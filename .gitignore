@@ -1,6 +1,7 @@
 .env.local
 env.local
 .env.*.local
+.env
 
 # OS / editor
 .DS_Store
