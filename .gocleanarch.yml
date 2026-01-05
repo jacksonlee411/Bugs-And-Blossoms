@@ -1,0 +1,6 @@
+domain: domain
+application: services
+infrastructure: infrastructure
+interfaces: presentation
+ignore_tests: true
+
