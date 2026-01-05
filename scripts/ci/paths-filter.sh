@@ -27,7 +27,7 @@ set_out "routing" "$(has '^(config/routing/|scripts/routing/|docs/dev-plans/017-
 set_out "ui" "$(has '^(apps/web/)' && echo true || echo false)"
 set_out "i18n" "$(has '^(i18n/|config/i18n/)' && echo true || echo false)"
 set_out "db" "$(has '^(atlas\\.hcl|migrations/|compose\\.dev\\.yml|compose\\.yml|scripts/db/|modules/.+/infrastructure/)' && echo true || echo false)"
-set_out "sqlc" "$(has '^(sqlc\\.|queries/|schema/)' && echo true || echo false)"
+set_out "sqlc" "$(has '^(sqlc\\.ya?ml|internal/sqlc/|modules/.+/infrastructure/sqlc/|modules/.+/infrastructure/persistence/schema/)' && echo true || echo false)"
 set_out "authz" "$(has '^(config/access/|policies/|scripts/authz/)' && echo true || echo false)"
 set_out "e2e" "$(has '^(e2e/|apps/web/|playwright\\.)' && echo true || echo false)"
 
