@@ -15,7 +15,7 @@ func main() {
 	}
 
 	log.Printf("listening on %s", addr)
-	if err := http.ListenAndServe(addr, server.NewMux()); err != nil {
+	if err := http.ListenAndServe(addr, server.MustNewHandler()); err != nil {
 		log.Fatal(err)
 	}
 }

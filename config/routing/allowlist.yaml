@@ -1,7 +1,18 @@
 version: 1
 entrypoints:
   server:
-    routes: []
+    routes:
+      - path: /health
+        methods: [GET]
+        route_class: ops
+      - path: /healthz
+        methods: [GET]
+        route_class: ops
+      - path: /login
+        methods: [GET, POST]
+        route_class: authn
   superadmin:
-    routes: []
-
+    routes:
+      - path: /health
+        methods: [GET]
+        route_class: ops
