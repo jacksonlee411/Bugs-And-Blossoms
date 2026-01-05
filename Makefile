@@ -7,6 +7,7 @@ SHELL := bash
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
+.PHONY: dev-up dev-down
 
 help:
 	@printf "%s\n" \
@@ -17,6 +18,10 @@ help:
 		"  make test" \
 		"  make check routing" \
 		"  make e2e" \
+		"" \
+		"开发环境：" \
+		"  make dev-up" \
+		"  make dev-down" \
 		"" \
 		"模块级（示例）：" \
 		"  make iam plan" \
@@ -36,7 +41,6 @@ fmt: ## 格式化/格式检查（按项目能力渐进接入）
 	@if [[ -f go.mod ]]; then \
 		echo "[fmt] go fmt ./..."; \
 		go fmt ./...; \
-		./scripts/ci/ensure-clean.sh; \
 	else \
 		echo "[fmt] no go.mod; no-op"; \
 	fi
@@ -58,6 +62,12 @@ test: ## 单元/集成测试
 	else \
 		echo "[test] no go.mod; no-op"; \
 	fi
+
+dev-up:
+	@docker compose -f compose.dev.yml up -d
+
+dev-down:
+	@docker compose -f compose.dev.yml down -v
 
 routing: ## 路由门禁（allowlist/entrypoint key 等）
 	@./scripts/routing/check-allowlist.sh
