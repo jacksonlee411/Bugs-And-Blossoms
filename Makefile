@@ -5,6 +5,8 @@ SHELL := bash
 
 export ATLAS_VERSION ?= v0.38.0
 export GOOSE_VERSION ?= v3.26.0
+export SQLC_VERSION ?= v1.28.0
+export GOIMPORTS_VERSION ?= v0.26.0
 
 .PHONY: help preflight check fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
@@ -101,16 +103,16 @@ css: ## Tailwind/Astro CSS（按项目能力渐进接入）
 	@echo "[css] no-op (placeholder)"
 
 sqlc-generate:
-	@echo "[sqlc] no-op (placeholder)"
+	@./scripts/sqlc/generate.sh
 
 authz-pack:
-	@echo "[authz-pack] no-op (placeholder)"
+	@./scripts/authz/pack.sh
 
 authz-test:
-	@echo "[authz-test] no-op (placeholder)"
+	@./scripts/authz/test.sh
 
 authz-lint:
-	@echo "[authz-lint] no-op (placeholder)"
+	@./scripts/authz/lint.sh
 
 iam:
 	@:
