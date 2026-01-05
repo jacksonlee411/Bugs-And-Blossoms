@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -n "${DATABASE_URL:-}" ]]; then
+  echo "$DATABASE_URL"
+  exit 0
+fi
+
 load_env() {
   local file="${1:?}"
   if [[ -f "$file" ]]; then

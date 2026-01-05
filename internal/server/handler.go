@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"io/fs"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
@@ -15,6 +17,14 @@ import (
 var embeddedAssets embed.FS
 
 func NewHandler() (http.Handler, error) {
+	return NewHandlerWithOptions(HandlerOptions{})
+}
+
+type HandlerOptions struct {
+	OrgUnitStore OrgUnitStore
+}
+
+func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	tenants, err := loadTenants()
 	if err != nil {
 		return nil, err
@@ -37,6 +47,16 @@ func NewHandler() (http.Handler, error) {
 	classifier, err := routing.NewClassifier(a, "server")
 	if err != nil {
 		return nil, err
+	}
+
+	orgStore := opts.OrgUnitStore
+	if orgStore == nil {
+		dsn := dbDSNFromEnv()
+		pool, err := pgxpool.New(context.Background(), dsn)
+		if err != nil {
+			return nil, err
+		}
+		orgStore = newOrgUnitPGStore(pool)
 	}
 
 	router := routing.NewRouter(classifier)
@@ -94,7 +114,10 @@ func NewHandler() (http.Handler, error) {
 	}))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeShell(w, r, "<h1>OrgUnit /org/nodes</h1><p>(placeholder)</p>")
+		handleOrgNodes(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/nodes", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgNodes(w, r, orgStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeShell(w, r, "<h1>Job Catalog /org/job-catalog</h1><p>(placeholder)</p>")
@@ -145,6 +168,10 @@ func redirectBack(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, ref, http.StatusFound)
 }
 
+func isHX(r *http.Request) bool {
+	return r.Header.Get("HX-Request") == "true"
+}
+
 func setLangCookie(w http.ResponseWriter, lang string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "lang",
@@ -190,10 +217,12 @@ func withTenantAndSession(tenants map[string]Tenant, next http.Handler) http.Han
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "tenant_not_found", "tenant not found")
 			return
 		}
-		if _, ok := tenants[tenantDomain]; !ok {
+		t, ok := tenants[tenantDomain]
+		if !ok {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "tenant_not_found", "tenant not found")
 			return
 		}
+		r = r.WithContext(withTenant(r.Context(), t))
 
 		if path == "/login" || pathHasPrefixSegment(path, "/lang") {
 			next.ServeHTTP(w, r)
@@ -309,4 +338,12 @@ func writeContent(w http.ResponseWriter, _ *http.Request, bodyHTML string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(bodyHTML))
+}
+
+func writePage(w http.ResponseWriter, r *http.Request, bodyHTML string) {
+	if isHX(r) {
+		writeContent(w, r, bodyHTML)
+		return
+	}
+	writeShell(w, r, bodyHTML)
 }

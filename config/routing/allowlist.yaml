@@ -39,7 +39,7 @@ entrypoints:
         methods: [GET]
         route_class: ui
       - path: /org/nodes
-        methods: [GET]
+        methods: [GET, POST]
         route_class: ui
       - path: /org/job-catalog
         methods: [GET]
