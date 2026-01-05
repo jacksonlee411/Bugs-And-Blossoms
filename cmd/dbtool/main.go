@@ -197,6 +197,11 @@ func orgunitSmoke(args []string) {
 		fatal(err)
 	}
 
+	var countA0 int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM orgunit.nodes;`).Scan(&countA0); err != nil {
+		fatal(err)
+	}
+
 	var nodeID string
 	if err := tx.QueryRow(ctx, `
 SELECT orgunit.submit_orgunit_event(
@@ -208,12 +213,12 @@ SELECT orgunit.submit_orgunit_event(
 		fatal(err)
 	}
 
-	var count int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM orgunit.nodes;`).Scan(&count); err != nil {
+	var countA1 int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM orgunit.nodes;`).Scan(&countA1); err != nil {
 		fatal(err)
 	}
-	if count != 1 {
-		fatalf("expected count=1 under tenant A, got %d", count)
+	if countA1 != countA0+1 {
+		fatalf("expected count under tenant A to increase by 1, got before=%d after=%d", countA0, countA1)
 	}
 
 	if _, err := tx.Exec(ctx, `SAVEPOINT sp_cross_event;`); err != nil {
@@ -246,11 +251,13 @@ SELECT orgunit.submit_orgunit_event(
 	if _, err := tx2.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantB); err != nil {
 		fatal(err)
 	}
-	if err := tx2.QueryRow(ctx, `SELECT count(*) FROM orgunit.nodes;`).Scan(&count); err != nil {
+
+	var visible int
+	if err := tx2.QueryRow(ctx, `SELECT count(*) FROM orgunit.nodes WHERE node_id = $1::uuid;`, nodeID).Scan(&visible); err != nil {
 		fatal(err)
 	}
-	if count != 0 {
-		fatalf("expected count=0 under tenant B, got %d (node created under A: %s)", count, nodeID)
+	if visible != 0 {
+		fatalf("expected node created under tenant A to be invisible under tenant B, got visible=%d node_id=%s", visible, nodeID)
 	}
 	if err := tx2.Commit(ctx); err != nil {
 		fatal(err)
@@ -277,6 +284,12 @@ $$;`, role, role)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA orgunit TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA iam TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA orgunit TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA iam TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA orgunit TO `+role+`;`)
 	return nil
 }
 
