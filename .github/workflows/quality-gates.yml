@@ -59,6 +59,10 @@ jobs:
       - id: paths
         name: Paths Filter
         run: ./scripts/ci/paths-filter.sh
+      - uses: actions/setup-go@v5
+        if: steps.paths.outputs.routing == 'true' || steps.paths.outputs.go == 'true'
+        with:
+          go-version-file: go.mod
       - name: Run routing gates
         run: |
           if [[ "${{ steps.paths.outputs.routing }}" == "true" || "${{ steps.paths.outputs.go }}" == "true" ]]; then
