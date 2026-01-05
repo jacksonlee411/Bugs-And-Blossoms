@@ -100,7 +100,15 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		writeShell(w, r, `<div id="content" hx-get="/app/home" hx-trigger="load"></div>`)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/app/home", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeContent(w, r, "<h1>Home</h1><p>(placeholder)</p>")
+		l := lang(r)
+		writeContent(w, r, `<h1>Home</h1>`+
+			`<p>Pick a module:</p>`+
+			`<ul>`+
+			`<li><a href="/org/nodes" hx-get="/org/nodes" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit")+`</a></li>`+
+			`<li><a href="/org/job-catalog" hx-get="/org/job-catalog" hx-target="#content" hx-push-url="true">`+tr(l, "nav_jobcatalog")+`</a></li>`+
+			`<li><a href="/org/positions" hx-get="/org/positions" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
+			`<li><a href="/person/persons" hx-get="/person/persons" hx-target="#content" hx-push-url="true">`+tr(l, "nav_person")+`</a></li>`+
+			`</ul>`)
 	}))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/nav", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -256,10 +264,10 @@ func pathHasPrefixSegment(path, prefix string) bool {
 func renderNav(r *http.Request) string {
 	l := lang(r)
 	return `<nav><ul>` +
-		`<li><a hx-get="/org/nodes" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit") + `</a></li>` +
-		`<li><a hx-get="/org/job-catalog" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
-		`<li><a hx-get="/org/positions" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
-		`<li><a hx-get="/person/persons" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
+		`<li><a href="/org/nodes" hx-get="/org/nodes" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit") + `</a></li>` +
+		`<li><a href="/org/job-catalog" hx-get="/org/job-catalog" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
+		`<li><a href="/org/positions" hx-get="/org/positions" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
+		`<li><a href="/person/persons" hx-get="/person/persons" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
 		`</ul></nav>`
 }
 
