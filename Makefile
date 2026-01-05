@@ -53,6 +53,8 @@ lint: ## 静态检查（按项目能力渐进接入）
 	elif [[ -f go.mod ]]; then \
 		echo "[lint] go vet ./..."; \
 		go vet ./...; \
+		echo "[lint] go-cleanarch"; \
+		./scripts/ci/cleanarch.sh; \
 	else \
 		echo "[lint] no go.mod; no-op"; \
 	fi
