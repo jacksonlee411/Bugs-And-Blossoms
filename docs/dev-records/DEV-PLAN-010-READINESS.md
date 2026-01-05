@@ -6,7 +6,7 @@
 ## 1. 基本信息
 
 - repo: Bugs-And-Blossoms
-- 分支保护：main 禁止直推/禁止 force-push/必须 PR（GitHub 侧配置）
+- 分支保护：main 禁止直推/禁止 force-push/必须 PR，并冻结 required checks（GitHub 侧配置）
 
 ## 2. Required Checks（不出现 skipped）
 
@@ -24,6 +24,7 @@
   - PR-6（最小登录）：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/6
   - PR-7（DB gates）：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/7
   - PR-8（sqlc/authz toolchain）：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/8
+  - PR-10（orgunit P0 slice）：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/10
 
 ## 3. UI 壳（用户可见性）
 
