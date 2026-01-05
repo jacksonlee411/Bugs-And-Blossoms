@@ -1,0 +1,22 @@
+.env.local
+env.local
+.env.*.local
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+*~
+Thumbs.db
+*.Zone.Identifier
+
+# Go
+bin/
+dist/
+coverage/
+*.out
+
+# Node / web
+node_modules/
+.astro/
+*.log

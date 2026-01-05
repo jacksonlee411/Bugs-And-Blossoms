@@ -1,0 +1,129 @@
+SHELL := bash
+.SHELLFLAGS := -euo pipefail -c
+
+.DEFAULT_GOAL := help
+
+.PHONY: help preflight check fmt lint test routing e2e doc tr generate css
+.PHONY: sqlc-generate authz-pack authz-test authz-lint
+.PHONY: plan migrate up
+.PHONY: iam orgunit jobcatalog staffing person
+
+help:
+	@printf "%s\n" \
+		"常用入口：" \
+		"  make preflight" \
+		"  make check fmt" \
+		"  make check lint" \
+		"  make test" \
+		"  make check routing" \
+		"  make e2e" \
+		"" \
+		"模块级（示例）：" \
+		"  make iam plan" \
+		"  make iam migrate up"
+
+preflight: ## 本地一键对齐CI
+	@$(MAKE) check fmt
+	@$(MAKE) check lint
+	@$(MAKE) test
+	@$(MAKE) check routing
+	@$(MAKE) e2e
+
+check:
+	@:
+
+fmt: ## 格式化/格式检查（按项目能力渐进接入）
+	@if [[ -f go.mod ]]; then \
+		echo "[fmt] go fmt ./..."; \
+		go fmt ./...; \
+		./scripts/ci/ensure-clean.sh; \
+	else \
+		echo "[fmt] no go.mod; no-op"; \
+	fi
+
+lint: ## 静态检查（按项目能力渐进接入）
+	@if [[ -n "$(MODULE)" ]]; then \
+		./scripts/db/lint.sh "$(MODULE)"; \
+	elif [[ -f go.mod ]]; then \
+		echo "[lint] go vet ./..."; \
+		go vet ./...; \
+	else \
+		echo "[lint] no go.mod; no-op"; \
+	fi
+
+test: ## 单元/集成测试
+	@if [[ -f go.mod ]]; then \
+		echo "[test] go test ./..."; \
+		go test ./...; \
+	else \
+		echo "[test] no go.mod; no-op"; \
+	fi
+
+routing: ## 路由门禁（allowlist/entrypoint key 等）
+	@./scripts/routing/check-allowlist.sh
+
+e2e: ## E2E smoke（按项目能力渐进接入）
+	@if [[ -d apps/web ]]; then \
+		echo "[e2e] apps/web exists; no-op (placeholder)"; \
+	else \
+		echo "[e2e] no apps/web; no-op"; \
+	fi
+
+doc: ## 文档门禁（按项目能力渐进接入）
+	@echo "[doc] no-op (placeholder)"
+
+tr: ## i18n（en/zh）门禁（按项目能力渐进接入）
+	@echo "[tr] no-op (placeholder)"
+
+generate: ## templ/生成物（按项目能力渐进接入）
+	@echo "[generate] no-op (placeholder)"
+
+css: ## Tailwind/Astro CSS（按项目能力渐进接入）
+	@echo "[css] no-op (placeholder)"
+
+sqlc-generate:
+	@echo "[sqlc] no-op (placeholder)"
+
+authz-pack:
+	@echo "[authz-pack] no-op (placeholder)"
+
+authz-test:
+	@echo "[authz-test] no-op (placeholder)"
+
+authz-lint:
+	@echo "[authz-lint] no-op (placeholder)"
+
+iam:
+	@:
+orgunit:
+	@:
+jobcatalog:
+	@:
+staffing:
+	@:
+person:
+	@:
+
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint plan migrate up,$(MAKECMDGOALS)))
+MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
+
+plan:
+	@if [[ -z "$(MODULE)" ]]; then \
+		echo "用法：make <module> plan（例如：make iam plan）" >&2; \
+		exit 2; \
+	fi
+	@./scripts/db/plan.sh "$(MODULE)"
+
+migrate:
+	@if [[ -z "$(MODULE)" ]]; then \
+		echo "用法：make <module> migrate up|down（例如：make iam migrate up）" >&2; \
+		exit 2; \
+	fi
+	@if [[ -z "$(MIGRATE_DIR)" ]]; then \
+		echo "缺少方向：up 或 down（例如：make iam migrate up）" >&2; \
+		exit 2; \
+	fi
+	@./scripts/db/migrate.sh "$(MODULE)" "$(MIGRATE_DIR)"
+
+up:
+	@:
