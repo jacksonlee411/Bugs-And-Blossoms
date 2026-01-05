@@ -16,23 +16,46 @@
 - `E2E Tests`：`make e2e`
 
 证据（贴运行时间与结论链接/截图均可）：
-- 日期：
-- 运行环境（本机/CI）：
-- 结论：
+- 日期：2026-01-06
+- 运行环境：GitHub Actions（Quality Gates）
+- 结论：PR 合并均为 4/4 checks 成功（不出现 skipped）
+  - PR-3（Routing Gates）：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/3
+  - PR-5（UI shell）：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5
+  - PR-6（最小登录）：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/6
+  - PR-7（DB gates）：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/7
+  - PR-8（sqlc/authz toolchain）：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/8
 
 ## 3. UI 壳（用户可见性）
 
-占位：完成 UI 壳后记录“能打开壳、能看到 4 模块入口与占位页”的证据。
+证据：
+- PR-5：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5
+- 路由入口：`/app`（壳）+ 导航占位页（Org/JobCatalog/Staffing/Person）
 
 ## 4. 最小登录链路
 
-占位：完成 tenant 解析（fail-closed）与最小登录闭环后记录证据。
+证据：
+- PR-6：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/6
+- 行为：Host→tenant（fail-closed）；未登录重定向 `/login`；登录后进入 `/app`
 
 ## 5. Routing Gates
 
-占位：记录 allowlist SSOT 存在、entrypoint key 冻结、门禁阻断示例（缺失/漂移时失败）。
+证据：
+- PR-3：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/3
+- allowlist SSOT：`config/routing/allowlist.yaml`
+- 本地门禁：`make check routing`
 
 ## 6. DB/迁移闭环（至少 iam）
 
-占位：记录 `make iam plan` / `make iam migrate up` 的 smoke 证据与 RLS fail-closed 证据链接。
+证据：
+- PR-7：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/7
+- 入口：
+  - `make iam plan`
+  - `make iam lint`（atlas migrate validate）
+  - `make iam migrate up`（goose + `cmd/dbtool rls-smoke`）
 
+## 7. sqlc / Authz 工具链
+
+证据：
+- PR-8：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/8
+- sqlc：`make sqlc-generate`（导出 `internal/sqlc/schema.sql` + 生成物提交）
+- authz：`make authz-pack && make authz-test && make authz-lint`（生成 `config/access/policy.csv(.rev)` 并纳入一致性门禁）
