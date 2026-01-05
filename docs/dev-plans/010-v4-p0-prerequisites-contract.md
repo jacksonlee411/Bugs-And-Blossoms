@@ -1,9 +1,9 @@
 # DEV-PLAN-010：P0 前置条件实施方案（契约文档优先，避免实施漂移）
 
-**状态**: 草拟中（2026-01-05 21:40 UTC）
+**状态**: 已完成（2026-01-06）
 
 > 适用范围：V4 Greenfield 全新实施（从 0 开始）在进入 P0（第一条业务垂直切片）前的“工程/治理/工具链/UI 骨架”准备工作。  
-> 注意：本仓库仅承载计划文本；真正的实现与验证发生在“新代码仓库（implementation repo）”。
+> 说明：本仓库即 implementation repo；契约文档 SSOT 位于 `docs/dev-plans/`，证据记录位于 `docs/dev-records/`。
 
 ## 1. 背景与上下文 (Context)
 
@@ -265,7 +265,7 @@ job(required_check):
 1. [X] ADR-010-01：dev-plan SSOT 放置策略选 A（同仓）—— 已批准。
 2. [X] 仓库形态：mono-repo + `apps/web`（对齐 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`）—— 已批准。
 3. [X] P0 第一条业务垂直切片：`orgunit` —— 已批准。
-4. [ ] implementation repo 的仓库命名、归属组织、权限与分支保护规则（required checks 名称冻结）落地方式。
+4. [X] implementation repo 命名/权限/分支保护：`jacksonlee411/Bugs-And-Blossoms`（public），`main` 禁止直推/禁止 force-push/必须 PR，并冻结 required checks：`Code Quality & Formatting` / `Unit & Integration Tests` / `Routing Gates` / `E2E Tests`。
 
 ## 13. 参考（本仓库路径）
 
