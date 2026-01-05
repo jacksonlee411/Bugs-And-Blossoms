@@ -17,3 +17,18 @@ env "iam_ci" {
   }
 }
 
+env "orgunit_dev" {
+  src = "file://modules/orgunit/infrastructure/persistence/schema"
+  migration {
+    dir    = "file://migrations/orgunit"
+    format = "goose"
+  }
+}
+
+env "orgunit_ci" {
+  src = "file://modules/orgunit/infrastructure/persistence/schema"
+  migration {
+    dir    = "file://migrations/orgunit"
+    format = "goose"
+  }
+}

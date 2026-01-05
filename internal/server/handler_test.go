@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -182,7 +183,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
 
-	h, err := NewHandler()
+	h, err := NewHandlerWithOptions(HandlerOptions{OrgUnitStore: newOrgUnitMemoryStore()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,6 +266,16 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("path=%s status=%d", p, rec.Code)
 		}
+	}
+
+	reqCreate := httptest.NewRequest(http.MethodPost, "/org/nodes", strings.NewReader("name=NodeA"))
+	reqCreate.Host = "localhost:8080"
+	reqCreate.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqCreate.AddCookie(session)
+	recCreate := httptest.NewRecorder()
+	h.ServeHTTP(recCreate, reqCreate)
+	if recCreate.Code != http.StatusSeeOther {
+		t.Fatalf("org create status=%d", recCreate.Code)
 	}
 
 	reqNavZH := httptest.NewRequest(http.MethodGet, "/ui/nav", nil)

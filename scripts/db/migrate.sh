@@ -39,6 +39,10 @@ case "$direction" in
       echo "[db-migrate] rls smoke: module=$module"
       go run ./cmd/dbtool rls-smoke --url "$db_url"
     fi
+    if [[ "$module" == "orgunit" ]]; then
+      echo "[db-migrate] orgunit smoke: module=$module"
+      go run ./cmd/dbtool orgunit-smoke --url "$db_url"
+    fi
     ;;
   down)
     steps="${GOOSE_STEPS:-1}"
