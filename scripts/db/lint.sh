@@ -12,5 +12,17 @@ if [[ ! -d "modules/$module" ]]; then
   exit 2
 fi
 
-echo "[db-lint] no-op (placeholder): module=$module"
+migrations_dir="migrations/$module"
+if [[ ! -d "$migrations_dir" ]]; then
+  echo "[db-lint] missing migrations dir: $migrations_dir" >&2
+  exit 2
+fi
 
+dev_url="$("./scripts/db/db_url.sh")"
+
+echo "[db-lint] atlas migrate validate: $module"
+ATLAS_NO_UPDATE_NOTIFIER=true \
+  ./scripts/db/run_atlas.sh migrate validate \
+  --dir "file://${migrations_dir}" \
+  --dir-format goose \
+  --dev-url "$dev_url"
