@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
     ports:
-      - "5438:5432"
+      - "${DB_PORT:-5438}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U app -d bugs_and_blossoms"]
       interval: 2s
@@ -18,8 +18,7 @@ services:
   redis:
     image: redis:latest
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
 volumes:
   pgdata:
-

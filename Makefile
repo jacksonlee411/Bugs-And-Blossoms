@@ -72,10 +72,16 @@ test: ## 单元/集成测试
 	fi
 
 dev-up:
-	@docker compose -f compose.dev.yml up -d
+	@env_file=".env"; \
+	if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
+	if [[ -f "env.local" ]]; then env_file="env.local"; fi; \
+	docker compose --env-file "$$env_file" -f compose.dev.yml up -d
 
 dev-down:
-	@docker compose -f compose.dev.yml down -v
+	@env_file=".env"; \
+	if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
+	if [[ -f "env.local" ]]; then env_file="env.local"; fi; \
+	docker compose --env-file "$$env_file" -f compose.dev.yml down -v
 
 routing: ## 路由门禁（allowlist/entrypoint key 等）
 	@./scripts/routing/check-allowlist.sh
