@@ -1,6 +1,6 @@
 # DEV-PLAN-026：Org v4（事务性事件溯源 + 同步投射）完整方案（Greenfield）
 
-**状态**: 草拟中（2026-01-04 04:40 UTC）
+**状态**: 草拟中（2026-01-04 04:40 UTC；2026-01-06 起进入实施）
 
 > 本计划是“干净/完整”的 v4 方案设计稿：以 **`org_events` 为 SoT**，以 **同步投射** 在同一事务内维护 **`org_unit_versions` 读模型**，并提供强一致读、可重放重建与并发互斥策略。  
 > **暂不考虑迁移与兼容**：不要求与现有 `modules/org` 的 schema/API/事件契约兼容；也不提供双写/灰度/回滚路径（另开计划承接）。
@@ -45,8 +45,9 @@ HR SaaS 的组织架构场景常见约束：
   - 触发器矩阵与本地必跑：`AGENTS.md`
   - 命令入口：`Makefile`
   - CI 门禁：`.github/workflows/quality-gates.yml`
-  - 时间语义（Valid Time=DATE）：`docs/dev-plans/064-effective-date-day-granularity.md`
-  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`（对齐 `docs/dev-plans/019-multi-tenant-toolchain.md` / `docs/dev-plans/019A-rls-tenant-isolation.md`）
+  - 时间语义（Valid Time=DATE）：`AGENTS.md`（“时间语义”章节）
+  - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn-v4.md`
+  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 架构图 (Mermaid)
@@ -119,6 +120,8 @@ flowchart TD
 
 ## 4. 数据模型与约束 (Data Model & Constraints)
 > 约定：PostgreSQL 17；多租户隔离通过 `tenant_id` 强制；v4 表默认启用 RLS（fail-closed；落盘口径见 `DEV-PLAN-021`）。
+
+> 落地提示（implementation repo 口径）：为对齐模块边界与 Atlas+Goose 闭环，本计划在实施时建议把表与函数放在模块 schema `orgunit.*` 下（而非默认 `public`），并通过权限/role 约束落实 One Door（详见 §3.3 与 §2.3 SSOT）。
 
 ### 4.1 必备扩展
 ```sql
