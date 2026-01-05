@@ -15,6 +15,11 @@ import (
 var embeddedAssets embed.FS
 
 func NewHandler() (http.Handler, error) {
+	tenants, err := loadTenants()
+	if err != nil {
+		return nil, err
+	}
+
 	allowlistPath := os.Getenv("ALLOWLIST_PATH")
 	if allowlistPath == "" {
 		p, err := defaultAllowlistPath()
@@ -35,6 +40,7 @@ func NewHandler() (http.Handler, error) {
 	}
 
 	router := routing.NewRouter(classifier)
+	guarded := withTenantAndSession(tenants, router)
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/app", http.StatusFound)
@@ -53,9 +59,11 @@ func NewHandler() (http.Handler, error) {
 		writeShell(w, r, "<h1>Login</h1><p>(placeholder)</p>")
 	}))
 	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		setSessionCookie(w)
 		http.Redirect(w, r, "/app", http.StatusFound)
 	}))
 	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clearSessionCookie(w)
 		http.Redirect(w, r, "/login", http.StatusFound)
 	}))
 
@@ -105,7 +113,7 @@ func NewHandler() (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetsSub))))
-	mux.Handle("/", router)
+	mux.Handle("/", guarded)
 
 	return mux, nil
 }
@@ -145,6 +153,75 @@ func setLangCookie(w http.ResponseWriter, lang string) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func setSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    "ok",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func withTenantAndSession(tenants map[string]Tenant, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		if path == "/health" || path == "/healthz" || path == "/assets" || pathHasPrefixSegment(path, "/assets") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		tenantDomain := hostWithoutPort(r.Host)
+		if tenantDomain == "" {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "tenant_not_found", "tenant not found")
+			return
+		}
+		if _, ok := tenants[tenantDomain]; !ok {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "tenant_not_found", "tenant not found")
+			return
+		}
+
+		if path == "/login" || pathHasPrefixSegment(path, "/lang") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if !hasSession(r) {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func hasSession(r *http.Request) bool {
+	c, err := r.Cookie("session")
+	if err != nil {
+		return false
+	}
+	return c.Value == "ok"
+}
+
+func pathHasPrefixSegment(path, prefix string) bool {
+	if path == prefix {
+		return true
+	}
+	return len(path) > len(prefix) && path[:len(prefix)+1] == prefix+"/"
 }
 
 func renderNav(r *http.Request) string {
