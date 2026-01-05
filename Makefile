@@ -3,6 +3,9 @@ SHELL := bash
 
 .DEFAULT_GOAL := help
 
+export ATLAS_VERSION ?= v0.38.0
+export GOOSE_VERSION ?= v3.26.0
+
 .PHONY: help preflight check fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
 .PHONY: plan migrate up

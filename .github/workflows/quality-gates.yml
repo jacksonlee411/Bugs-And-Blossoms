@@ -34,6 +34,20 @@ jobs:
   unit-integration-tests:
     name: Unit & Integration Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - id: paths
@@ -43,6 +57,19 @@ jobs:
         if: steps.paths.outputs.go == 'true' || steps.paths.outputs.db == 'true' || steps.paths.outputs.sqlc == 'true' || steps.paths.outputs.authz == 'true' || steps.paths.outputs.routing == 'true'
         with:
           go-version-file: go.mod
+      - name: DB Gates (iam)
+        if: steps.paths.outputs.db == 'true'
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: postgres
+          DB_SSLMODE: disable
+        run: |
+          make iam plan
+          make iam lint
+          make iam migrate up
       - name: Run tests
         run: |
           if [[ "${{ steps.paths.outputs.go }}" == "true" || "${{ steps.paths.outputs.db }}" == "true" || "${{ steps.paths.outputs.sqlc }}" == "true" || "${{ steps.paths.outputs.authz }}" == "true" || "${{ steps.paths.outputs.routing }}" == "true" ]]; then

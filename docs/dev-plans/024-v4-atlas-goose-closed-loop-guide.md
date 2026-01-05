@@ -43,7 +43,7 @@ flowchart TD
   Schema[编辑 Schema SSOT\nmodules/<module>/.../schema/*.sql] --> Plan[Atlas plan/diff\n（dry-run）]
   Plan --> Diff[atlas migrate diff\n生成 goose 迁移]
   Diff --> Hash[atlas migrate hash\n更新 atlas.sum]
-  Hash --> Lint[atlas migrate lint\n（CI 门禁）]
+  Hash --> Lint[atlas migrate validate\n（CI 门禁）]
   Hash --> Goose[goose up/down\n执行 migrations/<module>]
   CI[CI quality-gates] --> Lint
   CI --> Goose
@@ -144,7 +144,7 @@ migrations/orgunit/
 5. [ ] 扩展 `Makefile`：新增 `make <module> plan/lint/migrate` 入口（命令语义对齐现有 `make org ...`）。
 6. [ ] 扩展 CI：在 `quality-gates.yml` 新增 `<module>-atlas` filter，并在命中时执行：
    - `make atlas-install` + `make goose-install`（如需要）
-   - `make <module> plan` / `make <module> lint`
+   - `make <module> plan` / `make <module> lint`（实现上使用 `atlas migrate validate`；`atlas migrate lint` 在 v0.38+ 为 Pro）
    - `make <module> migrate up`（smoke；使用独立 `GOOSE_TABLE`）
    - `git status --porcelain` 必须为空（`atlas.sum` 等生成物必须提交）
 7. [ ] 记录 readiness：在对应 dev-record 中登记命令与结果（时间戳/环境/结论），作为可追溯证据。
@@ -157,13 +157,13 @@ migrations/orgunit/
 2. [ ] 运行 `<module> plan`（dry-run），确认 diff 与预期一致（避免误连到错误 DB）。
 3. [ ] 用 Atlas 生成迁移（推荐）：优先使用 `Makefile` 包装；否则临时执行 `atlas migrate diff --env <module>_dev <slug>`。
 4. [ ] 更新迁移 hash：优先使用 `Makefile` 包装；否则临时执行 `atlas migrate hash --dir file://migrations/<module>`，提交 `atlas.sum`。
-5. [ ] 运行 `<module> lint`（`atlas migrate lint`），确保无破坏性/漂移问题。
+5. [ ] 运行 `<module> lint`（`atlas migrate validate`），确保 hash 与 SQL 语义可验证（`atlas migrate lint` 在 v0.38+ 为 Pro）。
 6. [ ] 运行 `<module> migrate up`（goose apply）并做最小验证；需要回滚时用 `<module> migrate down`（建议 `GOOSE_STEPS=1`）。
 7. [ ] 再次运行 `<module> plan`，期望输出为 No Changes（闭环收敛）。
 
 ## 7. 常见故障与处理（失败路径）
 
-- [ ] `atlas migrate lint` 报 `atlas.sum` 不一致：运行 `atlas migrate hash --dir file://migrations/<module>` 后重新 lint，并提交 `atlas.sum`。
+- [ ] `atlas migrate validate` 报 `atlas.sum` 不一致：运行 `atlas migrate hash --dir file://migrations/<module>` 后重新 validate，并提交 `atlas.sum`。
 - [ ] `goose` 执行了“别的模块”的迁移：检查 `GOOSE_MIGRATIONS_DIR` 与 `GOOSE_TABLE` 是否正确；每个模块必须使用独立版本表。
 - [ ] Atlas plan/lint 报引用表不存在（FK 依赖缺失）：优先移除跨模块 FK；若必须保留，则补齐 `core_deps.sql` 的最小定义。
 - [ ] plan 输出出现大规模 drop/create：优先检查是否连接到错误 DB，或 DB 已被手工修改导致 drift；禁止用“手工改库”去对齐 schema，应回到迁移闭环。
