@@ -1,20 +1,21 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"net/http"
+	"os"
+
+	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/server"
 )
 
 func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok\n"))
-	})
+	addr := os.Getenv("HTTP_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
 
-	addr := ":8080"
-	fmt.Printf("listening on %s\n", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		panic(err)
+	log.Printf("listening on %s", addr)
+	if err := http.ListenAndServe(addr, server.NewMux()); err != nil {
+		log.Fatal(err)
 	}
 }

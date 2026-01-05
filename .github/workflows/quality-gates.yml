@@ -1,4 +1,4 @@
-name: quality-gates
+name: Quality Gates
 
 on:
   push:
@@ -14,43 +14,75 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: paths
+        name: Paths Filter
+        run: ./scripts/ci/paths-filter.sh
       - uses: actions/setup-go@v5
+        if: steps.paths.outputs.go == 'true'
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - name: Run format checks
+      - name: Docs Gate (always)
+        run: make check doc
+      - name: Go Lint/Fmt Gate
+        if: steps.paths.outputs.go == 'true'
         run: |
           make check fmt
           make check lint
+      - name: Generated Artifacts Clean
+        run: ./scripts/ci/assert-clean.sh
 
   unit-integration-tests:
     name: Unit & Integration Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: paths
+        name: Paths Filter
+        run: ./scripts/ci/paths-filter.sh
       - uses: actions/setup-go@v5
+        if: steps.paths.outputs.go == 'true' || steps.paths.outputs.db == 'true' || steps.paths.outputs.sqlc == 'true' || steps.paths.outputs.authz == 'true' || steps.paths.outputs.routing == 'true'
         with:
           go-version-file: go.mod
       - name: Run tests
-        run: make test
+        run: |
+          if [[ "${{ steps.paths.outputs.go }}" == "true" || "${{ steps.paths.outputs.db }}" == "true" || "${{ steps.paths.outputs.sqlc }}" == "true" || "${{ steps.paths.outputs.authz }}" == "true" || "${{ steps.paths.outputs.routing }}" == "true" ]]; then
+            make test
+          else
+            echo "no relevant changes; no-op"
+          fi
 
   routing-gates:
     name: Routing Gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: paths
+        name: Paths Filter
+        run: ./scripts/ci/paths-filter.sh
       - name: Run routing gates
-        run: make check routing
+        run: |
+          if [[ "${{ steps.paths.outputs.routing }}" == "true" || "${{ steps.paths.outputs.go }}" == "true" ]]; then
+            make check routing
+          else
+            echo "no relevant changes; no-op"
+          fi
 
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: paths
+        name: Paths Filter
+        run: ./scripts/ci/paths-filter.sh
       - uses: actions/setup-node@v4
+        if: steps.paths.outputs.e2e == 'true' || steps.paths.outputs.ui == 'true' || steps.paths.outputs.i18n == 'true' || steps.paths.outputs.go == 'true' || steps.paths.outputs.routing == 'true'
         with:
           node-version: "20"
       - name: Run E2E
-        run: make e2e
+        run: |
+          if [[ "${{ steps.paths.outputs.e2e }}" == "true" || "${{ steps.paths.outputs.ui }}" == "true" || "${{ steps.paths.outputs.i18n }}" == "true" || "${{ steps.paths.outputs.go }}" == "true" || "${{ steps.paths.outputs.routing }}" == "true" ]]; then
+            make e2e
+          else
+            echo "no relevant changes; no-op"
+          fi

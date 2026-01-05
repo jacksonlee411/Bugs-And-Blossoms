@@ -8,6 +8,7 @@ SHELL := bash
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
 .PHONY: dev-up dev-down
+.PHONY: coverage
 
 help:
 	@printf "%s\n" \
@@ -28,6 +29,7 @@ help:
 		"  make iam migrate up"
 
 preflight: ## 本地一键对齐CI
+	@$(MAKE) check doc
 	@$(MAKE) check fmt
 	@$(MAKE) check lint
 	@$(MAKE) test
@@ -57,8 +59,7 @@ lint: ## 静态检查（按项目能力渐进接入）
 
 test: ## 单元/集成测试
 	@if [[ -f go.mod ]]; then \
-		echo "[test] go test ./..."; \
-		go test ./...; \
+		./scripts/ci/test.sh; \
 	else \
 		echo "[test] no go.mod; no-op"; \
 	fi
@@ -80,7 +81,10 @@ e2e: ## E2E smoke（按项目能力渐进接入）
 	fi
 
 doc: ## 文档门禁（按项目能力渐进接入）
-	@echo "[doc] no-op (placeholder)"
+	@./scripts/doc/check.sh
+
+coverage:
+	@./scripts/ci/coverage.sh
 
 tr: ## i18n（en/zh）门禁（按项目能力渐进接入）
 	@echo "[tr] no-op (placeholder)"
