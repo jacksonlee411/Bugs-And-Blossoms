@@ -218,6 +218,12 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	if recLogin.Code != http.StatusOK {
 		t.Fatalf("login status=%d", recLogin.Code)
 	}
+	if body := recLogin.Body.String(); !strings.Contains(body, `<form method="POST" action="/login">`) {
+		t.Fatalf("unexpected login body: %q", body)
+	}
+	if body := recLogin.Body.String(); strings.Contains(body, `hx-get="/ui/nav"`) || strings.Contains(body, `hx-get="/ui/topbar"`) {
+		t.Fatalf("unexpected hx-get in login body: %q", body)
+	}
 
 	reqAppNoSession := httptest.NewRequest(http.MethodGet, "/app", nil)
 	reqAppNoSession.Host = "localhost:8080"
