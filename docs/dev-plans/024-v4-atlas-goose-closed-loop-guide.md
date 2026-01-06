@@ -53,7 +53,7 @@ flowchart TD
 ```
 
 约束：
-- Schema SSOT 与 migrations 必须保持一致；CI 通过 lint + smoke 证明闭环可用。
+- Schema SSOT 与 migrations 必须保持一致；CI 通过 `plan`/`lint` + `migrate up`（必要时对关键模块叠加 smoke）证明闭环可用。
 - goose 只负责 apply/rollback；迁移内容由 Schema SSOT + Atlas 约束驱动产生与校验。
 
 ### 3.2 模块级受控目录（选定）
@@ -73,21 +73,28 @@ flowchart TD
 | 项 | 约定 |
 | --- | --- |
 | Schema SSOT | `modules/<module>/infrastructure/persistence/schema/*.sql` |
-| 依赖 stub（可选） | `modules/<module>/infrastructure/atlas/core_deps.sql` |
+| 依赖 stub（预留） | `modules/<module>/infrastructure/atlas/core_deps.sql`（当前门禁脚本不读取；见 §3.4） |
 | migrations 目录 | `migrations/<module>/` |
 | Atlas env（可选） | `<module>_dev` / `<module>_ci`（用于手工运行 Atlas；门禁以脚本显式参数为准） |
 | Atlas dev URL（门禁使用） | `ATLAS_DEV_URL=docker://postgres/17/dev?search_path=public`（可覆盖；`make <module> plan/lint` 会使用） |
 | 目标库连接（goose apply） | `DATABASE_URL=...` 或 `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME/DB_SSLMODE`（见 `scripts/db/db_url.sh`） |
 | goose 版本表（必须） | `goose_db_version_<module>`（由 `scripts/db/migrate.sh` 固定传入） |
 
-### 3.4 跨模块依赖（建议口径）
-**建议优先级（从高到低）**：
-1. **避免跨模块 FK**：跨模块只存 ID，不在 DB 层强绑定到别的模块表，降低 toolchain stub 成本与漂移风险（对齐 `DEV-PLAN-016` 的边界原则）。
-2. **若必须 FK**（典型：`tenant_id` → `tenants(id)`）：为该模块提供最小 `core_deps.sql`，仅包含被引用对象的最小定义（字段/约束以满足 FK 为限），并将其视为“工具链资产”（不作为业务查询入口）。
+### 3.4 跨模块依赖（冻结口径）
+**冻结**：v4 业务模块默认 **禁止跨模块 FK**；跨模块只存 ID（例如 `tenant_id`），不在 DB 层强绑定到别的模块表（对齐 `DEV-PLAN-016` 的边界原则）。
+
+例外（必须显式论证）：
+- 只有当某个 FK 是“必须的业务不变量/监管约束”时，才允许作为例外；并且必须在该子域 dev-plan 中明确：
+  - 依赖顺序（例如 CI/本地必须先 `make iam migrate up`）
+  - 工具链可复现方案（Atlas validate 的 dev DB 如何具备依赖对象）
+  - 回滚影响面与停止线
+
+关于 stub：
+- 目前 `scripts/db/plan.sh`/`scripts/db/lint.sh` **不会读取** `modules/<module>/infrastructure/atlas/core_deps.sql`，因此该文件路径仅做目录预留，并不构成可用方案；若未来确需 stub，必须另开 dev-plan 落地脚本/CI 支持后才能使用。
 
 关于 `tenants/tenant_domains`：
 - v4 推荐：除 `iam`（见 `DEV-PLAN-019`）外，业务模块默认只保存 `tenant_id` 并依赖 RLS/`assert_current_tenant` 做 fail-closed，不对 `tenants` 做 FK（减少跨模块 DB 耦合与 stub 漂移）。
-- 若某模块坚持对 `tenants` 建 FK：必须在该模块的实现 dev-plan 中明确“依赖顺序（先 apply `iam` 迁移）+ plan/lint stub 策略 + 回滚影响面”，不得仅靠“本地库刚好有 tenants 表”隐式通过。
+- 若某模块坚持对 `tenants` 建 FK：必须在该模块的实现 dev-plan 中明确“依赖顺序（先 apply `iam` 迁移）+ 工具链可复现策略 + 回滚影响面”，不得仅靠“本地库刚好有 tenants 表”隐式通过。
 
 停止线：
 - [ ] 任何因为“图省事”在多个模块重复维护同一份完整外部 schema（易 drift）；若出现，必须先收敛依赖策略再继续扩表。
@@ -118,7 +125,7 @@ flowchart TD
 modules/orgunit/
   infrastructure/
     atlas/
-      core_deps.sql                # 可选：仅用于 plan/lint 的最小 stub
+      core_deps.sql                # 预留：当前 toolchain 不读取；默认禁止跨模块 FK（见 §3.4）
     persistence/
       schema/
         orgunit-schema.sql         # Schema SSOT（可按对象拆多个 sql）
@@ -141,7 +148,7 @@ migrations/orgunit/
 
 ### 5.2 接入落地步骤
 1. [ ] 准备 Schema SSOT：在 `modules/<module>/infrastructure/persistence/schema/` 创建/维护 schema SQL（SSOT）。
-2. [ ] 准备依赖 stub（如需要）：在 `modules/<module>/infrastructure/atlas/core_deps.sql` 提供最小外部依赖定义（例如 `tenants`）。
+2. [ ] （默认不需要）跨模块 FK 默认禁止；如未来要支持跨模块依赖 stub，仅预留 `modules/<module>/infrastructure/atlas/core_deps.sql`（当前 toolchain 不读取，需另开 dev-plan 落地）。
 3. [ ] 初始化 migrations 目录：创建 `migrations/<module>/`、baseline 迁移与 `atlas.sum`（由 Atlas 生成/维护）。
 4. [ ] （可选）扩展 `atlas.hcl`：为 `<module>` 增加 `<module>_dev/<module>_ci` env，并绑定 `src=modules/<module>/.../schema` 与 `migration.dir=migrations/<module>`（便于手工运行 Atlas；门禁以脚本显式参数为准）。
 5. [ ] 扩展 `Makefile`：在 `.PHONY` 加入 `<module>` 并添加空 target（`<module>:` → `@:`），使 `make <module> plan|lint|migrate up` 可用。
@@ -149,7 +156,7 @@ migrations/orgunit/
    - `make <module> plan`
    - `make <module> lint`
    - `make <module> migrate up`
-   > 当前 CI 以 `paths.outputs.db == true` 粗粒度触发；Atlas/Goose 由 `scripts/db/run_atlas.sh`/`scripts/db/run_goose.sh` 自动安装，无需额外 install target。
+   > 当前 CI 以 `paths.outputs.db == true` 粗粒度触发（避免漏跑）；Atlas/Goose 由 `scripts/db/run_atlas.sh`/`scripts/db/run_goose.sh` 自动安装，无需额外 install target。
 7. [ ] 记录 readiness：在对应 dev-record 中登记命令与结果（时间戳/环境/结论），作为可追溯证据。
 
 ## 6. 日常开发闭环（给“改 schema 的开发者”用）
@@ -168,7 +175,7 @@ migrations/orgunit/
 
 - [ ] `atlas migrate validate` 报 `atlas.sum` 不一致：运行 `./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/<module>" --dir-format goose` 后重新 validate，并提交 `atlas.sum`。
 - [ ] `goose` 执行了“别的模块”的迁移：检查是否误用迁移目录（应为 `migrations/<module>`）或误用版本表（应为 `goose_db_version_<module>`）；建议优先使用 `make <module> migrate up|down`（内部固定 `-dir/-table`）。
-- [ ] Atlas plan/lint 报引用表不存在（FK 依赖缺失）：优先移除跨模块 FK；若必须保留，则补齐 `core_deps.sql` 的最小定义。
+- [ ] Atlas plan/lint 报引用表不存在（FK 依赖缺失）：优先移除跨模块 FK（默认口径）；如确需 FK，必须先补齐“依赖顺序 + 工具链可复现方案”，并在子域 dev-plan 论证后再落地。
 - [ ] plan 输出出现大规模 drop/create：优先检查是否连接到错误 DB，或 DB 已被手工修改导致 drift；禁止用“手工改库”去对齐 schema，应回到迁移闭环。
 - [ ] 需要破坏性变更（drop column/table）：先在子域 dev-plan 明确回滚与数据迁移策略，并通过 lint 的破坏性规则；禁止绕过门禁强推。
 
@@ -193,7 +200,7 @@ migrations/orgunit/
 
 ### 9.2 演化（确定性与可复现）
 - 通过：命名约定冻结 + SSOT 引用明确（`Makefile`/CI/`scripts/db/*.sh`），避免“口头流程”。
-- 风险：跨模块 FK 会迫使 stub 扩张；已给出“避免 FK 优先”的收敛口径与停止线。
+- 风险：跨模块 FK 会迫使工具链复杂化（stub/dev DB/依赖顺序）；已冻结“默认禁止 FK + 例外需 dev-plan 论证”的停止线。
 
 ### 9.3 认知（Simple > Easy）
 - 通过：把复杂度集中在一条闭环流水线（plan→diff→hash→lint→apply），不引入第二套迁移系统。
@@ -202,15 +209,19 @@ migrations/orgunit/
 ### 9.4 维护（可替换性）
 - 通过：闭环拆解成可替换环节（Schema SSOT、Atlas 校验、Goose apply），未来若替换执行器（非本计划）也有清晰边界。
 
-## 10. 待决策事项（Open Questions）
+## 10. 决策记录与待决策事项
 
-> 目的：把仍需明确的关键决策显式化，避免在实现阶段“撞出来”。
+> 目的：把关键口径显式化，避免在实现期“撞出来”；同时保留历史问题的可追溯性。
 
-- [ ] 跨模块依赖/FK 是否“允许/禁止/有限允许”？（默认建议：优先禁止；确需 FK 的场景在子域 dev-plan 单独论证并给出可复现闭环）
-  - 现状：`scripts/db/plan.sh`/`scripts/db/lint.sh` 不会读取 `modules/<module>/infrastructure/atlas/core_deps.sql`，因此“stub 方案”目前仅是概念，需要另行实现或明确为不支持。
-  - 典型例外候选：`tenant_id` → `iam.tenants(id)`；若坚持 FK，则需明确依赖顺序（CI/本地必须先 `make iam migrate up`）以及 Atlas validate 的 dev DB 如何具备依赖对象。
-- [ ] Atlas 执行入口是否收敛到 `atlas.hcl` env？（默认建议：门禁 SSOT 继续以 `scripts/db/*.sh` 的显式参数为准；`atlas.hcl` 仅作手工辅助）
-  - 影响：是否引入 `make <module> diff` / `make <module> hash` 等包装命令以减少参数漂移。
-- [ ] CI DB Gates 触发粒度：继续使用 `paths.outputs.db` 粗粒度，还是升级到“模块级 filter”？（默认建议：粗粒度直到模块数/耗时触发优化门槛）
-  - 影响：新增模块是否必须改 workflow；以及 DB gate 的 CI 时间/并行度。
-- [ ] 是否为每个模块定义最小 smoke（类似 `cmd/dbtool`）？（默认建议：仅对关键平台模块/首个垂直切片模块强制 smoke，其余先以 `migrate up` 覆盖）
+### 10.1 已冻结决策
+- [x] **跨模块 FK：默认禁止**。跨模块仅存 ID；如确需 FK，必须在子域 dev-plan 论证“依赖顺序 + 工具链可复现方案 + 回滚影响面”，并落地对应脚本/CI 支持后方可启用（见 §3.4）。
+- [x] **`core_deps.sql`：仅预留，不作为现行方案**。当前 `scripts/db/plan.sh`/`scripts/db/lint.sh` 不读取该文件，避免形成“第二权威表达”；后续若要支持，需另开计划实现（见 §3.4/§5.2）。
+- [x] **门禁入口：以 `make <module> plan|lint|migrate` 与 `scripts/db/*.sh` 为 SSOT**。`atlas.hcl` 仅作手工辅助，防止出现多入口与参数漂移。
+- [x] **CI DB Gates：先维持粗粒度触发**（`paths.outputs.db == true`），优先 fail-safe 避免漏跑；当模块数/耗时达到优化阈值再升级到模块级 filter（见 §5.2/§8.2）。
+- [x] **smoke：默认只要求 `migrate up`**；仅对关键平台模块或首个垂直切片模块强制额外 smoke，其它模块按需引入，避免脚本/测试入口泛滥。
+
+### 10.2 历史待决策问题（已收敛）
+- [x] 跨模块依赖/FK 是否“允许/禁止/有限允许”？—— 已冻结为“默认禁止；例外需 dev-plan 论证并落地可复现闭环”（见 §3.4/§10.1）。
+- [x] Atlas 执行入口是否收敛到 `atlas.hcl` env？—— 已冻结为“门禁 SSOT 以 `scripts/db/*.sh` 显式参数为准；`atlas.hcl` 仅作手工辅助”（见 §3.2/§10.1）。
+- [x] CI DB Gates 触发粒度：粗粒度还是模块级 filter？—— 已冻结为“先维持粗粒度（避免漏跑），达到优化阈值再升级”（见 §5.2/§8.2/§10.1）。
+- [x] 是否为每个模块定义最小 smoke（类似 `cmd/dbtool`）？—— 已冻结为“默认只要求 `migrate up`；关键模块/首个垂直切片模块可额外 smoke”（见 §8.2/§10.1）。
