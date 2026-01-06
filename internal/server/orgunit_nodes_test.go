@@ -136,6 +136,22 @@ func TestHandleOrgNodes_POST_SuccessRedirect(t *testing.T) {
 	}
 }
 
+func TestHandleOrgNodes_POST_SuccessRedirect_PreservesQuery(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", bytes.NewBufferString("name=A"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-06" {
+		t.Fatalf("location=%q", loc)
+	}
+}
+
 func TestHandleOrgNodes_MethodNotAllowed(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	req := httptest.NewRequest(http.MethodPut, "/org/nodes", nil)
@@ -149,11 +165,11 @@ func TestHandleOrgNodes_MethodNotAllowed(t *testing.T) {
 }
 
 func TestRenderOrgNodes(t *testing.T) {
-	out := renderOrgNodes(nil, Tenant{Name: "T"}, "")
+	out := renderOrgNodes(nil, Tenant{Name: "T"}, "", "legacy", "2026-01-06")
 	if out == "" {
 		t.Fatal("expected output")
 	}
-	out2 := renderOrgNodes([]OrgUnitNode{{ID: "1", Name: "N"}}, Tenant{Name: "T"}, "err")
+	out2 := renderOrgNodes([]OrgUnitNode{{ID: "1", Name: "N"}}, Tenant{Name: "T"}, "err", "legacy", "2026-01-06")
 	if out2 == "" {
 		t.Fatal("expected output")
 	}
@@ -161,7 +177,7 @@ func TestRenderOrgNodes(t *testing.T) {
 
 func TestOrgUnitPGStore_ListAndCreate(t *testing.T) {
 	pool := &fakeBeginner{}
-	store := newOrgUnitPGStore(pool)
+	store := &orgUnitPGStore{pool: pool}
 
 	nodes, err := store.ListNodes(context.Background(), "t1")
 	if err != nil {
@@ -171,12 +187,232 @@ func TestOrgUnitPGStore_ListAndCreate(t *testing.T) {
 		t.Fatalf("nodes=%+v", nodes)
 	}
 
+	nodesV4, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodesV4) != 1 || nodesV4[0].ID != "n1" {
+		t.Fatalf("nodes=%+v", nodesV4)
+	}
+
 	created, err := store.CreateNode(context.Background(), "t1", "A")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if created.ID != "n2" || created.Name != "A" {
 		t.Fatalf("created=%+v", created)
+	}
+}
+
+type v4SpyStore struct {
+	legacyCalled int
+	v4Called     int
+
+	v4Nodes     []OrgUnitNode
+	v4Err       error
+	legacyNodes []OrgUnitNode
+	legacyErr   error
+}
+
+func (s *v4SpyStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
+	s.legacyCalled++
+	return s.legacyNodes, s.legacyErr
+}
+
+func (s *v4SpyStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode, error) {
+	s.v4Called++
+	return s.v4Nodes, s.v4Err
+}
+
+func (s *v4SpyStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
+	return OrgUnitNode{}, nil
+}
+
+func TestHandleOrgNodes_GET_ReadV4_UsesV4WhenAvailable(t *testing.T) {
+	store := &v4SpyStore{
+		v4Nodes:     []OrgUnitNode{{ID: "v1", Name: "V"}},
+		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if store.v4Called != 1 || store.legacyCalled != 0 {
+		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("V")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleOrgNodes_GET_ReadV4_FallbackOnError(t *testing.T) {
+	store := &v4SpyStore{
+		v4Err:       errors.New("v4 boom"),
+		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if store.v4Called != 1 || store.legacyCalled != 1 {
+		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 读取失败")) || !bytes.Contains([]byte(body), []byte("L")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleOrgNodes_GET_ReadV4_FallbackOnEmpty(t *testing.T) {
+	store := &v4SpyStore{
+		v4Nodes:     nil,
+		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if store.v4Called != 1 || store.legacyCalled != 1 {
+		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 快照为空")) || !bytes.Contains([]byte(body), []byte("L")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleOrgNodes_GET_ReadV4_BadAsOf(t *testing.T) {
+	store := &v4SpyStore{
+		v4Nodes:     []OrgUnitNode{{ID: "v1", Name: "V"}},
+		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=bad", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if store.v4Called != 0 || store.legacyCalled != 1 {
+		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("as_of 无效")) || !bytes.Contains([]byte(body), []byte("L")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleOrgNodes_GET_ReadV4_BadAsOf_LegacyError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=bad", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, errStore{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("as_of 无效，且 legacy 读取失败")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_LegacyError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, errStore{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 reader 未配置，且 legacy 读取失败")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_FallbackSuccess(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	_, _ = store.CreateNode(context.Background(), "t1", "L")
+
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 reader 未配置，已回退到 legacy")) || !bytes.Contains([]byte(body), []byte("L")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+type v4ErrStore struct {
+	legacyErr error
+	v4Err     error
+}
+
+func (s v4ErrStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
+	return nil, s.legacyErr
+}
+func (s v4ErrStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
+	return OrgUnitNode{}, nil
+}
+func (s v4ErrStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode, error) {
+	return nil, s.v4Err
+}
+
+func TestHandleOrgNodes_GET_ReadV4_V4Error_LegacyError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, v4ErrStore{legacyErr: errors.New("legacy boom"), v4Err: errors.New("v4 boom")})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 读取失败: v4 boom；且 legacy 读取失败: legacy boom")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+type v4EmptyLegacyErrStore struct{}
+
+func (v4EmptyLegacyErrStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
+	return nil, errors.New("legacy boom")
+}
+func (v4EmptyLegacyErrStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
+	return OrgUnitNode{}, nil
+}
+func (v4EmptyLegacyErrStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode, error) {
+	return nil, nil
+}
+
+func TestHandleOrgNodes_GET_ReadV4_Empty_LegacyError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, v4EmptyLegacyErrStore{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("legacy 读取失败: legacy boom")) {
+		t.Fatalf("unexpected body: %q", body)
 	}
 }
 
@@ -238,6 +474,68 @@ func TestOrgUnitPGStore_ListNodes_Errors(t *testing.T) {
 			return &stubTx{commitErr: errors.New("commit")}, nil
 		}))
 		_, err := store.ListNodes(context.Background(), "t1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestOrgUnitPGStore_ListNodesV4_Errors(t *testing.T) {
+	t.Run("begin", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		})}
+		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set_config", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		})}
+		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{queryErr: errors.New("query")}, nil
+		})}
+		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("scan", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &stubRows{scanErr: errors.New("scan")}}, nil
+		})}
+		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rows_err", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &stubRows{err: errors.New("rows")}}, nil
+		})}
+		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{commitErr: errors.New("commit")}, nil
+		})}
+		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -378,6 +676,7 @@ func (t *stubTx) QueryRow(context.Context, string, ...any) pgx.Row {
 }
 
 type stubRows struct {
+	empty   bool
 	nextN   int
 	scanErr error
 	err     error
@@ -390,6 +689,9 @@ func (r *stubRows) FieldDescriptions() []pgconn.FieldDescription {
 	return nil
 }
 func (r *stubRows) Next() bool {
+	if r.empty {
+		return false
+	}
 	if r.nextN > 0 {
 		return false
 	}
