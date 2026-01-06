@@ -146,6 +146,9 @@ flowchart TD
   - `make e2e`（smoke）
   - `make check doc`（若 dev-plans 同仓）
   - `make check tr`（i18n：en/zh）
+  - 开发环境（本地一键启动，避免环境变量漂移）：
+    - `make dev-up` / `make dev-down`
+    - `make dev-server`：必须自动加载 `.env.local`（优先）/`env.local`/`.env`，避免 DB 端口回落到默认值（例如 `5438`）导致“连接拒绝”
   - DB（按模块）：`make <module> plan|lint|migrate up`（至少 `iam` 先跑通；对齐 024）
   - 生成物（按需）：`make sqlc-generate`、`make authz-pack/authz-test/authz-lint`
 
