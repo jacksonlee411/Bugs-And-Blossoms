@@ -142,6 +142,8 @@ modules/{module}/
 - 技术设计模板：`docs/dev-plans/001-technical-design-template.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
 - DEV-PLAN-004：全仓去除版本标记（命名降噪 + 避免对外契约污染）：`docs/dev-plans/004-remove-version-marker-repo-wide.md`
+- DEV-PLAN-004 记录：全仓去除版本标记——映射表（草案）：`docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`
+- DEV-PLAN-004 记录：全仓去除版本标记——执行日志：`docs/dev-records/dev-plan-004-execution-log.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-v4-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
