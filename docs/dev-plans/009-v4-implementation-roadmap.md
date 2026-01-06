@@ -1,6 +1,6 @@
 # DEV-PLAN-009：V4 Greenfield 全新实施路线图（009-031）
 
-**状态**: 规划中（2026-01-05 12:56 UTC）
+**状态**: 实施中（2026-01-06）
 
 > 目标：在“从 0 开始的新代码仓库（Greenfield）”里，按 `DEV-PLAN-010`～`DEV-PLAN-031` 的契约，全新实施一套可运行、可验证、可演进的 HRMS v4。  
 > 本文只做 **路线图编排（先后顺序 + 串行/并行）**，不复制各计划内部的细节；具体合同以对应 dev-plan 为准。  
@@ -9,7 +9,8 @@
 ## 0. 进度速记
 1. [X] 新增 `DEV-PLAN-009` 并登记到 `AGENTS.md` Doc Map。
 2. [ ] 将本文拆成可执行里程碑（M0-M6），并把每个里程碑映射到可交付的 PR 序列（新仓库执行）。
-3. [ ] P0 前置条件（仓库 bootstrap/门禁/壳/最小登录/迁移闭环）以 `DEV-PLAN-010` 为合同执行，避免实现期漂移。
+3. [X] P0 前置条件（仓库 bootstrap/门禁/壳/最小登录/迁移闭环）以 `DEV-PLAN-010` 为合同执行，避免实现期漂移。
+   - 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`、#11 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/11
 
 ## 1. 背景（从 0 开始实施的约束）
 V4 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必须尽早冻结“可验证的工程契约”，否则实现期会出现：
@@ -81,10 +82,10 @@ V4 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必�
 - 可并行：
   - `013 || 014 || 015 || 017`
 - 出口条件（进入 Phase 1 前必须满足）：
-  1. [ ] 版本基线与 SSOT 明确（011）。
-  2. [ ] DDD 分层框架与模块边界可用于 code review（015/016）。
-  3. [ ] 路由命名空间与 routing gates SSOT 明确（017）。
-  4. [ ] CI 至少具备“required checks 外壳 + Makefile 单一入口”能力（012 的骨架）。
+  1. [X] 版本基线与 SSOT 明确（011）。证据：#1 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/1
+  2. [X] DDD 分层框架与模块边界可用于 code review（015/016）。证据：#4 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/4
+  3. [X] 路由命名空间与 routing gates SSOT 明确（017）。证据：#3 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/3
+  4. [X] CI 至少具备“required checks 外壳 + Makefile 单一入口”能力（012 的骨架）。证据：#2 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/2
 
 ### Phase 1：用户可见骨架（先有壳，再长肉）
 > 依据“用户可见性原则”，UI 不作为最后阶段集中交付：先把壳、导航、语言、as-of 与登录最小链路跑通，让后续所有能力都能“挂到页面上”。
@@ -94,10 +95,10 @@ V4 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必�
   - `019`（Tenancy/AuthN/session，先做最小可登录闭环）
   - `020`（i18n：en/zh + 语言切换写入口）
 - 出口条件：
-  1. [ ] UI Shell 可运行：导航/Topbar/Flash/as-of 透传具备最小可用形态（018）。
-  2. [ ] tenant app 至少可完成“确定租户 → 登录 → 进入壳”的最小链路（019）。
-  3. [ ] 语言切换可用且只允许 `en/zh`，切换后整页一致刷新（020）。
-  4. [ ] 4 个业务模块入口在导航中可见：未实现模块以占位页呈现“未交付/计划中的能力”，作为后续实现的唯一挂载点（避免隐形功能长期漂移）。
+  1. [X] UI Shell 可运行：导航/Topbar/Flash/as-of 透传具备最小可用形态（018）。证据：#5 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5
+  2. [X] tenant app 至少可完成“确定租户 → 登录 → 进入壳”的最小链路（019）。证据：#6 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/6 、#23 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/23 、#24 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/24
+  3. [X] 语言切换可用且只允许 `en/zh`，切换后整页一致刷新（020）。证据：#5 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5
+  4. [X] 4 个业务模块入口在导航中可见：未实现模块以占位页呈现“未交付/计划中的能力”，作为后续实现的唯一挂载点（避免隐形功能长期漂移）。证据：#13 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/13
 
 ### Phase 2：平台与安全硬化（能圈地、能拒绝、能旁路且可审计）
 - 串行关键路径：`019 => 021 => 022`（`023` 跟随）
@@ -113,8 +114,8 @@ V4 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必�
 - 并行说明：
   - 本阶段可以与 Phase 4 的业务实现并行，但必须在“第一批 migrations/sqlc/authz 生成物合入主干”前完成收口。
 - 出口条件：
-  1. [ ] Atlas+Goose：按模块能 plan/lint/migrate smoke（024）。
-  2. [ ] sqlc：schema 输入/导出策略冻结，且生成物一致性可被 CI 阻断（025/012）。
+  1. [X] Atlas+Goose：按模块能 plan/lint/migrate smoke（024）。证据：#7 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/7 、#14 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/14
+  2. [X] sqlc：schema 输入/导出策略冻结，且生成物一致性可被 CI 阻断（025/012）。证据：#8 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/8
 
 ### Phase 4：业务垂直切片（业务 + UI 同步交付）
 > 本阶段不允许“先堆后端、最后补 UI”：每条子链路的 done 需要同时满足“内核闭环 + 页面可见/可操作”。
@@ -127,7 +128,7 @@ V4 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必�
   - `026 + 029 => 030(position)`
   - `030 + 027 => 031(assignments)`
 - 出口条件（最小端到端闭环，且必须用户可见）：
-  1. [ ] OrgUnit：至少一条“写入→读树/详情”的 UI 操作链路可演示（026 + 018）。
+  1. [X] OrgUnit：至少一条“写入→读树/详情”的 UI 操作链路可演示（026 + 018）。证据：#21 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/21 、#22 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/22 、#26 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/26 、#28 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/28 、#29 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/29 、#30 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/30
   2. [ ] Person Identity：`pernr -> person_uuid` 精确解析可被页面/表单实际复用（027 + 018），避免 staffing 自己解析形成隐形耦合。
   3. [ ] SetID + JobCatalog：SetID 映射可配置，并在 JobCatalog 至少一个实体形成“解析→写入→列表读取”的 UI 样板（028 + 029 + 018）。
   4. [ ] Staffing：Position 与 Assignments 的 v4 写入口与读模型闭环可用，且至少一条“创建/更新→列表可见”的 UI 链路存在（030/031 + 018）。
