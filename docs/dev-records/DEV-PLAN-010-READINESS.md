@@ -69,3 +69,16 @@
 - 结论：
   - `make dev-up` 后 postgres/redis 可用（端口来自 `.env.local`）
   - `make dev-server` 启动的 server 不会回落到默认 DB 端口（避免出现 `127.0.0.1:5438 connect: connection refused`）
+
+## 9. 浏览器验证脚本（本地可复现）
+
+目的：把“从启动到可见业务操作”的最小闭环固化为可复现步骤。
+
+- 启动：
+  - `make dev`（或分别运行 `make dev-up` + `make dev-server`）
+- 打开并登录：
+  - `http://localhost:8080/login`（点击 Login 按钮）
+- 访问 OrgUnit（默认 v4 读取；可回退）：
+  - `http://localhost:8080/org/nodes?as_of=2026-01-06`（默认读取优先 v4，失败/为空自动回退 legacy）
+  - 强制 legacy：`http://localhost:8080/org/nodes?read=legacy`
+  - 强制 v4：`http://localhost:8080/org/nodes?read=v4&as_of=2026-01-06`

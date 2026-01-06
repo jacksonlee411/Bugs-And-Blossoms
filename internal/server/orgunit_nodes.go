@@ -268,6 +268,14 @@ func (s *orgUnitMemoryStore) CreateNode(_ context.Context, tenantID string, name
 	return n, nil
 }
 
+func (s *orgUnitMemoryStore) ListNodesV4(_ context.Context, tenantID string, _ string) ([]OrgUnitNode, error) {
+	return s.ListNodes(context.Background(), tenantID)
+}
+
+func (s *orgUnitMemoryStore) CreateNodeV4(_ context.Context, tenantID string, _ string, name string, _ string) (OrgUnitNode, error) {
+	return s.CreateNode(context.Background(), tenantID, name)
+}
+
 func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -281,7 +289,10 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 	}
 	preferRead := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("read")))
 	if preferRead == "" {
-		preferRead = "legacy"
+		preferRead = "v4"
+	}
+	if preferRead != "legacy" && preferRead != "v4" {
+		preferRead = "v4"
 	}
 
 	listNodes := func(errHint string) ([]OrgUnitNode, string) {
@@ -405,7 +416,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, readMode 
 	b.WriteString("<h1>OrgUnit</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
 	b.WriteString("<p>Read: <code>" + html.EscapeString(readMode) + "</code></p>")
-	b.WriteString(`<p><a href="/org/nodes">Use legacy read</a> | <a href="/org/nodes?read=v4&as_of=` + html.EscapeString(asOf) + `">Try v4 read</a></p>`)
+	b.WriteString(`<p><a href="/org/nodes?read=legacy&as_of=` + html.EscapeString(asOf) + `">Use legacy read</a> | <a href="/org/nodes?read=v4&as_of=` + html.EscapeString(asOf) + `">Use v4 read</a></p>`)
 	if readMode == "v4" {
 		b.WriteString(`<form method="GET" action="/org/nodes">`)
 		b.WriteString(`<input type="hidden" name="read" value="v4" />`)
