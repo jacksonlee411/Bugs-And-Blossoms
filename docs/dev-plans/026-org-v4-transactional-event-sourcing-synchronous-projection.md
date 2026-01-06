@@ -1189,7 +1189,7 @@ func (s *OrgServiceV4) MoveOrg(ctx context.Context, tenantID uuid.UUID, cmd Move
   - [ ] 同一 `org_id` 在同一 `effective_date` 第二次提交（不同 `event_id`）稳定失败，并映射为 `ORG_EVENT_CONFLICT_SAME_DAY`。
   - [ ] RLS（对齐 `DEV-PLAN-021`）：缺失 `app.current_tenant` 时对 v4 表的读写必须 fail-closed（不得以“空结果”掩盖注入遗漏）。
   - [ ] RLS（对齐 `DEV-PLAN-021`）：`app.current_tenant` 与 `p_tenant_id` 不一致时，`submit_org_event/replay_org_unit_versions` 必须稳定失败（tenant mismatch）。
-  - [ ] UI 集成（渐进切换）：`/org/nodes` 默认读取优先 v4（`get_org_snapshot`），失败/为空自动回退 legacy；可用 `read=legacy` 强制走 legacy（用于回退/排障）。
+  - [ ] UI 集成（渐进切换）：`/org/nodes` 默认读取优先 v4（`get_org_snapshot`），失败/为空自动回退 legacy；可用 `read=legacy` 强制走 legacy（仅用于过渡期回退/排障）。`read=legacy` 必须有删除条件与时间盒：当 `/org/nodes` 的 v4 写入能力覆盖到 CREATE/RENAME/MOVE/DISABLE 且本地 `make preflight` 与浏览器验证脚本稳定通过后，必须移除 `read=legacy`（最晚不应晚于开始实施 `DEV-PLAN-030` 之前）。
 - 性能（建议）：
   - [ ] `get_org_snapshot` 在 1k/10k 节点规模下 query 次数为常数（1 次），并可通过索引命中保持稳定延迟。
   - [ ] `EXPLAIN (ANALYZE, BUFFERS)` 显示 `get_org_snapshot` 的 snapshot 过滤命中 `org_unit_versions_active_day_gist`（或等价的 GiST/EXCLUDE 索引），避免全表 Seq Scan。
