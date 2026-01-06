@@ -82,3 +82,14 @@
   - `make check lint`：通过
   - `make test`：通过
   - `make check doc`：通过
+
+## PR-7：防回归门禁落地（禁止版本标记再次进入仓库）
+
+- **状态**：已完成（2026-01-06 11:46 UTC）
+- **范围**
+  - 新增命名去噪门禁：`./scripts/ci/check-no-version-marker.sh`
+  - 本地入口：接入 `make check naming` 与 `make preflight`
+  - CI：在 Quality Gates 中加入 `make check naming`（always）
+- **本地门禁**
+  - `make check naming`：通过
+  - `make check doc`：通过

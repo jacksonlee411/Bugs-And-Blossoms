@@ -8,7 +8,7 @@ export GOOSE_VERSION ?= v3.26.0
 export SQLC_VERSION ?= v1.28.0
 export GOIMPORTS_VERSION ?= v0.26.0
 
-.PHONY: help preflight check fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check naming fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
@@ -19,6 +19,7 @@ help:
 	@printf "%s\n" \
 		"常用入口：" \
 		"  make preflight" \
+		"  make check naming" \
 		"  make check fmt" \
 		"  make check lint" \
 		"  make test" \
@@ -35,6 +36,7 @@ help:
 		"  make iam migrate up"
 
 preflight: ## 本地一键对齐CI
+	@$(MAKE) check naming
 	@$(MAKE) check doc
 	@$(MAKE) check fmt
 	@$(MAKE) check lint
@@ -44,6 +46,9 @@ preflight: ## 本地一键对齐CI
 
 check:
 	@:
+
+naming: ## 命名去噪门禁（禁止版本标记再次进入仓库）
+	@./scripts/ci/check-no-version-marker.sh
 
 fmt: ## 格式化/格式检查（按项目能力渐进接入）
 	@if [[ -f go.mod ]]; then \
