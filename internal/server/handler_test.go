@@ -252,6 +252,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		"/ui/nav",
 		"/ui/topbar",
 		"/org/nodes",
+		"/org/v4/snapshot",
 		"/org/job-catalog",
 		"/org/positions",
 		"/org/assignments",
@@ -266,6 +267,16 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("path=%s status=%d", p, rec.Code)
 		}
+	}
+
+	reqOrgV4Post := httptest.NewRequest(http.MethodPost, "/org/v4/snapshot", strings.NewReader("name=A"))
+	reqOrgV4Post.Host = "localhost:8080"
+	reqOrgV4Post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqOrgV4Post.AddCookie(session)
+	recOrgV4Post := httptest.NewRecorder()
+	h.ServeHTTP(recOrgV4Post, reqOrgV4Post)
+	if recOrgV4Post.Code != http.StatusOK {
+		t.Fatalf("org v4 post status=%d", recOrgV4Post.Code)
 	}
 
 	reqCreate := httptest.NewRequest(http.MethodPost, "/org/nodes", strings.NewReader("name=NodeA"))
@@ -332,6 +343,40 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	rOther := &http.Request{Header: http.Header{}}
 	rOther.AddCookie(&http.Cookie{Name: "lang", Value: "fr"})
 	_ = lang(rOther)
+}
+
+func TestNewHandlerWithOptions_DefaultOrgUnitV4StoreFromPGStore(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
+	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		OrgUnitStore: newOrgUnitPGStore(&fakeBeginner{}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req.Host = "localhost:8080"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
 }
 
 func TestPathHasPrefixSegment(t *testing.T) {
