@@ -177,20 +177,20 @@ flowchart LR
    - Alpine 初始化不与 HTMX 冲突
 
 ### Phase 1：按模块逐个接入内容（不改 Shell）
-5. [ ] 按 016 的 4 模块顺序接入页面与二级菜单入口（未实现模块不出现在导航中）：
+6. [ ] 按 016 的 4 模块顺序接入页面与二级菜单入口（未实现模块不出现在导航中）：
    - OrgUnit（`/org/nodes`）
    - JobCatalog（`/org/job-catalog/*`，见 §3.2）
    - Staffing（`/org/positions`、`/org/assignments`）
    - Person（`/person/persons`，并通过 HTMX 组合 Staffing 的任职时间线）
-6. [ ] 导航 SSOT：二级菜单由服务端单点维护并渲染 `/ui/nav`（Astro 不维护第二份导航规则；避免出现“第二套权威表达”）。
+7. [ ] 导航 SSOT：二级菜单由服务端单点维护并渲染 `/ui/nav`（Astro 不维护第二份导航规则；避免出现“第二套权威表达”）。
 
 ### Phase 2：硬化与验收（对齐 026-031 契约）
-7. [ ] 全局 as-of 透传严格执行 Query 参数口径（见 §3.3）；`/ui/nav`、`/ui/topbar`、模块链接一律保留 `as_of`。
-8. [ ] 任职记录页严格执行：只展示 `effective_date`，不展示 `end_date`（对齐 031），但底层有效期仍为 `daterange [start,end)`。
-9. [ ] E2E：为“导航层级 + as-of 参数透传 + 任职仅展示 effective_date”补齐可视化验收用例（入口与门禁以 `DEV-PLAN-012` 为准）。
+8. [ ] 全局 as-of 透传严格执行 Query 参数口径（见 §3.3）；`/ui/nav`、`/ui/topbar`、模块链接一律保留 `as_of`。
+9. [ ] 任职记录页严格执行：只展示 `effective_date`，不展示 `end_date`（对齐 031），但底层有效期仍为 `daterange [start,end)`。
+10. [ ] E2E：为“导航层级 + as-of 参数透传 + 任职仅展示 effective_date”补齐可视化验收用例（入口与门禁以 `DEV-PLAN-012` 为准）。
 
 ### 回退策略（Greenfield 口径）
-10. [ ] 回退以“发布版本回滚”为唯一手段：上一版构建产物/上一版镜像；不在运行时引入旧页面并存或 feature flag 分流。
+11. [ ] 回退以“发布版本回滚”为唯一手段：上一版构建产物/上一版镜像；不在运行时引入旧页面并存或 feature flag 分流。
 
 ## 7. 验收标准（Acceptance Criteria）
 - [ ] 左侧导航布局与现有一致；一级仅 4 模块；二级菜单与 §3.2 完全一致。
