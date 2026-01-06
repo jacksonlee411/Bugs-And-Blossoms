@@ -23,6 +23,10 @@ type OrgUnitStore interface {
 	CreateNode(ctx context.Context, tenantID string, name string) (OrgUnitNode, error)
 }
 
+type OrgUnitNodesV4Reader interface {
+	ListNodesV4(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
+}
+
 type orgUnitPGStore struct {
 	pool pgBeginner
 }
@@ -52,6 +56,59 @@ FROM orgunit.nodes
 WHERE tenant_id = $1::uuid
 ORDER BY created_at DESC
 `, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []OrgUnitNode
+	for rows.Next() {
+		var n OrgUnitNode
+		if err := rows.Scan(&n.ID, &n.Name, &n.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *orgUnitPGStore) ListNodesV4(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	rows, err := tx.Query(ctx, `
+WITH snapshot AS (
+  SELECT org_id, name
+  FROM orgunit.get_org_snapshot($1::uuid, $2::date)
+)
+SELECT
+  s.org_id::text,
+  s.name,
+  e.transaction_time
+FROM snapshot s
+JOIN orgunit.org_unit_versions v
+  ON v.tenant_id = $1::uuid
+ AND v.hierarchy_type = 'OrgUnit'
+ AND v.org_id = s.org_id
+ AND v.status = 'active'
+ AND v.validity @> $2::date
+JOIN orgunit.org_events e
+  ON e.id = v.last_event_id
+ORDER BY e.transaction_time DESC
+`, tenantID, asOfDate)
 	if err != nil {
 		return nil, err
 	}
@@ -149,32 +206,86 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 		return
 	}
 
-	switch r.Method {
-	case http.MethodGet:
+	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
+	if asOf == "" {
+		asOf = time.Now().UTC().Format("2006-01-02")
+	}
+	preferRead := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("read")))
+	if preferRead == "" {
+		preferRead = "legacy"
+	}
+
+	listNodes := func(errHint string) ([]OrgUnitNode, string) {
+		if preferRead == "v4" {
+			if _, err := time.Parse("2006-01-02", asOf); err != nil {
+				nodes, legacyErr := store.ListNodes(r.Context(), tenant.ID)
+				if legacyErr != nil {
+					return nil, "as_of 无效，且 legacy 读取失败: " + legacyErr.Error()
+				}
+				return nodes, "as_of 无效，已回退到 legacy: " + err.Error()
+			}
+
+			v4Store, ok := store.(OrgUnitNodesV4Reader)
+			if !ok {
+				nodes, err := store.ListNodes(r.Context(), tenant.ID)
+				if err != nil {
+					return nil, "v4 reader 未配置，且 legacy 读取失败: " + err.Error()
+				}
+				return nodes, "v4 reader 未配置，已回退到 legacy"
+			}
+
+			nodesV4, err := v4Store.ListNodesV4(r.Context(), tenant.ID, asOf)
+			if err == nil && len(nodesV4) > 0 {
+				return nodesV4, errHint
+			}
+
+			nodes, legacyErr := store.ListNodes(r.Context(), tenant.ID)
+			if legacyErr != nil {
+				if err != nil {
+					return nil, "v4 读取失败: " + err.Error() + "；且 legacy 读取失败: " + legacyErr.Error()
+				}
+				return nil, "legacy 读取失败: " + legacyErr.Error()
+			}
+			if err != nil {
+				return nodes, "v4 读取失败，已回退到 legacy: " + err.Error()
+			}
+			return nodes, "v4 快照为空，已回退到 legacy"
+		}
+
 		nodes, err := store.ListNodes(r.Context(), tenant.ID)
 		if err != nil {
-			writePage(w, r, renderOrgNodes(nodes, tenant, err.Error()))
-			return
+			return nil, err.Error()
 		}
-		writePage(w, r, renderOrgNodes(nodes, tenant, ""))
+		return nodes, errHint
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		nodes, errMsg := listNodes("")
+		writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
-			writePage(w, r, renderOrgNodes(nil, tenant, "bad form"))
+			nodes, errMsg := listNodes("bad form")
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 			return
 		}
 		name := strings.TrimSpace(r.Form.Get("name"))
 		if name == "" {
-			nodes, _ := store.ListNodes(r.Context(), tenant.ID)
-			writePage(w, r, renderOrgNodes(nodes, tenant, "name is required"))
+			nodes, errMsg := listNodes("name is required")
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 			return
 		}
 		if _, err := store.CreateNode(r.Context(), tenant.ID, name); err != nil {
-			nodes, _ := store.ListNodes(r.Context(), tenant.ID)
-			writePage(w, r, renderOrgNodes(nodes, tenant, err.Error()))
+			nodes, errMsg := listNodes(err.Error())
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 			return
 		}
-		http.Redirect(w, r, "/org/nodes", http.StatusSeeOther)
+		redirectTo := "/org/nodes"
+		if r.URL.RawQuery != "" {
+			redirectTo += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, redirectTo, http.StatusSeeOther)
 		return
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -182,16 +293,29 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 	}
 }
 
-func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string) string {
+func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, readMode string, asOf string) string {
 	var b strings.Builder
 	b.WriteString("<h1>OrgUnit</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
+	b.WriteString("<p>Read: <code>" + html.EscapeString(readMode) + "</code></p>")
+	b.WriteString(`<p><a href="/org/nodes">Use legacy read</a> | <a href="/org/nodes?read=v4&as_of=` + html.EscapeString(asOf) + `">Try v4 read</a></p>`)
+	if readMode == "v4" {
+		b.WriteString(`<form method="GET" action="/org/nodes">`)
+		b.WriteString(`<input type="hidden" name="read" value="v4" />`)
+		b.WriteString(`<label>As-of <input type="date" name="as_of" value="` + html.EscapeString(asOf) + `" /></label> `)
+		b.WriteString(`<button type="submit">Apply</button>`)
+		b.WriteString(`</form>`)
+	}
 
 	if errMsg != "" {
 		b.WriteString(`<div style="padding:8px;border:1px solid #c00;color:#c00">` + html.EscapeString(errMsg) + `</div>`)
 	}
 
-	b.WriteString(`<form method="POST" action="/org/nodes">`)
+	postAction := "/org/nodes"
+	if readMode == "v4" {
+		postAction += "?read=v4&as_of=" + html.EscapeString(asOf)
+	}
+	b.WriteString(`<form method="POST" action="` + postAction + `">`)
 	b.WriteString(`<label>Name <input name="name" /></label>`)
 	b.WriteString(`<button type="submit">Create</button>`)
 	b.WriteString(`</form>`)
