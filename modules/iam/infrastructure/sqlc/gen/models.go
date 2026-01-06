@@ -22,3 +22,41 @@ type OrgunitNode struct {
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
+
+type OrgunitOrgEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	HierarchyType   string             `json:"hierarchy_type"`
+	OrgID           pgtype.UUID        `json:"org_id"`
+	EventType       string             `json:"event_type"`
+	EffectiveDate   pgtype.Date        `json:"effective_date"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type OrgunitOrgTree struct {
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	HierarchyType string             `json:"hierarchy_type"`
+	RootOrgID     pgtype.UUID        `json:"root_org_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OrgunitOrgUnitVersion struct {
+	ID            int64                     `json:"id"`
+	TenantID      pgtype.UUID               `json:"tenant_id"`
+	HierarchyType string                    `json:"hierarchy_type"`
+	OrgID         pgtype.UUID               `json:"org_id"`
+	ParentID      pgtype.UUID               `json:"parent_id"`
+	NodePath      string                    `json:"node_path"`
+	Validity      pgtype.Range[pgtype.Date] `json:"validity"`
+	PathIds       []pgtype.UUID             `json:"path_ids"`
+	Name          string                    `json:"name"`
+	Status        string                    `json:"status"`
+	ManagerID     pgtype.UUID               `json:"manager_id"`
+	LastEventID   int64                     `json:"last_event_id"`
+}
