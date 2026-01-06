@@ -1,6 +1,6 @@
 # DEV-PLAN-022：Authz（Casbin）工具链与实施方案（Greenfield）
 
-**状态**: 草拟中（2026-01-06 09:04 UTC）
+**状态**: 部分完成（009M1：tenant app 最小可拒绝；2026-01-06 23:40 UTC）
 
 > 适用范围：本仓库（`Bugs-And-Blossoms`）的 **Greenfield implementation**。如未来拆分到独立仓库，本计划冻结的 Authz 契约与工具链口径仍应保持一致，避免“同一概念两套权威表达”。
 >
@@ -17,10 +17,16 @@
 
 ### 2.1 核心目标
 
-- [ ] 冻结 Authz 合同：`subject/object/action/domain` 的命名规范与不变量（用于 code review、lint、测试断言）。
-- [ ] 明确 policy SSOT 与发布口径（baseline = Git 管理 + pack），并定义“生产可复现”的约束。
-- [ ] 给出模块级接入模板（controller/service 如何调用 `pkg/authz` 门面、以及 403/forbidden 契约）。
-- [ ] 形成本仓库 Authz 工具链门禁清单（触发器、CI 入口、生成物与验收标准），避免实现期临时拼装。
+- [X] 冻结 Authz 合同：`subject/object/action/domain` 的命名规范与不变量（用于 code review、lint、测试断言）。
+- [X] 明确 policy SSOT 与发布口径（baseline = Git 管理 + pack），并定义“生产可复现”的约束。
+- [X] 给出模块级接入模板（controller/service 如何调用 `pkg/authz` 门面、以及 403/forbidden 契约）。
+- [X] 形成本仓库 Authz 工具链门禁清单（触发器、CI 入口、生成物与验收标准），避免实现期临时拼装。
+
+009M1 落地（最小可拒绝）：
+- `pkg/authz/*`：Authorizer 门面与 mode 语义（`disabled|shadow|enforce`）
+- `internal/server/authz_middleware.go`：统一 403/forbidden 契约
+- policy SSOT/生成物：`config/access/policies/00-bootstrap.csv` → `config/access/policy.csv`、`config/access/policy.csv.rev`
+- 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
 
 ### 2.2 非目标（明确不做）
 

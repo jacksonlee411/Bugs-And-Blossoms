@@ -80,3 +80,24 @@
   - `http://localhost:8080/login`（点击 Login 按钮）
 - 访问 OrgUnit（单链路 current）：
   - `http://localhost:8080/org/nodes?as_of=2026-01-06`（读取 current；失败/为空显式报错并引导修复/重试）
+
+## 10. DEV-PLAN-009M1（SetID + JobCatalog 纵切片）
+
+证据：
+- 日期：2026-01-06
+- 本地门禁：`make preflight`（全绿）
+- 新增表/迁移（红线）手工确认：用户已在对话中确认追认（2026-01-06）
+- DB 闭环（Atlas+Goose + smoke）：
+  - `make iam plan && make iam lint && make iam migrate up`（含 `rls-smoke`）
+  - `make orgunit plan && make orgunit lint && make orgunit migrate up`（含 `orgunit-smoke`）
+  - `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）
+- 端到端（HTTP/curl，可复现）：
+  - 前置：`make dev-up`（需要本机 `.env.local`/`env.local`/`.env` 提供 `DB_PORT` 等；本仓库 `.env.local` 已被 `.gitignore` 忽略）
+  - 启动：`make dev-server`
+  - 登录：`curl -i -X POST -H 'Host: localhost:8080' -c /tmp/bb_cookies.txt http://127.0.0.1:8080/login`（拿到 `session=ok`）
+  - SetID/BU 创建：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=create_setid&setid=S2601&name=Smoke+SetID' http://127.0.0.1:8080/org/setid`（303）
+  - BU 创建：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=create_bu&business_unit_id=BU901&name=Smoke+BU' http://127.0.0.1:8080/org/setid`（303）
+  - Mappings 保存：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=save_mappings&map_BU000=SHARE&map_BU901=S2601' http://127.0.0.1:8080/org/setid`（303）
+  - JobCatalog 解析验证：`curl -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt 'http://127.0.0.1:8080/org/job-catalog?as_of=2026-01-01&business_unit_id=BU901'`（页面显示 `Resolved SetID: S2601`）
+  - Job Family Group 创建：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=create_job_family_group&effective_date=2026-01-01&business_unit_id=BU901&code=JC901&name=Smoke+Group&description=' 'http://127.0.0.1:8080/org/job-catalog?business_unit_id=BU901&as_of=2026-01-01'`（303）
+  - 列表读取验证：同 GET 页面可见 `JC901 / Smoke Group` 行（写入→列表读取闭环）

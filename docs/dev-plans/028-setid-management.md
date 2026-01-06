@@ -1,6 +1,6 @@
 # DEV-PLAN-028：SetID 管理（Greenfield）
 
-**状态**: 草拟中（2026-01-06 15:10 UTC）
+**状态**: 部分完成（009M1：最小闭环已落地；2026-01-06 23:40 UTC）
 
 > 适用范围：**Greenfield 全新实现**（路线图见 `DEV-PLAN-009`）。  
 > 本文研究 PeopleSoft 的 SetID 机制，并提出引入 SetID 的最小可执行方案：在同一租户内实现“主数据按业务单元共享/隔离”的配置能力，且可被门禁验证，避免实现期各模块各写一套数据共享规则导致漂移。
@@ -32,11 +32,17 @@
 
 ### 3.1 核心目标
 
-- [ ] 引入 SetID 作为“同租户内的主数据数据集”能力：同一编码可在不同 SetID 下并行存在。
-- [ ] 引入 **Set Control**：对每个控制值（后续对齐 Business Unit）和每个 Record Group，稳定映射到唯一 SetID（无歧义、可测试）。
-- [ ] 为主数据表提供一致的建模约束：`tenant_id + setid + business_key + valid_time(date)`。
-- [ ] 提供最小管理入口（API + UI）：创建/禁用 SetID、配置 set control value、维护映射矩阵。
-- [ ] 将关键约束固化为可执行门禁（tests/gates），避免实现期 drift。
+- [X] 引入 SetID 作为“同租户内的主数据数据集”能力：同一编码可在不同 SetID 下并行存在。
+- [X] 引入 **Set Control**：对每个控制值（后续对齐 Business Unit）和每个 Record Group，稳定映射到唯一 SetID（无歧义、可测试）。
+- [X] 为主数据表提供一致的建模约束：`tenant_id + setid + business_key + valid_time(date)`。
+- [X] 提供最小管理入口（API + UI）：创建/禁用 SetID、配置 set control value、维护映射矩阵。
+- [X] 将关键约束固化为可执行门禁（tests/gates），避免实现期 drift。
+
+已落地范围（009M1，最小闭环）：
+- schema/迁移：`modules/orgunit/infrastructure/persistence/schema/00005_orgunit_setid_schema.sql`、`modules/orgunit/infrastructure/persistence/schema/00006_orgunit_setid_engine.sql`、`migrations/orgunit/20260106100000_orgunit_setid_schema.sql`、`migrations/orgunit/20260106100500_orgunit_setid_engine.sql`
+- 共享解析入口：`pkg/setid/setid.go`
+- UI 入口：`/org/setid`（实现：`internal/server/setid.go`；allowlist：`config/routing/allowlist.yaml`）
+- 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
 
 ### 3.2 非目标（明确不做）
 

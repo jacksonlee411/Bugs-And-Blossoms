@@ -940,3 +940,1165 @@ $$;
 
 -- end: modules/orgunit/infrastructure/persistence/schema/00004_orgunit_read.sql
 
+-- begin: modules/orgunit/infrastructure/persistence/schema/00005_orgunit_setid_schema.sql
+CREATE TABLE IF NOT EXISTS orgunit.setid_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  event_type text NOT NULL,
+  setid text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT setid_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','CREATE','RENAME','DISABLE')),
+  CONSTRAINT setid_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT setid_events_request_id_unique UNIQUE (tenant_id, request_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS setid_events_event_id_unique ON orgunit.setid_events (event_id);
+CREATE INDEX IF NOT EXISTS setid_events_tenant_time_idx ON orgunit.setid_events (tenant_id, transaction_time DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS orgunit.setids (
+  tenant_id uuid NOT NULL,
+  setid text NOT NULL,
+  name text NOT NULL,
+  status text NOT NULL DEFAULT 'active',
+  last_event_id bigint NOT NULL REFERENCES orgunit.setid_events(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, setid),
+  CONSTRAINT setids_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT setids_status_check CHECK (status IN ('active','disabled')),
+  CONSTRAINT setids_share_must_be_active CHECK (setid <> 'SHARE' OR status = 'active')
+);
+
+CREATE TABLE IF NOT EXISTS orgunit.business_unit_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  event_type text NOT NULL,
+  business_unit_id text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT business_unit_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','CREATE','RENAME','DISABLE')),
+  CONSTRAINT business_unit_events_id_format_check CHECK (business_unit_id ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT business_unit_events_request_id_unique UNIQUE (tenant_id, request_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS business_unit_events_event_id_unique ON orgunit.business_unit_events (event_id);
+CREATE INDEX IF NOT EXISTS business_unit_events_tenant_time_idx ON orgunit.business_unit_events (tenant_id, transaction_time DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS orgunit.business_units (
+  tenant_id uuid NOT NULL,
+  business_unit_id text NOT NULL,
+  name text NOT NULL,
+  status text NOT NULL DEFAULT 'active',
+  last_event_id bigint NOT NULL REFERENCES orgunit.business_unit_events(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, business_unit_id),
+  CONSTRAINT business_units_id_format_check CHECK (business_unit_id ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT business_units_status_check CHECK (status IN ('active','disabled'))
+);
+
+CREATE TABLE IF NOT EXISTS orgunit.set_control_mapping_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  event_type text NOT NULL,
+  record_group text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT set_control_mapping_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','PUT')),
+  CONSTRAINT set_control_mapping_events_record_group_check CHECK (record_group IN ('jobcatalog')),
+  CONSTRAINT set_control_mapping_events_request_id_unique UNIQUE (tenant_id, request_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS set_control_mapping_events_event_id_unique ON orgunit.set_control_mapping_events (event_id);
+CREATE INDEX IF NOT EXISTS set_control_mapping_events_tenant_time_idx ON orgunit.set_control_mapping_events (tenant_id, transaction_time DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS orgunit.set_control_mappings (
+  tenant_id uuid NOT NULL,
+  business_unit_id text NOT NULL,
+  record_group text NOT NULL,
+  setid text NOT NULL,
+  last_event_id bigint NOT NULL REFERENCES orgunit.set_control_mapping_events(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, business_unit_id, record_group),
+  CONSTRAINT set_control_mappings_record_group_check CHECK (record_group IN ('jobcatalog')),
+  CONSTRAINT set_control_mappings_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT set_control_mappings_bu_format_check CHECK (business_unit_id ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT set_control_mappings_setid_fk FOREIGN KEY (tenant_id, setid) REFERENCES orgunit.setids (tenant_id, setid),
+  CONSTRAINT set_control_mappings_bu_fk FOREIGN KEY (tenant_id, business_unit_id) REFERENCES orgunit.business_units (tenant_id, business_unit_id)
+);
+
+ALTER TABLE orgunit.setid_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.setid_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.setid_events;
+CREATE POLICY tenant_isolation ON orgunit.setid_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE orgunit.setids ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.setids FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.setids;
+CREATE POLICY tenant_isolation ON orgunit.setids
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE orgunit.business_unit_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.business_unit_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.business_unit_events;
+CREATE POLICY tenant_isolation ON orgunit.business_unit_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE orgunit.business_units ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.business_units FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.business_units;
+CREATE POLICY tenant_isolation ON orgunit.business_units
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE orgunit.set_control_mapping_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.set_control_mapping_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.set_control_mapping_events;
+CREATE POLICY tenant_isolation ON orgunit.set_control_mapping_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE orgunit.set_control_mappings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.set_control_mappings FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.set_control_mappings;
+CREATE POLICY tenant_isolation ON orgunit.set_control_mappings
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+-- end: modules/orgunit/infrastructure/persistence/schema/00005_orgunit_setid_schema.sql
+
+-- begin: modules/orgunit/infrastructure/persistence/schema/00006_orgunit_setid_engine.sql
+CREATE OR REPLACE FUNCTION orgunit.normalize_setid(p_setid text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  v text;
+BEGIN
+  IF p_setid IS NULL OR btrim(p_setid) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_INVALID_FORMAT',
+      DETAIL = 'setid is required';
+  END IF;
+
+  v := upper(btrim(p_setid));
+  IF v !~ '^[A-Z0-9]{1,5}$' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_INVALID_FORMAT',
+      DETAIL = format('setid=%s', v);
+  END IF;
+
+  RETURN v;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.normalize_business_unit_id(p_business_unit_id text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  v text;
+BEGIN
+  IF p_business_unit_id IS NULL OR btrim(p_business_unit_id) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'BUSINESS_UNIT_INVALID_ID',
+      DETAIL = 'business_unit_id is required';
+  END IF;
+
+  v := upper(btrim(p_business_unit_id));
+  IF v !~ '^[A-Z0-9]{1,5}$' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'BUSINESS_UNIT_INVALID_ID',
+      DETAIL = format('business_unit_id=%s', v);
+  END IF;
+
+  RETURN v;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.assert_record_group(p_record_group text)
+RETURNS void
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+BEGIN
+  IF p_record_group IS NULL OR btrim(p_record_group) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'RECORD_GROUP_UNKNOWN',
+      DETAIL = 'record_group is required';
+  END IF;
+  IF p_record_group <> 'jobcatalog' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'RECORD_GROUP_UNKNOWN',
+      DETAIL = format('record_group=%s', p_record_group);
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.lock_setid_governance(p_tenant_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  k bigint;
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  k := hashtextextended('orgunit.setid.governance:' || p_tenant_id::text, 0);
+  PERFORM pg_advisory_xact_lock(k);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.ensure_setid_bootstrap(
+  p_tenant_id uuid,
+  p_initiator_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_evt_id uuid;
+  v_evt_db_id bigint;
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.lock_setid_governance(p_tenant_id);
+
+  IF NOT EXISTS (
+    SELECT 1 FROM orgunit.setids WHERE tenant_id = p_tenant_id AND setid = 'SHARE'
+  ) THEN
+    v_evt_id := gen_random_uuid();
+    INSERT INTO orgunit.setid_events (event_id, tenant_id, event_type, setid, payload, request_id, initiator_id)
+    VALUES (v_evt_id, p_tenant_id, 'BOOTSTRAP', 'SHARE', jsonb_build_object('name', 'Shared'), 'bootstrap:share', p_initiator_id)
+    ON CONFLICT (tenant_id, request_id) DO NOTHING;
+
+    SELECT id INTO v_evt_db_id
+    FROM orgunit.setid_events
+    WHERE tenant_id = p_tenant_id AND request_id = 'bootstrap:share'
+    ORDER BY id DESC
+    LIMIT 1;
+
+    INSERT INTO orgunit.setids (tenant_id, setid, name, status, last_event_id)
+    VALUES (p_tenant_id, 'SHARE', 'Shared', 'active', v_evt_db_id)
+    ON CONFLICT (tenant_id, setid) DO NOTHING;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM orgunit.business_units WHERE tenant_id = p_tenant_id AND business_unit_id = 'BU000'
+  ) THEN
+    v_evt_id := gen_random_uuid();
+    INSERT INTO orgunit.business_unit_events (event_id, tenant_id, event_type, business_unit_id, payload, request_id, initiator_id)
+    VALUES (v_evt_id, p_tenant_id, 'BOOTSTRAP', 'BU000', jsonb_build_object('name', 'Default BU'), 'bootstrap:bu000', p_initiator_id)
+    ON CONFLICT (tenant_id, request_id) DO NOTHING;
+
+    SELECT id INTO v_evt_db_id
+    FROM orgunit.business_unit_events
+    WHERE tenant_id = p_tenant_id AND request_id = 'bootstrap:bu000'
+    ORDER BY id DESC
+    LIMIT 1;
+
+    INSERT INTO orgunit.business_units (tenant_id, business_unit_id, name, status, last_event_id)
+    VALUES (p_tenant_id, 'BU000', 'Default BU', 'active', v_evt_db_id)
+    ON CONFLICT (tenant_id, business_unit_id) DO NOTHING;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM orgunit.set_control_mappings
+    WHERE tenant_id = p_tenant_id AND business_unit_id = 'BU000' AND record_group = 'jobcatalog'
+  ) THEN
+    v_evt_id := gen_random_uuid();
+    INSERT INTO orgunit.set_control_mapping_events (event_id, tenant_id, event_type, record_group, payload, request_id, initiator_id)
+    VALUES (
+      v_evt_id,
+      p_tenant_id,
+      'BOOTSTRAP',
+      'jobcatalog',
+      jsonb_build_object('mappings', jsonb_build_array(jsonb_build_object('business_unit_id', 'BU000', 'setid', 'SHARE'))),
+      'bootstrap:mappings:jobcatalog',
+      p_initiator_id
+    )
+    ON CONFLICT (tenant_id, request_id) DO NOTHING;
+
+    SELECT id INTO v_evt_db_id
+    FROM orgunit.set_control_mapping_events
+    WHERE tenant_id = p_tenant_id AND request_id = 'bootstrap:mappings:jobcatalog'
+    ORDER BY id DESC
+    LIMIT 1;
+
+    INSERT INTO orgunit.set_control_mappings (tenant_id, business_unit_id, record_group, setid, last_event_id)
+    VALUES (p_tenant_id, 'BU000', 'jobcatalog', 'SHARE', v_evt_db_id)
+    ON CONFLICT (tenant_id, business_unit_id, record_group) DO NOTHING;
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.submit_setid_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_event_type text,
+  p_setid text,
+  p_payload jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_setid text;
+  v_evt_db_id bigint;
+  v_name text;
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.lock_setid_governance(p_tenant_id);
+
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_INVALID_ARGUMENT',
+      DETAIL = 'request_id is required';
+  END IF;
+
+  IF p_event_type IS NULL OR btrim(p_event_type) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_INVALID_ARGUMENT',
+      DETAIL = 'event_type is required';
+  END IF;
+
+  v_setid := orgunit.normalize_setid(p_setid);
+  IF v_setid = 'SHARE' AND p_event_type <> 'BOOTSTRAP' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_RESERVED',
+      DETAIL = 'SHARE is reserved';
+  END IF;
+
+  INSERT INTO orgunit.setid_events (event_id, tenant_id, event_type, setid, payload, request_id, initiator_id)
+  VALUES (p_event_id, p_tenant_id, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_id, p_initiator_id)
+  ON CONFLICT (tenant_id, request_id) DO NOTHING;
+
+  SELECT id INTO v_evt_db_id
+  FROM orgunit.setid_events
+  WHERE tenant_id = p_tenant_id AND request_id = p_request_id
+  ORDER BY id DESC
+  LIMIT 1;
+
+  IF p_event_type IN ('BOOTSTRAP','CREATE') THEN
+    v_name := NULLIF(btrim(COALESCE(p_payload->>'name', '')), '');
+    IF v_name IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_INVALID_ARGUMENT',
+        DETAIL = 'name is required';
+    END IF;
+
+    IF p_event_type = 'CREATE' AND EXISTS (
+      SELECT 1 FROM orgunit.setids WHERE tenant_id = p_tenant_id AND setid = v_setid
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_ALREADY_EXISTS',
+        DETAIL = format('setid=%s', v_setid);
+    END IF;
+
+    INSERT INTO orgunit.setids (tenant_id, setid, name, status, last_event_id)
+    VALUES (p_tenant_id, v_setid, v_name, 'active', v_evt_db_id)
+    ON CONFLICT (tenant_id, setid) DO UPDATE
+    SET name = EXCLUDED.name,
+        status = 'active',
+        last_event_id = EXCLUDED.last_event_id,
+        updated_at = now();
+  ELSIF p_event_type = 'RENAME' THEN
+    v_name := NULLIF(btrim(COALESCE(p_payload->>'name', '')), '');
+    IF v_name IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_INVALID_ARGUMENT',
+        DETAIL = 'name is required';
+    END IF;
+    UPDATE orgunit.setids
+    SET name = v_name,
+        last_event_id = v_evt_db_id,
+        updated_at = now()
+    WHERE tenant_id = p_tenant_id AND setid = v_setid;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_NOT_FOUND',
+        DETAIL = format('setid=%s', v_setid);
+    END IF;
+  ELSIF p_event_type = 'DISABLE' THEN
+    IF v_setid = 'SHARE' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_RESERVED',
+        DETAIL = 'SHARE is reserved';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM orgunit.set_control_mappings
+      WHERE tenant_id = p_tenant_id AND setid = v_setid
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_IN_USE',
+        DETAIL = format('setid=%s', v_setid);
+    END IF;
+    UPDATE orgunit.setids
+    SET status = 'disabled',
+        last_event_id = v_evt_db_id,
+        updated_at = now()
+    WHERE tenant_id = p_tenant_id AND setid = v_setid;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_NOT_FOUND',
+        DETAIL = format('setid=%s', v_setid);
+    END IF;
+  ELSE
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_INVALID_ARGUMENT',
+      DETAIL = format('unsupported event_type=%s', p_event_type);
+  END IF;
+
+  RETURN v_evt_db_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.submit_business_unit_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_event_type text,
+  p_business_unit_id text,
+  p_payload jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_bu text;
+  v_evt_db_id bigint;
+  v_name text;
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.lock_setid_governance(p_tenant_id);
+  PERFORM orgunit.ensure_setid_bootstrap(p_tenant_id, p_initiator_id);
+
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'BUSINESS_UNIT_INVALID_ARGUMENT',
+      DETAIL = 'request_id is required';
+  END IF;
+  IF p_event_type IS NULL OR btrim(p_event_type) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'BUSINESS_UNIT_INVALID_ARGUMENT',
+      DETAIL = 'event_type is required';
+  END IF;
+
+  v_bu := orgunit.normalize_business_unit_id(p_business_unit_id);
+
+  INSERT INTO orgunit.business_unit_events (event_id, tenant_id, event_type, business_unit_id, payload, request_id, initiator_id)
+  VALUES (p_event_id, p_tenant_id, p_event_type, v_bu, COALESCE(p_payload, '{}'::jsonb), p_request_id, p_initiator_id)
+  ON CONFLICT (tenant_id, request_id) DO NOTHING;
+
+  SELECT id INTO v_evt_db_id
+  FROM orgunit.business_unit_events
+  WHERE tenant_id = p_tenant_id AND request_id = p_request_id
+  ORDER BY id DESC
+  LIMIT 1;
+
+  IF p_event_type IN ('BOOTSTRAP','CREATE') THEN
+    v_name := NULLIF(btrim(COALESCE(p_payload->>'name', '')), '');
+    IF v_name IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'BUSINESS_UNIT_INVALID_ARGUMENT',
+        DETAIL = 'name is required';
+    END IF;
+
+    IF p_event_type = 'CREATE' AND EXISTS (
+      SELECT 1 FROM orgunit.business_units WHERE tenant_id = p_tenant_id AND business_unit_id = v_bu
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'BUSINESS_UNIT_ALREADY_EXISTS',
+        DETAIL = format('business_unit_id=%s', v_bu);
+    END IF;
+
+    INSERT INTO orgunit.business_units (tenant_id, business_unit_id, name, status, last_event_id)
+    VALUES (p_tenant_id, v_bu, v_name, 'active', v_evt_db_id)
+    ON CONFLICT (tenant_id, business_unit_id) DO UPDATE
+    SET name = EXCLUDED.name,
+        status = 'active',
+        last_event_id = EXCLUDED.last_event_id,
+        updated_at = now();
+
+    IF NOT EXISTS (
+      SELECT 1 FROM orgunit.set_control_mappings
+      WHERE tenant_id = p_tenant_id AND business_unit_id = v_bu AND record_group = 'jobcatalog'
+    ) THEN
+      PERFORM orgunit.put_set_control_mappings(
+        gen_random_uuid(),
+        p_tenant_id,
+        'jobcatalog',
+        jsonb_build_array(jsonb_build_object('business_unit_id', v_bu, 'setid', 'SHARE')),
+        'bootstrap:mappings:jobcatalog:' || v_bu,
+        p_initiator_id
+      );
+    END IF;
+  ELSIF p_event_type = 'RENAME' THEN
+    v_name := NULLIF(btrim(COALESCE(p_payload->>'name', '')), '');
+    IF v_name IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'BUSINESS_UNIT_INVALID_ARGUMENT',
+        DETAIL = 'name is required';
+    END IF;
+    UPDATE orgunit.business_units
+    SET name = v_name,
+        last_event_id = v_evt_db_id,
+        updated_at = now()
+    WHERE tenant_id = p_tenant_id AND business_unit_id = v_bu;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'BUSINESS_UNIT_NOT_FOUND',
+        DETAIL = format('business_unit_id=%s', v_bu);
+    END IF;
+  ELSIF p_event_type = 'DISABLE' THEN
+    UPDATE orgunit.business_units
+    SET status = 'disabled',
+        last_event_id = v_evt_db_id,
+        updated_at = now()
+    WHERE tenant_id = p_tenant_id AND business_unit_id = v_bu;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'BUSINESS_UNIT_NOT_FOUND',
+        DETAIL = format('business_unit_id=%s', v_bu);
+    END IF;
+  ELSE
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'BUSINESS_UNIT_INVALID_ARGUMENT',
+      DETAIL = format('unsupported event_type=%s', p_event_type);
+  END IF;
+
+  RETURN v_evt_db_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.put_set_control_mappings(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_record_group text,
+  p_mappings jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_evt_db_id bigint;
+  v_row jsonb;
+  v_bu text;
+  v_setid text;
+  v_disabled text;
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.lock_setid_governance(p_tenant_id);
+  PERFORM orgunit.assert_record_group(p_record_group);
+  PERFORM orgunit.ensure_setid_bootstrap(p_tenant_id, p_initiator_id);
+
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_INVALID_ARGUMENT',
+      DETAIL = 'request_id is required';
+  END IF;
+  IF jsonb_typeof(p_mappings) <> 'array' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_INVALID_ARGUMENT',
+      DETAIL = 'mappings must be an array';
+  END IF;
+
+  INSERT INTO orgunit.set_control_mapping_events (event_id, tenant_id, event_type, record_group, payload, request_id, initiator_id)
+  VALUES (p_event_id, p_tenant_id, 'PUT', p_record_group, jsonb_build_object('mappings', p_mappings), p_request_id, p_initiator_id)
+  ON CONFLICT (tenant_id, request_id) DO NOTHING;
+
+  SELECT id INTO v_evt_db_id
+  FROM orgunit.set_control_mapping_events
+  WHERE tenant_id = p_tenant_id AND request_id = p_request_id
+  ORDER BY id DESC
+  LIMIT 1;
+
+  FOR v_row IN SELECT * FROM jsonb_array_elements(p_mappings)
+  LOOP
+    v_bu := orgunit.normalize_business_unit_id(v_row->>'business_unit_id');
+    v_setid := orgunit.normalize_setid(v_row->>'setid');
+
+    SELECT status INTO v_disabled
+    FROM orgunit.business_units
+    WHERE tenant_id = p_tenant_id AND business_unit_id = v_bu;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'BUSINESS_UNIT_NOT_FOUND',
+        DETAIL = format('business_unit_id=%s', v_bu);
+    END IF;
+    IF v_disabled = 'disabled' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'BUSINESS_UNIT_DISABLED',
+        DETAIL = format('business_unit_id=%s', v_bu);
+    END IF;
+
+    SELECT status INTO v_disabled
+    FROM orgunit.setids
+    WHERE tenant_id = p_tenant_id AND setid = v_setid;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_NOT_FOUND',
+        DETAIL = format('setid=%s', v_setid);
+    END IF;
+    IF v_disabled = 'disabled' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_DISABLED',
+        DETAIL = format('setid=%s', v_setid);
+    END IF;
+
+    INSERT INTO orgunit.set_control_mappings (tenant_id, business_unit_id, record_group, setid, last_event_id, updated_at)
+    VALUES (p_tenant_id, v_bu, p_record_group, v_setid, v_evt_db_id, now())
+    ON CONFLICT (tenant_id, business_unit_id, record_group) DO UPDATE
+    SET setid = EXCLUDED.setid,
+        last_event_id = EXCLUDED.last_event_id,
+        updated_at = now();
+  END LOOP;
+
+  IF EXISTS (
+    SELECT 1
+    FROM orgunit.business_units bu
+    WHERE bu.tenant_id = p_tenant_id
+      AND bu.status = 'active'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM orgunit.set_control_mappings m
+        WHERE m.tenant_id = bu.tenant_id
+          AND m.business_unit_id = bu.business_unit_id
+          AND m.record_group = p_record_group
+      )
+  ) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_MAPPING_MISSING',
+      DETAIL = format('record_group=%s', p_record_group);
+  END IF;
+
+  RETURN v_evt_db_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.resolve_setid(
+  p_tenant_id uuid,
+  p_business_unit_id text,
+  p_record_group text
+)
+RETURNS text
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_bu text;
+  v_rg text;
+  v_setid text;
+  v_status text;
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  v_bu := orgunit.normalize_business_unit_id(p_business_unit_id);
+  v_rg := lower(btrim(p_record_group));
+  PERFORM orgunit.assert_record_group(v_rg);
+
+  SELECT status INTO v_status
+  FROM orgunit.business_units
+  WHERE tenant_id = p_tenant_id AND business_unit_id = v_bu;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'BUSINESS_UNIT_NOT_FOUND',
+      DETAIL = format('business_unit_id=%s', v_bu);
+  END IF;
+  IF v_status = 'disabled' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'BUSINESS_UNIT_DISABLED',
+      DETAIL = format('business_unit_id=%s', v_bu);
+  END IF;
+
+  SELECT setid INTO v_setid
+  FROM orgunit.set_control_mappings
+  WHERE tenant_id = p_tenant_id
+    AND business_unit_id = v_bu
+    AND record_group = v_rg;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_MAPPING_MISSING',
+      DETAIL = format('business_unit_id=%s record_group=%s', v_bu, v_rg);
+  END IF;
+
+  SELECT status INTO v_status
+  FROM orgunit.setids
+  WHERE tenant_id = p_tenant_id AND setid = v_setid;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_NOT_FOUND',
+      DETAIL = format('setid=%s', v_setid);
+  END IF;
+  IF v_status = 'disabled' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_DISABLED',
+      DETAIL = format('setid=%s', v_setid);
+  END IF;
+
+  RETURN v_setid;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.assert_setid_active(
+  p_tenant_id uuid,
+  p_setid text
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_setid text;
+  v_status text;
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  v_setid := orgunit.normalize_setid(p_setid);
+
+  SELECT status INTO v_status
+  FROM orgunit.setids
+  WHERE tenant_id = p_tenant_id AND setid = v_setid;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_NOT_FOUND',
+      DETAIL = format('setid=%s', v_setid);
+  END IF;
+  IF v_status = 'disabled' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SETID_DISABLED',
+      DETAIL = format('setid=%s', v_setid);
+  END IF;
+END;
+$$;
+
+-- end: modules/orgunit/infrastructure/persistence/schema/00006_orgunit_setid_engine.sql
+
+-- begin: modules/jobcatalog/infrastructure/persistence/schema/00001_jobcatalog_schema.sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+CREATE SCHEMA IF NOT EXISTS jobcatalog;
+
+
+-- end: modules/jobcatalog/infrastructure/persistence/schema/00001_jobcatalog_schema.sql
+
+-- begin: modules/jobcatalog/infrastructure/persistence/schema/00002_jobcatalog_job_family_groups.sql
+CREATE TABLE IF NOT EXISTS jobcatalog.job_family_groups (
+  tenant_id uuid NOT NULL,
+  setid text NOT NULL,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code varchar(64) NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT job_family_groups_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_family_groups_tenant_setid_code_key UNIQUE (tenant_id, setid, code)
+);
+
+CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  setid text NOT NULL,
+  job_family_group_id uuid NOT NULL,
+  event_type text NOT NULL,
+  effective_date date NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT job_family_group_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_family_group_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
+  CONSTRAINT job_family_group_events_one_per_day_unique UNIQUE (tenant_id, setid, job_family_group_id, effective_date),
+  CONSTRAINT job_family_group_events_request_id_unique UNIQUE (tenant_id, request_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS job_family_group_events_event_id_unique ON jobcatalog.job_family_group_events (event_id);
+CREATE INDEX IF NOT EXISTS job_family_group_events_tenant_effective_idx
+  ON jobcatalog.job_family_group_events (tenant_id, setid, job_family_group_id, effective_date, id);
+
+CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_versions (
+  id bigserial PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  setid text NOT NULL,
+  job_family_group_id uuid NOT NULL REFERENCES jobcatalog.job_family_groups(id) ON DELETE CASCADE,
+  validity daterange NOT NULL,
+  name text NOT NULL,
+  description text NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  external_refs jsonb NOT NULL DEFAULT '{}'::jsonb,
+  last_event_id bigint NOT NULL REFERENCES jobcatalog.job_family_group_events(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT job_family_group_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_family_group_versions_validity_check CHECK (NOT isempty(validity)),
+  CONSTRAINT job_family_group_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
+  CONSTRAINT job_family_group_versions_no_overlap
+    EXCLUDE USING gist (
+      tenant_id gist_uuid_ops WITH =,
+      setid gist_text_ops WITH =,
+      job_family_group_id gist_uuid_ops WITH =,
+      validity WITH &&
+    )
+);
+
+CREATE INDEX IF NOT EXISTS job_family_group_versions_active_day_gist
+  ON jobcatalog.job_family_group_versions
+  USING gist (tenant_id gist_uuid_ops, setid gist_text_ops, validity)
+  WHERE is_active = true;
+
+CREATE INDEX IF NOT EXISTS job_family_group_versions_lookup_btree
+  ON jobcatalog.job_family_group_versions (tenant_id, setid, job_family_group_id, lower(validity));
+
+ALTER TABLE jobcatalog.job_family_groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE jobcatalog.job_family_groups FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON jobcatalog.job_family_groups;
+CREATE POLICY tenant_isolation ON jobcatalog.job_family_groups
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE jobcatalog.job_family_group_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE jobcatalog.job_family_group_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON jobcatalog.job_family_group_events;
+CREATE POLICY tenant_isolation ON jobcatalog.job_family_group_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE jobcatalog.job_family_group_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE jobcatalog.job_family_group_versions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON jobcatalog.job_family_group_versions;
+CREATE POLICY tenant_isolation ON jobcatalog.job_family_group_versions
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+-- end: modules/jobcatalog/infrastructure/persistence/schema/00002_jobcatalog_job_family_groups.sql
+
+-- begin: modules/jobcatalog/infrastructure/persistence/schema/00003_jobcatalog_engine.sql
+CREATE OR REPLACE FUNCTION jobcatalog.assert_current_tenant(p_tenant_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_ctx_raw text;
+  v_ctx_tenant uuid;
+BEGIN
+  IF p_tenant_id IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+      DETAIL = 'tenant_id is required';
+  END IF;
+
+  v_ctx_raw := current_setting('app.current_tenant', true);
+  IF v_ctx_raw IS NULL OR btrim(v_ctx_raw) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'RLS_TENANT_CONTEXT_MISSING',
+      DETAIL = 'app.current_tenant is required';
+  END IF;
+
+  BEGIN
+    v_ctx_tenant := v_ctx_raw::uuid;
+  EXCEPTION
+    WHEN invalid_text_representation THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'RLS_TENANT_CONTEXT_INVALID',
+        DETAIL = format('app.current_tenant=%s', v_ctx_raw);
+  END;
+
+  IF v_ctx_tenant <> p_tenant_id THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'RLS_TENANT_MISMATCH',
+      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_id, v_ctx_tenant);
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION jobcatalog.normalize_setid(p_setid text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  v text;
+BEGIN
+  IF p_setid IS NULL OR btrim(p_setid) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+      DETAIL = 'setid is required';
+  END IF;
+  v := upper(btrim(p_setid));
+  IF v !~ '^[A-Z0-9]{1,5}$' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+      DETAIL = format('setid=%s', v);
+  END IF;
+  RETURN v;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION jobcatalog.replay_job_family_group_versions(
+  p_tenant_id uuid,
+  p_setid text,
+  p_job_family_group_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_setid text;
+  v_state jsonb;
+  v_prev jsonb;
+  v_row RECORD;
+  v_next_date date;
+  v_validity daterange;
+BEGIN
+  PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
+  v_setid := jobcatalog.normalize_setid(p_setid);
+
+  DELETE FROM jobcatalog.job_family_group_versions
+  WHERE tenant_id = p_tenant_id AND setid = v_setid AND job_family_group_id = p_job_family_group_id;
+
+  v_prev := NULL;
+  FOR v_row IN
+    SELECT id, event_type, effective_date, payload
+    FROM jobcatalog.job_family_group_events
+    WHERE tenant_id = p_tenant_id
+      AND setid = v_setid
+      AND job_family_group_id = p_job_family_group_id
+    ORDER BY effective_date ASC, id ASC
+  LOOP
+    v_state := COALESCE(v_prev, '{}'::jsonb);
+
+    IF v_row.event_type = 'CREATE' THEN
+      IF v_prev IS NOT NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'JOBCATALOG_INVALID_EVENT',
+          DETAIL = 'CREATE must be the first event';
+      END IF;
+      v_state := jsonb_build_object(
+        'name', v_row.payload->>'name',
+        'description', v_row.payload->'description',
+        'is_active', true,
+        'external_refs', COALESCE(v_row.payload->'external_refs', '{}'::jsonb)
+      );
+    ELSIF v_row.event_type = 'UPDATE' THEN
+      IF v_prev IS NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'JOBCATALOG_INVALID_EVENT',
+          DETAIL = 'UPDATE requires prior state';
+      END IF;
+      IF v_row.payload ? 'name' THEN
+        v_state := jsonb_set(v_state, '{name}', to_jsonb(v_row.payload->>'name'), true);
+      END IF;
+      IF v_row.payload ? 'description' THEN
+        v_state := jsonb_set(v_state, '{description}', v_row.payload->'description', true);
+      END IF;
+      IF v_row.payload ? 'external_refs' THEN
+        v_state := jsonb_set(v_state, '{external_refs}', v_row.payload->'external_refs', true);
+      END IF;
+    ELSIF v_row.event_type = 'DISABLE' THEN
+      IF v_prev IS NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'JOBCATALOG_INVALID_EVENT',
+          DETAIL = 'DISABLE requires prior state';
+      END IF;
+      v_state := jsonb_set(v_state, '{is_active}', 'false'::jsonb, true);
+    ELSE
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'JOBCATALOG_INVALID_EVENT',
+        DETAIL = format('unsupported event_type=%s', v_row.event_type);
+    END IF;
+
+    v_next_date := NULL;
+    SELECT e.effective_date INTO v_next_date
+    FROM jobcatalog.job_family_group_events e
+    WHERE e.tenant_id = p_tenant_id
+      AND e.setid = v_setid
+      AND e.job_family_group_id = p_job_family_group_id
+      AND (e.effective_date, e.id) > (v_row.effective_date, v_row.id)
+    ORDER BY e.effective_date ASC, e.id ASC
+    LIMIT 1;
+
+    v_validity := daterange(v_row.effective_date, v_next_date, '[)');
+
+    INSERT INTO jobcatalog.job_family_group_versions (
+      tenant_id,
+      setid,
+      job_family_group_id,
+      validity,
+      name,
+      description,
+      is_active,
+      external_refs,
+      last_event_id
+    ) VALUES (
+      p_tenant_id,
+      v_setid,
+      p_job_family_group_id,
+      v_validity,
+      COALESCE(NULLIF(btrim(v_state->>'name'), ''), '[missing]'),
+      CASE
+        WHEN jsonb_typeof(v_state->'description') = 'null' THEN NULL
+        ELSE v_state->>'description'
+      END,
+      COALESCE((v_state->>'is_active')::boolean, true),
+      COALESCE(v_state->'external_refs', '{}'::jsonb),
+      v_row.id
+    );
+
+    v_prev := v_state;
+  END LOOP;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION jobcatalog.submit_job_family_group_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_setid text,
+  p_job_family_group_id uuid,
+  p_event_type text,
+  p_effective_date date,
+  p_payload jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_setid text;
+  v_evt_db_id bigint;
+  v_code text;
+  v_name text;
+BEGIN
+  PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+      DETAIL = 'request_id is required';
+  END IF;
+  IF p_job_family_group_id IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+      DETAIL = 'job_family_group_id is required';
+  END IF;
+  IF p_effective_date IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+      DETAIL = 'effective_date is required';
+  END IF;
+
+  v_setid := jobcatalog.normalize_setid(p_setid);
+
+  IF p_event_type = 'CREATE' THEN
+    v_code := NULLIF(btrim(COALESCE(p_payload->>'code', '')), '');
+    v_name := NULLIF(btrim(COALESCE(p_payload->>'name', '')), '');
+    IF v_code IS NULL OR v_name IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+        DETAIL = 'code/name is required';
+    END IF;
+
+    INSERT INTO jobcatalog.job_family_groups (tenant_id, setid, id, code)
+    VALUES (p_tenant_id, v_setid, p_job_family_group_id, v_code);
+  ELSE
+    IF NOT EXISTS (
+      SELECT 1 FROM jobcatalog.job_family_groups
+      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = p_job_family_group_id
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'JOBCATALOG_NOT_FOUND',
+        DETAIL = format('job_family_group_id=%s', p_job_family_group_id);
+    END IF;
+  END IF;
+
+  INSERT INTO jobcatalog.job_family_group_events (
+    event_id, tenant_id, setid, job_family_group_id, event_type, effective_date, payload, request_id, initiator_id
+  )
+  VALUES (
+    p_event_id, p_tenant_id, v_setid, p_job_family_group_id, p_event_type, p_effective_date, COALESCE(p_payload, '{}'::jsonb), p_request_id, p_initiator_id
+  )
+  RETURNING id INTO v_evt_db_id;
+
+  PERFORM jobcatalog.replay_job_family_group_versions(p_tenant_id, v_setid, p_job_family_group_id);
+
+  RETURN v_evt_db_id;
+END;
+$$;
+
+-- end: modules/jobcatalog/infrastructure/persistence/schema/00003_jobcatalog_engine.sql
+
