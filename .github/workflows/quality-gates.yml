@@ -23,6 +23,8 @@ jobs:
           go-version-file: go.mod
       - name: Naming Gate (always)
         run: make check naming
+      - name: No-Legacy Gate (always)
+        run: make check no-legacy
       - name: Docs Gate (always)
         run: make check doc
       - name: Go Lint/Fmt Gate

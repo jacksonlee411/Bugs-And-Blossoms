@@ -22,7 +22,7 @@ Greenfield 将重构租户/认证/RLS，并要求：
 ### 2.1 目标（Goals）
 - [ ] **认证链路解耦**：SuperAdmin 不复用 tenant app 的 `sid` cookie；使用独立 cookie 名与独立 session 事实源。
 - [ ] **显式旁路**：SuperAdmin 访问启用 RLS 的业务表时，必须通过独立 DB role/连接池（或 BYPASSRLS role）实现旁路；tenant app 永远不可获得该连接。
-- [ ] **可回滚**：认证故障时，能降级到“环境级保护 + 只读/停写”，而不是引入 legacy 分支。
+- [ ] **可回滚**：认证故障时，能降级到“环境级保护 + 只读/停写”，而不是引入 legacy 分支（对齐 `DEV-PLAN-004M1`）。
 - [ ] **可审计**：所有跨租户写操作必须记录审计事件（最小字段即可：who/when/what/target_tenant）。
 - [ ] **Bootstrap 可用**：在没有任何租户/用户数据时，也能创建第一个 superadmin 并登录进入控制面。
 

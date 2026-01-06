@@ -9,6 +9,7 @@
 ## 0. TL;DR（最常见变更要跑什么）
 
 - Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
+- 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
 - `.templ`/Tailwind/Astro UI 相关：`make generate && make css`，然后 `git status --short` 必须为空
 - 多语言 JSON：`make check tr`
 - 发 PR 前一键对齐 CI（推荐）：`make preflight`
@@ -41,6 +42,7 @@
 | Authz（Casbin） | `make authz-pack && make authz-test && make authz-lint` | 口径见 `DEV-PLAN-022` |
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012` |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
+| 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
 
 ## 3. 开发与编码规则（仓库级合约）
 
@@ -86,6 +88,7 @@
 - i18n：仅 `en/zh`，语言写入口唯一；不做业务数据多语言（`DEV-PLAN-020`）。
 - 模块边界：业务域 4 模块（orgunit/jobcatalog/staffing/person）+ 平台模块 iam；跨模块优先通过 `pkg/**` 与 HTTP/HTMX 组合，避免 Go 代码跨模块 import（`DEV-PLAN-015/016/019`）。
 - SetID：record group 为稳定枚举；映射无缺省洞；不得模块自造回退规则（`DEV-PLAN-028`）。
+- No Legacy：禁止引入“legacy 分支/回退通道/双链路”（包括 `read=legacy`、兼容别名窗口、旧实现兜底等）；回滚只能走“环境级保护 + 只读/停写/修复后重试”，并必须有门禁阻断（`DEV-PLAN-004M1`）。
 
 ### 3.8 用户可见性原则（避免“僵尸功能”）
 
@@ -142,6 +145,7 @@ modules/{module}/
 - 技术设计模板：`docs/dev-plans/001-technical-design-template.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
 - DEV-PLAN-004：全仓去除版本标记（命名降噪 + 避免对外契约污染）：`docs/dev-plans/004-remove-version-marker-repo-wide.md`
+- DEV-PLAN-004M1：禁止 legacy（单链路原则）——清理、门禁与迁移策略：`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
 - DEV-PLAN-004 记录：全仓去除版本标记——映射表（草案）：`docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`
 - DEV-PLAN-004 记录：全仓去除版本标记——执行日志：`docs/dev-records/dev-plan-004-execution-log.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`

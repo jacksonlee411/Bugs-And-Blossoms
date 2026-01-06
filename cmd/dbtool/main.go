@@ -185,7 +185,7 @@ func orgunitSmoke(args []string) {
 	if _, err := tx.Exec(ctx, `SAVEPOINT sp_failclosed;`); err != nil {
 		fatal(err)
 	}
-	_, err = tx.Exec(ctx, `SELECT count(*) FROM orgunit.nodes;`)
+	_, err = tx.Exec(ctx, `SELECT count(*) FROM orgunit.org_events;`)
 	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed;`); rbErr != nil {
 		fatal(rbErr)
 	}
@@ -200,23 +200,34 @@ func orgunitSmoke(args []string) {
 	}
 
 	var countA0 int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM orgunit.nodes;`).Scan(&countA0); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM orgunit.org_events WHERE hierarchy_type = 'OrgUnit';`).Scan(&countA0); err != nil {
 		fatal(err)
 	}
 
-	var nodeID string
+	initiatorID := "00000000-0000-0000-0000-00000000f001"
+	requestID := "dbtool-orgunit-smoke-a"
+	eventIDA := "00000000-0000-0000-0000-00000000a101"
+	orgIDA := "00000000-0000-0000-0000-0000000000a1"
+
+	var dbIDA int64
 	if err := tx.QueryRow(ctx, `
-SELECT orgunit.submit_orgunit_event(
-  $1::uuid,
-  'node_created',
-  jsonb_build_object('name', 'A1')
-)::text
-`, tenantA).Scan(&nodeID); err != nil {
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+	  $2::uuid,
+	  'OrgUnit',
+	  $3::uuid,
+	  'CREATE',
+	  $4::date,
+	  jsonb_build_object('name', 'A1'),
+	  $5::text,
+	  $6::uuid
+	)
+	`, eventIDA, tenantA, orgIDA, "2026-01-01", requestID, initiatorID).Scan(&dbIDA); err != nil {
 		fatal(err)
 	}
 
 	var countA1 int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM orgunit.nodes;`).Scan(&countA1); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM orgunit.org_events WHERE hierarchy_type = 'OrgUnit';`).Scan(&countA1); err != nil {
 		fatal(err)
 	}
 	if countA1 != countA0+1 {
@@ -227,12 +238,18 @@ SELECT orgunit.submit_orgunit_event(
 		fatal(err)
 	}
 	_, err = tx.Exec(ctx, `
-SELECT orgunit.submit_orgunit_event(
-  $1::uuid,
-  'node_created',
-  jsonb_build_object('name', 'B1')
-)
-`, tenantB)
+	SELECT orgunit.submit_org_event(
+	  gen_random_uuid(),
+	  $1::uuid,
+	  'OrgUnit',
+	  gen_random_uuid(),
+	  'CREATE',
+	  '2026-01-01'::date,
+	  jsonb_build_object('name', 'B1'),
+	  'dbtool-orgunit-smoke-b',
+	  gen_random_uuid()
+	)
+	`, tenantB)
 	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_cross_event;`); rbErr != nil {
 		fatal(rbErr)
 	}
@@ -255,11 +272,11 @@ SELECT orgunit.submit_orgunit_event(
 	}
 
 	var visible int
-	if err := tx2.QueryRow(ctx, `SELECT count(*) FROM orgunit.nodes WHERE node_id = $1::uuid;`, nodeID).Scan(&visible); err != nil {
+	if err := tx2.QueryRow(ctx, `SELECT count(*) FROM orgunit.org_events WHERE event_id = $1::uuid;`, eventIDA).Scan(&visible); err != nil {
 		fatal(err)
 	}
 	if visible != 0 {
-		fatalf("expected node created under tenant A to be invisible under tenant B, got visible=%d node_id=%s", visible, nodeID)
+		fatalf("expected event created under tenant A to be invisible under tenant B, got visible=%d event_id=%s", visible, eventIDA)
 	}
 	if err := tx2.Commit(ctx); err != nil {
 		fatal(err)
@@ -302,8 +319,7 @@ SELECT orgunit.submit_orgunit_event(
 		fatal(err)
 	}
 
-	initiatorID := "00000000-0000-0000-0000-00000000f001"
-	requestID := "dbtool-orgunit-smoke"
+	requestID = "dbtool-orgunit-smoke"
 
 	orgRootID := "00000000-0000-0000-0000-000000000101"
 	orgChildID := "00000000-0000-0000-0000-000000000102"

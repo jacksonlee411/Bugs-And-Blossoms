@@ -7,7 +7,7 @@
 
 ## 1. 背景与上下文 (Context)
 
-- Greenfield 选择全新实施（路线图见 `DEV-PLAN-009`），不承担存量路由形态/legacy alias 的兼容包袱，但仍需要“路由治理型 SSOT”来保证一致性与可验证性。
+- Greenfield 选择全新实施（路线图见 `DEV-PLAN-009`），不承担存量路由形态/legacy alias 的兼容包袱（对齐 `DEV-PLAN-004M1`），但仍需要“路由治理型 SSOT”来保证一致性与可验证性。
 - Greenfield 同时包含 UI（SSR/HTMX）、内部 JSON API（与 UI 同仓同发）、对外 API（如未来引入）、第三方回调（webhooks）、运维端点与测试/开发端点；若缺少统一规则，会直接放大鉴权、错误返回与安全暴露的漂移风险。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
