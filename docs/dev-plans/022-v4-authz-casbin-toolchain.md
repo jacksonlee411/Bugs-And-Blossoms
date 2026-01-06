@@ -246,7 +246,7 @@
 - subject 必须是 principal/role 的规范形式，禁止模块自造。
 
 ### 10.3 停止线（命中即打回）
-- [ ] 在模块里手写 subject/domain 推导（应复用 `pkg/authz` helpers）。
+- [ ] 在模块里手写 subject/domain/object/action 推导（应复用 `pkg/authz` helpers）。
 - [ ] 用放宽 RLS policy 实现跨租户控制面需求（必须走控制面边界与专用 role）。
 - [ ] 任何模块自造 forbidden payload（应统一走全局 responder/组件）；或在 403 响应体回显 `subject/domain/object/action`。
 - [ ] policy 中出现 `g,`/`g2,`（MVP 不做 role 继承/组/多角色）。
