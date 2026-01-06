@@ -20,8 +20,11 @@ type OrgUnitNode struct {
 }
 
 type OrgUnitStore interface {
-	ListNodes(ctx context.Context, tenantID string) ([]OrgUnitNode, error)
-	CreateNode(ctx context.Context, tenantID string, name string) (OrgUnitNode, error)
+	OrgUnitNodesCurrentReader
+	OrgUnitNodesCurrentWriter
+	OrgUnitNodesCurrentRenamer
+	OrgUnitNodesCurrentMover
+	OrgUnitNodesCurrentDisabler
 }
 
 type OrgUnitNodesCurrentReader interface {
@@ -54,45 +57,6 @@ type pgBeginner interface {
 
 func newOrgUnitPGStore(pool pgBeginner) OrgUnitStore {
 	return &orgUnitPGStore{pool: pool}
-}
-
-func (s *orgUnitPGStore) ListNodes(ctx context.Context, tenantID string) ([]OrgUnitNode, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-
-	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
-		return nil, err
-	}
-
-	rows, err := tx.Query(ctx, `
-SELECT node_id::text, name, created_at
-FROM orgunit.nodes
-WHERE tenant_id = $1::uuid
-ORDER BY created_at DESC
-`, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []OrgUnitNode
-	for rows.Next() {
-		var n OrgUnitNode
-		if err := rows.Scan(&n.ID, &n.Name, &n.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, n)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (s *orgUnitPGStore) ListNodesCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
@@ -146,48 +110,6 @@ ORDER BY e.transaction_time DESC
 		return nil, err
 	}
 	return out, nil
-}
-
-func (s *orgUnitPGStore) CreateNode(ctx context.Context, tenantID string, name string) (OrgUnitNode, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return OrgUnitNode{}, err
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-
-	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
-		return OrgUnitNode{}, err
-	}
-
-	payload := []byte(`{"name":` + strconv.Quote(name) + `}`)
-
-	var id string
-	row := tx.QueryRow(ctx, `
-SELECT orgunit.submit_orgunit_event(
-  $1::uuid,
-  'node_created',
-  $2::jsonb
-)::text
-`, tenantID, payload)
-	if err := row.Scan(&id); err != nil {
-		return OrgUnitNode{}, err
-	}
-
-	var createdAt time.Time
-	row2 := tx.QueryRow(ctx, `
-SELECT created_at
-FROM orgunit.nodes
-WHERE tenant_id = $1::uuid AND node_id = $2::uuid
-`, tenantID, id)
-	if err := row2.Scan(&createdAt); err != nil {
-		return OrgUnitNode{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return OrgUnitNode{}, err
-	}
-
-	return OrgUnitNode{ID: id, Name: name, CreatedAt: createdAt}, nil
 }
 
 func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error) {
@@ -414,11 +336,11 @@ func newOrgUnitMemoryStore() *orgUnitMemoryStore {
 	}
 }
 
-func (s *orgUnitMemoryStore) ListNodes(_ context.Context, tenantID string) ([]OrgUnitNode, error) {
+func (s *orgUnitMemoryStore) listNodes(tenantID string) ([]OrgUnitNode, error) {
 	return append([]OrgUnitNode(nil), s.nodes[tenantID]...), nil
 }
 
-func (s *orgUnitMemoryStore) CreateNode(_ context.Context, tenantID string, name string) (OrgUnitNode, error) {
+func (s *orgUnitMemoryStore) createNode(tenantID string, name string) (OrgUnitNode, error) {
 	n := OrgUnitNode{
 		ID:        "mem-" + strings.ToLower(strings.ReplaceAll(name, " ", "-")),
 		Name:      name,
@@ -429,11 +351,11 @@ func (s *orgUnitMemoryStore) CreateNode(_ context.Context, tenantID string, name
 }
 
 func (s *orgUnitMemoryStore) ListNodesCurrent(_ context.Context, tenantID string, _ string) ([]OrgUnitNode, error) {
-	return s.ListNodes(context.Background(), tenantID)
+	return s.listNodes(tenantID)
 }
 
 func (s *orgUnitMemoryStore) CreateNodeCurrent(_ context.Context, tenantID string, _ string, name string, _ string) (OrgUnitNode, error) {
-	return s.CreateNode(context.Background(), tenantID, name)
+	return s.createNode(tenantID, name)
 }
 
 func (s *orgUnitMemoryStore) RenameNodeCurrent(_ context.Context, tenantID string, _ string, orgID string, newName string) error {
@@ -495,13 +417,6 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 	if asOf == "" {
 		asOf = time.Now().UTC().Format("2006-01-02")
 	}
-	preferRead := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("read")))
-	if preferRead == "" {
-		preferRead = "current"
-	}
-	if preferRead != "legacy" && preferRead != "current" {
-		preferRead = "current"
-	}
 
 	listNodes := func(errHint string) ([]OrgUnitNode, string) {
 		mergeMsg := func(hint string, msg string) string {
@@ -514,45 +429,13 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			return hint + "；" + msg
 		}
 
-		if preferRead == "current" {
-			if _, err := time.Parse("2006-01-02", asOf); err != nil {
-				nodes, legacyErr := store.ListNodes(r.Context(), tenant.ID)
-				if legacyErr != nil {
-					return nil, mergeMsg(errHint, "as_of 无效，且 legacy 读取失败: "+legacyErr.Error())
-				}
-				return nodes, mergeMsg(errHint, "as_of 无效，已回退到 legacy: "+err.Error())
-			}
-
-			currentStore, ok := store.(OrgUnitNodesCurrentReader)
-			if !ok {
-				nodes, err := store.ListNodes(r.Context(), tenant.ID)
-				if err != nil {
-					return nil, mergeMsg(errHint, "current reader 未配置，且 legacy 读取失败: "+err.Error())
-				}
-				return nodes, mergeMsg(errHint, "current reader 未配置，已回退到 legacy")
-			}
-
-			currentNodes, err := currentStore.ListNodesCurrent(r.Context(), tenant.ID, asOf)
-			if err == nil && len(currentNodes) > 0 {
-				return currentNodes, mergeMsg(errHint, "")
-			}
-
-			nodes, legacyErr := store.ListNodes(r.Context(), tenant.ID)
-			if legacyErr != nil {
-				if err != nil {
-					return nil, mergeMsg(errHint, "current 读取失败: "+err.Error()+"；且 legacy 读取失败: "+legacyErr.Error())
-				}
-				return nil, mergeMsg(errHint, "legacy 读取失败: "+legacyErr.Error())
-			}
-			if err != nil {
-				return nodes, mergeMsg(errHint, "current 读取失败，已回退到 legacy: "+err.Error())
-			}
-			return nodes, mergeMsg(errHint, "current 快照为空，已回退到 legacy")
+		if _, err := time.Parse("2006-01-02", asOf); err != nil {
+			return nil, mergeMsg(errHint, "as_of 无效: "+err.Error())
 		}
 
-		nodes, err := store.ListNodes(r.Context(), tenant.ID)
+		nodes, err := store.ListNodesCurrent(r.Context(), tenant.ID, asOf)
 		if err != nil {
-			return nil, err.Error()
+			return nil, mergeMsg(errHint, err.Error())
 		}
 		return nodes, errHint
 	}
@@ -560,12 +443,12 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 	switch r.Method {
 	case http.MethodGet:
 		nodes, errMsg := listNodes("")
-		writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+		writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
 			nodes, errMsg := listNodes("bad form")
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 			return
 		}
 		action := strings.TrimSpace(strings.ToLower(r.Form.Get("action")))
@@ -574,26 +457,20 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 		}
 
 		if action == "rename" || action == "move" || action == "disable" {
-			if preferRead != "current" {
-				nodes, errMsg := listNodes(action + " 仅支持 current 模式")
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
-				return
-			}
-
 			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
 			if effectiveDate == "" {
 				effectiveDate = asOf
 			}
 			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
 				nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 				return
 			}
 
 			orgID := strings.TrimSpace(r.Form.Get("org_id"))
 			if orgID == "" {
 				nodes, errMsg := listNodes("org_id is required")
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 				return
 			}
 
@@ -602,100 +479,62 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 				newName := strings.TrimSpace(r.Form.Get("new_name"))
 				if newName == "" {
 					nodes, errMsg := listNodes("new_name is required")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 					return
 				}
 
-				renamer, ok := store.(OrgUnitNodesCurrentRenamer)
-				if !ok {
-					nodes, errMsg := listNodes("current renamer 未配置：请稍后再试")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
-					return
-				}
-
-				if err := renamer.RenameNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newName); err != nil {
+				if err := store.RenameNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newName); err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 					return
 				}
 			case "move":
 				newParentID := strings.TrimSpace(r.Form.Get("new_parent_id"))
-				mover, ok := store.(OrgUnitNodesCurrentMover)
-				if !ok {
-					nodes, errMsg := listNodes("current mover 未配置：请稍后再试")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
-					return
-				}
 
-				if err := mover.MoveNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newParentID); err != nil {
+				if err := store.MoveNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newParentID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 					return
 				}
 			case "disable":
-				disabler, ok := store.(OrgUnitNodesCurrentDisabler)
-				if !ok {
-					nodes, errMsg := listNodes("current disabler 未配置：请稍后再试")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
-					return
-				}
 
-				if err := disabler.DisableNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID); err != nil {
+				if err := store.DisableNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 					return
 				}
 			default:
 			}
 
-			http.Redirect(w, r, "/org/nodes?read=current&as_of="+effectiveDate, http.StatusSeeOther)
+			http.Redirect(w, r, "/org/nodes?as_of="+effectiveDate, http.StatusSeeOther)
 			return
 		}
 
 		name := strings.TrimSpace(r.Form.Get("name"))
 		if name == "" {
 			nodes, errMsg := listNodes("name is required")
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
-			return
-		}
-		if preferRead == "current" {
-			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
-			if effectiveDate == "" {
-				effectiveDate = asOf
-			}
-			parentID := strings.TrimSpace(r.Form.Get("parent_id"))
-			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
-				nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
-				return
-			}
-
-			currentWriter, ok := store.(OrgUnitNodesCurrentWriter)
-			if !ok {
-				nodes, errMsg := listNodes("current writer 未配置：请切回 legacy 模式写入")
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
-				return
-			}
-
-			if _, err := currentWriter.CreateNodeCurrent(r.Context(), tenant.ID, effectiveDate, name, parentID); err != nil {
-				nodes, errMsg := listNodes(err.Error())
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
-				return
-			}
-			http.Redirect(w, r, "/org/nodes?read=current&as_of="+effectiveDate, http.StatusSeeOther)
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 			return
 		}
 
-		if _, err := store.CreateNode(r.Context(), tenant.ID, name); err != nil {
+		effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
+		if effectiveDate == "" {
+			effectiveDate = asOf
+		}
+		parentID := strings.TrimSpace(r.Form.Get("parent_id"))
+		if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
+			nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+			return
+		}
+
+		if _, err := store.CreateNodeCurrent(r.Context(), tenant.ID, effectiveDate, name, parentID); err != nil {
 			nodes, errMsg := listNodes(err.Error())
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 			return
 		}
-		redirectTo := "/org/nodes"
-		if r.URL.RawQuery != "" {
-			redirectTo += "?" + r.URL.RawQuery
-		}
-		http.Redirect(w, r, redirectTo, http.StatusSeeOther)
+
+		http.Redirect(w, r, "/org/nodes?as_of="+effectiveDate, http.StatusSeeOther)
 		return
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -703,33 +542,23 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 	}
 }
 
-func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, readMode string, asOf string) string {
+func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf string) string {
 	var b strings.Builder
 	b.WriteString("<h1>OrgUnit</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
-	b.WriteString("<p>Read: <code>" + html.EscapeString(readMode) + "</code></p>")
-	b.WriteString(`<p><a href="/org/nodes?read=legacy&as_of=` + html.EscapeString(asOf) + `">Use legacy read</a> | <a href="/org/nodes?read=current&as_of=` + html.EscapeString(asOf) + `">Use current read</a></p>`)
-	if readMode == "current" {
-		b.WriteString(`<form method="GET" action="/org/nodes">`)
-		b.WriteString(`<input type="hidden" name="read" value="current" />`)
-		b.WriteString(`<label>As-of <input type="date" name="as_of" value="` + html.EscapeString(asOf) + `" /></label> `)
-		b.WriteString(`<button type="submit">Apply</button>`)
-		b.WriteString(`</form>`)
-	}
+	b.WriteString(`<form method="GET" action="/org/nodes">`)
+	b.WriteString(`<label>As-of <input type="date" name="as_of" value="` + html.EscapeString(asOf) + `" /></label> `)
+	b.WriteString(`<button type="submit">Apply</button>`)
+	b.WriteString(`</form>`)
 
 	if errMsg != "" {
 		b.WriteString(`<div style="padding:8px;border:1px solid #c00;color:#c00">` + html.EscapeString(errMsg) + `</div>`)
 	}
 
-	postAction := "/org/nodes"
-	if readMode == "current" {
-		postAction += "?read=current&as_of=" + html.EscapeString(asOf)
-	}
+	postAction := "/org/nodes?as_of=" + html.EscapeString(asOf)
 	b.WriteString(`<form method="POST" action="` + postAction + `">`)
-	if readMode == "current" {
-		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-		b.WriteString(`<label>Parent ID (optional) <input name="parent_id" /></label><br/>`)
-	}
+	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
+	b.WriteString(`<label>Parent ID (optional) <input name="parent_id" /></label><br/>`)
 	b.WriteString(`<label>Name <input name="name" /></label>`)
 	b.WriteString(`<button type="submit">Create</button>`)
 	b.WriteString(`</form>`)
@@ -744,30 +573,28 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, readMode 
 	for _, n := range nodes {
 		b.WriteString("<li>")
 		b.WriteString(html.EscapeString(n.Name) + " <code>" + html.EscapeString(n.ID) + "</code>")
-		if readMode == "current" {
-			b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
-			b.WriteString(`<input type="hidden" name="action" value="rename" />`)
-			b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
-			b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
-			b.WriteString(`<label>New Name <input name="new_name" value="` + html.EscapeString(n.Name) + `" /></label> `)
-			b.WriteString(`<button type="submit">Rename</button>`)
-			b.WriteString(`</form>`)
+		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
+		b.WriteString(`<input type="hidden" name="action" value="rename" />`)
+		b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
+		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
+		b.WriteString(`<label>New Name <input name="new_name" value="` + html.EscapeString(n.Name) + `" /></label> `)
+		b.WriteString(`<button type="submit">Rename</button>`)
+		b.WriteString(`</form>`)
 
-			b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
-			b.WriteString(`<input type="hidden" name="action" value="move" />`)
-			b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
-			b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
-			b.WriteString(`<label>New Parent ID (optional) <input name="new_parent_id" /></label> `)
-			b.WriteString(`<button type="submit">Move</button>`)
-			b.WriteString(`</form>`)
+		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
+		b.WriteString(`<input type="hidden" name="action" value="move" />`)
+		b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
+		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
+		b.WriteString(`<label>New Parent ID (optional) <input name="new_parent_id" /></label> `)
+		b.WriteString(`<button type="submit">Move</button>`)
+		b.WriteString(`</form>`)
 
-			b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
-			b.WriteString(`<input type="hidden" name="action" value="disable" />`)
-			b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
-			b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
-			b.WriteString(`<button type="submit">Disable</button>`)
-			b.WriteString(`</form>`)
-		}
+		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
+		b.WriteString(`<input type="hidden" name="action" value="disable" />`)
+		b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
+		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
+		b.WriteString(`<button type="submit">Disable</button>`)
+		b.WriteString(`</form>`)
 		b.WriteString("</li>")
 	}
 	b.WriteString("</ul>")

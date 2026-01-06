@@ -27,7 +27,7 @@
 
 ### 2.1 目标（Goals）
 - [ ] **租户解析 fail-closed**：任何需要 tenant 语义的入口在 tenant 未解析时必须拒绝（404/401），不得回退跨租户逻辑。
-- [ ] **统一认证入口**：仅实现一种主链路（推荐：Kratos password login），避免 legacy/多分支并存。
+- [ ] **统一认证入口**：仅实现一种主链路（推荐：Kratos password login），避免 legacy/多分支并存（对齐 `DEV-PLAN-004M1`）。
 - [ ] **统一会话模型**：应用侧 `sid` session 作为唯一运行态会话来源，承载 `tenant_id` 与 `principal_id`（对齐现仓库稳定链路）。
 - [ ] **RLS 默认开启（fail-closed）**：所有 tenant-scoped 表默认启用 RLS，并要求在事务内注入 `app.current_tenant`。
 - [ ] **最小控制面（Tenant Console）**：提供 SuperAdmin 创建/禁用租户、绑定域名、初始化租户管理员的能力（可先无 DNS/HTTP verify）。
@@ -95,7 +95,7 @@
 - **信任边界**：生产环境只信任反代写入的 host（建议使用 `X-Forwarded-Host` 白名单策略或由网关做 host 校验），禁止 Host header 注入导致“串租户”。
 
 ### 4.2 身份（Kratos）到本地主体（Principal）的映射
-沿用已评审的 PoC 结论（`DEV-PLAN-019B`），但移除 legacy 分支：
+沿用已评审的 PoC 结论（`DEV-PLAN-019B`），但移除 legacy 分支（对齐 `DEV-PLAN-004M1`）：
 - **identifier**：`{tenant_id}:{lower(email)}`（解决“同一 email 多租户”）。
 - **traits（最小子集）**：`tenant_id`、`email`、（可选）`name`。
 - **本地 principal**：以 `(tenant_id, email)` 唯一；并绑定 `kratos_identity_id`（全局唯一）用于防串号。
@@ -210,7 +210,7 @@ SuperAdmin 认证（MVP 建议）：
 
 ## 10. 回滚与停止线（避免把复杂度留给实现阶段）
 - 回滚（Greenfield 口径）：
-  - 禁止引入 “legacy 认证分支” 作为回滚；回滚应通过“保持控制面可用 + 修复配置/数据 + 重试”完成。
+  - 禁止引入 “legacy 认证分支” 作为回滚；回滚应通过“保持控制面可用 + 修复配置/数据 + 重试”完成（对齐 `DEV-PLAN-004M1`）。
   - 对 Kratos 依赖的回滚：允许在本地/dev 通过切换到 stub IdP 或禁用外部调用来维持开发效率，但不得进入生产口径。
 - 停止线（命中即打回）：
   - [ ] tenant 未解析时出现跨租户兜底查询（按 email 全局查 principal/user）。

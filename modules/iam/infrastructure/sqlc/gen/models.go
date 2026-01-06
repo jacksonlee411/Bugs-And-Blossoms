@@ -8,21 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type OrgunitEvent struct {
-	TenantID  pgtype.UUID        `json:"tenant_id"`
-	EventID   pgtype.UUID        `json:"event_id"`
-	EventType string             `json:"event_type"`
-	Payload   []byte             `json:"payload"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-type OrgunitNode struct {
-	TenantID  pgtype.UUID        `json:"tenant_id"`
-	NodeID    pgtype.UUID        `json:"node_id"`
-	Name      string             `json:"name"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
 type OrgunitOrgEvent struct {
 	ID              int64              `json:"id"`
 	EventID         pgtype.UUID        `json:"event_id"`

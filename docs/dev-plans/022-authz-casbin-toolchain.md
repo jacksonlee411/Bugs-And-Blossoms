@@ -77,7 +77,7 @@
 ### 4.4 Object 命名（选定：module.resource）
 
 - **选定**：object 采用 `module.resource`（全小写）。
-- **粒度（选定，MVP）**：以“业务资源级”作为 object 粒度（例如 `orgunit.nodes`、`jobcatalog.catalog`），避免按 endpoint/page 细碎拆分导致策略爆炸与漂移。
+- **粒度（选定，MVP）**：以“业务资源级”作为 object 粒度（例如 `orgunit.orgunits`、`jobcatalog.catalog`），避免按 endpoint/page 细碎拆分导致策略爆炸与漂移。
 - **禁止**：把 HTTP method/path 片段、页面组件名、query params 等写入 object（它们属于路由与展示层细节，不是稳定授权边界）。
 - **模块建议前缀**（与 `DEV-PLAN-016/019` 对齐）：
   - `iam.*`（tenancy/authn/session/principal 等平台域）
@@ -142,7 +142,7 @@
 
 | object（module.resource） | `tenant_viewer` | `tenant_admin` | `superadmin` | `anonymous` |
 | --- | --- | --- | --- | --- |
-| `orgunit.nodes` | `read` | `read, admin` | — | — |
+| `orgunit.orgunits` | `read` | `read, admin` | — | — |
 | `jobcatalog.catalog` | `read` | `read, admin` | — | — |
 | `staffing.positions` | `read` | `read, admin` | — | — |
 | `staffing.assignments` | `read` | `read, admin` | — | — |

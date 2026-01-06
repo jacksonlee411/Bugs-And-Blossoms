@@ -385,6 +385,111 @@ func TestNewHandlerWithOptions_DefaultOrgUnitSnapshotStoreFromPGStore(t *testing
 	}
 }
 
+func TestNewHandlerWithOptions_DefaultPaths(t *testing.T) {
+	t.Cleanup(func() {
+		_ = os.Unsetenv("ALLOWLIST_PATH")
+		_ = os.Unsetenv("TENANTS_PATH")
+	})
+	_ = os.Unsetenv("ALLOWLIST_PATH")
+	_ = os.Unsetenv("TENANTS_PATH")
+
+	h, err := NewHandlerWithOptions(HandlerOptions{OrgUnitStore: newOrgUnitMemoryStore()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestNewHandlerWithOptions_DefaultAllowlistPath_NotFound(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
+	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
+
+	_ = os.Unsetenv("ALLOWLIST_PATH")
+
+	tmp := t.TempDir()
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(wd) })
+
+	_, err = NewHandlerWithOptions(HandlerOptions{OrgUnitStore: newOrgUnitMemoryStore()})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestNewHandlerWithOptions_DefaultPGStore_DoesNotRequireDBAtBuildTime(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
+	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
+
+	t.Setenv("DATABASE_URL", "postgres://app:app@localhost:5432/bugs_and_blossoms?sslmode=disable")
+
+	h, err := NewHandlerWithOptions(HandlerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestNewHandlerWithOptions_BadDatabaseURL(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
+	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
+
+	t.Setenv("DATABASE_URL", "postgres://%zz")
+
+	_, err = NewHandlerWithOptions(HandlerOptions{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestPathHasPrefixSegment(t *testing.T) {
 	if !pathHasPrefixSegment("/assets", "/assets") {
 		t.Fatal("expected true")
