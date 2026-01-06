@@ -5,4 +5,10 @@ p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, orgunit.setid, read
 p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, orgunit.setid, admin
 p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, jobcatalog.catalog, read
 p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, jobcatalog.catalog, admin
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, staffing.positions, read
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, staffing.positions, admin
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, staffing.assignments, read
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, staffing.assignments, admin
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, person.persons, read
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, person.persons, admin
 

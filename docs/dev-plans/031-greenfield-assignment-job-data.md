@@ -8,7 +8,7 @@
 - 技术路线（`DEV-PLAN-026/029/030`）：**DB=Projection Kernel（权威）**、同步投射（同事务 delete+replay）、One Door Policy（唯一写入口）、Valid Time=DATE、`daterange` 统一使用左闭右开 `[start,end)`。
 - DDD/分层与模块骨架（`DEV-PLAN-015`、`DEV-PLAN-016`）：采用 4 模块（`orgunit/jobcatalog/staffing/person`），其中任职记录归属 `modules/staffing`。
 
-同时，本仓库当前在 `modules/org` 内已存在一套“任职记录”实现（非事件 SoT 模式），包含 UI、API、DB 表与若干约束/运维手段；本计划需要先**完整登记现有功能**，再定义新方案如何承接（保留/替代/显式不做）。
+本仓库当前尚未落盘任职记录与 Position 的实现（`/org/assignments` 仍为 placeholder），因此本计划按 Greenfield 口径推进：不做“存量盘点/承接/退场策略”。若未来需要承接外部存量系统或历史实现，必须另立 dev-plan 并明确迁移/回滚策略（对齐 `AGENTS.md` 的 No Legacy 与 Contract First）。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
@@ -18,11 +18,11 @@
 - [ ] 以清晰契约替代“隐式耦合”：
   - 写路径输入统一使用 `person_uuid`（对齐 016），不再以 pernr 作为写侧主键；
   - person 的 pernr→uuid 解析由 `modules/person` 提供 options/read API，`staffing` 不直读 `persons` 表（Person Identity 合同见 `DEV-PLAN-027`）。
-- [ ] 完整登记当前任职记录已实现功能，并逐项给出新方案的落地方式（或明确不做）。
+- [ ] 对齐 `DEV-PLAN-009M2` 的 M2 MVP：先交付 `primary` + `CREATE`（可选 `UPDATE`）的最小闭环，并把 `TRANSFER/TERMINATE/RESCIND/DELETE-SLICE` 等复杂动作显式延后（避免实现期补丁式堆叠）。
 - [ ] 实现需满足 015/016 的 DDD 分层与 One Door Policy：Go=Facade（鉴权/事务/调用/错误映射），DB=Kernel（裁决/投射/重放）。
 
 ### 2.2 非目标（明确不做）
-- 不做存量 `modules/org` 的迁移/替换 cutover；存量退场/兼容策略必须另立 dev-plan 承接。
+- 不做任何存量系统迁移/兼容/cutover（Greenfield）；如需承接外部存量必须另立 dev-plan。
 - 不引入 `effseq`，同一实体同日最多一条事件（对齐 026/030/029）。
 - 不在本计划内实现“跨模块异步事件/旧 outbox/audit/settings 支撑能力”的兼容；如需要另立计划。
 
@@ -33,61 +33,10 @@
 - 分层/依赖门禁：`.gocleanarch.yml`（入口：`make check lint`）
 - 命令入口与 CI：`Makefile`、`.github/workflows/quality-gates.yml`
 
-## 3. 现状功能盘点（已实现的任职记录能力，存量参考）
+## 3. 现状功能盘点（本仓库不适用）
 
-> 本节仅登记事实（当前系统已有的能力与约束），不代表新方案一定保留；新方案见 §6。
-
-### 3.1 路由与交互（UI / HTMX）
-- 页面与表单（`modules/org/presentation/controllers/org_ui_controller.go`）：
-  - `GET /org/assignments`：任职列表/时间线（支持 `effective_date`、`pernr`、`include_summary` 等组合）。
-  - `GET /org/assignments/form`：新建任职表单（HTMX）。
-  - `POST /org/assignments`：创建任职。
-  - `GET /org/assignments/{id}/edit` + `PATCH /org/assignments/{id}`：编辑任职。
-  - `GET /org/assignments/{id}/transition` + `POST /org/assignments/{id}:transition`：任职“转移/终止”流程（见 §3.3）。
-- 人员详情页嵌入任职时间线（`modules/person/presentation/templates/pages/persons/detail.templ`）：
-  - 通过 HTMX 请求 `/org/assignments` 与 `/org/assignments/form`，并以 `pernr` 作为筛选参数。
-
-### 3.2 API（JSON）
-- `modules/org/presentation/controllers/org_api_controller.go`：
-  - `GET /org/api/assignments`（list）
-  - `POST /org/api/assignments`（create）
-  - `PATCH /org/api/assignments/{id}`（update）
-  - `POST /org/api/assignments/{id}:correct`（correct）
-  - `POST /org/api/assignments/{id}:rescind`（rescind）
-  - `POST /org/api/assignments/{id}:delete-slice`（delete+stitch）
-
-### 3.3 业务动作/能力（services）
-- 创建任职：`modules/org/services/org_service.go:1108`
-  - 输入：`pernr`、`effective_date`、`assignment_type`（`primary/matrix/dotted`）、`allocated_fte`、`position_id` 或 `org_node_id`（自动建岗）
-  - 行为要点：
-    - pernr→person_uuid 解析（目前由 org repo 直接查 `persons` 表）
-    - primary 冲突检测（时间窗口重叠）
-    - “再入职（rehire）”场景：若当前 primary 片段为 inactive，则在新生效日截断旧 end_date
-    - 可选“自动建岗”（auto position），并依赖 Job Catalog 至少存在一个 job_profile
-- 更新任职：`modules/org/services/org_service.go:1476`
-  - 创建新 slice（新 id）并截断旧 slice，写审计并发 outbox（`assignment.updated`）
-- 就地更正：`modules/org/services/org_service_025.go:727`
-  - 允许修正 pernr/subject_id/position_id 等字段（in-place patch）
-- 撤销（rescind）：`modules/org/services/org_service_025.go:904`
-  - 在指定 `effective_date` 进行撤销/截断/补 inactive 等（实现较复杂，需在新方案里明确取舍）
-- 删除切片并缝补（delete+stitch）：`modules/org/services/org_service_066.go:614`
-  - 仅支持 primary timeline；删除某 slice，并把前一片段 end_date 延长以保持 gap-free
-- 转移/终止（transition）：`modules/org/services/assignment_transition_061a1.go:30`
-  - 事件类型：`transfer`/`termination`
-  - 依赖 `org_personnel_events` 的 upsert，并在同事务中触发 update/rescind
-- 约束与错误映射：
-  - primary 重叠：由 DB exclusion 或服务层判定，映射为 `ORG_PRIMARY_CONFLICT`（`modules/org/services/pg_errors.go:47`）
-  - gap-free（primary）：DB 端 constraint trigger `org_assignments_gap_free`（`modules/org/infrastructure/persistence/schema/org-schema.sql:1183`）
-
-### 3.4 数据与查询（DB）
-- 表：`org_assignments`（`modules/org/infrastructure/persistence/schema/org-schema.sql:653`）
-  - 字段：`position_id`、`subject_id`（uuid）、`pernr`、`assignment_type`、`allocated_fte`、`employment_status`、`effective_date`、`end_date` 等
-  - 约束：
-    - primary 唯一性（时间窗口排他，EXCLUDE）
-    - subject/position no-overlap（EXCLUDE）
-    - primary gap-free（commit-time constraint trigger，仅对 primary）
-- 读模型查询：
-  - timeline 查询会 join Position/Org/Job Catalog 多表，并附带 personnel_event 的起止事件类型（`modules/org/infrastructure/persistence/org_crud_repository.go:786` 起）
+本仓库当前未包含任何“存量任职记录实现”可供盘点；本计划按 Greenfield 口径直接落地新实现。
+若未来需要盘点/承接外部存量系统或历史实现，必须另立 dev-plan 并明确迁移、回滚与门禁（对齐 `AGENTS.md` 的 No Legacy / Contract First）。
 
 ## 4. 核心设计约束（合同，必须遵守）
 

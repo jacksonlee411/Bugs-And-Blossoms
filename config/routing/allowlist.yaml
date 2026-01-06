@@ -51,14 +51,26 @@ entrypoints:
         methods: [GET, POST]
         route_class: ui
       - path: /org/positions
-        methods: [GET]
+        methods: [GET, POST]
         route_class: ui
       - path: /org/assignments
-        methods: [GET]
+        methods: [GET, POST]
         route_class: ui
       - path: /person/persons
-        methods: [GET]
+        methods: [GET, POST]
         route_class: ui
+      - path: /person/api/persons:options
+        methods: [GET]
+        route_class: internal_api
+      - path: /person/api/persons:by-pernr
+        methods: [GET]
+        route_class: internal_api
+      - path: /org/api/positions
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /org/api/assignments
+        methods: [GET, POST]
+        route_class: internal_api
   superadmin:
     routes:
       - path: /health

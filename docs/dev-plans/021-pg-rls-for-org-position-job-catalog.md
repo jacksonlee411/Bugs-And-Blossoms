@@ -105,19 +105,22 @@ CREATE POLICY tenant_isolation ON <table>
 ```
 
 ### 4.2 OrgUnit（DEV-PLAN-026）
-- `org_trees`
-- `org_events`
-- `org_unit_versions`
+- `orgunit.org_trees`
+- `orgunit.org_events`
+- `orgunit.org_unit_versions`
 
 ### 4.3 Position/Assignment（DEV-PLAN-030）
-- `positions` / `position_events` / `position_versions`
-- `assignments` / `assignment_events` / `assignment_versions`
+- `staffing.positions` / `staffing.position_events` / `staffing.position_versions`
+- `staffing.assignments` / `staffing.assignment_events` / `staffing.assignment_versions`
 
 ### 4.4 Job Catalog（DEV-PLAN-029）
-- Identity：`job_family_groups` / `job_families` / `job_levels` / `job_profiles`
-- Events：`job_family_group_events` / `job_family_events` / `job_level_events` / `job_profile_events`
-- Versions：`job_family_group_versions` / `job_family_versions` / `job_level_versions` / `job_profile_versions`
-- Relation：`job_profile_version_job_families`
+- Identity：`jobcatalog.job_family_groups` / `jobcatalog.job_families` / `jobcatalog.job_levels` / `jobcatalog.job_profiles`
+- Events：`jobcatalog.job_family_group_events` / `jobcatalog.job_family_events` / `jobcatalog.job_level_events` / `jobcatalog.job_profile_events`
+- Versions：`jobcatalog.job_family_group_versions` / `jobcatalog.job_family_versions` / `jobcatalog.job_level_versions` / `jobcatalog.job_profile_versions`
+- Relation：`jobcatalog.job_profile_version_job_families`
+
+### 4.5 Person（DEV-PLAN-027）
+- `person.persons`
 
 ## 5. 接口契约 (API Contracts)
 ### 5.1 Go 事务契约（No Tx, No RLS）

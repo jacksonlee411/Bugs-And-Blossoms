@@ -212,6 +212,20 @@
   - 对应 policy（`config/access/policies/**` + pack 产物）
   - lint/test（确保不出现 `g,` 行与非 MVP action）
 
+**M2 最小映射（冻结，用于 Review 快速核对）**
+- `person.persons`
+  - UI：`/person/persons`（`GET=read`，`POST=admin`）
+  - internal_api：`/person/api/persons:options`、`/person/api/persons:by-pernr`（`GET=read`）
+- `staffing.positions`
+  - UI：`/org/positions`（`GET=read`，`POST=admin`）
+  - internal_api：`/org/api/positions`（`GET=read`，`POST=admin`）
+- `staffing.assignments`
+  - UI：`/org/assignments`（`GET=read`，`POST=admin`）
+  - internal_api：`/org/api/assignments`（`GET=read`，`POST=admin`）
+
+**口径（冻结）**
+- “表单页/写提交”统一归为 `admin`：避免出现“页面可打开但提交 403/反之”的漂移；只读列表/详情为 `read`。
+
 ### 5.3 授权主流程与失败路径（10 句可复述）
 
 > 目标：reviewer 能用 5 分钟复述“为什么会放行/为什么会拒绝”，而不需要翻多处实现细节。
@@ -237,7 +251,7 @@
    - [ ] `scripts/authz/test.sh`（或 CI 步骤）在 `make authz-pack` 后执行 `git diff --exit-code -- config/access/policy.csv config/access/policy.csv.rev`，确保生成物与源码一致且已提交。
 5. [ ] 接入最小授权点：
    - [ ] `modules/iam`：tenant console（创建/禁用租户、绑定域名、bootstrap）—— 仅 superadmin 可用。
-   - [ ] HR 4 模块 UI/API（`orgunit/jobcatalog/staffing/person`）的 read/admin 最小集。
+   - [ ] HR 4 模块 UI/API（`orgunit/jobcatalog/staffing/person`）的 read/admin 最小集（M2 objects 见 §5.2）。
 6. [ ] 统一 403/forbidden 输出契约：控制器侧不自造 JSON/HTML；统一走全局 responder/通用组件（对齐 `DEV-PLAN-017`）；响应体不回显 `subject/domain/object/action`。
 7. [ ] 落地匿名白名单（MVP）：保证 `role:anonymous` 仅访问 policy 明确列出的入口（至少 `iam.ping/read`）；任何新增匿名入口必须先定义稳定 object 并显式加 policy。
 8. [ ] 文档与门禁对齐：确保 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 所述 Authz gates 与实际 `Makefile/scripts/authz/*` 一致，避免“文档说一套、CI 跑一套”。

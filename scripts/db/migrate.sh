@@ -74,6 +74,14 @@ case "$direction" in
       echo "[db-migrate] jobcatalog smoke: module=$module"
       go run ./cmd/dbtool jobcatalog-smoke --url "$db_url"
     fi
+    if [[ "$module" == "person" ]]; then
+      echo "[db-migrate] person smoke: module=$module"
+      go run ./cmd/dbtool person-smoke --url "$db_url"
+    fi
+    if [[ "$module" == "staffing" ]]; then
+      echo "[db-migrate] staffing smoke: module=$module"
+      go run ./cmd/dbtool staffing-smoke --url "$db_url"
+    fi
     ;;
   down)
     steps="${GOOSE_STEPS:-1}"

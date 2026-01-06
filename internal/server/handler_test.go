@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -362,6 +364,110 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("logout status=%d", recLogout.Code)
 	}
 
+	reqPersonPost := httptest.NewRequest(http.MethodPost, "/person/persons", strings.NewReader("pernr=1&display_name=A"))
+	reqPersonPost.Host = "localhost:8080"
+	reqPersonPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqPersonPost.AddCookie(session)
+	recPersonPost := httptest.NewRecorder()
+	h.ServeHTTP(recPersonPost, reqPersonPost)
+	if recPersonPost.Code != http.StatusSeeOther {
+		t.Fatalf("person post status=%d", recPersonPost.Code)
+	}
+
+	reqPersonByPernr := httptest.NewRequest(http.MethodGet, "/person/api/persons:by-pernr?pernr=1", nil)
+	reqPersonByPernr.Host = "localhost:8080"
+	reqPersonByPernr.AddCookie(session)
+	recPersonByPernr := httptest.NewRecorder()
+	h.ServeHTTP(recPersonByPernr, reqPersonByPernr)
+	if recPersonByPernr.Code != http.StatusOK {
+		t.Fatalf("person by pernr status=%d", recPersonByPernr.Code)
+	}
+	var pResp struct {
+		PersonUUID string `json:"person_uuid"`
+	}
+	if err := json.NewDecoder(recPersonByPernr.Body).Decode(&pResp); err != nil {
+		t.Fatal(err)
+	}
+	if pResp.PersonUUID == "" {
+		t.Fatal("missing person_uuid")
+	}
+
+	reqPersonOptions := httptest.NewRequest(http.MethodGet, "/person/api/persons:options?q=1&limit=10", nil)
+	reqPersonOptions.Host = "localhost:8080"
+	reqPersonOptions.AddCookie(session)
+	recPersonOptions := httptest.NewRecorder()
+	h.ServeHTTP(recPersonOptions, reqPersonOptions)
+	if recPersonOptions.Code != http.StatusOK {
+		t.Fatalf("person options status=%d", recPersonOptions.Code)
+	}
+
+	reqPosCreate := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_unit_id":"org1","name":"A"}`))
+	reqPosCreate.Host = "localhost:8080"
+	reqPosCreate.Header.Set("Content-Type", "application/json")
+	reqPosCreate.AddCookie(session)
+	recPosCreate := httptest.NewRecorder()
+	h.ServeHTTP(recPosCreate, reqPosCreate)
+	if recPosCreate.Code != http.StatusOK {
+		t.Fatalf("positions api post status=%d", recPosCreate.Code)
+	}
+	var posResp struct {
+		ID string `json:"ID"`
+	}
+	if err := json.NewDecoder(recPosCreate.Body).Decode(&posResp); err != nil {
+		t.Fatal(err)
+	}
+	if posResp.ID == "" {
+		t.Fatal("missing position id")
+	}
+
+	reqPosList := httptest.NewRequest(http.MethodGet, "/org/api/positions?as_of=2026-01-01", nil)
+	reqPosList.Host = "localhost:8080"
+	reqPosList.AddCookie(session)
+	recPosList := httptest.NewRecorder()
+	h.ServeHTTP(recPosList, reqPosList)
+	if recPosList.Code != http.StatusOK {
+		t.Fatalf("positions api get status=%d", recPosList.Code)
+	}
+
+	reqAssignCreate := httptest.NewRequest(http.MethodPost, "/org/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"`+pResp.PersonUUID+`","position_id":"`+posResp.ID+`"}`))
+	reqAssignCreate.Host = "localhost:8080"
+	reqAssignCreate.Header.Set("Content-Type", "application/json")
+	reqAssignCreate.AddCookie(session)
+	recAssignCreate := httptest.NewRecorder()
+	h.ServeHTTP(recAssignCreate, reqAssignCreate)
+	if recAssignCreate.Code != http.StatusOK {
+		t.Fatalf("assignments api post status=%d", recAssignCreate.Code)
+	}
+
+	reqAssignList := httptest.NewRequest(http.MethodGet, "/org/api/assignments?as_of=2026-01-01&person_uuid="+pResp.PersonUUID, nil)
+	reqAssignList.Host = "localhost:8080"
+	reqAssignList.AddCookie(session)
+	recAssignList := httptest.NewRecorder()
+	h.ServeHTTP(recAssignList, reqAssignList)
+	if recAssignList.Code != http.StatusOK {
+		t.Fatalf("assignments api get status=%d", recAssignList.Code)
+	}
+
+	reqPosUIPost := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_unit_id=org1&name=A"))
+	reqPosUIPost.Host = "localhost:8080"
+	reqPosUIPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqPosUIPost.AddCookie(session)
+	recPosUIPost := httptest.NewRecorder()
+	h.ServeHTTP(recPosUIPost, reqPosUIPost)
+	if recPosUIPost.Code != http.StatusSeeOther {
+		t.Fatalf("positions ui post status=%d", recPosUIPost.Code)
+	}
+
+	reqAssignUIPost := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&pernr=1&position_id="+posResp.ID))
+	reqAssignUIPost.Host = "localhost:8080"
+	reqAssignUIPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqAssignUIPost.AddCookie(session)
+	recAssignUIPost := httptest.NewRecorder()
+	h.ServeHTTP(recAssignUIPost, reqAssignUIPost)
+	if recAssignUIPost.Code != http.StatusSeeOther {
+		t.Fatalf("assignments ui post status=%d", recAssignUIPost.Code)
+	}
+
 	_ = tr("en", "unknown")
 	_ = tr("zh", "unknown")
 
@@ -423,6 +529,178 @@ func TestNewHandlerWithOptions_DefaultPaths(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestNewHandlerWithOptions_AuthzLoadError(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
+	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
+
+	if err := os.Setenv("AUTHZ_MODEL_PATH", "no-such-model.conf"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("AUTHZ_MODEL_PATH") })
+
+	_, err = NewHandlerWithOptions(HandlerOptions{OrgUnitStore: newOrgUnitMemoryStore()})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestNewHandlerWithOptions_PoolDSNError(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
+	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
+
+	if err := os.Setenv("DATABASE_URL", "%%%"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("DATABASE_URL") })
+
+	_, err = NewHandlerWithOptions(HandlerOptions{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestNewHandlerWithOptions_DefaultStaffingStores(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
+	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		OrgUnitStore: newOrgUnitMemoryStore(),
+		PositionStore: positionStoreStub{
+			listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h == nil {
+		t.Fatal("nil handler")
+	}
+
+	h2, err := NewHandlerWithOptions(HandlerOptions{
+		OrgUnitStore: newOrgUnitMemoryStore(),
+		AssignmentStore: assignmentStoreStub{
+			listFn: func(context.Context, string, string, string) ([]Assignment, error) { return nil, nil },
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h2 == nil {
+		t.Fatal("nil handler")
+	}
+
+	h3, err := NewHandlerWithOptions(HandlerOptions{
+		OrgUnitStore: newOrgUnitPGStore(&fakeBeginner{}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h3 == nil {
+		t.Fatal("nil handler")
+	}
+
+	h4, err := NewHandlerWithOptions(HandlerOptions{
+		OrgUnitStore: newOrgUnitPGStore(&fakeBeginner{}),
+		PositionStore: positionStoreStub{
+			listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h4 == nil {
+		t.Fatal("nil handler")
+	}
+}
+
+type orgSnapshotStoreStub struct{}
+
+func (orgSnapshotStoreStub) GetSnapshot(context.Context, string, string) ([]OrgUnitSnapshotRow, error) {
+	return nil, nil
+}
+func (orgSnapshotStoreStub) CreateOrgUnit(context.Context, string, string, string, string) (string, error) {
+	return "org1", nil
+}
+
+func TestNewHandlerWithOptions_UsesProvidedStores(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
+	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
+
+	staffingStore := newStaffingMemoryStore()
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+		OrgUnitSnapshot: orgSnapshotStoreStub{},
+		SetIDStore:      newSetIDMemoryStore(),
+		JobCatalogStore: newJobCatalogMemoryStore(),
+		PersonStore:     newPersonMemoryStore(),
+		PositionStore:   staffingStore,
+		AssignmentStore: staffingStore,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h == nil {
+		t.Fatal("nil handler")
 	}
 }
 

@@ -15,7 +15,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|jobcatalog-smoke> [args]")
+		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|jobcatalog-smoke|person-smoke|staffing-smoke> [args]")
 	}
 
 	switch os.Args[1] {
@@ -25,9 +25,315 @@ func main() {
 		orgunitSmoke(os.Args[2:])
 	case "jobcatalog-smoke":
 		jobcatalogSmoke(os.Args[2:])
+	case "person-smoke":
+		personSmoke(os.Args[2:])
+	case "staffing-smoke":
+		staffingSmoke(os.Args[2:])
 	default:
 		fatalf("unknown subcommand: %s", os.Args[1])
 	}
+}
+
+func personSmoke(args []string) {
+	fs := flag.NewFlagSet("person-smoke", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var url string
+	fs.StringVar(&url, "url", "", "postgres connection string")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if url == "" {
+		fatalf("missing --url")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		fatal(err)
+	}
+	defer conn.Close(context.Background())
+
+	_ = tryEnsureRole(ctx, conn, "app_nobypassrls")
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	_ = trySetRole(ctx, tx, "app_nobypassrls")
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_failclosed;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `SELECT count(*) FROM person.persons;`)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected fail-closed error when app.current_tenant is missing")
+	}
+
+	tenantA := "00000000-0000-0000-0000-00000000000a"
+	tenantB := "00000000-0000-0000-0000-00000000000b"
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantA); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM person.persons WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+
+	var personUUID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&personUUID); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO person.persons (tenant_id, person_uuid, pernr, display_name, status)
+		VALUES ($1::uuid, $2::uuid, '1', 'Smoke Person', 'active');
+	`, tenantA, personUUID); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_cross_insert;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO person.persons (tenant_id, pernr, display_name, status)
+		VALUES ($1::uuid, '2', 'Cross Tenant', 'active');
+	`, tenantB)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_cross_insert;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected RLS rejection on cross-tenant insert")
+	}
+
+	var countA int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM person.persons WHERE tenant_id = $1::uuid;`, tenantA).Scan(&countA); err != nil {
+		fatal(err)
+	}
+	if countA != 1 {
+		fatalf("expected count=1 under tenant A, got %d", countA)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		fatal(err)
+	}
+
+	tx2, err := conn.Begin(ctx)
+	if err != nil {
+		fatal(err)
+	}
+	defer func() { _ = tx2.Rollback(context.Background()) }()
+
+	_ = trySetRole(ctx, tx2, "app_nobypassrls")
+	if _, err := tx2.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantB); err != nil {
+		fatal(err)
+	}
+	var countB int
+	if err := tx2.QueryRow(ctx, `SELECT count(*) FROM person.persons;`).Scan(&countB); err != nil {
+		fatal(err)
+	}
+	if countB != 0 {
+		fatalf("expected count=0 under tenant B, got %d", countB)
+	}
+	if err := tx2.Commit(ctx); err != nil {
+		fatal(err)
+	}
+
+	fmt.Println("[person-smoke] OK")
+}
+
+func staffingSmoke(args []string) {
+	fs := flag.NewFlagSet("staffing-smoke", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var url string
+	fs.StringVar(&url, "url", "", "postgres connection string")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if url == "" {
+		fatalf("missing --url")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		fatal(err)
+	}
+	defer conn.Close(context.Background())
+
+	_ = tryEnsureRole(ctx, conn, "app_nobypassrls")
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	_ = trySetRole(ctx, tx, "app_nobypassrls")
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_failclosed;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `SELECT count(*) FROM staffing.position_events;`)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected fail-closed error when app.current_tenant is missing")
+	}
+
+	tenantA := "00000000-0000-0000-0000-00000000000a"
+	tenantB := "00000000-0000-0000-0000-00000000000b"
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantA); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignments WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.position_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.position_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.positions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+
+	initiatorID := "00000000-0000-0000-0000-00000000f001"
+	requestID := "dbtool-staffing-smoke-a"
+	effectiveDate := "2026-01-01"
+
+	var positionID string
+	var positionEventID string
+	var orgUnitID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&positionID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&positionEventID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&orgUnitID); err != nil {
+		fatal(err)
+	}
+
+	var positionEventDBID int64
+	if err := tx.QueryRow(ctx, `
+		SELECT staffing.submit_position_event(
+		  $1::uuid,
+		  $2::uuid,
+		  $3::uuid,
+		  'CREATE',
+		  $4::date,
+		  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position'),
+		  $6::text,
+		  $7::uuid
+		);
+	`, positionEventID, tenantA, positionID, effectiveDate, orgUnitID, requestID, initiatorID).Scan(&positionEventDBID); err != nil {
+		fatal(err)
+	}
+	if positionEventDBID <= 0 {
+		fatalf("expected position event db id > 0, got %d", positionEventDBID)
+	}
+
+	var positionVersions int
+	if err := tx.QueryRow(ctx, `
+		SELECT count(*)
+		FROM staffing.position_versions
+		WHERE tenant_id = $1::uuid AND position_id = $2::uuid AND validity @> $3::date;
+	`, tenantA, positionID, effectiveDate).Scan(&positionVersions); err != nil {
+		fatal(err)
+	}
+	if positionVersions != 1 {
+		fatalf("expected position_versions=1, got %d", positionVersions)
+	}
+
+	var assignmentID string
+	var assignmentEventID string
+	var personUUID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&assignmentID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&assignmentEventID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&personUUID); err != nil {
+		fatal(err)
+	}
+
+	var assignmentEventDBID int64
+	if err := tx.QueryRow(ctx, `
+		SELECT staffing.submit_assignment_event(
+		  $1::uuid,
+		  $2::uuid,
+		  $3::uuid,
+		  $4::uuid,
+		  'primary',
+		  'CREATE',
+		  $5::date,
+		  jsonb_build_object('position_id', $6::text),
+		  $7::text,
+		  $8::uuid
+		);
+	`, assignmentEventID, tenantA, assignmentID, personUUID, effectiveDate, positionID, "dbtool-staffing-smoke-a2", initiatorID).Scan(&assignmentEventDBID); err != nil {
+		fatal(err)
+	}
+	if assignmentEventDBID <= 0 {
+		fatalf("expected assignment event db id > 0, got %d", assignmentEventDBID)
+	}
+
+	var assignmentVersions int
+	if err := tx.QueryRow(ctx, `
+		SELECT count(*)
+		FROM staffing.assignment_versions
+		WHERE tenant_id = $1::uuid AND assignment_id = $2::uuid AND validity @> $3::date;
+	`, tenantA, assignmentID, effectiveDate).Scan(&assignmentVersions); err != nil {
+		fatal(err)
+	}
+	if assignmentVersions != 1 {
+		fatalf("expected assignment_versions=1, got %d", assignmentVersions)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		fatal(err)
+	}
+
+	tx2, err := conn.Begin(ctx)
+	if err != nil {
+		fatal(err)
+	}
+	defer func() { _ = tx2.Rollback(context.Background()) }()
+
+	_ = trySetRole(ctx, tx2, "app_nobypassrls")
+	if _, err := tx2.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantB); err != nil {
+		fatal(err)
+	}
+	var crossCount int
+	if err := tx2.QueryRow(ctx, `SELECT count(*) FROM staffing.position_versions;`).Scan(&crossCount); err != nil {
+		fatal(err)
+	}
+	if crossCount != 0 {
+		fatalf("expected position_versions count=0 under tenant B, got %d", crossCount)
+	}
+	if err := tx2.Commit(ctx); err != nil {
+		fatal(err)
+	}
+
+	fmt.Println("[staffing-smoke] OK")
 }
 
 func rlsSmoke(args []string) {
@@ -703,22 +1009,32 @@ $$;`, role, role)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA orgunit TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA jobcatalog TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA person TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA staffing TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA orgunit TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA jobcatalog TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA person TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA staffing TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA orgunit TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA jobcatalog TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA person TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA staffing TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA orgunit TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA jobcatalog TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA person TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA staffing TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA iam GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA orgunit GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA jobcatalog GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA person GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA staffing GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
 	return nil
 }
 
