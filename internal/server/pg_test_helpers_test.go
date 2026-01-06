@@ -24,7 +24,7 @@ type stubTx struct {
 	row2Err   error
 	row3Err   error
 
-	rows *stubRows
+	rows pgx.Rows
 	row  pgx.Row
 	row2 pgx.Row
 	row3 pgx.Row

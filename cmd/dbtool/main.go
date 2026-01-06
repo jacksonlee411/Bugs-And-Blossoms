@@ -15,7 +15,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: dbtool <rls-smoke|orgunit-smoke> [args]")
+		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|jobcatalog-smoke> [args]")
 	}
 
 	switch os.Args[1] {
@@ -23,6 +23,8 @@ func main() {
 		rlsSmoke(os.Args[2:])
 	case "orgunit-smoke":
 		orgunitSmoke(os.Args[2:])
+	case "jobcatalog-smoke":
+		jobcatalogSmoke(os.Args[2:])
 	default:
 		fatalf("unknown subcommand: %s", os.Args[1])
 	}
@@ -196,6 +198,15 @@ func orgunitSmoke(args []string) {
 	tenantA := "00000000-0000-0000-0000-00000000000a"
 	tenantB := "00000000-0000-0000-0000-00000000000b"
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM orgunit.org_unit_versions WHERE tenant_id = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM orgunit.org_trees WHERE tenant_id = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM orgunit.org_events WHERE tenant_id = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantA); err != nil {
 		fatal(err)
 	}
 
@@ -548,6 +559,123 @@ SELECT orgunit.submit_org_event(
 	fmt.Println("[orgunit-smoke] OK")
 }
 
+func jobcatalogSmoke(args []string) {
+	fs := flag.NewFlagSet("jobcatalog-smoke", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var url string
+	fs.StringVar(&url, "url", "", "postgres connection string")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if url == "" {
+		fatalf("missing --url")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		fatal(err)
+	}
+	defer conn.Close(context.Background())
+
+	_ = tryEnsureRole(ctx, conn, "app_nobypassrls")
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	_ = trySetRole(ctx, tx, "app_nobypassrls")
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_failclosed;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `SELECT count(*) FROM jobcatalog.job_family_group_events;`)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected fail-closed error when app.current_tenant is missing")
+	}
+
+	tenantA := "00000000-0000-0000-0000-00000000000a"
+	tenantB := "00000000-0000-0000-0000-00000000000b"
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantA); err != nil {
+		fatal(err)
+	}
+
+	// SetID bootstrap is part of 009M1 dependency chain; smoke uses it to avoid hidden coupling.
+	_, _ = tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $1::uuid);`, tenantA)
+
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_group_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_group_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_groups WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+
+	groupID := "00000000-0000-0000-0000-00000000c101"
+	eventID := "00000000-0000-0000-0000-00000000c102"
+	requestID := "dbtool-jobcatalog-smoke-create"
+	initiatorID := "00000000-0000-0000-0000-00000000f001"
+
+	if _, err := tx.Exec(ctx, `
+SELECT jobcatalog.submit_job_family_group_event(
+  $1::uuid,
+  $2::uuid,
+  'SHARE',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('code', 'JC1', 'name', 'Job Family Group 1', 'description', null),
+  $5::text,
+  $6::uuid
+);
+`, eventID, tenantA, groupID, "2026-01-01", requestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	var count int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM jobcatalog.job_family_group_versions WHERE validity @> '2026-01-01'::date;`).Scan(&count); err != nil {
+		fatal(err)
+	}
+	if count != 1 {
+		fatalf("expected versions count=1 under tenant A, got %d", count)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		fatal(err)
+	}
+
+	tx2, err := conn.Begin(ctx)
+	if err != nil {
+		fatal(err)
+	}
+	defer func() { _ = tx2.Rollback(context.Background()) }()
+
+	_ = trySetRole(ctx, tx2, "app_nobypassrls")
+	if _, err := tx2.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantB); err != nil {
+		fatal(err)
+	}
+	if err := tx2.QueryRow(ctx, `SELECT count(*) FROM jobcatalog.job_family_group_versions;`).Scan(&count); err != nil {
+		fatal(err)
+	}
+	if count != 0 {
+		fatalf("expected versions count=0 under tenant B, got %d", count)
+	}
+	if err := tx2.Commit(ctx); err != nil {
+		fatal(err)
+	}
+
+	fmt.Println("[jobcatalog-smoke] OK")
+}
+
 func pgErrorMessage(err error) (string, bool) {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {
@@ -574,18 +702,23 @@ $$;`, role, role)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA orgunit TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT USAGE ON SCHEMA jobcatalog TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA orgunit TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA jobcatalog TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA orgunit TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA jobcatalog TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA iam TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA orgunit TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA jobcatalog TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA iam GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
 	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA orgunit GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
+	_, _ = conn.Exec(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA jobcatalog GRANT USAGE, SELECT ON SEQUENCES TO `+role+`;`)
 	return nil
 }
 

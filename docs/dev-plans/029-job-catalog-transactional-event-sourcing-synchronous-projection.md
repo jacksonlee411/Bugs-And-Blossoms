@@ -1,6 +1,6 @@
 # DEV-PLAN-029：Job Catalog（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
-**状态**: 草拟中（2026-01-04 04:20 UTC）
+**状态**: 部分完成（009M1：Job Family Group 最小闭环；2026-01-06 23:40 UTC）
 
 > 本计划的定位：作为 Greenfield HR 的 Job Catalog 子域，提供 **Job Catalog 权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026/030` 对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -10,9 +10,9 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 提供 Job Catalog 的 schema（events + identity + versions）与最小不变量集合（可识别、可验收、可重放）。
-- [ ] 与 026/030 对齐：Valid Time=DATE、同日事件唯一、**同事务全量重放（delete+replay）**、versions **no-overlap + gapless**、One Door（各实体 `submit_*_event`）。
-- [ ] 表命名去掉 `org_` 前缀（见 3.2），并与 Position 可组合（030 的 FK 以 `(tenant_id, id)` 为基准）。
+- [X] 提供 Job Catalog 的 schema（events + identity + versions）与最小不变量集合（可识别、可验收、可重放）。（009M1：仅覆盖 `job_family_groups` 样板）
+- [X] 与 026/030 对齐：Valid Time=DATE、同日事件唯一、**同事务全量重放（delete+replay）**、versions **no-overlap + gapless**、One Door（各实体 `submit_*_event`）。（009M1：仅覆盖 `submit_job_family_group_event(...)`）
+- [X] 表命名去掉 `org_` 前缀（见 3.2），并与 Position 可组合（030 的 FK 以 `(tenant_id, id)` 为基准）。
 
 ### 2.2 非目标（明确不做）
 - 不提供对旧 API/旧数据的兼容；迁移/退场策略必须另立 dev-plan 承接。
@@ -22,8 +22,15 @@
 > 本计划仅声明命中项与 SSOT 链接，不复制命令清单。
 
 - **触发器（实施阶段将命中）**：
-  - [ ] DB 迁移 / Schema（Atlas + Goose 闭环：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`）
-  - [ ] Go 代码（`AGENTS.md`）
+  - [X] DB 迁移 / Schema（Atlas + Goose 闭环：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`）
+  - [X] Go 代码（`AGENTS.md`）
+
+## 2.5 009M1 已落地范围（最小样板：Job Family Group）
+
+- schema/迁移：`modules/jobcatalog/infrastructure/persistence/schema/00001_jobcatalog_schema.sql`、`modules/jobcatalog/infrastructure/persistence/schema/00002_jobcatalog_job_family_groups.sql`、`modules/jobcatalog/infrastructure/persistence/schema/00003_jobcatalog_engine.sql`、`migrations/jobcatalog/20260106102000_jobcatalog_schema.sql`、`migrations/jobcatalog/20260106102500_jobcatalog_engine.sql`
+- UI 闭环入口：`/org/job-catalog`（实现：`internal/server/jobcatalog.go`；allowlist：`config/routing/allowlist.yaml`）
+- SetID 解析依赖：`pkg/setid/setid.go` + `orgunit.resolve_setid(...)`
+- 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
 - **SSOT 链接**：
   - 触发器矩阵与本地必跑：`AGENTS.md`
   - 命令入口：`Makefile`

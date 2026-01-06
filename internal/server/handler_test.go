@@ -259,6 +259,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		"/ui/topbar",
 		"/org/nodes",
 		"/org/snapshot",
+		"/org/setid",
 		"/org/job-catalog",
 		"/org/positions",
 		"/org/assignments",
@@ -273,6 +274,26 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("path=%s status=%d", p, rec.Code)
 		}
+	}
+
+	reqSetIDPost := httptest.NewRequest(http.MethodPost, "/org/setid", strings.NewReader("action=create_setid&setid=A0001&name=Default+A"))
+	reqSetIDPost.Host = "localhost:8080"
+	reqSetIDPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqSetIDPost.AddCookie(session)
+	recSetIDPost := httptest.NewRecorder()
+	h.ServeHTTP(recSetIDPost, reqSetIDPost)
+	if recSetIDPost.Code != http.StatusSeeOther {
+		t.Fatalf("setid post status=%d", recSetIDPost.Code)
+	}
+
+	reqJobCatalogPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&business_unit_id=BU000", strings.NewReader("action=create_job_family_group&effective_date=2026-01-01&business_unit_id=BU000&code=JC1&name=Group1"))
+	reqJobCatalogPost.Host = "localhost:8080"
+	reqJobCatalogPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqJobCatalogPost.AddCookie(session)
+	recJobCatalogPost := httptest.NewRecorder()
+	h.ServeHTTP(recJobCatalogPost, reqJobCatalogPost)
+	if recJobCatalogPost.Code != http.StatusSeeOther {
+		t.Fatalf("jobcatalog post status=%d", recJobCatalogPost.Code)
 	}
 
 	reqOrgSnapshotPost := httptest.NewRequest(http.MethodPost, "/org/snapshot", strings.NewReader("name=A"))
@@ -402,6 +423,69 @@ func TestNewHandlerWithOptions_DefaultPaths(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestNewHandlerWithOptions_WithProvidedStores(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
+	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+		OrgUnitSnapshot: nil,
+		SetIDStore:      newSetIDMemoryStore(),
+		JobCatalogStore: newJobCatalogMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestNewHandlerWithOptions_LoadAuthorizerError(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
+	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
+
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "")
+
+	_, err = NewHandlerWithOptions(HandlerOptions{OrgUnitStore: newOrgUnitMemoryStore()})
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }
 

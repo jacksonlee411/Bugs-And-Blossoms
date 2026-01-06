@@ -70,6 +70,10 @@ case "$direction" in
       echo "[db-migrate] orgunit smoke: module=$module"
       go run ./cmd/dbtool orgunit-smoke --url "$db_url"
     fi
+    if [[ "$module" == "jobcatalog" ]]; then
+      echo "[db-migrate] jobcatalog smoke: module=$module"
+      go run ./cmd/dbtool jobcatalog-smoke --url "$db_url"
+    fi
     ;;
   down)
     steps="${GOOSE_STEPS:-1}"

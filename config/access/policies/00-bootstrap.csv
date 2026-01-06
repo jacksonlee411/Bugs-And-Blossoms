@@ -1,2 +1,7 @@
 p, role:anonymous, global, iam.ping, read
-
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, orgunit.orgunits, read
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, orgunit.orgunits, admin
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, orgunit.setid, read
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, orgunit.setid, admin
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, jobcatalog.catalog, read
+p, role:tenant-admin, 00000000-0000-0000-0000-000000000001, jobcatalog.catalog, admin

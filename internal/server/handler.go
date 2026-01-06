@@ -23,6 +23,8 @@ func NewHandler() (http.Handler, error) {
 type HandlerOptions struct {
 	OrgUnitStore    OrgUnitStore
 	OrgUnitSnapshot OrgUnitSnapshotStore
+	SetIDStore      SetIDGovernanceStore
+	JobCatalogStore JobCatalogStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -52,6 +54,8 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	orgStore := opts.OrgUnitStore
 	orgSnapshotStore := opts.OrgUnitSnapshot
+	setidStore := opts.SetIDStore
+	jobcatalogStore := opts.JobCatalogStore
 	if orgStore == nil {
 		dsn := dbDSNFromEnv()
 		pool, err := pgxpool.New(context.Background(), dsn)
@@ -67,8 +71,30 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		}
 	}
 
+	if setidStore == nil {
+		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
+			setidStore = newSetIDPGStore(pgStore.pool)
+		} else {
+			setidStore = newSetIDMemoryStore()
+		}
+	}
+
+	if jobcatalogStore == nil {
+		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
+			jobcatalogStore = newJobCatalogPGStore(pgStore.pool)
+		} else {
+			jobcatalogStore = newJobCatalogMemoryStore()
+		}
+	}
+
 	router := routing.NewRouter(classifier)
-	guarded := withTenantAndSession(tenants, router)
+
+	authorizer, err := loadAuthorizer()
+	if err != nil {
+		return nil, err
+	}
+
+	guarded := withTenantAndSession(tenants, withAuthz(authorizer, router))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/app", http.StatusFound)
@@ -117,6 +143,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			`<ul>`+
 			`<li><a href="/org/nodes" hx-get="/org/nodes" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit")+`</a></li>`+
 			`<li><a href="/org/snapshot" hx-get="/org/snapshot" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit_snapshot")+`</a></li>`+
+			`<li><a href="/org/setid" hx-get="/org/setid" hx-target="#content" hx-push-url="true">`+tr(l, "nav_setid")+`</a></li>`+
 			`<li><a href="/org/job-catalog" hx-get="/org/job-catalog" hx-target="#content" hx-push-url="true">`+tr(l, "nav_jobcatalog")+`</a></li>`+
 			`<li><a href="/org/positions" hx-get="/org/positions" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
 			`<li><a href="/person/persons" hx-get="/person/persons" hx-target="#content" hx-push-url="true">`+tr(l, "nav_person")+`</a></li>`+
@@ -145,8 +172,17 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/snapshot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgSnapshot(w, r, orgSnapshotStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/setid", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleSetID(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/setid", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleSetID(w, r, setidStore)
+	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeShell(w, r, "<h1>Job Catalog /org/job-catalog</h1><p>(placeholder)</p>")
+		handleJobCatalog(w, r, jobcatalogStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleJobCatalog(w, r, jobcatalogStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeShell(w, r, "<h1>Staffing /org/positions</h1><p>(placeholder)</p>")
@@ -284,6 +320,7 @@ func renderNav(r *http.Request) string {
 	return `<nav><ul>` +
 		`<li><a href="/org/nodes" hx-get="/org/nodes" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit") + `</a></li>` +
 		`<li><a href="/org/snapshot" hx-get="/org/snapshot" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit_snapshot") + `</a></li>` +
+		`<li><a href="/org/setid" hx-get="/org/setid" hx-target="#content" hx-push-url="true">` + tr(l, "nav_setid") + `</a></li>` +
 		`<li><a href="/org/job-catalog" hx-get="/org/job-catalog" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
 		`<li><a href="/org/positions" hx-get="/org/positions" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
 		`<li><a href="/person/persons" hx-get="/person/persons" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
@@ -317,6 +354,8 @@ func tr(lang string, key string) string {
 			return "组织架构"
 		case "nav_orgunit_snapshot":
 			return "组织架构快照"
+		case "nav_setid":
+			return "SetID 管理"
 		case "nav_jobcatalog":
 			return "职位分类"
 		case "nav_staffing":
@@ -333,6 +372,8 @@ func tr(lang string, key string) string {
 		return "OrgUnit"
 	case "nav_orgunit_snapshot":
 		return "OrgUnit Snapshot"
+	case "nav_setid":
+		return "SetID Governance"
 	case "nav_jobcatalog":
 		return "Job Catalog"
 	case "nav_staffing":

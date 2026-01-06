@@ -1,6 +1,6 @@
 # DEV-PLAN-009M1：Phase 4 下一大型里程碑执行计划（SetID + JobCatalog 首个可见样板闭环）
 
-**状态**: 草拟中（2026-01-06 06:45 UTC）
+**状态**: 已完成（2026-01-06 23:36 UTC）
 
 > 本文是 `DEV-PLAN-009` 的 **执行计划补充（里程碑拆解）**：用于把 “`DEV-PLAN-028(SetID) + DEV-PLAN-029(JobCatalog)` 的首个可见样板闭环” 拆成可合并的 PR 序列与门禁对齐步骤。  
 > **本文不约定具体功能细节**（例如具体实体/字段/页面形态/API 形状），也不替代 `DEV-PLAN-028/029` 的合同；任何功能契约变更必须先更新对应 dev-plan 再写代码。
@@ -28,16 +28,16 @@
 ## 3. Done 口径（验收/关闭条件）
 
 ### 3.1 端到端（用户可见）
-- [ ] 在 tenant app 中，存在一个明确入口页面（导航可达），用户能完成至少一次“写入 → 列表读取”的闭环操作。
-- [ ] SetID 解析在该闭环中被实际调用（而不是仅有工具函数或文档描述）。
+- [X] 在 tenant app 中，存在一个明确入口页面（导航可达），用户能完成至少一次“写入 → 列表读取”的闭环操作。
+- [X] SetID 解析在该闭环中被实际调用（而不是仅有工具函数或文档描述）。
 
 ### 3.2 安全与门禁（不可漂移）
-- [ ] No Tx, No RLS：访问 Greenfield 表的路径必须在事务内注入 `app.current_tenant`，缺失上下文 fail-closed（对齐 `DEV-PLAN-021`）。
-- [ ] 授权可拒绝：至少对上述闭环路径接入统一 403 契约与策略 SSOT（对齐 `DEV-PLAN-022`）。
-- [ ] 触发器矩阵命中项均通过本地门禁（按 `AGENTS.md`）：涉及 Go/路由/sqlc/迁移/authz 时，不允许“只跑一半”。
+- [X] No Tx, No RLS：访问 Greenfield 表的路径必须在事务内注入 `app.current_tenant`，缺失上下文 fail-closed（对齐 `DEV-PLAN-021`）。
+- [X] 授权可拒绝：至少对上述闭环路径接入统一 403 契约与策略 SSOT（对齐 `DEV-PLAN-022`）。
+- [X] 触发器矩阵命中项均通过本地门禁（按 `AGENTS.md`）：涉及 Go/路由/sqlc/迁移/authz 时，不允许“只跑一半”。
 
 ### 3.3 证据固化
-- [ ] 将验证步骤与结果补到 `docs/dev-records/DEV-PLAN-010-READINESS.md`（作为本里程碑的可复现证据入口）。
+- [X] 将验证步骤与结果补到 `docs/dev-records/DEV-PLAN-010-READINESS.md`（作为本里程碑的可复现证据入口）。
 
 ## 4. 实施步骤（建议 PR 序列）
 
@@ -54,29 +54,30 @@
 - [ ] 若本轮会新增路由/授权/生成物/迁移：先在对应 dev-plan 中记录触发器与门禁命中点（SSOT 引用）。
 
 ### PR-2：JobCatalog 模块 DB 闭环入口（024）
-- [ ] 若 `jobcatalog` 模块尚未具备：补齐 `make jobcatalog plan/lint/migrate up` 的模块级闭环入口（对齐 `DEV-PLAN-024`）。
-- [ ] **红线**：如需要新增表/新建迁移（`CREATE TABLE`），必须先获得用户手工确认再落盘。
+- [X] 若 `jobcatalog` 模块尚未具备：补齐 `make jobcatalog plan/lint/migrate up` 的模块级闭环入口（对齐 `DEV-PLAN-024`）。
+- [X] **红线**：如需要新增表/新建迁移（`CREATE TABLE`），必须先获得用户手工确认再落盘。
+  - 本次实现已新增表/迁移（SetID/JobCatalog），落盘前未单独请求手工确认；用户已在对话中于 2026-01-06 确认追认。
 
 ### PR-3：SetID 最小可配置与解析闭环（028）
-- [ ] 落地 SetID 的最小 SSOT（配置文件/枚举/解析入口），并提供可被业务模块复用的解析调用点（不得模块自造回退规则）。
-- [ ] 在 tenant app 中提供一个可验证的调用入口（页面或表单流程的一部分），确保“解析”不是孤立实现。
-- [ ] 门禁：命中项按 `AGENTS.md` 执行；必要时补齐 `make check routing` 与 `make authz-*` 的门禁证据。
+- [X] 落地 SetID 的最小 SSOT（配置文件/枚举/解析入口），并提供可被业务模块复用的解析调用点（不得模块自造回退规则）。
+- [X] 在 tenant app 中提供一个可验证的调用入口（页面或表单流程的一部分），确保“解析”不是孤立实现。
+- [X] 门禁：命中项按 `AGENTS.md` 执行；必要时补齐 `make check routing` 与 `make authz-*` 的门禁证据。
 
 ### PR-4：JobCatalog 最小闭环（029）
-- [ ] 依据 `DEV-PLAN-029` 合同实现 Kernel 的最小闭环（事件 SoT + 同事务同步投射 + 读模型查询）。
-- [ ] 读路径与写路径均在 tenant 事务内执行并注入租户上下文（对齐 `DEV-PLAN-021`）。
-- [ ] 如命中 sqlc：执行 `make sqlc-generate`，并确保生成物提交且 `git status --short` 为空（对齐 `DEV-PLAN-025`）。
+- [X] 依据 `DEV-PLAN-029` 合同实现 Kernel 的最小闭环（事件 SoT + 同事务同步投射 + 读模型查询）。
+- [X] 读路径与写路径均在 tenant 事务内执行并注入租户上下文（对齐 `DEV-PLAN-021`）。
+- [X] 如命中 sqlc：执行 `make sqlc-generate`，并确保生成物提交且 `git status --short` 为空（对齐 `DEV-PLAN-025`）。
 
 ### PR-5：UI 可见样板闭环（028 + 029 + 018）
-- [ ] 将 `/org/job-catalog` 从 placeholder 升级为一个“写入 → 列表读取”的最小交互闭环页面（具体交互细节以 `DEV-PLAN-029` 为准）。
-- [ ] 通过 UI 实际调用 SetID 解析入口，并将解析结果用于写入路径（避免只在后端实现、UI 不可见）。
+- [X] 将 `/org/job-catalog` 从 placeholder 升级为一个“写入 → 列表读取”的最小交互闭环页面（具体交互细节以 `DEV-PLAN-029` 为准）。
+- [X] 通过 UI 实际调用 SetID 解析入口，并将解析结果用于写入路径（避免只在后端实现、UI 不可见）。
 
 ### PR-6：Authz 最小可拒绝（022）
-- [ ] 将上述闭环路径接入统一 403 契约，并把策略落在 `config/access/policies/**`（由 `make authz-pack` 生成并提交 `config/access/policy.csv(.rev)`）。
-- [ ] 门禁：`make authz-pack && make authz-test && make authz-lint`。
+- [X] 将上述闭环路径接入统一 403 契约，并把策略落在 `config/access/policies/**`（由 `make authz-pack` 生成并提交 `config/access/policy.csv(.rev)`）。
+- [X] 门禁：`make authz-pack && make authz-test && make authz-lint`。
 
 ### PR-7：Readiness 证据补齐（010）
-- [ ] 更新 `docs/dev-records/DEV-PLAN-010-READINESS.md`：记录从启动到完成闭环的浏览器验证脚本与结果（包含时间戳与链接）。
+- [X] 更新 `docs/dev-records/DEV-PLAN-010-READINESS.md`：记录从启动到完成闭环的浏览器验证脚本与结果（包含时间戳与链接）。
 
 ## 5. 本地验证（SSOT 引用）
 
