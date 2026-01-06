@@ -178,6 +178,8 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 - `modules/**/infrastructure/persistence/schema/**`（或 schema SSOT 等效路径）
 - `scripts/db/export_*schema*.sh`（若存在）
 
+> 说明（M2 典型场景）：即使某模块（例如 `person/staffing`）暂时没有新增 sqlc queries，只要 schema SSOT 有变更，`internal/sqlc/schema.sql` 仍会变化；该导出文件属于生成物，必须提交并通过 “Generated Artifacts Clean” 门禁。
+
 ### 11.2 开发者本地流程（必须）
 1. 修改 schema SSOT（Atlas/Goose 入口按 Makefile）。
 2. 运行 schema 导出脚本（见 §6）。

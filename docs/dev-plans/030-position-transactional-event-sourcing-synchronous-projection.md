@@ -5,8 +5,8 @@
 > 本计划的定位：作为 Greenfield HR 的 Position/Assignment 子域，提供 **Position/Assignment 的权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026`（OrgUnit）对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
 ## 1. 背景与上下文 (Context)
-- 当前 Position/Assignment 位于 `modules/org` 的 schema 与实现中（`org_positions/org_position_slices/org_assignments` 等），并强依赖 `org_nodes`（FK）。
-- 本计划按 Greenfield（从 0 开始）口径编写：暂不考虑迁移/兼容；如需承接存量 `modules/org` 的退场/替换，必须另立 dev-plan。
+- 本仓库为 Greenfield implementation repo：`modules/staffing` 目前仅有骨架，占位文件不承载任何存量实现。
+- 本计划按 Greenfield（从 0 开始）口径编写：不考虑迁移/兼容；如未来需要承接存量系统的退场/替换，必须另立 dev-plan。
 - 本计划采用与 026 相同的 Kernel 边界：DB 负责不变量与投射，Go 只做鉴权/事务/调用与错误映射。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
@@ -18,6 +18,15 @@
 ### 2.2 非目标（明确不做）
 - 不提供对旧 API/旧数据的兼容；迁移/退场策略必须另立 dev-plan 承接。
 - 不保留/不替代旧的 outbox/audit/settings 等支撑能力（本系列优先收敛 Kernel 最小闭环；如需引入另立 dev-plan）。
+
+### 2.M2 MVP 范围冻结（对齐 `DEV-PLAN-009M2`）
+
+> 目的：把本计划的“大合同”拆出 M2 的最小交付面，避免实现期一次性引入大量动作/不变量导致“Easy but not Simple”。
+
+- [ ] 事件类型（M2）：`CREATE`（必选）+ `UPDATE`（可选）；不交付 `CORRECT/RESCIND/SHIFT_BOUNDARY/...`。
+- [ ] 汇报线（M2）：不交付 `reports_to_position_id` 的编辑能力；写入时将其保持为 `NULL`（使“无环”不变量在 M2 内保持平凡成立，避免引入额外校验复杂度）。
+- [ ] 占编/容量（M2）：以“每个 position 同一时点最多 1 条 active primary assignment（allocated_fte=1.0）”作为最小裁决口径；复杂的 `SUM(allocated_fte) <= capacity_fte` 在后续里程碑再扩展（需另立清单与测试）。
+- [ ] 外部引用（M2）：`job_profile_id/job_level_id` 等允许为 `NULL`；不在 M2 内强制实现跨域 as-of 存在性校验（避免跨模块耦合与工具链复杂化）。
 
 ## 2.3 工具链与门禁（SSOT 引用）
 > 本计划仅声明命中项与 SSOT 链接，不复制命令清单。
@@ -78,6 +87,8 @@
 
 ## 4. 数据模型与约束 (Data Model & Constraints)
 > 说明：以下为 schema 级合同（字段/约束/索引）；具体 DDL 以实施阶段落盘的 schema SSOT 文件为准（对齐 `DEV-PLAN-016`：`modules/staffing/infrastructure/persistence/schema/`）。
+
+> 实现注记（本仓库口径）：当前仓库未落盘 `tenants` 表，因此所有 `tenant_id` 仅作为 uuid 字段参与约束与 RLS，不建立到 `tenants(id)` 的 FK（对齐 `DEV-PLAN-019/021` 的“租户注入 + RLS 圈地”口径）。
 
 ### 4.1 `positions`（稳定实体）
 ```sql

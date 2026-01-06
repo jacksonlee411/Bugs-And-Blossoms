@@ -8,7 +8,8 @@
 
 为避免 `staffing` 与 `persons` 表形成隐式耦合（跨模块直接查表/解析），`DEV-PLAN-016/031` 明确要求：**pernr → person_uuid 的解析由 `modules/person` 提供 options/read API**，并把“人员身份”收敛为一个最小、稳定、可复用的契约。
 
-当前仓库已存在 `modules/person` 与 `persons` 表，但 `pernr` 尚未被约束为“最多 8 位数字字符串（前导 0 同值）”，也缺少一个面向集成方的“按 pernr 精确解析”的稳定 API 合同。本计划给出 **Person Identity 的最小化设计**，作为 `modules/staffing` 落地的前置契约。
+当前仓库已存在 `modules/person` 的模块骨架，但 **Person 的 schema/table 尚未作为 SSOT 落盘**（`modules/person/infrastructure/persistence/schema/*.sql` 仍为空）。
+为使“Person Identity”从文档合同变为可执行合同，本计划将把最小 `person.persons` 表与其约束、RLS、以及对外 read API 一并落地，作为 `modules/staffing` 落地的前置契约。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
@@ -21,14 +22,17 @@
 ### 2.2 非目标（明确不做）
 - 不在本计划内引入“人员主数据全量模型”（证件/地址/雇佣信息等）。
 - 不在本计划内把 Person 强制改造成事件 SoT + versions（`DEV-PLAN-016` 已明确：Person 可选是否事件化，本计划默认不强制）。
-- 不在本计划内新增数据库表；仅定义最小字段/约束/接口契约。若实施阶段确需新增表，必须另开实施计划并获得手工确认（仓库红线）。
+- 不在本计划内实现任职/组织/职位等跨域逻辑；Person 仅负责身份锚点与解析。
+- 不在本计划内引入跨模块 FK（默认仅存 ID；对齐 `DEV-PLAN-024` 的 stopline）。
+
+> 说明：为使合同可执行，本计划将新增 `person.persons` 表（最小字段），并按 `AGENTS.md` 红线执行（`CREATE TABLE` 需用户手工确认）。
 
 ### 2.3 工具链与门禁（SSOT 引用）
 - DDD 分层与共享策略：`docs/dev-plans/015-ddd-layering-framework.md`
 - 4 模块边界与跨模块契约：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - Staffing 方案（对 Person 的依赖点）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - Kernel 风格与 One Door Policy：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
-- RLS（若扩展到 Person）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- RLS（本计划将 Person 纳入强租户隔离）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - 命令入口与触发器矩阵：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`
 
 ## 3. 对 `DEV-PLAN-031` 的架构分析：Person 的最小责任面
@@ -76,16 +80,15 @@
 
 ### 4.2 DB 约束（最小）与兼容策略
 
-> 实施阶段的 SSOT：`modules/person/infrastructure/persistence/schema/person-schema.sql`。
+> 实施阶段的 SSOT：`modules/person/infrastructure/persistence/schema/*.sql`（对齐 `DEV-PLAN-024/025` 的目录约定）。
 
-- 现状：`persons.pernr` 为 `text`，仅有 trim check 与 unique。
-- 建议：新增两类约束（可采用 Postgres `NOT VALID` + `VALIDATE CONSTRAINT` 渐进落盘，避免存量脏数据导致迁移中断）：
-  - digits：`CONSTRAINT persons_pernr_digits_max8_check CHECK (pernr ~ '^[0-9]{1,8}$')`
-  - canonical：`CONSTRAINT persons_pernr_canonical_check CHECK (pernr = '0' OR pernr !~ '^0')`
+- 本仓库落盘策略：直接以“canonical pernr”作为存储权威表达，并用 DB check 约束兜底：
+  - digits：`CHECK (pernr ~ '^[0-9]{1,8}$')`
+  - canonical：`CHECK (pernr = '0' OR pernr !~ '^0')`
+  - trim：`CHECK (btrim(pernr) = pernr)`、`CHECK (btrim(display_name) = display_name)`
 
 **实施前置检查（避免盲目加约束）**
-- [ ] 统计存量 `persons.pernr` 是否存在“非数字 / 空 / 超过 8 位”的值；若存在，明确修复策略（人工修正/数据回填/冻结迁移）。
-- [ ] 统计存量是否存在“前导 0 导致同值冲突”的重复工号（例：`00001234` 与 `1234` 同时存在）；若存在，必须给出合并/清理策略后再落库（否则会触发唯一性冲突）。
+- [ ] 若未来引入存量数据导入：必须在导入前先跑审计（非数字/超长/前导 0 同值冲突），并给出修复策略后再导入（避免把“清洗逻辑”塞进运行时分支）。
 
 ### 4.3 对外接口契约（供 Staffing/前端复用）
 
@@ -114,24 +117,25 @@
 - `modules/staffing` 不应在 Go 层 import `modules/person/**`；需要 pernr→uuid 时，走 Person 的 options/read API（或由前端先解析）。
 - DB 层如需强一致性（可选）：`staffing` 表可对 `(tenant_id, person_uuid)` 建立外键引用 `persons(tenant_id, person_uuid)`，以拒绝孤儿引用；但这不改变“解析责任属于 person 模块”的边界。
 
-### 4.5 与 RLS（021）的关系（可选扩展）
+### 4.5 与 RLS（021）的关系（本计划强制）
 
-本计划的最小落点不要求立即对 `persons` 启用 RLS；但若后续要把 Person 纳入“强租户隔离（fail-closed）”，应复用 `DEV-PLAN-021` 的模板：
+本计划将 `person.persons` 纳入“强租户隔离（fail-closed）”，与 OrgUnit/JobCatalog 同口径：
 - 事务内注入 `app.current_tenant`
 - `persons` 启用 `ENABLE/FORCE ROW LEVEL SECURITY` + `tenant_isolation` policy
 - Go 访问路径必须满足 “No Tx, No RLS” 契约（否则会出现 fail-closed）
 
 **实现提醒（避免脚枪）**
-- 当前 `persons:options` 为读路径，若未来对 `persons` 启用 RLS，则该读路径也必须进入显式事务并注入 `app.current_tenant`（或保持 `persons` 不启用 RLS）。
+- `persons:options`/`persons:by-pernr` 都是读路径，但由于表启用 RLS，读路径同样必须在事务内注入 tenant（fail-closed）。
 
 ## 5. 实施步骤（Plan → Implement）
 
 1. [ ] 冻结 Person Identity 合同（本文档）并在 `AGENTS.md` Doc Map 登记。
-2. [ ] Go：在 `modules/person` 的 DTO/domain 层增加 `pernr` 1-8 位数字校验（错误信息本地化，错误码稳定）。
-3. [ ] DB：为 `persons.pernr` 增加“最多 8 位数字”check constraint（必要时使用 `NOT VALID` 渐进落盘），并补齐存量数据校验策略。
-4. [ ] API：补齐 `persons:by-pernr`（精确解析），并在 Staffing 表单/筛选中复用（由 031/Staffing 实施计划承接）。
-5. [ ] 测试：新增最小测试覆盖（pernr 校验、pernr 冲突、按 pernr 解析不存在/存在）。
-6. [ ] 门禁对齐：命中项按 `AGENTS.md` 触发器矩阵执行（Go + schema + doc）。
+2. [ ] DB：落盘 `person` schema 与 `person.persons`（最小字段 + check constraints + RLS policy），并接入 Atlas+Goose 闭环（`make person plan/lint/migrate up`）。
+3. [ ] Go：实现 `pernr` 规范化与校验（1-8 位数字 + 前导 0 同值），并用于 API 入参校验与查询路径。
+4. [ ] API：补齐 `persons:by-pernr`（精确解析）与 `persons:options`（联想），并提供稳定错误码（对齐 §4.3）。
+5. [ ] UI（可选但推荐用于 M2 演示）：提供最小 Person 列表/创建入口，便于 end-to-end 验收。
+6. [ ] 测试：新增最小测试覆盖（pernr 校验、按 pernr 解析不存在/存在、RLS fail-closed）。
+7. [ ] 门禁对齐：命中项按 `AGENTS.md` 触发器矩阵执行（Go + schema/migrations + authz + routing + doc）。
 
 ## 6. 验收标准 (Acceptance Criteria)
 - [ ] `pernr` 不满足 `^[0-9]{1,8}$` 时：创建 Person 必须失败（Go 校验 + DB 双保险）。

@@ -95,6 +95,8 @@ flowchart LR
 - 职位（Positions）：`/org/positions`
 - 任职记录（Job Data / Assignments）：`/org/assignments`
 
+> 说明：`/org/*` 是 UI 命名空间（信息架构/导航维度），不是 Go 模块边界；`/org/positions` 与 `/org/assignments` 的实现归属 `modules/staffing`，Authz object 使用 `staffing.positions`/`staffing.assignments`（对齐 `DEV-PLAN-016/022`）。
+
 **Person**
 - 人员列表（Persons）：`/person/persons`
 - 人员详情（Person Details）：`/person/persons/{person_uuid}`
