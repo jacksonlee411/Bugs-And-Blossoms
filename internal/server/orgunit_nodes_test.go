@@ -63,6 +63,37 @@ func TestHandleOrgNodes_GET_HX(t *testing.T) {
 	}
 }
 
+func TestHandleOrgNodes_GET_ReadLegacy_Success(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	_, _ = store.CreateNode(context.Background(), "t1", "A")
+
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=legacy", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("Read: <code>legacy</code>")) || !bytes.Contains([]byte(body), []byte("A")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleOrgNodes_GET_ReadLegacy_StoreError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=legacy", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, errStore{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("boom")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
 func TestHandleOrgNodes_POST_BadForm(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	body := bytes.NewBufferString("%zz")
@@ -113,7 +144,7 @@ func TestHandleOrgNodes_GET_StoreError(t *testing.T) {
 }
 
 func TestHandleOrgNodes_POST_CreateError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes", bytes.NewBufferString("name=A"))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=legacy", bytes.NewBufferString("name=A"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -122,11 +153,14 @@ func TestHandleOrgNodes_POST_CreateError(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("boom")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
 }
 
 func TestHandleOrgNodes_POST_SuccessRedirect(t *testing.T) {
 	store := newOrgUnitMemoryStore()
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes", bytes.NewBufferString("name=A"))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", bytes.NewBufferString("name=A"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -134,12 +168,15 @@ func TestHandleOrgNodes_POST_SuccessRedirect(t *testing.T) {
 	handleOrgNodes(rec, req, store)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-06" {
+		t.Fatalf("location=%q", loc)
 	}
 }
 
 func TestHandleOrgNodes_POST_SuccessRedirect_PreservesQuery(t *testing.T) {
 	store := newOrgUnitMemoryStore()
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?foo=bar", bytes.NewBufferString("name=A"))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=legacy&foo=bar", bytes.NewBufferString("name=A"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -148,7 +185,7 @@ func TestHandleOrgNodes_POST_SuccessRedirect_PreservesQuery(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?foo=bar" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=legacy&foo=bar" {
 		t.Fatalf("location=%q", loc)
 	}
 }
@@ -174,6 +211,29 @@ func (s *v4WriteSpyStore) CreateNodeV4(_ context.Context, tenantID string, effec
 		return OrgUnitNode{}, s.err
 	}
 	return OrgUnitNode{ID: "u1", Name: name, CreatedAt: time.Unix(1, 0).UTC()}, nil
+}
+
+type v4ReadOnlyStore struct {
+	nodes []OrgUnitNode
+}
+
+func (s v4ReadOnlyStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) { return nil, nil }
+func (s v4ReadOnlyStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
+	return OrgUnitNode{}, nil
+}
+func (s v4ReadOnlyStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode, error) {
+	return s.nodes, nil
+}
+
+type legacyOnlyStore struct {
+	inner *orgUnitMemoryStore
+}
+
+func (s legacyOnlyStore) ListNodes(ctx context.Context, tenantID string) ([]OrgUnitNode, error) {
+	return s.inner.ListNodes(ctx, tenantID)
+}
+func (s legacyOnlyStore) CreateNode(ctx context.Context, tenantID string, name string) (OrgUnitNode, error) {
+	return s.inner.CreateNode(ctx, tenantID, name)
 }
 
 func TestHandleOrgNodes_POST_ReadV4_UsesV4Writer(t *testing.T) {
@@ -216,6 +276,28 @@ func TestHandleOrgNodes_POST_ReadV4_DefaultsEffectiveDateToAsOf(t *testing.T) {
 	}
 }
 
+func TestHandleOrgNodes_POST_DefaultReadV4_UsesAsOfNow(t *testing.T) {
+	store := &v4WriteSpyStore{}
+	body := bytes.NewBufferString("name=Hello")
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	loc := rec.Header().Get("Location")
+	if !strings.HasPrefix(loc, "/org/nodes?read=v4&as_of=") {
+		t.Fatalf("location=%q", loc)
+	}
+	asOf := strings.TrimPrefix(loc, "/org/nodes?read=v4&as_of=")
+	if _, err := time.Parse("2006-01-02", asOf); err != nil {
+		t.Fatalf("as_of=%q err=%v", asOf, err)
+	}
+}
+
 func TestHandleOrgNodes_POST_ReadV4_BadEffectiveDate(t *testing.T) {
 	store := &v4WriteSpyStore{}
 	body := bytes.NewBufferString("name=Hello&effective_date=bad")
@@ -237,7 +319,7 @@ func TestHandleOrgNodes_POST_ReadV4_BadEffectiveDate(t *testing.T) {
 }
 
 func TestHandleOrgNodes_POST_ReadV4_MissingWriter(t *testing.T) {
-	store := newOrgUnitMemoryStore()
+	store := v4ReadOnlyStore{nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
 	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-06")
 	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -407,6 +489,47 @@ func TestHandleOrgNodes_GET_ReadV4_UsesV4WhenAvailable(t *testing.T) {
 	}
 }
 
+func TestHandleOrgNodes_GET_DefaultReadV4(t *testing.T) {
+	store := &v4SpyStore{
+		v4Nodes:     []OrgUnitNode{{ID: "v1", Name: "V"}},
+		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?as_of=2026-01-06", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if store.v4Called != 1 || store.legacyCalled != 0 {
+		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	}
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("V")) {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleOrgNodes_GET_ReadInvalidDefaultsToV4(t *testing.T) {
+	store := &v4SpyStore{
+		v4Nodes:     []OrgUnitNode{{ID: "v1", Name: "V"}},
+		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=nope&as_of=2026-01-06", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if store.v4Called != 1 || store.legacyCalled != 0 {
+		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	}
+}
+
 func TestHandleOrgNodes_GET_ReadV4_FallbackOnError(t *testing.T) {
 	store := &v4SpyStore{
 		v4Err:       errors.New("v4 boom"),
@@ -502,8 +625,9 @@ func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_LegacyError(t *testing.T) {
 }
 
 func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_FallbackSuccess(t *testing.T) {
-	store := newOrgUnitMemoryStore()
-	_, _ = store.CreateNode(context.Background(), "t1", "L")
+	mem := newOrgUnitMemoryStore()
+	_, _ = mem.CreateNode(context.Background(), "t1", "L")
+	store := legacyOnlyStore{inner: mem}
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
