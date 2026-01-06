@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -138,7 +139,7 @@ func TestHandleOrgNodes_POST_SuccessRedirect(t *testing.T) {
 
 func TestHandleOrgNodes_POST_SuccessRedirect_PreservesQuery(t *testing.T) {
 	store := newOrgUnitMemoryStore()
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", bytes.NewBufferString("name=A"))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?foo=bar", bytes.NewBufferString("name=A"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -147,8 +148,148 @@ func TestHandleOrgNodes_POST_SuccessRedirect_PreservesQuery(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-06" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?foo=bar" {
 		t.Fatalf("location=%q", loc)
+	}
+}
+
+type v4WriteSpyStore struct {
+	v4Called int
+	args     []string
+	err      error
+	v4Nodes  []OrgUnitNode
+}
+
+func (s *v4WriteSpyStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) { return nil, nil }
+func (s *v4WriteSpyStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
+	return OrgUnitNode{}, nil
+}
+func (s *v4WriteSpyStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode, error) {
+	return s.v4Nodes, nil
+}
+func (s *v4WriteSpyStore) CreateNodeV4(_ context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error) {
+	s.v4Called++
+	s.args = []string{tenantID, effectiveDate, name, parentID}
+	if s.err != nil {
+		return OrgUnitNode{}, s.err
+	}
+	return OrgUnitNode{ID: "u1", Name: name, CreatedAt: time.Unix(1, 0).UTC()}, nil
+}
+
+func TestHandleOrgNodes_POST_ReadV4_UsesV4Writer(t *testing.T) {
+	store := &v4WriteSpyStore{}
+	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-05&parent_id=u0")
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if store.v4Called != 1 {
+		t.Fatalf("v4Called=%d", store.v4Called)
+	}
+	if got := strings.Join(store.args, "|"); got != "t1|2026-01-05|Hello|u0" {
+		t.Fatalf("args=%q", got)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-05" {
+		t.Fatalf("location=%q", loc)
+	}
+}
+
+func TestHandleOrgNodes_POST_ReadV4_DefaultsEffectiveDateToAsOf(t *testing.T) {
+	store := &v4WriteSpyStore{}
+	body := bytes.NewBufferString("name=Hello")
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if got := strings.Join(store.args, "|"); got != "t1|2026-01-06|Hello|" {
+		t.Fatalf("args=%q", got)
+	}
+}
+
+func TestHandleOrgNodes_POST_ReadV4_BadEffectiveDate(t *testing.T) {
+	store := &v4WriteSpyStore{}
+	body := bytes.NewBufferString("name=Hello&effective_date=bad")
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if store.v4Called != 0 {
+		t.Fatalf("v4Called=%d", store.v4Called)
+	}
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("effective_date 无效")) {
+		t.Fatalf("unexpected body: %q", bodyOut)
+	}
+}
+
+func TestHandleOrgNodes_POST_ReadV4_MissingWriter(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-06")
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("v4 writer 未配置")) {
+		t.Fatalf("unexpected body: %q", bodyOut)
+	}
+}
+
+func TestHandleOrgNodes_POST_ReadV4_CreateError(t *testing.T) {
+	store := &v4WriteSpyStore{err: errors.New("boom")}
+	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-06")
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if store.v4Called != 1 {
+		t.Fatalf("v4Called=%d", store.v4Called)
+	}
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("boom")) {
+		t.Fatalf("unexpected body: %q", bodyOut)
+	}
+}
+
+func TestHandleOrgNodes_POST_ReadV4_CreateError_WithV4Nodes(t *testing.T) {
+	store := &v4WriteSpyStore{
+		err:     errors.New("boom"),
+		v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}},
+	}
+	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-06")
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("boom")) || !bytes.Contains([]byte(bodyOut), []byte("V")) {
+		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
 
@@ -201,6 +342,22 @@ func TestOrgUnitPGStore_ListAndCreate(t *testing.T) {
 	}
 	if created.ID != "n2" || created.Name != "A" {
 		t.Fatalf("created=%+v", created)
+	}
+
+	createdV4, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "V4", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if createdV4.ID != "u1" || createdV4.Name != "V4" || !createdV4.CreatedAt.Equal(time.Unix(789, 0).UTC()) {
+		t.Fatalf("created=%+v", createdV4)
+	}
+
+	createdV4Child, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "V4 Child", "00000000-0000-0000-0000-000000000001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if createdV4Child.ID != "u1" || createdV4Child.Name != "V4 Child" || !createdV4Child.CreatedAt.Equal(time.Unix(789, 0).UTC()) {
+		t.Fatalf("created=%+v", createdV4Child)
 	}
 }
 
@@ -600,6 +757,102 @@ func TestOrgUnitPGStore_CreateNode_Errors(t *testing.T) {
 	})
 }
 
+func TestOrgUnitPGStore_CreateNodeV4_Errors(t *testing.T) {
+	t.Run("begin", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		})}
+		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set_config", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		})}
+		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("effective_date_required", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		})}
+		_, err := store.CreateNodeV4(context.Background(), "t1", "", "A", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("org_id_scan", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rowErr: errors.New("row")}, nil
+		})}
+		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("event_id_scan", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{}
+			tx.row = &stubRow{vals: []any{"u1"}}
+			tx.row2Err = errors.New("row2")
+			return tx, nil
+		})}
+		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submit_exec", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{execErr: errors.New("exec"), execErrAt: 2}
+			tx.row = &stubRow{vals: []any{"u1"}}
+			tx.row2 = &stubRow{vals: []any{"e1"}}
+			return tx, nil
+		})}
+		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("tx_time_scan", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{}
+			tx.row = &stubRow{vals: []any{"u1"}}
+			tx.row2 = &stubRow{vals: []any{"e1"}}
+			tx.row3Err = errors.New("row3")
+			return tx, nil
+		})}
+		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{commitErr: errors.New("commit")}
+			tx.row = &stubRow{vals: []any{"u1"}}
+			tx.row2 = &stubRow{vals: []any{"e1"}}
+			tx.row3 = &stubRow{vals: []any{time.Unix(2, 0).UTC()}}
+			return tx, nil
+		})}
+		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
 func TestNewHandlerWithOptions_BadDBURL(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://%zz")
 	t.Setenv("ALLOWLIST_PATH", "../../config/routing/allowlist.yaml")
@@ -617,14 +870,18 @@ func (f beginnerFunc) Begin(ctx context.Context) (pgx.Tx, error) { return f(ctx)
 
 type stubTx struct {
 	execErr   error
+	execErrAt int
+	execN     int
 	queryErr  error
 	commitErr error
 	rowErr    error
 	row2Err   error
+	row3Err   error
 
 	rows *stubRows
 	row  pgx.Row
 	row2 pgx.Row
+	row3 pgx.Row
 }
 
 func (t *stubTx) Begin(ctx context.Context) (pgx.Tx, error) { return t, nil }
@@ -641,8 +898,15 @@ func (t *stubTx) Prepare(context.Context, string, string) (*pgconn.StatementDesc
 func (t *stubTx) Conn() *pgx.Conn { return nil }
 
 func (t *stubTx) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
+	t.execN++
 	if t.execErr != nil {
-		return pgconn.CommandTag{}, t.execErr
+		at := t.execErrAt
+		if at == 0 {
+			at = 1
+		}
+		if t.execN == at {
+			return pgconn.CommandTag{}, t.execErr
+		}
 	}
 	return pgconn.CommandTag{}, nil
 }
@@ -670,7 +934,15 @@ func (t *stubTx) QueryRow(context.Context, string, ...any) pgx.Row {
 		return &stubRow{err: t.row2Err}
 	}
 	if t.row2 != nil {
-		return t.row2
+		r := t.row2
+		t.row2 = nil
+		return r
+	}
+	if t.row3Err != nil {
+		return &stubRow{err: t.row3Err}
+	}
+	if t.row3 != nil {
+		return t.row3
 	}
 	return fakeRow{}
 }
@@ -731,7 +1003,7 @@ func (b *fakeBeginner) Begin(context.Context) (pgx.Tx, error) {
 
 type fakeTx struct {
 	beginCount int
-	queryRowN  int
+	uuidN      int
 	committed  bool
 	rolled     bool
 }
@@ -744,14 +1016,26 @@ func (t *fakeTx) Query(context.Context, string, ...any) (pgx.Rows, error) {
 	return &fakeRows{idx: 0}, nil
 }
 
-func (t *fakeTx) QueryRow(context.Context, string, ...any) pgx.Row {
-	t.queryRowN++
-	switch t.queryRowN {
-	case 1:
+func (t *fakeTx) QueryRow(ctx context.Context, q string, args ...any) pgx.Row {
+	if strings.Contains(q, "gen_random_uuid") {
+		t.uuidN++
+		switch t.uuidN {
+		case 1:
+			return fakeRow{vals: []any{"u1"}}
+		default:
+			return fakeRow{vals: []any{"e1"}}
+		}
+	}
+	if strings.Contains(q, "submit_orgunit_event") {
 		return fakeRow{vals: []any{"n2"}}
-	default:
+	}
+	if strings.Contains(q, "FROM orgunit.nodes") {
 		return fakeRow{vals: []any{time.Unix(456, 0).UTC()}}
 	}
+	if strings.Contains(q, "FROM orgunit.org_events") {
+		return fakeRow{vals: []any{time.Unix(789, 0).UTC()}}
+	}
+	return &stubRow{err: errors.New("unexpected QueryRow")}
 }
 
 func (t *fakeTx) Commit(context.Context) error   { t.committed = true; return nil }

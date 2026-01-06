@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"html"
 	"net/http"
 	"strconv"
@@ -25,6 +26,10 @@ type OrgUnitStore interface {
 
 type OrgUnitNodesV4Reader interface {
 	ListNodesV4(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
+}
+
+type OrgUnitNodesV4Writer interface {
+	CreateNodeV4(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error)
 }
 
 type orgUnitPGStore struct {
@@ -173,6 +178,70 @@ WHERE tenant_id = $1::uuid AND node_id = $2::uuid
 	return OrgUnitNode{ID: id, Name: name, CreatedAt: createdAt}, nil
 }
 
+func (s *orgUnitPGStore) CreateNodeV4(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return OrgUnitNode{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return OrgUnitNode{}, err
+	}
+
+	if strings.TrimSpace(effectiveDate) == "" {
+		return OrgUnitNode{}, errors.New("effective_date is required")
+	}
+
+	var orgID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&orgID); err != nil {
+		return OrgUnitNode{}, err
+	}
+
+	var eventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+		return OrgUnitNode{}, err
+	}
+
+	payload := `{"name":` + strconv.Quote(name)
+	if strings.TrimSpace(parentID) != "" {
+		payload += `,"parent_id":` + strconv.Quote(parentID)
+	}
+	payload += `}`
+
+	_, err = tx.Exec(ctx, `
+SELECT orgunit.submit_org_event(
+  $1::uuid,
+  $2::uuid,
+  'OrgUnit',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  $5::jsonb,
+  $6::text,
+  $7::uuid
+)
+`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, tenantID)
+	if err != nil {
+		return OrgUnitNode{}, err
+	}
+
+	var createdAt time.Time
+	if err := tx.QueryRow(ctx, `
+SELECT transaction_time
+FROM orgunit.org_events
+WHERE tenant_id = $1::uuid AND event_id = $2::uuid
+`, tenantID, eventID).Scan(&createdAt); err != nil {
+		return OrgUnitNode{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return OrgUnitNode{}, err
+	}
+
+	return OrgUnitNode{ID: orgID, Name: name, CreatedAt: createdAt}, nil
+}
+
 type orgUnitMemoryStore struct {
 	nodes map[string][]OrgUnitNode
 	now   func() time.Time
@@ -216,40 +285,50 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 	}
 
 	listNodes := func(errHint string) ([]OrgUnitNode, string) {
+		mergeMsg := func(hint string, msg string) string {
+			if hint == "" {
+				return msg
+			}
+			if msg == "" {
+				return hint
+			}
+			return hint + "；" + msg
+		}
+
 		if preferRead == "v4" {
 			if _, err := time.Parse("2006-01-02", asOf); err != nil {
 				nodes, legacyErr := store.ListNodes(r.Context(), tenant.ID)
 				if legacyErr != nil {
-					return nil, "as_of 无效，且 legacy 读取失败: " + legacyErr.Error()
+					return nil, mergeMsg(errHint, "as_of 无效，且 legacy 读取失败: "+legacyErr.Error())
 				}
-				return nodes, "as_of 无效，已回退到 legacy: " + err.Error()
+				return nodes, mergeMsg(errHint, "as_of 无效，已回退到 legacy: "+err.Error())
 			}
 
 			v4Store, ok := store.(OrgUnitNodesV4Reader)
 			if !ok {
 				nodes, err := store.ListNodes(r.Context(), tenant.ID)
 				if err != nil {
-					return nil, "v4 reader 未配置，且 legacy 读取失败: " + err.Error()
+					return nil, mergeMsg(errHint, "v4 reader 未配置，且 legacy 读取失败: "+err.Error())
 				}
-				return nodes, "v4 reader 未配置，已回退到 legacy"
+				return nodes, mergeMsg(errHint, "v4 reader 未配置，已回退到 legacy")
 			}
 
 			nodesV4, err := v4Store.ListNodesV4(r.Context(), tenant.ID, asOf)
 			if err == nil && len(nodesV4) > 0 {
-				return nodesV4, errHint
+				return nodesV4, mergeMsg(errHint, "")
 			}
 
 			nodes, legacyErr := store.ListNodes(r.Context(), tenant.ID)
 			if legacyErr != nil {
 				if err != nil {
-					return nil, "v4 读取失败: " + err.Error() + "；且 legacy 读取失败: " + legacyErr.Error()
+					return nil, mergeMsg(errHint, "v4 读取失败: "+err.Error()+"；且 legacy 读取失败: "+legacyErr.Error())
 				}
-				return nil, "legacy 读取失败: " + legacyErr.Error()
+				return nil, mergeMsg(errHint, "legacy 读取失败: "+legacyErr.Error())
 			}
 			if err != nil {
-				return nodes, "v4 读取失败，已回退到 legacy: " + err.Error()
+				return nodes, mergeMsg(errHint, "v4 读取失败，已回退到 legacy: "+err.Error())
 			}
-			return nodes, "v4 快照为空，已回退到 legacy"
+			return nodes, mergeMsg(errHint, "v4 快照为空，已回退到 legacy")
 		}
 
 		nodes, err := store.ListNodes(r.Context(), tenant.ID)
@@ -276,6 +355,34 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 			return
 		}
+		if preferRead == "v4" {
+			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
+			if effectiveDate == "" {
+				effectiveDate = asOf
+			}
+			parentID := strings.TrimSpace(r.Form.Get("parent_id"))
+			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
+				nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+				return
+			}
+
+			v4Writer, ok := store.(OrgUnitNodesV4Writer)
+			if !ok {
+				nodes, errMsg := listNodes("v4 writer 未配置：请切回 legacy 模式写入")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+				return
+			}
+
+			if _, err := v4Writer.CreateNodeV4(r.Context(), tenant.ID, effectiveDate, name, parentID); err != nil {
+				nodes, errMsg := listNodes(err.Error())
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+				return
+			}
+			http.Redirect(w, r, "/org/nodes?read=v4&as_of="+effectiveDate, http.StatusSeeOther)
+			return
+		}
+
 		if _, err := store.CreateNode(r.Context(), tenant.ID, name); err != nil {
 			nodes, errMsg := listNodes(err.Error())
 			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
@@ -316,6 +423,10 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, readMode 
 		postAction += "?read=v4&as_of=" + html.EscapeString(asOf)
 	}
 	b.WriteString(`<form method="POST" action="` + postAction + `">`)
+	if readMode == "v4" {
+		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
+		b.WriteString(`<label>Parent ID (optional) <input name="parent_id" /></label><br/>`)
+	}
 	b.WriteString(`<label>Name <input name="name" /></label>`)
 	b.WriteString(`<button type="submit">Create</button>`)
 	b.WriteString(`</form>`)
