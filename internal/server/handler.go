@@ -84,7 +84,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 
 	router.Handle(routing.RouteClassAuthn, http.MethodGet, "/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeShell(w, r, "<h1>Login</h1><p>(placeholder)</p>")
+		writeShell(w, r, `<h1>Login</h1>`+
+			`<form method="POST" action="/login">`+
+			`<button type="submit">Login</button>`+
+			`</form>`)
 	}))
 	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		setSessionCookie(w)
