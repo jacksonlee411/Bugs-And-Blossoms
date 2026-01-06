@@ -22,7 +22,7 @@
 > 本计划仅声明命中项与 SSOT 链接，不复制命令清单。
 
 - **触发器（实施阶段将命中）**：
-  - [ ] DB 迁移 / Schema（Org Atlas+Goose：`docs/dev-plans/021A-org-atlas-goose-toolchain-and-gates.md`）
+  - [ ] DB 迁移 / Schema（Atlas + Goose 闭环：`docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`）
   - [ ] Go 代码（`AGENTS.md`）
 - **SSOT 链接**：
   - 触发器矩阵与本地必跑：`AGENTS.md`
@@ -31,14 +31,26 @@
   - Greenfield HR 模块骨架（Job Catalog 归属 jobcatalog）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
   - OrgUnit v4：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`
   - Position v4：`docs/dev-plans/030-position-v4-transactional-event-sourcing-synchronous-projection.md`
-  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`（对齐 `docs/dev-plans/019-multi-tenant-toolchain.md` / `docs/dev-plans/019A-rls-tenant-isolation.md`）
-  - 时间语义（Valid Time=DATE）：`docs/dev-plans/064-effective-date-day-granularity.md`
+  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`（认证与租户上下文：`docs/dev-plans/019-tenant-and-authn-v4.md`）
+  - 时间语义（Valid Time=DATE）：`AGENTS.md`（时间语义章节）、`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`（Valid Time 口径）与 `docs/dev-plans/032-effective-date-day-granularity.md`
+
+## 2.4 落地路径（可验收分步）
+> 目标：把实现拆成“每步可验收”的闭环，避免实现期即兴补丁与契约漂移。
+
+建议按以下顺序推进（每一步都可单独验收并回滚）：
+1) **Schema 落盘（不含函数逻辑）**：identity / events / versions / 关系表与必要扩展（例如 `btree_gist` 以支持 `gist_uuid_ops`）；确认约束命名与错误映射口径可稳定识别（见 7.1）。
+2) **RLS 落盘**：对所有 tenant-scoped 表开启 RLS 与 fail-closed 策略；定义“tenant 注入缺失/不一致”时的稳定失败形状（见 `DEV-PLAN-021`）。
+3) **Kernel 写入口函数（先闭环入库与拒绝）**：实现 `submit_*_event` 的参数校验、幂等与同日唯一（依赖唯一约束）；业务级拒绝必须使用 `MESSAGE` 稳定 code + `DETAIL` 动态信息（见 7.1）。
+4) **replay（投射）闭环**：实现 `replay_*_versions`（delete+rebuild）与 gapless/no-overlap 校验；实现 `job_profile_version_job_families` 的“恰好一个 primary”约束（建议 DEFERRABLE 触发器）。
+5) **Go Facade 闭环**：实现最小命令层（事务 + tenant 注入 + 调 `submit_*_event`），并把 DB 错误稳定映射到 `pkg/serrors`（见 7.1）。
+6) **读模型快照（SQL）**：实现 `get_job_catalog_snapshot(p_tenant_id, p_query_date)`，并提供最小查询验收（as-of 一致性）。
+7) **端到端最小可发现入口（可选，另计划承接）**：若需要用户可见能力，请在 jobcatalog 模块 presentation 增加最小页面/路由入口或明确由 `DEV-PLAN-009M1` 承接（避免“僵尸能力”）。
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 Kernel 边界（与 026/030 对齐）
 - **DB = Projection Kernel（权威）**：插入事件（幂等）+ 同步投射 versions + 不变量裁决 + 可 replay。
 - **Go = Command Facade**：鉴权/租户与操作者上下文 + 事务边界 + 调 Kernel + 错误映射到 `pkg/serrors`。
-- **多租户隔离（RLS）**：v4 tenant-scoped 表默认启用 PostgreSQL RLS（fail-closed；见 `DEV-PLAN-021`），因此访问 v4 的运行态必须 `RLS_ENFORCE=enforce`，并在事务内注入 `app.current_tenant`（对齐 `DEV-PLAN-019/019A`）。
+- **多租户隔离（RLS）**：v4 tenant-scoped 表默认启用 PostgreSQL RLS（fail-closed；见 `DEV-PLAN-021`），因此访问 v4 的运行态必须 `RLS_ENFORCE=enforce`，并在事务内注入 `app.current_tenant`（对齐 `DEV-PLAN-019`）。
 - **One Door Policy（写入口唯一）**：除各实体 `submit_*_event` 与运维 replay 外，应用层不得直写事件表/versions 表/identity 表（`job_family_groups/job_families/job_levels/job_profiles`）及关系表，不得直调 `apply_*_logic`。
 - **同步投射机制（选定）**：每次写入都触发**同事务全量重放**（delete+replay），保持逻辑简单，拒绝“增量缝补”分支。
 
@@ -154,6 +166,20 @@ CREATE TABLE job_profile_events (
   - `event_type` 仅允许：`CREATE/UPDATE/DISABLE`。
   - `payload` 必须为 JSON object；未知 key 必须拒绝（稳定错误码见 7.1）。
   - `code` 为 identity 字段，仅允许在 `CREATE` 的 payload 中出现；其余事件若包含 `code` 必须拒绝（identity 不可变）。
+
+#### 4.1.1 `UPDATE` patch 语义（强制，避免实现分叉）
+> 统一口径：`UPDATE` 的 `payload` 是“字段级 patch”，只改变出现的 key；未出现的字段保持不变。
+
+- 所有实体：
+  - `name`：若出现则全量替换；必须为非空字符串。
+  - `description`：若出现则全量替换；允许显式 `null` 表示清空。
+  - `is_active`：若出现则全量替换；必须为 boolean。
+  - `external_refs`：若出现则全量替换；必须为 JSON object（不做 merge，避免隐藏复杂度与冲突语义）。
+- Job Family：
+  - `job_family_group_id`：若出现则视为 reparenting（有效期属性变更）；必须为 uuid，且在同一 `tenant_id` 下对应 group identity 存在。
+- Job Profile：
+  - `job_family_ids`：若出现则语义为“该版本的 families 集合整体替换”（非增量 add/remove）；必须为非空集合且元素不重复；每个 id 必须在同一 `tenant_id` 下存在对应 family identity。
+  - `primary_job_family_id`：若出现则必须包含于 `job_family_ids`（若同时出现）；并要求在该版本中满足“恰好一个 primary”（4.4）。
 
 - **Job Family Group（`job_family_group_*`）**
   - `CREATE`：必填 `payload.code`、`payload.name`；可选 `payload.description`、`payload.external_refs`。
@@ -338,7 +364,7 @@ CREATE UNIQUE INDEX job_profile_version_job_families_primary_unique
 ### 5.1 并发互斥（Advisory Lock）
 **锁粒度（选定）**：同一 `tenant_id` 的 Job Catalog 写入串行化，避免跨实体依赖（family↔group、profile↔families）在实现期引入死锁与漂移。
 
-锁 key（文本）：`org:v4:<tenant_id>:JobCatalog`
+锁 key（文本，选定）：`jobcatalog:v4:<tenant_id>:JobCatalog`
 
 ### 5.2 写入口（按实体 One Door）
 函数签名（建议，与 026/030 对齐）：
@@ -390,14 +416,16 @@ CREATE OR REPLACE FUNCTION submit_job_profile_event(
 
 统一合同语义（必须）：
 0) 多租户上下文（RLS）：写入口函数开头必须断言 `p_tenant_id` 与 `app.current_tenant` 一致（对齐 `DEV-PLAN-021`）。
-1) 获取互斥锁：`org:v4:<tenant_id>:JobCatalog`（同一事务内）。
+1) 获取互斥锁：`jobcatalog:v4:<tenant_id>:JobCatalog`（同一事务内）。
 2) 参数校验：`p_event_type` 必须为 `CREATE/UPDATE/DISABLE`；`p_payload` 必须为 object（空则视为 `{}`）。
 3) identity 处理：
    - `CREATE`：从 `payload.code` 创建对应 identity 行；若已存在则拒绝（`JOB_*_ALREADY_EXISTS`）。
    - 非 `CREATE`：要求 identity 行已存在；否则拒绝（`JOB_*_NOT_FOUND`）。
-4) 写入对应 `*_events`（以 `event_id` 幂等；同一实体同日唯一由约束拒绝）。
-5) 幂等复用校验：若 `event_id` 已存在但参数不同，拒绝（`JOB_*_IDEMPOTENCY_REUSED`）；若完全相同则返回既有 event 行 id（不重复投射）。
-6) 插入成功后调用对应 `replay_*_versions(p_tenant_id, <entity_id>)`（同一事务内）生成 gapless versions，并裁决 `job_profile_version_job_families` 等不变量（4.4）。
+4) 引用字段校验（选定，见 10.2）：仅校验被引用实体的 identity 存在且属于同一 `p_tenant_id`（`job_family_group_id/job_family_ids/primary_job_family_id`）；不强制 referenced entity 在 `effective_date` 上 `is_active=true` 或“存在有效 versions”。
+   - 若在同一事务内既创建依赖方 identity 又创建引用方（例如先建 group 再建 family），必须保证调用顺序先依赖后引用。
+5) 写入对应 `*_events`（以 `event_id` 幂等；同一实体同日唯一由约束拒绝）。
+6) 幂等复用校验：若 `event_id` 已存在但参数不同，拒绝（`JOB_*_IDEMPOTENCY_REUSED`）；若完全相同则返回既有 event 行 id（不重复投射）。
+7) 插入成功后调用对应 `replay_*_versions(p_tenant_id, <entity_id>)`（同一事务内）生成 gapless versions，并裁决 `job_profile_version_job_families` 等不变量（4.4）。
 
 > 说明：不提供 `submit_job_catalog_event(entity_type, ...)` 这种分发器入口，避免多主体共享事件流带来的复杂度与漂移。
 
@@ -422,13 +450,22 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 
 语义：
 - `get_job_catalog_snapshot(p_tenant_id, p_query_date)`：返回 as-of 的 group/family/level/profile（含 profile↔families 关系）。
+  - 返回结果应同时包含：identity 的稳定锚点（`<entity_id>` + `code`）与 versions 的有效期属性（`name/description/is_active/external_refs/validity/last_event_id`）。
+  - v1 不强制按 `is_active` 过滤：快照返回“事实”（含 `is_active` 值），展示/筛选由上层决定（对齐 10.2 的“identity-only 引用校验”口径）。
 
 ## 7. Go 层集成（事务 + 调用 DB）
 - Go 仅负责：鉴权 → 开事务 → 调对应实体的 `submit_*_event` → 提交。
-- 错误契约对齐 026：优先用 `SQLSTATE + constraint name` 做稳定映射；业务级拒绝使用“稳定 code（`MESSAGE`）+ `DETAIL`”的异常形状。
+- 错误契约对齐 026：优先用 `SQLSTATE + constraint name` 做稳定映射；业务级拒绝必须使用“稳定 code（`MESSAGE`）+ 动态信息（`DETAIL`）”的异常形状（Go 只解析 `MESSAGE` 做映射）。
 - 多租户隔离（RLS）相关失败路径与稳定映射对齐 `DEV-PLAN-021`（fail-closed 缺 tenant 上下文 / tenant mismatch / policy 拒绝）。
 
 ### 7.1 错误契约（DB → Go → serrors）
+约定（实现阶段建议遵守，避免字符串匹配与即兴漂移）：
+- Go 侧对 Postgres 错误优先用 `SQLSTATE`（例如 `23505`、`23P01`）+ `ConstraintName` 做稳定映射。
+- 对于业务级拒绝（not-found/already-exists/idempotency-reused/invalid-argument/reference-not-found 等），DB 必须使用机器可识别异常：
+  - `RAISE EXCEPTION USING MESSAGE = '<STABLE_CODE>', DETAIL = '<dynamic details>'`；
+  - `MESSAGE` 必须是稳定 code（不拼接动态内容），动态信息放在 `DETAIL`；
+  - Go 侧只解析 `MESSAGE` 做映射，不依赖自然语言与字符串包含关系。
+
 最小映射表（v1，示例 code；落地时以模块错误码表收敛为准）：
 
 | 场景 | DB 侧来源 | 识别方式（建议） | Go `serrors` code |
@@ -437,6 +474,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 | Job Catalog 实体不存在 / 已存在 | `submit_*_event` 明确拒绝 | DB exception `MESSAGE` | `JOB_*_NOT_FOUND` / `JOB_*_ALREADY_EXISTS` |
 | 参数/事件类型/payload 不合法 | `submit_*_event` 明确拒绝 | DB exception `MESSAGE` | `JOB_*_INVALID_ARGUMENT` |
 | 幂等键复用但参数不同 | `submit_*_event` 明确拒绝 | DB exception `MESSAGE` | `JOB_*_IDEMPOTENCY_REUSED` |
+| 引用字段指向不存在的 identity | `submit_*_event` 参数校验 | DB exception `MESSAGE` | `JOB_*_REFERENCE_NOT_FOUND` |
 | 同一实体同日重复事件 | `*_events_one_per_day_unique` | `23505` + constraint name | `JOB_*_EVENT_CONFLICT_SAME_DAY` |
 | 有效期重叠（破坏 no-overlap） | `*_versions_no_overlap` | `23P01` + constraint name | `JOB_*_VALIDITY_OVERLAP` |
 | gapless 被破坏（出现间隙/末段非 infinity） | `replay_*_versions` 校验失败 | DB exception `MESSAGE` | `JOB_*_VALIDITY_GAP` / `JOB_*_VALIDITY_NOT_INFINITE` |
@@ -447,6 +485,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 - [ ] 事件幂等：同 `event_id` 重试不重复投射。
 - [ ] 全量重放：每次写入都在同一事务内 delete+replay 对应 versions，且写后读强一致。
 - [ ] 同日唯一：同一实体同日提交第二条事件被拒绝且可稳定映射错误码（每类实体独立 events 表）。
+- [ ] 引用校验（选定，见 10.2）：仅要求被引用 identity 存在；不强制 referenced entity 在 `effective_date` 上 `is_active=true` 或存在有效 versions（失败必须稳定映射到错误码）。
 - [ ] versions no-overlap：任一实体不会产生重叠有效期。
 - [ ] versions gapless：相邻切片无间隙且末段到 infinity（失败可稳定映射错误码）。
 - [ ] profile↔families：每个 profile version 恰好一个 primary family（DB 约束可验收）。
@@ -459,6 +498,21 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 - Level：`SELECT replay_job_level_versions('<tenant_id>'::uuid, '<job_level_id>'::uuid);`
 - Profile：`SELECT replay_job_profile_versions('<tenant_id>'::uuid, '<job_profile_id>'::uuid);`
 
-> 建议在执行前复用同一把维护互斥锁（`org:v4:<tenant_id>:JobCatalog`）确保与在线写入互斥。
+> 建议在执行前复用同一把维护互斥锁（`jobcatalog:v4:<tenant_id>:JobCatalog`）确保与在线写入互斥。
 
 > 多租户隔离（RLS，见 `DEV-PLAN-021`）：replay 必须在显式事务内先注入 `app.current_tenant`，否则会 fail-closed。
+
+## 10. 已选定决策（防止实现期漂移）
+> 本节把“容易在实现期即兴决定”的点固化为合同；若未来结论变化，应先更新本计划再改实现。
+
+### 10.1 互斥锁粒度
+**结论（选定）**：tenant 内 Job Catalog 写全串行（`jobcatalog:v4:<tenant_id>:JobCatalog`）。
+
+- 理由：Job Catalog 通常低频变更；先用最小策略换取实现简单与可解释性，避免跨实体依赖导致死锁与一致性漂移。
+- 备选（未选定）：按实体类型拆锁（group/family/level/profile）。如未来需要提升并发，必须先补齐锁顺序规则与跨实体校验边界，并更新本计划。
+
+### 10.2 跨实体 as-of 引用校验
+**结论（选定，Simple）**：写入口仅校验被引用实体的 identity 存在（FK/显式检查，且必须属于同一 `tenant_id`）；不强制 referenced entity 在 `effective_date` 上 `is_active=true` 或“存在有效 versions”。
+
+- 理由：减少跨实体耦合与顺序依赖，避免把“引用校验=隐式业务规则”埋入 Kernel 导致分叉；需要更强一致性时再通过更新本计划引入（并补齐同事务多事件顺序约束）。
+- 影响：可能出现“profile 在某日引用了当日已禁用的 family/group”。该状态对 as-of 可解释（读侧可通过 `is_active` 决策展示/过滤），但不由 Kernel 在 v1 强制阻断。

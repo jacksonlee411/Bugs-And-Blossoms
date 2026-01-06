@@ -64,7 +64,7 @@
 - `pernr`：**1-8 位数字字符串（canonical）**（例如输入 `00001234` 将规范化为 `1234`；输入全 0 将规范化为 `0`），同租户唯一
 - `display_name`：展示名（非空，trim 后存储）
 - `status`：`active|inactive`
-- `created_at/updated_at`：审计时间（`timestamptz`；对齐 064 的“审计时间”语义）
+- `created_at/updated_at`：审计时间（`timestamptz`；对齐 032 的“审计时间”语义）
 
 **不变量（必须）**
 - `pernr` 必须满足：

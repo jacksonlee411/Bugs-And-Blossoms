@@ -1,6 +1,6 @@
 # DEV-PLAN-028：SetID 管理（V4，Greenfield）
 
-**状态**: 草拟中（2026-01-05 11:16 UTC）
+**状态**: 草拟中（2026-01-06 15:10 UTC）
 
 > 适用范围：**V4 Greenfield 全新实现**（路线图见 `DEV-PLAN-009`）。  
 > 本文研究 PeopleSoft 的 SetID 机制，并提出 V4 引入 SetID 的最小可执行方案：在同一租户内实现“主数据按业务单元共享/隔离”的配置能力，且可被门禁验证，避免实现期各模块各写一套数据共享规则导致漂移。
@@ -54,7 +54,7 @@
 - V4 模块边界（将影响哪些模块）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - V4 Tenancy/AuthN 与主体模型：`docs/dev-plans/019-tenant-and-authn-v4.md`
 - V4 RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
-- Valid Time=DATE 口径：`docs/dev-plans/064-effective-date-day-granularity.md`
+- Valid Time=DATE 口径：`docs/dev-plans/032-effective-date-day-granularity.md`
 
 ## 5. 关键决策（ADR 摘要）
 
@@ -104,6 +104,30 @@
   - 映射变更会影响“未来的解析结果”（例如后续创建/读取列表的默认集合）。
   - 历史可复现性必须依赖“业务记录落库 `setid`”这一不变量：任何对单条记录的读取都以记录自身 `setid` 为准。
 
+### 5.7 权威入口与依赖方向（冻结：避免跨模块漂移）
+
+> 目的：把“SetID 解析/写入口/失败模式”冻结为可执行契约，避免实现阶段各模块各写一套。
+
+- **选定（冻结）**：SetID 解析是一个“横切能力”，Go 侧实现放在 `pkg/setid`（或同等共享包）中，供各模块复用；禁止模块间互相 import。
+- **选定（冻结）**：解析必须在“显式事务 + 租户注入（RLS context）”下执行；解析函数签名显式接收 `tx`（或等价）以满足 No Tx, No RLS。
+- **选定（冻结）**：解析的唯一数据源是 Set Control 映射表；禁止任何“缺映射时默认 SHARE/回退到 tenant 全局/从 path 推导”等逻辑。
+- **选定（冻结）**：所有 setid-controlled 的**写入口**必须走 DB Kernel 的单点写入口（One Door）：
+  - 对业务主数据：依旧遵循各模块 `submit_*_event(...)` 事件入口。
+  - 对 SetID/BU/Mapping 自身：提供专用的 kernel 写入口（形式见 11.4 的待决策建议），同样要求单点入口 + 可门禁验证。
+
+### 5.8 失败模式与错误契约（冻结：先写清再实现）
+
+> 目的：避免实现阶段“为了跑通”临时补分支，导致 Easy 式隐性复杂度。
+
+SetID 解析 `ResolveSetID(tenant_id, business_unit_id, record_group)` 的失败模式（均为 **fail-closed**）：
+- `SETID_MAPPING_MISSING`：映射缺失（理论上被“无缺省洞”门禁阻断，但仍需定义错误用于数据损坏/手工改库等场景）。
+- `BUSINESS_UNIT_DISABLED`：控制值（BU）已禁用。
+- `RECORD_GROUP_DISABLED` / `RECORD_GROUP_UNKNOWN`：record group 不在稳定枚举内（或被停用）。
+- `SETID_DISABLED`：映射指向的 SetID 已禁用。
+- `RLS_TENANT_MISMATCH` / `TX_REQUIRED`：租户上下文不一致或缺少显式事务（用于强制不变量）。
+
+写入路径禁止客户端直接提交 `setid`；若检测到绕过解析入口（例如 API payload 携带 `setid` 字段或直接写表），必须返回 `SETID_WRITE_BYPASS_FORBIDDEN`（或等价错误）并由门禁覆盖。
+
 ## 6. 数据契约（Schema/约束级别）
 
 > 本节定义“横切不变量”；具体表名与落点由各模块实现 dev-plan 承接。
@@ -118,8 +142,21 @@
 
 ### 6.2 主数据表通用约束（所有 setid-controlled 表必须满足）
 
-- 主键/唯一性必须包含：`tenant_id`、`setid`、业务键（如 `code`）、Valid Time（`effective_on/end_on`，date 粒度）。
-- `setid` 的值必须存在于 `setids`，且写入时需通过 set control 解析得到（禁止调用方任意填 setid）。
+- `setid` 的值必须存在于 `setids`，且写入时需通过 set control 解析得到（禁止调用方任意填 `setid`）。
+- **唯一性/主键合同（冻结）**：
+  - 若实体是 **effective-dated**（采用 versions + Valid Time 语义，见 `DEV-PLAN-032`）：唯一性必须包含 `tenant_id + setid + business_key + valid_time`（或等价的不重叠约束）。
+  - 若实体不是 effective-dated：唯一性必须包含 `tenant_id + setid + business_key`。
+
+### 6.3 DB 级约束（建议：可门禁验证）
+
+> 本节不是实现细节，而是为了让“无缺省洞/禁止绕过/格式合同”等不变量可被 DB 与门禁共同强制。
+
+- `setid` 格式合同：`[A-Z0-9]{1,5}` 且存储为全大写；`SHARE` 必须存在且不可删除（可禁用策略见 12）。
+- `set_control_mappings` 必须满足：
+  - `UNIQUE (tenant_id, business_unit_id, record_group)`（确保解析唯一）。
+  - `FOREIGN KEY (tenant_id, setid)` 指向 `setids`（禁止指向不存在的 SetID）。
+  - `record_group` 受稳定枚举约束（Postgres enum 或 check constraint）。
+- RLS：上述三类表必须启用 `tenant_id = current_setting('app.current_tenant')` 的强隔离；SetID 不参与 RLS（避免误用为安全边界）。
 
 ## 7. API 与 UI（最小管理面）
 
@@ -131,26 +168,67 @@
   - `GET/PUT /orgunit/api/setid-mappings`（批量矩阵更适合 PUT）
 - 写请求必须显式携带 `business_unit_id`（禁止从 path/session 推导）。
 
+### 7.2 API 契约（冻结：字段、错误、幂等）
+
+> 说明：具体 route_class/responder 口径以 `DEV-PLAN-017` 为准；此处只冻结业务契约与错误语义。
+
+**SetID**
+- `POST /orgunit/api/setids`
+  - Request：`{ "setid": "A0001", "name": "Default A", "request_id": "..." }`
+  - Rules：`setid` 必须满足格式合同；`SHARE` 保留字不可用作创建参数（仅系统初始化/修复入口可写）。
+  - Errors：`SETID_INVALID_FORMAT`、`SETID_RESERVED`、`SETID_ALREADY_EXISTS`、`RLS_TENANT_MISMATCH`
+- `POST /orgunit/api/setids/{setid}/disable`
+  - Request：`{ "request_id": "..." }`
+  - Errors：`SETID_IN_USE`（仍被 mapping 引用）、`SETID_RESERVED`（`SHARE`）、`SETID_NOT_FOUND`
+
+**Business Unit（Set Control Values）**
+- `POST /orgunit/api/business-units`
+  - Request：`{ "business_unit_id": "BU001", "name": "BU 001", "request_id": "..." }`
+  - Rules：创建时必须为所有启用的 record group 自动补齐映射为 `SHARE`（保证无缺省洞）。
+  - Errors：`BUSINESS_UNIT_ALREADY_EXISTS`、`BUSINESS_UNIT_INVALID_ID`
+- `POST /orgunit/api/business-units/{business_unit_id}/disable`
+  - Errors：`BUSINESS_UNIT_IN_USE`（仍被业务引用，策略待决策见 12）、`BUSINESS_UNIT_NOT_FOUND`
+
+**Mapping Matrix**
+- `GET /orgunit/api/setid-mappings?record_group=jobcatalog`
+  - Response：`{ "record_group": "jobcatalog", "rows": [ { "business_unit_id": "BU001", "setid": "SHARE" } ] }`
+- `PUT /orgunit/api/setid-mappings`
+  - Request：`{ "record_group": "jobcatalog", "mappings": [ { "business_unit_id": "BU001", "setid": "A0001" } ], "request_id": "..." }`
+  - Rules：必须拒绝把启用 BU 指向 disabled setid；更新需事务化并可串行化（建议 tenant 级 advisory lock）。
+  - Errors：`SETID_DISABLED`、`BUSINESS_UNIT_DISABLED`、`RECORD_GROUP_UNKNOWN`、`SETID_MAPPING_MISSING`（若要求全量矩阵提交）
+
 ### 7.2 UI（最小交互）
 
 - SetID 列表：创建/禁用/重命名（禁用需校验是否被映射引用）。
 - Set Control Values 列表：创建/禁用（代表 BU 或其他控制维度）。
 - 映射矩阵：按 record group 展示一张“控制值 × group -> setid”的矩阵，默认初始化为 `SHARE`。
 
+**最小交互闭环（对齐“可发现、可操作”）**
+- 导航入口：OrgUnit → Governance → SetID（或同等可发现入口）。
+- SetID 列表：新增/禁用（禁用前校验引用）；重命名（仅影响展示名，不影响 key）。
+- Business Unit 列表：新增/禁用（禁用策略见 12）。
+- 映射矩阵：选择 record group → 展示 BU 行 → 下拉选择 setid → 保存（`PUT` 批量提交，避免逐格写入导致并发漂移）。
+
 ## 8. 门禁（Routing/Data/Contract Gates）(Checklist)
 
 1. [ ] SetID 合同门禁：`setid` 只能是 1-5 位大写字母/数字；`SHARE` 必存在且不可删除。
 2. [ ] 映射完整性门禁：任意启用的 `business_unit_id` 对每个启用的 record group 必须存在映射（无缺省洞）。
-3. [ ] 写入口门禁：所有 setid-controlled 写入必须走“解析 setid + 写入”的单一入口（避免绕过映射直接写 setid）。
-4. [ ] 引用完整性门禁：`setid-mappings` 不得指向 `disabled setid`；禁用/删除 SetID 时若仍被引用必须阻断。
+3. [ ] 解析入口门禁：代码库内只能存在一个权威解析入口（共享包），业务写入路径必须通过该入口获取 `setid`。
+4. [ ] 写入口门禁：任何 setid-controlled 写入必须走“解析 setid + 写入”的单一入口（禁止 payload 直接带 `setid`；禁止直接写表）。
+5. [ ] 引用完整性门禁：`setid-mappings` 不得指向 `disabled setid`；禁用/删除 SetID 时若仍被引用必须阻断。
+6. [ ] 失败模式门禁：缺映射/禁用/非法 group 等错误必须覆盖到测试，且为 fail-closed（不得隐式回退 SHARE）。
 
 ## 9. 实施步骤 (Checklist)
 
 1. [ ] 明确 record group 的初始清单（`jobcatalog/orgunit`），并在实现模块的 dev-plan 中声明“哪些表受控于哪个 group”。
-2. [ ] 实现 SetID 管理的最小 DB/Kernel/Facade（或等价）与 API。
-3. [ ] 为主数据写入路径接入 setid 解析（先从 `jobcatalog` 起步，形成样板）。
-4. [ ] 落地门禁（tests/gates）并接入 CI required checks。
-5. [ ] 补齐 UI 管理面（最小可用），并在后续模块实现中复用同一套解析入口与 contracts。
+2. [ ] 冻结共享包 API：`ResolveSetID(tx, tenant_id, business_unit_id, record_group) -> setid`（含错误契约），并约束所有模块复用。
+3. [ ] 实现 SetID/BU/Mapping 的 DB Kernel 单点写入口 + 读 API（含幂等 `request_id` 语义）。
+4. [ ] 实现 “无缺省洞” 的初始化与演化路径：
+   - [ ] 新增 BU 时：为所有启用 record group 自动补齐 mapping=`SHARE`。
+   - [ ] 新增 record group 时：为所有启用 BU 自动 backfill mapping=`SHARE`。
+5. [ ] 为主数据写入路径接入 setid 解析（先从 `jobcatalog` 起步，形成样板）。
+6. [ ] 落地门禁（tests/gates）并接入 CI required checks。
+7. [ ] 补齐 UI 管理面（最小可用），并在后续模块实现中复用同一套解析入口与 contracts。
 
 ## 10. 验收标准 (Acceptance Criteria)
 
@@ -160,7 +238,38 @@
 - [ ] `jobcatalog` 至少一个主数据实体完成端到端接入（解析→写入→读取→UI 展示）。
 - [ ] 示例验收：同一 `code` 在 `setid=A0001` 与 `setid=B0001` 并存；BU1 映射到 A0001、BU2 映射到 B0001；两 BU 的列表读取互不串数据；单条读取能通过记录自身 `setid` 精确定位。
 
-## 11. Simple > Easy（DEV-PLAN-003）停止线
+## 11. 待决策事项（解决方案建议与理由）
+
+### 11.1 SetID/BU/Mapping 的“模块归属”与 DB schema
+
+- **方案 A（推荐）**：归属 `orgunit`（DB schema/HTTP 管理面都在 orgunit），并提供 `pkg/setid` 作为跨模块共享解析入口。
+  - 理由：Set Control Value 冻结为 Business Unit，本质属于 orgunit 治理；解析能力用 `pkg/**` 复用，避免 Go 跨模块 import；最少新增“平台层”概念。
+- **方案 B**：归属 `iam`（作为平台治理能力），orgunit 只是 UI/数据来源之一。
+  - 理由：SetID 是横切配置，放平台更“概念纯”；代价是需要额外定义跨模块 UI/路由 owner 与依赖边界，早期容易引入第二套抽象。
+
+### 11.2 Set Control Values（Business Unit）是否复用 orgunit 现有实体
+
+- **方案 A（推荐）**：Set Control Value 直接等价为 “Business Unit（orgunit 的一种实体）”，SetID 管理面只提供对 BU 的“启用/禁用与显示名”，并在后续 orgunit 实体成熟后收敛为同一张权威表。
+  - 理由：避免早期出现两套 BU（orgunit 一套、setid 一套）导致漂移；对齐“同一概念只有一种权威表达”。
+- **方案 B**：Set Control Value 独立成表（`set_control_values`），与 orgunit BU 通过外键或同步保持一致。
+  - 理由：实现更独立、推进更快；代价是需要额外的同步/一致性策略与退场计划，属于偶然复杂度。
+
+### 11.3 禁用策略：禁用 BU/SetID 时如何处理存量引用
+
+- **方案 A（推荐，保守）**：禁止禁用仍被引用的 BU/SetID（fail-closed），必须先迁移 mapping/业务引用再禁用。
+  - 理由：契约最清晰，可预测；避免出现“禁用后读不到/写不了但数据还在”的僵尸状态。
+- **方案 B**：允许禁用但保留历史可读，且禁止新写入（需要明确读写差异与 UI 提示）。
+  - 理由：操作更灵活；代价是引入状态机与更多失败路径，需更强的门禁与可解释性。
+
+### 11.4 SetID/BU/Mapping 的 DB Kernel 写入口形态（One Door 对齐）
+
+- **方案 A（推荐）**：为 SetID/BU/Mapping 也提供 `submit_*_event(...)` 风格入口，并在同事务内同步投射到配置表（与 `orgunit.submit_org_event(...)` 的“事件 SoT + 同步投射”模式一致）。
+  - 理由：最大化对齐仓库 One Door 不变量；天然具备幂等/审计；避免未来引入第二套“非事件写入口”标准。
+  - 代价：需要为配置域定义最小事件类型与投射函数（但规模可控）。
+- **方案 B**：仅提供“直接写配置表”的 kernel 函数（例如 `upsert_setid(...)` / `put_setid_mappings(...)`），不做事件 SoT。
+  - 理由：实现更直接；代价是与 v4 主干写模型出现分叉，需要额外说明为何不违反 One Door（并补齐审计/幂等策略）。
+
+## 12. Simple > Easy（DEV-PLAN-003）停止线
 
 - [ ] 任何模块各自实现“SetID 解析/默认值/回退规则”，而不是复用单一权威入口。
 - [ ] 允许调用方自由传入 setid 并绕过 set control（会导致不可审计的漂移）。

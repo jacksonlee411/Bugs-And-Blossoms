@@ -72,7 +72,7 @@ table "org_nodes" {
   column "tenant_id" { type = uuid }
   column "code" { type = varchar(64) }
 
-  // Valid Time（业务有效期）统一使用 date（日粒度）；时间戳仅用于 Audit/Tx Time（SSOT：DEV-PLAN-064）。
+  // Valid Time（业务有效期）统一使用 date（日粒度）；时间戳仅用于 Audit/Tx Time（SSOT：DEV-PLAN-032）。
   column "effective_date" { type = date }
   column "end_date" { type = date, default = "9999-12-31" }
 
