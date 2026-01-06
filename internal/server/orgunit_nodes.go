@@ -32,6 +32,10 @@ type OrgUnitNodesV4Writer interface {
 	CreateNodeV4(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error)
 }
 
+type OrgUnitNodesV4Renamer interface {
+	RenameNodeV4(ctx context.Context, tenantID string, effectiveDate string, orgID string, newName string) error
+}
+
 type orgUnitPGStore struct {
 	pool pgBeginner
 }
@@ -242,6 +246,57 @@ WHERE tenant_id = $1::uuid AND event_id = $2::uuid
 	return OrgUnitNode{ID: orgID, Name: name, CreatedAt: createdAt}, nil
 }
 
+func (s *orgUnitPGStore) RenameNodeV4(ctx context.Context, tenantID string, effectiveDate string, orgID string, newName string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(effectiveDate) == "" {
+		return errors.New("effective_date is required")
+	}
+
+	if strings.TrimSpace(orgID) == "" {
+		return errors.New("org_id is required")
+	}
+	if strings.TrimSpace(newName) == "" {
+		return errors.New("new_name is required")
+	}
+
+	var eventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+		return err
+	}
+
+	payload := `{"new_name":` + strconv.Quote(newName) + `}`
+
+	if _, err := tx.Exec(ctx, `
+SELECT orgunit.submit_org_event(
+  $1::uuid,
+  $2::uuid,
+  'OrgUnit',
+  $3::uuid,
+  'RENAME',
+  $4::date,
+  $5::jsonb,
+  $6::text,
+  $7::uuid
+)
+`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, tenantID); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
 type orgUnitMemoryStore struct {
 	nodes map[string][]OrgUnitNode
 	now   func() time.Time
@@ -274,6 +329,25 @@ func (s *orgUnitMemoryStore) ListNodesV4(_ context.Context, tenantID string, _ s
 
 func (s *orgUnitMemoryStore) CreateNodeV4(_ context.Context, tenantID string, _ string, name string, _ string) (OrgUnitNode, error) {
 	return s.CreateNode(context.Background(), tenantID, name)
+}
+
+func (s *orgUnitMemoryStore) RenameNodeV4(_ context.Context, tenantID string, _ string, orgID string, newName string) error {
+	if strings.TrimSpace(orgID) == "" {
+		return errors.New("org_id is required")
+	}
+	if strings.TrimSpace(newName) == "" {
+		return errors.New("new_name is required")
+	}
+
+	nodes := s.nodes[tenantID]
+	for i := range nodes {
+		if nodes[i].ID == orgID {
+			nodes[i].Name = newName
+			s.nodes[tenantID] = nodes
+			return nil
+		}
+	}
+	return errors.New("org_id not found")
 }
 
 func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
@@ -360,6 +434,57 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 			return
 		}
+		action := strings.TrimSpace(strings.ToLower(r.Form.Get("action")))
+		if action == "" {
+			action = "create"
+		}
+
+		if action == "rename" {
+			if preferRead != "v4" {
+				nodes, errMsg := listNodes("rename 仅支持 v4 模式")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+				return
+			}
+
+			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
+			if effectiveDate == "" {
+				effectiveDate = asOf
+			}
+			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
+				nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+				return
+			}
+
+			orgID := strings.TrimSpace(r.Form.Get("org_id"))
+			newName := strings.TrimSpace(r.Form.Get("new_name"))
+			if orgID == "" {
+				nodes, errMsg := listNodes("org_id is required")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+				return
+			}
+			if newName == "" {
+				nodes, errMsg := listNodes("new_name is required")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+				return
+			}
+
+			renamer, ok := store.(OrgUnitNodesV4Renamer)
+			if !ok {
+				nodes, errMsg := listNodes("v4 renamer 未配置：请稍后再试")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+				return
+			}
+
+			if err := renamer.RenameNodeV4(r.Context(), tenant.ID, effectiveDate, orgID, newName); err != nil {
+				nodes, errMsg := listNodes(err.Error())
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
+				return
+			}
+			http.Redirect(w, r, "/org/nodes?read=v4&as_of="+effectiveDate, http.StatusSeeOther)
+			return
+		}
+
 		name := strings.TrimSpace(r.Form.Get("name"))
 		if name == "" {
 			nodes, errMsg := listNodes("name is required")
@@ -452,6 +577,15 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, readMode 
 	for _, n := range nodes {
 		b.WriteString("<li>")
 		b.WriteString(html.EscapeString(n.Name) + " <code>" + html.EscapeString(n.ID) + "</code>")
+		if readMode == "v4" {
+			b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
+			b.WriteString(`<input type="hidden" name="action" value="rename" />`)
+			b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
+			b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
+			b.WriteString(`<label>New Name <input name="new_name" value="` + html.EscapeString(n.Name) + `" /></label> `)
+			b.WriteString(`<button type="submit">Rename</button>`)
+			b.WriteString(`</form>`)
+		}
 		b.WriteString("</li>")
 	}
 	b.WriteString("</ul>")
