@@ -23,12 +23,14 @@ CREATE TABLE IF NOT EXISTS orgunit.nodes (
 
 ALTER TABLE orgunit.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.events;
 CREATE POLICY tenant_isolation ON orgunit.events
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.nodes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.nodes FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.nodes;
 CREATE POLICY tenant_isolation ON orgunit.nodes
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
@@ -89,4 +91,3 @@ DROP TABLE IF EXISTS orgunit.events;
 DROP SCHEMA IF EXISTS orgunit;
 DROP EXTENSION IF EXISTS pgcrypto;
 -- +goose StatementEnd
-
