@@ -216,16 +216,16 @@ BEGIN
   )
   VALUES (
     p_tenant_id,
-    p_hierarchy_type,
-    p_org_id,
-    p_parent_id,
-    v_node_path,
-    daterange(p_effective_date, 'infinity'::date, '[)'),
-    p_name,
-    'active',
-    p_manager_id,
-    p_event_db_id
-  );
+	    p_hierarchy_type,
+	    p_org_id,
+	    p_parent_id,
+	    v_node_path,
+	    daterange(p_effective_date, NULL, '[)'),
+	    p_name,
+	    'active',
+	    p_manager_id,
+	    p_event_db_id
+	  );
 END;
 $$;
 
