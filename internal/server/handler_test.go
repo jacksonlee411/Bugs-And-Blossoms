@@ -351,7 +351,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	_ = lang(rOther)
 }
 
-func TestNewHandlerWithOptions_DefaultOrgUnitV4StoreFromPGStore(t *testing.T) {
+func TestNewHandlerWithOptions_DefaultOrgUnitSnapshotStoreFromPGStore(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)

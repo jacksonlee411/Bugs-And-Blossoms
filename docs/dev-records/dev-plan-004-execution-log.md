@@ -50,3 +50,20 @@
   - `./scripts/db/lint.sh orgunit`：通过
   - `make orgunit plan`：通过
   - `make orgunit migrate up`：通过（已在本地环境运行）
+
+## PR-5：Go/迁移文件名去噪（`<ver>` 清理）
+
+- **状态**：已完成（2026-01-06 10:44 UTC）
+- **范围**
+  - Go：OrgUnit Nodes/Snapshot 相关文件名与标识符移除 `<ver>`（接口改为 `Current` 语义），并更新所有引用与测试
+  - DB：OrgUnit 迁移文件名与 schema SSOT 文件名移除 `<ver>`，同步更新 `atlas.sum` 与 sqlc 导出 schema
+- **本地门禁**
+  - `go fmt ./...`：通过
+  - `go vet ./...`：通过
+  - `make check lint`：通过
+  - `make test`：通过
+  - `make check routing`：通过
+  - `make sqlc-generate`：通过
+  - `./scripts/db/run_atlas.sh migrate hash --dir file://migrations/orgunit --dir-format goose`：通过
+  - `./scripts/db/lint.sh orgunit`：通过
+  - `make orgunit plan`：通过

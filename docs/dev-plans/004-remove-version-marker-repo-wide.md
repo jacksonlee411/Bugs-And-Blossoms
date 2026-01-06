@@ -114,16 +114,16 @@
 - [X] 更新 routing allowlist 与 routing gates，确保 `make check routing` 通过（2026-01-06 10:01 UTC）。
 - [X] 更新 readiness 证据中的链接与步骤（固化到 `docs/dev-records/`）（2026-01-06 10:01 UTC）。
 
-### PR-4：Go 代码命名清理
-
-- [ ] 重命名 Go 文件/包/类型/函数，保持语义不变并更新所有引用。
-- [ ] 按 `AGENTS.md` 触发器矩阵运行对应门禁，并确保生成物与工作区状态符合要求（必要时使用 `make preflight` 一键对齐 CI）。
-
-### PR-5：迁移与工具链清理（高风险，需小步）
+### PR-4：锁 key 前缀去噪（原子切换）
 
 - [X] 锁 key 前缀去噪：同步更新 schema SSOT、迁移文件、校验和、sqlc 导出 schema 与文档示例（2026-01-06 10:09 UTC）。
-- [ ] 若需要重命名迁移文件：先在对应模块 dev-plan 中明确“迁移文件名是否允许变更”的约束与验证方式，再实施。
-- [ ] 从零环境验证：能从空数据库完整执行迁移闭环（按模块入口）。
+- [X] 按 `AGENTS.md` 触发器矩阵运行对应门禁，确保 required checks 可全绿（2026-01-06 10:09 UTC）。
+
+### PR-5：Go/迁移文件名去噪（`<ver>` 清理）
+
+- [X] Go：OrgUnit Nodes/Snapshot 相关文件名与标识符移除 `<ver>`（接口改为 `Current` 语义），并更新所有引用与测试（2026-01-06 10:44 UTC）。
+- [X] DB：OrgUnit 迁移文件名与 schema SSOT 文件名移除 `<ver>`，同步更新 `atlas.sum` 与 sqlc 导出 schema（2026-01-06 10:44 UTC）。
+- [ ] 从零环境验证：能从空数据库完整执行迁移闭环（按模块入口，先从 OrgUnit 开始）。
 
 ### PR-6：防回归门禁落地
 

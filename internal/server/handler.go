@@ -21,8 +21,8 @@ func NewHandler() (http.Handler, error) {
 }
 
 type HandlerOptions struct {
-	OrgUnitStore OrgUnitStore
-	OrgUnitV4    OrgUnitV4Store
+	OrgUnitStore    OrgUnitStore
+	OrgUnitSnapshot OrgUnitSnapshotStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -51,7 +51,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}
 
 	orgStore := opts.OrgUnitStore
-	orgV4Store := opts.OrgUnitV4
+	orgSnapshotStore := opts.OrgUnitSnapshot
 	if orgStore == nil {
 		dsn := dbDSNFromEnv()
 		pool, err := pgxpool.New(context.Background(), dsn)
@@ -61,9 +61,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		orgStore = newOrgUnitPGStore(pool)
 	}
 
-	if orgV4Store == nil {
+	if orgSnapshotStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			orgV4Store = newOrgUnitV4PGStore(pgStore.pool)
+			orgSnapshotStore = newOrgUnitSnapshotPGStore(pgStore.pool)
 		}
 	}
 
@@ -140,10 +140,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleOrgNodes(w, r, orgStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/snapshot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgV4Snapshot(w, r, orgV4Store)
+		handleOrgSnapshot(w, r, orgSnapshotStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/snapshot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgV4Snapshot(w, r, orgV4Store)
+		handleOrgSnapshot(w, r, orgSnapshotStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeShell(w, r, "<h1>Job Catalog /org/job-catalog</h1><p>(placeholder)</p>")

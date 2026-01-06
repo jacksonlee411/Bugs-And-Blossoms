@@ -13,26 +13,26 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type v4Rows struct {
+type snapshotRows struct {
 	nextN   int
 	scanErr error
 	err     error
 }
 
-func (r *v4Rows) Close()                        {}
-func (r *v4Rows) Err() error                    { return r.err }
-func (r *v4Rows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
-func (r *v4Rows) FieldDescriptions() []pgconn.FieldDescription {
+func (r *snapshotRows) Close()                        {}
+func (r *snapshotRows) Err() error                    { return r.err }
+func (r *snapshotRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *snapshotRows) FieldDescriptions() []pgconn.FieldDescription {
 	return nil
 }
-func (r *v4Rows) Next() bool {
+func (r *snapshotRows) Next() bool {
 	if r.nextN > 0 {
 		return false
 	}
 	r.nextN++
 	return true
 }
-func (r *v4Rows) Scan(dest ...any) error {
+func (r *snapshotRows) Scan(dest ...any) error {
 	if r.scanErr != nil {
 		return r.scanErr
 	}
@@ -45,16 +45,16 @@ func (r *v4Rows) Scan(dest ...any) error {
 	*(dest[6].(*string)) = "path1"
 	return nil
 }
-func (r *v4Rows) Values() ([]any, error) { return nil, nil }
-func (r *v4Rows) RawValues() [][]byte    { return nil }
-func (r *v4Rows) Conn() *pgx.Conn        { return nil }
+func (r *snapshotRows) Values() ([]any, error) { return nil, nil }
+func (r *snapshotRows) RawValues() [][]byte    { return nil }
+func (r *snapshotRows) Conn() *pgx.Conn        { return nil }
 
-type v4QueryTx struct {
+type snapshotQueryTx struct {
 	*stubTx
 	rows pgx.Rows
 }
 
-func (t *v4QueryTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+func (t *snapshotQueryTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
 	if t.queryErr != nil {
 		return nil, t.queryErr
 	}
@@ -64,9 +64,9 @@ func (t *v4QueryTx) Query(ctx context.Context, sql string, args ...any) (pgx.Row
 	return &fakeRows{}, nil
 }
 
-func TestOrgUnitV4PGStore_GetSnapshot(t *testing.T) {
+func TestOrgUnitSnapshotPGStore_GetSnapshot(t *testing.T) {
 	t.Run("begin error", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
 		_, err := store.GetSnapshot(context.Background(), "t1", "2026-01-01")
@@ -76,8 +76,8 @@ func TestOrgUnitV4PGStore_GetSnapshot(t *testing.T) {
 	})
 
 	t.Run("ok", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &v4QueryTx{stubTx: &stubTx{}, rows: &v4Rows{}}
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &snapshotQueryTx{stubTx: &stubTx{}, rows: &snapshotRows{}}
 			return tx, nil
 		}))
 		rows, err := store.GetSnapshot(context.Background(), "t1", "2026-01-01")
@@ -90,7 +90,7 @@ func TestOrgUnitV4PGStore_GetSnapshot(t *testing.T) {
 	})
 
 	t.Run("set tenant error", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		}))
 		_, err := store.GetSnapshot(context.Background(), "t1", "2026-01-01")
@@ -100,7 +100,7 @@ func TestOrgUnitV4PGStore_GetSnapshot(t *testing.T) {
 	})
 
 	t.Run("query error", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{queryErr: errors.New("query")}, nil
 		}))
 		_, err := store.GetSnapshot(context.Background(), "t1", "2026-01-01")
@@ -110,8 +110,8 @@ func TestOrgUnitV4PGStore_GetSnapshot(t *testing.T) {
 	})
 
 	t.Run("scan error", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &v4QueryTx{stubTx: &stubTx{}, rows: &v4Rows{scanErr: errors.New("scan")}}
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &snapshotQueryTx{stubTx: &stubTx{}, rows: &snapshotRows{scanErr: errors.New("scan")}}
 			return tx, nil
 		}))
 		_, err := store.GetSnapshot(context.Background(), "t1", "2026-01-01")
@@ -121,8 +121,8 @@ func TestOrgUnitV4PGStore_GetSnapshot(t *testing.T) {
 	})
 
 	t.Run("commit error", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &v4QueryTx{stubTx: &stubTx{commitErr: errors.New("commit")}, rows: &v4Rows{}}
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &snapshotQueryTx{stubTx: &stubTx{commitErr: errors.New("commit")}, rows: &snapshotRows{}}
 			return tx, nil
 		}))
 		_, err := store.GetSnapshot(context.Background(), "t1", "2026-01-01")
@@ -132,8 +132,8 @@ func TestOrgUnitV4PGStore_GetSnapshot(t *testing.T) {
 	})
 
 	t.Run("rows err", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &v4QueryTx{stubTx: &stubTx{}, rows: &v4Rows{err: errors.New("rows")}}
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &snapshotQueryTx{stubTx: &stubTx{}, rows: &snapshotRows{err: errors.New("rows")}}
 			return tx, nil
 		}))
 		_, err := store.GetSnapshot(context.Background(), "t1", "2026-01-01")
@@ -157,9 +157,9 @@ func (t *execPlanTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.
 	return t.stubTx.Exec(ctx, sql, args...)
 }
 
-func TestOrgUnitV4PGStore_CreateOrgUnit(t *testing.T) {
+func TestOrgUnitSnapshotPGStore_CreateOrgUnit(t *testing.T) {
 	t.Run("begin error", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
 		_, err := store.CreateOrgUnit(context.Background(), "t1", "2026-01-01", "A", "")
@@ -169,7 +169,7 @@ func TestOrgUnitV4PGStore_CreateOrgUnit(t *testing.T) {
 	})
 
 	t.Run("ok (root)", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"org1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
@@ -185,7 +185,7 @@ func TestOrgUnitV4PGStore_CreateOrgUnit(t *testing.T) {
 	})
 
 	t.Run("ok (child payload branch)", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"org1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
@@ -198,7 +198,7 @@ func TestOrgUnitV4PGStore_CreateOrgUnit(t *testing.T) {
 	})
 
 	t.Run("set tenant error", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		}))
 		_, err := store.CreateOrgUnit(context.Background(), "t1", "2026-01-01", "A", "")
@@ -208,7 +208,7 @@ func TestOrgUnitV4PGStore_CreateOrgUnit(t *testing.T) {
 	})
 
 	t.Run("gen org id error", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		}))
 		_, err := store.CreateOrgUnit(context.Background(), "t1", "2026-01-01", "A", "")
@@ -218,7 +218,7 @@ func TestOrgUnitV4PGStore_CreateOrgUnit(t *testing.T) {
 	})
 
 	t.Run("gen event id error", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{row2Err: errors.New("row2")}
 			tx.row = &stubRow{vals: []any{"org1"}}
 			return tx, nil
@@ -230,7 +230,7 @@ func TestOrgUnitV4PGStore_CreateOrgUnit(t *testing.T) {
 	})
 
 	t.Run("submit error", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &execPlanTx{
 				stubTx:  &stubTx{},
 				execErr: errors.New("submit"),
@@ -247,7 +247,7 @@ func TestOrgUnitV4PGStore_CreateOrgUnit(t *testing.T) {
 	})
 
 	t.Run("commit error", func(t *testing.T) {
-		store := newOrgUnitV4PGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{commitErr: errors.New("commit")}
 			tx.row = &stubRow{vals: []any{"org1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
@@ -260,34 +260,34 @@ func TestOrgUnitV4PGStore_CreateOrgUnit(t *testing.T) {
 	})
 }
 
-type stubOrgUnitV4Store struct {
-	snapshot    []OrgUnitV4SnapshotRow
+type stubOrgUnitSnapshotStore struct {
+	snapshot    []OrgUnitSnapshotRow
 	snapshotErr error
 	createID    string
 	createErr   error
 }
 
-func (s *stubOrgUnitV4Store) GetSnapshot(context.Context, string, string) ([]OrgUnitV4SnapshotRow, error) {
+func (s *stubOrgUnitSnapshotStore) GetSnapshot(context.Context, string, string) ([]OrgUnitSnapshotRow, error) {
 	if s.snapshotErr != nil {
 		return nil, s.snapshotErr
 	}
 	return s.snapshot, nil
 }
 
-func (s *stubOrgUnitV4Store) CreateOrgUnit(context.Context, string, string, string, string) (string, error) {
+func (s *stubOrgUnitSnapshotStore) CreateOrgUnit(context.Context, string, string, string, string) (string, error) {
 	if s.createErr != nil {
 		return "", s.createErr
 	}
 	return s.createID, nil
 }
 
-func TestHandleOrgV4Snapshot(t *testing.T) {
+func TestHandleOrgSnapshot(t *testing.T) {
 	tenant := Tenant{ID: "00000000-0000-0000-0000-000000000001", Name: "T1"}
 
 	t.Run("tenant missing", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/snapshot", nil)
 		rec := httptest.NewRecorder()
-		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{})
+		handleOrgSnapshot(rec, req, &stubOrgUnitSnapshotStore{})
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -297,7 +297,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/snapshot?as_of=2026-01-01&created_id=x", nil)
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
-		handleOrgV4Snapshot(rec, req, nil)
+		handleOrgSnapshot(rec, req, nil)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -310,7 +310,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/snapshot?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
-		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{snapshot: nil})
+		handleOrgSnapshot(rec, req, &stubOrgUnitSnapshotStore{snapshot: nil})
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -320,8 +320,8 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/snapshot?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
-		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{
-			snapshot: []OrgUnitV4SnapshotRow{{OrgID: "o1", Name: "A", FullNamePath: "A", NodePath: "x"}},
+		handleOrgSnapshot(rec, req, &stubOrgUnitSnapshotStore{
+			snapshot: []OrgUnitSnapshotRow{{OrgID: "o1", Name: "A", FullNamePath: "A", NodePath: "x"}},
 		})
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
@@ -335,7 +335,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/snapshot?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
-		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{snapshotErr: errors.New("boom")})
+		handleOrgSnapshot(rec, req, &stubOrgUnitSnapshotStore{snapshotErr: errors.New("boom")})
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -349,7 +349,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
-		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{})
+		handleOrgSnapshot(rec, req, &stubOrgUnitSnapshotStore{})
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -363,7 +363,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
-		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{})
+		handleOrgSnapshot(rec, req, &stubOrgUnitSnapshotStore{})
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -377,7 +377,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
-		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{createErr: errors.New("create")})
+		handleOrgSnapshot(rec, req, &stubOrgUnitSnapshotStore{createErr: errors.New("create")})
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -391,7 +391,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
-		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{createID: "new1"})
+		handleOrgSnapshot(rec, req, &stubOrgUnitSnapshotStore{createID: "new1"})
 		if rec.Code != http.StatusSeeOther {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -405,7 +405,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPut, "/org/snapshot", nil)
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
-		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{})
+		handleOrgSnapshot(rec, req, &stubOrgUnitSnapshotStore{})
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status=%d", rec.Code)
 		}
