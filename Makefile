@@ -12,7 +12,7 @@ export GOIMPORTS_VERSION ?= v0.26.0
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
-.PHONY: dev-up dev-down
+.PHONY: dev dev-up dev-down dev-server
 .PHONY: coverage
 
 help:
@@ -27,6 +27,7 @@ help:
 		"" \
 		"开发环境：" \
 		"  make dev-up" \
+		"  make dev-server" \
 		"  make dev-down" \
 		"" \
 		"模块级（示例）：" \
@@ -71,6 +72,8 @@ test: ## 单元/集成测试
 		echo "[test] no go.mod; no-op"; \
 	fi
 
+dev: dev-up dev-server
+
 dev-up:
 	@env_file=".env"; \
 	if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
@@ -82,6 +85,16 @@ dev-down:
 	if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
 	if [[ -f "env.local" ]]; then env_file="env.local"; fi; \
 	docker compose --env-file "$$env_file" -f compose.dev.yml down -v
+
+dev-server:
+	@env_file=""; \
+	if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
+	if [[ -z "$$env_file" && -f "env.local" ]]; then env_file="env.local"; fi; \
+	if [[ -z "$$env_file" && -f ".env" ]]; then env_file=".env"; fi; \
+	if [[ -n "$$env_file" ]]; then \
+		set -a; . "$$env_file"; set +a; \
+	fi; \
+	go run ./cmd/server
 
 routing: ## 路由门禁（allowlist/entrypoint key 等）
 	@./scripts/routing/check-allowlist.sh
@@ -131,7 +144,7 @@ staffing:
 person:
 	@:
 
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint plan migrate up,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint plan migrate up dev dev-up dev-down dev-server,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

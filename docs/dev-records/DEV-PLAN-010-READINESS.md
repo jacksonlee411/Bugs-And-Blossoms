@@ -60,3 +60,12 @@
 - PR-8：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/8
 - sqlc：`make sqlc-generate`（导出 `internal/sqlc/schema.sql` + 生成物提交）
 - authz：`make authz-pack && make authz-test && make authz-lint`（生成 `config/access/policy.csv(.rev)` 并纳入一致性门禁）
+
+## 8. 本地开发一键启动（避免端口/环境漂移）
+
+证据：
+- PR-25：新增 `make dev` / `make dev-up` / `make dev-server`（自动加载 `.env.local`/`env.local`/`.env`）
+- 日期：2026-01-06
+- 结论：
+  - `make dev-up` 后 postgres/redis 可用（端口来自 `.env.local`）
+  - `make dev-server` 启动的 server 不会回落到默认 DB 端口（避免出现 `127.0.0.1:5438 connect: connection refused`）
