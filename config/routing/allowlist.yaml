@@ -41,7 +41,7 @@ entrypoints:
       - path: /org/nodes
         methods: [GET, POST]
         route_class: ui
-      - path: /org/v4/snapshot
+      - path: /org/snapshot
         methods: [GET, POST]
         route_class: ui
       - path: /org/job-catalog

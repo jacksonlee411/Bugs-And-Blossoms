@@ -116,7 +116,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			`<p>Pick a module:</p>`+
 			`<ul>`+
 			`<li><a href="/org/nodes" hx-get="/org/nodes" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit")+`</a></li>`+
-			`<li><a href="/org/v4/snapshot" hx-get="/org/v4/snapshot" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit_v4")+`</a></li>`+
+			`<li><a href="/org/snapshot" hx-get="/org/snapshot" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit_snapshot")+`</a></li>`+
 			`<li><a href="/org/job-catalog" hx-get="/org/job-catalog" hx-target="#content" hx-push-url="true">`+tr(l, "nav_jobcatalog")+`</a></li>`+
 			`<li><a href="/org/positions" hx-get="/org/positions" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
 			`<li><a href="/person/persons" hx-get="/person/persons" hx-target="#content" hx-push-url="true">`+tr(l, "nav_person")+`</a></li>`+
@@ -139,10 +139,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/nodes", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgNodes(w, r, orgStore)
 	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/v4/snapshot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/snapshot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgV4Snapshot(w, r, orgV4Store)
 	}))
-	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/v4/snapshot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/snapshot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgV4Snapshot(w, r, orgV4Store)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -283,7 +283,7 @@ func renderNav(r *http.Request) string {
 	l := lang(r)
 	return `<nav><ul>` +
 		`<li><a href="/org/nodes" hx-get="/org/nodes" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit") + `</a></li>` +
-		`<li><a href="/org/v4/snapshot" hx-get="/org/v4/snapshot" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit_v4") + `</a></li>` +
+		`<li><a href="/org/snapshot" hx-get="/org/snapshot" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit_snapshot") + `</a></li>` +
 		`<li><a href="/org/job-catalog" hx-get="/org/job-catalog" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
 		`<li><a href="/org/positions" hx-get="/org/positions" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
 		`<li><a href="/person/persons" hx-get="/person/persons" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
@@ -315,8 +315,8 @@ func tr(lang string, key string) string {
 		switch key {
 		case "nav_orgunit":
 			return "组织架构"
-		case "nav_orgunit_v4":
-			return "组织架构 v4"
+		case "nav_orgunit_snapshot":
+			return "组织架构快照"
 		case "nav_jobcatalog":
 			return "职位分类"
 		case "nav_staffing":
@@ -331,8 +331,8 @@ func tr(lang string, key string) string {
 	switch key {
 	case "nav_orgunit":
 		return "OrgUnit"
-	case "nav_orgunit_v4":
-		return "OrgUnit v4"
+	case "nav_orgunit_snapshot":
+		return "OrgUnit Snapshot"
 	case "nav_jobcatalog":
 		return "Job Catalog"
 	case "nav_staffing":

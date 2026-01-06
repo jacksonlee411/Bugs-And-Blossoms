@@ -227,7 +227,7 @@ func TestHandleOrgNodes_POST_SuccessRedirect(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-06" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=current&as_of=2026-01-06" {
 		t.Fatalf("location=%q", loc)
 	}
 }
@@ -330,7 +330,7 @@ func (s legacyOnlyStore) CreateNode(ctx context.Context, tenantID string, name s
 func TestHandleOrgNodes_POST_ReadV4_UsesV4Writer(t *testing.T) {
 	store := &v4WriteSpyStore{}
 	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-05&parent_id=u0")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -354,7 +354,7 @@ func TestHandleOrgNodes_POST_ReadV4_UsesV4Writer(t *testing.T) {
 	if got := strings.Join(store.args, "|"); got != "t1|2026-01-05|Hello|u0" {
 		t.Fatalf("args=%q", got)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-05" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=current&as_of=2026-01-05" {
 		t.Fatalf("location=%q", loc)
 	}
 }
@@ -362,7 +362,7 @@ func TestHandleOrgNodes_POST_ReadV4_UsesV4Writer(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_DefaultsEffectiveDateToAsOf(t *testing.T) {
 	store := &v4WriteSpyStore{}
 	body := bytes.NewBufferString("name=Hello")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -392,7 +392,7 @@ func (v4CreateOnlyStore) CreateNodeV4(context.Context, string, string, string, s
 func TestHandleOrgNodes_POST_ReadV4_Rename_UsesRenamer(t *testing.T) {
 	store := &v4WriteSpyStore{}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=New&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -407,7 +407,7 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_UsesRenamer(t *testing.T) {
 	if got := strings.Join(store.renameArgs, "|"); got != "t1|2026-01-05|u1|New" {
 		t.Fatalf("args=%q", got)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-05" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=current&as_of=2026-01-05" {
 		t.Fatalf("location=%q", loc)
 	}
 }
@@ -415,7 +415,7 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_UsesRenamer(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_Rename_DefaultsEffectiveDateToAsOf(t *testing.T) {
 	store := &v4WriteSpyStore{}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=New")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -432,7 +432,7 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_DefaultsEffectiveDateToAsOf(t *testin
 func TestHandleOrgNodes_POST_ReadV4_Rename_BadEffectiveDate(t *testing.T) {
 	store := &v4WriteSpyStore{v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=New&effective_date=bad")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -455,7 +455,7 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_Error(t *testing.T) {
 		v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}},
 	}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=New&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -475,7 +475,7 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_Error(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_Rename_MissingOrgID(t *testing.T) {
 	store := &v4WriteSpyStore{v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
 	body := bytes.NewBufferString("action=rename&org_id=&new_name=New&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -495,7 +495,7 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_MissingOrgID(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_Rename_MissingNewName(t *testing.T) {
 	store := &v4WriteSpyStore{v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -515,7 +515,7 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_MissingNewName(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_Rename_MissingRenamer(t *testing.T) {
 	store := v4CreateOnlyStore{}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=New&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -524,7 +524,7 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_MissingRenamer(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("v4 renamer 未配置")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("current renamer 未配置")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -542,7 +542,7 @@ func TestHandleOrgNodes_POST_ReadLegacy_RenameRejected(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("rename 仅支持 v4 模式")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("rename 仅支持 current 模式")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -550,7 +550,7 @@ func TestHandleOrgNodes_POST_ReadLegacy_RenameRejected(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_Move_UsesMover(t *testing.T) {
 	store := &v4WriteSpyStore{}
 	body := bytes.NewBufferString("action=move&org_id=u1&new_parent_id=u0&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -565,7 +565,7 @@ func TestHandleOrgNodes_POST_ReadV4_Move_UsesMover(t *testing.T) {
 	if got := strings.Join(store.moveArgs, "|"); got != "t1|2026-01-05|u1|u0" {
 		t.Fatalf("args=%q", got)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-05" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=current&as_of=2026-01-05" {
 		t.Fatalf("location=%q", loc)
 	}
 }
@@ -573,7 +573,7 @@ func TestHandleOrgNodes_POST_ReadV4_Move_UsesMover(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_Move_DefaultsEffectiveDateToAsOf(t *testing.T) {
 	store := &v4WriteSpyStore{}
 	body := bytes.NewBufferString("action=move&org_id=u1&new_parent_id=")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -590,7 +590,7 @@ func TestHandleOrgNodes_POST_ReadV4_Move_DefaultsEffectiveDateToAsOf(t *testing.
 func TestHandleOrgNodes_POST_ReadV4_Move_BadEffectiveDate(t *testing.T) {
 	store := &v4WriteSpyStore{v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
 	body := bytes.NewBufferString("action=move&org_id=u1&effective_date=bad")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -613,7 +613,7 @@ func TestHandleOrgNodes_POST_ReadV4_Move_Error(t *testing.T) {
 		v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}},
 	}
 	body := bytes.NewBufferString("action=move&org_id=u1&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -633,7 +633,7 @@ func TestHandleOrgNodes_POST_ReadV4_Move_Error(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_Move_MissingMover(t *testing.T) {
 	store := v4CreateOnlyStore{}
 	body := bytes.NewBufferString("action=move&org_id=u1&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -642,7 +642,7 @@ func TestHandleOrgNodes_POST_ReadV4_Move_MissingMover(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("v4 mover 未配置")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("current mover 未配置")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -660,7 +660,7 @@ func TestHandleOrgNodes_POST_ReadLegacy_MoveRejected(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("move 仅支持 v4 模式")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("move 仅支持 current 模式")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -668,7 +668,7 @@ func TestHandleOrgNodes_POST_ReadLegacy_MoveRejected(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_Disable_UsesDisabler(t *testing.T) {
 	store := &v4WriteSpyStore{}
 	body := bytes.NewBufferString("action=disable&org_id=u1&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -688,7 +688,7 @@ func TestHandleOrgNodes_POST_ReadV4_Disable_UsesDisabler(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_Disable_DefaultsEffectiveDateToAsOf(t *testing.T) {
 	store := &v4WriteSpyStore{}
 	body := bytes.NewBufferString("action=disable&org_id=u1")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -705,7 +705,7 @@ func TestHandleOrgNodes_POST_ReadV4_Disable_DefaultsEffectiveDateToAsOf(t *testi
 func TestHandleOrgNodes_POST_ReadV4_Disable_BadEffectiveDate(t *testing.T) {
 	store := &v4WriteSpyStore{v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
 	body := bytes.NewBufferString("action=disable&org_id=u1&effective_date=bad")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -728,7 +728,7 @@ func TestHandleOrgNodes_POST_ReadV4_Disable_Error(t *testing.T) {
 		v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}},
 	}
 	body := bytes.NewBufferString("action=disable&org_id=u1&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -748,7 +748,7 @@ func TestHandleOrgNodes_POST_ReadV4_Disable_Error(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_Disable_MissingDisabler(t *testing.T) {
 	store := v4CreateOnlyStore{}
 	body := bytes.NewBufferString("action=disable&org_id=u1&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -757,7 +757,7 @@ func TestHandleOrgNodes_POST_ReadV4_Disable_MissingDisabler(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("v4 disabler 未配置")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("current disabler 未配置")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -775,7 +775,7 @@ func TestHandleOrgNodes_POST_ReadLegacy_DisableRejected(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("disable 仅支持 v4 模式")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("disable 仅支持 current 模式")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -793,10 +793,10 @@ func TestHandleOrgNodes_POST_DefaultReadV4_UsesAsOfNow(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 	loc := rec.Header().Get("Location")
-	if !strings.HasPrefix(loc, "/org/nodes?read=v4&as_of=") {
+	if !strings.HasPrefix(loc, "/org/nodes?read=current&as_of=") {
 		t.Fatalf("location=%q", loc)
 	}
-	asOf := strings.TrimPrefix(loc, "/org/nodes?read=v4&as_of=")
+	asOf := strings.TrimPrefix(loc, "/org/nodes?read=current&as_of=")
 	if _, err := time.Parse("2006-01-02", asOf); err != nil {
 		t.Fatalf("as_of=%q err=%v", asOf, err)
 	}
@@ -805,7 +805,7 @@ func TestHandleOrgNodes_POST_DefaultReadV4_UsesAsOfNow(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_BadEffectiveDate(t *testing.T) {
 	store := &v4WriteSpyStore{}
 	body := bytes.NewBufferString("name=Hello&effective_date=bad")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -825,7 +825,7 @@ func TestHandleOrgNodes_POST_ReadV4_BadEffectiveDate(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_MissingWriter(t *testing.T) {
 	store := v4ReadOnlyStore{nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
 	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -834,7 +834,7 @@ func TestHandleOrgNodes_POST_ReadV4_MissingWriter(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("v4 writer 未配置")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("current writer 未配置")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -842,7 +842,7 @@ func TestHandleOrgNodes_POST_ReadV4_MissingWriter(t *testing.T) {
 func TestHandleOrgNodes_POST_ReadV4_CreateError(t *testing.T) {
 	store := &v4WriteSpyStore{err: errors.New("boom")}
 	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -865,7 +865,7 @@ func TestHandleOrgNodes_POST_ReadV4_CreateError_WithV4Nodes(t *testing.T) {
 		v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}},
 	}
 	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -977,7 +977,7 @@ func TestHandleOrgNodes_GET_ReadV4_UsesV4WhenAvailable(t *testing.T) {
 		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1036,11 +1036,11 @@ func TestHandleOrgNodes_GET_ReadInvalidDefaultsToV4(t *testing.T) {
 
 func TestHandleOrgNodes_GET_ReadV4_FallbackOnError(t *testing.T) {
 	store := &v4SpyStore{
-		v4Err:       errors.New("v4 boom"),
+		v4Err:       errors.New("boom"),
 		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1051,7 +1051,7 @@ func TestHandleOrgNodes_GET_ReadV4_FallbackOnError(t *testing.T) {
 	if store.v4Called != 1 || store.legacyCalled != 1 {
 		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 读取失败")) || !bytes.Contains([]byte(body), []byte("L")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("current 读取失败")) || !bytes.Contains([]byte(body), []byte("L")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
@@ -1062,7 +1062,7 @@ func TestHandleOrgNodes_GET_ReadV4_FallbackOnEmpty(t *testing.T) {
 		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1073,7 +1073,7 @@ func TestHandleOrgNodes_GET_ReadV4_FallbackOnEmpty(t *testing.T) {
 	if store.v4Called != 1 || store.legacyCalled != 1 {
 		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 快照为空")) || !bytes.Contains([]byte(body), []byte("L")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("current 快照为空")) || !bytes.Contains([]byte(body), []byte("L")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
@@ -1084,7 +1084,7 @@ func TestHandleOrgNodes_GET_ReadV4_BadAsOf(t *testing.T) {
 		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=bad", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=bad", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1101,7 +1101,7 @@ func TestHandleOrgNodes_GET_ReadV4_BadAsOf(t *testing.T) {
 }
 
 func TestHandleOrgNodes_GET_ReadV4_BadAsOf_LegacyError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=bad", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=bad", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1115,7 +1115,7 @@ func TestHandleOrgNodes_GET_ReadV4_BadAsOf_LegacyError(t *testing.T) {
 }
 
 func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_LegacyError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1123,7 +1123,7 @@ func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_LegacyError(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 reader 未配置，且 legacy 读取失败")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("current reader 未配置，且 legacy 读取失败")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
@@ -1133,7 +1133,7 @@ func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_FallbackSuccess(t *testing.T) 
 	_, _ = mem.CreateNode(context.Background(), "t1", "L")
 	store := legacyOnlyStore{inner: mem}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1141,7 +1141,7 @@ func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_FallbackSuccess(t *testing.T) 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 reader 未配置，已回退到 legacy")) || !bytes.Contains([]byte(body), []byte("L")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("current reader 未配置，已回退到 legacy")) || !bytes.Contains([]byte(body), []byte("L")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
@@ -1162,15 +1162,15 @@ func (s v4ErrStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode,
 }
 
 func TestHandleOrgNodes_GET_ReadV4_V4Error_LegacyError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, v4ErrStore{legacyErr: errors.New("legacy boom"), v4Err: errors.New("v4 boom")})
+	handleOrgNodes(rec, req, v4ErrStore{legacyErr: errors.New("legacy boom"), v4Err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 读取失败: v4 boom；且 legacy 读取失败: legacy boom")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("current 读取失败: boom；且 legacy 读取失败: legacy boom")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
@@ -1188,7 +1188,7 @@ func (v4EmptyLegacyErrStore) ListNodesV4(context.Context, string, string) ([]Org
 }
 
 func TestHandleOrgNodes_GET_ReadV4_Empty_LegacyError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 

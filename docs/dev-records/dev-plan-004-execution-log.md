@@ -22,3 +22,18 @@
   - 全仓：修复对旧路径的引用（`AGENTS.md` 与相关 dev-plan 文档）
 - **本地门禁**
   - `make check doc`：通过
+
+## PR-3：路由与 UI 文案清理
+
+- **状态**：已完成（2026-01-06 10:01 UTC）
+- **范围**
+  - `/org/nodes`：`read` 模式从旧值切换为 `current`（默认值、链接、重定向、错误文案与测试一并更新）
+  - OrgUnit Snapshot：路径从 `/org/.../snapshot` 切换为 `/org/snapshot`，并同步更新导航与 allowlist
+  - Readiness：更新浏览器复现步骤中的 URL
+- **本地门禁**
+  - `go fmt ./...`：通过
+  - `go vet ./...`：通过
+  - `make check lint`：通过
+  - `make test`：通过
+  - `make check routing`：通过
+  - `make check doc`：通过

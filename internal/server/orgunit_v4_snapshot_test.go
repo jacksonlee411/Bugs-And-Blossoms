@@ -285,7 +285,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 	tenant := Tenant{ID: "00000000-0000-0000-0000-000000000001", Name: "T1"}
 
 	t.Run("tenant missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/v4/snapshot", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/snapshot", nil)
 		rec := httptest.NewRecorder()
 		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{})
 		if rec.Code != http.StatusInternalServerError {
@@ -294,7 +294,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 	})
 
 	t.Run("store nil", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/v4/snapshot?as_of=2026-01-01&created_id=x", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/snapshot?as_of=2026-01-01&created_id=x", nil)
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
 		handleOrgV4Snapshot(rec, req, nil)
@@ -307,7 +307,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 	})
 
 	t.Run("get ok (rows empty branch)", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/v4/snapshot?as_of=2026-01-01", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/snapshot?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
 		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{snapshot: nil})
@@ -317,7 +317,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 	})
 
 	t.Run("get ok (rows)", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/v4/snapshot?as_of=2026-01-01", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/snapshot?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
 		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{
@@ -326,13 +326,13 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
-		if !strings.Contains(rec.Body.String(), "OrgUnit v4 Snapshot") {
+		if !strings.Contains(rec.Body.String(), "OrgUnit Snapshot") {
 			t.Fatalf("body=%q", rec.Body.String())
 		}
 	})
 
 	t.Run("get error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/v4/snapshot?as_of=2026-01-01", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/snapshot?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
 		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{snapshotErr: errors.New("boom")})
@@ -345,7 +345,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 	})
 
 	t.Run("post bad form", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/v4/snapshot?as_of=2026-01-01", strings.NewReader("%zz"))
+		req := httptest.NewRequest(http.MethodPost, "/org/snapshot?as_of=2026-01-01", strings.NewReader("%zz"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
@@ -359,7 +359,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 	})
 
 	t.Run("post missing name", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/v4/snapshot?as_of=2026-01-01", strings.NewReader("name="))
+		req := httptest.NewRequest(http.MethodPost, "/org/snapshot?as_of=2026-01-01", strings.NewReader("name="))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
@@ -373,7 +373,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 	})
 
 	t.Run("post create error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/v4/snapshot?as_of=2026-01-01", bytes.NewBufferString("name=A"))
+		req := httptest.NewRequest(http.MethodPost, "/org/snapshot?as_of=2026-01-01", bytes.NewBufferString("name=A"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
@@ -387,7 +387,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 	})
 
 	t.Run("post ok", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/v4/snapshot?as_of=2026-01-01", bytes.NewBufferString("name=A&parent_id=p1&effective_date=2026-01-02"))
+		req := httptest.NewRequest(http.MethodPost, "/org/snapshot?as_of=2026-01-01", bytes.NewBufferString("name=A&parent_id=p1&effective_date=2026-01-02"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
@@ -402,7 +402,7 @@ func TestHandleOrgV4Snapshot(t *testing.T) {
 	})
 
 	t.Run("method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPut, "/org/v4/snapshot", nil)
+		req := httptest.NewRequest(http.MethodPut, "/org/snapshot", nil)
 		req = req.WithContext(withTenant(req.Context(), tenant))
 		rec := httptest.NewRecorder()
 		handleOrgV4Snapshot(rec, req, &stubOrgUnitV4Store{})

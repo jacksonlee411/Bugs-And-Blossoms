@@ -180,7 +180,7 @@ func handleOrgV4Snapshot(w http.ResponseWriter, r *http.Request, store OrgUnitV4
 			writePage(w, r, renderOrgV4Snapshot(rows, tenant, asOf, "", err.Error()))
 			return
 		}
-		http.Redirect(w, r, "/org/v4/snapshot?as_of="+effectiveDate+"&created_id="+createdID, http.StatusSeeOther)
+		http.Redirect(w, r, "/org/snapshot?as_of="+effectiveDate+"&created_id="+createdID, http.StatusSeeOther)
 		return
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -190,7 +190,7 @@ func handleOrgV4Snapshot(w http.ResponseWriter, r *http.Request, store OrgUnitV4
 
 func renderOrgV4Snapshot(rows []OrgUnitV4SnapshotRow, tenant Tenant, asOfDate string, createdID string, errMsg string) string {
 	var b strings.Builder
-	b.WriteString("<h1>OrgUnit v4 Snapshot</h1>")
+	b.WriteString("<h1>OrgUnit Snapshot</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
 	b.WriteString("<p>As-of: <code>" + html.EscapeString(asOfDate) + "</code></p>")
 
@@ -201,8 +201,8 @@ func renderOrgV4Snapshot(rows []OrgUnitV4SnapshotRow, tenant Tenant, asOfDate st
 		b.WriteString(`<div style="padding:8px;border:1px solid #0a0;color:#0a0">created <code>` + html.EscapeString(createdID) + `</code></div>`)
 	}
 
-	b.WriteString(`<h2>Create (v4)</h2>`)
-	b.WriteString(`<form method="POST" action="/org/v4/snapshot?as_of=` + html.EscapeString(asOfDate) + `">`)
+	b.WriteString(`<h2>Create</h2>`)
+	b.WriteString(`<form method="POST" action="/org/snapshot?as_of=` + html.EscapeString(asOfDate) + `">`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOfDate) + `" /></label><br/>`)
 	b.WriteString(`<label>Name <input name="name" /></label><br/>`)
 	b.WriteString(`<label>Parent ID (optional) <input name="parent_id" /></label><br/>`)

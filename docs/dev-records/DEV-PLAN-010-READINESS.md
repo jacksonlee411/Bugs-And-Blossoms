@@ -78,7 +78,7 @@
   - `make dev`（或分别运行 `make dev-up` + `make dev-server`）
 - 打开并登录：
   - `http://localhost:8080/login`（点击 Login 按钮）
-- 访问 OrgUnit（默认 v4 读取；可回退）：
-  - `http://localhost:8080/org/nodes?as_of=2026-01-06`（默认读取优先 v4，失败/为空自动回退 legacy）
+- 访问 OrgUnit（默认 current 读取；可回退）：
+  - `http://localhost:8080/org/nodes?as_of=2026-01-06`（默认读取优先 current，失败/为空自动回退 legacy）
   - 强制 legacy：`http://localhost:8080/org/nodes?read=legacy`
-  - 强制 v4：`http://localhost:8080/org/nodes?read=v4&as_of=2026-01-06`
+  - 强制 current：`http://localhost:8080/org/nodes?read=current&as_of=2026-01-06`

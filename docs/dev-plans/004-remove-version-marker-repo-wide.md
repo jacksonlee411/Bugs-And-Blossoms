@@ -110,9 +110,9 @@
 
 ### PR-3：路由与 UI 文案清理
 
-- [ ] 调整所有含版本标记的路由与页面链接，确保用户侧 URL/页面不暴露版本标记。
-- [ ] 更新 routing allowlist 与 routing gates，确保 `make check routing` 通过。
-- [ ] 更新 readiness 证据中的链接与步骤（固化到 `docs/dev-records/`）。
+- [X] 调整所有含版本标记的路由与页面链接，确保用户侧 URL/页面不暴露版本标记（2026-01-06 10:01 UTC）。
+- [X] 更新 routing allowlist 与 routing gates，确保 `make check routing` 通过（2026-01-06 10:01 UTC）。
+- [X] 更新 readiness 证据中的链接与步骤（固化到 `docs/dev-records/`）（2026-01-06 10:01 UTC）。
 
 ### PR-4：Go 代码命名清理
 

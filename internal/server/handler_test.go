@@ -258,7 +258,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		"/ui/nav",
 		"/ui/topbar",
 		"/org/nodes",
-		"/org/v4/snapshot",
+		"/org/snapshot",
 		"/org/job-catalog",
 		"/org/positions",
 		"/org/assignments",
@@ -275,14 +275,14 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		}
 	}
 
-	reqOrgV4Post := httptest.NewRequest(http.MethodPost, "/org/v4/snapshot", strings.NewReader("name=A"))
-	reqOrgV4Post.Host = "localhost:8080"
-	reqOrgV4Post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqOrgV4Post.AddCookie(session)
-	recOrgV4Post := httptest.NewRecorder()
-	h.ServeHTTP(recOrgV4Post, reqOrgV4Post)
-	if recOrgV4Post.Code != http.StatusOK {
-		t.Fatalf("org v4 post status=%d", recOrgV4Post.Code)
+	reqOrgSnapshotPost := httptest.NewRequest(http.MethodPost, "/org/snapshot", strings.NewReader("name=A"))
+	reqOrgSnapshotPost.Host = "localhost:8080"
+	reqOrgSnapshotPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqOrgSnapshotPost.AddCookie(session)
+	recOrgSnapshotPost := httptest.NewRecorder()
+	h.ServeHTTP(recOrgSnapshotPost, reqOrgSnapshotPost)
+	if recOrgSnapshotPost.Code != http.StatusOK {
+		t.Fatalf("org snapshot post status=%d", recOrgSnapshotPost.Code)
 	}
 
 	reqCreate := httptest.NewRequest(http.MethodPost, "/org/nodes", strings.NewReader("name=NodeA"))
