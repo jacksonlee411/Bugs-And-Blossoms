@@ -176,10 +176,10 @@ CREATE TABLE job_profile_events (
   - `is_active`：若出现则全量替换；必须为 boolean。
   - `external_refs`：若出现则全量替换；必须为 JSON object（不做 merge，避免隐藏复杂度与冲突语义）。
 - Job Family：
-  - `job_family_group_id`：若出现则视为 reparenting（有效期属性变更）；必须为 uuid 且对应 group identity 存在。
+  - `job_family_group_id`：若出现则视为 reparenting（有效期属性变更）；必须为 uuid，且在同一 `tenant_id` 下对应 group identity 存在。
 - Job Profile：
-  - `job_family_ids`：若出现则语义为“该版本的 families 集合整体替换”（非增量 add/remove）；必须为非空集合且元素不重复。
-  - `primary_job_family_id`：若出现则必须包含于 `job_family_ids`（若同时出现），且在该版本中必须满足“恰好一个 primary”（4.4）。
+  - `job_family_ids`：若出现则语义为“该版本的 families 集合整体替换”（非增量 add/remove）；必须为非空集合且元素不重复；每个 id 必须在同一 `tenant_id` 下存在对应 family identity。
+  - `primary_job_family_id`：若出现则必须包含于 `job_family_ids`（若同时出现）；并要求在该版本中满足“恰好一个 primary”（4.4）。
 
 - **Job Family Group（`job_family_group_*`）**
   - `CREATE`：必填 `payload.code`、`payload.name`；可选 `payload.description`、`payload.external_refs`。
@@ -421,7 +421,7 @@ CREATE OR REPLACE FUNCTION submit_job_profile_event(
 3) identity 处理：
    - `CREATE`：从 `payload.code` 创建对应 identity 行；若已存在则拒绝（`JOB_*_ALREADY_EXISTS`）。
    - 非 `CREATE`：要求 identity 行已存在；否则拒绝（`JOB_*_NOT_FOUND`）。
-4) 引用字段校验（选定，见 10.2）：仅校验被引用实体的 identity 存在（`job_family_group_id/job_family_ids/primary_job_family_id`）；不强制 referenced entity 在 `effective_date` 上 `is_active=true` 或“存在有效 versions”。
+4) 引用字段校验（选定，见 10.2）：仅校验被引用实体的 identity 存在且属于同一 `p_tenant_id`（`job_family_group_id/job_family_ids/primary_job_family_id`）；不强制 referenced entity 在 `effective_date` 上 `is_active=true` 或“存在有效 versions”。
    - 若在同一事务内既创建依赖方 identity 又创建引用方（例如先建 group 再建 family），必须保证调用顺序先依赖后引用。
 5) 写入对应 `*_events`（以 `event_id` 幂等；同一实体同日唯一由约束拒绝）。
 6) 幂等复用校验：若 `event_id` 已存在但参数不同，拒绝（`JOB_*_IDEMPOTENCY_REUSED`）；若完全相同则返回既有 event 行 id（不重复投射）。
@@ -512,7 +512,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 - 备选（未选定）：按实体类型拆锁（group/family/level/profile）。如未来需要提升并发，必须先补齐锁顺序规则与跨实体校验边界，并更新本计划。
 
 ### 10.2 跨实体 as-of 引用校验
-**结论（选定，Simple）**：写入口仅校验被引用实体的 identity 存在（FK/显式检查）；不强制 referenced entity 在 `effective_date` 上 `is_active=true` 或“存在有效 versions”。
+**结论（选定，Simple）**：写入口仅校验被引用实体的 identity 存在（FK/显式检查，且必须属于同一 `tenant_id`）；不强制 referenced entity 在 `effective_date` 上 `is_active=true` 或“存在有效 versions”。
 
 - 理由：减少跨实体耦合与顺序依赖，避免把“引用校验=隐式业务规则”埋入 Kernel 导致分叉；需要更强一致性时再通过更新本计划引入（并补齐同事务多事件顺序约束）。
 - 影响：可能出现“profile 在某日引用了当日已禁用的 family/group”。该状态对 as-of 可解释（读侧可通过 `is_active` 决策展示/过滤），但不由 Kernel 在 v1 强制阻断。

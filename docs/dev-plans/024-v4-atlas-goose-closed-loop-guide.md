@@ -4,7 +4,7 @@
 
 ## 1. 背景与上下文 (Context)
 
-`DEV-PLAN-009`～`DEV-PLAN-023` 已冻结 v4 方向：Greenfield（全新实施）、DB Kernel（权威）、Go Facade（编排）、One Door Policy（唯一写入口），并在仓库内已有可复用的 Atlas+Goose 基线（Person/Org）。
+`DEV-PLAN-009`～`DEV-PLAN-023` 已冻结 v4 方向：Greenfield（全新实施）、DB Kernel（权威）、Go Facade（编排）、One Door Policy（唯一写入口），并在仓库内已有可复用的 Atlas+Goose 基线（`iam`/`orgunit`）。
 
 为保证 v4 新模块（见 `DEV-PLAN-016`）在最早期即可做到 **“schema 变更可规划、迁移可生成、可回滚、CI 可拦截漂移”**，本计划提供一份可执行的 Atlas+Goose 闭环指引，并冻结“模块级受控目录”的统一口径。
 
@@ -14,7 +14,7 @@
 - [ ] **闭环统一**：对 v4 模块提供统一的“Schema SSOT → Atlas plan/lint → Goose apply”闭环指引与验收标准。
 - [ ] **模块级隔离**：每个 v4 模块拥有独立迁移目录与独立 goose 版本表，避免跨模块串号与门禁误触发。
 - [ ] **命名与目录冻结**：冻结 `atlas.hcl` env 命名、migrations 目录命名、goose 版本表命名，降低实施期沟通成本。
-- [ ] **Makefile/CI 对齐**：新增模块的入口与 CI 门禁以 `Makefile`/`.github/workflows/quality-gates.yml` 为 SSOT，对齐现有 Person/Org 样板。
+- [ ] **Makefile/CI 对齐**：新增模块的入口与 CI 门禁以 `Makefile`/`.github/workflows/quality-gates.yml` 为 SSOT，对齐现有 `iam`/`orgunit` 样板。
 - [ ] **失败路径明确**：常见故障（hash 漂移、stub 缺失、版本表冲突、破坏性变更等）提供明确处理路径，避免“凭经验修库”。
 
 ### 2.2 非目标（明确不做）
@@ -28,24 +28,27 @@
 - 触发器矩阵与红线：`AGENTS.md`
 - 命令入口：`Makefile`
 - CI 门禁：`.github/workflows/quality-gates.yml`
-- Atlas 配置：`atlas.hcl`
-- Goose runner：`scripts/db/run_goose.sh`
-- 现有样板（强烈建议先读）：`docs/runbooks/person-atlas-goose.md`、`docs/dev-plans/021A-org-atlas-goose-toolchain-and-gates.md`
+- Atlas 配置（可选/辅助）：`atlas.hcl`（当前门禁以 `scripts/db/*.sh` 的显式参数为准）
+- Atlas runner：`scripts/db/run_atlas.sh`（自动安装到 `bin/atlas`）
+- Goose runner：`scripts/db/run_goose.sh`（自动安装到 `bin/goose`）
+- DB 闭环脚本：`scripts/db/plan.sh`、`scripts/db/lint.sh`、`scripts/db/migrate.sh`
+- 现有样板（代码即样板）：`migrations/iam` + `modules/iam/infrastructure/persistence/schema`；`migrations/orgunit` + `modules/orgunit/infrastructure/persistence/schema`
 - v4 模块边界：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 
 ## 3. 统一闭环（架构与关键决策）
 
 ### 3.1 单一流水线（选定）
-**选定**：v4 采用与现有 Person/Org 同构的单一流水线：
+**选定**：v4 采用与现有 `iam`/`orgunit` 同构的单一流水线：
 
 ```mermaid
 flowchart TD
-  Schema[编辑 Schema SSOT\nmodules/<module>/.../schema/*.sql] --> Plan[Atlas plan/diff\n（dry-run）]
-  Plan --> Diff[atlas migrate diff\n生成 goose 迁移]
-  Diff --> Hash[atlas migrate hash\n更新 atlas.sum]
-  Hash --> Lint[atlas migrate validate\n（CI 门禁）]
-  Hash --> Goose[goose up/down\n执行 migrations/<module>]
-  CI[CI quality-gates] --> Lint
+  Schema[编辑 Schema SSOT\nmodules/<module>/.../schema/*.sql] --> Plan[make <module> plan\natlas schema diff（migrations→schema）]
+  Plan --> Diff[atlas migrate diff\n生成 goose 迁移（写入 migrations/<module>）]
+  Diff --> Hash[atlas migrate hash\n更新 migrations/<module>/atlas.sum]
+  Hash --> Lint[make <module> lint\natlas migrate validate]
+  Lint --> Goose[make <module> migrate up/down\ngoose apply/rollback]
+  CI[CI quality-gates] --> Plan
+  CI --> Lint
   CI --> Goose
 ```
 
@@ -56,7 +59,7 @@ flowchart TD
 ### 3.2 模块级受控目录（选定）
 **选定**：每个模块独立一套：
 - `migrations/<module>/`（goose 格式）+ `atlas.sum`
-- `atlas.hcl` env：`<module>_dev` / `<module>_ci`
+- （可选）`atlas.hcl` env：`<module>_dev` / `<module>_ci`（用于手工运行 Atlas）
 - goose 版本表：`goose_db_version_<module>`（必须独立）
 
 动机：
@@ -72,10 +75,10 @@ flowchart TD
 | Schema SSOT | `modules/<module>/infrastructure/persistence/schema/*.sql` |
 | 依赖 stub（可选） | `modules/<module>/infrastructure/atlas/core_deps.sql` |
 | migrations 目录 | `migrations/<module>/` |
-| Atlas env | `<module>_dev` / `<module>_ci` |
-| CI 目标库（建议） | `DB_NAME=iota_erp_<module>_atlas` |
-| Atlas dev 库（建议） | `ATLAS_DEV_DB_NAME=<module>_dev` |
-| goose 版本表（必须） | `GOOSE_TABLE=goose_db_version_<module>` |
+| Atlas env（可选） | `<module>_dev` / `<module>_ci`（用于手工运行 Atlas；门禁以脚本显式参数为准） |
+| Atlas dev URL（门禁使用） | `ATLAS_DEV_URL=docker://postgres/17/dev?search_path=public`（可覆盖；`make <module> plan/lint` 会使用） |
+| 目标库连接（goose apply） | `DATABASE_URL=...` 或 `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME/DB_SSLMODE`（见 `scripts/db/db_url.sh`） |
+| goose 版本表（必须） | `goose_db_version_<module>`（由 `scripts/db/migrate.sh` 固定传入） |
 
 ### 3.4 跨模块依赖（建议口径）
 **建议优先级（从高到低）**：
@@ -104,9 +107,9 @@ flowchart TD
 - 现仓库既有目录（例如 `migrations/person` 的 `00001_...`）不强制回迁；本规则仅约束 v4 新建模块，避免在旧资产上制造额外 churn。
 
 ### 3.7 与现有样板的对照（避免“再发明一套”）
-- Person 样板：`docs/runbooks/person-atlas-goose.md`（`make db plan/lint` + `PERSON_MIGRATIONS=1 make db migrate up`）
-- Org 样板：`docs/dev-plans/021A-org-atlas-goose-toolchain-and-gates.md`（`make org plan/lint/migrate` + 独立 `goose_db_version_org`）
-- v4 新模块：目标形态对齐 Org（新增 `make <module> plan/lint/migrate` + CI `<module>-atlas` filter），并复用通用 runner `scripts/db/run_goose.sh`（通过 `GOOSE_MIGRATIONS_DIR/GOOSE_TABLE` 参数化）
+- `iam`：`modules/iam/infrastructure/persistence/schema` + `migrations/iam`；本地 `make iam plan && make iam lint && make iam migrate up`；CI 见 `.github/workflows/quality-gates.yml` 的 “DB Gates”。
+- `orgunit`：`modules/orgunit/infrastructure/persistence/schema` + `migrations/orgunit`；本地 `make orgunit plan && make orgunit lint && make orgunit migrate up`；CI 同上。
+- 脚本实现：`scripts/db/plan.sh`（schema drift 检测）、`scripts/db/lint.sh`（migrations validate）、`scripts/db/migrate.sh`（goose up/down + smoke）。
 
 ## 4. 推荐目录结构（模板）
 
@@ -128,7 +131,7 @@ migrations/orgunit/
 
 ## 5. 接入落地步骤（给“新增模块闭环”用）
 
-> 目标：把某个 v4 模块接入到“可 plan/lint/apply + CI 门禁”的状态；模板以 Org（021A）为参照。
+> 目标：把某个 v4 模块接入到“可 plan/lint/apply + CI 门禁”的状态；模板以仓库现有 `iam`/`orgunit` 为参照。
 
 ### 5.1 建议接入顺序（路线图）
 为减少跨模块依赖与“先有鸡还是先有蛋”，建议接入顺序为：
@@ -140,31 +143,31 @@ migrations/orgunit/
 1. [ ] 准备 Schema SSOT：在 `modules/<module>/infrastructure/persistence/schema/` 创建/维护 schema SQL（SSOT）。
 2. [ ] 准备依赖 stub（如需要）：在 `modules/<module>/infrastructure/atlas/core_deps.sql` 提供最小外部依赖定义（例如 `tenants`）。
 3. [ ] 初始化 migrations 目录：创建 `migrations/<module>/`、baseline 迁移与 `atlas.sum`（由 Atlas 生成/维护）。
-4. [ ] 扩展 `atlas.hcl`：为 `<module>` 增加 `local.<module>_src` 与 `<module>_dev/<module>_ci` env，并绑定 `migration.dir=migrations/<module>`（goose 格式）。
-5. [ ] 扩展 `Makefile`：新增 `make <module> plan/lint/migrate` 入口（命令语义对齐现有 `make org ...`）。
-6. [ ] 扩展 CI：在 `quality-gates.yml` 新增 `<module>-atlas` filter，并在命中时执行：
-   - `make atlas-install` + `make goose-install`（如需要）
-   - `make <module> plan` / `make <module> lint`（实现上使用 `atlas migrate validate`；`atlas migrate lint` 在 v0.38+ 为 Pro）
-   - `make <module> migrate up`（smoke；使用独立 `GOOSE_TABLE`）
-   - `git status --porcelain` 必须为空（`atlas.sum` 等生成物必须提交）
+4. [ ] （可选）扩展 `atlas.hcl`：为 `<module>` 增加 `<module>_dev/<module>_ci` env，并绑定 `src=modules/<module>/.../schema` 与 `migration.dir=migrations/<module>`（便于手工运行 Atlas；门禁以脚本显式参数为准）。
+5. [ ] 扩展 `Makefile`：在 `.PHONY` 加入 `<module>` 并添加空 target（`<module>:` → `@:`），使 `make <module> plan|lint|migrate up` 可用。
+6. [ ] 扩展 CI：在 `.github/workflows/quality-gates.yml` 的 “DB Gates” step 中加入该模块的：
+   - `make <module> plan`
+   - `make <module> lint`
+   - `make <module> migrate up`
+   > 当前 CI 以 `paths.outputs.db == true` 粗粒度触发；Atlas/Goose 由 `scripts/db/run_atlas.sh`/`scripts/db/run_goose.sh` 自动安装，无需额外 install target。
 7. [ ] 记录 readiness：在对应 dev-record 中登记命令与结果（时间戳/环境/结论），作为可追溯证据。
 
 ## 6. 日常开发闭环（给“改 schema 的开发者”用）
 
-> 命令入口以 `Makefile` 为准；下述为“行为顺序”说明。若 `Makefile` 尚未为该模块提供 `diff/hash` 包装命令，可临时使用 Atlas CLI（必须通过 `atlas.hcl` 的 `<module>_dev` env，避免参数漂移）。
+> 命令入口以 `Makefile` 为准；下述为“行为顺序”说明。当前仓库未提供 `diff/hash` 的 `make` 包装命令；生成迁移时建议使用 `scripts/db/run_atlas.sh` 并显式指定 `--dir/--dir-format/--to/--dev-url`（避免隐式参数漂移）。
 
 1. [ ] 修改 Schema SSOT（必要时同步更新 `core_deps.sql`）。
-2. [ ] 运行 `<module> plan`（dry-run），确认 diff 与预期一致（避免误连到错误 DB）。
-3. [ ] 用 Atlas 生成迁移（推荐）：优先使用 `Makefile` 包装；否则临时执行 `atlas migrate diff --env <module>_dev <slug>`。
-4. [ ] 更新迁移 hash：优先使用 `Makefile` 包装；否则临时执行 `atlas migrate hash --dir file://migrations/<module>`，提交 `atlas.sum`。
+2. [ ] 运行 `<module> plan`（drift 检测），确认 migrations 与 Schema SSOT 一致。
+3. [ ] 用 Atlas 生成迁移：执行 `./scripts/db/run_atlas.sh migrate diff --dir "file://migrations/<module>" --dir-format goose --dev-url "${ATLAS_DEV_URL:-docker://postgres/17/dev?search_path=public}" --to "file://modules/<module>/infrastructure/persistence/schema" <slug>`。
+4. [ ] 更新迁移 hash：执行 `./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/<module>" --dir-format goose`，提交 `atlas.sum`。
 5. [ ] 运行 `<module> lint`（`atlas migrate validate`），确保 hash 与 SQL 语义可验证（`atlas migrate lint` 在 v0.38+ 为 Pro）。
 6. [ ] 运行 `<module> migrate up`（goose apply）并做最小验证；需要回滚时用 `<module> migrate down`（建议 `GOOSE_STEPS=1`）。
 7. [ ] 再次运行 `<module> plan`，期望输出为 No Changes（闭环收敛）。
 
 ## 7. 常见故障与处理（失败路径）
 
-- [ ] `atlas migrate validate` 报 `atlas.sum` 不一致：运行 `atlas migrate hash --dir file://migrations/<module>` 后重新 validate，并提交 `atlas.sum`。
-- [ ] `goose` 执行了“别的模块”的迁移：检查 `GOOSE_MIGRATIONS_DIR` 与 `GOOSE_TABLE` 是否正确；每个模块必须使用独立版本表。
+- [ ] `atlas migrate validate` 报 `atlas.sum` 不一致：运行 `./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/<module>" --dir-format goose` 后重新 validate，并提交 `atlas.sum`。
+- [ ] `goose` 执行了“别的模块”的迁移：检查是否误用迁移目录（应为 `migrations/<module>`）或误用版本表（应为 `goose_db_version_<module>`）；建议优先使用 `make <module> migrate up|down`（内部固定 `-dir/-table`）。
 - [ ] Atlas plan/lint 报引用表不存在（FK 依赖缺失）：优先移除跨模块 FK；若必须保留，则补齐 `core_deps.sql` 的最小定义。
 - [ ] plan 输出出现大规模 drop/create：优先检查是否连接到错误 DB，或 DB 已被手工修改导致 drift；禁止用“手工改库”去对齐 schema，应回到迁移闭环。
 - [ ] 需要破坏性变更（drop column/table）：先在子域 dev-plan 明确回滚与数据迁移策略，并通过 lint 的破坏性规则；禁止绕过门禁强推。
@@ -177,9 +180,9 @@ migrations/orgunit/
 
 ### 8.2 工具链门禁（模块接入后必须满足）
 对任一接入模块 `<module>`：
-- [ ] CI 在命中 `<module>-atlas` filter 时可跑通：`<module> plan`、`<module> lint`、`<module> migrate up`（smoke）。
+- [ ] CI 的 “DB Gates”（`paths.outputs.db == true`）包含该模块的 `make <module> plan/lint/migrate up` 且可跑通（见 `.github/workflows/quality-gates.yml`）。
 - [ ] goose 使用独立版本表：`goose_db_version_<module>`。
-- [ ] 生成物无漂移：CI 结束时 `git status --porcelain` 为空。
+- [ ] 生成物无漂移：CI 的 `./scripts/ci/assert-clean.sh` 为 OK（`atlas.sum` 等生成物必须提交）。
 - [ ] migrations 文件名符合 3.6 的 `version_id` 规则（v4 新建模块）。
 
 ## 9. Simple > Easy Review（DEV-PLAN-003）
@@ -189,7 +192,7 @@ migrations/orgunit/
 - 通过：goose runner 复用 `scripts/db/run_goose.sh`，避免脚本复制与参数漂移。
 
 ### 9.2 演化（确定性与可复现）
-- 通过：命名约定冻结 + SSOT 引用明确（`Makefile`/CI/`atlas.hcl`），避免“口头流程”。
+- 通过：命名约定冻结 + SSOT 引用明确（`Makefile`/CI/`scripts/db/*.sh`），避免“口头流程”。
 - 风险：跨模块 FK 会迫使 stub 扩张；已给出“避免 FK 优先”的收敛口径与停止线。
 
 ### 9.3 认知（Simple > Easy）
@@ -198,3 +201,16 @@ migrations/orgunit/
 
 ### 9.4 维护（可替换性）
 - 通过：闭环拆解成可替换环节（Schema SSOT、Atlas 校验、Goose apply），未来若替换执行器（非本计划）也有清晰边界。
+
+## 10. 待决策事项（Open Questions）
+
+> 目的：把仍需明确的关键决策显式化，避免在实现阶段“撞出来”。
+
+- [ ] 跨模块依赖/FK 是否“允许/禁止/有限允许”？（默认建议：优先禁止；确需 FK 的场景在子域 dev-plan 单独论证并给出可复现闭环）
+  - 现状：`scripts/db/plan.sh`/`scripts/db/lint.sh` 不会读取 `modules/<module>/infrastructure/atlas/core_deps.sql`，因此“stub 方案”目前仅是概念，需要另行实现或明确为不支持。
+  - 典型例外候选：`tenant_id` → `iam.tenants(id)`；若坚持 FK，则需明确依赖顺序（CI/本地必须先 `make iam migrate up`）以及 Atlas validate 的 dev DB 如何具备依赖对象。
+- [ ] Atlas 执行入口是否收敛到 `atlas.hcl` env？（默认建议：门禁 SSOT 继续以 `scripts/db/*.sh` 的显式参数为准；`atlas.hcl` 仅作手工辅助）
+  - 影响：是否引入 `make <module> diff` / `make <module> hash` 等包装命令以减少参数漂移。
+- [ ] CI DB Gates 触发粒度：继续使用 `paths.outputs.db` 粗粒度，还是升级到“模块级 filter”？（默认建议：粗粒度直到模块数/耗时触发优化门槛）
+  - 影响：新增模块是否必须改 workflow；以及 DB gate 的 CI 时间/并行度。
+- [ ] 是否为每个模块定义最小 smoke（类似 `cmd/dbtool`）？（默认建议：仅对关键平台模块/首个垂直切片模块强制 smoke，其余先以 `migrate up` 覆盖）

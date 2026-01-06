@@ -1,6 +1,6 @@
 # DEV-PLAN-018：引入 Astro（AHA Stack）到 HTMX + Alpine 的 HRMS v4 UI 方案（026-031）
 
-**状态**: 草拟中（2026-01-05 04:18 UTC）
+**状态**: 草拟中（2026-01-06 08:03 UTC）
 
 ## 1. 背景与上下文 (Context)
 
@@ -63,6 +63,7 @@ flowchart LR
 - DDD 分层框架：`docs/dev-plans/015-ddd-layering-framework.md`
 - HR 模块骨架（4 模块）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - 任职记录 v4 UI 合同（仅显示 effective_date、保持 `[start,end)`）：`docs/dev-plans/031-greenfield-assignment-job-data-v4.md`
+- 路由治理与门禁：`docs/dev-plans/017-v4-routing-strategy.md`（入口：`make check routing`）
 - 分层/依赖门禁：`.gocleanarch.yml`（入口：`make check lint`）
 - 样式与生成入口：`Makefile`（Tailwind/生成物以 SSOT 为准）
 - 文档门禁：`make check doc`
@@ -84,6 +85,7 @@ flowchart LR
 - 组织节点详情（Panel/Details）：`/org/nodes/{id}`（可复用现有信息架构）
 
 **Job Catalog**
+- 职类总览（Overview，默认重定向到 family groups）：`/org/job-catalog`
 - 职类组（Job Family Groups）：`/org/job-catalog/family-groups`
 - 职类（Job Families）：`/org/job-catalog/families`
 - 职级（Job Levels）：`/org/job-catalog/levels`
@@ -106,6 +108,11 @@ flowchart LR
 - `as_of` 校验：若 `as_of` 非法（格式不为 `YYYY-MM-DD` 或不可解析），返回 **400**（UI 显示错误，且不做“猜测性纠正”）。
 - 透传规则：`/ui/nav`、`/ui/topbar`、以及所有模块内链接都必须保留当前 `as_of`（使 URL 可分享/可复现）。
 - 对任职记录页面：仅展示 `effective_date`（即 `lower(validity)`）；as-of 用于筛选/定位快照，不引入 `end_date` 展示（对齐 031）。
+
+### 3.4 As-of 控件交互（HTMX，冻结口径）
+- `/ui/topbar` 渲染一个 `method="GET"` 的日期表单（`name="as_of"`），提交后以 **GET + `hx-push-url=true`** 更新当前页面 URL，并刷新 `#content`（不需要引入 SPA 或前端状态管理）。
+- `q`（搜索）与其他筛选条件必须与 `as_of` 共存于 query string；任何刷新/分页/详情跳转都不得丢失 `as_of`。
+- Job Catalog 默认页：`/org/job-catalog` 必须保留 `as_of` 并重定向到 `/org/job-catalog/family-groups?as_of=...`（或等价的默认 section）。
 
 ## 4. UI 技术架构：Astro + HTMX + Alpine（AHA）
 
@@ -135,7 +142,7 @@ flowchart LR
 ### 4.4 Shell/Partial 的最小契约（冻结）
 为降低“壳与内容互相猜测”的偶然复杂度，冻结如下最小契约：
 - Shell 必须包含固定 ID 的挂载点：`#nav`、`#topbar`、`#flash`、`#content`。
-- Shell 必须在用户已登录的上下文中触发加载：`hx-get="/ui/nav"`、`hx-get="/ui/topbar"`、`hx-get="/ui/flash"`（触发时机允许实现差异，但契约 URL 不变）。
+- Shell 必须在用户已登录的上下文中触发加载：`hx-get="/ui/nav?as_of=..."`、`hx-get="/ui/topbar?as_of=..."`、`hx-get="/ui/flash"`（其中 `as_of` 由 `/app` handler 在返回 Shell 时注入；契约 URL 路径不变；见 §4.5）。
 - 内容区页（任意模块页面）必须满足：同一 URL 同时支持 “全页访问” 与 “HTMX partial（`Hx-Request: true`）” 两种模式（路由/协商口径对齐 `DEV-PLAN-017`）。
 - `as_of` 作为 URL 状态：Shell 与 partial 的所有 HTMX 请求与链接必须保留 `as_of`（见 §3.3）。
 
@@ -144,13 +151,14 @@ flowchart LR
 - Astro build 产物在构建阶段被复制到 Go 可 `go:embed` 的稳定目录（建议：`internal/server/assets/astro/**`）。
 - Go server 负责静态资源分发（仍以 `/assets/*` 命名空间提供），避免运行时依赖额外 volume/旁路静态服务器。
 - `apps/web` 的 `package.json` + lockfile 作为 UI 依赖版本的 SSOT（见 `DEV-PLAN-011`）。
+- Shell 文件约定（冻结，避免路径漂移）：Astro 产出一个可嵌入的 Shell HTML（例如落为 `internal/server/assets/astro/app.html`），Go 的 `/app` handler 只做**最小占位符注入**（例如注入 `/ui/nav?as_of=...`、`/ui/topbar?as_of=...`），不在 handler 内重写页面结构。
 
 ## 5. 页面与组件规范（只覆盖 026-031 模块）
 
 ### 5.1 通用页面框架
 - 主内容区统一：`PageHeader`（标题+说明+操作按钮） + `AsOfBar`（如该页需要） + `ContentPanel`（列表/表单/详情）。
 - 所有列表页：
-  - 支持 `as_of`（可选）与 `q`（搜索，可选）
+  - 支持 `as_of`（必带；缺省会被重定向补齐）与 `q`（搜索，可选）
   - 列表行点击打开右侧/下方详情面板（HTMX swap），减少全页跳转
 
 ### 5.2 任职记录（Assignments）v4 UI 合同落地
@@ -171,10 +179,11 @@ flowchart LR
 2. [ ] 定义 App Shell（Astro）：包含 §4.4 的四个固定挂载点，并以 HTMX 拉取 nav/topbar/flash 的方式装配动态上下文。
 3. [ ] 按 §4.5 落地 Astro build 产物复制到 `internal/server/assets/astro/**` 的 pipeline，并由 Go server 在 `/assets/*` 下提供静态资源。
 4. [ ] 将 `/app` 的 Shell 渲染切换为 Astro 产物（不在 Go handler 内拼接整页 HTML），但继续保留 `/ui/nav`、`/ui/topbar`、`/ui/flash` 的服务端权威渲染。
-5. [ ] 后端对齐最小 UI partial：`/ui/nav`、`/ui/topbar`、`/ui/flash` 与一个占位内容页（例如 `/app/home`），验证：
+5. [ ] 后端提供最小 UI partial：`/ui/nav`、`/ui/topbar`、`/ui/flash` 与一个占位内容页（例如 `/app/home`），验证：
    - 静态资源可用（Astro build 产物）
    - HTMX swap 正常
    - Alpine 初始化不与 HTMX 冲突
+6. [ ] 更新路由 allowlist 以覆盖新增的 UI 路由（尤其 `/org/job-catalog/*`）并通过路由门禁（入口：`make check routing`）。
 
 ### Phase 1：按模块逐个接入内容（不改 Shell）
 6. [ ] 按 016 的 4 模块顺序接入页面与二级菜单入口（未实现模块不出现在导航中）：
@@ -195,8 +204,11 @@ flowchart LR
 ## 7. 验收标准（Acceptance Criteria）
 - [ ] 左侧导航布局与现有一致；一级仅 4 模块；二级菜单与 §3.2 完全一致。
 - [ ] 任职记录页面不展示 `end_date`，只展示 `effective_date`；且 `as_of` 作为 query 参数在页面间保持一致透传（URL 可分享可复现）。
+- [ ] `as_of` 缺省时会被 302 补齐（`/app` 与任意模块页面均满足），`as_of` 非法时返回 400 且可被 UI 展示。
 - [ ] 不引入 SPA；所有业务交互仍可用 HTMX 解释（5 分钟可复述：入口 → 请求 → swap → 失败提示）。
 - [ ] 权限与本地化不在前端复制实现：导航与操作按钮可随用户权限变化。
+- [ ] Astro build 产物被纳入 `go:embed`，发布产物中不依赖额外静态目录挂载即可访问 Shell 与静态资源。
+- [ ] 路由门禁通过：新增的 UI 路由已登记 allowlist 且 `make check routing` 通过。
 - [ ] 文档与门禁：本计划加入 Doc Map，且 `make check doc` 通过。
 
 ## 8. Simple > Easy Review（DEV-PLAN-003）
