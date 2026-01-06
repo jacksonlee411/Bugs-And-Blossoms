@@ -112,7 +112,7 @@ $$;
 
 -- end: modules/orgunit/infrastructure/persistence/schema/00001_orgunit_baseline.sql
 
--- begin: modules/orgunit/infrastructure/persistence/schema/00002_orgunit_v4_org_schema.sql
+-- begin: modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql
 CREATE EXTENSION IF NOT EXISTS ltree;
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
@@ -245,9 +245,9 @@ CREATE POLICY tenant_isolation ON orgunit.org_unit_versions
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
--- end: modules/orgunit/infrastructure/persistence/schema/00002_orgunit_v4_org_schema.sql
+-- end: modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql
 
--- begin: modules/orgunit/infrastructure/persistence/schema/00003_orgunit_v4_engine.sql
+-- begin: modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql
 CREATE OR REPLACE FUNCTION orgunit.assert_current_tenant(p_tenant_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -769,7 +769,7 @@ BEGIN
       DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
   END IF;
 
-  v_lock_key := format('org:v4:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM orgunit.org_unit_versions
@@ -893,7 +893,7 @@ BEGIN
       DETAIL = format('unsupported event_type: %s', p_event_type);
   END IF;
 
-  v_lock_key := format('org:v4:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
@@ -951,9 +951,9 @@ BEGIN
 END;
 $$;
 
--- end: modules/orgunit/infrastructure/persistence/schema/00003_orgunit_v4_engine.sql
+-- end: modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql
 
--- begin: modules/orgunit/infrastructure/persistence/schema/00004_orgunit_v4_read.sql
+-- begin: modules/orgunit/infrastructure/persistence/schema/00004_orgunit_read.sql
 CREATE OR REPLACE FUNCTION orgunit.get_org_snapshot(p_tenant_id uuid, p_query_date date)
 RETURNS TABLE (
   org_id uuid,
@@ -1011,5 +1011,5 @@ BEGIN
 END;
 $$;
 
--- end: modules/orgunit/infrastructure/persistence/schema/00004_orgunit_v4_read.sql
+-- end: modules/orgunit/infrastructure/persistence/schema/00004_orgunit_read.sql
 

@@ -1,8 +1,8 @@
-# DEV-PLAN-030：Position v4（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
+# DEV-PLAN-030：Position（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
 **状态**: 草拟中（2026-01-04 04:20 UTC）
 
-> 本计划的定位：作为 Greenfield HR v4 的 Position/Assignment 子域，提供 **Position/Assignment 的 v4 权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026`（OrgUnit v4）对齐“事件 SoT + 同步投射 + 可重放”的范式。
+> 本计划的定位：作为 Greenfield HR 的 Position/Assignment 子域，提供 **Position/Assignment 的权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026`（OrgUnit）对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
 ## 1. 背景与上下文 (Context)
 - 当前 Position/Assignment 位于 `modules/org` 的 schema 与实现中（`org_positions/org_position_slices/org_assignments` 等），并强依赖 `org_nodes`（FK）。
@@ -11,9 +11,9 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 提供 Position/Assignment v4 的 schema（events + versions）与最小不变量集合（可识别、可验收、可重放）。
+- [ ] 提供 Position/Assignment 的 schema（events + versions）与最小不变量集合（可识别、可验收、可重放）。
 - [ ] 与 `DEV-PLAN-026` 的口径对齐：Valid Time=DATE、同日事件唯一、**同事务全量重放（delete+replay）**、versions **no-overlap + gapless**、One Door（`submit_*_event`）。
-- [ ] 表命名去掉 `org_` 前缀（见 3.2），并与 Job Catalog v4（`DEV-PLAN-029`）可组合使用。
+- [ ] 表命名去掉 `org_` 前缀（见 3.2），并与 Job Catalog（`DEV-PLAN-029`）可组合使用。
 
 ### 2.2 非目标（明确不做）
 - 不提供对旧 API/旧数据的兼容；迁移/退场策略必须另立 dev-plan 承接。
@@ -29,22 +29,22 @@
   - 触发器矩阵与本地必跑：`AGENTS.md`
   - 命令入口：`Makefile`
   - CI 门禁：`.github/workflows/quality-gates.yml`
-  - OrgUnit v4：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`
+  - OrgUnit：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
   - Greenfield HR 模块骨架（Position/Assignment 归属 staffing）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`（对齐 `docs/dev-plans/019-multi-tenant-toolchain.md` / `docs/dev-plans/019A-rls-tenant-isolation.md`）
-  - Job Catalog v4：`docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`
+  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（对齐 `docs/dev-plans/019-multi-tenant-toolchain.md` / `docs/dev-plans/019A-rls-tenant-isolation.md`）
+  - Job Catalog：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
   - 时间语义（Valid Time=DATE）：`docs/dev-plans/032-effective-date-day-granularity.md`
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 Kernel 边界（与 026 对齐）
 - **DB = Projection Kernel（权威）**：插入事件（幂等）+ 同步投射 versions + 不变量裁决 + 可 replay。
 - **Go = Command Facade**：鉴权/租户与操作者上下文 + 事务边界 + 调 Kernel + 错误映射到 `pkg/serrors`。
-- **多租户隔离（RLS）**：v4 tenant-scoped 表默认启用 PostgreSQL RLS（fail-closed；见 `DEV-PLAN-021`），因此访问 v4 的运行态必须 `RLS_ENFORCE=enforce`，并在事务内注入 `app.current_tenant`（对齐 `DEV-PLAN-019/019A`）。
+- **多租户隔离（RLS）**：tenant-scoped 表默认启用 PostgreSQL RLS（fail-closed；见 `DEV-PLAN-021`），因此运行态必须 `RLS_ENFORCE=enforce`，并在事务内注入 `app.current_tenant`（对齐 `DEV-PLAN-019/019A`）。
 - **One Door Policy（写入口唯一）**：除 `submit_*_event` 与运维 replay 外，应用层不得直写事件表/versions 表/identity 表（`positions/assignments`），不得直调 `apply_*_logic`。
 - **同步投射机制（选定）**：每次写入都触发**同事务全量重放**（delete+replay），保持逻辑简单，拒绝增量缝补逻辑分叉。
 
 ### 3.2 表命名：去掉 `org_` 前缀（评估结论：采用）
-**结论（选定）**：Position/Assignment v4 表统一去掉 `org_` 前缀，采用 `positions/position_events/position_versions` 与 `assignments/assignment_events/assignment_versions`。
+**结论（选定）**：Position/Assignment 表统一去掉 `org_` 前缀，采用 `positions/position_events/position_versions` 与 `assignments/assignment_events/assignment_versions`。
 
 原因：
 - `org_` 在本仓库中已强语义绑定 OrgUnit（组织树）子域；且在 `DEV-PLAN-016` 的模块划分中，Position（`modules/staffing`）与 Job Catalog（`modules/jobcatalog`）为独立子域，继续使用 `org_` 容易造成“权威表达边界”混淆。
@@ -147,7 +147,7 @@ CREATE TABLE position_versions (
   tenant_id     uuid NOT NULL,
 
   position_id   uuid NOT NULL,
-  org_unit_id   uuid NOT NULL,          -- 引用 OrgUnit v4 的 org_id（无 FK；由 Kernel 校验 as-of 存在性）
+  org_unit_id   uuid NOT NULL,          -- 引用 OrgUnit 的 org_id（无 FK；由 Kernel 校验 as-of 存在性）
 
   reports_to_position_id uuid NULL,
 
@@ -206,7 +206,7 @@ ALTER TABLE position_versions
   ```
 
 > 约束说明：
-> - `org_unit_id` 由于 OrgUnit v4 没有 identity 表，无法用 FK 表达；必须由 Kernel 在写入时校验“as-of 存在且可用”。
+> - `org_unit_id` 由于 OrgUnit 没有 identity 表，无法用 FK 表达；必须由 Kernel 在写入时校验“as-of 存在且可用”。
 > - `job_profile_id/job_level_id` 可做存在性 FK（指向 identity 表），但“as-of 有效”仍需 Kernel 校验。
 >
 > gapless 合同：
@@ -214,7 +214,7 @@ ALTER TABLE position_versions
 > - 由 `replay_position_versions` 生成并在事务内校验（避免实现期靠应用层“补洞”导致漂移）。
 
 ### 4.4 `assignments` / `assignment_events` / `assignment_versions`
-> Assignment v4 作为 Position v4 的同域能力一并落地（对齐 `DEV-PLAN-016`：归属 `modules/staffing`）。
+> Assignment 作为 Position 的同域能力一并落地（对齐 `DEV-PLAN-016`：归属 `modules/staffing`）。
 
 最小形状（合同约束重点）：
 - `assignment_events`：同 `position_events`，不变量为 `UNIQUE(tenant_id, assignment_id, effective_date)`。
@@ -311,7 +311,7 @@ CREATE INDEX assignment_versions_subject_day_gist
 ### 5.1 并发互斥（Advisory Lock）
 **锁粒度（选定）**：同一 `tenant_id` 的 Position+Assignment 写入串行化，简化 `reports_to_position_id` 与占编等跨实体不变量的裁决。
 
-锁 key（文本）：`org:v4:<tenant_id>:Position`
+锁 key（文本）：`org:write-lock:<tenant_id>:Position`
 
 ### 5.2 `submit_position_event`（同事务全量重放）
 函数签名（建议，与 026 对齐）：
@@ -330,7 +330,7 @@ CREATE OR REPLACE FUNCTION submit_position_event(
 
 合同语义（必须）：
 0) 多租户上下文（RLS）：函数开头必须断言 `p_tenant_id` 与 `app.current_tenant` 一致（对齐 `DEV-PLAN-021`）。
-1) 获取互斥锁：`org:v4:<tenant_id>:Position`（同一事务内）。
+1) 获取互斥锁：`org:write-lock:<tenant_id>:Position`（同一事务内）。
 2) 参数校验：`p_event_type` 必须为 `CREATE/UPDATE/DISABLE`；`p_payload` 必须为 object（空则视为 `{}`）。
 3) identity 处理：
    - `CREATE`：从 `payload.code` 创建 `positions` 行（并可设置 `is_auto_created`）；若已存在则拒绝（`POSITION_ALREADY_EXISTS`）。
@@ -411,7 +411,7 @@ CREATE OR REPLACE FUNCTION submit_assignment_event(
 
 合同语义（必须）：
 0) 多租户上下文（RLS）：函数开头必须断言 `p_tenant_id` 与 `app.current_tenant` 一致（对齐 `DEV-PLAN-021`）。
-1) 获取互斥锁：`org:v4:<tenant_id>:Position`（同一事务内）。
+1) 获取互斥锁：`org:write-lock:<tenant_id>:Position`（同一事务内）。
 2) identity 处理：
    - `CREATE`：创建 `assignments` 行；若已存在则拒绝（`ASSIGNMENT_ALREADY_EXISTS`）。
    - 非 `CREATE`：要求 `assignments` 行已存在；否则拒绝（`ASSIGNMENT_NOT_FOUND`）。
@@ -469,7 +469,7 @@ CREATE OR REPLACE FUNCTION get_assignment_snapshot(
 | 占编超限 | `submit_assignment_event` 校验失败 | DB exception `MESSAGE` | `ASSIGNMENT_CAPACITY_EXCEEDED` |
 
 ## 8. 测试与验收标准 (Acceptance Criteria)
-- [ ] RLS（对齐 021）：缺失 `app.current_tenant` 时对 v4 表的读写必须 fail-closed；tenant mismatch 必须稳定失败可映射。
+- [ ] RLS（对齐 021）：缺失 `app.current_tenant` 时对 tenant-scoped 表的读写必须 fail-closed；tenant mismatch 必须稳定失败可映射。
 - [ ] 事件幂等：同 `event_id` 重试不重复投射。
 - [ ] 全量重放：每次写入都在同一事务内 delete+replay 对应 versions，且写后读强一致。
 - [ ] 同日唯一：同一实体同日提交第二条事件被拒绝且可稳定映射错误码。
@@ -484,6 +484,6 @@ CREATE OR REPLACE FUNCTION get_assignment_snapshot(
 - Position：`SELECT replay_position_versions('<tenant_id>'::uuid, '<position_id>'::uuid);`
 - Assignment：`SELECT replay_assignment_versions('<tenant_id>'::uuid, '<assignment_id>'::uuid);`
 
-> 建议在执行前复用同一把维护互斥锁（`org:v4:<tenant_id>:Position`）确保与在线写入互斥。
+> 建议在执行前复用同一把维护互斥锁（`org:write-lock:<tenant_id>:Position`）确保与在线写入互斥。
 
 > 多租户隔离（RLS，见 `DEV-PLAN-021`）：replay 必须在显式事务内先注入 `app.current_tenant`，否则会 fail-closed。

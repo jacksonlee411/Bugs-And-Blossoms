@@ -24,24 +24,24 @@ type OrgUnitStore interface {
 	CreateNode(ctx context.Context, tenantID string, name string) (OrgUnitNode, error)
 }
 
-type OrgUnitNodesV4Reader interface {
-	ListNodesV4(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
+type OrgUnitNodesCurrentReader interface {
+	ListNodesCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
 }
 
-type OrgUnitNodesV4Writer interface {
-	CreateNodeV4(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error)
+type OrgUnitNodesCurrentWriter interface {
+	CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error)
 }
 
-type OrgUnitNodesV4Renamer interface {
-	RenameNodeV4(ctx context.Context, tenantID string, effectiveDate string, orgID string, newName string) error
+type OrgUnitNodesCurrentRenamer interface {
+	RenameNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, newName string) error
 }
 
-type OrgUnitNodesV4Mover interface {
-	MoveNodeV4(ctx context.Context, tenantID string, effectiveDate string, orgID string, newParentID string) error
+type OrgUnitNodesCurrentMover interface {
+	MoveNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, newParentID string) error
 }
 
-type OrgUnitNodesV4Disabler interface {
-	DisableNodeV4(ctx context.Context, tenantID string, effectiveDate string, orgID string) error
+type OrgUnitNodesCurrentDisabler interface {
+	DisableNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string) error
 }
 
 type orgUnitPGStore struct {
@@ -95,7 +95,7 @@ ORDER BY created_at DESC
 	return out, nil
 }
 
-func (s *orgUnitPGStore) ListNodesV4(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
+func (s *orgUnitPGStore) ListNodesCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -190,7 +190,7 @@ WHERE tenant_id = $1::uuid AND node_id = $2::uuid
 	return OrgUnitNode{ID: id, Name: name, CreatedAt: createdAt}, nil
 }
 
-func (s *orgUnitPGStore) CreateNodeV4(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error) {
+func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return OrgUnitNode{}, err
@@ -254,7 +254,7 @@ WHERE tenant_id = $1::uuid AND event_id = $2::uuid
 	return OrgUnitNode{ID: orgID, Name: name, CreatedAt: createdAt}, nil
 }
 
-func (s *orgUnitPGStore) RenameNodeV4(ctx context.Context, tenantID string, effectiveDate string, orgID string, newName string) error {
+func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, newName string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -305,7 +305,7 @@ SELECT orgunit.submit_org_event(
 	return nil
 }
 
-func (s *orgUnitPGStore) MoveNodeV4(ctx context.Context, tenantID string, effectiveDate string, orgID string, newParentID string) error {
+func (s *orgUnitPGStore) MoveNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, newParentID string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -356,7 +356,7 @@ SELECT orgunit.submit_org_event(
 	return nil
 }
 
-func (s *orgUnitPGStore) DisableNodeV4(ctx context.Context, tenantID string, effectiveDate string, orgID string) error {
+func (s *orgUnitPGStore) DisableNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -428,15 +428,15 @@ func (s *orgUnitMemoryStore) CreateNode(_ context.Context, tenantID string, name
 	return n, nil
 }
 
-func (s *orgUnitMemoryStore) ListNodesV4(_ context.Context, tenantID string, _ string) ([]OrgUnitNode, error) {
+func (s *orgUnitMemoryStore) ListNodesCurrent(_ context.Context, tenantID string, _ string) ([]OrgUnitNode, error) {
 	return s.ListNodes(context.Background(), tenantID)
 }
 
-func (s *orgUnitMemoryStore) CreateNodeV4(_ context.Context, tenantID string, _ string, name string, _ string) (OrgUnitNode, error) {
+func (s *orgUnitMemoryStore) CreateNodeCurrent(_ context.Context, tenantID string, _ string, name string, _ string) (OrgUnitNode, error) {
 	return s.CreateNode(context.Background(), tenantID, name)
 }
 
-func (s *orgUnitMemoryStore) RenameNodeV4(_ context.Context, tenantID string, _ string, orgID string, newName string) error {
+func (s *orgUnitMemoryStore) RenameNodeCurrent(_ context.Context, tenantID string, _ string, orgID string, newName string) error {
 	if strings.TrimSpace(orgID) == "" {
 		return errors.New("org_id is required")
 	}
@@ -455,7 +455,7 @@ func (s *orgUnitMemoryStore) RenameNodeV4(_ context.Context, tenantID string, _ 
 	return errors.New("org_id not found")
 }
 
-func (s *orgUnitMemoryStore) MoveNodeV4(_ context.Context, tenantID string, _ string, orgID string, _ string) error {
+func (s *orgUnitMemoryStore) MoveNodeCurrent(_ context.Context, tenantID string, _ string, orgID string, _ string) error {
 	if strings.TrimSpace(orgID) == "" {
 		return errors.New("org_id is required")
 	}
@@ -469,7 +469,7 @@ func (s *orgUnitMemoryStore) MoveNodeV4(_ context.Context, tenantID string, _ st
 	return errors.New("org_id not found")
 }
 
-func (s *orgUnitMemoryStore) DisableNodeV4(_ context.Context, tenantID string, _ string, orgID string) error {
+func (s *orgUnitMemoryStore) DisableNodeCurrent(_ context.Context, tenantID string, _ string, orgID string) error {
 	if strings.TrimSpace(orgID) == "" {
 		return errors.New("org_id is required")
 	}
@@ -497,10 +497,10 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 	}
 	preferRead := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("read")))
 	if preferRead == "" {
-		preferRead = "v4"
+		preferRead = "current"
 	}
-	if preferRead != "legacy" && preferRead != "v4" {
-		preferRead = "v4"
+	if preferRead != "legacy" && preferRead != "current" {
+		preferRead = "current"
 	}
 
 	listNodes := func(errHint string) ([]OrgUnitNode, string) {
@@ -514,7 +514,7 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			return hint + "；" + msg
 		}
 
-		if preferRead == "v4" {
+		if preferRead == "current" {
 			if _, err := time.Parse("2006-01-02", asOf); err != nil {
 				nodes, legacyErr := store.ListNodes(r.Context(), tenant.ID)
 				if legacyErr != nil {
@@ -523,31 +523,31 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 				return nodes, mergeMsg(errHint, "as_of 无效，已回退到 legacy: "+err.Error())
 			}
 
-			v4Store, ok := store.(OrgUnitNodesV4Reader)
+			currentStore, ok := store.(OrgUnitNodesCurrentReader)
 			if !ok {
 				nodes, err := store.ListNodes(r.Context(), tenant.ID)
 				if err != nil {
-					return nil, mergeMsg(errHint, "v4 reader 未配置，且 legacy 读取失败: "+err.Error())
+					return nil, mergeMsg(errHint, "current reader 未配置，且 legacy 读取失败: "+err.Error())
 				}
-				return nodes, mergeMsg(errHint, "v4 reader 未配置，已回退到 legacy")
+				return nodes, mergeMsg(errHint, "current reader 未配置，已回退到 legacy")
 			}
 
-			nodesV4, err := v4Store.ListNodesV4(r.Context(), tenant.ID, asOf)
-			if err == nil && len(nodesV4) > 0 {
-				return nodesV4, mergeMsg(errHint, "")
+			currentNodes, err := currentStore.ListNodesCurrent(r.Context(), tenant.ID, asOf)
+			if err == nil && len(currentNodes) > 0 {
+				return currentNodes, mergeMsg(errHint, "")
 			}
 
 			nodes, legacyErr := store.ListNodes(r.Context(), tenant.ID)
 			if legacyErr != nil {
 				if err != nil {
-					return nil, mergeMsg(errHint, "v4 读取失败: "+err.Error()+"；且 legacy 读取失败: "+legacyErr.Error())
+					return nil, mergeMsg(errHint, "current 读取失败: "+err.Error()+"；且 legacy 读取失败: "+legacyErr.Error())
 				}
 				return nil, mergeMsg(errHint, "legacy 读取失败: "+legacyErr.Error())
 			}
 			if err != nil {
-				return nodes, mergeMsg(errHint, "v4 读取失败，已回退到 legacy: "+err.Error())
+				return nodes, mergeMsg(errHint, "current 读取失败，已回退到 legacy: "+err.Error())
 			}
-			return nodes, mergeMsg(errHint, "v4 快照为空，已回退到 legacy")
+			return nodes, mergeMsg(errHint, "current 快照为空，已回退到 legacy")
 		}
 
 		nodes, err := store.ListNodes(r.Context(), tenant.ID)
@@ -574,8 +574,8 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 		}
 
 		if action == "rename" || action == "move" || action == "disable" {
-			if preferRead != "v4" {
-				nodes, errMsg := listNodes(action + " 仅支持 v4 模式")
+			if preferRead != "current" {
+				nodes, errMsg := listNodes(action + " 仅支持 current 模式")
 				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 				return
 			}
@@ -606,41 +606,41 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 					return
 				}
 
-				renamer, ok := store.(OrgUnitNodesV4Renamer)
+				renamer, ok := store.(OrgUnitNodesCurrentRenamer)
 				if !ok {
-					nodes, errMsg := listNodes("v4 renamer 未配置：请稍后再试")
+					nodes, errMsg := listNodes("current renamer 未配置：请稍后再试")
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 					return
 				}
 
-				if err := renamer.RenameNodeV4(r.Context(), tenant.ID, effectiveDate, orgID, newName); err != nil {
+				if err := renamer.RenameNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newName); err != nil {
 					nodes, errMsg := listNodes(err.Error())
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 					return
 				}
 			case "move":
 				newParentID := strings.TrimSpace(r.Form.Get("new_parent_id"))
-				mover, ok := store.(OrgUnitNodesV4Mover)
+				mover, ok := store.(OrgUnitNodesCurrentMover)
 				if !ok {
-					nodes, errMsg := listNodes("v4 mover 未配置：请稍后再试")
+					nodes, errMsg := listNodes("current mover 未配置：请稍后再试")
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 					return
 				}
 
-				if err := mover.MoveNodeV4(r.Context(), tenant.ID, effectiveDate, orgID, newParentID); err != nil {
+				if err := mover.MoveNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newParentID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 					return
 				}
 			case "disable":
-				disabler, ok := store.(OrgUnitNodesV4Disabler)
+				disabler, ok := store.(OrgUnitNodesCurrentDisabler)
 				if !ok {
-					nodes, errMsg := listNodes("v4 disabler 未配置：请稍后再试")
+					nodes, errMsg := listNodes("current disabler 未配置：请稍后再试")
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 					return
 				}
 
-				if err := disabler.DisableNodeV4(r.Context(), tenant.ID, effectiveDate, orgID); err != nil {
+				if err := disabler.DisableNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 					return
@@ -648,7 +648,7 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			default:
 			}
 
-			http.Redirect(w, r, "/org/nodes?read=v4&as_of="+effectiveDate, http.StatusSeeOther)
+			http.Redirect(w, r, "/org/nodes?read=current&as_of="+effectiveDate, http.StatusSeeOther)
 			return
 		}
 
@@ -658,7 +658,7 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 			return
 		}
-		if preferRead == "v4" {
+		if preferRead == "current" {
 			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
 			if effectiveDate == "" {
 				effectiveDate = asOf
@@ -670,19 +670,19 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 				return
 			}
 
-			v4Writer, ok := store.(OrgUnitNodesV4Writer)
+			currentWriter, ok := store.(OrgUnitNodesCurrentWriter)
 			if !ok {
-				nodes, errMsg := listNodes("v4 writer 未配置：请切回 legacy 模式写入")
+				nodes, errMsg := listNodes("current writer 未配置：请切回 legacy 模式写入")
 				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 				return
 			}
 
-			if _, err := v4Writer.CreateNodeV4(r.Context(), tenant.ID, effectiveDate, name, parentID); err != nil {
+			if _, err := currentWriter.CreateNodeCurrent(r.Context(), tenant.ID, effectiveDate, name, parentID); err != nil {
 				nodes, errMsg := listNodes(err.Error())
 				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, preferRead, asOf))
 				return
 			}
-			http.Redirect(w, r, "/org/nodes?read=v4&as_of="+effectiveDate, http.StatusSeeOther)
+			http.Redirect(w, r, "/org/nodes?read=current&as_of="+effectiveDate, http.StatusSeeOther)
 			return
 		}
 
@@ -708,10 +708,10 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, readMode 
 	b.WriteString("<h1>OrgUnit</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
 	b.WriteString("<p>Read: <code>" + html.EscapeString(readMode) + "</code></p>")
-	b.WriteString(`<p><a href="/org/nodes?read=legacy&as_of=` + html.EscapeString(asOf) + `">Use legacy read</a> | <a href="/org/nodes?read=v4&as_of=` + html.EscapeString(asOf) + `">Use v4 read</a></p>`)
-	if readMode == "v4" {
+	b.WriteString(`<p><a href="/org/nodes?read=legacy&as_of=` + html.EscapeString(asOf) + `">Use legacy read</a> | <a href="/org/nodes?read=current&as_of=` + html.EscapeString(asOf) + `">Use current read</a></p>`)
+	if readMode == "current" {
 		b.WriteString(`<form method="GET" action="/org/nodes">`)
-		b.WriteString(`<input type="hidden" name="read" value="v4" />`)
+		b.WriteString(`<input type="hidden" name="read" value="current" />`)
 		b.WriteString(`<label>As-of <input type="date" name="as_of" value="` + html.EscapeString(asOf) + `" /></label> `)
 		b.WriteString(`<button type="submit">Apply</button>`)
 		b.WriteString(`</form>`)
@@ -722,11 +722,11 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, readMode 
 	}
 
 	postAction := "/org/nodes"
-	if readMode == "v4" {
-		postAction += "?read=v4&as_of=" + html.EscapeString(asOf)
+	if readMode == "current" {
+		postAction += "?read=current&as_of=" + html.EscapeString(asOf)
 	}
 	b.WriteString(`<form method="POST" action="` + postAction + `">`)
-	if readMode == "v4" {
+	if readMode == "current" {
 		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
 		b.WriteString(`<label>Parent ID (optional) <input name="parent_id" /></label><br/>`)
 	}
@@ -744,7 +744,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, readMode 
 	for _, n := range nodes {
 		b.WriteString("<li>")
 		b.WriteString(html.EscapeString(n.Name) + " <code>" + html.EscapeString(n.ID) + "</code>")
-		if readMode == "v4" {
+		if readMode == "current" {
 			b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
 			b.WriteString(`<input type="hidden" name="action" value="rename" />`)
 			b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)

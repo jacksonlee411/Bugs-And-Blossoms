@@ -1,9 +1,9 @@
-# DEV-PLAN-028：SetID 管理（V4，Greenfield）
+# DEV-PLAN-028：SetID 管理（Greenfield）
 
 **状态**: 草拟中（2026-01-06 15:10 UTC）
 
-> 适用范围：**V4 Greenfield 全新实现**（路线图见 `DEV-PLAN-009`）。  
-> 本文研究 PeopleSoft 的 SetID 机制，并提出 V4 引入 SetID 的最小可执行方案：在同一租户内实现“主数据按业务单元共享/隔离”的配置能力，且可被门禁验证，避免实现期各模块各写一套数据共享规则导致漂移。
+> 适用范围：**Greenfield 全新实现**（路线图见 `DEV-PLAN-009`）。  
+> 本文研究 PeopleSoft 的 SetID 机制，并提出引入 SetID 的最小可执行方案：在同一租户内实现“主数据按业务单元共享/隔离”的配置能力，且可被门禁验证，避免实现期各模块各写一套数据共享规则导致漂移。
 
 ## 1. PeopleSoft SetID 机制：作用与目的（摘要）
 
@@ -21,20 +21,20 @@
 - **Record Group**：把一组主数据表归为同一类（同一组共享同一个 SetID 选择），避免每张表单独配置。
 - **Set Control（映射）**：`(business_unit_id, record_group) -> setid` 的确定性映射，保证每次查询/写入都能稳定得到唯一 SetID。
 
-> V4 引入 SetID 的目标是复用上述“确定性映射 + 共享/隔离”的思想，而不是复刻 PeopleSoft 的全部页面/术语与历史包袱。
+> 引入 SetID 的目标是复用上述“确定性映射 + 共享/隔离”的思想，而不是复刻 PeopleSoft 的全部页面/术语与历史包袱。
 
 ## 2. 背景与上下文 (Context)
 
-- V4 采用 Greenfield 全新实施（路线图见 `DEV-PLAN-009`），需要在早期冻结“主数据共享/隔离”的权威机制，否则后续各模块会用不同的方式表达同一需求（例如：用 orgunit path、用 tenant 级别全局表、用 hardcode 前缀等）。
+- Greenfield 全新实施（路线图见 `DEV-PLAN-009`），需要在早期冻结“主数据共享/隔离”的权威机制，否则后续各模块会用不同的方式表达同一需求（例如：用 orgunit path、用 tenant 级别全局表、用 hardcode 前缀等）。
 - SetID 属于“数据建模/组织治理”的横切能力，主要影响 `jobcatalog/orgunit/staffing` 的主数据读取与配置 UI。
 
 ## 3. 目标与非目标 (Goals & Non-Goals)
 
 ### 3.1 核心目标
 
-- [ ] 在 V4 引入 SetID 作为“同租户内的主数据数据集”能力：同一编码可在不同 SetID 下并行存在。
+- [ ] 引入 SetID 作为“同租户内的主数据数据集”能力：同一编码可在不同 SetID 下并行存在。
 - [ ] 引入 **Set Control**：对每个控制值（后续对齐 Business Unit）和每个 Record Group，稳定映射到唯一 SetID（无歧义、可测试）。
-- [ ] 为 V4 的主数据表提供一致的建模约束：`tenant_id + setid + business_key + valid_time(date)`。
+- [ ] 为主数据表提供一致的建模约束：`tenant_id + setid + business_key + valid_time(date)`。
 - [ ] 提供最小管理入口（API + UI）：创建/禁用 SetID、配置 set control value、维护映射矩阵。
 - [ ] 将关键约束固化为可执行门禁（tests/gates），避免实现期 drift。
 
@@ -42,7 +42,7 @@
 
 - 不做跨租户共享 SetID（RLS/tenant 是硬边界，SetID 仅用于同租户内共享/隔离）。
 - 不做“多 SetID 合并视图/union”（一次查询只使用一个解析出的 SetID；不引入层级继承或叠加规则）。
-- 不做 PeopleSoft 全量 UI 复刻；只保留 V4 需要的最小配置与可验证性。
+- 不做 PeopleSoft 全量 UI 复刻；只保留需要的最小配置与可验证性。
 
 ## 4. 工具链与门禁（SSOT 引用）
 
@@ -51,10 +51,10 @@
 - 触发器矩阵与本地必跑：`AGENTS.md`
 - 命令入口：`Makefile`
 - CI 门禁：`.github/workflows/quality-gates.yml`
-- V4 模块边界（将影响哪些模块）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- V4 Tenancy/AuthN 与主体模型：`docs/dev-plans/019-tenant-and-authn-v4.md`
-- V4 SuperAdmin 控制面认证与会话：`docs/dev-plans/023-superadmin-authn-v4.md`
-- V4 RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
+- 模块边界（将影响哪些模块）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
+- Tenancy/AuthN 与主体模型：`docs/dev-plans/019-tenant-and-authn.md`
+- SuperAdmin 控制面认证与会话：`docs/dev-plans/023-superadmin-authn.md`
+- RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - Valid Time=DATE 口径：`docs/dev-plans/032-effective-date-day-granularity.md`
 
 ## 5. 关键决策（ADR 摘要）
@@ -83,7 +83,7 @@
 
 - **选定**：Record Group 为稳定枚举（代码侧 + DB 侧约束），新增 group 必须走 dev-plan 并补齐门禁。
 - **选定（冻结）**：Record Group 不做运行时 enable/disable；稳定枚举列表即“启用清单”。如未来需要停用，必须另起 dev-plan 并补齐迁移/门禁策略。
-- **V4 MVP group**（可扩展，但必须从最小集合开始）：
+- **MVP group**（可扩展，但必须从最小集合开始）：
   - `jobcatalog`：职位分类主数据（Job Family/Job Profile/Level 等）
   - `orgunit`：组织基础主数据（部门/地点等，按实际建模落地）
 
@@ -289,7 +289,7 @@ SetID 解析 `ResolveSetID(tenant_id, business_unit_id, record_group)` 的失败
   - 理由：最大化对齐仓库 One Door 不变量；天然具备幂等/审计；避免未来引入第二套“非事件写入口”标准。
   - 代价：需要为配置域定义最小事件类型与投射函数（但规模可控）。
 - **不选（暂不做）**：仅提供“直接写配置表”的 kernel 函数（例如 `upsert_setid(...)` / `put_setid_mappings(...)`），不做事件 SoT。
-  - 理由：实现更直接；代价是与 v4 主干写模型出现分叉，需要额外说明为何不违反 One Door（并补齐审计/幂等策略）。
+  - 理由：实现更直接；代价是与主干写模型出现分叉，需要额外说明为何不违反 One Door（并补齐审计/幂等策略）。
 
 ## 12. Simple > Easy（DEV-PLAN-003）停止线
 

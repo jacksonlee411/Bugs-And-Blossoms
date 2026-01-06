@@ -22,7 +22,7 @@ func TestOrgUnitMemoryStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RenameNodeV4(context.Background(), "t1", "2026-01-06", created.ID, "Hello"); err != nil {
+	if err := s.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", created.ID, "Hello"); err != nil {
 		t.Fatal(err)
 	}
 	nodes, err := s.ListNodes(context.Background(), "t1")
@@ -40,48 +40,48 @@ func TestOrgUnitMemoryStore(t *testing.T) {
 	}
 }
 
-func TestOrgUnitMemoryStore_RenameNodeV4_Errors(t *testing.T) {
+func TestOrgUnitMemoryStore_RenameNodeCurrent_Errors(t *testing.T) {
 	s := newOrgUnitMemoryStore()
 	created, err := s.CreateNode(context.Background(), "t1", "A")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.RenameNodeV4(context.Background(), "t1", "2026-01-06", "", "B"); err == nil {
+	if err := s.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", "", "B"); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.RenameNodeV4(context.Background(), "t1", "2026-01-06", created.ID, ""); err == nil {
+	if err := s.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", created.ID, ""); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.RenameNodeV4(context.Background(), "t1", "2026-01-06", "nope", "B"); err == nil {
+	if err := s.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", "nope", "B"); err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestOrgUnitMemoryStore_MoveDisableNodeV4(t *testing.T) {
+func TestOrgUnitMemoryStore_MoveDisableNodeCurrent(t *testing.T) {
 	s := newOrgUnitMemoryStore()
 	created, err := s.CreateNode(context.Background(), "t1", "A")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.MoveNodeV4(context.Background(), "t1", "2026-01-06", "", ""); err == nil {
+	if err := s.MoveNodeCurrent(context.Background(), "t1", "2026-01-06", "", ""); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.MoveNodeV4(context.Background(), "t1", "2026-01-06", "nope", ""); err == nil {
+	if err := s.MoveNodeCurrent(context.Background(), "t1", "2026-01-06", "nope", ""); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.MoveNodeV4(context.Background(), "t1", "2026-01-06", created.ID, ""); err != nil {
+	if err := s.MoveNodeCurrent(context.Background(), "t1", "2026-01-06", created.ID, ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 
-	if err := s.DisableNodeV4(context.Background(), "t1", "2026-01-06", ""); err == nil {
+	if err := s.DisableNodeCurrent(context.Background(), "t1", "2026-01-06", ""); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.DisableNodeV4(context.Background(), "t1", "2026-01-06", "nope"); err == nil {
+	if err := s.DisableNodeCurrent(context.Background(), "t1", "2026-01-06", "nope"); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.DisableNodeV4(context.Background(), "t1", "2026-01-06", created.ID); err != nil {
+	if err := s.DisableNodeCurrent(context.Background(), "t1", "2026-01-06", created.ID); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 
@@ -227,7 +227,7 @@ func TestHandleOrgNodes_POST_SuccessRedirect(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-06" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=current&as_of=2026-01-06" {
 		t.Fatalf("location=%q", loc)
 	}
 }
@@ -248,8 +248,8 @@ func TestHandleOrgNodes_POST_SuccessRedirect_PreservesQuery(t *testing.T) {
 	}
 }
 
-type v4WriteSpyStore struct {
-	v4Called      int
+type currentWriteSpyStore struct {
+	currentCalled int
 	args          []string
 	renameCalled  int
 	renameArgs    []string
@@ -258,18 +258,20 @@ type v4WriteSpyStore struct {
 	disableCalled int
 	disableArgs   []string
 	err           error
-	v4Nodes       []OrgUnitNode
+	currentNodes  []OrgUnitNode
 }
 
-func (s *v4WriteSpyStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) { return nil, nil }
-func (s *v4WriteSpyStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
+func (s *currentWriteSpyStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
+	return nil, nil
+}
+func (s *currentWriteSpyStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
 	return OrgUnitNode{}, nil
 }
-func (s *v4WriteSpyStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode, error) {
-	return s.v4Nodes, nil
+func (s *currentWriteSpyStore) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
+	return s.currentNodes, nil
 }
-func (s *v4WriteSpyStore) CreateNodeV4(_ context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error) {
-	s.v4Called++
+func (s *currentWriteSpyStore) CreateNodeCurrent(_ context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error) {
+	s.currentCalled++
 	s.args = []string{tenantID, effectiveDate, name, parentID}
 	if s.err != nil {
 		return OrgUnitNode{}, s.err
@@ -277,7 +279,7 @@ func (s *v4WriteSpyStore) CreateNodeV4(_ context.Context, tenantID string, effec
 	return OrgUnitNode{ID: "u1", Name: name, CreatedAt: time.Unix(1, 0).UTC()}, nil
 }
 
-func (s *v4WriteSpyStore) RenameNodeV4(_ context.Context, tenantID string, effectiveDate string, orgID string, newName string) error {
+func (s *currentWriteSpyStore) RenameNodeCurrent(_ context.Context, tenantID string, effectiveDate string, orgID string, newName string) error {
 	s.renameCalled++
 	s.renameArgs = []string{tenantID, effectiveDate, orgID, newName}
 	if s.err != nil {
@@ -286,7 +288,7 @@ func (s *v4WriteSpyStore) RenameNodeV4(_ context.Context, tenantID string, effec
 	return nil
 }
 
-func (s *v4WriteSpyStore) MoveNodeV4(_ context.Context, tenantID string, effectiveDate string, orgID string, newParentID string) error {
+func (s *currentWriteSpyStore) MoveNodeCurrent(_ context.Context, tenantID string, effectiveDate string, orgID string, newParentID string) error {
 	s.moveCalled++
 	s.moveArgs = []string{tenantID, effectiveDate, orgID, newParentID}
 	if s.err != nil {
@@ -295,7 +297,7 @@ func (s *v4WriteSpyStore) MoveNodeV4(_ context.Context, tenantID string, effecti
 	return nil
 }
 
-func (s *v4WriteSpyStore) DisableNodeV4(_ context.Context, tenantID string, effectiveDate string, orgID string) error {
+func (s *currentWriteSpyStore) DisableNodeCurrent(_ context.Context, tenantID string, effectiveDate string, orgID string) error {
 	s.disableCalled++
 	s.disableArgs = []string{tenantID, effectiveDate, orgID}
 	if s.err != nil {
@@ -304,15 +306,17 @@ func (s *v4WriteSpyStore) DisableNodeV4(_ context.Context, tenantID string, effe
 	return nil
 }
 
-type v4ReadOnlyStore struct {
+type currentReadOnlyStore struct {
 	nodes []OrgUnitNode
 }
 
-func (s v4ReadOnlyStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) { return nil, nil }
-func (s v4ReadOnlyStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
+func (s currentReadOnlyStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
+	return nil, nil
+}
+func (s currentReadOnlyStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
 	return OrgUnitNode{}, nil
 }
-func (s v4ReadOnlyStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode, error) {
+func (s currentReadOnlyStore) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
 	return s.nodes, nil
 }
 
@@ -327,10 +331,10 @@ func (s legacyOnlyStore) CreateNode(ctx context.Context, tenantID string, name s
 	return s.inner.CreateNode(ctx, tenantID, name)
 }
 
-func TestHandleOrgNodes_POST_ReadV4_UsesV4Writer(t *testing.T) {
-	store := &v4WriteSpyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_UsesCurrentWriter(t *testing.T) {
+	store := &currentWriteSpyStore{}
 	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-05&parent_id=u0")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -339,8 +343,8 @@ func TestHandleOrgNodes_POST_ReadV4_UsesV4Writer(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if store.v4Called != 1 {
-		t.Fatalf("v4Called=%d", store.v4Called)
+	if store.currentCalled != 1 {
+		t.Fatalf("currentCalled=%d", store.currentCalled)
 	}
 	if store.renameCalled != 0 {
 		t.Fatalf("renameCalled=%d", store.renameCalled)
@@ -354,15 +358,15 @@ func TestHandleOrgNodes_POST_ReadV4_UsesV4Writer(t *testing.T) {
 	if got := strings.Join(store.args, "|"); got != "t1|2026-01-05|Hello|u0" {
 		t.Fatalf("args=%q", got)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-05" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=current&as_of=2026-01-05" {
 		t.Fatalf("location=%q", loc)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_DefaultsEffectiveDateToAsOf(t *testing.T) {
-	store := &v4WriteSpyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_DefaultsEffectiveDateToAsOf(t *testing.T) {
+	store := &currentWriteSpyStore{}
 	body := bytes.NewBufferString("name=Hello")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -376,23 +380,25 @@ func TestHandleOrgNodes_POST_ReadV4_DefaultsEffectiveDateToAsOf(t *testing.T) {
 	}
 }
 
-type v4CreateOnlyStore struct{}
+type currentCreateOnlyStore struct{}
 
-func (v4CreateOnlyStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) { return nil, nil }
-func (v4CreateOnlyStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
+func (currentCreateOnlyStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
+	return nil, nil
+}
+func (currentCreateOnlyStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
 	return OrgUnitNode{}, nil
 }
-func (v4CreateOnlyStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode, error) {
-	return []OrgUnitNode{{ID: "v1", Name: "V"}}, nil
+func (currentCreateOnlyStore) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
+	return []OrgUnitNode{{ID: "c1", Name: "C"}}, nil
 }
-func (v4CreateOnlyStore) CreateNodeV4(context.Context, string, string, string, string) (OrgUnitNode, error) {
+func (currentCreateOnlyStore) CreateNodeCurrent(context.Context, string, string, string, string) (OrgUnitNode, error) {
 	return OrgUnitNode{}, nil
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Rename_UsesRenamer(t *testing.T) {
-	store := &v4WriteSpyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_Rename_UsesRenamer(t *testing.T) {
+	store := &currentWriteSpyStore{}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=New&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -407,15 +413,15 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_UsesRenamer(t *testing.T) {
 	if got := strings.Join(store.renameArgs, "|"); got != "t1|2026-01-05|u1|New" {
 		t.Fatalf("args=%q", got)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-05" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=current&as_of=2026-01-05" {
 		t.Fatalf("location=%q", loc)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Rename_DefaultsEffectiveDateToAsOf(t *testing.T) {
-	store := &v4WriteSpyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_Rename_DefaultsEffectiveDateToAsOf(t *testing.T) {
+	store := &currentWriteSpyStore{}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=New")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -429,10 +435,10 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_DefaultsEffectiveDateToAsOf(t *testin
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Rename_BadEffectiveDate(t *testing.T) {
-	store := &v4WriteSpyStore{v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
+func TestHandleOrgNodes_POST_ReadCurrent_Rename_BadEffectiveDate(t *testing.T) {
+	store := &currentWriteSpyStore{currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}}}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=New&effective_date=bad")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -449,13 +455,13 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_BadEffectiveDate(t *testing.T) {
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Rename_Error(t *testing.T) {
-	store := &v4WriteSpyStore{
-		err:     errors.New("boom"),
-		v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}},
+func TestHandleOrgNodes_POST_ReadCurrent_Rename_Error(t *testing.T) {
+	store := &currentWriteSpyStore{
+		err:          errors.New("boom"),
+		currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}},
 	}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=New&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -467,15 +473,15 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_Error(t *testing.T) {
 	if store.renameCalled != 1 {
 		t.Fatalf("renameCalled=%d", store.renameCalled)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("boom")) || !bytes.Contains([]byte(bodyOut), []byte("V")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("boom")) || !bytes.Contains([]byte(bodyOut), []byte("C")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Rename_MissingOrgID(t *testing.T) {
-	store := &v4WriteSpyStore{v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
+func TestHandleOrgNodes_POST_ReadCurrent_Rename_MissingOrgID(t *testing.T) {
+	store := &currentWriteSpyStore{currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}}}
 	body := bytes.NewBufferString("action=rename&org_id=&new_name=New&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -492,10 +498,10 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_MissingOrgID(t *testing.T) {
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Rename_MissingNewName(t *testing.T) {
-	store := &v4WriteSpyStore{v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
+func TestHandleOrgNodes_POST_ReadCurrent_Rename_MissingNewName(t *testing.T) {
+	store := &currentWriteSpyStore{currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}}}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -512,10 +518,10 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_MissingNewName(t *testing.T) {
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Rename_MissingRenamer(t *testing.T) {
-	store := v4CreateOnlyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_Rename_MissingRenamer(t *testing.T) {
+	store := currentCreateOnlyStore{}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=New&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -524,7 +530,7 @@ func TestHandleOrgNodes_POST_ReadV4_Rename_MissingRenamer(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("v4 renamer 未配置")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("current renamer 未配置")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -542,15 +548,15 @@ func TestHandleOrgNodes_POST_ReadLegacy_RenameRejected(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("rename 仅支持 v4 模式")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("rename 仅支持 current 模式")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Move_UsesMover(t *testing.T) {
-	store := &v4WriteSpyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_Move_UsesMover(t *testing.T) {
+	store := &currentWriteSpyStore{}
 	body := bytes.NewBufferString("action=move&org_id=u1&new_parent_id=u0&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -565,15 +571,15 @@ func TestHandleOrgNodes_POST_ReadV4_Move_UsesMover(t *testing.T) {
 	if got := strings.Join(store.moveArgs, "|"); got != "t1|2026-01-05|u1|u0" {
 		t.Fatalf("args=%q", got)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=v4&as_of=2026-01-05" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?read=current&as_of=2026-01-05" {
 		t.Fatalf("location=%q", loc)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Move_DefaultsEffectiveDateToAsOf(t *testing.T) {
-	store := &v4WriteSpyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_Move_DefaultsEffectiveDateToAsOf(t *testing.T) {
+	store := &currentWriteSpyStore{}
 	body := bytes.NewBufferString("action=move&org_id=u1&new_parent_id=")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -587,10 +593,10 @@ func TestHandleOrgNodes_POST_ReadV4_Move_DefaultsEffectiveDateToAsOf(t *testing.
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Move_BadEffectiveDate(t *testing.T) {
-	store := &v4WriteSpyStore{v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
+func TestHandleOrgNodes_POST_ReadCurrent_Move_BadEffectiveDate(t *testing.T) {
+	store := &currentWriteSpyStore{currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}}}
 	body := bytes.NewBufferString("action=move&org_id=u1&effective_date=bad")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -607,13 +613,13 @@ func TestHandleOrgNodes_POST_ReadV4_Move_BadEffectiveDate(t *testing.T) {
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Move_Error(t *testing.T) {
-	store := &v4WriteSpyStore{
-		err:     errors.New("boom"),
-		v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}},
+func TestHandleOrgNodes_POST_ReadCurrent_Move_Error(t *testing.T) {
+	store := &currentWriteSpyStore{
+		err:          errors.New("boom"),
+		currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}},
 	}
 	body := bytes.NewBufferString("action=move&org_id=u1&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -625,15 +631,15 @@ func TestHandleOrgNodes_POST_ReadV4_Move_Error(t *testing.T) {
 	if store.moveCalled != 1 {
 		t.Fatalf("moveCalled=%d", store.moveCalled)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("boom")) || !bytes.Contains([]byte(bodyOut), []byte("V")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("boom")) || !bytes.Contains([]byte(bodyOut), []byte("C")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Move_MissingMover(t *testing.T) {
-	store := v4CreateOnlyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_Move_MissingMover(t *testing.T) {
+	store := currentCreateOnlyStore{}
 	body := bytes.NewBufferString("action=move&org_id=u1&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -642,7 +648,7 @@ func TestHandleOrgNodes_POST_ReadV4_Move_MissingMover(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("v4 mover 未配置")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("current mover 未配置")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -660,15 +666,15 @@ func TestHandleOrgNodes_POST_ReadLegacy_MoveRejected(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("move 仅支持 v4 模式")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("move 仅支持 current 模式")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Disable_UsesDisabler(t *testing.T) {
-	store := &v4WriteSpyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_Disable_UsesDisabler(t *testing.T) {
+	store := &currentWriteSpyStore{}
 	body := bytes.NewBufferString("action=disable&org_id=u1&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -685,10 +691,10 @@ func TestHandleOrgNodes_POST_ReadV4_Disable_UsesDisabler(t *testing.T) {
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Disable_DefaultsEffectiveDateToAsOf(t *testing.T) {
-	store := &v4WriteSpyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_Disable_DefaultsEffectiveDateToAsOf(t *testing.T) {
+	store := &currentWriteSpyStore{}
 	body := bytes.NewBufferString("action=disable&org_id=u1")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -702,10 +708,10 @@ func TestHandleOrgNodes_POST_ReadV4_Disable_DefaultsEffectiveDateToAsOf(t *testi
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Disable_BadEffectiveDate(t *testing.T) {
-	store := &v4WriteSpyStore{v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
+func TestHandleOrgNodes_POST_ReadCurrent_Disable_BadEffectiveDate(t *testing.T) {
+	store := &currentWriteSpyStore{currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}}}
 	body := bytes.NewBufferString("action=disable&org_id=u1&effective_date=bad")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -722,13 +728,13 @@ func TestHandleOrgNodes_POST_ReadV4_Disable_BadEffectiveDate(t *testing.T) {
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Disable_Error(t *testing.T) {
-	store := &v4WriteSpyStore{
-		err:     errors.New("boom"),
-		v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}},
+func TestHandleOrgNodes_POST_ReadCurrent_Disable_Error(t *testing.T) {
+	store := &currentWriteSpyStore{
+		err:          errors.New("boom"),
+		currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}},
 	}
 	body := bytes.NewBufferString("action=disable&org_id=u1&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -740,15 +746,15 @@ func TestHandleOrgNodes_POST_ReadV4_Disable_Error(t *testing.T) {
 	if store.disableCalled != 1 {
 		t.Fatalf("disableCalled=%d", store.disableCalled)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("boom")) || !bytes.Contains([]byte(bodyOut), []byte("V")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("boom")) || !bytes.Contains([]byte(bodyOut), []byte("C")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_Disable_MissingDisabler(t *testing.T) {
-	store := v4CreateOnlyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_Disable_MissingDisabler(t *testing.T) {
+	store := currentCreateOnlyStore{}
 	body := bytes.NewBufferString("action=disable&org_id=u1&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -757,7 +763,7 @@ func TestHandleOrgNodes_POST_ReadV4_Disable_MissingDisabler(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("v4 disabler 未配置")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("current disabler 未配置")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -775,13 +781,13 @@ func TestHandleOrgNodes_POST_ReadLegacy_DisableRejected(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("disable 仅支持 v4 模式")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("disable 仅支持 current 模式")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
 
-func TestHandleOrgNodes_POST_DefaultReadV4_UsesAsOfNow(t *testing.T) {
-	store := &v4WriteSpyStore{}
+func TestHandleOrgNodes_POST_DefaultReadCurrent_UsesAsOfNow(t *testing.T) {
+	store := &currentWriteSpyStore{}
 	body := bytes.NewBufferString("name=Hello")
 	req := httptest.NewRequest(http.MethodPost, "/org/nodes", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -793,19 +799,19 @@ func TestHandleOrgNodes_POST_DefaultReadV4_UsesAsOfNow(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 	loc := rec.Header().Get("Location")
-	if !strings.HasPrefix(loc, "/org/nodes?read=v4&as_of=") {
+	if !strings.HasPrefix(loc, "/org/nodes?read=current&as_of=") {
 		t.Fatalf("location=%q", loc)
 	}
-	asOf := strings.TrimPrefix(loc, "/org/nodes?read=v4&as_of=")
+	asOf := strings.TrimPrefix(loc, "/org/nodes?read=current&as_of=")
 	if _, err := time.Parse("2006-01-02", asOf); err != nil {
 		t.Fatalf("as_of=%q err=%v", asOf, err)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_BadEffectiveDate(t *testing.T) {
-	store := &v4WriteSpyStore{}
+func TestHandleOrgNodes_POST_ReadCurrent_BadEffectiveDate(t *testing.T) {
+	store := &currentWriteSpyStore{}
 	body := bytes.NewBufferString("name=Hello&effective_date=bad")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -814,18 +820,18 @@ func TestHandleOrgNodes_POST_ReadV4_BadEffectiveDate(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if store.v4Called != 0 {
-		t.Fatalf("v4Called=%d", store.v4Called)
+	if store.currentCalled != 0 {
+		t.Fatalf("currentCalled=%d", store.currentCalled)
 	}
 	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("effective_date 无效")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_MissingWriter(t *testing.T) {
-	store := v4ReadOnlyStore{nodes: []OrgUnitNode{{ID: "v1", Name: "V"}}}
+func TestHandleOrgNodes_POST_ReadCurrent_MissingWriter(t *testing.T) {
+	store := currentReadOnlyStore{nodes: []OrgUnitNode{{ID: "c1", Name: "C"}}}
 	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -834,15 +840,15 @@ func TestHandleOrgNodes_POST_ReadV4_MissingWriter(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("v4 writer 未配置")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("current writer 未配置")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_CreateError(t *testing.T) {
-	store := &v4WriteSpyStore{err: errors.New("boom")}
+func TestHandleOrgNodes_POST_ReadCurrent_CreateError(t *testing.T) {
+	store := &currentWriteSpyStore{err: errors.New("boom")}
 	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -851,21 +857,21 @@ func TestHandleOrgNodes_POST_ReadV4_CreateError(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if store.v4Called != 1 {
-		t.Fatalf("v4Called=%d", store.v4Called)
+	if store.currentCalled != 1 {
+		t.Fatalf("currentCalled=%d", store.currentCalled)
 	}
 	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("boom")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
 
-func TestHandleOrgNodes_POST_ReadV4_CreateError_WithV4Nodes(t *testing.T) {
-	store := &v4WriteSpyStore{
-		err:     errors.New("boom"),
-		v4Nodes: []OrgUnitNode{{ID: "v1", Name: "V"}},
+func TestHandleOrgNodes_POST_ReadCurrent_CreateError_WithCurrentNodes(t *testing.T) {
+	store := &currentWriteSpyStore{
+		err:          errors.New("boom"),
+		currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}},
 	}
 	body := bytes.NewBufferString("name=Hello&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=v4&as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?read=current&as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -874,7 +880,7 @@ func TestHandleOrgNodes_POST_ReadV4_CreateError_WithV4Nodes(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("boom")) || !bytes.Contains([]byte(bodyOut), []byte("V")) {
+	if bodyOut := rec.Body.String(); !bytes.Contains([]byte(bodyOut), []byte("boom")) || !bytes.Contains([]byte(bodyOut), []byte("C")) {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -914,12 +920,12 @@ func TestOrgUnitPGStore_ListAndCreate(t *testing.T) {
 		t.Fatalf("nodes=%+v", nodes)
 	}
 
-	nodesV4, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+	nodesCurrent, err := store.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(nodesV4) != 1 || nodesV4[0].ID != "n1" {
-		t.Fatalf("nodes=%+v", nodesV4)
+	if len(nodesCurrent) != 1 || nodesCurrent[0].ID != "n1" {
+		t.Fatalf("nodes=%+v", nodesCurrent)
 	}
 
 	created, err := store.CreateNode(context.Background(), "t1", "A")
@@ -930,54 +936,54 @@ func TestOrgUnitPGStore_ListAndCreate(t *testing.T) {
 		t.Fatalf("created=%+v", created)
 	}
 
-	createdV4, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "V4", "")
+	createdCurrent, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "C", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if createdV4.ID != "u1" || createdV4.Name != "V4" || !createdV4.CreatedAt.Equal(time.Unix(789, 0).UTC()) {
-		t.Fatalf("created=%+v", createdV4)
+	if createdCurrent.ID != "u1" || createdCurrent.Name != "C" || !createdCurrent.CreatedAt.Equal(time.Unix(789, 0).UTC()) {
+		t.Fatalf("created=%+v", createdCurrent)
 	}
 
-	createdV4Child, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "V4 Child", "00000000-0000-0000-0000-000000000001")
+	createdCurrentChild, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "C Child", "00000000-0000-0000-0000-000000000001")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if createdV4Child.ID != "u1" || createdV4Child.Name != "V4 Child" || !createdV4Child.CreatedAt.Equal(time.Unix(789, 0).UTC()) {
-		t.Fatalf("created=%+v", createdV4Child)
+	if createdCurrentChild.ID != "u1" || createdCurrentChild.Name != "C Child" || !createdCurrentChild.CreatedAt.Equal(time.Unix(789, 0).UTC()) {
+		t.Fatalf("created=%+v", createdCurrentChild)
 	}
 }
 
-type v4SpyStore struct {
-	legacyCalled int
-	v4Called     int
+type currentSpyStore struct {
+	legacyCalled  int
+	currentCalled int
 
-	v4Nodes     []OrgUnitNode
-	v4Err       error
-	legacyNodes []OrgUnitNode
-	legacyErr   error
+	currentNodes []OrgUnitNode
+	currentErr   error
+	legacyNodes  []OrgUnitNode
+	legacyErr    error
 }
 
-func (s *v4SpyStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
+func (s *currentSpyStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
 	s.legacyCalled++
 	return s.legacyNodes, s.legacyErr
 }
 
-func (s *v4SpyStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode, error) {
-	s.v4Called++
-	return s.v4Nodes, s.v4Err
+func (s *currentSpyStore) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
+	s.currentCalled++
+	return s.currentNodes, s.currentErr
 }
 
-func (s *v4SpyStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
+func (s *currentSpyStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
 	return OrgUnitNode{}, nil
 }
 
-func TestHandleOrgNodes_GET_ReadV4_UsesV4WhenAvailable(t *testing.T) {
-	store := &v4SpyStore{
-		v4Nodes:     []OrgUnitNode{{ID: "v1", Name: "V"}},
-		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
+func TestHandleOrgNodes_GET_ReadCurrent_UsesCurrentWhenAvailable(t *testing.T) {
+	store := &currentSpyStore{
+		currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}},
+		legacyNodes:  []OrgUnitNode{{ID: "l1", Name: "L"}},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -985,18 +991,18 @@ func TestHandleOrgNodes_GET_ReadV4_UsesV4WhenAvailable(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if store.v4Called != 1 || store.legacyCalled != 0 {
-		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	if store.currentCalled != 1 || store.legacyCalled != 0 {
+		t.Fatalf("calls current=%d legacy=%d", store.currentCalled, store.legacyCalled)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("V")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("C")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
 
-func TestHandleOrgNodes_GET_DefaultReadV4(t *testing.T) {
-	store := &v4SpyStore{
-		v4Nodes:     []OrgUnitNode{{ID: "v1", Name: "V"}},
-		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
+func TestHandleOrgNodes_GET_DefaultReadCurrent(t *testing.T) {
+	store := &currentSpyStore{
+		currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}},
+		legacyNodes:  []OrgUnitNode{{ID: "l1", Name: "L"}},
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes?as_of=2026-01-06", nil)
@@ -1007,18 +1013,18 @@ func TestHandleOrgNodes_GET_DefaultReadV4(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if store.v4Called != 1 || store.legacyCalled != 0 {
-		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	if store.currentCalled != 1 || store.legacyCalled != 0 {
+		t.Fatalf("calls current=%d legacy=%d", store.currentCalled, store.legacyCalled)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("V")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("C")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
 
-func TestHandleOrgNodes_GET_ReadInvalidDefaultsToV4(t *testing.T) {
-	store := &v4SpyStore{
-		v4Nodes:     []OrgUnitNode{{ID: "v1", Name: "V"}},
-		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
+func TestHandleOrgNodes_GET_ReadInvalidDefaultsToCurrent(t *testing.T) {
+	store := &currentSpyStore{
+		currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}},
+		legacyNodes:  []OrgUnitNode{{ID: "l1", Name: "L"}},
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=nope&as_of=2026-01-06", nil)
@@ -1029,18 +1035,18 @@ func TestHandleOrgNodes_GET_ReadInvalidDefaultsToV4(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if store.v4Called != 1 || store.legacyCalled != 0 {
-		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	if store.currentCalled != 1 || store.legacyCalled != 0 {
+		t.Fatalf("calls current=%d legacy=%d", store.currentCalled, store.legacyCalled)
 	}
 }
 
-func TestHandleOrgNodes_GET_ReadV4_FallbackOnError(t *testing.T) {
-	store := &v4SpyStore{
-		v4Err:       errors.New("v4 boom"),
+func TestHandleOrgNodes_GET_ReadCurrent_FallbackOnError(t *testing.T) {
+	store := &currentSpyStore{
+		currentErr:  errors.New("boom"),
 		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1048,21 +1054,21 @@ func TestHandleOrgNodes_GET_ReadV4_FallbackOnError(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if store.v4Called != 1 || store.legacyCalled != 1 {
-		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	if store.currentCalled != 1 || store.legacyCalled != 1 {
+		t.Fatalf("calls current=%d legacy=%d", store.currentCalled, store.legacyCalled)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 读取失败")) || !bytes.Contains([]byte(body), []byte("L")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("current 读取失败")) || !bytes.Contains([]byte(body), []byte("L")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
 
-func TestHandleOrgNodes_GET_ReadV4_FallbackOnEmpty(t *testing.T) {
-	store := &v4SpyStore{
-		v4Nodes:     nil,
-		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
+func TestHandleOrgNodes_GET_ReadCurrent_FallbackOnEmpty(t *testing.T) {
+	store := &currentSpyStore{
+		currentNodes: nil,
+		legacyNodes:  []OrgUnitNode{{ID: "l1", Name: "L"}},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1070,21 +1076,21 @@ func TestHandleOrgNodes_GET_ReadV4_FallbackOnEmpty(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if store.v4Called != 1 || store.legacyCalled != 1 {
-		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	if store.currentCalled != 1 || store.legacyCalled != 1 {
+		t.Fatalf("calls current=%d legacy=%d", store.currentCalled, store.legacyCalled)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 快照为空")) || !bytes.Contains([]byte(body), []byte("L")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("current 快照为空")) || !bytes.Contains([]byte(body), []byte("L")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
 
-func TestHandleOrgNodes_GET_ReadV4_BadAsOf(t *testing.T) {
-	store := &v4SpyStore{
-		v4Nodes:     []OrgUnitNode{{ID: "v1", Name: "V"}},
-		legacyNodes: []OrgUnitNode{{ID: "l1", Name: "L"}},
+func TestHandleOrgNodes_GET_ReadCurrent_BadAsOf(t *testing.T) {
+	store := &currentSpyStore{
+		currentNodes: []OrgUnitNode{{ID: "c1", Name: "C"}},
+		legacyNodes:  []OrgUnitNode{{ID: "l1", Name: "L"}},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=bad", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=bad", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1092,16 +1098,16 @@ func TestHandleOrgNodes_GET_ReadV4_BadAsOf(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if store.v4Called != 0 || store.legacyCalled != 1 {
-		t.Fatalf("calls v4=%d legacy=%d", store.v4Called, store.legacyCalled)
+	if store.currentCalled != 0 || store.legacyCalled != 1 {
+		t.Fatalf("calls current=%d legacy=%d", store.currentCalled, store.legacyCalled)
 	}
 	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("as_of 无效")) || !bytes.Contains([]byte(body), []byte("L")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
 
-func TestHandleOrgNodes_GET_ReadV4_BadAsOf_LegacyError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=bad", nil)
+func TestHandleOrgNodes_GET_ReadCurrent_BadAsOf_LegacyError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=bad", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1114,8 +1120,8 @@ func TestHandleOrgNodes_GET_ReadV4_BadAsOf_LegacyError(t *testing.T) {
 	}
 }
 
-func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_LegacyError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+func TestHandleOrgNodes_GET_ReadCurrent_StoreWithoutCurrent_LegacyError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1123,17 +1129,17 @@ func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_LegacyError(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 reader 未配置，且 legacy 读取失败")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("current reader 未配置，且 legacy 读取失败")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
 
-func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_FallbackSuccess(t *testing.T) {
+func TestHandleOrgNodes_GET_ReadCurrent_StoreWithoutCurrent_FallbackSuccess(t *testing.T) {
 	mem := newOrgUnitMemoryStore()
 	_, _ = mem.CreateNode(context.Background(), "t1", "L")
 	store := legacyOnlyStore{inner: mem}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1141,58 +1147,58 @@ func TestHandleOrgNodes_GET_ReadV4_StoreWithoutV4_FallbackSuccess(t *testing.T) 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 reader 未配置，已回退到 legacy")) || !bytes.Contains([]byte(body), []byte("L")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("current reader 未配置，已回退到 legacy")) || !bytes.Contains([]byte(body), []byte("L")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
 
-type v4ErrStore struct {
-	legacyErr error
-	v4Err     error
+type currentErrStore struct {
+	legacyErr  error
+	currentErr error
 }
 
-func (s v4ErrStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
+func (s currentErrStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
 	return nil, s.legacyErr
 }
-func (s v4ErrStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
+func (s currentErrStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
 	return OrgUnitNode{}, nil
 }
-func (s v4ErrStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode, error) {
-	return nil, s.v4Err
+func (s currentErrStore) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
+	return nil, s.currentErr
 }
 
-func TestHandleOrgNodes_GET_ReadV4_V4Error_LegacyError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+func TestHandleOrgNodes_GET_ReadCurrent_CurrentError_LegacyError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, v4ErrStore{legacyErr: errors.New("legacy boom"), v4Err: errors.New("v4 boom")})
+	handleOrgNodes(rec, req, currentErrStore{legacyErr: errors.New("legacy boom"), currentErr: errors.New("boom")})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("v4 读取失败: v4 boom；且 legacy 读取失败: legacy boom")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("current 读取失败: boom；且 legacy 读取失败: legacy boom")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
 
-type v4EmptyLegacyErrStore struct{}
+type currentEmptyLegacyErrStore struct{}
 
-func (v4EmptyLegacyErrStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
+func (currentEmptyLegacyErrStore) ListNodes(context.Context, string) ([]OrgUnitNode, error) {
 	return nil, errors.New("legacy boom")
 }
-func (v4EmptyLegacyErrStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
+func (currentEmptyLegacyErrStore) CreateNode(context.Context, string, string) (OrgUnitNode, error) {
 	return OrgUnitNode{}, nil
 }
-func (v4EmptyLegacyErrStore) ListNodesV4(context.Context, string, string) ([]OrgUnitNode, error) {
+func (currentEmptyLegacyErrStore) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
 	return nil, nil
 }
 
-func TestHandleOrgNodes_GET_ReadV4_Empty_LegacyError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=v4&as_of=2026-01-06", nil)
+func TestHandleOrgNodes_GET_ReadCurrent_Empty_LegacyError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?read=current&as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, v4EmptyLegacyErrStore{})
+	handleOrgNodes(rec, req, currentEmptyLegacyErrStore{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1265,12 +1271,12 @@ func TestOrgUnitPGStore_ListNodes_Errors(t *testing.T) {
 	})
 }
 
-func TestOrgUnitPGStore_ListNodesV4_Errors(t *testing.T) {
+func TestOrgUnitPGStore_ListNodesCurrent_Errors(t *testing.T) {
 	t.Run("begin", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		})}
-		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+		_, err := store.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1280,7 +1286,7 @@ func TestOrgUnitPGStore_ListNodesV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		})}
-		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+		_, err := store.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1290,7 +1296,7 @@ func TestOrgUnitPGStore_ListNodesV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{queryErr: errors.New("query")}, nil
 		})}
-		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+		_, err := store.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1300,7 +1306,7 @@ func TestOrgUnitPGStore_ListNodesV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rows: &stubRows{scanErr: errors.New("scan")}}, nil
 		})}
-		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+		_, err := store.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1310,7 +1316,7 @@ func TestOrgUnitPGStore_ListNodesV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rows: &stubRows{err: errors.New("rows")}}, nil
 		})}
-		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+		_, err := store.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1320,7 +1326,7 @@ func TestOrgUnitPGStore_ListNodesV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{commitErr: errors.New("commit")}, nil
 		})}
-		_, err := store.ListNodesV4(context.Background(), "t1", "2026-01-06")
+		_, err := store.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1385,12 +1391,12 @@ func TestOrgUnitPGStore_CreateNode_Errors(t *testing.T) {
 	})
 }
 
-func TestOrgUnitPGStore_CreateNodeV4_Errors(t *testing.T) {
+func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 	t.Run("begin", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		})}
-		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1400,7 +1406,7 @@ func TestOrgUnitPGStore_CreateNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		})}
-		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1410,7 +1416,7 @@ func TestOrgUnitPGStore_CreateNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		})}
-		_, err := store.CreateNodeV4(context.Background(), "t1", "", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "", "A", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1420,7 +1426,7 @@ func TestOrgUnitPGStore_CreateNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		})}
-		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1433,7 +1439,7 @@ func TestOrgUnitPGStore_CreateNodeV4_Errors(t *testing.T) {
 			tx.row2Err = errors.New("row2")
 			return tx, nil
 		})}
-		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1446,7 +1452,7 @@ func TestOrgUnitPGStore_CreateNodeV4_Errors(t *testing.T) {
 			tx.row2 = &stubRow{vals: []any{"e1"}}
 			return tx, nil
 		})}
-		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1460,7 +1466,7 @@ func TestOrgUnitPGStore_CreateNodeV4_Errors(t *testing.T) {
 			tx.row3Err = errors.New("row3")
 			return tx, nil
 		})}
-		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1474,19 +1480,19 @@ func TestOrgUnitPGStore_CreateNodeV4_Errors(t *testing.T) {
 			tx.row3 = &stubRow{vals: []any{time.Unix(2, 0).UTC()}}
 			return tx, nil
 		})}
-		_, err := store.CreateNodeV4(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 }
 
-func TestOrgUnitPGStore_RenameNodeV4_Errors(t *testing.T) {
+func TestOrgUnitPGStore_RenameNodeCurrent_Errors(t *testing.T) {
 	t.Run("begin", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		})}
-		err := store.RenameNodeV4(context.Background(), "t1", "2026-01-06", "u1", "New")
+		err := store.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "New")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1496,7 +1502,7 @@ func TestOrgUnitPGStore_RenameNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		})}
-		err := store.RenameNodeV4(context.Background(), "t1", "2026-01-06", "u1", "New")
+		err := store.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "New")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1506,7 +1512,7 @@ func TestOrgUnitPGStore_RenameNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		})}
-		err := store.RenameNodeV4(context.Background(), "t1", "", "u1", "New")
+		err := store.RenameNodeCurrent(context.Background(), "t1", "", "u1", "New")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1516,7 +1522,7 @@ func TestOrgUnitPGStore_RenameNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		})}
-		err := store.RenameNodeV4(context.Background(), "t1", "2026-01-06", "", "New")
+		err := store.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", "", "New")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1526,7 +1532,7 @@ func TestOrgUnitPGStore_RenameNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		})}
-		err := store.RenameNodeV4(context.Background(), "t1", "2026-01-06", "u1", "")
+		err := store.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1536,7 +1542,7 @@ func TestOrgUnitPGStore_RenameNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		})}
-		err := store.RenameNodeV4(context.Background(), "t1", "2026-01-06", "u1", "New")
+		err := store.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "New")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1548,7 +1554,7 @@ func TestOrgUnitPGStore_RenameNodeV4_Errors(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"e1"}}
 			return tx, nil
 		})}
-		err := store.RenameNodeV4(context.Background(), "t1", "2026-01-06", "u1", "New")
+		err := store.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "New")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1560,30 +1566,30 @@ func TestOrgUnitPGStore_RenameNodeV4_Errors(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"e1"}}
 			return tx, nil
 		})}
-		err := store.RenameNodeV4(context.Background(), "t1", "2026-01-06", "u1", "New")
+		err := store.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "New")
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 }
 
-func TestOrgUnitPGStore_RenameNodeV4_Success(t *testing.T) {
+func TestOrgUnitPGStore_RenameNodeCurrent_Success(t *testing.T) {
 	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		tx := &stubTx{}
 		tx.row = &stubRow{vals: []any{"e1"}}
 		return tx, nil
 	})}
-	if err := store.RenameNodeV4(context.Background(), "t1", "2026-01-06", "u1", "New"); err != nil {
+	if err := store.RenameNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "New"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 }
 
-func TestOrgUnitPGStore_MoveNodeV4_Errors(t *testing.T) {
+func TestOrgUnitPGStore_MoveNodeCurrent_Errors(t *testing.T) {
 	t.Run("begin", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		})}
-		err := store.MoveNodeV4(context.Background(), "t1", "2026-01-06", "u1", "")
+		err := store.MoveNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1593,7 +1599,7 @@ func TestOrgUnitPGStore_MoveNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		})}
-		err := store.MoveNodeV4(context.Background(), "t1", "2026-01-06", "u1", "")
+		err := store.MoveNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1603,7 +1609,7 @@ func TestOrgUnitPGStore_MoveNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		})}
-		err := store.MoveNodeV4(context.Background(), "t1", "", "u1", "")
+		err := store.MoveNodeCurrent(context.Background(), "t1", "", "u1", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1613,7 +1619,7 @@ func TestOrgUnitPGStore_MoveNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		})}
-		err := store.MoveNodeV4(context.Background(), "t1", "2026-01-06", "", "")
+		err := store.MoveNodeCurrent(context.Background(), "t1", "2026-01-06", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1623,7 +1629,7 @@ func TestOrgUnitPGStore_MoveNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		})}
-		err := store.MoveNodeV4(context.Background(), "t1", "2026-01-06", "u1", "")
+		err := store.MoveNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1635,7 +1641,7 @@ func TestOrgUnitPGStore_MoveNodeV4_Errors(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"e1"}}
 			return tx, nil
 		})}
-		err := store.MoveNodeV4(context.Background(), "t1", "2026-01-06", "u1", "")
+		err := store.MoveNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1647,30 +1653,30 @@ func TestOrgUnitPGStore_MoveNodeV4_Errors(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"e1"}}
 			return tx, nil
 		})}
-		err := store.MoveNodeV4(context.Background(), "t1", "2026-01-06", "u1", "")
+		err := store.MoveNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 }
 
-func TestOrgUnitPGStore_MoveNodeV4_Success(t *testing.T) {
+func TestOrgUnitPGStore_MoveNodeCurrent_Success(t *testing.T) {
 	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		tx := &stubTx{}
 		tx.row = &stubRow{vals: []any{"e1"}}
 		return tx, nil
 	})}
-	if err := store.MoveNodeV4(context.Background(), "t1", "2026-01-06", "u1", "u0"); err != nil {
+	if err := store.MoveNodeCurrent(context.Background(), "t1", "2026-01-06", "u1", "u0"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 }
 
-func TestOrgUnitPGStore_DisableNodeV4_Errors(t *testing.T) {
+func TestOrgUnitPGStore_DisableNodeCurrent_Errors(t *testing.T) {
 	t.Run("begin", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		})}
-		err := store.DisableNodeV4(context.Background(), "t1", "2026-01-06", "u1")
+		err := store.DisableNodeCurrent(context.Background(), "t1", "2026-01-06", "u1")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1680,7 +1686,7 @@ func TestOrgUnitPGStore_DisableNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		})}
-		err := store.DisableNodeV4(context.Background(), "t1", "2026-01-06", "u1")
+		err := store.DisableNodeCurrent(context.Background(), "t1", "2026-01-06", "u1")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1690,7 +1696,7 @@ func TestOrgUnitPGStore_DisableNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		})}
-		err := store.DisableNodeV4(context.Background(), "t1", "", "u1")
+		err := store.DisableNodeCurrent(context.Background(), "t1", "", "u1")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1700,7 +1706,7 @@ func TestOrgUnitPGStore_DisableNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		})}
-		err := store.DisableNodeV4(context.Background(), "t1", "2026-01-06", "")
+		err := store.DisableNodeCurrent(context.Background(), "t1", "2026-01-06", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1710,7 +1716,7 @@ func TestOrgUnitPGStore_DisableNodeV4_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		})}
-		err := store.DisableNodeV4(context.Background(), "t1", "2026-01-06", "u1")
+		err := store.DisableNodeCurrent(context.Background(), "t1", "2026-01-06", "u1")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1722,7 +1728,7 @@ func TestOrgUnitPGStore_DisableNodeV4_Errors(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"e1"}}
 			return tx, nil
 		})}
-		err := store.DisableNodeV4(context.Background(), "t1", "2026-01-06", "u1")
+		err := store.DisableNodeCurrent(context.Background(), "t1", "2026-01-06", "u1")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1734,20 +1740,20 @@ func TestOrgUnitPGStore_DisableNodeV4_Errors(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"e1"}}
 			return tx, nil
 		})}
-		err := store.DisableNodeV4(context.Background(), "t1", "2026-01-06", "u1")
+		err := store.DisableNodeCurrent(context.Background(), "t1", "2026-01-06", "u1")
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 }
 
-func TestOrgUnitPGStore_DisableNodeV4_Success(t *testing.T) {
+func TestOrgUnitPGStore_DisableNodeCurrent_Success(t *testing.T) {
 	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		tx := &stubTx{}
 		tx.row = &stubRow{vals: []any{"e1"}}
 		return tx, nil
 	})}
-	if err := store.DisableNodeV4(context.Background(), "t1", "2026-01-06", "u1"); err != nil {
+	if err := store.DisableNodeCurrent(context.Background(), "t1", "2026-01-06", "u1"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 }

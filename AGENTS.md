@@ -4,7 +4,7 @@
 
 本文件是仓库内“如何开发/如何验证/如何组织文档与规则”的**主干入口**。优先阅读本文件，并通过链接跳转到其他专题文档；避免在多个文档里复制同一套规则，减少漂移。
 
-本仓库为 V4 Greenfield 的 **implementation repo**（仓库名：`Bugs-And-Blossoms`）。执行顺序与并行策略以 `docs/dev-plans/009-v4-implementation-roadmap.md` 为准；`docs/dev-plans/` 为契约文档 SSOT（同时通过 `docs/dev-plans` 入口可达），P0-Ready 的证据记录在 `docs/dev-records/`。
+本仓库为 Greenfield 的 **implementation repo**（仓库名：`Bugs-And-Blossoms`）。执行顺序与并行策略以 `docs/dev-plans/009-implementation-roadmap.md` 为准；`docs/dev-plans/` 为契约文档 SSOT（同时通过 `docs/dev-plans` 入口可达），P0-Ready 的证据记录在 `docs/dev-records/`。
 
 ## 0. TL;DR（最常见变更要跑什么）
 
@@ -19,13 +19,13 @@
 - E2E：`make e2e`
 - 文档新增/整理：`make check doc`
 
-> 说明：命令入口与门禁结构以 `docs/dev-plans/012-v4-ci-quality-gates.md` 为准；本文件只维护“入口与触发器”，尽量不复制脚本内部实现。
+> 说明：命令入口与门禁结构以 `docs/dev-plans/012-ci-quality-gates.md` 为准；本文件只维护“入口与触发器”，尽量不复制脚本内部实现。
 
 ## 1. 事实源（不要复制细节，统一引用）
 
 - 规则入口：`AGENTS.md`
 - 计划/规范文档：`docs/dev-plans/`
-- 实施路线图：`docs/dev-plans/009-v4-implementation-roadmap.md`
+- 实施路线图：`docs/dev-plans/009-implementation-roadmap.md`
 - Readiness 证据记录：`docs/dev-records/`
 
 ## 2. 变更触发器矩阵（与 CI 对齐）
@@ -77,10 +77,10 @@
 
 关于运维与监控，不需要引入开关切换。本项目仍处于初期，未发布上线，避免过度运维和监控。
 
-### 3.7 V4 Greenfield 不变量（009-031）
+### 3.7 Greenfield 不变量（009-031）
 
 - One Door：写入必须走 DB Kernel 的 `submit_*_event(...)`（事件 SoT + 同事务同步投射），避免出现第二写入口（`DEV-PLAN-026/030/029/031`）。
-- No Tx, No RLS：访问 v4 表必须显式事务 + 租户注入，且 fail-closed（`DEV-PLAN-021/019/025`）。
+- No Tx, No RLS：访问 Greenfield 表必须显式事务 + 租户注入，且 fail-closed（`DEV-PLAN-021/019/025`）。
 - 路由治理：命名空间/route_class/全局 responder 契约统一，并由门禁阻断漂移（`DEV-PLAN-017/012`）。
 - 授权边界：RLS 圈地 ≠ Casbin 授权；subject/domain/object/action 命名冻结（`DEV-PLAN-021/022/019`）。
 - i18n：仅 `en/zh`，语言写入口唯一；不做业务数据多语言（`DEV-PLAN-020`）。
@@ -106,22 +106,22 @@ modules/{module}/
 
 更完整的分层/边界说明以 `docs/dev-plans/015-ddd-layering-framework.md` 与 `docs/dev-plans/016-greenfield-hr-modules-skeleton.md` 为准（由本文件引用，不在多处复制）。
 
-## 5. V4 实施工作流（入口与 SSOT）
+## 5. 实施工作流（入口与 SSOT）
 
-- P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-v4-p0-prerequisites-contract.md`
-- 路线图（执行顺序/并行）：`docs/dev-plans/009-v4-implementation-roadmap.md`
-- 版本与工具链基线：`docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
-- Atlas + Goose（模块级闭环）：`docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`
-- sqlc（规范与门禁）：`docs/dev-plans/025-sqlc-guidelines-for-v4.md`
-- Tenancy/AuthN（Kratos + session）：`docs/dev-plans/019-tenant-and-authn-v4.md`
-- RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
-- Authz（Casbin）：`docs/dev-plans/022-v4-authz-casbin-toolchain.md`
-- Routing 策略与门禁：`docs/dev-plans/017-v4-routing-strategy.md`
-- UI Shell（Astro AHA）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`
+- P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
+- 路线图（执行顺序/并行）：`docs/dev-plans/009-implementation-roadmap.md`
+- 版本与工具链基线：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
+- Atlas + Goose（模块级闭环）：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
+- sqlc（规范与门禁）：`docs/dev-plans/025-sqlc-guidelines.md`
+- Tenancy/AuthN（Kratos + session）：`docs/dev-plans/019-tenant-and-authn.md`
+- RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- Authz（Casbin）：`docs/dev-plans/022-authz-casbin-toolchain.md`
+- Routing 策略与门禁：`docs/dev-plans/017-routing-strategy.md`
+- UI Shell（Astro AHA）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - i18n（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
 - Docs 治理：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
-- CI 质量门禁：`docs/dev-plans/012-v4-ci-quality-gates.md`
-- SetID：`docs/dev-plans/028-v4-setid-management.md`
+- CI 质量门禁：`docs/dev-plans/012-ci-quality-gates.md`
+- SetID：`docs/dev-plans/028-setid-management.md`
 
 ## 6. 文档收敛与门禁（New Doc Gate）
 
@@ -142,29 +142,31 @@ modules/{module}/
 - 技术设计模板：`docs/dev-plans/001-technical-design-template.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
 - DEV-PLAN-004：全仓去除版本标记（命名降噪 + 避免对外契约污染）：`docs/dev-plans/004-remove-version-marker-repo-wide.md`
+- DEV-PLAN-004 记录：全仓去除版本标记——映射表（草案）：`docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`
+- DEV-PLAN-004 记录：全仓去除版本标记——执行日志：`docs/dev-records/dev-plan-004-execution-log.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
-- P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-v4-p0-prerequisites-contract.md`
+- P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
-- Org v4（事务性事件溯源 + 同步投射）：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`
-- Position v4（事务性事件溯源 + 同步投射）：`docs/dev-plans/030-position-v4-transactional-event-sourcing-synchronous-projection.md`
-- Job Catalog v4（事务性事件溯源 + 同步投射）：`docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`
-- PostgreSQL RLS 强租户隔离（Org/Position/Job Catalog v4）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
-- DDD 分层框架（对齐 CleanArchGuard + v4 DB Kernel）：`docs/dev-plans/015-ddd-layering-framework.md`
+- Org（事务性事件溯源 + 同步投射）：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+- Position（事务性事件溯源 + 同步投射）：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
+- Job Catalog（事务性事件溯源 + 同步投射）：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+- PostgreSQL RLS 强租户隔离（Org/Position/Job Catalog）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- DDD 分层框架（对齐 CleanArchGuard + DB Kernel）：`docs/dev-plans/015-ddd-layering-framework.md`
 - Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- 任职记录（Job Data / Assignments）v4（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data-v4.md`
+- 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - Person 最小身份锚点（Pernr 1-8 位数字字符串）：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`
-- 引入 Astro（AHA Stack）到 HRMS v4 UI：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`
-- V4 技术栈与工具链版本冻结：`docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
-- V4 租户管理与登录认证：`docs/dev-plans/019-tenant-and-authn-v4.md`
-- V4 SuperAdmin 控制面认证与会话：`docs/dev-plans/023-superadmin-authn-v4.md`
-- V4 多语言（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
-- V4 Atlas + Goose 闭环指引：`docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`
-- V4 sqlc 工具链使用指引与规范：`docs/dev-plans/025-sqlc-guidelines-for-v4.md`
-- V4 Authz（Casbin）工具链与实施方案：`docs/dev-plans/022-v4-authz-casbin-toolchain.md`
-- V4 多工作区并行开发指引（3 worktree）：`docs/dev-plans/014-v4-parallel-worktrees-local-dev-guide.md`
-- V4 全局路由策略统一（UI/HTMX/API/Webhooks）：`docs/dev-plans/017-v4-routing-strategy.md`
+- 引入 Astro（AHA Stack）到 HRMS UI：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- 技术栈与工具链版本冻结：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
+- 租户管理与登录认证：`docs/dev-plans/019-tenant-and-authn.md`
+- SuperAdmin 控制面认证与会话：`docs/dev-plans/023-superadmin-authn.md`
+- 多语言（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
+- Atlas + Goose 闭环指引：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
+- sqlc 工具链使用指引与规范：`docs/dev-plans/025-sqlc-guidelines.md`
+- Authz（Casbin）工具链与实施方案：`docs/dev-plans/022-authz-casbin-toolchain.md`
+- 多工作区并行开发指引（3 worktree）：`docs/dev-plans/014-parallel-worktrees-local-dev-guide.md`
+- 全局路由策略统一（UI/HTMX/API/Webhooks）：`docs/dev-plans/017-routing-strategy.md`
 - 文档创建与过程治理规范：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
-- V4 CI 质量门禁（Quality Gates）：`docs/dev-plans/012-v4-ci-quality-gates.md`
-- SetID 管理（V4，Greenfield）：`docs/dev-plans/028-v4-setid-management.md`
+- CI 质量门禁（Quality Gates）：`docs/dev-plans/012-ci-quality-gates.md`
+- SetID 管理（Greenfield）：`docs/dev-plans/028-setid-management.md`
 - DEV-PLAN-009M1：Phase 4 下一大型里程碑执行计划（SetID + JobCatalog 首个可见样板闭环）：`docs/dev-plans/009m1-phase4-setid-jobcatalog-vertical-slice-execution-plan.md`
-- V4 Greenfield 全新实施路线图（009-031）：`docs/dev-plans/009-v4-implementation-roadmap.md`
+- Greenfield 全新实施路线图（009-031）：`docs/dev-plans/009-implementation-roadmap.md`

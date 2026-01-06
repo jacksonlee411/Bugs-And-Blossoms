@@ -1,24 +1,24 @@
-# DEV-PLAN-022：V4 Authz（Casbin）工具链与实施方案（Greenfield）
+# DEV-PLAN-022：Authz（Casbin）工具链与实施方案（Greenfield）
 
 **状态**: 草拟中（2026-01-06 09:04 UTC）
 
-> 适用范围：本仓库（`Bugs-And-Blossoms`）的 **V4 Greenfield implementation**。如未来拆分到独立仓库，本计划冻结的 Authz 契约与工具链口径仍应保持一致，避免“同一概念两套权威表达”。
+> 适用范围：本仓库（`Bugs-And-Blossoms`）的 **Greenfield implementation**。如未来拆分到独立仓库，本计划冻结的 Authz 契约与工具链口径仍应保持一致，避免“同一概念两套权威表达”。
 >
-> 本文冻结 V4 的授权（Authz）契约与工具链口径：`subject/object/action/domain` 命名、policy 的 SSOT 与发布方式、CI 门禁，以及与 `DEV-PLAN-021/019`（RLS/AuthN/Tenancy）的边界关系，避免实现期“各模块各写一套”导致漂移。
+> 本文冻结授权（Authz）契约与工具链口径：`subject/object/action/domain` 命名、policy 的 SSOT 与发布方式、CI 门禁，以及与 `DEV-PLAN-021/019`（RLS/AuthN/Tenancy）的边界关系，避免实现期“各模块各写一套”导致漂移。
 
 ## 1. 背景与上下文 (Context)
 
-- V4 选择 Greenfield 全新实施（路线图见 `DEV-PLAN-009`），不承担存量 `user.Can`/旧权限映射的兼容包袱。
+- Greenfield 全新实施（路线图见 `DEV-PLAN-009`），不承担存量 `user.Can`/旧权限映射的兼容包袱。
 - 本仓库已具备最小 Casbin 工具链与门禁：`config/access/*` + `scripts/authz/*` + `make authz-pack/authz-test/authz-lint`（CI 入口见 `.github/workflows/quality-gates.yml`）。
-- V4 选定：RLS 做强租户隔离（`DEV-PLAN-021`），Casbin 做“是否允许做事”（Authz）。两者边界必须明确：**RLS 圈地 != Casbin 授权**。
-- V4 的主体模型在 `DEV-PLAN-019` 已选定为 `principal`（而非 `user`）。本计划必须冻结“principal（审计） vs role（授权）”的输入语义，避免后续改名或双轨并存。
+- 选定：RLS 做强租户隔离（`DEV-PLAN-021`），Casbin 做“是否允许做事”（Authz）。两者边界必须明确：**RLS 圈地 != Casbin 授权**。
+- 主体模型在 `DEV-PLAN-019` 已选定为 `principal`（而非 `user`）。本计划必须冻结“principal（审计） vs role（授权）”的输入语义，避免后续改名或双轨并存。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
 ### 2.1 核心目标
 
-- [ ] 冻结 V4 Authz 合同：`subject/object/action/domain` 的命名规范与不变量（用于 code review、lint、测试断言）。
-- [ ] 明确 policy SSOT 与发布口径（V4 baseline = Git 管理 + pack），并定义“生产可复现”的约束。
+- [ ] 冻结 Authz 合同：`subject/object/action/domain` 的命名规范与不变量（用于 code review、lint、测试断言）。
+- [ ] 明确 policy SSOT 与发布口径（baseline = Git 管理 + pack），并定义“生产可复现”的约束。
 - [ ] 给出模块级接入模板（controller/service 如何调用 `pkg/authz` 门面、以及 403/forbidden 契约）。
 - [ ] 形成本仓库 Authz 工具链门禁清单（触发器、CI 入口、生成物与验收标准），避免实现期临时拼装。
 
@@ -26,8 +26,8 @@
 
 - 不在本计划内交付企业 SSO 或多 IdP 编排；相关工作属于 AuthN/SSO 范畴（参考 `DEV-PLAN-019` 的 AuthN/Session 边界）。
 - 不在本计划内引入“复杂 ABAC DSL/表达式”或策略编排语言；仅保留最小 ABAC 字段（如确需）。
-- 不在本计划内迁移/兼容旧系统（或旧仓库）的 policy/roles 到 V4；V4 以最小角色集重新定义。
-- 不在本计划内新增数据库表存储 policy（避免把配置与数据耦合、并触发迁移门禁）；V4 baseline 以文件策略为主。
+- 不在本计划内迁移/兼容旧系统（或旧仓库）的 policy/roles；以最小角色集重新定义。
+- 不在本计划内新增数据库表存储 policy（避免把配置与数据耦合、并触发迁移门禁）；baseline 以文件策略为主。
 - 不在本计划内引入 Casbin `g/g2`（role 继承/组/多角色）。如确需，必须另起 dev-plan 并给出迁移与回滚。
 
 ## 3. 工具链与门禁（SSOT 引用）
@@ -36,23 +36,23 @@
 
 - 触发器矩阵与本地必跑：`AGENTS.md`
 - 命令入口：`Makefile`
-- CI 门禁：`.github/workflows/quality-gates.yml`（说明见 `docs/dev-plans/012-v4-ci-quality-gates.md`）
+- CI 门禁：`.github/workflows/quality-gates.yml`（说明见 `docs/dev-plans/012-ci-quality-gates.md`）
 - Casbin 模型：`config/access/model.conf`
 - Policy 碎片（SSOT）：`config/access/policies/**`
 - Pack 产物：`config/access/policy.csv`、`config/access/policy.csv.rev`
 - 打包/校验脚本：`scripts/authz/pack.sh`、`scripts/authz/test.sh`、`scripts/authz/lint.sh`
-- V4 Tenancy/AuthN 与主体模型（principal）：`docs/dev-plans/019-tenant-and-authn-v4.md`
-- V4 RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
-- V4 路由治理与 responder 契约：`docs/dev-plans/017-v4-routing-strategy.md`
-- V4 技术栈与工具链版本（Casbin 版本基线等）：`docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
+- Tenancy/AuthN 与主体模型（principal）：`docs/dev-plans/019-tenant-and-authn.md`
+- RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- 路由治理与 responder 契约：`docs/dev-plans/017-routing-strategy.md`
+- 技术栈与工具链版本（Casbin 版本基线等）：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - Simple > Easy 评审口径：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 
 ## 4. 关键决策（ADR 摘要）
 
 ### 4.1 继续采用 Casbin（选定）
 
-- **选定**：V4 继续采用 Casbin 作为授权引擎（以 role 为主体的 RBAC + domains；ABAC 仅在明确需要时引入），沿用本仓库 `config/access/model.conf` 的“输入四元组”思路（`sub/dom/obj/act`）。
-- **理由**：工具链与门禁已具备（pack/lint/test）；V4 更需要“冻结契约、防漂移”，而非替换引擎。
+- **选定**：继续采用 Casbin 作为授权引擎（以 role 为主体的 RBAC + domains；ABAC 仅在明确需要时引入），沿用本仓库 `config/access/model.conf` 的“输入四元组”思路（`sub/dom/obj/act`）。
+- **理由**：工具链与门禁已具备（pack/lint/test）；更需要“冻结契约、防漂移”，而非替换引擎。
 
 ### 4.2 Domain 语义（选定：tenant UUID / global）
 
@@ -63,7 +63,7 @@
 
 ### 4.3 Subject 语义（选定：role 为授权主体；principal 为审计标识）
 
-> `DEV-PLAN-019` 选定“本地主体”为 `principal`。但若把“principal↔role 绑定”写进 Casbin policy，会导致“创建用户/租户 = 修改 policy 文件”的运维耦合。为保持简单性：**V4 MVP 的 Casbin 授权以 role 为主体**；principal 仅作为审计/日志/诊断标识。
+> `DEV-PLAN-019` 选定“本地主体”为 `principal`。但若把“principal↔role 绑定”写进 Casbin policy，会导致“创建用户/租户 = 修改 policy 文件”的运维耦合。为保持简单性：**MVP 的 Casbin 授权以 role 为主体**；principal 仅作为审计/日志/诊断标识。
 
 - **审计标识（principal id，非 Casbin Enforce 输入）**：
   - tenant principal：`tenant:{tenant_id}:principal:{principal_id}`
@@ -79,7 +79,7 @@
 - **选定**：object 采用 `module.resource`（全小写）。
 - **粒度（选定，MVP）**：以“业务资源级”作为 object 粒度（例如 `orgunit.nodes`、`jobcatalog.catalog`），避免按 endpoint/page 细碎拆分导致策略爆炸与漂移。
 - **禁止**：把 HTTP method/path 片段、页面组件名、query params 等写入 object（它们属于路由与展示层细节，不是稳定授权边界）。
-- **V4 模块建议前缀**（与 `DEV-PLAN-016/019` 对齐）：
+- **模块建议前缀**（与 `DEV-PLAN-016/019` 对齐）：
   - `iam.*`（tenancy/authn/session/principal 等平台域）
   - `orgunit.*`
   - `jobcatalog.*`
@@ -98,12 +98,12 @@
 
 ### 4.6 Policy SSOT 与发布方式（选定：Git 管理 + pack）
 
-- **选定（V4 baseline）**：policy 以 Git 管理为 SSOT：
+- **选定（baseline）**：policy 以 Git 管理为 SSOT：
   - 源文件：`config/access/policies/**`（按模块拆分）
   - 生成物：`config/access/policy.csv` 与 `config/access/policy.csv.rev`（由 pack 生成，必须提交）
 - **一致性门禁（选定）**：CI 在 `make authz-pack` 后必须执行：
   - `git diff --exit-code -- config/access/policy.csv config/access/policy.csv.rev`
-- **暂不纳入**：管理员在线 Apply 作为 V4 MVP 的必选能力。若未来引入，必须补齐“容器内写文件的持久化策略、审计与回滚”，另起子计划（暂定命名：DEV-PLAN-022A）。
+- **暂不纳入**：管理员在线 Apply 作为 MVP 的必选能力。若未来引入，必须补齐“容器内写文件的持久化策略、审计与回滚”，另起子计划（暂定命名：DEV-PLAN-022A）。
 
 ### 4.7 与 RLS 的边界（选定：分层防御）
 
@@ -127,9 +127,9 @@
 | `shadow` | 不中断请求（继续执行） | 是（日志/诊断） | 新模块接入期 |
 | `enforce` | 直接拒绝（统一 403） | 是（日志/诊断） | 默认（生产） |
 
-### 4.9 V4 最小角色与策略包（选定：3 角色 + 只用 `read/admin/debug`）
+### 4.9 最小角色与策略包（选定：3 角色 + 只用 `read/admin/debug`）
 
-> 目标：V4 先把“能跑通的最小权限闭环”冻结为可执行规格；后续新增能力必须显式扩展本表。
+> 目标：先把“能跑通的最小权限闭环”冻结为可执行规格；后续新增能力必须显式扩展本表。
 
 - **选定角色**：
   - `role:superadmin`（控制面）
@@ -158,8 +158,8 @@
 
 ## 5. 本仓库落地形态（目录与产物）
 
-> 说明：本仓库已存在 `config/access/*` 与 `scripts/authz/*` 的最小闭环；本节描述“V4 需要补齐/冻结”的增量目标。
-- `pkg/authz/**`：V4 authz 门面（输入规范化、enforcer 构造、授权调用、缺口诊断、403 输出适配）。
+> 说明：本仓库已存在 `config/access/*` 与 `scripts/authz/*` 的最小闭环；本节描述“需要补齐/冻结”的增量目标。
+- `pkg/authz/**`：authz 门面（输入规范化、enforcer 构造、授权调用、缺口诊断、403 输出适配）。
 - `config/access/model.conf`：Casbin 模型。
 - `config/access/policies/**`：策略碎片（模块维度）。
 - `config/access/policy.csv`、`config/access/policy.csv.rev`：聚合产物（pack 生成）。
@@ -234,7 +234,7 @@
    - [ ] HR 4 模块 UI/API（`orgunit/jobcatalog/staffing/person`）的 read/admin 最小集。
 6. [ ] 统一 403/forbidden 输出契约：控制器侧不自造 JSON/HTML；统一走全局 responder/通用组件（对齐 `DEV-PLAN-017`）；响应体不回显 `subject/domain/object/action`。
 7. [ ] 落地匿名白名单（MVP）：保证 `role:anonymous` 仅访问 policy 明确列出的入口（至少 `iam.ping/read`）；任何新增匿名入口必须先定义稳定 object 并显式加 policy。
-8. [ ] 文档与门禁对齐：确保 `AGENTS.md` 与 `docs/dev-plans/012-v4-ci-quality-gates.md` 所述 Authz gates 与实际 `Makefile/scripts/authz/*` 一致，避免“文档说一套、CI 跑一套”。
+8. [ ] 文档与门禁对齐：确保 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 所述 Authz gates 与实际 `Makefile/scripts/authz/*` 一致，避免“文档说一套、CI 跑一套”。
 
 ## 7. 测试与覆盖率（Go 代码门禁）
 
@@ -254,11 +254,11 @@
 - **命名漂移**（principal vs user）：缓解——本计划在 §4.3 冻结为 principal（审计）与 role（授权），并要求 helpers（必要时集中 registry/常量）统一推导。
 - **策略分散**（每模块自造 object/action）：缓解——冻结 module 前缀与 action 最小集合；新增必须走 dev-plan；实现侧通过 stopline 阻断模块自拼字符串。
 - **误配全放行**（`AUTHZ_MODE=disabled`）：缓解——必须 `AUTHZ_UNSAFE_ALLOW_DISABLED=1` 显式解锁，否则 fail-fast；并要求单测覆盖。
-- **运维复杂度**（在线 apply/写文件）：缓解——V4 baseline 不纳入 apply；需要时另起子计划（暂定命名：DEV-PLAN-022A）并补齐持久化与回滚。
+- **运维复杂度**（在线 apply/写文件）：缓解——baseline 不纳入 apply；需要时另起子计划（暂定命名：DEV-PLAN-022A）并补齐持久化与回滚。
 
 ## 9. 验收标准（本计划完成定义）
 
-- [ ] V4 的 `subject/object/action/domain` 命名规范在文档与代码中一致，并有测试兜底。
+- [ ] `subject/object/action/domain` 命名规范在文档与代码中一致，并有测试兜底。
 - [ ] policy SSOT 清晰：策略碎片可追踪、聚合产物可复现、CI 能阻止漏提交。
 - [ ] 最小授权闭环可演示：登录（DEV-PLAN-019）→ 进入租户 → 访问受保护页面/API → 无权返回统一 403。
 - [ ] 匿名入口符合 §4.9：`role:anonymous` 仅可访问白名单（MVP 至少 `iam.ping/read`），新增匿名入口必须显式加 policy 且走 registry。

@@ -11,7 +11,7 @@ import (
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
-type OrgUnitV4SnapshotRow struct {
+type OrgUnitSnapshotRow struct {
 	OrgID        string
 	ParentID     string
 	Name         string
@@ -21,20 +21,20 @@ type OrgUnitV4SnapshotRow struct {
 	NodePath     string
 }
 
-type OrgUnitV4Store interface {
-	GetSnapshot(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitV4SnapshotRow, error)
+type OrgUnitSnapshotStore interface {
+	GetSnapshot(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitSnapshotRow, error)
 	CreateOrgUnit(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (string, error)
 }
 
-type orgUnitV4PGStore struct {
+type orgUnitSnapshotPGStore struct {
 	pool pgBeginner
 }
 
-func newOrgUnitV4PGStore(pool pgBeginner) OrgUnitV4Store {
-	return &orgUnitV4PGStore{pool: pool}
+func newOrgUnitSnapshotPGStore(pool pgBeginner) OrgUnitSnapshotStore {
+	return &orgUnitSnapshotPGStore{pool: pool}
 }
 
-func (s *orgUnitV4PGStore) GetSnapshot(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitV4SnapshotRow, error) {
+func (s *orgUnitSnapshotPGStore) GetSnapshot(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitSnapshotRow, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -62,9 +62,9 @@ ORDER BY node_path
 	}
 	defer rows.Close()
 
-	var out []OrgUnitV4SnapshotRow
+	var out []OrgUnitSnapshotRow
 	for rows.Next() {
-		var row OrgUnitV4SnapshotRow
+		var row OrgUnitSnapshotRow
 		if err := rows.Scan(&row.OrgID, &row.ParentID, &row.Name, &row.FullNamePath, &row.Depth, &row.ManagerID, &row.NodePath); err != nil {
 			return nil, err
 		}
@@ -79,7 +79,7 @@ ORDER BY node_path
 	return out, nil
 }
 
-func (s *orgUnitV4PGStore) CreateOrgUnit(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (string, error) {
+func (s *orgUnitSnapshotPGStore) CreateOrgUnit(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -129,7 +129,7 @@ SELECT orgunit.submit_org_event(
 	return orgID, nil
 }
 
-func handleOrgV4Snapshot(w http.ResponseWriter, r *http.Request, store OrgUnitV4Store) {
+func handleOrgSnapshot(w http.ResponseWriter, r *http.Request, store OrgUnitSnapshotStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -143,7 +143,7 @@ func handleOrgV4Snapshot(w http.ResponseWriter, r *http.Request, store OrgUnitV4
 	createdID := strings.TrimSpace(r.URL.Query().Get("created_id"))
 
 	if store == nil {
-		writePage(w, r, renderOrgV4Snapshot(nil, tenant, asOf, createdID, "store not configured"))
+		writePage(w, r, renderOrgSnapshot(nil, tenant, asOf, createdID, "store not configured"))
 		return
 	}
 
@@ -151,14 +151,14 @@ func handleOrgV4Snapshot(w http.ResponseWriter, r *http.Request, store OrgUnitV4
 	case http.MethodGet:
 		rows, err := store.GetSnapshot(r.Context(), tenant.ID, asOf)
 		if err != nil {
-			writePage(w, r, renderOrgV4Snapshot(nil, tenant, asOf, createdID, err.Error()))
+			writePage(w, r, renderOrgSnapshot(nil, tenant, asOf, createdID, err.Error()))
 			return
 		}
-		writePage(w, r, renderOrgV4Snapshot(rows, tenant, asOf, createdID, ""))
+		writePage(w, r, renderOrgSnapshot(rows, tenant, asOf, createdID, ""))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
-			writePage(w, r, renderOrgV4Snapshot(nil, tenant, asOf, "", "bad form"))
+			writePage(w, r, renderOrgSnapshot(nil, tenant, asOf, "", "bad form"))
 			return
 		}
 
@@ -170,17 +170,17 @@ func handleOrgV4Snapshot(w http.ResponseWriter, r *http.Request, store OrgUnitV4
 		}
 		if name == "" {
 			rows, _ := store.GetSnapshot(r.Context(), tenant.ID, asOf)
-			writePage(w, r, renderOrgV4Snapshot(rows, tenant, asOf, "", "name is required"))
+			writePage(w, r, renderOrgSnapshot(rows, tenant, asOf, "", "name is required"))
 			return
 		}
 
 		createdID, err := store.CreateOrgUnit(r.Context(), tenant.ID, effectiveDate, name, parentID)
 		if err != nil {
 			rows, _ := store.GetSnapshot(r.Context(), tenant.ID, asOf)
-			writePage(w, r, renderOrgV4Snapshot(rows, tenant, asOf, "", err.Error()))
+			writePage(w, r, renderOrgSnapshot(rows, tenant, asOf, "", err.Error()))
 			return
 		}
-		http.Redirect(w, r, "/org/v4/snapshot?as_of="+effectiveDate+"&created_id="+createdID, http.StatusSeeOther)
+		http.Redirect(w, r, "/org/snapshot?as_of="+effectiveDate+"&created_id="+createdID, http.StatusSeeOther)
 		return
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -188,9 +188,9 @@ func handleOrgV4Snapshot(w http.ResponseWriter, r *http.Request, store OrgUnitV4
 	}
 }
 
-func renderOrgV4Snapshot(rows []OrgUnitV4SnapshotRow, tenant Tenant, asOfDate string, createdID string, errMsg string) string {
+func renderOrgSnapshot(rows []OrgUnitSnapshotRow, tenant Tenant, asOfDate string, createdID string, errMsg string) string {
 	var b strings.Builder
-	b.WriteString("<h1>OrgUnit v4 Snapshot</h1>")
+	b.WriteString("<h1>OrgUnit Snapshot</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
 	b.WriteString("<p>As-of: <code>" + html.EscapeString(asOfDate) + "</code></p>")
 
@@ -201,8 +201,8 @@ func renderOrgV4Snapshot(rows []OrgUnitV4SnapshotRow, tenant Tenant, asOfDate st
 		b.WriteString(`<div style="padding:8px;border:1px solid #0a0;color:#0a0">created <code>` + html.EscapeString(createdID) + `</code></div>`)
 	}
 
-	b.WriteString(`<h2>Create (v4)</h2>`)
-	b.WriteString(`<form method="POST" action="/org/v4/snapshot?as_of=` + html.EscapeString(asOfDate) + `">`)
+	b.WriteString(`<h2>Create</h2>`)
+	b.WriteString(`<form method="POST" action="/org/snapshot?as_of=` + html.EscapeString(asOfDate) + `">`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOfDate) + `" /></label><br/>`)
 	b.WriteString(`<label>Name <input name="name" /></label><br/>`)
 	b.WriteString(`<label>Parent ID (optional) <input name="parent_id" /></label><br/>`)

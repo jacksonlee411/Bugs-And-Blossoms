@@ -4,7 +4,7 @@
 
 ## 1. 背景与上下文 (Context)
 
-`DEV-PLAN-031` 选定：任职记录（Assignment/Job Data）v4 归属 `modules/staffing`，写路径以 `person_uuid` 作为唯一身份锚点；`pernr`（工号）仅作为 UI 查询/筛选与展示用途（不进入 write-side 合同）。
+`DEV-PLAN-031` 选定：任职记录（Assignment/Job Data）归属 `modules/staffing`，写路径以 `person_uuid` 作为唯一身份锚点；`pernr`（工号）仅作为 UI 查询/筛选与展示用途（不进入 write-side 合同）。
 
 为避免 `staffing` 与 `persons` 表形成隐式耦合（跨模块直接查表/解析），`DEV-PLAN-016/031` 明确要求：**pernr → person_uuid 的解析由 `modules/person` 提供 options/read API**，并把“人员身份”收敛为一个最小、稳定、可复用的契约。
 
@@ -20,15 +20,15 @@
 
 ### 2.2 非目标（明确不做）
 - 不在本计划内引入“人员主数据全量模型”（证件/地址/雇佣信息等）。
-- 不在本计划内把 Person 强制改造成 v4 事件 SoT + versions（`DEV-PLAN-016` 已明确：Person 可选是否事件化，本计划默认不强制）。
+- 不在本计划内把 Person 强制改造成事件 SoT + versions（`DEV-PLAN-016` 已明确：Person 可选是否事件化，本计划默认不强制）。
 - 不在本计划内新增数据库表；仅定义最小字段/约束/接口契约。若实施阶段确需新增表，必须另开实施计划并获得手工确认（仓库红线）。
 
 ### 2.3 工具链与门禁（SSOT 引用）
 - DDD 分层与共享策略：`docs/dev-plans/015-ddd-layering-framework.md`
 - 4 模块边界与跨模块契约：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- Staffing v4 方案（对 Person 的依赖点）：`docs/dev-plans/031-greenfield-assignment-job-data-v4.md`
-- v4 Kernel 风格与 One Door Policy：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`
-- RLS（若扩展到 Person）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
+- Staffing 方案（对 Person 的依赖点）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
+- Kernel 风格与 One Door Policy：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+- RLS（若扩展到 Person）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - 命令入口与触发器矩阵：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`
 
 ## 3. 对 `DEV-PLAN-031` 的架构分析：Person 的最小责任面

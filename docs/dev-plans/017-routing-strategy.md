@@ -1,20 +1,20 @@
-# DEV-PLAN-017：V4 全局路由策略统一（UI/HTMX/API/Webhooks）
+# DEV-PLAN-017：全局路由策略统一（UI/HTMX/API/Webhooks）
 
 **状态**: 草拟中（2026-01-05 09:56 UTC）
 
-> 适用范围：**V4 Greenfield 全新实现**（路线图见 `DEV-PLAN-009`）。  
-> 本文以 `DEV-PLAN-018` 为蓝本，冻结 V4 的“全局路由命名空间 + 返回契约 + 安全暴露基线 + 门禁”口径，避免实现期各模块各写一套导致长期漂移。
+> 适用范围：**Greenfield 全新实现**（路线图见 `DEV-PLAN-009`）。  
+> 本文以 `DEV-PLAN-018` 为蓝本，冻结 Greenfield 的“全局路由命名空间 + 返回契约 + 安全暴露基线 + 门禁”口径，避免实现期各模块各写一套导致长期漂移。
 
 ## 1. 背景与上下文 (Context)
 
-- V4 选择 Greenfield 全新实施（路线图见 `DEV-PLAN-009`），不承担存量路由形态/legacy alias 的兼容包袱，但仍需要“路由治理型 SSOT”来保证一致性与可验证性。
-- V4 同时包含 UI（SSR/HTMX）、内部 JSON API（与 UI 同仓同发）、对外 API（如未来引入）、第三方回调（webhooks）、运维端点与测试/开发端点；若缺少统一规则，会直接放大鉴权、错误返回与安全暴露的漂移风险。
+- Greenfield 选择全新实施（路线图见 `DEV-PLAN-009`），不承担存量路由形态/legacy alias 的兼容包袱，但仍需要“路由治理型 SSOT”来保证一致性与可验证性。
+- Greenfield 同时包含 UI（SSR/HTMX）、内部 JSON API（与 UI 同仓同发）、对外 API（如未来引入）、第三方回调（webhooks）、运维端点与测试/开发端点；若缺少统一规则，会直接放大鉴权、错误返回与安全暴露的漂移风险。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
 ### 2.1 核心目标
 
-- [ ] 冻结 V4 **全局路由命名空间**：UI / 内部 API / 对外 API / Webhooks / AuthN / Ops / Dev / Test / Static / Websocket。
+- [ ] 冻结 **全局路由命名空间**：UI / 内部 API / 对外 API / Webhooks / AuthN / Ops / Dev / Test / Static / Websocket。
 - [ ] 冻结每类命名空间的**返回契约**：成功/失败（尤其 404/405/500）的 Content-Type 与 payload 形态。
 - [ ] 冻结**内容协商优先级**与统一实现方式（避免 controller 里手写分支）。
 - [ ] 冻结 **安全暴露基线**：生产环境默认不暴露 dev/test/playground；ops 端点必须有最小保护基线。
@@ -22,7 +22,7 @@
 
 ### 2.2 非目标（明确不做）
 
-- 不在本计划内迁移/复刻现仓库的历史路由与别名窗口；V4 默认从“强命名空间”起步。
+- 不在本计划内迁移/复刻现仓库的历史路由与别名窗口；默认从“强命名空间”起步。
 - 不在本计划内引入新的路由框架或 OpenAPI 生成门禁；如需引入，另开子计划并明确边界。
 - 不在本计划内规定具体模块路由清单（属于各模块 dev-plan 的职责）；本文只定义全局约束与门禁。
 
@@ -64,7 +64,7 @@ flowchart LR
     - 全局错误处理（404/405/500）返回契约；
     - 默认 middleware stack（按类别统一绑定）。
 - **选定**：allowlist SSOT 继续采用 YAML，并支持**多 entrypoint**（tenant app / superadmin app / 未来其他二进制）。
-- **选定（冻结）**：entrypoint key 使用稳定枚举（不随“V4/V3”变化）：`server`（tenant app）、`superadmin`（控制面 app）。
+- **选定（冻结）**：entrypoint key 使用稳定枚举（不随实现代际变化）：`server`（tenant app）、`superadmin`（控制面 app）。
 
 ### 4.2 命名空间与不变量（选定）
 
@@ -104,7 +104,7 @@ flowchart LR
 - **选定**：`/health` 与 `/debug/prometheus` 必须具备至少一层应用侧保护（例如 OpsGuard/BasicAuth/显式开关 + deny-by-default）；无法从代码可靠判断的网关侧策略不纳入自动门禁，但必须进入 review checklist。
 - **选定（失败模式冻结）**：allowlist 加载失败 / entrypoint 缺失属于“配置不可用”，必须 fail-fast（启动直接失败），禁止静默降级到“无规则/全 UI”。
 
-## 5. V4 门禁（Routing Quality Gates）(Checklist)
+## 5. 路由门禁（Routing Quality Gates）(Checklist)
 
 > 目标：把本计划的关键契约固化为 CI 可阻断的 gates；实现思路参考 `DEV-PLAN-018B`。
 
@@ -116,7 +116,7 @@ flowchart LR
 
 ## 6. 实施步骤 (Checklist)
 
-1. [ ] 明确二进制边界（tenant app / superadmin app），并在 allowlist SSOT 中维护 `server`、`superadmin` 两个 entrypoint（禁止“v4-server”之类的变体命名）。
+1. [ ] 明确二进制边界（tenant app / superadmin app），并在 allowlist SSOT 中维护 `server`、`superadmin` 两个 entrypoint（禁止引入版本标记（例如 `<ver>-server`）之类的变体命名）。
 2. [ ] 落地“路径分类器”（`path -> route_class`）与单一 responder 入口（用于 404/405/500 与 panic recovery）。
 3. [ ] 落地“按 route_class 绑定默认 middleware stack”的 router builder 约束（减少 controller 自由发挥）。
 4. [ ] 落地 Gate-A/B/C/D，并将其纳入 CI required checks（以 `.github/workflows/quality-gates.yml` 为准）。
@@ -128,4 +128,4 @@ flowchart LR
 - [ ] allowlist 缺失/损坏/entrypoint 缺失不会静默降级，且会被门禁阻断。
 - [ ] `internal_api/public_api/webhook` 的 404/405/500 在门禁中稳定断言为 JSON-only。
 - [ ] 生产默认不暴露 dev/test/playground 端点，且具备可测试的断言。
-- [ ] 本计划被后续 V4 子计划（`DEV-PLAN-011`～`DEV-PLAN-031`）引用并保持为路由治理 SSOT（避免重复写另一套规则）。
+- [ ] 本计划被后续子计划（`DEV-PLAN-011`～`DEV-PLAN-031`）引用并保持为路由治理 SSOT（避免重复写另一套规则）。

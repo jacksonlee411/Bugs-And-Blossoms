@@ -1,8 +1,8 @@
-# DEV-PLAN-019：V4 租户管理与登录认证（Kratos 认人 → RLS 圈地 → Casbin 管事）
+# DEV-PLAN-019：租户管理与登录认证（Kratos 认人 → RLS 圈地 → Casbin 管事）
 
 **状态**: 草拟中（2026-01-05 07:52 UTC）
 
-> 适用范围：**全新实现的 V4 新代码仓库（Greenfield）**。本文总结现仓库在“租户/认证/会话/RLS/Authz”上的既有实现与已评审契约（`DEV-PLAN-019*`、`DEV-PLAN-021`），并给出 V4 的最小可落地方案。  
+> 适用范围：**全新实现的新代码仓库（Greenfield）**。本文总结现仓库在“租户/认证/会话/RLS/Authz”上的既有实现与已评审契约（`DEV-PLAN-019*`、`DEV-PLAN-021`），并给出最小可落地方案。  
 > 对齐要求：`DEV-PLAN-015`（DDD 分层框架）、`DEV-PLAN-016`（HR 业务域 4 模块骨架）；本文引入一个 **平台 IAM/Tenancy 模块**，不计入 HR 业务域模块数量。
 
 ## 1. 现仓库实现总结（作为输入，不做兼容包袱）
@@ -18,12 +18,12 @@
 - **已评审演进方向**：`DEV-PLAN-019` 及子计划采用 **ORY Kratos** 作为 Headless Identity，应用保留 `/login` UI；PoC 选择 “Kratos 认人 → 本地 session 桥接”（见 `docs/dev-plans/019B-ory-kratos-session-bridge.md`）。
 
 ### 1.3 数据隔离（RLS）
-- **现状接口**：事务内设置 `app.current_tenant`（`set_config`），由 RLS policy 读取，实现 fail-closed（见 `pkg/composables/rls.go`；RLS 设计契约见 `docs/dev-plans/019A-rls-tenant-isolation.md`、V4 推进见 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`）。
+- **现状接口**：事务内设置 `app.current_tenant`（`set_config`），由 RLS policy 读取，实现 fail-closed（见 `pkg/composables/rls.go`；RLS 设计契约见 `docs/dev-plans/019A-rls-tenant-isolation.md`，推进见 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`）。
 
 ### 1.4 授权（AuthZ）
 - **系统级口径**：Casbin（“管事”）与 tenant subject（`tenant:{id}:user:{id}`）结合，形成纵深防御（`docs/dev-plans/019-multi-tenant-toolchain.md`）。
 
-## 2. V4 目标与非目标（Greenfield 口径）
+## 2. 目标与非目标（Greenfield 口径）
 
 ### 2.1 目标（Goals）
 - [ ] **租户解析 fail-closed**：任何需要 tenant 语义的入口在 tenant 未解析时必须拒绝（404/401），不得回退跨租户逻辑。
@@ -55,11 +55,11 @@
 ## 3. 模块与分层方案（对齐 015/016）
 
 ### 3.1 新增平台模块：`modules/iam`
-> 说明：`DEV-PLAN-016` 的 4 个 HR 业务域模块保持不变；`iam` 属于平台能力（Identity & Access Management），为 V4 运行态提供“租户/认证/授权基础设施”。
+> 说明：`DEV-PLAN-016` 的 4 个 HR 业务域模块保持不变；`iam` 属于平台能力（Identity & Access Management），为运行态提供“租户/认证/授权基础设施”。
 
 - `modules/iam/domain/`：
   - 聚合：`tenant`（Tenant + Domain 列表/主域规则）、`principal`（租户内登录主体）、`session`（运行态会话）。
-  - 值对象：`hostname`、`email`、`identity_mode`（V4 仅 `kratos`）。
+  - 值对象：`hostname`、`email`、`identity_mode`（仅 `kratos`）。
   - 端口（接口）：`TenantRepository`、`PrincipalRepository`、`SessionRepository`、`IdentityProvider`（Kratos client port）、`AuditSink`（可选）。
 - `modules/iam/infrastructure/`：
   - Postgres repo（tenant/principal/session）。
@@ -112,7 +112,7 @@
   - AuthZ（Casbin）只负责“是否允许做事”，不得承担 tenant 解析与 session 校验职责；
   - DB（RLS）只负责“圈地”，不得放宽 policy 作为跨租户旁路。
 
-## 5. 数据模型（V4 新仓库建议）
+## 5. 数据模型（新仓库建议）
 
 > 本节为目标态 schema 草案；是否启用 domain verify、是否引入企业 SSO、以及 superadmin 的更完整审计模型，后续按子计划扩展。
 
@@ -157,7 +157,7 @@
 - `principals`（数据面）可启用 RLS：
   - 登录入口已通过 Host 解析 tenant；因此可以在查询 principal 之前先注入 `app.current_tenant`。
   - 若实现成本过高，可先不启用 RLS，但必须保持所有查询显式包含 `tenant_id`，并用测试覆盖“缺 tenant 即失败/不跨租户命中”。
-- 推荐：**superadmin 使用独立 DB role/连接池**（旁路在连接层完成），tenant app 的 DB role 对业务表强制开启 RLS（对齐 `DEV-PLAN-021` 的 v4 口径）。
+- 推荐：**superadmin 使用独立 DB role/连接池**（旁路在连接层完成），tenant app 的 DB role 对业务表强制开启 RLS（对齐 `DEV-PLAN-021` 的口径）。
 
 ## 6. 路由与 UI（最小集）
 

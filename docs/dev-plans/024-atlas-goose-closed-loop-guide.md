@@ -1,18 +1,18 @@
-# DEV-PLAN-024：V4 Atlas + Goose 闭环指引（模块级 schema→迁移→门禁）
+# DEV-PLAN-024：Atlas + Goose 闭环指引（模块级 schema→迁移→门禁）
 
 **状态**: 草拟中（2026-01-05 08:30 UTC）
 
 ## 1. 背景与上下文 (Context)
 
-`DEV-PLAN-009`～`DEV-PLAN-023` 已冻结 v4 方向：Greenfield（全新实施）、DB Kernel（权威）、Go Facade（编排）、One Door Policy（唯一写入口），并在仓库内已有可复用的 Atlas+Goose 基线（`iam`/`orgunit`）。
+`DEV-PLAN-009`～`DEV-PLAN-023` 已冻结实施方向：Greenfield（全新实施）、DB Kernel（权威）、Go Facade（编排）、One Door Policy（唯一写入口），并在仓库内已有可复用的 Atlas+Goose 基线（`iam`/`orgunit`）。
 
-为保证 v4 新模块（见 `DEV-PLAN-016`）在最早期即可做到 **“schema 变更可规划、迁移可生成、可回滚、CI 可拦截漂移”**，本计划提供一份可执行的 Atlas+Goose 闭环指引，并冻结“模块级受控目录”的统一口径。
+为保证新模块（见 `DEV-PLAN-016`）在最早期即可做到 **“schema 变更可规划、迁移可生成、可回滚、CI 可拦截漂移”**，本计划提供一份可执行的 Atlas+Goose 闭环指引，并冻结“模块级受控目录”的统一口径。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
 ### 2.1 核心目标
-- [ ] **闭环统一**：对 v4 模块提供统一的“Schema SSOT → Atlas plan/lint → Goose apply”闭环指引与验收标准。
-- [ ] **模块级隔离**：每个 v4 模块拥有独立迁移目录与独立 goose 版本表，避免跨模块串号与门禁误触发。
+- [ ] **闭环统一**：对模块提供统一的“Schema SSOT → Atlas plan/lint → Goose apply”闭环指引与验收标准。
+- [ ] **模块级隔离**：每个模块拥有独立迁移目录与独立 goose 版本表，避免跨模块串号与门禁误触发。
 - [ ] **命名与目录冻结**：冻结 `atlas.hcl` env 命名、migrations 目录命名、goose 版本表命名，降低实施期沟通成本。
 - [ ] **Makefile/CI 对齐**：新增模块的入口与 CI 门禁以 `Makefile`/`.github/workflows/quality-gates.yml` 为 SSOT，对齐现有 `iam`/`orgunit` 样板。
 - [ ] **失败路径明确**：常见故障（hash 漂移、stub 缺失、版本表冲突、破坏性变更等）提供明确处理路径，避免“凭经验修库”。
@@ -33,12 +33,12 @@
 - Goose runner：`scripts/db/run_goose.sh`（自动安装到 `bin/goose`）
 - DB 闭环脚本：`scripts/db/plan.sh`、`scripts/db/lint.sh`、`scripts/db/migrate.sh`
 - 现有样板（代码即样板）：`migrations/iam` + `modules/iam/infrastructure/persistence/schema`；`migrations/orgunit` + `modules/orgunit/infrastructure/persistence/schema`
-- v4 模块边界：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
+- 模块边界：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 
 ## 3. 统一闭环（架构与关键决策）
 
 ### 3.1 单一流水线（选定）
-**选定**：v4 采用与现有 `iam`/`orgunit` 同构的单一流水线：
+**选定**：采用与现有 `iam`/`orgunit` 同构的单一流水线：
 
 ```mermaid
 flowchart TD
@@ -81,7 +81,7 @@ flowchart TD
 | goose 版本表（必须） | `goose_db_version_<module>`（由 `scripts/db/migrate.sh` 固定传入） |
 
 ### 3.4 跨模块依赖（冻结口径）
-**冻结**：v4 业务模块默认 **禁止跨模块 FK**；跨模块只存 ID（例如 `tenant_id`），不在 DB 层强绑定到别的模块表（对齐 `DEV-PLAN-016` 的边界原则）。
+**冻结**：业务模块默认 **禁止跨模块 FK**；跨模块只存 ID（例如 `tenant_id`），不在 DB 层强绑定到别的模块表（对齐 `DEV-PLAN-016` 的边界原则）。
 
 例外（必须显式论证）：
 - 只有当某个 FK 是“必须的业务不变量/监管约束”时，才允许作为例外；并且必须在该子域 dev-plan 中明确：
@@ -93,7 +93,7 @@ flowchart TD
 - 目前 `scripts/db/plan.sh`/`scripts/db/lint.sh` **不会读取** `modules/<module>/infrastructure/atlas/core_deps.sql`，因此该文件路径仅做目录预留，并不构成可用方案；若未来确需 stub，必须另开 dev-plan 落地脚本/CI 支持后才能使用。
 
 关于 `tenants/tenant_domains`：
-- v4 推荐：除 `iam`（见 `DEV-PLAN-019`）外，业务模块默认只保存 `tenant_id` 并依赖 RLS/`assert_current_tenant` 做 fail-closed，不对 `tenants` 做 FK（减少跨模块 DB 耦合与 stub 漂移）。
+- 推荐：除 `iam`（见 `DEV-PLAN-019`）外，业务模块默认只保存 `tenant_id` 并依赖 RLS/`assert_current_tenant` 做 fail-closed，不对 `tenants` 做 FK（减少跨模块 DB 耦合与 stub 漂移）。
 - 若某模块坚持对 `tenants` 建 FK：必须在该模块的实现 dev-plan 中明确“依赖顺序（先 apply `iam` 迁移）+ 工具链可复现策略 + 回滚影响面”，不得仅靠“本地库刚好有 tenants 表”隐式通过。
 
 停止线：
@@ -104,14 +104,14 @@ flowchart TD
 - [ ] 任何将引入新表的迁移（出现 `CREATE TABLE`）在落地前必须获得人工确认（仓库红线，见 `AGENTS.md`）。
 
 ### 3.6 迁移版本号（`version_id`）与文件名规则（冻结）
-为降低并行开发下的冲突与回滚误操作风险，v4 **新建模块**的 goose 迁移文件名统一采用：
+为降低并行开发下的冲突与回滚误操作风险，**新建模块**的 goose 迁移文件名统一采用：
 - `YYYYMMDDHHMMSS_<slug>.sql`（UTC 时间戳，14 位，作为 goose `version_id`）
 - 示例：`20260105083000_orgunit_baseline.sql`
 
 约束：
 - 同一模块内 `version_id` 必须严格递增（按时间戳天然满足）。
 - 禁止在不同模块共享同一个 goose 版本表；否则仅按 `version_id` 记账会导致串号（已在 3.2 冻结）。
-- 现仓库既有目录（例如 `migrations/person` 的 `00001_...`）不强制回迁；本规则仅约束 v4 新建模块，避免在旧资产上制造额外 churn。
+- 现仓库既有目录（例如 `migrations/person` 的 `00001_...`）不强制回迁；本规则仅约束新建模块，避免在旧资产上制造额外 churn。
 
 ### 3.7 与现有样板的对照（避免“再发明一套”）
 - `iam`：`modules/iam/infrastructure/persistence/schema` + `migrations/iam`；本地 `make iam plan && make iam lint && make iam migrate up`；CI 见 `.github/workflows/quality-gates.yml` 的 “DB Gates”。
@@ -138,13 +138,13 @@ migrations/orgunit/
 
 ## 5. 接入落地步骤（给“新增模块闭环”用）
 
-> 目标：把某个 v4 模块接入到“可 plan/lint/apply + CI 门禁”的状态；模板以仓库现有 `iam`/`orgunit` 为参照。
+> 目标：把某个模块接入到“可 plan/lint/apply + CI 门禁”的状态；模板以仓库现有 `iam`/`orgunit` 为参照。
 
 ### 5.1 建议接入顺序（路线图）
 为减少跨模块依赖与“先有鸡还是先有蛋”，建议接入顺序为：
 1. `iam`：先落 `tenants/tenant_domains/sessions` 等平台表（见 `DEV-PLAN-019`），并把其 Atlas+Goose 闭环跑通。
 2. `orgunit` / `jobcatalog` / `staffing`：按业务优先级逐个接入；每个模块独立 migrations/env/版本表。
-3. `person`（v4 identity）：按 `DEV-PLAN-027` 的契约落地；是否复用现有 `migrations/person` 取决于“是否新建 v4 person 模块与新表”，需在实现计划中明确。
+3. `person`（identity）：按 `DEV-PLAN-027` 的契约落地；是否复用现有 `migrations/person` 取决于“是否新建 person 模块与新表”，需在实现计划中明确。
 
 ### 5.2 接入落地步骤
 1. [ ] 准备 Schema SSOT：在 `modules/<module>/infrastructure/persistence/schema/` 创建/维护 schema SQL（SSOT）。
@@ -190,7 +190,7 @@ migrations/orgunit/
 - [ ] CI 的 “DB Gates”（`paths.outputs.db == true`）包含该模块的 `make <module> plan/lint/migrate up` 且可跑通（见 `.github/workflows/quality-gates.yml`）。
 - [ ] goose 使用独立版本表：`goose_db_version_<module>`。
 - [ ] 生成物无漂移：CI 的 `./scripts/ci/assert-clean.sh` 为 OK（`atlas.sum` 等生成物必须提交）。
-- [ ] migrations 文件名符合 3.6 的 `version_id` 规则（v4 新建模块）。
+- [ ] migrations 文件名符合 3.6 的 `version_id` 规则（新建模块）。
 
 ## 9. Simple > Easy Review（DEV-PLAN-003）
 

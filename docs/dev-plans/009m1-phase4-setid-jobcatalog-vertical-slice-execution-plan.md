@@ -9,21 +9,21 @@
 
 - 目标（对齐 `DEV-PLAN-009` Phase 4 出口条件 #3）：在 JobCatalog 至少一个实体上形成“**解析 → 写入 → 列表读取**”的 **UI 可见且可操作** 闭环。
 - 依赖（SSOT 引用）：
-  - SetID：`docs/dev-plans/028-v4-setid-management.md`
-  - JobCatalog v4：`docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`
+  - SetID：`docs/dev-plans/028-setid-management.md`
+  - JobCatalog：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
   - 门禁与触发器：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`
-  - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn-v4.md`
-  - RLS：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
-  - Authz：`docs/dev-plans/022-v4-authz-casbin-toolchain.md`
-  - Routing：`docs/dev-plans/017-v4-routing-strategy.md`
-  - Atlas+Goose：`docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`
-  - sqlc：`docs/dev-plans/025-sqlc-guidelines-for-v4.md`
+  - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
+  - RLS：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+  - Authz：`docs/dev-plans/022-authz-casbin-toolchain.md`
+  - Routing：`docs/dev-plans/017-routing-strategy.md`
+  - Atlas+Goose：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
+  - sqlc：`docs/dev-plans/025-sqlc-guidelines.md`
 
 ## 2. 非目标（本执行计划不做）
 
 - 不定义 JobCatalog 的具体业务数据模型/字段/页面交互细节（以 `DEV-PLAN-029` 为合同）。
 - 不引入存量迁移/兼容/灰度策略。
-- 不新增“第二写入口”：所有 v4 写入必须遵守 One Door（写入走 DB Kernel 的 `submit_*_event(...)`）。
+- 不新增“第二写入口”：所有写入必须遵守 One Door（写入走 DB Kernel 的 `submit_*_event(...)`）。
 
 ## 3. Done 口径（验收/关闭条件）
 
@@ -32,7 +32,7 @@
 - [ ] SetID 解析在该闭环中被实际调用（而不是仅有工具函数或文档描述）。
 
 ### 3.2 安全与门禁（不可漂移）
-- [ ] No Tx, No RLS：访问 v4 表的路径必须在事务内注入 `app.current_tenant`，缺失上下文 fail-closed（对齐 `DEV-PLAN-021`）。
+- [ ] No Tx, No RLS：访问 Greenfield 表的路径必须在事务内注入 `app.current_tenant`，缺失上下文 fail-closed（对齐 `DEV-PLAN-021`）。
 - [ ] 授权可拒绝：至少对上述闭环路径接入统一 403 契约与策略 SSOT（对齐 `DEV-PLAN-022`）。
 - [ ] 触发器矩阵命中项均通过本地门禁（按 `AGENTS.md`）：涉及 Go/路由/sqlc/迁移/authz 时，不允许“只跑一半”。
 
@@ -62,8 +62,8 @@
 - [ ] 在 tenant app 中提供一个可验证的调用入口（页面或表单流程的一部分），确保“解析”不是孤立实现。
 - [ ] 门禁：命中项按 `AGENTS.md` 执行；必要时补齐 `make check routing` 与 `make authz-*` 的门禁证据。
 
-### PR-4：JobCatalog v4 最小闭环（029）
-- [ ] 依据 `DEV-PLAN-029` 合同实现 v4 Kernel 的最小闭环（事件 SoT + 同事务同步投射 + 读模型查询）。
+### PR-4：JobCatalog 最小闭环（029）
+- [ ] 依据 `DEV-PLAN-029` 合同实现 Kernel 的最小闭环（事件 SoT + 同事务同步投射 + 读模型查询）。
 - [ ] 读路径与写路径均在 tenant 事务内执行并注入租户上下文（对齐 `DEV-PLAN-021`）。
 - [ ] 如命中 sqlc：执行 `make sqlc-generate`，并确保生成物提交且 `git status --short` 为空（对齐 `DEV-PLAN-025`）。
 

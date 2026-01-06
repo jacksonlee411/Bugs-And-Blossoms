@@ -1,15 +1,15 @@
-# DEV-PLAN-012：V4 CI 质量门禁（Quality Gates：Lint/Tests/Routing/E2E）
+# DEV-PLAN-012：CI 质量门禁（Quality Gates：Lint/Tests/Routing/E2E）
 
 **状态**: 草拟中（2026-01-05 09:25 UTC）
 
 ## 1. 背景与上下文 (Context)
 
-`DEV-PLAN-009`～`DEV-PLAN-031` 明确了 V4 的 Greenfield 全新实施路线：不做存量兼容包袱，但必须尽早冻结“可验证的工程契约”，否则实现期会出现：
+`DEV-PLAN-009`～`DEV-PLAN-031` 明确了 Greenfield 全新实施路线：不做存量兼容包袱，但必须尽早冻结“可验证的工程契约”，否则实现期会出现：
 - 本地/CI/部署版本漂移（不可复现）
 - 各模块各写一套脚本/门禁（长期 drift）
 - 生成物漏提交、迁移闭环不完整、路由/授权口径不一致（PR 反复返工）
 
-本计划的定位是：为 V4 新仓库建立一套**全面且可执行**的 CI 质量门禁（required checks），并把门禁与本地入口收敛到 `Makefile`/CI workflow 的单一事实源（SSOT）。
+本计划的定位是：为新仓库建立一套**全面且可执行**的 CI 质量门禁（required checks），并把门禁与本地入口收敛到 `Makefile`/CI workflow 的单一事实源（SSOT）。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
@@ -38,13 +38,13 @@
 - 触发器矩阵与本地必跑：`AGENTS.md`
 - 命令入口：`Makefile`
 - CI 门禁：`.github/workflows/quality-gates.yml`
-- 版本基线：`docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
-- Astro UI（必选）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`
+- 版本基线：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
+- Astro UI（必选）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - 多语言门禁（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
-- Atlas+Goose 闭环：`docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`
-- sqlc 门禁：`docs/dev-plans/025-sqlc-guidelines-for-v4.md`
-- Authz 门禁：`docs/dev-plans/022-v4-authz-casbin-toolchain.md`
-- 路由门禁：`docs/dev-plans/017-v4-routing-strategy.md`
+- Atlas+Goose 闭环：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
+- sqlc 门禁：`docs/dev-plans/025-sqlc-guidelines.md`
+- Authz 门禁：`docs/dev-plans/022-authz-casbin-toolchain.md`
+- 路由门禁：`docs/dev-plans/017-routing-strategy.md`
 
 本计划实施时通常会命中：
 - [ ] CI workflow / Makefile（本计划交付）
@@ -55,7 +55,7 @@
 - [ ] UI（Astro/pnpm）与 E2E（Playwright）
 - [X] 文档（本计划 → `make check doc`）
 
-## 3. 总体方案：V4 CI 质量门禁框架 (Quality Gates)
+## 3. 总体方案：CI 质量门禁框架 (Quality Gates)
 
 ### 3.1 Required Checks：四大门禁（稳定、可预测）
 
@@ -193,7 +193,7 @@
 - [ ] DB 门禁失败：Atlas/goose/sqlc 的失败日志必须被保留为 artifact（至少包含 plan/lint 输出与迁移日志）。
 - [ ] E2E 波动：必须默认输出 trace/screenshot/video（按新仓库 SSOT），并在失败时上传报告。
 
-## 6. 测试与覆盖率（V4 新仓库 100% 门禁）
+## 6. 测试与覆盖率（新仓库 100% 门禁）
 
 > 对齐 `DEV-PLAN-019/025/022`：100% 覆盖率门禁应作为“可测性设计”的约束，而不是末尾豁免。
 
@@ -217,12 +217,12 @@
 
 ## 8. 参考与链接 (Links)
 
-- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`
-- `docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
-- `docs/dev-plans/019-tenant-and-authn-v4.md`
+- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
+- `docs/dev-plans/019-tenant-and-authn.md`
 - `docs/dev-plans/020-i18n-en-zh-only.md`
-- `docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`
-- `docs/dev-plans/025-sqlc-guidelines-for-v4.md`
-- `docs/dev-plans/022-v4-authz-casbin-toolchain.md`
-- `docs/dev-plans/017-v4-routing-strategy.md`
+- `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
+- `docs/dev-plans/025-sqlc-guidelines.md`
+- `docs/dev-plans/022-authz-casbin-toolchain.md`
+- `docs/dev-plans/017-routing-strategy.md`
 - `.github/workflows/quality-gates.yml`
