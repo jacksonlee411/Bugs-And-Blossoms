@@ -357,9 +357,11 @@ func writeShell(w http.ResponseWriter, r *http.Request, bodyHTML string) {
 	_, _ = w.Write([]byte(`<script src="/assets/js/lib/htmx.min.js"></script>`))
 	_, _ = w.Write([]byte(`<script defer src="/assets/js/lib/alpine.min.js"></script>`))
 	_, _ = w.Write([]byte(`</head><body>`))
-	_, _ = w.Write([]byte(`<aside id="nav" hx-get="/ui/nav" hx-trigger="load"></aside>`))
-	_, _ = w.Write([]byte(`<header id="topbar" hx-get="/ui/topbar" hx-trigger="load"></header>`))
-	_, _ = w.Write([]byte(`<div id="flash" hx-get="/ui/flash" hx-trigger="load"></div>`))
+	if hasSession(r) {
+		_, _ = w.Write([]byte(`<aside id="nav" hx-get="/ui/nav" hx-trigger="load"></aside>`))
+		_, _ = w.Write([]byte(`<header id="topbar" hx-get="/ui/topbar" hx-trigger="load"></header>`))
+		_, _ = w.Write([]byte(`<div id="flash" hx-get="/ui/flash" hx-trigger="load"></div>`))
+	}
 	_, _ = w.Write([]byte(`<main id="content">` + bodyHTML + `</main>`))
 	_, _ = w.Write([]byte(`</body></html>`))
 	_ = l
