@@ -1,8 +1,8 @@
-# DEV-PLAN-009：V4 Greenfield 全新实施路线图（009-031）
+# DEV-PLAN-009：Greenfield 全新实施路线图（009-031）
 
 **状态**: 实施中（2026-01-06）
 
-> 目标：在“从 0 开始的新代码仓库（Greenfield）”里，按 `DEV-PLAN-010`～`DEV-PLAN-031` 的契约，全新实施一套可运行、可验证、可演进的 HRMS v4。  
+> 目标：在“从 0 开始的新代码仓库（Greenfield）”里，按 `DEV-PLAN-010`～`DEV-PLAN-031` 的契约，全新实施一套可运行、可验证、可演进的 HRMS（Greenfield）。  
 > 本文只做 **路线图编排（先后顺序 + 串行/并行）**，不复制各计划内部的细节；具体合同以对应 dev-plan 为准。  
 > 注：路线图覆盖 `DEV-PLAN-010`～`DEV-PLAN-031`；编号已按本路线图的先后顺序重排。
 
@@ -13,7 +13,7 @@
    - 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`、#11 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/11
 
 ## 1. 背景（从 0 开始实施的约束）
-V4 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必须尽早冻结“可验证的工程契约”，否则实现期会出现：
+选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必须尽早冻结“可验证的工程契约”，否则实现期会出现：
 - 工具链/版本漂移导致不可复现；
 - 各模块各写一套路由/授权/迁移/生成工作流导致长期 drift；
 - DB Kernel（事件 SoT + 同步投射）的 One Door / RLS 注入在实现期被“补丁式绕过”。
@@ -34,7 +34,7 @@ V4 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必�
 ## 3. 执行原则（把“简单”落到交付节奏）
 1. **先门禁、后扩展**：能被 CI 阻断的契约（版本/生成物/迁移闭环/路由分类/授权口径）必须前置（011/024/017/012）。
 2. **平台先行、业务复用**：RLS/Authz/Tenancy 的契约先落地，业务模块只“复用”，不各自实现第二套（019/021/022）。
-3. **One Door / No Tx, No RLS**：涉及 v4 表的任何读写，从第一天起就按 026/021/025 的合同实现；不要先跑通再回填。
+3. **One Door / No Tx, No RLS**：涉及 Greenfield 表的任何读写，从第一天起就按 026/021/025 的合同实现；不要先跑通再回填。
 4. **以最小端到端闭环做节奏锚点**：每个阶段都要产出“能演示、能测、能回滚”的最小闭环，而不是堆积半成品。
 5. **用户可见性（避免僵尸功能）**：每个能力交付必须在页面上可见/可操作（至少一条端到端链路）；若短期后端先行，也必须同步提供明确的 UI 入口规划与验收方式。
 
@@ -54,24 +54,24 @@ V4 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必�
 
 - **平台与安全（业务的运行时前提）**
   - `DEV-PLAN-019`：Tenancy/AuthN/session（阻塞 021/022/028，以及业务模块的 tenant 上下文与 bootstrap）。
-  - `DEV-PLAN-021`：v4 表默认启用 RLS（依赖 019 的 tenant 注入契约；阻塞 025/022/023 与 v4 模块实现“从第一天就强隔离”）。
+  - `DEV-PLAN-021`：Greenfield 表默认启用 RLS（依赖 019 的 tenant 注入契约；阻塞 025/022/023 等实现“从第一天就强隔离”）。
   - `DEV-PLAN-022`：Casbin Authz 契约与工具链（依赖 019/021；阻塞 UI/API 的统一 403 与策略治理）。
   - `DEV-PLAN-023`：SuperAdmin 控制面认证与旁路（显式依赖 019/021；用于跨租户操作与可审计旁路）。
   - `DEV-PLAN-020`：仅 en/zh 的 i18n 合同（可与 018 并行，但应在 UI 规模化前完成）。
 
 - **DB/生成工具链（把确定性变成门禁）**
-  - `DEV-PLAN-024`：Atlas+Goose 模块级闭环（依赖 011；建议在任何 v4 schema 开始落盘前完成）。
+  - `DEV-PLAN-024`：Atlas+Goose 模块级闭环（依赖 011；建议在任何 schema 开始落盘前完成）。
   - `DEV-PLAN-025`：sqlc 规范（显式依赖 011/015/016/021；建议在第一批 sqlc 生成物进入主干前完成）。
 
 - **主数据治理（影响 JobCatalog/Staffing 的建模）**
   - `DEV-PLAN-028`：SetID（依赖 016/019/021；应在 029/030 进入“落盘与 API 合同冻结”前完成，以避免返工）。
 
 - **业务模块（交付主体）**
-  - `DEV-PLAN-026`：OrgUnit v4（依赖 016/024/021；为 Staffing/SetID/UI 提供组织基础）。
-  - `DEV-PLAN-029`：Job Catalog v4（依赖 016/024/021/028；为 Staffing/Assignments 提供主数据）。
-  - `DEV-PLAN-030`：Position v4（Staffing，依赖 026/029/016/024/021；Position↔Assignment 强不变量收敛在同模块）。
+  - `DEV-PLAN-026`：OrgUnit（依赖 016/024/021；为 Staffing/SetID/UI 提供组织基础）。
+  - `DEV-PLAN-029`：Job Catalog（依赖 016/024/021/028；为 Staffing/Assignments 提供主数据）。
+  - `DEV-PLAN-030`：Position（Staffing，依赖 026/029/016/024/021；Position↔Assignment 强不变量收敛在同模块）。
   - `DEV-PLAN-027`：Person 最小身份锚点（依赖 016；为 031 的 `person_uuid` 写侧合同做前置）。
-  - `DEV-PLAN-031`：Assignments v4（依赖 030/027，并与 026/029 组合；UI 合同“仅展示 effective_date”对齐 018/020）。
+  - `DEV-PLAN-031`：Assignments（依赖 030/027，并与 026/029 组合；UI 合同“仅展示 effective_date”对齐 018/020）。
   - `DEV-PLAN-018`：AHA UI Shell（壳/导航/Topbar/i18n/as-of 应前置；模块页面与权限集成随 022 与各业务垂直切片推进）。
 
 ## 5. 实施路线图（串行 + 并行泳道）
@@ -105,7 +105,7 @@ V4 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必�
 - 可并行：
   - `024`（模块级迁移闭环）可与本阶段并行推进，但必须在业务模块落 schema 前收口。
 - 出口条件：
-  1. [ ] v4 表的 RLS 注入契约可用（No Tx, No RLS），并有最小 fail-closed 测试（021）。
+  1. [ ] Greenfield 表的 RLS 注入契约可用（No Tx, No RLS），并有最小 fail-closed 测试（021）。
   2. [ ] Authz 最小闭环：统一 403 契约 + policy SSOT + 可 shadow/enforce（022）。
   3. [ ] 控制面边界可用（至少 Phase 0/1）：独立 cookie + 显式 bypass pool/role + 审计（023）。
 
@@ -131,7 +131,7 @@ V4 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必�
   1. [X] OrgUnit：至少一条“写入→读树/详情”的 UI 操作链路可演示（026 + 018）。证据：#21 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/21 、#22 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/22 、#26 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/26 、#28 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/28 、#29 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/29 、#30 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/30
   2. [ ] Person Identity：`pernr -> person_uuid` 精确解析可被页面/表单实际复用（027 + 018），避免 staffing 自己解析形成隐形耦合。
   3. [ ] SetID + JobCatalog：SetID 映射可配置，并在 JobCatalog 至少一个实体形成“解析→写入→列表读取”的 UI 样板（028 + 029 + 018）。
-  4. [ ] Staffing：Position 与 Assignments 的 v4 写入口与读模型闭环可用，且至少一条“创建/更新→列表可见”的 UI 链路存在（030/031 + 018）。
+  4. [ ] Staffing：Position 与 Assignments 的写入口与读模型闭环可用，且至少一条“创建/更新→列表可见”的 UI 链路存在（030/031 + 018）。
   5. [ ] Assignments UI：严格执行“仅展示 `effective_date`”（031/018）。
 
 ### Phase 5：质量收口（把“能跑”变成“可长期演进”）

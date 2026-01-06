@@ -1,12 +1,12 @@
-# DEV-PLAN-020：V4 多语言（仅 en/zh：UI 选择 + Accept-Language + 用户语言）
+# DEV-PLAN-020：多语言（仅 en/zh：UI 选择 + Accept-Language + 用户语言）
 
 **状态**: 草拟中（2026-01-05 07:48 UTC）
 
 ## 1. 背景与上下文 (Context)
 
-`DEV-PLAN-009` 已明确 HRMS v4 的 Greenfield 路线：DB=Projection Kernel（权威）、Go=Command Facade（编排）、One Door Policy（唯一写入口），并采用 AHA UI Shell（`DEV-PLAN-018`：Astro + HTMX + Alpine）。
+`DEV-PLAN-009` 已明确 HRMS（Greenfield）的路线：DB=Projection Kernel（权威）、Go=Command Facade（编排）、One Door Policy（唯一写入口），并采用 AHA UI Shell（`DEV-PLAN-018`：Astro + HTMX + Alpine）。
 
-为保证 v4 的全局 UX 一致性与可维护性，需要将“界面语言（UI language）”作为系统级能力收敛并冻结契约：
+为保证全局 UX 一致性与可维护性，需要将“界面语言（UI language）”作为系统级能力收敛并冻结契约：
 - 系统仅暴露并支持 `en` / `zh` 两种语言，不扩展更多语言。
 - 多语言只覆盖 **界面文案与交互提示**（导航、按钮、表单标签、错误提示等）。
 - 多语言 **不涉及业务数据**：例如创建部门/组织单元时，只维护单一 `name` 文本；不支持“部门名称的多语言版本”之类的数据结构。
@@ -60,7 +60,7 @@
 - 始终对候选语言执行 whitelist matcher：`Match([en, zh], candidates...)`，保证最终 locale 只能是 `en` 或 `zh`。
 - 任一来源出现“不可解析/不在白名单/空值”，都不得导致报错或落入非 `en/zh`；必须进入回退路径并最终落到 `en` 或 `zh`。
 
-### 3.3 UI 语言切换（V4 Shell）
+### 3.3 UI 语言切换（UI Shell）
 对齐 `DEV-PLAN-018` 的 Shell 约束：语言是“动态上下文”，不得在 Astro 壳里固化。
 
 **选定**：在 Topbar 提供快速切换入口，并将“切换语言”收敛为一个小而明确的写入口：
@@ -90,7 +90,7 @@
 - 代码/模板引用的 key 必须在允许语言集合中可被 localize（避免运行期 panic）。
 
 **key 命名建议（避免冲突）**：
-- v4 新模块按 016 的模块划分做命名空间前缀：
+- 新模块按 016 的模块划分做命名空间前缀：
   - `OrgUnit.*` / `JobCatalog.*` / `Staffing.*` / `Person.*`
 - UI Shell（018）的公共文案以 `UI.*` 前缀收敛（例如 `UI.Topbar.Language`）。
 
@@ -138,7 +138,7 @@
 2. [ ] locale 解析收敛：HTTP middleware 与 WS 广播等入口复用 whitelist matcher（避免任何路径落入非 `en/zh`）。
 3. [ ] 用户资料语言：在用户资料更新入口中强制校验 `en|zh`；（可选）增加 DB check constraint。
 4. [ ] UI Shell 集成（对齐 018）：Topbar 增加语言切换入口，并接入 `POST /ui/language`。
-5. [ ] 翻译资源补齐：为 v4 UI Shell 与 v4 模块新增的文案补齐 `en/zh` keys，并通过 `make check tr`。
+5. [ ] 翻译资源补齐：为 UI Shell 与模块新增的文案补齐 `en/zh` keys，并通过 `make check tr`。
 
 ### 6.1 实现落点 checklist（避免实现期分叉）
 - [ ] HTTP：统一 locale 解析函数包含 cookie 分支（用户资料 → cookie → `Accept-Language` → `en`），并在末端做 whitelist match。
@@ -167,4 +167,4 @@
 
 ## 8. 交付物
 - [ ] `docs/dev-plans/020-i18n-en-zh-only.md`（本文）
-- [ ] 实施 PR：语言切换入口 + locale 解析 + v4 UI shell i18n 集成（对齐 026-018）
+- [ ] 实施 PR：语言切换入口 + locale 解析 + UI shell i18n 集成（对齐 026-018）

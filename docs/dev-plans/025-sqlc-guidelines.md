@@ -1,26 +1,26 @@
-# DEV-PLAN-025：V4 sqlc 工具链使用指引与规范（SQL-first + DB Kernel + RLS）
+# DEV-PLAN-025：sqlc 工具链使用指引与规范（SQL-first + DB Kernel + RLS）
 
 **状态**: 草拟中（2026-01-05 08:48 UTC）
 
-> 适用范围：**全新实现的 V4 新代码仓库（Greenfield）**，并将按 `DEV-PLAN-026/030/029/021` 的 DB Kernel 范式实现。  
+> 适用范围：**全新实现的新代码仓库（Greenfield）**，并将按 `DEV-PLAN-026/030/029/021` 的 DB Kernel 范式实现。  
 > 上游依赖：`DEV-PLAN-011`（工具链版本冻结）、`DEV-PLAN-015`（DDD 分层框架）、`DEV-PLAN-016`（模块骨架）、`DEV-PLAN-021`（RLS 注入契约）。  
-> 目标：把 sqlc 从“生成工具”收敛为一套**可审查、可验证、可复用**的工程规范，避免 V4 体系在实现期因 SQL 漂移而退化为“容易（Easy）”的补丁堆叠。
+> 目标：把 sqlc 从“生成工具”收敛为一套**可审查、可验证、可复用**的工程规范，避免体系在实现期因 SQL 漂移而退化为“容易（Easy）”的补丁堆叠。
 
 ## 1. 结论先行（必须遵守的最小规则）
 
 1. **SQL-first**：只要是持久化读写，优先用 SQL + sqlc（拒绝 ORM 逃逸口）。
 2. **One Door**（对齐 026-029）：写入必须走 DB Kernel 的 `submit_*_event(...)`（或等价唯一入口）；应用层禁止直写 events/versions/identity 表。
-3. **No Tx, No RLS**（对齐 021）：凡访问 v4 tenant-scoped 表，必须显式事务，并在事务内注入 `app.current_tenant`（fail-closed）。
+3. **No Tx, No RLS**（对齐 021）：凡访问 tenant-scoped 表，必须显式事务，并在事务内注入 `app.current_tenant`（fail-closed）。
 4. **生成物必须提交**：sqlc 生成的 Go 代码属于门禁产物，必须随 PR 提交；CI 只接受“生成物与源码一致”。
 5. **模块边界优先**：sqlc 查询/包按模块拆分，禁止跨模块 import 对方的 `infrastructure/**` 生成包；跨模块读写通过 DB Kernel 函数/视图或在本模块内封装 adapter。
 
-## 2. 背景：为何 V4 仍要用 sqlc（结合 V4）
+## 2. 背景：为何仍要用 sqlc
 
 `DEV-PLAN-026/030/029` 选定了 **DB Kernel（Postgres）作为不变量与投射的最终裁判**：advisory lock、GiST exclusion、ltree、jsonb 校验、同事务 replay 等都让 SQL 成为“领域合同”的主要载体。此时：
 - 如果继续用手写分散 SQL，reviewer 很难判断“权威表达是否唯一”“是否绕过 One Door”“是否遗漏 RLS 注入”。
-- 如果引入 ORM，SQL 会被隐藏在运行期拼装里，反而削弱 V4 追求的可解释性与可验证性。
+- 如果引入 ORM，SQL 会被隐藏在运行期拼装里，反而削弱我们追求的可解释性与可验证性。
 
-因此 V4 的 sqlc 目标不是“少写 Go”，而是：
+因此 sqlc 的目标不是“少写 Go”，而是：
 - 让 SQL 成为显式资产（可审查/可测试/可版本化），
 - 让生成的 Go 调用形状稳定一致（编译期类型安全），
 - 让“门禁与生成物”成为强约束，阻止实现期漂移。
@@ -28,7 +28,7 @@
 ## 3. 范围与非目标
 
 ### 3.1 范围（In Scope）
-- V4 业务域模块：`orgunit` / `jobcatalog` / `staffing` / `person`（对齐 `DEV-PLAN-016`）。
+- 业务域模块：`orgunit` / `jobcatalog` / `staffing` / `person`（对齐 `DEV-PLAN-016`）。
 - 平台模块：如 `iam`（若存在；对齐 `DEV-PLAN-019/023` 的思路），同样遵循本文规范。
 - sqlc 配置（`sqlc.yaml`）、schema 输入、查询文件组织、生成目录、门禁触发器与验收标准。
 
@@ -45,7 +45,7 @@
 ## 5. 目录结构与归属（对齐 015/016）
 
 ### 5.1 约定的目录（每个模块一致）
-在 V4 新仓库中建议采用统一形状（示意）：
+在新仓库中建议采用统一形状（示意）：
 ```
 modules/<module>/
   infrastructure/
@@ -68,22 +68,22 @@ modules/<module>/
 
 ## 6. schema 输入策略（解决“sqlc 看见的 schema 与真实 DB 不一致”）
 
-V4 需要同时满足：
-- V4 的 schema/函数/约束是合同（SSOT），
+需要同时满足：
+- schema/函数/约束是合同（SSOT），
 - sqlc 需要“可解析的 schema”做静态分析（含跨模块 FK/类型）。
 
-### 6.0 ADR：选定“全量可解析 schema.sql”作为 sqlc 输入（V4）
-**结论（选定）**：V4 采用 **全量可解析 schema** 作为 sqlc 输入，并纳入门禁；不采用“每模块自维护最小 schema 子集”的方式。
+### 6.0 ADR：选定“全量可解析 schema.sql”作为 sqlc 输入
+**结论（选定）**：采用 **全量可解析 schema** 作为 sqlc 输入，并纳入门禁；不采用“每模块自维护最小 schema 子集”的方式。
 
 原因：
-- 026/030/029 的 v4 方案存在跨模块引用与组合（例如 staffing ↔ jobcatalog 的 identity，orgunit 的 as-of 校验），若 schema 输入按模块裁剪，容易引入“缺表/缺类型/缺函数”的隐式依赖清单，最终靠试错补齐（违背 045 的确定性要求）。
+- 026/030/029 的方案存在跨模块引用与组合（例如 staffing ↔ jobcatalog 的 identity，orgunit 的 as-of 校验），若 schema 输入按模块裁剪，容易引入“缺表/缺类型/缺函数”的隐式依赖清单，最终靠试错补齐（违背 045 的确定性要求）。
 - 全量 schema 输入可把“依赖边界”从“sqlc 能否解析”解耦出来：边界由模块分层/ports/one-door 决定，而不是由 schema 文件裁剪决定。
 
 回滚/演化：
 - 若未来必须拆分（例如 schema 体量过大导致 sqlc 性能问题），必须另开子计划（例如 025A）并给出：依赖清单生成方式、回滚策略、以及 CI 门禁如何保持确定性。
 
 ### 6.1 导出策略（建议落地为脚本）
-- 提供脚本（示意名）：`scripts/db/export_v4_schema.sh`
+- 提供脚本（示意名）：`scripts/sqlc/export-schema.sh`
   - 在干净数据库中应用 schema SSOT（Atlas/Goose，入口以 Makefile 为准）。
   - 导出 schema-only 到 **全局** `internal/sqlc/schema.sql`（单一事实源），再由 `sqlc.yaml` 引用。
 - 导出文件必须可复现：同一份 schema SSOT，导出结果应稳定（避免排序漂移）。
@@ -118,12 +118,12 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 ## 8. 多租户与 RLS（与 sqlc 的组合口径）
 
 ### 8.1 No Tx, No RLS（必须）
-对所有 v4 tenant-scoped 表（026/030/029 定义的 events/versions/identity/关系表）：
+对所有 tenant-scoped 表（026/030/029 定义的 events/versions/identity/关系表）：
 - **必须**在事务内执行 sqlc 查询；
 - **必须**在事务开始后首先注入 RLS tenant：`set_config('app.current_tenant', ...)`（语义对齐 `DEV-PLAN-021`）。
 
 ### 8.2 双保险策略（推荐）
-为降低实现期“漏注入/漏过滤”风险，V4 推荐同时满足：
+为降低实现期“漏注入/漏过滤”风险，推荐同时满足：
 - DB 层：RLS policy fail-closed；
 - SQL 层：查询仍显式包含 `tenant_id = $1`（尤其在 join/子查询中），作为可读性与审查锚点。
 
@@ -141,7 +141,7 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 ## 9. sqlc 配置规范（`sqlc.yaml`）
 
 ### 9.1 组织策略
-- V4 建议使用 **单一 `sqlc.yaml`**（根目录），在 `sql:` 下按模块输出多个 `gen.go` 包。
+- 建议使用 **单一 `sqlc.yaml`**（根目录），在 `sql:` 下按模块输出多个 `gen.go` 包。
 - 每个包只包含本模块的 queries（路径隔离），但 schema 输入可共享（见 §6）。
 
 ### 9.2 必选配置（推荐基线）
@@ -158,7 +158,7 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 - `ltree` → `string`（或 `pkg/ltree.Path`，但必须提供清晰边界与测试）
 - `daterange` → `pgtype.Range[...]`（或自定义 `pkg/daterange`，但必须有清晰的 `[start,end)` 语义单测）
 
-## 10. 测试与覆盖率（对齐 V4 100% 门禁）
+## 10. 测试与覆盖率（对齐 100% 门禁）
 
 若新仓库启用“100% 覆盖率门禁”，必须明确覆盖率统计范围：
 - **推荐**：覆盖率门禁排除生成物（sqlc/templ/mock 等），100% 仅对手写代码生效；排除规则与审计方式必须在新仓库 SSOT 中固定（对齐 `DEV-PLAN-000` 的“覆盖率口径/范围/证据记录”要求）。
@@ -185,7 +185,7 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 4. `git status --short` 必须为空。
 
 ## 12. 停止线（命中即打回，按 DEV-PLAN-003）
-- 绕过 One Door：应用层出现对 v4 events/versions/identity 表的直接 DML（除运维 replay 且有明确边界）。
+- 绕过 One Door：应用层出现对 events/versions/identity 表的直接 DML（除运维 replay 且有明确边界）。
 - 绕过 RLS：访问 tenant-scoped 表但没有事务与 tenant 注入；或为了“方便”把 policy 改成可缺省 tenant。
 - 手改生成物：对 `modules/**/infrastructure/sqlc/**/gen/**` 的手工编辑。
 - 生成物未提交：PR 命中触发器但 `git status` 非空或生成物与源码不一致。
@@ -196,5 +196,5 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 - [ ] schema 输入已选定为 `internal/sqlc/schema.sql`，并由脚本从 schema SSOT 可复现导出（同一 SSOT 导出无 diff）。
 - [ ] `sqlc.yaml` 以多包方式按模块输出生成物，但引用同一份全局 schema 输入（不允许按模块“随手裁剪 schema”）。
 - [ ] 命中触发器时，CI 必须执行 `make sqlc-generate` 并强制 `git status --short` 为空（生成物一致性门禁）。
-- [ ] 所有 v4 tenant-scoped 查询在事务内执行且注入 RLS（缺 tenant 注入时 fail-closed 有测试覆盖）。
+- [ ] 所有 tenant-scoped 查询在事务内执行且注入 RLS（缺 tenant 注入时 fail-closed 有测试覆盖）。
 - [ ] `ops.sql` 仅能在 superadmin/job 边界使用，且所有跨租户写操作具备审计记录；tenant app 无法调用 ops 查询（通过静态依赖与测试双重保证）。

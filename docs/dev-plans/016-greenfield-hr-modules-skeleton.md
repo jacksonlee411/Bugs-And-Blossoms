@@ -9,7 +9,7 @@
 - `modules/person` 承载：人员管理（Person），但 UI 会链接/嵌入任职页面（跨模块 UI 组合）。
 - 持久化层存在跨域耦合点：Org 的 repo 会直接查询 `persons` 表做 pernr→person_uuid 解析。
 
-结合 `DEV-PLAN-015`（DDD 分层框架）与 `DEV-PLAN-026/029/030`（v4：DB Kernel + Go Facade + One Door Policy），本计划以 **Greenfield（从 0 开始）** 口径提出新的 `modules/*` 骨架与跨模块契约，以降低边界漂移风险并提升可演化性。
+结合 `DEV-PLAN-015`（DDD 分层框架）与 `DEV-PLAN-026/029/030`（DB Kernel + Go Facade + One Door Policy），本计划以 **Greenfield（从 0 开始）** 口径提出新的 `modules/*` 骨架与跨模块契约，以降低边界漂移风险并提升可演化性。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
@@ -26,7 +26,7 @@
 ## 2.3 工具链与门禁（SSOT 引用）
 - 分层与依赖门禁：`.gocleanarch.yml`（入口：`make check lint`）
 - DDD 分层框架（Greenfield）：`docs/dev-plans/015-ddd-layering-framework.md`
-- v4 DB Kernel 边界 SSOT：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+- DB Kernel 边界 SSOT：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - 工具链入口：`Makefile`、CI：`.github/workflows/quality-gates.yml`
 
 ## 3. Bounded Context 划分（建议）

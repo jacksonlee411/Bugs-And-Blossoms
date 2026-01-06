@@ -1,4 +1,4 @@
-# DEV-PLAN-015：DDD 分层框架方案（对齐 CleanArchGuard + v4 DB Kernel）
+# DEV-PLAN-015：DDD 分层框架方案（对齐 CleanArchGuard + DB Kernel）
 
 **状态**: 草拟中（2026-01-05 03:00 UTC）
 
@@ -6,7 +6,7 @@
 
 本仓库已采用“模块化单体 + DDD 分层”的目录形态：`modules/{module}/{domain,infrastructure,services,presentation}/`，并用 CleanArchGuard（配置见 `.gocleanarch.yml`，入口 `make check lint`）自动阻断跨层非法依赖。
 
-同时，`DEV-PLAN-026/029/030` 明确了一条在 Org v4 系列中将“领域内核下沉到 DB（Kernel）”的路线：**DB 负责不变量与投射（权威），Go 只做鉴权/事务/调用与错误映射（Facade）**，并以 **One Door Policy（写入口唯一）** 防止实现期漂移。
+同时，`DEV-PLAN-026/029/030` 明确了一条在 Org 系列计划中将“领域内核下沉到 DB（Kernel）”的路线：**DB 负责不变量与投射（权威），Go 只做鉴权/事务/调用与错误映射（Facade）**，并以 **One Door Policy（写入口唯一）** 防止实现期漂移。
 
 上述两者叠加后，项目需要一份“可执行且可审查”的 DDD 分层框架，统一回答：
 - 每层职责边界是什么？哪些代码应该放在哪里？
@@ -35,7 +35,7 @@
 
 - 触发器矩阵与本地必跑：`AGENTS.md`
 - 分层与依赖门禁（CleanArchGuard）：`.gocleanarch.yml`（入口：`make check lint`）
-- v4 DB Kernel 边界 SSOT：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+- DB Kernel 边界 SSOT：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 
 ## 3. 分层框架总览（DDD + Ports & Adapters）
 
@@ -104,7 +104,7 @@
 - **One Door Policy（写入口唯一）**：除 `submit_*_event` 与运维 replay 外，应用层不得直写事件表/versions 表/identity 表，不得直调 `apply_*_logic`。
 
 **在四层目录中的表达方式（推荐）**：
-- `infrastructure/persistence/schema/**`：DB Kernel 的 schema/函数/约束（SSOT 文件路径以对应模块工具链为准；示例：OrgUnit v4 见 026）。
+- `infrastructure/persistence/schema/**`：DB Kernel 的 schema/函数/约束（SSOT 文件路径以对应模块工具链为准；示例：OrgUnit 见 026）。
 - `domain/`：承载“稳定业务概念与契约类型”（IDs、枚举、命令入参类型、稳定错误码常量等），但不复写 Kernel 的裁决逻辑。
 - `services/`：只做 Facade：事务 + 调用 Kernel 端口 + 错误映射；避免在 Go 写“第二套投射/校验”。
 - `infrastructure/`：提供 Kernel 端口实现（例如用 pgx 调 `submit_*_event`），并在 Composition Root 注入到 services。
@@ -219,6 +219,6 @@ modules/<module>/presentation/controllers/  # Delivery
 ## 10. 验收标准（本计划完成的判定）
 
 - [ ] `DEV-PLAN-015` 明确描述：四层职责、依赖规则、两种落地形态（Go DDD / DB Kernel + Go Facade）及其统一口径。
-- [ ] 文档中对 v4 Kernel 边界的描述与 026-029 一致（不引入“第二套权威表达”的例外分支）。
+- [ ] 文档中对 Kernel 边界的描述与 026-029 一致（不引入“第二套权威表达”的例外分支）。
 - [ ] 提供 Greenfield 可直接复用的：形态选择决策树、最小骨架模板、`pkg/**` 准入规则、停止线与分步验收点。
 - [ ] 本文档已加入 `AGENTS.md` 的 Doc Map（可发现性门禁）。

@@ -1,17 +1,17 @@
-# DEV-PLAN-026：Org v4（事务性事件溯源 + 同步投射）完整方案（Greenfield）
+# DEV-PLAN-026：Org（事务性事件溯源 + 同步投射）完整方案（Greenfield）
 
 **状态**: 草拟中（2026-01-04 04:40 UTC；2026-01-06 起进入实施）
 
-> 本计划是“干净/完整”的 v4 方案设计稿：以 **`org_events` 为 SoT**，以 **同步投射** 在同一事务内维护 **`org_unit_versions` 读模型**，并提供强一致读、可重放重建与并发互斥策略。  
+> 本计划是“干净/完整”的方案设计稿：以 **`org_events` 为 SoT**，以 **同步投射** 在同一事务内维护 **`org_unit_versions` 读模型**，并提供强一致读、可重放重建与并发互斥策略。  
 > **暂不考虑迁移与兼容**：不要求与现有 `modules/org` 的 schema/API/事件契约兼容；也不提供双写/灰度/回滚路径（另开计划承接）。
 
 ## 0. 进度速记
-1. [X] 明确 v4 目标边界（SoT=events，ReadModel=versions，Engine=DB，Safety=advisory lock，Rebuild=replay）。
+1. [X] 明确目标边界（SoT=events，ReadModel=versions，Engine=DB，Safety=advisory lock，Rebuild=replay）。
 2. [X] 输出完整 schema、核心 DB 函数、Go 事务调用形状、查询封装与运维重建流程（可直接编码，无猜测）。
 3. [ ] （非本计划）迁移/兼容/灰度：必须另开子计划（建议 026A/026B），并遵守仓库红线（新增表需手工确认）。
-4. [X] UI 渐进切换：`/org/nodes` 读路径已支持 v4（失败/为空自动回退 legacy），并提供 `read=legacy` 过渡期逃生通道。
+4. [X] UI 渐进切换：`/org/nodes` 读路径已支持 `current`（失败/为空自动回退 legacy），并提供 `read=legacy` 过渡期逃生通道。
    - 证据：#21 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/21 、#26 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/26
-5. [X] UI 可操作写入：`/org/nodes` 的 CREATE/RENAME/MOVE/DISABLE 已全部走 v4 `submit_org_event(...)`（保持“写入口唯一”）。
+5. [X] UI 可操作写入：`/org/nodes` 的 CREATE/RENAME/MOVE/DISABLE 已全部走 `submit_org_event(...)`（保持“写入口唯一”）。
    - 证据：#22 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/22 、#28 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/28 、#29 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/29
 6. [X] `read=legacy` 时间盒：已补齐删除条件与时间盒（达到条件后必须移除，最晚不应晚于开始实施 `DEV-PLAN-030` 前）。
    - 证据：#27 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/27
@@ -22,7 +22,7 @@ HR SaaS 的组织架构场景常见约束：
 - 强时态（Effective Dating）：同一节点/边在不同业务日拥有不同父链与名称。
 - 写操作存在“子树级联影响”（Move 需要重算后代路径），需要强并发互斥以避免死锁与路径失真。
 
-本计划以 “一次事务，双重写入（事件+投射），即时读取，随时重放” 为核心理念，定义一套可在 Postgres 17 上落地的 v4 架构。
+本计划以 “一次事务，双重写入（事件+投射），即时读取，随时重放” 为核心理念，定义一套可在 Postgres 17 上落地的架构。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
@@ -35,7 +35,7 @@ HR SaaS 的组织架构场景常见约束：
 
 ### 2.2 非目标（明确不做）
 - 不考虑与现有 Org 模块的兼容、迁移与灰度（不做双写/回填/回滚策略）。
-- 不覆盖岗位/任职/权限映射等扩展域（本计划仅定义 **OrgUnit 树（节点+父子关系+名称/状态）** 的 v4）。
+- 不覆盖岗位/任职/权限映射等扩展域（本计划仅定义 **OrgUnit 树（节点+父子关系+名称/状态）**）。
 - 不引入额外监控/开关切换（仓库原则：早期阶段避免过度运维；必要的健康信息在后续计划补齐）。
 
 ## 2.3 工具链与门禁（SSOT 引用）
@@ -122,10 +122,10 @@ flowchart TD
 - gapless：由重放算法生成并在事务内校验（见 §5.3）。
 - root 唯一：`org_trees`（见 4.3）+ 重放期校验。
 - 防环 move：重放期校验（cycle detection）。
-- 多租户隔离：`tenant_id` 强制；v4 表默认启用 RLS（fail-closed；落盘口径见 `DEV-PLAN-021`），因此访问 v4 的运行态必须 `RLS_ENFORCE=enforce`（并使用非 superuser 且 `NOBYPASSRLS` 的 DB role）。
+- 多租户隔离：`tenant_id` 强制；Greenfield 表默认启用 RLS（fail-closed；落盘口径见 `DEV-PLAN-021`），因此访问 Greenfield 表的运行态必须 `RLS_ENFORCE=enforce`（并使用非 superuser 且 `NOBYPASSRLS` 的 DB role）。
 
 ## 4. 数据模型与约束 (Data Model & Constraints)
-> 约定：PostgreSQL 17；多租户隔离通过 `tenant_id` 强制；v4 表默认启用 RLS（fail-closed；落盘口径见 `DEV-PLAN-021`）。
+> 约定：PostgreSQL 17；多租户隔离通过 `tenant_id` 强制；Greenfield 表默认启用 RLS（fail-closed；落盘口径见 `DEV-PLAN-021`）。
 
 > 落地提示（implementation repo 口径）：为对齐模块边界与 Atlas+Goose 闭环，本计划在实施时建议把表与函数放在模块 schema `orgunit.*` 下（而非默认 `public`），并通过权限/role 约束落实 One Door（详见 §3.3 与 §2.3 SSOT）。
 
@@ -675,7 +675,7 @@ payload（v1）：
 - 对“仍在旧子树下”的后代版本做前缀重写；
 - 对跨越生效日的版本做 split（旧段截断 + 新段插入），并保持 no-overlap。
 
-伪代码（与 v4 核心一致，略去细节）：
+伪代码（与核心一致，略去细节）：
 1) `SELECT node_path INTO v_old_path FROM org_unit_versions WHERE org_id=p_org_id AND validity @> p_effective_date FOR UPDATE`
 2) `SELECT node_path INTO v_new_parent_path FROM org_unit_versions WHERE org_id=p_new_parent_id AND validity @> p_effective_date`
 3) 防环：若 `v_new_parent_path <@ v_old_path` 则拒绝（new parent 在旧子树内）
@@ -1111,11 +1111,11 @@ WHERE v.tenant_id=$1
 ## 7. Go 应用层集成（事务 + 锁 + 调用 DB）
 > 应用层只负责：鉴权 →（可选 try-lock）→ 开事务 → 调 `submit_org_event` → 提交。
 
-> 多租户隔离（RLS，见 `DEV-PLAN-021`）：v4 表默认启用 RLS，事务必须在第一条 SQL 前注入 `app.current_tenant`（复用 `composables.ApplyTenantRLS`）；`RLS_ENFORCE` 为 `disabled` 将导致 fail-closed（属于配置错误，而非“降级模式”）。
+> 多租户隔离（RLS，见 `DEV-PLAN-021`）：Greenfield 表默认启用 RLS，事务必须在第一条 SQL 前注入 `app.current_tenant`（复用 `composables.ApplyTenantRLS`）；`RLS_ENFORCE` 为 `disabled` 将导致 fail-closed（属于配置错误，而非“降级模式”）。
 
 建议形状（伪代码）：
 ```go
-func (s *OrgServiceV4) MoveOrg(ctx context.Context, tenantID uuid.UUID, cmd MoveCmd) error {
+func (s *OrgService) MoveOrg(ctx context.Context, tenantID uuid.UUID, cmd MoveCmd) error {
   return composables.InTx(ctx, func(txCtx context.Context) error {
     tx, _ := composables.UseTx(txCtx)
 
@@ -1193,9 +1193,9 @@ func (s *OrgServiceV4) MoveOrg(ctx context.Context, tenantID uuid.UUID, cmd Move
   - [ ] Move 触发子树 path 重写后，祖先/子树查询与长名称拼接一致且不缺段。
   - [ ] 并发写：同一 tenant/hierarchy 下同时发起两次写入，第二个在 fail-fast 模式下稳定返回“busy”错误码。
   - [ ] 同一 `org_id` 在同一 `effective_date` 第二次提交（不同 `event_id`）稳定失败，并映射为 `ORG_EVENT_CONFLICT_SAME_DAY`。
-  - [ ] RLS（对齐 `DEV-PLAN-021`）：缺失 `app.current_tenant` 时对 v4 表的读写必须 fail-closed（不得以“空结果”掩盖注入遗漏）。
+	  - [ ] RLS（对齐 `DEV-PLAN-021`）：缺失 `app.current_tenant` 时对 Greenfield 表的读写必须 fail-closed（不得以“空结果”掩盖注入遗漏）。
   - [ ] RLS（对齐 `DEV-PLAN-021`）：`app.current_tenant` 与 `p_tenant_id` 不一致时，`submit_org_event/replay_org_unit_versions` 必须稳定失败（tenant mismatch）。
-  - [X] UI 集成（渐进切换）：`/org/nodes` 默认读取优先 v4（`get_org_snapshot`），失败/为空自动回退 legacy；可用 `read=legacy` 强制走 legacy（仅用于过渡期回退/排障）。`read=legacy` 必须有删除条件与时间盒：当 `/org/nodes` 的 v4 写入能力覆盖到 CREATE/RENAME/MOVE/DISABLE 且本地 `make preflight` 与浏览器验证脚本稳定通过后，必须移除 `read=legacy`（最晚不应晚于开始实施 `DEV-PLAN-030` 之前）。
+	  - [X] UI 集成（渐进切换）：`/org/nodes` 默认读取优先 `current`（`get_org_snapshot`），失败/为空自动回退 legacy；可用 `read=legacy` 强制走 legacy（仅用于过渡期回退/排障）。`read=legacy` 必须有删除条件与时间盒：当 `/org/nodes` 的写入能力覆盖到 CREATE/RENAME/MOVE/DISABLE 且本地 `make preflight` 与浏览器验证脚本稳定通过后，必须移除 `read=legacy`（最晚不应晚于开始实施 `DEV-PLAN-030` 之前）。
     - 证据：#21 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/21 、#22 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/22 、#26 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/26 、#27 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/27 、#28 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/28 、#29 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/29
 - 性能（建议）：
   - [ ] `get_org_snapshot` 在 1k/10k 节点规模下 query 次数为常数（1 次），并可通过索引命中保持稳定延迟。

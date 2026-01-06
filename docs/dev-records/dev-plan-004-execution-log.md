@@ -67,3 +67,18 @@
   - `./scripts/db/run_atlas.sh migrate hash --dir file://migrations/orgunit --dir-format goose`：通过
   - `./scripts/db/lint.sh orgunit`：通过
   - `make orgunit plan`：通过
+  - `make orgunit migrate up`：通过（已在本地环境运行）
+
+## PR-6：文档与工具链收尾清理（清零）
+
+- **状态**：已完成（2026-01-06 11:32 UTC）
+- **范围**
+  - 文档：清理剩余 `<ver>` 字面量命中（包含 dev-plan 正文与 CI workflow）
+  - 工具链：`cmd/dbtool` 去噪（移除命名中的 `<ver>`）；`atlas.hcl` 注释去噪
+  - CI：将 `actions/*@<ver>` 改为 commit SHA pin，避免引入 `<ver>` 字面量
+- **本地门禁**
+  - `go fmt ./...`：通过
+  - `go vet ./...`：通过
+  - `make check lint`：通过
+  - `make test`：通过
+  - `make check doc`：通过

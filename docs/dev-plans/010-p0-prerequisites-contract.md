@@ -2,7 +2,7 @@
 
 **状态**: 已完成（2026-01-06）
 
-> 适用范围：V4 Greenfield 全新实施（从 0 开始）在进入 P0（第一条业务垂直切片）前的“工程/治理/工具链/UI 骨架”准备工作。  
+> 适用范围：Greenfield 全新实施（从 0 开始）在进入 P0（第一条业务垂直切片）前的“工程/治理/工具链/UI 骨架”准备工作。  
 > 说明：本仓库即 implementation repo；契约文档 SSOT 位于 `docs/dev-plans/`，证据记录位于 `docs/dev-records/`。
 
 ## 1. 背景与上下文 (Context)
@@ -13,7 +13,7 @@
 
 ### 1.1 术语与定义（本计划口径）
 
-- **implementation repo**：V4 新代码仓库（真正写代码/跑 CI/跑 DB 的地方）。
+- **implementation repo**：新代码仓库（真正写代码/跑 CI/跑 DB 的地方）。
 - **plans repo**：本仓库（只存放 dev-plans 文档）。
 - **P0**：在 implementation repo 中交付第一条“用户可见/可操作”的端到端垂直切片（最小链路：确定租户 → 登录 → 进入 UI 壳 → 完成一个业务动作并在页面可见）。
 - **P0-Ready**：进入 P0 之前必须满足的前置条件（本计划的“完成定义”）。
@@ -259,8 +259,8 @@ job(required_check):
 
 - [ ] 在 CI YAML 里直接拼接 Atlas/sqlc/authz/templ 命令绕过 Makefile（012）。
 - [ ] 新增路由但未更新 allowlist SSOT，或 allowlist 不可用时静默降级（017）。
-- [ ] 开始落盘 v4 schema/写入口，但迁移闭环与门禁尚未就位（024）。
-- [ ] 访问 tenant-scoped v4 表但不在事务内注入 RLS，或把 policy 改成可缺省 tenant（021）。
+- [ ] 开始落盘 schema/写入口，但迁移闭环与门禁尚未就位（024）。
+- [ ] 访问 tenant-scoped 表但不在事务内注入 RLS，或把 policy 改成可缺省 tenant（021）。
 - [ ] 新能力无 UI 入口/无占位页/长期不可见（违反用户可见性原则）。
 
 ## 12. 未决问题（需要在 PR-0 明确）

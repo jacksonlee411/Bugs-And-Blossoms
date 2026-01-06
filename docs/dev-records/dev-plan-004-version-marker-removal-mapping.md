@@ -1,6 +1,6 @@
-# DEV-PLAN-004 记录：全仓去除版本标记——映射表（草案）
+# DEV-PLAN-004 记录：全仓去除版本标记——映射表（已冻结）
 
-**状态**: 草拟中（2026-01-06 09:25 UTC）
+**状态**: 已冻结（2026-01-06 11:32 UTC）
 
 > 本记录用于支撑 `docs/dev-plans/004-remove-version-marker-repo-wide.md` 的 PR-1（盘点与映射表冻结）。
 >
@@ -94,6 +94,5 @@ rg --files --hidden --glob '!.git/**' | rg -S "(?i)(${PATTERN_LOWER}|${PATTERN_U
 
 以下两项一旦确定，后续 PR 不允许再变更方向（避免漂移）：
 
-1. [ ] `read=` 的“current”命名是否接受；如需替代（例如 `primary` / `canonical`），必须在冻结前一次性定稿。
-2. [ ] 锁 key 前缀 `org:write-lock:` 是否接受；如需替代（例如 `org:lock:`），必须在冻结前一次性定稿。
-
+1. [X] `read=` 的“current”命名接受（并作为默认值）。
+2. [X] 锁 key 前缀 `org:write-lock:` 接受（并要求同 PR 原子切换：迁移/SSOT/sqlc/文档一致）。

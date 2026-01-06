@@ -1,8 +1,8 @@
-# DEV-PLAN-029：Job Catalog v4（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
+# DEV-PLAN-029：Job Catalog（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
 **状态**: 草拟中（2026-01-04 04:20 UTC）
 
-> 本计划的定位：作为 Greenfield HR v4 的 Job Catalog 子域，提供 **Job Catalog v4 权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026/030` 对齐“事件 SoT + 同步投射 + 可重放”的范式。
+> 本计划的定位：作为 Greenfield HR 的 Job Catalog 子域，提供 **Job Catalog 权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026/030` 对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
 ## 1. 背景与上下文 (Context)
 - 当前 Job Catalog 位于 `modules/org` 的 schema 与实现中（`org_job_*` + `*_slices`），并与 Position（`org_position_slices.job_profile_id/job_level_code/...`）形成强耦合校验与展示链路。
@@ -10,9 +10,9 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 提供 Job Catalog v4 的 schema（events + identity + versions）与最小不变量集合（可识别、可验收、可重放）。
+- [ ] 提供 Job Catalog 的 schema（events + identity + versions）与最小不变量集合（可识别、可验收、可重放）。
 - [ ] 与 026/030 对齐：Valid Time=DATE、同日事件唯一、**同事务全量重放（delete+replay）**、versions **no-overlap + gapless**、One Door（各实体 `submit_*_event`）。
-- [ ] 表命名去掉 `org_` 前缀（见 3.2），并与 Position v4 可组合（030 的 FK 以 `(tenant_id, id)` 为基准）。
+- [ ] 表命名去掉 `org_` 前缀（见 3.2），并与 Position 可组合（030 的 FK 以 `(tenant_id, id)` 为基准）。
 
 ### 2.2 非目标（明确不做）
 - 不提供对旧 API/旧数据的兼容；迁移/退场策略必须另立 dev-plan 承接。
@@ -29,8 +29,8 @@
   - 命令入口：`Makefile`
   - CI 门禁：`.github/workflows/quality-gates.yml`
   - Greenfield HR 模块骨架（Job Catalog 归属 jobcatalog）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-  - OrgUnit v4：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
-  - Position v4：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
+  - OrgUnit：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+  - Position：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
   - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（认证与租户上下文：`docs/dev-plans/019-tenant-and-authn.md`）
   - 时间语义（Valid Time=DATE）：`AGENTS.md`（时间语义章节）、`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（Valid Time 口径）与 `docs/dev-plans/032-effective-date-day-granularity.md`
 
@@ -50,12 +50,12 @@
 ### 3.1 Kernel 边界（与 026/030 对齐）
 - **DB = Projection Kernel（权威）**：插入事件（幂等）+ 同步投射 versions + 不变量裁决 + 可 replay。
 - **Go = Command Facade**：鉴权/租户与操作者上下文 + 事务边界 + 调 Kernel + 错误映射到 `pkg/serrors`。
-- **多租户隔离（RLS）**：v4 tenant-scoped 表默认启用 PostgreSQL RLS（fail-closed；见 `DEV-PLAN-021`），因此访问 v4 的运行态必须 `RLS_ENFORCE=enforce`，并在事务内注入 `app.current_tenant`（对齐 `DEV-PLAN-019`）。
+- **多租户隔离（RLS）**：tenant-scoped 表默认启用 PostgreSQL RLS（fail-closed；见 `DEV-PLAN-021`），因此运行态必须 `RLS_ENFORCE=enforce`，并在事务内注入 `app.current_tenant`（对齐 `DEV-PLAN-019`）。
 - **One Door Policy（写入口唯一）**：除各实体 `submit_*_event` 与运维 replay 外，应用层不得直写事件表/versions 表/identity 表（`job_family_groups/job_families/job_levels/job_profiles`）及关系表，不得直调 `apply_*_logic`。
 - **同步投射机制（选定）**：每次写入都触发**同事务全量重放**（delete+replay），保持逻辑简单，拒绝“增量缝补”分支。
 
 ### 3.2 表命名：去掉 `org_` 前缀（评估结论：采用）
-**结论（选定）**：Job Catalog v4 表统一去掉 `org_` 前缀，采用 `job_*` 命名（例如 `job_profile_events/job_profiles/job_profile_versions` 等）。
+**结论（选定）**：Job Catalog 表统一去掉 `org_` 前缀，采用 `job_*` 命名（例如 `job_profile_events/job_profiles/job_profile_versions` 等）。
 
 原因：
 - `org_` 在本仓库中已强语义绑定 OrgUnit（组织树）子域；Job Catalog 属于独立主数据子域，继续使用 `org_` 会扩大“Org”概念边界并制造漂移。
@@ -364,7 +364,7 @@ CREATE UNIQUE INDEX job_profile_version_job_families_primary_unique
 ### 5.1 并发互斥（Advisory Lock）
 **锁粒度（选定）**：同一 `tenant_id` 的 Job Catalog 写入串行化，避免跨实体依赖（family↔group、profile↔families）在实现期引入死锁与漂移。
 
-锁 key（文本，选定）：`jobcatalog:v4:<tenant_id>:JobCatalog`
+锁 key（文本，选定）：`jobcatalog:write-lock:<tenant_id>:JobCatalog`
 
 ### 5.2 写入口（按实体 One Door）
 函数签名（建议，与 026/030 对齐）：
@@ -416,7 +416,7 @@ CREATE OR REPLACE FUNCTION submit_job_profile_event(
 
 统一合同语义（必须）：
 0) 多租户上下文（RLS）：写入口函数开头必须断言 `p_tenant_id` 与 `app.current_tenant` 一致（对齐 `DEV-PLAN-021`）。
-1) 获取互斥锁：`jobcatalog:v4:<tenant_id>:JobCatalog`（同一事务内）。
+1) 获取互斥锁：`jobcatalog:write-lock:<tenant_id>:JobCatalog`（同一事务内）。
 2) 参数校验：`p_event_type` 必须为 `CREATE/UPDATE/DISABLE`；`p_payload` 必须为 object（空则视为 `{}`）。
 3) identity 处理：
    - `CREATE`：从 `payload.code` 创建对应 identity 行；若已存在则拒绝（`JOB_*_ALREADY_EXISTS`）。
@@ -481,7 +481,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 | profile↔families 违反“至少一个/恰好一个 primary” | 约束/触发器失败 | `23514/23505` + constraint name 或 DB exception `MESSAGE` | `JOB_PROFILE_FAMILY_CONSTRAINT_VIOLATION` |
 
 ## 8. 测试与验收标准 (Acceptance Criteria)
-- [ ] RLS（对齐 021）：缺失 `app.current_tenant` 时对 v4 表的读写必须 fail-closed；tenant mismatch 必须稳定失败可映射。
+- [ ] RLS（对齐 021）：缺失 `app.current_tenant` 时对 tenant-scoped 表的读写必须 fail-closed；tenant mismatch 必须稳定失败可映射。
 - [ ] 事件幂等：同 `event_id` 重试不重复投射。
 - [ ] 全量重放：每次写入都在同一事务内 delete+replay 对应 versions，且写后读强一致。
 - [ ] 同日唯一：同一实体同日提交第二条事件被拒绝且可稳定映射错误码（每类实体独立 events 表）。
@@ -498,7 +498,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 - Level：`SELECT replay_job_level_versions('<tenant_id>'::uuid, '<job_level_id>'::uuid);`
 - Profile：`SELECT replay_job_profile_versions('<tenant_id>'::uuid, '<job_profile_id>'::uuid);`
 
-> 建议在执行前复用同一把维护互斥锁（`jobcatalog:v4:<tenant_id>:JobCatalog`）确保与在线写入互斥。
+> 建议在执行前复用同一把维护互斥锁（`jobcatalog:write-lock:<tenant_id>:JobCatalog`）确保与在线写入互斥。
 
 > 多租户隔离（RLS，见 `DEV-PLAN-021`）：replay 必须在显式事务内先注入 `app.current_tenant`，否则会 fail-closed。
 
@@ -506,7 +506,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 > 本节把“容易在实现期即兴决定”的点固化为合同；若未来结论变化，应先更新本计划再改实现。
 
 ### 10.1 互斥锁粒度
-**结论（选定）**：tenant 内 Job Catalog 写全串行（`jobcatalog:v4:<tenant_id>:JobCatalog`）。
+**结论（选定）**：tenant 内 Job Catalog 写全串行（`jobcatalog:write-lock:<tenant_id>:JobCatalog`）。
 
 - 理由：Job Catalog 通常低频变更；先用最小策略换取实现简单与可解释性，避免跨实体依赖导致死锁与一致性漂移。
 - 备选（未选定）：按实体类型拆锁（group/family/level/profile）。如未来需要提升并发，必须先补齐锁顺序规则与跨实体校验边界，并更新本计划。

@@ -1,24 +1,24 @@
-# DEV-PLAN-031：任职记录（Job Data / Assignments）v4 全新实现（Staffing，事件 SoT + 同步投射）
+# DEV-PLAN-031：任职记录（Job Data / Assignments）全新实现（Staffing，事件 SoT + 同步投射）
 
 **状态**: 草拟中（2026-01-05 03:38 UTC）
 
 ## 1. 背景与上下文 (Context)
 
 本计划目标是**全新实现**“任职记录（Job Data / Assignments）”能力（Greenfield），并对齐：
-- v4 技术路线（`DEV-PLAN-026/029/030`）：**DB=Projection Kernel（权威）**、同步投射（同事务 delete+replay）、One Door Policy（唯一写入口）、Valid Time=DATE、`daterange` 统一使用左闭右开 `[start,end)`。
+- 技术路线（`DEV-PLAN-026/029/030`）：**DB=Projection Kernel（权威）**、同步投射（同事务 delete+replay）、One Door Policy（唯一写入口）、Valid Time=DATE、`daterange` 统一使用左闭右开 `[start,end)`。
 - DDD/分层与模块骨架（`DEV-PLAN-015`、`DEV-PLAN-016`）：采用 4 模块（`orgunit/jobcatalog/staffing/person`），其中任职记录归属 `modules/staffing`。
 
-同时，本仓库当前在 `modules/org` 内已存在一套“任职记录”实现（非 v4 事件 SoT 模式），包含 UI、API、DB 表与若干约束/运维手段；本计划需要先**完整登记现有功能**，再定义 v4 方案如何承接（保留/替代/显式不做）。
+同时，本仓库当前在 `modules/org` 内已存在一套“任职记录”实现（非事件 SoT 模式），包含 UI、API、DB 表与若干约束/运维手段；本计划需要先**完整登记现有功能**，再定义新方案如何承接（保留/替代/显式不做）。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
 ### 2.1 核心目标
-- [ ] 在 `modules/staffing` 内全新实现任职记录 v4：**事件 SoT（`*_events`）+ 同步投射（`*_versions`）**，并由 DB Kernel 强制关键不变量。
+- [ ] 在 `modules/staffing` 内全新实现任职记录：**事件 SoT（`*_events`）+ 同步投射（`*_versions`）**，并由 DB Kernel 强制关键不变量。
 - [ ] UI/列表展示层：任职记录**仅显示生效日期（effective date）**；底层仍使用 `daterange` 的左闭右开 `[start,end)` 表达有效期（不改为闭区间）。
 - [ ] 以清晰契约替代“隐式耦合”：
   - 写路径输入统一使用 `person_uuid`（对齐 016），不再以 pernr 作为写侧主键；
   - person 的 pernr→uuid 解析由 `modules/person` 提供 options/read API，`staffing` 不直读 `persons` 表（Person Identity 合同见 `DEV-PLAN-027`）。
-- [ ] 完整登记当前任职记录已实现功能，并逐项给出 v4 方案的落地方式（或明确不做）。
+- [ ] 完整登记当前任职记录已实现功能，并逐项给出新方案的落地方式（或明确不做）。
 - [ ] 实现需满足 015/016 的 DDD 分层与 One Door Policy：Go=Facade（鉴权/事务/调用/错误映射），DB=Kernel（裁决/投射/重放）。
 
 ### 2.2 非目标（明确不做）
@@ -29,13 +29,13 @@
 ## 2.3 工具链与门禁（SSOT 引用）
 - DDD 分层框架（Greenfield）：`docs/dev-plans/015-ddd-layering-framework.md`
 - Greenfield HR 模块骨架（4 模块）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- v4 Kernel 边界与 daterange 口径：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/032-effective-date-day-granularity.md`
+- Kernel 边界与 daterange 口径：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/032-effective-date-day-granularity.md`
 - 分层/依赖门禁：`.gocleanarch.yml`（入口：`make check lint`）
 - 命令入口与 CI：`Makefile`、`.github/workflows/quality-gates.yml`
 
 ## 3. 现状功能盘点（已实现的任职记录能力，存量参考）
 
-> 本节仅登记事实（当前系统已有的能力与约束），不代表 v4 一定保留；v4 方案见 §6。
+> 本节仅登记事实（当前系统已有的能力与约束），不代表新方案一定保留；新方案见 §6。
 
 ### 3.1 路由与交互（UI / HTMX）
 - 页面与表单（`modules/org/presentation/controllers/org_ui_controller.go`）：
@@ -69,7 +69,7 @@
 - 就地更正：`modules/org/services/org_service_025.go:727`
   - 允许修正 pernr/subject_id/position_id 等字段（in-place patch）
 - 撤销（rescind）：`modules/org/services/org_service_025.go:904`
-  - 在指定 `effective_date` 进行撤销/截断/补 inactive 等（实现较复杂，需在 v4 里明确取舍）
+  - 在指定 `effective_date` 进行撤销/截断/补 inactive 等（实现较复杂，需在新方案里明确取舍）
 - 删除切片并缝补（delete+stitch）：`modules/org/services/org_service_066.go:614`
   - 仅支持 primary timeline；删除某 slice，并把前一片段 end_date 延长以保持 gap-free
 - 转移/终止（transition）：`modules/org/services/assignment_transition_061a1.go:30`
@@ -89,7 +89,7 @@
 - 读模型查询：
   - timeline 查询会 join Position/Org/Job Catalog 多表，并附带 personnel_event 的起止事件类型（`modules/org/infrastructure/persistence/org_crud_repository.go:786` 起）
 
-## 4. 核心设计约束（v4 合同，必须遵守）
+## 4. 核心设计约束（合同，必须遵守）
 
 ### 4.1 Valid Time 与 `daterange` 口径（强制）
 - Valid Time 粒度：`date`（对齐 `DEV-PLAN-032`）。
@@ -103,7 +103,7 @@
 ## 5. 目标架构（modules/staffing，DB Kernel + Go Facade）
 
 ### 5.1 模块归属
-任职记录 v4 归属 `modules/staffing`（对齐 `DEV-PLAN-016`：Position+Assignment 收敛以承载跨聚合不变量）。
+任职记录归属 `modules/staffing`（对齐 `DEV-PLAN-016`：Position+Assignment 收敛以承载跨聚合不变量）。
 
 ### 5.2 目录骨架（对齐 015/016）
 ```
@@ -112,7 +112,7 @@ modules/staffing/
   domain/types/                        # 稳定枚举/错误码/输入 DTO（可选）
   services/                            # Facade：Tx + 调 Kernel + serrors 映射
   infrastructure/persistence/          # pgx adapter（调用 submit_*_event）
-  infrastructure/persistence/schema/   # staffing-schema.sql（SSOT，含 assignment v4）
+  infrastructure/persistence/schema/   # staffing-schema.sql（SSOT，含 assignment）
   presentation/controllers/            # /org/assignments（UI）与 /org/api/assignments（API）
   presentation/templates/
   presentation/locales/
@@ -124,7 +124,7 @@ modules/staffing/
 - **DB = Projection Kernel（权威）**：插入事件（幂等）→ 同事务全量重放生成 versions → 裁决不变量。
 - **Go = Command Facade**：鉴权/事务边界 + 调 Kernel + 错误映射到 `pkg/serrors`。
 
-## 6. v4 方案（新实现方式：事件 SoT + 同步投射）
+## 6. 方案（新实现方式：事件 SoT + 同步投射）
 
 ### 6.1 领域建模：以“时间线聚合（timeline aggregate）”作为写侧单位
 
@@ -145,7 +145,7 @@ modules/staffing/
   - `tenant_id uuid`
   - `event_id uuid`（幂等键，unique）
   - `timeline_id uuid`
-  - `event_type text`（例如 `CREATE/UPDATE/TRANSFER/TERMINATE/CORRECT/RESCIND`，以 v4 合同冻结）
+  - `event_type text`（例如 `CREATE/UPDATE/TRANSFER/TERMINATE/CORRECT/RESCIND`，以合同冻结）
   - `effective_date date`（同日唯一：`(tenant_id,timeline_id,effective_date)` unique）
   - `payload jsonb`（变化字段、reason_code/note 等）
   - `request_id text`、`initiator_id uuid`、`transaction_time timestamptz`
@@ -177,41 +177,41 @@ modules/staffing/
   - 不展示 `end_date`/`upper(validity)`（避免闭区间混用）
 - as-of 查询仍使用 `validity @> $as_of::date` 保证语义一致。
 
-## 7. 功能映射：存量能力 → v4 方案
+## 7. 功能映射：存量能力 → 新方案
 
-> 本节把 §3 的存量能力逐项映射到 v4 的实现方式（保留/替代/不做）。
+> 本节把 §3 的存量能力逐项映射到新方案的实现方式（保留/替代/不做）。
 
 1) 创建任职（CreateAssignment）
-- v4：通过 `submit_assignment_timeline_event(event_type='CREATE', effective_date=...)` 创建/更新时间线的第一个版本或新版本。
+- 新方案：通过 `submit_assignment_timeline_event(event_type='CREATE', effective_date=...)` 创建/更新时间线的第一个版本或新版本。
 - 输入主键：使用 `person_uuid`（pernr 仅用于 UI 查询与展示，不进入写侧合同）。
 
 2) 更新任职（UpdateAssignment）
-- v4：统一为事件写入（例如 `event_type='UPDATE'`），由 Kernel 决定切片 split/截断。
+- 新方案：统一为事件写入（例如 `event_type='UPDATE'`），由 Kernel 决定切片 split/截断。
 - Go 不再“先查当前 slice 再补丁式截断”；避免第二套时间线算法。
 
 3) Correct（就地更正）
-- v4：定义为 `event_type='CORRECT'`，但仍遵循“同日唯一”规则；若需要同日多次修正，必须提升为不同的业务事件（本计划不引入 effseq）。
+- 新方案：定义为 `event_type='CORRECT'`，但仍遵循“同日唯一”规则；若需要同日多次修正，必须提升为不同的业务事件（本计划不引入 effseq）。
 
 4) Rescind（撤销）
-- v4：定义为 `event_type='RESCIND'`，由 Kernel 将某日之后的状态切片化为 `inactive` 或回滚到前态；具体语义需在子域实现计划中冻结（避免隐式复杂分支）。
+- 新方案：定义为 `event_type='RESCIND'`，由 Kernel 将某日之后的状态切片化为 `inactive` 或回滚到前态；具体语义需在子域实现计划中冻结（避免隐式复杂分支）。
 
 5) Delete slice + stitch
-- v4：不暴露“直接删 versions”的能力；如需“删除某日变更”，通过 `RESCIND` 或 `CORRECT` 事件表达（One Door Policy）。
+- 新方案：不暴露“直接删 versions”的能力；如需“删除某日变更”，通过 `RESCIND` 或 `CORRECT` 事件表达（One Door Policy）。
 
 6) Transfer / Termination（transition）
-- v4：不再依赖独立的 `org_personnel_events` 表作为裁决入口；转移/终止应成为 assignment timeline 的事件类型（或成为 staffing 内的人员事件，但必须同构为 v4 事件 SoT）。
+- 新方案：不再依赖独立的 `org_personnel_events` 表作为裁决入口；转移/终止应成为 assignment timeline 的事件类型（或成为 staffing 内的人员事件，但必须同构为事件 SoT）。
 
 7) Primary gap-free / no-overlap
-- v4：以 versions 的 `daterange [)` + DB gate 强制；展示层只用 `effective_date`。
+- 新方案：以 versions 的 `daterange [)` + DB gate 强制；展示层只用 `effective_date`。
 
 8) 与 Position/OrgUnit/Job Catalog 的 join 与显示
-- v4：读侧允许 join，但写侧必须避免跨模块“隐式查询”：
+- 新方案：读侧允许 join，但写侧必须避免跨模块“隐式查询”：
   - orgunit/jobcatalog 的 label 建议走 read API 或 `pkg/orglabels` 类共享投射能力；
   - 如确需快照，为保证历史一致性，可把必要 label 写入 versions 的 `meta`（需在实现计划中明确范围，避免无限膨胀）。
 
 ## 8. 里程碑与验收（Plan → Implement 的承接）
 
-1. [ ] 冻结 v4 的事件类型枚举、payload 合同、错误契约（SQLSTATE/constraint/stable code）。
+1. [ ] 冻结事件类型枚举、payload 合同、错误契约（SQLSTATE/constraint/stable code）。
 2. [ ] 冻结 `modules/staffing` 的路由（UI+API）与输入输出契约（只展示 effective_date）。
 3. [ ] 冻结 DB Kernel：`submit_*_event` + `replay_*_versions` + `validate_*` 的职责矩阵（对齐 026-029）。
 4. [ ] 定义最小测试集：

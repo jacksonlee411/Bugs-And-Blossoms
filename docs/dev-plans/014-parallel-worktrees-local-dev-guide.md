@@ -1,13 +1,13 @@
-# DEV-PLAN-014：V4 多工作区并行开发指引（3 worktree 模式 + 共享本地 infra）
+# DEV-PLAN-014：多工作区并行开发指引（3 worktree 模式 + 共享本地 infra）
 
 **状态**: 草拟中（2026-01-05 09:50 UTC）
 
-> 适用范围：**全新实施的 V4 新代码仓库（Greenfield）**，但本指引可复用于现仓库的多 worktree 工作方式。  
+> 适用范围：**全新实施的新代码仓库（Greenfield）**，但本指引可复用于现仓库的多 worktree 工作方式。  
 > 目标：在一台开发机上维持 **3 个并行 worktree**（常见：main/feature-a/feature-b 或 main/feature/review），并与 `DEV-PLAN-011` 的本地开发/部署口径对齐（Docker/compose/devhub/端口与版本基线）。
 
 ## 1. 背景与上下文 (Context)
 
-- V4 采用 Greenfield 全新实施（路线图见 `DEV-PLAN-009`），研发阶段常见需要同时打开多个分支：一边开发、一边 review/复现、另一边保持 main 同步。
+- Greenfield 采用全新实施（路线图见 `DEV-PLAN-009`），研发阶段常见需要同时打开多个分支：一边开发、一边 review/复现、另一边保持 main 同步。
 - 多 worktree 的核心收益是：**不需要频繁切分支**，每个分支拥有独立工作目录与生成物，降低上下文切换与“误改错分支”的风险。
 - 本地基础设施（Postgres/Redis）不应为每个 worktree 各起一套：资源浪费且端口/配置管理复杂。默认采用 **共享 infra**（参考 `DEV-PLAN-011C`）。
 
@@ -34,7 +34,7 @@
 - 本地服务编排：`devhub.yml`、`compose.dev.yml`、`compose.yml`
 - 示例环境变量：`.env.example`
 - 共享 infra 默认方案：`docs/dev-plans/011C-worktree-shared-local-dev-infra.md`
-- V4 技术栈/部署口径：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
+- 技术栈/部署口径：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 
 ## 3. 推荐拓扑：3 worktree 角色分工
 
@@ -129,9 +129,9 @@
 
 > OAuth：无论采用 6.3.1 还是 6.3.2，都必须同步更新 `GOOGLE_REDIRECT_URL`（示例见 `.env.example`），并与 `ORIGIN`/端口一致；否则回调会打到错误端口。
 
-### 6.4 与 v4 RLS 的对齐（只在命中 v4 表时）
+### 6.4 与 RLS 的对齐（只在命中 Greenfield 表时）
 
-`DEV-PLAN-021/011` 已明确：访问启用 RLS 的 v4 表时，`RLS_ENFORCE` 必须为 `enforce`，且 `DB_USER` 必须为非 superuser（否则 Postgres 会绕过 RLS）。  
+`DEV-PLAN-021/011` 已明确：访问启用 RLS 的 Greenfield 表时，`RLS_ENFORCE` 必须为 `enforce`，且 `DB_USER` 必须为非 superuser（否则 Postgres 会绕过 RLS）。  
 多 worktree 并行时，务必在**每个 worktree 的 `.env/.env.local`**保持一致，避免“一个 worktree enforce、另一个 disabled”导致行为分叉。
 
 ## 7. 数据库迁移与 seed：协作规则（避免互相踩踏）

@@ -1,10 +1,10 @@
-# DEV-PLAN-023：V4 SuperAdmin 控制面认证与会话（与租户登录链路解耦）
+# DEV-PLAN-023：SuperAdmin 控制面认证与会话（与租户登录链路解耦）
 
 **状态**: 草拟中（2026-01-05 08:05 UTC）
 
-> 适用范围：**全新实现的 V4 新代码仓库（Greenfield）**。  
-> 上游依赖：`DEV-PLAN-019`（V4 租户管理与登录认证总体方案）、`DEV-PLAN-021`（v4 RLS 推进）、`DEV-PLAN-019D`（控制面边界与回滚理念）。  
-> 目标：把 “SuperAdmin 控制面” 的认证/会话/旁路能力收口成一个清晰、可回滚、可审计的边界，避免在 V4 早期引入第二套隐式认证模型。
+> 适用范围：**全新实现的新代码仓库（Greenfield）**。  
+> 上游依赖：`DEV-PLAN-019`（租户管理与登录认证总体方案）、`DEV-PLAN-021`（RLS 推进）、`DEV-PLAN-019D`（控制面边界与回滚理念）。  
+> 目标：把 “SuperAdmin 控制面” 的认证/会话/旁路能力收口成一个清晰、可回滚、可审计的边界，避免在早期引入第二套隐式认证模型。
 
 ## 1. 背景与现状（输入）
 
@@ -13,7 +13,7 @@
 - 使用与主应用相同的会话机制（`sid`），并通过 `user.type == superadmin` 做全局拦截。
 - 与主应用共享同一 DB 与环境配置。
 
-V4（Greenfield）将重构租户/认证/RLS，并要求：
+Greenfield 将重构租户/认证/RLS，并要求：
 - tenant app：`Host 解析 tenant（fail-closed）→ Kratos 认人 → 本地 session（sid）→ RLS 圈地 → Casbin 管事`（见 `DEV-PLAN-019`）。
 - 控制面：跨租户高风险操作必须在独立边界，且 RLS 旁路必须显式（见 `DEV-PLAN-019D/019A`、`DEV-PLAN-021`）。
 
@@ -74,7 +74,7 @@ flowchart LR
   - `modules/iam/infrastructure/persistence/`：superadmin repo 使用 **bypass 连接池**。
 - HR 业务域模块不依赖任何 superadmin 类型；仅依赖 `pkg/**` 的 tenancy/rls/authz 契约。
 
-## 5. 数据模型（V4 新仓库建议）
+## 5. 数据模型（新仓库建议）
 
 > 本节是新仓库的目标态 schema 草案；实际建表前需用户确认（本仓库规则）。
 

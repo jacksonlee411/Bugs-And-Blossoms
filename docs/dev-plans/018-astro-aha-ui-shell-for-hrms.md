@@ -1,11 +1,11 @@
-# DEV-PLAN-018：引入 Astro（AHA Stack）到 HTMX + Alpine 的 HRMS v4 UI 方案（026-031）
+# DEV-PLAN-018：引入 Astro（AHA Stack）到 HTMX + Alpine 的 HRMS UI 方案（026-031）
 
 **状态**: 草拟中（2026-01-06 08:03 UTC）
 
 ## 1. 背景与上下文 (Context)
 
-仓库当前 UI 技术栈为 **Templ + HTMX + Alpine.js + Tailwind CSS**（版本与 SSOT 见 `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`）。与此同时，`DEV-PLAN-026`～`DEV-PLAN-031` 定义了 HRMS v4 的核心模块与契约：
-- v4 内核边界：DB=Projection Kernel（权威），Go=Command Facade（编排），One Door Policy（唯一写入口）（见 026/030/029/031）。
+仓库当前 UI 技术栈为 **Templ + HTMX + Alpine.js + Tailwind CSS**（版本与 SSOT 见 `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`）。与此同时，`DEV-PLAN-026`～`DEV-PLAN-031` 定义了 HRMS（Greenfield）的核心模块与契约：
+- 内核边界：DB=Projection Kernel（权威），Go=Command Facade（编排），One Door Policy（唯一写入口）（见 026/030/029/031）。
 - Valid Time=DATE；时间戳仅用于 Audit/Tx Time。读模型使用 `daterange` 且统一 `[start,end)`（左闭右开）（口径见 `AGENTS.md` 与 `docs/dev-plans/032-effective-date-day-granularity.md`，并对齐 026/030/029/031）。
 - UI 合同：任职记录（Job Data / Assignments）**仅显示 `effective_date`**（不展示 `end_date`），但底层继续沿用 `daterange [start,end)`（见 031）。
 - Greenfield 模块划分（仅实现 026-031 所覆盖模块）：`orgunit/jobcatalog/staffing/person`（见 016）。
@@ -15,8 +15,8 @@
 - 统一 UI 组件、视觉规范与布局系统（Design System）
 - 降低页面级模板复杂度与重复，提高可复用性
 
-### 1.1 适用范围：V4 Greenfield（同仓内引入 Astro 工程）
-本计划按 “V4 Greenfield、同仓实现” 口径制定：
+### 1.1 适用范围：Greenfield（同仓内引入 Astro 工程）
+本计划按 “Greenfield、同仓实现” 口径制定：
 - 在本仓库 `apps/web` 建立 Astro 工程，作为 UI 壳与静态资源的 build 层（对齐 `DEV-PLAN-011` 的 SSOT 口径）。
 - 不做 feature flag 分流；不在同一路由下并存两套壳；回退以**发布版本回滚**（上一版构建产物/上一版镜像）为唯一手段。
 
@@ -62,7 +62,7 @@ flowchart LR
 ### 2.3 工具链与门禁（SSOT 引用）
 - DDD 分层框架：`docs/dev-plans/015-ddd-layering-framework.md`
 - HR 模块骨架（4 模块）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- 任职记录 v4 UI 合同（仅显示 effective_date、保持 `[start,end)`）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
+- 任职记录 UI 合同（仅显示 effective_date、保持 `[start,end)`）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - 路由治理与门禁：`docs/dev-plans/017-routing-strategy.md`（入口：`make check routing`）
 - 分层/依赖门禁：`.gocleanarch.yml`（入口：`make check lint`）
 - 样式与生成入口：`Makefile`（Tailwind/生成物以 SSOT 为准）
@@ -102,7 +102,7 @@ flowchart LR
 > 说明：路由沿用 016 的“人机入口稳定”建议（仍使用 `/org/*` 与 `/person/*`），但导航以“模块”维度组织，解决当前“Person 里挂 org/assignments”造成的 IA 混乱。
 
 ### 3.3 全局 as-of（有效日期）交互（统一入口）
-为对齐 v4 的 valid-time 语义，页面壳提供一个全局 “As-of 日期”控件：
+为对齐 valid-time 语义，页面壳提供一个全局 “As-of 日期”控件：
 - **冻结口径：Query 参数** `?as_of=YYYY-MM-DD`（禁止混用 `hx-include` 作为第二套透传口径）。
 - `as_of` 缺省行为：对所有“业务内容 UI 路由”（含 `/app` 与模块页面），若未提供 `as_of`，服务端必须 **302 重定向** 到同一路径并补齐 `?as_of=<CURRENT_DATE(UTC)>`，从而让 URL 可分享/可复现。
 - `as_of` 校验：若 `as_of` 非法（格式不为 `YYYY-MM-DD` 或不可解析），返回 **400**（UI 显示错误，且不做“猜测性纠正”）。
@@ -161,7 +161,7 @@ flowchart LR
   - 支持 `as_of`（必带；缺省会被重定向补齐）与 `q`（搜索，可选）
   - 列表行点击打开右侧/下方详情面板（HTMX swap），减少全页跳转
 
-### 5.2 任职记录（Assignments）v4 UI 合同落地
+### 5.2 任职记录（Assignments）UI 合同落地
 对齐 031 的强约束：
 - 列表/时间线**只显示 `effective_date`**（生效日期），不显示 `end_date`。
 - 时间线分段用 “事件/动作”标识（CREATE/UPDATE/TRANSFER/TERMINATE…），但不引入 `effseq`。
