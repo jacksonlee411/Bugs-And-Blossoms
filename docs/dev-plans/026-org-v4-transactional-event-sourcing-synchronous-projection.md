@@ -9,6 +9,12 @@
 1. [X] 明确 v4 目标边界（SoT=events，ReadModel=versions，Engine=DB，Safety=advisory lock，Rebuild=replay）。
 2. [X] 输出完整 schema、核心 DB 函数、Go 事务调用形状、查询封装与运维重建流程（可直接编码，无猜测）。
 3. [ ] （非本计划）迁移/兼容/灰度：必须另开子计划（建议 026A/026B），并遵守仓库红线（新增表需手工确认）。
+4. [X] UI 渐进切换：`/org/nodes` 读路径已支持 v4（失败/为空自动回退 legacy），并提供 `read=legacy` 过渡期逃生通道。
+   - 证据：#21 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/21 、#26 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/26
+5. [X] UI 可操作写入：`/org/nodes` 的 CREATE/RENAME/MOVE/DISABLE 已全部走 v4 `submit_org_event(...)`（保持“写入口唯一”）。
+   - 证据：#22 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/22 、#28 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/28 、#29 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/29
+6. [X] `read=legacy` 时间盒：已补齐删除条件与时间盒（达到条件后必须移除，最晚不应晚于开始实施 `DEV-PLAN-030` 前）。
+   - 证据：#27 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/27
 
 ## 1. 背景与上下文 (Context)
 HR SaaS 的组织架构场景常见约束：
@@ -20,12 +26,12 @@ HR SaaS 的组织架构场景常见约束：
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 定义 **事件表 SoT**：`org_events`（append-only），记录业务意图与必要元数据（tenant/request/initiator/tx_time）。
-- [ ] 定义 **读模型表**：`org_unit_versions`（ltree path + daterange validity + no-overlap），支持毫秒级 as-of 查询与子树/祖先链查询。
-- [ ] 定义 **DB 投射引擎（选定：同事务全量重放）**：单入口函数 `submit_org_event(...)` 在同一事务内完成：事件写入（幂等）+ **全量重放**（删除并重建 `org_unit_versions`）+ 不变量校验。
-- [ ] 定义 **并发安全策略**：Postgres advisory lock，串行化同一棵组织树的写入（fail-fast 可选）。
-- [ ] 定义 **读模型封装**：`get_org_snapshot(...)`（含长名称拼接），提供“参数化视图”体验。
-- [ ] 定义 **可重放重建**：提供 rebuild 流程（truncate versions + replay events）与安全守卫（维护锁/互斥）。
+- [X] 定义 **事件表 SoT**：`org_events`（append-only），记录业务意图与必要元数据（tenant/request/initiator/tx_time）。
+- [X] 定义 **读模型表**：`org_unit_versions`（ltree path + daterange validity + no-overlap），支持毫秒级 as-of 查询与子树/祖先链查询。
+- [X] 定义 **DB 投射引擎（选定：同事务全量重放）**：单入口函数 `submit_org_event(...)` 在同一事务内完成：事件写入（幂等）+ **全量重放**（删除并重建 `org_unit_versions`）+ 不变量校验。
+- [X] 定义 **并发安全策略**：Postgres advisory lock，串行化同一棵组织树的写入（fail-fast 可选）。
+- [X] 定义 **读模型封装**：`get_org_snapshot(...)`（含长名称拼接），提供“参数化视图”体验。
+- [X] 定义 **可重放重建**：提供 rebuild 流程（truncate versions + replay events）与安全守卫（维护锁/互斥）。
 
 ### 2.2 非目标（明确不做）
 - 不考虑与现有 Org 模块的兼容、迁移与灰度（不做双写/回填/回滚策略）。
@@ -36,8 +42,8 @@ HR SaaS 的组织架构场景常见约束：
 > 本计划是设计稿；进入实施时，触发器与门禁以 `AGENTS.md` / `Makefile` / CI workflow 为 SSOT。本文只勾选“将会命中”的类别。
 
 - **触发器清单（实施阶段将命中）**：
-  - [ ] Go 代码（`AGENTS.md`）
-  - [ ] DB 迁移 / Schema（新增表/函数/索引；按 Org 工具链门禁执行）
+  - [X] Go 代码（`AGENTS.md`）
+  - [X] DB 迁移 / Schema（新增表/函数/索引；按 Org 工具链门禁执行）
   - [ ] Outbox（若在实施阶段选择发布 integration events，则按 `DEV-PLAN-017`）
   - [X] 文档（本计划）
 
@@ -1189,7 +1195,8 @@ func (s *OrgServiceV4) MoveOrg(ctx context.Context, tenantID uuid.UUID, cmd Move
   - [ ] 同一 `org_id` 在同一 `effective_date` 第二次提交（不同 `event_id`）稳定失败，并映射为 `ORG_EVENT_CONFLICT_SAME_DAY`。
   - [ ] RLS（对齐 `DEV-PLAN-021`）：缺失 `app.current_tenant` 时对 v4 表的读写必须 fail-closed（不得以“空结果”掩盖注入遗漏）。
   - [ ] RLS（对齐 `DEV-PLAN-021`）：`app.current_tenant` 与 `p_tenant_id` 不一致时，`submit_org_event/replay_org_unit_versions` 必须稳定失败（tenant mismatch）。
-  - [ ] UI 集成（渐进切换）：`/org/nodes` 默认读取优先 v4（`get_org_snapshot`），失败/为空自动回退 legacy；可用 `read=legacy` 强制走 legacy（仅用于过渡期回退/排障）。`read=legacy` 必须有删除条件与时间盒：当 `/org/nodes` 的 v4 写入能力覆盖到 CREATE/RENAME/MOVE/DISABLE 且本地 `make preflight` 与浏览器验证脚本稳定通过后，必须移除 `read=legacy`（最晚不应晚于开始实施 `DEV-PLAN-030` 之前）。
+  - [X] UI 集成（渐进切换）：`/org/nodes` 默认读取优先 v4（`get_org_snapshot`），失败/为空自动回退 legacy；可用 `read=legacy` 强制走 legacy（仅用于过渡期回退/排障）。`read=legacy` 必须有删除条件与时间盒：当 `/org/nodes` 的 v4 写入能力覆盖到 CREATE/RENAME/MOVE/DISABLE 且本地 `make preflight` 与浏览器验证脚本稳定通过后，必须移除 `read=legacy`（最晚不应晚于开始实施 `DEV-PLAN-030` 之前）。
+    - 证据：#21 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/21 、#22 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/22 、#26 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/26 、#27 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/27 、#28 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/28 、#29 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/29
 - 性能（建议）：
   - [ ] `get_org_snapshot` 在 1k/10k 节点规模下 query 次数为常数（1 次），并可通过索引命中保持稳定延迟。
   - [ ] `EXPLAIN (ANALYZE, BUFFERS)` 显示 `get_org_snapshot` 的 snapshot 过滤命中 `org_unit_versions_active_day_gist`（或等价的 GiST/EXCLUDE 索引），避免全表 Seq Scan。
