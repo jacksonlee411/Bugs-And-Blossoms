@@ -1,6 +1,6 @@
 # DEV-PLAN-004 记录：全仓去除版本标记——执行日志
 
-**状态**: 进行中（2026-01-06 09:25 UTC）
+**状态**: 已完成（2026-01-06 12:01 UTC）
 
 > 重要：为满足“最终全仓扫描命中为 0”的验收口径，本文避免直接写出版本标记字面量；统一用占位符 `<ver>` 表示“`v`/`V` + `4` 的紧邻组合”。
 
@@ -93,3 +93,13 @@
 - **本地门禁**
   - `make check naming`：通过
   - `make check doc`：通过
+
+## 补充：从零环境迁移闭环验证（OrgUnit）
+
+- **状态**：已完成（2026-01-06 12:01 UTC）
+- **范围**
+  - 从空数据库验证：`make orgunit migrate up` 可完整执行并通过 smoke
+- **复现命令（本地）**
+  - 启动临时 Postgres：`docker run --rm -d --name bb-devplan004-postgres2 -e POSTGRES_USER=app -e POSTGRES_PASSWORD=app -e POSTGRES_DB=bugs_and_blossoms -p 55438:5432 postgres:17`
+  - 迁移 + smoke：`DATABASE_URL='postgres://app:app@localhost:55438/bugs_and_blossoms?sslmode=disable' make orgunit migrate up`
+  - 清理：`docker rm -f bb-devplan004-postgres2`
