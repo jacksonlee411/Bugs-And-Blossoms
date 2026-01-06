@@ -311,7 +311,7 @@ CREATE INDEX assignment_versions_subject_day_gist
 ### 5.1 并发互斥（Advisory Lock）
 **锁粒度（选定）**：同一 `tenant_id` 的 Position+Assignment 写入串行化，简化 `reports_to_position_id` 与占编等跨实体不变量的裁决。
 
-锁 key（文本）：`org:v4:<tenant_id>:Position`
+锁 key（文本）：`org:write-lock:<tenant_id>:Position`
 
 ### 5.2 `submit_position_event`（同事务全量重放）
 函数签名（建议，与 026 对齐）：
@@ -330,7 +330,7 @@ CREATE OR REPLACE FUNCTION submit_position_event(
 
 合同语义（必须）：
 0) 多租户上下文（RLS）：函数开头必须断言 `p_tenant_id` 与 `app.current_tenant` 一致（对齐 `DEV-PLAN-021`）。
-1) 获取互斥锁：`org:v4:<tenant_id>:Position`（同一事务内）。
+1) 获取互斥锁：`org:write-lock:<tenant_id>:Position`（同一事务内）。
 2) 参数校验：`p_event_type` 必须为 `CREATE/UPDATE/DISABLE`；`p_payload` 必须为 object（空则视为 `{}`）。
 3) identity 处理：
    - `CREATE`：从 `payload.code` 创建 `positions` 行（并可设置 `is_auto_created`）；若已存在则拒绝（`POSITION_ALREADY_EXISTS`）。
@@ -411,7 +411,7 @@ CREATE OR REPLACE FUNCTION submit_assignment_event(
 
 合同语义（必须）：
 0) 多租户上下文（RLS）：函数开头必须断言 `p_tenant_id` 与 `app.current_tenant` 一致（对齐 `DEV-PLAN-021`）。
-1) 获取互斥锁：`org:v4:<tenant_id>:Position`（同一事务内）。
+1) 获取互斥锁：`org:write-lock:<tenant_id>:Position`（同一事务内）。
 2) identity 处理：
    - `CREATE`：创建 `assignments` 行；若已存在则拒绝（`ASSIGNMENT_ALREADY_EXISTS`）。
    - 非 `CREATE`：要求 `assignments` 行已存在；否则拒绝（`ASSIGNMENT_NOT_FOUND`）。
@@ -484,6 +484,6 @@ CREATE OR REPLACE FUNCTION get_assignment_snapshot(
 - Position：`SELECT replay_position_versions('<tenant_id>'::uuid, '<position_id>'::uuid);`
 - Assignment：`SELECT replay_assignment_versions('<tenant_id>'::uuid, '<assignment_id>'::uuid);`
 
-> 建议在执行前复用同一把维护互斥锁（`org:v4:<tenant_id>:Position`）确保与在线写入互斥。
+> 建议在执行前复用同一把维护互斥锁（`org:write-lock:<tenant_id>:Position`）确保与在线写入互斥。
 
 > 多租户隔离（RLS，见 `DEV-PLAN-021`）：replay 必须在显式事务内先注入 `app.current_tenant`，否则会 fail-closed。

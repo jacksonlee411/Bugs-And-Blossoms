@@ -289,7 +289,7 @@ CREATE INDEX org_unit_versions_path_ids_gin
 ### 5.1 并发互斥（Advisory Lock）
 **锁粒度（选定）**：同一 `tenant_id + hierarchy_type` 串行化写入，避免并发 Move/Correct 导致死锁与 path 漂移。
 
-锁 key（文本）：`org:v4:<tenant_id>:<hierarchy_type>`
+锁 key（文本）：`org:write-lock:<tenant_id>:<hierarchy_type>`
 
 在事务内调用（阻塞版）：
 ```sql
@@ -353,7 +353,7 @@ BEGIN
       DETAIL = format('unsupported event_type: %s', p_event_type);
   END IF;
 
-  v_lock_key := format('org:v4:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
@@ -450,7 +450,7 @@ BEGIN
       DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
   END IF;
 
-  v_lock_key := format('org:v4:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM org_unit_versions
@@ -1119,7 +1119,7 @@ func (s *OrgServiceV4) MoveOrg(ctx context.Context, tenantID uuid.UUID, cmd Move
   return composables.InTx(ctx, func(txCtx context.Context) error {
     tx, _ := composables.UseTx(txCtx)
 
-    lockKey := fmt.Sprintf("org:v4:%s:%s", tenantID, "OrgUnit")
+    lockKey := fmt.Sprintf("org:write-lock:%s:%s", tenantID, "OrgUnit")
     var locked bool
     if err := tx.QueryRow(txCtx, "SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0))", lockKey).Scan(&locked); err != nil {
       return err
@@ -1179,7 +1179,7 @@ func (s *OrgServiceV4) MoveOrg(ctx context.Context, tenantID uuid.UUID, cmd Move
 
 1) `BEGIN;`
 2) 注入租户上下文：`SELECT set_config('app.current_tenant', '<tenant_id>', true);`
-3) 获取维护互斥锁（复用写锁 key）：`SELECT pg_advisory_xact_lock(hashtextextended('org:v4:<tenant_id>:OrgUnit', 0));`
+3) 获取维护互斥锁（复用写锁 key）：`SELECT pg_advisory_xact_lock(hashtextextended('org:write-lock:<tenant_id>:OrgUnit', 0));`
 4) 执行全量重放：`SELECT replay_org_unit_versions('<tenant_id>'::uuid, 'OrgUnit');`
 5) `COMMIT;`
 

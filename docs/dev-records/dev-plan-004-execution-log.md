@@ -37,3 +37,16 @@
   - `make test`：通过
   - `make check routing`：通过
   - `make check doc`：通过
+
+## PR-4：锁 key 前缀去噪（原子切换）
+
+- **状态**：已完成（2026-01-06 10:09 UTC）
+- **范围**
+  - OrgUnit：写入互斥锁 key 前缀去除版本标记，并同步更新 schema SSOT、迁移文件与文档示例
+  - 工具链：更新迁移校验和（`atlas.sum`）并重新导出 sqlc schema
+- **本地门禁**
+  - `make sqlc-generate`：通过
+  - `./scripts/db/run_atlas.sh migrate hash --dir file://migrations/orgunit --dir-format goose`：通过
+  - `./scripts/db/lint.sh orgunit`：通过
+  - `make orgunit plan`：通过
+  - `make orgunit migrate up`：通过（已在本地环境运行）

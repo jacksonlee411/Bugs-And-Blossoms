@@ -769,7 +769,7 @@ BEGIN
       DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
   END IF;
 
-  v_lock_key := format('org:v4:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM orgunit.org_unit_versions
@@ -893,7 +893,7 @@ BEGIN
       DETAIL = format('unsupported event_type: %s', p_event_type);
   END IF;
 
-  v_lock_key := format('org:v4:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
