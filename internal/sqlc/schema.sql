@@ -2102,3 +2102,921 @@ $$;
 
 -- end: modules/jobcatalog/infrastructure/persistence/schema/00003_jobcatalog_engine.sql
 
+-- begin: modules/staffing/infrastructure/persistence/schema/00001_staffing_schema.sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+CREATE SCHEMA IF NOT EXISTS staffing;
+
+
+-- end: modules/staffing/infrastructure/persistence/schema/00001_staffing_schema.sql
+
+-- begin: modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql
+CREATE TABLE IF NOT EXISTS staffing.positions (
+  tenant_id uuid NOT NULL,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, id)
+);
+
+CREATE TABLE IF NOT EXISTS staffing.position_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  position_id uuid NOT NULL,
+  event_type text NOT NULL,
+  effective_date date NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT position_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
+  CONSTRAINT position_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT position_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT position_events_one_per_day_unique UNIQUE (tenant_id, position_id, effective_date),
+  CONSTRAINT position_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT position_events_position_fk FOREIGN KEY (tenant_id, position_id) REFERENCES staffing.positions(tenant_id, id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS position_events_tenant_position_effective_idx
+  ON staffing.position_events (tenant_id, position_id, effective_date, id);
+
+CREATE TABLE IF NOT EXISTS staffing.position_versions (
+  id bigserial PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  position_id uuid NOT NULL,
+  org_unit_id uuid NOT NULL,
+  reports_to_position_id uuid NULL,
+  name text NULL,
+  lifecycle_status text NOT NULL DEFAULT 'active',
+  capacity_fte numeric(9,2) NOT NULL DEFAULT 1.0,
+  profile jsonb NOT NULL DEFAULT '{}'::jsonb,
+  validity daterange NOT NULL,
+  last_event_id bigint NOT NULL REFERENCES staffing.position_events(id),
+  CONSTRAINT position_versions_validity_check CHECK (NOT isempty(validity)),
+  CONSTRAINT position_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
+  CONSTRAINT position_versions_capacity_fte_check CHECK (capacity_fte > 0),
+  CONSTRAINT position_versions_profile_is_object_check CHECK (jsonb_typeof(profile) = 'object'),
+  CONSTRAINT position_versions_lifecycle_status_check CHECK (lifecycle_status IN ('active','disabled')),
+  CONSTRAINT position_versions_position_fk FOREIGN KEY (tenant_id, position_id) REFERENCES staffing.positions(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT position_versions_reports_to_fk FOREIGN KEY (tenant_id, reports_to_position_id) REFERENCES staffing.positions(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT position_versions_no_overlap
+    EXCLUDE USING gist (
+      tenant_id gist_uuid_ops WITH =,
+      position_id gist_uuid_ops WITH =,
+      validity WITH &&
+    )
+);
+
+CREATE INDEX IF NOT EXISTS position_versions_lookup_btree
+  ON staffing.position_versions (tenant_id, position_id, lower(validity));
+
+CREATE TABLE IF NOT EXISTS staffing.assignments (
+  tenant_id uuid NOT NULL,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  person_uuid uuid NOT NULL,
+  assignment_type text NOT NULL DEFAULT 'primary',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, id),
+  CONSTRAINT assignments_assignment_type_check CHECK (assignment_type IN ('primary')),
+  CONSTRAINT assignments_tenant_person_type_unique UNIQUE (tenant_id, person_uuid, assignment_type)
+);
+
+CREATE TABLE IF NOT EXISTS staffing.assignment_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  assignment_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  assignment_type text NOT NULL DEFAULT 'primary',
+  event_type text NOT NULL,
+  effective_date date NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT assignment_events_assignment_type_check CHECK (assignment_type IN ('primary')),
+  CONSTRAINT assignment_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
+  CONSTRAINT assignment_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT assignment_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT assignment_events_one_per_day_unique UNIQUE (tenant_id, assignment_id, effective_date),
+  CONSTRAINT assignment_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT assignment_events_assignment_fk FOREIGN KEY (tenant_id, assignment_id) REFERENCES staffing.assignments(tenant_id, id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS assignment_events_tenant_assignment_effective_idx
+  ON staffing.assignment_events (tenant_id, assignment_id, effective_date, id);
+
+CREATE TABLE IF NOT EXISTS staffing.assignment_versions (
+  id bigserial PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  assignment_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  position_id uuid NOT NULL,
+  assignment_type text NOT NULL DEFAULT 'primary',
+  status text NOT NULL DEFAULT 'active',
+  allocated_fte numeric(9,2) NOT NULL DEFAULT 1.0,
+  validity daterange NOT NULL,
+  last_event_id bigint NOT NULL REFERENCES staffing.assignment_events(id),
+  CONSTRAINT assignment_versions_validity_check CHECK (NOT isempty(validity)),
+  CONSTRAINT assignment_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
+  CONSTRAINT assignment_versions_allocated_fte_check CHECK (allocated_fte > 0),
+  CONSTRAINT assignment_versions_status_check CHECK (status IN ('active','inactive')),
+  CONSTRAINT assignment_versions_assignment_type_check CHECK (assignment_type IN ('primary')),
+  CONSTRAINT assignment_versions_assignment_fk FOREIGN KEY (tenant_id, assignment_id) REFERENCES staffing.assignments(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT assignment_versions_position_fk FOREIGN KEY (tenant_id, position_id) REFERENCES staffing.positions(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT assignment_versions_no_overlap
+    EXCLUDE USING gist (
+      tenant_id gist_uuid_ops WITH =,
+      assignment_id gist_uuid_ops WITH =,
+      validity WITH &&
+    ),
+  CONSTRAINT assignment_versions_position_no_overlap
+    EXCLUDE USING gist (
+      tenant_id gist_uuid_ops WITH =,
+      position_id gist_uuid_ops WITH =,
+      validity WITH &&
+    )
+    WHERE (status = 'active')
+);
+
+CREATE INDEX IF NOT EXISTS assignment_versions_person_lookup_btree
+  ON staffing.assignment_versions (tenant_id, person_uuid, lower(validity));
+
+ALTER TABLE staffing.positions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.positions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.positions;
+CREATE POLICY tenant_isolation ON staffing.positions
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.position_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.position_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.position_events;
+CREATE POLICY tenant_isolation ON staffing.position_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.position_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.position_versions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.position_versions;
+CREATE POLICY tenant_isolation ON staffing.position_versions
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.assignments FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.assignments;
+CREATE POLICY tenant_isolation ON staffing.assignments
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.assignment_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.assignment_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.assignment_events;
+CREATE POLICY tenant_isolation ON staffing.assignment_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.assignment_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.assignment_versions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.assignment_versions;
+CREATE POLICY tenant_isolation ON staffing.assignment_versions
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+-- end: modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql
+
+-- begin: modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql
+CREATE OR REPLACE FUNCTION staffing.assert_current_tenant(p_tenant_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_ctx_raw text;
+  v_ctx_tenant uuid;
+BEGIN
+  IF p_tenant_id IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'tenant_id is required';
+  END IF;
+
+  v_ctx_raw := current_setting('app.current_tenant', true);
+  IF v_ctx_raw IS NULL OR btrim(v_ctx_raw) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'RLS_TENANT_CONTEXT_MISSING',
+      DETAIL = 'app.current_tenant is required';
+  END IF;
+
+  BEGIN
+    v_ctx_tenant := v_ctx_raw::uuid;
+  EXCEPTION
+    WHEN invalid_text_representation THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'RLS_TENANT_CONTEXT_INVALID',
+        DETAIL = format('app.current_tenant=%s', v_ctx_raw);
+  END;
+
+  IF v_ctx_tenant <> p_tenant_id THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'RLS_TENANT_MISMATCH',
+      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_id, v_ctx_tenant);
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.replay_position_versions(
+  p_tenant_id uuid,
+  p_position_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_lock_key text;
+  v_prev_effective date;
+  v_last_validity daterange;
+  v_org_unit_id uuid;
+  v_name text;
+  v_row RECORD;
+  v_validity daterange;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_position_id IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'position_id is required';
+  END IF;
+
+  v_lock_key := format('staffing:position:%s:%s', p_tenant_id, p_position_id);
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
+
+  DELETE FROM staffing.position_versions
+  WHERE tenant_id = p_tenant_id AND position_id = p_position_id;
+
+  v_org_unit_id := NULL;
+  v_name := NULL;
+  v_prev_effective := NULL;
+
+  FOR v_row IN
+    SELECT
+      e.id AS event_db_id,
+      e.event_type,
+      e.effective_date,
+      e.payload,
+      lead(e.effective_date) OVER (ORDER BY e.effective_date ASC, e.id ASC) AS next_effective
+    FROM staffing.position_events e
+    WHERE e.tenant_id = p_tenant_id AND e.position_id = p_position_id
+    ORDER BY e.effective_date ASC, e.id ASC
+  LOOP
+    IF v_row.event_type = 'CREATE' THEN
+      IF v_prev_effective IS NOT NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_INVALID_EVENT',
+          DETAIL = 'CREATE must be the first event';
+      END IF;
+
+      v_org_unit_id := NULLIF(v_row.payload->>'org_unit_id', '')::uuid;
+      IF v_org_unit_id IS NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+          DETAIL = 'org_unit_id is required';
+      END IF;
+
+      v_name := NULLIF(btrim(v_row.payload->>'name'), '');
+    ELSIF v_row.event_type = 'UPDATE' THEN
+      IF v_prev_effective IS NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_INVALID_EVENT',
+          DETAIL = 'UPDATE requires prior state';
+      END IF;
+
+      IF v_row.payload ? 'org_unit_id' THEN
+        v_org_unit_id := NULLIF(v_row.payload->>'org_unit_id', '')::uuid;
+        IF v_org_unit_id IS NULL THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = 'org_unit_id is required';
+        END IF;
+      END IF;
+      IF v_row.payload ? 'name' THEN
+        v_name := NULLIF(btrim(v_row.payload->>'name'), '');
+      END IF;
+    ELSE
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+        DETAIL = format('unexpected event_type: %s', v_row.event_type);
+    END IF;
+
+    IF v_row.next_effective IS NULL THEN
+      v_validity := daterange(v_row.effective_date, NULL, '[)');
+    ELSE
+      v_validity := daterange(v_row.effective_date, v_row.next_effective, '[)');
+    END IF;
+
+    INSERT INTO staffing.position_versions (
+      tenant_id,
+      position_id,
+      org_unit_id,
+      reports_to_position_id,
+      name,
+      lifecycle_status,
+      capacity_fte,
+      profile,
+      validity,
+      last_event_id
+    )
+    VALUES (
+      p_tenant_id,
+      p_position_id,
+      v_org_unit_id,
+      NULL,
+      v_name,
+      'active',
+      1.0,
+      '{}'::jsonb,
+      v_validity,
+      v_row.event_db_id
+    );
+
+    v_prev_effective := v_row.effective_date;
+  END LOOP;
+
+  IF EXISTS (
+    WITH ordered AS (
+      SELECT
+        validity,
+        lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
+      FROM staffing.position_versions
+      WHERE tenant_id = p_tenant_id AND position_id = p_position_id
+    )
+    SELECT 1
+    FROM ordered
+    WHERE prev_validity IS NOT NULL
+      AND lower(validity) <> upper(prev_validity)
+    LIMIT 1
+  ) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_VALIDITY_GAP',
+      DETAIL = 'position_versions must be gapless';
+  END IF;
+
+  SELECT validity INTO v_last_validity
+  FROM staffing.position_versions
+  WHERE tenant_id = p_tenant_id AND position_id = p_position_id
+  ORDER BY lower(validity) DESC
+  LIMIT 1;
+
+  IF v_last_validity IS NOT NULL AND NOT upper_inf(v_last_validity) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_VALIDITY_NOT_INFINITE',
+      DETAIL = 'last position version validity must be unbounded (infinity)';
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.submit_position_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_position_id uuid,
+  p_event_type text,
+  p_effective_date date,
+  p_payload jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_lock_key text;
+  v_event_db_id bigint;
+  v_existing staffing.position_events%ROWTYPE;
+  v_payload jsonb;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_event_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  END IF;
+  IF p_position_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'position_id is required';
+  END IF;
+  IF p_effective_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
+  END IF;
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  END IF;
+  IF p_initiator_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  END IF;
+  IF p_event_type NOT IN ('CREATE','UPDATE') THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = format('unsupported event_type: %s', p_event_type);
+  END IF;
+
+  v_lock_key := format('staffing:position:%s:%s', p_tenant_id, p_position_id);
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
+
+  INSERT INTO staffing.positions (tenant_id, id)
+  VALUES (p_tenant_id, p_position_id)
+  ON CONFLICT DO NOTHING;
+
+  v_payload := COALESCE(p_payload, '{}'::jsonb);
+
+  INSERT INTO staffing.position_events (
+    event_id,
+    tenant_id,
+    position_id,
+    event_type,
+    effective_date,
+    payload,
+    request_id,
+    initiator_id
+  )
+  VALUES (
+    p_event_id,
+    p_tenant_id,
+    p_position_id,
+    p_event_type,
+    p_effective_date,
+    v_payload,
+    p_request_id,
+    p_initiator_id
+  )
+  ON CONFLICT (event_id) DO NOTHING
+  RETURNING id INTO v_event_db_id;
+
+  IF v_event_db_id IS NULL THEN
+    SELECT * INTO v_existing
+    FROM staffing.position_events
+    WHERE event_id = p_event_id;
+
+    IF v_existing.tenant_id <> p_tenant_id
+      OR v_existing.position_id <> p_position_id
+      OR v_existing.event_type <> p_event_type
+      OR v_existing.effective_date <> p_effective_date
+      OR v_existing.payload <> v_payload
+      OR v_existing.request_id <> p_request_id
+      OR v_existing.initiator_id <> p_initiator_id
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+    END IF;
+
+    RETURN v_existing.id;
+  END IF;
+
+  PERFORM staffing.replay_position_versions(p_tenant_id, p_position_id);
+
+  RETURN v_event_db_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.replay_assignment_versions(
+  p_tenant_id uuid,
+  p_assignment_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_lock_key text;
+  v_prev_effective date;
+  v_last_validity daterange;
+  v_person_uuid uuid;
+  v_assignment_type text;
+  v_position_id uuid;
+  v_status text;
+  v_row RECORD;
+  v_validity daterange;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_assignment_id IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'assignment_id is required';
+  END IF;
+
+  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_id, p_assignment_id);
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
+
+  DELETE FROM staffing.assignment_versions
+  WHERE tenant_id = p_tenant_id AND assignment_id = p_assignment_id;
+
+  v_person_uuid := NULL;
+  v_assignment_type := NULL;
+  v_position_id := NULL;
+  v_status := 'active';
+  v_prev_effective := NULL;
+
+  FOR v_row IN
+    SELECT
+      e.id AS event_db_id,
+      e.event_type,
+      e.effective_date,
+      e.person_uuid,
+      e.assignment_type,
+      e.payload,
+      lead(e.effective_date) OVER (ORDER BY e.effective_date ASC, e.id ASC) AS next_effective
+    FROM staffing.assignment_events e
+    WHERE e.tenant_id = p_tenant_id AND e.assignment_id = p_assignment_id
+    ORDER BY e.effective_date ASC, e.id ASC
+  LOOP
+    IF v_row.event_type = 'CREATE' THEN
+      IF v_prev_effective IS NOT NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_INVALID_EVENT',
+          DETAIL = 'CREATE must be the first event';
+      END IF;
+
+      v_person_uuid := v_row.person_uuid;
+      v_assignment_type := v_row.assignment_type;
+
+      v_position_id := NULLIF(v_row.payload->>'position_id', '')::uuid;
+      IF v_position_id IS NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+          DETAIL = 'position_id is required';
+      END IF;
+      v_status := 'active';
+    ELSIF v_row.event_type = 'UPDATE' THEN
+      IF v_prev_effective IS NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_INVALID_EVENT',
+          DETAIL = 'UPDATE requires prior state';
+      END IF;
+
+      IF v_row.payload ? 'position_id' THEN
+        v_position_id := NULLIF(v_row.payload->>'position_id', '')::uuid;
+        IF v_position_id IS NULL THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = 'position_id is required';
+        END IF;
+      END IF;
+
+      IF v_row.payload ? 'status' THEN
+        v_status := NULLIF(btrim(v_row.payload->>'status'), '');
+        IF v_status IS NULL OR v_status NOT IN ('active','inactive') THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = format('invalid status: %s', v_row.payload->>'status');
+        END IF;
+      END IF;
+    ELSE
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+        DETAIL = format('unexpected event_type: %s', v_row.event_type);
+    END IF;
+
+    IF v_row.next_effective IS NULL THEN
+      v_validity := daterange(v_row.effective_date, NULL, '[)');
+    ELSE
+      v_validity := daterange(v_row.effective_date, v_row.next_effective, '[)');
+    END IF;
+
+    INSERT INTO staffing.assignment_versions (
+      tenant_id,
+      assignment_id,
+      person_uuid,
+      position_id,
+      assignment_type,
+      status,
+      allocated_fte,
+      validity,
+      last_event_id
+    )
+    VALUES (
+      p_tenant_id,
+      p_assignment_id,
+      v_person_uuid,
+      v_position_id,
+      v_assignment_type,
+      v_status,
+      1.0,
+      v_validity,
+      v_row.event_db_id
+    );
+
+    v_prev_effective := v_row.effective_date;
+  END LOOP;
+
+  IF EXISTS (
+    WITH ordered AS (
+      SELECT
+        validity,
+        lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
+      FROM staffing.assignment_versions
+      WHERE tenant_id = p_tenant_id AND assignment_id = p_assignment_id
+    )
+    SELECT 1
+    FROM ordered
+    WHERE prev_validity IS NOT NULL
+      AND lower(validity) <> upper(prev_validity)
+    LIMIT 1
+  ) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_VALIDITY_GAP',
+      DETAIL = 'assignment_versions must be gapless';
+  END IF;
+
+  SELECT validity INTO v_last_validity
+  FROM staffing.assignment_versions
+  WHERE tenant_id = p_tenant_id AND assignment_id = p_assignment_id
+  ORDER BY lower(validity) DESC
+  LIMIT 1;
+
+  IF v_last_validity IS NOT NULL AND NOT upper_inf(v_last_validity) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_VALIDITY_NOT_INFINITE',
+      DETAIL = 'last assignment version validity must be unbounded (infinity)';
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.submit_assignment_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_assignment_id uuid,
+  p_person_uuid uuid,
+  p_assignment_type text,
+  p_event_type text,
+  p_effective_date date,
+  p_payload jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_lock_key text;
+  v_event_db_id bigint;
+  v_existing staffing.assignment_events%ROWTYPE;
+  v_payload jsonb;
+  v_existing_assignment_id uuid;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_event_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  END IF;
+  IF p_assignment_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_id is required';
+  END IF;
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_assignment_type IS NULL OR btrim(p_assignment_type) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_type is required';
+  END IF;
+  IF p_assignment_type <> 'primary' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unsupported assignment_type: %s', p_assignment_type);
+  END IF;
+  IF p_effective_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
+  END IF;
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  END IF;
+  IF p_initiator_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  END IF;
+  IF p_event_type NOT IN ('CREATE','UPDATE') THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = format('unsupported event_type: %s', p_event_type);
+  END IF;
+
+  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_id, p_assignment_id);
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
+
+  INSERT INTO staffing.assignments (tenant_id, id, person_uuid, assignment_type)
+  VALUES (p_tenant_id, p_assignment_id, p_person_uuid, p_assignment_type)
+  ON CONFLICT (tenant_id, person_uuid, assignment_type) DO NOTHING;
+
+  SELECT id INTO v_existing_assignment_id
+  FROM staffing.assignments
+  WHERE tenant_id = p_tenant_id AND person_uuid = p_person_uuid AND assignment_type = p_assignment_type;
+
+  IF v_existing_assignment_id IS NULL THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'assignment identity missing';
+  END IF;
+  IF v_existing_assignment_id <> p_assignment_id THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_ASSIGNMENT_ID_MISMATCH',
+      DETAIL = format('assignment_id=%s existing_id=%s', p_assignment_id, v_existing_assignment_id);
+  END IF;
+
+  v_payload := COALESCE(p_payload, '{}'::jsonb);
+
+  INSERT INTO staffing.assignment_events (
+    event_id,
+    tenant_id,
+    assignment_id,
+    person_uuid,
+    assignment_type,
+    event_type,
+    effective_date,
+    payload,
+    request_id,
+    initiator_id
+  )
+  VALUES (
+    p_event_id,
+    p_tenant_id,
+    p_assignment_id,
+    p_person_uuid,
+    p_assignment_type,
+    p_event_type,
+    p_effective_date,
+    v_payload,
+    p_request_id,
+    p_initiator_id
+  )
+  ON CONFLICT (event_id) DO NOTHING
+  RETURNING id INTO v_event_db_id;
+
+  IF v_event_db_id IS NULL THEN
+    SELECT * INTO v_existing
+    FROM staffing.assignment_events
+    WHERE event_id = p_event_id;
+
+    IF v_existing.tenant_id <> p_tenant_id
+      OR v_existing.assignment_id <> p_assignment_id
+      OR v_existing.person_uuid <> p_person_uuid
+      OR v_existing.assignment_type <> p_assignment_type
+      OR v_existing.event_type <> p_event_type
+      OR v_existing.effective_date <> p_effective_date
+      OR v_existing.payload <> v_payload
+      OR v_existing.request_id <> p_request_id
+      OR v_existing.initiator_id <> p_initiator_id
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+    END IF;
+
+    RETURN v_existing.id;
+  END IF;
+
+  PERFORM staffing.replay_assignment_versions(p_tenant_id, p_assignment_id);
+
+  RETURN v_event_db_id;
+END;
+$$;
+
+
+-- end: modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql
+
+-- begin: modules/person/infrastructure/persistence/schema/00001_person_schema.sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE SCHEMA IF NOT EXISTS person;
+
+
+-- end: modules/person/infrastructure/persistence/schema/00001_person_schema.sql
+
+-- begin: modules/person/infrastructure/persistence/schema/00002_person_persons.sql
+CREATE TABLE IF NOT EXISTS person.persons (
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL DEFAULT gen_random_uuid(),
+  pernr text NOT NULL,
+  display_name text NOT NULL,
+  status text NOT NULL DEFAULT 'active',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, person_uuid),
+  CONSTRAINT persons_pernr_trim_check CHECK (btrim(pernr) = pernr),
+  CONSTRAINT persons_pernr_digits_max8_check CHECK (pernr ~ '^[0-9]{1,8}$'),
+  CONSTRAINT persons_pernr_canonical_check CHECK (pernr = '0' OR pernr !~ '^0'),
+  CONSTRAINT persons_display_name_trim_check CHECK (btrim(display_name) = display_name),
+  CONSTRAINT persons_display_name_nonempty_check CHECK (display_name <> ''),
+  CONSTRAINT persons_status_check CHECK (status IN ('active','inactive')),
+  CONSTRAINT persons_tenant_pernr_unique UNIQUE (tenant_id, pernr)
+);
+
+CREATE INDEX IF NOT EXISTS persons_tenant_display_name_idx
+  ON person.persons (tenant_id, display_name);
+
+ALTER TABLE person.persons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE person.persons FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON person.persons;
+CREATE POLICY tenant_isolation ON person.persons
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+
+-- end: modules/person/infrastructure/persistence/schema/00002_person_persons.sql
+
+-- begin: modules/person/infrastructure/persistence/schema/00003_person_engine.sql
+CREATE OR REPLACE FUNCTION person.assert_current_tenant(p_tenant_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_ctx_raw text;
+  v_ctx_tenant uuid;
+BEGIN
+  IF p_tenant_id IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'PERSON_INVALID_ARGUMENT',
+      DETAIL = 'tenant_id is required';
+  END IF;
+
+  v_ctx_raw := current_setting('app.current_tenant', true);
+  IF v_ctx_raw IS NULL OR btrim(v_ctx_raw) = '' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'RLS_TENANT_CONTEXT_MISSING',
+      DETAIL = 'app.current_tenant is required';
+  END IF;
+
+  BEGIN
+    v_ctx_tenant := v_ctx_raw::uuid;
+  EXCEPTION
+    WHEN invalid_text_representation THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'RLS_TENANT_CONTEXT_INVALID',
+        DETAIL = format('app.current_tenant=%s', v_ctx_raw);
+  END;
+
+  IF v_ctx_tenant <> p_tenant_id THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'RLS_TENANT_MISMATCH',
+      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_id, v_ctx_tenant);
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION person.normalize_pernr(p_pernr text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  v text;
+BEGIN
+  IF p_pernr IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'PERSON_PERNR_INVALID',
+      DETAIL = 'pernr is required';
+  END IF;
+
+  v := btrim(p_pernr);
+  IF v = '' OR v !~ '^[0-9]{1,8}$' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'PERSON_PERNR_INVALID',
+      DETAIL = format('pernr=%s', v);
+  END IF;
+
+  v := regexp_replace(v, '^0+', '');
+  IF v = '' THEN
+    v := '0';
+  END IF;
+  RETURN v;
+END;
+$$;
+
+
+-- end: modules/person/infrastructure/persistence/schema/00003_person_engine.sql
+

@@ -153,3 +153,86 @@ type OrgunitSetidEvent struct {
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
+
+type PersonPerson struct {
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	PersonUuid  pgtype.UUID        `json:"person_uuid"`
+	Pernr       string             `json:"pernr"`
+	DisplayName string             `json:"display_name"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingAssignment struct {
+	TenantID       pgtype.UUID        `json:"tenant_id"`
+	ID             pgtype.UUID        `json:"id"`
+	PersonUuid     pgtype.UUID        `json:"person_uuid"`
+	AssignmentType string             `json:"assignment_type"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingAssignmentEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	AssignmentID    pgtype.UUID        `json:"assignment_id"`
+	PersonUuid      pgtype.UUID        `json:"person_uuid"`
+	AssignmentType  string             `json:"assignment_type"`
+	EventType       string             `json:"event_type"`
+	EffectiveDate   pgtype.Date        `json:"effective_date"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type StaffingAssignmentVersion struct {
+	ID             int64                     `json:"id"`
+	TenantID       pgtype.UUID               `json:"tenant_id"`
+	AssignmentID   pgtype.UUID               `json:"assignment_id"`
+	PersonUuid     pgtype.UUID               `json:"person_uuid"`
+	PositionID     pgtype.UUID               `json:"position_id"`
+	AssignmentType string                    `json:"assignment_type"`
+	Status         string                    `json:"status"`
+	AllocatedFte   pgtype.Numeric            `json:"allocated_fte"`
+	Validity       pgtype.Range[pgtype.Date] `json:"validity"`
+	LastEventID    int64                     `json:"last_event_id"`
+}
+
+type StaffingPosition struct {
+	TenantID  pgtype.UUID        `json:"tenant_id"`
+	ID        pgtype.UUID        `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingPositionEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	PositionID      pgtype.UUID        `json:"position_id"`
+	EventType       string             `json:"event_type"`
+	EffectiveDate   pgtype.Date        `json:"effective_date"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type StaffingPositionVersion struct {
+	ID                  int64                     `json:"id"`
+	TenantID            pgtype.UUID               `json:"tenant_id"`
+	PositionID          pgtype.UUID               `json:"position_id"`
+	OrgUnitID           pgtype.UUID               `json:"org_unit_id"`
+	ReportsToPositionID pgtype.UUID               `json:"reports_to_position_id"`
+	Name                *string                   `json:"name"`
+	LifecycleStatus     string                    `json:"lifecycle_status"`
+	CapacityFte         pgtype.Numeric            `json:"capacity_fte"`
+	Profile             []byte                    `json:"profile"`
+	Validity            pgtype.Range[pgtype.Date] `json:"validity"`
+	LastEventID         int64                     `json:"last_event_id"`
+}
