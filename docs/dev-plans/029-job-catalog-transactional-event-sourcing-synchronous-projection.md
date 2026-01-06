@@ -22,17 +22,17 @@
 > 本计划仅声明命中项与 SSOT 链接，不复制命令清单。
 
 - **触发器（实施阶段将命中）**：
-  - [ ] DB 迁移 / Schema（Atlas + Goose 闭环：`docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`）
+  - [ ] DB 迁移 / Schema（Atlas + Goose 闭环：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`）
   - [ ] Go 代码（`AGENTS.md`）
 - **SSOT 链接**：
   - 触发器矩阵与本地必跑：`AGENTS.md`
   - 命令入口：`Makefile`
   - CI 门禁：`.github/workflows/quality-gates.yml`
   - Greenfield HR 模块骨架（Job Catalog 归属 jobcatalog）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-  - OrgUnit v4：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`
-  - Position v4：`docs/dev-plans/030-position-v4-transactional-event-sourcing-synchronous-projection.md`
-  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`（认证与租户上下文：`docs/dev-plans/019-tenant-and-authn-v4.md`）
-  - 时间语义（Valid Time=DATE）：`AGENTS.md`（时间语义章节）、`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`（Valid Time 口径）与 `docs/dev-plans/032-effective-date-day-granularity.md`
+  - OrgUnit v4：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+  - Position v4：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
+  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（认证与租户上下文：`docs/dev-plans/019-tenant-and-authn.md`）
+  - 时间语义（Valid Time=DATE）：`AGENTS.md`（时间语义章节）、`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（Valid Time 口径）与 `docs/dev-plans/032-effective-date-day-granularity.md`
 
 ## 2.4 落地路径（可验收分步）
 > 目标：把实现拆成“每步可验收”的闭环，避免实现期即兴补丁与契约漂移。

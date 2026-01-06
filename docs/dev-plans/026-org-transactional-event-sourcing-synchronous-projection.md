@@ -52,8 +52,8 @@ HR SaaS 的组织架构场景常见约束：
   - 命令入口：`Makefile`
   - CI 门禁：`.github/workflows/quality-gates.yml`
   - 时间语义（Valid Time=DATE）：`AGENTS.md`（“时间语义”章节）
-  - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn-v4.md`
-  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
+  - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
+  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 架构图 (Mermaid)

@@ -38,13 +38,13 @@
 - 触发器矩阵与本地必跑：`AGENTS.md`
 - 命令入口：`Makefile`
 - CI 门禁：`.github/workflows/quality-gates.yml`
-- 版本基线：`docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
-- Astro UI（必选）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`
+- 版本基线：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
+- Astro UI（必选）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - 多语言门禁（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
-- Atlas+Goose 闭环：`docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`
-- sqlc 门禁：`docs/dev-plans/025-sqlc-guidelines-for-v4.md`
-- Authz 门禁：`docs/dev-plans/022-v4-authz-casbin-toolchain.md`
-- 路由门禁：`docs/dev-plans/017-v4-routing-strategy.md`
+- Atlas+Goose 闭环：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
+- sqlc 门禁：`docs/dev-plans/025-sqlc-guidelines.md`
+- Authz 门禁：`docs/dev-plans/022-authz-casbin-toolchain.md`
+- 路由门禁：`docs/dev-plans/017-routing-strategy.md`
 
 本计划实施时通常会命中：
 - [ ] CI workflow / Makefile（本计划交付）
@@ -217,12 +217,12 @@
 
 ## 8. 参考与链接 (Links)
 
-- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`
-- `docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
-- `docs/dev-plans/019-tenant-and-authn-v4.md`
+- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
+- `docs/dev-plans/019-tenant-and-authn.md`
 - `docs/dev-plans/020-i18n-en-zh-only.md`
-- `docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`
-- `docs/dev-plans/025-sqlc-guidelines-for-v4.md`
-- `docs/dev-plans/022-v4-authz-casbin-toolchain.md`
-- `docs/dev-plans/017-v4-routing-strategy.md`
+- `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
+- `docs/dev-plans/025-sqlc-guidelines.md`
+- `docs/dev-plans/022-authz-casbin-toolchain.md`
+- `docs/dev-plans/017-routing-strategy.md`
 - `.github/workflows/quality-gates.yml`

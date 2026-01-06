@@ -7,7 +7,7 @@
 
 ## 1. 背景与上下文 (Context)
 
-- **需求来源**：`docs/dev-plans/009-v4-implementation-roadmap.md`（Phase 0/1 的前置条件收口）。
+- **需求来源**：`docs/dev-plans/009-implementation-roadmap.md`（Phase 0/1 的前置条件收口）。
 - **当前痛点**：Greenfield 从 0 开始最容易出现“先写代码再补规约/门禁”的漂移：版本不可复现、迁移/生成物口径各写一套、路由/授权边界随人演化，最终产出大量不可见的“僵尸功能”。
 - **业务价值**：把 P0 之前必须具备的契约（SSOT/门禁/壳/最小登录/迁移闭环）提前固化，使后续 `DEV-PLAN-011`～`DEV-PLAN-031` 的实施只是在“既定轨道”上累积业务能力，而非重复发明基础设施。
 
@@ -23,17 +23,17 @@
 ### 2.1 核心目标
 
 - [ ] **仓库初始化（bootstrap）可复现**：implementation repo 的基础结构、入口、文档与规则落点清晰，reviewer 能在 5 分钟内找到“规则/门禁/路线图/关键 SSOT”。
-- [ ] **SSOT 不漂移**：命令入口统一 `Makefile`；CI 门禁统一 `.github/workflows/*`；规则入口统一 `AGENTS.md`（对齐 `docs/dev-plans/012-v4-ci-quality-gates.md`）。
+- [ ] **SSOT 不漂移**：命令入口统一 `Makefile`；CI 门禁统一 `.github/workflows/*`；规则入口统一 `AGENTS.md`（对齐 `docs/dev-plans/012-ci-quality-gates.md`）。
 - [ ] **门禁先行**：CI 至少具备四大 required checks 的“外壳”，且不会出现 `skipped` 结论。
 - [ ] **用户可见骨架先行**：UI 壳（含 4 模块入口 + 占位页）尽早落地，后续能力只能挂到这些入口上（对齐用户可见性原则）。
-- [ ] **平台最小闭环**：至少具备“租户解析（fail-closed）→ 登录 → session → 进入壳”的最小链路（`docs/dev-plans/019-tenant-and-authn-v4.md`）。
-- [ ] **DB/迁移闭环可复制**：至少平台模块（`iam`）具备 Atlas+Goose 模块级闭环与 smoke（`docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`），并有 RLS fail-closed 证据（`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`）。
+- [ ] **平台最小闭环**：至少具备“租户解析（fail-closed）→ 登录 → session → 进入壳”的最小链路（`docs/dev-plans/019-tenant-and-authn.md`）。
+- [ ] **DB/迁移闭环可复制**：至少平台模块（`iam`）具备 Atlas+Goose 模块级闭环与 smoke（`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`），并有 RLS fail-closed 证据（`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`）。
 - [ ] **证据可审计**：P0-Ready 的每项关键结论（命令/时间戳/环境）有 readiness 记录入口（实现仓库落地）。
 
 ### 2.2 非目标（Out of Scope）
 
 - 不在本计划内实现任何业务模块的“真实业务功能”（由 `DEV-PLAN-026`～`DEV-PLAN-031` 承接）。
-- 不在本计划内交付完整 Authz 策略体系（Casbin 的收口可与 P0 并行，但必须在首批策略落地前完成；见 `docs/dev-plans/022-v4-authz-casbin-toolchain.md`）。
+- 不在本计划内交付完整 Authz 策略体系（Casbin 的收口可与 P0 并行，但必须在首批策略落地前完成；见 `docs/dev-plans/022-authz-casbin-toolchain.md`）。
 - 不在本计划内解决部署/发布/CD（只聚焦 PR/merge 的 CI 门禁与本地可复现）。
 
 ## 2.3 工具链与门禁（SSOT 引用）
@@ -54,16 +54,16 @@
 
 - **SSOT 链接（本仓库路径）**：
   - 规则入口：`AGENTS.md`
-  - 路线图：`docs/dev-plans/009-v4-implementation-roadmap.md`
-  - 版本基线：`docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
-  - 路由契约：`docs/dev-plans/017-v4-routing-strategy.md`
-  - CI 门禁：`docs/dev-plans/012-v4-ci-quality-gates.md`
-  - UI 壳：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`
-  - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn-v4.md`
-  - RLS：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
-  - Atlas+Goose：`docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`
-  - sqlc：`docs/dev-plans/025-sqlc-guidelines-for-v4.md`
-  - Authz：`docs/dev-plans/022-v4-authz-casbin-toolchain.md`
+  - 路线图：`docs/dev-plans/009-implementation-roadmap.md`
+  - 版本基线：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
+  - 路由契约：`docs/dev-plans/017-routing-strategy.md`
+  - CI 门禁：`docs/dev-plans/012-ci-quality-gates.md`
+  - UI 壳：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+  - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
+  - RLS：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+  - Atlas+Goose：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
+  - sqlc：`docs/dev-plans/025-sqlc-guidelines.md`
+  - Authz：`docs/dev-plans/022-authz-casbin-toolchain.md`
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 
@@ -92,7 +92,7 @@ flowchart TD
 
 #### ADR-010-02：CI required checks 必须稳定且不 `skipped`（选定）
 
-- 选定：required checks 以 `docs/dev-plans/012-v4-ci-quality-gates.md` 为准，job 名称冻结；路径未命中时只能在 job 内 no-op，不能 job-level 跳过。
+- 选定：required checks 以 `docs/dev-plans/012-ci-quality-gates.md` 为准，job 名称冻结；路径未命中时只能在 job 内 no-op，不能 job-level 跳过。
 
 #### ADR-010-03：用户可见性作为“前置条件”的验收约束（选定）
 
@@ -100,7 +100,7 @@ flowchart TD
 
 #### ADR-010-04：路由治理与 allowlist entrypoint key（选定）
 
-- 选定：allowlist SSOT 存在且 entrypoint key 冻结为 `server`（tenant app）与 `superadmin`（控制面），并由 routing gates 阻断漂移（见 `docs/dev-plans/017-v4-routing-strategy.md`）。
+- 选定：allowlist SSOT 存在且 entrypoint key 冻结为 `server`（tenant app）与 `superadmin`（控制面），并由 routing gates 阻断漂移（见 `docs/dev-plans/017-routing-strategy.md`）。
 
 ## 4. 交付物与约束（Repo Skeleton as Contract）
 
@@ -138,7 +138,7 @@ flowchart TD
 
 > 目标：让“本地 = CI”成立，避免每个人都发明一套脚本。
 
-- 必须提供（名称建议与 `docs/dev-plans/012-v4-ci-quality-gates.md` 对齐）：
+- 必须提供（名称建议与 `docs/dev-plans/012-ci-quality-gates.md` 对齐）：
   - `make preflight`（本地聚合入口）
   - `make check lint` / `make check fmt`
   - `make test`（含覆盖率门禁口径；100% 口径由 SSOT 固化）
@@ -157,7 +157,7 @@ flowchart TD
 
 ### 4.3 CI 最小接口（required checks 的外部稳定面）
 
-- required checks 的 job 名称必须冻结（对齐 `docs/dev-plans/012-v4-ci-quality-gates.md`），且合并保护规则以此为准。
+- required checks 的 job 名称必须冻结（对齐 `docs/dev-plans/012-ci-quality-gates.md`），且合并保护规则以此为准。
 - required checks 不得因路径不命中而 `skipped`；允许 job 内 no-op 并返回成功结论。
 - 对齐 `DEV-PLAN-012`，对外暴露的四个 required checks（job name）应稳定为：
   - `Code Quality & Formatting`
@@ -167,7 +167,7 @@ flowchart TD
 
 ### 4.4 UI 最小接口（用户可见性）
 
-- UI 壳必须可运行并包含 4 模块入口（`docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md` 的 IA）。
+- UI 壳必须可运行并包含 4 模块入口（`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md` 的 IA）。
 - 未交付模块必须以占位页承载，并明确“未来将交付的能力范围/验收方式”，作为后续唯一挂载点。
 
 ## 5. 接口契约 (API Contracts)
@@ -176,11 +176,11 @@ flowchart TD
 
 ### 5.1 路由与命名空间（高层约束）
 
-- 路由命名空间、返回契约、allowlist 与 routing gates 以 `docs/dev-plans/017-v4-routing-strategy.md` 为 SSOT；P0-Ready 阶段至少应覆盖 allowlist 健康检查与全局 404/405/500 的 responder 契约。
+- 路由命名空间、返回契约、allowlist 与 routing gates 以 `docs/dev-plans/017-routing-strategy.md` 为 SSOT；P0-Ready 阶段至少应覆盖 allowlist 健康检查与全局 404/405/500 的 responder 契约。
 
 ### 5.2 最小登录链路（P0-Ready 阶段可演示）
 
-- tenant 解析必须 fail-closed（见 `docs/dev-plans/019-tenant-and-authn-v4.md`）。
+- tenant 解析必须 fail-closed（见 `docs/dev-plans/019-tenant-and-authn.md`）。
 - 登录成功后必须能进入 UI 壳（对齐用户可见性：能看到导航与占位页）。
 
 ## 6. 核心流程与算法 (Business Logic & Algorithms)
@@ -215,14 +215,14 @@ job(required_check):
 ### 8.2 推荐 PR 拆分（可并行，但需按关键路径收口）
 
 1. [ ] PR-0：仓库 bootstrap（mono-repo + `apps/web`；README/AGENTS/Doc Map/目录骨架）+ 固化 `docs/dev-plans/` 为 SSOT（ADR-010-01）。
-2. [ ] PR-1：对齐 `docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`（版本 pin、依赖锁定、基础 Makefile 入口）。
-3. [ ] PR-2：对齐 `docs/dev-plans/012-v4-ci-quality-gates.md`（CI required checks 骨架；job 名称冻结；job 不跳过）。
-4. [ ] PR-3：对齐 `docs/dev-plans/017-v4-routing-strategy.md`（allowlist SSOT + 最小 routing gates + 本地入口）。
+2. [ ] PR-1：对齐 `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`（版本 pin、依赖锁定、基础 Makefile 入口）。
+3. [ ] PR-2：对齐 `docs/dev-plans/012-ci-quality-gates.md`（CI required checks 骨架；job 名称冻结；job 不跳过）。
+4. [ ] PR-3：对齐 `docs/dev-plans/017-routing-strategy.md`（allowlist SSOT + 最小 routing gates + 本地入口）。
 5. [ ] PR-4：对齐 `docs/dev-plans/015-ddd-layering-framework.md`/`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`（`modules/*` 骨架 + 依赖门禁配置）。
-6. [ ] PR-5：对齐 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`/`docs/dev-plans/020-i18n-en-zh-only.md`（UI 壳 + i18n + 占位页；为 P0 的 `orgunit` 预留入口）。
-7. [ ] PR-6：对齐 `docs/dev-plans/019-tenant-and-authn-v4.md`（tenant 解析 + 登录最小闭环，进入壳即可）。
-8. [ ] PR-7：对齐 `docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`/`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`（`iam` Atlas+Goose 闭环 + RLS fail-closed 最小测试）。
-9. [ ] PR-8：对齐 `docs/dev-plans/025-sqlc-guidelines-for-v4.md`/`docs/dev-plans/022-v4-authz-casbin-toolchain.md`（sqlc 与 Authz 工具链收口；可与 P0 并行，但必须在首批 schema/策略合入前完成）。
+6. [ ] PR-5：对齐 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`/`docs/dev-plans/020-i18n-en-zh-only.md`（UI 壳 + i18n + 占位页；为 P0 的 `orgunit` 预留入口）。
+7. [ ] PR-6：对齐 `docs/dev-plans/019-tenant-and-authn.md`（tenant 解析 + 登录最小闭环，进入壳即可）。
+8. [ ] PR-7：对齐 `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`/`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（`iam` Atlas+Goose 闭环 + RLS fail-closed 最小测试）。
+9. [ ] PR-8：对齐 `docs/dev-plans/025-sqlc-guidelines.md`/`docs/dev-plans/022-authz-casbin-toolchain.md`（sqlc 与 Authz 工具链收口；可与 P0 并行，但必须在首批 schema/策略合入前完成）。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
@@ -266,25 +266,25 @@ job(required_check):
 ## 12. 未决问题（需要在 PR-0 明确）
 
 1. [X] ADR-010-01：dev-plan SSOT 放置策略选 A（同仓）—— 已批准。
-2. [X] 仓库形态：mono-repo + `apps/web`（对齐 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`）—— 已批准。
+2. [X] 仓库形态：mono-repo + `apps/web`（对齐 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`）—— 已批准。
 3. [X] P0 第一条业务垂直切片：`orgunit` —— 已批准。
 4. [X] implementation repo 命名/权限/分支保护：`jacksonlee411/Bugs-And-Blossoms`（public），`main` 禁止直推/禁止 force-push/必须 PR，并冻结 required checks：`Code Quality & Formatting` / `Unit & Integration Tests` / `Routing Gates` / `E2E Tests`。
 
 ## 13. 参考（本仓库路径）
 
 - `docs/dev-plans/001-technical-design-template.md`
-- `docs/dev-plans/009-v4-implementation-roadmap.md`
-- `docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
+- `docs/dev-plans/009-implementation-roadmap.md`
+- `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - `docs/dev-plans/015-ddd-layering-framework.md`
 - `docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- `docs/dev-plans/017-v4-routing-strategy.md`
-- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`
-- `docs/dev-plans/019-tenant-and-authn-v4.md`
-- `docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
-- `docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`
-- `docs/dev-plans/025-sqlc-guidelines-for-v4.md`
-- `docs/dev-plans/022-v4-authz-casbin-toolchain.md`
-- `docs/dev-plans/012-v4-ci-quality-gates.md`
+- `docs/dev-plans/017-routing-strategy.md`
+- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- `docs/dev-plans/019-tenant-and-authn.md`
+- `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
+- `docs/dev-plans/025-sqlc-guidelines.md`
+- `docs/dev-plans/022-authz-casbin-toolchain.md`
+- `docs/dev-plans/012-ci-quality-gates.md`
 
 ## 14. Simple > Easy Review（DEV-PLAN-003）
 

@@ -9,15 +9,15 @@
 
 - 目标（对齐 `DEV-PLAN-009` Phase 4 出口条件 #3）：在 JobCatalog 至少一个实体上形成“**解析 → 写入 → 列表读取**”的 **UI 可见且可操作** 闭环。
 - 依赖（SSOT 引用）：
-  - SetID：`docs/dev-plans/028-v4-setid-management.md`
-  - JobCatalog v4：`docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`
+  - SetID：`docs/dev-plans/028-setid-management.md`
+  - JobCatalog v4：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
   - 门禁与触发器：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`
-  - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn-v4.md`
-  - RLS：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
-  - Authz：`docs/dev-plans/022-v4-authz-casbin-toolchain.md`
-  - Routing：`docs/dev-plans/017-v4-routing-strategy.md`
-  - Atlas+Goose：`docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`
-  - sqlc：`docs/dev-plans/025-sqlc-guidelines-for-v4.md`
+  - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
+  - RLS：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+  - Authz：`docs/dev-plans/022-authz-casbin-toolchain.md`
+  - Routing：`docs/dev-plans/017-routing-strategy.md`
+  - Atlas+Goose：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
+  - sqlc：`docs/dev-plans/025-sqlc-guidelines.md`
 
 ## 2. 非目标（本执行计划不做）
 

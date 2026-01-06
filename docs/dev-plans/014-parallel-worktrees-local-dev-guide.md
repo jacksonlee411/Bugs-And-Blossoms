@@ -34,7 +34,7 @@
 - 本地服务编排：`devhub.yml`、`compose.dev.yml`、`compose.yml`
 - 示例环境变量：`.env.example`
 - 共享 infra 默认方案：`docs/dev-plans/011C-worktree-shared-local-dev-infra.md`
-- V4 技术栈/部署口径：`docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
+- V4 技术栈/部署口径：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 
 ## 3. 推荐拓扑：3 worktree 角色分工
 

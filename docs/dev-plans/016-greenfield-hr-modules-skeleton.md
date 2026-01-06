@@ -26,7 +26,7 @@
 ## 2.3 工具链与门禁（SSOT 引用）
 - 分层与依赖门禁：`.gocleanarch.yml`（入口：`make check lint`）
 - DDD 分层框架（Greenfield）：`docs/dev-plans/015-ddd-layering-framework.md`
-- v4 DB Kernel 边界 SSOT：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`
+- v4 DB Kernel 边界 SSOT：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - 工具链入口：`Makefile`、CI：`.github/workflows/quality-gates.yml`
 
 ## 3. Bounded Context 划分（建议）

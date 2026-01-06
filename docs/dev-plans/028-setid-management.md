@@ -52,9 +52,9 @@
 - 命令入口：`Makefile`
 - CI 门禁：`.github/workflows/quality-gates.yml`
 - V4 模块边界（将影响哪些模块）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- V4 Tenancy/AuthN 与主体模型：`docs/dev-plans/019-tenant-and-authn-v4.md`
-- V4 SuperAdmin 控制面认证与会话：`docs/dev-plans/023-superadmin-authn-v4.md`
-- V4 RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
+- V4 Tenancy/AuthN 与主体模型：`docs/dev-plans/019-tenant-and-authn.md`
+- V4 SuperAdmin 控制面认证与会话：`docs/dev-plans/023-superadmin-authn.md`
+- V4 RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - Valid Time=DATE 口径：`docs/dev-plans/032-effective-date-day-granularity.md`
 
 ## 5. 关键决策（ADR 摘要）

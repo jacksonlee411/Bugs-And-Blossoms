@@ -26,9 +26,9 @@
 ### 2.3 工具链与门禁（SSOT 引用）
 - DDD 分层与共享策略：`docs/dev-plans/015-ddd-layering-framework.md`
 - 4 模块边界与跨模块契约：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- Staffing v4 方案（对 Person 的依赖点）：`docs/dev-plans/031-greenfield-assignment-job-data-v4.md`
-- v4 Kernel 风格与 One Door Policy：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`
-- RLS（若扩展到 Person）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
+- Staffing v4 方案（对 Person 的依赖点）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
+- v4 Kernel 风格与 One Door Policy：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+- RLS（若扩展到 Person）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - 命令入口与触发器矩阵：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`
 
 ## 3. 对 `DEV-PLAN-031` 的架构分析：Person 的最小责任面

@@ -4,7 +4,7 @@
 
 ## 1. 背景与上下文 (Context)
 
-仓库当前 UI 技术栈为 **Templ + HTMX + Alpine.js + Tailwind CSS**（版本与 SSOT 见 `docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`）。与此同时，`DEV-PLAN-026`～`DEV-PLAN-031` 定义了 HRMS v4 的核心模块与契约：
+仓库当前 UI 技术栈为 **Templ + HTMX + Alpine.js + Tailwind CSS**（版本与 SSOT 见 `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`）。与此同时，`DEV-PLAN-026`～`DEV-PLAN-031` 定义了 HRMS v4 的核心模块与契约：
 - v4 内核边界：DB=Projection Kernel（权威），Go=Command Facade（编排），One Door Policy（唯一写入口）（见 026/030/029/031）。
 - Valid Time=DATE；时间戳仅用于 Audit/Tx Time。读模型使用 `daterange` 且统一 `[start,end)`（左闭右开）（口径见 `AGENTS.md` 与 `docs/dev-plans/032-effective-date-day-granularity.md`，并对齐 026/030/029/031）。
 - UI 合同：任职记录（Job Data / Assignments）**仅显示 `effective_date`**（不展示 `end_date`），但底层继续沿用 `daterange [start,end)`（见 031）。
@@ -62,8 +62,8 @@ flowchart LR
 ### 2.3 工具链与门禁（SSOT 引用）
 - DDD 分层框架：`docs/dev-plans/015-ddd-layering-framework.md`
 - HR 模块骨架（4 模块）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- 任职记录 v4 UI 合同（仅显示 effective_date、保持 `[start,end)`）：`docs/dev-plans/031-greenfield-assignment-job-data-v4.md`
-- 路由治理与门禁：`docs/dev-plans/017-v4-routing-strategy.md`（入口：`make check routing`）
+- 任职记录 v4 UI 合同（仅显示 effective_date、保持 `[start,end)`）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
+- 路由治理与门禁：`docs/dev-plans/017-routing-strategy.md`（入口：`make check routing`）
 - 分层/依赖门禁：`.gocleanarch.yml`（入口：`make check lint`）
 - 样式与生成入口：`Makefile`（Tailwind/生成物以 SSOT 为准）
 - 文档门禁：`make check doc`

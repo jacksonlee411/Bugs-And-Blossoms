@@ -29,10 +29,10 @@
   - 触发器矩阵与本地必跑：`AGENTS.md`
   - 命令入口：`Makefile`
   - CI 门禁：`.github/workflows/quality-gates.yml`
-  - OrgUnit v4：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`
+  - OrgUnit v4：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
   - Greenfield HR 模块骨架（Position/Assignment 归属 staffing）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`（对齐 `docs/dev-plans/019-multi-tenant-toolchain.md` / `docs/dev-plans/019A-rls-tenant-isolation.md`）
-  - Job Catalog v4：`docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`
+  - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（对齐 `docs/dev-plans/019-multi-tenant-toolchain.md` / `docs/dev-plans/019A-rls-tenant-isolation.md`）
+  - Job Catalog v4：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
   - 时间语义（Valid Time=DATE）：`docs/dev-plans/032-effective-date-day-granularity.md`
 
 ## 3. 架构与关键决策 (Architecture & Decisions)

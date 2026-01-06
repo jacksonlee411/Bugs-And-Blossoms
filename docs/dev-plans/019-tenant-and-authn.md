@@ -18,7 +18,7 @@
 - **已评审演进方向**：`DEV-PLAN-019` 及子计划采用 **ORY Kratos** 作为 Headless Identity，应用保留 `/login` UI；PoC 选择 “Kratos 认人 → 本地 session 桥接”（见 `docs/dev-plans/019B-ory-kratos-session-bridge.md`）。
 
 ### 1.3 数据隔离（RLS）
-- **现状接口**：事务内设置 `app.current_tenant`（`set_config`），由 RLS policy 读取，实现 fail-closed（见 `pkg/composables/rls.go`；RLS 设计契约见 `docs/dev-plans/019A-rls-tenant-isolation.md`、V4 推进见 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`）。
+- **现状接口**：事务内设置 `app.current_tenant`（`set_config`），由 RLS policy 读取，实现 fail-closed（见 `pkg/composables/rls.go`；RLS 设计契约见 `docs/dev-plans/019A-rls-tenant-isolation.md`、V4 推进见 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`）。
 
 ### 1.4 授权（AuthZ）
 - **系统级口径**：Casbin（“管事”）与 tenant subject（`tenant:{id}:user:{id}`）结合，形成纵深防御（`docs/dev-plans/019-multi-tenant-toolchain.md`）。

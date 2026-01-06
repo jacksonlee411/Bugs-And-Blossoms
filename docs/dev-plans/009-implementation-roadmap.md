@@ -194,26 +194,26 @@ flowchart TD
 ```
 
 ## 8. 对应计划文档索引（本仓库路径）
-- `docs/dev-plans/009-v4-implementation-roadmap.md`
-- `docs/dev-plans/010-v4-p0-prerequisites-contract.md`
-- `docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
-- `docs/dev-plans/012-v4-ci-quality-gates.md`
+- `docs/dev-plans/009-implementation-roadmap.md`
+- `docs/dev-plans/010-p0-prerequisites-contract.md`
+- `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
+- `docs/dev-plans/012-ci-quality-gates.md`
 - `docs/dev-plans/013-docs-creation-and-governance-guide.md`
-- `docs/dev-plans/014-v4-parallel-worktrees-local-dev-guide.md`
+- `docs/dev-plans/014-parallel-worktrees-local-dev-guide.md`
 - `docs/dev-plans/015-ddd-layering-framework.md`
 - `docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- `docs/dev-plans/017-v4-routing-strategy.md`
-- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms-v4.md`
-- `docs/dev-plans/019-tenant-and-authn-v4.md`
+- `docs/dev-plans/017-routing-strategy.md`
+- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- `docs/dev-plans/019-tenant-and-authn.md`
 - `docs/dev-plans/020-i18n-en-zh-only.md`
-- `docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
-- `docs/dev-plans/022-v4-authz-casbin-toolchain.md`
-- `docs/dev-plans/023-superadmin-authn-v4.md`
-- `docs/dev-plans/024-v4-atlas-goose-closed-loop-guide.md`
-- `docs/dev-plans/025-sqlc-guidelines-for-v4.md`
-- `docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`
+- `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- `docs/dev-plans/022-authz-casbin-toolchain.md`
+- `docs/dev-plans/023-superadmin-authn.md`
+- `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
+- `docs/dev-plans/025-sqlc-guidelines.md`
+- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/027-person-minimal-identity-for-staffing.md`
-- `docs/dev-plans/028-v4-setid-management.md`
-- `docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`
-- `docs/dev-plans/030-position-v4-transactional-event-sourcing-synchronous-projection.md`
-- `docs/dev-plans/031-greenfield-assignment-job-data-v4.md`
+- `docs/dev-plans/028-setid-management.md`
+- `docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+- `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
+- `docs/dev-plans/031-greenfield-assignment-job-data.md`

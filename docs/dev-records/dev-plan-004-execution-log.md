@@ -14,3 +14,11 @@
 - **本地门禁**
   - `make check doc`：通过
 
+## PR-2：重命名 dev-plan 文件名并修复全仓引用
+
+- **状态**：已完成（2026-01-06 09:49 UTC）
+- **范围**
+  - `docs/dev-plans/**`：移除文件名中的版本标记（`git mv`）
+  - 全仓：修复对旧路径的引用（`AGENTS.md` 与相关 dev-plan 文档）
+- **本地门禁**
+  - `make check doc`：通过

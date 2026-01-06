@@ -35,7 +35,7 @@
 
 - 触发器矩阵与本地必跑：`AGENTS.md`
 - 分层与依赖门禁（CleanArchGuard）：`.gocleanarch.yml`（入口：`make check lint`）
-- v4 DB Kernel 边界 SSOT：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`
+- v4 DB Kernel 边界 SSOT：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 
 ## 3. 分层框架总览（DDD + Ports & Adapters）
 

@@ -36,15 +36,15 @@
 
 - 触发器矩阵与本地必跑：`AGENTS.md`
 - 命令入口：`Makefile`
-- CI 门禁：`.github/workflows/quality-gates.yml`（说明见 `docs/dev-plans/012-v4-ci-quality-gates.md`）
+- CI 门禁：`.github/workflows/quality-gates.yml`（说明见 `docs/dev-plans/012-ci-quality-gates.md`）
 - Casbin 模型：`config/access/model.conf`
 - Policy 碎片（SSOT）：`config/access/policies/**`
 - Pack 产物：`config/access/policy.csv`、`config/access/policy.csv.rev`
 - 打包/校验脚本：`scripts/authz/pack.sh`、`scripts/authz/test.sh`、`scripts/authz/lint.sh`
-- V4 Tenancy/AuthN 与主体模型（principal）：`docs/dev-plans/019-tenant-and-authn-v4.md`
-- V4 RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`
-- V4 路由治理与 responder 契约：`docs/dev-plans/017-v4-routing-strategy.md`
-- V4 技术栈与工具链版本（Casbin 版本基线等）：`docs/dev-plans/011-v4-tech-stack-and-toolchain-versions.md`
+- V4 Tenancy/AuthN 与主体模型（principal）：`docs/dev-plans/019-tenant-and-authn.md`
+- V4 RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+- V4 路由治理与 responder 契约：`docs/dev-plans/017-routing-strategy.md`
+- V4 技术栈与工具链版本（Casbin 版本基线等）：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - Simple > Easy 评审口径：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 
 ## 4. 关键决策（ADR 摘要）
@@ -234,7 +234,7 @@
    - [ ] HR 4 模块 UI/API（`orgunit/jobcatalog/staffing/person`）的 read/admin 最小集。
 6. [ ] 统一 403/forbidden 输出契约：控制器侧不自造 JSON/HTML；统一走全局 responder/通用组件（对齐 `DEV-PLAN-017`）；响应体不回显 `subject/domain/object/action`。
 7. [ ] 落地匿名白名单（MVP）：保证 `role:anonymous` 仅访问 policy 明确列出的入口（至少 `iam.ping/read`）；任何新增匿名入口必须先定义稳定 object 并显式加 policy。
-8. [ ] 文档与门禁对齐：确保 `AGENTS.md` 与 `docs/dev-plans/012-v4-ci-quality-gates.md` 所述 Authz gates 与实际 `Makefile/scripts/authz/*` 一致，避免“文档说一套、CI 跑一套”。
+8. [ ] 文档与门禁对齐：确保 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 所述 Authz gates 与实际 `Makefile/scripts/authz/*` 一致，避免“文档说一套、CI 跑一套”。
 
 ## 7. 测试与覆盖率（Go 代码门禁）
 
