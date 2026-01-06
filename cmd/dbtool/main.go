@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func main() {
@@ -263,7 +265,279 @@ SELECT orgunit.submit_orgunit_event(
 		fatal(err)
 	}
 
+	tx3, err := conn.Begin(ctx)
+	if err != nil {
+		fatal(err)
+	}
+	defer func() { _ = tx3.Rollback(context.Background()) }()
+	_ = trySetRole(ctx, tx3, "app_nobypassrls")
+
+	tenantV4 := "00000000-0000-0000-0000-0000000000c1"
+
+	if _, err := tx3.Exec(ctx, `SAVEPOINT sp_v4_missing_ctx;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx3.Exec(ctx, `SELECT orgunit.assert_current_tenant($1::uuid);`, tenantV4)
+	if _, rbErr := tx3.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_v4_missing_ctx;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected orgunit.assert_current_tenant to fail when app.current_tenant is missing")
+	}
+	if msg, ok := pgErrorMessage(err); !ok || msg != "RLS_TENANT_CONTEXT_MISSING" {
+		fatalf("expected pg error message=RLS_TENANT_CONTEXT_MISSING, got ok=%v message=%q err=%v", ok, msg, err)
+	}
+
+	if _, err := tx3.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantV4); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx3.Exec(ctx, `DELETE FROM orgunit.org_unit_versions WHERE tenant_id = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantV4); err != nil {
+		fatal(err)
+	}
+	if _, err := tx3.Exec(ctx, `DELETE FROM orgunit.org_trees WHERE tenant_id = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantV4); err != nil {
+		fatal(err)
+	}
+	if _, err := tx3.Exec(ctx, `DELETE FROM orgunit.org_events WHERE tenant_id = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantV4); err != nil {
+		fatal(err)
+	}
+
+	initiatorID := "00000000-0000-0000-0000-00000000f001"
+	requestID := "dbtool-orgunit-v4-smoke"
+
+	orgRootID := "00000000-0000-0000-0000-000000000101"
+	orgChildID := "00000000-0000-0000-0000-000000000102"
+	orgParent2ID := "00000000-0000-0000-0000-000000000103"
+
+	eventCreateRoot := "00000000-0000-0000-0000-00000000e101"
+	eventCreateChild := "00000000-0000-0000-0000-00000000e102"
+	eventCreateParent2 := "00000000-0000-0000-0000-00000000e103"
+	eventRenameChild := "00000000-0000-0000-0000-00000000e104"
+	eventMoveChild := "00000000-0000-0000-0000-00000000e105"
+	eventDisableChild := "00000000-0000-0000-0000-00000000e106"
+
+	var createRootDBID int64
+	if err := tx3.QueryRow(ctx, `
+SELECT orgunit.submit_org_event(
+  $1::uuid,
+  $2::uuid,
+  'OrgUnit',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('name', 'Root'),
+  $5::text,
+  $6::uuid
+)
+`, eventCreateRoot, tenantV4, orgRootID, "2026-01-01", requestID, initiatorID).Scan(&createRootDBID); err != nil {
+		fatal(err)
+	}
+
+	var createRootDBID2 int64
+	if err := tx3.QueryRow(ctx, `
+SELECT orgunit.submit_org_event(
+  $1::uuid,
+  $2::uuid,
+  'OrgUnit',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('name', 'Root'),
+  $5::text,
+  $6::uuid
+)
+`, eventCreateRoot, tenantV4, orgRootID, "2026-01-01", requestID, initiatorID).Scan(&createRootDBID2); err != nil {
+		fatal(err)
+	}
+	if createRootDBID2 != createRootDBID {
+		fatalf("expected idempotent submit_org_event to return same db id, got %d then %d", createRootDBID, createRootDBID2)
+	}
+
+	if _, err := tx3.Exec(ctx, `
+SELECT orgunit.submit_org_event(
+  $1::uuid,
+  $2::uuid,
+  'OrgUnit',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('parent_id', $5::uuid, 'name', 'Child'),
+  $6::text,
+  $7::uuid
+)
+`, eventCreateChild, tenantV4, orgChildID, "2026-01-01", orgRootID, requestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx3.Exec(ctx, `
+SELECT orgunit.submit_org_event(
+  $1::uuid,
+  $2::uuid,
+  'OrgUnit',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('parent_id', $5::uuid, 'name', 'Parent2'),
+  $6::text,
+  $7::uuid
+)
+`, eventCreateParent2, tenantV4, orgParent2ID, "2026-01-03", orgRootID, requestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx3.Exec(ctx, `
+SELECT orgunit.submit_org_event(
+  $1::uuid,
+  $2::uuid,
+  'OrgUnit',
+  $3::uuid,
+  'RENAME',
+  $4::date,
+  jsonb_build_object('new_name', 'Child2'),
+  $5::text,
+  $6::uuid
+)
+`, eventRenameChild, tenantV4, orgChildID, "2026-01-02", requestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx3.Exec(ctx, `
+SELECT orgunit.submit_org_event(
+  $1::uuid,
+  $2::uuid,
+  'OrgUnit',
+  $3::uuid,
+  'MOVE',
+  $4::date,
+  jsonb_build_object('new_parent_id', $5::uuid),
+  $6::text,
+  $7::uuid
+)
+`, eventMoveChild, tenantV4, orgChildID, "2026-01-04", orgParent2ID, requestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx3.Exec(ctx, `
+SELECT orgunit.submit_org_event(
+  $1::uuid,
+  $2::uuid,
+  'OrgUnit',
+  $3::uuid,
+  'DISABLE',
+  $4::date,
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+)
+`, eventDisableChild, tenantV4, orgChildID, "2026-01-06", requestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	var childSlices int
+	if err := tx3.QueryRow(ctx, `
+SELECT count(*)
+FROM orgunit.org_unit_versions
+WHERE tenant_id = $1::uuid AND hierarchy_type = 'OrgUnit' AND org_id = $2::uuid
+`, tenantV4, orgChildID).Scan(&childSlices); err != nil {
+		fatal(err)
+	}
+	if childSlices != 4 {
+		fatalf("expected org child to have 4 version slices, got %d", childSlices)
+	}
+
+	var rootLabel, childLabel, parent2Label string
+	if err := tx3.QueryRow(ctx, `SELECT orgunit.org_ltree_label($1::uuid);`, orgRootID).Scan(&rootLabel); err != nil {
+		fatal(err)
+	}
+	if err := tx3.QueryRow(ctx, `SELECT orgunit.org_ltree_label($1::uuid);`, orgChildID).Scan(&childLabel); err != nil {
+		fatal(err)
+	}
+	if err := tx3.QueryRow(ctx, `SELECT orgunit.org_ltree_label($1::uuid);`, orgParent2ID).Scan(&parent2Label); err != nil {
+		fatal(err)
+	}
+	expectedPathBeforeMove := rootLabel + "." + childLabel
+	expectedPathAfterMove := rootLabel + "." + parent2Label + "." + childLabel
+
+	var name0301, status0301, parent0301, path0301 string
+	if err := tx3.QueryRow(ctx, `
+SELECT name, status, parent_id::text, node_path::text
+FROM orgunit.org_unit_versions
+WHERE tenant_id = $1::uuid
+  AND hierarchy_type = 'OrgUnit'
+  AND org_id = $2::uuid
+  AND validity @> $3::date
+`, tenantV4, orgChildID, "2026-01-03").Scan(&name0301, &status0301, &parent0301, &path0301); err != nil {
+		fatal(err)
+	}
+	if name0301 != "Child2" || status0301 != "active" || parent0301 != orgRootID || path0301 != expectedPathBeforeMove {
+		fatalf("unexpected snapshot on 2026-01-03: name=%q status=%q parent=%q path=%q", name0301, status0301, parent0301, path0301)
+	}
+
+	var name0501, status0501, parent0501, path0501 string
+	if err := tx3.QueryRow(ctx, `
+SELECT name, status, parent_id::text, node_path::text
+FROM orgunit.org_unit_versions
+WHERE tenant_id = $1::uuid
+  AND hierarchy_type = 'OrgUnit'
+  AND org_id = $2::uuid
+  AND validity @> $3::date
+`, tenantV4, orgChildID, "2026-01-05").Scan(&name0501, &status0501, &parent0501, &path0501); err != nil {
+		fatal(err)
+	}
+	if name0501 != "Child2" || status0501 != "active" || parent0501 != orgParent2ID || path0501 != expectedPathAfterMove {
+		fatalf("unexpected snapshot on 2026-01-05: name=%q status=%q parent=%q path=%q", name0501, status0501, parent0501, path0501)
+	}
+
+	var status0701 string
+	if err := tx3.QueryRow(ctx, `
+SELECT status
+FROM orgunit.org_unit_versions
+WHERE tenant_id = $1::uuid
+  AND hierarchy_type = 'OrgUnit'
+  AND org_id = $2::uuid
+  AND validity @> $3::date
+`, tenantV4, orgChildID, "2026-01-07").Scan(&status0701); err != nil {
+		fatal(err)
+	}
+	if status0701 != "disabled" {
+		fatalf("expected snapshot status on 2026-01-07 to be disabled, got %q", status0701)
+	}
+
+	if _, err := tx3.Exec(ctx, `SAVEPOINT sp_v4_tenant_mismatch;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx3.Exec(ctx, `
+SELECT orgunit.submit_org_event(
+  $1::uuid,
+  $2::uuid,
+  'OrgUnit',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('name', 'X'),
+  $5::text,
+  $6::uuid
+)
+`, "00000000-0000-0000-0000-00000000e1ff", tenantB, "00000000-0000-0000-0000-0000000001ff", "2026-01-01", requestID, initiatorID)
+	if _, rbErr := tx3.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_v4_tenant_mismatch;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected tenant mismatch when orgunit.submit_org_event tenant_id differs from app.current_tenant")
+	}
+	if msg, ok := pgErrorMessage(err); !ok || msg != "RLS_TENANT_MISMATCH" {
+		fatalf("expected pg error message=RLS_TENANT_MISMATCH, got ok=%v message=%q err=%v", ok, msg, err)
+	}
+
 	fmt.Println("[orgunit-smoke] OK")
+}
+
+func pgErrorMessage(err error) (string, bool) {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return "", false
+	}
+	return pgErr.Message, true
 }
 
 func tryEnsureRole(ctx context.Context, conn *pgx.Conn, role string) error {
