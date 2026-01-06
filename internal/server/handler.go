@@ -25,6 +25,9 @@ type HandlerOptions struct {
 	OrgUnitSnapshot OrgUnitSnapshotStore
 	SetIDStore      SetIDGovernanceStore
 	JobCatalogStore JobCatalogStore
+	PersonStore     PersonStore
+	PositionStore   PositionStore
+	AssignmentStore AssignmentStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -56,6 +59,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	orgSnapshotStore := opts.OrgUnitSnapshot
 	setidStore := opts.SetIDStore
 	jobcatalogStore := opts.JobCatalogStore
+	personStore := opts.PersonStore
+	positionStore := opts.PositionStore
+	assignmentStore := opts.AssignmentStore
 	if orgStore == nil {
 		dsn := dbDSNFromEnv()
 		pool, err := pgxpool.New(context.Background(), dsn)
@@ -87,6 +93,34 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		}
 	}
 
+	if personStore == nil {
+		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
+			personStore = newPersonPGStore(pgStore.pool)
+		} else {
+			personStore = newPersonMemoryStore()
+		}
+	}
+
+	if positionStore == nil || assignmentStore == nil {
+		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
+			s := newStaffingPGStore(pgStore.pool)
+			if positionStore == nil {
+				positionStore = s
+			}
+			if assignmentStore == nil {
+				assignmentStore = s
+			}
+		} else {
+			s := newStaffingMemoryStore()
+			if positionStore == nil {
+				positionStore = s
+			}
+			if assignmentStore == nil {
+				assignmentStore = s
+			}
+		}
+	}
+
 	router := routing.NewRouter(classifier)
 
 	authorizer, err := loadAuthorizer()
@@ -94,7 +128,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		return nil, err
 	}
 
-	guarded := withTenantAndSession(tenants, withAuthz(authorizer, router))
+	guarded := withTenantAndSession(tenants, withAuthz(classifier, authorizer, router))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/app", http.StatusFound)
@@ -185,13 +219,40 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleJobCatalog(w, r, jobcatalogStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeShell(w, r, "<h1>Staffing /org/positions</h1><p>(placeholder)</p>")
+		handlePositions(w, r, orgStore, positionStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePositions(w, r, orgStore, positionStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeShell(w, r, "<h1>Staffing /org/assignments</h1><p>(placeholder)</p>")
+		handleAssignments(w, r, positionStore, assignmentStore, personStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssignments(w, r, positionStore, assignmentStore, personStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePositionsAPI(w, r, positionStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePositionsAPI(w, r, positionStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssignmentsAPI(w, r, assignmentStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssignmentsAPI(w, r, assignmentStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/person/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeShell(w, r, "<h1>Person /person/persons</h1><p>(placeholder)</p>")
+		handlePersons(w, r, personStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/person/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePersons(w, r, personStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/person/api/persons:options", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePersonOptionsAPI(w, r, personStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/person/api/persons:by-pernr", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePersonByPernrAPI(w, r, personStore)
 	}))
 
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")

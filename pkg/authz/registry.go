@@ -12,8 +12,11 @@ const (
 )
 
 const (
-	ObjectIAMPing           = "iam.ping"
-	ObjectOrgUnitOrgUnits   = "orgunit.orgunits"
-	ObjectOrgUnitSetID      = "orgunit.setid"
-	ObjectJobCatalogCatalog = "jobcatalog.catalog"
+	ObjectIAMPing             = "iam.ping"
+	ObjectOrgUnitOrgUnits     = "orgunit.orgunits"
+	ObjectOrgUnitSetID        = "orgunit.setid"
+	ObjectJobCatalogCatalog   = "jobcatalog.catalog"
+	ObjectPersonPersons       = "person.persons"
+	ObjectStaffingPositions   = "staffing.positions"
+	ObjectStaffingAssignments = "staffing.assignments"
 )

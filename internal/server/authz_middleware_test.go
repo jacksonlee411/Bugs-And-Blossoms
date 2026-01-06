@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
 type stubAuthorizer struct {
@@ -18,11 +20,23 @@ func (a stubAuthorizer) Authorize(string, string, string, string) (bool, bool, e
 	return a.allowed, a.enforced, a.err
 }
 
+func mustTestClassifier(t *testing.T) *routing.Classifier {
+	t.Helper()
+
+	c, err := routing.NewClassifier(routing.Allowlist{Version: 1, Entrypoints: map[string]routing.Entrypoint{
+		"server": {Routes: []routing.Route{{Path: "/health", Methods: []string{"GET"}, RouteClass: "ops"}}},
+	}}, "server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
 func TestWithAuthz_AllowsBypassRoutes(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(stubAuthorizer{allowed: false, enforced: true}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -38,9 +52,9 @@ func TestWithAuthz_SkipsWhenNoRequirement(t *testing.T) {
 		nextCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(stubAuthorizer{allowed: false, enforced: true}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
 
-	req := httptest.NewRequest(http.MethodGet, "/person/persons", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/unprotected", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -53,7 +67,7 @@ func TestWithAuthz_AnonymousRole(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(stubAuthorizer{allowed: true, enforced: true}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -68,7 +82,7 @@ func TestWithAuthz_ForbiddenWhenEnforced(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(stubAuthorizer{allowed: false, enforced: true}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/setid", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -84,7 +98,7 @@ func TestWithAuthz_AllowsWhenNotEnforced(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(stubAuthorizer{allowed: false, enforced: false}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: false}, next)
 
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -100,7 +114,7 @@ func TestWithAuthz_AuthzError(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(stubAuthorizer{allowed: false, enforced: true, err: os.ErrInvalid}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true, err: os.ErrInvalid}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -116,7 +130,7 @@ func TestWithAuthz_TenantMissing(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := withAuthz(stubAuthorizer{allowed: true, enforced: true}, next)
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes", nil)
 	req.AddCookie(&http.Cookie{Name: "session", Value: "ok"})
@@ -140,7 +154,13 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/nodes"); !ok {
 		t.Fatal("expected ok=true")
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPatch, "/org/nodes"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/snapshot"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPatch, "/org/snapshot"); !ok {
 		t.Fatal("expected ok=true")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/setid"); !ok {
@@ -149,11 +169,71 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/setid"); !ok {
 		t.Fatal("expected ok=true")
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/setid"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/job-catalog"); !ok {
 		t.Fatal("expected ok=true")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/job-catalog"); !ok {
 		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/job-catalog"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/positions"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/positions"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/positions"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/positions"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/positions"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/positions"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/assignments"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/assignments"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/assignments"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/assignments"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/assignments"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/assignments"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/person/persons"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/person/persons"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/person/persons"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/person/api/persons:options"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/person/api/persons:options"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/person/api/persons:by-pernr"); ok {
+		t.Fatal("expected ok=false")
 	}
 }
 

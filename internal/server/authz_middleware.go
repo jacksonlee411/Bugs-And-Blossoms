@@ -63,9 +63,13 @@ type authorizer interface {
 	Authorize(subject string, domain string, object string, action string) (allowed bool, enforced bool, err error)
 }
 
-func withAuthz(a authorizer, next http.Handler) http.Handler {
+func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
+		rc := routing.RouteClassUI
+		if classifier != nil {
+			rc = classifier.Classify(path)
+		}
 
 		switch path {
 		case "/health", "/healthz", "/login", "/logout":
@@ -80,7 +84,7 @@ func withAuthz(a authorizer, next http.Handler) http.Handler {
 
 		tenant, ok := currentTenant(r.Context())
 		if !ok {
-			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+			routing.WriteError(w, r, rc, http.StatusInternalServerError, "tenant_missing", "tenant missing")
 			return
 		}
 
@@ -100,11 +104,11 @@ func withAuthz(a authorizer, next http.Handler) http.Handler {
 
 		allowed, enforced, err := a.Authorize(subject, domain, object, action)
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "authz_error", "authz error")
+			routing.WriteError(w, r, rc, http.StatusInternalServerError, "authz_error", "authz error")
 			return
 		}
 		if enforced && !allowed {
-			routing.WriteError(w, r, routing.RouteClassUI, http.StatusForbidden, "forbidden", "forbidden")
+			routing.WriteError(w, r, rc, http.StatusForbidden, "forbidden", "forbidden")
 			return
 		}
 
@@ -138,6 +142,51 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		if method == http.MethodPost {
 			return authz.ObjectJobCatalogCatalog, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/positions":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPositions, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPositions, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/positions":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPositions, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPositions, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/assignments":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingAssignments, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/assignments":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingAssignments, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/person/persons":
+		if method == http.MethodGet {
+			return authz.ObjectPersonPersons, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectPersonPersons, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/person/api/persons:options", "/person/api/persons:by-pernr":
+		if method == http.MethodGet {
+			return authz.ObjectPersonPersons, authz.ActionRead, true
 		}
 		return "", "", false
 	default:
