@@ -32,7 +32,7 @@
   - OrgUnit v4：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`
   - Position v4：`docs/dev-plans/030-position-v4-transactional-event-sourcing-synchronous-projection.md`
   - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog-v4.md`（对齐 `docs/dev-plans/019-multi-tenant-toolchain.md` / `docs/dev-plans/019A-rls-tenant-isolation.md`）
-  - 时间语义（Valid Time=DATE）：`docs/dev-plans/064-effective-date-day-granularity.md`
+  - 时间语义（Valid Time=DATE）：`docs/dev-plans/032-effective-date-day-granularity.md`
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 Kernel 边界（与 026/030 对齐）

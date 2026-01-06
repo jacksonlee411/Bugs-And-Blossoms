@@ -29,7 +29,7 @@
 ## 2.3 工具链与门禁（SSOT 引用）
 - DDD 分层框架（Greenfield）：`docs/dev-plans/015-ddd-layering-framework.md`
 - Greenfield HR 模块骨架（4 模块）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-- v4 Kernel 边界与 daterange 口径：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/064-effective-date-day-granularity.md`
+- v4 Kernel 边界与 daterange 口径：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-v4-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/032-effective-date-day-granularity.md`
 - 分层/依赖门禁：`.gocleanarch.yml`（入口：`make check lint`）
 - 命令入口与 CI：`Makefile`、`.github/workflows/quality-gates.yml`
 
@@ -92,7 +92,7 @@
 ## 4. 核心设计约束（v4 合同，必须遵守）
 
 ### 4.1 Valid Time 与 `daterange` 口径（强制）
-- Valid Time 粒度：`date`（对齐 `DEV-PLAN-064`）。
+- Valid Time 粒度：`date`（对齐 `DEV-PLAN-032`）。
 - 所有有效期区间：使用 `daterange` 且统一左闭右开 `[start,end)`。
 - 展示层：任职记录**仅展示 `effective_date`**（即 `lower(validity)`），不展示 `end_date`；避免把 `[start,end)` 再转回闭区间造成语义混乱。
 

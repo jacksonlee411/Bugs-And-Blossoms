@@ -123,7 +123,7 @@ modules/person/
 
 > 目标：共享“横切能力与稳定类型”，避免跨模块 import（对齐 015 的 `pkg/**` 准入规则）。
 
-- `pkg/validtime`：Valid Time（date）相关工具与类型（对齐 064）
+- `pkg/validtime`：Valid Time（date）相关工具与类型（对齐 032）
 - `pkg/hrids`（建议新增）：跨模块 ID 强类型（PersonID/OrgUnitID/PositionID/JobProfileID…）
 - `pkg/serrors`、`pkg/htmx`、`pkg/orglabels`：继续作为跨模块复用基础设施
 

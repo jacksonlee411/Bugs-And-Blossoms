@@ -141,6 +141,7 @@ modules/{module}/
 - 文档规范：`docs/dev-plans/000-docs-format.md`
 - 技术设计模板：`docs/dev-plans/001-technical-design-template.md`
 - DEV-PLAN-004：全仓去除版本标记（命名降噪 + 避免对外契约污染）：`docs/dev-plans/004-remove-version-marker-repo-wide.md`
+- Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-v4-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 - Org v4（事务性事件溯源 + 同步投射）：`docs/dev-plans/026-org-v4-transactional-event-sourcing-synchronous-projection.md`
