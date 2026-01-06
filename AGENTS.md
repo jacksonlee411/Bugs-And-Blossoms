@@ -163,4 +163,5 @@ modules/{module}/
 - 文档创建与过程治理规范：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
 - V4 CI 质量门禁（Quality Gates）：`docs/dev-plans/012-v4-ci-quality-gates.md`
 - SetID 管理（V4，Greenfield）：`docs/dev-plans/028-v4-setid-management.md`
+- DEV-PLAN-009M1：Phase 4 下一大型里程碑执行计划（SetID + JobCatalog 首个可见样板闭环）：`docs/dev-plans/009m1-phase4-setid-jobcatalog-vertical-slice-execution-plan.md`
 - V4 Greenfield 全新实施路线图（009-031）：`docs/dev-plans/009-v4-implementation-roadmap.md`
