@@ -12,6 +12,7 @@
 - tenant 解析：运行态 SSOT 已切换到 DB（`iam.tenant_domains.hostname`），并禁止 runtime fallback 到 `config/tenants.yaml`（该文件仅可作为样例，不得被运行态读取）。
 - tenant app 登录态：当前最小实现为 `/login` 设置 cookie `session=ok`（仅用于门禁占位）；目标态合同仍以 `sid`（tenant session token）作为术语。
 - superadmin：已落地独立控制面边界与 Tenant Console MVP（Phase 0：环境级保护/BasicAuth）；Phase 1（`sa_sid` 本地会话）在 `DEV-PLAN-023`/`DEV-PLAN-009M5` 推进。
+- 009M5 PR-0（#58）：冻结 `sid` 合同（§4.3/§4.5）与 Kratos 测试/拓扑口径（§9）。
 
 ## 1. 现仓库实现总结（作为输入，不做兼容包袱）
 

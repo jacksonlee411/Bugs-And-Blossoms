@@ -109,12 +109,12 @@
 
 ### PR-0：合同回填与范围冻结（文档优先）
 
-- [ ] 在 `DEV-PLAN-019` 冻结 `sid` 合同：token 形态/哈希存储/TTL/吊销/失败口径/跨租户绑定断言（见 `DEV-PLAN-019` §4.3/§5.2/§4.5）。
-- [ ] 在 `DEV-PLAN-023` 冻结 `sa_sid` 合同：token 形态/哈希存储/TTL/失败口径（见 `DEV-PLAN-023` §6.2/§5）。
-- [ ] 冻结 bootstrap 凭据注入策略：本机 `.env.local`/CI secrets；禁止迁移/日志/审计落明文（见 `DEV-PLAN-019` §6.3、`DEV-PLAN-023` §9）。
-- [ ] 冻结 Kratos dev/CI 拓扑：dev 走 `compose.dev.yml`、CI 走 service；镜像版本 pin 见 `DEV-PLAN-011` 的 Kratos 项；明确 unit/integration 使用 stub/real 的边界与失败产物落点。
-- [ ] 冻结落位与依赖方向：`modules/iam/**` 承载 principal/session/Kratos client；`internal/{server,superadmin}` 只做 wiring；禁止 HR 模块依赖 iam domain 类型（对齐 `DEV-PLAN-015/019`）。
-- [ ] 门禁对齐：在 `DEV-PLAN-012` 中确认本里程碑命中项的触发器覆盖到位（特别是：迁移闭环、authz pack、routing gates、e2e、doc gate）。
+- [x] 在 `DEV-PLAN-019` 冻结 `sid` 合同：token 形态/哈希存储/TTL/吊销/失败口径/跨租户绑定断言（见 `DEV-PLAN-019` §4.3/§5.2/§4.5）。（#58）
+- [x] 在 `DEV-PLAN-023` 冻结 `sa_sid` 合同：token 形态/哈希存储/TTL/失败口径（见 `DEV-PLAN-023` §6.2/§5）。（#58）
+- [x] 冻结 bootstrap 凭据注入策略：本机 `.env.local`/CI secrets；禁止迁移/日志/审计落明文（见 `DEV-PLAN-019` §6.3、`DEV-PLAN-023` §9）。（#58）
+- [x] 冻结 Kratos dev/CI 拓扑：dev 走 `compose.dev.yml`、CI 走 service；镜像版本 pin 见 `DEV-PLAN-011` 的 Kratos 项；明确 unit/integration 使用 stub/real 的边界与失败产物落点。（#58）
+- [x] 冻结落位与依赖方向：`modules/iam/**` 承载 principal/session/Kratos client；`internal/{server,superadmin}` 只做 wiring；禁止 HR 模块依赖 iam domain 类型（对齐 `DEV-PLAN-015/019`）。（#58）
+- [x] 门禁对齐：在 `DEV-PLAN-012` 中确认本里程碑命中项的触发器覆盖到位（特别是：迁移闭环、authz pack、routing gates、e2e、doc gate）。（#58）
 
 ### PR-1：IAM 数据模型（principals/sessions）与迁移闭环（需要用户确认的新表）
 
