@@ -21,3 +21,5 @@ coverage/
 node_modules/
 .astro/
 *.log
+e2e/test-results/
+e2e/playwright-report/
