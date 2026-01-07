@@ -192,7 +192,10 @@ func renderOrgSnapshot(rows []OrgUnitSnapshotRow, tenant Tenant, asOfDate string
 	var b strings.Builder
 	b.WriteString("<h1>OrgUnit Snapshot</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
-	b.WriteString("<p>As-of: <code>" + html.EscapeString(asOfDate) + "</code></p>")
+	b.WriteString(`<form method="GET" action="/org/snapshot">`)
+	b.WriteString(`<label>As-of <input type="date" name="as_of" value="` + html.EscapeString(asOfDate) + `" /></label> `)
+	b.WriteString(`<button type="submit">Apply</button>`)
+	b.WriteString(`</form>`)
 
 	if errMsg != "" {
 		b.WriteString(`<div style="padding:8px;border:1px solid #c00;color:#c00">` + html.EscapeString(errMsg) + `</div>`)
