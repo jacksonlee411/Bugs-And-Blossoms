@@ -5,6 +5,14 @@
 > 适用范围：**全新实现的新代码仓库（Greenfield）**。本文总结现仓库在“租户/认证/会话/RLS/Authz”上的既有实现与已评审契约（`DEV-PLAN-019*`、`DEV-PLAN-021`），并给出最小可落地方案。  
 > 对齐要求：`DEV-PLAN-015`（DDD 分层框架）、`DEV-PLAN-016`（HR 业务域 4 模块骨架）；本文引入一个 **平台 IAM/Tenancy 模块**，不计入 HR 业务域模块数量。
 
+## 0. 实现注记（本仓库现状，避免 drift）
+
+> 说明：本节用于描述 `Bugs-And-Blossoms` 当前已合并实现的“事实输入”，避免计划与实现口径漂移；目标态合同仍以本文后续章节为准。
+
+- tenant 解析：当前实现使用 `config/tenants.yaml`（可用 `TENANTS_PATH` 覆盖）作为 Host→tenant 映射；`DEV-PLAN-009M4` 将把运行态 SSOT 切换到 DB（`tenant_domains.hostname`），并禁止 runtime fallback。
+- tenant app 登录态：当前最小实现为 `/login` 设置 cookie `session=ok`（仅用于门禁占位）；目标态合同仍以 `sid`（tenant session token）作为术语。
+- superadmin：当前仅预留 allowlist entrypoint（`superadmin`），尚未实现独立二进制/路由与 Tenant Console；`DEV-PLAN-009M4` 将补齐该边界。
+
 ## 1. 现仓库实现总结（作为输入，不做兼容包袱）
 
 ### 1.1 租户（Tenancy）
@@ -13,8 +21,8 @@
 - **tenant 解析契约（已有）**：`Host → tenants.domain`，找不到即 fail-closed（见 `docs/dev-plans/019B-ory-kratos-session-bridge.md` 的 Tenant Domain Contract）。
 
 ### 1.2 认证与会话（AuthN + Session）
-- **现状**：本地用户密码 + 本地 `sessions`（`sid` cookie），并支持 Google OAuth（见 `modules/core/services/auth_service.go`、`modules/core/presentation/controllers/login_controller.go`、`pkg/middleware/auth.go`）。
-- **中间件链路**：`sid` cookie/`Authorization` header → 查 session → 注入 session & tenant_id → 再加载 user（见 `pkg/middleware/auth.go`）。
+- **现状**：应用侧会话 cookie（本文术语：`sid`）。在 `Bugs-And-Blossoms` 当前最小实现中，暂以 cookie `session=ok` 占位（无 `sessions` 表），仅用于保证“先有 tenant 再登录”的路由链路可演示。
+- **中间件链路**：目标态为 `sid` cookie/`Authorization` header → 查 session → 注入 session & tenant_id → 再加载 principal；当前最小实现仅做 cookie 存在性判断（无 principal）。
 - **已评审演进方向**：`DEV-PLAN-019` 及子计划采用 **ORY Kratos** 作为 Headless Identity，应用保留 `/login` UI；PoC 选择 “Kratos 认人 → 本地 session 桥接”（见 `docs/dev-plans/019B-ory-kratos-session-bridge.md`）。
 
 ### 1.3 数据隔离（RLS）
@@ -28,7 +36,7 @@
 ### 2.1 目标（Goals）
 - [ ] **租户解析 fail-closed**：任何需要 tenant 语义的入口在 tenant 未解析时必须拒绝（404/401），不得回退跨租户逻辑。
 - [ ] **统一认证入口**：仅实现一种主链路（推荐：Kratos password login），避免 legacy/多分支并存（对齐 `DEV-PLAN-004M1`）。
-- [ ] **统一会话模型**：应用侧 `sid` session 作为唯一运行态会话来源，承载 `tenant_id` 与 `principal_id`（对齐现仓库稳定链路）。
+- [ ] **统一会话模型**：概念上以 `sid` session 作为唯一运行态会话来源，承载 `tenant_id` 与 `principal_id`；在本仓库当前最小实现阶段 cookie 名为 `session`（占位），但不得引入第二套会话事实源（对齐 `DEV-PLAN-009M4` 的 stopline）。
 - [ ] **RLS 默认开启（fail-closed）**：所有 tenant-scoped 表默认启用 RLS，并要求在事务内注入 `app.current_tenant`。
 - [ ] **最小控制面（Tenant Console）**：提供 SuperAdmin 创建/禁用租户、绑定域名、初始化租户管理员的能力（可先无 DNS/HTTP verify）。
 - [ ] **对齐 DDD 分层与共享准入**：IAM/Tenancy 作为平台模块按 `modules/{module}/{domain,infrastructure,services,presentation}` 落地；跨模块共用能力优先下沉 `pkg/**`（遵循 `DEV-PLAN-015`）。
@@ -40,7 +48,7 @@
 
 ### 2.3 关键决策（ADR 摘要，避免实现阶段“撞出来”）
 - **决策 1：采用 Kratos，但应用仍保留本地 session**
-  - 选择：Kratos 负责“认人”，应用负责“发会话/圈地/管事”（`sid` session + RLS + Casbin）。
+  - 选择：Kratos 负责“认人”，应用负责“发会话/圈地/管事”（tenant session（术语：`sid`） + RLS + Casbin）。
   - 理由：运行态只需要一个稳定的 session 事实源；RLS 依赖 `tenant_id`，因此应用必须可确定注入。
 - **决策 2：tenant 解析 SSOT 为 `tenant_domains.hostname`**
   - 选择：解析只读 `tenant_domains`（hostname 全局唯一），`tenants.primary_domain` 仅作展示/缓存字段。
@@ -101,7 +109,7 @@
 - **本地 principal**：以 `(tenant_id, email)` 唯一；并绑定 `kratos_identity_id`（全局唯一）用于防串号。
 
 ### 4.3 会话（Session）与运行态上下文
-- **唯一运行态会话来源**：应用侧 `sid` cookie（或 `Authorization: Bearer <sid>`）。
+- **唯一运行态会话来源**：应用侧 tenant session cookie（术语：`sid`；本仓库当前最小实现为 `session=ok` 占位）（或 `Authorization: Bearer <sid>`）。
 - **session 必含 tenant_id**：中间件链路必须保证 tenant_id 注入，RLS 才可能 fail-closed。
 - **登出**：删除本地 session；（可选）同时调用 Kratos 失效化其 session，避免外部身份仍“认为已登录”。
 
@@ -163,7 +171,7 @@
 
 ### 6.1 Tenant App
 - `GET /login`：渲染登录页（Host 解析 tenant；未解析返回 404）
-- `POST /login`：Kratos login flow（server-side）→ whoami → upsert principal → create session → set `sid`（错误返回 422 并渲染表单错误）
+- `POST /login`：Kratos login flow（server-side）→ whoami → upsert principal → create session → set tenant session cookie（术语：`sid`；本仓库最小实现阶段为 `session=ok` 占位）（错误返回 422 并渲染表单错误）
 - `POST /logout`：删除 session（可选调用 Kratos logout；无论是否存在 session 都应幂等成功）
 
 ### 6.2 SuperAdmin（Tenant Console MVP）
@@ -172,16 +180,16 @@
 - `GET /superadmin/tenants/{tenant_id}`：详情（基础信息 + is_active）
 - `POST /superadmin/tenants/{tenant_id}/disable|enable`：启停
 
-SuperAdmin 认证（MVP 建议）：
-- 由于本计划聚焦“租户登录链路 + 运行态隔离”，且新仓库处于早期阶段，Tenant Console MVP 可先采用 **环境级保护**（例如反代 BasicAuth / 仅内网可达 / 固定 allowlist）。
-- 后续若需要把 superadmin 也纳入同一套 Identity（Kratos/Jackson），建议单独出子计划（例如 023），避免在本计划中引入第二套 session/主体模型而导致边界不清。
+SuperAdmin 认证（MVP 选定，见 `DEV-PLAN-009M4`）：
+- 采用 **环境级保护/BasicAuth**（可由反代提供，或由 superadmin 二进制内置 BasicAuth），以便保持“控制面边界”简单可回滚、且可被 E2E/CI 复现。
+- 不在 Tenant Console MVP 内引入 `sa_sid` 与第二套会话表；`sa_sid` 作为 `DEV-PLAN-023` Phase 1 的后续能力单独推进。
 
 ### 6.3 Bootstrap（避免“第一天就锁死”）
 - 最小要求：在没有任何 tenant/domain/principal 的情况下，能完成以下闭环：
   1) 创建第一个租户 + 主域名
   2) 创建/绑定第一个租户管理员（principal）
   3) 使用该租户管理员通过 `/login` 登录成功
-- 建议方案（Greenfield）：提供一次性 CLI/脚本入口（例如 `cmd/superadmin bootstrap`），用于生成初始租户与管理员，并记录为可审计的“执行痕迹”（但不得输出明文密码/secret）。
+- 建议方案（Greenfield）：提供一次性/幂等 CLI/脚本入口（例如扩展 `cmd/dbtool` 的 `tenancy-bootstrap` 子命令），用于生成初始租户与域名（以及后续的管理员/principal），并记录为可审计的“执行痕迹”（但不得输出明文密码/secret）。
 
 ## 7. 安全与失败路径（必须显式）
 - **fail-closed**：tenant 未解析 / session 缺 tenant_id / RLS 注入失败 ⇒ 直接拒绝请求；不得“默认租户”。
