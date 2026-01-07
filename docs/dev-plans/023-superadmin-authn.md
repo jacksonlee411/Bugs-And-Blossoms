@@ -8,10 +8,10 @@
 
 ## 1. 背景与现状（输入）
 
-现仓库已有独立部署的 superadmin server（见 `docs/SUPERADMIN.md`）：
-- 运行于独立入口与路由空间，加载更少模块。
-- 使用与主应用相同的会话机制（`sid`），并通过 `user.type == superadmin` 做全局拦截。
-- 与主应用共享同一 DB 与环境配置。
+本仓库当前仅具备 tenant app 的最小可登录链路，并 **尚未落地** 独立 superadmin 二进制/路由：
+- routing allowlist 已预留 entrypoint：`superadmin`（对齐 `DEV-PLAN-017`），但目前仅用于 ops 占位。
+- tenant app 当前最小实现使用 cookie `session=ok` 作为登录态占位（目标态术语仍为 `sid`）。
+- `DEV-PLAN-009M4` 将在此基础上补齐：superadmin 边界 + Tenant Console MVP + Tenancy SSOT 切换（DB `tenant_domains.hostname`）。
 
 Greenfield 将重构租户/认证/RLS，并要求：
 - tenant app：`Host 解析 tenant（fail-closed）→ Kratos 认人 → 本地 session（sid）→ RLS 圈地 → Casbin 管事`（见 `DEV-PLAN-019`）。
@@ -20,7 +20,7 @@ Greenfield 将重构租户/认证/RLS，并要求：
 ## 2. 目标与非目标
 
 ### 2.1 目标（Goals）
-- [ ] **认证链路解耦**：SuperAdmin 不复用 tenant app 的 `sid` cookie；使用独立 cookie 名与独立 session 事实源。
+- [ ] **认证链路解耦**：SuperAdmin 不复用 tenant app 的登录态 cookie（术语：`sid`；本仓库当前实现为 `session` 占位）；Phase 0 使用环境级保护，Phase 1 使用独立 cookie 名与独立 session 事实源。
 - [ ] **显式旁路**：SuperAdmin 访问启用 RLS 的业务表时，必须通过独立 DB role/连接池（或 BYPASSRLS role）实现旁路；tenant app 永远不可获得该连接。
 - [ ] **可回滚**：认证故障时，能降级到“环境级保护 + 只读/停写”，而不是引入 legacy 分支（对齐 `DEV-PLAN-004M1`）。
 - [ ] **可审计**：所有跨租户写操作必须记录审计事件（最小字段即可：who/when/what/target_tenant）。
@@ -32,16 +32,18 @@ Greenfield 将重构租户/认证/RLS，并要求：
 
 ## 3. 关键决策（ADR 摘要）
 
-### 3.1 决策 1：SuperAdmin 使用独立会话 cookie（`sa_sid`）
-- 选择：控制面用 `sa_sid`（host-only cookie），tenant app 用 `sid`。
-- 理由：消除“带着 tenant session 误入控制面”的偶然复杂度；并降低 middleware 复用导致的隐式耦合。
+### 3.1 决策 1：分阶段落地（Phase 0→Phase 1）
+- 选择：
+  - Phase 0（`DEV-PLAN-009M4`）：使用环境级保护/BasicAuth，不引入 `sa_sid` 与 `superadmin_sessions`（避免在 tenant app 尚未具备真实 `sessions`/`principal` 时先造第二套会话系统）。
+  - Phase 1（后续里程碑）：引入独立会话 cookie `sa_sid`（host-only），并落地 `superadmin_sessions`/`superadmin_principals`。
+- 理由：把复杂度与风险按阶段拆开：MVP 先确保“边界隔离 + 审计 + 可回滚”，再引入可用性更强但成本更高的控制面会话。
 
 ### 3.2 决策 2：SuperAdmin 不依赖 Host→tenant 解析
 - 选择：控制面不做 tenant 解析；跨租户操作必须显式携带 `target_tenant_id`（路径或表单字段）。
 - 理由：SuperAdmin 的本质是“跨租户操作”，把 tenant 解析留在 tenant app，可避免串租户风险模型混杂。
 
 ### 3.3 决策 3：`sessions`（tenant app）不启用 RLS；控制面会话独立
-- 选择：tenant app 的 `sessions` 不启用 RLS（避免“先有 tenant 才能取 session”的循环）；控制面另建 `superadmin_sessions`，同样不启用 RLS。
+- 选择：tenant app 的 `sessions` 不启用 RLS（避免“先有 tenant 才能取 session”的循环）；控制面 Phase 1 另建 `superadmin_sessions`，同样不启用 RLS。
 - 理由：会话查找必须发生在 tenant 注入之前；RLS 适用于业务表，而非 session 表。
 
 ### 3.4 决策 4：SuperAdmin Identity 与 Tenant Identity 共享 Kratos（但 identifier 命名空间隔离）
@@ -51,6 +53,9 @@ Greenfield 将重构租户/认证/RLS，并要求：
 ## 4. 架构与边界
 
 ### 4.1 组件图（Mermaid）
+
+> 注：下图展示 Phase 1 的目标态（`sa_sid`）；`DEV-PLAN-009M4` 的 Phase 0 将以 BasicAuth 作为控制面入口保护。tenant app cookie 当前实现为 `session`（目标态术语为 `sid`）。
+
 ```mermaid
 flowchart LR
   subgraph TenantApp[Tenant App]
@@ -76,7 +81,7 @@ flowchart LR
 
 ## 5. 数据模型（新仓库建议）
 
-> 本节是新仓库的目标态 schema 草案；实际建表前需用户确认（本仓库规则）。
+> 本节是目标态 schema 草案；新增表落盘前需用户确认（本仓库规则）。注：`DEV-PLAN-009M4` 已对其 MVP 需要的新增表/迁移做了预先批准（2026-01-07）。
 
 - `superadmin_principals`
   - `id uuid pk`
@@ -95,7 +100,8 @@ flowchart LR
 
 - `superadmin_audit_logs`（最小审计）
   - `id uuid pk`
-  - `principal_id uuid not null`
+  - `actor text not null`（Phase 0：BasicAuth username；Phase 1：也可写 `principal_id`）
+  - `principal_id uuid null`
   - `action text not null`（例如 `tenant.create` / `tenant.disable`）
   - `target_tenant_id uuid null`
   - `payload jsonb not null`（必须过滤 secret/token/cookie）
@@ -106,8 +112,8 @@ flowchart LR
 ### 6.1 Phase 0（MVP）：环境级保护 + 只读/停写开关
 - 入口保护：反代 BasicAuth / 内网访问 / IP allowlist（三选一或组合）。
 - 优点：实现最小、回滚最直接；适合 Greenfield 早期。
-- 缺点：不可审计到用户粒度；无法做细粒度授权。
-- 停止线：任何需要跨租户写的功能，在没有 `principal_id` 审计前不得上线。
+- 缺点：无法获得强身份（principal_id）；审计粒度通常只能到 BasicAuth username。
+- 停止线：进入生产口径前，跨租户写操作必须具备可审计主体（至少 actor=BasicAuth username；如需更强身份与会话管理则推进 Phase 1）。
 
 ### 6.2 Phase 1（推荐）：Kratos 认人 + 控制面本地会话（`sa_sid`）
 - SuperAdmin 登录：
