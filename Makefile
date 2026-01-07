@@ -7,32 +7,36 @@ export ATLAS_VERSION ?= v0.38.0
 export GOOSE_VERSION ?= v3.26.0
 export SQLC_VERSION ?= v1.28.0
 export GOIMPORTS_VERSION ?= v0.26.0
+export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
+export DEV_INFRA_ENV_FILE ?= .env.example
 
 .PHONY: help preflight check naming no-legacy fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
-.PHONY: dev dev-up dev-down dev-server
+.PHONY: dev dev-up dev-down dev-reset dev-ps dev-server
 .PHONY: coverage
 
-	help:
-		@printf "%s\n" \
-			"常用入口：" \
-			"  make preflight" \
-			"  make check naming" \
-			"  make check no-legacy" \
-			"  make check fmt" \
-			"  make check lint" \
-			"  make test" \
-			"  make check routing" \
-			"  make e2e" \
-		"" \
-		"开发环境：" \
+help:
+	@printf "%s\n" \
+		"常用入口：" \
+		"  make preflight" \
+		"  make check naming" \
+		"  make check no-legacy" \
+		"  make check fmt" \
+		"  make check lint" \
+		"  make test" \
+		"  make check routing" \
+		"  make e2e" \
+	"" \
+	"开发环境：" \
 		"  make dev-up" \
 		"  make dev-server" \
 		"  make dev-down" \
-		"" \
-		"模块级（示例）：" \
+		"  make dev-reset" \
+		"  make dev-ps" \
+	"" \
+	"模块级（示例）：" \
 		"  make iam plan" \
 		"  make iam migrate up"
 
@@ -85,16 +89,16 @@ test: ## 单元/集成测试
 dev: dev-up dev-server
 
 dev-up:
-	@env_file=".env"; \
-	if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
-	if [[ -f "env.local" ]]; then env_file="env.local"; fi; \
-	docker compose --env-file "$$env_file" -f compose.dev.yml up -d
+	docker compose -p "$(DEV_COMPOSE_PROJECT)" --env-file "$(DEV_INFRA_ENV_FILE)" -f compose.dev.yml up -d
 
 dev-down:
-	@env_file=".env"; \
-	if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
-	if [[ -f "env.local" ]]; then env_file="env.local"; fi; \
-	docker compose --env-file "$$env_file" -f compose.dev.yml down -v
+	docker compose -p "$(DEV_COMPOSE_PROJECT)" --env-file "$(DEV_INFRA_ENV_FILE)" -f compose.dev.yml down
+
+dev-reset:
+	docker compose -p "$(DEV_COMPOSE_PROJECT)" --env-file "$(DEV_INFRA_ENV_FILE)" -f compose.dev.yml down -v
+
+dev-ps:
+	docker compose -p "$(DEV_COMPOSE_PROJECT)" --env-file "$(DEV_INFRA_ENV_FILE)" -f compose.dev.yml ps
 
 dev-server:
 	@env_file=""; \
@@ -154,7 +158,7 @@ staffing:
 person:
 	@:
 
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint plan migrate up dev dev-up dev-down dev-server,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:
