@@ -86,7 +86,7 @@ func TestWithAuthz_ForbiddenWhenEnforced(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/org/setid", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
-	req.AddCookie(&http.Cookie{Name: "session", Value: "ok"})
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -102,7 +102,7 @@ func TestWithAuthz_AllowsWhenNotEnforced(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
-	req.AddCookie(&http.Cookie{Name: "session", Value: "ok"})
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -118,7 +118,7 @@ func TestWithAuthz_AuthzError(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
-	req.AddCookie(&http.Cookie{Name: "session", Value: "ok"})
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
@@ -133,7 +133,7 @@ func TestWithAuthz_TenantMissing(t *testing.T) {
 	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes", nil)
-	req.AddCookie(&http.Cookie{Name: "session", Value: "ok"})
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
