@@ -1,6 +1,6 @@
 # DEV-PLAN-009M5：Phase 2 下一大型里程碑执行计划（AuthN 真实化：Kratos + 本地会话 sid/sa_sid）
 
-**状态**: 草拟中（2026-01-07 10:52 UTC）
+**状态**: 已评审，待实施（2026-01-07 10:52 UTC）
 
 > 本文是 `DEV-PLAN-009` 的执行计划补充（里程碑拆解）。假设 `DEV-PLAN-009M4`（SuperAdmin 控制面 + Tenant Console MVP）已完成，本里程碑聚焦 `DEV-PLAN-009` 的 **Phase 2：平台与安全硬化** 中仍缺失的关键出口：将 tenant app 的“占位登录”升级为 **真实认证与会话（Kratos 认人 → 本地 session）**，并推进 SuperAdmin Phase 1（`sa_sid`）以获得更强的可审计主体。
 >
@@ -109,8 +109,12 @@
 
 ### PR-0：合同回填与范围冻结（文档优先）
 
-- [ ] 在 `DEV-PLAN-019/023/021/022` 中补齐本里程碑 MVP 所需的“边界/不变量/失败路径/验收口径”（本文不复制细节）。
-- [ ] 在 `DEV-PLAN-012` 中确认本里程碑命中项的门禁触发器覆盖到位（特别是：迁移闭环、authz pack、routing gates、e2e）。
+- [ ] 在 `DEV-PLAN-019` 冻结 `sid` 合同：token 形态/哈希存储/TTL/吊销/失败口径/跨租户绑定断言（见 `DEV-PLAN-019` §4.3/§5.2/§4.5）。
+- [ ] 在 `DEV-PLAN-023` 冻结 `sa_sid` 合同：token 形态/哈希存储/TTL/失败口径（见 `DEV-PLAN-023` §6.2/§5）。
+- [ ] 冻结 bootstrap 凭据注入策略：本机 `.env.local`/CI secrets；禁止迁移/日志/审计落明文（见 `DEV-PLAN-019` §6.3、`DEV-PLAN-023` §9）。
+- [ ] 冻结 Kratos dev/CI 拓扑：dev 走 `compose.dev.yml`、CI 走 service；镜像版本 pin 见 `DEV-PLAN-011` 的 Kratos 项；明确 unit/integration 使用 stub/real 的边界与失败产物落点。
+- [ ] 冻结落位与依赖方向：`modules/iam/**` 承载 principal/session/Kratos client；`internal/{server,superadmin}` 只做 wiring；禁止 HR 模块依赖 iam domain 类型（对齐 `DEV-PLAN-015/019`）。
+- [ ] 门禁对齐：在 `DEV-PLAN-012` 中确认本里程碑命中项的触发器覆盖到位（特别是：迁移闭环、authz pack、routing gates、e2e、doc gate）。
 
 ### PR-1：IAM 数据模型（principals/sessions）与迁移闭环（需要用户确认的新表）
 
@@ -124,13 +128,14 @@
 
 - [ ] `/login`/`/logout` 改为创建/失效化 DB session（`sid`），并在中间件中以 DB session 作为唯一登录态判断依据。
 - [ ] 明确 cookie 属性（host-only/httpOnly/sameSite）；无效/过期统一跳转 `/login`。
+- [ ] 跨租户绑定断言：`session.tenant_id` 必须与 `Host → tenant_id` 一致；不一致清 cookie 并回到 `/login`（fail-closed）。
 - [ ] 单测覆盖：session 校验、过期、登出幂等、fail-closed（覆盖率门禁保持 100%）。
 
 ### PR-3：Kratos 集成（tenant app）
 
 - [ ] 增加最小 Kratos 客户端抽象与实现（测试用 stub server 做契约测试；运行态可配置 Kratos endpoint）。
 - [ ] `POST /login`：Kratos login flow → whoami → upsert principal → create `sid` session。
-- [ ] 开发/CI：提供可复现的 Kratos 启动方式（优先通过 `compose.dev.yml`/CI service 编排），避免“本机手工跑”。
+- [ ] 开发/CI：提供可复现的 Kratos 启动方式（`compose.dev.yml` + CI service），并按 `DEV-PLAN-011` pin 镜像版本；避免“本机手工跑”。
 
 ### PR-4：SuperAdmin Phase 1（sa_sid）+ 审计主体升级
 
@@ -154,4 +159,3 @@
 - 结构：tenant app 与 superadmin 通过“cookie/会话表/路由/DB pool”四层隔离，避免隐式共享导致串租户风险。
 - 演化：先把 session 事实源与 fail-closed 行为收口，再引入 Kratos；避免“先接 IdP 再补会话/审计”造成返工。
 - 回滚：回滚只能走“PR 回滚/环境级保护/只读停写”，禁止引入 runtime legacy 分支。
-

@@ -11,25 +11,25 @@
 
 - tenant 解析：运行态 SSOT 已切换到 DB（`iam.tenant_domains.hostname`），并禁止 runtime fallback 到 `config/tenants.yaml`（该文件仅可作为样例，不得被运行态读取）。
 - tenant app 登录态：当前最小实现为 `/login` 设置 cookie `session=ok`（仅用于门禁占位）；目标态合同仍以 `sid`（tenant session token）作为术语。
-- superadmin：当前仅预留 allowlist entrypoint（`superadmin`），尚未实现独立二进制/路由与 Tenant Console；`DEV-PLAN-009M4` 将补齐该边界。
+- superadmin：已落地独立控制面边界与 Tenant Console MVP（Phase 0：环境级保护/BasicAuth）；Phase 1（`sa_sid` 本地会话）在 `DEV-PLAN-023`/`DEV-PLAN-009M5` 推进。
 
 ## 1. 现仓库实现总结（作为输入，不做兼容包袱）
 
 ### 1.1 租户（Tenancy）
-- **数据模型**：`tenants` 表（含 `id/name/domain/is_active/...`），domain 入库会 `lowercase + trim`，并作为未登录态的 tenant 解析事实源（见 `modules/core/infrastructure/persistence/tenant_repository.go`）。
+- **数据模型**：`iam.tenants` + `iam.tenant_domains`（`hostname` 全局唯一；入库 `lowercase + trim + 去端口` 由 DB 约束兜底），并作为未登录态的 tenant 解析事实源（见 `internal/server/tenancy.go`、`internal/superadmin/handler.go`）。
 - **tenant 上下文**：通过 `context` 注入 `tenant_id`（见 `pkg/composables/tenant.go`），业务代码普遍依赖 `composables.UseTenantID(ctx)`；缺 tenant 即报错，避免“跨租户兜底查询”。
-- **tenant 解析契约（已有）**：`Host → tenants.domain`，找不到即 fail-closed（见 `docs/dev-plans/019B-ory-kratos-session-bridge.md` 的 Tenant Domain Contract）。
+- **tenant 解析契约（已有）**：`Host → iam.tenant_domains.hostname`，找不到即 fail-closed（见本文 §4.1）。
 
 ### 1.2 认证与会话（AuthN + Session）
 - **现状**：应用侧会话 cookie（本文术语：`sid`）。在 `Bugs-And-Blossoms` 当前最小实现中，暂以 cookie `session=ok` 占位（无 `sessions` 表），仅用于保证“先有 tenant 再登录”的路由链路可演示。
 - **中间件链路**：目标态为 `sid` cookie/`Authorization` header → 查 session → 注入 session & tenant_id → 再加载 principal；当前最小实现仅做 cookie 存在性判断（无 principal）。
-- **已评审演进方向**：`DEV-PLAN-019` 及子计划采用 **ORY Kratos** 作为 Headless Identity，应用保留 `/login` UI；PoC 选择 “Kratos 认人 → 本地 session 桥接”（见 `docs/dev-plans/019B-ory-kratos-session-bridge.md`）。
+- **已评审演进方向**：采用 **ORY Kratos** 作为 Headless Identity，应用保留 `/login` UI；主链路选择 “Kratos 认人 → 本地 session（`sid`）桥接”（见本文 §4.2/§6.1）。
 
 ### 1.3 数据隔离（RLS）
-- **现状接口**：事务内设置 `app.current_tenant`（`set_config`），由 RLS policy 读取，实现 fail-closed（见 `pkg/composables/rls.go`；RLS 设计契约见 `docs/dev-plans/019A-rls-tenant-isolation.md`，推进见 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`）。
+- **现状接口**：事务内设置 `app.current_tenant`（`set_config`），由 RLS policy 读取，实现 fail-closed（见 `pkg/composables/rls.go`；RLS 推进口径见 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`）。
 
 ### 1.4 授权（AuthZ）
-- **系统级口径**：Casbin（“管事”）与 tenant subject（`tenant:{id}:user:{id}`）结合，形成纵深防御（`docs/dev-plans/019-multi-tenant-toolchain.md`）。
+- **系统级口径**：Casbin（“管事”）与 RLS（“圈地”）形成纵深防御；主体/role_slug/subject 的冻结口径以 `docs/dev-plans/022-authz-casbin-toolchain.md` 为准。
 
 ## 2. 目标与非目标（Greenfield 口径）
 
@@ -58,7 +58,7 @@
   - 理由：消灭“同一邮箱多租户”歧义，避免串租户与安全事故。
 - **决策 4：控制面与数据面隔离**
   - 选择：Tenant Console 在 superadmin server，数据面业务 server 永远不提供跨租户控制入口。
-  - 理由：把高风险跨租户能力收口在单一边界，便于审计与回滚（对齐 `DEV-PLAN-019D` 的思路）。
+  - 理由：把高风险跨租户能力收口在单一边界，便于审计与回滚（对齐 `DEV-PLAN-023` 的边界与回滚口径）。
 
 ## 3. 模块与分层方案（对齐 015/016）
 
@@ -103,22 +103,41 @@
 - **信任边界**：生产环境只信任反代写入的 host（建议使用 `X-Forwarded-Host` 白名单策略或由网关做 host 校验），禁止 Host header 注入导致“串租户”。
 
 ### 4.2 身份（Kratos）到本地主体（Principal）的映射
-沿用已评审的 PoC 结论（`DEV-PLAN-019B`），但移除 legacy 分支（对齐 `DEV-PLAN-004M1`）：
+沿用已评审的 Headless IdP 方案（Kratos），但移除 legacy 分支（对齐 `DEV-PLAN-004M1`）：
 - **identifier**：`{tenant_id}:{lower(email)}`（解决“同一 email 多租户”）。
 - **traits（最小子集）**：`tenant_id`、`email`、（可选）`name`。
 - **本地 principal**：以 `(tenant_id, email)` 唯一；并绑定 `kratos_identity_id`（全局唯一）用于防串号。
 
-### 4.3 会话（Session）与运行态上下文
-- **唯一运行态会话来源**：应用侧 tenant session cookie（术语：`sid`；本仓库当前最小实现为 `session=ok` 占位）（或 `Authorization: Bearer <sid>`）。
-- **session 必含 tenant_id**：中间件链路必须保证 tenant_id 注入，RLS 才可能 fail-closed。
-- **登出**：删除本地 session；（可选）同时调用 Kratos 失效化其 session，避免外部身份仍“认为已登录”。
+### 4.3 会话（Session）与运行态上下文（`sid`）
+- **唯一运行态会话来源**：tenant app 只认 `sid`（cookie 或 `Authorization: Bearer <sid>`）。本仓库当前 `session=ok` 仅为占位，必须在实现真实 `sessions` 时删除（对齐 `DEV-PLAN-004M1` 的 No Legacy）。
+- **token 形态（冻结）**：
+  - `sid` 为随机高熵不透明字符串（推荐：`32 bytes random → base64url`，无 padding）。
+  - DB 中只存 `sha256(sid)`，不存明文 token（避免“DB 泄露 = session 可重放”）。
+- **生命周期（冻结）**：
+  - `expires_at` 为绝对过期时间（建议默认 14d，支持配置覆盖）。
+  - logout = 失效化 session（删除行或标记 revoke）；`principal=disabled` / 重置凭据时必须回收该 principal 的全部 session。
+- **跨租户绑定（冻结，必须 fail-closed）**：
+  - 请求链路必须先 `Host → tenant_id`（见 §4.1），再查 session（`sessions` 不启用 RLS）。
+  - 必须断言：`session.tenant_id == tenant_id`；不一致视为无效 session：清 cookie 并返回 `401`（或 302 到 `/login`）；不得“自动切租户/默认租户”。
+- **失败口径（冻结）**：
+  - token 缺失/无效/过期 ⇒ 视为未登录；HTML：302 到 `/login`；API：401。
+  - 禁止把密码、token、cookie、Kratos 凭据写入日志/审计（只记录 `principal_id/tenant_id/request_id` 等非敏感定位信息）。
 
 ### 4.4 授权（Casbin）与主体表达
-- **主体（Subject）建议**：`tenant:{tenant_id}:principal:{principal_id}`
+- **审计标识（principal）**：`tenant:{tenant_id}:principal:{principal_id}`（用于日志/审计/诊断；不作为 MVP 的 Casbin enforce 输入）。
+- **授权主体（effective subject）**：`role:{role_slug}`（MVP 单角色；口径见 `DEV-PLAN-022`）。
 - **边界**：
   - AuthN（登录）只负责建立 `principal_id` 与 `tenant_id` 的可信来源；
   - AuthZ（Casbin）只负责“是否允许做事”，不得承担 tenant 解析与 session 校验职责；
   - DB（RLS）只负责“圈地”，不得放宽 policy 作为跨租户旁路。
+
+### 4.5 `role_slug`（最小角色集，冻结）
+- **权威来源**：`principals.role_slug`；禁止以“有 session 就默认是 admin”等隐式推导作为授权依据。
+- **MVP 角色集**：
+  - tenant app：`tenant_admin`（唯一可登录角色）
+  - 未登录：`anonymous`（仅作为 Authz 输入，不落库）
+  - superadmin：使用其专用 principal/session（见 `DEV-PLAN-023`），不得复用 tenant principal。
+- **注入规则（冻结）**：session 中间件必须加载 principal 并注入 `principal_id/role_slug/tenant_id`；缺任一项即拒绝进入受保护路径（fail-closed）。
 
 ## 5. 数据模型（新仓库建议）
 
@@ -144,13 +163,14 @@
   - `id uuid pk`
   - `tenant_id uuid not null`
   - `email text not null`
+  - `role_slug text not null`（MVP：`tenant_admin`）
   - `display_name text null`
   - `status text not null`（`active|disabled`）
   - `kratos_identity_id uuid not null unique`
   - `created_at/updated_at timestamptz`
   - 约束：`unique (tenant_id, email)`
 - `sessions`
-  - `token text pk`（随机高熵）
+  - `token_sha256 bytea pk`（`sha256(sid)`；32 bytes）
   - `tenant_id uuid not null`
   - `principal_id uuid not null`
   - `expires_at timestamptz not null`
@@ -190,10 +210,11 @@ SuperAdmin 认证（MVP 选定，见 `DEV-PLAN-009M4`）：
   2) 创建/绑定第一个租户管理员（principal）
   3) 使用该租户管理员通过 `/login` 登录成功
 - 建议方案（Greenfield）：提供一次性/幂等 CLI/脚本入口（例如扩展 `cmd/dbtool` 的 `tenancy-bootstrap` 子命令），用于生成初始租户与域名（以及后续的管理员/principal），并记录为可审计的“执行痕迹”（但不得输出明文密码/secret）。
+- CI/E2E 凭据注入（冻结）：凭据只允许通过环境变量/本机 `.env.local` 注入；不得把明文密码/token 写入迁移、seed 文件或仓库；任何“输出一次性凭据”必须显式 opt-in 且默认关闭，避免出现在 CI 日志中。
 
 ## 7. 安全与失败路径（必须显式）
 - **fail-closed**：tenant 未解析 / session 缺 tenant_id / RLS 注入失败 ⇒ 直接拒绝请求；不得“默认租户”。
-- **cookie 策略**：非 production 使用 host-only cookie；production 允许显式配置 apex domain（对齐 `DEV-PLAN-019B`）。
+- **cookie 策略**：默认 host-only cookie；如必须使用 apex domain，需显式配置且仍必须满足 `session.tenant_id == Host 解析 tenant_id` 的绑定断言（见 §4.3）。
 - **敏感信息**：禁止把密码、token、cookie 写入日志；审计日志需过滤 secret。
 
 ## 8. 实施步骤（Greenfield 里程碑）
@@ -213,7 +234,7 @@ SuperAdmin 认证（MVP 选定，见 `DEV-PLAN-009M4`）：
   - session 创建/过期/登出。
 - 集成测试（infrastructure）：
   - Postgres repo + RLS 注入：缺 tenant 时必须失败（fail-closed）。
-  - Kratos client：用 stub server 或容器化 Kratos 做契约测试（只覆盖最小端点）。
+  - Kratos client：默认用 stub server 做契约测试（只覆盖最小端点）；E2E/CI 使用容器化 Kratos（dev：`compose.dev.yml`，CI：workflow service），失败产物统一落到既有 artifacts 目录（例如 `e2e/test-results/`、`e2e/playwright-report/`）。
 - E2E（可选，若新仓库已有 e2e 体系）：登录→访问受保护页面→登出。
 
 ## 10. 回滚与停止线（避免把复杂度留给实现阶段）
