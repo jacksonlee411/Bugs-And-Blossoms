@@ -33,8 +33,7 @@ if ! diff_out="$(
     --from "file://${migrations_dir}?format=goose" \
     --to "file://${schema_dir}" \
     --dev-url "$dev_url" \
-    --format '{{ sql . }}' \
-    2>&1
+    --format '{{ sql . }}'
 )"; then
   echo "[db-plan] FAIL: atlas schema diff failed"
   echo "$diff_out"
