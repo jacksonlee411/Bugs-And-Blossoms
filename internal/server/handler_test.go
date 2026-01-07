@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -218,7 +219,16 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	if recLoginPost.Code != http.StatusFound {
 		t.Fatalf("login post status=%d", recLoginPost.Code)
 	}
-	session := recLoginPost.Result().Cookies()[0]
+	var session *http.Cookie
+	for _, c := range recLoginPost.Result().Cookies() {
+		if c.Name == sidCookieName {
+			session = c
+			break
+		}
+	}
+	if session == nil || session.Value == "" {
+		t.Fatalf("missing %s cookie", sidCookieName)
+	}
 
 	reqRoot := httptest.NewRequest(http.MethodGet, "/", nil)
 	reqRoot.Host = "localhost:8080"
@@ -331,13 +341,51 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("lang status=%d", recLangWithRef.Code)
 	}
 
+	oldSession := session
 	reqLogout := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	reqLogout.Host = "localhost:8080"
-	reqLogout.AddCookie(session)
+	reqLogout.AddCookie(oldSession)
 	recLogout := httptest.NewRecorder()
 	h.ServeHTTP(recLogout, reqLogout)
 	if recLogout.Code != http.StatusFound {
 		t.Fatalf("logout status=%d", recLogout.Code)
+	}
+	var cleared bool
+	for _, c := range recLogout.Result().Cookies() {
+		if c.Name == sidCookieName && c.MaxAge < 0 {
+			cleared = true
+			break
+		}
+	}
+	if !cleared {
+		t.Fatalf("expected %s cookie cleared", sidCookieName)
+	}
+
+	reqAppOldSession := httptest.NewRequest(http.MethodGet, "/app", nil)
+	reqAppOldSession.Host = "localhost:8080"
+	reqAppOldSession.AddCookie(oldSession)
+	recAppOldSession := httptest.NewRecorder()
+	h.ServeHTTP(recAppOldSession, reqAppOldSession)
+	if recAppOldSession.Code != http.StatusFound {
+		t.Fatalf("app (old session) status=%d", recAppOldSession.Code)
+	}
+
+	reqLoginPost2 := httptest.NewRequest(http.MethodPost, "/login", nil)
+	reqLoginPost2.Host = "localhost:8080"
+	recLoginPost2 := httptest.NewRecorder()
+	h.ServeHTTP(recLoginPost2, reqLoginPost2)
+	if recLoginPost2.Code != http.StatusFound {
+		t.Fatalf("login post (2) status=%d", recLoginPost2.Code)
+	}
+	session = nil
+	for _, c := range recLoginPost2.Result().Cookies() {
+		if c.Name == sidCookieName {
+			session = c
+			break
+		}
+	}
+	if session == nil || session.Value == "" {
+		t.Fatalf("missing %s cookie (2)", sidCookieName)
 	}
 
 	reqPersonPost := httptest.NewRequest(http.MethodPost, "/person/persons", strings.NewReader("pernr=1&display_name=A"))
@@ -791,5 +839,69 @@ func TestPathHasPrefixSegment(t *testing.T) {
 	}
 	if pathHasPrefixSegment("/assetx", "/assets") {
 		t.Fatal("expected false")
+	}
+}
+
+func TestLoginPost_PrincipalError(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	old := sidRandReader
+	t.Cleanup(func() { sidRandReader = old })
+	sidRandReader = errReader{}
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", nil)
+	req.Host = "localhost:8080"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestLoginPost_SessionError(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	old := sidRandReader
+	t.Cleanup(func() { sidRandReader = old })
+	sidRandReader = bytes.NewReader(bytes.Repeat([]byte{0xAB}, 16))
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", nil)
+	req.Host = "localhost:8080"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
 	}
 }

@@ -89,8 +89,8 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 		}
 
 		roleSlug := authz.RoleAnonymous
-		if hasSession(r) {
-			roleSlug = authz.RoleTenantAdmin
+		if p, ok := currentPrincipal(r.Context()); ok {
+			roleSlug = p.RoleSlug
 		}
 
 		subject := authz.SubjectFromRoleSlug(roleSlug)

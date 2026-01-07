@@ -10,10 +10,11 @@
 > 说明：本节用于描述 `Bugs-And-Blossoms` 当前已合并实现的“事实输入”，避免计划与实现口径漂移；目标态合同仍以本文后续章节为准。
 
 - tenant 解析：运行态 SSOT 已切换到 DB（`iam.tenant_domains.hostname`），并禁止 runtime fallback 到 `config/tenants.yaml`（该文件仅可作为样例，不得被运行态读取）。
-- tenant app 登录态：当前最小实现为 `/login` 设置 cookie `session=ok`（仅用于门禁占位）；目标态合同仍以 `sid`（tenant session token）作为术语。
+- tenant app 登录态：已落地 cookie `sid` + DB session（`iam.sessions`），并移除占位 `session=ok`。
 - superadmin：已落地独立控制面边界与 Tenant Console MVP（Phase 0：环境级保护/BasicAuth）；Phase 1（`sa_sid` 本地会话）在 `DEV-PLAN-023`/`DEV-PLAN-009M5` 推进。
 - 009M5 PR-0（#58）：冻结 `sid` 合同（§4.3/§4.5）与 Kratos 测试/拓扑口径（§9）。
 - 009M5 PR-1（#60）：新增 `iam.principals`/`iam.sessions` 数据模型与迁移闭环（token 存 `sha256(sid)`；`sessions` 不启用 RLS）。
+- 009M5 PR-2（#61）：tenant app `sid` 会话与中间件收口（以 DB session 为唯一登录态；跨租户绑定断言 fail-closed；移除占位 `session=ok`）。
 
 ## 1. 现仓库实现总结（作为输入，不做兼容包袱）
 
@@ -23,8 +24,8 @@
 - **tenant 解析契约（已有）**：`Host → iam.tenant_domains.hostname`，找不到即 fail-closed（见本文 §4.1）。
 
 ### 1.2 认证与会话（AuthN + Session）
-- **现状**：应用侧会话 cookie（本文术语：`sid`）。在 `Bugs-And-Blossoms` 当前最小实现中，暂以 cookie `session=ok` 占位（无 `sessions` 表），仅用于保证“先有 tenant 再登录”的路由链路可演示。
-- **中间件链路**：目标态为 `sid` cookie/`Authorization` header → 查 session → 注入 session & tenant_id → 再加载 principal；当前最小实现仅做 cookie 存在性判断（无 principal）。
+- **现状**：应用侧会话 cookie 为 `sid`，并以 `iam.sessions` 为唯一会话事实源（DB 存 `sha256(sid)`，不存明文）。
+- **中间件链路**：`Host → tenant` → `sid` cookie → 查 session → 断言 tenant 一致 → 加载 principal → 注入运行态上下文；无效/过期/串租户统一清 cookie 并跳转 `/login`（fail-closed）。
 - **已评审演进方向**：采用 **ORY Kratos** 作为 Headless Identity，应用保留 `/login` UI；主链路选择 “Kratos 认人 → 本地 session（`sid`）桥接”（见本文 §4.2/§6.1）。
 
 ### 1.3 数据隔离（RLS）
@@ -38,7 +39,7 @@
 ### 2.1 目标（Goals）
 - [ ] **租户解析 fail-closed**：任何需要 tenant 语义的入口在 tenant 未解析时必须拒绝（404/401），不得回退跨租户逻辑。
 - [ ] **统一认证入口**：仅实现一种主链路（推荐：Kratos password login），避免 legacy/多分支并存（对齐 `DEV-PLAN-004M1`）。
-- [ ] **统一会话模型**：概念上以 `sid` session 作为唯一运行态会话来源，承载 `tenant_id` 与 `principal_id`；在本仓库当前最小实现阶段 cookie 名为 `session`（占位），但不得引入第二套会话事实源（对齐 `DEV-PLAN-009M4` 的 stopline）。
+- [x] **统一会话模型**：以 `sid` session 作为唯一运行态会话来源，承载 `tenant_id` 与 `principal_id`；cookie 名为 `sid`（不得引入第二套会话事实源；对齐 `DEV-PLAN-009M4` stopline）。
 - [ ] **RLS 默认开启（fail-closed）**：所有 tenant-scoped 表默认启用 RLS，并要求在事务内注入 `app.current_tenant`。
 - [ ] **最小控制面（Tenant Console）**：提供 SuperAdmin 创建/禁用租户、绑定域名、初始化租户管理员的能力（可先无 DNS/HTTP verify）。
 - [ ] **对齐 DDD 分层与共享准入**：IAM/Tenancy 作为平台模块按 `modules/{module}/{domain,infrastructure,services,presentation}` 落地；跨模块共用能力优先下沉 `pkg/**`（遵循 `DEV-PLAN-015`）。
@@ -111,7 +112,7 @@
 - **本地 principal**：以 `(tenant_id, email)` 唯一；并绑定 `kratos_identity_id`（全局唯一）用于防串号。
 
 ### 4.3 会话（Session）与运行态上下文（`sid`）
-- **唯一运行态会话来源**：tenant app 只认 `sid`（cookie 或 `Authorization: Bearer <sid>`）。本仓库当前 `session=ok` 仅为占位，必须在实现真实 `sessions` 时删除（对齐 `DEV-PLAN-004M1` 的 No Legacy）。
+- **唯一运行态会话来源**：tenant app 只认 `sid`（cookie 或 `Authorization: Bearer <sid>`）；本仓库已移除占位 `session=ok`（#61，对齐 `DEV-PLAN-004M1` 的 No Legacy）。
 - **token 形态（冻结）**：
   - `sid` 为随机高熵不透明字符串（推荐：`32 bytes random → base64url`，无 padding）。
   - DB 中只存 `sha256(sid)`，不存明文 token（避免“DB 泄露 = session 可重放”）。
@@ -136,7 +137,7 @@
 ### 4.5 `role_slug`（最小角色集，冻结）
 - **权威来源**：`principals.role_slug`；禁止以“有 session 就默认是 admin”等隐式推导作为授权依据。
 - **MVP 角色集**：
-  - tenant app：`tenant_admin`（唯一可登录角色）
+  - tenant app：`tenant-admin`（唯一可登录角色）
   - 未登录：`anonymous`（仅作为 Authz 输入，不落库）
   - superadmin：使用其专用 principal/session（见 `DEV-PLAN-023`），不得复用 tenant principal。
 - **注入规则（冻结）**：session 中间件必须加载 principal 并注入 `principal_id/role_slug/tenant_id`；缺任一项即拒绝进入受保护路径（fail-closed）。
