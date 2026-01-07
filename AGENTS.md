@@ -51,6 +51,7 @@
 - DO NOT COMMENT EXCESSIVELY：用清晰、可读的代码表达意图，不要堆注释。
 - 错误处理遵循项目标准错误类型。
 - UI 交互优先复用组件与既有交互模式。
+- UI 主题色约定：提夫尼蓝（Tiffany Blue），统一使用 `#81D8D0`（优先以全局 CSS 变量承载）。
 - NEVER read `*_templ.go`（templ 生成文件不可读且无意义）。
 - 不要手动对齐缩进：用 `go fmt`/`templ fmt`/已有工具完成格式化。
 
