@@ -101,3 +101,42 @@
   - JobCatalog 解析验证：`curl -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt 'http://127.0.0.1:8080/org/job-catalog?as_of=2026-01-01&business_unit_id=BU901'`（页面显示 `Resolved SetID: S2601`）
   - Job Family Group 创建：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=create_job_family_group&effective_date=2026-01-01&business_unit_id=BU901&code=JC901&name=Smoke+Group&description=' 'http://127.0.0.1:8080/org/job-catalog?business_unit_id=BU901&as_of=2026-01-01'`（303）
   - 列表读取验证：同 GET 页面可见 `JC901 / Smoke Group` 行（写入→列表读取闭环）
+
+## 11. DEV-PLAN-009M2（Person Identity + Staffing 纵切片）
+
+证据：
+- 日期：2026-01-07
+- 合并记录：PR #43 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/43
+- 运行模式：
+  - `RLS_ENFORCE=enforce`（对齐 `.env.example`；DB role 为非 superuser）
+  - `AUTHZ_MODE=enforce`（默认 enforce；见 `pkg/authz`）
+
+DB 闭环（迁移 + smoke）：
+- `make person migrate up`（含 `person-smoke`）
+- `make staffing migrate up`（含 `staffing-smoke`）
+
+端到端（HTTP/curl，可复现）：
+- 前置启动：
+  - `make dev-up`
+  - `make iam migrate up && make orgunit migrate up && make jobcatalog migrate up && make person migrate up && make staffing migrate up`
+  - `make dev-server`
+- 登录拿 cookie（注意 tenant 解析依赖 Host；`127.0.0.1` 会 fail-closed）：
+  - `curl -i -X POST -H 'Host: localhost:8080' -c /tmp/bb_m2_cookies.txt http://127.0.0.1:8080/login`
+- 创建 Person（pernr 1-8 位数字；含前导 0 同值）：
+  - `curl -i -X POST -H 'Host: localhost:8080' -b /tmp/bb_m2_cookies.txt -d 'pernr=101&display_name=Smoke+Person+101' http://127.0.0.1:8080/person/persons`
+- 确保存在 OrgUnit（用于 Position 的 `org_unit_id` 输入来源）：
+  - 打开 `http://localhost:8080/org/nodes?as_of=2026-01-07`，若为空则创建 1 条 OrgUnit；随后从 `http://localhost:8080/org/positions?as_of=2026-01-07` 的下拉选项中取任一 `org_unit_id`。
+- 创建 Position：
+  - `curl -i -X POST -H 'Host: localhost:8080' -b /tmp/bb_m2_cookies.txt -d 'effective_date=2026-01-07&org_unit_id=<uuid>&name=Smoke+Position+101' http://127.0.0.1:8080/org/positions?as_of=2026-01-07`
+  - 验证列表：`http://localhost:8080/org/positions?as_of=2026-01-07` 可见新行（包含 `position_id`）。
+- 创建/更新 Assignment（primary upsert；写侧权威输入为 `person_uuid`，UI 允许输入 pernr 并解析）：
+  - `curl -i -X POST -H 'Host: localhost:8080' -b /tmp/bb_m2_cookies.txt -d 'effective_date=2026-01-07&pernr=101&position_id=<uuid>' http://127.0.0.1:8080/org/assignments?as_of=2026-01-07`
+  - 验证时间线：`http://localhost:8080/org/assignments?as_of=2026-01-07&pernr=101` 可见新增行，且 UI 只展示 `effective_date`（不展示 `end_date`）。
+- Person read API（精确解析）：
+  - `curl -i -H 'Host: localhost:8080' -b /tmp/bb_m2_cookies.txt 'http://127.0.0.1:8080/person/api/persons:by-pernr?pernr=101'`
+
+失败路径（最小 2 条）：
+- 非法 pernr：
+  - `curl -i -H 'Host: localhost:8080' -b /tmp/bb_m2_cookies.txt 'http://127.0.0.1:8080/person/api/persons:by-pernr?pernr=BAD'`（400 `PERSON_PERNR_INVALID`）
+- 403（授权可拒绝）：
+  - 运行态行为由 `AUTHZ_MODE=enforce` + policy 决定；单测覆盖见 `internal/server/authz_middleware_test.go` 的 `TestWithAuthz_ForbiddenWhenEnforced`（403）。
