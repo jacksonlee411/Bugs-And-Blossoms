@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-files="$(./scripts/ci/changed-files.sh || true)"
+files="$(./scripts/ci/changed-files.sh)"
 
 has() {
   local pattern="${1:?}"
