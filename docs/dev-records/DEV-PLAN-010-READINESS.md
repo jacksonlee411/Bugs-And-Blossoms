@@ -164,6 +164,7 @@ DB 闭环（迁移 + smoke）：
 
 证据：
 - 日期：2026-01-07
+- 合并记录：PR #55 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/55
 - 本地门禁：`make preflight`（全绿，含 `make e2e`）
 - E2E smoke：`e2e/tests/m3-smoke.spec.js`（superadmin→创建 tenant/domain→tenant app 登录→访问受保护页面）
 

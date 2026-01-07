@@ -174,6 +174,7 @@
 ## 8. 完成登记（证据）
 
 - 日期：2026-01-07
+- PR：#55 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/55
 - 本地门禁：`make preflight`（全绿，含 `make e2e`）
 - E2E 关键产物：
   - server/superadmin 日志：`e2e/_artifacts/server.log`、`e2e/_artifacts/superadmin.log`
