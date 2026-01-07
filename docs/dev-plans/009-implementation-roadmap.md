@@ -129,10 +129,10 @@
   - `030 + 027 => 031(assignments)`
 - 出口条件（最小端到端闭环，且必须用户可见）：
   1. [X] OrgUnit：至少一条“写入→读树/详情”的 UI 操作链路可演示（026 + 018）。证据：#21 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/21 、#22 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/22 、#26 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/26 、#28 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/28 、#29 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/29 、#30 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/30
-  2. [ ] Person Identity：`pernr -> person_uuid` 精确解析可被页面/表单实际复用（027 + 018），避免 staffing 自己解析形成隐形耦合。
-  3. [ ] SetID + JobCatalog：SetID 映射可配置，并在 JobCatalog 至少一个实体形成“解析→写入→列表读取”的 UI 样板（028 + 029 + 018）。
-  4. [ ] Staffing：Position 与 Assignments 的写入口与读模型闭环可用，且至少一条“创建/更新→列表可见”的 UI 链路存在（030/031 + 018）。
-  5. [ ] Assignments UI：严格执行“仅展示 `effective_date`”（031/018）。
+  2. [X] Person Identity：`pernr -> person_uuid` 精确解析可被页面/表单实际复用（027 + 018），避免 staffing 自己解析形成隐形耦合。证据：#43 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/43
+  3. [X] SetID + JobCatalog：SetID 映射可配置，并在 JobCatalog 至少一个实体形成“解析→写入→列表读取”的 UI 样板（028 + 029 + 018）。证据：#42 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/42
+  4. [X] Staffing：Position 与 Assignments 的写入口与读模型闭环可用，且至少一条“创建/更新→列表可见”的 UI 链路存在（030/031 + 018）。证据：#43 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/43
+  5. [X] Assignments UI：严格执行“仅展示 `effective_date`”（031/018）。证据：#43 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/43
 
 ### Phase 5：质量收口（把“能跑”变成“可长期演进”）
 - 串行关键路径：`012(四大 required checks 全量启用) => 交付`
