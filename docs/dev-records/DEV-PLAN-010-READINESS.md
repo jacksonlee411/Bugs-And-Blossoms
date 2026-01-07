@@ -158,4 +158,21 @@ DB 闭环（迁移 + smoke）：
 
 失败时证据落点：
 - Playwright 产物：`e2e/test-results/**`、`e2e/playwright-report/**`（trace/screenshot/video retain-on-failure）
-- Server 启动日志：`e2e/test-results/server.log`
+- Server/SuperAdmin 启动日志：`e2e/_artifacts/server.log`、`e2e/_artifacts/superadmin.log`
+
+## 13. DEV-PLAN-009M4（Phase 2：SuperAdmin 控制面 + Tenant Console MVP）
+
+证据：
+- 日期：2026-01-07
+- 本地门禁：`make preflight`（全绿，含 `make e2e`）
+- E2E smoke：`e2e/tests/m3-smoke.spec.js`（superadmin→创建 tenant/domain→tenant app 登录→访问受保护页面）
+
+复现（本地）：
+- 一键：`make preflight`（会自动跑 e2e）
+- 仅 e2e：`make e2e`
+  - server：`http://localhost:8080`
+  - superadmin：`http://localhost:8081`（Phase 0 BasicAuth；dev 默认 `admin/admin`，见 `Makefile` 的 `dev-superadmin`）
+
+失败时证据落点：
+- Playwright 产物：`e2e/test-results/**`、`e2e/playwright-report/**`
+- server/superadmin 日志：`e2e/_artifacts/server.log`、`e2e/_artifacts/superadmin.log`

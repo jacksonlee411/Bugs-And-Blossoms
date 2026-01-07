@@ -118,10 +118,10 @@
 
 #### 6.3.2 备选：不同 hostname（cookie 天然隔离，但需同步 tenants 配置）
 
-当前租户解析使用 `Host`（去掉端口）并在 tenants 配置中查找（见 `internal/server/tenants.go`、默认 `config/tenants.yaml`）。因此若你用多个 hostname（例如 `a.localhost`/`b.localhost`），必须同时：
+当前租户解析使用 `Host`（去掉端口）并在 DB 中查找（`iam.tenant_domains.hostname`）。因此若你用多个 hostname（例如 `a.localhost`/`b.localhost`），必须同时：
 
 1) 在 `/etc/hosts` 映射到 `127.0.0.1`；  
-2) 在各 worktree 的 `.env.local` 指定 `TENANTS_PATH` 指向一个本地 tenants 文件，并在其中加入这些 hostname。
+2) 通过 superadmin Tenant Console 绑定这些 hostname（写入 `iam.tenant_domains`），或通过数据库 seed/脚本完成绑定（但不得引入 runtime 双事实源）。
 
 示例（`config/tenants.local.yaml`，仅本机使用，不提交）：
 
@@ -176,6 +176,6 @@ tenants:
 ## 10. 常见问题与排查（Troubleshooting）
 
 - 另一个 worktree 执行 `make dev-up` 报端口占用：通常表示你起了第二套 compose project，或已有其他进程占用了 `5438/6379`；先 `make dev-ps`/`docker ps` 确认当前容器与端口占用，并确保各 worktree 使用同一 `DEV_COMPOSE_PROJECT`。
-- 多个 server 并行时登录态“串号”：优先按 §6.3.1 使用不同浏览器 profile/容器；若采用不同 hostname，则按 §6.3.2 同步配置 `TENANTS_PATH` 与 `/etc/hosts`；必要时清理浏览器对应站点的 cookies。
-- 多个 server 并行时提示 `tenant not found`：检查当前访问的 hostname 是否在 tenants 配置中；默认只有 `localhost`（见 `config/tenants.yaml`），若用了自定义 hostname 需要按 §6.3.2 配置 `TENANTS_PATH`。
+- 多个 server 并行时登录态“串号”：优先按 §6.3.1 使用不同浏览器 profile/容器；若采用不同 hostname，则按 §6.3.2 绑定对应 hostname（Tenant Console/seed），必要时清理浏览器对应站点的 cookies。
+- 多个 server 并行时提示 `tenant not found`：检查当前访问的 hostname 是否已绑定到某个 tenant（`iam.tenant_domains.hostname`）；默认只有 `localhost`。
 - 误执行 `make dev-reset` / `docker compose ... down -v`：重新 `make dev-up` 后，按模块执行 `make <module> migrate up` 恢复迁移（若你本地依赖了未提交的数据，需自行重建）。

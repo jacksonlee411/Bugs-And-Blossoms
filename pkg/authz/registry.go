@@ -3,6 +3,7 @@ package authz
 const (
 	RoleTenantAdmin = "tenant-admin"
 	RoleAnonymous   = "anonymous"
+	RoleSuperadmin  = "superadmin"
 )
 
 const (
@@ -10,6 +11,8 @@ const (
 	ActionAdmin = "admin"
 	ActionDebug = "debug"
 )
+
+const DomainGlobal = "global"
 
 const (
 	ObjectIAMPing             = "iam.ping"
@@ -19,4 +22,5 @@ const (
 	ObjectPersonPersons       = "person.persons"
 	ObjectStaffingPositions   = "staffing.positions"
 	ObjectStaffingAssignments = "staffing.assignments"
+	ObjectSuperadminTenants   = "superadmin.tenants"
 )

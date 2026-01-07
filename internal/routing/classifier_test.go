@@ -85,3 +85,25 @@ func TestClassifier_AllClasses(t *testing.T) {
 		}
 	}
 }
+
+func TestClassifier_PathPattern(t *testing.T) {
+	t.Parallel()
+
+	a := Allowlist{
+		Version: 1,
+		Entrypoints: map[string]Entrypoint{
+			"superadmin": {Routes: []Route{
+				{Path: "/health", Methods: []string{"GET"}, RouteClass: "ops"},
+				{Path: "/superadmin/tenants/{tenant_id}/disable", Methods: []string{"POST"}, RouteClass: "ui"},
+			}},
+		},
+	}
+	c, err := NewClassifier(a, "superadmin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := c.Classify("/superadmin/tenants/abc/disable"); got != RouteClassUI {
+		t.Fatalf("got=%q", got)
+	}
+}

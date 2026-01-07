@@ -2,7 +2,8 @@
 set -euo pipefail
 
 base_url="${E2E_BASE_URL:-http://localhost:8080}"
-server_log="${E2E_SERVER_LOG:-./e2e/test-results/server.log}"
+server_log="${E2E_SERVER_LOG:-./e2e/_artifacts/server.log}"
+superadmin_log="${E2E_SUPERADMIN_LOG:-./e2e/_artifacts/superadmin.log}"
 
 if [[ ! "$base_url" =~ ^https?://localhost(:[0-9]+)?(/|$) ]]; then
   echo "[e2e] invalid E2E_BASE_URL=$base_url (must use localhost for Host->tenant fail-closed)" >&2
@@ -16,6 +17,7 @@ fi
 
 export AUTHZ_MODE="${AUTHZ_MODE:-enforce}"
 export RLS_ENFORCE="${RLS_ENFORCE:-enforce}"
+export TRUST_PROXY="${TRUST_PROXY:-1}"
 
 load_env_file() {
   local file="${1:?}"
@@ -103,6 +105,42 @@ if [[ "$role_line" != "f|f|t" ]]; then
   exit 2
 fi
 
+echo "[e2e] ensure superadmin_runtime role exists (dev-only)"
+docker exec -i "$postgres_cid" psql -U app -d postgres -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'superadmin_runtime') THEN
+    CREATE ROLE superadmin_runtime
+      LOGIN
+      PASSWORD 'app'
+      NOSUPERUSER
+      NOCREATEDB
+      NOCREATEROLE
+      NOREPLICATION
+      NOBYPASSRLS;
+  END IF;
+END
+$$;
+GRANT app_nobypassrls TO superadmin_runtime;
+GRANT ALL PRIVILEGES ON DATABASE bugs_and_blossoms TO superadmin_runtime;
+SQL
+
+echo "[e2e] assert superadmin_runtime role exists"
+sa_role_line="$(
+  docker exec -i "$postgres_cid" psql -U app -d postgres -tAc \
+    "SELECT (CASE WHEN rolsuper THEN 't' ELSE 'f' END) || '|' || (CASE WHEN rolbypassrls THEN 't' ELSE 'f' END) || '|' || (CASE WHEN rolcanlogin THEN 't' ELSE 'f' END) FROM pg_roles WHERE rolname='superadmin_runtime';" \
+    2>/dev/null || true
+)"
+sa_role_line="$(echo "$sa_role_line" | tr -d '[:space:]')"
+if [[ -z "$sa_role_line" ]]; then
+  echo "[e2e] missing role superadmin_runtime; run \`make dev-reset\` once to re-init the dev database" >&2
+  exit 2
+fi
+if [[ "$sa_role_line" != "f|f|t" ]]; then
+  echo "[e2e] invalid superadmin_runtime role flags (expected rolsuper=false, rolbypassrls=false, rolcanlogin=true), got: $sa_role_line" >&2
+  exit 2
+fi
+
 echo "[e2e] migrate: iam/orgunit/jobcatalog/person/staffing"
 make iam migrate up
 make orgunit migrate up
@@ -111,15 +149,33 @@ make person migrate up
 make staffing migrate up
 
 mkdir -p "$(dirname "$server_log")"
+mkdir -p "$(dirname "$superadmin_log")"
+
+echo "[e2e] authz pack (policy.csv must be up-to-date)"
+make authz-pack >/dev/null
 
 echo "[e2e] start server: log=$server_log"
 make dev-server >"$server_log" 2>&1 &
 server_pid="$!"
 
+superadmin_db_url="postgres://superadmin_runtime:${db_pass}@${db_host}:${db_port}/${db_name}?sslmode=${db_sslmode}"
+export SUPERADMIN_DATABASE_URL="$superadmin_db_url"
+export SUPERADMIN_BASIC_AUTH_USER="${E2E_SUPERADMIN_USER:-admin}"
+export SUPERADMIN_BASIC_AUTH_PASS="${E2E_SUPERADMIN_PASS:-admin}"
+export SUPERADMIN_WRITE_MODE="${SUPERADMIN_WRITE_MODE:-enabled}"
+
+echo "[e2e] start superadmin: log=$superadmin_log"
+make dev-superadmin >"$superadmin_log" 2>&1 &
+superadmin_pid="$!"
+
 cleanup() {
   if kill -0 "$server_pid" >/dev/null 2>&1; then
     kill "$server_pid" >/dev/null 2>&1 || true
     wait "$server_pid" >/dev/null 2>&1 || true
+  fi
+  if kill -0 "$superadmin_pid" >/dev/null 2>&1; then
+    kill "$superadmin_pid" >/dev/null 2>&1 || true
+    wait "$superadmin_pid" >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -137,6 +193,24 @@ for i in $(seq 1 60); do
   fi
   if [[ "$i" == "60" ]]; then
     echo "[e2e] server did not become ready; see: $server_log" >&2
+    exit 1
+  fi
+  sleep 0.5
+done
+
+echo "[e2e] wait superadmin ready: http://127.0.0.1:8081/health"
+for i in $(seq 1 60); do
+  if command -v curl >/dev/null 2>&1; then
+    if curl -fsS "http://127.0.0.1:8081/health" >/dev/null 2>&1; then
+      break
+    fi
+  else
+    if wget -q -O- "http://127.0.0.1:8081/health" >/dev/null 2>&1; then
+      break
+    fi
+  fi
+  if [[ "$i" == "60" ]]; then
+    echo "[e2e] superadmin did not become ready; see: $superadmin_log" >&2
     exit 1
   fi
   sleep 0.5
@@ -162,8 +236,8 @@ else
 fi
 
 echo "[e2e] run playwright: baseURL=$base_url"
-if ! (cd e2e && E2E_BASE_URL="$base_url" pnpm exec playwright test); then
+if ! (cd e2e && E2E_BASE_URL="$base_url" E2E_SUPERADMIN_BASE_URL="${E2E_SUPERADMIN_BASE_URL:-http://localhost:8081}" E2E_SUPERADMIN_USER="${E2E_SUPERADMIN_USER:-admin}" E2E_SUPERADMIN_PASS="${E2E_SUPERADMIN_PASS:-admin}" pnpm exec playwright test); then
   echo "[e2e] reproduce locally: make e2e" >&2
-  echo "[e2e] artifacts: e2e/test-results/ e2e/playwright-report/ (and server log: $server_log)" >&2
+  echo "[e2e] artifacts: e2e/test-results/ e2e/playwright-report/ (server log: $server_log; superadmin log: $superadmin_log)" >&2
   exit 1
 fi

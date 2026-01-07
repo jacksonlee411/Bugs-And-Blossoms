@@ -1,11 +1,41 @@
 import { expect, test } from "@playwright/test";
 
-test("smoke: /login -> /app -> org/person/staffing vertical slice", async ({ page }) => {
+test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffing vertical slice", async ({ browser }) => {
   const asOf = "2026-01-07";
   const runID = `${Date.now()}`;
+  const tenantHost = `t-${runID}.localhost`;
   const pernr = `${Math.floor(10000000 + Math.random() * 90000000)}`;
   const orgName = `E2E OrgUnit ${runID}`;
   const posName = `E2E Position ${runID}`;
+
+  const superadminBaseURL = process.env.E2E_SUPERADMIN_BASE_URL || "http://localhost:8081";
+  const superadminUser = process.env.E2E_SUPERADMIN_USER || "admin";
+  const superadminPass = process.env.E2E_SUPERADMIN_PASS || "admin";
+
+  const superadminContext = await browser.newContext({
+    baseURL: superadminBaseURL,
+    httpCredentials: { username: superadminUser, password: superadminPass }
+  });
+  const superadminPage = await superadminContext.newPage();
+
+  await superadminPage.goto("/superadmin/tenants");
+  await expect(superadminPage.locator("h1")).toHaveText("SuperAdmin / Tenants");
+
+  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(`E2E Tenant ${runID}`);
+  await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(tenantHost);
+  await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
+  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
+  await expect(superadminPage.getByText(tenantHost)).toBeVisible();
+
+  await superadminContext.close();
+
+  const appContext = await browser.newContext({
+    baseURL: process.env.E2E_BASE_URL || "http://localhost:8080",
+    extraHTTPHeaders: {
+      "X-Forwarded-Host": tenantHost
+    }
+  });
+  const page = await appContext.newPage();
 
   await page.goto("/login");
   await expect(page.locator("h1")).toHaveText("Login");
@@ -74,4 +104,6 @@ test("smoke: /login -> /app -> org/person/staffing vertical slice", async ({ pag
   await expect(page.locator("h2", { hasText: "Timeline" })).toBeVisible();
   await expect(page.locator("table")).toContainText(asOf);
   await expect(page.locator("table")).not.toContainText("end_date");
+
+  await appContext.close();
 });

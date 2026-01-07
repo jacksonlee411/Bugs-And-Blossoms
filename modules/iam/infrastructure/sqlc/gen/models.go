@@ -8,6 +8,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type IamSuperadminAuditLog struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	Actor           string             `json:"actor"`
+	Action          string             `json:"action"`
+	TargetTenantID  pgtype.UUID        `json:"target_tenant_id"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type IamTenant struct {
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	IsActive  bool               `json:"is_active"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamTenantDomain struct {
+	ID        pgtype.UUID        `json:"id"`
+	TenantID  pgtype.UUID        `json:"tenant_id"`
+	Hostname  string             `json:"hostname"`
+	IsPrimary bool               `json:"is_primary"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type JobcatalogJobFamilyGroup struct {
 	TenantID  pgtype.UUID        `json:"tenant_id"`
 	Setid     string             `json:"setid"`
