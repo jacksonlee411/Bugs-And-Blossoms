@@ -178,4 +178,5 @@ modules/{module}/
 - DEV-PLAN-009M1：Phase 4 下一大型里程碑执行计划（SetID + JobCatalog 首个可见样板闭环）：`docs/dev-plans/009m1-phase4-setid-jobcatalog-vertical-slice-execution-plan.md`
 - DEV-PLAN-009M2：Phase 4 下一大型里程碑执行计划（Person Identity + Staffing 首个可见样板闭环）：`docs/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`
 - DEV-PLAN-009M3：Phase 5 下一大型里程碑执行计划（质量收口：E2E 真实化 + 可排障门禁）：`docs/dev-plans/009m3-phase5-quality-hardening-e2e-execution-plan.md`
+- DEV-PLAN-009M4：Phase 2 下一大型里程碑执行计划（SuperAdmin 控制面 + Tenant Console MVP）：`docs/dev-plans/009m4-phase2-superadmin-tenant-console-execution-plan.md`
 - Greenfield 全新实施路线图（009-031）：`docs/dev-plans/009-implementation-roadmap.md`

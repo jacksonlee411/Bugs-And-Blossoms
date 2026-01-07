@@ -145,6 +145,7 @@ DB 闭环（迁移 + smoke）：
 
 证据：
 - 日期：2026-01-07
+- 合并记录：PR #49 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/49
 - 本地门禁：`make preflight`（全绿）
 - E2E 入口（SSOT）：`make e2e`（Playwright 真实浏览器 smoke；fail-fast；failure artifact）
 

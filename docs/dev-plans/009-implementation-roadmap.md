@@ -137,8 +137,8 @@
 ### Phase 5：质量收口（把“能跑”变成“可长期演进”）
 - 串行关键路径：`012(四大 required checks 全量启用) => 交付`
 - 出口条件：
-  1. [ ] 四大 required checks 稳定产出结论（不出现 `skipped`），且本地有一键入口（012）。
-  2. [ ] 生成物漂移、路由漂移、迁移闭环失败可被 CI 明确阻断并易排障（024/025/017/012）。
+  1. [X] 四大 required checks 稳定产出结论（不出现 `skipped`），且本地有一键入口（012）。证据：PR #49 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/49 、`DEV-PLAN-010` §12
+  2. [X] 生成物漂移、路由漂移、迁移闭环失败可被 CI 明确阻断并易排障（024/025/017/012）。证据：PR #49 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/49
 
 ## 6. 关键路径（建议优先保证不阻塞）
 > 任何延迟都会放大后续返工面：优先保证这些“阻塞链路”最短闭环。

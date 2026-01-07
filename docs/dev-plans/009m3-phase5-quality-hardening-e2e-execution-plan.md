@@ -1,6 +1,6 @@
 # DEV-PLAN-009M3：Phase 5 下一大型里程碑执行计划（质量收口：E2E 真实化 + 可排障门禁）
 
-**状态**: 执行中（实现已落地，待合并）（2026-01-07 12:40 UTC）
+**状态**: 已完成（2026-01-07 12:50 UTC）
 
 > 本文是 `DEV-PLAN-009` 的执行计划补充（里程碑拆解）。假设 `DEV-PLAN-009M2`（Person Identity + Staffing 首个可见样板闭环）已完成，本里程碑聚焦 `DEV-PLAN-009` 的 **Phase 5：质量收口**：把当前“能跑”的状态，推进到“可长期演进且可被 CI 明确阻断漂移/易排障”的状态。  
 > 本文不替代 `DEV-PLAN-012`（CI 质量门禁）的合同；任何门禁结构/口径的变更必须先更新对应 dev-plan 再实现。
@@ -128,6 +128,7 @@
 > 说明：本节只登记“已完成/落地”的关键项与 SSOT 落点；详细实现差异以对应 PR/commit 为准。
 
 - 2026-01-07：完成 `make e2e` 真实化（Playwright smoke + fail-fast + artifact）
+  - 合并记录：PR #49 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/49
   - 入口收口：`Makefile` → `scripts/e2e/run.sh`
   - E2E 工程：`e2e/`（`playwright.config.mjs` + `tests/m3-smoke.spec.js`）
   - CI artifact（failure）：`.github/workflows/quality-gates.yml` 上传 `e2e/test-results/**`、`e2e/playwright-report/**`
