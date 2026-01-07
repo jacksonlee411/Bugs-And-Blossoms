@@ -8,6 +8,29 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type IamPrincipal struct {
+	ID               pgtype.UUID        `json:"id"`
+	TenantID         pgtype.UUID        `json:"tenant_id"`
+	Email            string             `json:"email"`
+	RoleSlug         string             `json:"role_slug"`
+	DisplayName      *string            `json:"display_name"`
+	Status           string             `json:"status"`
+	KratosIdentityID pgtype.UUID        `json:"kratos_identity_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamSession struct {
+	TokenSha256 []byte             `json:"token_sha256"`
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	PrincipalID pgtype.UUID        `json:"principal_id"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt   pgtype.Timestamptz `json:"revoked_at"`
+	Ip          *string            `json:"ip"`
+	UserAgent   *string            `json:"user_agent"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type IamSuperadminAuditLog struct {
 	ID              int64              `json:"id"`
 	EventID         pgtype.UUID        `json:"event_id"`
@@ -18,6 +41,26 @@ type IamSuperadminAuditLog struct {
 	RequestID       string             `json:"request_id"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type IamSuperadminPrincipal struct {
+	ID               pgtype.UUID        `json:"id"`
+	Email            string             `json:"email"`
+	DisplayName      *string            `json:"display_name"`
+	Status           string             `json:"status"`
+	KratosIdentityID pgtype.UUID        `json:"kratos_identity_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamSuperadminSession struct {
+	TokenSha256 []byte             `json:"token_sha256"`
+	PrincipalID pgtype.UUID        `json:"principal_id"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt   pgtype.Timestamptz `json:"revoked_at"`
+	Ip          *string            `json:"ip"`
+	UserAgent   *string            `json:"user_agent"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type IamTenant struct {
