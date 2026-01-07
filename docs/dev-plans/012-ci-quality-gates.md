@@ -96,6 +96,7 @@
 
 **约束**：
 - required checks 的 job 必须始终给出结论；未命中触发器时只能执行 no-op（例如打印 `no relevant changes` 并退出 0），不得返回 `skipped`。
+- **E2E 特别约束**：当 `E2E Tests` 进入 Full Run（命中触发器）时，`make e2e` 必须**真实执行**用例；若未发现用例/依赖缺失，则必须 fail-fast（退出非 0）并输出明确指引；禁止 no-op/placeholder/0 tests 仍退出 0。
 - 触发器的路径细节以新仓库的 `AGENTS.md` 与 CI workflow filters 为 SSOT；本节只冻结“类别 → required check”的映射。
 
 **变更类别（示例）**：
@@ -172,6 +173,13 @@
 - E2E 采用 Playwright（对齐 `DEV-PLAN-011` 版本口径），通过 `Makefile` 入口完成：DB reset → 启动 server → 跑测试 → 产出报告 artifact。
 - required check 以“最小稳定集（smoke）”为准入门禁；更大规模用例（长耗时/高波动）通过 nightly 或手动触发运行，避免把不稳定性引入 PR 合并主路径。
 
+**停止线**：
+- 命中 `E2E Tests` 的 Full Run 触发器时，`make e2e` 仍然 no-op/placeholder，或“0 tests 但退出 0”（required check 绿但不具备约束力）。
+- 通过 job-level `if:` 让 required check 变成 `skipped`（对外结论不稳定）。
+
+**fail-fast（缺口必须显式化）**：
+- 当 Playwright 依赖缺失、未发现任何测试用例、或关键运行态契约缺失导致无法执行时：必须退出非 0，并输出“如何在本地复现/修复”的最短指引（入口以 `Makefile` 为 SSOT）。
+
 ## 4. 实施步骤 (Checklist)
 
 1. [ ] 新仓库建立 `Quality Gates` workflow：冻结四个 required checks 的 job 名称，并把 job-level 跳过作为停止线。
@@ -215,6 +223,7 @@
 - [ ] 覆盖率门禁的阈值/范围/排除项存在可审计的策略文件（例如 `config/coverage/policy.yaml`），且 CI workflow 不再隐式写入阈值/忽略规则。
 - [ ] Routing Gates 能阻断 allowlist/分类/返回契约漂移（对齐 `DEV-PLAN-017`）。
 - [ ] E2E smoke 在 CI 稳定可复现，失败时具备可用的报告/trace artifact。
+- [ ] 命中 `E2E Tests` Full Run 触发器时不允许 no-op/0 tests 退出 0；无用例/依赖缺失必须 fail-fast 并给出明确指引。
 
 ## 8. 参考与链接 (Links)
 

@@ -1,6 +1,6 @@
 # DEV-PLAN-009M3：Phase 5 下一大型里程碑执行计划（质量收口：E2E 真实化 + 可排障门禁）
 
-**状态**: 草拟中（2026-01-07 01:36 UTC）
+**状态**: 草拟中（2026-01-07 02:27 UTC）
 
 > 本文是 `DEV-PLAN-009` 的执行计划补充（里程碑拆解）。假设 `DEV-PLAN-009M2`（Person Identity + Staffing 首个可见样板闭环）已完成，本里程碑聚焦 `DEV-PLAN-009` 的 **Phase 5：质量收口**：把当前“能跑”的状态，推进到“可长期演进且可被 CI 明确阻断漂移/易排障”的状态。  
 > 本文不替代 `DEV-PLAN-012`（CI 质量门禁）的合同；任何门禁结构/口径的变更必须先更新对应 dev-plan 再实现。
@@ -19,11 +19,17 @@
   - 路线图与出口口径：`docs/dev-plans/009-implementation-roadmap.md`
   - CI 门禁结构与验收：`docs/dev-plans/012-ci-quality-gates.md`、`.github/workflows/quality-gates.yml`
   - 本地入口与触发器矩阵：`AGENTS.md`、`Makefile`
+  - 工具链版本口径（Node/Playwright/Go 等）：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
+  - 证据记录（可复现步骤/结果链接）：`docs/dev-records/DEV-PLAN-010-READINESS.md`
+  - 评审与停止线（约束性引用）：`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
   - Routing：`docs/dev-plans/017-routing-strategy.md`
   - Tenancy/AuthN（Host→tenant fail-closed + 登录入口）：`docs/dev-plans/019-tenant-and-authn.md`
+  - RLS（No Tx, No RLS + fail-closed + NOBYPASSRLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
   - Atlas+Goose：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
   - sqlc：`docs/dev-plans/025-sqlc-guidelines.md`
   - Authz：`docs/dev-plans/022-authz-casbin-toolchain.md`
+  - E2E 业务断言口径（`effective_date`）：`docs/dev-plans/031-greenfield-assignment-job-data.md`、`docs/dev-plans/032-effective-date-day-granularity.md`
+  - Phase 4 复用输入（smoke 场景来源）：`docs/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`
 
 ## 2. 非目标（本执行计划不做）
 
@@ -31,24 +37,53 @@
 - 不引入“第二套 E2E 框架”或“第二套 UI 构建流水线”；E2E 与门禁入口必须收敛到 `Makefile`/CI workflow（SSOT）。
 - 不引入 legacy/双链路/回退通道；不为“让 E2E 通过”绕过 One Door / No Tx, No RLS stopline。
 
-## 3. Done 口径（验收/关闭条件）
+## 3. 不变量与停止线（对齐 `DEV-PLAN-003` + `AGENTS.md`）
 
-### 3.1 E2E（真实且可复现）
+> 评审定位：Stage 2（Plan）为主。目标是把实现期最容易“为了过测而引入偶然复杂度”的决策前置冻结，避免回到 Easy（堆叠分支/后门/第二入口）。
+
+### 3.1 运行态契约（必须写死）
+
+- **Host/tenant**：E2E 与手工验证必须使用 `http://localhost:8080`（而非 `127.0.0.1`）；对齐 `DEV-PLAN-019`：tenant 解析 SSOT 为 `tenant_domains.hostname`，且 `/login` 也必须先解析 tenant（未解析即 404，fail-closed）。
+- **强约束模式**：E2E 必须在 `AUTHZ_MODE=enforce`、`RLS_ENFORCE=enforce` 下运行；不得通过降级模式让测试变绿（对齐 `DEV-PLAN-022/021`）。
+- **危险解锁开关**：CI/E2E 不得设置 `AUTHZ_UNSAFE_ALLOW_DISABLED=1`（该开关仅用于本地短期排障，且必须显式解锁；对齐 `DEV-PLAN-022` 的 fail-fast 约束）。
+- **DB 用户**：E2E/CI 的 `DB_USER` 必须为非 superuser 且不得拥有 `BYPASSRLS`（避免绕过 RLS；对齐 `DEV-PLAN-021` 口径）。
+- **确定性 DB**：E2E 必须对 DB 状态有确定性假设（推荐：CI 每次使用全新 Postgres service + migrate up；本地如需 reset 必须走明确的破坏性入口，不允许隐式清库）。
+
+### 3.2 数据准备单一权威（禁止测试后门）
+
+- E2E 的业务数据准备只允许走**既有用户可见入口**（现有 UI 表单链路）或既有 `cmd/dbtool` smoke/迁移闭环；不得新增“测试专用写入 API/隐藏路由/直写表脚本”。
+- 写入必须继续遵守 One Door（`submit_*_event(...)`）；不得为测试直接写 read model 表。
+
+### 3.3 停止线（命中即拒绝）
+
+- 引入第二套 E2E 框架/第二套入口（违反 SSOT）。
+- 让 required check “成功但不跑测试”：在 `E2E Tests` job **命中触发器**时，`make e2e` 仍 no-op/placeholder/0 tests 却退出 0；仅允许在 paths-filter 未命中时 step-level no-op（对齐 `DEV-PLAN-012` 的 required checks 口径）。
+- 通过 `AUTHZ_MODE=disabled`/`RLS_ENFORCE=disabled` 绕过约束，或在 CI 中设置 `AUTHZ_UNSAFE_ALLOW_DISABLED=1` 让 disabled 可用。
+- 为测试新增 legacy 分支/回退通道/双链路。
+
+## 4. Done 口径（验收/关闭条件）
+
+### 4.1 E2E（真实且可复现）
 - [ ] CI 的 `E2E Tests` job 运行 **真实 E2E**（非 no-op/placeholder），并且：
-  - [ ] 至少包含 1 条可稳定复现的 smoke 场景：`/login` → 登录成功 → `/app` 壳加载成功 → 至少一个业务页面可打开且可执行一次最小操作（建议复用 `DEV-PLAN-009M1` 或 `DEV-PLAN-009M2` 的“写入→列表读取”闭环之一，避免新增“专用测试功能”）。
+  - [ ] 至少包含 1 条可稳定复现的 smoke 场景（首选复用 `DEV-PLAN-009M2`）：`/login` → `/app` → Person→Position→Assignment 的“写入→列表读取”闭环，并断言 Assignments UI 仅展示 `effective_date`（对齐 `DEV-PLAN-031/032`）。
   - [ ] 失败时默认产出可用 artifact（trace/screenshot/video/日志，具体落点以 `DEV-PLAN-012` 的 SSOT 为准）。
-- [ ] 本地可通过单一入口复现同一 E2E（入口以 `Makefile` 为准；不要在本文复制脚本细节）。
+- [ ] 本地可通过单一入口复现同一 E2E（入口以 `Makefile` 为准）。
 - [ ] `make e2e` 不再因 `apps/web` 存在而 no-op；placeholder 逻辑被移除或被替换为真实执行（以 `Makefile` 为 SSOT）。
+- [ ] 当 E2E 依赖缺失/未发现测试用例时：应 fail-fast 并输出明确指引（而不是静默成功）。
 
-### 3.2 门禁与漂移阻断（可解释）
+### 4.2 门禁与漂移阻断（可解释）
 - [ ] “生成物漂移”能被 CI 明确阻断并给出可定位的差异证据（对齐 `DEV-PLAN-012` 的 artifact 约束；SSOT：`.github/workflows/quality-gates.yml` + `scripts/ci/assert-clean.sh`）。
 - [ ] DB/迁移闭环失败可被定位：Atlas plan/lint 与 goose/smoke 的失败输出在 CI 中可审计（SSOT：`Makefile` + `scripts/db/**`）。
 - [ ] Routing 漂移可被定位：`make check routing` 的失败信息能指向具体 allowlist/分类漂移点（SSOT：`scripts/routing/**`）。
 
-### 3.3 证据固化
+### 4.3 证据固化（可审计）
 - [ ] 将本里程碑 E2E 与门禁收口的“可复现步骤 + 结果链接”写入 `docs/dev-records/DEV-PLAN-010-READINESS.md`（或在 `DEV-PLAN-012` 增设对应 readiness 记录文件，并在本文引用其 SSOT 路径）。
+- [ ] E2E 失败时最小证据集（至少）：
+  - [ ] Playwright 报告/trace（或等价）、至少 1 张 screenshot
+  - [ ] server 启动日志（含监听地址、关键 env）
+  - [ ] 迁移执行日志（模块 migrate up / smoke 输出）
 
-## 4. 实施步骤（建议 PR 序列）
+## 5. 实施步骤（建议 PR 序列）
 
 > 说明：每个 PR 都必须在 GitHub Actions required checks 全绿且不 `skipped` 后合并；`main` 禁止直推与 force-push。
 
@@ -58,19 +93,20 @@
 - [X] 将 `docs/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md` 的状态更新为 `已完成` 并补时间戳（以 readiness 证据为前置）。
 
 ### PR-1：E2E 框架落地（Playwright/等价）与最小 smoke
-- [ ] 调整 `make e2e`：移除/替换 placeholder（当前会因 `apps/web` 目录存在而 no-op），并将 E2E 唯一入口收敛为真实执行。
-- [ ] 落地 E2E 测试工程（目录/依赖/配置），并提供一个最小 smoke（建议优先复用 `DEV-PLAN-009M2` 的最短闭环）：
+- [ ] 调整 `make e2e`：移除/替换 placeholder（当前会因 `apps/web` 目录存在而 no-op），并将 E2E 唯一入口收敛为真实执行（无测试/无依赖时 fail-fast，不允许静默成功）。
+- [ ] 落地 E2E 测试工程（目录/依赖/配置），并提供一个最小 smoke（先只覆盖“登录→壳可见”，确保第一条链路稳定）：
   - [ ] 打开 `http://localhost:8080/login`（或 CI 内部等价地址）并完成登录。
   - [ ] 验证跳转到 `/app` 并能看到 `/app/home` 的模块入口（避免只验证 200）。
 - [ ] 明确“测试数据准备”的唯一入口（建议通过既有 UI 表单或既有迁移/seed 工具；禁止新增隐藏后门）。
 
 ### PR-2：CI 编排与排障证据（让失败可定位）
 - [ ] 更新 `.github/workflows/quality-gates.yml` 的 `E2E Tests` job：为 E2E 提供最小运行环境（启动 server、准备 DB、准备必要迁移/数据；方式以 SSOT 为准）。
+- [ ] CI 运行态契约必须显式化（并与 `DEV-PLAN-010`/`.env.example` 对齐）：使用 `localhost` 域名访问、`AUTHZ_MODE=enforce`、`RLS_ENFORCE=enforce`、不设置 `AUTHZ_UNSAFE_ALLOW_DISABLED=1`、DB 用户为非 superuser 且无 `BYPASSRLS`。
 - [ ] 默认上传 E2E 失败 artifact（trace/screenshot/video/日志等），并在失败输出中包含“如何在本地复现”的最短指引（引用 `Makefile` 入口）。
 
 ### PR-3：选择一个业务闭环纳入 E2E（避免只测登录）
 - [ ] 选择并固化一个“业务闭环”作为 E2E 场景（按现状建议优先顺序如下）：
-  - [ ] 首选：复用 `DEV-PLAN-009M2`（Person Identity + Staffing）：创建 Person → 创建 Position → 创建/更新 Assignment，并断言 UI 仅展示 `effective_date`（可直接把 `DEV-PLAN-010` 中的 M2 证据脚本翻译为浏览器操作）。
+  - [ ] 首选：复用 `DEV-PLAN-009M2`（Person Identity + Staffing）：创建 Person → 创建 Position → 创建/更新 Assignment，并断言 UI 仅展示 `effective_date`（对齐 `DEV-PLAN-031/032`；可直接把 `DEV-PLAN-010` 中的 M2 证据脚本翻译为浏览器操作）。
   - [ ] 复用 `DEV-PLAN-009M1`：SetID + JobCatalog（解析→写入→列表读取）。
 - [ ] 场景必须走真实 UI 交互（浏览器操作），并在失败时能定位到“哪一步失败”（而非只有最终断言）。
 
@@ -78,8 +114,8 @@
 - [ ] 将 E2E 入口纳入 `make preflight`（如果当前 `preflight` 未覆盖或覆盖但为 placeholder，则收口成真实执行）。
 - [ ] 对齐 `DEV-PLAN-012`：更新其状态/待办项，使“门禁结构”与“实现现状”一致（例如 E2E 已真实化、artifact 已落地等）。
 
-## 5. 本地验证（SSOT 引用）
+## 6. 本地验证（SSOT 引用）
 
 - 一键启动：`make dev`（入口与环境加载规则以 `Makefile`/`DEV-PLAN-010` 为准）。
 - 质量门禁：优先 `make preflight`（入口与 required checks 口径以 `AGENTS.md`/`DEV-PLAN-012` 为准）。
-- E2E：以 `make e2e` 为唯一入口（具体实现与依赖在落地后由 `Makefile` 与 E2E 工程 README 作为 SSOT）。
+- E2E：以 `make e2e` 为唯一入口（实现落地后由 `Makefile` 与 E2E 工程文档作为 SSOT）。
