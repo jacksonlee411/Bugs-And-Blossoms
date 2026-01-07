@@ -14,6 +14,7 @@
 - tenant app 当前最小实现使用 cookie `session=ok` 作为登录态占位（目标态术语仍为 `sid`）。
 - `DEV-PLAN-009M4` 已补齐：superadmin 边界 + Tenant Console MVP + Tenancy SSOT 切换；`DEV-PLAN-009M5` 推进 Phase 1（`sa_sid`）。
 - 009M5 PR-0（#58）：冻结 `sa_sid` token 合同（§6.2）与凭据注入口径（§9）。
+- 009M5 PR-1（#60）：新增 `iam.superadmin_principals`/`iam.superadmin_sessions` 数据模型与迁移闭环（token 存 `sha256(sa_sid)`）。
 
 Greenfield 将重构租户/认证/RLS，并要求：
 - tenant app：`Host 解析 tenant（fail-closed）→ Kratos 认人 → 本地 session（sid）→ RLS 圈地 → Casbin 管事`（见 `DEV-PLAN-019`）。

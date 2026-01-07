@@ -118,11 +118,11 @@
 
 ### PR-1：IAM 数据模型（principals/sessions）与迁移闭环（需要用户确认的新表）
 
-- [ ] **红线**：新增表前必须获得用户手工确认（按 `AGENTS.md`）。
-- [ ] 新增最小表（建议落在 `iam` schema）：
+- [x] **红线**：新增表前必须获得用户手工确认（按 `AGENTS.md`）。（#60）
+- [x] 新增最小表（建议落在 `iam` schema）。（#60）
   - tenant app：`principals`、`sessions`
   - superadmin：`superadmin_principals`、`superadmin_sessions`（或等价拆分）
-- [ ] 迁移闭环：`make iam plan && make iam lint && make iam migrate up`（含 smoke）；sqlc 生成物一致性按门禁收口。
+- [x] 迁移闭环：`make iam plan && make iam lint && make iam migrate up`（含 smoke）；sqlc 生成物一致性按门禁收口。（#60）
 
 ### PR-2：tenant app 本地 session（sid）与中间件收口（移除占位 session=ok）
 
