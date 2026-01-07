@@ -220,6 +220,8 @@ func staffingSmoke(args []string) {
 
 	var positionID string
 	var positionEventID string
+	var orgEventID string
+	var missingOrgUnitID string
 	var orgUnitID string
 	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&positionID); err != nil {
 		fatal(err)
@@ -227,8 +229,82 @@ func staffingSmoke(args []string) {
 	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&positionEventID); err != nil {
 		fatal(err)
 	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&orgEventID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&missingOrgUnitID); err != nil {
+		fatal(err)
+	}
 	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&orgUnitID); err != nil {
 		fatal(err)
+	}
+
+	var existingRootOrgID string
+	err = tx.QueryRow(ctx, `
+		SELECT root_org_id::text
+		FROM orgunit.org_trees
+		WHERE tenant_id = $1::uuid AND hierarchy_type = 'OrgUnit';
+	`, tenantA).Scan(&existingRootOrgID)
+	if err != nil && err != pgx.ErrNoRows {
+		fatal(err)
+	}
+	if err == nil {
+		orgUnitID = existingRootOrgID
+		if err := tx.QueryRow(ctx, `
+			SELECT lower(validity)::text
+			FROM orgunit.org_unit_versions
+			WHERE tenant_id = $1::uuid
+			  AND hierarchy_type = 'OrgUnit'
+			  AND org_id = $2::uuid
+			  AND status = 'active'
+			ORDER BY lower(validity) DESC
+			LIMIT 1;
+		`, tenantA, orgUnitID).Scan(&effectiveDate); err != nil {
+			fatal(err)
+		}
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_missing_org;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `
+		SELECT staffing.submit_position_event(
+		  $1::uuid,
+		  $2::uuid,
+		  $3::uuid,
+		  'CREATE',
+		  $4::date,
+		  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position'),
+		  $6::text,
+		  $7::uuid
+		);
+	`, positionEventID, tenantA, positionID, effectiveDate, missingOrgUnitID, requestID, initiatorID)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_missing_org;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected submit_position_event to fail when org_unit_id is missing as-of")
+	}
+	if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_ORG_UNIT_NOT_FOUND_AS_OF" {
+		fatalf("expected pg error message=STAFFING_ORG_UNIT_NOT_FOUND_AS_OF, got ok=%v message=%q err=%v", ok, msg, err)
+	}
+
+	if existingRootOrgID == "" {
+		if _, err := tx.Exec(ctx, `
+			SELECT orgunit.submit_org_event(
+			  $1::uuid,
+			  $2::uuid,
+			  'OrgUnit',
+			  $3::uuid,
+			  'CREATE',
+			  $4::date,
+			  jsonb_build_object('name', 'Smoke Org'),
+			  $5::text,
+			  $6::uuid
+			);
+		`, orgEventID, tenantA, orgUnitID, effectiveDate, "dbtool-staffing-smoke-org", initiatorID); err != nil {
+			fatal(err)
+		}
 	}
 
 	var positionEventDBID int64

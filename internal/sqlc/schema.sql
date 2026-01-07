@@ -2424,6 +2424,22 @@ BEGIN
         DETAIL = format('unexpected event_type: %s', v_row.event_type);
     END IF;
 
+    IF NOT EXISTS (
+      SELECT 1
+      FROM orgunit.org_unit_versions v
+      WHERE v.tenant_id = p_tenant_id
+        AND v.hierarchy_type = 'OrgUnit'
+        AND v.org_id = v_org_unit_id
+        AND v.status = 'active'
+        AND v.validity @> v_row.effective_date
+      LIMIT 1
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'STAFFING_ORG_UNIT_NOT_FOUND_AS_OF',
+        DETAIL = format('org_unit_id=%s as_of=%s', v_org_unit_id, v_row.effective_date);
+    END IF;
+
     IF v_row.next_effective IS NULL THEN
       v_validity := daterange(v_row.effective_date, NULL, '[)');
     ELSE
@@ -2899,7 +2915,6 @@ BEGIN
   RETURN v_event_db_id;
 END;
 $$;
-
 
 -- end: modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql
 
