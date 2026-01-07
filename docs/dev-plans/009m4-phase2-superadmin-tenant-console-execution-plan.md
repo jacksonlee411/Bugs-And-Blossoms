@@ -13,6 +13,7 @@
 - `DEV-PLAN-009M1/009M2/009M3` 已完成：Phase 4 业务纵切片可演示；Phase 5 E2E 已真实化并纳入 required checks。
 - tenant app 当前具备 Host→tenant fail-closed 与最小登录链路，但 tenant 解析 SSOT 仍为配置文件（`config/tenants.yaml`），控制面（superadmin）仍为占位（allowlist 仅预留 entrypoint）。
 - RLS/Authz 已按 enforce 口径运行；但缺少“跨租户控制面”的明确边界与审计闭环（对齐 `DEV-PLAN-023` 的目标）。
+- 本里程碑预计需要新增 Tenancy/控制面相关表；用户已在对话中预先同意（2026-01-07），后续实施不再需要逐次审批。
 
 ### 1.2 目标（对齐 `DEV-PLAN-009` Phase 2 出口条件 #3）
 
@@ -112,7 +113,7 @@
 - [ ] 新增 Tenancy 控制面表（至少 `tenants`、`tenant_domains`），并按合同冻结唯一性/规范化规则（hostname 全局唯一等）。
 - [ ] 新增 superadmin 会话/审计表（例如 `superadmin_sessions`、`superadmin_audit_logs` 的最小集）。
 - [ ] 迁移闭环：补齐 `make iam plan/lint/migrate up` 的闭环验证与 smoke（对齐 `DEV-PLAN-024`）。
-- [ ] **红线**：上述新增表/迁移落盘前，必须获得用户手工确认。
+- [ ] **红线（已预先批准）**：上述新增表/迁移已获用户在对话中预先同意（2026-01-07），后续落盘不再需要逐次审批；但必须在本文与相关 dev-plan 中登记具体表/迁移与 PR 证据。
 
 ### PR-3：tenant 解析 SSOT 切换到 DB（移除 runtime fallback）
 
