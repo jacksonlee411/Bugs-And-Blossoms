@@ -14,7 +14,7 @@ Thumbs.db
 # Go
 bin/
 dist/
-coverage/
+/coverage/
 *.out
 
 # Node / web
