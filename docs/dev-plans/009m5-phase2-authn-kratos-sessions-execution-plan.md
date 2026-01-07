@@ -126,10 +126,10 @@
 
 ### PR-2：tenant app 本地 session（sid）与中间件收口（移除占位 session=ok）
 
-- [ ] `/login`/`/logout` 改为创建/失效化 DB session（`sid`），并在中间件中以 DB session 作为唯一登录态判断依据。
-- [ ] 明确 cookie 属性（host-only/httpOnly/sameSite）；无效/过期统一跳转 `/login`。
-- [ ] 跨租户绑定断言：`session.tenant_id` 必须与 `Host → tenant_id` 一致；不一致清 cookie 并回到 `/login`（fail-closed）。
-- [ ] 单测覆盖：session 校验、过期、登出幂等、fail-closed（覆盖率门禁保持 100%）。
+- [x] `/login`/`/logout` 改为创建/失效化 DB session（`sid`），并在中间件中以 DB session 作为唯一登录态判断依据。（#61）
+- [x] 明确 cookie 属性（host-only/httpOnly/sameSite）；无效/过期统一跳转 `/login`。（#61）
+- [x] 跨租户绑定断言：`session.tenant_id` 必须与 `Host → tenant_id` 一致；不一致清 cookie 并回到 `/login`（fail-closed）。（#61）
+- [x] 单测覆盖：session 校验、过期、登出幂等、fail-closed（覆盖率门禁保持 100%）。（#61）
 
 ### PR-3：Kratos 集成（tenant app）
 
