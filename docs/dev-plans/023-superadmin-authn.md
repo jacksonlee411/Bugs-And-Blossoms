@@ -3,19 +3,20 @@
 **状态**: 草拟中（2026-01-05 08:05 UTC）
 
 > 适用范围：**全新实现的新代码仓库（Greenfield）**。  
-> 上游依赖：`DEV-PLAN-019`（租户管理与登录认证总体方案）、`DEV-PLAN-021`（RLS 推进）、`DEV-PLAN-019D`（控制面边界与回滚理念）。  
+> 上游依赖：`DEV-PLAN-019`（租户管理与登录认证总体方案）、`DEV-PLAN-021`（RLS 推进）、`DEV-PLAN-022`（Authz/Casbin 契约）。  
 > 目标：把 “SuperAdmin 控制面” 的认证/会话/旁路能力收口成一个清晰、可回滚、可审计的边界，避免在早期引入第二套隐式认证模型。
 
 ## 1. 背景与现状（输入）
 
-本仓库当前仅具备 tenant app 的最小可登录链路，并 **尚未落地** 独立 superadmin 二进制/路由：
-- routing allowlist 已预留 entrypoint：`superadmin`（对齐 `DEV-PLAN-017`），但目前仅用于 ops 占位。
+本仓库已落地独立 superadmin 边界与 Tenant Console MVP（Phase 0：环境级保护/BasicAuth），并完成 Tenancy SSOT 切换（DB `iam.tenant_domains.hostname`）。但控制面仍缺少 Phase 1 的本地会话（`sa_sid`），审计主体仍以 BasicAuth username 为主（待升级为可稳定引用的 `superadmin_principal_id`）。
+
+- routing allowlist 已启用 entrypoint：`superadmin`（对齐 `DEV-PLAN-017`）。
 - tenant app 当前最小实现使用 cookie `session=ok` 作为登录态占位（目标态术语仍为 `sid`）。
-- `DEV-PLAN-009M4` 将在此基础上补齐：superadmin 边界 + Tenant Console MVP + Tenancy SSOT 切换（DB `tenant_domains.hostname`）。
+- `DEV-PLAN-009M4` 已补齐：superadmin 边界 + Tenant Console MVP + Tenancy SSOT 切换；`DEV-PLAN-009M5` 推进 Phase 1（`sa_sid`）。
 
 Greenfield 将重构租户/认证/RLS，并要求：
 - tenant app：`Host 解析 tenant（fail-closed）→ Kratos 认人 → 本地 session（sid）→ RLS 圈地 → Casbin 管事`（见 `DEV-PLAN-019`）。
-- 控制面：跨租户高风险操作必须在独立边界，且 RLS 旁路必须显式（见 `DEV-PLAN-019D/019A`、`DEV-PLAN-021`）。
+- 控制面：跨租户高风险操作必须在独立边界，且 RLS 旁路必须显式（见 `DEV-PLAN-021/022` 与本文 §4/§7）。
 
 ## 2. 目标与非目标
 
@@ -92,7 +93,7 @@ flowchart LR
   - `created_at/updated_at timestamptz`
 
 - `superadmin_sessions`
-  - `token text pk`
+  - `token_sha256 bytea pk`（`sha256(sa_sid)`；32 bytes）
   - `principal_id uuid not null`
   - `expires_at timestamptz not null`
   - `ip text null`、`user_agent text null`
@@ -125,9 +126,13 @@ flowchart LR
   - SuperAdmin 入口必须是独立 host（例如 `superadmin.<apex>`），避免与 tenant 域名混用。
   - `sa_sid` cookie 必须 host-only；不得设置为 apex Domain，避免被租户站点携带。
   - Kratos identifier 必须采用 `sa:{lower(email)}`；不得复用 tenant 的 `{tenant_id}:{email}` 规则。
+- 会话 token 契约（冻结）：
+  - `sa_sid` 为随机高熵不透明字符串（推荐：`32 bytes random → base64url`，无 padding）。
+  - DB 中只存 `sha256(sa_sid)`，不存明文 token；查找只能按 `token_sha256` 精确命中。
+  - 绝对过期（建议默认 8h，支持配置覆盖）；无效/过期必须清 cookie 并返回 302 到 `/superadmin/login`（或 API 401）；不得回退到 tenant `sid` 或环境级身份作为应用内事实源。
 
 ### 6.3 Phase 2（可选）：接入企业 SSO（Jackson）
-单独出计划（例如 019B），并在 Tenant Console 中管理 superadmin 的 SSO 连接与回滚策略；不在本计划内展开。
+单独出计划，并在 Tenant Console 中管理 superadmin 的 SSO 连接与回滚策略；不在本计划内展开。
 
 ## 7. 路由、失败路径与回滚
 
@@ -172,6 +177,7 @@ flowchart LR
   - 创建首个 `superadmin_principals`（email + display_name）。
   - （可选）创建对应 Kratos identity（identifier `sa:{email}`），并输出一次性初始密码/恢复链接（不得落日志）。
   - 记录可审计痕迹（时间、操作者、目标 email），但不得记录敏感凭据。
+- CI/E2E 凭据注入（冻结）：凭据只允许通过环境变量/本机 `.env.local`/CI secrets 注入；不得把明文密码/token 写入迁移、seed 文件或仓库；默认禁止在 CI 日志打印一次性凭据（如需本地输出必须显式 opt-in）。
 
 ## 10. Simple > Easy Review（DEV-PLAN-003，自评）
 

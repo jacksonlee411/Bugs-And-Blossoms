@@ -176,7 +176,7 @@
 5. [ ] Redis 镜像：当前为 `redis:latest`（浮动）—— 为生产/CI 口径增加 pin 策略（至少固定 major/minor，推荐 digest）。
 6. [ ] DevContainer：当前基底为 Go `1.23`（与 `go.mod` 不一致）—— 视团队是否继续使用 DevContainer，决定升级或移除（参考 `DEV-PLAN-002`）。
 7. [ ] Astro（AHA UI Shell，`DEV-PLAN-018`）：已确定为必选方案；必须在新仓库 pin `Astro/Node/pnpm`（含 `apps/web/pnpm-lock.yaml`），并明确静态资产构建与发布的 SSOT（`Makefile`/CI）。
-8. [ ] ORY Kratos（`DEV-PLAN-019`）：若确认为 AuthN 方案，需要 pin `ory/kratos` 镜像版本（建议 digest）与配置格式，并在本地编排/CI 中加入可复现的启动口径。
+8. [X] ORY Kratos（`DEV-PLAN-019/009M5`）：已确认为 AuthN 方案；镜像选定 `oryd/kratos:v25.4.0`（后续在 `compose.dev.yml`/CI service 固定到 digest），配置格式以官方 `kratos.yml`（YAML）为准，并要求本地/CI 启动口径可复现。
 9. [ ] 100% 覆盖率门禁（`DEV-PLAN-019`）：新仓库需明确“覆盖率统计口径/排除项/生成物处理/CI 入口”，避免实现期临时拼装导致口径漂移。
 
 ## 8. 验收标准（本计划完成定义）
