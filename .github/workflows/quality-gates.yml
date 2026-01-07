@@ -131,6 +131,10 @@ jobs:
       - id: paths
         name: Paths Filter
         run: ./scripts/ci/paths-filter.sh
+      - uses: actions/setup-go@v5
+        if: steps.paths.outputs.e2e == 'true' || steps.paths.outputs.ui == 'true' || steps.paths.outputs.i18n == 'true' || steps.paths.outputs.go == 'true' || steps.paths.outputs.routing == 'true'
+        with:
+          go-version-file: go.mod
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         if: steps.paths.outputs.e2e == 'true' || steps.paths.outputs.ui == 'true' || steps.paths.outputs.i18n == 'true' || steps.paths.outputs.go == 'true' || steps.paths.outputs.routing == 'true'
         with:
@@ -142,3 +146,12 @@ jobs:
           else
             echo "no relevant changes; no-op"
           fi
+      - name: Upload E2E artifacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: e2e-artifacts
+          if-no-files-found: ignore
+          path: |
+            e2e/test-results/**
+            e2e/playwright-report/**

@@ -140,3 +140,21 @@ DB 闭环（迁移 + smoke）：
   - `curl -i -H 'Host: localhost:8080' -b /tmp/bb_m2_cookies.txt 'http://127.0.0.1:8080/person/api/persons:by-pernr?pernr=BAD'`（400 `PERSON_PERNR_INVALID`）
 - 403（授权可拒绝）：
   - 运行态行为由 `AUTHZ_MODE=enforce` + policy 决定；单测覆盖见 `internal/server/authz_middleware_test.go` 的 `TestWithAuthz_ForbiddenWhenEnforced`（403）。
+
+## 12. DEV-PLAN-009M3（Phase 5：E2E 真实化 + 可排障门禁）
+
+证据：
+- 日期：2026-01-07
+- 本地门禁：`make preflight`（全绿）
+- E2E 入口（SSOT）：`make e2e`（Playwright 真实浏览器 smoke；fail-fast；failure artifact）
+
+复现（本地）：
+- 运行：`make e2e`
+  - 默认使用：`E2E_BASE_URL=http://localhost:8080`（强约束：必须 `localhost`，禁止 `127.0.0.1`，对齐 Host→tenant fail-closed）。
+  - 默认运行态：`AUTHZ_MODE=enforce`、`RLS_ENFORCE=enforce`，且禁止 `AUTHZ_UNSAFE_ALLOW_DISABLED=1`。
+  - DB runtime 角色：`app_runtime`（非 superuser 且 `NOBYPASSRLS`；E2E 脚本会断言）。
+- 若本机 dev Postgres volume 早于该里程碑创建（未执行 init scripts），可能缺少 `app_runtime`：先运行 `make dev-reset`（会清空 dev volume）再重跑 `make e2e`。
+
+失败时证据落点：
+- Playwright 产物：`e2e/test-results/**`、`e2e/playwright-report/**`（trace/screenshot/video retain-on-failure）
+- Server 启动日志：`e2e/test-results/server.log`

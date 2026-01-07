@@ -14,6 +14,7 @@ services:
       retries: 20
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./scripts/dev/postgres-init:/docker-entrypoint-initdb.d:ro
 
   redis:
     image: redis:latest

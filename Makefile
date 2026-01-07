@@ -105,6 +105,7 @@ dev-server:
 	if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
 	if [[ -z "$$env_file" && -f "env.local" ]]; then env_file="env.local"; fi; \
 	if [[ -z "$$env_file" && -f ".env" ]]; then env_file=".env"; fi; \
+	if [[ -z "$$env_file" && -f ".env.example" ]]; then env_file=".env.example"; fi; \
 	if [[ -n "$$env_file" ]]; then \
 		set -a; . "$$env_file"; set +a; \
 	fi; \
@@ -114,11 +115,7 @@ routing: ## 路由门禁（allowlist/entrypoint key 等）
 	@./scripts/routing/check-allowlist.sh
 
 e2e: ## E2E smoke（按项目能力渐进接入）
-	@if [[ -d apps/web ]]; then \
-		echo "[e2e] apps/web exists; no-op (placeholder)"; \
-	else \
-		echo "[e2e] no apps/web; no-op"; \
-	fi
+	@./scripts/e2e/run.sh
 
 doc: ## 文档门禁（按项目能力渐进接入）
 	@./scripts/doc/check.sh

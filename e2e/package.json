@@ -1,0 +1,8 @@
+{
+  "name": "bugs-and-blossoms-e2e",
+  "private": true,
+  "packageManager": "pnpm@10.24.0",
+  "devDependencies": {
+    "@playwright/test": "1.55.1"
+  }
+}

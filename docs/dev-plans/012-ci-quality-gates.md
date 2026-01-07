@@ -1,6 +1,6 @@
 # DEV-PLAN-012：CI 质量门禁（Quality Gates：Lint/Tests/Routing/E2E）
 
-**状态**: 草拟中（2026-01-05 09:25 UTC）
+**状态**: 执行中（E2E 门禁已落地）（2026-01-07 12:40 UTC）
 
 ## 1. 背景与上下文 (Context)
 
@@ -180,6 +180,12 @@
 **fail-fast（缺口必须显式化）**：
 - 当 Playwright 依赖缺失、未发现任何测试用例、或关键运行态契约缺失导致无法执行时：必须退出非 0，并输出“如何在本地复现/修复”的最短指引（入口以 `Makefile` 为 SSOT）。
 
+**实施现状（DEV-PLAN-009M3 已落地）**：
+- 入口（SSOT）：`make e2e` → `scripts/e2e/run.sh`（不再 placeholder/no-op）。
+- 用例（最小稳定集）：`e2e/tests/m3-smoke.spec.js`（/login → /app → Org/Person/Staffing 纵切片）。
+- 停止线落地：0 tests / 缺依赖 / 运行态契约缺失 → fail-fast 退出非 0（required check 不允许“空跑仍成功”）。
+- 失败证据：默认产出 `e2e/test-results/**`、`e2e/playwright-report/**`；CI failure 时上传 artifact（见 `.github/workflows/quality-gates.yml`）。
+
 ## 4. 实施步骤 (Checklist)
 
 1. [ ] 新仓库建立 `Quality Gates` workflow：冻结四个 required checks 的 job 名称，并把 job-level 跳过作为停止线。
@@ -193,14 +199,14 @@
 9. [ ] Routing gate：落地 `make check routing` 并加入 required checks（对齐 `DEV-PLAN-017`）。
 10. [ ] Unit & Integration Tests：建立可复现的测试库初始化流程（含迁移/seed 的最小集），并在 CI 中稳定运行。
 11. [ ] 覆盖率门禁：按 §6 固化口径/范围/排除项与证据记录方式，并接入 CI 阻断。
-12. [ ] E2E smoke：固化 Playwright 入口与最小稳定集，上传报告 artifact，并明确 nightly/full-suite 的触发方式。
+12. [X] E2E smoke：固化 Playwright 入口与最小稳定集；failure 上传报告/trace artifact（最小稳定集作为 required check）。
 13. [ ] GitHub 保护规则：把四大 required checks 设置为合并前必须通过（repo settings 层面），并在文档中冻结其名称（避免后续改名）。
 
 ## 5. 失败路径与排障（Fail-Fast & Debuggability）
 
 - [ ] 生成物漂移：CI 必须打印 `git status --porcelain` 与差异提示（必要时上传 diff artifact），以便开发者快速定位“漏跑 generate/漏提交”。
 - [ ] DB 门禁失败：Atlas/goose/sqlc 的失败日志必须被保留为 artifact（至少包含 plan/lint 输出与迁移日志）。
-- [ ] E2E 波动：必须默认输出 trace/screenshot/video（按新仓库 SSOT），并在失败时上传报告。
+- [X] E2E 波动：默认输出 trace/screenshot/video（Playwright retain-on-failure），CI failure 上传报告 artifact。
 
 ## 6. 测试与覆盖率（新仓库 100% 门禁）
 
@@ -222,8 +228,8 @@
 - [ ] Unit & Integration Tests 在 CI 稳定可复现，并满足 100% 覆盖率门禁（按 §6 的口径）。
 - [ ] 覆盖率门禁的阈值/范围/排除项存在可审计的策略文件（例如 `config/coverage/policy.yaml`），且 CI workflow 不再隐式写入阈值/忽略规则。
 - [ ] Routing Gates 能阻断 allowlist/分类/返回契约漂移（对齐 `DEV-PLAN-017`）。
-- [ ] E2E smoke 在 CI 稳定可复现，失败时具备可用的报告/trace artifact。
-- [ ] 命中 `E2E Tests` Full Run 触发器时不允许 no-op/0 tests 退出 0；无用例/依赖缺失必须 fail-fast 并给出明确指引。
+- [X] E2E smoke 在 CI 稳定可复现，失败时具备可用的报告/trace artifact。
+- [X] 命中 `E2E Tests` Full Run 触发器时不允许 no-op/0 tests 退出 0；无用例/依赖缺失必须 fail-fast 并给出明确指引。
 
 ## 8. 参考与链接 (Links)
 
