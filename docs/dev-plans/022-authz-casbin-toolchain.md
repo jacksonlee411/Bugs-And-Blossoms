@@ -60,11 +60,12 @@
 - **选定**：继续采用 Casbin 作为授权引擎（以 role 为主体的 RBAC + domains；ABAC 仅在明确需要时引入），沿用本仓库 `config/access/model.conf` 的“输入四元组”思路（`sub/dom/obj/act`）。
 - **理由**：工具链与门禁已具备（pack/lint/test）；更需要“冻结契约、防漂移”，而非替换引擎。
 
-### 4.2 Domain 语义（选定：tenant UUID / global）
+### 4.2 Domain 语义（选定：r.dom=tenant UUID / global；p.dom 允许 *）
 
-- **选定**：Casbin `domain` 仅有两类：
+- **选定**：请求侧 Casbin `domain`（`r.dom`）仅有两类：
   - 租户域：`strings.ToLower(tenant_id.String())`
   - 全局域：`global`
+- **选定**：策略侧 `p.dom` 允许使用 `*`（通配 domain）表示“任意 tenant domain”（用于避免“每新增 tenant 就要改 policy”的运维耦合；必须配合 RLS 强租户隔离，且不得把 hostname/路由形态写入 domain）。
 - **禁止**：把模块名、路由 segment、hostname 写入 domain（避免把“部署形态/路由形态”误当成授权边界）。
 
 ### 4.3 Subject 语义（选定：role 为授权主体；principal 为审计标识）
@@ -178,7 +179,7 @@
 
 **输入四元组（Casbin Enforce 输入）**
 - `subject`：`role:{slug}`（全小写；由 session 的 `role_slug` 映射得到；MVP 不支持多角色 OR 判定）
-- `domain`：tenant UUID（lowercase string）或 `global`
+- `domain`：tenant UUID（lowercase string）或 `global`（注意：这是请求侧 `r.dom`；策略侧 `p.dom` 允许 `*` 通配）
 - `object`：`module.resource`（全小写）
 - `action`：MVP 仅允许 `read|admin|debug`（`create|update|delete` 保留但默认不启用）
 

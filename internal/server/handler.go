@@ -21,6 +21,7 @@ func NewHandler() (http.Handler, error) {
 }
 
 type HandlerOptions struct {
+	TenancyResolver TenancyResolver
 	OrgUnitStore    OrgUnitStore
 	OrgUnitSnapshot OrgUnitSnapshotStore
 	SetIDStore      SetIDGovernanceStore
@@ -31,11 +32,6 @@ type HandlerOptions struct {
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
-	tenants, err := loadTenants()
-	if err != nil {
-		return nil, err
-	}
-
 	allowlistPath := os.Getenv("ALLOWLIST_PATH")
 	if allowlistPath == "" {
 		p, err := defaultAllowlistPath()
@@ -62,13 +58,17 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	personStore := opts.PersonStore
 	positionStore := opts.PositionStore
 	assignmentStore := opts.AssignmentStore
+	tenancyResolver := opts.TenancyResolver
+
+	var pgPool *pgxpool.Pool
 	if orgStore == nil {
 		dsn := dbDSNFromEnv()
 		pool, err := pgxpool.New(context.Background(), dsn)
 		if err != nil {
 			return nil, err
 		}
-		orgStore = newOrgUnitPGStore(pool)
+		pgPool = pool
+		orgStore = newOrgUnitPGStore(pgPool)
 	}
 
 	if orgSnapshotStore == nil {
@@ -128,7 +128,14 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		return nil, err
 	}
 
-	guarded := withTenantAndSession(tenants, withAuthz(classifier, authorizer, router))
+	if tenancyResolver == nil {
+		if pgPool == nil {
+			return nil, errors.New("server: missing tenancy resolver (set HandlerOptions.TenancyResolver or use default PG stores)")
+		}
+		tenancyResolver = newTenancyDBResolver(pgPool)
+	}
+
+	guarded := withTenantAndSession(tenancyResolver, withAuthz(classifier, authorizer, router))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/app", http.StatusFound)
@@ -326,7 +333,7 @@ func clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
-func withTenantAndSession(tenants map[string]Tenant, next http.Handler) http.Handler {
+func withTenantAndSession(tenants TenancyResolver, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
@@ -335,12 +342,12 @@ func withTenantAndSession(tenants map[string]Tenant, next http.Handler) http.Han
 			return
 		}
 
-		tenantDomain := hostWithoutPort(r.Host)
-		if tenantDomain == "" {
-			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "tenant_not_found", "tenant not found")
+		tenantDomain := effectiveHost(r)
+		t, ok, err := tenants.ResolveTenant(r.Context(), tenantDomain)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_resolve_error", "tenant resolve error")
 			return
 		}
-		t, ok := tenants[tenantDomain]
 		if !ok {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "tenant_not_found", "tenant not found")
 			return

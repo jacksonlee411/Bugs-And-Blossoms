@@ -21,8 +21,9 @@ const (
 )
 
 type Classifier struct {
-	entrypoint string
-	allowExact map[string]RouteClass
+	entrypoint        string
+	allowExact        map[string]RouteClass
+	allowPathPatterns []pathPatternRoute
 }
 
 func NewClassifier(a Allowlist, entrypoint string) (*Classifier, error) {
@@ -35,18 +36,28 @@ func NewClassifier(a Allowlist, entrypoint string) (*Classifier, error) {
 	}
 
 	exact := make(map[string]RouteClass, len(ep.Routes))
+	var patterns []pathPatternRoute
 	for _, r := range ep.Routes {
 		if r.Path == "" || r.RouteClass == "" {
 			return nil, errors.New("allowlist: invalid route")
 		}
+		if p, ok := parsePathPattern(r.Path); ok {
+			patterns = append(patterns, pathPatternRoute{pattern: p, rc: RouteClass(r.RouteClass)})
+			continue
+		}
 		exact[r.Path] = RouteClass(r.RouteClass)
 	}
-	return &Classifier{entrypoint: entrypoint, allowExact: exact}, nil
+	return &Classifier{entrypoint: entrypoint, allowExact: exact, allowPathPatterns: patterns}, nil
 }
 
 func (c *Classifier) Classify(path string) RouteClass {
 	if rc, ok := c.allowExact[path]; ok {
 		return rc
+	}
+	for _, p := range c.allowPathPatterns {
+		if p.pattern.Match(path) {
+			return p.rc
+		}
 	}
 
 	switch {
@@ -88,4 +99,9 @@ func isModuleInternalAPI(path string) bool {
 		return false
 	}
 	return hasPrefixSegment("/"+after, "/api")
+}
+
+type pathPatternRoute struct {
+	pattern PathPattern
+	rc      RouteClass
 }

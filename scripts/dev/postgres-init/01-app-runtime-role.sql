@@ -20,6 +20,17 @@ BEGIN
       NOREPLICATION
       NOBYPASSRLS;
   END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'superadmin_runtime') THEN
+    CREATE ROLE superadmin_runtime
+      LOGIN
+      PASSWORD 'app'
+      NOSUPERUSER
+      NOCREATEDB
+      NOCREATEROLE
+      NOREPLICATION
+      NOBYPASSRLS;
+  END IF;
 END
 $$;
 
@@ -27,3 +38,4 @@ GRANT app_nobypassrls TO app_runtime;
 
 ALTER DATABASE bugs_and_blossoms OWNER TO app_runtime;
 GRANT ALL PRIVILEGES ON DATABASE bugs_and_blossoms TO app_runtime;
+GRANT ALL PRIVILEGES ON DATABASE bugs_and_blossoms TO superadmin_runtime;

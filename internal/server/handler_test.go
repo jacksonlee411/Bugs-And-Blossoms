@@ -11,6 +11,12 @@ import (
 	"testing"
 )
 
+func localTenancyResolver() TenancyResolver {
+	return newStaticTenancyResolver(map[string]Tenant{
+		"localhost": {ID: "00000000-0000-0000-0000-000000000001", Domain: "localhost", Name: "Local Tenant"},
+	})
+}
+
 func TestNewHandler_Health(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -122,38 +128,11 @@ func TestNewHandler_ClassifierError(t *testing.T) {
 	}
 }
 
-func TestNewHandler_TenantsError(t *testing.T) {
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
-	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
-
-	if err := os.Setenv("TENANTS_PATH", "no-such-file.yaml"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
-
-	_, err = NewHandler()
-	if err == nil {
-		t.Fatal("expected error")
-	}
-}
-
 func TestNewHandler_DefaultAllowlistNotFound(t *testing.T) {
 	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
 
 	wd, err := os.Getwd()
 	if err != nil {
-		t.Fatal(err)
-	}
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
 		t.Fatal(err)
 	}
 	tmp := t.TempDir()
@@ -179,13 +158,10 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
 
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
-
-	h, err := NewHandlerWithOptions(HandlerOptions{OrgUnitStore: newOrgUnitMemoryStore()})
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -490,14 +466,9 @@ func TestNewHandlerWithOptions_DefaultOrgUnitSnapshotStoreFromPGStore(t *testing
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
 
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
-
 	h, err := NewHandlerWithOptions(HandlerOptions{
-		OrgUnitStore: newOrgUnitPGStore(&fakeBeginner{}),
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitPGStore(&fakeBeginner{}),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -515,12 +486,13 @@ func TestNewHandlerWithOptions_DefaultOrgUnitSnapshotStoreFromPGStore(t *testing
 func TestNewHandlerWithOptions_DefaultPaths(t *testing.T) {
 	t.Cleanup(func() {
 		_ = os.Unsetenv("ALLOWLIST_PATH")
-		_ = os.Unsetenv("TENANTS_PATH")
 	})
 	_ = os.Unsetenv("ALLOWLIST_PATH")
-	_ = os.Unsetenv("TENANTS_PATH")
 
-	h, err := NewHandlerWithOptions(HandlerOptions{OrgUnitStore: newOrgUnitMemoryStore()})
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,18 +516,15 @@ func TestNewHandlerWithOptions_AuthzLoadError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
 
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
-
 	if err := os.Setenv("AUTHZ_MODEL_PATH", "no-such-model.conf"); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("AUTHZ_MODEL_PATH") })
 
-	_, err = NewHandlerWithOptions(HandlerOptions{OrgUnitStore: newOrgUnitMemoryStore()})
+	_, err = NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+	})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -572,12 +541,6 @@ func TestNewHandlerWithOptions_PoolDSNError(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
-
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
 
 	if err := os.Setenv("DATABASE_URL", "%%%"); err != nil {
 		t.Fatal(err)
@@ -602,14 +565,9 @@ func TestNewHandlerWithOptions_DefaultStaffingStores(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
 
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
-
 	h, err := NewHandlerWithOptions(HandlerOptions{
-		OrgUnitStore: newOrgUnitMemoryStore(),
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
 		PositionStore: positionStoreStub{
 			listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
 		},
@@ -622,7 +580,8 @@ func TestNewHandlerWithOptions_DefaultStaffingStores(t *testing.T) {
 	}
 
 	h2, err := NewHandlerWithOptions(HandlerOptions{
-		OrgUnitStore: newOrgUnitMemoryStore(),
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
 		AssignmentStore: assignmentStoreStub{
 			listFn: func(context.Context, string, string, string) ([]Assignment, error) { return nil, nil },
 		},
@@ -635,7 +594,8 @@ func TestNewHandlerWithOptions_DefaultStaffingStores(t *testing.T) {
 	}
 
 	h3, err := NewHandlerWithOptions(HandlerOptions{
-		OrgUnitStore: newOrgUnitPGStore(&fakeBeginner{}),
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitPGStore(&fakeBeginner{}),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -645,7 +605,8 @@ func TestNewHandlerWithOptions_DefaultStaffingStores(t *testing.T) {
 	}
 
 	h4, err := NewHandlerWithOptions(HandlerOptions{
-		OrgUnitStore: newOrgUnitPGStore(&fakeBeginner{}),
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitPGStore(&fakeBeginner{}),
 		PositionStore: positionStoreStub{
 			listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
 		},
@@ -679,15 +640,10 @@ func TestNewHandlerWithOptions_UsesProvidedStores(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
 
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
-
 	staffingStore := newStaffingMemoryStore()
 
 	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
 		OrgUnitStore:    newOrgUnitMemoryStore(),
 		OrgUnitSnapshot: orgSnapshotStoreStub{},
 		SetIDStore:      newSetIDMemoryStore(),
@@ -716,13 +672,8 @@ func TestNewHandlerWithOptions_WithProvidedStores(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
 
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
-
 	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
 		OrgUnitStore:    newOrgUnitMemoryStore(),
 		OrgUnitSnapshot: nil,
 		SetIDStore:      newSetIDMemoryStore(),
@@ -752,16 +703,13 @@ func TestNewHandlerWithOptions_LoadAuthorizerError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
 
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
-
 	t.Setenv("AUTHZ_MODE", "disabled")
 	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "")
 
-	_, err = NewHandlerWithOptions(HandlerOptions{OrgUnitStore: newOrgUnitMemoryStore()})
+	_, err = NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+	})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -773,12 +721,6 @@ func TestNewHandlerWithOptions_DefaultAllowlistPath_NotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
-
 	_ = os.Unsetenv("ALLOWLIST_PATH")
 
 	tmp := t.TempDir()
@@ -787,7 +729,10 @@ func TestNewHandlerWithOptions_DefaultAllowlistPath_NotFound(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(wd) })
 
-	_, err = NewHandlerWithOptions(HandlerOptions{OrgUnitStore: newOrgUnitMemoryStore()})
+	_, err = NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+	})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -804,12 +749,6 @@ func TestNewHandlerWithOptions_DefaultPGStore_DoesNotRequireDBAtBuildTime(t *tes
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
-
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
 
 	t.Setenv("DATABASE_URL", "postgres://app:app@localhost:5432/bugs_and_blossoms?sslmode=disable")
 
@@ -837,12 +776,6 @@ func TestNewHandlerWithOptions_BadDatabaseURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
-
-	tenantsPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "tenants.yaml"))
-	if err := os.Setenv("TENANTS_PATH", tenantsPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("TENANTS_PATH") })
 
 	t.Setenv("DATABASE_URL", "postgres://%zz")
 

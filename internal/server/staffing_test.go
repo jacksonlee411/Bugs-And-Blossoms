@@ -1089,6 +1089,16 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
+	t.Run("handleAssignments method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/org/assignments?as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleAssignments(rec, req, &staffingMemoryStore{}, &staffingMemoryStore{}, newPersonMemoryStore())
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
 	t.Run("handleAssignments positions error", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/assignments?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
@@ -1119,6 +1129,20 @@ func TestStaffingHandlers(t *testing.T) {
 
 	t.Run("handleAssignments get ok (no person)", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/assignments?as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleAssignments(rec, req,
+			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return []Position{}, nil }},
+			assignmentStoreStub{listFn: func(context.Context, string, string, string) ([]Assignment, error) { return nil, nil }},
+			newPersonMemoryStore(),
+		)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignments get ok (as_of defaults)", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/assignments", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handleAssignments(rec, req,
@@ -1268,6 +1292,29 @@ func TestStaffingHandlers(t *testing.T) {
 		_, _ = pstore.CreatePerson(context.Background(), "t1", "1", "A")
 
 		req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&pernr=1&position_id=pos1"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleAssignments(rec, req,
+			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return []Position{{ID: "pos1"}}, nil }},
+			assignmentStoreStub{
+				listFn: func(context.Context, string, string, string) ([]Assignment, error) { return []Assignment{}, nil },
+				upsertFn: func(context.Context, string, string, string, string) (Assignment, error) {
+					return Assignment{AssignmentID: "as1"}, nil
+				},
+			},
+			pstore,
+		)
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignments post ok (effective_date defaults)", func(t *testing.T) {
+		pstore := newPersonMemoryStore()
+		_, _ = pstore.CreatePerson(context.Background(), "t1", "1", "A")
+
+		req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("pernr=1&position_id=pos1"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()

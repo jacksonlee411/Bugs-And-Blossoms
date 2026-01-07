@@ -73,6 +73,24 @@ entrypoints:
         route_class: internal_api
   superadmin:
     routes:
+      - path: /
+        methods: [GET]
+        route_class: ui
       - path: /health
         methods: [GET]
         route_class: ops
+      - path: /healthz
+        methods: [GET]
+        route_class: ops
+      - path: /superadmin/tenants
+        methods: [GET, POST]
+        route_class: ui
+      - path: /superadmin/tenants/{tenant_id}/enable
+        methods: [POST]
+        route_class: ui
+      - path: /superadmin/tenants/{tenant_id}/disable
+        methods: [POST]
+        route_class: ui
+      - path: /superadmin/tenants/{tenant_id}/domains
+        methods: [POST]
+        route_class: ui

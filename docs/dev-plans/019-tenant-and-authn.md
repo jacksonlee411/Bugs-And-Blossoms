@@ -9,7 +9,7 @@
 
 > 说明：本节用于描述 `Bugs-And-Blossoms` 当前已合并实现的“事实输入”，避免计划与实现口径漂移；目标态合同仍以本文后续章节为准。
 
-- tenant 解析：当前实现使用 `config/tenants.yaml`（可用 `TENANTS_PATH` 覆盖）作为 Host→tenant 映射；`DEV-PLAN-009M4` 将把运行态 SSOT 切换到 DB（`tenant_domains.hostname`），并禁止 runtime fallback。
+- tenant 解析：运行态 SSOT 已切换到 DB（`iam.tenant_domains.hostname`），并禁止 runtime fallback 到 `config/tenants.yaml`（该文件仅可作为样例，不得被运行态读取）。
 - tenant app 登录态：当前最小实现为 `/login` 设置 cookie `session=ok`（仅用于门禁占位）；目标态合同仍以 `sid`（tenant session token）作为术语。
 - superadmin：当前仅预留 allowlist entrypoint（`superadmin`），尚未实现独立二进制/路由与 Tenant Console；`DEV-PLAN-009M4` 将补齐该边界。
 
