@@ -37,6 +37,7 @@ type sessionStore interface {
 
 type principalStore interface {
 	GetOrCreateTenantAdmin(ctx context.Context, tenantID string) (Principal, error)
+	UpsertFromKratos(ctx context.Context, tenantID string, email string, roleSlug string, kratosIdentityID string) (Principal, error)
 	GetByID(ctx context.Context, tenantID string, principalID string) (Principal, bool, error)
 }
 
@@ -122,6 +123,36 @@ func (s *memoryPrincipalStore) GetOrCreateTenantAdmin(_ context.Context, tenantI
 		return Principal{}, err
 	}
 	s.byKey[key] = p
+	return p, nil
+}
+
+func (s *memoryPrincipalStore) UpsertFromKratos(_ context.Context, tenantID string, email string, roleSlug string, kratosIdentityID string) (Principal, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := tenantID + "|" + email
+	if p, ok := s.byKey[key]; ok {
+		if p.Status != "active" {
+			return Principal{}, errors.New("server: principal is not active")
+		}
+		if p.KratosIdentityID != "" && p.KratosIdentityID != kratosIdentityID {
+			return Principal{}, errors.New("server: principal kratos identity mismatch")
+		}
+		if p.KratosIdentityID == "" {
+			p.KratosIdentityID = kratosIdentityID
+			s.byKey[key] = p
+			s.byID[p.ID] = p
+		}
+		return p, nil
+	}
+
+	p, err := s.newPrincipalLocked(tenantID, email, roleSlug)
+	if err != nil {
+		return Principal{}, err
+	}
+	p.KratosIdentityID = kratosIdentityID
+	s.byKey[key] = p
+	s.byID[p.ID] = p
 	return p, nil
 }
 
@@ -247,6 +278,37 @@ RETURNING id::text, status;
 	}
 	if p.Status != "active" {
 		return Principal{}, errors.New("server: principal is not active")
+	}
+	return p, nil
+}
+
+func (s *pgPrincipalStore) UpsertFromKratos(ctx context.Context, tenantID string, email string, roleSlug string, kratosIdentityID string) (Principal, error) {
+	var p Principal
+	p.Email = email
+	p.TenantID = tenantID
+	p.RoleSlug = roleSlug
+	p.Status = "active"
+	p.KratosIdentityID = kratosIdentityID
+
+	err := s.q.QueryRow(ctx, `
+	INSERT INTO iam.principals (tenant_id, email, role_slug, status, kratos_identity_id)
+	VALUES ($1, $2, $3, 'active', $4::uuid)
+	ON CONFLICT (tenant_id, email) DO UPDATE SET
+	  kratos_identity_id = COALESCE(iam.principals.kratos_identity_id, EXCLUDED.kratos_identity_id),
+	  updated_at = now()
+	RETURNING id::text, role_slug, status, COALESCE(kratos_identity_id::text, '');
+	`, tenantID, email, roleSlug, kratosIdentityID).Scan(&p.ID, &p.RoleSlug, &p.Status, &p.KratosIdentityID)
+	if err != nil {
+		return Principal{}, err
+	}
+	if p.Status != "active" {
+		return Principal{}, errors.New("server: principal is not active")
+	}
+	if p.KratosIdentityID == "" {
+		return Principal{}, errors.New("server: principal missing kratos identity")
+	}
+	if p.KratosIdentityID != kratosIdentityID {
+		return Principal{}, errors.New("server: principal kratos identity mismatch")
 	}
 	return p, nil
 }

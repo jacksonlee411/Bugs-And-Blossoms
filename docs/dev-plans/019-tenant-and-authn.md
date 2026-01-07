@@ -194,7 +194,7 @@
 
 ### 6.1 Tenant App
 - `GET /login`：渲染登录页（Host 解析 tenant；未解析返回 404）
-- `POST /login`：Kratos login flow（server-side）→ whoami → upsert principal → create session → set tenant session cookie（术语：`sid`；本仓库最小实现阶段为 `session=ok` 占位）（错误返回 422 并渲染表单错误）
+- `POST /login`：Kratos login flow（server-side）→ whoami → upsert principal → create session → set tenant session cookie（术语：`sid`）（错误返回 422 并渲染表单错误）
 - `POST /logout`：删除 session（可选调用 Kratos logout；无论是否存在 session 都应幂等成功）
 
 ### 6.2 SuperAdmin（Tenant Console MVP）

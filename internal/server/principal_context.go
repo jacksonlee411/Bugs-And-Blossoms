@@ -3,11 +3,12 @@ package server
 import "context"
 
 type Principal struct {
-	ID       string
-	TenantID string
-	RoleSlug string
-	Status   string
-	Email    string
+	ID               string
+	TenantID         string
+	RoleSlug         string
+	Status           string
+	Email            string
+	KratosIdentityID string
 }
 
 type principalContextKey struct{}

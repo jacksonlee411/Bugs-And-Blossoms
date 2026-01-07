@@ -4,10 +4,12 @@ import (
 	"context"
 	"embed"
 	"errors"
+	"html"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,14 +24,15 @@ func NewHandler() (http.Handler, error) {
 }
 
 type HandlerOptions struct {
-	TenancyResolver TenancyResolver
-	OrgUnitStore    OrgUnitStore
-	OrgUnitSnapshot OrgUnitSnapshotStore
-	SetIDStore      SetIDGovernanceStore
-	JobCatalogStore JobCatalogStore
-	PersonStore     PersonStore
-	PositionStore   PositionStore
-	AssignmentStore AssignmentStore
+	TenancyResolver  TenancyResolver
+	IdentityProvider identityProvider
+	OrgUnitStore     OrgUnitStore
+	OrgUnitSnapshot  OrgUnitSnapshotStore
+	SetIDStore       SetIDGovernanceStore
+	JobCatalogStore  JobCatalogStore
+	PersonStore      PersonStore
+	PositionStore    PositionStore
+	AssignmentStore  AssignmentStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -60,6 +63,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	positionStore := opts.PositionStore
 	assignmentStore := opts.AssignmentStore
 	tenancyResolver := opts.TenancyResolver
+	identityProvider := opts.IdentityProvider
 
 	var pgPool *pgxpool.Pool
 	if orgStore == nil {
@@ -154,15 +158,43 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 
 	router.Handle(routing.RouteClassAuthn, http.MethodGet, "/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeShell(w, r, `<h1>Login</h1>`+
-			`<form method="POST" action="/login">`+
-			`<button type="submit">Login</button>`+
-			`</form>`)
+		writeShell(w, r, renderLoginForm(""))
 	}))
 	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tenant, _ := currentTenant(r.Context())
 
-		p, err := principals.GetOrCreateTenantAdmin(r.Context(), tenant.ID)
+		if err := r.ParseForm(); err != nil {
+			writeShellWithStatus(w, r, http.StatusUnprocessableEntity, renderLoginForm("invalid form"))
+			return
+		}
+		email := r.FormValue("email")
+		password := r.FormValue("password")
+		if email == "" || password == "" {
+			writeShellWithStatus(w, r, http.StatusUnprocessableEntity, renderLoginForm("email and password required"))
+			return
+		}
+
+		provider := identityProvider
+		if provider == nil {
+			p, err := newKratosIdentityProviderFromEnv()
+			if err != nil {
+				routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "identity_provider_error", "identity provider error")
+				return
+			}
+			provider = p
+		}
+
+		ident, err := provider.AuthenticatePassword(r.Context(), tenant, email, password)
+		if err != nil {
+			if errors.Is(err, errInvalidCredentials) {
+				writeShellWithStatus(w, r, http.StatusUnprocessableEntity, renderLoginForm("invalid credentials"))
+				return
+			}
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "identity_error", "identity error")
+			return
+		}
+
+		p, err := principals.UpsertFromKratos(r.Context(), tenant.ID, ident.Email, "tenant-admin", ident.KratosIdentityID)
 		if err != nil {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "principal_error", "principal error")
 			return
@@ -470,10 +502,28 @@ func tr(lang string, key string) string {
 	}
 }
 
+func renderLoginForm(errMsg string) string {
+	var b strings.Builder
+	b.WriteString(`<h1>Login</h1>`)
+	if errMsg != "" {
+		b.WriteString(`<p style="color:#b00020">` + html.EscapeString(errMsg) + `</p>`)
+	}
+	b.WriteString(`<form method="POST" action="/login">`)
+	b.WriteString(`<label>Email <input type="email" name="email" autocomplete="username" required></label><br>`)
+	b.WriteString(`<label>Password <input type="password" name="password" autocomplete="current-password" required></label><br>`)
+	b.WriteString(`<button type="submit">Login</button>`)
+	b.WriteString(`</form>`)
+	return b.String()
+}
+
 func writeShell(w http.ResponseWriter, r *http.Request, bodyHTML string) {
+	writeShellWithStatus(w, r, http.StatusOK, bodyHTML)
+}
+
+func writeShellWithStatus(w http.ResponseWriter, r *http.Request, status int, bodyHTML string) {
 	l := lang(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(status)
 	_, _ = w.Write([]byte(`<!doctype html><html><head>`))
 	_, _ = w.Write([]byte(`<meta charset="utf-8">`))
 	_, _ = w.Write([]byte(`<title>` + tr(l, "nav_orgunit") + `</title>`))

@@ -4,6 +4,7 @@ set -euo pipefail
 base_url="${E2E_BASE_URL:-http://localhost:8080}"
 server_log="${E2E_SERVER_LOG:-./e2e/_artifacts/server.log}"
 superadmin_log="${E2E_SUPERADMIN_LOG:-./e2e/_artifacts/superadmin.log}"
+kratos_log="${E2E_KRATOS_LOG:-./e2e/_artifacts/kratosstub.log}"
 
 if [[ ! "$base_url" =~ ^https?://localhost(:[0-9]+)?(/|$) ]]; then
   echo "[e2e] invalid E2E_BASE_URL=$base_url (must use localhost for Host->tenant fail-closed)" >&2
@@ -150,13 +151,31 @@ make staffing migrate up
 
 mkdir -p "$(dirname "$server_log")"
 mkdir -p "$(dirname "$superadmin_log")"
+mkdir -p "$(dirname "$kratos_log")"
 
 echo "[e2e] authz pack (policy.csv must be up-to-date)"
 make authz-pack >/dev/null
 
+export KRATOS_PUBLIC_URL="${KRATOS_PUBLIC_URL:-http://127.0.0.1:4433}"
+export E2E_KRATOS_ADMIN_URL="${E2E_KRATOS_ADMIN_URL:-http://127.0.0.1:4434}"
+
+echo "[e2e] start kratos stub: log=$kratos_log"
+go run ./cmd/kratosstub >"$kratos_log" 2>&1 &
+kratos_pid="$!"
+sleep 0.2
+if ! kill -0 "$kratos_pid" >/dev/null 2>&1; then
+  echo "[e2e] kratos stub failed to start; see: $kratos_log" >&2
+  exit 1
+fi
+
 echo "[e2e] start server: log=$server_log"
 make dev-server >"$server_log" 2>&1 &
 server_pid="$!"
+sleep 0.2
+if ! kill -0 "$server_pid" >/dev/null 2>&1; then
+  echo "[e2e] server failed to start; see: $server_log" >&2
+  exit 1
+fi
 
 superadmin_db_url="postgres://superadmin_runtime:${db_pass}@${db_host}:${db_port}/${db_name}?sslmode=${db_sslmode}"
 export SUPERADMIN_DATABASE_URL="$superadmin_db_url"
@@ -167,11 +186,20 @@ export SUPERADMIN_WRITE_MODE="${SUPERADMIN_WRITE_MODE:-enabled}"
 echo "[e2e] start superadmin: log=$superadmin_log"
 make dev-superadmin >"$superadmin_log" 2>&1 &
 superadmin_pid="$!"
+sleep 0.2
+if ! kill -0 "$superadmin_pid" >/dev/null 2>&1; then
+  echo "[e2e] superadmin failed to start; see: $superadmin_log" >&2
+  exit 1
+fi
 
 cleanup() {
   if kill -0 "$server_pid" >/dev/null 2>&1; then
     kill "$server_pid" >/dev/null 2>&1 || true
     wait "$server_pid" >/dev/null 2>&1 || true
+  fi
+  if kill -0 "$kratos_pid" >/dev/null 2>&1; then
+    kill "$kratos_pid" >/dev/null 2>&1 || true
+    wait "$kratos_pid" >/dev/null 2>&1 || true
   fi
   if kill -0 "$superadmin_pid" >/dev/null 2>&1; then
     kill "$superadmin_pid" >/dev/null 2>&1 || true
@@ -182,6 +210,10 @@ trap cleanup EXIT
 
 echo "[e2e] wait server ready: http://127.0.0.1:8080/health"
 for i in $(seq 1 60); do
+  if ! kill -0 "$server_pid" >/dev/null 2>&1; then
+    echo "[e2e] server exited before becoming ready; see: $server_log" >&2
+    exit 1
+  fi
   if command -v curl >/dev/null 2>&1; then
     if curl -fsS "http://127.0.0.1:8080/health" >/dev/null 2>&1; then
       break
@@ -200,6 +232,10 @@ done
 
 echo "[e2e] wait superadmin ready: http://127.0.0.1:8081/health"
 for i in $(seq 1 60); do
+  if ! kill -0 "$superadmin_pid" >/dev/null 2>&1; then
+    echo "[e2e] superadmin exited before becoming ready; see: $superadmin_log" >&2
+    exit 1
+  fi
   if command -v curl >/dev/null 2>&1; then
     if curl -fsS "http://127.0.0.1:8081/health" >/dev/null 2>&1; then
       break
@@ -211,6 +247,50 @@ for i in $(seq 1 60); do
   fi
   if [[ "$i" == "60" ]]; then
     echo "[e2e] superadmin did not become ready; see: $superadmin_log" >&2
+    exit 1
+  fi
+  sleep 0.5
+done
+
+echo "[e2e] wait kratos ready: $KRATOS_PUBLIC_URL/health/ready"
+for i in $(seq 1 60); do
+  if ! kill -0 "$kratos_pid" >/dev/null 2>&1; then
+    echo "[e2e] kratos exited before becoming ready; see: $kratos_log" >&2
+    exit 1
+  fi
+  if command -v curl >/dev/null 2>&1; then
+    if curl -fsS "$KRATOS_PUBLIC_URL/health/ready" >/dev/null 2>&1; then
+      break
+    fi
+  else
+    if wget -q -O- "$KRATOS_PUBLIC_URL/health/ready" >/dev/null 2>&1; then
+      break
+    fi
+  fi
+  if [[ "$i" == "60" ]]; then
+    echo "[e2e] kratos did not become ready; see: $kratos_log" >&2
+    exit 1
+  fi
+  sleep 0.5
+done
+
+echo "[e2e] wait kratos admin ready: $E2E_KRATOS_ADMIN_URL/health/ready"
+for i in $(seq 1 60); do
+  if ! kill -0 "$kratos_pid" >/dev/null 2>&1; then
+    echo "[e2e] kratos exited before becoming ready; see: $kratos_log" >&2
+    exit 1
+  fi
+  if command -v curl >/dev/null 2>&1; then
+    if curl -fsS "$E2E_KRATOS_ADMIN_URL/health/ready" >/dev/null 2>&1; then
+      break
+    fi
+  else
+    if wget -q -O- "$E2E_KRATOS_ADMIN_URL/health/ready" >/dev/null 2>&1; then
+      break
+    fi
+  fi
+  if [[ "$i" == "60" ]]; then
+    echo "[e2e] kratos admin did not become ready; see: $kratos_log" >&2
     exit 1
   fi
   sleep 0.5
