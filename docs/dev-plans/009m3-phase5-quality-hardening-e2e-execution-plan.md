@@ -19,11 +19,17 @@
   - 路线图与出口口径：`docs/dev-plans/009-implementation-roadmap.md`
   - CI 门禁结构与验收：`docs/dev-plans/012-ci-quality-gates.md`、`.github/workflows/quality-gates.yml`
   - 本地入口与触发器矩阵：`AGENTS.md`、`Makefile`
+  - 工具链版本口径（Node/Playwright/Go 等）：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
+  - 证据记录（可复现步骤/结果链接）：`docs/dev-records/DEV-PLAN-010-READINESS.md`
+  - 评审与停止线（约束性引用）：`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
   - Routing：`docs/dev-plans/017-routing-strategy.md`
   - Tenancy/AuthN（Host→tenant fail-closed + 登录入口）：`docs/dev-plans/019-tenant-and-authn.md`
+  - RLS（No Tx, No RLS + fail-closed + NOBYPASSRLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
   - Atlas+Goose：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
   - sqlc：`docs/dev-plans/025-sqlc-guidelines.md`
   - Authz：`docs/dev-plans/022-authz-casbin-toolchain.md`
+  - E2E 业务断言口径（`effective_date`）：`docs/dev-plans/031-greenfield-assignment-job-data.md`、`docs/dev-plans/032-effective-date-day-granularity.md`
+  - Phase 4 复用输入（smoke 场景来源）：`docs/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`
 
 ## 2. 非目标（本执行计划不做）
 
@@ -37,9 +43,10 @@
 
 ### 3.1 运行态契约（必须写死）
 
-- **Host/tenant**：E2E 与手工验证必须使用 `http://localhost:8080`（而非 `127.0.0.1`），确保 Host→tenant 解析按合同 fail-closed。
-- **强约束模式**：E2E 必须在 `AUTHZ_MODE=enforce`、`RLS_ENFORCE=enforce` 下运行；不得通过降级模式让测试变绿。
-- **DB 用户**：E2E/CI 的 `DB_USER` 必须为非 superuser（避免绕过 RLS；对齐 `DEV-PLAN-021` 口径）。
+- **Host/tenant**：E2E 与手工验证必须使用 `http://localhost:8080`（而非 `127.0.0.1`）；对齐 `DEV-PLAN-019`：tenant 解析 SSOT 为 `tenant_domains.hostname`，且 `/login` 也必须先解析 tenant（未解析即 404，fail-closed）。
+- **强约束模式**：E2E 必须在 `AUTHZ_MODE=enforce`、`RLS_ENFORCE=enforce` 下运行；不得通过降级模式让测试变绿（对齐 `DEV-PLAN-022/021`）。
+- **危险解锁开关**：CI/E2E 不得设置 `AUTHZ_UNSAFE_ALLOW_DISABLED=1`（该开关仅用于本地短期排障，且必须显式解锁；对齐 `DEV-PLAN-022` 的 fail-fast 约束）。
+- **DB 用户**：E2E/CI 的 `DB_USER` 必须为非 superuser 且不得拥有 `BYPASSRLS`（避免绕过 RLS；对齐 `DEV-PLAN-021` 口径）。
 - **确定性 DB**：E2E 必须对 DB 状态有确定性假设（推荐：CI 每次使用全新 Postgres service + migrate up；本地如需 reset 必须走明确的破坏性入口，不允许隐式清库）。
 
 ### 3.2 数据准备单一权威（禁止测试后门）
@@ -50,15 +57,15 @@
 ### 3.3 停止线（命中即拒绝）
 
 - 引入第二套 E2E 框架/第二套入口（违反 SSOT）。
-- 让 required check “成功但不跑测试”（`make e2e` no-op/placeholder 仍退出 0）。
-- 通过 `AUTHZ_MODE=disabled`/`RLS_ENFORCE=disabled` 绕过约束。
+- 让 required check “成功但不跑测试”：在 `E2E Tests` job **命中触发器**时，`make e2e` 仍 no-op/placeholder/0 tests 却退出 0；仅允许在 paths-filter 未命中时 step-level no-op（对齐 `DEV-PLAN-012` 的 required checks 口径）。
+- 通过 `AUTHZ_MODE=disabled`/`RLS_ENFORCE=disabled` 绕过约束，或在 CI 中设置 `AUTHZ_UNSAFE_ALLOW_DISABLED=1` 让 disabled 可用。
 - 为测试新增 legacy 分支/回退通道/双链路。
 
 ## 4. Done 口径（验收/关闭条件）
 
 ### 4.1 E2E（真实且可复现）
 - [ ] CI 的 `E2E Tests` job 运行 **真实 E2E**（非 no-op/placeholder），并且：
-  - [ ] 至少包含 1 条可稳定复现的 smoke 场景（首选复用 `DEV-PLAN-009M2`）：`/login` → `/app` → Person→Position→Assignment 的“写入→列表读取”闭环，并断言 Assignments UI 仅展示 `effective_date`。
+  - [ ] 至少包含 1 条可稳定复现的 smoke 场景（首选复用 `DEV-PLAN-009M2`）：`/login` → `/app` → Person→Position→Assignment 的“写入→列表读取”闭环，并断言 Assignments UI 仅展示 `effective_date`（对齐 `DEV-PLAN-031/032`）。
   - [ ] 失败时默认产出可用 artifact（trace/screenshot/video/日志，具体落点以 `DEV-PLAN-012` 的 SSOT 为准）。
 - [ ] 本地可通过单一入口复现同一 E2E（入口以 `Makefile` 为准）。
 - [ ] `make e2e` 不再因 `apps/web` 存在而 no-op；placeholder 逻辑被移除或被替换为真实执行（以 `Makefile` 为 SSOT）。
@@ -94,12 +101,12 @@
 
 ### PR-2：CI 编排与排障证据（让失败可定位）
 - [ ] 更新 `.github/workflows/quality-gates.yml` 的 `E2E Tests` job：为 E2E 提供最小运行环境（启动 server、准备 DB、准备必要迁移/数据；方式以 SSOT 为准）。
-- [ ] CI 运行态契约必须显式化（并与 `DEV-PLAN-010`/`.env.example` 对齐）：使用 `localhost` 域名访问、`AUTHZ_MODE=enforce`、`RLS_ENFORCE=enforce`、DB 用户为非 superuser。
+- [ ] CI 运行态契约必须显式化（并与 `DEV-PLAN-010`/`.env.example` 对齐）：使用 `localhost` 域名访问、`AUTHZ_MODE=enforce`、`RLS_ENFORCE=enforce`、不设置 `AUTHZ_UNSAFE_ALLOW_DISABLED=1`、DB 用户为非 superuser 且无 `BYPASSRLS`。
 - [ ] 默认上传 E2E 失败 artifact（trace/screenshot/video/日志等），并在失败输出中包含“如何在本地复现”的最短指引（引用 `Makefile` 入口）。
 
 ### PR-3：选择一个业务闭环纳入 E2E（避免只测登录）
 - [ ] 选择并固化一个“业务闭环”作为 E2E 场景（按现状建议优先顺序如下）：
-  - [ ] 首选：复用 `DEV-PLAN-009M2`（Person Identity + Staffing）：创建 Person → 创建 Position → 创建/更新 Assignment，并断言 UI 仅展示 `effective_date`（可直接把 `DEV-PLAN-010` 中的 M2 证据脚本翻译为浏览器操作）。
+  - [ ] 首选：复用 `DEV-PLAN-009M2`（Person Identity + Staffing）：创建 Person → 创建 Position → 创建/更新 Assignment，并断言 UI 仅展示 `effective_date`（对齐 `DEV-PLAN-031/032`；可直接把 `DEV-PLAN-010` 中的 M2 证据脚本翻译为浏览器操作）。
   - [ ] 复用 `DEV-PLAN-009M1`：SetID + JobCatalog（解析→写入→列表读取）。
 - [ ] 场景必须走真实 UI 交互（浏览器操作），并在失败时能定位到“哪一步失败”（而非只有最终断言）。
 
