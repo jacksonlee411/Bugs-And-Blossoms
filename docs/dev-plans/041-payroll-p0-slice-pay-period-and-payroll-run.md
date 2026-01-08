@@ -1,6 +1,10 @@
 # DEV-PLAN-041：Payroll P0-1——薪资周期与算薪批次（Pay Period & Payroll Run）
 
-**状态**: 草拟中（2026-01-08 04:56 UTC）
+**状态**: 已完成（2026-01-08）
+
+已完成事项（合并记录）：
+- 实现 PR：#82 / #84 / #85 / #86 / #89
+- 证据登记 PR：#83 / #87 / #90（readiness：`docs/dev-records/DEV-PLAN-010-READINESS.md` §18）
 
 > 上游路线图：`DEV-PLAN-039`  
 > 蓝图合同（范围/不变量/验收基线）：`DEV-PLAN-040`  
@@ -19,10 +23,10 @@
 ### 0.2 目标与非目标（P0-1 Slice）
 
 **目标**
-- [ ] 冻结最小数据模型与状态字段（列化）：`staffing.pay_periods`、`staffing.payroll_runs`、`staffing.payslips`（payslip 可先为空壳）。
-- [ ] 落地 DB Kernel 写入口（One Door）：创建 pay period、创建 payroll run、触发计算（占位）、定稿（同事务更新投射表）。
-- [ ] RLS fail-closed：所有 payroll 相关表启用 RLS；运行态访问必须在事务内注入 `app.current_tenant`，缺失即失败（对齐 `AGENTS.md` / `DEV-PLAN-019/021`）。
-- [ ] UI 可发现/可操作：新增“薪酬”入口；提供 pay period 列表/创建、payroll run 列表/详情，并提供“计算/定稿”动作入口（对齐 `DEV-PLAN-040` §0.5）。
+- [x] 冻结最小数据模型与状态字段（列化）：`staffing.pay_periods`、`staffing.payroll_runs`、`staffing.payslips`（payslip 可先为空壳）。
+- [x] 落地 DB Kernel 写入口（One Door）：创建 pay period、创建 payroll run、触发计算（占位）、定稿（同事务更新投射表）。
+- [x] RLS fail-closed：所有 payroll 相关表启用 RLS；运行态访问必须在事务内注入 `app.current_tenant`，缺失即失败（对齐 `AGENTS.md` / `DEV-PLAN-019/021`）。
+- [x] UI 可发现/可操作：新增“薪酬”入口；提供 pay period 列表/创建、payroll run 列表/详情，并提供“计算/定稿”动作入口（对齐 `DEV-PLAN-040` §0.5）。
 
 **非目标（Out of Scope）**
 - 不实现真实算薪逻辑与明细（gross/社保/个税/税后发放），只需保证“计算动作可触发并产生可见结果”（至少 run 状态与时间戳变化可见）。
@@ -34,10 +38,10 @@
 > 本计划仅声明命中项与 SSOT 链接，不复制命令清单（避免漂移；见 `DEV-PLAN-000`）。
 
 - **触发器（实施阶段将命中）**
-  - [ ] Go 代码（`AGENTS.md`）
-  - [ ] DB 迁移 / Schema（`DEV-PLAN-024`）
-  - [ ] 路由治理（`DEV-PLAN-017`；需更新 `config/routing/allowlist.yaml`）
-  - [ ] 文档（`make check doc`）
+  - [x] Go 代码（`AGENTS.md`）
+  - [x] DB 迁移 / Schema（`DEV-PLAN-024`）
+  - [x] 路由治理（`DEV-PLAN-017`；需更新 `config/routing/allowlist.yaml`）
+  - [x] 文档（`make check doc`）
 - **SSOT 链接**
   - 触发器矩阵与本地必跑：`AGENTS.md`
   - 命令入口与 CI：`Makefile`、`.github/workflows/quality-gates.yml`
@@ -59,10 +63,10 @@
 
 ### 0.5 验收标准（Done 口径）
 
-- [ ] UI 可创建一个 pay period，并在列表可见（含 pay_group 与 period）。
-- [ ] UI 可创建一个 payroll run，并在详情页触发“计算”动作；run 状态与 `started_at/finished_at` 可见且可查询。
-- [ ] UI 可对一个 run 执行“定稿”；定稿后 run 进入只读（再次计算/再次定稿必须失败且返回稳定错误码）。
-- [ ] 缺少 tenant context 时，相关读写 fail-closed（No Tx, No RLS）。
+- [x] UI 可创建一个 pay period，并在列表可见（含 pay_group 与 period）。
+- [x] UI 可创建一个 payroll run，并在详情页触发“计算”动作；run 状态与 `started_at/finished_at` 可见且可查询。
+- [x] UI 可对一个 run 执行“定稿”；定稿后 run 进入只读（再次计算/再次定稿必须失败且返回稳定错误码）。
+- [x] 缺少 tenant context 时，相关读写 fail-closed（No Tx, No RLS）。
 
 ## 1. 背景与上下文（Context）
 
@@ -449,21 +453,21 @@ SELECT staffing.submit_payroll_pay_period_event(
 
 ### 8.2 里程碑（实现顺序建议）
 
-1. [ ] Schema SSOT：新增 payroll tables + RLS（`modules/staffing/.../schema`）。
-2. [ ] Schema→迁移闭环：按 `DEV-PLAN-024` 生成 `migrations/staffing/*` + `atlas.sum`。
-3. [ ] Kernel：实现 `submit_payroll_pay_period_event` 与 `submit_payroll_run_event`（幂等 + 状态机）。
-4. [ ] Server：实现 PayrollStore（PG）与 handlers/routes（UI + internal API）。
-5. [ ] Routing/Authz：更新 `config/routing/allowlist.yaml`、`pkg/authz/registry.go`、`internal/server/authz_middleware.go`。
-6. [ ] Tests：覆盖状态机、幂等、RLS fail-closed；最少应包含“finalized 后再 calc/finalize 必失败”。
+1. [x] Schema SSOT：新增 payroll tables + RLS（`modules/staffing/.../schema`）。
+2. [x] Schema→迁移闭环：按 `DEV-PLAN-024` 生成 `migrations/staffing/*` + `atlas.sum`。
+3. [x] Kernel：实现 `submit_payroll_pay_period_event` 与 `submit_payroll_run_event`（幂等 + 状态机）。
+4. [x] Server：实现 PayrollStore（PG）与 handlers/routes（UI + internal API）。
+5. [x] Routing/Authz：更新 `config/routing/allowlist.yaml`、`pkg/authz/registry.go`、`internal/server/authz_middleware.go`。
+6. [x] Tests：覆盖状态机、幂等、RLS fail-closed；最少应包含“finalized 后再 calc/finalize 必失败”。
 
 ## 9. 测试与验收（Acceptance Criteria）
 
 ### 9.1 最小测试矩阵（必须）
 
-- [ ] pay period：创建成功；同 pay_group 重叠创建失败（稳定错误码）；参数校验失败（422/稳定错误码）。
-- [ ] run：创建成功；重复 `event_id` 幂等成功；同一 pay period 多次 finalize 被阻断。
-- [ ] 状态机：非法跃迁（例如 draft→finalized）失败；finalized 后任何动作失败。
-- [ ] RLS：不设置 `app.current_tenant` 时，对 payroll 表的读写全部失败（fail-closed）。
+- [x] pay period：创建成功；同 pay_group 重叠创建失败（稳定错误码）；参数校验失败（422/稳定错误码）。
+- [x] run：创建成功；重复 `event_id` 幂等成功；同一 pay period 多次 finalize 被阻断。
+- [x] 状态机：非法跃迁（例如 draft→finalized）失败；finalized 后任何动作失败。
+- [x] RLS：不设置 `app.current_tenant` 时，对 payroll 表的读写全部失败（fail-closed）。
 
 ### 9.2 验收脚本（建议以 UI 可操作复现）
 
