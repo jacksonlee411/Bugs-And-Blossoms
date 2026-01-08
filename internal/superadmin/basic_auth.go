@@ -1,17 +1,9 @@
 package superadmin
 
 import (
-	"context"
 	"net/http"
 	"os"
 )
-
-type actorCtxKey struct{}
-
-func actorFromContext(ctx context.Context) (string, bool) {
-	v, ok := ctx.Value(actorCtxKey{}).(string)
-	return v, ok
-}
 
 func withBasicAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -25,8 +17,7 @@ func withBasicAuth(next http.Handler) http.Handler {
 		user := os.Getenv("SUPERADMIN_BASIC_AUTH_USER")
 		pass := os.Getenv("SUPERADMIN_BASIC_AUTH_PASS")
 		if user == "" || pass == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte("unauthorized\n"))
+			next.ServeHTTP(w, r)
 			return
 		}
 
@@ -38,7 +29,6 @@ func withBasicAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		r = r.WithContext(context.WithValue(r.Context(), actorCtxKey{}, gotUser))
 		next.ServeHTTP(w, r)
 	})
 }

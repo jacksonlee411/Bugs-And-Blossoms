@@ -1,32 +1,42 @@
 package superadmin
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
-
-func TestActorFromContext_Missing(t *testing.T) {
-	if _, ok := actorFromContext(context.Background()); ok {
-		t.Fatal("expected missing")
-	}
-}
 
 func TestWithBasicAuth_MissingEnv(t *testing.T) {
 	t.Setenv("SUPERADMIN_BASIC_AUTH_USER", "")
 	t.Setenv("SUPERADMIN_BASIC_AUTH_PASS", "")
 
 	h := withBasicAuth(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("unexpected next")
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
 	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
+	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestWithBasicAuth_BypassesWhenEnvMissing(t *testing.T) {
+	t.Setenv("SUPERADMIN_BASIC_AUTH_USER", "")
+	t.Setenv("SUPERADMIN_BASIC_AUTH_PASS", "")
+
+	called := false
+	h := withBasicAuth(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
+	req.SetBasicAuth("admin", "admin")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if !called {
+		t.Fatal("expected next")
 	}
 }
 
@@ -50,24 +60,37 @@ func TestWithBasicAuth_WrongCreds(t *testing.T) {
 	}
 }
 
-func TestWithBasicAuth_SetsActor(t *testing.T) {
+func TestWithBasicAuth_MissingHeader(t *testing.T) {
 	t.Setenv("SUPERADMIN_BASIC_AUTH_USER", "admin")
-	t.Setenv("SUPERADMIN_BASIC_AUTH_PASS", "admin")
+	t.Setenv("SUPERADMIN_BASIC_AUTH_PASS", "secret")
 
-	h := withBasicAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		actor, ok := actorFromContext(r.Context())
-		if !ok || actor != "admin" {
-			t.Fatalf("actor ok=%v actor=%q", ok, actor)
-		}
-		w.WriteHeader(http.StatusOK)
+	h := withBasicAuth(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unexpected next")
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestWithBasicAuth_Success(t *testing.T) {
+	t.Setenv("SUPERADMIN_BASIC_AUTH_USER", "admin")
+	t.Setenv("SUPERADMIN_BASIC_AUTH_PASS", "secret")
+
+	called := false
+	h := withBasicAuth(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
+	req.SetBasicAuth("admin", "secret")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if !called {
+		t.Fatal("expected next")
 	}
 }
 

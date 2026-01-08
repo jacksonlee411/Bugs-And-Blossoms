@@ -3,6 +3,11 @@ package superadmin
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -76,6 +81,23 @@ func (r stubRow) Scan(dest ...any) error {
 			*d = r.vals[i].(string)
 		case *bool:
 			*d = r.vals[i].(bool)
+		case *time.Time:
+			*d = r.vals[i].(time.Time)
+		case **time.Time:
+			if r.vals[i] == nil {
+				*d = nil
+				continue
+			}
+			if v, ok := r.vals[i].(*time.Time); ok {
+				*d = v
+				continue
+			}
+			if v, ok := r.vals[i].(time.Time); ok {
+				tmp := v
+				*d = &tmp
+				continue
+			}
+			return errors.New("unsupported dest")
 		default:
 			return errors.New("unsupported dest")
 		}
@@ -132,3 +154,60 @@ func (stubBatchResults) Exec() (pgconn.CommandTag, error) { return pgconn.Comman
 func (stubBatchResults) Query() (pgx.Rows, error)         { return &stubRows{}, nil }
 func (stubBatchResults) QueryRow() pgx.Row                { return stubRow{vals: []any{"ok"}} }
 func (stubBatchResults) Close() error                     { return nil }
+
+type stubIdentityProvider struct {
+	ident authenticatedIdentity
+	err   error
+}
+
+func (s stubIdentityProvider) AuthenticatePassword(context.Context, string, string) (authenticatedIdentity, error) {
+	return s.ident, s.err
+}
+
+type authedHandler struct {
+	h          http.Handler
+	principals *memoryPrincipalStore
+	sessions   *memorySessionStore
+	principal  superadminPrincipal
+	saSid      string
+}
+
+func newAuthedHandler(t *testing.T, pool pgBeginner) authedHandler {
+	t.Helper()
+	t.Setenv("AUTHZ_MODE", "enforce")
+
+	principals := newMemoryPrincipalStore()
+	sessions := newMemorySessionStore()
+	p, err := principals.UpsertFromKratos(context.Background(), "admin@example.invalid", "kid-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	saSid, err := sessions.Create(context.Background(), p.ID, time.Now().Add(time.Hour), "ip", "ua")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		Pool:             pool,
+		IdentityProvider: stubIdentityProvider{},
+		Principals:       principals,
+		Sessions:         sessions,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return authedHandler{
+		h:          h,
+		principals: principals,
+		sessions:   sessions,
+		principal:  p,
+		saSid:      saSid,
+	}
+}
+
+func (a authedHandler) newRequest(method string, path string, body io.Reader) *http.Request {
+	req := httptest.NewRequest(method, path, body)
+	req.AddCookie(&http.Cookie{Name: saSidCookieName, Value: a.saSid})
+	return req
+}

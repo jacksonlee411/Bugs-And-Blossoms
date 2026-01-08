@@ -11,17 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func newTestHandler(t *testing.T, pool pgBeginner) http.Handler {
+func newTestHandler(t *testing.T, pool pgBeginner) authedHandler {
 	t.Helper()
-	t.Setenv("SUPERADMIN_BASIC_AUTH_USER", "admin")
-	t.Setenv("SUPERADMIN_BASIC_AUTH_PASS", "admin")
-	t.Setenv("AUTHZ_MODE", "enforce")
-
-	h, err := NewHandlerWithOptions(HandlerOptions{Pool: pool})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return h
+	return newAuthedHandler(t, pool)
 }
 
 func TestTenantsIndex_Success(t *testing.T) {
@@ -40,10 +32,9 @@ func TestTenantsIndex_Success(t *testing.T) {
 
 	h := newTestHandler(t, pool)
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/tenants", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -74,10 +65,9 @@ func TestTenantsIndex_IgnoresUnknownTenantDomains(t *testing.T) {
 
 	h := newTestHandler(t, pool)
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/tenants", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -102,10 +92,9 @@ func TestTenantsIndex_PrimaryOnlyFirstWins(t *testing.T) {
 
 	h := newTestHandler(t, pool)
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/tenants", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -130,10 +119,9 @@ func TestTenantsIndex_InactiveTenant(t *testing.T) {
 
 	h := newTestHandler(t, pool)
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/tenants", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -151,10 +139,9 @@ func TestTenantsIndex_QueryError(t *testing.T) {
 		beginFn: func(context.Context) (pgx.Tx, error) { return &stubTx{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/tenants", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -171,10 +158,9 @@ func TestTenantsIndex_Empty(t *testing.T) {
 		beginFn: func(context.Context) (pgx.Tx, error) { return &stubTx{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/tenants", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -194,10 +180,9 @@ func TestTenantsIndex_ScanError(t *testing.T) {
 		beginFn: func(context.Context) (pgx.Tx, error) { return &stubTx{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/tenants", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -214,10 +199,9 @@ func TestTenantsIndex_RowsErr(t *testing.T) {
 		beginFn: func(context.Context) (pgx.Tx, error) { return &stubTx{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/tenants", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -234,10 +218,9 @@ func TestTenantsIndex_DomainQueryError(t *testing.T) {
 		beginFn: func(context.Context) (pgx.Tx, error) { return &stubTx{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/tenants", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -257,10 +240,9 @@ func TestTenantsIndex_DomainScanError(t *testing.T) {
 		beginFn: func(context.Context) (pgx.Tx, error) { return &stubTx{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/tenants", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -280,10 +262,9 @@ func TestTenantsIndex_DomainRowsErr(t *testing.T) {
 		beginFn: func(context.Context) (pgx.Tx, error) { return &stubTx{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/tenants", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/tenants", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -296,11 +277,10 @@ func TestTenantsCreate_WriteDisabled(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -312,11 +292,10 @@ func TestTenantsCreate_ParseFormError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", errReader{})
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants", errReader{})
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -328,11 +307,10 @@ func TestTenantsCreate_InvalidInput(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=&hostname="))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=&hostname="))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -344,11 +322,10 @@ func TestTenantsCreate_InvalidHostname(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local:8080"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local:8080"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -360,11 +337,10 @@ func TestTenantsCreate_BeginError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -379,11 +355,10 @@ func TestTenantsCreate_InsertTenantError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -400,11 +375,10 @@ func TestTenantsCreate_InsertDomainError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -421,11 +395,10 @@ func TestTenantsCreate_AuditError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -441,11 +414,10 @@ func TestTenantsCreate_CommitError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -460,12 +432,11 @@ func TestTenantsCreate_Success(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	req.Header.Set("X-Request-Id", "rid")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -473,6 +444,7 @@ func TestTenantsCreate_Success(t *testing.T) {
 
 func TestHandleTenantToggle_BadPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", nil)
+	req = req.WithContext(context.WithValue(req.Context(), principalCtxKey{}, superadminPrincipal{ID: "p1", Status: "active"}))
 	rec := httptest.NewRecorder()
 	handleTenantToggle(rec, req, stubPool{beginFn: func(context.Context) (pgx.Tx, error) { return &stubTx{}, nil }}, true)
 	if rec.Code != http.StatusBadRequest {
@@ -490,10 +462,9 @@ func TestTenantToggle_ExecError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/disable", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/disable", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -505,10 +476,9 @@ func TestTenantToggle_BeginError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/enable", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/enable", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -521,10 +491,9 @@ func TestTenantToggle_CommitError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/enable", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/enable", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -537,10 +506,9 @@ func TestTenantToggle_EnableSuccess(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/enable", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/enable", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -553,10 +521,9 @@ func TestTenantToggle_DisableSuccess(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/00000000-0000-0000-0000-000000000001/disable", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/00000000-0000-0000-0000-000000000001/disable", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -569,10 +536,9 @@ func TestTenantToggle_WriteDisabled(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/enable", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/enable", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -585,10 +551,9 @@ func TestTenantToggle_AuditError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/enable", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/enable", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -600,11 +565,10 @@ func TestTenantBindDomain_InvalidHost(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=bad host"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=bad host"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -617,11 +581,10 @@ func TestTenantBindDomain_WriteDisabled(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -633,11 +596,10 @@ func TestTenantBindDomain_ParseFormError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/domains", errReader{})
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/domains", errReader{})
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -645,6 +607,7 @@ func TestTenantBindDomain_ParseFormError(t *testing.T) {
 
 func TestHandleTenantBindDomain_BadPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants", nil)
+	req = req.WithContext(context.WithValue(req.Context(), principalCtxKey{}, superadminPrincipal{ID: "p1", Status: "active"}))
 	rec := httptest.NewRecorder()
 	handleTenantBindDomain(rec, req, stubPool{beginFn: func(context.Context) (pgx.Tx, error) { return &stubTx{}, nil }})
 	if rec.Code != http.StatusBadRequest {
@@ -658,11 +621,10 @@ func TestTenantBindDomain_BeginError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -675,11 +637,10 @@ func TestTenantBindDomain_ExecError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -692,11 +653,10 @@ func TestTenantBindDomain_AuditError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -709,11 +669,10 @@ func TestTenantBindDomain_CommitError(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/t1/domains", strings.NewReader("hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -726,11 +685,10 @@ func TestTenantBindDomain_Success(t *testing.T) {
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/superadmin/tenants/00000000-0000-0000-0000-000000000001/domains", strings.NewReader("hostname=x.local"))
+	req := h.newRequest(http.MethodPost, "/superadmin/tenants/00000000-0000-0000-0000-000000000001/domains", strings.NewReader("hostname=x.local"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth("admin", "admin")
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d", rec.Code)
 	}

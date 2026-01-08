@@ -159,7 +159,12 @@ func main() {
 		if len(req.Credentials.Password.Identifiers) > 0 {
 			identifier = strings.TrimSpace(req.Credentials.Password.Identifiers[0])
 		}
-		if req.SchemaID == "" || tenantID == "" || email == "" || password == "" || identifier == "" {
+		isSuperadmin := strings.HasPrefix(identifier, "sa:")
+		if req.SchemaID == "" || email == "" || password == "" || identifier == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if tenantID == "" && !isSuperadmin {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
