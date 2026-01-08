@@ -3426,6 +3426,27 @@ BEGIN
   v_lock_key := format('staffing:payroll:run:%s:%s', p_tenant_id, p_run_id);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
+  SELECT * INTO v_existing
+  FROM staffing.payroll_run_events
+  WHERE event_id = p_event_id;
+
+  IF FOUND THEN
+    IF v_existing.tenant_id <> p_tenant_id
+      OR v_existing.run_id <> p_run_id
+      OR v_existing.pay_period_id <> p_pay_period_id
+      OR v_existing.event_type <> p_event_type
+      OR v_existing.payload <> v_payload
+      OR v_existing.request_id <> p_request_id
+      OR v_existing.initiator_id <> p_initiator_id
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+    END IF;
+
+    RETURN v_existing.id;
+  END IF;
+
   SELECT * INTO v_existing_run
   FROM staffing.payroll_runs
   WHERE tenant_id = p_tenant_id AND id = p_run_id
@@ -3538,7 +3559,6 @@ BEGIN
       OR v_existing.run_id <> p_run_id
       OR v_existing.pay_period_id <> p_pay_period_id
       OR v_existing.event_type <> p_event_type
-      OR v_existing.run_state <> v_next_state
       OR v_existing.payload <> v_payload
       OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_id <> p_initiator_id
