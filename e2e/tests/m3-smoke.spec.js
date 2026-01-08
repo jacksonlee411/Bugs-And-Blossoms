@@ -13,7 +13,8 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const superadminBaseURL = process.env.E2E_SUPERADMIN_BASE_URL || "http://localhost:8081";
   const superadminUser = process.env.E2E_SUPERADMIN_USER || "admin";
   const superadminPass = process.env.E2E_SUPERADMIN_PASS || "admin";
-  const superadminEmail = process.env.E2E_SUPERADMIN_EMAIL || "admin@example.invalid";
+  const defaultSuperadminEmail = `admin+${runID}@example.invalid`;
+  const superadminEmail = process.env.E2E_SUPERADMIN_EMAIL || defaultSuperadminEmail;
   const superadminLoginPass = process.env.E2E_SUPERADMIN_LOGIN_PASS || superadminPass;
   const kratosAdminURL = process.env.E2E_KRATOS_ADMIN_URL || "http://localhost:4434";
 
