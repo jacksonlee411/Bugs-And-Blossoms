@@ -261,12 +261,8 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, store JobCatalogSt
 		return
 	}
 
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		asOf = time.Now().UTC().Format("2006-01-02")
-	}
-	if _, err := time.Parse("2006-01-02", asOf); err != nil {
-		writePage(w, r, renderJobCatalog(nil, nil, tenant, "", "as_of 无效: "+err.Error(), asOf, ""))
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
 		return
 	}
 

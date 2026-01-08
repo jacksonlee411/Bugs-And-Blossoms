@@ -117,13 +117,13 @@ func TestHandleJobCatalog_InvalidAsOf(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleJobCatalog(rec, req, newJobCatalogMemoryStore())
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
 }
 
 func TestHandleJobCatalog_ListBUError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleJobCatalog(rec, req, errJobCatalogStore{err: errors.New("boom")})
@@ -242,7 +242,7 @@ func TestHandleJobCatalog_Post_CreateError(t *testing.T) {
 
 func TestHandleJobCatalog_DefaultsAndMethodNotAllowed(t *testing.T) {
 	store := newJobCatalogMemoryStore()
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleJobCatalog(rec, req, store)
@@ -253,7 +253,7 @@ func TestHandleJobCatalog_DefaultsAndMethodNotAllowed(t *testing.T) {
 	_ = renderJobCatalog(nil, []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}, Tenant{Name: "T"}, "BU000", "", "2026-01-01", "")
 	_ = renderJobCatalog([]JobFamilyGroup{{ID: "g1", Code: "C", Name: "N", IsActive: true, EffectiveDay: "2026-01-01"}}, []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}, Tenant{Name: "T"}, "BU000", "err", "2026-01-01", "SHARE")
 
-	req2 := httptest.NewRequest(http.MethodPut, "/org/job-catalog", nil)
+	req2 := httptest.NewRequest(http.MethodPut, "/org/job-catalog?as_of=2026-01-01", nil)
 	req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec2 := httptest.NewRecorder()
 	handleJobCatalog(rec2, req2, store)

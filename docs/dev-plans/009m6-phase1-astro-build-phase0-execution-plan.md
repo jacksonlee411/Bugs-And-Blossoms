@@ -141,15 +141,15 @@
 
 ### PR-4：Go Server 切换为 Astro Shell（移除 Go 拼接壳）
 
-- [ ] `/app` 读取并输出 `assets/astro/app.html`，并进行最小占位符注入（替换 `__BB_AS_OF__`；对齐 `DEV-PLAN-018` §4.5.2；不在 handler 内重写结构）。
-- [ ] `as_of` 缺省/校验行为对齐 `DEV-PLAN-018` §3.3（302 补齐；非法 400），并保证注入后的 HTMX 请求不会丢失 `as_of`。
-- [ ] `writeShell*`/全页模式收口：将“非 HTMX”页面的外壳渲染统一切换到 Astro Shell，确保“同一 URL 支持全页与 partial”。
-- [ ] 静态资源分发确保覆盖 Astro build 产物路径（仍在 `/assets/*` 命名空间下）。
+- [X] `/app` 读取并输出 `assets/astro/app.html`，并进行最小占位符注入（替换 `__BB_AS_OF__`；对齐 `DEV-PLAN-018` §4.5.2；不在 handler 内重写结构）。
+- [X] `as_of` 缺省/校验行为对齐 `DEV-PLAN-018` §3.3（302 补齐；非法 400），并保证注入后的 HTMX 请求不会丢失 `as_of`。
+- [X] `writeShell*`/全页模式收口：将“非 HTMX”页面的外壳渲染统一切换到 Astro Shell，确保“同一 URL 支持全页与 partial”。
+- [X] 静态资源分发确保覆盖 Astro build 产物路径（仍在 `/assets/*` 命名空间下）。
 
 ### PR-5：测试与验收脚本收口（最小可复现）
 
-- [ ] 单测：覆盖 `/app` 全页响应中包含四个挂载点，并且在登录态会触发 `/ui/nav` 等 HTMX 拉取（只测“契约存在”，不测 Astro 内部实现）。
-- [ ] E2E（如需）：增加一个轻量断言（打开 `/app` 后壳加载成功，且能通过导航进入一个模块页）。
+- [X] 单测：覆盖 `/app` 全页响应中包含四个挂载点，并且在登录态会触发 `/ui/nav` 等 HTMX 拉取（只测“契约存在”，不测 Astro 内部实现）。
+- [X] E2E（如需）：增加一个轻量断言（打开 `/app` 后壳加载成功，且能通过导航进入一个模块页）。
 
 ### PR-6：Readiness 证据登记与文档收口
 

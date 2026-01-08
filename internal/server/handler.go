@@ -7,8 +7,10 @@ import (
 	"html"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -207,7 +209,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			return
 		}
 		setSIDCookie(w, sid)
-		http.Redirect(w, r, "/app", http.StatusFound)
+		http.Redirect(w, r, "/app?as_of="+currentUTCDateString(), http.StatusFound)
 	}))
 	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if sid, ok := readSID(r); ok {
@@ -227,27 +229,42 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/app", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeShell(w, r, `<div id="content" hx-get="/app/home" hx-trigger="load"></div>`)
+		if _, ok := requireAsOf(w, r); !ok {
+			return
+		}
+		writeShell(w, r, "")
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/app/home", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asOf, ok := requireAsOf(w, r)
+		if !ok {
+			return
+		}
 		l := lang(r)
-		writeContent(w, r, `<h1>Home</h1>`+
+		writePage(w, r, `<h1>Home</h1>`+
 			`<p>Pick a module:</p>`+
 			`<ul>`+
-			`<li><a href="/org/nodes" hx-get="/org/nodes" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit")+`</a></li>`+
-			`<li><a href="/org/snapshot" hx-get="/org/snapshot" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit_snapshot")+`</a></li>`+
-			`<li><a href="/org/setid" hx-get="/org/setid" hx-target="#content" hx-push-url="true">`+tr(l, "nav_setid")+`</a></li>`+
-			`<li><a href="/org/job-catalog" hx-get="/org/job-catalog" hx-target="#content" hx-push-url="true">`+tr(l, "nav_jobcatalog")+`</a></li>`+
-			`<li><a href="/org/positions" hx-get="/org/positions" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
-			`<li><a href="/person/persons" hx-get="/person/persons" hx-target="#content" hx-push-url="true">`+tr(l, "nav_person")+`</a></li>`+
+			`<li><a href="/org/nodes?as_of=`+asOf+`" hx-get="/org/nodes?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit")+`</a></li>`+
+			`<li><a href="/org/snapshot?as_of=`+asOf+`" hx-get="/org/snapshot?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit_snapshot")+`</a></li>`+
+			`<li><a href="/org/setid?as_of=`+asOf+`" hx-get="/org/setid?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_setid")+`</a></li>`+
+			`<li><a href="/org/job-catalog?as_of=`+asOf+`" hx-get="/org/job-catalog?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_jobcatalog")+`</a></li>`+
+			`<li><a href="/org/positions?as_of=`+asOf+`" hx-get="/org/positions?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
+			`<li><a href="/person/persons?as_of=`+asOf+`" hx-get="/person/persons?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_person")+`</a></li>`+
 			`</ul>`)
 	}))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/nav", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeContent(w, r, renderNav(r))
+		asOf, ok := requireAsOf(w, r)
+		if !ok {
+			return
+		}
+		writeContent(w, r, renderNav(r, asOf))
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/topbar", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeContent(w, r, renderTopbar(r))
+		asOf, ok := requireAsOf(w, r)
+		if !ok {
+			return
+		}
+		writeContent(w, r, renderTopbar(r, asOf))
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/flash", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeContent(w, r, "")
@@ -430,25 +447,64 @@ func pathHasPrefixSegment(path, prefix string) bool {
 	return len(path) > len(prefix) && path[:len(prefix)+1] == prefix+"/"
 }
 
-func renderNav(r *http.Request) string {
+func renderNav(r *http.Request, asOf string) string {
 	l := lang(r)
 	return `<nav><ul>` +
-		`<li><a href="/org/nodes" hx-get="/org/nodes" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit") + `</a></li>` +
-		`<li><a href="/org/snapshot" hx-get="/org/snapshot" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit_snapshot") + `</a></li>` +
-		`<li><a href="/org/setid" hx-get="/org/setid" hx-target="#content" hx-push-url="true">` + tr(l, "nav_setid") + `</a></li>` +
-		`<li><a href="/org/job-catalog" hx-get="/org/job-catalog" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
-		`<li><a href="/org/positions" hx-get="/org/positions" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
-		`<li><a href="/person/persons" hx-get="/person/persons" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
+		`<li><a href="/org/nodes?as_of=` + asOf + `" hx-get="/org/nodes?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit") + `</a></li>` +
+		`<li><a href="/org/snapshot?as_of=` + asOf + `" hx-get="/org/snapshot?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit_snapshot") + `</a></li>` +
+		`<li><a href="/org/setid?as_of=` + asOf + `" hx-get="/org/setid?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_setid") + `</a></li>` +
+		`<li><a href="/org/job-catalog?as_of=` + asOf + `" hx-get="/org/job-catalog?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
+		`<li><a href="/org/positions?as_of=` + asOf + `" hx-get="/org/positions?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
+		`<li><a href="/person/persons?as_of=` + asOf + `" hx-get="/person/persons?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
 		`</ul></nav>`
 }
 
-func renderTopbar(r *http.Request) string {
+func renderTopbar(r *http.Request, asOf string) string {
 	l := lang(r)
-	return `<div>` +
-		`<a href="/lang/en">EN</a> | <a href="/lang/zh">中文</a>` +
-		`<span style="margin-left:12px">` + tr(l, "as_of") + `</span>` +
-		`<input type="date" name="as_of" />` +
-		`</div>`
+	currentURL := strings.TrimSpace(r.Header.Get("HX-Current-URL"))
+	if currentURL == "" {
+		currentURL = strings.TrimSpace(r.Header.Get("Referer"))
+	}
+
+	targetPath := "/app/home"
+	var q url.Values
+	if currentURL != "" {
+		if u, err := url.Parse(currentURL); err == nil {
+			if u.Path != "" {
+				targetPath = u.Path
+			}
+			q = u.Query()
+		}
+	}
+	if targetPath == "/" || targetPath == "/app" || targetPath == "/login" {
+		targetPath = "/app/home"
+	}
+
+	var keys []string
+	for k := range q {
+		if k == "as_of" {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var b strings.Builder
+	b.WriteString(`<div>`)
+	b.WriteString(`<a href="/lang/en">EN</a> | <a href="/lang/zh">中文</a>`)
+	b.WriteString(`<form method="GET" action="` + html.EscapeString(targetPath) + `" hx-get="` + html.EscapeString(targetPath) + `" hx-target="#content" hx-push-url="true" style="display:inline">`)
+	for _, k := range keys {
+		for _, v := range q[k] {
+			b.WriteString(`<input type="hidden" name="` + html.EscapeString(k) + `" value="` + html.EscapeString(v) + `" />`)
+		}
+	}
+	b.WriteString(`<span style="margin-left:12px">` + tr(l, "as_of") + `</span>`)
+	b.WriteString(`<input type="date" name="as_of" value="` + html.EscapeString(asOf) + `" />`)
+	b.WriteString(`<button type="submit">Go</button>`)
+	b.WriteString(`</form>`)
+	b.WriteString(`</div>`)
+
+	return b.String()
 }
 
 func lang(r *http.Request) string {
@@ -521,24 +577,24 @@ func writeShell(w http.ResponseWriter, r *http.Request, bodyHTML string) {
 }
 
 func writeShellWithStatus(w http.ResponseWriter, r *http.Request, status int, bodyHTML string) {
-	l := lang(r)
+	writeShellWithStatusFromAssets(w, r, status, bodyHTML, embeddedAssets)
+}
+
+func writeShellWithStatusFromAssets(w http.ResponseWriter, r *http.Request, status int, bodyHTML string, assets fs.FS) {
+	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
+	if asOf == "" {
+		asOf = currentUTCDateString()
+	}
+
+	out, err := renderAstroShellFromAssets(assets, r, asOf, bodyHTML)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "shell_error", "shell error")
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(`<!doctype html><html><head>`))
-	_, _ = w.Write([]byte(`<meta charset="utf-8">`))
-	_, _ = w.Write([]byte(`<title>` + tr(l, "nav_orgunit") + `</title>`))
-	_, _ = w.Write([]byte(`<link rel="stylesheet" href="/assets/app.css">`))
-	_, _ = w.Write([]byte(`<script src="/assets/js/lib/htmx.min.js"></script>`))
-	_, _ = w.Write([]byte(`<script defer src="/assets/js/lib/alpine.min.js"></script>`))
-	_, _ = w.Write([]byte(`</head><body>`))
-	if _, ok := currentPrincipal(r.Context()); ok {
-		_, _ = w.Write([]byte(`<aside id="nav" hx-get="/ui/nav" hx-trigger="load"></aside>`))
-		_, _ = w.Write([]byte(`<header id="topbar" hx-get="/ui/topbar" hx-trigger="load"></header>`))
-		_, _ = w.Write([]byte(`<div id="flash" hx-get="/ui/flash" hx-trigger="load"></div>`))
-	}
-	_, _ = w.Write([]byte(`<main id="content">` + bodyHTML + `</main>`))
-	_, _ = w.Write([]byte(`</body></html>`))
-	_ = l
+	_, _ = w.Write([]byte(out))
 }
 
 func writeContent(w http.ResponseWriter, _ *http.Request, bodyHTML string) {
@@ -553,4 +609,66 @@ func writePage(w http.ResponseWriter, r *http.Request, bodyHTML string) {
 		return
 	}
 	writeShell(w, r, bodyHTML)
+}
+
+const astroShellPath = "assets/astro/app.html"
+const astroAsOfToken = "__BB_AS_OF__"
+
+func renderAstroShellFromAssets(assets fs.FS, r *http.Request, asOf string, bodyHTML string) (string, error) {
+	b, err := fs.ReadFile(assets, astroShellPath)
+	if err != nil {
+		return "", err
+	}
+	return renderAstroShellFromTemplate(string(b), r, asOf, bodyHTML)
+}
+
+func renderAstroShellFromTemplate(shell string, r *http.Request, asOf string, bodyHTML string) (string, error) {
+	if !strings.Contains(shell, astroAsOfToken) {
+		return "", errors.New("shell missing as_of token")
+	}
+
+	if bodyHTML != "" {
+		var err error
+		shell, err = replaceMainContent(shell, bodyHTML)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if _, ok := currentPrincipal(r.Context()); !ok {
+		shell = strings.ReplaceAll(shell, ` hx-trigger="load"`, "")
+	}
+
+	shell = strings.ReplaceAll(shell, astroAsOfToken, asOf)
+	if strings.Contains(shell, astroAsOfToken) {
+		return "", errors.New("shell still contains as_of token after injection")
+	}
+
+	return shell, nil
+}
+
+func replaceMainContent(shell string, bodyHTML string) (string, error) {
+	idIdx := strings.Index(shell, `id="content"`)
+	if idIdx < 0 {
+		return "", errors.New("shell missing #content mount")
+	}
+
+	openStart := strings.LastIndex(shell[:idIdx], "<main")
+	if openStart < 0 {
+		return "", errors.New("shell missing <main> for #content")
+	}
+
+	openEndRel := strings.Index(shell[openStart:], ">")
+	if openEndRel < 0 {
+		return "", errors.New("shell has unterminated <main> tag")
+	}
+	openEnd := openStart + openEndRel
+
+	closeRel := strings.Index(shell[openEnd+1:], "</main>")
+	if closeRel < 0 {
+		return "", errors.New("shell missing closing </main> for #content")
+	}
+	closeIdx := openEnd + 1 + closeRel
+
+	return shell[:openEnd+1] + bodyHTML + shell[closeIdx:], nil
 }

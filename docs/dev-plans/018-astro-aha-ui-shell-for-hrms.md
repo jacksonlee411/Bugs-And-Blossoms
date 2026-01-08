@@ -193,8 +193,8 @@ flowchart LR
 1. [X] 在 `apps/web` 初始化 Astro 工程，落盘 `package.json` 与 lockfile，并按 `DEV-PLAN-011` 冻结 Node/pnpm/Astro 版本口径。（009M6 PR-1）
 2. [X] 定义 App Shell（Astro）：包含 §4.4 的四个固定挂载点，并以 HTMX 拉取 nav/topbar/flash 的方式装配动态上下文。（009M6 PR-1）
 3. [X] 按 §4.5 落地 Astro build 产物复制到 `internal/server/assets/astro/**` 的 pipeline，并由 Go server 在 `/assets/*` 下提供静态资源。（009M6 PR-2）
-4. [ ] 将 `/app` 的 Shell 渲染切换为 Astro 产物（不在 Go handler 内拼接整页 HTML），但继续保留 `/ui/nav`、`/ui/topbar`、`/ui/flash` 的服务端权威渲染。
-5. [ ] 后端提供最小 UI partial：`/ui/nav`、`/ui/topbar`、`/ui/flash` 与一个占位内容页（例如 `/app/home`），验证：
+4. [X] 将 `/app` 的 Shell 渲染切换为 Astro 产物（不在 Go handler 内拼接整页 HTML），但继续保留 `/ui/nav`、`/ui/topbar`、`/ui/flash` 的服务端权威渲染。（009M6 PR-4）
+5. [X] 后端提供最小 UI partial：`/ui/nav`、`/ui/topbar`、`/ui/flash` 与一个占位内容页（例如 `/app/home`），验证：（009M6 PR-4）
    - 静态资源可用（Astro build 产物）
    - HTMX swap 正常
    - Alpine 初始化不与 HTMX 冲突

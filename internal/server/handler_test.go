@@ -326,18 +326,18 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	}
 
 	protected := []string{
-		"/app",
-		"/app/home",
-		"/ui/flash",
-		"/ui/nav",
-		"/ui/topbar",
-		"/org/nodes",
-		"/org/snapshot",
-		"/org/setid",
-		"/org/job-catalog",
-		"/org/positions",
-		"/org/assignments",
-		"/person/persons",
+		"/app?as_of=2026-01-01",
+		"/app/home?as_of=2026-01-01",
+		"/ui/flash?as_of=2026-01-01",
+		"/ui/nav?as_of=2026-01-01",
+		"/ui/topbar?as_of=2026-01-01",
+		"/org/nodes?as_of=2026-01-01",
+		"/org/snapshot?as_of=2026-01-01",
+		"/org/setid?as_of=2026-01-01",
+		"/org/job-catalog?as_of=2026-01-01",
+		"/org/positions?as_of=2026-01-01",
+		"/org/assignments?as_of=2026-01-01",
+		"/person/persons?as_of=2026-01-01",
 	}
 	for _, p := range protected {
 		req := httptest.NewRequest(http.MethodGet, p, nil)
@@ -350,7 +350,34 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		}
 	}
 
-	reqSetIDPost := httptest.NewRequest(http.MethodPost, "/org/setid", strings.NewReader("action=create_setid&setid=A0001&name=Default+A"))
+	reqAppMissingAsOf := httptest.NewRequest(http.MethodGet, "/app", nil)
+	reqAppMissingAsOf.Host = "localhost:8080"
+	reqAppMissingAsOf.AddCookie(session)
+	recAppMissingAsOf := httptest.NewRecorder()
+	h.ServeHTTP(recAppMissingAsOf, reqAppMissingAsOf)
+	if recAppMissingAsOf.Code != http.StatusFound {
+		t.Fatalf("app (missing as_of) status=%d", recAppMissingAsOf.Code)
+	}
+
+	reqNavMissingAsOf := httptest.NewRequest(http.MethodGet, "/ui/nav", nil)
+	reqNavMissingAsOf.Host = "localhost:8080"
+	reqNavMissingAsOf.AddCookie(session)
+	recNavMissingAsOf := httptest.NewRecorder()
+	h.ServeHTTP(recNavMissingAsOf, reqNavMissingAsOf)
+	if recNavMissingAsOf.Code != http.StatusFound {
+		t.Fatalf("nav (missing as_of) status=%d", recNavMissingAsOf.Code)
+	}
+
+	reqTopbarMissingAsOf := httptest.NewRequest(http.MethodGet, "/ui/topbar", nil)
+	reqTopbarMissingAsOf.Host = "localhost:8080"
+	reqTopbarMissingAsOf.AddCookie(session)
+	recTopbarMissingAsOf := httptest.NewRecorder()
+	h.ServeHTTP(recTopbarMissingAsOf, reqTopbarMissingAsOf)
+	if recTopbarMissingAsOf.Code != http.StatusFound {
+		t.Fatalf("topbar (missing as_of) status=%d", recTopbarMissingAsOf.Code)
+	}
+
+	reqSetIDPost := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader("action=create_setid&setid=A0001&name=Default+A"))
 	reqSetIDPost.Host = "localhost:8080"
 	reqSetIDPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqSetIDPost.AddCookie(session)
@@ -370,7 +397,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("jobcatalog post status=%d", recJobCatalogPost.Code)
 	}
 
-	reqOrgSnapshotPost := httptest.NewRequest(http.MethodPost, "/org/snapshot", strings.NewReader("name=A"))
+	reqOrgSnapshotPost := httptest.NewRequest(http.MethodPost, "/org/snapshot?as_of=2026-01-01", strings.NewReader("name=A"))
 	reqOrgSnapshotPost.Host = "localhost:8080"
 	reqOrgSnapshotPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqOrgSnapshotPost.AddCookie(session)
@@ -390,7 +417,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("org create status=%d", recCreate.Code)
 	}
 
-	reqNavZH := httptest.NewRequest(http.MethodGet, "/ui/nav", nil)
+	reqNavZH := httptest.NewRequest(http.MethodGet, "/ui/nav?as_of=2026-01-01", nil)
 	reqNavZH.Host = "localhost:8080"
 	reqNavZH.AddCookie(session)
 	reqNavZH.AddCookie(&http.Cookie{Name: "lang", Value: "zh"})
@@ -400,7 +427,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("nav zh status=%d", recNavZH.Code)
 	}
 
-	reqTopbarZH := httptest.NewRequest(http.MethodGet, "/ui/topbar", nil)
+	reqTopbarZH := httptest.NewRequest(http.MethodGet, "/ui/topbar?as_of=2026-01-01", nil)
 	reqTopbarZH.Host = "localhost:8080"
 	reqTopbarZH.AddCookie(session)
 	reqTopbarZH.AddCookie(&http.Cookie{Name: "lang", Value: "zh"})
@@ -475,7 +502,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("missing %s cookie (2)", sidCookieName)
 	}
 
-	reqPersonPost := httptest.NewRequest(http.MethodPost, "/person/persons", strings.NewReader("pernr=1&display_name=A"))
+	reqPersonPost := httptest.NewRequest(http.MethodPost, "/person/persons?as_of=2026-01-01", strings.NewReader("pernr=1&display_name=A"))
 	reqPersonPost.Host = "localhost:8080"
 	reqPersonPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqPersonPost.AddCookie(session)
