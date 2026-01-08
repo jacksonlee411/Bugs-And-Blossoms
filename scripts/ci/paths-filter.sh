@@ -24,7 +24,7 @@ set_out() {
 set_out "docs" "$(has '^(AGENTS\\.md|docs/)' && echo true || echo false)"
 set_out "go" "$(has '(\\.go$|^go\\.(mod|sum)$|^cmd/|^internal/|^modules/|^pkg/)' && echo true || echo false)"
 set_out "routing" "$(has '^(config/routing/|scripts/routing/|docs/dev-plans/017-)' && echo true || echo false)"
-set_out "ui" "$(has '^(apps/web/)' && echo true || echo false)"
+set_out "ui" "$(has '^(apps/web/|internal/server/assets/astro/)' && echo true || echo false)"
 set_out "i18n" "$(has '^(i18n/|config/i18n/)' && echo true || echo false)"
 set_out "db" "$(has '^(atlas\\.hcl|migrations/|compose\\.dev\\.yml|compose\\.yml|scripts/db/|modules/.+/infrastructure/)' && echo true || echo false)"
 set_out "sqlc" "$(has '^(sqlc\\.ya?ml|internal/sqlc/|modules/.+/infrastructure/sqlc/|modules/.+/infrastructure/persistence/schema/)' && echo true || echo false)"
