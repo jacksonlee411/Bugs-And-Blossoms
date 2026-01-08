@@ -174,6 +174,105 @@ func TestAppHome_RedirectsWhenAsOfMissing(t *testing.T) {
 	}
 }
 
+func TestNewHandler_PayrollRoutesWired(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
+	store := stubPayrollStore{
+		listPayPeriodsPeriods: []PayPeriod{{ID: "pp1", PayGroup: "monthly", StartDate: "2026-01-01", EndDateExclusive: "2026-02-01", Status: "open"}},
+		createPayPeriodOut:    PayPeriod{ID: "pp2", PayGroup: "monthly", StartDate: "2026-02-01", EndDateExclusive: "2026-03-01", Status: "open"},
+		listRunsRuns:          []PayrollRun{{ID: "run1", PayPeriodID: "pp1", RunState: "draft"}},
+		createRunOut:          PayrollRun{ID: "run1", PayPeriodID: "pp1", RunState: "draft"},
+		getRunOut:             PayrollRun{ID: "run1", PayPeriodID: "pp1", RunState: "draft"},
+		calcOut:               PayrollRun{ID: "run1", PayPeriodID: "pp1", RunState: "calculated"},
+		finalizeOut:           PayrollRun{ID: "run1", PayPeriodID: "pp1", RunState: "finalized"},
+	}
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver:  localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{Email: "tenant-admin@example.invalid", KratosIdentityID: "kid1"}},
+		OrgUnitStore:     newOrgUnitMemoryStore(),
+		PayrollStore:     store,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	loginReq.Host = "localhost:8080"
+	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginRec := httptest.NewRecorder()
+	h.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusFound {
+		t.Fatalf("login status=%d", loginRec.Code)
+	}
+	sidCookie := loginRec.Result().Cookies()[0]
+	if sidCookie == nil || sidCookie.Name != "sid" || sidCookie.Value == "" {
+		t.Fatalf("unexpected sid cookie: %#v", sidCookie)
+	}
+
+	do := func(method string, target string, body []byte, contentType string, hx bool) *httptest.ResponseRecorder {
+		var req *http.Request
+		if body == nil {
+			req = httptest.NewRequest(method, target, nil)
+		} else {
+			req = httptest.NewRequest(method, target, bytes.NewReader(body))
+		}
+		req.Host = "localhost:8080"
+		req.AddCookie(sidCookie)
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
+		}
+		if hx {
+			req.Header.Set("HX-Request", "true")
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := do(http.MethodGet, "/org/payroll-periods?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {
+		t.Fatalf("payroll periods get status=%d", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/org/payroll-periods?as_of=2026-01-01", []byte("pay_group=monthly&start_date=2026-02-01&end_date_exclusive=2026-03-01"), "application/x-www-form-urlencoded", false); rec.Code != http.StatusSeeOther {
+		t.Fatalf("payroll periods post status=%d", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/org/payroll-runs?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {
+		t.Fatalf("payroll runs get status=%d", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/org/payroll-runs?as_of=2026-01-01", []byte("pay_period_id=pp1"), "application/x-www-form-urlencoded", false); rec.Code != http.StatusSeeOther {
+		t.Fatalf("payroll runs post status=%d", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/org/payroll-runs/run1?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {
+		t.Fatalf("payroll run detail status=%d", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/org/payroll-runs/run1/calculate?as_of=2026-01-01", nil, "", false); rec.Code != http.StatusSeeOther {
+		t.Fatalf("payroll run calculate status=%d", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/org/payroll-runs/run1/finalize?as_of=2026-01-01", nil, "", false); rec.Code != http.StatusSeeOther {
+		t.Fatalf("payroll run finalize status=%d", rec.Code)
+	}
+
+	if rec := do(http.MethodGet, "/org/api/payroll-periods?pay_group=monthly", nil, "", false); rec.Code != http.StatusOK {
+		t.Fatalf("payroll periods api get status=%d", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/org/api/payroll-periods", []byte(`{"pay_group":"monthly","start_date":"2026-02-01","end_date_exclusive":"2026-03-01"}`), "application/json", false); rec.Code != http.StatusCreated {
+		t.Fatalf("payroll periods api post status=%d", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/org/api/payroll-runs?pay_period_id=pp1", nil, "", false); rec.Code != http.StatusOK {
+		t.Fatalf("payroll runs api get status=%d", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/org/api/payroll-runs", []byte(`{"pay_period_id":"pp1"}`), "application/json", false); rec.Code != http.StatusCreated {
+		t.Fatalf("payroll runs api post status=%d", rec.Code)
+	}
+}
+
 func TestMustNewHandler_PanicsOnBadPath(t *testing.T) {
 	if err := os.Setenv("ALLOWLIST_PATH", "no-such-file.yaml"); err != nil {
 		t.Fatal(err)
