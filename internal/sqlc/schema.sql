@@ -2396,6 +2396,21 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_versions (
 CREATE INDEX IF NOT EXISTS assignment_versions_person_lookup_btree
   ON staffing.assignment_versions (tenant_id, person_uuid, lower(validity));
 
+ALTER TABLE staffing.assignment_versions
+  ADD COLUMN IF NOT EXISTS base_salary numeric(15,2) NULL,
+  ADD COLUMN IF NOT EXISTS currency char(3) NOT NULL DEFAULT 'CNY',
+  ADD COLUMN IF NOT EXISTS profile jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+ALTER TABLE staffing.assignment_versions
+  DROP CONSTRAINT IF EXISTS assignment_versions_currency_check,
+  DROP CONSTRAINT IF EXISTS assignment_versions_base_salary_check,
+  DROP CONSTRAINT IF EXISTS assignment_versions_profile_is_object_check;
+
+ALTER TABLE staffing.assignment_versions
+  ADD CONSTRAINT assignment_versions_currency_check CHECK (currency = btrim(currency) AND currency = upper(currency)),
+  ADD CONSTRAINT assignment_versions_base_salary_check CHECK (base_salary IS NULL OR base_salary >= 0),
+  ADD CONSTRAINT assignment_versions_profile_is_object_check CHECK (jsonb_typeof(profile) = 'object');
+
 ALTER TABLE staffing.positions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.positions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.positions;
@@ -3197,6 +3212,30 @@ CREATE TABLE IF NOT EXISTS staffing.payslips (
 CREATE INDEX IF NOT EXISTS payslips_by_run_btree
   ON staffing.payslips (tenant_id, run_id, person_uuid, assignment_id);
 
+CREATE TABLE IF NOT EXISTS staffing.payslip_items (
+  id bigserial PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  payslip_id uuid NOT NULL,
+  item_code text NOT NULL,
+  item_kind text NOT NULL,
+  amount numeric(15,2) NOT NULL,
+  meta jsonb NOT NULL DEFAULT '{}'::jsonb,
+  last_run_event_id bigint NOT NULL REFERENCES staffing.payroll_run_events(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT payslip_items_item_code_nonempty_check CHECK (btrim(item_code) <> ''),
+  CONSTRAINT payslip_items_item_code_trim_check CHECK (item_code = btrim(item_code)),
+  CONSTRAINT payslip_items_item_code_upper_check CHECK (item_code = upper(item_code)),
+  CONSTRAINT payslip_items_item_kind_check CHECK (item_kind IN ('earning','deduction','employer_cost')),
+  CONSTRAINT payslip_items_meta_is_object_check CHECK (jsonb_typeof(meta) = 'object'),
+  CONSTRAINT payslip_items_payslip_fk FOREIGN KEY (tenant_id, payslip_id) REFERENCES staffing.payslips(tenant_id, id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS payslip_items_by_payslip_btree
+  ON staffing.payslip_items (tenant_id, payslip_id, id);
+
+CREATE INDEX IF NOT EXISTS payslip_items_by_event_btree
+  ON staffing.payslip_items (tenant_id, last_run_event_id, id);
+
 ALTER TABLE staffing.pay_period_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.pay_period_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.pay_period_events;
@@ -3229,6 +3268,13 @@ ALTER TABLE staffing.payslips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.payslips FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.payslips;
 CREATE POLICY tenant_isolation ON staffing.payslips
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.payslip_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.payslip_items FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.payslip_items;
+CREATE POLICY tenant_isolation ON staffing.payslip_items
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
