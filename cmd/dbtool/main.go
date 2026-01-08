@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -242,7 +244,11 @@ func staffingSmoke(args []string) {
 	}
 
 	initiatorID := "00000000-0000-0000-0000-00000000f001"
-	requestID := "dbtool-staffing-smoke-a"
+	var requestIDPrefix string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&requestIDPrefix); err != nil {
+		fatal(err)
+	}
+	requestID := "dbtool-staffing-smoke-" + requestIDPrefix
 	effectiveDate := "2026-01-01"
 
 	var positionID string
@@ -329,7 +335,7 @@ func staffingSmoke(args []string) {
 			  $5::text,
 			  $6::uuid
 			);
-		`, orgEventID, tenantA, orgUnitID, effectiveDate, "dbtool-staffing-smoke-org", initiatorID); err != nil {
+		`, orgEventID, tenantA, orgUnitID, effectiveDate, requestID+"-org", initiatorID); err != nil {
 			fatal(err)
 		}
 	}
@@ -380,19 +386,25 @@ func staffingSmoke(args []string) {
 
 	var assignmentEventDBID int64
 	if err := tx.QueryRow(ctx, `
-		SELECT staffing.submit_assignment_event(
-		  $1::uuid,
-		  $2::uuid,
-		  $3::uuid,
-		  $4::uuid,
-		  'primary',
-		  'CREATE',
-		  $5::date,
-		  jsonb_build_object('position_id', $6::text),
-		  $7::text,
-		  $8::uuid
-		);
-	`, assignmentEventID, tenantA, assignmentID, personUUID, effectiveDate, positionID, "dbtool-staffing-smoke-a2", initiatorID).Scan(&assignmentEventDBID); err != nil {
+			SELECT staffing.submit_assignment_event(
+			  $1::uuid,
+			  $2::uuid,
+			  $3::uuid,
+			  $4::uuid,
+			  'primary',
+			  'CREATE',
+			  $5::date,
+			  jsonb_build_object(
+			    'position_id', $6::text,
+			    'base_salary', '30000.00',
+			    'allocated_fte', '1.0',
+			    'currency', 'CNY',
+			    'profile', '{}'::jsonb
+			  ),
+			  $7::text,
+			  $8::uuid
+			);
+		`, assignmentEventID, tenantA, assignmentID, personUUID, effectiveDate, positionID, requestID+"-a2", initiatorID).Scan(&assignmentEventDBID); err != nil {
 		fatal(err)
 	}
 	if assignmentEventDBID <= 0 {
@@ -412,8 +424,21 @@ func staffingSmoke(args []string) {
 	}
 
 	payGroup := "monthly"
-	ppStart := "2026-01-01"
-	ppEndExcl := "2026-02-01"
+	ppStart := "2030-01-01"
+	ppEndExcl := "2030-02-01"
+	{
+		seedHex := strings.ReplaceAll(requestIDPrefix, "-", "")
+		if len(seedHex) >= 4 {
+			if seed, err := strconv.ParseInt(seedHex[:4], 16, 64); err == nil {
+				base := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+				start := base.AddDate(0, int(seed%600), 0)
+				start = time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, time.UTC)
+				end := start.AddDate(0, 1, 0)
+				ppStart = start.Format("2006-01-02")
+				ppEndExcl = end.Format("2006-01-02")
+			}
+		}
+	}
 
 	var payPeriodID string
 	var payPeriodEventID string
@@ -485,16 +510,16 @@ WHERE tenant_id = $1::uuid AND id = $2::uuid;
 		fatal(err)
 	}
 	_, err = tx.Exec(ctx, `
-SELECT staffing.submit_payroll_pay_period_event(
-  $1::uuid,
-  $2::uuid,
-  $3::uuid,
-  $4::text,
-  daterange('2026-01-15'::date, '2026-02-15'::date, '[)'),
-  $5::text,
-  $6::uuid
-);
-`, payPeriodEventID3, tenantA, payPeriodID2, payGroup, payPeriodEventID3, initiatorID)
+	SELECT staffing.submit_payroll_pay_period_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::uuid,
+	  $4::text,
+	  daterange(($5::date + 14), ($6::date + 14), '[)'),
+	  $7::text,
+	  $8::uuid
+	);
+	`, payPeriodEventID3, tenantA, payPeriodID2, payGroup, ppStart, ppEndExcl, payPeriodEventID3, initiatorID)
 	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_pp_overlap;`); rbErr != nil {
 		fatal(rbErr)
 	}
@@ -577,10 +602,10 @@ SELECT staffing.submit_payroll_run_event(
 	}
 
 	if _, err := tx.Exec(ctx, `
-SELECT staffing.submit_payroll_run_event(
-  $1::uuid,
-  $2::uuid,
-  $3::uuid,
+	SELECT staffing.submit_payroll_run_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::uuid,
   $4::uuid,
   'CALC_START',
   '{}'::jsonb,
@@ -601,8 +626,51 @@ SELECT staffing.submit_payroll_run_event(
   $5::text,
   $6::uuid
 );
-`, calcFinishEventID, tenantA, runID, payPeriodID, calcFinishEventID, initiatorID); err != nil {
+	`, calcFinishEventID, tenantA, runID, payPeriodID, calcFinishEventID, initiatorID); err != nil {
 		fatal(err)
+	}
+
+	var payslipCount int
+	if err := tx.QueryRow(ctx, `
+	SELECT count(*)
+	FROM staffing.payslips
+	WHERE tenant_id = $1::uuid AND run_id = $2::uuid;
+	`, tenantA, runID).Scan(&payslipCount); err != nil {
+		fatal(err)
+	}
+	if payslipCount != 1 {
+		fatalf("expected payslips=1, got %d", payslipCount)
+	}
+
+	var payslipItemCount int
+	if err := tx.QueryRow(ctx, `
+	SELECT count(*)
+	FROM staffing.payslip_items i
+	JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
+	WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid;
+	`, tenantA, runID).Scan(&payslipItemCount); err != nil {
+		fatal(err)
+	}
+	if payslipItemCount < 1 {
+		fatalf("expected payslip_items>=1, got %d", payslipItemCount)
+	}
+
+	var grossPay string
+	var netPay string
+	var employerTotal string
+	if err := tx.QueryRow(ctx, `
+	SELECT
+	  gross_pay::text,
+	  net_pay::text,
+	  employer_total::text
+	FROM staffing.payslips
+	WHERE tenant_id = $1::uuid AND run_id = $2::uuid
+	LIMIT 1;
+	`, tenantA, runID).Scan(&grossPay, &netPay, &employerTotal); err != nil {
+		fatal(err)
+	}
+	if grossPay != "30000.00" || netPay != "30000.00" || employerTotal != "0.00" {
+		fatalf("unexpected payslip totals gross=%s net=%s employer_total=%s", grossPay, netPay, employerTotal)
 	}
 
 	var finalizeEventDBID int64
