@@ -701,6 +701,16 @@ func TestHandlePayslipDetail(t *testing.T) {
 		}
 	})
 
+	t.Run("path missing run_id", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipDetail(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
 	t.Run("method not allowed", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPut, "/org/payroll-runs/run1/payslips/ps1", nil)

@@ -582,6 +582,8 @@ func renderPayrollRun(runID string, asOf string, run PayrollRun, errMsg string) 
 	b.WriteString(`<button type="submit">Finalize</button>`)
 	b.WriteString(`</form>`)
 
+	b.WriteString(`<p><a href="/org/payroll-runs/` + url.PathEscape(runID) + `/payslips` + postSuffix + `">Payslips</a></p>`)
+
 	b.WriteString(`<p><a href="/org/payroll-runs`)
 	if asOf != "" {
 		b.WriteString(`?as_of=` + url.QueryEscape(asOf))
