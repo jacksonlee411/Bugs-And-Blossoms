@@ -15,13 +15,14 @@
 
 - `DEV-PLAN-041` 已提供 payroll 主流程壳（pay period / payroll run / payslip 空壳载体）。本切片将 payslip 升级为**可对账的 gross pay 工资条**：生成工资项明细（子表）并将汇总列化到 `payslips.gross_pay/net_pay/employer_total`（但汇总口径必须可由明细重算）。
 - 本切片的输入侧依赖任职（Assignment）投射：`staffing.assignment_versions`，并按 `DEV-PLAN-040` 建议为其补齐最小“定薪字段”（`base_salary/currency/profile`）。
+- 本切片冻结定薪语义：`assignment_versions.base_salary` 表示**月薪（FTE=1.0）**，实际计薪金额需乘以 `assignment_versions.allocated_fte`（FTE，`(0,1]`）；本切片仅支持 `pay_periods.pay_group='monthly'` 且 pay period 为自然月 `[YYYY-MM-01, next_month-01)`，否则 calculate 必须 fail（稳定错误码见 §5.3，失败态编排见 §6.4）。
 - UI 必须可发现/可操作：用户可在 run 详情进入工资条列表/详情，并看到“基本工资”明细与汇总字段（对齐 `AGENTS.md` 用户可见性原则与 `DEV-PLAN-039` Slice 2 出口条件）。
 
 ### 0.2 目标与非目标（P0-2 Slice）
 
 **目标**
 - [ ] 冻结工资项明细模型（最小集合）：定义 `payslip_items.item_kind` 枚举与最小 `item_code` 集合（至少含 `EARNING_BASE_SALARY`）。
-- [ ] Gross Pay（应发）最小计算可复现：从 `staffing.assignment_versions.base_salary` 按 pay period 与 assignment validity 的**日粒度交集**进行 pro-rate，并生成 `staffing.payslip_items`；`payslips.gross_pay` 由明细聚合得到。
+- [ ] Gross Pay（应发）最小计算可复现：从 `staffing.assignment_versions.base_salary`（月薪，FTE=1.0）× `allocated_fte`，按 pay period（自然月）与 assignment validity 的**日粒度交集**进行 pro-rate，并生成 `staffing.payslip_items`；`payslips.gross_pay` 由明细聚合得到。
 - [ ] 对账口径冻结：`gross_pay/net_pay/employer_total` 必须可由明细重算（列化字段仅为快照/查询优化，不得成为第二权威；对齐 `DEV-PLAN-040` §0.4.1 JSONB 矩阵）。
 - [ ] UI 工资条详情可解释：展示工资项明细（至少含 code、归类、金额、pro-rate basis 解释字段）。
 - [ ] 一致性与隔离：写入口唯一（One Door）、RLS fail-closed、Valid Time=date（对齐 `AGENTS.md` 与 `DEV-PLAN-040`）。
@@ -32,6 +33,7 @@
 - 不引入“税后发放/净额保证（仅个税）”工资项（`DEV-PLAN-046`）。
 - 不引入通用表达式引擎（对齐 `DEV-PLAN-040` §4.3）。
 - P0 不引入 `business_unit_id/setid/record_group`（对齐 `DEV-PLAN-040` §0.2 与 `DEV-PLAN-028`）。
+- 本切片不支持非 `monthly` 的 `pay_group` 或非自然月 pay period（该扩展必须另立 dev-plan 冻结口径与验收）。
 
 ### 0.3 工具链与门禁（SSOT 引用）
 
@@ -40,6 +42,7 @@
 - **触发器（实施阶段将命中）**
   - [ ] Go 代码（`AGENTS.md`）
   - [ ] DB 迁移 / Schema（`DEV-PLAN-024`）
+  - [ ] sqlc / schema export（`DEV-PLAN-025`；`internal/sqlc/schema.sql` 需保持最新）
   - [ ] `.templ` / Tailwind（若实现 UI 模板，按 `AGENTS.md` 入口执行）
   - [ ] 路由治理（`DEV-PLAN-017`；需更新 `config/routing/allowlist.yaml`）
   - [ ] 文档（`make check doc`）
@@ -57,6 +60,8 @@
 - **One Door**：任何写入（生成 payslips/items、更新汇总）必须走 DB Kernel；应用层禁止直写 `staffing.payslips/payslip_items`。
 - **No Tx, No RLS**：所有读写必须显式事务 + 注入 `app.current_tenant`，缺失即 fail-closed（对齐 `AGENTS.md` / `DEV-PLAN-019/021`）。
 - **Valid Time = date**：pro-rate 仅基于 `daterange [start,end)` 的日粒度交集；禁止把业务有效期写成 `timestamptz`。
+- **P0 pay period 语义冻结**：本切片仅支持 `pay_group='monthly'` 且 period 为自然月 `[YYYY-MM-01, next_month-01)`；否则 `CALC_FINISH` 必须抛稳定错误码并进入失败态（对齐 §6.4 编排）。
+- **FTE 语义冻结**：`base_salary` 为月薪（FTE=1.0）；实际计薪金额必须乘以 `allocated_fte`（`(0,1]`），否则计算失败并抛稳定错误码（见 §5.3 / §6.2）。
 - **金额无浮点**：DB 使用 `numeric`；Go 侧金额/费率计算与 JSON 传输使用十进制定点（推荐 `apd.Decimal` + JSON string；对齐 `DEV-PLAN-040` §4.2）。
 - **舍入即合同**：冻结“舍入点/舍入规则/精度”，并在测试中覆盖；禁止在业务代码散落临时 Round（对齐 `DEV-PLAN-040` §4.2）。
 - **JSONB 边界**：工资项明细一律子表；`payslip_items.meta` 仅承载解释/trace（object），不得让 JSONB 成为权威金额明细来源（对齐 `DEV-PLAN-040` §0.4.1）。
@@ -67,6 +72,8 @@
 - [ ] 对任一人员/任职：创建 payroll run 后可计算生成工资条；工资条详情至少包含“基本工资（EARNING_BASE_SALARY）”一项明细。
 - [ ] `payslips.gross_pay/net_pay/employer_total` 与明细聚合结果一致（可重算）。
 - [ ] pro-rate 在日粒度下可复现（示例：月中入职/离职/调薪导致的时间切片）。
+- [ ] FTE 可复现：`allocated_fte=0.5` 时，基本工资明细金额为 `0.5×`（再叠加日期 pro-rate），且汇总与明细聚合一致。
+- [ ] pay period 口径受控：`pay_group != 'monthly'` 或 period 非自然月时，calculate 返回 422 + 稳定错误码，并按状态机进入 failed（允许修复后重试）。
 - [ ] 工资条列表支持按 `pernr` 定位人员（通过 Person 内部只读入口解析），并在过滤视图中展示 `pernr/display_name`。
 - [ ] 缺少 tenant context 时，对 payroll 表读写 fail-closed（No Tx, No RLS）。
 
@@ -84,6 +91,7 @@
 
 - DB：
   - 扩展 `staffing.assignment_versions`（补齐最小定薪字段：`base_salary/currency/profile`）。
+  - 承接 Assignment 写入口与投射：`staffing.submit_assignment_event` / `staffing.replay_assignment_versions` 支持并投射 `base_salary/allocated_fte/currency/profile`（见 §6.1）。
   - 新增 `staffing.payslip_items`（工资项明细子表，RLS + 约束）。
   - 在 Kernel 的 `CALC_FINISH` 路径内生成 payslips/items，并刷新 `payslips.gross_pay/net_pay/employer_total`。
 - Go：
@@ -161,6 +169,7 @@ ALTER TABLE staffing.assignment_versions
 
 说明：
 - `base_salary` 在 DB 层允许为 NULL（避免一次性要求存量数据补齐）；但本切片的算薪逻辑对“参与计算的 assignment”强制要求 `base_salary IS NOT NULL`（见 §6）。
+- `allocated_fte` 已存在于 `assignment_versions`（stable 列）。本切片冻结其语义为 FTE `(0,1]`，并在算薪时 fail-closed 校验（见 §6.2）。
 - P0 仅支持 `currency='CNY'`；若后续引入多币种，需另立 dev-plan 冻结口径与汇率处理。
 
 #### 4.2.2 `staffing.payslip_items`
@@ -222,7 +231,7 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 #### `GET /org/payroll-runs/{run_id}/payslips`
 - **用途**：展示某个 run 的工资条列表（每条至少显示 `person_uuid/assignment_id/gross_pay/net_pay/employer_total`）。
 - **Query（可选）**
-  - `pernr`：用于用户侧定位人员；服务端通过 Person 的内部只读入口解析为 `person_uuid`（避免 Staffing 直读 `person.persons`；解析入口：`GET /person/api/persons:by-pernr?pernr=...`）。
+  - `pernr`：用于用户侧定位人员；服务端复用现有 `PersonStore.FindPersonByPernr`（同进程、同 DB tx + tenant 注入）解析为 `person_uuid`，并复用 Person 的 `pernr` 规范化规则（1-8 位数字字符串，去前导 0 后 canonical）。禁止通过 HTTP 自调用 `/person/api/...` 形成第二套失败模式与契约漂移。
   - `person_uuid`：仅用于排障/测试（实现期可保留）。
 - **返回**：HTML 页面（列表 + 进入详情链接）。
 
@@ -263,12 +272,27 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 | 场景 | 稳定错误码（DB `MESSAGE` / 解析失败码） | HTTP（UI/internal_api） |
 | --- | --- | --- |
 | 租户上下文缺失/非法/不匹配 | `RLS_TENANT_CONTEXT_MISSING` / `RLS_TENANT_CONTEXT_INVALID` / `RLS_TENANT_MISMATCH` | 403 |
+| pay_group 非 `monthly` | `STAFFING_PAYROLL_UNSUPPORTED_PAY_GROUP` | 422 |
+| pay period 非自然月 `[YYYY-MM-01, next_month-01)` | `STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD` | 422 |
+| allocated_fte 非 `(0,1]` | `STAFFING_PAYROLL_INVALID_ALLOCATED_FTE` | 422 |
 | base_salary 缺失（命中计算输入） | `STAFFING_PAYROLL_MISSING_BASE_SALARY` | 422 |
 | currency 非 CNY（P0 冻结） | `STAFFING_PAYROLL_UNSUPPORTED_CURRENCY` | 422 |
 | run 状态机冲突（例如已 finalized、非法跃迁） | `STAFFING_PAYROLL_RUN_*`（沿用 `DEV-PLAN-041` 的稳定错误码） | 409 |
 | 幂等冲突（同 event_id 但 payload 不一致） | `STAFFING_IDEMPOTENCY_REUSED` | 409 |
 | pernr 输入非法 | `PERSON_PERNR_INVALID` | 400/422（internal_api 用 400；UI 可回显为表单/提示） |
 | pernr 不存在 | `PERSON_NOT_FOUND` | 404 |
+
+### 5.4 Routing 与 Authz 覆盖（Stopline）
+
+为避免“新增动态路由未被鉴权覆盖”的隐性漏洞（对齐 `DEV-PLAN-003` stopline），本切片冻结以下实现要求：
+
+- **routing allowlist（必须）**：在 `config/routing/allowlist.yaml`（entrypoint=`server`）新增：
+  - UI：`GET /org/payroll-runs/{run_id}/payslips`
+  - UI：`GET /org/payroll-runs/{run_id}/payslips/{payslip_id}`
+  - UI：`POST /org/payroll-runs/{run_id}/calculate`
+  - internal_api：`GET /org/api/payslips`
+  - internal_api：`GET /org/api/payslips/{payslip_id}`
+- **Authz 覆盖（必须）**：`internal/server/authz_middleware.go` 当前基于“精确 path”判定是否鉴权；本切片新增路由包含 `{...}` 动态段，因此必须实现与 routing allowlist 相同的“段匹配”能力，确保上述 5 条路由全部可命中鉴权要求，并增加测试覆盖（至少覆盖：GET=read、POST=admin、以及任一动态路由不会落入“默认不鉴权”分支）。
 
 ## 6. 核心逻辑与算法（Business Logic & Algorithms）
 
@@ -277,13 +301,15 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 为确保 payroll 计算只依赖投射表（而非重放 events 或解析 JSONB），本切片要求：
 
 - `staffing.submit_assignment_event(...)` 的 payload 支持并投射：
-  - `base_salary`：string（例如 `"30000.00"`）
+  - `base_salary`：string（例如 `"30000.00"`；语义为“月薪（FTE=1.0）”）
+  - `allocated_fte`：string（例如 `"1.0"` / `"0.5"`；语义为 FTE，必须在 `(0,1]`）
   - `currency`：string（例如 `"CNY"`；P0 仅允许 CNY）
   - `profile`：object（低频扩展键；不得放权威金额明细）
 - `staffing.replay_assignment_versions(...)` 在生成 `assignment_versions` 时把上述字段写入稳定列；缺失键沿用上一版本（UPDATE 语义对齐 position）。
 
 失败路径（建议错误码）：
 - `STAFFING_ASSIGNMENT_BASE_SALARY_INVALID`：`base_salary` 非法或 <0。
+- `STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID`：`allocated_fte` 非法或不在 `(0,1]`。
 - `STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED`：非 `CNY`。
 - `STAFFING_ASSIGNMENT_PROFILE_INVALID`：profile 非 object。
 
@@ -296,25 +322,29 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 - `item_code`（本切片只用）：`EARNING_BASE_SALARY`
 
 **pro-rate 合同（冻结）**
-- pay period：`period daterange`，日粒度、闭开区间 `[start,end)`。
+- pay period：`period daterange`，日粒度、闭开区间 `[start,end)`；本切片仅支持 `pay_group='monthly'` 且 period 为自然月。
 - assignment slice：`assignment_versions.validity`，日粒度、闭开区间 `[start,end)`。
 - `period_days = upper(period) - lower(period)`（整数，>0）。
 - `overlap = [max(lower(validity), lower(period)), min(upper(validity), upper(period)))`；`overlap_days = overlap_end - overlap_start`。
-- `amount_raw = base_salary * overlap_days / period_days`。
+- `amount_raw = base_salary * allocated_fte * overlap_days / period_days`。
 - **舍入点**：每条 payslip item 量化到 2 位小数（`precision=2`，`rounding_rule=ROUND_HALF_UP_2DP_ITEM`）。
 
 **生成算法（必须，幂等/可重放）**
 1. `assert_current_tenant(p_tenant_id)`；对 `run_id` 继续沿用 `DEV-PLAN-041` 的 `pg_advisory_xact_lock`（状态机串行化）。
-2. 读取 `payroll_runs/pay_periods`，取得 `period`；校验 `period_days>0`。
+2. 读取 `payroll_runs/pay_periods`，取得 `pay_group/period`；校验：
+   - `pay_group='monthly'`；否则抛 `STAFFING_PAYROLL_UNSUPPORTED_PAY_GROUP`；
+   - `period` 为自然月 `[YYYY-MM-01, next_month-01)`；否则抛 `STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD`；
+   - `period_days>0`。
 3. 选取参与本 run 的 assignment slices：
    - `assignment_versions.status='active'` 且 `assignment_type='primary'`；
    - `validity && period`（有交集）；
+   - `allocated_fte > 0 AND allocated_fte <= 1`；否则抛稳定错误码 `STAFFING_PAYROLL_INVALID_ALLOCATED_FTE`；
    - `base_salary IS NOT NULL` 且 `currency='CNY'`；否则计算失败并抛稳定错误码 `STAFFING_PAYROLL_MISSING_BASE_SALARY` / `STAFFING_PAYROLL_UNSUPPORTED_CURRENCY`。
 4. upsert payslips（按 `run_id+person_uuid+assignment_id` 唯一）：若已存在则复用；确保 `payslips.last_run_event_id` 被刷新为本次 `CALC_FINISH` 的 event db id。
 5. 删除旧明细（仅限本 run 产物）：按 `tenant_id + run_id` 维度删除该 run 下所有 `payslip_items`（通过 join payslips 定位）。
 6. 插入 `payslip_items`：对每个 assignment slice 的 overlap 段生成一条 `EARNING_BASE_SALARY` 明细：
    - `amount = round(amount_raw, 2)`；
-   - `meta` 至少包含：`period_start/period_end_exclusive/segment_start/segment_end_exclusive/base_salary/overlap_days/period_days/ratio`（数值均为 string）。
+   - `meta` 至少包含：`pay_group/period_start/period_end_exclusive/segment_start/segment_end_exclusive/base_salary/allocated_fte/overlap_days/period_days/ratio`（数值均为 string）。
 7. 刷新 payslip 汇总字段：
    - `gross_pay = SUM(items.amount WHERE item_kind='earning')`；
    - P0-2：`net_pay = gross_pay`；`employer_total = 0`；
@@ -344,9 +374,9 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 ### 7.1 Authz 对象与动作（冻结口径）
 
 按现有实现（`pkg/authz/registry.go` + `internal/server/authz_middleware.go`）：
-- 新增对象常量：`staffing.payslips`（read/admin）
-- UI：GET 为 `read`；本切片不新增“编辑工资条”写入口（仍由 `payroll-runs:calculate` 管理）。
-- internal API：同 UI。
+- 复用 `DEV-PLAN-041` 已冻结的对象常量：`staffing.payroll-runs`（read/admin），本切片不新增新的 object（避免对象增殖/重复权威表达）。
+- UI：GET（payslips 列表/详情）为 `read`；POST（`/calculate`）为 `admin`。
+- internal API：同 UI（GET=read）。
 
 ### 7.2 数据隔离
 
@@ -381,8 +411,11 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
   - 整段覆盖（assignment validity 覆盖整个 pay period）= 100%。
   - 月中入职/离职（部分覆盖）= 比例可复现（按天）。
   - 月中调薪（assignment validity 切片）= 多条明细累加后等于预期。
+- [ ] FTE：`allocated_fte=0.5` 时，明细与汇总均按 0.5 倍生效（并与按天 pro-rate 组合可复现）。
 - [ ] 舍入点：在 item level 量化到 2 位小数，汇总仅求和；验证边界（例如 1/31 的重复小数）。
 - [ ] 失败路径：缺少 base_salary 或 currency 非 CNY 时，计算失败且 run 进入 failed（或至少返回稳定错误码；状态机与实现一致）。
+- [ ] 失败路径：pay_group 非 monthly 或 period 非自然月时，计算失败且返回稳定错误码（状态机与实现一致）。
+- [ ] 鉴权：GET payslips=read、POST calculate=admin；且动态路由（含 `{run_id}`/`{payslip_id}`）不会落入“默认不鉴权”分支（需测试覆盖）。
 - [ ] RLS：不设置 `app.current_tenant` 时，对 payroll 表与 `payslip_items` 的读写全部失败（fail-closed）。
 
 ### 9.2 验收脚本（建议以 UI 可操作复现）
