@@ -1,6 +1,6 @@
 # DEV-PLAN-022：Authz（Casbin）工具链与实施方案（Greenfield）
 
-**状态**: 已完成（2026-01-08 03:10 UTC）
+**状态**: 已完成（2026-01-08 03:10 UTC；PR #67 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/67）
 
 > 适用范围：本仓库（`Bugs-And-Blossoms`）的 **Greenfield implementation**。如未来拆分到独立仓库，本计划冻结的 Authz 契约与工具链口径仍应保持一致，避免“同一概念两套权威表达”。
 >

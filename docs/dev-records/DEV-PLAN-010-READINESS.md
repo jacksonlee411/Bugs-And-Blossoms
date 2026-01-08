@@ -231,6 +231,7 @@ DB 闭环（迁移 + smoke）：
 
 证据：
 - 日期：2026-01-08
+- 合并记录：PR #67 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/67
 - policy SSOT：`config/access/policies/**` → `config/access/policy.csv`（pack 产物）
 - 本地门禁：
   - `make authz-pack && make authz-test && make authz-lint`
