@@ -1,6 +1,6 @@
 # DEV-PLAN-019：租户管理与登录认证（Kratos 认人 → RLS 圈地 → Casbin 管事）
 
-**状态**: 草拟中（2026-01-05 07:52 UTC）
+**状态**: 部分完成（009M5：tenant app Kratos + sid 会话已落地；2026-01-08 03:30 UTC）
 
 > 适用范围：**全新实现的新代码仓库（Greenfield）**。本文总结现仓库在“租户/认证/会话/RLS/Authz”上的既有实现与已评审契约（`DEV-PLAN-019*`、`DEV-PLAN-021`），并给出最小可落地方案。  
 > 对齐要求：`DEV-PLAN-015`（DDD 分层框架）、`DEV-PLAN-016`（HR 业务域 4 模块骨架）；本文引入一个 **平台 IAM/Tenancy 模块**，不计入 HR 业务域模块数量。
@@ -21,7 +21,7 @@
 
 ### 1.1 租户（Tenancy）
 - **数据模型**：`iam.tenants` + `iam.tenant_domains`（`hostname` 全局唯一；入库 `lowercase + trim + 去端口` 由 DB 约束兜底），并作为未登录态的 tenant 解析事实源（见 `internal/server/tenancy.go`、`internal/superadmin/handler.go`）。
-- **tenant 上下文**：通过 `context` 注入 `tenant_id`（见 `pkg/composables/tenant.go`），业务代码普遍依赖 `composables.UseTenantID(ctx)`；缺 tenant 即报错，避免“跨租户兜底查询”。
+- **tenant 上下文**：通过 `context` 注入 tenant（见 `internal/server/tenancy.go` 与 `currentTenant(...)`）；缺 tenant 即 fail-closed（404/错误页），避免“跨租户兜底查询”。
 - **tenant 解析契约（已有）**：`Host → iam.tenant_domains.hostname`，找不到即 fail-closed（见本文 §4.1）。
 
 ### 1.2 认证与会话（AuthN + Session）
@@ -30,7 +30,7 @@
 - **已评审演进方向**：采用 **ORY Kratos** 作为 Headless Identity，应用保留 `/login` UI；主链路选择 “Kratos 认人 → 本地 session（`sid`）桥接”（见本文 §4.2/§6.1）。
 
 ### 1.3 数据隔离（RLS）
-- **现状接口**：事务内设置 `app.current_tenant`（`set_config`），由 RLS policy 读取，实现 fail-closed（见 `pkg/composables/rls.go`；RLS 推进口径见 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`）。
+- **现状接口**：事务内设置 `app.current_tenant`（`SELECT set_config('app.current_tenant', $1, true)`），由 RLS policy 读取，实现 fail-closed（RLS 推进口径见 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`；DB smoke 见 `cmd/dbtool`）。
 
 ### 1.4 授权（AuthZ）
 - **系统级口径**：Casbin（“管事”）与 RLS（“圈地”）形成纵深防御；主体/role_slug/subject 的冻结口径以 `docs/dev-plans/022-authz-casbin-toolchain.md` 为准。
@@ -86,7 +86,7 @@
 
 ### 3.2 `pkg/**` 下沉（跨模块共享）
 - `pkg/tenancy`：Host 规范化、tenant 解析中间件、ctx 注入/读取（可直接复用 `composables` 的模式，但建议在新仓库中收敛命名）。
-- `pkg/rls`：事务内注入 `app.current_tenant` 的统一入口（对齐现仓库 `pkg/composables/rls.go` 的语义）。
+- `pkg/rls`：事务内注入 `app.current_tenant` 的统一入口（对齐现仓库运行态链路：事务内 `set_config('app.current_tenant', ...)`）。
 - `pkg/http/middleware`：认证态注入（session→principal→tenant）与 fail-closed guard（对齐现仓库 `pkg/middleware/auth.go` 的语义）。
 
 ### 3.3 依赖方向（保证“可替换性/局部性”）
