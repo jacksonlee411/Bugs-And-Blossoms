@@ -54,7 +54,7 @@ preflight: ## 本地一键对齐CI
 check:
 	@:
 
-naming: ## 命名去噪门禁（禁止版本标记再次进入仓库）
+naming: ## 命名去噪门禁（已取消：no-op）
 	@./scripts/ci/check-no-version-marker.sh
 
 no-legacy: ## 禁止 legacy 分支/回退通道（单链路原则）
