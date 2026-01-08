@@ -30,8 +30,9 @@
 
 证据：
 - PR-5：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5
+- PR-80（Astro build + go:embed Phase 0 收口）：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/80
 - 路由入口：`/app`（壳）+ 导航占位页（Org/JobCatalog/Staffing/Person）
-- 说明：当前壳实现为 Go SSR（`internal/server/handler.go` 的 `writeShell*`）；Astro build + go:embed 的 Phase 0 收敛见 `docs/dev-plans/009m6-phase1-astro-build-phase0-execution-plan.md`（待执行）。
+- 说明：`/app` 已收口为 Astro build 产物 + `go:embed`（`internal/server/assets/astro/app.html`），并按 `DEV-PLAN-018` 注入 `__BB_AS_OF__`；证据与闭环见 `docs/dev-plans/009m6-phase1-astro-build-phase0-execution-plan.md` 与本文件 §17。
 
 ## 4. 最小登录链路
 
@@ -240,9 +241,44 @@ DB 闭环（迁移 + smoke）：
 
 ## 17. DEV-PLAN-009M6（Phase 1：Astro build + go:embed Shell）
 
-证据（完成后补齐）：
-- 日期：
+证据：
+- 日期：2026-01-08
 - 合并记录：
-- 本地门禁：`make preflight`（全绿）
-- UI build：`make css`（生成 `internal/server/assets/astro/**`；生成后 `git status --short` 为空）
-- CI：UI 变更时 Gate-1 执行 `make css` 且通过 `assert-clean`（required checks 不出现 `skipped`）
+  - PR #76 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/76
+  - PR #77 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/77
+  - PR #78 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/78
+  - PR #79 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/79
+  - PR #80 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/80
+- 本地验证（全绿）：
+  - Go：`go fmt ./...`、`go vet ./...`、`make check lint`、`make test`
+  - Routing：`make check routing`
+  - UI build：`make css`（生成 `internal/server/assets/astro/**`；生成后 `git status --short` 为空）
+  - E2E：`make e2e`
+  - Docs/Stopline：`make check doc`、`make check no-legacy`
+- CI（不出现 skipped）：PR #80 的 Quality Gates 4/4 全绿（Gate-1 命中 UI 变更时执行 `make css` 并通过 `assert-clean`）
+
+## 18. DEV-PLAN-041（Payroll P0-1：Pay Period & Payroll Run）
+
+证据（Milestone 1-2：Schema SSOT + 迁移闭环）：
+- 日期：2026-01-08
+- 合并记录：PR #82 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/82
+- 产出：
+  - Schema SSOT：`modules/staffing/infrastructure/persistence/schema/00004_staffing_payroll_tables.sql`
+  - 迁移：`migrations/staffing/20260108131301_staffing_payroll_tables.sql` + `migrations/staffing/atlas.sum`
+  - sqlc 生成物：`internal/sqlc/schema.sql`、`modules/iam/infrastructure/sqlc/gen/models.go`
+- 本地验证：
+  - `make staffing plan`（No drift）
+  - `make staffing lint`（atlas migrate validate）
+  - `make staffing migrate up`（含 `cmd/dbtool staffing-smoke`）
+  - `make sqlc-generate` 后 `git status --short` 为空
+- CI（Quality Gates）：PR #82 4/4 全绿（包含 `assert-clean`）
+
+证据（Milestone 3：Kernel submit 函数）：
+- 日期：2026-01-08
+- 合并记录：PR #84 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/84
+- 产出：
+  - Schema SSOT：`modules/staffing/infrastructure/persistence/schema/00005_staffing_payroll_engine.sql`
+  - 迁移：`migrations/staffing/20260108133000_staffing_payroll_engine.sql` + `migrations/staffing/atlas.sum`
+- 本地验证：
+  - `make staffing plan && make staffing lint && make staffing migrate up`
+  - `make sqlc-generate` 后 `git status --short` 为空

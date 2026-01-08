@@ -199,10 +199,10 @@ func TestHandleOrgNodes_GET_BadAsOf(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handleOrgNodes(rec, req, errStore{})
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("as_of 无效")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("invalid as_of")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
@@ -233,6 +233,23 @@ func TestHandleOrgNodes_POST_BadForm_MergesEmptyStoreError(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 	if bodyOut := rec.Body.String(); !strings.Contains(bodyOut, "bad form") {
+		t.Fatalf("unexpected body: %q", bodyOut)
+	}
+}
+
+func TestHandleOrgNodes_POST_BadForm_MergesNonEmptyStoreError(t *testing.T) {
+	body := bytes.NewBufferString("%zz")
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, errStore{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	bodyOut := rec.Body.String()
+	if !strings.Contains(bodyOut, "bad form") || !strings.Contains(bodyOut, "boom") {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -527,10 +544,10 @@ func TestHandleOrgNodes_POST_MergesErrorHints(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handleOrgNodes(rec, req, store)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !strings.Contains(bodyOut, "name is required；as_of 无效") {
+	if bodyOut := rec.Body.String(); !strings.Contains(bodyOut, "invalid as_of") {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -593,11 +610,16 @@ func TestHandleOrgNodes_GET_DefaultAsOf_UsesToday(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handleOrgNodes(rec, req, store)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if store.gotAsOf != time.Now().UTC().Format("2006-01-02") {
-		t.Fatalf("asOf=%q", store.gotAsOf)
+	loc := rec.Header().Get("Location")
+	if !strings.Contains(loc, "/org/nodes?as_of=") {
+		t.Fatalf("location=%q", loc)
+	}
+	wantAsOf := time.Now().UTC().Format("2006-01-02")
+	if !strings.Contains(loc, wantAsOf) {
+		t.Fatalf("location=%q wantAsOf=%q", loc, wantAsOf)
 	}
 }
 
@@ -609,6 +631,17 @@ func TestHandleOrgNodes_MethodNotAllowed(t *testing.T) {
 
 	handleOrgNodes(rec, req, store)
 	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleOrgNodes_TenantMissing(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?as_of=2026-01-01", nil)
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
 }

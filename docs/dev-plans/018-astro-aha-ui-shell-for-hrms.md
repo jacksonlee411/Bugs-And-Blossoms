@@ -1,6 +1,6 @@
 # DEV-PLAN-018：引入 Astro（AHA Stack）到 HTMX + Alpine 的 HRMS UI 方案（026-031）
 
-**状态**: 草拟中（2026-01-06 08:03 UTC）
+**状态**: 已完成（Phase 0：Astro build + go:embed Shell，2026-01-08 12:24 UTC）
 
 ## 1. 背景与上下文 (Context)
 
@@ -153,6 +153,7 @@ flowchart LR
 - Astro build 产物在构建阶段被复制到 Go 可 `go:embed` 的稳定目录（建议：`internal/server/assets/astro/**`）。
 - Go server 负责静态资源分发（仍以 `/assets/*` 命名空间提供），避免运行时依赖额外 volume/旁路静态服务器。
 - `apps/web` 的 `package.json` + lockfile 作为 UI 依赖版本的 SSOT（见 `DEV-PLAN-011`）。
+- 门禁与入口：UI build 的唯一入口为 `make css`（SSOT），CI Gate-1 命中 `ui` 触发器时必须执行并由 `assert-clean` 阻断生成物漂移（见 `DEV-PLAN-012`）。
 
 #### 4.5.1 Shell 产物映射（冻结）
 - 静态资源 URL 前缀固定为 `/assets/astro/`（由 Go `/assets/*` 分发，确保路径稳定且不依赖 `/app` 相对路径）。
@@ -189,11 +190,11 @@ flowchart LR
 ## 6. 落地步骤（可执行）
 
 ### Phase 0：先打通 AHA 基础链路（最小可运行）
-1. [ ] 在 `apps/web` 初始化 Astro 工程，落盘 `package.json` 与 lockfile，并按 `DEV-PLAN-011` 冻结 Node/pnpm/Astro 版本口径。
-2. [ ] 定义 App Shell（Astro）：包含 §4.4 的四个固定挂载点，并以 HTMX 拉取 nav/topbar/flash 的方式装配动态上下文。
-3. [ ] 按 §4.5 落地 Astro build 产物复制到 `internal/server/assets/astro/**` 的 pipeline，并由 Go server 在 `/assets/*` 下提供静态资源。
-4. [ ] 将 `/app` 的 Shell 渲染切换为 Astro 产物（不在 Go handler 内拼接整页 HTML），但继续保留 `/ui/nav`、`/ui/topbar`、`/ui/flash` 的服务端权威渲染。
-5. [ ] 后端提供最小 UI partial：`/ui/nav`、`/ui/topbar`、`/ui/flash` 与一个占位内容页（例如 `/app/home`），验证：
+1. [X] 在 `apps/web` 初始化 Astro 工程，落盘 `package.json` 与 lockfile，并按 `DEV-PLAN-011` 冻结 Node/pnpm/Astro 版本口径。（009M6 PR-1）
+2. [X] 定义 App Shell（Astro）：包含 §4.4 的四个固定挂载点，并以 HTMX 拉取 nav/topbar/flash 的方式装配动态上下文。（009M6 PR-1）
+3. [X] 按 §4.5 落地 Astro build 产物复制到 `internal/server/assets/astro/**` 的 pipeline，并由 Go server 在 `/assets/*` 下提供静态资源。（009M6 PR-2）
+4. [X] 将 `/app` 的 Shell 渲染切换为 Astro 产物（不在 Go handler 内拼接整页 HTML），但继续保留 `/ui/nav`、`/ui/topbar`、`/ui/flash` 的服务端权威渲染。（009M6 PR-4）
+5. [X] 后端提供最小 UI partial：`/ui/nav`、`/ui/topbar`、`/ui/flash` 与一个占位内容页（例如 `/app/home`），验证：（009M6 PR-4）
    - 静态资源可用（Astro build 产物）
    - HTMX swap 正常
    - Alpine 初始化不与 HTMX 冲突

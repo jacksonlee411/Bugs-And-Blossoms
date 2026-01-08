@@ -5,6 +5,7 @@ import (
 	"errors"
 	"html"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -351,9 +352,14 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 		return
 	}
 
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
+		return
+	}
+
 	initiatorID := tenant.ID
 	if err := store.EnsureBootstrap(r.Context(), tenant.ID, initiatorID); err != nil {
-		writePage(w, r, renderSetIDPage(nil, nil, nil, tenant, err.Error()))
+		writePage(w, r, renderSetIDPage(nil, nil, nil, tenant, asOf, err.Error()))
 		return
 	}
 
@@ -386,12 +392,12 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 	switch r.Method {
 	case http.MethodGet:
 		sids, bus, mappings, errMsg := list("")
-		writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, errMsg))
+		writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, asOf, errMsg))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
 			sids, bus, mappings, errMsg := list("bad form")
-			writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, errMsg))
+			writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, asOf, errMsg))
 			return
 		}
 
@@ -406,13 +412,13 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 			name := strings.TrimSpace(r.Form.Get("name"))
 			if sid == "" || name == "" {
 				sids, bus, mappings, errMsg := list("setid/name is required")
-				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, errMsg))
+				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, asOf, errMsg))
 				return
 			}
 			reqID := "ui:setid:create:" + sid
 			if err := store.CreateSetID(r.Context(), tenant.ID, sid, name, reqID, initiatorID); err != nil {
 				sids, bus, mappings, errMsg := list(err.Error())
-				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, errMsg))
+				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, asOf, errMsg))
 				return
 			}
 		case "create_bu":
@@ -420,13 +426,13 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 			name := strings.TrimSpace(r.Form.Get("name"))
 			if bu == "" || name == "" {
 				sids, bus, mappings, errMsg := list("business_unit_id/name is required")
-				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, errMsg))
+				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, asOf, errMsg))
 				return
 			}
 			reqID := "ui:bu:create:" + bu
 			if err := store.CreateBusinessUnit(r.Context(), tenant.ID, bu, name, reqID, initiatorID); err != nil {
 				sids, bus, mappings, errMsg := list(err.Error())
-				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, errMsg))
+				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, asOf, errMsg))
 				return
 			}
 		case "save_mappings":
@@ -440,22 +446,22 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 			}
 			if len(m) == 0 {
 				sids, bus, mappings, errMsg := list("no mapping changes")
-				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, errMsg))
+				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, asOf, errMsg))
 				return
 			}
 			reqID := "ui:mappings:jobcatalog"
 			if err := store.PutMappings(r.Context(), tenant.ID, setid.RecordGroupJobCatalog, m, reqID, initiatorID); err != nil {
 				sids, bus, mappings, errMsg := list(err.Error())
-				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, errMsg))
+				writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, asOf, errMsg))
 				return
 			}
 		default:
 			sids, bus, mappings, errMsg := list("unknown action")
-			writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, errMsg))
+			writePage(w, r, renderSetIDPage(sids, bus, mappings, tenant, asOf, errMsg))
 			return
 		}
 
-		http.Redirect(w, r, "/org/setid", http.StatusSeeOther)
+		http.Redirect(w, r, "/org/setid?as_of="+url.QueryEscape(asOf), http.StatusSeeOther)
 		return
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -463,18 +469,18 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 	}
 }
 
-func renderSetIDPage(setids []SetID, businessUnits []BusinessUnit, mappings []SetIDMappingRow, tenant Tenant, errMsg string) string {
+func renderSetIDPage(setids []SetID, businessUnits []BusinessUnit, mappings []SetIDMappingRow, tenant Tenant, asOf string, errMsg string) string {
 	var b strings.Builder
 	b.WriteString("<h1>SetID Governance</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
-	b.WriteString(`<p><a href="/org/job-catalog" hx-get="/org/job-catalog" hx-target="#content" hx-push-url="true">Go to Job Catalog</a></p>`)
+	b.WriteString(`<p><a href="/org/job-catalog?as_of=` + html.EscapeString(asOf) + `" hx-get="/org/job-catalog?as_of=` + html.EscapeString(asOf) + `" hx-target="#content" hx-push-url="true">Go to Job Catalog</a></p>`)
 
 	if errMsg != "" {
 		b.WriteString(`<div style="padding:8px;border:1px solid #c00;color:#c00">` + html.EscapeString(errMsg) + `</div>`)
 	}
 
 	b.WriteString("<h2>SetIDs</h2>")
-	b.WriteString(`<form method="POST" action="/org/setid">`)
+	b.WriteString(`<form method="POST" action="/org/setid?as_of=` + html.EscapeString(asOf) + `">`)
 	b.WriteString(`<input type="hidden" name="action" value="create_setid" />`)
 	b.WriteString(`<label>SetID <input name="setid" maxlength="5" /></label> `)
 	b.WriteString(`<label>Name <input name="name" /></label> `)
@@ -492,7 +498,7 @@ func renderSetIDPage(setids []SetID, businessUnits []BusinessUnit, mappings []Se
 	b.WriteString("</tbody></table>")
 
 	b.WriteString("<h2>Business Units</h2>")
-	b.WriteString(`<form method="POST" action="/org/setid">`)
+	b.WriteString(`<form method="POST" action="/org/setid?as_of=` + html.EscapeString(asOf) + `">`)
 	b.WriteString(`<input type="hidden" name="action" value="create_bu" />`)
 	b.WriteString(`<label>BU <input name="business_unit_id" maxlength="5" /></label> `)
 	b.WriteString(`<label>Name <input name="name" /></label> `)
@@ -515,7 +521,7 @@ func renderSetIDPage(setids []SetID, businessUnits []BusinessUnit, mappings []Se
 	}
 
 	b.WriteString("<h2>Mappings (jobcatalog)</h2>")
-	b.WriteString(`<form method="POST" action="/org/setid">`)
+	b.WriteString(`<form method="POST" action="/org/setid?as_of=` + html.EscapeString(asOf) + `">`)
 	b.WriteString(`<input type="hidden" name="action" value="save_mappings" />`)
 	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>business_unit_id</th><th>setid</th></tr></thead><tbody>`)
 	for _, bu := range businessUnits {

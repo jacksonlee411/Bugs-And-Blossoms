@@ -88,7 +88,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await page.locator('input[name="email"]').fill(tenantAdminEmail);
   await page.locator('input[name="password"]').fill(tenantAdminPass);
   await page.getByRole("button", { name: "Login" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app\?as_of=\d{4}-\d{2}-\d{2}$/);
   await expect(page.locator("h1")).toHaveText("Home");
 
   await page.goto(`/org/nodes?as_of=${asOf}`);
@@ -108,12 +108,12 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await expect(page).toHaveURL(new RegExp(`/org/nodes\\?as_of=${asOf}$`));
   await expect(page.locator("ul li", { hasText: orgName })).toBeVisible();
 
-  await page.goto(`/person/persons`);
+  await page.goto(`/person/persons?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Person");
-  await page.locator('form[action="/person/persons"] input[name="pernr"]').fill(pernr);
-  await page.locator('form[action="/person/persons"] input[name="display_name"]').fill(`E2E Person ${runID}`);
-  await page.locator('form[action="/person/persons"] button[type="submit"]').click();
-  await expect(page).toHaveURL(/\/person\/persons$/);
+  await page.locator(`form[action="/person/persons?as_of=${asOf}"] input[name="pernr"]`).fill(pernr);
+  await page.locator(`form[action="/person/persons?as_of=${asOf}"] input[name="display_name"]`).fill(`E2E Person ${runID}`);
+  await page.locator(`form[action="/person/persons?as_of=${asOf}"] button[type="submit"]`).click();
+  await expect(page).toHaveURL(new RegExp(`/person/persons\\?as_of=${asOf}$`));
   await expect(page.getByText(pernr)).toBeVisible();
 
   await page.goto(`/org/positions?as_of=${asOf}`);
@@ -135,8 +135,11 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
 
   await page.goto(`/org/assignments?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Assignments");
-  await page.locator('form[method="GET"] input[name="pernr"]').fill(pernr);
-  await page.locator('form[method="GET"] button[type="submit"]').click();
+  const pernrLoadForm = page.locator('form[method="GET"]', {
+    has: page.locator('input[name="pernr"]')
+  });
+  await pernrLoadForm.locator('input[name="pernr"]').fill(pernr);
+  await pernrLoadForm.getByRole("button", { name: "Load" }).click();
   await expect(page).toHaveURL(new RegExp(`/org/assignments\\?as_of=${asOf}&pernr=${pernr}$`));
 
   const positionOption = await page

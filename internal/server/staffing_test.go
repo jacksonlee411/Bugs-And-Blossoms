@@ -728,7 +728,7 @@ func TestStaffingHandlers(t *testing.T) {
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req, newOrgUnitMemoryStore(), &staffingMemoryStore{})
-		if rec.Code != http.StatusOK {
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
@@ -1084,7 +1084,7 @@ func TestStaffingHandlers(t *testing.T) {
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handleAssignments(rec, req, &staffingMemoryStore{}, &staffingMemoryStore{}, newPersonMemoryStore())
-		if rec.Code != http.StatusOK {
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
@@ -1150,8 +1150,11 @@ func TestStaffingHandlers(t *testing.T) {
 			assignmentStoreStub{listFn: func(context.Context, string, string, string) ([]Assignment, error) { return nil, nil }},
 			newPersonMemoryStore(),
 		)
-		if rec.Code != http.StatusOK {
+		if rec.Code != http.StatusFound {
 			t.Fatalf("status=%d", rec.Code)
+		}
+		if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/org/assignments?as_of=") {
+			t.Fatalf("location=%q", loc)
 		}
 	})
 
@@ -1493,8 +1496,11 @@ func TestStaffingHandlers_ParseDefaultDates(t *testing.T) {
 		}},
 		positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil }},
 	)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/org/positions?as_of=") {
+		t.Fatalf("location=%q", loc)
 	}
 }
 
@@ -1560,7 +1566,11 @@ func TestStaffingHandlers_DefaultAsOf_UI(t *testing.T) {
 		},
 		pstore,
 	)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d", rec.Code)
+	}
+	loc := rec.Header().Get("Location")
+	if !strings.HasPrefix(loc, "/org/assignments?as_of=") || !strings.Contains(loc, "&pernr=1") {
+		t.Fatalf("location=%q", loc)
 	}
 }

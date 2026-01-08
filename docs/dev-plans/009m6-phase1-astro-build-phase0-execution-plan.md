@@ -1,6 +1,6 @@
 # DEV-PLAN-009M6：Phase 1 追加里程碑执行计划（补齐 DEV-PLAN-018 Phase 0：Astro build + go:embed Shell）
 
-**状态**: 规划中（2026-01-08 07:24 UTC）
+**状态**: 已完成（2026-01-08 12:24 UTC）
 
 > 本文是 `DEV-PLAN-009` 的执行计划补充（里程碑拆解）。由于当前仓库的 UI Shell 仍主要由 Go handler 拼接输出，而 `DEV-PLAN-018` 已冻结“Shell=Astro build 产物 + go:embed + HTMX 装配动态上下文”的合同，本里程碑用于**补齐/收敛**到 `DEV-PLAN-018` 的 Phase 0（最小可运行）要求，并同步把 `Makefile`/CI 门禁从 placeholder 收口为可阻断漂移的真实入口。
 >
@@ -42,21 +42,20 @@
 - 证据记录：`docs/dev-records/DEV-PLAN-010-READINESS.md`
 - 停止线：`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
 
-### 1.4 待决事项（需你确认）
+### 1.4 已决事项（已确认采用建议项）
 
-> 这些是会影响实现细节与门禁闭合的关键决策；若未确认，PR-1 之后容易出现返工/漂移。
-> 当前已按“建议项”口径暂定写入 `DEV-PLAN-018/012`；若你选择备选方案，需要同步调整对应条款。
+> 这些是会影响实现细节与门禁闭合的关键决策；当前已确认采用“建议项”（并已写入 `DEV-PLAN-018/012`）。
 
-1. [ ] 占位符注入 token 方案（Shell HTML）
+1. [X] 占位符注入 token 方案（Shell HTML）
    - 建议：单 token `__BB_AS_OF__`（只注入 `as_of`；对齐 `DEV-PLAN-018` §4.5.2）。
    - 备选：为每个动态属性单独 token（例如 `__BB_NAV_HX_GET__`），但注入点数量会膨胀。
-2. [ ] Shell 产物映射（Astro dist → go:embed）
+2. [X] Shell 产物映射（Astro dist → go:embed）
    - 建议：`apps/web/dist/index.html` 复制为 `internal/server/assets/astro/app.html`；其余 `dist/**` 原样复制到 `internal/server/assets/astro/**`（对齐 `DEV-PLAN-018` §4.5.1）。
-3. [ ] CI `ui` 触发器口径（paths-filter）
+3. [X] CI `ui` 触发器口径（paths-filter）
    - 建议：`ui` 至少覆盖 `apps/web/` + `internal/server/assets/astro/`，确保“改源/改产物”都会触发 `make css` 并被 `assert-clean` 阻断漂移。
-4. [ ] Node 版本 pin 形式（本地可复现 vs 最小必要）
+4. [X] Node 版本 pin 形式（本地可复现 vs 最小必要）
    - 建议：先以 CI Node 20 + `packageManager: pnpm@10.24.0` 为最小闭环；如需要更强一致性再补 `.nvmrc`/`.tool-versions`。
-5. [ ] `as_of` 缺省行为（URL 可分享/可复现）
+5. [X] `as_of` 缺省行为（URL 可分享/可复现）
    - 建议：按 `DEV-PLAN-018` §3.3 执行 302 补齐 `?as_of=<CURRENT_DATE(UTC)>`（URL 永远显式包含 `as_of`）。
    - 备选：缺省时直接在服务端回退到 `CURRENT_DATE(UTC)`（不 302），实现更省但 URL 不可复现且易产生“今天/明天不同结果”的隐性漂移。
 
@@ -89,9 +88,9 @@
 
 ### 4.1 UI 工程与产物
 
-- [ ] `apps/web/package.json` 与 `apps/web/pnpm-lock.yaml` 已提交，且 `packageManager` pin 为 `pnpm@10.24.0`。
-- [ ] `internal/server/assets/astro/app.html` 存在，且包含 `#nav`、`#topbar`、`#flash`、`#content` 四个挂载点，并在 `hx-get` 中使用 `as_of=__BB_AS_OF__`（对齐 `DEV-PLAN-018` §4.4/§4.5）。
-- [ ] `make css` 可在本地与 CI 生成/更新 `internal/server/assets/astro/**`，并保证 `git status --porcelain` 为空。
+- [X] `apps/web/package.json` 与 `apps/web/pnpm-lock.yaml` 已提交，且 `packageManager` pin 为 `pnpm@10.24.0`。
+- [X] `internal/server/assets/astro/app.html` 存在，且包含 `#nav`、`#topbar`、`#flash`、`#content` 四个挂载点，并在 `hx-get` 中使用 `as_of=__BB_AS_OF__`（对齐 `DEV-PLAN-018` §4.4/§4.5）。
+- [X] `make css` 可在本地与 CI 生成/更新 `internal/server/assets/astro/**`，并保证 `git status --porcelain` 为空。
 
 ### 4.2 Server 行为
 
@@ -111,52 +110,52 @@
 
 ### PR-0：合同回填与实施口径冻结（文档优先）
 
-- [ ] 在 `DEV-PLAN-018` 明确 Shell 的“产物映射 + 占位符注入”契约（`apps/web/dist/*` → `internal/server/assets/astro/**`、token `__BB_AS_OF__`、注入点/失败行为），避免实现期临时发明。
-- [ ] 在 `DEV-PLAN-011` 落定 Astro 基线版本（以 `apps/web/pnpm-lock.yaml` 进入主干为准），并明确 Node/pnpm 的 SSOT 与对齐方式。
-- [ ] 在 `DEV-PLAN-012` 补齐 UI Gate 的“必须执行项”与触发器说明（命中 `ui` 时 Gate-1 必须跑 `make css`；触发器需覆盖 `apps/web/**` 与 go:embed 产物目录）。
+- [X] 在 `DEV-PLAN-018` 明确 Shell 的“产物映射 + 占位符注入”契约（`apps/web/dist/*` → `internal/server/assets/astro/**`、token `__BB_AS_OF__`、注入点/失败行为），避免实现期临时发明。
+- [X] 在 `DEV-PLAN-011` 落定 Astro 基线版本（以 `apps/web/pnpm-lock.yaml` 进入主干为准），并明确 Node/pnpm 的 SSOT 与对齐方式。
+- [X] 在 `DEV-PLAN-012` 补齐 UI Gate 的“必须执行项”与触发器说明（命中 `ui` 时 Gate-1 必须跑 `make css`；触发器需覆盖 `apps/web/**` 与 go:embed 产物目录）。
 
 ### PR-1：初始化 `apps/web` Astro 工程（SSOT 落盘）
 
-- [ ] 初始化 Astro 项目（最小集），提交：
+- [X] 初始化 Astro 项目（最小集），提交：
   - `apps/web/package.json`（含 `packageManager: pnpm@10.24.0`）
   - `apps/web/pnpm-lock.yaml`
   - `apps/web/astro.config.*`（必要时）
   - 最小页面/模板：生成 `dist/index.html`（或等价入口），包含四个挂载点，并在 `hx-get` 中使用 `as_of=__BB_AS_OF__`（token 由 Go 注入）。
-- [ ] 确保 `apps/web/node_modules` 不进入仓库（gitignore）。
+- [X] 确保 `apps/web/node_modules` 不进入仓库（gitignore）。
 
 ### PR-2：构建与复制管线（产物进入 `internal/server/assets/astro/**`）
 
-- [ ] 新增脚本（建议）：`scripts/ui/build-astro.sh`
+- [X] 新增脚本（建议）：`scripts/ui/build-astro.sh`
   - 通过 corepack pin pnpm 版本（对齐 E2E 口径）；
   - `pnpm -C apps/web install --frozen-lockfile`
   - `pnpm -C apps/web build`
   - 按 `DEV-PLAN-018` §4.5.1 将 build 产物复制到 `internal/server/assets/astro/**`（`dist/index.html` → `app.html`；其余文件保持相对路径）。
-- [ ] Makefile 收口：`make css` 调用上述脚本，且输出稳定、可复现、可在 CI 运行；生成后 `git status --porcelain` 必须为空。
+- [X] Makefile 收口：`make css` 调用上述脚本，且输出稳定、可复现、可在 CI 运行；生成后 `git status --porcelain` 必须为空。
 
 ### PR-3：CI Gate-1 补齐 UI build（阻断生成物漂移）
 
-- [ ] 更新 `.github/workflows/quality-gates.yml`：
+- [X] 更新 `.github/workflows/quality-gates.yml`：
   - Code Quality & Formatting job 命中 UI 变更时安装 Node（setup-node）并执行 `make css`；
   - 仍保留 `assert-clean` 作为生成物一致性门禁。
-- [ ] 调整 paths-filter 的 UI 触发器口径：`ui` 至少覆盖 `apps/web/**` 与 `internal/server/assets/astro/**`（防止手改产物绕过 build）；不扩大到无关 generated 目录导致误触发。
+- [X] 调整 paths-filter 的 UI 触发器口径：`ui` 至少覆盖 `apps/web/**` 与 `internal/server/assets/astro/**`（防止手改产物绕过 build）；不扩大到无关 generated 目录导致误触发。
 
 ### PR-4：Go Server 切换为 Astro Shell（移除 Go 拼接壳）
 
-- [ ] `/app` 读取并输出 `assets/astro/app.html`，并进行最小占位符注入（替换 `__BB_AS_OF__`；对齐 `DEV-PLAN-018` §4.5.2；不在 handler 内重写结构）。
-- [ ] `as_of` 缺省/校验行为对齐 `DEV-PLAN-018` §3.3（302 补齐；非法 400），并保证注入后的 HTMX 请求不会丢失 `as_of`。
-- [ ] `writeShell*`/全页模式收口：将“非 HTMX”页面的外壳渲染统一切换到 Astro Shell，确保“同一 URL 支持全页与 partial”。
-- [ ] 静态资源分发确保覆盖 Astro build 产物路径（仍在 `/assets/*` 命名空间下）。
+- [X] `/app` 读取并输出 `assets/astro/app.html`，并进行最小占位符注入（替换 `__BB_AS_OF__`；对齐 `DEV-PLAN-018` §4.5.2；不在 handler 内重写结构）。
+- [X] `as_of` 缺省/校验行为对齐 `DEV-PLAN-018` §3.3（302 补齐；非法 400），并保证注入后的 HTMX 请求不会丢失 `as_of`。
+- [X] `writeShell*`/全页模式收口：将“非 HTMX”页面的外壳渲染统一切换到 Astro Shell，确保“同一 URL 支持全页与 partial”。
+- [X] 静态资源分发确保覆盖 Astro build 产物路径（仍在 `/assets/*` 命名空间下）。
 
 ### PR-5：测试与验收脚本收口（最小可复现）
 
-- [ ] 单测：覆盖 `/app` 全页响应中包含四个挂载点，并且在登录态会触发 `/ui/nav` 等 HTMX 拉取（只测“契约存在”，不测 Astro 内部实现）。
-- [ ] E2E（如需）：增加一个轻量断言（打开 `/app` 后壳加载成功，且能通过导航进入一个模块页）。
+- [X] 单测：覆盖 `/app` 全页响应中包含四个挂载点，并且在登录态会触发 `/ui/nav` 等 HTMX 拉取（只测“契约存在”，不测 Astro 内部实现）。
+- [X] E2E（如需）：增加一个轻量断言（打开 `/app` 后壳加载成功，且能通过导航进入一个模块页）。
 
 ### PR-6：Readiness 证据登记与文档收口
 
-- [ ] 更新 `docs/dev-records/DEV-PLAN-010-READINESS.md`：新增 009M6 证据（时间戳/命令/结果/PR）。
-- [ ] 更新 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`：Phase 0 勾选完成并将状态更新为“已完成（UTC 时间戳）”。
-- [ ] 更新 `docs/dev-plans/009-implementation-roadmap.md`：在 UI Shell 相关条目处补充“已按 Astro build Phase 0 收口”的证据链接（不改合同，只补证据）。
+- [X] 更新 `docs/dev-records/DEV-PLAN-010-READINESS.md`：新增 009M6 证据（时间戳/命令/结果/PR）。
+- [X] 更新 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`：Phase 0 勾选完成并将状态更新为“已完成（UTC 时间戳）”。
+- [X] 更新 `docs/dev-plans/009-implementation-roadmap.md`：在 UI Shell 相关条目处补充“已按 Astro build Phase 0 收口”的证据链接（不改合同，只补证据）。
 
 ## 6. 本地验证（SSOT 引用）
 

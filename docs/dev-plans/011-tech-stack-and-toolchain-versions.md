@@ -65,7 +65,7 @@
 
 | 组件 | 基线版本 | 来源/说明 |
 | --- | --- | --- |
-| Astro | 必须 pin（随 UI 工程落盘） | `DEV-PLAN-018`；以 `apps/web/package.json` + `apps/web/pnpm-lock.yaml` 为 SSOT（新仓库） |
+| Astro | `5.16.7`（pin） | `DEV-PLAN-018`；以 `apps/web/package.json` + `apps/web/pnpm-lock.yaml` 为 SSOT（新仓库），本表仅用于“可读性摘要”。 |
 | pnpm | `10.24.0` | 统一用于 UI build 与 E2E；需在 `apps/web/package.json#packageManager` pin 并提交 `apps/web/pnpm-lock.yaml` |
 | Node.js | `20.x`（推荐） | UI build 与 E2E 共同依赖；建议在新仓库补齐可复现 pin（例如 `.tool-versions`/`.nvmrc`/CI） |
 

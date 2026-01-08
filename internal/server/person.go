@@ -6,6 +6,7 @@ import (
 	"errors"
 	"html"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -311,6 +312,11 @@ func handlePersons(w http.ResponseWriter, r *http.Request, store PersonStore) {
 		return
 	}
 
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		ps, err := store.ListPersons(r.Context(), tenant.ID)
@@ -318,22 +324,22 @@ func handlePersons(w http.ResponseWriter, r *http.Request, store PersonStore) {
 		if err != nil {
 			msg = err.Error()
 		}
-		writePage(w, r, renderPersons(ps, tenant, msg))
+		writePage(w, r, renderPersons(ps, tenant, asOf, msg))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
 			ps, _ := store.ListPersons(r.Context(), tenant.ID)
-			writePage(w, r, renderPersons(ps, tenant, "bad form"))
+			writePage(w, r, renderPersons(ps, tenant, asOf, "bad form"))
 			return
 		}
 		pernr := strings.TrimSpace(r.Form.Get("pernr"))
 		displayName := strings.TrimSpace(r.Form.Get("display_name"))
 		if _, err := store.CreatePerson(r.Context(), tenant.ID, pernr, displayName); err != nil {
 			ps, _ := store.ListPersons(r.Context(), tenant.ID)
-			writePage(w, r, renderPersons(ps, tenant, err.Error()))
+			writePage(w, r, renderPersons(ps, tenant, asOf, err.Error()))
 			return
 		}
-		http.Redirect(w, r, "/person/persons", http.StatusSeeOther)
+		http.Redirect(w, r, "/person/persons?as_of="+url.QueryEscape(asOf), http.StatusSeeOther)
 		return
 	default:
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -341,7 +347,7 @@ func handlePersons(w http.ResponseWriter, r *http.Request, store PersonStore) {
 	}
 }
 
-func renderPersons(persons []Person, tenant Tenant, errMsg string) string {
+func renderPersons(persons []Person, tenant Tenant, asOf string, errMsg string) string {
 	var b strings.Builder
 	b.WriteString("<h1>Person</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
@@ -350,7 +356,7 @@ func renderPersons(persons []Person, tenant Tenant, errMsg string) string {
 	}
 
 	b.WriteString(`<h2>Create</h2>`)
-	b.WriteString(`<form method="POST" action="/person/persons">`)
+	b.WriteString(`<form method="POST" action="/person/persons?as_of=` + html.EscapeString(asOf) + `">`)
 	b.WriteString(`<label>Pernr <input name="pernr" /></label><br/>`)
 	b.WriteString(`<label>Display Name <input name="display_name" /></label><br/>`)
 	b.WriteString(`<button type="submit">Create</button>`)
