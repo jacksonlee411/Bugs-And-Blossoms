@@ -41,24 +41,14 @@ func TestMustNewHandler_Panics(t *testing.T) {
 }
 
 func TestNewHandlerWithOptions_RootRedirect(t *testing.T) {
-	t.Setenv("SUPERADMIN_BASIC_AUTH_USER", "admin")
-	t.Setenv("SUPERADMIN_BASIC_AUTH_PASS", "admin")
-	t.Setenv("AUTHZ_MODE", "enforce")
-
-	h, err := NewHandlerWithOptions(HandlerOptions{
-		Pool: stubPool{
-			beginFn: func(ctx context.Context) (pgx.Tx, error) { return &stubTx{}, nil },
-			queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
-		},
+	h := newAuthedHandler(t, stubPool{
+		beginFn: func(ctx context.Context) (pgx.Tx, error) { return &stubTx{}, nil },
+		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -68,15 +58,14 @@ func TestNewHandlerWithOptions_RootRedirect(t *testing.T) {
 }
 
 func TestNewHandlerWithOptions_NoAuthzCheckForUnknownPath(t *testing.T) {
-	h := newTestHandler(t, stubPool{
+	h := newAuthedHandler(t, stubPool{
 		beginFn: func(context.Context) (pgx.Tx, error) { return &stubTx{}, nil },
 		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/superadmin/unknown", nil)
-	req.SetBasicAuth("admin", "admin")
+	req := h.newRequest(http.MethodGet, "/superadmin/unknown", nil)
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	h.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status=%d", rec.Code)
 	}

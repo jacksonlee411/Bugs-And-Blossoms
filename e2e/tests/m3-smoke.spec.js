@@ -13,6 +13,8 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const superadminBaseURL = process.env.E2E_SUPERADMIN_BASE_URL || "http://localhost:8081";
   const superadminUser = process.env.E2E_SUPERADMIN_USER || "admin";
   const superadminPass = process.env.E2E_SUPERADMIN_PASS || "admin";
+  const superadminEmail = process.env.E2E_SUPERADMIN_EMAIL || "admin@example.invalid";
+  const superadminLoginPass = process.env.E2E_SUPERADMIN_LOGIN_PASS || superadminPass;
   const kratosAdminURL = process.env.E2E_KRATOS_ADMIN_URL || "http://localhost:4434";
 
   const superadminContext = await browser.newContext({
@@ -21,7 +23,27 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   });
   const superadminPage = await superadminContext.newPage();
 
-  await superadminPage.goto("/superadmin/tenants");
+  const superadminIdentifier = `sa:${superadminEmail.toLowerCase()}`;
+  const createSuperadminIdentityResp = await superadminContext.request.post(`${kratosAdminURL}/admin/identities`, {
+    data: {
+      schema_id: "default",
+      traits: { email: superadminEmail },
+      credentials: {
+        password: {
+          identifiers: [superadminIdentifier],
+          config: { password: superadminLoginPass }
+        }
+      }
+    }
+  });
+  expect(createSuperadminIdentityResp.ok()).toBeTruthy();
+
+  await superadminPage.goto("/superadmin/login");
+  await expect(superadminPage.locator("h1")).toHaveText("SuperAdmin Login");
+  await superadminPage.locator('input[name="email"]').fill(superadminEmail);
+  await superadminPage.locator('input[name="password"]').fill(superadminLoginPass);
+  await superadminPage.getByRole("button", { name: "Login" }).click();
+  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
   await expect(superadminPage.locator("h1")).toHaveText("SuperAdmin / Tenants");
 
   await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(`E2E Tenant ${runID}`);

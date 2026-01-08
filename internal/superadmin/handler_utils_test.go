@@ -52,10 +52,10 @@ func TestTenantIDFromPath(t *testing.T) {
 	}
 }
 
-func TestInsertAudit_Defaults(t *testing.T) {
+func TestInsertAudit_MissingActor(t *testing.T) {
 	tx := &stubTx{}
-	if err := insertAudit(context.Background(), tx, "", "action", "00000000-0000-0000-0000-000000000001", nil, "rid"); err != nil {
-		t.Fatal(err)
+	if err := insertAudit(context.Background(), tx, "", "action", "00000000-0000-0000-0000-000000000001", nil, "rid"); err == nil {
+		t.Fatal("expected error")
 	}
 }
 
