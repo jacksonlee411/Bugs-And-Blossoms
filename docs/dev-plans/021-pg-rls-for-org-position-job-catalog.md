@@ -1,20 +1,20 @@
 # DEV-PLAN-021：启用 PostgreSQL RLS 强租户隔离（Org/Position/Job Catalog）
 
-**状态**: 草拟中（2026-01-05 02:45 UTC）
+**状态**: 已完成（2026-01-08 02:45 UTC）
 
 > 本计划聚焦：在 `DEV-PLAN-026/030/029` 的 Kernel 表上 **默认启用 PostgreSQL RLS**，把“租户隔离”从应用层 `WHERE tenant_id=...` 的约定，升级为 DB 层可验证的强制约束；并与 `DEV-PLAN-019/019A` 的 RLS 注入与 DB 角色契约对齐，确保 Greenfield 默认强隔离，不依赖实现期临时补丁。
 
 ## 1. 背景与上下文 (Context)
 - `DEV-PLAN-026/030/029` 将大量不变量与核心计算下沉到 PostgreSQL（advisory lock / GiST exclusion / ltree / jsonb 校验 / 同事务 replay），DB 已被选定为“Kernel/最终裁判”。
 - 这些表普遍以 `(tenant_id, <id>)` 复合唯一/外键对齐多租户，但隔离仍主要依赖应用层显式追加 `WHERE tenant_id = ...`，存在“漏写/误 join”导致跨租户泄露的系统性风险。
-- `DEV-PLAN-019/019A` 已确立 RLS PoC 的系统级契约：**事务内**注入 `app.current_tenant`（`set_config(..., true)`/`SET LOCAL`）+ policy 使用 `current_setting('app.current_tenant')::uuid` **fail-closed**；并已落地 `pkg/composables/rls.go:ApplyTenantRLS`。
+- `DEV-PLAN-019/019A` 已确立 RLS PoC 的系统级契约：**事务内**注入 `app.current_tenant`（`set_config(..., true)`/`SET LOCAL`）+ policy 使用 `current_setting('app.current_tenant')::uuid` **fail-closed**；并已在运行态链路中落地（server handler 在事务内注入、DB smoke 覆盖 fail-closed/隔离/tenant mismatch）。
 - 需要一个面向 Greenfield 的“启用清单 + 迁移落盘 + Go 调用约束 + 验收/回滚”的方案，作为系列计划（026/030/029）的默认启用策略与后续扩展模板。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 对 `DEV-PLAN-026/030/029` 中所有 **tenant-scoped 表**启用 RLS（`ENABLE` + `FORCE` + policy），且 policy 为 **fail-closed**。
-- [ ] Go 层所有访问 tenant-scoped 表的路径在事务内调用 `composables.ApplyTenantRLS`；读路径同样要求显式事务（遵循 019 的 “No Tx, No RLS” 契约）。
-- [ ] 为 Kernel 的写入口（`submit_*_event`）增加“tenant 一致性断言”（`p_tenant_id` 必须等于 `app.current_tenant`），降低“串租户/误传参”导致的隐性数据污染。
+- [x] 对 `DEV-PLAN-026/030/029` 中所有 **tenant-scoped 表**启用 RLS（`ENABLE` + `FORCE` + policy），且 policy 为 **fail-closed**。
+- [x] Go 层所有访问 tenant-scoped 表的路径在事务内注入 `app.current_tenant`；读路径同样要求显式事务（遵循 019 的 “No Tx, No RLS” 契约）。
+- [x] 为 Kernel 的写入口（`submit_*_event`）增加“tenant 一致性断言”（`p_tenant_id` 必须等于 `app.current_tenant`），降低“串租户/误传参”导致的隐性数据污染。
 - [ ] 提供可验证、可渐进推广（按表/按模块）的实施步骤、验收标准与回滚路径。
 
 ### 2.2 非目标（明确不做）
@@ -160,11 +160,11 @@ CREATE POLICY tenant_isolation ON <table>
   - 识别建议：按 `SQLSTATE` 收敛为 `RLS_VIOLATION`（并在日志中输出 `tenant_id/request_id/sqlstate`）。
 
 ## 6. 实施步骤（建议顺序）
-1. [ ] 在 schema SSOT 的通用段落中引入 `current_tenant_id()` 与 `assert_current_tenant(...)`，并将写入口函数接入断言。
-2. [ ] 按 4.2-4.4 清单为这些表添加 RLS DDL（`ENABLE/FORCE` + `tenant_isolation` policy），并确保最终 SSOT 落在对应模块的 schema SSOT 目录：`modules/orgunit/infrastructure/persistence/schema/`、`modules/jobcatalog/infrastructure/persistence/schema/`、`modules/staffing/infrastructure/persistence/schema/`（对齐 `DEV-PLAN-016`）。
-3. [ ] Go 层：在这些表的写路径/读路径统一走事务入口，并在事务内调用 `composables.ApplyTenantRLS`（对齐 019A 的注入契约）。
-4. [ ] 补齐测试（至少一条 DB/集成测试）：验证缺失 `app.current_tenant` 时 fail-closed；跨租户读写被拒绝；同租户正常。
-5. [ ] 本地验证与门禁对齐（命中项按 `AGENTS.md` 触发器矩阵执行），确保 `RLS_ENFORCE=enforce` + 非 superuser 且 `NOBYPASSRLS` 账号下稳定通过。
+1. [x] 在 schema SSOT 的通用段落中引入 `current_tenant_id()` 与 `assert_current_tenant(...)`，并将写入口函数接入断言。
+2. [x] 按 4.2-4.4 清单为这些表添加 RLS DDL（`ENABLE/FORCE` + `tenant_isolation` policy），并确保最终 SSOT 落在对应模块的 schema SSOT 目录：`modules/orgunit/infrastructure/persistence/schema/`、`modules/jobcatalog/infrastructure/persistence/schema/`、`modules/staffing/infrastructure/persistence/schema/`（对齐 `DEV-PLAN-016`）。
+3. [x] Go 层：在这些表的写路径/读路径统一走事务入口，并在事务内注入 `app.current_tenant`（对齐 019A 的注入契约）。
+4. [x] 补齐测试（至少一条 DB/集成测试）：验证缺失 `app.current_tenant` 时 fail-closed；跨租户读写被拒绝；同租户正常。
+5. [x] 本地验证与门禁对齐（命中项按 `AGENTS.md` 触发器矩阵执行），确保 `RLS_ENFORCE=enforce` + 非 superuser 且 `NOBYPASSRLS` 账号下稳定通过。
 
 ## 7. 风险与缓解
 - **性能**：RLS 会引入额外谓词与 plan 变化；缓解：policy 只做 `tenant_id = current_tenant_id()` 的等值过滤，且关键索引均以 `tenant_id` 为前导；实现期以 `EXPLAIN (ANALYZE, BUFFERS)` 复核热点查询。
@@ -172,13 +172,13 @@ CREATE POLICY tenant_isolation ON <table>
 - **系统组件**：outbox relay/后台 job 可能需要跨租户扫描；缓解：按 019A 边界，系统表不启用 RLS；若未来必须启用，使用专用 role/连接池，禁止“缺 tenant 放行”的 policy。
 
 ## 8. 测试与验收标准 (Acceptance Criteria)
-- [ ] **fail-closed**：未设置 `app.current_tenant` 时，访问启用 RLS 的表必须报错（不可“默认放行”）。
-- [ ] **隔离**：在 tenant=A 的上下文下，读取/写入 tenant=B 的行必须被拒绝（无数据或报错）。
-- [ ] **一致性断言**：`p_tenant_id` 与 `app.current_tenant` 不一致时，写入口必须以稳定错误码失败。
-- [ ] **回归**：在 `RLS_ENFORCE=enforce` 模式下，关键路径（写入 + 快照读取 + replay 维护入口）稳定可用。
+- [x] **fail-closed**：未设置 `app.current_tenant` 时，访问启用 RLS 的表必须报错（不可“默认放行”）。
+- [x] **隔离**：在 tenant=A 的上下文下，读取/写入 tenant=B 的行必须被拒绝（无数据或报错）。
+- [x] **一致性断言**：`p_tenant_id` 与 `app.current_tenant` 不一致时，写入口必须以稳定错误码失败。
+- [x] **回归**：在 `RLS_ENFORCE=enforce` 模式下，关键路径（写入 + 快照读取 + replay 维护入口）稳定可用。
 
 ### 8.1 最小验证点（避免“跑一跑就算”）
-- [ ] **行为**：用同一套 SQL 分别验证（1）未注入 tenant 时 fail-closed；（2）tenant=A 下不可见 tenant=B；（3）跨租户 insert/update 被拒绝。
+- [x] **行为**：用同一套 SQL 分别验证（1）未注入 tenant 时 fail-closed；（2）tenant=A 下不可见 tenant=B；（3）跨租户 insert/update 被拒绝。
 - [ ] **计划**：对各子域最常用的 as-of 快照查询做一次 `EXPLAIN (ANALYZE, BUFFERS)`，确认仍使用以 `tenant_id` 为前导的索引（RLS 作为兜底，不替代显式 `tenant_id` 过滤）。
 - [ ] **可观测性**：RLS 相关失败在应用日志中至少包含：`tenant_id`, `request_id`, `rls_enforce`, `sqlstate`, `error`（对齐 019A 的建议字段）。
 
