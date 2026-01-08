@@ -130,6 +130,50 @@ func TestLogin_UsesDefaultKratosIdentityProviderWhenNil(t *testing.T) {
 	}
 }
 
+func TestAppHome_RedirectsWhenAsOfMissing(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver:  localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{Email: "tenant-admin@example.invalid", KratosIdentityID: "kid1"}},
+		OrgUnitStore:     newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	loginReq.Host = "localhost:8080"
+	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginRec := httptest.NewRecorder()
+	h.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusFound {
+		t.Fatalf("login status=%d", loginRec.Code)
+	}
+
+	sidCookie := loginRec.Result().Cookies()[0]
+	if sidCookie == nil || sidCookie.Name != "sid" || sidCookie.Value == "" {
+		t.Fatalf("unexpected sid cookie: %#v", sidCookie)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/app/home", nil)
+	req.Host = "localhost:8080"
+	req.AddCookie(sidCookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/app/home?as_of=") {
+		t.Fatalf("loc=%s", loc)
+	}
+}
+
 func TestMustNewHandler_PanicsOnBadPath(t *testing.T) {
 	if err := os.Setenv("ALLOWLIST_PATH", "no-such-file.yaml"); err != nil {
 		t.Fatal(err)
