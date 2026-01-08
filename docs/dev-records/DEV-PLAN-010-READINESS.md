@@ -272,3 +272,13 @@ DB 闭环（迁移 + smoke）：
   - `make staffing migrate up`（含 `cmd/dbtool staffing-smoke`）
   - `make sqlc-generate` 后 `git status --short` 为空
 - CI（Quality Gates）：PR #82 4/4 全绿（包含 `assert-clean`）
+
+证据（Milestone 3：Kernel submit 函数）：
+- 日期：2026-01-08
+- 合并记录：PR #84 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/84
+- 产出：
+  - Schema SSOT：`modules/staffing/infrastructure/persistence/schema/00005_staffing_payroll_engine.sql`
+  - 迁移：`migrations/staffing/20260108133000_staffing_payroll_engine.sql` + `migrations/staffing/atlas.sum`
+- 本地验证：
+  - `make staffing plan && make staffing lint && make staffing migrate up`
+  - `make sqlc-generate` 后 `git status --short` 为空
