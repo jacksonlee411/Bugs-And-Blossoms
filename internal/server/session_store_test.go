@@ -191,6 +191,49 @@ func TestMemoryPrincipalStore_GetByID_Branches(t *testing.T) {
 	}
 }
 
+func TestMemoryPrincipalStore_UpsertFromKratos_Branches(t *testing.T) {
+	old := sidRandReader
+	t.Cleanup(func() { sidRandReader = old })
+	sidRandReader = bytes.NewReader(bytes.Repeat([]byte{0xAB}, 16))
+
+	s := newMemoryPrincipalStore()
+	p, err := s.GetOrCreateTenantAdmin(context.Background(), "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.KratosIdentityID != "" {
+		t.Fatalf("unexpected kratos id: %q", p.KratosIdentityID)
+	}
+
+	p2, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "tenant-admin", "kid1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p2.ID != p.ID || p2.KratosIdentityID != "kid1" {
+		t.Fatalf("p2=%+v p=%+v", p2, p)
+	}
+
+	p3, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "tenant-admin", "kid1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p3.ID != p.ID {
+		t.Fatalf("p3=%+v", p3)
+	}
+
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "tenant-admin", "kid2"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	pDisabled := p3
+	pDisabled.Status = "disabled"
+	s.byKey["t1|tenant-admin@example.invalid"] = pDisabled
+	s.byID[pDisabled.ID] = pDisabled
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "tenant-admin@example.invalid", "tenant-admin", "kid1"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestMemorySessionStore_RevokedOrExpired(t *testing.T) {
 	old := sidRandReader
 	t.Cleanup(func() { sidRandReader = old })
@@ -247,6 +290,12 @@ func TestPGPrincipalStore_GetOrCreateAndGetByID(t *testing.T) {
 		t.Fatalf("principal=%+v", p)
 	}
 
+	q.rowErr = os.ErrInvalid
+	if _, err := s.GetOrCreateTenantAdmin(context.Background(), "t1"); err == nil {
+		t.Fatal("expected error")
+	}
+	q.rowErr = nil
+
 	q.row = scanRow{scan: func(dest ...any) error {
 		*(dest[0].(*string)) = "p1"
 		*(dest[1].(*string)) = "disabled"
@@ -283,6 +332,64 @@ func TestPGPrincipalStore_GetOrCreateAndGetByID(t *testing.T) {
 	got, ok, err := s.GetByID(context.Background(), "t1", "p1")
 	if err != nil || !ok || got.ID != "p1" {
 		t.Fatalf("got=%+v ok=%v err=%v", got, ok, err)
+	}
+}
+
+func TestPGPrincipalStore_UpsertFromKratos(t *testing.T) {
+	q := &stubQ{}
+	s := &pgPrincipalStore{q: q}
+
+	q.row = scanRow{scan: func(dest ...any) error {
+		*(dest[0].(*string)) = "p1"
+		*(dest[1].(*string)) = "tenant-admin"
+		*(dest[2].(*string)) = "active"
+		*(dest[3].(*string)) = "kid1"
+		return nil
+	}}
+	p, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "tenant-admin", "kid1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.ID != "p1" || p.KratosIdentityID != "kid1" {
+		t.Fatalf("p=%+v", p)
+	}
+
+	q.row = scanRow{scan: func(dest ...any) error {
+		*(dest[0].(*string)) = "p1"
+		*(dest[1].(*string)) = "tenant-admin"
+		*(dest[2].(*string)) = "disabled"
+		*(dest[3].(*string)) = "kid1"
+		return nil
+	}}
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "tenant-admin", "kid1"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	q.row = scanRow{scan: func(dest ...any) error {
+		*(dest[0].(*string)) = "p1"
+		*(dest[1].(*string)) = "tenant-admin"
+		*(dest[2].(*string)) = "active"
+		*(dest[3].(*string)) = ""
+		return nil
+	}}
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "tenant-admin", "kid1"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	q.row = scanRow{scan: func(dest ...any) error {
+		*(dest[0].(*string)) = "p1"
+		*(dest[1].(*string)) = "tenant-admin"
+		*(dest[2].(*string)) = "active"
+		*(dest[3].(*string)) = "kid2"
+		return nil
+	}}
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "tenant-admin", "kid1"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	q.rowErr = os.ErrInvalid
+	if _, err := s.UpsertFromKratos(context.Background(), "t1", "a@example.invalid", "tenant-admin", "kid1"); err == nil {
+		t.Fatal("expected error")
 	}
 }
 
