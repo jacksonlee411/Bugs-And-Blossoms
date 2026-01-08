@@ -72,7 +72,7 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 		}
 
 		switch path {
-		case "/health", "/healthz", "/login", "/logout":
+		case "/health", "/healthz":
 			next.ServeHTTP(w, r)
 			return
 		default:
@@ -118,6 +118,19 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 
 func authzRequirementForRoute(method string, path string) (object string, action string, ok bool) {
 	switch path {
+	case "/login":
+		if method == http.MethodGet {
+			return authz.ObjectIAMSession, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectIAMSession, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/logout":
+		if method == http.MethodPost {
+			return authz.ObjectIAMSession, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/org/nodes":
 		if method == http.MethodGet {
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true

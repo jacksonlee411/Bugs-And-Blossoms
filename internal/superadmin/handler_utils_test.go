@@ -60,7 +60,26 @@ func TestInsertAudit_MissingActor(t *testing.T) {
 }
 
 func TestAuthzRequirementForRoute(t *testing.T) {
-	object, action, ok := authzRequirementForRoute(http.MethodGet, "/superadmin/tenants")
+	object, action, ok := authzRequirementForRoute(http.MethodGet, "/superadmin/login")
+	if !ok || object == "" || action == "" {
+		t.Fatalf("expected ok got ok=%v object=%q action=%q", ok, object, action)
+	}
+	object, action, ok = authzRequirementForRoute(http.MethodPost, "/superadmin/login")
+	if !ok || object == "" || action == "" {
+		t.Fatalf("expected ok got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/superadmin/login"); ok {
+		t.Fatal("expected no check")
+	}
+	object, action, ok = authzRequirementForRoute(http.MethodPost, "/superadmin/logout")
+	if !ok || object == "" || action == "" {
+		t.Fatalf("expected ok got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/superadmin/logout"); ok {
+		t.Fatal("expected no check")
+	}
+
+	object, action, ok = authzRequirementForRoute(http.MethodGet, "/superadmin/tenants")
 	if !ok || object == "" || action == "" {
 		t.Fatalf("expected ok got ok=%v object=%q action=%q", ok, object, action)
 	}

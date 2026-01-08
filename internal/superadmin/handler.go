@@ -240,6 +240,19 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 
 func authzRequirementForRoute(method string, path string) (object string, action string, ok bool) {
 	switch path {
+	case "/superadmin/login":
+		if method == http.MethodGet {
+			return authz.ObjectSuperadminSession, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectSuperadminSession, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/superadmin/logout":
+		if method == http.MethodPost {
+			return authz.ObjectSuperadminSession, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/superadmin/tenants":
 		if method == http.MethodGet {
 			return authz.ObjectSuperadminTenants, authz.ActionRead, true

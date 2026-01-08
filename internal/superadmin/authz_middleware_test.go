@@ -31,6 +31,18 @@ func TestWithAuthz_BypassesHealth(t *testing.T) {
 	}
 }
 
+func TestWithAuthz_LoginForbiddenWhenEnforced(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	h := withAuthz(nil, stubAuthorizer{allowed: false, enforced: true}, next)
+
+	req := httptest.NewRequest(http.MethodGet, "/superadmin/login", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
 func TestWithAuthz_Error(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	h := withAuthz(nil, stubAuthorizer{err: errors.New("boom")}, next)
