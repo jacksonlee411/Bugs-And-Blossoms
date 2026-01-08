@@ -1,6 +1,6 @@
 # DEV-PLAN-040：薪酬社保（Payroll & Social Insurance）可执行方案
 
-**状态**: 草拟中（2026-01-07 15:00 UTC）
+**状态**: 草拟中（2026-01-08 02:40 UTC）
 
 > 来源：`docs/dev-records/薪酬社保模块设计蓝图.docx`（转换为 Markdown）
 >
@@ -20,6 +20,8 @@
 **目标**
 - [ ] 提供“薪资周期（pay period）→ 计算 → 审核 → 定稿”的单链路主流程：生成工资条（payslip）并可在 UI 查看。
 - [ ] 引入“社保政策（单城市起步）”配置：按 `city_code` + 有效期（Valid Time）选择规则，计算个人/企业缴费。
+- [ ] 支持回溯计算（Retroactive Accounting）：当 HR 在后续日期提交早于某已定稿 pay period 的定薪/任职变更时，系统必须生成“重算请求”，并通过可审计的差额处理（修正累计口径 + 结转补发/扣回 pay item）把结果带到后续 pay period（口径与失败路径见 5.3）。
+- [ ] 支持“税后发放/净额保证（仅个税）”工资项：HR 可录入某工资项的 `target_net`（例如长期服务奖 20,000.00），系统必须确保该项在仅扣除个税后员工到手金额= `target_net`；相应税金成本（含“税上税”迭代产生的税金成本）由公司承担。
 - [ ] 金额精度全链路无浮点：DB `numeric` + Go `cockroachdb/apd/v3`（实现期禁止 `float64`；舍入通过统一 Context 与枚举口径）。
 - [ ] 严格多租户隔离与 fail-closed：所有 payroll 表启用 RLS，访问必须显式事务 + 租户注入（SSOT：`AGENTS.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`）。
 - [ ] 写入口唯一（One Door）：所有写入通过 DB Kernel `submit_*_event(...)`，同事务同步投射读模型（SSOT：`AGENTS.md`、`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/031-greenfield-assignment-job-data.md`）。
@@ -27,6 +29,7 @@
 **非目标（本计划不交付）**
 - 不做生产中的“双轨并行/回退到旧系统/读写双链路”（No Legacy，SSOT：`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`）。
 - 不做金税四期直连申报、银企直连、ESOP/LTI、300+ 城市全量规则；这些在后续里程碑另立 dev-plan 承接。
+- 不在 P0 引入 SetID/Business Unit 维度（`business_unit_id/setid/record_group`）：Payroll 配置与结果按 tenant 共享（等价 `SHARE`）；`pay_group` 仅用于算薪分组，不承载主数据共享/隔离语义。若未来需要按 BU 分化政策/工资项/规则，必须先按 `docs/dev-plans/028-setid-management.md` 扩展 stable record group 清单并接入权威解析入口（`ResolveSetID(...)`），再另立 dev-plan 承接迁移与门禁。
 
 ### 0.3 工具链与门禁（SSOT 引用）
 - 触发器矩阵与本地必跑：`AGENTS.md`
@@ -43,6 +46,9 @@
 - **One Door**：任何写入（政策、算薪、定稿）必须走 Kernel `submit_*_event`；禁止直接 `INSERT/UPDATE` 读模型表。
 - **No Tx, No RLS**：缺少 tenant context 直接失败（fail-closed）；不得用 superuser/bypass RLS 跑业务链路（对齐 `docs/dev-plans/019-tenant-and-authn.md` 与 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`）。
 - **Valid Time = date**：有效期仅用 `date`/`daterange`（`[start,end)`）；`timestamptz` 仅用于审计/事务时间（`docs/dev-plans/032-effective-date-day-granularity.md`）。
+- **SetID/BU 边界（P0 冻结）**：P0 不引入 `business_unit_id/setid/record_group`；禁止用“缺映射时默认 `SHARE`”等隐式回退让链路“看起来能跑”（对齐 `docs/dev-plans/028-setid-management.md` 的 fail-closed 与“无缺省洞”约束）。
+- **回溯重算口径冻结**：定稿后提交的历史生效变更不得被静默忽略；必须生成可审计的 `payroll_recalc_request`（append-only）并在后续周期以“可追溯差额 pay item + 累计口径修正”的方式闭环；禁止引入第二写入口或“人工手算后直接改读模型”的捷径。
+- **税后发放口径冻结**：`tax_bearer=employer`（公司承担个税）必须是显式声明；“净额保证”口径固定为**仅扣除个税（IIT）后的到手金额**，不覆盖社保/公积金/其他扣款；必须通过确定性求解覆盖“税上税”递归效应（不得用一次近似/拍脑袋系数）。
 - **幂等**：所有 `submit_*_event` 必须支持 `event_id`/`request_id` 幂等复用；复用冲突必须抛出稳定错误码（模式参考 `modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql`）。
 - **JSONB 边界**：`rules_config/profile` 仅承载扩展字段；任何参与算薪/审计/对账的关键字段必须是稳定列；禁止“列字段 + JSONB 字段”重复存储同一语义（避免双权威表达）。
 - **索引口径**：JSONB 的 **GIN** 仅用于 containment/exists（例如 `@>`、`?`）；数值比较（例如费率阈值分析）必须使用 `numeric` 列或显式表达式 btree 索引，禁止误用 GIN。
@@ -104,18 +110,21 @@
 ### 0.6 实施步骤（Checklist）
 1. [ ] 设计并冻结最小数据模型（见 3.x/5.x 章节修订版）：包含 pay period、payslip、社保政策、YTD 累加器。
 2. [ ] 落地 Kernel 写入口：`submit_payroll_*_event`（含 tenant assert、advisory lock、幂等约束）与同步投射。
-3. [ ] 落地 UI：创建批次 → 触发计算 → 查看结果 → 定稿（定稿后结果只读）。
-4. [ ] 质量门禁对齐：按触发器矩阵运行并在本计划记录证据（时间戳、命令、结果）。
+3. [ ] 落地回溯重算闭环：命中已定稿 pay period 的历史生效变更会生成 `payroll_recalc_request`；可在后续周期按口径生成补发/扣回差额 pay item，并修正累计口径（含 IIT 的 YTD balances）。
+4. [ ] 落地 UI：创建批次 → 触发计算 → 查看结果 → 定稿（定稿后结果只读）；回溯请求可被发现、可被执行、可追溯差额来源。
+5. [ ] 质量门禁对齐：按触发器矩阵运行并在本计划记录证据（时间戳、命令、结果）。
 
 ### 0.7 验收标准（Done 口径）
 - [ ] 任意租户在 UI 可完成：配置社保政策 → 创建一个 pay period 批次 → 计算 → 查看工资条 → 定稿。
 - [ ] 关键约束可审计：RLS fail-closed、唯一写入口、Valid Time 日粒度、金额无浮点、幂等可复现。
+- [ ] 回溯重算可复现：对已定稿 pay period 后补提交“更早生效”的定薪/任职变更，会生成 `payroll_recalc_request`；执行回溯后，下一次（或指定）pay period 的工资条出现补发/扣回差额 pay item，且可追溯关联原事件/原工资条，并与累计口径（含 IIT balances）一致。
+- [ ] 税后发放（仅个税）可复现：在同一工资条中录入“长期服务奖（税后）=20,000.00”，计算后该工资项的 `net_after_iit` 精确等于 20,000.00，且工资条可解释地展示该项对应的 `gross_amount` 与 `iit_delta`（税金成本计入公司成本口径）。
 - [ ] 新增路由均已登记 allowlist 且通过 routing gate；无 legacy 入口可被 `make check no-legacy` 阻断。
 
 ### 0.8 Simple > Easy Review（DEV-PLAN-003）
 
 - **结构（解耦/边界）**：通过 —— Payroll 作为 `modules/staffing` 子域；写入口唯一（Kernel）；Valid Time/Tx Time 分离。
-- **演化（规格/确定性）**：需警惕 —— 6/7 章明确为“非目标”，不得在 P0 实现期被顺手带入；回溯重算明确为 M2+ 且需另立子计划收敛。
+- **演化（规格/确定性）**：需警惕 —— 6/7 章明确为“非目标”，不得在 P0 实现期被顺手带入；回溯重算虽纳入 P0，但必须以“请求 → 可审计差额 → 后续周期结转”的切片方式交付，避免膨胀成“自动全量重算 + 外部申报/银企/凭证”。
 - **认知（本质/偶然复杂度）**：通过 —— 不变量显式化：No Legacy / One Door / No Tx, No RLS / Valid Time（日粒度）。
 - **维护（可理解/可解释）**：待补齐 —— 进入实现前补齐：状态机（run 状态与事件）、稳定错误码枚举、最小路由清单与可复现验收脚本。
 
@@ -124,6 +133,7 @@
 - [X] `make check doc` —— 通过（2026-01-07 15:29 UTC）
 - [X] `make check doc` —— 通过（2026-01-08 00:59 UTC）
 - [X] `make check doc` —— 通过（2026-01-08 01:01 UTC）
+- [X] `make check doc` —— 通过（2026-01-08 01:48 UTC）
 
 ## 1. 执行摘要：企业级薪酬系统的代际跨越
 
@@ -333,7 +343,7 @@ P0 Slice 不引入通用表达式引擎：先用“结构化字段 + 显式代�
 
 1.  **Pre-Process**：时间切片（Time Slicing）。利用PG的Range Intersection算法，处理月中调薪、入离职导致的计薪段拆分。
 
-2.  **Gross-Up**：基于考勤和定薪计算应发工资。
+2.  **Gross Pay（应发）**：基于考勤和定薪计算应发工资（注：这里不是“税后发放”的 tax gross-up，税后发放口径见 5.2.1）。
 
 3.  **Social Security**：调用社保引擎计算个人扣款。
 
@@ -375,9 +385,29 @@ P0 Slice 不引入通用表达式引擎：先用“结构化字段 + 显式代�
 
 - **负数处理**：如果某月新增了巨额专项附加扣除（如补报了房贷利息），导致计算结果为负数，根据税法规定，当月个税为0，多缴纳的税款留抵下月或年度汇算清缴。Go引擎需内置此逻辑，将负值存储在“留抵税额”字段中，并在下月自动抵扣，而非直接退税<sup>16</sup>。
 
-### 5.3 回溯计算（Retroactive Accounting）（后续里程碑：M2+）
+#### 5.2.1 税后发放（仅个税）与公司承担税金成本（Tax Gross-up）
 
-说明：P0 Slice 先交付“当前周期算薪 + 定稿只读”的可见闭环，不实现自动回溯重算；本节为后续设计草案，需在进入实现前再单独收敛为子 dev-plan（避免范围膨胀）。
+业务需求：HR 可能需要配置某工资项“税后到手=指定净额”（例如长期服务奖 20,000.00）。系统必须保证该工资项在**仅扣除个税（IIT）**后员工到手金额精确等于 `target_net`；为实现该净额保证而产生的全部税金成本（税金成本本质上属于员工收入，因而会触发“税上税”递归）由公司承担。
+
+**口径冻结（必须）**
+- 范围：仅覆盖综合所得的累计预扣法链路；不覆盖社保/公积金/其他扣款口径（这些仍按正常规则扣除，可能影响工资条总 `net_pay`，但不影响该工资项的 `net_after_iit` 合同）。
+- 显式声明：仅当工资项标记 `tax_bearer=employer` 且 `calc_mode=net_guaranteed_iit`（命名可调整但语义必须冻结）时启用；默认税负由员工承担。
+- 可审计：工资条必须可展示该项的 `target_net`、求解后的 `gross_amount` 与本期 `iit_delta`（增量预扣税额）。
+
+**计算合同（确定性求解，覆盖“税上税”）**
+- 将本期所有 `calc_mode=net_guaranteed_iit` 的工资项合并为一个“净额保证组”（group），组目标净额为 `T = Σ target_net`。
+- 先在不含该 group 的情况下计算基线个税 `IIT_base`（同一套累计预扣引擎/舍入合同）。
+- 定义增量预扣税函数：`ΔIIT(x) = IIT(base_income + x) - IIT_base`（`x` 为 group 的计税收入/gross）。
+- 求解 `x` 使得：`x - ΔIIT(x) = T`。由于累计预扣税对收入单调不减，左侧对 `x` 单调递增，必须使用二分/定点迭代等确定性方法在“分（0.01）”粒度内收敛；实现上建议以“分”为整数做二分，避免浮点与舍入漂移。
+- 求得 `x` 后，将 `ΔIIT(x)` 作为该 group 的税金成本，并按 `target_net` 比例分摊到各工资项（分摊需确定性舍入，确保 `Σ tax_i = ΔIIT(x)`）；每项 `gross_i = target_net_i + tax_i`，从而逐项满足 `net_after_iit_i = target_net_i`。
+
+**失败路径（必须稳定）**
+- 若标记为 `net_guaranteed_iit` 但缺少 `target_net`/币种不一致/出现负数等非法输入：直接失败并返回稳定错误码。
+- 若求解在预设迭代次数/上界扩展上限内无法收敛：失败并记录可审计诊断信息（不得静默降级或退回“一次近似”）。
+
+### 5.3 回溯计算（Retroactive Accounting）（P0 必交付底座能力）
+
+说明：回溯计算是 HRMS 的“皇冠上的明珠”，必须在底座阶段就支持：**定稿后发生的历史生效变更**必须能被系统捕获并形成可执行的回溯闭环，而不是依赖人工手算差额。P0 的交付边界是：提供“请求 → 可审计差额 → 后续周期结转”的最小闭环；不在 P0 交付银行文件/财务凭证/外部申报等 Post-Process（仍属非目标）。
 
 当 HR 在后续日期提交了早于某已定稿 pay period 的定薪/任职变更时，需要生成“重算请求”，并按合规口径处理差额。
 
