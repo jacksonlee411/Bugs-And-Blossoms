@@ -139,9 +139,9 @@
 
 ### PR-4：SuperAdmin Phase 1（sa_sid）+ 审计主体升级
 
-- [ ] 新增 `GET/POST /superadmin/login`、`POST /superadmin/logout`；引入 `sa_sid`（host-only）。
-- [ ] 审计升级：将 actor 从“字符串”升级为可稳定引用的 principal（必要时保留旧字段但不得作为唯一事实源）。
-- [ ] 保持旁路能力仅存在于 superadmin 边界；tenant app 不得获取 bypass pool/role。
+- [x] 新增 `GET/POST /superadmin/login`、`POST /superadmin/logout`；引入 `sa_sid`（host-only）。(#63)
+- [x] 审计升级：将 actor 从“字符串”升级为可稳定引用的 principal（必要时保留旧字段但不得作为唯一事实源）。(#63)
+- [x] 保持旁路能力仅存在于 superadmin 边界；tenant app 不得获取 bypass pool/role。(#63)
 
 ### PR-5：E2E 与 readiness 收口
 

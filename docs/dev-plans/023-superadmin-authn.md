@@ -8,13 +8,14 @@
 
 ## 1. 背景与现状（输入）
 
-本仓库已落地独立 superadmin 边界与 Tenant Console MVP（Phase 0：环境级保护/BasicAuth），并完成 Tenancy SSOT 切换（DB `iam.tenant_domains.hostname`）。但控制面仍缺少 Phase 1 的本地会话（`sa_sid`），审计主体仍以 BasicAuth username 为主（待升级为可稳定引用的 `superadmin_principal_id`）。
+本仓库已落地独立 superadmin 边界与 Tenant Console MVP（Phase 0：环境级保护/BasicAuth），并完成 Tenancy SSOT 切换（DB `iam.tenant_domains.hostname`）。控制面已落地 Phase 1 的本地会话（`sa_sid`），且审计主体已升级为可稳定引用的 `superadmin_principal_id`（写入 `superadmin_audit_logs.actor`）。
 
 - routing allowlist 已启用 entrypoint：`superadmin`（对齐 `DEV-PLAN-017`）。
 - tenant app 已落地 cookie `sid` + DB session（`iam.sessions`）作为登录态（009M5 PR-2：#61）。
 - `DEV-PLAN-009M4` 已补齐：superadmin 边界 + Tenant Console MVP + Tenancy SSOT 切换；`DEV-PLAN-009M5` 推进 Phase 1（`sa_sid`）。
 - 009M5 PR-0（#58）：冻结 `sa_sid` token 合同（§6.2）与凭据注入口径（§9）。
 - 009M5 PR-1（#60）：新增 `iam.superadmin_principals`/`iam.superadmin_sessions` 数据模型与迁移闭环（token 存 `sha256(sa_sid)`）。
+- 009M5 PR-4（#63）：落地 `/superadmin/login`（Kratos 认人 → 本地 `sa_sid` 会话桥接）与审计主体升级（actor=superadmin_principal_id）。
 
 Greenfield 将重构租户/认证/RLS，并要求：
 - tenant app：`Host 解析 tenant（fail-closed）→ Kratos 认人 → 本地 session（sid）→ RLS 圈地 → Casbin 管事`（见 `DEV-PLAN-019`）。
