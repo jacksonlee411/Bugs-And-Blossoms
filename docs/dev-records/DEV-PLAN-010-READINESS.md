@@ -256,3 +256,19 @@ DB 闭环（迁移 + smoke）：
   - E2E：`make e2e`
   - Docs/Stopline：`make check doc`、`make check no-legacy`
 - CI（不出现 skipped）：PR #80 的 Quality Gates 4/4 全绿（Gate-1 命中 UI 变更时执行 `make css` 并通过 `assert-clean`）
+
+## 18. DEV-PLAN-041（Payroll P0-1：Pay Period & Payroll Run）
+
+证据（Milestone 1-2：Schema SSOT + 迁移闭环）：
+- 日期：2026-01-08
+- 合并记录：PR #82 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/82
+- 产出：
+  - Schema SSOT：`modules/staffing/infrastructure/persistence/schema/00004_staffing_payroll_tables.sql`
+  - 迁移：`migrations/staffing/20260108131301_staffing_payroll_tables.sql` + `migrations/staffing/atlas.sum`
+  - sqlc 生成物：`internal/sqlc/schema.sql`、`modules/iam/infrastructure/sqlc/gen/models.go`
+- 本地验证：
+  - `make staffing plan`（No drift）
+  - `make staffing lint`（atlas migrate validate）
+  - `make staffing migrate up`（含 `cmd/dbtool staffing-smoke`）
+  - `make sqlc-generate` 后 `git status --short` 为空
+- CI（Quality Gates）：PR #82 4/4 全绿（包含 `assert-clean`）
