@@ -88,7 +88,7 @@
 
 ### 4.1 UI 工程与产物
 
-- [ ] `apps/web/package.json` 与 `apps/web/pnpm-lock.yaml` 已提交，且 `packageManager` pin 为 `pnpm@10.24.0`。
+- [X] `apps/web/package.json` 与 `apps/web/pnpm-lock.yaml` 已提交，且 `packageManager` pin 为 `pnpm@10.24.0`。
 - [ ] `internal/server/assets/astro/app.html` 存在，且包含 `#nav`、`#topbar`、`#flash`、`#content` 四个挂载点，并在 `hx-get` 中使用 `as_of=__BB_AS_OF__`（对齐 `DEV-PLAN-018` §4.4/§4.5）。
 - [ ] `make css` 可在本地与 CI 生成/更新 `internal/server/assets/astro/**`，并保证 `git status --porcelain` 为空。
 
@@ -116,12 +116,12 @@
 
 ### PR-1：初始化 `apps/web` Astro 工程（SSOT 落盘）
 
-- [ ] 初始化 Astro 项目（最小集），提交：
+- [X] 初始化 Astro 项目（最小集），提交：
   - `apps/web/package.json`（含 `packageManager: pnpm@10.24.0`）
   - `apps/web/pnpm-lock.yaml`
   - `apps/web/astro.config.*`（必要时）
   - 最小页面/模板：生成 `dist/index.html`（或等价入口），包含四个挂载点，并在 `hx-get` 中使用 `as_of=__BB_AS_OF__`（token 由 Go 注入）。
-- [ ] 确保 `apps/web/node_modules` 不进入仓库（gitignore）。
+- [X] 确保 `apps/web/node_modules` 不进入仓库（gitignore）。
 
 ### PR-2：构建与复制管线（产物进入 `internal/server/assets/astro/**`）
 
