@@ -1,6 +1,6 @@
 # DEV-PLAN-022：Authz（Casbin）工具链与实施方案（Greenfield）
 
-**状态**: 部分完成（009M1：tenant app 最小可拒绝；2026-01-06 23:40 UTC）
+**状态**: 已完成（2026-01-08 03:10 UTC）
 
 > 适用范围：本仓库（`Bugs-And-Blossoms`）的 **Greenfield implementation**。如未来拆分到独立仓库，本计划冻结的 Authz 契约与工具链口径仍应保持一致，避免“同一概念两套权威表达”。
 >
@@ -160,7 +160,10 @@
 
 **匿名白名单（选定，MVP）**
 - 仅允许 `role:anonymous` 访问“明确列入 policy 的 object/action”，不得因为“没有登录”而在 handler 内做隐式放行。
-- MVP 默认仅允许：`iam.ping/read`。
+- MVP 默认允许：
+  - `iam.ping/read`
+  - `iam.session/read`（GET `/login`）
+  - `iam.session/admin`（POST `/login`、POST `/logout`）
 - 当新增登录/会话创建等“必须匿名可达”的入口时：必须为其定义稳定 object（例如 `iam.session`/`iam.login` 等）并在 policy 中显式加入 `role:anonymous` 允许项；否则 `AUTHZ_MODE=enforce` 下应当拒绝（fail-closed）。
 
 ## 5. 本仓库落地形态（目录与产物）

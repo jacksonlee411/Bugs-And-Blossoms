@@ -226,3 +226,12 @@ DB 闭环（迁移 + smoke）：
 复现（本地）：
 - 一键：`make preflight`
 - 仅 DB/RLS：按上面模块逐个执行 `make <module> migrate up`
+
+## 16. DEV-PLAN-022（Authz：Casbin 工具链 + 403 契约 + enforce/shadow）
+
+证据：
+- 日期：2026-01-08
+- policy SSOT：`config/access/policies/**` → `config/access/policy.csv`（pack 产物）
+- 本地门禁：
+  - `make authz-pack && make authz-test && make authz-lint`
+  - `make preflight`（全绿，E2E 默认 `AUTHZ_MODE=enforce`）

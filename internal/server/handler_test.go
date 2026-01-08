@@ -59,6 +59,77 @@ func TestNewHandler_Health(t *testing.T) {
 	}
 }
 
+func TestLogin_UsesDefaultKratosIdentityProviderWhenNil(t *testing.T) {
+	type stubState struct {
+		loginStatus int
+		whoamiID    string
+		tenantID    string
+		email       string
+	}
+
+	st := &stubState{
+		loginStatus: http.StatusOK,
+		whoamiID:    "kid1",
+		tenantID:    "00000000-0000-0000-0000-000000000001",
+		email:       "tenant-admin@example.invalid",
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/self-service/login/api", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method=%s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"id":"flow1"}`))
+	})
+	mux.HandleFunc("/self-service/login", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method=%s", r.Method)
+		}
+		if st.loginStatus/100 != 2 {
+			w.WriteHeader(st.loginStatus)
+			return
+		}
+		_, _ = w.Write([]byte(`{"session_token":"st1"}`))
+	})
+	mux.HandleFunc("/sessions/whoami", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method=%s", r.Method)
+		}
+		if r.Header.Get("X-Session-Token") != "st1" {
+			t.Fatalf("missing session token header")
+		}
+		_, _ = w.Write([]byte(`{"identity":{"id":"` + st.whoamiID + `","traits":{"tenant_id":"` + st.tenantID + `","email":"` + st.email + `"}}}`))
+	})
+
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Setenv("KRATOS_PUBLIC_URL", srv.URL)
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req.Host = "localhost:8080"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
 func TestMustNewHandler_PanicsOnBadPath(t *testing.T) {
 	if err := os.Setenv("ALLOWLIST_PATH", "no-such-file.yaml"); err != nil {
 		t.Fatal(err)
