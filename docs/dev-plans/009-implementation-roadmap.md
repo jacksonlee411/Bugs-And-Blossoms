@@ -1,6 +1,6 @@
 # DEV-PLAN-009：Greenfield 全新实施路线图（009-031）
 
-**状态**: 实施中（2026-01-06）
+**状态**: 已完成（2026-01-08）
 
 > 目标：在“从 0 开始的新代码仓库（Greenfield）”里，按 `DEV-PLAN-010`～`DEV-PLAN-031` 的契约，全新实施一套可运行、可验证、可演进的 HRMS（Greenfield）。  
 > 本文只做 **路线图编排（先后顺序 + 串行/并行）**，不复制各计划内部的细节；具体合同以对应 dev-plan 为准。  
@@ -11,6 +11,7 @@
 2. [X] 将本文拆成可执行里程碑（009M1-009M5），并把每个里程碑映射到可交付的 PR 序列（新仓库执行）。证据：PR #68 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/68 、`docs/dev-plans/009m1-phase4-setid-jobcatalog-vertical-slice-execution-plan.md`、`docs/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`、`docs/dev-plans/009m3-phase5-quality-hardening-e2e-execution-plan.md`、`docs/dev-plans/009m4-phase2-superadmin-tenant-console-execution-plan.md`、`docs/dev-plans/009m5-phase2-authn-kratos-sessions-execution-plan.md`
 3. [X] P0 前置条件（仓库 bootstrap/门禁/壳/最小登录/迁移闭环）以 `DEV-PLAN-010` 为合同执行，避免实现期漂移。
    - 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`、#11 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/11
+4. [X] 将本文状态从“实施中”更新为“已完成”（与出口条件全绿一致）。证据：PR #70 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/70
 
 ## 1. 背景（从 0 开始实施的约束）
 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必须尽早冻结“可验证的工程契约”，否则实现期会出现：
