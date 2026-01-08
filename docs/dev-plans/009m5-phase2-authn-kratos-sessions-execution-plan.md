@@ -1,6 +1,6 @@
 # DEV-PLAN-009M5：Phase 2 下一大型里程碑执行计划（AuthN 真实化：Kratos + 本地会话 sid/sa_sid）
 
-**状态**: 已评审，待实施（2026-01-07 10:52 UTC）
+**状态**: 已完成（2026-01-08 02:01 UTC）
 
 > 本文是 `DEV-PLAN-009` 的执行计划补充（里程碑拆解）。假设 `DEV-PLAN-009M4`（SuperAdmin 控制面 + Tenant Console MVP）已完成，本里程碑聚焦 `DEV-PLAN-009` 的 **Phase 2：平台与安全硬化** 中仍缺失的关键出口：将 tenant app 的“占位登录”升级为 **真实认证与会话（Kratos 认人 → 本地 session）**，并推进 SuperAdmin Phase 1（`sa_sid`）以获得更强的可审计主体。
 >
@@ -145,8 +145,8 @@
 
 ### PR-5：E2E 与 readiness 收口
 
-- [ ] 更新/新增 E2E：覆盖本里程碑最小链路（含失败产物与日志落点）。
-- [ ] 更新 `DEV-PLAN-010`（009M5 小节）与 `DEV-PLAN-009` Phase 2 出口条件勾选与证据链接。
+- [x] 更新/新增 E2E：覆盖本里程碑最小链路（含失败产物与日志落点）。（#64）
+- [x] 更新 `DEV-PLAN-010`（009M5 小节）与 `DEV-PLAN-009` Phase 2 出口条件勾选与证据链接。（#64）
 
 ## 6. 本地验证（SSOT 引用）
 
