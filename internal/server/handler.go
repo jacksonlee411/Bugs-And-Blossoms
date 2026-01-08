@@ -4,10 +4,13 @@ import (
 	"context"
 	"embed"
 	"errors"
+	"html"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
@@ -21,14 +24,15 @@ func NewHandler() (http.Handler, error) {
 }
 
 type HandlerOptions struct {
-	TenancyResolver TenancyResolver
-	OrgUnitStore    OrgUnitStore
-	OrgUnitSnapshot OrgUnitSnapshotStore
-	SetIDStore      SetIDGovernanceStore
-	JobCatalogStore JobCatalogStore
-	PersonStore     PersonStore
-	PositionStore   PositionStore
-	AssignmentStore AssignmentStore
+	TenancyResolver  TenancyResolver
+	IdentityProvider identityProvider
+	OrgUnitStore     OrgUnitStore
+	OrgUnitSnapshot  OrgUnitSnapshotStore
+	SetIDStore       SetIDGovernanceStore
+	JobCatalogStore  JobCatalogStore
+	PersonStore      PersonStore
+	PositionStore    PositionStore
+	AssignmentStore  AssignmentStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -59,6 +63,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	positionStore := opts.PositionStore
 	assignmentStore := opts.AssignmentStore
 	tenancyResolver := opts.TenancyResolver
+	identityProvider := opts.IdentityProvider
 
 	var pgPool *pgxpool.Pool
 	if orgStore == nil {
@@ -135,7 +140,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		tenancyResolver = newTenancyDBResolver(pgPool)
 	}
 
-	guarded := withTenantAndSession(tenancyResolver, withAuthz(classifier, authorizer, router))
+	principals := newPrincipalStore(pgPool)
+	sessions := newSessionStore(pgPool)
+	guarded := withTenantAndSession(tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, router))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/app", http.StatusFound)
@@ -151,17 +158,62 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 
 	router.Handle(routing.RouteClassAuthn, http.MethodGet, "/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeShell(w, r, `<h1>Login</h1>`+
-			`<form method="POST" action="/login">`+
-			`<button type="submit">Login</button>`+
-			`</form>`)
+		writeShell(w, r, renderLoginForm(""))
 	}))
 	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		setSessionCookie(w)
+		tenant, _ := currentTenant(r.Context())
+
+		if err := r.ParseForm(); err != nil {
+			writeShellWithStatus(w, r, http.StatusUnprocessableEntity, renderLoginForm("invalid form"))
+			return
+		}
+		email := r.FormValue("email")
+		password := r.FormValue("password")
+		if email == "" || password == "" {
+			writeShellWithStatus(w, r, http.StatusUnprocessableEntity, renderLoginForm("email and password required"))
+			return
+		}
+
+		provider := identityProvider
+		if provider == nil {
+			p, err := newKratosIdentityProviderFromEnv()
+			if err != nil {
+				routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "identity_provider_error", "identity provider error")
+				return
+			}
+			provider = p
+		}
+
+		ident, err := provider.AuthenticatePassword(r.Context(), tenant, email, password)
+		if err != nil {
+			if errors.Is(err, errInvalidCredentials) {
+				writeShellWithStatus(w, r, http.StatusUnprocessableEntity, renderLoginForm("invalid credentials"))
+				return
+			}
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "identity_error", "identity error")
+			return
+		}
+
+		p, err := principals.UpsertFromKratos(r.Context(), tenant.ID, ident.Email, "tenant-admin", ident.KratosIdentityID)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "principal_error", "principal error")
+			return
+		}
+
+		expiresAt := time.Now().Add(sidTTLFromEnv())
+		sid, err := sessions.Create(r.Context(), tenant.ID, p.ID, expiresAt, r.RemoteAddr, r.UserAgent())
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "session_error", "session error")
+			return
+		}
+		setSIDCookie(w, sid)
 		http.Redirect(w, r, "/app", http.StatusFound)
 	}))
 	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		clearSessionCookie(w)
+		if sid, ok := readSID(r); ok {
+			_ = sessions.Revoke(r.Context(), sid)
+		}
+		clearSIDCookie(w)
 		http.Redirect(w, r, "/login", http.StatusFound)
 	}))
 
@@ -312,28 +364,7 @@ func setLangCookie(w http.ResponseWriter, lang string) {
 	})
 }
 
-func setSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session",
-		Value:    "ok",
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-}
-
-func clearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-}
-
-func withTenantAndSession(tenants TenancyResolver, next http.Handler) http.Handler {
+func withTenantAndSession(tenants TenancyResolver, principals principalStore, sessions sessionStore, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
@@ -359,21 +390,37 @@ func withTenantAndSession(tenants TenancyResolver, next http.Handler) http.Handl
 			return
 		}
 
-		if !hasSession(r) {
+		sid, ok := readSID(r)
+		if !ok {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 
+		sess, ok, err := sessions.Lookup(r.Context(), sid)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "session_lookup_error", "session lookup error")
+			return
+		}
+		if !ok || sess.TenantID != t.ID {
+			clearSIDCookie(w)
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		p, ok, err := principals.GetByID(r.Context(), t.ID, sess.PrincipalID)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "principal_lookup_error", "principal lookup error")
+			return
+		}
+		if !ok || p.Status != "active" {
+			clearSIDCookie(w)
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+		r = r.WithContext(withPrincipal(r.Context(), p))
+
 		next.ServeHTTP(w, r)
 	})
-}
-
-func hasSession(r *http.Request) bool {
-	c, err := r.Cookie("session")
-	if err != nil {
-		return false
-	}
-	return c.Value == "ok"
 }
 
 func pathHasPrefixSegment(path, prefix string) bool {
@@ -455,10 +502,28 @@ func tr(lang string, key string) string {
 	}
 }
 
+func renderLoginForm(errMsg string) string {
+	var b strings.Builder
+	b.WriteString(`<h1>Login</h1>`)
+	if errMsg != "" {
+		b.WriteString(`<p style="color:#b00020">` + html.EscapeString(errMsg) + `</p>`)
+	}
+	b.WriteString(`<form method="POST" action="/login">`)
+	b.WriteString(`<label>Email <input type="email" name="email" autocomplete="username" required></label><br>`)
+	b.WriteString(`<label>Password <input type="password" name="password" autocomplete="current-password" required></label><br>`)
+	b.WriteString(`<button type="submit">Login</button>`)
+	b.WriteString(`</form>`)
+	return b.String()
+}
+
 func writeShell(w http.ResponseWriter, r *http.Request, bodyHTML string) {
+	writeShellWithStatus(w, r, http.StatusOK, bodyHTML)
+}
+
+func writeShellWithStatus(w http.ResponseWriter, r *http.Request, status int, bodyHTML string) {
 	l := lang(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(status)
 	_, _ = w.Write([]byte(`<!doctype html><html><head>`))
 	_, _ = w.Write([]byte(`<meta charset="utf-8">`))
 	_, _ = w.Write([]byte(`<title>` + tr(l, "nav_orgunit") + `</title>`))
@@ -466,7 +531,7 @@ func writeShell(w http.ResponseWriter, r *http.Request, bodyHTML string) {
 	_, _ = w.Write([]byte(`<script src="/assets/js/lib/htmx.min.js"></script>`))
 	_, _ = w.Write([]byte(`<script defer src="/assets/js/lib/alpine.min.js"></script>`))
 	_, _ = w.Write([]byte(`</head><body>`))
-	if hasSession(r) {
+	if _, ok := currentPrincipal(r.Context()); ok {
 		_, _ = w.Write([]byte(`<aside id="nav" hx-get="/ui/nav" hx-trigger="load"></aside>`))
 		_, _ = w.Write([]byte(`<header id="topbar" hx-get="/ui/topbar" hx-trigger="load"></header>`))
 		_, _ = w.Write([]byte(`<div id="flash" hx-get="/ui/flash" hx-trigger="load"></div>`))

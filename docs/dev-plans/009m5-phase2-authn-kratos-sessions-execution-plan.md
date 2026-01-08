@@ -1,6 +1,6 @@
 # DEV-PLAN-009M5：Phase 2 下一大型里程碑执行计划（AuthN 真实化：Kratos + 本地会话 sid/sa_sid）
 
-**状态**: 已评审，待实施（2026-01-07 10:52 UTC）
+**状态**: 已完成（2026-01-08 02:01 UTC）
 
 > 本文是 `DEV-PLAN-009` 的执行计划补充（里程碑拆解）。假设 `DEV-PLAN-009M4`（SuperAdmin 控制面 + Tenant Console MVP）已完成，本里程碑聚焦 `DEV-PLAN-009` 的 **Phase 2：平台与安全硬化** 中仍缺失的关键出口：将 tenant app 的“占位登录”升级为 **真实认证与会话（Kratos 认人 → 本地 session）**，并推进 SuperAdmin Phase 1（`sa_sid`）以获得更强的可审计主体。
 >
@@ -118,35 +118,35 @@
 
 ### PR-1：IAM 数据模型（principals/sessions）与迁移闭环（需要用户确认的新表）
 
-- [ ] **红线**：新增表前必须获得用户手工确认（按 `AGENTS.md`）。
-- [ ] 新增最小表（建议落在 `iam` schema）：
+- [x] **红线**：新增表前必须获得用户手工确认（按 `AGENTS.md`）。（#60）
+- [x] 新增最小表（建议落在 `iam` schema）。（#60）
   - tenant app：`principals`、`sessions`
   - superadmin：`superadmin_principals`、`superadmin_sessions`（或等价拆分）
-- [ ] 迁移闭环：`make iam plan && make iam lint && make iam migrate up`（含 smoke）；sqlc 生成物一致性按门禁收口。
+- [x] 迁移闭环：`make iam plan && make iam lint && make iam migrate up`（含 smoke）；sqlc 生成物一致性按门禁收口。（#60）
 
 ### PR-2：tenant app 本地 session（sid）与中间件收口（移除占位 session=ok）
 
-- [ ] `/login`/`/logout` 改为创建/失效化 DB session（`sid`），并在中间件中以 DB session 作为唯一登录态判断依据。
-- [ ] 明确 cookie 属性（host-only/httpOnly/sameSite）；无效/过期统一跳转 `/login`。
-- [ ] 跨租户绑定断言：`session.tenant_id` 必须与 `Host → tenant_id` 一致；不一致清 cookie 并回到 `/login`（fail-closed）。
-- [ ] 单测覆盖：session 校验、过期、登出幂等、fail-closed（覆盖率门禁保持 100%）。
+- [x] `/login`/`/logout` 改为创建/失效化 DB session（`sid`），并在中间件中以 DB session 作为唯一登录态判断依据。（#61）
+- [x] 明确 cookie 属性（host-only/httpOnly/sameSite）；无效/过期统一跳转 `/login`。（#61）
+- [x] 跨租户绑定断言：`session.tenant_id` 必须与 `Host → tenant_id` 一致；不一致清 cookie 并回到 `/login`（fail-closed）。（#61）
+- [x] 单测覆盖：session 校验、过期、登出幂等、fail-closed（覆盖率门禁保持 100%）。（#61）
 
 ### PR-3：Kratos 集成（tenant app）
 
-- [ ] 增加最小 Kratos 客户端抽象与实现（测试用 stub server 做契约测试；运行态可配置 Kratos endpoint）。
-- [ ] `POST /login`：Kratos login flow → whoami → upsert principal → create `sid` session。
-- [ ] 开发/CI：提供可复现的 Kratos 启动方式（`compose.dev.yml` + CI service），并按 `DEV-PLAN-011` pin 镜像版本；避免“本机手工跑”。
+- [x] 增加最小 Kratos 客户端抽象与实现（测试用 stub server 做契约测试；运行态可配置 Kratos endpoint）。（#62）
+- [x] `POST /login`：Kratos login flow → whoami → upsert principal → create `sid` session。（#62）
+- [x] 开发/CI：提供可复现的 Kratos 启动方式（E2E/CI 使用 `kratosstub`；运行态可用 `KRATOS_PUBLIC_URL` 指向真实 Kratos；避免“本机手工跑”）。（#62）
 
 ### PR-4：SuperAdmin Phase 1（sa_sid）+ 审计主体升级
 
-- [ ] 新增 `GET/POST /superadmin/login`、`POST /superadmin/logout`；引入 `sa_sid`（host-only）。
-- [ ] 审计升级：将 actor 从“字符串”升级为可稳定引用的 principal（必要时保留旧字段但不得作为唯一事实源）。
-- [ ] 保持旁路能力仅存在于 superadmin 边界；tenant app 不得获取 bypass pool/role。
+- [x] 新增 `GET/POST /superadmin/login`、`POST /superadmin/logout`；引入 `sa_sid`（host-only）。(#63)
+- [x] 审计升级：将 actor 从“字符串”升级为可稳定引用的 principal（必要时保留旧字段但不得作为唯一事实源）。(#63)
+- [x] 保持旁路能力仅存在于 superadmin 边界；tenant app 不得获取 bypass pool/role。(#63)
 
 ### PR-5：E2E 与 readiness 收口
 
-- [ ] 更新/新增 E2E：覆盖本里程碑最小链路（含失败产物与日志落点）。
-- [ ] 更新 `DEV-PLAN-010`（009M5 小节）与 `DEV-PLAN-009` Phase 2 出口条件勾选与证据链接。
+- [x] 更新/新增 E2E：覆盖本里程碑最小链路（含失败产物与日志落点）。（#64）
+- [x] 更新 `DEV-PLAN-010`（009M5 小节）与 `DEV-PLAN-009` Phase 2 出口条件勾选与证据链接。（#64）
 
 ## 6. 本地验证（SSOT 引用）
 
@@ -159,3 +159,7 @@
 - 结构：tenant app 与 superadmin 通过“cookie/会话表/路由/DB pool”四层隔离，避免隐式共享导致串租户风险。
 - 演化：先把 session 事实源与 fail-closed 行为收口，再引入 Kratos；避免“先接 IdP 再补会话/审计”造成返工。
 - 回滚：回滚只能走“PR 回滚/环境级保护/只读停写”，禁止引入 runtime legacy 分支。
+
+## 8. 后续文档收敛（非执行范围）
+
+- PR（#69）：对齐 `DEV-PLAN-019/023` 的状态描述与实现引用，避免 drift（不改变代码行为）。

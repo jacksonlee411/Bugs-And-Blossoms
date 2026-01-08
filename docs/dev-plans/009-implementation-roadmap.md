@@ -1,6 +1,6 @@
 # DEV-PLAN-009：Greenfield 全新实施路线图（009-031）
 
-**状态**: 实施中（2026-01-06）
+**状态**: 已完成（2026-01-08）
 
 > 目标：在“从 0 开始的新代码仓库（Greenfield）”里，按 `DEV-PLAN-010`～`DEV-PLAN-031` 的契约，全新实施一套可运行、可验证、可演进的 HRMS（Greenfield）。  
 > 本文只做 **路线图编排（先后顺序 + 串行/并行）**，不复制各计划内部的细节；具体合同以对应 dev-plan 为准。  
@@ -8,9 +8,10 @@
 
 ## 0. 进度速记
 1. [X] 新增 `DEV-PLAN-009` 并登记到 `AGENTS.md` Doc Map。
-2. [ ] 将本文拆成可执行里程碑（M0-M6），并把每个里程碑映射到可交付的 PR 序列（新仓库执行）。
+2. [X] 将本文拆成可执行里程碑（009M1-009M5），并把每个里程碑映射到可交付的 PR 序列（新仓库执行）。证据：PR #68 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/68 、`docs/dev-plans/009m1-phase4-setid-jobcatalog-vertical-slice-execution-plan.md`、`docs/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`、`docs/dev-plans/009m3-phase5-quality-hardening-e2e-execution-plan.md`、`docs/dev-plans/009m4-phase2-superadmin-tenant-console-execution-plan.md`、`docs/dev-plans/009m5-phase2-authn-kratos-sessions-execution-plan.md`
 3. [X] P0 前置条件（仓库 bootstrap/门禁/壳/最小登录/迁移闭环）以 `DEV-PLAN-010` 为合同执行，避免实现期漂移。
    - 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`、#11 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/11
+4. [X] 将本文状态从“实施中”更新为“已完成”（与出口条件全绿一致）。证据：PR #70 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/70
 
 ## 1. 背景（从 0 开始实施的约束）
 选定 Greenfield 全新实施：不背负存量兼容/迁移包袱，但必须尽早冻结“可验证的工程契约”，否则实现期会出现：
@@ -20,11 +21,11 @@
 
 ## 2. 目标与非目标（路线图层）
 ### 2.1 核心目标（Done 的定义）
-- [ ] **工程可复现**：版本基线、门禁入口、生成物一致性可被 CI 阻断（011/024/025/012）。
-- [ ] **平台先行**：Tenancy/AuthN → RLS 圈地 → Casbin 管事，且 superadmin 与 tenant app 边界清晰可审计（019/021/022/023）。
-- [ ] **业务闭环**：OrgUnit / JobCatalog / Staffing / Person 四模块具备最小可用闭环（026/029/030/031/027/016）。
-- [ ] **UI 可用**：AHA Shell + en/zh i18n + as-of 交互一致，且任职记录仅展示 `effective_date` 合同不漂移（018/020/017/031）。
-- [ ] **主数据治理可扩展**：SetID 机制从最小集合起步，并在 JobCatalog 上形成首个样板（028/029）。
+- [X] **工程可复现**：版本基线、门禁入口、生成物一致性可被 CI 阻断（011/024/025/012）。证据：`docs/dev-records/DEV-PLAN-010-READINESS.md` §2/§6/§7
+- [X] **平台先行**：Tenancy/AuthN → RLS 圈地 → Casbin 管事，且 superadmin 与 tenant app 边界清晰可审计（019/021/022/023）。证据：`docs/dev-records/DEV-PLAN-010-READINESS.md` §14/§15/§16
+- [X] **业务闭环**：OrgUnit / JobCatalog / Staffing / Person 四模块具备最小可用闭环（026/029/030/031/027/016）。证据：`docs/dev-records/DEV-PLAN-010-READINESS.md` §10/§11/§12/§14
+- [X] **UI 可用**：AHA Shell + en/zh i18n + as-of 交互一致，且任职记录仅展示 `effective_date` 合同不漂移（018/020/017/031）。证据：#5 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5 、`docs/dev-records/DEV-PLAN-010-READINESS.md` §3/§11/§14
+- [X] **主数据治理可扩展**：SetID 机制从最小集合起步，并在 JobCatalog 上形成首个样板（028/029）。证据：`docs/dev-records/DEV-PLAN-010-READINESS.md` §10
 
 ### 2.2 非目标（本文不解决）
 - 不解决任何存量系统迁移/兼容/灰度（026/030/029/031 明确不承接）。
@@ -105,9 +106,9 @@
 - 可并行：
   - `024`（模块级迁移闭环）可与本阶段并行推进，但必须在业务模块落 schema 前收口。
 - 出口条件：
-  1. [ ] Greenfield 表的 RLS 注入契约可用（No Tx, No RLS），并有最小 fail-closed 测试（021）。
-  2. [ ] Authz 最小闭环：统一 403 契约 + policy SSOT + 可 shadow/enforce（022）。
-  3. [ ] 控制面边界可用（至少 Phase 0/1）：独立 cookie + 显式 bypass pool/role + 审计（023）。
+  1. [X] Greenfield 表的 RLS 注入契约可用（No Tx, No RLS），并有最小 fail-closed 测试（021）。证据：PR #66 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/66 、`cmd/dbtool rls-smoke/orgunit-smoke/jobcatalog-smoke/person-smoke/staffing-smoke`（由 `make <module> migrate up` 触发）、`docs/dev-records/DEV-PLAN-010-READINESS.md` §15
+  2. [X] Authz 最小闭环：统一 403 契约 + policy SSOT + 可 shadow/enforce（022）。证据：PR #67 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/67 、`make authz-pack && make authz-test && make authz-lint`、`docs/dev-records/DEV-PLAN-010-READINESS.md` §16
+  3. [X] 控制面边界可用（至少 Phase 0/1）：独立 cookie + 显式 bypass pool/role + 审计（023）。证据：PR #63 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/63 、`docs/dev-records/DEV-PLAN-010-READINESS.md` §14
 
 ### Phase 3：工具链闭环固化（让“schema/生成/门禁”不可漂移）
 - 串行关键路径：`024 => 025 => 012(生成物与门禁收口)`

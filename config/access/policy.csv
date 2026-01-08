@@ -1,4 +1,7 @@
 p, role:anonymous, global, iam.ping, read
+p, role:anonymous, *, iam.session, read
+p, role:anonymous, *, iam.session, admin
+p, role:tenant-admin, *, iam.session, admin
 p, role:tenant-admin, *, orgunit.orgunits, read
 p, role:tenant-admin, *, orgunit.orgunits, admin
 p, role:tenant-admin, *, orgunit.setid, read
@@ -11,6 +14,8 @@ p, role:tenant-admin, *, staffing.assignments, read
 p, role:tenant-admin, *, staffing.assignments, admin
 p, role:tenant-admin, *, person.persons, read
 p, role:tenant-admin, *, person.persons, admin
+p, role:superadmin, global, superadmin.session, read
+p, role:superadmin, global, superadmin.session, admin
 p, role:superadmin, global, superadmin.tenants, read
 p, role:superadmin, global, superadmin.tenants, admin
 

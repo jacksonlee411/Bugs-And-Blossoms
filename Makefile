@@ -14,7 +14,7 @@ export DEV_INFRA_ENV_FILE ?= .env.example
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
-.PHONY: dev dev-up dev-down dev-reset dev-ps dev-server
+.PHONY: dev dev-up dev-down dev-reset dev-ps dev-server dev-kratos-stub
 .PHONY: coverage
 
 help:
@@ -111,6 +111,9 @@ dev-server:
 		set -a; . "$$env_file"; set +a; \
 	fi; \
 	go run ./cmd/server
+
+dev-kratos-stub:
+	go run ./cmd/kratosstub
 
 dev-superadmin:
 	@env_file=""; \

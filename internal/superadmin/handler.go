@@ -23,7 +23,10 @@ func NewHandler() (http.Handler, error) {
 }
 
 type HandlerOptions struct {
-	Pool pgBeginner
+	Pool             pgBeginner
+	IdentityProvider identityProvider
+	Sessions         sessionStore
+	Principals       principalStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -65,10 +68,81 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		return nil, err
 	}
 
-	guarded := withBasicAuth(withAuthz(classifier, authorizer, router))
+	idp := opts.IdentityProvider
+	if idp == nil {
+		p, err := newKratosIdentityProviderFromEnv()
+		if err != nil {
+			return nil, err
+		}
+		idp = p
+	}
+
+	var db queryExecer
+	if q, ok := pool.(queryExecer); ok {
+		db = q
+	}
+
+	principals := opts.Principals
+	if principals == nil {
+		principals = newPrincipalStoreFromDB(db)
+	}
+	sessions := opts.Sessions
+	if sessions == nil {
+		sessions = newSessionStoreFromDB(db)
+	}
+
+	guarded := withBasicAuth(withSuperadminSession(sessions, principals, withAuthz(classifier, authorizer, router)))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/superadmin/tenants", http.StatusFound)
+	}))
+
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/superadmin/login", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeSuperadminLogin(w, http.StatusOK, "")
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/superadmin/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			writeSuperadminLogin(w, http.StatusBadRequest, "bad request")
+			return
+		}
+		email := strings.TrimSpace(r.FormValue("email"))
+		pass := r.FormValue("password")
+		if email == "" || pass == "" {
+			writeSuperadminLogin(w, http.StatusUnprocessableEntity, "email/password required")
+			return
+		}
+
+		ident, err := idp.AuthenticatePassword(r.Context(), email, pass)
+		if err != nil {
+			if errors.Is(err, errInvalidCredentials) {
+				writeSuperadminLogin(w, http.StatusUnprocessableEntity, "invalid credentials")
+				return
+			}
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "idp_error", "idp error")
+			return
+		}
+
+		p, err := principals.UpsertFromKratos(r.Context(), ident.Email, ident.KratosIdentityID)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "principal_error", "principal error")
+			return
+		}
+
+		expiresAt := time.Now().Add(saSidTTLFromEnv())
+		saSid, err := sessions.Create(r.Context(), p.ID, expiresAt, r.RemoteAddr, r.UserAgent())
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "session_error", "session error")
+			return
+		}
+		setSASIDCookie(w, saSid)
+		http.Redirect(w, r, "/superadmin/tenants", http.StatusFound)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/superadmin/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if saSid, ok := readSASID(r); ok {
+			_ = sessions.Revoke(r.Context(), saSid)
+		}
+		clearSASIDCookie(w)
+		http.Redirect(w, r, "/superadmin/login", http.StatusFound)
 	}))
 
 	router.Handle(routing.RouteClassOps, http.MethodGet, "/health", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -166,6 +240,19 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 
 func authzRequirementForRoute(method string, path string) (object string, action string, ok bool) {
 	switch path {
+	case "/superadmin/login":
+		if method == http.MethodGet {
+			return authz.ObjectSuperadminSession, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectSuperadminSession, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/superadmin/logout":
+		if method == http.MethodPost {
+			return authz.ObjectSuperadminSession, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/superadmin/tenants":
 		if method == http.MethodGet {
 			return authz.ObjectSuperadminTenants, authz.ActionRead, true
@@ -188,9 +275,27 @@ type pgBeginner interface {
 }
 
 func writeHTML(w http.ResponseWriter, title string, body string) {
+	writeHTMLWithStatus(w, http.StatusOK, title, body)
+}
+
+func writeHTMLWithStatus(w http.ResponseWriter, statusCode int, title string, body string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(statusCode)
 	_, _ = fmt.Fprintf(w, "<!doctype html><html><head><title>%s</title></head><body>%s</body></html>", html.EscapeString(title), body)
+}
+
+func writeSuperadminLogin(w http.ResponseWriter, statusCode int, errMsg string) {
+	title := "SuperAdmin Login"
+	body := `<h1>SuperAdmin Login</h1>` +
+		`<form method="POST" action="/superadmin/login">` +
+		`<label>Email <input name="email" type="email" autocomplete="username" /></label><br/>` +
+		`<label>Password <input name="password" type="password" autocomplete="current-password" /></label><br/>` +
+		`<button type="submit">Login</button>` +
+		`</form>`
+	if errMsg != "" {
+		body = `<p style="color:#b00020">` + html.EscapeString(errMsg) + `</p>` + body
+	}
+	writeHTMLWithStatus(w, statusCode, title, body)
 }
 
 func requestID(r *http.Request) string {
@@ -336,6 +441,12 @@ func handleTenantsCreate(w http.ResponseWriter, r *http.Request, pool pgBeginner
 		return
 	}
 
+	p, ok := principalFromContext(r.Context())
+	if !ok || p.ID == "" {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusUnauthorized, "unauthorized", "unauthorized")
+		return
+	}
+
 	if err := r.ParseForm(); err != nil {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "bad_request", "bad request")
 		return
@@ -378,9 +489,8 @@ VALUES ($1::uuid, $2, true)
 		return
 	}
 
-	actor, _ := actorFromContext(r.Context())
 	payload, _ := json.Marshal(map[string]any{"name": name, "hostname": hostname})
-	if err := insertAudit(ctx, tx, actor, "tenant.create", tenantID, payload, requestID(r)); err != nil {
+	if err := insertAudit(ctx, tx, p.ID, "tenant.create", tenantID, payload, requestID(r)); err != nil {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "audit_error", "audit error")
 		return
 	}
@@ -396,6 +506,12 @@ VALUES ($1::uuid, $2, true)
 func handleTenantToggle(w http.ResponseWriter, r *http.Request, pool pgBeginner, enable bool) {
 	if !superadminWritesEnabled() {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusForbidden, "write_disabled", "write disabled")
+		return
+	}
+
+	p, ok := principalFromContext(r.Context())
+	if !ok || p.ID == "" {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusUnauthorized, "unauthorized", "unauthorized")
 		return
 	}
 
@@ -422,13 +538,12 @@ WHERE id = $1::uuid
 		return
 	}
 
-	actor, _ := actorFromContext(r.Context())
 	action := "tenant.disable"
 	if enable {
 		action = "tenant.enable"
 	}
 	payload, _ := json.Marshal(map[string]any{"enable": enable})
-	if err := insertAudit(ctx, tx, actor, action, tenantID, payload, requestID(r)); err != nil {
+	if err := insertAudit(ctx, tx, p.ID, action, tenantID, payload, requestID(r)); err != nil {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "audit_error", "audit error")
 		return
 	}
@@ -443,6 +558,12 @@ WHERE id = $1::uuid
 func handleTenantBindDomain(w http.ResponseWriter, r *http.Request, pool pgBeginner) {
 	if !superadminWritesEnabled() {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusForbidden, "write_disabled", "write disabled")
+		return
+	}
+
+	p, ok := principalFromContext(r.Context())
+	if !ok || p.ID == "" {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusUnauthorized, "unauthorized", "unauthorized")
 		return
 	}
 
@@ -478,9 +599,8 @@ VALUES ($1::uuid, $2, false)
 		return
 	}
 
-	actor, _ := actorFromContext(r.Context())
 	payload, _ := json.Marshal(map[string]any{"hostname": hostname})
-	if err := insertAudit(ctx, tx, actor, "tenant.domain.bind", tenantID, payload, requestID(r)); err != nil {
+	if err := insertAudit(ctx, tx, p.ID, "tenant.domain.bind", tenantID, payload, requestID(r)); err != nil {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "audit_error", "audit error")
 		return
 	}
@@ -506,7 +626,7 @@ func tenantIDFromPath(path string) (string, bool) {
 
 func insertAudit(ctx context.Context, tx pgx.Tx, actor string, action string, tenantID string, payload []byte, reqID string) error {
 	if actor == "" {
-		actor = "unknown"
+		return errors.New("superadmin: missing actor")
 	}
 	if payload == nil {
 		payload = []byte(`{}`)

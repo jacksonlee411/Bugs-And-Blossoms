@@ -158,7 +158,7 @@ DB 闭环（迁移 + smoke）：
 
 失败时证据落点：
 - Playwright 产物：`e2e/test-results/**`、`e2e/playwright-report/**`（trace/screenshot/video retain-on-failure）
-- Server/SuperAdmin 启动日志：`e2e/_artifacts/server.log`、`e2e/_artifacts/superadmin.log`
+- Server/SuperAdmin/Kratos 启动日志：`e2e/_artifacts/server.log`、`e2e/_artifacts/superadmin.log`、`e2e/_artifacts/kratosstub.log`
 
 ## 13. DEV-PLAN-009M4（Phase 2：SuperAdmin 控制面 + Tenant Console MVP）
 
@@ -176,4 +176,63 @@ DB 闭环（迁移 + smoke）：
 
 失败时证据落点：
 - Playwright 产物：`e2e/test-results/**`、`e2e/playwright-report/**`
-- server/superadmin 日志：`e2e/_artifacts/server.log`、`e2e/_artifacts/superadmin.log`
+- server/superadmin/kratos 日志：`e2e/_artifacts/server.log`、`e2e/_artifacts/superadmin.log`、`e2e/_artifacts/kratosstub.log`
+
+## 14. DEV-PLAN-009M5（Phase 2：AuthN 真实化：Kratos + 本地会话 sid/sa_sid）
+
+证据：
+- 日期：2026-01-08
+- 合并记录：
+  - PR #58 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/58
+  - PR #60 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/60
+  - PR #61 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/61
+  - PR #62 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/62
+  - PR #63 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/63
+- 本地门禁：`make preflight`（全绿，含 `make e2e`；coverage 门禁 100%）
+- E2E smoke：`e2e/tests/m3-smoke.spec.js`
+  - superadmin：`/superadmin/login`（Kratos 认人 → `sa_sid`）
+  - tenant app：`/login`（Kratos 认人 → `sid`）
+
+复现（本地）：
+- 一键：`make preflight`
+- 仅 e2e：`make e2e`
+  - server：`http://localhost:8080`
+  - superadmin：`http://localhost:8081`（E2E 脚本仍启用 BasicAuth 外层保护；E2E 会先走 `/superadmin/login` 建立 `sa_sid`）
+  - Kratos stub：
+    - public：`http://127.0.0.1:4433`（`KRATOS_PUBLIC_URL`）
+    - admin：`http://127.0.0.1:4434`（`E2E_KRATOS_ADMIN_URL`）
+  - superadmin login identity（默认）：
+    - email：`admin+<runID>@example.invalid`（默认用 runID 做唯一化，避免本地多次运行时与既有 principal 的 `kratos_identity_id` 绑定冲突；可用 `E2E_SUPERADMIN_EMAIL` 覆盖为固定值）
+    - identifier：`sa:<email>`
+    - password：`E2E_SUPERADMIN_LOGIN_PASS`（未设置时回退 `E2E_SUPERADMIN_PASS`）
+
+失败时证据落点：
+- Playwright 产物：`e2e/test-results/**`、`e2e/playwright-report/**`
+- server/superadmin/kratos 日志：`e2e/_artifacts/server.log`、`e2e/_artifacts/superadmin.log`、`e2e/_artifacts/kratosstub.log`
+
+## 15. DEV-PLAN-021（RLS 强租户隔离：No Tx, No RLS）
+
+证据：
+- 日期：2026-01-08
+- 合并记录：PR #66 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/66
+- 运行模式：`RLS_ENFORCE=enforce`（运行态 DB role 非 superuser 且 `NOBYPASSRLS`）
+- DB 闭环（迁移 + smoke；fail-closed/隔离/tenant mismatch）：
+  - `make iam migrate up`（含 `cmd/dbtool rls-smoke`）
+  - `make orgunit migrate up`（含 `cmd/dbtool orgunit-smoke`）
+  - `make jobcatalog migrate up`（含 `cmd/dbtool jobcatalog-smoke`）
+  - `make person migrate up`（含 `cmd/dbtool person-smoke`）
+  - `make staffing migrate up`（含 `cmd/dbtool staffing-smoke`）
+
+复现（本地）：
+- 一键：`make preflight`
+- 仅 DB/RLS：按上面模块逐个执行 `make <module> migrate up`
+
+## 16. DEV-PLAN-022（Authz：Casbin 工具链 + 403 契约 + enforce/shadow）
+
+证据：
+- 日期：2026-01-08
+- 合并记录：PR #67 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/67
+- policy SSOT：`config/access/policies/**` → `config/access/policy.csv`（pack 产物）
+- 本地门禁：
+  - `make authz-pack && make authz-test && make authz-lint`
+  - `make preflight`（全绿，E2E 默认 `AUTHZ_MODE=enforce`）

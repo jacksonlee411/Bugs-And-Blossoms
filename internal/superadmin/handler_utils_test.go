@@ -52,15 +52,34 @@ func TestTenantIDFromPath(t *testing.T) {
 	}
 }
 
-func TestInsertAudit_Defaults(t *testing.T) {
+func TestInsertAudit_MissingActor(t *testing.T) {
 	tx := &stubTx{}
-	if err := insertAudit(context.Background(), tx, "", "action", "00000000-0000-0000-0000-000000000001", nil, "rid"); err != nil {
-		t.Fatal(err)
+	if err := insertAudit(context.Background(), tx, "", "action", "00000000-0000-0000-0000-000000000001", nil, "rid"); err == nil {
+		t.Fatal("expected error")
 	}
 }
 
 func TestAuthzRequirementForRoute(t *testing.T) {
-	object, action, ok := authzRequirementForRoute(http.MethodGet, "/superadmin/tenants")
+	object, action, ok := authzRequirementForRoute(http.MethodGet, "/superadmin/login")
+	if !ok || object == "" || action == "" {
+		t.Fatalf("expected ok got ok=%v object=%q action=%q", ok, object, action)
+	}
+	object, action, ok = authzRequirementForRoute(http.MethodPost, "/superadmin/login")
+	if !ok || object == "" || action == "" {
+		t.Fatalf("expected ok got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/superadmin/login"); ok {
+		t.Fatal("expected no check")
+	}
+	object, action, ok = authzRequirementForRoute(http.MethodPost, "/superadmin/logout")
+	if !ok || object == "" || action == "" {
+		t.Fatalf("expected ok got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/superadmin/logout"); ok {
+		t.Fatal("expected no check")
+	}
+
+	object, action, ok = authzRequirementForRoute(http.MethodGet, "/superadmin/tenants")
 	if !ok || object == "" || action == "" {
 		t.Fatalf("expected ok got ok=%v object=%q action=%q", ok, object, action)
 	}

@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +12,15 @@ import (
 	"strings"
 	"testing"
 )
+
+type staticIdentityProvider struct {
+	ident authenticatedIdentity
+	err   error
+}
+
+func (s staticIdentityProvider) AuthenticatePassword(context.Context, Tenant, string, string) (authenticatedIdentity, error) {
+	return s.ident, s.err
+}
 
 func localTenancyResolver() TenancyResolver {
 	return newStaticTenancyResolver(map[string]Tenant{
@@ -45,6 +56,77 @@ func TestNewHandler_Health(t *testing.T) {
 	h.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec2.Code)
+	}
+}
+
+func TestLogin_UsesDefaultKratosIdentityProviderWhenNil(t *testing.T) {
+	type stubState struct {
+		loginStatus int
+		whoamiID    string
+		tenantID    string
+		email       string
+	}
+
+	st := &stubState{
+		loginStatus: http.StatusOK,
+		whoamiID:    "kid1",
+		tenantID:    "00000000-0000-0000-0000-000000000001",
+		email:       "tenant-admin@example.invalid",
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/self-service/login/api", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method=%s", r.Method)
+		}
+		_, _ = w.Write([]byte(`{"id":"flow1"}`))
+	})
+	mux.HandleFunc("/self-service/login", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method=%s", r.Method)
+		}
+		if st.loginStatus/100 != 2 {
+			w.WriteHeader(st.loginStatus)
+			return
+		}
+		_, _ = w.Write([]byte(`{"session_token":"st1"}`))
+	})
+	mux.HandleFunc("/sessions/whoami", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method=%s", r.Method)
+		}
+		if r.Header.Get("X-Session-Token") != "st1" {
+			t.Fatalf("missing session token header")
+		}
+		_, _ = w.Write([]byte(`{"identity":{"id":"` + st.whoamiID + `","traits":{"tenant_id":"` + st.tenantID + `","email":"` + st.email + `"}}}`))
+	})
+
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Setenv("KRATOS_PUBLIC_URL", srv.URL)
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req.Host = "localhost:8080"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d", rec.Code)
 	}
 }
 
@@ -160,7 +242,11 @@ func TestUI_ShellAndPartials(t *testing.T) {
 
 	h, err := NewHandlerWithOptions(HandlerOptions{
 		TenancyResolver: localTenancyResolver(),
-		OrgUnitStore:    newOrgUnitMemoryStore(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
+			Email:            "tenant-admin@example.invalid",
+		}},
+		OrgUnitStore: newOrgUnitMemoryStore(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -211,14 +297,24 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("app (no session) status=%d", recAppNoSession.Code)
 	}
 
-	reqLoginPost := httptest.NewRequest(http.MethodPost, "/login", nil)
+	reqLoginPost := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
 	reqLoginPost.Host = "localhost:8080"
+	reqLoginPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	recLoginPost := httptest.NewRecorder()
 	h.ServeHTTP(recLoginPost, reqLoginPost)
 	if recLoginPost.Code != http.StatusFound {
 		t.Fatalf("login post status=%d", recLoginPost.Code)
 	}
-	session := recLoginPost.Result().Cookies()[0]
+	var session *http.Cookie
+	for _, c := range recLoginPost.Result().Cookies() {
+		if c.Name == sidCookieName {
+			session = c
+			break
+		}
+	}
+	if session == nil || session.Value == "" {
+		t.Fatalf("missing %s cookie", sidCookieName)
+	}
 
 	reqRoot := httptest.NewRequest(http.MethodGet, "/", nil)
 	reqRoot.Host = "localhost:8080"
@@ -331,13 +427,52 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("lang status=%d", recLangWithRef.Code)
 	}
 
+	oldSession := session
 	reqLogout := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	reqLogout.Host = "localhost:8080"
-	reqLogout.AddCookie(session)
+	reqLogout.AddCookie(oldSession)
 	recLogout := httptest.NewRecorder()
 	h.ServeHTTP(recLogout, reqLogout)
 	if recLogout.Code != http.StatusFound {
 		t.Fatalf("logout status=%d", recLogout.Code)
+	}
+	var cleared bool
+	for _, c := range recLogout.Result().Cookies() {
+		if c.Name == sidCookieName && c.MaxAge < 0 {
+			cleared = true
+			break
+		}
+	}
+	if !cleared {
+		t.Fatalf("expected %s cookie cleared", sidCookieName)
+	}
+
+	reqAppOldSession := httptest.NewRequest(http.MethodGet, "/app", nil)
+	reqAppOldSession.Host = "localhost:8080"
+	reqAppOldSession.AddCookie(oldSession)
+	recAppOldSession := httptest.NewRecorder()
+	h.ServeHTTP(recAppOldSession, reqAppOldSession)
+	if recAppOldSession.Code != http.StatusFound {
+		t.Fatalf("app (old session) status=%d", recAppOldSession.Code)
+	}
+
+	reqLoginPost2 := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	reqLoginPost2.Host = "localhost:8080"
+	reqLoginPost2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	recLoginPost2 := httptest.NewRecorder()
+	h.ServeHTTP(recLoginPost2, reqLoginPost2)
+	if recLoginPost2.Code != http.StatusFound {
+		t.Fatalf("login post (2) status=%d", recLoginPost2.Code)
+	}
+	session = nil
+	for _, c := range recLoginPost2.Result().Cookies() {
+		if c.Name == sidCookieName {
+			session = c
+			break
+		}
+	}
+	if session == nil || session.Value == "" {
+		t.Fatalf("missing %s cookie (2)", sidCookieName)
 	}
 
 	reqPersonPost := httptest.NewRequest(http.MethodPost, "/person/persons", strings.NewReader("pernr=1&display_name=A"))
@@ -791,5 +926,240 @@ func TestPathHasPrefixSegment(t *testing.T) {
 	}
 	if pathHasPrefixSegment("/assetx", "/assets") {
 		t.Fatal("expected false")
+	}
+}
+
+func TestLoginPost_PrincipalError(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	old := sidRandReader
+	t.Cleanup(func() { sidRandReader = old })
+	sidRandReader = errReader{}
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
+			Email:            "tenant-admin@example.invalid",
+		}},
+		OrgUnitStore: newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req.Host = "localhost:8080"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestLoginPost_SessionError(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	old := sidRandReader
+	t.Cleanup(func() { sidRandReader = old })
+	sidRandReader = bytes.NewReader(bytes.Repeat([]byte{0xAB}, 16))
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
+			Email:            "tenant-admin@example.invalid",
+		}},
+		OrgUnitStore: newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req.Host = "localhost:8080"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestLoginPost_InvalidCredentials(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{
+			err: errInvalidCredentials,
+		},
+		OrgUnitStore: newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=bad"))
+	req.Host = "localhost:8080"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestLoginPost_IdentityError(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{
+			err: errors.New("boom"),
+		},
+		OrgUnitStore: newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req.Host = "localhost:8080"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestLoginPost_MissingFields(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
+			Email:            "tenant-admin@example.invalid",
+		}},
+		OrgUnitStore: newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid"))
+	req.Host = "localhost:8080"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestLoginPost_BadForm(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
+			Email:            "tenant-admin@example.invalid",
+		}},
+		OrgUnitStore: newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=%zz&password=pw"))
+	req.Host = "localhost:8080"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestLoginPost_DefaultProviderConfigError(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	t.Setenv("KRATOS_PUBLIC_URL", "ftp://localhost:4433")
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req.Host = "localhost:8080"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
 	}
 }

@@ -4,6 +4,8 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const asOf = "2026-01-07";
   const runID = `${Date.now()}`;
   const tenantHost = `t-${runID}.localhost`;
+  const tenantAdminEmail = "tenant-admin@example.invalid";
+  const tenantAdminPass = process.env.E2E_TENANT_ADMIN_PASS || "pw";
   const pernr = `${Math.floor(10000000 + Math.random() * 90000000)}`;
   const orgName = `E2E OrgUnit ${runID}`;
   const posName = `E2E Position ${runID}`;
@@ -11,6 +13,10 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const superadminBaseURL = process.env.E2E_SUPERADMIN_BASE_URL || "http://localhost:8081";
   const superadminUser = process.env.E2E_SUPERADMIN_USER || "admin";
   const superadminPass = process.env.E2E_SUPERADMIN_PASS || "admin";
+  const defaultSuperadminEmail = `admin+${runID}@example.invalid`;
+  const superadminEmail = process.env.E2E_SUPERADMIN_EMAIL || defaultSuperadminEmail;
+  const superadminLoginPass = process.env.E2E_SUPERADMIN_LOGIN_PASS || superadminPass;
+  const kratosAdminURL = process.env.E2E_KRATOS_ADMIN_URL || "http://localhost:4434";
 
   const superadminContext = await browser.newContext({
     baseURL: superadminBaseURL,
@@ -18,7 +24,27 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   });
   const superadminPage = await superadminContext.newPage();
 
-  await superadminPage.goto("/superadmin/tenants");
+  const superadminIdentifier = `sa:${superadminEmail.toLowerCase()}`;
+  const createSuperadminIdentityResp = await superadminContext.request.post(`${kratosAdminURL}/admin/identities`, {
+    data: {
+      schema_id: "default",
+      traits: { email: superadminEmail },
+      credentials: {
+        password: {
+          identifiers: [superadminIdentifier],
+          config: { password: superadminLoginPass }
+        }
+      }
+    }
+  });
+  expect(createSuperadminIdentityResp.ok()).toBeTruthy();
+
+  await superadminPage.goto("/superadmin/login");
+  await expect(superadminPage.locator("h1")).toHaveText("SuperAdmin Login");
+  await superadminPage.locator('input[name="email"]').fill(superadminEmail);
+  await superadminPage.locator('input[name="password"]').fill(superadminLoginPass);
+  await superadminPage.getByRole("button", { name: "Login" }).click();
+  await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
   await expect(superadminPage.locator("h1")).toHaveText("SuperAdmin / Tenants");
 
   await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(`E2E Tenant ${runID}`);
@@ -26,6 +52,25 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
   await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
   await expect(superadminPage.getByText(tenantHost)).toBeVisible();
+
+  const tenantRow = superadminPage.locator("tr", { hasText: tenantHost });
+  const tenantID = (await tenantRow.locator("code").first().innerText()).trim();
+  expect(tenantID).not.toBe("");
+
+  const identifier = `${tenantID}:${tenantAdminEmail}`;
+  const createIdentityResp = await superadminContext.request.post(`${kratosAdminURL}/admin/identities`, {
+    data: {
+      schema_id: "default",
+      traits: { tenant_id: tenantID, email: tenantAdminEmail },
+      credentials: {
+        password: {
+          identifiers: [identifier],
+          config: { password: tenantAdminPass }
+        }
+      }
+    }
+  });
+  expect(createIdentityResp.ok()).toBeTruthy();
 
   await superadminContext.close();
 
@@ -40,6 +85,8 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await page.goto("/login");
   await expect(page.locator("h1")).toHaveText("Login");
 
+  await page.locator('input[name="email"]').fill(tenantAdminEmail);
+  await page.locator('input[name="password"]').fill(tenantAdminPass);
   await page.getByRole("button", { name: "Login" }).click();
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.locator("h1")).toHaveText("Home");

@@ -16,6 +16,7 @@ const DomainGlobal = "global"
 
 const (
 	ObjectIAMPing             = "iam.ping"
+	ObjectIAMSession          = "iam.session"
 	ObjectOrgUnitOrgUnits     = "orgunit.orgunits"
 	ObjectOrgUnitSetID        = "orgunit.setid"
 	ObjectJobCatalogCatalog   = "jobcatalog.catalog"
@@ -23,4 +24,5 @@ const (
 	ObjectStaffingPositions   = "staffing.positions"
 	ObjectStaffingAssignments = "staffing.assignments"
 	ObjectSuperadminTenants   = "superadmin.tenants"
+	ObjectSuperadminSession   = "superadmin.session"
 )

@@ -46,6 +46,21 @@ func TestWithAuthz_AllowsBypassRoutes(t *testing.T) {
 	}
 }
 
+func TestWithAuthz_LoginForbiddenWhenEnforced(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
+
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
 func TestWithAuthz_SkipsWhenNoRequirement(t *testing.T) {
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -86,7 +101,7 @@ func TestWithAuthz_ForbiddenWhenEnforced(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/org/setid", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
-	req.AddCookie(&http.Cookie{Name: "session", Value: "ok"})
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -102,7 +117,7 @@ func TestWithAuthz_AllowsWhenNotEnforced(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
-	req.AddCookie(&http.Cookie{Name: "session", Value: "ok"})
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -118,7 +133,7 @@ func TestWithAuthz_AuthzError(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
-	req.AddCookie(&http.Cookie{Name: "session", Value: "ok"})
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
@@ -133,7 +148,7 @@ func TestWithAuthz_TenantMissing(t *testing.T) {
 	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: true, enforced: true}, next)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes", nil)
-	req.AddCookie(&http.Cookie{Name: "session", Value: "ok"})
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
@@ -144,6 +159,21 @@ func TestWithAuthz_TenantMissing(t *testing.T) {
 func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/unknown"); ok {
 		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/login"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/login"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/login"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/logout"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/logout"); !ok {
+		t.Fatal("expected ok=true")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/nodes"); ok {
 		t.Fatal("expected ok=false")
