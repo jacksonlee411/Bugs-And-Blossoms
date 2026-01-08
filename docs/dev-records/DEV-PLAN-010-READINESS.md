@@ -209,3 +209,20 @@ DB 闭环（迁移 + smoke）：
 失败时证据落点：
 - Playwright 产物：`e2e/test-results/**`、`e2e/playwright-report/**`
 - server/superadmin/kratos 日志：`e2e/_artifacts/server.log`、`e2e/_artifacts/superadmin.log`、`e2e/_artifacts/kratosstub.log`
+
+## 15. DEV-PLAN-021（RLS 强租户隔离：No Tx, No RLS）
+
+证据：
+- 日期：2026-01-08
+- 合并记录：PR #66 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/66
+- 运行模式：`RLS_ENFORCE=enforce`（运行态 DB role 非 superuser 且 `NOBYPASSRLS`）
+- DB 闭环（迁移 + smoke；fail-closed/隔离/tenant mismatch）：
+  - `make iam migrate up`（含 `cmd/dbtool rls-smoke`）
+  - `make orgunit migrate up`（含 `cmd/dbtool orgunit-smoke`）
+  - `make jobcatalog migrate up`（含 `cmd/dbtool jobcatalog-smoke`）
+  - `make person migrate up`（含 `cmd/dbtool person-smoke`）
+  - `make staffing migrate up`（含 `cmd/dbtool staffing-smoke`）
+
+复现（本地）：
+- 一键：`make preflight`
+- 仅 DB/RLS：按上面模块逐个执行 `make <module> migrate up`
