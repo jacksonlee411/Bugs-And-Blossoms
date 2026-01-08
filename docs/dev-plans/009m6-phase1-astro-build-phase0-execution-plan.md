@@ -89,7 +89,7 @@
 ### 4.1 UI 工程与产物
 
 - [X] `apps/web/package.json` 与 `apps/web/pnpm-lock.yaml` 已提交，且 `packageManager` pin 为 `pnpm@10.24.0`。
-- [ ] `internal/server/assets/astro/app.html` 存在，且包含 `#nav`、`#topbar`、`#flash`、`#content` 四个挂载点，并在 `hx-get` 中使用 `as_of=__BB_AS_OF__`（对齐 `DEV-PLAN-018` §4.4/§4.5）。
+- [X] `internal/server/assets/astro/app.html` 存在，且包含 `#nav`、`#topbar`、`#flash`、`#content` 四个挂载点，并在 `hx-get` 中使用 `as_of=__BB_AS_OF__`（对齐 `DEV-PLAN-018` §4.4/§4.5）。
 - [ ] `make css` 可在本地与 CI 生成/更新 `internal/server/assets/astro/**`，并保证 `git status --porcelain` 为空。
 
 ### 4.2 Server 行为
@@ -125,12 +125,12 @@
 
 ### PR-2：构建与复制管线（产物进入 `internal/server/assets/astro/**`）
 
-- [ ] 新增脚本（建议）：`scripts/ui/build-astro.sh`
+- [X] 新增脚本（建议）：`scripts/ui/build-astro.sh`
   - 通过 corepack pin pnpm 版本（对齐 E2E 口径）；
   - `pnpm -C apps/web install --frozen-lockfile`
   - `pnpm -C apps/web build`
   - 按 `DEV-PLAN-018` §4.5.1 将 build 产物复制到 `internal/server/assets/astro/**`（`dist/index.html` → `app.html`；其余文件保持相对路径）。
-- [ ] Makefile 收口：`make css` 调用上述脚本，且输出稳定、可复现、可在 CI 运行；生成后 `git status --porcelain` 必须为空。
+- [X] Makefile 收口：`make css` 调用上述脚本，且输出稳定、可复现、可在 CI 运行；生成后 `git status --porcelain` 必须为空。
 
 ### PR-3：CI Gate-1 补齐 UI build（阻断生成物漂移）
 
