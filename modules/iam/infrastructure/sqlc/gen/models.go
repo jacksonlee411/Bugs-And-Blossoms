@@ -274,6 +274,77 @@ type StaffingAssignmentVersion struct {
 	LastEventID    int64                     `json:"last_event_id"`
 }
 
+type StaffingPayPeriod struct {
+	TenantID    pgtype.UUID               `json:"tenant_id"`
+	ID          pgtype.UUID               `json:"id"`
+	PayGroup    string                    `json:"pay_group"`
+	Period      pgtype.Range[pgtype.Date] `json:"period"`
+	Status      string                    `json:"status"`
+	ClosedAt    pgtype.Timestamptz        `json:"closed_at"`
+	LastEventID int64                     `json:"last_event_id"`
+	CreatedAt   pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz        `json:"updated_at"`
+}
+
+type StaffingPayPeriodEvent struct {
+	ID              int64                     `json:"id"`
+	EventID         pgtype.UUID               `json:"event_id"`
+	TenantID        pgtype.UUID               `json:"tenant_id"`
+	PayPeriodID     pgtype.UUID               `json:"pay_period_id"`
+	EventType       string                    `json:"event_type"`
+	PayGroup        string                    `json:"pay_group"`
+	Period          pgtype.Range[pgtype.Date] `json:"period"`
+	RequestID       string                    `json:"request_id"`
+	InitiatorID     pgtype.UUID               `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz        `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz        `json:"created_at"`
+}
+
+type StaffingPayrollRun struct {
+	TenantID       pgtype.UUID        `json:"tenant_id"`
+	ID             pgtype.UUID        `json:"id"`
+	PayPeriodID    pgtype.UUID        `json:"pay_period_id"`
+	RunState       string             `json:"run_state"`
+	NeedsRecalc    bool               `json:"needs_recalc"`
+	CalcStartedAt  pgtype.Timestamptz `json:"calc_started_at"`
+	CalcFinishedAt pgtype.Timestamptz `json:"calc_finished_at"`
+	FinalizedAt    pgtype.Timestamptz `json:"finalized_at"`
+	LastEventID    int64              `json:"last_event_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingPayrollRunEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	RunID           pgtype.UUID        `json:"run_id"`
+	PayPeriodID     pgtype.UUID        `json:"pay_period_id"`
+	EventType       string             `json:"event_type"`
+	RunState        string             `json:"run_state"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type StaffingPayslip struct {
+	TenantID       pgtype.UUID        `json:"tenant_id"`
+	ID             pgtype.UUID        `json:"id"`
+	RunID          pgtype.UUID        `json:"run_id"`
+	PayPeriodID    pgtype.UUID        `json:"pay_period_id"`
+	PersonUuid     pgtype.UUID        `json:"person_uuid"`
+	AssignmentID   pgtype.UUID        `json:"assignment_id"`
+	Currency       string             `json:"currency"`
+	GrossPay       pgtype.Numeric     `json:"gross_pay"`
+	NetPay         pgtype.Numeric     `json:"net_pay"`
+	EmployerTotal  pgtype.Numeric     `json:"employer_total"`
+	LastRunEventID int64              `json:"last_run_event_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type StaffingPosition struct {
 	TenantID  pgtype.UUID        `json:"tenant_id"`
 	ID        pgtype.UUID        `json:"id"`
