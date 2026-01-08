@@ -11,6 +11,9 @@ exclude_globs=(
   --glob '!.github/**'
   --glob '!docs/**'
   --glob '!**/*_templ.go'
+  --glob '!**/pnpm-lock.yaml'
+  --glob '!**/package-lock.json'
+  --glob '!**/yarn.lock'
   --glob '!scripts/ci/**'
   --glob '!scripts/ci/check-no-legacy.sh'
 )

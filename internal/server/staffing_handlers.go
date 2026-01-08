@@ -19,12 +19,8 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 		return
 	}
 
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		asOf = time.Now().UTC().Format("2006-01-02")
-	}
-	if _, err := time.Parse("2006-01-02", asOf); err != nil {
-		writePage(w, r, renderPositions(nil, nil, tenant, asOf, "as_of 无效: "+err.Error()))
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
 		return
 	}
 
@@ -212,12 +208,8 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 		return
 	}
 
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		asOf = time.Now().UTC().Format("2006-01-02")
-	}
-	if _, err := time.Parse("2006-01-02", asOf); err != nil {
-		writePage(w, r, renderAssignments(nil, nil, tenant, asOf, "", "", "", "as_of 无效: "+err.Error()))
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
 		return
 	}
 

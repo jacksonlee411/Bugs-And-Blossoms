@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
@@ -136,9 +135,9 @@ func handleOrgSnapshot(w http.ResponseWriter, r *http.Request, store OrgUnitSnap
 		return
 	}
 
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		asOf = time.Now().UTC().Format("2006-01-02")
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
+		return
 	}
 	createdID := strings.TrimSpace(r.URL.Query().Get("created_id"))
 

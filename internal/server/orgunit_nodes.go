@@ -413,9 +413,9 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 		return
 	}
 
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		asOf = time.Now().UTC().Format("2006-01-02")
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
+		return
 	}
 
 	listNodes := func(errHint string) ([]OrgUnitNode, string) {
@@ -427,10 +427,6 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 				return hint
 			}
 			return hint + "；" + msg
-		}
-
-		if _, err := time.Parse("2006-01-02", asOf); err != nil {
-			return nil, mergeMsg(errHint, "as_of 无效: "+err.Error())
 		}
 
 		nodes, err := store.ListNodesCurrent(r.Context(), tenant.ID, asOf)

@@ -293,6 +293,29 @@ func TestHandleOrgSnapshot(t *testing.T) {
 		}
 	})
 
+	t.Run("missing as_of redirects", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/snapshot", nil)
+		req = req.WithContext(withTenant(req.Context(), tenant))
+		rec := httptest.NewRecorder()
+		handleOrgSnapshot(rec, req, &stubOrgUnitSnapshotStore{})
+		if rec.Code != http.StatusFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Header().Get("Location"), "as_of=") {
+			t.Fatalf("location=%q", rec.Header().Get("Location"))
+		}
+	})
+
+	t.Run("invalid as_of returns 400", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/snapshot?as_of=BAD", nil)
+		req = req.WithContext(withTenant(req.Context(), tenant))
+		rec := httptest.NewRecorder()
+		handleOrgSnapshot(rec, req, &stubOrgUnitSnapshotStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
 	t.Run("store nil", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/snapshot?as_of=2026-01-01&created_id=x", nil)
 		req = req.WithContext(withTenant(req.Context(), tenant))
