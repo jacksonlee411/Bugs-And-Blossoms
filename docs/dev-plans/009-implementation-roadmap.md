@@ -24,7 +24,7 @@
 - [X] **工程可复现**：版本基线、门禁入口、生成物一致性可被 CI 阻断（011/024/025/012）。证据：`docs/dev-records/DEV-PLAN-010-READINESS.md` §2/§6/§7
 - [X] **平台先行**：Tenancy/AuthN → RLS 圈地 → Casbin 管事，且 superadmin 与 tenant app 边界清晰可审计（019/021/022/023）。证据：`docs/dev-records/DEV-PLAN-010-READINESS.md` §14/§15/§16
 - [X] **业务闭环**：OrgUnit / JobCatalog / Staffing / Person 四模块具备最小可用闭环（026/029/030/031/027/016）。证据：`docs/dev-records/DEV-PLAN-010-READINESS.md` §10/§11/§12/§14
-- [X] **UI 可用**：AHA Shell + en/zh i18n + as-of 交互一致，且任职记录仅展示 `effective_date` 合同不漂移（018/020/017/031）。证据：#5 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5 、`docs/dev-records/DEV-PLAN-010-READINESS.md` §3/§11/§14
+- [X] **UI 可用**：AHA Shell + en/zh i18n + as-of 交互一致，且任职记录仅展示 `effective_date` 合同不漂移（018/020/017/031）。证据：#5 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5 、`docs/dev-records/DEV-PLAN-010-READINESS.md` §3/§11/§14（说明：当前壳实现为 Go SSR；Astro build + go:embed 的 Phase 0 收敛见 `DEV-PLAN-009M6`）
 - [X] **主数据治理可扩展**：SetID 机制从最小集合起步，并在 JobCatalog 上形成首个样板（028/029）。证据：`docs/dev-records/DEV-PLAN-010-READINESS.md` §10
 
 ### 2.2 非目标（本文不解决）
@@ -96,7 +96,7 @@
   - `019`（Tenancy/AuthN/session，先做最小可登录闭环）
   - `020`（i18n：en/zh + 语言切换写入口）
 - 出口条件：
-  1. [X] UI Shell 可运行：导航/Topbar/Flash/as-of 透传具备最小可用形态（018）。证据：#5 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5
+  1. [X] UI Shell 可运行：导航/Topbar/Flash/as-of 透传具备最小可用形态（018）。证据：#5 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5（说明：当前壳实现为 Go SSR；Astro build + go:embed 的 Phase 0 收敛见 `DEV-PLAN-009M6`）
   2. [X] tenant app 至少可完成“确定租户 → 登录 → 进入壳”的最小链路（019）。证据：#6 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/6 、#23 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/23 、#24 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/24
   3. [X] 语言切换可用且只允许 `en/zh`，切换后整页一致刷新（020）。证据：#5 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5
   4. [X] 4 个业务模块入口在导航中可见：未实现模块以占位页呈现“未交付/计划中的能力”，作为后续实现的唯一挂载点（避免隐形功能长期漂移）。证据：#13 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/13

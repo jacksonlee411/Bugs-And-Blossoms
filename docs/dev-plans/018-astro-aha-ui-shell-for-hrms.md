@@ -144,7 +144,7 @@ flowchart LR
 ### 4.4 Shell/Partial 的最小契约（冻结）
 为降低“壳与内容互相猜测”的偶然复杂度，冻结如下最小契约：
 - Shell 必须包含固定 ID 的挂载点：`#nav`、`#topbar`、`#flash`、`#content`。
-- Shell 必须在用户已登录的上下文中触发加载：`hx-get="/ui/nav?as_of=..."`、`hx-get="/ui/topbar?as_of=..."`、`hx-get="/ui/flash"`（其中 `as_of` 由 `/app` handler 在返回 Shell 时注入；契约 URL 路径不变；见 §4.5）。
+- Shell 必须在用户已登录的上下文中触发加载：`hx-get="/ui/nav?as_of=__BB_AS_OF__"`、`hx-get="/ui/topbar?as_of=__BB_AS_OF__"`、`hx-get="/ui/flash"`（其中 `__BB_AS_OF__` 由 `/app` handler 在返回 Shell 时注入；契约 URL 路径不变；见 §4.5）。
 - 内容区页（任意模块页面）必须满足：同一 URL 同时支持 “全页访问” 与 “HTMX partial（`Hx-Request: true`）” 两种模式（路由/协商口径对齐 `DEV-PLAN-017`）。
 - `as_of` 作为 URL 状态：Shell 与 partial 的所有 HTMX 请求与链接必须保留 `as_of`（见 §3.3）。
 
@@ -153,7 +153,19 @@ flowchart LR
 - Astro build 产物在构建阶段被复制到 Go 可 `go:embed` 的稳定目录（建议：`internal/server/assets/astro/**`）。
 - Go server 负责静态资源分发（仍以 `/assets/*` 命名空间提供），避免运行时依赖额外 volume/旁路静态服务器。
 - `apps/web` 的 `package.json` + lockfile 作为 UI 依赖版本的 SSOT（见 `DEV-PLAN-011`）。
-- Shell 文件约定（冻结，避免路径漂移）：Astro 产出一个可嵌入的 Shell HTML（例如落为 `internal/server/assets/astro/app.html`），Go 的 `/app` handler 只做**最小占位符注入**（例如注入 `/ui/nav?as_of=...`、`/ui/topbar?as_of=...`），不在 handler 内重写页面结构。
+
+#### 4.5.1 Shell 产物映射（冻结）
+- 静态资源 URL 前缀固定为 `/assets/astro/`（由 Go `/assets/*` 分发，确保路径稳定且不依赖 `/app` 相对路径）。
+- 复制规则（冻结，作为 CI 可验证契约）：
+  - `apps/web/dist/index.html` → `internal/server/assets/astro/app.html`
+  - `apps/web/dist/**`（除 `index.html` 外）→ `internal/server/assets/astro/**`（保持相对路径）
+
+#### 4.5.2 占位符注入（冻结）
+- Shell 模板唯一占位符：`__BB_AS_OF__`（表示当前 URL 的 `as_of`）。
+- Go `/app` handler 只允许做“最小占位符注入”，不得在 handler 内重写页面结构：
+  - 先按 §3.3 执行 `as_of` 的缺省/校验口径（302 补齐；非法则 400）。
+  - 将 `internal/server/assets/astro/app.html` 中所有 `__BB_AS_OF__` 以 URL query 语义替换为当前 `as_of`（例如用于 `hx-get="/ui/nav?as_of=__BB_AS_OF__"`）。
+- 失败行为（fail-fast）：若模板缺失 `__BB_AS_OF__` 或替换后仍残留该 token，返回 500 并显式报错；禁止回退到 Go 拼接壳/双壳并存。
 
 ## 5. 页面与组件规范（只覆盖 026-031 模块）
 
