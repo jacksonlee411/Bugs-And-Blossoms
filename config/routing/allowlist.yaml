@@ -56,6 +56,21 @@ entrypoints:
       - path: /org/assignments
         methods: [GET, POST]
         route_class: ui
+      - path: /org/payroll-periods
+        methods: [GET, POST]
+        route_class: ui
+      - path: /org/payroll-runs
+        methods: [GET, POST]
+        route_class: ui
+      - path: /org/payroll-runs/{run_id}
+        methods: [GET]
+        route_class: ui
+      - path: /org/payroll-runs/{run_id}/calculate
+        methods: [POST]
+        route_class: ui
+      - path: /org/payroll-runs/{run_id}/finalize
+        methods: [POST]
+        route_class: ui
       - path: /person/persons
         methods: [GET, POST]
         route_class: ui
@@ -69,6 +84,12 @@ entrypoints:
         methods: [GET, POST]
         route_class: internal_api
       - path: /org/api/assignments
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /org/api/payroll-periods
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /org/api/payroll-runs
         methods: [GET, POST]
         route_class: internal_api
   superadmin:
