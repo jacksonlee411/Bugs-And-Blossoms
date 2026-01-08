@@ -1,6 +1,6 @@
 # DEV-PLAN-018：引入 Astro（AHA Stack）到 HTMX + Alpine 的 HRMS UI 方案（026-031）
 
-**状态**: 草拟中（2026-01-06 08:03 UTC）
+**状态**: 执行中（Phase 0：Astro build + go:embed Shell，2026-01-08 10:24 UTC）
 
 ## 1. 背景与上下文 (Context)
 
@@ -153,6 +153,7 @@ flowchart LR
 - Astro build 产物在构建阶段被复制到 Go 可 `go:embed` 的稳定目录（建议：`internal/server/assets/astro/**`）。
 - Go server 负责静态资源分发（仍以 `/assets/*` 命名空间提供），避免运行时依赖额外 volume/旁路静态服务器。
 - `apps/web` 的 `package.json` + lockfile 作为 UI 依赖版本的 SSOT（见 `DEV-PLAN-011`）。
+- 门禁与入口：UI build 的唯一入口为 `make css`（SSOT），CI Gate-1 命中 `ui` 触发器时必须执行并由 `assert-clean` 阻断生成物漂移（见 `DEV-PLAN-012`）。
 
 #### 4.5.1 Shell 产物映射（冻结）
 - 静态资源 URL 前缀固定为 `/assets/astro/`（由 Go `/assets/*` 分发，确保路径稳定且不依赖 `/app` 相对路径）。
