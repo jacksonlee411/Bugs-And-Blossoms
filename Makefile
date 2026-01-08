@@ -148,7 +148,7 @@ generate: ## templ/生成物（按项目能力渐进接入）
 	@echo "[generate] no-op (placeholder)"
 
 css: ## Tailwind/Astro CSS（按项目能力渐进接入）
-	@echo "[css] no-op (placeholder)"
+	@./scripts/ui/build-astro.sh
 
 sqlc-generate:
 	@./scripts/sqlc/generate.sh
