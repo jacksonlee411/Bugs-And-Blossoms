@@ -31,6 +31,7 @@
 证据：
 - PR-5：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5
 - 路由入口：`/app`（壳）+ 导航占位页（Org/JobCatalog/Staffing/Person）
+- 说明：当前壳实现为 Go SSR（`internal/server/handler.go` 的 `writeShell*`）；Astro build + go:embed 的 Phase 0 收敛见 `docs/dev-plans/009m6-phase1-astro-build-phase0-execution-plan.md`（待执行）。
 
 ## 4. 最小登录链路
 
@@ -236,3 +237,12 @@ DB 闭环（迁移 + smoke）：
 - 本地门禁：
   - `make authz-pack && make authz-test && make authz-lint`
   - `make preflight`（全绿，E2E 默认 `AUTHZ_MODE=enforce`）
+
+## 17. DEV-PLAN-009M6（Phase 1：Astro build + go:embed Shell）
+
+证据（完成后补齐）：
+- 日期：
+- 合并记录：
+- 本地门禁：`make preflight`（全绿）
+- UI build：`make css`（生成 `internal/server/assets/astro/**`；生成后 `git status --short` 为空）
+- CI：UI 变更时 Gate-1 执行 `make css` 且通过 `assert-clean`（required checks 不出现 `skipped`）

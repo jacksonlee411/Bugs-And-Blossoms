@@ -102,7 +102,7 @@
 **变更类别（示例）**：
 - `docs`：文档与规范（Doc Map / dev-plans / runbooks）。
 - `go`：Go 源码与依赖（`*.go`/`go.mod`/`go.sum`/lint 配置）。
-- `ui`：Astro（`DEV-PLAN-018`）与服务端 UI 资源（`.templ`/Tailwind/assets）。
+- `ui`：Astro（`DEV-PLAN-018`）工程（`apps/web/`）与其 go:embed 产物（`internal/server/assets/astro/**`），以及服务端 UI 资源（`.templ`/Tailwind/assets）。
 - `i18n`：`en/zh` 翻译资源（`make check tr`）。
 - `db`：schema/migrations/atlas/goose（对齐 `DEV-PLAN-024`）。
 - `sqlc`：sqlc 配置/queries/schema export（对齐 `DEV-PLAN-025`）。
@@ -121,7 +121,7 @@
 
 **覆盖范围（聚合门禁）**：
 - Go：`gofmt`/`go vet`/`golangci-lint`/CleanArchGuard（对齐 `DEV-PLAN-015`）。
-- UI：`.templ`/Tailwind 生成物 + Astro（`DEV-PLAN-018`）工程的格式化/构建基线（Node/pnpm 版本对齐 `DEV-PLAN-011`）。
+- UI：`.templ`/Tailwind 生成物 + Astro（`DEV-PLAN-018`）工程的格式化/构建基线（Node/pnpm 版本对齐 `DEV-PLAN-011`）；命中 `ui` 触发器时必须通过 `Makefile` 单一入口执行 `make css`。
 - SQL：SQL 格式化门禁（pg_format，版本口径对齐 `DEV-PLAN-011`）。
 - Docs：`make check doc`（新文档门禁）。
 - No-Legacy：`make check no-legacy`（禁止 legacy 分支/回退通道，对齐 `DEV-PLAN-004M1`）。
