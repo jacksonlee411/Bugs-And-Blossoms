@@ -42,21 +42,20 @@
 - 证据记录：`docs/dev-records/DEV-PLAN-010-READINESS.md`
 - 停止线：`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
 
-### 1.4 待决事项（需你确认）
+### 1.4 已决事项（已确认采用建议项）
 
-> 这些是会影响实现细节与门禁闭合的关键决策；若未确认，PR-1 之后容易出现返工/漂移。
-> 当前已按“建议项”口径暂定写入 `DEV-PLAN-018/012`；若你选择备选方案，需要同步调整对应条款。
+> 这些是会影响实现细节与门禁闭合的关键决策；当前已确认采用“建议项”（并已写入 `DEV-PLAN-018/012`）。
 
-1. [ ] 占位符注入 token 方案（Shell HTML）
+1. [X] 占位符注入 token 方案（Shell HTML）
    - 建议：单 token `__BB_AS_OF__`（只注入 `as_of`；对齐 `DEV-PLAN-018` §4.5.2）。
    - 备选：为每个动态属性单独 token（例如 `__BB_NAV_HX_GET__`），但注入点数量会膨胀。
-2. [ ] Shell 产物映射（Astro dist → go:embed）
+2. [X] Shell 产物映射（Astro dist → go:embed）
    - 建议：`apps/web/dist/index.html` 复制为 `internal/server/assets/astro/app.html`；其余 `dist/**` 原样复制到 `internal/server/assets/astro/**`（对齐 `DEV-PLAN-018` §4.5.1）。
-3. [ ] CI `ui` 触发器口径（paths-filter）
+3. [X] CI `ui` 触发器口径（paths-filter）
    - 建议：`ui` 至少覆盖 `apps/web/` + `internal/server/assets/astro/`，确保“改源/改产物”都会触发 `make css` 并被 `assert-clean` 阻断漂移。
-4. [ ] Node 版本 pin 形式（本地可复现 vs 最小必要）
+4. [X] Node 版本 pin 形式（本地可复现 vs 最小必要）
    - 建议：先以 CI Node 20 + `packageManager: pnpm@10.24.0` 为最小闭环；如需要更强一致性再补 `.nvmrc`/`.tool-versions`。
-5. [ ] `as_of` 缺省行为（URL 可分享/可复现）
+5. [X] `as_of` 缺省行为（URL 可分享/可复现）
    - 建议：按 `DEV-PLAN-018` §3.3 执行 302 补齐 `?as_of=<CURRENT_DATE(UTC)>`（URL 永远显式包含 `as_of`）。
    - 备选：缺省时直接在服务端回退到 `CURRENT_DATE(UTC)`（不 302），实现更省但 URL 不可复现且易产生“今天/明天不同结果”的隐性漂移。
 
