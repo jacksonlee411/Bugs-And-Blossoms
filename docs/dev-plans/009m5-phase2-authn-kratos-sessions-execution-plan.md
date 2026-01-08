@@ -159,3 +159,7 @@
 - 结构：tenant app 与 superadmin 通过“cookie/会话表/路由/DB pool”四层隔离，避免隐式共享导致串租户风险。
 - 演化：先把 session 事实源与 fail-closed 行为收口，再引入 Kratos；避免“先接 IdP 再补会话/审计”造成返工。
 - 回滚：回滚只能走“PR 回滚/环境级保护/只读停写”，禁止引入 runtime legacy 分支。
+
+## 8. 后续文档收敛（非执行范围）
+
+- PR（#69）：对齐 `DEV-PLAN-019/023` 的状态描述与实现引用，避免 drift（不改变代码行为）。

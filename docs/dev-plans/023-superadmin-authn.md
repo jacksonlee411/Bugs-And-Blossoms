@@ -16,6 +16,7 @@
 - 009M5 PR-0（#58）：冻结 `sa_sid` token 合同（§6.2）与凭据注入口径（§9）。
 - 009M5 PR-1（#60）：新增 `iam.superadmin_principals`/`iam.superadmin_sessions` 数据模型与迁移闭环（token 存 `sha256(sa_sid)`）。
 - 009M5 PR-4（#63）：落地 `/superadmin/login`（Kratos 认人 → 本地 `sa_sid` 会话桥接）与审计主体升级（actor=superadmin_principal_id）。
+- PR（#69）：对齐本文状态与 Phase 0/1 口径（文档收敛，非代码变更）。
 
 Greenfield 将重构租户/认证/RLS，并要求：
 - tenant app：`Host 解析 tenant（fail-closed）→ Kratos 认人 → 本地 session（sid）→ RLS 圈地 → Casbin 管事`（见 `DEV-PLAN-019`）。
