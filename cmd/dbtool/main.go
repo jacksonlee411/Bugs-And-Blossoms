@@ -189,9 +189,36 @@ func staffingSmoke(args []string) {
 		fatalf("expected fail-closed error when app.current_tenant is missing")
 	}
 
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_failclosed_payroll;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `SELECT count(*) FROM staffing.pay_periods;`)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed_payroll;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected fail-closed error when app.current_tenant is missing")
+	}
+
 	tenantA := "00000000-0000-0000-0000-00000000000a"
 	tenantB := "00000000-0000-0000-0000-00000000000b"
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantA); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.payslips WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.payroll_runs WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.payroll_run_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.pay_periods WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.pay_period_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
 
@@ -384,6 +411,307 @@ func staffingSmoke(args []string) {
 		fatalf("expected assignment_versions=1, got %d", assignmentVersions)
 	}
 
+	payGroup := "monthly"
+	ppStart := "2026-01-01"
+	ppEndExcl := "2026-02-01"
+
+	var payPeriodID string
+	var payPeriodEventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&payPeriodID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&payPeriodEventID); err != nil {
+		fatal(err)
+	}
+
+	var payPeriodEventDBID int64
+	if err := tx.QueryRow(ctx, `
+SELECT staffing.submit_payroll_pay_period_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::text,
+  daterange($5::date, $6::date, '[)'),
+  $7::text,
+  $8::uuid
+);
+`, payPeriodEventID, tenantA, payPeriodID, payGroup, ppStart, ppEndExcl, payPeriodEventID, initiatorID).Scan(&payPeriodEventDBID); err != nil {
+		fatal(err)
+	}
+	if payPeriodEventDBID <= 0 {
+		fatalf("expected pay period event db id > 0, got %d", payPeriodEventDBID)
+	}
+
+	var payPeriodEventDBID2 int64
+	if err := tx.QueryRow(ctx, `
+SELECT staffing.submit_payroll_pay_period_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::text,
+  daterange($5::date, $6::date, '[)'),
+  $7::text,
+  $8::uuid
+);
+`, payPeriodEventID, tenantA, payPeriodID, payGroup, ppStart, ppEndExcl, payPeriodEventID, initiatorID).Scan(&payPeriodEventDBID2); err != nil {
+		fatal(err)
+	}
+	if payPeriodEventDBID2 != payPeriodEventDBID {
+		fatalf("expected idempotent pay period event id=%d, got %d", payPeriodEventDBID, payPeriodEventDBID2)
+	}
+
+	var periodStatus string
+	if err := tx.QueryRow(ctx, `
+SELECT status
+FROM staffing.pay_periods
+WHERE tenant_id = $1::uuid AND id = $2::uuid;
+`, tenantA, payPeriodID).Scan(&periodStatus); err != nil {
+		fatal(err)
+	}
+	if periodStatus != "open" {
+		fatalf("expected pay period status=open, got %s", periodStatus)
+	}
+
+	var payPeriodID2 string
+	var payPeriodEventID3 string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&payPeriodID2); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&payPeriodEventID3); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_pp_overlap;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `
+SELECT staffing.submit_payroll_pay_period_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::text,
+  daterange('2026-01-15'::date, '2026-02-15'::date, '[)'),
+  $5::text,
+  $6::uuid
+);
+`, payPeriodEventID3, tenantA, payPeriodID2, payGroup, payPeriodEventID3, initiatorID)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_pp_overlap;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected submit_payroll_pay_period_event to fail on overlap")
+	}
+	if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_PAY_PERIOD_OVERLAP" {
+		fatalf("expected pg error message=STAFFING_PAYROLL_PAY_PERIOD_OVERLAP, got ok=%v message=%q err=%v", ok, msg, err)
+	}
+
+	var runID string
+	var runCreateEventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&runID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&runCreateEventID); err != nil {
+		fatal(err)
+	}
+
+	var runCreateEventDBID int64
+	if err := tx.QueryRow(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'CREATE',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, runCreateEventID, tenantA, runID, payPeriodID, runCreateEventID, initiatorID).Scan(&runCreateEventDBID); err != nil {
+		fatal(err)
+	}
+	if runCreateEventDBID <= 0 {
+		fatalf("expected run create event db id > 0, got %d", runCreateEventDBID)
+	}
+
+	var illegalFinalizeEventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&illegalFinalizeEventID); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_run_illegal_finalize;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'FINALIZE',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, illegalFinalizeEventID, tenantA, runID, payPeriodID, illegalFinalizeEventID, initiatorID)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_run_illegal_finalize;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected FINALIZE to fail when run_state=draft")
+	}
+	if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_RUN_INVALID_TRANSITION" {
+		fatalf("expected pg error message=STAFFING_PAYROLL_RUN_INVALID_TRANSITION, got ok=%v message=%q err=%v", ok, msg, err)
+	}
+
+	var calcStartEventID string
+	var calcFinishEventID string
+	var finalizeEventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&calcStartEventID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&calcFinishEventID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&finalizeEventID); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'CALC_START',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, calcStartEventID, tenantA, runID, payPeriodID, calcStartEventID, initiatorID); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'CALC_FINISH',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, calcFinishEventID, tenantA, runID, payPeriodID, calcFinishEventID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	var finalizeEventDBID int64
+	if err := tx.QueryRow(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'FINALIZE',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, finalizeEventID, tenantA, runID, payPeriodID, finalizeEventID, initiatorID).Scan(&finalizeEventDBID); err != nil {
+		fatal(err)
+	}
+	if finalizeEventDBID <= 0 {
+		fatalf("expected finalize event db id > 0, got %d", finalizeEventDBID)
+	}
+
+	var finalizeEventDBID2 int64
+	if err := tx.QueryRow(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'FINALIZE',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, finalizeEventID, tenantA, runID, payPeriodID, finalizeEventID, initiatorID).Scan(&finalizeEventDBID2); err != nil {
+		fatal(err)
+	}
+	if finalizeEventDBID2 != finalizeEventDBID {
+		fatalf("expected idempotent finalize event id=%d, got %d", finalizeEventDBID, finalizeEventDBID2)
+	}
+
+	if err := tx.QueryRow(ctx, `
+SELECT status
+FROM staffing.pay_periods
+WHERE tenant_id = $1::uuid AND id = $2::uuid;
+`, tenantA, payPeriodID).Scan(&periodStatus); err != nil {
+		fatal(err)
+	}
+	if periodStatus != "closed" {
+		fatalf("expected pay period status=closed after finalize, got %s", periodStatus)
+	}
+
+	var postFinalizeCalcEventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&postFinalizeCalcEventID); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_post_finalize_calc;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'CALC_START',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, postFinalizeCalcEventID, tenantA, runID, payPeriodID, postFinalizeCalcEventID, initiatorID)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_post_finalize_calc;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected CALC_START to fail after finalize")
+	}
+	if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_RUN_FINALIZED_READONLY" {
+		fatalf("expected pg error message=STAFFING_PAYROLL_RUN_FINALIZED_READONLY, got ok=%v message=%q err=%v", ok, msg, err)
+	}
+
+	var postFinalizeFinalizeEventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&postFinalizeFinalizeEventID); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_post_finalize_finalize;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'FINALIZE',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, postFinalizeFinalizeEventID, tenantA, runID, payPeriodID, postFinalizeFinalizeEventID, initiatorID)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_post_finalize_finalize;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected FINALIZE to fail after finalize")
+	}
+	if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_RUN_FINALIZED_READONLY" {
+		fatalf("expected pg error message=STAFFING_PAYROLL_RUN_FINALIZED_READONLY, got ok=%v message=%q err=%v", ok, msg, err)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		fatal(err)
 	}
@@ -404,6 +732,13 @@ func staffingSmoke(args []string) {
 	}
 	if crossCount != 0 {
 		fatalf("expected position_versions count=0 under tenant B, got %d", crossCount)
+	}
+
+	if err := tx2.QueryRow(ctx, `SELECT count(*) FROM staffing.pay_periods;`).Scan(&crossCount); err != nil {
+		fatal(err)
+	}
+	if crossCount != 0 {
+		fatalf("expected pay_periods count=0 under tenant B, got %d", crossCount)
 	}
 	if err := tx2.Commit(ctx); err != nil {
 		fatal(err)
