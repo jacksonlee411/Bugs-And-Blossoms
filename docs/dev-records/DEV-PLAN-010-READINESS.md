@@ -282,3 +282,27 @@ DB 闭环（迁移 + smoke）：
 - 本地验证：
   - `make staffing plan && make staffing lint && make staffing migrate up`
   - `make sqlc-generate` 后 `git status --short` 为空
+
+证据（Milestone 4：Server Store + handlers）：
+- 日期：2026-01-08
+- 合并记录：PR #85 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/85
+- 产出：
+  - Server：`internal/server/payroll.go`、`internal/server/payroll_handlers.go`
+  - Tests：`internal/server/payroll_store_test.go`、`internal/server/payroll_handlers_test.go`
+- 本地验证：
+  - `go fmt ./... && go vet ./... && make check lint && make test`
+- CI（Quality Gates）：PR #85 4/4 全绿
+
+证据（Milestone 5：Routing/Authz + 路由接入）：
+- 日期：2026-01-08
+- 合并记录：PR #86 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/86
+- 产出：
+  - Routing allowlist：`config/routing/allowlist.yaml`
+  - Authz registry/route map：`pkg/authz/registry.go`、`internal/server/authz_middleware.go`
+  - Authz policy SSOT：`config/access/policies/00-bootstrap.csv`（生成：`config/access/policy.csv`、`config/access/policy.csv.rev`）
+  - Server route wiring（UI + internal API）：`internal/server/handler.go`
+- 本地验证：
+  - `go fmt ./... && go vet ./... && make check lint && make test`
+  - `make check routing`
+  - `make authz-pack && make authz-test && make authz-lint`
+- CI（Quality Gates）：PR #86 4/4 全绿
