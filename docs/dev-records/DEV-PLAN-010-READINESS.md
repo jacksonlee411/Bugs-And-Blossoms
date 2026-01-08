@@ -214,6 +214,7 @@ DB 闭环（迁移 + smoke）：
 
 证据：
 - 日期：2026-01-08
+- 合并记录：PR #66 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/66
 - 运行模式：`RLS_ENFORCE=enforce`（运行态 DB role 非 superuser 且 `NOBYPASSRLS`）
 - DB 闭环（迁移 + smoke；fail-closed/隔离/tenant mismatch）：
   - `make iam migrate up`（含 `cmd/dbtool rls-smoke`）

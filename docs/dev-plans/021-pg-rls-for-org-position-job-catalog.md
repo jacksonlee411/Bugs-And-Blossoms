@@ -1,6 +1,6 @@
 # DEV-PLAN-021：启用 PostgreSQL RLS 强租户隔离（Org/Position/Job Catalog）
 
-**状态**: 已完成（2026-01-08 02:45 UTC）
+**状态**: 已完成（2026-01-08 02:45 UTC；PR #66 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/66）
 
 > 本计划聚焦：在 `DEV-PLAN-026/030/029` 的 Kernel 表上 **默认启用 PostgreSQL RLS**，把“租户隔离”从应用层 `WHERE tenant_id=...` 的约定，升级为 DB 层可验证的强制约束；并与 `DEV-PLAN-019/019A` 的 RLS 注入与 DB 角色契约对齐，确保 Greenfield 默认强隔离，不依赖实现期临时补丁。
 
