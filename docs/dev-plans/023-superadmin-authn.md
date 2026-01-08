@@ -1,6 +1,6 @@
 # DEV-PLAN-023：SuperAdmin 控制面认证与会话（与租户登录链路解耦）
 
-**状态**: 草拟中（2026-01-05 08:05 UTC）
+**状态**: 部分完成（Phase 0/1：Tenant Console + sa_sid 已落地；2026-01-08 03:30 UTC）
 
 > 适用范围：**全新实现的新代码仓库（Greenfield）**。  
 > 上游依赖：`DEV-PLAN-019`（租户管理与登录认证总体方案）、`DEV-PLAN-021`（RLS 推进）、`DEV-PLAN-022`（Authz/Casbin 契约）。  
@@ -16,6 +16,7 @@
 - 009M5 PR-0（#58）：冻结 `sa_sid` token 合同（§6.2）与凭据注入口径（§9）。
 - 009M5 PR-1（#60）：新增 `iam.superadmin_principals`/`iam.superadmin_sessions` 数据模型与迁移闭环（token 存 `sha256(sa_sid)`）。
 - 009M5 PR-4（#63）：落地 `/superadmin/login`（Kratos 认人 → 本地 `sa_sid` 会话桥接）与审计主体升级（actor=superadmin_principal_id）。
+- PR（#69）：对齐本文状态与 Phase 0/1 口径（文档收敛，非代码变更）。
 
 Greenfield 将重构租户/认证/RLS，并要求：
 - tenant app：`Host 解析 tenant（fail-closed）→ Kratos 认人 → 本地 session（sid）→ RLS 圈地 → Casbin 管事`（见 `DEV-PLAN-019`）。
@@ -38,8 +39,8 @@ Greenfield 将重构租户/认证/RLS，并要求：
 
 ### 3.1 决策 1：分阶段落地（Phase 0→Phase 1）
 - 选择：
-  - Phase 0（`DEV-PLAN-009M4`）：使用环境级保护/BasicAuth，不引入 `sa_sid` 与 `superadmin_sessions`（避免在 tenant app 尚未具备真实 `sessions`/`principal` 时先造第二套会话系统）。
-  - Phase 1（后续里程碑）：引入独立会话 cookie `sa_sid`（host-only），并落地 `superadmin_sessions`/`superadmin_principals`。
+  - Phase 0（`DEV-PLAN-009M4`）：使用环境级保护/BasicAuth（独立 superadmin 边界 + Tenant Console MVP）。
+  - Phase 1（`DEV-PLAN-009M5`）：引入独立会话 cookie `sa_sid`（host-only），并落地 `superadmin_sessions`/`superadmin_principals`（Kratos 认人 → 本地会话桥接）。
 - 理由：把复杂度与风险按阶段拆开：MVP 先确保“边界隔离 + 审计 + 可回滚”，再引入可用性更强但成本更高的控制面会话。
 
 ### 3.2 决策 2：SuperAdmin 不依赖 Host→tenant 解析
@@ -58,7 +59,7 @@ Greenfield 将重构租户/认证/RLS，并要求：
 
 ### 4.1 组件图（Mermaid）
 
-> 注：下图展示 Phase 1 的目标态（`sa_sid`）；`DEV-PLAN-009M4` 的 Phase 0 将以 BasicAuth 作为控制面入口保护。tenant app cookie 当前实现为 `session`（目标态术语为 `sid`）。
+> 注：下图展示 Phase 1（`sa_sid`）的目标态；`DEV-PLAN-009M4` Phase 0 以 BasicAuth 作为控制面入口保护。tenant app cookie 当前实现为 `sid`。
 
 ```mermaid
 flowchart LR
