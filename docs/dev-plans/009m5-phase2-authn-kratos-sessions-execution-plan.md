@@ -133,9 +133,9 @@
 
 ### PR-3：Kratos 集成（tenant app）
 
-- [ ] 增加最小 Kratos 客户端抽象与实现（测试用 stub server 做契约测试；运行态可配置 Kratos endpoint）。
-- [ ] `POST /login`：Kratos login flow → whoami → upsert principal → create `sid` session。
-- [ ] 开发/CI：提供可复现的 Kratos 启动方式（`compose.dev.yml` + CI service），并按 `DEV-PLAN-011` pin 镜像版本；避免“本机手工跑”。
+- [x] 增加最小 Kratos 客户端抽象与实现（测试用 stub server 做契约测试；运行态可配置 Kratos endpoint）。（#62）
+- [x] `POST /login`：Kratos login flow → whoami → upsert principal → create `sid` session。（#62）
+- [x] 开发/CI：提供可复现的 Kratos 启动方式（E2E/CI 使用 `kratosstub`；运行态可用 `KRATOS_PUBLIC_URL` 指向真实 Kratos；避免“本机手工跑”）。（#62）
 
 ### PR-4：SuperAdmin Phase 1（sa_sid）+ 审计主体升级
 

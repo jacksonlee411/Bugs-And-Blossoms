@@ -15,6 +15,7 @@
 - 009M5 PR-0（#58）：冻结 `sid` 合同（§4.3/§4.5）与 Kratos 测试/拓扑口径（§9）。
 - 009M5 PR-1（#60）：新增 `iam.principals`/`iam.sessions` 数据模型与迁移闭环（token 存 `sha256(sid)`；`sessions` 不启用 RLS）。
 - 009M5 PR-2（#61）：tenant app `sid` 会话与中间件收口（以 DB session 为唯一登录态；跨租户绑定断言 fail-closed；移除占位 `session=ok`）。
+- 009M5 PR-3（#62）：tenant app `/login` 真实接入 Kratos（login flow + whoami）；E2E/CI 引入 `kratosstub` 保证可复现。
 
 ## 1. 现仓库实现总结（作为输入，不做兼容包袱）
 
