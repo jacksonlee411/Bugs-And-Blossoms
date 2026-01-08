@@ -107,7 +107,7 @@
 - 出口条件：
   1. [ ] Greenfield 表的 RLS 注入契约可用（No Tx, No RLS），并有最小 fail-closed 测试（021）。
   2. [ ] Authz 最小闭环：统一 403 契约 + policy SSOT + 可 shadow/enforce（022）。
-  3. [ ] 控制面边界可用（至少 Phase 0/1）：独立 cookie + 显式 bypass pool/role + 审计（023）。
+  3. [X] 控制面边界可用（至少 Phase 0/1）：独立 cookie + 显式 bypass pool/role + 审计（023）。证据：PR #63 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/63 、`docs/dev-records/DEV-PLAN-010-READINESS.md` §14
 
 ### Phase 3：工具链闭环固化（让“schema/生成/门禁”不可漂移）
 - 串行关键路径：`024 => 025 => 012(生成物与门禁收口)`
