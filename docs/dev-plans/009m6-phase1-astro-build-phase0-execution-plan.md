@@ -90,7 +90,7 @@
 
 - [X] `apps/web/package.json` 与 `apps/web/pnpm-lock.yaml` 已提交，且 `packageManager` pin 为 `pnpm@10.24.0`。
 - [X] `internal/server/assets/astro/app.html` 存在，且包含 `#nav`、`#topbar`、`#flash`、`#content` 四个挂载点，并在 `hx-get` 中使用 `as_of=__BB_AS_OF__`（对齐 `DEV-PLAN-018` §4.4/§4.5）。
-- [ ] `make css` 可在本地与 CI 生成/更新 `internal/server/assets/astro/**`，并保证 `git status --porcelain` 为空。
+- [X] `make css` 可在本地与 CI 生成/更新 `internal/server/assets/astro/**`，并保证 `git status --porcelain` 为空。
 
 ### 4.2 Server 行为
 
@@ -134,10 +134,10 @@
 
 ### PR-3：CI Gate-1 补齐 UI build（阻断生成物漂移）
 
-- [ ] 更新 `.github/workflows/quality-gates.yml`：
+- [X] 更新 `.github/workflows/quality-gates.yml`：
   - Code Quality & Formatting job 命中 UI 变更时安装 Node（setup-node）并执行 `make css`；
   - 仍保留 `assert-clean` 作为生成物一致性门禁。
-- [ ] 调整 paths-filter 的 UI 触发器口径：`ui` 至少覆盖 `apps/web/**` 与 `internal/server/assets/astro/**`（防止手改产物绕过 build）；不扩大到无关 generated 目录导致误触发。
+- [X] 调整 paths-filter 的 UI 触发器口径：`ui` 至少覆盖 `apps/web/**` 与 `internal/server/assets/astro/**`（防止手改产物绕过 build）；不扩大到无关 generated 目录导致误触发。
 
 ### PR-4：Go Server 切换为 Astro Shell（移除 Go 拼接壳）
 
