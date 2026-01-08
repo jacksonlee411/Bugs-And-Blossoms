@@ -1,6 +1,6 @@
 # DEV-PLAN-009M6：Phase 1 追加里程碑执行计划（补齐 DEV-PLAN-018 Phase 0：Astro build + go:embed Shell）
 
-**状态**: 执行中（2026-01-08 10:24 UTC）
+**状态**: 已完成（2026-01-08 12:24 UTC）
 
 > 本文是 `DEV-PLAN-009` 的执行计划补充（里程碑拆解）。由于当前仓库的 UI Shell 仍主要由 Go handler 拼接输出，而 `DEV-PLAN-018` 已冻结“Shell=Astro build 产物 + go:embed + HTMX 装配动态上下文”的合同，本里程碑用于**补齐/收敛**到 `DEV-PLAN-018` 的 Phase 0（最小可运行）要求，并同步把 `Makefile`/CI 门禁从 placeholder 收口为可阻断漂移的真实入口。
 >
@@ -153,9 +153,9 @@
 
 ### PR-6：Readiness 证据登记与文档收口
 
-- [ ] 更新 `docs/dev-records/DEV-PLAN-010-READINESS.md`：新增 009M6 证据（时间戳/命令/结果/PR）。
-- [ ] 更新 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`：Phase 0 勾选完成并将状态更新为“已完成（UTC 时间戳）”。
-- [ ] 更新 `docs/dev-plans/009-implementation-roadmap.md`：在 UI Shell 相关条目处补充“已按 Astro build Phase 0 收口”的证据链接（不改合同，只补证据）。
+- [X] 更新 `docs/dev-records/DEV-PLAN-010-READINESS.md`：新增 009M6 证据（时间戳/命令/结果/PR）。
+- [X] 更新 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`：Phase 0 勾选完成并将状态更新为“已完成（UTC 时间戳）”。
+- [X] 更新 `docs/dev-plans/009-implementation-roadmap.md`：在 UI Shell 相关条目处补充“已按 Astro build Phase 0 收口”的证据链接（不改合同，只补证据）。
 
 ## 6. 本地验证（SSOT 引用）
 

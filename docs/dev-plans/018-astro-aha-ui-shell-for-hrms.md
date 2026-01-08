@@ -1,6 +1,6 @@
 # DEV-PLAN-018：引入 Astro（AHA Stack）到 HTMX + Alpine 的 HRMS UI 方案（026-031）
 
-**状态**: 执行中（Phase 0：Astro build + go:embed Shell，2026-01-08 10:24 UTC）
+**状态**: 已完成（Phase 0：Astro build + go:embed Shell，2026-01-08 12:24 UTC）
 
 ## 1. 背景与上下文 (Context)
 
