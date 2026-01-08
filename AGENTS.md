@@ -153,7 +153,14 @@ modules/{module}/
 - DEV-PLAN-004 记录：全仓去除版本标记——映射表（草案）：`docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`
 - DEV-PLAN-004 记录：全仓去除版本标记——执行日志：`docs/dev-records/dev-plan-004-execution-log.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
+- DEV-PLAN-039：薪酬社保实施路线图（040→041+）：`docs/dev-plans/039-payroll-social-insurance-implementation-roadmap.md`
 - DEV-PLAN-040：薪酬社保模块设计蓝图：`docs/dev-plans/040-payroll-social-insurance-module-design-blueprint.md`
+- DEV-PLAN-041：Payroll P0-1——薪资周期与算薪批次（Pay Period & Payroll Run）：`docs/dev-plans/041-payroll-p0-slice-pay-period-and-payroll-run.md`
+- DEV-PLAN-042：Payroll P0-2——工资条与工资项（Payslip & Pay Items，Gross Pay）：`docs/dev-plans/042-payroll-p0-slice-payslip-and-pay-items.md`
+- DEV-PLAN-043：Payroll P0-3——社保政策（单城市）配置与扣缴计算：`docs/dev-plans/043-payroll-p0-slice-social-insurance-policy-and-calculation.md`
+- DEV-PLAN-044：Payroll P0-4——个税累计预扣法（IIT）与 YTD Balances：`docs/dev-plans/044-payroll-p0-slice-iit-cumulative-withholding-and-balances.md`
+- DEV-PLAN-045：Payroll P0-5——回溯计算（Retroactive Accounting）：`docs/dev-plans/045-payroll-p0-slice-retroactive-accounting.md`
+- DEV-PLAN-046：Payroll P0-6——税后发放（仅个税）的 Tax Gross-up（公司承担税金成本）：`docs/dev-plans/046-payroll-p0-slice-net-guaranteed-iit-tax-gross-up.md`
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 - Org（事务性事件溯源 + 同步投射）：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
