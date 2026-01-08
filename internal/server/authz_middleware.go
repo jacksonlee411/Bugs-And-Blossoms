@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
@@ -117,6 +118,16 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 }
 
 func authzRequirementForRoute(method string, path string) (object string, action string, ok bool) {
+	if strings.HasPrefix(path, "/org/payroll-runs/") {
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayrollRuns, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayrollRuns, authz.ActionAdmin, true
+		}
+		return "", "", false
+	}
+
 	switch path {
 	case "/login":
 		if method == http.MethodGet {
@@ -187,6 +198,38 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		if method == http.MethodPost {
 			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/payroll-periods":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayrollPeriods, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayrollPeriods, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/payroll-periods":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayrollPeriods, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayrollPeriods, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/payroll-runs":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayrollRuns, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayrollRuns, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/payroll-runs":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayrollRuns, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayrollRuns, authz.ActionAdmin, true
 		}
 		return "", "", false
 	case "/person/persons":

@@ -35,6 +35,7 @@ type HandlerOptions struct {
 	PersonStore      PersonStore
 	PositionStore    PositionStore
 	AssignmentStore  AssignmentStore
+	PayrollStore     PayrollStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -64,6 +65,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	personStore := opts.PersonStore
 	positionStore := opts.PositionStore
 	assignmentStore := opts.AssignmentStore
+	payrollStore := opts.PayrollStore
 	tenancyResolver := opts.TenancyResolver
 	identityProvider := opts.IdentityProvider
 
@@ -108,7 +110,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		}
 	}
 
-	if positionStore == nil || assignmentStore == nil {
+	if positionStore == nil || assignmentStore == nil || payrollStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
 			s := newStaffingPGStore(pgStore.pool)
 			if positionStore == nil {
@@ -116,6 +118,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			}
 			if assignmentStore == nil {
 				assignmentStore = s
+			}
+			if payrollStore == nil {
+				payrollStore = s
 			}
 		} else {
 			s := newStaffingMemoryStore()
@@ -248,6 +253,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			`<li><a href="/org/setid?as_of=`+asOf+`" hx-get="/org/setid?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_setid")+`</a></li>`+
 			`<li><a href="/org/job-catalog?as_of=`+asOf+`" hx-get="/org/job-catalog?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_jobcatalog")+`</a></li>`+
 			`<li><a href="/org/positions?as_of=`+asOf+`" hx-get="/org/positions?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
+			`<li><a href="/org/payroll-periods?as_of=`+asOf+`" hx-get="/org/payroll-periods?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_payroll")+`</a></li>`+
 			`<li><a href="/person/persons?as_of=`+asOf+`" hx-get="/person/persons?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_person")+`</a></li>`+
 			`</ul>`)
 	}))
@@ -306,6 +312,27 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssignments(w, r, positionStore, assignmentStore, personStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-periods", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollPeriods(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/payroll-periods", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollPeriods(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-runs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRuns(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/payroll-runs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRuns(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-runs/{run_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRunDetail(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/payroll-runs/{run_id}/calculate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRunCalculate(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/payroll-runs/{run_id}/finalize", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRunFinalize(w, r, payrollStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePositionsAPI(w, r, positionStore)
 	}))
@@ -317,6 +344,18 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssignmentsAPI(w, r, assignmentStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payroll-periods", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollPeriodsAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/payroll-periods", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollPeriodsAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payroll-runs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRunsAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/payroll-runs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRunsAPI(w, r, payrollStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/person/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePersons(w, r, personStore)
@@ -455,6 +494,7 @@ func renderNav(r *http.Request, asOf string) string {
 		`<li><a href="/org/setid?as_of=` + asOf + `" hx-get="/org/setid?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_setid") + `</a></li>` +
 		`<li><a href="/org/job-catalog?as_of=` + asOf + `" hx-get="/org/job-catalog?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
 		`<li><a href="/org/positions?as_of=` + asOf + `" hx-get="/org/positions?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
+		`<li><a href="/org/payroll-periods?as_of=` + asOf + `" hx-get="/org/payroll-periods?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_payroll") + `</a></li>` +
 		`<li><a href="/person/persons?as_of=` + asOf + `" hx-get="/person/persons?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
 		`</ul></nav>`
 }
@@ -531,6 +571,8 @@ func tr(lang string, key string) string {
 			return "职位分类"
 		case "nav_staffing":
 			return "用工任职"
+		case "nav_payroll":
+			return "薪酬"
 		case "nav_person":
 			return "人员"
 		case "as_of":
@@ -549,6 +591,8 @@ func tr(lang string, key string) string {
 		return "Job Catalog"
 	case "nav_staffing":
 		return "Staffing"
+	case "nav_payroll":
+		return "Payroll"
 	case "nav_person":
 		return "Person"
 	case "as_of":
