@@ -306,3 +306,17 @@ DB 闭环（迁移 + smoke）：
   - `make check routing`
   - `make authz-pack && make authz-test && make authz-lint`
 - CI（Quality Gates）：PR #86 4/4 全绿
+
+证据（Milestone 6：Tests（状态机/幂等/RLS fail-closed））：
+- 日期：2026-01-08
+- 合并记录：PR #89 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/89
+- 产出：
+  - Kernel（幂等修复）：`modules/staffing/infrastructure/persistence/schema/00005_staffing_payroll_engine.sql`
+  - 迁移：`migrations/staffing/20260108180000_staffing_payroll_run_event_idempotency.sql` + `migrations/staffing/atlas.sum`
+  - DB Smoke：`cmd/dbtool/main.go`（`staffing-smoke` 覆盖 overlap/invalid transition/finalized readonly/idempotent finalize/RLS）
+  - sqlc 生成物：`internal/sqlc/schema.sql`
+- 本地验证：
+  - Go：`go fmt ./... && go vet ./... && make check lint && make test`
+  - DB：`make staffing plan && make staffing lint && make staffing migrate up`（含 `cmd/dbtool staffing-smoke`）
+  - `make sqlc-generate` 后 `git status --short` 为空
+- CI（Quality Gates）：PR #89 4/4 全绿（E2E 路径包含 `make staffing migrate up`，并运行扩展后的 `staffing-smoke`）
