@@ -1,6 +1,6 @@
 # DEV-PLAN-009M6：Phase 1 追加里程碑执行计划（补齐 DEV-PLAN-018 Phase 0：Astro build + go:embed Shell）
 
-**状态**: 规划中（2026-01-08 07:24 UTC）
+**状态**: 执行中（2026-01-08 10:24 UTC）
 
 > 本文是 `DEV-PLAN-009` 的执行计划补充（里程碑拆解）。由于当前仓库的 UI Shell 仍主要由 Go handler 拼接输出，而 `DEV-PLAN-018` 已冻结“Shell=Astro build 产物 + go:embed + HTMX 装配动态上下文”的合同，本里程碑用于**补齐/收敛**到 `DEV-PLAN-018` 的 Phase 0（最小可运行）要求，并同步把 `Makefile`/CI 门禁从 placeholder 收口为可阻断漂移的真实入口。
 >
@@ -110,9 +110,9 @@
 
 ### PR-0：合同回填与实施口径冻结（文档优先）
 
-- [ ] 在 `DEV-PLAN-018` 明确 Shell 的“产物映射 + 占位符注入”契约（`apps/web/dist/*` → `internal/server/assets/astro/**`、token `__BB_AS_OF__`、注入点/失败行为），避免实现期临时发明。
-- [ ] 在 `DEV-PLAN-011` 落定 Astro 基线版本（以 `apps/web/pnpm-lock.yaml` 进入主干为准），并明确 Node/pnpm 的 SSOT 与对齐方式。
-- [ ] 在 `DEV-PLAN-012` 补齐 UI Gate 的“必须执行项”与触发器说明（命中 `ui` 时 Gate-1 必须跑 `make css`；触发器需覆盖 `apps/web/**` 与 go:embed 产物目录）。
+- [X] 在 `DEV-PLAN-018` 明确 Shell 的“产物映射 + 占位符注入”契约（`apps/web/dist/*` → `internal/server/assets/astro/**`、token `__BB_AS_OF__`、注入点/失败行为），避免实现期临时发明。
+- [X] 在 `DEV-PLAN-011` 落定 Astro 基线版本（以 `apps/web/pnpm-lock.yaml` 进入主干为准），并明确 Node/pnpm 的 SSOT 与对齐方式。
+- [X] 在 `DEV-PLAN-012` 补齐 UI Gate 的“必须执行项”与触发器说明（命中 `ui` 时 Gate-1 必须跑 `make css`；触发器需覆盖 `apps/web/**` 与 go:embed 产物目录）。
 
 ### PR-1：初始化 `apps/web` Astro 工程（SSOT 落盘）
 
