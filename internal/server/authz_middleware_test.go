@@ -254,6 +254,24 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-daily-results"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-time-profile"); !ok || obj != authz.ObjectStaffingAttendanceTimeProfile || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-time-profile"); !ok || obj != authz.ObjectStaffingAttendanceTimeProfile || act != authz.ActionAdmin {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/attendance-time-profile"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-holiday-calendar"); !ok || obj != authz.ObjectStaffingAttendanceHolidayCalendar || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-holiday-calendar"); !ok || obj != authz.ObjectStaffingAttendanceHolidayCalendar || act != authz.ActionAdmin {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/attendance-holiday-calendar"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-daily-results/person-101/2026-01-01"); !ok || obj != authz.ObjectStaffingAttendanceDailyResults || act != authz.ActionRead {
 		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
 	}

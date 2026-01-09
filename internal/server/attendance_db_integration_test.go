@@ -713,6 +713,7 @@ func ensureAttendanceDailyResultsSchemaForTest(ctx context.Context, conn *pgx.Co
 	}
 
 	ddl := []string{
+		`CREATE EXTENSION IF NOT EXISTS btree_gist;`,
 		`
 CREATE TABLE IF NOT EXISTS staffing.daily_attendance_results (
   tenant_id uuid NOT NULL,
