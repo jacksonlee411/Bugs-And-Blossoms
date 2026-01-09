@@ -375,6 +375,15 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/payroll-social-insurance-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollSocialInsurancePolicies(w, r, payrollStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-recalc-requests", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRecalcRequests(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-recalc-requests/{recalc_request_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRecalcRequestDetail(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/payroll-recalc-requests/{recalc_request_id}/apply", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRecalcRequestApply(w, r, payrollStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePositionsAPI(w, r, positionStore)
 	}))
@@ -425,6 +434,15 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/payroll-social-insurance-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollSocialInsurancePoliciesAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payroll-recalc-requests", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRecalcRequestsAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payroll-recalc-requests/{recalc_request_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRecalcRequestAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/payroll-recalc-requests/{recalc_request_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollRecalcRequestAPI(w, r, payrollStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/person/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePersons(w, r, personStore)
@@ -726,12 +744,26 @@ func writeContent(w http.ResponseWriter, _ *http.Request, bodyHTML string) {
 	_, _ = w.Write([]byte(bodyHTML))
 }
 
+func writeContentWithStatus(w http.ResponseWriter, _ *http.Request, status int, bodyHTML string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(bodyHTML))
+}
+
 func writePage(w http.ResponseWriter, r *http.Request, bodyHTML string) {
 	if isHX(r) {
 		writeContent(w, r, bodyHTML)
 		return
 	}
 	writeShell(w, r, bodyHTML)
+}
+
+func writePageWithStatus(w http.ResponseWriter, r *http.Request, status int, bodyHTML string) {
+	if isHX(r) {
+		writeContentWithStatus(w, r, status, bodyHTML)
+		return
+	}
+	writeShellWithStatus(w, r, status, bodyHTML)
 }
 
 const astroShellPath = "assets/astro/app.html"

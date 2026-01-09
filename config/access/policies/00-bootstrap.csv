@@ -19,6 +19,8 @@ p, role:tenant-admin, *, staffing.payroll-periods, read
 p, role:tenant-admin, *, staffing.payroll-periods, admin
 p, role:tenant-admin, *, staffing.payroll-runs, read
 p, role:tenant-admin, *, staffing.payroll-runs, admin
+p, role:tenant-admin, *, staffing.payroll-recalc-requests, read
+p, role:tenant-admin, *, staffing.payroll-recalc-requests, admin
 p, role:tenant-admin, *, staffing.payslips, read
 p, role:tenant-admin, *, staffing.payslips, admin
 p, role:tenant-admin, *, staffing.payroll-social-insurance-policies, read

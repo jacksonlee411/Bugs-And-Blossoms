@@ -89,6 +89,15 @@ entrypoints:
       - path: /org/payroll-social-insurance-policies
         methods: [GET, POST]
         route_class: ui
+      - path: /org/payroll-recalc-requests
+        methods: [GET]
+        route_class: ui
+      - path: /org/payroll-recalc-requests/{recalc_request_id}
+        methods: [GET]
+        route_class: ui
+      - path: /org/payroll-recalc-requests/{recalc_request_id}/apply
+        methods: [POST]
+        route_class: ui
       - path: /person/persons
         methods: [GET, POST]
         route_class: ui
@@ -123,6 +132,12 @@ entrypoints:
         methods: [POST]
         route_class: internal_api
       - path: /org/api/payroll-social-insurance-policies
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /org/api/payroll-recalc-requests
+        methods: [GET]
+        route_class: internal_api
+      - path: /org/api/payroll-recalc-requests/{recalc_request_id}
         methods: [GET, POST]
         route_class: internal_api
       - path: /org/api/payslips

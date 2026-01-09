@@ -350,6 +350,42 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/payroll-social-insurance-policies"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-recalc-requests"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-recalc-requests"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-recalc-requests/rr1"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-recalc-requests/rr1"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-recalc-requests/rr1/apply"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionAdmin {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/payroll-recalc-requests/rr1/apply"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payroll-recalc-requests"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payroll-recalc-requests"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payroll-recalc-requests/rr1"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/payroll-recalc-requests/rr1"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionAdmin {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/payroll-recalc-requests/rr1:apply"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs/run1"); !ok {
 		t.Fatal("expected ok=true")
 	}

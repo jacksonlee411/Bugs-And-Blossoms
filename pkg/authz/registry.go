@@ -27,6 +27,7 @@ const (
 	ObjectStaffingAssignments            = "staffing.assignments"
 	ObjectStaffingPayrollPeriods         = "staffing.payroll-periods"
 	ObjectStaffingPayrollRuns            = "staffing.payroll-runs"
+	ObjectStaffingPayrollRecalcRequests  = "staffing.payroll-recalc-requests"
 	ObjectStaffingPayslips               = "staffing.payslips"
 
 	ObjectStaffingPayrollSocialInsurancePolicies = "staffing.payroll-social-insurance-policies"
