@@ -1401,6 +1401,125 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION staffing.recompute_time_bank_cycle(
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_work_date date
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_cycle_type text := 'MONTH';
+  v_cycle_start date;
+  v_cycle_end date;
+
+  v_ruleset_version text := 'TIME_BANK_V1';
+
+  v_worked_total int := 0;
+  v_ot_150 int := 0;
+  v_ot_200 int := 0;
+  v_ot_300 int := 0;
+  v_comp_earned int := 0;
+  v_comp_used int := 0;
+
+  v_input_max_id bigint := NULL;
+  v_input_max_punch_time timestamptz := NULL;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_work_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'work_date is required';
+  END IF;
+
+  v_cycle_start := date_trunc('month', p_work_date)::date;
+  v_cycle_end := ((date_trunc('month', p_work_date) + interval '1 month')::date - 1);
+
+  PERFORM pg_advisory_xact_lock(
+    hashtext(p_tenant_id::text),
+    hashtext(p_person_uuid::text || ':' || v_cycle_type || ':' || v_cycle_start::text)
+  );
+
+  SELECT
+    COALESCE(sum(worked_minutes), 0)::int,
+    COALESCE(sum(overtime_minutes_150), 0)::int,
+    COALESCE(sum(overtime_minutes_200), 0)::int,
+    COALESCE(sum(overtime_minutes_300), 0)::int,
+    COALESCE(sum(CASE WHEN day_type = 'RESTDAY' THEN overtime_minutes_200 ELSE 0 END), 0)::int,
+    COALESCE(max(input_max_punch_event_db_id), NULL),
+    COALESCE(max(input_max_punch_time), NULL)
+  INTO
+    v_worked_total,
+    v_ot_150,
+    v_ot_200,
+    v_ot_300,
+    v_comp_earned,
+    v_input_max_id,
+    v_input_max_punch_time
+  FROM staffing.daily_attendance_results
+  WHERE tenant_id = p_tenant_id
+    AND person_uuid = p_person_uuid
+    AND work_date >= v_cycle_start
+    AND work_date <= v_cycle_end;
+
+  INSERT INTO staffing.time_bank_cycles (
+    tenant_id,
+    person_uuid,
+    cycle_type,
+    cycle_start_date,
+    cycle_end_date,
+    ruleset_version,
+    worked_minutes_total,
+    overtime_minutes_150,
+    overtime_minutes_200,
+    overtime_minutes_300,
+    comp_earned_minutes,
+    comp_used_minutes,
+    input_max_punch_event_db_id,
+    input_max_punch_time,
+    computed_at,
+    created_at,
+    updated_at
+  )
+  VALUES (
+    p_tenant_id,
+    p_person_uuid,
+    v_cycle_type,
+    v_cycle_start,
+    v_cycle_end,
+    v_ruleset_version,
+    v_worked_total,
+    v_ot_150,
+    v_ot_200,
+    v_ot_300,
+    v_comp_earned,
+    v_comp_used,
+    v_input_max_id,
+    v_input_max_punch_time,
+    now(),
+    now(),
+    now()
+  )
+  ON CONFLICT (tenant_id, person_uuid, cycle_type, cycle_start_date)
+  DO UPDATE SET
+    cycle_end_date = EXCLUDED.cycle_end_date,
+    ruleset_version = EXCLUDED.ruleset_version,
+    worked_minutes_total = EXCLUDED.worked_minutes_total,
+    overtime_minutes_150 = EXCLUDED.overtime_minutes_150,
+    overtime_minutes_200 = EXCLUDED.overtime_minutes_200,
+    overtime_minutes_300 = EXCLUDED.overtime_minutes_300,
+    comp_earned_minutes = EXCLUDED.comp_earned_minutes,
+    comp_used_minutes = EXCLUDED.comp_used_minutes,
+    input_max_punch_event_db_id = EXCLUDED.input_max_punch_event_db_id,
+    input_max_punch_time = EXCLUDED.input_max_punch_time,
+    computed_at = EXCLUDED.computed_at,
+    updated_at = EXCLUDED.updated_at;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION staffing.recompute_daily_attendance_result(
   p_tenant_id uuid,
   p_person_uuid uuid,
@@ -1726,6 +1845,8 @@ BEGIN
     holiday_day_last_event_id = EXCLUDED.holiday_day_last_event_id,
     computed_at = EXCLUDED.computed_at,
     updated_at = EXCLUDED.updated_at;
+
+  PERFORM staffing.recompute_time_bank_cycle(p_tenant_id, p_person_uuid, p_work_date);
 END;
 $$;
 

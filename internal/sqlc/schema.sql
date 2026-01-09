@@ -2486,6 +2486,50 @@ CREATE TABLE IF NOT EXISTS staffing.daily_attendance_results (
 CREATE INDEX IF NOT EXISTS daily_attendance_results_lookup_idx
   ON staffing.daily_attendance_results (tenant_id, person_uuid, work_date DESC);
 
+CREATE TABLE IF NOT EXISTS staffing.time_bank_cycles (
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  cycle_type text NOT NULL,
+  cycle_start_date date NOT NULL,
+  cycle_end_date date NOT NULL,
+
+  ruleset_version text NOT NULL,
+
+  worked_minutes_total int NOT NULL DEFAULT 0,
+  overtime_minutes_150 int NOT NULL DEFAULT 0,
+  overtime_minutes_200 int NOT NULL DEFAULT 0,
+  overtime_minutes_300 int NOT NULL DEFAULT 0,
+
+  comp_earned_minutes int NOT NULL DEFAULT 0,
+  comp_used_minutes int NOT NULL DEFAULT 0,
+
+  input_max_punch_event_db_id bigint NULL,
+  input_max_punch_time timestamptz NULL,
+
+  computed_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+
+  PRIMARY KEY (tenant_id, person_uuid, cycle_type, cycle_start_date),
+
+  CONSTRAINT time_bank_cycles_cycle_type_check
+    CHECK (cycle_type IN ('MONTH')),
+  CONSTRAINT time_bank_cycles_cycle_bounds_check
+    CHECK (cycle_end_date >= cycle_start_date),
+  CONSTRAINT time_bank_cycles_minutes_nonneg_check
+    CHECK (
+      worked_minutes_total >= 0
+      AND overtime_minutes_150 >= 0
+      AND overtime_minutes_200 >= 0
+      AND overtime_minutes_300 >= 0
+      AND comp_earned_minutes >= 0
+      AND comp_used_minutes >= 0
+    )
+);
+
+CREATE INDEX IF NOT EXISTS time_bank_cycles_lookup_idx
+  ON staffing.time_bank_cycles (tenant_id, person_uuid, cycle_start_date DESC);
+
 CREATE TABLE IF NOT EXISTS staffing.time_profile_events (
   id bigserial PRIMARY KEY,
   event_id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -2632,6 +2676,13 @@ ALTER TABLE staffing.daily_attendance_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.daily_attendance_results FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.daily_attendance_results;
 CREATE POLICY tenant_isolation ON staffing.daily_attendance_results
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.time_bank_cycles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.time_bank_cycles FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.time_bank_cycles;
+CREATE POLICY tenant_isolation ON staffing.time_bank_cycles
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
@@ -4069,6 +4120,125 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION staffing.recompute_time_bank_cycle(
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_work_date date
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_cycle_type text := 'MONTH';
+  v_cycle_start date;
+  v_cycle_end date;
+
+  v_ruleset_version text := 'TIME_BANK_V1';
+
+  v_worked_total int := 0;
+  v_ot_150 int := 0;
+  v_ot_200 int := 0;
+  v_ot_300 int := 0;
+  v_comp_earned int := 0;
+  v_comp_used int := 0;
+
+  v_input_max_id bigint := NULL;
+  v_input_max_punch_time timestamptz := NULL;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_work_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'work_date is required';
+  END IF;
+
+  v_cycle_start := date_trunc('month', p_work_date)::date;
+  v_cycle_end := ((date_trunc('month', p_work_date) + interval '1 month')::date - 1);
+
+  PERFORM pg_advisory_xact_lock(
+    hashtext(p_tenant_id::text),
+    hashtext(p_person_uuid::text || ':' || v_cycle_type || ':' || v_cycle_start::text)
+  );
+
+  SELECT
+    COALESCE(sum(worked_minutes), 0)::int,
+    COALESCE(sum(overtime_minutes_150), 0)::int,
+    COALESCE(sum(overtime_minutes_200), 0)::int,
+    COALESCE(sum(overtime_minutes_300), 0)::int,
+    COALESCE(sum(CASE WHEN day_type = 'RESTDAY' THEN overtime_minutes_200 ELSE 0 END), 0)::int,
+    COALESCE(max(input_max_punch_event_db_id), NULL),
+    COALESCE(max(input_max_punch_time), NULL)
+  INTO
+    v_worked_total,
+    v_ot_150,
+    v_ot_200,
+    v_ot_300,
+    v_comp_earned,
+    v_input_max_id,
+    v_input_max_punch_time
+  FROM staffing.daily_attendance_results
+  WHERE tenant_id = p_tenant_id
+    AND person_uuid = p_person_uuid
+    AND work_date >= v_cycle_start
+    AND work_date <= v_cycle_end;
+
+  INSERT INTO staffing.time_bank_cycles (
+    tenant_id,
+    person_uuid,
+    cycle_type,
+    cycle_start_date,
+    cycle_end_date,
+    ruleset_version,
+    worked_minutes_total,
+    overtime_minutes_150,
+    overtime_minutes_200,
+    overtime_minutes_300,
+    comp_earned_minutes,
+    comp_used_minutes,
+    input_max_punch_event_db_id,
+    input_max_punch_time,
+    computed_at,
+    created_at,
+    updated_at
+  )
+  VALUES (
+    p_tenant_id,
+    p_person_uuid,
+    v_cycle_type,
+    v_cycle_start,
+    v_cycle_end,
+    v_ruleset_version,
+    v_worked_total,
+    v_ot_150,
+    v_ot_200,
+    v_ot_300,
+    v_comp_earned,
+    v_comp_used,
+    v_input_max_id,
+    v_input_max_punch_time,
+    now(),
+    now(),
+    now()
+  )
+  ON CONFLICT (tenant_id, person_uuid, cycle_type, cycle_start_date)
+  DO UPDATE SET
+    cycle_end_date = EXCLUDED.cycle_end_date,
+    ruleset_version = EXCLUDED.ruleset_version,
+    worked_minutes_total = EXCLUDED.worked_minutes_total,
+    overtime_minutes_150 = EXCLUDED.overtime_minutes_150,
+    overtime_minutes_200 = EXCLUDED.overtime_minutes_200,
+    overtime_minutes_300 = EXCLUDED.overtime_minutes_300,
+    comp_earned_minutes = EXCLUDED.comp_earned_minutes,
+    comp_used_minutes = EXCLUDED.comp_used_minutes,
+    input_max_punch_event_db_id = EXCLUDED.input_max_punch_event_db_id,
+    input_max_punch_time = EXCLUDED.input_max_punch_time,
+    computed_at = EXCLUDED.computed_at,
+    updated_at = EXCLUDED.updated_at;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION staffing.recompute_daily_attendance_result(
   p_tenant_id uuid,
   p_person_uuid uuid,
@@ -4394,6 +4564,8 @@ BEGIN
     holiday_day_last_event_id = EXCLUDED.holiday_day_last_event_id,
     computed_at = EXCLUDED.computed_at,
     updated_at = EXCLUDED.updated_at;
+
+  PERFORM staffing.recompute_time_bank_cycle(p_tenant_id, p_person_uuid, p_work_date);
 END;
 $$;
 
