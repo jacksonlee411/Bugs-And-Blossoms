@@ -40,6 +40,7 @@
 - 不在 P0 交付批量回溯全员/全年度的自动重算调度；P0 先以“按人员/按请求”可执行为准。
 - 不在 P0 支持跨税年（tax_year）回溯结转（例如 2025-12 的差额结转到 2026-01）：若触发命中跨年，必须失败并返回稳定错误码（后续另立 dev-plan 承接）。
 - 不在 P0 支持“已计算但未定稿 run”上的就地注入并自动修补 IIT：P0 要求 Target run 处于 `draft/failed`，由用户显式重新计算（对齐 `DEV-PLAN-041` 状态机与“定稿只读”语义）。
+- 不在 P0 支持“按 Origin period 的社保政策/基数”重算并结转社保差额；社保扣缴仍按 Target period 的正常计算链路处理（等价将回溯差额视为 Target period 的收入/扣减参与扣缴口径）。
 
 ### 0.3 工具链与门禁（SSOT 引用）
 
@@ -69,7 +70,7 @@
 - **幂等**：回溯请求创建与“执行结转”动作必须幂等（同一触发事件不得产生多个请求；同一请求不得被重复结转）。
 - **No Tx, No RLS**：缺少 tenant context 直接失败（fail-closed）；回溯链路不得绕过 RLS。
 - **失败可见**：任何无法定位命中周期/无法生成结转差额/无目标 run/跨税年等情况必须失败并返回稳定错误码（不得静默吞掉回溯请求）。
-- **税额避免双计**：P0 禁止把“历史期 IIT 差额”作为独立 adjustment pay item 结转；应仅结转“非 IIT 的差额 pay items”，并由 `DEV-PLAN-044` 的累计预扣引擎在 Target period 自动计算并追缴/抵扣税额（避免双计）。
+- **税额避免双计**：P0 禁止把 `item_code='DEDUCTION_IIT_WITHHOLDING'` 的差额作为 adjustment 结转；应仅结转“非 IIT 的差额 pay items”，并由 `DEV-PLAN-044` 的累计预扣引擎在 Target period 自动计算并追缴/抵扣税额（避免双计）。
 
 ### 0.5 验收标准（Done 口径）
 
@@ -101,10 +102,10 @@
 
 - `staffing.payslip_items`（由 `DEV-PLAN-042` 承接落地）：必须以“明细子表”表达工资项，至少包含：
   - 键：`tenant_id`、`payslip_id`
-  - 维度：`item_type`（`earning|deduction|employer_cost`）、`item_code`（trim 后非空）
-  - 金额：`amount numeric(15,2)`、`currency char(3)`
+  - 维度：`item_kind`（`earning|deduction|employer_cost`）、`item_code`（trim 后非空且大写）
+  - 金额：`amount numeric(15,2)`（P0 币种冻结为 `CNY`；币种在 `staffing.payslips.currency`）
   - 约束：`meta jsonb` 必须为 object；不得用 JSONB array 承载权威明细（对齐 `DEV-PLAN-040`）。
-- IIT 明细 pay item code（由 `DEV-PLAN-044` 承接冻结）：P0 固定为 `item_type='deduction'` + `item_code='DEDUCTION_IIT'`；`DEV-PLAN-045` 在结转时以此识别并跳过 IIT 差额（避免双计）。
+- IIT 明细 pay item code（由 `DEV-PLAN-044` 承接冻结）：P0 固定为 `item_kind='deduction'` + `item_code='DEDUCTION_IIT_WITHHOLDING'`；`DEV-PLAN-045` 在结转时以此识别并跳过 IIT 差额（避免双计）。
 
 ## 2. 目标与非目标（Goals & Non-Goals）
 
@@ -239,17 +240,16 @@ CREATE TABLE IF NOT EXISTS staffing.payroll_adjustments (
   assignment_id uuid NOT NULL,
   origin_pay_period_id uuid NOT NULL,
   origin_run_id uuid NOT NULL,
-  origin_payslip_id uuid NOT NULL,
-  item_type text NOT NULL,
+  origin_payslip_id uuid NULL,
+  item_kind text NOT NULL,
   item_code text NOT NULL,
-  currency char(3) NOT NULL DEFAULT 'CNY',
   amount numeric(15,2) NOT NULL,
   meta jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT payroll_adjustments_item_type_check CHECK (item_type IN ('earning','deduction','employer_cost')),
+  CONSTRAINT payroll_adjustments_item_kind_check CHECK (item_kind IN ('earning','deduction','employer_cost')),
   CONSTRAINT payroll_adjustments_item_code_nonempty_check CHECK (btrim(item_code) <> ''),
   CONSTRAINT payroll_adjustments_item_code_trim_check CHECK (item_code = btrim(item_code)),
-  CONSTRAINT payroll_adjustments_currency_check CHECK (currency = btrim(currency) AND currency = upper(currency)),
+  CONSTRAINT payroll_adjustments_item_code_upper_check CHECK (item_code = upper(item_code)),
   CONSTRAINT payroll_adjustments_meta_is_object_check CHECK (jsonb_typeof(meta) = 'object'),
   CONSTRAINT payroll_adjustments_request_fk FOREIGN KEY (tenant_id, recalc_request_id) REFERENCES staffing.payroll_recalc_requests(tenant_id, recalc_request_id) ON DELETE RESTRICT,
   CONSTRAINT payroll_adjustments_target_run_fk FOREIGN KEY (tenant_id, target_run_id) REFERENCES staffing.payroll_runs(tenant_id, id) ON DELETE RESTRICT,
@@ -264,7 +264,7 @@ CREATE TABLE IF NOT EXISTS staffing.payroll_adjustments (
     person_uuid,
     assignment_id,
     origin_pay_period_id,
-    item_type,
+    item_kind,
     item_code
   )
 );
@@ -282,9 +282,9 @@ CREATE INDEX IF NOT EXISTS payroll_adjustments_origin_lookup_idx
 
 ### 4.4 迁移策略（按 `DEV-PLAN-024`）
 
-- **Schema SSOT**：建议新增
-  - `modules/staffing/infrastructure/persistence/schema/00006_staffing_payroll_recalc_tables.sql`
-  - `modules/staffing/infrastructure/persistence/schema/00007_staffing_payroll_recalc_engine.sql`
+- **Schema SSOT**：建议新增（文件名可调整，避免与现有序列冲突）
+  - `modules/staffing/infrastructure/persistence/schema/00011_staffing_payroll_recalc_tables.sql`
+  - `modules/staffing/infrastructure/persistence/schema/00012_staffing_payroll_recalc_engine.sql`
 - **生成迁移**：在 `migrations/staffing/` 生成对应 goose 迁移文件，并更新 `migrations/staffing/atlas.sum`；必须保证 `make staffing plan` 最终输出 No Changes。
 
 ## 5. 接口契约（API Contracts）
@@ -404,7 +404,7 @@ SELECT staffing.submit_payroll_recalc_apply_event(
 
 #### 6.3.3 计算“需要回溯的 Origin 集合”（冻结）
 
-在同一 `person_uuid+assignment_id` 下，取所有已定稿 payslips：
+在同一 `person_uuid+assignment_id` 下，取所有“已定稿 pay periods（及其 finalized run）”作为 Origin 集合；对每个 Origin period 尝试定位 payslip（若不存在则视为 original=0）：
 
 - 满足 `upper(origin_period) > effective_date`
 - 且 `lower(origin_period) < lower(target_period)`（必须结转到后续周期）
@@ -416,26 +416,28 @@ SELECT staffing.submit_payroll_recalc_apply_event(
 
 对每个 Origin period：
 
-1. **读取原始结果（original）**：从 `payslip_items` 聚合为 map（key=`item_type + item_code`，value=`amount`）。
+1. **读取原始结果（original）**：
+   - 若 `origin_payslip_id` 存在：从 `payslip_items` 聚合为 map（key=`item_kind + item_code`，value=`amount`）。
+   - 若 `origin_payslip_id` 不存在：视为 empty map（original=0，补录历史任职场景）。
 2. **读取已结转差额（already_forwarded）**：从 `payroll_adjustments` 聚合：
    - 过滤条件：同 `tenant/person_uuid/assignment_id/origin_pay_period_id`
-   - 且对应 `recalc_request_id` 已存在 application（P0：直接以 adjustments 表为准；因为 adjustments 只会由 application 生成）
+   - 说明：对同一 origin 的 **所有** 历史 application 的 adjustments 求和（作为“已承诺支付”的基线）
 3. **计算基线（as_settled）**：`original + already_forwarded`（逐 key 相加）。
 4. **计算“重算应得（recalculated）”**：
-   - P0 仅重算“非 IIT 项”（gross pay + 社保扣缴/公司成本等），并明确不依赖 `payroll_balances as-of`：
-     - 复用 `DEV-PLAN-042/043` 的“纯计算”输出（使用 *Origin period* 的输入：assignment/policy as-of）。
-     - 不计算 IIT；IIT 仅在 Target period 由 `DEV-PLAN-044` 的累计预扣引擎统一计算（避免双计与 as-of 复杂度）。
+   - P0 仅重算 payslip “工资项明细”（对齐 `DEV-PLAN-042` 的口径），并明确不依赖 `payroll_balances as-of`。
+   - 不计算 IIT；IIT 仅在 Target period 由 `DEV-PLAN-044` 的累计预扣引擎统一计算（避免双计与 as-of 复杂度）。
    - 输出同结构 map（`earning|deduction|employer_cost`），其中 IIT 项必须不存在。
 5. **计算净差额（delta_to_forward）**：`recalculated - as_settled`。
 6. **过滤与落盘**：
-   - 对于 `item_type='deduction' AND item_code='DEDUCTION_IIT'`：**跳过**（P0 禁止结转 IIT 差额，避免双计）。
+   - 对于 `item_kind='deduction' AND item_code='DEDUCTION_IIT_WITHHOLDING'`：**跳过**（P0 禁止结转 IIT 差额，避免双计）。
    - `amount == 0.00` 的项不落盘（避免噪声）。
    - 其余项插入 `staffing.payroll_adjustments`，并写入 `origin_*` 关联与 `meta`（至少包含 `trigger_event_id`）。
 
 #### 6.3.5 与 balances 的一致性（冻结要求）
 
 - `DEV-PLAN-044` 的累计预扣引擎必须把 `payroll_adjustments` 作为 payslip 的明细输入之一：
-  - adjustments 中 `item_type/item_code` 属于“计税收入/专项扣除/公司成本”的，必须按口径进入税基与汇总。
+  - adjustments 中 `item_kind/item_code` 属于“计税收入/专项扣除/公司成本”的，必须按口径进入税基与汇总。
+  - `payslips.gross_pay` 必须包含 `item_kind='earning'` 的 adjustments（否则 `DEV-PLAN-044` 的 `ytd_income`（以 `gross_pay` 计入）将漏计回溯差额）。
   - 最终 `payroll_balances` 的更新仍以 Target run 定稿为事务边界（对齐 `DEV-PLAN-044` §0.4“事务一致性”）。
   
 > P0 说明：由于本切片不显式结转 IIT 差额，且累计预扣法以“税年累计值”校正税额，因此不要求 `payroll_balances` 支持 origin as-of 重算；只要求 Target period 计算时把 adjustments 纳入税基，并在定稿时一致性更新 balances。
