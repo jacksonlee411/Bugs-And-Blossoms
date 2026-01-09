@@ -369,7 +369,7 @@ $$;
 4. [x] sqlc：运行 `make sqlc-generate`，确保生成物提交且 `git status --short` 为空（CI 会在 `paths-filter` 命中 schema 变更时强制执行）。
 5. [x] Go：实现 store（建议 `internal/server/attendance.go`：显式事务 + tenant 注入 + 调 kernel + 查询）；实现 handler（建议 `internal/server/attendance_handlers.go`：UI + internal API）；把入口挂到 `internal/server/handler.go` 的 router 与 nav（并补齐 `tr()` 的 nav 文案）。
 6. [x] 测试：补齐本计划覆盖（见 §9）。
-7. [ ] 证据：按 `docs/dev-records/DEV-PLAN-010-READINESS.md` 口径记录关键门禁执行结果（时间戳/命令/结论）。
+7. [x] 证据：按 `docs/dev-records/DEV-PLAN-010-READINESS.md` 口径记录关键门禁执行结果（时间戳/命令/结论）。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
