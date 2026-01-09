@@ -3,7 +3,7 @@
 **状态**: 规划中（2026-01-08 02:40 UTC）
 
 已完成事项（合并记录）：
-- 阶段 1（§8.2-1）：`iit_special_additional_deduction_claims`（events+projection+RLS）+ 迁移闭环（PR：TBD）
+- 阶段 1（§8.2-1）：`iit_special_additional_deduction_claims`（events+projection+RLS）+ 迁移闭环（PR：#116）
 
 > 上游路线图：`DEV-PLAN-039`  
 > 蓝图合同（范围/不变量/算法基线）：`DEV-PLAN-040`（重点：§3.3、§5.2）  
