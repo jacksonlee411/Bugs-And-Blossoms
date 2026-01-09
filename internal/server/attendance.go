@@ -59,6 +59,29 @@ type DailyAttendanceResultStore interface {
 	ListDailyAttendanceResultsForPerson(ctx context.Context, tenantID string, personUUID string, fromDate string, toDate string, limit int) ([]DailyAttendanceResult, error)
 }
 
+type TimeBankCycle struct {
+	PersonUUID             string     `json:"person_uuid"`
+	CycleType              string     `json:"cycle_type"`
+	CycleStartDate         string     `json:"cycle_start_date"`
+	CycleEndDate           string     `json:"cycle_end_date"`
+	RulesetVersion         string     `json:"ruleset_version"`
+	WorkedMinutesTotal     int        `json:"worked_minutes_total"`
+	OvertimeMinutes150     int        `json:"overtime_minutes_150"`
+	OvertimeMinutes200     int        `json:"overtime_minutes_200"`
+	OvertimeMinutes300     int        `json:"overtime_minutes_300"`
+	CompEarnedMinutes      int        `json:"comp_earned_minutes"`
+	CompUsedMinutes        int        `json:"comp_used_minutes"`
+	InputMaxPunchEventDBID *int64     `json:"input_max_punch_event_db_id"`
+	InputMaxPunchTime      *time.Time `json:"input_max_punch_time"`
+	ComputedAt             time.Time  `json:"computed_at"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+}
+
+type TimeBankCycleStore interface {
+	GetTimeBankCycleForMonth(ctx context.Context, tenantID string, personUUID string, month string) (TimeBankCycle, bool, error)
+}
+
 type submitTimePunchParams struct {
 	EventID          string
 	PersonUUID       string
@@ -641,6 +664,98 @@ LIMIT $5
 	return out, nil
 }
 
+func (s *staffingPGStore) GetTimeBankCycleForMonth(ctx context.Context, tenantID string, personUUID string, month string) (TimeBankCycle, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return TimeBankCycle{}, false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return TimeBankCycle{}, false, err
+	}
+
+	personUUID = strings.TrimSpace(personUUID)
+	if personUUID == "" {
+		return TimeBankCycle{}, false, errors.New("person_uuid is required")
+	}
+
+	month = strings.TrimSpace(month)
+	if month == "" {
+		return TimeBankCycle{}, false, errors.New("month is required")
+	}
+	tm, err := time.Parse("2006-01", month)
+	if err != nil {
+		return TimeBankCycle{}, false, err
+	}
+	cycleStart := time.Date(tm.Year(), tm.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+
+	var out TimeBankCycle
+	var inputMaxPunchEventDBID *int64
+	var inputMaxPunchTime *time.Time
+	err = tx.QueryRow(ctx, `
+SELECT
+  person_uuid::text,
+  cycle_type,
+  cycle_start_date::text,
+  cycle_end_date::text,
+  ruleset_version,
+  worked_minutes_total,
+  overtime_minutes_150,
+  overtime_minutes_200,
+  overtime_minutes_300,
+  comp_earned_minutes,
+  comp_used_minutes,
+  input_max_punch_event_db_id,
+  input_max_punch_time,
+  computed_at,
+  created_at,
+  updated_at
+FROM staffing.time_bank_cycles
+WHERE tenant_id = $1::uuid
+  AND person_uuid = $2::uuid
+  AND cycle_type = 'MONTH'
+  AND cycle_start_date = $3::date
+`, tenantID, personUUID, cycleStart).Scan(
+		&out.PersonUUID,
+		&out.CycleType,
+		&out.CycleStartDate,
+		&out.CycleEndDate,
+		&out.RulesetVersion,
+		&out.WorkedMinutesTotal,
+		&out.OvertimeMinutes150,
+		&out.OvertimeMinutes200,
+		&out.OvertimeMinutes300,
+		&out.CompEarnedMinutes,
+		&out.CompUsedMinutes,
+		&inputMaxPunchEventDBID,
+		&inputMaxPunchTime,
+		&out.ComputedAt,
+		&out.CreatedAt,
+		&out.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return TimeBankCycle{}, false, nil
+		}
+		return TimeBankCycle{}, false, err
+	}
+
+	out.InputMaxPunchEventDBID = inputMaxPunchEventDBID
+	if inputMaxPunchTime != nil {
+		tm := inputMaxPunchTime.UTC()
+		out.InputMaxPunchTime = &tm
+	}
+	out.ComputedAt = out.ComputedAt.UTC()
+	out.CreatedAt = out.CreatedAt.UTC()
+	out.UpdatedAt = out.UpdatedAt.UTC()
+
+	if err := tx.Commit(ctx); err != nil {
+		return TimeBankCycle{}, false, err
+	}
+	return out, true, nil
+}
+
 func isSTAFFING_IDEMPOTENCY_REUSED(err error) bool {
 	if err == nil {
 		return false
@@ -750,6 +865,10 @@ func (s *staffingMemoryStore) GetDailyAttendanceResult(context.Context, string, 
 
 func (s *staffingMemoryStore) ListDailyAttendanceResultsForPerson(context.Context, string, string, string, string, int) ([]DailyAttendanceResult, error) {
 	return nil, nil
+}
+
+func (s *staffingMemoryStore) GetTimeBankCycleForMonth(context.Context, string, string, string) (TimeBankCycle, bool, error) {
+	return TimeBankCycle{}, false, nil
 }
 
 func min(a int, b int) int {

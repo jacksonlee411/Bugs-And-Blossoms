@@ -38,6 +38,7 @@ type HandlerOptions struct {
 	PayrollStore                PayrollStore
 	AttendanceStore             TimePunchStore
 	AttendanceDailyResultsStore DailyAttendanceResultStore
+	AttendanceTimeBankStore     TimeBankCycleStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -70,6 +71,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	payrollStore := opts.PayrollStore
 	attendanceStore := opts.AttendanceStore
 	attendanceDailyResultsStore := opts.AttendanceDailyResultsStore
+	attendanceTimeBankStore := opts.AttendanceTimeBankStore
 	tenancyResolver := opts.TenancyResolver
 	identityProvider := opts.IdentityProvider
 
@@ -114,7 +116,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		}
 	}
 
-	if positionStore == nil || assignmentStore == nil || payrollStore == nil || attendanceStore == nil || attendanceDailyResultsStore == nil {
+	if positionStore == nil || assignmentStore == nil || payrollStore == nil || attendanceStore == nil || attendanceDailyResultsStore == nil || attendanceTimeBankStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
 			s := newStaffingPGStore(pgStore.pool)
 			if positionStore == nil {
@@ -132,6 +134,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			if attendanceDailyResultsStore == nil {
 				attendanceDailyResultsStore = s
 			}
+			if attendanceTimeBankStore == nil {
+				attendanceTimeBankStore = s
+			}
 		} else {
 			s := newStaffingMemoryStore()
 			if positionStore == nil {
@@ -145,6 +150,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			}
 			if attendanceDailyResultsStore == nil {
 				attendanceDailyResultsStore = s
+			}
+			if attendanceTimeBankStore == nil {
+				attendanceTimeBankStore = s
 			}
 		}
 	}
@@ -280,6 +288,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			`<li><a href="/org/positions?as_of=`+asOf+`" hx-get="/org/positions?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
 			`<li><a href="/org/attendance-punches?as_of=`+asOf+`" hx-get="/org/attendance-punches?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance")+`</a></li>`+
 			`<li><a href="/org/attendance-daily-results?as_of=`+asOf+`" hx-get="/org/attendance-daily-results?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_daily_results")+`</a></li>`+
+			`<li><a href="/org/attendance-time-bank?as_of=`+asOf+`" hx-get="/org/attendance-time-bank?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_time_bank")+`</a></li>`+
 			`<li><a href="/org/attendance-time-profile?as_of=`+asOf+`" hx-get="/org/attendance-time-profile?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_time_profile")+`</a></li>`+
 			`<li><a href="/org/attendance-holiday-calendar?as_of=`+asOf+`" hx-get="/org/attendance-holiday-calendar?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_holiday_calendar")+`</a></li>`+
 			`<li><a href="/org/payroll-periods?as_of=`+asOf+`" hx-get="/org/payroll-periods?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_payroll")+`</a></li>`+
@@ -349,6 +358,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-daily-results", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAttendanceDailyResults(w, r, attendanceDailyResultsStore, personStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-time-bank", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceTimeBank(w, r, attendanceTimeBankStore, attendanceDailyResultsStore, personStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-time-profile", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAttendanceTimeProfile(w, r, attendanceConfigStore)
@@ -606,6 +618,7 @@ func renderNav(r *http.Request, asOf string) string {
 		`<li><a href="/org/positions?as_of=` + asOf + `" hx-get="/org/positions?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
 		`<li><a href="/org/attendance-punches?as_of=` + asOf + `" hx-get="/org/attendance-punches?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance") + `</a></li>` +
 		`<li><a href="/org/attendance-daily-results?as_of=` + asOf + `" hx-get="/org/attendance-daily-results?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_daily_results") + `</a></li>` +
+		`<li><a href="/org/attendance-time-bank?as_of=` + asOf + `" hx-get="/org/attendance-time-bank?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_time_bank") + `</a></li>` +
 		`<li><a href="/org/attendance-time-profile?as_of=` + asOf + `" hx-get="/org/attendance-time-profile?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_time_profile") + `</a></li>` +
 		`<li><a href="/org/attendance-holiday-calendar?as_of=` + asOf + `" hx-get="/org/attendance-holiday-calendar?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_holiday_calendar") + `</a></li>` +
 		`<li><a href="/org/payroll-periods?as_of=` + asOf + `" hx-get="/org/payroll-periods?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_payroll") + `</a></li>` +
@@ -689,6 +702,8 @@ func tr(lang string, key string) string {
 			return "考勤 / 打卡"
 		case "nav_attendance_daily_results":
 			return "考勤 / 日结果"
+		case "nav_attendance_time_bank":
+			return "考勤 / 额度与银行"
 		case "nav_attendance_time_profile":
 			return "考勤 / TimeProfile"
 		case "nav_attendance_holiday_calendar":
@@ -717,6 +732,8 @@ func tr(lang string, key string) string {
 		return "Attendance / Punches"
 	case "nav_attendance_daily_results":
 		return "Attendance / Daily Results"
+	case "nav_attendance_time_bank":
+		return "Attendance / Time Bank"
 	case "nav_attendance_time_profile":
 		return "Attendance / TimeProfile"
 	case "nav_attendance_holiday_calendar":
