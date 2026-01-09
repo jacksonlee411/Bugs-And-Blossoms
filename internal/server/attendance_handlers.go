@@ -482,7 +482,7 @@ func shanghaiLocation() *time.Location {
 	return time.FixedZone("Asia/Shanghai", 8*60*60)
 }
 
-func handleAttendanceDailyResultsPlaceholder(w http.ResponseWriter, r *http.Request) {
+func handleAttendanceDailyResults(w http.ResponseWriter, r *http.Request, store DailyAttendanceResultStore, personStore PersonStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -494,20 +494,107 @@ func handleAttendanceDailyResultsPlaceholder(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writePage(w, r, renderAttendanceDailyResultsPlaceholder(tenant, asOf))
+	loc := shanghaiLocation()
+	workDate := strings.TrimSpace(r.URL.Query().Get("work_date"))
+	if workDate == "" {
+		workDate = asOf
+	}
+	if _, err := parseDateInLocation(workDate, loc); err != nil {
+		writePage(w, r, renderAttendanceDailyResults(nil, nil, tenant, asOf, workDate, "work_date 无效: "+err.Error()))
+		return
+	}
+
+	persons, err := personStore.ListPersons(r.Context(), tenant.ID)
+	if err != nil {
+		writePage(w, r, renderAttendanceDailyResults(nil, nil, tenant, asOf, workDate, err.Error()))
+		return
+	}
+
+	results, err := store.ListDailyAttendanceResultsForDate(r.Context(), tenant.ID, workDate, 2000)
+	if err != nil {
+		writePage(w, r, renderAttendanceDailyResults(nil, persons, tenant, asOf, workDate, err.Error()))
+		return
+	}
+
+	writePage(w, r, renderAttendanceDailyResults(results, persons, tenant, asOf, workDate, ""))
 }
 
-func renderAttendanceDailyResultsPlaceholder(tenant Tenant, asOf string) string {
+func renderAttendanceDailyResults(results []DailyAttendanceResult, persons []Person, tenant Tenant, asOf string, workDate string, errMsg string) string {
+	loc := shanghaiLocation()
+
 	var b strings.Builder
 	b.WriteString("<h1>Attendance / Daily Results</h1>")
 	b.WriteString(`<p>Tenant: <code>` + html.EscapeString(tenant.Name) + `</code> (<code>` + html.EscapeString(tenant.ID) + `</code>)</p>`)
 	b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code></p>`)
-	b.WriteString(`<p>(coming soon)</p>`)
+	if errMsg != "" {
+		b.WriteString(`<p style="color:#b00">` + html.EscapeString(errMsg) + `</p>`)
+	}
+
+	b.WriteString(`<h2>Query</h2>`)
+	b.WriteString(`<form method="GET" action="/org/attendance-daily-results" hx-get="/org/attendance-daily-results" hx-target="#content" hx-push-url="true">`)
+	b.WriteString(`<input type="hidden" name="as_of" value="` + html.EscapeString(asOf) + `"/>`)
+	b.WriteString(`<label>Work Date <input type="date" name="work_date" value="` + html.EscapeString(workDate) + `"/></label><br/>`)
+	b.WriteString(`<button type="submit">Query</button>`)
+	b.WriteString(`</form>`)
+
 	b.WriteString(`<p><a href="/org/attendance-punches?as_of=` + url.QueryEscape(asOf) + `" hx-get="/org/attendance-punches?as_of=` + url.QueryEscape(asOf) + `" hx-target="#content" hx-push-url="true">Go to punches</a></p>`)
+
+	b.WriteString(`<h2>Results</h2>`)
+	if workDate == "" {
+		b.WriteString(`<p>(pick a work date)</p>`)
+		return b.String()
+	}
+	if len(results) == 0 {
+		b.WriteString(`<p>(no results)</p>`)
+		return b.String()
+	}
+
+	personByUUID := make(map[string]Person, len(persons))
+	for _, p := range persons {
+		personByUUID[p.UUID] = p
+	}
+
+	b.WriteString(`<table border="1" cellpadding="4" cellspacing="0">`)
+	b.WriteString(`<tr><th>Person</th><th>Status</th><th>Flags</th><th>First In (Beijing)</th><th>Last Out (Beijing)</th><th>Worked (min)</th><th>Late (min)</th><th>Early Leave (min)</th><th>Punches</th><th>Computed At (UTC)</th></tr>`)
+	for _, r := range results {
+		p := personByUUID[r.PersonUUID]
+		personLabel := r.PersonUUID
+		if strings.TrimSpace(p.UUID) != "" {
+			personLabel = p.DisplayName + " (" + p.Pernr + ") / " + p.UUID
+		}
+
+		firstIn := ""
+		if r.FirstInTime != nil {
+			firstIn = r.FirstInTime.In(loc).Format("2006-01-02 15:04")
+		}
+		lastOut := ""
+		if r.LastOutTime != nil {
+			lastOut = r.LastOutTime.In(loc).Format("2006-01-02 15:04")
+		}
+
+		flags := strings.Join(r.Flags, ",")
+		detailHref := "/org/attendance-daily-results/" + url.PathEscape(r.PersonUUID) + "/" + url.PathEscape(r.WorkDate) + "?as_of=" + url.QueryEscape(asOf)
+		detailHX := "/org/attendance-daily-results/" + url.PathEscape(r.PersonUUID) + "/" + url.PathEscape(r.WorkDate) + "?as_of=" + url.QueryEscape(asOf)
+
+		b.WriteString(`<tr>`)
+		b.WriteString(`<td><a href="` + html.EscapeString(detailHref) + `" hx-get="` + html.EscapeString(detailHX) + `" hx-target="#content" hx-push-url="true">` + html.EscapeString(personLabel) + `</a></td>`)
+		b.WriteString(`<td>` + html.EscapeString(r.Status) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(flags) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(firstIn) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(lastOut) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.WorkedMinutes) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.LateMinutes) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.EarlyLeaveMinutes) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.InputPunchCount) + `</td>`)
+		b.WriteString(`<td><code>` + html.EscapeString(r.ComputedAt.UTC().Format(time.RFC3339)) + `</code></td>`)
+		b.WriteString(`</tr>`)
+	}
+	b.WriteString(`</table>`)
+
 	return b.String()
 }
 
-func handleAttendanceDailyResultDetailPlaceholder(w http.ResponseWriter, r *http.Request) {
+func handleAttendanceDailyResultDetail(w http.ResponseWriter, r *http.Request, store DailyAttendanceResultStore, personStore PersonStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -521,14 +608,42 @@ func handleAttendanceDailyResultDetailPlaceholder(w http.ResponseWriter, r *http
 
 	personUUID, workDate, ok := parseAttendanceDailyResultsDetailPath(r.URL.Path)
 	if !ok {
-		writePage(w, r, renderAttendanceDailyResultsDetailPlaceholder(tenant, asOf, "", "", "bad path"))
+		writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, "", "", nil, Person{}, "bad path"))
 		return
 	}
 
-	writePage(w, r, renderAttendanceDailyResultsDetailPlaceholder(tenant, asOf, personUUID, workDate, ""))
+	loc := shanghaiLocation()
+	if _, err := parseDateInLocation(workDate, loc); err != nil {
+		writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, nil, Person{}, "work_date 无效: "+err.Error()))
+		return
+	}
+
+	var person Person
+	if persons, err := personStore.ListPersons(r.Context(), tenant.ID); err == nil {
+		for _, p := range persons {
+			if p.UUID == personUUID {
+				person = p
+				break
+			}
+		}
+	}
+
+	result, found, err := store.GetDailyAttendanceResult(r.Context(), tenant.ID, personUUID, workDate)
+	if err != nil {
+		writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, nil, person, err.Error()))
+		return
+	}
+	if !found {
+		writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, nil, person, "not found"))
+		return
+	}
+
+	writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, &result, person, ""))
 }
 
-func renderAttendanceDailyResultsDetailPlaceholder(tenant Tenant, asOf string, personUUID string, workDate string, errMsg string) string {
+func renderAttendanceDailyResultsDetail(tenant Tenant, asOf string, personUUID string, workDate string, result *DailyAttendanceResult, person Person, errMsg string) string {
+	loc := shanghaiLocation()
+
 	var b strings.Builder
 	b.WriteString("<h1>Attendance / Daily Results / Detail</h1>")
 	b.WriteString(`<p>Tenant: <code>` + html.EscapeString(tenant.Name) + `</code> (<code>` + html.EscapeString(tenant.ID) + `</code>)</p>`)
@@ -537,13 +652,59 @@ func renderAttendanceDailyResultsDetailPlaceholder(tenant Tenant, asOf string, p
 		b.WriteString(`<p style="color:#b00">` + html.EscapeString(errMsg) + `</p>`)
 	}
 	if personUUID != "" {
-		b.WriteString(`<p>Person: <code>` + html.EscapeString(personUUID) + `</code></p>`)
+		if strings.TrimSpace(person.UUID) != "" {
+			b.WriteString(`<p>Person: <code>` + html.EscapeString(person.DisplayName) + `</code> (<code>` + html.EscapeString(person.Pernr) + `</code>) / <code>` + html.EscapeString(person.UUID) + `</code></p>`)
+		} else {
+			b.WriteString(`<p>Person: <code>` + html.EscapeString(personUUID) + `</code></p>`)
+		}
 	}
 	if workDate != "" {
 		b.WriteString(`<p>Work Date: <code>` + html.EscapeString(workDate) + `</code></p>`)
 	}
-	b.WriteString(`<p>(coming soon)</p>`)
-	b.WriteString(`<p><a href="/org/attendance-daily-results?as_of=` + url.QueryEscape(asOf) + `" hx-get="/org/attendance-daily-results?as_of=` + url.QueryEscape(asOf) + `" hx-target="#content" hx-push-url="true">Back to list</a></p>`)
+
+	if result != nil {
+		flags := strings.Join(result.Flags, ",")
+		firstIn := ""
+		if result.FirstInTime != nil {
+			firstIn = result.FirstInTime.In(loc).Format("2006-01-02 15:04")
+		}
+		lastOut := ""
+		if result.LastOutTime != nil {
+			lastOut = result.LastOutTime.In(loc).Format("2006-01-02 15:04")
+		}
+		inputMaxPunchTime := ""
+		if result.InputMaxPunchTime != nil {
+			inputMaxPunchTime = result.InputMaxPunchTime.In(loc).Format("2006-01-02 15:04")
+		}
+		inputMaxPunchEventDBID := ""
+		if result.InputMaxPunchEventDBID != nil {
+			inputMaxPunchEventDBID = strconv.FormatInt(*result.InputMaxPunchEventDBID, 10)
+		}
+
+		b.WriteString(`<h2>Summary</h2>`)
+		b.WriteString(`<ul>`)
+		b.WriteString(`<li>Status: <code>` + html.EscapeString(result.Status) + `</code></li>`)
+		b.WriteString(`<li>Flags: <code>` + html.EscapeString(flags) + `</code></li>`)
+		b.WriteString(`<li>Ruleset: <code>` + html.EscapeString(result.RulesetVersion) + `</code></li>`)
+		b.WriteString(`<li>First In (Beijing): <code>` + html.EscapeString(firstIn) + `</code></li>`)
+		b.WriteString(`<li>Last Out (Beijing): <code>` + html.EscapeString(lastOut) + `</code></li>`)
+		b.WriteString(`<li>Worked Minutes: <code>` + strconv.Itoa(result.WorkedMinutes) + `</code></li>`)
+		b.WriteString(`<li>Late Minutes: <code>` + strconv.Itoa(result.LateMinutes) + `</code></li>`)
+		b.WriteString(`<li>Early Leave Minutes: <code>` + strconv.Itoa(result.EarlyLeaveMinutes) + `</code></li>`)
+		b.WriteString(`<li>Input Punch Count: <code>` + strconv.Itoa(result.InputPunchCount) + `</code></li>`)
+		b.WriteString(`<li>Input Max Punch Event DB ID: <code>` + html.EscapeString(inputMaxPunchEventDBID) + `</code></li>`)
+		b.WriteString(`<li>Input Max Punch Time (Beijing): <code>` + html.EscapeString(inputMaxPunchTime) + `</code></li>`)
+		b.WriteString(`<li>Computed At (UTC): <code>` + html.EscapeString(result.ComputedAt.UTC().Format(time.RFC3339)) + `</code></li>`)
+		b.WriteString(`</ul>`)
+	}
+
+	backHref := "/org/attendance-daily-results?as_of=" + url.QueryEscape(asOf)
+	backHX := "/org/attendance-daily-results?as_of=" + url.QueryEscape(asOf)
+	if workDate != "" {
+		backHref += "&work_date=" + url.QueryEscape(workDate)
+		backHX += "&work_date=" + url.QueryEscape(workDate)
+	}
+	b.WriteString(`<p><a href="` + html.EscapeString(backHref) + `" hx-get="` + html.EscapeString(backHX) + `" hx-target="#content" hx-push-url="true">Back to list</a></p>`)
 	return b.String()
 }
 
@@ -563,6 +724,95 @@ func parseAttendanceDailyResultsDetailPath(path string) (personUUID string, work
 	return personUUID, workDate, true
 }
 
-func handleAttendanceDailyResultsAPIPlaceholder(w http.ResponseWriter, r *http.Request) {
-	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotImplemented, "not_implemented", "not implemented")
+type attendanceDailyResultsAPIResponse struct {
+	PersonUUID string                  `json:"person_uuid"`
+	FromDate   string                  `json:"from_date"`
+	ToDate     string                  `json:"to_date"`
+	Results    []DailyAttendanceResult `json:"results"`
+}
+
+func handleAttendanceDailyResultsAPI(w http.ResponseWriter, r *http.Request, store DailyAttendanceResultStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	if _, ok := currentPrincipal(r.Context()); !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_missing", "principal missing")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		loc := shanghaiLocation()
+
+		personUUID := strings.TrimSpace(r.URL.Query().Get("person_uuid"))
+		if personUUID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_person_uuid", "person_uuid is required")
+			return
+		}
+
+		fromDate := strings.TrimSpace(r.URL.Query().Get("from_date"))
+		toDate := strings.TrimSpace(r.URL.Query().Get("to_date"))
+		if fromDate == "" && toDate == "" {
+			fromDate = currentUTCDateString()
+			toDate = fromDate
+		}
+		if fromDate == "" {
+			fromDate = toDate
+		}
+		if toDate == "" {
+			toDate = fromDate
+		}
+
+		fromMid, err := parseDateInLocation(fromDate, loc)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_from_date", "invalid from_date")
+			return
+		}
+		toMid, err := parseDateInLocation(toDate, loc)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_to_date", "invalid to_date")
+			return
+		}
+		if toMid.Before(fromMid) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_date_range", "to_date must be >= from_date")
+			return
+		}
+
+		limit := 2000
+		if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_limit", "invalid limit")
+				return
+			}
+			limit = n
+		}
+		if limit < 1 {
+			limit = 1
+		}
+		if limit > 2000 {
+			limit = 2000
+		}
+
+		results, err := store.ListDailyAttendanceResultsForPerson(r.Context(), tenant.ID, personUUID, fromDate, toDate, limit)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "list_failed", "list failed")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(attendanceDailyResultsAPIResponse{
+			PersonUUID: personUUID,
+			FromDate:   fromDate,
+			ToDate:     toDate,
+			Results:    results,
+		})
+		return
+	default:
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
 }
