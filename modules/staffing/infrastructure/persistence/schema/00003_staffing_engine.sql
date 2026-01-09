@@ -770,3 +770,120 @@ BEGIN
   RETURN v_event_db_id;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION staffing.submit_time_punch_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_punch_time timestamptz,
+  p_punch_type text,
+  p_source_provider text,
+  p_payload jsonb,
+  p_source_raw_payload jsonb,
+  p_device_info jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_event_db_id bigint;
+  v_existing staffing.time_punch_events%ROWTYPE;
+  v_payload jsonb;
+  v_source_raw jsonb;
+  v_device jsonb;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_event_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  END IF;
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_punch_time IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'punch_time is required';
+  END IF;
+  IF p_punch_type NOT IN ('IN','OUT') THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unsupported punch_type: %s', p_punch_type);
+  END IF;
+  IF p_source_provider NOT IN ('MANUAL','IMPORT') THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unsupported source_provider: %s', p_source_provider);
+  END IF;
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  END IF;
+  IF p_initiator_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  END IF;
+
+  v_payload := COALESCE(p_payload, '{}'::jsonb);
+  v_source_raw := COALESCE(p_source_raw_payload, '{}'::jsonb);
+  v_device := COALESCE(p_device_info, '{}'::jsonb);
+  IF jsonb_typeof(v_payload) <> 'object' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'payload must be an object';
+  END IF;
+  IF jsonb_typeof(v_source_raw) <> 'object' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'source_raw_payload must be an object';
+  END IF;
+  IF jsonb_typeof(v_device) <> 'object' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'device_info must be an object';
+  END IF;
+
+  INSERT INTO staffing.time_punch_events (
+    event_id,
+    tenant_id,
+    person_uuid,
+    punch_time,
+    punch_type,
+    source_provider,
+    payload,
+    source_raw_payload,
+    device_info,
+    request_id,
+    initiator_id
+  )
+  VALUES (
+    p_event_id,
+    p_tenant_id,
+    p_person_uuid,
+    p_punch_time,
+    p_punch_type,
+    p_source_provider,
+    v_payload,
+    v_source_raw,
+    v_device,
+    p_request_id,
+    p_initiator_id
+  )
+  ON CONFLICT (event_id) DO NOTHING
+  RETURNING id INTO v_event_db_id;
+
+  IF v_event_db_id IS NULL THEN
+    SELECT * INTO v_existing
+    FROM staffing.time_punch_events
+    WHERE event_id = p_event_id;
+
+    IF v_existing.tenant_id <> p_tenant_id
+      OR v_existing.person_uuid <> p_person_uuid
+      OR v_existing.punch_time <> p_punch_time
+      OR v_existing.punch_type <> p_punch_type
+      OR v_existing.source_provider <> p_source_provider
+      OR v_existing.payload <> v_payload
+      OR v_existing.source_raw_payload <> v_source_raw
+      OR v_existing.device_info <> v_device
+      OR v_existing.request_id <> p_request_id
+      OR v_existing.initiator_id <> p_initiator_id
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+    END IF;
+
+    RETURN v_existing.id;
+  END IF;
+
+  RETURN v_event_db_id;
+END;
+$$;
