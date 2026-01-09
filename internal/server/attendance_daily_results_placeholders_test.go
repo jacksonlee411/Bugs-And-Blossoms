@@ -386,7 +386,7 @@ func TestAttendanceDailyResultsHandlers_Coverage(t *testing.T) {
 
 		ctx := withTenant(t.Context(), tenant)
 		ctx = withPrincipal(ctx, Principal{ID: "i1", TenantID: tenant.ID, RoleSlug: "tenant-admin", Status: "active"})
-		req := httptest.NewRequest(http.MethodGet, "/org/api/attendance-daily-results?person_uuid=p1&to_date=BAD", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/attendance-daily-results?person_uuid=p1&from_date=2026-01-01&to_date=BAD", nil).WithContext(ctx)
 		rec := httptest.NewRecorder()
 		handleAttendanceDailyResultsAPI(rec, req, store)
 		if rec.Code != http.StatusBadRequest {

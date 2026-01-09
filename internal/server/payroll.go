@@ -68,6 +68,53 @@ type PayslipDetail struct {
 	SocialInsuranceEmployerTotal string                       `json:"social_insurance_employer_total"`
 }
 
+type PayrollBalances struct {
+	TenantID           string `json:"tenant_id"`
+	PersonUUID         string `json:"person_uuid"`
+	TaxYear            int    `json:"tax_year"`
+	FirstTaxMonth      int    `json:"first_tax_month"`
+	LastTaxMonth       int    `json:"last_tax_month"`
+	YTDIncome          string `json:"ytd_income"`
+	YTDSpecialDeduct   string `json:"ytd_special_deduction"`
+	YTDStandardDeduct  string `json:"ytd_standard_deduction"`
+	YTDTaxableIncome   string `json:"ytd_taxable_income"`
+	YTDIITTaxLiability string `json:"ytd_iit_tax_liability"`
+	YTDIITWithheld     string `json:"ytd_iit_withheld"`
+	YTDIITCredit       string `json:"ytd_iit_credit"`
+}
+
+type PayrollIITSADUpsertInput struct {
+	EventID     string `json:"event_id"`
+	PersonUUID  string `json:"person_uuid"`
+	TaxYear     int    `json:"tax_year"`
+	TaxMonth    int    `json:"tax_month"`
+	Amount      string `json:"amount"`
+	RequestID   string `json:"request_id"`
+	RequestIDIn string `json:"-"`
+}
+
+type PayrollIITSADUpsertResult struct {
+	EventID    string `json:"event_id"`
+	PersonUUID string `json:"person_uuid"`
+	TaxYear    int    `json:"tax_year"`
+	TaxMonth   int    `json:"tax_month"`
+	Amount     string `json:"amount"`
+	RequestID  string `json:"request_id"`
+}
+
+type badRequestError struct {
+	msg string
+}
+
+func (e *badRequestError) Error() string { return e.msg }
+
+func newBadRequestError(msg string) error { return &badRequestError{msg: msg} }
+
+func isBadRequestError(err error) bool {
+	var badReq *badRequestError
+	return errors.As(err, &badReq) && badReq != nil
+}
+
 type PayrollStore interface {
 	ListPayPeriods(ctx context.Context, tenantID string, payGroup string) ([]PayPeriod, error)
 	CreatePayPeriod(ctx context.Context, tenantID string, payGroup string, startDate string, endDateExclusive string) (PayPeriod, error)
@@ -80,6 +127,9 @@ type PayrollStore interface {
 
 	ListPayslips(ctx context.Context, tenantID string, runID string) ([]Payslip, error)
 	GetPayslip(ctx context.Context, tenantID string, payslipID string) (PayslipDetail, error)
+
+	GetPayrollBalances(ctx context.Context, tenantID string, personUUID string, taxYear int) (PayrollBalances, error)
+	UpsertPayrollIITSAD(ctx context.Context, tenantID string, in PayrollIITSADUpsertInput) (PayrollIITSADUpsertResult, error)
 
 	ListSocialInsurancePolicyVersions(ctx context.Context, tenantID string, asOfDate string) ([]SocialInsurancePolicyVersion, error)
 	UpsertSocialInsurancePolicyVersion(ctx context.Context, tenantID string, in SocialInsurancePolicyUpsertInput) (SocialInsurancePolicyUpsertResult, error)
@@ -1036,6 +1086,135 @@ SELECT EXISTS (
 	}, nil
 }
 
+func (s *staffingPGStore) GetPayrollBalances(ctx context.Context, tenantID string, personUUID string, taxYear int) (PayrollBalances, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return PayrollBalances{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return PayrollBalances{}, err
+	}
+
+	personUUID = strings.TrimSpace(personUUID)
+	if personUUID == "" {
+		return PayrollBalances{}, newBadRequestError("person_uuid is required")
+	}
+	if taxYear < 2000 || taxYear > 9999 {
+		return PayrollBalances{}, newBadRequestError("tax_year out of range")
+	}
+
+	var out PayrollBalances
+	if err := tx.QueryRow(ctx, `
+	SELECT
+	  tenant_id::text,
+	  person_uuid::text,
+	  tax_year,
+	  first_tax_month,
+	  last_tax_month,
+	  ytd_income::text,
+	  ytd_special_deduction::text,
+	  ytd_standard_deduction::text,
+	  ytd_taxable_income::text,
+	  ytd_iit_tax_liability::text,
+	  ytd_iit_withheld::text,
+	  ytd_iit_credit::text
+	FROM staffing.payroll_balances
+	WHERE tenant_id = $1::uuid
+	  AND tax_entity_id = $1::uuid
+	  AND person_uuid = $2::uuid
+	  AND tax_year = $3::int
+	`, tenantID, personUUID, taxYear).Scan(
+		&out.TenantID,
+		&out.PersonUUID,
+		&out.TaxYear,
+		&out.FirstTaxMonth,
+		&out.LastTaxMonth,
+		&out.YTDIncome,
+		&out.YTDSpecialDeduct,
+		&out.YTDStandardDeduct,
+		&out.YTDTaxableIncome,
+		&out.YTDIITTaxLiability,
+		&out.YTDIITWithheld,
+		&out.YTDIITCredit,
+	); err != nil {
+		return PayrollBalances{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return PayrollBalances{}, err
+	}
+	return out, nil
+}
+
+func (s *staffingPGStore) UpsertPayrollIITSAD(ctx context.Context, tenantID string, in PayrollIITSADUpsertInput) (PayrollIITSADUpsertResult, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return PayrollIITSADUpsertResult{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return PayrollIITSADUpsertResult{}, err
+	}
+
+	in.EventID = strings.TrimSpace(in.EventID)
+	in.PersonUUID = strings.TrimSpace(in.PersonUUID)
+	in.Amount = strings.TrimSpace(in.Amount)
+	in.RequestIDIn = strings.TrimSpace(in.RequestID)
+
+	if in.EventID == "" {
+		return PayrollIITSADUpsertResult{}, newBadRequestError("event_id is required")
+	}
+	if in.PersonUUID == "" {
+		return PayrollIITSADUpsertResult{}, newBadRequestError("person_uuid is required")
+	}
+	if in.TaxYear < 2000 || in.TaxYear > 9999 {
+		return PayrollIITSADUpsertResult{}, newBadRequestError("tax_year out of range")
+	}
+	if in.TaxMonth < 1 || in.TaxMonth > 12 {
+		return PayrollIITSADUpsertResult{}, newBadRequestError("tax_month out of range")
+	}
+	if in.Amount == "" {
+		return PayrollIITSADUpsertResult{}, newBadRequestError("amount is required")
+	}
+	if in.RequestIDIn == "" {
+		in.RequestIDIn = in.EventID
+	}
+
+	var eventDBID int64
+	if err := tx.QueryRow(ctx, `
+	SELECT staffing.submit_iit_special_additional_deduction_claim_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::uuid,
+	  $4::int,
+	  $5::smallint,
+	  $6::numeric,
+	  $7::text,
+	  $8::uuid
+	);
+	`, in.EventID, tenantID, in.PersonUUID, in.TaxYear, in.TaxMonth, in.Amount, in.RequestIDIn, tenantID).Scan(&eventDBID); err != nil {
+		return PayrollIITSADUpsertResult{}, err
+	}
+	if eventDBID <= 0 {
+		return PayrollIITSADUpsertResult{}, errors.New("unexpected event_db_id")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return PayrollIITSADUpsertResult{}, err
+	}
+	return PayrollIITSADUpsertResult{
+		EventID:    in.EventID,
+		PersonUUID: in.PersonUUID,
+		TaxYear:    in.TaxYear,
+		TaxMonth:   in.TaxMonth,
+		Amount:     in.Amount,
+		RequestID:  in.RequestIDIn,
+	}, nil
+}
+
 func pgErrorMessage(err error) string {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr != nil {
@@ -1045,6 +1224,23 @@ func pgErrorMessage(err error) string {
 		}
 	}
 	return "UNKNOWN"
+}
+
+func pgErrorCode(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr != nil {
+		return strings.TrimSpace(pgErr.Code)
+	}
+	return ""
+}
+
+func isPgInvalidInput(err error) bool {
+	switch pgErrorCode(err) {
+	case "22P02", "22003", "22007", "22008":
+		return true
+	default:
+		return false
+	}
 }
 
 type pgRows interface {

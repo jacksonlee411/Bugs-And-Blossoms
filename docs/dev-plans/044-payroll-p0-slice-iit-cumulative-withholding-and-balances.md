@@ -1,6 +1,6 @@
 # DEV-PLAN-044：Payroll P0-4——个税累计预扣法（IIT）与 YTD Balances
 
-**状态**: 规划中（2026-01-08 02:40 UTC）
+**状态**: 已完成（2026-01-09）
 
 已完成事项（合并记录）：
 - 阶段 1（§8.2-1）：`iit_special_additional_deduction_claims`（events+projection+RLS）+ 迁移闭环（PR：#116）
@@ -8,6 +8,7 @@
 - 阶段 3（§8.2-3）：迁移闭环确认（`make staffing plan/lint` No Drift）（PR：#120）
 - 阶段 4（§8.2-4）：Go IIT 引擎（纯函数）+ 单元测试（PR：#121）
 - 阶段 5（§8.2-5）：集成 CALC/FINALIZE（Kernel + balances posting + 一致性校验）（PR：#129）
+- 阶段 6（§8.2-6）：UI 工资条展示 IIT 明细项与税后实发 + internal API（SAD 输入载体）（PR：#134）
 
 > 上游路线图：`DEV-PLAN-039`  
 > 蓝图合同（范围/不变量/算法基线）：`DEV-PLAN-040`（重点：§3.3、§5.2）  
@@ -512,7 +513,7 @@ SELECT staffing.submit_iit_special_additional_deduction_claim_event(
 3. [x] 迁移闭环：`migrations/staffing/*` + `atlas.sum`（`make staffing plan` No Changes）。
 4. [x] Go：IIT 引擎（纯函数）+ 单元测试（含留抵）。
 5. [x] 集成：CALC 写 IIT 明细项；FINALIZE Posting 推进 balances（含一致性校验）。
-6. [ ] UI：工资条展示 IIT 明细项与税后实发（可对账）。
+6. [x] UI：工资条展示 IIT 明细项与税后实发（可对账）。
 
 ## 9. 测试与验收（Acceptance Criteria）
 
