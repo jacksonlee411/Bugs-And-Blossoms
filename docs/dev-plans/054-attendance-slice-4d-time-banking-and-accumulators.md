@@ -1,6 +1,6 @@
 # DEV-PLAN-054：考勤 Slice 4D——额度与银行闭环（调休/综合工时累加器）
 
-**状态**: 草拟中（2026-01-09 23:50 UTC）
+**状态**: 草拟中（2026-01-09 23:56 UTC）
 
 > 目标：按 `docs/dev-plans/001-technical-design-template.md` 补齐到“无需再做设计决策即可开工”的细化程度（Level 4-5）。
 
@@ -373,7 +373,7 @@ PERFORM staffing.recompute_time_bank_cycle(p_tenant_id, p_person_uuid, p_work_da
 
 1. [x] 文档确认：确认本切片只支持 `MONTH`，且调休累积口径固定为“RESTDAY OT200 → comp earned（1:1）”。
 2. [x] DB：按 §4.1/§4.2 落地 `time_bank_cycles` + kernel 函数 + 联动调用（落迁移前需手工确认新增表）。
-3. [ ] sqlc：运行 `make sqlc-generate` 并确保 `git status --short` 为空（更新 schema.sql）。
+3. [x] sqlc：运行 `make sqlc-generate` 并确保 `git status --short` 为空（更新 schema.sql）。
 4. [ ] Routing/Authz：新增 `/org/attendance-time-bank` 路由 + allowlist + authz registry/middleware + bootstrap policy。
 5. [ ] Go：实现读 store（tx + tenant 注入）与 handler，挂到 nav（en/zh 文字同构 `internal/server/handler.go` 的 `tr(...)`）。
 6. [ ] 测试：覆盖聚合口径与联动更新；RLS/Authz 负例；并发锁行为（可用并发提交 2 个不同日期 punches 来验证最终累计不丢失）。
