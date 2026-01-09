@@ -9,6 +9,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type stubPayrollStore struct {
@@ -38,6 +41,12 @@ type stubPayrollStore struct {
 
 	getPayslipErr error
 	getPayslipOut PayslipDetail
+
+	getBalancesErr error
+	getBalancesOut PayrollBalances
+
+	upsertIITSADErr error
+	upsertIITSADOut PayrollIITSADUpsertResult
 
 	listSIVersionsErr error
 	listSIVersionsOut []SocialInsurancePolicyVersion
@@ -101,6 +110,20 @@ func (s stubPayrollStore) GetPayslip(_ context.Context, _ string, _ string) (Pay
 		return PayslipDetail{}, s.getPayslipErr
 	}
 	return s.getPayslipOut, nil
+}
+
+func (s stubPayrollStore) GetPayrollBalances(_ context.Context, _ string, _ string, _ int) (PayrollBalances, error) {
+	if s.getBalancesErr != nil {
+		return PayrollBalances{}, s.getBalancesErr
+	}
+	return s.getBalancesOut, nil
+}
+
+func (s stubPayrollStore) UpsertPayrollIITSAD(_ context.Context, _ string, _ PayrollIITSADUpsertInput) (PayrollIITSADUpsertResult, error) {
+	if s.upsertIITSADErr != nil {
+		return PayrollIITSADUpsertResult{}, s.upsertIITSADErr
+	}
+	return s.upsertIITSADOut, nil
 }
 
 func (s stubPayrollStore) ListSocialInsurancePolicyVersions(_ context.Context, _ string, _ string) ([]SocialInsurancePolicyVersion, error) {
@@ -707,6 +730,226 @@ func TestHandlePayslips(t *testing.T) {
 		}
 		if !strings.Contains(rec.Body.String(), "ps1") {
 			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+}
+
+func TestHandlePayrollBalancesAPI(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-balances?person_uuid=p1&tax_year=2026", nil)
+		handlePayrollBalancesAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-balances?person_uuid=p1&tax_year=2026", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollBalancesAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("missing person_uuid", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-balances?tax_year=2026", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollBalancesAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("missing tax_year", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-balances?person_uuid=p1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollBalancesAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("invalid tax_year", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-balances?person_uuid=p1&tax_year=bad", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollBalancesAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("tax_year out of range", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-balances?person_uuid=p1&tax_year=1999", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollBalancesAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-balances?person_uuid=p1&tax_year=2026", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollBalancesAPI(rec, req, stubPayrollStore{getBalancesErr: pgx.ErrNoRows})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("get error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-balances?person_uuid=p1&tax_year=2026", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollBalancesAPI(rec, req, stubPayrollStore{getBalancesErr: errors.New("get")})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("bad request (store validation)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-balances?person_uuid=p1&tax_year=2026", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollBalancesAPI(rec, req, stubPayrollStore{getBalancesErr: newBadRequestError("bad")})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("bad request (pg invalid input)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-balances?person_uuid=p1&tax_year=2026", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollBalancesAPI(rec, req, stubPayrollStore{getBalancesErr: &pgconn.PgError{Code: "22P02", Message: "invalid input syntax"}})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-balances?person_uuid=p1&tax_year=2026", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollBalancesAPI(rec, req, stubPayrollStore{
+			getBalancesOut: PayrollBalances{TenantID: "t1", PersonUUID: "p1", TaxYear: 2026, FirstTaxMonth: 1, LastTaxMonth: 2},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), `"tax_year":2026`) {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+}
+
+func TestHandlePayrollIITSADAPI(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-iit-special-additional-deductions", strings.NewReader(`{"event_id":"e1"}`))
+		handlePayrollIITSADAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-iit-special-additional-deductions", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollIITSADAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("bad json", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-iit-special-additional-deductions", strings.NewReader("{"))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollIITSADAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("idempotency reused", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-iit-special-additional-deductions", strings.NewReader(`{"event_id":"e1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollIITSADAPI(rec, req, stubPayrollStore{upsertIITSADErr: &pgconn.PgError{Message: "STAFFING_IDEMPOTENCY_REUSED"}})
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "STAFFING_IDEMPOTENCY_REUSED") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("month finalized", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-iit-special-additional-deductions", strings.NewReader(`{"event_id":"e1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollIITSADAPI(rec, req, stubPayrollStore{upsertIITSADErr: &pgconn.PgError{Message: "STAFFING_IIT_SAD_CLAIM_MONTH_FINALIZED"}})
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("bad request", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-iit-special-additional-deductions", strings.NewReader(`{"event_id":"e1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollIITSADAPI(rec, req, stubPayrollStore{upsertIITSADErr: newBadRequestError("bad")})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "bad") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("internal error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-iit-special-additional-deductions", strings.NewReader(`{"event_id":"e1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollIITSADAPI(rec, req, stubPayrollStore{upsertIITSADErr: errors.New("boom")})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("bad request (pg invalid input)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-iit-special-additional-deductions", strings.NewReader(`{"event_id":"e1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollIITSADAPI(rec, req, stubPayrollStore{upsertIITSADErr: &pgconn.PgError{Code: "22P02", Message: "invalid input syntax"}})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-iit-special-additional-deductions", strings.NewReader(`{"event_id":"e1","person_uuid":"p1","tax_year":2026,"tax_month":2,"amount":"100.00"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollIITSADAPI(rec, req, stubPayrollStore{upsertIITSADOut: PayrollIITSADUpsertResult{EventID: "e1", PersonUUID: "p1", TaxYear: 2026, TaxMonth: 2, Amount: "100.00", RequestID: "e1"}})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var got PayrollIITSADUpsertResult
+		if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got.EventID != "e1" || got.RequestID != "e1" {
+			t.Fatalf("got=%#v", got)
 		}
 	})
 }

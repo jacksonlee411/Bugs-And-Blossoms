@@ -291,6 +291,16 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectStaffingPayrollRuns, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/org/api/payroll-balances":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayrollRuns, authz.ActionRead, true
+		}
+		return "", "", false
+	case "/org/api/payroll-iit-special-additional-deductions":
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayrollRuns, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/org/payroll-social-insurance-policies":
 		if method == http.MethodGet {
 			return authz.ObjectStaffingPayrollSocialInsurancePolicies, authz.ActionRead, true

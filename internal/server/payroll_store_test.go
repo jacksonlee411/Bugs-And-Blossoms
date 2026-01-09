@@ -1698,3 +1698,203 @@ func TestPayrollPGStore_UpsertSocialInsurancePolicyVersion(t *testing.T) {
 		}
 	})
 }
+
+func TestPayrollPGStore_GetPayrollBalances(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.GetPayrollBalances(context.Background(), "t1", "p1", 2026)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{execErr: errors.New("exec")})
+		_, err := store.GetPayrollBalances(context.Background(), "t1", "p1", 2026)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing person_uuid", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		_, err := store.GetPayrollBalances(context.Background(), "t1", "", 2026)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("tax_year out of range", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		_, err := store.GetPayrollBalances(context.Background(), "t1", "p1", 1999)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query row error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{rowErr: errors.New("row")})
+		_, err := store.GetPayrollBalances(context.Background(), "t1", "p1", 2026)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:       &stubRow{vals: []any{"t1", "p1", 2026, 1, 2, "20000.00", "1000.00", "10000.00", "9000.00", "270.00", "270.00", "0.00"}},
+			commitErr: errors.New("commit"),
+		})
+		_, err := store.GetPayrollBalances(context.Background(), "t1", "p1", 2026)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row: &stubRow{vals: []any{"t1", "p1", 2026, 1, 2, "20000.00", "1000.00", "10000.00", "9000.00", "270.00", "270.00", "0.00"}},
+		})
+		got, err := store.GetPayrollBalances(context.Background(), "t1", "p1", 2026)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.PersonUUID != "p1" || got.TaxYear != 2026 || got.YTDIncome != "20000.00" {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+}
+
+func TestPayrollPGStore_UpsertPayrollIITSAD(t *testing.T) {
+	validIn := func() PayrollIITSADUpsertInput {
+		return PayrollIITSADUpsertInput{
+			EventID:    "e1",
+			PersonUUID: "p1",
+			TaxYear:    2026,
+			TaxMonth:   2,
+			Amount:     "100.00",
+			RequestID:  "",
+		}
+	}
+
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.UpsertPayrollIITSAD(context.Background(), "t1", validIn())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{execErr: errors.New("exec")})
+		_, err := store.UpsertPayrollIITSAD(context.Background(), "t1", validIn())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("validation error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		in := validIn()
+		in.TaxMonth = 0
+		_, err := store.UpsertPayrollIITSAD(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("validation error (missing event_id)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		in := validIn()
+		in.EventID = ""
+		_, err := store.UpsertPayrollIITSAD(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("validation error (missing person_uuid)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		in := validIn()
+		in.PersonUUID = ""
+		_, err := store.UpsertPayrollIITSAD(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("validation error (tax_year out of range)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		in := validIn()
+		in.TaxYear = 1999
+		_, err := store.UpsertPayrollIITSAD(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("validation error (missing amount)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		in := validIn()
+		in.Amount = ""
+		_, err := store.UpsertPayrollIITSAD(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query row error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{rowErr: errors.New("row")})
+		_, err := store.UpsertPayrollIITSAD(context.Background(), "t1", validIn())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("unexpected event db id", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{row: &stubRow{vals: []any{int64(0)}}})
+		_, err := store.UpsertPayrollIITSAD(context.Background(), "t1", validIn())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:       &stubRow{vals: []any{int64(1)}},
+			commitErr: errors.New("commit"),
+		})
+		_, err := store.UpsertPayrollIITSAD(context.Background(), "t1", validIn())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok (default request_id)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{row: &stubRow{vals: []any{int64(1)}}})
+		got, err := store.UpsertPayrollIITSAD(context.Background(), "t1", validIn())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.EventID != "e1" || got.RequestID != "e1" || got.Amount != "100.00" {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+
+	t.Run("ok (explicit request_id)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{row: &stubRow{vals: []any{int64(1)}}})
+		in := validIn()
+		in.RequestID = "req1"
+		got, err := store.UpsertPayrollIITSAD(context.Background(), "t1", in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.EventID != "e1" || got.RequestID != "req1" || got.Amount != "100.00" {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+}

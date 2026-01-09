@@ -408,6 +408,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/payroll-runs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollRunsAPI(w, r, payrollStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payroll-balances", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollBalancesAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/payroll-iit-special-additional-deductions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollIITSADAPI(w, r, payrollStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payslips", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayslipsAPI(w, r, payrollStore)
 	}))
