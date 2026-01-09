@@ -35,12 +35,18 @@
 
 ## PR-4：Milestone 3 — 日结果投射（day_type / OFF / OT 分桶）
 
-- **状态**：进行中
+- **状态**：已完成（2026-01-09）
 - **PR**：#136（https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/136）
+- **说明**
+  - 修复 E2E：新租户创建时 bootstrap 默认 TimeProfile（避免 /attendance 日结果重算链路缺少主数据导致失败）
+  - 合并方式：merge commit
+- **门禁**
+  - GitHub Actions（Quality Gates）：全绿（Code Quality & Formatting / Unit & Integration / Routing Gates / E2E）
 
 ## PR-5：Milestone 4 — UI（TimeProfile / HolidayCalendar）
 
-- **状态**：未开始
+- **状态**：进行中（2026-01-09）
+- **PR**：#137（https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/137）
 
 ## PR-6：Milestone 5 — Authz / Routing（allowlist + bootstrap policy）
 
