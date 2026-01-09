@@ -1,6 +1,6 @@
 # DEV-PLAN-053：考勤 Slice 4C——主数据与合规闭环（TimeProfile（含班次）/HolidayCalendar（按日覆盖））
 
-**状态**: 草拟中（2026-01-09 08:20 UTC）— 收敛：租户默认 TimeProfile、固定 `Asia/Shanghai`、不做按人绑定与配置 internal API
+**状态**: 已实施（2026-01-09）— 交付见执行日志：`docs/dev-records/dev-plan-053-execution-log.md`
 
 > 目标：按 `docs/dev-plans/001-technical-design-template.md` 补齐到“无需再做设计决策即可开工”的细化程度（Level 4-5）。
 
@@ -23,25 +23,25 @@
 
 ### 2.1 核心目标（Done 的定义）
 
-- [ ] **主数据可配置（effective-dated，`date` 粒度）**：
+- [x] **主数据可配置（effective-dated，`date` 粒度）**：
   - **租户默认 TimeProfile**：CREATE/UPDATE（按 `effective_date date` 事件驱动）。
   - **HolidayCalendar 覆盖项（按日）**：SET/CLEAR（按 `day_date date` 事件驱动；只存覆盖项）。
-- [ ] **One Door**：所有主数据写入必须走 DB Kernel `staffing.submit_*_event(...)`；应用层禁止直写 `*_events`/`*_versions`/读模表。
-- [ ] **合规规则（最小集合）**：
+- [x] **One Door**：所有主数据写入必须走 DB Kernel `staffing.submit_*_event(...)`；应用层禁止直写 `*_events`/`*_versions`/读模表。
+- [x] **合规规则（最小集合）**：
   - 调休覆盖：周末可被标记为 `WORKDAY`，工作日可被标记为 `RESTDAY`；
   - 法定假日：`LEGAL_HOLIDAY`；
   - 加班分桶（分钟口径，整数）：`OT_150/OT_200/OT_300` 三个桶。
-- [ ] **日结果可解释**：在 `staffing.daily_attendance_results`（`DEV-PLAN-052`）基础上增量扩展字段，使 UI 能解释：
+- [x] **日结果可解释**：在 `staffing.daily_attendance_results`（`DEV-PLAN-052`）基础上增量扩展字段，使 UI 能解释：
   - `day_type`（WORKDAY/RESTDAY/LEGAL_HOLIDAY）；
   - `scheduled_minutes`（班次跨度分钟）；
   - `overtime_minutes_150/200/300`；
   - `time_profile_last_event_id`、`holiday_day_last_event_id`（结构化追溯锚点）。
   同时将 `ruleset_version` 固定为 `TIME_PROFILE_V1`（语义版本），避免用拼接字符串承载结构化事实。
-- [ ] **UI 可见可操作**：
+- [x] **UI 可见可操作**：
   - `/org/attendance-time-profile`：配置租户默认 TimeProfile（effective-dated）。
   - `/org/attendance-holiday-calendar`：配置 HolidayCalendar 日覆盖项（按月视图 + 单日编辑 + CSV 粘贴导入）。
   - 能通过“设置调休/法定假日 → 补打一对 punches → 观察日结果 OT 分桶变化”的链路完成验收。
-- [ ] **安全可拒绝**：RLS `ENABLE + FORCE`；`AUTHZ_MODE=enforce` 下未授权读/写必须统一 403（对齐 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`）。
+- [x] **安全可拒绝**：RLS `ENABLE + FORCE`；`AUTHZ_MODE=enforce` 下未授权读/写必须统一 403（对齐 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`）。
 
 ### 2.2 非目标（Out of Scope）
 
@@ -61,7 +61,7 @@
   - [X] sqlc（`make sqlc-generate`；改 schema SSOT 必须确保 sqlc 可解析，且生成后 `git status --short` 为空）
   - [X] 路由治理（`make check routing`；必要时更新 `config/routing/allowlist.yaml`）
   - [X] Authz（`make authz-pack && make authz-test && make authz-lint`）
-  - [ ] E2E（如将本切片纳入 smoke：`make e2e`）
+  - [X] E2E（`make e2e`；本切片相关变更已纳入 CI Quality Gates）
 
 - **SSOT 链接**：
   - 触发器矩阵与红线：`AGENTS.md`
@@ -507,12 +507,12 @@ AS $$ ... $$;
 
 ### 8.2 里程碑（实施拆分）
 
-1. [ ] Schema SSOT：新增 TimeProfile 与 Holiday 覆盖项表 + 日结果增量字段/约束 + RLS（落迁移前人工确认新增表）。
-2. [ ] Kernel：实现 `submit_time_profile_event` + `replay_time_profile_versions`、`submit_holiday_day_event`。
-3. [ ] 日结果投射：在 052 的重算函数中引入 TimeProfile + day_type + OT 分桶 + OFF 口径。
-4. [ ] UI：新增 `/org/attendance-time-profile`、`/org/attendance-holiday-calendar` 页面与最小表单（含 CSV 粘贴导入）。
-5. [ ] Authz/Routing：更新 allowlist、authz registry、middleware mapping、bootstrap policy。
-6. [ ] Tests：参数校验 + OT/day_type 核心用例 + RLS/Authz 负例 + 路由门禁。
+1. [x] Schema SSOT：新增 TimeProfile 与 Holiday 覆盖项表 + 日结果增量字段/约束 + RLS（PR #132；落迁移前人工确认新增表见 PR #131）。
+2. [x] Kernel：实现 `submit_time_profile_event` + `replay_time_profile_versions`、`submit_holiday_day_event`（PR #133）。
+3. [x] 日结果投射：在 052 的重算函数中引入 TimeProfile + day_type + OT 分桶 + OFF 口径（PR #136）。
+4. [x] UI：新增 `/org/attendance-time-profile`、`/org/attendance-holiday-calendar` 页面与最小表单（含 CSV 粘贴导入）（PR #140）。
+5. [x] Authz/Routing：allowlist、authz registry、middleware mapping、bootstrap policy（为满足 fail-closed 与路由门禁，已随 PR #140 一并交付，不再单独拆 PR）。
+6. [x] Tests：参数校验 + OT/day_type 核心用例 + RLS/Authz 负例 + 路由门禁（为满足 100% coverage 门禁，已随 PR #140 一并交付，不再单独拆 PR）。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
