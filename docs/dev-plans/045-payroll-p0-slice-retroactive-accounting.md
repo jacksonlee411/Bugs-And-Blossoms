@@ -1,6 +1,6 @@
 # DEV-PLAN-045：Payroll P0-5——回溯计算（Retroactive Accounting）
 
-**状态**: 实施中（2026-01-09）
+**状态**: 已完成（2026-01-09）
 
 已完成事项（合并记录）：
 - 阶段 1-2（§8.2-1/2）：recalc tables + RLS + 迁移闭环（PR：#139）
