@@ -154,6 +154,12 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		return "", "", false
 	}
+	if pathMatchRouteTemplate(path, "/org/attendance-daily-results/{person_uuid}/{work_date}") {
+		if method == http.MethodGet {
+			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionRead, true
+		}
+		return "", "", false
+	}
 
 	switch path {
 	case "/login":
@@ -227,6 +233,11 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectStaffingAttendancePunches, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/org/attendance-daily-results":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionRead, true
+		}
+		return "", "", false
 	case "/org/api/assignments":
 		if method == http.MethodGet {
 			return authz.ObjectStaffingAssignments, authz.ActionRead, true
@@ -241,6 +252,11 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		if method == http.MethodPost {
 			return authz.ObjectStaffingAttendancePunches, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/attendance-daily-results":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionRead, true
 		}
 		return "", "", false
 	case "/org/payroll-periods":

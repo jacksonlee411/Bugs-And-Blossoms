@@ -363,3 +363,4 @@ DB 闭环（迁移 + smoke）：
 - 日期：2026-01-09
 - 合并记录（按 `docs/dev-plans/052-attendance-slice-4b-daily-results-standard-shift.md` §8.2 每步一个 PR）：
   - Step1 Routing：PR #110 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/110
+  - Step2 Authz：PR #112 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/112
