@@ -264,6 +264,21 @@ type fakeRow struct {
 
 func (r fakeRow) Scan(dest ...any) error {
 	for i := range dest {
+		if i >= len(r.vals) || r.vals[i] == nil {
+			switch d := dest[i].(type) {
+			case *string:
+				*d = ""
+			case *time.Time:
+				*d = time.Time{}
+			case *bool:
+				*d = false
+			case *int:
+				*d = 0
+			case *int64:
+				*d = 0
+			}
+			continue
+		}
 		switch d := dest[i].(type) {
 		case *string:
 			*d = r.vals[i].(string)
