@@ -117,7 +117,7 @@ graph TD
 - `staffing.attendance_recalc_events`
 
 **建表批准记录（落迁移前必须完成）**
-- [ ] 待批准新增以上 2 张表（批准人/时间/证据链接待补）。
+- [x] 已批准新增以上 2 张表（批准人：shangmeilin；时间：2026-01-09；证据：本对话确认“你获得全部授权”，按 DEV-PLAN-055 实施）。
 
 #### 4.1.1 `staffing.time_punch_void_events`（打卡作废事件 SoT，append-only）
 
@@ -778,19 +778,20 @@ LIMIT 50;
 
 ### 8.2 里程碑（可直接开工的拆解）
 
-1. [ ] 路由：
+1. [x] 文档确认 + 新增表批准记录固化：确认本切片范围/不变量，并在 §4.1.0 登记“新增表已获手工批准”。
+2. [ ] 路由：
    - 允许 `/org/attendance-daily-results/{person_uuid}/{work_date}` 支持 POST（保持 `route_class=ui`）。
    - （建议）新增 `/org/api/attendance-punch-voids`、`/org/api/attendance-recalc`（`route_class=internal_api`）。
    - 更新 `config/routing/allowlist.yaml` 并跑 `make check routing`。
-2. [ ] Authz：更新 `pkg/authz/registry.go`（如需新增 object）；更新 `internal/server/authz_middleware.go` 进行路由映射；更新 `config/access/policies/00-bootstrap.csv`；跑 `make authz-pack authz-test authz-lint`。
-3. [ ] DB：按 §4.1/§4.2 落地表 + kernel（新增表/迁移前需手工确认）；跑 `make staffing plan && make staffing lint && make staffing migrate up`。
-4. [ ] sqlc：运行 `make sqlc-generate`，并确保生成物提交且 `git status --short` 为空。
-5. [ ] Go：
+3. [ ] Authz：更新 `pkg/authz/registry.go`（如需新增 object）；更新 `internal/server/authz_middleware.go` 进行路由映射；更新 `config/access/policies/00-bootstrap.csv`；跑 `make authz-pack authz-test authz-lint`。
+4. [ ] DB：按 §4.1/§4.2 落地表 + kernel（新增表/迁移前需手工确认）；跑 `make staffing plan && make staffing lint && make staffing migrate up`。
+5. [ ] sqlc：运行 `make sqlc-generate`，并确保生成物提交且 `git status --short` 为空。
+6. [ ] Go：
    - store：在 `internal/server/attendance.go` 增补 void/recalc 的 store 方法（显式 tx + tenant 注入 + 调 kernel）。
    - handler/UI：在 `internal/server/attendance_handlers.go` 的日结果详情页实现 POST（void/recalc），并补齐审计区块（事件链展示）。
-6. [ ] 测试：补齐本计划覆盖（见 §9）。
-7. [ ] （可选）E2E：把“作废 punch → 日结果变化可见”纳入 smoke（`make e2e`）。
-8. [ ] 证据：按 `docs/dev-records/` 口径登记关键门禁执行记录（时间戳/命令/结论）。
+7. [ ] 测试：补齐本计划覆盖（见 §9）。
+8. [ ] （可选）E2E：把“作废 punch → 日结果变化可见”纳入 smoke（`make e2e`）。
+9. [ ] 证据：按 `docs/dev-records/` 口径登记关键门禁执行记录（时间戳/命令/结论）。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
