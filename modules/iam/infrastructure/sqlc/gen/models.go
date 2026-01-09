@@ -348,6 +348,28 @@ type StaffingPayPeriodEvent struct {
 	CreatedAt       pgtype.Timestamptz        `json:"created_at"`
 }
 
+type StaffingPayrollBalance struct {
+	TenantID                      pgtype.UUID        `json:"tenant_id"`
+	TaxEntityID                   pgtype.UUID        `json:"tax_entity_id"`
+	PersonUuid                    pgtype.UUID        `json:"person_uuid"`
+	TaxYear                       int32              `json:"tax_year"`
+	FirstTaxMonth                 int16              `json:"first_tax_month"`
+	LastTaxMonth                  int16              `json:"last_tax_month"`
+	YtdIncome                     pgtype.Numeric     `json:"ytd_income"`
+	YtdTaxExemptIncome            pgtype.Numeric     `json:"ytd_tax_exempt_income"`
+	YtdStandardDeduction          pgtype.Numeric     `json:"ytd_standard_deduction"`
+	YtdSpecialDeduction           pgtype.Numeric     `json:"ytd_special_deduction"`
+	YtdSpecialAdditionalDeduction pgtype.Numeric     `json:"ytd_special_additional_deduction"`
+	YtdTaxableIncome              pgtype.Numeric     `json:"ytd_taxable_income"`
+	YtdIitTaxLiability            pgtype.Numeric     `json:"ytd_iit_tax_liability"`
+	YtdIitWithheld                pgtype.Numeric     `json:"ytd_iit_withheld"`
+	YtdIitCredit                  pgtype.Numeric     `json:"ytd_iit_credit"`
+	LastPayPeriodID               pgtype.UUID        `json:"last_pay_period_id"`
+	LastRunID                     pgtype.UUID        `json:"last_run_id"`
+	CreatedAt                     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                     pgtype.Timestamptz `json:"updated_at"`
+}
+
 type StaffingPayrollRun struct {
 	TenantID       pgtype.UUID        `json:"tenant_id"`
 	ID             pgtype.UUID        `json:"id"`
