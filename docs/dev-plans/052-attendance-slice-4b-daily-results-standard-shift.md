@@ -535,7 +535,7 @@ RETURN v_event_db_id;
 5. [x] Go：实现日结果 store（建议复用 `internal/server/attendance.go`：显式事务 + tenant 注入 + 查询读模）；实现 handlers（建议复用 `internal/server/attendance_handlers.go`：UI list/detail + internal API GET）；把入口挂到 `internal/server/handler.go` 的 router 与 nav，并补齐 i18n 文案（en/zh）。（PR #117）
 6. [x] 测试：补齐本计划覆盖（见 §9）。（PR #123）
 7. [x]（可选）E2E：扩展 `e2e/tests/m3-smoke.spec.js` 覆盖“补卡 → 日结果可见/可解释”的最小链路。（PR #125）
-8. [ ] 证据：按 `docs/dev-records/` 口径登记关键门禁执行记录（时间戳/命令/结论）。
+8. [x] 证据：按 `docs/dev-records/` 口径登记关键门禁执行记录（时间戳/命令/结论）。（PR #127）
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
