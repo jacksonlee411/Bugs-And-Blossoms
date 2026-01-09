@@ -38,6 +38,12 @@ type stubPayrollStore struct {
 
 	getPayslipErr error
 	getPayslipOut PayslipDetail
+
+	listSIVersionsErr error
+	listSIVersionsOut []SocialInsurancePolicyVersion
+
+	upsertSIErr error
+	upsertSIOut SocialInsurancePolicyUpsertResult
 }
 
 func (s stubPayrollStore) ListPayPeriods(_ context.Context, _ string, _ string) ([]PayPeriod, error) {
@@ -95,6 +101,20 @@ func (s stubPayrollStore) GetPayslip(_ context.Context, _ string, _ string) (Pay
 		return PayslipDetail{}, s.getPayslipErr
 	}
 	return s.getPayslipOut, nil
+}
+
+func (s stubPayrollStore) ListSocialInsurancePolicyVersions(_ context.Context, _ string, _ string) ([]SocialInsurancePolicyVersion, error) {
+	if s.listSIVersionsErr != nil {
+		return nil, s.listSIVersionsErr
+	}
+	return s.listSIVersionsOut, nil
+}
+
+func (s stubPayrollStore) UpsertSocialInsurancePolicyVersion(_ context.Context, _ string, _ SocialInsurancePolicyUpsertInput) (SocialInsurancePolicyUpsertResult, error) {
+	if s.upsertSIErr != nil {
+		return SocialInsurancePolicyUpsertResult{}, s.upsertSIErr
+	}
+	return s.upsertSIOut, nil
 }
 
 func TestHandlePayrollPeriods(t *testing.T) {
@@ -771,6 +791,34 @@ func TestHandlePayslipDetail(t *testing.T) {
 		}
 	})
 
+	t.Run("ok with social insurance items", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1?as_of=2026-01-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipDetail(rec, req, stubPayrollStore{
+			getPayslipOut: PayslipDetail{
+				Payslip:                      Payslip{ID: "ps1", RunID: "run1", Currency: "CNY", GrossPay: "100.00", NetPay: "100.00", EmployerTotal: "0.00"},
+				Items:                        []PayslipItem{{ID: "it1", ItemCode: "EARNING_BASE_SALARY", ItemKind: "earning", Amount: "100.00", Meta: json.RawMessage(`{}`)}},
+				SocialInsuranceEmployeeTotal: "8.00",
+				SocialInsuranceEmployerTotal: "16.00",
+				SocialInsuranceItems: []PayslipSocialInsuranceItem{{
+					InsuranceType:     "PENSION",
+					BaseAmount:        "100.00",
+					EmployeeAmount:    "8.00",
+					EmployerAmount:    "16.00",
+					PolicyEffectiveAt: "2026-01-01",
+				}},
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "PENSION") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
 	t.Run("payslip_id has extra segments", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1/extra", nil)
@@ -781,6 +829,329 @@ func TestHandlePayslipDetail(t *testing.T) {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
+}
+
+type alwaysErrReader struct{}
+
+func (alwaysErrReader) Read([]byte) (int, error) { return 0, errors.New("read err") }
+
+func TestNewUUIDv4(t *testing.T) {
+	prev := uuidRandReader
+	t.Cleanup(func() { uuidRandReader = prev })
+
+	uuidRandReader = bytes.NewReader(make([]byte, 16))
+	got, err := newUUIDv4()
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if got != "00000000-0000-4000-8000-000000000000" {
+		t.Fatalf("got=%q", got)
+	}
+
+	uuidRandReader = alwaysErrReader{}
+	if _, err := newUUIDv4(); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestHandlePayrollSocialInsurancePolicies(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-social-insurance-policies?as_of=2026-01-01", nil)
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get list error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-social-insurance-policies?as_of=2026-01-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{listSIVersionsErr: errors.New("list")})
+		if !strings.Contains(rec.Body.String(), "list") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("get uuid error", func(t *testing.T) {
+		prev := uuidRandReader
+		t.Cleanup(func() { uuidRandReader = prev })
+		uuidRandReader = alwaysErrReader{}
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-social-insurance-policies?as_of=2026-01-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{listSIVersionsOut: []SocialInsurancePolicyVersion{{InsuranceType: "PENSION", CityCode: "CN-310000"}}})
+		if !strings.Contains(rec.Body.String(), "read err") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("get ok", func(t *testing.T) {
+		prev := uuidRandReader
+		t.Cleanup(func() { uuidRandReader = prev })
+		uuidRandReader = bytes.NewReader(make([]byte, 16))
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-social-insurance-policies?as_of=2026-01-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{listSIVersionsOut: []SocialInsurancePolicyVersion{{InsuranceType: "PENSION", CityCode: "CN-310000"}}})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "00000000-0000-4000-8000-000000000000") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("get defaults as_of", func(t *testing.T) {
+		prev := uuidRandReader
+		t.Cleanup(func() { uuidRandReader = prev })
+		uuidRandReader = bytes.NewReader(make([]byte, 16))
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-social-insurance-policies", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{listSIVersionsOut: []SocialInsurancePolicyVersion{{InsuranceType: "PENSION", CityCode: "CN-310000"}}})
+		if !strings.Contains(rec.Body.String(), "As-of:") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("post bad form", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-social-insurance-policies?as_of=2026-01-01", strings.NewReader("%zz"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{})
+		if !strings.Contains(rec.Body.String(), "bad form") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("post event_id missing uuid error", func(t *testing.T) {
+		prev := uuidRandReader
+		t.Cleanup(func() { uuidRandReader = prev })
+		uuidRandReader = alwaysErrReader{}
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-social-insurance-policies?as_of=2026-01-01", strings.NewReader("precision=2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{})
+		if !strings.Contains(rec.Body.String(), "read err") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("post event_id missing with rules_config_json object", func(t *testing.T) {
+		prev := uuidRandReader
+		t.Cleanup(func() { uuidRandReader = prev })
+		uuidRandReader = bytes.NewReader(make([]byte, 16))
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-social-insurance-policies?as_of=2026-01-01", strings.NewReader("precision=2&rules_config_json=%7B%7D"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{upsertSIOut: SocialInsurancePolicyUpsertResult{PolicyID: "p1"}})
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post precision invalid", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-social-insurance-policies?as_of=2026-01-01", strings.NewReader("event_id=evt1&precision=xx"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{})
+		if !strings.Contains(rec.Body.String(), "precision invalid") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("post rules_config_json invalid", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-social-insurance-policies?as_of=2026-01-01", strings.NewReader("event_id=evt1&precision=2&rules_config_json=%7B"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{})
+		if !strings.Contains(rec.Body.String(), "rules_config_json invalid") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("post rules_config_json must be object", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-social-insurance-policies?as_of=2026-01-01", strings.NewReader("event_id=evt1&precision=2&rules_config_json=%5B%5D"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{})
+		if !strings.Contains(rec.Body.String(), "rules_config_json must be object") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("post upsert error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-social-insurance-policies?as_of=2026-01-01", strings.NewReader("event_id=evt1&precision=2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{upsertSIErr: errors.New("upsert")})
+		if !strings.Contains(rec.Body.String(), "upsert") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("post redirect", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-social-insurance-policies?as_of=2026-01-01", strings.NewReader("event_id=evt1&precision=2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{upsertSIOut: SocialInsurancePolicyUpsertResult{PolicyID: "p1"}})
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if loc := rec.Header().Get("Location"); loc != "/org/payroll-social-insurance-policies?as_of=2026-01-01" {
+			t.Fatalf("loc=%s", loc)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/org/payroll-social-insurance-policies?as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePolicies(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+}
+
+func TestHandlePayrollSocialInsurancePoliciesAPI(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-social-insurance-policies?as_of=2026-01-01", nil)
+		handlePayrollSocialInsurancePoliciesAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get list error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-social-insurance-policies?as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePoliciesAPI(rec, req, stubPayrollStore{listSIVersionsErr: errors.New("list")})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get ok json decode", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-social-insurance-policies?as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePoliciesAPI(rec, req, stubPayrollStore{listSIVersionsOut: []SocialInsurancePolicyVersion{{PolicyID: "p1"}}})
+		var got []SocialInsurancePolicyVersion
+		_ = json.NewDecoder(rec.Body).Decode(&got)
+	})
+
+	t.Run("get defaults as_of", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-social-insurance-policies", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePoliciesAPI(rec, req, stubPayrollStore{listSIVersionsOut: []SocialInsurancePolicyVersion{{PolicyID: "p1"}}})
+		var got []SocialInsurancePolicyVersion
+		_ = json.NewDecoder(rec.Body).Decode(&got)
+	})
+
+	t.Run("post bad json", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-social-insurance-policies", strings.NewReader("{"))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePoliciesAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post event_id missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-social-insurance-policies", strings.NewReader(`{}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePoliciesAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post upsert error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-social-insurance-policies", strings.NewReader(`{"event_id":"evt1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePoliciesAPI(rec, req, stubPayrollStore{upsertSIErr: errors.New("upsert")})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post ok json decode", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-social-insurance-policies", strings.NewReader(`{"event_id":"evt1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePoliciesAPI(rec, req, stubPayrollStore{upsertSIOut: SocialInsurancePolicyUpsertResult{PolicyID: "p1"}})
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		var got SocialInsurancePolicyUpsertResult
+		_ = json.NewDecoder(rec.Body).Decode(&got)
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/org/api/payroll-social-insurance-policies?as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollSocialInsurancePoliciesAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+}
+
+func TestRenderPayrollSocialInsurancePolicies(t *testing.T) {
+	html1 := renderPayrollSocialInsurancePolicies(nil, "", "", "")
+	if !strings.Contains(html1, "(missing)") {
+		t.Fatalf("html=%s", html1)
+	}
+
+	html2 := renderPayrollSocialInsurancePolicies([]SocialInsurancePolicyVersion{{
+		PolicyID:      "p1",
+		CityCode:      "CN-310000",
+		HukouType:     "default",
+		InsuranceType: "PENSION",
+		EffectiveDate: "2026-01-01",
+		EmployerRate:  "0.16",
+		EmployeeRate:  "0.08",
+		BaseFloor:     "0.00",
+		BaseCeiling:   "99999.99",
+		RoundingRule:  "HALF_UP",
+		Precision:     2,
+	}}, "2026-01-01", "evt1", "oops")
+	if !strings.Contains(html2, "oops") || !strings.Contains(html2, "CN-310000") || !strings.Contains(html2, "evt1") {
+		t.Fatalf("html=%s", html2)
+	}
 }
 
 func TestHandlePayslipsAPI(t *testing.T) {

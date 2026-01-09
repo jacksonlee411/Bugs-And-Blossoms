@@ -360,6 +360,29 @@ type StaffingPayslipItem struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type StaffingPayslipSocialInsuranceItem struct {
+	ID                int64              `json:"id"`
+	TenantID          pgtype.UUID        `json:"tenant_id"`
+	PayslipID         pgtype.UUID        `json:"payslip_id"`
+	RunID             pgtype.UUID        `json:"run_id"`
+	PayPeriodID       pgtype.UUID        `json:"pay_period_id"`
+	PersonUuid        pgtype.UUID        `json:"person_uuid"`
+	AssignmentID      pgtype.UUID        `json:"assignment_id"`
+	CityCode          string             `json:"city_code"`
+	HukouType         string             `json:"hukou_type"`
+	InsuranceType     string             `json:"insurance_type"`
+	BaseAmount        pgtype.Numeric     `json:"base_amount"`
+	EmployeeAmount    pgtype.Numeric     `json:"employee_amount"`
+	EmployerAmount    pgtype.Numeric     `json:"employer_amount"`
+	Currency          string             `json:"currency"`
+	PolicyID          pgtype.UUID        `json:"policy_id"`
+	PolicyLastEventID int64              `json:"policy_last_event_id"`
+	LastRunEventID    int64              `json:"last_run_event_id"`
+	Meta              []byte             `json:"meta"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type StaffingPosition struct {
 	TenantID  pgtype.UUID        `json:"tenant_id"`
 	ID        pgtype.UUID        `json:"id"`
@@ -393,4 +416,49 @@ type StaffingPositionVersion struct {
 	Profile             []byte                    `json:"profile"`
 	Validity            pgtype.Range[pgtype.Date] `json:"validity"`
 	LastEventID         int64                     `json:"last_event_id"`
+}
+
+type StaffingSocialInsurancePolicy struct {
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	ID            pgtype.UUID        `json:"id"`
+	CityCode      string             `json:"city_code"`
+	HukouType     string             `json:"hukou_type"`
+	InsuranceType string             `json:"insurance_type"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingSocialInsurancePolicyEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	PolicyID        pgtype.UUID        `json:"policy_id"`
+	CityCode        string             `json:"city_code"`
+	HukouType       string             `json:"hukou_type"`
+	InsuranceType   string             `json:"insurance_type"`
+	EventType       string             `json:"event_type"`
+	EffectiveDate   pgtype.Date        `json:"effective_date"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type StaffingSocialInsurancePolicyVersion struct {
+	ID            int64                     `json:"id"`
+	TenantID      pgtype.UUID               `json:"tenant_id"`
+	PolicyID      pgtype.UUID               `json:"policy_id"`
+	CityCode      string                    `json:"city_code"`
+	HukouType     string                    `json:"hukou_type"`
+	InsuranceType string                    `json:"insurance_type"`
+	EmployerRate  pgtype.Numeric            `json:"employer_rate"`
+	EmployeeRate  pgtype.Numeric            `json:"employee_rate"`
+	BaseFloor     pgtype.Numeric            `json:"base_floor"`
+	BaseCeiling   pgtype.Numeric            `json:"base_ceiling"`
+	RoundingRule  string                    `json:"rounding_rule"`
+	Precision     int16                     `json:"precision"`
+	RulesConfig   []byte                    `json:"rules_config"`
+	Validity      pgtype.Range[pgtype.Date] `json:"validity"`
+	LastEventID   int64                     `json:"last_event_id"`
 }

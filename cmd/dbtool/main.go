@@ -224,9 +224,66 @@ func staffingSmoke(args []string) {
 		fatalf("expected fail-closed error when app.current_tenant is missing")
 	}
 
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_failclosed_si_policies;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `SELECT count(*) FROM staffing.social_insurance_policies;`)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed_si_policies;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected fail-closed error when app.current_tenant is missing")
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_failclosed_si_events;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `SELECT count(*) FROM staffing.social_insurance_policy_events;`)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed_si_events;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected fail-closed error when app.current_tenant is missing")
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_failclosed_si_versions;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `SELECT count(*) FROM staffing.social_insurance_policy_versions;`)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed_si_versions;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected fail-closed error when app.current_tenant is missing")
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_failclosed_payslip_si_items;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `SELECT count(*) FROM staffing.payslip_social_insurance_items;`)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed_payslip_si_items;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected fail-closed error when app.current_tenant is missing")
+	}
+
 	tenantA := "00000000-0000-0000-0000-00000000000a"
 	tenantB := "00000000-0000-0000-0000-00000000000b"
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantA); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.payslip_social_insurance_items WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.social_insurance_policy_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.social_insurance_policy_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.social_insurance_policies WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
 
@@ -541,6 +598,334 @@ func staffingSmoke(args []string) {
 		}
 	}
 
+	mustUUID := func() string {
+		var id string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&id); err != nil {
+			fatal(err)
+		}
+		return id
+	}
+
+	{
+		var gotHalfUp string
+		if err := tx.QueryRow(ctx, `SELECT staffing.round_by_rule('1.005'::numeric, 'HALF_UP', 2::smallint)::text;`).Scan(&gotHalfUp); err != nil {
+			fatal(err)
+		}
+		if gotHalfUp != "1.01" {
+			fatalf("unexpected round_by_rule HALF_UP: %s", gotHalfUp)
+		}
+
+		var gotCeil string
+		if err := tx.QueryRow(ctx, `SELECT trim_scale(staffing.round_by_rule('1.01'::numeric, 'CEIL', 1::smallint))::text;`).Scan(&gotCeil); err != nil {
+			fatal(err)
+		}
+		if gotCeil != "1.1" {
+			fatalf("unexpected round_by_rule CEIL: %s", gotCeil)
+		}
+	}
+
+	cityCode := "CN-310000"
+	hukouType := "default"
+	policyEffectiveDate := effectiveDate
+	policyBaseFloor := "0.00"
+	policyBaseCeiling := "999999.00"
+	policyRoundingRule := "HALF_UP"
+	policyPrecision := "2"
+
+	type siSeed struct {
+		insuranceType string
+		employerRate  string
+		employeeRate  string
+	}
+	seeds := []siSeed{
+		{insuranceType: "PENSION", employerRate: "0.16", employeeRate: "0.08"},
+		{insuranceType: "MEDICAL", employerRate: "0.10", employeeRate: "0.02"},
+		{insuranceType: "UNEMPLOYMENT", employerRate: "0.01", employeeRate: "0.005"},
+		{insuranceType: "INJURY", employerRate: "0.002", employeeRate: "0"},
+		{insuranceType: "MATERNITY", employerRate: "0.01", employeeRate: "0"},
+		{insuranceType: "HOUSING_FUND", employerRate: "0.07", employeeRate: "0.07"},
+	}
+
+	policyIDByType := map[string]string{}
+	for _, seed := range seeds {
+		policyID := mustUUID()
+		eventID := mustUUID()
+		var eventDBID int64
+		if err := tx.QueryRow(ctx, `
+SELECT staffing.submit_social_insurance_policy_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::text,
+  $5::text,
+  $6::text,
+  'CREATE',
+  $7::date,
+  jsonb_build_object(
+    'employer_rate', $8::text,
+    'employee_rate', $9::text,
+    'base_floor', $10::text,
+    'base_ceiling', $11::text,
+    'rounding_rule', $12::text,
+    'precision', $13::text,
+    'rules_config', '{}'::jsonb
+  ),
+  $14::text,
+  $15::uuid
+);
+`, eventID, tenantA, policyID, cityCode, hukouType, seed.insuranceType, policyEffectiveDate, seed.employerRate, seed.employeeRate, policyBaseFloor, policyBaseCeiling, policyRoundingRule, policyPrecision, eventID, initiatorID).Scan(&eventDBID); err != nil {
+			fatal(err)
+		}
+		if eventDBID <= 0 {
+			fatalf("expected social_insurance_policy_event db id > 0, got %d", eventDBID)
+		}
+		policyIDByType[seed.insuranceType] = policyID
+	}
+
+	withSavepoint("sp_si_multi_city", func() {
+		eventID := mustUUID()
+		policyID := mustUUID()
+		_, err := tx.Exec(ctx, `
+SELECT staffing.submit_social_insurance_policy_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  'CN-110000',
+  $4::text,
+  'PENSION',
+  'CREATE',
+  $5::date,
+  jsonb_build_object(
+    'employer_rate', '0.16',
+    'employee_rate', '0.08',
+    'base_floor', '0.00',
+    'base_ceiling', '999999.00',
+    'rounding_rule', 'HALF_UP',
+    'precision', '2',
+    'rules_config', '{}'::jsonb
+  ),
+  $6::text,
+  $7::uuid
+);
+`, eventID, tenantA, policyID, hukouType, policyEffectiveDate, eventID, initiatorID)
+		if err == nil {
+			fatalf("expected multi-city to fail")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_SI_MULTI_CITY_NOT_SUPPORTED" {
+			fatalf("expected pg error message=STAFFING_PAYROLL_SI_MULTI_CITY_NOT_SUPPORTED, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+	})
+
+	withSavepoint("sp_si_one_per_day", func() {
+		eventID := mustUUID()
+		_, err := tx.Exec(ctx, `
+SELECT staffing.submit_social_insurance_policy_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::text,
+  $5::text,
+  'PENSION',
+  'UPDATE',
+  $6::date,
+  jsonb_build_object(
+    'employer_rate', '0.16',
+    'employee_rate', '0.08',
+    'base_floor', '0.00',
+    'base_ceiling', '999999.00',
+    'rounding_rule', 'HALF_UP',
+    'precision', '2',
+    'rules_config', '{}'::jsonb
+  ),
+  $7::text,
+  $8::uuid
+);
+`, eventID, tenantA, policyIDByType["PENSION"], cityCode, hukouType, policyEffectiveDate, eventID, initiatorID)
+		if err == nil {
+			fatalf("expected one-per-day conflict to fail")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_SI_POLICY_EVENT_ONE_PER_DAY_CONFLICT" {
+			fatalf("expected pg error message=STAFFING_PAYROLL_SI_POLICY_EVENT_ONE_PER_DAY_CONFLICT, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+	})
+
+	withSavepoint("sp_si_missing_policy_asof", func() {
+		if _, err := tx.Exec(ctx, `
+DELETE FROM staffing.social_insurance_policy_versions
+WHERE tenant_id = $1::uuid AND insurance_type = 'PENSION';
+`, tenantA); err != nil {
+			fatal(err)
+		}
+
+		ppID := mustUUID()
+		ppEventID := mustUUID()
+		if _, err := tx.Exec(ctx, `
+SELECT staffing.submit_payroll_pay_period_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::text,
+  daterange($5::date, $6::date, '[)'),
+  $7::text,
+  $8::uuid
+);
+`, ppEventID, tenantA, ppID, payGroup, ppStart, ppEndExcl, ppEventID, initiatorID); err != nil {
+			fatal(err)
+		}
+
+		runID := mustUUID()
+		createEventID := mustUUID()
+		if _, err := tx.Exec(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'CREATE',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, createEventID, tenantA, runID, ppID, createEventID, initiatorID); err != nil {
+			fatal(err)
+		}
+
+		startEventID := mustUUID()
+		if _, err := tx.Exec(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'CALC_START',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, startEventID, tenantA, runID, ppID, startEventID, initiatorID); err != nil {
+			fatal(err)
+		}
+
+		finishEventID := mustUUID()
+		_, err := tx.Exec(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'CALC_FINISH',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, finishEventID, tenantA, runID, ppID, finishEventID, initiatorID)
+		if err == nil {
+			fatalf("expected CALC_FINISH to fail when policy is missing")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_SI_POLICY_NOT_FOUND_AS_OF" {
+			fatalf("expected pg error message=STAFFING_PAYROLL_SI_POLICY_NOT_FOUND_AS_OF, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+	})
+
+	withSavepoint("sp_si_changed_within_period", func() {
+		mid := ppStartTime.AddDate(0, 0, 1).Format("2006-01-02")
+		eventID := mustUUID()
+		if _, err := tx.Exec(ctx, `
+SELECT staffing.submit_social_insurance_policy_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::text,
+  $5::text,
+  'PENSION',
+  'UPDATE',
+  $6::date,
+  jsonb_build_object(
+    'employer_rate', '0.16',
+    'employee_rate', '0.08',
+    'base_floor', '0.00',
+    'base_ceiling', '999999.00',
+    'rounding_rule', 'HALF_UP',
+    'precision', '2',
+    'rules_config', '{}'::jsonb
+  ),
+  $7::text,
+  $8::uuid
+);
+`, eventID, tenantA, policyIDByType["PENSION"], cityCode, hukouType, mid, eventID, initiatorID); err != nil {
+			fatal(err)
+		}
+
+		ppID := mustUUID()
+		ppEventID := mustUUID()
+		if _, err := tx.Exec(ctx, `
+SELECT staffing.submit_payroll_pay_period_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::text,
+  daterange($5::date, $6::date, '[)'),
+  $7::text,
+  $8::uuid
+);
+`, ppEventID, tenantA, ppID, payGroup, ppStart, ppEndExcl, ppEventID, initiatorID); err != nil {
+			fatal(err)
+		}
+
+		runID := mustUUID()
+		createEventID := mustUUID()
+		if _, err := tx.Exec(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'CREATE',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, createEventID, tenantA, runID, ppID, createEventID, initiatorID); err != nil {
+			fatal(err)
+		}
+
+		startEventID := mustUUID()
+		if _, err := tx.Exec(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'CALC_START',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, startEventID, tenantA, runID, ppID, startEventID, initiatorID); err != nil {
+			fatal(err)
+		}
+
+		finishEventID := mustUUID()
+		_, err := tx.Exec(ctx, `
+SELECT staffing.submit_payroll_run_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  'CALC_FINISH',
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, finishEventID, tenantA, runID, ppID, finishEventID, initiatorID)
+		if err == nil {
+			fatalf("expected CALC_FINISH to fail when policy changed within period")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_SI_POLICY_CHANGED_WITHIN_PERIOD" {
+			fatalf("expected pg error message=STAFFING_PAYROLL_SI_POLICY_CHANGED_WITHIN_PERIOD, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+	})
+
 	var payPeriodID string
 	var payPeriodEventID string
 	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&payPeriodID); err != nil {
@@ -760,17 +1145,17 @@ SELECT staffing.submit_payroll_run_event(
 	var netPay string
 	var employerTotal string
 	if err := tx.QueryRow(ctx, `
-	SELECT
-	  gross_pay::text,
-	  net_pay::text,
-	  employer_total::text
-	FROM staffing.payslips
-	WHERE tenant_id = $1::uuid AND run_id = $2::uuid
-	LIMIT 1;
-	`, tenantA, runID).Scan(&grossPay, &netPay, &employerTotal); err != nil {
+		SELECT
+		  gross_pay::text,
+		  net_pay::text,
+		  employer_total::text
+		FROM staffing.payslips
+		WHERE tenant_id = $1::uuid AND run_id = $2::uuid
+		LIMIT 1;
+		`, tenantA, runID).Scan(&grossPay, &netPay, &employerTotal); err != nil {
 		fatal(err)
 	}
-	if grossPay != "30000.00" || netPay != "30000.00" || employerTotal != "0.00" {
+	if grossPay != "30000.00" || netPay != "24750.00" || employerTotal != "10560.00" {
 		fatalf("unexpected payslip totals gross=%s net=%s employer_total=%s", grossPay, netPay, employerTotal)
 	}
 
@@ -920,14 +1305,6 @@ SELECT staffing.submit_payroll_run_event(
 	}
 
 	baseSalaryCents := int64(3_000_000)
-
-	mustUUID := func() string {
-		var id string
-		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&id); err != nil {
-			fatal(err)
-		}
-		return id
-	}
 
 	submitAssignmentCreate := func(effective string, baseSalaryText any, allocatedFTE string, currency string) (assignmentID string, personUUID string) {
 		assignmentID = mustUUID()
@@ -1277,8 +1654,8 @@ SELECT staffing.submit_payroll_run_event(
 		if err == nil {
 			fatalf("expected CALC_FINISH to fail when pay_group is not monthly")
 		}
-		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_UNSUPPORTED_PAY_GROUP" {
-			fatalf("expected pg error message=STAFFING_PAYROLL_UNSUPPORTED_PAY_GROUP, got ok=%v message=%q err=%v", ok, msg, err)
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_PAY_GROUP_NOT_SUPPORTED" {
+			fatalf("expected pg error message=STAFFING_PAYROLL_PAY_GROUP_NOT_SUPPORTED, got ok=%v message=%q err=%v", ok, msg, err)
 		}
 
 		if err := submitPayrollRunEvent(runID, payPeriodID, "CALC_FAIL"); err != nil {
@@ -1320,8 +1697,8 @@ SELECT staffing.submit_payroll_run_event(
 		if err == nil {
 			fatalf("expected CALC_FINISH to fail when period is not a natural month")
 		}
-		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD" {
-			fatalf("expected pg error message=STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD, got ok=%v message=%q err=%v", ok, msg, err)
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_PERIOD_NOT_NATURAL_MONTH" {
+			fatalf("expected pg error message=STAFFING_PAYROLL_PERIOD_NOT_NATURAL_MONTH, got ok=%v message=%q err=%v", ok, msg, err)
 		}
 
 		if err := submitPayrollRunEvent(runID, payPeriodID, "CALC_FAIL"); err != nil {

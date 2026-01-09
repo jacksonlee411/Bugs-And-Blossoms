@@ -1,14 +1,20 @@
 package server
 
 import (
+	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"html"
+	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
+
+var uuidRandReader io.Reader = rand.Reader
 
 func handlePayrollPeriods(w http.ResponseWriter, r *http.Request, store PayrollStore) {
 	tenant, ok := currentTenant(r.Context())
@@ -403,6 +409,175 @@ func handlePayslipAPI(w http.ResponseWriter, r *http.Request, store PayrollStore
 	_ = json.NewEncoder(w).Encode(payslip)
 }
 
+func handlePayrollSocialInsurancePolicies(w http.ResponseWriter, r *http.Request, store PayrollStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
+	if asOf == "" {
+		asOf = currentUTCDateString()
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		versions, err := store.ListSocialInsurancePolicyVersions(r.Context(), tenant.ID, asOf)
+		if err != nil {
+			writePage(w, r, renderPayrollSocialInsurancePolicies(nil, asOf, "", err.Error()))
+			return
+		}
+
+		eventID, err := newUUIDv4()
+		if err != nil {
+			writePage(w, r, renderPayrollSocialInsurancePolicies(versions, asOf, "", err.Error()))
+			return
+		}
+		writePage(w, r, renderPayrollSocialInsurancePolicies(versions, asOf, eventID, ""))
+		return
+	case http.MethodPost:
+		if err := r.ParseForm(); err != nil {
+			writePage(w, r, renderPayrollSocialInsurancePolicies(nil, asOf, "", "bad form"))
+			return
+		}
+
+		eventID := strings.TrimSpace(r.Form.Get("event_id"))
+		if eventID == "" {
+			v, err := newUUIDv4()
+			if err != nil {
+				writePage(w, r, renderPayrollSocialInsurancePolicies(nil, asOf, "", err.Error()))
+				return
+			}
+			eventID = v
+		}
+
+		cityCode := strings.TrimSpace(r.Form.Get("city_code"))
+		hukouType := strings.TrimSpace(r.Form.Get("hukou_type"))
+		insuranceType := strings.TrimSpace(r.Form.Get("insurance_type"))
+		effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
+		employerRate := strings.TrimSpace(r.Form.Get("employer_rate"))
+		employeeRate := strings.TrimSpace(r.Form.Get("employee_rate"))
+		baseFloor := strings.TrimSpace(r.Form.Get("base_floor"))
+		baseCeiling := strings.TrimSpace(r.Form.Get("base_ceiling"))
+		roundingRule := strings.TrimSpace(r.Form.Get("rounding_rule"))
+		precisionText := strings.TrimSpace(r.Form.Get("precision"))
+		rulesConfigText := strings.TrimSpace(r.Form.Get("rules_config_json"))
+
+		precision, err := strconv.Atoi(precisionText)
+		if err != nil {
+			versions, _ := store.ListSocialInsurancePolicyVersions(r.Context(), tenant.ID, asOf)
+			writePage(w, r, renderPayrollSocialInsurancePolicies(versions, asOf, eventID, "precision invalid"))
+			return
+		}
+
+		var rulesConfig json.RawMessage
+		if rulesConfigText == "" {
+			rulesConfig = json.RawMessage(`{}`)
+		} else {
+			var v any
+			if err := json.Unmarshal([]byte(rulesConfigText), &v); err != nil {
+				versions, _ := store.ListSocialInsurancePolicyVersions(r.Context(), tenant.ID, asOf)
+				writePage(w, r, renderPayrollSocialInsurancePolicies(versions, asOf, eventID, "rules_config_json invalid"))
+				return
+			}
+			if _, ok := v.(map[string]any); !ok {
+				versions, _ := store.ListSocialInsurancePolicyVersions(r.Context(), tenant.ID, asOf)
+				writePage(w, r, renderPayrollSocialInsurancePolicies(versions, asOf, eventID, "rules_config_json must be object"))
+				return
+			}
+			rulesConfig = json.RawMessage(rulesConfigText)
+		}
+
+		_, err = store.UpsertSocialInsurancePolicyVersion(r.Context(), tenant.ID, SocialInsurancePolicyUpsertInput{
+			EventID:       eventID,
+			CityCode:      cityCode,
+			HukouType:     hukouType,
+			InsuranceType: insuranceType,
+			EffectiveDate: effectiveDate,
+			EmployerRate:  employerRate,
+			EmployeeRate:  employeeRate,
+			BaseFloor:     baseFloor,
+			BaseCeiling:   baseCeiling,
+			RoundingRule:  roundingRule,
+			Precision:     precision,
+			RulesConfig:   rulesConfig,
+		})
+		if err != nil {
+			versions, _ := store.ListSocialInsurancePolicyVersions(r.Context(), tenant.ID, asOf)
+			writePage(w, r, renderPayrollSocialInsurancePolicies(versions, asOf, eventID, err.Error()))
+			return
+		}
+
+		loc := "/org/payroll-social-insurance-policies"
+		if asOf != "" {
+			loc += "?as_of=" + url.QueryEscape(asOf)
+		}
+		http.Redirect(w, r, loc, http.StatusSeeOther)
+		return
+	default:
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+}
+
+func handlePayrollSocialInsurancePoliciesAPI(w http.ResponseWriter, r *http.Request, store PayrollStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
+		if asOf == "" {
+			asOf = currentUTCDateString()
+		}
+		versions, err := store.ListSocialInsurancePolicyVersions(r.Context(), tenant.ID, asOf)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "list_failed", "list failed")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(versions)
+		return
+	case http.MethodPost:
+		var req SocialInsurancePolicyUpsertInput
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+			return
+		}
+		if strings.TrimSpace(req.EventID) == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "event_id_missing", "event_id is required")
+			return
+		}
+
+		out, err := store.UpsertSocialInsurancePolicyVersion(r.Context(), tenant.ID, req)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "upsert_failed", "upsert failed")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(out)
+		return
+	default:
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+}
+
+func newUUIDv4() (string, error) {
+	var b [16]byte
+	if _, err := io.ReadFull(uuidRandReader, b[:]); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
+}
+
 func requireRunIDFromPath(w http.ResponseWriter, r *http.Request, prefix string) (string, bool) {
 	path := strings.TrimSpace(r.URL.Path)
 	if !strings.HasPrefix(path, prefix) {
@@ -436,6 +611,11 @@ func renderPayrollPeriods(periods []PayPeriod, asOf string, errMsg string) strin
 	if asOf != "" {
 		b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code></p>`)
 	}
+	b.WriteString(`<p><a href="/org/payroll-social-insurance-policies`)
+	if asOf != "" {
+		b.WriteString(`?as_of=` + url.QueryEscape(asOf))
+	}
+	b.WriteString(`">Social Insurance Policies</a></p>`)
 
 	b.WriteString(`<h2>Create</h2>`)
 	postAction := "/org/payroll-periods"
@@ -486,6 +666,11 @@ func renderPayrollRuns(runs []PayrollRun, periods []PayPeriod, asOf string, filt
 	if asOf != "" {
 		b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code></p>`)
 	}
+	b.WriteString(`<p><a href="/org/payroll-social-insurance-policies`)
+	if asOf != "" {
+		b.WriteString(`?as_of=` + url.QueryEscape(asOf))
+	}
+	b.WriteString(`">Social Insurance Policies</a></p>`)
 
 	postAction := "/org/payroll-runs"
 	if asOf != "" {
@@ -676,11 +861,111 @@ func renderPayslipDetail(runID string, payslipID string, asOf string, payslip Pa
 		b.WriteString(`</table>`)
 	}
 
+	b.WriteString(`<h2>Social Insurance</h2>`)
+	if len(payslip.SocialInsuranceItems) == 0 {
+		b.WriteString(`<p><em>(empty)</em></p>`)
+	} else {
+		b.WriteString(`<p>employee_total: <code>` + html.EscapeString(payslip.SocialInsuranceEmployeeTotal) + `</code> `)
+		b.WriteString(`employer_total: <code>` + html.EscapeString(payslip.SocialInsuranceEmployerTotal) + `</code></p>`)
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6">`)
+		b.WriteString(`<tr><th>insurance_type</th><th>base_amount</th><th>employee_amount</th><th>employer_amount</th><th>policy_effective_date</th></tr>`)
+		for _, item := range payslip.SocialInsuranceItems {
+			b.WriteString(`<tr>`)
+			b.WriteString(`<td>` + html.EscapeString(item.InsuranceType) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.BaseAmount) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.EmployeeAmount) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.EmployerAmount) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.PolicyEffectiveAt) + `</td>`)
+			b.WriteString(`</tr>`)
+		}
+		b.WriteString(`</table>`)
+	}
+
 	b.WriteString(`<p><a href="/org/payroll-runs/` + url.PathEscape(runID) + `/payslips`)
 	if asOf != "" {
 		b.WriteString(`?as_of=` + url.QueryEscape(asOf))
 	}
 	b.WriteString(`">Back to Payslips</a></p>`)
+
+	return b.String()
+}
+
+func renderPayrollSocialInsurancePolicies(versions []SocialInsurancePolicyVersion, asOf string, eventID string, errMsg string) string {
+	byType := map[string]SocialInsurancePolicyVersion{}
+	for _, v := range versions {
+		byType[v.InsuranceType] = v
+	}
+
+	defaultCityCode := ""
+	if len(versions) > 0 {
+		defaultCityCode = versions[0].CityCode
+	}
+
+	var b strings.Builder
+	b.WriteString(`<h1>Social Insurance Policies</h1>`)
+	if errMsg != "" {
+		b.WriteString(`<p style="color:#b00020">` + html.EscapeString(errMsg) + `</p>`)
+	}
+	if asOf != "" {
+		b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code></p>`)
+	}
+
+	b.WriteString(`<h2>List (as-of)</h2>`)
+	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6">`)
+	b.WriteString(`<tr><th>insurance_type</th><th>effective_date</th><th>employer_rate</th><th>employee_rate</th><th>base_floor</th><th>base_ceiling</th><th>rounding_rule</th><th>precision</th><th>city_code</th><th>hukou_type</th><th>policy_id</th></tr>`)
+	for _, t := range []string{"PENSION", "MEDICAL", "UNEMPLOYMENT", "INJURY", "MATERNITY", "HOUSING_FUND"} {
+		v, ok := byType[t]
+		b.WriteString(`<tr>`)
+		b.WriteString(`<td>` + html.EscapeString(t) + `</td>`)
+		if !ok {
+			b.WriteString(`<td colspan="10"><em>(missing)</em></td>`)
+			b.WriteString(`</tr>`)
+			continue
+		}
+		b.WriteString(`<td>` + html.EscapeString(v.EffectiveDate) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(v.EmployerRate) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(v.EmployeeRate) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(v.BaseFloor) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(v.BaseCeiling) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(v.RoundingRule) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(strconv.Itoa(v.Precision)) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(v.CityCode) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(v.HukouType) + `</td>`)
+		b.WriteString(`<td><code>` + html.EscapeString(v.PolicyID) + `</code></td>`)
+		b.WriteString(`</tr>`)
+	}
+	b.WriteString(`</table>`)
+
+	b.WriteString(`<h2>Upsert Version</h2>`)
+	postAction := "/org/payroll-social-insurance-policies"
+	if asOf != "" {
+		postAction += "?as_of=" + url.QueryEscape(asOf)
+	}
+	b.WriteString(`<form method="POST" action="` + html.EscapeString(postAction) + `">`)
+	b.WriteString(`<input type="hidden" name="event_id" value="` + html.EscapeString(eventID) + `">`)
+	b.WriteString(`<label>city_code <input name="city_code" placeholder="CN-310000" value="` + html.EscapeString(defaultCityCode) + `" required></label><br>`)
+	b.WriteString(`<input type="hidden" name="hukou_type" value="default">`)
+	b.WriteString(`<label>insurance_type <select name="insurance_type" required>`)
+	for _, t := range []string{"PENSION", "MEDICAL", "UNEMPLOYMENT", "INJURY", "MATERNITY", "HOUSING_FUND"} {
+		b.WriteString(`<option value="` + html.EscapeString(t) + `">` + html.EscapeString(t) + `</option>`)
+	}
+	b.WriteString(`</select></label><br>`)
+	b.WriteString(`<label>effective_date <input type="date" name="effective_date" required></label><br>`)
+	b.WriteString(`<label>employer_rate <input name="employer_rate" placeholder="0.16" required></label><br>`)
+	b.WriteString(`<label>employee_rate <input name="employee_rate" placeholder="0.08" required></label><br>`)
+	b.WriteString(`<label>base_floor <input name="base_floor" placeholder="0.00" required></label><br>`)
+	b.WriteString(`<label>base_ceiling <input name="base_ceiling" placeholder="99999.99" required></label><br>`)
+	b.WriteString(`<label>rounding_rule <select name="rounding_rule" required><option value="HALF_UP">HALF_UP</option><option value="CEIL">CEIL</option></select></label><br>`)
+	b.WriteString(`<label>precision <select name="precision" required><option value="0">0</option><option value="1">1</option><option value="2" selected>2</option></select></label><br>`)
+	b.WriteString(`<label>rules_config_json <textarea name="rules_config_json" rows="4" cols="60" placeholder="{}"></textarea></label><br>`)
+	b.WriteString(`<button type="submit">Upsert</button>`)
+	b.WriteString(`</form>`)
+
+	b.WriteString(`<p><a href="/org/payroll-periods`)
+	if asOf != "" {
+		b.WriteString(`?as_of=` + url.QueryEscape(asOf))
+	}
+	b.WriteString(`">Back to Payroll</a></p>`)
 
 	return b.String()
 }

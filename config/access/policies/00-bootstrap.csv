@@ -18,6 +18,8 @@ p, role:tenant-admin, *, staffing.payroll-runs, read
 p, role:tenant-admin, *, staffing.payroll-runs, admin
 p, role:tenant-admin, *, staffing.payslips, read
 p, role:tenant-admin, *, staffing.payslips, admin
+p, role:tenant-admin, *, staffing.payroll-social-insurance-policies, read
+p, role:tenant-admin, *, staffing.payroll-social-insurance-policies, admin
 p, role:tenant-admin, *, person.persons, read
 p, role:tenant-admin, *, person.persons, admin
 p, role:superadmin, global, superadmin.session, read

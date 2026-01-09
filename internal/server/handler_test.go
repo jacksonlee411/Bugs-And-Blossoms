@@ -197,6 +197,25 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 			Payslip: Payslip{ID: "ps1", RunID: "run1"},
 			Items:   []PayslipItem{{ID: "it1", Meta: json.RawMessage(`{}`)}},
 		},
+		listSIVersionsOut: []SocialInsurancePolicyVersion{{
+			PolicyID:      "p1",
+			CityCode:      "CN-310000",
+			HukouType:     "default",
+			InsuranceType: "PENSION",
+			EffectiveDate: "2026-01-01",
+			EmployerRate:  "0.16",
+			EmployeeRate:  "0.08",
+			BaseFloor:     "0.00",
+			BaseCeiling:   "99999.99",
+			RoundingRule:  "HALF_UP",
+			Precision:     2,
+		}},
+		upsertSIOut: SocialInsurancePolicyUpsertResult{
+			PolicyID:      "p1",
+			LastEventDBID: 1,
+			InsuranceType: "PENSION",
+			EffectiveDate: "2026-01-01",
+		},
 	}
 
 	h, err := NewHandlerWithOptions(HandlerOptions{
@@ -287,6 +306,20 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 	}
 	if rec := do(http.MethodGet, "/org/api/payslips/ps1", nil, "", false); rec.Code != http.StatusOK {
 		t.Fatalf("payslip api get status=%d", rec.Code)
+	}
+
+	if rec := do(http.MethodGet, "/org/payroll-social-insurance-policies?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {
+		t.Fatalf("payroll social insurance policies status=%d", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/org/payroll-social-insurance-policies?as_of=2026-01-01", []byte("event_id=evt1&city_code=CN-310000&hukou_type=default&insurance_type=PENSION&effective_date=2026-01-01&employer_rate=0.16&employee_rate=0.08&base_floor=0.00&base_ceiling=99999.99&rounding_rule=HALF_UP&precision=2"), "application/x-www-form-urlencoded", false); rec.Code != http.StatusSeeOther {
+		t.Fatalf("payroll social insurance policies post status=%d", rec.Code)
+	}
+
+	if rec := do(http.MethodGet, "/org/api/payroll-social-insurance-policies?as_of=2026-01-01", nil, "", false); rec.Code != http.StatusOK {
+		t.Fatalf("payroll social insurance policies api get status=%d", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/org/api/payroll-social-insurance-policies", []byte(`{"event_id":"evt1"}`), "application/json", false); rec.Code != http.StatusCreated {
+		t.Fatalf("payroll social insurance policies api post status=%d", rec.Code)
 	}
 }
 
