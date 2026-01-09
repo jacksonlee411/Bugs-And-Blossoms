@@ -48,7 +48,9 @@
   - [ ] DB 迁移 / Schema（`DEV-PLAN-024`）
   - [ ] sqlc（若触及 queries/config；`DEV-PLAN-025`）
   - [ ] 路由治理（`DEV-PLAN-017`；需更新 `config/routing/allowlist.yaml`）
-  - [ ] Authz（`DEV-PLAN-022`；需更新 `pkg/authz/registry.go` 与 `internal/server/authz_middleware.go`）
+    - 新增：`POST /org/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items`
+    - 新增：`POST /org/api/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items`
+  - [ ] Authz（`DEV-PLAN-022`；需更新 `internal/server/authz_middleware.go` + `internal/server/authz_middleware_test.go`；复用既有 object `staffing.payslips`）
   - [ ] 文档（`make check doc`）
 - **SSOT 链接**
   - 触发器矩阵与本地必跑：`AGENTS.md`
@@ -333,7 +335,7 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
   - 展示名称：由 `item_code` + i18n 在渲染时决定（不写入输入表）
 - **成功**：303 跳转回 `GET /org/payroll-runs/{run_id}/payslips/{payslip_id}`。
 - **失败（422）**：回显表单错误（稳定错误码映射见 §6.6）。
-- **额外行为（冻结）**：若当前 run 状态为 `calculated` 且允许编辑输入，则需在同一事务内将 `payroll_runs.needs_recalc=true`（对齐 `DEV-PLAN-045` 的“需要重算”语义），并在 UI 提示“需重新计算”。
+- **额外行为（冻结）**：若当前 run 状态为 `calculated` 且允许编辑输入，则 Kernel 在 `submit_payslip_item_input_event(...)` 同一事务内将 `payroll_runs.needs_recalc=true`（对齐 `DEV-PLAN-045`）；应用层禁止直写 `payroll_runs`（One Door）。UI 提示“需重新计算”。
 
 ### 5.2 internal API（便于测试/排障，最小）
 
@@ -481,13 +483,12 @@ gross_i = target_net_i + tax_i
 ### 7.1 Authz 对象与动作（冻结口径）
 
 按现有实现（`pkg/authz/registry.go` + `internal/server/authz_middleware.go`，并对齐 `DEV-PLAN-041`）：
-- 新增对象常量：`staffing.payroll-payslips`（read/admin）。
-- UI：`GET /org/payroll-runs/{run_id}/payslips/{payslip_id}` 为 `read`；`POST .../net-guaranteed-iit-items` 为 `admin`（净额保证项的写入与删除统一视为“修改工资条”，不再单独引入第二个 object，避免权限模型增殖）。
-- internal API：同 UI。
+- 复用对象：`staffing.payslips`（read/admin）。
+- UI：`GET /org/payroll-runs/{run_id}/payslips/{payslip_id}` 为 `read`；`POST /org/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items` 为 `admin`（净额保证项的写入与删除统一视为“修改工资条”，不再单独引入第二个 object，避免权限模型增殖）。
+- internal API：`POST /org/api/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items` 为 `admin`。
 
 **Stopline（必须落实到实现与测试）**
-- 当前 `internal/server/authz_middleware.go` 的 `authzRequirementForRoute` 采用“path 精确匹配”，对包含 `{run_id}/{payslip_id}` 的路由会 fail-open。
-- 本切片新增的 payroll routes 必须在 Authz middleware 中实现 **path pattern 匹配**（语义与 `internal/routing` 的 `{param}` segment 匹配一致即可），并在 `internal/server/authz_middleware_test.go` 增加用例，确保上述 2 条路由在 GET/POST 上都能命中正确的 object/action。
+- `authzRequirementForRoute` 采用“显式登记路由”的 allowlist：当未登记时 `ok=false` 会跳过授权检查（fail-open）。本切片新增的 2 条 POST 路由必须在 `authzRequirementForRoute` 中显式登记（复用现有 `pathMatchRouteTemplate` 的 `{param}` segment 匹配），并在 `internal/server/authz_middleware_test.go` 增加用例，确保 GET/POST 都能命中正确的 object/action（fail-closed）。
 
 ### 7.2 数据隔离
 
