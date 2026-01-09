@@ -320,3 +320,22 @@ DB 闭环（迁移 + smoke）：
   - DB：`make staffing plan && make staffing lint && make staffing migrate up`（含 `cmd/dbtool staffing-smoke`）
   - `make sqlc-generate` 后 `git status --short` 为空
 - CI（Quality Gates）：PR #89 4/4 全绿（E2E 路径包含 `make staffing migrate up`，并运行扩展后的 `staffing-smoke`）
+
+## 19. DEV-PLAN-042（Payroll P0-2：Payslip & Pay Items）
+
+证据（Milestone 1-5：Schema/Kernel/Server/Routing/Authz）：
+- 日期：2026-01-09
+- 合并记录：
+  - PR #92 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/92
+  - PR #93 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/93
+  - PR #94 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/94
+  - PR #95 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/95
+
+证据（Milestone 6：Tests（pro-rate/FTE/舍入点/失败路径/RLS fail-closed））：
+- 日期：2026-01-09
+- 合并记录：PR #96 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/96
+- 产出：
+  - DB Smoke：`cmd/dbtool/main.go`（`staffing-smoke` 覆盖 pro-rate/FTE/舍入点/失败路径/RLS fail-closed）
+- 本地验证：
+  - `go fmt ./... && go vet ./... && make check lint && make test`
+- CI（Quality Gates）：PR #96 4/4 全绿
