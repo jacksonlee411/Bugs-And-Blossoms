@@ -25,12 +25,13 @@
 
 ## PR-2：Milestone 1 — Schema SSOT / RLS / 迁移闭环（staffing）
 
-- **状态**：进行中
+- **状态**：已完成（2026-01-09）
 - **PR**：#132（https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/132）
 
 ## PR-3：Milestone 2 — Kernel（submit_time_profile_event / submit_holiday_day_event）
 
-- **状态**：未开始
+- **状态**：进行中
+- **PR**：#133（https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/133）
 
 ## PR-4：Milestone 3 — 日结果投射（day_type / OFF / OT 分桶）
 
