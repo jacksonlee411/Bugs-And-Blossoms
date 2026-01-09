@@ -194,5 +194,42 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const summaryList = page.locator("h2", { hasText: "Summary" }).locator("xpath=following-sibling::ul[1]");
   await expect(summaryList).toContainText("PRESENT");
 
+  const voidForm = page
+    .locator('form[method="POST"]')
+    .filter({ has: page.locator('input[name="op"][value="void_punch"]') })
+    .first();
+  const outOption = voidForm.locator('select[name="target_punch_event_id"] option', { hasText: "18:00 OUT" }).first();
+  const outPunchEventID = await outOption.getAttribute("value");
+  expect(outPunchEventID).not.toBeNull();
+
+  await voidForm.locator('select[name="target_punch_event_id"]').selectOption(outPunchEventID);
+  await Promise.all([
+    page.waitForURL(
+      (url) =>
+        url.pathname === `/org/attendance-daily-results/${personUUID}/${asOf}` && url.searchParams.get("as_of") === asOf
+    ),
+    voidForm.getByRole("button", { name: "Void" }).click()
+  ]);
+
+  const summaryListAfterVoid = page.locator("h2", { hasText: "Summary" }).locator("xpath=following-sibling::ul[1]");
+  await expect(summaryListAfterVoid).toContainText("EXCEPTION");
+  await expect(summaryListAfterVoid).toContainText("MISSING_OUT");
+
+  const outOptionAfterVoid = page
+    .locator('select[name="target_punch_event_id"] option', { hasText: "18:00 OUT" })
+    .first();
+  await expect(outOptionAfterVoid).toHaveAttribute("disabled", /.*/);
+  await expect(outOptionAfterVoid).toContainText("(VOIDED)");
+
+  const punchesAuditTable = page
+    .locator("h3", { hasText: "Punches (including voided)" })
+    .locator("xpath=following-sibling::table[1]");
+  await expect(punchesAuditTable).toContainText("VOIDED");
+
+  await page.goto(`/org/attendance-daily-results?as_of=${asOf}&work_date=${asOf}`);
+  const dailyResultRowAfterVoid = page.locator("tr", { hasText: pernr }).first();
+  await expect(dailyResultRowAfterVoid).toBeVisible();
+  await expect(dailyResultRowAfterVoid).toContainText("EXCEPTION");
+
   await appContext.close();
 });
