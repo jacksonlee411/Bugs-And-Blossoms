@@ -163,6 +163,13 @@ modules/{module}/
 - DEV-PLAN-044：Payroll P0-4——个税累计预扣法（IIT）与 YTD Balances：`docs/dev-plans/044-payroll-p0-slice-iit-cumulative-withholding-and-balances.md`
 - DEV-PLAN-045：Payroll P0-5——回溯计算（Retroactive Accounting）：`docs/dev-plans/045-payroll-p0-slice-retroactive-accounting.md`
 - DEV-PLAN-046：Payroll P0-6——税后发放（仅个税）的 Tax Gross-up（公司承担税金成本）：`docs/dev-plans/046-payroll-p0-slice-net-guaranteed-iit-tax-gross-up.md`
+- DEV-PLAN-050：HRMS 考勤蓝图设计（Time & Attendance / SmartCore）：`docs/dev-plans/050-hrms-attendance-blueprint.md`
+- DEV-PLAN-051：考勤 Slice 4A——打卡流水闭环（手工/导入，先可见）：`docs/dev-plans/051-attendance-slice-4a-punch-ledger.md`
+- DEV-PLAN-052：考勤 Slice 4B——日结果计算闭环（标准班次）：`docs/dev-plans/052-attendance-slice-4b-daily-results-standard-shift.md`
+- DEV-PLAN-053：考勤 Slice 4C——主数据与合规闭环（TimeProfile/Shift/HolidayCalendar）：`docs/dev-plans/053-attendance-slice-4c-time-profile-holiday-calendar.md`
+- DEV-PLAN-054：考勤 Slice 4D——额度与银行闭环（调休/综合工时累加器）：`docs/dev-plans/054-attendance-slice-4d-time-banking-and-accumulators.md`
+- DEV-PLAN-055：考勤 Slice 4E——纠错与审计闭环（更正事件 + 重算）：`docs/dev-plans/055-attendance-slice-4e-corrections-audit-recalc.md`
+- DEV-PLAN-056：考勤 Slice 4F——生态集成闭环（钉钉 Stream / 企微 Poller）：`docs/dev-plans/056-attendance-slice-4f-dingtalk-wecom-integration.md`
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 - Org（事务性事件溯源 + 同步投射）：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
