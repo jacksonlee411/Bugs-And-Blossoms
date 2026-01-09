@@ -497,6 +497,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		"/org/job-catalog?as_of=2026-01-01",
 		"/org/positions?as_of=2026-01-01",
 		"/org/assignments?as_of=2026-01-01",
+		"/org/attendance-punches?as_of=2026-01-01",
 		"/person/persons?as_of=2026-01-01",
 	}
 	for _, p := range protected {
@@ -555,6 +556,35 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	h.ServeHTTP(recJobCatalogPost, reqJobCatalogPost)
 	if recJobCatalogPost.Code != http.StatusSeeOther {
 		t.Fatalf("jobcatalog post status=%d", recJobCatalogPost.Code)
+	}
+
+	reqAttendancePunchesPost := httptest.NewRequest(http.MethodPost, "/org/attendance-punches?as_of=2026-01-01", strings.NewReader("op=manual&person_uuid=pu1&punch_at=2026-01-01T09:00&punch_type=IN"))
+	reqAttendancePunchesPost.Host = "localhost:8080"
+	reqAttendancePunchesPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqAttendancePunchesPost.AddCookie(session)
+	recAttendancePunchesPost := httptest.NewRecorder()
+	h.ServeHTTP(recAttendancePunchesPost, reqAttendancePunchesPost)
+	if recAttendancePunchesPost.Code != http.StatusSeeOther {
+		t.Fatalf("attendance punches post status=%d", recAttendancePunchesPost.Code)
+	}
+
+	reqAttendancePunchesAPIGet := httptest.NewRequest(http.MethodGet, "/org/api/attendance-punches?person_uuid=pu1&from=2026-01-01T00:00:00Z&to=2026-01-02T00:00:00Z", nil)
+	reqAttendancePunchesAPIGet.Host = "localhost:8080"
+	reqAttendancePunchesAPIGet.AddCookie(session)
+	recAttendancePunchesAPIGet := httptest.NewRecorder()
+	h.ServeHTTP(recAttendancePunchesAPIGet, reqAttendancePunchesAPIGet)
+	if recAttendancePunchesAPIGet.Code != http.StatusOK {
+		t.Fatalf("attendance punches api get status=%d", recAttendancePunchesAPIGet.Code)
+	}
+
+	reqAttendancePunchesAPIPost := httptest.NewRequest(http.MethodPost, "/org/api/attendance-punches", strings.NewReader(`{"person_uuid":"pu1","punch_time":"2026-01-01T00:00:00Z","punch_type":"IN","payload":{}}`))
+	reqAttendancePunchesAPIPost.Host = "localhost:8080"
+	reqAttendancePunchesAPIPost.Header.Set("Content-Type", "application/json")
+	reqAttendancePunchesAPIPost.AddCookie(session)
+	recAttendancePunchesAPIPost := httptest.NewRecorder()
+	h.ServeHTTP(recAttendancePunchesAPIPost, reqAttendancePunchesAPIPost)
+	if recAttendancePunchesAPIPost.Code != http.StatusCreated {
+		t.Fatalf("attendance punches api post status=%d", recAttendancePunchesAPIPost.Code)
 	}
 
 	reqOrgSnapshotPost := httptest.NewRequest(http.MethodPost, "/org/snapshot?as_of=2026-01-01", strings.NewReader("name=A"))
