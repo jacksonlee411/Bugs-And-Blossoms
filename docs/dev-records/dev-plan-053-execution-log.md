@@ -36,6 +36,7 @@
 ## PR-4：Milestone 3 — 日结果投射（day_type / OFF / OT 分桶）
 
 - **状态**：进行中
+- **PR**：#136（https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/136）
 
 ## PR-5：Milestone 4 — UI（TimeProfile / HolidayCalendar）
 
