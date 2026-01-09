@@ -48,7 +48,9 @@
   - [ ] DB 迁移 / Schema（`DEV-PLAN-024`）
   - [ ] sqlc（若触及 queries/config；`DEV-PLAN-025`）
   - [ ] 路由治理（`DEV-PLAN-017`；需更新 `config/routing/allowlist.yaml`）
-  - [ ] Authz（`DEV-PLAN-022`；需更新 `pkg/authz/registry.go` 与 `internal/server/authz_middleware.go`）
+    - 新增：`POST /org/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items`
+    - 新增：`POST /org/api/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items`
+  - [ ] Authz（`DEV-PLAN-022`；需更新 `internal/server/authz_middleware.go` + `internal/server/authz_middleware_test.go`；复用既有 object `staffing.payslips`）
   - [ ] 文档（`make check doc`）
 - **SSOT 链接**
   - 触发器矩阵与本地必跑：`AGENTS.md`
@@ -167,8 +169,7 @@ CREATE TABLE IF NOT EXISTS staffing.payslip_item_input_events (
   event_type text NOT NULL, -- UPSERT / DELETE
 
   item_code text NOT NULL,
-  item_name text NOT NULL,
-  direction text NOT NULL,  -- earning / deduction / employer_cost（P0-6 只允许 earning）
+  item_kind text NOT NULL,  -- earning / deduction / employer_cost（P0-6 只允许 earning；净额保证项仅允许 earning）
 
   currency char(3) NOT NULL DEFAULT 'CNY',
   calc_mode text NOT NULL,   -- amount / net_guaranteed_iit
@@ -186,12 +187,19 @@ CREATE TABLE IF NOT EXISTS staffing.payslip_item_input_events (
 
   CONSTRAINT payslip_item_input_events_event_type_check CHECK (event_type IN ('UPSERT','DELETE')),
   CONSTRAINT payslip_item_input_events_code_check CHECK (btrim(item_code) <> '' AND item_code = btrim(item_code) AND item_code = upper(item_code) AND item_code ~ '^[A-Z0-9_]+$'),
-  CONSTRAINT payslip_item_input_events_name_check CHECK (btrim(item_name) <> '' AND item_name = btrim(item_name)),
-  CONSTRAINT payslip_item_input_events_direction_check CHECK (direction IN ('earning','deduction','employer_cost')),
+  CONSTRAINT payslip_item_input_events_item_kind_check CHECK (item_kind IN ('earning','deduction','employer_cost')),
   CONSTRAINT payslip_item_input_events_currency_check CHECK (currency = btrim(currency) AND currency = upper(currency)),
   CONSTRAINT payslip_item_input_events_calc_mode_check CHECK (calc_mode IN ('amount','net_guaranteed_iit')),
   CONSTRAINT payslip_item_input_events_tax_bearer_check CHECK (tax_bearer IN ('employee','employer')),
   CONSTRAINT payslip_item_input_events_amount_positive_check CHECK (amount > 0),
+  CONSTRAINT payslip_item_input_events_net_guaranteed_contract_check CHECK (
+    calc_mode <> 'net_guaranteed_iit'
+    OR (
+      item_kind = 'earning'
+      AND tax_bearer = 'employer'
+      AND currency = 'CNY'
+    )
+  ),
   CONSTRAINT payslip_item_input_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT payslip_item_input_events_request_id_unique UNIQUE (tenant_id, request_id),
   CONSTRAINT payslip_item_input_events_run_fk FOREIGN KEY (tenant_id, run_id) REFERENCES staffing.payroll_runs(tenant_id, id) ON DELETE RESTRICT
@@ -213,8 +221,7 @@ CREATE TABLE IF NOT EXISTS staffing.payslip_item_inputs (
   assignment_id uuid NOT NULL,
 
   item_code text NOT NULL,
-  item_name text NOT NULL,
-  direction text NOT NULL,
+  item_kind text NOT NULL,
   currency char(3) NOT NULL DEFAULT 'CNY',
   calc_mode text NOT NULL,
   tax_bearer text NOT NULL,
@@ -226,12 +233,19 @@ CREATE TABLE IF NOT EXISTS staffing.payslip_item_inputs (
 
   PRIMARY KEY (tenant_id, id),
   CONSTRAINT payslip_item_inputs_code_check CHECK (btrim(item_code) <> '' AND item_code = btrim(item_code) AND item_code = upper(item_code) AND item_code ~ '^[A-Z0-9_]+$'),
-  CONSTRAINT payslip_item_inputs_name_check CHECK (btrim(item_name) <> '' AND item_name = btrim(item_name)),
-  CONSTRAINT payslip_item_inputs_direction_check CHECK (direction IN ('earning','deduction','employer_cost')),
+  CONSTRAINT payslip_item_inputs_item_kind_check CHECK (item_kind IN ('earning','deduction','employer_cost')),
   CONSTRAINT payslip_item_inputs_currency_check CHECK (currency = btrim(currency) AND currency = upper(currency)),
   CONSTRAINT payslip_item_inputs_calc_mode_check CHECK (calc_mode IN ('amount','net_guaranteed_iit')),
   CONSTRAINT payslip_item_inputs_tax_bearer_check CHECK (tax_bearer IN ('employee','employer')),
   CONSTRAINT payslip_item_inputs_amount_positive_check CHECK (amount > 0),
+  CONSTRAINT payslip_item_inputs_net_guaranteed_contract_check CHECK (
+    calc_mode <> 'net_guaranteed_iit'
+    OR (
+      item_kind = 'earning'
+      AND tax_bearer = 'employer'
+      AND currency = 'CNY'
+    )
+  ),
   CONSTRAINT payslip_item_inputs_natural_unique UNIQUE (tenant_id, run_id, person_uuid, assignment_id, item_code),
   CONSTRAINT payslip_item_inputs_run_fk FOREIGN KEY (tenant_id, run_id) REFERENCES staffing.payroll_runs(tenant_id, id) ON DELETE RESTRICT
 );
@@ -261,7 +275,7 @@ ALTER TABLE staffing.payslip_items
     calc_mode <> 'net_guaranteed_iit'
     OR (
       tax_bearer = 'employer'
-      AND direction = 'earning'
+      AND item_kind = 'earning'
       AND target_net IS NOT NULL
       AND iit_delta IS NOT NULL
       AND amount = target_net + iit_delta
@@ -314,14 +328,14 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
   - `target_net`（必填，string 金额，精确到分，例如 `20000.00`）
   - `request_id`（必填，幂等）
 - **固定语义（服务端强制）**
-  - `direction=earning`
+  - `item_kind=earning`
   - `calc_mode=net_guaranteed_iit`
   - `tax_bearer=employer`
   - `currency=CNY`
-  - `item_name`：P0 可固定为“长期服务奖（税后）”（en/zh 由 i18n 承接）
+  - 展示名称：由 `item_code` + i18n 在渲染时决定（不写入输入表）
 - **成功**：303 跳转回 `GET /org/payroll-runs/{run_id}/payslips/{payslip_id}`。
 - **失败（422）**：回显表单错误（稳定错误码映射见 §6.6）。
-- **额外行为（冻结）**：若当前 run 状态为 `calculated` 且允许编辑输入，则需在同一事务内将 `payroll_runs.needs_recalc=true`（对齐 `DEV-PLAN-045` 的“需要重算”语义），并在 UI 提示“需重新计算”。
+- **额外行为（冻结）**：若当前 run 状态为 `calculated` 且允许编辑输入，则 Kernel 在 `submit_payslip_item_input_event(...)` 同一事务内将 `payroll_runs.needs_recalc=true`（对齐 `DEV-PLAN-045`）；应用层禁止直写 `payroll_runs`（One Door）。UI 提示“需重新计算”。
 
 ### 5.2 internal API（便于测试/排障，最小）
 
@@ -337,8 +351,8 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 - `target_net > 0`
 - `currency == 'CNY'`（P0 冻结）
 - `tax_bearer == employer`
-- `direction == earning`
-- `item_code`/`item_name` 非空且 trim
+- `item_kind == earning`
+- `item_code` 非空且 trim
 
 对同一工资条的净额保证组：
 - `T = Σ target_net` 必须 > 0
@@ -355,8 +369,9 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 - `ΔIIT(x) = IIT(base_income + x) - IIT_base`
 
 其中：
-- `base_income` 为本期计税收入口径（由 `DEV-PLAN-044` 冻结），但**不包含**净额保证组的收入。
-- `x` 为净额保证组的计税收入总额（gross）。
+- `IIT(...)` 表示复用 `DEV-PLAN-044` 的累计预扣引擎计算得到的“本期应预扣税额（`iit_withhold_this_month`）”，YTD balances 与扣除项口径保持不变。
+- `base_income` 表示本期进入 `DEV-PLAN-044` §6.2 “累计收入（ytd_income）”的当月收入增量（P0 即 `payslips.gross_pay`），但在求解阶段先按“不含净额保证组”的收入计算 `IIT_base`。
+- `x` 为净额保证组增加的当月计税收入总额（gross，以分计），仅叠加到上述 `base_income` 上参与 `IIT(base_income + x)` 的计算。
 
 ### 6.3 求解目标（冻结）
 
@@ -392,6 +407,10 @@ hi = T
 for expand in 1..32:
   if netFromX(hi) >= T:
     break
+  if hi > MAX_INT64/2:
+    fail SOLVER_UPPER_BOUND_EXHAUSTED
+  if hi > MAX_INT64 - base_income_cents:
+    fail SOLVER_UPPER_BOUND_EXHAUSTED
   hi = hi * 2
 if netFromX(hi) < T:
   fail SOLVER_UPPER_BOUND_EXHAUSTED
@@ -450,7 +469,7 @@ gross_i = target_net_i + tax_i
 **统一前缀（冻结）**：本切片新增/使用的错误码一律以 `STAFFING_PAYROLL_` 开头（与 `DEV-PLAN-041` 对齐）。
 
 **输入写入口（DB Kernel MESSAGE）**
-- `STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT` → HTTP 422
+- `STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT` → HTTP 422（含：`item_kind!=earning`、`tax_bearer!=employer`、`target_net<=0`、`item_code` 非法等）
 - `STAFFING_PAYROLL_NET_GUARANTEED_IIT_CURRENCY_MISMATCH` → HTTP 422
 - `STAFFING_PAYROLL_RUN_FINALIZED_READONLY` → HTTP 409/422（与 `DEV-PLAN-041` 的 run 状态机错误码口径保持一致）
 - `STAFFING_IDEMPOTENCY_REUSED` → HTTP 409/422（复用既有幂等错误码；对齐 `DEV-PLAN-041` 的幂等语义）
@@ -464,13 +483,12 @@ gross_i = target_net_i + tax_i
 ### 7.1 Authz 对象与动作（冻结口径）
 
 按现有实现（`pkg/authz/registry.go` + `internal/server/authz_middleware.go`，并对齐 `DEV-PLAN-041`）：
-- 新增对象常量：`staffing.payroll-payslips`（read/admin）。
-- UI：`GET /org/payroll-runs/{run_id}/payslips/{payslip_id}` 为 `read`；`POST .../net-guaranteed-iit-items` 为 `admin`（净额保证项的写入与删除统一视为“修改工资条”，不再单独引入第二个 object，避免权限模型增殖）。
-- internal API：同 UI。
+- 复用对象：`staffing.payslips`（read/admin）。
+- UI：`GET /org/payroll-runs/{run_id}/payslips/{payslip_id}` 为 `read`；`POST /org/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items` 为 `admin`（净额保证项的写入与删除统一视为“修改工资条”，不再单独引入第二个 object，避免权限模型增殖）。
+- internal API：`POST /org/api/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items` 为 `admin`。
 
 **Stopline（必须落实到实现与测试）**
-- 当前 `internal/server/authz_middleware.go` 的 `authzRequirementForRoute` 采用“path 精确匹配”，对包含 `{run_id}/{payslip_id}` 的路由会 fail-open。
-- 本切片新增的 payroll routes 必须在 Authz middleware 中实现 **path pattern 匹配**（语义与 `internal/routing` 的 `{param}` segment 匹配一致即可），并在 `internal/server/authz_middleware_test.go` 增加用例，确保上述 2 条路由在 GET/POST 上都能命中正确的 object/action。
+- `authzRequirementForRoute` 采用“显式登记路由”的 allowlist：当未登记时 `ok=false` 会跳过授权检查（fail-open）。本切片新增的 2 条 POST 路由必须在 `authzRequirementForRoute` 中显式登记（复用现有 `pathMatchRouteTemplate` 的 `{param}` segment 匹配），并在 `internal/server/authz_middleware_test.go` 增加用例，确保 GET/POST 都能命中正确的 object/action（fail-closed）。
 
 ### 7.2 数据隔离
 

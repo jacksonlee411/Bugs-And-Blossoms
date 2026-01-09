@@ -232,6 +232,21 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 			InsuranceType: "PENSION",
 			EffectiveDate: "2026-01-01",
 		},
+		listRecalcOut: []PayrollRecalcRequestSummary{{
+			RecalcRequestID: "rr1",
+			PersonUUID:      "p1",
+			AssignmentID:    "a1",
+			EffectiveDate:   "2026-01-15",
+			HitPayPeriodID:  "pp1",
+			CreatedAt:       "2026-02-01T00:00:00Z",
+			Applied:         false,
+		}},
+		getRecalcOut: PayrollRecalcRequestDetail{RecalcRequestID: "rr1"},
+		applyRecalcOut: PayrollRecalcApplication{
+			RecalcRequestID:   "rr1",
+			TargetRunID:       "run1",
+			TargetPayPeriodID: "pp1",
+		},
 	}
 
 	h, err := NewHandlerWithOptions(HandlerOptions{
@@ -304,6 +319,15 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 	if rec := do(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {
 		t.Fatalf("payslip detail status=%d", rec.Code)
 	}
+	if rec := do(http.MethodGet, "/org/payroll-recalc-requests?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {
+		t.Fatalf("payroll recalc requests status=%d", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/org/payroll-recalc-requests/rr1?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {
+		t.Fatalf("payroll recalc request detail status=%d", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/org/payroll-recalc-requests/rr1/apply?as_of=2026-01-01", []byte("target_run_id=run1"), "application/x-www-form-urlencoded", false); rec.Code != http.StatusSeeOther {
+		t.Fatalf("payroll recalc request apply status=%d", rec.Code)
+	}
 
 	if rec := do(http.MethodGet, "/org/api/payroll-periods?pay_group=monthly", nil, "", false); rec.Code != http.StatusOK {
 		t.Fatalf("payroll periods api get status=%d", rec.Code)
@@ -328,6 +352,15 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 	}
 	if rec := do(http.MethodGet, "/org/api/payslips/ps1", nil, "", false); rec.Code != http.StatusOK {
 		t.Fatalf("payslip api get status=%d", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/org/api/payroll-recalc-requests", nil, "", false); rec.Code != http.StatusOK {
+		t.Fatalf("payroll recalc requests api get status=%d", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/org/api/payroll-recalc-requests/rr1", nil, "", false); rec.Code != http.StatusOK {
+		t.Fatalf("payroll recalc request api get status=%d", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply", []byte(`{"target_run_id":"run1"}`), "application/json", false); rec.Code != http.StatusOK {
+		t.Fatalf("payroll recalc request api apply status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
 	if rec := do(http.MethodGet, "/org/payroll-social-insurance-policies?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {

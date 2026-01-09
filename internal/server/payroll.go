@@ -83,6 +83,53 @@ type PayrollBalances struct {
 	YTDIITCredit       string `json:"ytd_iit_credit"`
 }
 
+type PayrollRecalcRequestSummary struct {
+	RecalcRequestID string `json:"recalc_request_id"`
+	PersonUUID      string `json:"person_uuid"`
+	AssignmentID    string `json:"assignment_id"`
+	EffectiveDate   string `json:"effective_date"`
+	HitPayPeriodID  string `json:"hit_pay_period_id"`
+	CreatedAt       string `json:"created_at"`
+	Applied         bool   `json:"applied"`
+}
+
+type PayrollRecalcApplication struct {
+	ApplicationID     string `json:"application_id"`
+	EventID           string `json:"event_id"`
+	RecalcRequestID   string `json:"recalc_request_id"`
+	TargetRunID       string `json:"target_run_id"`
+	TargetPayPeriodID string `json:"target_pay_period_id"`
+	CreatedAt         string `json:"created_at"`
+}
+
+type PayrollRecalcAdjustmentSummary struct {
+	ItemKind string `json:"item_kind"`
+	ItemCode string `json:"item_code"`
+	Amount   string `json:"amount"`
+}
+
+type PayrollRecalcRequestDetail struct {
+	RecalcRequestID string `json:"recalc_request_id"`
+
+	TriggerEventID  string `json:"trigger_event_id"`
+	TriggerSource   string `json:"trigger_source"`
+	RequestID       string `json:"request_id"`
+	InitiatorID     string `json:"initiator_id"`
+	TransactionTime string `json:"transaction_time"`
+	CreatedAt       string `json:"created_at"`
+
+	PersonUUID    string `json:"person_uuid"`
+	AssignmentID  string `json:"assignment_id"`
+	EffectiveDate string `json:"effective_date"`
+
+	HitPayPeriodID string `json:"hit_pay_period_id"`
+	HitRunID       string `json:"hit_run_id"`
+	HitPayslipID   string `json:"hit_payslip_id"`
+
+	Application        *PayrollRecalcApplication        `json:"application,omitempty"`
+	AdjustmentsSummary []PayrollRecalcAdjustmentSummary `json:"adjustments_summary,omitempty"`
+}
+
 type PayrollIITSADUpsertInput struct {
 	EventID     string `json:"event_id"`
 	PersonUUID  string `json:"person_uuid"`
@@ -127,6 +174,10 @@ type PayrollStore interface {
 
 	ListPayslips(ctx context.Context, tenantID string, runID string) ([]Payslip, error)
 	GetPayslip(ctx context.Context, tenantID string, payslipID string) (PayslipDetail, error)
+
+	ListPayrollRecalcRequests(ctx context.Context, tenantID string, personUUID string, state string) ([]PayrollRecalcRequestSummary, error)
+	GetPayrollRecalcRequest(ctx context.Context, tenantID string, recalcRequestID string) (PayrollRecalcRequestDetail, error)
+	ApplyPayrollRecalcRequest(ctx context.Context, tenantID string, initiatorID string, recalcRequestID string, targetRunID string) (PayrollRecalcApplication, error)
 
 	GetPayrollBalances(ctx context.Context, tenantID string, personUUID string, taxYear int) (PayrollBalances, error)
 	UpsertPayrollIITSAD(ctx context.Context, tenantID string, in PayrollIITSADUpsertInput) (PayrollIITSADUpsertResult, error)
@@ -852,6 +903,264 @@ func (s *staffingPGStore) GetPayslip(ctx context.Context, tenantID string, paysl
 
 	if err := tx.Commit(ctx); err != nil {
 		return PayslipDetail{}, err
+	}
+	return out, nil
+}
+
+func (s *staffingPGStore) ListPayrollRecalcRequests(ctx context.Context, tenantID string, personUUID string, state string) ([]PayrollRecalcRequestSummary, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	personUUID = strings.TrimSpace(personUUID)
+	state = strings.TrimSpace(state)
+	if state != "" && state != "pending" && state != "applied" {
+		return nil, errors.New("state must be pending|applied")
+	}
+
+	query := `
+SELECT
+  r.recalc_request_id::text,
+  r.person_uuid::text,
+  r.assignment_id::text,
+  r.effective_date::text,
+  r.hit_pay_period_id::text,
+  r.created_at::text,
+  (a.id IS NOT NULL) AS applied
+FROM staffing.payroll_recalc_requests r
+LEFT JOIN staffing.payroll_recalc_applications a
+  ON a.tenant_id = r.tenant_id AND a.recalc_request_id = r.recalc_request_id
+WHERE r.tenant_id = $1::uuid
+`
+	args := []any{tenantID}
+
+	if personUUID != "" {
+		args = append(args, personUUID)
+		query += ` AND r.person_uuid = $2::uuid`
+	}
+
+	if state == "pending" {
+		query += ` AND a.id IS NULL`
+	} else if state == "applied" {
+		query += ` AND a.id IS NOT NULL`
+	}
+
+	query += `
+ORDER BY r.created_at DESC, r.id DESC
+LIMIT 500
+`
+
+	rows, err := tx.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []PayrollRecalcRequestSummary
+	for rows.Next() {
+		var r PayrollRecalcRequestSummary
+		if err := rows.Scan(&r.RecalcRequestID, &r.PersonUUID, &r.AssignmentID, &r.EffectiveDate, &r.HitPayPeriodID, &r.CreatedAt, &r.Applied); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *staffingPGStore) GetPayrollRecalcRequest(ctx context.Context, tenantID string, recalcRequestID string) (PayrollRecalcRequestDetail, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return PayrollRecalcRequestDetail{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return PayrollRecalcRequestDetail{}, err
+	}
+
+	recalcRequestID = strings.TrimSpace(recalcRequestID)
+	if recalcRequestID == "" {
+		return PayrollRecalcRequestDetail{}, errors.New("recalc_request_id is required")
+	}
+
+	var out PayrollRecalcRequestDetail
+	if err := tx.QueryRow(ctx, `
+SELECT
+  recalc_request_id::text,
+  trigger_event_id::text,
+  trigger_source,
+  request_id,
+  initiator_id::text,
+  transaction_time::text,
+  created_at::text,
+  person_uuid::text,
+  assignment_id::text,
+  effective_date::text,
+  hit_pay_period_id::text,
+  hit_run_id::text,
+  COALESCE(hit_payslip_id::text, '') AS hit_payslip_id
+FROM staffing.payroll_recalc_requests
+WHERE tenant_id = $1::uuid AND recalc_request_id = $2::uuid
+`, tenantID, recalcRequestID).Scan(
+		&out.RecalcRequestID,
+		&out.TriggerEventID,
+		&out.TriggerSource,
+		&out.RequestID,
+		&out.InitiatorID,
+		&out.TransactionTime,
+		&out.CreatedAt,
+		&out.PersonUUID,
+		&out.AssignmentID,
+		&out.EffectiveDate,
+		&out.HitPayPeriodID,
+		&out.HitRunID,
+		&out.HitPayslipID,
+	); err != nil {
+		return PayrollRecalcRequestDetail{}, err
+	}
+
+	var app PayrollRecalcApplication
+	if err := tx.QueryRow(ctx, `
+SELECT
+  id::text,
+  event_id::text,
+  recalc_request_id::text,
+  target_run_id::text,
+  target_pay_period_id::text,
+  created_at::text
+FROM staffing.payroll_recalc_applications
+WHERE tenant_id = $1::uuid AND recalc_request_id = $2::uuid
+`, tenantID, recalcRequestID).Scan(
+		&app.ApplicationID,
+		&app.EventID,
+		&app.RecalcRequestID,
+		&app.TargetRunID,
+		&app.TargetPayPeriodID,
+		&app.CreatedAt,
+	); err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return PayrollRecalcRequestDetail{}, err
+		}
+	} else {
+		out.Application = &app
+	}
+
+	rows, err := tx.Query(ctx, `
+SELECT
+  item_kind,
+  item_code,
+  COALESCE(sum(amount), 0)::text
+FROM staffing.payroll_adjustments
+WHERE tenant_id = $1::uuid AND recalc_request_id = $2::uuid
+GROUP BY item_kind, item_code
+ORDER BY item_kind ASC, item_code ASC
+`, tenantID, recalcRequestID)
+	if err != nil {
+		return PayrollRecalcRequestDetail{}, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var s PayrollRecalcAdjustmentSummary
+		if err := rows.Scan(&s.ItemKind, &s.ItemCode, &s.Amount); err != nil {
+			return PayrollRecalcRequestDetail{}, err
+		}
+		out.AdjustmentsSummary = append(out.AdjustmentsSummary, s)
+	}
+	if err := rows.Err(); err != nil {
+		return PayrollRecalcRequestDetail{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return PayrollRecalcRequestDetail{}, err
+	}
+	return out, nil
+}
+
+func (s *staffingPGStore) ApplyPayrollRecalcRequest(ctx context.Context, tenantID string, initiatorID string, recalcRequestID string, targetRunID string) (PayrollRecalcApplication, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return PayrollRecalcApplication{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return PayrollRecalcApplication{}, err
+	}
+
+	initiatorID = strings.TrimSpace(initiatorID)
+	if initiatorID == "" {
+		return PayrollRecalcApplication{}, errors.New("initiator_id is required")
+	}
+	recalcRequestID = strings.TrimSpace(recalcRequestID)
+	if recalcRequestID == "" {
+		return PayrollRecalcApplication{}, errors.New("recalc_request_id is required")
+	}
+	targetRunID = strings.TrimSpace(targetRunID)
+	if targetRunID == "" {
+		return PayrollRecalcApplication{}, errors.New("target_run_id is required")
+	}
+
+	var eventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+		return PayrollRecalcApplication{}, err
+	}
+	requestID := eventID
+
+	var applicationDBID int64
+	if err := tx.QueryRow(ctx, `
+SELECT staffing.submit_payroll_recalc_apply_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::uuid,
+  $5::text,
+  $6::uuid
+)
+`, eventID, tenantID, recalcRequestID, targetRunID, requestID, initiatorID).Scan(&applicationDBID); err != nil {
+		return PayrollRecalcApplication{}, err
+	}
+	if applicationDBID <= 0 {
+		return PayrollRecalcApplication{}, errors.New("unexpected application_db_id")
+	}
+
+	var out PayrollRecalcApplication
+	if err := tx.QueryRow(ctx, `
+SELECT
+  id::text,
+  event_id::text,
+  recalc_request_id::text,
+  target_run_id::text,
+  target_pay_period_id::text,
+  created_at::text
+FROM staffing.payroll_recalc_applications
+WHERE tenant_id = $1::uuid AND id = $2
+`, tenantID, applicationDBID).Scan(
+		&out.ApplicationID,
+		&out.EventID,
+		&out.RecalcRequestID,
+		&out.TargetRunID,
+		&out.TargetPayPeriodID,
+		&out.CreatedAt,
+	); err != nil {
+		return PayrollRecalcApplication{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return PayrollRecalcApplication{}, err
 	}
 	return out, nil
 }
