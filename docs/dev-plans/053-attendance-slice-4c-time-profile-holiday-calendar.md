@@ -132,7 +132,7 @@ graph TD
 - `staffing.holiday_days`
 
 **建表批准记录（落迁移前必须完成）**
-- [ ] 已批准新增以上 4 张表（批准人：；时间：；证据：PR/评论链接）
+- [x] 已批准新增以上 4 张表（批准人：shangmeilin；时间：2026-01-09；证据：PR（待补，本 PR））
 
 #### 4.1.1 `staffing.time_profile_events` / `staffing.time_profile_versions`（租户默认 TimeProfile）
 
