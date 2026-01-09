@@ -36,6 +36,7 @@ type HandlerOptions struct {
 	PositionStore    PositionStore
 	AssignmentStore  AssignmentStore
 	PayrollStore     PayrollStore
+	AttendanceStore  TimePunchStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -66,6 +67,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	positionStore := opts.PositionStore
 	assignmentStore := opts.AssignmentStore
 	payrollStore := opts.PayrollStore
+	attendanceStore := opts.AttendanceStore
 	tenancyResolver := opts.TenancyResolver
 	identityProvider := opts.IdentityProvider
 
@@ -110,7 +112,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		}
 	}
 
-	if positionStore == nil || assignmentStore == nil || payrollStore == nil {
+	if positionStore == nil || assignmentStore == nil || payrollStore == nil || attendanceStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
 			s := newStaffingPGStore(pgStore.pool)
 			if positionStore == nil {
@@ -122,6 +124,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			if payrollStore == nil {
 				payrollStore = s
 			}
+			if attendanceStore == nil {
+				attendanceStore = s
+			}
 		} else {
 			s := newStaffingMemoryStore()
 			if positionStore == nil {
@@ -129,6 +134,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			}
 			if assignmentStore == nil {
 				assignmentStore = s
+			}
+			if attendanceStore == nil {
+				attendanceStore = s
 			}
 		}
 	}
@@ -253,6 +261,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			`<li><a href="/org/setid?as_of=`+asOf+`" hx-get="/org/setid?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_setid")+`</a></li>`+
 			`<li><a href="/org/job-catalog?as_of=`+asOf+`" hx-get="/org/job-catalog?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_jobcatalog")+`</a></li>`+
 			`<li><a href="/org/positions?as_of=`+asOf+`" hx-get="/org/positions?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
+			`<li><a href="/org/attendance-punches?as_of=`+asOf+`" hx-get="/org/attendance-punches?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance")+`</a></li>`+
 			`<li><a href="/org/payroll-periods?as_of=`+asOf+`" hx-get="/org/payroll-periods?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_payroll")+`</a></li>`+
 			`<li><a href="/person/persons?as_of=`+asOf+`" hx-get="/person/persons?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_person")+`</a></li>`+
 			`</ul>`)
@@ -312,6 +321,18 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssignments(w, r, positionStore, assignmentStore, personStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-punches", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendancePunches(w, r, attendanceStore, personStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/attendance-punches", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendancePunches(w, r, attendanceStore, personStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-daily-results", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceDailyResultsPlaceholder(w, r)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-daily-results/{person_uuid}/{work_date}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceDailyResultDetailPlaceholder(w, r)
+	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-periods", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollPeriods(w, r, payrollStore)
 	}))
@@ -356,6 +377,15 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssignmentsAPI(w, r, assignmentStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/attendance-punches", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendancePunchesAPI(w, r, attendanceStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/attendance-punches", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendancePunchesAPI(w, r, attendanceStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/attendance-daily-results", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceDailyResultsAPIPlaceholder(w, r)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payroll-periods", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollPeriodsAPI(w, r, payrollStore)
@@ -518,6 +548,7 @@ func renderNav(r *http.Request, asOf string) string {
 		`<li><a href="/org/setid?as_of=` + asOf + `" hx-get="/org/setid?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_setid") + `</a></li>` +
 		`<li><a href="/org/job-catalog?as_of=` + asOf + `" hx-get="/org/job-catalog?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
 		`<li><a href="/org/positions?as_of=` + asOf + `" hx-get="/org/positions?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
+		`<li><a href="/org/attendance-punches?as_of=` + asOf + `" hx-get="/org/attendance-punches?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance") + `</a></li>` +
 		`<li><a href="/org/payroll-periods?as_of=` + asOf + `" hx-get="/org/payroll-periods?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_payroll") + `</a></li>` +
 		`<li><a href="/person/persons?as_of=` + asOf + `" hx-get="/person/persons?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
 		`</ul></nav>`
@@ -595,6 +626,8 @@ func tr(lang string, key string) string {
 			return "职位分类"
 		case "nav_staffing":
 			return "用工任职"
+		case "nav_attendance":
+			return "考勤"
 		case "nav_payroll":
 			return "薪酬"
 		case "nav_person":
@@ -615,6 +648,8 @@ func tr(lang string, key string) string {
 		return "Job Catalog"
 	case "nav_staffing":
 		return "Staffing"
+	case "nav_attendance":
+		return "Attendance"
 	case "nav_payroll":
 		return "Payroll"
 	case "nav_person":

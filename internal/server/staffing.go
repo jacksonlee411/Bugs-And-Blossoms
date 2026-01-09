@@ -294,6 +294,7 @@ SELECT staffing.submit_assignment_event(
 type staffingMemoryStore struct {
 	positions  map[string][]Position
 	assigns    map[string]map[string][]Assignment
+	punches    map[string]map[string][]TimePunch
 	positions0 []Position
 }
 
@@ -301,6 +302,7 @@ func newStaffingMemoryStore() *staffingMemoryStore {
 	return &staffingMemoryStore{
 		positions: make(map[string][]Position),
 		assigns:   make(map[string]map[string][]Assignment),
+		punches:   make(map[string]map[string][]TimePunch),
 	}
 }
 

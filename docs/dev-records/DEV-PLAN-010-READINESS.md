@@ -339,3 +339,27 @@ DB 闭环（迁移 + smoke）：
 - 本地验证：
   - `go fmt ./... && go vet ./... && make check lint && make test`
 - CI（Quality Gates）：PR #96 4/4 全绿
+
+## 20. DEV-PLAN-051（考勤 Slice 4A：Punch Ledger）
+
+证据：
+- 日期：2026-01-09
+- 合并记录（按 `docs/dev-plans/051-attendance-slice-4a-punch-ledger.md` §8.2 每步一个 PR）：
+  - Step1 Routing：PR #102 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/102
+  - Step2 Authz：PR #103 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/103
+  - Step3 DB（表 + RLS + kernel）：PR #104 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/104
+  - Step4 sqlc（生成物清洁）：PR #105 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/105
+  - Step5 Go（store + handlers + nav + route wiring）：PR #106 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/106
+  - Step6 Tests（RLS fail-closed / 跨租户隔离 / 幂等冲突）：PR #108 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/108
+- 本地门禁（结论：全绿）：
+  - Go：`go fmt ./... && go vet ./... && make check lint && make test`
+  - DB（闭环）：`make staffing plan && make staffing lint && make staffing migrate up`
+- CI（Quality Gates）：上述 PR 均为 4/4 checks 全绿（不出现 skipped）
+- 新增表/迁移（红线）手工确认：已在对话中确认（2026-01-09）
+
+## 21. DEV-PLAN-052（考勤 Slice 4B：日结果计算闭环（标准班次））
+
+证据：
+- 日期：2026-01-09
+- 合并记录（按 `docs/dev-plans/052-attendance-slice-4b-daily-results-standard-shift.md` §8.2 每步一个 PR）：
+  - Step1 Routing：PR #110 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/110
