@@ -788,7 +788,7 @@ LIMIT 50;
 5. [x] Go：
    - store：在 `internal/server/attendance.go` 增补 void/recalc 的 store 方法（显式 tx + tenant 注入 + 调 kernel）。
    - handler/UI：在 `internal/server/attendance_handlers.go` 的日结果详情页实现 POST（void/recalc），并补齐审计区块（事件链展示）。
-6. [ ] 测试：补齐本计划覆盖（见 §9）。
+6. [x] 测试：补齐本计划覆盖（见 §9）。
 7. [ ] （可选）E2E：把“作废 punch → 日结果变化可见”纳入 smoke（`make e2e`）。
 8. [ ] 证据：按 `docs/dev-records/` 口径登记关键门禁执行记录（时间戳/命令/结论）。
 
