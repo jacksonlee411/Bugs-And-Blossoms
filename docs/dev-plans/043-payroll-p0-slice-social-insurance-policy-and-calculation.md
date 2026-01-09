@@ -44,6 +44,9 @@
   - [ ] DB 迁移 / Schema（`DEV-PLAN-024`）
   - [ ] sqlc（若触及 queries/config；`DEV-PLAN-025`）
   - [ ] 路由治理（`DEV-PLAN-017`；需更新 `config/routing/allowlist.yaml`）
+  - [ ] Authz（`DEV-PLAN-022`；涉及 `pkg/authz/registry.go` / `internal/server/authz_middleware.go`）
+  - [ ] i18n（仅 `en/zh`；`DEV-PLAN-020`；若触及 `modules/**/presentation/locales/**` 则命中 `make check tr`）
+  - [ ] `.templ` / Tailwind / Astro UI / presentation assets（按 `AGENTS.md`；若触及生成物则必须 `make generate && make css` 且生成后 `git status --short` 为空）
   - [ ] 文档（`make check doc`）
 - **SSOT 链接**
   - 触发器矩阵与本地必跑：`AGENTS.md`
@@ -52,6 +55,8 @@
   - sqlc 规范：`docs/dev-plans/025-sqlc-guidelines.md`
   - 路由策略：`docs/dev-plans/017-routing-strategy.md`
   - UI Shell：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+  - Authz（Casbin）：`docs/dev-plans/022-authz-casbin-toolchain.md`
+  - i18n（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
   - 时间语义（Valid Time）：`docs/dev-plans/032-effective-date-day-granularity.md`
 
 ### 0.4 关键不变量与失败路径（停止线）
@@ -64,7 +69,7 @@
 - **舍入即合同**：冻结 `rounding_rule` 枚举与精度 `precision`；舍入点固定为“逐险种金额行”层面（`employer_amount`/`employee_amount`），汇总通过行求和得到。
 - **单城市冻结（P0）**：同一 tenant 的社保政策只允许一个 `city_code`，且 `hukou_type` 仅允许 `default`；违反必须抛稳定错误码（见 §6.1/§6.2）。
 - **可对账**：险种分项必须子表；禁止 JSONB array 作为权威明细（对齐 `DEV-PLAN-040` §0.4.1）。
-- **新增表需确认（红线）**：实现阶段一旦要落地新的 `CREATE TABLE` 迁移，需你在 PR 前明确确认（SSOT：`AGENTS.md`）。
+- **新增表需确认（红线）**：实现阶段一旦要落地新的 `CREATE TABLE` 迁移，需你在 PR 前明确确认（SSOT：`AGENTS.md`；本计划新增表已在 §12.1 获得确认）。
 
 ### 0.5 验收标准（Done 口径）
 
@@ -337,10 +342,13 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 - **用途**：展示社保政策列表（按险种）+ 新增/更新政策版本表单。
 - **Query（可选）**：`as_of=YYYY-MM-DD`（默认今日；用于查看某日生效的版本）。
 - **返回**：HTML 页面（列表 + 表单）。
+- **路由治理**：`route_class=ui`；需加入 `config/routing/allowlist.yaml`（见 §5.4）。
+- **可发现性（必须）**：在 Payroll 相关页面提供入口（建议：`/org/payroll-periods` 与 `/org/payroll-runs` 页面顶部加入“社保政策”链接，避免成为隐藏功能；对齐 `AGENTS.md` §3.8）。
 
 #### `POST /org/payroll-social-insurance-policies`
 - **语义**：为某险种创建（或追加）一个政策版本（事件写入 + versions 投射）。
 - **Form Fields**
+  - `event_id`（必填；UUID；由服务端在 GET 渲染时生成并作为隐藏字段回传，用于防双击/重试幂等；见“幂等约定”）
   - `city_code`（必填；P0 同 tenant 只允许一个；大写；trim 后非空）
   - `hukou_type`（必填；P0 固定为 `default`）
   - `insurance_type`（必填；见 §2.1 枚举）
@@ -352,6 +360,13 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
   - `rules_config_json`（可选；JSON object；P0 可先只支持空对象或缺省）
 - **成功**：303 跳转回 `GET /org/payroll-social-insurance-policies`。
 - **失败（422）**：回显表单错误（包括：多城市不支持、户口类型不支持、参数非法、有效期冲突等）。
+- **路由治理**：`route_class=ui`；需加入 `config/routing/allowlist.yaml`（见 §5.4）。
+
+**幂等约定（冻结，P0）**
+- 本端点对 DB Kernel 的幂等键为 `event_id`（对应 `staffing.submit_social_insurance_policy_event.p_event_id`）。
+- `request_id`（传入 Kernel）在 P0 固定设置为 `event_id` 的文本形式（与现有 `staffing.submit_*_event` / `staffing.submit_payroll_*_event` 的最小模式一致），避免引入第二套 id 口径。
+- 若同一 `event_id` 被重复提交且载荷一致：应返回成功（Kernel 返回既有 event db id）。
+- 若同一 `event_id` 被重复提交但载荷不一致：必须失败并返回稳定错误 `STAFFING_IDEMPOTENCY_REUSED`（fail-closed，避免写入漂移）。
 
 ### 5.2 UI：工资条详情的险种分项展示
 
@@ -374,6 +389,15 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 - `POST /org/api/payroll-social-insurance-policies`
   - JSON body（字段同 UI form；金额/费率用 string）
   - 成功：`201 {policy_id,last_event_db_id,...}`
+
+### 5.4 Routing（治理对齐，必须）
+
+> 本节冻结新增路由的 `route_class` 与 allowlist 形态，避免实现期漂移（对齐 `DEV-PLAN-017` + `make check routing`）。
+
+- UI（`route_class=ui`）
+  - `/org/payroll-social-insurance-policies`（`methods: [GET, POST]`）
+- Internal API（`route_class=internal_api`）
+  - `/org/api/payroll-social-insurance-policies`（`methods: [GET, POST]`）
 
 ## 6. 核心逻辑与算法（Business Logic & Algorithms）
 
@@ -406,7 +430,7 @@ SELECT staffing.submit_social_insurance_policy_event(
    - 读取该 identity 的 `id`，若与 `p_policy_id` 不一致 → 抛 `STAFFING_SOCIAL_INSURANCE_POLICY_ID_MISMATCH`。
 5. 对 `policy_id` 加锁：`pg_advisory_xact_lock(hashtextextended(format('staffing:social_insurance_policy:%s:%s', tenant_id, policy_id),0))`。
 6. 插入 `social_insurance_policy_events`（`ON CONFLICT(event_id) DO NOTHING`）；若 `event_id` 已存在则做幂等对比，不一致抛 `STAFFING_IDEMPOTENCY_REUSED`。
-   - 若触发 `social_insurance_policy_events_one_per_day_unique`（同一 policy 同一天重复写入）→ 抛 `STAFFING_PAYROLL_SI_POLICY_EVENT_ONE_PER_DAY_CONFLICT`（稳定错误码；避免暴露 PG constraint）。
+    - 若触发 `social_insurance_policy_events_one_per_day_unique`（同一 policy 同一天重复写入）→ 抛 `STAFFING_PAYROLL_SI_POLICY_EVENT_ONE_PER_DAY_CONFLICT`（稳定错误码；避免暴露 PG constraint）。
 7. `replay_social_insurance_policy_versions(p_tenant_id, p_policy_id)`：同事务删除并重建 versions（并做参数/规则校验）；失败则整笔事务失败（fail-closed）。
 
 **稳定错误码（新增/复用，口径冻结）**
@@ -550,3 +574,15 @@ WHERE tenant_id = $1 AND payslip_id = $2;
 
 - `DEV-PLAN-044`：会以本切片冻结的“专项扣除（社保个人部分）”口径进入累计预扣法；不得在 044 内另造第二套求和口径。
 - `DEV-PLAN-045/046`：会进一步改变 `net_pay/employer_total` 的组成（回溯结转/税金成本）；本切片只冻结社保部分的明细与求和规则，不提前引入后续复杂度。
+
+## 12. 待决事项（Open Items）
+
+> 本节列出“需要你确认”或“需要明确取舍”的事项；未决前不应在实现期临时发明规则（对齐 `DEV-PLAN-003`）。
+
+1. [x] **新增 4 张表 + 对应迁移**：`staffing.social_insurance_policies/social_insurance_policy_events/social_insurance_policy_versions/payslip_social_insurance_items`（见 §4.1/§4.2；已确认：2026-01-09）。
+2. **`initiator_id` 的真实语义**：P0 阶段现有模块多用 `tenant_id` 作为 `initiator_id` 占位；后续 AuthN 真实化（`DEV-PLAN-019/023`）会切到 subject id。
+   - 建议：P0 先沿用占位（保证接口与审计字段齐全），并在实现时把“占位→真实 subject id”的替换点集中在服务层/存储层一处，避免散落。
+3. **UI 文案/i18n 落点**：本切片将新增险种名称与“社保政策”入口文案；当前实现可能落在 Go UI（`internal/server`）或模块 locales JSON（`DEV-PLAN-020` 的目标形态）。
+   - 建议：若本切片 UI 仍在 `internal/server`，先用 Go 映射最小交付；一旦转入模块化 presentation（`modules/**/presentation`）再按 `DEV-PLAN-020` 切到 `locales/{en,zh}.json` 并开启 `make check tr` 作为 fail-fast。
+4. **“同一 policy 同一天仅 1 次事件”是否接受**：本文用 `UNIQUE (tenant_id, policy_id, effective_date)` 禁止同日多次变更（简化，不引入 PeopleSoft 风格 `EFFSEQ`）。
+   - 建议：P0 接受该限制以保持简单；若你认为必须支持同日更正，建议另立 dev-plan 引入 `effseq`（或显式“撤销/更正”事件）并同步更新 no-overlap/选择算法与测试矩阵。
