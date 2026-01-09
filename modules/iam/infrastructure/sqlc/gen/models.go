@@ -282,19 +282,50 @@ type StaffingDailyAttendanceResult struct {
 	PersonUuid             pgtype.UUID        `json:"person_uuid"`
 	WorkDate               pgtype.Date        `json:"work_date"`
 	RulesetVersion         string             `json:"ruleset_version"`
+	DayType                *string            `json:"day_type"`
 	Status                 string             `json:"status"`
 	Flags                  []string           `json:"flags"`
 	FirstInTime            pgtype.Timestamptz `json:"first_in_time"`
 	LastOutTime            pgtype.Timestamptz `json:"last_out_time"`
+	ScheduledMinutes       int32              `json:"scheduled_minutes"`
 	WorkedMinutes          int32              `json:"worked_minutes"`
+	OvertimeMinutes150     int32              `json:"overtime_minutes_150"`
+	OvertimeMinutes200     int32              `json:"overtime_minutes_200"`
+	OvertimeMinutes300     int32              `json:"overtime_minutes_300"`
 	LateMinutes            int32              `json:"late_minutes"`
 	EarlyLeaveMinutes      int32              `json:"early_leave_minutes"`
 	InputPunchCount        int32              `json:"input_punch_count"`
 	InputMaxPunchEventDbID *int64             `json:"input_max_punch_event_db_id"`
 	InputMaxPunchTime      pgtype.Timestamptz `json:"input_max_punch_time"`
+	TimeProfileLastEventID *int64             `json:"time_profile_last_event_id"`
+	HolidayDayLastEventID  *int64             `json:"holiday_day_last_event_id"`
 	ComputedAt             pgtype.Timestamptz `json:"computed_at"`
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingHolidayDay struct {
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	DayDate     pgtype.Date        `json:"day_date"`
+	DayType     string             `json:"day_type"`
+	HolidayCode *string            `json:"holiday_code"`
+	Note        *string            `json:"note"`
+	LastEventID int64              `json:"last_event_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingHolidayDayEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	DayDate         pgtype.Date        `json:"day_date"`
+	EventType       string             `json:"event_type"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type StaffingIitSpecialAdditionalDeductionClaim struct {
@@ -528,6 +559,35 @@ type StaffingSocialInsurancePolicyVersion struct {
 	RulesConfig   []byte                    `json:"rules_config"`
 	Validity      pgtype.Range[pgtype.Date] `json:"validity"`
 	LastEventID   int64                     `json:"last_event_id"`
+}
+
+type StaffingTimeProfileEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	EventType       string             `json:"event_type"`
+	EffectiveDate   pgtype.Date        `json:"effective_date"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type StaffingTimeProfileVersion struct {
+	ID                          int64                     `json:"id"`
+	TenantID                    pgtype.UUID               `json:"tenant_id"`
+	Name                        *string                   `json:"name"`
+	LifecycleStatus             string                    `json:"lifecycle_status"`
+	ShiftStartLocal             pgtype.Time               `json:"shift_start_local"`
+	ShiftEndLocal               pgtype.Time               `json:"shift_end_local"`
+	LateToleranceMinutes        int32                     `json:"late_tolerance_minutes"`
+	EarlyLeaveToleranceMinutes  int32                     `json:"early_leave_tolerance_minutes"`
+	OvertimeMinMinutes          int32                     `json:"overtime_min_minutes"`
+	OvertimeRoundingMode        string                    `json:"overtime_rounding_mode"`
+	OvertimeRoundingUnitMinutes int32                     `json:"overtime_rounding_unit_minutes"`
+	Validity                    pgtype.Range[pgtype.Date] `json:"validity"`
+	LastEventID                 int64                     `json:"last_event_id"`
 }
 
 type StaffingTimePunchEvent struct {
