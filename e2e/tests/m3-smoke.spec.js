@@ -190,7 +190,9 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
 
   await dailyResultRow.locator("a").first().click();
   await expect(page.locator("h1")).toHaveText("Attendance / Daily Results / Detail");
-  await expect(page.locator("ul")).toContainText("PRESENT");
+
+  const summaryList = page.locator("h2", { hasText: "Summary" }).locator("xpath=following-sibling::ul[1]");
+  await expect(summaryList).toContainText("PRESENT");
 
   await appContext.close();
 });
