@@ -45,7 +45,8 @@
 
 ## PR-5：Milestone 4 — UI（TimeProfile / HolidayCalendar）
 
-- **状态**：未开始
+- **状态**：进行中（2026-01-09）
+- **PR**：#137（https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/137）
 
 ## PR-6：Milestone 5 — Authz / Routing（allowlist + bootstrap policy）
 
