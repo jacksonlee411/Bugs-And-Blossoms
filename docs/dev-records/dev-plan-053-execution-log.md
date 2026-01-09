@@ -43,10 +43,16 @@
 - **门禁**
   - GitHub Actions（Quality Gates）：全绿（Code Quality & Formatting / Unit & Integration / Routing Gates / E2E）
 
+## PR-4b：执行日志回填（登记 PR-4 完整完成情况）
+
+- **状态**：已完成（2026-01-09）
+- **PR**：#137（https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/137）
+- **本地门禁**
+  - `make check doc`：通过
+
 ## PR-5：Milestone 4 — UI（TimeProfile / HolidayCalendar）
 
-- **状态**：进行中（2026-01-09）
-- **PR**：#137（https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/137）
+- **状态**：未开始
 
 ## PR-6：Milestone 5 — Authz / Routing（allowlist + bootstrap policy）
 
