@@ -1,6 +1,6 @@
 # DEV-PLAN-054：考勤 Slice 4D——额度与银行闭环（调休/综合工时累加器）
 
-**状态**: 草拟中（2026-01-10 00:05 UTC）
+**状态**: 已实施（2026-01-09）— 交付见执行日志：`docs/dev-records/dev-plan-054-execution-log.md`
 
 > 目标：按 `docs/dev-plans/001-technical-design-template.md` 补齐到“无需再做设计决策即可开工”的细化程度（Level 4-5）。
 
@@ -377,7 +377,7 @@ PERFORM staffing.recompute_time_bank_cycle(p_tenant_id, p_person_uuid, p_work_da
 4. [x] Routing/Authz：新增 `/org/attendance-time-bank` 路由 + allowlist + authz registry/middleware + bootstrap policy。
 5. [x] Go：实现读 store（tx + tenant 注入）与 handler，挂到 nav（en/zh 文字同构 `internal/server/handler.go` 的 `tr(...)`）。
 6. [x] 测试：覆盖聚合口径与联动更新；RLS/Authz 负例；并发锁行为（可用并发提交 2 个不同日期 punches 来验证最终累计不丢失）。
-7. [ ] 证据：按 `docs/dev-records/` 口径登记关键门禁执行记录（时间戳/命令/结论）。
+7. [x] 证据：按 `docs/dev-records/` 口径登记关键门禁执行记录（时间戳/命令/结论）。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
