@@ -2,6 +2,9 @@
 
 **状态**: 规划中（2026-01-08 02:40 UTC）
 
+已完成事项（合并记录）：
+- 阶段 1（§8.2-1）：`iit_special_additional_deduction_claims`（events+projection+RLS）+ 迁移闭环（PR：TBD）
+
 > 上游路线图：`DEV-PLAN-039`  
 > 蓝图合同（范围/不变量/算法基线）：`DEV-PLAN-040`（重点：§3.3、§5.2）  
 > 依赖：`DEV-PLAN-041/042/043`（主流程载体 + payslip/pay items + 社保扣缴）  
@@ -500,7 +503,7 @@ SELECT staffing.submit_iit_special_additional_deduction_claim_event(
 
 ### 8.2 里程碑（实现顺序建议）
 
-1. [ ] Schema SSOT：新增 `iit_special_additional_deduction_claims`（events+projection）+ RLS。
+1. [x] Schema SSOT：新增 `iit_special_additional_deduction_claims`（events+projection）+ RLS。
 2. [ ] Schema SSOT：新增 `payroll_balances` + RLS。
 3. [ ] 迁移闭环：`migrations/staffing/*` + `atlas.sum`（`make staffing plan` No Changes）。
 4. [ ] Go：IIT 引擎（纯函数）+ 单元测试（含留抵）。
