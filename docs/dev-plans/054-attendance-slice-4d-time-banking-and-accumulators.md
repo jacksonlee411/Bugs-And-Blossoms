@@ -375,7 +375,7 @@ PERFORM staffing.recompute_time_bank_cycle(p_tenant_id, p_person_uuid, p_work_da
 2. [x] DB：按 §4.1/§4.2 落地 `time_bank_cycles` + kernel 函数 + 联动调用（落迁移前需手工确认新增表）。
 3. [x] sqlc：运行 `make sqlc-generate` 并确保 `git status --short` 为空（更新 schema.sql）。
 4. [x] Routing/Authz：新增 `/org/attendance-time-bank` 路由 + allowlist + authz registry/middleware + bootstrap policy。
-5. [ ] Go：实现读 store（tx + tenant 注入）与 handler，挂到 nav（en/zh 文字同构 `internal/server/handler.go` 的 `tr(...)`）。
+5. [x] Go：实现读 store（tx + tenant 注入）与 handler，挂到 nav（en/zh 文字同构 `internal/server/handler.go` 的 `tr(...)`）。
 6. [ ] 测试：覆盖聚合口径与联动更新；RLS/Authz 负例；并发锁行为（可用并发提交 2 个不同日期 punches 来验证最终累计不丢失）。
 7. [ ] 证据：按 `docs/dev-records/` 口径登记关键门禁执行记录（时间戳/命令/结论）。
 

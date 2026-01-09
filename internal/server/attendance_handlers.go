@@ -379,6 +379,20 @@ func parseDateInLocation(date string, loc *time.Location) (time.Time, error) {
 	return time.Date(tm.Year(), tm.Month(), tm.Day(), 0, 0, 0, 0, loc), nil
 }
 
+func monthStartEndDates(month string) (startDate string, endDate string, err error) {
+	month = strings.TrimSpace(month)
+	if month == "" {
+		return "", "", errors.New("empty month")
+	}
+	tm, err := time.Parse("2006-01", month)
+	if err != nil {
+		return "", "", err
+	}
+	start := time.Date(tm.Year(), tm.Month(), 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 1, 0).AddDate(0, 0, -1)
+	return start.Format("2006-01-02"), end.Format("2006-01-02"), nil
+}
+
 func splitNonEmptyLines(raw string) []string {
 	raw = strings.ReplaceAll(raw, "\r\n", "\n")
 	raw = strings.ReplaceAll(raw, "\r", "\n")
@@ -596,6 +610,164 @@ func renderAttendanceDailyResults(results []DailyAttendanceResult, persons []Per
 		b.WriteString(`<td>` + strconv.Itoa(r.LateMinutes) + `</td>`)
 		b.WriteString(`<td>` + strconv.Itoa(r.EarlyLeaveMinutes) + `</td>`)
 		b.WriteString(`<td>` + strconv.Itoa(r.InputPunchCount) + `</td>`)
+		b.WriteString(`<td><code>` + html.EscapeString(r.ComputedAt.UTC().Format(time.RFC3339)) + `</code></td>`)
+		b.WriteString(`</tr>`)
+	}
+	b.WriteString(`</table>`)
+
+	return b.String()
+}
+
+func handleAttendanceTimeBank(w http.ResponseWriter, r *http.Request, store TimeBankCycleStore, dailyResultsStore DailyAttendanceResultStore, personStore PersonStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
+		return
+	}
+
+	personUUID := strings.TrimSpace(r.URL.Query().Get("person_uuid"))
+	month := strings.TrimSpace(r.URL.Query().Get("month"))
+	if month == "" {
+		month = asOf[:7]
+	}
+
+	persons, err := personStore.ListPersons(r.Context(), tenant.ID)
+	if err != nil {
+		writePage(w, r, renderAttendanceTimeBank(nil, false, nil, nil, tenant, asOf, personUUID, month, "", "", err.Error()))
+		return
+	}
+
+	startDate, endDate, err := monthStartEndDates(month)
+	if err != nil {
+		writePage(w, r, renderAttendanceTimeBank(nil, false, nil, persons, tenant, asOf, personUUID, month, "", "", "month 无效: "+err.Error()))
+		return
+	}
+
+	var cycle *TimeBankCycle
+	var cycleFound bool
+	var results []DailyAttendanceResult
+	var errMsg string
+
+	if personUUID != "" {
+		c, found, err := store.GetTimeBankCycleForMonth(r.Context(), tenant.ID, personUUID, month)
+		if err != nil {
+			errMsg = err.Error()
+		} else if found {
+			cycle = &c
+			cycleFound = true
+		}
+
+		dayResults, err := dailyResultsStore.ListDailyAttendanceResultsForPerson(r.Context(), tenant.ID, personUUID, startDate, endDate, 2000)
+		if err != nil {
+			errMsg = mergeMsg(errMsg, err.Error())
+		} else {
+			for _, r := range dayResults {
+				if r.WorkedMinutes == 0 && r.OvertimeMinutes150 == 0 && r.OvertimeMinutes200 == 0 && r.OvertimeMinutes300 == 0 {
+					continue
+				}
+				results = append(results, r)
+			}
+		}
+	}
+
+	writePage(w, r, renderAttendanceTimeBank(cycle, cycleFound, results, persons, tenant, asOf, personUUID, month, startDate, endDate, errMsg))
+}
+
+func renderAttendanceTimeBank(cycle *TimeBankCycle, cycleFound bool, results []DailyAttendanceResult, persons []Person, tenant Tenant, asOf string, personUUID string, month string, startDate string, endDate string, errMsg string) string {
+	personByUUID := make(map[string]Person, len(persons))
+	for _, p := range persons {
+		personByUUID[p.UUID] = p
+	}
+
+	var b strings.Builder
+	b.WriteString("<h1>Attendance / Time Bank</h1>")
+	b.WriteString(`<p>Tenant: <code>` + html.EscapeString(tenant.Name) + `</code> (<code>` + html.EscapeString(tenant.ID) + `</code>)</p>`)
+	b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code></p>`)
+	if errMsg != "" {
+		b.WriteString(`<p style="color:#b00">` + html.EscapeString(errMsg) + `</p>`)
+	}
+
+	b.WriteString(`<h2>Query</h2>`)
+	b.WriteString(`<form method="GET" action="/org/attendance-time-bank" hx-get="/org/attendance-time-bank" hx-target="#content" hx-push-url="true">`)
+	b.WriteString(`<input type="hidden" name="as_of" value="` + html.EscapeString(asOf) + `"/>`)
+	b.WriteString(`<label>Person <select name="person_uuid">`)
+	b.WriteString(`<option value=""></option>`)
+	for _, p := range persons {
+		selected := ""
+		if p.UUID == personUUID {
+			selected = ` selected`
+		}
+		b.WriteString(`<option value="` + html.EscapeString(p.UUID) + `"` + selected + `>` + html.EscapeString(p.DisplayName) + ` (` + html.EscapeString(p.Pernr) + `) / ` + html.EscapeString(p.UUID) + `</option>`)
+	}
+	b.WriteString(`</select></label><br/>`)
+	b.WriteString(`<label>Month <input type="month" name="month" value="` + html.EscapeString(month) + `"/></label><br/>`)
+	b.WriteString(`<button type="submit">Query</button>`)
+	b.WriteString(`</form>`)
+
+	b.WriteString(`<p><a href="/org/attendance-punches?as_of=` + url.QueryEscape(asOf) + `" hx-get="/org/attendance-punches?as_of=` + url.QueryEscape(asOf) + `" hx-target="#content" hx-push-url="true">Go to punches</a></p>`)
+	b.WriteString(`<p><a href="/org/attendance-daily-results?as_of=` + url.QueryEscape(asOf) + `" hx-get="/org/attendance-daily-results?as_of=` + url.QueryEscape(asOf) + `" hx-target="#content" hx-push-url="true">Go to daily results</a></p>`)
+
+	b.WriteString(`<h2>Cycle</h2>`)
+	if personUUID == "" {
+		b.WriteString(`<p>(pick a person)</p>`)
+		return b.String()
+	}
+
+	p := personByUUID[personUUID]
+	if strings.TrimSpace(p.UUID) != "" {
+		b.WriteString(`<p>Person: <code>` + html.EscapeString(p.DisplayName) + `</code> (<code>` + html.EscapeString(p.Pernr) + `</code>) / <code>` + html.EscapeString(p.UUID) + `</code></p>`)
+	} else {
+		b.WriteString(`<p>Person: <code>` + html.EscapeString(personUUID) + `</code></p>`)
+	}
+	if month != "" && startDate != "" && endDate != "" {
+		b.WriteString(`<p>Month: <code>` + html.EscapeString(month) + `</code> (range <code>` + html.EscapeString(startDate) + `</code> ~ <code>` + html.EscapeString(endDate) + `</code>)</p>`)
+	}
+
+	if !cycleFound || cycle == nil {
+		b.WriteString(`<p>(no cycle computed yet)</p>`)
+	} else {
+		b.WriteString(`<ul>`)
+		b.WriteString(`<li>Cycle Type: <code>` + html.EscapeString(cycle.CycleType) + `</code></li>`)
+		b.WriteString(`<li>Cycle Start Date: <code>` + html.EscapeString(cycle.CycleStartDate) + `</code></li>`)
+		b.WriteString(`<li>Cycle End Date: <code>` + html.EscapeString(cycle.CycleEndDate) + `</code></li>`)
+		b.WriteString(`<li>Ruleset: <code>` + html.EscapeString(cycle.RulesetVersion) + `</code></li>`)
+		b.WriteString(`<li>Worked Minutes Total: <code>` + strconv.Itoa(cycle.WorkedMinutesTotal) + `</code></li>`)
+		b.WriteString(`<li>OT Minutes 150: <code>` + strconv.Itoa(cycle.OvertimeMinutes150) + `</code></li>`)
+		b.WriteString(`<li>OT Minutes 200: <code>` + strconv.Itoa(cycle.OvertimeMinutes200) + `</code></li>`)
+		b.WriteString(`<li>OT Minutes 300: <code>` + strconv.Itoa(cycle.OvertimeMinutes300) + `</code></li>`)
+		b.WriteString(`<li>Comp Earned Minutes: <code>` + strconv.Itoa(cycle.CompEarnedMinutes) + `</code></li>`)
+		b.WriteString(`<li>Comp Used Minutes: <code>` + strconv.Itoa(cycle.CompUsedMinutes) + `</code></li>`)
+		b.WriteString(`<li>Computed At (UTC): <code>` + html.EscapeString(cycle.ComputedAt.UTC().Format(time.RFC3339)) + `</code></li>`)
+		b.WriteString(`</ul>`)
+	}
+
+	b.WriteString(`<h2>Contributing Daily Results</h2>`)
+	if len(results) == 0 {
+		b.WriteString(`<p>(no daily results)</p>`)
+		return b.String()
+	}
+
+	b.WriteString(`<table border="1" cellpadding="4" cellspacing="0">`)
+	b.WriteString(`<tr><th>Work Date</th><th>Day Type</th><th>Status</th><th>Worked (min)</th><th>OT150</th><th>OT200</th><th>OT300</th><th>Computed At (UTC)</th></tr>`)
+	for _, r := range results {
+		dayType := ""
+		if r.DayType != nil {
+			dayType = *r.DayType
+		}
+		detailHref := "/org/attendance-daily-results/" + url.PathEscape(r.PersonUUID) + "/" + url.PathEscape(r.WorkDate) + "?as_of=" + url.QueryEscape(asOf)
+		b.WriteString(`<tr>`)
+		b.WriteString(`<td><a href="` + html.EscapeString(detailHref) + `" hx-get="` + html.EscapeString(detailHref) + `" hx-target="#content" hx-push-url="true">` + html.EscapeString(r.WorkDate) + `</a></td>`)
+		b.WriteString(`<td>` + html.EscapeString(dayType) + `</td>`)
+		b.WriteString(`<td>` + html.EscapeString(r.Status) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.WorkedMinutes) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.OvertimeMinutes150) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.OvertimeMinutes200) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.OvertimeMinutes300) + `</td>`)
 		b.WriteString(`<td><code>` + html.EscapeString(r.ComputedAt.UTC().Format(time.RFC3339)) + `</code></td>`)
 		b.WriteString(`</tr>`)
 	}
