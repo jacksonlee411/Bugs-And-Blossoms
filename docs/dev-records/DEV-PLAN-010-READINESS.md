@@ -356,3 +356,10 @@ DB 闭环（迁移 + smoke）：
   - DB（闭环）：`make staffing plan && make staffing lint && make staffing migrate up`
 - CI（Quality Gates）：上述 PR 均为 4/4 checks 全绿（不出现 skipped）
 - 新增表/迁移（红线）手工确认：已在对话中确认（2026-01-09）
+
+## 21. DEV-PLAN-052（考勤 Slice 4B：日结果计算闭环（标准班次））
+
+证据：
+- 日期：2026-01-09
+- 合并记录（按 `docs/dev-plans/052-attendance-slice-4b-daily-results-standard-shift.md` §8.2 每步一个 PR）：
+  - Step1 Routing：PR #110 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/110

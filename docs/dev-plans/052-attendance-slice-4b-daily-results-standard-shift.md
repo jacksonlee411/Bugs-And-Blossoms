@@ -528,7 +528,7 @@ RETURN v_event_db_id;
 
 ### 8.2 里程碑（可直接开工的拆解）
 
-1. [ ] 路由：新增 `/org/attendance-daily-results`、`/org/attendance-daily-results/{person_uuid}/{work_date}`、`/org/api/attendance-daily-results`，并更新 `config/routing/allowlist.yaml`（`route_class` 为 `ui`/`internal_api`）。
+1. [x] 路由：新增 `/org/attendance-daily-results`、`/org/attendance-daily-results/{person_uuid}/{work_date}`、`/org/api/attendance-daily-results`，并更新 `config/routing/allowlist.yaml`（`route_class` 为 `ui`/`internal_api`）。（PR #110）
 2. [ ] Authz：在 `pkg/authz/registry.go` 增加 `ObjectStaffingAttendanceDailyResults`；在 `internal/server/authz_middleware.go` 加入路由映射；更新 `config/access/policies/00-bootstrap.csv` 并跑 authz 门禁。
 3. [ ] DB：按 §4.1/§4.2 落地表 + kernel（新增表/迁移前需手工确认）；跑 `make staffing plan && make staffing lint && make staffing migrate up` 闭环。
 4. [ ] sqlc：运行 `make sqlc-generate`（会更新 `internal/sqlc/schema.sql` 等生成物），并确保 `git status --short` 为空。
