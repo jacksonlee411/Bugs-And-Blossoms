@@ -5307,30 +5307,64 @@ BEGIN
       AND p.run_id = p_run_id
       AND p.person_uuid = av.person_uuid
       AND p.assignment_id = av.assignment_id
-    WHERE av.tenant_id = p_tenant_id
-      AND av.assignment_type = 'primary'
-      AND av.status = 'active'
-      AND av.validity && v_period;
+	    WHERE av.tenant_id = p_tenant_id
+	      AND av.assignment_type = 'primary'
+	      AND av.status = 'active'
+	      AND av.validity && v_period;
 
-    WITH sums AS (
-      SELECT
-        p.id AS payslip_id,
-        COALESCE(sum(i.amount) FILTER (WHERE i.item_kind = 'earning'), 0) AS gross
-      FROM staffing.payslips p
-      LEFT JOIN staffing.payslip_items i
-        ON i.tenant_id = p.tenant_id AND i.payslip_id = p.id
-      WHERE p.tenant_id = p_tenant_id AND p.run_id = p_run_id
+	    INSERT INTO staffing.payslip_items (
+	      tenant_id,
+	      payslip_id,
+	      item_code,
+	      item_kind,
+	      amount,
+	      meta,
+	      last_run_event_id
+	    )
+	    SELECT
+	      p_tenant_id,
+	      p.id,
+	      a.item_code,
+	      a.item_kind,
+	      a.amount,
+	      a.meta || jsonb_build_object(
+	        'recalc_request_id', a.recalc_request_id::text,
+	        'application_id', a.application_id::text,
+	        'origin_pay_period_id', a.origin_pay_period_id::text,
+	        'origin_run_id', a.origin_run_id::text,
+	        'origin_payslip_id', a.origin_payslip_id
+	      ),
+	      v_event_db_id
+	    FROM staffing.payslips p
+	    JOIN staffing.payroll_adjustments a
+	      ON a.tenant_id = p.tenant_id
+	      AND a.target_run_id = p.run_id
+	      AND a.person_uuid = p.person_uuid
+	      AND a.assignment_id = p.assignment_id
+	    WHERE p.tenant_id = p_tenant_id
+	      AND p.run_id = p_run_id;
+
+	    WITH sums AS (
+	      SELECT
+	        p.id AS payslip_id,
+	        COALESCE(sum(i.amount) FILTER (WHERE i.item_kind = 'earning'), 0) AS gross,
+	        COALESCE(sum(i.amount) FILTER (WHERE i.item_kind = 'deduction'), 0) AS deductions,
+	        COALESCE(sum(i.amount) FILTER (WHERE i.item_kind = 'employer_cost'), 0) AS employer_cost
+	      FROM staffing.payslips p
+	      LEFT JOIN staffing.payslip_items i
+	        ON i.tenant_id = p.tenant_id AND i.payslip_id = p.id
+	      WHERE p.tenant_id = p_tenant_id AND p.run_id = p_run_id
       GROUP BY p.id
     )
-    UPDATE staffing.payslips p
-    SET
-      gross_pay = sums.gross,
-      net_pay = sums.gross,
-      employer_total = 0,
-      last_run_event_id = v_event_db_id,
-      updated_at = v_now
-    FROM sums
-    WHERE p.tenant_id = p_tenant_id AND p.id = sums.payslip_id;
+	    UPDATE staffing.payslips p
+	    SET
+	      gross_pay = sums.gross,
+	      net_pay = sums.gross - sums.deductions,
+	      employer_total = sums.employer_cost,
+	      last_run_event_id = v_event_db_id,
+	      updated_at = v_now
+	    FROM sums
+	    WHERE p.tenant_id = p_tenant_id AND p.id = sums.payslip_id;
 
     -- NOTE: use dynamic SQL to avoid schema file ordering issues (P0-3 adds staffing.payroll_apply_social_insurance later).
     EXECUTE 'SELECT staffing.payroll_apply_social_insurance($1::uuid,$2::uuid,$3::uuid,$4::date,$5::date,$6::bigint,$7::timestamptz);'
@@ -6217,15 +6251,14 @@ BEGIN
   )
   UPDATE staffing.payslips p
   SET
-    net_pay = p.gross_pay - sums.employee_total,
-    employer_total = sums.employer_total,
+    net_pay = p.net_pay - sums.employee_total,
+    employer_total = p.employer_total + sums.employer_total,
     last_run_event_id = p_run_event_db_id,
     updated_at = p_now
   FROM sums
   WHERE p.tenant_id = p_tenant_id AND p.id = sums.payslip_id;
 END;
 $$;
-
 
 -- end: modules/staffing/infrastructure/persistence/schema/00007_staffing_payroll_social_insurance_engine.sql
 
