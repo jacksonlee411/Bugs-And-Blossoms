@@ -1,6 +1,10 @@
 # DEV-PLAN-043：Payroll P0-3——社保政策（单城市）配置与扣缴计算
 
-**状态**: 草拟中（2026-01-08 06:07 UTC）
+**状态**: 已完成（2026-01-09）
+
+已完成事项（合并记录）：
+- 实现 PR：#111 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/111
+- 证据记录：`docs/dev-records/DEV-PLAN-010-READINESS.md`
 
 > 上游路线图：`DEV-PLAN-039`  
 > 蓝图合同（范围/不变量/验收基线）：`DEV-PLAN-040`  
@@ -22,12 +26,12 @@
 ### 0.2 目标与非目标（P0-3 Slice）
 
 **目标**
-- [ ] 冻结“社保政策（单城市）”最小数据模型：关键字段列化（费率/基数上下限/舍入合同），低频扩展仅允许 JSONB object（对齐 `DEV-PLAN-040` §0.4.1）。
-- [ ] 落地 DB Kernel One Door：`staffing.submit_social_insurance_policy_event(...)`（append-only events + 同事务投射 versions）。
-- [ ] 冻结并实现扣缴计算合同：基数 clamp + 逐险种个人/企业金额计算 + 舍入点与舍入枚举显式化（至少覆盖 2 种舍入策略）。
-- [ ] 生成可对账险种明细：写入 `staffing.payslip_social_insurance_items`（权威明细子表），并更新 `staffing.payslips.net_pay` 与 `staffing.payslips.employer_total`（可由明细重算）。
-- [ ] 为 `DEV-PLAN-044` 提供可复用口径：工资条的“专项扣除（社保个人部分）”= `Σ payslip_social_insurance_items.employee_amount`（冻结为权威读口径）。
-- [ ] UI 可发现/可操作：提供“社保政策（单城市）”配置页，并在工资条详情展示险种分项（个人/企业）与汇总。
+- [x] 冻结“社保政策（单城市）”最小数据模型：关键字段列化（费率/基数上下限/舍入合同），低频扩展仅允许 JSONB object（对齐 `DEV-PLAN-040` §0.4.1）。
+- [x] 落地 DB Kernel One Door：`staffing.submit_social_insurance_policy_event(...)`（append-only events + 同事务投射 versions）。
+- [x] 冻结并实现扣缴计算合同：基数 clamp + 逐险种个人/企业金额计算 + 舍入点与舍入枚举显式化（至少覆盖 2 种舍入策略）。
+- [x] 生成可对账险种明细：写入 `staffing.payslip_social_insurance_items`（权威明细子表），并更新 `staffing.payslips.net_pay` 与 `staffing.payslips.employer_total`（可由明细重算）。
+- [x] 为 `DEV-PLAN-044` 提供可复用口径：工资条的“专项扣除（社保个人部分）”= `Σ payslip_social_insurance_items.employee_amount`（冻结为权威读口径）。
+- [x] UI 可发现/可操作：提供“社保政策（单城市）”配置页，并在工资条详情展示险种分项（个人/企业）与汇总。
 
 **非目标（Out of Scope）**
 - 不实现 300+ 城市全量规则；不做外部社保申报系统集成。
@@ -73,10 +77,10 @@
 
 ### 0.5 验收标准（Done 口径）
 
-- [ ] UI 可配置一套社保政策（单城市，覆盖 P0 险种集合）并在指定 pay period 生效（Valid Time 日粒度）。
-- [ ] 对任一 payroll run：计算后工资条详情展示各险种个人扣款与企业成本明细；`net_pay/employer_total` 与明细聚合一致（可重算）。
-- [ ] 舍入规则可复现：至少覆盖 `HALF_UP(precision=2)` 与 `CEIL(precision=1)` 两种策略，并在测试中锁定输入/输出。
-- [ ] `DEV-PLAN-044` 可读取“专项扣除（社保个人部分）”口径：`Σ employee_amount`（同一 payslip，按险种求和）。
+- [x] UI 可配置一套社保政策（单城市，覆盖 P0 险种集合）并在指定 pay period 生效（Valid Time 日粒度）。
+- [x] 对任一 payroll run：计算后工资条详情展示各险种个人扣款与企业成本明细；`net_pay/employer_total` 与明细聚合一致（可重算）。
+- [x] 舍入规则可复现：至少覆盖 `HALF_UP(precision=2)` 与 `CEIL(precision=1)` 两种策略，并在测试中锁定输入/输出。
+- [x] `DEV-PLAN-044` 可读取“专项扣除（社保个人部分）”口径：`Σ employee_amount`（同一 payslip，按险种求和）。
 
 ## 1. 背景与上下文（Context）
 
@@ -541,23 +545,23 @@ WHERE tenant_id = $1 AND payslip_id = $2;
 
 ### 8.2 里程碑（实现顺序建议）
 
-1. [ ] Schema SSOT：新增社保政策表 + 明细表 + RLS（`modules/staffing/.../schema`）。
-2. [ ] Schema→迁移闭环：按 `DEV-PLAN-024` 生成 `migrations/staffing/*` + `atlas.sum`。
-3. [ ] Kernel：实现 `submit_social_insurance_policy_event` + replay；补齐 `CALC_FINISH` 中的 `payroll_apply_social_insurance`。
-4. [ ] Server：实现 UI 页面与 internal API（含路由 allowlist 与 authz registry）。
-5. [ ] Tests：覆盖政策版本化、单城市裁决、舍入合同、算薪写入与汇总一致性、RLS fail-closed。
+1. [x] Schema SSOT：新增社保政策表 + 明细表 + RLS（`modules/staffing/.../schema`）。
+2. [x] Schema→迁移闭环：按 `DEV-PLAN-024` 生成 `migrations/staffing/*` + `atlas.sum`。
+3. [x] Kernel：实现 `submit_social_insurance_policy_event` + replay；补齐 `CALC_FINISH` 中的 `payroll_apply_social_insurance`。
+4. [x] Server：实现 UI 页面与 internal API（含路由 allowlist 与 authz registry）。
+5. [x] Tests：覆盖政策版本化、单城市裁决、舍入合同、算薪写入与汇总一致性、RLS fail-closed。
 
 ## 9. 测试与验收标准（Acceptance Criteria）
 
 ### 9.1 最小测试矩阵（必须）
 
-- [ ] 政策：创建 6 个险种政策成功；同一 policy 在同一天重复 `effective_date` 被阻断并返回 `STAFFING_PAYROLL_SI_POLICY_EVENT_ONE_PER_DAY_CONFLICT`；policy versions no-overlap（约束/重放一致）。
-- [ ] 单城市：创建不同 `city_code` 的政策必须失败（稳定错误码 `STAFFING_PAYROLL_SI_MULTI_CITY_NOT_SUPPORTED`）。
-- [ ] 舍入：同一输入在 `HALF_UP(2)` 与 `CEIL(1)` 下输出可复现（锁定用例）。
-- [ ] 算薪：给定 gross_pay 与政策参数，生成的 `payslip_social_insurance_items` 行数=险种数；`net_pay/employer_total` 与行求和一致。
-- [ ] fail-closed：缺少任一险种 policy（as_of）时，run 计算必须失败（稳定错误码 `STAFFING_PAYROLL_SI_POLICY_NOT_FOUND_AS_OF`）。
-- [ ] fail-closed：pay period 内存在任一险种 policy 变更（生效日落在 `(period_start, period_end_exclusive)`）时，run 计算必须失败（稳定错误码 `STAFFING_PAYROLL_SI_POLICY_CHANGED_WITHIN_PERIOD`）。
-- [ ] RLS：不设置 `app.current_tenant` 时，对新增表的读写全部失败（fail-closed）。
+- [x] 政策：创建 6 个险种政策成功；同一 policy 在同一天重复 `effective_date` 被阻断并返回 `STAFFING_PAYROLL_SI_POLICY_EVENT_ONE_PER_DAY_CONFLICT`；policy versions no-overlap（约束/重放一致）。
+- [x] 单城市：创建不同 `city_code` 的政策必须失败（稳定错误码 `STAFFING_PAYROLL_SI_MULTI_CITY_NOT_SUPPORTED`）。
+- [x] 舍入：同一输入在 `HALF_UP(2)` 与 `CEIL(1)` 下输出可复现（锁定用例）。
+- [x] 算薪：给定 gross_pay 与政策参数，生成的 `payslip_social_insurance_items` 行数=险种数；`net_pay/employer_total` 与行求和一致。
+- [x] fail-closed：缺少任一险种 policy（as_of）时，run 计算必须失败（稳定错误码 `STAFFING_PAYROLL_SI_POLICY_NOT_FOUND_AS_OF`）。
+- [x] fail-closed：pay period 内存在任一险种 policy 变更（生效日落在 `(period_start, period_end_exclusive)`）时，run 计算必须失败（稳定错误码 `STAFFING_PAYROLL_SI_POLICY_CHANGED_WITHIN_PERIOD`）。
+- [x] RLS：不设置 `app.current_tenant` 时，对新增表的读写全部失败（fail-closed）。
 
 ### 9.2 验收脚本（建议以 UI 可操作复现）
 

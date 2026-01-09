@@ -297,6 +297,31 @@ type StaffingDailyAttendanceResult struct {
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
 }
 
+type StaffingIitSpecialAdditionalDeductionClaim struct {
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	PersonUuid  pgtype.UUID        `json:"person_uuid"`
+	TaxYear     int32              `json:"tax_year"`
+	TaxMonth    int16              `json:"tax_month"`
+	Amount      pgtype.Numeric     `json:"amount"`
+	LastEventID int64              `json:"last_event_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingIitSpecialAdditionalDeductionClaimEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	PersonUuid      pgtype.UUID        `json:"person_uuid"`
+	TaxYear         int32              `json:"tax_year"`
+	TaxMonth        int16              `json:"tax_month"`
+	Amount          pgtype.Numeric     `json:"amount"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type StaffingPayPeriod struct {
 	TenantID    pgtype.UUID               `json:"tenant_id"`
 	ID          pgtype.UUID               `json:"id"`
