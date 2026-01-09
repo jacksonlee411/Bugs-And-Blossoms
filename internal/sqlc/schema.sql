@@ -2396,6 +2396,21 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_versions (
 CREATE INDEX IF NOT EXISTS assignment_versions_person_lookup_btree
   ON staffing.assignment_versions (tenant_id, person_uuid, lower(validity));
 
+ALTER TABLE staffing.assignment_versions
+  ADD COLUMN IF NOT EXISTS base_salary numeric(15,2) NULL,
+  ADD COLUMN IF NOT EXISTS currency char(3) NOT NULL DEFAULT 'CNY',
+  ADD COLUMN IF NOT EXISTS profile jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+ALTER TABLE staffing.assignment_versions
+  DROP CONSTRAINT IF EXISTS assignment_versions_currency_check,
+  DROP CONSTRAINT IF EXISTS assignment_versions_base_salary_check,
+  DROP CONSTRAINT IF EXISTS assignment_versions_profile_is_object_check;
+
+ALTER TABLE staffing.assignment_versions
+  ADD CONSTRAINT assignment_versions_currency_check CHECK (currency = btrim(currency) AND currency = upper(currency)),
+  ADD CONSTRAINT assignment_versions_base_salary_check CHECK (base_salary IS NULL OR base_salary >= 0),
+  ADD CONSTRAINT assignment_versions_profile_is_object_check CHECK (jsonb_typeof(profile) = 'object');
+
 ALTER TABLE staffing.positions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.positions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.positions;
@@ -2774,6 +2789,11 @@ DECLARE
   v_assignment_type text;
   v_position_id uuid;
   v_status text;
+  v_allocated_fte numeric(9,2);
+  v_base_salary numeric(15,2);
+  v_currency text;
+  v_profile jsonb;
+  v_tmp_text text;
   v_row RECORD;
   v_validity daterange;
 BEGIN
@@ -2796,6 +2816,10 @@ BEGIN
   v_assignment_type := NULL;
   v_position_id := NULL;
   v_status := 'active';
+  v_allocated_fte := 1.0;
+  v_base_salary := NULL;
+  v_currency := 'CNY';
+  v_profile := '{}'::jsonb;
   v_prev_effective := NULL;
 
   FOR v_row IN
@@ -2830,6 +2854,73 @@ BEGIN
           DETAIL = 'position_id is required';
       END IF;
       v_status := 'active';
+
+      IF v_row.payload ? 'base_salary' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'base_salary'), '');
+        IF v_tmp_text IS NULL THEN
+          v_base_salary := NULL;
+        ELSE
+          BEGIN
+            v_base_salary := v_tmp_text::numeric;
+          EXCEPTION
+            WHEN others THEN
+              RAISE EXCEPTION USING
+                MESSAGE = 'STAFFING_ASSIGNMENT_BASE_SALARY_INVALID',
+                DETAIL = format('base_salary=%s', v_row.payload->>'base_salary');
+          END;
+          IF v_base_salary < 0 THEN
+            RAISE EXCEPTION USING
+              MESSAGE = 'STAFFING_ASSIGNMENT_BASE_SALARY_INVALID',
+              DETAIL = format('base_salary=%s', v_row.payload->>'base_salary');
+          END IF;
+        END IF;
+      END IF;
+
+      IF v_row.payload ? 'allocated_fte' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'allocated_fte'), '');
+        IF v_tmp_text IS NULL THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+            DETAIL = 'allocated_fte is required';
+        END IF;
+        BEGIN
+          v_allocated_fte := v_tmp_text::numeric;
+        EXCEPTION
+          WHEN others THEN
+            RAISE EXCEPTION USING
+              MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+              DETAIL = format('allocated_fte=%s', v_row.payload->>'allocated_fte');
+        END;
+        IF v_allocated_fte <= 0 OR v_allocated_fte > 1 THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+            DETAIL = format('allocated_fte=%s', v_row.payload->>'allocated_fte');
+        END IF;
+      END IF;
+
+      IF v_row.payload ? 'currency' THEN
+        v_tmp_text := upper(btrim(v_row.payload->>'currency'));
+        IF v_tmp_text IS NULL OR v_tmp_text = '' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED',
+            DETAIL = 'currency is required';
+        END IF;
+        IF v_tmp_text <> 'CNY' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED',
+            DETAIL = format('currency=%s', v_row.payload->>'currency');
+        END IF;
+        v_currency := v_tmp_text;
+      END IF;
+
+      IF v_row.payload ? 'profile' THEN
+        IF jsonb_typeof(v_row.payload->'profile') <> 'object' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_PROFILE_INVALID',
+            DETAIL = 'profile must be an object';
+        END IF;
+        v_profile := v_row.payload->'profile';
+      END IF;
     ELSIF v_row.event_type = 'UPDATE' THEN
       IF v_prev_effective IS NULL THEN
         RAISE EXCEPTION USING
@@ -2845,7 +2936,7 @@ BEGIN
             ERRCODE = 'P0001',
             MESSAGE = 'STAFFING_INVALID_ARGUMENT',
             DETAIL = 'position_id is required';
-        END IF;
+	      END IF;
       END IF;
 
       IF v_row.payload ? 'status' THEN
@@ -2855,7 +2946,74 @@ BEGIN
             ERRCODE = 'P0001',
             MESSAGE = 'STAFFING_INVALID_ARGUMENT',
             DETAIL = format('invalid status: %s', v_row.payload->>'status');
+	        END IF;
+      END IF;
+
+      IF v_row.payload ? 'base_salary' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'base_salary'), '');
+        IF v_tmp_text IS NULL THEN
+          v_base_salary := NULL;
+        ELSE
+          BEGIN
+            v_base_salary := v_tmp_text::numeric;
+          EXCEPTION
+            WHEN others THEN
+              RAISE EXCEPTION USING
+                MESSAGE = 'STAFFING_ASSIGNMENT_BASE_SALARY_INVALID',
+                DETAIL = format('base_salary=%s', v_row.payload->>'base_salary');
+          END;
+          IF v_base_salary < 0 THEN
+            RAISE EXCEPTION USING
+              MESSAGE = 'STAFFING_ASSIGNMENT_BASE_SALARY_INVALID',
+              DETAIL = format('base_salary=%s', v_row.payload->>'base_salary');
+          END IF;
         END IF;
+      END IF;
+
+      IF v_row.payload ? 'allocated_fte' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'allocated_fte'), '');
+        IF v_tmp_text IS NULL THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+            DETAIL = 'allocated_fte is required';
+        END IF;
+        BEGIN
+          v_allocated_fte := v_tmp_text::numeric;
+        EXCEPTION
+          WHEN others THEN
+            RAISE EXCEPTION USING
+              MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+              DETAIL = format('allocated_fte=%s', v_row.payload->>'allocated_fte');
+        END;
+        IF v_allocated_fte <= 0 OR v_allocated_fte > 1 THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+            DETAIL = format('allocated_fte=%s', v_row.payload->>'allocated_fte');
+        END IF;
+      END IF;
+
+      IF v_row.payload ? 'currency' THEN
+        v_tmp_text := upper(btrim(v_row.payload->>'currency'));
+        IF v_tmp_text IS NULL OR v_tmp_text = '' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED',
+            DETAIL = 'currency is required';
+        END IF;
+        IF v_tmp_text <> 'CNY' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED',
+            DETAIL = format('currency=%s', v_row.payload->>'currency');
+        END IF;
+        v_currency := v_tmp_text;
+      END IF;
+
+      IF v_row.payload ? 'profile' THEN
+        IF jsonb_typeof(v_row.payload->'profile') <> 'object' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_PROFILE_INVALID',
+            DETAIL = 'profile must be an object';
+        END IF;
+        v_profile := v_row.payload->'profile';
       END IF;
     ELSE
       RAISE EXCEPTION USING
@@ -2878,6 +3036,9 @@ BEGIN
       assignment_type,
       status,
       allocated_fte,
+      base_salary,
+      currency,
+      profile,
       validity,
       last_event_id
     )
@@ -2888,7 +3049,10 @@ BEGIN
       v_position_id,
       v_assignment_type,
       v_status,
-      1.0,
+      v_allocated_fte,
+      v_base_salary,
+      v_currency,
+      v_profile,
       v_validity,
       v_row.event_db_id
     );
@@ -3197,6 +3361,30 @@ CREATE TABLE IF NOT EXISTS staffing.payslips (
 CREATE INDEX IF NOT EXISTS payslips_by_run_btree
   ON staffing.payslips (tenant_id, run_id, person_uuid, assignment_id);
 
+CREATE TABLE IF NOT EXISTS staffing.payslip_items (
+  id bigserial PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  payslip_id uuid NOT NULL,
+  item_code text NOT NULL,
+  item_kind text NOT NULL,
+  amount numeric(15,2) NOT NULL,
+  meta jsonb NOT NULL DEFAULT '{}'::jsonb,
+  last_run_event_id bigint NOT NULL REFERENCES staffing.payroll_run_events(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT payslip_items_item_code_nonempty_check CHECK (btrim(item_code) <> ''),
+  CONSTRAINT payslip_items_item_code_trim_check CHECK (item_code = btrim(item_code)),
+  CONSTRAINT payslip_items_item_code_upper_check CHECK (item_code = upper(item_code)),
+  CONSTRAINT payslip_items_item_kind_check CHECK (item_kind IN ('earning','deduction','employer_cost')),
+  CONSTRAINT payslip_items_meta_is_object_check CHECK (jsonb_typeof(meta) = 'object'),
+  CONSTRAINT payslip_items_payslip_fk FOREIGN KEY (tenant_id, payslip_id) REFERENCES staffing.payslips(tenant_id, id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS payslip_items_by_payslip_btree
+  ON staffing.payslip_items (tenant_id, payslip_id, id);
+
+CREATE INDEX IF NOT EXISTS payslip_items_by_event_btree
+  ON staffing.payslip_items (tenant_id, last_run_event_id, id);
+
 ALTER TABLE staffing.pay_period_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.pay_period_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.pay_period_events;
@@ -3229,6 +3417,13 @@ ALTER TABLE staffing.payslips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.payslips FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.payslips;
 CREATE POLICY tenant_isolation ON staffing.payslips
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.payslip_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.payslip_items FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.payslip_items;
+CREATE POLICY tenant_isolation ON staffing.payslip_items
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
@@ -3391,6 +3586,11 @@ DECLARE
   v_next_state text;
   v_now timestamptz;
   v_period_status text;
+  v_pay_group text;
+  v_period daterange;
+  v_period_start date;
+  v_period_end_excl date;
+  v_period_days int;
 BEGIN
   PERFORM staffing.assert_current_tenant(p_tenant_id);
 
@@ -3614,6 +3814,218 @@ BEGIN
       updated_at = v_now
     WHERE tenant_id = p_tenant_id AND id = p_run_id;
   ELSIF p_event_type = 'CALC_FINISH' THEN
+    SELECT pay_group, period
+    INTO v_pay_group, v_period
+    FROM staffing.pay_periods
+    WHERE tenant_id = p_tenant_id AND id = p_pay_period_id
+    FOR UPDATE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_PAY_PERIOD_NOT_FOUND',
+        DETAIL = format('pay_period_id=%s', p_pay_period_id);
+    END IF;
+
+    IF v_pay_group <> 'monthly' THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_UNSUPPORTED_PAY_GROUP',
+        DETAIL = format('pay_group=%s', v_pay_group);
+    END IF;
+
+    v_period_start := lower(v_period);
+    v_period_end_excl := upper(v_period);
+    IF v_period_start IS NULL OR v_period_end_excl IS NULL THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD',
+        DETAIL = format('period=%s', v_period);
+    END IF;
+
+    IF date_trunc('month', v_period_start)::date <> v_period_start
+      OR (v_period_start + interval '1 month')::date <> v_period_end_excl
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD',
+        DETAIL = format('period=%s', v_period);
+    END IF;
+
+    v_period_days := v_period_end_excl - v_period_start;
+    IF v_period_days <= 0 THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD',
+        DETAIL = format('period=%s', v_period);
+    END IF;
+
+    IF EXISTS (
+      SELECT 1
+      FROM staffing.assignment_versions av
+      WHERE av.tenant_id = p_tenant_id
+        AND av.assignment_type = 'primary'
+        AND av.status = 'active'
+        AND av.validity && v_period
+        AND (av.allocated_fte <= 0 OR av.allocated_fte > 1)
+      LIMIT 1
+    ) THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_INVALID_ALLOCATED_FTE',
+        DETAIL = format('run_id=%s', p_run_id);
+    END IF;
+
+    IF EXISTS (
+      SELECT 1
+      FROM staffing.assignment_versions av
+      WHERE av.tenant_id = p_tenant_id
+        AND av.assignment_type = 'primary'
+        AND av.status = 'active'
+        AND av.validity && v_period
+        AND av.base_salary IS NULL
+      LIMIT 1
+    ) THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_MISSING_BASE_SALARY',
+        DETAIL = format('run_id=%s', p_run_id);
+    END IF;
+
+    IF EXISTS (
+      SELECT 1
+      FROM staffing.assignment_versions av
+      WHERE av.tenant_id = p_tenant_id
+        AND av.assignment_type = 'primary'
+        AND av.status = 'active'
+        AND av.validity && v_period
+        AND av.currency <> 'CNY'
+      LIMIT 1
+    ) THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_UNSUPPORTED_CURRENCY',
+        DETAIL = format('run_id=%s', p_run_id);
+    END IF;
+
+    INSERT INTO staffing.payslips (
+      tenant_id,
+      id,
+      run_id,
+      pay_period_id,
+      person_uuid,
+      assignment_id,
+      currency,
+      gross_pay,
+      net_pay,
+      employer_total,
+      last_run_event_id,
+      created_at,
+      updated_at
+    )
+    SELECT
+      p_tenant_id,
+      gen_random_uuid(),
+      p_run_id,
+      p_pay_period_id,
+      av.person_uuid,
+      av.assignment_id,
+      'CNY',
+      0,
+      0,
+      0,
+      v_event_db_id,
+      v_now,
+      v_now
+    FROM staffing.assignment_versions av
+    WHERE av.tenant_id = p_tenant_id
+      AND av.assignment_type = 'primary'
+      AND av.status = 'active'
+      AND av.validity && v_period
+    GROUP BY av.person_uuid, av.assignment_id
+    ON CONFLICT ON CONSTRAINT payslips_run_person_assignment_unique
+    DO UPDATE SET
+      pay_period_id = EXCLUDED.pay_period_id,
+      currency = EXCLUDED.currency,
+      last_run_event_id = EXCLUDED.last_run_event_id,
+      updated_at = EXCLUDED.updated_at;
+
+    DELETE FROM staffing.payslip_items i
+    USING staffing.payslips p
+    WHERE p.tenant_id = p_tenant_id
+      AND p.run_id = p_run_id
+      AND i.tenant_id = p_tenant_id
+      AND i.payslip_id = p.id;
+
+    DELETE FROM staffing.payslips p
+    WHERE p.tenant_id = p_tenant_id
+      AND p.run_id = p_run_id
+      AND NOT EXISTS (
+        SELECT 1
+        FROM staffing.assignment_versions av
+        WHERE av.tenant_id = p_tenant_id
+          AND av.assignment_type = 'primary'
+          AND av.status = 'active'
+          AND av.validity && v_period
+          AND av.person_uuid = p.person_uuid
+          AND av.assignment_id = p.assignment_id
+      );
+
+    INSERT INTO staffing.payslip_items (
+      tenant_id,
+      payslip_id,
+      item_code,
+      item_kind,
+      amount,
+      meta,
+      last_run_event_id
+    )
+    SELECT
+      p_tenant_id,
+      p.id,
+      'EARNING_BASE_SALARY',
+      'earning',
+      round(
+        av.base_salary * av.allocated_fte
+          * (least(coalesce(upper(av.validity), v_period_end_excl), v_period_end_excl) - greatest(lower(av.validity), v_period_start))::numeric
+          / v_period_days::numeric,
+        2
+      ) AS amount,
+      jsonb_build_object(
+        'pay_group', v_pay_group,
+        'period_start', v_period_start::text,
+        'period_end_exclusive', v_period_end_excl::text,
+        'segment_start', greatest(lower(av.validity), v_period_start)::text,
+        'segment_end_exclusive', least(coalesce(upper(av.validity), v_period_end_excl), v_period_end_excl)::text,
+        'base_salary', av.base_salary::text,
+        'allocated_fte', av.allocated_fte::text,
+        'overlap_days', (least(coalesce(upper(av.validity), v_period_end_excl), v_period_end_excl) - greatest(lower(av.validity), v_period_start))::text,
+        'period_days', v_period_days::text,
+        'ratio', ((least(coalesce(upper(av.validity), v_period_end_excl), v_period_end_excl) - greatest(lower(av.validity), v_period_start))::numeric / v_period_days::numeric)::text
+      ),
+      v_event_db_id
+    FROM staffing.assignment_versions av
+    JOIN staffing.payslips p
+      ON p.tenant_id = p_tenant_id
+      AND p.run_id = p_run_id
+      AND p.person_uuid = av.person_uuid
+      AND p.assignment_id = av.assignment_id
+    WHERE av.tenant_id = p_tenant_id
+      AND av.assignment_type = 'primary'
+      AND av.status = 'active'
+      AND av.validity && v_period;
+
+    WITH sums AS (
+      SELECT
+        p.id AS payslip_id,
+        COALESCE(sum(i.amount) FILTER (WHERE i.item_kind = 'earning'), 0) AS gross
+      FROM staffing.payslips p
+      LEFT JOIN staffing.payslip_items i
+        ON i.tenant_id = p.tenant_id AND i.payslip_id = p.id
+      WHERE p.tenant_id = p_tenant_id AND p.run_id = p_run_id
+      GROUP BY p.id
+    )
+    UPDATE staffing.payslips p
+    SET
+      gross_pay = sums.gross,
+      net_pay = sums.gross,
+      employer_total = 0,
+      last_run_event_id = v_event_db_id,
+      updated_at = v_now
+    FROM sums
+    WHERE p.tenant_id = p_tenant_id AND p.id = sums.payslip_id;
+
     UPDATE staffing.payroll_runs
     SET
       run_state = v_next_state,

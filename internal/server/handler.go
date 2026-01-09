@@ -333,6 +333,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/payroll-runs/{run_id}/finalize", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollRunFinalize(w, r, payrollStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-runs/{run_id}/payslips", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayslips(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-runs/{run_id}/payslips/{payslip_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayslipDetail(w, r, payrollStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePositionsAPI(w, r, positionStore)
 	}))
@@ -356,6 +362,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/payroll-runs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollRunsAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payslips", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayslipsAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payslips/{payslip_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayslipAPI(w, r, payrollStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/person/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePersons(w, r, personStore)

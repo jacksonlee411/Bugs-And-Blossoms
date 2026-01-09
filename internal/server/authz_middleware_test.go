@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 )
 
 type stubAuthorizer struct {
@@ -286,10 +287,46 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs/run1"); !ok {
 		t.Fatal("expected ok=true")
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-runs/run1"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-runs/run1/calculate"); !ok {
 		t.Fatal("expected ok=true")
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs/run1/calculate"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/payroll-runs/run1/finalize"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs/run1/payslips"); !ok || obj != authz.ObjectStaffingPayslips || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-runs/run1/payslips"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1"); !ok || obj != authz.ObjectStaffingPayslips || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-runs/run1/payslips/ps1"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payslips"); !ok || obj != authz.ObjectStaffingPayslips || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payslips/ps1"); !ok || obj != authz.ObjectStaffingPayslips || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payslips/ps1"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payslips"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, ""); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs//payslips"); ok {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/person/persons"); !ok {

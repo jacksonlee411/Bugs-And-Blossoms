@@ -192,6 +192,11 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 		getRunOut:             PayrollRun{ID: "run1", PayPeriodID: "pp1", RunState: "draft"},
 		calcOut:               PayrollRun{ID: "run1", PayPeriodID: "pp1", RunState: "calculated"},
 		finalizeOut:           PayrollRun{ID: "run1", PayPeriodID: "pp1", RunState: "finalized"},
+		listPayslipsOut:       []Payslip{{ID: "ps1", RunID: "run1"}},
+		getPayslipOut: PayslipDetail{
+			Payslip: Payslip{ID: "ps1", RunID: "run1"},
+			Items:   []PayslipItem{{ID: "it1", Meta: json.RawMessage(`{}`)}},
+		},
 	}
 
 	h, err := NewHandlerWithOptions(HandlerOptions{
@@ -258,6 +263,12 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 	if rec := do(http.MethodPost, "/org/payroll-runs/run1/finalize?as_of=2026-01-01", nil, "", false); rec.Code != http.StatusSeeOther {
 		t.Fatalf("payroll run finalize status=%d", rec.Code)
 	}
+	if rec := do(http.MethodGet, "/org/payroll-runs/run1/payslips?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {
+		t.Fatalf("payslips status=%d", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {
+		t.Fatalf("payslip detail status=%d", rec.Code)
+	}
 
 	if rec := do(http.MethodGet, "/org/api/payroll-periods?pay_group=monthly", nil, "", false); rec.Code != http.StatusOK {
 		t.Fatalf("payroll periods api get status=%d", rec.Code)
@@ -270,6 +281,12 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 	}
 	if rec := do(http.MethodPost, "/org/api/payroll-runs", []byte(`{"pay_period_id":"pp1"}`), "application/json", false); rec.Code != http.StatusCreated {
 		t.Fatalf("payroll runs api post status=%d", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/org/api/payslips?run_id=run1", nil, "", false); rec.Code != http.StatusOK {
+		t.Fatalf("payslips api get status=%d", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/org/api/payslips/ps1", nil, "", false); rec.Code != http.StatusOK {
+		t.Fatalf("payslip api get status=%d", rec.Code)
 	}
 }
 

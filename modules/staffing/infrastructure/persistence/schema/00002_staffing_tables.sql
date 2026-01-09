@@ -133,6 +133,21 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_versions (
 CREATE INDEX IF NOT EXISTS assignment_versions_person_lookup_btree
   ON staffing.assignment_versions (tenant_id, person_uuid, lower(validity));
 
+ALTER TABLE staffing.assignment_versions
+  ADD COLUMN IF NOT EXISTS base_salary numeric(15,2) NULL,
+  ADD COLUMN IF NOT EXISTS currency char(3) NOT NULL DEFAULT 'CNY',
+  ADD COLUMN IF NOT EXISTS profile jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+ALTER TABLE staffing.assignment_versions
+  DROP CONSTRAINT IF EXISTS assignment_versions_currency_check,
+  DROP CONSTRAINT IF EXISTS assignment_versions_base_salary_check,
+  DROP CONSTRAINT IF EXISTS assignment_versions_profile_is_object_check;
+
+ALTER TABLE staffing.assignment_versions
+  ADD CONSTRAINT assignment_versions_currency_check CHECK (currency = btrim(currency) AND currency = upper(currency)),
+  ADD CONSTRAINT assignment_versions_base_salary_check CHECK (base_salary IS NULL OR base_salary >= 0),
+  ADD CONSTRAINT assignment_versions_profile_is_object_check CHECK (jsonb_typeof(profile) = 'object');
+
 ALTER TABLE staffing.positions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.positions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.positions;

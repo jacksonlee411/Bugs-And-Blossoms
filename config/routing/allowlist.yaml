@@ -71,6 +71,12 @@ entrypoints:
       - path: /org/payroll-runs/{run_id}/finalize
         methods: [POST]
         route_class: ui
+      - path: /org/payroll-runs/{run_id}/payslips
+        methods: [GET]
+        route_class: ui
+      - path: /org/payroll-runs/{run_id}/payslips/{payslip_id}
+        methods: [GET]
+        route_class: ui
       - path: /person/persons
         methods: [GET, POST]
         route_class: ui
@@ -91,6 +97,12 @@ entrypoints:
         route_class: internal_api
       - path: /org/api/payroll-runs
         methods: [GET, POST]
+        route_class: internal_api
+      - path: /org/api/payslips
+        methods: [GET]
+        route_class: internal_api
+      - path: /org/api/payslips/{payslip_id}
+        methods: [GET]
         route_class: internal_api
   superadmin:
     routes:

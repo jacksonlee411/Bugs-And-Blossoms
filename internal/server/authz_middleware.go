@@ -118,12 +118,39 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 }
 
 func authzRequirementForRoute(method string, path string) (object string, action string, ok bool) {
-	if strings.HasPrefix(path, "/org/payroll-runs/") {
+	if pathMatchRouteTemplate(path, "/org/payroll-runs/{run_id}") {
 		if method == http.MethodGet {
 			return authz.ObjectStaffingPayrollRuns, authz.ActionRead, true
 		}
+		return "", "", false
+	}
+	if pathMatchRouteTemplate(path, "/org/payroll-runs/{run_id}/calculate") {
 		if method == http.MethodPost {
 			return authz.ObjectStaffingPayrollRuns, authz.ActionAdmin, true
+		}
+		return "", "", false
+	}
+	if pathMatchRouteTemplate(path, "/org/payroll-runs/{run_id}/finalize") {
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayrollRuns, authz.ActionAdmin, true
+		}
+		return "", "", false
+	}
+	if pathMatchRouteTemplate(path, "/org/payroll-runs/{run_id}/payslips") {
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayslips, authz.ActionRead, true
+		}
+		return "", "", false
+	}
+	if pathMatchRouteTemplate(path, "/org/payroll-runs/{run_id}/payslips/{payslip_id}") {
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayslips, authz.ActionRead, true
+		}
+		return "", "", false
+	}
+	if pathMatchRouteTemplate(path, "/org/api/payslips/{payslip_id}") {
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayslips, authz.ActionRead, true
 		}
 		return "", "", false
 	}
@@ -232,6 +259,11 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectStaffingPayrollRuns, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/org/api/payslips":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayslips, authz.ActionRead, true
+		}
+		return "", "", false
 	case "/person/persons":
 		if method == http.MethodGet {
 			return authz.ObjectPersonPersons, authz.ActionRead, true
@@ -248,4 +280,39 @@ func authzRequirementForRoute(method string, path string) (object string, action
 	default:
 		return "", "", false
 	}
+}
+
+func pathMatchRouteTemplate(path string, template string) bool {
+	in := splitRouteSegments(path)
+	want := splitRouteSegments(template)
+	if len(in) != len(want) {
+		return false
+	}
+	for i := range want {
+		w := want[i]
+		g := in[i]
+		if g == "" {
+			return false
+		}
+		if routeTemplateIsParamSegment(w) {
+			continue
+		}
+		if g != w {
+			return false
+		}
+	}
+	return true
+}
+
+func splitRouteSegments(path string) []string {
+	path = strings.TrimSpace(path)
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		return nil
+	}
+	return strings.Split(path, "/")
+}
+
+func routeTemplateIsParamSegment(s string) bool {
+	return strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}") && len(s) > 2
 }
