@@ -197,6 +197,22 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 			Payslip: Payslip{ID: "ps1", RunID: "run1"},
 			Items:   []PayslipItem{{ID: "it1", Meta: json.RawMessage(`{}`)}},
 		},
+		getBalancesOut: PayrollBalances{
+			TenantID:      "t1",
+			PersonUUID:    "p1",
+			TaxYear:       2026,
+			FirstTaxMonth: 1,
+			LastTaxMonth:  2,
+			YTDIncome:     "20000.00",
+		},
+		upsertIITSADOut: PayrollIITSADUpsertResult{
+			EventID:    "e1",
+			PersonUUID: "p1",
+			TaxYear:    2026,
+			TaxMonth:   2,
+			Amount:     "100.00",
+			RequestID:  "e1",
+		},
 		listSIVersionsOut: []SocialInsurancePolicyVersion{{
 			PolicyID:      "p1",
 			CityCode:      "CN-310000",
@@ -300,6 +316,12 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 	}
 	if rec := do(http.MethodPost, "/org/api/payroll-runs", []byte(`{"pay_period_id":"pp1"}`), "application/json", false); rec.Code != http.StatusCreated {
 		t.Fatalf("payroll runs api post status=%d", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/org/api/payroll-balances?person_uuid=p1&tax_year=2026", nil, "", false); rec.Code != http.StatusOK {
+		t.Fatalf("payroll balances api get status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := do(http.MethodPost, "/org/api/payroll-iit-special-additional-deductions", []byte(`{"event_id":"e1","person_uuid":"p1","tax_year":2026,"tax_month":2,"amount":"100.00"}`), "application/json", false); rec.Code != http.StatusOK {
+		t.Fatalf("payroll iit sad api post status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := do(http.MethodGet, "/org/api/payslips?run_id=run1", nil, "", false); rec.Code != http.StatusOK {
 		t.Fatalf("payslips api get status=%d", rec.Code)

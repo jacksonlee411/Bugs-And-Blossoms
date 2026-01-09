@@ -116,6 +116,12 @@ entrypoints:
       - path: /org/api/payroll-runs
         methods: [GET, POST]
         route_class: internal_api
+      - path: /org/api/payroll-balances
+        methods: [GET]
+        route_class: internal_api
+      - path: /org/api/payroll-iit-special-additional-deductions
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/payroll-social-insurance-policies
         methods: [GET, POST]
         route_class: internal_api

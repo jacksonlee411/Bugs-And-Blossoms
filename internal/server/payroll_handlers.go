@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
@@ -273,6 +275,99 @@ func handlePayrollRunsAPI(w http.ResponseWriter, r *http.Request, store PayrollS
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
+}
+
+func handlePayrollBalancesAPI(w http.ResponseWriter, r *http.Request, store PayrollStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+	if r.Method != http.MethodGet {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	personUUID := strings.TrimSpace(r.URL.Query().Get("person_uuid"))
+	if personUUID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_person_uuid", "person_uuid is required")
+		return
+	}
+	taxYearRaw := strings.TrimSpace(r.URL.Query().Get("tax_year"))
+	if taxYearRaw == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_tax_year", "tax_year is required")
+		return
+	}
+	taxYear, err := strconv.Atoi(taxYearRaw)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_tax_year", "invalid tax_year")
+		return
+	}
+	if taxYear < 2000 || taxYear > 9999 {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_tax_year", "tax_year out of range")
+		return
+	}
+
+	bal, err := store.GetPayrollBalances(r.Context(), tenant.ID, personUUID, taxYear)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "not found")
+			return
+		}
+		if isBadRequestError(err) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		if isPgInvalidInput(err) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_request", "bad request")
+			return
+		}
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "get_failed", "get failed")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(bal)
+}
+
+func handlePayrollIITSADAPI(w http.ResponseWriter, r *http.Request, store PayrollStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+	if r.Method != http.MethodPost {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	var req PayrollIITSADUpsertInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+
+	res, err := store.UpsertPayrollIITSAD(r.Context(), tenant.ID, req)
+	if err != nil {
+		switch msg := pgErrorMessage(err); msg {
+		case "STAFFING_IDEMPOTENCY_REUSED", "STAFFING_IIT_SAD_CLAIM_MONTH_FINALIZED":
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, msg, msg)
+			return
+		default:
+			if isBadRequestError(err) {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_request", err.Error())
+				return
+			}
+			if isPgInvalidInput(err) {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_request", "bad request")
+				return
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "upsert_failed", "upsert failed")
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(res)
 }
 
 func handlePayslips(w http.ResponseWriter, r *http.Request, store PayrollStore) {
