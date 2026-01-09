@@ -2438,6 +2438,55 @@ CREATE TABLE IF NOT EXISTS staffing.time_punch_events (
 CREATE INDEX IF NOT EXISTS time_punch_events_lookup_idx
   ON staffing.time_punch_events (tenant_id, person_uuid, punch_time DESC, id DESC);
 
+CREATE TABLE IF NOT EXISTS staffing.time_punch_void_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  target_punch_event_db_id bigint NOT NULL,
+  target_punch_event_id uuid NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT time_punch_void_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT time_punch_void_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT time_punch_void_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT time_punch_void_events_target_unique UNIQUE (tenant_id, target_punch_event_db_id)
+);
+
+CREATE INDEX IF NOT EXISTS time_punch_void_events_person_created_idx
+  ON staffing.time_punch_void_events (tenant_id, person_uuid, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS time_punch_void_events_target_idx
+  ON staffing.time_punch_void_events (tenant_id, target_punch_event_db_id);
+
+CREATE TABLE IF NOT EXISTS staffing.attendance_recalc_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  from_date date NOT NULL,
+  to_date date NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT attendance_recalc_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT attendance_recalc_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT attendance_recalc_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT attendance_recalc_events_date_range_check CHECK (to_date >= from_date),
+  CONSTRAINT attendance_recalc_events_range_size_check CHECK ((to_date - from_date) <= 30)
+);
+
+CREATE INDEX IF NOT EXISTS attendance_recalc_events_person_range_idx
+  ON staffing.attendance_recalc_events (tenant_id, person_uuid, from_date, to_date, id);
+
+CREATE INDEX IF NOT EXISTS attendance_recalc_events_created_idx
+  ON staffing.attendance_recalc_events (tenant_id, created_at DESC, id DESC);
+
 CREATE TABLE IF NOT EXISTS staffing.daily_attendance_results (
   tenant_id uuid NOT NULL,
   person_uuid uuid NOT NULL,
@@ -2672,6 +2721,20 @@ CREATE POLICY tenant_isolation ON staffing.time_punch_events
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
+ALTER TABLE staffing.time_punch_void_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.time_punch_void_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.time_punch_void_events;
+CREATE POLICY tenant_isolation ON staffing.time_punch_void_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.attendance_recalc_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.attendance_recalc_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.attendance_recalc_events;
+CREATE POLICY tenant_isolation ON staffing.attendance_recalc_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
 ALTER TABLE staffing.daily_attendance_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.daily_attendance_results FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.daily_attendance_results;
@@ -2756,6 +2819,220 @@ BEGIN
       MESSAGE = 'RLS_TENANT_MISMATCH',
       DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_id, v_ctx_tenant);
   END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.submit_time_punch_void_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_target_punch_event_id uuid,
+  p_payload jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_target staffing.time_punch_events%ROWTYPE;
+  v_existing_by_event staffing.time_punch_void_events%ROWTYPE;
+  v_existing_by_target staffing.time_punch_void_events%ROWTYPE;
+  v_payload jsonb;
+  v_void_db_id bigint;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_event_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  END IF;
+  IF p_target_punch_event_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'target_punch_event_id is required';
+  END IF;
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  END IF;
+  IF p_initiator_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  END IF;
+
+  v_payload := COALESCE(p_payload, '{}'::jsonb);
+  IF jsonb_typeof(v_payload) <> 'object' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'payload must be an object';
+  END IF;
+
+  SELECT * INTO v_target
+  FROM staffing.time_punch_events
+  WHERE tenant_id = p_tenant_id
+    AND event_id = p_target_punch_event_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_TIME_PUNCH_EVENT_NOT_FOUND',
+      DETAIL = format('tenant_id=%s target_event_id=%s', p_tenant_id, p_target_punch_event_id);
+  END IF;
+
+  INSERT INTO staffing.time_punch_void_events (
+    event_id,
+    tenant_id,
+    person_uuid,
+    target_punch_event_db_id,
+    target_punch_event_id,
+    payload,
+    request_id,
+    initiator_id
+  )
+  VALUES (
+    p_event_id,
+    p_tenant_id,
+    v_target.person_uuid,
+    v_target.id,
+    v_target.event_id,
+    v_payload,
+    p_request_id,
+    p_initiator_id
+  )
+  ON CONFLICT DO NOTHING
+  RETURNING id INTO v_void_db_id;
+
+  IF v_void_db_id IS NULL THEN
+    SELECT * INTO v_existing_by_event
+    FROM staffing.time_punch_void_events
+    WHERE event_id = p_event_id;
+
+    IF FOUND THEN
+      IF v_existing_by_event.tenant_id <> p_tenant_id
+        OR v_existing_by_event.person_uuid <> v_target.person_uuid
+        OR v_existing_by_event.target_punch_event_db_id <> v_target.id
+        OR v_existing_by_event.target_punch_event_id <> v_target.event_id
+        OR v_existing_by_event.payload <> v_payload
+        OR v_existing_by_event.request_id <> p_request_id
+        OR v_existing_by_event.initiator_id <> p_initiator_id
+      THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+          DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing_by_event.id);
+      END IF;
+      RETURN v_existing_by_event.id;
+    END IF;
+
+    SELECT * INTO v_existing_by_target
+    FROM staffing.time_punch_void_events
+    WHERE tenant_id = p_tenant_id
+      AND target_punch_event_db_id = v_target.id
+    LIMIT 1;
+
+    IF FOUND THEN
+      RETURN v_existing_by_target.id;
+    END IF;
+
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'void insert failed';
+  END IF;
+
+  PERFORM staffing.recompute_daily_attendance_results_for_punch(p_tenant_id, v_target.person_uuid, v_target.punch_time);
+
+  RETURN v_void_db_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.submit_attendance_recalc_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_from_date date,
+  p_to_date date,
+  p_payload jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_existing staffing.attendance_recalc_events%ROWTYPE;
+  v_payload jsonb;
+  v_recalc_db_id bigint;
+  v_d date;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_event_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  END IF;
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_from_date IS NULL OR p_to_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'from_date/to_date is required';
+  END IF;
+  IF p_to_date < p_from_date THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'to_date must be >= from_date';
+  END IF;
+  IF (p_to_date - p_from_date) > 30 THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'date range too large (max 31 days)';
+  END IF;
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  END IF;
+  IF p_initiator_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  END IF;
+
+  v_payload := COALESCE(p_payload, '{}'::jsonb);
+  IF jsonb_typeof(v_payload) <> 'object' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'payload must be an object';
+  END IF;
+
+  INSERT INTO staffing.attendance_recalc_events (
+    event_id,
+    tenant_id,
+    person_uuid,
+    from_date,
+    to_date,
+    payload,
+    request_id,
+    initiator_id
+  )
+  VALUES (
+    p_event_id,
+    p_tenant_id,
+    p_person_uuid,
+    p_from_date,
+    p_to_date,
+    v_payload,
+    p_request_id,
+    p_initiator_id
+  )
+  ON CONFLICT (event_id) DO NOTHING
+  RETURNING id INTO v_recalc_db_id;
+
+  IF v_recalc_db_id IS NULL THEN
+    SELECT * INTO v_existing
+    FROM staffing.attendance_recalc_events
+    WHERE event_id = p_event_id;
+
+    IF v_existing.tenant_id <> p_tenant_id
+      OR v_existing.person_uuid <> p_person_uuid
+      OR v_existing.from_date <> p_from_date
+      OR v_existing.to_date <> p_to_date
+      OR v_existing.payload <> v_payload
+      OR v_existing.request_id <> p_request_id
+      OR v_existing.initiator_id <> p_initiator_id
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+    END IF;
+
+    RETURN v_existing.id;
+  END IF;
+
+  v_d := p_from_date;
+  WHILE v_d <= p_to_date LOOP
+    PERFORM staffing.recompute_daily_attendance_result(p_tenant_id, p_person_uuid, v_d);
+    v_d := v_d + 1;
+  END LOOP;
+
+  RETURN v_recalc_db_id;
 END;
 $$;
 
@@ -4239,6 +4516,76 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION staffing.get_time_profile_for_work_date(
+  p_tenant_id uuid,
+  p_work_date date
+)
+RETURNS TABLE (
+  shift_start_local time,
+  shift_end_local time,
+  late_tolerance_minutes int,
+  early_leave_tolerance_minutes int,
+  overtime_min_minutes int,
+  overtime_rounding_mode text,
+  overtime_rounding_unit_minutes int,
+  time_profile_last_event_id bigint,
+  shift_start timestamptz,
+  shift_end timestamptz,
+  window_start timestamptz,
+  window_end timestamptz
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_tz text := 'Asia/Shanghai';
+  v_window_before interval := interval '6 hours';
+  v_window_after interval := interval '12 hours';
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_work_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'work_date is required';
+  END IF;
+
+  SELECT
+    tp.shift_start_local,
+    tp.shift_end_local,
+    tp.late_tolerance_minutes,
+    tp.early_leave_tolerance_minutes,
+    tp.overtime_min_minutes,
+    tp.overtime_rounding_mode,
+    tp.overtime_rounding_unit_minutes,
+    tp.last_event_id
+  INTO
+    shift_start_local,
+    shift_end_local,
+    late_tolerance_minutes,
+    early_leave_tolerance_minutes,
+    overtime_min_minutes,
+    overtime_rounding_mode,
+    overtime_rounding_unit_minutes,
+    time_profile_last_event_id
+  FROM staffing.time_profile_versions tp
+  WHERE tp.tenant_id = p_tenant_id
+    AND tp.lifecycle_status = 'active'
+    AND tp.validity @> p_work_date
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_TIME_PROFILE_NOT_CONFIGURED_AS_OF',
+      DETAIL = format('tenant_id=%s as_of=%s', p_tenant_id, p_work_date);
+  END IF;
+
+  shift_start := (p_work_date + shift_start_local) AT TIME ZONE v_tz;
+  shift_end := (p_work_date + shift_end_local) AT TIME ZONE v_tz;
+  window_start := shift_start - v_window_before;
+  window_end := shift_end + v_window_after;
+
+  RETURN NEXT;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION staffing.recompute_daily_attendance_result(
   p_tenant_id uuid,
   p_person_uuid uuid,
@@ -4248,7 +4595,6 @@ RETURNS void
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_tz text := 'Asia/Shanghai';
   v_ruleset_version text := 'TIME_PROFILE_V1';
 
   v_shift_start_local time := NULL;
@@ -4259,9 +4605,6 @@ DECLARE
   v_overtime_min_minutes int := 0;
   v_overtime_rounding_mode text := 'NONE';
   v_overtime_rounding_unit_minutes int := 0;
-
-  v_window_before interval := interval '6 hours';
-  v_window_after interval := interval '12 hours';
 
   v_shift_start timestamptz;
   v_shift_end timestamptz;
@@ -4321,7 +4664,11 @@ BEGIN
     overtime_min_minutes,
     overtime_rounding_mode,
     overtime_rounding_unit_minutes,
-    last_event_id
+    time_profile_last_event_id,
+    shift_start,
+    shift_end,
+    window_start,
+    window_end
   INTO
     v_shift_start_local,
     v_shift_end_local,
@@ -4330,18 +4677,12 @@ BEGIN
     v_overtime_min_minutes,
     v_overtime_rounding_mode,
     v_overtime_rounding_unit_minutes,
-    v_time_profile_last_event_id
-  FROM staffing.time_profile_versions
-  WHERE tenant_id = p_tenant_id
-    AND lifecycle_status = 'active'
-    AND validity @> p_work_date
-  LIMIT 1;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'STAFFING_TIME_PROFILE_NOT_CONFIGURED_AS_OF',
-      DETAIL = format('tenant_id=%s as_of=%s', p_tenant_id, p_work_date);
-  END IF;
+    v_time_profile_last_event_id,
+    v_shift_start,
+    v_shift_end,
+    v_window_start,
+    v_window_end
+  FROM staffing.get_time_profile_for_work_date(p_tenant_id, p_work_date);
 
   v_scheduled_minutes := floor(extract(epoch FROM (v_shift_end_local - v_shift_start_local)) / 60.0)::int;
   IF v_scheduled_minutes < 0 THEN
@@ -4365,19 +4706,20 @@ BEGIN
     v_holiday_day_last_event_id := NULL;
   END IF;
 
-  v_shift_start := (p_work_date + v_shift_start_local) AT TIME ZONE v_tz;
-  v_shift_end := (p_work_date + v_shift_end_local) AT TIME ZONE v_tz;
-  v_window_start := v_shift_start - v_window_before;
-  v_window_end := v_shift_end + v_window_after;
-
   FOR r IN
-    SELECT id, punch_time, punch_type
-    FROM staffing.time_punch_events
-    WHERE tenant_id = p_tenant_id
-      AND person_uuid = p_person_uuid
-      AND punch_time >= v_window_start
-      AND punch_time < v_window_end
-    ORDER BY punch_time ASC, id ASC
+    SELECT e.id, e.punch_time, e.punch_type
+    FROM staffing.time_punch_events e
+    WHERE e.tenant_id = p_tenant_id
+      AND e.person_uuid = p_person_uuid
+      AND e.punch_time >= v_window_start
+      AND e.punch_time < v_window_end
+      AND NOT EXISTS (
+        SELECT 1
+        FROM staffing.time_punch_void_events v
+        WHERE v.tenant_id = e.tenant_id
+          AND v.target_punch_event_db_id = e.id
+      )
+    ORDER BY e.punch_time ASC, e.id ASC
   LOOP
     v_punch_count := v_punch_count + 1;
     v_input_max_id := COALESCE(v_input_max_id, r.id);
