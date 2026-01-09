@@ -30,12 +30,12 @@
 
 ## PR-3：Milestone 2 — Kernel（submit_time_profile_event / submit_holiday_day_event）
 
-- **状态**：进行中
+- **状态**：已完成（2026-01-09）
 - **PR**：#133（https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/133）
 
 ## PR-4：Milestone 3 — 日结果投射（day_type / OFF / OT 分桶）
 
-- **状态**：未开始
+- **状态**：进行中
 
 ## PR-5：Milestone 4 — UI（TimeProfile / HolidayCalendar）
 

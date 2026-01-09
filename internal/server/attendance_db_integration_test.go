@@ -273,6 +273,88 @@ WHERE tenant_id = $1::uuid AND person_uuid = $2::uuid AND work_date = $3::date
 		return status, flags, worked, late, early, firstIn, lastOut
 	}
 
+	seedTimeProfile := func(t *testing.T, tenantID string) {
+		t.Helper()
+
+		tx, err := conn.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback(context.Background()) }()
+
+		if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+			t.Fatal(err)
+		}
+
+		eventID := testUUID(9001)
+		requestID := eventID
+		payload := []byte(`{"shift_start_local":"09:00","shift_end_local":"18:00","late_tolerance_minutes":5,"early_leave_tolerance_minutes":5,"overtime_min_minutes":0,"overtime_rounding_mode":"NONE","overtime_rounding_unit_minutes":0}`)
+
+		var eventDBID int64
+		if err := tx.QueryRow(ctx, `
+INSERT INTO staffing.time_profile_events (
+  event_id,
+  tenant_id,
+  event_type,
+  effective_date,
+  payload,
+  request_id,
+  initiator_id
+)
+VALUES (
+  $1::uuid,
+  $2::uuid,
+  'CREATE',
+  $3::date,
+  $4::jsonb,
+  $5::text,
+  $6::uuid
+)
+RETURNING id
+`, eventID, tenantID, "2025-01-01", payload, requestID, initiatorID).Scan(&eventDBID); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := tx.Exec(ctx, `
+INSERT INTO staffing.time_profile_versions (
+  tenant_id,
+  name,
+  lifecycle_status,
+  shift_start_local,
+  shift_end_local,
+  late_tolerance_minutes,
+  early_leave_tolerance_minutes,
+  overtime_min_minutes,
+  overtime_rounding_mode,
+  overtime_rounding_unit_minutes,
+  validity,
+  last_event_id
+)
+VALUES (
+  $1::uuid,
+  NULL,
+  'active',
+  '09:00'::time,
+  '18:00'::time,
+  5,
+  5,
+  0,
+  'NONE',
+  0,
+  daterange($2::date, NULL, '[)'),
+  $3::bigint
+)
+`, tenantID, "2025-01-01", eventDBID); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	seedTimeProfile(t, tenantA)
+
 	t.Run("fail-closed (no tenant)", func(t *testing.T) {
 		tx, err := conn.Begin(ctx)
 		if err != nil {
@@ -638,18 +720,26 @@ CREATE TABLE IF NOT EXISTS staffing.daily_attendance_results (
   work_date date NOT NULL,
 
   ruleset_version text NOT NULL,
+  day_type text NULL,
   status text NOT NULL,
   flags text[] NOT NULL DEFAULT '{}'::text[],
 
   first_in_time timestamptz NULL,
   last_out_time timestamptz NULL,
+  scheduled_minutes int NOT NULL DEFAULT 0,
   worked_minutes int NOT NULL DEFAULT 0,
+  overtime_minutes_150 int NOT NULL DEFAULT 0,
+  overtime_minutes_200 int NOT NULL DEFAULT 0,
+  overtime_minutes_300 int NOT NULL DEFAULT 0,
   late_minutes int NOT NULL DEFAULT 0,
   early_leave_minutes int NOT NULL DEFAULT 0,
 
   input_punch_count int NOT NULL DEFAULT 0,
   input_max_punch_event_db_id bigint NULL,
   input_max_punch_time timestamptz NULL,
+
+  time_profile_last_event_id bigint NULL,
+  holiday_day_last_event_id bigint NULL,
 
   computed_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -658,9 +748,13 @@ CREATE TABLE IF NOT EXISTS staffing.daily_attendance_results (
   PRIMARY KEY (tenant_id, person_uuid, work_date),
 
   CONSTRAINT daily_attendance_results_status_check
-    CHECK (status IN ('PRESENT','ABSENT','EXCEPTION')),
+    CHECK (status IN ('PRESENT','ABSENT','EXCEPTION','OFF')),
+  CONSTRAINT daily_attendance_results_day_type_check
+    CHECK (day_type IS NULL OR day_type IN ('WORKDAY','RESTDAY','LEGAL_HOLIDAY')),
   CONSTRAINT daily_attendance_results_minutes_nonneg_check
-    CHECK (worked_minutes >= 0 AND late_minutes >= 0 AND early_leave_minutes >= 0),
+    CHECK (scheduled_minutes >= 0 AND worked_minutes >= 0 AND late_minutes >= 0 AND early_leave_minutes >= 0),
+  CONSTRAINT daily_attendance_results_overtime_nonneg_check
+    CHECK (overtime_minutes_150 >= 0 AND overtime_minutes_200 >= 0 AND overtime_minutes_300 >= 0),
   CONSTRAINT daily_attendance_results_flags_allowlist_check
     CHECK (flags <@ ARRAY['ABSENT','MISSING_IN','MISSING_OUT','LATE','EARLY_LEAVE']::text[])
 );
@@ -678,6 +772,139 @@ USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 `,
 		`
+CREATE TABLE IF NOT EXISTS staffing.time_profile_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  event_type text NOT NULL,
+  effective_date date NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT time_profile_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
+  CONSTRAINT time_profile_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT time_profile_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT time_profile_events_one_per_day_unique UNIQUE (tenant_id, effective_date),
+  CONSTRAINT time_profile_events_request_id_unique UNIQUE (tenant_id, request_id)
+);
+`,
+		`
+CREATE INDEX IF NOT EXISTS time_profile_events_lookup_idx
+  ON staffing.time_profile_events (tenant_id, effective_date, id);
+`,
+		`ALTER TABLE staffing.time_profile_events ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE staffing.time_profile_events FORCE ROW LEVEL SECURITY;`,
+		`DROP POLICY IF EXISTS tenant_isolation ON staffing.time_profile_events;`,
+		`
+CREATE POLICY tenant_isolation ON staffing.time_profile_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+`,
+		`
+CREATE TABLE IF NOT EXISTS staffing.time_profile_versions (
+  id bigserial PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  name text NULL,
+  lifecycle_status text NOT NULL DEFAULT 'active',
+
+  shift_start_local time NOT NULL,
+  shift_end_local time NOT NULL,
+  late_tolerance_minutes int NOT NULL DEFAULT 0,
+  early_leave_tolerance_minutes int NOT NULL DEFAULT 0,
+
+  overtime_min_minutes int NOT NULL DEFAULT 0,
+  overtime_rounding_mode text NOT NULL DEFAULT 'NONE',
+  overtime_rounding_unit_minutes int NOT NULL DEFAULT 0,
+
+  validity daterange NOT NULL,
+  last_event_id bigint NOT NULL REFERENCES staffing.time_profile_events(id),
+
+  CONSTRAINT time_profile_versions_validity_check CHECK (NOT isempty(validity)),
+  CONSTRAINT time_profile_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
+  CONSTRAINT time_profile_versions_lifecycle_status_check CHECK (lifecycle_status IN ('active','disabled')),
+  CONSTRAINT time_profile_versions_shift_time_order_check CHECK (shift_end_local > shift_start_local),
+  CONSTRAINT time_profile_versions_tolerance_minutes_check CHECK (late_tolerance_minutes >= 0 AND early_leave_tolerance_minutes >= 0),
+  CONSTRAINT time_profile_versions_overtime_min_check CHECK (overtime_min_minutes >= 0),
+  CONSTRAINT time_profile_versions_overtime_rounding_mode_check CHECK (overtime_rounding_mode IN ('NONE','FLOOR','CEIL','NEAREST')),
+  CONSTRAINT time_profile_versions_overtime_rounding_unit_check CHECK (overtime_rounding_unit_minutes >= 0),
+  CONSTRAINT time_profile_versions_no_overlap
+    EXCLUDE USING gist (
+      tenant_id gist_uuid_ops WITH =,
+      validity WITH &&
+    )
+);
+`,
+		`
+CREATE INDEX IF NOT EXISTS time_profile_versions_lookup_idx
+  ON staffing.time_profile_versions (tenant_id, lower(validity));
+`,
+		`ALTER TABLE staffing.time_profile_versions ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE staffing.time_profile_versions FORCE ROW LEVEL SECURITY;`,
+		`DROP POLICY IF EXISTS tenant_isolation ON staffing.time_profile_versions;`,
+		`
+CREATE POLICY tenant_isolation ON staffing.time_profile_versions
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+`,
+		`
+CREATE TABLE IF NOT EXISTS staffing.holiday_day_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  day_date date NOT NULL,
+  event_type text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT holiday_day_events_event_type_check CHECK (event_type IN ('SET','CLEAR')),
+  CONSTRAINT holiday_day_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT holiday_day_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT holiday_day_events_request_id_unique UNIQUE (tenant_id, request_id)
+);
+`,
+		`
+CREATE INDEX IF NOT EXISTS holiday_day_events_lookup_idx
+  ON staffing.holiday_day_events (tenant_id, day_date, id);
+`,
+		`ALTER TABLE staffing.holiday_day_events ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE staffing.holiday_day_events FORCE ROW LEVEL SECURITY;`,
+		`DROP POLICY IF EXISTS tenant_isolation ON staffing.holiday_day_events;`,
+		`
+CREATE POLICY tenant_isolation ON staffing.holiday_day_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+`,
+		`
+CREATE TABLE IF NOT EXISTS staffing.holiday_days (
+  tenant_id uuid NOT NULL,
+  day_date date NOT NULL,
+  day_type text NOT NULL,
+  holiday_code text NULL,
+  note text NULL,
+  last_event_id bigint NOT NULL REFERENCES staffing.holiday_day_events(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, day_date),
+  CONSTRAINT holiday_days_day_type_check CHECK (day_type IN ('WORKDAY','RESTDAY','LEGAL_HOLIDAY'))
+);
+`,
+		`
+CREATE INDEX IF NOT EXISTS holiday_days_lookup_idx
+  ON staffing.holiday_days (tenant_id, day_date DESC);
+`,
+		`ALTER TABLE staffing.holiday_days ENABLE ROW LEVEL SECURITY;`,
+		`ALTER TABLE staffing.holiday_days FORCE ROW LEVEL SECURITY;`,
+		`DROP POLICY IF EXISTS tenant_isolation ON staffing.holiday_days;`,
+		`
+CREATE POLICY tenant_isolation ON staffing.holiday_days
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+`,
+		`
 CREATE OR REPLACE FUNCTION staffing.recompute_daily_attendance_result(
   p_tenant_id uuid,
   p_person_uuid uuid,
@@ -688,12 +915,16 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_tz text := 'Asia/Shanghai';
-  v_ruleset_version text := 'STANDARD_SHIFT_V1';
+  v_ruleset_version text := 'TIME_PROFILE_V1';
 
-  v_shift_start_local time := time '09:00';
-  v_shift_end_local time := time '18:00';
-  v_late_tolerance_min int := 5;
-  v_early_tolerance_min int := 5;
+  v_shift_start_local time := NULL;
+  v_shift_end_local time := NULL;
+  v_late_tolerance_min int := 0;
+  v_early_tolerance_min int := 0;
+
+  v_overtime_min_minutes int := 0;
+  v_overtime_rounding_mode text := 'NONE';
+  v_overtime_rounding_unit_minutes int := 0;
 
   v_window_before interval := interval '6 hours';
   v_window_after interval := interval '12 hours';
@@ -713,15 +944,26 @@ DECLARE
   v_first_in_time timestamptz := NULL;
   v_last_out_time timestamptz := NULL;
 
+  v_day_type text := NULL;
+  v_holiday_day_last_event_id bigint := NULL;
+
+  v_scheduled_minutes int := 0;
   v_worked_minutes int := 0;
+  v_overtime_minutes_150 int := 0;
+  v_overtime_minutes_200 int := 0;
+  v_overtime_minutes_300 int := 0;
   v_late_minutes int := 0;
   v_early_leave_minutes int := 0;
+
+  v_time_profile_last_event_id bigint := NULL;
 
   v_status text := 'ABSENT';
   v_flags text[] := '{}'::text[];
 
   r record;
   v_delta_min int;
+  v_raw_ot int := 0;
+  v_rounded_ot int := 0;
 BEGIN
   PERFORM staffing.assert_current_tenant(p_tenant_id);
 
@@ -736,6 +978,58 @@ BEGIN
     hashtext(p_tenant_id::text),
     hashtext(p_person_uuid::text || ':' || p_work_date::text)
   );
+
+  SELECT
+    shift_start_local,
+    shift_end_local,
+    late_tolerance_minutes,
+    early_leave_tolerance_minutes,
+    overtime_min_minutes,
+    overtime_rounding_mode,
+    overtime_rounding_unit_minutes,
+    last_event_id
+  INTO
+    v_shift_start_local,
+    v_shift_end_local,
+    v_late_tolerance_min,
+    v_early_tolerance_min,
+    v_overtime_min_minutes,
+    v_overtime_rounding_mode,
+    v_overtime_rounding_unit_minutes,
+    v_time_profile_last_event_id
+  FROM staffing.time_profile_versions
+  WHERE tenant_id = p_tenant_id
+    AND lifecycle_status = 'active'
+    AND validity @> p_work_date
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_TIME_PROFILE_NOT_CONFIGURED_AS_OF',
+      DETAIL = format('tenant_id=%s as_of=%s', p_tenant_id, p_work_date);
+  END IF;
+
+  v_scheduled_minutes := floor(extract(epoch FROM (v_shift_end_local - v_shift_start_local)) / 60.0)::int;
+  IF v_scheduled_minutes < 0 THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'scheduled_minutes must be non-negative';
+  END IF;
+
+  SELECT day_type, last_event_id
+  INTO v_day_type, v_holiday_day_last_event_id
+  FROM staffing.holiday_days
+  WHERE tenant_id = p_tenant_id
+    AND day_date = p_work_date;
+
+  IF NOT FOUND THEN
+    IF extract(isodow FROM p_work_date) IN (6, 7) THEN
+      v_day_type := 'RESTDAY';
+    ELSE
+      v_day_type := 'WORKDAY';
+    END IF;
+    v_holiday_day_last_event_id := NULL;
+  END IF;
 
   v_shift_start := (p_work_date + v_shift_start_local) AT TIME ZONE v_tz;
   v_shift_end := (p_work_date + v_shift_end_local) AT TIME ZONE v_tz;
@@ -788,8 +1082,13 @@ BEGIN
   END LOOP;
 
   IF v_punch_count = 0 THEN
-    v_status := 'ABSENT';
-    v_flags := array_append(v_flags, 'ABSENT');
+    IF v_day_type = 'WORKDAY' THEN
+      v_status := 'ABSENT';
+      v_flags := array_append(v_flags, 'ABSENT');
+    ELSE
+      v_status := 'OFF';
+      v_flags := '{}'::text[];
+    END IF;
   ELSE
     IF v_first_in_time IS NULL THEN
       v_flags := array_append(v_flags, 'MISSING_IN');
@@ -819,12 +1118,41 @@ BEGIN
     ELSE
       SELECT COALESCE(array_agg(DISTINCT f ORDER BY f), '{}'::text[]) INTO v_flags
       FROM unnest(v_flags) AS f;
+      v_status := 'EXCEPTION';
+    END IF;
+  END IF;
 
-      IF v_flags = ARRAY['ABSENT']::text[] THEN
-        v_status := 'ABSENT';
-      ELSE
-        v_status := 'EXCEPTION';
-      END IF;
+  IF v_day_type = 'WORKDAY' THEN
+    v_raw_ot := GREATEST(0, v_worked_minutes - v_scheduled_minutes);
+  ELSE
+    v_raw_ot := v_worked_minutes;
+  END IF;
+
+  IF v_raw_ot < v_overtime_min_minutes THEN
+    v_raw_ot := 0;
+  END IF;
+
+  v_rounded_ot := v_raw_ot;
+  IF v_rounded_ot > 0 AND v_overtime_rounding_unit_minutes > 0 AND v_overtime_rounding_mode <> 'NONE' THEN
+    IF v_overtime_rounding_mode = 'FLOOR' THEN
+      v_rounded_ot := floor(v_rounded_ot::numeric / v_overtime_rounding_unit_minutes::numeric) * v_overtime_rounding_unit_minutes;
+    ELSIF v_overtime_rounding_mode = 'CEIL' THEN
+      v_rounded_ot := ceiling(v_rounded_ot::numeric / v_overtime_rounding_unit_minutes::numeric) * v_overtime_rounding_unit_minutes;
+    ELSIF v_overtime_rounding_mode = 'NEAREST' THEN
+      v_rounded_ot := round(v_rounded_ot::numeric / v_overtime_rounding_unit_minutes::numeric) * v_overtime_rounding_unit_minutes;
+    END IF;
+  END IF;
+
+  v_overtime_minutes_150 := 0;
+  v_overtime_minutes_200 := 0;
+  v_overtime_minutes_300 := 0;
+  IF v_rounded_ot > 0 THEN
+    IF v_day_type = 'WORKDAY' THEN
+      v_overtime_minutes_150 := v_rounded_ot;
+    ELSIF v_day_type = 'RESTDAY' THEN
+      v_overtime_minutes_200 := v_rounded_ot;
+    ELSIF v_day_type = 'LEGAL_HOLIDAY' THEN
+      v_overtime_minutes_300 := v_rounded_ot;
     END IF;
   END IF;
 
@@ -833,16 +1161,23 @@ BEGIN
     person_uuid,
     work_date,
     ruleset_version,
+    day_type,
     status,
     flags,
     first_in_time,
     last_out_time,
+    scheduled_minutes,
     worked_minutes,
+    overtime_minutes_150,
+    overtime_minutes_200,
+    overtime_minutes_300,
     late_minutes,
     early_leave_minutes,
     input_punch_count,
     input_max_punch_event_db_id,
     input_max_punch_time,
+    time_profile_last_event_id,
+    holiday_day_last_event_id,
     computed_at,
     created_at,
     updated_at
@@ -852,16 +1187,23 @@ BEGIN
     p_person_uuid,
     p_work_date,
     v_ruleset_version,
+    v_day_type,
     v_status,
     v_flags,
     v_first_in_time,
     v_last_out_time,
+    v_scheduled_minutes,
     v_worked_minutes,
+    v_overtime_minutes_150,
+    v_overtime_minutes_200,
+    v_overtime_minutes_300,
     v_late_minutes,
     v_early_leave_minutes,
     v_punch_count,
     v_input_max_id,
     v_input_max_punch_time,
+    v_time_profile_last_event_id,
+    v_holiday_day_last_event_id,
     now(),
     now(),
     now()
@@ -869,16 +1211,23 @@ BEGIN
   ON CONFLICT (tenant_id, person_uuid, work_date)
   DO UPDATE SET
     ruleset_version = EXCLUDED.ruleset_version,
+    day_type = EXCLUDED.day_type,
     status = EXCLUDED.status,
     flags = EXCLUDED.flags,
     first_in_time = EXCLUDED.first_in_time,
     last_out_time = EXCLUDED.last_out_time,
+    scheduled_minutes = EXCLUDED.scheduled_minutes,
     worked_minutes = EXCLUDED.worked_minutes,
+    overtime_minutes_150 = EXCLUDED.overtime_minutes_150,
+    overtime_minutes_200 = EXCLUDED.overtime_minutes_200,
+    overtime_minutes_300 = EXCLUDED.overtime_minutes_300,
     late_minutes = EXCLUDED.late_minutes,
     early_leave_minutes = EXCLUDED.early_leave_minutes,
     input_punch_count = EXCLUDED.input_punch_count,
     input_max_punch_event_db_id = EXCLUDED.input_max_punch_event_db_id,
     input_max_punch_time = EXCLUDED.input_max_punch_time,
+    time_profile_last_event_id = EXCLUDED.time_profile_last_event_id,
+    holiday_day_last_event_id = EXCLUDED.holiday_day_last_event_id,
     computed_at = EXCLUDED.computed_at,
     updated_at = EXCLUDED.updated_at;
 END;
@@ -1040,8 +1389,14 @@ $$;
 		`GRANT EXECUTE ON FUNCTION staffing.recompute_daily_attendance_result(uuid, uuid, date) TO ` + runtimeRole + `;`,
 		`GRANT EXECUTE ON FUNCTION staffing.recompute_daily_attendance_results_for_punch(uuid, uuid, timestamptz) TO ` + runtimeRole + `;`,
 		`GRANT EXECUTE ON FUNCTION staffing.submit_time_punch_event(uuid, uuid, uuid, timestamptz, text, text, jsonb, jsonb, jsonb, text, uuid) TO ` + runtimeRole + `;`,
+		`GRANT SELECT, INSERT ON staffing.time_profile_events TO ` + runtimeRole + `;`,
+		`GRANT USAGE, SELECT ON SEQUENCE staffing.time_profile_events_id_seq TO ` + runtimeRole + `;`,
+		`GRANT SELECT, INSERT ON staffing.time_profile_versions TO ` + runtimeRole + `;`,
+		`GRANT USAGE, SELECT ON SEQUENCE staffing.time_profile_versions_id_seq TO ` + runtimeRole + `;`,
+		`GRANT SELECT ON staffing.holiday_day_events TO ` + runtimeRole + `;`,
+		`GRANT SELECT ON staffing.holiday_days TO ` + runtimeRole + `;`,
 		`GRANT SELECT, INSERT, UPDATE ON staffing.daily_attendance_results TO ` + runtimeRole + `;`,
-		`TRUNCATE staffing.daily_attendance_results;`,
+		`TRUNCATE staffing.time_profile_versions, staffing.time_profile_events, staffing.holiday_days, staffing.holiday_day_events, staffing.daily_attendance_results;`,
 	}
 
 	for _, s := range ddl {

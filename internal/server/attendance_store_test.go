@@ -98,23 +98,30 @@ func (r *dailyAttendanceResultRows) Scan(dest ...any) error {
 	*(dest[0].(*string)) = row.PersonUUID
 	*(dest[1].(*string)) = row.WorkDate
 	*(dest[2].(*string)) = row.RulesetVersion
-	*(dest[3].(*string)) = row.Status
-	*(dest[4].(*[]string)) = append([]string(nil), row.Flags...)
+	*(dest[3].(**string)) = row.DayType
+	*(dest[4].(*string)) = row.Status
+	*(dest[5].(*[]string)) = append([]string(nil), row.Flags...)
 
-	*(dest[5].(**time.Time)) = row.FirstInTime
-	*(dest[6].(**time.Time)) = row.LastOutTime
+	*(dest[6].(**time.Time)) = row.FirstInTime
+	*(dest[7].(**time.Time)) = row.LastOutTime
 
-	*(dest[7].(*int)) = row.WorkedMinutes
-	*(dest[8].(*int)) = row.LateMinutes
-	*(dest[9].(*int)) = row.EarlyLeaveMinutes
+	*(dest[8].(*int)) = row.ScheduledMinutes
+	*(dest[9].(*int)) = row.WorkedMinutes
+	*(dest[10].(*int)) = row.OvertimeMinutes150
+	*(dest[11].(*int)) = row.OvertimeMinutes200
+	*(dest[12].(*int)) = row.OvertimeMinutes300
+	*(dest[13].(*int)) = row.LateMinutes
+	*(dest[14].(*int)) = row.EarlyLeaveMinutes
 
-	*(dest[10].(*int)) = row.InputPunchCount
-	*(dest[11].(**int64)) = row.InputMaxPunchEventDBID
-	*(dest[12].(**time.Time)) = row.InputMaxPunchTime
+	*(dest[15].(*int)) = row.InputPunchCount
+	*(dest[16].(**int64)) = row.InputMaxPunchEventDBID
+	*(dest[17].(**time.Time)) = row.InputMaxPunchTime
+	*(dest[18].(**int64)) = row.TimeProfileLastEventID
+	*(dest[19].(**int64)) = row.HolidayDayLastEventID
 
-	*(dest[13].(*time.Time)) = row.ComputedAt
-	*(dest[14].(*time.Time)) = row.CreatedAt
-	*(dest[15].(*time.Time)) = row.UpdatedAt
+	*(dest[20].(*time.Time)) = row.ComputedAt
+	*(dest[21].(*time.Time)) = row.CreatedAt
+	*(dest[22].(*time.Time)) = row.UpdatedAt
 	return nil
 }
 func (r *dailyAttendanceResultRows) Values() ([]any, error) { return nil, nil }
@@ -134,19 +141,26 @@ func (row dailyAttendanceResultRow) Scan(dest ...any) error {
 	*(dest[0].(*string)) = row.r.PersonUUID
 	*(dest[1].(*string)) = row.r.WorkDate
 	*(dest[2].(*string)) = row.r.RulesetVersion
-	*(dest[3].(*string)) = row.r.Status
-	*(dest[4].(*[]string)) = append([]string(nil), row.r.Flags...)
-	*(dest[5].(**time.Time)) = row.r.FirstInTime
-	*(dest[6].(**time.Time)) = row.r.LastOutTime
-	*(dest[7].(*int)) = row.r.WorkedMinutes
-	*(dest[8].(*int)) = row.r.LateMinutes
-	*(dest[9].(*int)) = row.r.EarlyLeaveMinutes
-	*(dest[10].(*int)) = row.r.InputPunchCount
-	*(dest[11].(**int64)) = row.r.InputMaxPunchEventDBID
-	*(dest[12].(**time.Time)) = row.r.InputMaxPunchTime
-	*(dest[13].(*time.Time)) = row.r.ComputedAt
-	*(dest[14].(*time.Time)) = row.r.CreatedAt
-	*(dest[15].(*time.Time)) = row.r.UpdatedAt
+	*(dest[3].(**string)) = row.r.DayType
+	*(dest[4].(*string)) = row.r.Status
+	*(dest[5].(*[]string)) = append([]string(nil), row.r.Flags...)
+	*(dest[6].(**time.Time)) = row.r.FirstInTime
+	*(dest[7].(**time.Time)) = row.r.LastOutTime
+	*(dest[8].(*int)) = row.r.ScheduledMinutes
+	*(dest[9].(*int)) = row.r.WorkedMinutes
+	*(dest[10].(*int)) = row.r.OvertimeMinutes150
+	*(dest[11].(*int)) = row.r.OvertimeMinutes200
+	*(dest[12].(*int)) = row.r.OvertimeMinutes300
+	*(dest[13].(*int)) = row.r.LateMinutes
+	*(dest[14].(*int)) = row.r.EarlyLeaveMinutes
+	*(dest[15].(*int)) = row.r.InputPunchCount
+	*(dest[16].(**int64)) = row.r.InputMaxPunchEventDBID
+	*(dest[17].(**time.Time)) = row.r.InputMaxPunchTime
+	*(dest[18].(**int64)) = row.r.TimeProfileLastEventID
+	*(dest[19].(**int64)) = row.r.HolidayDayLastEventID
+	*(dest[20].(*time.Time)) = row.r.ComputedAt
+	*(dest[21].(*time.Time)) = row.r.CreatedAt
+	*(dest[22].(*time.Time)) = row.r.UpdatedAt
 	return nil
 }
 
