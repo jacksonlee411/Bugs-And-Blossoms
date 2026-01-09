@@ -5,7 +5,7 @@
 已完成事项（合并记录）：
 - 阶段 1（§8.2-1）：`iit_special_additional_deduction_claims`（events+projection+RLS）+ 迁移闭环（PR：#116）
 - 阶段 2（§8.2-2）：`payroll_balances` + RLS + 迁移闭环（PR：#118）
-- 阶段 3（§8.2-3）：迁移闭环确认（`make staffing plan/lint` No Drift）（PR：TBD）
+- 阶段 3（§8.2-3）：迁移闭环确认（`make staffing plan/lint` No Drift）（PR：#120）
 
 > 上游路线图：`DEV-PLAN-039`  
 > 蓝图合同（范围/不变量/算法基线）：`DEV-PLAN-040`（重点：§3.3、§5.2）  
