@@ -394,3 +394,20 @@ type StaffingPositionVersion struct {
 	Validity            pgtype.Range[pgtype.Date] `json:"validity"`
 	LastEventID         int64                     `json:"last_event_id"`
 }
+
+type StaffingTimePunchEvent struct {
+	ID               int64              `json:"id"`
+	EventID          pgtype.UUID        `json:"event_id"`
+	TenantID         pgtype.UUID        `json:"tenant_id"`
+	PersonUuid       pgtype.UUID        `json:"person_uuid"`
+	PunchTime        pgtype.Timestamptz `json:"punch_time"`
+	PunchType        string             `json:"punch_type"`
+	SourceProvider   string             `json:"source_provider"`
+	Payload          []byte             `json:"payload"`
+	SourceRawPayload []byte             `json:"source_raw_payload"`
+	DeviceInfo       []byte             `json:"device_info"`
+	RequestID        string             `json:"request_id"`
+	InitiatorID      pgtype.UUID        `json:"initiator_id"`
+	TransactionTime  pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}

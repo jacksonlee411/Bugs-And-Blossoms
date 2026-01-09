@@ -148,6 +148,33 @@ ALTER TABLE staffing.assignment_versions
   ADD CONSTRAINT assignment_versions_base_salary_check CHECK (base_salary IS NULL OR base_salary >= 0),
   ADD CONSTRAINT assignment_versions_profile_is_object_check CHECK (jsonb_typeof(profile) = 'object');
 
+CREATE TABLE IF NOT EXISTS staffing.time_punch_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  punch_time timestamptz NOT NULL,
+  punch_type text NOT NULL,
+  source_provider text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  source_raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  device_info jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT time_punch_events_punch_type_check CHECK (punch_type IN ('IN','OUT')),
+  CONSTRAINT time_punch_events_source_provider_check CHECK (source_provider IN ('MANUAL','IMPORT')),
+  CONSTRAINT time_punch_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT time_punch_events_source_raw_is_object_check CHECK (jsonb_typeof(source_raw_payload) = 'object'),
+  CONSTRAINT time_punch_events_device_info_is_object_check CHECK (jsonb_typeof(device_info) = 'object'),
+  CONSTRAINT time_punch_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT time_punch_events_request_id_unique UNIQUE (tenant_id, request_id)
+);
+
+CREATE INDEX IF NOT EXISTS time_punch_events_lookup_idx
+  ON staffing.time_punch_events (tenant_id, person_uuid, punch_time DESC, id DESC);
+
 ALTER TABLE staffing.positions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.positions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.positions;
@@ -187,5 +214,12 @@ ALTER TABLE staffing.assignment_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.assignment_versions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.assignment_versions;
 CREATE POLICY tenant_isolation ON staffing.assignment_versions
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.time_punch_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.time_punch_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.time_punch_events;
+CREATE POLICY tenant_isolation ON staffing.time_punch_events
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
