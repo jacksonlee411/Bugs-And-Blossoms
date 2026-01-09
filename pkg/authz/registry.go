@@ -28,6 +28,9 @@ const (
 	ObjectStaffingPayrollPeriods         = "staffing.payroll-periods"
 	ObjectStaffingPayrollRuns            = "staffing.payroll-runs"
 	ObjectStaffingPayslips               = "staffing.payslips"
-	ObjectSuperadminTenants              = "superadmin.tenants"
-	ObjectSuperadminSession              = "superadmin.session"
+
+	ObjectStaffingPayrollSocialInsurancePolicies = "staffing.payroll-social-insurance-policies"
+
+	ObjectSuperadminTenants = "superadmin.tenants"
+	ObjectSuperadminSession = "superadmin.session"
 )

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -50,9 +51,21 @@ type PayslipItem struct {
 	Meta     json.RawMessage `json:"meta"`
 }
 
+type PayslipSocialInsuranceItem struct {
+	InsuranceType     string `json:"insurance_type"`
+	BaseAmount        string `json:"base_amount"`
+	EmployeeAmount    string `json:"employee_amount"`
+	EmployerAmount    string `json:"employer_amount"`
+	PolicyEffectiveAt string `json:"policy_effective_date"`
+}
+
 type PayslipDetail struct {
 	Payslip
 	Items []PayslipItem `json:"items"`
+
+	SocialInsuranceItems         []PayslipSocialInsuranceItem `json:"social_insurance_items"`
+	SocialInsuranceEmployeeTotal string                       `json:"social_insurance_employee_total"`
+	SocialInsuranceEmployerTotal string                       `json:"social_insurance_employer_total"`
 }
 
 type PayrollStore interface {
@@ -67,6 +80,9 @@ type PayrollStore interface {
 
 	ListPayslips(ctx context.Context, tenantID string, runID string) ([]Payslip, error)
 	GetPayslip(ctx context.Context, tenantID string, payslipID string) (PayslipDetail, error)
+
+	ListSocialInsurancePolicyVersions(ctx context.Context, tenantID string, asOfDate string) ([]SocialInsurancePolicyVersion, error)
+	UpsertSocialInsurancePolicyVersion(ctx context.Context, tenantID string, in SocialInsurancePolicyUpsertInput) (SocialInsurancePolicyUpsertResult, error)
 }
 
 func (s *staffingPGStore) ListPayPeriods(ctx context.Context, tenantID string, payGroup string) ([]PayPeriod, error) {
@@ -135,6 +151,42 @@ ORDER BY lower(period) DESC, id::text ASC
 		return nil, err
 	}
 	return out, nil
+}
+
+type SocialInsurancePolicyVersion struct {
+	PolicyID      string `json:"policy_id"`
+	CityCode      string `json:"city_code"`
+	HukouType     string `json:"hukou_type"`
+	InsuranceType string `json:"insurance_type"`
+	EffectiveDate string `json:"effective_date"`
+	EmployerRate  string `json:"employer_rate"`
+	EmployeeRate  string `json:"employee_rate"`
+	BaseFloor     string `json:"base_floor"`
+	BaseCeiling   string `json:"base_ceiling"`
+	RoundingRule  string `json:"rounding_rule"`
+	Precision     int    `json:"precision"`
+}
+
+type SocialInsurancePolicyUpsertInput struct {
+	EventID       string          `json:"event_id"`
+	CityCode      string          `json:"city_code"`
+	HukouType     string          `json:"hukou_type"`
+	InsuranceType string          `json:"insurance_type"`
+	EffectiveDate string          `json:"effective_date"`
+	EmployerRate  string          `json:"employer_rate"`
+	EmployeeRate  string          `json:"employee_rate"`
+	BaseFloor     string          `json:"base_floor"`
+	BaseCeiling   string          `json:"base_ceiling"`
+	RoundingRule  string          `json:"rounding_rule"`
+	Precision     int             `json:"precision"`
+	RulesConfig   json.RawMessage `json:"rules_config"`
+}
+
+type SocialInsurancePolicyUpsertResult struct {
+	PolicyID      string `json:"policy_id"`
+	LastEventDBID int64  `json:"last_event_db_id"`
+	InsuranceType string `json:"insurance_type"`
+	EffectiveDate string `json:"effective_date"`
 }
 
 func (s *staffingPGStore) CreatePayPeriod(ctx context.Context, tenantID string, payGroup string, startDate string, endDateExclusive string) (PayPeriod, error) {
@@ -709,10 +761,279 @@ func (s *staffingPGStore) GetPayslip(ctx context.Context, tenantID string, paysl
 		return PayslipDetail{}, err
 	}
 
+	if err := tx.QueryRow(ctx, `
+	SELECT
+	  COALESCE(sum(employee_amount), 0)::text,
+	  COALESCE(sum(employer_amount), 0)::text
+	FROM staffing.payslip_social_insurance_items
+	WHERE tenant_id = $1::uuid AND payslip_id = $2::uuid
+	`, tenantID, payslipID).Scan(&out.SocialInsuranceEmployeeTotal, &out.SocialInsuranceEmployerTotal); err != nil {
+		return PayslipDetail{}, err
+	}
+
+	rowsSI, err := tx.Query(ctx, `
+	SELECT
+	  i.insurance_type,
+	  i.base_amount::text,
+	  i.employee_amount::text,
+	  i.employer_amount::text,
+	  e.effective_date::text
+	FROM staffing.payslip_social_insurance_items i
+	JOIN staffing.social_insurance_policy_events e
+	  ON e.tenant_id = i.tenant_id AND e.id = i.policy_last_event_id
+	WHERE i.tenant_id = $1::uuid AND i.payslip_id = $2::uuid
+	ORDER BY i.insurance_type ASC, i.id ASC
+	`, tenantID, payslipID)
+	if err != nil {
+		return PayslipDetail{}, err
+	}
+	defer rowsSI.Close()
+
+	for rowsSI.Next() {
+		var item PayslipSocialInsuranceItem
+		if err := rowsSI.Scan(&item.InsuranceType, &item.BaseAmount, &item.EmployeeAmount, &item.EmployerAmount, &item.PolicyEffectiveAt); err != nil {
+			return PayslipDetail{}, err
+		}
+		out.SocialInsuranceItems = append(out.SocialInsuranceItems, item)
+	}
+	if err := rowsSI.Err(); err != nil {
+		return PayslipDetail{}, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return PayslipDetail{}, err
 	}
 	return out, nil
+}
+
+func (s *staffingPGStore) ListSocialInsurancePolicyVersions(ctx context.Context, tenantID string, asOfDate string) ([]SocialInsurancePolicyVersion, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	asOfDate = strings.TrimSpace(asOfDate)
+	if asOfDate == "" {
+		return nil, errors.New("as_of is required")
+	}
+	if _, err := time.Parse("2006-01-02", asOfDate); err != nil {
+		return nil, errors.New("as_of invalid: " + err.Error())
+	}
+
+	rows, err := tx.Query(ctx, `
+SELECT
+  policy_id::text,
+  city_code,
+  hukou_type,
+  insurance_type,
+  lower(validity)::text AS effective_date,
+  employer_rate::text,
+  employee_rate::text,
+  base_floor::text,
+  base_ceiling::text,
+  rounding_rule,
+  precision
+FROM staffing.social_insurance_policy_versions
+WHERE tenant_id = $1::uuid
+  AND validity @> $2::date
+ORDER BY insurance_type ASC, policy_id::text ASC
+`, tenantID, asOfDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []SocialInsurancePolicyVersion
+	for rows.Next() {
+		var p SocialInsurancePolicyVersion
+		if err := rows.Scan(
+			&p.PolicyID,
+			&p.CityCode,
+			&p.HukouType,
+			&p.InsuranceType,
+			&p.EffectiveDate,
+			&p.EmployerRate,
+			&p.EmployeeRate,
+			&p.BaseFloor,
+			&p.BaseCeiling,
+			&p.RoundingRule,
+			&p.Precision,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *staffingPGStore) UpsertSocialInsurancePolicyVersion(ctx context.Context, tenantID string, in SocialInsurancePolicyUpsertInput) (SocialInsurancePolicyUpsertResult, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return SocialInsurancePolicyUpsertResult{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return SocialInsurancePolicyUpsertResult{}, err
+	}
+
+	in.EventID = strings.TrimSpace(in.EventID)
+	if in.EventID == "" {
+		return SocialInsurancePolicyUpsertResult{}, errors.New("event_id is required")
+	}
+
+	in.CityCode = strings.TrimSpace(in.CityCode)
+	if in.CityCode == "" {
+		return SocialInsurancePolicyUpsertResult{}, errors.New("city_code is required")
+	}
+	in.CityCode = strings.ToUpper(in.CityCode)
+
+	in.HukouType = strings.ToLower(strings.TrimSpace(in.HukouType))
+	if in.HukouType == "" {
+		in.HukouType = "default"
+	}
+	if in.HukouType != "default" {
+		return SocialInsurancePolicyUpsertResult{}, errors.New("hukou_type not supported")
+	}
+
+	in.InsuranceType = strings.ToUpper(strings.TrimSpace(in.InsuranceType))
+	if in.InsuranceType == "" {
+		return SocialInsurancePolicyUpsertResult{}, errors.New("insurance_type is required")
+	}
+	switch in.InsuranceType {
+	case "PENSION", "MEDICAL", "UNEMPLOYMENT", "INJURY", "MATERNITY", "HOUSING_FUND":
+	default:
+		return SocialInsurancePolicyUpsertResult{}, errors.New("insurance_type invalid")
+	}
+
+	in.EffectiveDate = strings.TrimSpace(in.EffectiveDate)
+	if in.EffectiveDate == "" {
+		return SocialInsurancePolicyUpsertResult{}, errors.New("effective_date is required")
+	}
+	if _, err := time.Parse("2006-01-02", in.EffectiveDate); err != nil {
+		return SocialInsurancePolicyUpsertResult{}, errors.New("effective_date invalid: " + err.Error())
+	}
+
+	in.EmployerRate = strings.TrimSpace(in.EmployerRate)
+	in.EmployeeRate = strings.TrimSpace(in.EmployeeRate)
+	in.BaseFloor = strings.TrimSpace(in.BaseFloor)
+	in.BaseCeiling = strings.TrimSpace(in.BaseCeiling)
+	if in.EmployerRate == "" || in.EmployeeRate == "" || in.BaseFloor == "" || in.BaseCeiling == "" {
+		return SocialInsurancePolicyUpsertResult{}, errors.New("rates and base are required")
+	}
+
+	in.RoundingRule = strings.ToUpper(strings.TrimSpace(in.RoundingRule))
+	if in.RoundingRule == "" {
+		return SocialInsurancePolicyUpsertResult{}, errors.New("rounding_rule is required")
+	}
+	switch in.RoundingRule {
+	case "HALF_UP", "CEIL":
+	default:
+		return SocialInsurancePolicyUpsertResult{}, errors.New("rounding_rule invalid")
+	}
+	if in.Precision < 0 || in.Precision > 2 {
+		return SocialInsurancePolicyUpsertResult{}, errors.New("precision invalid")
+	}
+
+	rulesConfig := in.RulesConfig
+	if len(rulesConfig) == 0 {
+		rulesConfig = []byte(`{}`)
+	} else {
+		var v any
+		if err := json.Unmarshal(rulesConfig, &v); err != nil {
+			return SocialInsurancePolicyUpsertResult{}, errors.New("rules_config invalid json: " + err.Error())
+		}
+		if _, ok := v.(map[string]any); !ok {
+			return SocialInsurancePolicyUpsertResult{}, errors.New("rules_config must be an object")
+		}
+	}
+
+	var policyID string
+	err = tx.QueryRow(ctx, `
+SELECT id::text
+FROM staffing.social_insurance_policies
+WHERE tenant_id = $1::uuid
+  AND city_code = $2::text
+  AND hukou_type = $3::text
+  AND insurance_type = $4::text
+`, tenantID, in.CityCode, in.HukouType, in.InsuranceType).Scan(&policyID)
+	if err != nil && err != pgx.ErrNoRows {
+		return SocialInsurancePolicyUpsertResult{}, err
+	}
+	if err == pgx.ErrNoRows {
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&policyID); err != nil {
+			return SocialInsurancePolicyUpsertResult{}, err
+		}
+	}
+
+	eventType := "CREATE"
+	{
+		var hasEvent bool
+		if err := tx.QueryRow(ctx, `
+SELECT EXISTS (
+  SELECT 1
+  FROM staffing.social_insurance_policy_events
+  WHERE tenant_id = $1::uuid AND policy_id = $2::uuid
+  LIMIT 1
+)
+`, tenantID, policyID).Scan(&hasEvent); err != nil {
+			return SocialInsurancePolicyUpsertResult{}, err
+		}
+		if hasEvent {
+			eventType = "UPDATE"
+		}
+	}
+
+	payloadBytes, _ := json.Marshal(map[string]any{
+		"employer_rate": in.EmployerRate,
+		"employee_rate": in.EmployeeRate,
+		"base_floor":    in.BaseFloor,
+		"base_ceiling":  in.BaseCeiling,
+		"rounding_rule": in.RoundingRule,
+		"precision":     in.Precision,
+		"rules_config":  json.RawMessage(rulesConfig),
+	})
+
+	var eventDBID int64
+	if err := tx.QueryRow(ctx, `
+	SELECT staffing.submit_social_insurance_policy_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::text,
+  $5::text,
+  $6::text,
+  $7::text,
+  $8::date,
+  $9::jsonb,
+  $10::text,
+  $11::uuid
+);
+`, in.EventID, tenantID, policyID, in.CityCode, in.HukouType, in.InsuranceType, eventType, in.EffectiveDate, payloadBytes, in.EventID, tenantID).Scan(&eventDBID); err != nil {
+		return SocialInsurancePolicyUpsertResult{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return SocialInsurancePolicyUpsertResult{}, err
+	}
+	return SocialInsurancePolicyUpsertResult{
+		PolicyID:      policyID,
+		LastEventDBID: eventDBID,
+		InsuranceType: in.InsuranceType,
+		EffectiveDate: in.EffectiveDate,
+	}, nil
 }
 
 func pgErrorMessage(err error) string {

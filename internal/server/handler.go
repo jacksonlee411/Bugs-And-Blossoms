@@ -360,6 +360,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-runs/{run_id}/payslips/{payslip_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayslipDetail(w, r, payrollStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-social-insurance-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollSocialInsurancePolicies(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/payroll-social-insurance-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollSocialInsurancePolicies(w, r, payrollStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePositionsAPI(w, r, positionStore)
 	}))
@@ -398,6 +404,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payslips/{payslip_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayslipAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payroll-social-insurance-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollSocialInsurancePoliciesAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/payroll-social-insurance-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollSocialInsurancePoliciesAPI(w, r, payrollStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/person/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePersons(w, r, personStore)

@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS staffing.payroll_run_events (
   run_id uuid NOT NULL,
   pay_period_id uuid NOT NULL,
   event_type text NOT NULL,
-  run_state text NOT NULL,
+  run_state text NOT NULL DEFAULT 'draft',
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   request_id text NOT NULL,
   initiator_id uuid NOT NULL,
