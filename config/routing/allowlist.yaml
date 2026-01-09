@@ -56,6 +56,9 @@ entrypoints:
       - path: /org/assignments
         methods: [GET, POST]
         route_class: ui
+      - path: /org/attendance-punches
+        methods: [GET, POST]
+        route_class: ui
       - path: /org/payroll-periods
         methods: [GET, POST]
         route_class: ui
@@ -90,6 +93,9 @@ entrypoints:
         methods: [GET, POST]
         route_class: internal_api
       - path: /org/api/assignments
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /org/api/attendance-punches
         methods: [GET, POST]
         route_class: internal_api
       - path: /org/api/payroll-periods
