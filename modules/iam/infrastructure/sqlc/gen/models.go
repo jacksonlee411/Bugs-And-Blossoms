@@ -277,6 +277,20 @@ type StaffingAssignmentVersion struct {
 	Profile        []byte                    `json:"profile"`
 }
 
+type StaffingAttendanceRecalcEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	PersonUuid      pgtype.UUID        `json:"person_uuid"`
+	FromDate        pgtype.Date        `json:"from_date"`
+	ToDate          pgtype.Date        `json:"to_date"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type StaffingDailyAttendanceResult struct {
 	TenantID               pgtype.UUID        `json:"tenant_id"`
 	PersonUuid             pgtype.UUID        `json:"person_uuid"`
@@ -716,4 +730,18 @@ type StaffingTimePunchEvent struct {
 	InitiatorID      pgtype.UUID        `json:"initiator_id"`
 	TransactionTime  pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type StaffingTimePunchVoidEvent struct {
+	ID                   int64              `json:"id"`
+	EventID              pgtype.UUID        `json:"event_id"`
+	TenantID             pgtype.UUID        `json:"tenant_id"`
+	PersonUuid           pgtype.UUID        `json:"person_uuid"`
+	TargetPunchEventDbID int64              `json:"target_punch_event_db_id"`
+	TargetPunchEventID   pgtype.UUID        `json:"target_punch_event_id"`
+	Payload              []byte             `json:"payload"`
+	RequestID            string             `json:"request_id"`
+	InitiatorID          pgtype.UUID        `json:"initiator_id"`
+	TransactionTime      pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 }

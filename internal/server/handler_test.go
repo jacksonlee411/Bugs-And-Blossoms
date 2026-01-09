@@ -613,6 +613,56 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("attendance daily results api content-type=%q", ct)
 	}
 
+	reqAttendanceTimeProfilePost := httptest.NewRequest(http.MethodPost, "/org/attendance-time-profile?as_of=2026-01-01", strings.NewReader("op=unknown"))
+	reqAttendanceTimeProfilePost.Host = "localhost:8080"
+	reqAttendanceTimeProfilePost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqAttendanceTimeProfilePost.AddCookie(session)
+	recAttendanceTimeProfilePost := httptest.NewRecorder()
+	h.ServeHTTP(recAttendanceTimeProfilePost, reqAttendanceTimeProfilePost)
+	if recAttendanceTimeProfilePost.Code == http.StatusNotFound || recAttendanceTimeProfilePost.Code == http.StatusInternalServerError {
+		t.Fatalf("attendance time profile post status=%d", recAttendanceTimeProfilePost.Code)
+	}
+
+	reqHolidayCalendarPost := httptest.NewRequest(http.MethodPost, "/org/attendance-holiday-calendar?as_of=2026-01-01&month=2026-01", strings.NewReader("op=unknown"))
+	reqHolidayCalendarPost.Host = "localhost:8080"
+	reqHolidayCalendarPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqHolidayCalendarPost.AddCookie(session)
+	recHolidayCalendarPost := httptest.NewRecorder()
+	h.ServeHTTP(recHolidayCalendarPost, reqHolidayCalendarPost)
+	if recHolidayCalendarPost.Code == http.StatusNotFound || recHolidayCalendarPost.Code == http.StatusInternalServerError {
+		t.Fatalf("holiday calendar post status=%d", recHolidayCalendarPost.Code)
+	}
+
+	reqAttendanceDailyResultsDetailPost := httptest.NewRequest(http.MethodPost, "/org/attendance-daily-results/person-101/2026-01-01?as_of=2026-01-01", strings.NewReader("op=unknown"))
+	reqAttendanceDailyResultsDetailPost.Host = "localhost:8080"
+	reqAttendanceDailyResultsDetailPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqAttendanceDailyResultsDetailPost.AddCookie(session)
+	recAttendanceDailyResultsDetailPost := httptest.NewRecorder()
+	h.ServeHTTP(recAttendanceDailyResultsDetailPost, reqAttendanceDailyResultsDetailPost)
+	if recAttendanceDailyResultsDetailPost.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("attendance daily results detail post status=%d", recAttendanceDailyResultsDetailPost.Code)
+	}
+
+	reqAttendancePunchVoidsPost := httptest.NewRequest(http.MethodPost, "/org/api/attendance-punch-voids", strings.NewReader(`{}`))
+	reqAttendancePunchVoidsPost.Host = "localhost:8080"
+	reqAttendancePunchVoidsPost.Header.Set("Content-Type", "application/json")
+	reqAttendancePunchVoidsPost.AddCookie(session)
+	recAttendancePunchVoidsPost := httptest.NewRecorder()
+	h.ServeHTTP(recAttendancePunchVoidsPost, reqAttendancePunchVoidsPost)
+	if recAttendancePunchVoidsPost.Code != http.StatusBadRequest {
+		t.Fatalf("attendance punch voids post status=%d", recAttendancePunchVoidsPost.Code)
+	}
+
+	reqAttendanceRecalcPost := httptest.NewRequest(http.MethodPost, "/org/api/attendance-recalc", strings.NewReader(`{}`))
+	reqAttendanceRecalcPost.Host = "localhost:8080"
+	reqAttendanceRecalcPost.Header.Set("Content-Type", "application/json")
+	reqAttendanceRecalcPost.AddCookie(session)
+	recAttendanceRecalcPost := httptest.NewRecorder()
+	h.ServeHTTP(recAttendanceRecalcPost, reqAttendanceRecalcPost)
+	if recAttendanceRecalcPost.Code != http.StatusBadRequest {
+		t.Fatalf("attendance recalc post status=%d", recAttendanceRecalcPost.Code)
+	}
+
 	reqAppMissingAsOf := httptest.NewRequest(http.MethodGet, "/app", nil)
 	reqAppMissingAsOf.Host = "localhost:8080"
 	reqAppMissingAsOf.AddCookie(session)
