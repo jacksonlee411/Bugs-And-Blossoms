@@ -48,7 +48,7 @@ func personSmoke(args []string) {
 		fatalf("missing --url")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	conn, err := pgx.Connect(ctx, url)
@@ -196,6 +196,28 @@ func staffingSmoke(args []string) {
 	}
 	_, err = tx.Exec(ctx, `SELECT count(*) FROM staffing.pay_periods;`)
 	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed_payroll;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected fail-closed error when app.current_tenant is missing")
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_failclosed_payroll_runs;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `SELECT count(*) FROM staffing.payroll_runs;`)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed_payroll_runs;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected fail-closed error when app.current_tenant is missing")
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_failclosed_payslip_items;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `SELECT count(*) FROM staffing.payslip_items;`)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_failclosed_payslip_items;`); rbErr != nil {
 		fatal(rbErr)
 	}
 	if err == nil {
@@ -440,6 +462,85 @@ func staffingSmoke(args []string) {
 		}
 	}
 
+	ppStartTime, err := time.Parse("2006-01-02", ppStart)
+	if err != nil {
+		fatal(err)
+	}
+	ppEndExclTime, err := time.Parse("2006-01-02", ppEndExcl)
+	if err != nil {
+		fatal(err)
+	}
+	periodDays := int64(ppEndExclTime.Sub(ppStartTime) / (24 * time.Hour))
+	if periodDays <= 0 {
+		fatalf("expected pay period days > 0, got %d", periodDays)
+	}
+
+	formatMoney := func(cents int64) string {
+		whole := cents / 100
+		frac := cents % 100
+		if frac < 0 {
+			frac = -frac
+		}
+		return fmt.Sprintf("%d.%02d", whole, frac)
+	}
+	prorateCents := func(baseSalaryCents int64, fteNum int64, fteDen int64, overlapDays int64) int64 {
+		num := baseSalaryCents * fteNum * overlapDays
+		den := fteDen * periodDays
+		if den <= 0 {
+			fatalf("invalid denominator=%d", den)
+		}
+		q := num / den
+		r := num % den
+		if r < 0 {
+			r = -r
+		}
+		if r*2 >= den {
+			q++
+		}
+		return q
+	}
+
+	withSavepoint := func(name string, fn func()) {
+		if _, err := tx.Exec(ctx, fmt.Sprintf("SAVEPOINT %s;", name)); err != nil {
+			fatal(err)
+		}
+		fn()
+		if _, err := tx.Exec(ctx, fmt.Sprintf("ROLLBACK TO SAVEPOINT %s;", name)); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, fmt.Sprintf("RELEASE SAVEPOINT %s;", name)); err != nil {
+			fatal(err)
+		}
+	}
+
+	resetPayrollAndAssignments := func() {
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.payslips WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.payroll_runs WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.payroll_run_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.pay_periods WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.pay_period_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+			fatal(err)
+		}
+
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignments WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+			fatal(err)
+		}
+	}
+
 	var payPeriodID string
 	var payPeriodEventID string
 	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&payPeriodID); err != nil {
@@ -673,6 +774,44 @@ SELECT staffing.submit_payroll_run_event(
 		fatalf("unexpected payslip totals gross=%s net=%s employer_total=%s", grossPay, netPay, employerTotal)
 	}
 
+	var sumItems string
+	if err := tx.QueryRow(ctx, `
+	SELECT COALESCE(sum(i.amount), 0)::text
+	FROM staffing.payslip_items i
+	JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
+	WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid;
+		`, tenantA, runID).Scan(&sumItems); err != nil {
+		fatal(err)
+	}
+	if sumItems != grossPay {
+		fatalf("unexpected items sum=%s gross=%s", sumItems, grossPay)
+	}
+
+	var baseItemAmount string
+	var baseOverlapDays int64
+	var basePeriodDays int64
+	if err := tx.QueryRow(ctx, `
+	SELECT
+	  i.amount::text,
+	  (i.meta->>'overlap_days')::bigint,
+	  (i.meta->>'period_days')::bigint
+	FROM staffing.payslip_items i
+	JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
+	WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid AND i.item_code = 'EARNING_BASE_SALARY'
+	LIMIT 1;
+		`, tenantA, runID).Scan(&baseItemAmount, &baseOverlapDays, &basePeriodDays); err != nil {
+		fatal(err)
+	}
+	if basePeriodDays != periodDays {
+		fatalf("unexpected base item period_days=%d expected=%d", basePeriodDays, periodDays)
+	}
+	if baseOverlapDays != periodDays {
+		fatalf("unexpected base item overlap_days=%d expected=%d", baseOverlapDays, periodDays)
+	}
+	if expected := formatMoney(prorateCents(3_000_000, 1, 1, baseOverlapDays)); baseItemAmount != expected {
+		fatalf("unexpected base item amount=%s expected=%s", baseItemAmount, expected)
+	}
+
 	var finalizeEventDBID int64
 	if err := tx.QueryRow(ctx, `
 SELECT staffing.submit_payroll_run_event(
@@ -779,6 +918,468 @@ SELECT staffing.submit_payroll_run_event(
 	if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_RUN_FINALIZED_READONLY" {
 		fatalf("expected pg error message=STAFFING_PAYROLL_RUN_FINALIZED_READONLY, got ok=%v message=%q err=%v", ok, msg, err)
 	}
+
+	baseSalaryCents := int64(3_000_000)
+
+	mustUUID := func() string {
+		var id string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&id); err != nil {
+			fatal(err)
+		}
+		return id
+	}
+
+	submitAssignmentCreate := func(effective string, baseSalaryText any, allocatedFTE string, currency string) (assignmentID string, personUUID string) {
+		assignmentID = mustUUID()
+		personUUID = mustUUID()
+		assignmentEventID := mustUUID()
+		if _, err := tx.Exec(ctx, `
+			SELECT staffing.submit_assignment_event(
+			  $1::uuid,
+			  $2::uuid,
+			  $3::uuid,
+			  $4::uuid,
+			  'primary',
+			  'CREATE',
+			  $5::date,
+			  jsonb_build_object(
+			    'position_id', $6::text,
+			    'base_salary', $7::text,
+			    'allocated_fte', $8::text,
+			    'currency', $9::text,
+			    'profile', '{}'::jsonb
+			  ),
+			  $10::text,
+			  $11::uuid
+			);
+			`, assignmentEventID, tenantA, assignmentID, personUUID, effective, positionID, baseSalaryText, allocatedFTE, currency, assignmentEventID, initiatorID); err != nil {
+			fatal(err)
+		}
+		return assignmentID, personUUID
+	}
+
+	submitAssignmentUpdateBaseSalary := func(assignmentID string, personUUID string, effective string, baseSalary string) {
+		assignmentEventID := mustUUID()
+		if _, err := tx.Exec(ctx, `
+			SELECT staffing.submit_assignment_event(
+			  $1::uuid,
+			  $2::uuid,
+			  $3::uuid,
+			  $4::uuid,
+			  'primary',
+			  'UPDATE',
+			  $5::date,
+			  jsonb_build_object('base_salary', $6::text),
+			  $7::text,
+			  $8::uuid
+			);
+			`, assignmentEventID, tenantA, assignmentID, personUUID, effective, baseSalary, assignmentEventID, initiatorID); err != nil {
+			fatal(err)
+		}
+	}
+
+	submitPayPeriod := func(payGroup string, start string, endExcl string) (payPeriodID string) {
+		payPeriodID = mustUUID()
+		payPeriodEventID := mustUUID()
+		if _, err := tx.Exec(ctx, `
+			SELECT staffing.submit_payroll_pay_period_event(
+			  $1::uuid,
+			  $2::uuid,
+			  $3::uuid,
+			  $4::text,
+			  daterange($5::date, $6::date, '[)'),
+			  $7::text,
+			  $8::uuid
+			);
+			`, payPeriodEventID, tenantA, payPeriodID, payGroup, start, endExcl, payPeriodEventID, initiatorID); err != nil {
+			fatal(err)
+		}
+		return payPeriodID
+	}
+
+	submitPayrollRunEvent := func(runID string, payPeriodID string, eventType string) error {
+		eventID := mustUUID()
+		_, err := tx.Exec(ctx, `
+			SELECT staffing.submit_payroll_run_event(
+			  $1::uuid,
+			  $2::uuid,
+			  $3::uuid,
+			  $4::uuid,
+			  $5::text,
+			  '{}'::jsonb,
+			  $6::text,
+			  $7::uuid
+			);
+			`, eventID, tenantA, runID, payPeriodID, eventType, eventID, initiatorID)
+		return err
+	}
+
+	createRun := func(payPeriodID string) (runID string) {
+		runID = mustUUID()
+		if err := submitPayrollRunEvent(runID, payPeriodID, "CREATE"); err != nil {
+			fatal(err)
+		}
+		return runID
+	}
+
+	calcRun := func(payPeriodID string) (runID string) {
+		runID = createRun(payPeriodID)
+		if err := submitPayrollRunEvent(runID, payPeriodID, "CALC_START"); err != nil {
+			fatal(err)
+		}
+		if err := submitPayrollRunEvent(runID, payPeriodID, "CALC_FINISH"); err != nil {
+			fatal(err)
+		}
+		return runID
+	}
+
+	getBaseSalaryItem := func(runID string) (amount string, overlapDays int64) {
+		if err := tx.QueryRow(ctx, `
+			SELECT
+			  i.amount::text,
+			  (i.meta->>'overlap_days')::bigint
+			FROM staffing.payslip_items i
+			JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
+			WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid AND i.item_code = 'EARNING_BASE_SALARY'
+			LIMIT 1;
+			`, tenantA, runID).Scan(&amount, &overlapDays); err != nil {
+			fatal(err)
+		}
+		return amount, overlapDays
+	}
+
+	withSavepoint("sp_prorate_midmonth", func() {
+		resetPayrollAndAssignments()
+
+		startOffsetDays := int64(15)
+		if startOffsetDays >= periodDays {
+			fatalf("expected startOffsetDays < periodDays, got %d >= %d", startOffsetDays, periodDays)
+		}
+		start := ppStartTime.AddDate(0, 0, int(startOffsetDays)).Format("2006-01-02")
+		submitAssignmentCreate(start, "30000.00", "1.0", "CNY")
+
+		payPeriodID := submitPayPeriod(payGroup, ppStart, ppEndExcl)
+		runID := calcRun(payPeriodID)
+
+		itemAmount, overlapDays := getBaseSalaryItem(runID)
+		if overlapDays != periodDays-startOffsetDays {
+			fatalf("unexpected overlap_days=%d expected=%d", overlapDays, periodDays-startOffsetDays)
+		}
+		if expected := formatMoney(prorateCents(baseSalaryCents, 1, 1, overlapDays)); itemAmount != expected {
+			fatalf("unexpected prorate midmonth amount=%s expected=%s", itemAmount, expected)
+		}
+	})
+
+	withSavepoint("sp_prorate_last_day_repeating", func() {
+		resetPayrollAndAssignments()
+
+		start := ppEndExclTime.AddDate(0, 0, -1).Format("2006-01-02")
+		submitAssignmentCreate(start, "30000.00", "1.0", "CNY")
+
+		payPeriodID := submitPayPeriod(payGroup, ppStart, ppEndExcl)
+		runID := calcRun(payPeriodID)
+
+		itemAmount, overlapDays := getBaseSalaryItem(runID)
+		if overlapDays != 1 {
+			fatalf("unexpected overlap_days=%d expected=1", overlapDays)
+		}
+		if expected := formatMoney(prorateCents(baseSalaryCents, 1, 1, overlapDays)); itemAmount != expected {
+			fatalf("unexpected prorate last-day amount=%s expected=%s", itemAmount, expected)
+		}
+	})
+
+	withSavepoint("sp_fte_half_full", func() {
+		resetPayrollAndAssignments()
+
+		submitAssignmentCreate(effectiveDate, "30000.00", "0.5", "CNY")
+
+		payPeriodID := submitPayPeriod(payGroup, ppStart, ppEndExcl)
+		runID := calcRun(payPeriodID)
+
+		itemAmount, overlapDays := getBaseSalaryItem(runID)
+		if overlapDays != periodDays {
+			fatalf("unexpected overlap_days=%d expected=%d", overlapDays, periodDays)
+		}
+		if expected := formatMoney(prorateCents(baseSalaryCents, 1, 2, overlapDays)); itemAmount != expected {
+			fatalf("unexpected fte-half amount=%s expected=%s", itemAmount, expected)
+		}
+	})
+
+	withSavepoint("sp_salary_change", func() {
+		resetPayrollAndAssignments()
+
+		changeDays := int64(15)
+		if changeDays >= periodDays {
+			fatalf("expected changeDays < periodDays, got %d >= %d", changeDays, periodDays)
+		}
+		changeDate := ppStartTime.AddDate(0, 0, int(changeDays)).Format("2006-01-02")
+
+		assignmentID, personUUID := submitAssignmentCreate(ppStart, "30000.00", "1.0", "CNY")
+		submitAssignmentUpdateBaseSalary(assignmentID, personUUID, changeDate, "31000.00")
+
+		payPeriodID := submitPayPeriod(payGroup, ppStart, ppEndExcl)
+		runID := calcRun(payPeriodID)
+
+		type row struct {
+			amount      string
+			segmentDate string
+			overlapDays int64
+		}
+		rows, err := tx.Query(ctx, `
+			SELECT
+			  i.amount::text,
+			  (i.meta->>'segment_start')::text,
+			  (i.meta->>'overlap_days')::bigint
+			FROM staffing.payslip_items i
+			JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
+			WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid AND i.item_code = 'EARNING_BASE_SALARY'
+			ORDER BY (i.meta->>'segment_start')::date ASC;
+			`, tenantA, runID)
+		if err != nil {
+			fatal(err)
+		}
+		defer rows.Close()
+		var got []row
+		for rows.Next() {
+			var r row
+			if err := rows.Scan(&r.amount, &r.segmentDate, &r.overlapDays); err != nil {
+				fatal(err)
+			}
+			got = append(got, r)
+		}
+		if err := rows.Err(); err != nil {
+			fatal(err)
+		}
+		if len(got) != 2 {
+			fatalf("expected 2 base salary items for mid-period change, got %d", len(got))
+		}
+
+		if got[0].segmentDate != ppStart || got[0].overlapDays != changeDays {
+			fatalf("unexpected first segment_start=%s overlap_days=%d expected_start=%s expected_days=%d", got[0].segmentDate, got[0].overlapDays, ppStart, changeDays)
+		}
+		if expected := formatMoney(prorateCents(baseSalaryCents, 1, 1, got[0].overlapDays)); got[0].amount != expected {
+			fatalf("unexpected first segment amount=%s expected=%s", got[0].amount, expected)
+		}
+
+		remainDays := periodDays - changeDays
+		if got[1].segmentDate != changeDate || got[1].overlapDays != remainDays {
+			fatalf("unexpected second segment_start=%s overlap_days=%d expected_start=%s expected_days=%d", got[1].segmentDate, got[1].overlapDays, changeDate, remainDays)
+		}
+		if expected := formatMoney(prorateCents(3_100_000, 1, 1, got[1].overlapDays)); got[1].amount != expected {
+			fatalf("unexpected second segment amount=%s expected=%s", got[1].amount, expected)
+		}
+
+		var gross string
+		var sum string
+		if err := tx.QueryRow(ctx, `
+			SELECT p.gross_pay::text
+			FROM staffing.payslips p
+			WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid
+			LIMIT 1;
+			`, tenantA, runID).Scan(&gross); err != nil {
+			fatal(err)
+		}
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(sum(i.amount), 0)::text
+			FROM staffing.payslip_items i
+			JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
+			WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid;
+			`, tenantA, runID).Scan(&sum); err != nil {
+			fatal(err)
+		}
+		if gross != sum {
+			fatalf("unexpected salary-change gross=%s sum=%s", gross, sum)
+		}
+	})
+
+	withSavepoint("sp_round_half_up_boundary", func() {
+		resetPayrollAndAssignments()
+
+		start := ppEndExclTime.AddDate(0, 0, -1).Format("2006-01-02")
+		baseSalaryBoundaryCents := periodDays
+		baseSalaryBoundary := formatMoney(baseSalaryBoundaryCents)
+		submitAssignmentCreate(start, baseSalaryBoundary, "0.5", "CNY")
+
+		payPeriodID := submitPayPeriod(payGroup, ppStart, ppEndExcl)
+		runID := calcRun(payPeriodID)
+
+		itemAmount, overlapDays := getBaseSalaryItem(runID)
+		if overlapDays != 1 {
+			fatalf("unexpected overlap_days=%d expected=1", overlapDays)
+		}
+		if expected := formatMoney(prorateCents(baseSalaryBoundaryCents, 1, 2, overlapDays)); itemAmount != expected {
+			fatalf("unexpected rounding boundary amount=%s expected=%s", itemAmount, expected)
+		}
+		if itemAmount != "0.01" {
+			fatalf("expected rounding boundary amount=0.01, got %s (period_days=%d base_salary=%s)", itemAmount, periodDays, baseSalaryBoundary)
+		}
+	})
+
+	withSavepoint("sp_fail_missing_base_salary", func() {
+		resetPayrollAndAssignments()
+
+		submitAssignmentCreate(effectiveDate, nil, "1.0", "CNY")
+
+		payPeriodID := submitPayPeriod(payGroup, ppStart, ppEndExcl)
+		runID := createRun(payPeriodID)
+		if err := submitPayrollRunEvent(runID, payPeriodID, "CALC_START"); err != nil {
+			fatal(err)
+		}
+
+		if _, err := tx.Exec(ctx, `SAVEPOINT sp_calc_finish_missing_salary;`); err != nil {
+			fatal(err)
+		}
+		err := submitPayrollRunEvent(runID, payPeriodID, "CALC_FINISH")
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_calc_finish_missing_salary;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		if err == nil {
+			fatalf("expected CALC_FINISH to fail when base_salary is missing")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_MISSING_BASE_SALARY" {
+			fatalf("expected pg error message=STAFFING_PAYROLL_MISSING_BASE_SALARY, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+
+		if err := submitPayrollRunEvent(runID, payPeriodID, "CALC_FAIL"); err != nil {
+			fatal(err)
+		}
+		var runState string
+		if err := tx.QueryRow(ctx, `
+			SELECT run_state
+			FROM staffing.payroll_runs
+			WHERE tenant_id = $1::uuid AND id = $2::uuid;
+			`, tenantA, runID).Scan(&runState); err != nil {
+			fatal(err)
+		}
+		if runState != "failed" {
+			fatalf("expected run_state=failed after CALC_FAIL, got %s", runState)
+		}
+	})
+
+	withSavepoint("sp_fail_unsupported_pay_group", func() {
+		resetPayrollAndAssignments()
+
+		submitAssignmentCreate(effectiveDate, "30000.00", "1.0", "CNY")
+
+		payPeriodID := submitPayPeriod("weekly", ppStart, ppEndExcl)
+		runID := createRun(payPeriodID)
+		if err := submitPayrollRunEvent(runID, payPeriodID, "CALC_START"); err != nil {
+			fatal(err)
+		}
+
+		if _, err := tx.Exec(ctx, `SAVEPOINT sp_calc_finish_bad_group;`); err != nil {
+			fatal(err)
+		}
+		err := submitPayrollRunEvent(runID, payPeriodID, "CALC_FINISH")
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_calc_finish_bad_group;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		if err == nil {
+			fatalf("expected CALC_FINISH to fail when pay_group is not monthly")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_UNSUPPORTED_PAY_GROUP" {
+			fatalf("expected pg error message=STAFFING_PAYROLL_UNSUPPORTED_PAY_GROUP, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+
+		if err := submitPayrollRunEvent(runID, payPeriodID, "CALC_FAIL"); err != nil {
+			fatal(err)
+		}
+		var runState string
+		if err := tx.QueryRow(ctx, `
+			SELECT run_state
+			FROM staffing.payroll_runs
+			WHERE tenant_id = $1::uuid AND id = $2::uuid;
+			`, tenantA, runID).Scan(&runState); err != nil {
+			fatal(err)
+		}
+		if runState != "failed" {
+			fatalf("expected run_state=failed after CALC_FAIL, got %s", runState)
+		}
+	})
+
+	withSavepoint("sp_fail_unsupported_pay_period", func() {
+		resetPayrollAndAssignments()
+
+		submitAssignmentCreate(effectiveDate, "30000.00", "1.0", "CNY")
+
+		unsupportedStart := ppStartTime.AddDate(0, 0, 1).Format("2006-01-02")
+		unsupportedEnd := ppEndExclTime.AddDate(0, 0, 1).Format("2006-01-02")
+		payPeriodID := submitPayPeriod(payGroup, unsupportedStart, unsupportedEnd)
+		runID := createRun(payPeriodID)
+		if err := submitPayrollRunEvent(runID, payPeriodID, "CALC_START"); err != nil {
+			fatal(err)
+		}
+
+		if _, err := tx.Exec(ctx, `SAVEPOINT sp_calc_finish_bad_period;`); err != nil {
+			fatal(err)
+		}
+		err := submitPayrollRunEvent(runID, payPeriodID, "CALC_FINISH")
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_calc_finish_bad_period;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		if err == nil {
+			fatalf("expected CALC_FINISH to fail when period is not a natural month")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD" {
+			fatalf("expected pg error message=STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+
+		if err := submitPayrollRunEvent(runID, payPeriodID, "CALC_FAIL"); err != nil {
+			fatal(err)
+		}
+		var runState string
+		if err := tx.QueryRow(ctx, `
+			SELECT run_state
+			FROM staffing.payroll_runs
+			WHERE tenant_id = $1::uuid AND id = $2::uuid;
+			`, tenantA, runID).Scan(&runState); err != nil {
+			fatal(err)
+		}
+		if runState != "failed" {
+			fatalf("expected run_state=failed after CALC_FAIL, got %s", runState)
+		}
+	})
+
+	withSavepoint("sp_assignment_currency_unsupported", func() {
+		resetPayrollAndAssignments()
+
+		assignmentID := mustUUID()
+		personUUID := mustUUID()
+		assignmentEventID := mustUUID()
+
+		if _, err := tx.Exec(ctx, `SAVEPOINT sp_bad_currency;`); err != nil {
+			fatal(err)
+		}
+		_, err := tx.Exec(ctx, `
+			SELECT staffing.submit_assignment_event(
+			  $1::uuid,
+			  $2::uuid,
+			  $3::uuid,
+			  $4::uuid,
+			  'primary',
+			  'CREATE',
+			  $5::date,
+			  jsonb_build_object(
+			    'position_id', $6::text,
+			    'base_salary', '30000.00',
+			    'allocated_fte', '1.0',
+			    'currency', 'USD',
+			    'profile', '{}'::jsonb
+			  ),
+			  $7::text,
+			  $8::uuid
+			);
+			`, assignmentEventID, tenantA, assignmentID, personUUID, effectiveDate, positionID, assignmentEventID, initiatorID)
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_bad_currency;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		if err == nil {
+			fatalf("expected submit_assignment_event to fail when currency is non-CNY")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED" {
+			fatalf("expected pg error message=STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+	})
 
 	if err := tx.Commit(ctx); err != nil {
 		fatal(err)
