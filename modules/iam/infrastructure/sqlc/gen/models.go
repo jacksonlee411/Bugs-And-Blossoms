@@ -611,6 +611,26 @@ type StaffingSocialInsurancePolicyVersion struct {
 	LastEventID   int64                     `json:"last_event_id"`
 }
 
+type StaffingTimeBankCycle struct {
+	TenantID               pgtype.UUID        `json:"tenant_id"`
+	PersonUuid             pgtype.UUID        `json:"person_uuid"`
+	CycleType              string             `json:"cycle_type"`
+	CycleStartDate         pgtype.Date        `json:"cycle_start_date"`
+	CycleEndDate           pgtype.Date        `json:"cycle_end_date"`
+	RulesetVersion         string             `json:"ruleset_version"`
+	WorkedMinutesTotal     int32              `json:"worked_minutes_total"`
+	OvertimeMinutes150     int32              `json:"overtime_minutes_150"`
+	OvertimeMinutes200     int32              `json:"overtime_minutes_200"`
+	OvertimeMinutes300     int32              `json:"overtime_minutes_300"`
+	CompEarnedMinutes      int32              `json:"comp_earned_minutes"`
+	CompUsedMinutes        int32              `json:"comp_used_minutes"`
+	InputMaxPunchEventDbID *int64             `json:"input_max_punch_event_db_id"`
+	InputMaxPunchTime      pgtype.Timestamptz `json:"input_max_punch_time"`
+	ComputedAt             pgtype.Timestamptz `json:"computed_at"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
 type StaffingTimeProfileEvent struct {
 	ID              int64              `json:"id"`
 	EventID         pgtype.UUID        `json:"event_id"`
