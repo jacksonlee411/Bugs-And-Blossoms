@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
 type stubPayrollStore struct {
@@ -53,6 +54,15 @@ type stubPayrollStore struct {
 
 	upsertSIErr error
 	upsertSIOut SocialInsurancePolicyUpsertResult
+
+	listRecalcErr error
+	listRecalcOut []PayrollRecalcRequestSummary
+
+	getRecalcErr error
+	getRecalcOut PayrollRecalcRequestDetail
+
+	applyRecalcErr error
+	applyRecalcOut PayrollRecalcApplication
 }
 
 func (s stubPayrollStore) ListPayPeriods(_ context.Context, _ string, _ string) ([]PayPeriod, error) {
@@ -110,6 +120,27 @@ func (s stubPayrollStore) GetPayslip(_ context.Context, _ string, _ string) (Pay
 		return PayslipDetail{}, s.getPayslipErr
 	}
 	return s.getPayslipOut, nil
+}
+
+func (s stubPayrollStore) ListPayrollRecalcRequests(_ context.Context, _ string, _ string, _ string) ([]PayrollRecalcRequestSummary, error) {
+	if s.listRecalcErr != nil {
+		return nil, s.listRecalcErr
+	}
+	return s.listRecalcOut, nil
+}
+
+func (s stubPayrollStore) GetPayrollRecalcRequest(_ context.Context, _ string, _ string) (PayrollRecalcRequestDetail, error) {
+	if s.getRecalcErr != nil {
+		return PayrollRecalcRequestDetail{}, s.getRecalcErr
+	}
+	return s.getRecalcOut, nil
+}
+
+func (s stubPayrollStore) ApplyPayrollRecalcRequest(_ context.Context, _ string, _ string, _ string, _ string) (PayrollRecalcApplication, error) {
+	if s.applyRecalcErr != nil {
+		return PayrollRecalcApplication{}, s.applyRecalcErr
+	}
+	return s.applyRecalcOut, nil
 }
 
 func (s stubPayrollStore) GetPayrollBalances(_ context.Context, _ string, _ string, _ int) (PayrollBalances, error) {
@@ -1513,6 +1544,569 @@ func TestHandlePayslipAPI(t *testing.T) {
 		handlePayslipAPI(rec, req, stubPayrollStore{getPayslipOut: PayslipDetail{Payslip: Payslip{ID: "ps1"}}})
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+}
+
+func TestSelectedAttr(t *testing.T) {
+	if got := selectedAttr(true); got != " selected" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := selectedAttr(false); got != "" {
+		t.Fatalf("got=%q", got)
+	}
+}
+
+func TestStablePgMessage(t *testing.T) {
+	if got := stablePgMessage(&pgconn.PgError{Message: "STAFFING_X"}); got != "STAFFING_X" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := stablePgMessage(errors.New("boom")); got != "boom" {
+		t.Fatalf("got=%q", got)
+	}
+}
+
+func TestWritePageWithStatus_NonHX(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/app?as_of=2026-02-01", nil)
+	writePageWithStatus(rec, req, http.StatusTeapot, "<p>hi</p>")
+	if rec.Code != http.StatusTeapot {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "hi") {
+		t.Fatalf("body=%s", rec.Body.String())
+	}
+}
+
+func TestRequireFirstSegmentFromPath_TrimmedEmpty(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-requests/%20/extra", nil)
+	_, ok := requireFirstSegmentFromPath(rec, req, "/org/api/payroll-recalc-requests/", routing.RouteClassInternalAPI)
+	if ok {
+		t.Fatal("expected ok=false")
+	}
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandlePayrollRecalcRequests(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-recalc-requests", nil)
+		handlePayrollRecalcRequests(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-recalc-requests", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequests(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("list error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-recalc-requests?as_of=2026-02-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequests(rec, req, stubPayrollStore{listRecalcErr: errors.New("list_failed")})
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "list_failed") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-recalc-requests?as_of=2026-02-01&state=pending", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequests(rec, req, stubPayrollStore{
+			listRecalcOut: []PayrollRecalcRequestSummary{{RecalcRequestID: "rr1", CreatedAt: "2026-02-01T00:00:00Z"}},
+		})
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "rr1") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestHandlePayrollRecalcRequestDetail(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-recalc-requests/rr1", nil)
+		handlePayrollRecalcRequestDetail(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("prefix mismatch", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-recalc-request/rr1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestDetail(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("missing id", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-recalc-requests/", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestDetail(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-recalc-requests/rr1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestDetail(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-recalc-requests/rr1?as_of=2026-02-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestDetail(rec, req, stubPayrollStore{getRecalcErr: errors.New("get_failed")})
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "get_failed") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-recalc-requests/rr1?as_of=2026-02-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestDetail(rec, req, stubPayrollStore{getRecalcOut: PayrollRecalcRequestDetail{RecalcRequestID: "rr1"}})
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "target_run_id") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("ok (applied)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-recalc-requests/rr1?as_of=2026-02-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestDetail(rec, req, stubPayrollStore{getRecalcOut: PayrollRecalcRequestDetail{
+			RecalcRequestID: "rr1",
+			Application:     &PayrollRecalcApplication{ApplicationID: "1"},
+		}})
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "application_id") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestHandlePayrollRecalcRequestApply(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-recalc-requests/rr1/apply", nil)
+		handlePayrollRecalcRequestApply(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-recalc-requests/rr1/apply", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestApply(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("bad form", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-recalc-requests/rr1/apply?as_of=2026-02-01", strings.NewReader("%zz"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestApply(rec, req, stubPayrollStore{getRecalcOut: PayrollRecalcRequestDetail{RecalcRequestID: "rr1"}})
+		if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "bad form") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("principal missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-recalc-requests/rr1/apply", strings.NewReader("target_run_id=run2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestApply(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("target_run_id missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-recalc-requests/rr1/apply", strings.NewReader("target_run_id="))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestApply(rec, req, stubPayrollStore{getRecalcOut: PayrollRecalcRequestDetail{RecalcRequestID: "rr1"}})
+		if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "target_run_id is required") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("apply error (conflict)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-recalc-requests/rr1/apply", strings.NewReader("target_run_id=run2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestApply(rec, req, stubPayrollStore{
+			getRecalcOut:   PayrollRecalcRequestDetail{RecalcRequestID: "rr1"},
+			applyRecalcErr: &pgconn.PgError{Message: "STAFFING_PAYROLL_RECALC_ALREADY_APPLIED"},
+		})
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "STAFFING_PAYROLL_RECALC_ALREADY_APPLIED") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("apply error (not found)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-recalc-requests/rr1/apply", strings.NewReader("target_run_id=run2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestApply(rec, req, stubPayrollStore{
+			getRecalcOut:   PayrollRecalcRequestDetail{RecalcRequestID: "rr1"},
+			applyRecalcErr: &pgconn.PgError{Message: "STAFFING_PAYROLL_RECALC_REQUEST_NOT_FOUND"},
+		})
+		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "STAFFING_PAYROLL_RECALC_REQUEST_NOT_FOUND") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("prefix mismatch", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-recalc-request/rr1/apply", strings.NewReader("target_run_id=run2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestApply(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-recalc-requests/rr1/apply?as_of=2026-02-01", strings.NewReader("target_run_id=run2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestApply(rec, req, stubPayrollStore{applyRecalcOut: PayrollRecalcApplication{RecalcRequestID: "rr1"}})
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if rec.Header().Get("Location") != "/org/payroll-recalc-requests/rr1?as_of=2026-02-01" {
+			t.Fatalf("location=%q", rec.Header().Get("Location"))
+		}
+	})
+}
+
+func TestHandlePayrollRecalcRequestsAPI(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-requests", nil)
+		handlePayrollRecalcRequestsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-recalc-requests", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("bad request", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-requests", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestsAPI(rec, req, stubPayrollStore{listRecalcErr: errors.New("bad")})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-requests", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestsAPI(rec, req, stubPayrollStore{listRecalcOut: []PayrollRecalcRequestSummary{{RecalcRequestID: "rr1"}}})
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "rr1") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestHandlePayrollRecalcRequestAPI(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-requests/rr1", nil)
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("prefix mismatch", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-request/rr1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("missing id", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-requests/", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get :apply not found", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-requests/rr1:apply", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get not found", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-requests/rr1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{getRecalcErr: pgx.ErrNoRows})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get bad request", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-requests/rr1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{getRecalcErr: &pgconn.PgError{Code: "22P02"}})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get ok", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-requests/rr1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{getRecalcOut: PayrollRecalcRequestDetail{RecalcRequestID: "rr1"}})
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "rr1") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("get failed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-recalc-requests/rr1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{getRecalcErr: errors.New("boom")})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post without :apply not found", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-recalc-requests/rr1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post principal missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply", strings.NewReader(`{"target_run_id":"run2"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post bad json", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply", strings.NewReader("{"))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post target_run_id missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply", strings.NewReader(`{"target_run_id":""}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post not found", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply", strings.NewReader(`{"target_run_id":"run2"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{applyRecalcErr: &pgconn.PgError{Message: "STAFFING_PAYROLL_RECALC_REQUEST_NOT_FOUND"}})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post already applied", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply", strings.NewReader(`{"target_run_id":"run2"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{applyRecalcErr: &pgconn.PgError{Message: "STAFFING_PAYROLL_RECALC_ALREADY_APPLIED"}})
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post staffing error -> 422", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply", strings.NewReader(`{"target_run_id":"run2"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{applyRecalcErr: &pgconn.PgError{Message: "STAFFING_PAYROLL_RECALC_TARGET_RUN_NOT_EDITABLE"}})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post bad request -> 400", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply", strings.NewReader(`{"target_run_id":"run2"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{applyRecalcErr: &pgconn.PgError{Code: "22P02"}})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post failed -> 500", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply", strings.NewReader(`{"target_run_id":"run2"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{applyRecalcErr: errors.New("boom")})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post ok", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply/extra", strings.NewReader(`{"target_run_id":"run2"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{applyRecalcOut: PayrollRecalcApplication{RecalcRequestID: "rr1", TargetRunID: "run2", TargetPayPeriodID: "pp2"}})
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "target_pay_period_id") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/org/api/payroll-recalc-requests/rr1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayrollRecalcRequestAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+}
+
+func TestRenderPayrollRecalcRequestDetail(t *testing.T) {
+	t.Run("render error", func(t *testing.T) {
+		out := renderPayrollRecalcRequestDetail("rr1", "2026-02-01", PayrollRecalcRequestDetail{}, PayrollRecalcApplication{}, "boom")
+		if !strings.Contains(out, "boom") {
+			t.Fatalf("out=%s", out)
+		}
+	})
+
+	t.Run("render pending + apply form", func(t *testing.T) {
+		out := renderPayrollRecalcRequestDetail("rr1", "2026-02-01", PayrollRecalcRequestDetail{RecalcRequestID: "rr1"}, PayrollRecalcApplication{}, "")
+		if !strings.Contains(out, "Apply") || !strings.Contains(out, "target_run_id") {
+			t.Fatalf("out=%s", out)
+		}
+	})
+
+	t.Run("render applied + adjustments", func(t *testing.T) {
+		out := renderPayrollRecalcRequestDetail(
+			"rr1",
+			"",
+			PayrollRecalcRequestDetail{
+				RecalcRequestID: "rr1",
+				AdjustmentsSummary: []PayrollRecalcAdjustmentSummary{{
+					ItemKind: "earning",
+					ItemCode: "EARNING_BASE_SALARY",
+					Amount:   "100.00",
+				}},
+			},
+			PayrollRecalcApplication{
+				ApplicationID:     "1",
+				EventID:           "e1",
+				TargetRunID:       "run2",
+				TargetPayPeriodID: "pp2",
+				CreatedAt:         "2026-02-02T00:00:00Z",
+			},
+			"",
+		)
+		if !strings.Contains(out, "Application") || !strings.Contains(out, "Adjustments Summary") || !strings.Contains(out, "EARNING_BASE_SALARY") {
+			t.Fatalf("out=%s", out)
 		}
 	})
 }

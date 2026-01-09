@@ -663,6 +663,248 @@ func handlePayrollSocialInsurancePoliciesAPI(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+func handlePayrollRecalcRequests(w http.ResponseWriter, r *http.Request, store PayrollStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
+	if r.Method != http.MethodGet {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	personUUID := strings.TrimSpace(r.URL.Query().Get("person_uuid"))
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	reqs, err := store.ListPayrollRecalcRequests(r.Context(), tenant.ID, personUUID, state)
+	if err != nil {
+		writePage(w, r, renderPayrollRecalcRequests(nil, asOf, personUUID, state, err.Error()))
+		return
+	}
+
+	writePage(w, r, renderPayrollRecalcRequests(reqs, asOf, personUUID, state, ""))
+}
+
+func handlePayrollRecalcRequestDetail(w http.ResponseWriter, r *http.Request, store PayrollStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
+	recalcRequestID, ok := requireFirstSegmentFromPath(w, r, "/org/payroll-recalc-requests/", routing.RouteClassUI)
+	if !ok {
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	d, err := store.GetPayrollRecalcRequest(r.Context(), tenant.ID, recalcRequestID)
+	if err != nil {
+		writePage(w, r, renderPayrollRecalcRequestDetail(recalcRequestID, asOf, PayrollRecalcRequestDetail{}, PayrollRecalcApplication{}, err.Error()))
+		return
+	}
+	var app PayrollRecalcApplication
+	if d.Application != nil {
+		app = *d.Application
+	}
+	writePage(w, r, renderPayrollRecalcRequestDetail(recalcRequestID, asOf, d, app, ""))
+}
+
+func handlePayrollRecalcRequestApply(w http.ResponseWriter, r *http.Request, store PayrollStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
+	recalcRequestID, ok := requireFirstSegmentFromPath(w, r, "/org/payroll-recalc-requests/", routing.RouteClassUI)
+	if !ok {
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		d, _ := store.GetPayrollRecalcRequest(r.Context(), tenant.ID, recalcRequestID)
+		writePageWithStatus(w, r, http.StatusUnprocessableEntity, renderPayrollRecalcRequestDetail(recalcRequestID, asOf, d, PayrollRecalcApplication{}, "bad form"))
+		return
+	}
+
+	principal, ok := currentPrincipal(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "principal_missing", "principal missing")
+		return
+	}
+
+	targetRunID := strings.TrimSpace(r.Form.Get("target_run_id"))
+	if targetRunID == "" {
+		d, _ := store.GetPayrollRecalcRequest(r.Context(), tenant.ID, recalcRequestID)
+		writePageWithStatus(w, r, http.StatusUnprocessableEntity, renderPayrollRecalcRequestDetail(recalcRequestID, asOf, d, PayrollRecalcApplication{}, "target_run_id is required"))
+		return
+	}
+
+	_, err := store.ApplyPayrollRecalcRequest(r.Context(), tenant.ID, principal.ID, recalcRequestID, targetRunID)
+	if err != nil {
+		msg := stablePgMessage(err)
+		status := http.StatusUnprocessableEntity
+		if msg == "STAFFING_PAYROLL_RECALC_ALREADY_APPLIED" {
+			status = http.StatusConflict
+		}
+		if msg == "STAFFING_PAYROLL_RECALC_REQUEST_NOT_FOUND" {
+			status = http.StatusNotFound
+		}
+
+		d, _ := store.GetPayrollRecalcRequest(r.Context(), tenant.ID, recalcRequestID)
+		writePageWithStatus(w, r, status, renderPayrollRecalcRequestDetail(recalcRequestID, asOf, d, PayrollRecalcApplication{}, msg))
+		return
+	}
+
+	loc := "/org/payroll-recalc-requests/" + url.PathEscape(recalcRequestID)
+	if asOf != "" {
+		loc += "?as_of=" + url.QueryEscape(asOf)
+	}
+	http.Redirect(w, r, loc, http.StatusSeeOther)
+}
+
+func handlePayrollRecalcRequestsAPI(w http.ResponseWriter, r *http.Request, store PayrollStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	personUUID := strings.TrimSpace(r.URL.Query().Get("person_uuid"))
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	reqs, err := store.ListPayrollRecalcRequests(r.Context(), tenant.ID, personUUID, state)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_request", "bad request")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(reqs)
+}
+
+func handlePayrollRecalcRequestAPI(w http.ResponseWriter, r *http.Request, store PayrollStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	seg, ok := requireFirstSegmentFromPath(w, r, "/org/api/payroll-recalc-requests/", routing.RouteClassInternalAPI)
+	if !ok {
+		return
+	}
+	isApply := strings.HasSuffix(seg, ":apply")
+	recalcRequestID := seg
+	if isApply {
+		recalcRequestID = strings.TrimSuffix(seg, ":apply")
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		if isApply {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "not found")
+			return
+		}
+		d, err := store.GetPayrollRecalcRequest(r.Context(), tenant.ID, recalcRequestID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "not found")
+				return
+			}
+			if isPgInvalidInput(err) || isBadRequestError(err) {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_request", "bad request")
+				return
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "get_failed", "get failed")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(d)
+		return
+
+	case http.MethodPost:
+		if !isApply {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "not found")
+			return
+		}
+
+		principal, ok := currentPrincipal(r.Context())
+		if !ok {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_missing", "principal missing")
+			return
+		}
+
+		var req struct {
+			TargetRunID string `json:"target_run_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+			return
+		}
+
+		req.TargetRunID = strings.TrimSpace(req.TargetRunID)
+		if req.TargetRunID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "target_run_id_missing", "target_run_id is required")
+			return
+		}
+
+		app, err := store.ApplyPayrollRecalcRequest(r.Context(), tenant.ID, principal.ID, recalcRequestID, req.TargetRunID)
+		if err != nil {
+			switch msg := stablePgMessage(err); msg {
+			case "STAFFING_PAYROLL_RECALC_REQUEST_NOT_FOUND":
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, msg, msg)
+				return
+			case "STAFFING_PAYROLL_RECALC_ALREADY_APPLIED":
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, msg, msg)
+				return
+			default:
+				if strings.HasPrefix(msg, "STAFFING_") {
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, msg, msg)
+					return
+				}
+				if isPgInvalidInput(err) || isBadRequestError(err) {
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_request", "bad request")
+					return
+				}
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "apply_failed", "apply failed")
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"recalc_request_id":    app.RecalcRequestID,
+			"target_run_id":        app.TargetRunID,
+			"target_pay_period_id": app.TargetPayPeriodID,
+		})
+		return
+
+	default:
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+}
+
 func newUUIDv4() (string, error) {
 	var b [16]byte
 	if _, err := io.ReadFull(uuidRandReader, b[:]); err != nil {
@@ -671,6 +913,38 @@ func newUUIDv4() (string, error) {
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
+}
+
+func stablePgMessage(err error) string {
+	msg := pgErrorMessage(err)
+	if strings.HasPrefix(msg, "STAFFING_") {
+		return msg
+	}
+	return err.Error()
+}
+
+func requireFirstSegmentFromPath(w http.ResponseWriter, r *http.Request, prefix string, rc routing.RouteClass) (string, bool) {
+	path := strings.TrimSpace(r.URL.Path)
+	if !strings.HasPrefix(path, prefix) {
+		routing.WriteError(w, r, rc, http.StatusNotFound, "not_found", "not found")
+		return "", false
+	}
+
+	rest := strings.TrimPrefix(path, prefix)
+	rest = strings.TrimPrefix(rest, "/")
+	if rest == "" {
+		routing.WriteError(w, r, rc, http.StatusNotFound, "not_found", "not found")
+		return "", false
+	}
+	if strings.Contains(rest, "/") {
+		rest = strings.Split(rest, "/")[0]
+	}
+	rest = strings.TrimSpace(rest)
+	if rest == "" {
+		routing.WriteError(w, r, rc, http.StatusNotFound, "not_found", "not found")
+		return "", false
+	}
+	return rest, true
 }
 
 func requireRunIDFromPath(w http.ResponseWriter, r *http.Request, prefix string) (string, bool) {
@@ -697,6 +971,153 @@ func requireRunIDFromPath(w http.ResponseWriter, r *http.Request, prefix string)
 	return rest, true
 }
 
+func renderPayrollRecalcRequests(reqs []PayrollRecalcRequestSummary, asOf string, personUUID string, state string, errMsg string) string {
+	var b strings.Builder
+	b.WriteString(`<h1>Payroll Recalc Requests</h1>`)
+	if errMsg != "" {
+		b.WriteString(`<p style="color:#b00020">` + html.EscapeString(errMsg) + `</p>`)
+	}
+	if asOf != "" {
+		b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code></p>`)
+	}
+
+	filterAction := "/org/payroll-recalc-requests"
+	if asOf != "" {
+		filterAction += "?as_of=" + url.QueryEscape(asOf)
+	}
+	b.WriteString(`<form method="GET" action="` + html.EscapeString(filterAction) + `">`)
+	b.WriteString(`<label>person_uuid <input name="person_uuid" value="` + html.EscapeString(personUUID) + `"></label> `)
+	b.WriteString(`<label>state <select name="state">`)
+	b.WriteString(`<option value=""` + selectedAttr(state == "") + `>(all)</option>`)
+	b.WriteString(`<option value="pending"` + selectedAttr(state == "pending") + `>pending</option>`)
+	b.WriteString(`<option value="applied"` + selectedAttr(state == "applied") + `>applied</option>`)
+	b.WriteString(`</select></label> `)
+	b.WriteString(`<button type="submit">Filter</button>`)
+	b.WriteString(`</form>`)
+
+	if len(reqs) == 0 {
+		b.WriteString(`<p><em>(empty)</em></p>`)
+		b.WriteString(`<p><a href="/org/payroll-periods`)
+		if asOf != "" {
+			b.WriteString(`?as_of=` + url.QueryEscape(asOf))
+		}
+		b.WriteString(`">Back to Payroll</a></p>`)
+		return b.String()
+	}
+
+	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6">`)
+	b.WriteString(`<tr><th>created_at</th><th>recalc_request_id</th><th>person_uuid</th><th>assignment_id</th><th>effective_date</th><th>hit_pay_period_id</th><th>applied</th></tr>`)
+	for _, r := range reqs {
+		b.WriteString(`<tr>`)
+		b.WriteString(`<td>` + html.EscapeString(r.CreatedAt) + `</td>`)
+		b.WriteString(`<td><a href="/org/payroll-recalc-requests/` + url.PathEscape(r.RecalcRequestID))
+		if asOf != "" {
+			b.WriteString(`?as_of=` + url.QueryEscape(asOf))
+		}
+		b.WriteString(`"><code>` + html.EscapeString(r.RecalcRequestID) + `</code></a></td>`)
+		b.WriteString(`<td><code>` + html.EscapeString(r.PersonUUID) + `</code></td>`)
+		b.WriteString(`<td><code>` + html.EscapeString(r.AssignmentID) + `</code></td>`)
+		b.WriteString(`<td>` + html.EscapeString(r.EffectiveDate) + `</td>`)
+		b.WriteString(`<td><code>` + html.EscapeString(r.HitPayPeriodID) + `</code></td>`)
+		b.WriteString(`<td>` + html.EscapeString(fmt.Sprintf("%t", r.Applied)) + `</td>`)
+		b.WriteString(`</tr>`)
+	}
+	b.WriteString(`</table>`)
+
+	b.WriteString(`<p><a href="/org/payroll-periods`)
+	if asOf != "" {
+		b.WriteString(`?as_of=` + url.QueryEscape(asOf))
+	}
+	b.WriteString(`">Back to Payroll</a></p>`)
+	return b.String()
+}
+
+func renderPayrollRecalcRequestDetail(recalcRequestID string, asOf string, d PayrollRecalcRequestDetail, applied PayrollRecalcApplication, errMsg string) string {
+	var b strings.Builder
+	b.WriteString(`<h1>Payroll Recalc Request</h1>`)
+	if errMsg != "" {
+		b.WriteString(`<p style="color:#b00020">` + html.EscapeString(errMsg) + `</p>`)
+	}
+	if asOf != "" {
+		b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code></p>`)
+	}
+	b.WriteString(`<p>recalc_request_id: <code>` + html.EscapeString(recalcRequestID) + `</code></p>`)
+
+	if d.RecalcRequestID != "" {
+		b.WriteString(`<h2>Request</h2>`)
+		b.WriteString(`<ul>`)
+		b.WriteString(`<li>trigger_event_id: <code>` + html.EscapeString(d.TriggerEventID) + `</code></li>`)
+		b.WriteString(`<li>request_id: <code>` + html.EscapeString(d.RequestID) + `</code></li>`)
+		b.WriteString(`<li>initiator_id: <code>` + html.EscapeString(d.InitiatorID) + `</code></li>`)
+		b.WriteString(`<li>transaction_time: <code>` + html.EscapeString(d.TransactionTime) + `</code></li>`)
+		b.WriteString(`<li>created_at: <code>` + html.EscapeString(d.CreatedAt) + `</code></li>`)
+		b.WriteString(`<li>person_uuid: <code>` + html.EscapeString(d.PersonUUID) + `</code></li>`)
+		b.WriteString(`<li>assignment_id: <code>` + html.EscapeString(d.AssignmentID) + `</code></li>`)
+		b.WriteString(`<li>effective_date: <code>` + html.EscapeString(d.EffectiveDate) + `</code></li>`)
+		b.WriteString(`<li>hit_pay_period_id: <code>` + html.EscapeString(d.HitPayPeriodID) + `</code></li>`)
+		b.WriteString(`<li>hit_run_id: <code>` + html.EscapeString(d.HitRunID) + `</code></li>`)
+		b.WriteString(`<li>hit_payslip_id: <code>` + html.EscapeString(d.HitPayslipID) + `</code></li>`)
+		b.WriteString(`</ul>`)
+	}
+
+	if applied.ApplicationID != "" {
+		b.WriteString(`<h2>Application</h2>`)
+		b.WriteString(`<ul>`)
+		b.WriteString(`<li>application_id: <code>` + html.EscapeString(applied.ApplicationID) + `</code></li>`)
+		b.WriteString(`<li>event_id: <code>` + html.EscapeString(applied.EventID) + `</code></li>`)
+		b.WriteString(`<li>target_run_id: <code>` + html.EscapeString(applied.TargetRunID) + `</code></li>`)
+		b.WriteString(`<li>target_pay_period_id: <code>` + html.EscapeString(applied.TargetPayPeriodID) + `</code></li>`)
+		b.WriteString(`<li>created_at: <code>` + html.EscapeString(applied.CreatedAt) + `</code></li>`)
+		b.WriteString(`</ul>`)
+	} else if d.RecalcRequestID != "" {
+		b.WriteString(`<h2>Apply</h2>`)
+		postAction := "/org/payroll-recalc-requests/" + url.PathEscape(recalcRequestID) + "/apply"
+		if asOf != "" {
+			postAction += "?as_of=" + url.QueryEscape(asOf)
+		}
+		b.WriteString(`<form method="POST" action="` + html.EscapeString(postAction) + `">`)
+		b.WriteString(`<label>target_run_id <input name="target_run_id" required></label><br>`)
+		b.WriteString(`<button type="submit">Apply</button>`)
+		b.WriteString(`</form>`)
+		b.WriteString(`<p><a href="/org/payroll-runs`)
+		if asOf != "" {
+			b.WriteString(`?as_of=` + url.QueryEscape(asOf))
+		}
+		b.WriteString(`">Open Payroll Runs</a></p>`)
+	}
+
+	b.WriteString(`<h2>Adjustments Summary</h2>`)
+	if len(d.AdjustmentsSummary) == 0 {
+		b.WriteString(`<p><em>(empty)</em></p>`)
+	} else {
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6">`)
+		b.WriteString(`<tr><th>item_kind</th><th>item_code</th><th>amount</th></tr>`)
+		for _, s := range d.AdjustmentsSummary {
+			b.WriteString(`<tr>`)
+			b.WriteString(`<td>` + html.EscapeString(s.ItemKind) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(s.ItemCode) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(s.Amount) + `</td>`)
+			b.WriteString(`</tr>`)
+		}
+		b.WriteString(`</table>`)
+	}
+
+	b.WriteString(`<p><a href="/org/payroll-recalc-requests`)
+	if asOf != "" {
+		b.WriteString(`?as_of=` + url.QueryEscape(asOf))
+	}
+	b.WriteString(`">Back to Recalc Requests</a></p>`)
+
+	return b.String()
+}
+
+func selectedAttr(selected bool) string {
+	if selected {
+		return ` selected`
+	}
+	return ""
+}
+
 func renderPayrollPeriods(periods []PayPeriod, asOf string, errMsg string) string {
 	var b strings.Builder
 	b.WriteString(`<h1>Payroll Periods</h1>`)
@@ -711,6 +1132,11 @@ func renderPayrollPeriods(periods []PayPeriod, asOf string, errMsg string) strin
 		b.WriteString(`?as_of=` + url.QueryEscape(asOf))
 	}
 	b.WriteString(`">Social Insurance Policies</a></p>`)
+	b.WriteString(`<p><a href="/org/payroll-recalc-requests`)
+	if asOf != "" {
+		b.WriteString(`?as_of=` + url.QueryEscape(asOf))
+	}
+	b.WriteString(`">Payroll Recalc Requests</a></p>`)
 
 	b.WriteString(`<h2>Create</h2>`)
 	postAction := "/org/payroll-periods"

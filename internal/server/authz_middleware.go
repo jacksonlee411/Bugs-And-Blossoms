@@ -148,6 +148,27 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		return "", "", false
 	}
+	if pathMatchRouteTemplate(path, "/org/payroll-recalc-requests/{recalc_request_id}") {
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayrollRecalcRequests, authz.ActionRead, true
+		}
+		return "", "", false
+	}
+	if pathMatchRouteTemplate(path, "/org/payroll-recalc-requests/{recalc_request_id}/apply") {
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayrollRecalcRequests, authz.ActionAdmin, true
+		}
+		return "", "", false
+	}
+	if pathMatchRouteTemplate(path, "/org/api/payroll-recalc-requests/{recalc_request_id}") {
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayrollRecalcRequests, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayrollRecalcRequests, authz.ActionAdmin, true
+		}
+		return "", "", false
+	}
 	if pathMatchRouteTemplate(path, "/org/api/payslips/{payslip_id}") {
 		if method == http.MethodGet {
 			return authz.ObjectStaffingPayslips, authz.ActionRead, true
@@ -331,6 +352,16 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		if method == http.MethodPost {
 			return authz.ObjectStaffingPayrollSocialInsurancePolicies, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/payroll-recalc-requests":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayrollRecalcRequests, authz.ActionRead, true
+		}
+		return "", "", false
+	case "/org/api/payroll-recalc-requests":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingPayrollRecalcRequests, authz.ActionRead, true
 		}
 		return "", "", false
 	case "/org/api/payslips":

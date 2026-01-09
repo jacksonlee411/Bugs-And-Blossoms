@@ -244,6 +244,83 @@ func (r *payslipSocialInsuranceItemRows) Values() ([]any, error) { return nil, n
 func (r *payslipSocialInsuranceItemRows) RawValues() [][]byte    { return nil }
 func (r *payslipSocialInsuranceItemRows) Conn() *pgx.Conn        { return nil }
 
+type payrollRecalcRequestRows struct {
+	empty   bool
+	nextN   int
+	scanErr error
+	err     error
+	applied bool
+}
+
+func (r *payrollRecalcRequestRows) Close()                        {}
+func (r *payrollRecalcRequestRows) Err() error                    { return r.err }
+func (r *payrollRecalcRequestRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *payrollRecalcRequestRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *payrollRecalcRequestRows) Next() bool {
+	if r.empty {
+		return false
+	}
+	if r.nextN > 0 {
+		return false
+	}
+	r.nextN++
+	return true
+}
+func (r *payrollRecalcRequestRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	*(dest[0].(*string)) = "rr1"
+	*(dest[1].(*string)) = "person1"
+	*(dest[2].(*string)) = "assign1"
+	*(dest[3].(*string)) = "2026-01-15"
+	*(dest[4].(*string)) = "pp1"
+	*(dest[5].(*string)) = "2026-02-01T00:00:00Z"
+	*(dest[6].(*bool)) = r.applied
+	return nil
+}
+func (r *payrollRecalcRequestRows) Values() ([]any, error) { return nil, nil }
+func (r *payrollRecalcRequestRows) RawValues() [][]byte    { return nil }
+func (r *payrollRecalcRequestRows) Conn() *pgx.Conn        { return nil }
+
+type payrollRecalcAdjustmentRows struct {
+	empty   bool
+	nextN   int
+	scanErr error
+	err     error
+}
+
+func (r *payrollRecalcAdjustmentRows) Close()                        {}
+func (r *payrollRecalcAdjustmentRows) Err() error                    { return r.err }
+func (r *payrollRecalcAdjustmentRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *payrollRecalcAdjustmentRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *payrollRecalcAdjustmentRows) Next() bool {
+	if r.empty {
+		return false
+	}
+	if r.nextN > 0 {
+		return false
+	}
+	r.nextN++
+	return true
+}
+func (r *payrollRecalcAdjustmentRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	*(dest[0].(*string)) = "earning"
+	*(dest[1].(*string)) = "EARNING_BASE_SALARY"
+	*(dest[2].(*string)) = "100.00"
+	return nil
+}
+func (r *payrollRecalcAdjustmentRows) Values() ([]any, error) { return nil, nil }
+func (r *payrollRecalcAdjustmentRows) RawValues() [][]byte    { return nil }
+func (r *payrollRecalcAdjustmentRows) Conn() *pgx.Conn        { return nil }
+
 func seqBeginner(txs ...pgx.Tx) beginnerFunc {
 	n := 0
 	return func(context.Context) (pgx.Tx, error) {
@@ -1894,6 +1971,383 @@ func TestPayrollPGStore_UpsertPayrollIITSAD(t *testing.T) {
 			t.Fatal(err)
 		}
 		if got.EventID != "e1" || got.RequestID != "req1" || got.Amount != "100.00" {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+}
+
+func TestPayrollPGStore_ListPayrollRecalcRequests(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.ListPayrollRecalcRequests(context.Background(), "t1", "", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		}))
+		_, err := store.ListPayrollRecalcRequests(context.Background(), "t1", "", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("invalid state", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.ListPayrollRecalcRequests(context.Background(), "t1", "", "boom")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{queryErr: errors.New("query")}, nil
+		}))
+		_, err := store.ListPayrollRecalcRequests(context.Background(), "t1", "", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &payrollRecalcRequestRows{scanErr: errors.New("scan")}}, nil
+		}))
+		_, err := store.ListPayrollRecalcRequests(context.Background(), "t1", "", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rows error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &payrollRecalcRequestRows{err: errors.New("rows")}}, nil
+		}))
+		_, err := store.ListPayrollRecalcRequests(context.Background(), "t1", "", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &payrollRecalcRequestRows{empty: true}, commitErr: errors.New("commit")}, nil
+		}))
+		_, err := store.ListPayrollRecalcRequests(context.Background(), "t1", "", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok (no filters)", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &payrollRecalcRequestRows{applied: false}}, nil
+		}))
+		got, err := store.ListPayrollRecalcRequests(context.Background(), "t1", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].RecalcRequestID != "rr1" || got[0].Applied {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+
+	t.Run("ok (pending)", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &payrollRecalcRequestRows{applied: false}}, nil
+		}))
+		got, err := store.ListPayrollRecalcRequests(context.Background(), "t1", "", "pending")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].RecalcRequestID != "rr1" {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+
+	t.Run("ok (applied + person_uuid)", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &payrollRecalcRequestRows{applied: true}}, nil
+		}))
+		got, err := store.ListPayrollRecalcRequests(context.Background(), "t1", "person1", "applied")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].RecalcRequestID != "rr1" || !got[0].Applied {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+}
+
+func TestPayrollPGStore_GetPayrollRecalcRequest(t *testing.T) {
+	headerRow := &stubRow{vals: []any{
+		"rr1",
+		"evt1",
+		"assignment",
+		"req1",
+		"init1",
+		"2026-02-01T00:00:00Z",
+		"2026-02-01T00:00:00Z",
+		"person1",
+		"assign1",
+		"2026-01-15",
+		"pp1",
+		"run1",
+		"ps1",
+	}}
+	appRow := &stubRow{vals: []any{
+		"1",
+		"app_evt1",
+		"rr1",
+		"run2",
+		"pp2",
+		"2026-02-02T00:00:00Z",
+	}}
+
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.GetPayrollRecalcRequest(context.Background(), "t1", "rr1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		}))
+		_, err := store.GetPayrollRecalcRequest(context.Background(), "t1", "rr1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing recalc_request_id", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.GetPayrollRecalcRequest(context.Background(), "t1", " ")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("request row error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rowErr: errors.New("row")}, nil
+		}))
+		_, err := store.GetPayrollRecalcRequest(context.Background(), "t1", "rr1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("application row error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: headerRow, row2Err: errors.New("app")}, nil
+		}))
+		_, err := store.GetPayrollRecalcRequest(context.Background(), "t1", "rr1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("adjustments query error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: headerRow, row2Err: pgx.ErrNoRows, queryErr: errors.New("query")}, nil
+		}))
+		_, err := store.GetPayrollRecalcRequest(context.Background(), "t1", "rr1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("adjustments scan error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: headerRow, row2Err: pgx.ErrNoRows, rows: &payrollRecalcAdjustmentRows{scanErr: errors.New("scan")}}, nil
+		}))
+		_, err := store.GetPayrollRecalcRequest(context.Background(), "t1", "rr1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("adjustments rows error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: headerRow, row2Err: pgx.ErrNoRows, rows: &payrollRecalcAdjustmentRows{err: errors.New("rows")}}, nil
+		}))
+		_, err := store.GetPayrollRecalcRequest(context.Background(), "t1", "rr1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: headerRow, row2Err: pgx.ErrNoRows, rows: &payrollRecalcAdjustmentRows{empty: true}, commitErr: errors.New("commit")}, nil
+		}))
+		_, err := store.GetPayrollRecalcRequest(context.Background(), "t1", "rr1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok (no application)", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: headerRow, row2Err: pgx.ErrNoRows, rows: &payrollRecalcAdjustmentRows{empty: true}}, nil
+		}))
+		got, err := store.GetPayrollRecalcRequest(context.Background(), "t1", "rr1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.RecalcRequestID != "rr1" || got.Application != nil {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+
+	t.Run("ok (with application + adjustments)", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: headerRow, row2: appRow, rows: &payrollRecalcAdjustmentRows{}}, nil
+		}))
+		got, err := store.GetPayrollRecalcRequest(context.Background(), "t1", "rr1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.RecalcRequestID != "rr1" || got.Application == nil || got.Application.TargetRunID != "run2" || len(got.AdjustmentsSummary) != 1 {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+}
+
+func TestPayrollPGStore_ApplyPayrollRecalcRequest(t *testing.T) {
+	appRow := &stubRow{vals: []any{
+		"1",
+		"app_evt1",
+		"rr1",
+		"run2",
+		"pp2",
+		"2026-02-02T00:00:00Z",
+	}}
+
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.ApplyPayrollRecalcRequest(context.Background(), "t1", "i1", "rr1", "run2")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		}))
+		_, err := store.ApplyPayrollRecalcRequest(context.Background(), "t1", "i1", "rr1", "run2")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing initiator_id", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.ApplyPayrollRecalcRequest(context.Background(), "t1", " ", "rr1", "run2")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing recalc_request_id", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.ApplyPayrollRecalcRequest(context.Background(), "t1", "i1", " ", "run2")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing target_run_id", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.ApplyPayrollRecalcRequest(context.Background(), "t1", "i1", "rr1", " ")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("gen uuid error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rowErr: errors.New("uuid")}, nil
+		}))
+		_, err := store.ApplyPayrollRecalcRequest(context.Background(), "t1", "i1", "rr1", "run2")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submit error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: &stubRow{vals: []any{"e1"}}, row2Err: errors.New("submit")}, nil
+		}))
+		_, err := store.ApplyPayrollRecalcRequest(context.Background(), "t1", "i1", "rr1", "run2")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("unexpected application_db_id", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: &stubRow{vals: []any{"e1"}}, row2: &stubRow{vals: []any{int64(0)}}}, nil
+		}))
+		_, err := store.ApplyPayrollRecalcRequest(context.Background(), "t1", "i1", "rr1", "run2")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("application fetch error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: &stubRow{vals: []any{"e1"}}, row2: &stubRow{vals: []any{int64(1)}}, row3Err: errors.New("fetch")}, nil
+		}))
+		_, err := store.ApplyPayrollRecalcRequest(context.Background(), "t1", "i1", "rr1", "run2")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: &stubRow{vals: []any{"e1"}}, row2: &stubRow{vals: []any{int64(1)}}, row3: appRow, commitErr: errors.New("commit")}, nil
+		}))
+		_, err := store.ApplyPayrollRecalcRequest(context.Background(), "t1", "i1", "rr1", "run2")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{row: &stubRow{vals: []any{"e1"}}, row2: &stubRow{vals: []any{int64(1)}}, row3: appRow}, nil
+		}))
+		got, err := store.ApplyPayrollRecalcRequest(context.Background(), "t1", "i1", "rr1", "run2")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.RecalcRequestID != "rr1" || got.TargetPayPeriodID != "pp2" {
 			t.Fatalf("got=%#v", got)
 		}
 	})
