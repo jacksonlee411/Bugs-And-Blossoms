@@ -116,6 +116,10 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await expect(page).toHaveURL(new RegExp(`/person/persons\\?as_of=${asOf}$`));
   await expect(page.getByText(pernr)).toBeVisible();
 
+  const personRow = page.locator("tr", { hasText: pernr }).first();
+  const personUUID = (await personRow.locator("code").innerText()).trim();
+  expect(personUUID).not.toBe("");
+
   await page.goto(`/org/positions?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Positions");
   const orgUnitID = await page
@@ -154,6 +158,39 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await expect(page.locator("h2", { hasText: "Timeline" })).toBeVisible();
   await expect(page.locator("table")).toContainText(asOf);
   await expect(page.locator("table")).not.toContainText("end_date");
+
+  await page.goto(`/org/attendance-punches?as_of=${asOf}`);
+  await expect(page.locator("h1")).toHaveText("Attendance / Punches");
+
+  const manualPunchForm = page
+    .locator(`form[method="POST"][action="/org/attendance-punches?as_of=${asOf}"]`)
+    .filter({ has: page.locator('input[name="op"][value="manual"]') })
+    .first();
+
+  await manualPunchForm.locator('select[name="person_uuid"]').selectOption(personUUID);
+  await manualPunchForm.locator('input[name="punch_at"]').fill(`${asOf}T09:00`);
+  await manualPunchForm.locator('select[name="punch_type"]').selectOption("IN");
+  await manualPunchForm.getByRole("button", { name: "Submit" }).click();
+  await expect(page).toHaveURL(new RegExp(`/org/attendance-punches\\?as_of=${asOf}`));
+  await expect(page.locator("table")).toContainText(`${asOf} 09:00`);
+
+  await manualPunchForm.locator('select[name="person_uuid"]').selectOption(personUUID);
+  await manualPunchForm.locator('input[name="punch_at"]').fill(`${asOf}T18:00`);
+  await manualPunchForm.locator('select[name="punch_type"]').selectOption("OUT");
+  await manualPunchForm.getByRole("button", { name: "Submit" }).click();
+  await expect(page).toHaveURL(new RegExp(`/org/attendance-punches\\?as_of=${asOf}`));
+  await expect(page.locator("table")).toContainText(`${asOf} 18:00`);
+
+  await page.goto(`/org/attendance-daily-results?as_of=${asOf}&work_date=${asOf}`);
+  await expect(page.locator("h1")).toHaveText("Attendance / Daily Results");
+
+  const dailyResultRow = page.locator("tr", { hasText: pernr }).first();
+  await expect(dailyResultRow).toBeVisible();
+  await expect(dailyResultRow).toContainText("PRESENT");
+
+  await dailyResultRow.locator("a").first().click();
+  await expect(page.locator("h1")).toHaveText("Attendance / Daily Results / Detail");
+  await expect(page.locator("ul")).toContainText("PRESENT");
 
   await appContext.close();
 });
