@@ -365,3 +365,4 @@ DB 闭环（迁移 + smoke）：
   - Step1 Routing：PR #110 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/110
   - Step2 Authz：PR #112 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/112
   - Step3 DB（表 + RLS + kernel）：PR #113 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/113
+  - Step4 sqlc（生成物清洁）：PR #115 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/115
