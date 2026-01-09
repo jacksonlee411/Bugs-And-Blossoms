@@ -149,6 +149,15 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		}
 	}
 
+	var attendanceConfigStore AttendanceConfigStore
+	if s, ok := attendanceStore.(AttendanceConfigStore); ok {
+		attendanceConfigStore = s
+	} else if s, ok := attendanceDailyResultsStore.(AttendanceConfigStore); ok {
+		attendanceConfigStore = s
+	} else {
+		return nil, errors.New("server: missing attendance config store (expected AttendanceStore to implement AttendanceConfigStore)")
+	}
+
 	router := routing.NewRouter(classifier)
 
 	authorizer, err := loadAuthorizer()
@@ -271,6 +280,8 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			`<li><a href="/org/positions?as_of=`+asOf+`" hx-get="/org/positions?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
 			`<li><a href="/org/attendance-punches?as_of=`+asOf+`" hx-get="/org/attendance-punches?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance")+`</a></li>`+
 			`<li><a href="/org/attendance-daily-results?as_of=`+asOf+`" hx-get="/org/attendance-daily-results?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_daily_results")+`</a></li>`+
+			`<li><a href="/org/attendance-time-profile?as_of=`+asOf+`" hx-get="/org/attendance-time-profile?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_time_profile")+`</a></li>`+
+			`<li><a href="/org/attendance-holiday-calendar?as_of=`+asOf+`" hx-get="/org/attendance-holiday-calendar?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_holiday_calendar")+`</a></li>`+
 			`<li><a href="/org/payroll-periods?as_of=`+asOf+`" hx-get="/org/payroll-periods?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_payroll")+`</a></li>`+
 			`<li><a href="/person/persons?as_of=`+asOf+`" hx-get="/person/persons?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_person")+`</a></li>`+
 			`</ul>`)
@@ -338,6 +349,18 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-daily-results", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAttendanceDailyResults(w, r, attendanceDailyResultsStore, personStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-time-profile", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceTimeProfile(w, r, attendanceConfigStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/attendance-time-profile", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceTimeProfile(w, r, attendanceConfigStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-holiday-calendar", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceHolidayCalendar(w, r, attendanceConfigStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/attendance-holiday-calendar", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceHolidayCalendar(w, r, attendanceConfigStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-daily-results/{person_uuid}/{work_date}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAttendanceDailyResultDetail(w, r, attendanceDailyResultsStore, personStore)
@@ -565,6 +588,8 @@ func renderNav(r *http.Request, asOf string) string {
 		`<li><a href="/org/positions?as_of=` + asOf + `" hx-get="/org/positions?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
 		`<li><a href="/org/attendance-punches?as_of=` + asOf + `" hx-get="/org/attendance-punches?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance") + `</a></li>` +
 		`<li><a href="/org/attendance-daily-results?as_of=` + asOf + `" hx-get="/org/attendance-daily-results?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_daily_results") + `</a></li>` +
+		`<li><a href="/org/attendance-time-profile?as_of=` + asOf + `" hx-get="/org/attendance-time-profile?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_time_profile") + `</a></li>` +
+		`<li><a href="/org/attendance-holiday-calendar?as_of=` + asOf + `" hx-get="/org/attendance-holiday-calendar?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_holiday_calendar") + `</a></li>` +
 		`<li><a href="/org/payroll-periods?as_of=` + asOf + `" hx-get="/org/payroll-periods?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_payroll") + `</a></li>` +
 		`<li><a href="/person/persons?as_of=` + asOf + `" hx-get="/person/persons?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
 		`</ul></nav>`
@@ -646,6 +671,10 @@ func tr(lang string, key string) string {
 			return "考勤 / 打卡"
 		case "nav_attendance_daily_results":
 			return "考勤 / 日结果"
+		case "nav_attendance_time_profile":
+			return "考勤 / TimeProfile"
+		case "nav_attendance_holiday_calendar":
+			return "考勤 / 假期日历"
 		case "nav_payroll":
 			return "薪酬"
 		case "nav_person":
@@ -670,6 +699,10 @@ func tr(lang string, key string) string {
 		return "Attendance / Punches"
 	case "nav_attendance_daily_results":
 		return "Attendance / Daily Results"
+	case "nav_attendance_time_profile":
+		return "Attendance / TimeProfile"
+	case "nav_attendance_holiday_calendar":
+		return "Attendance / Holiday Calendar"
 	case "nav_payroll":
 		return "Payroll"
 	case "nav_person":

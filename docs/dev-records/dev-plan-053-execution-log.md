@@ -52,12 +52,17 @@
 
 ## PR-5：Milestone 4 — UI（TimeProfile / HolidayCalendar）
 
-- **状态**：未开始
+- **状态**：进行中（2026-01-09）
+- **PR**：#140（https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/140）
+- **范围**
+  - UI：新增 `/org/attendance-time-profile`、`/org/attendance-holiday-calendar`（含 CSV 粘贴导入）
+  - Routing/Authz：allowlist + authz registry + middleware mapping + bootstrap policy（为保证路由门禁与授权 fail-closed）
+  - Tests：为满足仓库 100% coverage 门禁补齐最小单测
 
 ## PR-6：Milestone 5 — Authz / Routing（allowlist + bootstrap policy）
 
-- **状态**：未开始
+- **状态**：未开始（部分内容已随 PR-5 前置以保证门禁可通过）
 
 ## PR-7：Milestone 6 — Tests（核心口径 + 负例）
 
-- **状态**：未开始
+- **状态**：未开始（部分内容已随 PR-5 前置以满足 100% coverage 门禁）
