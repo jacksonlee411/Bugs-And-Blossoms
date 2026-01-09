@@ -81,29 +81,95 @@ func (r *payrollRunRows) Values() ([]any, error) { return nil, nil }
 func (r *payrollRunRows) RawValues() [][]byte    { return nil }
 func (r *payrollRunRows) Conn() *pgx.Conn        { return nil }
 
-type calcPayrollTx struct {
-	*stubTx
-	rowN     int
-	rowErrAt int
-	rowErr   error
+type payslipRows struct {
+	empty   bool
+	nextN   int
+	scanErr error
+	err     error
 }
 
-func (t *calcPayrollTx) QueryRow(_ context.Context, _ string, _ ...any) pgx.Row {
-	t.rowN++
-	if t.rowErrAt == t.rowN {
-		return &stubRow{err: t.rowErr}
+func (r *payslipRows) Close()                        {}
+func (r *payslipRows) Err() error                    { return r.err }
+func (r *payslipRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *payslipRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *payslipRows) Next() bool {
+	if r.empty {
+		return false
 	}
-	switch t.rowN {
-	case 1:
-		return &stubRow{vals: []any{"pp1"}}
-	case 2:
-		return &stubRow{vals: []any{"evt_start"}}
-	case 3:
-		return &stubRow{vals: []any{"evt_finish"}}
-	case 4:
-		return &stubRow{vals: []any{"run1", "pp1", "calculated", "2026-01-01T00:00:00Z", "2026-01-01T00:00:01Z", "", "2026-01-01T00:00:00Z"}}
-	default:
-		return &stubRow{err: errors.New("unexpected QueryRow")}
+	if r.nextN > 0 {
+		return false
+	}
+	r.nextN++
+	return true
+}
+func (r *payslipRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	*(dest[0].(*string)) = "ps1"
+	*(dest[1].(*string)) = "run1"
+	*(dest[2].(*string)) = "pp1"
+	*(dest[3].(*string)) = "person1"
+	*(dest[4].(*string)) = "asmt1"
+	*(dest[5].(*string)) = "CNY"
+	*(dest[6].(*string)) = "100.00"
+	*(dest[7].(*string)) = "100.00"
+	*(dest[8].(*string)) = "0.00"
+	return nil
+}
+func (r *payslipRows) Values() ([]any, error) { return nil, nil }
+func (r *payslipRows) RawValues() [][]byte    { return nil }
+func (r *payslipRows) Conn() *pgx.Conn        { return nil }
+
+type payslipItemRows struct {
+	empty   bool
+	nextN   int
+	scanErr error
+	err     error
+}
+
+func (r *payslipItemRows) Close()                        {}
+func (r *payslipItemRows) Err() error                    { return r.err }
+func (r *payslipItemRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *payslipItemRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *payslipItemRows) Next() bool {
+	if r.empty {
+		return false
+	}
+	if r.nextN > 0 {
+		return false
+	}
+	r.nextN++
+	return true
+}
+func (r *payslipItemRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	*(dest[0].(*string)) = "it1"
+	*(dest[1].(*string)) = "EARNING_BASE_SALARY"
+	*(dest[2].(*string)) = "earning"
+	*(dest[3].(*string)) = "100.00"
+	*(dest[4].(*string)) = "{}"
+	return nil
+}
+func (r *payslipItemRows) Values() ([]any, error) { return nil, nil }
+func (r *payslipItemRows) RawValues() [][]byte    { return nil }
+func (r *payslipItemRows) Conn() *pgx.Conn        { return nil }
+
+func seqBeginner(txs ...pgx.Tx) beginnerFunc {
+	n := 0
+	return func(context.Context) (pgx.Tx, error) {
+		if n >= len(txs) {
+			return nil, errors.New("unexpected begin")
+		}
+		tx := txs[n]
+		n++
+		return tx, nil
 	}
 }
 
@@ -654,6 +720,8 @@ func TestPayrollPGStore_GetPayrollRun(t *testing.T) {
 }
 
 func TestPayrollPGStore_CalculatePayrollRun(t *testing.T) {
+	runRow := &stubRow{vals: []any{"run1", "pp1", "calculated", "2026-01-01T00:00:00Z", "2026-01-01T00:00:01Z", "", "2026-01-01T00:00:00Z"}}
+
 	t.Run("begin error", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
@@ -664,30 +732,85 @@ func TestPayrollPGStore_CalculatePayrollRun(t *testing.T) {
 		}
 	})
 
-	t.Run("set tenant error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &stubTx{execErr: errors.New("exec")}, nil
-		}))
-		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
 	t.Run("missing run_id", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &calcPayrollTx{stubTx: &stubTx{}}, nil
-		}))
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
 		_, err := store.CalculatePayrollRun(context.Background(), "t1", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{execErr: errors.New("exec"), execErrAt: 1}))
+		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
 	t.Run("pay_period_id query error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &calcPayrollTx{stubTx: &stubTx{}, rowErrAt: 1, rowErr: errors.New("pp")}, nil
-		}))
+		store := newStaffingPGStore(seqBeginner(&stubTx{rowErr: errors.New("pp")}))
+		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("pay_period_id commit error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{row: &stubRow{vals: []any{"pp1"}}, commitErr: errors.New("commit")}))
+		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("calc start begin error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{row: &stubRow{vals: []any{"pp1"}}}))
+		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("calc start set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{execErr: errors.New("exec"), execErrAt: 1},
+		))
+		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("calc start commit error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}, commitErr: errors.New("commit")},
+		))
+		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("calc finish begin error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}},
+		))
+		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("calc finish set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}},
+			&stubTx{execErr: errors.New("exec"), execErrAt: 1},
+		))
 		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
 		if err == nil {
 			t.Fatal("expected error")
@@ -695,9 +818,10 @@ func TestPayrollPGStore_CalculatePayrollRun(t *testing.T) {
 	})
 
 	t.Run("event start id error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &calcPayrollTx{stubTx: &stubTx{}, rowErrAt: 2, rowErr: errors.New("evt")}, nil
-		}))
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{rowErr: errors.New("evt")},
+		))
 		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
 		if err == nil {
 			t.Fatal("expected error")
@@ -705,9 +829,10 @@ func TestPayrollPGStore_CalculatePayrollRun(t *testing.T) {
 	})
 
 	t.Run("calc start exec error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &calcPayrollTx{stubTx: &stubTx{execErr: errors.New("start"), execErrAt: 2}}, nil
-		}))
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}, execErr: errors.New("start"), execErrAt: 2},
+		))
 		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
 		if err == nil {
 			t.Fatal("expected error")
@@ -715,9 +840,11 @@ func TestPayrollPGStore_CalculatePayrollRun(t *testing.T) {
 	})
 
 	t.Run("event finish id error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &calcPayrollTx{stubTx: &stubTx{}, rowErrAt: 3, rowErr: errors.New("evt")}, nil
-		}))
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}},
+			&stubTx{rowErr: errors.New("evt")},
+		))
 		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
 		if err == nil {
 			t.Fatal("expected error")
@@ -725,19 +852,62 @@ func TestPayrollPGStore_CalculatePayrollRun(t *testing.T) {
 	})
 
 	t.Run("calc finish exec error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &calcPayrollTx{stubTx: &stubTx{execErr: errors.New("finish"), execErrAt: 3}}, nil
-		}))
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_finish"}}, execErr: errors.New("finish"), execErrAt: 2},
+		))
 		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
+	t.Run("calc finish exec error (calc_fail ok)", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_finish"}}, execErr: errors.New("finish"), execErrAt: 2},
+			&stubTx{row: &stubRow{vals: []any{"evt_fail"}}},
+		))
+		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
+		if err == nil || err.Error() != "finish" {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("calc finish exec error (calc_fail set tenant error)", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_finish"}}, execErr: errors.New("finish"), execErrAt: 2},
+			&stubTx{execErr: errors.New("fail_exec"), execErrAt: 1},
+		))
+		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
+		if err == nil || err.Error() != "finish" {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("calc finish exec error (calc_fail event id error)", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_finish"}}, execErr: errors.New("finish"), execErrAt: 2},
+			&stubTx{rowErr: errors.New("fail_row")},
+		))
+		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
+		if err == nil || err.Error() != "finish" {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
 	t.Run("run query error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &calcPayrollTx{stubTx: &stubTx{}, rowErrAt: 4, rowErr: errors.New("run")}, nil
-		}))
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_finish"}}, row2Err: errors.New("run")},
+		))
 		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
 		if err == nil {
 			t.Fatal("expected error")
@@ -745,9 +915,11 @@ func TestPayrollPGStore_CalculatePayrollRun(t *testing.T) {
 	})
 
 	t.Run("commit error", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &calcPayrollTx{stubTx: &stubTx{commitErr: errors.New("commit")}}, nil
-		}))
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_finish"}}, row2: runRow, commitErr: errors.New("commit")},
+		))
 		_, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
 		if err == nil {
 			t.Fatal("expected error")
@@ -755,9 +927,11 @@ func TestPayrollPGStore_CalculatePayrollRun(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &calcPayrollTx{stubTx: &stubTx{}}, nil
-		}))
+		store := newStaffingPGStore(seqBeginner(
+			&stubTx{row: &stubRow{vals: []any{"pp1"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_start"}}},
+			&stubTx{row: &stubRow{vals: []any{"evt_finish"}}, row2: runRow},
+		))
 		run, err := store.CalculatePayrollRun(context.Background(), "t1", "run1")
 		if err != nil {
 			t.Fatal(err)
@@ -876,4 +1050,168 @@ func TestPayrollRender(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/bad/prefix", nil)
 	_, _ = requireRunIDFromPath(rec, req, "/org/payroll-runs/")
+}
+
+func TestPgErrorMessage(t *testing.T) {
+	if got := pgErrorMessage(errors.New("boom")); got != "UNKNOWN" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := pgErrorMessage(&pgconn.PgError{Message: "PGMSG"}); got != "PGMSG" {
+		t.Fatalf("got=%q", got)
+	}
+}
+
+func TestPayrollPGStore_ListPayslips(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.ListPayslips(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{execErr: errors.New("exec"), execErrAt: 1}))
+		_, err := store.ListPayslips(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing run_id", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		_, err := store.ListPayslips(context.Background(), "t1", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{queryErr: errors.New("query")}))
+		_, err := store.ListPayslips(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{rows: &payslipRows{scanErr: errors.New("scan")}}))
+		_, err := store.ListPayslips(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rows err", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{rows: &payslipRows{err: errors.New("rows")}}))
+		_, err := store.ListPayslips(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{rows: &payslipRows{}, commitErr: errors.New("commit")}))
+		_, err := store.ListPayslips(context.Background(), "t1", "run1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{rows: &payslipRows{}}))
+		got, err := store.ListPayslips(context.Background(), "t1", "run1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].ID != "ps1" {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+}
+
+func TestPayrollPGStore_GetPayslip(t *testing.T) {
+	headerRow := &stubRow{vals: []any{"ps1", "run1", "pp1", "person1", "asmt1", "CNY", "100.00", "100.00", "0.00"}}
+
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{execErr: errors.New("exec"), execErrAt: 1}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing payslip_id", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		_, err := store.GetPayslip(context.Background(), "t1", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("header query error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{rowErr: errors.New("header")}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("items query error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{row: headerRow, queryErr: errors.New("items")}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("items scan error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{row: headerRow, rows: &payslipItemRows{scanErr: errors.New("scan")}}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("items rows err", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{row: headerRow, rows: &payslipItemRows{err: errors.New("rows")}}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{row: headerRow, rows: &payslipItemRows{}, commitErr: errors.New("commit")}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{row: headerRow, rows: &payslipItemRows{}}))
+		got, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.ID != "ps1" || len(got.Items) != 1 {
+			t.Fatalf("got=%#v", got)
+		}
+		if string(got.Items[0].Meta) != "{}" {
+			t.Fatalf("meta=%q", string(got.Items[0].Meta))
+		}
+	})
 }

@@ -272,6 +272,9 @@ type StaffingAssignmentVersion struct {
 	AllocatedFte   pgtype.Numeric            `json:"allocated_fte"`
 	Validity       pgtype.Range[pgtype.Date] `json:"validity"`
 	LastEventID    int64                     `json:"last_event_id"`
+	BaseSalary     pgtype.Numeric            `json:"base_salary"`
+	Currency       string                    `json:"currency"`
+	Profile        []byte                    `json:"profile"`
 }
 
 type StaffingPayPeriod struct {
@@ -343,6 +346,18 @@ type StaffingPayslip struct {
 	LastRunEventID int64              `json:"last_run_event_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingPayslipItem struct {
+	ID             int64              `json:"id"`
+	TenantID       pgtype.UUID        `json:"tenant_id"`
+	PayslipID      pgtype.UUID        `json:"payslip_id"`
+	ItemCode       string             `json:"item_code"`
+	ItemKind       string             `json:"item_kind"`
+	Amount         pgtype.Numeric     `json:"amount"`
+	Meta           []byte             `json:"meta"`
+	LastRunEventID int64              `json:"last_run_event_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type StaffingPosition struct {

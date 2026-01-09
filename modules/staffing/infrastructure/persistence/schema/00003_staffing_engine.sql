@@ -331,6 +331,11 @@ DECLARE
   v_assignment_type text;
   v_position_id uuid;
   v_status text;
+  v_allocated_fte numeric(9,2);
+  v_base_salary numeric(15,2);
+  v_currency text;
+  v_profile jsonb;
+  v_tmp_text text;
   v_row RECORD;
   v_validity daterange;
 BEGIN
@@ -353,6 +358,10 @@ BEGIN
   v_assignment_type := NULL;
   v_position_id := NULL;
   v_status := 'active';
+  v_allocated_fte := 1.0;
+  v_base_salary := NULL;
+  v_currency := 'CNY';
+  v_profile := '{}'::jsonb;
   v_prev_effective := NULL;
 
   FOR v_row IN
@@ -387,6 +396,73 @@ BEGIN
           DETAIL = 'position_id is required';
       END IF;
       v_status := 'active';
+
+      IF v_row.payload ? 'base_salary' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'base_salary'), '');
+        IF v_tmp_text IS NULL THEN
+          v_base_salary := NULL;
+        ELSE
+          BEGIN
+            v_base_salary := v_tmp_text::numeric;
+          EXCEPTION
+            WHEN others THEN
+              RAISE EXCEPTION USING
+                MESSAGE = 'STAFFING_ASSIGNMENT_BASE_SALARY_INVALID',
+                DETAIL = format('base_salary=%s', v_row.payload->>'base_salary');
+          END;
+          IF v_base_salary < 0 THEN
+            RAISE EXCEPTION USING
+              MESSAGE = 'STAFFING_ASSIGNMENT_BASE_SALARY_INVALID',
+              DETAIL = format('base_salary=%s', v_row.payload->>'base_salary');
+          END IF;
+        END IF;
+      END IF;
+
+      IF v_row.payload ? 'allocated_fte' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'allocated_fte'), '');
+        IF v_tmp_text IS NULL THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+            DETAIL = 'allocated_fte is required';
+        END IF;
+        BEGIN
+          v_allocated_fte := v_tmp_text::numeric;
+        EXCEPTION
+          WHEN others THEN
+            RAISE EXCEPTION USING
+              MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+              DETAIL = format('allocated_fte=%s', v_row.payload->>'allocated_fte');
+        END;
+        IF v_allocated_fte <= 0 OR v_allocated_fte > 1 THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+            DETAIL = format('allocated_fte=%s', v_row.payload->>'allocated_fte');
+        END IF;
+      END IF;
+
+      IF v_row.payload ? 'currency' THEN
+        v_tmp_text := upper(btrim(v_row.payload->>'currency'));
+        IF v_tmp_text IS NULL OR v_tmp_text = '' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED',
+            DETAIL = 'currency is required';
+        END IF;
+        IF v_tmp_text <> 'CNY' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED',
+            DETAIL = format('currency=%s', v_row.payload->>'currency');
+        END IF;
+        v_currency := v_tmp_text;
+      END IF;
+
+      IF v_row.payload ? 'profile' THEN
+        IF jsonb_typeof(v_row.payload->'profile') <> 'object' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_PROFILE_INVALID',
+            DETAIL = 'profile must be an object';
+        END IF;
+        v_profile := v_row.payload->'profile';
+      END IF;
     ELSIF v_row.event_type = 'UPDATE' THEN
       IF v_prev_effective IS NULL THEN
         RAISE EXCEPTION USING
@@ -402,7 +478,7 @@ BEGIN
             ERRCODE = 'P0001',
             MESSAGE = 'STAFFING_INVALID_ARGUMENT',
             DETAIL = 'position_id is required';
-        END IF;
+	      END IF;
       END IF;
 
       IF v_row.payload ? 'status' THEN
@@ -412,7 +488,74 @@ BEGIN
             ERRCODE = 'P0001',
             MESSAGE = 'STAFFING_INVALID_ARGUMENT',
             DETAIL = format('invalid status: %s', v_row.payload->>'status');
+	        END IF;
+      END IF;
+
+      IF v_row.payload ? 'base_salary' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'base_salary'), '');
+        IF v_tmp_text IS NULL THEN
+          v_base_salary := NULL;
+        ELSE
+          BEGIN
+            v_base_salary := v_tmp_text::numeric;
+          EXCEPTION
+            WHEN others THEN
+              RAISE EXCEPTION USING
+                MESSAGE = 'STAFFING_ASSIGNMENT_BASE_SALARY_INVALID',
+                DETAIL = format('base_salary=%s', v_row.payload->>'base_salary');
+          END;
+          IF v_base_salary < 0 THEN
+            RAISE EXCEPTION USING
+              MESSAGE = 'STAFFING_ASSIGNMENT_BASE_SALARY_INVALID',
+              DETAIL = format('base_salary=%s', v_row.payload->>'base_salary');
+          END IF;
         END IF;
+      END IF;
+
+      IF v_row.payload ? 'allocated_fte' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'allocated_fte'), '');
+        IF v_tmp_text IS NULL THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+            DETAIL = 'allocated_fte is required';
+        END IF;
+        BEGIN
+          v_allocated_fte := v_tmp_text::numeric;
+        EXCEPTION
+          WHEN others THEN
+            RAISE EXCEPTION USING
+              MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+              DETAIL = format('allocated_fte=%s', v_row.payload->>'allocated_fte');
+        END;
+        IF v_allocated_fte <= 0 OR v_allocated_fte > 1 THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID',
+            DETAIL = format('allocated_fte=%s', v_row.payload->>'allocated_fte');
+        END IF;
+      END IF;
+
+      IF v_row.payload ? 'currency' THEN
+        v_tmp_text := upper(btrim(v_row.payload->>'currency'));
+        IF v_tmp_text IS NULL OR v_tmp_text = '' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED',
+            DETAIL = 'currency is required';
+        END IF;
+        IF v_tmp_text <> 'CNY' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED',
+            DETAIL = format('currency=%s', v_row.payload->>'currency');
+        END IF;
+        v_currency := v_tmp_text;
+      END IF;
+
+      IF v_row.payload ? 'profile' THEN
+        IF jsonb_typeof(v_row.payload->'profile') <> 'object' THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'STAFFING_ASSIGNMENT_PROFILE_INVALID',
+            DETAIL = 'profile must be an object';
+        END IF;
+        v_profile := v_row.payload->'profile';
       END IF;
     ELSE
       RAISE EXCEPTION USING
@@ -435,6 +578,9 @@ BEGIN
       assignment_type,
       status,
       allocated_fte,
+      base_salary,
+      currency,
+      profile,
       validity,
       last_event_id
     )
@@ -445,7 +591,10 @@ BEGIN
       v_position_id,
       v_assignment_type,
       v_status,
-      1.0,
+      v_allocated_fte,
+      v_base_salary,
+      v_currency,
+      v_profile,
       v_validity,
       v_row.event_db_id
     );

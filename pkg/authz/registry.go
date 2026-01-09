@@ -25,6 +25,7 @@ const (
 	ObjectStaffingAssignments    = "staffing.assignments"
 	ObjectStaffingPayrollPeriods = "staffing.payroll-periods"
 	ObjectStaffingPayrollRuns    = "staffing.payroll-runs"
+	ObjectStaffingPayslips       = "staffing.payslips"
 	ObjectSuperadminTenants      = "superadmin.tenants"
 	ObjectSuperadminSession      = "superadmin.session"
 )

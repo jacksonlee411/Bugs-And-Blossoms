@@ -32,6 +32,12 @@ type stubPayrollStore struct {
 
 	finalizeErr error
 	finalizeOut PayrollRun
+
+	listPayslipsErr error
+	listPayslipsOut []Payslip
+
+	getPayslipErr error
+	getPayslipOut PayslipDetail
 }
 
 func (s stubPayrollStore) ListPayPeriods(_ context.Context, _ string, _ string) ([]PayPeriod, error) {
@@ -75,6 +81,20 @@ func (s stubPayrollStore) FinalizePayrollRun(_ context.Context, _ string, _ stri
 		return PayrollRun{}, s.finalizeErr
 	}
 	return s.finalizeOut, nil
+}
+
+func (s stubPayrollStore) ListPayslips(_ context.Context, _ string, _ string) ([]Payslip, error) {
+	if s.listPayslipsErr != nil {
+		return nil, s.listPayslipsErr
+	}
+	return s.listPayslipsOut, nil
+}
+
+func (s stubPayrollStore) GetPayslip(_ context.Context, _ string, _ string) (PayslipDetail, error) {
+	if s.getPayslipErr != nil {
+		return PayslipDetail{}, s.getPayslipErr
+	}
+	return s.getPayslipOut, nil
 }
 
 func TestHandlePayrollPeriods(t *testing.T) {
@@ -609,6 +629,276 @@ func TestHandlePayrollInternalAPI(t *testing.T) {
 		_, ok := requireRunIDFromPath(rec, req, "/org/payroll-runs/")
 		if ok {
 			t.Fatal("expected not ok")
+		}
+	})
+}
+
+func TestHandlePayslips(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips", nil)
+		handlePayslips(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/org/payroll-runs/run1/payslips", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslips(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("path missing run_id", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslips(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("list error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips?as_of=2026-01-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslips(rec, req, stubPayrollStore{listPayslipsErr: errors.New("list_failed")})
+		if !strings.Contains(rec.Body.String(), "list_failed") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips?as_of=2026-01-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslips(rec, req, stubPayrollStore{
+			listPayslipsOut: []Payslip{{ID: "ps1", RunID: "run1", PersonUUID: "u1", AssignmentID: "a1", Currency: "CNY", GrossPay: "100.00", NetPay: "100.00", EmployerTotal: "0.00"}},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "ps1") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+}
+
+func TestHandlePayslipDetail(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1", nil)
+		handlePayslipDetail(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("path missing run_id", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipDetail(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/org/payroll-runs/run1/payslips/ps1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipDetail(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("path missing payslip_id", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips/", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipDetail(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("path prefix mismatch", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/not-payslips/ps1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipDetail(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1?as_of=2026-01-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipDetail(rec, req, stubPayrollStore{getPayslipErr: errors.New("get_failed")})
+		if !strings.Contains(rec.Body.String(), "get_failed") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1?as_of=2026-01-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipDetail(rec, req, stubPayrollStore{
+			getPayslipOut: PayslipDetail{
+				Payslip: Payslip{ID: "ps1", RunID: "run1", Currency: "CNY", GrossPay: "100.00", NetPay: "100.00", EmployerTotal: "0.00"},
+				Items:   []PayslipItem{{ID: "it1", ItemCode: "EARNING_BASE_SALARY", ItemKind: "earning", Amount: "100.00", Meta: json.RawMessage(`{}`)}},
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "EARNING_BASE_SALARY") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
+	t.Run("payslip_id has extra segments", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1/extra", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipDetail(rec, req, stubPayrollStore{getPayslipOut: PayslipDetail{Payslip: Payslip{ID: "ps1"}}})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+}
+
+func TestHandlePayslipsAPI(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payslips?run_id=run1", nil)
+		handlePayslipsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/org/api/payslips?run_id=run1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("run_id missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payslips", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("list error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payslips?run_id=run1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipsAPI(rec, req, stubPayrollStore{listPayslipsErr: errors.New("boom")})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("ok json decode", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payslips?run_id=run1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipsAPI(rec, req, stubPayrollStore{listPayslipsOut: []Payslip{{ID: "ps1", RunID: "run1"}}})
+		var got []Payslip
+		_ = json.NewDecoder(rec.Body).Decode(&got)
+	})
+}
+
+func TestHandlePayslipAPI(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payslips/ps1", nil)
+		handlePayslipAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/org/api/payslips/ps1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("path prefix mismatch", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payslipz/ps1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("path missing payslip_id", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payslips/", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payslips/ps1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipAPI(rec, req, stubPayrollStore{getPayslipErr: errors.New("boom")})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("ok json decode", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payslips/ps1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipAPI(rec, req, stubPayrollStore{getPayslipOut: PayslipDetail{Payslip: Payslip{ID: "ps1"}, Items: []PayslipItem{{ID: "it1", Meta: json.RawMessage(`{}`)}}}})
+		var got PayslipDetail
+		_ = json.NewDecoder(rec.Body).Decode(&got)
+	})
+
+	t.Run("payslip_id has extra segments", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payslips/ps1/extra", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipAPI(rec, req, stubPayrollStore{getPayslipOut: PayslipDetail{Payslip: Payslip{ID: "ps1"}}})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
 		}
 	})
 }
