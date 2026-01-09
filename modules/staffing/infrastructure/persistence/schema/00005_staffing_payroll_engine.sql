@@ -281,132 +281,38 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'payload must be an object';
   END IF;
 
-  v_lock_key := format('staffing:payroll:run:%s:%s', p_tenant_id, p_run_id);
+  v_lock_key := format('staffing:payroll-run:%s:%s', p_tenant_id, p_run_id);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
-  SELECT * INTO v_existing
-  FROM staffing.payroll_run_events
-  WHERE event_id = p_event_id;
+  v_now := now();
 
-  IF FOUND THEN
-    IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.run_id <> p_run_id
-      OR v_existing.pay_period_id <> p_pay_period_id
-      OR v_existing.event_type <> p_event_type
-      OR v_existing.payload <> v_payload
-      OR v_existing.request_id <> p_request_id
-      OR v_existing.initiator_id <> p_initiator_id
-    THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
-    END IF;
-
-    RETURN v_existing.id;
-  END IF;
-
-  SELECT * INTO v_existing_run
-  FROM staffing.payroll_runs
-  WHERE tenant_id = p_tenant_id AND id = p_run_id
-  FOR UPDATE;
-
-  IF p_event_type = 'CREATE' THEN
-    IF FOUND THEN
-      RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_RUN_EXISTS', DETAIL = format('run_id=%s', p_run_id);
-    END IF;
-
-    SELECT status INTO v_period_status
-    FROM staffing.pay_periods
-    WHERE tenant_id = p_tenant_id AND id = p_pay_period_id
-    FOR UPDATE;
-    IF NOT FOUND THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_PAYROLL_PAY_PERIOD_NOT_FOUND',
-        DETAIL = format('pay_period_id=%s', p_pay_period_id);
-    END IF;
-    IF v_period_status <> 'open' THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_PAYROLL_PAY_PERIOD_CLOSED',
-        DETAIL = format('pay_period_id=%s status=%s', p_pay_period_id, v_period_status);
-    END IF;
-
-    v_next_state := 'draft';
-  ELSE
-    IF NOT FOUND THEN
-      RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_RUN_NOT_FOUND', DETAIL = format('run_id=%s', p_run_id);
-    END IF;
-
-    IF v_existing_run.pay_period_id <> p_pay_period_id THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-        DETAIL = format('pay_period_id mismatch: run_id=%s run_pay_period_id=%s param_pay_period_id=%s', p_run_id, v_existing_run.pay_period_id, p_pay_period_id);
-    END IF;
-
-    IF v_existing_run.run_state = 'finalized' THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_PAYROLL_RUN_FINALIZED_READONLY',
-        DETAIL = format('run_id=%s', p_run_id);
-    END IF;
-
-    IF p_event_type = 'CALC_START' THEN
-      IF v_existing_run.run_state NOT IN ('draft','failed') THEN
-        RAISE EXCEPTION USING
-          MESSAGE = 'STAFFING_PAYROLL_RUN_INVALID_TRANSITION',
-          DETAIL = format('run_id=%s current=%s event=%s', p_run_id, v_existing_run.run_state, p_event_type);
-      END IF;
-      v_next_state := 'calculating';
-    ELSIF p_event_type = 'CALC_FINISH' THEN
-      IF v_existing_run.run_state <> 'calculating' THEN
-        RAISE EXCEPTION USING
-          MESSAGE = 'STAFFING_PAYROLL_RUN_INVALID_TRANSITION',
-          DETAIL = format('run_id=%s current=%s event=%s', p_run_id, v_existing_run.run_state, p_event_type);
-      END IF;
-      v_next_state := 'calculated';
-    ELSIF p_event_type = 'CALC_FAIL' THEN
-      IF v_existing_run.run_state <> 'calculating' THEN
-        RAISE EXCEPTION USING
-          MESSAGE = 'STAFFING_PAYROLL_RUN_INVALID_TRANSITION',
-          DETAIL = format('run_id=%s current=%s event=%s', p_run_id, v_existing_run.run_state, p_event_type);
-      END IF;
-      v_next_state := 'failed';
-    ELSIF p_event_type = 'FINALIZE' THEN
-      IF v_existing_run.run_state <> 'calculated' THEN
-        RAISE EXCEPTION USING
-          MESSAGE = 'STAFFING_PAYROLL_RUN_INVALID_TRANSITION',
-          DETAIL = format('run_id=%s current=%s event=%s', p_run_id, v_existing_run.run_state, p_event_type);
-      END IF;
-      v_next_state := 'finalized';
-    ELSE
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-        DETAIL = format('unexpected event_type: %s', p_event_type);
-    END IF;
-  END IF;
-
-  INSERT INTO staffing.payroll_run_events (
-    event_id,
-    tenant_id,
-    run_id,
-    pay_period_id,
-    event_type,
-    run_state,
-    payload,
-    request_id,
-    initiator_id
-  )
-  VALUES (
-    p_event_id,
-    p_tenant_id,
-    p_run_id,
-    p_pay_period_id,
-    p_event_type,
-    v_next_state,
-    v_payload,
-    p_request_id,
-    p_initiator_id
-  )
-  ON CONFLICT (event_id) DO NOTHING
-  RETURNING id INTO v_event_db_id;
+  BEGIN
+    INSERT INTO staffing.payroll_run_events (
+      event_id,
+      tenant_id,
+      run_id,
+      pay_period_id,
+      event_type,
+      payload,
+      request_id,
+      initiator_id
+    )
+    VALUES (
+      p_event_id,
+      p_tenant_id,
+      p_run_id,
+      p_pay_period_id,
+      p_event_type,
+      v_payload,
+      p_request_id,
+      p_initiator_id
+    )
+    ON CONFLICT (event_id) DO NOTHING
+    RETURNING id INTO v_event_db_id;
+  EXCEPTION
+    WHEN unique_violation THEN
+      RAISE;
+  END;
 
   IF v_event_db_id IS NULL THEN
     SELECT * INTO v_existing
@@ -429,133 +335,46 @@ BEGIN
     RETURN v_existing.id;
   END IF;
 
-  v_now := now();
+  SELECT * INTO v_existing_run
+  FROM staffing.payroll_runs
+  WHERE tenant_id = p_tenant_id AND id = p_run_id;
 
   IF p_event_type = 'CREATE' THEN
+    IF FOUND THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_RUN_EXISTS',
+        DETAIL = format('run_id=%s', p_run_id);
+    END IF;
+
+    SELECT status, pay_group, period INTO v_period_status, v_pay_group, v_period
+    FROM staffing.pay_periods
+    WHERE tenant_id = p_tenant_id AND id = p_pay_period_id;
+
+    IF v_period_status IS NULL THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_PAY_PERIOD_NOT_FOUND',
+        DETAIL = format('pay_period_id=%s', p_pay_period_id);
+    END IF;
+    IF v_period_status <> 'open' THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_PAY_PERIOD_CLOSED',
+        DETAIL = format('pay_period_id=%s status=%s', p_pay_period_id, v_period_status);
+    END IF;
+
     INSERT INTO staffing.payroll_runs (
       tenant_id,
       id,
       pay_period_id,
       run_state,
-      needs_recalc,
-      calc_started_at,
-      calc_finished_at,
-      finalized_at,
-      last_event_id,
-      created_at,
-      updated_at
+      last_event_id
     )
     VALUES (
       p_tenant_id,
       p_run_id,
       p_pay_period_id,
       'draft',
-      false,
-      NULL,
-      NULL,
-      NULL,
-      v_event_db_id,
-      v_now,
-      v_now
+      v_event_db_id
     );
-
-    RETURN v_event_db_id;
-  END IF;
-
-  IF p_event_type = 'CALC_START' THEN
-    UPDATE staffing.payroll_runs
-    SET
-      run_state = v_next_state,
-      calc_started_at = v_now,
-      calc_finished_at = NULL,
-      last_event_id = v_event_db_id,
-      updated_at = v_now
-    WHERE tenant_id = p_tenant_id AND id = p_run_id;
-  ELSIF p_event_type = 'CALC_FINISH' THEN
-    SELECT pay_group, period
-    INTO v_pay_group, v_period
-    FROM staffing.pay_periods
-    WHERE tenant_id = p_tenant_id AND id = p_pay_period_id
-    FOR UPDATE;
-    IF NOT FOUND THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_PAYROLL_PAY_PERIOD_NOT_FOUND',
-        DETAIL = format('pay_period_id=%s', p_pay_period_id);
-    END IF;
-
-    IF v_pay_group <> 'monthly' THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_PAYROLL_UNSUPPORTED_PAY_GROUP',
-        DETAIL = format('pay_group=%s', v_pay_group);
-    END IF;
-
-    v_period_start := lower(v_period);
-    v_period_end_excl := upper(v_period);
-    IF v_period_start IS NULL OR v_period_end_excl IS NULL THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD',
-        DETAIL = format('period=%s', v_period);
-    END IF;
-
-    IF date_trunc('month', v_period_start)::date <> v_period_start
-      OR (v_period_start + interval '1 month')::date <> v_period_end_excl
-    THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD',
-        DETAIL = format('period=%s', v_period);
-    END IF;
-
-    v_period_days := v_period_end_excl - v_period_start;
-    IF v_period_days <= 0 THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_PAYROLL_UNSUPPORTED_PAY_PERIOD',
-        DETAIL = format('period=%s', v_period);
-    END IF;
-
-    IF EXISTS (
-      SELECT 1
-      FROM staffing.assignment_versions av
-      WHERE av.tenant_id = p_tenant_id
-        AND av.assignment_type = 'primary'
-        AND av.status = 'active'
-        AND av.validity && v_period
-        AND (av.allocated_fte <= 0 OR av.allocated_fte > 1)
-      LIMIT 1
-    ) THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_PAYROLL_INVALID_ALLOCATED_FTE',
-        DETAIL = format('run_id=%s', p_run_id);
-    END IF;
-
-    IF EXISTS (
-      SELECT 1
-      FROM staffing.assignment_versions av
-      WHERE av.tenant_id = p_tenant_id
-        AND av.assignment_type = 'primary'
-        AND av.status = 'active'
-        AND av.validity && v_period
-        AND av.base_salary IS NULL
-      LIMIT 1
-    ) THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_PAYROLL_MISSING_BASE_SALARY',
-        DETAIL = format('run_id=%s', p_run_id);
-    END IF;
-
-    IF EXISTS (
-      SELECT 1
-      FROM staffing.assignment_versions av
-      WHERE av.tenant_id = p_tenant_id
-        AND av.assignment_type = 'primary'
-        AND av.status = 'active'
-        AND av.validity && v_period
-        AND av.currency <> 'CNY'
-      LIMIT 1
-    ) THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'STAFFING_PAYROLL_UNSUPPORTED_CURRENCY',
-        DETAIL = format('run_id=%s', p_run_id);
-    END IF;
 
     INSERT INTO staffing.payslips (
       tenant_id,
@@ -568,9 +387,7 @@ BEGIN
       gross_pay,
       net_pay,
       employer_total,
-      last_run_event_id,
-      created_at,
-      updated_at
+      last_run_event_id
     )
     SELECT
       p_tenant_id,
@@ -579,25 +396,105 @@ BEGIN
       p_pay_period_id,
       av.person_uuid,
       av.assignment_id,
-      'CNY',
+      av.currency,
       0,
       0,
       0,
-      v_event_db_id,
-      v_now,
-      v_now
+      v_event_db_id
     FROM staffing.assignment_versions av
     WHERE av.tenant_id = p_tenant_id
       AND av.assignment_type = 'primary'
       AND av.status = 'active'
-      AND av.validity && v_period
-    GROUP BY av.person_uuid, av.assignment_id
-    ON CONFLICT ON CONSTRAINT payslips_run_person_assignment_unique
-    DO UPDATE SET
-      pay_period_id = EXCLUDED.pay_period_id,
-      currency = EXCLUDED.currency,
-      last_run_event_id = EXCLUDED.last_run_event_id,
-      updated_at = EXCLUDED.updated_at;
+      AND av.validity @> lower(v_period)
+      AND av.base_salary IS NOT NULL;
+
+    RETURN v_event_db_id;
+  END IF;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_RUN_NOT_FOUND',
+      DETAIL = format('run_id=%s', p_run_id);
+  END IF;
+
+  IF v_existing_run.pay_period_id <> p_pay_period_id THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_RUN_PAY_PERIOD_MISMATCH',
+      DETAIL = format('run_id=%s pay_period_id=%s existing_pay_period_id=%s', p_run_id, p_pay_period_id, v_existing_run.pay_period_id);
+  END IF;
+
+  IF v_existing_run.run_state = 'finalized' THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_RUN_FINALIZED_READONLY',
+      DETAIL = format('run_id=%s', p_run_id);
+  END IF;
+
+  IF p_event_type = 'CALC_START' THEN
+    IF v_existing_run.run_state NOT IN ('draft','failed') THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_RUN_INVALID_TRANSITION',
+        DETAIL = format('run_id=%s run_state=%s event_type=%s', p_run_id, v_existing_run.run_state, p_event_type);
+    END IF;
+    v_next_state := 'calculating';
+  ELSIF p_event_type = 'CALC_FINISH' THEN
+    IF v_existing_run.run_state <> 'calculating' THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_RUN_INVALID_TRANSITION',
+        DETAIL = format('run_id=%s run_state=%s event_type=%s', p_run_id, v_existing_run.run_state, p_event_type);
+    END IF;
+    v_next_state := 'calculated';
+  ELSIF p_event_type = 'CALC_FAIL' THEN
+    IF v_existing_run.run_state <> 'calculating' THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_RUN_INVALID_TRANSITION',
+        DETAIL = format('run_id=%s run_state=%s event_type=%s', p_run_id, v_existing_run.run_state, p_event_type);
+    END IF;
+    v_next_state := 'failed';
+  ELSIF p_event_type = 'FINALIZE' THEN
+    IF v_existing_run.run_state <> 'calculated' THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_RUN_INVALID_TRANSITION',
+        DETAIL = format('run_id=%s run_state=%s event_type=%s', p_run_id, v_existing_run.run_state, p_event_type);
+    END IF;
+    v_next_state := 'finalized';
+  ELSE
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unexpected event_type: %s', p_event_type);
+  END IF;
+
+  SELECT status, pay_group, period INTO v_period_status, v_pay_group, v_period
+  FROM staffing.pay_periods
+  WHERE tenant_id = p_tenant_id AND id = p_pay_period_id;
+
+  IF v_period_status IS NULL THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_PAY_PERIOD_NOT_FOUND',
+      DETAIL = format('pay_period_id=%s', p_pay_period_id);
+  END IF;
+
+  v_period_start := lower(v_period);
+  v_period_end_excl := upper(v_period);
+  v_period_days := (v_period_end_excl - v_period_start);
+
+  IF p_event_type = 'CALC_START' THEN
+    UPDATE staffing.payroll_runs
+    SET
+      run_state = v_next_state,
+      calc_started_at = v_now,
+      calc_finished_at = NULL,
+      last_event_id = v_event_db_id,
+      updated_at = v_now
+    WHERE tenant_id = p_tenant_id AND id = p_run_id;
+  ELSIF p_event_type = 'CALC_FINISH' THEN
+    IF v_pay_group <> 'monthly' THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_PAY_GROUP_NOT_SUPPORTED',
+        DETAIL = format('pay_group=%s', v_pay_group);
+    END IF;
+    IF v_period_start <> date_trunc('month', v_period_start)::date OR v_period_end_excl <> (date_trunc('month', v_period_start)::date + INTERVAL '1 month')::date THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_PERIOD_NOT_NATURAL_MONTH',
+        DETAIL = format('period_start=%s period_end_exclusive=%s', v_period_start, v_period_end_excl);
+    END IF;
 
     DELETE FROM staffing.payslip_items i
     USING staffing.payslips p
@@ -688,6 +585,10 @@ BEGIN
     EXECUTE 'SELECT staffing.payroll_apply_social_insurance($1::uuid,$2::uuid,$3::uuid,$4::date,$5::date,$6::bigint,$7::timestamptz);'
     USING p_tenant_id, p_run_id, p_pay_period_id, v_period_start, v_period_end_excl, v_event_db_id, v_now;
 
+    -- NOTE: use dynamic SQL to avoid schema file ordering issues (P0-4 adds staffing.payroll_apply_iit later).
+    EXECUTE 'SELECT staffing.payroll_apply_iit($1::uuid,$2::uuid,$3::uuid,$4::bigint,$5::timestamptz);'
+    USING p_tenant_id, p_run_id, p_pay_period_id, v_event_db_id, v_now;
+
     UPDATE staffing.payroll_runs
     SET
       run_state = v_next_state,
@@ -703,6 +604,10 @@ BEGIN
       updated_at = v_now
     WHERE tenant_id = p_tenant_id AND id = p_run_id;
   ELSIF p_event_type = 'FINALIZE' THEN
+    -- NOTE: use dynamic SQL to avoid schema file ordering issues (P0-4 adds staffing.payroll_post_iit_balances later).
+    EXECUTE 'SELECT staffing.payroll_post_iit_balances($1::uuid,$2::uuid,$3::uuid,$4::bigint,$5::timestamptz);'
+    USING p_tenant_id, p_run_id, p_pay_period_id, v_event_db_id, v_now;
+
     BEGIN
       UPDATE staffing.payroll_runs
       SET

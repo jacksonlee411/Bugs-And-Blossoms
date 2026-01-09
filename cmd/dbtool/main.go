@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	payrolliit "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/payroll/iit"
 )
 
 func main() {
@@ -1145,27 +1146,59 @@ SELECT staffing.submit_payroll_run_event(
 	var netPay string
 	var employerTotal string
 	if err := tx.QueryRow(ctx, `
-		SELECT
-		  gross_pay::text,
-		  net_pay::text,
-		  employer_total::text
-		FROM staffing.payslips
-		WHERE tenant_id = $1::uuid AND run_id = $2::uuid
-		LIMIT 1;
-		`, tenantA, runID).Scan(&grossPay, &netPay, &employerTotal); err != nil {
+			SELECT
+			  gross_pay::text,
+			  net_pay::text,
+			  employer_total::text
+			FROM staffing.payslips
+			WHERE tenant_id = $1::uuid AND run_id = $2::uuid
+			LIMIT 1;
+			`, tenantA, runID).Scan(&grossPay, &netPay, &employerTotal); err != nil {
 		fatal(err)
 	}
-	if grossPay != "30000.00" || netPay != "24750.00" || employerTotal != "10560.00" {
-		fatalf("unexpected payslip totals gross=%s net=%s employer_total=%s", grossPay, netPay, employerTotal)
+	if grossPay != "30000.00" || employerTotal != "10560.00" {
+		fatalf("unexpected payslip totals gross=%s employer_total=%s", grossPay, employerTotal)
+	}
+
+	var netExpected string
+	var iitAmount string
+	var siEmployeeAmount string
+	if err := tx.QueryRow(ctx, `
+			WITH
+			si AS (
+			  SELECT COALESCE(sum(i.employee_amount), 0) AS employee_amount
+			  FROM staffing.payslip_social_insurance_items i
+			  WHERE i.tenant_id = $1::uuid AND i.run_id = $2::uuid
+			),
+			iit AS (
+			  SELECT COALESCE(sum(i.amount), 0) AS amount
+			  FROM staffing.payslip_items i
+			  JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
+			  WHERE p.tenant_id = $1::uuid
+			    AND p.run_id = $2::uuid
+			    AND i.item_code = 'DEDUCTION_IIT_WITHHOLDING'
+			)
+			SELECT
+			  round(iit.amount, 2)::text,
+			  round(si.employee_amount, 2)::text,
+			  round(p.gross_pay - si.employee_amount - iit.amount, 2)::text
+			FROM staffing.payslips p, si, iit
+			WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid
+			LIMIT 1;
+			`, tenantA, runID).Scan(&iitAmount, &siEmployeeAmount, &netExpected); err != nil {
+		fatal(err)
+	}
+	if netPay != netExpected {
+		fatalf("unexpected payslip net_pay=%s expected=%s (si_employee=%s iit=%s)", netPay, netExpected, siEmployeeAmount, iitAmount)
 	}
 
 	var sumItems string
 	if err := tx.QueryRow(ctx, `
-	SELECT COALESCE(sum(i.amount), 0)::text
-	FROM staffing.payslip_items i
-	JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
-	WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid;
-		`, tenantA, runID).Scan(&sumItems); err != nil {
+		SELECT COALESCE(sum(i.amount) FILTER (WHERE i.item_kind = 'earning'), 0)::text
+		FROM staffing.payslip_items i
+		JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
+		WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid;
+			`, tenantA, runID).Scan(&sumItems); err != nil {
 		fatal(err)
 	}
 	if sumItems != grossPay {
@@ -1412,9 +1445,9 @@ SELECT staffing.submit_payroll_run_event(
 
 	getBaseSalaryItem := func(runID string) (amount string, overlapDays int64) {
 		if err := tx.QueryRow(ctx, `
-			SELECT
-			  i.amount::text,
-			  (i.meta->>'overlap_days')::bigint
+				SELECT
+				  i.amount::text,
+				  (i.meta->>'overlap_days')::bigint
 			FROM staffing.payslip_items i
 			JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
 			WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid AND i.item_code = 'EARNING_BASE_SALARY'
@@ -1423,6 +1456,43 @@ SELECT staffing.submit_payroll_run_event(
 			fatal(err)
 		}
 		return amount, overlapDays
+	}
+
+	getIITItemCents := func(runID string) (amountCents int64) {
+		if err := tx.QueryRow(ctx, `
+				SELECT COALESCE(round(sum(i.amount) * 100)::bigint, 0)
+				FROM staffing.payslip_items i
+				JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
+				WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid AND i.item_code = 'DEDUCTION_IIT_WITHHOLDING';
+				`, tenantA, runID).Scan(&amountCents); err != nil {
+			fatal(err)
+		}
+		return amountCents
+	}
+
+	getPayslipMoneyCents := func(runID string) (grossCents int64, netCents int64) {
+		if err := tx.QueryRow(ctx, `
+					SELECT
+					  round(gross_pay * 100)::bigint,
+					  round(net_pay * 100)::bigint
+					FROM staffing.payslips
+					WHERE tenant_id = $1::uuid AND run_id = $2::uuid
+					LIMIT 1;
+					`, tenantA, runID).Scan(&grossCents, &netCents); err != nil {
+			fatal(err)
+		}
+		return grossCents, netCents
+	}
+
+	getEmployeeSICents := func(runID string) (amountCents int64) {
+		if err := tx.QueryRow(ctx, `
+				SELECT COALESCE(round(sum(i.employee_amount) * 100)::bigint, 0)
+				FROM staffing.payslip_social_insurance_items i
+				WHERE i.tenant_id = $1::uuid AND i.run_id = $2::uuid;
+				`, tenantA, runID).Scan(&amountCents); err != nil {
+			fatal(err)
+		}
+		return amountCents
 	}
 
 	withSavepoint("sp_prorate_midmonth", func() {
@@ -1444,6 +1514,243 @@ SELECT staffing.submit_payroll_run_event(
 		}
 		if expected := formatMoney(prorateCents(baseSalaryCents, 1, 1, overlapDays)); itemAmount != expected {
 			fatalf("unexpected prorate midmonth amount=%s expected=%s", itemAmount, expected)
+		}
+	})
+
+	withSavepoint("sp_payroll_iit_two_months", func() {
+		resetPayrollAndAssignments()
+
+		start1Time := ppStartTime
+		if start1Time.Month() == time.December {
+			start1Time = start1Time.AddDate(0, -1, 0)
+		}
+		start1 := start1Time.Format("2006-01-02")
+		end1 := start1Time.AddDate(0, 1, 0).Format("2006-01-02")
+
+		start2Time := start1Time.AddDate(0, 1, 0)
+		start2 := start2Time.Format("2006-01-02")
+		end2 := start2Time.AddDate(0, 1, 0).Format("2006-01-02")
+
+		_, personUUID := submitAssignmentCreate(start1, "30000.00", "1.0", "CNY")
+
+		payPeriodID1 := submitPayPeriod(payGroup, start1, end1)
+		runID1 := calcRun(payPeriodID1)
+
+		gross1Cents, net1Cents := getPayslipMoneyCents(runID1)
+		si1Cents := getEmployeeSICents(runID1)
+		iit1Cents := getIITItemCents(runID1)
+		if net1Cents != gross1Cents-si1Cents-iit1Cents {
+			fatalf(
+				"unexpected month1 net_pay=%s expected=%s (si_employee=%s iit=%s)",
+				formatMoney(net1Cents),
+				formatMoney(gross1Cents-si1Cents-iit1Cents),
+				formatMoney(si1Cents),
+				formatMoney(iit1Cents),
+			)
+		}
+
+		taxMonth1 := int(start1Time.Month())
+		taxMonth2 := int(start2Time.Month())
+		std1, err := payrolliit.StandardDeductionCents(taxMonth1, taxMonth1)
+		if err != nil {
+			fatal(err)
+		}
+		out1, err := payrolliit.ComputeCumulativeWithholding(payrolliit.CumulativeInput{
+			IncomeCents:                     gross1Cents,
+			TaxExemptIncomeCents:            0,
+			StandardDeductionCents:          std1,
+			SpecialDeductionCents:           si1Cents,
+			SpecialAdditionalDeductionCents: 0,
+			WithheldCents:                   0,
+		})
+		if err != nil {
+			fatal(err)
+		}
+		if iit1Cents != out1.WithholdThisMonthCents {
+			fatalf("unexpected month1 iit=%s expected=%s", formatMoney(iit1Cents), formatMoney(out1.WithholdThisMonthCents))
+		}
+
+		if err := submitPayrollRunEvent(runID1, payPeriodID1, "FINALIZE"); err != nil {
+			fatal(err)
+		}
+
+		var firstTaxMonth, lastTaxMonth int
+		var ytdIncomeCents, ytdStdCents, ytdSpecialCents, ytdTaxableCents, ytdTaxLiabCents, ytdWithheldCents, ytdCreditCents int64
+		if err := tx.QueryRow(ctx, `
+					SELECT
+					  first_tax_month,
+					  last_tax_month,
+					  round(ytd_income * 100)::bigint,
+					  round(ytd_standard_deduction * 100)::bigint,
+					  round(ytd_special_deduction * 100)::bigint,
+					  round(ytd_taxable_income * 100)::bigint,
+					  round(ytd_iit_tax_liability * 100)::bigint,
+					  round(ytd_iit_withheld * 100)::bigint,
+					  round(ytd_iit_credit * 100)::bigint
+					FROM staffing.payroll_balances
+					WHERE tenant_id = $1::uuid
+					  AND tax_entity_id = $1::uuid
+					  AND person_uuid = $2::uuid
+					  AND tax_year = $3::int;
+					`, tenantA, personUUID, start1Time.Year()).Scan(
+			&firstTaxMonth, &lastTaxMonth,
+			&ytdIncomeCents, &ytdStdCents, &ytdSpecialCents, &ytdTaxableCents, &ytdTaxLiabCents, &ytdWithheldCents, &ytdCreditCents,
+		); err != nil {
+			fatal(err)
+		}
+
+		if firstTaxMonth != taxMonth1 || lastTaxMonth != taxMonth1 {
+			fatalf("unexpected balances months: first=%d last=%d expected=%d", firstTaxMonth, lastTaxMonth, taxMonth1)
+		}
+		if ytdIncomeCents != gross1Cents || ytdStdCents != std1 {
+			fatalf("unexpected balances ytd_income=%s ytd_std=%s", formatMoney(ytdIncomeCents), formatMoney(ytdStdCents))
+		}
+		if ytdSpecialCents != si1Cents {
+			fatalf("unexpected balances ytd_special_deduction=%s expected=%s", formatMoney(ytdSpecialCents), formatMoney(si1Cents))
+		}
+		if ytdWithheldCents != out1.WithholdThisMonthCents || ytdCreditCents != out1.CreditCents {
+			fatalf("unexpected balances ytd_withheld=%s ytd_credit=%s", formatMoney(ytdWithheldCents), formatMoney(ytdCreditCents))
+		}
+		if ytdTaxableCents != out1.TaxableIncomeCents || ytdTaxLiabCents != out1.TaxLiabilityCents {
+			fatalf("unexpected balances taxable=%s liability=%s", formatMoney(ytdTaxableCents), formatMoney(ytdTaxLiabCents))
+		}
+
+		payPeriodID2 := submitPayPeriod(payGroup, start2, end2)
+		runID2Baseline := calcRun(payPeriodID2)
+		gross2Cents, _ := getPayslipMoneyCents(runID2Baseline)
+		si2Cents := getEmployeeSICents(runID2Baseline)
+		ytdIncome2Cents := gross1Cents + gross2Cents
+
+		std2, err := payrolliit.StandardDeductionCents(taxMonth1, taxMonth2)
+		if err != nil {
+			fatal(err)
+		}
+
+		ytdSpecial2Cents := si1Cents + si2Cents
+		requiredSADCents := ytdIncome2Cents - std2 - ytdSpecial2Cents
+		if requiredSADCents < 0 {
+			requiredSADCents = 0
+		}
+		sad2Cents := requiredSADCents + 1
+
+		eventID := mustUUID()
+		if _, err := tx.Exec(ctx, `
+				SELECT staffing.submit_iit_special_additional_deduction_claim_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::int,
+				  $5::smallint,
+				  $6::numeric,
+				  $7::text,
+				  $8::uuid
+				);
+				`, eventID, tenantA, personUUID, start2Time.Year(), taxMonth2, formatMoney(sad2Cents), eventID, initiatorID); err != nil {
+			fatal(err)
+		}
+
+		runID2 := calcRun(payPeriodID2)
+
+		gross2Cents, net2Cents := getPayslipMoneyCents(runID2)
+		si2Cents = getEmployeeSICents(runID2)
+		ytdIncome2Cents = gross1Cents + gross2Cents
+		ytdSpecial2Cents = si1Cents + si2Cents
+
+		iit2Cents := getIITItemCents(runID2)
+		if net2Cents != gross2Cents-si2Cents-iit2Cents {
+			fatalf(
+				"unexpected month2 net_pay=%s expected=%s (si_employee=%s iit=%s)",
+				formatMoney(net2Cents),
+				formatMoney(gross2Cents-si2Cents-iit2Cents),
+				formatMoney(si2Cents),
+				formatMoney(iit2Cents),
+			)
+		}
+
+		withheldSoFar := out1.WithholdThisMonthCents + out1.CreditCents
+		out2, err := payrolliit.ComputeCumulativeWithholding(payrolliit.CumulativeInput{
+			IncomeCents:                     ytdIncome2Cents,
+			TaxExemptIncomeCents:            0,
+			StandardDeductionCents:          std2,
+			SpecialDeductionCents:           ytdSpecial2Cents,
+			SpecialAdditionalDeductionCents: sad2Cents,
+			WithheldCents:                   withheldSoFar,
+		})
+		if err != nil {
+			fatal(err)
+		}
+		if iit2Cents != out2.WithholdThisMonthCents {
+			fatalf("unexpected month2 iit=%s expected=%s", formatMoney(iit2Cents), formatMoney(out2.WithholdThisMonthCents))
+		}
+
+		if err := submitPayrollRunEvent(runID2, payPeriodID2, "FINALIZE"); err != nil {
+			fatal(err)
+		}
+
+		var ytdSadCents int64
+		if err := tx.QueryRow(ctx, `
+					SELECT
+					  first_tax_month,
+					  last_tax_month,
+					  round(ytd_income * 100)::bigint,
+					  round(ytd_standard_deduction * 100)::bigint,
+					  round(ytd_special_deduction * 100)::bigint,
+					  round(ytd_special_additional_deduction * 100)::bigint,
+					  round(ytd_taxable_income * 100)::bigint,
+					  round(ytd_iit_tax_liability * 100)::bigint,
+					  round(ytd_iit_withheld * 100)::bigint,
+					  round(ytd_iit_credit * 100)::bigint
+					FROM staffing.payroll_balances
+					WHERE tenant_id = $1::uuid
+					  AND tax_entity_id = $1::uuid
+					  AND person_uuid = $2::uuid
+					  AND tax_year = $3::int;
+					`, tenantA, personUUID, start2Time.Year()).Scan(
+			&firstTaxMonth, &lastTaxMonth,
+			&ytdIncomeCents, &ytdStdCents, &ytdSpecialCents, &ytdSadCents, &ytdTaxableCents, &ytdTaxLiabCents, &ytdWithheldCents, &ytdCreditCents,
+		); err != nil {
+			fatal(err)
+		}
+		if firstTaxMonth != taxMonth1 || lastTaxMonth != taxMonth2 {
+			fatalf("unexpected balances months: first=%d last=%d expected_first=%d expected_last=%d", firstTaxMonth, lastTaxMonth, taxMonth1, taxMonth2)
+		}
+		if ytdIncomeCents != ytdIncome2Cents || ytdStdCents != std2 {
+			fatalf("unexpected balances ytd_income=%s ytd_std=%s", formatMoney(ytdIncomeCents), formatMoney(ytdStdCents))
+		}
+		if ytdSpecialCents != ytdSpecial2Cents || ytdSadCents != sad2Cents {
+			fatalf(
+				"unexpected balances deductions ytd_special=%s ytd_sad=%s expected_special=%s expected_sad=%s",
+				formatMoney(ytdSpecialCents),
+				formatMoney(ytdSadCents),
+				formatMoney(ytdSpecial2Cents),
+				formatMoney(sad2Cents),
+			)
+		}
+		if ytdWithheldCents != out1.WithholdThisMonthCents || ytdCreditCents != out2.CreditCents {
+			fatalf("unexpected balances ytd_withheld=%s ytd_credit=%s", formatMoney(ytdWithheldCents), formatMoney(ytdCreditCents))
+		}
+		if ytdTaxableCents != out2.TaxableIncomeCents || ytdTaxLiabCents != out2.TaxLiabilityCents {
+			fatalf("unexpected balances taxable=%s liability=%s", formatMoney(ytdTaxableCents), formatMoney(ytdTaxLiabCents))
+		}
+
+		eventID2 := mustUUID()
+		_, err = tx.Exec(ctx, `
+				SELECT staffing.submit_iit_special_additional_deduction_claim_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::int,
+				  $5::smallint,
+				  $6::numeric,
+				  $7::text,
+				  $8::uuid
+				);
+				`, eventID2, tenantA, personUUID, start1Time.Year(), taxMonth1, "0.00", eventID2, initiatorID)
+		if err == nil {
+			fatalf("expected SAD submit to fail after FINALIZE")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_IIT_SAD_CLAIM_MONTH_FINALIZED" {
+			fatalf("unexpected error for SAD submit after FINALIZE: %v", err)
 		}
 	})
 
@@ -1557,11 +1864,11 @@ SELECT staffing.submit_payroll_run_event(
 			fatal(err)
 		}
 		if err := tx.QueryRow(ctx, `
-			SELECT COALESCE(sum(i.amount), 0)::text
-			FROM staffing.payslip_items i
-			JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
-			WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid;
-			`, tenantA, runID).Scan(&sum); err != nil {
+				SELECT COALESCE(sum(i.amount) FILTER (WHERE i.item_kind = 'earning'), 0)::text
+				FROM staffing.payslip_items i
+				JOIN staffing.payslips p ON p.tenant_id = i.tenant_id AND p.id = i.payslip_id
+				WHERE p.tenant_id = $1::uuid AND p.run_id = $2::uuid;
+				`, tenantA, runID).Scan(&sum); err != nil {
 			fatal(err)
 		}
 		if gross != sum {
