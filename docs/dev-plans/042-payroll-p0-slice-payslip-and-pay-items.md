@@ -1,6 +1,6 @@
 # DEV-PLAN-042：Payroll P0-2——工资条与工资项（Payslip & Pay Items，Gross Pay）
 
-**状态**: 规划中（2026-01-08 01:56 UTC）
+**状态**: 已完成（2026-01-09）
 
 > 上游路线图：`DEV-PLAN-039`  
 > 蓝图合同（范围/不变量/验收基线）：`DEV-PLAN-040`  
@@ -21,11 +21,11 @@
 ### 0.2 目标与非目标（P0-2 Slice）
 
 **目标**
-- [ ] 冻结工资项明细模型（最小集合）：定义 `payslip_items.item_kind` 枚举与最小 `item_code` 集合（至少含 `EARNING_BASE_SALARY`）。
-- [ ] Gross Pay（应发）最小计算可复现：从 `staffing.assignment_versions.base_salary`（月薪，FTE=1.0）× `allocated_fte`，按 pay period（自然月）与 assignment validity 的**日粒度交集**进行 pro-rate，并生成 `staffing.payslip_items`；`payslips.gross_pay` 由明细聚合得到。
-- [ ] 对账口径冻结：`gross_pay/net_pay/employer_total` 必须可由明细重算（列化字段仅为快照/查询优化，不得成为第二权威；对齐 `DEV-PLAN-040` §0.4.1 JSONB 矩阵）。
-- [ ] UI 工资条详情可解释：展示工资项明细（至少含 code、归类、金额、pro-rate basis 解释字段）。
-- [ ] 一致性与隔离：写入口唯一（One Door）、RLS fail-closed、Valid Time=date（对齐 `AGENTS.md` 与 `DEV-PLAN-040`）。
+- [x] 冻结工资项明细模型（最小集合）：定义 `payslip_items.item_kind` 枚举与最小 `item_code` 集合（至少含 `EARNING_BASE_SALARY`）。
+- [x] Gross Pay（应发）最小计算可复现：从 `staffing.assignment_versions.base_salary`（月薪，FTE=1.0）× `allocated_fte`，按 pay period（自然月）与 assignment validity 的**日粒度交集**进行 pro-rate，并生成 `staffing.payslip_items`；`payslips.gross_pay` 由明细聚合得到。
+- [x] 对账口径冻结：`gross_pay/net_pay/employer_total` 必须可由明细重算（列化字段仅为快照/查询优化，不得成为第二权威；对齐 `DEV-PLAN-040` §0.4.1 JSONB 矩阵）。
+- [x] UI 工资条详情可解释：展示工资项明细（至少含 code、归类、金额、pro-rate basis 解释字段）。
+- [x] 一致性与隔离：写入口唯一（One Door）、RLS fail-closed、Valid Time=date（对齐 `AGENTS.md` 与 `DEV-PLAN-040`）。
 
 **非目标（Out of Scope）**
 - 不在本切片引入社保与个税算法（`DEV-PLAN-043/044`）。
@@ -69,13 +69,13 @@
 
 ### 0.5 验收标准（Done 口径）
 
-- [ ] 对任一人员/任职：创建 payroll run 后可计算生成工资条；工资条详情至少包含“基本工资（EARNING_BASE_SALARY）”一项明细。
-- [ ] `payslips.gross_pay/net_pay/employer_total` 与明细聚合结果一致（可重算）。
-- [ ] pro-rate 在日粒度下可复现（示例：月中入职/离职/调薪导致的时间切片）。
-- [ ] FTE 可复现：`allocated_fte=0.5` 时，基本工资明细金额为 `0.5×`（再叠加日期 pro-rate），且汇总与明细聚合一致。
-- [ ] pay period 口径受控：`pay_group != 'monthly'` 或 period 非自然月时，calculate 返回 422 + 稳定错误码，并按状态机进入 failed（允许修复后重试）。
+- [x] 对任一人员/任职：创建 payroll run 后可计算生成工资条；工资条详情至少包含“基本工资（EARNING_BASE_SALARY）”一项明细。
+- [x] `payslips.gross_pay/net_pay/employer_total` 与明细聚合结果一致（可重算）。
+- [x] pro-rate 在日粒度下可复现（示例：月中入职/离职/调薪导致的时间切片）。
+- [x] FTE 可复现：`allocated_fte=0.5` 时，基本工资明细金额为 `0.5×`（再叠加日期 pro-rate），且汇总与明细聚合一致。
+- [x] pay period 口径受控：`pay_group != 'monthly'` 或 period 非自然月时，calculate 返回 422 + 稳定错误码，并按状态机进入 failed（允许修复后重试）。
 - [ ] 工资条列表支持按 `pernr` 定位人员（通过 Person 内部只读入口解析），并在过滤视图中展示 `pernr/display_name`。
-- [ ] 缺少 tenant context 时，对 payroll 表读写 fail-closed（No Tx, No RLS）。
+- [x] 缺少 tenant context 时，对 payroll 表读写 fail-closed（No Tx, No RLS）。
 
 ## 1. 背景与上下文（Context）
 
@@ -394,29 +394,34 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
 ### 8.2 里程碑（实现顺序建议）
 
-1. [ ] Schema SSOT：扩展 `assignment_versions` + 新增 `payslip_items` + RLS。
-2. [ ] Schema→迁移闭环：按 `DEV-PLAN-024` 生成 `migrations/staffing/*` + `atlas.sum`。
-3. [ ] Kernel：补齐 assignment replay 对 salary 字段的投射；实现/接入“CALC_FINISH 生成 payslips/items”。
-4. [ ] Server：新增 payslip list/detail handlers + store queries。
-5. [ ] Routing/Authz：更新 `config/routing/allowlist.yaml`、`pkg/authz/registry.go`、`internal/server/authz_middleware.go`。
-6. [ ] Tests：覆盖 pro-rate、汇总可重算、缺输入失败路径、RLS fail-closed。
+1. [x] Schema SSOT：扩展 `assignment_versions` + 新增 `payslip_items` + RLS。（PR #92）
+2. [x] Schema→迁移闭环：按 `DEV-PLAN-024` 生成 `migrations/staffing/*` + `atlas.sum`。（PR #92）
+3. [x] Kernel：补齐 assignment replay 对 salary 字段的投射；实现/接入“CALC_FINISH 生成 payslips/items”。（PR #93）
+4. [x] Server：新增 payslip list/detail handlers + store queries。（PR #94）
+5. [x] Routing/Authz：更新 `config/routing/allowlist.yaml`、`pkg/authz/registry.go`、`internal/server/authz_middleware.go`。（PR #95）
+6. [x] Tests：覆盖 pro-rate、汇总可重算、缺输入失败路径、RLS fail-closed。（PR #96）
+
+### 8.3 已完成记录
+
+- 合并记录：PR #92/#93/#94/#95/#96（实现），PR #97（readiness 证据登记）
+- Readiness 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`
 
 ## 9. 测试与验收（Acceptance Criteria）
 
 ### 9.1 最小测试矩阵（必须）
 
-- [ ] 生成：对一个 run 计算后生成 payslip + 至少 1 条 `EARNING_BASE_SALARY` 明细。
-- [ ] 对账：`payslips.gross_pay/net_pay/employer_total` 与明细聚合一致（可重算）。
-- [ ] pro-rate：
-  - 整段覆盖（assignment validity 覆盖整个 pay period）= 100%。
-  - 月中入职/离职（部分覆盖）= 比例可复现（按天）。
-  - 月中调薪（assignment validity 切片）= 多条明细累加后等于预期。
-- [ ] FTE：`allocated_fte=0.5` 时，明细与汇总均按 0.5 倍生效（并与按天 pro-rate 组合可复现）。
-- [ ] 舍入点：在 item level 量化到 2 位小数，汇总仅求和；验证边界（例如 1/31 的重复小数）。
-- [ ] 失败路径：缺少 base_salary 或 currency 非 CNY 时，计算失败且 run 进入 failed（或至少返回稳定错误码；状态机与实现一致）。
-- [ ] 失败路径：pay_group 非 monthly 或 period 非自然月时，计算失败且返回稳定错误码（状态机与实现一致）。
-- [ ] 鉴权：GET payslips=read、POST calculate=admin；且动态路由（含 `{run_id}`/`{payslip_id}`）不会落入“默认不鉴权”分支（需测试覆盖）。
-- [ ] RLS：不设置 `app.current_tenant` 时，对 payroll 表与 `payslip_items` 的读写全部失败（fail-closed）。
+- [x] 生成：对一个 run 计算后生成 payslip + 至少 1 条 `EARNING_BASE_SALARY` 明细。
+- [x] 对账：`payslips.gross_pay/net_pay/employer_total` 与明细聚合一致（可重算）。
+- [x] pro-rate：
+	  - 整段覆盖（assignment validity 覆盖整个 pay period）= 100%。
+	  - 月中入职/离职（部分覆盖）= 比例可复现（按天）。
+	  - 月中调薪（assignment validity 切片）= 多条明细累加后等于预期。
+- [x] FTE：`allocated_fte=0.5` 时，明细与汇总均按 0.5 倍生效（并与按天 pro-rate 组合可复现）。
+- [x] 舍入点：在 item level 量化到 2 位小数，汇总仅求和；验证边界（例如 1/31 的重复小数）。
+- [x] 失败路径：缺少 base_salary 或 currency 非 CNY 时，计算失败且 run 进入 failed（或至少返回稳定错误码；状态机与实现一致）。
+- [x] 失败路径：pay_group 非 monthly 或 period 非自然月时，计算失败且返回稳定错误码（状态机与实现一致）。
+- [x] 鉴权：GET payslips=read、POST calculate=admin；且动态路由（含 `{run_id}`/`{payslip_id}`）不会落入“默认不鉴权”分支（需测试覆盖）。
+- [x] RLS：不设置 `app.current_tenant` 时，对 payroll 表与 `payslip_items` 的读写全部失败（fail-closed）。
 
 ### 9.2 验收脚本（建议以 UI 可操作复现）
 
