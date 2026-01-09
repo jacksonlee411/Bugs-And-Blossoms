@@ -219,12 +219,28 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/org/attendance-punches":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingAttendancePunches, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAttendancePunches, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/org/api/assignments":
 		if method == http.MethodGet {
 			return authz.ObjectStaffingAssignments, authz.ActionRead, true
 		}
 		if method == http.MethodPost {
 			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/attendance-punches":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingAttendancePunches, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAttendancePunches, authz.ActionAdmin, true
 		}
 		return "", "", false
 	case "/org/payroll-periods":

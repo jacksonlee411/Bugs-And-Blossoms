@@ -364,7 +364,7 @@ $$;
 ### 8.2 里程碑（可直接开工的拆解）
 
 1. [x] 路由：新增 `/org/attendance-punches`、`/org/api/attendance-punches`，并更新 `config/routing/allowlist.yaml`（`route_class` 分别为 `ui`/`internal_api`）。
-2. [ ] Authz：在 `pkg/authz/registry.go` 增加 `ObjectStaffingAttendancePunches`；在 `internal/server/authz_middleware.go` 加入路由映射；更新 `config/access/policies/00-bootstrap.csv` 并跑 authz 门禁。
+2. [x] Authz：在 `pkg/authz/registry.go` 增加 `ObjectStaffingAttendancePunches`；在 `internal/server/authz_middleware.go` 加入路由映射；更新 `config/access/policies/00-bootstrap.csv` 并跑 authz 门禁。
 3. [ ] DB：按 §4.1 落地 schema + kernel（新增表/迁移前需手工确认）；跑 `make staffing plan/lint/migrate up` 闭环。
 4. [ ] sqlc：运行 `make sqlc-generate`，确保生成物提交且 `git status --short` 为空（CI 会在 `paths-filter` 命中 schema 变更时强制执行）。
 5. [ ] Go：实现 store（建议 `internal/server/attendance.go`：显式事务 + tenant 注入 + 调 kernel + 查询）；实现 handler（建议 `internal/server/attendance_handlers.go`：UI + internal API）；把入口挂到 `internal/server/handler.go` 的 router 与 nav（并补齐 `tr()` 的 nav 文案）。

@@ -239,6 +239,15 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/assignments"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-punches"); !ok || obj != authz.ObjectStaffingAttendancePunches || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-punches"); !ok || obj != authz.ObjectStaffingAttendancePunches || act != authz.ActionAdmin {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/attendance-punches"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/assignments"); !ok {
 		t.Fatal("expected ok=true")
 	}
@@ -246,6 +255,15 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 		t.Fatal("expected ok=true")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/assignments"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/attendance-punches"); !ok || obj != authz.ObjectStaffingAttendancePunches || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/api/attendance-punches"); !ok || obj != authz.ObjectStaffingAttendancePunches || act != authz.ActionAdmin {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/attendance-punches"); ok {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-periods"); !ok {
