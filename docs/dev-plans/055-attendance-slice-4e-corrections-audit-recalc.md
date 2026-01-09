@@ -779,7 +779,7 @@ LIMIT 50;
 ### 8.2 里程碑（可直接开工的拆解）
 
 1. [x] 文档确认 + 新增表批准记录固化：确认本切片范围/不变量，并在 §4.1.0 登记“新增表已获手工批准”。
-2. [ ] 路由：
+2. [x] 路由：
    - 允许 `/org/attendance-daily-results/{person_uuid}/{work_date}` 支持 POST（保持 `route_class=ui`）。
    - （建议）新增 `/org/api/attendance-punch-voids`、`/org/api/attendance-recalc`（`route_class=internal_api`）。
    - 更新 `config/routing/allowlist.yaml` 并跑 `make check routing`。
