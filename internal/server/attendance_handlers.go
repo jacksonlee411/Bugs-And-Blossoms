@@ -481,3 +481,88 @@ func renderAttendancePunches(punches []TimePunch, persons []Person, tenant Tenan
 func shanghaiLocation() *time.Location {
 	return time.FixedZone("Asia/Shanghai", 8*60*60)
 }
+
+func handleAttendanceDailyResultsPlaceholder(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
+		return
+	}
+
+	writePage(w, r, renderAttendanceDailyResultsPlaceholder(tenant, asOf))
+}
+
+func renderAttendanceDailyResultsPlaceholder(tenant Tenant, asOf string) string {
+	var b strings.Builder
+	b.WriteString("<h1>Attendance / Daily Results</h1>")
+	b.WriteString(`<p>Tenant: <code>` + html.EscapeString(tenant.Name) + `</code> (<code>` + html.EscapeString(tenant.ID) + `</code>)</p>`)
+	b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code></p>`)
+	b.WriteString(`<p>(coming soon)</p>`)
+	b.WriteString(`<p><a href="/org/attendance-punches?as_of=` + url.QueryEscape(asOf) + `" hx-get="/org/attendance-punches?as_of=` + url.QueryEscape(asOf) + `" hx-target="#content" hx-push-url="true">Go to punches</a></p>`)
+	return b.String()
+}
+
+func handleAttendanceDailyResultDetailPlaceholder(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
+		return
+	}
+
+	personUUID, workDate, ok := parseAttendanceDailyResultsDetailPath(r.URL.Path)
+	if !ok {
+		writePage(w, r, renderAttendanceDailyResultsDetailPlaceholder(tenant, asOf, "", "", "bad path"))
+		return
+	}
+
+	writePage(w, r, renderAttendanceDailyResultsDetailPlaceholder(tenant, asOf, personUUID, workDate, ""))
+}
+
+func renderAttendanceDailyResultsDetailPlaceholder(tenant Tenant, asOf string, personUUID string, workDate string, errMsg string) string {
+	var b strings.Builder
+	b.WriteString("<h1>Attendance / Daily Results / Detail</h1>")
+	b.WriteString(`<p>Tenant: <code>` + html.EscapeString(tenant.Name) + `</code> (<code>` + html.EscapeString(tenant.ID) + `</code>)</p>`)
+	b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code></p>`)
+	if errMsg != "" {
+		b.WriteString(`<p style="color:#b00">` + html.EscapeString(errMsg) + `</p>`)
+	}
+	if personUUID != "" {
+		b.WriteString(`<p>Person: <code>` + html.EscapeString(personUUID) + `</code></p>`)
+	}
+	if workDate != "" {
+		b.WriteString(`<p>Work Date: <code>` + html.EscapeString(workDate) + `</code></p>`)
+	}
+	b.WriteString(`<p>(coming soon)</p>`)
+	b.WriteString(`<p><a href="/org/attendance-daily-results?as_of=` + url.QueryEscape(asOf) + `" hx-get="/org/attendance-daily-results?as_of=` + url.QueryEscape(asOf) + `" hx-target="#content" hx-push-url="true">Back to list</a></p>`)
+	return b.String()
+}
+
+func parseAttendanceDailyResultsDetailPath(path string) (personUUID string, workDate string, ok bool) {
+	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
+	if len(parts) != 4 {
+		return "", "", false
+	}
+	if parts[0] != "org" || parts[1] != "attendance-daily-results" {
+		return "", "", false
+	}
+	personUUID = strings.TrimSpace(parts[2])
+	workDate = strings.TrimSpace(parts[3])
+	if personUUID == "" || workDate == "" {
+		return "", "", false
+	}
+	return personUUID, workDate, true
+}
+
+func handleAttendanceDailyResultsAPIPlaceholder(w http.ResponseWriter, r *http.Request) {
+	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotImplemented, "not_implemented", "not implemented")
+}

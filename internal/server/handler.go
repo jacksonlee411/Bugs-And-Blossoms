@@ -327,6 +327,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/attendance-punches", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAttendancePunches(w, r, attendanceStore, personStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-daily-results", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceDailyResultsPlaceholder(w, r)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-daily-results/{person_uuid}/{work_date}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceDailyResultDetailPlaceholder(w, r)
+	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-periods", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollPeriods(w, r, payrollStore)
 	}))
@@ -371,6 +377,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/attendance-punches", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAttendancePunchesAPI(w, r, attendanceStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/attendance-daily-results", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceDailyResultsAPIPlaceholder(w, r)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payroll-periods", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollPeriodsAPI(w, r, payrollStore)

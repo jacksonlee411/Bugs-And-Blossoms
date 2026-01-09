@@ -498,6 +498,8 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		"/org/positions?as_of=2026-01-01",
 		"/org/assignments?as_of=2026-01-01",
 		"/org/attendance-punches?as_of=2026-01-01",
+		"/org/attendance-daily-results?as_of=2026-01-01",
+		"/org/attendance-daily-results/person-101/2026-01-01?as_of=2026-01-01",
 		"/person/persons?as_of=2026-01-01",
 	}
 	for _, p := range protected {
@@ -509,6 +511,18 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("path=%s status=%d", p, rec.Code)
 		}
+	}
+
+	reqAttendanceDailyResultsAPI := httptest.NewRequest(http.MethodGet, "/org/api/attendance-daily-results?person_uuid=person-101", nil)
+	reqAttendanceDailyResultsAPI.Host = "localhost:8080"
+	reqAttendanceDailyResultsAPI.AddCookie(session)
+	recAttendanceDailyResultsAPI := httptest.NewRecorder()
+	h.ServeHTTP(recAttendanceDailyResultsAPI, reqAttendanceDailyResultsAPI)
+	if recAttendanceDailyResultsAPI.Code != http.StatusNotImplemented {
+		t.Fatalf("attendance daily results api status=%d", recAttendanceDailyResultsAPI.Code)
+	}
+	if ct := recAttendanceDailyResultsAPI.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Fatalf("attendance daily results api content-type=%q", ct)
 	}
 
 	reqAppMissingAsOf := httptest.NewRequest(http.MethodGet, "/app", nil)
