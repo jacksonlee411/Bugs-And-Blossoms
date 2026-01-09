@@ -6,6 +6,7 @@
 - 阶段 1-2（§8.2-1/2）：recalc tables + RLS + 迁移闭环（PR：#139）
 - 阶段 3（§8.2-3）：Kernel（recalc request + apply event）（PR：#141）
 - 阶段 4（§8.2-4）：算薪注入 payroll_adjustments（PR：#142）
+- 阶段 5-7（§8.2-5/6/7）：Server（UI+internal API）+ Routing/Authz + Tests（PR：#145）
 
 > 上游路线图：`DEV-PLAN-039`  
 > 蓝图合同（口径/不变量/验收基线）：`DEV-PLAN-040` §5.3（Retroactive Accounting）  
@@ -489,9 +490,9 @@ SELECT staffing.submit_payroll_recalc_apply_event(
 2. [x] Schema→迁移闭环：按 `DEV-PLAN-024` 生成 `migrations/staffing/*` + `atlas.sum`。
 3. [x] Kernel：实现 “maybe_create_recalc_request” 与 “submit_recalc_apply_event”（幂等 + 稳定错误码）。
 4. [x] Payroll 计算引擎：在 Target run 的计算路径中注入 `payroll_adjustments`（并确保 totals/balances 一致）。
-5. [ ] Server：实现 handlers/routes（UI + internal API）与页面展示（含差额来源）。
-6. [ ] Routing/Authz：更新 `config/routing/allowlist.yaml` 与 authz registry/middleware。
-7. [ ] Tests：覆盖命中判定、幂等、跨税年拒绝、重复回溯净差额、RLS fail-closed。
+5. [x] Server：实现 handlers/routes（UI + internal API）与页面展示（含差额来源）。
+6. [x] Routing/Authz：更新 `config/routing/allowlist.yaml` 与 authz registry/middleware。
+7. [x] Tests：覆盖命中判定、幂等、跨税年拒绝、重复回溯净差额、RLS fail-closed。
 
 ## 9. 测试与验收（Acceptance Criteria）
 
