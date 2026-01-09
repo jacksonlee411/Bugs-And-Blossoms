@@ -364,3 +364,30 @@ DB 闭环（迁移 + smoke）：
 - 合并记录（按 `docs/dev-plans/052-attendance-slice-4b-daily-results-standard-shift.md` §8.2 每步一个 PR）：
   - Step1 Routing：PR #110 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/110
   - Step2 Authz：PR #112 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/112
+
+## 22. DEV-PLAN-043（Payroll P0-3：社保政策（单城市）配置与扣缴计算）
+
+证据：
+- 日期：2026-01-09
+- 合并记录：PR #111 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/111
+- 新增表/迁移（红线）手工确认：已在对话中确认（2026-01-09）
+- 产出：
+  - Schema SSOT：
+    - `modules/staffing/infrastructure/persistence/schema/00006_staffing_payroll_social_insurance_tables.sql`
+    - `modules/staffing/infrastructure/persistence/schema/00007_staffing_payroll_social_insurance_engine.sql`
+  - 迁移（Atlas+Goose）：
+    - `migrations/staffing/20260109100000_staffing_payroll_p0_3_social_insurance_schema.sql`
+    - `migrations/staffing/20260109101000_staffing_payroll_p0_3_social_insurance_kernel.sql`
+    - `migrations/staffing/20260109102000_staffing_payroll_run_events_run_state_default.sql`
+    - `migrations/staffing/20260109103000_staffing_payroll_run_events_calc_finish_ensure_payslips.sql`
+    - `migrations/staffing/atlas.sum`
+  - DB Smoke：`cmd/dbtool/main.go`（`staffing-smoke` 覆盖 policy/no-overlap/single-city/舍入/fail-closed/RLS）
+- 本地门禁（结论：全绿）：
+  - DB：`make staffing plan && make staffing lint && make staffing migrate up`
+  - sqlc：`make sqlc-generate`（生成后 `git status --short` 为空）
+  - Authz：`make authz-pack && make authz-test && make authz-lint`
+  - Go：`go fmt ./... && go vet ./... && make check lint && make test`
+  - Stopline：`make check routing && make check no-legacy && make check doc`
+- CI（Quality Gates）：PR #111 4/4 全绿（coverage 门禁 100%）
+  - Step3 DB（表 + RLS + kernel）：PR #113 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/113
+  - Step4 sqlc（生成物清洁）：PR #115 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/115

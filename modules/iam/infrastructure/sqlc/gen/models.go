@@ -277,6 +277,26 @@ type StaffingAssignmentVersion struct {
 	Profile        []byte                    `json:"profile"`
 }
 
+type StaffingDailyAttendanceResult struct {
+	TenantID               pgtype.UUID        `json:"tenant_id"`
+	PersonUuid             pgtype.UUID        `json:"person_uuid"`
+	WorkDate               pgtype.Date        `json:"work_date"`
+	RulesetVersion         string             `json:"ruleset_version"`
+	Status                 string             `json:"status"`
+	Flags                  []string           `json:"flags"`
+	FirstInTime            pgtype.Timestamptz `json:"first_in_time"`
+	LastOutTime            pgtype.Timestamptz `json:"last_out_time"`
+	WorkedMinutes          int32              `json:"worked_minutes"`
+	LateMinutes            int32              `json:"late_minutes"`
+	EarlyLeaveMinutes      int32              `json:"early_leave_minutes"`
+	InputPunchCount        int32              `json:"input_punch_count"`
+	InputMaxPunchEventDbID *int64             `json:"input_max_punch_event_db_id"`
+	InputMaxPunchTime      pgtype.Timestamptz `json:"input_max_punch_time"`
+	ComputedAt             pgtype.Timestamptz `json:"computed_at"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
 type StaffingIitSpecialAdditionalDeductionClaim struct {
 	TenantID    pgtype.UUID        `json:"tenant_id"`
 	PersonUuid  pgtype.UUID        `json:"person_uuid"`
