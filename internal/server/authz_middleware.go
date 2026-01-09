@@ -179,6 +179,9 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		if method == http.MethodGet {
 			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionRead, true
 		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionAdmin, true
+		}
 		return "", "", false
 	}
 
@@ -299,6 +302,16 @@ func authzRequirementForRoute(method string, path string) (object string, action
 	case "/org/api/attendance-daily-results":
 		if method == http.MethodGet {
 			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionRead, true
+		}
+		return "", "", false
+	case "/org/api/attendance-punch-voids":
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAttendancePunches, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/attendance-recalc":
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionAdmin, true
 		}
 		return "", "", false
 	case "/org/payroll-periods":

@@ -783,7 +783,7 @@ LIMIT 50;
    - 允许 `/org/attendance-daily-results/{person_uuid}/{work_date}` 支持 POST（保持 `route_class=ui`）。
    - （建议）新增 `/org/api/attendance-punch-voids`、`/org/api/attendance-recalc`（`route_class=internal_api`）。
    - 更新 `config/routing/allowlist.yaml` 并跑 `make check routing`。
-3. [ ] Authz：更新 `pkg/authz/registry.go`（如需新增 object）；更新 `internal/server/authz_middleware.go` 进行路由映射；更新 `config/access/policies/00-bootstrap.csv`；跑 `make authz-pack authz-test authz-lint`。
+3. [x] Authz：更新 `pkg/authz/registry.go`（如需新增 object）；更新 `internal/server/authz_middleware.go` 进行路由映射；更新 `config/access/policies/00-bootstrap.csv`；跑 `make authz-pack authz-test authz-lint`。
 4. [ ] DB：按 §4.1/§4.2 落地表 + kernel（新增表/迁移前需手工确认）；跑 `make staffing plan && make staffing lint && make staffing migrate up`。
 5. [ ] sqlc：运行 `make sqlc-generate`，并确保生成物提交且 `git status --short` 为空。
 6. [ ] Go：
