@@ -367,6 +367,12 @@ DB 闭环（迁移 + smoke）：
   - Step3 DB（表 + RLS + kernel）：PR #113 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/113
   - Step4 sqlc（生成物清洁）：PR #115 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/115
   - Step5 Go（store + handlers + nav + API）：PR #117 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/117
+  - Step6 Tests（RLS fail-closed / 跨租户隔离 / 日结果核心用例）：PR #123 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/123
+  - Step7 E2E（smoke：补卡 → 日结果可见/可解释）：PR #125 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/125
+  - Step8 Evidence（门禁执行记录：时间戳/命令/结论）：PR #127 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/127
+- 本地门禁（结论：全绿）：
+  - 2026-01-09T09:51:35Z：`go fmt ./... && go vet ./... && make check lint && make test`
+- CI（Quality Gates）：上述 PR 均为 4/4 checks 全绿（不出现 skipped）
 
 ## 22. DEV-PLAN-043（Payroll P0-3：社保政策（单城市）配置与扣缴计算）
 
