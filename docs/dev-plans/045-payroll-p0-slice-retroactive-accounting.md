@@ -1,6 +1,9 @@
 # DEV-PLAN-045：Payroll P0-5——回溯计算（Retroactive Accounting）
 
-**状态**: 草拟中（2026-01-08 05:44 UTC）
+**状态**: 实施中（2026-01-09）
+
+已完成事项（合并记录）：
+- 阶段 1-2（§8.2-1/2）：recalc tables + RLS + 迁移闭环（PR：#139）
 
 > 上游路线图：`DEV-PLAN-039`  
 > 蓝图合同（口径/不变量/验收基线）：`DEV-PLAN-040` §5.3（Retroactive Accounting）  
@@ -480,8 +483,8 @@ SELECT staffing.submit_payroll_recalc_apply_event(
 
 ### 8.2 里程碑（实现顺序建议）
 
-1. [ ] Schema SSOT：新增 recalc tables + RLS（`modules/staffing/.../schema`）。
-2. [ ] Schema→迁移闭环：按 `DEV-PLAN-024` 生成 `migrations/staffing/*` + `atlas.sum`。
+1. [x] Schema SSOT：新增 recalc tables + RLS（`modules/staffing/.../schema`）。
+2. [x] Schema→迁移闭环：按 `DEV-PLAN-024` 生成 `migrations/staffing/*` + `atlas.sum`。
 3. [ ] Kernel：实现 “maybe_create_recalc_request” 与 “submit_recalc_apply_event”（幂等 + 稳定错误码）。
 4. [ ] Payroll 计算引擎：在 Target run 的计算路径中注入 `payroll_adjustments`（并确保 totals/balances 一致）。
 5. [ ] Server：实现 handlers/routes（UI + internal API）与页面展示（含差额来源）。
