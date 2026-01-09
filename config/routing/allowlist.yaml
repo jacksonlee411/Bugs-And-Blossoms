@@ -63,7 +63,7 @@ entrypoints:
         methods: [GET]
         route_class: ui
       - path: /org/attendance-daily-results/{person_uuid}/{work_date}
-        methods: [GET]
+        methods: [GET, POST]
         route_class: ui
       - path: /org/attendance-time-bank
         methods: [GET]
@@ -127,6 +127,12 @@ entrypoints:
         route_class: internal_api
       - path: /org/api/attendance-daily-results
         methods: [GET]
+        route_class: internal_api
+      - path: /org/api/attendance-punch-voids
+        methods: [POST]
+        route_class: internal_api
+      - path: /org/api/attendance-recalc
+        methods: [POST]
         route_class: internal_api
       - path: /org/api/payroll-periods
         methods: [GET, POST]
