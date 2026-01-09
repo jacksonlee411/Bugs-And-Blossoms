@@ -127,19 +127,19 @@ func TestAttendanceDailyResultsHandlers_Coverage(t *testing.T) {
 		storeOK := store
 		storeOK.listDateFn = func(context.Context, string, string, int) ([]DailyAttendanceResult, error) {
 			return []DailyAttendanceResult{{
-				PersonUUID:      "p1",
-				WorkDate:        "2026-01-01",
-				RulesetVersion:  "R1",
-				DayType:         &dayType,
-				Status:          "PRESENT",
-				Flags:           []string{"LATE"},
-				FirstInTime:     &firstIn,
-				LastOutTime:     &lastOut,
+				PersonUUID:         "p1",
+				WorkDate:           "2026-01-01",
+				RulesetVersion:     "R1",
+				DayType:            &dayType,
+				Status:             "PRESENT",
+				Flags:              []string{"LATE"},
+				FirstInTime:        &firstIn,
+				LastOutTime:        &lastOut,
 				ScheduledMinutes:   540,
-				WorkedMinutes:   480,
+				WorkedMinutes:      480,
 				OvertimeMinutes150: 10,
-				InputPunchCount: 2,
-				ComputedAt:      time.Unix(1, 0).UTC(),
+				InputPunchCount:    2,
+				ComputedAt:         time.Unix(1, 0).UTC(),
 			}}, nil
 		}
 
