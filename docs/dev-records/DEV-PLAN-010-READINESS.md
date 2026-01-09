@@ -368,6 +368,7 @@ DB 闭环（迁移 + smoke）：
   - Step4 sqlc（生成物清洁）：PR #115 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/115
   - Step5 Go（store + handlers + nav + API）：PR #117 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/117
   - Step6 Tests（RLS fail-closed / 跨租户隔离 / 日结果核心用例）：PR #123 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/123
+  - Step7 E2E（smoke：补卡 → 日结果可见/可解释）：PR #125 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/125
 
 ## 22. DEV-PLAN-043（Payroll P0-3：社保政策（单城市）配置与扣缴计算）
 
