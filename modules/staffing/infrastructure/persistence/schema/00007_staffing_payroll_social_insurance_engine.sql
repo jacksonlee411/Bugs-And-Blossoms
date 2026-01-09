@@ -649,12 +649,11 @@ BEGIN
   )
   UPDATE staffing.payslips p
   SET
-    net_pay = p.gross_pay - sums.employee_total,
-    employer_total = sums.employer_total,
+    net_pay = p.net_pay - sums.employee_total,
+    employer_total = p.employer_total + sums.employer_total,
     last_run_event_id = p_run_event_db_id,
     updated_at = p_now
   FROM sums
   WHERE p.tenant_id = p_tenant_id AND p.id = sums.payslip_id;
 END;
 $$;
-
