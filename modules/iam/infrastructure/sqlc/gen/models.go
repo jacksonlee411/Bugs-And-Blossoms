@@ -379,6 +379,25 @@ type StaffingPayPeriodEvent struct {
 	CreatedAt       pgtype.Timestamptz        `json:"created_at"`
 }
 
+type StaffingPayrollAdjustment struct {
+	ID                int64              `json:"id"`
+	TenantID          pgtype.UUID        `json:"tenant_id"`
+	ApplicationID     int64              `json:"application_id"`
+	RecalcRequestID   pgtype.UUID        `json:"recalc_request_id"`
+	TargetRunID       pgtype.UUID        `json:"target_run_id"`
+	TargetPayPeriodID pgtype.UUID        `json:"target_pay_period_id"`
+	PersonUuid        pgtype.UUID        `json:"person_uuid"`
+	AssignmentID      pgtype.UUID        `json:"assignment_id"`
+	OriginPayPeriodID pgtype.UUID        `json:"origin_pay_period_id"`
+	OriginRunID       pgtype.UUID        `json:"origin_run_id"`
+	OriginPayslipID   pgtype.UUID        `json:"origin_payslip_id"`
+	ItemKind          string             `json:"item_kind"`
+	ItemCode          string             `json:"item_code"`
+	Amount            pgtype.Numeric     `json:"amount"`
+	Meta              []byte             `json:"meta"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+}
+
 type StaffingPayrollBalance struct {
 	TenantID                      pgtype.UUID        `json:"tenant_id"`
 	TaxEntityID                   pgtype.UUID        `json:"tax_entity_id"`
@@ -399,6 +418,37 @@ type StaffingPayrollBalance struct {
 	LastRunID                     pgtype.UUID        `json:"last_run_id"`
 	CreatedAt                     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingPayrollRecalcApplication struct {
+	ID                int64              `json:"id"`
+	EventID           pgtype.UUID        `json:"event_id"`
+	TenantID          pgtype.UUID        `json:"tenant_id"`
+	RecalcRequestID   pgtype.UUID        `json:"recalc_request_id"`
+	TargetRunID       pgtype.UUID        `json:"target_run_id"`
+	TargetPayPeriodID pgtype.UUID        `json:"target_pay_period_id"`
+	RequestID         string             `json:"request_id"`
+	InitiatorID       pgtype.UUID        `json:"initiator_id"`
+	TransactionTime   pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+}
+
+type StaffingPayrollRecalcRequest struct {
+	ID              int64              `json:"id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	RecalcRequestID pgtype.UUID        `json:"recalc_request_id"`
+	TriggerEventID  pgtype.UUID        `json:"trigger_event_id"`
+	TriggerSource   string             `json:"trigger_source"`
+	PersonUuid      pgtype.UUID        `json:"person_uuid"`
+	AssignmentID    pgtype.UUID        `json:"assignment_id"`
+	EffectiveDate   pgtype.Date        `json:"effective_date"`
+	HitPayPeriodID  pgtype.UUID        `json:"hit_pay_period_id"`
+	HitRunID        pgtype.UUID        `json:"hit_run_id"`
+	HitPayslipID    pgtype.UUID        `json:"hit_payslip_id"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type StaffingPayrollRun struct {
