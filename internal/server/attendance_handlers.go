@@ -790,13 +790,13 @@ func handleAttendanceDailyResultDetail(w http.ResponseWriter, r *http.Request, s
 
 	personUUID, workDate, ok := parseAttendanceDailyResultsDetailPath(r.URL.Path)
 	if !ok {
-		writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, "", "", nil, Person{}, "bad path"))
+		writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, "", "", nil, Person{}, nil, nil, nil, "bad path"))
 		return
 	}
 
 	loc := shanghaiLocation()
 	if _, err := parseDateInLocation(workDate, loc); err != nil {
-		writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, nil, Person{}, "work_date 无效: "+err.Error()))
+		writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, nil, Person{}, nil, nil, nil, "work_date 无效: "+err.Error()))
 		return
 	}
 
@@ -810,20 +810,158 @@ func handleAttendanceDailyResultDetail(w http.ResponseWriter, r *http.Request, s
 		}
 	}
 
-	result, found, err := store.GetDailyAttendanceResult(r.Context(), tenant.ID, personUUID, workDate)
-	if err != nil {
-		writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, nil, person, err.Error()))
-		return
-	}
-	if !found {
-		writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, nil, person, "not found"))
-		return
+	load := func(extraErrMsg string) {
+		result, found, err := store.GetDailyAttendanceResult(r.Context(), tenant.ID, personUUID, workDate)
+		if err != nil {
+			writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, nil, person, nil, nil, nil, mergeMsg(extraErrMsg, err.Error())))
+			return
+		}
+		if !found {
+			writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, nil, person, nil, nil, nil, mergeMsg(extraErrMsg, "not found")))
+			return
+		}
+
+		var tp *AttendanceTimeProfileForWorkDate
+		var punches []TimePunchWithVoid
+		if gotTP, gotPunches, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(r.Context(), tenant.ID, personUUID, workDate); err != nil {
+			extraErrMsg = mergeMsg(extraErrMsg, "audit load failed: "+err.Error())
+		} else {
+			tp = &gotTP
+			punches = gotPunches
+		}
+
+		var recalcEvents []AttendanceRecalcEvent
+		if events, err := store.ListAttendanceRecalcEventsForWorkDate(r.Context(), tenant.ID, personUUID, workDate, 2000); err != nil {
+			extraErrMsg = mergeMsg(extraErrMsg, "audit recalc load failed: "+err.Error())
+		} else {
+			recalcEvents = events
+		}
+
+		writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, &result, person, tp, punches, recalcEvents, extraErrMsg))
 	}
 
-	writePage(w, r, renderAttendanceDailyResultsDetail(tenant, asOf, personUUID, workDate, &result, person, ""))
+	switch r.Method {
+	case http.MethodGet:
+		load("")
+		return
+	case http.MethodPost:
+		if err := r.ParseForm(); err != nil {
+			load("bad form")
+			return
+		}
+
+		principal, ok := currentPrincipal(r.Context())
+		if !ok {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "principal_missing", "principal missing")
+			return
+		}
+
+		op := strings.TrimSpace(r.Form.Get("op"))
+		switch op {
+		case "void_punch":
+			targetPunchEventID := strings.TrimSpace(r.Form.Get("target_punch_event_id"))
+			reason := strings.TrimSpace(r.Form.Get("reason"))
+			if targetPunchEventID == "" {
+				load("target_punch_event_id is required")
+				return
+			}
+
+			payload := map[string]any{"source": "ui"}
+			if reason != "" {
+				payload["reason"] = reason
+			}
+			payloadJSON, _ := json.Marshal(payload)
+
+			if _, err := store.SubmitTimePunchVoid(r.Context(), tenant.ID, principal.ID, SubmitTimePunchVoidParams{
+				TargetPunchEventID: targetPunchEventID,
+				Payload:            payloadJSON,
+			}); err != nil {
+				load(err.Error())
+				return
+			}
+
+			http.Redirect(w, r, "/org/attendance-daily-results/"+url.PathEscape(personUUID)+"/"+url.PathEscape(workDate)+"?as_of="+url.QueryEscape(asOf), http.StatusSeeOther)
+			return
+
+		case "recalc_day":
+			reason := strings.TrimSpace(r.Form.Get("reason"))
+
+			payload := map[string]any{"source": "ui"}
+			if reason != "" {
+				payload["reason"] = reason
+			}
+			payloadJSON, _ := json.Marshal(payload)
+
+			if _, err := store.SubmitAttendanceRecalc(r.Context(), tenant.ID, principal.ID, SubmitAttendanceRecalcParams{
+				PersonUUID: personUUID,
+				FromDate:   workDate,
+				ToDate:     workDate,
+				Payload:    payloadJSON,
+			}); err != nil {
+				load(err.Error())
+				return
+			}
+
+			http.Redirect(w, r, "/org/attendance-daily-results/"+url.PathEscape(personUUID)+"/"+url.PathEscape(workDate)+"?as_of="+url.QueryEscape(asOf), http.StatusSeeOther)
+			return
+
+		case "recalc_range":
+			fromDate := strings.TrimSpace(r.Form.Get("from_date"))
+			toDate := strings.TrimSpace(r.Form.Get("to_date"))
+			reason := strings.TrimSpace(r.Form.Get("reason"))
+			if fromDate == "" || toDate == "" {
+				load("from_date/to_date is required")
+				return
+			}
+
+			fromMid, err := parseDateInLocation(fromDate, loc)
+			if err != nil {
+				load("from_date 无效: " + err.Error())
+				return
+			}
+			toMid, err := parseDateInLocation(toDate, loc)
+			if err != nil {
+				load("to_date 无效: " + err.Error())
+				return
+			}
+			if toMid.Before(fromMid) {
+				load("to_date must be >= from_date")
+				return
+			}
+			if int(toMid.Sub(fromMid).Hours()/24) > 30 {
+				load("date range too large (max 31 days)")
+				return
+			}
+
+			payload := map[string]any{"source": "ui"}
+			if reason != "" {
+				payload["reason"] = reason
+			}
+			payloadJSON, _ := json.Marshal(payload)
+
+			if _, err := store.SubmitAttendanceRecalc(r.Context(), tenant.ID, principal.ID, SubmitAttendanceRecalcParams{
+				PersonUUID: personUUID,
+				FromDate:   fromDate,
+				ToDate:     toDate,
+				Payload:    payloadJSON,
+			}); err != nil {
+				load(err.Error())
+				return
+			}
+
+			http.Redirect(w, r, "/org/attendance-daily-results/"+url.PathEscape(personUUID)+"/"+url.PathEscape(workDate)+"?as_of="+url.QueryEscape(asOf), http.StatusSeeOther)
+			return
+		default:
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+			return
+		}
+	default:
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
 }
 
-func renderAttendanceDailyResultsDetail(tenant Tenant, asOf string, personUUID string, workDate string, result *DailyAttendanceResult, person Person, errMsg string) string {
+func renderAttendanceDailyResultsDetail(tenant Tenant, asOf string, personUUID string, workDate string, result *DailyAttendanceResult, person Person, timeProfile *AttendanceTimeProfileForWorkDate, punches []TimePunchWithVoid, recalcEvents []AttendanceRecalcEvent, errMsg string) string {
 	loc := shanghaiLocation()
 
 	var b strings.Builder
@@ -842,6 +980,49 @@ func renderAttendanceDailyResultsDetail(tenant Tenant, asOf string, personUUID s
 	}
 	if workDate != "" {
 		b.WriteString(`<p>Work Date: <code>` + html.EscapeString(workDate) + `</code></p>`)
+	}
+
+	if personUUID != "" && workDate != "" {
+		b.WriteString(`<h2>Corrections</h2>`)
+		postAction := "/org/attendance-daily-results/" + url.PathEscape(personUUID) + "/" + url.PathEscape(workDate) + "?as_of=" + url.QueryEscape(asOf)
+
+		b.WriteString(`<h3>Void Punch</h3>`)
+		b.WriteString(`<form method="POST" action="` + html.EscapeString(postAction) + `">`)
+		b.WriteString(`<input type="hidden" name="op" value="void_punch"/>`)
+		b.WriteString(`<label>Target Punch <select name="target_punch_event_id" required>`)
+		if len(punches) == 0 {
+			b.WriteString(`<option value="">(no punches in window)</option>`)
+		} else {
+			b.WriteString(`<option value=""></option>`)
+			for _, p := range punches {
+				label := p.PunchTime.In(loc).Format("2006-01-02 15:04") + " " + p.PunchType + " " + p.SourceProvider
+				disabled := ""
+				if p.VoidDBID != nil {
+					label += " (VOIDED)"
+					disabled = ` disabled`
+				}
+				b.WriteString(`<option value="` + html.EscapeString(p.EventID) + `"` + disabled + `>` + html.EscapeString(label) + `</option>`)
+			}
+		}
+		b.WriteString(`</select></label><br/>`)
+		b.WriteString(`<label>Reason <input type="text" name="reason" style="width:60%"/></label><br/>`)
+		b.WriteString(`<button type="submit">Void</button>`)
+		b.WriteString(`</form>`)
+
+		b.WriteString(`<h3>Recalc</h3>`)
+		b.WriteString(`<form method="POST" action="` + html.EscapeString(postAction) + `" style="margin-bottom:8px">`)
+		b.WriteString(`<input type="hidden" name="op" value="recalc_day"/>`)
+		b.WriteString(`<label>Reason <input type="text" name="reason" style="width:60%"/></label><br/>`)
+		b.WriteString(`<button type="submit">Recalc This Day</button>`)
+		b.WriteString(`</form>`)
+
+		b.WriteString(`<form method="POST" action="` + html.EscapeString(postAction) + `">`)
+		b.WriteString(`<input type="hidden" name="op" value="recalc_range"/>`)
+		b.WriteString(`<label>From <input type="date" name="from_date" value="` + html.EscapeString(workDate) + `" required/></label><br/>`)
+		b.WriteString(`<label>To <input type="date" name="to_date" value="` + html.EscapeString(workDate) + `" required/></label><br/>`)
+		b.WriteString(`<label>Reason <input type="text" name="reason" style="width:60%"/></label><br/>`)
+		b.WriteString(`<button type="submit">Recalc Range (max 31 days)</button>`)
+		b.WriteString(`</form>`)
 	}
 
 	if result != nil {
@@ -897,6 +1078,79 @@ func renderAttendanceDailyResultsDetail(tenant Tenant, asOf string, personUUID s
 		b.WriteString(`<li>HolidayDay Last Event ID: <code>` + html.EscapeString(holidayDayLastEventID) + `</code></li>`)
 		b.WriteString(`<li>Computed At (UTC): <code>` + html.EscapeString(result.ComputedAt.UTC().Format(time.RFC3339)) + `</code></li>`)
 		b.WriteString(`</ul>`)
+	}
+
+	if timeProfile != nil {
+		b.WriteString(`<h2>Audit</h2>`)
+		b.WriteString(`<h3>Time Profile Window</h3>`)
+		b.WriteString(`<ul>`)
+		b.WriteString(`<li>Shift Start Local: <code>` + html.EscapeString(timeProfile.ShiftStartLocal) + `</code></li>`)
+		b.WriteString(`<li>Shift End Local: <code>` + html.EscapeString(timeProfile.ShiftEndLocal) + `</code></li>`)
+		b.WriteString(`<li>Window Start (Beijing): <code>` + html.EscapeString(timeProfile.WindowStart.In(loc).Format("2006-01-02 15:04")) + `</code></li>`)
+		b.WriteString(`<li>Window End (Beijing): <code>` + html.EscapeString(timeProfile.WindowEnd.In(loc).Format("2006-01-02 15:04")) + `</code></li>`)
+		b.WriteString(`<li>TimeProfile Last Event ID: <code>` + strconv.FormatInt(timeProfile.TimeProfileLastEventID, 10) + `</code></li>`)
+		b.WriteString(`</ul>`)
+
+		b.WriteString(`<h3>Punches (including voided)</h3>`)
+		if len(punches) == 0 {
+			b.WriteString(`<p>(no punches in window)</p>`)
+		} else {
+			b.WriteString(`<table border="1" cellpadding="4" cellspacing="0">`)
+			b.WriteString(`<tr><th>Punch Time (Beijing)</th><th>Type</th><th>Source</th><th>Event</th><th>Voided</th></tr>`)
+			for _, p := range punches {
+				bt := p.PunchTime.In(loc).Format("2006-01-02 15:04")
+				voided := ""
+				if p.VoidDBID != nil {
+					at := ""
+					if p.VoidCreatedAt != nil {
+						at = p.VoidCreatedAt.In(loc).Format("2006-01-02 15:04")
+					}
+					ev := ""
+					if p.VoidEventID != nil {
+						ev = *p.VoidEventID
+					}
+					voided = "VOIDED"
+					if at != "" {
+						voided += "@" + at
+					}
+					if ev != "" {
+						voided += " (" + ev + ")"
+					}
+					if len(p.VoidPayload) != 0 {
+						voided += " " + string(p.VoidPayload)
+					}
+				}
+				b.WriteString(`<tr>`)
+				b.WriteString(`<td>` + html.EscapeString(bt) + `</td>`)
+				b.WriteString(`<td>` + html.EscapeString(p.PunchType) + `</td>`)
+				b.WriteString(`<td>` + html.EscapeString(p.SourceProvider) + `</td>`)
+				b.WriteString(`<td><code>` + html.EscapeString(p.EventID) + `</code></td>`)
+				b.WriteString(`<td>` + html.EscapeString(voided) + `</td>`)
+				b.WriteString(`</tr>`)
+			}
+			b.WriteString(`</table>`)
+		}
+
+		b.WriteString(`<h3>Recalc Events (covering this day)</h3>`)
+		if len(recalcEvents) == 0 {
+			b.WriteString(`<p>(no recalc events)</p>`)
+		} else {
+			b.WriteString(`<table border="1" cellpadding="4" cellspacing="0">`)
+			b.WriteString(`<tr><th>Created At (UTC)</th><th>Range</th><th>Event</th><th>Payload</th></tr>`)
+			for _, e := range recalcEvents {
+				rangeText := e.FromDate
+				if e.ToDate != "" && e.ToDate != e.FromDate {
+					rangeText += " ~ " + e.ToDate
+				}
+				b.WriteString(`<tr>`)
+				b.WriteString(`<td><code>` + html.EscapeString(e.CreatedAt.UTC().Format(time.RFC3339)) + `</code></td>`)
+				b.WriteString(`<td>` + html.EscapeString(rangeText) + `</td>`)
+				b.WriteString(`<td><code>` + html.EscapeString(e.EventID) + `</code></td>`)
+				b.WriteString(`<td><code>` + html.EscapeString(string(e.Payload)) + `</code></td>`)
+				b.WriteString(`</tr>`)
+			}
+			b.WriteString(`</table>`)
+		}
 	}
 
 	backHref := "/org/attendance-daily-results?as_of=" + url.QueryEscape(asOf)
@@ -1011,6 +1265,161 @@ func handleAttendanceDailyResultsAPI(w http.ResponseWriter, r *http.Request, sto
 			ToDate:     toDate,
 			Results:    results,
 		})
+		return
+	default:
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+}
+
+type attendancePunchVoidsAPIRequest struct {
+	EventID            string          `json:"event_id"`
+	TargetPunchEventID string          `json:"target_punch_event_id"`
+	Payload            json.RawMessage `json:"payload"`
+}
+
+func handleAttendancePunchVoidsAPI(w http.ResponseWriter, r *http.Request, store DailyAttendanceResultStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	principal, ok := currentPrincipal(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_missing", "principal missing")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPost:
+		var req attendancePunchVoidsAPIRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+			return
+		}
+
+		req.TargetPunchEventID = strings.TrimSpace(req.TargetPunchEventID)
+		if req.TargetPunchEventID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_target_punch_event_id", "target_punch_event_id is required")
+			return
+		}
+
+		out, err := store.SubmitTimePunchVoid(r.Context(), tenant.ID, principal.ID, SubmitTimePunchVoidParams{
+			EventID:            strings.TrimSpace(req.EventID),
+			TargetPunchEventID: req.TargetPunchEventID,
+			Payload:            req.Payload,
+		})
+		if err != nil {
+			if isSTAFFING_IDEMPOTENCY_REUSED(err) {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "idempotency_reused", "idempotency reused")
+				return
+			}
+			if strings.Contains(err.Error(), "STAFFING_TIME_PUNCH_EVENT_NOT_FOUND") {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "target_not_found", "target punch not found")
+				return
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "submit_failed", "submit failed")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(out)
+		return
+	default:
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+}
+
+type attendanceRecalcAPIRequest struct {
+	EventID    string          `json:"event_id"`
+	PersonUUID string          `json:"person_uuid"`
+	FromDate   string          `json:"from_date"`
+	ToDate     string          `json:"to_date"`
+	Payload    json.RawMessage `json:"payload"`
+}
+
+func handleAttendanceRecalcAPI(w http.ResponseWriter, r *http.Request, store DailyAttendanceResultStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	principal, ok := currentPrincipal(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_missing", "principal missing")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPost:
+		var req attendanceRecalcAPIRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+			return
+		}
+
+		req.PersonUUID = strings.TrimSpace(req.PersonUUID)
+		if req.PersonUUID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_person_uuid", "person_uuid is required")
+			return
+		}
+
+		req.FromDate = strings.TrimSpace(req.FromDate)
+		req.ToDate = strings.TrimSpace(req.ToDate)
+		if req.FromDate == "" && req.ToDate == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_date_range", "from_date/to_date is required")
+			return
+		}
+		if req.FromDate == "" {
+			req.FromDate = req.ToDate
+		}
+		if req.ToDate == "" {
+			req.ToDate = req.FromDate
+		}
+
+		loc := shanghaiLocation()
+		fromMid, err := parseDateInLocation(req.FromDate, loc)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_from_date", "invalid from_date")
+			return
+		}
+		toMid, err := parseDateInLocation(req.ToDate, loc)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_to_date", "invalid to_date")
+			return
+		}
+		if toMid.Before(fromMid) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_date_range", "to_date must be >= from_date")
+			return
+		}
+		if int(toMid.Sub(fromMid).Hours()/24) > 30 {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "range_too_large", "date range too large (max 31 days)")
+			return
+		}
+
+		out, err := store.SubmitAttendanceRecalc(r.Context(), tenant.ID, principal.ID, SubmitAttendanceRecalcParams{
+			EventID:    strings.TrimSpace(req.EventID),
+			PersonUUID: req.PersonUUID,
+			FromDate:   req.FromDate,
+			ToDate:     req.ToDate,
+			Payload:    req.Payload,
+		})
+		if err != nil {
+			if isSTAFFING_IDEMPOTENCY_REUSED(err) {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "idempotency_reused", "idempotency reused")
+				return
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "submit_failed", "submit failed")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(out)
 		return
 	default:
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")

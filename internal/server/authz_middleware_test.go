@@ -284,6 +284,9 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-daily-results/person-101/2026-01-01"); !ok || obj != authz.ObjectStaffingAttendanceDailyResults || act != authz.ActionAdmin {
 		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/attendance-daily-results/person-101/2026-01-01"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/assignments"); !ok {
 		t.Fatal("expected ok=true")
 	}

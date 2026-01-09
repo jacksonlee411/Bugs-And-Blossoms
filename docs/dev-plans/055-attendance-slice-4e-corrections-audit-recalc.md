@@ -785,7 +785,7 @@ LIMIT 50;
    - 更新 `config/routing/allowlist.yaml` 并跑 `make check routing`。
 3. [x] Authz：更新 `pkg/authz/registry.go`（如需新增 object）；更新 `internal/server/authz_middleware.go` 进行路由映射；更新 `config/access/policies/00-bootstrap.csv`；跑 `make authz-pack authz-test authz-lint`。
 4. [x] DB + sqlc：按 §4.1/§4.2 落地表 + kernel（新增表/迁移前需手工确认）；跑 `make staffing plan && make staffing lint && make staffing migrate up && make sqlc-generate`，并确保生成物提交且 `git status --short` 为空。
-5. [ ] Go：
+5. [x] Go：
    - store：在 `internal/server/attendance.go` 增补 void/recalc 的 store 方法（显式 tx + tenant 注入 + 调 kernel）。
    - handler/UI：在 `internal/server/attendance_handlers.go` 的日结果详情页实现 POST（void/recalc），并补齐审计区块（事件链展示）。
 6. [ ] 测试：补齐本计划覆盖（见 §9）。
