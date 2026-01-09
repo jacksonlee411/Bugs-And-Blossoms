@@ -551,7 +551,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	reqAttendanceDailyResultsAPI.AddCookie(session)
 	recAttendanceDailyResultsAPI := httptest.NewRecorder()
 	h.ServeHTTP(recAttendanceDailyResultsAPI, reqAttendanceDailyResultsAPI)
-	if recAttendanceDailyResultsAPI.Code != http.StatusNotImplemented {
+	if recAttendanceDailyResultsAPI.Code != http.StatusOK {
 		t.Fatalf("attendance daily results api status=%d", recAttendanceDailyResultsAPI.Code)
 	}
 	if ct := recAttendanceDailyResultsAPI.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
