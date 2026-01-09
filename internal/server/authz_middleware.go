@@ -259,6 +259,11 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionRead, true
 		}
 		return "", "", false
+	case "/org/attendance-time-bank":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingAttendanceTimeBank, authz.ActionRead, true
+		}
+		return "", "", false
 	case "/org/attendance-time-profile":
 		if method == http.MethodGet {
 			return authz.ObjectStaffingAttendanceTimeProfile, authz.ActionRead, true

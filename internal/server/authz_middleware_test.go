@@ -254,6 +254,12 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-daily-results"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-time-bank"); !ok || obj != authz.ObjectStaffingAttendanceTimeBank || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-time-bank"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-time-profile"); !ok || obj != authz.ObjectStaffingAttendanceTimeProfile || act != authz.ActionRead {
 		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
 	}
