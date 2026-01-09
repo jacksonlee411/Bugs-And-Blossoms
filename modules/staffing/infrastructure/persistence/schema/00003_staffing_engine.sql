@@ -771,6 +771,244 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION staffing.recompute_daily_attendance_result(
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_work_date date
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_tz text := 'Asia/Shanghai';
+  v_ruleset_version text := 'STANDARD_SHIFT_V1';
+
+  v_shift_start_local time := time '09:00';
+  v_shift_end_local time := time '18:00';
+  v_late_tolerance_min int := 5;
+  v_early_tolerance_min int := 5;
+
+  v_window_before interval := interval '6 hours';
+  v_window_after interval := interval '12 hours';
+
+  v_shift_start timestamptz;
+  v_shift_end timestamptz;
+  v_window_start timestamptz;
+  v_window_end timestamptz;
+
+  v_punch_count int := 0;
+  v_input_max_id bigint := NULL;
+  v_input_max_punch_time timestamptz := NULL;
+
+  v_expect text := 'IN';
+  v_open_in_time timestamptz := NULL;
+
+  v_first_in_time timestamptz := NULL;
+  v_last_out_time timestamptz := NULL;
+
+  v_worked_minutes int := 0;
+  v_late_minutes int := 0;
+  v_early_leave_minutes int := 0;
+
+  v_status text := 'ABSENT';
+  v_flags text[] := '{}'::text[];
+
+  r record;
+  v_delta_min int;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_work_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'work_date is required';
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(
+    hashtext(p_tenant_id::text),
+    hashtext(p_person_uuid::text || ':' || p_work_date::text)
+  );
+
+  v_shift_start := (p_work_date + v_shift_start_local) AT TIME ZONE v_tz;
+  v_shift_end := (p_work_date + v_shift_end_local) AT TIME ZONE v_tz;
+  v_window_start := v_shift_start - v_window_before;
+  v_window_end := v_shift_end + v_window_after;
+
+  FOR r IN
+    SELECT id, punch_time, punch_type
+    FROM staffing.time_punch_events
+    WHERE tenant_id = p_tenant_id
+      AND person_uuid = p_person_uuid
+      AND punch_time >= v_window_start
+      AND punch_time < v_window_end
+    ORDER BY punch_time ASC, id ASC
+  LOOP
+    v_punch_count := v_punch_count + 1;
+    v_input_max_id := COALESCE(v_input_max_id, r.id);
+    v_input_max_id := GREATEST(v_input_max_id, r.id);
+    v_input_max_punch_time := COALESCE(v_input_max_punch_time, r.punch_time);
+    v_input_max_punch_time := GREATEST(v_input_max_punch_time, r.punch_time);
+
+    IF r.punch_type = 'IN' THEN
+      IF v_expect = 'IN' THEN
+        v_open_in_time := r.punch_time;
+        v_expect := 'OUT';
+        IF v_first_in_time IS NULL THEN
+          v_first_in_time := r.punch_time;
+        END IF;
+      ELSE
+        v_flags := array_append(v_flags, 'MISSING_OUT');
+        v_open_in_time := r.punch_time;
+        v_expect := 'OUT';
+        IF v_first_in_time IS NULL THEN
+          v_first_in_time := r.punch_time;
+        END IF;
+      END IF;
+    ELSE
+      IF v_expect = 'OUT' AND v_open_in_time IS NOT NULL THEN
+        v_delta_min := floor(extract(epoch FROM (r.punch_time - v_open_in_time)) / 60.0)::int;
+        IF v_delta_min > 0 THEN
+          v_worked_minutes := v_worked_minutes + v_delta_min;
+        END IF;
+        v_last_out_time := r.punch_time;
+        v_open_in_time := NULL;
+        v_expect := 'IN';
+      ELSE
+        v_flags := array_append(v_flags, 'MISSING_IN');
+      END IF;
+    END IF;
+  END LOOP;
+
+  IF v_punch_count = 0 THEN
+    v_status := 'ABSENT';
+    v_flags := array_append(v_flags, 'ABSENT');
+  ELSE
+    IF v_first_in_time IS NULL THEN
+      v_flags := array_append(v_flags, 'MISSING_IN');
+    END IF;
+    IF v_expect = 'OUT' THEN
+      v_flags := array_append(v_flags, 'MISSING_OUT');
+    END IF;
+
+    IF v_first_in_time IS NOT NULL THEN
+      v_delta_min := floor(extract(epoch FROM (v_first_in_time - v_shift_start)) / 60.0)::int;
+      IF v_delta_min > v_late_tolerance_min THEN
+        v_late_minutes := v_delta_min - v_late_tolerance_min;
+        v_flags := array_append(v_flags, 'LATE');
+      END IF;
+    END IF;
+
+    IF v_last_out_time IS NOT NULL THEN
+      v_delta_min := floor(extract(epoch FROM (v_shift_end - v_last_out_time)) / 60.0)::int;
+      IF v_delta_min > v_early_tolerance_min THEN
+        v_early_leave_minutes := v_delta_min - v_early_tolerance_min;
+        v_flags := array_append(v_flags, 'EARLY_LEAVE');
+      END IF;
+    END IF;
+
+    IF array_length(v_flags, 1) IS NULL THEN
+      v_status := 'PRESENT';
+    ELSE
+      SELECT COALESCE(array_agg(DISTINCT f ORDER BY f), '{}'::text[]) INTO v_flags
+      FROM unnest(v_flags) AS f;
+
+      IF v_flags = ARRAY['ABSENT']::text[] THEN
+        v_status := 'ABSENT';
+      ELSE
+        v_status := 'EXCEPTION';
+      END IF;
+    END IF;
+  END IF;
+
+  INSERT INTO staffing.daily_attendance_results (
+    tenant_id,
+    person_uuid,
+    work_date,
+    ruleset_version,
+    status,
+    flags,
+    first_in_time,
+    last_out_time,
+    worked_minutes,
+    late_minutes,
+    early_leave_minutes,
+    input_punch_count,
+    input_max_punch_event_db_id,
+    input_max_punch_time,
+    computed_at,
+    created_at,
+    updated_at
+  )
+  VALUES (
+    p_tenant_id,
+    p_person_uuid,
+    p_work_date,
+    v_ruleset_version,
+    v_status,
+    v_flags,
+    v_first_in_time,
+    v_last_out_time,
+    v_worked_minutes,
+    v_late_minutes,
+    v_early_leave_minutes,
+    v_punch_count,
+    v_input_max_id,
+    v_input_max_punch_time,
+    now(),
+    now(),
+    now()
+  )
+  ON CONFLICT (tenant_id, person_uuid, work_date)
+  DO UPDATE SET
+    ruleset_version = EXCLUDED.ruleset_version,
+    status = EXCLUDED.status,
+    flags = EXCLUDED.flags,
+    first_in_time = EXCLUDED.first_in_time,
+    last_out_time = EXCLUDED.last_out_time,
+    worked_minutes = EXCLUDED.worked_minutes,
+    late_minutes = EXCLUDED.late_minutes,
+    early_leave_minutes = EXCLUDED.early_leave_minutes,
+    input_punch_count = EXCLUDED.input_punch_count,
+    input_max_punch_event_db_id = EXCLUDED.input_max_punch_event_db_id,
+    input_max_punch_time = EXCLUDED.input_max_punch_time,
+    computed_at = EXCLUDED.computed_at,
+    updated_at = EXCLUDED.updated_at;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.recompute_daily_attendance_results_for_punch(
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_punch_time timestamptz
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_tz text := 'Asia/Shanghai';
+  v_local_date date;
+  v_d1 date;
+  v_d2 date;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_punch_time IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'punch_time is required';
+  END IF;
+
+  v_local_date := (p_punch_time AT TIME ZONE v_tz)::date;
+  v_d1 := v_local_date - 1;
+  v_d2 := v_local_date;
+
+  PERFORM staffing.recompute_daily_attendance_result(p_tenant_id, p_person_uuid, v_d1);
+  PERFORM staffing.recompute_daily_attendance_result(p_tenant_id, p_person_uuid, v_d2);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION staffing.submit_time_punch_event(
   p_event_id uuid,
   p_tenant_id uuid,
@@ -883,6 +1121,8 @@ BEGIN
 
     RETURN v_existing.id;
   END IF;
+
+  PERFORM staffing.recompute_daily_attendance_results_for_punch(p_tenant_id, p_person_uuid, p_punch_time);
 
   RETURN v_event_db_id;
 END;
