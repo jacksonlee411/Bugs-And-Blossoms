@@ -520,6 +520,47 @@ type StaffingPayslipItem struct {
 	Meta           []byte             `json:"meta"`
 	LastRunEventID int64              `json:"last_run_event_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	CalcMode       string             `json:"calc_mode"`
+	TaxBearer      string             `json:"tax_bearer"`
+	TargetNet      pgtype.Numeric     `json:"target_net"`
+	IitDelta       pgtype.Numeric     `json:"iit_delta"`
+}
+
+type StaffingPayslipItemInput struct {
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	ID           pgtype.UUID        `json:"id"`
+	RunID        pgtype.UUID        `json:"run_id"`
+	PersonUuid   pgtype.UUID        `json:"person_uuid"`
+	AssignmentID pgtype.UUID        `json:"assignment_id"`
+	ItemCode     string             `json:"item_code"`
+	ItemKind     string             `json:"item_kind"`
+	Currency     string             `json:"currency"`
+	CalcMode     string             `json:"calc_mode"`
+	TaxBearer    string             `json:"tax_bearer"`
+	Amount       pgtype.Numeric     `json:"amount"`
+	LastEventID  int64              `json:"last_event_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingPayslipItemInputEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	RunID           pgtype.UUID        `json:"run_id"`
+	PersonUuid      pgtype.UUID        `json:"person_uuid"`
+	AssignmentID    pgtype.UUID        `json:"assignment_id"`
+	EventType       string             `json:"event_type"`
+	ItemCode        string             `json:"item_code"`
+	ItemKind        string             `json:"item_kind"`
+	Currency        string             `json:"currency"`
+	CalcMode        string             `json:"calc_mode"`
+	TaxBearer       string             `json:"tax_bearer"`
+	Amount          pgtype.Numeric     `json:"amount"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type StaffingPayslipSocialInsuranceItem struct {
