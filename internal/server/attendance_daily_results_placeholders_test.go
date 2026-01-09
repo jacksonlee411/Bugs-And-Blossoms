@@ -122,20 +122,24 @@ func TestAttendanceDailyResultsHandlers_Coverage(t *testing.T) {
 		loc := time.FixedZone("X", 8*60*60)
 		firstIn := time.Date(2026, 1, 1, 9, 0, 0, 0, loc)
 		lastOut := time.Date(2026, 1, 1, 18, 0, 0, 0, loc)
+		dayType := "WORKDAY"
 
 		storeOK := store
 		storeOK.listDateFn = func(context.Context, string, string, int) ([]DailyAttendanceResult, error) {
 			return []DailyAttendanceResult{{
-				PersonUUID:      "p1",
-				WorkDate:        "2026-01-01",
-				RulesetVersion:  "R1",
-				Status:          "PRESENT",
-				Flags:           []string{"LATE"},
-				FirstInTime:     &firstIn,
-				LastOutTime:     &lastOut,
-				WorkedMinutes:   480,
-				InputPunchCount: 2,
-				ComputedAt:      time.Unix(1, 0).UTC(),
+				PersonUUID:         "p1",
+				WorkDate:           "2026-01-01",
+				RulesetVersion:     "R1",
+				DayType:            &dayType,
+				Status:             "PRESENT",
+				Flags:              []string{"LATE"},
+				FirstInTime:        &firstIn,
+				LastOutTime:        &lastOut,
+				ScheduledMinutes:   540,
+				WorkedMinutes:      480,
+				OvertimeMinutes150: 10,
+				InputPunchCount:    2,
+				ComputedAt:         time.Unix(1, 0).UTC(),
 			}}, nil
 		}
 
@@ -209,20 +213,28 @@ func TestAttendanceDailyResultsHandlers_Coverage(t *testing.T) {
 		lastOut := time.Date(2026, 1, 1, 18, 0, 0, 0, time.UTC)
 		maxID := int64(123)
 		maxPunchTime := time.Date(2026, 1, 1, 18, 0, 0, 0, time.UTC)
+		timeProfileLastEventID := int64(1001)
+		holidayDayLastEventID := int64(2001)
+		dayType := "WORKDAY"
 		storeOK := store
 		storeOK.getFn = func(context.Context, string, string, string) (DailyAttendanceResult, bool, error) {
 			return DailyAttendanceResult{
 				PersonUUID:             "p1",
 				WorkDate:               "2026-01-01",
 				RulesetVersion:         "R1",
+				DayType:                &dayType,
 				Status:                 "PRESENT",
 				Flags:                  []string{"LATE"},
 				FirstInTime:            &firstIn,
 				LastOutTime:            &lastOut,
+				ScheduledMinutes:       540,
 				InputMaxPunchEventDBID: &maxID,
 				InputMaxPunchTime:      &maxPunchTime,
 				WorkedMinutes:          480,
+				OvertimeMinutes150:     10,
 				InputPunchCount:        2,
+				TimeProfileLastEventID: &timeProfileLastEventID,
+				HolidayDayLastEventID:  &holidayDayLastEventID,
 				ComputedAt:             time.Unix(1, 0).UTC(),
 			}, true, nil
 		}
@@ -468,9 +480,10 @@ func TestAttendanceDailyResultsHandlers_Coverage(t *testing.T) {
 	t.Run("api ok + json", func(t *testing.T) {
 		t.Parallel()
 
+		dayType := "WORKDAY"
 		storeOK := store
 		storeOK.listPersonFn = func(context.Context, string, string, string, string, int) ([]DailyAttendanceResult, error) {
-			return []DailyAttendanceResult{{PersonUUID: "p1", WorkDate: "2026-01-01", Status: "PRESENT"}}, nil
+			return []DailyAttendanceResult{{PersonUUID: "p1", WorkDate: "2026-01-01", DayType: &dayType, Status: "PRESENT", ScheduledMinutes: 540}}, nil
 		}
 
 		ctx := withTenant(t.Context(), tenant)
@@ -487,6 +500,24 @@ func TestAttendanceDailyResultsHandlers_Coverage(t *testing.T) {
 		}
 		if resp.PersonUUID != "p1" || len(resp.Results) != 1 {
 			t.Fatalf("resp=%+v", resp)
+		}
+	})
+
+	t.Run("api ok with explicit limit", func(t *testing.T) {
+		t.Parallel()
+
+		storeOK := store
+		storeOK.listPersonFn = func(context.Context, string, string, string, string, int) ([]DailyAttendanceResult, error) {
+			return nil, nil
+		}
+
+		ctx := withTenant(t.Context(), tenant)
+		ctx = withPrincipal(ctx, Principal{ID: "i1", TenantID: tenant.ID, RoleSlug: "tenant-admin", Status: "active"})
+		req := httptest.NewRequest(http.MethodGet, "/org/api/attendance-daily-results?person_uuid=p1&from_date=2026-01-01&to_date=2026-01-01&limit=10", nil).WithContext(ctx)
+		rec := httptest.NewRecorder()
+		handleAttendanceDailyResultsAPI(rec, req, storeOK)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
 		}
 	})
 

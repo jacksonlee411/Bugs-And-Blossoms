@@ -555,7 +555,7 @@ func renderAttendanceDailyResults(results []DailyAttendanceResult, persons []Per
 	}
 
 	b.WriteString(`<table border="1" cellpadding="4" cellspacing="0">`)
-	b.WriteString(`<tr><th>Person</th><th>Status</th><th>Flags</th><th>First In (Beijing)</th><th>Last Out (Beijing)</th><th>Worked (min)</th><th>Late (min)</th><th>Early Leave (min)</th><th>Punches</th><th>Computed At (UTC)</th></tr>`)
+	b.WriteString(`<tr><th>Person</th><th>Day Type</th><th>Status</th><th>Flags</th><th>First In (Beijing)</th><th>Last Out (Beijing)</th><th>Scheduled (min)</th><th>Worked (min)</th><th>OT150</th><th>OT200</th><th>OT300</th><th>Late (min)</th><th>Early Leave (min)</th><th>Punches</th><th>Computed At (UTC)</th></tr>`)
 	for _, r := range results {
 		p := personByUUID[r.PersonUUID]
 		personLabel := r.PersonUUID
@@ -576,13 +576,23 @@ func renderAttendanceDailyResults(results []DailyAttendanceResult, persons []Per
 		detailHref := "/org/attendance-daily-results/" + url.PathEscape(r.PersonUUID) + "/" + url.PathEscape(r.WorkDate) + "?as_of=" + url.QueryEscape(asOf)
 		detailHX := "/org/attendance-daily-results/" + url.PathEscape(r.PersonUUID) + "/" + url.PathEscape(r.WorkDate) + "?as_of=" + url.QueryEscape(asOf)
 
+		dayType := ""
+		if r.DayType != nil {
+			dayType = *r.DayType
+		}
+
 		b.WriteString(`<tr>`)
 		b.WriteString(`<td><a href="` + html.EscapeString(detailHref) + `" hx-get="` + html.EscapeString(detailHX) + `" hx-target="#content" hx-push-url="true">` + html.EscapeString(personLabel) + `</a></td>`)
+		b.WriteString(`<td>` + html.EscapeString(dayType) + `</td>`)
 		b.WriteString(`<td>` + html.EscapeString(r.Status) + `</td>`)
 		b.WriteString(`<td>` + html.EscapeString(flags) + `</td>`)
 		b.WriteString(`<td>` + html.EscapeString(firstIn) + `</td>`)
 		b.WriteString(`<td>` + html.EscapeString(lastOut) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.ScheduledMinutes) + `</td>`)
 		b.WriteString(`<td>` + strconv.Itoa(r.WorkedMinutes) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.OvertimeMinutes150) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.OvertimeMinutes200) + `</td>`)
+		b.WriteString(`<td>` + strconv.Itoa(r.OvertimeMinutes300) + `</td>`)
 		b.WriteString(`<td>` + strconv.Itoa(r.LateMinutes) + `</td>`)
 		b.WriteString(`<td>` + strconv.Itoa(r.EarlyLeaveMinutes) + `</td>`)
 		b.WriteString(`<td>` + strconv.Itoa(r.InputPunchCount) + `</td>`)
@@ -683,17 +693,36 @@ func renderAttendanceDailyResultsDetail(tenant Tenant, asOf string, personUUID s
 
 		b.WriteString(`<h2>Summary</h2>`)
 		b.WriteString(`<ul>`)
+		dayType := ""
+		if result.DayType != nil {
+			dayType = *result.DayType
+		}
 		b.WriteString(`<li>Status: <code>` + html.EscapeString(result.Status) + `</code></li>`)
 		b.WriteString(`<li>Flags: <code>` + html.EscapeString(flags) + `</code></li>`)
 		b.WriteString(`<li>Ruleset: <code>` + html.EscapeString(result.RulesetVersion) + `</code></li>`)
+		b.WriteString(`<li>Day Type: <code>` + html.EscapeString(dayType) + `</code></li>`)
 		b.WriteString(`<li>First In (Beijing): <code>` + html.EscapeString(firstIn) + `</code></li>`)
 		b.WriteString(`<li>Last Out (Beijing): <code>` + html.EscapeString(lastOut) + `</code></li>`)
+		b.WriteString(`<li>Scheduled Minutes: <code>` + strconv.Itoa(result.ScheduledMinutes) + `</code></li>`)
 		b.WriteString(`<li>Worked Minutes: <code>` + strconv.Itoa(result.WorkedMinutes) + `</code></li>`)
+		b.WriteString(`<li>OT Minutes 150: <code>` + strconv.Itoa(result.OvertimeMinutes150) + `</code></li>`)
+		b.WriteString(`<li>OT Minutes 200: <code>` + strconv.Itoa(result.OvertimeMinutes200) + `</code></li>`)
+		b.WriteString(`<li>OT Minutes 300: <code>` + strconv.Itoa(result.OvertimeMinutes300) + `</code></li>`)
 		b.WriteString(`<li>Late Minutes: <code>` + strconv.Itoa(result.LateMinutes) + `</code></li>`)
 		b.WriteString(`<li>Early Leave Minutes: <code>` + strconv.Itoa(result.EarlyLeaveMinutes) + `</code></li>`)
 		b.WriteString(`<li>Input Punch Count: <code>` + strconv.Itoa(result.InputPunchCount) + `</code></li>`)
 		b.WriteString(`<li>Input Max Punch Event DB ID: <code>` + html.EscapeString(inputMaxPunchEventDBID) + `</code></li>`)
 		b.WriteString(`<li>Input Max Punch Time (Beijing): <code>` + html.EscapeString(inputMaxPunchTime) + `</code></li>`)
+		timeProfileLastEventID := ""
+		if result.TimeProfileLastEventID != nil {
+			timeProfileLastEventID = strconv.FormatInt(*result.TimeProfileLastEventID, 10)
+		}
+		holidayDayLastEventID := ""
+		if result.HolidayDayLastEventID != nil {
+			holidayDayLastEventID = strconv.FormatInt(*result.HolidayDayLastEventID, 10)
+		}
+		b.WriteString(`<li>TimeProfile Last Event ID: <code>` + html.EscapeString(timeProfileLastEventID) + `</code></li>`)
+		b.WriteString(`<li>HolidayDay Last Event ID: <code>` + html.EscapeString(holidayDayLastEventID) + `</code></li>`)
 		b.WriteString(`<li>Computed At (UTC): <code>` + html.EscapeString(result.ComputedAt.UTC().Format(time.RFC3339)) + `</code></li>`)
 		b.WriteString(`</ul>`)
 	}

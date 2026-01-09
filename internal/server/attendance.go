@@ -31,16 +31,23 @@ type DailyAttendanceResult struct {
 	PersonUUID             string     `json:"person_uuid"`
 	WorkDate               string     `json:"work_date"`
 	RulesetVersion         string     `json:"ruleset_version"`
+	DayType                *string    `json:"day_type"`
 	Status                 string     `json:"status"`
 	Flags                  []string   `json:"flags"`
 	FirstInTime            *time.Time `json:"first_in_time"`
 	LastOutTime            *time.Time `json:"last_out_time"`
+	ScheduledMinutes       int        `json:"scheduled_minutes"`
 	WorkedMinutes          int        `json:"worked_minutes"`
+	OvertimeMinutes150     int        `json:"overtime_minutes_150"`
+	OvertimeMinutes200     int        `json:"overtime_minutes_200"`
+	OvertimeMinutes300     int        `json:"overtime_minutes_300"`
 	LateMinutes            int        `json:"late_minutes"`
 	EarlyLeaveMinutes      int        `json:"early_leave_minutes"`
 	InputPunchCount        int        `json:"input_punch_count"`
 	InputMaxPunchEventDBID *int64     `json:"input_max_punch_event_db_id"`
 	InputMaxPunchTime      *time.Time `json:"input_max_punch_time"`
+	TimeProfileLastEventID *int64     `json:"time_profile_last_event_id"`
+	HolidayDayLastEventID  *int64     `json:"holiday_day_last_event_id"`
 	ComputedAt             time.Time  `json:"computed_at"`
 	CreatedAt              time.Time  `json:"created_at"`
 	UpdatedAt              time.Time  `json:"updated_at"`
@@ -301,16 +308,23 @@ SELECT
   person_uuid::text,
   work_date::text,
   ruleset_version,
+  day_type,
   status,
   flags,
   first_in_time,
   last_out_time,
+  scheduled_minutes,
   worked_minutes,
+  overtime_minutes_150,
+  overtime_minutes_200,
+  overtime_minutes_300,
   late_minutes,
   early_leave_minutes,
   input_punch_count,
   input_max_punch_event_db_id,
   input_max_punch_time,
+  time_profile_last_event_id,
+  holiday_day_last_event_id,
   computed_at,
   created_at,
   updated_at
@@ -328,24 +342,34 @@ LIMIT $3
 	var out []DailyAttendanceResult
 	for rows.Next() {
 		var r DailyAttendanceResult
+		var dayType *string
 		var firstIn *time.Time
 		var lastOut *time.Time
 		var inputMaxPunchEventDBID *int64
 		var inputMaxPunchTime *time.Time
+		var timeProfileLastEventID *int64
+		var holidayDayLastEventID *int64
 		if err := rows.Scan(
 			&r.PersonUUID,
 			&r.WorkDate,
 			&r.RulesetVersion,
+			&dayType,
 			&r.Status,
 			&r.Flags,
 			&firstIn,
 			&lastOut,
+			&r.ScheduledMinutes,
 			&r.WorkedMinutes,
+			&r.OvertimeMinutes150,
+			&r.OvertimeMinutes200,
+			&r.OvertimeMinutes300,
 			&r.LateMinutes,
 			&r.EarlyLeaveMinutes,
 			&r.InputPunchCount,
 			&inputMaxPunchEventDBID,
 			&inputMaxPunchTime,
+			&timeProfileLastEventID,
+			&holidayDayLastEventID,
 			&r.ComputedAt,
 			&r.CreatedAt,
 			&r.UpdatedAt,
@@ -353,6 +377,7 @@ LIMIT $3
 			return nil, err
 		}
 
+		r.DayType = dayType
 		if firstIn != nil {
 			tm := firstIn.UTC()
 			r.FirstInTime = &tm
@@ -366,6 +391,8 @@ LIMIT $3
 			tm := inputMaxPunchTime.UTC()
 			r.InputMaxPunchTime = &tm
 		}
+		r.TimeProfileLastEventID = timeProfileLastEventID
+		r.HolidayDayLastEventID = holidayDayLastEventID
 		r.ComputedAt = r.ComputedAt.UTC()
 		r.CreatedAt = r.CreatedAt.UTC()
 		r.UpdatedAt = r.UpdatedAt.UTC()
@@ -394,25 +421,35 @@ func (s *staffingPGStore) GetDailyAttendanceResult(ctx context.Context, tenantID
 	}
 
 	var out DailyAttendanceResult
+	var dayType *string
 	var firstIn *time.Time
 	var lastOut *time.Time
 	var inputMaxPunchEventDBID *int64
 	var inputMaxPunchTime *time.Time
+	var timeProfileLastEventID *int64
+	var holidayDayLastEventID *int64
 	err = tx.QueryRow(ctx, `
 SELECT
   person_uuid::text,
   work_date::text,
   ruleset_version,
+  day_type,
   status,
   flags,
   first_in_time,
   last_out_time,
+  scheduled_minutes,
   worked_minutes,
+  overtime_minutes_150,
+  overtime_minutes_200,
+  overtime_minutes_300,
   late_minutes,
   early_leave_minutes,
   input_punch_count,
   input_max_punch_event_db_id,
   input_max_punch_time,
+  time_profile_last_event_id,
+  holiday_day_last_event_id,
   computed_at,
   created_at,
   updated_at
@@ -424,16 +461,23 @@ WHERE tenant_id = $1::uuid
 		&out.PersonUUID,
 		&out.WorkDate,
 		&out.RulesetVersion,
+		&dayType,
 		&out.Status,
 		&out.Flags,
 		&firstIn,
 		&lastOut,
+		&out.ScheduledMinutes,
 		&out.WorkedMinutes,
+		&out.OvertimeMinutes150,
+		&out.OvertimeMinutes200,
+		&out.OvertimeMinutes300,
 		&out.LateMinutes,
 		&out.EarlyLeaveMinutes,
 		&out.InputPunchCount,
 		&inputMaxPunchEventDBID,
 		&inputMaxPunchTime,
+		&timeProfileLastEventID,
+		&holidayDayLastEventID,
 		&out.ComputedAt,
 		&out.CreatedAt,
 		&out.UpdatedAt,
@@ -445,6 +489,7 @@ WHERE tenant_id = $1::uuid
 		return DailyAttendanceResult{}, false, err
 	}
 
+	out.DayType = dayType
 	if firstIn != nil {
 		tm := firstIn.UTC()
 		out.FirstInTime = &tm
@@ -458,6 +503,8 @@ WHERE tenant_id = $1::uuid
 		tm := inputMaxPunchTime.UTC()
 		out.InputMaxPunchTime = &tm
 	}
+	out.TimeProfileLastEventID = timeProfileLastEventID
+	out.HolidayDayLastEventID = holidayDayLastEventID
 	out.ComputedAt = out.ComputedAt.UTC()
 	out.CreatedAt = out.CreatedAt.UTC()
 	out.UpdatedAt = out.UpdatedAt.UTC()
@@ -491,16 +538,23 @@ SELECT
   person_uuid::text,
   work_date::text,
   ruleset_version,
+  day_type,
   status,
   flags,
   first_in_time,
   last_out_time,
+  scheduled_minutes,
   worked_minutes,
+  overtime_minutes_150,
+  overtime_minutes_200,
+  overtime_minutes_300,
   late_minutes,
   early_leave_minutes,
   input_punch_count,
   input_max_punch_event_db_id,
   input_max_punch_time,
+  time_profile_last_event_id,
+  holiday_day_last_event_id,
   computed_at,
   created_at,
   updated_at
@@ -520,24 +574,34 @@ LIMIT $5
 	var out []DailyAttendanceResult
 	for rows.Next() {
 		var r DailyAttendanceResult
+		var dayType *string
 		var firstIn *time.Time
 		var lastOut *time.Time
 		var inputMaxPunchEventDBID *int64
 		var inputMaxPunchTime *time.Time
+		var timeProfileLastEventID *int64
+		var holidayDayLastEventID *int64
 		if err := rows.Scan(
 			&r.PersonUUID,
 			&r.WorkDate,
 			&r.RulesetVersion,
+			&dayType,
 			&r.Status,
 			&r.Flags,
 			&firstIn,
 			&lastOut,
+			&r.ScheduledMinutes,
 			&r.WorkedMinutes,
+			&r.OvertimeMinutes150,
+			&r.OvertimeMinutes200,
+			&r.OvertimeMinutes300,
 			&r.LateMinutes,
 			&r.EarlyLeaveMinutes,
 			&r.InputPunchCount,
 			&inputMaxPunchEventDBID,
 			&inputMaxPunchTime,
+			&timeProfileLastEventID,
+			&holidayDayLastEventID,
 			&r.ComputedAt,
 			&r.CreatedAt,
 			&r.UpdatedAt,
@@ -545,6 +609,7 @@ LIMIT $5
 			return nil, err
 		}
 
+		r.DayType = dayType
 		if firstIn != nil {
 			tm := firstIn.UTC()
 			r.FirstInTime = &tm
@@ -558,6 +623,8 @@ LIMIT $5
 			tm := inputMaxPunchTime.UTC()
 			r.InputMaxPunchTime = &tm
 		}
+		r.TimeProfileLastEventID = timeProfileLastEventID
+		r.HolidayDayLastEventID = holidayDayLastEventID
 		r.ComputedAt = r.ComputedAt.UTC()
 		r.CreatedAt = r.CreatedAt.UTC()
 		r.UpdatedAt = r.UpdatedAt.UTC()
