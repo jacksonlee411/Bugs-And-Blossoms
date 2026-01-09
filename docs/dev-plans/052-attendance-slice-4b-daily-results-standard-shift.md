@@ -530,7 +530,7 @@ RETURN v_event_db_id;
 
 1. [x] 路由：新增 `/org/attendance-daily-results`、`/org/attendance-daily-results/{person_uuid}/{work_date}`、`/org/api/attendance-daily-results`，并更新 `config/routing/allowlist.yaml`（`route_class` 为 `ui`/`internal_api`）。（PR #110）
 2. [x] Authz：在 `pkg/authz/registry.go` 增加 `ObjectStaffingAttendanceDailyResults`；在 `internal/server/authz_middleware.go` 加入路由映射；更新 `config/access/policies/00-bootstrap.csv` 并跑 authz 门禁。（PR #112）
-3. [ ] DB：按 §4.1/§4.2 落地表 + kernel（新增表/迁移前需手工确认）；跑 `make staffing plan && make staffing lint && make staffing migrate up` 闭环。
+3. [x] DB：按 §4.1/§4.2 落地表 + kernel（新增表/迁移前需手工确认）；跑 `make staffing plan && make staffing lint && make staffing migrate up` 闭环。（PR #113）
 4. [ ] sqlc：运行 `make sqlc-generate`（会更新 `internal/sqlc/schema.sql` 等生成物），并确保 `git status --short` 为空。
 5. [ ] Go：实现日结果 store（建议复用 `internal/server/attendance.go`：显式事务 + tenant 注入 + 查询读模）；实现 handlers（建议复用 `internal/server/attendance_handlers.go`：UI list/detail + internal API GET）；把入口挂到 `internal/server/handler.go` 的 router 与 nav，并补齐 i18n 文案（en/zh）。
 6. [ ] 测试：补齐本计划覆盖（见 §9）。
