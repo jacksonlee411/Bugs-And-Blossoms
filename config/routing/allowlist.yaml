@@ -65,6 +65,9 @@ entrypoints:
       - path: /org/attendance-daily-results/{person_uuid}/{work_date}
         methods: [GET]
         route_class: ui
+      - path: /org/attendance-time-bank
+        methods: [GET]
+        route_class: ui
       - path: /org/attendance-time-profile
         methods: [GET, POST]
         route_class: ui
