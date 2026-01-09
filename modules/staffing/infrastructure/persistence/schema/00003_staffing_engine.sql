@@ -767,6 +767,10 @@ BEGIN
 
   PERFORM staffing.replay_assignment_versions(p_tenant_id, p_assignment_id);
 
+  -- NOTE: use dynamic SQL to avoid schema file ordering issues (P0-5 adds staffing.maybe_create_payroll_recalc_request_from_assignment_event later).
+  EXECUTE 'SELECT staffing.maybe_create_payroll_recalc_request_from_assignment_event($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::text,$6::date,$7::jsonb,$8::text,$9::uuid);'
+  USING p_event_id, p_tenant_id, p_assignment_id, p_person_uuid, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_id;
+
   RETURN v_event_db_id;
 END;
 $$;
