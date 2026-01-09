@@ -506,8 +506,8 @@ gross_i = target_net_i + tax_i
 
 ### 8.2 里程碑（实现顺序建议）
 
-1. [ ] Schema SSOT：新增输入载体表 + `payslip_items` 字段增补 + RLS。
-2. [ ] Schema→迁移闭环：按 `DEV-PLAN-024` 生成 `migrations/staffing/*` + `atlas.sum`。
+1. [x] Schema SSOT：新增输入载体表 + `payslip_items` 字段增补 + RLS。（PR #164）
+2. [x] Schema→迁移闭环：按 `DEV-PLAN-024` 生成 `migrations/staffing/*` + `atlas.sum`。（PR #164）
 3. [ ] Kernel：实现 `submit_payslip_item_input_event(...)`（幂等 + upsert/delete + finalized 只读裁决）。
 4. [ ] Calc：在 IIT pipeline 中接入 solver（base → solve → allocate → final IIT），并写入 payslip items。
 5. [ ] UI：工资条详情页录入/展示净额保证项；计算后展示解释字段。
