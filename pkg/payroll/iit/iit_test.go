@@ -147,4 +147,28 @@ func TestMulPercentRoundHalfUpCents(t *testing.T) {
 			t.Fatalf("got=%d", got)
 		}
 	})
+
+	t.Run("zero short-circuit", func(t *testing.T) {
+		if got := mulPercentRoundHalfUpCents(0, 3); got != 0 {
+			t.Fatalf("got=%d", got)
+		}
+		if got := mulPercentRoundHalfUpCents(17, 0); got != 0 {
+			t.Fatalf("got=%d", got)
+		}
+	})
+
+	t.Run("panic on negative", func(t *testing.T) {
+		defer func() {
+			if recover() == nil {
+				t.Fatalf("expected panic")
+			}
+		}()
+		_ = mulPercentRoundHalfUpCents(-1, 3)
+	})
+}
+
+func TestComputeCumulativeWithholding_RejectNegative(t *testing.T) {
+	if _, err := ComputeCumulativeWithholding(CumulativeInput{IncomeCents: -1}); err == nil {
+		t.Fatalf("expected error")
+	}
 }
