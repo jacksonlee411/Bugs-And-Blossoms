@@ -26,17 +26,18 @@ func NewHandler() (http.Handler, error) {
 }
 
 type HandlerOptions struct {
-	TenancyResolver  TenancyResolver
-	IdentityProvider identityProvider
-	OrgUnitStore     OrgUnitStore
-	OrgUnitSnapshot  OrgUnitSnapshotStore
-	SetIDStore       SetIDGovernanceStore
-	JobCatalogStore  JobCatalogStore
-	PersonStore      PersonStore
-	PositionStore    PositionStore
-	AssignmentStore  AssignmentStore
-	PayrollStore     PayrollStore
-	AttendanceStore  TimePunchStore
+	TenancyResolver             TenancyResolver
+	IdentityProvider            identityProvider
+	OrgUnitStore                OrgUnitStore
+	OrgUnitSnapshot             OrgUnitSnapshotStore
+	SetIDStore                  SetIDGovernanceStore
+	JobCatalogStore             JobCatalogStore
+	PersonStore                 PersonStore
+	PositionStore               PositionStore
+	AssignmentStore             AssignmentStore
+	PayrollStore                PayrollStore
+	AttendanceStore             TimePunchStore
+	AttendanceDailyResultsStore DailyAttendanceResultStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -68,6 +69,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	assignmentStore := opts.AssignmentStore
 	payrollStore := opts.PayrollStore
 	attendanceStore := opts.AttendanceStore
+	attendanceDailyResultsStore := opts.AttendanceDailyResultsStore
 	tenancyResolver := opts.TenancyResolver
 	identityProvider := opts.IdentityProvider
 
@@ -112,7 +114,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		}
 	}
 
-	if positionStore == nil || assignmentStore == nil || payrollStore == nil || attendanceStore == nil {
+	if positionStore == nil || assignmentStore == nil || payrollStore == nil || attendanceStore == nil || attendanceDailyResultsStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
 			s := newStaffingPGStore(pgStore.pool)
 			if positionStore == nil {
@@ -127,6 +129,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			if attendanceStore == nil {
 				attendanceStore = s
 			}
+			if attendanceDailyResultsStore == nil {
+				attendanceDailyResultsStore = s
+			}
 		} else {
 			s := newStaffingMemoryStore()
 			if positionStore == nil {
@@ -137,6 +142,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			}
 			if attendanceStore == nil {
 				attendanceStore = s
+			}
+			if attendanceDailyResultsStore == nil {
+				attendanceDailyResultsStore = s
 			}
 		}
 	}
@@ -262,6 +270,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			`<li><a href="/org/job-catalog?as_of=`+asOf+`" hx-get="/org/job-catalog?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_jobcatalog")+`</a></li>`+
 			`<li><a href="/org/positions?as_of=`+asOf+`" hx-get="/org/positions?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
 			`<li><a href="/org/attendance-punches?as_of=`+asOf+`" hx-get="/org/attendance-punches?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance")+`</a></li>`+
+			`<li><a href="/org/attendance-daily-results?as_of=`+asOf+`" hx-get="/org/attendance-daily-results?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_daily_results")+`</a></li>`+
 			`<li><a href="/org/payroll-periods?as_of=`+asOf+`" hx-get="/org/payroll-periods?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_payroll")+`</a></li>`+
 			`<li><a href="/person/persons?as_of=`+asOf+`" hx-get="/person/persons?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_person")+`</a></li>`+
 			`</ul>`)
@@ -328,10 +337,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleAttendancePunches(w, r, attendanceStore, personStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-daily-results", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAttendanceDailyResultsPlaceholder(w, r)
+		handleAttendanceDailyResults(w, r, attendanceDailyResultsStore, personStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-daily-results/{person_uuid}/{work_date}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAttendanceDailyResultDetailPlaceholder(w, r)
+		handleAttendanceDailyResultDetail(w, r, attendanceDailyResultsStore, personStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-periods", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollPeriods(w, r, payrollStore)
@@ -360,6 +369,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-runs/{run_id}/payslips/{payslip_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayslipDetail(w, r, payrollStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-social-insurance-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollSocialInsurancePolicies(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/payroll-social-insurance-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollSocialInsurancePolicies(w, r, payrollStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePositionsAPI(w, r, positionStore)
 	}))
@@ -379,7 +394,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleAttendancePunchesAPI(w, r, attendanceStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/attendance-daily-results", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAttendanceDailyResultsAPIPlaceholder(w, r)
+		handleAttendanceDailyResultsAPI(w, r, attendanceDailyResultsStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payroll-periods", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollPeriodsAPI(w, r, payrollStore)
@@ -398,6 +413,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payslips/{payslip_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayslipAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payroll-social-insurance-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollSocialInsurancePoliciesAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/payroll-social-insurance-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayrollSocialInsurancePoliciesAPI(w, r, payrollStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/person/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePersons(w, r, personStore)
@@ -537,6 +558,7 @@ func renderNav(r *http.Request, asOf string) string {
 		`<li><a href="/org/job-catalog?as_of=` + asOf + `" hx-get="/org/job-catalog?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
 		`<li><a href="/org/positions?as_of=` + asOf + `" hx-get="/org/positions?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
 		`<li><a href="/org/attendance-punches?as_of=` + asOf + `" hx-get="/org/attendance-punches?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance") + `</a></li>` +
+		`<li><a href="/org/attendance-daily-results?as_of=` + asOf + `" hx-get="/org/attendance-daily-results?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_daily_results") + `</a></li>` +
 		`<li><a href="/org/payroll-periods?as_of=` + asOf + `" hx-get="/org/payroll-periods?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_payroll") + `</a></li>` +
 		`<li><a href="/person/persons?as_of=` + asOf + `" hx-get="/person/persons?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
 		`</ul></nav>`
@@ -615,7 +637,9 @@ func tr(lang string, key string) string {
 		case "nav_staffing":
 			return "用工任职"
 		case "nav_attendance":
-			return "考勤"
+			return "考勤 / 打卡"
+		case "nav_attendance_daily_results":
+			return "考勤 / 日结果"
 		case "nav_payroll":
 			return "薪酬"
 		case "nav_person":
@@ -637,7 +661,9 @@ func tr(lang string, key string) string {
 	case "nav_staffing":
 		return "Staffing"
 	case "nav_attendance":
-		return "Attendance"
+		return "Attendance / Punches"
+	case "nav_attendance_daily_results":
+		return "Attendance / Daily Results"
 	case "nav_payroll":
 		return "Payroll"
 	case "nav_person":

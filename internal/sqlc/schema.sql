@@ -2438,6 +2438,42 @@ CREATE TABLE IF NOT EXISTS staffing.time_punch_events (
 CREATE INDEX IF NOT EXISTS time_punch_events_lookup_idx
   ON staffing.time_punch_events (tenant_id, person_uuid, punch_time DESC, id DESC);
 
+CREATE TABLE IF NOT EXISTS staffing.daily_attendance_results (
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  work_date date NOT NULL,
+
+  ruleset_version text NOT NULL,
+  status text NOT NULL,
+  flags text[] NOT NULL DEFAULT '{}'::text[],
+
+  first_in_time timestamptz NULL,
+  last_out_time timestamptz NULL,
+  worked_minutes int NOT NULL DEFAULT 0,
+  late_minutes int NOT NULL DEFAULT 0,
+  early_leave_minutes int NOT NULL DEFAULT 0,
+
+  input_punch_count int NOT NULL DEFAULT 0,
+  input_max_punch_event_db_id bigint NULL,
+  input_max_punch_time timestamptz NULL,
+
+  computed_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+
+  PRIMARY KEY (tenant_id, person_uuid, work_date),
+
+  CONSTRAINT daily_attendance_results_status_check
+    CHECK (status IN ('PRESENT','ABSENT','EXCEPTION')),
+  CONSTRAINT daily_attendance_results_minutes_nonneg_check
+    CHECK (worked_minutes >= 0 AND late_minutes >= 0 AND early_leave_minutes >= 0),
+  CONSTRAINT daily_attendance_results_flags_allowlist_check
+    CHECK (flags <@ ARRAY['ABSENT','MISSING_IN','MISSING_OUT','LATE','EARLY_LEAVE']::text[])
+);
+
+CREATE INDEX IF NOT EXISTS daily_attendance_results_lookup_idx
+  ON staffing.daily_attendance_results (tenant_id, person_uuid, work_date DESC);
+
 ALTER TABLE staffing.positions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.positions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.positions;
@@ -2484,6 +2520,13 @@ ALTER TABLE staffing.time_punch_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.time_punch_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.time_punch_events;
 CREATE POLICY tenant_isolation ON staffing.time_punch_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.daily_attendance_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.daily_attendance_results FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.daily_attendance_results;
+CREATE POLICY tenant_isolation ON staffing.daily_attendance_results
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
@@ -3263,6 +3306,244 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION staffing.recompute_daily_attendance_result(
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_work_date date
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_tz text := 'Asia/Shanghai';
+  v_ruleset_version text := 'STANDARD_SHIFT_V1';
+
+  v_shift_start_local time := time '09:00';
+  v_shift_end_local time := time '18:00';
+  v_late_tolerance_min int := 5;
+  v_early_tolerance_min int := 5;
+
+  v_window_before interval := interval '6 hours';
+  v_window_after interval := interval '12 hours';
+
+  v_shift_start timestamptz;
+  v_shift_end timestamptz;
+  v_window_start timestamptz;
+  v_window_end timestamptz;
+
+  v_punch_count int := 0;
+  v_input_max_id bigint := NULL;
+  v_input_max_punch_time timestamptz := NULL;
+
+  v_expect text := 'IN';
+  v_open_in_time timestamptz := NULL;
+
+  v_first_in_time timestamptz := NULL;
+  v_last_out_time timestamptz := NULL;
+
+  v_worked_minutes int := 0;
+  v_late_minutes int := 0;
+  v_early_leave_minutes int := 0;
+
+  v_status text := 'ABSENT';
+  v_flags text[] := '{}'::text[];
+
+  r record;
+  v_delta_min int;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_work_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'work_date is required';
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(
+    hashtext(p_tenant_id::text),
+    hashtext(p_person_uuid::text || ':' || p_work_date::text)
+  );
+
+  v_shift_start := (p_work_date + v_shift_start_local) AT TIME ZONE v_tz;
+  v_shift_end := (p_work_date + v_shift_end_local) AT TIME ZONE v_tz;
+  v_window_start := v_shift_start - v_window_before;
+  v_window_end := v_shift_end + v_window_after;
+
+  FOR r IN
+    SELECT id, punch_time, punch_type
+    FROM staffing.time_punch_events
+    WHERE tenant_id = p_tenant_id
+      AND person_uuid = p_person_uuid
+      AND punch_time >= v_window_start
+      AND punch_time < v_window_end
+    ORDER BY punch_time ASC, id ASC
+  LOOP
+    v_punch_count := v_punch_count + 1;
+    v_input_max_id := COALESCE(v_input_max_id, r.id);
+    v_input_max_id := GREATEST(v_input_max_id, r.id);
+    v_input_max_punch_time := COALESCE(v_input_max_punch_time, r.punch_time);
+    v_input_max_punch_time := GREATEST(v_input_max_punch_time, r.punch_time);
+
+    IF r.punch_type = 'IN' THEN
+      IF v_expect = 'IN' THEN
+        v_open_in_time := r.punch_time;
+        v_expect := 'OUT';
+        IF v_first_in_time IS NULL THEN
+          v_first_in_time := r.punch_time;
+        END IF;
+      ELSE
+        v_flags := array_append(v_flags, 'MISSING_OUT');
+        v_open_in_time := r.punch_time;
+        v_expect := 'OUT';
+        IF v_first_in_time IS NULL THEN
+          v_first_in_time := r.punch_time;
+        END IF;
+      END IF;
+    ELSE
+      IF v_expect = 'OUT' AND v_open_in_time IS NOT NULL THEN
+        v_delta_min := floor(extract(epoch FROM (r.punch_time - v_open_in_time)) / 60.0)::int;
+        IF v_delta_min > 0 THEN
+          v_worked_minutes := v_worked_minutes + v_delta_min;
+        END IF;
+        v_last_out_time := r.punch_time;
+        v_open_in_time := NULL;
+        v_expect := 'IN';
+      ELSE
+        v_flags := array_append(v_flags, 'MISSING_IN');
+      END IF;
+    END IF;
+  END LOOP;
+
+  IF v_punch_count = 0 THEN
+    v_status := 'ABSENT';
+    v_flags := array_append(v_flags, 'ABSENT');
+  ELSE
+    IF v_first_in_time IS NULL THEN
+      v_flags := array_append(v_flags, 'MISSING_IN');
+    END IF;
+    IF v_expect = 'OUT' THEN
+      v_flags := array_append(v_flags, 'MISSING_OUT');
+    END IF;
+
+    IF v_first_in_time IS NOT NULL THEN
+      v_delta_min := floor(extract(epoch FROM (v_first_in_time - v_shift_start)) / 60.0)::int;
+      IF v_delta_min > v_late_tolerance_min THEN
+        v_late_minutes := v_delta_min - v_late_tolerance_min;
+        v_flags := array_append(v_flags, 'LATE');
+      END IF;
+    END IF;
+
+    IF v_last_out_time IS NOT NULL THEN
+      v_delta_min := floor(extract(epoch FROM (v_shift_end - v_last_out_time)) / 60.0)::int;
+      IF v_delta_min > v_early_tolerance_min THEN
+        v_early_leave_minutes := v_delta_min - v_early_tolerance_min;
+        v_flags := array_append(v_flags, 'EARLY_LEAVE');
+      END IF;
+    END IF;
+
+    IF array_length(v_flags, 1) IS NULL THEN
+      v_status := 'PRESENT';
+    ELSE
+      SELECT COALESCE(array_agg(DISTINCT f ORDER BY f), '{}'::text[]) INTO v_flags
+      FROM unnest(v_flags) AS f;
+
+      IF v_flags = ARRAY['ABSENT']::text[] THEN
+        v_status := 'ABSENT';
+      ELSE
+        v_status := 'EXCEPTION';
+      END IF;
+    END IF;
+  END IF;
+
+  INSERT INTO staffing.daily_attendance_results (
+    tenant_id,
+    person_uuid,
+    work_date,
+    ruleset_version,
+    status,
+    flags,
+    first_in_time,
+    last_out_time,
+    worked_minutes,
+    late_minutes,
+    early_leave_minutes,
+    input_punch_count,
+    input_max_punch_event_db_id,
+    input_max_punch_time,
+    computed_at,
+    created_at,
+    updated_at
+  )
+  VALUES (
+    p_tenant_id,
+    p_person_uuid,
+    p_work_date,
+    v_ruleset_version,
+    v_status,
+    v_flags,
+    v_first_in_time,
+    v_last_out_time,
+    v_worked_minutes,
+    v_late_minutes,
+    v_early_leave_minutes,
+    v_punch_count,
+    v_input_max_id,
+    v_input_max_punch_time,
+    now(),
+    now(),
+    now()
+  )
+  ON CONFLICT (tenant_id, person_uuid, work_date)
+  DO UPDATE SET
+    ruleset_version = EXCLUDED.ruleset_version,
+    status = EXCLUDED.status,
+    flags = EXCLUDED.flags,
+    first_in_time = EXCLUDED.first_in_time,
+    last_out_time = EXCLUDED.last_out_time,
+    worked_minutes = EXCLUDED.worked_minutes,
+    late_minutes = EXCLUDED.late_minutes,
+    early_leave_minutes = EXCLUDED.early_leave_minutes,
+    input_punch_count = EXCLUDED.input_punch_count,
+    input_max_punch_event_db_id = EXCLUDED.input_max_punch_event_db_id,
+    input_max_punch_time = EXCLUDED.input_max_punch_time,
+    computed_at = EXCLUDED.computed_at,
+    updated_at = EXCLUDED.updated_at;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.recompute_daily_attendance_results_for_punch(
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_punch_time timestamptz
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_tz text := 'Asia/Shanghai';
+  v_local_date date;
+  v_d1 date;
+  v_d2 date;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_punch_time IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'punch_time is required';
+  END IF;
+
+  v_local_date := (p_punch_time AT TIME ZONE v_tz)::date;
+  v_d1 := v_local_date - 1;
+  v_d2 := v_local_date;
+
+  PERFORM staffing.recompute_daily_attendance_result(p_tenant_id, p_person_uuid, v_d1);
+  PERFORM staffing.recompute_daily_attendance_result(p_tenant_id, p_person_uuid, v_d2);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION staffing.submit_time_punch_event(
   p_event_id uuid,
   p_tenant_id uuid,
@@ -3376,6 +3657,8 @@ BEGIN
     RETURN v_existing.id;
   END IF;
 
+  PERFORM staffing.recompute_daily_attendance_results_for_punch(p_tenant_id, p_person_uuid, p_punch_time);
+
   RETURN v_event_db_id;
 END;
 $$;
@@ -3447,7 +3730,7 @@ CREATE TABLE IF NOT EXISTS staffing.payroll_run_events (
   run_id uuid NOT NULL,
   pay_period_id uuid NOT NULL,
   event_type text NOT NULL,
-  run_state text NOT NULL,
+  run_state text NOT NULL DEFAULT 'draft',
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   request_id text NOT NULL,
   initiator_id uuid NOT NULL,
@@ -3714,6 +3997,96 @@ BEGIN
   RETURN v_event_db_id;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION staffing.payroll_run_events_after_insert_ensure_payslips_on_calc_finish()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_period daterange;
+  v_now timestamptz;
+BEGIN
+  PERFORM staffing.assert_current_tenant(NEW.tenant_id);
+
+  SELECT period INTO v_period
+  FROM staffing.pay_periods
+  WHERE tenant_id = NEW.tenant_id AND id = NEW.pay_period_id;
+
+  IF v_period IS NULL THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_PAY_PERIOD_NOT_FOUND',
+      DETAIL = format('pay_period_id=%s', NEW.pay_period_id);
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM staffing.assignment_versions av
+    WHERE av.tenant_id = NEW.tenant_id
+      AND av.assignment_type = 'primary'
+      AND av.status = 'active'
+      AND av.validity && v_period
+      AND av.base_salary IS NULL
+    LIMIT 1
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_MISSING_BASE_SALARY',
+      DETAIL = format('run_id=%s', NEW.run_id);
+  END IF;
+
+  v_now := now();
+
+  INSERT INTO staffing.payslips (
+    tenant_id,
+    id,
+    run_id,
+    pay_period_id,
+    person_uuid,
+    assignment_id,
+    currency,
+    gross_pay,
+    net_pay,
+    employer_total,
+    last_run_event_id,
+    created_at,
+    updated_at
+  )
+  SELECT
+    NEW.tenant_id,
+    gen_random_uuid(),
+    NEW.run_id,
+    NEW.pay_period_id,
+    av.person_uuid,
+    av.assignment_id,
+    av.currency,
+    0,
+    0,
+    0,
+    NEW.id,
+    v_now,
+    v_now
+  FROM staffing.assignment_versions av
+  WHERE av.tenant_id = NEW.tenant_id
+    AND av.assignment_type = 'primary'
+    AND av.status = 'active'
+    AND av.validity && v_period
+  GROUP BY av.person_uuid, av.assignment_id, av.currency
+  ON CONFLICT ON CONSTRAINT payslips_run_person_assignment_unique
+  DO UPDATE SET
+    pay_period_id = EXCLUDED.pay_period_id,
+    currency = EXCLUDED.currency,
+    last_run_event_id = EXCLUDED.last_run_event_id,
+    updated_at = EXCLUDED.updated_at;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS payroll_run_events_calc_finish_ensure_payslips ON staffing.payroll_run_events;
+CREATE TRIGGER payroll_run_events_calc_finish_ensure_payslips
+AFTER INSERT ON staffing.payroll_run_events
+FOR EACH ROW
+WHEN (NEW.event_type = 'CALC_FINISH')
+EXECUTE FUNCTION staffing.payroll_run_events_after_insert_ensure_payslips_on_calc_finish();
 
 CREATE OR REPLACE FUNCTION staffing.submit_payroll_run_event(
   p_event_id uuid,
@@ -4177,6 +4550,10 @@ BEGIN
     FROM sums
     WHERE p.tenant_id = p_tenant_id AND p.id = sums.payslip_id;
 
+    -- NOTE: use dynamic SQL to avoid schema file ordering issues (P0-3 adds staffing.payroll_apply_social_insurance later).
+    EXECUTE 'SELECT staffing.payroll_apply_social_insurance($1::uuid,$2::uuid,$3::uuid,$4::date,$5::date,$6::bigint,$7::timestamptz);'
+    USING p_tenant_id, p_run_id, p_pay_period_id, v_period_start, v_period_end_excl, v_event_db_id, v_now;
+
     UPDATE staffing.payroll_runs
     SET
       run_state = v_next_state,
@@ -4224,6 +4601,948 @@ END;
 $$;
 
 -- end: modules/staffing/infrastructure/persistence/schema/00005_staffing_payroll_engine.sql
+
+-- begin: modules/staffing/infrastructure/persistence/schema/00006_staffing_payroll_social_insurance_tables.sql
+-- Payroll (P0-3) social insurance tables + RLS
+
+CREATE TABLE IF NOT EXISTS staffing.social_insurance_policies (
+  tenant_id uuid NOT NULL,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  city_code text NOT NULL,
+  hukou_type text NOT NULL,
+  insurance_type text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, id),
+  CONSTRAINT social_insurance_policies_city_code_nonempty_check CHECK (btrim(city_code) <> ''),
+  CONSTRAINT social_insurance_policies_city_code_trim_check CHECK (city_code = btrim(city_code)),
+  CONSTRAINT social_insurance_policies_city_code_upper_check CHECK (city_code = upper(city_code)),
+  CONSTRAINT social_insurance_policies_hukou_type_nonempty_check CHECK (btrim(hukou_type) <> ''),
+  CONSTRAINT social_insurance_policies_hukou_type_trim_check CHECK (hukou_type = btrim(hukou_type)),
+  CONSTRAINT social_insurance_policies_hukou_type_lower_check CHECK (hukou_type = lower(hukou_type)),
+  CONSTRAINT social_insurance_policies_insurance_type_check CHECK (
+    insurance_type IN ('PENSION','MEDICAL','UNEMPLOYMENT','INJURY','MATERNITY','HOUSING_FUND')
+  ),
+  CONSTRAINT social_insurance_policies_identity_unique UNIQUE (tenant_id, city_code, hukou_type, insurance_type)
+);
+
+CREATE INDEX IF NOT EXISTS social_insurance_policies_lookup_btree
+  ON staffing.social_insurance_policies (tenant_id, city_code, hukou_type, insurance_type);
+
+CREATE TABLE IF NOT EXISTS staffing.social_insurance_policy_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  policy_id uuid NOT NULL,
+  city_code text NOT NULL,
+  hukou_type text NOT NULL,
+  insurance_type text NOT NULL,
+  event_type text NOT NULL,
+  effective_date date NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT social_insurance_policy_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
+  CONSTRAINT social_insurance_policy_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT social_insurance_policy_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT social_insurance_policy_events_one_per_day_unique UNIQUE (tenant_id, policy_id, effective_date),
+  CONSTRAINT social_insurance_policy_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT social_insurance_policy_events_city_code_trim_check CHECK (city_code = btrim(city_code)),
+  CONSTRAINT social_insurance_policy_events_city_code_upper_check CHECK (city_code = upper(city_code)),
+  CONSTRAINT social_insurance_policy_events_hukou_type_trim_check CHECK (hukou_type = btrim(hukou_type)),
+  CONSTRAINT social_insurance_policy_events_hukou_type_lower_check CHECK (hukou_type = lower(hukou_type)),
+  CONSTRAINT social_insurance_policy_events_insurance_type_check CHECK (
+    insurance_type IN ('PENSION','MEDICAL','UNEMPLOYMENT','INJURY','MATERNITY','HOUSING_FUND')
+  ),
+  CONSTRAINT social_insurance_policy_events_policy_fk
+    FOREIGN KEY (tenant_id, policy_id) REFERENCES staffing.social_insurance_policies(tenant_id, id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS social_insurance_policy_events_tenant_policy_effective_idx
+  ON staffing.social_insurance_policy_events (tenant_id, policy_id, effective_date, id);
+
+CREATE TABLE IF NOT EXISTS staffing.social_insurance_policy_versions (
+  id bigserial PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  policy_id uuid NOT NULL,
+  city_code text NOT NULL,
+  hukou_type text NOT NULL,
+  insurance_type text NOT NULL,
+  employer_rate numeric(9,6) NOT NULL,
+  employee_rate numeric(9,6) NOT NULL,
+  base_floor numeric(15,2) NOT NULL,
+  base_ceiling numeric(15,2) NOT NULL,
+  rounding_rule text NOT NULL,
+  precision smallint NOT NULL DEFAULT 2,
+  rules_config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  validity daterange NOT NULL,
+  last_event_id bigint NOT NULL REFERENCES staffing.social_insurance_policy_events(id),
+  CONSTRAINT social_insurance_policy_versions_rules_is_object_check CHECK (jsonb_typeof(rules_config) = 'object'),
+  CONSTRAINT social_insurance_policy_versions_rate_check CHECK (
+    employer_rate >= 0 AND employer_rate <= 1 AND employee_rate >= 0 AND employee_rate <= 1
+  ),
+  CONSTRAINT social_insurance_policy_versions_base_check CHECK (
+    base_floor >= 0 AND base_ceiling >= base_floor
+  ),
+  CONSTRAINT social_insurance_policy_versions_rounding_rule_check CHECK (rounding_rule IN ('HALF_UP','CEIL')),
+  CONSTRAINT social_insurance_policy_versions_precision_check CHECK (precision >= 0 AND precision <= 2),
+  CONSTRAINT social_insurance_policy_versions_validity_check CHECK (NOT isempty(validity)),
+  CONSTRAINT social_insurance_policy_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
+  CONSTRAINT social_insurance_policy_versions_policy_fk
+    FOREIGN KEY (tenant_id, policy_id) REFERENCES staffing.social_insurance_policies(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT social_insurance_policy_versions_no_overlap
+    EXCLUDE USING gist (
+      tenant_id gist_uuid_ops WITH =,
+      policy_id gist_uuid_ops WITH =,
+      validity WITH &&
+    )
+);
+
+CREATE INDEX IF NOT EXISTS social_insurance_policy_versions_lookup_btree
+  ON staffing.social_insurance_policy_versions (tenant_id, policy_id, lower(validity));
+
+CREATE TABLE IF NOT EXISTS staffing.payslip_social_insurance_items (
+  id bigserial PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  payslip_id uuid NOT NULL,
+  run_id uuid NOT NULL,
+  pay_period_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  assignment_id uuid NOT NULL,
+  city_code text NOT NULL,
+  hukou_type text NOT NULL,
+  insurance_type text NOT NULL,
+  base_amount numeric(15,2) NOT NULL,
+  employee_amount numeric(15,2) NOT NULL,
+  employer_amount numeric(15,2) NOT NULL,
+  currency char(3) NOT NULL DEFAULT 'CNY',
+  policy_id uuid NOT NULL,
+  policy_last_event_id bigint NOT NULL REFERENCES staffing.social_insurance_policy_events(id),
+  last_run_event_id bigint NOT NULL REFERENCES staffing.payroll_run_events(id),
+  meta jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT payslip_social_insurance_items_currency_check CHECK (currency = btrim(currency) AND currency = upper(currency)),
+  CONSTRAINT payslip_social_insurance_items_meta_is_object_check CHECK (jsonb_typeof(meta) = 'object'),
+  CONSTRAINT payslip_social_insurance_items_amounts_check CHECK (base_amount >= 0 AND employee_amount >= 0 AND employer_amount >= 0),
+  CONSTRAINT payslip_social_insurance_items_insurance_type_check CHECK (
+    insurance_type IN ('PENSION','MEDICAL','UNEMPLOYMENT','INJURY','MATERNITY','HOUSING_FUND')
+  ),
+  CONSTRAINT payslip_social_insurance_items_payslip_fk
+    FOREIGN KEY (tenant_id, payslip_id) REFERENCES staffing.payslips(tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT payslip_social_insurance_items_run_fk
+    FOREIGN KEY (tenant_id, run_id) REFERENCES staffing.payroll_runs(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT payslip_social_insurance_items_period_fk
+    FOREIGN KEY (tenant_id, pay_period_id) REFERENCES staffing.pay_periods(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT payslip_social_insurance_items_policy_fk
+    FOREIGN KEY (tenant_id, policy_id) REFERENCES staffing.social_insurance_policies(tenant_id, id) ON DELETE RESTRICT,
+  CONSTRAINT payslip_social_insurance_items_identity_unique UNIQUE (tenant_id, payslip_id, insurance_type)
+);
+
+CREATE INDEX IF NOT EXISTS payslip_social_insurance_items_by_run_btree
+  ON staffing.payslip_social_insurance_items (tenant_id, run_id, person_uuid, assignment_id, insurance_type);
+
+ALTER TABLE staffing.social_insurance_policies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.social_insurance_policies FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.social_insurance_policies;
+CREATE POLICY tenant_isolation ON staffing.social_insurance_policies
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.social_insurance_policy_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.social_insurance_policy_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.social_insurance_policy_events;
+CREATE POLICY tenant_isolation ON staffing.social_insurance_policy_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.social_insurance_policy_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.social_insurance_policy_versions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.social_insurance_policy_versions;
+CREATE POLICY tenant_isolation ON staffing.social_insurance_policy_versions
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.payslip_social_insurance_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.payslip_social_insurance_items FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.payslip_social_insurance_items;
+CREATE POLICY tenant_isolation ON staffing.payslip_social_insurance_items
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+
+-- end: modules/staffing/infrastructure/persistence/schema/00006_staffing_payroll_social_insurance_tables.sql
+
+-- begin: modules/staffing/infrastructure/persistence/schema/00007_staffing_payroll_social_insurance_engine.sql
+CREATE OR REPLACE FUNCTION staffing.round_by_rule(
+  p_value numeric,
+  p_rounding_rule text,
+  p_precision smallint
+)
+RETURNS numeric
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_scale numeric;
+BEGIN
+  IF p_rounding_rule IS NULL OR btrim(p_rounding_rule) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'rounding_rule is required';
+  END IF;
+  IF p_rounding_rule NOT IN ('HALF_UP','CEIL') THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unsupported rounding_rule: %s', p_rounding_rule);
+  END IF;
+  IF p_precision IS NULL OR p_precision < 0 OR p_precision > 2 THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('precision out of range: %s', p_precision);
+  END IF;
+
+  IF p_rounding_rule = 'HALF_UP' THEN
+    RETURN round(p_value, p_precision);
+  END IF;
+
+  v_scale := power(10::numeric, p_precision);
+  RETURN ceiling(p_value * v_scale) / v_scale;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.replay_social_insurance_policy_versions(
+  p_tenant_id uuid,
+  p_policy_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_lock_key text;
+  v_prev_effective date;
+  v_last_validity daterange;
+  v_row RECORD;
+  v_validity daterange;
+  v_employer_rate numeric(9,6);
+  v_employee_rate numeric(9,6);
+  v_base_floor numeric(15,2);
+  v_base_ceiling numeric(15,2);
+  v_rounding_rule text;
+  v_precision smallint;
+  v_rules_config jsonb;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_policy_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'policy_id is required';
+  END IF;
+
+  v_lock_key := format('staffing:social_insurance_policy:%s:%s', p_tenant_id, p_policy_id);
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
+
+  DELETE FROM staffing.social_insurance_policy_versions
+  WHERE tenant_id = p_tenant_id AND policy_id = p_policy_id;
+
+  v_prev_effective := NULL;
+
+  FOR v_row IN
+    SELECT
+      e.id AS event_db_id,
+      e.event_type,
+      e.effective_date,
+      e.city_code,
+      e.hukou_type,
+      e.insurance_type,
+      e.payload,
+      lead(e.effective_date) OVER (ORDER BY e.effective_date ASC, e.id ASC) AS next_effective
+    FROM staffing.social_insurance_policy_events e
+    WHERE e.tenant_id = p_tenant_id AND e.policy_id = p_policy_id
+    ORDER BY e.effective_date ASC, e.id ASC
+  LOOP
+    IF v_row.event_type = 'CREATE' THEN
+      IF v_prev_effective IS NOT NULL THEN
+        RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_EVENT', DETAIL = 'CREATE must be the first event';
+      END IF;
+    ELSIF v_row.event_type = 'UPDATE' THEN
+      IF v_prev_effective IS NULL THEN
+        RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_EVENT', DETAIL = 'UPDATE requires prior state';
+      END IF;
+    ELSE
+      RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unexpected event_type: %s', v_row.event_type);
+    END IF;
+
+    IF jsonb_typeof(v_row.payload) <> 'object'
+      OR NOT (v_row.payload ? 'employer_rate')
+      OR NOT (v_row.payload ? 'employee_rate')
+      OR NOT (v_row.payload ? 'base_floor')
+      OR NOT (v_row.payload ? 'base_ceiling')
+      OR NOT (v_row.payload ? 'rounding_rule')
+      OR NOT (v_row.payload ? 'precision')
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+        DETAIL = format('policy_id=%s event_db_id=%s', p_policy_id, v_row.event_db_id);
+    END IF;
+
+    BEGIN
+      v_employer_rate := (v_row.payload->>'employer_rate')::numeric;
+      v_employee_rate := (v_row.payload->>'employee_rate')::numeric;
+      v_base_floor := (v_row.payload->>'base_floor')::numeric;
+      v_base_ceiling := (v_row.payload->>'base_ceiling')::numeric;
+      v_rounding_rule := btrim(v_row.payload->>'rounding_rule');
+      v_precision := (v_row.payload->>'precision')::smallint;
+    EXCEPTION
+      WHEN invalid_text_representation THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+          DETAIL = format('policy_id=%s event_db_id=%s', p_policy_id, v_row.event_db_id);
+    END;
+
+    IF v_employer_rate < 0 OR v_employer_rate > 1 OR v_employee_rate < 0 OR v_employee_rate > 1 THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+        DETAIL = format('policy_id=%s event_db_id=%s rate out of range', p_policy_id, v_row.event_db_id);
+    END IF;
+    IF v_base_floor < 0 OR v_base_ceiling < v_base_floor THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+        DETAIL = format('policy_id=%s event_db_id=%s base_floor/base_ceiling invalid', p_policy_id, v_row.event_db_id);
+    END IF;
+    IF v_rounding_rule IS NULL OR v_rounding_rule = '' OR v_rounding_rule NOT IN ('HALF_UP','CEIL') THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+        DETAIL = format('policy_id=%s event_db_id=%s rounding_rule invalid', p_policy_id, v_row.event_db_id);
+    END IF;
+    IF v_precision < 0 OR v_precision > 2 THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+        DETAIL = format('policy_id=%s event_db_id=%s precision invalid', p_policy_id, v_row.event_db_id);
+    END IF;
+
+    IF v_row.payload ? 'rules_config' THEN
+      v_rules_config := v_row.payload->'rules_config';
+      IF jsonb_typeof(v_rules_config) <> 'object' THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+          DETAIL = format('policy_id=%s event_db_id=%s rules_config must be object', p_policy_id, v_row.event_db_id);
+      END IF;
+    ELSE
+      v_rules_config := '{}'::jsonb;
+    END IF;
+
+    IF v_row.next_effective IS NULL THEN
+      v_validity := daterange(v_row.effective_date, NULL, '[)');
+    ELSE
+      v_validity := daterange(v_row.effective_date, v_row.next_effective, '[)');
+    END IF;
+
+    INSERT INTO staffing.social_insurance_policy_versions (
+      tenant_id,
+      policy_id,
+      city_code,
+      hukou_type,
+      insurance_type,
+      employer_rate,
+      employee_rate,
+      base_floor,
+      base_ceiling,
+      rounding_rule,
+      precision,
+      rules_config,
+      validity,
+      last_event_id
+    )
+    VALUES (
+      p_tenant_id,
+      p_policy_id,
+      v_row.city_code,
+      v_row.hukou_type,
+      v_row.insurance_type,
+      v_employer_rate,
+      v_employee_rate,
+      v_base_floor,
+      v_base_ceiling,
+      v_rounding_rule,
+      v_precision,
+      v_rules_config,
+      v_validity,
+      v_row.event_db_id
+    );
+
+    v_prev_effective := v_row.effective_date;
+  END LOOP;
+
+  IF EXISTS (
+    WITH ordered AS (
+      SELECT
+        validity,
+        lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
+      FROM staffing.social_insurance_policy_versions
+      WHERE tenant_id = p_tenant_id AND policy_id = p_policy_id
+    )
+    SELECT 1
+    FROM ordered
+    WHERE prev_validity IS NOT NULL
+      AND lower(validity) <> upper(prev_validity)
+    LIMIT 1
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_VALIDITY_GAP',
+      DETAIL = 'social_insurance_policy_versions must be gapless';
+  END IF;
+
+  SELECT validity INTO v_last_validity
+  FROM staffing.social_insurance_policy_versions
+  WHERE tenant_id = p_tenant_id AND policy_id = p_policy_id
+  ORDER BY lower(validity) DESC
+  LIMIT 1;
+
+  IF v_last_validity IS NOT NULL AND NOT upper_inf(v_last_validity) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_VALIDITY_NOT_INFINITE',
+      DETAIL = 'last social_insurance_policy_versions validity must be unbounded (infinity)';
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.submit_social_insurance_policy_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_policy_id uuid,
+  p_city_code text,
+  p_hukou_type text,
+  p_insurance_type text,
+  p_event_type text,
+  p_effective_date date,
+  p_payload jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_lock_key text;
+  v_event_db_id bigint;
+  v_existing staffing.social_insurance_policy_events%ROWTYPE;
+  v_payload jsonb;
+  v_existing_city_code text;
+  v_identity_policy_id uuid;
+  v_constraint text;
+  v_employer_rate numeric(9,6);
+  v_employee_rate numeric(9,6);
+  v_base_floor numeric(15,2);
+  v_base_ceiling numeric(15,2);
+  v_rounding_rule text;
+  v_precision smallint;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_event_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  END IF;
+  IF p_policy_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'policy_id is required';
+  END IF;
+  IF p_city_code IS NULL OR btrim(p_city_code) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'city_code is required';
+  END IF;
+  IF p_city_code <> btrim(p_city_code) THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'city_code must be trimmed';
+  END IF;
+  IF p_city_code <> upper(p_city_code) THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'city_code must be upper';
+  END IF;
+  IF p_hukou_type IS NULL OR btrim(p_hukou_type) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'hukou_type is required';
+  END IF;
+  IF p_hukou_type <> btrim(p_hukou_type) THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'hukou_type must be trimmed';
+  END IF;
+  IF p_hukou_type <> lower(p_hukou_type) THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'hukou_type must be lower';
+  END IF;
+  IF p_hukou_type <> 'default' THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_SI_HUKOU_TYPE_NOT_SUPPORTED',
+      DETAIL = format('hukou_type=%s', p_hukou_type);
+  END IF;
+  IF p_insurance_type IS NULL OR btrim(p_insurance_type) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'insurance_type is required';
+  END IF;
+  IF p_insurance_type NOT IN ('PENSION','MEDICAL','UNEMPLOYMENT','INJURY','MATERNITY','HOUSING_FUND') THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unsupported insurance_type: %s', p_insurance_type);
+  END IF;
+  IF p_event_type IS NULL OR btrim(p_event_type) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_type is required';
+  END IF;
+  IF p_event_type NOT IN ('CREATE','UPDATE') THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unsupported event_type: %s', p_event_type);
+  END IF;
+  IF p_effective_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
+  END IF;
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  END IF;
+  IF p_initiator_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  END IF;
+
+  v_payload := COALESCE(p_payload, '{}'::jsonb);
+  IF jsonb_typeof(v_payload) <> 'object' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'payload must be an object';
+  END IF;
+  IF NOT (v_payload ? 'employer_rate')
+    OR NOT (v_payload ? 'employee_rate')
+    OR NOT (v_payload ? 'base_floor')
+    OR NOT (v_payload ? 'base_ceiling')
+    OR NOT (v_payload ? 'rounding_rule')
+    OR NOT (v_payload ? 'precision')
+  THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+      DETAIL = format('policy_id=%s', p_policy_id);
+  END IF;
+  BEGIN
+    v_employer_rate := (v_payload->>'employer_rate')::numeric;
+    v_employee_rate := (v_payload->>'employee_rate')::numeric;
+    v_base_floor := (v_payload->>'base_floor')::numeric;
+    v_base_ceiling := (v_payload->>'base_ceiling')::numeric;
+    v_rounding_rule := btrim(v_payload->>'rounding_rule');
+    v_precision := (v_payload->>'precision')::smallint;
+  EXCEPTION
+    WHEN invalid_text_representation THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+        DETAIL = format('policy_id=%s', p_policy_id);
+  END;
+  IF v_employer_rate < 0 OR v_employer_rate > 1 OR v_employee_rate < 0 OR v_employee_rate > 1 THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+      DETAIL = format('policy_id=%s rate out of range', p_policy_id);
+  END IF;
+  IF v_base_floor < 0 OR v_base_ceiling < v_base_floor THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+      DETAIL = format('policy_id=%s base_floor/base_ceiling invalid', p_policy_id);
+  END IF;
+  IF v_rounding_rule IS NULL OR v_rounding_rule = '' OR v_rounding_rule NOT IN ('HALF_UP','CEIL') THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+      DETAIL = format('policy_id=%s rounding_rule invalid', p_policy_id);
+  END IF;
+  IF v_precision < 0 OR v_precision > 2 THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+      DETAIL = format('policy_id=%s precision invalid', p_policy_id);
+  END IF;
+  IF v_payload ? 'rules_config' AND jsonb_typeof(v_payload->'rules_config') <> 'object' THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_PAYLOAD_REQUIRED',
+      DETAIL = format('policy_id=%s rules_config must be object', p_policy_id);
+  END IF;
+
+  SELECT city_code INTO v_existing_city_code
+  FROM staffing.social_insurance_policies
+  WHERE tenant_id = p_tenant_id
+  LIMIT 1;
+  IF FOUND AND v_existing_city_code <> p_city_code THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_SI_MULTI_CITY_NOT_SUPPORTED',
+      DETAIL = format('existing_city_code=%s requested_city_code=%s', v_existing_city_code, p_city_code);
+  END IF;
+
+  INSERT INTO staffing.social_insurance_policies (
+    tenant_id,
+    id,
+    city_code,
+    hukou_type,
+    insurance_type
+  )
+  VALUES (
+    p_tenant_id,
+    p_policy_id,
+    p_city_code,
+    p_hukou_type,
+    p_insurance_type
+  )
+  ON CONFLICT (tenant_id, city_code, hukou_type, insurance_type) DO NOTHING;
+
+  SELECT id INTO v_identity_policy_id
+  FROM staffing.social_insurance_policies
+  WHERE tenant_id = p_tenant_id
+    AND city_code = p_city_code
+    AND hukou_type = p_hukou_type
+    AND insurance_type = p_insurance_type;
+
+  IF v_identity_policy_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'policy identity missing after upsert';
+  END IF;
+  IF v_identity_policy_id <> p_policy_id THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_SOCIAL_INSURANCE_POLICY_ID_MISMATCH',
+      DETAIL = format('policy_id=%s existing_policy_id=%s', p_policy_id, v_identity_policy_id);
+  END IF;
+
+  v_lock_key := format('staffing:social_insurance_policy:%s:%s', p_tenant_id, p_policy_id);
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
+
+  BEGIN
+    INSERT INTO staffing.social_insurance_policy_events (
+      event_id,
+      tenant_id,
+      policy_id,
+      city_code,
+      hukou_type,
+      insurance_type,
+      event_type,
+      effective_date,
+      payload,
+      request_id,
+      initiator_id
+    )
+    VALUES (
+      p_event_id,
+      p_tenant_id,
+      p_policy_id,
+      p_city_code,
+      p_hukou_type,
+      p_insurance_type,
+      p_event_type,
+      p_effective_date,
+      v_payload,
+      p_request_id,
+      p_initiator_id
+    )
+    ON CONFLICT (event_id) DO NOTHING
+    RETURNING id INTO v_event_db_id;
+  EXCEPTION
+    WHEN unique_violation THEN
+      GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
+      IF v_constraint = 'social_insurance_policy_events_one_per_day_unique' THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_EVENT_ONE_PER_DAY_CONFLICT',
+          DETAIL = format('policy_id=%s effective_date=%s', p_policy_id, p_effective_date);
+      END IF;
+      RAISE;
+  END;
+
+  IF v_event_db_id IS NULL THEN
+    SELECT * INTO v_existing
+    FROM staffing.social_insurance_policy_events
+    WHERE event_id = p_event_id;
+
+    IF v_existing.tenant_id <> p_tenant_id
+      OR v_existing.policy_id <> p_policy_id
+      OR v_existing.city_code <> p_city_code
+      OR v_existing.hukou_type <> p_hukou_type
+      OR v_existing.insurance_type <> p_insurance_type
+      OR v_existing.event_type <> p_event_type
+      OR v_existing.effective_date <> p_effective_date
+      OR v_existing.payload <> v_payload
+      OR v_existing.request_id <> p_request_id
+      OR v_existing.initiator_id <> p_initiator_id
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+    END IF;
+
+    RETURN v_existing.id;
+  END IF;
+
+  PERFORM staffing.replay_social_insurance_policy_versions(p_tenant_id, p_policy_id);
+
+  RETURN v_event_db_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.payroll_apply_social_insurance(
+  p_tenant_id uuid,
+  p_run_id uuid,
+  p_pay_period_id uuid,
+  p_period_start date,
+  p_period_end_excl date,
+  p_run_event_db_id bigint,
+  p_now timestamptz
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_types int;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_run_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'run_id is required';
+  END IF;
+  IF p_pay_period_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'pay_period_id is required';
+  END IF;
+  IF p_period_start IS NULL OR p_period_end_excl IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'period bounds are required';
+  END IF;
+  IF p_period_end_excl <= p_period_start THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'invalid period bounds';
+  END IF;
+  IF p_run_event_db_id IS NULL OR p_run_event_db_id <= 0 THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'run_event_db_id is required';
+  END IF;
+  IF p_now IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'now is required';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM staffing.social_insurance_policies
+    WHERE tenant_id = p_tenant_id
+    LIMIT 1
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_MISSING',
+      DETAIL = format('tenant_id=%s', p_tenant_id);
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM staffing.social_insurance_policy_events e
+    WHERE e.tenant_id = p_tenant_id
+      AND e.effective_date > p_period_start
+      AND e.effective_date < p_period_end_excl
+    LIMIT 1
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_CHANGED_WITHIN_PERIOD',
+      DETAIL = format('period_start=%s period_end_exclusive=%s', p_period_start, p_period_end_excl);
+  END IF;
+
+  SELECT count(DISTINCT insurance_type) INTO v_types
+  FROM staffing.social_insurance_policy_versions v
+  WHERE v.tenant_id = p_tenant_id
+    AND v.validity @> p_period_start;
+
+  IF v_types <> 6 THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_SI_POLICY_NOT_FOUND_AS_OF',
+      DETAIL = format('as_of=%s types_found=%s', p_period_start, v_types);
+  END IF;
+
+  DELETE FROM staffing.payslip_social_insurance_items i
+  USING staffing.payslips p
+  WHERE p.tenant_id = p_tenant_id
+    AND p.run_id = p_run_id
+    AND i.tenant_id = p_tenant_id
+    AND i.payslip_id = p.id;
+
+  WITH policy_as_of AS (
+    SELECT
+      v.policy_id,
+      v.city_code,
+      v.hukou_type,
+      v.insurance_type,
+      v.employer_rate,
+      v.employee_rate,
+      v.base_floor,
+      v.base_ceiling,
+      v.rounding_rule,
+      v.precision,
+      v.rules_config,
+      v.validity,
+      v.last_event_id
+    FROM staffing.social_insurance_policy_versions v
+    WHERE v.tenant_id = p_tenant_id
+      AND v.validity @> p_period_start
+  )
+  INSERT INTO staffing.payslip_social_insurance_items (
+    tenant_id,
+    payslip_id,
+    run_id,
+    pay_period_id,
+    person_uuid,
+    assignment_id,
+    city_code,
+    hukou_type,
+    insurance_type,
+    base_amount,
+    employee_amount,
+    employer_amount,
+    currency,
+    policy_id,
+    policy_last_event_id,
+    last_run_event_id,
+    meta,
+    created_at,
+    updated_at
+  )
+  SELECT
+    p_tenant_id,
+    p.id,
+    p_run_id,
+    p_pay_period_id,
+    p.person_uuid,
+    p.assignment_id,
+    pol.city_code,
+    pol.hukou_type,
+    pol.insurance_type,
+    GREATEST(pol.base_floor, LEAST(p.gross_pay, pol.base_ceiling)) AS base_amount,
+    staffing.round_by_rule(
+      GREATEST(pol.base_floor, LEAST(p.gross_pay, pol.base_ceiling)) * pol.employee_rate,
+      pol.rounding_rule,
+      pol.precision
+    ) AS employee_amount,
+    staffing.round_by_rule(
+      GREATEST(pol.base_floor, LEAST(p.gross_pay, pol.base_ceiling)) * pol.employer_rate,
+      pol.rounding_rule,
+      pol.precision
+    ) AS employer_amount,
+    p.currency,
+    pol.policy_id,
+    pol.last_event_id,
+    p_run_event_db_id,
+    jsonb_build_object(
+      'as_of', p_period_start::text,
+      'policy_effective_date', lower(pol.validity)::text,
+      'employer_rate', pol.employer_rate::text,
+      'employee_rate', pol.employee_rate::text,
+      'base_floor', pol.base_floor::text,
+      'base_ceiling', pol.base_ceiling::text,
+      'rounding_rule', pol.rounding_rule,
+      'precision', pol.precision::text,
+      'gross_pay', p.gross_pay::text
+    ),
+    p_now,
+    p_now
+  FROM staffing.payslips p
+  CROSS JOIN policy_as_of pol
+  WHERE p.tenant_id = p_tenant_id AND p.run_id = p_run_id;
+
+  WITH sums AS (
+    SELECT
+      p.id AS payslip_id,
+      COALESCE(sum(i.employee_amount), 0) AS employee_total,
+      COALESCE(sum(i.employer_amount), 0) AS employer_total
+    FROM staffing.payslips p
+    LEFT JOIN staffing.payslip_social_insurance_items i
+      ON i.tenant_id = p.tenant_id AND i.payslip_id = p.id
+    WHERE p.tenant_id = p_tenant_id AND p.run_id = p_run_id
+    GROUP BY p.id
+  )
+  UPDATE staffing.payslips p
+  SET
+    net_pay = p.gross_pay - sums.employee_total,
+    employer_total = sums.employer_total,
+    last_run_event_id = p_run_event_db_id,
+    updated_at = p_now
+  FROM sums
+  WHERE p.tenant_id = p_tenant_id AND p.id = sums.payslip_id;
+END;
+$$;
+
+
+-- end: modules/staffing/infrastructure/persistence/schema/00007_staffing_payroll_social_insurance_engine.sql
+
+-- begin: modules/staffing/infrastructure/persistence/schema/00008_staffing_iit_deduction_claims.sql
+CREATE TABLE IF NOT EXISTS staffing.iit_special_additional_deduction_claim_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  tax_year integer NOT NULL,
+  tax_month smallint NOT NULL,
+  amount numeric(15,2) NOT NULL,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT iit_sad_claim_events_tax_year_check CHECK (tax_year >= 2000 AND tax_year <= 9999),
+  CONSTRAINT iit_sad_claim_events_tax_month_check CHECK (tax_month >= 1 AND tax_month <= 12),
+  CONSTRAINT iit_sad_claim_events_amount_check CHECK (amount >= 0),
+  CONSTRAINT iit_sad_claim_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT iit_sad_claim_events_request_id_unique UNIQUE (tenant_id, request_id)
+);
+
+CREATE INDEX IF NOT EXISTS iit_sad_claim_events_lookup_btree
+  ON staffing.iit_special_additional_deduction_claim_events (tenant_id, person_uuid, tax_year, tax_month, id);
+
+CREATE TABLE IF NOT EXISTS staffing.iit_special_additional_deduction_claims (
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  tax_year integer NOT NULL,
+  tax_month smallint NOT NULL,
+  amount numeric(15,2) NOT NULL DEFAULT 0,
+  last_event_id bigint NOT NULL REFERENCES staffing.iit_special_additional_deduction_claim_events(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, person_uuid, tax_year, tax_month),
+  CONSTRAINT iit_sad_claims_tax_year_check CHECK (tax_year >= 2000 AND tax_year <= 9999),
+  CONSTRAINT iit_sad_claims_tax_month_check CHECK (tax_month >= 1 AND tax_month <= 12),
+  CONSTRAINT iit_sad_claims_amount_check CHECK (amount >= 0)
+);
+
+ALTER TABLE staffing.iit_special_additional_deduction_claim_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.iit_special_additional_deduction_claim_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.iit_special_additional_deduction_claim_events;
+CREATE POLICY tenant_isolation ON staffing.iit_special_additional_deduction_claim_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.iit_special_additional_deduction_claims ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.iit_special_additional_deduction_claims FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.iit_special_additional_deduction_claims;
+CREATE POLICY tenant_isolation ON staffing.iit_special_additional_deduction_claims
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+-- end: modules/staffing/infrastructure/persistence/schema/00008_staffing_iit_deduction_claims.sql
+
+-- begin: modules/staffing/infrastructure/persistence/schema/00009_staffing_payroll_balances.sql
+CREATE TABLE IF NOT EXISTS staffing.payroll_balances (
+  tenant_id uuid NOT NULL,
+  tax_entity_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  tax_year integer NOT NULL,
+
+  first_tax_month smallint NOT NULL,
+  last_tax_month smallint NOT NULL,
+
+  ytd_income numeric(15,2) NOT NULL DEFAULT 0,
+  ytd_tax_exempt_income numeric(15,2) NOT NULL DEFAULT 0,
+  ytd_standard_deduction numeric(15,2) NOT NULL DEFAULT 0,
+  ytd_special_deduction numeric(15,2) NOT NULL DEFAULT 0,
+  ytd_special_additional_deduction numeric(15,2) NOT NULL DEFAULT 0,
+
+  ytd_taxable_income numeric(15,2) NOT NULL DEFAULT 0,
+  ytd_iit_tax_liability numeric(15,2) NOT NULL DEFAULT 0,
+  ytd_iit_withheld numeric(15,2) NOT NULL DEFAULT 0,
+  ytd_iit_credit numeric(15,2) NOT NULL DEFAULT 0,
+
+  last_pay_period_id uuid NOT NULL,
+  last_run_id uuid NOT NULL,
+
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+
+  PRIMARY KEY (tenant_id, tax_entity_id, person_uuid, tax_year),
+  CONSTRAINT payroll_balances_tax_year_check CHECK (tax_year >= 2000 AND tax_year <= 9999),
+  CONSTRAINT payroll_balances_first_month_check CHECK (first_tax_month >= 1 AND first_tax_month <= 12),
+  CONSTRAINT payroll_balances_last_month_check CHECK (last_tax_month >= 1 AND last_tax_month <= 12),
+  CONSTRAINT payroll_balances_months_order_check CHECK (last_tax_month >= first_tax_month),
+  CONSTRAINT payroll_balances_amounts_nonneg_check CHECK (
+    ytd_income >= 0 AND ytd_tax_exempt_income >= 0 AND ytd_standard_deduction >= 0
+    AND ytd_special_deduction >= 0 AND ytd_special_additional_deduction >= 0
+    AND ytd_taxable_income >= 0 AND ytd_iit_tax_liability >= 0 AND ytd_iit_withheld >= 0 AND ytd_iit_credit >= 0
+  )
+);
+
+CREATE INDEX IF NOT EXISTS payroll_balances_lookup_btree
+  ON staffing.payroll_balances (tenant_id, person_uuid, tax_year);
+
+ALTER TABLE staffing.payroll_balances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.payroll_balances FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.payroll_balances;
+CREATE POLICY tenant_isolation ON staffing.payroll_balances
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+-- end: modules/staffing/infrastructure/persistence/schema/00009_staffing_payroll_balances.sql
 
 -- begin: modules/person/infrastructure/persistence/schema/00001_person_schema.sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

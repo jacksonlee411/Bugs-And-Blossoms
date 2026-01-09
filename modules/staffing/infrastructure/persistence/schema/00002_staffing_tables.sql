@@ -175,6 +175,42 @@ CREATE TABLE IF NOT EXISTS staffing.time_punch_events (
 CREATE INDEX IF NOT EXISTS time_punch_events_lookup_idx
   ON staffing.time_punch_events (tenant_id, person_uuid, punch_time DESC, id DESC);
 
+CREATE TABLE IF NOT EXISTS staffing.daily_attendance_results (
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  work_date date NOT NULL,
+
+  ruleset_version text NOT NULL,
+  status text NOT NULL,
+  flags text[] NOT NULL DEFAULT '{}'::text[],
+
+  first_in_time timestamptz NULL,
+  last_out_time timestamptz NULL,
+  worked_minutes int NOT NULL DEFAULT 0,
+  late_minutes int NOT NULL DEFAULT 0,
+  early_leave_minutes int NOT NULL DEFAULT 0,
+
+  input_punch_count int NOT NULL DEFAULT 0,
+  input_max_punch_event_db_id bigint NULL,
+  input_max_punch_time timestamptz NULL,
+
+  computed_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+
+  PRIMARY KEY (tenant_id, person_uuid, work_date),
+
+  CONSTRAINT daily_attendance_results_status_check
+    CHECK (status IN ('PRESENT','ABSENT','EXCEPTION')),
+  CONSTRAINT daily_attendance_results_minutes_nonneg_check
+    CHECK (worked_minutes >= 0 AND late_minutes >= 0 AND early_leave_minutes >= 0),
+  CONSTRAINT daily_attendance_results_flags_allowlist_check
+    CHECK (flags <@ ARRAY['ABSENT','MISSING_IN','MISSING_OUT','LATE','EARLY_LEAVE']::text[])
+);
+
+CREATE INDEX IF NOT EXISTS daily_attendance_results_lookup_idx
+  ON staffing.daily_attendance_results (tenant_id, person_uuid, work_date DESC);
+
 ALTER TABLE staffing.positions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.positions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.positions;
@@ -221,5 +257,12 @@ ALTER TABLE staffing.time_punch_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.time_punch_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.time_punch_events;
 CREATE POLICY tenant_isolation ON staffing.time_punch_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.daily_attendance_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.daily_attendance_results FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.daily_attendance_results;
+CREATE POLICY tenant_isolation ON staffing.daily_attendance_results
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);

@@ -15,19 +15,25 @@ type beginnerFunc func(ctx context.Context) (pgx.Tx, error)
 func (f beginnerFunc) Begin(ctx context.Context) (pgx.Tx, error) { return f(ctx) }
 
 type stubTx struct {
-	execErr   error
-	execErrAt int
-	execN     int
-	queryErr  error
-	commitErr error
-	rowErr    error
-	row2Err   error
-	row3Err   error
+	execErr    error
+	execErrAt  int
+	execN      int
+	queryErr   error
+	queryErrAt int
+	queryN     int
+	commitErr  error
+	rowErr     error
+	row2Err    error
+	row3Err    error
+	row4Err    error
 
-	rows pgx.Rows
-	row  pgx.Row
-	row2 pgx.Row
-	row3 pgx.Row
+	rows  pgx.Rows
+	rows2 pgx.Rows
+	rows3 pgx.Rows
+	row   pgx.Row
+	row2  pgx.Row
+	row3  pgx.Row
+	row4  pgx.Row
 }
 
 func (t *stubTx) Begin(ctx context.Context) (pgx.Tx, error) { return t, nil }
@@ -58,8 +64,24 @@ func (t *stubTx) Exec(context.Context, string, ...any) (pgconn.CommandTag, error
 }
 
 func (t *stubTx) Query(context.Context, string, ...any) (pgx.Rows, error) {
+	t.queryN++
 	if t.queryErr != nil {
-		return nil, t.queryErr
+		at := t.queryErrAt
+		if at == 0 {
+			at = 1
+		}
+		if t.queryN == at {
+			return nil, t.queryErr
+		}
+	}
+	if t.queryN == 1 && t.rows != nil {
+		return t.rows, nil
+	}
+	if t.queryN == 2 && t.rows2 != nil {
+		return t.rows2, nil
+	}
+	if t.queryN == 3 && t.rows3 != nil {
+		return t.rows3, nil
 	}
 	if t.rows != nil {
 		return t.rows, nil
@@ -88,7 +110,17 @@ func (t *stubTx) QueryRow(context.Context, string, ...any) pgx.Row {
 		return &stubRow{err: t.row3Err}
 	}
 	if t.row3 != nil {
-		return t.row3
+		r := t.row3
+		t.row3 = nil
+		return r
+	}
+	if t.row4Err != nil {
+		return &stubRow{err: t.row4Err}
+	}
+	if t.row4 != nil {
+		r := t.row4
+		t.row4 = nil
+		return r
 	}
 	return fakeRow{}
 }
@@ -232,11 +264,32 @@ type fakeRow struct {
 
 func (r fakeRow) Scan(dest ...any) error {
 	for i := range dest {
+		if i >= len(r.vals) || r.vals[i] == nil {
+			switch d := dest[i].(type) {
+			case *string:
+				*d = ""
+			case *time.Time:
+				*d = time.Time{}
+			case *bool:
+				*d = false
+			case *int:
+				*d = 0
+			case *int64:
+				*d = 0
+			}
+			continue
+		}
 		switch d := dest[i].(type) {
 		case *string:
 			*d = r.vals[i].(string)
 		case *time.Time:
 			*d = r.vals[i].(time.Time)
+		case *bool:
+			*d = r.vals[i].(bool)
+		case *int:
+			*d = r.vals[i].(int)
+		case *int64:
+			*d = r.vals[i].(int64)
 		}
 	}
 	return nil

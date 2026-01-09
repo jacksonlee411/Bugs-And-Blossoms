@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http/httptest"
 	"testing"
@@ -160,6 +161,88 @@ func (r *payslipItemRows) Scan(dest ...any) error {
 func (r *payslipItemRows) Values() ([]any, error) { return nil, nil }
 func (r *payslipItemRows) RawValues() [][]byte    { return nil }
 func (r *payslipItemRows) Conn() *pgx.Conn        { return nil }
+
+type siPolicyVersionRows struct {
+	empty   bool
+	nextN   int
+	scanErr error
+	err     error
+}
+
+func (r *siPolicyVersionRows) Close()                        {}
+func (r *siPolicyVersionRows) Err() error                    { return r.err }
+func (r *siPolicyVersionRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *siPolicyVersionRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *siPolicyVersionRows) Next() bool {
+	if r.empty {
+		return false
+	}
+	if r.nextN > 0 {
+		return false
+	}
+	r.nextN++
+	return true
+}
+func (r *siPolicyVersionRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	*(dest[0].(*string)) = "p1"
+	*(dest[1].(*string)) = "CN-310000"
+	*(dest[2].(*string)) = "default"
+	*(dest[3].(*string)) = "PENSION"
+	*(dest[4].(*string)) = "2026-01-01"
+	*(dest[5].(*string)) = "0.16"
+	*(dest[6].(*string)) = "0.08"
+	*(dest[7].(*string)) = "0.00"
+	*(dest[8].(*string)) = "99999.99"
+	*(dest[9].(*string)) = "HALF_UP"
+	*(dest[10].(*int)) = 2
+	return nil
+}
+func (r *siPolicyVersionRows) Values() ([]any, error) { return nil, nil }
+func (r *siPolicyVersionRows) RawValues() [][]byte    { return nil }
+func (r *siPolicyVersionRows) Conn() *pgx.Conn        { return nil }
+
+type payslipSocialInsuranceItemRows struct {
+	empty   bool
+	nextN   int
+	scanErr error
+	err     error
+}
+
+func (r *payslipSocialInsuranceItemRows) Close()                        {}
+func (r *payslipSocialInsuranceItemRows) Err() error                    { return r.err }
+func (r *payslipSocialInsuranceItemRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *payslipSocialInsuranceItemRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *payslipSocialInsuranceItemRows) Next() bool {
+	if r.empty {
+		return false
+	}
+	if r.nextN > 0 {
+		return false
+	}
+	r.nextN++
+	return true
+}
+func (r *payslipSocialInsuranceItemRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	*(dest[0].(*string)) = "PENSION"
+	*(dest[1].(*string)) = "100.00"
+	*(dest[2].(*string)) = "8.00"
+	*(dest[3].(*string)) = "16.00"
+	*(dest[4].(*string)) = "2026-01-01"
+	return nil
+}
+func (r *payslipSocialInsuranceItemRows) Values() ([]any, error) { return nil, nil }
+func (r *payslipSocialInsuranceItemRows) RawValues() [][]byte    { return nil }
+func (r *payslipSocialInsuranceItemRows) Conn() *pgx.Conn        { return nil }
 
 func seqBeginner(txs ...pgx.Tx) beginnerFunc {
 	n := 0
@@ -1134,6 +1217,7 @@ func TestPayrollPGStore_ListPayslips(t *testing.T) {
 
 func TestPayrollPGStore_GetPayslip(t *testing.T) {
 	headerRow := &stubRow{vals: []any{"ps1", "run1", "pp1", "person1", "asmt1", "CNY", "100.00", "100.00", "0.00"}}
+	totalsRow := &stubRow{vals: []any{"0.00", "0.00"}}
 
 	t.Run("begin error", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
@@ -1193,8 +1277,66 @@ func TestPayrollPGStore_GetPayslip(t *testing.T) {
 		}
 	})
 
+	t.Run("social insurance totals query error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:     headerRow,
+			rows:    &payslipItemRows{},
+			row2Err: errors.New("totals"),
+		}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("social insurance items query error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:        headerRow,
+			row2:       totalsRow,
+			rows:       &payslipItemRows{},
+			queryErr:   errors.New("si query"),
+			queryErrAt: 2,
+		}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("social insurance items scan error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:   headerRow,
+			row2:  totalsRow,
+			rows:  &payslipItemRows{},
+			rows2: &payslipSocialInsuranceItemRows{scanErr: errors.New("scan")},
+		}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("social insurance items rows err", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:   headerRow,
+			row2:  totalsRow,
+			rows:  &payslipItemRows{},
+			rows2: &payslipSocialInsuranceItemRows{err: errors.New("rows")},
+		}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
 	t.Run("commit error", func(t *testing.T) {
-		store := newStaffingPGStore(seqBeginner(&stubTx{row: headerRow, rows: &payslipItemRows{}, commitErr: errors.New("commit")}))
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:       headerRow,
+			row2:      totalsRow,
+			rows:      &payslipItemRows{},
+			rows2:     &payslipSocialInsuranceItemRows{empty: true},
+			commitErr: errors.New("commit"),
+		}))
 		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
 		if err == nil {
 			t.Fatal("expected error")
@@ -1202,16 +1344,357 @@ func TestPayrollPGStore_GetPayslip(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		store := newStaffingPGStore(seqBeginner(&stubTx{row: headerRow, rows: &payslipItemRows{}}))
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:   headerRow,
+			row2:  totalsRow,
+			rows:  &payslipItemRows{},
+			rows2: &payslipSocialInsuranceItemRows{empty: false},
+		}))
 		got, err := store.GetPayslip(context.Background(), "t1", "ps1")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.ID != "ps1" || len(got.Items) != 1 {
+		if got.ID != "ps1" || len(got.Items) != 1 || len(got.SocialInsuranceItems) != 1 {
 			t.Fatalf("got=%#v", got)
 		}
 		if string(got.Items[0].Meta) != "{}" {
 			t.Fatalf("meta=%q", string(got.Items[0].Meta))
+		}
+	})
+}
+
+func TestPayrollPGStore_ListSocialInsurancePolicyVersions(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.ListSocialInsurancePolicyVersions(context.Background(), "t1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{execErr: errors.New("exec")}))
+		_, err := store.ListSocialInsurancePolicyVersions(context.Background(), "t1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("as_of required", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		_, err := store.ListSocialInsurancePolicyVersions(context.Background(), "t1", " ")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("as_of invalid", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		_, err := store.ListSocialInsurancePolicyVersions(context.Background(), "t1", "2026-01-99")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{queryErr: errors.New("query")}))
+		_, err := store.ListSocialInsurancePolicyVersions(context.Background(), "t1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{rows: &siPolicyVersionRows{scanErr: errors.New("scan")}}))
+		_, err := store.ListSocialInsurancePolicyVersions(context.Background(), "t1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rows err", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{rows: &siPolicyVersionRows{err: errors.New("rows")}}))
+		_, err := store.ListSocialInsurancePolicyVersions(context.Background(), "t1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{rows: &siPolicyVersionRows{}, commitErr: errors.New("commit")}))
+		_, err := store.ListSocialInsurancePolicyVersions(context.Background(), "t1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{rows: &siPolicyVersionRows{}}))
+		got, err := store.ListSocialInsurancePolicyVersions(context.Background(), "t1", "2026-01-01")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].PolicyID != "p1" || got[0].Precision != 2 {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+}
+
+func TestPayrollPGStore_UpsertSocialInsurancePolicyVersion(t *testing.T) {
+	validInput := func() SocialInsurancePolicyUpsertInput {
+		return SocialInsurancePolicyUpsertInput{
+			EventID:       "evt1",
+			CityCode:      "cn-310000",
+			HukouType:     "",
+			InsuranceType: "pension",
+			EffectiveDate: "2026-01-01",
+			EmployerRate:  "0.16",
+			EmployeeRate:  "0.08",
+			BaseFloor:     "0.00",
+			BaseCeiling:   "99999.99",
+			RoundingRule:  "half_up",
+			Precision:     2,
+		}
+	}
+
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", validInput())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{execErr: errors.New("exec")}))
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", validInput())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("event_id required", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.EventID = " "
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("city_code required", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.CityCode = ""
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("hukou_type not supported", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.HukouType = "urban"
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("insurance_type required", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.InsuranceType = ""
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("insurance_type invalid", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.InsuranceType = "invalid"
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("effective_date required", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.EffectiveDate = ""
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("effective_date invalid", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.EffectiveDate = "2026-01-99"
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rates and base required", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.EmployeeRate = ""
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rounding_rule required", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.RoundingRule = ""
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rounding_rule invalid", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.RoundingRule = "floor"
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("precision invalid", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.Precision = 3
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rules_config invalid json", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.RulesConfig = json.RawMessage("{")
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rules_config must be object", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{}))
+		in := validInput()
+		in.RulesConfig = json.RawMessage(`[]`)
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("policy query error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{rowErr: errors.New("policy query")}))
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", validInput())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("gen policy_id error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:     &stubRow{err: pgx.ErrNoRows},
+			row2Err: errors.New("gen"),
+		}))
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", validInput())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("hasEvent query error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:     &stubRow{err: pgx.ErrNoRows},
+			row2:    &stubRow{vals: []any{"p1"}},
+			row3Err: errors.New("exists"),
+		}))
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", validInput())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submit error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:     &stubRow{err: pgx.ErrNoRows},
+			row2:    &stubRow{vals: []any{"p1"}},
+			row3:    &stubRow{vals: []any{false}},
+			row4Err: errors.New("submit"),
+		}))
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", validInput())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			commitErr: errors.New("commit"),
+			row:       &stubRow{err: pgx.ErrNoRows},
+			row2:      &stubRow{vals: []any{"p1"}},
+			row3:      &stubRow{vals: []any{false}},
+			row4:      &stubRow{vals: []any{int64(1)}},
+		}))
+		_, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", validInput())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("success create", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:  &stubRow{err: pgx.ErrNoRows},
+			row2: &stubRow{vals: []any{"p1"}},
+			row3: &stubRow{vals: []any{false}},
+			row4: &stubRow{vals: []any{int64(1)}},
+		}))
+		got, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", validInput())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.PolicyID != "p1" || got.LastEventDBID != 1 || got.InsuranceType != "PENSION" {
+			t.Fatalf("got=%#v", got)
+		}
+	})
+
+	t.Run("success update", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:  &stubRow{vals: []any{"p1"}},
+			row2: &stubRow{vals: []any{true}},
+			row3: &stubRow{vals: []any{int64(2)}},
+		}))
+		in := validInput()
+		in.RulesConfig = json.RawMessage(`{"k":1}`)
+		got, err := store.UpsertSocialInsurancePolicyVersion(context.Background(), "t1", in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.PolicyID != "p1" || got.LastEventDBID != 2 || got.InsuranceType != "PENSION" {
+			t.Fatalf("got=%#v", got)
 		}
 	})
 }

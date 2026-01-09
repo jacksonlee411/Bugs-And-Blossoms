@@ -2,6 +2,11 @@
 
 **状态**: 规划中（2026-01-08 02:40 UTC）
 
+已完成事项（合并记录）：
+- 阶段 1（§8.2-1）：`iit_special_additional_deduction_claims`（events+projection+RLS）+ 迁移闭环（PR：#116）
+- 阶段 2（§8.2-2）：`payroll_balances` + RLS + 迁移闭环（PR：#118）
+- 阶段 3（§8.2-3）：迁移闭环确认（`make staffing plan/lint` No Drift）（PR：#120）
+
 > 上游路线图：`DEV-PLAN-039`  
 > 蓝图合同（范围/不变量/算法基线）：`DEV-PLAN-040`（重点：§3.3、§5.2）  
 > 依赖：`DEV-PLAN-041/042/043`（主流程载体 + payslip/pay items + 社保扣缴）  
@@ -23,7 +28,7 @@
 ### 0.2 目标与非目标（P0-4 Slice）
 
 **目标**
-- [ ] 冻结累计预扣法输入口径（字段级）：累计收入、累计免税、累计减除费用、累计专项扣除（含社保/公积金个人部分）、累计专项附加扣除、累计已预扣税额、留抵税额。
+- [ ] 冻结累计预扣法输入口径（字段级）：累计收入、累计免税、累计减除费用（按“本 tax_entity 的任职受雇月份数”计入，见 §6.2）、累计专项扣除（含社保/公积金个人部分）、累计专项附加扣除、累计已预扣税额、留抵税额。
 - [ ] 落地 `staffing.payroll_balances`（YTD 累加器）并保证 **O(1) 历史读取**：严禁在算薪热路径对历史工资条做线性聚合回看。
 - [ ] 实现累计预扣算法（税率表 + 速算扣除数 + 负数留抵）并生成 payslip IIT 明细项，工资条汇总 `net_pay` 与明细聚合一致（可重算）。
 - [ ] 将 balances 更新钩入 payroll run `FINALIZE` 的同一事务内（Posting 语义），保证“定稿后可审计、只读、口径稳定”。
@@ -42,7 +47,7 @@
   - [ ] Go 代码（`AGENTS.md`）
   - [ ] DB 迁移 / Schema（`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`）
   - [ ] sqlc（若触及 queries/config）（`docs/dev-plans/025-sqlc-guidelines.md`）
-  - [ ] 路由治理（若新增 internal API）（`docs/dev-plans/017-routing-strategy.md`）
+  - [ ] 路由治理（新增 internal API）（`docs/dev-plans/017-routing-strategy.md`）
   - [ ] 文档（`make check doc`）
 - **SSOT 链接**
   - 触发器矩阵与本地必跑：`AGENTS.md`
@@ -56,6 +61,7 @@
 - **One Door**：所有写入必须通过 DB Kernel `staffing.submit_*_event(...)`；应用层禁止直写 `staffing.*` 读模型表（对齐 `AGENTS.md`、`DEV-PLAN-040` §0.2）。
 - **No Tx, No RLS**：访问 payroll 表必须显式事务 + `set_config('app.current_tenant', ...)`；缺失即 fail-closed（对齐 `AGENTS.md`、`DEV-PLAN-019/021`）。
 - **O(1) 历史读取**：IIT 计算严禁 `SUM(...)` 扫描历史工资条；必须以 `payroll_balances` 单行读取作为历史输入（对齐 `DEV-PLAN-040` §3.3）。
+- **累计减除费用月数口径（冻结）**：`ytd_standard_deduction` 不使用“自然月号 × 5000”；而使用 `first_tax_month` 作为起点：`ytd_standard_deduction = 5000.00 * (tax_month - first_tax_month + 1)`；`first_tax_month` 在该税年首次 posting 时写入并保持不变（用于处理年中入职/跨雇主入职）。
 - **负数留抵（不得退税）**：当 `本期应预扣税额 < 0` 时，本期 IIT=0，并把差额存为 `ytd_iit_credit`（留抵税额）；后续月份按累计预扣法自动抵扣（对齐 `DEV-PLAN-040` §5.2）。
 - **Posting 同事务**：balances 更新必须与 payroll run `FINALIZE` 同事务完成；任何“先定稿后补 balances”的异步补偿都视为双权威（禁止）。
 - **金额无浮点**：金额计算使用 `apd.Decimal`；税额最终量化到“分”（2 位小数）；对外/JSON 传输金额一律 string（对齐 `DEV-PLAN-040` §4.2）。
@@ -66,6 +72,7 @@
 
 - [ ] 运行至少两个月 pay period：第 2 月 IIT 计算只读取 `staffing.payroll_balances`（一行）作为历史输入，不依赖聚合扫描历史工资条（可在测试/日志中验证）。
 - [ ] 构造“留抵税额”用例：通过录入/更新某月专项附加扣除，制造 `累计应纳税额 < 累计已预扣税额`；本月 IIT=0，`ytd_iit_credit` 保存为正数并影响下月。
+- [ ] 年中入职/跨雇主入职：首月 `ytd_standard_deduction = 5000.00`（不是 `5000 * 自然月号`）；balances 的 `first_tax_month` 固定并影响后续累计减除费用。
 - [ ] 工资条详情展示 IIT 明细项（本期预扣税额），`net_pay` 与明细聚合一致（可重算）。
 - [ ] payroll run `FINALIZE` 后 balances 已更新；定稿事务内断言（或集成测试）不出现“run 已 finalized 但 balances 未推进”的状态。
 
@@ -154,7 +161,8 @@ CREATE TABLE IF NOT EXISTS staffing.payroll_balances (
   tax_entity_id uuid NOT NULL,
   person_uuid uuid NOT NULL,
   tax_year integer NOT NULL,
-  last_tax_month smallint NOT NULL DEFAULT 0, -- 0 表示该年度尚未 posting
+  first_tax_month smallint NOT NULL, -- 本 tax_year 内首次 posting 的月份（1-12）
+  last_tax_month smallint NOT NULL, -- 本 tax_year 内最后一次 posting 的月份（1-12）
 
   ytd_income numeric(15,2) NOT NULL DEFAULT 0,
   ytd_tax_exempt_income numeric(15,2) NOT NULL DEFAULT 0,
@@ -175,7 +183,9 @@ CREATE TABLE IF NOT EXISTS staffing.payroll_balances (
 
   PRIMARY KEY (tenant_id, tax_entity_id, person_uuid, tax_year),
   CONSTRAINT payroll_balances_tax_year_check CHECK (tax_year >= 2000 AND tax_year <= 9999),
-  CONSTRAINT payroll_balances_month_check CHECK (last_tax_month >= 0 AND last_tax_month <= 12),
+  CONSTRAINT payroll_balances_first_month_check CHECK (first_tax_month >= 1 AND first_tax_month <= 12),
+  CONSTRAINT payroll_balances_last_month_check CHECK (last_tax_month >= 1 AND last_tax_month <= 12),
+  CONSTRAINT payroll_balances_months_order_check CHECK (last_tax_month >= first_tax_month),
   CONSTRAINT payroll_balances_amounts_nonneg_check CHECK (
     ytd_income >= 0 AND ytd_tax_exempt_income >= 0 AND ytd_standard_deduction >= 0
     AND ytd_special_deduction >= 0 AND ytd_special_additional_deduction >= 0
@@ -189,6 +199,7 @@ CREATE INDEX IF NOT EXISTS payroll_balances_lookup_btree
 
 说明：
 - `tax_entity_id`：扣缴义务人/发薪主体。P0 冻结为 `tax_entity_id = tenant_id`（`DEV-PLAN-040` §3.3），暂不引入多主体维度。
+- `first_tax_month`：本 tax_entity 内该员工在本税年的首次 posting 月份；用于累计减除费用月数口径：`month_count = last_tax_month - first_tax_month + 1`。
 - `ytd_iit_credit`：留抵税额（累计应纳税额 < 累计已预扣税额时的差额），用于后续月份抵扣；不做“直接退税”。
 
 #### 4.2.2 `staffing.iit_special_additional_deduction_claim_events`
@@ -272,7 +283,7 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
 ## 5. 接口契约（API Contracts）
 
-> 本切片不新增核心 UI 路由（沿用 `DEV-PLAN-041/042` 的 payroll UI）；仅补齐展示内容与（可选）internal API 便于测试与排障。
+> 本切片不新增核心 UI 路由（沿用 `DEV-PLAN-041/042` 的 payroll UI）；仅补齐展示内容与 internal API（用于测试与排障）。
 
 ### 5.1 UI：Payslip 详情（扩展）
 
@@ -280,7 +291,7 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 - 本期 IIT 预扣税额明细项（pay item code 见 §6.2.1）。
 - `net_pay`（税后实发）与明细聚合一致。
 
-### 5.2 Internal API（可选但推荐，route_class=`internal_api`）
+### 5.2 Internal API（必须，route_class=`internal_api`）
 
 #### `GET /org/api/payroll-balances`
 
@@ -293,6 +304,7 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
     "tenant_id": "uuid",
     "person_uuid": "uuid",
     "tax_year": 2026,
+    "first_tax_month": 1,
     "last_tax_month": 2,
     "ytd_income": "20000.00",
     "ytd_special_deduction": "2000.00",
@@ -313,16 +325,26 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 - **Request**
   ```json
   {
+    "event_id": "uuid",
     "person_uuid": "uuid",
     "tax_year": 2026,
     "tax_month": 2,
-    "amount": "10000.00"
+    "amount": "10000.00",
+    "request_id": "client-generated-string (optional)"
   }
   ```
 - **Response (200)**
   ```json
-  { "person_uuid": "uuid", "tax_year": 2026, "tax_month": 2, "amount": "10000.00" }
+  { "event_id": "uuid", "person_uuid": "uuid", "tax_year": 2026, "tax_month": 2, "amount": "10000.00", "request_id": "client-generated-string" }
   ```
+- **幂等**
+  - 以 `event_id` 作为幂等键：重复提交同一 `event_id` 必须幂等成功。
+  - 若 `event_id` 被复用但 payload 不一致，则返回稳定错误码 `STAFFING_IDEMPOTENCY_REUSED`。
+  - 若 `request_id` 缺省，服务端应使用 `event_id` 的 string 作为 `request_id` 传入 Kernel（避免 request_id 漂移）。
+- **Errors**
+  - 400：参数缺失/无效
+  - 409：幂等冲突（`STAFFING_IDEMPOTENCY_REUSED`）
+  - 409：该月已定稿（`STAFFING_IIT_SAD_CLAIM_MONTH_FINALIZED`）
 - **Routing（治理约束）**
   - route_class 必须为 `internal_api`（对齐 `DEV-PLAN-017`）。
   - 实施时需同步更新 `config/routing/allowlist.yaml`，否则 routing gates 会阻断合并（SSOT：`AGENTS.md`）。
@@ -344,7 +366,11 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
   - P0 固定为 0（保留字段便于后续扩展）。
 - **累计减除费用（ytd_standard_deduction）**
   - P0 固定标准：`5000.00 CNY / 月`（居民综合所得口径）。
-  - `tax_month` 取 pay period 的 `lower(period)` 的月份（1-12），累计减除费用= `5000 * tax_month`。
+  - 月数口径（冻结）：按“本 tax_entity 内本 tax_year 的任职受雇月份数”计入。
+    - `tax_month`：取 pay period 的 `lower(period)` 的月份（1-12）。
+    - `first_tax_month`：首次 posting 的月份（写入 `payroll_balances.first_tax_month`，首次写入后保持不变）。
+    - `month_count = tax_month - first_tax_month + 1`。
+    - `ytd_standard_deduction = 5000.00 * month_count`。
 - **累计专项扣除（ytd_special_deduction）**
   - 口径冻结为“社保/公积金个人扣款合计”（由 `DEV-PLAN-043` 提供月度个人扣款合计，并落到 payslip 明细可聚合口径）。
 - **累计专项附加扣除（ytd_special_additional_deduction）**
@@ -404,16 +430,16 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
 1. 解析 `tax_year/tax_month`：从 pay period 的 `lower(period)` 得到。
    - P0 冻结：pay period 必须为自然月区间（`[YYYY-MM-01, next_month_01)`）；否则 FINALIZE 必须失败并返回稳定错误码（见 §6.6）。
-2. `SELECT ... FOR UPDATE` 锁定该 `(tenant_id,tax_entity_id,person_uuid,tax_year)` 的 balances 行（不存在则视为 0 初始化）。
+2. `SELECT ... FOR UPDATE` 锁定该 `(tenant_id,tax_entity_id,person_uuid,tax_year)` 的 balances 行（不存在则视为 0 初始化；插入新行时将 `first_tax_month = tax_month`）。
 3. 计算本月增量（按 §6.2 冻结口径）并按 §6.3 计算本月预扣税额。
 4. 校验：本月计算得到的 `iit_withhold_this_month` 必须与 payslip 中 IIT 明细项金额一致；不一致则 FINALIZE 失败并返回稳定错误码（要求先重新 CALC）。
-5. `UPSERT` 写回 balances（推进 `last_tax_month`、更新 YTD 字段、写 `last_pay_period_id/last_run_id`）。
+5. `UPSERT` 写回 balances（推进 `last_tax_month`、更新 YTD 字段、写 `last_pay_period_id/last_run_id`；`first_tax_month` 不得被更新）。
 
 补充冻结点（避免实现期“猜”）：
 - **month 推进语义**：`last_tax_month` 必须单调递增；若 `tax_month <= last_tax_month` 且不是同一 `run_id` 的幂等重放，则必须失败（稳定错误码见 §6.6）。
 - **SAD 月度合计读取**：Posting 时仅读取当月 `iit_special_additional_deduction_claims.amount`（不存在视为 0），并更新：
   - `ytd_special_additional_deduction = prev_ytd_special_additional_deduction + sad_amount_this_month`
-  - `ytd_standard_deduction = 5000.00 * tax_month`（按月序号直接计算，避免“跳月”时隐式漏算/多算）
+  - `ytd_standard_deduction = 5000.00 * (tax_month - first_tax_month + 1)`（`first_tax_month` 在首次 posting 写入；后续月份不得变化）
 
 并保证：
 - 与 run 的 `finalized_at`、pay period 的 `closed_at` 同事务提交；
@@ -457,6 +483,7 @@ SELECT staffing.submit_iit_special_additional_deduction_claim_event(
 - `STAFFING_IIT_PAYSLIP_ITEM_MISSING`：FINALIZE 时未找到 `DEDUCTION_IIT_WITHHOLDING` 明细项（要求先 CALC）。
 - `STAFFING_IIT_WITHHOLDING_MISMATCH_RECALC_REQUIRED`：FINALIZE 重新计算得到的 `iit_withhold_this_month` 与 payslip 明细项不一致（要求先重新 CALC）。
 - `STAFFING_IIT_SAD_CLAIM_MONTH_FINALIZED`：该月已存在 finalized payroll run，禁止录入/更新 SAD 月度合计。
+- `STAFFING_IDEMPOTENCY_REUSED`：同一 `event_id` 被复用但 payload 不一致。
 
 ## 7. 安全与鉴权（Security & Authz）
 
@@ -478,9 +505,9 @@ SELECT staffing.submit_iit_special_additional_deduction_claim_event(
 
 ### 8.2 里程碑（实现顺序建议）
 
-1. [ ] Schema SSOT：新增 `iit_special_additional_deduction_claims`（events+projection）+ RLS。
-2. [ ] Schema SSOT：新增 `payroll_balances` + RLS。
-3. [ ] 迁移闭环：`migrations/staffing/*` + `atlas.sum`（`make staffing plan` No Changes）。
+1. [x] Schema SSOT：新增 `iit_special_additional_deduction_claims`（events+projection）+ RLS。
+2. [x] Schema SSOT：新增 `payroll_balances` + RLS。
+3. [x] 迁移闭环：`migrations/staffing/*` + `atlas.sum`（`make staffing plan` No Changes）。
 4. [ ] Go：IIT 引擎（纯函数）+ 单元测试（含留抵）。
 5. [ ] 集成：CALC 写 IIT 明细项；FINALIZE Posting 推进 balances（含一致性校验）。
 6. [ ] UI：工资条展示 IIT 明细项与税后实发（可对账）。
@@ -490,12 +517,14 @@ SELECT staffing.submit_iit_special_additional_deduction_claim_event(
 ### 9.1 单元测试（必须）
 
 - [ ] 税率表：各档位边界（36,000/144,000/...）选择正确。
+- [ ] 累计减除费用月数：`ytd_standard_deduction = 5000.00 * (tax_month - first_tax_month + 1)`；覆盖年中入职/跨雇主入职（`first_tax_month > 1`）。
 - [ ] 负数留抵：通过专项附加扣除（SAD）输入制造 `Δ <= 0`，本期 IIT=0，`ytd_iit_credit > 0`。
 - [ ] 舍入：税额在分粒度确定性一致（禁止 float）。
 
 ### 9.2 集成测试（必须）
 
 - [ ] 两个月跑通：月 2 计算读取 balances（上一月）并正确影响本月 IIT。
+- [ ] 年中入职：首月 FINALIZE 后 `payroll_balances.first_tax_month = tax_month` 且 `ytd_standard_deduction = 5000.00`。
 - [ ] FINALIZE 同事务：finalize 后 balances 已推进；若 FINALIZE 失败则 balances 不变（事务原子性）。
 - [ ] RLS fail-closed：未设置 `app.current_tenant` 时，对 balances/工资条的读写均失败。
 
