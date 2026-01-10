@@ -14,6 +14,7 @@ var errInvalidCredentials = errors.New("server: invalid credentials")
 type authenticatedIdentity struct {
 	KratosIdentityID string
 	Email            string
+	RoleSlug         string
 }
 
 type identityProvider interface {
@@ -64,9 +65,13 @@ func (p *kratosIdentityProvider) AuthenticatePassword(ctx context.Context, tenan
 		return authenticatedIdentity{}, errors.New("server: kratos missing identity id")
 	}
 
+	roleSlug, _ := stringTrait(ident.Traits, "role_slug")
+	roleSlug = strings.ToLower(strings.TrimSpace(roleSlug))
+
 	return authenticatedIdentity{
 		KratosIdentityID: ident.ID,
 		Email:            email,
+		RoleSlug:         roleSlug,
 	}, nil
 }
 
