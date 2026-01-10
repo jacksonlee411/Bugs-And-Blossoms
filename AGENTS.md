@@ -13,6 +13,7 @@
 - `.templ`/Tailwind/Astro UI 相关：`make generate && make css`，然后 `git status --short` 必须为空
 - 多语言 JSON：`make check tr`
 - 发 PR 前一键对齐 CI（推荐）：`make preflight`
+- 发 PR 规则（强制）：PR 源分支只能是 `wt-dev-main` / `wt-dev-a` / `wt-dev-b`（CI 门禁：`make check pr-branch`）
 - DB Schema/迁移（Atlas+Goose，按模块）：`make <module> plan && make <module> lint && make <module> migrate up`
 - sqlc：`make sqlc-generate`，然后 `git status --short` 必须为空
 - Routing：`make check routing`
@@ -115,6 +116,7 @@ modules/{module}/
 - 本地 worktree 约定：`Bugs-And-Blossoms` 工作区固定使用 `wt-dev-main` 分支进行长期开发（跟踪 `origin/wt-dev-main`），不要在该目录切换分支。
 - 本地 worktree 约定：`Bugs-And-Blossoms-wt-dev-a` 工作区固定使用 `wt-dev-a` 分支进行长期开发（跟踪 `origin/wt-dev-a`），不要在该目录切换分支。
 - 本地 worktree 约定：`Bugs-And-Blossoms-wt-dev-b` 工作区固定使用 `wt-dev-b` 分支进行长期开发（跟踪 `origin/wt-dev-b`），不要在该目录切换分支。
+- PR 规则（强制门禁）：禁止创建/使用临时分支；所有 PR 的源分支必须是 `wt-dev-main` / `wt-dev-a` / `wt-dev-b`（CI 门禁：`make check pr-branch`）。
 - 主线原则：以 `origin/main` 为唯一主线；所有 worktree 分支都应以 `origin/main` 为基线并定期同步，避免把 `origin/wt-dev-*` 当作集成主线。
 - 合并建议：固定 worktree 分支（`wt-dev-*`）向 `origin/main` 合并时优先使用 **merge commit**（GitHub: Create a merge commit），以便后续能通过快进/常规 merge 顺滑同步；`squash`/`rebase` 仅用于短生命周期分支，合并后应删除该分支或将其重置到 `origin/main`，避免出现“内容已进 main 但 hash 不同”的残留分叉。
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`

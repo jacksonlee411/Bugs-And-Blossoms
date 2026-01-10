@@ -10,7 +10,7 @@ export GOIMPORTS_VERSION ?= v0.26.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
-.PHONY: help preflight check naming no-legacy fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch naming no-legacy fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
@@ -42,6 +42,7 @@ help:
 		"  make iam migrate up"
 
 preflight: ## 本地一键对齐CI
+	@$(MAKE) check pr-branch
 	@$(MAKE) check naming
 	@$(MAKE) check no-legacy
 	@$(MAKE) check doc
@@ -53,6 +54,9 @@ preflight: ## 本地一键对齐CI
 
 check:
 	@:
+
+pr-branch: ## PR 固定分支门禁（只允许 wt-dev-main / wt-dev-a / wt-dev-b）
+	@./scripts/ci/check-pr-fixed-branch.sh
 
 naming: ## 命名去噪门禁（已取消：no-op）
 	@./scripts/ci/check-no-version-marker.sh
