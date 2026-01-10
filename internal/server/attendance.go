@@ -53,10 +53,113 @@ type DailyAttendanceResult struct {
 	UpdatedAt              time.Time  `json:"updated_at"`
 }
 
+type AttendanceTimeProfileForWorkDate struct {
+	ShiftStartLocal            string    `json:"shift_start_local"`
+	ShiftEndLocal              string    `json:"shift_end_local"`
+	LateToleranceMinutes       int       `json:"late_tolerance_minutes"`
+	EarlyLeaveToleranceMinutes int       `json:"early_leave_tolerance_minutes"`
+	OvertimeMinMinutes         int       `json:"overtime_min_minutes"`
+	OvertimeRoundingMode       string    `json:"overtime_rounding_mode"`
+	OvertimeRoundingUnitMin    int       `json:"overtime_rounding_unit_minutes"`
+	TimeProfileLastEventID     int64     `json:"time_profile_last_event_id"`
+	ShiftStart                 time.Time `json:"shift_start"`
+	ShiftEnd                   time.Time `json:"shift_end"`
+	WindowStart                time.Time `json:"window_start"`
+	WindowEnd                  time.Time `json:"window_end"`
+}
+
+type TimePunchWithVoid struct {
+	EventDBID        int64           `json:"event_db_id"`
+	EventID          string          `json:"event_id"`
+	PersonUUID       string          `json:"person_uuid"`
+	PunchTime        time.Time       `json:"punch_time"`
+	PunchType        string          `json:"punch_type"`
+	SourceProvider   string          `json:"source_provider"`
+	Payload          json.RawMessage `json:"payload"`
+	TransactionTime  time.Time       `json:"transaction_time"`
+	VoidDBID         *int64          `json:"void_db_id,omitempty"`
+	VoidEventID      *string         `json:"void_event_id,omitempty"`
+	VoidPayload      json.RawMessage `json:"void_payload,omitempty"`
+	VoidRequestID    *string         `json:"void_request_id,omitempty"`
+	VoidInitiatorID  *string         `json:"void_initiator_id,omitempty"`
+	VoidCreatedAt    *time.Time      `json:"void_created_at,omitempty"`
+	VoidTxTime       *time.Time      `json:"void_transaction_time,omitempty"`
+	TargetPunchDBID  *int64          `json:"target_punch_event_db_id,omitempty"`
+	TargetPunchEvent *string         `json:"target_punch_event_id,omitempty"`
+}
+
+type AttendanceRecalcEvent struct {
+	DBID            int64           `json:"id"`
+	EventID         string          `json:"event_id"`
+	PersonUUID      string          `json:"person_uuid"`
+	FromDate        string          `json:"from_date"`
+	ToDate          string          `json:"to_date"`
+	Payload         json.RawMessage `json:"payload"`
+	RequestID       string          `json:"request_id"`
+	InitiatorID     string          `json:"initiator_id"`
+	TransactionTime time.Time       `json:"transaction_time"`
+	CreatedAt       time.Time       `json:"created_at"`
+}
+
+type SubmitTimePunchVoidParams struct {
+	EventID            string
+	TargetPunchEventID string
+	Payload            json.RawMessage
+}
+
+type TimePunchVoidResult struct {
+	DBID               int64  `json:"id"`
+	EventID            string `json:"event_id"`
+	TargetPunchEventID string `json:"target_punch_event_id"`
+}
+
+type SubmitAttendanceRecalcParams struct {
+	EventID    string
+	PersonUUID string
+	FromDate   string
+	ToDate     string
+	Payload    json.RawMessage
+}
+
+type AttendanceRecalcResult struct {
+	DBID       int64  `json:"id"`
+	EventID    string `json:"event_id"`
+	PersonUUID string `json:"person_uuid"`
+	FromDate   string `json:"from_date"`
+	ToDate     string `json:"to_date"`
+}
+
 type DailyAttendanceResultStore interface {
 	ListDailyAttendanceResultsForDate(ctx context.Context, tenantID string, workDate string, limit int) ([]DailyAttendanceResult, error)
 	GetDailyAttendanceResult(ctx context.Context, tenantID string, personUUID string, workDate string) (DailyAttendanceResult, bool, error)
 	ListDailyAttendanceResultsForPerson(ctx context.Context, tenantID string, personUUID string, fromDate string, toDate string, limit int) ([]DailyAttendanceResult, error)
+	GetAttendanceTimeProfileAndPunchesForWorkDate(ctx context.Context, tenantID string, personUUID string, workDate string) (AttendanceTimeProfileForWorkDate, []TimePunchWithVoid, error)
+	ListAttendanceRecalcEventsForWorkDate(ctx context.Context, tenantID string, personUUID string, workDate string, limit int) ([]AttendanceRecalcEvent, error)
+	SubmitTimePunchVoid(ctx context.Context, tenantID string, initiatorID string, p SubmitTimePunchVoidParams) (TimePunchVoidResult, error)
+	SubmitAttendanceRecalc(ctx context.Context, tenantID string, initiatorID string, p SubmitAttendanceRecalcParams) (AttendanceRecalcResult, error)
+}
+
+type TimeBankCycle struct {
+	PersonUUID             string     `json:"person_uuid"`
+	CycleType              string     `json:"cycle_type"`
+	CycleStartDate         string     `json:"cycle_start_date"`
+	CycleEndDate           string     `json:"cycle_end_date"`
+	RulesetVersion         string     `json:"ruleset_version"`
+	WorkedMinutesTotal     int        `json:"worked_minutes_total"`
+	OvertimeMinutes150     int        `json:"overtime_minutes_150"`
+	OvertimeMinutes200     int        `json:"overtime_minutes_200"`
+	OvertimeMinutes300     int        `json:"overtime_minutes_300"`
+	CompEarnedMinutes      int        `json:"comp_earned_minutes"`
+	CompUsedMinutes        int        `json:"comp_used_minutes"`
+	InputMaxPunchEventDBID *int64     `json:"input_max_punch_event_db_id"`
+	InputMaxPunchTime      *time.Time `json:"input_max_punch_time"`
+	ComputedAt             time.Time  `json:"computed_at"`
+	CreatedAt              time.Time  `json:"created_at"`
+	UpdatedAt              time.Time  `json:"updated_at"`
+}
+
+type TimeBankCycleStore interface {
+	GetTimeBankCycleForMonth(ctx context.Context, tenantID string, personUUID string, month string) (TimeBankCycle, bool, error)
 }
 
 type submitTimePunchParams struct {
@@ -641,6 +744,466 @@ LIMIT $5
 	return out, nil
 }
 
+func (s *staffingPGStore) GetAttendanceTimeProfileAndPunchesForWorkDate(ctx context.Context, tenantID string, personUUID string, workDate string) (AttendanceTimeProfileForWorkDate, []TimePunchWithVoid, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return AttendanceTimeProfileForWorkDate{}, nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return AttendanceTimeProfileForWorkDate{}, nil, err
+	}
+
+	personUUID = strings.TrimSpace(personUUID)
+	if personUUID == "" {
+		return AttendanceTimeProfileForWorkDate{}, nil, errors.New("person_uuid is required")
+	}
+	workDate = strings.TrimSpace(workDate)
+	if workDate == "" {
+		return AttendanceTimeProfileForWorkDate{}, nil, errors.New("work_date is required")
+	}
+
+	var tp AttendanceTimeProfileForWorkDate
+	if err := tx.QueryRow(ctx, `
+SELECT
+  shift_start_local::text,
+  shift_end_local::text,
+  late_tolerance_minutes,
+  early_leave_tolerance_minutes,
+  overtime_min_minutes,
+  overtime_rounding_mode,
+  overtime_rounding_unit_minutes,
+  time_profile_last_event_id,
+  shift_start,
+  shift_end,
+  window_start,
+  window_end
+FROM staffing.get_time_profile_for_work_date($1::uuid, $2::date)
+`, tenantID, workDate).Scan(
+		&tp.ShiftStartLocal,
+		&tp.ShiftEndLocal,
+		&tp.LateToleranceMinutes,
+		&tp.EarlyLeaveToleranceMinutes,
+		&tp.OvertimeMinMinutes,
+		&tp.OvertimeRoundingMode,
+		&tp.OvertimeRoundingUnitMin,
+		&tp.TimeProfileLastEventID,
+		&tp.ShiftStart,
+		&tp.ShiftEnd,
+		&tp.WindowStart,
+		&tp.WindowEnd,
+	); err != nil {
+		return AttendanceTimeProfileForWorkDate{}, nil, err
+	}
+	tp.ShiftStart = tp.ShiftStart.UTC()
+	tp.ShiftEnd = tp.ShiftEnd.UTC()
+	tp.WindowStart = tp.WindowStart.UTC()
+	tp.WindowEnd = tp.WindowEnd.UTC()
+
+	rows, err := tx.Query(ctx, `
+SELECT
+  e.id,
+  e.event_id::text,
+  e.person_uuid::text,
+  e.punch_time,
+  e.punch_type,
+  e.source_provider,
+  e.payload,
+  e.transaction_time,
+  v.id,
+  v.event_id::text,
+  v.payload,
+  v.request_id,
+  v.initiator_id::text,
+  v.created_at,
+  v.transaction_time,
+  v.target_punch_event_db_id,
+  v.target_punch_event_id::text
+FROM staffing.time_punch_events e
+LEFT JOIN staffing.time_punch_void_events v
+  ON v.tenant_id = e.tenant_id
+ AND v.target_punch_event_db_id = e.id
+WHERE e.tenant_id = $1::uuid
+  AND e.person_uuid = $2::uuid
+  AND e.punch_time >= $3
+  AND e.punch_time < $4
+ORDER BY e.punch_time ASC, e.id ASC
+`, tenantID, personUUID, tp.WindowStart, tp.WindowEnd)
+	if err != nil {
+		return AttendanceTimeProfileForWorkDate{}, nil, err
+	}
+	defer rows.Close()
+
+	var punches []TimePunchWithVoid
+	for rows.Next() {
+		var p TimePunchWithVoid
+		var payload []byte
+		var txTime time.Time
+		var voidDBID *int64
+		var voidEventID *string
+		var voidPayload []byte
+		var voidRequestID *string
+		var voidInitiatorID *string
+		var voidCreatedAt *time.Time
+		var voidTxTime *time.Time
+		var targetPunchDBID *int64
+		var targetPunchEventID *string
+		if err := rows.Scan(
+			&p.EventDBID,
+			&p.EventID,
+			&p.PersonUUID,
+			&p.PunchTime,
+			&p.PunchType,
+			&p.SourceProvider,
+			&payload,
+			&txTime,
+			&voidDBID,
+			&voidEventID,
+			&voidPayload,
+			&voidRequestID,
+			&voidInitiatorID,
+			&voidCreatedAt,
+			&voidTxTime,
+			&targetPunchDBID,
+			&targetPunchEventID,
+		); err != nil {
+			return AttendanceTimeProfileForWorkDate{}, nil, err
+		}
+
+		p.PunchTime = p.PunchTime.UTC()
+		p.TransactionTime = txTime.UTC()
+		p.Payload = json.RawMessage(payload)
+
+		p.VoidDBID = voidDBID
+		p.VoidEventID = voidEventID
+		p.VoidPayload = json.RawMessage(voidPayload)
+		p.VoidRequestID = voidRequestID
+		p.VoidInitiatorID = voidInitiatorID
+		if voidCreatedAt != nil {
+			tm := voidCreatedAt.UTC()
+			p.VoidCreatedAt = &tm
+		}
+		if voidTxTime != nil {
+			tm := voidTxTime.UTC()
+			p.VoidTxTime = &tm
+		}
+		p.TargetPunchDBID = targetPunchDBID
+		p.TargetPunchEvent = targetPunchEventID
+
+		punches = append(punches, p)
+	}
+	if err := rows.Err(); err != nil {
+		return AttendanceTimeProfileForWorkDate{}, nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return AttendanceTimeProfileForWorkDate{}, nil, err
+	}
+	return tp, punches, nil
+}
+
+func (s *staffingPGStore) ListAttendanceRecalcEventsForWorkDate(ctx context.Context, tenantID string, personUUID string, workDate string, limit int) ([]AttendanceRecalcEvent, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	personUUID = strings.TrimSpace(personUUID)
+	if personUUID == "" {
+		return nil, errors.New("person_uuid is required")
+	}
+	workDate = strings.TrimSpace(workDate)
+	if workDate == "" {
+		return nil, errors.New("work_date is required")
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+	if limit > 2000 {
+		limit = 2000
+	}
+
+	rows, err := tx.Query(ctx, `
+SELECT
+  id,
+  event_id::text,
+  person_uuid::text,
+  from_date::text,
+  to_date::text,
+  payload,
+  request_id,
+  initiator_id::text,
+  transaction_time,
+  created_at
+FROM staffing.attendance_recalc_events
+WHERE tenant_id = $1::uuid
+  AND person_uuid = $2::uuid
+  AND from_date <= $3::date
+  AND to_date >= $3::date
+ORDER BY created_at DESC, id DESC
+LIMIT $4
+`, tenantID, personUUID, workDate, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []AttendanceRecalcEvent
+	for rows.Next() {
+		var e AttendanceRecalcEvent
+		var payload []byte
+		if err := rows.Scan(
+			&e.DBID,
+			&e.EventID,
+			&e.PersonUUID,
+			&e.FromDate,
+			&e.ToDate,
+			&payload,
+			&e.RequestID,
+			&e.InitiatorID,
+			&e.TransactionTime,
+			&e.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		e.Payload = json.RawMessage(payload)
+		e.TransactionTime = e.TransactionTime.UTC()
+		e.CreatedAt = e.CreatedAt.UTC()
+		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *staffingPGStore) SubmitTimePunchVoid(ctx context.Context, tenantID string, initiatorID string, p SubmitTimePunchVoidParams) (TimePunchVoidResult, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return TimePunchVoidResult{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return TimePunchVoidResult{}, err
+	}
+
+	if strings.TrimSpace(initiatorID) == "" {
+		return TimePunchVoidResult{}, errors.New("initiator_id is required")
+	}
+
+	if p.EventID == "" {
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&p.EventID); err != nil {
+			return TimePunchVoidResult{}, err
+		}
+	}
+
+	p.TargetPunchEventID = strings.TrimSpace(p.TargetPunchEventID)
+	if p.TargetPunchEventID == "" {
+		return TimePunchVoidResult{}, errors.New("target_punch_event_id is required")
+	}
+
+	payload := json.RawMessage(p.Payload)
+	if len(payload) == 0 {
+		payload = json.RawMessage(`{}`)
+	}
+
+	requestID := p.EventID
+
+	var id int64
+	if err := tx.QueryRow(ctx, `
+SELECT staffing.submit_time_punch_void_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::jsonb,
+  $5::text,
+  $6::uuid
+)
+`, p.EventID, tenantID, p.TargetPunchEventID, []byte(payload), requestID, initiatorID).Scan(&id); err != nil {
+		return TimePunchVoidResult{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return TimePunchVoidResult{}, err
+	}
+
+	return TimePunchVoidResult{
+		DBID:               id,
+		EventID:            p.EventID,
+		TargetPunchEventID: p.TargetPunchEventID,
+	}, nil
+}
+
+func (s *staffingPGStore) SubmitAttendanceRecalc(ctx context.Context, tenantID string, initiatorID string, p SubmitAttendanceRecalcParams) (AttendanceRecalcResult, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return AttendanceRecalcResult{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return AttendanceRecalcResult{}, err
+	}
+
+	if strings.TrimSpace(initiatorID) == "" {
+		return AttendanceRecalcResult{}, errors.New("initiator_id is required")
+	}
+
+	if p.EventID == "" {
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&p.EventID); err != nil {
+			return AttendanceRecalcResult{}, err
+		}
+	}
+
+	p.PersonUUID = strings.TrimSpace(p.PersonUUID)
+	if p.PersonUUID == "" {
+		return AttendanceRecalcResult{}, errors.New("person_uuid is required")
+	}
+	p.FromDate = strings.TrimSpace(p.FromDate)
+	p.ToDate = strings.TrimSpace(p.ToDate)
+	if p.FromDate == "" || p.ToDate == "" {
+		return AttendanceRecalcResult{}, errors.New("from_date/to_date is required")
+	}
+
+	payload := json.RawMessage(p.Payload)
+	if len(payload) == 0 {
+		payload = json.RawMessage(`{}`)
+	}
+
+	requestID := p.EventID
+
+	var id int64
+	if err := tx.QueryRow(ctx, `
+SELECT staffing.submit_attendance_recalc_event(
+  $1::uuid,
+  $2::uuid,
+  $3::uuid,
+  $4::date,
+  $5::date,
+  $6::jsonb,
+  $7::text,
+  $8::uuid
+)
+`, p.EventID, tenantID, p.PersonUUID, p.FromDate, p.ToDate, []byte(payload), requestID, initiatorID).Scan(&id); err != nil {
+		return AttendanceRecalcResult{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return AttendanceRecalcResult{}, err
+	}
+
+	return AttendanceRecalcResult{
+		DBID:       id,
+		EventID:    p.EventID,
+		PersonUUID: p.PersonUUID,
+		FromDate:   p.FromDate,
+		ToDate:     p.ToDate,
+	}, nil
+}
+
+func (s *staffingPGStore) GetTimeBankCycleForMonth(ctx context.Context, tenantID string, personUUID string, month string) (TimeBankCycle, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return TimeBankCycle{}, false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return TimeBankCycle{}, false, err
+	}
+
+	personUUID = strings.TrimSpace(personUUID)
+	if personUUID == "" {
+		return TimeBankCycle{}, false, errors.New("person_uuid is required")
+	}
+
+	month = strings.TrimSpace(month)
+	if month == "" {
+		return TimeBankCycle{}, false, errors.New("month is required")
+	}
+	tm, err := time.Parse("2006-01", month)
+	if err != nil {
+		return TimeBankCycle{}, false, err
+	}
+	cycleStart := time.Date(tm.Year(), tm.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+
+	var out TimeBankCycle
+	var inputMaxPunchEventDBID *int64
+	var inputMaxPunchTime *time.Time
+	err = tx.QueryRow(ctx, `
+SELECT
+  person_uuid::text,
+  cycle_type,
+  cycle_start_date::text,
+  cycle_end_date::text,
+  ruleset_version,
+  worked_minutes_total,
+  overtime_minutes_150,
+  overtime_minutes_200,
+  overtime_minutes_300,
+  comp_earned_minutes,
+  comp_used_minutes,
+  input_max_punch_event_db_id,
+  input_max_punch_time,
+  computed_at,
+  created_at,
+  updated_at
+FROM staffing.time_bank_cycles
+WHERE tenant_id = $1::uuid
+  AND person_uuid = $2::uuid
+  AND cycle_type = 'MONTH'
+  AND cycle_start_date = $3::date
+`, tenantID, personUUID, cycleStart).Scan(
+		&out.PersonUUID,
+		&out.CycleType,
+		&out.CycleStartDate,
+		&out.CycleEndDate,
+		&out.RulesetVersion,
+		&out.WorkedMinutesTotal,
+		&out.OvertimeMinutes150,
+		&out.OvertimeMinutes200,
+		&out.OvertimeMinutes300,
+		&out.CompEarnedMinutes,
+		&out.CompUsedMinutes,
+		&inputMaxPunchEventDBID,
+		&inputMaxPunchTime,
+		&out.ComputedAt,
+		&out.CreatedAt,
+		&out.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return TimeBankCycle{}, false, nil
+		}
+		return TimeBankCycle{}, false, err
+	}
+
+	out.InputMaxPunchEventDBID = inputMaxPunchEventDBID
+	if inputMaxPunchTime != nil {
+		tm := inputMaxPunchTime.UTC()
+		out.InputMaxPunchTime = &tm
+	}
+	out.ComputedAt = out.ComputedAt.UTC()
+	out.CreatedAt = out.CreatedAt.UTC()
+	out.UpdatedAt = out.UpdatedAt.UTC()
+
+	if err := tx.Commit(ctx); err != nil {
+		return TimeBankCycle{}, false, err
+	}
+	return out, true, nil
+}
+
 func isSTAFFING_IDEMPOTENCY_REUSED(err error) bool {
 	if err == nil {
 		return false
@@ -750,6 +1313,26 @@ func (s *staffingMemoryStore) GetDailyAttendanceResult(context.Context, string, 
 
 func (s *staffingMemoryStore) ListDailyAttendanceResultsForPerson(context.Context, string, string, string, string, int) ([]DailyAttendanceResult, error) {
 	return nil, nil
+}
+
+func (s *staffingMemoryStore) GetAttendanceTimeProfileAndPunchesForWorkDate(context.Context, string, string, string) (AttendanceTimeProfileForWorkDate, []TimePunchWithVoid, error) {
+	return AttendanceTimeProfileForWorkDate{}, nil, nil
+}
+
+func (s *staffingMemoryStore) ListAttendanceRecalcEventsForWorkDate(context.Context, string, string, string, int) ([]AttendanceRecalcEvent, error) {
+	return nil, nil
+}
+
+func (s *staffingMemoryStore) SubmitTimePunchVoid(context.Context, string, string, SubmitTimePunchVoidParams) (TimePunchVoidResult, error) {
+	return TimePunchVoidResult{}, nil
+}
+
+func (s *staffingMemoryStore) SubmitAttendanceRecalc(context.Context, string, string, SubmitAttendanceRecalcParams) (AttendanceRecalcResult, error) {
+	return AttendanceRecalcResult{}, nil
+}
+
+func (s *staffingMemoryStore) GetTimeBankCycleForMonth(context.Context, string, string, string) (TimeBankCycle, bool, error) {
+	return TimeBankCycle{}, false, nil
 }
 
 func min(a int, b int) int {

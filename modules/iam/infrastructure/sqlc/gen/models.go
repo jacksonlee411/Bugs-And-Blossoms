@@ -291,6 +291,20 @@ type StaffingAssignmentVersion struct {
 	Profile        []byte                    `json:"profile"`
 }
 
+type StaffingAttendanceRecalcEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	PersonUuid      pgtype.UUID        `json:"person_uuid"`
+	FromDate        pgtype.Date        `json:"from_date"`
+	ToDate          pgtype.Date        `json:"to_date"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type StaffingDailyAttendanceResult struct {
 	TenantID               pgtype.UUID        `json:"tenant_id"`
 	PersonUuid             pgtype.UUID        `json:"person_uuid"`
@@ -520,6 +534,47 @@ type StaffingPayslipItem struct {
 	Meta           []byte             `json:"meta"`
 	LastRunEventID int64              `json:"last_run_event_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	CalcMode       string             `json:"calc_mode"`
+	TaxBearer      string             `json:"tax_bearer"`
+	TargetNet      pgtype.Numeric     `json:"target_net"`
+	IitDelta       pgtype.Numeric     `json:"iit_delta"`
+}
+
+type StaffingPayslipItemInput struct {
+	TenantID     pgtype.UUID        `json:"tenant_id"`
+	ID           pgtype.UUID        `json:"id"`
+	RunID        pgtype.UUID        `json:"run_id"`
+	PersonUuid   pgtype.UUID        `json:"person_uuid"`
+	AssignmentID pgtype.UUID        `json:"assignment_id"`
+	ItemCode     string             `json:"item_code"`
+	ItemKind     string             `json:"item_kind"`
+	Currency     string             `json:"currency"`
+	CalcMode     string             `json:"calc_mode"`
+	TaxBearer    string             `json:"tax_bearer"`
+	Amount       pgtype.Numeric     `json:"amount"`
+	LastEventID  int64              `json:"last_event_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StaffingPayslipItemInputEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	RunID           pgtype.UUID        `json:"run_id"`
+	PersonUuid      pgtype.UUID        `json:"person_uuid"`
+	AssignmentID    pgtype.UUID        `json:"assignment_id"`
+	EventType       string             `json:"event_type"`
+	ItemCode        string             `json:"item_code"`
+	ItemKind        string             `json:"item_kind"`
+	Currency        string             `json:"currency"`
+	CalcMode        string             `json:"calc_mode"`
+	TaxBearer       string             `json:"tax_bearer"`
+	Amount          pgtype.Numeric     `json:"amount"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type StaffingPayslipSocialInsuranceItem struct {
@@ -625,6 +680,26 @@ type StaffingSocialInsurancePolicyVersion struct {
 	LastEventID   int64                     `json:"last_event_id"`
 }
 
+type StaffingTimeBankCycle struct {
+	TenantID               pgtype.UUID        `json:"tenant_id"`
+	PersonUuid             pgtype.UUID        `json:"person_uuid"`
+	CycleType              string             `json:"cycle_type"`
+	CycleStartDate         pgtype.Date        `json:"cycle_start_date"`
+	CycleEndDate           pgtype.Date        `json:"cycle_end_date"`
+	RulesetVersion         string             `json:"ruleset_version"`
+	WorkedMinutesTotal     int32              `json:"worked_minutes_total"`
+	OvertimeMinutes150     int32              `json:"overtime_minutes_150"`
+	OvertimeMinutes200     int32              `json:"overtime_minutes_200"`
+	OvertimeMinutes300     int32              `json:"overtime_minutes_300"`
+	CompEarnedMinutes      int32              `json:"comp_earned_minutes"`
+	CompUsedMinutes        int32              `json:"comp_used_minutes"`
+	InputMaxPunchEventDbID *int64             `json:"input_max_punch_event_db_id"`
+	InputMaxPunchTime      pgtype.Timestamptz `json:"input_max_punch_time"`
+	ComputedAt             pgtype.Timestamptz `json:"computed_at"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
 type StaffingTimeProfileEvent struct {
 	ID              int64              `json:"id"`
 	EventID         pgtype.UUID        `json:"event_id"`
@@ -669,4 +744,18 @@ type StaffingTimePunchEvent struct {
 	InitiatorID      pgtype.UUID        `json:"initiator_id"`
 	TransactionTime  pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type StaffingTimePunchVoidEvent struct {
+	ID                   int64              `json:"id"`
+	EventID              pgtype.UUID        `json:"event_id"`
+	TenantID             pgtype.UUID        `json:"tenant_id"`
+	PersonUuid           pgtype.UUID        `json:"person_uuid"`
+	TargetPunchEventDbID int64              `json:"target_punch_event_db_id"`
+	TargetPunchEventID   pgtype.UUID        `json:"target_punch_event_id"`
+	Payload              []byte             `json:"payload"`
+	RequestID            string             `json:"request_id"`
+	InitiatorID          pgtype.UUID        `json:"initiator_id"`
+	TransactionTime      pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 }

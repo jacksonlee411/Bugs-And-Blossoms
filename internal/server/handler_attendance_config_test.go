@@ -29,6 +29,18 @@ func (dummyDailyAttendanceResultStore) GetDailyAttendanceResult(context.Context,
 func (dummyDailyAttendanceResultStore) ListDailyAttendanceResultsForPerson(context.Context, string, string, string, string, int) ([]DailyAttendanceResult, error) {
 	return nil, nil
 }
+func (dummyDailyAttendanceResultStore) GetAttendanceTimeProfileAndPunchesForWorkDate(context.Context, string, string, string) (AttendanceTimeProfileForWorkDate, []TimePunchWithVoid, error) {
+	return AttendanceTimeProfileForWorkDate{}, nil, nil
+}
+func (dummyDailyAttendanceResultStore) ListAttendanceRecalcEventsForWorkDate(context.Context, string, string, string, int) ([]AttendanceRecalcEvent, error) {
+	return nil, nil
+}
+func (dummyDailyAttendanceResultStore) SubmitTimePunchVoid(context.Context, string, string, SubmitTimePunchVoidParams) (TimePunchVoidResult, error) {
+	return TimePunchVoidResult{}, nil
+}
+func (dummyDailyAttendanceResultStore) SubmitAttendanceRecalc(context.Context, string, string, SubmitAttendanceRecalcParams) (AttendanceRecalcResult, error) {
+	return AttendanceRecalcResult{}, nil
+}
 
 func TestNewHandlerWithOptions_MissingAttendanceConfigStore(t *testing.T) {
 	_, err := NewHandlerWithOptions(HandlerOptions{

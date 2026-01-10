@@ -175,6 +175,55 @@ CREATE TABLE IF NOT EXISTS staffing.time_punch_events (
 CREATE INDEX IF NOT EXISTS time_punch_events_lookup_idx
   ON staffing.time_punch_events (tenant_id, person_uuid, punch_time DESC, id DESC);
 
+CREATE TABLE IF NOT EXISTS staffing.time_punch_void_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  target_punch_event_db_id bigint NOT NULL,
+  target_punch_event_id uuid NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT time_punch_void_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT time_punch_void_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT time_punch_void_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT time_punch_void_events_target_unique UNIQUE (tenant_id, target_punch_event_db_id)
+);
+
+CREATE INDEX IF NOT EXISTS time_punch_void_events_person_created_idx
+  ON staffing.time_punch_void_events (tenant_id, person_uuid, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS time_punch_void_events_target_idx
+  ON staffing.time_punch_void_events (tenant_id, target_punch_event_db_id);
+
+CREATE TABLE IF NOT EXISTS staffing.attendance_recalc_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  from_date date NOT NULL,
+  to_date date NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT attendance_recalc_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT attendance_recalc_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT attendance_recalc_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT attendance_recalc_events_date_range_check CHECK (to_date >= from_date),
+  CONSTRAINT attendance_recalc_events_range_size_check CHECK ((to_date - from_date) <= 30)
+);
+
+CREATE INDEX IF NOT EXISTS attendance_recalc_events_person_range_idx
+  ON staffing.attendance_recalc_events (tenant_id, person_uuid, from_date, to_date, id);
+
+CREATE INDEX IF NOT EXISTS attendance_recalc_events_created_idx
+  ON staffing.attendance_recalc_events (tenant_id, created_at DESC, id DESC);
+
 CREATE TABLE IF NOT EXISTS staffing.daily_attendance_results (
   tenant_id uuid NOT NULL,
   person_uuid uuid NOT NULL,
@@ -222,6 +271,50 @@ CREATE TABLE IF NOT EXISTS staffing.daily_attendance_results (
 
 CREATE INDEX IF NOT EXISTS daily_attendance_results_lookup_idx
   ON staffing.daily_attendance_results (tenant_id, person_uuid, work_date DESC);
+
+CREATE TABLE IF NOT EXISTS staffing.time_bank_cycles (
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  cycle_type text NOT NULL,
+  cycle_start_date date NOT NULL,
+  cycle_end_date date NOT NULL,
+
+  ruleset_version text NOT NULL,
+
+  worked_minutes_total int NOT NULL DEFAULT 0,
+  overtime_minutes_150 int NOT NULL DEFAULT 0,
+  overtime_minutes_200 int NOT NULL DEFAULT 0,
+  overtime_minutes_300 int NOT NULL DEFAULT 0,
+
+  comp_earned_minutes int NOT NULL DEFAULT 0,
+  comp_used_minutes int NOT NULL DEFAULT 0,
+
+  input_max_punch_event_db_id bigint NULL,
+  input_max_punch_time timestamptz NULL,
+
+  computed_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+
+  PRIMARY KEY (tenant_id, person_uuid, cycle_type, cycle_start_date),
+
+  CONSTRAINT time_bank_cycles_cycle_type_check
+    CHECK (cycle_type IN ('MONTH')),
+  CONSTRAINT time_bank_cycles_cycle_bounds_check
+    CHECK (cycle_end_date >= cycle_start_date),
+  CONSTRAINT time_bank_cycles_minutes_nonneg_check
+    CHECK (
+      worked_minutes_total >= 0
+      AND overtime_minutes_150 >= 0
+      AND overtime_minutes_200 >= 0
+      AND overtime_minutes_300 >= 0
+      AND comp_earned_minutes >= 0
+      AND comp_used_minutes >= 0
+    )
+);
+
+CREATE INDEX IF NOT EXISTS time_bank_cycles_lookup_idx
+  ON staffing.time_bank_cycles (tenant_id, person_uuid, cycle_start_date DESC);
 
 CREATE TABLE IF NOT EXISTS staffing.time_profile_events (
   id bigserial PRIMARY KEY,
@@ -365,10 +458,31 @@ CREATE POLICY tenant_isolation ON staffing.time_punch_events
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
+ALTER TABLE staffing.time_punch_void_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.time_punch_void_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.time_punch_void_events;
+CREATE POLICY tenant_isolation ON staffing.time_punch_void_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.attendance_recalc_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.attendance_recalc_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.attendance_recalc_events;
+CREATE POLICY tenant_isolation ON staffing.attendance_recalc_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
 ALTER TABLE staffing.daily_attendance_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.daily_attendance_results FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.daily_attendance_results;
 CREATE POLICY tenant_isolation ON staffing.daily_attendance_results
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.time_bank_cycles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.time_bank_cycles FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.time_bank_cycles;
+CREATE POLICY tenant_isolation ON staffing.time_bank_cycles
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 

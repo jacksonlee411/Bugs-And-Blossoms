@@ -2438,6 +2438,55 @@ CREATE TABLE IF NOT EXISTS staffing.time_punch_events (
 CREATE INDEX IF NOT EXISTS time_punch_events_lookup_idx
   ON staffing.time_punch_events (tenant_id, person_uuid, punch_time DESC, id DESC);
 
+CREATE TABLE IF NOT EXISTS staffing.time_punch_void_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  target_punch_event_db_id bigint NOT NULL,
+  target_punch_event_id uuid NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT time_punch_void_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT time_punch_void_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT time_punch_void_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT time_punch_void_events_target_unique UNIQUE (tenant_id, target_punch_event_db_id)
+);
+
+CREATE INDEX IF NOT EXISTS time_punch_void_events_person_created_idx
+  ON staffing.time_punch_void_events (tenant_id, person_uuid, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS time_punch_void_events_target_idx
+  ON staffing.time_punch_void_events (tenant_id, target_punch_event_db_id);
+
+CREATE TABLE IF NOT EXISTS staffing.attendance_recalc_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  from_date date NOT NULL,
+  to_date date NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT attendance_recalc_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT attendance_recalc_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT attendance_recalc_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT attendance_recalc_events_date_range_check CHECK (to_date >= from_date),
+  CONSTRAINT attendance_recalc_events_range_size_check CHECK ((to_date - from_date) <= 30)
+);
+
+CREATE INDEX IF NOT EXISTS attendance_recalc_events_person_range_idx
+  ON staffing.attendance_recalc_events (tenant_id, person_uuid, from_date, to_date, id);
+
+CREATE INDEX IF NOT EXISTS attendance_recalc_events_created_idx
+  ON staffing.attendance_recalc_events (tenant_id, created_at DESC, id DESC);
+
 CREATE TABLE IF NOT EXISTS staffing.daily_attendance_results (
   tenant_id uuid NOT NULL,
   person_uuid uuid NOT NULL,
@@ -2485,6 +2534,50 @@ CREATE TABLE IF NOT EXISTS staffing.daily_attendance_results (
 
 CREATE INDEX IF NOT EXISTS daily_attendance_results_lookup_idx
   ON staffing.daily_attendance_results (tenant_id, person_uuid, work_date DESC);
+
+CREATE TABLE IF NOT EXISTS staffing.time_bank_cycles (
+  tenant_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  cycle_type text NOT NULL,
+  cycle_start_date date NOT NULL,
+  cycle_end_date date NOT NULL,
+
+  ruleset_version text NOT NULL,
+
+  worked_minutes_total int NOT NULL DEFAULT 0,
+  overtime_minutes_150 int NOT NULL DEFAULT 0,
+  overtime_minutes_200 int NOT NULL DEFAULT 0,
+  overtime_minutes_300 int NOT NULL DEFAULT 0,
+
+  comp_earned_minutes int NOT NULL DEFAULT 0,
+  comp_used_minutes int NOT NULL DEFAULT 0,
+
+  input_max_punch_event_db_id bigint NULL,
+  input_max_punch_time timestamptz NULL,
+
+  computed_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+
+  PRIMARY KEY (tenant_id, person_uuid, cycle_type, cycle_start_date),
+
+  CONSTRAINT time_bank_cycles_cycle_type_check
+    CHECK (cycle_type IN ('MONTH')),
+  CONSTRAINT time_bank_cycles_cycle_bounds_check
+    CHECK (cycle_end_date >= cycle_start_date),
+  CONSTRAINT time_bank_cycles_minutes_nonneg_check
+    CHECK (
+      worked_minutes_total >= 0
+      AND overtime_minutes_150 >= 0
+      AND overtime_minutes_200 >= 0
+      AND overtime_minutes_300 >= 0
+      AND comp_earned_minutes >= 0
+      AND comp_used_minutes >= 0
+    )
+);
+
+CREATE INDEX IF NOT EXISTS time_bank_cycles_lookup_idx
+  ON staffing.time_bank_cycles (tenant_id, person_uuid, cycle_start_date DESC);
 
 CREATE TABLE IF NOT EXISTS staffing.time_profile_events (
   id bigserial PRIMARY KEY,
@@ -2628,10 +2721,31 @@ CREATE POLICY tenant_isolation ON staffing.time_punch_events
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
+ALTER TABLE staffing.time_punch_void_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.time_punch_void_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.time_punch_void_events;
+CREATE POLICY tenant_isolation ON staffing.time_punch_void_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.attendance_recalc_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.attendance_recalc_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.attendance_recalc_events;
+CREATE POLICY tenant_isolation ON staffing.attendance_recalc_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
 ALTER TABLE staffing.daily_attendance_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.daily_attendance_results FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.daily_attendance_results;
 CREATE POLICY tenant_isolation ON staffing.daily_attendance_results
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.time_bank_cycles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.time_bank_cycles FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.time_bank_cycles;
+CREATE POLICY tenant_isolation ON staffing.time_bank_cycles
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
@@ -2705,6 +2819,220 @@ BEGIN
       MESSAGE = 'RLS_TENANT_MISMATCH',
       DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_id, v_ctx_tenant);
   END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.submit_time_punch_void_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_target_punch_event_id uuid,
+  p_payload jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_target staffing.time_punch_events%ROWTYPE;
+  v_existing_by_event staffing.time_punch_void_events%ROWTYPE;
+  v_existing_by_target staffing.time_punch_void_events%ROWTYPE;
+  v_payload jsonb;
+  v_void_db_id bigint;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_event_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  END IF;
+  IF p_target_punch_event_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'target_punch_event_id is required';
+  END IF;
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  END IF;
+  IF p_initiator_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  END IF;
+
+  v_payload := COALESCE(p_payload, '{}'::jsonb);
+  IF jsonb_typeof(v_payload) <> 'object' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'payload must be an object';
+  END IF;
+
+  SELECT * INTO v_target
+  FROM staffing.time_punch_events
+  WHERE tenant_id = p_tenant_id
+    AND event_id = p_target_punch_event_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_TIME_PUNCH_EVENT_NOT_FOUND',
+      DETAIL = format('tenant_id=%s target_event_id=%s', p_tenant_id, p_target_punch_event_id);
+  END IF;
+
+  INSERT INTO staffing.time_punch_void_events (
+    event_id,
+    tenant_id,
+    person_uuid,
+    target_punch_event_db_id,
+    target_punch_event_id,
+    payload,
+    request_id,
+    initiator_id
+  )
+  VALUES (
+    p_event_id,
+    p_tenant_id,
+    v_target.person_uuid,
+    v_target.id,
+    v_target.event_id,
+    v_payload,
+    p_request_id,
+    p_initiator_id
+  )
+  ON CONFLICT DO NOTHING
+  RETURNING id INTO v_void_db_id;
+
+  IF v_void_db_id IS NULL THEN
+    SELECT * INTO v_existing_by_event
+    FROM staffing.time_punch_void_events
+    WHERE event_id = p_event_id;
+
+    IF FOUND THEN
+      IF v_existing_by_event.tenant_id <> p_tenant_id
+        OR v_existing_by_event.person_uuid <> v_target.person_uuid
+        OR v_existing_by_event.target_punch_event_db_id <> v_target.id
+        OR v_existing_by_event.target_punch_event_id <> v_target.event_id
+        OR v_existing_by_event.payload <> v_payload
+        OR v_existing_by_event.request_id <> p_request_id
+        OR v_existing_by_event.initiator_id <> p_initiator_id
+      THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+          DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing_by_event.id);
+      END IF;
+      RETURN v_existing_by_event.id;
+    END IF;
+
+    SELECT * INTO v_existing_by_target
+    FROM staffing.time_punch_void_events
+    WHERE tenant_id = p_tenant_id
+      AND target_punch_event_db_id = v_target.id
+    LIMIT 1;
+
+    IF FOUND THEN
+      RETURN v_existing_by_target.id;
+    END IF;
+
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'void insert failed';
+  END IF;
+
+  PERFORM staffing.recompute_daily_attendance_results_for_punch(p_tenant_id, v_target.person_uuid, v_target.punch_time);
+
+  RETURN v_void_db_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.submit_attendance_recalc_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_from_date date,
+  p_to_date date,
+  p_payload jsonb,
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_existing staffing.attendance_recalc_events%ROWTYPE;
+  v_payload jsonb;
+  v_recalc_db_id bigint;
+  v_d date;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_event_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  END IF;
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_from_date IS NULL OR p_to_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'from_date/to_date is required';
+  END IF;
+  IF p_to_date < p_from_date THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'to_date must be >= from_date';
+  END IF;
+  IF (p_to_date - p_from_date) > 30 THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'date range too large (max 31 days)';
+  END IF;
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  END IF;
+  IF p_initiator_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  END IF;
+
+  v_payload := COALESCE(p_payload, '{}'::jsonb);
+  IF jsonb_typeof(v_payload) <> 'object' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'payload must be an object';
+  END IF;
+
+  INSERT INTO staffing.attendance_recalc_events (
+    event_id,
+    tenant_id,
+    person_uuid,
+    from_date,
+    to_date,
+    payload,
+    request_id,
+    initiator_id
+  )
+  VALUES (
+    p_event_id,
+    p_tenant_id,
+    p_person_uuid,
+    p_from_date,
+    p_to_date,
+    v_payload,
+    p_request_id,
+    p_initiator_id
+  )
+  ON CONFLICT (event_id) DO NOTHING
+  RETURNING id INTO v_recalc_db_id;
+
+  IF v_recalc_db_id IS NULL THEN
+    SELECT * INTO v_existing
+    FROM staffing.attendance_recalc_events
+    WHERE event_id = p_event_id;
+
+    IF v_existing.tenant_id <> p_tenant_id
+      OR v_existing.person_uuid <> p_person_uuid
+      OR v_existing.from_date <> p_from_date
+      OR v_existing.to_date <> p_to_date
+      OR v_existing.payload <> v_payload
+      OR v_existing.request_id <> p_request_id
+      OR v_existing.initiator_id <> p_initiator_id
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+    END IF;
+
+    RETURN v_existing.id;
+  END IF;
+
+  v_d := p_from_date;
+  WHILE v_d <= p_to_date LOOP
+    PERFORM staffing.recompute_daily_attendance_result(p_tenant_id, p_person_uuid, v_d);
+    v_d := v_d + 1;
+  END LOOP;
+
+  RETURN v_recalc_db_id;
 END;
 $$;
 
@@ -4069,6 +4397,195 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION staffing.recompute_time_bank_cycle(
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_work_date date
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_cycle_type text := 'MONTH';
+  v_cycle_start date;
+  v_cycle_end date;
+
+  v_ruleset_version text := 'TIME_BANK_V1';
+
+  v_worked_total int := 0;
+  v_ot_150 int := 0;
+  v_ot_200 int := 0;
+  v_ot_300 int := 0;
+  v_comp_earned int := 0;
+  v_comp_used int := 0;
+
+  v_input_max_id bigint := NULL;
+  v_input_max_punch_time timestamptz := NULL;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_work_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'work_date is required';
+  END IF;
+
+  v_cycle_start := date_trunc('month', p_work_date)::date;
+  v_cycle_end := ((date_trunc('month', p_work_date) + interval '1 month')::date - 1);
+
+  PERFORM pg_advisory_xact_lock(
+    hashtext(p_tenant_id::text),
+    hashtext(p_person_uuid::text || ':' || v_cycle_type || ':' || v_cycle_start::text)
+  );
+
+  SELECT
+    COALESCE(sum(worked_minutes), 0)::int,
+    COALESCE(sum(overtime_minutes_150), 0)::int,
+    COALESCE(sum(overtime_minutes_200), 0)::int,
+    COALESCE(sum(overtime_minutes_300), 0)::int,
+    COALESCE(sum(CASE WHEN day_type = 'RESTDAY' THEN overtime_minutes_200 ELSE 0 END), 0)::int,
+    COALESCE(max(input_max_punch_event_db_id), NULL),
+    COALESCE(max(input_max_punch_time), NULL)
+  INTO
+    v_worked_total,
+    v_ot_150,
+    v_ot_200,
+    v_ot_300,
+    v_comp_earned,
+    v_input_max_id,
+    v_input_max_punch_time
+  FROM staffing.daily_attendance_results
+  WHERE tenant_id = p_tenant_id
+    AND person_uuid = p_person_uuid
+    AND work_date >= v_cycle_start
+    AND work_date <= v_cycle_end;
+
+  INSERT INTO staffing.time_bank_cycles (
+    tenant_id,
+    person_uuid,
+    cycle_type,
+    cycle_start_date,
+    cycle_end_date,
+    ruleset_version,
+    worked_minutes_total,
+    overtime_minutes_150,
+    overtime_minutes_200,
+    overtime_minutes_300,
+    comp_earned_minutes,
+    comp_used_minutes,
+    input_max_punch_event_db_id,
+    input_max_punch_time,
+    computed_at,
+    created_at,
+    updated_at
+  )
+  VALUES (
+    p_tenant_id,
+    p_person_uuid,
+    v_cycle_type,
+    v_cycle_start,
+    v_cycle_end,
+    v_ruleset_version,
+    v_worked_total,
+    v_ot_150,
+    v_ot_200,
+    v_ot_300,
+    v_comp_earned,
+    v_comp_used,
+    v_input_max_id,
+    v_input_max_punch_time,
+    now(),
+    now(),
+    now()
+  )
+  ON CONFLICT (tenant_id, person_uuid, cycle_type, cycle_start_date)
+  DO UPDATE SET
+    cycle_end_date = EXCLUDED.cycle_end_date,
+    ruleset_version = EXCLUDED.ruleset_version,
+    worked_minutes_total = EXCLUDED.worked_minutes_total,
+    overtime_minutes_150 = EXCLUDED.overtime_minutes_150,
+    overtime_minutes_200 = EXCLUDED.overtime_minutes_200,
+    overtime_minutes_300 = EXCLUDED.overtime_minutes_300,
+    comp_earned_minutes = EXCLUDED.comp_earned_minutes,
+    comp_used_minutes = EXCLUDED.comp_used_minutes,
+    input_max_punch_event_db_id = EXCLUDED.input_max_punch_event_db_id,
+    input_max_punch_time = EXCLUDED.input_max_punch_time,
+    computed_at = EXCLUDED.computed_at,
+    updated_at = EXCLUDED.updated_at;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.get_time_profile_for_work_date(
+  p_tenant_id uuid,
+  p_work_date date
+)
+RETURNS TABLE (
+  shift_start_local time,
+  shift_end_local time,
+  late_tolerance_minutes int,
+  early_leave_tolerance_minutes int,
+  overtime_min_minutes int,
+  overtime_rounding_mode text,
+  overtime_rounding_unit_minutes int,
+  time_profile_last_event_id bigint,
+  shift_start timestamptz,
+  shift_end timestamptz,
+  window_start timestamptz,
+  window_end timestamptz
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_tz text := 'Asia/Shanghai';
+  v_window_before interval := interval '6 hours';
+  v_window_after interval := interval '12 hours';
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_work_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'work_date is required';
+  END IF;
+
+  SELECT
+    tp.shift_start_local,
+    tp.shift_end_local,
+    tp.late_tolerance_minutes,
+    tp.early_leave_tolerance_minutes,
+    tp.overtime_min_minutes,
+    tp.overtime_rounding_mode,
+    tp.overtime_rounding_unit_minutes,
+    tp.last_event_id
+  INTO
+    shift_start_local,
+    shift_end_local,
+    late_tolerance_minutes,
+    early_leave_tolerance_minutes,
+    overtime_min_minutes,
+    overtime_rounding_mode,
+    overtime_rounding_unit_minutes,
+    time_profile_last_event_id
+  FROM staffing.time_profile_versions tp
+  WHERE tp.tenant_id = p_tenant_id
+    AND tp.lifecycle_status = 'active'
+    AND tp.validity @> p_work_date
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_TIME_PROFILE_NOT_CONFIGURED_AS_OF',
+      DETAIL = format('tenant_id=%s as_of=%s', p_tenant_id, p_work_date);
+  END IF;
+
+  shift_start := (p_work_date + shift_start_local) AT TIME ZONE v_tz;
+  shift_end := (p_work_date + shift_end_local) AT TIME ZONE v_tz;
+  window_start := shift_start - v_window_before;
+  window_end := shift_end + v_window_after;
+
+  RETURN NEXT;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION staffing.recompute_daily_attendance_result(
   p_tenant_id uuid,
   p_person_uuid uuid,
@@ -4078,7 +4595,6 @@ RETURNS void
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_tz text := 'Asia/Shanghai';
   v_ruleset_version text := 'TIME_PROFILE_V1';
 
   v_shift_start_local time := NULL;
@@ -4089,9 +4605,6 @@ DECLARE
   v_overtime_min_minutes int := 0;
   v_overtime_rounding_mode text := 'NONE';
   v_overtime_rounding_unit_minutes int := 0;
-
-  v_window_before interval := interval '6 hours';
-  v_window_after interval := interval '12 hours';
 
   v_shift_start timestamptz;
   v_shift_end timestamptz;
@@ -4151,7 +4664,11 @@ BEGIN
     overtime_min_minutes,
     overtime_rounding_mode,
     overtime_rounding_unit_minutes,
-    last_event_id
+    time_profile_last_event_id,
+    shift_start,
+    shift_end,
+    window_start,
+    window_end
   INTO
     v_shift_start_local,
     v_shift_end_local,
@@ -4160,18 +4677,12 @@ BEGIN
     v_overtime_min_minutes,
     v_overtime_rounding_mode,
     v_overtime_rounding_unit_minutes,
-    v_time_profile_last_event_id
-  FROM staffing.time_profile_versions
-  WHERE tenant_id = p_tenant_id
-    AND lifecycle_status = 'active'
-    AND validity @> p_work_date
-  LIMIT 1;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'STAFFING_TIME_PROFILE_NOT_CONFIGURED_AS_OF',
-      DETAIL = format('tenant_id=%s as_of=%s', p_tenant_id, p_work_date);
-  END IF;
+    v_time_profile_last_event_id,
+    v_shift_start,
+    v_shift_end,
+    v_window_start,
+    v_window_end
+  FROM staffing.get_time_profile_for_work_date(p_tenant_id, p_work_date);
 
   v_scheduled_minutes := floor(extract(epoch FROM (v_shift_end_local - v_shift_start_local)) / 60.0)::int;
   IF v_scheduled_minutes < 0 THEN
@@ -4195,19 +4706,20 @@ BEGIN
     v_holiday_day_last_event_id := NULL;
   END IF;
 
-  v_shift_start := (p_work_date + v_shift_start_local) AT TIME ZONE v_tz;
-  v_shift_end := (p_work_date + v_shift_end_local) AT TIME ZONE v_tz;
-  v_window_start := v_shift_start - v_window_before;
-  v_window_end := v_shift_end + v_window_after;
-
   FOR r IN
-    SELECT id, punch_time, punch_type
-    FROM staffing.time_punch_events
-    WHERE tenant_id = p_tenant_id
-      AND person_uuid = p_person_uuid
-      AND punch_time >= v_window_start
-      AND punch_time < v_window_end
-    ORDER BY punch_time ASC, id ASC
+    SELECT e.id, e.punch_time, e.punch_type
+    FROM staffing.time_punch_events e
+    WHERE e.tenant_id = p_tenant_id
+      AND e.person_uuid = p_person_uuid
+      AND e.punch_time >= v_window_start
+      AND e.punch_time < v_window_end
+      AND NOT EXISTS (
+        SELECT 1
+        FROM staffing.time_punch_void_events v
+        WHERE v.tenant_id = e.tenant_id
+          AND v.target_punch_event_db_id = e.id
+      )
+    ORDER BY e.punch_time ASC, e.id ASC
   LOOP
     v_punch_count := v_punch_count + 1;
     v_input_max_id := COALESCE(v_input_max_id, r.id);
@@ -4416,6 +4928,8 @@ BEGIN
     holiday_day_last_event_id = EXCLUDED.holiday_day_last_event_id,
     computed_at = EXCLUDED.computed_at,
     updated_at = EXCLUDED.updated_at;
+
+  PERFORM staffing.recompute_time_bank_cycle(p_tenant_id, p_person_uuid, p_work_date);
 END;
 $$;
 
@@ -6647,6 +7161,34 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION staffing.iit_withhold_this_month_cents(
+  p_ytd_income_cents bigint,
+  p_ytd_tax_exempt_income_cents bigint,
+  p_ytd_standard_deduction_cents bigint,
+  p_ytd_special_deduction_cents bigint,
+  p_ytd_special_additional_deduction_cents bigint,
+  p_effective_withheld_cents bigint
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_withhold_this_month numeric;
+BEGIN
+  SELECT t.withhold_this_month INTO v_withhold_this_month
+  FROM staffing.iit_compute_cumulative_withholding(
+    round(coalesce(p_ytd_income_cents, 0)::numeric / 100, 2),
+    round(coalesce(p_ytd_tax_exempt_income_cents, 0)::numeric / 100, 2),
+    round(coalesce(p_ytd_standard_deduction_cents, 0)::numeric / 100, 2),
+    round(coalesce(p_ytd_special_deduction_cents, 0)::numeric / 100, 2),
+    round(coalesce(p_ytd_special_additional_deduction_cents, 0)::numeric / 100, 2),
+    round(coalesce(p_effective_withheld_cents, 0)::numeric / 100, 2)
+  ) t;
+
+  RETURN round(coalesce(v_withhold_this_month, 0) * 100, 0)::bigint;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION staffing.payroll_apply_iit(
   p_tenant_id uuid,
   p_run_id uuid,
@@ -6663,6 +7205,42 @@ DECLARE
   v_period_end_excl date;
   v_tax_year integer;
   v_tax_month smallint;
+
+  v_int64_max constant bigint := 9223372036854775807;
+  v_net_guaranteed_payslip record;
+
+  v_base_income_cents bigint;
+  v_si_employee_cents bigint;
+  v_sad_amount_cents bigint;
+  v_first_tax_month smallint;
+
+  v_prev_ytd_income_cents bigint;
+  v_prev_ytd_tax_exempt_income_cents bigint;
+  v_prev_ytd_special_deduction_cents bigint;
+  v_prev_ytd_special_additional_deduction_cents bigint;
+  v_prev_ytd_iit_withheld_cents bigint;
+  v_prev_ytd_iit_credit_cents bigint;
+
+  v_ytd_income_base_cents bigint;
+  v_ytd_tax_exempt_income_cents bigint;
+  v_ytd_standard_deduction_cents bigint;
+  v_ytd_special_deduction_cents bigint;
+  v_ytd_special_additional_deduction_cents bigint;
+  v_effective_withheld_cents bigint;
+
+  v_group_target_net_cents bigint;
+  v_base_iit_withhold_cents bigint;
+  v_test_iit_withhold_cents bigint;
+  v_delta_iit_cents bigint;
+  v_test_net_cents bigint;
+
+  v_lo_cents bigint;
+  v_hi_cents bigint;
+  v_mid_cents bigint;
+  v_expand int;
+  v_iters int;
+  v_solved_gross_cents bigint;
+  v_group_delta_iit_cents bigint;
 BEGIN
   PERFORM staffing.assert_current_tenant(p_tenant_id);
 
@@ -6719,6 +7297,293 @@ BEGIN
       MESSAGE = 'STAFFING_IIT_BALANCES_MONTH_NOT_ADVANCING',
       DETAIL = format('tax_year=%s tax_month=%s', v_tax_year, v_tax_month);
   END IF;
+
+  FOR v_net_guaranteed_payslip IN
+    WITH
+    si AS (
+      SELECT
+        i.payslip_id,
+        COALESCE(sum(i.employee_amount), 0) AS employee_amount
+      FROM staffing.payslip_social_insurance_items i
+      WHERE i.tenant_id = p_tenant_id AND i.run_id = p_run_id
+      GROUP BY i.payslip_id
+    ),
+    sad AS (
+      SELECT
+        c.person_uuid,
+        c.amount
+      FROM staffing.iit_special_additional_deduction_claims c
+      WHERE c.tenant_id = p_tenant_id
+        AND c.tax_year = v_tax_year
+        AND c.tax_month = v_tax_month
+    )
+    SELECT
+      p.id AS payslip_id,
+      p.person_uuid,
+      p.assignment_id,
+      round(p.gross_pay * 100, 0)::bigint AS base_income_cents,
+      round(COALESCE(si.employee_amount, 0) * 100, 0)::bigint AS si_employee_cents,
+      round(COALESCE(sad.amount, 0) * 100, 0)::bigint AS sad_amount_cents,
+      COALESCE(b.first_tax_month, v_tax_month) AS first_tax_month,
+      round(COALESCE(b.ytd_income, 0) * 100, 0)::bigint AS prev_ytd_income_cents,
+      round(COALESCE(b.ytd_tax_exempt_income, 0) * 100, 0)::bigint AS prev_ytd_tax_exempt_income_cents,
+      round(COALESCE(b.ytd_special_deduction, 0) * 100, 0)::bigint AS prev_ytd_special_deduction_cents,
+      round(COALESCE(b.ytd_special_additional_deduction, 0) * 100, 0)::bigint AS prev_ytd_special_additional_deduction_cents,
+      round(COALESCE(b.ytd_iit_withheld, 0) * 100, 0)::bigint AS prev_ytd_iit_withheld_cents,
+      round(COALESCE(b.ytd_iit_credit, 0) * 100, 0)::bigint AS prev_ytd_iit_credit_cents
+    FROM staffing.payslips p
+    LEFT JOIN staffing.payroll_balances b
+      ON b.tenant_id = p.tenant_id
+      AND b.tax_entity_id = p.tenant_id
+      AND b.person_uuid = p.person_uuid
+      AND b.tax_year = v_tax_year
+    LEFT JOIN si ON si.payslip_id = p.id
+    LEFT JOIN sad ON sad.person_uuid = p.person_uuid
+    WHERE p.tenant_id = p_tenant_id
+      AND p.run_id = p_run_id
+      AND EXISTS (
+        SELECT 1
+        FROM staffing.payslip_item_inputs i
+        WHERE i.tenant_id = p.tenant_id
+          AND i.run_id = p.run_id
+          AND i.person_uuid = p.person_uuid
+          AND i.assignment_id = p.assignment_id
+          AND i.calc_mode = 'net_guaranteed_iit'
+      )
+  LOOP
+    v_base_income_cents := v_net_guaranteed_payslip.base_income_cents;
+    v_si_employee_cents := v_net_guaranteed_payslip.si_employee_cents;
+    v_sad_amount_cents := v_net_guaranteed_payslip.sad_amount_cents;
+    v_first_tax_month := v_net_guaranteed_payslip.first_tax_month;
+
+    v_prev_ytd_income_cents := v_net_guaranteed_payslip.prev_ytd_income_cents;
+    v_prev_ytd_tax_exempt_income_cents := v_net_guaranteed_payslip.prev_ytd_tax_exempt_income_cents;
+    v_prev_ytd_special_deduction_cents := v_net_guaranteed_payslip.prev_ytd_special_deduction_cents;
+    v_prev_ytd_special_additional_deduction_cents := v_net_guaranteed_payslip.prev_ytd_special_additional_deduction_cents;
+    v_prev_ytd_iit_withheld_cents := v_net_guaranteed_payslip.prev_ytd_iit_withheld_cents;
+    v_prev_ytd_iit_credit_cents := v_net_guaranteed_payslip.prev_ytd_iit_credit_cents;
+
+    SELECT round(sum(i.amount) * 100, 0)::bigint INTO v_group_target_net_cents
+    FROM staffing.payslip_item_inputs i
+    WHERE i.tenant_id = p_tenant_id
+      AND i.run_id = p_run_id
+      AND i.person_uuid = v_net_guaranteed_payslip.person_uuid
+      AND i.assignment_id = v_net_guaranteed_payslip.assignment_id
+      AND i.calc_mode = 'net_guaranteed_iit';
+
+    IF v_group_target_net_cents IS NULL OR v_group_target_net_cents <= 0 THEN
+      CONTINUE;
+    END IF;
+
+    v_ytd_income_base_cents := v_prev_ytd_income_cents + v_base_income_cents;
+    v_ytd_tax_exempt_income_cents := v_prev_ytd_tax_exempt_income_cents;
+    v_ytd_special_deduction_cents := v_prev_ytd_special_deduction_cents + v_si_employee_cents;
+    v_ytd_special_additional_deduction_cents := v_prev_ytd_special_additional_deduction_cents + v_sad_amount_cents;
+    v_ytd_standard_deduction_cents := 5000 * 100 * (v_tax_month - v_first_tax_month + 1);
+    v_effective_withheld_cents := v_prev_ytd_iit_withheld_cents + v_prev_ytd_iit_credit_cents;
+
+    v_base_iit_withhold_cents := staffing.iit_withhold_this_month_cents(
+      v_ytd_income_base_cents,
+      v_ytd_tax_exempt_income_cents,
+      v_ytd_standard_deduction_cents,
+      v_ytd_special_deduction_cents,
+      v_ytd_special_additional_deduction_cents,
+      v_effective_withheld_cents
+    );
+
+    v_lo_cents := v_group_target_net_cents;
+    v_hi_cents := v_group_target_net_cents;
+
+    FOR v_expand IN 1..32 LOOP
+      v_test_iit_withhold_cents := staffing.iit_withhold_this_month_cents(
+        v_ytd_income_base_cents + v_hi_cents,
+        v_ytd_tax_exempt_income_cents,
+        v_ytd_standard_deduction_cents,
+        v_ytd_special_deduction_cents,
+        v_ytd_special_additional_deduction_cents,
+        v_effective_withheld_cents
+      );
+      v_delta_iit_cents := v_test_iit_withhold_cents - v_base_iit_withhold_cents;
+      v_test_net_cents := v_hi_cents - v_delta_iit_cents;
+
+      IF v_test_net_cents >= v_group_target_net_cents THEN
+        EXIT;
+      END IF;
+
+      IF v_hi_cents > v_int64_max / 2 OR v_hi_cents > v_int64_max - v_ytd_income_base_cents THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_SOLVER_UPPER_BOUND_EXHAUSTED',
+          DETAIL = format(
+            'payslip_id=%s person_uuid=%s assignment_id=%s base_income=%s target_net=%s',
+            v_net_guaranteed_payslip.payslip_id,
+            v_net_guaranteed_payslip.person_uuid,
+            v_net_guaranteed_payslip.assignment_id,
+            (v_base_income_cents::numeric / 100)::text,
+            (v_group_target_net_cents::numeric / 100)::text
+          );
+      END IF;
+
+      v_hi_cents := v_hi_cents * 2;
+    END LOOP;
+
+    v_test_iit_withhold_cents := staffing.iit_withhold_this_month_cents(
+      v_ytd_income_base_cents + v_hi_cents,
+      v_ytd_tax_exempt_income_cents,
+      v_ytd_standard_deduction_cents,
+      v_ytd_special_deduction_cents,
+      v_ytd_special_additional_deduction_cents,
+      v_effective_withheld_cents
+    );
+    v_delta_iit_cents := v_test_iit_withhold_cents - v_base_iit_withhold_cents;
+    v_test_net_cents := v_hi_cents - v_delta_iit_cents;
+    IF v_test_net_cents < v_group_target_net_cents THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_SOLVER_UPPER_BOUND_EXHAUSTED',
+        DETAIL = format(
+          'payslip_id=%s person_uuid=%s assignment_id=%s base_income=%s target_net=%s hi=%s hi_net=%s',
+          v_net_guaranteed_payslip.payslip_id,
+          v_net_guaranteed_payslip.person_uuid,
+          v_net_guaranteed_payslip.assignment_id,
+          (v_base_income_cents::numeric / 100)::text,
+          (v_group_target_net_cents::numeric / 100)::text,
+          (v_hi_cents::numeric / 100)::text,
+          (v_test_net_cents::numeric / 100)::text
+        );
+    END IF;
+
+    v_iters := 0;
+    WHILE v_lo_cents < v_hi_cents LOOP
+      v_iters := v_iters + 1;
+      v_mid_cents := (v_lo_cents + v_hi_cents) / 2;
+
+      v_test_iit_withhold_cents := staffing.iit_withhold_this_month_cents(
+        v_ytd_income_base_cents + v_mid_cents,
+        v_ytd_tax_exempt_income_cents,
+        v_ytd_standard_deduction_cents,
+        v_ytd_special_deduction_cents,
+        v_ytd_special_additional_deduction_cents,
+        v_effective_withheld_cents
+      );
+      v_delta_iit_cents := v_test_iit_withhold_cents - v_base_iit_withhold_cents;
+      v_test_net_cents := v_mid_cents - v_delta_iit_cents;
+
+      IF v_test_net_cents >= v_group_target_net_cents THEN
+        v_hi_cents := v_mid_cents;
+      ELSE
+        v_lo_cents := v_mid_cents + 1;
+      END IF;
+    END LOOP;
+
+    v_solved_gross_cents := v_lo_cents;
+    v_test_iit_withhold_cents := staffing.iit_withhold_this_month_cents(
+      v_ytd_income_base_cents + v_solved_gross_cents,
+      v_ytd_tax_exempt_income_cents,
+      v_ytd_standard_deduction_cents,
+      v_ytd_special_deduction_cents,
+      v_ytd_special_additional_deduction_cents,
+      v_effective_withheld_cents
+    );
+    v_group_delta_iit_cents := v_test_iit_withhold_cents - v_base_iit_withhold_cents;
+
+    IF v_solved_gross_cents - v_group_delta_iit_cents <> v_group_target_net_cents THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_SOLVER_CONTRACT_VIOLATION',
+        DETAIL = format(
+          'payslip_id=%s person_uuid=%s assignment_id=%s target_net=%s solved_gross=%s delta_iit=%s',
+          v_net_guaranteed_payslip.payslip_id,
+          v_net_guaranteed_payslip.person_uuid,
+          v_net_guaranteed_payslip.assignment_id,
+          (v_group_target_net_cents::numeric / 100)::text,
+          (v_solved_gross_cents::numeric / 100)::text,
+          (v_group_delta_iit_cents::numeric / 100)::text
+        );
+    END IF;
+
+    WITH
+    inputs AS (
+      SELECT
+        i.id AS input_id,
+        i.item_code,
+        round(i.amount * 100, 0)::bigint AS target_net_cents,
+        i.last_event_id AS input_last_event_id
+      FROM staffing.payslip_item_inputs i
+      WHERE i.tenant_id = p_tenant_id
+        AND i.run_id = p_run_id
+        AND i.person_uuid = v_net_guaranteed_payslip.person_uuid
+        AND i.assignment_id = v_net_guaranteed_payslip.assignment_id
+        AND i.calc_mode = 'net_guaranteed_iit'
+    ),
+    alloc_base AS (
+      SELECT
+        i.*,
+        (v_group_delta_iit_cents::numeric * i.target_net_cents::numeric) AS mul,
+        floor((v_group_delta_iit_cents::numeric * i.target_net_cents::numeric) / v_group_target_net_cents::numeric)::bigint AS q
+      FROM inputs i
+    ),
+    alloc AS (
+      SELECT
+        a.*,
+        (a.mul - (a.q::numeric * v_group_target_net_cents::numeric))::bigint AS r
+      FROM alloc_base a
+    ),
+    residual AS (
+      SELECT
+        v_group_delta_iit_cents - sum(a.q) AS residual
+      FROM alloc a
+    ),
+    ranked AS (
+      SELECT
+        a.*,
+        row_number() OVER (ORDER BY a.r DESC, a.item_code ASC) AS rn,
+        (SELECT residual FROM residual) AS residual
+      FROM alloc a
+    )
+    INSERT INTO staffing.payslip_items (
+      tenant_id,
+      payslip_id,
+      item_code,
+      item_kind,
+      amount,
+      meta,
+      last_run_event_id,
+      calc_mode,
+      tax_bearer,
+      target_net,
+      iit_delta
+    )
+    SELECT
+      p_tenant_id,
+      v_net_guaranteed_payslip.payslip_id,
+      r.item_code,
+      'earning',
+      round(((r.target_net_cents + (r.q + CASE WHEN r.rn <= r.residual THEN 1 ELSE 0 END))::numeric) / 100, 2),
+      jsonb_build_object(
+        'input_id', r.input_id::text,
+        'input_last_event_id', r.input_last_event_id::text,
+        'tax_year', v_tax_year::text,
+        'tax_month', v_tax_month::text,
+        'group_target_net', (v_group_target_net_cents::numeric / 100)::text,
+        'group_solved_gross', (v_solved_gross_cents::numeric / 100)::text,
+        'group_delta_iit', (v_group_delta_iit_cents::numeric / 100)::text,
+        'base_income', (v_base_income_cents::numeric / 100)::text,
+        'base_iit_withhold', (v_base_iit_withhold_cents::numeric / 100)::text,
+        'iterations', v_iters::text
+      ),
+      p_run_event_db_id,
+      'net_guaranteed_iit',
+      'employer',
+      round((r.target_net_cents::numeric) / 100, 2),
+      round(((r.q + CASE WHEN r.rn <= r.residual THEN 1 ELSE 0 END)::numeric) / 100, 2)
+    FROM ranked r;
+
+    UPDATE staffing.payslips p
+    SET
+      gross_pay = p.gross_pay + round(v_solved_gross_cents::numeric / 100, 2),
+      net_pay = p.net_pay + round(v_solved_gross_cents::numeric / 100, 2),
+      last_run_event_id = p_run_event_db_id,
+      updated_at = p_now
+    WHERE p.tenant_id = p_tenant_id AND p.id = v_net_guaranteed_payslip.payslip_id;
+  END LOOP;
 
   WITH
   si AS (
@@ -7722,6 +8587,470 @@ END;
 $$;
 
 -- end: modules/staffing/infrastructure/persistence/schema/00012_staffing_payroll_recalc_engine.sql
+
+-- begin: modules/staffing/infrastructure/persistence/schema/00013_staffing_payroll_item_inputs.sql
+-- Payroll item inputs (net-guaranteed IIT / amount) — SSOT.
+
+CREATE TABLE IF NOT EXISTS staffing.payslip_item_input_events (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+
+  -- “输入归属 payslip”使用 natural key（避免依赖 payslip_id 稳定性）
+  run_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  assignment_id uuid NOT NULL,
+
+  event_type text NOT NULL, -- UPSERT / DELETE
+
+  item_code text NOT NULL,
+  item_kind text NOT NULL,  -- earning / deduction / employer_cost（P0-6 只允许 earning；净额保证项仅允许 earning）
+
+  currency char(3) NOT NULL DEFAULT 'CNY',
+  calc_mode text NOT NULL,   -- amount / net_guaranteed_iit
+  tax_bearer text NOT NULL,  -- employee / employer
+
+  -- amount 语义：
+  -- - calc_mode=amount：amount 为该输入项的金额（税前，正数）
+  -- - calc_mode=net_guaranteed_iit：amount 为 target_net（仅扣 IIT 后净额目标，正数）
+  amount numeric(15,2) NOT NULL,
+
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT payslip_item_input_events_event_type_check CHECK (event_type IN ('UPSERT','DELETE')),
+  CONSTRAINT payslip_item_input_events_code_check CHECK (btrim(item_code) <> '' AND item_code = btrim(item_code) AND item_code = upper(item_code) AND item_code ~ '^[A-Z0-9_]+$'),
+  CONSTRAINT payslip_item_input_events_item_kind_check CHECK (item_kind IN ('earning','deduction','employer_cost')),
+  CONSTRAINT payslip_item_input_events_currency_check CHECK (currency = btrim(currency) AND currency = upper(currency)),
+  CONSTRAINT payslip_item_input_events_calc_mode_check CHECK (calc_mode IN ('amount','net_guaranteed_iit')),
+  CONSTRAINT payslip_item_input_events_tax_bearer_check CHECK (tax_bearer IN ('employee','employer')),
+  CONSTRAINT payslip_item_input_events_amount_positive_check CHECK (amount > 0),
+  CONSTRAINT payslip_item_input_events_net_guaranteed_contract_check CHECK (
+    calc_mode <> 'net_guaranteed_iit'
+    OR (
+      item_kind = 'earning'
+      AND tax_bearer = 'employer'
+      AND currency = 'CNY'
+    )
+  ),
+  CONSTRAINT payslip_item_input_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT payslip_item_input_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT payslip_item_input_events_run_fk FOREIGN KEY (tenant_id, run_id) REFERENCES staffing.payroll_runs(tenant_id, id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS payslip_item_input_events_lookup_btree
+  ON staffing.payslip_item_input_events (tenant_id, run_id, person_uuid, assignment_id, item_code, id);
+
+CREATE TABLE IF NOT EXISTS staffing.payslip_item_inputs (
+  tenant_id uuid NOT NULL,
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+
+  run_id uuid NOT NULL,
+  person_uuid uuid NOT NULL,
+  assignment_id uuid NOT NULL,
+
+  item_code text NOT NULL,
+  item_kind text NOT NULL,
+  currency char(3) NOT NULL DEFAULT 'CNY',
+  calc_mode text NOT NULL,
+  tax_bearer text NOT NULL,
+  amount numeric(15,2) NOT NULL,
+
+  last_event_id bigint NOT NULL REFERENCES staffing.payslip_item_input_events(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+
+  PRIMARY KEY (tenant_id, id),
+  CONSTRAINT payslip_item_inputs_code_check CHECK (btrim(item_code) <> '' AND item_code = btrim(item_code) AND item_code = upper(item_code) AND item_code ~ '^[A-Z0-9_]+$'),
+  CONSTRAINT payslip_item_inputs_item_kind_check CHECK (item_kind IN ('earning','deduction','employer_cost')),
+  CONSTRAINT payslip_item_inputs_currency_check CHECK (currency = btrim(currency) AND currency = upper(currency)),
+  CONSTRAINT payslip_item_inputs_calc_mode_check CHECK (calc_mode IN ('amount','net_guaranteed_iit')),
+  CONSTRAINT payslip_item_inputs_tax_bearer_check CHECK (tax_bearer IN ('employee','employer')),
+  CONSTRAINT payslip_item_inputs_amount_positive_check CHECK (amount > 0),
+  CONSTRAINT payslip_item_inputs_net_guaranteed_contract_check CHECK (
+    calc_mode <> 'net_guaranteed_iit'
+    OR (
+      item_kind = 'earning'
+      AND tax_bearer = 'employer'
+      AND currency = 'CNY'
+    )
+  ),
+  CONSTRAINT payslip_item_inputs_natural_unique UNIQUE (tenant_id, run_id, person_uuid, assignment_id, item_code),
+  CONSTRAINT payslip_item_inputs_run_fk FOREIGN KEY (tenant_id, run_id) REFERENCES staffing.payroll_runs(tenant_id, id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS payslip_item_inputs_by_run_person_btree
+  ON staffing.payslip_item_inputs (tenant_id, run_id, person_uuid, assignment_id, item_code);
+
+ALTER TABLE staffing.payslip_items
+  ADD COLUMN IF NOT EXISTS calc_mode text NOT NULL DEFAULT 'amount',
+  ADD COLUMN IF NOT EXISTS tax_bearer text NOT NULL DEFAULT 'employee',
+  ADD COLUMN IF NOT EXISTS target_net numeric(15,2) NULL,
+  ADD COLUMN IF NOT EXISTS iit_delta numeric(15,2) NULL;
+
+ALTER TABLE staffing.payslip_items
+  DROP CONSTRAINT IF EXISTS payslip_items_calc_mode_check,
+  DROP CONSTRAINT IF EXISTS payslip_items_tax_bearer_check,
+  DROP CONSTRAINT IF EXISTS payslip_items_iit_delta_nonneg_check,
+  DROP CONSTRAINT IF EXISTS payslip_items_target_net_positive_check,
+  DROP CONSTRAINT IF EXISTS payslip_items_net_guaranteed_contract_check;
+
+ALTER TABLE staffing.payslip_items
+  ADD CONSTRAINT payslip_items_calc_mode_check CHECK (calc_mode IN ('amount','net_guaranteed_iit')),
+  ADD CONSTRAINT payslip_items_tax_bearer_check CHECK (tax_bearer IN ('employee','employer')),
+  ADD CONSTRAINT payslip_items_iit_delta_nonneg_check CHECK (iit_delta IS NULL OR iit_delta >= 0),
+  ADD CONSTRAINT payslip_items_target_net_positive_check CHECK (target_net IS NULL OR target_net > 0),
+  ADD CONSTRAINT payslip_items_net_guaranteed_contract_check CHECK (
+    calc_mode <> 'net_guaranteed_iit'
+    OR (
+      tax_bearer = 'employer'
+      AND item_kind = 'earning'
+      AND target_net IS NOT NULL
+      AND iit_delta IS NOT NULL
+      AND amount = target_net + iit_delta
+    )
+  );
+
+ALTER TABLE staffing.payslip_item_input_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.payslip_item_input_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.payslip_item_input_events;
+CREATE POLICY tenant_isolation ON staffing.payslip_item_input_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.payslip_item_inputs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.payslip_item_inputs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.payslip_item_inputs;
+CREATE POLICY tenant_isolation ON staffing.payslip_item_inputs
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+-- end: modules/staffing/infrastructure/persistence/schema/00013_staffing_payroll_item_inputs.sql
+
+-- begin: modules/staffing/infrastructure/persistence/schema/00014_staffing_payroll_item_inputs_engine.sql
+CREATE OR REPLACE FUNCTION staffing.submit_payslip_item_input_event(
+  p_event_id uuid,
+  p_tenant_id uuid,
+  p_run_id uuid,
+  p_person_uuid uuid,
+  p_assignment_id uuid,
+  p_event_type text,
+  p_item_code text,
+  p_item_kind text,
+  p_currency char(3),
+  p_calc_mode text,
+  p_tax_bearer text,
+  p_amount numeric(15,2),
+  p_request_id text,
+  p_initiator_id uuid
+)
+RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_lock_key text;
+  v_event_db_id bigint;
+  v_existing_event staffing.payslip_item_input_events%ROWTYPE;
+  v_run staffing.payroll_runs%ROWTYPE;
+  v_existing_input staffing.payslip_item_inputs%ROWTYPE;
+
+  v_now timestamptz;
+
+  v_item_code text;
+  v_item_kind text;
+  v_currency char(3);
+  v_calc_mode text;
+  v_tax_bearer text;
+  v_amount numeric(15,2);
+
+  v_currency_trim text;
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_event_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  END IF;
+  IF p_run_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'run_id is required';
+  END IF;
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_assignment_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'assignment_id is required';
+  END IF;
+  IF p_event_type IS NULL OR p_event_type NOT IN ('UPSERT','DELETE') THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT',
+      DETAIL = format('unsupported event_type: %s', p_event_type);
+  END IF;
+
+  v_item_code := COALESCE(p_item_code, '');
+  IF btrim(v_item_code) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'item_code is required';
+  END IF;
+  IF v_item_code <> btrim(v_item_code) THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'item_code must be trimmed';
+  END IF;
+  IF v_item_code <> upper(v_item_code) THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'item_code must be upper';
+  END IF;
+  IF v_item_code !~ '^[A-Z0-9_]+$' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'item_code invalid';
+  END IF;
+
+  IF btrim(COALESCE(p_request_id, '')) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  END IF;
+  IF p_initiator_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  END IF;
+
+  v_lock_key := format('staffing:payroll-run:%s:%s', p_tenant_id, p_run_id);
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
+
+  SELECT * INTO v_run
+  FROM staffing.payroll_runs
+  WHERE tenant_id = p_tenant_id AND id = p_run_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_RUN_NOT_FOUND',
+      DETAIL = format('run_id=%s', p_run_id);
+  END IF;
+
+  IF v_run.run_state = 'finalized' THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_RUN_FINALIZED_READONLY',
+      DETAIL = format('run_id=%s', p_run_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM staffing.payslips p
+    WHERE p.tenant_id = p_tenant_id
+      AND p.run_id = p_run_id
+      AND p.person_uuid = p_person_uuid
+      AND p.assignment_id = p_assignment_id
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT',
+      DETAIL = format('payslip not found: run_id=%s person_uuid=%s assignment_id=%s', p_run_id, p_person_uuid, p_assignment_id);
+  END IF;
+
+  v_now := now();
+
+  IF p_event_type = 'DELETE' THEN
+    SELECT * INTO v_existing_input
+    FROM staffing.payslip_item_inputs i
+    WHERE i.tenant_id = p_tenant_id
+      AND i.run_id = p_run_id
+      AND i.person_uuid = p_person_uuid
+      AND i.assignment_id = p_assignment_id
+      AND i.item_code = v_item_code;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT',
+        DETAIL = format('input not found: run_id=%s person_uuid=%s assignment_id=%s item_code=%s', p_run_id, p_person_uuid, p_assignment_id, v_item_code);
+    END IF;
+
+    v_item_kind := v_existing_input.item_kind;
+    v_currency := v_existing_input.currency;
+    v_calc_mode := v_existing_input.calc_mode;
+    v_tax_bearer := v_existing_input.tax_bearer;
+    v_amount := v_existing_input.amount;
+  ELSE
+    IF p_item_kind IS NULL OR p_item_kind NOT IN ('earning','deduction','employer_cost') THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT',
+        DETAIL = format('unsupported item_kind: %s', p_item_kind);
+    END IF;
+
+    IF p_calc_mode IS NULL OR p_calc_mode NOT IN ('amount','net_guaranteed_iit') THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT',
+        DETAIL = format('unsupported calc_mode: %s', p_calc_mode);
+    END IF;
+
+    IF p_tax_bearer IS NULL OR p_tax_bearer NOT IN ('employee','employer') THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT',
+        DETAIL = format('unsupported tax_bearer: %s', p_tax_bearer);
+    END IF;
+
+    IF p_currency IS NULL THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT',
+        DETAIL = 'currency is required';
+    END IF;
+
+    v_currency_trim := btrim(p_currency::text);
+    IF v_currency_trim = '' THEN
+      RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'currency is required';
+    END IF;
+    IF v_currency_trim <> upper(v_currency_trim) THEN
+      RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'currency must be upper';
+    END IF;
+    IF length(v_currency_trim) <> 3 THEN
+      RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'currency must be 3 letters';
+    END IF;
+
+    IF p_amount IS NULL OR p_amount <= 0 THEN
+      RAISE EXCEPTION USING MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT', DETAIL = 'amount must be > 0';
+    END IF;
+
+    IF p_calc_mode = 'net_guaranteed_iit' THEN
+      IF v_currency_trim <> 'CNY' THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_CURRENCY_MISMATCH',
+          DETAIL = format('currency=%s', v_currency_trim);
+      END IF;
+      IF p_tax_bearer <> 'employer' THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT',
+          DETAIL = format('tax_bearer must be employer, got=%s', p_tax_bearer);
+      END IF;
+      IF p_item_kind <> 'earning' THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT',
+          DETAIL = format('item_kind must be earning, got=%s', p_item_kind);
+      END IF;
+    END IF;
+
+    v_item_kind := p_item_kind;
+    v_currency := p_currency;
+    v_calc_mode := p_calc_mode;
+    v_tax_bearer := p_tax_bearer;
+    v_amount := p_amount;
+  END IF;
+
+  INSERT INTO staffing.payslip_item_input_events (
+    event_id,
+    tenant_id,
+    run_id,
+    person_uuid,
+    assignment_id,
+    event_type,
+    item_code,
+    item_kind,
+    currency,
+    calc_mode,
+    tax_bearer,
+    amount,
+    request_id,
+    initiator_id
+  )
+  VALUES (
+    p_event_id,
+    p_tenant_id,
+    p_run_id,
+    p_person_uuid,
+    p_assignment_id,
+    p_event_type,
+    v_item_code,
+    v_item_kind,
+    v_currency,
+    v_calc_mode,
+    v_tax_bearer,
+    v_amount,
+    p_request_id,
+    p_initiator_id
+  )
+  ON CONFLICT (event_id) DO NOTHING
+  RETURNING id INTO v_event_db_id;
+
+  IF v_event_db_id IS NULL THEN
+    SELECT * INTO v_existing_event
+    FROM staffing.payslip_item_input_events
+    WHERE event_id = p_event_id;
+
+    IF v_existing_event.tenant_id <> p_tenant_id
+      OR v_existing_event.run_id <> p_run_id
+      OR v_existing_event.person_uuid <> p_person_uuid
+      OR v_existing_event.assignment_id <> p_assignment_id
+      OR v_existing_event.event_type <> p_event_type
+      OR v_existing_event.item_code <> v_item_code
+      OR v_existing_event.item_kind <> v_item_kind
+      OR v_existing_event.currency <> v_currency
+      OR v_existing_event.calc_mode <> v_calc_mode
+      OR v_existing_event.tax_bearer <> v_tax_bearer
+      OR v_existing_event.amount <> v_amount
+      OR v_existing_event.request_id <> p_request_id
+      OR v_existing_event.initiator_id <> p_initiator_id
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing_event.id);
+    END IF;
+
+    RETURN v_existing_event.id;
+  END IF;
+
+  IF p_event_type = 'UPSERT' THEN
+    INSERT INTO staffing.payslip_item_inputs (
+      tenant_id,
+      run_id,
+      person_uuid,
+      assignment_id,
+      item_code,
+      item_kind,
+      currency,
+      calc_mode,
+      tax_bearer,
+      amount,
+      last_event_id,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      p_tenant_id,
+      p_run_id,
+      p_person_uuid,
+      p_assignment_id,
+      v_item_code,
+      v_item_kind,
+      v_currency,
+      v_calc_mode,
+      v_tax_bearer,
+      v_amount,
+      v_event_db_id,
+      v_now,
+      v_now
+    )
+    ON CONFLICT ON CONSTRAINT payslip_item_inputs_natural_unique
+    DO UPDATE SET
+      item_kind = EXCLUDED.item_kind,
+      currency = EXCLUDED.currency,
+      calc_mode = EXCLUDED.calc_mode,
+      tax_bearer = EXCLUDED.tax_bearer,
+      amount = EXCLUDED.amount,
+      last_event_id = EXCLUDED.last_event_id,
+      updated_at = EXCLUDED.updated_at;
+  ELSE
+    DELETE FROM staffing.payslip_item_inputs
+    WHERE tenant_id = p_tenant_id
+      AND run_id = p_run_id
+      AND person_uuid = p_person_uuid
+      AND assignment_id = p_assignment_id
+      AND item_code = v_item_code;
+  END IF;
+
+  IF v_run.run_state = 'calculated' THEN
+    UPDATE staffing.payroll_runs
+    SET
+      needs_recalc = true,
+      updated_at = v_now
+    WHERE tenant_id = p_tenant_id AND id = p_run_id;
+  END IF;
+
+  RETURN v_event_db_id;
+END;
+$$;
+
+-- end: modules/staffing/infrastructure/persistence/schema/00014_staffing_payroll_item_inputs_engine.sql
 
 -- begin: modules/person/infrastructure/persistence/schema/00001_person_schema.sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

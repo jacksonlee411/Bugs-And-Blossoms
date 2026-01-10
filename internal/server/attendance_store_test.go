@@ -164,6 +164,128 @@ func (row dailyAttendanceResultRow) Scan(dest ...any) error {
 	return nil
 }
 
+type attendanceTimePunchWithVoidRow struct {
+	EventDBID        int64
+	EventID          string
+	PersonUUID       string
+	PunchTime        time.Time
+	PunchType        string
+	SourceProvider   string
+	Payload          []byte
+	TransactionTime  time.Time
+	VoidDBID         *int64
+	VoidEventID      *string
+	VoidPayload      []byte
+	VoidRequestID    *string
+	VoidInitiatorID  *string
+	VoidCreatedAt    *time.Time
+	VoidTxTime       *time.Time
+	TargetPunchDBID  *int64
+	TargetPunchEvent *string
+}
+
+type attendanceTimePunchWithVoidRows struct {
+	idx     int
+	scanErr error
+	err     error
+	rows    []attendanceTimePunchWithVoidRow
+}
+
+func (r *attendanceTimePunchWithVoidRows) Close()                        {}
+func (r *attendanceTimePunchWithVoidRows) Err() error                    { return r.err }
+func (r *attendanceTimePunchWithVoidRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *attendanceTimePunchWithVoidRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *attendanceTimePunchWithVoidRows) Next() bool {
+	if r.idx >= len(r.rows) {
+		return false
+	}
+	r.idx++
+	return true
+}
+func (r *attendanceTimePunchWithVoidRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	row := r.rows[r.idx-1]
+	*(dest[0].(*int64)) = row.EventDBID
+	*(dest[1].(*string)) = row.EventID
+	*(dest[2].(*string)) = row.PersonUUID
+	*(dest[3].(*time.Time)) = row.PunchTime
+	*(dest[4].(*string)) = row.PunchType
+	*(dest[5].(*string)) = row.SourceProvider
+	*(dest[6].(*[]byte)) = append([]byte(nil), row.Payload...)
+	*(dest[7].(*time.Time)) = row.TransactionTime
+	*(dest[8].(**int64)) = row.VoidDBID
+	*(dest[9].(**string)) = row.VoidEventID
+	*(dest[10].(*[]byte)) = append([]byte(nil), row.VoidPayload...)
+	*(dest[11].(**string)) = row.VoidRequestID
+	*(dest[12].(**string)) = row.VoidInitiatorID
+	*(dest[13].(**time.Time)) = row.VoidCreatedAt
+	*(dest[14].(**time.Time)) = row.VoidTxTime
+	*(dest[15].(**int64)) = row.TargetPunchDBID
+	*(dest[16].(**string)) = row.TargetPunchEvent
+	return nil
+}
+func (r *attendanceTimePunchWithVoidRows) Values() ([]any, error) { return nil, nil }
+func (r *attendanceTimePunchWithVoidRows) RawValues() [][]byte    { return nil }
+func (r *attendanceTimePunchWithVoidRows) Conn() *pgx.Conn        { return nil }
+
+type attendanceRecalcEventRow struct {
+	DBID            int64
+	EventID         string
+	PersonUUID      string
+	FromDate        string
+	ToDate          string
+	Payload         []byte
+	RequestID       string
+	InitiatorID     string
+	TransactionTime time.Time
+	CreatedAt       time.Time
+}
+
+type attendanceRecalcEventRows struct {
+	idx     int
+	scanErr error
+	err     error
+	rows    []attendanceRecalcEventRow
+}
+
+func (r *attendanceRecalcEventRows) Close()                        {}
+func (r *attendanceRecalcEventRows) Err() error                    { return r.err }
+func (r *attendanceRecalcEventRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *attendanceRecalcEventRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *attendanceRecalcEventRows) Next() bool {
+	if r.idx >= len(r.rows) {
+		return false
+	}
+	r.idx++
+	return true
+}
+func (r *attendanceRecalcEventRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	row := r.rows[r.idx-1]
+	*(dest[0].(*int64)) = row.DBID
+	*(dest[1].(*string)) = row.EventID
+	*(dest[2].(*string)) = row.PersonUUID
+	*(dest[3].(*string)) = row.FromDate
+	*(dest[4].(*string)) = row.ToDate
+	*(dest[5].(*[]byte)) = append([]byte(nil), row.Payload...)
+	*(dest[6].(*string)) = row.RequestID
+	*(dest[7].(*string)) = row.InitiatorID
+	*(dest[8].(*time.Time)) = row.TransactionTime
+	*(dest[9].(*time.Time)) = row.CreatedAt
+	return nil
+}
+func (r *attendanceRecalcEventRows) Values() ([]any, error) { return nil, nil }
+func (r *attendanceRecalcEventRows) RawValues() [][]byte    { return nil }
+func (r *attendanceRecalcEventRows) Conn() *pgx.Conn        { return nil }
+
 func TestStaffingPGStore_ListTimePunchesForPerson(t *testing.T) {
 	t.Run("begin error", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
@@ -829,4 +951,498 @@ func TestStaffingPGStore_ListDailyAttendanceResultsForPerson(t *testing.T) {
 			t.Fatalf("err=%v", err)
 		}
 	})
+}
+
+func TestStaffingPGStore_GetAttendanceTimeProfileAndPunchesForWorkDate(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, _, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(context.Background(), "t1", "p1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{execErr: errors.New("exec")})
+		_, _, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(context.Background(), "t1", "p1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing person_uuid", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		_, _, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(context.Background(), "t1", "", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing work_date", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		_, _, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(context.Background(), "t1", "p1", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("time profile row error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{rowErr: errors.New("row")})
+		_, _, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(context.Background(), "t1", "p1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("punch query error", func(t *testing.T) {
+		tx := &stubTx{
+			row: fakeRow{vals: []any{
+				"09:00:00",
+				"18:00:00",
+				5,
+				0,
+				0,
+				"NONE",
+				0,
+				int64(1),
+				time.Unix(1, 0).UTC(),
+				time.Unix(2, 0).UTC(),
+				time.Unix(3, 0).UTC(),
+				time.Unix(4, 0).UTC(),
+			}},
+			queryErr: errors.New("query"),
+		}
+		store := newStaffingPGStore(tx)
+		_, _, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(context.Background(), "t1", "p1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		tx := &stubTx{
+			row: fakeRow{vals: []any{
+				"09:00:00",
+				"18:00:00",
+				5,
+				0,
+				0,
+				"NONE",
+				0,
+				int64(1),
+				time.Unix(1, 0).UTC(),
+				time.Unix(2, 0).UTC(),
+				time.Unix(3, 0).UTC(),
+				time.Unix(4, 0).UTC(),
+			}},
+			rows: &attendanceTimePunchWithVoidRows{
+				rows:    []attendanceTimePunchWithVoidRow{{EventDBID: 1, EventID: "e1", PersonUUID: "p1"}},
+				scanErr: errors.New("scan"),
+			},
+		}
+		store := newStaffingPGStore(tx)
+		_, _, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(context.Background(), "t1", "p1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rows error", func(t *testing.T) {
+		tx := &stubTx{
+			row: fakeRow{vals: []any{
+				"09:00:00",
+				"18:00:00",
+				5,
+				0,
+				0,
+				"NONE",
+				0,
+				int64(1),
+				time.Unix(1, 0).UTC(),
+				time.Unix(2, 0).UTC(),
+				time.Unix(3, 0).UTC(),
+				time.Unix(4, 0).UTC(),
+			}},
+			rows: &attendanceTimePunchWithVoidRows{
+				rows: []attendanceTimePunchWithVoidRow{{EventDBID: 1, EventID: "e1", PersonUUID: "p1"}},
+				err:  errors.New("rows"),
+			},
+		}
+		store := newStaffingPGStore(tx)
+		_, _, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(context.Background(), "t1", "p1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		tx := &stubTx{
+			row: fakeRow{vals: []any{
+				"09:00:00",
+				"18:00:00",
+				5,
+				0,
+				0,
+				"NONE",
+				0,
+				int64(1),
+				time.Unix(1, 0).UTC(),
+				time.Unix(2, 0).UTC(),
+				time.Unix(3, 0).UTC(),
+				time.Unix(4, 0).UTC(),
+			}},
+			rows:      &attendanceTimePunchWithVoidRows{rows: []attendanceTimePunchWithVoidRow{{EventDBID: 1, EventID: "e1", PersonUUID: "p1"}}},
+			commitErr: errors.New("commit"),
+		}
+		store := newStaffingPGStore(tx)
+		_, _, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(context.Background(), "t1", "p1", "2026-01-01")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		voidDBID := int64(10)
+		voidEventID := "v1"
+		voidRequestID := "r1"
+		voidInitiatorID := "i1"
+		voidCreatedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.FixedZone("X", 8*60*60))
+		voidTxTime := time.Date(2026, 1, 1, 0, 1, 0, 0, time.FixedZone("Y", -7*60*60))
+		targetPunchDBID := int64(99)
+		targetPunchEvent := "tp1"
+
+		tx := &stubTx{
+			row: fakeRow{vals: []any{
+				"09:00:00",
+				"18:00:00",
+				5,
+				0,
+				0,
+				"NONE",
+				0,
+				int64(1),
+				time.Date(2026, 1, 1, 0, 0, 0, 0, time.FixedZone("S", 5*60*60)),
+				time.Date(2026, 1, 1, 1, 0, 0, 0, time.FixedZone("E", -3*60*60)),
+				time.Date(2026, 1, 1, 2, 0, 0, 0, time.FixedZone("W", 7*60*60)),
+				time.Date(2026, 1, 1, 3, 0, 0, 0, time.FixedZone("X", -2*60*60)),
+			}},
+			rows: &attendanceTimePunchWithVoidRows{rows: []attendanceTimePunchWithVoidRow{{
+				EventDBID:        1,
+				EventID:          "e1",
+				PersonUUID:       "p1",
+				PunchTime:        time.Date(2026, 1, 1, 9, 0, 0, 0, time.FixedZone("P", 8*60*60)),
+				PunchType:        "IN",
+				SourceProvider:   "MANUAL",
+				Payload:          []byte(`{}`),
+				TransactionTime:  time.Date(2026, 1, 1, 9, 1, 0, 0, time.FixedZone("T", -7*60*60)),
+				VoidDBID:         &voidDBID,
+				VoidEventID:      &voidEventID,
+				VoidPayload:      []byte(`{"reason":"x"}`),
+				VoidRequestID:    &voidRequestID,
+				VoidInitiatorID:  &voidInitiatorID,
+				VoidCreatedAt:    &voidCreatedAt,
+				VoidTxTime:       &voidTxTime,
+				TargetPunchDBID:  &targetPunchDBID,
+				TargetPunchEvent: &targetPunchEvent,
+			}}},
+		}
+		store := newStaffingPGStore(tx)
+		tp, punches, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(context.Background(), "t1", "p1", "2026-01-01")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if tp.ShiftStart.Location() != time.UTC || tp.WindowStart.Location() != time.UTC {
+			t.Fatalf("expected UTC window")
+		}
+		if len(punches) != 1 || punches[0].VoidCreatedAt == nil || punches[0].VoidTxTime == nil {
+			t.Fatalf("punches=%+v", punches)
+		}
+		if punches[0].PunchTime.Location() != time.UTC || punches[0].TransactionTime.Location() != time.UTC {
+			t.Fatalf("expected UTC punch timestamps")
+		}
+		if punches[0].VoidCreatedAt.Location() != time.UTC || punches[0].VoidTxTime.Location() != time.UTC {
+			t.Fatalf("expected UTC void timestamps")
+		}
+	})
+}
+
+func TestStaffingPGStore_ListAttendanceRecalcEventsForWorkDate(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.ListAttendanceRecalcEventsForWorkDate(context.Background(), "t1", "p1", "2026-01-01", 200)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{execErr: errors.New("exec")})
+		_, err := store.ListAttendanceRecalcEventsForWorkDate(context.Background(), "t1", "p1", "2026-01-01", 200)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing person_uuid", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		_, err := store.ListAttendanceRecalcEventsForWorkDate(context.Background(), "t1", "", "2026-01-01", 200)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing work_date", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		_, err := store.ListAttendanceRecalcEventsForWorkDate(context.Background(), "t1", "p1", "", 200)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{queryErr: errors.New("query")})
+		_, err := store.ListAttendanceRecalcEventsForWorkDate(context.Background(), "t1", "p1", "2026-01-01", 200)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{rows: &attendanceRecalcEventRows{rows: []attendanceRecalcEventRow{{DBID: 1, EventID: "e1"}}, scanErr: errors.New("scan")}})
+		_, err := store.ListAttendanceRecalcEventsForWorkDate(context.Background(), "t1", "p1", "2026-01-01", 200)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rows error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{rows: &attendanceRecalcEventRows{rows: []attendanceRecalcEventRow{{DBID: 1, EventID: "e1"}}, err: errors.New("rows")}})
+		_, err := store.ListAttendanceRecalcEventsForWorkDate(context.Background(), "t1", "p1", "2026-01-01", 200)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			rows:      &attendanceRecalcEventRows{rows: []attendanceRecalcEventRow{{DBID: 1, EventID: "e1"}}},
+			commitErr: errors.New("commit"),
+		})
+		_, err := store.ListAttendanceRecalcEventsForWorkDate(context.Background(), "t1", "p1", "2026-01-01", 200)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok (limit clamp)", func(t *testing.T) {
+		ttLocal := time.Date(2026, 1, 1, 1, 0, 0, 0, time.FixedZone("X", 8*60*60))
+		ctLocal := time.Date(2026, 1, 1, 2, 0, 0, 0, time.FixedZone("Y", -7*60*60))
+		store := newStaffingPGStore(&stubTx{rows: &attendanceRecalcEventRows{rows: []attendanceRecalcEventRow{{
+			DBID:            1,
+			EventID:         "e1",
+			PersonUUID:      "p1",
+			FromDate:        "2026-01-01",
+			ToDate:          "2026-01-02",
+			Payload:         []byte(`{}`),
+			RequestID:       "r1",
+			InitiatorID:     "i1",
+			TransactionTime: ttLocal,
+			CreatedAt:       ctLocal,
+		}}}})
+		out, err := store.ListAttendanceRecalcEventsForWorkDate(context.Background(), "t1", "p1", "2026-01-01", 0)
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if len(out) != 1 || out[0].CreatedAt.Location() != time.UTC || out[0].TransactionTime.Location() != time.UTC {
+			t.Fatalf("out=%+v", out)
+		}
+
+		store2 := newStaffingPGStore(&stubTx{rows: &attendanceRecalcEventRows{rows: []attendanceRecalcEventRow{{DBID: 1, EventID: "e1"}}}})
+		if _, err := store2.ListAttendanceRecalcEventsForWorkDate(context.Background(), "t1", "p1", "2026-01-01", 5000); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+	})
+}
+
+func TestStaffingPGStore_SubmitTimePunchVoid(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.SubmitTimePunchVoid(context.Background(), "t1", "i1", SubmitTimePunchVoidParams{TargetPunchEventID: "p1"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{execErr: errors.New("exec")})
+		_, err := store.SubmitTimePunchVoid(context.Background(), "t1", "i1", SubmitTimePunchVoidParams{TargetPunchEventID: "p1"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing initiator_id", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		_, err := store.SubmitTimePunchVoid(context.Background(), "t1", "", SubmitTimePunchVoidParams{TargetPunchEventID: "p1"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("gen event id error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{rowErr: errors.New("uuid")})
+		_, err := store.SubmitTimePunchVoid(context.Background(), "t1", "i1", SubmitTimePunchVoidParams{TargetPunchEventID: "p1"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing target_punch_event_id", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		_, err := store.SubmitTimePunchVoid(context.Background(), "t1", "i1", SubmitTimePunchVoidParams{EventID: "e1"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submit error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{rowErr: errors.New("submit")})
+		_, err := store.SubmitTimePunchVoid(context.Background(), "t1", "i1", SubmitTimePunchVoidParams{EventID: "e1", TargetPunchEventID: "p1"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:       fakeRow{vals: []any{int64(1)}},
+			commitErr: errors.New("commit"),
+		})
+		_, err := store.SubmitTimePunchVoid(context.Background(), "t1", "i1", SubmitTimePunchVoidParams{EventID: "e1", TargetPunchEventID: "p1"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok (gen event id + payload default)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:  fakeRow{vals: []any{"e1"}},
+			row2: fakeRow{vals: []any{int64(2)}},
+		})
+		out, err := store.SubmitTimePunchVoid(context.Background(), "t1", "i1", SubmitTimePunchVoidParams{TargetPunchEventID: "p1"})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if out.EventID != "e1" || out.DBID != 2 {
+			t.Fatalf("out=%+v", out)
+		}
+	})
+}
+
+func TestStaffingPGStore_SubmitAttendanceRecalc(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.SubmitAttendanceRecalc(context.Background(), "t1", "i1", SubmitAttendanceRecalcParams{PersonUUID: "p1", FromDate: "2026-01-01", ToDate: "2026-01-01"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{execErr: errors.New("exec")})
+		_, err := store.SubmitAttendanceRecalc(context.Background(), "t1", "i1", SubmitAttendanceRecalcParams{PersonUUID: "p1", FromDate: "2026-01-01", ToDate: "2026-01-01"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing initiator_id", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		_, err := store.SubmitAttendanceRecalc(context.Background(), "t1", "", SubmitAttendanceRecalcParams{PersonUUID: "p1", FromDate: "2026-01-01", ToDate: "2026-01-01"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("gen event id error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{rowErr: errors.New("uuid")})
+		_, err := store.SubmitAttendanceRecalc(context.Background(), "t1", "i1", SubmitAttendanceRecalcParams{PersonUUID: "p1", FromDate: "2026-01-01", ToDate: "2026-01-01"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing person_uuid", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		_, err := store.SubmitAttendanceRecalc(context.Background(), "t1", "i1", SubmitAttendanceRecalcParams{EventID: "e1", FromDate: "2026-01-01", ToDate: "2026-01-01"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing date range", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		_, err := store.SubmitAttendanceRecalc(context.Background(), "t1", "i1", SubmitAttendanceRecalcParams{EventID: "e1", PersonUUID: "p1"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submit error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{rowErr: errors.New("submit")})
+		_, err := store.SubmitAttendanceRecalc(context.Background(), "t1", "i1", SubmitAttendanceRecalcParams{EventID: "e1", PersonUUID: "p1", FromDate: "2026-01-01", ToDate: "2026-01-01"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:       fakeRow{vals: []any{int64(1)}},
+			commitErr: errors.New("commit"),
+		})
+		_, err := store.SubmitAttendanceRecalc(context.Background(), "t1", "i1", SubmitAttendanceRecalcParams{EventID: "e1", PersonUUID: "p1", FromDate: "2026-01-01", ToDate: "2026-01-01"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok (gen event id + payload default)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:  fakeRow{vals: []any{"e1"}},
+			row2: fakeRow{vals: []any{int64(2)}},
+		})
+		out, err := store.SubmitAttendanceRecalc(context.Background(), "t1", "i1", SubmitAttendanceRecalcParams{PersonUUID: "p1", FromDate: "2026-01-01", ToDate: "2026-01-02"})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if out.EventID != "e1" || out.DBID != 2 {
+			t.Fatalf("out=%+v", out)
+		}
+	})
+}
+
+func TestStaffingMemoryStore_AttendanceCorrectionsCoverage(t *testing.T) {
+	store := newStaffingMemoryStore()
+
+	if _, _, err := store.GetAttendanceTimeProfileAndPunchesForWorkDate(context.Background(), "t1", "p1", "2026-01-01"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if _, err := store.ListAttendanceRecalcEventsForWorkDate(context.Background(), "t1", "p1", "2026-01-01", 200); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if _, err := store.SubmitTimePunchVoid(context.Background(), "t1", "i1", SubmitTimePunchVoidParams{TargetPunchEventID: "p1"}); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if _, err := store.SubmitAttendanceRecalc(context.Background(), "t1", "i1", SubmitAttendanceRecalcParams{PersonUUID: "p1", FromDate: "2026-01-01", ToDate: "2026-01-01"}); err != nil {
+		t.Fatalf("err=%v", err)
+	}
 }

@@ -15,6 +15,8 @@ p, role:tenant-admin, *, staffing.attendance-punches, admin
 p, role:tenant-admin, *, staffing.attendance-integrations, read
 p, role:tenant-admin, *, staffing.attendance-integrations, admin
 p, role:tenant-admin, *, staffing.attendance-daily-results, read
+p, role:tenant-admin, *, staffing.attendance-daily-results, admin
+p, role:tenant-admin, *, staffing.attendance-time-bank, read
 p, role:tenant-admin, *, staffing.attendance-time-profile, read
 p, role:tenant-admin, *, staffing.attendance-time-profile, admin
 p, role:tenant-admin, *, staffing.attendance-holiday-calendar, read

@@ -25,6 +25,7 @@ type PayrollRun struct {
 	ID             string `json:"id"`
 	PayPeriodID    string `json:"pay_period_id"`
 	RunState       string `json:"run_state"`
+	NeedsRecalc    bool   `json:"needs_recalc"`
 	CalcStartedAt  string `json:"calc_started_at"`
 	CalcFinishedAt string `json:"calc_finished_at"`
 	FinalizedAt    string `json:"finalized_at"`
@@ -44,11 +45,29 @@ type Payslip struct {
 }
 
 type PayslipItem struct {
-	ID       string          `json:"id"`
-	ItemCode string          `json:"item_code"`
-	ItemKind string          `json:"item_kind"`
-	Amount   string          `json:"amount"`
-	Meta     json.RawMessage `json:"meta"`
+	ID       string `json:"id"`
+	ItemCode string `json:"item_code"`
+	ItemKind string `json:"item_kind"`
+	Amount   string `json:"amount"`
+
+	CalcMode  string `json:"calc_mode"`
+	TaxBearer string `json:"tax_bearer"`
+	TargetNet string `json:"target_net"`
+	IITDelta  string `json:"iit_delta"`
+
+	Meta json.RawMessage `json:"meta"`
+}
+
+type PayslipItemInput struct {
+	ID          string `json:"id"`
+	ItemCode    string `json:"item_code"`
+	ItemKind    string `json:"item_kind"`
+	Currency    string `json:"currency"`
+	CalcMode    string `json:"calc_mode"`
+	TaxBearer   string `json:"tax_bearer"`
+	Amount      string `json:"amount"`
+	LastEventID string `json:"last_event_id"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 type PayslipSocialInsuranceItem struct {
@@ -62,6 +81,8 @@ type PayslipSocialInsuranceItem struct {
 type PayslipDetail struct {
 	Payslip
 	Items []PayslipItem `json:"items"`
+
+	ItemInputs []PayslipItemInput `json:"item_inputs"`
 
 	SocialInsuranceItems         []PayslipSocialInsuranceItem `json:"social_insurance_items"`
 	SocialInsuranceEmployeeTotal string                       `json:"social_insurance_employee_total"`
@@ -174,6 +195,8 @@ type PayrollStore interface {
 
 	ListPayslips(ctx context.Context, tenantID string, runID string) ([]Payslip, error)
 	GetPayslip(ctx context.Context, tenantID string, payslipID string) (PayslipDetail, error)
+
+	SubmitPayslipNetGuaranteedIITItem(ctx context.Context, tenantID string, initiatorID string, runID string, payslipID string, eventType string, itemCode string, targetNet string, requestID string) error
 
 	ListPayrollRecalcRequests(ctx context.Context, tenantID string, personUUID string, state string) ([]PayrollRecalcRequestSummary, error)
 	GetPayrollRecalcRequest(ctx context.Context, tenantID string, recalcRequestID string) (PayrollRecalcRequestDetail, error)
@@ -376,33 +399,35 @@ func (s *staffingPGStore) ListPayrollRuns(ctx context.Context, tenantID string, 
 	var rows pgRows
 	if payPeriodID == "" {
 		rows, err = tx.Query(ctx, `
-SELECT
-  id::text,
-  pay_period_id::text,
-  run_state,
-  COALESCE(calc_started_at::text, '') AS calc_started_at,
-  COALESCE(calc_finished_at::text, '') AS calc_finished_at,
-  COALESCE(finalized_at::text, '') AS finalized_at,
-  created_at::text
-FROM staffing.payroll_runs
-WHERE tenant_id = $1::uuid
-ORDER BY created_at DESC, id::text ASC
-`, tenantID)
+	SELECT
+	  id::text,
+	  pay_period_id::text,
+	  run_state,
+	  needs_recalc,
+	  COALESCE(calc_started_at::text, '') AS calc_started_at,
+	  COALESCE(calc_finished_at::text, '') AS calc_finished_at,
+	  COALESCE(finalized_at::text, '') AS finalized_at,
+	  created_at::text
+	FROM staffing.payroll_runs
+	WHERE tenant_id = $1::uuid
+	ORDER BY created_at DESC, id::text ASC
+	`, tenantID)
 	} else {
 		rows, err = tx.Query(ctx, `
-SELECT
-  id::text,
-  pay_period_id::text,
-  run_state,
-  COALESCE(calc_started_at::text, '') AS calc_started_at,
-  COALESCE(calc_finished_at::text, '') AS calc_finished_at,
-  COALESCE(finalized_at::text, '') AS finalized_at,
-  created_at::text
-FROM staffing.payroll_runs
-WHERE tenant_id = $1::uuid
-  AND pay_period_id = $2::uuid
-ORDER BY created_at DESC, id::text ASC
-`, tenantID, payPeriodID)
+	SELECT
+	  id::text,
+	  pay_period_id::text,
+	  run_state,
+	  needs_recalc,
+	  COALESCE(calc_started_at::text, '') AS calc_started_at,
+	  COALESCE(calc_finished_at::text, '') AS calc_finished_at,
+	  COALESCE(finalized_at::text, '') AS finalized_at,
+	  created_at::text
+	FROM staffing.payroll_runs
+	WHERE tenant_id = $1::uuid
+	  AND pay_period_id = $2::uuid
+	ORDER BY created_at DESC, id::text ASC
+	`, tenantID, payPeriodID)
 	}
 	if err != nil {
 		return nil, err
@@ -412,7 +437,7 @@ ORDER BY created_at DESC, id::text ASC
 	var out []PayrollRun
 	for rows.Next() {
 		var r PayrollRun
-		if err := rows.Scan(&r.ID, &r.PayPeriodID, &r.RunState, &r.CalcStartedAt, &r.CalcFinishedAt, &r.FinalizedAt, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.PayPeriodID, &r.RunState, &r.NeedsRecalc, &r.CalcStartedAt, &r.CalcFinishedAt, &r.FinalizedAt, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -484,6 +509,7 @@ WHERE tenant_id = $1::uuid AND id = $2::uuid
 		ID:          runID,
 		PayPeriodID: payPeriodID,
 		RunState:    "draft",
+		NeedsRecalc: false,
 		CreatedAt:   createdAt,
 	}, nil
 }
@@ -506,17 +532,18 @@ func (s *staffingPGStore) GetPayrollRun(ctx context.Context, tenantID string, ru
 
 	var out PayrollRun
 	if err := tx.QueryRow(ctx, `
-SELECT
-  id::text,
-  pay_period_id::text,
-  run_state,
-  COALESCE(calc_started_at::text, '') AS calc_started_at,
-  COALESCE(calc_finished_at::text, '') AS calc_finished_at,
-  COALESCE(finalized_at::text, '') AS finalized_at,
-  created_at::text
-FROM staffing.payroll_runs
-WHERE tenant_id = $1::uuid AND id = $2::uuid
-`, tenantID, runID).Scan(&out.ID, &out.PayPeriodID, &out.RunState, &out.CalcStartedAt, &out.CalcFinishedAt, &out.FinalizedAt, &out.CreatedAt); err != nil {
+	SELECT
+	  id::text,
+	  pay_period_id::text,
+	  run_state,
+	  needs_recalc,
+	  COALESCE(calc_started_at::text, '') AS calc_started_at,
+	  COALESCE(calc_finished_at::text, '') AS calc_finished_at,
+	  COALESCE(finalized_at::text, '') AS finalized_at,
+	  created_at::text
+	FROM staffing.payroll_runs
+	WHERE tenant_id = $1::uuid AND id = $2::uuid
+	`, tenantID, runID).Scan(&out.ID, &out.PayPeriodID, &out.RunState, &out.NeedsRecalc, &out.CalcStartedAt, &out.CalcFinishedAt, &out.FinalizedAt, &out.CreatedAt); err != nil {
 		return PayrollRun{}, err
 	}
 
@@ -658,17 +685,18 @@ func (s *staffingPGStore) CalculatePayrollRun(ctx context.Context, tenantID stri
 
 		var out PayrollRun
 		if err := tx.QueryRow(ctx, `
-	SELECT
-	  id::text,
-	  pay_period_id::text,
-	  run_state,
-	  COALESCE(calc_started_at::text, '') AS calc_started_at,
-	  COALESCE(calc_finished_at::text, '') AS calc_finished_at,
-	  COALESCE(finalized_at::text, '') AS finalized_at,
-	  created_at::text
-	FROM staffing.payroll_runs
-	WHERE tenant_id = $1::uuid AND id = $2::uuid
-	`, tenantID, runID).Scan(&out.ID, &out.PayPeriodID, &out.RunState, &out.CalcStartedAt, &out.CalcFinishedAt, &out.FinalizedAt, &out.CreatedAt); err != nil {
+		SELECT
+		  id::text,
+		  pay_period_id::text,
+		  run_state,
+		  needs_recalc,
+		  COALESCE(calc_started_at::text, '') AS calc_started_at,
+		  COALESCE(calc_finished_at::text, '') AS calc_finished_at,
+		  COALESCE(finalized_at::text, '') AS finalized_at,
+		  created_at::text
+		FROM staffing.payroll_runs
+		WHERE tenant_id = $1::uuid AND id = $2::uuid
+		`, tenantID, runID).Scan(&out.ID, &out.PayPeriodID, &out.RunState, &out.NeedsRecalc, &out.CalcStartedAt, &out.CalcFinishedAt, &out.FinalizedAt, &out.CreatedAt); err != nil {
 			return PayrollRun{}, err
 		}
 
@@ -725,17 +753,18 @@ SELECT staffing.submit_payroll_run_event(
 
 	var out PayrollRun
 	if err := tx.QueryRow(ctx, `
-SELECT
-  id::text,
-  pay_period_id::text,
-  run_state,
-  COALESCE(calc_started_at::text, '') AS calc_started_at,
-  COALESCE(calc_finished_at::text, '') AS calc_finished_at,
-  COALESCE(finalized_at::text, '') AS finalized_at,
-  created_at::text
-FROM staffing.payroll_runs
-WHERE tenant_id = $1::uuid AND id = $2::uuid
-`, tenantID, runID).Scan(&out.ID, &out.PayPeriodID, &out.RunState, &out.CalcStartedAt, &out.CalcFinishedAt, &out.FinalizedAt, &out.CreatedAt); err != nil {
+	SELECT
+	  id::text,
+	  pay_period_id::text,
+	  run_state,
+	  needs_recalc,
+	  COALESCE(calc_started_at::text, '') AS calc_started_at,
+	  COALESCE(calc_finished_at::text, '') AS calc_finished_at,
+	  COALESCE(finalized_at::text, '') AS finalized_at,
+	  created_at::text
+	FROM staffing.payroll_runs
+	WHERE tenant_id = $1::uuid AND id = $2::uuid
+	`, tenantID, runID).Scan(&out.ID, &out.PayPeriodID, &out.RunState, &out.NeedsRecalc, &out.CalcStartedAt, &out.CalcFinishedAt, &out.FinalizedAt, &out.CreatedAt); err != nil {
 		return PayrollRun{}, err
 	}
 
@@ -834,16 +863,20 @@ func (s *staffingPGStore) GetPayslip(ctx context.Context, tenantID string, paysl
 	}
 
 	rows, err := tx.Query(ctx, `
-	SELECT
-	  id::text,
-	  item_code,
-	  item_kind,
-	  amount::text,
-	  meta::text
-	FROM staffing.payslip_items
-	WHERE tenant_id = $1::uuid AND payslip_id = $2::uuid
-	ORDER BY id ASC
-	`, tenantID, payslipID)
+		SELECT
+		  id::text,
+		  item_code,
+		  item_kind,
+		  amount::text,
+		  calc_mode,
+		  tax_bearer,
+		  COALESCE(target_net::text, '') AS target_net,
+		  COALESCE(iit_delta::text, '') AS iit_delta,
+		  meta::text
+		FROM staffing.payslip_items
+		WHERE tenant_id = $1::uuid AND payslip_id = $2::uuid
+		ORDER BY id ASC
+		`, tenantID, payslipID)
 	if err != nil {
 		return PayslipDetail{}, err
 	}
@@ -852,13 +885,47 @@ func (s *staffingPGStore) GetPayslip(ctx context.Context, tenantID string, paysl
 	for rows.Next() {
 		var item PayslipItem
 		var metaText string
-		if err := rows.Scan(&item.ID, &item.ItemCode, &item.ItemKind, &item.Amount, &metaText); err != nil {
+		if err := rows.Scan(&item.ID, &item.ItemCode, &item.ItemKind, &item.Amount, &item.CalcMode, &item.TaxBearer, &item.TargetNet, &item.IITDelta, &metaText); err != nil {
 			return PayslipDetail{}, err
 		}
 		item.Meta = json.RawMessage(metaText)
 		out.Items = append(out.Items, item)
 	}
 	if err := rows.Err(); err != nil {
+		return PayslipDetail{}, err
+	}
+
+	rowsInputs, err := tx.Query(ctx, `
+	SELECT
+	  id::text,
+	  item_code,
+	  item_kind,
+	  currency::text,
+	  calc_mode,
+	  tax_bearer,
+	  amount::text,
+	  last_event_id::text,
+	  updated_at::text
+	FROM staffing.payslip_item_inputs
+	WHERE tenant_id = $1::uuid
+	  AND run_id = $2::uuid
+	  AND person_uuid = $3::uuid
+	  AND assignment_id = $4::uuid
+	ORDER BY item_code ASC, id::text ASC
+	`, tenantID, out.RunID, out.PersonUUID, out.AssignmentID)
+	if err != nil {
+		return PayslipDetail{}, err
+	}
+	defer rowsInputs.Close()
+
+	for rowsInputs.Next() {
+		var input PayslipItemInput
+		if err := rowsInputs.Scan(&input.ID, &input.ItemCode, &input.ItemKind, &input.Currency, &input.CalcMode, &input.TaxBearer, &input.Amount, &input.LastEventID, &input.UpdatedAt); err != nil {
+			return PayslipDetail{}, err
+		}
+		out.ItemInputs = append(out.ItemInputs, input)
+	}
+	if err := rowsInputs.Err(); err != nil {
 		return PayslipDetail{}, err
 	}
 
@@ -905,6 +972,111 @@ func (s *staffingPGStore) GetPayslip(ctx context.Context, tenantID string, paysl
 		return PayslipDetail{}, err
 	}
 	return out, nil
+}
+
+func (s *staffingPGStore) SubmitPayslipNetGuaranteedIITItem(
+	ctx context.Context,
+	tenantID string,
+	initiatorID string,
+	runID string,
+	payslipID string,
+	eventType string,
+	itemCode string,
+	targetNet string,
+	requestID string,
+) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return err
+	}
+
+	initiatorID = strings.TrimSpace(initiatorID)
+
+	runID = strings.TrimSpace(runID)
+	if runID == "" {
+		return errors.New("run_id is required")
+	}
+	payslipID = strings.TrimSpace(payslipID)
+	if payslipID == "" {
+		return errors.New("payslip_id is required")
+	}
+
+	eventType = strings.ToUpper(strings.TrimSpace(eventType))
+	if eventType == "" {
+		eventType = "UPSERT"
+	}
+	if eventType != "UPSERT" && eventType != "DELETE" {
+		return newBadRequestError("event_type must be UPSERT|DELETE")
+	}
+
+	itemCode = strings.ToUpper(strings.TrimSpace(itemCode))
+	requestID = strings.TrimSpace(requestID)
+	targetNet = strings.TrimSpace(targetNet)
+
+	var payslipRunID, personUUID, assignmentID string
+	if err := tx.QueryRow(ctx, `
+	SELECT
+	  run_id::text,
+	  person_uuid::text,
+	  assignment_id::text
+	FROM staffing.payslips
+	WHERE tenant_id = $1::uuid AND id = $2::uuid
+	`, tenantID, payslipID).Scan(&payslipRunID, &personUUID, &assignmentID); err != nil {
+		return err
+	}
+	if payslipRunID != runID {
+		return newBadRequestError("payslip_id does not belong to run_id")
+	}
+
+	eventID := requestID
+	if eventID == "" {
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+			return err
+		}
+	}
+
+	amount := targetNet
+	if eventType == "DELETE" {
+		amount = "0"
+	}
+
+	var eventDBID int64
+	if err := tx.QueryRow(ctx, `
+	SELECT staffing.submit_payslip_item_input_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::uuid,
+	  $4::uuid,
+	  $5::uuid,
+	  $6::text,
+	  $7::text,
+	  'earning',
+	  'CNY'::char(3),
+	  'net_guaranteed_iit',
+	  'employer',
+	  CASE
+	    WHEN $8::text ~ '^[0-9]+([.][0-9]{1,2})?$' THEN $8::numeric(15,2)
+	    ELSE NULL
+	  END,
+	  $9::text,
+	  NULLIF($10::text, '')::uuid
+	);
+	`, eventID, tenantID, runID, personUUID, assignmentID, eventType, itemCode, amount, requestID, initiatorID).Scan(&eventDBID); err != nil {
+		return err
+	}
+	if eventDBID <= 0 {
+		return errors.New("unexpected event_db_id")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *staffingPGStore) ListPayrollRecalcRequests(ctx context.Context, tenantID string, personUUID string, state string) ([]PayrollRecalcRequestSummary, error) {

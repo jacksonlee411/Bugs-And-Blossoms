@@ -66,6 +66,9 @@ entrypoints:
         methods: [GET]
         route_class: ui
       - path: /org/attendance-daily-results/{person_uuid}/{work_date}
+        methods: [GET, POST]
+        route_class: ui
+      - path: /org/attendance-time-bank
         methods: [GET]
         route_class: ui
       - path: /org/attendance-time-profile
@@ -94,6 +97,9 @@ entrypoints:
         route_class: ui
       - path: /org/payroll-runs/{run_id}/payslips/{payslip_id}
         methods: [GET]
+        route_class: ui
+      - path: /org/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items
+        methods: [POST]
         route_class: ui
       - path: /org/payroll-social-insurance-policies
         methods: [GET, POST]
@@ -128,11 +134,20 @@ entrypoints:
       - path: /org/api/attendance-daily-results
         methods: [GET]
         route_class: internal_api
+      - path: /org/api/attendance-punch-voids
+        methods: [POST]
+        route_class: internal_api
+      - path: /org/api/attendance-recalc
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/payroll-periods
         methods: [GET, POST]
         route_class: internal_api
       - path: /org/api/payroll-runs
         methods: [GET, POST]
+        route_class: internal_api
+      - path: /org/api/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items
+        methods: [POST]
         route_class: internal_api
       - path: /org/api/payroll-balances
         methods: [GET]

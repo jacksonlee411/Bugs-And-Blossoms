@@ -148,6 +148,12 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		return "", "", false
 	}
+	if pathMatchRouteTemplate(path, "/org/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items") {
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayslips, authz.ActionAdmin, true
+		}
+		return "", "", false
+	}
 	if pathMatchRouteTemplate(path, "/org/payroll-recalc-requests/{recalc_request_id}") {
 		if method == http.MethodGet {
 			return authz.ObjectStaffingPayrollRecalcRequests, authz.ActionRead, true
@@ -175,9 +181,18 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		return "", "", false
 	}
+	if pathMatchRouteTemplate(path, "/org/api/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items") {
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayslips, authz.ActionAdmin, true
+		}
+		return "", "", false
+	}
 	if pathMatchRouteTemplate(path, "/org/attendance-daily-results/{person_uuid}/{work_date}") {
 		if method == http.MethodGet {
 			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionAdmin, true
 		}
 		return "", "", false
 	}
@@ -267,6 +282,11 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionRead, true
 		}
 		return "", "", false
+	case "/org/attendance-time-bank":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingAttendanceTimeBank, authz.ActionRead, true
+		}
+		return "", "", false
 	case "/org/attendance-time-profile":
 		if method == http.MethodGet {
 			return authz.ObjectStaffingAttendanceTimeProfile, authz.ActionRead, true
@@ -302,6 +322,16 @@ func authzRequirementForRoute(method string, path string) (object string, action
 	case "/org/api/attendance-daily-results":
 		if method == http.MethodGet {
 			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionRead, true
+		}
+		return "", "", false
+	case "/org/api/attendance-punch-voids":
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAttendancePunches, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/attendance-recalc":
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionAdmin, true
 		}
 		return "", "", false
 	case "/org/payroll-periods":

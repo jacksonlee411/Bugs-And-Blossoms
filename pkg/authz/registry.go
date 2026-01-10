@@ -25,6 +25,7 @@ const (
 	ObjectStaffingAttendancePunches         = "staffing.attendance-punches"
 	ObjectStaffingAttendanceIntegrations    = "staffing.attendance-integrations"
 	ObjectStaffingAttendanceDailyResults    = "staffing.attendance-daily-results"
+	ObjectStaffingAttendanceTimeBank        = "staffing.attendance-time-bank"
 	ObjectStaffingAttendanceTimeProfile     = "staffing.attendance-time-profile"
 	ObjectStaffingAttendanceHolidayCalendar = "staffing.attendance-holiday-calendar"
 	ObjectStaffingAssignments               = "staffing.assignments"

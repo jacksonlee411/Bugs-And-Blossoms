@@ -72,10 +72,11 @@ func (r *payrollRunRows) Scan(dest ...any) error {
 	*(dest[0].(*string)) = "run1"
 	*(dest[1].(*string)) = "pp1"
 	*(dest[2].(*string)) = "draft"
-	*(dest[3].(*string)) = ""
+	*(dest[3].(*bool)) = false
 	*(dest[4].(*string)) = ""
 	*(dest[5].(*string)) = ""
-	*(dest[6].(*string)) = "2026-01-01T00:00:00Z"
+	*(dest[6].(*string)) = ""
+	*(dest[7].(*string)) = "2026-01-01T00:00:00Z"
 	return nil
 }
 func (r *payrollRunRows) Values() ([]any, error) { return nil, nil }
@@ -155,12 +156,58 @@ func (r *payslipItemRows) Scan(dest ...any) error {
 	*(dest[1].(*string)) = "EARNING_BASE_SALARY"
 	*(dest[2].(*string)) = "earning"
 	*(dest[3].(*string)) = "100.00"
-	*(dest[4].(*string)) = "{}"
+	*(dest[4].(*string)) = "amount"
+	*(dest[5].(*string)) = "employee"
+	*(dest[6].(*string)) = ""
+	*(dest[7].(*string)) = ""
+	*(dest[8].(*string)) = "{}"
 	return nil
 }
 func (r *payslipItemRows) Values() ([]any, error) { return nil, nil }
 func (r *payslipItemRows) RawValues() [][]byte    { return nil }
 func (r *payslipItemRows) Conn() *pgx.Conn        { return nil }
+
+type payslipItemInputRows struct {
+	empty   bool
+	nextN   int
+	scanErr error
+	err     error
+}
+
+func (r *payslipItemInputRows) Close()                        {}
+func (r *payslipItemInputRows) Err() error                    { return r.err }
+func (r *payslipItemInputRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *payslipItemInputRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *payslipItemInputRows) Next() bool {
+	if r.empty {
+		return false
+	}
+	if r.nextN > 0 {
+		return false
+	}
+	r.nextN++
+	return true
+}
+func (r *payslipItemInputRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	*(dest[0].(*string)) = "in1"
+	*(dest[1].(*string)) = "EARNING_LONG_SERVICE_AWARD"
+	*(dest[2].(*string)) = "earning"
+	*(dest[3].(*string)) = "CNY"
+	*(dest[4].(*string)) = "net_guaranteed_iit"
+	*(dest[5].(*string)) = "employer"
+	*(dest[6].(*string)) = "20000.00"
+	*(dest[7].(*string)) = "evt1"
+	*(dest[8].(*string)) = "2026-01-01T00:00:00Z"
+	return nil
+}
+func (r *payslipItemInputRows) Values() ([]any, error) { return nil, nil }
+func (r *payslipItemInputRows) RawValues() [][]byte    { return nil }
+func (r *payslipItemInputRows) Conn() *pgx.Conn        { return nil }
 
 type siPolicyVersionRows struct {
 	empty   bool
@@ -351,7 +398,7 @@ func (t *finalizePayrollTx) QueryRow(_ context.Context, _ string, _ ...any) pgx.
 	case 2:
 		return &stubRow{vals: []any{"evt_finalize"}}
 	case 3:
-		return &stubRow{vals: []any{"run1", "pp1", "finalized", "2026-01-01T00:00:00Z", "2026-01-01T00:00:01Z", "2026-01-01T00:00:02Z", "2026-01-01T00:00:00Z"}}
+		return &stubRow{vals: []any{"run1", "pp1", "finalized", false, "2026-01-01T00:00:00Z", "2026-01-01T00:00:01Z", "2026-01-01T00:00:02Z", "2026-01-01T00:00:00Z"}}
 	default:
 		return &stubRow{err: errors.New("unexpected QueryRow")}
 	}
@@ -854,7 +901,7 @@ func TestPayrollPGStore_GetPayrollRun(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{
 				commitErr: errors.New("commit"),
-				row:       &stubRow{vals: []any{"run1", "pp1", "draft", "", "", "", "2026-01-01T00:00:00Z"}},
+				row:       &stubRow{vals: []any{"run1", "pp1", "draft", false, "", "", "", "2026-01-01T00:00:00Z"}},
 			}, nil
 		}))
 		_, err := store.GetPayrollRun(context.Background(), "t1", "run1")
@@ -866,7 +913,7 @@ func TestPayrollPGStore_GetPayrollRun(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{
-				row: &stubRow{vals: []any{"run1", "pp1", "draft", "", "", "", "2026-01-01T00:00:00Z"}},
+				row: &stubRow{vals: []any{"run1", "pp1", "draft", false, "", "", "", "2026-01-01T00:00:00Z"}},
 			}, nil
 		}))
 		run, err := store.GetPayrollRun(context.Background(), "t1", "run1")
@@ -880,7 +927,7 @@ func TestPayrollPGStore_GetPayrollRun(t *testing.T) {
 }
 
 func TestPayrollPGStore_CalculatePayrollRun(t *testing.T) {
-	runRow := &stubRow{vals: []any{"run1", "pp1", "calculated", "2026-01-01T00:00:00Z", "2026-01-01T00:00:01Z", "", "2026-01-01T00:00:00Z"}}
+	runRow := &stubRow{vals: []any{"run1", "pp1", "calculated", false, "2026-01-01T00:00:00Z", "2026-01-01T00:00:01Z", "", "2026-01-01T00:00:00Z"}}
 
 	t.Run("begin error", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
@@ -1354,10 +1401,48 @@ func TestPayrollPGStore_GetPayslip(t *testing.T) {
 		}
 	})
 
+	t.Run("item inputs query error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:        headerRow,
+			rows:       &payslipItemRows{},
+			queryErr:   errors.New("inputs query"),
+			queryErrAt: 2,
+		}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("item inputs scan error", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:   headerRow,
+			rows:  &payslipItemRows{},
+			rows2: &payslipItemInputRows{scanErr: errors.New("scan")},
+		}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("item inputs rows err", func(t *testing.T) {
+		store := newStaffingPGStore(seqBeginner(&stubTx{
+			row:   headerRow,
+			rows:  &payslipItemRows{},
+			rows2: &payslipItemInputRows{empty: true, err: errors.New("rows")},
+		}))
+		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
 	t.Run("social insurance totals query error", func(t *testing.T) {
 		store := newStaffingPGStore(seqBeginner(&stubTx{
 			row:     headerRow,
 			rows:    &payslipItemRows{},
+			rows2:   &payslipItemInputRows{empty: true},
 			row2Err: errors.New("totals"),
 		}))
 		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
@@ -1371,8 +1456,9 @@ func TestPayrollPGStore_GetPayslip(t *testing.T) {
 			row:        headerRow,
 			row2:       totalsRow,
 			rows:       &payslipItemRows{},
+			rows2:      &payslipItemInputRows{empty: true},
 			queryErr:   errors.New("si query"),
-			queryErrAt: 2,
+			queryErrAt: 3,
 		}))
 		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
 		if err == nil {
@@ -1385,7 +1471,8 @@ func TestPayrollPGStore_GetPayslip(t *testing.T) {
 			row:   headerRow,
 			row2:  totalsRow,
 			rows:  &payslipItemRows{},
-			rows2: &payslipSocialInsuranceItemRows{scanErr: errors.New("scan")},
+			rows2: &payslipItemInputRows{empty: true},
+			rows3: &payslipSocialInsuranceItemRows{scanErr: errors.New("scan")},
 		}))
 		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
 		if err == nil {
@@ -1398,7 +1485,8 @@ func TestPayrollPGStore_GetPayslip(t *testing.T) {
 			row:   headerRow,
 			row2:  totalsRow,
 			rows:  &payslipItemRows{},
-			rows2: &payslipSocialInsuranceItemRows{err: errors.New("rows")},
+			rows2: &payslipItemInputRows{empty: true},
+			rows3: &payslipSocialInsuranceItemRows{err: errors.New("rows")},
 		}))
 		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
 		if err == nil {
@@ -1411,7 +1499,8 @@ func TestPayrollPGStore_GetPayslip(t *testing.T) {
 			row:       headerRow,
 			row2:      totalsRow,
 			rows:      &payslipItemRows{},
-			rows2:     &payslipSocialInsuranceItemRows{empty: true},
+			rows2:     &payslipItemInputRows{empty: true},
+			rows3:     &payslipSocialInsuranceItemRows{empty: true},
 			commitErr: errors.New("commit"),
 		}))
 		_, err := store.GetPayslip(context.Background(), "t1", "ps1")
@@ -1425,17 +1514,21 @@ func TestPayrollPGStore_GetPayslip(t *testing.T) {
 			row:   headerRow,
 			row2:  totalsRow,
 			rows:  &payslipItemRows{},
-			rows2: &payslipSocialInsuranceItemRows{empty: false},
+			rows2: &payslipItemInputRows{empty: false},
+			rows3: &payslipSocialInsuranceItemRows{empty: false},
 		}))
 		got, err := store.GetPayslip(context.Background(), "t1", "ps1")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.ID != "ps1" || len(got.Items) != 1 || len(got.SocialInsuranceItems) != 1 {
+		if got.ID != "ps1" || len(got.Items) != 1 || len(got.ItemInputs) != 1 || len(got.SocialInsuranceItems) != 1 {
 			t.Fatalf("got=%#v", got)
 		}
 		if string(got.Items[0].Meta) != "{}" {
 			t.Fatalf("meta=%q", string(got.Items[0].Meta))
+		}
+		if got.ItemInputs[0].CalcMode != "net_guaranteed_iit" {
+			t.Fatalf("calc_mode=%q", got.ItemInputs[0].CalcMode)
 		}
 	})
 }
@@ -1840,6 +1933,134 @@ func TestPayrollPGStore_GetPayrollBalances(t *testing.T) {
 		}
 		if got.PersonUUID != "p1" || got.TaxYear != 2026 || got.YTDIncome != "20000.00" {
 			t.Fatalf("got=%#v", got)
+		}
+	})
+}
+
+func TestPayrollPGStore_SubmitPayslipNetGuaranteedIITItem(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "UPSERT", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{execErr: errors.New("exec")})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "UPSERT", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing run_id", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", " ", "ps1", "UPSERT", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing payslip_id", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", " ", "UPSERT", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("event_type invalid", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "BAD", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil || !isBadRequestError(err) {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("payslip query error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{rowErr: errors.New("row")})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("payslip run mismatch", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{row: &stubRow{vals: []any{"run2", "person1", "asmt1"}}})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil || !isBadRequestError(err) {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("gen event_id error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:     &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2Err: errors.New("gen"),
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submit error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:     &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2Err: errors.New("submit"),
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("unexpected event_db_id", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:  &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2: &stubRow{vals: []any{int64(0)}},
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:       &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2:      &stubRow{vals: []any{int64(1)}},
+			commitErr: errors.New("commit"),
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok (upsert; gen event_id)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:  &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2: &stubRow{vals: []any{"evt1"}},
+			row3: &stubRow{vals: []any{int64(1)}},
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("ok (delete)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:  &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2: &stubRow{vals: []any{int64(1)}},
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "DELETE", "EARNING_LONG_SERVICE_AWARD", "0", "req1")
+		if err != nil {
+			t.Fatal(err)
 		}
 	})
 }
