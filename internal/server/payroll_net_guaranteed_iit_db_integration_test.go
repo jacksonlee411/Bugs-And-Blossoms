@@ -666,6 +666,21 @@ func TestPayrollDB_NetGuaranteedIIT(t *testing.T) {
 				t.Fatalf("expected amount = target_net + iit_delta for all items; bad=%d", bad)
 			}
 
+			var negative int
+			if err := tx.QueryRow(ctx, `
+				SELECT count(*)
+				FROM staffing.payslip_items
+				WHERE tenant_id = $1::uuid
+				  AND payslip_id = $2::uuid
+				  AND calc_mode = 'net_guaranteed_iit'
+				  AND (amount < 0 OR target_net <= 0 OR iit_delta < 0);
+			`, tenantID, payslipID).Scan(&negative); err != nil {
+				t.Fatal(err)
+			}
+			if negative != 0 {
+				t.Fatalf("expected non-negative net-guaranteed values; bad=%d", negative)
+			}
+
 			return out
 		}
 
