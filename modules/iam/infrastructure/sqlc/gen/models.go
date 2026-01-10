@@ -226,6 +226,20 @@ type OrgunitSetidEvent struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type PersonExternalIdentityLink struct {
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	Provider        string             `json:"provider"`
+	ExternalUserID  string             `json:"external_user_id"`
+	Status          string             `json:"status"`
+	PersonUuid      pgtype.UUID        `json:"person_uuid"`
+	FirstSeenAt     pgtype.Timestamptz `json:"first_seen_at"`
+	LastSeenAt      pgtype.Timestamptz `json:"last_seen_at"`
+	SeenCount       int32              `json:"seen_count"`
+	LastSeenPayload []byte             `json:"last_seen_payload"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
 type PersonPerson struct {
 	TenantID    pgtype.UUID        `json:"tenant_id"`
 	PersonUuid  pgtype.UUID        `json:"person_uuid"`

@@ -165,7 +165,7 @@ migrations/orgunit/
 
 1. [ ] 修改 Schema SSOT（必要时同步更新 `core_deps.sql`）。
 2. [ ] 运行 `<module> plan`（drift 检测），确认 migrations 与 Schema SSOT 一致。
-3. [ ] 用 Atlas 生成迁移：执行 `./scripts/db/run_atlas.sh migrate diff --dir "file://migrations/<module>" --dir-format goose --dev-url "${ATLAS_DEV_URL:-docker://postgres/17/dev?search_path=public}" --to "file://modules/<module>/infrastructure/persistence/schema" <slug>`。
+3. [ ] 用 Atlas 生成迁移：执行 `./scripts/db/run_atlas.sh migrate diff --dir "file://migrations/<module>" --dir-format goose --dev-url "${ATLAS_DEV_URL:-docker://postgres/17/dev}" --to "file://modules/<module>/infrastructure/persistence/schema" <slug>`。
 4. [ ] 更新迁移 hash：执行 `./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/<module>" --dir-format goose`，提交 `atlas.sum`。
 5. [ ] 运行 `<module> lint`（`atlas migrate validate`），确保 hash 与 SQL 语义可验证（`atlas migrate lint` 在 v0.38+ 为 Pro）。
 6. [ ] 运行 `<module> migrate up`（goose apply）并做最小验证；需要回滚时用 `<module> migrate down`（建议 `GOOSE_STEPS=1`）。

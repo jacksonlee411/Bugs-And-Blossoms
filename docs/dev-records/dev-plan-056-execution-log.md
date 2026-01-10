@@ -21,15 +21,25 @@
 
 ## PR-1：DB/Kernel — identity_links + RAW punch + request_id 幂等
 
-- **状态**：待开始
-- **范围（预期）**
-  - Person：`person.external_identity_links`（RLS + 最小排障摘要字段）
-  - Staffing：`staffing.time_punch_events` allowlist（`punch_type=RAW`，`source_provider=DINGTALK/WECOM`）
-  - Staffing Kernel：`staffing.submit_time_punch_event` 支持 `request_id` 幂等
+- **状态**：已完成（2026-01-10）
+- **范围**
+  - Person：新增 `person.external_identity_links`（RLS + 最小排障摘要字段）
+  - Staffing：扩展 `staffing.time_punch_events` allowlist（`punch_type=RAW`，`source_provider=DINGTALK/WECOM`）
+  - Staffing Kernel：`staffing.submit_time_punch_event` 支持 `request_id` 幂等（允许 event_id 漂移但字段必须一致）
   - 日结果：`staffing.recompute_daily_attendance_result` 支持 RAW punch 交替解释
-  - 工具链：修复 Atlas dev-url 默认值（避免 drift 检测失效）
+  - 工具链：修复 Atlas dev-url 默认值（避免仅 public schema 导致 drift 检测失效）
   - sqlc：更新 `internal/sqlc/schema.sql` 并重新生成
-  - Tests：覆盖 request_id 幂等路径的 DB 集成测试
+  - Tests：补齐 request_id 幂等路径的 DB 集成测试
+- **本地门禁**
+  - `make person plan && make person lint`：通过
+  - `make staffing plan && make staffing lint`：通过
+  - `make sqlc-generate`：通过（生成物已更新）
+  - `go fmt ./... && go vet ./... && make check lint && make test`：通过
+  - `make check doc`：通过
+- **迁移验证（本地 DB）**
+  - `DATABASE_URL=... make orgunit migrate up`：通过（满足 staffing smoke 的 orgunit 依赖）
+  - `DATABASE_URL=... make staffing migrate up`：通过（含 `staffing-smoke`）
+  - `DATABASE_URL=... make person migrate up`：通过（含 `person-smoke`）
 
 ## PR-2：UI + Authz + Routing — /org/attendance-integrations
 
