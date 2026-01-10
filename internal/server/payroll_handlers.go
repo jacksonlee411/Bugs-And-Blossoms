@@ -444,6 +444,179 @@ func handlePayslipDetail(w http.ResponseWriter, r *http.Request, store PayrollSt
 	writePage(w, r, renderPayslipDetail(runID, payslipID, asOf, run, p, ""))
 }
 
+func handlePayslipNetGuaranteedIITItems(w http.ResponseWriter, r *http.Request, store PayrollStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
+
+	runID, ok := requireRunIDFromPath(w, r, "/org/payroll-runs/")
+	if !ok {
+		return
+	}
+	prefix := "/org/payroll-runs/" + runID + "/payslips/"
+	path := strings.TrimSpace(r.URL.Path)
+	if !strings.HasPrefix(path, prefix) {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "not_found", "not found")
+		return
+	}
+	payslipID := strings.TrimPrefix(path, prefix)
+	payslipID = strings.TrimPrefix(payslipID, "/")
+	if strings.Contains(payslipID, "/") {
+		payslipID = strings.Split(payslipID, "/")[0]
+	}
+	payslipID = strings.TrimSpace(payslipID)
+	if payslipID == "" {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "not_found", "not found")
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		run, _ := store.GetPayrollRun(r.Context(), tenant.ID, runID)
+		p, _ := store.GetPayslip(r.Context(), tenant.ID, payslipID)
+		writePageWithStatus(w, r, http.StatusBadRequest, renderPayslipDetail(runID, payslipID, asOf, run, p, "bad form"))
+		return
+	}
+
+	principal, ok := currentPrincipal(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "principal_missing", "principal missing")
+		return
+	}
+
+	eventType := strings.TrimSpace(r.Form.Get("event_type"))
+	itemCode := strings.TrimSpace(r.Form.Get("item_code"))
+	targetNet := strings.TrimSpace(r.Form.Get("target_net"))
+	requestID := strings.TrimSpace(r.Form.Get("request_id"))
+	if requestID == "" {
+		if v, err := newUUIDv4(); err == nil {
+			requestID = v
+		}
+	}
+
+	if err := store.SubmitPayslipNetGuaranteedIITItem(r.Context(), tenant.ID, principal.ID, runID, payslipID, eventType, itemCode, targetNet, requestID); err != nil {
+		msg := stablePgMessage(err)
+		status := http.StatusInternalServerError
+
+		switch pgErrorMessage(err) {
+		case "STAFFING_IDEMPOTENCY_REUSED", "STAFFING_PAYROLL_RUN_FINALIZED_READONLY":
+			status = http.StatusConflict
+		default:
+			if strings.HasPrefix(pgErrorMessage(err), "STAFFING_") {
+				status = http.StatusUnprocessableEntity
+			}
+			if isBadRequestError(err) || isPgInvalidInput(err) {
+				status = http.StatusBadRequest
+			}
+		}
+
+		run, _ := store.GetPayrollRun(r.Context(), tenant.ID, runID)
+		p, _ := store.GetPayslip(r.Context(), tenant.ID, payslipID)
+		writePageWithStatus(w, r, status, renderPayslipDetail(runID, payslipID, asOf, run, p, msg))
+		return
+	}
+
+	loc := "/org/payroll-runs/" + url.PathEscape(runID) + "/payslips/" + url.PathEscape(payslipID)
+	if asOf != "" {
+		loc += "?as_of=" + url.QueryEscape(asOf)
+	}
+	http.Redirect(w, r, loc, http.StatusSeeOther)
+}
+
+func handlePayslipNetGuaranteedIITItemsAPI(w http.ResponseWriter, r *http.Request, store PayrollStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	principal, ok := currentPrincipal(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_missing", "principal missing")
+		return
+	}
+
+	runID, ok := requireFirstSegmentFromPath(w, r, "/org/api/payroll-runs/", routing.RouteClassInternalAPI)
+	if !ok {
+		return
+	}
+	prefix := "/org/api/payroll-runs/" + runID + "/payslips/"
+	path := strings.TrimSpace(r.URL.Path)
+	if !strings.HasPrefix(path, prefix) {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "not found")
+		return
+	}
+	payslipID := strings.TrimPrefix(path, prefix)
+	payslipID = strings.TrimPrefix(payslipID, "/")
+	if strings.Contains(payslipID, "/") {
+		payslipID = strings.Split(payslipID, "/")[0]
+	}
+	payslipID = strings.TrimSpace(payslipID)
+	if payslipID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "not_found", "not found")
+		return
+	}
+
+	var req struct {
+		EventType string `json:"event_type"`
+		ItemCode  string `json:"item_code"`
+		TargetNet string `json:"target_net"`
+		RequestID string `json:"request_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+
+	req.ItemCode = strings.TrimSpace(req.ItemCode)
+	req.RequestID = strings.TrimSpace(req.RequestID)
+
+	eventType := strings.TrimSpace(req.EventType)
+	if eventType == "" {
+		eventType = "UPSERT"
+	}
+	eventType = strings.ToUpper(eventType)
+	if eventType != "UPSERT" && eventType != "DELETE" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "event_type_invalid", "event_type must be UPSERT|DELETE")
+		return
+	}
+
+	if err := store.SubmitPayslipNetGuaranteedIITItem(r.Context(), tenant.ID, principal.ID, runID, payslipID, eventType, req.ItemCode, req.TargetNet, req.RequestID); err != nil {
+		switch msg := pgErrorMessage(err); msg {
+		case "STAFFING_IDEMPOTENCY_REUSED", "STAFFING_PAYROLL_RUN_FINALIZED_READONLY":
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, msg, msg)
+			return
+		default:
+			if strings.HasPrefix(msg, "STAFFING_") {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, msg, msg)
+				return
+			}
+			if isBadRequestError(err) || isPgInvalidInput(err) {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_request", "bad request")
+				return
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "submit_failed", "submit failed")
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
 func handlePayslipsAPI(w http.ResponseWriter, r *http.Request, store PayrollStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -1393,7 +1566,18 @@ func renderPayslipDetail(runID string, payslipID string, asOf string, run Payrol
 	if run.RunState == "finalized" {
 		b.WriteString(`<p><em>(finalized: read-only)</em></p>`)
 	} else {
-		b.WriteString(`<p><em>(录入/删除将在下一步开通)</em></p>`)
+		postAction := "/org/payroll-runs/" + url.PathEscape(runID) + "/payslips/" + url.PathEscape(payslipID) + "/net-guaranteed-iit-items"
+		if asOf != "" {
+			postAction += "?as_of=" + url.QueryEscape(asOf)
+		}
+		reqID, _ := newUUIDv4()
+		b.WriteString(`<form method="POST" action="` + html.EscapeString(postAction) + `">`)
+		b.WriteString(`<input type="hidden" name="event_type" value="UPSERT">`)
+		b.WriteString(`<input type="hidden" name="request_id" value="` + html.EscapeString(reqID) + `">`)
+		b.WriteString(`<label>item_code <input name="item_code" value="EARNING_LONG_SERVICE_AWARD" required></label> `)
+		b.WriteString(`<label>target_net <input name="target_net" placeholder="20000.00" required></label> `)
+		b.WriteString(`<button type="submit">Upsert</button>`)
+		b.WriteString(`</form>`)
 
 		if run.NeedsRecalc {
 			b.WriteString(`<p style="color:#b00020">needs_recalc=true（请重新计算该 run）</p>`)
@@ -1410,13 +1594,30 @@ func renderPayslipDetail(runID string, payslipID string, asOf string, run Payrol
 		b.WriteString(`<p><em>(empty)</em></p>`)
 	} else {
 		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6">`)
-		b.WriteString(`<tr><th>item_code</th><th>target_net</th><th>updated_at</th><th>last_event_id</th></tr>`)
+		b.WriteString(`<tr><th>item_code</th><th>target_net</th><th>updated_at</th><th>last_event_id</th><th>actions</th></tr>`)
 		for _, in := range ngInputs {
 			b.WriteString(`<tr>`)
 			b.WriteString(`<td>` + html.EscapeString(in.ItemCode) + `</td>`)
 			b.WriteString(`<td>` + html.EscapeString(in.Amount) + `</td>`)
 			b.WriteString(`<td>` + html.EscapeString(in.UpdatedAt) + `</td>`)
 			b.WriteString(`<td><code>` + html.EscapeString(in.LastEventID) + `</code></td>`)
+			b.WriteString(`<td>`)
+			if run.RunState != "finalized" {
+				delAction := "/org/payroll-runs/" + url.PathEscape(runID) + "/payslips/" + url.PathEscape(payslipID) + "/net-guaranteed-iit-items"
+				if asOf != "" {
+					delAction += "?as_of=" + url.QueryEscape(asOf)
+				}
+				delReqID, _ := newUUIDv4()
+				b.WriteString(`<form method="POST" action="` + html.EscapeString(delAction) + `" style="margin:0">`)
+				b.WriteString(`<input type="hidden" name="event_type" value="DELETE">`)
+				b.WriteString(`<input type="hidden" name="item_code" value="` + html.EscapeString(in.ItemCode) + `">`)
+				b.WriteString(`<input type="hidden" name="request_id" value="` + html.EscapeString(delReqID) + `">`)
+				b.WriteString(`<button type="submit">Delete</button>`)
+				b.WriteString(`</form>`)
+			} else {
+				b.WriteString(`<em>(read-only)</em>`)
+			}
+			b.WriteString(`</td>`)
 			b.WriteString(`</tr>`)
 		}
 		b.WriteString(`</table>`)

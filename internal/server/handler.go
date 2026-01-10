@@ -407,6 +407,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-runs/{run_id}/payslips/{payslip_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayslipDetail(w, r, payrollStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayslipNetGuaranteedIITItems(w, r, payrollStore)
+	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/payroll-social-insurance-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollSocialInsurancePolicies(w, r, payrollStore)
 	}))
@@ -460,6 +463,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/payroll-runs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollRunsAPI(w, r, payrollStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePayslipNetGuaranteedIITItemsAPI(w, r, payrollStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/payroll-balances", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePayrollBalancesAPI(w, r, payrollStore)
