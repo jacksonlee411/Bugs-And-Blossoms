@@ -305,7 +305,7 @@ func TestPayrollDB_NetGuaranteedIIT(t *testing.T) {
 		})
 	})
 
-	t.Run("solver and allocation: multi-item, sum(iit_delta)=ΔIIT, deterministic", func(t *testing.T) {
+	t.Run("solver and allocation: single/multi, sum(iit_delta)=ΔIIT, deterministic", func(t *testing.T) {
 		const (
 			tenantID    = "00000000-0000-0000-0000-0000000001a1"
 			payPeriodID = "00000000-0000-0000-0000-0000000001b1"
@@ -317,6 +317,12 @@ func TestPayrollDB_NetGuaranteedIIT(t *testing.T) {
 		)
 
 		now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+		type input struct {
+			eventID string
+			code    string
+			net     string
+		}
 
 		type itemOut struct {
 			itemCode  string
@@ -331,7 +337,7 @@ func TestPayrollDB_NetGuaranteedIIT(t *testing.T) {
 			grossDiff int64
 		}
 
-		runOnce := func(t *testing.T) runOut {
+		runScenario := func(t *testing.T, inputs []input) runOut {
 			t.Helper()
 
 			tx, err := conn.Begin(ctx)
@@ -477,14 +483,7 @@ func TestPayrollDB_NetGuaranteedIIT(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			for _, in := range []struct {
-				eventID string
-				code    string
-				net     string
-			}{
-				{"00000000-0000-0000-0000-000000000211", "EARNING_LONG_SERVICE_AWARD", "20000.00"},
-				{"00000000-0000-0000-0000-000000000212", "EARNING_SIGN_ON_BONUS", "5000.00"},
-			} {
+			for _, in := range inputs {
 				var eventDBID int64
 				if err := tx.QueryRow(ctx, `
 					SELECT staffing.submit_payslip_item_input_event(
@@ -562,8 +561,8 @@ func TestPayrollDB_NetGuaranteedIIT(t *testing.T) {
 			if err := rows.Err(); err != nil {
 				t.Fatal(err)
 			}
-			if len(out.items) != 2 {
-				t.Fatalf("expected 2 net-guaranteed items, got=%d", len(out.items))
+			if len(out.items) != len(inputs) {
+				t.Fatalf("expected %d net-guaranteed items, got=%d", len(inputs), len(out.items))
 			}
 
 			if err := tx.QueryRow(ctx, `
@@ -640,17 +639,29 @@ func TestPayrollDB_NetGuaranteedIIT(t *testing.T) {
 			return out
 		}
 
-		first := runOnce(t)
-		second := runOnce(t)
+		t.Run("single item", func(t *testing.T) {
+			_ = runScenario(t, []input{
+				{eventID: "00000000-0000-0000-0000-000000000211", code: "EARNING_LONG_SERVICE_AWARD", net: "20000.00"},
+			})
+		})
 
-		if first.sumDelta != second.sumDelta || first.deltaIIT != second.deltaIIT || first.grossDiff != second.grossDiff {
-			t.Fatalf("non-deterministic: first=%+v second=%+v", first, second)
-		}
-		for i := range first.items {
-			if first.items[i] != second.items[i] {
-				t.Fatalf("non-deterministic items: first=%+v second=%+v", first.items, second.items)
+		t.Run("multi item deterministic", func(t *testing.T) {
+			inputs := []input{
+				{eventID: "00000000-0000-0000-0000-000000000211", code: "EARNING_LONG_SERVICE_AWARD", net: "20000.00"},
+				{eventID: "00000000-0000-0000-0000-000000000212", code: "EARNING_SIGN_ON_BONUS", net: "5000.00"},
 			}
-		}
+			first := runScenario(t, inputs)
+			second := runScenario(t, inputs)
+
+			if first.sumDelta != second.sumDelta || first.deltaIIT != second.deltaIIT || first.grossDiff != second.grossDiff {
+				t.Fatalf("non-deterministic: first=%+v second=%+v", first, second)
+			}
+			for i := range first.items {
+				if first.items[i] != second.items[i] {
+					t.Fatalf("non-deterministic items: first=%+v second=%+v", first.items, second.items)
+				}
+			}
+		})
 	})
 
 	t.Run("allocation tie-breaker: item_code asc when residual ties", func(t *testing.T) {
