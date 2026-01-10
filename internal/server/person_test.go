@@ -514,16 +514,49 @@ type personStoreStub struct {
 }
 
 func (s personStoreStub) ListPersons(ctx context.Context, tenantID string) ([]Person, error) {
+	if s.listFn == nil {
+		return nil, errors.New("not implemented")
+	}
 	return s.listFn(ctx, tenantID)
 }
 func (s personStoreStub) CreatePerson(ctx context.Context, tenantID string, pernr string, displayName string) (Person, error) {
+	if s.createFn == nil {
+		return Person{}, errors.New("not implemented")
+	}
 	return s.createFn(ctx, tenantID, pernr, displayName)
 }
 func (s personStoreStub) FindPersonByPernr(ctx context.Context, tenantID string, pernr string) (Person, error) {
+	if s.findFn == nil {
+		return Person{}, errors.New("not implemented")
+	}
 	return s.findFn(ctx, tenantID, pernr)
 }
 func (s personStoreStub) ListPersonOptions(ctx context.Context, tenantID string, q string, limit int) ([]PersonOption, error) {
+	if s.optionsFn == nil {
+		return nil, errors.New("not implemented")
+	}
 	return s.optionsFn(ctx, tenantID, q, limit)
+}
+func (personStoreStub) ListExternalIdentityLinks(context.Context, string, int) ([]ExternalIdentityLink, error) {
+	return nil, errors.New("not implemented")
+}
+func (personStoreStub) LinkExternalIdentity(context.Context, string, string, string, string) error {
+	return errors.New("not implemented")
+}
+func (personStoreStub) DisableExternalIdentity(context.Context, string, string, string) error {
+	return errors.New("not implemented")
+}
+func (personStoreStub) EnableExternalIdentity(context.Context, string, string, string) error {
+	return errors.New("not implemented")
+}
+func (personStoreStub) IgnoreExternalIdentity(context.Context, string, string, string) error {
+	return errors.New("not implemented")
+}
+func (personStoreStub) UnignoreExternalIdentity(context.Context, string, string, string) error {
+	return errors.New("not implemented")
+}
+func (personStoreStub) UnlinkExternalIdentity(context.Context, string, string, string) error {
+	return errors.New("not implemented")
 }
 
 func TestPersonHandlers(t *testing.T) {

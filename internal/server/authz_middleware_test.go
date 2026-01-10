@@ -248,6 +248,15 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/attendance-punches"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-integrations"); !ok || obj != authz.ObjectStaffingAttendanceIntegrations || act != authz.ActionRead {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-integrations"); !ok || obj != authz.ObjectStaffingAttendanceIntegrations || act != authz.ActionAdmin {
+		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/attendance-integrations"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-daily-results"); !ok || obj != authz.ObjectStaffingAttendanceDailyResults || act != authz.ActionRead {
 		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
 	}

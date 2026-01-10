@@ -287,6 +287,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			`<li><a href="/org/job-catalog?as_of=`+asOf+`" hx-get="/org/job-catalog?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_jobcatalog")+`</a></li>`+
 			`<li><a href="/org/positions?as_of=`+asOf+`" hx-get="/org/positions?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
 			`<li><a href="/org/attendance-punches?as_of=`+asOf+`" hx-get="/org/attendance-punches?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance")+`</a></li>`+
+			`<li><a href="/org/attendance-integrations?as_of=`+asOf+`" hx-get="/org/attendance-integrations?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_integrations")+`</a></li>`+
 			`<li><a href="/org/attendance-daily-results?as_of=`+asOf+`" hx-get="/org/attendance-daily-results?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_daily_results")+`</a></li>`+
 			`<li><a href="/org/attendance-time-bank?as_of=`+asOf+`" hx-get="/org/attendance-time-bank?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_time_bank")+`</a></li>`+
 			`<li><a href="/org/attendance-time-profile?as_of=`+asOf+`" hx-get="/org/attendance-time-profile?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_attendance_time_profile")+`</a></li>`+
@@ -355,6 +356,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/attendance-punches", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAttendancePunches(w, r, attendanceStore, personStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-integrations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceIntegrations(w, r, personStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/attendance-integrations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAttendanceIntegrations(w, r, personStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/attendance-daily-results", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAttendanceDailyResults(w, r, attendanceDailyResultsStore, personStore)
@@ -632,6 +639,7 @@ func renderNav(r *http.Request, asOf string) string {
 		`<li><a href="/org/job-catalog?as_of=` + asOf + `" hx-get="/org/job-catalog?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
 		`<li><a href="/org/positions?as_of=` + asOf + `" hx-get="/org/positions?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
 		`<li><a href="/org/attendance-punches?as_of=` + asOf + `" hx-get="/org/attendance-punches?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance") + `</a></li>` +
+		`<li><a href="/org/attendance-integrations?as_of=` + asOf + `" hx-get="/org/attendance-integrations?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_integrations") + `</a></li>` +
 		`<li><a href="/org/attendance-daily-results?as_of=` + asOf + `" hx-get="/org/attendance-daily-results?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_daily_results") + `</a></li>` +
 		`<li><a href="/org/attendance-time-bank?as_of=` + asOf + `" hx-get="/org/attendance-time-bank?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_time_bank") + `</a></li>` +
 		`<li><a href="/org/attendance-time-profile?as_of=` + asOf + `" hx-get="/org/attendance-time-profile?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_attendance_time_profile") + `</a></li>` +
@@ -715,6 +723,8 @@ func tr(lang string, key string) string {
 			return "用工任职"
 		case "nav_attendance":
 			return "考勤 / 打卡"
+		case "nav_attendance_integrations":
+			return "考勤 / 集成映射"
 		case "nav_attendance_daily_results":
 			return "考勤 / 日结果"
 		case "nav_attendance_time_bank":
@@ -745,6 +755,8 @@ func tr(lang string, key string) string {
 		return "Staffing"
 	case "nav_attendance":
 		return "Attendance / Punches"
+	case "nav_attendance_integrations":
+		return "Attendance / Integrations"
 	case "nav_attendance_daily_results":
 		return "Attendance / Daily Results"
 	case "nav_attendance_time_bank":
