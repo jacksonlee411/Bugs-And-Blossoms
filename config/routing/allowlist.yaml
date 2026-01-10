@@ -59,6 +59,9 @@ entrypoints:
       - path: /org/attendance-punches
         methods: [GET, POST]
         route_class: ui
+      - path: /org/attendance-integrations
+        methods: [GET, POST]
+        route_class: ui
       - path: /org/attendance-daily-results
         methods: [GET]
         route_class: ui

@@ -31,6 +31,27 @@ func (fakePersonStore) FindPersonByPernr(context.Context, string, string) (Perso
 func (fakePersonStore) ListPersonOptions(context.Context, string, string, int) ([]PersonOption, error) {
 	return nil, errors.New("not implemented")
 }
+func (fakePersonStore) ListExternalIdentityLinks(context.Context, string, int) ([]ExternalIdentityLink, error) {
+	return nil, errors.New("not implemented")
+}
+func (fakePersonStore) LinkExternalIdentity(context.Context, string, string, string, string) error {
+	return errors.New("not implemented")
+}
+func (fakePersonStore) DisableExternalIdentity(context.Context, string, string, string) error {
+	return errors.New("not implemented")
+}
+func (fakePersonStore) EnableExternalIdentity(context.Context, string, string, string) error {
+	return errors.New("not implemented")
+}
+func (fakePersonStore) IgnoreExternalIdentity(context.Context, string, string, string) error {
+	return errors.New("not implemented")
+}
+func (fakePersonStore) UnignoreExternalIdentity(context.Context, string, string, string) error {
+	return errors.New("not implemented")
+}
+func (fakePersonStore) UnlinkExternalIdentity(context.Context, string, string, string) error {
+	return errors.New("not implemented")
+}
 
 type fakeTimePunchStore struct {
 	listFn   func(ctx context.Context, tenantID string, personUUID string, fromUTC time.Time, toUTC time.Time, limit int) ([]TimePunch, error)

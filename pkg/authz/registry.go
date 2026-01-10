@@ -23,6 +23,7 @@ const (
 	ObjectPersonPersons                     = "person.persons"
 	ObjectStaffingPositions                 = "staffing.positions"
 	ObjectStaffingAttendancePunches         = "staffing.attendance-punches"
+	ObjectStaffingAttendanceIntegrations    = "staffing.attendance-integrations"
 	ObjectStaffingAttendanceDailyResults    = "staffing.attendance-daily-results"
 	ObjectStaffingAttendanceTimeProfile     = "staffing.attendance-time-profile"
 	ObjectStaffingAttendanceHolidayCalendar = "staffing.attendance-holiday-calendar"
