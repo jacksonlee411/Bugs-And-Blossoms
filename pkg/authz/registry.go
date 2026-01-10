@@ -1,9 +1,10 @@
 package authz
 
 const (
-	RoleTenantAdmin = "tenant-admin"
-	RoleAnonymous   = "anonymous"
-	RoleSuperadmin  = "superadmin"
+	RoleTenantAdmin  = "tenant-admin"
+	RoleTenantViewer = "tenant-viewer"
+	RoleAnonymous    = "anonymous"
+	RoleSuperadmin   = "superadmin"
 )
 
 const (

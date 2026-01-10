@@ -19,6 +19,7 @@ type identity struct {
 	ID         string
 	TenantID   string
 	Email      string
+	RoleSlug   string
 	Identifier string
 	Password   string
 }
@@ -121,6 +122,7 @@ func main() {
 				"traits": map[string]any{
 					"tenant_id": ident.TenantID,
 					"email":     ident.Email,
+					"role_slug": ident.RoleSlug,
 				},
 			},
 		})
@@ -138,6 +140,7 @@ func main() {
 			Traits   struct {
 				TenantID string `json:"tenant_id"`
 				Email    string `json:"email"`
+				RoleSlug string `json:"role_slug"`
 			} `json:"traits"`
 			Credentials struct {
 				Password struct {
@@ -154,6 +157,7 @@ func main() {
 		}
 		tenantID := strings.TrimSpace(req.Traits.TenantID)
 		email := strings.ToLower(strings.TrimSpace(req.Traits.Email))
+		roleSlug := strings.ToLower(strings.TrimSpace(req.Traits.RoleSlug))
 		password := req.Credentials.Password.Config.Password
 		identifier := ""
 		if len(req.Credentials.Password.Identifiers) > 0 {
@@ -186,6 +190,7 @@ func main() {
 			ID:         id,
 			TenantID:   tenantID,
 			Email:      email,
+			RoleSlug:   roleSlug,
 			Identifier: identifier,
 			Password:   password,
 		}
@@ -197,6 +202,7 @@ func main() {
 			"traits": map[string]any{
 				"tenant_id": tenantID,
 				"email":     email,
+				"role_slug": roleSlug,
 			},
 		})
 	})

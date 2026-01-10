@@ -139,7 +139,7 @@
 ### 4.5 `role_slug`（最小角色集，冻结）
 - **权威来源**：`principals.role_slug`；禁止以“有 session 就默认是 admin”等隐式推导作为授权依据。
 - **MVP 角色集**：
-  - tenant app：`tenant-admin`（唯一可登录角色）
+  - tenant app：`tenant-admin`（管理）、`tenant-viewer`（只读，用于 060/061 的 403 验证）
   - 未登录：`anonymous`（仅作为 Authz 输入，不落库）
   - superadmin：使用其专用 principal/session（见 `DEV-PLAN-023`），不得复用 tenant principal。
 - **注入规则（冻结）**：session 中间件必须加载 principal 并注入 `principal_id/role_slug/tenant_id`；缺任一项即拒绝进入受保护路径（fail-closed）。
@@ -168,7 +168,7 @@
   - `id uuid pk`
   - `tenant_id uuid not null`
   - `email text not null`
-  - `role_slug text not null`（MVP：`tenant_admin`）
+  - `role_slug text not null`（MVP：`tenant-admin`、`tenant-viewer`）
   - `display_name text null`
   - `status text not null`（`active|disabled`）
   - `kratos_identity_id uuid not null unique`
