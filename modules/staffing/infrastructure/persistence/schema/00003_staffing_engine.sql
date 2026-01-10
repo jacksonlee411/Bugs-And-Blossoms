@@ -1960,7 +1960,7 @@ BEGIN
           v_first_in_time := r.punch_time;
         END IF;
       END IF;
-    ELSE
+    ELSIF r.punch_type = 'OUT' THEN
       IF v_expect = 'OUT' AND v_open_in_time IS NOT NULL THEN
         v_delta_min := floor(extract(epoch FROM (r.punch_time - v_open_in_time)) / 60.0)::int;
         IF v_delta_min > 0 THEN
@@ -1972,6 +1972,28 @@ BEGIN
       ELSE
         v_flags := array_append(v_flags, 'MISSING_IN');
       END IF;
+    ELSIF r.punch_type = 'RAW' THEN
+      IF v_expect = 'IN' THEN
+        v_open_in_time := r.punch_time;
+        v_expect := 'OUT';
+        IF v_first_in_time IS NULL THEN
+          v_first_in_time := r.punch_time;
+        END IF;
+      ELSE
+        IF v_expect = 'OUT' AND v_open_in_time IS NOT NULL THEN
+          v_delta_min := floor(extract(epoch FROM (r.punch_time - v_open_in_time)) / 60.0)::int;
+          IF v_delta_min > 0 THEN
+            v_worked_minutes := v_worked_minutes + v_delta_min;
+          END IF;
+          v_last_out_time := r.punch_time;
+          v_open_in_time := NULL;
+          v_expect := 'IN';
+        ELSE
+          v_flags := array_append(v_flags, 'MISSING_IN');
+        END IF;
+      END IF;
+    ELSE
+      RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unsupported punch_type in recompute: %s', r.punch_type);
     END IF;
   END LOOP;
 
@@ -2195,10 +2217,10 @@ BEGIN
   IF p_punch_time IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'punch_time is required';
   END IF;
-  IF p_punch_type NOT IN ('IN','OUT') THEN
+  IF p_punch_type NOT IN ('IN','OUT','RAW') THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unsupported punch_type: %s', p_punch_type);
   END IF;
-  IF p_source_provider NOT IN ('MANUAL','IMPORT') THEN
+  IF p_source_provider NOT IN ('MANUAL','IMPORT','DINGTALK','WECOM') THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unsupported source_provider: %s', p_source_provider);
   END IF;
   IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
@@ -2247,13 +2269,44 @@ BEGIN
     p_request_id,
     p_initiator_id
   )
-  ON CONFLICT (event_id) DO NOTHING
+  ON CONFLICT DO NOTHING
   RETURNING id INTO v_event_db_id;
 
   IF v_event_db_id IS NULL THEN
     SELECT * INTO v_existing
     FROM staffing.time_punch_events
     WHERE event_id = p_event_id;
+
+    IF FOUND THEN
+      IF v_existing.tenant_id <> p_tenant_id
+        OR v_existing.person_uuid <> p_person_uuid
+        OR v_existing.punch_time <> p_punch_time
+        OR v_existing.punch_type <> p_punch_type
+        OR v_existing.source_provider <> p_source_provider
+        OR v_existing.payload <> v_payload
+        OR v_existing.source_raw_payload <> v_source_raw
+        OR v_existing.device_info <> v_device
+        OR v_existing.request_id <> p_request_id
+        OR v_existing.initiator_id <> p_initiator_id
+      THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+          DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+      END IF;
+
+      RETURN v_existing.id;
+    END IF;
+
+    SELECT * INTO v_existing
+    FROM staffing.time_punch_events
+    WHERE tenant_id = p_tenant_id
+      AND request_id = p_request_id;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
+        DETAIL = format('request_id_conflict_not_found request_id=%s event_id=%s', p_request_id, p_event_id);
+    END IF;
 
     IF v_existing.tenant_id <> p_tenant_id
       OR v_existing.person_uuid <> p_person_uuid
@@ -2268,7 +2321,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+        DETAIL = format('request_id=%s existing_id=%s', p_request_id, v_existing.id);
     END IF;
 
     RETURN v_existing.id;
