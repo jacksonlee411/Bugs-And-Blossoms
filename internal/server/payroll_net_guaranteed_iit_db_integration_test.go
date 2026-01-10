@@ -244,6 +244,36 @@ func TestPayrollDB_NetGuaranteedIIT(t *testing.T) {
 			}
 		})
 
+		t.Run("amount negative => 422 code", func(t *testing.T) {
+			tx := setup(t, "draft")
+
+			var eventDBID int64
+			err := tx.QueryRow(ctx, `
+				SELECT staffing.submit_payslip_item_input_event(
+				  '00000000-0000-0000-0000-000000000114'::uuid,
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::uuid,
+				  'UPSERT',
+				  'EARNING_LONG_SERVICE_AWARD',
+				  'earning',
+				  'CNY'::char(3),
+				  'net_guaranteed_iit',
+				  'employer',
+				  -1.00,
+				  'req-1',
+				  $5::uuid
+				);
+			`, tenantID, runID, personUUID, asmtID, initiatorID).Scan(&eventDBID)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if msg := pgErrorMessage(err); msg != "STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT" {
+				t.Fatalf("pg_message=%q", msg)
+			}
+		})
+
 		t.Run("currency mismatch => 422 code", func(t *testing.T) {
 			tx := setup(t, "draft")
 
