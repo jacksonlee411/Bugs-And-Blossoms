@@ -1046,6 +1046,17 @@ func TestHandlePayslipDetail(t *testing.T) {
 		}
 	})
 
+	t.Run("get run error", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1?as_of=2026-01-01", nil)
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipDetail(rec, req, stubPayrollStore{getRunErr: errors.New("get_run_failed")})
+		if !strings.Contains(rec.Body.String(), "get_run_failed") {
+			t.Fatalf("body=%s", rec.Body.String())
+		}
+	})
+
 	t.Run("ok", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1?as_of=2026-01-01", nil)
@@ -1108,6 +1119,131 @@ func TestHandlePayslipDetail(t *testing.T) {
 type alwaysErrReader struct{}
 
 func (alwaysErrReader) Read([]byte) (int, error) { return 0, errors.New("read err") }
+
+func TestToString(t *testing.T) {
+	if got := toString(nil); got != "" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := toString("x"); got != "x" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := toString(float64(12.5)); got != "12.5" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := toString(true); got != "true" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := toString(map[string]any{"a": 1}); !strings.Contains(got, "\"a\"") {
+		t.Fatalf("got=%q", got)
+	}
+	if got := toString(make(chan int)); got != "" {
+		t.Fatalf("got=%q", got)
+	}
+}
+
+func TestRenderPayslipDetail_NetGuaranteedIIT(t *testing.T) {
+	html := renderPayslipDetail(
+		"run1",
+		"ps1",
+		"2026-01-01",
+		PayrollRun{RunState: "calculated", NeedsRecalc: true},
+		PayslipDetail{
+			Payslip: Payslip{
+				ID:            "ps1",
+				RunID:         "run1",
+				PersonUUID:    "person1",
+				AssignmentID:  "asmt1",
+				Currency:      "CNY",
+				GrossPay:      "100.00",
+				NetPay:        "100.00",
+				EmployerTotal: "0.00",
+			},
+			ItemInputs: []PayslipItemInput{{
+				ID:          "in1",
+				ItemCode:    "EARNING_LONG_SERVICE_AWARD",
+				ItemKind:    "earning",
+				Currency:    "CNY",
+				CalcMode:    "net_guaranteed_iit",
+				TaxBearer:   "employer",
+				Amount:      "20000.00",
+				LastEventID: "evt1",
+				UpdatedAt:   "2026-01-01T00:00:00Z",
+			}},
+			Items: []PayslipItem{{
+				ID:        "it1",
+				ItemCode:  "EARNING_LONG_SERVICE_AWARD",
+				ItemKind:  "earning",
+				Amount:    "25000.00",
+				CalcMode:  "net_guaranteed_iit",
+				TaxBearer: "employer",
+				TargetNet: "20000.00",
+				IITDelta:  "5000.00",
+				Meta: json.RawMessage(`{
+					"tax_year": 2026,
+					"tax_month": 1,
+					"group_target_net": 20000,
+					"group_solved_gross": 25000,
+					"group_delta_iit": 5000,
+					"base_income": 10000,
+					"base_iit_withhold": 100,
+					"iterations": 12
+				}`),
+			}},
+		},
+		"",
+	)
+	if !strings.Contains(html, "Net Guaranteed IIT") {
+		t.Fatalf("html=%s", html)
+	}
+	if !strings.Contains(html, "needs_recalc=true") {
+		t.Fatalf("html=%s", html)
+	}
+	if !strings.Contains(html, "EARNING_LONG_SERVICE_AWARD") {
+		t.Fatalf("html=%s", html)
+	}
+	if !strings.Contains(html, "explain:") {
+		t.Fatalf("html=%s", html)
+	}
+}
+
+func TestRenderPayslipDetail_FinalizedAndBadMeta(t *testing.T) {
+	html := renderPayslipDetail(
+		"run1",
+		"ps1",
+		"",
+		PayrollRun{RunState: "finalized"},
+		PayslipDetail{
+			Payslip: Payslip{
+				ID:            "ps1",
+				RunID:         "run1",
+				PersonUUID:    "person1",
+				AssignmentID:  "asmt1",
+				Currency:      "CNY",
+				GrossPay:      "100.00",
+				NetPay:        "100.00",
+				EmployerTotal: "0.00",
+			},
+			Items: []PayslipItem{{
+				ID:        "it1",
+				ItemCode:  "EARNING_LONG_SERVICE_AWARD",
+				ItemKind:  "earning",
+				Amount:    "25000.00",
+				CalcMode:  "net_guaranteed_iit",
+				TaxBearer: "employer",
+				TargetNet: "20000.00",
+				IITDelta:  "5000.00",
+				Meta:      json.RawMessage(`{`),
+			}},
+		},
+		"",
+	)
+	if !strings.Contains(html, "(finalized: read-only)") {
+		t.Fatalf("html=%s", html)
+	}
+	if strings.Contains(html, "explain:") {
+		t.Fatalf("html=%s", html)
+	}
+}
 
 func TestNewUUIDv4(t *testing.T) {
 	prev := uuidRandReader
