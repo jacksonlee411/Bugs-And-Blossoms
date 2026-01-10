@@ -1,6 +1,6 @@
 # DEV-PLAN-056：考勤 Slice 4F——生态集成闭环（钉钉 Stream / 企微 Poller）
 
-**状态**: 已完成（2026-01-10）
+**状态**: 已完成（2026-01-10；已合并：#170 #171 #172 #173 #174 #175）
 
 > 目标：按 `DEV-PLAN-001` 模板补齐到“无需再做设计决策即可开工”的细化程度（Level 4-5）。
 
@@ -20,14 +20,14 @@
 
 ### 2.1 核心目标（Done 的定义）
 
-- [ ] **接入能力**：
-  - [ ] 钉钉：Stream 模式接入，订阅“员工打卡事件”（`eventType=attendance_check_record`）。
-  - [ ] 企微：Poller 拉取增量打卡（周期可配置，至少支持 30s）。
-- [ ] **身份映射**：将外部 `userId`（钉钉）/`userid`（企微）映射到 `person_uuid`，并提供 UI 可见可操作的映射管理页面。
-- [ ] **One Door**：外部事件写入必须调用 DB Kernel `staffing.submit_time_punch_event(...)`；禁止绕过 kernel 直接写表（对齐 `AGENTS.md` “One Door”）。
-- [ ] **幂等成立**：重复投递/重复拉取不会产生重复 punch；幂等键统一落在 `request_id`（`tenant_id + request_id` unique），并由 kernel fail-fast 校验“同 key 不同内容”。
-- [ ] **外部字段不作为权威输入**：平台侧“迟到/早退/正常”等结果字段一律不作为计算输入；仅原样保留在 `source_raw_payload/device_info` 供审计/排障。
-- [ ] **验收闭环**：外部事件进入后，在 `/org/attendance-punches`、`/org/attendance-daily-results` 等页面与手工事件同口径可见。
+- [X] **接入能力**：
+  - [X] 钉钉：Stream 模式接入，订阅“员工打卡事件”（`eventType=attendance_check_record`）。
+  - [X] 企微：Poller 拉取增量打卡（周期可配置，至少支持 30s）。
+- [X] **身份映射**：将外部 `userId`（钉钉）/`userid`（企微）映射到 `person_uuid`，并提供 UI 可见可操作的映射管理页面。
+- [X] **One Door**：外部事件写入必须调用 DB Kernel `staffing.submit_time_punch_event(...)`；禁止绕过 kernel 直接写表（对齐 `AGENTS.md` “One Door”）。
+- [X] **幂等成立**：重复投递/重复拉取不会产生重复 punch；幂等键统一落在 `request_id`（`tenant_id + request_id` unique），并由 kernel fail-fast 校验“同 key 不同内容”。
+- [X] **外部字段不作为权威输入**：平台侧“迟到/早退/正常”等结果字段一律不作为计算输入；仅原样保留在 `source_raw_payload/device_info` 供审计/排障。
+- [X] **验收闭环**：外部事件进入后，在 `/org/attendance-punches`、`/org/attendance-daily-results` 等页面与手工事件同口径可见。
 
 ### 2.2 非目标（Out of Scope）
 
@@ -292,24 +292,24 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
   - Provider 落地顺序：先 DingTalk（push/低延迟/单事件类型），后 WeCom（poll/窗口补数/速率与去重复杂度更高）。
   - PR 切分建议：PR1（DB+Kernel+RAW）→ PR2（UI+Authz+Routing）→ PR3（Worker+DingTalk）→ PR4（Worker+WeCom）→ PR5（fixture/集成测试/Readiness 记录）。
 - **里程碑**：
-  1. [ ] 手工确认：允许新增表 `person.external_identity_links`（并确认 `last_seen_payload` 的最小字段白名单与“不存位置/设备明文”的策略）。
-  2. [ ] DB：`person.external_identity_links` 迁移；`staffing.time_punch_events` allowlist 扩展；kernel 幂等改造；日结果支持 RAW。
-  3. [ ] UI+门禁：`/org/attendance-integrations` 映射管理（含 pending/ignored/active/disabled）+ routing allowlist + authz object/action + 测试断言。
-  4. [ ] Worker：`cmd/attendance-integrations` + DingTalk adapter（仅 `attendance_check_record`）。
-  5. [ ] Worker：WeCom poller（滑动窗口 + 幂等）。
-  6. [ ] 测试：fixture + DB 集成测试 + 基本负例（RLS/Authz/幂等冲突）。
-  7. [ ] Readiness：在 `docs/dev-records/` 记录门禁执行与结果。
+  1. [X] 手工确认：允许新增表 `person.external_identity_links`（并确认 `last_seen_payload` 的最小字段白名单与“不存位置/设备明文”的策略）。（#170）
+  2. [X] DB：`person.external_identity_links` 迁移；`staffing.time_punch_events` allowlist 扩展；kernel 幂等改造；日结果支持 RAW。（#171）
+  3. [X] UI+门禁：`/org/attendance-integrations` 映射管理（含 pending/ignored/active/disabled）+ routing allowlist + authz object/action + 测试断言。（#172）
+  4. [X] Worker：`cmd/attendance-integrations` + DingTalk adapter（仅 `attendance_check_record`）。（#173）
+  5. [X] Worker：WeCom poller（滑动窗口 + 幂等）。（#174）
+  6. [X] 测试：fixture + DB 集成测试 + 基本负例（RLS/Authz/幂等冲突）。（#171 #172 #173 #174）
+  7. [X] Readiness：在 `docs/dev-records/` 记录门禁执行与结果。（#175）
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
-- [ ] **端到端**：钉钉/企微任一来源的事件进入后，在 `/org/attendance-punches` 可见；对应 `work_date` 的日结果可见且口径一致。
-- [ ] **可发现性**：`/org/attendance-integrations` 可见且可操作（创建/禁用映射、查看 pending/ignored/active 状态与 `last_seen_at/seen_count`）。
-- [ ] **幂等**：重复推送/重复拉取不会产生重复 punch；同 request_id 不同内容会触发 `STAFFING_IDEMPOTENCY_REUSED`。
-- [ ] **未映射行为清晰**：
+- [X] **端到端**：钉钉/企微任一来源的事件进入后，在 `/org/attendance-punches` 可见；对应 `work_date` 的日结果可见且口径一致。
+- [X] **可发现性**：`/org/attendance-integrations` 可见且可操作（创建/禁用映射、查看 pending/ignored/active 状态与 `last_seen_at/seen_count`）。
+- [X] **幂等**：重复推送/重复拉取不会产生重复 punch；同 request_id 不同内容会触发 `STAFFING_IDEMPOTENCY_REUSED`。
+- [X] **未映射行为清晰**：
   - DingTalk：未映射时不写入 `staffing.time_punch_events`；`person.external_identity_links` 出现 `pending/ignored` 且 `seen_count` 增长；映射后仅影响后续事件（不回补）。
   - WeCom：映射后在 `lookback` 窗口内可补入；超窗不保证。
-- [ ] **RLS/Authz**：未注入 tenant context 时读写 fail-closed；未授权访问 `/org/attendance-integrations` 必须 403。
-- [ ] **门禁**：本计划命中的 routing/authz/sqlc/迁移/Go 测试门禁全绿。
+- [X] **RLS/Authz**：未注入 tenant context 时读写 fail-closed；未授权访问 `/org/attendance-integrations` 必须 403。
+- [X] **门禁**：本计划命中的 routing/authz/sqlc/迁移/Go 测试门禁全绿。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 

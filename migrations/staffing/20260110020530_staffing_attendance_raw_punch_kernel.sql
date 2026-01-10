@@ -132,13 +132,19 @@ BEGIN
   v_window_end := v_shift_end + v_window_after;
 
   FOR r IN
-    SELECT id, punch_time, punch_type
-    FROM staffing.time_punch_events
-    WHERE tenant_id = p_tenant_id
-      AND person_uuid = p_person_uuid
-      AND punch_time >= v_window_start
-      AND punch_time < v_window_end
-    ORDER BY punch_time ASC, id ASC
+    SELECT e.id, e.punch_time, e.punch_type
+    FROM staffing.time_punch_events e
+    WHERE e.tenant_id = p_tenant_id
+      AND e.person_uuid = p_person_uuid
+      AND e.punch_time >= v_window_start
+      AND e.punch_time < v_window_end
+      AND NOT EXISTS (
+        SELECT 1
+        FROM staffing.time_punch_void_events v
+        WHERE v.tenant_id = e.tenant_id
+          AND v.target_punch_event_db_id = e.id
+      )
+    ORDER BY e.punch_time ASC, e.id ASC
   LOOP
     v_punch_count := v_punch_count + 1;
     v_input_max_id := COALESCE(v_input_max_id, r.id);
@@ -505,4 +511,3 @@ $$;
 -- +goose StatementBegin
 SELECT 1;
 -- +goose StatementEnd
-
