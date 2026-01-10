@@ -117,8 +117,12 @@ modules/{module}/
 - 本地 worktree 约定：`Bugs-And-Blossoms-wt-dev-a` 工作区固定使用 `wt-dev-a` 分支进行长期开发（跟踪 `origin/wt-dev-a`），不要在该目录切换分支。
 - 本地 worktree 约定：`Bugs-And-Blossoms-wt-dev-b` 工作区固定使用 `wt-dev-b` 分支进行长期开发（跟踪 `origin/wt-dev-b`），不要在该目录切换分支。
 - PR 规则（强制门禁）：禁止创建/使用临时分支；所有 PR 的源分支必须是 `wt-dev-main` / `wt-dev-a` / `wt-dev-b`（CI 门禁：`make check pr-branch`）。
+- 避免分叉（每次都做）：在对应 worktree 目录中，始终先同步 `origin/main` 再开发/发 PR/合并后回写。
+  - 开工前：`git fetch origin && git status --porcelain=v1` 必须为空，然后 `git merge origin/main`
+  - 发 PR 前：再次 `git fetch origin && git merge origin/main`，跑 `make preflight`，再 `git push origin <wt-dev-*>` 并从该分支发起 PR
+  - PR 合并后：立刻在“发起该 PR 的固定分支”执行 `git fetch origin && git merge origin/main && git push origin <wt-dev-*>`；并建议另外两个固定分支也各同步一次，避免下次切换时累积冲突
 - 主线原则：以 `origin/main` 为唯一主线；所有 worktree 分支都应以 `origin/main` 为基线并定期同步，避免把 `origin/wt-dev-*` 当作集成主线。
-- 合并建议：固定 worktree 分支（`wt-dev-*`）向 `origin/main` 合并时优先使用 **merge commit**（GitHub: Create a merge commit），以便后续能通过快进/常规 merge 顺滑同步；`squash`/`rebase` 仅用于短生命周期分支，合并后应删除该分支或将其重置到 `origin/main`，避免出现“内容已进 main 但 hash 不同”的残留分叉。
+- 合并建议：固定 worktree 分支（`wt-dev-*`）向 `origin/main` 合并时优先使用 **merge commit**（GitHub: Create a merge commit），以便后续能通过快进/常规 merge 顺滑同步；`squash`/`rebase` 仅适用于“短生命周期分支”（本仓库日常已禁止创建临时分支），避免出现“内容已进 main 但 hash 不同”的残留分叉。
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - 路线图（执行顺序/并行）：`docs/dev-plans/009-implementation-roadmap.md`
 - 版本与工具链基线：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
