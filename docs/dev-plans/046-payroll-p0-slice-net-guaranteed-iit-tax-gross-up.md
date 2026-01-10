@@ -512,17 +512,17 @@ gross_i = target_net_i + tax_i
 4. [x] Calc：在 IIT pipeline 中接入 solver（base → solve → allocate → final IIT），并写入 payslip items。（PR #166）
 5. [x] UI：工资条详情页展示净额保证项；计算后展示解释字段。（PR #167）
 6. [x] Routing/Authz：更新 `config/routing/allowlist.yaml`、`pkg/authz/registry.go`、`internal/server/authz_middleware.go`。（PR #168）
-7. [ ] Tests：覆盖 solver、分摊、错误路径、RLS fail-closed、finalized 只读。
+7. [x] Tests：覆盖 solver、分摊、错误路径、RLS fail-closed、finalized 只读。（PR #169）
 
 ## 9. 测试与验收（Acceptance Criteria）
 
 ### 9.1 最小测试矩阵（必须）
 
-- [ ] solver：单项 target_net 可解；多项可解；`Σ tax_i = ΔIIT(x)`；确定性（同输入多次运行结果一致）。
-- [ ] 分摊：存在 residual 分时按 tie-breaker（`item_code asc`）稳定分配；无负数；不丢分不多分。
-- [ ] 失败路径：输入非法（缺 target_net/负数/币种错）返回 422 + 稳定错误码；不收敛返回稳定错误码；contract violation 返回 500。
-- [ ] RLS：不设置 `app.current_tenant` 时，对输入表/事件表读写全部失败（fail-closed）。
-- [ ] finalized：run 已定稿时，录入/删除净额保证项失败（只读语义成立）。
+- [x] solver：单项 target_net 可解；多项可解；`Σ tax_i = ΔIIT(x)`；确定性（同输入多次运行结果一致）。
+- [x] 分摊：存在 residual 分时按 tie-breaker（`item_code asc`）稳定分配；无负数；不丢分不多分。
+- [x] 失败路径：输入非法（缺 target_net/负数/币种错）返回 422 + 稳定错误码；不收敛返回稳定错误码；contract violation 返回 500。
+- [x] RLS：不设置 `app.current_tenant` 时，对输入表/事件表读写全部失败（fail-closed）。
+- [x] finalized：run 已定稿时，录入/删除净额保证项失败（只读语义成立）。
 
 ### 9.2 验收脚本（建议以 UI 可操作复现）
 
