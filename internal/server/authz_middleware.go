@@ -269,6 +269,14 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectStaffingAttendancePunches, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/org/attendance-integrations":
+		if method == http.MethodGet {
+			return authz.ObjectStaffingAttendanceIntegrations, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAttendanceIntegrations, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/org/attendance-daily-results":
 		if method == http.MethodGet {
 			return authz.ObjectStaffingAttendanceDailyResults, authz.ActionRead, true
