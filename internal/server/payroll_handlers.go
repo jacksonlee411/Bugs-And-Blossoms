@@ -430,12 +430,18 @@ func handlePayslipDetail(w http.ResponseWriter, r *http.Request, store PayrollSt
 		return
 	}
 
-	p, err := store.GetPayslip(r.Context(), tenant.ID, payslipID)
+	run, err := store.GetPayrollRun(r.Context(), tenant.ID, runID)
 	if err != nil {
-		writePage(w, r, renderPayslipDetail(runID, payslipID, asOf, PayslipDetail{}, err.Error()))
+		writePage(w, r, renderPayslipDetail(runID, payslipID, asOf, PayrollRun{}, PayslipDetail{}, err.Error()))
 		return
 	}
-	writePage(w, r, renderPayslipDetail(runID, payslipID, asOf, p, ""))
+
+	p, err := store.GetPayslip(r.Context(), tenant.ID, payslipID)
+	if err != nil {
+		writePage(w, r, renderPayslipDetail(runID, payslipID, asOf, run, PayslipDetail{}, err.Error()))
+		return
+	}
+	writePage(w, r, renderPayslipDetail(runID, payslipID, asOf, run, p, ""))
 }
 
 func handlePayslipsAPI(w http.ResponseWriter, r *http.Request, store PayrollStore) {
@@ -923,6 +929,25 @@ func stablePgMessage(err error) string {
 	return err.Error()
 }
 
+func toString(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return t
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(t)
+	default:
+		b, err := json.Marshal(t)
+		if err != nil {
+			return ""
+		}
+		return string(b)
+	}
+}
+
 func requireFirstSegmentFromPath(w http.ResponseWriter, r *http.Request, prefix string, rc routing.RouteClass) (string, bool) {
 	path := strings.TrimSpace(r.URL.Path)
 	if !strings.HasPrefix(path, prefix) {
@@ -1341,7 +1366,7 @@ func renderPayslips(runID string, asOf string, payslips []Payslip, errMsg string
 	return b.String()
 }
 
-func renderPayslipDetail(runID string, payslipID string, asOf string, payslip PayslipDetail, errMsg string) string {
+func renderPayslipDetail(runID string, payslipID string, asOf string, run PayrollRun, payslip PayslipDetail, errMsg string) string {
 	var b strings.Builder
 	b.WriteString(`<h1>Payslip</h1>`)
 	if errMsg != "" {
@@ -1364,18 +1389,101 @@ func renderPayslipDetail(runID string, payslipID string, asOf string, payslip Pa
 		b.WriteString(`</ul>`)
 	}
 
+	b.WriteString(`<h2>Net Guaranteed IIT (Inputs)</h2>`)
+	if run.RunState == "finalized" {
+		b.WriteString(`<p><em>(finalized: read-only)</em></p>`)
+	} else {
+		b.WriteString(`<p><em>(录入/删除将在下一步开通)</em></p>`)
+
+		if run.NeedsRecalc {
+			b.WriteString(`<p style="color:#b00020">needs_recalc=true（请重新计算该 run）</p>`)
+		}
+	}
+
+	var ngInputs []PayslipItemInput
+	for _, in := range payslip.ItemInputs {
+		if in.CalcMode == "net_guaranteed_iit" {
+			ngInputs = append(ngInputs, in)
+		}
+	}
+	if len(ngInputs) == 0 {
+		b.WriteString(`<p><em>(empty)</em></p>`)
+	} else {
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6">`)
+		b.WriteString(`<tr><th>item_code</th><th>target_net</th><th>updated_at</th><th>last_event_id</th></tr>`)
+		for _, in := range ngInputs {
+			b.WriteString(`<tr>`)
+			b.WriteString(`<td>` + html.EscapeString(in.ItemCode) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(in.Amount) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(in.UpdatedAt) + `</td>`)
+			b.WriteString(`<td><code>` + html.EscapeString(in.LastEventID) + `</code></td>`)
+			b.WriteString(`</tr>`)
+		}
+		b.WriteString(`</table>`)
+	}
+
+	b.WriteString(`<h2>Net Guaranteed IIT (Results)</h2>`)
+	var ngItems []PayslipItem
+	for _, item := range payslip.Items {
+		if item.CalcMode == "net_guaranteed_iit" {
+			ngItems = append(ngItems, item)
+		}
+	}
+	if len(ngItems) == 0 {
+		b.WriteString(`<p><em>(empty)</em></p>`)
+	} else {
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6">`)
+		b.WriteString(`<tr><th>item_code</th><th>target_net</th><th>gross_amount</th><th>iit_delta</th><th>net_after_iit</th></tr>`)
+		for _, item := range ngItems {
+			b.WriteString(`<tr>`)
+			b.WriteString(`<td>` + html.EscapeString(item.ItemCode) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.TargetNet) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.Amount) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.IITDelta) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.TargetNet) + `</td>`)
+			b.WriteString(`</tr>`)
+		}
+		b.WriteString(`</table>`)
+
+		var explain map[string]any
+		if err := json.Unmarshal(ngItems[0].Meta, &explain); err == nil {
+			keys := []string{
+				"tax_year",
+				"tax_month",
+				"group_target_net",
+				"group_solved_gross",
+				"group_delta_iit",
+				"base_income",
+				"base_iit_withhold",
+				"iterations",
+			}
+			b.WriteString(`<p>explain:</p>`)
+			b.WriteString(`<pre style="margin:0">`)
+			for _, k := range keys {
+				if v, ok := explain[k]; ok {
+					b.WriteString(html.EscapeString(k) + `=` + html.EscapeString(toString(v)) + "\n")
+				}
+			}
+			b.WriteString(`</pre>`)
+		}
+	}
+
 	b.WriteString(`<h2>Items</h2>`)
 	if len(payslip.Items) == 0 {
 		b.WriteString(`<p><em>(empty)</em></p>`)
 	} else {
 		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6">`)
-		b.WriteString(`<tr><th>id</th><th>item_code</th><th>item_kind</th><th>amount</th><th>meta</th></tr>`)
+		b.WriteString(`<tr><th>id</th><th>item_code</th><th>item_kind</th><th>amount</th><th>calc_mode</th><th>tax_bearer</th><th>target_net</th><th>iit_delta</th><th>meta</th></tr>`)
 		for _, item := range payslip.Items {
 			b.WriteString(`<tr>`)
 			b.WriteString(`<td><code>` + html.EscapeString(item.ID) + `</code></td>`)
 			b.WriteString(`<td>` + html.EscapeString(item.ItemCode) + `</td>`)
 			b.WriteString(`<td>` + html.EscapeString(item.ItemKind) + `</td>`)
 			b.WriteString(`<td>` + html.EscapeString(item.Amount) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.CalcMode) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.TaxBearer) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.TargetNet) + `</td>`)
+			b.WriteString(`<td>` + html.EscapeString(item.IITDelta) + `</td>`)
 			b.WriteString(`<td><pre style="margin:0">` + html.EscapeString(string(item.Meta)) + `</pre></td>`)
 			b.WriteString(`</tr>`)
 		}
