@@ -33,6 +33,10 @@
 - `as_of`：建议 `2026-01-02`
 - 需要的人员：E01/E03/E10（`person_uuid` 已记录）
 
+### 4.1 数据保留（强制）
+
+- 本子计划写入的 punches（含缺卡样例与导入样例）必须保留，用于 TP-060-05 的日结果/更正与审计链路复用（SSOT：`docs/dev-plans/060-business-e2e-test-suite.md` §5.0）。
+
 ## 5. 测试步骤（执行时勾选）
 
 1. [ ] 打开 punches 页面：`/org/attendance-punches?as_of=2026-01-02`（确认页面可见）。
@@ -51,4 +55,3 @@
 
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-

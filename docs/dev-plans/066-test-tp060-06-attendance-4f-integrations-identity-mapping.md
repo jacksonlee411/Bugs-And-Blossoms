@@ -37,6 +37,10 @@
   - E08：DINGTALK `userId`（示例值即可）
   - E09：WECOM `userid`（示例值即可）
 
+### 4.1 数据保留（强制）
+
+- 本子计划创建的外部身份映射与外部摄入事件必须保留，用于后续回归与排障（例如验证 `seen_count/last_seen_at` 累积与状态流转），不得跑完清理（SSOT：`docs/dev-plans/060-business-e2e-test-suite.md` §5.0）。
+
 ## 5. 测试步骤（执行时勾选）
 
 1. [ ] 打开 integrations 页面：`/org/attendance-integrations?as_of=2026-01-02`（确认页面可见）。
@@ -61,4 +65,3 @@
 
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-
