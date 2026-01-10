@@ -148,6 +148,12 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		return "", "", false
 	}
+	if pathMatchRouteTemplate(path, "/org/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items") {
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayslips, authz.ActionAdmin, true
+		}
+		return "", "", false
+	}
 	if pathMatchRouteTemplate(path, "/org/payroll-recalc-requests/{recalc_request_id}") {
 		if method == http.MethodGet {
 			return authz.ObjectStaffingPayrollRecalcRequests, authz.ActionRead, true
@@ -172,6 +178,12 @@ func authzRequirementForRoute(method string, path string) (object string, action
 	if pathMatchRouteTemplate(path, "/org/api/payslips/{payslip_id}") {
 		if method == http.MethodGet {
 			return authz.ObjectStaffingPayslips, authz.ActionRead, true
+		}
+		return "", "", false
+	}
+	if pathMatchRouteTemplate(path, "/org/api/payroll-runs/{run_id}/payslips/{payslip_id}/net-guaranteed-iit-items") {
+		if method == http.MethodPost {
+			return authz.ObjectStaffingPayslips, authz.ActionAdmin, true
 		}
 		return "", "", false
 	}

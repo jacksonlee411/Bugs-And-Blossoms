@@ -319,6 +319,9 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 	if rec := do(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {
 		t.Fatalf("payslip detail status=%d", rec.Code)
 	}
+	if rec := do(http.MethodPost, "/org/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items?as_of=2026-01-01", []byte("item_code=EARNING_LONG_SERVICE_AWARD&target_net=20000.00&request_id=req1"), "application/x-www-form-urlencoded", false); rec.Code != http.StatusSeeOther {
+		t.Fatalf("payslip net-guaranteed iit items post status=%d body=%s", rec.Code, rec.Body.String())
+	}
 	if rec := do(http.MethodGet, "/org/payroll-recalc-requests?as_of=2026-01-01", nil, "", true); rec.Code != http.StatusOK {
 		t.Fatalf("payroll recalc requests status=%d", rec.Code)
 	}
@@ -340,6 +343,9 @@ func TestNewHandler_PayrollRoutesWired(t *testing.T) {
 	}
 	if rec := do(http.MethodPost, "/org/api/payroll-runs", []byte(`{"pay_period_id":"pp1"}`), "application/json", false); rec.Code != http.StatusCreated {
 		t.Fatalf("payroll runs api post status=%d", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", []byte(`{"event_type":"UPSERT","item_code":"EARNING_LONG_SERVICE_AWARD","target_net":"20000.00","request_id":"req1"}`), "application/json", false); rec.Code != http.StatusOK {
+		t.Fatalf("payroll net-guaranteed iit items api post status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := do(http.MethodGet, "/org/api/payroll-balances?person_uuid=p1&tax_year=2026", nil, "", false); rec.Code != http.StatusOK {
 		t.Fatalf("payroll balances api get status=%d body=%s", rec.Code, rec.Body.String())

@@ -43,6 +43,8 @@ type stubPayrollStore struct {
 	getPayslipErr error
 	getPayslipOut PayslipDetail
 
+	submitNetGuaranteedErr error
+
 	getBalancesErr error
 	getBalancesOut PayrollBalances
 
@@ -120,6 +122,10 @@ func (s stubPayrollStore) GetPayslip(_ context.Context, _ string, _ string) (Pay
 		return PayslipDetail{}, s.getPayslipErr
 	}
 	return s.getPayslipOut, nil
+}
+
+func (s stubPayrollStore) SubmitPayslipNetGuaranteedIITItem(_ context.Context, _ string, _ string, _ string, _ string, _ string, _ string, _ string, _ string) error {
+	return s.submitNetGuaranteedErr
 }
 
 func (s stubPayrollStore) ListPayrollRecalcRequests(_ context.Context, _ string, _ string, _ string) ([]PayrollRecalcRequestSummary, error) {
@@ -1116,6 +1122,280 @@ func TestHandlePayslipDetail(t *testing.T) {
 	})
 }
 
+func TestHandlePayslipNetGuaranteedIITItems(t *testing.T) {
+	prev := uuidRandReader
+	t.Cleanup(func() { uuidRandReader = prev })
+
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", nil)
+		handlePayslipNetGuaranteedIITItems(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("path missing run_id", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-runs/", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipNetGuaranteedIITItems(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("path prefix mismatch", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-runs/run1/not-payslips/ps1/net-guaranteed-iit-items", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipNetGuaranteedIITItems(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("path missing payslip_id", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-runs/run1/payslips/", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipNetGuaranteedIITItems(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipNetGuaranteedIITItems(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("bad form", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items?as_of=2026-01-01", strings.NewReader("%zz"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipNetGuaranteedIITItems(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "bad form") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("principal missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader("item_code=EARNING_LONG_SERVICE_AWARD&target_net=20000.00&request_id=req1"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipNetGuaranteedIITItems(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("submit error (conflict)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items?as_of=2026-01-01", strings.NewReader("item_code=EARNING_LONG_SERVICE_AWARD&target_net=20000.00&request_id=req1"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItems(rec, req, stubPayrollStore{submitNetGuaranteedErr: &pgconn.PgError{Message: "STAFFING_IDEMPOTENCY_REUSED"}})
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "STAFFING_IDEMPOTENCY_REUSED") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("submit error (unprocessable)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader("item_code=EARNING_LONG_SERVICE_AWARD&target_net=20000.00&request_id=req1"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItems(rec, req, stubPayrollStore{submitNetGuaranteedErr: &pgconn.PgError{Message: "STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT"}})
+		if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("submit error (bad request)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader("item_code=EARNING_LONG_SERVICE_AWARD&target_net=20000.00&request_id=req1"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItems(rec, req, stubPayrollStore{submitNetGuaranteedErr: newBadRequestError("bad")})
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "bad") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		uuidRandReader = bytes.NewReader(make([]byte, 16))
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items?as_of=2026-01-01", strings.NewReader("item_code=EARNING_LONG_SERVICE_AWARD&target_net=20000.00&request_id="))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItems(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if loc := rec.Header().Get("Location"); loc != "/org/payroll-runs/run1/payslips/ps1?as_of=2026-01-01" {
+			t.Fatalf("loc=%q", loc)
+		}
+	})
+}
+
+func TestHandlePayslipNetGuaranteedIITItemsAPI(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", nil)
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("principal missing", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader(`{"event_type":"UPSERT"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("path prefix mismatch", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-run/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader(`{"event_type":"UPSERT"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("inner prefix mismatch", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/not-payslips/ps1/net-guaranteed-iit-items", strings.NewReader(`{"event_type":"UPSERT"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("missing payslip_id", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/", strings.NewReader(`{"event_type":"UPSERT"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("bad json", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader("{"))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("event_type invalid", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader(`{"event_type":"BAD","request_id":"req1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("submit error (conflict)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader(`{"event_type":"UPSERT","request_id":"req1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{submitNetGuaranteedErr: &pgconn.PgError{Message: "STAFFING_PAYROLL_RUN_FINALIZED_READONLY"}})
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("submit error (unprocessable)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader(`{"event_type":"UPSERT","request_id":"req1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{submitNetGuaranteedErr: &pgconn.PgError{Message: "STAFFING_PAYROLL_NET_GUARANTEED_IIT_INVALID_ARGUMENT"}})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("submit error (bad request)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader(`{"event_type":"UPSERT","request_id":"req1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{submitNetGuaranteedErr: newBadRequestError("bad")})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("submit error (internal)", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader(`{"event_type":"UPSERT","request_id":"req1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{submitNetGuaranteedErr: errors.New("boom")})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader(`{"event_type":"UPSERT","request_id":"req1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "\"ok\":true") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if ct := rec.Header().Get("Content-Type"); ct != "application/json; charset=utf-8" {
+			t.Fatalf("content_type=%q", ct)
+		}
+	})
+}
+
 type alwaysErrReader struct{}
 
 func (alwaysErrReader) Read([]byte) (int, error) { return 0, errors.New("read err") }
@@ -1241,6 +1521,44 @@ func TestRenderPayslipDetail_FinalizedAndBadMeta(t *testing.T) {
 		t.Fatalf("html=%s", html)
 	}
 	if strings.Contains(html, "explain:") {
+		t.Fatalf("html=%s", html)
+	}
+}
+
+func TestRenderPayslipDetail_FinalizedWithItemInputs_ReadOnlyActions(t *testing.T) {
+	html := renderPayslipDetail(
+		"run1",
+		"ps1",
+		"",
+		PayrollRun{RunState: "finalized"},
+		PayslipDetail{
+			Payslip: Payslip{
+				ID:            "ps1",
+				RunID:         "run1",
+				PersonUUID:    "person1",
+				AssignmentID:  "asmt1",
+				Currency:      "CNY",
+				GrossPay:      "100.00",
+				NetPay:        "100.00",
+				EmployerTotal: "0.00",
+			},
+			ItemInputs: []PayslipItemInput{{
+				ID:        "in1",
+				ItemCode:  "EARNING_LONG_SERVICE_AWARD",
+				ItemKind:  "earning",
+				Currency:  "CNY",
+				CalcMode:  "net_guaranteed_iit",
+				TaxBearer: "employer",
+				Amount:    "20000.00",
+				UpdatedAt: "2026-01-01T00:00:00Z",
+			}},
+		},
+		"",
+	)
+	if !strings.Contains(html, "(read-only)") {
+		t.Fatalf("html=%s", html)
+	}
+	if strings.Contains(html, "Delete</button>") {
 		t.Fatalf("html=%s", html)
 	}
 }

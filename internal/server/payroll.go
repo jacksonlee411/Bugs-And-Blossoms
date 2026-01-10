@@ -196,6 +196,8 @@ type PayrollStore interface {
 	ListPayslips(ctx context.Context, tenantID string, runID string) ([]Payslip, error)
 	GetPayslip(ctx context.Context, tenantID string, payslipID string) (PayslipDetail, error)
 
+	SubmitPayslipNetGuaranteedIITItem(ctx context.Context, tenantID string, initiatorID string, runID string, payslipID string, eventType string, itemCode string, targetNet string, requestID string) error
+
 	ListPayrollRecalcRequests(ctx context.Context, tenantID string, personUUID string, state string) ([]PayrollRecalcRequestSummary, error)
 	GetPayrollRecalcRequest(ctx context.Context, tenantID string, recalcRequestID string) (PayrollRecalcRequestDetail, error)
 	ApplyPayrollRecalcRequest(ctx context.Context, tenantID string, initiatorID string, recalcRequestID string, targetRunID string) (PayrollRecalcApplication, error)
@@ -970,6 +972,111 @@ func (s *staffingPGStore) GetPayslip(ctx context.Context, tenantID string, paysl
 		return PayslipDetail{}, err
 	}
 	return out, nil
+}
+
+func (s *staffingPGStore) SubmitPayslipNetGuaranteedIITItem(
+	ctx context.Context,
+	tenantID string,
+	initiatorID string,
+	runID string,
+	payslipID string,
+	eventType string,
+	itemCode string,
+	targetNet string,
+	requestID string,
+) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return err
+	}
+
+	initiatorID = strings.TrimSpace(initiatorID)
+
+	runID = strings.TrimSpace(runID)
+	if runID == "" {
+		return errors.New("run_id is required")
+	}
+	payslipID = strings.TrimSpace(payslipID)
+	if payslipID == "" {
+		return errors.New("payslip_id is required")
+	}
+
+	eventType = strings.ToUpper(strings.TrimSpace(eventType))
+	if eventType == "" {
+		eventType = "UPSERT"
+	}
+	if eventType != "UPSERT" && eventType != "DELETE" {
+		return newBadRequestError("event_type must be UPSERT|DELETE")
+	}
+
+	itemCode = strings.ToUpper(strings.TrimSpace(itemCode))
+	requestID = strings.TrimSpace(requestID)
+	targetNet = strings.TrimSpace(targetNet)
+
+	var payslipRunID, personUUID, assignmentID string
+	if err := tx.QueryRow(ctx, `
+	SELECT
+	  run_id::text,
+	  person_uuid::text,
+	  assignment_id::text
+	FROM staffing.payslips
+	WHERE tenant_id = $1::uuid AND id = $2::uuid
+	`, tenantID, payslipID).Scan(&payslipRunID, &personUUID, &assignmentID); err != nil {
+		return err
+	}
+	if payslipRunID != runID {
+		return newBadRequestError("payslip_id does not belong to run_id")
+	}
+
+	eventID := requestID
+	if eventID == "" {
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+			return err
+		}
+	}
+
+	amount := targetNet
+	if eventType == "DELETE" {
+		amount = "0"
+	}
+
+	var eventDBID int64
+	if err := tx.QueryRow(ctx, `
+	SELECT staffing.submit_payslip_item_input_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::uuid,
+	  $4::uuid,
+	  $5::uuid,
+	  $6::text,
+	  $7::text,
+	  'earning',
+	  'CNY'::char(3),
+	  'net_guaranteed_iit',
+	  'employer',
+	  CASE
+	    WHEN $8::text ~ '^[0-9]+([.][0-9]{1,2})?$' THEN $8::numeric(15,2)
+	    ELSE NULL
+	  END,
+	  $9::text,
+	  NULLIF($10::text, '')::uuid
+	);
+	`, eventID, tenantID, runID, personUUID, assignmentID, eventType, itemCode, amount, requestID, initiatorID).Scan(&eventDBID); err != nil {
+		return err
+	}
+	if eventDBID <= 0 {
+		return errors.New("unexpected event_db_id")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *staffingPGStore) ListPayrollRecalcRequests(ctx context.Context, tenantID string, personUUID string, state string) ([]PayrollRecalcRequestSummary, error) {

@@ -1937,6 +1937,134 @@ func TestPayrollPGStore_GetPayrollBalances(t *testing.T) {
 	})
 }
 
+func TestPayrollPGStore_SubmitPayslipNetGuaranteedIITItem(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "UPSERT", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{execErr: errors.New("exec")})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "UPSERT", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing run_id", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", " ", "ps1", "UPSERT", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing payslip_id", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", " ", "UPSERT", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("event_type invalid", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "BAD", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil || !isBadRequestError(err) {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("payslip query error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{rowErr: errors.New("row")})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("payslip run mismatch", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{row: &stubRow{vals: []any{"run2", "person1", "asmt1"}}})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil || !isBadRequestError(err) {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("gen event_id error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:     &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2Err: errors.New("gen"),
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submit error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:     &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2Err: errors.New("submit"),
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("unexpected event_db_id", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:  &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2: &stubRow{vals: []any{int64(0)}},
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:       &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2:      &stubRow{vals: []any{int64(1)}},
+			commitErr: errors.New("commit"),
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "req1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok (upsert; gen event_id)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:  &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2: &stubRow{vals: []any{"evt1"}},
+			row3: &stubRow{vals: []any{int64(1)}},
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "", "EARNING_LONG_SERVICE_AWARD", "20000.00", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("ok (delete)", func(t *testing.T) {
+		store := newStaffingPGStore(&stubTx{
+			row:  &stubRow{vals: []any{"run1", "person1", "asmt1"}},
+			row2: &stubRow{vals: []any{int64(1)}},
+		})
+		err := store.SubmitPayslipNetGuaranteedIITItem(context.Background(), "t1", "i1", "run1", "ps1", "DELETE", "EARNING_LONG_SERVICE_AWARD", "0", "req1")
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
 func TestPayrollPGStore_UpsertPayrollIITSAD(t *testing.T) {
 	validIn := func() PayrollIITSADUpsertInput {
 		return PayrollIITSADUpsertInput{
