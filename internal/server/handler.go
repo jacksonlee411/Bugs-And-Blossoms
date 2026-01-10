@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 )
 
 //go:embed assets/*
@@ -234,7 +235,16 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			return
 		}
 
-		p, err := principals.UpsertFromKratos(r.Context(), tenant.ID, ident.Email, "tenant-admin", ident.KratosIdentityID)
+		roleSlug := strings.TrimSpace(strings.ToLower(ident.RoleSlug))
+		if roleSlug == "" {
+			roleSlug = authz.RoleTenantAdmin
+		}
+		if roleSlug != authz.RoleTenantAdmin && roleSlug != authz.RoleTenantViewer {
+			writeShellWithStatus(w, r, http.StatusUnprocessableEntity, renderLoginForm("invalid identity role"))
+			return
+		}
+
+		p, err := principals.UpsertFromKratos(r.Context(), tenant.ID, ident.Email, roleSlug, ident.KratosIdentityID)
 		if err != nil {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "principal_error", "principal error")
 			return
