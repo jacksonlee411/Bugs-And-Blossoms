@@ -176,6 +176,15 @@ modules/{module}/
 - DEV-PLAN-054：考勤 Slice 4D——额度与银行闭环（调休/综合工时累加器）：`docs/dev-plans/054-attendance-slice-4d-time-banking-and-accumulators.md`
 - DEV-PLAN-055：考勤 Slice 4E——纠错与审计闭环（更正事件 + 重算）：`docs/dev-plans/055-attendance-slice-4e-corrections-audit-recalc.md`
 - DEV-PLAN-056：考勤 Slice 4F——生态集成闭环（钉钉 Stream / 企微 Poller）：`docs/dev-plans/056-attendance-slice-4f-dingtalk-wecom-integration.md`
+- DEV-PLAN-060：全链路业务测试案例套件（009/039/051-056 覆盖）：`docs/dev-plans/060-business-e2e-test-suite.md`
+- DEV-PLAN-061：全链路业务测试子计划 TP-060-01——租户/登录/权限/隔离基线：`docs/dev-plans/061-test-tp060-01-tenant-login-authz-rls-baseline.md`
+- DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
+- DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
+- DEV-PLAN-064：全链路业务测试子计划 TP-060-04——考勤 4A（Punch Ledger：手工补卡 + 最小导入）：`docs/dev-plans/064-test-tp060-04-attendance-4a-punch-ledger.md`
+- DEV-PLAN-065：全链路业务测试子计划 TP-060-05——考勤 4B-4E（日结果/配置/时间银行/更正与审计）：`docs/dev-plans/065-test-tp060-05-attendance-4b-4e-results-config-bank-corrections.md`
+- DEV-PLAN-066：全链路业务测试子计划 TP-060-06——考勤 4F（外部对接 + 身份映射）：`docs/dev-plans/066-test-tp060-06-attendance-4f-integrations-identity-mapping.md`
+- DEV-PLAN-067：全链路业务测试子计划 TP-060-07——薪酬 041-043（主流程 + 工资条 + 社保）：`docs/dev-plans/067-test-tp060-07-payroll-041-043-run-payslip-si.md`
+- DEV-PLAN-068：全链路业务测试子计划 TP-060-08——薪酬 044-046（个税累计预扣 + 回溯 + 税后发放）：`docs/dev-plans/068-test-tp060-08-payroll-044-046-iit-retro-net-guarantee.md`
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 - Org（事务性事件溯源 + 同步投射）：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
