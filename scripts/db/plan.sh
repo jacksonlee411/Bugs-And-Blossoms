@@ -24,7 +24,7 @@ if [[ ! -d "$migrations_dir" ]]; then
   exit 2
 fi
 
-dev_url="${ATLAS_DEV_URL:-docker://postgres/17/dev?search_path=public}"
+dev_url="${ATLAS_DEV_URL:-docker://postgres/17/dev}"
 
 echo "[db-plan] atlas schema diff: $module (migrations -> schema)"
 if ! diff_out="$(
