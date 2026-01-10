@@ -136,6 +136,8 @@ type staffingAssignmentsAPIRequest struct {
 	EffectiveDate string `json:"effective_date"`
 	PersonUUID    string `json:"person_uuid"`
 	PositionID    string `json:"position_id"`
+	BaseSalary    string `json:"base_salary"`
+	AllocatedFte  string `json:"allocated_fte"`
 }
 
 func handleAssignmentsAPI(w http.ResponseWriter, r *http.Request, store AssignmentStore) {
@@ -187,7 +189,7 @@ func handleAssignmentsAPI(w http.ResponseWriter, r *http.Request, store Assignme
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 			return
 		}
-		a, err := store.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, req.EffectiveDate, req.PersonUUID, req.PositionID)
+		a, err := store.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, req.EffectiveDate, req.PersonUUID, req.PositionID, req.BaseSalary, req.AllocatedFte)
 		if err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "upsert_failed", "upsert failed")
 			return
@@ -269,30 +271,41 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 		postPernr := strings.TrimSpace(r.Form.Get("pernr"))
 		postPersonUUID := strings.TrimSpace(r.Form.Get("person_uuid"))
 		positionID := strings.TrimSpace(r.Form.Get("position_id"))
+		baseSalary := strings.TrimSpace(r.Form.Get("base_salary"))
+		allocatedFte := strings.TrimSpace(r.Form.Get("allocated_fte"))
 
-		if postPersonUUID == "" {
-			if postPernr == "" {
-				assigns, errMsg := list()
-				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, personUUID, pernr, displayName, mergeMsg(errMsg, "pernr is required")))
-				return
-			}
+		if postPernr != "" {
 			p, err := personStore.FindPersonByPernr(r.Context(), tenant.ID, postPernr)
 			if err != nil {
 				assigns, errMsg := list()
 				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, personUUID, pernr, displayName, mergeMsg(errMsg, err.Error())))
 				return
 			}
+			if postPersonUUID != "" && postPersonUUID != p.UUID {
+				assigns, errMsg := list()
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, personUUID, pernr, displayName, mergeMsg(errMsg, "pernr/person_uuid 不一致")))
+				return
+			}
 			postPersonUUID = p.UUID
 			postPernr = p.Pernr
+			displayName = p.DisplayName
+		} else if postPersonUUID == "" {
+			assigns, errMsg := list()
+			writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, personUUID, pernr, displayName, mergeMsg(errMsg, "pernr is required")))
+			return
 		}
 
-		if _, err := assignmentStore.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, effectiveDate, postPersonUUID, positionID); err != nil {
+		if _, err := assignmentStore.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, effectiveDate, postPersonUUID, positionID, baseSalary, allocatedFte); err != nil {
 			assigns, errMsg := list()
 			writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, err.Error())))
 			return
 		}
 
-		http.Redirect(w, r, "/org/assignments?as_of="+url.QueryEscape(effectiveDate)+"&pernr="+url.QueryEscape(postPernr), http.StatusSeeOther)
+		if postPernr != "" {
+			http.Redirect(w, r, "/org/assignments?as_of="+url.QueryEscape(effectiveDate)+"&pernr="+url.QueryEscape(postPernr), http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/org/assignments?as_of="+url.QueryEscape(effectiveDate)+"&person_uuid="+url.QueryEscape(postPersonUUID), http.StatusSeeOther)
 		return
 	default:
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -397,6 +410,8 @@ func renderAssignments(assignments []Assignment, positions []Position, tenant Te
 		}
 	}
 	b.WriteString(`</select></label><br/>`)
+	b.WriteString(`<label>Allocated FTE <input type="number" name="allocated_fte" step="0.01" min="0.01" max="1.00" value="1.0" /></label><br/>`)
+	b.WriteString(`<label>Base Salary (CNY) <input type="number" name="base_salary" step="0.01" min="0" /></label><br/>`)
 	b.WriteString(`<button type="submit">Submit</button>`)
 	b.WriteString(`</form>`)
 

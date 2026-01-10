@@ -32,7 +32,7 @@ type PositionStore interface {
 
 type AssignmentStore interface {
 	ListAssignmentsForPerson(ctx context.Context, tenantID string, asOfDate string, personUUID string) ([]Assignment, error)
-	UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string) (Assignment, error)
+	UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, baseSalary string, allocatedFte string) (Assignment, error)
 }
 
 type staffingPGStore struct {
@@ -199,7 +199,7 @@ ORDER BY lower(validity) DESC, assignment_id::text ASC
 	return out, nil
 }
 
-func (s *staffingPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string) (Assignment, error) {
+func (s *staffingPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, baseSalary string, allocatedFte string) (Assignment, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Assignment{}, err
@@ -222,6 +222,8 @@ func (s *staffingPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context, 
 	if positionID == "" {
 		return Assignment{}, errors.New("position_id is required")
 	}
+	baseSalary = strings.TrimSpace(baseSalary)
+	allocatedFte = strings.TrimSpace(allocatedFte)
 
 	assignmentType := "primary"
 
@@ -259,7 +261,14 @@ WHERE tenant_id = $1::uuid AND assignment_id = $2::uuid
 		return Assignment{}, err
 	}
 
-	payload := `{"position_id":` + strconv.Quote(positionID) + `}`
+	payload := `{"position_id":` + strconv.Quote(positionID)
+	if baseSalary != "" {
+		payload += `,"base_salary":` + strconv.Quote(baseSalary)
+	}
+	if allocatedFte != "" {
+		payload += `,"allocated_fte":` + strconv.Quote(allocatedFte)
+	}
+	payload += `}`
 
 	if _, err := tx.Exec(ctx, `
 SELECT staffing.submit_assignment_event(
@@ -335,7 +344,7 @@ func (s *staffingMemoryStore) ListAssignmentsForPerson(_ context.Context, tenant
 	return append([]Assignment(nil), byPerson[personUUID]...), nil
 }
 
-func (s *staffingMemoryStore) UpsertPrimaryAssignmentForPerson(_ context.Context, tenantID string, effectiveDate string, personUUID string, positionID string) (Assignment, error) {
+func (s *staffingMemoryStore) UpsertPrimaryAssignmentForPerson(_ context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, _ string, _ string) (Assignment, error) {
 	effectiveDate = strings.TrimSpace(effectiveDate)
 	if effectiveDate == "" {
 		return Assignment{}, errors.New("effective_date is required")

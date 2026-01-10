@@ -42,6 +42,10 @@
   - TimeProfile：配置租户默认标准班次（09:00-18:00，午休 60m，Asia/Shanghai）
   - HolidayCalendar：将 `2026-01-01` 标记为 Holiday（按月覆盖项）
 
+### 4.1 数据保留（强制）
+
+- 本子计划创建/修改的配置（TimeProfile/HolidayCalendar）、作废记录（VOIDED）与日结果变化必须保留，供后续排障与 TP-060-06/07/08 的复用与回归（SSOT：`docs/dev-plans/060-business-e2e-test-suite.md` §5.0）。
+
 ## 5. 测试步骤（执行时勾选）
 
 1. [ ] 配置 TimeProfile：`/org/attendance-time-profile?as_of=2026-01-01`（保存成功且页面可回显）。
@@ -63,4 +67,3 @@
 
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-

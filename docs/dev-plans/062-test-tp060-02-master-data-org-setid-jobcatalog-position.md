@@ -83,6 +83,11 @@
 - 所有“创建”动作若返回“已存在/重复”类错误：应先在列表中确认是否已存在对应记录；若已存在则改为记录其 ID 并继续；若未存在则记录为 `BUG/CONTRACT_DRIFT` 并停止该子步骤。
 - 若环境允许但数据已明显污染（重复 Root、重复 BU/SetID/JobFamilyGroup、职位数量异常且无法判定）：记录为 `ENV_DRIFT`，建议重置租户或更换干净租户再跑（不得在测试中隐式修补口径）。
 
+### 4.5 数据保留（强制）
+
+- 本子计划创建/补齐的数据（OrgUnit、SetID/BU/mapping、JobCatalog、Positions）构成 060-DS1 的主数据底座，必须保留以供 TP-060-03/04/05/07/08 复用（SSOT：`docs/dev-plans/060-business-e2e-test-suite.md` §5.0）。
+- 禁止在本子计划执行完后清理数据；若必须重置环境，需按 §4.4 的口径登记并重建 060-DS1。
+
 ## 5. 数据准备要求（060-DS1 子集 + 本计划增量）
 
 > 基线数据 SSOT：`docs/dev-plans/060-business-e2e-test-suite.md` 的 §5.2–§5.5。本文只声明本子计划用到的“子集与增量”。

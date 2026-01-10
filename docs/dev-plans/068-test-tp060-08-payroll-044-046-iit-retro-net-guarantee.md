@@ -41,6 +41,10 @@
   - E07：录入净额保证工资项（`target_net=20,000.00`）
   - E05：用于回溯触发（定稿后提交更早生效变更）
 
+### 4.1 数据保留（强制）
+
+- 本子计划产生的 IIT 输入（SAD）、net-guarantee 项、recalc requests 与结转差额结果必须保留，用于后续回归与可排障证据（SSOT：`docs/dev-plans/060-business-e2e-test-suite.md` §5.0）。
+
 ## 5. 测试步骤（执行时勾选）
 
 1. [ ] 创建 `PP-2026-02` 与 run（若尚未存在），确保 run 为 `draft/failed`（可重新 calculate）。
@@ -71,4 +75,3 @@
 
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-

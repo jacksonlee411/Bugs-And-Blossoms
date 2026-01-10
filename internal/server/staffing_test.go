@@ -463,7 +463,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -473,7 +473,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -483,7 +483,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "", "p1", "pos1")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "", "p1", "pos1", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -493,7 +493,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "", "pos1")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "", "pos1", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -503,7 +503,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -513,7 +513,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -524,7 +524,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 			tx := &staffingAssignmentGenIDErrorTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -535,7 +535,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 			tx := &staffingAssignmentCountErrorTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -546,7 +546,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 			tx := &staffingAssignmentEventIDErrorTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -557,7 +557,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 			tx := &staffingAssignmentQueryTx{stubTx: &stubTx{execErr: errors.New("exec"), execErrAt: 2}}
 			return tx, nil
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -568,7 +568,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 			tx := &staffingAssignmentQueryTx{stubTx: &stubTx{commitErr: errors.New("commit")}}
 			return tx, nil
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -579,7 +579,7 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 			tx := &staffingAssignmentQueryTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))
-		a, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1")
+		a, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -593,9 +593,23 @@ func TestStaffingPGStore_UpsertPrimaryAssignmentForPerson(t *testing.T) {
 			tx := &staffingAssignmentUpdateQueryTx{stubTx: &stubTx{}}
 			return tx, nil
 		}))
-		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1")
+		_, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", "")
 		if err != nil {
 			t.Fatal(err)
+		}
+	})
+
+	t.Run("ok (with salary and fte)", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &staffingAssignmentQueryTx{stubTx: &stubTx{}}
+			return tx, nil
+		}))
+		a, err := store.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "30000.00", "0.5")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a.AssignmentID != "as1" {
+			t.Fatalf("expected as1, got %q", a.AssignmentID)
 		}
 	})
 }
@@ -629,19 +643,19 @@ func TestStaffingMemoryStore(t *testing.T) {
 	})
 
 	t.Run("upsert invalid", func(t *testing.T) {
-		if _, err := s.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "", "p1", "pos1"); err == nil {
+		if _, err := s.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "", "p1", "pos1", "", ""); err == nil {
 			t.Fatal("expected error")
 		}
-		if _, err := s.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "", "pos1"); err == nil {
+		if _, err := s.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "", "pos1", "", ""); err == nil {
 			t.Fatal("expected error")
 		}
-		if _, err := s.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", ""); err == nil {
+		if _, err := s.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "", "", ""); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("upsert ok", func(t *testing.T) {
-		if _, err := s.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1"); err != nil {
+		if _, err := s.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-01", "p1", "pos1", "", ""); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -702,15 +716,15 @@ func (s positionStoreStub) CreatePositionCurrent(ctx context.Context, tenantID s
 
 type assignmentStoreStub struct {
 	listFn   func(ctx context.Context, tenantID string, asOfDate string, personUUID string) ([]Assignment, error)
-	upsertFn func(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string) (Assignment, error)
+	upsertFn func(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, baseSalary string, allocatedFte string) (Assignment, error)
 }
 
 func (s assignmentStoreStub) ListAssignmentsForPerson(ctx context.Context, tenantID string, asOfDate string, personUUID string) ([]Assignment, error) {
 	return s.listFn(ctx, tenantID, asOfDate, personUUID)
 }
 
-func (s assignmentStoreStub) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string) (Assignment, error) {
-	return s.upsertFn(ctx, tenantID, effectiveDate, personUUID, positionID)
+func (s assignmentStoreStub) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, baseSalary string, allocatedFte string) (Assignment, error) {
+	return s.upsertFn(ctx, tenantID, effectiveDate, personUUID, positionID, baseSalary, allocatedFte)
 }
 
 func TestStaffingHandlers(t *testing.T) {
@@ -1037,7 +1051,7 @@ func TestStaffingHandlers(t *testing.T) {
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentsAPI(rec, req, assignmentStoreStub{
-			upsertFn: func(context.Context, string, string, string, string) (Assignment, error) {
+			upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
 				return Assignment{}, errors.New("upsert")
 			},
 		})
@@ -1051,7 +1065,7 @@ func TestStaffingHandlers(t *testing.T) {
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentsAPI(rec, req, assignmentStoreStub{
-			upsertFn: func(context.Context, string, string, string, string) (Assignment, error) {
+			upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
 				return Assignment{AssignmentID: "as1"}, nil
 			},
 		})
@@ -1279,7 +1293,7 @@ func TestStaffingHandlers(t *testing.T) {
 			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return []Position{{ID: "pos1"}}, nil }},
 			assignmentStoreStub{
 				listFn: func(context.Context, string, string, string) ([]Assignment, error) { return []Assignment{}, nil },
-				upsertFn: func(context.Context, string, string, string, string) (Assignment, error) {
+				upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
 					return Assignment{}, errors.New("upsert")
 				},
 			},
@@ -1302,7 +1316,7 @@ func TestStaffingHandlers(t *testing.T) {
 			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return []Position{{ID: "pos1"}}, nil }},
 			assignmentStoreStub{
 				listFn: func(context.Context, string, string, string) ([]Assignment, error) { return []Assignment{}, nil },
-				upsertFn: func(context.Context, string, string, string, string) (Assignment, error) {
+				upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
 					return Assignment{AssignmentID: "as1"}, nil
 				},
 			},
@@ -1325,7 +1339,7 @@ func TestStaffingHandlers(t *testing.T) {
 			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return []Position{{ID: "pos1"}}, nil }},
 			assignmentStoreStub{
 				listFn: func(context.Context, string, string, string) ([]Assignment, error) { return []Assignment{}, nil },
-				upsertFn: func(context.Context, string, string, string, string) (Assignment, error) {
+				upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
 					return Assignment{AssignmentID: "as1"}, nil
 				},
 			},
@@ -1337,7 +1351,10 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handleAssignments post ok (person_uuid already resolved)", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&person_uuid=p1&position_id=pos1&pernr=1"))
+		pstore := newPersonMemoryStore()
+		p, _ := pstore.CreatePerson(context.Background(), "t1", "1", "A")
+
+		req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&person_uuid="+p.UUID+"&position_id=pos1&pernr=1"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
@@ -1345,14 +1362,37 @@ func TestStaffingHandlers(t *testing.T) {
 			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return []Position{{ID: "pos1"}}, nil }},
 			assignmentStoreStub{
 				listFn: func(context.Context, string, string, string) ([]Assignment, error) { return []Assignment{}, nil },
-				upsertFn: func(context.Context, string, string, string, string) (Assignment, error) {
+				upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
 					return Assignment{AssignmentID: "as1"}, nil
 				},
 			},
-			newPersonMemoryStore(),
+			pstore,
 		)
 		if rec.Code != http.StatusSeeOther {
 			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignments post rejects pernr/person_uuid mismatch", func(t *testing.T) {
+		pstore := newPersonMemoryStore()
+		_, _ = pstore.CreatePerson(context.Background(), "t1", "1", "A")
+
+		req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&person_uuid=bad&position_id=pos1&pernr=1"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleAssignments(rec, req,
+			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return []Position{{ID: "pos1"}}, nil }},
+			assignmentStoreStub{
+				listFn: func(context.Context, string, string, string) ([]Assignment, error) { return []Assignment{}, nil },
+				upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
+					return Assignment{}, errors.New("unexpected upsert")
+				},
+			},
+			pstore,
+		)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "pernr/person_uuid 不一致") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
 
@@ -1365,7 +1405,7 @@ func TestStaffingHandlers(t *testing.T) {
 			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return []Position{{ID: "pos1"}}, nil }},
 			assignmentStoreStub{
 				listFn: func(context.Context, string, string, string) ([]Assignment, error) { return []Assignment{}, nil },
-				upsertFn: func(context.Context, string, string, string, string) (Assignment, error) {
+				upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
 					return Assignment{AssignmentID: "as1"}, nil
 				},
 			},
