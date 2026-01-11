@@ -1,6 +1,6 @@
 # DEV-PLAN-029：Job Catalog（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
-**状态**: 部分完成（009M1：Job Family Group 最小闭环；2026-01-06 23:40 UTC）
+**状态**: 部分完成（009M1：Job Family Group 最小闭环；M2：Job Family Group 合同对齐补丁；M3：Job Family；M4：Job Level；M5：Job Profile；M6：Snapshot；2026-01-11）
 
 > 本计划的定位：作为 Greenfield HR 的 Job Catalog 子域，提供 **Job Catalog 权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026/030` 对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -569,7 +569,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 
 - 新增表/迁移（红线）：已获得用户手工确认允许新增表（包括 `job_families/job_levels/job_profiles` 等）。
 
-- [ ] **M2：合同对齐补丁（在既有 009M1 上收口）**
+- [x] **M2：合同对齐补丁（在既有 009M1 上收口）**
   - 范围：在不扩展业务实体的前提下，先把已落地的 `job_family_groups` 补齐到“可作为模板复用”的合同口径。
   - 交付物（至少）：
     - schema：为 `jobcatalog.job_family_groups` 增加 `UNIQUE (tenant_id, setid, id)`（用于后续复合 FK 的稳定锚点），并将 events/versions 侧 FK/唯一约束命名收敛到可稳定映射。
@@ -577,24 +577,27 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
     - replay：确保 delete+replay 仍保持 gapless/no-overlap 的裁决路径与稳定错误形状。
   - Done（最小验收）：
     - §8 中 “事件幂等/全量重放/同日唯一/versions no-overlap/gapless/RLS” 对 group 至少可验证（允许其余实体未实现）。
+  - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证。
 
-- [ ] **M3：Job Family（`job_families`，含 effective-dated reparenting）**
+- [x] **M3：Job Family（`job_families`，含 effective-dated reparenting）**
   - 范围：落地 Job Family 的 identity/events/versions + submit/replay；支持 `job_family_group_id` 的有效期归属变更（reparenting）。
   - 交付物（至少）：
     - schema：`jobcatalog.job_families/job_family_events/job_family_versions`（含 `setid`、RLS、约束、索引）。
     - kernel：`submit_job_family_event(...)` + `replay_job_family_versions(...)`（同事务 delete+replay；引用校验按 §10.2）。
   - Done（最小验收）：
     - 具备：CREATE/UPDATE/DISABLE 写入 → as-of 读取（直接查 versions 或通过快照函数；快照可留到 M6）。
+  - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证（覆盖 reparenting 与 DISABLE）。
 
-- [ ] **M4：Job Level（`job_levels`）**
+- [x] **M4：Job Level（`job_levels`）**
   - 范围：落地 Job Level 的 identity/events/versions + submit/replay。
   - 交付物（至少）：
     - schema：`jobcatalog.job_levels/job_level_events/job_level_versions`（含 `setid`、RLS、约束、索引）。
     - kernel：`submit_job_level_event(...)` + `replay_job_level_versions(...)`（幂等/同日唯一/全量重放对齐 M2 口径）。
   - Done（最小验收）：
     - 具备：CREATE/UPDATE/DISABLE 写入 → as-of 读取闭环。
+  - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证（覆盖 level CREATE/UPDATE/DISABLE）。
 
-- [ ] **M5：Job Profile（`job_profiles`）+ Profile↔Families 关系**
+- [x] **M5：Job Profile（`job_profiles`）+ Profile↔Families 关系**
   - 范围：落地 Job Profile 的 identity/events/versions + submit/replay，并实现 `job_profile_version_job_families` 关系表与“至少一个 family + 恰好一个 primary”的不变量裁决。
   - 交付物（至少）：
     - schema：`jobcatalog.job_profiles/job_profile_events/job_profile_versions/job_profile_version_job_families`（含 `setid`、RLS、约束、索引）。
@@ -604,13 +607,16 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
       - 违反时以稳定错误码拒绝（见 §7.1）。
   - Done（最小验收）：
     - 具备：CREATE/UPDATE/DISABLE 写入 → as-of 读取闭环（含 profile↔families 关系可验收）。
+  - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证（覆盖 profile CREATE/UPDATE/DISABLE 与 “至少一个 family + 恰好一个 primary”）。
 
-- [ ] **M6：读模型快照（`get_job_catalog_snapshot`）**
+- [x] **M6：读模型快照（`get_job_catalog_snapshot`）**
   - 范围：实现 `get_job_catalog_snapshot(p_tenant_id, p_setid, p_query_date)`，返回 as-of 的 group/family/level/profile（含 profile↔families）。
   - 交付物（至少）：
     - SQL：快照函数本体（RLS 口径 fail-closed），并提供最小查询验收脚本/示例。
   - Done（最小验收）：
     - §8 的 “as-of 查询一致性” 可通过快照函数稳定验收。
+  - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证（`jobcatalog-smoke` 覆盖 `get_job_catalog_snapshot(...)` 调用）。
+  - 示例：`SELECT * FROM jobcatalog.get_job_catalog_snapshot('<tenant_id>'::uuid, '<setid>'::text, '<query_date>'::date);`
 
 - [ ] **M7：Go Facade + UI 可见闭环（可选扩展，但推荐）**
   - 说明：本里程碑用于满足“用户可见性原则”，避免长期积累只有 DB 没有入口的僵尸能力；若短期不做 UI，也必须在 `DEV-PLAN-018`/测试计划中明确验收方式（例如仅用 curl/SQL 验收）。
