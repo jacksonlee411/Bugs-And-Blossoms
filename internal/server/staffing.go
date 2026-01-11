@@ -3,12 +3,22 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
+
+var staffingAssignmentEventNamespace = uuid.Must(uuid.Parse("6d73e345-ae88-4e9d-a2ed-89f292e94f7b"))
+
+func deterministicStaffingAssignmentEventID(tenantID string, assignmentID string, effectiveDate string, assignmentType string) string {
+	// Stable, payload-independent event_id for rerunnable upsert (DEV-PLAN-031 M3-A).
+	name := fmt.Sprintf("staffing.assignment_event:%s:%s:%s:%s", tenantID, assignmentID, assignmentType, effectiveDate)
+	return uuid.NewSHA1(staffingAssignmentEventNamespace, []byte(name)).String()
+}
 
 type Position struct {
 	ID              string
@@ -389,10 +399,10 @@ func (s *staffingPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context, 
 
 	var assignmentID string
 	err = tx.QueryRow(ctx, `
-SELECT id::text
-FROM staffing.assignments
-WHERE tenant_id = $1::uuid AND person_uuid = $2::uuid AND assignment_type = $3::text
-`, tenantID, personUUID, assignmentType).Scan(&assignmentID)
+	SELECT id::text
+	FROM staffing.assignments
+	WHERE tenant_id = $1::uuid AND person_uuid = $2::uuid AND assignment_type = $3::text
+	`, tenantID, personUUID, assignmentType).Scan(&assignmentID)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return Assignment{}, err
@@ -404,10 +414,10 @@ WHERE tenant_id = $1::uuid AND person_uuid = $2::uuid AND assignment_type = $3::
 
 	var eventsCount int
 	if err := tx.QueryRow(ctx, `
-SELECT count(*)
-FROM staffing.assignment_events
-WHERE tenant_id = $1::uuid AND assignment_id = $2::uuid
-`, tenantID, assignmentID).Scan(&eventsCount); err != nil {
+	SELECT count(*)
+	FROM staffing.assignment_events
+	WHERE tenant_id = $1::uuid AND assignment_id = $2::uuid
+	`, tenantID, assignmentID).Scan(&eventsCount); err != nil {
 		return Assignment{}, err
 	}
 
@@ -416,9 +426,37 @@ WHERE tenant_id = $1::uuid AND assignment_id = $2::uuid
 		eventType = "CREATE"
 	}
 
-	var eventID string
-	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
-		return Assignment{}, err
+	eventID := deterministicStaffingAssignmentEventID(tenantID, assignmentID, effectiveDate, assignmentType)
+	requestID := eventID
+	initiatorID := tenantID
+
+	// Rerunnable upsert (DEV-PLAN-031 M3-A):
+	// - If the effective_date already exists, reuse existing (event_id, request_id, initiator_id, event_type)
+	//   so the Kernel hits the idempotency path instead of violating (tenant_id, assignment_id, effective_date) unique.
+	{
+		var existingEventType string
+		var existingRequestID string
+		var existingInitiatorID string
+		err := tx.QueryRow(ctx, `
+	SELECT
+	  event_id::text,
+	  event_type,
+	  request_id,
+	  initiator_id::text
+	FROM staffing.assignment_events
+	WHERE tenant_id = $1::uuid
+	  AND assignment_id = $2::uuid
+	  AND effective_date = $3::date
+	LIMIT 1
+	`, tenantID, assignmentID, effectiveDate).Scan(&eventID, &existingEventType, &existingRequestID, &existingInitiatorID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return Assignment{}, err
+		}
+		if err == nil {
+			eventType = existingEventType
+			requestID = existingRequestID
+			initiatorID = existingInitiatorID
+		}
 	}
 
 	payload := `{"position_id":` + strconv.Quote(positionID)
@@ -431,19 +469,19 @@ WHERE tenant_id = $1::uuid AND assignment_id = $2::uuid
 	payload += `}`
 
 	if _, err := tx.Exec(ctx, `
-SELECT staffing.submit_assignment_event(
-  $1::uuid,
-  $2::uuid,
-  $3::uuid,
-  $4::uuid,
-  $5::text,
-  $6::text,
-  $7::date,
-  $8::jsonb,
-  $9::text,
-  $10::uuid
-)
-`, eventID, tenantID, assignmentID, personUUID, assignmentType, eventType, effectiveDate, []byte(payload), eventID, tenantID); err != nil {
+	SELECT staffing.submit_assignment_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::uuid,
+	  $4::uuid,
+	  $5::text,
+	  $6::text,
+	  $7::date,
+	  $8::jsonb,
+	  $9::text,
+	  $10::uuid
+	)
+	`, eventID, tenantID, assignmentID, personUUID, assignmentType, eventType, effectiveDate, []byte(payload), requestID, initiatorID); err != nil {
 		return Assignment{}, err
 	}
 
