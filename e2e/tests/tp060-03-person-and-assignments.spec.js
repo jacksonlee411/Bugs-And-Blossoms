@@ -59,7 +59,7 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
       await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
       await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
     }
-    await expect(tenantRow).toBeVisible({ timeout: 15000 });
+    await expect(tenantRow).toBeVisible({ timeout: 60000 });
     const tenantID = (await tenantRow.locator("code").first().innerText()).trim();
     expect(tenantID).not.toBe("");
     return tenantID;

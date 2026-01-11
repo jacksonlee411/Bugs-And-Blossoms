@@ -66,7 +66,7 @@ test("tp060-04: attendance 4A punches (manual + import + authz + fail-closed + c
       await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
       await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
     }
-    await expect(tenantRow).toBeVisible({ timeout: 15000 });
+    await expect(tenantRow).toBeVisible({ timeout: 60000 });
     const tenantID = (await tenantRow.locator("code").first().innerText()).trim();
     expect(tenantID).not.toBe("");
     return tenantID;

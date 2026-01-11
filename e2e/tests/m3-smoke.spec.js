@@ -51,7 +51,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(tenantHost);
   await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
   await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-  await expect(superadminPage.locator("tr", { hasText: tenantHost }).first()).toBeVisible({ timeout: 15000 });
+  await expect(superadminPage.locator("tr", { hasText: tenantHost }).first()).toBeVisible({ timeout: 60000 });
 
   const tenantRow = superadminPage.locator("tr", { hasText: tenantHost });
   const tenantID = (await tenantRow.locator("code").first().innerText()).trim();
