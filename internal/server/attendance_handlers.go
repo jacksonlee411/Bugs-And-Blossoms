@@ -984,6 +984,13 @@ func renderAttendanceDailyResultsDetail(tenant Tenant, asOf string, personUUID s
 	if workDate != "" {
 		b.WriteString(`<p>Work Date: <code>` + html.EscapeString(workDate) + `</code></p>`)
 	}
+	if personUUID != "" && workDate != "" {
+		punchesHref := "/org/attendance-punches?as_of=" + url.QueryEscape(asOf) +
+			"&person_uuid=" + url.QueryEscape(personUUID) +
+			"&from_date=" + url.QueryEscape(workDate) +
+			"&to_date=" + url.QueryEscape(workDate)
+		b.WriteString(`<p><a href="` + html.EscapeString(punchesHref) + `" hx-get="` + html.EscapeString(punchesHref) + `" hx-target="#content" hx-push-url="true">Go to punches</a></p>`)
+	}
 
 	if personUUID != "" && workDate != "" {
 		b.WriteString(`<h2>Corrections</h2>`)
