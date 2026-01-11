@@ -2680,6 +2680,19 @@ func jobcatalogSmoke(args []string) {
 	// SetID bootstrap is part of 009M1 dependency chain; smoke uses it to avoid hidden coupling.
 	_, _ = tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $1::uuid);`, tenantA)
 
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profile_version_job_families WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profile_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profile_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profiles WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+
 	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_level_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
@@ -2911,6 +2924,176 @@ LIMIT 1
 	}
 	if familyIsActiveAtMar {
 		fatalf("expected family to be disabled at 2026-03-15")
+	}
+
+	familyID2 := "00000000-0000-0000-0000-00000000c211"
+	family2CreateEventID := "00000000-0000-0000-0000-00000000c212"
+	family2CreateRequestID := "dbtool-jobcatalog-smoke-family2-create"
+
+	if _, err := tx.Exec(ctx, `
+	SELECT jobcatalog.submit_job_family_event(
+	  $1::uuid,
+	  $2::uuid,
+	  'SHARE',
+	  $3::uuid,
+	  'CREATE',
+	  $4::date,
+	  jsonb_build_object('code', 'JF2', 'name', 'Job Family 2', 'description', null, 'job_family_group_id', $5::uuid),
+	  $6::text,
+	  $7::uuid
+	);
+	`, family2CreateEventID, tenantA, familyID2, "2026-01-01", groupID, family2CreateRequestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	profileID := "00000000-0000-0000-0000-00000000c401"
+	profileCreateEventID := "00000000-0000-0000-0000-00000000c402"
+	profileCreateRequestID := "dbtool-jobcatalog-smoke-profile-create"
+
+	var profileCreatedEventDBID int64
+	if err := tx.QueryRow(ctx, `
+	SELECT jobcatalog.submit_job_profile_event(
+	  $1::uuid,
+	  $2::uuid,
+	  'SHARE',
+	  $3::uuid,
+	  'CREATE',
+	  $4::date,
+	  jsonb_build_object(
+	    'code', 'JP1',
+	    'name', 'Job Profile 1',
+	    'description', null,
+	    'job_family_ids', jsonb_build_array($5::uuid, $6::uuid),
+	    'primary_job_family_id', $5::uuid
+	  ),
+	  $7::text,
+	  $8::uuid
+	);
+	`, profileCreateEventID, tenantA, profileID, "2026-01-01", familyID, familyID2, profileCreateRequestID, initiatorID).Scan(&profileCreatedEventDBID); err != nil {
+		fatal(err)
+	}
+	if profileCreatedEventDBID <= 0 {
+		fatalf("expected profile event db id > 0, got %d", profileCreatedEventDBID)
+	}
+
+	profileUpdateEventID := "00000000-0000-0000-0000-00000000c403"
+	profileUpdateRequestID := "dbtool-jobcatalog-smoke-profile-update"
+	if _, err := tx.Exec(ctx, `
+	SELECT jobcatalog.submit_job_profile_event(
+	  $1::uuid,
+	  $2::uuid,
+	  'SHARE',
+	  $3::uuid,
+	  'UPDATE',
+	  $4::date,
+	  jsonb_build_object(
+	    'job_family_ids', jsonb_build_array($5::uuid),
+	    'primary_job_family_id', $5::uuid
+	  ),
+	  $6::text,
+	  $7::uuid
+	);
+	`, profileUpdateEventID, tenantA, profileID, "2026-02-01", familyID2, profileUpdateRequestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	profileDisableEventID := "00000000-0000-0000-0000-00000000c404"
+	profileDisableRequestID := "dbtool-jobcatalog-smoke-profile-disable"
+	if _, err := tx.Exec(ctx, `
+	SELECT jobcatalog.submit_job_profile_event(
+	  $1::uuid,
+	  $2::uuid,
+	  'SHARE',
+	  $3::uuid,
+	  'DISABLE',
+	  $4::date,
+	  '{}'::jsonb,
+	  $5::text,
+	  $6::uuid
+	);
+	`, profileDisableEventID, tenantA, profileID, "2026-03-01", profileDisableRequestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	var profileFamiliesAtJan int
+	var profilePrimaryCountAtJan int
+	if err := tx.QueryRow(ctx, `
+	SELECT
+	  count(*)::int,
+	  sum(CASE WHEN f.is_primary THEN 1 ELSE 0 END)::int
+	FROM jobcatalog.job_profile_versions v
+	JOIN jobcatalog.job_profile_version_job_families f
+	  ON f.job_profile_version_id = v.id
+	WHERE v.tenant_id = $1::uuid
+	  AND v.setid = 'SHARE'
+	  AND v.job_profile_id = $2::uuid
+	  AND v.validity @> $3::date
+	`, tenantA, profileID, "2026-01-15").Scan(&profileFamiliesAtJan, &profilePrimaryCountAtJan); err != nil {
+		fatal(err)
+	}
+	if profileFamiliesAtJan != 2 {
+		fatalf("expected profile families count at 2026-01-15 to be 2, got %d", profileFamiliesAtJan)
+	}
+	if profilePrimaryCountAtJan != 1 {
+		fatalf("expected profile primary count at 2026-01-15 to be 1, got %d", profilePrimaryCountAtJan)
+	}
+
+	var profilePrimaryFamilyAtJan string
+	if err := tx.QueryRow(ctx, `
+	SELECT f.job_family_id::text
+	FROM jobcatalog.job_profile_versions v
+	JOIN jobcatalog.job_profile_version_job_families f
+	  ON f.job_profile_version_id = v.id
+	WHERE v.tenant_id = $1::uuid
+	  AND v.setid = 'SHARE'
+	  AND v.job_profile_id = $2::uuid
+	  AND v.validity @> $3::date
+	  AND f.is_primary = true
+	LIMIT 1
+	`, tenantA, profileID, "2026-01-15").Scan(&profilePrimaryFamilyAtJan); err != nil {
+		fatal(err)
+	}
+	if profilePrimaryFamilyAtJan != familyID {
+		fatalf("expected primary family at 2026-01-15 to be %s, got %s", familyID, profilePrimaryFamilyAtJan)
+	}
+
+	var profileFamiliesAtFeb int
+	var profilePrimaryCountAtFeb int
+	if err := tx.QueryRow(ctx, `
+	SELECT
+	  count(*)::int,
+	  sum(CASE WHEN f.is_primary THEN 1 ELSE 0 END)::int
+	FROM jobcatalog.job_profile_versions v
+	JOIN jobcatalog.job_profile_version_job_families f
+	  ON f.job_profile_version_id = v.id
+	WHERE v.tenant_id = $1::uuid
+	  AND v.setid = 'SHARE'
+	  AND v.job_profile_id = $2::uuid
+	  AND v.validity @> $3::date
+	`, tenantA, profileID, "2026-02-15").Scan(&profileFamiliesAtFeb, &profilePrimaryCountAtFeb); err != nil {
+		fatal(err)
+	}
+	if profileFamiliesAtFeb != 1 {
+		fatalf("expected profile families count at 2026-02-15 to be 1, got %d", profileFamiliesAtFeb)
+	}
+	if profilePrimaryCountAtFeb != 1 {
+		fatalf("expected profile primary count at 2026-02-15 to be 1, got %d", profilePrimaryCountAtFeb)
+	}
+
+	var profileIsActiveAtMar bool
+	if err := tx.QueryRow(ctx, `
+	SELECT is_active
+	FROM jobcatalog.job_profile_versions
+	WHERE tenant_id = $1::uuid
+	  AND setid = 'SHARE'
+	  AND job_profile_id = $2::uuid
+	  AND validity @> $3::date
+	LIMIT 1
+	`, tenantA, profileID, "2026-03-15").Scan(&profileIsActiveAtMar); err != nil {
+		fatal(err)
+	}
+	if profileIsActiveAtMar {
+		fatalf("expected profile to be disabled at 2026-03-15")
 	}
 
 	levelID := "00000000-0000-0000-0000-00000000c301"
