@@ -350,10 +350,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleJobCatalog(w, r, jobcatalogStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePositions(w, r, orgStore, positionStore)
+		handlePositions(w, r, orgStore, positionStore, jobcatalogStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePositions(w, r, orgStore, positionStore)
+		handlePositions(w, r, orgStore, positionStore, jobcatalogStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssignments(w, r, positionStore, assignmentStore, personStore)

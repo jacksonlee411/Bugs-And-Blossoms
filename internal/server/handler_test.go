@@ -945,6 +945,15 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("positions ui post status=%d", recPosUIPost.Code)
 	}
 
+	reqPosUIGet := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01", nil)
+	reqPosUIGet.Host = "localhost:8080"
+	reqPosUIGet.AddCookie(session)
+	recPosUIGet := httptest.NewRecorder()
+	h.ServeHTTP(recPosUIGet, reqPosUIGet)
+	if recPosUIGet.Code != http.StatusOK {
+		t.Fatalf("positions ui get status=%d", recPosUIGet.Code)
+	}
+
 	reqAssignUIPost := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&pernr=1&position_id="+posResp.ID))
 	reqAssignUIPost.Host = "localhost:8080"
 	reqAssignUIPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")

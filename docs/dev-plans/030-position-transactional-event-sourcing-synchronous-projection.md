@@ -1,6 +1,6 @@
 # DEV-PLAN-030：Position（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
-**状态**: 进行中（2026-01-11 10:00 UTC）— M3/M4a 已落地；M4b+ 规划见 §10
+**状态**: 进行中（2026-01-11 10:00 UTC）— M3/M4a/M5 已落地；M4b/M6/M7 规划见 §10
 
 > 本计划的定位：作为 Greenfield HR 的 Position/Assignment 子域，提供 **Position/Assignment 的权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026`（OrgUnit）对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -9,7 +9,7 @@
 - [X] TP-060-02/03：E2E 覆盖“主数据→职位→人员→任职”，Position 作为下游输入已可复现（见 `docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`、`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`）。
 - [X] M3：Position 的更新/停用（同 `position_id`）与 UI/Internal API 收敛（见 §10.M3）。
 - [X] M4a：`reports_to_position_id` 可编辑 + 无环不变量（forward-only；retro 另拆，见 §10.M4）。
-- [ ] M5：与 JobCatalog（`DEV-PLAN-029` 的 SetID 一等公民口径）组合：Position 绑定 Job Profile/Level 的 SetID 口径与落地（见 §3.8 与 §10.M5）。
+- [X] M5：与 JobCatalog（`DEV-PLAN-029` 的 SetID 一等公民口径）组合：Position 绑定 Job Profile 的 SetID 口径与落地（见 §3.8 与 §10.M5）。
 - [ ] M6：容量模型拆分：M6a `capacity_fte` 可编辑 + `allocated_fte <= capacity_fte`（仍一岗一人）；M6b 多人并发 + `SUM(allocated_fte) <= capacity_fte`（见 §10.M6）。
 - [ ] M7：读快照函数/错误码收敛（便于复用与排障，见 §10.M7）。
 
@@ -23,7 +23,7 @@
 - [X] 提供 Position/Assignment 的 schema（events + versions）与最小不变量集合（可识别、可验收、可重放）。
 - [X] 与 `DEV-PLAN-026` 的口径对齐：Valid Time=DATE、同日事件唯一、**同事务全量重放（delete+replay）**、versions **no-overlap + gapless**、One Door（`submit_*_event`）。
 - [X] 表命名去掉 `org_` 前缀（见 3.2）。
-- [ ] 与 Job Catalog（`DEV-PLAN-029`）可组合使用（SetID 口径对齐；见 §3.8 与 §10.M5）。
+- [X] 与 Job Catalog（`DEV-PLAN-029`）可组合使用（SetID 口径对齐；见 §3.8 与 §10.M5）。
 
 ### 2.2 非目标（明确不做）
 - 不提供对旧 API/旧数据的兼容；迁移/退场策略必须另立 dev-plan 承接。
@@ -89,6 +89,16 @@
 - [X] DB smoke：`cmd/dbtool/main.go`（self/cycle/forward-only 断言）
 - [X] E2E：`e2e/tests/tp060-03-person-and-assignments.spec.js`（可见链路 + cycle 负例）
 
+## 2.7 已落地范围（M5，主干）
+> 说明：M5 的增量以“JobCatalog（SetID）组合” 为核心：Position 绑定 `business_unit_id` + `job_profile_id`，并在 Kernel 中解析 SetID 与做 identity 存在性校验（fail-closed）。
+
+- [X] 迁移闭环（staffing）：`migrations/staffing/20260111203000_staffing_position_jobcatalog_m5.sql`
+- [X] Schema（staffing）：`modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql`（新增 `business_unit_id/jobcatalog_setid/job_profile_id`）
+- [X] Kernel（staffing）：`modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql`（`orgunit.resolve_setid(...,'jobcatalog')` + `JOBCATALOG_REFERENCE_NOT_FOUND` 校验）
+- [X] 说明：跨模块 FK 默认禁止（`DEV-PLAN-024`），因此本阶段不落物理 FK，采用 Kernel 校验（soft FK）
+- [X] UI/Internal API：`internal/server/staffing_handlers.go`、`internal/server/staffing.go`（BU/Job Profile 选择与展示；list/join 显示 job_profile_code）
+- [X] Tests：`internal/server/staffing_test.go`、`internal/server/handler_test.go`（覆盖 BU/job_profile 绑定与清空、JobCatalog store 分支、redirect 保留 BU、100% coverage 门禁）
+
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 Kernel 边界（与 026 对齐）
 - **DB = Projection Kernel（权威）**：插入事件（幂等）+ 同步投射 versions + 不变量裁决 + 可 replay。
@@ -133,7 +143,7 @@
 >
 > 因此 Position 若要绑定 Job Profile/Level，必须先明确“SetID 从哪里来/如何落盘/如何校验”的策略；禁止在实现期隐式采用“默认 SHARE”或跨 setid 混用导致历史 as-of 语义不可解释。
 
-- [ ] M5：选定并落地 SetID 传递策略（例如 Position 显式存 `jobcatalog_setid`，或引入 `business_unit_id` 并通过 `orgunit.resolve_setid(...)` 解析），细化见 §10.M5。
+- [X] M5：选定并落地 SetID 传递策略：Position 在切片中写入 `business_unit_id` 并通过 `orgunit.resolve_setid(...)` 投射 `jobcatalog_setid`（fail-closed；禁止默认 SHARE），细化见 §10.M5。
 
 ### 3.9 与 Payroll/Attendance 的边界（039/050）
 - [X] 现状事实：Payroll/Attendance 已落在 `modules/staffing`，且依赖 `staffing.assignment_versions` 的稳定字段（例如 `base_salary/allocated_fte/currency/profile`）与任职写入口（One Door）。
@@ -372,11 +382,11 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [ ] M4b（可选，retro）：若要允许 retro 写入，需定义“再验证窗口”（哪些日期需要重检）并实现，确保 retro 不会让未来日期出现环；补齐对应 tests 与证据。
 
 ### 10.M5：与 JobCatalog 组合（SetID 一等公民）
-- [ ] SetID 策略定稿（见 §3.8）：SetID 从哪里来（推荐 `orgunit.resolve_setid(...)`）、是否引入 `business_unit_id`、如何落盘与迁移（禁止默认 SHARE）。
-- [ ] 范围收敛：明确是否先只绑定 `job_profile`（必要时再扩展 `job_level`），避免一次性引入多维组合导致 UI/校验膨胀。
-- [ ] DB：为 Position 增加 JobCatalog 绑定字段并以 `(tenant_id, setid, id)` 做 FK 锚点；引用校验口径默认对齐 `DEV-PLAN-029`：**只要求 identity 存在**，不强制 as-of active（如需更强校验另立子里程碑）。
-- [ ] UI：`/org/positions` 引入 Job Profile/Level 选择与显示（必须可解释 SetID 来源）。
-- [ ] Tests：SetID 不存在/跨 setid 引用/disabled BU 的 fail-closed 等负例。
+- [X] SetID 策略定稿（见 §3.8）：引入 `business_unit_id`，在投射中调用 `orgunit.resolve_setid(..., 'jobcatalog')` 生成 `jobcatalog_setid`（fail-closed；禁止默认 SHARE）。
+- [X] 范围收敛：先只绑定 `job_profile`（暂不引入 `job_level`），避免一次性引入多维组合导致 UI/校验膨胀。
+- [X] DB：为 Position 增加 JobCatalog 绑定字段；引用校验口径对齐 `DEV-PLAN-029`：**只要求 identity 存在**，不强制 as-of active。说明：跨模块 FK 默认禁止（`DEV-PLAN-024`），因此本阶段采用 Kernel 校验（soft FK），不落物理 FK。
+- [X] UI：`/org/positions` 引入 Business Unit / Job Profile 选择与显示（可解释 SetID 来源与 resolved 结果）。
+- [X] Tests：补齐业务字段分支覆盖（BU/job_profile 绑定与清空、JobCatalog store error 分支、redirect 保留 BU 等）；DB fail-closed 负例留待 M7 错误码收敛后增强到端到端断言。
 
 ### 10.M6：容量模型升级（拆分：M6a/M6b）
 - [ ] M6a（先交付）：开放 `capacity_fte` 编辑并投射；任职写入时裁决 `allocated_fte <= capacity_fte`（仍保持“一岗一人”的排他约束不变）；Position 降容必须 fail-closed（避免把既有任职“挤爆”）。
@@ -393,5 +403,5 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] M4 拆分：先交付 forward-only（M4a），retro 作为可选子里程碑（M4b），避免一次性引入全局图 retro 校验导致偶然复杂度爆炸。
 - [X] M6 拆分：先交付 `capacity_fte` 可编辑（M6a），多人并发（M6b）延后并要求先冻结锁与校验算法。
 - [X] M3 选择：沿用 `event_type='UPDATE'` + `payload.lifecycle_status` 表达 disable（对齐 `staffing.time_profile_events` 的既有模式），避免为“好看”引入更多 event_type 分支。
-- [ ] M5 SetID 策略：在实现前必须定稿“BU/SetID 来源、落盘字段、引用校验口径”（禁止默认 SHARE），并明确是否先只绑定 `job_profile`。
+- [X] M5 SetID 策略：已定稿并落地“BU/SetID 来源、落盘字段、引用校验口径”（禁止默认 SHARE），并明确先只绑定 `job_profile`。
 - [ ] M7 错误码收敛：在实现前必须冻结“稳定码集合 + Go 层映射策略 + 最小回归断言”，避免继续累积 `create_failed/upsert_failed` 这类泛化错误。

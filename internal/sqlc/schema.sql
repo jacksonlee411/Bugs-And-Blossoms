@@ -4498,6 +4498,24 @@ CREATE TABLE IF NOT EXISTS staffing.position_versions (
 CREATE INDEX IF NOT EXISTS position_versions_lookup_btree
   ON staffing.position_versions (tenant_id, position_id, lower(validity));
 
+ALTER TABLE staffing.position_versions
+  ADD COLUMN IF NOT EXISTS business_unit_id text NULL,
+  ADD COLUMN IF NOT EXISTS jobcatalog_setid text NULL,
+  ADD COLUMN IF NOT EXISTS job_profile_id uuid NULL;
+
+ALTER TABLE staffing.position_versions
+  DROP CONSTRAINT IF EXISTS position_versions_business_unit_id_format_check,
+  DROP CONSTRAINT IF EXISTS position_versions_jobcatalog_setid_format_check,
+  DROP CONSTRAINT IF EXISTS position_versions_jobcatalog_setid_requires_bu_check,
+  DROP CONSTRAINT IF EXISTS position_versions_job_profile_requires_setid_check,
+  DROP CONSTRAINT IF EXISTS position_versions_job_profile_fk;
+
+ALTER TABLE staffing.position_versions
+  ADD CONSTRAINT position_versions_business_unit_id_format_check CHECK (business_unit_id IS NULL OR business_unit_id ~ '^[A-Z0-9]{1,5}$'),
+  ADD CONSTRAINT position_versions_jobcatalog_setid_format_check CHECK (jobcatalog_setid IS NULL OR jobcatalog_setid ~ '^[A-Z0-9]{1,5}$'),
+  ADD CONSTRAINT position_versions_jobcatalog_setid_requires_bu_check CHECK (jobcatalog_setid IS NULL OR business_unit_id IS NOT NULL),
+  ADD CONSTRAINT position_versions_job_profile_requires_setid_check CHECK (job_profile_id IS NULL OR jobcatalog_setid IS NOT NULL);
+
 CREATE TABLE IF NOT EXISTS staffing.assignments (
   tenant_id uuid NOT NULL,
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -5225,6 +5243,9 @@ DECLARE
   v_last_validity daterange;
   v_org_unit_id uuid;
   v_reports_to_position_id uuid;
+  v_business_unit_id text;
+  v_jobcatalog_setid text;
+  v_job_profile_id uuid;
   v_name text;
   v_lifecycle_status text;
   v_reports_to_status text;
@@ -5248,6 +5269,9 @@ BEGIN
 
   v_org_unit_id := NULL;
   v_reports_to_position_id := NULL;
+  v_business_unit_id := NULL;
+  v_jobcatalog_setid := NULL;
+  v_job_profile_id := NULL;
   v_name := NULL;
   v_lifecycle_status := 'active';
   v_prev_effective := NULL;
@@ -5281,6 +5305,11 @@ BEGIN
 
       v_name := NULLIF(btrim(v_row.payload->>'name'), '');
       v_reports_to_position_id := NULL;
+      v_business_unit_id := NULLIF(btrim(v_row.payload->>'business_unit_id'), '');
+      v_job_profile_id := NULL;
+      IF v_row.payload ? 'job_profile_id' THEN
+        v_job_profile_id := NULLIF(v_row.payload->>'job_profile_id', '')::uuid;
+      END IF;
       v_lifecycle_status := 'active';
     ELSIF v_row.event_type = 'UPDATE' THEN
       IF v_prev_effective IS NULL THEN
@@ -5304,6 +5333,12 @@ BEGIN
       END IF;
       IF v_row.payload ? 'reports_to_position_id' THEN
         v_reports_to_position_id := NULLIF(v_row.payload->>'reports_to_position_id', '')::uuid;
+      END IF;
+      IF v_row.payload ? 'business_unit_id' THEN
+        v_business_unit_id := NULLIF(btrim(v_row.payload->>'business_unit_id'), '');
+      END IF;
+      IF v_row.payload ? 'job_profile_id' THEN
+        v_job_profile_id := NULLIF(v_row.payload->>'job_profile_id', '')::uuid;
       END IF;
       IF v_row.payload ? 'lifecycle_status' THEN
         v_lifecycle_status := NULLIF(btrim(v_row.payload->>'lifecycle_status'), '');
@@ -5335,6 +5370,32 @@ BEGIN
         ERRCODE = 'P0001',
         MESSAGE = 'STAFFING_ORG_UNIT_NOT_FOUND_AS_OF',
         DETAIL = format('org_unit_id=%s as_of=%s', v_org_unit_id, v_row.effective_date);
+    END IF;
+
+    v_jobcatalog_setid := NULL;
+    IF v_business_unit_id IS NOT NULL THEN
+      v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_business_unit_id, 'jobcatalog');
+    END IF;
+    IF v_job_profile_id IS NOT NULL THEN
+      IF v_jobcatalog_setid IS NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+          DETAIL = 'business_unit_id is required when binding job_profile_id';
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1
+        FROM jobcatalog.job_profiles jp
+        WHERE jp.tenant_id = p_tenant_id
+          AND jp.setid = v_jobcatalog_setid
+          AND jp.id = v_job_profile_id
+        LIMIT 1
+      ) THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'JOBCATALOG_REFERENCE_NOT_FOUND',
+          DETAIL = format('job_profile_id=%s setid=%s', v_job_profile_id, v_jobcatalog_setid);
+      END IF;
     END IF;
 
     IF v_row.next_effective IS NULL THEN
@@ -5425,6 +5486,9 @@ BEGIN
       position_id,
       org_unit_id,
       reports_to_position_id,
+      business_unit_id,
+      jobcatalog_setid,
+      job_profile_id,
       name,
       lifecycle_status,
       capacity_fte,
@@ -5437,6 +5501,9 @@ BEGIN
       p_position_id,
       v_org_unit_id,
       v_reports_to_position_id,
+      v_business_unit_id,
+      v_jobcatalog_setid,
+      v_job_profile_id,
       v_name,
       v_lifecycle_status,
       1.0,
