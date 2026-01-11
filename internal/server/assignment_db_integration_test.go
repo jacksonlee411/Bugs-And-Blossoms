@@ -189,8 +189,7 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   CONSTRAINT assignment_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
   CONSTRAINT assignment_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT assignment_events_one_per_day_unique UNIQUE (tenant_id, assignment_id, effective_date),
-  CONSTRAINT assignment_events_request_id_unique UNIQUE (tenant_id, request_id),
-  CONSTRAINT assignment_events_assignment_fk FOREIGN KEY (tenant_id, assignment_id) REFERENCES staffing.assignments(tenant_id, id) ON DELETE RESTRICT
+  CONSTRAINT assignment_events_request_id_unique UNIQUE (tenant_id, request_id)
 );
 `,
 		`CREATE UNIQUE INDEX IF NOT EXISTS assignment_events_event_id_unique_idx ON staffing.assignment_events (event_id);`,
