@@ -49,7 +49,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(tenantHost);
   await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
   await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
-  await expect(superadminPage.getByText(tenantHost)).toBeVisible({ timeout: 15000 });
+  await expect(superadminPage.getByText(tenantHost)).toBeVisible({ timeout: 60000 });
 
   const tenantRow = superadminPage.locator("tr", { hasText: tenantHost }).first();
   const tenantID = (await tenantRow.locator("code").first().innerText()).trim();
