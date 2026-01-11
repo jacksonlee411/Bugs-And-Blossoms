@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS staffing.assignments (
   CONSTRAINT assignments_assignment_type_check CHECK (assignment_type IN ('primary'))
 );
 `,
+		`CREATE UNIQUE INDEX IF NOT EXISTS assignments_identity_unique ON staffing.assignments (tenant_id, person_uuid, assignment_type);`,
 		`
 CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   id bigserial PRIMARY KEY,
@@ -192,6 +193,9 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   CONSTRAINT assignment_events_assignment_fk FOREIGN KEY (tenant_id, assignment_id) REFERENCES staffing.assignments(tenant_id, id) ON DELETE RESTRICT
 );
 `,
+		`CREATE UNIQUE INDEX IF NOT EXISTS assignment_events_event_id_unique_idx ON staffing.assignment_events (event_id);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS assignment_events_one_per_day_unique_idx ON staffing.assignment_events (tenant_id, assignment_id, effective_date);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS assignment_events_request_id_unique_idx ON staffing.assignment_events (tenant_id, request_id);`,
 		`ALTER TABLE staffing.assignments ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE staffing.assignments FORCE ROW LEVEL SECURITY;`,
 		`DROP POLICY IF EXISTS tenant_isolation ON staffing.assignments;`,
