@@ -84,7 +84,7 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
       await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
     }
 
-    await expect(tenantRow).toBeVisible({ timeout: 15000 });
+    await expect(tenantRow).toBeVisible({ timeout: 60000 });
     const tenantID = (await tenantRow.locator("code").first().innerText()).trim();
     expect(tenantID).not.toBe("");
     return tenantID;

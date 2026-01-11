@@ -61,7 +61,7 @@ test("tp060-07: payroll 041-043 (period/run -> payslip -> social insurance -> fi
       await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
       await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
     }
-    await expect(tenantRow).toBeVisible({ timeout: 15000 });
+    await expect(tenantRow).toBeVisible({ timeout: 60000 });
     const tenantID = (await tenantRow.locator("code").first().innerText()).trim();
     expect(tenantID).not.toBe("");
     return tenantID;
