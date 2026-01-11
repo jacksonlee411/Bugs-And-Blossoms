@@ -317,12 +317,21 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_TENANT_MISMATCH';
   END IF;
 END;
-$$;
-`,
+	$$;
+	`,
 		`
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '` + runtimeRole + `') THEN
+	CREATE TABLE IF NOT EXISTS staffing.positions (
+	  tenant_id uuid NOT NULL,
+	  id uuid NOT NULL,
+	  created_at timestamptz NOT NULL DEFAULT now(),
+	  updated_at timestamptz NOT NULL DEFAULT now(),
+	  PRIMARY KEY (tenant_id, id)
+	);
+	`,
+		`
+	DO $$
+	BEGIN
+	  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '` + runtimeRole + `') THEN
     CREATE ROLE ` + runtimeRole + ` LOGIN PASSWORD '` + runtimeRole + `' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
   END IF;
 END
