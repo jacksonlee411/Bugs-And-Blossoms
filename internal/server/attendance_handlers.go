@@ -294,6 +294,9 @@ func handleAttendancePunchesAPI(w http.ResponseWriter, r *http.Request, store Ti
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "list_failed", "list failed")
 			return
 		}
+		if punches == nil {
+			punches = []TimePunch{}
+		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(map[string]any{
