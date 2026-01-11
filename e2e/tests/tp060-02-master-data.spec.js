@@ -1,7 +1,12 @@
 import { expect, test } from "@playwright/test";
 
 test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", async ({ browser }) => {
+  test.setTimeout(240_000);
+
   const asOf = "2026-01-01";
+  const m5EffectiveDate = "2026-01-15";
+  const m5CrossEffectiveDate = "2026-01-16";
+  const m5ClearEffectiveDate = "2026-01-17";
   const runID = `${Date.now()}`;
   const tenantHost = `t-tp060-02-${runID}.localhost`;
   const tenantName = `TP060-02 Tenant ${runID}`;
@@ -321,6 +326,76 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await expect(page.getByText("Resolved SetID:")).toHaveCount(0);
   await expect(page.locator('div[style*="border:1px solid #c00"]')).toBeVisible();
 
+  // Prepare another SetID + Job Profile for cross-setid reference tests (M5 fail-closed).
+  // Keep the earlier "BU902 resolves to SHARE" assertion above; after this point BU902 will map to S2602.
+  await page.goto(`/org/setid?as_of=${asOf}`);
+  if ((await page.locator("tr", { hasText: "S2602" }).count()) === 0) {
+    await createSetID("S2602", "SetID S2602");
+  }
+  if ((await page.locator("tr", { hasText: "BU902" }).count()) === 0) {
+    await createBU("BU902", "BU902");
+  }
+  {
+    const mappingsForm2 = page.locator(`form[method="POST"][action="/org/setid?as_of=${asOf}"]`).filter({
+      has: page.getByRole("button", { name: "Save Mappings" })
+    });
+    await mappingsForm2.locator('select[name="map_BU000"]').selectOption("SHARE");
+    await mappingsForm2.locator('select[name="map_BU901"]').selectOption("S2601");
+    await mappingsForm2.locator('select[name="map_BU902"]').selectOption("S2602");
+    await mappingsForm2.getByRole("button", { name: "Save Mappings" }).click();
+    await expect(page).toHaveURL(new RegExp(`/org/setid\\?as_of=${asOf}$`));
+  }
+
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&business_unit_id=BU902`);
+  await expect(page.locator("h1")).toHaveText("Job Catalog");
+  await expect(page.getByText("Resolved SetID:")).toBeVisible();
+  await expect(page.getByText("Resolved SetID:")).toContainText("S2602");
+
+  const ensureJobFamilyGroupBU902 = async (code, name) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_family_group"]')
+    });
+    await form.locator('input[name="job_family_group_code"]').fill(code);
+    await form.locator('input[name="job_family_group_name"]').fill(name);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU902&as_of=${asOfJobCatalogBase}$`));
+  };
+  await ensureJobFamilyGroupBU902("JFG-OPS", "Operations");
+
+  const ensureJobFamilyBU902 = async (code, name, groupCode) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_family"]')
+    });
+    await form.locator('input[name="job_family_code"]').fill(code);
+    await form.locator('input[name="job_family_name"]').fill(name);
+    await form.locator('input[name="job_family_group_code"]').fill(groupCode);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU902&as_of=${asOfJobCatalogBase}$`));
+  };
+  await ensureJobFamilyBU902("JF-OPS", "Ops", "JFG-OPS");
+
+  const ensureJobProfileBU902 = async (code, name, familyCodesCSV, primaryFamilyCode) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_profile"]')
+    });
+    await form.locator('input[name="job_profile_code"]').fill(code);
+    await form.locator('input[name="job_profile_name"]').fill(name);
+    await form.locator('input[name="job_profile_family_codes"]').fill(familyCodesCSV);
+    await form.locator('input[name="job_profile_primary_family_code"]').fill(primaryFamilyCode);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU902&as_of=${asOfJobCatalogBase}$`));
+  };
+  await ensureJobProfileBU902("JP-OPS", "Ops Profile", "JF-OPS", "JF-OPS");
+
   await page.goto(`/org/positions?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Positions");
   const positionCreateForm = page.locator(`form[method="POST"][action="/org/positions?as_of=${asOf}"]`).first();
@@ -366,6 +441,92 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   for (const spec of positionSpecs) {
     await expect(page.locator("tr", { hasText: spec.name })).toBeVisible();
   }
+
+  // Position M5: bind BU + Job Profile, and assert stable fail-closed errors via internal API.
+  const pEng01Row = page.locator("tr", { hasText: "P-ENG-01" }).first();
+  const pEng01ID = (await pEng01Row.locator("td").nth(1).innerText()).trim();
+  expect(pEng01ID).not.toBe("");
+
+  await page.goto(`/org/positions?as_of=${asOf}&business_unit_id=BU901`);
+  await expect(page.getByText("Resolved SetID:")).toBeVisible();
+  await expect(page.getByText("Resolved SetID:")).toContainText("S2601");
+
+  const jpSweOpt = page.locator('select[name="job_profile_id"] option', { hasText: "JP-SWE" }).first();
+  const jpSweID = (await jpSweOpt.getAttribute("value")) || "";
+  expect(jpSweID).not.toBe("");
+
+  {
+    const bindResp = await appContext.request.post(`/org/api/positions?as_of=${m5EffectiveDate}`, {
+      data: {
+        effective_date: m5EffectiveDate,
+        position_id: pEng01ID,
+        business_unit_id: "BU901",
+        job_profile_id: jpSweID
+      }
+    });
+    expect(bindResp.status(), await bindResp.text()).toBe(200);
+  }
+
+  await page.goto(`/org/positions?as_of=${m5EffectiveDate}&business_unit_id=BU901`);
+  const pEng01BoundRow = page.locator("tr", { hasText: "P-ENG-01" }).first();
+  await expect(pEng01BoundRow).toContainText("BU901");
+  await expect(pEng01BoundRow).toContainText("S2601");
+  await expect(pEng01BoundRow).toContainText("JP-SWE");
+
+  {
+    const resp = await appContext.request.post(`/org/api/positions?as_of=${asOf}`, {
+      data: { effective_date: asOf, org_unit_id: orgIDs.HQ, job_profile_id: jpSweID, name: `TP060-02 BAD NO BU ${runID}` }
+    });
+    expect(resp.status(), await resp.text()).toBe(422);
+    expect((await resp.json()).code).toBe("STAFFING_INVALID_ARGUMENT");
+  }
+  {
+    const resp = await appContext.request.post(`/org/api/positions?as_of=${asOf}`, {
+      data: {
+        effective_date: asOf,
+        org_unit_id: orgIDs.HQ,
+        business_unit_id: "BU999",
+        job_profile_id: jpSweID,
+        name: `TP060-02 BAD BU999 ${runID}`
+      }
+    });
+    expect(resp.status(), await resp.text()).toBe(422);
+    expect((await resp.json()).code).toBe("BUSINESS_UNIT_NOT_FOUND");
+  }
+
+  // Cross-setid Job Profile reference must fail-closed (BU901 resolves to S2601, JP-OPS is in S2602).
+  await page.goto(`/org/positions?as_of=${asOf}&business_unit_id=BU902`);
+  await expect(page.getByText("Resolved SetID:")).toBeVisible();
+  await expect(page.getByText("Resolved SetID:")).toContainText("S2602");
+  const jpOpsOpt = page.locator('select[name="job_profile_id"] option', { hasText: "JP-OPS" }).first();
+  const jpOpsID = (await jpOpsOpt.getAttribute("value")) || "";
+  expect(jpOpsID).not.toBe("");
+
+  {
+    const resp = await appContext.request.post(`/org/api/positions?as_of=${m5CrossEffectiveDate}`, {
+      data: {
+        effective_date: m5CrossEffectiveDate,
+        position_id: pEng01ID,
+        business_unit_id: "BU901",
+        job_profile_id: jpOpsID
+      }
+    });
+    expect(resp.status(), await resp.text()).toBe(422);
+    expect((await resp.json()).code).toBe("JOBCATALOG_REFERENCE_NOT_FOUND");
+  }
+
+  // Clear job profile binding should keep BU + resolved setid visible.
+  {
+    const resp = await appContext.request.post(`/org/api/positions?as_of=${m5ClearEffectiveDate}`, {
+      data: { effective_date: m5ClearEffectiveDate, position_id: pEng01ID, job_profile_id: "__CLEAR__" }
+    });
+    expect(resp.status(), await resp.text()).toBe(200);
+  }
+  await page.goto(`/org/positions?as_of=${m5ClearEffectiveDate}&business_unit_id=BU901`);
+  const pEng01ClearedRow = page.locator("tr", { hasText: "P-ENG-01" }).first();
+  await expect(pEng01ClearedRow).toContainText("BU901");
+  await expect(pEng01ClearedRow).toContainText("S2601");
+  await expect(pEng01ClearedRow).not.toContainText("JP-SWE");
 
   await appContext.close();
 });

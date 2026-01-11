@@ -39,6 +39,15 @@
 
 - [X] `make e2e` 覆盖本子计划的最小链路（见 `e2e/tests/tp060-03-person-and-assignments.spec.js`）。
 
+**Done-D（必须，Position/Assignment 交叉不变量：fail-closed）**
+
+> 说明：本条对齐 `DEV-PLAN-030`（Position）与 `DEV-PLAN-031`（Assignments）的交叉口径：不允许 UI/服务层临时兜底分支；必须由 Kernel 统一裁决并返回稳定错误码。
+
+- [X] 禁止把任职写入 disabled position：422 `STAFFING_POSITION_DISABLED_AS_OF`
+- [X] Position disable 与 active assignment 冲突必须 fail-closed：422 `STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF`
+- [X] 容量裁决（M6a）：`allocated_fte > capacity_fte` 必须 fail-closed：422 `STAFFING_POSITION_CAPACITY_EXCEEDED`
+- [X] 降容裁决（M6a）：Position 降容导致 `allocated_fte > capacity_fte` 必须 fail-closed：422 `STAFFING_POSITION_CAPACITY_EXCEEDED`
+
 ### 2.2 非目标
 
 - 不验证考勤/薪酬的计算结果（由 TP-060-04~08 承接）。
@@ -201,6 +210,18 @@
   - 400：`code=bad_json` / `code=invalid_effective_date` / `code=upsert_failed`
   - 500：`code=tenant_missing`
 
+### 6.5 Positions（Internal API，用于交叉不变量的稳定错误码断言）
+
+> 说明：Position UI 的写入入口是 `/org/positions`；但负例断言优先使用 Internal API 提取稳定 `code`，避免 UI 红字提示无法标准化采集。
+
+- `POST /org/api/positions?as_of=YYYY-MM-DD`：
+  - Update：`{"effective_date","position_id", ...}`（至少 1 个 patch 字段）
+  - 常用 patch 字段：
+    - disable：`{"position_id","lifecycle_status":"disabled"}`
+    - reports_to：`{"position_id","reports_to_position_id":"<uuid>"}`（forward-only）
+    - capacity：`{"position_id","capacity_fte":"0.50"}`
+  - 422：稳定错误码（示例：`STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF` / `STAFFING_POSITION_CAPACITY_EXCEEDED` / `STAFFING_POSITION_DISABLED_AS_OF` / `STAFFING_POSITION_REPORTS_TO_SELF` / `STAFFING_INVALID_ARGUMENT`）
+
 ## 7. 安全与鉴权（Security & Authz）
 
 - 写入动作（Person 创建、Assignment upsert）要求 Tenant Admin；只读角色（若可分配）应对写入返回 403（SSOT：`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/060-business-e2e-test-suite.md` §4.4）。
@@ -253,6 +274,48 @@
 2. [ ] 按 060-DS1 为 E01~E10 写入 `base_salary/allocated_fte`，并记录 E04 的 `allocated_fte=0.5` 证据。
 3. [ ] 若环境中仍缺失（不应发生）：在 §11 记录为 `CONTRACT_MISSING/CONTRACT_DRIFT`，并明确这是 TP-060-07/08 的阻塞点（不得用 SQL 直改绕过 One Door）；同时记录“当前可见入口”现状（页面/路由/表单字段缺失的证据）。
 
+### 8.5 Position/Assignment 交叉不变量（fail-closed，稳定错误码）
+
+> 目标：把 `DEV-PLAN-030` 的 M3/M6a 不变量纳入 TP-060 套件，避免“岗位停用/容量”变成 UI 层分叉条件。
+
+1. [ ] 禁止任职写入 disabled position（负例，Internal API）
+   - 先在 `/org/positions?as_of=...` 创建或选择一个职位，并在更晚的 `effective_date`（例如 `2026-01-15`）将其更新为 `lifecycle_status=disabled`
+   - 调用：`POST /org/api/assignments?as_of=2026-01-15`
+     - body：`{"effective_date":"2026-01-15","person_uuid":"<E01 person_uuid>","position_id":"<disabled_position_id>","base_salary":"0","allocated_fte":"1.0"}`
+   - 断言：422 且 `code=STAFFING_POSITION_DISABLED_AS_OF`
+2. [ ] 容量裁决：`allocated_fte > capacity_fte` 必须 fail-closed（负例，Internal API）
+   - 选择一个职位（建议：E04 的职位）并设置 `capacity_fte=0.50`
+   - 调用：`POST /org/api/assignments?as_of=2026-01-15`
+     - body：`{"effective_date":"2026-01-15","person_uuid":"<E04 person_uuid>","position_id":"<capacity_position_id>","base_salary":"0","allocated_fte":"1.0"}`
+   - 断言：422 且 `code=STAFFING_POSITION_CAPACITY_EXCEEDED`
+3. [ ] 降容裁决：Position 降容导致超编必须 fail-closed（负例，Internal API）
+   - 前置：确保该 position 已存在一条 active assignment，且 `allocated_fte=0.50`
+   - 调用：`POST /org/api/positions?as_of=2026-01-15`
+     - body：`{"effective_date":"2026-01-15","position_id":"<capacity_position_id>","capacity_fte":"0.25"}`
+   - 断言：422 且 `code=STAFFING_POSITION_CAPACITY_EXCEEDED`
+4. [ ] Position disable 与 active assignment 冲突必须 fail-closed（负例，Internal API）
+   - 前置：该 position 已存在 active assignment
+   - 调用：`POST /org/api/positions?as_of=2026-01-15`
+     - body：`{"effective_date":"2026-01-15","position_id":"<capacity_position_id>","lifecycle_status":"disabled"}`
+   - 断言：422 且 `code=STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF`
+
+### 8.6 汇报线（reports_to）不变量（M4a：无环 + forward-only）
+
+> 目标：覆盖 `DEV-PLAN-030` 的 M4a：可编辑 + 禁止自指/禁止成环 + forward-only。
+
+1. [ ] 正例：在 `/org/positions?as_of=2026-01-15` 将一个岗位的 `reports_to_position_id` 设置为另一个 active 岗位
+   - 断言：列表中 `reports_to_position_id` 列可见（或等效展示）
+2. [ ] 负例 A（自指）：`POST /org/api/positions?as_of=2026-01-15`
+   - body：`{"effective_date":"2026-01-15","position_id":"<manager_position_id>","reports_to_position_id":"<manager_position_id>"}`
+   - 断言：422 且 `code=STAFFING_POSITION_REPORTS_TO_SELF`
+3. [ ] 负例 B（成环）：`POST /org/api/positions?as_of=2026-01-15`
+   - body：`{"effective_date":"2026-01-15","position_id":"<manager_position_id>","reports_to_position_id":"<reportee_position_id>"}`
+   - 断言：422 且 `code=STAFFING_POSITION_REPORTS_TO_CYCLE`
+4. [ ] 负例 C（forward-only）：在已存在 `effective_date=2026-01-15` 的 reports_to 更新后，尝试 retro 写入
+   - 调用：`POST /org/api/positions?as_of=2026-01-10`
+   - body：`{"effective_date":"2026-01-10","position_id":"<reportee_position_id>","reports_to_position_id":"<manager_position_id>"}`
+   - 断言：422 且 `code=STAFFING_INVALID_ARGUMENT`
+
 ## 9. 依赖与里程碑（Dependencies & Milestones）
 
 - 依赖（必须先满足）：
@@ -270,6 +333,14 @@
 - `persons:by-pernr`：`00000103` 与 `103` 命中同一 `person_uuid` 的证据；以及 1 条 `PERSON_PERNR_INVALID` 的 400 负例证据。
 - `/org/assignments?...`：10 人 Timeline 证据（含 `assignment_id/position_id/effective_date/status`），并证明 UI 未展示 `end_date`。
 - `base_salary/allocated_fte` 写入证据（至少包含 E04 的 `allocated_fte=0.5`）。
+- 交叉不变量证据（Internal API 响应即可）：
+  - `STAFFING_POSITION_DISABLED_AS_OF`
+  - `STAFFING_POSITION_CAPACITY_EXCEEDED`（含“写入超编”与“降容超编”两条）
+  - `STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF`
+- 汇报线证据（Internal API 响应即可）：
+  - `STAFFING_POSITION_REPORTS_TO_SELF`
+  - `STAFFING_POSITION_REPORTS_TO_CYCLE`
+  - `STAFFING_INVALID_ARGUMENT`（forward-only 负例）
 - 自动化证据：`make e2e` 通过（用例：`e2e/tests/tp060-03-person-and-assignments.spec.js`；截图输出位置见 `docs/dev-records/dev-plan-063-execution-log.md`）。
 
 建议在证据中维护一份可复用映射表（后续子计划直接引用）：
