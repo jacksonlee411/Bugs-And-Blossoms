@@ -7982,7 +7982,9 @@ BEGIN
   END IF;
 
   IF p_event_type = 'CALC_START' THEN
-    IF v_existing_run.run_state NOT IN ('draft','failed') THEN
+    IF v_existing_run.run_state NOT IN ('draft','failed')
+      AND NOT (v_existing_run.run_state = 'calculated' AND v_existing_run.needs_recalc = true)
+    THEN
       RAISE EXCEPTION USING
         MESSAGE = 'STAFFING_PAYROLL_RUN_INVALID_TRANSITION',
         DETAIL = format('run_id=%s run_state=%s event_type=%s', p_run_id, v_existing_run.run_state, p_event_type);
@@ -8179,6 +8181,7 @@ BEGIN
     SET
       run_state = v_next_state,
       calc_finished_at = v_now,
+      needs_recalc = false,
       last_event_id = v_event_db_id,
       updated_at = v_now
     WHERE tenant_id = p_tenant_id AND id = p_run_id;
