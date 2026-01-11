@@ -405,8 +405,8 @@ DB 闭环（迁移 + smoke）：
 
 证据：
 - 日期：2026-01-11
-- 范围：M2（Job Family Group 合同对齐补丁：互斥锁 + event_id 幂等 + 复合 FK 锚点）；M3（Job Family：effective-dated reparenting）；M4（Job Level）；M5（Job Profile：profile↔families 关系与 primary 不变量）；M6（get_job_catalog_snapshot：as-of 读快照）
-- 合并记录：M2 PR #187 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/187；M3 PR #188 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/188；M4 PR #189 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/189；M5 PR #190 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/190；M6 PR #191 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/191
+- 范围：M2（Job Family Group 合同对齐补丁：互斥锁 + event_id 幂等 + 复合 FK 锚点）；M3（Job Family：effective-dated reparenting）；M4（Job Level）；M5（Job Profile：profile↔families 关系与 primary 不变量）；M6（get_job_catalog_snapshot：as-of 读快照）；M7（Go Facade + UI 可见闭环：Job Level 写入+列表）
+- 合并记录：M2 PR #187 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/187；M3 PR #188 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/188；M4 PR #189 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/189；M5 PR #190 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/190；M6 PR #191 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/191；M7 PR #193 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/193
 - 本地门禁（结论：全绿）：
   - Go：`go fmt ./... && go vet ./... && make check lint && make test`
   - DB：`make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）
