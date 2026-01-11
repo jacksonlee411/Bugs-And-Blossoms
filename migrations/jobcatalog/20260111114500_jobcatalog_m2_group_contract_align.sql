@@ -1,69 +1,21 @@
-CREATE OR REPLACE FUNCTION jobcatalog.assert_current_tenant(p_tenant_id uuid)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_ctx_raw text;
-  v_ctx_tenant uuid;
-BEGIN
-  IF p_tenant_id IS NULL THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'tenant_id is required';
-  END IF;
+-- +goose Up
+-- +goose StatementBegin
+ALTER TABLE jobcatalog.job_family_groups
+  ADD CONSTRAINT job_family_groups_tenant_setid_id_unique UNIQUE (tenant_id, setid, id);
 
-  v_ctx_raw := current_setting('app.current_tenant', true);
-  IF v_ctx_raw IS NULL OR btrim(v_ctx_raw) = '' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'RLS_TENANT_CONTEXT_MISSING',
-      DETAIL = 'app.current_tenant is required';
-  END IF;
+DROP INDEX IF EXISTS jobcatalog.job_family_group_events_event_id_unique;
+ALTER TABLE jobcatalog.job_family_group_events
+  ADD CONSTRAINT job_family_group_events_event_id_unique UNIQUE (event_id);
 
-  BEGIN
-    v_ctx_tenant := v_ctx_raw::uuid;
-  EXCEPTION
-    WHEN invalid_text_representation THEN
-      RAISE EXCEPTION USING
-        ERRCODE = 'P0001',
-        MESSAGE = 'RLS_TENANT_CONTEXT_INVALID',
-        DETAIL = format('app.current_tenant=%s', v_ctx_raw);
-  END;
+ALTER TABLE jobcatalog.job_family_group_events
+  ADD CONSTRAINT job_family_group_events_group_fk
+  FOREIGN KEY (tenant_id, setid, job_family_group_id) REFERENCES jobcatalog.job_family_groups(tenant_id, setid, id) ON DELETE RESTRICT;
 
-  IF v_ctx_tenant <> p_tenant_id THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'RLS_TENANT_MISMATCH',
-      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_id, v_ctx_tenant);
-  END IF;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION jobcatalog.normalize_setid(p_setid text)
-RETURNS text
-LANGUAGE plpgsql
-IMMUTABLE
-AS $$
-DECLARE
-  v text;
-BEGIN
-  IF p_setid IS NULL OR btrim(p_setid) = '' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'setid is required';
-  END IF;
-  v := upper(btrim(p_setid));
-  IF v !~ '^[A-Z0-9]{1,5}$' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = format('setid=%s', v);
-  END IF;
-  RETURN v;
-END;
-$$;
+ALTER TABLE jobcatalog.job_family_group_versions
+  DROP CONSTRAINT IF EXISTS job_family_group_versions_job_family_group_id_fkey;
+ALTER TABLE jobcatalog.job_family_group_versions
+  ADD CONSTRAINT job_family_group_versions_group_fk
+  FOREIGN KEY (tenant_id, setid, job_family_group_id) REFERENCES jobcatalog.job_family_groups(tenant_id, setid, id) ON DELETE RESTRICT;
 
 CREATE OR REPLACE FUNCTION jobcatalog.replay_job_family_group_versions(
   p_tenant_id uuid,
@@ -121,6 +73,9 @@ BEGIN
           ERRCODE = 'P0001',
           MESSAGE = 'JOBCATALOG_INVALID_EVENT',
           DETAIL = 'UPDATE requires prior state';
+      END IF;
+      IF v_row.payload ? 'is_active' THEN
+        v_state := jsonb_set(v_state, '{is_active}', v_row.payload->'is_active', true);
       END IF;
       IF v_row.payload ? 'name' THEN
         v_state := jsonb_set(v_state, '{name}', to_jsonb(v_row.payload->>'name'), true);
@@ -462,3 +417,20 @@ BEGIN
   RETURN v_evt_db_id;
 END;
 $$;
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+ALTER TABLE jobcatalog.job_family_group_versions
+  DROP CONSTRAINT IF EXISTS job_family_group_versions_group_fk;
+
+ALTER TABLE jobcatalog.job_family_group_events
+  DROP CONSTRAINT IF EXISTS job_family_group_events_group_fk;
+
+ALTER TABLE jobcatalog.job_family_group_events
+  DROP CONSTRAINT IF EXISTS job_family_group_events_event_id_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS job_family_group_events_event_id_unique ON jobcatalog.job_family_group_events (event_id);
+
+ALTER TABLE jobcatalog.job_family_groups
+  DROP CONSTRAINT IF EXISTS job_family_groups_tenant_setid_id_unique;
+-- +goose StatementEnd

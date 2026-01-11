@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_groups (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_family_groups_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
-  CONSTRAINT job_family_groups_tenant_setid_code_key UNIQUE (tenant_id, setid, code)
+  CONSTRAINT job_family_groups_tenant_setid_code_key UNIQUE (tenant_id, setid, code),
+  CONSTRAINT job_family_groups_tenant_setid_id_unique UNIQUE (tenant_id, setid, id)
 );
 
 CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_events (
@@ -24,11 +25,13 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_events (
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_family_group_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
   CONSTRAINT job_family_group_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
+  CONSTRAINT job_family_group_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT job_family_group_events_one_per_day_unique UNIQUE (tenant_id, setid, job_family_group_id, effective_date),
-  CONSTRAINT job_family_group_events_request_id_unique UNIQUE (tenant_id, request_id)
+  CONSTRAINT job_family_group_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT job_family_group_events_group_fk
+    FOREIGN KEY (tenant_id, setid, job_family_group_id) REFERENCES jobcatalog.job_family_groups(tenant_id, setid, id) ON DELETE RESTRICT
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS job_family_group_events_event_id_unique ON jobcatalog.job_family_group_events (event_id);
 CREATE INDEX IF NOT EXISTS job_family_group_events_tenant_effective_idx
   ON jobcatalog.job_family_group_events (tenant_id, setid, job_family_group_id, effective_date, id);
 
@@ -36,7 +39,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_versions (
   id bigserial PRIMARY KEY,
   tenant_id uuid NOT NULL,
   setid text NOT NULL,
-  job_family_group_id uuid NOT NULL REFERENCES jobcatalog.job_family_groups(id) ON DELETE CASCADE,
+  job_family_group_id uuid NOT NULL,
   validity daterange NOT NULL,
   name text NOT NULL,
   description text NULL,
@@ -48,6 +51,8 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_versions (
   CONSTRAINT job_family_group_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
   CONSTRAINT job_family_group_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT job_family_group_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
+  CONSTRAINT job_family_group_versions_group_fk
+    FOREIGN KEY (tenant_id, setid, job_family_group_id) REFERENCES jobcatalog.job_family_groups(tenant_id, setid, id) ON DELETE RESTRICT,
   CONSTRAINT job_family_group_versions_no_overlap
     EXCLUDE USING gist (
       tenant_id gist_uuid_ops WITH =,
