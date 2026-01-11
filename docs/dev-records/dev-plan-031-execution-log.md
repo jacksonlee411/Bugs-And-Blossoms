@@ -4,8 +4,9 @@
 
 ## M3-A：Upsert 可重复执行（Idempotency / Re-run）
 
-- 状态：已完成（PR #206，待合并）
+- 状态：已合并（PR #206）
 - PR：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/206
+- 合并提交：`ca0e057`
 - 变更摘要：
   - `internal/server/staffing.go`：`UpsertPrimaryAssignmentForPerson` 支持同一 `effective_date` 的重复提交可重试：
     - 首次提交使用确定性 `event_id`（payload-independent）。
@@ -14,6 +15,21 @@
     - RLS fail-closed（缺失 `app.current_tenant` 必须报错）
     - rerun 不新增事件（同一 assignment + effective_date 仍只有 1 条 event）
     - 同日不同 payload 必须 `STAFFING_IDEMPOTENCY_REUSED`
+- 本地验证（按 `AGENTS.md`）：
+  - `go fmt ./...`
+  - `go vet ./...`
+  - `make check lint`
+  - `make test`
+
+## M3-B：Terminate / Deactivate（`status=inactive`）
+
+- 状态：已完成（待 PR 合并）
+- 变更摘要：
+  - `internal/server/staffing_handlers.go`：
+    - `POST /org/api/assignments` 支持可选 `status` 字段（`active|inactive`），非法值 400。
+    - `/org/assignments` 表单新增 `status` 下拉，并可提交 `status=inactive`。
+  - `internal/server/staffing.go`：`UpsertPrimaryAssignmentForPerson` 写入 payload 时可选包含 `status`。
+  - `internal/server/staffing_test.go`：补齐 status 分支覆盖（含 UI/Internal API 的 invalid status 负例）。
 - 本地验证（按 `AGENTS.md`）：
   - `go fmt ./...`
   - `go vet ./...`

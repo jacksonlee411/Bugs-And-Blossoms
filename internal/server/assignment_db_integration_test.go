@@ -83,11 +83,11 @@ func TestStaffingAssignmentDB_RerunnableUpsert(t *testing.T) {
 
 	store := newStaffingPGStore(conn)
 
-	a1, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position1, "", "")
+	a1, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position1, "", "", "")
 	if err != nil {
 		t.Fatalf("upsert-1: %v", err)
 	}
-	a2, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position1, "", "")
+	a2, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position1, "", "", "")
 	if err != nil {
 		t.Fatalf("upsert-2 (rerun): %v", err)
 	}
@@ -118,7 +118,7 @@ func TestStaffingAssignmentDB_RerunnableUpsert(t *testing.T) {
 		}
 	}()
 
-	_, err = store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position2, "", "")
+	_, err = store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position2, "", "", "")
 	if err == nil {
 		t.Fatal("expected error when reusing effective_date with different payload")
 	}
