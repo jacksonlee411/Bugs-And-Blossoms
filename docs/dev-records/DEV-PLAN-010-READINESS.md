@@ -406,7 +406,7 @@ DB 闭环（迁移 + smoke）：
 证据：
 - 日期：2026-01-11
 - 范围：M2（Job Family Group 合同对齐补丁：互斥锁 + event_id 幂等 + 复合 FK 锚点）；M3（Job Family：effective-dated reparenting）
-- 合并记录：M2 PR #187 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/187；M3 TBD
+- 合并记录：M2 PR #187 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/187；M3 PR #188 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/188
 - 本地门禁（结论：全绿）：
   - Go：`go fmt ./... && go vet ./... && make check lint && make test`
   - DB：`make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）
