@@ -1337,6 +1337,17 @@ func TestHandlePayslipNetGuaranteedIITItemsAPI(t *testing.T) {
 		}
 	})
 
+	t.Run("event_type defaults to UPSERT", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader(`{"request_id":"req1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1"}))
+		handlePayslipNetGuaranteedIITItemsAPI(rec, req, stubPayrollStore{})
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "\"ok\":true") {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("submit error (conflict)", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items", strings.NewReader(`{"event_type":"UPSERT","request_id":"req1"}`))

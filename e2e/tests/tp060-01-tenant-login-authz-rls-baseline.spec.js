@@ -30,8 +30,8 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
   const asOf = "2026-01-01";
   const runID = `${Date.now()}`;
 
-  const tenantAHost = "t-060.localhost";
-  const tenantBHost = "t-060b.localhost";
+  const tenantAHost = `t-tp060-01-a-${runID}.localhost`;
+  const tenantBHost = `t-tp060-01-b-${runID}.localhost`;
 
   const tenantAdminPass = process.env.E2E_TENANT_ADMIN_PASS || "pw";
   const tenantViewerPass = process.env.E2E_TENANT_VIEWER_PASS || tenantAdminPass;
@@ -75,21 +75,23 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
 
   const ensureTenant = async (hostname, name) => {
     await superadminPage.goto("/superadmin/tenants");
-    if ((await superadminPage.locator("tr", { hasText: hostname }).count()) === 0) {
+
+    const tenantRow = superadminPage.locator("tr", { hasText: hostname }).first();
+    if ((await tenantRow.count()) === 0) {
       await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(name);
       await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(hostname);
       await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
-      await expect(superadminPage.getByText(hostname)).toBeVisible();
+      await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
     }
 
-    const row = superadminPage.locator("tr", { hasText: hostname });
-    const tenantID = (await row.locator("code").first().innerText()).trim();
+    await expect(tenantRow).toBeVisible({ timeout: 15000 });
+    const tenantID = (await tenantRow.locator("code").first().innerText()).trim();
     expect(tenantID).not.toBe("");
     return tenantID;
   };
 
-  const tenantAID = await ensureTenant(tenantAHost, "Tenant 060");
-  const tenantBID = await ensureTenant(tenantBHost, "Tenant 060B");
+  const tenantAID = await ensureTenant(tenantAHost, `TP060-01 Tenant A ${runID}`);
+  const tenantBID = await ensureTenant(tenantBHost, `TP060-01 Tenant B ${runID}`);
 
   await createKratosIdentity(superadminContext.request, kratosAdminURL, {
     traits: { tenant_id: tenantAID, email: t060AdminEmail, role_slug: "tenant-admin" },
@@ -116,7 +118,7 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
 
   const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
 
-  const badHost = "t-060-nope.localhost";
+  const badHost = `t-tp060-01-nope-${runID}.localhost`;
   const badHostContext = await browser.newContext({
     baseURL: appBaseURL,
     extraHTTPHeaders: { "X-Forwarded-Host": badHost }

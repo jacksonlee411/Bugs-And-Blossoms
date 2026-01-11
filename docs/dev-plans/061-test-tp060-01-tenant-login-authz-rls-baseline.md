@@ -103,6 +103,11 @@
 - 若环境缺少“角色分配入口/流程”（无法把某个 principal 设为只读角色）：
   - 本步标记为阻塞，并在“问题记录”中登记为 `CONTRACT_MISSING/ENV_DRIFT`（说明缺口落点：角色分配入口/role slug 命名/policy 缺失）。
 
+### 4.5 数据保留（强制）
+
+- 本子计划创建的 `T060/T060B`、tenant users identities、以及 `T060B pernr=201`（060-DS2）必须保留，供后续子计划复用（SSOT：`docs/dev-plans/060-business-e2e-test-suite.md` §5.0）。
+- 禁止在执行完本子计划后清理租户/清库；若必须重置环境，需在问题记录登记 `ENV_DRIFT` 并重建数据集后再继续。
+
 ## 5. 测试步骤（执行时勾选）
 
 > 执行记录要求：每步至少记录 `Host/AS_OF_BASE/AUTHZ_MODE/RLS_ENFORCE`；若涉及重定向/清 cookie，必须同时记录 `Location` 与 `Set-Cookie`；失败必须填“问题记录”表。

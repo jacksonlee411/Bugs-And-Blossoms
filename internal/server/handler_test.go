@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type staticIdentityProvider struct {
@@ -1167,6 +1168,72 @@ func TestNewHandlerWithOptions_UsesProvidedStores(t *testing.T) {
 	}
 	if h == nil {
 		t.Fatal("nil handler")
+	}
+}
+
+type noAttendanceConfigStore struct{}
+
+func (noAttendanceConfigStore) ListTimePunchesForPerson(context.Context, string, string, time.Time, time.Time, int) ([]TimePunch, error) {
+	return nil, nil
+}
+func (noAttendanceConfigStore) SubmitTimePunch(context.Context, string, string, submitTimePunchParams) (TimePunch, error) {
+	return TimePunch{}, nil
+}
+func (noAttendanceConfigStore) ImportTimePunches(context.Context, string, string, []submitTimePunchParams) error {
+	return nil
+}
+
+func (noAttendanceConfigStore) ListDailyAttendanceResultsForDate(context.Context, string, string, int) ([]DailyAttendanceResult, error) {
+	return nil, nil
+}
+func (noAttendanceConfigStore) GetDailyAttendanceResult(context.Context, string, string, string) (DailyAttendanceResult, bool, error) {
+	return DailyAttendanceResult{}, false, nil
+}
+func (noAttendanceConfigStore) ListDailyAttendanceResultsForPerson(context.Context, string, string, string, string, int) ([]DailyAttendanceResult, error) {
+	return nil, nil
+}
+func (noAttendanceConfigStore) GetAttendanceTimeProfileAndPunchesForWorkDate(context.Context, string, string, string) (AttendanceTimeProfileForWorkDate, []TimePunchWithVoid, error) {
+	return AttendanceTimeProfileForWorkDate{}, nil, nil
+}
+func (noAttendanceConfigStore) ListAttendanceRecalcEventsForWorkDate(context.Context, string, string, string, int) ([]AttendanceRecalcEvent, error) {
+	return nil, nil
+}
+func (noAttendanceConfigStore) SubmitTimePunchVoid(context.Context, string, string, SubmitTimePunchVoidParams) (TimePunchVoidResult, error) {
+	return TimePunchVoidResult{}, nil
+}
+func (noAttendanceConfigStore) SubmitAttendanceRecalc(context.Context, string, string, SubmitAttendanceRecalcParams) (AttendanceRecalcResult, error) {
+	return AttendanceRecalcResult{}, nil
+}
+
+func (noAttendanceConfigStore) GetTimeBankCycleForMonth(context.Context, string, string, string) (TimeBankCycle, bool, error) {
+	return TimeBankCycle{}, false, nil
+}
+
+func TestNewHandlerWithOptions_AttendanceConfigStoreMissing(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	staffingStore := newStaffingMemoryStore()
+	_, err = NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver:             localTenancyResolver(),
+		OrgUnitStore:                newOrgUnitMemoryStore(),
+		PositionStore:               staffingStore,
+		AssignmentStore:             staffingStore,
+		PayrollStore:                stubPayrollStore{},
+		AttendanceStore:             noAttendanceConfigStore{},
+		AttendanceDailyResultsStore: noAttendanceConfigStore{},
+		AttendanceTimeBankStore:     noAttendanceConfigStore{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "missing attendance config store") {
+		t.Fatalf("err=%v", err)
 	}
 }
 
