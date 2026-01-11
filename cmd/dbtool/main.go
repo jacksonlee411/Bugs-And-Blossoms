@@ -3207,6 +3207,13 @@ LIMIT 1
 		fatalf("expected level to be disabled at 2026-03-15")
 	}
 
+	if _, err := tx.Exec(ctx, `
+	SELECT *
+	FROM jobcatalog.get_job_catalog_snapshot($1::uuid, 'SHARE', $2::date);
+	`, tenantA, "2026-02-15"); err != nil {
+		fatal(err)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		fatal(err)
 	}
