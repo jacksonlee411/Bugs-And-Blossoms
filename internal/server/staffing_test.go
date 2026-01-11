@@ -393,6 +393,22 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			t.Fatalf("expected capacity_fte=2.50, got %q", p.CapacityFTE)
 		}
 	})
+
+	t.Run("ok (default capacity)", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{}
+			tx.row = &stubRow{vals: []any{"pos1"}}
+			tx.row2 = &stubRow{vals: []any{"evt1"}}
+			return tx, nil
+		}))
+		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "", "A")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.CapacityFTE != "1.0" {
+			t.Fatalf("expected capacity_fte=1.0, got %q", p.CapacityFTE)
+		}
+	})
 }
 
 func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
@@ -1274,6 +1290,20 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
+	t.Run("handlePositionsAPI get stable error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/positions?as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handlePositionsAPI(rec, req, positionStoreStub{
+			listFn: func(context.Context, string, string) ([]Position, error) {
+				return nil, &pgconn.PgError{Message: "STAFFING_INVALID_ARGUMENT"}
+			},
+		})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
 	t.Run("handlePositionsAPI get ok", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/positions?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
@@ -1436,6 +1466,20 @@ func TestStaffingHandlers(t *testing.T) {
 			listFn: func(context.Context, string, string, string) ([]Assignment, error) { return nil, errors.New("list") },
 		})
 		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignmentsAPI get stable error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/assignments?as_of=2026-01-01&person_uuid=p1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleAssignmentsAPI(rec, req, assignmentStoreStub{
+			listFn: func(context.Context, string, string, string) ([]Assignment, error) {
+				return nil, &pgconn.PgError{Message: "STAFFING_INVALID_ARGUMENT"}
+			},
+		})
+		if rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
