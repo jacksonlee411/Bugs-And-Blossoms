@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"html"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	staffingcontrollers "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/presentation/controllers"
+	staffingservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/services"
 )
 
 func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitStore, store PositionStore, jobStore JobCatalogStore) {
@@ -209,230 +212,40 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionSt
 	}
 }
 
-type staffingAssignmentsAPIRequest struct {
-	EffectiveDate string `json:"effective_date"`
-	PersonUUID    string `json:"person_uuid"`
-	PositionID    string `json:"position_id"`
-	Status        string `json:"status"`
-	BaseSalary    string `json:"base_salary"`
-	AllocatedFte  string `json:"allocated_fte"`
-}
-
-type staffingAssignmentEventsCorrectAPIRequest struct {
-	AssignmentID        string          `json:"assignment_id"`
-	TargetEffectiveDate string          `json:"target_effective_date"`
-	ReplacementPayload  json.RawMessage `json:"replacement_payload"`
-}
-
-type staffingAssignmentEventsRescindAPIRequest struct {
-	AssignmentID        string          `json:"assignment_id"`
-	TargetEffectiveDate string          `json:"target_effective_date"`
-	Payload             json.RawMessage `json:"payload"`
-}
-
 func handleAssignmentsAPI(w http.ResponseWriter, r *http.Request, store AssignmentStore) {
-	tenant, ok := currentTenant(r.Context())
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
-		return
+	c := staffingcontrollers.AssignmentsController{
+		TenantID: func(ctx context.Context) (string, bool) {
+			tenant, ok := currentTenant(ctx)
+			return tenant.ID, ok
+		},
+		NowUTC: time.Now,
+		Facade: staffingservices.NewAssignmentsFacade(store),
 	}
-
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		asOf = time.Now().UTC().Format("2006-01-02")
-	}
-	if _, err := time.Parse("2006-01-02", asOf); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
-		return
-	}
-
-	switch r.Method {
-	case http.MethodGet:
-		personUUID := strings.TrimSpace(r.URL.Query().Get("person_uuid"))
-		if personUUID == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_person_uuid", "person_uuid is required")
-			return
-		}
-		assigns, err := store.ListAssignmentsForPerson(r.Context(), tenant.ID, asOf, personUUID)
-		if err != nil {
-			code := stablePgMessage(err)
-			status := http.StatusInternalServerError
-			if isStableDBCode(code) {
-				status = http.StatusUnprocessableEntity
-			}
-			if isBadRequestError(err) || isPgInvalidInput(err) {
-				status = http.StatusBadRequest
-			}
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "list failed")
-			return
-		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"as_of":       asOf,
-			"tenant":      tenant.ID,
-			"person_uuid": personUUID,
-			"assignments": assigns,
-		})
-		return
-	case http.MethodPost:
-		var req staffingAssignmentsAPIRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
-			return
-		}
-		if req.EffectiveDate == "" {
-			req.EffectiveDate = asOf
-		}
-		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
-			return
-		}
-		req.Status = strings.TrimSpace(req.Status)
-		if req.Status != "" && req.Status != "active" && req.Status != "inactive" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_status", "invalid status")
-			return
-		}
-		a, err := store.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, req.EffectiveDate, req.PersonUUID, req.PositionID, req.Status, req.BaseSalary, req.AllocatedFte)
-		if err != nil {
-			code := stablePgMessage(err)
-			status := http.StatusInternalServerError
-			switch pgErrorMessage(err) {
-			case "STAFFING_IDEMPOTENCY_REUSED":
-				status = http.StatusConflict
-			default:
-				if isStableDBCode(code) {
-					status = http.StatusUnprocessableEntity
-				}
-				if isBadRequestError(err) || isPgInvalidInput(err) {
-					status = http.StatusBadRequest
-				}
-			}
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "upsert failed")
-			return
-		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(a)
-		return
-	default:
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
-		return
-	}
+	c.HandleAssignmentsAPI(w, r)
 }
 
 func handleAssignmentEventsCorrectAPI(w http.ResponseWriter, r *http.Request, store AssignmentStore) {
-	tenant, ok := currentTenant(r.Context())
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
-		return
+	c := staffingcontrollers.AssignmentsController{
+		TenantID: func(ctx context.Context) (string, bool) {
+			tenant, ok := currentTenant(ctx)
+			return tenant.ID, ok
+		},
+		NowUTC: time.Now,
+		Facade: staffingservices.NewAssignmentsFacade(store),
 	}
-
-	if r.Method != http.MethodPost {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
-		return
-	}
-
-	var req staffingAssignmentEventsCorrectAPIRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
-		return
-	}
-	req.AssignmentID = strings.TrimSpace(req.AssignmentID)
-	req.TargetEffectiveDate = strings.TrimSpace(req.TargetEffectiveDate)
-	if req.AssignmentID == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_assignment_id", "assignment_id is required")
-		return
-	}
-	if req.TargetEffectiveDate == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_target_effective_date", "target_effective_date is required")
-		return
-	}
-	if _, err := time.Parse("2006-01-02", req.TargetEffectiveDate); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_target_effective_date", "invalid target_effective_date")
-		return
-	}
-
-	eventID, err := store.CorrectAssignmentEvent(r.Context(), tenant.ID, req.AssignmentID, req.TargetEffectiveDate, req.ReplacementPayload)
-	if err != nil {
-		code := stablePgMessage(err)
-		status := http.StatusInternalServerError
-		switch pgErrorMessage(err) {
-		case "STAFFING_IDEMPOTENCY_REUSED":
-			status = http.StatusConflict
-		default:
-			if isStableDBCode(code) {
-				status = http.StatusUnprocessableEntity
-			}
-			if isBadRequestError(err) || isPgInvalidInput(err) {
-				status = http.StatusBadRequest
-			}
-		}
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "correct failed")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"correction_event_id":   eventID,
-		"target_effective_date": req.TargetEffectiveDate,
-	})
+	c.HandleAssignmentEventsCorrectAPI(w, r)
 }
 
 func handleAssignmentEventsRescindAPI(w http.ResponseWriter, r *http.Request, store AssignmentStore) {
-	tenant, ok := currentTenant(r.Context())
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
-		return
+	c := staffingcontrollers.AssignmentsController{
+		TenantID: func(ctx context.Context) (string, bool) {
+			tenant, ok := currentTenant(ctx)
+			return tenant.ID, ok
+		},
+		NowUTC: time.Now,
+		Facade: staffingservices.NewAssignmentsFacade(store),
 	}
-
-	if r.Method != http.MethodPost {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
-		return
-	}
-
-	var req staffingAssignmentEventsRescindAPIRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
-		return
-	}
-	req.AssignmentID = strings.TrimSpace(req.AssignmentID)
-	req.TargetEffectiveDate = strings.TrimSpace(req.TargetEffectiveDate)
-	if req.AssignmentID == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_assignment_id", "assignment_id is required")
-		return
-	}
-	if req.TargetEffectiveDate == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_target_effective_date", "target_effective_date is required")
-		return
-	}
-	if _, err := time.Parse("2006-01-02", req.TargetEffectiveDate); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_target_effective_date", "invalid target_effective_date")
-		return
-	}
-
-	eventID, err := store.RescindAssignmentEvent(r.Context(), tenant.ID, req.AssignmentID, req.TargetEffectiveDate, req.Payload)
-	if err != nil {
-		code := stablePgMessage(err)
-		status := http.StatusInternalServerError
-		switch pgErrorMessage(err) {
-		case "STAFFING_IDEMPOTENCY_REUSED":
-			status = http.StatusConflict
-		default:
-			if isStableDBCode(code) {
-				status = http.StatusUnprocessableEntity
-			}
-			if isBadRequestError(err) || isPgInvalidInput(err) {
-				status = http.StatusBadRequest
-			}
-		}
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "rescind failed")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"rescind_event_id":      eventID,
-		"target_effective_date": req.TargetEffectiveDate,
-	})
+	c.HandleAssignmentEventsRescindAPI(w, r)
 }
 
 func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore PositionStore, assignmentStore AssignmentStore, personStore PersonStore) {

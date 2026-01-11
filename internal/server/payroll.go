@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/httperr"
 )
 
 type PayPeriod struct {
@@ -170,18 +171,9 @@ type PayrollIITSADUpsertResult struct {
 	RequestID  string `json:"request_id"`
 }
 
-type badRequestError struct {
-	msg string
-}
+func newBadRequestError(msg string) error { return httperr.NewBadRequest(msg) }
 
-func (e *badRequestError) Error() string { return e.msg }
-
-func newBadRequestError(msg string) error { return &badRequestError{msg: msg} }
-
-func isBadRequestError(err error) bool {
-	var badReq *badRequestError
-	return errors.As(err, &badReq) && badReq != nil
-}
+func isBadRequestError(err error) bool { return httperr.IsBadRequest(err) }
 
 type PayrollStore interface {
 	ListPayPeriods(ctx context.Context, tenantID string, payGroup string) ([]PayPeriod, error)
