@@ -213,6 +213,7 @@ type staffingAssignmentsAPIRequest struct {
 	EffectiveDate string `json:"effective_date"`
 	PersonUUID    string `json:"person_uuid"`
 	PositionID    string `json:"position_id"`
+	Status        string `json:"status"`
 	BaseSalary    string `json:"base_salary"`
 	AllocatedFte  string `json:"allocated_fte"`
 }
@@ -274,7 +275,12 @@ func handleAssignmentsAPI(w http.ResponseWriter, r *http.Request, store Assignme
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 			return
 		}
-		a, err := store.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, req.EffectiveDate, req.PersonUUID, req.PositionID, req.BaseSalary, req.AllocatedFte)
+		req.Status = strings.TrimSpace(req.Status)
+		if req.Status != "" && req.Status != "active" && req.Status != "inactive" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_status", "invalid status")
+			return
+		}
+		a, err := store.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, req.EffectiveDate, req.PersonUUID, req.PositionID, req.Status, req.BaseSalary, req.AllocatedFte)
 		if err != nil {
 			code := stablePgMessage(err)
 			status := http.StatusInternalServerError
@@ -372,6 +378,12 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 		positionID := strings.TrimSpace(r.Form.Get("position_id"))
 		baseSalary := strings.TrimSpace(r.Form.Get("base_salary"))
 		allocatedFte := strings.TrimSpace(r.Form.Get("allocated_fte"))
+		status := strings.TrimSpace(r.Form.Get("status"))
+		if status != "" && status != "active" && status != "inactive" {
+			assigns, errMsg := list()
+			writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, personUUID, pernr, displayName, mergeMsg(errMsg, "status 无效")))
+			return
+		}
 
 		if postPernr != "" {
 			p, err := personStore.FindPersonByPernr(r.Context(), tenant.ID, postPernr)
@@ -394,7 +406,7 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 			return
 		}
 
-		if _, err := assignmentStore.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, effectiveDate, postPersonUUID, positionID, baseSalary, allocatedFte); err != nil {
+		if _, err := assignmentStore.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, effectiveDate, postPersonUUID, positionID, status, baseSalary, allocatedFte); err != nil {
 			assigns, errMsg := list()
 			writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, stablePgMessage(err))))
 			return
@@ -649,6 +661,10 @@ func renderAssignments(assignments []Assignment, positions []Position, tenant Te
 			b.WriteString(`<option value="` + html.EscapeString(p.ID) + `">` + html.EscapeString(label) + `</option>`)
 		}
 	}
+	b.WriteString(`</select></label><br/>`)
+	b.WriteString(`<label>Status <select name="status">`)
+	b.WriteString(`<option value="">active</option>`)
+	b.WriteString(`<option value="inactive">inactive</option>`)
 	b.WriteString(`</select></label><br/>`)
 	b.WriteString(`<label>Allocated FTE <input type="number" name="allocated_fte" step="0.01" min="0.01" max="1.00" value="1.0" /></label><br/>`)
 	b.WriteString(`<label>Base Salary (CNY) <input type="number" name="base_salary" step="0.01" min="0" /></label><br/>`)
