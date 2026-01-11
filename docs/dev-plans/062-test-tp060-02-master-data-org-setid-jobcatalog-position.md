@@ -22,11 +22,20 @@
 - [X] **OrgUnit**：可在 `/org/nodes` 完成 Root + 5 个一级部门创建，刷新后列表可见；并记录每个 `org_unit_id`。
 - [X] **SetID**：可在 `/org/setid` 完成 SetID/BU/mapping 的创建与保存；映射矩阵无缺省洞（新 BU 自动补齐到 `SHARE`）；不存在/disabled BU 必须 fail-closed。
 - [X] **JobCatalog**：在 `/org/job-catalog` 能看到 `Resolved SetID: S2601`，并覆盖 groups/families/levels/profiles 的“写入→as_of 读取→UI 可见”闭环，且包含至少 1 个跨日期场景（Job Family reparenting 的前后对比）。
-- [X] **Position**：在 `/org/positions` 能创建 10 条职位，刷新后列表可见且包含 `position_id`；创建时 OrgUnit 下拉可用（不出现 `(no org units)`）。
+- [X] **Position（基础）**：在 `/org/positions` 能创建 10 条职位，刷新后列表可见且包含 `position_id`；创建时 OrgUnit 下拉可用（不出现 `(no org units)`）。
+- [X] **Position（M5：与 JobCatalog/SetID 组合）**：至少 1 条职位能绑定 `business_unit_id=BU901` + `job_profile=JP-SWE`，且列表中可见：
+  - `business_unit_id=BU901`
+  - `jobcatalog_setid=S2601`
+  - `job_profile` 显示 `JP-SWE (...)`（或等效可解释文本）
+- [X] **Position（M5：fail-closed 负例，Internal API）**：至少覆盖 3 个稳定错误码断言：
+  - `STAFFING_INVALID_ARGUMENT`：绑定 `job_profile_id` 但缺失 `business_unit_id`
+  - `BUSINESS_UNIT_NOT_FOUND`：绑定不存在的 `business_unit_id`
+  - `JOBCATALOG_REFERENCE_NOT_FOUND`：跨 SetID 引用 `job_profile_id`（BU=SetID 解析为 `S2601`，但 `job_profile_id` 属于其他 setid）
 
 ### 2.2 非目标
 
-- 本子计划不覆盖更深层的业务规则（例如 Position 与 JobCatalog 的绑定语义、后续 Staffing/Person/Attendance/Payroll 的业务联动），这些由后续 TP-060-03/04/05/07/08 负责。
+- 本子计划不覆盖 **Position 与 Assignments 的交叉裁决**（例如 “disabled 与任职冲突” / “capacity 与 allocated_fte 裁决”），这些由后续 TP-060-03 承接。
+- 本子计划不验证考勤/薪酬计算结果（由 TP-060-04~08 承接）。
 
 ### 2.3 工具链与门禁（SSOT 引用）
 
@@ -148,13 +157,30 @@
 
 ### 6.4 Position：`/org/positions`（UI）
 
-- `GET /org/positions?as_of=YYYY-MM-DD`：展示 OrgUnit 下拉与职位列表（需能看到 `position_id`、`org_unit_id`、`effective_date`）。
-- `POST /org/positions?as_of=YYYY-MM-DD`：创建职位（成功后 `303` 跳回 `/org/positions?as_of=<effective_date>`）。
+- `GET /org/positions?as_of=YYYY-MM-DD`：展示 JobCatalog Context（BU 选择）、创建表单、更新/停用表单与职位列表。
+  - 可选：`business_unit_id=BUxxx`（用于加载 Job Profiles 下拉，并显示 `Resolved SetID`）
+- `POST /org/positions?as_of=YYYY-MM-DD`：
+  - Create：`position_id` 为空时创建职位（成功后 `303` 跳回 `/org/positions?as_of=<effective_date>`，若表单带 `business_unit_id` 则 redirect 保留 `business_unit_id`）。
+  - Update/Disable：`position_id` 非空时更新/停用职位（同上）。
 - 关键字段：
-  - `effective_date`（默认：`as_of`；非法日期应提示 `effective_date 无效: ...`）
-  - `org_unit_id`
-  - `name`
+  - JobCatalog Context（GET 表单）：`business_unit_id`（用于加载 job profiles；不影响已有 position 的字段）
+  - Create（POST）：`effective_date`（默认：`as_of`；非法日期应提示 `effective_date 无效: ...`）、`org_unit_id`、`business_unit_id`（可空）、`job_profile_id`（可空；**若填写必须同时填写 `business_unit_id`**）、`capacity_fte`（可空；默认 1.0）、`name`（可空）
+  - Update/Disable（POST，patch 语义）：`position_id` 必填，其余字段为“可选 patch”
+    - `org_unit_id` / `business_unit_id` / `reports_to_position_id` / `capacity_fte` / `name` / `lifecycle_status`
+    - `job_profile_id="__CLEAR__"` 表示清空（UI 下拉提供）
 - Authz 口径：`GET=read`，`POST=admin`。
+
+### 6.5 Position：`/org/api/positions`（Internal API，用于稳定错误码断言）
+
+- `GET /org/api/positions?as_of=YYYY-MM-DD`：
+  - 200：`{"as_of","tenant","positions":[...]}`（positions 元素包含 `PositionID/OrgUnitID/BusinessUnitID/JobCatalogSetID/JobProfileID/JobProfileCode/CapacityFTE/LifecycleStatus/...`）
+  - 400：`code=invalid_as_of`
+- `POST /org/api/positions?as_of=YYYY-MM-DD`：
+  - Create：`{"effective_date","org_unit_id", ...}`（`position_id` 为空）
+  - Update：`{"effective_date","position_id", ...}`（`position_id` 非空；至少 1 个 patch 字段）
+  - 400：`code=bad_json` / `code=invalid_effective_date` / `code=effective_date is required` / `code=position_id is required` / `code=at least one patch field is required`（等）
+  - 409：`code=STAFFING_IDEMPOTENCY_REUSED`
+  - 422：稳定 DB 错误码（示例：`STAFFING_INVALID_ARGUMENT` / `BUSINESS_UNIT_NOT_FOUND` / `JOBCATALOG_REFERENCE_NOT_FOUND`）
 
 ## 7. 测试步骤（执行时勾选）
 
@@ -238,6 +264,44 @@
 4. [ ] 负例：提交非法 `effective_date`（例如 `bad`）
    - 断言：页面提示 `effective_date 无效: ...`；不得创建新职位
 
+### 7.5 Position（M5）：与 JobCatalog/SetID 组合（BU + Job Profile）
+
+> 目标：覆盖 `DEV-PLAN-030` 的 M5 关键链路：BU → resolve_setid → job_profile identity 校验 → UI 可见。
+
+1. [ ] 打开：`/org/positions?as_of=2026-01-01&business_unit_id=BU901`
+2. [ ] 断言：页面显示 `Resolved SetID: S2601`，且 Create 表单的 `Job Profile` 下拉包含 `JP-SWE (...)`（来自 §7.3 创建的 Job Profile）
+3. [ ] 绑定 Job Profile（正例）
+   - 选择任一既有职位（建议：`P-ENG-01`）
+   - 在 Update/Disable 表单提交：
+     - `effective_date=2026-01-15`
+     - `position_id=<P-ENG-01 的 position_id>`
+     - `business_unit_id=BU901`
+     - `job_profile_id=<JP-SWE 的 id>`
+   - 断言：职位列表对应行可见：
+     - `business_unit_id=BU901`
+     - `jobcatalog_setid=S2601`
+     - `job_profile` 显示 `JP-SWE (...)`（或等效）
+
+### 7.6 Position（M5）：fail-closed 负例（Internal API，断言稳定错误码）
+
+> 说明：负例优先用 Internal API 断言 `code`，避免 UI 只显示红字但无法稳定提取错误码。
+
+1. [ ] 负例 A（缺 BU）：`POST /org/api/positions?as_of=2026-01-01`
+   - body：`{"effective_date":"2026-01-01","org_unit_id":"<任一 org_unit_id>","job_profile_id":"<JP-SWE-id>","name":"TP062-BAD-NO-BU"}`
+   - 断言：422 且 `code=STAFFING_INVALID_ARGUMENT`
+2. [ ] 负例 B（不存在 BU）：`POST /org/api/positions?as_of=2026-01-01`
+   - body：`{"effective_date":"2026-01-01","org_unit_id":"<任一 org_unit_id>","business_unit_id":"BU999","name":"TP062-BAD-BU999"}`
+   - 断言：422 且 `code=BUSINESS_UNIT_NOT_FOUND`
+3. [ ] 负例 C（跨 SetID 引用）：准备并断言
+   - 在 `/org/setid?as_of=2026-01-01`：
+     - 创建 `SetID=S2602`（若不存在）
+     - 确保 `BU902` 存在，并将 mappings（jobcatalog）设置为 `BU902 -> S2602`（保留 `BU901 -> S2601` 不变）
+   - 在 `/org/job-catalog?as_of=2026-01-01&business_unit_id=BU902`：
+     - 创建最小 Job Profile（例如 `JP-OPS`；需先创建其 families）
+   - 调用：`POST /org/api/positions?as_of=2026-01-16`（Update）
+     - body：`{"effective_date":"2026-01-16","position_id":"<P-ENG-01 position_id>","business_unit_id":"BU901","job_profile_id":"<JP-OPS-id>"}`
+   - 断言：422 且 `code=JOBCATALOG_REFERENCE_NOT_FOUND`
+
 ## 8. 验收证据（最小）
 
 - OrgUnit：
@@ -259,6 +323,8 @@
 - Position：
   - `/org/positions?as_of=2026-01-01` 页面证据（10 条职位可见，含 `position_id`）
   - 记录表：10 个 `position_id` + 对应 `org_unit_id`
+  - M5 正例：`/org/positions?as_of=2026-01-15&business_unit_id=BU901` 页面证据（`Resolved SetID: S2601`；且至少 1 条职位显示 `business_unit_id=BU901`、`jobcatalog_setid=S2601`、`job_profile=JP-SWE (...)`）
+  - M5 负例：`/org/api/positions` 的 3 条失败响应证据（含 HTTP 状态码与 `code`：`STAFFING_INVALID_ARGUMENT` / `BUSINESS_UNIT_NOT_FOUND` / `JOBCATALOG_REFERENCE_NOT_FOUND`）
 
 ## 9. 执行记录（Readiness/可复现记录）
 
