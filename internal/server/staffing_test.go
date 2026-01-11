@@ -957,8 +957,10 @@ func (s positionStoreStub) UpdatePositionCurrent(ctx context.Context, tenantID s
 }
 
 type assignmentStoreStub struct {
-	listFn   func(ctx context.Context, tenantID string, asOfDate string, personUUID string) ([]Assignment, error)
-	upsertFn func(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, baseSalary string, allocatedFte string) (Assignment, error)
+	listFn    func(ctx context.Context, tenantID string, asOfDate string, personUUID string) ([]Assignment, error)
+	upsertFn  func(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, baseSalary string, allocatedFte string) (Assignment, error)
+	correctFn func(ctx context.Context, tenantID string, assignmentID string, targetEffectiveDate string, replacementPayload json.RawMessage) (string, error)
+	rescindFn func(ctx context.Context, tenantID string, assignmentID string, targetEffectiveDate string, payload json.RawMessage) (string, error)
 }
 
 func (s assignmentStoreStub) ListAssignmentsForPerson(ctx context.Context, tenantID string, asOfDate string, personUUID string) ([]Assignment, error) {
@@ -967,6 +969,20 @@ func (s assignmentStoreStub) ListAssignmentsForPerson(ctx context.Context, tenan
 
 func (s assignmentStoreStub) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, baseSalary string, allocatedFte string) (Assignment, error) {
 	return s.upsertFn(ctx, tenantID, effectiveDate, personUUID, positionID, status, baseSalary, allocatedFte)
+}
+
+func (s assignmentStoreStub) CorrectAssignmentEvent(ctx context.Context, tenantID string, assignmentID string, targetEffectiveDate string, replacementPayload json.RawMessage) (string, error) {
+	if s.correctFn == nil {
+		return "", errors.New("not implemented")
+	}
+	return s.correctFn(ctx, tenantID, assignmentID, targetEffectiveDate, replacementPayload)
+}
+
+func (s assignmentStoreStub) RescindAssignmentEvent(ctx context.Context, tenantID string, assignmentID string, targetEffectiveDate string, payload json.RawMessage) (string, error) {
+	if s.rescindFn == nil {
+		return "", errors.New("not implemented")
+	}
+	return s.rescindFn(ctx, tenantID, assignmentID, targetEffectiveDate, payload)
 }
 
 func TestStaffingHandlers(t *testing.T) {
@@ -1622,6 +1638,77 @@ func TestStaffingHandlers(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handleAssignmentsAPI(rec, req, &staffingMemoryStore{})
 		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignmentEventsCorrectAPI tenant missing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{}`))
+		rec := httptest.NewRecorder()
+		handleAssignmentEventsCorrectAPI(rec, req, &staffingMemoryStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignmentEventsCorrectAPI bad json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader("{bad"))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleAssignmentEventsCorrectAPI(rec, req, &staffingMemoryStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignmentEventsCorrectAPI invalid target date", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"bad","replacement_payload":{}}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleAssignmentEventsCorrectAPI(rec, req, &staffingMemoryStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignmentEventsCorrectAPI ok", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","replacement_payload":{"position_id":"p1"}}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleAssignmentEventsCorrectAPI(rec, req, assignmentStoreStub{
+			correctFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "e1", nil
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignmentEventsRescindAPI error conflict", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","payload":{}}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleAssignmentEventsRescindAPI(rec, req, assignmentStoreStub{
+			rescindFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "", &pgconn.PgError{Message: "STAFFING_IDEMPOTENCY_REUSED"}
+			},
+		})
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignmentEventsRescindAPI error unprocessable", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","payload":{}}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleAssignmentEventsRescindAPI(rec, req, assignmentStoreStub{
+			rescindFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "", &pgconn.PgError{Message: "STAFFING_ASSIGNMENT_EVENT_NOT_FOUND"}
+			},
+		})
+		if rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})

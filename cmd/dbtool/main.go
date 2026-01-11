@@ -595,6 +595,222 @@ func staffingSmoke(args []string) {
 		}
 	}
 
+	// DEV-PLAN-031 M4: Correct / Rescind / Delete-slice（附属 SoT + replay 统一解释）.
+	{
+		// Correct CREATE: replace payload interpretation (base_salary 30000 -> 40000).
+		var correctionEventID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&correctionEventID); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `
+				SELECT staffing.submit_assignment_event_correction(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::date,
+				  jsonb_build_object(
+				    'position_id', $5::text,
+				    'base_salary', '40000.00',
+				    'allocated_fte', '1.0',
+				    'currency', 'CNY',
+				    'profile', '{}'::jsonb
+				  ),
+				  $6::text,
+				  $7::uuid
+				);
+			`, correctionEventID, tenantA, assignmentID, effectiveDate, positionID, requestID+"-a2-correct-create", initiatorID); err != nil {
+			fatal(err)
+		}
+
+		var baseSalary string
+		if err := tx.QueryRow(ctx, `
+				SELECT COALESCE(base_salary::text, '')
+				FROM staffing.assignment_versions
+				WHERE tenant_id = $1::uuid
+				  AND assignment_id = $2::uuid
+				  AND validity @> $3::date
+				LIMIT 1;
+			`, tenantA, assignmentID, effectiveDate).Scan(&baseSalary); err != nil {
+			fatal(err)
+		}
+		if baseSalary != "40000.00" {
+			fatalf("expected base_salary=40000.00 after correct, got %q", baseSalary)
+		}
+	}
+
+	updateDate := "2026-02-01"
+	{
+		// Prepare a second position to update into.
+		var positionID2 string
+		var positionEventID2 string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&positionID2); err != nil {
+			fatal(err)
+		}
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&positionEventID2); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `
+				SELECT staffing.submit_position_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  'CREATE',
+				  $4::date,
+				  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position 2'),
+				  $6::text,
+				  $7::uuid
+				);
+			`, positionEventID2, tenantA, positionID2, effectiveDate, orgUnitID, requestID+"-pos2", initiatorID); err != nil {
+			fatal(err)
+		}
+
+		// UPDATE assignment to position 2.
+		var updateEventID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&updateEventID); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `
+				SELECT staffing.submit_assignment_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::uuid,
+				  'primary',
+				  'UPDATE',
+				  $5::date,
+				  jsonb_build_object('position_id', $6::text),
+				  $7::text,
+				  $8::uuid
+				);
+			`, updateEventID, tenantA, assignmentID, personUUID, updateDate, positionID2, requestID+"-a2-update", initiatorID); err != nil {
+			fatal(err)
+		}
+
+		// Rescind UPDATE: delete-slice + stitch should leave only the CREATE slice as-of later date.
+		var rescindEventID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&rescindEventID); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `
+				SELECT staffing.submit_assignment_event_rescind(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::date,
+				  '{}'::jsonb,
+				  $5::text,
+				  $6::uuid
+				);
+			`, rescindEventID, tenantA, assignmentID, updateDate, requestID+"-a2-rescind-update", initiatorID); err != nil {
+			fatal(err)
+		}
+
+		asOfAfterUpdate := "2026-02-15"
+		var posAfter string
+		if err := tx.QueryRow(ctx, `
+				SELECT position_id::text
+				FROM staffing.assignment_versions
+				WHERE tenant_id = $1::uuid
+				  AND assignment_id = $2::uuid
+				  AND validity @> $3::date
+				LIMIT 1;
+			`, tenantA, assignmentID, asOfAfterUpdate).Scan(&posAfter); err != nil {
+			fatal(err)
+		}
+		if posAfter != positionID {
+			fatalf("expected stitched position_id=%s after rescind, got %s", positionID, posAfter)
+		}
+
+		// Not allowed to rescind CREATE (when later events exist).
+		if _, err := tx.Exec(ctx, `SAVEPOINT sp_rescind_create;`); err != nil {
+			fatal(err)
+		}
+		var rescindCreateEventID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&rescindCreateEventID); err != nil {
+			fatal(err)
+		}
+		_, err := tx.Exec(ctx, `
+				SELECT staffing.submit_assignment_event_rescind(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::date,
+				  '{}'::jsonb,
+				  $5::text,
+				  $6::uuid
+				);
+			`, rescindCreateEventID, tenantA, assignmentID, effectiveDate, requestID+"-a2-rescind-create", initiatorID)
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_rescind_create;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		if err == nil {
+			fatalf("expected rescind CREATE to fail")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_ASSIGNMENT_CREATE_CANNOT_RESCIND" {
+			fatalf("expected pg error message=STAFFING_ASSIGNMENT_CREATE_CANNOT_RESCIND, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+
+		// Correcting a rescinded target must fail-closed.
+		if _, err := tx.Exec(ctx, `SAVEPOINT sp_correct_rescinded;`); err != nil {
+			fatal(err)
+		}
+		var correctRescindedID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&correctRescindedID); err != nil {
+			fatal(err)
+		}
+		_, err = tx.Exec(ctx, `
+				SELECT staffing.submit_assignment_event_correction(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::date,
+				  jsonb_build_object('position_id', $5::text),
+				  $6::text,
+				  $7::uuid
+				);
+			`, correctRescindedID, tenantA, assignmentID, updateDate, positionID2, requestID+"-a2-correct-rescinded", initiatorID)
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_correct_rescinded;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		if err == nil {
+			fatalf("expected correct on rescinded target to fail")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_ASSIGNMENT_EVENT_ALREADY_RESCINDED" {
+			fatalf("expected pg error message=STAFFING_ASSIGNMENT_EVENT_ALREADY_RESCINDED, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+	}
+
+	{
+		// Target not found should be stable.
+		if _, err := tx.Exec(ctx, `SAVEPOINT sp_correct_target_not_found;`); err != nil {
+			fatal(err)
+		}
+		var eID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eID); err != nil {
+			fatal(err)
+		}
+		_, err := tx.Exec(ctx, `
+				SELECT staffing.submit_assignment_event_correction(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  '2099-01-01'::date,
+				  jsonb_build_object('position_id', $4::text),
+				  $5::text,
+				  $6::uuid
+				);
+			`, eID, tenantA, assignmentID, positionID, requestID+"-target-not-found", initiatorID)
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_correct_target_not_found;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		if err == nil {
+			fatalf("expected correct target not found to fail")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_ASSIGNMENT_EVENT_NOT_FOUND" {
+			fatalf("expected pg error message=STAFFING_ASSIGNMENT_EVENT_NOT_FOUND, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+	}
+
 	disableDateTime, err := time.Parse("2006-01-02", effectiveDate)
 	if err != nil {
 		fatal(err)
@@ -982,6 +1198,12 @@ func staffingSmoke(args []string) {
 		}
 
 		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_event_corrections WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_event_rescinds WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
 			fatal(err)
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
@@ -1549,7 +1771,7 @@ SELECT staffing.submit_payroll_run_event(
 			`, tenantA, runID).Scan(&grossPay, &netPay, &employerTotal); err != nil {
 		fatal(err)
 	}
-	if grossPay != "30000.00" || employerTotal != "10560.00" {
+	if grossPay != "40000.00" || employerTotal != "14080.00" {
 		fatalf("unexpected payslip totals gross=%s employer_total=%s", grossPay, employerTotal)
 	}
 
@@ -1619,7 +1841,7 @@ SELECT staffing.submit_payroll_run_event(
 	if baseOverlapDays != periodDays {
 		fatalf("unexpected base item overlap_days=%d expected=%d", baseOverlapDays, periodDays)
 	}
-	if expected := formatMoney(prorateCents(3_000_000, 1, 1, baseOverlapDays)); baseItemAmount != expected {
+	if expected := formatMoney(prorateCents(4_000_000, 1, 1, baseOverlapDays)); baseItemAmount != expected {
 		fatalf("unexpected base item amount=%s expected=%s", baseItemAmount, expected)
 	}
 

@@ -311,6 +311,16 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/org/api/assignment-events:correct":
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/assignment-events:rescind":
+		if method == http.MethodPost {
+			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/org/api/attendance-punches":
 		if method == http.MethodGet {
 			return authz.ObjectStaffingAttendancePunches, authz.ActionRead, true

@@ -128,6 +128,12 @@ entrypoints:
       - path: /org/api/assignments
         methods: [GET, POST]
         route_class: internal_api
+      - path: /org/api/assignment-events:correct
+        methods: [POST]
+        route_class: internal_api
+      - path: /org/api/assignment-events:rescind
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/attendance-punches
         methods: [GET, POST]
         route_class: internal_api

@@ -138,6 +138,40 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
 CREATE INDEX IF NOT EXISTS assignment_events_tenant_assignment_effective_idx
   ON staffing.assignment_events (tenant_id, assignment_id, effective_date, id);
 
+CREATE TABLE IF NOT EXISTS staffing.assignment_event_corrections (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL,
+  tenant_id uuid NOT NULL,
+  assignment_id uuid NOT NULL,
+  target_effective_date date NOT NULL,
+  replacement_payload jsonb NOT NULL,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT assignment_event_corrections_replacement_payload_obj_check CHECK (jsonb_typeof(replacement_payload) = 'object'),
+  CONSTRAINT assignment_event_corrections_event_id_unique UNIQUE (event_id),
+  CONSTRAINT assignment_event_corrections_target_unique UNIQUE (tenant_id, assignment_id, target_effective_date),
+  CONSTRAINT assignment_event_corrections_request_id_unique UNIQUE (tenant_id, request_id)
+);
+
+CREATE TABLE IF NOT EXISTS staffing.assignment_event_rescinds (
+  id bigserial PRIMARY KEY,
+  event_id uuid NOT NULL,
+  tenant_id uuid NOT NULL,
+  assignment_id uuid NOT NULL,
+  target_effective_date date NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_id text NOT NULL,
+  initiator_id uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT assignment_event_rescinds_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT assignment_event_rescinds_event_id_unique UNIQUE (event_id),
+  CONSTRAINT assignment_event_rescinds_target_unique UNIQUE (tenant_id, assignment_id, target_effective_date),
+  CONSTRAINT assignment_event_rescinds_request_id_unique UNIQUE (tenant_id, request_id)
+);
+
 CREATE TABLE IF NOT EXISTS staffing.assignment_versions (
   id bigserial PRIMARY KEY,
   tenant_id uuid NOT NULL,
@@ -482,6 +516,20 @@ ALTER TABLE staffing.assignment_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staffing.assignment_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON staffing.assignment_events;
 CREATE POLICY tenant_isolation ON staffing.assignment_events
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.assignment_event_corrections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.assignment_event_corrections FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.assignment_event_corrections;
+CREATE POLICY tenant_isolation ON staffing.assignment_event_corrections
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE staffing.assignment_event_rescinds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staffing.assignment_event_rescinds FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON staffing.assignment_event_rescinds;
+CREATE POLICY tenant_isolation ON staffing.assignment_event_rescinds
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
