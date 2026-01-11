@@ -761,6 +761,9 @@ type StaffingPositionVersion struct {
 	Profile             []byte                    `json:"profile"`
 	Validity            pgtype.Range[pgtype.Date] `json:"validity"`
 	LastEventID         int64                     `json:"last_event_id"`
+	BusinessUnitID      *string                   `json:"business_unit_id"`
+	JobcatalogSetid     *string                   `json:"jobcatalog_setid"`
+	JobProfileID        pgtype.UUID               `json:"job_profile_id"`
 }
 
 type StaffingSocialInsurancePolicy struct {
