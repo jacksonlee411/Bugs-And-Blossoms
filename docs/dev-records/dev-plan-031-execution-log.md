@@ -4,7 +4,8 @@
 
 ## M3-A：Upsert 可重复执行（Idempotency / Re-run）
 
-- 状态：已完成（待 PR 合并）
+- 状态：已完成（PR #206，待合并）
+- PR：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/206
 - 变更摘要：
   - `internal/server/staffing.go`：`UpsertPrimaryAssignmentForPerson` 支持同一 `effective_date` 的重复提交可重试：
     - 首次提交使用确定性 `event_id`（payload-independent）。
@@ -18,4 +19,3 @@
   - `go vet ./...`
   - `make check lint`
   - `make test`
-
