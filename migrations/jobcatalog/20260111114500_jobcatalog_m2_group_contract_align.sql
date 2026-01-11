@@ -1,5 +1,9 @@
 -- +goose Up
 -- +goose StatementBegin
+ALTER TABLE jobcatalog.job_family_groups DISABLE ROW LEVEL SECURITY;
+ALTER TABLE jobcatalog.job_family_group_events DISABLE ROW LEVEL SECURITY;
+ALTER TABLE jobcatalog.job_family_group_versions DISABLE ROW LEVEL SECURITY;
+
 ALTER TABLE jobcatalog.job_family_groups
   ADD CONSTRAINT job_family_groups_tenant_setid_id_unique UNIQUE (tenant_id, setid, id);
 
@@ -16,6 +20,13 @@ ALTER TABLE jobcatalog.job_family_group_versions
 ALTER TABLE jobcatalog.job_family_group_versions
   ADD CONSTRAINT job_family_group_versions_group_fk
   FOREIGN KEY (tenant_id, setid, job_family_group_id) REFERENCES jobcatalog.job_family_groups(tenant_id, setid, id) ON DELETE RESTRICT;
+
+ALTER TABLE jobcatalog.job_family_groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE jobcatalog.job_family_groups FORCE ROW LEVEL SECURITY;
+ALTER TABLE jobcatalog.job_family_group_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE jobcatalog.job_family_group_events FORCE ROW LEVEL SECURITY;
+ALTER TABLE jobcatalog.job_family_group_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE jobcatalog.job_family_group_versions FORCE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION jobcatalog.replay_job_family_group_versions(
   p_tenant_id uuid,
