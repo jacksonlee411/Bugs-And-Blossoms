@@ -26,12 +26,12 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 
 	nodes, err := orgStore.ListNodesCurrent(r.Context(), tenant.ID, asOf)
 	if err != nil {
-		writePage(w, r, renderPositions(nil, nil, tenant, asOf, err.Error()))
+		writePage(w, r, renderPositions(nil, nil, tenant, asOf, stablePgMessage(err)))
 		return
 	}
 	positions, err := store.ListPositionsCurrent(r.Context(), tenant.ID, asOf)
 	if err != nil {
-		writePage(w, r, renderPositions(nil, nodes, tenant, asOf, err.Error()))
+		writePage(w, r, renderPositions(nil, nodes, tenant, asOf, stablePgMessage(err)))
 		return
 	}
 
@@ -54,11 +54,21 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 			return
 		}
 
+		positionID := strings.TrimSpace(r.Form.Get("position_id"))
 		orgUnitID := strings.TrimSpace(r.Form.Get("org_unit_id"))
 		name := strings.TrimSpace(r.Form.Get("name"))
-		if _, err := store.CreatePositionCurrent(r.Context(), tenant.ID, effectiveDate, orgUnitID, name); err != nil {
-			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, err.Error()))
-			return
+		lifecycleStatus := strings.TrimSpace(r.Form.Get("lifecycle_status"))
+
+		if positionID == "" {
+			if _, err := store.CreatePositionCurrent(r.Context(), tenant.ID, effectiveDate, orgUnitID, name); err != nil {
+				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, stablePgMessage(err)))
+				return
+			}
+		} else {
+			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionID, effectiveDate, orgUnitID, name, lifecycleStatus); err != nil {
+				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, stablePgMessage(err)))
+				return
+			}
 		}
 
 		http.Redirect(w, r, "/org/positions?as_of="+url.QueryEscape(effectiveDate), http.StatusSeeOther)
@@ -70,9 +80,11 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 }
 
 type staffingPositionsAPIRequest struct {
-	EffectiveDate string `json:"effective_date"`
-	OrgUnitID     string `json:"org_unit_id"`
-	Name          string `json:"name"`
+	EffectiveDate   string `json:"effective_date"`
+	PositionID      string `json:"position_id"`
+	OrgUnitID       string `json:"org_unit_id"`
+	Name            string `json:"name"`
+	LifecycleStatus string `json:"lifecycle_status"`
 }
 
 func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionStore) {
@@ -118,9 +130,29 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionSt
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 			return
 		}
-		p, err := store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, req.OrgUnitID, req.Name)
+
+		var p Position
+		var err error
+		if strings.TrimSpace(req.PositionID) == "" {
+			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, req.OrgUnitID, req.Name)
+		} else {
+			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionID, req.EffectiveDate, req.OrgUnitID, req.Name, req.LifecycleStatus)
+		}
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "create_failed", "create failed")
+			code := stablePgMessage(err)
+			status := http.StatusInternalServerError
+			switch pgErrorMessage(err) {
+			case "STAFFING_IDEMPOTENCY_REUSED":
+				status = http.StatusConflict
+			default:
+				if strings.HasPrefix(code, "STAFFING_") {
+					status = http.StatusUnprocessableEntity
+				}
+				if isBadRequestError(err) || isPgInvalidInput(err) {
+					status = http.StatusBadRequest
+				}
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "upsert failed")
 			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -191,7 +223,20 @@ func handleAssignmentsAPI(w http.ResponseWriter, r *http.Request, store Assignme
 		}
 		a, err := store.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, req.EffectiveDate, req.PersonUUID, req.PositionID, req.BaseSalary, req.AllocatedFte)
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "upsert_failed", "upsert failed")
+			code := stablePgMessage(err)
+			status := http.StatusInternalServerError
+			switch pgErrorMessage(err) {
+			case "STAFFING_IDEMPOTENCY_REUSED":
+				status = http.StatusConflict
+			default:
+				if strings.HasPrefix(code, "STAFFING_") {
+					status = http.StatusUnprocessableEntity
+				}
+				if isBadRequestError(err) || isPgInvalidInput(err) {
+					status = http.StatusBadRequest
+				}
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "upsert failed")
 			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -217,9 +262,10 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 
 	positions, err := positionStore.ListPositionsCurrent(r.Context(), tenant.ID, asOf)
 	if err != nil {
-		writePage(w, r, renderAssignments(nil, nil, tenant, asOf, "", "", "", err.Error()))
+		writePage(w, r, renderAssignments(nil, nil, tenant, asOf, "", "", "", stablePgMessage(err)))
 		return
 	}
+	positions = filterActivePositions(positions)
 
 	pernr := strings.TrimSpace(r.URL.Query().Get("pernr"))
 	personUUID := strings.TrimSpace(r.URL.Query().Get("person_uuid"))
@@ -227,7 +273,7 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 	if pernr != "" && personUUID == "" {
 		p, err := personStore.FindPersonByPernr(r.Context(), tenant.ID, pernr)
 		if err != nil {
-			writePage(w, r, renderAssignments(nil, positions, tenant, asOf, "", pernr, "", err.Error()))
+			writePage(w, r, renderAssignments(nil, positions, tenant, asOf, "", pernr, "", stablePgMessage(err)))
 			return
 		}
 		personUUID = p.UUID
@@ -241,7 +287,7 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 		}
 		assigns, err := assignmentStore.ListAssignmentsForPerson(r.Context(), tenant.ID, asOf, personUUID)
 		if err != nil {
-			return nil, err.Error()
+			return nil, stablePgMessage(err)
 		}
 		return assigns, ""
 	}
@@ -278,7 +324,7 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 			p, err := personStore.FindPersonByPernr(r.Context(), tenant.ID, postPernr)
 			if err != nil {
 				assigns, errMsg := list()
-				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, personUUID, pernr, displayName, mergeMsg(errMsg, err.Error())))
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, personUUID, pernr, displayName, mergeMsg(errMsg, stablePgMessage(err))))
 				return
 			}
 			if postPersonUUID != "" && postPersonUUID != p.UUID {
@@ -297,7 +343,7 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 
 		if _, err := assignmentStore.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, effectiveDate, postPersonUUID, positionID, baseSalary, allocatedFte); err != nil {
 			assigns, errMsg := list()
-			writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, err.Error())))
+			writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, stablePgMessage(err))))
 			return
 		}
 
@@ -349,6 +395,40 @@ func renderPositions(positions []Position, nodes []OrgUnitNode, tenant Tenant, a
 	b.WriteString(`<button type="submit">Create</button>`)
 	b.WriteString(`</form>`)
 
+	b.WriteString(`<h2>Update / Disable</h2>`)
+	b.WriteString(`<form method="POST" action="/org/positions?as_of=` + url.QueryEscape(asOf) + `">`)
+	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
+	b.WriteString(`<label>Position <select name="position_id">`)
+	if len(positions) == 0 {
+		b.WriteString(`<option value="">(no positions)</option>`)
+	} else {
+		for _, p := range positions {
+			label := p.ID
+			if p.Name != "" {
+				label = p.Name + " (" + p.ID + ")"
+			}
+			b.WriteString(`<option value="` + html.EscapeString(p.ID) + `">` + html.EscapeString(label) + `</option>`)
+		}
+	}
+	b.WriteString(`</select></label><br/>`)
+	b.WriteString(`<label>Org Unit <select name="org_unit_id">`)
+	b.WriteString(`<option value="">(no change)</option>`)
+	if len(nodes) > 0 {
+		sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
+		for _, n := range nodes {
+			b.WriteString(`<option value="` + html.EscapeString(n.ID) + `">` + html.EscapeString(n.Name) + ` (` + html.EscapeString(n.ID) + `)</option>`)
+		}
+	}
+	b.WriteString(`</select></label><br/>`)
+	b.WriteString(`<label>Name <input type="text" name="name" placeholder="(no change)" /></label><br/>`)
+	b.WriteString(`<label>Lifecycle <select name="lifecycle_status">` +
+		`<option value="">(no change)</option>` +
+		`<option value="active">active</option>` +
+		`<option value="disabled">disabled</option>` +
+		`</select></label><br/>`)
+	b.WriteString(`<button type="submit">Update</button>`)
+	b.WriteString(`</form>`)
+
 	b.WriteString(`<h2>Current</h2>`)
 	if len(positions) == 0 {
 		b.WriteString("<p>(empty)</p>")
@@ -356,16 +436,27 @@ func renderPositions(positions []Position, nodes []OrgUnitNode, tenant Tenant, a
 	}
 
 	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr>` +
-		`<th>effective_date</th><th>position_id</th><th>org_unit_id</th><th>name</th>` +
+		`<th>effective_date</th><th>position_id</th><th>lifecycle_status</th><th>org_unit_id</th><th>name</th>` +
 		`</tr></thead><tbody>`)
 	for _, p := range positions {
 		b.WriteString(`<tr><td><code>` + html.EscapeString(p.EffectiveAt) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.ID) + `</code></td>` +
+			`<td><code>` + html.EscapeString(p.LifecycleStatus) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.OrgUnitID) + `</code></td>` +
 			`<td>` + html.EscapeString(p.Name) + `</td></tr>`)
 	}
 	b.WriteString(`</tbody></table>`)
 	return b.String()
+}
+
+func filterActivePositions(in []Position) []Position {
+	out := make([]Position, 0, len(in))
+	for _, p := range in {
+		if p.LifecycleStatus == "active" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func renderAssignments(assignments []Assignment, positions []Position, tenant Tenant, asOf string, personUUID string, pernr string, displayName string, errMsg string) string {
