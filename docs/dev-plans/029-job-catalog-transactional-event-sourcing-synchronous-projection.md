@@ -1,6 +1,6 @@
 # DEV-PLAN-029：Job Catalog（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
-**状态**: 部分完成（009M1：Job Family Group 最小闭环；2026-01-06 23:40 UTC）
+**状态**: 部分完成（009M1：Job Family Group 最小闭环；M2：Job Family Group 合同对齐补丁；2026-01-11）
 
 > 本计划的定位：作为 Greenfield HR 的 Job Catalog 子域，提供 **Job Catalog 权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026/030` 对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -569,7 +569,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 
 - 新增表/迁移（红线）：已获得用户手工确认允许新增表（包括 `job_families/job_levels/job_profiles` 等）。
 
-- [ ] **M2：合同对齐补丁（在既有 009M1 上收口）**
+- [x] **M2：合同对齐补丁（在既有 009M1 上收口）**
   - 范围：在不扩展业务实体的前提下，先把已落地的 `job_family_groups` 补齐到“可作为模板复用”的合同口径。
   - 交付物（至少）：
     - schema：为 `jobcatalog.job_family_groups` 增加 `UNIQUE (tenant_id, setid, id)`（用于后续复合 FK 的稳定锚点），并将 events/versions 侧 FK/唯一约束命名收敛到可稳定映射。
@@ -577,6 +577,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
     - replay：确保 delete+replay 仍保持 gapless/no-overlap 的裁决路径与稳定错误形状。
   - Done（最小验收）：
     - §8 中 “事件幂等/全量重放/同日唯一/versions no-overlap/gapless/RLS” 对 group 至少可验证（允许其余实体未实现）。
+  - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证。
 
 - [ ] **M3：Job Family（`job_families`，含 effective-dated reparenting）**
   - 范围：落地 Job Family 的 identity/events/versions + submit/replay；支持 `job_family_group_id` 的有效期归属变更（reparenting）。

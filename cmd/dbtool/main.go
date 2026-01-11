@@ -2695,7 +2695,8 @@ func jobcatalogSmoke(args []string) {
 	requestID := "dbtool-jobcatalog-smoke-create"
 	initiatorID := "00000000-0000-0000-0000-00000000f001"
 
-	if _, err := tx.Exec(ctx, `
+	var createdEventDBID int64
+	if err := tx.QueryRow(ctx, `
 SELECT jobcatalog.submit_job_family_group_event(
   $1::uuid,
   $2::uuid,
@@ -2707,11 +2708,37 @@ SELECT jobcatalog.submit_job_family_group_event(
   $5::text,
   $6::uuid
 );
-`, eventID, tenantA, groupID, "2026-01-01", requestID, initiatorID); err != nil {
+`, eventID, tenantA, groupID, "2026-01-01", requestID, initiatorID).Scan(&createdEventDBID); err != nil {
 		fatal(err)
 	}
 
+	var retriedEventDBID int64
+	if err := tx.QueryRow(ctx, `
+SELECT jobcatalog.submit_job_family_group_event(
+  $1::uuid,
+  $2::uuid,
+  'SHARE',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('code', 'JC1', 'name', 'Job Family Group 1', 'description', null),
+  $5::text,
+  $6::uuid
+);
+`, eventID, tenantA, groupID, "2026-01-01", requestID, initiatorID).Scan(&retriedEventDBID); err != nil {
+		fatal(err)
+	}
+	if retriedEventDBID != createdEventDBID {
+		fatalf("expected idempotent retry to return same event id: got %d want %d", retriedEventDBID, createdEventDBID)
+	}
+
 	var count int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM jobcatalog.job_family_group_events WHERE tenant_id = $1::uuid;`, tenantA).Scan(&count); err != nil {
+		fatal(err)
+	}
+	if count != 1 {
+		fatalf("expected events count=1 under tenant A, got %d", count)
+	}
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM jobcatalog.job_family_group_versions WHERE validity @> '2026-01-01'::date;`).Scan(&count); err != nil {
 		fatal(err)
 	}

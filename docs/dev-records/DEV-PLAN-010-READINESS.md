@@ -400,3 +400,14 @@ DB 闭环（迁移 + smoke）：
 - CI（Quality Gates）：PR #111 4/4 全绿（coverage 门禁 100%）
   - Step3 DB（表 + RLS + kernel）：PR #113 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/113
   - Step4 sqlc（生成物清洁）：PR #115 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/115
+
+## 23. DEV-PLAN-029（Job Catalog：事务性事件溯源 + 同步投射）
+
+证据：
+- 日期：2026-01-11
+- 范围：M2（Job Family Group 合同对齐补丁：互斥锁 + event_id 幂等 + 复合 FK 锚点）
+- 合并记录：PR #187 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/187
+- 本地门禁（结论：全绿）：
+  - Go：`go fmt ./... && go vet ./... && make check lint && make test`
+  - DB：`make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）
+  - sqlc：`make sqlc-generate`（生成后 `git status --short` 为空）
