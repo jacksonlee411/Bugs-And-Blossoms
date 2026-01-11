@@ -218,6 +218,18 @@ type staffingAssignmentsAPIRequest struct {
 	AllocatedFte  string `json:"allocated_fte"`
 }
 
+type staffingAssignmentEventsCorrectAPIRequest struct {
+	AssignmentID        string          `json:"assignment_id"`
+	TargetEffectiveDate string          `json:"target_effective_date"`
+	ReplacementPayload  json.RawMessage `json:"replacement_payload"`
+}
+
+type staffingAssignmentEventsRescindAPIRequest struct {
+	AssignmentID        string          `json:"assignment_id"`
+	TargetEffectiveDate string          `json:"target_effective_date"`
+	Payload             json.RawMessage `json:"payload"`
+}
+
 func handleAssignmentsAPI(w http.ResponseWriter, r *http.Request, store AssignmentStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -307,6 +319,122 @@ func handleAssignmentsAPI(w http.ResponseWriter, r *http.Request, store Assignme
 	}
 }
 
+func handleAssignmentEventsCorrectAPI(w http.ResponseWriter, r *http.Request, store AssignmentStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	var req staffingAssignmentEventsCorrectAPIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+	req.AssignmentID = strings.TrimSpace(req.AssignmentID)
+	req.TargetEffectiveDate = strings.TrimSpace(req.TargetEffectiveDate)
+	if req.AssignmentID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_assignment_id", "assignment_id is required")
+		return
+	}
+	if req.TargetEffectiveDate == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_target_effective_date", "target_effective_date is required")
+		return
+	}
+	if _, err := time.Parse("2006-01-02", req.TargetEffectiveDate); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_target_effective_date", "invalid target_effective_date")
+		return
+	}
+
+	eventID, err := store.CorrectAssignmentEvent(r.Context(), tenant.ID, req.AssignmentID, req.TargetEffectiveDate, req.ReplacementPayload)
+	if err != nil {
+		code := stablePgMessage(err)
+		status := http.StatusInternalServerError
+		switch pgErrorMessage(err) {
+		case "STAFFING_IDEMPOTENCY_REUSED":
+			status = http.StatusConflict
+		default:
+			if isStableDBCode(code) {
+				status = http.StatusUnprocessableEntity
+			}
+			if isBadRequestError(err) || isPgInvalidInput(err) {
+				status = http.StatusBadRequest
+			}
+		}
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "correct failed")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"correction_event_id":   eventID,
+		"target_effective_date": req.TargetEffectiveDate,
+	})
+}
+
+func handleAssignmentEventsRescindAPI(w http.ResponseWriter, r *http.Request, store AssignmentStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	var req staffingAssignmentEventsRescindAPIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+	req.AssignmentID = strings.TrimSpace(req.AssignmentID)
+	req.TargetEffectiveDate = strings.TrimSpace(req.TargetEffectiveDate)
+	if req.AssignmentID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_assignment_id", "assignment_id is required")
+		return
+	}
+	if req.TargetEffectiveDate == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "missing_target_effective_date", "target_effective_date is required")
+		return
+	}
+	if _, err := time.Parse("2006-01-02", req.TargetEffectiveDate); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_target_effective_date", "invalid target_effective_date")
+		return
+	}
+
+	eventID, err := store.RescindAssignmentEvent(r.Context(), tenant.ID, req.AssignmentID, req.TargetEffectiveDate, req.Payload)
+	if err != nil {
+		code := stablePgMessage(err)
+		status := http.StatusInternalServerError
+		switch pgErrorMessage(err) {
+		case "STAFFING_IDEMPOTENCY_REUSED":
+			status = http.StatusConflict
+		default:
+			if isStableDBCode(code) {
+				status = http.StatusUnprocessableEntity
+			}
+			if isBadRequestError(err) || isPgInvalidInput(err) {
+				status = http.StatusBadRequest
+			}
+		}
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "rescind failed")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"rescind_event_id":      eventID,
+		"target_effective_date": req.TargetEffectiveDate,
+	})
+}
+
 func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore PositionStore, assignmentStore AssignmentStore, personStore PersonStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -363,6 +491,8 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 			return
 		}
 
+		action := strings.TrimSpace(r.Form.Get("action"))
+
 		effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
 		if effectiveDate == "" {
 			effectiveDate = asOf
@@ -406,9 +536,80 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 			return
 		}
 
-		if _, err := assignmentStore.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, effectiveDate, postPersonUUID, positionID, status, baseSalary, allocatedFte); err != nil {
+		switch action {
+		case "":
+			if _, err := assignmentStore.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, effectiveDate, postPersonUUID, positionID, status, baseSalary, allocatedFte); err != nil {
+				assigns, errMsg := list()
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, stablePgMessage(err))))
+				return
+			}
+		case "correct_event":
+			assignmentID := strings.TrimSpace(r.Form.Get("assignment_id"))
+			targetEffectiveDate := strings.TrimSpace(r.Form.Get("target_effective_date"))
+			if assignmentID == "" || targetEffectiveDate == "" {
+				assigns, errMsg := list()
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "assignment_id/target_effective_date is required")))
+				return
+			}
+			if _, err := time.Parse("2006-01-02", targetEffectiveDate); err != nil {
+				assigns, errMsg := list()
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "target_effective_date 无效")))
+				return
+			}
+			if positionID == "" {
+				assigns, errMsg := list()
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "position_id is required")))
+				return
+			}
+
+			replacementPayload := map[string]any{
+				"position_id": positionID,
+			}
+			if baseSalary != "" {
+				replacementPayload["base_salary"] = baseSalary
+			}
+			if allocatedFte != "" {
+				replacementPayload["allocated_fte"] = allocatedFte
+			}
+			if status != "" {
+				replacementPayload["status"] = status
+			}
+			raw, _ := json.Marshal(replacementPayload)
+
+			if _, err := assignmentStore.CorrectAssignmentEvent(r.Context(), tenant.ID, assignmentID, targetEffectiveDate, raw); err != nil {
+				assigns, errMsg := list()
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, stablePgMessage(err))))
+				return
+			}
+		case "rescind_event":
+			assignmentID := strings.TrimSpace(r.Form.Get("assignment_id"))
+			targetEffectiveDate := strings.TrimSpace(r.Form.Get("target_effective_date"))
+			note := strings.TrimSpace(r.Form.Get("note"))
+			if assignmentID == "" || targetEffectiveDate == "" {
+				assigns, errMsg := list()
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "assignment_id/target_effective_date is required")))
+				return
+			}
+			if _, err := time.Parse("2006-01-02", targetEffectiveDate); err != nil {
+				assigns, errMsg := list()
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "target_effective_date 无效")))
+				return
+			}
+
+			payload := map[string]any{}
+			if note != "" {
+				payload["note"] = note
+			}
+			raw, _ := json.Marshal(payload)
+
+			if _, err := assignmentStore.RescindAssignmentEvent(r.Context(), tenant.ID, assignmentID, targetEffectiveDate, raw); err != nil {
+				assigns, errMsg := list()
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, stablePgMessage(err))))
+				return
+			}
+		default:
 			assigns, errMsg := list()
-			writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, stablePgMessage(err))))
+			writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "unknown action")))
 			return
 		}
 
@@ -682,13 +883,41 @@ func renderAssignments(assignments []Assignment, positions []Position, tenant Te
 	}
 
 	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr>` +
-		`<th>effective_date</th><th>assignment_id</th><th>position_id</th><th>status</th>` +
+		`<th>effective_date</th><th>assignment_id</th><th>position_id</th><th>status</th><th>actions</th>` +
 		`</tr></thead><tbody>`)
 	for _, a := range assignments {
 		b.WriteString(`<tr><td><code>` + html.EscapeString(a.EffectiveAt) + `</code></td>` +
 			`<td><code>` + html.EscapeString(a.AssignmentID) + `</code></td>` +
 			`<td><code>` + html.EscapeString(a.PositionID) + `</code></td>` +
-			`<td>` + html.EscapeString(a.Status) + `</td></tr>`)
+			`<td>` + html.EscapeString(a.Status) + `</td>` +
+			`<td>` +
+			`<form method="POST" action="/org/assignments?as_of=` + url.QueryEscape(asOf) + `" style="display:inline-block;margin-right:8px">` +
+			`<input type="hidden" name="action" value="rescind_event" />` +
+			`<input type="hidden" name="effective_date" value="` + html.EscapeString(asOf) + `" />` +
+			`<input type="hidden" name="pernr" value="` + html.EscapeString(pernr) + `" />` +
+			`<input type="hidden" name="person_uuid" value="` + html.EscapeString(personUUID) + `" />` +
+			`<input type="hidden" name="assignment_id" value="` + html.EscapeString(a.AssignmentID) + `" />` +
+			`<input type="hidden" name="target_effective_date" value="` + html.EscapeString(a.EffectiveAt) + `" />` +
+			`<button type="submit">Rescind</button>` +
+			`</form>` +
+			`<form method="POST" action="/org/assignments?as_of=` + url.QueryEscape(asOf) + `" style="display:inline-block">` +
+			`<input type="hidden" name="action" value="correct_event" />` +
+			`<input type="hidden" name="effective_date" value="` + html.EscapeString(asOf) + `" />` +
+			`<input type="hidden" name="pernr" value="` + html.EscapeString(pernr) + `" />` +
+			`<input type="hidden" name="person_uuid" value="` + html.EscapeString(personUUID) + `" />` +
+			`<input type="hidden" name="assignment_id" value="` + html.EscapeString(a.AssignmentID) + `" />` +
+			`<input type="hidden" name="target_effective_date" value="` + html.EscapeString(a.EffectiveAt) + `" />` +
+			`<input type="hidden" name="position_id" value="` + html.EscapeString(a.PositionID) + `" />` +
+			`<label>base_salary <input type="number" name="base_salary" step="0.01" min="0" style="width:120px" /></label> ` +
+			`<label>allocated_fte <input type="number" name="allocated_fte" step="0.01" min="0.01" max="1.00" style="width:80px" /></label> ` +
+			`<label>status <select name="status">` +
+			`<option value=""></option>` +
+			`<option value="active">active</option>` +
+			`<option value="inactive">inactive</option>` +
+			`</select></label> ` +
+			`<button type="submit">Correct</button>` +
+			`</form>` +
+			`</td></tr>`)
 	}
 	b.WriteString(`</tbody></table>`)
 	return b.String()

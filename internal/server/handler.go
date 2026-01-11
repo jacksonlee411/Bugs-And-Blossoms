@@ -454,6 +454,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssignmentsAPI(w, r, assignmentStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/assignment-events:correct", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssignmentEventsCorrectAPI(w, r, assignmentStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/assignment-events:rescind", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssignmentEventsRescindAPI(w, r, assignmentStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/attendance-punches", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAttendancePunchesAPI(w, r, attendanceStore)
 	}))

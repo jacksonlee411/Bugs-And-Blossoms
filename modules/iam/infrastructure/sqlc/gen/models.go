@@ -403,6 +403,32 @@ type StaffingAssignmentEvent struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type StaffingAssignmentEventCorrection struct {
+	ID                  int64              `json:"id"`
+	EventID             pgtype.UUID        `json:"event_id"`
+	TenantID            pgtype.UUID        `json:"tenant_id"`
+	AssignmentID        pgtype.UUID        `json:"assignment_id"`
+	TargetEffectiveDate pgtype.Date        `json:"target_effective_date"`
+	ReplacementPayload  []byte             `json:"replacement_payload"`
+	RequestID           string             `json:"request_id"`
+	InitiatorID         pgtype.UUID        `json:"initiator_id"`
+	TransactionTime     pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+}
+
+type StaffingAssignmentEventRescind struct {
+	ID                  int64              `json:"id"`
+	EventID             pgtype.UUID        `json:"event_id"`
+	TenantID            pgtype.UUID        `json:"tenant_id"`
+	AssignmentID        pgtype.UUID        `json:"assignment_id"`
+	TargetEffectiveDate pgtype.Date        `json:"target_effective_date"`
+	Payload             []byte             `json:"payload"`
+	RequestID           string             `json:"request_id"`
+	InitiatorID         pgtype.UUID        `json:"initiator_id"`
+	TransactionTime     pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+}
+
 type StaffingAssignmentVersion struct {
 	ID             int64                     `json:"id"`
 	TenantID       pgtype.UUID               `json:"tenant_id"`
