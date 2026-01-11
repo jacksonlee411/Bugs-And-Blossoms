@@ -177,6 +177,8 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
 
   await expect(page.locator("tr", { hasText: disabledPositionName }).first()).toContainText("disabled");
 
+  const positionUpdateFormLate = page.locator(`form[method="POST"][action="/org/positions?as_of=${lateEffectiveDate}"]`).nth(1);
+
   const managerPernr = "101";
   const reporteePernr = "102";
   const managerPositionName = `TP060-03 Position ${managerPernr} ${runID}`;
@@ -186,10 +188,10 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
   expect(managerPositionID).not.toBeUndefined();
   expect(reporteePositionID).not.toBeUndefined();
 
-  await positionUpdateForm.locator('input[name="effective_date"]').fill(lateEffectiveDate);
-  await positionUpdateForm.locator('select[name="position_id"]').selectOption(reporteePositionID);
-  await positionUpdateForm.locator('select[name="reports_to_position_id"]').selectOption(managerPositionID);
-  await positionUpdateForm.locator('button[type="submit"]').click();
+  await positionUpdateFormLate.locator('input[name="effective_date"]').fill(lateEffectiveDate);
+  await positionUpdateFormLate.locator('select[name="position_id"]').selectOption(reporteePositionID);
+  await positionUpdateFormLate.locator('select[name="reports_to_position_id"]').selectOption(managerPositionID);
+  await positionUpdateFormLate.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${lateEffectiveDate}$`));
 
   const reporteeRow = page.locator("tr", { hasText: reporteePositionName }).first();
