@@ -2680,6 +2680,16 @@ func jobcatalogSmoke(args []string) {
 	// SetID bootstrap is part of 009M1 dependency chain; smoke uses it to avoid hidden coupling.
 	_, _ = tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $1::uuid);`, tenantA)
 
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_families WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+
 	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_group_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
@@ -2744,6 +2754,153 @@ SELECT jobcatalog.submit_job_family_group_event(
 	}
 	if count != 1 {
 		fatalf("expected versions count=1 under tenant A, got %d", count)
+	}
+
+	groupID2 := "00000000-0000-0000-0000-00000000c111"
+	eventID2 := "00000000-0000-0000-0000-00000000c112"
+	requestID2 := "dbtool-jobcatalog-smoke-create2"
+
+	if _, err := tx.Exec(ctx, `
+SELECT jobcatalog.submit_job_family_group_event(
+  $1::uuid,
+  $2::uuid,
+  'SHARE',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('code', 'JC2', 'name', 'Job Family Group 2', 'description', null),
+  $5::text,
+  $6::uuid
+);
+`, eventID2, tenantA, groupID2, "2026-01-01", requestID2, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	familyID := "00000000-0000-0000-0000-00000000c201"
+	familyCreateEventID := "00000000-0000-0000-0000-00000000c202"
+	familyCreateRequestID := "dbtool-jobcatalog-smoke-family-create"
+
+	var familyCreatedEventDBID int64
+	if err := tx.QueryRow(ctx, `
+SELECT jobcatalog.submit_job_family_event(
+  $1::uuid,
+  $2::uuid,
+  'SHARE',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_id', $5::uuid),
+  $6::text,
+  $7::uuid
+);
+`, familyCreateEventID, tenantA, familyID, "2026-01-01", groupID, familyCreateRequestID, initiatorID).Scan(&familyCreatedEventDBID); err != nil {
+		fatal(err)
+	}
+
+	var familyRetriedEventDBID int64
+	if err := tx.QueryRow(ctx, `
+SELECT jobcatalog.submit_job_family_event(
+  $1::uuid,
+  $2::uuid,
+  'SHARE',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_id', $5::uuid),
+  $6::text,
+  $7::uuid
+);
+`, familyCreateEventID, tenantA, familyID, "2026-01-01", groupID, familyCreateRequestID, initiatorID).Scan(&familyRetriedEventDBID); err != nil {
+		fatal(err)
+	}
+	if familyRetriedEventDBID != familyCreatedEventDBID {
+		fatalf("expected idempotent retry to return same family event id: got %d want %d", familyRetriedEventDBID, familyCreatedEventDBID)
+	}
+
+	familyUpdateEventID := "00000000-0000-0000-0000-00000000c203"
+	familyUpdateRequestID := "dbtool-jobcatalog-smoke-family-reparent"
+
+	if _, err := tx.Exec(ctx, `
+SELECT jobcatalog.submit_job_family_event(
+  $1::uuid,
+  $2::uuid,
+  'SHARE',
+  $3::uuid,
+  'UPDATE',
+  $4::date,
+  jsonb_build_object('job_family_group_id', $5::uuid),
+  $6::text,
+  $7::uuid
+);
+`, familyUpdateEventID, tenantA, familyID, "2026-02-01", groupID2, familyUpdateRequestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	familyDisableEventID := "00000000-0000-0000-0000-00000000c204"
+	familyDisableRequestID := "dbtool-jobcatalog-smoke-family-disable"
+
+	if _, err := tx.Exec(ctx, `
+SELECT jobcatalog.submit_job_family_event(
+  $1::uuid,
+  $2::uuid,
+  'SHARE',
+  $3::uuid,
+  'DISABLE',
+  $4::date,
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, familyDisableEventID, tenantA, familyID, "2026-03-01", familyDisableRequestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	var familyGroupAtJan string
+	if err := tx.QueryRow(ctx, `
+SELECT job_family_group_id::text
+FROM jobcatalog.job_family_versions
+WHERE tenant_id = $1::uuid
+  AND setid = 'SHARE'
+  AND job_family_id = $2::uuid
+  AND validity @> $3::date
+LIMIT 1
+`, tenantA, familyID, "2026-01-15").Scan(&familyGroupAtJan); err != nil {
+		fatal(err)
+	}
+	if familyGroupAtJan != groupID {
+		fatalf("expected family group at 2026-01-15 to be %s, got %s", groupID, familyGroupAtJan)
+	}
+
+	var familyGroupAtFeb string
+	if err := tx.QueryRow(ctx, `
+SELECT job_family_group_id::text
+FROM jobcatalog.job_family_versions
+WHERE tenant_id = $1::uuid
+  AND setid = 'SHARE'
+  AND job_family_id = $2::uuid
+  AND validity @> $3::date
+LIMIT 1
+`, tenantA, familyID, "2026-02-15").Scan(&familyGroupAtFeb); err != nil {
+		fatal(err)
+	}
+	if familyGroupAtFeb != groupID2 {
+		fatalf("expected family group at 2026-02-15 to be %s, got %s", groupID2, familyGroupAtFeb)
+	}
+
+	var familyIsActiveAtMar bool
+	if err := tx.QueryRow(ctx, `
+SELECT is_active
+FROM jobcatalog.job_family_versions
+WHERE tenant_id = $1::uuid
+  AND setid = 'SHARE'
+  AND job_family_id = $2::uuid
+  AND validity @> $3::date
+LIMIT 1
+`, tenantA, familyID, "2026-03-15").Scan(&familyIsActiveAtMar); err != nil {
+		fatal(err)
+	}
+	if familyIsActiveAtMar {
+		fatalf("expected family to be disabled at 2026-03-15")
 	}
 
 	if err := tx.Commit(ctx); err != nil {
