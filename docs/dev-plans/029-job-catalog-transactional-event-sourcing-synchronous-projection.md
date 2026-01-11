@@ -1,6 +1,6 @@
 # DEV-PLAN-029：Job Catalog（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
-**状态**: 部分完成（009M1：Job Family Group 最小闭环；M2：Job Family Group 合同对齐补丁；M3：Job Family；2026-01-11）
+**状态**: 部分完成（009M1：Job Family Group 最小闭环；M2：Job Family Group 合同对齐补丁；M3：Job Family；M4：Job Level；2026-01-11）
 
 > 本计划的定位：作为 Greenfield HR 的 Job Catalog 子域，提供 **Job Catalog 权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026/030` 对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -588,13 +588,14 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
     - 具备：CREATE/UPDATE/DISABLE 写入 → as-of 读取（直接查 versions 或通过快照函数；快照可留到 M6）。
   - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证（覆盖 reparenting 与 DISABLE）。
 
-- [ ] **M4：Job Level（`job_levels`）**
+- [x] **M4：Job Level（`job_levels`）**
   - 范围：落地 Job Level 的 identity/events/versions + submit/replay。
   - 交付物（至少）：
     - schema：`jobcatalog.job_levels/job_level_events/job_level_versions`（含 `setid`、RLS、约束、索引）。
     - kernel：`submit_job_level_event(...)` + `replay_job_level_versions(...)`（幂等/同日唯一/全量重放对齐 M2 口径）。
   - Done（最小验收）：
     - 具备：CREATE/UPDATE/DISABLE 写入 → as-of 读取闭环。
+  - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证（覆盖 level CREATE/UPDATE/DISABLE）。
 
 - [ ] **M5：Job Profile（`job_profiles`）+ Profile↔Families 关系**
   - 范围：落地 Job Profile 的 identity/events/versions + submit/replay，并实现 `job_profile_version_job_families` 关系表与“至少一个 family + 恰好一个 primary”的不变量裁决。

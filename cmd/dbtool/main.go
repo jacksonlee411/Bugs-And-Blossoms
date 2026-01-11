@@ -2680,6 +2680,16 @@ func jobcatalogSmoke(args []string) {
 	// SetID bootstrap is part of 009M1 dependency chain; smoke uses it to avoid hidden coupling.
 	_, _ = tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $1::uuid);`, tenantA)
 
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_level_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_level_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_levels WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+
 	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
@@ -2901,6 +2911,117 @@ LIMIT 1
 	}
 	if familyIsActiveAtMar {
 		fatalf("expected family to be disabled at 2026-03-15")
+	}
+
+	levelID := "00000000-0000-0000-0000-00000000c301"
+	levelCreateEventID := "00000000-0000-0000-0000-00000000c302"
+	levelCreateRequestID := "dbtool-jobcatalog-smoke-level-create"
+
+	var levelCreatedEventDBID int64
+	if err := tx.QueryRow(ctx, `
+SELECT jobcatalog.submit_job_level_event(
+  $1::uuid,
+  $2::uuid,
+  'SHARE',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('code', 'JL1', 'name', 'Job Level 1', 'description', null),
+  $5::text,
+  $6::uuid
+);
+`, levelCreateEventID, tenantA, levelID, "2026-01-01", levelCreateRequestID, initiatorID).Scan(&levelCreatedEventDBID); err != nil {
+		fatal(err)
+	}
+
+	var levelRetriedEventDBID int64
+	if err := tx.QueryRow(ctx, `
+SELECT jobcatalog.submit_job_level_event(
+  $1::uuid,
+  $2::uuid,
+  'SHARE',
+  $3::uuid,
+  'CREATE',
+  $4::date,
+  jsonb_build_object('code', 'JL1', 'name', 'Job Level 1', 'description', null),
+  $5::text,
+  $6::uuid
+);
+`, levelCreateEventID, tenantA, levelID, "2026-01-01", levelCreateRequestID, initiatorID).Scan(&levelRetriedEventDBID); err != nil {
+		fatal(err)
+	}
+	if levelRetriedEventDBID != levelCreatedEventDBID {
+		fatalf("expected idempotent retry to return same level event id: got %d want %d", levelRetriedEventDBID, levelCreatedEventDBID)
+	}
+
+	levelUpdateEventID := "00000000-0000-0000-0000-00000000c303"
+	levelUpdateRequestID := "dbtool-jobcatalog-smoke-level-update"
+
+	if _, err := tx.Exec(ctx, `
+SELECT jobcatalog.submit_job_level_event(
+  $1::uuid,
+  $2::uuid,
+  'SHARE',
+  $3::uuid,
+  'UPDATE',
+  $4::date,
+  jsonb_build_object('name', 'Job Level 1 Updated'),
+  $5::text,
+  $6::uuid
+);
+`, levelUpdateEventID, tenantA, levelID, "2026-02-01", levelUpdateRequestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	levelDisableEventID := "00000000-0000-0000-0000-00000000c304"
+	levelDisableRequestID := "dbtool-jobcatalog-smoke-level-disable"
+
+	if _, err := tx.Exec(ctx, `
+SELECT jobcatalog.submit_job_level_event(
+  $1::uuid,
+  $2::uuid,
+  'SHARE',
+  $3::uuid,
+  'DISABLE',
+  $4::date,
+  '{}'::jsonb,
+  $5::text,
+  $6::uuid
+);
+`, levelDisableEventID, tenantA, levelID, "2026-03-01", levelDisableRequestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	var levelNameAtFeb string
+	if err := tx.QueryRow(ctx, `
+SELECT name
+FROM jobcatalog.job_level_versions
+WHERE tenant_id = $1::uuid
+  AND setid = 'SHARE'
+  AND job_level_id = $2::uuid
+  AND validity @> $3::date
+LIMIT 1
+`, tenantA, levelID, "2026-02-15").Scan(&levelNameAtFeb); err != nil {
+		fatal(err)
+	}
+	if levelNameAtFeb != "Job Level 1 Updated" {
+		fatalf("expected level name at 2026-02-15 to be updated, got %q", levelNameAtFeb)
+	}
+
+	var levelIsActiveAtMar bool
+	if err := tx.QueryRow(ctx, `
+SELECT is_active
+FROM jobcatalog.job_level_versions
+WHERE tenant_id = $1::uuid
+  AND setid = 'SHARE'
+  AND job_level_id = $2::uuid
+  AND validity @> $3::date
+LIMIT 1
+`, tenantA, levelID, "2026-03-15").Scan(&levelIsActiveAtMar); err != nil {
+		fatal(err)
+	}
+	if levelIsActiveAtMar {
+		fatalf("expected level to be disabled at 2026-03-15")
 	}
 
 	if err := tx.Commit(ctx); err != nil {
