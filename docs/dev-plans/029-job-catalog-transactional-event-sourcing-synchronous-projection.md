@@ -1,6 +1,6 @@
 # DEV-PLAN-029：Job Catalog（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
-**状态**: 部分完成（009M1：Job Family Group 最小闭环；M2：Job Family Group 合同对齐补丁；M3：Job Family；M4：Job Level；M5：Job Profile；M6：Snapshot；M7：Go+UI；2026-01-11）
+**状态**: 已完成（009M1：Job Family Group 最小闭环；M2：Job Family Group 合同对齐补丁；M3：Job Family；M4：Job Level；M5：Job Profile；M6：Snapshot；M7：Go+UI；2026-01-11）
 
 > 本计划的定位：作为 Greenfield HR 的 Job Catalog 子域，提供 **Job Catalog 权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026/030` 对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
