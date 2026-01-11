@@ -23,7 +23,8 @@
 
 ## M3-B：Terminate / Deactivate（`status=inactive`）
 
-- 状态：已完成（待 PR 合并）
+- 状态：已完成（PR #207，待合并）
+- PR：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/207
 - 变更摘要：
   - `internal/server/staffing_handlers.go`：
     - `POST /org/api/assignments` 支持可选 `status` 字段（`active|inactive`），非法值 400。
