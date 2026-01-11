@@ -40,7 +40,8 @@
 
 ## M3-C：质量补齐（Assignment 不变量的可复现负例）
 
-- 状态：已完成（待 PR 合并）
+- 状态：已完成（PR #208，待合并）
+- PR：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/208
 - 变更摘要：
   - `cmd/dbtool/main.go`（`staffing-smoke`）新增负例断言：
     - one-per-day：同一 `(tenant_id, assignment_id, effective_date)` 用不同 `event_id` 再次提交，要求能定位到 `assignment_events_one_per_day_unique`（或稳定码 `STAFFING_ASSIGNMENT_ONE_PER_DAY`）。
