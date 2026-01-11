@@ -55,7 +55,9 @@
 
 ## M4：Correct / Rescind（Delete-slice + Stitch）
 
-- 状态：已实现（待合并）
+- 状态：已合并（PR #211）
+- PR：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/211
+- 合并提交：`a6658bb`
 - 变更摘要（对齐 `docs/dev-plans/031-greenfield-assignment-job-data.md` §9.4，保持 append-only，不引入 effseq，不改变同日唯一约束）：
   - DB（Schema SSOT）：
     - `modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql`：新增两张 append-only 表：
