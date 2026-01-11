@@ -486,9 +486,18 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, store JobCatalogSt
 			buID = formBU
 		}
 
-		code := strings.TrimSpace(r.Form.Get("code"))
-		name := strings.TrimSpace(r.Form.Get("name"))
-		desc := strings.TrimSpace(r.Form.Get("description"))
+		codeField := "code"
+		nameField := "name"
+		descField := "description"
+		if action == "create_job_level" {
+			codeField = "job_level_code"
+			nameField = "job_level_name"
+			descField = "job_level_description"
+		}
+
+		code := strings.TrimSpace(r.Form.Get(codeField))
+		name := strings.TrimSpace(r.Form.Get(nameField))
+		desc := strings.TrimSpace(r.Form.Get(descField))
 		if code == "" || name == "" {
 			groups, levels, resolved, errMsg := list("code/name is required")
 			writePage(w, r, renderJobCatalog(groups, levels, activeBUs, tenant, buID, errMsg, asOf, resolved))
@@ -579,9 +588,9 @@ func renderJobCatalog(groups []JobFamilyGroup, levels []JobLevel, businessUnits 
 	b.WriteString(`<input type="hidden" name="action" value="create_job_level" />`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
 	b.WriteString(`<label>Business Unit <input name="business_unit_id" value="` + html.EscapeString(businessUnitID) + `" maxlength="5" /></label><br/>`)
-	b.WriteString(`<label>Code <input name="code" /></label><br/>`)
-	b.WriteString(`<label>Name <input name="name" /></label><br/>`)
-	b.WriteString(`<label>Description <input name="description" /></label><br/>`)
+	b.WriteString(`<label>Code <input name="job_level_code" /></label><br/>`)
+	b.WriteString(`<label>Name <input name="job_level_name" /></label><br/>`)
+	b.WriteString(`<label>Description <input name="job_level_description" /></label><br/>`)
 	b.WriteString(`<button type="submit">Create</button>`)
 	b.WriteString(`</form>`)
 

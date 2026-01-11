@@ -317,9 +317,9 @@ func TestHandleJobCatalog_Post_CreateJobLevel_Success(t *testing.T) {
 	form.Set("action", "create_job_level")
 	form.Set("effective_date", "2026-01-01")
 	form.Set("business_unit_id", "BU000")
-	form.Set("code", "JL1")
-	form.Set("name", "Level1")
-	form.Set("description", "")
+	form.Set("job_level_code", "JL1")
+	form.Set("job_level_name", "Level1")
+	form.Set("job_level_description", "")
 
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -339,8 +339,8 @@ func TestHandleJobCatalog_Post_CreateJobLevel_Error(t *testing.T) {
 	form.Set("action", "create_job_level")
 	form.Set("effective_date", "2026-01-01")
 	form.Set("business_unit_id", "BU000")
-	form.Set("code", "JL1")
-	form.Set("name", "Level1")
+	form.Set("job_level_code", "JL1")
+	form.Set("job_level_name", "Level1")
 
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
