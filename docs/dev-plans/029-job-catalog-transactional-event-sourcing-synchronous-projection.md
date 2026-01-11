@@ -1,6 +1,6 @@
 # DEV-PLAN-029：Job Catalog（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
-**状态**: 部分完成（009M1：Job Family Group 最小闭环；M2：Job Family Group 合同对齐补丁；2026-01-11）
+**状态**: 部分完成（009M1：Job Family Group 最小闭环；M2：Job Family Group 合同对齐补丁；M3：Job Family；2026-01-11）
 
 > 本计划的定位：作为 Greenfield HR 的 Job Catalog 子域，提供 **Job Catalog 权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026/030` 对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -579,13 +579,14 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
     - §8 中 “事件幂等/全量重放/同日唯一/versions no-overlap/gapless/RLS” 对 group 至少可验证（允许其余实体未实现）。
   - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证。
 
-- [ ] **M3：Job Family（`job_families`，含 effective-dated reparenting）**
+- [x] **M3：Job Family（`job_families`，含 effective-dated reparenting）**
   - 范围：落地 Job Family 的 identity/events/versions + submit/replay；支持 `job_family_group_id` 的有效期归属变更（reparenting）。
   - 交付物（至少）：
     - schema：`jobcatalog.job_families/job_family_events/job_family_versions`（含 `setid`、RLS、约束、索引）。
     - kernel：`submit_job_family_event(...)` + `replay_job_family_versions(...)`（同事务 delete+replay；引用校验按 §10.2）。
   - Done（最小验收）：
     - 具备：CREATE/UPDATE/DISABLE 写入 → as-of 读取（直接查 versions 或通过快照函数；快照可留到 M6）。
+  - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证（覆盖 reparenting 与 DISABLE）。
 
 - [ ] **M4：Job Level（`job_levels`）**
   - 范围：落地 Job Level 的 identity/events/versions + submit/replay。

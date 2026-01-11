@@ -80,6 +80,30 @@ type IamTenantDomain struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+type JobcatalogJobFamily struct {
+	TenantID  pgtype.UUID        `json:"tenant_id"`
+	Setid     string             `json:"setid"`
+	ID        pgtype.UUID        `json:"id"`
+	Code      string             `json:"code"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type JobcatalogJobFamilyEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	Setid           string             `json:"setid"`
+	JobFamilyID     pgtype.UUID        `json:"job_family_id"`
+	EventType       string             `json:"event_type"`
+	EffectiveDate   pgtype.Date        `json:"effective_date"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type JobcatalogJobFamilyGroup struct {
 	TenantID  pgtype.UUID        `json:"tenant_id"`
 	Setid     string             `json:"setid"`
@@ -114,6 +138,22 @@ type JobcatalogJobFamilyGroupVersion struct {
 	Description      *string                   `json:"description"`
 	IsActive         bool                      `json:"is_active"`
 	ExternalRefs     []byte                    `json:"external_refs"`
+	LastEventID      int64                     `json:"last_event_id"`
+	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
+}
+
+type JobcatalogJobFamilyVersion struct {
+	ID               int64                     `json:"id"`
+	TenantID         pgtype.UUID               `json:"tenant_id"`
+	Setid            string                    `json:"setid"`
+	JobFamilyID      pgtype.UUID               `json:"job_family_id"`
+	Validity         pgtype.Range[pgtype.Date] `json:"validity"`
+	Name             string                    `json:"name"`
+	Description      *string                   `json:"description"`
+	IsActive         bool                      `json:"is_active"`
+	ExternalRefs     []byte                    `json:"external_refs"`
+	JobFamilyGroupID pgtype.UUID               `json:"job_family_group_id"`
 	LastEventID      int64                     `json:"last_event_id"`
 	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`

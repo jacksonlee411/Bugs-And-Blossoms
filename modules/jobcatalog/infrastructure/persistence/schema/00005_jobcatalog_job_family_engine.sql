@@ -1,74 +1,7 @@
-CREATE OR REPLACE FUNCTION jobcatalog.assert_current_tenant(p_tenant_id uuid)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_ctx_raw text;
-  v_ctx_tenant uuid;
-BEGIN
-  IF p_tenant_id IS NULL THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'tenant_id is required';
-  END IF;
-
-  v_ctx_raw := current_setting('app.current_tenant', true);
-  IF v_ctx_raw IS NULL OR btrim(v_ctx_raw) = '' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'RLS_TENANT_CONTEXT_MISSING',
-      DETAIL = 'app.current_tenant is required';
-  END IF;
-
-  BEGIN
-    v_ctx_tenant := v_ctx_raw::uuid;
-  EXCEPTION
-    WHEN invalid_text_representation THEN
-      RAISE EXCEPTION USING
-        ERRCODE = 'P0001',
-        MESSAGE = 'RLS_TENANT_CONTEXT_INVALID',
-        DETAIL = format('app.current_tenant=%s', v_ctx_raw);
-  END;
-
-  IF v_ctx_tenant <> p_tenant_id THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'RLS_TENANT_MISMATCH',
-      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_id, v_ctx_tenant);
-  END IF;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION jobcatalog.normalize_setid(p_setid text)
-RETURNS text
-LANGUAGE plpgsql
-IMMUTABLE
-AS $$
-DECLARE
-  v text;
-BEGIN
-  IF p_setid IS NULL OR btrim(p_setid) = '' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'setid is required';
-  END IF;
-  v := upper(btrim(p_setid));
-  IF v !~ '^[A-Z0-9]{1,5}$' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = format('setid=%s', v);
-  END IF;
-  RETURN v;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION jobcatalog.replay_job_family_group_versions(
+CREATE OR REPLACE FUNCTION jobcatalog.replay_job_family_versions(
   p_tenant_id uuid,
   p_setid text,
-  p_job_family_group_id uuid
+  p_job_family_id uuid
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -81,6 +14,7 @@ DECLARE
   v_row RECORD;
   v_next_date date;
   v_validity daterange;
+  v_group_id uuid;
 BEGIN
   PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
   v_setid := jobcatalog.normalize_setid(p_setid);
@@ -88,16 +22,16 @@ BEGIN
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
-  DELETE FROM jobcatalog.job_family_group_versions
-  WHERE tenant_id = p_tenant_id AND setid = v_setid AND job_family_group_id = p_job_family_group_id;
+  DELETE FROM jobcatalog.job_family_versions
+  WHERE tenant_id = p_tenant_id AND setid = v_setid AND job_family_id = p_job_family_id;
 
   v_prev := NULL;
   FOR v_row IN
     SELECT id, event_type, effective_date, payload
-    FROM jobcatalog.job_family_group_events
+    FROM jobcatalog.job_family_events
     WHERE tenant_id = p_tenant_id
       AND setid = v_setid
-      AND job_family_group_id = p_job_family_group_id
+      AND job_family_id = p_job_family_id
     ORDER BY effective_date ASC, id ASC
   LOOP
     v_state := COALESCE(v_prev, '{}'::jsonb);
@@ -109,11 +43,14 @@ BEGIN
           MESSAGE = 'JOBCATALOG_INVALID_EVENT',
           DETAIL = 'CREATE must be the first event';
       END IF;
+
+      v_group_id := NULLIF(btrim(COALESCE(v_row.payload->>'job_family_group_id', '')), '')::uuid;
       v_state := jsonb_build_object(
         'name', v_row.payload->>'name',
         'description', v_row.payload->'description',
         'is_active', true,
-        'external_refs', COALESCE(v_row.payload->'external_refs', '{}'::jsonb)
+        'external_refs', COALESCE(v_row.payload->'external_refs', '{}'::jsonb),
+        'job_family_group_id', v_group_id::text
       );
     ELSIF v_row.event_type = 'UPDATE' THEN
       IF v_prev IS NULL THEN
@@ -134,6 +71,9 @@ BEGIN
       IF v_row.payload ? 'external_refs' THEN
         v_state := jsonb_set(v_state, '{external_refs}', v_row.payload->'external_refs', true);
       END IF;
+      IF v_row.payload ? 'job_family_group_id' THEN
+        v_state := jsonb_set(v_state, '{job_family_group_id}', to_jsonb(v_row.payload->>'job_family_group_id'), true);
+      END IF;
     ELSIF v_row.event_type = 'DISABLE' THEN
       IF v_prev IS NULL THEN
         RAISE EXCEPTION USING
@@ -151,30 +91,31 @@ BEGIN
 
     v_next_date := NULL;
     SELECT e.effective_date INTO v_next_date
-    FROM jobcatalog.job_family_group_events e
+    FROM jobcatalog.job_family_events e
     WHERE e.tenant_id = p_tenant_id
       AND e.setid = v_setid
-      AND e.job_family_group_id = p_job_family_group_id
+      AND e.job_family_id = p_job_family_id
       AND (e.effective_date, e.id) > (v_row.effective_date, v_row.id)
     ORDER BY e.effective_date ASC, e.id ASC
     LIMIT 1;
 
     v_validity := daterange(v_row.effective_date, v_next_date, '[)');
 
-    INSERT INTO jobcatalog.job_family_group_versions (
+    INSERT INTO jobcatalog.job_family_versions (
       tenant_id,
       setid,
-      job_family_group_id,
+      job_family_id,
       validity,
       name,
       description,
       is_active,
       external_refs,
+      job_family_group_id,
       last_event_id
     ) VALUES (
       p_tenant_id,
       v_setid,
-      p_job_family_group_id,
+      p_job_family_id,
       v_validity,
       COALESCE(NULLIF(btrim(v_state->>'name'), ''), '[missing]'),
       CASE
@@ -183,6 +124,7 @@ BEGIN
       END,
       COALESCE((v_state->>'is_active')::boolean, true),
       COALESCE(v_state->'external_refs', '{}'::jsonb),
+      NULLIF(btrim(COALESCE(v_state->>'job_family_group_id', '')), '')::uuid,
       v_row.id
     );
 
@@ -194,10 +136,10 @@ BEGIN
       SELECT
         validity,
         lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
-      FROM jobcatalog.job_family_group_versions
+      FROM jobcatalog.job_family_versions
       WHERE tenant_id = p_tenant_id
         AND setid = v_setid
-        AND job_family_group_id = p_job_family_group_id
+        AND job_family_id = p_job_family_id
     )
     SELECT 1
     FROM ordered
@@ -208,17 +150,17 @@ BEGIN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_VALIDITY_GAP',
-      DETAIL = format('job_family_group_id=%s', p_job_family_group_id);
+      DETAIL = format('job_family_id=%s', p_job_family_id);
   END IF;
 
   IF EXISTS (
     SELECT 1
     FROM (
       SELECT validity
-      FROM jobcatalog.job_family_group_versions
+      FROM jobcatalog.job_family_versions
       WHERE tenant_id = p_tenant_id
         AND setid = v_setid
-        AND job_family_group_id = p_job_family_group_id
+        AND job_family_id = p_job_family_id
       ORDER BY lower(validity) DESC
       LIMIT 1
     ) last
@@ -228,16 +170,16 @@ BEGIN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_VALIDITY_NOT_INFINITE',
-      DETAIL = format('job_family_group_id=%s', p_job_family_group_id);
+      DETAIL = format('job_family_id=%s', p_job_family_id);
   END IF;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION jobcatalog.submit_job_family_group_event(
+CREATE OR REPLACE FUNCTION jobcatalog.submit_job_family_event(
   p_event_id uuid,
   p_tenant_id uuid,
   p_setid text,
-  p_job_family_group_id uuid,
+  p_job_family_id uuid,
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
@@ -254,8 +196,9 @@ DECLARE
   v_code text;
   v_name text;
   v_payload jsonb;
-  v_existing jobcatalog.job_family_group_events%ROWTYPE;
-  v_existing_group jobcatalog.job_family_groups%ROWTYPE;
+  v_existing jobcatalog.job_family_events%ROWTYPE;
+  v_existing_family jobcatalog.job_families%ROWTYPE;
+  v_group_id uuid;
 BEGIN
   PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
   IF p_event_id IS NULL THEN
@@ -270,11 +213,11 @@ BEGIN
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
       DETAIL = 'request_id is required';
   END IF;
-  IF p_job_family_group_id IS NULL THEN
+  IF p_job_family_id IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'job_family_group_id is required';
+      DETAIL = 'job_family_id is required';
   END IF;
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING
@@ -312,7 +255,7 @@ BEGIN
     IF EXISTS (
       SELECT 1
       FROM jsonb_object_keys(v_payload) AS k
-      WHERE k NOT IN ('code', 'name', 'description', 'external_refs')
+      WHERE k NOT IN ('code', 'name', 'description', 'external_refs', 'job_family_group_id')
       LIMIT 1
     ) THEN
       RAISE EXCEPTION USING
@@ -342,7 +285,7 @@ BEGIN
     IF EXISTS (
       SELECT 1
       FROM jsonb_object_keys(v_payload) AS k
-      WHERE k NOT IN ('name', 'description', 'is_active', 'external_refs')
+      WHERE k NOT IN ('name', 'description', 'is_active', 'external_refs', 'job_family_group_id')
       LIMIT 1
     ) THEN
       RAISE EXCEPTION USING
@@ -374,7 +317,13 @@ BEGIN
         MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
         DETAIL = 'payload.external_refs must be an object';
     END IF;
-    IF NOT (v_payload ? 'name' OR v_payload ? 'description' OR v_payload ? 'is_active' OR v_payload ? 'external_refs') THEN
+    IF v_payload ? 'job_family_group_id' AND NULLIF(btrim(COALESCE(v_payload->>'job_family_group_id', '')), '') IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+        DETAIL = 'payload.job_family_group_id must be non-empty';
+    END IF;
+    IF NOT (v_payload ? 'name' OR v_payload ? 'description' OR v_payload ? 'is_active' OR v_payload ? 'external_refs' OR v_payload ? 'job_family_group_id') THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
@@ -399,52 +348,110 @@ BEGIN
         DETAIL = 'code/name is required';
     END IF;
 
-    INSERT INTO jobcatalog.job_family_groups (tenant_id, setid, id, code)
-    VALUES (p_tenant_id, v_setid, p_job_family_group_id, v_code)
+    BEGIN
+      v_group_id := NULLIF(btrim(COALESCE(v_payload->>'job_family_group_id', '')), '')::uuid;
+    EXCEPTION
+      WHEN invalid_text_representation THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+          DETAIL = 'job_family_group_id must be uuid';
+    END;
+
+    IF v_group_id IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+        DETAIL = 'job_family_group_id is required';
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM jobcatalog.job_family_groups
+      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = v_group_id
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'JOBCATALOG_REFERENCE_NOT_FOUND',
+        DETAIL = format('job_family_group_id=%s', v_group_id);
+    END IF;
+
+    INSERT INTO jobcatalog.job_families (tenant_id, setid, id, code)
+    VALUES (p_tenant_id, v_setid, p_job_family_id, v_code)
     ON CONFLICT (id) DO NOTHING;
 
-    SELECT * INTO v_existing_group
-    FROM jobcatalog.job_family_groups
-    WHERE id = p_job_family_group_id;
+    SELECT * INTO v_existing_family
+    FROM jobcatalog.job_families
+    WHERE id = p_job_family_id;
 
-    IF v_existing_group.tenant_id <> p_tenant_id
-      OR v_existing_group.setid <> v_setid
-      OR v_existing_group.code <> v_code
+    IF v_existing_family.tenant_id <> p_tenant_id
+      OR v_existing_family.setid <> v_setid
+      OR v_existing_family.code <> v_code
     THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-        DETAIL = format('job_family_group_id=%s', p_job_family_group_id);
+        DETAIL = format('job_family_id=%s', p_job_family_id);
     END IF;
   ELSE
     IF NOT EXISTS (
-      SELECT 1 FROM jobcatalog.job_family_groups
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = p_job_family_group_id
+      SELECT 1 FROM jobcatalog.job_families
+      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = p_job_family_id
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_NOT_FOUND',
-        DETAIL = format('job_family_group_id=%s', p_job_family_group_id);
+        DETAIL = format('job_family_id=%s', p_job_family_id);
     END IF;
   END IF;
 
-  INSERT INTO jobcatalog.job_family_group_events (
-    event_id, tenant_id, setid, job_family_group_id, event_type, effective_date, payload, request_id, initiator_id
+  IF (p_event_type = 'CREATE' OR p_event_type = 'UPDATE') AND v_payload ? 'job_family_group_id' THEN
+    BEGIN
+      v_group_id := NULLIF(btrim(COALESCE(v_payload->>'job_family_group_id', '')), '')::uuid;
+    EXCEPTION
+      WHEN invalid_text_representation THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+          DETAIL = 'job_family_group_id must be uuid';
+    END;
+
+    IF v_group_id IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+        DETAIL = 'job_family_group_id must be non-empty';
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM jobcatalog.job_family_groups
+      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = v_group_id
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'JOBCATALOG_REFERENCE_NOT_FOUND',
+        DETAIL = format('job_family_group_id=%s', v_group_id);
+    END IF;
+  END IF;
+
+  INSERT INTO jobcatalog.job_family_events (
+    event_id, tenant_id, setid, job_family_id, event_type, effective_date, payload, request_id, initiator_id
   )
   VALUES (
-    p_event_id, p_tenant_id, v_setid, p_job_family_group_id, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_id
+    p_event_id, p_tenant_id, v_setid, p_job_family_id, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_id
   )
   ON CONFLICT (event_id) DO NOTHING
   RETURNING id INTO v_evt_db_id;
 
   IF v_evt_db_id IS NULL THEN
     SELECT * INTO v_existing
-    FROM jobcatalog.job_family_group_events
+    FROM jobcatalog.job_family_events
     WHERE event_id = p_event_id;
 
     IF v_existing.tenant_id <> p_tenant_id
       OR v_existing.setid <> v_setid
-      OR v_existing.job_family_group_id <> p_job_family_group_id
+      OR v_existing.job_family_id <> p_job_family_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
@@ -460,7 +467,7 @@ BEGIN
     RETURN v_existing.id;
   END IF;
 
-  PERFORM jobcatalog.replay_job_family_group_versions(p_tenant_id, v_setid, p_job_family_group_id);
+  PERFORM jobcatalog.replay_job_family_versions(p_tenant_id, v_setid, p_job_family_id);
 
   RETURN v_evt_db_id;
 END;
