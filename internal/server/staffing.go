@@ -20,6 +20,7 @@ type Position struct {
 	JobProfileCode  string
 	Name            string
 	LifecycleStatus string
+	CapacityFTE     string
 	EffectiveAt     string
 }
 
@@ -33,8 +34,8 @@ type Assignment struct {
 
 type PositionStore interface {
 	ListPositionsCurrent(ctx context.Context, tenantID string, asOfDate string) ([]Position, error)
-	CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, businessUnitID string, jobProfileID string, name string) (Position, error)
-	UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, businessUnitID string, reportsToPositionID string, jobProfileID string, name string, lifecycleStatus string) (Position, error)
+	CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, businessUnitID string, jobProfileID string, capacityFTE string, name string) (Position, error)
+	UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, businessUnitID string, reportsToPositionID string, jobProfileID string, capacityFTE string, name string, lifecycleStatus string) (Position, error)
 }
 
 type AssignmentStore interface {
@@ -72,6 +73,7 @@ func (s *staffingPGStore) ListPositionsCurrent(ctx context.Context, tenantID str
 	  COALESCE(jp.code, '') AS job_profile_code,
 	  COALESCE(pv.name, '') AS name,
 	  pv.lifecycle_status,
+	  pv.capacity_fte::text AS capacity_fte,
 	  lower(pv.validity)::text AS effective_date
 	FROM staffing.position_versions pv
 	LEFT JOIN jobcatalog.job_profiles jp
@@ -100,6 +102,7 @@ func (s *staffingPGStore) ListPositionsCurrent(ctx context.Context, tenantID str
 			&p.JobProfileCode,
 			&p.Name,
 			&p.LifecycleStatus,
+			&p.CapacityFTE,
 			&p.EffectiveAt,
 		); err != nil {
 			return nil, err
@@ -116,7 +119,7 @@ func (s *staffingPGStore) ListPositionsCurrent(ctx context.Context, tenantID str
 	return out, nil
 }
 
-func (s *staffingPGStore) CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, businessUnitID string, jobProfileID string, name string) (Position, error) {
+func (s *staffingPGStore) CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, businessUnitID string, jobProfileID string, capacityFTE string, name string) (Position, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Position{}, err
@@ -137,6 +140,7 @@ func (s *staffingPGStore) CreatePositionCurrent(ctx context.Context, tenantID st
 	}
 	businessUnitID = strings.TrimSpace(businessUnitID)
 	jobProfileID = strings.TrimSpace(jobProfileID)
+	capacityFTE = strings.TrimSpace(capacityFTE)
 	name = strings.TrimSpace(name)
 
 	var positionID string
@@ -154,6 +158,9 @@ func (s *staffingPGStore) CreatePositionCurrent(ctx context.Context, tenantID st
 	}
 	if jobProfileID != "" {
 		payload += `,"job_profile_id":` + strconv.Quote(jobProfileID)
+	}
+	if capacityFTE != "" {
+		payload += `,"capacity_fte":` + strconv.Quote(capacityFTE)
 	}
 	if name != "" {
 		payload += `,"name":` + strconv.Quote(name)
@@ -179,6 +186,9 @@ SELECT staffing.submit_position_event(
 		return Position{}, err
 	}
 
+	if capacityFTE == "" {
+		capacityFTE = "1.0"
+	}
 	return Position{
 		ID:              positionID,
 		OrgUnitID:       orgUnitID,
@@ -189,11 +199,12 @@ SELECT staffing.submit_position_event(
 		JobProfileCode:  "",
 		Name:            name,
 		LifecycleStatus: "active",
+		CapacityFTE:     capacityFTE,
 		EffectiveAt:     effectiveDate,
 	}, nil
 }
 
-func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, businessUnitID string, reportsToPositionID string, jobProfileID string, name string, lifecycleStatus string) (Position, error) {
+func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, businessUnitID string, reportsToPositionID string, jobProfileID string, capacityFTE string, name string, lifecycleStatus string) (Position, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Position{}, err
@@ -216,6 +227,7 @@ func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 	businessUnitID = strings.TrimSpace(businessUnitID)
 	reportsToPositionID = strings.TrimSpace(reportsToPositionID)
 	jobProfileID = strings.TrimSpace(jobProfileID)
+	capacityFTE = strings.TrimSpace(capacityFTE)
 	name = strings.TrimSpace(name)
 	lifecycleStatus = strings.TrimSpace(lifecycleStatus)
 
@@ -235,6 +247,9 @@ func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 		} else {
 			payloadParts = append(payloadParts, `"job_profile_id":`+strconv.Quote(jobProfileID))
 		}
+	}
+	if capacityFTE != "" {
+		payloadParts = append(payloadParts, `"capacity_fte":`+strconv.Quote(capacityFTE))
 	}
 	if name != "" {
 		payloadParts = append(payloadParts, `"name":`+strconv.Quote(name))
@@ -269,20 +284,21 @@ func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 
 	var out Position
 	if err := tx.QueryRow(ctx, `
-	SELECT
-	  pv.position_id::text,
-	  pv.org_unit_id::text,
-	  COALESCE(pv.reports_to_position_id::text, '') AS reports_to_position_id,
-	  COALESCE(pv.business_unit_id, '') AS business_unit_id,
-	  COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,
-	  COALESCE(pv.job_profile_id::text, '') AS job_profile_id,
-	  COALESCE(jp.code, '') AS job_profile_code,
-	  COALESCE(pv.name, '') AS name,
-	  pv.lifecycle_status,
-	  lower(pv.validity)::text AS effective_date
-	FROM staffing.position_versions pv
-	LEFT JOIN jobcatalog.job_profiles jp
-	  ON jp.tenant_id = pv.tenant_id
+		SELECT
+		  pv.position_id::text,
+		  pv.org_unit_id::text,
+		  COALESCE(pv.reports_to_position_id::text, '') AS reports_to_position_id,
+		  COALESCE(pv.business_unit_id, '') AS business_unit_id,
+		  COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,
+		  COALESCE(pv.job_profile_id::text, '') AS job_profile_id,
+		  COALESCE(jp.code, '') AS job_profile_code,
+		  COALESCE(pv.name, '') AS name,
+		  pv.lifecycle_status,
+		  pv.capacity_fte::text AS capacity_fte,
+		  lower(pv.validity)::text AS effective_date
+		FROM staffing.position_versions pv
+		LEFT JOIN jobcatalog.job_profiles jp
+		  ON jp.tenant_id = pv.tenant_id
 	 AND jp.setid = pv.jobcatalog_setid
 	 AND jp.id = pv.job_profile_id
 	WHERE pv.tenant_id = $1::uuid
@@ -298,6 +314,7 @@ func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 		&out.JobProfileCode,
 		&out.Name,
 		&out.LifecycleStatus,
+		&out.CapacityFTE,
 		&out.EffectiveAt,
 	); err != nil {
 		return Position{}, err
@@ -476,7 +493,7 @@ func (s *staffingMemoryStore) ListPositionsCurrent(_ context.Context, tenantID s
 	return append([]Position(nil), s.positions[tenantID]...), nil
 }
 
-func (s *staffingMemoryStore) CreatePositionCurrent(_ context.Context, tenantID string, effectiveDate string, orgUnitID string, businessUnitID string, jobProfileID string, name string) (Position, error) {
+func (s *staffingMemoryStore) CreatePositionCurrent(_ context.Context, tenantID string, effectiveDate string, orgUnitID string, businessUnitID string, jobProfileID string, capacityFTE string, name string) (Position, error) {
 	effectiveDate = strings.TrimSpace(effectiveDate)
 	if effectiveDate == "" {
 		return Position{}, newBadRequestError("effective_date is required")
@@ -487,6 +504,10 @@ func (s *staffingMemoryStore) CreatePositionCurrent(_ context.Context, tenantID 
 	}
 	businessUnitID = strings.TrimSpace(businessUnitID)
 	jobProfileID = strings.TrimSpace(jobProfileID)
+	capacityFTE = strings.TrimSpace(capacityFTE)
+	if capacityFTE == "" {
+		capacityFTE = "1.0"
+	}
 	name = strings.TrimSpace(name)
 
 	id := "pos-" + strconv.FormatInt(time.Now().UnixNano(), 10)
@@ -500,13 +521,14 @@ func (s *staffingMemoryStore) CreatePositionCurrent(_ context.Context, tenantID 
 		JobProfileCode:  "",
 		Name:            name,
 		LifecycleStatus: "active",
+		CapacityFTE:     capacityFTE,
 		EffectiveAt:     effectiveDate,
 	}
 	s.positions[tenantID] = append(s.positions[tenantID], p)
 	return p, nil
 }
 
-func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, businessUnitID string, reportsToPositionID string, jobProfileID string, name string, lifecycleStatus string) (Position, error) {
+func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, businessUnitID string, reportsToPositionID string, jobProfileID string, capacityFTE string, name string, lifecycleStatus string) (Position, error) {
 	effectiveDate = strings.TrimSpace(effectiveDate)
 	if effectiveDate == "" {
 		return Position{}, newBadRequestError("effective_date is required")
@@ -519,9 +541,10 @@ func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID 
 	businessUnitID = strings.TrimSpace(businessUnitID)
 	reportsToPositionID = strings.TrimSpace(reportsToPositionID)
 	jobProfileID = strings.TrimSpace(jobProfileID)
+	capacityFTE = strings.TrimSpace(capacityFTE)
 	name = strings.TrimSpace(name)
 	lifecycleStatus = strings.TrimSpace(lifecycleStatus)
-	if orgUnitID == "" && businessUnitID == "" && reportsToPositionID == "" && jobProfileID == "" && name == "" && lifecycleStatus == "" {
+	if orgUnitID == "" && businessUnitID == "" && reportsToPositionID == "" && jobProfileID == "" && capacityFTE == "" && name == "" && lifecycleStatus == "" {
 		return Position{}, newBadRequestError("at least one patch field is required")
 	}
 
@@ -544,6 +567,9 @@ func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID 
 			} else {
 				s.positions[tenantID][i].JobProfileID = jobProfileID
 			}
+		}
+		if capacityFTE != "" {
+			s.positions[tenantID][i].CapacityFTE = capacityFTE
 		}
 		if name != "" {
 			s.positions[tenantID][i].Name = name
