@@ -503,6 +503,98 @@ func staffingSmoke(args []string) {
 		fatalf("expected assignment_versions=1, got %d", assignmentVersions)
 	}
 
+	{
+		if _, err := tx.Exec(ctx, `SAVEPOINT sp_assignment_one_per_day;`); err != nil {
+			fatal(err)
+		}
+
+		var secondEventID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&secondEventID); err != nil {
+			fatal(err)
+		}
+
+		_, err = tx.Exec(ctx, `
+				SELECT staffing.submit_assignment_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::uuid,
+				  'primary',
+				  'UPDATE',
+				  $5::date,
+				  jsonb_build_object('position_id', $6::text),
+				  $7::text,
+				  $8::uuid
+				);
+			`, secondEventID, tenantA, assignmentID, personUUID, effectiveDate, positionID, requestID+"-as-one-per-day", initiatorID)
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_assignment_one_per_day;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		if err == nil {
+			fatalf("expected submit_assignment_event to fail when (tenant_id, assignment_id, effective_date) is reused with a different event_id")
+		}
+		constraint, hasConstraint := pgErrorConstraintName(err)
+		if hasConstraint && constraint == "assignment_events_one_per_day_unique" {
+			// OK: can locate the exact constraint (DEV-PLAN-031 M3-C).
+		} else {
+			if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_ASSIGNMENT_ONE_PER_DAY" {
+				fatalf("expected constraint=assignment_events_one_per_day_unique (or message=STAFFING_ASSIGNMENT_ONE_PER_DAY), got has_constraint=%v constraint=%q err=%v", hasConstraint, constraint, err)
+			}
+		}
+	}
+
+	{
+		if _, err := tx.Exec(ctx, `SAVEPOINT sp_assignment_missing_position;`); err != nil {
+			fatal(err)
+		}
+
+		var missingPositionID string
+		var aID string
+		var eID string
+		var pUUID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&missingPositionID); err != nil {
+			fatal(err)
+		}
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&aID); err != nil {
+			fatal(err)
+		}
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eID); err != nil {
+			fatal(err)
+		}
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&pUUID); err != nil {
+			fatal(err)
+		}
+
+		_, err = tx.Exec(ctx, `
+				SELECT staffing.submit_assignment_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::uuid,
+				  'primary',
+				  'CREATE',
+				  $5::date,
+				  jsonb_build_object(
+				    'position_id', $6::text,
+				    'allocated_fte', '1.0',
+				    'currency', 'CNY',
+				    'profile', '{}'::jsonb
+				  ),
+				  $7::text,
+				  $8::uuid
+				);
+			`, eID, tenantA, aID, pUUID, effectiveDate, missingPositionID, requestID+"-as-missing-position", initiatorID)
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_assignment_missing_position;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		if err == nil {
+			fatalf("expected submit_assignment_event to fail when position is missing as-of")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_POSITION_NOT_FOUND_AS_OF" {
+			fatalf("expected pg error message=STAFFING_POSITION_NOT_FOUND_AS_OF, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+	}
+
 	disableDateTime, err := time.Parse("2006-01-02", effectiveDate)
 	if err != nil {
 		fatal(err)
@@ -3548,6 +3640,17 @@ func pgErrorMessage(err error) (string, bool) {
 		return "", false
 	}
 	return pgErr.Message, true
+}
+
+func pgErrorConstraintName(err error) (string, bool) {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return "", false
+	}
+	if pgErr.ConstraintName == "" {
+		return "", false
+	}
+	return pgErr.ConstraintName, true
 }
 
 func tryEnsureRole(ctx context.Context, conn *pgx.Conn, role string) error {
