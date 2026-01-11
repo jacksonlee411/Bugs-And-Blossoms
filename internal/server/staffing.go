@@ -13,6 +13,7 @@ import (
 type Position struct {
 	ID              string
 	OrgUnitID       string
+	ReportsToID     string
 	Name            string
 	LifecycleStatus string
 	EffectiveAt     string
@@ -29,7 +30,7 @@ type Assignment struct {
 type PositionStore interface {
 	ListPositionsCurrent(ctx context.Context, tenantID string, asOfDate string) ([]Position, error)
 	CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, name string) (Position, error)
-	UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, name string, lifecycleStatus string) (Position, error)
+	UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, reportsToPositionID string, name string, lifecycleStatus string) (Position, error)
 }
 
 type AssignmentStore interface {
@@ -60,6 +61,7 @@ func (s *staffingPGStore) ListPositionsCurrent(ctx context.Context, tenantID str
 	SELECT
 	  position_id::text,
 	  org_unit_id::text,
+	  COALESCE(reports_to_position_id::text, '') AS reports_to_position_id,
 	  COALESCE(name, '') AS name,
 	  lifecycle_status,
 	  lower(validity)::text AS effective_date
@@ -76,7 +78,7 @@ func (s *staffingPGStore) ListPositionsCurrent(ctx context.Context, tenantID str
 	var out []Position
 	for rows.Next() {
 		var p Position
-		if err := rows.Scan(&p.ID, &p.OrgUnitID, &p.Name, &p.LifecycleStatus, &p.EffectiveAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.OrgUnitID, &p.ReportsToID, &p.Name, &p.LifecycleStatus, &p.EffectiveAt); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -149,13 +151,14 @@ SELECT staffing.submit_position_event(
 	return Position{
 		ID:              positionID,
 		OrgUnitID:       orgUnitID,
+		ReportsToID:     "",
 		Name:            name,
 		LifecycleStatus: "active",
 		EffectiveAt:     effectiveDate,
 	}, nil
 }
 
-func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, name string, lifecycleStatus string) (Position, error) {
+func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, reportsToPositionID string, name string, lifecycleStatus string) (Position, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Position{}, err
@@ -175,12 +178,16 @@ func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 		return Position{}, newBadRequestError("position_id is required")
 	}
 	orgUnitID = strings.TrimSpace(orgUnitID)
+	reportsToPositionID = strings.TrimSpace(reportsToPositionID)
 	name = strings.TrimSpace(name)
 	lifecycleStatus = strings.TrimSpace(lifecycleStatus)
 
-	payloadParts := make([]string, 0, 3)
+	payloadParts := make([]string, 0, 4)
 	if orgUnitID != "" {
 		payloadParts = append(payloadParts, `"org_unit_id":`+strconv.Quote(orgUnitID))
+	}
+	if reportsToPositionID != "" {
+		payloadParts = append(payloadParts, `"reports_to_position_id":`+strconv.Quote(reportsToPositionID))
 	}
 	if name != "" {
 		payloadParts = append(payloadParts, `"name":`+strconv.Quote(name))
@@ -218,6 +225,7 @@ func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 	SELECT
 	  position_id::text,
 	  org_unit_id::text,
+	  COALESCE(reports_to_position_id::text, '') AS reports_to_position_id,
 	  COALESCE(name, '') AS name,
 	  lifecycle_status,
 	  lower(validity)::text AS effective_date
@@ -225,7 +233,7 @@ func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 	WHERE tenant_id = $1::uuid
 	  AND position_id = $2::uuid
 	  AND validity @> $3::date
-	`, tenantID, positionID, effectiveDate).Scan(&out.ID, &out.OrgUnitID, &out.Name, &out.LifecycleStatus, &out.EffectiveAt); err != nil {
+	`, tenantID, positionID, effectiveDate).Scan(&out.ID, &out.OrgUnitID, &out.ReportsToID, &out.Name, &out.LifecycleStatus, &out.EffectiveAt); err != nil {
 		return Position{}, err
 	}
 
@@ -414,12 +422,12 @@ func (s *staffingMemoryStore) CreatePositionCurrent(_ context.Context, tenantID 
 	name = strings.TrimSpace(name)
 
 	id := "pos-" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	p := Position{ID: id, OrgUnitID: orgUnitID, Name: name, LifecycleStatus: "active", EffectiveAt: effectiveDate}
+	p := Position{ID: id, OrgUnitID: orgUnitID, ReportsToID: "", Name: name, LifecycleStatus: "active", EffectiveAt: effectiveDate}
 	s.positions[tenantID] = append(s.positions[tenantID], p)
 	return p, nil
 }
 
-func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, name string, lifecycleStatus string) (Position, error) {
+func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, reportsToPositionID string, name string, lifecycleStatus string) (Position, error) {
 	effectiveDate = strings.TrimSpace(effectiveDate)
 	if effectiveDate == "" {
 		return Position{}, newBadRequestError("effective_date is required")
@@ -429,9 +437,10 @@ func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID 
 		return Position{}, newBadRequestError("position_id is required")
 	}
 	orgUnitID = strings.TrimSpace(orgUnitID)
+	reportsToPositionID = strings.TrimSpace(reportsToPositionID)
 	name = strings.TrimSpace(name)
 	lifecycleStatus = strings.TrimSpace(lifecycleStatus)
-	if orgUnitID == "" && name == "" && lifecycleStatus == "" {
+	if orgUnitID == "" && reportsToPositionID == "" && name == "" && lifecycleStatus == "" {
 		return Position{}, newBadRequestError("at least one patch field is required")
 	}
 
@@ -441,6 +450,9 @@ func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID 
 		}
 		if orgUnitID != "" {
 			s.positions[tenantID][i].OrgUnitID = orgUnitID
+		}
+		if reportsToPositionID != "" {
+			s.positions[tenantID][i].ReportsToID = reportsToPositionID
 		}
 		if name != "" {
 			s.positions[tenantID][i].Name = name
