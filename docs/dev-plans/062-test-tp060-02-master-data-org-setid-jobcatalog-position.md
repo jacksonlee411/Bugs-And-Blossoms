@@ -1,6 +1,6 @@
 # DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）
 
-**状态**: 草拟中（2026-01-10 14:29 UTC）
+**状态**: 已完成（2026-01-10；证据：见 §9）
 
 > 上游测试套件（总纲）：`docs/dev-plans/060-business-e2e-test-suite.md`  
 > 依赖：建议先完成 `docs/dev-plans/061-test-tp060-01-tenant-login-authz-rls-baseline.md`（可登录 + 隔离基线）。
@@ -19,10 +19,10 @@
 
 ### 2.1 目标（Done 定义）
 
-- [ ] **OrgUnit**：可在 `/org/nodes` 完成 Root + 5 个一级部门创建，刷新后列表可见；并记录每个 `org_unit_id`。
-- [ ] **SetID**：可在 `/org/setid` 完成 SetID/BU/mapping 的创建与保存；映射矩阵无缺省洞（新 BU 自动补齐到 `SHARE`）；不存在/disabled BU 必须 fail-closed。
-- [ ] **JobCatalog**：在 `/org/job-catalog` 能看到 `Resolved SetID: S2601`，并能创建至少 2 条 Job Family Group，刷新后列表可见且包含 `id`。
-- [ ] **Position**：在 `/org/positions` 能创建 10 条职位，刷新后列表可见且包含 `position_id`；创建时 OrgUnit 下拉可用（不出现 `(no org units)`）。
+- [X] **OrgUnit**：可在 `/org/nodes` 完成 Root + 5 个一级部门创建，刷新后列表可见；并记录每个 `org_unit_id`。
+- [X] **SetID**：可在 `/org/setid` 完成 SetID/BU/mapping 的创建与保存；映射矩阵无缺省洞（新 BU 自动补齐到 `SHARE`）；不存在/disabled BU 必须 fail-closed。
+- [X] **JobCatalog**：在 `/org/job-catalog` 能看到 `Resolved SetID: S2601`，并能创建至少 2 条 Job Family Group，刷新后列表可见且包含 `id`。
+- [X] **Position**：在 `/org/positions` 能创建 10 条职位，刷新后列表可见且包含 `position_id`；创建时 OrgUnit 下拉可用（不出现 `(no org units)`）。
 
 ### 2.2 非目标
 
@@ -33,10 +33,10 @@
 > 目的：避免在子计划里复制工具链/脚本细节导致 drift；本文仅声明“本子计划执行/修复时可能命中的门禁入口”，具体命令以 `AGENTS.md`/`Makefile`/CI workflow 为准。
 
 - **触发器清单（勾选本计划命中的项；执行记录见 §9）**：
-  - [ ] E2E（`make e2e`，套件入口对齐 `docs/dev-plans/060-business-e2e-test-suite.md`）
-  - [ ] Authz（`make authz-pack && make authz-test && make authz-lint`）
-  - [ ] 路由治理（`make check routing`，必要时更新 `config/routing/allowlist.yaml`）
-  - [ ] 文档（`make check doc`）
+  - [X] E2E（`make e2e`，套件入口对齐 `docs/dev-plans/060-business-e2e-test-suite.md`）
+  - [X] Authz（`make authz-pack && make authz-test && make authz-lint`）
+  - [X] 路由治理（`make check routing`，必要时更新 `config/routing/allowlist.yaml`）
+  - [X] 文档（`make check doc`）
   - [ ] Go 代码（`go fmt ./... && go vet ./... && make check lint && make test`）——仅当为修复 drift 而改 Go 时
   - [ ] DB/迁移（按模块 `make <module> plan/lint/migrate ...`）——仅当为修复 drift 而改 DB 时
   - [ ] sqlc（`make sqlc-generate`）——仅当为修复 drift 而改 sqlc 输入时
