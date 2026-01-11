@@ -20,6 +20,18 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT position_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
   CONSTRAINT position_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT position_events_payload_allowed_keys_check CHECK (
+    (
+      payload
+      - 'org_unit_id'
+      - 'name'
+      - 'reports_to_position_id'
+      - 'business_unit_id'
+      - 'job_profile_id'
+      - 'lifecycle_status'
+      - 'capacity_fte'
+    ) = '{}'::jsonb
+  ),
   CONSTRAINT position_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT position_events_one_per_day_unique UNIQUE (tenant_id, position_id, effective_date),
   CONSTRAINT position_events_request_id_unique UNIQUE (tenant_id, request_id),
@@ -59,6 +71,24 @@ CREATE TABLE IF NOT EXISTS staffing.position_versions (
 CREATE INDEX IF NOT EXISTS position_versions_lookup_btree
   ON staffing.position_versions (tenant_id, position_id, lower(validity));
 
+ALTER TABLE staffing.position_versions
+  ADD COLUMN IF NOT EXISTS business_unit_id text NULL,
+  ADD COLUMN IF NOT EXISTS jobcatalog_setid text NULL,
+  ADD COLUMN IF NOT EXISTS job_profile_id uuid NULL;
+
+ALTER TABLE staffing.position_versions
+  DROP CONSTRAINT IF EXISTS position_versions_business_unit_id_format_check,
+  DROP CONSTRAINT IF EXISTS position_versions_jobcatalog_setid_format_check,
+  DROP CONSTRAINT IF EXISTS position_versions_jobcatalog_setid_requires_bu_check,
+  DROP CONSTRAINT IF EXISTS position_versions_job_profile_requires_setid_check,
+  DROP CONSTRAINT IF EXISTS position_versions_job_profile_fk;
+
+ALTER TABLE staffing.position_versions
+  ADD CONSTRAINT position_versions_business_unit_id_format_check CHECK (business_unit_id IS NULL OR business_unit_id ~ '^[A-Z0-9]{1,5}$'),
+  ADD CONSTRAINT position_versions_jobcatalog_setid_format_check CHECK (jobcatalog_setid IS NULL OR jobcatalog_setid ~ '^[A-Z0-9]{1,5}$'),
+  ADD CONSTRAINT position_versions_jobcatalog_setid_requires_bu_check CHECK (jobcatalog_setid IS NULL OR business_unit_id IS NOT NULL),
+  ADD CONSTRAINT position_versions_job_profile_requires_setid_check CHECK (job_profile_id IS NULL OR jobcatalog_setid IS NOT NULL);
+
 CREATE TABLE IF NOT EXISTS staffing.assignments (
   tenant_id uuid NOT NULL,
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -88,6 +118,17 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   CONSTRAINT assignment_events_assignment_type_check CHECK (assignment_type IN ('primary')),
   CONSTRAINT assignment_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
   CONSTRAINT assignment_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT assignment_events_payload_allowed_keys_check CHECK (
+    (
+      payload
+      - 'position_id'
+      - 'status'
+      - 'base_salary'
+      - 'allocated_fte'
+      - 'currency'
+      - 'profile'
+    ) = '{}'::jsonb
+  ),
   CONSTRAINT assignment_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT assignment_events_one_per_day_unique UNIQUE (tenant_id, assignment_id, effective_date),
   CONSTRAINT assignment_events_request_id_unique UNIQUE (tenant_id, request_id),

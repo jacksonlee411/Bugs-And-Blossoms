@@ -566,6 +566,20 @@ func TestHandleAttendancePunchesAPI(t *testing.T) {
 		}
 	})
 
+	t.Run("get ok (nil punches)", func(t *testing.T) {
+		storeNil := storeOK
+		storeNil.listFn = func(context.Context, string, string, time.Time, time.Time, int) ([]TimePunch, error) {
+			return nil, nil
+		}
+		req := httptest.NewRequest(http.MethodGet, "/org/api/attendance-punches?person_uuid=pu1", nil)
+		req = req.WithContext(ctxWithTenantAndPrincipal(req.Context()))
+		rec := httptest.NewRecorder()
+		handleAttendancePunchesAPI(rec, req, storeNil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
 	t.Run("get ok (from/to)", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/attendance-punches?person_uuid=pu1&from=2026-01-01T00:00:00Z&to=2026-01-02T00:00:00Z", nil)
 		req = req.WithContext(ctxWithTenantAndPrincipal(req.Context()))

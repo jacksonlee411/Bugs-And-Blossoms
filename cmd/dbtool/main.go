@@ -688,6 +688,122 @@ func staffingSmoke(args []string) {
 		}
 	}
 
+	reportsToDate := disableDateTime.AddDate(0, 0, 2).Format("2006-01-02")
+	reportsToRetroDate := disableDate
+
+	{
+		var posAID, posBID, posCID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&posAID); err != nil {
+			fatal(err)
+		}
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&posBID); err != nil {
+			fatal(err)
+		}
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&posCID); err != nil {
+			fatal(err)
+		}
+
+		createPosition := func(positionID string, name string) {
+			var eventID string
+			if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+				fatal(err)
+			}
+			if _, err := tx.Exec(ctx, `
+				SELECT staffing.submit_position_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  'CREATE',
+				  $4::date,
+				  jsonb_build_object('org_unit_id', $5::text, 'name', $6::text),
+				  $7::text,
+				  $8::uuid
+				);
+			`, eventID, tenantA, positionID, effectiveDate, orgUnitID, name, requestID+"-pos-reports-to-create-"+positionID, initiatorID); err != nil {
+				fatal(err)
+			}
+		}
+
+		updateReportsTo := func(positionID string, asOf string, reportsToPositionID string) error {
+			var eventID string
+			if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+				fatal(err)
+			}
+			_, err := tx.Exec(ctx, `
+				SELECT staffing.submit_position_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  'UPDATE',
+				  $4::date,
+				  jsonb_build_object('reports_to_position_id', $5::text),
+				  $6::text,
+				  $7::uuid
+				);
+			`, eventID, tenantA, positionID, asOf, reportsToPositionID, requestID+"-pos-reports-to-update-"+positionID+"-"+asOf, initiatorID)
+			return err
+		}
+
+		createPosition(posAID, "Smoke ReportsTo A")
+		createPosition(posBID, "Smoke ReportsTo B")
+		createPosition(posCID, "Smoke ReportsTo C")
+
+		if err := updateReportsTo(posBID, reportsToDate, posAID); err != nil {
+			fatalf("expected reports_to update to succeed, err=%v", err)
+		}
+		if err := updateReportsTo(posCID, reportsToDate, posBID); err != nil {
+			fatalf("expected reports_to update to succeed, err=%v", err)
+		}
+
+		{
+			if _, err := tx.Exec(ctx, `SAVEPOINT sp_reports_to_self;`); err != nil {
+				fatal(err)
+			}
+			err := updateReportsTo(posAID, reportsToDate, posAID)
+			if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_reports_to_self;`); rbErr != nil {
+				fatal(rbErr)
+			}
+			if err == nil {
+				fatalf("expected reports_to self to fail")
+			}
+			if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_POSITION_REPORTS_TO_SELF" {
+				fatalf("expected pg error message=STAFFING_POSITION_REPORTS_TO_SELF, got ok=%v message=%q err=%v", ok, msg, err)
+			}
+		}
+
+		{
+			if _, err := tx.Exec(ctx, `SAVEPOINT sp_reports_to_cycle;`); err != nil {
+				fatal(err)
+			}
+			err := updateReportsTo(posAID, reportsToDate, posCID)
+			if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_reports_to_cycle;`); rbErr != nil {
+				fatal(rbErr)
+			}
+			if err == nil {
+				fatalf("expected reports_to cycle to fail")
+			}
+			if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_POSITION_REPORTS_TO_CYCLE" {
+				fatalf("expected pg error message=STAFFING_POSITION_REPORTS_TO_CYCLE, got ok=%v message=%q err=%v", ok, msg, err)
+			}
+		}
+
+		{
+			if _, err := tx.Exec(ctx, `SAVEPOINT sp_reports_to_retro;`); err != nil {
+				fatal(err)
+			}
+			err := updateReportsTo(posBID, reportsToRetroDate, posAID)
+			if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_reports_to_retro;`); rbErr != nil {
+				fatal(rbErr)
+			}
+			if err == nil {
+				fatalf("expected retro reports_to update to fail")
+			}
+			if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_INVALID_ARGUMENT" {
+				fatalf("expected pg error message=STAFFING_INVALID_ARGUMENT, got ok=%v message=%q err=%v", ok, msg, err)
+			}
+		}
+	}
+
 	payGroup := "monthly"
 	ppStart := "2030-01-01"
 	ppEndExcl := "2030-02-01"

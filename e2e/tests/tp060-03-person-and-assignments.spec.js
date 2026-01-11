@@ -177,6 +177,37 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
 
   await expect(page.locator("tr", { hasText: disabledPositionName }).first()).toContainText("disabled");
 
+  const positionUpdateFormLate = page.locator(`form[method="POST"][action="/org/positions?as_of=${lateEffectiveDate}"]`).nth(1);
+
+  const managerPernr = "101";
+  const reporteePernr = "102";
+  const managerPositionName = `TP060-03 Position ${managerPernr} ${runID}`;
+  const reporteePositionName = `TP060-03 Position ${reporteePernr} ${runID}`;
+  const managerPositionID = positionIDsByPernr.get(managerPernr);
+  const reporteePositionID = positionIDsByPernr.get(reporteePernr);
+  expect(managerPositionID).not.toBeUndefined();
+  expect(reporteePositionID).not.toBeUndefined();
+
+  await positionUpdateFormLate.locator('input[name="effective_date"]').fill(lateEffectiveDate);
+  await positionUpdateFormLate.locator('select[name="position_id"]').selectOption(reporteePositionID);
+  await positionUpdateFormLate.locator('select[name="reports_to_position_id"]').selectOption(managerPositionID);
+  await positionUpdateFormLate.locator('button[type="submit"]').click();
+  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${lateEffectiveDate}$`));
+
+  const reporteeRow = page.locator("tr", { hasText: reporteePositionName }).first();
+  await expect(reporteeRow).toBeVisible();
+  await expect(reporteeRow).toContainText(managerPositionID);
+
+  const reportsToCycleResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
+    data: {
+      effective_date: lateEffectiveDate,
+      position_id: managerPositionID,
+      reports_to_position_id: reporteePositionID
+    }
+  });
+  expect(reportsToCycleResp.status()).toBe(422);
+  expect((await reportsToCycleResp.json()).code).toBe("STAFFING_POSITION_REPORTS_TO_CYCLE");
+
   const byPernr = async (pernr) => {
     const resp = await appContext.request.get(`/person/api/persons:by-pernr?pernr=${encodeURIComponent(pernr)}`);
     return resp;

@@ -1096,10 +1096,34 @@ func newUUIDv4() (string, error) {
 
 func stablePgMessage(err error) string {
 	msg := pgErrorMessage(err)
-	if strings.HasPrefix(msg, "STAFFING_") {
+	if isStableDBCode(msg) {
 		return msg
 	}
 	return err.Error()
+}
+
+func isStableDBCode(code string) bool {
+	code = strings.TrimSpace(code)
+	if code == "" || code == "UNKNOWN" {
+		return false
+	}
+	for i := 0; i < len(code); i++ {
+		ch := code[i]
+		if ch >= 'A' && ch <= 'Z' {
+			continue
+		}
+		if ch >= '0' && ch <= '9' {
+			continue
+		}
+		if ch == '_' {
+			continue
+		}
+		return false
+	}
+	if code[0] < 'A' || code[0] > 'Z' {
+		return false
+	}
+	return true
 }
 
 func toString(v any) string {

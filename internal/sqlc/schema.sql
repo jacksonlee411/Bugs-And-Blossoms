@@ -4459,6 +4459,18 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT position_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
   CONSTRAINT position_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT position_events_payload_allowed_keys_check CHECK (
+    (
+      payload
+      - 'org_unit_id'
+      - 'name'
+      - 'reports_to_position_id'
+      - 'business_unit_id'
+      - 'job_profile_id'
+      - 'lifecycle_status'
+      - 'capacity_fte'
+    ) = '{}'::jsonb
+  ),
   CONSTRAINT position_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT position_events_one_per_day_unique UNIQUE (tenant_id, position_id, effective_date),
   CONSTRAINT position_events_request_id_unique UNIQUE (tenant_id, request_id),
@@ -4498,6 +4510,24 @@ CREATE TABLE IF NOT EXISTS staffing.position_versions (
 CREATE INDEX IF NOT EXISTS position_versions_lookup_btree
   ON staffing.position_versions (tenant_id, position_id, lower(validity));
 
+ALTER TABLE staffing.position_versions
+  ADD COLUMN IF NOT EXISTS business_unit_id text NULL,
+  ADD COLUMN IF NOT EXISTS jobcatalog_setid text NULL,
+  ADD COLUMN IF NOT EXISTS job_profile_id uuid NULL;
+
+ALTER TABLE staffing.position_versions
+  DROP CONSTRAINT IF EXISTS position_versions_business_unit_id_format_check,
+  DROP CONSTRAINT IF EXISTS position_versions_jobcatalog_setid_format_check,
+  DROP CONSTRAINT IF EXISTS position_versions_jobcatalog_setid_requires_bu_check,
+  DROP CONSTRAINT IF EXISTS position_versions_job_profile_requires_setid_check,
+  DROP CONSTRAINT IF EXISTS position_versions_job_profile_fk;
+
+ALTER TABLE staffing.position_versions
+  ADD CONSTRAINT position_versions_business_unit_id_format_check CHECK (business_unit_id IS NULL OR business_unit_id ~ '^[A-Z0-9]{1,5}$'),
+  ADD CONSTRAINT position_versions_jobcatalog_setid_format_check CHECK (jobcatalog_setid IS NULL OR jobcatalog_setid ~ '^[A-Z0-9]{1,5}$'),
+  ADD CONSTRAINT position_versions_jobcatalog_setid_requires_bu_check CHECK (jobcatalog_setid IS NULL OR business_unit_id IS NOT NULL),
+  ADD CONSTRAINT position_versions_job_profile_requires_setid_check CHECK (job_profile_id IS NULL OR jobcatalog_setid IS NOT NULL);
+
 CREATE TABLE IF NOT EXISTS staffing.assignments (
   tenant_id uuid NOT NULL,
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -4527,6 +4557,17 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   CONSTRAINT assignment_events_assignment_type_check CHECK (assignment_type IN ('primary')),
   CONSTRAINT assignment_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
   CONSTRAINT assignment_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT assignment_events_payload_allowed_keys_check CHECK (
+    (
+      payload
+      - 'position_id'
+      - 'status'
+      - 'base_salary'
+      - 'allocated_fte'
+      - 'currency'
+      - 'profile'
+    ) = '{}'::jsonb
+  ),
   CONSTRAINT assignment_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT assignment_events_one_per_day_unique UNIQUE (tenant_id, assignment_id, effective_date),
   CONSTRAINT assignment_events_request_id_unique UNIQUE (tenant_id, request_id),
@@ -5212,6 +5253,88 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION staffing.assert_position_capacity(
+  p_tenant_id uuid,
+  p_position_id uuid,
+  p_validity daterange
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_as_of date;
+  v_capacity_fte numeric(9,2);
+  v_allocated_sum numeric(9,2);
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_position_id IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'position_id is required';
+  END IF;
+  IF p_validity IS NULL OR isempty(p_validity) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'validity is required';
+  END IF;
+
+  FOR v_as_of IN
+    SELECT d::date AS as_of
+    FROM (
+      SELECT lower(p_validity) AS d
+      UNION
+      SELECT lower(av.validity) AS d
+      FROM staffing.assignment_versions av
+      WHERE av.tenant_id = p_tenant_id
+        AND av.position_id = p_position_id
+        AND av.status = 'active'
+        AND av.validity && p_validity
+      UNION
+      SELECT lower(pv.validity) AS d
+      FROM staffing.position_versions pv
+      WHERE pv.tenant_id = p_tenant_id
+        AND pv.position_id = p_position_id
+        AND pv.validity && p_validity
+    ) dates
+    WHERE d IS NOT NULL
+      AND d >= lower(p_validity)
+      AND (upper_inf(p_validity) OR d < upper(p_validity))
+    ORDER BY d
+  LOOP
+    SELECT pv.capacity_fte INTO v_capacity_fte
+    FROM staffing.position_versions pv
+    WHERE pv.tenant_id = p_tenant_id
+      AND pv.position_id = p_position_id
+      AND pv.validity @> v_as_of
+    LIMIT 1;
+
+    IF v_capacity_fte IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'STAFFING_POSITION_NOT_FOUND_AS_OF',
+        DETAIL = format('position_id=%s as_of=%s', p_position_id, v_as_of);
+    END IF;
+
+    SELECT COALESCE(sum(av.allocated_fte), 0)::numeric(9,2) INTO v_allocated_sum
+    FROM staffing.assignment_versions av
+    WHERE av.tenant_id = p_tenant_id
+      AND av.position_id = p_position_id
+      AND av.status = 'active'
+      AND av.validity @> v_as_of;
+
+    IF v_allocated_sum > v_capacity_fte THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'STAFFING_POSITION_CAPACITY_EXCEEDED',
+        DETAIL = format('position_id=%s as_of=%s allocated_sum=%s capacity_fte=%s', p_position_id, v_as_of, v_allocated_sum, v_capacity_fte);
+    END IF;
+  END LOOP;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION staffing.replay_position_versions(
   p_tenant_id uuid,
   p_position_id uuid
@@ -5224,8 +5347,15 @@ DECLARE
   v_prev_effective date;
   v_last_validity daterange;
   v_org_unit_id uuid;
+  v_reports_to_position_id uuid;
+  v_business_unit_id text;
+  v_jobcatalog_setid text;
+  v_job_profile_id uuid;
+  v_capacity_fte numeric(9,2);
   v_name text;
   v_lifecycle_status text;
+  v_reports_to_status text;
+  v_tmp_text text;
   v_row RECORD;
   v_validity daterange;
 BEGIN
@@ -5245,6 +5375,11 @@ BEGIN
   WHERE tenant_id = p_tenant_id AND position_id = p_position_id;
 
   v_org_unit_id := NULL;
+  v_reports_to_position_id := NULL;
+  v_business_unit_id := NULL;
+  v_jobcatalog_setid := NULL;
+  v_job_profile_id := NULL;
+  v_capacity_fte := 1.0;
   v_name := NULL;
   v_lifecycle_status := 'active';
   v_prev_effective := NULL;
@@ -5277,6 +5412,37 @@ BEGIN
       END IF;
 
       v_name := NULLIF(btrim(v_row.payload->>'name'), '');
+      v_reports_to_position_id := NULL;
+      v_business_unit_id := NULLIF(btrim(v_row.payload->>'business_unit_id'), '');
+      v_job_profile_id := NULL;
+      IF v_row.payload ? 'job_profile_id' THEN
+        v_job_profile_id := NULLIF(v_row.payload->>'job_profile_id', '')::uuid;
+      END IF;
+      v_capacity_fte := 1.0;
+      IF v_row.payload ? 'capacity_fte' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'capacity_fte'), '');
+        IF v_tmp_text IS NULL THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = 'capacity_fte is required';
+        END IF;
+        BEGIN
+          v_capacity_fte := v_tmp_text::numeric;
+        EXCEPTION
+          WHEN others THEN
+            RAISE EXCEPTION USING
+              ERRCODE = 'P0001',
+              MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+              DETAIL = format('invalid capacity_fte: %s', v_row.payload->>'capacity_fte');
+        END;
+        IF v_capacity_fte <= 0 THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = format('invalid capacity_fte: %s', v_row.payload->>'capacity_fte');
+        END IF;
+      END IF;
       v_lifecycle_status := 'active';
     ELSIF v_row.event_type = 'UPDATE' THEN
       IF v_prev_effective IS NULL THEN
@@ -5297,6 +5463,39 @@ BEGIN
       END IF;
       IF v_row.payload ? 'name' THEN
         v_name := NULLIF(btrim(v_row.payload->>'name'), '');
+      END IF;
+      IF v_row.payload ? 'reports_to_position_id' THEN
+        v_reports_to_position_id := NULLIF(v_row.payload->>'reports_to_position_id', '')::uuid;
+      END IF;
+      IF v_row.payload ? 'business_unit_id' THEN
+        v_business_unit_id := NULLIF(btrim(v_row.payload->>'business_unit_id'), '');
+      END IF;
+      IF v_row.payload ? 'job_profile_id' THEN
+        v_job_profile_id := NULLIF(v_row.payload->>'job_profile_id', '')::uuid;
+      END IF;
+      IF v_row.payload ? 'capacity_fte' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'capacity_fte'), '');
+        IF v_tmp_text IS NULL THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = 'capacity_fte is required';
+        END IF;
+        BEGIN
+          v_capacity_fte := v_tmp_text::numeric;
+        EXCEPTION
+          WHEN others THEN
+            RAISE EXCEPTION USING
+              ERRCODE = 'P0001',
+              MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+              DETAIL = format('invalid capacity_fte: %s', v_row.payload->>'capacity_fte');
+        END;
+        IF v_capacity_fte <= 0 THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = format('invalid capacity_fte: %s', v_row.payload->>'capacity_fte');
+        END IF;
       END IF;
       IF v_row.payload ? 'lifecycle_status' THEN
         v_lifecycle_status := NULLIF(btrim(v_row.payload->>'lifecycle_status'), '');
@@ -5330,10 +5529,98 @@ BEGIN
         DETAIL = format('org_unit_id=%s as_of=%s', v_org_unit_id, v_row.effective_date);
     END IF;
 
+    v_jobcatalog_setid := NULL;
+    IF v_business_unit_id IS NOT NULL THEN
+      v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_business_unit_id, 'jobcatalog');
+    END IF;
+    IF v_job_profile_id IS NOT NULL THEN
+      IF v_jobcatalog_setid IS NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+          DETAIL = 'business_unit_id is required when binding job_profile_id';
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1
+        FROM jobcatalog.job_profiles jp
+        WHERE jp.tenant_id = p_tenant_id
+          AND jp.setid = v_jobcatalog_setid
+          AND jp.id = v_job_profile_id
+        LIMIT 1
+      ) THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'JOBCATALOG_REFERENCE_NOT_FOUND',
+          DETAIL = format('job_profile_id=%s setid=%s', v_job_profile_id, v_jobcatalog_setid);
+      END IF;
+    END IF;
+
     IF v_row.next_effective IS NULL THEN
       v_validity := daterange(v_row.effective_date, NULL, '[)');
     ELSE
       v_validity := daterange(v_row.effective_date, v_row.next_effective, '[)');
+    END IF;
+
+    IF v_reports_to_position_id IS NOT NULL THEN
+      IF v_reports_to_position_id = p_position_id THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_POSITION_REPORTS_TO_SELF',
+          DETAIL = format('position_id=%s as_of=%s', p_position_id, v_row.effective_date);
+      END IF;
+
+      SELECT pv.lifecycle_status INTO v_reports_to_status
+      FROM staffing.position_versions pv
+      WHERE pv.tenant_id = p_tenant_id
+        AND pv.position_id = v_reports_to_position_id
+        AND pv.validity @> v_row.effective_date
+      LIMIT 1;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_POSITION_NOT_FOUND_AS_OF',
+          DETAIL = format('position_id=%s as_of=%s', v_reports_to_position_id, v_row.effective_date);
+      END IF;
+      IF v_reports_to_status <> 'active' THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_POSITION_DISABLED_AS_OF',
+          DETAIL = format('position_id=%s as_of=%s', v_reports_to_position_id, v_row.effective_date);
+      END IF;
+
+      IF EXISTS (
+        WITH RECURSIVE chain AS (
+          SELECT
+            pv.position_id,
+            pv.reports_to_position_id,
+            ARRAY[pv.position_id]::uuid[] AS path
+          FROM staffing.position_versions pv
+          WHERE pv.tenant_id = p_tenant_id
+            AND pv.position_id = v_reports_to_position_id
+            AND pv.validity @> v_row.effective_date
+          UNION ALL
+          SELECT
+            pv.position_id,
+            pv.reports_to_position_id,
+            c.path || pv.position_id
+          FROM chain c
+          JOIN staffing.position_versions pv
+            ON pv.tenant_id = p_tenant_id
+           AND pv.position_id = c.reports_to_position_id
+           AND pv.validity @> v_row.effective_date
+          WHERE c.reports_to_position_id IS NOT NULL
+            AND NOT (pv.position_id = ANY(c.path))
+        )
+        SELECT 1
+        FROM chain
+        WHERE reports_to_position_id = p_position_id
+        LIMIT 1
+      ) THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_POSITION_REPORTS_TO_CYCLE',
+          DETAIL = format('position_id=%s reports_to_position_id=%s as_of=%s', p_position_id, v_reports_to_position_id, v_row.effective_date);
+      END IF;
     END IF;
 
     IF v_lifecycle_status = 'disabled' AND EXISTS (
@@ -5356,6 +5643,9 @@ BEGIN
       position_id,
       org_unit_id,
       reports_to_position_id,
+      business_unit_id,
+      jobcatalog_setid,
+      job_profile_id,
       name,
       lifecycle_status,
       capacity_fte,
@@ -5367,14 +5657,19 @@ BEGIN
       p_tenant_id,
       p_position_id,
       v_org_unit_id,
-      NULL,
+      v_reports_to_position_id,
+      v_business_unit_id,
+      v_jobcatalog_setid,
+      v_job_profile_id,
       v_name,
       v_lifecycle_status,
-      1.0,
+      v_capacity_fte,
       '{}'::jsonb,
       v_validity,
       v_row.event_db_id
     );
+
+    PERFORM staffing.assert_position_capacity(p_tenant_id, p_position_id, v_validity);
 
     v_prev_effective := v_row.effective_date;
   END LOOP;
@@ -5429,9 +5724,11 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
+  v_reports_to_lock_key text;
   v_event_db_id bigint;
   v_existing staffing.position_events%ROWTYPE;
   v_payload jsonb;
+  v_prev_effective_max date;
 BEGIN
   PERFORM staffing.assert_current_tenant(p_tenant_id);
 
@@ -5456,14 +5753,19 @@ BEGIN
       DETAIL = format('unsupported event_type: %s', p_event_type);
   END IF;
 
+  v_payload := COALESCE(p_payload, '{}'::jsonb);
+
+  IF v_payload ? 'reports_to_position_id' THEN
+    v_reports_to_lock_key := format('staffing:position-reports-to:%s', p_tenant_id);
+    PERFORM pg_advisory_xact_lock(hashtextextended(v_reports_to_lock_key, 0));
+  END IF;
+
   v_lock_key := format('staffing:position:%s:%s', p_tenant_id, p_position_id);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   INSERT INTO staffing.positions (tenant_id, id)
   VALUES (p_tenant_id, p_position_id)
   ON CONFLICT DO NOTHING;
-
-  v_payload := COALESCE(p_payload, '{}'::jsonb);
 
   INSERT INTO staffing.position_events (
     event_id,
@@ -5507,6 +5809,20 @@ BEGIN
     END IF;
 
     RETURN v_existing.id;
+  END IF;
+
+  IF p_event_type = 'UPDATE' AND v_payload ? 'reports_to_position_id' THEN
+    SELECT max(effective_date) INTO v_prev_effective_max
+    FROM staffing.position_events
+    WHERE tenant_id = p_tenant_id
+      AND position_id = p_position_id
+      AND id <> v_event_db_id;
+
+    IF v_prev_effective_max IS NOT NULL AND p_effective_date <= v_prev_effective_max THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+        DETAIL = format('reports_to_position_id updates must be forward-only: effective_date=%s last_effective_date=%s', p_effective_date, v_prev_effective_max);
+    END IF;
   END IF;
 
   PERFORM staffing.replay_position_versions(p_tenant_id, p_position_id);
@@ -5828,6 +6144,10 @@ BEGIN
       v_validity,
       v_row.event_db_id
     );
+
+    IF v_status = 'active' THEN
+      PERFORM staffing.assert_position_capacity(p_tenant_id, v_position_id, v_validity);
+    END IF;
 
     v_prev_effective := v_row.effective_date;
   END LOOP;
@@ -11288,6 +11608,103 @@ END;
 $$;
 
 -- end: modules/staffing/infrastructure/persistence/schema/00014_staffing_payroll_item_inputs_engine.sql
+
+-- begin: modules/staffing/infrastructure/persistence/schema/00015_staffing_read.sql
+CREATE OR REPLACE FUNCTION staffing.get_position_snapshot(
+  p_tenant_id uuid,
+  p_query_date date
+)
+RETURNS TABLE (
+  position_id uuid,
+  org_unit_id uuid,
+  reports_to_position_id uuid,
+  business_unit_id text,
+  jobcatalog_setid text,
+  job_profile_id uuid,
+  job_profile_code text,
+  name text,
+  lifecycle_status text,
+  capacity_fte numeric(9,2),
+  effective_date date
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  IF p_query_date IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'query_date is required';
+  END IF;
+
+	  RETURN QUERY
+	  SELECT
+	    pv.position_id,
+	    pv.org_unit_id,
+	    pv.reports_to_position_id,
+	    pv.business_unit_id,
+	    pv.jobcatalog_setid,
+	    pv.job_profile_id,
+	    jp.code::text AS job_profile_code,
+	    pv.name,
+	    pv.lifecycle_status,
+	    pv.capacity_fte,
+	    lower(pv.validity) AS effective_date
+	  FROM staffing.position_versions pv
+	  LEFT JOIN jobcatalog.job_profiles jp
+	    ON jp.tenant_id = pv.tenant_id
+   AND jp.setid = pv.jobcatalog_setid
+   AND jp.id = pv.job_profile_id
+  WHERE pv.tenant_id = p_tenant_id
+    AND pv.validity @> p_query_date;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.get_assignment_snapshot(
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_query_date date
+)
+RETURNS TABLE (
+  assignment_id uuid,
+  person_uuid uuid,
+  position_id uuid,
+  status text,
+  effective_date date
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_query_date IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'query_date is required';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    av.assignment_id,
+    av.person_uuid,
+    av.position_id,
+    av.status,
+    lower(av.validity) AS effective_date
+  FROM staffing.assignment_versions av
+  WHERE av.tenant_id = p_tenant_id
+    AND av.person_uuid = p_person_uuid
+    AND av.validity @> p_query_date;
+END;
+$$;
+
+-- end: modules/staffing/infrastructure/persistence/schema/00015_staffing_read.sql
 
 -- begin: modules/person/infrastructure/persistence/schema/00001_person_schema.sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
