@@ -1,6 +1,6 @@
 # DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）
 
-**状态**: 已完成（2026-01-10；证据：见 §9）
+**状态**: 已完成（2026-01-11；证据：见 §9）
 
 > 上游测试套件（总纲）：`docs/dev-plans/060-business-e2e-test-suite.md`  
 > 依赖：建议先完成 `docs/dev-plans/061-test-tp060-01-tenant-login-authz-rls-baseline.md`（可登录 + 隔离基线）。
@@ -21,12 +21,12 @@
 
 - [X] **OrgUnit**：可在 `/org/nodes` 完成 Root + 5 个一级部门创建，刷新后列表可见；并记录每个 `org_unit_id`。
 - [X] **SetID**：可在 `/org/setid` 完成 SetID/BU/mapping 的创建与保存；映射矩阵无缺省洞（新 BU 自动补齐到 `SHARE`）；不存在/disabled BU 必须 fail-closed。
-- [X] **JobCatalog**：在 `/org/job-catalog` 能看到 `Resolved SetID: S2601`，并能创建至少 2 条 Job Family Group，刷新后列表可见且包含 `id`。
+- [X] **JobCatalog**：在 `/org/job-catalog` 能看到 `Resolved SetID: S2601`，并覆盖 groups/families/levels/profiles 的“写入→as_of 读取→UI 可见”闭环，且包含至少 1 个跨日期场景（Job Family reparenting 的前后对比）。
 - [X] **Position**：在 `/org/positions` 能创建 10 条职位，刷新后列表可见且包含 `position_id`；创建时 OrgUnit 下拉可用（不出现 `(no org units)`）。
 
 ### 2.2 非目标
 
-- 不在本子计划强制覆盖 JobCatalog 的 families/levels/profiles（若环境已实现可作为扩展验证；若未实现记录为 `SCOPE_GAP`）。
+- 本子计划不覆盖更深层的业务规则（例如 Position 与 JobCatalog 的绑定语义、后续 Staffing/Person/Attendance/Payroll 的业务联动），这些由后续 TP-060-03/04/05/07/08 负责。
 
 ### 2.3 工具链与门禁（SSOT 引用）
 
@@ -62,7 +62,7 @@
 ### 4.1 租户与 Host
 
 - Tenant：`T060`（示例 host：`t-060.localhost`）
-- `as_of`：固定使用 `2026-01-01`（本子计划所有 URL 必须显式带 `as_of`，避免被缺省重定向到“当天”导致不可复现）
+- `as_of`：基准使用 `2026-01-01`（数据底座），并在 JobCatalog 的跨日期断言中额外使用 `2026-01-15/2026-02-15/2026-03-15`（本子计划所有 URL 必须显式带 `as_of`，避免被缺省重定向到“当天”导致不可复现）
 
 ### 4.2 账号与权限
 
@@ -193,12 +193,33 @@
      - `code=JFG-ENG`，`name=Engineering`
      - `code=JFG-SALES`，`name=Sales`
    - 断言：创建后列表可见，且每条包含 `id`；记录两条 `job_family_group_id`
-4. [ ] 无缺省洞验证：新建 BU `BU902`，不修改 mapping，然后访问：
+4. [ ] 确认 Job Families（至少 2 条；缺失则创建；已有则记录并复用）
+   - 基准：`as_of=2026-01-01`，`effective_date=2026-01-01`
+   - 建议：
+     - `code=JF-BE`，`name=Backend`，`group=JFG-ENG`
+     - `code=JF-FE`，`name=Frontend`，`group=JFG-ENG`
+   - 断言：创建后列表可见；每条包含 `id`；列表可见其 `group`（至少能判定 `JF-BE` 初始归属为 `JFG-ENG`）
+5. [ ] 跨日期断言：Job Family reparenting（同一 `code` 在不同 `as_of` 下归属不同 group）
+   - 在 `effective_date=2026-02-01` 提交对 `JF-BE` 的 UPDATE（reparent 到 `JFG-SALES`）
+   - 断言 A：访问 `/org/job-catalog?as_of=2026-01-15&business_unit_id=BU901`，`JF-BE` 的 `group=JFG-ENG`
+   - 断言 B：访问 `/org/job-catalog?as_of=2026-02-15&business_unit_id=BU901`，`JF-BE` 的 `group=JFG-SALES`
+6. [ ] 确认 Job Levels（至少 1 条；缺失则创建；已有则记录并复用）
+   - 基准：`as_of=2026-01-01`，`effective_date=2026-01-01`
+   - 建议：`code=JL-1`，`name=Level 1`
+   - 断言：创建后列表可见，且包含 `id`
+7. [ ] 确认 Job Profiles（至少 1 条；缺失则创建；已有则记录并复用）
+   - 基准：`as_of=2026-01-01`，`effective_date=2026-01-01`
+   - 建议：`code=JP-SWE`，`name=Software Engineer`，`families=[JF-BE,JF-FE]`，`primary=JF-BE`
+   - 断言：创建后列表可见；能看到 families 与 primary 的归属信息（文本/列表均可）
+8. [ ] 负例：Profile families/primary 不变量
+   - 提交：`job_family_ids=[JF-BE]`，`primary=JF-FE`（primary 不在 families）
+   - 断言：页面提示稳定错误（例如 `payload.primary_job_family_id must be included ...`），且不得创建新 profile
+9. [ ] 无缺省洞验证：新建 BU `BU902`，不修改 mapping，然后访问：
    - 先回到：`/org/setid?as_of=2026-01-01`
    - 用 `action=create_bu` 创建 `BU902`（仅创建 BU；不需要保存 mappings）
    - `/org/job-catalog?as_of=2026-01-01&business_unit_id=BU902`
    - 断言：页面显示 `Resolved SetID: SHARE`（因为 BU 创建时自动补齐映射到 `SHARE`）
-5. [ ] fail-closed 负例：使用不存在 BU（例如 `BU999`），直接访问：
+10. [ ] fail-closed 负例：使用不存在 BU（例如 `BU999`），直接访问：
    - `/org/job-catalog?as_of=2026-01-01&business_unit_id=BU999`
    - 断言：页面显式报错，且不得显示 `Resolved SetID`
 
@@ -228,6 +249,11 @@
 - JobCatalog：
   - `/org/job-catalog?as_of=2026-01-01&business_unit_id=BU901` 页面证据（显示 `Resolved SetID: S2601`）
   - 两条 Job Family Group 的列表证据（含 `id`）
+  - Job Families 列表证据（含 `id`，且可判定 group 归属）
+  - reparenting 证据（`as_of=2026-01-15` 与 `as_of=2026-02-15` 的前后对比）
+  - Job Levels 列表证据（含 `id`）
+  - Job Profiles 列表证据（含 families + primary）
+  - Profile families/primary 不变量负例证据（稳定报错即可）
   - 无缺省洞证据（`BU902` 显示 `Resolved SetID: SHARE`）
   - fail-closed 负例证据（`BU999` 不存在时的错误提示，且无 `Resolved SetID`）
 - Position：
@@ -238,10 +264,10 @@
 
 > 说明：此处只记录“本次执行实际跑了什么、结果如何”；命令入口以 `AGENTS.md` 为准。执行时把 `[ ]` 改为 `[X]` 并补齐时间戳与结果摘要。
 
-- [X] 文档门禁：`make check doc` —— （2026-01-10 14:32 UTC，结果：PASS）
-- [X] E2E：`make e2e` —— （2026-01-10 14:29 UTC，结果：PASS；包含 `e2e/tests/tp060-02-master-data.spec.js`）
-- [X] Authz：`make authz-pack && make authz-test && make authz-lint` —— （2026-01-10 14:32 UTC，结果：PASS）
-- [X] 路由治理：`make check routing` —— （2026-01-10 14:32 UTC，结果：PASS）
+- [X] 文档门禁：`make check doc` —— （2026-01-11 06:59 UTC，结果：PASS）
+- [X] E2E：`make e2e` —— （2026-01-11 06:59 UTC，结果：PASS；包含 `e2e/tests/tp060-02-master-data.spec.js`）
+- [X] Authz：`make authz-pack && make authz-test && make authz-lint` —— （2026-01-11 06:59 UTC，结果：PASS）
+- [X] 路由治理：`make check routing` —— （2026-01-11 06:59 UTC，结果：PASS）
 
 ## 10. 问题记录（必须写在本子计划中）
 
