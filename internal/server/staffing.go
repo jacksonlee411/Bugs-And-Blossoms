@@ -11,10 +11,11 @@ import (
 )
 
 type Position struct {
-	ID          string
-	OrgUnitID   string
-	Name        string
-	EffectiveAt string
+	ID              string
+	OrgUnitID       string
+	Name            string
+	LifecycleStatus string
+	EffectiveAt     string
 }
 
 type Assignment struct {
@@ -28,6 +29,7 @@ type Assignment struct {
 type PositionStore interface {
 	ListPositionsCurrent(ctx context.Context, tenantID string, asOfDate string) ([]Position, error)
 	CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, name string) (Position, error)
+	UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, name string, lifecycleStatus string) (Position, error)
 }
 
 type AssignmentStore interface {
@@ -55,17 +57,17 @@ func (s *staffingPGStore) ListPositionsCurrent(ctx context.Context, tenantID str
 	}
 
 	rows, err := tx.Query(ctx, `
-SELECT
-  position_id::text,
-  org_unit_id::text,
-  COALESCE(name, '') AS name,
-  lower(validity)::text AS effective_date
-FROM staffing.position_versions
-WHERE tenant_id = $1::uuid
-  AND lifecycle_status = 'active'
-  AND validity @> $2::date
-ORDER BY lower(validity) DESC, position_id::text ASC
-`, tenantID, asOfDate)
+	SELECT
+	  position_id::text,
+	  org_unit_id::text,
+	  COALESCE(name, '') AS name,
+	  lifecycle_status,
+	  lower(validity)::text AS effective_date
+	FROM staffing.position_versions
+	WHERE tenant_id = $1::uuid
+	  AND validity @> $2::date
+	ORDER BY lower(validity) DESC, position_id::text ASC
+	`, tenantID, asOfDate)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +76,7 @@ ORDER BY lower(validity) DESC, position_id::text ASC
 	var out []Position
 	for rows.Next() {
 		var p Position
-		if err := rows.Scan(&p.ID, &p.OrgUnitID, &p.Name, &p.EffectiveAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.OrgUnitID, &p.Name, &p.LifecycleStatus, &p.EffectiveAt); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -102,11 +104,11 @@ func (s *staffingPGStore) CreatePositionCurrent(ctx context.Context, tenantID st
 
 	effectiveDate = strings.TrimSpace(effectiveDate)
 	if effectiveDate == "" {
-		return Position{}, errors.New("effective_date is required")
+		return Position{}, newBadRequestError("effective_date is required")
 	}
 	orgUnitID = strings.TrimSpace(orgUnitID)
 	if orgUnitID == "" {
-		return Position{}, errors.New("org_unit_id is required")
+		return Position{}, newBadRequestError("org_unit_id is required")
 	}
 	name = strings.TrimSpace(name)
 
@@ -145,11 +147,92 @@ SELECT staffing.submit_position_event(
 	}
 
 	return Position{
-		ID:          positionID,
-		OrgUnitID:   orgUnitID,
-		Name:        name,
-		EffectiveAt: effectiveDate,
+		ID:              positionID,
+		OrgUnitID:       orgUnitID,
+		Name:            name,
+		LifecycleStatus: "active",
+		EffectiveAt:     effectiveDate,
 	}, nil
+}
+
+func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, name string, lifecycleStatus string) (Position, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Position{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return Position{}, err
+	}
+
+	effectiveDate = strings.TrimSpace(effectiveDate)
+	if effectiveDate == "" {
+		return Position{}, newBadRequestError("effective_date is required")
+	}
+	positionID = strings.TrimSpace(positionID)
+	if positionID == "" {
+		return Position{}, newBadRequestError("position_id is required")
+	}
+	orgUnitID = strings.TrimSpace(orgUnitID)
+	name = strings.TrimSpace(name)
+	lifecycleStatus = strings.TrimSpace(lifecycleStatus)
+
+	payloadParts := make([]string, 0, 3)
+	if orgUnitID != "" {
+		payloadParts = append(payloadParts, `"org_unit_id":`+strconv.Quote(orgUnitID))
+	}
+	if name != "" {
+		payloadParts = append(payloadParts, `"name":`+strconv.Quote(name))
+	}
+	if lifecycleStatus != "" {
+		payloadParts = append(payloadParts, `"lifecycle_status":`+strconv.Quote(lifecycleStatus))
+	}
+	if len(payloadParts) == 0 {
+		return Position{}, newBadRequestError("at least one patch field is required")
+	}
+	payload := `{` + strings.Join(payloadParts, ",") + `}`
+
+	var eventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+		return Position{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `
+	SELECT staffing.submit_position_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::uuid,
+	  'UPDATE',
+	  $4::date,
+	  $5::jsonb,
+	  $6::text,
+	  $7::uuid
+	)
+	`, eventID, tenantID, positionID, effectiveDate, []byte(payload), eventID, tenantID); err != nil {
+		return Position{}, err
+	}
+
+	var out Position
+	if err := tx.QueryRow(ctx, `
+	SELECT
+	  position_id::text,
+	  org_unit_id::text,
+	  COALESCE(name, '') AS name,
+	  lifecycle_status,
+	  lower(validity)::text AS effective_date
+	FROM staffing.position_versions
+	WHERE tenant_id = $1::uuid
+	  AND position_id = $2::uuid
+	  AND validity @> $3::date
+	`, tenantID, positionID, effectiveDate).Scan(&out.ID, &out.OrgUnitID, &out.Name, &out.LifecycleStatus, &out.EffectiveAt); err != nil {
+		return Position{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return Position{}, err
+	}
+	return out, nil
 }
 
 func (s *staffingPGStore) ListAssignmentsForPerson(ctx context.Context, tenantID string, asOfDate string, personUUID string) ([]Assignment, error) {
@@ -322,18 +405,53 @@ func (s *staffingMemoryStore) ListPositionsCurrent(_ context.Context, tenantID s
 func (s *staffingMemoryStore) CreatePositionCurrent(_ context.Context, tenantID string, effectiveDate string, orgUnitID string, name string) (Position, error) {
 	effectiveDate = strings.TrimSpace(effectiveDate)
 	if effectiveDate == "" {
-		return Position{}, errors.New("effective_date is required")
+		return Position{}, newBadRequestError("effective_date is required")
 	}
 	orgUnitID = strings.TrimSpace(orgUnitID)
 	if orgUnitID == "" {
-		return Position{}, errors.New("org_unit_id is required")
+		return Position{}, newBadRequestError("org_unit_id is required")
 	}
 	name = strings.TrimSpace(name)
 
 	id := "pos-" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	p := Position{ID: id, OrgUnitID: orgUnitID, Name: name, EffectiveAt: effectiveDate}
+	p := Position{ID: id, OrgUnitID: orgUnitID, Name: name, LifecycleStatus: "active", EffectiveAt: effectiveDate}
 	s.positions[tenantID] = append(s.positions[tenantID], p)
 	return p, nil
+}
+
+func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, name string, lifecycleStatus string) (Position, error) {
+	effectiveDate = strings.TrimSpace(effectiveDate)
+	if effectiveDate == "" {
+		return Position{}, newBadRequestError("effective_date is required")
+	}
+	positionID = strings.TrimSpace(positionID)
+	if positionID == "" {
+		return Position{}, newBadRequestError("position_id is required")
+	}
+	orgUnitID = strings.TrimSpace(orgUnitID)
+	name = strings.TrimSpace(name)
+	lifecycleStatus = strings.TrimSpace(lifecycleStatus)
+	if orgUnitID == "" && name == "" && lifecycleStatus == "" {
+		return Position{}, newBadRequestError("at least one patch field is required")
+	}
+
+	for i := range s.positions[tenantID] {
+		if s.positions[tenantID][i].ID != positionID {
+			continue
+		}
+		if orgUnitID != "" {
+			s.positions[tenantID][i].OrgUnitID = orgUnitID
+		}
+		if name != "" {
+			s.positions[tenantID][i].Name = name
+		}
+		if lifecycleStatus != "" {
+			s.positions[tenantID][i].LifecycleStatus = lifecycleStatus
+		}
+		s.positions[tenantID][i].EffectiveAt = effectiveDate
+		return s.positions[tenantID][i], nil
+	}
+	return Position{}, errors.New("position not found")
 }
 
 func (s *staffingMemoryStore) ListAssignmentsForPerson(_ context.Context, tenantID string, _ string, personUUID string) ([]Assignment, error) {
