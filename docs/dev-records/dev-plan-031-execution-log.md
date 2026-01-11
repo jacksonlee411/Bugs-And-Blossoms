@@ -91,3 +91,21 @@
   - `go fmt ./... && go vet ./...`
   - `make check lint && make check routing && make test`
   - `make staffing plan && make staffing lint && make staffing migrate up`
+
+## 9.5（可选）：Go 分层落位（Assignments Facade/Handler）
+
+- 状态：已合并（PR #213）
+- PR：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/213
+- 合并提交：`ba96366`
+- 变更摘要（不改 DB 合同与路由，`internal/server` 仅做 wiring）：
+  - `modules/staffing/domain/ports/assignment_store.go` / `modules/staffing/domain/types/assignment.go`：定义 Assignments port 与最小类型。
+  - `modules/staffing/services/assignments_facade.go`：落位 Assignments Facade（应用层）。
+  - `modules/staffing/infrastructure/persistence/assignment_pg_store.go`：落位 PG store（含 deterministic event id + payload canonicalization）。
+  - `modules/staffing/presentation/controllers/assignments_api.go`：落位 Internal API handlers（`/org/api/assignments` + `assignment-events:correct|rescind`）。
+  - `internal/server/staffing.go`：`Assignment`/`AssignmentStore` 别名对齐 modules，并将 PG store 的 Assignments 方法改为调用 modules/staffing（wiring）。
+  - `internal/server/staffing_handlers.go`：Assignements 相关 API handlers 改为委托 modules/staffing controllers（wiring）。
+  - `pkg/httperr/httperr.go`：抽出 BadRequest error（供 internal/server 与 modules 共享），保持错误分类口径一致。
+  - 测试：补齐 modules/staffing 的分支覆盖，`make test` 通过 100% coverage gate。
+- 本地验证（按 `AGENTS.md`）：
+  - `go fmt ./... && go vet ./...`
+  - `make check lint && make check routing && make test`
