@@ -122,14 +122,15 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
 
   await page.goto(`/org/positions?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Positions");
-  const orgUnitID = await page
-    .locator('form[method="POST"] select[name="org_unit_id"] option', { hasText: orgName })
+  const posCreateForm = page.locator(`form[method="POST"][action="/org/positions?as_of=${asOf}"]`).first();
+  const orgUnitID = await posCreateForm
+    .locator('select[name="org_unit_id"] option', { hasText: orgName })
     .first()
     .getAttribute("value");
   expect(orgUnitID).not.toBeNull();
-  await page.locator('form[method="POST"] select[name="org_unit_id"]').selectOption(orgUnitID);
-  await page.locator('form[method="POST"] input[name="name"]').fill(posName);
-  await page.locator('form[method="POST"] button[type="submit"]').click();
+  await posCreateForm.locator('select[name="org_unit_id"]').selectOption(orgUnitID);
+  await posCreateForm.locator('input[name="name"]').fill(posName);
+  await posCreateForm.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}$`));
 
   const posRow = page.locator("tr", { hasText: posName });

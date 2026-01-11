@@ -134,6 +134,18 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
     positionIDsByPernr.set(pernr, positionID);
   }
 
+  const disabledPositionName = `TP060-03 Disabled Position ${runID}`;
+  await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
+  await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
+  await positionCreateForm.locator('input[name="name"]').fill(disabledPositionName);
+  await positionCreateForm.locator('button[type="submit"]').click();
+  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}$`));
+
+  const disabledRow = page.locator("tr", { hasText: disabledPositionName }).first();
+  await expect(disabledRow).toBeVisible();
+  const disabledPositionID = (await disabledRow.locator("td").nth(1).innerText()).trim();
+  expect(disabledPositionID).not.toBe("");
+
   await page.goto(`/person/persons?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Person");
 
@@ -152,6 +164,18 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
     expect(personUUID).not.toBe("");
     personUUIDByPernr.set(pernr, personUUID);
   }
+
+  await page.goto(`/org/positions?as_of=${asOf}`);
+  await expect(page.locator("h1")).toHaveText("Staffing / Positions");
+
+  const positionUpdateForm = page.locator(`form[method="POST"][action="/org/positions?as_of=${asOf}"]`).nth(1);
+  await positionUpdateForm.locator('input[name="effective_date"]').fill(lateEffectiveDate);
+  await positionUpdateForm.locator('select[name="position_id"]').selectOption(disabledPositionID);
+  await positionUpdateForm.locator('select[name="lifecycle_status"]').selectOption("disabled");
+  await positionUpdateForm.locator('button[type="submit"]').click();
+  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${lateEffectiveDate}$`));
+
+  await expect(page.locator("tr", { hasText: disabledPositionName }).first()).toContainText("disabled");
 
   const byPernr = async (pernr) => {
     const resp = await appContext.request.get(`/person/api/persons:by-pernr?pernr=${encodeURIComponent(pernr)}`);
@@ -177,6 +201,22 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
   expect((await respNotFound.json()).code).toBe("PERSON_NOT_FOUND");
 
   await page.screenshot({ path: `_artifacts/tp060-03-persons-${runID}.png`, fullPage: true });
+
+  const assignmentDisabledResp = await appContext.request.post(`/org/api/assignments?as_of=${lateEffectiveDate}`, {
+    data: {
+      effective_date: lateEffectiveDate,
+      person_uuid: personUUIDByPernr.get("101"),
+      position_id: disabledPositionID,
+      base_salary: "0",
+      allocated_fte: "1.0"
+    }
+  });
+  expect(assignmentDisabledResp.status()).toBe(422);
+  expect((await assignmentDisabledResp.json()).code).toBe("STAFFING_POSITION_DISABLED_AS_OF");
+
+  await page.goto(`/org/assignments?as_of=${lateEffectiveDate}`);
+  await expect(page.locator("h1")).toHaveText("Staffing / Assignments");
+  await expect(page.locator(`select[name="position_id"] option[value="${disabledPositionID}"]`)).toHaveCount(0);
 
   await page.goto(`/org/assignments?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Assignments");

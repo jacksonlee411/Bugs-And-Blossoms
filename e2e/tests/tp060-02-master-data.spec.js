@@ -323,10 +323,11 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
 
   await page.goto(`/org/positions?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Positions");
-  await expect(page.locator('select[name="org_unit_id"] option', { hasText: "(no org units)" })).toHaveCount(0);
+  const positionCreateForm = page.locator(`form[method="POST"][action="/org/positions?as_of=${asOf}"]`).first();
+  await expect(positionCreateForm.locator('select[name="org_unit_id"] option', { hasText: "(no org units)" })).toHaveCount(0);
 
   const findOrgUnitOptionValue = async (name) => {
-    const option = page.locator('select[name="org_unit_id"] option', { hasText: name }).first();
+    const option = positionCreateForm.locator('select[name="org_unit_id"] option', { hasText: name }).first();
     const value = await option.getAttribute("value");
     expect(value).not.toBeNull();
     return value;
@@ -356,10 +357,10 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     if ((await page.locator("tr", { hasText: spec.name }).count()) > 0) {
       continue;
     }
-    await page.locator('input[name="effective_date"]').fill(asOf);
-    await page.locator('select[name="org_unit_id"]').selectOption(spec.org);
-    await page.locator('input[name="name"]').fill(spec.name);
-    await page.getByRole("button", { name: "Create" }).click();
+    await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
+    await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(spec.org);
+    await positionCreateForm.locator('input[name="name"]').fill(spec.name);
+    await positionCreateForm.getByRole("button", { name: "Create" }).click();
     await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}$`));
   }
   for (const spec of positionSpecs) {

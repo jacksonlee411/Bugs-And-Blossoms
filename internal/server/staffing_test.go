@@ -41,7 +41,8 @@ func (r *positionRows) Scan(dest ...any) error {
 	*(dest[0].(*string)) = "pos1"
 	*(dest[1].(*string)) = "org1"
 	*(dest[2].(*string)) = "Name"
-	*(dest[3].(*string)) = "2026-01-01"
+	*(dest[3].(*string)) = "active"
+	*(dest[4].(*string)) = "2026-01-01"
 	return nil
 }
 func (r *positionRows) Values() ([]any, error) { return nil, nil }
@@ -379,6 +380,124 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 	})
 }
 
+func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "A", "disabled")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		}))
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "A", "disabled")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing effective_date", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "", "org1", "A", "disabled")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing position_id", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "", "2026-01-01", "org1", "A", "disabled")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing patch", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "", "", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("gen event id error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rowErr: errors.New("row")}, nil
+		}))
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "A", "disabled")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submit error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{execErr: errors.New("exec"), execErrAt: 2}
+			tx.row = &stubRow{vals: []any{"evt1"}}
+			return tx, nil
+		}))
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "A", "disabled")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("select error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{row2Err: errors.New("scan")}
+			tx.row = &stubRow{vals: []any{"evt1"}}
+			return tx, nil
+		}))
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "A", "disabled")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{commitErr: errors.New("commit")}
+			tx.row = &stubRow{vals: []any{"evt1"}}
+			tx.row2 = &stubRow{vals: []any{"pos1", "org1", "Name", "disabled", "2026-01-01"}}
+			return tx, nil
+		}))
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "A", "disabled")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{}
+			tx.row = &stubRow{vals: []any{"evt1"}}
+			tx.row2 = &stubRow{vals: []any{"pos1", "org1", "Name", "disabled", "2026-01-01"}}
+			return tx, nil
+		}))
+		p, err := store.UpdatePositionCurrent(context.Background(), "t1", " pos1 ", "2026-01-01", " org1 ", " Name ", " disabled ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.ID != "pos1" {
+			t.Fatalf("expected pos1, got %q", p.ID)
+		}
+		if p.LifecycleStatus != "disabled" {
+			t.Fatalf("expected lifecycle_status=disabled, got %q", p.LifecycleStatus)
+		}
+	})
+}
+
 func TestStaffingPGStore_ListAssignmentsForPerson(t *testing.T) {
 	t.Run("begin error", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
@@ -642,6 +761,42 @@ func TestStaffingMemoryStore(t *testing.T) {
 		}
 	})
 
+	t.Run("update position invalid", func(t *testing.T) {
+		if _, err := s.UpdatePositionCurrent(context.Background(), "t1", "pos1", "", "", "", ""); err == nil {
+			t.Fatal("expected error")
+		}
+		if _, err := s.UpdatePositionCurrent(context.Background(), "t1", "", "2026-01-01", "", "", ""); err == nil {
+			t.Fatal("expected error")
+		}
+		if _, err := s.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "", "", ""); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("update position not found", func(t *testing.T) {
+		if _, err := s.UpdatePositionCurrent(context.Background(), "t1", "missing", "2026-01-01", "", "A", ""); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("update position ok", func(t *testing.T) {
+		positions, err := s.ListPositionsCurrent(context.Background(), "t1", "2026-01-01")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(positions) != 1 {
+			t.Fatalf("expected 1, got %d", len(positions))
+		}
+
+		updated, err := s.UpdatePositionCurrent(context.Background(), "t1", positions[0].ID, "2026-02-01", "org2", "B", "disabled")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if updated.OrgUnitID != "org2" || updated.Name != "B" || updated.LifecycleStatus != "disabled" || updated.EffectiveAt != "2026-02-01" {
+			t.Fatalf("unexpected updated position: %+v", updated)
+		}
+	})
+
 	t.Run("upsert invalid", func(t *testing.T) {
 		if _, err := s.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "", "p1", "pos1", "", ""); err == nil {
 			t.Fatal("expected error")
@@ -704,6 +859,7 @@ func (orgStoreStub) DisableNodeCurrent(context.Context, string, string, string) 
 type positionStoreStub struct {
 	listFn   func(ctx context.Context, tenantID string, asOfDate string) ([]Position, error)
 	createFn func(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, name string) (Position, error)
+	updateFn func(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, name string, lifecycleStatus string) (Position, error)
 }
 
 func (s positionStoreStub) ListPositionsCurrent(ctx context.Context, tenantID string, asOfDate string) ([]Position, error) {
@@ -712,6 +868,10 @@ func (s positionStoreStub) ListPositionsCurrent(ctx context.Context, tenantID st
 
 func (s positionStoreStub) CreatePositionCurrent(ctx context.Context, tenantID string, effectiveDate string, orgUnitID string, name string) (Position, error) {
 	return s.createFn(ctx, tenantID, effectiveDate, orgUnitID, name)
+}
+
+func (s positionStoreStub) UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, name string, lifecycleStatus string) (Position, error) {
+	return s.updateFn(ctx, tenantID, positionID, effectiveDate, orgUnitID, name, lifecycleStatus)
 }
 
 type assignmentStoreStub struct {
@@ -860,6 +1020,58 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
+	t.Run("handlePositions post update ok", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&position_id=pos1&lifecycle_status=disabled"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handlePositions(rec, req,
+			orgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
+				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+			}},
+			positionStoreStub{
+				listFn: func(context.Context, string, string) ([]Position, error) {
+					return []Position{{ID: "pos1", LifecycleStatus: "active"}}, nil
+				},
+				updateFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
+					return Position{ID: "pos1", LifecycleStatus: "disabled"}, nil
+				},
+				createFn: func(context.Context, string, string, string, string) (Position, error) {
+					return Position{}, errors.New("unexpected create")
+				},
+			},
+		)
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handlePositions post update error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&position_id=pos1&lifecycle_status=disabled"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handlePositions(rec, req,
+			orgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
+				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+			}},
+			positionStoreStub{
+				listFn: func(context.Context, string, string) ([]Position, error) {
+					return []Position{{ID: "pos1", LifecycleStatus: "active"}}, nil
+				},
+				updateFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
+					return Position{}, errors.New("update")
+				},
+				createFn: func(context.Context, string, string, string, string) (Position, error) {
+					return Position{}, errors.New("unexpected create")
+				},
+			},
+		)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
 	t.Run("handlePositions post default effective_date", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("org_unit_id=org1&name=A"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -971,7 +1183,7 @@ func TestStaffingHandlers(t *testing.T) {
 				return Position{}, errors.New("create")
 			},
 		})
-		if rec.Code != http.StatusBadRequest {
+		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
@@ -986,6 +1198,76 @@ func TestStaffingHandlers(t *testing.T) {
 			},
 		})
 		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handlePositionsAPI post update ok", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"position_id":"pos1","lifecycle_status":"disabled"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handlePositionsAPI(rec, req, positionStoreStub{
+			updateFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
+				return Position{ID: "pos1", LifecycleStatus: "disabled"}, nil
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handlePositionsAPI post error conflict", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"org1","name":"A"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handlePositionsAPI(rec, req, positionStoreStub{
+			createFn: func(context.Context, string, string, string, string) (Position, error) {
+				return Position{}, &pgconn.PgError{Message: "STAFFING_IDEMPOTENCY_REUSED"}
+			},
+		})
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handlePositionsAPI post error unprocessable", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"position_id":"pos1","lifecycle_status":"disabled"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handlePositionsAPI(rec, req, positionStoreStub{
+			updateFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
+				return Position{}, &pgconn.PgError{Message: "STAFFING_POSITION_DISABLED_AS_OF"}
+			},
+		})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handlePositionsAPI post error bad request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"position_id":"pos1","lifecycle_status":"disabled"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handlePositionsAPI(rec, req, positionStoreStub{
+			updateFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
+				return Position{}, newBadRequestError("bad")
+			},
+		})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handlePositionsAPI post error invalid input", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"position_id":"pos1","lifecycle_status":"disabled"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handlePositionsAPI(rec, req, positionStoreStub{
+			updateFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
+				return Position{}, &pgconn.PgError{Code: "22P02", Message: "invalid input syntax for type uuid"}
+			},
+		})
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
@@ -1055,7 +1337,7 @@ func TestStaffingHandlers(t *testing.T) {
 				return Assignment{}, errors.New("upsert")
 			},
 		})
-		if rec.Code != http.StatusBadRequest {
+		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
@@ -1070,6 +1352,62 @@ func TestStaffingHandlers(t *testing.T) {
 			},
 		})
 		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignmentsAPI post error conflict", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignments?as_of=2026-01-01", bytes.NewReader([]byte(`{"person_uuid":"p1","position_id":"pos1"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleAssignmentsAPI(rec, req, assignmentStoreStub{
+			upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
+				return Assignment{}, &pgconn.PgError{Message: "STAFFING_IDEMPOTENCY_REUSED"}
+			},
+		})
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignmentsAPI post error unprocessable", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignments?as_of=2026-01-01", bytes.NewReader([]byte(`{"person_uuid":"p1","position_id":"pos1"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleAssignmentsAPI(rec, req, assignmentStoreStub{
+			upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
+				return Assignment{}, &pgconn.PgError{Message: "STAFFING_POSITION_DISABLED_AS_OF"}
+			},
+		})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignmentsAPI post error bad request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignments?as_of=2026-01-01", bytes.NewReader([]byte(`{"person_uuid":"p1","position_id":"pos1"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleAssignmentsAPI(rec, req, assignmentStoreStub{
+			upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
+				return Assignment{}, newBadRequestError("bad")
+			},
+		})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handleAssignmentsAPI post error invalid input", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignments?as_of=2026-01-01", bytes.NewReader([]byte(`{"person_uuid":"p1","position_id":"pos1"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleAssignmentsAPI(rec, req, assignmentStoreStub{
+			upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
+				return Assignment{}, &pgconn.PgError{Code: "22P02", Message: "invalid input syntax for type uuid"}
+			},
+		})
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
@@ -1580,6 +1918,17 @@ func TestStaffingHandlers_DefaultAsOf_InternalAPI(t *testing.T) {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
+}
+
+func TestFilterActivePositions(t *testing.T) {
+	got := filterActivePositions([]Position{
+		{ID: "a", LifecycleStatus: "active"},
+		{ID: "b", LifecycleStatus: "disabled"},
+		{ID: "c", LifecycleStatus: ""},
+	})
+	if len(got) != 1 || got[0].ID != "a" {
+		t.Fatalf("unexpected result: %+v", got)
+	}
 }
 
 func TestStaffingHandlers_DefaultAsOf_UI(t *testing.T) {

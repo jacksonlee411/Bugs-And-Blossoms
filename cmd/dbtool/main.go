@@ -503,6 +503,191 @@ func staffingSmoke(args []string) {
 		fatalf("expected assignment_versions=1, got %d", assignmentVersions)
 	}
 
+	disableDateTime, err := time.Parse("2006-01-02", effectiveDate)
+	if err != nil {
+		fatal(err)
+	}
+	disableDate := disableDateTime.AddDate(0, 0, 1).Format("2006-01-02")
+
+	var disablePositionID string
+	var disablePositionEventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&disablePositionID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&disablePositionEventID); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `
+			SELECT staffing.submit_position_event(
+			  $1::uuid,
+			  $2::uuid,
+			  $3::uuid,
+			  'CREATE',
+			  $4::date,
+			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Disable Test Position'),
+			  $6::text,
+			  $7::uuid
+			);
+		`, disablePositionEventID, tenantA, disablePositionID, effectiveDate, orgUnitID, requestID+"-pos-disable-test-create", initiatorID); err != nil {
+		fatal(err)
+	}
+
+	var disableAssignmentID string
+	var disableAssignmentEventID string
+	var disablePersonUUID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&disableAssignmentID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&disableAssignmentEventID); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&disablePersonUUID); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `
+			SELECT staffing.submit_assignment_event(
+			  $1::uuid,
+			  $2::uuid,
+			  $3::uuid,
+			  $4::uuid,
+			  'primary',
+			  'CREATE',
+			  $5::date,
+			  jsonb_build_object(
+			    'position_id', $6::text,
+			    'allocated_fte', '1.0',
+			    'currency', 'CNY',
+			    'profile', '{}'::jsonb
+			  ),
+			  $7::text,
+			  $8::uuid
+			);
+		`, disableAssignmentEventID, tenantA, disableAssignmentID, disablePersonUUID, effectiveDate, disablePositionID, requestID+"-as-disable-test-create", initiatorID); err != nil {
+		fatal(err)
+	}
+
+	{
+		if _, err := tx.Exec(ctx, `SAVEPOINT sp_disable_position_with_active_assignment;`); err != nil {
+			fatal(err)
+		}
+		var disableEventID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&disableEventID); err != nil {
+			fatal(err)
+		}
+
+		_, err = tx.Exec(ctx, `
+				SELECT staffing.submit_position_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  'UPDATE',
+				  $4::date,
+				  jsonb_build_object('lifecycle_status', 'disabled'),
+				  $5::text,
+				  $6::uuid
+				);
+			`, disableEventID, tenantA, disablePositionID, disableDate, requestID+"-pos-disable-should-fail", initiatorID)
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_disable_position_with_active_assignment;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		if err == nil {
+			fatalf("expected disabling position to fail when it still has active assignments")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF" {
+			fatalf("expected pg error message=STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+	}
+
+	{
+		var assignmentDeactivateEventID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&assignmentDeactivateEventID); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `
+				SELECT staffing.submit_assignment_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::uuid,
+				  'primary',
+				  'UPDATE',
+				  $5::date,
+				  jsonb_build_object('status', 'inactive'),
+				  $6::text,
+				  $7::uuid
+				);
+			`, assignmentDeactivateEventID, tenantA, disableAssignmentID, disablePersonUUID, disableDate, requestID+"-as-deactivate", initiatorID); err != nil {
+			fatal(err)
+		}
+
+		var disableEventID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&disableEventID); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `
+				SELECT staffing.submit_position_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  'UPDATE',
+				  $4::date,
+				  jsonb_build_object('lifecycle_status', 'disabled'),
+				  $5::text,
+				  $6::uuid
+				);
+			`, disableEventID, tenantA, disablePositionID, disableDate, requestID+"-pos-disable", initiatorID); err != nil {
+			fatal(err)
+		}
+	}
+
+	{
+		if _, err := tx.Exec(ctx, `SAVEPOINT sp_assignment_to_disabled_position;`); err != nil {
+			fatal(err)
+		}
+
+		var otherAssignmentID string
+		var otherAssignmentEventID string
+		var otherPersonUUID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&otherAssignmentID); err != nil {
+			fatal(err)
+		}
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&otherAssignmentEventID); err != nil {
+			fatal(err)
+		}
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&otherPersonUUID); err != nil {
+			fatal(err)
+		}
+
+		_, err = tx.Exec(ctx, `
+				SELECT staffing.submit_assignment_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  $4::uuid,
+				  'primary',
+				  'CREATE',
+				  $5::date,
+				  jsonb_build_object(
+				    'position_id', $6::text,
+				    'allocated_fte', '1.0',
+				    'currency', 'CNY',
+				    'profile', '{}'::jsonb
+				  ),
+				  $7::text,
+				  $8::uuid
+				);
+			`, otherAssignmentEventID, tenantA, otherAssignmentID, otherPersonUUID, disableDate, disablePositionID, requestID+"-as-disabled", initiatorID)
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_assignment_to_disabled_position;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		if err == nil {
+			fatalf("expected assignment create to disabled position to fail")
+		}
+		if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_POSITION_DISABLED_AS_OF" {
+			fatalf("expected pg error message=STAFFING_POSITION_DISABLED_AS_OF, got ok=%v message=%q err=%v", ok, msg, err)
+		}
+	}
+
 	payGroup := "monthly"
 	ppStart := "2030-01-01"
 	ppEndExcl := "2030-02-01"

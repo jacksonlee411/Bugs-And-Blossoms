@@ -5225,6 +5225,7 @@ DECLARE
   v_last_validity daterange;
   v_org_unit_id uuid;
   v_name text;
+  v_lifecycle_status text;
   v_row RECORD;
   v_validity daterange;
 BEGIN
@@ -5245,6 +5246,7 @@ BEGIN
 
   v_org_unit_id := NULL;
   v_name := NULL;
+  v_lifecycle_status := 'active';
   v_prev_effective := NULL;
 
   FOR v_row IN
@@ -5275,6 +5277,7 @@ BEGIN
       END IF;
 
       v_name := NULLIF(btrim(v_row.payload->>'name'), '');
+      v_lifecycle_status := 'active';
     ELSIF v_row.event_type = 'UPDATE' THEN
       IF v_prev_effective IS NULL THEN
         RAISE EXCEPTION USING
@@ -5294,6 +5297,15 @@ BEGIN
       END IF;
       IF v_row.payload ? 'name' THEN
         v_name := NULLIF(btrim(v_row.payload->>'name'), '');
+      END IF;
+      IF v_row.payload ? 'lifecycle_status' THEN
+        v_lifecycle_status := NULLIF(btrim(v_row.payload->>'lifecycle_status'), '');
+        IF v_lifecycle_status IS NULL OR v_lifecycle_status NOT IN ('active','disabled') THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = format('invalid lifecycle_status: %s', v_row.payload->>'lifecycle_status');
+        END IF;
       END IF;
     ELSE
       RAISE EXCEPTION USING
@@ -5324,6 +5336,21 @@ BEGIN
       v_validity := daterange(v_row.effective_date, v_row.next_effective, '[)');
     END IF;
 
+    IF v_lifecycle_status = 'disabled' AND EXISTS (
+      SELECT 1
+      FROM staffing.assignment_versions av
+      WHERE av.tenant_id = p_tenant_id
+        AND av.position_id = p_position_id
+        AND av.status = 'active'
+        AND av.validity && v_validity
+      LIMIT 1
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF',
+        DETAIL = format('position_id=%s as_of=%s', p_position_id, lower(v_validity));
+    END IF;
+
     INSERT INTO staffing.position_versions (
       tenant_id,
       position_id,
@@ -5342,7 +5369,7 @@ BEGIN
       v_org_unit_id,
       NULL,
       v_name,
-      'active',
+      v_lifecycle_status,
       1.0,
       '{}'::jsonb,
       v_validity,
@@ -5740,6 +5767,37 @@ BEGIN
       v_validity := daterange(v_row.effective_date, NULL, '[)');
     ELSE
       v_validity := daterange(v_row.effective_date, v_row.next_effective, '[)');
+    END IF;
+
+    IF v_status = 'active' THEN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM staffing.position_versions pv
+        WHERE pv.tenant_id = p_tenant_id
+          AND pv.position_id = v_position_id
+          AND pv.lifecycle_status = 'active'
+          AND pv.validity @> v_row.effective_date
+        LIMIT 1
+      ) THEN
+        IF EXISTS (
+          SELECT 1
+          FROM staffing.position_versions pv
+          WHERE pv.tenant_id = p_tenant_id
+            AND pv.position_id = v_position_id
+            AND pv.validity @> v_row.effective_date
+          LIMIT 1
+        ) THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_POSITION_DISABLED_AS_OF',
+            DETAIL = format('position_id=%s as_of=%s', v_position_id, v_row.effective_date);
+        END IF;
+
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_POSITION_NOT_FOUND_AS_OF',
+          DETAIL = format('position_id=%s as_of=%s', v_position_id, v_row.effective_date);
+      END IF;
     END IF;
 
     INSERT INTO staffing.assignment_versions (
