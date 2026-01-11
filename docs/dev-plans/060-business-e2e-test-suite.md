@@ -160,10 +160,14 @@
 | --- | --- | --- | --- |
 | Job Family Group | `JFG-ENG` | Engineering | 示例 |
 | Job Family Group | `JFG-SALES` | Sales | 示例 |
+| Job Family | `JF-BE` | Backend | 初始归属 `JFG-ENG`；用于 reparenting |
+| Job Family | `JF-FE` | Frontend | 归属 `JFG-ENG` |
+| Job Level | `JL-1` | Level 1 | 最小闭环（写入→列表） |
+| Job Profile | `JP-SWE` | Software Engineer | families=`JF-BE,JF-FE`；primary=`JF-BE` |
 
 备注：
 - Job Catalog 的权威作用域为 `setid`；本套件使用 `BU901 -> S2601` 的 SetID 解析链路作为 UI 入口（对齐 `docs/dev-plans/028-setid-management.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。
-- 可选扩展（若系统已实现）：补齐 `job_families/job_levels/job_profiles` 并验证“写入→as_of 读取→UI 可见”的闭环；若未实现则记录为 `SCOPE_GAP`（不得在测试中隐式补口径）。
+- 必测：覆盖 `job_family_groups/job_families/job_levels/job_profiles` 的“写入→as_of 读取→UI 可见”闭环，并包含至少 1 个跨日期场景（例如 family reparenting 的 `as_of` 前后对比）。
 
 ### 5.5 职位（Positions，`as_of=2026-01-01`）
 
@@ -296,6 +300,7 @@
 - OrgUnit：新增节点后树与详情可见；`as_of` 改变时口径符合日粒度有效期。
 - SetID：mapping 保存后，JobCatalog 页面可显示“resolved setid”，且缺映射必须 fail-closed（不允许默认洞）。
 - JobCatalog：至少 1 个实体“写入→列表可见”闭环；BU 变更与 as_of 变更口径一致。
+- JobCatalog（增强）：groups/families/levels/profiles 均覆盖“写入→as_of 读取→UI 可见”；profile 需覆盖 families+primary 不变量的负例（稳定报错即可）。
 - Position：新增职位后列表可见；职位引用 OrgUnit 的输入/下拉来源可靠。
 
 **问题记录**

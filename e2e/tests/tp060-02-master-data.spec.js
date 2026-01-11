@@ -168,7 +168,13 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await mappingsForm.getByRole("button", { name: "Save Mappings" }).click();
   await expect(page).toHaveURL(new RegExp(`/org/setid\\?as_of=${asOf}$`));
 
-  await page.goto(`/org/job-catalog?as_of=${asOf}&business_unit_id=BU901`);
+  const asOfJobCatalogBase = asOf;
+  const asOfJobCatalogBeforeReparent = "2026-01-15";
+  const asOfJobCatalogAfterReparent = "2026-02-15";
+  const reparentEffectiveDate = "2026-02-01";
+  const beforeJobCatalogExists = "2025-12-31";
+
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&business_unit_id=BU901`);
   await expect(page.locator("h1")).toHaveText("Job Catalog");
   await expect(page.getByText("Resolved SetID:")).toBeVisible();
   await expect(page.getByText("Resolved SetID:")).toContainText("S2601");
@@ -178,12 +184,12 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       return;
     }
     const form = page.locator(`form[method="POST"]`).filter({
-      has: page.locator('input[name="code"]')
+      has: page.locator('input[name="action"][value="create_job_family_group"]')
     });
-    await form.locator('input[name="code"]').fill(code);
-    await form.locator('input[name="name"]').fill(name);
+    await form.locator('input[name="job_family_group_code"]').fill(code);
+    await form.locator('input[name="job_family_group_name"]').fill(name);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU901&as_of=${asOf}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU901&as_of=${asOfJobCatalogBase}$`));
   };
   await ensureJobFamilyGroup("JFG-ENG", "Engineering");
   await ensureJobFamilyGroup("JFG-SALES", "Sales");
@@ -192,6 +198,113 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     .locator("xpath=following-sibling::table[1]");
   await expect(groupsTable).toContainText("JFG-ENG");
   await expect(groupsTable).toContainText("JFG-SALES");
+
+  const ensureJobFamily = async (code, name, groupCode) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_family"]')
+    });
+    await form.locator('input[name="job_family_code"]').fill(code);
+    await form.locator('input[name="job_family_name"]').fill(name);
+    await form.locator('input[name="job_family_group_code"]').fill(groupCode);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU901&as_of=${asOfJobCatalogBase}$`));
+  };
+  await ensureJobFamily("JF-BE", "Backend", "JFG-ENG");
+  await ensureJobFamily("JF-FE", "Frontend", "JFG-ENG");
+  const familiesTable = page
+    .locator('h2:has-text("Job Families")')
+    .locator("xpath=following-sibling::table[1]");
+  await expect(familiesTable).toContainText("JF-BE");
+  await expect(familiesTable).toContainText("JF-FE");
+  await expect(familiesTable.locator("tr", { hasText: "JF-BE" })).toContainText("JFG-ENG");
+
+  {
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="update_job_family_group"]')
+    });
+    await form.locator('input[name="effective_date"]').fill(reparentEffectiveDate);
+    await form.locator('input[name="job_family_code"]').fill("JF-BE");
+    await form.locator('input[name="job_family_group_code"]').fill("JFG-SALES");
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU901&as_of=${reparentEffectiveDate}$`));
+  }
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBeforeReparent}&business_unit_id=BU901`);
+  await expect(page.locator("h1")).toHaveText("Job Catalog");
+  await expect(page.getByText("Resolved SetID:")).toContainText("S2601");
+  await expect(
+    page.locator('h2:has-text("Job Families")').locator("xpath=following-sibling::table[1]").locator("tr", { hasText: "JF-BE" })
+  ).toContainText("JFG-ENG");
+
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogAfterReparent}&business_unit_id=BU901`);
+  await expect(page.locator("h1")).toHaveText("Job Catalog");
+  await expect(page.getByText("Resolved SetID:")).toContainText("S2601");
+  await expect(
+    page.locator('h2:has-text("Job Families")').locator("xpath=following-sibling::table[1]").locator("tr", { hasText: "JF-BE" })
+  ).toContainText("JFG-SALES");
+
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&business_unit_id=BU901`);
+  const ensureJobLevel = async (code, name) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_level"]')
+    });
+    await form.locator('input[name="job_level_code"]').fill(code);
+    await form.locator('input[name="job_level_name"]').fill(name);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU901&as_of=${asOfJobCatalogBase}$`));
+  };
+  await ensureJobLevel("JL-1", "Level 1");
+  const levelsTable = page
+    .locator('h2:has-text("Job Levels")')
+    .locator("xpath=following-sibling::table[1]");
+  await expect(levelsTable).toContainText("JL-1");
+
+  await page.goto(`/org/job-catalog?as_of=${beforeJobCatalogExists}&business_unit_id=BU901`);
+  await expect(page.locator("h1")).toHaveText("Job Catalog");
+  const levelsTableBefore = page
+    .locator('h2:has-text("Job Levels")')
+    .locator("xpath=following-sibling::table[1]");
+  await expect(levelsTableBefore.locator("tr", { hasText: "JL-1" })).toHaveCount(0);
+
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&business_unit_id=BU901`);
+  const ensureJobProfile = async (code, name, familyCodesCSV, primaryFamilyCode) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_profile"]')
+    });
+    await form.locator('input[name="job_profile_code"]').fill(code);
+    await form.locator('input[name="job_profile_name"]').fill(name);
+    await form.locator('input[name="job_profile_family_codes"]').fill(familyCodesCSV);
+    await form.locator('input[name="job_profile_primary_family_code"]').fill(primaryFamilyCode);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU901&as_of=${asOfJobCatalogBase}$`));
+  };
+  await ensureJobProfile("JP-SWE", "Software Engineer", "JF-BE,JF-FE", "JF-BE");
+  const profilesTable = page
+    .locator('h2:has-text("Job Profiles")')
+    .locator("xpath=following-sibling::table[1]");
+  await expect(profilesTable).toContainText("JP-SWE");
+  await expect(profilesTable).toContainText("JF-BE,JF-FE");
+  await expect(profilesTable.locator("tr", { hasText: "JP-SWE" })).toContainText("JF-BE");
+
+  {
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_profile"]')
+    });
+    await form.locator('input[name="job_profile_code"]').fill("JP-BAD");
+    await form.locator('input[name="job_profile_name"]').fill("Bad Profile");
+    await form.locator('input[name="job_profile_family_codes"]').fill("JF-BE");
+    await form.locator('input[name="job_profile_primary_family_code"]').fill("JF-FE");
+    await form.locator('button[type="submit"]').click();
+    await expect(page.locator('div[style*="border:1px solid #c00"]')).toBeVisible();
+  }
 
   await page.goto(`/org/setid?as_of=${asOf}`);
   if ((await page.locator("tr", { hasText: "BU902" }).count()) === 0) {
