@@ -56,6 +56,7 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 
 		positionID := strings.TrimSpace(r.Form.Get("position_id"))
 		orgUnitID := strings.TrimSpace(r.Form.Get("org_unit_id"))
+		reportsToPositionID := strings.TrimSpace(r.Form.Get("reports_to_position_id"))
 		name := strings.TrimSpace(r.Form.Get("name"))
 		lifecycleStatus := strings.TrimSpace(r.Form.Get("lifecycle_status"))
 
@@ -65,7 +66,7 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 				return
 			}
 		} else {
-			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionID, effectiveDate, orgUnitID, name, lifecycleStatus); err != nil {
+			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionID, effectiveDate, orgUnitID, reportsToPositionID, name, lifecycleStatus); err != nil {
 				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, stablePgMessage(err)))
 				return
 			}
@@ -80,11 +81,12 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 }
 
 type staffingPositionsAPIRequest struct {
-	EffectiveDate   string `json:"effective_date"`
-	PositionID      string `json:"position_id"`
-	OrgUnitID       string `json:"org_unit_id"`
-	Name            string `json:"name"`
-	LifecycleStatus string `json:"lifecycle_status"`
+	EffectiveDate       string `json:"effective_date"`
+	PositionID          string `json:"position_id"`
+	OrgUnitID           string `json:"org_unit_id"`
+	ReportsToPositionID string `json:"reports_to_position_id"`
+	Name                string `json:"name"`
+	LifecycleStatus     string `json:"lifecycle_status"`
 }
 
 func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionStore) {
@@ -136,7 +138,7 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionSt
 		if strings.TrimSpace(req.PositionID) == "" {
 			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, req.OrgUnitID, req.Name)
 		} else {
-			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionID, req.EffectiveDate, req.OrgUnitID, req.Name, req.LifecycleStatus)
+			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionID, req.EffectiveDate, req.OrgUnitID, req.ReportsToPositionID, req.Name, req.LifecycleStatus)
 		}
 		if err != nil {
 			code := stablePgMessage(err)
@@ -420,6 +422,16 @@ func renderPositions(positions []Position, nodes []OrgUnitNode, tenant Tenant, a
 		}
 	}
 	b.WriteString(`</select></label><br/>`)
+	b.WriteString(`<label>Reports To <select name="reports_to_position_id">`)
+	b.WriteString(`<option value="">(no change)</option>`)
+	for _, p := range filterActivePositions(positions) {
+		label := p.ID
+		if p.Name != "" {
+			label = p.Name + " (" + p.ID + ")"
+		}
+		b.WriteString(`<option value="` + html.EscapeString(p.ID) + `">` + html.EscapeString(label) + `</option>`)
+	}
+	b.WriteString(`</select></label><br/>`)
 	b.WriteString(`<label>Name <input type="text" name="name" placeholder="(no change)" /></label><br/>`)
 	b.WriteString(`<label>Lifecycle <select name="lifecycle_status">` +
 		`<option value="">(no change)</option>` +
@@ -436,11 +448,12 @@ func renderPositions(positions []Position, nodes []OrgUnitNode, tenant Tenant, a
 	}
 
 	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr>` +
-		`<th>effective_date</th><th>position_id</th><th>lifecycle_status</th><th>org_unit_id</th><th>name</th>` +
+		`<th>effective_date</th><th>position_id</th><th>reports_to_position_id</th><th>lifecycle_status</th><th>org_unit_id</th><th>name</th>` +
 		`</tr></thead><tbody>`)
 	for _, p := range positions {
 		b.WriteString(`<tr><td><code>` + html.EscapeString(p.EffectiveAt) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.ID) + `</code></td>` +
+			`<td><code>` + html.EscapeString(p.ReportsToID) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.LifecycleStatus) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.OrgUnitID) + `</code></td>` +
 			`<td>` + html.EscapeString(p.Name) + `</td></tr>`)

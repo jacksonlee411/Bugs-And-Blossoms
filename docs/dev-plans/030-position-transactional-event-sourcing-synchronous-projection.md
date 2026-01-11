@@ -1,6 +1,6 @@
 # DEV-PLAN-030：Position（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
-**状态**: 进行中（2026-01-11 10:00 UTC）— M3 已落地；M4+ 规划见 §10
+**状态**: 进行中（2026-01-11 10:00 UTC）— M3/M4a 已落地；M4b+ 规划见 §10
 
 > 本计划的定位：作为 Greenfield HR 的 Position/Assignment 子域，提供 **Position/Assignment 的权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026`（OrgUnit）对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -8,7 +8,7 @@
 - [X] M2（对齐 `DEV-PLAN-009M2`）：Position/Assignments 最小闭环已在主干落地（DB Kernel + UI + Internal API），证据见 §2.4。
 - [X] TP-060-02/03：E2E 覆盖“主数据→职位→人员→任职”，Position 作为下游输入已可复现（见 `docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`、`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`）。
 - [X] M3：Position 的更新/停用（同 `position_id`）与 UI/Internal API 收敛（见 §10.M3）。
-- [ ] M4：`reports_to_position_id` 可编辑 + 无环不变量（先交付 forward-only；retro 另拆，见 §10.M4）。
+- [X] M4a：`reports_to_position_id` 可编辑 + 无环不变量（forward-only；retro 另拆，见 §10.M4）。
 - [ ] M5：与 JobCatalog（`DEV-PLAN-029` 的 SetID 一等公民口径）组合：Position 绑定 Job Profile/Level 的 SetID 口径与落地（见 §3.8 与 §10.M5）。
 - [ ] M6：容量模型拆分：M6a `capacity_fte` 可编辑 + `allocated_fte <= capacity_fte`（仍一岗一人）；M6b 多人并发 + `SUM(allocated_fte) <= capacity_fte`（见 §10.M6）。
 - [ ] M7：读快照函数/错误码收敛（便于复用与排障，见 §10.M7）。
@@ -80,6 +80,15 @@
 - [X] DB smoke：`cmd/dbtool/main.go`（`staffing-smoke` 增加 disable 断言）
 - [X] E2E：`e2e/tests/tp060-03-person-and-assignments.spec.js`（disable → assignment fail）
 
+## 2.6 已落地范围（M4a，主干）
+> 说明：M4a 先交付 forward-only（只允许追加切片），并在 as-of 下裁决“禁止自指/禁止环/引用必须 as-of active”。
+
+- [X] 迁移闭环（staffing）：`migrations/staffing/20260111193000_staffing_position_reports_to_m4.sql`
+- [X] Schema/Kernel：`modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql`（reports_to 投射 + 无环裁决 + forward-only）
+- [X] UI/Internal API：`internal/server/staffing_handlers.go`、`internal/server/staffing.go`（reports_to 可编辑与展示）
+- [X] DB smoke：`cmd/dbtool/main.go`（self/cycle/forward-only 断言）
+- [X] E2E：`e2e/tests/tp060-03-person-and-assignments.spec.js`（可见链路 + cycle 负例）
+
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 Kernel 边界（与 026 对齐）
 - **DB = Projection Kernel（权威）**：插入事件（幂等）+ 同步投射 versions + 不变量裁决 + 可 replay。
@@ -111,7 +120,8 @@
 > 说明：M2 阶段不交付 `reports_to_position_id` 编辑能力，因此该字段在投射中固定为 `NULL`，无环不变量在 M2 内平凡成立；M4 再引入“可编辑 + 无环裁决”。
 
 - [X] M2：`reports_to_position_id` 固定为 `NULL`（Position 投射结果不包含汇报线编辑能力）。
-- [ ] M4：开放 `reports_to_position_id` 编辑，并由 DB Kernel 裁决“as-of 无环/禁止自指/引用可用性”；retro 作为单独子里程碑（见 §10.M4）。
+- [X] M4a：开放 `reports_to_position_id` 编辑，并由 DB Kernel 裁决“as-of 无环/禁止自指/引用可用性”；写入为 forward-only（见 §10.M4）。
+- [ ] M4b（可选，retro）：若要允许 retro 写入，需定义并实现“再验证窗口/锁策略”，确保 retro 不会让未来日期出现环（见 §10.M4）。
 
 ### 3.7 占编/容量（M6a/M6b；M2 简化模型）
 - [X] M2：同一 position 同一时点最多 1 条 active primary assignment；`allocated_fte` 约束为 `(0,1]`；`capacity_fte` 在投射中固定为 `1.0`。
@@ -286,7 +296,8 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] 投射字段（M2）固定值：`reports_to_position_id=NULL`、`lifecycle_status='active'`、`capacity_fte=1.0`、`profile='{}'`。
 - [X] gapless 校验：相邻切片无间隙 + 末段 infinity（错误：`STAFFING_VALIDITY_GAP` / `STAFFING_VALIDITY_NOT_INFINITE`）。
 - [X] M3：引入 `payload.lifecycle_status` 可编辑与投射；disabled 切片与 active assignment 冲突时 fail-closed（见 §3.10 / §10.M3）。
-- [ ] M4/M5/M6：引入 reports_to/jobcatalog/capacity 的可编辑与裁决逻辑（M6a/M6b；见 §10）。
+- [X] M4a：引入 `payload.reports_to_position_id` 可编辑与投射；引用必须 as-of active；禁止自指/禁止环；并限制为 forward-only（见 §10.M4）。
+- [ ] M5/M6：引入 jobcatalog/capacity 的可编辑与裁决逻辑（M6a/M6b；见 §10）。
 
 ### 5.4 `staffing.submit_assignment_event` / `staffing.replay_assignment_versions`（简述）
 > 说明：Assignment 的详细合同以 `DEV-PLAN-031` 为准；此处只记录已落地的写入口形状与 Payroll/Attendance 相关耦合点。
@@ -312,7 +323,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] Position：`STAFFING_ORG_UNIT_NOT_FOUND_AS_OF` / `STAFFING_VALIDITY_GAP` / `STAFFING_VALIDITY_NOT_INFINITE`
 - [X] Assignment（示例）：`STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID` / `STAFFING_ASSIGNMENT_BASE_SALARY_INVALID` / `STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED` / `STAFFING_ASSIGNMENT_PROFILE_INVALID`
 - [X] M3 生命周期/交叉不变量：`STAFFING_POSITION_NOT_FOUND_AS_OF` / `STAFFING_POSITION_DISABLED_AS_OF` / `STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF`
-- [ ] M4 汇报线：`STAFFING_POSITION_REPORTS_TO_SELF` / `STAFFING_POSITION_REPORTS_TO_CYCLE`（引用不存在/disabled 复用 `STAFFING_POSITION_NOT_FOUND_AS_OF` / `STAFFING_POSITION_DISABLED_AS_OF`）
+- [X] M4 汇报线：`STAFFING_POSITION_REPORTS_TO_SELF` / `STAFFING_POSITION_REPORTS_TO_CYCLE`（引用不存在/disabled 复用 `STAFFING_POSITION_NOT_FOUND_AS_OF` / `STAFFING_POSITION_DISABLED_AS_OF`）
 - [ ] M5 SetID/BU（来自 `orgunit.resolve_setid`）：`BUSINESS_UNIT_NOT_FOUND` / `BUSINESS_UNIT_DISABLED` / `SETID_MAPPING_MISSING` / `SETID_NOT_FOUND` / `SETID_DISABLED`
 - [ ] M6 容量：`STAFFING_POSITION_CAPACITY_EXCEEDED`（`allocated_fte` 或 `SUM(allocated_fte)` 超出；含降容 fail-closed）
 
@@ -325,7 +336,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] versions gapless：replay 校验相邻切片无间隙 + 末段 infinity（`STAFFING_VALIDITY_GAP/NOT_INFINITE`）。
 - [X] M2 汇报线：`reports_to_position_id` 固定为 `NULL`（因此无环不变量在 M2 内平凡成立）。
 - [X] M3 生命周期：支持 `disabled` 切片（可写入可读取），且 disabled 在 UI 可见并不可用于新任职。
-- [ ] M4a 汇报线：开放编辑后仍必须满足 as-of 无环/禁止自指/引用可用性（forward-only）。
+- [X] M4a 汇报线：开放编辑后仍必须满足 as-of 无环/禁止自指/引用可用性（forward-only）。
 - [ ] M4b（可选）：若要支持 retro 写入，必须定义并实现“再验证窗口/锁策略”，确保 retro 不会让未来日期出现环。
 - [X] M2 占编：同一时点一个 position 最多被一个 active assignment 占用（`assignment_versions_position_no_overlap`）。
 - [ ] M5 SetID：Position 绑定 JobCatalog 时必须 fail-closed（BU/SetID/mapping 缺失或 disabled），且不允许跨 setid 引用。
@@ -353,11 +364,11 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] Tests：dbtool smoke/单测补齐；E2E 增加“创建→停用→不可用于新任职”的最小断言。
 
 ### 10.M4：汇报线（reports_to）+ 无环裁决
-- [ ] M4a（先交付，forward-only）：`reports_to_position_id` 的写入只允许**追加事件**（`effective_date` 必须晚于该 position 当前最后一条事件的 `effective_date`），不允许 retro 改写历史切片；并在 `effective_date` as-of 下裁决：禁止自指、引用必须 as-of active、禁止形成环。
-- [ ] 并发策略：评估并确定“tenant 级锁/多锁策略”，避免跨 position 汇报线写入竞态。
-- [ ] DB：支持写入 `reports_to_position_id` 并实现 as-of 无环裁决；禁止自指；引用必须 as-of active。
-- [ ] UI：提供最小编辑入口（选择上级岗位）与可见性（展示汇报上级）。
-- [ ] Tests：环/自指/引用不存在/引用 disabled 负例；E2E 覆盖一条可见链路。
+- [X] M4a（先交付，forward-only）：`reports_to_position_id` 的写入只允许**追加事件**（`effective_date` 必须晚于该 position 当前最后一条事件的 `effective_date`），不允许 retro 改写历史切片；并在 `effective_date` as-of 下裁决：禁止自指、引用必须 as-of active、禁止形成环。
+- [X] 并发策略：选择“tenant 级锁”（仅在包含 `reports_to_position_id` patch 时启用），避免跨 position 汇报线写入竞态。
+- [X] DB：支持写入 `reports_to_position_id` 并实现 as-of 无环裁决；禁止自指；引用必须 as-of active。
+- [X] UI：提供最小编辑入口（选择上级岗位）与可见性（展示汇报上级）。
+- [X] Tests：环/自指/引用不存在/引用 disabled 负例；E2E 覆盖一条可见链路。
 - [ ] M4b（可选，retro）：若要允许 retro 写入，需定义“再验证窗口”（哪些日期需要重检）并实现，确保 retro 不会让未来日期出现环；补齐对应 tests 与证据。
 
 ### 10.M5：与 JobCatalog 组合（SetID 一等公民）
