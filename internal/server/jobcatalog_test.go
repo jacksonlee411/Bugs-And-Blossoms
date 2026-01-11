@@ -14,9 +14,10 @@ import (
 )
 
 type jobcatalogRows struct {
-	idx  int
-	rows [][]any
-	err  error
+	idx     int
+	rows    [][]any
+	scanErr error
+	err     error
 }
 
 func (r *jobcatalogRows) Close()                        {}
@@ -33,6 +34,9 @@ func (r *jobcatalogRows) Next() bool {
 	return true
 }
 func (r *jobcatalogRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
 	row := r.rows[r.idx-1]
 	for i := range dest {
 		switch d := dest[i].(type) {
@@ -66,6 +70,12 @@ func (s errJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string
 func (s errJobCatalogStore) ListJobFamilyGroups(context.Context, string, string, string) ([]JobFamilyGroup, string, error) {
 	return nil, "", s.err
 }
+func (s errJobCatalogStore) CreateJobLevel(context.Context, string, string, string, string, string, string) error {
+	return s.err
+}
+func (s errJobCatalogStore) ListJobLevels(context.Context, string, string, string) ([]JobLevel, string, error) {
+	return nil, "", s.err
+}
 
 type partialJobCatalogStore struct {
 	businessUnits []BusinessUnit
@@ -84,6 +94,12 @@ func (s partialJobCatalogStore) CreateJobFamilyGroup(context.Context, string, st
 func (s partialJobCatalogStore) ListJobFamilyGroups(context.Context, string, string, string) ([]JobFamilyGroup, string, error) {
 	return nil, "SHARE", s.listErr
 }
+func (s partialJobCatalogStore) CreateJobLevel(context.Context, string, string, string, string, string, string) error {
+	return nil
+}
+func (s partialJobCatalogStore) ListJobLevels(context.Context, string, string, string) ([]JobLevel, string, error) {
+	return nil, "SHARE", nil
+}
 
 type createErrJobCatalogStore struct {
 	businessUnits []BusinessUnit
@@ -100,6 +116,12 @@ func (s createErrJobCatalogStore) CreateJobFamilyGroup(context.Context, string, 
 	return s.err
 }
 func (s createErrJobCatalogStore) ListJobFamilyGroups(context.Context, string, string, string) ([]JobFamilyGroup, string, error) {
+	return nil, "SHARE", nil
+}
+func (s createErrJobCatalogStore) CreateJobLevel(context.Context, string, string, string, string, string, string) error {
+	return nil
+}
+func (s createErrJobCatalogStore) ListJobLevels(context.Context, string, string, string) ([]JobLevel, string, error) {
 	return nil, "SHARE", nil
 }
 
@@ -240,6 +262,324 @@ func TestHandleJobCatalog_Post_CreateError(t *testing.T) {
 	}
 }
 
+type createLevelErrJobCatalogStore struct {
+	businessUnits []BusinessUnit
+	err           error
+}
+
+func (s createLevelErrJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
+	return append([]BusinessUnit(nil), s.businessUnits...), nil
+}
+func (s createLevelErrJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
+	return "SHARE", nil
+}
+func (s createLevelErrJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
+	return nil
+}
+func (s createLevelErrJobCatalogStore) ListJobFamilyGroups(context.Context, string, string, string) ([]JobFamilyGroup, string, error) {
+	return nil, "SHARE", nil
+}
+func (s createLevelErrJobCatalogStore) CreateJobLevel(context.Context, string, string, string, string, string, string) error {
+	return s.err
+}
+func (s createLevelErrJobCatalogStore) ListJobLevels(context.Context, string, string, string) ([]JobLevel, string, error) {
+	return nil, "SHARE", nil
+}
+
+type levelsListErrJobCatalogStore struct {
+	businessUnits []BusinessUnit
+	err           error
+}
+
+func (s levelsListErrJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
+	return append([]BusinessUnit(nil), s.businessUnits...), nil
+}
+func (s levelsListErrJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
+	return "SHARE", nil
+}
+func (s levelsListErrJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
+	return nil
+}
+func (s levelsListErrJobCatalogStore) ListJobFamilyGroups(context.Context, string, string, string) ([]JobFamilyGroup, string, error) {
+	return nil, "SHARE", nil
+}
+func (s levelsListErrJobCatalogStore) CreateJobLevel(context.Context, string, string, string, string, string, string) error {
+	return nil
+}
+func (s levelsListErrJobCatalogStore) ListJobLevels(context.Context, string, string, string) ([]JobLevel, string, error) {
+	return nil, "SHARE", s.err
+}
+
+func TestHandleJobCatalog_Post_CreateJobLevel_Success(t *testing.T) {
+	store := newJobCatalogMemoryStore()
+
+	form := url.Values{}
+	form.Set("action", "create_job_level")
+	form.Set("effective_date", "2026-01-01")
+	form.Set("business_unit_id", "BU000")
+	form.Set("job_level_code", "JL1")
+	form.Set("job_level_name", "Level1")
+	form.Set("job_level_description", "")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleJobCatalog(rec, req, store)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleJobCatalog_Post_CreateJobLevel_Error(t *testing.T) {
+	bus := []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}
+	store := createLevelErrJobCatalogStore{businessUnits: bus, err: errors.New("boom")}
+
+	form := url.Values{}
+	form.Set("action", "create_job_level")
+	form.Set("effective_date", "2026-01-01")
+	form.Set("business_unit_id", "BU000")
+	form.Set("job_level_code", "JL1")
+	form.Set("job_level_name", "Level1")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleJobCatalog(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "boom") {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleJobCatalog_Get_ListJobLevelsError(t *testing.T) {
+	bus := []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}
+	store := levelsListErrJobCatalogStore{businessUnits: bus, err: errors.New("boom")}
+
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleJobCatalog(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "boom") {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestJobCatalogPGStore_CreateAndListJobLevels(t *testing.T) {
+	makeTx := func() *stubTx {
+		return &stubTx{
+			row:  &stubRow{vals: []any{"SHARE"}},
+			row2: &stubRow{vals: []any{"level-id"}},
+			row3: &stubRow{vals: []any{"event-id"}},
+		}
+	}
+
+	store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		return makeTx(), nil
+	})).(*jobcatalogPGStore)
+
+	if err := store.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL1", "Level 1", "desc"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+
+	store2 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		return makeTx(), nil
+	})).(*jobcatalogPGStore)
+	if err := store2.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL1", "Level 1", ""); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+
+	rows := &jobcatalogRows{rows: [][]any{{"id1", "JL1", "Level 1", true, "2026-01-01"}}}
+	store3 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		return &stubTx{
+			row:  &stubRow{vals: []any{"SHARE"}},
+			rows: rows,
+		}, nil
+	})).(*jobcatalogPGStore)
+	levels, setID, err := store3.ListJobLevels(context.Background(), "t1", "BU000", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if setID != "SHARE" {
+		t.Fatalf("setid=%q", setID)
+	}
+	if len(levels) != 1 {
+		t.Fatalf("levels=%d", len(levels))
+	}
+}
+
+func TestJobCatalogPGStore_CreateJobLevel_Errors(t *testing.T) {
+	cases := []struct {
+		name      string
+		tx        *stubTx
+		wantError bool
+	}{
+		{
+			name:      "ensure_bootstrap_exec_error",
+			tx:        &stubTx{execErr: errors.New("boom"), execErrAt: 2},
+			wantError: true,
+		},
+		{
+			name:      "resolve_setid_error",
+			tx:        &stubTx{rowErr: errors.New("boom")},
+			wantError: true,
+		},
+		{
+			name:      "level_uuid_error",
+			tx:        &stubTx{row: &stubRow{vals: []any{"SHARE"}}, row2Err: errors.New("boom")},
+			wantError: true,
+		},
+		{
+			name:      "event_uuid_error",
+			tx:        &stubTx{row: &stubRow{vals: []any{"SHARE"}}, row2: &stubRow{vals: []any{"level-id"}}, row3Err: errors.New("boom")},
+			wantError: true,
+		},
+		{
+			name:      "submit_exec_error",
+			tx:        &stubTx{row: &stubRow{vals: []any{"SHARE"}}, row2: &stubRow{vals: []any{"level-id"}}, row3: &stubRow{vals: []any{"event-id"}}, execErr: errors.New("boom"), execErrAt: 3},
+			wantError: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return tc.tx, nil
+			})).(*jobcatalogPGStore)
+			err := store.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL1", "Level 1", "desc")
+			if tc.wantError && err == nil {
+				t.Fatalf("expected error")
+			}
+		})
+	}
+}
+
+func TestJobCatalogPGStore_ListJobLevels_Errors(t *testing.T) {
+	cases := []struct {
+		name      string
+		tx        *stubTx
+		wantError bool
+	}{
+		{
+			name:      "ensure_bootstrap_exec_error",
+			tx:        &stubTx{execErr: errors.New("boom"), execErrAt: 2},
+			wantError: true,
+		},
+		{
+			name:      "resolve_setid_error",
+			tx:        &stubTx{rowErr: errors.New("boom")},
+			wantError: true,
+		},
+		{
+			name:      "query_error",
+			tx:        &stubTx{row: &stubRow{vals: []any{"SHARE"}}, queryErr: errors.New("boom"), queryErrAt: 1},
+			wantError: true,
+		},
+		{
+			name:      "scan_error",
+			tx:        &stubTx{row: &stubRow{vals: []any{"SHARE"}}, rows: &jobcatalogRows{rows: [][]any{{"id1", "JL1", "Level 1", true, "2026-01-01"}}, scanErr: errors.New("boom")}},
+			wantError: true,
+		},
+		{
+			name:      "rows_err",
+			tx:        &stubTx{row: &stubRow{vals: []any{"SHARE"}}, rows: &jobcatalogRows{rows: nil, err: errors.New("boom")}},
+			wantError: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return tc.tx, nil
+			})).(*jobcatalogPGStore)
+			_, _, err := store.ListJobLevels(context.Background(), "t1", "BU000", "2026-01-01")
+			if tc.wantError && err == nil {
+				t.Fatalf("expected error")
+			}
+		})
+	}
+}
+
+func TestJobCatalogMemoryStore_CreateAndListJobLevels_DefaultBU(t *testing.T) {
+	store := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
+	if err := store.CreateJobLevel(context.Background(), "t1", "", "2026-01-01", "JL1", "Level 1", ""); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if err := store.CreateJobLevel(context.Background(), "t1", "", "2026-01-01", "JL2", "Level 2", ""); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+
+	levels, resolved, err := store.ListJobLevels(context.Background(), "t1", "", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if resolved != "SHARE" {
+		t.Fatalf("resolved=%q", resolved)
+	}
+	if len(levels) != 2 {
+		t.Fatalf("levels=%d", len(levels))
+	}
+}
+
+type resolvedFallbackJobCatalogStore struct{}
+
+func (resolvedFallbackJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
+	return []BusinessUnit{
+		{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"},
+		{BusinessUnitID: "BU001", Name: "Other BU", Status: "active"},
+	}, nil
+}
+func (resolvedFallbackJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
+	return "SHARE", nil
+}
+func (resolvedFallbackJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
+	return nil
+}
+func (resolvedFallbackJobCatalogStore) ListJobFamilyGroups(context.Context, string, string, string) ([]JobFamilyGroup, string, error) {
+	return nil, "", nil
+}
+func (resolvedFallbackJobCatalogStore) CreateJobLevel(context.Context, string, string, string, string, string, string) error {
+	return nil
+}
+func (resolvedFallbackJobCatalogStore) ListJobLevels(context.Context, string, string, string) ([]JobLevel, string, error) {
+	return nil, "SHARE", nil
+}
+
+func TestHandleJobCatalog_Get_ResolvedFallbackToLevels(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&business_unit_id=BU001", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleJobCatalog(rec, req, resolvedFallbackJobCatalogStore{})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "Resolved SetID") || !strings.Contains(body, "SHARE") {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleJobCatalog_Get_RendersJobLevels(t *testing.T) {
+	store := newJobCatalogMemoryStore()
+	_ = store.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL1", "Level 1", "")
+
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&business_unit_id=BU000", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleJobCatalog(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "Job Levels") || !strings.Contains(body, "JL1") {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
 func TestHandleJobCatalog_DefaultsAndMethodNotAllowed(t *testing.T) {
 	store := newJobCatalogMemoryStore()
 	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01", nil)
@@ -250,8 +590,8 @@ func TestHandleJobCatalog_DefaultsAndMethodNotAllowed(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 
-	_ = renderJobCatalog(nil, []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}, Tenant{Name: "T"}, "BU000", "", "2026-01-01", "")
-	_ = renderJobCatalog([]JobFamilyGroup{{ID: "g1", Code: "C", Name: "N", IsActive: true, EffectiveDay: "2026-01-01"}}, []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}, Tenant{Name: "T"}, "BU000", "err", "2026-01-01", "SHARE")
+	_ = renderJobCatalog(nil, nil, []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}, Tenant{Name: "T"}, "BU000", "", "2026-01-01", "")
+	_ = renderJobCatalog([]JobFamilyGroup{{ID: "g1", Code: "C", Name: "N", IsActive: true, EffectiveDay: "2026-01-01"}}, nil, []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}, Tenant{Name: "T"}, "BU000", "err", "2026-01-01", "SHARE")
 
 	req2 := httptest.NewRequest(http.MethodPut, "/org/job-catalog?as_of=2026-01-01", nil)
 	req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))

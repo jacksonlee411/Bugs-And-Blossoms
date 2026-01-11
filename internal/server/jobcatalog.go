@@ -23,11 +23,21 @@ type JobFamilyGroup struct {
 	EffectiveDay string
 }
 
+type JobLevel struct {
+	ID           string
+	Code         string
+	Name         string
+	IsActive     bool
+	EffectiveDay string
+}
+
 type JobCatalogStore interface {
 	ListBusinessUnits(ctx context.Context, tenantID string) ([]BusinessUnit, error)
 	ResolveSetID(ctx context.Context, tenantID string, businessUnitID string, recordGroup string) (string, error)
 	CreateJobFamilyGroup(ctx context.Context, tenantID string, businessUnitID string, effectiveDate string, code string, name string, description string) error
 	ListJobFamilyGroups(ctx context.Context, tenantID string, businessUnitID string, asOfDate string) ([]JobFamilyGroup, string, error)
+	CreateJobLevel(ctx context.Context, tenantID string, businessUnitID string, effectiveDate string, code string, name string, description string) error
+	ListJobLevels(ctx context.Context, tenantID string, businessUnitID string, asOfDate string) ([]JobLevel, string, error)
 }
 
 type jobcatalogPGStore struct {
@@ -41,12 +51,14 @@ func newJobCatalogPGStore(pool pgBeginner) JobCatalogStore {
 type jobcatalogMemoryStore struct {
 	businessUnits map[string][]BusinessUnit
 	groups        map[string]map[string][]JobFamilyGroup // tenant -> bu -> groups
+	levels        map[string]map[string][]JobLevel       // tenant -> bu -> levels
 }
 
 func newJobCatalogMemoryStore() JobCatalogStore {
 	return &jobcatalogMemoryStore{
 		businessUnits: make(map[string][]BusinessUnit),
 		groups:        make(map[string]map[string][]JobFamilyGroup),
+		levels:        make(map[string]map[string][]JobLevel),
 	}
 }
 
@@ -56,6 +68,9 @@ func (s *jobcatalogMemoryStore) ensure(tenantID string) {
 	}
 	if s.groups[tenantID] == nil {
 		s.groups[tenantID] = make(map[string][]JobFamilyGroup)
+	}
+	if s.levels[tenantID] == nil {
+		s.levels[tenantID] = make(map[string][]JobLevel)
 	}
 }
 
@@ -93,6 +108,32 @@ func (s *jobcatalogMemoryStore) ListJobFamilyGroups(_ context.Context, tenantID 
 		businessUnitID = "BU000"
 	}
 	return append([]JobFamilyGroup(nil), s.groups[tenantID][businessUnitID]...), "SHARE", nil
+}
+
+func (s *jobcatalogMemoryStore) CreateJobLevel(_ context.Context, tenantID string, businessUnitID string, effectiveDate string, code string, name string, _ string) error {
+	s.ensure(tenantID)
+	if businessUnitID == "" {
+		businessUnitID = "BU000"
+	}
+	if s.levels[tenantID][businessUnitID] == nil {
+		s.levels[tenantID][businessUnitID] = []JobLevel{}
+	}
+	s.levels[tenantID][businessUnitID] = append(s.levels[tenantID][businessUnitID], JobLevel{
+		ID:           strconv.Itoa(len(s.levels[tenantID][businessUnitID]) + 1),
+		Code:         code,
+		Name:         name,
+		IsActive:     true,
+		EffectiveDay: effectiveDate,
+	})
+	return nil
+}
+
+func (s *jobcatalogMemoryStore) ListJobLevels(_ context.Context, tenantID string, businessUnitID string, _ string) ([]JobLevel, string, error) {
+	s.ensure(tenantID)
+	if businessUnitID == "" {
+		businessUnitID = "BU000"
+	}
+	return append([]JobLevel(nil), s.levels[tenantID][businessUnitID]...), "SHARE", nil
 }
 
 func (s *jobcatalogPGStore) withTx(ctx context.Context, tenantID string, fn func(tx pgx.Tx) error) error {
@@ -254,6 +295,99 @@ ORDER BY g.code ASC
 	return out, resolved, err
 }
 
+func (s *jobcatalogPGStore) CreateJobLevel(ctx context.Context, tenantID string, businessUnitID string, effectiveDate string, code string, name string, description string) error {
+	return s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, tenantID); err != nil {
+			return err
+		}
+
+		resolved, err := setid.Resolve(ctx, tx, tenantID, businessUnitID, setid.RecordGroupJobCatalog)
+		if err != nil {
+			return err
+		}
+
+		var levelID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&levelID); err != nil {
+			return err
+		}
+		var eventID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+			return err
+		}
+
+		payload := `{"code":` + strconv.Quote(code) +
+			`,"name":` + strconv.Quote(name)
+		if strings.TrimSpace(description) != "" {
+			payload += `,"description":` + strconv.Quote(description)
+		} else {
+			payload += `,"description":null`
+		}
+		payload += `}`
+
+		_, err = tx.Exec(ctx, `
+	SELECT jobcatalog.submit_job_level_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::text,
+	  $4::uuid,
+	  'CREATE',
+	  $5::date,
+	  $6::jsonb,
+	  $7::text,
+	  $8::uuid
+	);
+	`, eventID, tenantID, resolved, levelID, effectiveDate, []byte(payload), "ui:"+eventID, tenantID)
+		return err
+	})
+}
+
+func (s *jobcatalogPGStore) ListJobLevels(ctx context.Context, tenantID string, businessUnitID string, asOfDate string) ([]JobLevel, string, error) {
+	var out []JobLevel
+	var resolved string
+	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, tenantID); err != nil {
+			return err
+		}
+		v, err := setid.Resolve(ctx, tx, tenantID, businessUnitID, setid.RecordGroupJobCatalog)
+		if err != nil {
+			return err
+		}
+		resolved = v
+
+		rows, err := tx.Query(ctx, `
+	SELECT
+	  l.id::text,
+	  l.code,
+	  v.name,
+	  v.is_active,
+	  lower(v.validity)::text
+	FROM jobcatalog.job_levels l
+	JOIN jobcatalog.job_level_versions v
+	  ON v.tenant_id = $1::uuid
+	 AND v.setid = $2::text
+	 AND v.job_level_id = l.id
+	WHERE l.tenant_id = $1::uuid
+	  AND l.setid = $2::text
+	  AND v.validity @> $3::date
+	ORDER BY l.code ASC
+	`, tenantID, resolved, asOfDate)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var l JobLevel
+			if err := rows.Scan(&l.ID, &l.Code, &l.Name, &l.IsActive, &l.EffectiveDay); err != nil {
+				return err
+			}
+			out = append(out, l)
+		}
+		return rows.Err()
+	})
+	return out, resolved, err
+}
+
 func handleJobCatalog(w http.ResponseWriter, r *http.Request, store JobCatalogStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -268,7 +402,7 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, store JobCatalogSt
 
 	bus, err := store.ListBusinessUnits(r.Context(), tenant.ID)
 	if err != nil {
-		writePage(w, r, renderJobCatalog(nil, nil, tenant, "", err.Error(), asOf, ""))
+		writePage(w, r, renderJobCatalog(nil, nil, nil, tenant, "", err.Error(), asOf, ""))
 		return
 	}
 
@@ -285,7 +419,7 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, store JobCatalogSt
 		buID = "BU000"
 	}
 
-	list := func(errHint string) (groups []JobFamilyGroup, resolved string, errMsg string) {
+	list := func(errHint string) (groups []JobFamilyGroup, levels []JobLevel, resolved string, errMsg string) {
 		mergeMsg := func(hint string, msg string) string {
 			if hint == "" {
 				return msg
@@ -296,22 +430,32 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, store JobCatalogSt
 			return hint + "；" + msg
 		}
 
-		groups, resolved, err := store.ListJobFamilyGroups(r.Context(), tenant.ID, buID, asOf)
+		groups, resolvedGroups, err := store.ListJobFamilyGroups(r.Context(), tenant.ID, buID, asOf)
 		if err != nil {
-			return nil, "", mergeMsg(errHint, err.Error())
+			return nil, nil, "", mergeMsg(errHint, err.Error())
 		}
-		return groups, resolved, errHint
+
+		levels, resolvedLevels, err := store.ListJobLevels(r.Context(), tenant.ID, buID, asOf)
+		if err != nil {
+			return groups, nil, resolvedGroups, mergeMsg(errHint, err.Error())
+		}
+
+		resolved = resolvedGroups
+		if resolved == "" {
+			resolved = resolvedLevels
+		}
+		return groups, levels, resolved, errHint
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		groups, resolved, errMsg := list("")
-		writePage(w, r, renderJobCatalog(groups, activeBUs, tenant, buID, errMsg, asOf, resolved))
+		groups, levels, resolved, errMsg := list("")
+		writePage(w, r, renderJobCatalog(groups, levels, activeBUs, tenant, buID, errMsg, asOf, resolved))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
-			groups, resolved, errMsg := list("bad form")
-			writePage(w, r, renderJobCatalog(groups, activeBUs, tenant, buID, errMsg, asOf, resolved))
+			groups, levels, resolved, errMsg := list("bad form")
+			writePage(w, r, renderJobCatalog(groups, levels, activeBUs, tenant, buID, errMsg, asOf, resolved))
 			return
 		}
 
@@ -319,9 +463,11 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, store JobCatalogSt
 		if action == "" {
 			action = "create_job_family_group"
 		}
-		if action != "create_job_family_group" {
-			groups, resolved, errMsg := list("unknown action")
-			writePage(w, r, renderJobCatalog(groups, activeBUs, tenant, buID, errMsg, asOf, resolved))
+		switch action {
+		case "create_job_family_group", "create_job_level":
+		default:
+			groups, levels, resolved, errMsg := list("unknown action")
+			writePage(w, r, renderJobCatalog(groups, levels, activeBUs, tenant, buID, errMsg, asOf, resolved))
 			return
 		}
 
@@ -330,8 +476,8 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, store JobCatalogSt
 			effectiveDate = asOf
 		}
 		if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
-			groups, resolved, errMsg := list("effective_date 无效: " + err.Error())
-			writePage(w, r, renderJobCatalog(groups, activeBUs, tenant, buID, errMsg, asOf, resolved))
+			groups, levels, resolved, errMsg := list("effective_date 无效: " + err.Error())
+			writePage(w, r, renderJobCatalog(groups, levels, activeBUs, tenant, buID, errMsg, asOf, resolved))
 			return
 		}
 
@@ -340,19 +486,36 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, store JobCatalogSt
 			buID = formBU
 		}
 
-		code := strings.TrimSpace(r.Form.Get("code"))
-		name := strings.TrimSpace(r.Form.Get("name"))
-		desc := strings.TrimSpace(r.Form.Get("description"))
+		codeField := "code"
+		nameField := "name"
+		descField := "description"
+		if action == "create_job_level" {
+			codeField = "job_level_code"
+			nameField = "job_level_name"
+			descField = "job_level_description"
+		}
+
+		code := strings.TrimSpace(r.Form.Get(codeField))
+		name := strings.TrimSpace(r.Form.Get(nameField))
+		desc := strings.TrimSpace(r.Form.Get(descField))
 		if code == "" || name == "" {
-			groups, resolved, errMsg := list("code/name is required")
-			writePage(w, r, renderJobCatalog(groups, activeBUs, tenant, buID, errMsg, asOf, resolved))
+			groups, levels, resolved, errMsg := list("code/name is required")
+			writePage(w, r, renderJobCatalog(groups, levels, activeBUs, tenant, buID, errMsg, asOf, resolved))
 			return
 		}
 
-		if err := store.CreateJobFamilyGroup(r.Context(), tenant.ID, buID, effectiveDate, code, name, desc); err != nil {
-			groups, resolved, errMsg := list(err.Error())
-			writePage(w, r, renderJobCatalog(groups, activeBUs, tenant, buID, errMsg, asOf, resolved))
-			return
+		if action == "create_job_family_group" {
+			if err := store.CreateJobFamilyGroup(r.Context(), tenant.ID, buID, effectiveDate, code, name, desc); err != nil {
+				groups, levels, resolved, errMsg := list(err.Error())
+				writePage(w, r, renderJobCatalog(groups, levels, activeBUs, tenant, buID, errMsg, asOf, resolved))
+				return
+			}
+		} else {
+			if err := store.CreateJobLevel(r.Context(), tenant.ID, buID, effectiveDate, code, name, desc); err != nil {
+				groups, levels, resolved, errMsg := list(err.Error())
+				writePage(w, r, renderJobCatalog(groups, levels, activeBUs, tenant, buID, errMsg, asOf, resolved))
+				return
+			}
 		}
 
 		http.Redirect(w, r, "/org/job-catalog?business_unit_id="+url.QueryEscape(buID)+"&as_of="+url.QueryEscape(effectiveDate), http.StatusSeeOther)
@@ -363,7 +526,7 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, store JobCatalogSt
 	}
 }
 
-func renderJobCatalog(groups []JobFamilyGroup, businessUnits []BusinessUnit, tenant Tenant, businessUnitID string, errMsg string, asOf string, resolvedSetID string) string {
+func renderJobCatalog(groups []JobFamilyGroup, levels []JobLevel, businessUnits []BusinessUnit, tenant Tenant, businessUnitID string, errMsg string, asOf string, resolvedSetID string) string {
 	var b strings.Builder
 	b.WriteString("<h1>Job Catalog</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
@@ -416,6 +579,34 @@ func renderJobCatalog(groups []JobFamilyGroup, businessUnits []BusinessUnit, ten
 		b.WriteString("<td>" + html.EscapeString(active) + "</td>")
 		b.WriteString("<td>" + html.EscapeString(g.EffectiveDay) + "</td>")
 		b.WriteString("<td><code>" + html.EscapeString(g.ID) + "</code></td>")
+		b.WriteString("</tr>")
+	}
+	b.WriteString("</tbody></table>")
+
+	b.WriteString(`<h2>Create Job Level</h2>`)
+	b.WriteString(`<form method="POST" action="` + postAction + `">`)
+	b.WriteString(`<input type="hidden" name="action" value="create_job_level" />`)
+	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
+	b.WriteString(`<label>Business Unit <input name="business_unit_id" value="` + html.EscapeString(businessUnitID) + `" maxlength="5" /></label><br/>`)
+	b.WriteString(`<label>Code <input name="job_level_code" /></label><br/>`)
+	b.WriteString(`<label>Name <input name="job_level_name" /></label><br/>`)
+	b.WriteString(`<label>Description <input name="job_level_description" /></label><br/>`)
+	b.WriteString(`<button type="submit">Create</button>`)
+	b.WriteString(`</form>`)
+
+	b.WriteString(`<h2>Job Levels</h2>`)
+	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>name</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
+	for _, l := range levels {
+		active := "false"
+		if l.IsActive {
+			active = "true"
+		}
+		b.WriteString("<tr>")
+		b.WriteString("<td>" + html.EscapeString(l.Code) + "</td>")
+		b.WriteString("<td>" + html.EscapeString(l.Name) + "</td>")
+		b.WriteString("<td>" + html.EscapeString(active) + "</td>")
+		b.WriteString("<td>" + html.EscapeString(l.EffectiveDay) + "</td>")
+		b.WriteString("<td><code>" + html.EscapeString(l.ID) + "</code></td>")
 		b.WriteString("</tr>")
 	}
 	b.WriteString("</tbody></table>")
