@@ -2026,8 +2026,33 @@ func TestStablePgMessage(t *testing.T) {
 	if got := stablePgMessage(&pgconn.PgError{Message: "STAFFING_X"}); got != "STAFFING_X" {
 		t.Fatalf("got=%q", got)
 	}
+	if got := stablePgMessage(&pgconn.PgError{Message: "BUSINESS_UNIT_NOT_FOUND"}); got != "BUSINESS_UNIT_NOT_FOUND" {
+		t.Fatalf("got=%q", got)
+	}
 	if got := stablePgMessage(errors.New("boom")); got != "boom" {
 		t.Fatalf("got=%q", got)
+	}
+}
+
+func TestIsStableDBCode(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"", false},
+		{"UNKNOWN", false},
+		{"STAFFING_X", true},
+		{"BUSINESS_UNIT_NOT_FOUND", true},
+		{"invalid", false},
+		{"A B", false},
+		{"_ABC", false},
+		{"1ABC", false},
+		{"ABC-", false},
+	}
+	for _, c := range cases {
+		if got := isStableDBCode(c.in); got != c.want {
+			t.Fatalf("in=%q got=%v want=%v", c.in, got, c.want)
+		}
 	}
 }
 

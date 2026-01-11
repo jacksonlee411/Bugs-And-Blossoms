@@ -64,25 +64,19 @@ func (s *staffingPGStore) ListPositionsCurrent(ctx context.Context, tenantID str
 
 	rows, err := tx.Query(ctx, `
 	SELECT
-	  pv.position_id::text,
-	  pv.org_unit_id::text,
-	  COALESCE(pv.reports_to_position_id::text, '') AS reports_to_position_id,
-	  COALESCE(pv.business_unit_id, '') AS business_unit_id,
-	  COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,
-	  COALESCE(pv.job_profile_id::text, '') AS job_profile_id,
-	  COALESCE(jp.code, '') AS job_profile_code,
-	  COALESCE(pv.name, '') AS name,
-	  pv.lifecycle_status,
-	  pv.capacity_fte::text AS capacity_fte,
-	  lower(pv.validity)::text AS effective_date
-	FROM staffing.position_versions pv
-	LEFT JOIN jobcatalog.job_profiles jp
-	  ON jp.tenant_id = pv.tenant_id
-	 AND jp.setid = pv.jobcatalog_setid
-	 AND jp.id = pv.job_profile_id
-	WHERE pv.tenant_id = $1::uuid
-	  AND pv.validity @> $2::date
-	ORDER BY lower(pv.validity) DESC, pv.position_id::text ASC
+	  position_id::text,
+	  org_unit_id::text,
+	  COALESCE(reports_to_position_id::text, '') AS reports_to_position_id,
+	  COALESCE(business_unit_id, '') AS business_unit_id,
+	  COALESCE(jobcatalog_setid, '') AS jobcatalog_setid,
+	  COALESCE(job_profile_id::text, '') AS job_profile_id,
+	  COALESCE(job_profile_code, '') AS job_profile_code,
+	  COALESCE(name, '') AS name,
+	  lifecycle_status,
+	  capacity_fte::text AS capacity_fte,
+	  effective_date::text AS effective_date
+	FROM staffing.get_position_snapshot($1::uuid, $2::date)
+	ORDER BY effective_date DESC, position_id::text ASC
 	`, tenantID, asOfDate)
 	if err != nil {
 		return nil, err
@@ -285,25 +279,20 @@ func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 	var out Position
 	if err := tx.QueryRow(ctx, `
 		SELECT
-		  pv.position_id::text,
-		  pv.org_unit_id::text,
-		  COALESCE(pv.reports_to_position_id::text, '') AS reports_to_position_id,
-		  COALESCE(pv.business_unit_id, '') AS business_unit_id,
-		  COALESCE(pv.jobcatalog_setid, '') AS jobcatalog_setid,
-		  COALESCE(pv.job_profile_id::text, '') AS job_profile_id,
-		  COALESCE(jp.code, '') AS job_profile_code,
-		  COALESCE(pv.name, '') AS name,
-		  pv.lifecycle_status,
-		  pv.capacity_fte::text AS capacity_fte,
-		  lower(pv.validity)::text AS effective_date
-		FROM staffing.position_versions pv
-		LEFT JOIN jobcatalog.job_profiles jp
-		  ON jp.tenant_id = pv.tenant_id
-	 AND jp.setid = pv.jobcatalog_setid
-	 AND jp.id = pv.job_profile_id
-	WHERE pv.tenant_id = $1::uuid
-	  AND pv.position_id = $2::uuid
-	  AND pv.validity @> $3::date
+		  position_id::text,
+		  org_unit_id::text,
+		  COALESCE(reports_to_position_id::text, '') AS reports_to_position_id,
+		  COALESCE(business_unit_id, '') AS business_unit_id,
+		  COALESCE(jobcatalog_setid, '') AS jobcatalog_setid,
+		  COALESCE(job_profile_id::text, '') AS job_profile_id,
+		  COALESCE(job_profile_code, '') AS job_profile_code,
+		  COALESCE(name, '') AS name,
+		  lifecycle_status,
+		  capacity_fte::text AS capacity_fte,
+		  effective_date::text AS effective_date
+		FROM staffing.get_position_snapshot($1::uuid, $3::date)
+		WHERE position_id = $2::uuid
+		LIMIT 1
 	`, tenantID, positionID, effectiveDate).Scan(
 		&out.ID,
 		&out.OrgUnitID,
@@ -338,18 +327,15 @@ func (s *staffingPGStore) ListAssignmentsForPerson(ctx context.Context, tenantID
 	}
 
 	rows, err := tx.Query(ctx, `
-SELECT
-  assignment_id::text,
-  person_uuid::text,
-  position_id::text,
-  status,
-  lower(validity)::text AS effective_date
-FROM staffing.assignment_versions
-WHERE tenant_id = $1::uuid
-  AND person_uuid = $2::uuid
-  AND validity @> $3::date
-ORDER BY lower(validity) DESC, assignment_id::text ASC
-`, tenantID, personUUID, asOfDate)
+	SELECT
+	  assignment_id::text,
+	  person_uuid::text,
+	  position_id::text,
+	  status,
+	  effective_date::text AS effective_date
+	FROM staffing.get_assignment_snapshot($1::uuid, $2::uuid, $3::date)
+	ORDER BY effective_date DESC, assignment_id::text ASC
+	`, tenantID, personUUID, asOfDate)
 	if err != nil {
 		return nil, err
 	}

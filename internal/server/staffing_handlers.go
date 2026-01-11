@@ -144,7 +144,15 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionSt
 	case http.MethodGet:
 		positions, err := store.ListPositionsCurrent(r.Context(), tenant.ID, asOf)
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "list_failed", "list failed")
+			code := stablePgMessage(err)
+			status := http.StatusInternalServerError
+			if isStableDBCode(code) {
+				status = http.StatusUnprocessableEntity
+			}
+			if isBadRequestError(err) || isPgInvalidInput(err) {
+				status = http.StatusBadRequest
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "list failed")
 			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -182,7 +190,7 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionSt
 			case "STAFFING_IDEMPOTENCY_REUSED":
 				status = http.StatusConflict
 			default:
-				if strings.HasPrefix(code, "STAFFING_") {
+				if isStableDBCode(code) {
 					status = http.StatusUnprocessableEntity
 				}
 				if isBadRequestError(err) || isPgInvalidInput(err) {
@@ -234,7 +242,15 @@ func handleAssignmentsAPI(w http.ResponseWriter, r *http.Request, store Assignme
 		}
 		assigns, err := store.ListAssignmentsForPerson(r.Context(), tenant.ID, asOf, personUUID)
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "list_failed", "list failed")
+			code := stablePgMessage(err)
+			status := http.StatusInternalServerError
+			if isStableDBCode(code) {
+				status = http.StatusUnprocessableEntity
+			}
+			if isBadRequestError(err) || isPgInvalidInput(err) {
+				status = http.StatusBadRequest
+			}
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "list failed")
 			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -266,7 +282,7 @@ func handleAssignmentsAPI(w http.ResponseWriter, r *http.Request, store Assignme
 			case "STAFFING_IDEMPOTENCY_REUSED":
 				status = http.StatusConflict
 			default:
-				if strings.HasPrefix(code, "STAFFING_") {
+				if isStableDBCode(code) {
 					status = http.StatusUnprocessableEntity
 				}
 				if isBadRequestError(err) || isPgInvalidInput(err) {

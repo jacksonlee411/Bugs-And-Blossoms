@@ -1,6 +1,6 @@
 # DEV-PLAN-030：Position（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
-**状态**: 进行中（2026-01-11 20:00 UTC）— M3/M4a/M5/M6a 已落地；M4b/M6b/M7 规划见 §10
+**状态**: 进行中（2026-01-11 20:55 UTC）— M3/M4a/M5/M6a/M7 已落地；M4b/M6b 作为可选里程碑见 §10
 
 > 本计划的定位：作为 Greenfield HR 的 Position/Assignment 子域，提供 **Position/Assignment 的权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026`（OrgUnit）对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -12,7 +12,7 @@
 - [X] M5：与 JobCatalog（`DEV-PLAN-029` 的 SetID 一等公民口径）组合：Position 绑定 Job Profile 的 SetID 口径与落地（见 §3.8 与 §10.M5）。
 - [X] M6a：`capacity_fte` 可编辑 + `allocated_fte <= capacity_fte`（仍一岗一人；见 §10.M6）。
 - [ ] M6b：多人并发 + `SUM(allocated_fte) <= capacity_fte`（见 §10.M6）。
-- [ ] M7：读快照函数/错误码收敛（便于复用与排障，见 §10.M7）。
+- [X] M7：读快照函数/错误码收敛（便于复用与排障，见 §10.M7）。
 
 ## 1. 背景与上下文 (Context)
 - 本仓库为 Greenfield implementation repo：Position/Assignments 已在 `modules/staffing` 的 DB schema/kernel 与 `/org/*` UI 形成最小闭环（证据见 §2.4）。
@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
 事件合同（M2）：
 - [X] `CREATE`：必填 `payload.org_unit_id`；可选 `payload.name`。
 - [X] `UPDATE`：payload 为 patch；M2 仅允许 keys：`org_unit_id`、`name`。  
-  实现现状：未知 key 不会参与投射（允许存在但会被忽略）；M7 再收敛为“未知 key 拒绝”。
+  实现现状：未知 key 会被 DB 约束拒绝（fail-closed；见 `*_events_payload_allowed_keys_check`）。
 
 事件合同（M3+ 演进，按里程碑解锁）：
 - [X] M3：允许 `payload.lifecycle_status ∈ {'active','disabled'}`（沿用 `event_type='UPDATE'`，**不新增** `event_type='DISABLE'`），并投射到 `position_versions.lifecycle_status`。
@@ -319,12 +319,12 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 
 ## 6. 读模型与查询
 - [X] M2 现状：Go 层直接查询 `staffing.position_versions` / `staffing.assignment_versions`（as-of：`validity @> $as_of::date`）。
-- [ ] M7：如需复用/优化，补齐 `staffing.get_position_snapshot(...)`、`staffing.get_assignment_snapshot(...)` 并收敛 server 层 SQL 形状。
+- [X] M7：补齐 `staffing.get_position_snapshot(...)`、`staffing.get_assignment_snapshot(...)` 并收敛 server 层 SQL 形状。
 
 ## 7. Go 层集成（事务 + 调用 DB）
 - [X] M2：Go 层所有读写均显式事务，并通过 `set_config('app.current_tenant', $tenant, true)` 注入租户上下文（对齐 `No Tx, No RLS`）。
 - [X] M2：实现落点：`internal/server/staffing.go`（PG store）+ `internal/server/staffing_handlers.go`（UI/Internal API）。
-- [ ] M7：错误与 HTTP code 收敛：当前 UI 多为展示原始错误字符串；Internal API 多为泛化 `create_failed/upsert_failed`，需补齐稳定映射与测试。
+- [X] M7：错误与 HTTP code 收敛：Internal API 的 `routing.ErrorEnvelope.Code` 携带稳定码（优先 DB `MESSAGE`），并由 Go 层做最小映射（409/400/422）。
 
 ### 7.1 错误契约（现状：以 DB `MESSAGE` 为稳定码）
 > 说明：staffing kernel 使用 `RAISE EXCEPTION USING MESSAGE = '<STABLE_CODE>', DETAIL = '<...>'`；HTTP 层目前大多直出 `err.Error()`（UI）或泛化为 internal API code（待 M7 收敛）。
@@ -353,7 +353,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] M5 SetID：Position 绑定 JobCatalog 时必须 fail-closed（BU/SetID/mapping 缺失或 disabled），且不允许跨 setid 引用。
 - [X] M6a 容量：`capacity_fte` 可编辑且裁决 `allocated_fte <= capacity_fte`（仍一岗一人）。
 - [ ] M6b 容量：若允许并发多人任职，必须以 `capacity_fte` + `SUM(allocated_fte) <= capacity_fte` 裁决，并覆盖 Position 降容的 fail-closed。
-- [ ] M7 可排障：读快照函数可复用（DB/Go 收敛查询形状），且错误码映射稳定、回归可定位。
+- [X] M7 可排障：读快照函数可复用（DB/Go 收敛查询形状），且错误码映射稳定、回归可定位。
 - [X] as-of 查询：任意日期快照结果与 versions 语义一致（`validity @> date`），证据：TP-060-02/03 E2E。
 
 ## 9. 运维与灾备（Rebuild / Replay）
@@ -396,13 +396,14 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [ ] 红线提示：若 M6b 需要新增表/新建迁移中的 `CREATE TABLE`，必须先获得用户手工确认（见 `AGENTS.md`）。
 
 ### 10.M7：读快照函数 + 错误码收敛
-- [ ] DB：补齐 `staffing.get_position_snapshot(...)` / `staffing.get_assignment_snapshot(...)`（或等价封装）以收敛查询形状。
-- [ ] Go：统一错误码映射与 HTTP 行为（UI/Internal API）：Internal API 的 `routing.ErrorEnvelope.Code` 必须携带稳定码（优先复用 DB `MESSAGE`）；避免“页面显示 DB 原始错误 + API 泛化丢失细节”的漂移。
-- [ ] Tests：为错误码/快照函数补齐单测与最小 E2E 覆盖，确保回归可定位。
+- [X] DB：补齐 `staffing.get_position_snapshot(...)` / `staffing.get_assignment_snapshot(...)` 以收敛查询形状（schema：`modules/staffing/infrastructure/persistence/schema/00015_staffing_read.sql`；迁移：`migrations/staffing/20260111233000_staffing_read_snapshots_m7.sql`）。
+- [X] DB（修复）：显式 cast `job_profile_code` 为 `text`，避免 plpgsql `RETURN QUERY` 对 `varchar(64)` → `text` 的严格匹配导致 SQLSTATE 42804（迁移：`migrations/staffing/20260111235000_staffing_read_snapshots_m7_fix.sql`）。
+- [X] Go：Server 层读路径统一改为 snapshot；Internal API 的 `routing.ErrorEnvelope.Code` 携带稳定码（优先复用 DB `MESSAGE`），并做最小 HTTP 映射（400/409/422），避免“页面显示 DB 原始错误 + API 泛化丢失细节”的漂移。
+- [X] Tests：补齐错误码收敛与快照读路径单测；`make preflight`（含 E2E TP-060 / payroll）全绿。
 
 ## 11. 评审落地（DEV-PLAN-003，聚焦 M3-M7）
 - [X] M4 拆分：先交付 forward-only（M4a），retro 作为可选子里程碑（M4b），避免一次性引入全局图 retro 校验导致偶然复杂度爆炸。
 - [X] M6 拆分：先交付 `capacity_fte` 可编辑（M6a），多人并发（M6b）延后并要求先冻结锁与校验算法。
 - [X] M3 选择：沿用 `event_type='UPDATE'` + `payload.lifecycle_status` 表达 disable（对齐 `staffing.time_profile_events` 的既有模式），避免为“好看”引入更多 event_type 分支。
 - [X] M5 SetID 策略：已定稿并落地“BU/SetID 来源、落盘字段、引用校验口径”（禁止默认 SHARE），并明确先只绑定 `job_profile`。
-- [ ] M7 错误码收敛：在实现前必须冻结“稳定码集合 + Go 层映射策略 + 最小回归断言”，避免继续累积 `create_failed/upsert_failed` 这类泛化错误。
+- [X] M7 错误码收敛：冻结“稳定码集合 + Go 层映射策略 + 最小回归断言”，避免继续累积 `create_failed/upsert_failed` 这类泛化错误。

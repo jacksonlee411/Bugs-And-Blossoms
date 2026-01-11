@@ -20,6 +20,18 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT position_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
   CONSTRAINT position_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT position_events_payload_allowed_keys_check CHECK (
+    (
+      payload
+      - 'org_unit_id'
+      - 'name'
+      - 'reports_to_position_id'
+      - 'business_unit_id'
+      - 'job_profile_id'
+      - 'lifecycle_status'
+      - 'capacity_fte'
+    ) = '{}'::jsonb
+  ),
   CONSTRAINT position_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT position_events_one_per_day_unique UNIQUE (tenant_id, position_id, effective_date),
   CONSTRAINT position_events_request_id_unique UNIQUE (tenant_id, request_id),
@@ -106,6 +118,17 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   CONSTRAINT assignment_events_assignment_type_check CHECK (assignment_type IN ('primary')),
   CONSTRAINT assignment_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
   CONSTRAINT assignment_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT assignment_events_payload_allowed_keys_check CHECK (
+    (
+      payload
+      - 'position_id'
+      - 'status'
+      - 'base_salary'
+      - 'allocated_fte'
+      - 'currency'
+      - 'profile'
+    ) = '{}'::jsonb
+  ),
   CONSTRAINT assignment_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT assignment_events_one_per_day_unique UNIQUE (tenant_id, assignment_id, effective_date),
   CONSTRAINT assignment_events_request_id_unique UNIQUE (tenant_id, request_id),

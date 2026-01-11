@@ -4459,6 +4459,18 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT position_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
   CONSTRAINT position_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT position_events_payload_allowed_keys_check CHECK (
+    (
+      payload
+      - 'org_unit_id'
+      - 'name'
+      - 'reports_to_position_id'
+      - 'business_unit_id'
+      - 'job_profile_id'
+      - 'lifecycle_status'
+      - 'capacity_fte'
+    ) = '{}'::jsonb
+  ),
   CONSTRAINT position_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT position_events_one_per_day_unique UNIQUE (tenant_id, position_id, effective_date),
   CONSTRAINT position_events_request_id_unique UNIQUE (tenant_id, request_id),
@@ -4545,6 +4557,17 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   CONSTRAINT assignment_events_assignment_type_check CHECK (assignment_type IN ('primary')),
   CONSTRAINT assignment_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
   CONSTRAINT assignment_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
+  CONSTRAINT assignment_events_payload_allowed_keys_check CHECK (
+    (
+      payload
+      - 'position_id'
+      - 'status'
+      - 'base_salary'
+      - 'allocated_fte'
+      - 'currency'
+      - 'profile'
+    ) = '{}'::jsonb
+  ),
   CONSTRAINT assignment_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT assignment_events_one_per_day_unique UNIQUE (tenant_id, assignment_id, effective_date),
   CONSTRAINT assignment_events_request_id_unique UNIQUE (tenant_id, request_id),
@@ -11585,6 +11608,103 @@ END;
 $$;
 
 -- end: modules/staffing/infrastructure/persistence/schema/00014_staffing_payroll_item_inputs_engine.sql
+
+-- begin: modules/staffing/infrastructure/persistence/schema/00015_staffing_read.sql
+CREATE OR REPLACE FUNCTION staffing.get_position_snapshot(
+  p_tenant_id uuid,
+  p_query_date date
+)
+RETURNS TABLE (
+  position_id uuid,
+  org_unit_id uuid,
+  reports_to_position_id uuid,
+  business_unit_id text,
+  jobcatalog_setid text,
+  job_profile_id uuid,
+  job_profile_code text,
+  name text,
+  lifecycle_status text,
+  capacity_fte numeric(9,2),
+  effective_date date
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  IF p_query_date IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'query_date is required';
+  END IF;
+
+	  RETURN QUERY
+	  SELECT
+	    pv.position_id,
+	    pv.org_unit_id,
+	    pv.reports_to_position_id,
+	    pv.business_unit_id,
+	    pv.jobcatalog_setid,
+	    pv.job_profile_id,
+	    jp.code::text AS job_profile_code,
+	    pv.name,
+	    pv.lifecycle_status,
+	    pv.capacity_fte,
+	    lower(pv.validity) AS effective_date
+	  FROM staffing.position_versions pv
+	  LEFT JOIN jobcatalog.job_profiles jp
+	    ON jp.tenant_id = pv.tenant_id
+   AND jp.setid = pv.jobcatalog_setid
+   AND jp.id = pv.job_profile_id
+  WHERE pv.tenant_id = p_tenant_id
+    AND pv.validity @> p_query_date;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION staffing.get_assignment_snapshot(
+  p_tenant_id uuid,
+  p_person_uuid uuid,
+  p_query_date date
+)
+RETURNS TABLE (
+  assignment_id uuid,
+  person_uuid uuid,
+  position_id uuid,
+  status text,
+  effective_date date
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  IF p_person_uuid IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'person_uuid is required';
+  END IF;
+  IF p_query_date IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'query_date is required';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    av.assignment_id,
+    av.person_uuid,
+    av.position_id,
+    av.status,
+    lower(av.validity) AS effective_date
+  FROM staffing.assignment_versions av
+  WHERE av.tenant_id = p_tenant_id
+    AND av.person_uuid = p_person_uuid
+    AND av.validity @> p_query_date;
+END;
+$$;
+
+-- end: modules/staffing/infrastructure/persistence/schema/00015_staffing_read.sql
 
 -- begin: modules/person/infrastructure/persistence/schema/00001_person_schema.sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
