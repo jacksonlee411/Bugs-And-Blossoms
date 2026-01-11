@@ -123,6 +123,7 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
     const positionName = `TP060-03 Position ${pernr} ${runID}`;
     await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
     await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
+    await positionCreateForm.locator('input[name="capacity_fte"]').fill(pernr === "104" ? "0.50" : "1.0");
     await positionCreateForm.locator('input[name="name"]').fill(positionName);
     await positionCreateForm.locator('button[type="submit"]').click();
     await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}$`));
@@ -207,6 +208,27 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
   });
   expect(reportsToCycleResp.status()).toBe(422);
   expect((await reportsToCycleResp.json()).code).toBe("STAFFING_POSITION_REPORTS_TO_CYCLE");
+
+  const reportsToSelfResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
+    data: {
+      effective_date: lateEffectiveDate,
+      position_id: managerPositionID,
+      reports_to_position_id: managerPositionID
+    }
+  });
+  expect(reportsToSelfResp.status()).toBe(422);
+  expect((await reportsToSelfResp.json()).code).toBe("STAFFING_POSITION_REPORTS_TO_SELF");
+
+  const reportsToRetroEffectiveDate = "2026-01-10";
+  const reportsToRetroResp = await appContext.request.post(`/org/api/positions?as_of=${reportsToRetroEffectiveDate}`, {
+    data: {
+      effective_date: reportsToRetroEffectiveDate,
+      position_id: reporteePositionID,
+      reports_to_position_id: managerPositionID
+    }
+  });
+  expect(reportsToRetroResp.status()).toBe(422);
+  expect((await reportsToRetroResp.json()).code).toBe("STAFFING_INVALID_ARGUMENT");
 
   const byPernr = async (pernr) => {
     const resp = await appContext.request.get(`/person/api/persons:by-pernr?pernr=${encodeURIComponent(pernr)}`);
@@ -295,6 +317,43 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
       allocatedFte: isE04 ? "0.5" : "1.0"
     });
   }
+
+  const capacityPositionID = positionIDsByPernr.get("104");
+  expect(capacityPositionID).toBeTruthy();
+  const capacityPersonUUID = personUUIDByPernr.get("104");
+  expect(capacityPersonUUID).toBeTruthy();
+
+  const assignmentCapacityResp = await appContext.request.post(`/org/api/assignments?as_of=${lateEffectiveDate}`, {
+    data: {
+      effective_date: lateEffectiveDate,
+      person_uuid: capacityPersonUUID,
+      position_id: capacityPositionID,
+      base_salary: "0",
+      allocated_fte: "1.0"
+    }
+  });
+  expect(assignmentCapacityResp.status(), await assignmentCapacityResp.text()).toBe(422);
+  expect((await assignmentCapacityResp.json()).code).toBe("STAFFING_POSITION_CAPACITY_EXCEEDED");
+
+  const reduceCapacityResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
+    data: {
+      effective_date: lateEffectiveDate,
+      position_id: capacityPositionID,
+      capacity_fte: "0.25"
+    }
+  });
+  expect(reduceCapacityResp.status(), await reduceCapacityResp.text()).toBe(422);
+  expect((await reduceCapacityResp.json()).code).toBe("STAFFING_POSITION_CAPACITY_EXCEEDED");
+
+  const disableConflictResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
+    data: {
+      effective_date: lateEffectiveDate,
+      position_id: capacityPositionID,
+      lifecycle_status: "disabled"
+    }
+  });
+  expect(disableConflictResp.status(), await disableConflictResp.text()).toBe(422);
+  expect((await disableConflictResp.json()).code).toBe("STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF");
 
   await page.screenshot({ path: `_artifacts/tp060-03-assignments-${runID}.png`, fullPage: true });
 

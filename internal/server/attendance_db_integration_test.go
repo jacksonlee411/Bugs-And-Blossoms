@@ -1403,27 +1403,71 @@ WHERE tenant_id = $1::uuid
 func connectTestPostgres(ctx context.Context, t *testing.T) (*pgx.Conn, string, bool) {
 	t.Helper()
 
-	if v := strings.TrimSpace(os.Getenv("DATABASE_URL")); v != "" {
-		conn, err := pgx.Connect(ctx, v)
-		if err != nil {
-			t.Skipf("postgres unavailable: %v", err)
+	baseDSN := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if baseDSN == "" {
+		candidates := []string{
+			"postgres://app:app@localhost:5432/bugs_and_blossoms?sslmode=disable",
+			"postgres://app:app@localhost:5438/bugs_and_blossoms?sslmode=disable",
+		}
+		for _, dsn := range candidates {
+			conn, err := pgx.Connect(ctx, dsn)
+			if err == nil {
+				_ = conn.Close(context.Background())
+				baseDSN = dsn
+				break
+			}
+		}
+		if baseDSN == "" {
+			t.Skip("postgres unavailable (tried localhost:5432 and localhost:5438); skipping integration test")
 			return nil, "", false
 		}
-		return conn, v, true
 	}
 
-	candidates := []string{
-		"postgres://app:app@localhost:5432/bugs_and_blossoms?sslmode=disable",
-		"postgres://app:app@localhost:5438/bugs_and_blossoms?sslmode=disable",
+	u, err := url.Parse(baseDSN)
+	if err != nil {
+		t.Skipf("invalid DATABASE_URL: %v", err)
+		return nil, "", false
 	}
-	for _, dsn := range candidates {
-		conn, err := pgx.Connect(ctx, dsn)
-		if err == nil {
-			return conn, dsn, true
-		}
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+	default:
+		t.Skipf("DATABASE_URL must be localhost for integration tests, got host=%q", u.Hostname())
+		return nil, "", false
 	}
-	t.Skip("postgres unavailable (tried localhost:5432 and localhost:5438); skipping integration test")
-	return nil, "", false
+
+	bootstrapDSN, err := withDatabase(baseDSN, "postgres")
+	if err != nil {
+		t.Skipf("invalid postgres dsn: %v", err)
+		return nil, "", false
+	}
+	bootstrapConn, err := pgx.Connect(ctx, bootstrapDSN)
+	if err != nil {
+		t.Skipf("postgres unavailable: %v", err)
+		return nil, "", false
+	}
+	t.Cleanup(func() { _ = bootstrapConn.Close(context.Background()) })
+
+	dbName := fmt.Sprintf("bb_test_%d", time.Now().UnixNano())
+	if _, err := bootstrapConn.Exec(ctx, `CREATE DATABASE `+dbName+`;`); err != nil {
+		t.Skipf("create test database failed: %v", err)
+		return nil, "", false
+	}
+	t.Cleanup(func() {
+		_, _ = bootstrapConn.Exec(context.Background(), `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid();`, dbName)
+		_, _ = bootstrapConn.Exec(context.Background(), `DROP DATABASE IF EXISTS `+dbName+`;`)
+	})
+
+	testDSN, err := withDatabase(baseDSN, dbName)
+	if err != nil {
+		t.Skipf("invalid test database dsn: %v", err)
+		return nil, "", false
+	}
+	conn, err := pgx.Connect(ctx, testDSN)
+	if err != nil {
+		t.Skipf("connect test database failed: %v", err)
+		return nil, "", false
+	}
+	return conn, testDSN, true
 }
 
 func ensureAttendanceSchemaForTest(ctx context.Context, conn *pgx.Conn) error {
@@ -2947,5 +2991,14 @@ func withUserPassword(dsn string, user string, password string) (string, error) 
 		return "", err
 	}
 	u.User = url.UserPassword(user, password)
+	return u.String(), nil
+}
+
+func withDatabase(dsn string, dbName string) (string, error) {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return "", err
+	}
+	u.Path = "/" + dbName
 	return u.String(), nil
 }

@@ -326,10 +326,22 @@ test("tp060-08: payroll 044-046 (balances -> retro -> net-guaranteed IIT -> fina
 
   const e05UUID = personUUIDByPernr.get("105");
   expect(e05UUID).toBeTruthy();
-  const listRecalcResp = await appContext.request.get(`/org/api/payroll-recalc-requests?person_uuid=${encodeURIComponent(e05UUID)}`);
-  expect(listRecalcResp.status(), await listRecalcResp.text()).toBe(200);
-  const recalcList = await listRecalcResp.json();
-  const rr = recalcList.find((r) => r.person_uuid === e05UUID && r.effective_date === lateEffectiveDate);
+  let rr = null;
+  for (let i = 0; i < 80; i++) {
+    const listRecalcResp = await appContext.request.get(
+      `/org/api/payroll-recalc-requests?person_uuid=${encodeURIComponent(e05UUID)}`
+    );
+    if (listRecalcResp.status() !== 200) {
+      expect(listRecalcResp.status(), await listRecalcResp.text()).toBe(200);
+    }
+    const recalcListJSON = await listRecalcResp.json();
+    const recalcList = Array.isArray(recalcListJSON) ? recalcListJSON : [];
+    rr = recalcList.find((r) => r.person_uuid === e05UUID && r.effective_date === lateEffectiveDate);
+    if (rr) {
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
   expect(rr, `missing recalc request for person_uuid=${e05UUID} effective_date=${lateEffectiveDate}`).toBeTruthy();
   expect(rr.hit_pay_period_id).toBe(payPeriodIDJan);
   expect(rr.applied).toBe(false);
