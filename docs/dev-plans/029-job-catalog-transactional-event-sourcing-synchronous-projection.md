@@ -1,6 +1,6 @@
 # DEV-PLAN-029：Job Catalog（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
-**状态**: 部分完成（009M1：Job Family Group 最小闭环；M2：Job Family Group 合同对齐补丁；M3：Job Family；M4：Job Level；M5：Job Profile；M6：Snapshot；2026-01-11）
+**状态**: 部分完成（009M1：Job Family Group 最小闭环；M2：Job Family Group 合同对齐补丁；M3：Job Family；M4：Job Level；M5：Job Profile；M6：Snapshot；M7：Go+UI；2026-01-11）
 
 > 本计划的定位：作为 Greenfield HR 的 Job Catalog 子域，提供 **Job Catalog 权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026/030` 对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -618,8 +618,9 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
   - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证（`jobcatalog-smoke` 覆盖 `get_job_catalog_snapshot(...)` 调用）。
   - 示例：`SELECT * FROM jobcatalog.get_job_catalog_snapshot('<tenant_id>'::uuid, '<setid>'::text, '<query_date>'::date);`
 
-- [ ] **M7：Go Facade + UI 可见闭环（可选扩展，但推荐）**
+- [x] **M7：Go Facade + UI 可见闭环（可选扩展，但推荐）**
   - 说明：本里程碑用于满足“用户可见性原则”，避免长期积累只有 DB 没有入口的僵尸能力；若短期不做 UI，也必须在 `DEV-PLAN-018`/测试计划中明确验收方式（例如仅用 curl/SQL 验收）。
   - 范围：在 Go 层提供最小闭环入口（事务 + tenant 注入 + 调 `submit_*_event`）并完成错误映射；必要时扩展 `/org/job-catalog` 的 UI 分页/section 或新增子页面（按路由治理门禁）。
   - Done（最小验收）：
     - 至少一条端到端路径：写入（family/level/profile 任一）→ 列表读取（as-of）→ 页面可见。
+  - 记录：`/org/job-catalog` 已增加 `create_job_level`（调用 `submit_job_level_event`）并在页面上按 as-of 展示 Job Levels；已通过 `go fmt ./... && go vet ./... && make check lint && make test` 验证。
