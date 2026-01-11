@@ -84,16 +84,17 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 		businessUnitID := strings.TrimSpace(r.Form.Get("business_unit_id"))
 		reportsToPositionID := strings.TrimSpace(r.Form.Get("reports_to_position_id"))
 		jobProfileID := strings.TrimSpace(r.Form.Get("job_profile_id"))
+		capacityFTE := strings.TrimSpace(r.Form.Get("capacity_fte"))
 		name := strings.TrimSpace(r.Form.Get("name"))
 		lifecycleStatus := strings.TrimSpace(r.Form.Get("lifecycle_status"))
 
 		if positionID == "" {
-			if _, err := store.CreatePositionCurrent(r.Context(), tenant.ID, effectiveDate, orgUnitID, businessUnitID, jobProfileID, name); err != nil {
+			if _, err := store.CreatePositionCurrent(r.Context(), tenant.ID, effectiveDate, orgUnitID, businessUnitID, jobProfileID, capacityFTE, name); err != nil {
 				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, businessUnits, businessUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
 		} else {
-			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionID, effectiveDate, orgUnitID, businessUnitID, reportsToPositionID, jobProfileID, name, lifecycleStatus); err != nil {
+			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionID, effectiveDate, orgUnitID, businessUnitID, reportsToPositionID, jobProfileID, capacityFTE, name, lifecycleStatus); err != nil {
 				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, businessUnits, businessUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
@@ -118,6 +119,7 @@ type staffingPositionsAPIRequest struct {
 	BusinessUnitID      string `json:"business_unit_id"`
 	ReportsToPositionID string `json:"reports_to_position_id"`
 	JobProfileID        string `json:"job_profile_id"`
+	CapacityFTE         string `json:"capacity_fte"`
 	Name                string `json:"name"`
 	LifecycleStatus     string `json:"lifecycle_status"`
 }
@@ -169,9 +171,9 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionSt
 		var p Position
 		var err error
 		if strings.TrimSpace(req.PositionID) == "" {
-			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, req.OrgUnitID, req.BusinessUnitID, req.JobProfileID, req.Name)
+			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, req.OrgUnitID, req.BusinessUnitID, req.JobProfileID, req.CapacityFTE, req.Name)
 		} else {
-			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionID, req.EffectiveDate, req.OrgUnitID, req.BusinessUnitID, req.ReportsToPositionID, req.JobProfileID, req.Name, req.LifecycleStatus)
+			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionID, req.EffectiveDate, req.OrgUnitID, req.BusinessUnitID, req.ReportsToPositionID, req.JobProfileID, req.CapacityFTE, req.Name, req.LifecycleStatus)
 		}
 		if err != nil {
 			code := stablePgMessage(err)
@@ -481,6 +483,7 @@ func renderPositions(
 		b.WriteString(`<option value="` + html.EscapeString(jp.ID) + `">` + html.EscapeString(label) + `</option>`)
 	}
 	b.WriteString(`</select></label><br/>`)
+	b.WriteString(`<label>Capacity FTE <input type="number" name="capacity_fte" step="0.01" min="0.01" value="1.0" /></label><br/>`)
 	b.WriteString(`<label>Name <input type="text" name="name" /></label><br/>`)
 	b.WriteString(`<button type="submit">Create</button>`)
 	b.WriteString(`</form>`)
@@ -537,6 +540,7 @@ func renderPositions(
 		b.WriteString(`<option value="` + html.EscapeString(jp.ID) + `">` + html.EscapeString(label) + `</option>`)
 	}
 	b.WriteString(`</select></label><br/>`)
+	b.WriteString(`<label>Capacity FTE <input type="number" name="capacity_fte" step="0.01" min="0.01" placeholder="(no change)" /></label><br/>`)
 	b.WriteString(`<label>Name <input type="text" name="name" placeholder="(no change)" /></label><br/>`)
 	b.WriteString(`<label>Lifecycle <select name="lifecycle_status">` +
 		`<option value="">(no change)</option>` +
@@ -553,7 +557,7 @@ func renderPositions(
 	}
 
 	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr>` +
-		`<th>effective_date</th><th>position_id</th><th>reports_to_position_id</th><th>business_unit_id</th><th>jobcatalog_setid</th><th>job_profile</th><th>lifecycle_status</th><th>org_unit_id</th><th>name</th>` +
+		`<th>effective_date</th><th>position_id</th><th>reports_to_position_id</th><th>business_unit_id</th><th>jobcatalog_setid</th><th>job_profile</th><th>capacity_fte</th><th>lifecycle_status</th><th>org_unit_id</th><th>name</th>` +
 		`</tr></thead><tbody>`)
 	for _, p := range positions {
 		jobProfileLabel := ""
@@ -569,6 +573,7 @@ func renderPositions(
 			`<td><code>` + html.EscapeString(p.BusinessUnitID) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.JobCatalogSetID) + `</code></td>` +
 			`<td><code>` + html.EscapeString(jobProfileLabel) + `</code></td>` +
+			`<td><code>` + html.EscapeString(p.CapacityFTE) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.LifecycleStatus) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.OrgUnitID) + `</code></td>` +
 			`<td>` + html.EscapeString(p.Name) + `</td></tr>`)

@@ -5230,6 +5230,88 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION staffing.assert_position_capacity(
+  p_tenant_id uuid,
+  p_position_id uuid,
+  p_validity daterange
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_as_of date;
+  v_capacity_fte numeric(9,2);
+  v_allocated_sum numeric(9,2);
+BEGIN
+  PERFORM staffing.assert_current_tenant(p_tenant_id);
+
+  IF p_position_id IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'position_id is required';
+  END IF;
+  IF p_validity IS NULL OR isempty(p_validity) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+      DETAIL = 'validity is required';
+  END IF;
+
+  FOR v_as_of IN
+    SELECT d::date AS as_of
+    FROM (
+      SELECT lower(p_validity) AS d
+      UNION
+      SELECT lower(av.validity) AS d
+      FROM staffing.assignment_versions av
+      WHERE av.tenant_id = p_tenant_id
+        AND av.position_id = p_position_id
+        AND av.status = 'active'
+        AND av.validity && p_validity
+      UNION
+      SELECT lower(pv.validity) AS d
+      FROM staffing.position_versions pv
+      WHERE pv.tenant_id = p_tenant_id
+        AND pv.position_id = p_position_id
+        AND pv.validity && p_validity
+    ) dates
+    WHERE d IS NOT NULL
+      AND d >= lower(p_validity)
+      AND (upper_inf(p_validity) OR d < upper(p_validity))
+    ORDER BY d
+  LOOP
+    SELECT pv.capacity_fte INTO v_capacity_fte
+    FROM staffing.position_versions pv
+    WHERE pv.tenant_id = p_tenant_id
+      AND pv.position_id = p_position_id
+      AND pv.validity @> v_as_of
+    LIMIT 1;
+
+    IF v_capacity_fte IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'STAFFING_POSITION_NOT_FOUND_AS_OF',
+        DETAIL = format('position_id=%s as_of=%s', p_position_id, v_as_of);
+    END IF;
+
+    SELECT COALESCE(sum(av.allocated_fte), 0)::numeric(9,2) INTO v_allocated_sum
+    FROM staffing.assignment_versions av
+    WHERE av.tenant_id = p_tenant_id
+      AND av.position_id = p_position_id
+      AND av.status = 'active'
+      AND av.validity @> v_as_of;
+
+    IF v_allocated_sum > v_capacity_fte THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'STAFFING_POSITION_CAPACITY_EXCEEDED',
+        DETAIL = format('position_id=%s as_of=%s allocated_sum=%s capacity_fte=%s', p_position_id, v_as_of, v_allocated_sum, v_capacity_fte);
+    END IF;
+  END LOOP;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION staffing.replay_position_versions(
   p_tenant_id uuid,
   p_position_id uuid
@@ -5246,9 +5328,11 @@ DECLARE
   v_business_unit_id text;
   v_jobcatalog_setid text;
   v_job_profile_id uuid;
+  v_capacity_fte numeric(9,2);
   v_name text;
   v_lifecycle_status text;
   v_reports_to_status text;
+  v_tmp_text text;
   v_row RECORD;
   v_validity daterange;
 BEGIN
@@ -5272,6 +5356,7 @@ BEGIN
   v_business_unit_id := NULL;
   v_jobcatalog_setid := NULL;
   v_job_profile_id := NULL;
+  v_capacity_fte := 1.0;
   v_name := NULL;
   v_lifecycle_status := 'active';
   v_prev_effective := NULL;
@@ -5310,6 +5395,31 @@ BEGIN
       IF v_row.payload ? 'job_profile_id' THEN
         v_job_profile_id := NULLIF(v_row.payload->>'job_profile_id', '')::uuid;
       END IF;
+      v_capacity_fte := 1.0;
+      IF v_row.payload ? 'capacity_fte' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'capacity_fte'), '');
+        IF v_tmp_text IS NULL THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = 'capacity_fte is required';
+        END IF;
+        BEGIN
+          v_capacity_fte := v_tmp_text::numeric;
+        EXCEPTION
+          WHEN others THEN
+            RAISE EXCEPTION USING
+              ERRCODE = 'P0001',
+              MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+              DETAIL = format('invalid capacity_fte: %s', v_row.payload->>'capacity_fte');
+        END;
+        IF v_capacity_fte <= 0 THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = format('invalid capacity_fte: %s', v_row.payload->>'capacity_fte');
+        END IF;
+      END IF;
       v_lifecycle_status := 'active';
     ELSIF v_row.event_type = 'UPDATE' THEN
       IF v_prev_effective IS NULL THEN
@@ -5339,6 +5449,30 @@ BEGIN
       END IF;
       IF v_row.payload ? 'job_profile_id' THEN
         v_job_profile_id := NULLIF(v_row.payload->>'job_profile_id', '')::uuid;
+      END IF;
+      IF v_row.payload ? 'capacity_fte' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'capacity_fte'), '');
+        IF v_tmp_text IS NULL THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = 'capacity_fte is required';
+        END IF;
+        BEGIN
+          v_capacity_fte := v_tmp_text::numeric;
+        EXCEPTION
+          WHEN others THEN
+            RAISE EXCEPTION USING
+              ERRCODE = 'P0001',
+              MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+              DETAIL = format('invalid capacity_fte: %s', v_row.payload->>'capacity_fte');
+        END;
+        IF v_capacity_fte <= 0 THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = format('invalid capacity_fte: %s', v_row.payload->>'capacity_fte');
+        END IF;
       END IF;
       IF v_row.payload ? 'lifecycle_status' THEN
         v_lifecycle_status := NULLIF(btrim(v_row.payload->>'lifecycle_status'), '');
@@ -5506,11 +5640,13 @@ BEGIN
       v_job_profile_id,
       v_name,
       v_lifecycle_status,
-      1.0,
+      v_capacity_fte,
       '{}'::jsonb,
       v_validity,
       v_row.event_db_id
     );
+
+    PERFORM staffing.assert_position_capacity(p_tenant_id, p_position_id, v_validity);
 
     v_prev_effective := v_row.effective_date;
   END LOOP;
@@ -5985,6 +6121,10 @@ BEGIN
       v_validity,
       v_row.event_db_id
     );
+
+    IF v_status = 'active' THEN
+      PERFORM staffing.assert_position_capacity(p_tenant_id, v_position_id, v_validity);
+    END IF;
 
     v_prev_effective := v_row.effective_date;
   END LOOP;

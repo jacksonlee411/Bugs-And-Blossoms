@@ -1,6 +1,6 @@
 # DEV-PLAN-030：Position（事务性事件溯源 + 同步投射）方案（去掉 org_ 前缀）
 
-**状态**: 进行中（2026-01-11 10:00 UTC）— M3/M4a/M5 已落地；M4b/M6/M7 规划见 §10
+**状态**: 进行中（2026-01-11 20:00 UTC）— M3/M4a/M5/M6a 已落地；M4b/M6b/M7 规划见 §10
 
 > 本计划的定位：作为 Greenfield HR 的 Position/Assignment 子域，提供 **Position/Assignment 的权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026`（OrgUnit）对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -10,7 +10,8 @@
 - [X] M3：Position 的更新/停用（同 `position_id`）与 UI/Internal API 收敛（见 §10.M3）。
 - [X] M4a：`reports_to_position_id` 可编辑 + 无环不变量（forward-only；retro 另拆，见 §10.M4）。
 - [X] M5：与 JobCatalog（`DEV-PLAN-029` 的 SetID 一等公民口径）组合：Position 绑定 Job Profile 的 SetID 口径与落地（见 §3.8 与 §10.M5）。
-- [ ] M6：容量模型拆分：M6a `capacity_fte` 可编辑 + `allocated_fte <= capacity_fte`（仍一岗一人）；M6b 多人并发 + `SUM(allocated_fte) <= capacity_fte`（见 §10.M6）。
+- [X] M6a：`capacity_fte` 可编辑 + `allocated_fte <= capacity_fte`（仍一岗一人；见 §10.M6）。
+- [ ] M6b：多人并发 + `SUM(allocated_fte) <= capacity_fte`（见 §10.M6）。
 - [ ] M7：读快照函数/错误码收敛（便于复用与排障，见 §10.M7）。
 
 ## 1. 背景与上下文 (Context)
@@ -135,7 +136,7 @@
 
 ### 3.7 占编/容量（M6a/M6b；M2 简化模型）
 - [X] M2：同一 position 同一时点最多 1 条 active primary assignment；`allocated_fte` 约束为 `(0,1]`；`capacity_fte` 在投射中固定为 `1.0`。
-- [ ] M6a：开放 `capacity_fte` 编辑，并裁决 `allocated_fte <= capacity_fte`（仍保持“一岗同一时点最多 1 条 active primary assignment”）。
+- [X] M6a：开放 `capacity_fte` 编辑，并裁决 `allocated_fte <= capacity_fte`（仍保持“一岗同一时点最多 1 条 active primary assignment”）。
 - [ ] M6b：允许同一 position 并发多人任职，并裁决 `SUM(allocated_fte) <= capacity_fte`；Position 降容需 fail-closed（避免“事后超编”）；锁/校验策略见 §10.M6。
 
 ### 3.8 与 JobCatalog（SetID）组合（M5，必须先定口径）
@@ -208,10 +209,10 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
   实现现状：未知 key 不会参与投射（允许存在但会被忽略）；M7 再收敛为“未知 key 拒绝”。
 
 事件合同（M3+ 演进，按里程碑解锁）：
-- [ ] M3：允许 `payload.lifecycle_status ∈ {'active','disabled'}`（沿用 `event_type='UPDATE'`，**不新增** `event_type='DISABLE'`），并投射到 `position_versions.lifecycle_status`。
-- [ ] M4：允许 `payload.reports_to_position_id`（并执行无环裁决）。
-- [ ] M6a：允许 `payload.capacity_fte`（并执行容量裁决）。
-- [ ] M5：允许 Position 绑定 JobCatalog（先 `job_profile`，必要时再扩展 `job_level`），并冻结 payload 字段名与校验策略（SetID 一等公民；见 §10.M5）。
+- [X] M3：允许 `payload.lifecycle_status ∈ {'active','disabled'}`（沿用 `event_type='UPDATE'`，**不新增** `event_type='DISABLE'`），并投射到 `position_versions.lifecycle_status`。
+- [X] M4：允许 `payload.reports_to_position_id`（并执行无环裁决）。
+- [X] M6a：允许 `payload.capacity_fte`（并执行容量裁决）。
+- [X] M5：允许 Position 绑定 JobCatalog（先 `job_profile`，必要时再扩展 `job_level`），并冻结 payload 字段名与校验策略（SetID 一等公民；见 §10.M5）。
 
 ### 4.3 `staffing.position_versions`（Read Side / Projection）
 ```sql
@@ -259,8 +260,8 @@ CREATE TABLE IF NOT EXISTS staffing.position_versions (
 - [X] `staffing.assignments`：以 `(tenant_id, person_uuid, assignment_type)` 唯一（当前仅支持 `assignment_type='primary'`）。
 - [X] `staffing.assignment_versions`：通过 `EXCLUDE (tenant_id, position_id, validity) WHERE (status='active')` 实现 M2“同一时点一个 position 最多被一个 active assignment 占用”的裁决口径。
 - [X] Payroll 输入字段：`base_salary/currency/profile/allocated_fte` 已在 `assignment_versions` 投射（对齐 `DEV-PLAN-039/042`）。
-- [ ] M3：任职写入必须校验 Position 在 `effective_date` as-of 下为 active（禁止把任职写到 disabled position）。
-- [ ] M6a：任职写入必须校验 `allocated_fte <= capacity_fte`（capacity 由 Position 侧投射与裁决）。
+- [X] M3：任职写入必须校验 Position 在 `effective_date` as-of 下为 active（禁止把任职写到 disabled position）。
+- [X] M6a：任职写入必须校验 `allocated_fte <= capacity_fte`（capacity 由 Position 侧投射与裁决）。
 - [ ] M6b（多人并发）若要支持“同一 position 并发多人任职”，需调整上述排他策略并由 Kernel 改为 `SUM(allocated_fte) <= capacity_fte`（见 §10.M6）。
 
 ## 5. Kernel 写入口（One Door）
@@ -334,8 +335,8 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] Assignment（示例）：`STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID` / `STAFFING_ASSIGNMENT_BASE_SALARY_INVALID` / `STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED` / `STAFFING_ASSIGNMENT_PROFILE_INVALID`
 - [X] M3 生命周期/交叉不变量：`STAFFING_POSITION_NOT_FOUND_AS_OF` / `STAFFING_POSITION_DISABLED_AS_OF` / `STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF`
 - [X] M4 汇报线：`STAFFING_POSITION_REPORTS_TO_SELF` / `STAFFING_POSITION_REPORTS_TO_CYCLE`（引用不存在/disabled 复用 `STAFFING_POSITION_NOT_FOUND_AS_OF` / `STAFFING_POSITION_DISABLED_AS_OF`）
-- [ ] M5 SetID/BU（来自 `orgunit.resolve_setid`）：`BUSINESS_UNIT_NOT_FOUND` / `BUSINESS_UNIT_DISABLED` / `SETID_MAPPING_MISSING` / `SETID_NOT_FOUND` / `SETID_DISABLED`
-- [ ] M6 容量：`STAFFING_POSITION_CAPACITY_EXCEEDED`（`allocated_fte` 或 `SUM(allocated_fte)` 超出；含降容 fail-closed）
+- [X] M5 SetID/BU（来自 `orgunit.resolve_setid`）：`BUSINESS_UNIT_NOT_FOUND` / `BUSINESS_UNIT_DISABLED` / `SETID_MAPPING_MISSING` / `SETID_NOT_FOUND` / `SETID_DISABLED`
+- [X] M6 容量：`STAFFING_POSITION_CAPACITY_EXCEEDED`（`allocated_fte` 或 `SUM(allocated_fte)` 超出；含降容 fail-closed）
 
 ## 8. 测试与验收标准 (Acceptance Criteria)
 - [X] RLS fail-closed：缺失 `app.current_tenant` 时对 tenant-scoped 表的读写必须失败（证据：`cmd/dbtool staffing-smoke`）。
@@ -349,8 +350,8 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] M4a 汇报线：开放编辑后仍必须满足 as-of 无环/禁止自指/引用可用性（forward-only）。
 - [ ] M4b（可选）：若要支持 retro 写入，必须定义并实现“再验证窗口/锁策略”，确保 retro 不会让未来日期出现环。
 - [X] M2 占编：同一时点一个 position 最多被一个 active assignment 占用（`assignment_versions_position_no_overlap`）。
-- [ ] M5 SetID：Position 绑定 JobCatalog 时必须 fail-closed（BU/SetID/mapping 缺失或 disabled），且不允许跨 setid 引用。
-- [ ] M6a 容量：`capacity_fte` 可编辑且裁决 `allocated_fte <= capacity_fte`（仍一岗一人）。
+- [X] M5 SetID：Position 绑定 JobCatalog 时必须 fail-closed（BU/SetID/mapping 缺失或 disabled），且不允许跨 setid 引用。
+- [X] M6a 容量：`capacity_fte` 可编辑且裁决 `allocated_fte <= capacity_fte`（仍一岗一人）。
 - [ ] M6b 容量：若允许并发多人任职，必须以 `capacity_fte` + `SUM(allocated_fte) <= capacity_fte` 裁决，并覆盖 Position 降容的 fail-closed。
 - [ ] M7 可排障：读快照函数可复用（DB/Go 收敛查询形状），且错误码映射稳定、回归可定位。
 - [X] as-of 查询：任意日期快照结果与 versions 语义一致（`validity @> date`），证据：TP-060-02/03 E2E。
@@ -389,7 +390,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] Tests：补齐业务字段分支覆盖（BU/job_profile 绑定与清空、JobCatalog store error 分支、redirect 保留 BU 等）；DB fail-closed 负例留待 M7 错误码收敛后增强到端到端断言。
 
 ### 10.M6：容量模型升级（拆分：M6a/M6b）
-- [ ] M6a（先交付）：开放 `capacity_fte` 编辑并投射；任职写入时裁决 `allocated_fte <= capacity_fte`（仍保持“一岗一人”的排他约束不变）；Position 降容必须 fail-closed（避免把既有任职“挤爆”）。
+- [X] M6a（先交付）：开放 `capacity_fte` 编辑并投射；任职写入时裁决 `allocated_fte <= capacity_fte`（仍保持“一岗一人”的排他约束不变）；Position 降容必须 fail-closed（避免把既有任职“挤爆”）。
 - [ ] M6b（多人并发）：允许同一 position 并发多人任职：移除/调整 `assignment_versions_position_no_overlap`；在 DB Kernel 中裁决 `SUM(allocated_fte) <= capacity_fte`（含 Position 降容 fail-closed），并冻结锁粒度/校验算法（避免竞态下“分别通过、合起来超编”）。
 - [ ] 兼容性：显式评估并回归 Payroll/Attendance（`DEV-PLAN-039/050`）链路与 E2E 证据。
 - [ ] 红线提示：若 M6b 需要新增表/新建迁移中的 `CREATE TABLE`，必须先获得用户手工确认（见 `AGENTS.md`）。
