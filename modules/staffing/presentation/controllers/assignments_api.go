@@ -314,6 +314,16 @@ func stablePgMessage(err error) string {
 	if isStableDBCode(msg) {
 		return msg
 	}
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr != nil {
+		switch strings.TrimSpace(pgErr.ConstraintName) {
+		case "assignment_versions_position_no_overlap":
+			return "STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF"
+		case "assignment_events_one_per_day_unique":
+			return "STAFFING_ASSIGNMENT_ONE_PER_DAY"
+		}
+	}
 	return err.Error()
 }
 
