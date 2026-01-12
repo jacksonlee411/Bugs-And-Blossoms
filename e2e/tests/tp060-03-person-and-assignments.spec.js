@@ -4,6 +4,8 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
   test.setTimeout(240_000);
 
   const asOf = "2026-01-01";
+  const midEffectiveDate = "2026-01-10";
+  const asOfBeforeMid = "2026-01-09";
   const lateEffectiveDate = "2026-01-15";
   const runID = `${Date.now()}`;
 
@@ -52,7 +54,7 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
 
   const ensureTenant = async (hostname, name) => {
     await superadminPage.goto("/superadmin/tenants");
-    const tenantRow = superadminPage.locator("tr", { hasText: hostname }).first();
+    const tenantRow = superadminPage.locator("tr", { hasText: name }).first();
     if ((await tenantRow.count()) === 0) {
       await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(name);
       await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(hostname);
@@ -134,6 +136,19 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
     expect(positionID).not.toBe("");
     positionIDsByPernr.set(pernr, positionID);
   }
+
+  const updateTargetPositionName = `TP060-03 UpdateTarget Position ${runID}`;
+  await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
+  await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
+  await positionCreateForm.locator('input[name="capacity_fte"]').fill("1.0");
+  await positionCreateForm.locator('input[name="name"]').fill(updateTargetPositionName);
+  await positionCreateForm.locator('button[type="submit"]').click();
+  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}$`));
+
+  const updateTargetRow = page.locator("tr", { hasText: updateTargetPositionName }).first();
+  await expect(updateTargetRow).toBeVisible();
+  const updateTargetPositionID = (await updateTargetRow.locator("td").nth(1).innerText()).trim();
+  expect(updateTargetPositionID).not.toBe("");
 
   const disabledPositionName = `TP060-03 Disabled Position ${runID}`;
   await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
@@ -219,10 +234,9 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
   expect(reportsToSelfResp.status()).toBe(422);
   expect((await reportsToSelfResp.json()).code).toBe("STAFFING_POSITION_REPORTS_TO_SELF");
 
-  const reportsToRetroEffectiveDate = "2026-01-10";
-  const reportsToRetroResp = await appContext.request.post(`/org/api/positions?as_of=${reportsToRetroEffectiveDate}`, {
+  const reportsToRetroResp = await appContext.request.post(`/org/api/positions?as_of=${midEffectiveDate}`, {
     data: {
-      effective_date: reportsToRetroEffectiveDate,
+      effective_date: midEffectiveDate,
       position_id: reporteePositionID,
       reports_to_position_id: managerPositionID
     }
@@ -316,6 +330,84 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
       baseSalary: isE04 ? "30000.00" : "20000.00",
       allocatedFte: isE04 ? "0.5" : "1.0"
     });
+  }
+
+  const p101 = personUUIDByPernr.get("101");
+  expect(p101).toBeTruthy();
+  const p102 = personUUIDByPernr.get("102");
+  expect(p102).toBeTruthy();
+  const pos101 = positionIDsByPernr.get("101");
+  expect(pos101).toBeTruthy();
+  const pos104 = positionIDsByPernr.get("104");
+  expect(pos104).toBeTruthy();
+
+  // Multi-slice Valid Time: update at midEffectiveDate, verify snapshot switches across as_of.
+  {
+    const moveResp = await appContext.request.post(`/org/api/assignments?as_of=${midEffectiveDate}`, {
+      data: {
+        effective_date: midEffectiveDate,
+        person_uuid: p101,
+        position_id: updateTargetPositionID,
+        base_salary: "20000.00",
+        allocated_fte: "1.0"
+      }
+    });
+    expect(moveResp.status(), await moveResp.text()).toBe(200);
+
+    const beforeResp = await appContext.request.get(`/org/api/assignments?as_of=${asOfBeforeMid}&person_uuid=${encodeURIComponent(p101)}`);
+    expect(beforeResp.status(), await beforeResp.text()).toBe(200);
+    const beforeJSON = await beforeResp.json();
+    expect(beforeJSON.assignments).toHaveLength(1);
+    expect(beforeJSON.assignments[0].EffectiveAt).toBe(asOf);
+    expect(beforeJSON.assignments[0].PositionID).toBe(pos101);
+
+    const afterResp = await appContext.request.get(`/org/api/assignments?as_of=${midEffectiveDate}&person_uuid=${encodeURIComponent(p101)}`);
+    expect(afterResp.status(), await afterResp.text()).toBe(200);
+    const afterJSON = await afterResp.json();
+    expect(afterJSON.assignments).toHaveLength(1);
+    expect(afterJSON.assignments[0].EffectiveAt).toBe(midEffectiveDate);
+    expect(afterJSON.assignments[0].PositionID).toBe(updateTargetPositionID);
+  }
+
+  // Rerunnable upsert: same effective_date same payload => OK; different payload => 409 STAFFING_IDEMPOTENCY_REUSED.
+  {
+    const okResp = await appContext.request.post(`/org/api/assignments?as_of=${midEffectiveDate}`, {
+      data: {
+        effective_date: midEffectiveDate,
+        person_uuid: p101,
+        position_id: updateTargetPositionID,
+        base_salary: "20000.00",
+        allocated_fte: "1.0"
+      }
+    });
+    expect(okResp.status(), await okResp.text()).toBe(200);
+
+    const conflictResp = await appContext.request.post(`/org/api/assignments?as_of=${midEffectiveDate}`, {
+      data: {
+        effective_date: midEffectiveDate,
+        person_uuid: p101,
+        position_id: updateTargetPositionID,
+        base_salary: "21000.00",
+        allocated_fte: "1.0"
+      }
+    });
+    expect(conflictResp.status(), await conflictResp.text()).toBe(409);
+    expect((await conflictResp.json()).code).toBe("STAFFING_IDEMPOTENCY_REUSED");
+  }
+
+  // Position exclusivity: occupied position cannot be assigned to another active assignment (fail-closed with stable code).
+  {
+    const occupiedResp = await appContext.request.post(`/org/api/assignments?as_of=${midEffectiveDate}`, {
+      data: {
+        effective_date: midEffectiveDate,
+        person_uuid: p102,
+        position_id: pos104,
+        base_salary: "0",
+        allocated_fte: "0.25"
+      }
+    });
+    expect(occupiedResp.status(), await occupiedResp.text()).toBe(422);
+    expect((await occupiedResp.json()).code).toBe("STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF");
   }
 
   const capacityPositionID = positionIDsByPernr.get("104");

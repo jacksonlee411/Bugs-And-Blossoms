@@ -243,7 +243,7 @@
 | 职位分类 | Job family group 创建与查询（可选扩展：families/levels/profiles） | TP-060-02 |
 | 职位 | Position 创建与列表 | TP-060-02 |
 | 人员 | Person 创建/查询；pernr 解析一致性 | TP-060-03 |
-| 任职记录 | Assignment timeline；仅展示 effective_date；变更触发回溯 | TP-060-03、TP-060-08 |
+| 任职记录 | Assignment（Valid Time `as_of`）/仅展示 effective_date；upsert 可重复执行（同日幂等）；position 裁决 fail-closed；变更触发回溯 | TP-060-03、TP-060-08 |
 | 考勤 | punches（手工/导入/外部）→ daily results → time profile/holiday → time bank → corrections | TP-060-04/05/06 |
 | 薪酬 | pay period/run → payslip → 社保 → IIT/balances → retro → net guarantee | TP-060-07/08 |
 
@@ -323,7 +323,9 @@
 **核心验收点（高层）**
 - pernr 校验：仅允许 1-8 位数字字符串；前导 0 的解析一致性可验证（同一人可用不同输入形式定位，但不得产生重复人）。
 - Assignment：timeline 可见；UI 仅展示 `effective_date`（不展示 `end_date`）。
-- 有效期：提交更早生效的变更后，按 `as_of` 读取可见历史版本（Valid Time=day）。
+- Valid Time：同一 person 至少覆盖 1 条“未来生效/多切片”的 as_of 读口径（as_of 前后读到不同的 effective_date 版本；Valid Time=day）。
+- 可重复执行：同一 `effective_date` 相同输入重复提交应幂等成功；同日不同输入必须 fail-closed（例如 409 `STAFFING_IDEMPOTENCY_REUSED`，或等效稳定错误码）。
+- 交叉裁决：同一时点一个 position 不得被多个 active assignment 占用；违反必须 fail-closed（稳定错误码优先）。
 
 **问题记录**
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |

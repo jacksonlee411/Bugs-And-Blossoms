@@ -55,7 +55,7 @@ test("tp060-08: payroll 044-046 (balances -> retro -> net-guaranteed IIT -> fina
 
   const ensureTenant = async (hostname, name) => {
     await superadminPage.goto("/superadmin/tenants");
-    const tenantRow = superadminPage.locator("tr", { hasText: hostname }).first();
+    const tenantRow = superadminPage.locator("tr", { hasText: name }).first();
     if ((await tenantRow.count()) === 0) {
       await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(name);
       await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(hostname);

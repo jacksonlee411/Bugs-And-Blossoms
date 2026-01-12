@@ -38,6 +38,7 @@
 **Done-C（必须，自动化回归）**
 
 - [X] `make e2e` 覆盖本子计划的最小链路（见 `e2e/tests/tp060-03-person-and-assignments.spec.js`）。
+- [ ] 自动化补齐（对齐 `DEV-PLAN-031`）：覆盖“多切片 Valid Time（同一人两次不同 effective_date）”与“同日 upsert 可重复执行（相同输入幂等；不同输入 fail-closed=409 `STAFFING_IDEMPOTENCY_REUSED`）”。
 
 **Done-D（必须，Position/Assignment 交叉不变量：fail-closed）**
 
@@ -47,6 +48,7 @@
 - [X] Position disable 与 active assignment 冲突必须 fail-closed：422 `STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF`
 - [X] 容量裁决（M6a）：`allocated_fte > capacity_fte` 必须 fail-closed：422 `STAFFING_POSITION_CAPACITY_EXCEEDED`
 - [X] 降容裁决（M6a）：Position 降容导致 `allocated_fte > capacity_fte` 必须 fail-closed：422 `STAFFING_POSITION_CAPACITY_EXCEEDED`
+- [ ] Position 排他（M2）：同一时点一个 position 不得被多个 active assignment 占用；违反必须 fail-closed（稳定错误码优先，建议：422 `STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF`）。
 
 ### 2.2 非目标
 
@@ -82,7 +84,7 @@
 ### 3.1 手工执行 vs 自动化（两条链路的职责分工）
 
 - **手工执行（060-DS1 固定数据集）**：在 `T060` 下复用 TP-060-02 的 10 个 positions，按本文 §4.3 固定映射建立 10 个 Person + Primary Assignment，并把 `pernr/person_uuid/assignment_id/position_id` 记录为后续子计划可复用的证据。
-- **自动化回归（隔离数据）**：`e2e/tests/tp060-03-person-and-assignments.spec.js` 使用 `runID` 创建独立 tenant 与独立数据，保证可重复跑；**不替代** 060-DS1 的“固定可复现数据集”证据。
+- **自动化回归（隔离数据）**：`e2e/tests/tp060-03-person-and-assignments.spec.js` 使用 `runID` 创建独立 tenant 与独立数据，保证可重复跑；覆盖 `pernr` 解析/valid time/交叉不变量/同日幂等等断言；**不替代** 060-DS1 的“固定可复现数据集”证据。
 
 ### 3.2 `pernr` 规范化与写侧权威输入
 
@@ -136,6 +138,10 @@
   - 若同 pernr 存在但 `display_name` 不符合预期：记录为 `ENV_DRIFT`（或 `CONTRACT_DRIFT`），并在 §11 说明是否允许覆盖/是否需要先清理环境。
 - Assignment：
   - `/org/assignments` 的 upsert 为“写入/更新时间线”的动作；重复执行应表现为“同一 `effective_date` 的 slice 变更”或“幂等不变”，不得产生多条同日重复 slice（若出现，记录为 `BUG/CONTRACT_DRIFT`）。
+  - **同日幂等（稳定可断言）**：
+    - 同一 `person_uuid` + 同一 `effective_date` + 相同输入：必须成功（UI 为 303；Internal API 为 200）。
+    - 同一 `person_uuid` + 同一 `effective_date` + 不同输入：必须 fail-closed，且返回稳定错误码（建议：409 `STAFFING_IDEMPOTENCY_REUSED`）。
+  - **多切片 Valid Time（稳定可断言）**：同一人用两个不同的 `effective_date` 连续 upsert 后，`as_of` 前后读到的 snapshot 必须不同（至少体现在 `effective_date` 版本切换上）。
 
 ### 4.4 数据保留（强制）
 
