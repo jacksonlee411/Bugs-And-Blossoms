@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -185,7 +186,7 @@ func main() {
 			return
 		}
 
-		id := newUUID()
+		id := identityUUID(identifier)
 		ident := identity{
 			ID:         id,
 			TenantID:   tenantID,
@@ -252,6 +253,20 @@ func newUUID() string {
 	_, _ = rand.Read(b[:])
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
+	return formatUUID(b)
+}
+
+func identityUUID(identifier string) string {
+	sum := sha1.Sum([]byte("kratosstub:" + identifier))
+	var b [16]byte
+	copy(b[:], sum[:16])
+
+	b[6] = (b[6] & 0x0f) | 0x50
+	b[8] = (b[8] & 0x3f) | 0x80
+	return formatUUID(b)
+}
+
+func formatUUID(b [16]byte) string {
 	hex := "0123456789abcdef"
 	out := make([]byte, 36)
 	j := 0
