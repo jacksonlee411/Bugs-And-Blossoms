@@ -4511,7 +4511,7 @@ CREATE INDEX IF NOT EXISTS position_versions_lookup_btree
   ON staffing.position_versions (tenant_id, position_id, lower(validity));
 
 ALTER TABLE staffing.position_versions
-  ADD COLUMN IF NOT EXISTS business_unit_id text NULL,
+  ADD COLUMN IF NOT EXISTS business_unit_id text NOT NULL,
   ADD COLUMN IF NOT EXISTS jobcatalog_setid text NULL,
   ADD COLUMN IF NOT EXISTS job_profile_id uuid NULL;
 
@@ -4523,7 +4523,7 @@ ALTER TABLE staffing.position_versions
   DROP CONSTRAINT IF EXISTS position_versions_job_profile_fk;
 
 ALTER TABLE staffing.position_versions
-  ADD CONSTRAINT position_versions_business_unit_id_format_check CHECK (business_unit_id IS NULL OR business_unit_id ~ '^[A-Z0-9]{1,5}$'),
+  ADD CONSTRAINT position_versions_business_unit_id_format_check CHECK (business_unit_id ~ '^[A-Z0-9]{1,5}$'),
   ADD CONSTRAINT position_versions_jobcatalog_setid_format_check CHECK (jobcatalog_setid IS NULL OR jobcatalog_setid ~ '^[A-Z0-9]{1,5}$'),
   ADD CONSTRAINT position_versions_jobcatalog_setid_requires_bu_check CHECK (jobcatalog_setid IS NULL OR business_unit_id IS NOT NULL),
   ADD CONSTRAINT position_versions_job_profile_requires_setid_check CHECK (job_profile_id IS NULL OR jobcatalog_setid IS NOT NULL);
@@ -5462,6 +5462,19 @@ BEGIN
       v_name := NULLIF(btrim(v_row.payload->>'name'), '');
       v_reports_to_position_id := NULL;
       v_business_unit_id := NULLIF(btrim(v_row.payload->>'business_unit_id'), '');
+      IF v_business_unit_id IS NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+          DETAIL = 'business_unit_id is required';
+      END IF;
+      v_business_unit_id := upper(v_business_unit_id);
+      IF v_business_unit_id !~ '^[A-Z0-9]{1,5}$' THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+          DETAIL = format('invalid business_unit_id: %s', v_row.payload->>'business_unit_id');
+      END IF;
       v_job_profile_id := NULL;
       IF v_row.payload ? 'job_profile_id' THEN
         v_job_profile_id := NULLIF(v_row.payload->>'job_profile_id', '')::uuid;
@@ -5517,6 +5530,19 @@ BEGIN
       END IF;
       IF v_row.payload ? 'business_unit_id' THEN
         v_business_unit_id := NULLIF(btrim(v_row.payload->>'business_unit_id'), '');
+        IF v_business_unit_id IS NULL THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = 'business_unit_id is required';
+        END IF;
+        v_business_unit_id := upper(v_business_unit_id);
+        IF v_business_unit_id !~ '^[A-Z0-9]{1,5}$' THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+            DETAIL = format('invalid business_unit_id: %s', v_row.payload->>'business_unit_id');
+        END IF;
       END IF;
       IF v_row.payload ? 'job_profile_id' THEN
         v_job_profile_id := NULLIF(v_row.payload->>'job_profile_id', '')::uuid;
@@ -5577,17 +5603,8 @@ BEGIN
         DETAIL = format('org_unit_id=%s as_of=%s', v_org_unit_id, v_row.effective_date);
     END IF;
 
-    v_jobcatalog_setid := NULL;
-    IF v_business_unit_id IS NOT NULL THEN
-      v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_business_unit_id, 'jobcatalog');
-    END IF;
+    v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_business_unit_id, 'jobcatalog');
     IF v_job_profile_id IS NOT NULL THEN
-      IF v_jobcatalog_setid IS NULL THEN
-        RAISE EXCEPTION USING
-          ERRCODE = 'P0001',
-          MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-          DETAIL = 'business_unit_id is required when binding job_profile_id';
-      END IF;
       IF NOT EXISTS (
         SELECT 1
         FROM jobcatalog.job_profiles jp
