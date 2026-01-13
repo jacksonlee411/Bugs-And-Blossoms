@@ -125,10 +125,11 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
     const positionName = `TP060-03 Position ${pernr} ${runID}`;
     await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
     await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
+    await positionCreateForm.locator('select[name="business_unit_id"]').selectOption("BU000");
     await positionCreateForm.locator('input[name="capacity_fte"]').fill(pernr === "104" ? "0.50" : "1.0");
     await positionCreateForm.locator('input[name="name"]').fill(positionName);
     await positionCreateForm.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&business_unit_id=BU000$`));
 
     const row = page.locator("tr", { hasText: positionName }).first();
     await expect(row).toBeVisible();
@@ -140,10 +141,11 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
   const updateTargetPositionName = `TP060-03 UpdateTarget Position ${runID}`;
   await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
   await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
+  await positionCreateForm.locator('select[name="business_unit_id"]').selectOption("BU000");
   await positionCreateForm.locator('input[name="capacity_fte"]').fill("1.0");
   await positionCreateForm.locator('input[name="name"]').fill(updateTargetPositionName);
   await positionCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}$`));
+  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&business_unit_id=BU000$`));
 
   const updateTargetRow = page.locator("tr", { hasText: updateTargetPositionName }).first();
   await expect(updateTargetRow).toBeVisible();
@@ -153,9 +155,10 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
   const disabledPositionName = `TP060-03 Disabled Position ${runID}`;
   await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
   await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
+  await positionCreateForm.locator('select[name="business_unit_id"]').selectOption("BU000");
   await positionCreateForm.locator('input[name="name"]').fill(disabledPositionName);
   await positionCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}$`));
+  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&business_unit_id=BU000$`));
 
   const disabledRow = page.locator("tr", { hasText: disabledPositionName }).first();
   await expect(disabledRow).toBeVisible();

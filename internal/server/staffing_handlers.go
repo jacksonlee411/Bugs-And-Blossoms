@@ -505,8 +505,8 @@ func renderPositions(
 		}
 	}
 	b.WriteString(`</select></label><br/>`)
-	b.WriteString(`<label>Business Unit <select name="business_unit_id">`)
-	b.WriteString(`<option value="">(not set)</option>`)
+	b.WriteString(`<label>Business Unit <select name="business_unit_id" required>`)
+	b.WriteString(`<option value="">(required)</option>`)
 	for _, bu := range businessUnits {
 		if bu.Status != "active" {
 			continue

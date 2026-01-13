@@ -1,9 +1,31 @@
 # DEV-PLAN-028：SetID 管理（Greenfield）
 
-**状态**: 部分完成（009M1：最小闭环已落地；2026-01-06 23:40 UTC）
+**状态**: 进行中（2026-01-12 09:38 UTC）— 009M1 最小闭环已落地；根据评审补齐 PeopleSoft 机制差异与缺口标注
 
 > 适用范围：**Greenfield 全新实现**（路线图见 `DEV-PLAN-009`）。  
 > 本文研究 PeopleSoft 的 SetID 机制，并提出引入 SetID 的最小可执行方案：在同一租户内实现“主数据按业务单元共享/隔离”的配置能力，且可被门禁验证，避免实现期各模块各写一套数据共享规则导致漂移。
+
+## 0. 评审补丁（2026-01-12）
+
+> 目的：把“本轮评审新增功能（NEW）/原计划缺口（GAP）/口径澄清（CLARIFY）”显式标注出来，避免读者误判范围变更。
+
+### 0.1 新增功能（NEW）
+
+- [ ] **UI：显式 Business Unit**：任何 setid-controlled 的 UI 入口（例如 `/org/job-catalog`）若缺少 `business_unit_id`，必须 `302` 重定向补齐默认 `BU000`（最终请求必须显式携带 `business_unit_id`；禁止 silent default）。
+- [X] **Staffing：Position 必填 BU**：`position` 的创建事件必须携带 `business_unit_id`，并由 DB Kernel/UI/API 共同强制（保证“人员→任职→岗位→BU”的可推导链路；也避免后续接入 setid 解析时出现不可判定上下文）。
+- [ ] **（可选，非 P0）Tree Controls**：当出现“某 BU 需要访问不属于其 record group 解析 setid 的树/层级配置”的需求时，引入 Tree Controls 映射（契约见 5.3.1）。
+
+### 0.2 实现缺口（GAP：原计划已包含但尚未补齐）
+
+- [ ] **Record Group**：`orgunit` 尚未在 DB 约束/bootstrap/UI 中落地（现状仅 `jobcatalog`）；需补齐稳定枚举、bootstrap backfill、门禁与接入样板。
+- [ ] **管理面能力**：SetID/BU 的 `RENAME/DISABLE` 与“多 record group 映射矩阵”尚未补齐（现状管理面仅支持 `jobcatalog` 的 create + mapping）。
+- [ ] **门禁覆盖**：SetID 合同/无缺省洞/禁止绕过等需补齐 tests/gates 覆盖（目标见 §8）。
+
+### 0.3 口径澄清（CLARIFY：新增说明，不引入新功能）
+
+- PeopleSoft 的 TableSet Security（按 SetID 做访问控制）在本项目不实现；SetID 不作为权限边界（见 3.2）。
+- PeopleSoft 的 TableSet Tree Control 在 v1 不作为必需能力；除非出现“跨 setid tree 访问”的明确需求，否则不落地（如需落地，按 0.1 的 NEW-TreeControls 承接）。
+- `business_units` 与 `setids` 必须同时存在：BU 是业务上下文/控制值，SetID 是共享数据集；只用 SetID 会丢失“多 BU 共享同一 SetID/按 record group 选择 SetID”的表达能力（详见 11.2.1）。
 
 ## 1. PeopleSoft SetID 机制：作用与目的（摘要）
 
@@ -20,6 +42,36 @@
 - **Set Control Value**：用于“选择 SetID”的控制维度，PeopleSoft 常用 Business Unit 作为 set control value。
 - **Record Group**：把一组主数据表归为同一类（同一组共享同一个 SetID 选择），避免每张表单独配置。
 - **Set Control（映射）**：`(business_unit_id, record_group) -> setid` 的确定性映射，保证每次查询/写入都能稳定得到唯一 SetID。
+
+### 1.4 TableSet Control（Record Group + Tree）
+
+- PeopleSoft 的核心“发生作用”点是 PeopleTools 的 **TableSet Control**：
+  - **Record Group**：在 TableSet Control - Record Group（组件：`SET_CNTRL_TABLE1`）里，为每个 Set Control Value（常见=Business Unit）配置各 record group 对应的 SetID。
+  - **Tree**：在 TableSet Control - Tree（组件：`SET_CNTRL_TABLE2`）里登记“树名/树对象”的 SetID，以支持“tree 的 SetID 与 BU 默认 SetID 不一致”时仍可在 prompt/处理过程中可见。
+- PeopleSoft 的“Default SetID / preliminary tableset sharing”也会在 BU 建立/配置过程中出现：用于引导该 BU 的初始 tableset sharing 配置。
+
+### 1.5 TableSet Security（按 SetID 的访问控制，可选）
+
+- PeopleSoft 在 FSCM 等域提供 **TableSet Security**（例如按 Permission List 或 User 授权可访问的 SetID），从而影响页面可选 SetID、prompt 结果与可见数据范围。
+- 本项目将此能力显式排除在 v1（见 3.2），避免把治理机制误用为授权边界。
+
+### 1.6 SetID 如何在运行时“发生作用”（机制细化）
+
+> 这里描述的是 PeopleSoft 的典型实现思路：**Set Control Value（常见=Business Unit）驱动“每类主数据（Record Group）用哪个 SetID”**，从而让页面 prompt/校验/处理过程在不暴露复杂配置的情况下稳定使用同一套数据集。
+
+1) **确定 Set Control Value**：通常来自交易/业务上下文中的业务单元字段（如 BU），系统在组件缓冲区里“先拿到 BU”。  
+2) **确定 Record Group**：把一批 setid-controlled 表归入同一组（Record Group），从而避免“每张表都配置一次映射”。  
+3) **查表得到 SetID**：按 `(Set Control Value, Record Group) -> SetID` 查到唯一 SetID（PeopleSoft 常见落点是 `PS_SETCONTROL` 等表）。  
+4) **在 prompt/校验/处理时使用 SetID**：对 setid-controlled 表的查询都带上 `WHERE SETID = <resolved>`（或等价 join/view），保证同一 BU 在同一类主数据上使用同一套数据集。
+
+### 1.7 PeopleSoft vs 本项目 SetID：关键差异与取舍
+
+- **控制值简化**：PeopleSoft 可有多种 Set Control Value/Set Control Record；本项目冻结为 **BU（`business_unit_id`）唯一控制值**（见 5.4），降低早期漂移风险。
+- **映射完备性**：PeopleSoft 允许配置/默认值的历史包袱较多；本项目选定“无缺省洞”（见 5.5/5.9），并要求 fail-closed。
+- **显式上下文**：PeopleSoft 运行时通常隐式携带 BU；本项目要求 UI/API **显式携带 `business_unit_id`**，默认值必须通过 redirect 写回 URL（避免 silent default）。
+- **安全边界**：PeopleSoft 可选 TableSet Security；本项目明确 **不把 SetID 用作权限边界**（RLS/Casbin 承担安全语义）。
+- **Tree 控制**：PeopleSoft 的 Tree Controls（`SET_CNTRL_TABLE2`）可选；本项目 v1 不做，避免偶然复杂度（仅保留扩展点）。
+- **时间语义**：PeopleSoft 的主数据多为 effective-dated；本项目 Valid Time 统一收敛为 day 粒度（`DEV-PLAN-032`），Set Control 映射不做有效期（见 5.6）。
 
 > 引入 SetID 的目标是复用上述“确定性映射 + 共享/隔离”的思想，而不是复刻 PeopleSoft 的全部页面/术语与历史包袱。
 
@@ -42,6 +94,7 @@
 - schema/迁移：`modules/orgunit/infrastructure/persistence/schema/00005_orgunit_setid_schema.sql`、`modules/orgunit/infrastructure/persistence/schema/00006_orgunit_setid_engine.sql`、`migrations/orgunit/20260106100000_orgunit_setid_schema.sql`、`migrations/orgunit/20260106100500_orgunit_setid_engine.sql`
 - 共享解析入口：`pkg/setid/setid.go`
 - UI 入口：`/org/setid`（实现：`internal/server/setid.go`；allowlist：`config/routing/allowlist.yaml`）
+- 现状限制：record group 的 DB 约束 + 管理面当前仅覆盖 `jobcatalog`（`orgunit` 等 group 仍待补齐）
 - 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
 
 ### 3.2 非目标（明确不做）
@@ -49,6 +102,8 @@
 - 不做跨租户共享 SetID（RLS/tenant 是硬边界，SetID 仅用于同租户内共享/隔离）。
 - 不做“多 SetID 合并视图/union”（一次查询只使用一个解析出的 SetID；不引入层级继承或叠加规则）。
 - 不做 PeopleSoft 全量 UI 复刻；只保留需要的最小配置与可验证性。
+- **（新增澄清）不做 TableSet Security**：不提供按 SetID 的访问控制/授权模型（PeopleSoft 的 TableSet by Permission List/User ID）；若未来需要，必须另立 dev-plan，并与 Casbin/RLS 的边界协同设计。
+- **（新增澄清）v1 不做 Tree Controls**：除非出现明确的“跨 setid tree 可见性/提示集”需求，否则不引入 `SET_CNTRL_TABLE2` 等价机制；如确需落地，按 0.1 的 NEW-TreeControls 承接（避免提前引入偶然复杂度）。
 
 ## 4. 工具链与门禁（SSOT 引用）
 
@@ -92,6 +147,16 @@
 - **MVP group**（可扩展，但必须从最小集合开始）：
   - `jobcatalog`：职位分类主数据（Job Family/Job Profile/Level 等）
   - `orgunit`：组织基础主数据（部门/地点等，按实际建模落地）
+- **现状（009M1）**：DB 侧约束/解析函数/bootstrap/UI 管理面目前仅覆盖 `jobcatalog`；`orgunit` 仍为计划内待办（见 0.2/9.2）。
+
+### 5.3.1 Tree / Hierarchy Controls（NEW：可选扩展）
+
+> 背景：PeopleSoft 的 `SET_CNTRL_TABLE2` 用于解决“tree 的 SetID 与 BU 默认 SetID 不一致导致 tree 不可见”的问题。
+
+- **v1 口径（冻结）**：不实现 Tree Controls；任何需要被 BU/SetID 驱动的 tree/层级配置，必须作为 setid-controlled 数据落库并归入某个 record group，读取时仅按 `ResolveSetID(..., record_group)` 的结果过滤（不做跨 setid 混用）。
+- **如需扩展（NEW，非 P0）**：新增 Tree Controls 映射以支持跨 setid tree 可见性，建议契约为：
+  - `ResolveTreeSetID(tx, tenant_id, business_unit_id, tree_key) -> setid`
+  - 其中 `tree_key` 必须是稳定命名空间（禁止自由拼接/临时别名），并纳入门禁（防漂移）。
 
 ### 5.4 Set Control Value（选定：抽象为“控制值”，后续对齐 Business Unit）
 
@@ -99,8 +164,23 @@
   - `(tenant_id, business_unit_id, record_group) -> setid`
 - **约束**：
   - `business_unit_id` 必须可枚举、可在 UI 中显式选择；禁止在业务代码里“从路径/会话/环境推导”隐式生成。
+  - **（新增：UI 约束）**若 UI 需要提供默认 BU（`BU000`），必须通过 redirect 把 `business_unit_id=BU000` 写回 URL（使其显式可见），而不是在 handler 内部 silent fallback。
   - `business_unit_id` 的来源与生命周期由 OrgUnit/租户治理承接（本计划只冻结：写入/读取必须显式携带该字段）。
   - **字段合同（冻结）**：`business_unit_id` 值为 `[A-Z0-9]{1,5}`，存储为全大写；展示名使用 `name`，不允许“改 key”。
+
+### 5.4.1 BU 上下文如何匹配到请求（CLARIFY）
+
+- **列表读取（setid-controlled）**：由调用方显式传入 `business_unit_id`（URL query / API 参数）；服务端只负责校验/解析，不负责“猜测”。
+- **写入（setid-controlled）**：调用方显式传入业务 payload；解析阶段使用同一 `business_unit_id` 得到 `setid` 并落库（禁止调用方直填 `setid`）。
+- **跨模块引用（示例：Position）**：`staffing.position` 的创建强制携带 `business_unit_id`，从而能在投射中确定性解析 `jobcatalog_setid` 并校验 `job_profile_id`（否则会出现“岗位绑定的 job profile 属于哪套 jobcatalog”的不可判定）。
+
+### 5.4.2 人员如何“锁定归属”到 BU（CLARIFY）
+
+> 口径：BU 不是安全边界，但必须可推导、可解释、可复现。
+
+- **当前模型（009M1+）**：人员的 BU 以“任职/Assignment”为主线推导：`Person -> Assignment(primary) -> Position -> business_unit_id`（按 as-of date）。  
+- **强一致前提**：Position 必填 BU，因此只要人员存在有效任职，就能确定性得到其 BU；人员无任职则 BU 为空（显式状态，不做隐式默认）。  
+- **多 BU 情况**：若未来允许多任职/多 assignment_type，需要另起 dev-plan 明确“人员层面的 BU”口径（例如主任职优先/多值集合/按业务场景选择）。
 
 ### 5.5 SetID 解析算法（选定：确定性、无缺省洞）
 
@@ -229,6 +309,9 @@ SetID 解析 `ResolveSetID(tenant_id, business_unit_id, record_group)` 的失败
 - Business Unit 列表：创建/禁用。
 - 映射矩阵：按 record group 展示一张“控制值 × group -> setid”的矩阵，默认初始化为 `SHARE`。
 
+**现状（009M1）**
+- `/org/setid` 当前仅支持 `jobcatalog` record group 的映射展示与保存，且仅实现 `create_setid/create_bu/save_mappings`；`rename/disable` 与多 group 矩阵仍待补齐（见 0.2）。
+
 **最小交互闭环（对齐“可发现、可操作”）**
 - 导航入口：OrgUnit → Governance → SetID（或同等可发现入口）。
 - SetID 列表：新增/禁用（禁用前校验引用）；重命名（仅影响展示名，不影响 key）。
@@ -243,27 +326,37 @@ SetID 解析 `ResolveSetID(tenant_id, business_unit_id, record_group)` 的失败
 4. [ ] 写入口门禁：任何 setid-controlled 写入必须走“解析 setid + 写入”的单一入口（禁止 payload 直接带 `setid`；禁止直接写表）。
 5. [ ] 引用完整性门禁：`setid-mappings` 不得指向 `disabled setid`；禁用/删除 SetID 时若仍被引用必须阻断。
 6. [ ] 失败模式门禁：缺映射/禁用/非法 group 等错误必须覆盖到测试，且为 fail-closed（不得隐式回退 SHARE）。
+7. [ ] **（NEW）显式 BU 门禁**：setid-controlled 的 UI 入口缺少 `business_unit_id` 时必须 redirect 补齐默认 `BU000`，并在测试中断言“最终 URL 显式携带 business_unit_id”。
+
+现状说明（009M1）：
+- DB 级约束与 kernel 函数已覆盖 1/2/5/6 的大部分“数据层 fail-closed”；但 tests/gates 仍需补齐，且 record group 目前只覆盖 `jobcatalog`。
 
 ## 9. 实施步骤 (Checklist)
 
-1. [ ] 落地 tenant bootstrap（见 5.9）：初始化 `SHARE` + 默认 BU + 完整 mapping 矩阵。
-2. [ ] 明确 record group 的初始清单（`jobcatalog/orgunit`），并在实现模块的 dev-plan 中声明“哪些表受控于哪个 group”。
-3. [ ] 冻结共享包 API：`ResolveSetID(tx, tenant_id, business_unit_id, record_group) -> setid`（含错误契约），并约束所有模块复用。
-4. [ ] 实现 SetID/BU/Mapping 的 DB Kernel 单点写入口 + 读 API（含幂等 `request_id` 语义）。
+1. [X] 落地 tenant bootstrap（009M1：`SHARE` + `BU000` + `jobcatalog` mapping）—— 证据见 `docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节，2026-01-06）。
+   - [ ] 扩展：bootstrap 覆盖所有 stable record group（新增 `orgunit` 后必须补齐）。
+2. [ ] 补齐 record group 的稳定枚举与落地清单（计划：`jobcatalog/orgunit`；现状 DB/UI 仅 `jobcatalog`），并在实现模块的 dev-plan 中声明“哪些表受控于哪个 group”。
+3. [X] 冻结共享包 API：`ResolveSetID(tx, tenant_id, business_unit_id, record_group) -> setid`（含错误契约），并约束所有模块复用（009M1：`pkg/setid`）。
+4. [ ] 补齐 SetID/BU/Mapping 的“管理面闭环”：
+   - [X] DB Kernel 单点写入口（`submit_*_event(...)` + 同事务投射，含幂等 `request_id`）已落地（009M1）。
+   - [ ] HTTP 管理面：补齐 `RENAME/DISABLE` 与多 record group 的映射矩阵（现状仅 `jobcatalog`）。
 5. [ ] 实现 “无缺省洞” 的初始化与演化路径：
-   - [ ] 新增 BU 时：为所有 record group 自动补齐 mapping=`SHARE`。
-   - [ ] 新增 record group 时：为所有 BU 自动 backfill mapping=`SHARE`。
-6. [ ] 为主数据写入路径接入 setid 解析（先从 `jobcatalog` 起步，形成样板）。
-7. [ ] 落地门禁（tests/gates）并接入 CI required checks。
-8. [ ] 补齐 UI 管理面（最小可用），并在后续模块实现中复用同一套解析入口与 contracts。
+   - [X] 新增 BU 时：为 `jobcatalog` 自动补齐 mapping=`SHARE`（009M1）。
+   - [ ] 扩展：新增 BU 时为所有 stable record group 自动补齐 mapping=`SHARE`。
+   - [ ] 新增 record group 时：为所有 BU 自动 backfill mapping=`SHARE`（并补齐门禁）。
+6. [X] 为主数据写入路径接入 setid 解析（先从 `jobcatalog` 起步，形成样板；009M1 已完成并留证）。
+7. [ ] 落地门禁（tests/gates）并接入 CI required checks（见 §8）。
+8. [ ] 补齐 UI 管理面（多 group + disable/rename），并在后续模块实现中复用同一套解析入口与 contracts。
 
 ## 10. 验收标准 (Acceptance Criteria)
 
 - [ ] 同一 tenant 内可配置多个 SetID，并能在同一业务键下并行维护多套主数据（按 SetID 隔离）。
-- [ ] 给定 `(business_unit_id, record_group)`，系统能稳定解析出唯一 SetID（无缺省洞）。
+- [X] 给定 `(business_unit_id, record_group=jobcatalog)`，系统能稳定解析出唯一 SetID（009M1 已验证；证据见 `docs/dev-records/DEV-PLAN-010-READINESS.md` §10）。
+- [ ] 扩展：`record_group=orgunit` 及后续 group 同样满足解析与无缺省洞。
 - [ ] 任何绕过解析入口直接写 setid 的路径会被门禁阻断。
-- [ ] 新 tenant 初始化后即满足：`SHARE` + 至少 1 个 BU + 完整 mapping（默认 `SHARE`），无需手工补洞。
-- [ ] `jobcatalog` 至少一个主数据实体完成端到端接入（解析→写入→读取→UI 展示）。
+- [X] 新 tenant 初始化后即满足：`SHARE` + 至少 1 个 BU + `jobcatalog` mapping（默认 `SHARE`），无需手工补洞（009M1 已落地；证据见 `docs/dev-records/DEV-PLAN-010-READINESS.md` §10）。
+- [ ] 扩展：初始化覆盖所有 stable record group（新增 `orgunit` 后必须补齐）。
+- [X] `jobcatalog` 至少一个主数据实体完成端到端接入（解析→写入→读取→UI 展示；009M1 已落地并留证）。
 - [ ] 示例验收：同一 `code` 在 `setid=A0001` 与 `setid=B0001` 并存；BU1 映射到 A0001、BU2 映射到 B0001；两 BU 的列表读取互不串数据；单条读取能通过记录自身 `setid` 精确定位。
 
 ## 11. 已决策（本轮评审后冻结）
@@ -281,6 +374,13 @@ SetID 解析 `ResolveSetID(tenant_id, business_unit_id, record_group)` 的失败
   - 理由：避免早期出现两套 BU（orgunit 一套、setid 一套）导致漂移；对齐“同一概念只有一种权威表达”。
 - **不选（暂不做）**：Set Control Value 独立成表（`set_control_values`），与 orgunit BU 通过外键或同步保持一致。
   - 理由：实现更独立、推进更快；代价是需要额外的同步/一致性策略与退场计划，属于偶然复杂度。
+
+### 11.2.1 是否可以不引入 BU，只用 SetID（CLARIFY：结论=不可以）
+
+- **结论（冻结）**：不能只用 `setids`，必须同时存在 `business_units`（控制值）与 `setids`（共享数据集）。  
+- **原因 1：表达能力**：SetID 解决的是“共享/隔离哪套主数据”；BU 解决的是“业务上下文是谁”。多个 BU 需要共享同一 SetID（多对一），且同一 BU 需要按 **record group** 选择不同 SetID（矩阵映射）；只用 SetID 无法表达这些关系。  
+- **原因 2：业务可解释性**：用户/流程通常以 BU 作为入口（岗位、任职、算薪批次等），直接让业务侧选择 SetID 会把治理细节暴露成业务概念。  
+- **可选退化（不选）**：若强行将 `business_unit_id == setid`（一对一），则共享能力退化为“复制/同步”，与引入 SetID 的初衷冲突。
 
 ### 11.3 禁用策略：禁用 BU/SetID 时如何处理存量引用
 

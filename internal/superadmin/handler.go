@@ -335,7 +335,7 @@ ORDER BY created_at ASC, id ASC
 	defer rows.Close()
 
 	tenants := make([]tenantRow, 0, 8)
-	byID := make(map[string]*tenantRow)
+	byID := make(map[string]int)
 	for rows.Next() {
 		var tr tenantRow
 		if err := rows.Scan(&tr.ID, &tr.Name, &tr.IsActive); err != nil {
@@ -343,7 +343,7 @@ ORDER BY created_at ASC, id ASC
 			return
 		}
 		tenants = append(tenants, tr)
-		byID[tr.ID] = &tenants[len(tenants)-1]
+		byID[tr.ID] = len(tenants) - 1
 	}
 	if err := rows.Err(); err != nil {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "db_error", "db error")
@@ -368,10 +368,11 @@ ORDER BY is_primary DESC, hostname ASC
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "db_error", "db error")
 			return
 		}
-		tr, ok := byID[tenantID]
+		idx, ok := byID[tenantID]
 		if !ok {
 			continue
 		}
+		tr := &tenants[idx]
 		if isPrimary && tr.PrimaryHost == "" {
 			tr.PrimaryHost = hostname
 		} else {

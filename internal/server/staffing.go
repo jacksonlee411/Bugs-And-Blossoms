@@ -234,6 +234,9 @@ func (s *staffingPGStore) CreatePositionCurrent(ctx context.Context, tenantID st
 		return Position{}, newBadRequestError("org_unit_id is required")
 	}
 	businessUnitID = strings.TrimSpace(businessUnitID)
+	if businessUnitID == "" {
+		return Position{}, newBadRequestError("business_unit_id is required")
+	}
 	jobProfileID = strings.TrimSpace(jobProfileID)
 	capacityFTE = strings.TrimSpace(capacityFTE)
 	name = strings.TrimSpace(name)
@@ -469,6 +472,9 @@ func (s *staffingMemoryStore) CreatePositionCurrent(_ context.Context, tenantID 
 		return Position{}, newBadRequestError("org_unit_id is required")
 	}
 	businessUnitID = strings.TrimSpace(businessUnitID)
+	if businessUnitID == "" {
+		return Position{}, newBadRequestError("business_unit_id is required")
+	}
 	jobProfileID = strings.TrimSpace(jobProfileID)
 	capacityFTE = strings.TrimSpace(capacityFTE)
 	if capacityFTE == "" {

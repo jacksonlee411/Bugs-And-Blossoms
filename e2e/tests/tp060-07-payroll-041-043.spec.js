@@ -131,9 +131,10 @@ test("tp060-07: payroll 041-043 (period/run -> payslip -> social insurance -> fi
     const positionName = `TP060-07 Position ${pernr} ${runID}`;
     await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
     await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
+    await positionCreateForm.locator('select[name="business_unit_id"]').selectOption("BU000");
     await positionCreateForm.locator('input[name="name"]').fill(positionName);
     await positionCreateForm.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&business_unit_id=BU000$`));
 
     const row = page.locator("tr", { hasText: positionName }).first();
     await expect(row).toBeVisible();

@@ -91,7 +91,7 @@
 - [X] E2E：`e2e/tests/tp060-03-person-and-assignments.spec.js`（可见链路 + cycle 负例）
 
 ## 2.7 已落地范围（M5，主干）
-> 说明：M5 的增量以“JobCatalog（SetID）组合” 为核心：Position 绑定 `business_unit_id` + `job_profile_id`，并在 Kernel 中解析 SetID 与做 identity 存在性校验（fail-closed）。
+> 说明：M5 的增量以“JobCatalog（SetID）组合” 为核心：Position **必填** `business_unit_id`（强一致：人员 BU 可由 assignment→position 推导），绑定 `job_profile_id` 时在 Kernel 中解析 `jobcatalog_setid` 并做引用存在性校验（fail-closed）。
 
 - [X] 迁移闭环（staffing）：`migrations/staffing/20260111203000_staffing_position_jobcatalog_m5.sql`
 - [X] Schema（staffing）：`modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql`（新增 `business_unit_id/jobcatalog_setid/job_profile_id`）
@@ -204,7 +204,7 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
 ```
 
 事件合同（M2）：
-- [X] `CREATE`：必填 `payload.org_unit_id`；可选 `payload.name`。
+- [X] `CREATE`：必填 `payload.org_unit_id` + `payload.business_unit_id`；可选 `payload.name`。
 - [X] `UPDATE`：payload 为 patch；M2 仅允许 keys：`org_unit_id`、`name`。  
   实现现状：未知 key 会被 DB 约束拒绝（fail-closed；见 `*_events_payload_allowed_keys_check`）。
 
@@ -245,6 +245,11 @@ CREATE TABLE IF NOT EXISTS staffing.position_versions (
     )
 );
 ```
+
+M5+ 增量字段（SSOT：`modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql`）：
+- `business_unit_id text NOT NULL`（强一致：Position 必须归属 BU）
+- `jobcatalog_setid text NULL`（由 `orgunit.resolve_setid(...,'jobcatalog')` 解析投射；绑定 `job_profile_id` 时必须可解析且 active）
+- `job_profile_id uuid NULL`
 
 合同要点（M2）：
 - [X] Valid Time：`validity` 使用 `daterange [start,end)`；由 replay 校验 gapless + 末段 infinity。

@@ -27,10 +27,10 @@
   - `business_unit_id=BU901`
   - `jobcatalog_setid=S2601`
   - `job_profile` 显示 `JP-SWE (...)`（或等效可解释文本）
-- [X] **Position（M5：fail-closed 负例，Internal API）**：至少覆盖 3 个稳定错误码断言：
-  - `STAFFING_INVALID_ARGUMENT`：绑定 `job_profile_id` 但缺失 `business_unit_id`
-  - `BUSINESS_UNIT_NOT_FOUND`：绑定不存在的 `business_unit_id`
-  - `JOBCATALOG_REFERENCE_NOT_FOUND`：跨 SetID 引用 `job_profile_id`（BU=SetID 解析为 `S2601`，但 `job_profile_id` 属于其他 setid）
+- [X] **Position（M5：fail-closed 负例，Internal API）**：至少覆盖 3 个负例断言（1 个参数校验 + 2 个稳定错误码）：
+  - `400`：缺失 `business_unit_id`（`code=business_unit_id is required`）
+  - `BUSINESS_UNIT_NOT_FOUND`：绑定不存在的 `business_unit_id`（422）
+  - `JOBCATALOG_REFERENCE_NOT_FOUND`：跨 SetID 引用 `job_profile_id`（422；BU=SetID 解析为 `S2601`，但 `job_profile_id` 属于其他 setid）
 
 ### 2.2 非目标
 
@@ -164,7 +164,7 @@
   - Update/Disable：`position_id` 非空时更新/停用职位（同上）。
 - 关键字段：
   - JobCatalog Context（GET 表单）：`business_unit_id`（用于加载 job profiles；不影响已有 position 的字段）
-  - Create（POST）：`effective_date`（默认：`as_of`；非法日期应提示 `effective_date 无效: ...`）、`org_unit_id`、`business_unit_id`（可空）、`job_profile_id`（可空；**若填写必须同时填写 `business_unit_id`**）、`capacity_fte`（可空；默认 1.0）、`name`（可空）
+  - Create（POST）：`effective_date`（默认：`as_of`；非法日期应提示 `effective_date 无效: ...`）、`org_unit_id`、`business_unit_id`（**必填：Position 强一致归属 BU**）、`job_profile_id`（可空；若填写则必须属于该 BU 解析出的 `jobcatalog_setid`）、`capacity_fte`（可空；默认 1.0）、`name`（可空）
   - Update/Disable（POST，patch 语义）：`position_id` 必填，其余字段为“可选 patch”
     - `org_unit_id` / `business_unit_id` / `reports_to_position_id` / `capacity_fte` / `name` / `lifecycle_status`
     - `job_profile_id="__CLEAR__"` 表示清空（UI 下拉提供）
@@ -180,7 +180,7 @@
   - Update：`{"effective_date","position_id", ...}`（`position_id` 非空；至少 1 个 patch 字段）
   - 400：`code=bad_json` / `code=invalid_effective_date` / `code=effective_date is required` / `code=position_id is required` / `code=at least one patch field is required`（等）
   - 409：`code=STAFFING_IDEMPOTENCY_REUSED`
-  - 422：稳定 DB 错误码（示例：`STAFFING_INVALID_ARGUMENT` / `BUSINESS_UNIT_NOT_FOUND` / `JOBCATALOG_REFERENCE_NOT_FOUND`）
+  - 422：稳定 DB 错误码（示例：`BUSINESS_UNIT_NOT_FOUND` / `JOBCATALOG_REFERENCE_NOT_FOUND` / `STAFFING_INVALID_ARGUMENT`（例如 `business_unit_id` 格式非法））
 
 ## 7. 测试步骤（执行时勾选）
 
@@ -282,13 +282,13 @@
      - `jobcatalog_setid=S2601`
      - `job_profile` 显示 `JP-SWE (...)`（或等效）
 
-### 7.6 Position（M5）：fail-closed 负例（Internal API，断言稳定错误码）
+### 7.6 Position（M5）：fail-closed 负例（Internal API，断言 HTTP status + code）
 
 > 说明：负例优先用 Internal API 断言 `code`，避免 UI 只显示红字但无法稳定提取错误码。
 
 1. [ ] 负例 A（缺 BU）：`POST /org/api/positions?as_of=2026-01-01`
    - body：`{"effective_date":"2026-01-01","org_unit_id":"<任一 org_unit_id>","job_profile_id":"<JP-SWE-id>","name":"TP062-BAD-NO-BU"}`
-   - 断言：422 且 `code=STAFFING_INVALID_ARGUMENT`
+   - 断言：400 且 `code=business_unit_id is required`
 2. [ ] 负例 B（不存在 BU）：`POST /org/api/positions?as_of=2026-01-01`
    - body：`{"effective_date":"2026-01-01","org_unit_id":"<任一 org_unit_id>","business_unit_id":"BU999","name":"TP062-BAD-BU999"}`
    - 断言：422 且 `code=BUSINESS_UNIT_NOT_FOUND`
@@ -324,7 +324,7 @@
   - `/org/positions?as_of=2026-01-01` 页面证据（10 条职位可见，含 `position_id`）
   - 记录表：10 个 `position_id` + 对应 `org_unit_id`
   - M5 正例：`/org/positions?as_of=2026-01-15&business_unit_id=BU901` 页面证据（`Resolved SetID: S2601`；且至少 1 条职位显示 `business_unit_id=BU901`、`jobcatalog_setid=S2601`、`job_profile=JP-SWE (...)`）
-  - M5 负例：`/org/api/positions` 的 3 条失败响应证据（含 HTTP 状态码与 `code`：`STAFFING_INVALID_ARGUMENT` / `BUSINESS_UNIT_NOT_FOUND` / `JOBCATALOG_REFERENCE_NOT_FOUND`）
+  - M5 负例：`/org/api/positions` 的 3 条失败响应证据（含 HTTP 状态码与 `code`：`business_unit_id is required` / `BUSINESS_UNIT_NOT_FOUND` / `JOBCATALOG_REFERENCE_NOT_FOUND`）
 
 ## 9. 执行记录（Readiness/可复现记录）
 

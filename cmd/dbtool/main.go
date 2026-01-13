@@ -381,17 +381,17 @@ func staffingSmoke(args []string) {
 		fatal(err)
 	}
 	_, err = tx.Exec(ctx, `
-		SELECT staffing.submit_position_event(
-		  $1::uuid,
-		  $2::uuid,
-		  $3::uuid,
-		  'CREATE',
-		  $4::date,
-		  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position'),
-		  $6::text,
-		  $7::uuid
-		);
-	`, positionEventID, tenantA, positionID, effectiveDate, missingOrgUnitID, requestID, initiatorID)
+			SELECT staffing.submit_position_event(
+			  $1::uuid,
+			  $2::uuid,
+			  $3::uuid,
+			  'CREATE',
+			  $4::date,
+			  jsonb_build_object('org_unit_id', $5::text, 'business_unit_id', 'BU000', 'name', 'Smoke Position'),
+			  $6::text,
+			  $7::uuid
+			);
+		`, positionEventID, tenantA, positionID, effectiveDate, missingOrgUnitID, requestID, initiatorID)
 	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_missing_org;`); rbErr != nil {
 		fatal(rbErr)
 	}
@@ -422,17 +422,17 @@ func staffingSmoke(args []string) {
 
 	var positionEventDBID int64
 	if err := tx.QueryRow(ctx, `
-		SELECT staffing.submit_position_event(
-		  $1::uuid,
-		  $2::uuid,
-		  $3::uuid,
-		  'CREATE',
-		  $4::date,
-		  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position'),
-		  $6::text,
-		  $7::uuid
-		);
-	`, positionEventID, tenantA, positionID, effectiveDate, orgUnitID, requestID, initiatorID).Scan(&positionEventDBID); err != nil {
+			SELECT staffing.submit_position_event(
+			  $1::uuid,
+			  $2::uuid,
+			  $3::uuid,
+			  'CREATE',
+			  $4::date,
+			  jsonb_build_object('org_unit_id', $5::text, 'business_unit_id', 'BU000', 'name', 'Smoke Position'),
+			  $6::text,
+			  $7::uuid
+			);
+		`, positionEventID, tenantA, positionID, effectiveDate, orgUnitID, requestID, initiatorID).Scan(&positionEventDBID); err != nil {
 		fatal(err)
 	}
 	if positionEventDBID <= 0 {
@@ -650,17 +650,17 @@ func staffingSmoke(args []string) {
 			fatal(err)
 		}
 		if _, err := tx.Exec(ctx, `
-				SELECT staffing.submit_position_event(
-				  $1::uuid,
-				  $2::uuid,
-				  $3::uuid,
-				  'CREATE',
-				  $4::date,
-				  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position 2'),
-				  $6::text,
-				  $7::uuid
-				);
-			`, positionEventID2, tenantA, positionID2, effectiveDate, orgUnitID, requestID+"-pos2", initiatorID); err != nil {
+					SELECT staffing.submit_position_event(
+					  $1::uuid,
+					  $2::uuid,
+					  $3::uuid,
+					  'CREATE',
+					  $4::date,
+					  jsonb_build_object('org_unit_id', $5::text, 'business_unit_id', 'BU000', 'name', 'Smoke Position 2'),
+					  $6::text,
+					  $7::uuid
+					);
+				`, positionEventID2, tenantA, positionID2, effectiveDate, orgUnitID, requestID+"-pos2", initiatorID); err != nil {
 			fatal(err)
 		}
 
@@ -826,17 +826,17 @@ func staffingSmoke(args []string) {
 		fatal(err)
 	}
 	if _, err := tx.Exec(ctx, `
-			SELECT staffing.submit_position_event(
-			  $1::uuid,
-			  $2::uuid,
-			  $3::uuid,
-			  'CREATE',
-			  $4::date,
-			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Disable Test Position'),
-			  $6::text,
-			  $7::uuid
-			);
-		`, disablePositionEventID, tenantA, disablePositionID, effectiveDate, orgUnitID, requestID+"-pos-disable-test-create", initiatorID); err != nil {
+				SELECT staffing.submit_position_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::uuid,
+				  'CREATE',
+				  $4::date,
+				  jsonb_build_object('org_unit_id', $5::text, 'business_unit_id', 'BU000', 'name', 'Smoke Disable Test Position'),
+				  $6::text,
+				  $7::uuid
+				);
+			`, disablePositionEventID, tenantA, disablePositionID, effectiveDate, orgUnitID, requestID+"-pos-disable-test-create", initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -1017,17 +1017,17 @@ func staffingSmoke(args []string) {
 				fatal(err)
 			}
 			if _, err := tx.Exec(ctx, `
-				SELECT staffing.submit_position_event(
-				  $1::uuid,
-				  $2::uuid,
-				  $3::uuid,
-				  'CREATE',
-				  $4::date,
-				  jsonb_build_object('org_unit_id', $5::text, 'name', $6::text),
-				  $7::text,
-				  $8::uuid
-				);
-			`, eventID, tenantA, positionID, effectiveDate, orgUnitID, name, requestID+"-pos-reports-to-create-"+positionID, initiatorID); err != nil {
+					SELECT staffing.submit_position_event(
+					  $1::uuid,
+					  $2::uuid,
+					  $3::uuid,
+					  'CREATE',
+					  $4::date,
+					  jsonb_build_object('org_unit_id', $5::text, 'business_unit_id', 'BU000', 'name', $6::text),
+					  $7::text,
+					  $8::uuid
+					);
+				`, eventID, tenantA, positionID, effectiveDate, orgUnitID, name, requestID+"-pos-reports-to-create-"+positionID, initiatorID); err != nil {
 				fatal(err)
 			}
 		}
