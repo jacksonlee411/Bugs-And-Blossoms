@@ -59,6 +59,16 @@ func TestCanonicalizeJSONObjectOrEmpty(t *testing.T) {
 			t.Fatalf("got=%s", got)
 		}
 	})
+
+	t.Run("object => canonicalize", func(t *testing.T) {
+		got, err := canonicalizeJSONObjectOrEmpty(json.RawMessage(`{"b":1,"a":2}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != `{"a":2,"b":1}` {
+			t.Fatalf("got=%s", got)
+		}
+	})
 }
 
 func TestCanonicalizeJSON(t *testing.T) {

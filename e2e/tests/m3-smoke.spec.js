@@ -129,9 +129,10 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
     .getAttribute("value");
   expect(orgUnitID).not.toBeNull();
   await posCreateForm.locator('select[name="org_unit_id"]').selectOption(orgUnitID);
+  await posCreateForm.locator('select[name="business_unit_id"]').selectOption("BU000");
   await posCreateForm.locator('input[name="name"]').fill(posName);
   await posCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}$`));
+  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&business_unit_id=BU000$`));
 
   const posRow = page.locator("tr", { hasText: posName });
   await expect(posRow).toBeVisible();

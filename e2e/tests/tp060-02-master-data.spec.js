@@ -434,9 +434,10 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     }
     await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
     await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(spec.org);
+    await positionCreateForm.locator('select[name="business_unit_id"]').selectOption("BU000");
     await positionCreateForm.locator('input[name="name"]').fill(spec.name);
     await positionCreateForm.getByRole("button", { name: "Create" }).click();
-    await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&business_unit_id=BU000$`));
   }
   for (const spec of positionSpecs) {
     await expect(page.locator("tr", { hasText: spec.name })).toBeVisible();
@@ -477,8 +478,8 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     const resp = await appContext.request.post(`/org/api/positions?as_of=${asOf}`, {
       data: { effective_date: asOf, org_unit_id: orgIDs.HQ, job_profile_id: jpSweID, name: `TP060-02 BAD NO BU ${runID}` }
     });
-    expect(resp.status(), await resp.text()).toBe(422);
-    expect((await resp.json()).code).toBe("STAFFING_INVALID_ARGUMENT");
+    expect(resp.status(), await resp.text()).toBe(400);
+    expect((await resp.json()).code).toBe("business_unit_id is required");
   }
   {
     const resp = await appContext.request.post(`/org/api/positions?as_of=${asOf}`, {

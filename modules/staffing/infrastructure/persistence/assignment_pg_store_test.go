@@ -59,4 +59,20 @@ func TestCanonicalizeJSON_DefaultBranches(t *testing.T) {
 			t.Fatalf("expected error")
 		}
 	})
+
+	t.Run("map propagates nested error", func(t *testing.T) {
+		var b strings.Builder
+		ch := make(chan int)
+		if err := canonicalizeJSON(&b, map[string]any{"x": ch}); err == nil {
+			t.Fatalf("expected error")
+		}
+	})
+
+	t.Run("array propagates nested error", func(t *testing.T) {
+		var b strings.Builder
+		ch := make(chan int)
+		if err := canonicalizeJSON(&b, []any{ch}); err == nil {
+			t.Fatalf("expected error")
+		}
+	})
 }
