@@ -185,6 +185,7 @@ modules/{module}/
 - DEV-PLAN-066：全链路业务测试子计划 TP-060-06——考勤 4F（外部对接 + 身份映射）：`docs/dev-plans/066-test-tp060-06-attendance-4f-integrations-identity-mapping.md`
 - DEV-PLAN-067：全链路业务测试子计划 TP-060-07——薪酬 041-043（主流程 + 工资条 + 社保）：`docs/dev-plans/067-test-tp060-07-payroll-041-043-run-payslip-si.md`
 - DEV-PLAN-068：全链路业务测试子计划 TP-060-08——薪酬 044-046（个税累计预扣 + 回溯 + 税后发放）：`docs/dev-plans/068-test-tp060-08-payroll-044-046-iit-retro-net-guarantee.md`
+- DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 - Org（事务性事件溯源 + 同步投射）：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
