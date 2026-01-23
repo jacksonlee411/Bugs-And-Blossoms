@@ -55,7 +55,7 @@ func TestHandler_InternalAssignmentEventRoutes(t *testing.T) {
 
 	store := assignmentStoreStub{
 		listFn: func(context.Context, string, string, string) ([]Assignment, error) { return nil, nil },
-		upsertFn: func(context.Context, string, string, string, string, string, string, string) (Assignment, error) {
+		upsertFn: func(context.Context, string, string, string, string, string, string) (Assignment, error) {
 			return Assignment{}, nil
 		},
 		correctFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {

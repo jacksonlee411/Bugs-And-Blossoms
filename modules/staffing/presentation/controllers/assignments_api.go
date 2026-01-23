@@ -26,7 +26,6 @@ type assignmentsAPIRequest struct {
 	PersonUUID    string `json:"person_uuid"`
 	PositionID    string `json:"position_id"`
 	Status        string `json:"status"`
-	BaseSalary    string `json:"base_salary"`
 	AllocatedFte  string `json:"allocated_fte"`
 }
 
@@ -111,7 +110,7 @@ func (c AssignmentsController) HandleAssignmentsAPI(w http.ResponseWriter, r *ht
 			return
 		}
 
-		a, err := c.Facade.UpsertPrimaryAssignmentForPerson(r.Context(), tenantID, req.EffectiveDate, req.PersonUUID, req.PositionID, req.Status, req.BaseSalary, req.AllocatedFte)
+		a, err := c.Facade.UpsertPrimaryAssignmentForPerson(r.Context(), tenantID, req.EffectiveDate, req.PersonUUID, req.PositionID, req.Status, req.AllocatedFte)
 		if err != nil {
 			code := stablePgMessage(err)
 			status := http.StatusInternalServerError

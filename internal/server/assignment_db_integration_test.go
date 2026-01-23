@@ -98,11 +98,11 @@ func TestStaffingAssignmentDB_RerunnableUpsert(t *testing.T) {
 
 	store := newStaffingPGStore(conn)
 
-	a1, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position1, "", "", "")
+	a1, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position1, "", "")
 	if err != nil {
 		t.Fatalf("upsert-1: %v", err)
 	}
-	a2, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position1, "", "", "")
+	a2, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position1, "", "")
 	if err != nil {
 		t.Fatalf("upsert-2 (rerun): %v", err)
 	}
@@ -133,7 +133,7 @@ func TestStaffingAssignmentDB_RerunnableUpsert(t *testing.T) {
 		}
 	}()
 
-	_, err = store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position2, "", "", "")
+	_, err = store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, effectiveDate, personUUID, position2, "", "")
 	if err == nil {
 		t.Fatal("expected error when reusing effective_date with different payload")
 	}
@@ -214,12 +214,12 @@ func TestStaffingAssignmentDB_CorrectRescind(t *testing.T) {
 
 	store := newStaffingPGStore(conn)
 
-	a1, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, "2026-01-01", personUUID, position1, "", "20000.00", "1.0")
+	a1, err := store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, "2026-01-01", personUUID, position1, "", "1.0")
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
-	_, err = store.CorrectAssignmentEvent(ctx, tenantA, a1.AssignmentID, "2026-01-01", []byte(`{"position_id":"`+position1+`","base_salary":"30000.00"}`))
+	_, err = store.CorrectAssignmentEvent(ctx, tenantA, a1.AssignmentID, "2026-01-01", []byte(`{"position_id":"`+position1+`","allocated_fte":"0.75"}`))
 	if err != nil {
 		t.Fatalf("correct: %v", err)
 	}
@@ -233,21 +233,21 @@ func TestStaffingAssignmentDB_CorrectRescind(t *testing.T) {
 		if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantA); err != nil {
 			t.Fatal(err)
 		}
-		var baseSalary string
+		var allocatedFte string
 		if err := tx.QueryRow(ctx, `
-			SELECT COALESCE(base_salary::text,'')
+			SELECT COALESCE(allocated_fte::text,'')
 			FROM staffing.assignment_versions
 			WHERE tenant_id = $1::uuid AND assignment_id = $2::uuid AND validity @> '2026-01-15'::date
 			LIMIT 1;
-		`, tenantA, a1.AssignmentID).Scan(&baseSalary); err != nil {
+		`, tenantA, a1.AssignmentID).Scan(&allocatedFte); err != nil {
 			t.Fatal(err)
 		}
-		if baseSalary != "30000.00" {
-			t.Fatalf("expected base_salary=30000.00, got %q", baseSalary)
+		if allocatedFte != "0.75" {
+			t.Fatalf("expected allocated_fte=0.75, got %q", allocatedFte)
 		}
 	}()
 
-	_, err = store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, "2026-02-01", personUUID, position2, "", "", "")
+	_, err = store.UpsertPrimaryAssignmentForPerson(ctx, tenantA, "2026-02-01", personUUID, position2, "", "")
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -420,7 +420,6 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
 	  assignment_type text NOT NULL,
 	  status text NOT NULL DEFAULT 'active',
 	  allocated_fte numeric(9,2) NOT NULL DEFAULT 1.0,
-	  base_salary numeric(15,2) NULL,
 	  validity daterange NOT NULL,
 	  last_event_id bigint NOT NULL
 	);
@@ -486,7 +485,6 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	  v_position_id uuid;
 	  v_status text;
 	  v_allocated_fte numeric(9,2);
-	  v_base_salary numeric(15,2);
 	  v_tmp_text text;
 	  v_row RECORD;
 	  v_validity daterange;
@@ -508,7 +506,6 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	  v_position_id := NULL;
 	  v_status := 'active';
 	  v_allocated_fte := 1.0;
-	  v_base_salary := NULL;
 	  v_prev_effective := NULL;
 	
 	  FOR v_row IN
@@ -588,20 +585,6 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	      RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unexpected event_type: %s', v_row.event_type);
 	    END IF;
 	
-	    IF v_row.payload ? 'base_salary' THEN
-	      v_tmp_text := NULLIF(btrim(v_row.payload->>'base_salary'), '');
-	      IF v_tmp_text IS NULL THEN
-	        v_base_salary := NULL;
-	      ELSE
-	        BEGIN
-	          v_base_salary := v_tmp_text::numeric;
-	        EXCEPTION
-	          WHEN others THEN
-	            RAISE EXCEPTION USING MESSAGE = 'STAFFING_ASSIGNMENT_BASE_SALARY_INVALID';
-	        END;
-	      END IF;
-	    END IF;
-	
 	    IF v_row.payload ? 'allocated_fte' THEN
 	      v_tmp_text := NULLIF(btrim(v_row.payload->>'allocated_fte'), '');
 	      IF v_tmp_text IS NULL THEN
@@ -629,7 +612,6 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	      assignment_type,
 	      status,
 	      allocated_fte,
-	      base_salary,
 	      validity,
 	      last_event_id
 	    )
@@ -641,7 +623,6 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	      v_assignment_type,
 	      v_status,
 	      v_allocated_fte,
-	      v_base_salary,
 	      v_validity,
 	      v_row.event_db_id
 	    );

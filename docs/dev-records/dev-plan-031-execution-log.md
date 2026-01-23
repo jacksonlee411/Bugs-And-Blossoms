@@ -83,7 +83,7 @@
   - UI（最小可见入口）：
     - `internal/server/staffing_handlers.go`：`/org/assignments` timeline 每行新增 “Correct/Rescind” 操作入口（表单/按钮），保持只展示 effective_date 的合同不变。
   - 证据入口（dbtool）：
-    - `cmd/dbtool/main.go`（`staffing-smoke`）新增 M4 断言：Correct 生效、Rescind stitch、生效限制/错误码等（并同步 payroll 断言期望值）。
+    - `cmd/dbtool/main.go`（`staffing-smoke`）新增 M4 断言：Correct 生效、Rescind stitch、生效限制/错误码等（并同步相关断言期望值）。
   - 测试：
     - `internal/server/assignment_db_integration_test.go`：新增/补齐 Correct/Rescind DB 集成测试与清理顺序（避免 FK 约束失败）。
     - `internal/server/staffing_test.go` / `internal/server/*_test.go`：补齐 handler/store 分支覆盖，`make test` 通过 100% coverage gate。

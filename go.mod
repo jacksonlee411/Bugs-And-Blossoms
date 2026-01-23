@@ -4,15 +4,13 @@ go 1.24.10
 
 require (
 	github.com/casbin/casbin/v2 v2.98.0
+	github.com/google/uuid v1.3.0
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/open-dingtalk/dingtalk-stream-sdk-go v0.9.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
 	github.com/casbin/govaluate v1.3.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
-	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect

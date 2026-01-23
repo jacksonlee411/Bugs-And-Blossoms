@@ -495,22 +495,6 @@ VALUES ($1::uuid, $2, true)
 		return
 	}
 
-	defaultTimeProfilePayload := `{"shift_start_local":"09:00","shift_end_local":"18:00","late_tolerance_minutes":5,"early_leave_tolerance_minutes":5,"overtime_min_minutes":0,"overtime_rounding_mode":"NONE","overtime_rounding_unit_minutes":0,"name":"Default","lifecycle_status":"active"}`
-	if _, err := tx.Exec(ctx, `
-SELECT staffing.submit_time_profile_event(
-  gen_random_uuid(),
-  $1::uuid,
-  'CREATE',
-  '2000-01-01'::date,
-  $2::jsonb,
-  'bootstrap:attendance-time-profile',
-  $1::uuid
-);
-`, tenantID, defaultTimeProfilePayload); err != nil {
-		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "db_error", "db error")
-		return
-	}
-
 	payload, _ := json.Marshal(map[string]any{"name": name, "hostname": hostname})
 	if err := insertAudit(ctx, tx, p.ID, "tenant.create", tenantID, payload, requestID(r)); err != nil {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "audit_error", "audit error")

@@ -319,7 +319,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 		})
 
 		t.Run("ok (covers optional fields)", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_id=as1&target_effective_date=2026-01-01&position_id=pos1&base_salary=100.00&allocated_fte=0.5&status=inactive"))
+			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_id=as1&target_effective_date=2026-01-01&position_id=pos1&allocated_fte=0.5&status=inactive"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 			rec := httptest.NewRecorder()
@@ -330,7 +330,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 					if err := json.Unmarshal(raw, &m); err != nil {
 						return "", err
 					}
-					if m["base_salary"] != "100.00" || m["allocated_fte"] != "0.5" || m["status"] != "inactive" {
+					if m["allocated_fte"] != "0.5" || m["status"] != "inactive" {
 						return "", errors.New("unexpected payload")
 					}
 					return "e1", nil

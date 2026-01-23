@@ -425,10 +425,10 @@ func (s *staffingPGStore) ListAssignmentsForPerson(ctx context.Context, tenantID
 	return facade.ListAssignmentsForPerson(ctx, tenantID, asOfDate, personUUID)
 }
 
-func (s *staffingPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, baseSalary string, allocatedFte string) (Assignment, error) {
+func (s *staffingPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, allocatedFte string) (Assignment, error) {
 	store := staffingpersistence.NewAssignmentPGStore(s.pool)
 	facade := staffingservices.NewAssignmentsFacade(store)
-	return facade.UpsertPrimaryAssignmentForPerson(ctx, tenantID, effectiveDate, personUUID, positionID, status, baseSalary, allocatedFte)
+	return facade.UpsertPrimaryAssignmentForPerson(ctx, tenantID, effectiveDate, personUUID, positionID, status, allocatedFte)
 }
 
 func (s *staffingPGStore) CorrectAssignmentEvent(ctx context.Context, tenantID string, assignmentID string, targetEffectiveDate string, replacementPayload json.RawMessage) (string, error) {
@@ -446,7 +446,6 @@ func (s *staffingPGStore) RescindAssignmentEvent(ctx context.Context, tenantID s
 type staffingMemoryStore struct {
 	positions  map[string][]Position
 	assigns    map[string]map[string][]Assignment
-	punches    map[string]map[string][]TimePunch
 	positions0 []Position
 }
 
@@ -454,7 +453,6 @@ func newStaffingMemoryStore() *staffingMemoryStore {
 	return &staffingMemoryStore{
 		positions: make(map[string][]Position),
 		assigns:   make(map[string]map[string][]Assignment),
-		punches:   make(map[string]map[string][]TimePunch),
 	}
 }
 
@@ -563,7 +561,7 @@ func (s *staffingMemoryStore) ListAssignmentsForPerson(_ context.Context, tenant
 	return append([]Assignment(nil), byPerson[personUUID]...), nil
 }
 
-func (s *staffingMemoryStore) UpsertPrimaryAssignmentForPerson(_ context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, _ string, _ string) (Assignment, error) {
+func (s *staffingMemoryStore) UpsertPrimaryAssignmentForPerson(_ context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, _ string) (Assignment, error) {
 	effectiveDate = strings.TrimSpace(effectiveDate)
 	if effectiveDate == "" {
 		return Assignment{}, errors.New("effective_date is required")

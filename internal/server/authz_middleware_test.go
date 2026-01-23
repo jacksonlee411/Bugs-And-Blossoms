@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
-	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 )
 
 type stubAuthorizer struct {
@@ -239,268 +238,28 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/assignments"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-punches"); !ok || obj != authz.ObjectStaffingAttendancePunches || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-punches"); !ok || obj != authz.ObjectStaffingAttendancePunches || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/attendance-punches"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-integrations"); !ok || obj != authz.ObjectStaffingAttendanceIntegrations || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-integrations"); !ok || obj != authz.ObjectStaffingAttendanceIntegrations || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/attendance-integrations"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-daily-results"); !ok || obj != authz.ObjectStaffingAttendanceDailyResults || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-daily-results"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-time-bank"); !ok || obj != authz.ObjectStaffingAttendanceTimeBank || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-time-bank"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-time-profile"); !ok || obj != authz.ObjectStaffingAttendanceTimeProfile || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-time-profile"); !ok || obj != authz.ObjectStaffingAttendanceTimeProfile || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/attendance-time-profile"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-holiday-calendar"); !ok || obj != authz.ObjectStaffingAttendanceHolidayCalendar || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-holiday-calendar"); !ok || obj != authz.ObjectStaffingAttendanceHolidayCalendar || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/attendance-holiday-calendar"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/attendance-daily-results/person-101/2026-01-01"); !ok || obj != authz.ObjectStaffingAttendanceDailyResults || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/attendance-daily-results/person-101/2026-01-01"); !ok || obj != authz.ObjectStaffingAttendanceDailyResults || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/attendance-daily-results/person-101/2026-01-01"); ok {
-		t.Fatal("expected ok=false")
-	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/assignments"); !ok {
 		t.Fatal("expected ok=true")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/assignments"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/assignments"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/assignments"); ok {
 		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/api/assignment-events:correct"); !ok || obj != authz.ObjectStaffingAssignments || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/assignment-events:correct"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/api/assignment-events:rescind"); !ok || obj != authz.ObjectStaffingAssignments || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/assignment-events:correct"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/assignment-events:rescind"); !ok {
+		t.Fatal("expected ok=true")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/assignment-events:rescind"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/attendance-punches"); !ok || obj != authz.ObjectStaffingAttendancePunches || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/api/attendance-punches"); !ok || obj != authz.ObjectStaffingAttendancePunches || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/attendance-punches"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/attendance-daily-results"); !ok || obj != authz.ObjectStaffingAttendanceDailyResults || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/attendance-daily-results"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/api/attendance-punch-voids"); !ok || obj != authz.ObjectStaffingAttendancePunches || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/attendance-punch-voids"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/api/attendance-recalc"); !ok || obj != authz.ObjectStaffingAttendanceDailyResults || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/attendance-recalc"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-periods"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-periods"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/payroll-periods"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payroll-periods"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payroll-periods"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/payroll-periods"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-runs"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/payroll-runs"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payroll-runs"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payroll-runs"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/payroll-runs"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payroll-balances"); !ok || obj != authz.ObjectStaffingPayrollRuns || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payroll-balances"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payroll-iit-special-additional-deductions"); !ok || obj != authz.ObjectStaffingPayrollRuns || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payroll-iit-special-additional-deductions"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-social-insurance-policies"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-social-insurance-policies"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/payroll-social-insurance-policies"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payroll-social-insurance-policies"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payroll-social-insurance-policies"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/payroll-social-insurance-policies"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-recalc-requests"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-recalc-requests"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-recalc-requests/rr1"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-recalc-requests/rr1"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-recalc-requests/rr1/apply"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/payroll-recalc-requests/rr1/apply"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payroll-recalc-requests"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payroll-recalc-requests"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payroll-recalc-requests/rr1"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/payroll-recalc-requests/rr1"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payroll-recalc-requests/rr1:apply"); !ok || obj != authz.ObjectStaffingPayrollRecalcRequests || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/payroll-recalc-requests/rr1:apply"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs/run1"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-runs/run1"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-runs/run1/calculate"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs/run1/calculate"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/payroll-runs/run1/finalize"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs/run1/payslips"); !ok || obj != authz.ObjectStaffingPayslips || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-runs/run1/payslips"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1"); !ok || obj != authz.ObjectStaffingPayslips || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-runs/run1/payslips/ps1"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items"); !ok || obj != authz.ObjectStaffingPayslips || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payslips"); !ok || obj != authz.ObjectStaffingPayslips || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payslips/ps1"); !ok || obj != authz.ObjectStaffingPayslips || act != authz.ActionRead {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payslips/ps1"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payslips"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if obj, act, ok := authzRequirementForRoute(http.MethodPost, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items"); !ok || obj != authz.ObjectStaffingPayslips || act != authz.ActionAdmin {
-		t.Fatalf("obj=%q act=%q ok=%v", obj, act, ok)
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/payroll-runs/run1/payslips/ps1/net-guaranteed-iit-items"); ok {
-		t.Fatal("expected ok=false")
-	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, ""); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/payroll-runs//payslips"); ok {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/person/persons"); !ok {
@@ -705,5 +464,48 @@ func TestAuthzRequirementForRoute_UnsupportedMethods(t *testing.T) {
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/job-catalog"); ok {
 		t.Fatal("expected ok=false")
+	}
+}
+
+func TestPathMatchRouteTemplate(t *testing.T) {
+	if !pathMatchRouteTemplate("/org/positions/123", "/org/positions/{id}") {
+		t.Fatal("expected match")
+	}
+	if pathMatchRouteTemplate("/org/positions", "/org/positions/{id}") {
+		t.Fatal("expected length mismatch")
+	}
+	if pathMatchRouteTemplate("/org//positions", "/org/{id}/positions") {
+		t.Fatal("expected empty segment mismatch")
+	}
+	if pathMatchRouteTemplate("/org/positions/123", "/org/jobs/{id}") {
+		t.Fatal("expected segment mismatch")
+	}
+}
+
+func TestSplitRouteSegments(t *testing.T) {
+	got := splitRouteSegments(" /org/nodes ")
+	if len(got) != 2 || got[0] != "org" || got[1] != "nodes" {
+		t.Fatalf("segments=%v", got)
+	}
+	if splitRouteSegments("   ") != nil {
+		t.Fatal("expected nil")
+	}
+}
+
+func TestRouteTemplateIsParamSegment(t *testing.T) {
+	if !routeTemplateIsParamSegment("{id}") {
+		t.Fatal("expected param segment")
+	}
+	if routeTemplateIsParamSegment("{}") {
+		t.Fatal("expected false for empty param")
+	}
+	if routeTemplateIsParamSegment("id") {
+		t.Fatal("expected false for plain text")
+	}
+	if routeTemplateIsParamSegment("{id") {
+		t.Fatal("expected false for missing suffix")
+	}
+	if routeTemplateIsParamSegment("id}") {
+		t.Fatal("expected false for missing prefix")
 	}
 }

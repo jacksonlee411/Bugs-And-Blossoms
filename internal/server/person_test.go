@@ -537,27 +537,6 @@ func (s personStoreStub) ListPersonOptions(ctx context.Context, tenantID string,
 	}
 	return s.optionsFn(ctx, tenantID, q, limit)
 }
-func (personStoreStub) ListExternalIdentityLinks(context.Context, string, int) ([]ExternalIdentityLink, error) {
-	return nil, errors.New("not implemented")
-}
-func (personStoreStub) LinkExternalIdentity(context.Context, string, string, string, string) error {
-	return errors.New("not implemented")
-}
-func (personStoreStub) DisableExternalIdentity(context.Context, string, string, string) error {
-	return errors.New("not implemented")
-}
-func (personStoreStub) EnableExternalIdentity(context.Context, string, string, string) error {
-	return errors.New("not implemented")
-}
-func (personStoreStub) IgnoreExternalIdentity(context.Context, string, string, string) error {
-	return errors.New("not implemented")
-}
-func (personStoreStub) UnignoreExternalIdentity(context.Context, string, string, string) error {
-	return errors.New("not implemented")
-}
-func (personStoreStub) UnlinkExternalIdentity(context.Context, string, string, string) error {
-	return errors.New("not implemented")
-}
 
 func TestPersonHandlers(t *testing.T) {
 	t.Run("handlePersons tenant missing", func(t *testing.T) {

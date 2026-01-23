@@ -146,10 +146,6 @@
 
 - [X] M5：选定并落地 SetID 传递策略：Position 在切片中写入 `business_unit_id` 并通过 `orgunit.resolve_setid(...)` 投射 `jobcatalog_setid`（fail-closed；禁止默认 SHARE），细化见 §10.M5。
 
-### 3.9 与 Payroll/Attendance 的边界（039/050）
-- [X] 现状事实：Payroll/Attendance 已落在 `modules/staffing`，且依赖 `staffing.assignment_versions` 的稳定字段（例如 `base_salary/allocated_fte/currency/profile`）与任职写入口（One Door）。
-- [ ] 任何在 M3+/M6/M7 中触达 Position/Assignment 的“生命周期/并发/容量/字段”扩展，必须显式评估对 Payroll/Attendance 的兼容性与回归证据（以 `DEV-PLAN-039/050` 与 TP-060/后续 E2E 为验收基线）。
-
 ### 3.10 Position 生命周期与任职交叉不变量（M3，先冻结边界）
 > 目的：把“Position disable”与“Assignment 引用 Position”的交叉语义先冻结，避免实现期为了让页面能用而临时加后门或分叉逻辑（对齐 `DEV-PLAN-003`）。
 
@@ -264,7 +260,6 @@ M5+ 增量字段（SSOT：`modules/staffing/infrastructure/persistence/schema/00
 
 - [X] `staffing.assignments`：以 `(tenant_id, person_uuid, assignment_type)` 唯一（当前仅支持 `assignment_type='primary'`）。
 - [X] `staffing.assignment_versions`：通过 `EXCLUDE (tenant_id, position_id, validity) WHERE (status='active')` 实现 M2“同一时点一个 position 最多被一个 active assignment 占用”的裁决口径。
-- [X] Payroll 输入字段：`base_salary/currency/profile/allocated_fte` 已在 `assignment_versions` 投射（对齐 `DEV-PLAN-039/042`）。
 - [X] M3：任职写入必须校验 Position 在 `effective_date` as-of 下为 active（禁止把任职写到 disabled position）。
 - [X] M6a：任职写入必须校验 `allocated_fte <= capacity_fte`（capacity 由 Position 侧投射与裁决）。
 - [ ] M6b（多人并发）若要支持“同一 position 并发多人任职”，需调整上述排他策略并由 Kernel 改为 `SUM(allocated_fte) <= capacity_fte`（见 §10.M6）。
@@ -316,11 +311,10 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [ ] M5/M6：引入 jobcatalog/capacity 的可编辑与裁决逻辑（M6a/M6b；见 §10）。
 
 ### 5.4 `staffing.submit_assignment_event` / `staffing.replay_assignment_versions`（简述）
-> 说明：Assignment 的详细合同以 `DEV-PLAN-031` 为准；此处只记录已落地的写入口形状与 Payroll/Attendance 相关耦合点。
+> 说明：Assignment 的详细合同以 `DEV-PLAN-031` 为准；此处只记录已落地的写入口形状。
 
 - [X] 函数签名（实现现状，节选）：`staffing.submit_assignment_event(p_event_id,p_tenant_id,p_assignment_id,p_person_uuid,p_assignment_type,p_event_type,p_effective_date,p_payload,p_request_id,p_initiator_id)`。
-- [X] 写入会在同事务内重放 `staffing.assignment_versions` 并投射薪酬输入字段（`base_salary/allocated_fte/currency/profile`）。
-- [X] 与 Payroll 的耦合：写入后会调用 `staffing.maybe_create_payroll_recalc_request_from_assignment_event(...)`（对齐 `DEV-PLAN-039/045`），因此任职写入口的语义变更必须显式评估 payroll 回溯链路。
+- [X] 写入会在同事务内重放 `staffing.assignment_versions` 并投射可见字段。
 
 ## 6. 读模型与查询
 - [X] M2 现状：Go 层直接查询 `staffing.position_versions` / `staffing.assignment_versions`（as-of：`validity @> $as_of::date`）。
@@ -397,14 +391,13 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 ### 10.M6：容量模型升级（拆分：M6a/M6b）
 - [X] M6a（先交付）：开放 `capacity_fte` 编辑并投射；任职写入时裁决 `allocated_fte <= capacity_fte`（仍保持“一岗一人”的排他约束不变）；Position 降容必须 fail-closed（避免把既有任职“挤爆”）。
 - [ ] M6b（多人并发）：允许同一 position 并发多人任职：移除/调整 `assignment_versions_position_no_overlap`；在 DB Kernel 中裁决 `SUM(allocated_fte) <= capacity_fte`（含 Position 降容 fail-closed），并冻结锁粒度/校验算法（避免竞态下“分别通过、合起来超编”）。
-- [ ] 兼容性：显式评估并回归 Payroll/Attendance（`DEV-PLAN-039/050`）链路与 E2E 证据。
 - [ ] 红线提示：若 M6b 需要新增表/新建迁移中的 `CREATE TABLE`，必须先获得用户手工确认（见 `AGENTS.md`）。
 
 ### 10.M7：读快照函数 + 错误码收敛
 - [X] DB：补齐 `staffing.get_position_snapshot(...)` / `staffing.get_assignment_snapshot(...)` 以收敛查询形状（schema：`modules/staffing/infrastructure/persistence/schema/00015_staffing_read.sql`；迁移：`migrations/staffing/20260111233000_staffing_read_snapshots_m7.sql`）。
 - [X] DB（修复）：显式 cast `job_profile_code` 为 `text`，避免 plpgsql `RETURN QUERY` 对 `varchar(64)` → `text` 的严格匹配导致 SQLSTATE 42804（迁移：`migrations/staffing/20260111235000_staffing_read_snapshots_m7_fix.sql`）。
 - [X] Go：Server 层读路径统一改为 snapshot；Internal API 的 `routing.ErrorEnvelope.Code` 携带稳定码（优先复用 DB `MESSAGE`），并做最小 HTTP 映射（400/409/422），避免“页面显示 DB 原始错误 + API 泛化丢失细节”的漂移。
-- [X] Tests：补齐错误码收敛与快照读路径单测；`make preflight`（含 E2E TP-060 / payroll）全绿。
+- [X] Tests：补齐错误码收敛与快照读路径单测；`make preflight`（含 E2E TP-060）全绿。
 
 ## 11. 评审落地（DEV-PLAN-003，聚焦 M3-M7）
 - [X] M4 拆分：先交付 forward-only（M4a），retro 作为可选子里程碑（M4b），避免一次性引入全局图 retro 校验导致偶然复杂度爆炸。
