@@ -27,7 +27,7 @@ cd "$(git rev-parse --show-toplevel)"
 make iam migrate up
 ```
 
-（可选）若你希望登录后能直接打开各业务模块页面（如 `/org/*`、`/person/*`、Payroll/Attendance 等），需要把对应模块的 schema/table 也迁移到本地 dev DB：
+（可选）若你希望登录后能直接打开各业务模块页面（如 `/org/*`、`/person/*`），需要把对应模块的 schema/table 也迁移到本地 dev DB：
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -46,20 +46,20 @@ make dev-kratos-stub
 
 默认监听：public `127.0.0.1:4433` / admin `127.0.0.1:4434`。
 
-4) 创建/确保一个可登录账号（tenant admin）
+4) 创建/确保一个可登录账号（固定账号/密码）
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 ./tools/codex/skills/bugs-and-blossoms-dev-login/scripts/seed_kratosstub_identity.sh \
   --tenant-id 00000000-0000-0000-0000-000000000001 \
-  --email tenant-admin2@example.invalid \
-  --password pw \
+  --email admin@localhost \
+  --password admin123 \
   --role-slug tenant-admin
 ```
 
 说明：
 - identifier 格式固定为 `tenant_id:email`（服务端会这样拼接）。
-- 推荐用 `tenant-admin2@example.invalid`：更不容易撞上历史数据里的 principal 绑定冲突。
+- 固定账号：`admin@localhost` / `admin123`。
 - KratosStub 是**内存存储**：每次重启 KratosStub 后，需要重新跑一次 seed（同一个 `tenant_id:email` 会生成同一个 identity id）。
 
 5) 启动 Web 服务（Go server，默认 `:8080`）
@@ -72,7 +72,7 @@ make dev-server
 ## 验证（必须用 localhost）
 
 1) 打开登录页：`http://localhost:8080/login`
-2) 用账号登录：`tenant-admin2@example.invalid` / `pw`
+2) 用账号登录：`admin@localhost` / `admin123`
 3) 预期：302 到 `/app?as_of=...`，并设置 `sid` cookie。
 
 （注意）不要用 `http://127.0.0.1:8080/login`：租户解析基于 Host，IAM 默认只插入了 `localhost` 域名，`127.0.0.1` 会 404（tenant not found）。
@@ -81,6 +81,7 @@ make dev-server
 
 - 404 tenant not found：确认用的是 `localhost`；并确认 `make iam migrate up` 已执行。
 - 登录一直 invalid credentials：确认 KratosStub 在跑；并确认已按 `tenant_id:email` seed 过同一密码。
+- 登录显示 identity error：确认 KratosStub 在跑（4433/4434）；未设置时默认 `KRATOS_PUBLIC_URL=http://127.0.0.1:4433`；并确认已执行 seed。
 - 登录显示 principal error：通常表示数据库里 `iam.principals(tenant_id,email)` 已绑定了**不同的** `kratos_identity_id`（历史数据与当前 KratosStub 的 identity id 算法不一致会触发该保护）。处理方式：
   - A) 清库重建（最省心，会丢 dev 数据）：执行一次 `make dev-reset`，然后从本技能第 1 步重新跑起。
   - B) 不清库：换一个新邮箱重新 seed；或手工把该 principal 的 `kratos_identity_id` 清空后再登录（这会改动数据库数据，需你自行确认风险）。
