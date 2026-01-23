@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({ browser }) => {
+test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) => {
   test.setTimeout(240_000);
 
   const asOf = "2026-01-01";
@@ -277,7 +277,6 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
       effective_date: lateEffectiveDate,
       person_uuid: personUUIDByPernr.get("101"),
       position_id: disabledPositionID,
-      base_salary: "0",
       allocated_fte: "1.0"
     }
   });
@@ -291,7 +290,7 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
   await page.goto(`/org/assignments?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Assignments");
 
-  const upsertAssignment = async ({ pernr, effectiveDate, baseSalary, allocatedFte }) => {
+  const upsertAssignment = async ({ pernr, effectiveDate, allocatedFte }) => {
     await page.goto(`/org/assignments?as_of=${asOf}`);
     await expect(page.locator("h1")).toHaveText("Staffing / Assignments");
 
@@ -314,7 +313,6 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
     await upsertForm.locator('input[name="effective_date"]').fill(effectiveDate);
     await upsertForm.locator('select[name="position_id"]').selectOption(positionID);
     await upsertForm.locator('input[name="allocated_fte"]').fill(allocatedFte);
-    await upsertForm.locator('input[name="base_salary"]').fill(baseSalary);
     await upsertForm.getByRole("button", { name: "Submit" }).click();
     await expect(page).toHaveURL(new RegExp(`/org/assignments\\?as_of=${effectiveDate}&pernr=${pernr}$`));
 
@@ -330,7 +328,6 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
     await upsertAssignment({
       pernr,
       effectiveDate: isE06 ? lateEffectiveDate : asOf,
-      baseSalary: isE04 ? "30000.00" : "20000.00",
       allocatedFte: isE04 ? "0.5" : "1.0"
     });
   }
@@ -351,7 +348,6 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
         effective_date: midEffectiveDate,
         person_uuid: p101,
         position_id: updateTargetPositionID,
-        base_salary: "20000.00",
         allocated_fte: "1.0"
       }
     });
@@ -379,7 +375,6 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
         effective_date: midEffectiveDate,
         person_uuid: p101,
         position_id: updateTargetPositionID,
-        base_salary: "20000.00",
         allocated_fte: "1.0"
       }
     });
@@ -390,8 +385,7 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
         effective_date: midEffectiveDate,
         person_uuid: p101,
         position_id: updateTargetPositionID,
-        base_salary: "21000.00",
-        allocated_fte: "1.0"
+        allocated_fte: "0.75"
       }
     });
     expect(conflictResp.status(), await conflictResp.text()).toBe(409);
@@ -405,7 +399,6 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
         effective_date: midEffectiveDate,
         person_uuid: p102,
         position_id: pos104,
-        base_salary: "0",
         allocated_fte: "0.25"
       }
     });
@@ -423,7 +416,6 @@ test("tp060-03: person + assignments (with base_salary/allocated_fte)", async ({
       effective_date: lateEffectiveDate,
       person_uuid: capacityPersonUUID,
       position_id: capacityPositionID,
-      base_salary: "0",
       allocated_fte: "1.0"
     }
   });

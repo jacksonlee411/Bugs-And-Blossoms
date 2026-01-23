@@ -319,7 +319,6 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 		postPernr := strings.TrimSpace(r.Form.Get("pernr"))
 		postPersonUUID := strings.TrimSpace(r.Form.Get("person_uuid"))
 		positionID := strings.TrimSpace(r.Form.Get("position_id"))
-		baseSalary := strings.TrimSpace(r.Form.Get("base_salary"))
 		allocatedFte := strings.TrimSpace(r.Form.Get("allocated_fte"))
 		status := strings.TrimSpace(r.Form.Get("status"))
 		if status != "" && status != "active" && status != "inactive" {
@@ -351,7 +350,7 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 
 		switch action {
 		case "":
-			if _, err := assignmentStore.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, effectiveDate, postPersonUUID, positionID, status, baseSalary, allocatedFte); err != nil {
+			if _, err := assignmentStore.UpsertPrimaryAssignmentForPerson(r.Context(), tenant.ID, effectiveDate, postPersonUUID, positionID, status, allocatedFte); err != nil {
 				assigns, errMsg := list()
 				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, stablePgMessage(err))))
 				return
@@ -377,9 +376,6 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 
 			replacementPayload := map[string]any{
 				"position_id": positionID,
-			}
-			if baseSalary != "" {
-				replacementPayload["base_salary"] = baseSalary
 			}
 			if allocatedFte != "" {
 				replacementPayload["allocated_fte"] = allocatedFte
@@ -681,7 +677,6 @@ func renderAssignments(assignments []Assignment, positions []Position, tenant Te
 	b.WriteString(`<option value="inactive">inactive</option>`)
 	b.WriteString(`</select></label><br/>`)
 	b.WriteString(`<label>Allocated FTE <input type="number" name="allocated_fte" step="0.01" min="0.01" max="1.00" value="1.0" /></label><br/>`)
-	b.WriteString(`<label>Base Salary (CNY) <input type="number" name="base_salary" step="0.01" min="0" /></label><br/>`)
 	b.WriteString(`<button type="submit">Submit</button>`)
 	b.WriteString(`</form>`)
 
@@ -721,7 +716,6 @@ func renderAssignments(assignments []Assignment, positions []Position, tenant Te
 			`<input type="hidden" name="assignment_id" value="` + html.EscapeString(a.AssignmentID) + `" />` +
 			`<input type="hidden" name="target_effective_date" value="` + html.EscapeString(a.EffectiveAt) + `" />` +
 			`<input type="hidden" name="position_id" value="` + html.EscapeString(a.PositionID) + `" />` +
-			`<label>base_salary <input type="number" name="base_salary" step="0.01" min="0" style="width:120px" /></label> ` +
 			`<label>allocated_fte <input type="number" name="allocated_fte" step="0.01" min="0.01" max="1.00" style="width:80px" /></label> ` +
 			`<label>status <select name="status">` +
 			`<option value=""></option>` +

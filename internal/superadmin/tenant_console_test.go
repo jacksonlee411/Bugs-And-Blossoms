@@ -387,7 +387,7 @@ func TestTenantsCreate_InsertDomainError(t *testing.T) {
 func TestTenantsCreate_AuditError(t *testing.T) {
 	tx := &stubTx{
 		queryRowFn: func(string, ...any) pgx.Row { return stubRow{vals: []any{"t1"}} },
-		execErrAt:  4,
+		execErrAt:  3,
 		execErr:    errors.New("audit err"),
 	}
 	h := newTestHandler(t, stubPool{
@@ -404,30 +404,10 @@ func TestTenantsCreate_AuditError(t *testing.T) {
 	}
 }
 
-func TestTenantsCreate_SetTenantForBootstrapError(t *testing.T) {
+func TestTenantsCreate_SetTenantContextError(t *testing.T) {
 	tx := &stubTx{
 		queryRowFn: func(string, ...any) pgx.Row { return stubRow{vals: []any{"t1"}} },
 		execErrAt:  2,
-		execErr:    errors.New("exec err"),
-	}
-	h := newTestHandler(t, stubPool{
-		beginFn: func(context.Context) (pgx.Tx, error) { return tx, nil },
-		queryFn: func(context.Context, string, ...any) (pgx.Rows, error) { return &stubRows{}, nil },
-	})
-
-	req := h.newRequest(http.MethodPost, "/superadmin/tenants", strings.NewReader("name=x&hostname=x.local"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	h.h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status=%d", rec.Code)
-	}
-}
-
-func TestTenantsCreate_BootstrapTimeProfileError(t *testing.T) {
-	tx := &stubTx{
-		queryRowFn: func(string, ...any) pgx.Row { return stubRow{vals: []any{"t1"}} },
-		execErrAt:  3,
 		execErr:    errors.New("exec err"),
 	}
 	h := newTestHandler(t, stubPool{

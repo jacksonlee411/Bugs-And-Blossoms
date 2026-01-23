@@ -183,7 +183,7 @@ func (s *AssignmentPGStore) ListAssignmentsForPerson(ctx context.Context, tenant
 	return out, nil
 }
 
-func (s *AssignmentPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, baseSalary string, allocatedFte string) (types.Assignment, error) {
+func (s *AssignmentPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, allocatedFte string) (types.Assignment, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return types.Assignment{}, err
@@ -207,7 +207,6 @@ func (s *AssignmentPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context
 		return types.Assignment{}, errors.New("position_id is required")
 	}
 	status = strings.TrimSpace(status)
-	baseSalary = strings.TrimSpace(baseSalary)
 	allocatedFte = strings.TrimSpace(allocatedFte)
 
 	assignmentType := "primary"
@@ -275,9 +274,6 @@ func (s *AssignmentPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context
 	}
 
 	payload := `{"position_id":` + strconv.Quote(positionID)
-	if baseSalary != "" {
-		payload += `,"base_salary":` + strconv.Quote(baseSalary)
-	}
 	if allocatedFte != "" {
 		payload += `,"allocated_fte":` + strconv.Quote(allocatedFte)
 	}

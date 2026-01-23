@@ -30,33 +30,11 @@ type PersonOption struct {
 	DisplayName string
 }
 
-type ExternalIdentityLink struct {
-	TenantID        string
-	Provider        string
-	ExternalUserID  string
-	Status          string
-	PersonUUID      *string
-	FirstSeenAt     time.Time
-	LastSeenAt      time.Time
-	SeenCount       int
-	LastSeenPayload json.RawMessage
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-}
-
 type PersonStore interface {
 	ListPersons(ctx context.Context, tenantID string) ([]Person, error)
 	CreatePerson(ctx context.Context, tenantID string, pernr string, displayName string) (Person, error)
 	FindPersonByPernr(ctx context.Context, tenantID string, pernr string) (Person, error)
 	ListPersonOptions(ctx context.Context, tenantID string, q string, limit int) ([]PersonOption, error)
-
-	ListExternalIdentityLinks(ctx context.Context, tenantID string, limit int) ([]ExternalIdentityLink, error)
-	LinkExternalIdentity(ctx context.Context, tenantID string, provider string, externalUserID string, personUUID string) error
-	DisableExternalIdentity(ctx context.Context, tenantID string, provider string, externalUserID string) error
-	EnableExternalIdentity(ctx context.Context, tenantID string, provider string, externalUserID string) error
-	IgnoreExternalIdentity(ctx context.Context, tenantID string, provider string, externalUserID string) error
-	UnignoreExternalIdentity(ctx context.Context, tenantID string, provider string, externalUserID string) error
-	UnlinkExternalIdentity(ctx context.Context, tenantID string, provider string, externalUserID string) error
 }
 
 type personPGStore struct {
@@ -259,13 +237,11 @@ LIMIT $4::int
 
 type personMemoryStore struct {
 	byTenant map[string][]Person
-	links    map[string]ExternalIdentityLink
 }
 
 func newPersonMemoryStore() PersonStore {
 	return &personMemoryStore{
 		byTenant: make(map[string][]Person),
-		links:    make(map[string]ExternalIdentityLink),
 	}
 }
 

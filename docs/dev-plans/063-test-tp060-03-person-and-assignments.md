@@ -10,7 +10,7 @@
 
 - **需求来源**：TP-060 总纲中的“人员与任职最小闭环”（`docs/dev-plans/060-business-e2e-test-suite.md`），以及 Phase 4 Person/Staffing 纵切片交付口径（`DEV-PLAN-009M2`）。
 - **覆盖范围**：Person identity（`pernr → person_uuid`）+ Staffing assignments 时间线（position 绑定）。
-- **业务价值**：为后续考勤（punches/daily results）与薪酬（payslip/items）提供稳定的“人员锚点 + 任职输入”。
+- **业务价值**：为后续人员/任职相关闭环提供稳定的“人员锚点 + 任职输入”。
 - **关键不变量（必须成立）**：
   - `pernr` 为 1-8 位数字字符串；**前导 0 同值**（`DEV-PLAN-027`）。
   - Valid Time 为日粒度（date），测试固定 `as_of=2026-01-01`，避免执行期漂移（`DEV-PLAN-032`）。
@@ -31,9 +31,9 @@
   - 必须展示 `effective_date`；
   - 页面不得展示 `end_date`（对齐当前 UI 合同）。
 
-**Done-B（必须，为薪酬子计划准备输入；若写入口缺失则形成阻塞并记录）**
+**Done-B（必须，为任职输入字段准备证据；若写入口缺失则形成阻塞并记录）**
 
-- [X] 可为 10 人的 assignments 设置薪酬输入字段：`base_salary`（CNY）与 `allocated_fte`，且至少包含一条 `allocated_fte=0.5` 的样例（E04）。
+- [X] 可为 10 人的 assignments 设置 `allocated_fte`，且至少包含一条 `allocated_fte=0.5` 的样例（E04）。
 
 **Done-C（必须，自动化回归）**
 
@@ -52,7 +52,7 @@
 
 ### 2.2 非目标
 
-- 不验证考勤/薪酬的计算结果（由 TP-060-04~08 承接）。
+- 不验证其他子计划的业务计算结果（由对应子计划承接）。
 - 不在本子计划引入“临时绕过写入口”的双链路（例如手工 SQL 直改业务表）；若写入口缺失，按 §8.4 记录为阻塞并回到契约/实现处理。
 
 ### 2.3 工具链与门禁（SSOT 引用）
@@ -77,7 +77,6 @@
 - Person identity：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`
 - Assignments（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - Valid Time（日粒度）：`docs/dev-plans/032-effective-date-day-granularity.md`
-- 薪酬输入语义（base_salary/FTE）：`docs/dev-plans/042-payroll-p0-slice-payslip-and-pay-items.md`
 
 ## 3. 架构与关键决策（Architecture & Decisions）
 
@@ -94,7 +93,7 @@
 
 ### 3.3 One Door / No Legacy（写入口唯一）
 
-- `base_salary/allocated_fte` 的写入必须通过：`/org/assignments`（UI）或 `/org/api/assignments`（Internal API）。
+- `allocated_fte` 的写入必须通过：`/org/assignments`（UI）或 `/org/api/assignments`（Internal API）。
 - 禁止通过 SQL 直改业务表绕过写入口（对齐 `AGENTS.md` 的 One Door / No Legacy）。
 
 ## 4. 前置条件与数据准备（Prerequisites）
@@ -114,20 +113,20 @@
 
 ### 4.2 固定映射（建议作为默认；便于后续子计划复用）
 
-> 目的：消除“每次随便选一个 position”导致的漂移；后续考勤/薪酬子计划会引用这些人/岗位/差异字段。
+> 目的：消除“每次随便选一个 position”导致的漂移；后续子计划会引用这些人/岗位/差异字段。
 
-| 编号 | pernr | display_name（建议） | position_name（来自 TP-060-02） | assignment_effective_date（建议） | base_salary（CNY） | allocated_fte |
-| --- | --- | --- | --- | --- | --- | --- |
-| E01 | `101` | Alice Zhang | `P-ENG-01` | `2026-01-01` | 20,000.00 | 1.0 |
-| E02 | `102` | Bob Li | `P-SALES-01` | `2026-01-01` | 80,000.00 | 1.0 |
-| E03 | `00000103` | Carol Wu | `P-ENG-02` | `2026-01-01` | 3,000.00 | 1.0 |
-| E04 | `104` | David Chen | `P-ENG-02` | `2026-01-01` | 20,000.00 | 0.5 |
-| E05 | `105` | Erin Sun | `P-MGR-01` | `2026-01-01` | 30,000.00 | 1.0 |
-| E06 | `106` | Frank Zhou | `P-FIN-01` | `2026-01-15` | 25,000.00 | 1.0 |
-| E07 | `107` | Grace Xu | `P-MGR-01` | `2026-01-01` | 35,000.00 | 1.0 |
-| E08 | `108` | Henry Gao | `P-PLANT-01` | `2026-01-01` | 12,000.00 | 1.0 |
-| E09 | `109` | Ivy He | `P-PLANT-02` | `2026-01-01` | 12,000.00 | 1.0 |
-| E10 | `110` | Jack Lin | `P-SUPPORT-01` | `2026-01-01` | 15,000.00 | 1.0 |
+| 编号 | pernr | display_name（建议） | position_name（来自 TP-060-02） | assignment_effective_date（建议） | allocated_fte |
+| --- | --- | --- | --- | --- | --- |
+| E01 | `101` | Alice Zhang | `P-ENG-01` | `2026-01-01` | 1.0 |
+| E02 | `102` | Bob Li | `P-SALES-01` | `2026-01-01` | 1.0 |
+| E03 | `00000103` | Carol Wu | `P-ENG-02` | `2026-01-01` | 1.0 |
+| E04 | `104` | David Chen | `P-ENG-02` | `2026-01-01` | 0.5 |
+| E05 | `105` | Erin Sun | `P-MGR-01` | `2026-01-01` | 1.0 |
+| E06 | `106` | Frank Zhou | `P-FIN-01` | `2026-01-15` | 1.0 |
+| E07 | `107` | Grace Xu | `P-MGR-01` | `2026-01-01` | 1.0 |
+| E08 | `108` | Henry Gao | `P-PLANT-01` | `2026-01-01` | 1.0 |
+| E09 | `109` | Ivy He | `P-PLANT-02` | `2026-01-01` | 1.0 |
+| E10 | `110` | Jack Lin | `P-SUPPORT-01` | `2026-01-01` | 1.0 |
 
 ### 4.3 可重复执行口径（Idempotency / Re-run）
 
@@ -169,9 +168,8 @@
   - `status`：例如 `active`。
 - 展示合同：Timeline 只展示 `effective_date`，不得展示 `end_date`（对齐 `docs/dev-plans/031-greenfield-assignment-job-data.md`、`docs/dev-plans/032-effective-date-day-granularity.md`）。
 
-### 5.3 薪酬输入字段（为 Payroll 准备）
+### 5.3 任职输入字段（allocated_fte）
 
-- `base_salary`：CNY；以“十进制字符串”写入（例如 `"20000.00"`）。
 - `allocated_fte`：`(0, 1]`；以“十进制字符串”写入（例如 `"0.50"`）。
   - UI 建议约束：`min=0.01`、`max=1.00`、`step=0.01`（以实际页面为准）。
 
@@ -199,7 +197,7 @@
   - 或 `303` 跳回：`/org/assignments?as_of=<effective_date>&person_uuid=<person_uuid>`（若仅使用 person_uuid 提交）
 - 表单字段（写入）：
   - 必填：`effective_date`、`pernr`/`person_uuid`（其一必须能解析到 person）、`position_id`
-  - 薪酬输入（为 Payroll 准备）：`base_salary`（CNY）、`allocated_fte`（(0,1]；默认 1.0）
+  - 任职输入：`allocated_fte`（(0,1]；默认 1.0）
 - 负例提示（当前 UI 行为，便于排障）：
   - 缺少 pernr 且无 `person_uuid`：页面提示 `pernr is required`
   - `effective_date` 非法：页面提示 `effective_date 无效: ...`
@@ -212,7 +210,7 @@
   - 400：`code=missing_person_uuid`（缺少 `person_uuid`）、或 `code=invalid_as_of`
   - 500：`code=list_failed`（list 出错）、或 `code=tenant_missing`
 - `POST /org/api/assignments?as_of=YYYY-MM-DD`：
-  - body：`{"effective_date","person_uuid","position_id","base_salary","allocated_fte"}`（`effective_date` 缺省时默认为 `as_of`；薪酬字段可选）
+  - body：`{"effective_date","person_uuid","position_id","allocated_fte"}`（`effective_date` 缺省时默认为 `as_of`；字段可选）
   - 400：`code=bad_json` / `code=invalid_effective_date` / `code=upsert_failed`
   - 500：`code=tenant_missing`
 
@@ -270,15 +268,15 @@
    - 在 `as_of=2026-01-15` 下访问 `GET /org/assignments?as_of=2026-01-15&pernr=106`：Timeline 应包含 `effective_date=2026-01-15` 的记录。
    - 若上述行为不成立或无法解释，记录为 `CONTRACT_DRIFT/BUG` 并在 §11 给出证据。
 
-### 8.4 薪酬输入字段（base_salary/allocated_fte）：就绪性与阻塞判定
+### 8.4 任职输入字段（allocated_fte）：就绪性与阻塞判定
 
-> 目标：为 TP-060-07/08 提供可计算输入（否则 payroll kernel 将 fail-closed 报错）。
+> 目标：确保 assignments 输入字段可用并留证。
 
 1. [ ] 确认 **唯一写入口**（应当存在）可为 assignment 写入：
-   - UI：`/org/assignments?as_of=...` 表单支持 `base_salary/allocated_fte`
-   - Internal API：`/org/api/assignments?as_of=...` 支持 `base_salary/allocated_fte`
-2. [ ] 按 060-DS1 为 E01~E10 写入 `base_salary/allocated_fte`，并记录 E04 的 `allocated_fte=0.5` 证据。
-3. [ ] 若环境中仍缺失（不应发生）：在 §11 记录为 `CONTRACT_MISSING/CONTRACT_DRIFT`，并明确这是 TP-060-07/08 的阻塞点（不得用 SQL 直改绕过 One Door）；同时记录“当前可见入口”现状（页面/路由/表单字段缺失的证据）。
+   - UI：`/org/assignments?as_of=...` 表单支持 `allocated_fte`
+   - Internal API：`/org/api/assignments?as_of=...` 支持 `allocated_fte`
+2. [ ] 按 060-DS1 为 E01~E10 写入 `allocated_fte`，并记录 E04 的 `allocated_fte=0.5` 证据。
+3. [ ] 若环境中仍缺失（不应发生）：在 §11 记录为 `CONTRACT_MISSING/CONTRACT_DRIFT`，并明确阻塞点（不得用 SQL 直改绕过 One Door）；同时记录“当前可见入口”现状（页面/路由/表单字段缺失的证据）。
 
 ### 8.5 Position/Assignment 交叉不变量（fail-closed，稳定错误码）
 
@@ -287,12 +285,12 @@
 1. [ ] 禁止任职写入 disabled position（负例，Internal API）
    - 先在 `/org/positions?as_of=...` 创建或选择一个职位，并在更晚的 `effective_date`（例如 `2026-01-15`）将其更新为 `lifecycle_status=disabled`
    - 调用：`POST /org/api/assignments?as_of=2026-01-15`
-     - body：`{"effective_date":"2026-01-15","person_uuid":"<E01 person_uuid>","position_id":"<disabled_position_id>","base_salary":"0","allocated_fte":"1.0"}`
+     - body：`{"effective_date":"2026-01-15","person_uuid":"<E01 person_uuid>","position_id":"<disabled_position_id>","allocated_fte":"1.0"}`
    - 断言：422 且 `code=STAFFING_POSITION_DISABLED_AS_OF`
 2. [ ] 容量裁决：`allocated_fte > capacity_fte` 必须 fail-closed（负例，Internal API）
    - 选择一个职位（建议：E04 的职位）并设置 `capacity_fte=0.50`
    - 调用：`POST /org/api/assignments?as_of=2026-01-15`
-     - body：`{"effective_date":"2026-01-15","person_uuid":"<E04 person_uuid>","position_id":"<capacity_position_id>","base_salary":"0","allocated_fte":"1.0"}`
+     - body：`{"effective_date":"2026-01-15","person_uuid":"<E04 person_uuid>","position_id":"<capacity_position_id>","allocated_fte":"1.0"}`
    - 断言：422 且 `code=STAFFING_POSITION_CAPACITY_EXCEEDED`
 3. [ ] 降容裁决：Position 降容导致超编必须 fail-closed（负例，Internal API）
    - 前置：确保该 position 已存在一条 active assignment，且 `allocated_fte=0.50`
@@ -330,7 +328,7 @@
   1. [X] 建立/复用 10 个 Person，并记录 `pernr -> person_uuid`。
   2. [X] 完成 `persons:by-pernr` 的正例/负例断言（含前导 0 同值）。
   3. [X] 完成 10 人 primary assignment 绑定并留证（timeline 可见）。
-  4. [X] 写入并留证 `base_salary/allocated_fte`（至少包含 E04 的 `allocated_fte=0.5`）。
+  4. [X] 写入并留证 `allocated_fte`（至少包含 E04 的 `allocated_fte=0.5`）。
   5. [X] 自动化用例覆盖并纳入 `make e2e`（见 `e2e/tests/tp060-03-person-and-assignments.spec.js`）。
 
 ## 10. 验收证据（最小）
@@ -338,7 +336,7 @@
 - `/person/persons?as_of=2026-01-01`：10 人列表证据（含 `pernr/person_uuid`）。
 - `persons:by-pernr`：`00000103` 与 `103` 命中同一 `person_uuid` 的证据；以及 1 条 `PERSON_PERNR_INVALID` 的 400 负例证据。
 - `/org/assignments?...`：10 人 Timeline 证据（含 `assignment_id/position_id/effective_date/status`），并证明 UI 未展示 `end_date`。
-- `base_salary/allocated_fte` 写入证据（至少包含 E04 的 `allocated_fte=0.5`）。
+- `allocated_fte` 写入证据（至少包含 E04 的 `allocated_fte=0.5`）。
 - 交叉不变量证据（Internal API 响应即可）：
   - `STAFFING_POSITION_DISABLED_AS_OF`
   - `STAFFING_POSITION_CAPACITY_EXCEEDED`（含“写入超编”与“降容超编”两条）

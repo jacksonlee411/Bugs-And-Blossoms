@@ -20,8 +20,8 @@ func (f AssignmentsFacade) ListAssignmentsForPerson(ctx context.Context, tenantI
 	return f.store.ListAssignmentsForPerson(ctx, tenantID, asOfDate, personUUID)
 }
 
-func (f AssignmentsFacade) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, baseSalary string, allocatedFte string) (types.Assignment, error) {
-	return f.store.UpsertPrimaryAssignmentForPerson(ctx, tenantID, effectiveDate, personUUID, positionID, status, baseSalary, allocatedFte)
+func (f AssignmentsFacade) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, allocatedFte string) (types.Assignment, error) {
+	return f.store.UpsertPrimaryAssignmentForPerson(ctx, tenantID, effectiveDate, personUUID, positionID, status, allocatedFte)
 }
 
 func (f AssignmentsFacade) CorrectAssignmentEvent(ctx context.Context, tenantID string, assignmentID string, targetEffectiveDate string, replacementPayload json.RawMessage) (string, error) {

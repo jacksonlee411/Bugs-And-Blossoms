@@ -129,8 +129,6 @@ modules/staffing/
     - `position_id`：CREATE 必填；UPDATE 可选
     - `status`：仅 UPDATE 生效（`active|inactive`）
     - `allocated_fte`：可选；(0,1]
-    - `base_salary`：可选；>=0；空串表示清空
-    - `currency`：可选；仅支持 `CNY`
     - `profile`：可选；JSON object
 
 ### 6.4 只展示生效日期（UI/读接口形状）
@@ -220,7 +218,7 @@ modules/staffing/
 - `POST /org/api/assignments?as_of=YYYY-MM-DD`
   - Request Body（JSON）新增可选字段：
     - `status`: `"active" | "inactive"`（可选；为空/缺失表示不变）
-  - 其余字段保持 M2 合同：`effective_date/person_uuid/position_id/base_salary/allocated_fte`
+  - 其余字段保持 M2 合同：`effective_date/person_uuid/position_id/allocated_fte`
 - 错误码：
   - 400：JSON/日期/字段格式错误（HTTP 层校验）
   - 422：`STAFFING_*`（Kernel fail-closed，例如 status 非法、position 不可用等）
@@ -317,7 +315,7 @@ modules/staffing/
 
 #### 9.4.3 DB Kernel 写入口（One Door，拟新增函数）
 
-> 原则：应用层不得直写 `*_events/*_versions/*_corrections/*_rescinds`；只能调用 Kernel 函数。两类新函数必须在同一事务内完成：插入 correction/rescind → `replay_assignment_versions` →（如适用）触发 payroll recalc（对齐 `DEV-PLAN-045`）。
+> 原则：应用层不得直写 `*_events/*_versions/*_corrections/*_rescinds`；只能调用 Kernel 函数。两类新函数必须在同一事务内完成：插入 correction/rescind → `replay_assignment_versions`。
 
 1) `staffing.submit_assignment_event_correction(...)`
 - 输入（建议签名；以实施时 schema SSOT 为准）：
@@ -336,9 +334,6 @@ modules/staffing/
   - 插入 correction（按 `event_id` 幂等；按 `target` 二次幂等）：
     - 若同 target 已存在 correction：replacement_payload 相同则返回既有 id；否则报 `STAFFING_ASSIGNMENT_EVENT_ALREADY_CORRECTED`
   - 调用 `staffing.replay_assignment_versions(p_tenant_id, p_assignment_id)`；若 replay 失败则整事务回滚（fail-closed）
-  - Payroll 回溯触发（建议）：成功 replay 后调用 `staffing.maybe_create_payroll_recalc_request_from_assignment_event(...)`，其中：
-    - `p_event_type='UPDATE'`
-    - `p_payload=p_replacement_payload`（让 Payroll 仅在命中 `status/allocated_fte/base_salary/currency` 时触发）
 
 2) `staffing.submit_assignment_event_rescind(...)`
 - 输入（建议签名）：
@@ -354,9 +349,6 @@ modules/staffing/
   - 约束（建议）：
     - 只允许撤销 `event_type='UPDATE'`（禁止 CREATE）：`STAFFING_ASSIGNMENT_CREATE_CANNOT_RESCIND`
   - 幂等口径（建议）：若同 target 已存在 rescind，直接返回既有 id（rescind payload 可不纳入幂等比较；如需纳入必须冻结规则）
-  - Payroll 回溯触发（建议）：成功 replay 后调用 `staffing.maybe_create_payroll_recalc_request_from_assignment_event(...)`，其中：
-    - `p_event_type='UPDATE'`
-    - `p_payload=target_event.payload`（撤销一条“会影响 payroll 字段的 UPDATE”时，仍能触发回溯）
 
 #### 9.4.4 Replay 解释规则（`staffing.replay_assignment_versions` 的扩展）
 
@@ -400,7 +392,7 @@ modules/staffing/
 
 2) UI（建议扩展 `/org/assignments`）
 - Timeline 每行提供 “Rescind”/“Correct” 操作入口（按钮/表单），但仍保持“只展示 effective_date，不展示 end_date”合同不变。
-- Correct 表单仅暴露“可理解的字段”（position/status/base_salary/allocated_fte/currency/profile），其结果映射为 replacement_payload。
+- Correct 表单仅暴露“可理解的字段”（position/status/allocated_fte/profile），其结果映射为 replacement_payload。
 
 #### 9.4.6 错误码（稳定、可定位）
 
@@ -428,9 +420,9 @@ modules/staffing/
   - 操作：rescind `target_effective_date=2026-02-01`
   - 断言：as-of `2026-02-15` 仅剩 `effective_date=2026-01-01` 的 slice；UI 不展示 `end_date`
 - [ ] Correct（替换解释）：
-  - 准备：`2026-01-01` CREATE 写入 `base_salary=20000.00`
-  - 操作：correct `target_effective_date=2026-01-01`，replacement_payload 将 `base_salary` 改为 `30000.00`
-  - 断言：DB 投射后的 `assignment_versions.base_salary` 在 `as_of=2026-01-15` 为 `30000.00`（证据可落在 dbtool 或集成测试）
+  - 准备：`2026-01-01` CREATE 写入 `allocated_fte=0.5`
+  - 操作：correct `target_effective_date=2026-01-01`，replacement_payload 将 `allocated_fte` 改为 `0.75`
+  - 断言：DB 投射后的 `assignment_versions.allocated_fte` 在 `as_of=2026-01-15` 为 `0.75`（证据可落在 dbtool 或集成测试）
 - [ ] fail-closed：
   - 若 correction/rescind 导致 replay 失败（例如让 active assignment 引用 disabled position），操作必须整体失败且不落盘 correction/rescind 记录
 - [ ] 幂等：
@@ -441,8 +433,6 @@ modules/staffing/
   - 若 `2026-01-01` 为 CREATE 且存在 `2026-02-01` UPDATE：rescind `2026-01-01` 必须失败（`STAFFING_ASSIGNMENT_CREATE_CANNOT_RESCIND`）
 - [ ] correct 与 rescind 的优先级：
   - 若已 rescind 某条事件：再次对同 target 提交 correct 必须报错（`STAFFING_ASSIGNMENT_EVENT_ALREADY_RESCINDED`）
-- [ ] Payroll 回溯触发（与 `DEV-PLAN-045` 对齐）：
-  - 当 correction/rescind 的 payload 命中 payroll 触发字段且 `effective_date` 命中 closed pay period：必须产生 `staffing.payroll_recalc_requests`（append-only）并可追溯关联 trigger_event_id
 
 ### 9.5 （可选）Go 分层落位（对齐 `DEV-PLAN-015/016`，不改外部行为）
 
