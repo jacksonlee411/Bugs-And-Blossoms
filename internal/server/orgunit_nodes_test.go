@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestOrgUnitMemoryStore(t *testing.T) {
@@ -175,7 +176,7 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
 		{
 			name: "submit error",
 			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-				return &stubTx{row: &stubRow{vals: []any{"e1"}}, execErr: errors.New("exec fail"), execErrAt: 2}, nil
+				return &stubTx{row: &stubRow{vals: []any{"e1"}}, execErr: errors.New("exec fail"), execErrAt: 3}, nil
 			})},
 			effectiveDate: "2026-01-01",
 			orgID:         "org1",
@@ -208,6 +209,38 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Success(t *testing.T) {
 	if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "org1", true, ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
+}
+
+func TestOrgUnitPGStore_SetBusinessUnitCurrent_Idempotent(t *testing.T) {
+	dupErr := &pgconn.PgError{Code: "23505", ConstraintName: "org_events_one_per_day_unique"}
+
+	t.Run("already-set", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{
+				row:       &stubRow{vals: []any{"e1"}},
+				row2:      &stubRow{vals: []any{true}},
+				execErr:   dupErr,
+				execErrAt: 3,
+			}, nil
+		})}
+		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "org1", true, "r1"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("mismatch", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{
+				row:       &stubRow{vals: []any{"e1"}},
+				row2:      &stubRow{vals: []any{false}},
+				execErr:   dupErr,
+				execErrAt: 3,
+			}, nil
+		})}
+		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "org1", true, "r1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
 }
 
 func TestHandleOrgNodes_MissingTenant(t *testing.T) {

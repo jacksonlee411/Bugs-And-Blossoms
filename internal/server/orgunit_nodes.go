@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
@@ -360,19 +361,42 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 
 	payload := `{"is_business_unit":` + strconv.FormatBool(isBusinessUnit) + `}`
 
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_set_business_unit;`); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
-SELECT orgunit.submit_org_event(
-  $1::uuid,
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
   $2::uuid,
   'OrgUnit',
   $3::uuid,
   'SET_BUSINESS_UNIT',
   $4::date,
   $5::jsonb,
-  $6::text,
-  $7::uuid
-)
-`, eventID, tenantID, orgID, effectiveDate, []byte(payload), requestID, tenantID); err != nil {
+	  $6::text,
+	  $7::uuid
+	)
+	`, eventID, tenantID, orgID, effectiveDate, []byte(payload), requestID, tenantID); err != nil {
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_set_business_unit;`); rbErr != nil {
+			return rbErr
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr != nil && pgErr.Code == "23505" && pgErr.ConstraintName == "org_events_one_per_day_unique" {
+			var current bool
+			if queryErr := tx.QueryRow(ctx, `
+		SELECT is_business_unit
+		FROM orgunit.org_unit_versions
+		WHERE tenant_id = $1::uuid
+		  AND hierarchy_type = 'OrgUnit'
+		  AND org_id = $2::uuid
+		  AND status = 'active'
+		  AND validity @> $3::date
+		ORDER BY lower(validity) DESC
+		LIMIT 1;
+	`, tenantID, orgID, effectiveDate).Scan(&current); queryErr == nil && current == isBusinessUnit {
+				return tx.Commit(ctx)
+			}
+		}
 		return err
 	}
 
