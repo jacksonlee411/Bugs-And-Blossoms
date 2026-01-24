@@ -1,5 +1,4 @@
 -- +goose Up
--- +goose StatementBegin
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 -- Add new schema named "staffing"
@@ -227,8 +226,6 @@ DROP POLICY IF EXISTS tenant_isolation ON "staffing"."assignment_versions";
 CREATE POLICY tenant_isolation ON "staffing"."assignment_versions"
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
-
--- +goose StatementEnd
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION staffing.assert_current_tenant(p_tenant_id uuid)
 RETURNS void
