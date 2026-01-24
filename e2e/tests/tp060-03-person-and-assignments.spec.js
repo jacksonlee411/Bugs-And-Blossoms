@@ -94,20 +94,51 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   await page.goto(`/org/nodes?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("OrgUnit");
 
-  const createOrgUnit = async (effectiveDate, parentID, name) => {
+  const setBusinessUnitFlag = async (form, enabled) => {
+    const input = form.locator('input[name="is_business_unit"]');
+    if ((await input.count()) === 0) {
+      if (enabled) {
+        throw new Error("missing is_business_unit field in /org/nodes form");
+      }
+      return;
+    }
+    const inputType = (await input.first().getAttribute("type")) || "";
+    if (inputType === "checkbox") {
+      if (enabled) {
+        await input.first().check();
+      } else if (await input.first().isChecked()) {
+        await input.first().uncheck();
+      }
+      return;
+    }
+    await input.first().fill(enabled ? "true" : "false");
+  };
+
+  const createOrgUnit = async (effectiveDate, parentID, name, isBusinessUnit = false) => {
     const form = page.locator(`form[method="POST"][action="/org/nodes?as_of=${asOf}"]`).first();
     await form.locator('input[name="effective_date"]').fill(effectiveDate);
     await form.locator('input[name="parent_id"]').fill(parentID);
     await form.locator('input[name="name"]').fill(name);
+    await setBusinessUnitFlag(form, isBusinessUnit);
     await form.locator('button[type="submit"]').click();
     await expect(page).toHaveURL(new RegExp(`/org/nodes\\?as_of=${asOf}$`));
   };
 
   const rootName = `TP060-03 Root ${runID}`;
-  await createOrgUnit(asOf, "", rootName);
+  await createOrgUnit(asOf, "", rootName, true);
 
   const rootID = (await page.locator("ul li", { hasText: rootName }).first().locator("code").first().innerText()).trim();
   expect(rootID).not.toBe("");
+
+  const bindResp = await appContext.request.post("/orgunit/api/setid-bindings", {
+    data: {
+      org_unit_id: rootID,
+      setid: "DEFLT",
+      effective_date: asOf,
+      request_id: `tp060-03-bind-root-${runID}`
+    }
+  });
+  expect(bindResp.status(), await bindResp.text()).toBe(201);
 
   await page.goto(`/org/positions?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Positions");
@@ -125,11 +156,10 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     const positionName = `TP060-03 Position ${pernr} ${runID}`;
     await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
     await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
-    await positionCreateForm.locator('select[name="business_unit_id"]').selectOption("BU000");
     await positionCreateForm.locator('input[name="capacity_fte"]').fill(pernr === "104" ? "0.50" : "1.0");
     await positionCreateForm.locator('input[name="name"]').fill(positionName);
     await positionCreateForm.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&business_unit_id=BU000$`));
+    await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&org_unit_id=${orgOptionValue}$`));
 
     const row = page.locator("tr", { hasText: positionName }).first();
     await expect(row).toBeVisible();
@@ -141,11 +171,10 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const updateTargetPositionName = `TP060-03 UpdateTarget Position ${runID}`;
   await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
   await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
-  await positionCreateForm.locator('select[name="business_unit_id"]').selectOption("BU000");
   await positionCreateForm.locator('input[name="capacity_fte"]').fill("1.0");
   await positionCreateForm.locator('input[name="name"]').fill(updateTargetPositionName);
   await positionCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&business_unit_id=BU000$`));
+  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&org_unit_id=${orgOptionValue}$`));
 
   const updateTargetRow = page.locator("tr", { hasText: updateTargetPositionName }).first();
   await expect(updateTargetRow).toBeVisible();
@@ -155,10 +184,9 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const disabledPositionName = `TP060-03 Disabled Position ${runID}`;
   await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
   await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
-  await positionCreateForm.locator('select[name="business_unit_id"]').selectOption("BU000");
   await positionCreateForm.locator('input[name="name"]').fill(disabledPositionName);
   await positionCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&business_unit_id=BU000$`));
+  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&org_unit_id=${orgOptionValue}$`));
 
   const disabledRow = page.locator("tr", { hasText: disabledPositionName }).first();
   await expect(disabledRow).toBeVisible();

@@ -167,6 +167,7 @@ modules/{module}/
 - DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-069 执行日志：`docs/dev-records/dev-plan-069-execution-log.md`
+- DEV-PLAN-070：SetID 绑定组织架构重构方案：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 - Org（事务性事件溯源 + 同步投射）：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`

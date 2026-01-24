@@ -28,6 +28,7 @@ HR SaaS 的组织架构场景常见约束：
 ### 2.1 核心目标
 - [X] 定义 **事件表 SoT**：`org_events`（append-only），记录业务意图与必要元数据（tenant/request/initiator/tx_time）。
 - [X] 定义 **读模型表**：`org_unit_versions`（ltree path + daterange validity + no-overlap），支持毫秒级 as-of 查询与子树/祖先链查询。
+- [X] 新增 **业务单元标记**：`org_unit_versions.is_business_unit`（有效期内属性，供 SetID 绑定约束使用）。
 - [X] 定义 **DB 投射引擎（选定：同事务全量重放）**：单入口函数 `submit_org_event(...)` 在同一事务内完成：事件写入（幂等）+ **全量重放**（删除并重建 `org_unit_versions`）+ 不变量校验。
 - [X] 定义 **并发安全策略**：Postgres advisory lock，串行化同一棵组织树的写入（fail-fast 可选）。
 - [X] 定义 **读模型封装**：`get_org_snapshot(...)`（含长名称拼接），提供“参数化视图”体验。
@@ -84,11 +85,14 @@ flowchart TD
    - 落地方式：在 `org_events` 上施加唯一性约束（见 4.4），把“事件顺序”从隐式约定变成可验证不变量。
 7. **gapless（选定，纳入合同）**
    - `org_unit_versions` 必须无间隙：相邻切片必须满足 `upper(prev.validity)=lower(next.validity)`，最后一段 `upper(validity)='infinity'`；停用用 `status='disabled'` 表达而不是制造空洞。
-8. **高性能读索引（选定）**
+8. **业务单元标记（选定）**
+   - `org_unit_versions.is_business_unit` 作为有效期内属性；根节点必须为 `true`（用于 SetID 绑定约束）。
+   - 通过 `SET_BUSINESS_UNIT` 事件调整标记（见 §5.7）。
+9. **高性能读索引（选定）**
    - `GiST(tenant_id, node_path, validity)` 实现 “Path + Time” 联合过滤；
    - `no-overlap`：`EXCLUDE USING gist (tenant_id, org_id, validity &&)`。
    - 对“按日取全量快照（validity @> day）且只取 active”的场景，可额外提供 `validity` 维度的 partial GiST（见 4.5）。
-9. **可重放（选定）**
+10. **可重放（选定）**
    - 版本表可丢弃重建：任何时刻可通过 **全量重放** `org_events` 重建 `org_unit_versions`（运维入口与步骤见 §8）。
 
 ### 3.3 边界与可替换性（防止实现期漂移）
@@ -198,7 +202,7 @@ CREATE TABLE org_events (
   hierarchy_type   text NOT NULL DEFAULT 'OrgUnit',
 
   org_id           uuid NOT NULL,                 -- 目标节点
-  event_type       text NOT NULL,                 -- CREATE/MOVE/RENAME/DISABLE
+  event_type       text NOT NULL,                 -- CREATE/MOVE/RENAME/DISABLE/SET_BUSINESS_UNIT
   effective_date   date NOT NULL,                 -- 生效日（Valid Time）
   payload          jsonb NOT NULL DEFAULT '{}'::jsonb,
 
@@ -208,7 +212,7 @@ CREATE TABLE org_events (
   created_at       timestamptz NOT NULL DEFAULT now(),
 
   CONSTRAINT org_events_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit')),
-  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE')),
+  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT')),
 
   -- 不变量：同一节点同一生效日只允许一条事件（不引入 effseq）
   CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_id, hierarchy_type, org_id, effective_date)
@@ -239,6 +243,7 @@ CREATE TABLE org_unit_versions (
 
   name          varchar(255) NOT NULL,
   status        text NOT NULL DEFAULT 'active',  -- active/disabled
+  is_business_unit boolean NOT NULL DEFAULT false,
   manager_id    uuid NULL,
 
   last_event_id bigint NOT NULL REFERENCES org_events(id),
@@ -347,7 +352,7 @@ BEGIN
       DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
   END IF;
 
-  IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE') THEN
+  IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT') THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_INVALID_ARGUMENT',
       DETAIL = format('unsupported event_type: %s', p_event_type);
@@ -440,6 +445,7 @@ DECLARE
   v_new_parent_id uuid;
   v_name text;
   v_new_name text;
+  v_is_business_unit boolean;
   v_manager_id uuid;
 BEGIN
   PERFORM assert_current_tenant(p_tenant_id);
@@ -471,14 +477,18 @@ BEGIN
     IF v_event.event_type = 'CREATE' THEN
       v_parent_id := NULLIF(v_payload->>'parent_id', '')::uuid;
       v_name := NULLIF(btrim(v_payload->>'name'), '');
+      v_is_business_unit := COALESCE(NULLIF(v_payload->>'is_business_unit', '')::boolean, false);
       v_manager_id := NULLIF(v_payload->>'manager_id', '')::uuid;
-      PERFORM apply_create_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_parent_id, v_event.effective_date, v_name, v_manager_id, v_event.id);
+      PERFORM apply_create_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_parent_id, v_event.effective_date, v_name, v_is_business_unit, v_manager_id, v_event.id);
     ELSIF v_event.event_type = 'MOVE' THEN
       v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::uuid;
       PERFORM apply_move_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_new_parent_id, v_event.effective_date, v_event.id);
     ELSIF v_event.event_type = 'RENAME' THEN
       v_new_name := NULLIF(btrim(v_payload->>'new_name'), '');
       PERFORM apply_rename_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_new_name, v_event.id);
+    ELSIF v_event.event_type = 'SET_BUSINESS_UNIT' THEN
+      v_is_business_unit := NULLIF(v_payload->>'is_business_unit', '')::boolean;
+      PERFORM apply_set_business_unit_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_is_business_unit, v_event.id);
     ELSIF v_event.event_type = 'DISABLE' THEN
       PERFORM apply_disable_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_event.id);
     ELSE
@@ -534,6 +544,7 @@ payload（v1）：
 {
   "parent_id": "uuid|null",
   "name": "string",
+  "is_business_unit": "boolean",
   "manager_id": "uuid|null"
 }
 ```
@@ -542,12 +553,13 @@ payload（v1）：
 - `parent_id` 非空时：parent 在 `p_effective_date` 必须 active（版本存在且 `status='active'`）。
 - 同一 `org_id` 只允许 create 一次（greenfield 简化约束）。
 - 根节点（`parent_id=null`）在一个 tenant/hierarchy 内只能存在一个（通过 `org_trees` 固化）。
+- 根节点必须为业务单元（`is_business_unit=true`）。
 
 投射策略：
 - 计算 `node_path`：
   - root：`org_ltree_label(p_org_id)::ltree`
   - child：`parent_path || org_ltree_label(p_org_id)::ltree`
-- 插入 `org_unit_versions(org_id, parent_id, node_path, validity=[effective_date, 'infinity'), name, status='active', manager_id, last_event_id)`
+- 插入 `org_unit_versions(org_id, parent_id, node_path, validity=[effective_date, 'infinity'), name, status='active', is_business_unit, manager_id, last_event_id)`
 
 SQL 实现（v1）：
 ```sql
@@ -558,6 +570,7 @@ CREATE OR REPLACE FUNCTION apply_create_logic(
   p_parent_id uuid,
   p_effective_date date,
   p_name text,
+  p_is_business_unit boolean,
   p_manager_id uuid,
   p_event_db_id bigint
 ) RETURNS void
@@ -592,6 +605,12 @@ BEGIN
 
   -- root 唯一性（通过 org_trees 固化）
   IF p_parent_id IS NULL THEN
+    IF p_is_business_unit IS NOT TRUE THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'ORG_ROOT_MUST_BE_BUSINESS_UNIT',
+        DETAIL = format('root must be business unit (org_id=%s)', p_org_id);
+    END IF;
+
     SELECT t.root_org_id INTO v_root_org_id
     FROM org_trees t
     WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type
@@ -646,6 +665,7 @@ BEGIN
     validity,
     name,
     status,
+    is_business_unit,
     manager_id,
     last_event_id
   ) VALUES (
@@ -657,6 +677,7 @@ BEGIN
     daterange(p_effective_date, 'infinity'::date, '[)'),
     p_name,
     'active',
+    p_is_business_unit,
     p_manager_id,
     p_event_db_id
   );
@@ -806,6 +827,7 @@ BEGIN
     validity,
     name,
     status,
+    is_business_unit,
     manager_id,
     last_event_id
   )
@@ -821,6 +843,7 @@ BEGIN
     daterange(p_effective_date, upper(u.validity), '[)'),
     u.name,
     u.status,
+    u.is_business_unit,
     u.manager_id,
     p_event_db_id
   FROM upd u;
@@ -901,6 +924,7 @@ BEGIN
     validity,
     name,
     status,
+    is_business_unit,
     manager_id,
     last_event_id
   ) VALUES (
@@ -912,6 +936,7 @@ BEGIN
     daterange(p_effective_date, upper(v_row.validity), '[)'),
     v_row.name,
     v_row.status,
+    v_row.is_business_unit,
     v_row.manager_id,
     p_event_db_id
   );
@@ -979,7 +1004,90 @@ END;
 $$;
 ```
 
-### 5.7 `apply_disable_logic`
+### 5.7 `apply_set_business_unit_logic`
+payload（v1）：
+```json
+{ "is_business_unit": "boolean" }
+```
+
+关键点：
+1) 必须存在任一版本覆盖 `effective_date`（且 `status='active'`）。
+2) root 不允许被设置为 `false`。
+3) 与 rename 类似：split + 计算 stop_date（若存在未来的 `SET_BUSINESS_UNIT`），只影响区间内版本。
+
+SQL 实现（v1）：
+```sql
+CREATE OR REPLACE FUNCTION apply_set_business_unit_logic(
+  p_tenant_id uuid,
+  p_hierarchy_type text,
+  p_org_id uuid,
+  p_effective_date date,
+  p_is_business_unit boolean,
+  p_event_db_id bigint
+) RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_stop_date date;
+  v_root_org_id uuid;
+BEGIN
+  IF p_hierarchy_type <> 'OrgUnit' THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_INVALID_ARGUMENT',
+      DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
+  END IF;
+  IF p_is_business_unit IS NULL THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_INVALID_ARGUMENT',
+      DETAIL = 'is_business_unit is required';
+  END IF;
+
+  SELECT t.root_org_id INTO v_root_org_id
+  FROM org_trees t
+  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type;
+  IF v_root_org_id = p_org_id AND p_is_business_unit IS NOT TRUE THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_ROOT_MUST_BE_BUSINESS_UNIT',
+      DETAIL = format('root must be business unit (org_id=%s)', p_org_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM org_unit_versions
+    WHERE tenant_id = p_tenant_id
+      AND hierarchy_type = p_hierarchy_type
+      AND org_id = p_org_id
+      AND status = 'active'
+      AND validity @> p_effective_date
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_NOT_FOUND_AS_OF',
+      DETAIL = format('org not found at date (org_id=%s, as_of=%s)', p_org_id, p_effective_date);
+  END IF;
+
+  PERFORM split_org_unit_version_at(p_tenant_id, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
+
+  SELECT MIN(e.effective_date) INTO v_stop_date
+  FROM org_events e
+  WHERE e.tenant_id = p_tenant_id
+    AND e.hierarchy_type = p_hierarchy_type
+    AND e.org_id = p_org_id
+    AND e.event_type = 'SET_BUSINESS_UNIT'
+    AND e.effective_date > p_effective_date;
+
+  UPDATE org_unit_versions v
+  SET is_business_unit = p_is_business_unit,
+      last_event_id = p_event_db_id
+  WHERE v.tenant_id = p_tenant_id
+    AND v.hierarchy_type = p_hierarchy_type
+    AND v.org_id = p_org_id
+    AND lower(v.validity) >= p_effective_date
+    AND (v_stop_date IS NULL OR lower(v.validity) < v_stop_date);
+END;
+$$;
+```
+
+### 5.8 `apply_disable_logic`
 payload（v1）：
 ```json
 { "status": "disabled" }
@@ -1041,6 +1149,7 @@ RETURNS TABLE (
   name varchar,
   full_name_path text,
   depth int,
+  is_business_unit boolean,
   manager_id uuid
 );
 ```
@@ -1053,6 +1162,7 @@ RETURNS TABLE (
   name varchar,
   full_name_path text,
   depth int,
+  is_business_unit boolean,
   manager_id uuid
 )
 LANGUAGE sql
@@ -1079,6 +1189,7 @@ AS $$
        AND a.validity @> p_query_date
     ) AS full_name_path,
     nlevel(s.node_path) - 1 AS depth,
+    s.is_business_unit,
     s.manager_id
   FROM snapshot s;
 $$;
@@ -1161,6 +1272,7 @@ func (s *OrgService) MoveOrg(ctx context.Context, tenantID uuid.UUID, cmd MoveCm
 | 参数非法 / 不支持的类型/事件 | `submit_org_event/replay_org_unit_versions/apply_*_logic` 参数校验 | DB exception `MESSAGE` | `ORG_INVALID_ARGUMENT` |
 | 重复创建同一节点 | `apply_create_logic` | DB exception `MESSAGE` | `ORG_ALREADY_EXISTS` |
 | root 已存在 / root 未初始化 | `apply_create_logic` | DB exception `MESSAGE` | `ORG_ROOT_ALREADY_EXISTS` / `ORG_TREE_NOT_INITIALIZED` |
+| root 必须为业务单元 | `apply_create_logic` / `apply_set_business_unit_logic` | DB exception `MESSAGE` | `ORG_ROOT_MUST_BE_BUSINESS_UNIT` |
 | as-of 找不到目标 | `apply_*_logic` | DB exception `MESSAGE` | `ORG_NOT_FOUND_AS_OF` |
 | as-of 找不到父节点 | `apply_*_logic` | DB exception `MESSAGE` | `ORG_PARENT_NOT_FOUND_AS_OF` |
 | move 形成环 | `apply_move_logic` | DB exception `MESSAGE` | `ORG_CYCLE_MOVE` |
@@ -1193,6 +1305,7 @@ func (s *OrgService) MoveOrg(ctx context.Context, tenantID uuid.UUID, cmd MoveCm
   - [ ] Move 触发子树 path 重写后，祖先/子树查询与长名称拼接一致且不缺段。
   - [ ] 并发写：同一 tenant/hierarchy 下同时发起两次写入，第二个在 fail-fast 模式下稳定返回“busy”错误码。
   - [ ] 同一 `org_id` 在同一 `effective_date` 第二次提交（不同 `event_id`）稳定失败，并映射为 `ORG_EVENT_CONFLICT_SAME_DAY`。
+  - [ ] root 必须为业务单元；`SET_BUSINESS_UNIT` 在 as-of 维度下正确生效，且 root 不允许被设为非业务单元。
 	  - [ ] RLS（对齐 `DEV-PLAN-021`）：缺失 `app.current_tenant` 时对 Greenfield 表的读写必须 fail-closed（不得以“空结果”掩盖注入遗漏）。
   - [ ] RLS（对齐 `DEV-PLAN-021`）：`app.current_tenant` 与 `p_tenant_id` 不一致时，`submit_org_event/replay_org_unit_versions` 必须稳定失败（tenant mismatch）。
 	  - [X] UI 集成（单链路）：`/org/nodes` 读取使用 `current`（`get_org_snapshot`）；失败/为空必须显式报错并引导修复/重试，不得回退到另一套事实源，也不得通过 query param 强制走 legacy（对齐 `DEV-PLAN-004M1`）。

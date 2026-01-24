@@ -56,6 +56,8 @@ flowchart TD
 - **选定**：RLS policy 仅信任事务内注入的 `app.current_tenant`（`SELECT set_config('app.current_tenant', $1, true)` 或 `SET LOCAL app.current_tenant = ...`）。
 - **选定（fail-closed）**：policy 使用 `current_setting('app.current_tenant')::uuid`（不使用 `current_setting(..., true)`），缺失上下文时直接报错暴露注入遗漏。
 - **约束**：应用 DB role 不能是 superuser 且不能带 `BYPASSRLS`（否则 RLS 不生效/不可验证）；对齐 `DEV-PLAN-019/019A`。
+- **共享读开关（新增，见 DEV-PLAN-070）**：共享表读取必须在事务内显式 `SET LOCAL app.allow_share_read = 'on'`；policy 仍调用 `current_tenant_id()` 以保持缺失租户时 fail-closed。
+- **共享写入口（新增，见 DEV-PLAN-070）**：共享表写入必须通过 kernel 事件入口；事务内必须设置 `app.current_tenant = orgunit.global_tenant_id()` 且 `app.current_actor_scope='saas'`，普通应用角色不授予共享表 DML 权限。
 
 ### 3.3 Kernel 写入口的 tenant 一致性断言（新增决策）
 > 目的：避免“事务注入的 tenant ≠ 函数参数 tenant”时产生隐性污染；同时保持函数签名不变（继续显式传 `p_tenant_id`，与 026/030/029 对齐）。
@@ -102,6 +104,34 @@ DROP POLICY IF EXISTS tenant_isolation ON <table>;
 CREATE POLICY tenant_isolation ON <table>
   USING (tenant_id = current_tenant_id())
   WITH CHECK (tenant_id = current_tenant_id());
+
+-- 共享表 policy（只读，DEV-PLAN-070）
+ALTER TABLE <shared_table> ENABLE ROW LEVEL SECURITY;
+ALTER TABLE <shared_table> FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS share_read_only ON <shared_table>;
+CREATE POLICY share_read_only ON <shared_table>
+  FOR SELECT
+  USING (
+    tenant_id = orgunit.global_tenant_id()
+    AND current_setting('app.allow_share_read', true) = 'on'
+    AND current_tenant_id() IS NOT NULL
+  );
+
+-- 共享表写入 policy（仅 SaaS；如走 SECURITY DEFINER 入口可保持无写策略）
+DROP POLICY IF EXISTS share_write_saas ON <shared_table>;
+CREATE POLICY share_write_saas ON <shared_table>
+  FOR INSERT, UPDATE, DELETE
+  USING (
+    tenant_id = orgunit.global_tenant_id()
+    AND current_setting('app.current_actor_scope') = 'saas'
+    AND current_tenant_id() = orgunit.global_tenant_id()
+  )
+  WITH CHECK (
+    tenant_id = orgunit.global_tenant_id()
+    AND current_setting('app.current_actor_scope') = 'saas'
+    AND current_tenant_id() = orgunit.global_tenant_id()
+  );
 ```
 
 ### 4.2 OrgUnit（DEV-PLAN-026）
@@ -127,6 +157,8 @@ CREATE POLICY tenant_isolation ON <table>
 - 当 `RLS_ENFORCE=enforce` 时：
   - 所有访问启用 RLS 的 tenant-scoped 表的路径必须在显式事务中执行；
   - 在该事务内第一时间调用 `composables.ApplyTenantRLS(ctx, tx)`，再执行任何 SQL（含调用 DB Kernel 函数）。
+- 共享表读取路径：仅白名单入口可设置 `SET LOCAL app.allow_share_read = 'on'`（见 `DEV-PLAN-070`），未设置即拒绝。
+- 共享表写入路径：必须在事务内设置 `app.current_tenant = orgunit.global_tenant_id()` + `app.current_actor_scope='saas'`，并仅调用 kernel 事件入口（禁止直接写表）。
 - 当 `RLS_ENFORCE=disabled` 时：
   - 允许旧模块继续使用非事务读（仅限未启用 RLS 的表）；
   - 但对默认启用 RLS 的 Kernel 表不提供“无事务访问”的兼容口径（避免引入“偶发无数据/偶发报错”的漂移）。
@@ -170,6 +202,8 @@ CREATE POLICY tenant_isolation ON <table>
 - **性能**：RLS 会引入额外谓词与 plan 变化；缓解：policy 只做 `tenant_id = current_tenant_id()` 的等值过滤，且关键索引均以 `tenant_id` 为前导；实现期以 `EXPLAIN (ANALYZE, BUFFERS)` 复核热点查询。
 - **开发体验**：遗漏事务/注入会表现为“报错或无数据”；缓解：在 repo/service 层提供明确的 `InTenantTx`/`RequireTx` 约束与可读错误（对齐 019）。
 - **系统组件**：outbox relay/后台 job 可能需要跨租户扫描；缓解：按 019A 边界，系统表不启用 RLS；若未来必须启用，使用专用 role/连接池，禁止“缺 tenant 放行”的 policy。
+- **共享读开关滥用**：误把共享开关用于非白名单入口会扩大可见面；缓解：仅在白名单入口 `SET LOCAL app.allow_share_read = 'on'` + 代码审计 + 入口级测试覆盖。
+- **共享写入口滥用**：如果开放直写或缺少 `app.current_actor_scope` 校验，可能导致越权写入；缓解：仅 kernel 写入口 + 角色权限收口 + `app.current_actor_scope='saas'` 强校验。
 
 ## 8. 测试与验收标准 (Acceptance Criteria)
 - [x] **fail-closed**：未设置 `app.current_tenant` 时，访问启用 RLS 的表必须报错（不可“默认放行”）。
@@ -179,6 +213,8 @@ CREATE POLICY tenant_isolation ON <table>
 
 ### 8.1 最小验证点（避免“跑一跑就算”）
 - [x] **行为**：用同一套 SQL 分别验证（1）未注入 tenant 时 fail-closed；（2）tenant=A 下不可见 tenant=B；（3）跨租户 insert/update 被拒绝。
+- [ ] **共享读开关**：共享表默认不可读；仅当事务内显式设置 `app.allow_share_read=on` 且注入 `app.current_tenant` 时可读。
+- [ ] **共享写入口**：缺失 `app.current_actor_scope` 或 `app.current_tenant != global_tenant_id` 时写入必须失败；仅通过 kernel 入口成功写入。
 - [ ] **计划**：对各子域最常用的 as-of 快照查询做一次 `EXPLAIN (ANALYZE, BUFFERS)`，确认仍使用以 `tenant_id` 为前导的索引（RLS 作为兜底，不替代显式 `tenant_id` 过滤）。
 - [ ] **可观测性**：RLS 相关失败在应用日志中至少包含：`tenant_id`, `request_id`, `rls_enforce`, `sqlstate`, `error`（对齐 019A 的建议字段）。
 

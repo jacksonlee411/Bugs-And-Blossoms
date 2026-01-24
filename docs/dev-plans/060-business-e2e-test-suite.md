@@ -31,7 +31,7 @@
 测试侧关键信号：
 - **平台先行**：Tenancy/AuthN → RLS 圈地 → Casbin 授权边界，且 fail-closed（`docs/dev-plans/019-tenant-and-authn.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`）。
 - **用户可见性原则**：每个切片交付必须有页面入口与可操作链路（`AGENTS.md` §3.8）。
-- **主数据纵切片顺序**：`SetID => JobCatalog => Position => Assignments`（`docs/dev-plans/028-setid-management.md`～`docs/dev-plans/031-greenfield-assignment-job-data.md`）。
+- **主数据纵切片顺序**：`SetID => JobCatalog => Position => Assignments`（`docs/dev-plans/070-setid-orgunit-binding-redesign.md`～`docs/dev-plans/031-greenfield-assignment-job-data.md`）。
 
 因此：本套件以“租户与权限基线 → 主数据 → 人员任职”为主链路顺序。
 
@@ -101,7 +101,7 @@
 
 > 目的：TP-060-* 是“纵切片串联”的测试套件；前一子计划产出的数据会成为后一子计划的输入，因此**必须保留**，不能“跑完就清理”。
 
-- **必须保留**：执行 TP-060-* 过程中创建/变更的测试数据必须保留（含租户、账号/角色、OrgUnit、SetID/BU/mapping、JobCatalog、Position、Person、Assignment 等）。
+- **必须保留**：执行 TP-060-* 过程中创建/变更的测试数据必须保留（含租户、账号/角色、OrgUnit、SetID/绑定/业务单元标记、JobCatalog、Position、Person、Assignment 等）。
 - **禁止自动清理**：测试脚本与手工步骤不得包含“跑完回滚/删除租户/清库”的自动清理逻辑。
 - **需要重置时的口径**：若因环境漂移/破坏性变更必须重置（例如执行 `make dev-reset`），必须在对应子计划“问题记录”中登记为 `ENV_DRIFT`，并按本文的 060-DS1/DS2 重新建数再继续后续子计划。
 - **重复执行口径**：优先“存在则复用、缺失则补齐”；若必须新增，使用可追溯命名（例如附加 `run_id`/日期后缀），并在证据中记录映射，避免后续子计划无法对齐。
@@ -124,15 +124,16 @@
 | L1 | Ops | 运营/支持 |
 | L1 | Plant | 制造/仓储（用于岗位差异样例） |
 
-### 5.3 SetID 与 Business Unit
+### 5.3 SetID 绑定与业务单元节点
 
 | 对象 | 值 | 备注 |
 | --- | --- | --- |
 | SetID | `S2601` | 示例 SetID |
-| BU | `BU000` | 共享（映射到 `SHARE`） |
-| BU | `BU901` | 中国区业务单元 |
-| Mapping | `BU000 -> SHARE` | 不得隐式回退（对齐 `DEV-PLAN-028`） |
-| Mapping | `BU901 -> S2601` | 用于 JobCatalog 解析样板 |
+| SetID | `S2602` | 跨 SetID 负例 |
+| 根组织绑定 | `DEFLT` | 根节点绑定租户默认 SetID |
+| 业务单元节点 | `R&D` | `is_business_unit=true` 且绑定 `S2601`（记录 `org_unit_id`） |
+| 业务单元节点 | `Sales` | `is_business_unit=true` 且绑定 `S2602`（记录 `org_unit_id`） |
+| SHARE | `SHARE` | 仅白名单入口可读 |
 
 ### 5.4 职位分类（JobCatalog，按 `setid=S2601` + `as_of=2026-01-01`）
 
@@ -146,7 +147,7 @@
 | Job Profile | `JP-SWE` | Software Engineer | families=`JF-BE,JF-FE`；primary=`JF-BE` |
 
 备注：
-- Job Catalog 的权威作用域为 `setid`；本套件使用 `BU901 -> S2601` 的 SetID 解析链路作为 UI 入口（对齐 `docs/dev-plans/028-setid-management.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。
+- Job Catalog 的权威作用域为 `setid`；本套件使用 `R&D` 业务单元节点（`org_unit_id` 记录于证据）+ `as_of=2026-01-01` 作为解析入口（对齐 `docs/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。
 - 必测：覆盖 `job_family_groups/job_families/job_levels/job_profiles` 的“写入→as_of 读取→UI 可见”闭环，并包含至少 1 个跨日期场景（例如 family reparenting 的 `as_of` 前后对比）。
 
 ### 5.5 职位（Positions，`as_of=2026-01-01`）
@@ -197,7 +198,7 @@
 | 租户/登录 | superadmin 创建租户与域名；tenant app 登录 | TP-060-01 |
 | 权限/隔离 | Authz 403；RLS fail-closed；跨租户不可见 | TP-060-01 |
 | 组织架构 | OrgUnit 树/新增/查询 | TP-060-02 |
-| SetID | SetID/BU/mapping；JobCatalog 解析 setid | TP-060-02 |
+| SetID | SetID/组织绑定/业务单元标记；JobCatalog 解析 setid | TP-060-02 |
 | 职位分类 | Job family group 创建与查询（可选扩展：families/levels/profiles） | TP-060-02 |
 | 职位 | Position 创建与列表 | TP-060-02 |
 | 人员 | Person 创建/查询；pernr 解析一致性 | TP-060-03 |
@@ -241,21 +242,21 @@
 
 **契约引用**
 - `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
-- `docs/dev-plans/028-setid-management.md`
+- `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
 - `docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
 
 **数据准备**
 - 按 060-DS1 建立 OrgUnit 树（`/org/nodes?as_of=2026-01-01`）。
-- 建立 SetID/BU/mapping（`/org/setid`）。
-- 在 `BU901` 下建立 JobCatalog（`/org/job-catalog?business_unit_id=BU901&as_of=2026-01-01`）。
-- 建立 10 个职位（`/org/positions?as_of=2026-01-01`）。
+- 建立 SetID + 业务单元标记 + 组织绑定（`/org/setid` + `/org/nodes`）。
+- 在业务单元节点 `R&D` 下建立 JobCatalog（`/org/job-catalog?org_unit_id=<R&D>&as_of=2026-01-01`）。
+- 建立 10 个职位（`/org/positions?as_of=2026-01-01&org_unit_id=<R&D>`）。
 
 **核心验收点（高层）**
 - OrgUnit：新增节点后树与详情可见；`as_of` 改变时口径符合日粒度有效期。
-- SetID：mapping 保存后，JobCatalog 页面可显示“resolved setid”，且缺映射必须 fail-closed（不允许默认洞）。
-- JobCatalog：至少 1 个实体“写入→列表可见”闭环；BU 变更与 as_of 变更口径一致。
+- SetID：绑定保存后，JobCatalog 页面可显示“resolved setid”，且缺绑定必须 fail-closed（不允许默认洞）。
+- JobCatalog：至少 1 个实体“写入→列表可见”闭环；org_unit_id 切换与 as_of 变更口径一致。
 - JobCatalog（增强）：groups/families/levels/profiles 均覆盖“写入→as_of 读取→UI 可见”；profile 需覆盖 families+primary 不变量的负例（稳定报错即可）。
 - Position：新增职位后列表可见；职位引用 OrgUnit 的输入/下拉来源可靠。
 
@@ -303,5 +304,5 @@
 ## 10. 参考（SSOT 链接）
 
 - 路线图：`docs/dev-plans/009-implementation-roadmap.md`
-- 主数据：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/028-setid-management.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/031-greenfield-assignment-job-data.md`
+- 主数据：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - 平台：`docs/dev-plans/019-tenant-and-authn.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`、`docs/dev-plans/020-i18n-en-zh-only.md`
