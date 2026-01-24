@@ -250,6 +250,17 @@ func (s *jobcatalogPGStore) withTx(ctx context.Context, tenantID string, fn func
 	return tx.Commit(ctx)
 }
 
+func resolveSetIDOrDefault(ctx context.Context, q setid.QueryRower, tenantID string, orgUnitID string, asOfDate string) (string, error) {
+	resolved, err := setid.Resolve(ctx, q, tenantID, orgUnitID, asOfDate)
+	if err == nil {
+		return resolved, nil
+	}
+	if pgErrorMessage(err) == "SETID_BINDING_MISSING" {
+		return "DEFLT", nil
+	}
+	return "", err
+}
+
 func (s *jobcatalogPGStore) CreateJobFamilyGroup(ctx context.Context, tenantID string, orgUnitID string, effectiveDate string, code string, name string, description string) error {
 	return s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, tenantID); err != nil {
@@ -303,7 +314,7 @@ func (s *jobcatalogPGStore) ListJobFamilyGroups(ctx context.Context, tenantID st
 		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, tenantID); err != nil {
 			return err
 		}
-		v, err := setid.Resolve(ctx, tx, tenantID, orgUnitID, asOfDate)
+		v, err := resolveSetIDOrDefault(ctx, tx, tenantID, orgUnitID, asOfDate)
 		if err != nil {
 			return err
 		}
@@ -465,7 +476,7 @@ func (s *jobcatalogPGStore) ListJobFamilies(ctx context.Context, tenantID string
 		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, tenantID); err != nil {
 			return err
 		}
-		v, err := setid.Resolve(ctx, tx, tenantID, orgUnitID, asOfDate)
+		v, err := resolveSetIDOrDefault(ctx, tx, tenantID, orgUnitID, asOfDate)
 		if err != nil {
 			return err
 		}
@@ -563,7 +574,7 @@ func (s *jobcatalogPGStore) ListJobLevels(ctx context.Context, tenantID string, 
 		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, tenantID); err != nil {
 			return err
 		}
-		v, err := setid.Resolve(ctx, tx, tenantID, orgUnitID, asOfDate)
+		v, err := resolveSetIDOrDefault(ctx, tx, tenantID, orgUnitID, asOfDate)
 		if err != nil {
 			return err
 		}
@@ -715,7 +726,7 @@ func (s *jobcatalogPGStore) ListJobProfiles(ctx context.Context, tenantID string
 		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, tenantID); err != nil {
 			return err
 		}
-		v, err := setid.Resolve(ctx, tx, tenantID, orgUnitID, asOfDate)
+		v, err := resolveSetIDOrDefault(ctx, tx, tenantID, orgUnitID, asOfDate)
 		if err != nil {
 			return err
 		}
