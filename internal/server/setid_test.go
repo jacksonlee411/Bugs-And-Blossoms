@@ -561,14 +561,105 @@ func TestSetIDPGStore_WithTx_Errors(t *testing.T) {
 	}
 }
 
+func TestSetIDPGStore_EnsureBootstrap_GlobalShare(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var calls int
+		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			calls++
+			if calls == 1 {
+				return &stubTx{}, nil
+			}
+			return &stubTx{row: &stubRow{vals: []any{"gt1"}}}, nil
+		})}
+		if err := store.EnsureBootstrap(context.Background(), "t1", "p1"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("global begin error", func(t *testing.T) {
+		var calls int
+		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			calls++
+			if calls == 1 {
+				return &stubTx{}, nil
+			}
+			return nil, errors.New("begin fail")
+		})}
+		if err := store.EnsureBootstrap(context.Background(), "t1", "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("global tenant id error", func(t *testing.T) {
+		var calls int
+		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			calls++
+			if calls == 1 {
+				return &stubTx{}, nil
+			}
+			return &stubTx{rowErr: errors.New("row fail")}, nil
+		})}
+		if err := store.EnsureBootstrap(context.Background(), "t1", "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("global submit error", func(t *testing.T) {
+		var calls int
+		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			calls++
+			if calls == 1 {
+				return &stubTx{}, nil
+			}
+			return &stubTx{
+				row:       &stubRow{vals: []any{"gt1"}},
+				execErr:   errors.New("exec fail"),
+				execErrAt: 3,
+			}, nil
+		})}
+		if err := store.EnsureBootstrap(context.Background(), "t1", "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("global commit error", func(t *testing.T) {
+		var calls int
+		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			calls++
+			if calls == 1 {
+				return &stubTx{}, nil
+			}
+			return &stubTx{
+				row:       &stubRow{vals: []any{"gt1"}},
+				commitErr: errors.New("commit fail"),
+			}, nil
+		})}
+		if err := store.EnsureBootstrap(context.Background(), "t1", "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
 func TestSetIDPGStore_ListSetIDs(t *testing.T) {
-	tx := &stubTx{
+	txTenant := &stubTx{
 		rows: &tableRows{rows: [][]any{
-			{"SHARE", "Shared", "active"},
 			{"A0001", "A", "active"},
 		}},
 	}
-	s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+	txGlobal := &stubTx{
+		row: &stubRow{vals: []any{"gt1"}},
+		rows: &tableRows{rows: [][]any{
+			{"SHARE", "Shared", "active"},
+		}},
+	}
+	var calls int
+	s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		calls++
+		if calls == 1 {
+			return txTenant, nil
+		}
+		return txGlobal, nil
+	})}
 
 	if got, err := s.ListSetIDs(context.Background(), "t1"); err != nil || len(got) != 2 {
 		t.Fatalf("len=%d err=%v", len(got), err)
@@ -577,6 +668,22 @@ func TestSetIDPGStore_ListSetIDs(t *testing.T) {
 	txQueryErr := &stubTx{queryErr: errors.New("query fail")}
 	sQueryErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txQueryErr, nil })}
 	if _, err := sQueryErr.ListSetIDs(context.Background(), "t1"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	txGlobalQueryErr := &stubTx{
+		row:      &stubRow{vals: []any{"gt1"}},
+		queryErr: errors.New("global query fail"),
+	}
+	calls = 0
+	sGlobalQueryErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		calls++
+		if calls == 1 {
+			return &stubTx{rows: &tableRows{rows: [][]any{{"A0001", "A", "active"}}}}, nil
+		}
+		return txGlobalQueryErr, nil
+	})}
+	if _, err := sGlobalQueryErr.ListSetIDs(context.Background(), "t1"); err == nil {
 		t.Fatal("expected error")
 	}
 

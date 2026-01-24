@@ -62,19 +62,22 @@ func (s *setidPGStore) withTx(ctx context.Context, tenantID string, fn func(tx p
 }
 
 func (s *setidPGStore) EnsureBootstrap(ctx context.Context, tenantID string, initiatorID string) error {
-	return s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, initiatorID)
 		return err
-	})
+	}); err != nil {
+		return err
+	}
+	return s.ensureGlobalShareSetID(ctx, initiatorID)
 }
 
 func (s *setidPGStore) ListSetIDs(ctx context.Context, tenantID string) ([]SetID, error) {
 	var out []SetID
-	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-SELECT setid, name, status
-FROM orgunit.setids
-WHERE tenant_id = $1::uuid
+	SELECT setid, name, status
+	FROM orgunit.setids
+	WHERE tenant_id = $1::uuid
 ORDER BY setid ASC
 `, tenantID)
 		if err != nil {
@@ -90,8 +93,17 @@ ORDER BY setid ASC
 			out = append(out, r)
 		}
 		return rows.Err()
-	})
-	return out, err
+	}); err != nil {
+		return nil, err
+	}
+
+	globalSetids, err := s.listGlobalSetIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, globalSetids...)
+	sort.Slice(out, func(i, j int) bool { return out[i].SetID < out[j].SetID })
+	return out, nil
 }
 
 func (s *setidPGStore) CreateSetID(ctx context.Context, tenantID string, setID string, name string, requestID string, initiatorID string) error {
@@ -162,6 +174,86 @@ SELECT orgunit.submit_setid_binding_event(
 	})
 }
 
+func (s *setidPGStore) ensureGlobalShareSetID(ctx context.Context, initiatorID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	var globalTenantID string
+	if err := tx.QueryRow(ctx, `SELECT orgunit.global_tenant_id()::text;`).Scan(&globalTenantID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, globalTenantID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_actor_scope', 'saas', true);`); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `
+SELECT orgunit.submit_global_setid_event(
+  gen_random_uuid(),
+  $1::uuid,
+  'BOOTSTRAP',
+  'SHARE',
+  jsonb_build_object('name', 'Shared'),
+  'bootstrap:share',
+  $2::uuid
+);
+`, globalTenantID, initiatorID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *setidPGStore) listGlobalSetIDs(ctx context.Context) ([]SetID, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	var globalTenantID string
+	if err := tx.QueryRow(ctx, `SELECT orgunit.global_tenant_id()::text;`).Scan(&globalTenantID); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, globalTenantID); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.allow_share_read', 'on', true);`); err != nil {
+		return nil, err
+	}
+
+	rows, err := tx.Query(ctx, `
+SELECT setid, name, status
+FROM orgunit.global_setids
+WHERE tenant_id = $1::uuid
+ORDER BY setid ASC
+`, globalTenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []SetID
+	for rows.Next() {
+		var r SetID
+		if err := rows.Scan(&r.SetID, &r.Name, &r.Status); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (s *setidPGStore) CreateGlobalSetID(ctx context.Context, name string, requestID string, initiatorID string, actorScope string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -219,11 +311,17 @@ func (s *setidMemoryStore) EnsureBootstrap(_ context.Context, tenantID string, _
 	if _, ok := s.setids[tenantID]["DEFLT"]; !ok {
 		s.setids[tenantID]["DEFLT"] = SetID{SetID: "DEFLT", Name: "Default", Status: "active"}
 	}
+	if s.globalSetIDName == "" {
+		s.globalSetIDName = "Shared"
+	}
 	return nil
 }
 
 func (s *setidMemoryStore) ListSetIDs(_ context.Context, tenantID string) ([]SetID, error) {
 	var out []SetID
+	if s.globalSetIDName != "" {
+		out = append(out, SetID{SetID: "SHARE", Name: s.globalSetIDName, Status: "active"})
+	}
 	for _, v := range s.setids[tenantID] {
 		out = append(out, v)
 	}
