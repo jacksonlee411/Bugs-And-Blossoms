@@ -1766,6 +1766,30 @@ func TestHandleJobCatalog_Post_DefaultActionAndEffectiveDate(t *testing.T) {
 	}
 }
 
+func TestResolveSetIDOrDefaultTx(t *testing.T) {
+	t.Run("fallback to default", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{err: &pgconn.PgError{Message: "SETID_BINDING_MISSING"}}}
+		got, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01")
+		if err != nil || got != "DEFLT" {
+			t.Fatalf("got=%q err=%v", got, err)
+		}
+		if tx.execN != 3 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+
+	t.Run("success path", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{"S2601"}}}
+		got, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01")
+		if err != nil || got != "S2601" {
+			t.Fatalf("got=%q err=%v", got, err)
+		}
+		if tx.execN != 2 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+}
+
 func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 	beginErrStore := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return nil, errors.New("begin fail")
