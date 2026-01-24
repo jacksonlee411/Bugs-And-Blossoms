@@ -174,6 +174,19 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
 			requestID:     "r1",
 		},
 		{
+			name: "savepoint error",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{
+					row:       &stubRow{vals: []any{"e1"}},
+					execErr:   errors.New("exec fail"),
+					execErrAt: 2,
+				}, nil
+			})},
+			effectiveDate: "2026-01-01",
+			orgID:         "org1",
+			requestID:     "r1",
+		},
+		{
 			name: "submit error",
 			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 				return &stubTx{row: &stubRow{vals: []any{"e1"}}, execErr: errors.New("exec fail"), execErrAt: 3}, nil
@@ -241,6 +254,33 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Idempotent(t *testing.T) {
 			t.Fatal("expected error")
 		}
 	})
+}
+
+type rollbackErrTx struct {
+	*stubTx
+	rollbackErr error
+}
+
+func (t *rollbackErrTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	if strings.Contains(sql, "ROLLBACK TO SAVEPOINT") {
+		return pgconn.CommandTag{}, t.rollbackErr
+	}
+	return t.stubTx.Exec(ctx, sql, args...)
+}
+
+func TestOrgUnitPGStore_SetBusinessUnitCurrent_RollbackError(t *testing.T) {
+	tx := &rollbackErrTx{
+		stubTx: &stubTx{
+			row:       &stubRow{vals: []any{"e1"}},
+			execErr:   errors.New("exec fail"),
+			execErrAt: 3,
+		},
+		rollbackErr: errors.New("rollback fail"),
+	}
+	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+	if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "org1", true, "r1"); err == nil {
+		t.Fatal("expected error")
+	}
 }
 
 func TestHandleOrgNodes_MissingTenant(t *testing.T) {

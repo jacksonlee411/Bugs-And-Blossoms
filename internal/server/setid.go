@@ -191,6 +191,9 @@ func (s *setidPGStore) ensureGlobalShareSetID(ctx context.Context, initiatorID s
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_actor_scope', 'saas', true);`); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.allow_share_read', 'on', true);`); err != nil {
+		return err
+	}
 
 	if _, err := tx.Exec(ctx, `
 SELECT orgunit.submit_global_setid_event(
