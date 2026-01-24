@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_events (
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT setid_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','CREATE','RENAME','DISABLE')),
-  CONSTRAINT setid_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT setid_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
+  CONSTRAINT setid_events_share_forbidden CHECK (setid <> 'SHARE'),
   CONSTRAINT setid_events_request_id_unique UNIQUE (tenant_id, request_id)
 );
 
@@ -28,76 +29,84 @@ CREATE TABLE IF NOT EXISTS orgunit.setids (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_id, setid),
-  CONSTRAINT setids_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT setids_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
+  CONSTRAINT setids_share_forbidden CHECK (setid <> 'SHARE'),
   CONSTRAINT setids_status_check CHECK (status IN ('active','disabled')),
-  CONSTRAINT setids_share_must_be_active CHECK (setid <> 'SHARE' OR status = 'active')
+  CONSTRAINT setids_deflt_active_check CHECK (setid <> 'DEFLT' OR status = 'active')
 );
 
-CREATE TABLE IF NOT EXISTS orgunit.business_unit_events (
+CREATE TABLE IF NOT EXISTS orgunit.global_setid_events (
   id bigserial PRIMARY KEY,
   event_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL,
+  tenant_id uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
   event_type text NOT NULL,
-  business_unit_id text NOT NULL,
+  setid text NOT NULL DEFAULT 'SHARE',
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   request_id text NOT NULL,
   initiator_id uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT business_unit_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','CREATE','RENAME','DISABLE')),
-  CONSTRAINT business_unit_events_id_format_check CHECK (business_unit_id ~ '^[A-Z0-9]{1,5}$'),
-  CONSTRAINT business_unit_events_request_id_unique UNIQUE (tenant_id, request_id)
+  CONSTRAINT global_setid_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','CREATE','RENAME','DISABLE')),
+  CONSTRAINT global_setid_events_setid_check CHECK (setid = 'SHARE'),
+  CONSTRAINT global_setid_events_tenant_check CHECK (tenant_id = orgunit.global_tenant_id()),
+  CONSTRAINT global_setid_events_request_id_unique UNIQUE (tenant_id, request_id)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS business_unit_events_event_id_unique ON orgunit.business_unit_events (event_id);
-CREATE INDEX IF NOT EXISTS business_unit_events_tenant_time_idx ON orgunit.business_unit_events (tenant_id, transaction_time DESC, id DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS global_setid_events_event_id_unique ON orgunit.global_setid_events (event_id);
+CREATE INDEX IF NOT EXISTS global_setid_events_tenant_time_idx ON orgunit.global_setid_events (tenant_id, transaction_time DESC, id DESC);
 
-CREATE TABLE IF NOT EXISTS orgunit.business_units (
-  tenant_id uuid NOT NULL,
-  business_unit_id text NOT NULL,
+CREATE TABLE IF NOT EXISTS orgunit.global_setids (
+  tenant_id uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
+  setid text NOT NULL DEFAULT 'SHARE',
   name text NOT NULL,
   status text NOT NULL DEFAULT 'active',
-  last_event_id bigint NOT NULL REFERENCES orgunit.business_unit_events(id),
+  last_event_id bigint NOT NULL REFERENCES orgunit.global_setid_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, business_unit_id),
-  CONSTRAINT business_units_id_format_check CHECK (business_unit_id ~ '^[A-Z0-9]{1,5}$'),
-  CONSTRAINT business_units_status_check CHECK (status IN ('active','disabled'))
+  PRIMARY KEY (tenant_id, setid),
+  CONSTRAINT global_setids_share_only CHECK (setid = 'SHARE'),
+  CONSTRAINT global_setids_tenant_check CHECK (tenant_id = orgunit.global_tenant_id()),
+  CONSTRAINT global_setids_status_check CHECK (status = 'active')
 );
 
-CREATE TABLE IF NOT EXISTS orgunit.set_control_mapping_events (
+CREATE TABLE IF NOT EXISTS orgunit.setid_binding_events (
   id bigserial PRIMARY KEY,
   event_id uuid NOT NULL DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
+  org_id uuid NOT NULL,
   event_type text NOT NULL,
-  record_group text NOT NULL,
+  effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   request_id text NOT NULL,
   initiator_id uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT set_control_mapping_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','PUT')),
-  CONSTRAINT set_control_mapping_events_record_group_check CHECK (record_group IN ('jobcatalog')),
-  CONSTRAINT set_control_mapping_events_request_id_unique UNIQUE (tenant_id, request_id)
+  CONSTRAINT setid_binding_events_event_type_check CHECK (event_type IN ('BIND')),
+  CONSTRAINT setid_binding_events_event_id_unique UNIQUE (event_id),
+  CONSTRAINT setid_binding_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT setid_binding_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS set_control_mapping_events_event_id_unique ON orgunit.set_control_mapping_events (event_id);
-CREATE INDEX IF NOT EXISTS set_control_mapping_events_tenant_time_idx ON orgunit.set_control_mapping_events (tenant_id, transaction_time DESC, id DESC);
+CREATE INDEX IF NOT EXISTS setid_binding_events_tenant_effective_idx ON orgunit.setid_binding_events (tenant_id, org_id, effective_date, id);
 
-CREATE TABLE IF NOT EXISTS orgunit.set_control_mappings (
+CREATE TABLE IF NOT EXISTS orgunit.setid_binding_versions (
+  id bigserial PRIMARY KEY,
   tenant_id uuid NOT NULL,
-  business_unit_id text NOT NULL,
-  record_group text NOT NULL,
+  org_id uuid NOT NULL,
   setid text NOT NULL,
-  last_event_id bigint NOT NULL REFERENCES orgunit.set_control_mapping_events(id),
+  validity daterange NOT NULL,
+  last_event_id bigint NOT NULL REFERENCES orgunit.setid_binding_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, business_unit_id, record_group),
-  CONSTRAINT set_control_mappings_record_group_check CHECK (record_group IN ('jobcatalog')),
-  CONSTRAINT set_control_mappings_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
-  CONSTRAINT set_control_mappings_bu_format_check CHECK (business_unit_id ~ '^[A-Z0-9]{1,5}$'),
-  CONSTRAINT set_control_mappings_setid_fk FOREIGN KEY (tenant_id, setid) REFERENCES orgunit.setids (tenant_id, setid),
-  CONSTRAINT set_control_mappings_bu_fk FOREIGN KEY (tenant_id, business_unit_id) REFERENCES orgunit.business_units (tenant_id, business_unit_id)
+  CONSTRAINT setid_binding_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
+  CONSTRAINT setid_binding_setid_fk FOREIGN KEY (tenant_id, setid) REFERENCES orgunit.setids (tenant_id, setid),
+  CONSTRAINT setid_binding_no_share CHECK (setid <> 'SHARE'),
+  CONSTRAINT setid_binding_validity_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
+  CONSTRAINT setid_binding_no_overlap EXCLUDE USING gist (
+    tenant_id WITH =,
+    org_id WITH =,
+    validity WITH &&
+  )
 );
 
 ALTER TABLE orgunit.setid_events ENABLE ROW LEVEL SECURITY;
@@ -114,42 +123,57 @@ CREATE POLICY tenant_isolation ON orgunit.setids
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
-ALTER TABLE orgunit.business_unit_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orgunit.business_unit_events FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON orgunit.business_unit_events;
-CREATE POLICY tenant_isolation ON orgunit.business_unit_events
+ALTER TABLE orgunit.setid_binding_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.setid_binding_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.setid_binding_events;
+CREATE POLICY tenant_isolation ON orgunit.setid_binding_events
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
-ALTER TABLE orgunit.business_units ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orgunit.business_units FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON orgunit.business_units;
-CREATE POLICY tenant_isolation ON orgunit.business_units
+ALTER TABLE orgunit.setid_binding_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.setid_binding_versions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.setid_binding_versions;
+CREATE POLICY tenant_isolation ON orgunit.setid_binding_versions
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
-ALTER TABLE orgunit.set_control_mapping_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orgunit.set_control_mapping_events FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON orgunit.set_control_mapping_events;
-CREATE POLICY tenant_isolation ON orgunit.set_control_mapping_events
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+ALTER TABLE orgunit.global_setid_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.global_setid_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS share_scope ON orgunit.global_setid_events;
+CREATE POLICY share_scope ON orgunit.global_setid_events
+USING (
+  tenant_id = orgunit.global_tenant_id()
+  AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
+  AND current_setting('app.allow_share_read', true) = 'on'
+)
+WITH CHECK (
+  tenant_id = orgunit.global_tenant_id()
+  AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
+  AND current_setting('app.current_actor_scope', true) = 'saas'
+);
 
-ALTER TABLE orgunit.set_control_mappings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orgunit.set_control_mappings FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON orgunit.set_control_mappings;
-CREATE POLICY tenant_isolation ON orgunit.set_control_mappings
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+ALTER TABLE orgunit.global_setids ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.global_setids FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS share_scope ON orgunit.global_setids;
+CREATE POLICY share_scope ON orgunit.global_setids
+USING (
+  tenant_id = orgunit.global_tenant_id()
+  AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
+  AND current_setting('app.allow_share_read', true) = 'on'
+)
+WITH CHECK (
+  tenant_id = orgunit.global_tenant_id()
+  AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
+  AND current_setting('app.current_actor_scope', true) = 'saas'
+);
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
-DROP TABLE IF EXISTS orgunit.set_control_mappings;
-DROP TABLE IF EXISTS orgunit.set_control_mapping_events;
-DROP TABLE IF EXISTS orgunit.business_units;
-DROP TABLE IF EXISTS orgunit.business_unit_events;
+DROP TABLE IF EXISTS orgunit.setid_binding_versions;
+DROP TABLE IF EXISTS orgunit.setid_binding_events;
+DROP TABLE IF EXISTS orgunit.global_setids;
+DROP TABLE IF EXISTS orgunit.global_setid_events;
 DROP TABLE IF EXISTS orgunit.setids;
 DROP TABLE IF EXISTS orgunit.setid_events;
 -- +goose StatementEnd
-

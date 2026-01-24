@@ -5,6 +5,7 @@ RETURNS TABLE (
   org_id uuid,
   parent_id uuid,
   name varchar(255),
+  is_business_unit boolean,
   full_name_path text,
   depth int,
   manager_id uuid,
@@ -28,6 +29,7 @@ BEGIN
       v.parent_id,
       v.node_path,
       v.name,
+      v.is_business_unit,
       v.manager_id,
       v.path_ids
     FROM orgunit.org_unit_versions v
@@ -40,6 +42,7 @@ BEGIN
     s.org_id,
     s.parent_id,
     s.name,
+    s.is_business_unit,
     (
       SELECT string_agg(a.name, ' / ' ORDER BY t.idx)
       FROM unnest(s.path_ids) WITH ORDINALITY AS t(uid, idx)

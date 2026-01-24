@@ -249,9 +249,29 @@ func (r *fakeRows) Next() bool {
 	return true
 }
 func (r *fakeRows) Scan(dest ...any) error {
-	*(dest[0].(*string)) = "n1"
-	*(dest[1].(*string)) = "Node"
-	*(dest[2].(*time.Time)) = time.Unix(123, 0).UTC()
+	strings := []string{"n1", "Node"}
+	stringN := 0
+	for _, d := range dest {
+		switch v := d.(type) {
+		case *string:
+			if stringN < len(strings) {
+				*v = strings[stringN]
+				stringN++
+				continue
+			}
+			*v = ""
+		case *bool:
+			*v = false
+		case *time.Time:
+			*v = time.Unix(123, 0).UTC()
+		case *int:
+			*v = 0
+		case *int64:
+			*v = 0
+		default:
+			return errors.New("unsupported scan type")
+		}
+	}
 	return nil
 }
 func (r *fakeRows) Values() ([]any, error) { return nil, nil }

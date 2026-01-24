@@ -200,6 +200,26 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/orgunit/api/setids":
+		if method == http.MethodPost {
+			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/orgunit/api/setid-bindings":
+		if method == http.MethodPost {
+			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/orgunit/api/global-setids":
+		if method == http.MethodPost {
+			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/orgunit/api/org-units/set-business-unit":
+		if method == http.MethodPost {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/person/persons":
 		if method == http.MethodGet {
 			return authz.ObjectPersonPersons, authz.ActionRead, true

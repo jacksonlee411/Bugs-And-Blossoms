@@ -225,6 +225,46 @@ func TestNewHandler_DefaultAllowlistNotFound(t *testing.T) {
 	}
 }
 
+func TestNewHandlerWithOptions_PGStoreDefaults(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    &orgUnitPGStore{pool: &fakeBeginner{}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestNewHandlerWithOptions_MissingTenancyResolver_Error(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+
+	_, err = NewHandlerWithOptions(HandlerOptions{
+		OrgUnitStore: newOrgUnitMemoryStore(),
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestUI_ShellAndPartials(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -619,6 +659,89 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	rOther := &http.Request{Header: http.Header{}}
 	rOther.AddCookie(&http.Cookie{Name: "lang", Value: "fr"})
 	_ = lang(rOther)
+}
+
+func TestNewHandler_InternalAPIRoutes(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+	t.Setenv("AUTHZ_MODE", "shadow")
+
+	orgStore := newOrgUnitMemoryStore()
+	tenantID := "00000000-0000-0000-0000-000000000001"
+	node, err := orgStore.CreateNodeCurrent(context.Background(), tenantID, "2026-01-01", "Org1", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setidStore := newSetIDMemoryStore().(*setidMemoryStore)
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
+			Email:            "tenant-admin@example.invalid",
+		}},
+		OrgUnitStore: orgStore,
+		SetIDStore:   setidStore,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	loginReq.Host = "localhost:8080"
+	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginRec := httptest.NewRecorder()
+	h.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusFound {
+		t.Fatalf("login status=%d", loginRec.Code)
+	}
+	var session *http.Cookie
+	for _, c := range loginRec.Result().Cookies() {
+		if c.Name == sidCookieName {
+			session = c
+			break
+		}
+	}
+	if session == nil {
+		t.Fatal("missing session cookie")
+	}
+
+	postJSON := func(path string, body string, headers map[string]string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Host = "localhost:8080"
+		req.Header.Set("Content-Type", "application/json")
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		req.AddCookie(session)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	recSet := postJSON("/orgunit/api/setids", `{"setid":"A0001","name":"Default","request_id":"r1"}`, nil)
+	if recSet.Code != http.StatusCreated {
+		t.Fatalf("setid status=%d", recSet.Code)
+	}
+
+	recBind := postJSON("/orgunit/api/setid-bindings", `{"org_unit_id":"`+node.ID+`","setid":"A0001","effective_date":"2026-01-01","request_id":"r2"}`, nil)
+	if recBind.Code != http.StatusCreated {
+		t.Fatalf("binding status=%d", recBind.Code)
+	}
+
+	recGlobal := postJSON("/orgunit/api/global-setids", `{"name":"Shared","request_id":"r3"}`, map[string]string{"X-Actor-Scope": "saas"})
+	if recGlobal.Code != http.StatusCreated {
+		t.Fatalf("global setid status=%d", recGlobal.Code)
+	}
+
+	recBU := postJSON("/orgunit/api/org-units/set-business-unit", `{"org_unit_id":"`+node.ID+`","effective_date":"2026-01-01","is_business_unit":true,"request_id":"r4"}`, nil)
+	if recBU.Code != http.StatusCreated {
+		t.Fatalf("set business unit status=%d", recBU.Code)
+	}
 }
 
 func TestNewHandlerWithOptions_DefaultOrgUnitSnapshotStoreFromPGStore(t *testing.T) {

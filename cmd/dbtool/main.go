@@ -302,7 +302,7 @@ func staffingSmoke(args []string) {
 			  $3::uuid,
 			  'CREATE',
 			  $4::date,
-			  jsonb_build_object('org_unit_id', $5::text, 'business_unit_id', 'BU000', 'name', 'Smoke Position'),
+			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position'),
 			  $6::text,
 			  $7::uuid
 			);
@@ -343,7 +343,7 @@ func staffingSmoke(args []string) {
 			  $3::uuid,
 			  'CREATE',
 			  $4::date,
-			  jsonb_build_object('org_unit_id', $5::text, 'business_unit_id', 'BU000', 'name', 'Smoke Position'),
+			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position'),
 			  $6::text,
 			  $7::uuid
 			);
@@ -566,7 +566,7 @@ func staffingSmoke(args []string) {
 					  $3::uuid,
 					  'CREATE',
 					  $4::date,
-					  jsonb_build_object('org_unit_id', $5::text, 'business_unit_id', 'BU000', 'name', 'Smoke Position 2'),
+					  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position 2'),
 					  $6::text,
 					  $7::uuid
 					);
@@ -742,7 +742,7 @@ func staffingSmoke(args []string) {
 				  $3::uuid,
 				  'CREATE',
 				  $4::date,
-				  jsonb_build_object('org_unit_id', $5::text, 'business_unit_id', 'BU000', 'name', 'Smoke Disable Test Position'),
+				  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Disable Test Position'),
 				  $6::text,
 				  $7::uuid
 				);
@@ -931,7 +931,7 @@ func staffingSmoke(args []string) {
 					  $3::uuid,
 					  'CREATE',
 					  $4::date,
-					  jsonb_build_object('org_unit_id', $5::text, 'business_unit_id', 'BU000', 'name', $6::text),
+					  jsonb_build_object('org_unit_id', $5::text, 'name', $6::text),
 					  $7::text,
 					  $8::uuid
 					);

@@ -293,16 +293,16 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleOrgSnapshot(w, r, orgSnapshotStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/setid", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetID(w, r, setidStore)
+		handleSetID(w, r, setidStore, orgStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/setid", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetID(w, r, setidStore)
+		handleSetID(w, r, setidStore, orgStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleJobCatalog(w, r, jobcatalogStore)
+		handleJobCatalog(w, r, orgStore, jobcatalogStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleJobCatalog(w, r, jobcatalogStore)
+		handleJobCatalog(w, r, orgStore, jobcatalogStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePositions(w, r, orgStore, positionStore, jobcatalogStore)
@@ -333,6 +333,18 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/assignment-events:rescind", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssignmentEventsRescindAPI(w, r, assignmentStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleSetIDsAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/setid-bindings", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleSetIDBindingsAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/global-setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleGlobalSetIDsAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/org-units/set-business-unit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsBusinessUnitAPI(w, r, orgStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/person/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePersons(w, r, personStore)

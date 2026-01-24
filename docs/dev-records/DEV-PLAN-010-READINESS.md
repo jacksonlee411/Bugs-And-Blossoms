@@ -97,11 +97,11 @@
   - 前置：`make dev-up`（需要本机 `.env.local`/`env.local`/`.env` 提供 `DB_PORT` 等；本仓库 `.env.local` 已被 `.gitignore` 忽略）
   - 启动：`make dev-server`
   - 登录：`curl -i -X POST -H 'Host: localhost:8080' -c /tmp/bb_cookies.txt http://127.0.0.1:8080/login`（拿到 `session=ok`）
-  - SetID/BU 创建：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=create_setid&setid=S2601&name=Smoke+SetID' http://127.0.0.1:8080/org/setid`（303）
-  - BU 创建：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=create_bu&business_unit_id=BU901&name=Smoke+BU' http://127.0.0.1:8080/org/setid`（303）
-  - Mappings 保存：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=save_mappings&map_BU000=SHARE&map_BU901=S2601' http://127.0.0.1:8080/org/setid`（303）
-  - JobCatalog 解析验证：`curl -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt 'http://127.0.0.1:8080/org/job-catalog?as_of=2026-01-01&business_unit_id=BU901'`（页面显示 `Resolved SetID: S2601`）
-  - Job Family Group 创建：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=create_job_family_group&effective_date=2026-01-01&business_unit_id=BU901&code=JC901&name=Smoke+Group&description=' 'http://127.0.0.1:8080/org/job-catalog?business_unit_id=BU901&as_of=2026-01-01'`（303）
+  - SetID 创建：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=create_setid&setid=S2601&name=Smoke+SetID' http://127.0.0.1:8080/org/setid`（303）
+  - OrgUnit 创建并标记 BU：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'effective_date=2026-01-01&name=BU901&is_business_unit=true' 'http://127.0.0.1:8080/org/nodes?as_of=2026-01-01'`（303；从 `/org/nodes` 列表复制生成的 `org_unit_id`）
+  - SetID 绑定（OrgUnit）：`curl -X POST -H 'Host: localhost:8080' -H 'Content-Type: application/json' -b /tmp/bb_cookies.txt -d '{\"org_unit_id\":\"<ORG_ID>\",\"setid\":\"S2601\",\"effective_date\":\"2026-01-01\",\"request_id\":\"smoke:setid:bind\"}' http://127.0.0.1:8080/orgunit/api/setid-bindings`（201）
+  - JobCatalog 解析验证：`curl -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt 'http://127.0.0.1:8080/org/job-catalog?as_of=2026-01-01&org_unit_id=<ORG_ID>'`（页面显示 `Resolved SetID: S2601`）
+  - Job Family Group 创建：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=create_job_family_group&effective_date=2026-01-01&org_unit_id=<ORG_ID>&job_family_group_code=JC901&job_family_group_name=Smoke+Group&job_family_group_description=' 'http://127.0.0.1:8080/org/job-catalog?org_unit_id=<ORG_ID>&as_of=2026-01-01'`（303）
   - 列表读取验证：同 GET 页面可见 `JC901 / Smoke Group` 行（写入→列表读取闭环）
 
 ## 11. DEV-PLAN-009M2（Person Identity + Staffing 纵切片）

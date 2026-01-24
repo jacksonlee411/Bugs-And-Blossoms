@@ -26,7 +26,6 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
       - 'org_unit_id'
       - 'name'
       - 'reports_to_position_id'
-      - 'business_unit_id'
       - 'job_profile_id'
       - 'lifecycle_status'
       - 'capacity_fte'
@@ -72,21 +71,19 @@ CREATE INDEX IF NOT EXISTS position_versions_lookup_btree
   ON staffing.position_versions (tenant_id, position_id, lower(validity));
 
 ALTER TABLE staffing.position_versions
-  ADD COLUMN IF NOT EXISTS business_unit_id text NOT NULL,
   ADD COLUMN IF NOT EXISTS jobcatalog_setid text NULL,
+  ADD COLUMN IF NOT EXISTS jobcatalog_setid_as_of date NULL,
   ADD COLUMN IF NOT EXISTS job_profile_id uuid NULL;
 
 ALTER TABLE staffing.position_versions
-  DROP CONSTRAINT IF EXISTS position_versions_business_unit_id_format_check,
   DROP CONSTRAINT IF EXISTS position_versions_jobcatalog_setid_format_check,
   DROP CONSTRAINT IF EXISTS position_versions_jobcatalog_setid_requires_bu_check,
   DROP CONSTRAINT IF EXISTS position_versions_job_profile_requires_setid_check,
   DROP CONSTRAINT IF EXISTS position_versions_job_profile_fk;
 
 ALTER TABLE staffing.position_versions
-  ADD CONSTRAINT position_versions_business_unit_id_format_check CHECK (business_unit_id ~ '^[A-Z0-9]{1,5}$'),
-  ADD CONSTRAINT position_versions_jobcatalog_setid_format_check CHECK (jobcatalog_setid IS NULL OR jobcatalog_setid ~ '^[A-Z0-9]{1,5}$'),
-  ADD CONSTRAINT position_versions_jobcatalog_setid_requires_bu_check CHECK (jobcatalog_setid IS NULL OR business_unit_id IS NOT NULL),
+  ADD CONSTRAINT position_versions_jobcatalog_setid_format_check CHECK (jobcatalog_setid IS NULL OR jobcatalog_setid ~ '^[A-Z0-9]{5}$'),
+  ADD CONSTRAINT position_versions_jobcatalog_setid_as_of_check CHECK (jobcatalog_setid IS NULL OR jobcatalog_setid_as_of IS NOT NULL),
   ADD CONSTRAINT position_versions_job_profile_requires_setid_check CHECK (job_profile_id IS NULL OR jobcatalog_setid IS NOT NULL);
 
 CREATE TABLE IF NOT EXISTS staffing.assignments (

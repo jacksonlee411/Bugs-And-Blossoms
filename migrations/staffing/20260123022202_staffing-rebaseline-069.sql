@@ -1,4 +1,5 @@
 -- +goose Up
+-- +goose StatementBegin
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 -- Add new schema named "staffing"
@@ -133,7 +134,7 @@ CREATE TABLE "staffing"."position_events" (
   CONSTRAINT "position_events_request_id_unique" UNIQUE ("tenant_id", "request_id"),
   CONSTRAINT "position_events_position_fk" FOREIGN KEY ("tenant_id", "position_id") REFERENCES "staffing"."positions" ("tenant_id", "id") ON UPDATE NO ACTION ON DELETE RESTRICT,
   CONSTRAINT "position_events_event_type_check" CHECK (event_type = ANY (ARRAY['CREATE'::text, 'UPDATE'::text])),
-  CONSTRAINT "position_events_payload_allowed_keys_check" CHECK ((((((((payload - 'org_unit_id'::text) - 'name'::text) - 'reports_to_position_id'::text) - 'business_unit_id'::text) - 'job_profile_id'::text) - 'lifecycle_status'::text) - 'capacity_fte'::text) = '{}'::jsonb),
+  CONSTRAINT "position_events_payload_allowed_keys_check" CHECK ((((((payload - 'org_unit_id'::text) - 'name'::text) - 'reports_to_position_id'::text) - 'job_profile_id'::text) - 'lifecycle_status'::text) - 'capacity_fte'::text) = '{}'::jsonb),
   CONSTRAINT "position_events_payload_is_object_check" CHECK (jsonb_typeof(payload) = 'object'::text)
 );
 -- create index "position_events_tenant_position_effective_idx" to table: "position_events"
@@ -151,19 +152,18 @@ CREATE TABLE "staffing"."position_versions" (
   "profile" jsonb NOT NULL DEFAULT '{}',
   "validity" daterange NOT NULL,
   "last_event_id" bigint NOT NULL,
-  "business_unit_id" text NOT NULL,
   "jobcatalog_setid" text NULL,
+  "jobcatalog_setid_as_of" date NULL,
   "job_profile_id" uuid NULL,
   PRIMARY KEY ("id"),
   CONSTRAINT "position_versions_no_overlap" EXCLUDE USING gist ("tenant_id" WITH =, "position_id" WITH =, "validity" WITH &&),
   CONSTRAINT "position_versions_last_event_id_fkey" FOREIGN KEY ("last_event_id") REFERENCES "staffing"."position_events" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION,
   CONSTRAINT "position_versions_position_fk" FOREIGN KEY ("tenant_id", "position_id") REFERENCES "staffing"."positions" ("tenant_id", "id") ON UPDATE NO ACTION ON DELETE RESTRICT,
   CONSTRAINT "position_versions_reports_to_fk" FOREIGN KEY ("tenant_id", "reports_to_position_id") REFERENCES "staffing"."positions" ("tenant_id", "id") ON UPDATE NO ACTION ON DELETE RESTRICT,
-  CONSTRAINT "position_versions_business_unit_id_format_check" CHECK (business_unit_id ~ '^[A-Z0-9]{1,5}$'::text),
   CONSTRAINT "position_versions_capacity_fte_check" CHECK (capacity_fte > (0)::numeric),
   CONSTRAINT "position_versions_job_profile_requires_setid_check" CHECK ((job_profile_id IS NULL) OR (jobcatalog_setid IS NOT NULL)),
-  CONSTRAINT "position_versions_jobcatalog_setid_format_check" CHECK ((jobcatalog_setid IS NULL) OR (jobcatalog_setid ~ '^[A-Z0-9]{1,5}$'::text)),
-  CONSTRAINT "position_versions_jobcatalog_setid_requires_bu_check" CHECK ((jobcatalog_setid IS NULL) OR (business_unit_id IS NOT NULL)),
+  CONSTRAINT "position_versions_jobcatalog_setid_format_check" CHECK ((jobcatalog_setid IS NULL) OR (jobcatalog_setid ~ '^[A-Z0-9]{5}$'::text)),
+  CONSTRAINT "position_versions_jobcatalog_setid_as_of_check" CHECK ((jobcatalog_setid IS NULL) OR (jobcatalog_setid_as_of IS NOT NULL)),
   CONSTRAINT "position_versions_lifecycle_status_check" CHECK (lifecycle_status = ANY (ARRAY['active'::text, 'disabled'::text])),
   CONSTRAINT "position_versions_profile_is_object_check" CHECK (jsonb_typeof(profile) = 'object'::text),
   CONSTRAINT "position_versions_validity_bounds_check" CHECK (lower_inc(validity) AND (NOT upper_inc(validity))),
@@ -228,6 +228,7 @@ CREATE POLICY tenant_isolation ON "staffing"."assignment_versions"
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
+-- +goose StatementEnd
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION staffing.assert_current_tenant(p_tenant_id uuid)
 RETURNS void
@@ -406,8 +407,8 @@ DECLARE
   v_last_validity daterange;
   v_org_unit_id uuid;
   v_reports_to_position_id uuid;
-  v_business_unit_id text;
   v_jobcatalog_setid text;
+  v_jobcatalog_setid_as_of date;
   v_job_profile_id uuid;
   v_name text;
   v_lifecycle_status text;
@@ -435,8 +436,8 @@ BEGIN
 
   v_org_unit_id := NULL;
   v_reports_to_position_id := NULL;
-  v_business_unit_id := NULL;
   v_jobcatalog_setid := NULL;
+  v_jobcatalog_setid_as_of := NULL;
   v_job_profile_id := NULL;
   v_name := NULL;
   v_lifecycle_status := 'active';
@@ -478,13 +479,6 @@ BEGIN
             MESSAGE = 'STAFFING_INVALID_ARGUMENT',
             DETAIL = format('org_unit_id=%s', v_row.payload->>'org_unit_id');
       END;
-
-      v_business_unit_id := NULLIF(btrim(v_row.payload->>'business_unit_id'), '');
-      IF v_business_unit_id IS NULL THEN
-        RAISE EXCEPTION USING
-          MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-          DETAIL = 'business_unit_id is required';
-      END IF;
 
       v_name := NULLIF(btrim(v_row.payload->>'name'), '');
 
@@ -586,15 +580,6 @@ BEGIN
         END;
       END IF;
 
-      IF v_row.payload ? 'business_unit_id' THEN
-        v_business_unit_id := NULLIF(btrim(v_row.payload->>'business_unit_id'), '');
-        IF v_business_unit_id IS NULL THEN
-          RAISE EXCEPTION USING
-            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-            DETAIL = 'business_unit_id is required';
-        END IF;
-      END IF;
-
       IF v_row.payload ? 'reports_to_position_id' THEN
         v_tmp_text := NULLIF(btrim(v_row.payload->>'reports_to_position_id'), '');
         IF v_tmp_text IS NULL THEN
@@ -673,10 +658,12 @@ BEGIN
         DETAIL = format('unexpected event_type: %s', v_row.event_type);
     END IF;
 
-    IF v_business_unit_id IS NOT NULL THEN
-      v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_business_unit_id, 'jobcatalog');
+    IF v_org_unit_id IS NOT NULL THEN
+      v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_org_unit_id, v_row.effective_date);
+      v_jobcatalog_setid_as_of := v_row.effective_date;
     ELSE
       v_jobcatalog_setid := NULL;
+      v_jobcatalog_setid_as_of := NULL;
     END IF;
 
     IF NOT EXISTS (
@@ -810,8 +797,8 @@ BEGIN
       profile,
       validity,
       last_event_id,
-      business_unit_id,
       jobcatalog_setid,
+      jobcatalog_setid_as_of,
       job_profile_id
     )
     VALUES (
@@ -825,8 +812,8 @@ BEGIN
       v_profile,
       v_validity,
       v_row.event_db_id,
-      v_business_unit_id,
       v_jobcatalog_setid,
+      v_jobcatalog_setid_as_of,
       v_job_profile_id
     );
 
@@ -1676,8 +1663,8 @@ RETURNS TABLE (
   position_id uuid,
   org_unit_id uuid,
   reports_to_position_id uuid,
-  business_unit_id text,
   jobcatalog_setid text,
+  jobcatalog_setid_as_of date,
   job_profile_id uuid,
   job_profile_code text,
   name text,
@@ -1698,12 +1685,12 @@ BEGIN
 
 	  RETURN QUERY
 	  SELECT
-	    pv.position_id,
-	    pv.org_unit_id,
-	    pv.reports_to_position_id,
-	    pv.business_unit_id,
-	    pv.jobcatalog_setid,
-	    pv.job_profile_id,
+    pv.position_id,
+    pv.org_unit_id,
+    pv.reports_to_position_id,
+    pv.jobcatalog_setid,
+    pv.jobcatalog_setid_as_of,
+    pv.job_profile_id,
 	    jp.code::text AS job_profile_code,
 	    pv.name,
 	    pv.lifecycle_status,

@@ -74,6 +74,9 @@ func TestIsStableDBCode(t *testing.T) {
 	if !isStableDBCode("STAFFING_ASSIGNMENT_ONE_PER_DAY") {
 		t.Fatal("expected true for stable code")
 	}
+	if !isStableDBCode("CODE_123") {
+		t.Fatal("expected true for digits")
+	}
 	if isStableDBCode("bad-code") {
 		t.Fatal("expected false for invalid code")
 	}

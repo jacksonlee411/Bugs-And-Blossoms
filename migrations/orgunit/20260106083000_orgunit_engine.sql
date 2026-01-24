@@ -97,6 +97,7 @@ BEGIN
     validity,
     name,
     status,
+    is_business_unit,
     manager_id,
     last_event_id
   )
@@ -109,6 +110,7 @@ BEGIN
     daterange(p_effective_date, upper(v_row.validity), '[)'),
     v_row.name,
     v_row.status,
+    v_row.is_business_unit,
     v_row.manager_id,
     p_event_db_id
   );
@@ -123,6 +125,7 @@ CREATE OR REPLACE FUNCTION orgunit.apply_create_logic(
   p_effective_date date,
   p_name text,
   p_manager_id uuid,
+  p_is_business_unit boolean,
   p_event_db_id bigint
 )
 RETURNS void
@@ -132,6 +135,7 @@ DECLARE
   v_parent_path ltree;
   v_node_path ltree;
   v_root_org_id uuid;
+  v_is_business_unit boolean;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_id);
 
@@ -175,6 +179,12 @@ BEGIN
     VALUES (p_tenant_id, p_hierarchy_type, p_org_id);
 
     v_node_path := text2ltree(orgunit.org_ltree_label(p_org_id));
+    IF p_is_business_unit IS NOT NULL AND p_is_business_unit = false THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'ORG_ROOT_BUSINESS_UNIT_REQUIRED',
+        DETAIL = format('org_id=%s', p_org_id);
+    END IF;
+    v_is_business_unit := true;
   ELSE
     SELECT t.root_org_id INTO v_root_org_id
     FROM orgunit.org_trees t
@@ -202,6 +212,7 @@ BEGIN
     END IF;
 
     v_node_path := v_parent_path || text2ltree(orgunit.org_ltree_label(p_org_id));
+    v_is_business_unit := COALESCE(p_is_business_unit, false);
   END IF;
 
   INSERT INTO orgunit.org_unit_versions (
@@ -213,6 +224,7 @@ BEGIN
     validity,
     name,
     status,
+    is_business_unit,
     manager_id,
     last_event_id
   )
@@ -222,9 +234,10 @@ BEGIN
     p_org_id,
     p_parent_id,
     v_node_path,
-    daterange(p_effective_date, 'infinity'::date, '[)'),
+    daterange(p_effective_date, NULL, '[)'),
     p_name,
     'active',
+    v_is_business_unit,
     p_manager_id,
     p_event_db_id
   );
@@ -347,6 +360,7 @@ BEGIN
     validity,
     name,
     status,
+    is_business_unit,
     manager_id,
     last_event_id
   )
@@ -362,6 +376,7 @@ BEGIN
     daterange(p_effective_date, upper(u.validity), '[)'),
     u.name,
     u.status,
+    u.is_business_unit,
     u.manager_id,
     p_event_db_id
   FROM upd u;
@@ -496,6 +511,89 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION orgunit.apply_set_business_unit_logic(
+  p_tenant_id uuid,
+  p_hierarchy_type text,
+  p_org_id uuid,
+  p_effective_date date,
+  p_is_business_unit boolean,
+  p_event_db_id bigint
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_stop_date date;
+  v_status text;
+  v_root_org_id uuid;
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+
+  IF p_hierarchy_type <> 'OrgUnit' THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_INVALID_ARGUMENT',
+      DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
+  END IF;
+  IF p_org_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
+  END IF;
+  IF p_effective_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
+  END IF;
+  IF p_is_business_unit IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'is_business_unit is required';
+  END IF;
+
+  SELECT v.status INTO v_status
+  FROM orgunit.org_unit_versions v
+  WHERE v.tenant_id = p_tenant_id
+    AND v.hierarchy_type = p_hierarchy_type
+    AND v.org_id = p_org_id
+    AND v.validity @> p_effective_date
+  ORDER BY lower(v.validity) DESC
+  LIMIT 1;
+
+  IF v_status IS NULL THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_NOT_FOUND_AS_OF',
+      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
+  END IF;
+  IF v_status <> 'active' THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_INACTIVE_AS_OF',
+      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
+  END IF;
+
+  SELECT t.root_org_id INTO v_root_org_id
+  FROM orgunit.org_trees t
+  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type;
+
+  IF v_root_org_id IS NOT NULL AND v_root_org_id = p_org_id AND p_is_business_unit = false THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_ROOT_BUSINESS_UNIT_REQUIRED',
+      DETAIL = format('org_id=%s', p_org_id);
+  END IF;
+
+  PERFORM orgunit.split_org_unit_version_at(p_tenant_id, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
+
+  SELECT MIN(e.effective_date) INTO v_stop_date
+  FROM orgunit.org_events e
+  WHERE e.tenant_id = p_tenant_id
+    AND e.hierarchy_type = p_hierarchy_type
+    AND e.org_id = p_org_id
+    AND e.event_type = 'SET_BUSINESS_UNIT'
+    AND e.effective_date > p_effective_date;
+
+  UPDATE orgunit.org_unit_versions
+  SET is_business_unit = p_is_business_unit, last_event_id = p_event_db_id
+  WHERE tenant_id = p_tenant_id
+    AND hierarchy_type = p_hierarchy_type
+    AND org_id = p_org_id
+    AND lower(validity) >= p_effective_date
+    AND (v_stop_date IS NULL OR lower(validity) < v_stop_date);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION orgunit.replay_org_unit_versions(
   p_tenant_id uuid,
   p_hierarchy_type text
@@ -512,6 +610,7 @@ DECLARE
   v_name text;
   v_new_name text;
   v_manager_id uuid;
+  v_is_business_unit boolean;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_id);
 
@@ -542,7 +641,18 @@ BEGIN
       v_parent_id := NULLIF(v_payload->>'parent_id', '')::uuid;
       v_name := NULLIF(btrim(v_payload->>'name'), '');
       v_manager_id := NULLIF(v_payload->>'manager_id', '')::uuid;
-      PERFORM orgunit.apply_create_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_parent_id, v_event.effective_date, v_name, v_manager_id, v_event.id);
+      v_is_business_unit := NULL;
+      IF v_payload ? 'is_business_unit' THEN
+        BEGIN
+          v_is_business_unit := (v_payload->>'is_business_unit')::boolean;
+        EXCEPTION
+          WHEN invalid_text_representation THEN
+            RAISE EXCEPTION USING
+              MESSAGE = 'ORG_INVALID_ARGUMENT',
+              DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
+        END;
+      END IF;
+      PERFORM orgunit.apply_create_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_parent_id, v_event.effective_date, v_name, v_manager_id, v_is_business_unit, v_event.id);
     ELSIF v_event.event_type = 'MOVE' THEN
       v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::uuid;
       PERFORM orgunit.apply_move_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_new_parent_id, v_event.effective_date, v_event.id);
@@ -551,6 +661,21 @@ BEGIN
       PERFORM orgunit.apply_rename_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_new_name, v_event.id);
     ELSIF v_event.event_type = 'DISABLE' THEN
       PERFORM orgunit.apply_disable_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_event.id);
+    ELSIF v_event.event_type = 'SET_BUSINESS_UNIT' THEN
+      IF NOT (v_payload ? 'is_business_unit') THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'ORG_INVALID_ARGUMENT',
+          DETAIL = 'is_business_unit is required';
+      END IF;
+      BEGIN
+        v_is_business_unit := (v_payload->>'is_business_unit')::boolean;
+      EXCEPTION
+        WHEN invalid_text_representation THEN
+          RAISE EXCEPTION USING
+            MESSAGE = 'ORG_INVALID_ARGUMENT',
+            DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
+      END;
+      PERFORM orgunit.apply_set_business_unit_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_is_business_unit, v_event.id);
     ELSE
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_INVALID_ARGUMENT',
@@ -639,7 +764,7 @@ BEGIN
       MESSAGE = 'ORG_INVALID_ARGUMENT',
       DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
   END IF;
-  IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE') THEN
+  IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT') THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_INVALID_ARGUMENT',
       DETAIL = format('unsupported event_type: %s', p_event_type);
@@ -649,6 +774,21 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
+  IF p_event_type = 'SET_BUSINESS_UNIT' THEN
+    IF NOT (v_payload ? 'is_business_unit') THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'ORG_INVALID_ARGUMENT',
+        DETAIL = 'is_business_unit is required';
+    END IF;
+    BEGIN
+      PERFORM (v_payload->>'is_business_unit')::boolean;
+    EXCEPTION
+      WHEN invalid_text_representation THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'ORG_INVALID_ARGUMENT',
+          DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
+    END;
+  END IF;
 
   INSERT INTO orgunit.org_events (
     event_id,
@@ -708,10 +848,11 @@ $$;
 -- +goose StatementBegin
 DROP FUNCTION IF EXISTS orgunit.submit_org_event(uuid, uuid, text, uuid, text, date, jsonb, text, uuid);
 DROP FUNCTION IF EXISTS orgunit.replay_org_unit_versions(uuid, text);
+DROP FUNCTION IF EXISTS orgunit.apply_set_business_unit_logic(uuid, text, uuid, date, boolean, bigint);
 DROP FUNCTION IF EXISTS orgunit.apply_disable_logic(uuid, text, uuid, date, bigint);
 DROP FUNCTION IF EXISTS orgunit.apply_rename_logic(uuid, text, uuid, date, text, bigint);
 DROP FUNCTION IF EXISTS orgunit.apply_move_logic(uuid, text, uuid, uuid, date, bigint);
-DROP FUNCTION IF EXISTS orgunit.apply_create_logic(uuid, text, uuid, uuid, date, text, uuid, bigint);
+DROP FUNCTION IF EXISTS orgunit.apply_create_logic(uuid, text, uuid, uuid, date, text, uuid, boolean, bigint);
 DROP FUNCTION IF EXISTS orgunit.split_org_unit_version_at(uuid, text, uuid, date, bigint);
 DROP FUNCTION IF EXISTS orgunit.assert_current_tenant(uuid);
 -- +goose StatementEnd

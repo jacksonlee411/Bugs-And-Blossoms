@@ -175,8 +175,8 @@ DECLARE
   v_last_validity daterange;
   v_org_unit_id uuid;
   v_reports_to_position_id uuid;
-  v_business_unit_id text;
   v_jobcatalog_setid text;
+  v_jobcatalog_setid_as_of date;
   v_job_profile_id uuid;
   v_name text;
   v_lifecycle_status text;
@@ -204,8 +204,8 @@ BEGIN
 
   v_org_unit_id := NULL;
   v_reports_to_position_id := NULL;
-  v_business_unit_id := NULL;
   v_jobcatalog_setid := NULL;
+  v_jobcatalog_setid_as_of := NULL;
   v_job_profile_id := NULL;
   v_name := NULL;
   v_lifecycle_status := 'active';
@@ -247,13 +247,6 @@ BEGIN
             MESSAGE = 'STAFFING_INVALID_ARGUMENT',
             DETAIL = format('org_unit_id=%s', v_row.payload->>'org_unit_id');
       END;
-
-      v_business_unit_id := NULLIF(btrim(v_row.payload->>'business_unit_id'), '');
-      IF v_business_unit_id IS NULL THEN
-        RAISE EXCEPTION USING
-          MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-          DETAIL = 'business_unit_id is required';
-      END IF;
 
       v_name := NULLIF(btrim(v_row.payload->>'name'), '');
 
@@ -355,15 +348,6 @@ BEGIN
         END;
       END IF;
 
-      IF v_row.payload ? 'business_unit_id' THEN
-        v_business_unit_id := NULLIF(btrim(v_row.payload->>'business_unit_id'), '');
-        IF v_business_unit_id IS NULL THEN
-          RAISE EXCEPTION USING
-            MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-            DETAIL = 'business_unit_id is required';
-        END IF;
-      END IF;
-
       IF v_row.payload ? 'reports_to_position_id' THEN
         v_tmp_text := NULLIF(btrim(v_row.payload->>'reports_to_position_id'), '');
         IF v_tmp_text IS NULL THEN
@@ -442,10 +426,12 @@ BEGIN
         DETAIL = format('unexpected event_type: %s', v_row.event_type);
     END IF;
 
-    IF v_business_unit_id IS NOT NULL THEN
-      v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_business_unit_id, 'jobcatalog');
+    IF v_org_unit_id IS NOT NULL THEN
+      v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_org_unit_id, v_row.effective_date);
+      v_jobcatalog_setid_as_of := v_row.effective_date;
     ELSE
       v_jobcatalog_setid := NULL;
+      v_jobcatalog_setid_as_of := NULL;
     END IF;
 
     IF NOT EXISTS (
@@ -579,8 +565,8 @@ BEGIN
       profile,
       validity,
       last_event_id,
-      business_unit_id,
       jobcatalog_setid,
+      jobcatalog_setid_as_of,
       job_profile_id
     )
     VALUES (
@@ -594,8 +580,8 @@ BEGIN
       v_profile,
       v_validity,
       v_row.event_db_id,
-      v_business_unit_id,
       v_jobcatalog_setid,
+      v_jobcatalog_setid_as_of,
       v_job_profile_id
     );
 
