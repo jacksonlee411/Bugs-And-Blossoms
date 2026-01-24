@@ -1788,6 +1788,68 @@ func TestResolveSetIDOrDefaultTx(t *testing.T) {
 			t.Fatalf("execN=%d", tx.execN)
 		}
 	})
+
+	t.Run("savepoint error", func(t *testing.T) {
+		tx := &stubTx{execErr: errors.New("savepoint fail"), execErrAt: 1}
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "savepoint fail") {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if tx.execN != 1 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+
+	t.Run("release error after success", func(t *testing.T) {
+		tx := &stubTx{
+			execErr:   errors.New("release fail"),
+			execErrAt: 2,
+			row:       &stubRow{vals: []any{"S2601"}},
+		}
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "release fail") {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if tx.execN != 2 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+
+	t.Run("rollback error after resolve failure", func(t *testing.T) {
+		tx := &stubTx{
+			execErr:   errors.New("rollback fail"),
+			execErrAt: 2,
+			row:       &stubRow{err: &pgconn.PgError{Message: "SETID_BINDING_MISSING"}},
+		}
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "rollback fail") {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if tx.execN != 2 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+
+	t.Run("release error after rollback", func(t *testing.T) {
+		tx := &stubTx{
+			execErr:   errors.New("release fail"),
+			execErrAt: 3,
+			row:       &stubRow{err: &pgconn.PgError{Message: "SETID_BINDING_MISSING"}},
+		}
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "release fail") {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if tx.execN != 3 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+
+	t.Run("non-binding error returns", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{err: &pgconn.PgError{Message: "ORG_NOT_FOUND_AS_OF"}}}
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "ORG_NOT_FOUND_AS_OF") {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if tx.execN != 3 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
 }
 
 func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {

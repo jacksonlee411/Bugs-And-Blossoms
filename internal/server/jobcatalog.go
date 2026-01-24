@@ -261,14 +261,14 @@ func resolveSetIDOrDefaultTx(ctx context.Context, tx pgx.Tx, tenantID string, or
 		}
 		return resolved, nil
 	}
-	if pgErrorMessage(err) != "SETID_BINDING_MISSING" {
-		return "", err
-	}
 	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_resolve_setid;`); rbErr != nil {
 		return "", rbErr
 	}
 	if _, releaseErr := tx.Exec(ctx, `RELEASE SAVEPOINT sp_resolve_setid;`); releaseErr != nil {
 		return "", releaseErr
+	}
+	if pgErrorMessage(err) != "SETID_BINDING_MISSING" {
+		return "", err
 	}
 	return "DEFLT", nil
 }
