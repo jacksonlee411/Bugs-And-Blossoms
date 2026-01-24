@@ -427,27 +427,32 @@ BEGIN
     END IF;
 
     IF v_org_unit_id IS NOT NULL THEN
-      v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_org_unit_id, v_row.effective_date);
-      v_jobcatalog_setid_as_of := v_row.effective_date;
+      IF NOT EXISTS (
+        SELECT 1
+        FROM orgunit.org_unit_versions ouv
+        WHERE ouv.tenant_id = p_tenant_id
+          AND ouv.hierarchy_type = 'OrgUnit'
+          AND ouv.org_id = v_org_unit_id
+          AND ouv.status = 'active'
+          AND ouv.validity @> v_row.effective_date
+        LIMIT 1
+      ) THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'STAFFING_ORG_UNIT_NOT_FOUND_AS_OF',
+          DETAIL = format('org_unit_id=%s as_of=%s', v_org_unit_id, v_row.effective_date);
+      END IF;
+
+      IF v_job_profile_id IS NOT NULL THEN
+        v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_org_unit_id, v_row.effective_date);
+        v_jobcatalog_setid_as_of := v_row.effective_date;
+      ELSE
+        v_jobcatalog_setid := NULL;
+        v_jobcatalog_setid_as_of := NULL;
+      END IF;
     ELSE
       v_jobcatalog_setid := NULL;
       v_jobcatalog_setid_as_of := NULL;
-    END IF;
-
-    IF NOT EXISTS (
-      SELECT 1
-      FROM orgunit.org_unit_versions ouv
-      WHERE ouv.tenant_id = p_tenant_id
-        AND ouv.hierarchy_type = 'OrgUnit'
-        AND ouv.org_id = v_org_unit_id
-        AND ouv.status = 'active'
-        AND ouv.validity @> v_row.effective_date
-      LIMIT 1
-    ) THEN
-      RAISE EXCEPTION USING
-        ERRCODE = 'P0001',
-        MESSAGE = 'STAFFING_ORG_UNIT_NOT_FOUND_AS_OF',
-        DETAIL = format('org_unit_id=%s as_of=%s', v_org_unit_id, v_row.effective_date);
     END IF;
 
     IF v_job_profile_id IS NOT NULL THEN
