@@ -133,7 +133,7 @@ CREATE TABLE "staffing"."position_events" (
   CONSTRAINT "position_events_request_id_unique" UNIQUE ("tenant_id", "request_id"),
   CONSTRAINT "position_events_position_fk" FOREIGN KEY ("tenant_id", "position_id") REFERENCES "staffing"."positions" ("tenant_id", "id") ON UPDATE NO ACTION ON DELETE RESTRICT,
   CONSTRAINT "position_events_event_type_check" CHECK (event_type = ANY (ARRAY['CREATE'::text, 'UPDATE'::text])),
-  CONSTRAINT "position_events_payload_allowed_keys_check" CHECK ((((((payload - 'org_unit_id'::text) - 'name'::text) - 'reports_to_position_id'::text) - 'job_profile_id'::text) - 'lifecycle_status'::text) - 'capacity_fte'::text) = '{}'::jsonb),
+  CONSTRAINT "position_events_payload_allowed_keys_check" CHECK (((((((payload - 'org_unit_id'::text) - 'name'::text) - 'reports_to_position_id'::text) - 'job_profile_id'::text) - 'lifecycle_status'::text) - 'capacity_fte'::text) = '{}'::jsonb),
   CONSTRAINT "position_events_payload_is_object_check" CHECK (jsonb_typeof(payload) = 'object'::text)
 );
 -- create index "position_events_tenant_position_effective_idx" to table: "position_events"
