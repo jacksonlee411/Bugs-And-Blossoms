@@ -74,6 +74,7 @@ DECLARE
   v_evt_id uuid;
   v_evt_db_id bigint;
   v_root_org_id uuid;
+  v_root_valid_from date;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_id);
   PERFORM orgunit.lock_setid_governance(p_tenant_id);
@@ -106,16 +107,18 @@ BEGIN
     RETURN;
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM orgunit.org_unit_versions v
-    WHERE v.tenant_id = p_tenant_id
-      AND v.hierarchy_type = 'OrgUnit'
-      AND v.org_id = v_root_org_id
-      AND v.status = 'active'
-      AND v.is_business_unit = true
-      AND v.validity @> current_date
-  ) THEN
+  SELECT lower(v.validity)::date INTO v_root_valid_from
+  FROM orgunit.org_unit_versions v
+  WHERE v.tenant_id = p_tenant_id
+    AND v.hierarchy_type = 'OrgUnit'
+    AND v.org_id = v_root_org_id
+    AND v.status = 'active'
+    AND v.is_business_unit = true
+    AND v.validity @> current_date
+  ORDER BY lower(v.validity) DESC
+  LIMIT 1;
+
+  IF v_root_valid_from IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'ORG_NOT_BUSINESS_UNIT_AS_OF',
@@ -127,13 +130,13 @@ BEGIN
     FROM orgunit.setid_binding_versions
     WHERE tenant_id = p_tenant_id
       AND org_id = v_root_org_id
-      AND validity @> current_date
+      AND validity @> v_root_valid_from
   ) THEN
     PERFORM orgunit.submit_setid_binding_event(
       gen_random_uuid(),
       p_tenant_id,
       v_root_org_id,
-      current_date,
+      v_root_valid_from,
       'DEFLT',
       'bootstrap:binding:deflt',
       p_initiator_id
