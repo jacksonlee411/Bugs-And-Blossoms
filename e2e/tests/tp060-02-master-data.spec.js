@@ -224,7 +224,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   if ((await page.locator("tr", { hasText: "S2601" }).count()) === 0) {
     await createSetID("S2601", "SetID S2601");
   }
-  await expect(page.getByText("DEFLT")).toBeVisible();
+  await expect(setidsTable).toContainText("DEFLT");
 
   const rdBindingExists =
     (await page.locator("tr", { hasText: orgIDsFromTree["R&D"] }).filter({ hasText: "S2601" }).count()) > 0 ||
