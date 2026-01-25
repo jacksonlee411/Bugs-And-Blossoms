@@ -41,6 +41,78 @@ func TestOrgUnitMemoryStore(t *testing.T) {
 	}
 }
 
+func TestOrgUnitPGStore_ResolveSetID(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("begin error", func(t *testing.T) {
+		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		})).(*orgUnitPGStore)
+		if _, err := store.ResolveSetID(ctx, "t1", "org1", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		})).(*orgUnitPGStore)
+		if _, err := store.ResolveSetID(ctx, "t1", "org1", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("resolve error", func(t *testing.T) {
+		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rowErr: errors.New("resolve")}, nil
+		})).(*orgUnitPGStore)
+		if _, err := store.ResolveSetID(ctx, "t1", "org1", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{commitErr: errors.New("commit")}
+			tx.row = &stubRow{vals: []any{"S2601"}}
+			return tx, nil
+		})).(*orgUnitPGStore)
+		if _, err := store.ResolveSetID(ctx, "t1", "org1", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{}
+			tx.row = &stubRow{vals: []any{"S2601"}}
+			return tx, nil
+		})).(*orgUnitPGStore)
+		got, err := store.ResolveSetID(ctx, "t1", "org1", "2026-01-01")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if got != "S2601" {
+			t.Fatalf("expected S2601, got %q", got)
+		}
+	})
+}
+
+func TestOrgUnitMemoryStore_ResolveSetID(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+
+	if _, err := store.ResolveSetID(context.Background(), "t1", "", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	got, err := store.ResolveSetID(context.Background(), "t1", "org1", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if got != "S2601" {
+		t.Fatalf("expected S2601, got %q", got)
+	}
+}
+
 func TestOrgUnitMemoryStore_RenameNodeCurrent_Errors(t *testing.T) {
 	s := newOrgUnitMemoryStore()
 	created, err := s.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)

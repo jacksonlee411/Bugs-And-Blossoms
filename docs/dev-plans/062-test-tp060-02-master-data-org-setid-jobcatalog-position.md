@@ -12,8 +12,8 @@
 - **业务价值**：为后续 TP-060-03（Person/Assignments）及考勤/薪酬子计划提供稳定的主数据底座，避免“不可见/不可操作”的僵尸交付（见 `AGENTS.md` 的用户可见性原则）。
 - **关键不变量（必须 fail-closed）**：
   - `as_of` 为日粒度（date），所有读取必须显式传入 `as_of=YYYY-MM-DD`（对齐 `docs/dev-plans/032-effective-date-day-granularity.md`）。
-- SetID 绑定必须显式存在：根组织绑定 `DEFLT`，业务单元节点允许绑定其他 SetID；解析只沿 `is_business_unit=true` 的祖先链路，缺绑定或非法状态必须 fail-closed（对齐 `docs/dev-plans/070-setid-orgunit-binding-redesign.md`）。
-- 对不存在/disabled 的 `org_unit_id` 必须 fail-closed（不得解析出任何 SetID）。
+- SetID 绑定必须显式存在：根组织绑定 `DEFLT`，业务单元节点允许绑定其他 SetID；绑定管理与审计解析仍沿 `is_business_unit=true` 的祖先链路，缺绑定或非法状态必须 fail-closed（对齐 `docs/dev-plans/070-setid-orgunit-binding-redesign.md`）。
+- 配置主数据入口必须显式携带 `setid`；Position 创建必须选择 Job Profile，且可选列表由 `org_unit_id` 解析得到的 setid 提供（不要求手工选择 setid，缺绑定/非法必须 fail-closed）。
 
 ## 2. 目标与非目标
 
@@ -21,16 +21,16 @@
 
 - [X] **OrgUnit**：可在 `/org/nodes` 完成 Root + 5 个一级部门创建，刷新后列表可见；并记录每个 `org_unit_id`。
 - [X] **SetID**：可在 `/org/setid` 完成 SetID 创建与组织绑定；业务单元节点允许绑定 SetID；不存在/disabled 的 `org_unit_id` 必须 fail-closed。
-- [X] **JobCatalog**：在 `/org/job-catalog` 能看到 `Resolved SetID: S2601`，并覆盖 groups/families/levels/profiles 的“写入→as_of 读取→UI 可见”闭环，且包含至少 1 个跨日期场景（Job Family reparenting 的前后对比）。
+- [X] **JobCatalog**：在 `/org/job-catalog` 能看到 `SetID: S2601`，并覆盖 groups/families/levels/profiles 的“写入→as_of 读取→UI 可见”闭环，且包含至少 1 个跨日期场景（Job Family reparenting 的前后对比）。
 - [X] **Position（基础）**：在 `/org/positions` 能创建 10 条职位，刷新后列表可见且包含 `position_id`；创建时 OrgUnit 下拉可用（不出现 `(no org units)`）。
-- [X] **Position（M5：与 JobCatalog/SetID 组合）**：至少 1 条职位能绑定 `org_unit_id=<R&D>` + `job_profile=JP-SWE`，且列表中可见：
+- [X] **Position（M5：与 JobCatalog/SetID 组合）**：至少 1 条职位能绑定 `org_unit_id=<R&D>` + `job_profile=JP-SWE`（由 org_unit 解析 setid），且列表中可见：
   - `org_unit_id=<R&D>`
-  - `jobcatalog_setid=S2601`
+  - `jobcatalog_setid=S2601`（解析结果）
   - `job_profile` 显示 `JP-SWE (...)`（或等效可解释文本）
 - [X] **Position（M5：fail-closed 负例，Internal API）**：至少覆盖 3 个负例断言（1 个参数校验 + 2 个稳定错误码）：
   - `400`：缺失 `org_unit_id`（`code=org_unit_id is required`）
-  - `ORG_NOT_FOUND_AS_OF`：绑定不存在的 `org_unit_id`（422）
-  - `JOBCATALOG_REFERENCE_NOT_FOUND`：跨 SetID 引用 `job_profile_id`（422；`org_unit_id` 解析为 `S2601`，但 `job_profile_id` 属于其他 setid）
+  - `SETID_BINDING_MISSING/SETID_DISABLED/ORG_NOT_FOUND_AS_OF`：org_unit 解析 setid 失败（422）
+  - `JOBCATALOG_REFERENCE_NOT_FOUND`：`job_profile_id` 不属于解析得到的 setid（422）
 
 ### 2.2 非目标
 
@@ -115,14 +115,13 @@
   - 根组织绑定：`DEFLT`（必须存在）
   - 绑定：`R&D -> S2601`
   - 断言：绑定只能落在 `is_business_unit=true` 的节点；解析命中最近祖先绑定
-- JobCatalog（`org_unit_id=<R&D>` → `Resolved SetID=S2601`）：
+- JobCatalog（`setid=S2601`）：
   - Job Family Group：至少 2 条（建议使用 `JFG-ENG`、`JFG-SALES`）
 - Position：10 条（建议命名见 §7.4；需覆盖多个 OrgUnit）
 
-### 5.2 增量数据（用于继承解析 + fail-closed）
+### 5.2 增量数据（用于显式 SetID + fail-closed）
 
-- 继承解析验证：选择非业务单元节点（例如 `HQ`）访问 JobCatalog，期望解析到 `DEFLT`。
-- fail-closed 负例：使用一个不存在的 `org_unit_id`（**不**创建）访问 JobCatalog。
+- fail-closed 负例：使用不存在/非法 `setid` 访问 JobCatalog。
 - 跨 SetID 负例准备：
   - 创建 `SetID=S2602`（若不存在）。
   - 将 `Sales` 绑定为 `S2602`（`is_business_unit=true`）。
@@ -151,29 +150,28 @@
 
 ### 6.3 JobCatalog：`/org/job-catalog`（UI）
 
-- `GET /org/job-catalog?as_of=YYYY-MM-DD&org_unit_id=<uuid>`
-  - 页面应显示 `Resolved SetID: <setid>`；若解析失败，应显式显示错误信息，且不得展示错误的 `Resolved SetID`。
-- `POST /org/job-catalog?as_of=...&org_unit_id=...`：创建 Job Family Group（成功后 `303` 跳回 `/org/job-catalog?org_unit_id=...&as_of=<effective_date>`）。
+- `GET /org/job-catalog?as_of=YYYY-MM-DD&setid=<setid>`
+  - 页面应显示 `SetID: <setid>`；若 `setid` 缺失/非法，应显式显示错误信息。
+- `POST /org/job-catalog?as_of=...&setid=...`：创建 Job Family Group（成功后 `303` 跳回 `/org/job-catalog?setid=...&as_of=<effective_date>`）。
 - 关键字段：
   - `effective_date`（默认：`as_of`）
-  - `org_unit_id`（用于 SetID 解析）
+  - `setid`（显式；必须为租户 `active` 且非 `SHARE`）
   - `code`/`name`（必填；空值应提示 `code/name is required`）
   - `description`（可空）
 - Authz 口径：`GET=read`，`POST=admin`。
 
 ### 6.4 Position：`/org/positions`（UI）
 
-- `GET /org/positions?as_of=YYYY-MM-DD`：展示 JobCatalog Context（OrgUnit 选择）、创建表单、更新/停用表单与职位列表。
-  - 可选：`org_unit_id=<uuid>`（用于加载 Job Profiles 下拉，并显示 `Resolved SetID`）
+- `GET /org/positions?as_of=YYYY-MM-DD`：展示 JobCatalog Context（OrgUnit 选择 + 解析得到的 SetID）、创建表单、更新/停用表单与职位列表。
+  - 可选：`org_unit_id=<uuid>`（用于列表过滤与预选 OrgUnit）
 - `POST /org/positions?as_of=YYYY-MM-DD`：
-  - Create：`position_id` 为空时创建职位（成功后 `303` 跳回 `/org/positions?as_of=<effective_date>`，若表单带 `org_unit_id` 则 redirect 保留 `org_unit_id`）。
+  - Create：`position_id` 为空时创建职位（成功后 `303` 跳回 `/org/positions?as_of=<effective_date>`，若携带 `org_unit_id` 则 redirect 保留）。
   - Update/Disable：`position_id` 非空时更新/停用职位（同上）。
 - 关键字段：
-  - JobCatalog Context（GET 表单）：`org_unit_id`（用于加载 job profiles；不影响已有 position 的字段）
-  - Create（POST）：`effective_date`（默认：`as_of`；非法日期应提示 `effective_date 无效: ...`）、`org_unit_id`（必填）、`job_profile_id`（可空；若填写则必须属于该 `org_unit_id` 解析出的 `jobcatalog_setid`）、`capacity_fte`（可空；默认 1.0）、`name`（可空）
+  - JobCatalog Context（GET 表单）：`org_unit_id`（用于解析 setid 并加载 job profiles）
+  - Create（POST）：`effective_date`（默认：`as_of`；非法日期应提示 `effective_date 无效: ...`）、`org_unit_id`（必填）、`job_profile_id`（必填；必须归属解析得到的 setid）、`capacity_fte`（可空；默认 1.0）、`name`（可空）
   - Update/Disable（POST，patch 语义）：`position_id` 必填，其余字段为“可选 patch”
-    - `org_unit_id` / `reports_to_position_id` / `capacity_fte` / `name` / `lifecycle_status`
-    - `job_profile_id="__CLEAR__"` 表示清空（UI 下拉提供）
+    - `org_unit_id` / `reports_to_position_id` / `job_profile_id` / `capacity_fte` / `name` / `lifecycle_status`
 - Authz 口径：`GET=read`，`POST=admin`。
 
 ### 6.5 Position：`/org/api/positions`（Internal API，用于稳定错误码断言）
@@ -182,11 +180,11 @@
   - 200：`{"as_of","tenant","positions":[...]}`（positions 元素包含 `PositionID/OrgUnitID/JobCatalogSetID/JobProfileID/JobProfileCode/CapacityFTE/LifecycleStatus/...`）
   - 400：`code=invalid_as_of`
 - `POST /org/api/positions?as_of=YYYY-MM-DD`：
-  - Create：`{"effective_date","org_unit_id", ...}`（`position_id` 为空）
+  - Create：`{"effective_date","org_unit_id","job_profile_id", ...}`（`position_id` 为空；`job_profile_id` 必填，由 org_unit 解析 setid 校验）
   - Update：`{"effective_date","position_id", ...}`（`position_id` 非空；至少 1 个 patch 字段）
   - 400：`code=bad_json` / `code=invalid_effective_date` / `code=effective_date is required` / `code=position_id is required` / `code=at least one patch field is required`（等）
   - 409：`code=STAFFING_IDEMPOTENCY_REUSED`
-  - 422：稳定 DB 错误码（示例：`ORG_NOT_FOUND_AS_OF` / `ORG_INACTIVE_AS_OF` / `JOBCATALOG_REFERENCE_NOT_FOUND` / `STAFFING_INVALID_ARGUMENT`（例如 `org_unit_id` 格式非法））
+  - 422：稳定 DB 错误码（示例：`STAFFING_ORG_UNIT_NOT_FOUND_AS_OF` / `SETID_BINDING_MISSING` / `SETID_DISABLED` / `JOBCATALOG_REFERENCE_NOT_FOUND` / `STAFFING_INVALID_ARGUMENT`（例如 `org_unit_id` 格式非法））
 
 ## 7. 测试步骤（执行时勾选）
 
@@ -223,10 +221,10 @@
 6. [ ] 负例：尝试绑定到非业务单元节点（例如 `HQ`）
    - 断言：应失败并提示 `ORG_NOT_BUSINESS_UNIT_AS_OF`（若无法稳定提取错误码，记录实际提示）
 
-### 7.3 JobCatalog：解析链路、写入闭环与 fail-closed 负例
+### 7.3 JobCatalog：显式 SetID、写入闭环与 fail-closed 负例
 
-1. [ ] 打开：`/org/job-catalog?as_of=2026-01-01&org_unit_id=<R&D>`
-2. [ ] 断言：页面显示 `Resolved SetID: S2601`（且无错误提示）
+1. [ ] 打开：`/org/job-catalog?as_of=2026-01-01&setid=S2601`
+2. [ ] 断言：页面显示 `SetID: S2601`（且无错误提示）
 3. [ ] 确认 Job Family Group（至少 2 条；缺失则创建；已有则记录并复用）
    - 建议：
      - `code=JFG-ENG`，`name=Engineering`
@@ -240,8 +238,8 @@
    - 断言：创建后列表可见；每条包含 `id`；列表可见其 `group`（至少能判定 `JF-BE` 初始归属为 `JFG-ENG`）
 5. [ ] 跨日期断言：Job Family reparenting（同一 `code` 在不同 `as_of` 下归属不同 group）
    - 在 `effective_date=2026-02-01` 提交对 `JF-BE` 的 UPDATE（reparent 到 `JFG-SALES`）
-   - 断言 A：访问 `/org/job-catalog?as_of=2026-01-15&org_unit_id=<R&D>`，`JF-BE` 的 `group=JFG-ENG`
-   - 断言 B：访问 `/org/job-catalog?as_of=2026-02-15&org_unit_id=<R&D>`，`JF-BE` 的 `group=JFG-SALES`
+   - 断言 A：访问 `/org/job-catalog?as_of=2026-01-15&setid=S2601`，`JF-BE` 的 `group=JFG-ENG`
+   - 断言 B：访问 `/org/job-catalog?as_of=2026-02-15&setid=S2601`，`JF-BE` 的 `group=JFG-SALES`
 6. [ ] 确认 Job Levels（至少 1 条；缺失则创建；已有则记录并复用）
    - 基准：`as_of=2026-01-01`，`effective_date=2026-01-01`
    - 建议：`code=JL-1`，`name=Level 1`
@@ -253,16 +251,13 @@
 8. [ ] 负例：Profile families/primary 不变量
    - 提交：`job_family_ids=[JF-BE]`，`primary=JF-FE`（primary 不在 families）
    - 断言：页面提示稳定错误（例如 `payload.primary_job_family_id must be included ...`），且不得创建新 profile
-9. [ ] 继承解析验证：访问非业务单元节点（例如 `HQ`）
-   - `/org/job-catalog?as_of=2026-01-01&org_unit_id=<HQ>`
-   - 断言：页面显示 `Resolved SetID: DEFLT`（继承根组织绑定）
-10. [ ] fail-closed 负例：使用不存在的 `org_unit_id`，直接访问：
-   - `/org/job-catalog?as_of=2026-01-01&org_unit_id=<不存在的 org_unit_id>`
-   - 断言：页面显式报错，且不得显示 `Resolved SetID`
+9. [ ] fail-closed 负例：使用不存在/非法的 `setid`，直接访问：
+   - `/org/job-catalog?as_of=2026-01-01&setid=S9999`
+   - 断言：页面显式报错，且不得显示 `SetID`
 
 ### 7.4 Position：创建与列表可见
 
-1. [ ] 打开：`/org/positions?as_of=2026-01-01`
+1. [ ] 打开：`/org/positions?as_of=2026-01-01&org_unit_id=<R&D>`
 2. [ ] 断言：OrgUnit 下拉不为 `(no org units)`，且选项包含你在 §7.1 创建的部门（名称 + `org_unit_id`）
 3. [ ] 确保至少 10 个职位（不足则补齐创建；已有则记录其中 10 条）
    - 建议命名（可按 OrgUnit 分配；若重复可加后缀）：
@@ -271,16 +266,16 @@
      - `P-HR-01`、`P-FIN-01`、`P-MGR-01`
      - `P-OPS-01`、`P-SUPPORT-01`
      - `P-PLANT-01`、`P-PLANT-02`
-   - 断言：每次创建后 `303` 跳转回 `/org/positions?as_of=2026-01-01`；列表出现新行并包含 `position_id`；记录 10 条 `position_id`
+  - 断言：每次创建后 `303` 跳转回 `/org/positions?as_of=2026-01-01&org_unit_id=<R&D>`；列表出现新行并包含 `position_id`；记录 10 条 `position_id`
 4. [ ] 负例：提交非法 `effective_date`（例如 `bad`）
    - 断言：页面提示 `effective_date 无效: ...`；不得创建新职位
 
-### 7.5 Position（M5）：与 JobCatalog/SetID 组合（OrgUnit + Job Profile）
+### 7.5 Position（M5）：与 JobCatalog/SetID 组合（OrgUnit + SetID + Job Profile）
 
-> 目标：覆盖 `DEV-PLAN-030` 的 M5 关键链路：OrgUnit → resolve_setid → job_profile identity 校验 → UI 可见。
+> 目标：覆盖 `DEV-PLAN-030` 的 M5 关键链路：org_unit 解析 setid → job_profile identity 校验 → UI 可见。
 
 1. [ ] 打开：`/org/positions?as_of=2026-01-01&org_unit_id=<R&D>`
-2. [ ] 断言：页面显示 `Resolved SetID: S2601`，且 Create 表单的 `Job Profile` 下拉包含 `JP-SWE (...)`（来自 §7.3 创建的 Job Profile）
+2. [ ] 断言：页面显示解析得到的 `SetID: S2601`，且 Create 表单的 `Job Profile` 下拉包含 `JP-SWE (...)`（来自 §7.3 创建的 Job Profile）
 3. [ ] 绑定 Job Profile（正例）
    - 选择任一既有职位（建议：`P-ENG-01`）
    - 在 Update/Disable 表单提交：
@@ -300,17 +295,20 @@
 1. [ ] 负例 A（缺 org_unit_id）：`POST /org/api/positions?as_of=2026-01-01`
    - body：`{"effective_date":"2026-01-01","job_profile_id":"<JP-SWE-id>","name":"TP062-BAD-NO-ORG"}`
    - 断言：400 且 `code=org_unit_id is required`
-2. [ ] 负例 B（不存在 org_unit_id）：`POST /org/api/positions?as_of=2026-01-01`
-   - body：`{"effective_date":"2026-01-01","org_unit_id":"<不存在的 org_unit_id>","name":"TP062-BAD-ORG404"}`
-   - 断言：422 且 `code=ORG_NOT_FOUND_AS_OF`
-3. [ ] 负例 C（跨 SetID 引用）：准备并断言
+2. [ ] 负例 B（缺 job_profile_id）：`POST /org/api/positions?as_of=2026-01-01`
+   - body：`{"effective_date":"2026-01-01","org_unit_id":"<R&D>","name":"TP062-BAD-NO-JP"}`
+   - 断言：400 且 `code=job_profile_id is required`
+3. [ ] 负例 C（不存在/不可解析 org_unit）：`POST /org/api/positions?as_of=2026-01-01`
+   - body：`{"effective_date":"2026-01-01","org_unit_id":"<不存在的 org_unit_id>","job_profile_id":"<JP-SWE-id>","name":"TP062-BAD-ORG404"}`
+   - 断言：422 且 `code=STAFFING_ORG_UNIT_NOT_FOUND_AS_OF`（或 `SETID_BINDING_MISSING`/`SETID_DISABLED`）
+4. [ ] 负例 D（跨 SetID 引用）：准备并断言
    - 在 `/org/setid?as_of=2026-01-01`：
      - 创建 `SetID=S2602`（若不存在）
      - 将 `Sales` 绑定为 `S2602`（`is_business_unit=true`）
-   - 在 `/org/job-catalog?as_of=2026-01-01&org_unit_id=<Sales>`：
+   - 在 `/org/job-catalog?as_of=2026-01-01&setid=S2602`：
      - 创建最小 Job Profile（例如 `JP-OPS`；需先创建其 families）
-   - 调用：`POST /org/api/positions?as_of=2026-01-16`（Update）
-     - body：`{"effective_date":"2026-01-16","position_id":"<P-ENG-01 position_id>","org_unit_id":"<R&D>","job_profile_id":"<JP-OPS-id>"}`
+    - 调用：`POST /org/api/positions?as_of=2026-01-16`（Update）
+      - body：`{"effective_date":"2026-01-16","position_id":"<P-ENG-01 position_id>","org_unit_id":"<R&D>","job_profile_id":"<JP-OPS-id>"}`
    - 断言：422 且 `code=JOBCATALOG_REFERENCE_NOT_FOUND`
 
 ## 8. 验收证据（最小）
@@ -322,20 +320,19 @@
   - `/org/setid?as_of=2026-01-01` 页面证据（包含 `S2601`，以及绑定：Root→`DEFLT`、`R&D`→`S2601`、`Sales`→`S2602`）
   - 记录表：`root_org_unit_id -> DEFLT`、`R&D -> S2601`、`Sales -> S2602`
 - JobCatalog：
-  - `/org/job-catalog?as_of=2026-01-01&org_unit_id=<R&D>` 页面证据（显示 `Resolved SetID: S2601`）
+  - `/org/job-catalog?as_of=2026-01-01&setid=S2601` 页面证据（显示 `SetID: S2601`）
   - 两条 Job Family Group 的列表证据（含 `id`）
   - Job Families 列表证据（含 `id`，且可判定 group 归属）
   - reparenting 证据（`as_of=2026-01-15` 与 `as_of=2026-02-15` 的前后对比）
   - Job Levels 列表证据（含 `id`）
   - Job Profiles 列表证据（含 families + primary）
   - Profile families/primary 不变量负例证据（稳定报错即可）
-  - 继承解析证据（`/org/job-catalog?as_of=2026-01-01&org_unit_id=<HQ>` 显示 `Resolved SetID: DEFLT`）
-  - fail-closed 负例证据（不存在 `org_unit_id` 时的错误提示，且无 `Resolved SetID`）
+  - fail-closed 负例证据（不存在/非法 `setid` 时的错误提示，且无 `SetID`）
 - Position：
-  - `/org/positions?as_of=2026-01-01` 页面证据（10 条职位可见，含 `position_id`）
+  - `/org/positions?as_of=2026-01-01&org_unit_id=<R&D>` 页面证据（10 条职位可见，含 `position_id`）
   - 记录表：10 个 `position_id` + 对应 `org_unit_id`
-  - M5 正例：`/org/positions?as_of=2026-01-15&org_unit_id=<R&D>` 页面证据（`Resolved SetID: S2601`；且至少 1 条职位显示 `org_unit_id=<R&D>`、`jobcatalog_setid=S2601`、`job_profile=JP-SWE (...)`）
-  - M5 负例：`/org/api/positions` 的 3 条失败响应证据（含 HTTP 状态码与 `code`：`org_unit_id is required` / `ORG_NOT_FOUND_AS_OF` / `JOBCATALOG_REFERENCE_NOT_FOUND`）
+  - M5 正例：`/org/positions?as_of=2026-01-15&org_unit_id=<R&D>` 页面证据（显示解析得到的 `SetID: S2601`；且至少 1 条职位显示 `org_unit_id=<R&D>`、`jobcatalog_setid=S2601`、`job_profile=JP-SWE (...)`）
+  - M5 负例：`/org/api/positions` 的失败响应证据（含 HTTP 状态码与 `code`：`org_unit_id is required` / `job_profile_id is required` / `STAFFING_ORG_UNIT_NOT_FOUND_AS_OF` / `SETID_BINDING_MISSING` / `JOBCATALOG_REFERENCE_NOT_FOUND`）
 
 ## 9. 执行记录（Readiness/可复现记录）
 

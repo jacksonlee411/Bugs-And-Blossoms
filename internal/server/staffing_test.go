@@ -321,11 +321,21 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		}
 	})
 
+	t.Run("missing job_profile_id", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
 	t.Run("gen position id error", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -337,7 +347,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			return tx, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -350,7 +360,20 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("snapshot error", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			tx := &stubTx{row3Err: errors.New("row3")}
+			tx.row = &stubRow{vals: []any{"pos1"}}
+			tx.row2 = &stubRow{vals: []any{"evt1"}}
+			return tx, nil
+		}))
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -361,9 +384,10 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx := &stubTx{commitErr: errors.New("commit")}
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
+			tx.row3 = &stubRow{vals: []any{"pos1", "org1", "", "", "", "jp1", "", "A", "active", "1.0", "2026-01-01"}}
 			return tx, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -374,6 +398,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
+			tx.row3 = &stubRow{vals: []any{"pos1", "org1", "", "S2601", "2026-01-01", "00000000-0000-0000-0000-000000000001", "JP1", "A", "active", "2.50", "2026-01-01"}}
 			return tx, nil
 		}))
 		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "00000000-0000-0000-0000-000000000001", " 2.50 ", " A ")
@@ -389,6 +414,9 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		if p.JobProfileID == "" {
 			t.Fatal("expected job_profile_id")
 		}
+		if p.JobCatalogSetID != "S2601" {
+			t.Fatalf("expected jobcatalog_setid=S2601, got %q", p.JobCatalogSetID)
+		}
 		if p.CapacityFTE != "2.50" {
 			t.Fatalf("expected capacity_fte=2.50, got %q", p.CapacityFTE)
 		}
@@ -399,9 +427,10 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
+			tx.row3 = &stubRow{vals: []any{"pos1", "org1", "", "S2601", "2026-01-01", "jp1", "", "A", "active", "1.0", "2026-01-01"}}
 			return tx, nil
 		}))
-		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A")
+		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -516,7 +545,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 			tx.row2 = &stubRow{vals: []any{"pos1", "org1", "mgr1", "", "", "", "", "Name", "disabled", "1.25", "2026-01-01"}}
 			return tx, nil
 		}))
-		p, err := store.UpdatePositionCurrent(context.Background(), "t1", " pos1 ", "2026-01-01", " org1 ", " mgr1 ", "__CLEAR__", " 1.25 ", " Name ", " disabled ")
+		p, err := store.UpdatePositionCurrent(context.Background(), "t1", " pos1 ", "2026-01-01", " org1 ", " mgr1 ", "", " 1.25 ", " Name ", " disabled ")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -800,13 +829,16 @@ func TestStaffingMemoryStore(t *testing.T) {
 		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "", "org1", "", "", "A"); err == nil {
 			t.Fatal("expected error")
 		}
-		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "", "", "", "A"); err == nil {
+		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "", "jp1", "", "A"); err == nil {
+			t.Fatal("expected error")
+		}
+		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("create position ok", func(t *testing.T) {
-		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A"); err != nil {
+		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A"); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -855,14 +887,6 @@ func TestStaffingMemoryStore(t *testing.T) {
 		if updated.OrgUnitID != "org2" || updated.ReportsToID != "mgr1" || updated.JobProfileID != "jp1" || updated.Name != "B" || updated.LifecycleStatus != "disabled" || updated.EffectiveAt != "2026-02-01" {
 			t.Fatalf("unexpected updated position: %+v", updated)
 		}
-
-		updated2, err := s.UpdatePositionCurrent(context.Background(), "t1", positions[0].ID, "2026-02-02", "", "", "__CLEAR__", "", "", "")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if updated2.JobProfileID != "" {
-			t.Fatalf("expected job_profile_id cleared, got %q", updated2.JobProfileID)
-		}
 	})
 
 	t.Run("upsert invalid", func(t *testing.T) {
@@ -909,7 +933,8 @@ func TestStaffingMemoryStore(t *testing.T) {
 }
 
 type staffingOrgStoreStub struct {
-	listFn func(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
+	listFn    func(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
+	resolveFn func(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
 }
 
 func (s staffingOrgStoreStub) ListNodesCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
@@ -933,10 +958,20 @@ func (staffingOrgStoreStub) SetBusinessUnitCurrent(context.Context, string, stri
 	return nil
 }
 
+func (s staffingOrgStoreStub) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
+	if s.resolveFn != nil {
+		return s.resolveFn(ctx, tenantID, orgUnitID, asOfDate)
+	}
+	if strings.TrimSpace(orgUnitID) == "" {
+		return "", errors.New("org_unit_id is required")
+	}
+	return "S2601", nil
+}
+
 type jobStoreErrStub struct{ JobCatalogStore }
 
-func (jobStoreErrStub) ListJobProfiles(context.Context, string, string, string) ([]JobProfile, string, error) {
-	return nil, "", errors.New("profiles fail")
+func (jobStoreErrStub) ListJobProfiles(context.Context, string, string, string) ([]JobProfile, error) {
+	return nil, errors.New("profiles fail")
 }
 
 type positionStoreStub struct {
@@ -1086,7 +1121,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositions post create error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-01&org_unit_id=org1&name=A"))
+		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-01&org_unit_id=org1&job_profile_id=jp1&name=A"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
@@ -1108,7 +1143,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositions post ok", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_unit_id=org1&name=A"))
+		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_unit_id=org1&job_profile_id=jp1&name=A"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
@@ -1142,7 +1177,7 @@ func TestStaffingHandlers(t *testing.T) {
 				listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
 				createFn: func(_ context.Context, _ string, _ string, orgUnitID string, jobProfileID string, _ string, _ string) (Position, error) {
 					if orgUnitID != "org1" || jobProfileID != "1" {
-						return Position{}, errors.New("unexpected job catalog fields")
+						return Position{}, errors.New("unexpected job profile fields")
 					}
 					return Position{ID: "pos1"}, nil
 				},
@@ -1160,7 +1195,7 @@ func TestStaffingHandlers(t *testing.T) {
 
 	t.Run("handlePositions with job store ok", func(t *testing.T) {
 		jobStore := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
-		_ = jobStore.CreateJobProfile(context.Background(), "t1", "org1", "2026-01-01", "JP1", "Job Profile 1", "", nil, "")
+		_ = jobStore.CreateJobProfile(context.Background(), "t1", "S2601", "2026-01-01", "JP1", "Job Profile 1", "", nil, "")
 
 		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=org1", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
@@ -1173,6 +1208,27 @@ func TestStaffingHandlers(t *testing.T) {
 				return []Position{{ID: "pos1", Name: "A"}}, nil
 			}},
 			jobStore,
+		)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("handlePositions with resolve error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=org1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handlePositions(rec, req,
+			staffingOrgStoreStub{
+				listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
+					return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				},
+				resolveFn: func(context.Context, string, string, string) (string, error) {
+					return "", errors.New("resolve")
+				},
+			},
+			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil }},
+			newJobCatalogMemoryStore(),
 		)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
@@ -1250,7 +1306,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositions post default effective_date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("org_unit_id=org1&name=A"))
+		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("org_unit_id=org1&job_profile_id=jp1&name=A"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
@@ -1368,7 +1424,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositionsAPI post create error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"effective_date":"2026-01-01","org_unit_id":"org1","name":"A"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"effective_date":"2026-01-01","org_unit_id":"org1","job_profile_id":"jp1","name":"A"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, positionStoreStub{
@@ -1382,7 +1438,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositionsAPI post ok", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"org1","name":"A"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"org1","job_profile_id":"jp1","name":"A"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, positionStoreStub{
@@ -1410,7 +1466,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositionsAPI post error conflict", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"org1","name":"A"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"org1","job_profile_id":"jp1","name":"A"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, positionStoreStub{
@@ -2113,7 +2169,7 @@ func TestStaffingHandlers(t *testing.T) {
 			[]JobProfile{{ID: "1", Code: "JP1"}, {ID: "2", Code: "JP2"}},
 			"err",
 		)
-		if !strings.Contains(out, "Resolved SetID") {
+		if !strings.Contains(out, "SetID") {
 			t.Fatalf("unexpected output: %s", out)
 		}
 	})
@@ -2174,7 +2230,7 @@ func TestStaffingHandlers(t *testing.T) {
 }
 
 func TestStaffingHandlers_JSONRoundTrip(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"org1","name":"A"}`)))
+	req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"org1","job_profile_id":"jp1","name":"A"}`)))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
 

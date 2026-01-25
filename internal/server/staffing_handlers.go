@@ -15,6 +15,10 @@ import (
 	staffingservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/services"
 )
 
+type orgUnitSetIDResolver interface {
+	ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
+}
+
 func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitStore, store PositionStore, jobStore JobCatalogStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -41,27 +45,34 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 	}
 
 	var jobProfiles []JobProfile
-	resolvedSetID := ""
 	jobCatalogMsg := ""
+	setID := ""
 	if jobStore != nil {
 		if orgUnitID != "" {
-			profiles, resolved, err := jobStore.ListJobProfiles(r.Context(), tenant.ID, orgUnitID, asOf)
-			if err != nil {
-				jobCatalogMsg = mergeMsg(jobCatalogMsg, stablePgMessage(err))
-			} else {
-				jobProfiles = profiles
-				resolvedSetID = resolved
+			if resolver, ok := orgStore.(orgUnitSetIDResolver); ok {
+				resolved, err := resolver.ResolveSetID(r.Context(), tenant.ID, orgUnitID, asOf)
+				if err != nil {
+					jobCatalogMsg = mergeMsg(jobCatalogMsg, stablePgMessage(err))
+				} else {
+					setID = resolved
+					profiles, err := jobStore.ListJobProfiles(r.Context(), tenant.ID, resolved, asOf)
+					if err != nil {
+						jobCatalogMsg = mergeMsg(jobCatalogMsg, stablePgMessage(err))
+					} else {
+						jobProfiles = profiles
+					}
+				}
 			}
 		}
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, resolvedSetID, jobProfiles, jobCatalogMsg))
+		writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, setID, jobProfiles, jobCatalogMsg))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
-			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, "bad form")))
+			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, setID, jobProfiles, mergeMsg(jobCatalogMsg, "bad form")))
 			return
 		}
 
@@ -70,7 +81,7 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 			effectiveDate = asOf
 		}
 		if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
-			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, "effective_date 无效: "+err.Error())))
+			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, setID, jobProfiles, mergeMsg(jobCatalogMsg, "effective_date 无效: "+err.Error())))
 			return
 		}
 
@@ -87,12 +98,12 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 
 		if positionID == "" {
 			if _, err := store.CreatePositionCurrent(r.Context(), tenant.ID, effectiveDate, formOrgUnitID, jobProfileID, capacityFTE, name); err != nil {
-				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
+				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
 		} else {
 			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionID, effectiveDate, formOrgUnitID, reportsToPositionID, jobProfileID, capacityFTE, name, lifecycleStatus); err != nil {
-				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
+				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
 		}
@@ -443,11 +454,12 @@ func renderPositions(
 	tenant Tenant,
 	asOf string,
 	orgUnitID string,
-	resolvedSetID string,
+	setID string,
 	jobProfiles []JobProfile,
 	errMsg string,
 ) string {
 	b := strings.Builder{}
+	action := "/org/positions?as_of=" + url.QueryEscape(asOf)
 	b.WriteString("<h1>Staffing / Positions</h1>")
 	b.WriteString(`<p>Tenant: <code>` + html.EscapeString(tenant.Name) + `</code> (<code>` + html.EscapeString(tenant.ID) + `</code>)</p>`)
 	b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code> | <a href="/org/assignments?as_of=` + url.QueryEscape(asOf) + `">Assignments</a></p>`)
@@ -477,12 +489,12 @@ func renderPositions(
 	b.WriteString(`</select></label> `)
 	b.WriteString(`<button type="submit">Load</button>`)
 	b.WriteString(`</form>`)
-	if orgUnitID != "" && resolvedSetID != "" {
-		b.WriteString(`<p>Resolved SetID: <code>` + html.EscapeString(resolvedSetID) + `</code></p>`)
+	if setID != "" {
+		b.WriteString(`<p>SetID: <code>` + html.EscapeString(setID) + `</code></p>`)
 	}
 
 	b.WriteString(`<h2>Create</h2>`)
-	b.WriteString(`<form method="POST" action="/org/positions?as_of=` + url.QueryEscape(asOf) + `">`)
+	b.WriteString(`<form method="POST" action="` + html.EscapeString(action) + `">`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
 	b.WriteString(`<label>Org Unit <select name="org_unit_id">`)
 	if len(nodes) == 0 {
@@ -514,7 +526,7 @@ func renderPositions(
 	b.WriteString(`</form>`)
 
 	b.WriteString(`<h2>Update / Disable</h2>`)
-	b.WriteString(`<form method="POST" action="/org/positions?as_of=` + url.QueryEscape(asOf) + `">`)
+	b.WriteString(`<form method="POST" action="` + html.EscapeString(action) + `">`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
 	b.WriteString(`<label>Position <select name="position_id">`)
 	if len(positions) == 0 {
@@ -552,8 +564,7 @@ func renderPositions(
 	}
 	b.WriteString(`</select></label><br/>`)
 	b.WriteString(`<label>Job Profile <select name="job_profile_id">` +
-		`<option value="">(no change)</option>` +
-		`<option value="__CLEAR__">(clear)</option>`)
+		`<option value="">(no change)</option>`)
 	for _, jp := range jobProfiles {
 		label := jp.Code + " (" + jp.ID + ")"
 		b.WriteString(`<option value="` + html.EscapeString(jp.ID) + `">` + html.EscapeString(label) + `</option>`)

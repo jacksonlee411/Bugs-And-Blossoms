@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
 )
 
 type OrgUnitNode struct {
@@ -120,6 +121,27 @@ ORDER BY e.transaction_time DESC
 	return out, nil
 }
 
+func (s *orgUnitPGStore) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return "", err
+	}
+
+	out, err := setid.Resolve(ctx, tx, tenantID, orgUnitID, asOfDate)
+	if err != nil {
+		return "", err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+	return out, nil
+}
 func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string, isBusinessUnit bool) (OrgUnitNode, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -435,6 +457,13 @@ func (s *orgUnitMemoryStore) createNode(tenantID string, name string, isBusiness
 
 func (s *orgUnitMemoryStore) ListNodesCurrent(_ context.Context, tenantID string, _ string) ([]OrgUnitNode, error) {
 	return s.listNodes(tenantID)
+}
+
+func (s *orgUnitMemoryStore) ResolveSetID(_ context.Context, _ string, orgUnitID string, _ string) (string, error) {
+	if strings.TrimSpace(orgUnitID) == "" {
+		return "", errors.New("org_unit_id is required")
+	}
+	return "S2601", nil
 }
 
 func (s *orgUnitMemoryStore) CreateNodeCurrent(_ context.Context, tenantID string, _ string, name string, _ string, isBusinessUnit bool) (OrgUnitNode, error) {
