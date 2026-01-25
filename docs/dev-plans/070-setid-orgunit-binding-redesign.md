@@ -357,7 +357,7 @@ CREATE TABLE orgunit.setid_binding_versions (
 8. [X] 替换解析入口与调用链（Go/SQL），所有 setid-controlled 入口统一改为 `org_unit_id` 解析（2026-01-25 01:22 UTC）。
 9. [X] 改造 UI/路由/鉴权（去 BU/record_group、加 org 绑定 + 业务单元标记编辑 + 权限点补齐）（2026-01-25 02:05 UTC）。
 10. [X] 完成迁移脚本与数据 bootstrap（DEFLT + root 绑定），并修复存量 `setid` 规范（5 位/大写）（2026-01-25 02:57 UTC）。
-11. [ ] 补齐门禁与测试用例（参考 `AGENTS.md` 与 `DEV-PLAN-012`）。
+11. [X] 补齐门禁与测试用例（参考 `AGENTS.md` 与 `DEV-PLAN-012`）（2026-01-25 03:12 UTC）。
 
 ### 8.3 后续扩展（不在本阶段）
 - SetID 克隆：新增 `source_setid/source_snapshot_at` 字段与克隆入口；提供“基于快照复制”的补充能力（不做运行时合并）。

@@ -82,7 +82,7 @@ func (s orgStoreStub) SetBusinessUnitCurrent(context.Context, string, string, st
 }
 
 func defaultJobCatalogOrgStore() OrgUnitStore {
-	return orgStoreStub{nodes: []OrgUnitNode{{ID: "BU000", Name: "Default BU", IsBusinessUnit: true}}}
+	return orgStoreStub{nodes: []OrgUnitNode{{ID: "org1", Name: "Root Org", IsBusinessUnit: true}}}
 }
 
 func handleJobCatalogWithDefaultOrgStore(w http.ResponseWriter, r *http.Request, store JobCatalogStore) {
@@ -307,10 +307,10 @@ func TestHandleJobCatalog_ListOrgUnitError(t *testing.T) {
 
 func TestHandleJobCatalog_GetAndPost_Create(t *testing.T) {
 	store := newJobCatalogMemoryStore()
-	_ = store.CreateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-01-01", "JC0", "G0", "")
-	_, _, _ = store.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01")
+	_ = store.CreateJobFamilyGroup(context.Background(), "t1", "org1", "2026-01-01", "JC0", "G0", "")
+	_, _, _ = store.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01")
 
-	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", nil)
+	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", nil)
 	reqGet = reqGet.WithContext(withTenant(reqGet.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recGet := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(recGet, reqGet, store)
@@ -321,12 +321,12 @@ func TestHandleJobCatalog_GetAndPost_Create(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	form.Set("job_family_group_description", "")
 
-	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	reqPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqPost = reqPost.WithContext(withTenant(reqPost.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recPost := httptest.NewRecorder()
@@ -364,7 +364,7 @@ func TestHandleJobCatalog_Post_InvalidEffectiveDate(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "bad")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
@@ -381,7 +381,7 @@ func TestHandleJobCatalog_Post_MissingCode(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_group_code", "")
 	form.Set("job_family_group_name", "")
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
@@ -398,7 +398,7 @@ func TestHandleJobCatalog_Post_CreateError(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
@@ -481,12 +481,12 @@ func TestHandleJobCatalog_Post_CreateJobLevel_Success(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_level")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_level_code", "JL1")
 	form.Set("job_level_name", "Level1")
 	form.Set("job_level_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -500,11 +500,11 @@ func TestHandleJobCatalog_Post_CreateJobLevel_MissingCode(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_level")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_level_code", "")
 	form.Set("job_level_name", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -520,13 +520,13 @@ func TestHandleJobCatalog_Post_CreateJobFamily_Success(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_name", "Backend")
 	form.Set("job_family_group_code", "JFG-ENG")
 	form.Set("job_family_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -572,13 +572,13 @@ func TestHandleJobCatalog_Post_CreateJobFamily_Error_ShowsPage(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_name", "Backend")
 	form.Set("job_family_group_code", "JFG-ENG")
 	form.Set("job_family_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -595,12 +595,12 @@ func TestHandleJobCatalog_Post_CreateJobFamily_MissingGroup(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_name", "Backend")
 	form.Set("job_family_group_code", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -612,16 +612,16 @@ func TestHandleJobCatalog_Post_CreateJobFamily_MissingGroup(t *testing.T) {
 
 func TestHandleJobCatalog_Post_UpdateJobFamilyGroup_Success(t *testing.T) {
 	store := newJobCatalogMemoryStore()
-	_ = store.CreateJobFamily(context.Background(), "t1", "BU000", "2026-01-01", "JF-BE", "Backend", "", "JFG-ENG")
+	_ = store.CreateJobFamily(context.Background(), "t1", "org1", "2026-01-01", "JF-BE", "Backend", "", "JFG-ENG")
 
 	form := url.Values{}
 	form.Set("action", "update_job_family_group")
 	form.Set("effective_date", "2026-02-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_group_code", "JFG-SALES")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -635,11 +635,11 @@ func TestHandleJobCatalog_Post_UpdateJobFamilyGroup_MissingFields(t *testing.T) 
 	form := url.Values{}
 	form.Set("action", "update_job_family_group")
 	form.Set("effective_date", "2026-02-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_code", "")
 	form.Set("job_family_group_code", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -685,11 +685,11 @@ func TestHandleJobCatalog_Post_UpdateJobFamilyGroup_Error_ShowsPage(t *testing.T
 	form := url.Values{}
 	form.Set("action", "update_job_family_group")
 	form.Set("effective_date", "2026-02-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_group_code", "JFG-SALES")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -708,14 +708,14 @@ func TestHandleJobCatalog_Post_CreateJobProfile_Success(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_profile")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_profile_code", "JP-SWE")
 	form.Set("job_profile_name", "Software Engineer")
 	form.Set("job_profile_family_codes", "JF-BE,JF-FE")
 	form.Set("job_profile_primary_family_code", "JF-BE")
 	form.Set("job_profile_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -761,13 +761,13 @@ func TestHandleJobCatalog_Post_CreateJobProfile_Error_ShowsPage(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_profile")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_profile_code", "JP-SWE")
 	form.Set("job_profile_name", "Software Engineer")
 	form.Set("job_profile_family_codes", "JF-BE,JF-FE")
 	form.Set("job_profile_primary_family_code", "JF-BE")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -784,13 +784,13 @@ func TestHandleJobCatalog_Post_CreateJobProfile_MissingFamilies(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_profile")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_profile_code", "JP-SWE")
 	form.Set("job_profile_name", "Software Engineer")
 	form.Set("job_profile_family_codes", "")
 	form.Set("job_profile_primary_family_code", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -833,7 +833,7 @@ func (s listFamiliesErrJobCatalogStore) ListJobProfiles(context.Context, string,
 }
 
 func TestHandleJobCatalog_Get_ListFamiliesError_ShowsError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=org1", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, listFamiliesErrJobCatalogStore{err: errors.New("boom")})
@@ -878,7 +878,7 @@ func (s listProfilesErrJobCatalogStore) ListJobProfiles(context.Context, string,
 }
 
 func TestHandleJobCatalog_Get_ListProfilesError_ShowsError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=org1", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, listProfilesErrJobCatalogStore{err: errors.New("boom")})
@@ -896,11 +896,11 @@ func TestHandleJobCatalog_Post_CreateJobLevel_Error(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_level")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_level_code", "JL1")
 	form.Set("job_level_name", "Level1")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -916,7 +916,7 @@ func TestHandleJobCatalog_Post_CreateJobLevel_Error(t *testing.T) {
 func TestHandleJobCatalog_Get_ListJobLevelsError(t *testing.T) {
 	store := levelsListErrJobCatalogStore{err: errors.New("boom")}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?org_unit_id=org1&as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, store)
@@ -941,14 +941,14 @@ func TestJobCatalogPGStore_CreateAndListJobLevels(t *testing.T) {
 		return makeTx(), nil
 	})).(*jobcatalogPGStore)
 
-	if err := store.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL1", "Level 1", "desc"); err != nil {
+	if err := store.CreateJobLevel(context.Background(), "t1", "org1", "2026-01-01", "JL1", "Level 1", "desc"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 
 	store2 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return makeTx(), nil
 	})).(*jobcatalogPGStore)
-	if err := store2.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL1", "Level 1", ""); err != nil {
+	if err := store2.CreateJobLevel(context.Background(), "t1", "org1", "2026-01-01", "JL1", "Level 1", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 
@@ -959,7 +959,7 @@ func TestJobCatalogPGStore_CreateAndListJobLevels(t *testing.T) {
 			rows: rows,
 		}, nil
 	})).(*jobcatalogPGStore)
-	levels, setID, err := store3.ListJobLevels(context.Background(), "t1", "BU000", "2026-01-01")
+	levels, setID, err := store3.ListJobLevels(context.Background(), "t1", "org1", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -985,13 +985,13 @@ func TestJobCatalogPGStore_CreateAndListJobFamilies(t *testing.T) {
 		return makeTx(), nil
 	})).(*jobcatalogPGStore)
 
-	if err := store.CreateJobFamily(context.Background(), "t1", "BU000", "2026-01-01", "JF-BE", "Backend", "desc", "JFG-ENG"); err != nil {
+	if err := store.CreateJobFamily(context.Background(), "t1", "org1", "2026-01-01", "JF-BE", "Backend", "desc", "JFG-ENG"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 	storeNullDesc := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return makeTx(), nil
 	})).(*jobcatalogPGStore)
-	if err := storeNullDesc.CreateJobFamily(context.Background(), "t1", "BU000", "2026-01-01", "JF-FE", "Frontend", "", "JFG-ENG"); err != nil {
+	if err := storeNullDesc.CreateJobFamily(context.Background(), "t1", "org1", "2026-01-01", "JF-FE", "Frontend", "", "JFG-ENG"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 
@@ -1002,7 +1002,7 @@ func TestJobCatalogPGStore_CreateAndListJobFamilies(t *testing.T) {
 			rows: rows,
 		}, nil
 	})).(*jobcatalogPGStore)
-	families, setID, err := store2.ListJobFamilies(context.Background(), "t1", "BU000", "2026-01-01")
+	families, setID, err := store2.ListJobFamilies(context.Background(), "t1", "org1", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1057,7 +1057,7 @@ func TestJobCatalogPGStore_CreateJobFamily_Errors(t *testing.T) {
 			store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 				return tc.tx, nil
 			})).(*jobcatalogPGStore)
-			err := store.CreateJobFamily(context.Background(), "t1", "BU000", "2026-01-01", "JF-BE", "Backend", "desc", "JFG-ENG")
+			err := store.CreateJobFamily(context.Background(), "t1", "org1", "2026-01-01", "JF-BE", "Backend", "desc", "JFG-ENG")
 			if tc.wantError && err == nil {
 				t.Fatalf("expected error")
 			}
@@ -1103,7 +1103,7 @@ func TestJobCatalogPGStore_ListJobFamilies_Errors(t *testing.T) {
 			store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 				return tc.tx, nil
 			})).(*jobcatalogPGStore)
-			_, _, err := store.ListJobFamilies(context.Background(), "t1", "BU000", "2026-01-01")
+			_, _, err := store.ListJobFamilies(context.Background(), "t1", "org1", "2026-01-01")
 			if tc.wantError && err == nil {
 				t.Fatalf("expected error")
 			}
@@ -1154,7 +1154,7 @@ func TestJobCatalogPGStore_UpdateJobFamilyGroup_Errors(t *testing.T) {
 			store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 				return tc.tx, nil
 			})).(*jobcatalogPGStore)
-			err := store.UpdateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-02-01", "JF-BE", "JFG-SALES")
+			err := store.UpdateJobFamilyGroup(context.Background(), "t1", "org1", "2026-02-01", "JF-BE", "JFG-SALES")
 			if tc.wantError && err == nil {
 				t.Fatalf("expected error")
 			}
@@ -1172,7 +1172,7 @@ func TestJobCatalogPGStore_CreateAndListJobProfiles(t *testing.T) {
 			row3: &stubRow{vals: []any{"event-id"}},
 		}, nil
 	})).(*jobcatalogPGStore)
-	if err := store.CreateJobProfile(context.Background(), "t1", "BU000", "2026-01-01", "JP-SWE", "Software Engineer", "desc", []string{"JF-BE", "JF-FE"}, "JF-BE"); err != nil {
+	if err := store.CreateJobProfile(context.Background(), "t1", "org1", "2026-01-01", "JP-SWE", "Software Engineer", "desc", []string{"JF-BE", "JF-FE"}, "JF-BE"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 	rows2 := &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}, {"JF-FE", "family2"}}}
@@ -1184,7 +1184,7 @@ func TestJobCatalogPGStore_CreateAndListJobProfiles(t *testing.T) {
 			row3: &stubRow{vals: []any{"event-id"}},
 		}, nil
 	})).(*jobcatalogPGStore)
-	if err := storePrimaryNotInFamilies.CreateJobProfile(context.Background(), "t1", "BU000", "2026-01-01", "JP-BAD", "Bad", "", []string{"JF-BE"}, "JF-FE"); err != nil {
+	if err := storePrimaryNotInFamilies.CreateJobProfile(context.Background(), "t1", "org1", "2026-01-01", "JP-BAD", "Bad", "", []string{"JF-BE"}, "JF-FE"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 
@@ -1195,7 +1195,7 @@ func TestJobCatalogPGStore_CreateAndListJobProfiles(t *testing.T) {
 			rows: rowsProfiles,
 		}, nil
 	})).(*jobcatalogPGStore)
-	profiles, setID, err := store2.ListJobProfiles(context.Background(), "t1", "BU000", "2026-01-01")
+	profiles, setID, err := store2.ListJobProfiles(context.Background(), "t1", "org1", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1292,7 +1292,7 @@ func TestJobCatalogPGStore_CreateJobProfile_Errors(t *testing.T) {
 			store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 				return tc.tx, nil
 			})).(*jobcatalogPGStore)
-			err := store.CreateJobProfile(context.Background(), "t1", "BU000", "2026-01-01", "JP-SWE", "Software Engineer", "desc", tc.families, tc.primary)
+			err := store.CreateJobProfile(context.Background(), "t1", "org1", "2026-01-01", "JP-SWE", "Software Engineer", "desc", tc.families, tc.primary)
 			if tc.wantError && err == nil {
 				t.Fatalf("expected error")
 			}
@@ -1338,7 +1338,7 @@ func TestJobCatalogPGStore_ListJobProfiles_Errors(t *testing.T) {
 			store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 				return tc.tx, nil
 			})).(*jobcatalogPGStore)
-			_, _, err := store.ListJobProfiles(context.Background(), "t1", "BU000", "2026-01-01")
+			_, _, err := store.ListJobProfiles(context.Background(), "t1", "org1", "2026-01-01")
 			if tc.wantError && err == nil {
 				t.Fatalf("expected error")
 			}
@@ -1384,7 +1384,7 @@ func TestJobCatalogPGStore_CreateJobLevel_Errors(t *testing.T) {
 			store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 				return tc.tx, nil
 			})).(*jobcatalogPGStore)
-			err := store.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL1", "Level 1", "desc")
+			err := store.CreateJobLevel(context.Background(), "t1", "org1", "2026-01-01", "JL1", "Level 1", "desc")
 			if tc.wantError && err == nil {
 				t.Fatalf("expected error")
 			}
@@ -1430,7 +1430,7 @@ func TestJobCatalogPGStore_ListJobLevels_Errors(t *testing.T) {
 			store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 				return tc.tx, nil
 			})).(*jobcatalogPGStore)
-			_, _, err := store.ListJobLevels(context.Background(), "t1", "BU000", "2026-01-01")
+			_, _, err := store.ListJobLevels(context.Background(), "t1", "org1", "2026-01-01")
 			if tc.wantError && err == nil {
 				t.Fatalf("expected error")
 			}
@@ -1440,14 +1440,14 @@ func TestJobCatalogPGStore_ListJobLevels_Errors(t *testing.T) {
 
 func TestJobCatalogMemoryStore_CreateAndListJobLevels_DefaultBU(t *testing.T) {
 	store := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
-	if err := store.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL1", "Level 1", ""); err != nil {
+	if err := store.CreateJobLevel(context.Background(), "t1", "org1", "2026-01-01", "JL1", "Level 1", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := store.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL2", "Level 2", ""); err != nil {
+	if err := store.CreateJobLevel(context.Background(), "t1", "org1", "2026-01-01", "JL2", "Level 2", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 
-	levels, resolved, err := store.ListJobLevels(context.Background(), "t1", "BU000", "2026-01-01")
+	levels, resolved, err := store.ListJobLevels(context.Background(), "t1", "org1", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1461,17 +1461,17 @@ func TestJobCatalogMemoryStore_CreateAndListJobLevels_DefaultBU(t *testing.T) {
 
 func TestJobCatalogMemoryStore_CreateAndListJobFamilies_DefaultBU(t *testing.T) {
 	store := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
-	if err := store.CreateJobFamily(context.Background(), "t1", "BU000", "2026-01-01", "JF-BE", "Backend", "", "JFG-ENG"); err != nil {
+	if err := store.CreateJobFamily(context.Background(), "t1", "org1", "2026-01-01", "JF-BE", "Backend", "", "JFG-ENG"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := store.UpdateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-02-01", "JF-BE", "JFG-SALES"); err != nil {
+	if err := store.UpdateJobFamilyGroup(context.Background(), "t1", "org1", "2026-02-01", "JF-BE", "JFG-SALES"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := store.UpdateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-02-01", "NOPE", "JFG-SALES"); err != nil {
+	if err := store.UpdateJobFamilyGroup(context.Background(), "t1", "org1", "2026-02-01", "NOPE", "JFG-SALES"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 
-	families, resolved, err := store.ListJobFamilies(context.Background(), "t1", "BU000", "2026-01-01")
+	families, resolved, err := store.ListJobFamilies(context.Background(), "t1", "org1", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1485,10 +1485,10 @@ func TestJobCatalogMemoryStore_CreateAndListJobFamilies_DefaultBU(t *testing.T) 
 
 func TestJobCatalogMemoryStore_CreateAndListJobProfiles_DefaultBU(t *testing.T) {
 	store := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
-	if err := store.CreateJobProfile(context.Background(), "t1", "BU000", "2026-01-01", "JP-SWE", "Software Engineer", "", []string{"JF-BE", "JF-FE"}, "JF-BE"); err != nil {
+	if err := store.CreateJobProfile(context.Background(), "t1", "org1", "2026-01-01", "JP-SWE", "Software Engineer", "", []string{"JF-BE", "JF-FE"}, "JF-BE"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	profiles, resolved, err := store.ListJobProfiles(context.Background(), "t1", "BU000", "2026-01-01")
+	profiles, resolved, err := store.ListJobProfiles(context.Background(), "t1", "org1", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1515,7 +1515,7 @@ func TestQuoteAll(t *testing.T) {
 }
 
 func TestRenderJobCatalog_RendersFamiliesAndProfiles(t *testing.T) {
-	nodes := []OrgUnitNode{{ID: "BU000", Name: "Default BU", IsBusinessUnit: true}}
+	nodes := []OrgUnitNode{{ID: "org1", Name: "Root Org", IsBusinessUnit: true}}
 	html := renderJobCatalog(
 		[]JobFamilyGroup{
 			{ID: "g1", Code: "JFG-ENG", Name: "Engineering", IsActive: true, EffectiveDay: "2026-01-01"},
@@ -1535,7 +1535,7 @@ func TestRenderJobCatalog_RendersFamiliesAndProfiles(t *testing.T) {
 		},
 		nodes,
 		Tenant{Name: "T"},
-		"BU000",
+		"org1",
 		"err",
 		"2026-01-01",
 		"SHARE",
@@ -1633,9 +1633,9 @@ func TestHandleJobCatalog_Get_ResolvedFallbackToProfiles(t *testing.T) {
 
 func TestHandleJobCatalog_Get_RendersJobLevels(t *testing.T) {
 	store := newJobCatalogMemoryStore()
-	_ = store.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL1", "Level 1", "")
+	_ = store.CreateJobLevel(context.Background(), "t1", "org1", "2026-01-01", "JL1", "Level 1", "")
 
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=org1", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, store)
@@ -1657,9 +1657,9 @@ func TestHandleJobCatalog_DefaultsAndMethodNotAllowed(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 
-	nodes := []OrgUnitNode{{ID: "BU000", Name: "Default BU", IsBusinessUnit: true}}
-	_ = renderJobCatalog(nil, nil, nil, nil, nodes, Tenant{Name: "T"}, "BU000", "", "2026-01-01", "")
-	_ = renderJobCatalog([]JobFamilyGroup{{ID: "g1", Code: "C", Name: "N", IsActive: true, EffectiveDay: "2026-01-01"}}, nil, nil, nil, nodes, Tenant{Name: "T"}, "BU000", "err", "2026-01-01", "SHARE")
+	nodes := []OrgUnitNode{{ID: "org1", Name: "Root Org", IsBusinessUnit: true}}
+	_ = renderJobCatalog(nil, nil, nil, nil, nodes, Tenant{Name: "T"}, "org1", "", "2026-01-01", "")
+	_ = renderJobCatalog([]JobFamilyGroup{{ID: "g1", Code: "C", Name: "N", IsActive: true, EffectiveDay: "2026-01-01"}}, nil, nil, nil, nodes, Tenant{Name: "T"}, "org1", "err", "2026-01-01", "SHARE")
 
 	req2 := httptest.NewRequest(http.MethodPut, "/org/job-catalog?as_of=2026-01-01", nil)
 	req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -1671,7 +1671,7 @@ func TestHandleJobCatalog_DefaultsAndMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleJobCatalog_MergeMsgBranches(t *testing.T) {
-	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", nil)
+	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=org1", nil)
 	reqGet = reqGet.WithContext(withTenant(reqGet.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recGet := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(recGet, reqGet, partialJobCatalogStore{listErr: errors.New("boom")})
@@ -1679,7 +1679,7 @@ func TestHandleJobCatalog_MergeMsgBranches(t *testing.T) {
 		t.Fatalf("get status=%d", recGet.Code)
 	}
 
-	reqPost2 := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", strings.NewReader("%"))
+	reqPost2 := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&org_unit_id=org1", strings.NewReader("%"))
 	reqPost2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqPost2 = reqPost2.WithContext(withTenant(reqPost2.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recPost2 := httptest.NewRecorder()
@@ -1691,7 +1691,7 @@ func TestHandleJobCatalog_MergeMsgBranches(t *testing.T) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 
-	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", strings.NewReader("%"))
+	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&org_unit_id=org1", strings.NewReader("%"))
 	reqPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqPost = reqPost.WithContext(withTenant(reqPost.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recPost := httptest.NewRecorder()
@@ -1723,7 +1723,7 @@ func TestHandleJobCatalog_CreateJobFamilyGroupError_ShowsPage(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 
@@ -1752,7 +1752,7 @@ func TestHandleJobCatalog_Post_DefaultActionAndEffectiveDate(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("effective_date", "")
-	form.Set("org_unit_id", "BU000")
+	form.Set("org_unit_id", "org1")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	form.Set("job_family_group_description", "")
@@ -1769,7 +1769,7 @@ func TestHandleJobCatalog_Post_DefaultActionAndEffectiveDate(t *testing.T) {
 func TestResolveSetIDOrDefaultTx(t *testing.T) {
 	t.Run("fallback to default", func(t *testing.T) {
 		tx := &stubTx{row: &stubRow{err: &pgconn.PgError{Message: "SETID_BINDING_MISSING"}}}
-		got, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01")
+		got, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "org1", "2026-01-01")
 		if err != nil || got != "DEFLT" {
 			t.Fatalf("got=%q err=%v", got, err)
 		}
@@ -1780,7 +1780,7 @@ func TestResolveSetIDOrDefaultTx(t *testing.T) {
 
 	t.Run("success path", func(t *testing.T) {
 		tx := &stubTx{row: &stubRow{vals: []any{"S2601"}}}
-		got, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01")
+		got, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "org1", "2026-01-01")
 		if err != nil || got != "S2601" {
 			t.Fatalf("got=%q err=%v", got, err)
 		}
@@ -1791,7 +1791,7 @@ func TestResolveSetIDOrDefaultTx(t *testing.T) {
 
 	t.Run("savepoint error", func(t *testing.T) {
 		tx := &stubTx{execErr: errors.New("savepoint fail"), execErrAt: 1}
-		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "savepoint fail") {
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "org1", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "savepoint fail") {
 			t.Fatalf("unexpected err=%v", err)
 		}
 		if tx.execN != 1 {
@@ -1805,7 +1805,7 @@ func TestResolveSetIDOrDefaultTx(t *testing.T) {
 			execErrAt: 2,
 			row:       &stubRow{vals: []any{"S2601"}},
 		}
-		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "release fail") {
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "org1", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "release fail") {
 			t.Fatalf("unexpected err=%v", err)
 		}
 		if tx.execN != 2 {
@@ -1819,7 +1819,7 @@ func TestResolveSetIDOrDefaultTx(t *testing.T) {
 			execErrAt: 2,
 			row:       &stubRow{err: &pgconn.PgError{Message: "SETID_BINDING_MISSING"}},
 		}
-		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "rollback fail") {
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "org1", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "rollback fail") {
 			t.Fatalf("unexpected err=%v", err)
 		}
 		if tx.execN != 2 {
@@ -1833,7 +1833,7 @@ func TestResolveSetIDOrDefaultTx(t *testing.T) {
 			execErrAt: 3,
 			row:       &stubRow{err: &pgconn.PgError{Message: "SETID_BINDING_MISSING"}},
 		}
-		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "release fail") {
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "org1", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "release fail") {
 			t.Fatalf("unexpected err=%v", err)
 		}
 		if tx.execN != 3 {
@@ -1843,7 +1843,7 @@ func TestResolveSetIDOrDefaultTx(t *testing.T) {
 
 	t.Run("non-binding error returns", func(t *testing.T) {
 		tx := &stubTx{row: &stubRow{err: &pgconn.PgError{Message: "ORG_NOT_FOUND_AS_OF"}}}
-		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "ORG_NOT_FOUND_AS_OF") {
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "org1", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "ORG_NOT_FOUND_AS_OF") {
 			t.Fatalf("unexpected err=%v", err)
 		}
 		if tx.execN != 3 {
@@ -1856,7 +1856,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 	beginErrStore := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return nil, errors.New("begin fail")
 	})}
-	if _, _, err := beginErrStore.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
+	if _, _, err := beginErrStore.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -1866,19 +1866,19 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		row3: fakeRow{vals: []any{"e1"}},
 	}
 	s3 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3, nil })}
-	if err := s3.CreateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-01-01", "JC1", "Group1", ""); err != nil {
+	if err := s3.CreateJobFamilyGroup(context.Background(), "t1", "org1", "2026-01-01", "JC1", "Group1", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 
 	tx3a := &stubTx{execErr: errors.New("bootstrap fail"), execErrAt: 2}
 	s3a := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3a, nil })}
-	if err := s3a.CreateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
+	if err := s3a.CreateJobFamilyGroup(context.Background(), "t1", "org1", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx3ResolveErr := &stubTx{rowErr: errors.New("resolve fail")}
 	s3ResolveErr := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3ResolveErr, nil })}
-	if err := s3ResolveErr.CreateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
+	if err := s3ResolveErr.CreateJobFamilyGroup(context.Background(), "t1", "org1", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -1888,7 +1888,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		row3Err: errors.New("uuid fail"),
 	}
 	s3b := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3b, nil })}
-	if err := s3b.CreateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
+	if err := s3b.CreateJobFamilyGroup(context.Background(), "t1", "org1", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -1900,7 +1900,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		row3:      fakeRow{vals: []any{"e1"}},
 	}
 	s3c := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3c, nil })}
-	if err := s3c.CreateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
+	if err := s3c.CreateJobFamilyGroup(context.Background(), "t1", "org1", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -1911,20 +1911,20 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		}},
 	}
 	s4 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4, nil })}
-	groups, resolved, err := s4.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01")
+	groups, resolved, err := s4.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01")
 	if err != nil || resolved != "SHARE" || len(groups) != 1 {
 		t.Fatalf("resolved=%q len=%d err=%v", resolved, len(groups), err)
 	}
 
 	tx4a := &stubTx{execErr: errors.New("bootstrap fail"), execErrAt: 2}
 	s4a := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4a, nil })}
-	if _, _, err := s4a.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
+	if _, _, err := s4a.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx4ResolveErr := &stubTx{rowErr: errors.New("resolve fail")}
 	s4ResolveErr := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4ResolveErr, nil })}
-	if _, _, err := s4ResolveErr.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
+	if _, _, err := s4ResolveErr.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -1933,7 +1933,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		queryErr: errors.New("query fail"),
 	}
 	s4b := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4b, nil })}
-	if _, _, err := s4b.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
+	if _, _, err := s4b.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -1942,7 +1942,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		rows: &scanErrRows{},
 	}
 	s4c := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4c, nil })}
-	if _, _, err := s4c.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
+	if _, _, err := s4c.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -1950,13 +1950,13 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 func TestJobCatalogPGStore_Errors(t *testing.T) {
 	tx := &stubTx{queryErr: errors.New("query fail")}
 	s := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-	if _, _, err := s.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
+	if _, _, err := s.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx2 := &stubTx{rowErr: errors.New("row fail")}
 	s2 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx2, nil })}
-	if _, _, err := s2.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
+	if _, _, err := s2.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -1965,7 +1965,7 @@ func TestJobCatalogPGStore_Errors(t *testing.T) {
 		row2Err: errors.New("uuid fail"),
 	}
 	s3 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3, nil })}
-	if err := s3.CreateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-01-01", "JC1", "Group1", ""); err == nil {
+	if err := s3.CreateJobFamilyGroup(context.Background(), "t1", "org1", "2026-01-01", "JC1", "Group1", ""); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -1974,19 +1974,19 @@ func TestJobCatalogPGStore_Errors(t *testing.T) {
 		rows: &jobcatalogRows{err: errors.New("rows err")},
 	}
 	s4 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4, nil })}
-	if _, _, err := s4.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
+	if _, _, err := s4.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx5 := &stubTx{execErr: errors.New("set_config fail"), execErrAt: 1}
 	s5 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx5, nil })}
-	if _, _, err := s5.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
+	if _, _, err := s5.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx6 := &stubTx{execErr: errors.New("bootstrap fail"), execErrAt: 2}
 	s6 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx6, nil })}
-	if err := s6.CreateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-01-01", "JC1", "Group1", ""); err == nil {
+	if err := s6.CreateJobFamilyGroup(context.Background(), "t1", "org1", "2026-01-01", "JC1", "Group1", ""); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -1995,7 +1995,7 @@ func TestJobCatalogPGStore_Errors(t *testing.T) {
 		rows:      &jobcatalogRows{rows: [][]any{{"g1", "JC1", "Group1", true, "2026-01-01"}}},
 	}
 	s7 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx7, nil })}
-	if _, _, err := s7.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
+	if _, _, err := s7.ListJobFamilyGroups(context.Background(), "t1", "org1", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 }
