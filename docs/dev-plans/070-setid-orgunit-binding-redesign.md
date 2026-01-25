@@ -5,7 +5,7 @@
 ## 1. 背景与上下文 (Context)
 - **需求来源**：替代 `DEV-PLAN-028` 的 SetID 方案升级，落地“SetID 绑定组织架构 + 层级继承解析 + 单一共享层”新需求。
 - **当前痛点**：`business_unit_id + record_group` 无法表达组织层级继承与双层（SHARE/DEFLT）语义，且与全域一致性与可审计性要求不匹配。
-- **业务价值**：统一 SetID 解析入口与不变量，消除跨域分叉，保证 `as_of` 口径可复现与可审计。
+- **业务价值**：统一 SetID 绑定口径；**配置主数据显式 setid、业务数据用 org_unit 解析 setid**，保证 `as_of` 口径可复现与可审计。
 - 现有 SetID 方案以 `business_unit_id + record_group` 解析为主（见 `DEV-PLAN-028`），与“SetID 直接绑定组织架构并按层级继承”的新需求不匹配。
 - 新增“实例级 SHARE + 租户级 DEFLT”双层 SetID 语义，需要在数据模型与解析入口上明确边界与可审计规则。
 
@@ -13,7 +13,8 @@
 ### 2.1 核心目标
 - [ ] SetID 绑定组织架构，支持“就近祖先覆盖”的继承解析。
 - [ ] SetID 仅允许绑定在业务单元节点（`is_business_unit=true`），根组织强制为业务单元。
-- [ ] 完成 SetID **全域迁移**：覆盖所有 setid-controlled 业务域与入口，统一切换到“组织绑定 + 继承解析”。
+- [ ] **配置主数据入口**必须显式 `setid`；**业务数据入口**通过 `org_unit_id` 解析 `setid` 以选择可用配置集。
+- [ ] 完成 SetID **全域迁移**：覆盖所有 setid-controlled 业务域与入口，统一切换到“配置主数据显式 setid + 业务数据通过 org_unit 解析 setid 并落库审计”。
 - [ ] 移除 `business_unit_id` 与 `record_group` 设计（全域清理，禁止残留引用）。
 - [ ] 实例级共享 SetID：`SHARE`（Shared），只读给租户、仅 SaaS 厂商维护。
 - [ ] 租户级默认 SetID：`DEFLT`（Default），绑定租户根组织。
@@ -47,7 +48,7 @@
 - **租户级 SetID（DEFLT）**：每租户默认 SetID，绑定租户根组织。
 - **组织绑定**：SetID 与组织节点绑定，子节点默认继承，允许下级覆盖。
 - **业务单元（Business Unit）**：组织节点标记 `is_business_unit=true`（有效期内属性，来源于 Org 读模型）。
-- **解析时间**：以 `as_of` 的 **date** 进行解析（Valid Time）。
+- **解析时间**：`ResolveSetID` 以 `as_of` 的 **date** 进行解析（Valid Time）；配置主数据入口不使用解析推导，业务数据入口使用解析结果。
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 架构图 (Mermaid)
@@ -66,17 +67,18 @@ graph TD
 ```
 
 ### 3.2 关键设计决策 (ADR 摘要)
-- **解析入口**：`ResolveSetID(tenant_id, org_unit_id, as_of_date) -> setid`（fail-closed）。
+- **解析入口**：`ResolveSetID(tenant_id, org_unit_id, as_of_date) -> setid`（fail-closed；用于 SetID 管理/审计与业务数据选择配置集；配置主数据写入口不得使用推导）。
 - **根节点绑定**：租户根组织必须绑定 `DEFLT`，强制存在且不可禁用。
 - **绑定范围**：SetID 仅允许绑定到 `is_business_unit=true` 的节点；根组织强制为业务单元。
 - **共享层**：`SHARE` 仅用于实例级“通用主数据/配置”，不参与组织绑定解析。
 - **单一共享 SetID**：本阶段仅允许一个实例级共享 SetID（`SHARE`）。
 - **物理隔离**：共享层数据与租户层表不共表，使用独立表/命名空间；租户表 RLS 保持 `tenant_id = app.current_tenant`，不引入 OR。
-- **业务主数据入口**：以 `org_unit_id` 作为上下文，解析租户 SetID；不读取 `SHARE`。
+- **配置主数据入口**：必须显式传入 `setid`；禁止通过 `org_unit_id` 推导；不读取 `SHARE`。
+- **业务数据入口**：可通过 `org_unit_id` 解析得到 `setid` 以筛选配置数据，并将解析结果落库用于审计。
 - **SetID 格式**：`[A-Z0-9]{5}`，统一存储为大写。
-- **版本固定**：解析严格以 `as_of_date` 固化组织与绑定版本，不依赖“当前组织树”。
+- **版本固定**：`ResolveSetID` 严格以 `as_of_date` 固化组织与绑定版本，不依赖“当前组织树”。
 - **绑定存储权威**：仅采用 `setid_binding_events` + `setid_binding_versions`（无并行绑定表）。
-- **写入快照**：所有需要解析 SetID 的写入口必须显式传入业务有效期 `as_of_date`，并记录 `resolved_setid` + `resolved_setid_as_of` 快照（禁止默认 `current_date`）。
+- **写入快照**：配置主数据写入口记录显式 `setid`；业务数据写入口记录解析得到的 `setid` 与业务有效期；不记录 `resolved_setid*`，禁止默认 `current_date`。
 - **全局租户常量**：新增 `orgunit.global_tenant_id()` 作为唯一来源；共享层表 `tenant_id` 固定为该值，并与真实租户 ID 保证不冲突（保留常量/哨兵记录）。
 - **集合ID范围**：全模块共用一个 SetID 集合（不按模块拆分）。
 - **继承与补充**：子组织默认继承父级 SetID；本阶段不提供克隆/补充入口，不做运行时合并。
@@ -86,9 +88,10 @@ graph TD
 - `SHARE` 仅存在于共享层表；租户级不可创建或绑定 `SHARE`。
 - `DEFLT` 必须存在于每个租户，并绑定租户根组织。
 - `DEFLT` / `SHARE` 状态固定为 `active`；DB 约束 + 写入口双重阻断禁用操作。
+- **显式 SetID**：配置主数据写入口必须显式传入 `setid`（缺失/非法/`SHARE` 一律 fail-closed）；业务数据写入口使用 `org_unit_id + as_of_date` 解析并落库。
 - **业务单元约束**：根组织 `is_business_unit=true`；绑定事件必须验证 `org_unit_versions.is_business_unit=true`（`as_of_date`）。
-- **解析前提**：目标组织节点在 `as_of_date` 必须为 `active`；若已禁用则解析失败（fail-closed）。
-- **祖先过滤**：继承查找仅考虑在 `as_of_date` 为 `active` 的祖先节点；禁用节点的绑定不参与解析。
+- **解析前提（ResolveSetID）**：目标组织节点在 `as_of_date` 必须为 `active`；若已禁用则解析失败（fail-closed）。
+- **祖先过滤（ResolveSetID）**：继承查找仅考虑在 `as_of_date` 为 `active` 的祖先节点；禁用节点的绑定不参与解析。
 - **DB 级硬约束**：共享层表 `tenant_id = orgunit.global_tenant_id()`；租户表 `setid <> 'SHARE'`；`setid_binding_versions` 禁止 `SHARE`。
 - **Validity 语义**：`setid_binding_versions.validity` 使用 `[start_date, end_date)`（date range），同一 `tenant_id + org_id` 不得重叠（exclusion 约束）。
 - **共享读开关**：共享层读取必须显式开启 `app.allow_share_read=on`（或等价机制），缺省即拒绝。
@@ -106,9 +109,9 @@ graph TD
    - 解析时从当前组织向上查找最近绑定；无绑定即错误（理论上不会发生，因为根节点强制 `DEFLT`）。
 3. **入口与交互**：
    - SetID 管理面移除 BU 相关表单，改为“组织树 + 绑定编辑”。
-   - 所有 setid-controlled 业务入口通过 `org_unit_id` 解析并展示 `resolved setid`。
+  - 配置主数据入口必须显式 `setid` 并展示；业务数据入口按 `org_unit_id` 解析 SetID 以加载可选配置。
 4. **写入口快照**：
-   - 业务写入口在落库前解析并记录 `resolved_setid` + `resolved_setid_as_of` 快照（仅用于审计/查询，不替代当前解析规则）。
+  - 业务数据写入口记录解析得到的 `setid` 与业务有效期（仅用于审计/查询，不替代当前规则）。
 
 ## 4. 数据模型与约束 (Data Model & Constraints)
 ### 4.1 Schema 定义 (SQL/Atlas)
@@ -205,7 +208,7 @@ CREATE TABLE orgunit.setid_binding_versions (
 - `orgunit.setid_binding_versions` 需支持 `tenant_id + org_id + validity` 的组合查询。
 
 ### 4.2 迁移策略
-- **Up**：新增组织绑定表与解析函数；创建 `orgunit.global_tenant_id()` 哨兵与共享层约束；各业务域按“组织绑定 + 继承解析”替换旧入口。
+- **Up**：新增组织绑定表与解析函数；创建 `orgunit.global_tenant_id()` 哨兵与共享层约束；各业务域改为“配置主数据显式 setid 输入 + 业务数据通过 org_unit 解析 setid 并落库审计”。
 - **Down**：生产环境不执行破坏性 Down；回滚走“环境级停写 + 修复后重试”，并保持无 legacy 双链路。
 - **切换原则**：全域一次性切换；停写窗口内完成切换；**禁止双写/兼容兜底**（No Legacy）。
 - **准备期**：
@@ -215,7 +218,7 @@ CREATE TABLE orgunit.setid_binding_versions (
     - 文档（本方案）：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`（目标/风险/验收处保留“清理项”描述）。
     - 代码/DB/迁移/API/路由/测试：当前无 `business_unit_id` / `record_group` 残留引用（全仓检索确认）。
   - 数据校验：存量 `setid` 格式（全大写 + 5 位）、根组织 `is_business_unit=true`、既有绑定有效期与缺失绑定清单。
-  - 演练：在预发布环境跑完整门禁与 E2E，验证 “org_unit_id + as_of_date” 全链路。
+  - 演练：在预发布环境跑完整门禁与 E2E，验证“配置主数据显式 setid + 业务数据 org_unit 解析 setid”全链路。
 - **切换窗口（停写）**：
   - 环境级停写：关闭所有 `submit_*` 写入口（API/HTMX/UI），仅允许只读验证。
   - 执行迁移：更新 schema/函数/迁移，部署新入口与解析链路。
@@ -229,7 +232,7 @@ CREATE TABLE orgunit.setid_binding_versions (
 - 其他组织绑定不自动推断；需要在上线后由管理员补齐。
 - setid-controlled 业务域：
   - 移除 `business_unit_id` / `record_group` 输入与字段。
-  - 统一通过 `org_unit_id` 解析 SetID 并写入（含 `resolved_setid_as_of`）。
+  - 配置主数据显式传入 `setid`；业务数据按 `org_unit_id` 解析 `setid`，并记录解析结果用于审计。
 - 不保留“旧解析入口”或“兼容分支”，避免 legacy 双链路。
 
 ## 5. 接口契约 (API Contracts)
@@ -284,11 +287,13 @@ CREATE TABLE orgunit.setid_binding_versions (
 - `/org/nodes`：
   - `POST /org/nodes?as_of=...` 支持设置业务单元标记（触发 `SET_BUSINESS_UNIT` 事件）。
 - setid-controlled 入口：
-  - `GET/POST` 必须显式携带 `org_unit_id` + `as_of`（UI）/`as_of_date`（API）；页面展示 `Resolved SetID`，解析失败必须 fail-closed。
-  - 示例：`/org/job-catalog?as_of=YYYY-MM-DD&org_unit_id=...`、`/org/positions?as_of=YYYY-MM-DD&org_unit_id=...`。
+  - 配置主数据（如 JobCatalog）：`GET/POST` 必须显式携带 `setid` + `as_of`（UI）/`setid` + `effective_date`（API）；页面展示 `setid`，缺失/非法必须 fail-closed。
+  - 业务数据（如 Position）：`org_unit_id` 必填，用于解析 `setid` 以加载可选配置；不要求手工选择 `setid`。
+  - 示例：`/org/job-catalog?as_of=YYYY-MM-DD&setid=ABCDE`、`/org/positions?as_of=YYYY-MM-DD&org_unit_id=...`。
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 解析算法（fail-closed）
+> 解析入口用于 SetID 管理/审计与业务数据选择配置集；配置主数据写入口不得依赖 `ResolveSetID` 推导 setid。
 1. 校验 `tenant_id`、`org_unit_id`、`as_of_date`（`as_of_date` 必填，禁止默认 `current_date`）。
 2. 在 `orgunit.org_unit_versions` 取 `org_unit_id` 的 `node_path`（`as_of_date` 有效且 `status='active'`）；若不存在则返回 `SETID_ORG_INACTIVE`（或复用 `ORG_NOT_FOUND_AS_OF`，需统一错误码表）。
 3. 基于 `node_path` + `as_of_date` 找到所有 **active 且 is_business_unit=true** 的祖先节点，在 `setid_binding_versions` 中按 `tenant_id` + `as_of_date` 查询绑定，选 **最近祖先**（最大层级）。
@@ -300,7 +305,7 @@ CREATE TABLE orgunit.setid_binding_versions (
 - `submit_setid_binding_event(...)`：绑定/解绑；事件表 `setid_binding_events` 为 SoT，投射到 `setid_binding_versions`（含 validity split 逻辑）；必须验证 `org_unit_versions.is_business_unit=true`（`as_of_date`）。
 - `submit_global_setid_event(...)`：共享层写入（仅 SaaS）；事件表 `global_setid_events` 为 SoT，投射到 `global_setids`。
 - 上述入口必须在事务内执行 `assert_current_tenant(p_tenant_id)`；共享层入口需校验 `app.current_actor_scope=saas`。
-- 所有需要解析 SetID 的写入口必须显式传入业务有效期 `as_of_date`，并落库 `resolved_setid` + `resolved_setid_as_of`。
+- 配置主数据写入口必须显式传入 `setid`（`[A-Z0-9]{5}`、`active` 且非 `SHARE`）；业务数据写入口可通过 `org_unit_id` 解析 `setid` 并落库用于审计。
 
 ### 6.3 绑定投射（validity split）
 1. 开启事务并注入 `app.current_tenant`。
@@ -351,17 +356,17 @@ CREATE TABLE orgunit.setid_binding_versions (
 ### 8.2 里程碑
 1. [X] 更新 `DEV-PLAN-028` 为“被 DEV-PLAN-070 取代”的说明，并同步 `Doc Map`（2026-01-24 04:25 UTC）。
 2. [X] 梳理 `business_unit_id` / `record_group` 依赖清单并冻结范围（2026-01-25 03:21 UTC）。
-3. [ ] 更新相关 dev-plans 与测试用例（TP-060/子计划等），统一“全域迁移”口径，改为 `org_unit_id + as_of_date` 解析并移除 BU/record_group 约束。
-   - dev-plans：`docs/dev-plans/028-setid-management.md`（标注历史/弃用口径，指向 070）；`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`（解析上下文切换）；`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`（去 BU/record_group、改解析与错误码口径）；`docs/dev-plans/060-business-e2e-test-suite.md`（数据集/步骤改为 org_unit 绑定）；`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`（步骤/断言/契约引用改为 org_unit + as_of）。
-   - 测试用例：`e2e/tests/tp060-02-master-data.spec.js`（去 BU/mapping，改 org_unit 绑定与断言）；`e2e/tests/tp060-03-person-and-assignments.spec.js`（Position 创建与 URL 断言改 org_unit）；`e2e/tests/m3-smoke.spec.js`（Position 创建改 org_unit）；`internal/server/jobcatalog_test.go`（请求参数与断言改 org_unit）；`internal/server/staffing_test.go`（Position 相关断言改 org_unit）；`internal/server/handler_test.go`（JobCatalog/Position 相关断言改 org_unit）；`internal/server/setid_test.go`（SetID 管理改组织绑定）。
+3. [X] 更新相关 dev-plans 与测试用例（TP-060/子计划等），统一“全域迁移”口径，改为“配置主数据显式 setid、业务数据通过 org_unit 解析 setid”，并移除 BU/record_group 约束。（2026-01-25 11:01 UTC）
+  - dev-plans：`docs/dev-plans/028-setid-management.md`（标注历史/弃用口径，指向 070）；`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`（配置主数据显式 setid）；`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`（Position 由 org_unit 解析 setid + job_profile 必选）；`docs/dev-plans/060-business-e2e-test-suite.md`（数据集/步骤改为“配置显式 setid + 业务解析 setid”）；`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`（步骤/断言/契约引用改为 org_unit 解析 setid + as_of）。
+  - 测试用例：`e2e/tests/tp060-02-master-data.spec.js`（Position 由 org_unit 派生 setid、Job Profile 必选）；`e2e/tests/tp060-03-person-and-assignments.spec.js`（Position 创建不要求 setid，Job Profile 必选）；`e2e/tests/m3-smoke.spec.js`（Position 创建不要求 setid）；`internal/server/jobcatalog_test.go`（显式 setid 入口仍保留）；`internal/server/staffing_test.go`（Position 必选 job_profile + org_unit 解析 setid）；`internal/server/handler_test.go`（Position 入口去 setid）；`internal/server/setid_test.go`（SetID 管理改组织绑定）。
 4. [X] 制定迁移窗口与切换策略（停写切换、无双写）（2026-01-25 00:45 UTC）。
 5. [X] 明确 `orgunit.global_tenant_id()` 与共享层 RLS/读写入口合同（含共享读取专用入口）（2026-01-25 01:08 UTC）。
 6. [X] 将 `DEV-PLAN-026` 的 schema/函数/迁移落到模块实现（含 `is_business_unit` 与 `SET_BUSINESS_UNIT`），并同步 SetID 绑定入口的业务单元校验（2026-01-25 01:15 UTC）。
 7. [X] 设计并实现 `setid_binding_events` + `setid_binding_versions`（One Door）（2026-01-25 01:18 UTC）。
-8. [X] 替换解析入口与调用链（Go/SQL），所有 setid-controlled 入口统一改为 `org_unit_id` 解析（2026-01-25 01:22 UTC）。
-9. [X] 改造 UI/路由/鉴权（去 BU/record_group、加 org 绑定 + 业务单元标记编辑 + 权限点补齐）（2026-01-25 02:05 UTC）。
+8. [X] 切换解析入口与调用链（Go/SQL），配置主数据入口显式 `setid`，业务数据入口改为 `org_unit_id` 解析 `setid`。（2026-01-25 11:01 UTC）
+9. [ ] 改造 UI/路由/鉴权（去 BU/record_group、加 org 绑定 + 业务单元标记编辑 + 权限点补齐），补齐配置主数据的显式 `setid` 选择与展示，并展示业务数据的解析结果。
 10. [X] 完成迁移脚本与数据 bootstrap（DEFLT + root 绑定），并修复存量 `setid` 规范（5 位/大写）（2026-01-25 02:57 UTC）。
-11. [X] 补齐门禁与测试用例（参考 `AGENTS.md` 与 `DEV-PLAN-012`）（2026-01-25 03:12 UTC）。
+11. [X] 补齐门禁与测试用例（参考 `AGENTS.md` 与 `DEV-PLAN-012`），覆盖“配置主数据显式 setid + 业务数据 org_unit 解析 setid”的新口径。（2026-01-25 11:01 UTC）
 
 ### 8.3 后续扩展（不在本阶段）
 - SetID 克隆：新增 `source_setid/source_snapshot_at` 字段与克隆入口；提供“基于快照复制”的补充能力（不做运行时合并）。
@@ -370,16 +375,16 @@ CREATE TABLE orgunit.setid_binding_versions (
 ## 9. 测试与验收标准 (Acceptance Criteria)
 ### 9.1 风险与缓解
 - **共享层读写边界**：风险评估：高。若入口未显式设置共享读开关或写入口/会话标记缺漏，会导致越权或误拒绝。缓解：共享层独立表 + DB 级硬约束（共享表固定 `global_tenant`、绑定表禁 `SHARE`）+ `app.allow_share_read` 默认拒绝 + 写入口强校验 `app.current_actor_scope`。
-- **组织结构变更导致继承结果波动**：风险评估：中。组织调整会改变“最近祖先”的解析，影响后续数据落库。缓解：解析严格以 `as_of_date` 固化版本 + 写入口记录 `resolved_setid` + `resolved_setid_as_of` 快照；变更影响评估作为后续增强。
+- **组织结构变更导致继承结果波动**：风险评估：中。组织调整会改变 `ResolveSetID` 的“最近祖先”结果，影响业务写入时使用的配置集与解析展示。缓解：解析严格以 `as_of_date` 固化版本；写入口落库解析结果用于审计；变更影响评估作为后续增强。
 - **业务单元标记错误**：风险评估：中。若业务单元标记缺漏或错误，会导致绑定被拒绝或落在错误节点。缓解：根节点强制业务单元 + 绑定入口校验 + UI 显示业务单元标记。
 - **删除 BU/record_group 影响面广**：风险评估：高。牵涉 schema、API、UI、解析入口与数据迁移。缓解：依赖清单 + 迁移窗口（停写切换、无双写）+ 门禁禁止新引用。
-- **组织变更影响解析**：组织调整可能影响绑定继承。缓解：绑定有效期与 `as_of_date` 联动。
+- **组织变更影响解析**：组织调整可能影响绑定继承的可视化查询。缓解：绑定有效期与 `as_of_date` 联动。
 - **存量 SetID 不合规**：历史数据可能不满足 5 位/全大写规范，切换时会导致解析或约束失败。风险评估：中。缓解：迁移前完成全量校验与修复；约束先 `NOT VALID` 后验证。
 
 ### 9.2 测试计划
 - 单元测试：解析算法、validity split、错误码映射、共享层读写开关与保留字约束。
 - 集成测试：RLS fail-closed、绑定继承链路、as_of 变更对解析的影响。
-- E2E：TP-060-02/03 口径更新后仍可跑通（SetID→JobCatalog→Position→Assignments）。
+- E2E：TP-060-02/03 口径更新为“JobCatalog 显式 setid、Position 由 org_unit 解析 setid + Job Profile 必选”后仍可跑通（SetID→JobCatalog→Position→Assignments）。
 - 门禁与证据：按 §2.3 触发器执行并在执行记录中提供证据块。
 
 ### 9.3 验收标准
@@ -394,12 +399,12 @@ CREATE TABLE orgunit.setid_binding_versions (
 - [ ] 目标组织节点在 `as_of_date` 必须为 `active`；禁用节点解析失败（fail-closed）。
 - [ ] SetID 仅可绑定到业务单元节点（`is_business_unit=true`）。
 - [ ] `/org/nodes` 可修改业务单元标记并持久化（`SET_BUSINESS_UNIT`），权限不足时必须被拒绝。
-- [ ] 业务主数据域仅使用租户 SetID，不读取 `SHARE`。
+- [ ] 业务主数据域仅使用租户 SetID：配置主数据必须显式传入 `setid`，业务数据通过 `org_unit_id` 解析 setid，不读取 `SHARE`。
 - [ ] 共享层仅在白名单入口可见，UI 文案标注“共享/只读”，共享项不可编辑。
 - [ ] 移除 `business_unit_id` 与 `record_group` 的实现与存量结构。
 - [ ] `business_unit_id` / `record_group` 全局无新增引用（依赖清单与门禁验证）。
 - [ ] SetID 格式更新为 `[A-Z0-9]{5}` 并统一校验。
-- [ ] 写入口记录 `resolved_setid` + `resolved_setid_as_of` 解析快照（仅用于审计/查询）。
+- [ ] 配置主数据写入口必须显式 `setid` 并落库；业务数据写入口必须解析并记录 `setid` 与 `as_of_date` 用于审计，禁止默认 `current_date` 或记录 `resolved_setid*`。
 - [ ] 租户写 `SHARE` 必失败（DB 约束 + RLS + 入口校验）。
 - [ ] SaaS 写 `SHARE` 必成功（仅通过专用写入口）。
 - [ ] 租户读取 `SHARE` 仅只读可见。
@@ -409,7 +414,7 @@ CREATE TABLE orgunit.setid_binding_versions (
 
 ## 10. 运维与监控 (Ops & Monitoring)
 - Feature Flag：不引入开关切换（对齐 `AGENTS.md` 的“早期阶段不过度运维”）。
-- 关键日志：保留 `request_id` / `tenant_id` / `org_unit_id` / `setid`，便于审计与排障。
+- 关键日志：保留 `request_id` / `tenant_id` / `setid`（涉及绑定操作时追加 `org_unit_id`），便于审计与排障。
 - 回滚方案：环境级停写 + 修复后重试；禁止 legacy 双链路或回退通道。
 
 ## 11. 关联文档

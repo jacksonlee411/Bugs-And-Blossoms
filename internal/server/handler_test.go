@@ -423,7 +423,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("setid post status=%d", recSetIDPost.Code)
 	}
 
-	reqJobCatalogPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&org_unit_id=org1", strings.NewReader("action=create_job_family_group&effective_date=2026-01-01&org_unit_id=org1&job_family_group_code=JC1&job_family_group_name=Group1"))
+	reqJobCatalogPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&setid=S2601", strings.NewReader("action=create_job_family_group&effective_date=2026-01-01&setid=S2601&job_family_group_code=JC1&job_family_group_name=Group1"))
 	reqJobCatalogPost.Host = "localhost:8080"
 	reqJobCatalogPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqJobCatalogPost.AddCookie(session)
@@ -575,7 +575,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("person options status=%d", recPersonOptions.Code)
 	}
 
-	reqPosCreate := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_unit_id":"org1","name":"A"}`))
+	reqPosCreate := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_unit_id":"org1","job_profile_id":"jp1","name":"A"}`))
 	reqPosCreate.Host = "localhost:8080"
 	reqPosCreate.Header.Set("Content-Type", "application/json")
 	reqPosCreate.AddCookie(session)
@@ -622,7 +622,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("assignments api get status=%d", recAssignList.Code)
 	}
 
-	reqPosUIPost := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_unit_id=org1&name=A"))
+	reqPosUIPost := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_unit_id=org1&job_profile_id=jp1&name=A"))
 	reqPosUIPost.Host = "localhost:8080"
 	reqPosUIPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqPosUIPost.AddCookie(session)

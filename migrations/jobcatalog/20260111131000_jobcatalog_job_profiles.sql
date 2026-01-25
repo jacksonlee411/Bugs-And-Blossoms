@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_profiles (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_profiles_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
-  CONSTRAINT job_profiles_tenant_setid_code_key UNIQUE (tenant_id, setid, code),
+  CONSTRAINT job_profiles_tenant_setid_code_key UNIQUE (tenant_id, code),
   CONSTRAINT job_profiles_tenant_setid_id_unique UNIQUE (tenant_id, setid, id)
 );
 
@@ -131,4 +131,3 @@ DROP TABLE IF EXISTS jobcatalog.job_profile_versions;
 DROP TABLE IF EXISTS jobcatalog.job_profile_events;
 DROP TABLE IF EXISTS jobcatalog.job_profiles;
 -- +goose StatementEnd
-

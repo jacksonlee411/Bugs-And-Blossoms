@@ -141,6 +141,59 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
     expect(bindResp.status(), await bindResp.text()).toBe(201);
   }
 
+  const jobFamilyGroupCode = `JFG-SM-${runID}`;
+  const jobFamilyCode = `JF-SM-${runID}`;
+  const jobProfileCode = `JP-SM-${runID}`;
+
+  await page.goto(`/org/job-catalog?as_of=${asOf}&setid=DEFLT`);
+  await expect(page.locator("h1")).toHaveText("Job Catalog");
+
+  const ensureJobFamilyGroup = async (code, name) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_family_group"]')
+    });
+    await form.locator('input[name="job_family_group_code"]').fill(code);
+    await form.locator('input[name="job_family_group_name"]').fill(name);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*setid=DEFLT)(?=.*as_of=${asOf}).*$`));
+  };
+
+  const ensureJobFamily = async (code, name, groupCode) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_family"]')
+    });
+    await form.locator('input[name="job_family_code"]').fill(code);
+    await form.locator('input[name="job_family_name"]').fill(name);
+    await form.locator('input[name="job_family_group_code"]').fill(groupCode);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*setid=DEFLT)(?=.*as_of=${asOf}).*$`));
+  };
+
+  const ensureJobProfile = async (code, name, familyCodesCSV, primaryFamilyCode) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_profile"]')
+    });
+    await form.locator('input[name="job_profile_code"]').fill(code);
+    await form.locator('input[name="job_profile_name"]').fill(name);
+    await form.locator('input[name="job_profile_family_codes"]').fill(familyCodesCSV);
+    await form.locator('input[name="job_profile_primary_family_code"]').fill(primaryFamilyCode);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*setid=DEFLT)(?=.*as_of=${asOf}).*$`));
+  };
+
+  await ensureJobFamilyGroup(jobFamilyGroupCode, `Smoke Group ${runID}`);
+  await ensureJobFamily(jobFamilyCode, `Smoke Family ${runID}`, jobFamilyGroupCode);
+  await ensureJobProfile(jobProfileCode, `Smoke Profile ${runID}`, jobFamilyCode, jobFamilyCode);
+
   await page.goto(`/person/persons?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Person");
   await page.locator(`form[action="/person/persons?as_of=${asOf}"] input[name="pernr"]`).fill(pernr);
@@ -153,18 +206,26 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const personUUID = (await personRow.locator("code").innerText()).trim();
   expect(personUUID).not.toBe("");
 
-  await page.goto(`/org/positions?as_of=${asOf}`);
+  await page.goto(`/org/positions?as_of=${asOf}&org_unit_id=${createdOrgID}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Positions");
-  const posCreateForm = page.locator(`form[method="POST"][action="/org/positions?as_of=${asOf}"]`).first();
+  const posCreateForm = page
+    .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${asOf}"]`)
+    .first();
   const orgUnitID = await posCreateForm
     .locator('select[name="org_unit_id"] option', { hasText: orgName })
     .first()
     .getAttribute("value");
   expect(orgUnitID).not.toBeNull();
   await posCreateForm.locator('select[name="org_unit_id"]').selectOption(orgUnitID);
+  const jobProfileOption = posCreateForm.locator('select[name="job_profile_id"] option', { hasText: jobProfileCode }).first();
+  const jobProfileID = await jobProfileOption.getAttribute("value");
+  expect(jobProfileID).not.toBeNull();
+  await posCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
   await posCreateForm.locator('input[name="name"]').fill(posName);
   await posCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&org_unit_id=${orgUnitID}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/org/positions\\?(?=.*as_of=${asOf})(?=.*org_unit_id=${orgUnitID}).*$`)
+  );
 
   const posRow = page.locator("tr", { hasText: posName });
   await expect(posRow).toBeVisible();

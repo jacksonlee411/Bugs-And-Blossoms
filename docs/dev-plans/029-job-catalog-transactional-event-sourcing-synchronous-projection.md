@@ -29,7 +29,7 @@
 
 - schema/迁移：`modules/jobcatalog/infrastructure/persistence/schema/00001_jobcatalog_schema.sql`、`modules/jobcatalog/infrastructure/persistence/schema/00002_jobcatalog_job_family_groups.sql`、`modules/jobcatalog/infrastructure/persistence/schema/00003_jobcatalog_engine.sql`、`migrations/jobcatalog/20260106102000_jobcatalog_schema.sql`、`migrations/jobcatalog/20260106102500_jobcatalog_engine.sql`
 - UI 闭环入口：`/org/job-catalog`（实现：`internal/server/jobcatalog.go`；allowlist：`config/routing/allowlist.yaml`）
-- SetID 解析依赖：`pkg/setid/setid.go` + `orgunit.resolve_setid(tenant_id, org_unit_id, as_of_date)`（对齐 `DEV-PLAN-070`）
+- SetID 规范化与校验：`pkg/setid/setid.go`（格式校验/大写收敛）；**Job Catalog 配置主数据入口**必须显式传 `setid`（不通过 `org_unit_id` 推导；业务数据入口另见 `DEV-PLAN-030/070`）。
 - 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
 - **SSOT 链接**：
   - 触发器矩阵与本地必跑：`AGENTS.md`
@@ -43,9 +43,9 @@
 
 ## 2.5 合同更新（对齐 009M1：SetID 一等公民）
 
-> 009M1 的落地样板已把 `setid` 引入 Job Catalog 的 schema 与写入口（并通过 OrgUnit 的 Set Control Mapping 解析得到）。为避免后续实现继续出现“文档与实现分叉”，本计划自此将 `setid` 视为 Job Catalog 的一等维度：
-- **所有 Job Catalog identity/events/versions 表均包含 `setid`**（同一租户内允许不同 `setid` 下 code 重名）。
-- **所有 Kernel 写入口/读快照均显式接收 `p_setid`**；Go/HTTP 层通过 `org_unit_id + as_of_date` 解析 SetID 来填充该参数（对齐 `DEV-PLAN-070` 与 `internal/server/jobcatalog.go` 的改造目标）。
+> 009M1 的落地样板已把 `setid` 引入 Job Catalog 的 schema 与写入口（旧实现曾通过 OrgUnit 的 Set Control Mapping 解析；现统一改为 **显式 `setid`（仅限 Job Catalog 配置主数据入口）**）。为避免后续实现继续出现“文档与实现分叉”，本计划自此将 `setid` 视为 Job Catalog 的一等维度：
+- **所有 Job Catalog identity/events/versions 表均包含 `setid`**（同一租户内不同 `setid` 不允许 code 重名）。
+- **所有 Job Catalog Kernel 写入口/读快照均显式接收 `p_setid`**；Go/HTTP 层必须显式传入 `setid`（不通过 `org_unit_id`/`as_of_date` 推导或默认；业务数据入口对齐 `DEV-PLAN-030/070`），并同步 `internal/server/jobcatalog.go` 的入口契约。
 
 ## 2.6 落地路径（可验收分步）
 > 目标：把实现拆成“每步可验收”的闭环，避免实现期即兴补丁与契约漂移。
@@ -230,7 +230,7 @@ CREATE TABLE job_profile_events (
 ### 4.2 Identity（code 唯一性事实源）
 > 说明：identity 表用于承载 **稳定 ID**（被外部引用的锚点）与 **code 唯一性**；所有有效期属性与可变关系统一落在 versions 表。
 >
-> **SetID 口径（选定）**：Job Catalog 的 code 唯一性以 `(tenant_id, setid, code)` 为事实源；同一租户下不同 `setid` 允许 code 重名（符合 Set Control 语义）。
+> **code 唯一性口径（选定）**：Job Catalog 的 code 唯一性以 `(tenant_id, code)` 为事实源；同一租户下不同 `setid` 不允许 code 重名。
 
 ```sql
 CREATE TABLE job_family_groups (
@@ -241,7 +241,7 @@ CREATE TABLE job_family_groups (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_family_groups_tenant_setid_id_key UNIQUE (tenant_id, setid, id),
-  CONSTRAINT job_family_groups_tenant_setid_code_key UNIQUE (tenant_id, setid, code)
+  CONSTRAINT job_family_groups_tenant_code_key UNIQUE (tenant_id, code)
 );
 
 CREATE TABLE job_families (
@@ -252,7 +252,7 @@ CREATE TABLE job_families (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_families_tenant_setid_id_key UNIQUE (tenant_id, setid, id),
-  CONSTRAINT job_families_tenant_setid_code_key UNIQUE (tenant_id, setid, code)
+  CONSTRAINT job_families_tenant_code_key UNIQUE (tenant_id, code)
 );
 
 CREATE TABLE job_levels (
@@ -263,7 +263,7 @@ CREATE TABLE job_levels (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_levels_tenant_setid_id_key UNIQUE (tenant_id, setid, id),
-  CONSTRAINT job_levels_tenant_setid_code_key UNIQUE (tenant_id, setid, code)
+  CONSTRAINT job_levels_tenant_code_key UNIQUE (tenant_id, code)
 );
 
 CREATE TABLE job_profiles (
@@ -274,7 +274,7 @@ CREATE TABLE job_profiles (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_profiles_tenant_setid_id_key UNIQUE (tenant_id, setid, id),
-  CONSTRAINT job_profiles_tenant_setid_code_key UNIQUE (tenant_id, setid, code)
+  CONSTRAINT job_profiles_tenant_code_key UNIQUE (tenant_id, code)
 );
 ```
 
@@ -282,13 +282,13 @@ CREATE TABLE job_profiles (
 
 **选定（避免边界漂移）**：
 - **支持 effective-dated reparenting**：`job_family_group_id` 作为有效期属性，落在 `job_family_versions`（而不是 identity），通过 `job_family_events → replay_job_family_versions` 变更。
-- **code 唯一性口径（对齐 SetID）**：`job_*` 的 `code` 在 schema 层以 `(tenant_id, setid, code)` 唯一；不引入“按 group 维度的时态唯一性”。
+- **code 唯一性口径（选定）**：`job_*` 的 `code` 在 schema 层以 `(tenant_id, code)` 唯一；不引入“按 group 维度的时态唯一性”。
 
 > v1 约束（建议固化以保持简单）：identity 的 `code` 视为不可变；如需更换 code，采用“新建实体 + disable 旧实体（versions）”，避免更新 identity 引入第二事实源。
 
 identity 合同补充（v1）：
 - identity 行仅允许由各自 `submit_*_event(event_type='CREATE')` 创建；应用层禁止直写。
-- `job_*.(tenant_id,setid,code)` 的唯一性是 schema 层强约束；SetID 变化视为“不同维度的主数据”，不在 v1 里做跨 setid 的同实体迁移/重映射。
+- `job_*.(tenant_id,code)` 的唯一性是 schema 层强约束；SetID 变化不再允许同码并行存在。
 
 ### 4.3 Versions（Read Side / Projection）
 > 说明：各实体 versions 使用 `daterange validity` + EXCLUDE no-overlap，并由 replay 生成 gapless（相邻切片无间隙且末段 infinity）。
@@ -461,6 +461,7 @@ CREATE OR REPLACE FUNCTION submit_job_profile_event(
 1) 获取互斥锁：`jobcatalog:write-lock:<tenant_id>:JobCatalog`（同一事务内）。
 2) 参数校验：`p_event_type` 必须为 `CREATE/UPDATE/DISABLE`；`p_payload` 必须为 object（空则视为 `{}`）。
    - `p_setid` 必须可 normalize（格式校验与大小写收敛）；写入口应统一使用 `v_setid := normalize_setid(p_setid)`。
+   - `v_setid` 必须存在于租户 SetID 且为 `active`；租户写入口禁止使用 `SHARE`。
 3) identity 处理：
    - `CREATE`：从 `payload.code` 创建对应 identity 行（包含 `tenant_id/setid/id/code`）；code 冲突应可稳定映射（推荐用 `23505 + constraint name`）。
    - 非 `CREATE`：要求 identity 行已存在（至少满足 `(tenant_id,setid,id)`）；否则拒绝（稳定错误码见 7.1）。
@@ -516,6 +517,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 | --- | --- | --- | --- |
 | Job Catalog 实体不存在 | `submit_*_event` 明确拒绝 | DB exception `MESSAGE` | `JOBCATALOG_NOT_FOUND` |
 | 参数/事件类型/payload 不合法 | `submit_*_event` 明确拒绝 | DB exception `MESSAGE` | `JOBCATALOG_INVALID_ARGUMENT` |
+| SetID 不合法/不存在/已禁用 | `submit_*_event` 参数校验 | DB exception `MESSAGE` | `JOBCATALOG_SETID_INVALID` / `JOBCATALOG_SETID_NOT_FOUND` / `JOBCATALOG_SETID_DISABLED` |
 | 幂等键复用但参数不同 | `submit_*_event` 明确拒绝 | DB exception `MESSAGE` | `JOBCATALOG_IDEMPOTENCY_REUSED` |
 | 引用字段指向不存在的 identity | `submit_*_event` 参数校验 | DB exception `MESSAGE` | `JOBCATALOG_REFERENCE_NOT_FOUND` |
 | code 唯一性冲突 | identity 表唯一约束 | `23505` + constraint name | `JOBCATALOG_CODE_CONFLICT` |
@@ -526,6 +528,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 
 ## 8. 测试与验收标准 (Acceptance Criteria)
 - [ ] RLS（对齐 021）：缺失 `app.current_tenant` 时对 tenant-scoped 表的读写必须 fail-closed；tenant mismatch 必须稳定失败可映射。
+- [ ] 显式 SetID：写入口必须显式 `setid` 且为租户 `active`（禁止 `SHARE`）；缺失/非法需稳定映射错误码。
 - [ ] 事件幂等：同 `event_id` 重试不重复投射。
 - [ ] 全量重放：每次写入都在同一事务内 delete+replay 对应 versions，且写后读强一致。
 - [ ] 同日唯一：同一实体同日提交第二条事件被拒绝且可稳定映射错误码（每类实体独立 events 表）。

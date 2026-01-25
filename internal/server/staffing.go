@@ -234,6 +234,9 @@ func (s *staffingPGStore) CreatePositionCurrent(ctx context.Context, tenantID st
 		return Position{}, newBadRequestError("org_unit_id is required")
 	}
 	jobProfileID = strings.TrimSpace(jobProfileID)
+	if jobProfileID == "" {
+		return Position{}, newBadRequestError("job_profile_id is required")
+	}
 	capacityFTE = strings.TrimSpace(capacityFTE)
 	name = strings.TrimSpace(name)
 
@@ -246,10 +249,8 @@ func (s *staffingPGStore) CreatePositionCurrent(ctx context.Context, tenantID st
 		return Position{}, err
 	}
 
-	payload := `{"org_unit_id":` + strconv.Quote(orgUnitID)
-	if jobProfileID != "" {
-		payload += `,"job_profile_id":` + strconv.Quote(jobProfileID)
-	}
+	payload := `{"org_unit_id":` + strconv.Quote(orgUnitID) +
+		`,"job_profile_id":` + strconv.Quote(jobProfileID)
 	if capacityFTE != "" {
 		payload += `,"capacity_fte":` + strconv.Quote(capacityFTE)
 	}
@@ -273,26 +274,44 @@ SELECT staffing.submit_position_event(
 		return Position{}, err
 	}
 
+	var out Position
+	if err := tx.QueryRow(ctx, `
+		SELECT
+		  position_id::text,
+		  org_unit_id::text,
+		  COALESCE(reports_to_position_id::text, '') AS reports_to_position_id,
+		  COALESCE(jobcatalog_setid, '') AS jobcatalog_setid,
+		  COALESCE(jobcatalog_setid_as_of::text, '') AS jobcatalog_setid_as_of,
+		  COALESCE(job_profile_id::text, '') AS job_profile_id,
+		  COALESCE(job_profile_code, '') AS job_profile_code,
+		  COALESCE(name, '') AS name,
+		  lifecycle_status,
+		  capacity_fte::text AS capacity_fte,
+		  effective_date::text AS effective_date
+		FROM staffing.get_position_snapshot($1::uuid, $3::date)
+		WHERE position_id = $2::uuid
+		LIMIT 1
+	`, tenantID, positionID, effectiveDate).Scan(
+		&out.ID,
+		&out.OrgUnitID,
+		&out.ReportsToID,
+		&out.JobCatalogSetID,
+		&out.JobCatalogSetIDAsOf,
+		&out.JobProfileID,
+		&out.JobProfileCode,
+		&out.Name,
+		&out.LifecycleStatus,
+		&out.CapacityFTE,
+		&out.EffectiveAt,
+	); err != nil {
+		return Position{}, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return Position{}, err
 	}
 
-	if capacityFTE == "" {
-		capacityFTE = "1.0"
-	}
-	return Position{
-		ID:                  positionID,
-		OrgUnitID:           orgUnitID,
-		ReportsToID:         "",
-		JobCatalogSetID:     "",
-		JobCatalogSetIDAsOf: "",
-		JobProfileID:        jobProfileID,
-		JobProfileCode:      "",
-		Name:                name,
-		LifecycleStatus:     "active",
-		CapacityFTE:         capacityFTE,
-		EffectiveAt:         effectiveDate,
-	}, nil
+	return out, nil
 }
 
 func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID string, positionID string, effectiveDate string, orgUnitID string, reportsToPositionID string, jobProfileID string, capacityFTE string, name string, lifecycleStatus string) (Position, error) {
@@ -329,11 +348,7 @@ func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 		payloadParts = append(payloadParts, `"reports_to_position_id":`+strconv.Quote(reportsToPositionID))
 	}
 	if jobProfileID != "" {
-		if jobProfileID == "__CLEAR__" {
-			payloadParts = append(payloadParts, `"job_profile_id":null`)
-		} else {
-			payloadParts = append(payloadParts, `"job_profile_id":`+strconv.Quote(jobProfileID))
-		}
+		payloadParts = append(payloadParts, `"job_profile_id":`+strconv.Quote(jobProfileID))
 	}
 	if capacityFTE != "" {
 		payloadParts = append(payloadParts, `"capacity_fte":`+strconv.Quote(capacityFTE))
@@ -459,6 +474,9 @@ func (s *staffingMemoryStore) CreatePositionCurrent(_ context.Context, tenantID 
 		return Position{}, newBadRequestError("org_unit_id is required")
 	}
 	jobProfileID = strings.TrimSpace(jobProfileID)
+	if jobProfileID == "" {
+		return Position{}, newBadRequestError("job_profile_id is required")
+	}
 	capacityFTE = strings.TrimSpace(capacityFTE)
 	if capacityFTE == "" {
 		capacityFTE = "1.0"
@@ -513,11 +531,7 @@ func (s *staffingMemoryStore) UpdatePositionCurrent(_ context.Context, tenantID 
 			s.positions[tenantID][i].ReportsToID = reportsToPositionID
 		}
 		if jobProfileID != "" {
-			if jobProfileID == "__CLEAR__" {
-				s.positions[tenantID][i].JobProfileID = ""
-			} else {
-				s.positions[tenantID][i].JobProfileID = jobProfileID
-			}
+			s.positions[tenantID][i].JobProfileID = jobProfileID
 		}
 		if capacityFTE != "" {
 			s.positions[tenantID][i].CapacityFTE = capacityFTE

@@ -3,6 +3,7 @@
 **状态**: 已废弃（2026-01-24 04:25 UTC）— 已被 DEV-PLAN-070 取代，后续以 070 为准
 
 > **重要**：本文件仅作为历史记录保留，不再作为实现/评审/验收契约。所有涉及 `business_unit_id` / `record_group` 的设计与口径均已废弃，必须以 `docs/dev-plans/070-setid-orgunit-binding-redesign.md` 为 SSOT。
+> **补充（现行口径）**：配置主数据入口必须显式携带 `setid`；业务数据入口通过 `org_unit_id` + `as_of_date` 解析 `setid` 并落库审计；业务入口不再手工选择 `setid`；JobCatalog code 唯一性为 `(tenant_id, code)`，不允许跨 setid 同码。
 > **提醒**：本文以下内容仅供历史追溯，禁止在实现/测试/门禁中引用或执行。
 
 > 本计划作为历史记录保留，新的 SetID 方案以 `docs/dev-plans/070-setid-orgunit-binding-redesign.md` 为准。
@@ -16,8 +17,8 @@
 
 ### 0.1 新增功能（NEW）
 
-- [ ] **UI：显式 Business Unit**：任何 setid-controlled 的 UI 入口（例如 `/org/job-catalog`）若缺少 `business_unit_id`，必须 `302` 重定向补齐默认 `BU000`（最终请求必须显式携带 `business_unit_id`；禁止 silent default）。
-- [X] **Staffing：Position 必填 BU**：`position` 的创建事件必须携带 `business_unit_id`，并由 DB Kernel/UI/API 共同强制（保证“人员→任职→岗位→BU”的可推导链路；也避免后续接入 setid 解析时出现不可判定上下文）。
+- [ ] **UI：显式 Business Unit（已废弃）**：任何 setid-controlled 的 UI 入口（例如 `/org/job-catalog`）若缺少 `business_unit_id`，必须 `302` 重定向补齐默认 `BU000`（最终请求必须显式携带 `business_unit_id`；禁止 silent default）。**现改为配置主数据显式 `setid`；业务数据由 `org_unit_id` 解析 `setid`**（见 `docs/dev-plans/070-setid-orgunit-binding-redesign.md`）。
+- [X] **Staffing：Position 必填 BU（已废弃）**：`position` 的创建事件必须携带 `business_unit_id`，并由 DB Kernel/UI/API 共同强制（保证“人员→任职→岗位→BU”的可推导链路；也避免后续接入 setid 解析时出现不可判定上下文）。**现改为 Position 创建不要求手工 `setid`；`job_profile_id` 必填，`setid` 由 `org_unit_id` 解析并落库**（见 `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`）。
 - [ ] **（可选，非 P0）Tree Controls**：当出现“某 BU 需要访问不属于其 record group 解析 setid 的树/层级配置”的需求时，引入 Tree Controls 映射（契约见 5.3.1）。
 
 ### 0.2 实现缺口（GAP：原计划已包含但尚未补齐）
@@ -36,7 +37,7 @@
 
 ### 1.1 SetID 是什么
 - **SetID** 是一个短标识（PeopleSoft 习惯为 5 位字符），作为大量“基础主数据表”的关键字段之一，用于把主数据划分为不同的数据集（Set）。
-- **同一个 SetID 下的主数据**可以被多个业务单元（Business Unit）共享；不同 SetID 之间则天然隔离（可存在“同编码不同含义”的并行配置）。
+- **同一个 SetID 下的主数据**可以被多个业务单元（Business Unit）共享；不同 SetID 之间则天然隔离（PeopleSoft 允许“同编码并行配置”；本项目已改为同租户 code 唯一，不允许跨 setid 同码）。
 
 ### 1.2 解决的问题（为什么需要）
 - **共享 vs 隔离**：同一集团内，多 BU 需要共享一套通用字典（如 Job Code、Location），同时又要允许某些 BU 拥有本地化差异（如部门、工资等级规则）。
@@ -89,7 +90,7 @@
 
 ### 3.1 核心目标
 
-- [X] 引入 SetID 作为“同租户内的主数据数据集”能力：同一编码可在不同 SetID 下并行存在。
+- [X] 引入 SetID 作为“同租户内的主数据数据集”能力：**同一租户 code 唯一**，不允许跨 SetID 同码（`tenant_id + code`）。
 - [X] 引入 **Set Control**：对每个控制值（后续对齐 Business Unit）和每个 Record Group，稳定映射到唯一 SetID（无歧义、可测试）。
 - [X] 为主数据表提供一致的建模约束：`tenant_id + setid + business_key + valid_time(date)`。
 - [X] 提供最小管理入口（API + UI）：创建/禁用 SetID、配置 set control value、维护映射矩阵。
@@ -175,9 +176,10 @@
 
 ### 5.4.1 BU 上下文如何匹配到请求（CLARIFY）
 
-- **列表读取（setid-controlled）**：由调用方显式传入 `business_unit_id`（URL query / API 参数）；服务端只负责校验/解析，不负责“猜测”。
-- **写入（setid-controlled）**：调用方显式传入业务 payload；解析阶段使用同一 `business_unit_id` 得到 `setid` 并落库（禁止调用方直填 `setid`）。
-- **跨模块引用（示例：Position）**：`staffing.position` 的创建强制携带 `business_unit_id`，从而能在投射中确定性解析 `jobcatalog_setid` 并校验 `job_profile_id`（否则会出现“岗位绑定的 job profile 属于哪套 jobcatalog”的不可判定）。
+- **（历史口径，已废弃）列表读取（setid-controlled）**：由调用方显式传入 `business_unit_id`（URL query / API 参数）；服务端只负责校验/解析，不负责“猜测”。
+- **（历史口径，已废弃）写入（setid-controlled）**：调用方显式传入业务 payload；解析阶段使用同一 `business_unit_id` 得到 `setid` 并落库（禁止调用方直填 `setid`）。
+- **（历史口径，已废弃）跨模块引用（示例：Position）**：`staffing.position` 的创建强制携带 `business_unit_id`，从而能在投射中确定性解析 `jobcatalog_setid` 并校验 `job_profile_id`（否则会出现“岗位绑定的 job profile 属于哪套 jobcatalog”的不可判定）。
+- **现行口径**：配置主数据入口显式 `setid`；业务数据入口通过 `org_unit_id` 解析 `setid` 并落库审计；Position 绑定 `job_profile_id` 必须归属解析得到的 setid。
 
 ### 5.4.2 人员如何“锁定归属”到 BU（CLARIFY）
 
@@ -355,14 +357,14 @@ SetID 解析 `ResolveSetID(tenant_id, business_unit_id, record_group)` 的失败
 
 ## 10. 验收标准 (Acceptance Criteria)
 
-- [ ] 同一 tenant 内可配置多个 SetID，并能在同一业务键下并行维护多套主数据（按 SetID 隔离）。
+- [ ] 同一 tenant 内可配置多个 SetID，但 JobCatalog `code` 唯一（`tenant_id + code`），不允许跨 SetID 同码。
 - [X] 给定 `(business_unit_id, record_group=jobcatalog)`，系统能稳定解析出唯一 SetID（009M1 已验证；证据见 `docs/dev-records/DEV-PLAN-010-READINESS.md` §10）。
 - [ ] 扩展：`record_group=orgunit` 及后续 group 同样满足解析与无缺省洞。
 - [ ] 任何绕过解析入口直接写 setid 的路径会被门禁阻断。
 - [X] 新 tenant 初始化后即满足：`SHARE` + 至少 1 个 BU + `jobcatalog` mapping（默认 `SHARE`），无需手工补洞（009M1 已落地；证据见 `docs/dev-records/DEV-PLAN-010-READINESS.md` §10）。
 - [ ] 扩展：初始化覆盖所有 stable record group（新增 `orgunit` 后必须补齐）。
 - [X] `jobcatalog` 至少一个主数据实体完成端到端接入（解析→写入→读取→UI 展示；009M1 已落地并留证）。
-- [ ] 示例验收：同一 `code` 在 `setid=A0001` 与 `setid=B0001` 并存；BU1 映射到 A0001、BU2 映射到 B0001；两 BU 的列表读取互不串数据；单条读取能通过记录自身 `setid` 精确定位。
+- [ ] 示例验收：同一 `code` 不允许在 `setid=A0001` 与 `setid=B0001` 并存；创建第二条应被拒绝（`tenant_id + code` 唯一）。
 
 ## 11. 已决策（本轮评审后冻结）
 

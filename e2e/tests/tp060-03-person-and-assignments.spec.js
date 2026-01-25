@@ -140,15 +140,73 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   });
   expect(bindResp.status(), await bindResp.text()).toBe(201);
 
-  await page.goto(`/org/positions?as_of=${asOf}`);
+  const jobFamilyGroupCode = `JFG-TP06003-${runID}`;
+  const jobFamilyCode = `JF-TP06003-${runID}`;
+  const jobProfileCode = `JP-TP06003-${runID}`;
+
+  await page.goto(`/org/job-catalog?as_of=${asOf}&setid=DEFLT`);
+  await expect(page.locator("h1")).toHaveText("Job Catalog");
+
+  const ensureJobFamilyGroup = async (code, name) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_family_group"]')
+    });
+    await form.locator('input[name="job_family_group_code"]').fill(code);
+    await form.locator('input[name="job_family_group_name"]').fill(name);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*setid=DEFLT)(?=.*as_of=${asOf}).*$`));
+  };
+
+  const ensureJobFamily = async (code, name, groupCode) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_family"]')
+    });
+    await form.locator('input[name="job_family_code"]').fill(code);
+    await form.locator('input[name="job_family_name"]').fill(name);
+    await form.locator('input[name="job_family_group_code"]').fill(groupCode);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*setid=DEFLT)(?=.*as_of=${asOf}).*$`));
+  };
+
+  const ensureJobProfile = async (code, name, familyCodesCSV, primaryFamilyCode) => {
+    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
+      return;
+    }
+    const form = page.locator(`form[method="POST"]`).filter({
+      has: page.locator('input[name="action"][value="create_job_profile"]')
+    });
+    await form.locator('input[name="job_profile_code"]').fill(code);
+    await form.locator('input[name="job_profile_name"]').fill(name);
+    await form.locator('input[name="job_profile_family_codes"]').fill(familyCodesCSV);
+    await form.locator('input[name="job_profile_primary_family_code"]').fill(primaryFamilyCode);
+    await form.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*setid=DEFLT)(?=.*as_of=${asOf}).*$`));
+  };
+
+  await ensureJobFamilyGroup(jobFamilyGroupCode, `TP060-03 Group ${runID}`);
+  await ensureJobFamily(jobFamilyCode, `TP060-03 Family ${runID}`, jobFamilyGroupCode);
+  await ensureJobProfile(jobProfileCode, `TP060-03 Profile ${runID}`, jobFamilyCode, jobFamilyCode);
+
+  await page.goto(`/org/positions?as_of=${asOf}&org_unit_id=${rootID}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Positions");
 
-  const positionCreateForm = page.locator(`form[method="POST"][action="/org/positions?as_of=${asOf}"]`).first();
+  const positionCreateForm = page
+    .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${asOf}"]`)
+    .first();
   const orgOptionValue = await positionCreateForm
     .locator('select[name="org_unit_id"] option', { hasText: rootName })
     .first()
     .getAttribute("value");
   expect(orgOptionValue).not.toBeNull();
+  const jobProfileOption = positionCreateForm.locator('select[name="job_profile_id"] option', { hasText: jobProfileCode }).first();
+  const jobProfileID = await jobProfileOption.getAttribute("value");
+  expect(jobProfileID).not.toBeNull();
 
   const pernrByIndex = Array.from({ length: 10 }, (_, i) => `${101 + i}`);
   const positionIDsByPernr = new Map();
@@ -156,10 +214,13 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     const positionName = `TP060-03 Position ${pernr} ${runID}`;
     await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
     await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
+    await positionCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
     await positionCreateForm.locator('input[name="capacity_fte"]').fill(pernr === "104" ? "0.50" : "1.0");
     await positionCreateForm.locator('input[name="name"]').fill(positionName);
     await positionCreateForm.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&org_unit_id=${orgOptionValue}$`));
+    await expect(page).toHaveURL(
+      new RegExp(`/org/positions\\?(?=.*as_of=${asOf})(?=.*org_unit_id=${orgOptionValue}).*$`)
+    );
 
     const row = page.locator("tr", { hasText: positionName }).first();
     await expect(row).toBeVisible();
@@ -171,10 +232,13 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const updateTargetPositionName = `TP060-03 UpdateTarget Position ${runID}`;
   await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
   await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
+  await positionCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
   await positionCreateForm.locator('input[name="capacity_fte"]').fill("1.0");
   await positionCreateForm.locator('input[name="name"]').fill(updateTargetPositionName);
   await positionCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&org_unit_id=${orgOptionValue}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/org/positions\\?(?=.*as_of=${asOf})(?=.*org_unit_id=${orgOptionValue}).*$`)
+  );
 
   const updateTargetRow = page.locator("tr", { hasText: updateTargetPositionName }).first();
   await expect(updateTargetRow).toBeVisible();
@@ -184,9 +248,12 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const disabledPositionName = `TP060-03 Disabled Position ${runID}`;
   await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
   await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
+  await positionCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
   await positionCreateForm.locator('input[name="name"]').fill(disabledPositionName);
   await positionCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&org_unit_id=${orgOptionValue}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/org/positions\\?(?=.*as_of=${asOf})(?=.*org_unit_id=${orgOptionValue}).*$`)
+  );
 
   const disabledRow = page.locator("tr", { hasText: disabledPositionName }).first();
   await expect(disabledRow).toBeVisible();
@@ -212,19 +279,25 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     personUUIDByPernr.set(pernr, personUUID);
   }
 
-  await page.goto(`/org/positions?as_of=${asOf}`);
+  await page.goto(`/org/positions?as_of=${asOf}&org_unit_id=${rootID}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Positions");
 
-  const positionUpdateForm = page.locator(`form[method="POST"][action="/org/positions?as_of=${asOf}"]`).nth(1);
+  const positionUpdateForm = page
+    .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${asOf}"]`)
+    .nth(1);
   await positionUpdateForm.locator('input[name="effective_date"]').fill(lateEffectiveDate);
   await positionUpdateForm.locator('select[name="position_id"]').selectOption(disabledPositionID);
   await positionUpdateForm.locator('select[name="lifecycle_status"]').selectOption("disabled");
   await positionUpdateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${lateEffectiveDate}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/org/positions\\?(?=.*as_of=${lateEffectiveDate}).*$`)
+  );
 
   await expect(page.locator("tr", { hasText: disabledPositionName }).first()).toContainText("disabled");
 
-  const positionUpdateFormLate = page.locator(`form[method="POST"][action="/org/positions?as_of=${lateEffectiveDate}"]`).nth(1);
+  const positionUpdateFormLate = page
+    .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${lateEffectiveDate}"]`)
+    .nth(1);
 
   const managerPernr = "101";
   const reporteePernr = "102";
@@ -239,7 +312,9 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   await positionUpdateFormLate.locator('select[name="position_id"]').selectOption(reporteePositionID);
   await positionUpdateFormLate.locator('select[name="reports_to_position_id"]').selectOption(managerPositionID);
   await positionUpdateFormLate.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${lateEffectiveDate}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/org/positions\\?(?=.*as_of=${lateEffectiveDate}).*$`)
+  );
 
   const reporteeRow = page.locator("tr", { hasText: reporteePositionName }).first();
   await expect(reporteeRow).toBeVisible();

@@ -292,31 +292,6 @@ func staffingSmoke(args []string) {
 		}
 	}
 
-	if _, err := tx.Exec(ctx, `SAVEPOINT sp_missing_org;`); err != nil {
-		fatal(err)
-	}
-	_, err = tx.Exec(ctx, `
-			SELECT staffing.submit_position_event(
-			  $1::uuid,
-			  $2::uuid,
-			  $3::uuid,
-			  'CREATE',
-			  $4::date,
-			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position'),
-			  $6::text,
-			  $7::uuid
-			);
-		`, positionEventID, tenantA, positionID, effectiveDate, missingOrgUnitID, requestID, initiatorID)
-	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_missing_org;`); rbErr != nil {
-		fatal(rbErr)
-	}
-	if err == nil {
-		fatalf("expected submit_position_event to fail when org_unit_id is missing as-of")
-	}
-	if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_ORG_UNIT_NOT_FOUND_AS_OF" {
-		fatalf("expected pg error message=STAFFING_ORG_UNIT_NOT_FOUND_AS_OF, got ok=%v message=%q err=%v", ok, msg, err)
-	}
-
 	if existingRootOrgID == "" {
 		if _, err := tx.Exec(ctx, `
 			SELECT orgunit.submit_org_event(
@@ -376,6 +351,105 @@ func staffingSmoke(args []string) {
 		fatal(err)
 	}
 
+	var jobcatalogSetID string
+	if err := tx.QueryRow(ctx, `
+		SELECT orgunit.resolve_setid($1::uuid, $2::uuid, $3::date);
+	`, tenantA, orgUnitID, effectiveDate).Scan(&jobcatalogSetID); err != nil {
+		fatal(err)
+	}
+
+	jobFamilyGroupID := "00000000-0000-0000-0000-00000000d101"
+	jobFamilyGroupEventID := "00000000-0000-0000-0000-00000000d102"
+	jobFamilyGroupRequestID := "dbtool-staffing-smoke-jfg-create"
+	if _, err := tx.Exec(ctx, `
+		SELECT jobcatalog.submit_job_family_group_event(
+		  $1::uuid,
+		  $2::uuid,
+		  $3::text,
+		  $4::uuid,
+		  'CREATE',
+		  $5::date,
+		  jsonb_build_object('code', 'SMKFG1', 'name', 'Staffing Smoke Group', 'description', null),
+		  $6::text,
+		  $7::uuid
+		);
+	`, jobFamilyGroupEventID, tenantA, jobcatalogSetID, jobFamilyGroupID, effectiveDate, jobFamilyGroupRequestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	jobFamilyID := "00000000-0000-0000-0000-00000000d201"
+	jobFamilyEventID := "00000000-0000-0000-0000-00000000d202"
+	jobFamilyRequestID := "dbtool-staffing-smoke-jf-create"
+	if _, err := tx.Exec(ctx, `
+		SELECT jobcatalog.submit_job_family_event(
+		  $1::uuid,
+		  $2::uuid,
+		  $3::text,
+		  $4::uuid,
+		  'CREATE',
+		  $5::date,
+		  jsonb_build_object('code', 'SMKJF1', 'name', 'Staffing Smoke Family', 'description', null, 'job_family_group_id', $6::uuid),
+		  $7::text,
+		  $8::uuid
+		);
+	`, jobFamilyEventID, tenantA, jobcatalogSetID, jobFamilyID, effectiveDate, jobFamilyGroupID, jobFamilyRequestID, initiatorID); err != nil {
+		fatal(err)
+	}
+
+	jobProfileID := "00000000-0000-0000-0000-00000000d301"
+	jobProfileEventID := "00000000-0000-0000-0000-00000000d302"
+	jobProfileRequestID := "dbtool-staffing-smoke-jp-create"
+	var jobProfileEventDBID int64
+	if err := tx.QueryRow(ctx, `
+		SELECT jobcatalog.submit_job_profile_event(
+		  $1::uuid,
+		  $2::uuid,
+		  $3::text,
+		  $4::uuid,
+		  'CREATE',
+		  $5::date,
+		  jsonb_build_object(
+		    'code', 'SMKJP1',
+		    'name', 'Staffing Smoke Profile',
+		    'description', null,
+		    'job_family_ids', jsonb_build_array($6::uuid),
+		    'primary_job_family_id', $6::uuid
+		  ),
+		  $7::text,
+		  $8::uuid
+		);
+	`, jobProfileEventID, tenantA, jobcatalogSetID, jobProfileID, effectiveDate, jobFamilyID, jobProfileRequestID, initiatorID).Scan(&jobProfileEventDBID); err != nil {
+		fatal(err)
+	}
+	if jobProfileEventDBID <= 0 {
+		fatalf("expected job profile event db id > 0, got %d", jobProfileEventDBID)
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_missing_org;`); err != nil {
+		fatal(err)
+	}
+	_, err = tx.Exec(ctx, `
+			SELECT staffing.submit_position_event(
+			  $1::uuid,
+			  $2::uuid,
+			  $3::uuid,
+			  'CREATE',
+			  $4::date,
+			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position', 'job_profile_id', $6::text),
+			  $7::text,
+			  $8::uuid
+			);
+		`, positionEventID, tenantA, positionID, effectiveDate, missingOrgUnitID, jobProfileID, requestID, initiatorID)
+	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_missing_org;`); rbErr != nil {
+		fatal(rbErr)
+	}
+	if err == nil {
+		fatalf("expected submit_position_event to fail when org_unit_id is missing as-of")
+	}
+	if msg, ok := pgErrorMessage(err); !ok || msg != "STAFFING_ORG_UNIT_NOT_FOUND_AS_OF" {
+		fatalf("expected pg error message=STAFFING_ORG_UNIT_NOT_FOUND_AS_OF, got ok=%v message=%q err=%v", ok, msg, err)
+	}
+
 	var positionEventDBID int64
 	if err := tx.QueryRow(ctx, `
 			SELECT staffing.submit_position_event(
@@ -384,11 +458,11 @@ func staffingSmoke(args []string) {
 			  $3::uuid,
 			  'CREATE',
 			  $4::date,
-			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position'),
-			  $6::text,
-			  $7::uuid
+			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position', 'job_profile_id', $6::text),
+			  $7::text,
+			  $8::uuid
 			);
-		`, positionEventID, tenantA, positionID, effectiveDate, orgUnitID, requestID, initiatorID).Scan(&positionEventDBID); err != nil {
+		`, positionEventID, tenantA, positionID, effectiveDate, orgUnitID, jobProfileID, requestID, initiatorID).Scan(&positionEventDBID); err != nil {
 		fatal(err)
 	}
 	if positionEventDBID <= 0 {
@@ -607,11 +681,11 @@ func staffingSmoke(args []string) {
 					  $3::uuid,
 					  'CREATE',
 					  $4::date,
-					  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position 2'),
-					  $6::text,
-					  $7::uuid
+					  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position 2', 'job_profile_id', $6::text),
+					  $7::text,
+					  $8::uuid
 					);
-				`, positionEventID2, tenantA, positionID2, effectiveDate, orgUnitID, requestID+"-pos2", initiatorID); err != nil {
+				`, positionEventID2, tenantA, positionID2, effectiveDate, orgUnitID, jobProfileID, requestID+"-pos2", initiatorID); err != nil {
 			fatal(err)
 		}
 
@@ -783,11 +857,11 @@ func staffingSmoke(args []string) {
 				  $3::uuid,
 				  'CREATE',
 				  $4::date,
-				  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Disable Test Position'),
-				  $6::text,
-				  $7::uuid
+				  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Disable Test Position', 'job_profile_id', $6::text),
+				  $7::text,
+				  $8::uuid
 				);
-			`, disablePositionEventID, tenantA, disablePositionID, effectiveDate, orgUnitID, requestID+"-pos-disable-test-create", initiatorID); err != nil {
+			`, disablePositionEventID, tenantA, disablePositionID, effectiveDate, orgUnitID, jobProfileID, requestID+"-pos-disable-test-create", initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -972,11 +1046,11 @@ func staffingSmoke(args []string) {
 					  $3::uuid,
 					  'CREATE',
 					  $4::date,
-					  jsonb_build_object('org_unit_id', $5::text, 'name', $6::text),
-					  $7::text,
-					  $8::uuid
+					  jsonb_build_object('org_unit_id', $5::text, 'name', $6::text, 'job_profile_id', $7::text),
+					  $8::text,
+					  $9::uuid
 					);
-				`, eventID, tenantA, positionID, effectiveDate, orgUnitID, name, requestID+"-pos-reports-to-create-"+positionID, initiatorID); err != nil {
+				`, eventID, tenantA, positionID, effectiveDate, orgUnitID, name, jobProfileID, requestID+"-pos-reports-to-create-"+positionID, initiatorID); err != nil {
 				fatal(err)
 			}
 		}
@@ -2313,6 +2387,17 @@ func validSQLIdent(s string) bool {
 
 func fatal(err error) {
 	if err == nil {
+		os.Exit(1)
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+		if pgErr.Detail != "" {
+			_, _ = fmt.Fprintf(os.Stderr, "DETAIL: %s\n", pgErr.Detail)
+		}
+		if pgErr.Where != "" {
+			_, _ = fmt.Fprintf(os.Stderr, "WHERE: %s\n", pgErr.Where)
+		}
 		os.Exit(1)
 	}
 	fatalf("%v", err)

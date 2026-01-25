@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_groups (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_family_groups_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
-  CONSTRAINT job_family_groups_tenant_setid_code_key UNIQUE (tenant_id, setid, code)
+  CONSTRAINT job_family_groups_tenant_setid_code_key UNIQUE (tenant_id, code)
 );
 
 CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_events (

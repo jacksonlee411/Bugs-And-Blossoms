@@ -2145,7 +2145,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_groups (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_family_groups_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
-  CONSTRAINT job_family_groups_tenant_setid_code_key UNIQUE (tenant_id, setid, code),
+  CONSTRAINT job_family_groups_tenant_setid_code_key UNIQUE (tenant_id, code),
   CONSTRAINT job_family_groups_tenant_setid_id_unique UNIQUE (tenant_id, setid, id)
 );
 
@@ -2712,7 +2712,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_families (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_families_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
-  CONSTRAINT job_families_tenant_setid_code_key UNIQUE (tenant_id, setid, code),
+  CONSTRAINT job_families_tenant_setid_code_key UNIQUE (tenant_id, code),
   CONSTRAINT job_families_tenant_setid_id_unique UNIQUE (tenant_id, setid, id)
 );
 
@@ -3289,7 +3289,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_levels (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_levels_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
-  CONSTRAINT job_levels_tenant_setid_code_key UNIQUE (tenant_id, setid, code),
+  CONSTRAINT job_levels_tenant_setid_code_key UNIQUE (tenant_id, code),
   CONSTRAINT job_levels_tenant_setid_id_unique UNIQUE (tenant_id, setid, id)
 );
 
@@ -3790,7 +3790,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_profiles (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_profiles_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
-  CONSTRAINT job_profiles_tenant_setid_code_key UNIQUE (tenant_id, setid, code),
+  CONSTRAINT job_profiles_tenant_setid_code_key UNIQUE (tenant_id, code),
   CONSTRAINT job_profiles_tenant_setid_id_unique UNIQUE (tenant_id, setid, id)
 );
 
@@ -5396,37 +5396,32 @@ BEGIN
           MESSAGE = 'STAFFING_ORG_UNIT_NOT_FOUND_AS_OF',
           DETAIL = format('org_unit_id=%s as_of=%s', v_org_unit_id, v_row.effective_date);
       END IF;
-
-      v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_org_unit_id, v_row.effective_date);
-      v_jobcatalog_setid_as_of := v_row.effective_date;
-    ELSE
-      v_jobcatalog_setid := NULL;
-      v_jobcatalog_setid_as_of := NULL;
     END IF;
 
-    IF v_job_profile_id IS NOT NULL THEN
-      IF v_jobcatalog_setid IS NULL THEN
-        RAISE EXCEPTION USING
-          ERRCODE = 'P0001',
-          MESSAGE = 'JOBCATALOG_REFERENCE_NOT_FOUND',
-          DETAIL = format('job_profile_id=%s', v_job_profile_id);
-      END IF;
+    IF v_job_profile_id IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'STAFFING_INVALID_ARGUMENT',
+        DETAIL = 'job_profile_id is required';
+    END IF;
 
-      IF NOT EXISTS (
-        SELECT 1
-        FROM jobcatalog.job_profile_versions jpv
-        WHERE jpv.tenant_id = p_tenant_id
-          AND jpv.setid = v_jobcatalog_setid
-          AND jpv.job_profile_id = v_job_profile_id
-          AND jpv.is_active = true
-          AND jpv.validity @> v_row.effective_date
-        LIMIT 1
-      ) THEN
-        RAISE EXCEPTION USING
-          ERRCODE = 'P0001',
-          MESSAGE = 'JOBCATALOG_REFERENCE_NOT_FOUND',
-          DETAIL = format('job_profile_id=%s', v_job_profile_id);
-      END IF;
+    v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_org_unit_id, v_row.effective_date);
+    v_jobcatalog_setid_as_of := v_row.effective_date;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM jobcatalog.job_profile_versions jpv
+      WHERE jpv.tenant_id = p_tenant_id
+        AND jpv.setid = v_jobcatalog_setid
+        AND jpv.job_profile_id = v_job_profile_id
+        AND jpv.is_active = true
+        AND jpv.validity @> v_row.effective_date
+      LIMIT 1
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'JOBCATALOG_REFERENCE_NOT_FOUND',
+        DETAIL = format('job_profile_id=%s', v_job_profile_id);
     END IF;
 
     IF v_reports_to_position_id IS NOT NULL THEN
