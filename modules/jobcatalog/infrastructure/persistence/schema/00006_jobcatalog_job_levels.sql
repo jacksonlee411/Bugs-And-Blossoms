@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_levels (
   code varchar(64) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_levels_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_levels_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_levels_tenant_setid_code_key UNIQUE (tenant_id, setid, code),
   CONSTRAINT job_levels_tenant_setid_id_unique UNIQUE (tenant_id, setid, id)
 );
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_level_events (
   initiator_id uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_level_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_level_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_level_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
   CONSTRAINT job_level_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT job_level_events_one_per_day_unique UNIQUE (tenant_id, setid, job_level_id, effective_date),
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_level_versions (
   last_event_id bigint NOT NULL REFERENCES jobcatalog.job_level_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_level_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_level_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_level_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT job_level_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT job_level_versions_level_fk
@@ -90,4 +90,3 @@ DROP POLICY IF EXISTS tenant_isolation ON jobcatalog.job_level_versions;
 CREATE POLICY tenant_isolation ON jobcatalog.job_level_versions
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
-

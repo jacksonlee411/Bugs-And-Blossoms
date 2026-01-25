@@ -55,7 +55,7 @@ BEGIN
       DETAIL = 'setid is required';
   END IF;
   v := upper(btrim(p_setid));
-  IF v !~ '^[A-Z0-9]{1,5}$' THEN
+  IF v !~ '^[A-Z0-9]{5}$' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
