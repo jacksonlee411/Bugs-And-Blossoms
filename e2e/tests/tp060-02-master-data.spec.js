@@ -549,7 +549,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       }
     });
     expect(resp.status(), await resp.text()).toBe(422);
-    expect((await resp.json()).code).toBe("ORG_NOT_FOUND_AS_OF");
+    expect((await resp.json()).code).toBe("STAFFING_ORG_UNIT_NOT_FOUND_AS_OF");
   }
 
   // Cross-setid Job Profile reference must fail-closed (R&D resolves to S2601, JP-OPS is in S2602).

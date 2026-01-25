@@ -673,7 +673,7 @@ BEGIN
     AND o.validity @> p_as_of_date
     AND o.status = 'active'
     AND o.is_business_unit = true
-    AND v_node_path @> o.node_path
+    AND o.node_path @> v_node_path
   ORDER BY nlevel(o.node_path) DESC
   LIMIT 1;
 

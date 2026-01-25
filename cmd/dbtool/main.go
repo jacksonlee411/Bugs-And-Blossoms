@@ -326,13 +326,54 @@ func staffingSmoke(args []string) {
 			  $3::uuid,
 			  'CREATE',
 			  $4::date,
-			  jsonb_build_object('name', 'Smoke Org'),
+			  jsonb_build_object('name', 'Smoke Org', 'is_business_unit', true),
 			  $5::text,
 			  $6::uuid
 			);
 		`, orgEventID, tenantA, orgUnitID, effectiveDate, requestID+"-org", initiatorID); err != nil {
 			fatal(err)
 		}
+	}
+
+	var rootIsBU bool
+	err = tx.QueryRow(ctx, `
+		SELECT is_business_unit
+		FROM orgunit.org_unit_versions
+		WHERE tenant_id = $1::uuid
+		  AND hierarchy_type = 'OrgUnit'
+		  AND org_id = $2::uuid
+		  AND status = 'active'
+		  AND validity @> $3::date
+		ORDER BY lower(validity) DESC
+		LIMIT 1;
+	`, tenantA, orgUnitID, effectiveDate).Scan(&rootIsBU)
+	if err != nil && err != pgx.ErrNoRows {
+		fatal(err)
+	}
+	if err == pgx.ErrNoRows || !rootIsBU {
+		var buEventID string
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&buEventID); err != nil {
+			fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `
+			SELECT orgunit.submit_org_event(
+			  $1::uuid,
+			  $2::uuid,
+			  'OrgUnit',
+			  $3::uuid,
+			  'SET_BUSINESS_UNIT',
+			  $4::date,
+			  jsonb_build_object('is_business_unit', true),
+			  $5::text,
+			  $6::uuid
+			);
+		`, buEventID, tenantA, orgUnitID, effectiveDate, requestID+"-bu", initiatorID); err != nil {
+			fatal(err)
+		}
+	}
+
+	if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantA, initiatorID); err != nil {
+		fatal(err)
 	}
 
 	var positionEventDBID int64
