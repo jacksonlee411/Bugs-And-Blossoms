@@ -681,11 +681,11 @@ func staffingSmoke(args []string) {
 					  $3::uuid,
 					  'CREATE',
 					  $4::date,
-					  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position 2'),
-					  $6::text,
-					  $7::uuid
+					  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position 2', 'job_profile_id', $6::text),
+					  $7::text,
+					  $8::uuid
 					);
-				`, positionEventID2, tenantA, positionID2, effectiveDate, orgUnitID, requestID+"-pos2", initiatorID); err != nil {
+				`, positionEventID2, tenantA, positionID2, effectiveDate, orgUnitID, jobProfileID, requestID+"-pos2", initiatorID); err != nil {
 			fatal(err)
 		}
 
@@ -857,11 +857,11 @@ func staffingSmoke(args []string) {
 				  $3::uuid,
 				  'CREATE',
 				  $4::date,
-				  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Disable Test Position'),
-				  $6::text,
-				  $7::uuid
+				  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Disable Test Position', 'job_profile_id', $6::text),
+				  $7::text,
+				  $8::uuid
 				);
-			`, disablePositionEventID, tenantA, disablePositionID, effectiveDate, orgUnitID, requestID+"-pos-disable-test-create", initiatorID); err != nil {
+			`, disablePositionEventID, tenantA, disablePositionID, effectiveDate, orgUnitID, jobProfileID, requestID+"-pos-disable-test-create", initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -1046,11 +1046,11 @@ func staffingSmoke(args []string) {
 					  $3::uuid,
 					  'CREATE',
 					  $4::date,
-					  jsonb_build_object('org_unit_id', $5::text, 'name', $6::text),
-					  $7::text,
-					  $8::uuid
+					  jsonb_build_object('org_unit_id', $5::text, 'name', $6::text, 'job_profile_id', $7::text),
+					  $8::text,
+					  $9::uuid
 					);
-				`, eventID, tenantA, positionID, effectiveDate, orgUnitID, name, requestID+"-pos-reports-to-create-"+positionID, initiatorID); err != nil {
+				`, eventID, tenantA, positionID, effectiveDate, orgUnitID, name, jobProfileID, requestID+"-pos-reports-to-create-"+positionID, initiatorID); err != nil {
 				fatal(err)
 			}
 		}
@@ -2387,6 +2387,17 @@ func validSQLIdent(s string) bool {
 
 func fatal(err error) {
 	if err == nil {
+		os.Exit(1)
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
+		if pgErr.Detail != "" {
+			_, _ = fmt.Fprintf(os.Stderr, "DETAIL: %s\n", pgErr.Detail)
+		}
+		if pgErr.Where != "" {
+			_, _ = fmt.Fprintf(os.Stderr, "WHERE: %s\n", pgErr.Where)
+		}
 		os.Exit(1)
 	}
 	fatalf("%v", err)
