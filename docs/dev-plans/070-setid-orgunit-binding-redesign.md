@@ -352,7 +352,7 @@ CREATE TABLE orgunit.setid_binding_versions (
    - 测试用例：`e2e/tests/tp060-02-master-data.spec.js`（去 BU/mapping，改 org_unit 绑定与断言）；`e2e/tests/tp060-03-person-and-assignments.spec.js`（Position 创建与 URL 断言改 org_unit）；`e2e/tests/m3-smoke.spec.js`（Position 创建改 org_unit）；`internal/server/jobcatalog_test.go`（请求参数与断言改 org_unit）；`internal/server/staffing_test.go`（Position 相关断言改 org_unit）；`internal/server/handler_test.go`（JobCatalog/Position 相关断言改 org_unit）；`internal/server/setid_test.go`（SetID 管理改组织绑定）。
 4. [X] 制定迁移窗口与切换策略（停写切换、无双写）（2026-01-25 00:45 UTC）。
 5. [X] 明确 `orgunit.global_tenant_id()` 与共享层 RLS/读写入口合同（含共享读取专用入口）（2026-01-25 01:08 UTC）。
-6. [ ] 将 `DEV-PLAN-026` 的 schema/函数/迁移落到模块实现（含 `is_business_unit` 与 `SET_BUSINESS_UNIT`），并同步 SetID 绑定入口的业务单元校验。
+6. [X] 将 `DEV-PLAN-026` 的 schema/函数/迁移落到模块实现（含 `is_business_unit` 与 `SET_BUSINESS_UNIT`），并同步 SetID 绑定入口的业务单元校验（2026-01-25 01:15 UTC）。
 7. [ ] 设计并实现 `setid_binding_events` + `setid_binding_versions`（One Door）。
 8. [ ] 替换解析入口与调用链（Go/SQL），所有 setid-controlled 入口统一改为 `org_unit_id` 解析。
 9. [ ] 改造 UI/路由/鉴权（去 BU/record_group、加 org 绑定 + 业务单元标记编辑 + 权限点补齐）。
