@@ -1160,9 +1160,9 @@ func TestStaffingHandlers(t *testing.T) {
 
 	t.Run("handlePositions with job store ok", func(t *testing.T) {
 		jobStore := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
-		_ = jobStore.CreateJobProfile(context.Background(), "t1", "BU000", "2026-01-01", "JP1", "Job Profile 1", "", nil, "")
+		_ = jobStore.CreateJobProfile(context.Background(), "t1", "org1", "2026-01-01", "JP1", "Job Profile 1", "", nil, "")
 
-		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=BU000", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=org1", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
@@ -1180,7 +1180,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositions with job store errors", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=BU000", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=org1", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
