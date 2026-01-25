@@ -722,6 +722,17 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		h.ServeHTTP(rec, req)
 		return rec
 	}
+	getJSON := func(path string, headers map[string]string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Host = "localhost:8080"
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		req.AddCookie(session)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
 
 	recSet := postJSON("/orgunit/api/setids", `{"setid":"A0001","name":"Default","request_id":"r1"}`, nil)
 	if recSet.Code != http.StatusCreated {
@@ -736,6 +747,10 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 	recGlobal := postJSON("/orgunit/api/global-setids", `{"name":"Shared","request_id":"r3"}`, map[string]string{"X-Actor-Scope": "saas"})
 	if recGlobal.Code != http.StatusCreated {
 		t.Fatalf("global setid status=%d", recGlobal.Code)
+	}
+	recGlobalList := getJSON("/orgunit/api/global-setids", nil)
+	if recGlobalList.Code != http.StatusOK {
+		t.Fatalf("global setid list status=%d", recGlobalList.Code)
 	}
 
 	recBU := postJSON("/orgunit/api/org-units/set-business-unit", `{"org_unit_id":"`+node.ID+`","effective_date":"2026-01-01","is_business_unit":true,"request_id":"r4"}`, nil)

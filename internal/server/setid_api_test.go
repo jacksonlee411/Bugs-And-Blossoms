@@ -161,11 +161,34 @@ func TestHandleSetIDBindingsAPI_Success(t *testing.T) {
 }
 
 func TestHandleGlobalSetIDsAPI_BadInputs(t *testing.T) {
+	badMethod := httptest.NewRequest(http.MethodPut, "/orgunit/api/global-setids", nil)
+	badMethodRec := httptest.NewRecorder()
+	handleGlobalSetIDsAPI(badMethodRec, badMethod, newSetIDMemoryStore())
+	if badMethodRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status=%d", badMethodRec.Code)
+	}
+
 	req := httptest.NewRequest(http.MethodGet, "/orgunit/api/global-setids", nil)
 	rec := httptest.NewRecorder()
 	handleGlobalSetIDsAPI(rec, req, newSetIDMemoryStore())
-	if rec.Code != http.StatusMethodNotAllowed {
+	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
+	}
+
+	okGet := httptest.NewRequest(http.MethodGet, "/orgunit/api/global-setids", nil)
+	okGet = okGet.WithContext(withTenant(okGet.Context(), Tenant{ID: "t1", Name: "T"}))
+	okGetRec := httptest.NewRecorder()
+	handleGlobalSetIDsAPI(okGetRec, okGet, newSetIDMemoryStore())
+	if okGetRec.Code != http.StatusOK {
+		t.Fatalf("status=%d", okGetRec.Code)
+	}
+
+	getErr := httptest.NewRequest(http.MethodGet, "/orgunit/api/global-setids", nil)
+	getErr = getErr.WithContext(withTenant(getErr.Context(), Tenant{ID: "t1", Name: "T"}))
+	getErrRec := httptest.NewRecorder()
+	handleGlobalSetIDsAPI(getErrRec, getErr, errSetIDStore{err: errBoom{}})
+	if getErrRec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", getErrRec.Code)
 	}
 
 	badTenant := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-setids", nil)

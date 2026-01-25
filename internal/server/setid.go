@@ -30,6 +30,7 @@ type SetIDBindingRow struct {
 type SetIDGovernanceStore interface {
 	EnsureBootstrap(ctx context.Context, tenantID string, initiatorID string) error
 	ListSetIDs(ctx context.Context, tenantID string) ([]SetID, error)
+	ListGlobalSetIDs(ctx context.Context) ([]SetID, error)
 	CreateSetID(ctx context.Context, tenantID string, setID string, name string, requestID string, initiatorID string) error
 	ListSetIDBindings(ctx context.Context, tenantID string, asOfDate string) ([]SetIDBindingRow, error)
 	BindSetID(ctx context.Context, tenantID string, orgUnitID string, effectiveDate string, setID string, requestID string, initiatorID string) error
@@ -97,7 +98,7 @@ ORDER BY setid ASC
 		return nil, err
 	}
 
-	globalSetids, err := s.listGlobalSetIDs(ctx)
+	globalSetids, err := s.ListGlobalSetIDs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +212,10 @@ SELECT orgunit.submit_global_setid_event(
 	return tx.Commit(ctx)
 }
 
+func (s *setidPGStore) ListGlobalSetIDs(ctx context.Context) ([]SetID, error) {
+	return s.listGlobalSetIDs(ctx)
+}
+
 func (s *setidPGStore) listGlobalSetIDs(ctx context.Context) ([]SetID, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -320,16 +325,22 @@ func (s *setidMemoryStore) EnsureBootstrap(_ context.Context, tenantID string, _
 	return nil
 }
 
-func (s *setidMemoryStore) ListSetIDs(_ context.Context, tenantID string) ([]SetID, error) {
+func (s *setidMemoryStore) ListSetIDs(ctx context.Context, tenantID string) ([]SetID, error) {
 	var out []SetID
-	if s.globalSetIDName != "" {
-		out = append(out, SetID{SetID: "SHARE", Name: s.globalSetIDName, Status: "active"})
-	}
+	globalSetids, _ := s.ListGlobalSetIDs(ctx)
+	out = append(out, globalSetids...)
 	for _, v := range s.setids[tenantID] {
 		out = append(out, v)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].SetID < out[j].SetID })
 	return out, nil
+}
+
+func (s *setidMemoryStore) ListGlobalSetIDs(_ context.Context) ([]SetID, error) {
+	if s.globalSetIDName == "" {
+		return nil, nil
+	}
+	return []SetID{{SetID: "SHARE", Name: s.globalSetIDName, Status: "active"}}, nil
 }
 
 func (s *setidMemoryStore) CreateSetID(_ context.Context, tenantID string, setID string, name string, _ string, _ string) error {

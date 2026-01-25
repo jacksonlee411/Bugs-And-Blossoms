@@ -109,7 +109,11 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 			return
 		}
 		if enforced && !allowed {
-			routing.WriteError(w, r, rc, http.StatusForbidden, "forbidden", "forbidden")
+			code := "forbidden"
+			if object == authz.ObjectOrgShareRead {
+				code = "share_read_forbidden"
+			}
+			routing.WriteError(w, r, rc, http.StatusForbidden, code, code)
 			return
 		}
 
@@ -211,6 +215,9 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		return "", "", false
 	case "/orgunit/api/global-setids":
+		if method == http.MethodGet {
+			return authz.ObjectOrgShareRead, authz.ActionRead, true
+		}
 		if method == http.MethodPost {
 			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
 		}

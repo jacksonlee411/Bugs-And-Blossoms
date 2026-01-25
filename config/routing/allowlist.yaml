@@ -84,7 +84,7 @@ entrypoints:
         methods: [POST]
         route_class: internal_api
       - path: /orgunit/api/global-setids
-        methods: [POST]
+        methods: [GET, POST]
         route_class: internal_api
       - path: /orgunit/api/org-units/set-business-unit
         methods: [POST]
