@@ -209,7 +209,11 @@ CREATE TABLE orgunit.setid_binding_versions (
 - **Down**：生产环境不执行破坏性 Down；回滚走“环境级停写 + 修复后重试”，并保持无 legacy 双链路。
 - **切换原则**：全域一次性切换；停写窗口内完成切换；**禁止双写/兼容兜底**（No Legacy）。
 - **准备期**：
-  - 依赖清单：系统性梳理 `business_unit_id` / `record_group` 的字段、函数、事件、API、路由与 UI 入口，作为删除与回归验证的基准（覆盖所有 setid-controlled 业务域）。
+  - 依赖清单（冻结范围，2026-01-25 03:21 UTC）：
+    - 文档（历史/弃用）：`docs/dev-plans/028-setid-management.md`（保留历史口径，含 `business_unit_id` / `record_group`）。
+    - 文档（历史说明）：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`（更新说明仍提及旧口径）。
+    - 文档（本方案）：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`（目标/风险/验收处保留“清理项”描述）。
+    - 代码/DB/迁移/API/路由/测试：当前无 `business_unit_id` / `record_group` 残留引用（全仓检索确认）。
   - 数据校验：存量 `setid` 格式（全大写 + 5 位）、根组织 `is_business_unit=true`、既有绑定有效期与缺失绑定清单。
   - 演练：在预发布环境跑完整门禁与 E2E，验证 “org_unit_id + as_of_date” 全链路。
 - **切换窗口（停写）**：
@@ -346,7 +350,7 @@ CREATE TABLE orgunit.setid_binding_versions (
 
 ### 8.2 里程碑
 1. [X] 更新 `DEV-PLAN-028` 为“被 DEV-PLAN-070 取代”的说明，并同步 `Doc Map`（2026-01-24 04:25 UTC）。
-2. [ ] 梳理 `business_unit_id` / `record_group` 依赖清单并冻结范围。
+2. [X] 梳理 `business_unit_id` / `record_group` 依赖清单并冻结范围（2026-01-25 03:21 UTC）。
 3. [ ] 更新相关 dev-plans 与测试用例（TP-060/子计划等），统一“全域迁移”口径，改为 `org_unit_id + as_of_date` 解析并移除 BU/record_group 约束。
    - dev-plans：`docs/dev-plans/028-setid-management.md`（标注历史/弃用口径，指向 070）；`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`（解析上下文切换）；`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`（去 BU/record_group、改解析与错误码口径）；`docs/dev-plans/060-business-e2e-test-suite.md`（数据集/步骤改为 org_unit 绑定）；`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`（步骤/断言/契约引用改为 org_unit + as_of）。
    - 测试用例：`e2e/tests/tp060-02-master-data.spec.js`（去 BU/mapping，改 org_unit 绑定与断言）；`e2e/tests/tp060-03-person-and-assignments.spec.js`（Position 创建与 URL 断言改 org_unit）；`e2e/tests/m3-smoke.spec.js`（Position 创建改 org_unit）；`internal/server/jobcatalog_test.go`（请求参数与断言改 org_unit）；`internal/server/staffing_test.go`（Position 相关断言改 org_unit）；`internal/server/handler_test.go`（JobCatalog/Position 相关断言改 org_unit）；`internal/server/setid_test.go`（SetID 管理改组织绑定）。
