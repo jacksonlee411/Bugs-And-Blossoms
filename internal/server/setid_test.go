@@ -17,6 +17,7 @@ type errSetIDStore struct{ err error }
 
 func (s errSetIDStore) EnsureBootstrap(context.Context, string, string) error { return s.err }
 func (s errSetIDStore) ListSetIDs(context.Context, string) ([]SetID, error)   { return nil, s.err }
+func (s errSetIDStore) ListGlobalSetIDs(context.Context) ([]SetID, error)     { return nil, s.err }
 func (s errSetIDStore) CreateSetID(context.Context, string, string, string, string, string) error {
 	return s.err
 }
@@ -43,6 +44,9 @@ func (s partialSetIDStore) ListSetIDs(context.Context, string) ([]SetID, error) 
 		return nil, s.listSetErr
 	}
 	return []SetID{{SetID: "DEFLT", Name: "Default", Status: "active"}}, nil
+}
+func (s partialSetIDStore) ListGlobalSetIDs(context.Context) ([]SetID, error) {
+	return []SetID{{SetID: "SHARE", Name: "Shared", Status: "active"}}, nil
 }
 func (s partialSetIDStore) CreateSetID(context.Context, string, string, string, string, string) error {
 	return s.createSetErr

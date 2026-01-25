@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
@@ -106,6 +107,25 @@ func TestWithAuthz_ForbiddenWhenEnforced(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestWithAuthz_ShareReadForbidden(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
+
+	req := httptest.NewRequest(http.MethodGet, "/orgunit/api/global-setids", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "share_read_forbidden") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
 }
 
@@ -274,7 +294,10 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/global-setids"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/global-setids"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/global-setids"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/orgunit/api/global-setids"); ok {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/org-units/set-business-unit"); !ok {

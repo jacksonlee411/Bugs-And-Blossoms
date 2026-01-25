@@ -117,7 +117,7 @@ type globalSetIDAPIRequest struct {
 }
 
 func handleGlobalSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
@@ -125,6 +125,21 @@ func handleGlobalSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		globalSetids, err := store.ListGlobalSetIDs(r.Context())
+		if err != nil {
+			writeInternalAPIError(w, r, err, "global_setid_list_failed")
+			return
+		}
+		if globalSetids == nil {
+			globalSetids = []SetID{}
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(globalSetids)
 		return
 	}
 

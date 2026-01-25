@@ -343,6 +343,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/global-setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleGlobalSetIDsAPI(w, r, setidStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/orgunit/api/global-setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleGlobalSetIDsAPI(w, r, setidStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/org-units/set-business-unit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsBusinessUnitAPI(w, r, orgStore)
 	}))

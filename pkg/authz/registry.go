@@ -20,6 +20,7 @@ const (
 	ObjectIAMSession          = "iam.session"
 	ObjectOrgUnitOrgUnits     = "orgunit.orgunits"
 	ObjectOrgUnitSetID        = "orgunit.setid"
+	ObjectOrgShareRead        = "org.share_read"
 	ObjectJobCatalogCatalog   = "jobcatalog.catalog"
 	ObjectPersonPersons       = "person.persons"
 	ObjectStaffingPositions   = "staffing.positions"
