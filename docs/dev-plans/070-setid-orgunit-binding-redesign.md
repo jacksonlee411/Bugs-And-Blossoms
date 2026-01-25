@@ -255,6 +255,10 @@ CREATE TABLE orgunit.setid_binding_versions (
     - `request_id`（必填）
   - Response（201）：`{ "setid": "SHARE", "status": "active" }`
   - Error Codes：`ACTOR_SCOPE_FORBIDDEN` / `RLS_TENANT_CONTEXT_MISSING`
+- `GET /orgunit/api/global-setids`
+  - 仅共享读取专用入口/白名单可用（服务端必须在事务内设置 `app.current_tenant=orgunit.global_tenant_id()` 与 `app.allow_share_read=on`）。
+  - Response（200）：`[{ "setid": "SHARE", "name": "...", "status": "active" }]`
+  - Error Codes：`SHARE_READ_FORBIDDEN` / `RLS_TENANT_CONTEXT_MISSING`
 
 ### 5.4 JSON API：业务单元标记
 - `POST /orgunit/api/org-units/set-business-unit`
@@ -311,6 +315,11 @@ CREATE TABLE orgunit.setid_binding_versions (
 - **共享层写**：仅允许 SaaS 厂商身份写入（必须走专用写入口并强制校验 `app.current_actor_scope=saas`）；scope 缺失/未知即 fail-closed。
 - 租户侧不能写 `SHARE`，也不能把 `SHARE` 绑定到组织节点。
 
+#### 7.1.1 共享层读写入口合同（global_tenant）
+- `orgunit.global_tenant_id()` 固定返回 `00000000-0000-0000-0000-000000000000`，作为共享层唯一 tenant；哨兵租户必须存在，且禁止与真实租户冲突。
+- 共享层读入口：仅白名单入口/专用仓库层函数可调用；必须在同一事务内 `SET LOCAL app.current_tenant = orgunit.global_tenant_id()` + `SET LOCAL app.allow_share_read = on`；否则 RLS 拒绝。
+- 共享层写入口：仅 `submit_global_setid_event`；必须在同一事务内 `SET LOCAL app.current_tenant = orgunit.global_tenant_id()` + `SET LOCAL app.current_actor_scope = 'saas'`；否则 RLS 拒绝。
+
 ### 7.2 Casbin 策略（示意）
 - Subject：`tenant:{tenant_id}:user:{user_id}` / `saas:{user_id}`
 - Object：`org.setid` / `org.setid_binding` / `org.org_unit` / `org.share_read`
@@ -342,7 +351,7 @@ CREATE TABLE orgunit.setid_binding_versions (
    - dev-plans：`docs/dev-plans/028-setid-management.md`（标注历史/弃用口径，指向 070）；`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`（解析上下文切换）；`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`（去 BU/record_group、改解析与错误码口径）；`docs/dev-plans/060-business-e2e-test-suite.md`（数据集/步骤改为 org_unit 绑定）；`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`（步骤/断言/契约引用改为 org_unit + as_of）。
    - 测试用例：`e2e/tests/tp060-02-master-data.spec.js`（去 BU/mapping，改 org_unit 绑定与断言）；`e2e/tests/tp060-03-person-and-assignments.spec.js`（Position 创建与 URL 断言改 org_unit）；`e2e/tests/m3-smoke.spec.js`（Position 创建改 org_unit）；`internal/server/jobcatalog_test.go`（请求参数与断言改 org_unit）；`internal/server/staffing_test.go`（Position 相关断言改 org_unit）；`internal/server/handler_test.go`（JobCatalog/Position 相关断言改 org_unit）；`internal/server/setid_test.go`（SetID 管理改组织绑定）。
 4. [X] 制定迁移窗口与切换策略（停写切换、无双写）（2026-01-25 00:45 UTC）。
-5. [ ] 明确 `orgunit.global_tenant_id()` 与共享层 RLS/读写入口合同（含共享读取专用入口）。
+5. [X] 明确 `orgunit.global_tenant_id()` 与共享层 RLS/读写入口合同（含共享读取专用入口）（2026-01-25 01:08 UTC）。
 6. [ ] 将 `DEV-PLAN-026` 的 schema/函数/迁移落到模块实现（含 `is_business_unit` 与 `SET_BUSINESS_UNIT`），并同步 SetID 绑定入口的业务单元校验。
 7. [ ] 设计并实现 `setid_binding_events` + `setid_binding_versions`（One Door）。
 8. [ ] 替换解析入口与调用链（Go/SQL），所有 setid-controlled 入口统一改为 `org_unit_id` 解析。
