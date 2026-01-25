@@ -6,18 +6,20 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestOrgUnitMemoryStore(t *testing.T) {
 	s := newOrgUnitMemoryStore()
 	s.now = func() time.Time { return time.Unix(123, 0).UTC() }
 
-	created, err := s.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "Hello World", "")
+	created, err := s.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "Hello World", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +43,7 @@ func TestOrgUnitMemoryStore(t *testing.T) {
 
 func TestOrgUnitMemoryStore_RenameNodeCurrent_Errors(t *testing.T) {
 	s := newOrgUnitMemoryStore()
-	created, err := s.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
+	created, err := s.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +61,7 @@ func TestOrgUnitMemoryStore_RenameNodeCurrent_Errors(t *testing.T) {
 
 func TestOrgUnitMemoryStore_MoveDisableNodeCurrent(t *testing.T) {
 	s := newOrgUnitMemoryStore()
-	created, err := s.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
+	created, err := s.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,6 +95,194 @@ func TestOrgUnitMemoryStore_MoveDisableNodeCurrent(t *testing.T) {
 	}
 }
 
+func TestOrgUnitMemoryStore_SetBusinessUnitCurrent(t *testing.T) {
+	s := newOrgUnitMemoryStore()
+	created, err := s.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-06", "", true, "r1"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := s.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-06", "nope", true, "r1"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := s.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-06", created.ID, true, "r1"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	nodes, err := s.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || !nodes[0].IsBusinessUnit {
+		t.Fatalf("nodes=%v", nodes)
+	}
+}
+
+func TestOrgUnitPGStore_SetBusinessUnitCurrent_Errors(t *testing.T) {
+	cases := []struct {
+		name          string
+		store         *orgUnitPGStore
+		effectiveDate string
+		orgID         string
+		requestID     string
+	}{
+		{
+			name: "begin error",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return nil, errors.New("begin fail")
+			})},
+			effectiveDate: "2026-01-01",
+			orgID:         "org1",
+			requestID:     "r1",
+		},
+		{
+			name: "set_config error",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{execErr: errors.New("exec fail"), execErrAt: 1}, nil
+			})},
+			effectiveDate: "2026-01-01",
+			orgID:         "org1",
+			requestID:     "r1",
+		},
+		{
+			name: "missing effective date",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{}, nil
+			})},
+			effectiveDate: "",
+			orgID:         "org1",
+			requestID:     "r1",
+		},
+		{
+			name: "missing org id",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{}, nil
+			})},
+			effectiveDate: "2026-01-01",
+			orgID:         "",
+			requestID:     "r1",
+		},
+		{
+			name: "query row error",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{rowErr: errors.New("row fail")}, nil
+			})},
+			effectiveDate: "2026-01-01",
+			orgID:         "org1",
+			requestID:     "r1",
+		},
+		{
+			name: "savepoint error",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{
+					row:       &stubRow{vals: []any{"e1"}},
+					execErr:   errors.New("exec fail"),
+					execErrAt: 2,
+				}, nil
+			})},
+			effectiveDate: "2026-01-01",
+			orgID:         "org1",
+			requestID:     "r1",
+		},
+		{
+			name: "submit error",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{row: &stubRow{vals: []any{"e1"}}, execErr: errors.New("exec fail"), execErrAt: 3}, nil
+			})},
+			effectiveDate: "2026-01-01",
+			orgID:         "org1",
+			requestID:     "r1",
+		},
+		{
+			name: "commit error",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{row: &stubRow{vals: []any{"e1"}}, commitErr: errors.New("commit fail")}, nil
+			})},
+			effectiveDate: "2026-01-01",
+			orgID:         "org1",
+			requestID:     "r1",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.store.SetBusinessUnitCurrent(context.Background(), "t1", tc.effectiveDate, tc.orgID, true, tc.requestID); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestOrgUnitPGStore_SetBusinessUnitCurrent_Success(t *testing.T) {
+	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		return &stubTx{row: &stubRow{vals: []any{"e1"}}}, nil
+	})}
+	if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "org1", true, ""); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestOrgUnitPGStore_SetBusinessUnitCurrent_Idempotent(t *testing.T) {
+	dupErr := &pgconn.PgError{Code: "23505", ConstraintName: "org_events_one_per_day_unique"}
+
+	t.Run("already-set", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{
+				row:       &stubRow{vals: []any{"e1"}},
+				row2:      &stubRow{vals: []any{true}},
+				execErr:   dupErr,
+				execErrAt: 3,
+			}, nil
+		})}
+		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "org1", true, "r1"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("mismatch", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{
+				row:       &stubRow{vals: []any{"e1"}},
+				row2:      &stubRow{vals: []any{false}},
+				execErr:   dupErr,
+				execErrAt: 3,
+			}, nil
+		})}
+		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "org1", true, "r1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+type rollbackErrTx struct {
+	*stubTx
+	rollbackErr error
+}
+
+func (t *rollbackErrTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	if strings.Contains(sql, "ROLLBACK TO SAVEPOINT") {
+		return pgconn.CommandTag{}, t.rollbackErr
+	}
+	return t.stubTx.Exec(ctx, sql, args...)
+}
+
+func TestOrgUnitPGStore_SetBusinessUnitCurrent_RollbackError(t *testing.T) {
+	tx := &rollbackErrTx{
+		stubTx: &stubTx{
+			row:       &stubRow{vals: []any{"e1"}},
+			execErr:   errors.New("exec fail"),
+			execErrAt: 3,
+		},
+		rollbackErr: errors.New("rollback fail"),
+	}
+	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+	if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "org1", true, "r1"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestHandleOrgNodes_MissingTenant(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes", nil)
@@ -104,7 +294,7 @@ func TestHandleOrgNodes_MissingTenant(t *testing.T) {
 
 func TestHandleOrgNodes_GET_HX(t *testing.T) {
 	store := newOrgUnitMemoryStore()
-	_, _ = store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
+	_, _ = store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes?as_of=2026-01-06", nil)
 	req.Header.Set("HX-Request", "true")
@@ -122,7 +312,7 @@ func TestHandleOrgNodes_GET_HX(t *testing.T) {
 
 func TestHandleOrgNodes_GET_Success(t *testing.T) {
 	store := newOrgUnitMemoryStore()
-	_, _ = store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
+	_, _ = store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
 
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes?as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
@@ -142,7 +332,7 @@ type errStore struct{}
 func (errStore) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
 	return nil, errBoom{}
 }
-func (errStore) CreateNodeCurrent(context.Context, string, string, string, string) (OrgUnitNode, error) {
+func (errStore) CreateNodeCurrent(context.Context, string, string, string, string, bool) (OrgUnitNode, error) {
 	return OrgUnitNode{}, errBoom{}
 }
 func (errStore) RenameNodeCurrent(context.Context, string, string, string, string) error {
@@ -152,6 +342,9 @@ func (errStore) MoveNodeCurrent(context.Context, string, string, string, string)
 	return errBoom{}
 }
 func (errStore) DisableNodeCurrent(context.Context, string, string, string) error { return errBoom{} }
+func (errStore) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
+	return errBoom{}
+}
 
 type errBoom struct{}
 
@@ -166,7 +359,7 @@ type emptyErrStore struct{}
 func (emptyErrStore) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
 	return nil, emptyErr{}
 }
-func (emptyErrStore) CreateNodeCurrent(context.Context, string, string, string, string) (OrgUnitNode, error) {
+func (emptyErrStore) CreateNodeCurrent(context.Context, string, string, string, string, bool) (OrgUnitNode, error) {
 	return OrgUnitNode{}, emptyErr{}
 }
 func (emptyErrStore) RenameNodeCurrent(context.Context, string, string, string, string) error {
@@ -176,6 +369,9 @@ func (emptyErrStore) MoveNodeCurrent(context.Context, string, string, string, st
 	return emptyErr{}
 }
 func (emptyErrStore) DisableNodeCurrent(context.Context, string, string, string) error {
+	return emptyErr{}
+}
+func (emptyErrStore) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
 	return emptyErr{}
 }
 
@@ -304,7 +500,7 @@ type writeSpyStore struct {
 func (s *writeSpyStore) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
 	return []OrgUnitNode{{ID: "c1", Name: "C"}}, nil
 }
-func (s *writeSpyStore) CreateNodeCurrent(_ context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error) {
+func (s *writeSpyStore) CreateNodeCurrent(_ context.Context, tenantID string, effectiveDate string, name string, parentID string, _ bool) (OrgUnitNode, error) {
 	s.createCalled++
 	s.argsCreate = []string{tenantID, effectiveDate, name, parentID}
 	if s.err != nil {
@@ -327,6 +523,9 @@ func (s *writeSpyStore) DisableNodeCurrent(_ context.Context, tenantID string, e
 	s.argsDisable = []string{tenantID, effectiveDate, orgID}
 	return s.err
 }
+func (s *writeSpyStore) SetBusinessUnitCurrent(_ context.Context, _ string, _ string, _ string, _ bool, _ string) error {
+	return s.err
+}
 
 type asOfSpyStore struct {
 	gotAsOf string
@@ -336,7 +535,7 @@ func (s *asOfSpyStore) ListNodesCurrent(_ context.Context, _ string, asOf string
 	s.gotAsOf = asOf
 	return []OrgUnitNode{{ID: "c1", Name: "C"}}, nil
 }
-func (s *asOfSpyStore) CreateNodeCurrent(context.Context, string, string, string, string) (OrgUnitNode, error) {
+func (s *asOfSpyStore) CreateNodeCurrent(context.Context, string, string, string, string, bool) (OrgUnitNode, error) {
 	return OrgUnitNode{}, nil
 }
 func (s *asOfSpyStore) RenameNodeCurrent(context.Context, string, string, string, string) error {
@@ -346,6 +545,9 @@ func (s *asOfSpyStore) MoveNodeCurrent(context.Context, string, string, string, 
 	return nil
 }
 func (s *asOfSpyStore) DisableNodeCurrent(context.Context, string, string, string) error { return nil }
+func (s *asOfSpyStore) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
+	return nil
+}
 
 func TestHandleOrgNodes_POST_Rename_UsesStore(t *testing.T) {
 	store := &writeSpyStore{}
@@ -387,6 +589,86 @@ func TestHandleOrgNodes_POST_Rename_DefaultsEffectiveDateToAsOf(t *testing.T) {
 	}
 }
 
+func TestHandleOrgNodes_POST_SetBusinessUnit_InvalidFlag(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	created, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set("action", "set_business_unit")
+	form.Set("org_id", created.ID)
+	form.Set("effective_date", "2026-01-06")
+	form.Set("is_business_unit", "maybe")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "is_business_unit 无效") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleOrgNodes_POST_SetBusinessUnit_Success(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	created, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set("action", "set_business_unit")
+	form.Set("org_id", created.ID)
+	form.Set("effective_date", "2026-01-06")
+	form.Set("is_business_unit", "true")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	nodes, err := store.ListNodesCurrent(context.Background(), "t1", "2026-01-06")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || !nodes[0].IsBusinessUnit {
+		t.Fatalf("nodes=%v", nodes)
+	}
+}
+
+func TestHandleOrgNodes_POST_SetBusinessUnit_StoreError(t *testing.T) {
+	store := &writeSpyStore{err: errors.New("boom")}
+	form := url.Values{}
+	form.Set("action", "set_business_unit")
+	form.Set("org_id", "u1")
+	form.Set("effective_date", "2026-01-06")
+	form.Set("is_business_unit", "true")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "boom") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
 func TestHandleOrgNodes_POST_Rename_Error_ShowsErrorAndNodes(t *testing.T) {
 	store := &writeSpyStore{err: errors.New("boom")}
 	body := bytes.NewBufferString("action=rename&org_id=u1&new_name=New&effective_date=2026-01-05")
@@ -420,6 +702,46 @@ func TestHandleOrgNodes_POST_Create_BadEffectiveDate(t *testing.T) {
 		t.Fatalf("createCalled=%d", store.createCalled)
 	}
 	if bodyOut := rec.Body.String(); !strings.Contains(bodyOut, "effective_date 无效") {
+		t.Fatalf("unexpected body: %q", bodyOut)
+	}
+}
+
+func TestHandleOrgNodes_POST_Create_BusinessUnitFalse(t *testing.T) {
+	store := &writeSpyStore{}
+	form := url.Values{}
+	form.Set("name", "A")
+	form.Set("effective_date", "2026-01-06")
+	form.Set("is_business_unit", "no")
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if store.createCalled != 1 {
+		t.Fatalf("createCalled=%d", store.createCalled)
+	}
+}
+
+func TestHandleOrgNodes_POST_Create_InvalidBusinessUnitFlag(t *testing.T) {
+	store := &writeSpyStore{}
+	form := url.Values{}
+	form.Set("name", "A")
+	form.Set("effective_date", "2026-01-06")
+	form.Set("is_business_unit", "maybe")
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if bodyOut := rec.Body.String(); !strings.Contains(bodyOut, "is_business_unit 无效") {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -651,9 +973,12 @@ func TestRenderOrgNodes(t *testing.T) {
 	if out == "" {
 		t.Fatal("expected output")
 	}
-	out2 := renderOrgNodes([]OrgUnitNode{{ID: "1", Name: "N"}}, Tenant{Name: "T"}, "err", "2026-01-06")
+	out2 := renderOrgNodes([]OrgUnitNode{{ID: "1", Name: "N", IsBusinessUnit: true}}, Tenant{Name: "T"}, "err", "2026-01-06")
 	if out2 == "" {
 		t.Fatal("expected output")
+	}
+	if !strings.Contains(out2, "(BU)") || !strings.Contains(out2, "checked") {
+		t.Fatalf("unexpected output: %q", out2)
 	}
 }
 
@@ -669,7 +994,7 @@ func TestOrgUnitPGStore_ListNodesCurrent_AndCreateCurrent(t *testing.T) {
 		t.Fatalf("nodes=%+v", nodes)
 	}
 
-	createdCurrent, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "Current", "")
+	createdCurrent, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "Current", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -677,7 +1002,7 @@ func TestOrgUnitPGStore_ListNodesCurrent_AndCreateCurrent(t *testing.T) {
 		t.Fatalf("created=%+v", createdCurrent)
 	}
 
-	createdWithParent, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "CurrentWithParent", "p1")
+	createdWithParent, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "CurrentWithParent", "p1", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -753,7 +1078,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		})}
-		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -763,7 +1088,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		})}
-		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -773,7 +1098,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		})}
-		_, err := store.CreateNodeCurrent(context.Background(), "t1", "", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "", "A", "", false)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -783,7 +1108,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		})}
-		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -796,7 +1121,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 			tx.row2 = &stubRow{err: errors.New("row2")}
 			return tx, nil
 		})}
-		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -809,7 +1134,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 			tx.row2 = &stubRow{vals: []any{"e1"}}
 			return tx, nil
 		})}
-		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -823,7 +1148,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 			tx.row3 = &stubRow{err: errors.New("row3")}
 			return tx, nil
 		})}
-		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -837,7 +1162,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 			tx.row3 = &stubRow{vals: []any{time.Unix(1, 0).UTC()}}
 			return tx, nil
 		})}
-		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "")
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A", "", false)
 		if err == nil {
 			t.Fatal("expected error")
 		}

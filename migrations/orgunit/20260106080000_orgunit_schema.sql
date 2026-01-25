@@ -6,6 +6,14 @@ CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 CREATE SCHEMA IF NOT EXISTS orgunit;
 
+CREATE OR REPLACE FUNCTION orgunit.global_tenant_id()
+RETURNS uuid
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT '00000000-0000-0000-0000-000000000000'::uuid;
+$$;
+
 CREATE OR REPLACE FUNCTION orgunit.org_ltree_label(p_id uuid)
 RETURNS text
 LANGUAGE sql
@@ -61,7 +69,7 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT org_events_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit')),
-  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE')),
+  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT')),
   CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_id, hierarchy_type, org_id, effective_date)
 );
 
@@ -80,6 +88,7 @@ CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
   path_ids uuid[] GENERATED ALWAYS AS (orgunit.org_path_ids(node_path)) STORED,
   name varchar(255) NOT NULL,
   status text NOT NULL DEFAULT 'active',
+  is_business_unit boolean NOT NULL DEFAULT false,
   manager_id uuid NULL,
   last_event_id bigint NOT NULL REFERENCES orgunit.org_events(id),
   CONSTRAINT org_unit_versions_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit')),
@@ -150,4 +159,5 @@ DROP TABLE IF EXISTS orgunit.org_trees;
 DROP FUNCTION IF EXISTS orgunit.org_path_ids(ltree);
 DROP FUNCTION IF EXISTS orgunit.org_uuid_from_hex32(text);
 DROP FUNCTION IF EXISTS orgunit.org_ltree_label(uuid);
+DROP FUNCTION IF EXISTS orgunit.global_tenant_id();
 -- +goose StatementEnd

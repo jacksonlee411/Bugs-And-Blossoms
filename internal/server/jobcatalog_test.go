@@ -54,16 +54,45 @@ func (r *jobcatalogRows) Values() ([]any, error) { return nil, nil }
 func (r *jobcatalogRows) RawValues() [][]byte    { return nil }
 func (r *jobcatalogRows) Conn() *pgx.Conn        { return nil }
 
+type orgStoreStub struct {
+	nodes []OrgUnitNode
+	err   error
+}
+
+func (s orgStoreStub) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return append([]OrgUnitNode(nil), s.nodes...), nil
+}
+func (s orgStoreStub) CreateNodeCurrent(context.Context, string, string, string, string, bool) (OrgUnitNode, error) {
+	return OrgUnitNode{}, s.err
+}
+func (s orgStoreStub) RenameNodeCurrent(context.Context, string, string, string, string) error {
+	return s.err
+}
+func (s orgStoreStub) MoveNodeCurrent(context.Context, string, string, string, string) error {
+	return s.err
+}
+func (s orgStoreStub) DisableNodeCurrent(context.Context, string, string, string) error {
+	return s.err
+}
+func (s orgStoreStub) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
+	return s.err
+}
+
+func defaultJobCatalogOrgStore() OrgUnitStore {
+	return orgStoreStub{nodes: []OrgUnitNode{{ID: "BU000", Name: "Default BU", IsBusinessUnit: true}}}
+}
+
+func handleJobCatalogWithDefaultOrgStore(w http.ResponseWriter, r *http.Request, store JobCatalogStore) {
+	handleJobCatalog(w, r, defaultJobCatalogOrgStore(), store)
+}
+
 type errJobCatalogStore struct {
 	err error
 }
 
-func (s errJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return nil, s.err
-}
-func (s errJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "", s.err
-}
 func (s errJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return s.err
 }
@@ -93,16 +122,9 @@ func (s errJobCatalogStore) ListJobProfiles(context.Context, string, string, str
 }
 
 type partialJobCatalogStore struct {
-	businessUnits []BusinessUnit
-	listErr       error
+	listErr error
 }
 
-func (s partialJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return append([]BusinessUnit(nil), s.businessUnits...), nil
-}
-func (s partialJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "SHARE", nil
-}
 func (s partialJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return nil
 }
@@ -132,16 +154,9 @@ func (s partialJobCatalogStore) ListJobProfiles(context.Context, string, string,
 }
 
 type createErrJobCatalogStore struct {
-	businessUnits []BusinessUnit
-	err           error
+	err error
 }
 
-func (s createErrJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return append([]BusinessUnit(nil), s.businessUnits...), nil
-}
-func (s createErrJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "SHARE", nil
-}
 func (s createErrJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return s.err
 }
@@ -170,10 +185,86 @@ func (s createErrJobCatalogStore) ListJobProfiles(context.Context, string, strin
 	return nil, "SHARE", nil
 }
 
+func TestJobCatalogMemoryStore_Branches(t *testing.T) {
+	ctx := context.Background()
+	store := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
+	tenantID := "t1"
+
+	if err := store.CreateJobFamilyGroup(ctx, tenantID, "", "2026-01-01", "C1", "Group", ""); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, _, err := store.ListJobFamilyGroups(ctx, tenantID, "", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := store.CreateJobFamily(ctx, tenantID, "", "2026-01-01", "F1", "Family", "", "C1"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := store.UpdateJobFamilyGroup(ctx, tenantID, "", "2026-01-01", "F1", "C2"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, _, err := store.ListJobFamilies(ctx, tenantID, "", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := store.CreateJobLevel(ctx, tenantID, "", "2026-01-01", "L1", "Level", ""); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, _, err := store.ListJobLevels(ctx, tenantID, "", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := store.CreateJobProfile(ctx, tenantID, "", "2026-01-01", "P1", "Profile", "", []string{"F1"}, "F1"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, _, err := store.ListJobProfiles(ctx, tenantID, "", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	orgUnitID := "org1"
+	if err := store.CreateJobFamilyGroup(ctx, tenantID, orgUnitID, "2026-01-01", "C1", "Group", ""); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if groups, resolved, err := store.ListJobFamilyGroups(ctx, tenantID, orgUnitID, "2026-01-01"); err != nil || resolved != "DEFLT" || len(groups) != 1 {
+		t.Fatalf("groups=%d resolved=%q err=%v", len(groups), resolved, err)
+	}
+	if err := store.CreateJobFamily(ctx, tenantID, orgUnitID, "2026-01-01", "F1", "Family", "", "C1"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if families, resolved, err := store.ListJobFamilies(ctx, tenantID, orgUnitID, "2026-01-01"); err != nil || resolved != "DEFLT" || len(families) != 1 {
+		t.Fatalf("families=%d resolved=%q err=%v", len(families), resolved, err)
+	}
+	if err := store.UpdateJobFamilyGroup(ctx, tenantID, orgUnitID, "2026-01-02", "F1", "C2"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if err := store.UpdateJobFamilyGroup(ctx, tenantID, orgUnitID, "2026-01-02", "F2", "C2"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if err := store.CreateJobLevel(ctx, tenantID, orgUnitID, "2026-01-01", "L1", "Level", ""); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if levels, resolved, err := store.ListJobLevels(ctx, tenantID, orgUnitID, "2026-01-01"); err != nil || resolved != "DEFLT" || len(levels) != 1 {
+		t.Fatalf("levels=%d resolved=%q err=%v", len(levels), resolved, err)
+	}
+	if err := store.CreateJobProfile(ctx, tenantID, orgUnitID, "2026-01-01", "P1", "Profile", "", []string{"F1"}, "F1"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if profiles, resolved, err := store.ListJobProfiles(ctx, tenantID, orgUnitID, "2026-01-01"); err != nil || resolved != "DEFLT" || len(profiles) != 1 {
+		t.Fatalf("profiles=%d resolved=%q err=%v", len(profiles), resolved, err)
+	}
+}
+
 func TestHandleJobCatalog_TenantMissing(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog", nil)
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, newJobCatalogMemoryStore())
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleJobCatalog_OrgStoreMissing(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleJobCatalog(rec, req, nil, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -183,17 +274,32 @@ func TestHandleJobCatalog_InvalidAsOf(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=bad", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, newJobCatalogMemoryStore())
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
 }
 
-func TestHandleJobCatalog_ListBUError(t *testing.T) {
+func TestHandleJobCatalog_PostMissingOrgUnitID(t *testing.T) {
+	body := strings.NewReader("action=create_job_family_group&job_family_group_code=JC1&job_family_group_name=Group1")
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "org_unit_id is required") {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleJobCatalog_ListOrgUnitError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, errJobCatalogStore{err: errors.New("boom")})
+	handleJobCatalog(rec, req, orgStoreStub{err: errors.New("boom")}, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -201,15 +307,13 @@ func TestHandleJobCatalog_ListBUError(t *testing.T) {
 
 func TestHandleJobCatalog_GetAndPost_Create(t *testing.T) {
 	store := newJobCatalogMemoryStore()
+	_ = store.CreateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-01-01", "JC0", "G0", "")
+	_, _, _ = store.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01")
 
-	_, _ = store.ResolveSetID(context.Background(), "t1", "", "jobcatalog")
-	_ = store.CreateJobFamilyGroup(context.Background(), "t1", "", "2026-01-01", "JC0", "G0", "")
-	_, _, _ = store.ListJobFamilyGroups(context.Background(), "t1", "", "2026-01-01")
-
-	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", nil)
+	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", nil)
 	reqGet = reqGet.WithContext(withTenant(reqGet.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recGet := httptest.NewRecorder()
-	handleJobCatalog(recGet, reqGet, store)
+	handleJobCatalogWithDefaultOrgStore(recGet, reqGet, store)
 	if recGet.Code != http.StatusOK {
 		t.Fatalf("get status=%d", recGet.Code)
 	}
@@ -217,16 +321,16 @@ func TestHandleJobCatalog_GetAndPost_Create(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	form.Set("job_family_group_description", "")
 
-	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	reqPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqPost = reqPost.WithContext(withTenant(reqPost.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recPost := httptest.NewRecorder()
-	handleJobCatalog(recPost, reqPost, store)
+	handleJobCatalogWithDefaultOrgStore(recPost, reqPost, store)
 	if recPost.Code != http.StatusSeeOther {
 		t.Fatalf("post status=%d", recPost.Code)
 	}
@@ -237,7 +341,7 @@ func TestHandleJobCatalog_Post_BadForm(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, newJobCatalogMemoryStore())
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -250,7 +354,7 @@ func TestHandleJobCatalog_Post_UnknownAction(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, newJobCatalogMemoryStore())
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -260,14 +364,14 @@ func TestHandleJobCatalog_Post_InvalidEffectiveDate(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "bad")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, newJobCatalogMemoryStore())
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -277,14 +381,14 @@ func TestHandleJobCatalog_Post_MissingCode(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_group_code", "")
 	form.Set("job_family_group_name", "")
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, newJobCatalogMemoryStore())
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -294,30 +398,23 @@ func TestHandleJobCatalog_Post_CreateError(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, errJobCatalogStore{err: errors.New("boom")})
+	handleJobCatalogWithDefaultOrgStore(rec, req, errJobCatalogStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
 }
 
 type createLevelErrJobCatalogStore struct {
-	businessUnits []BusinessUnit
-	err           error
+	err error
 }
 
-func (s createLevelErrJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return append([]BusinessUnit(nil), s.businessUnits...), nil
-}
-func (s createLevelErrJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "SHARE", nil
-}
 func (s createLevelErrJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return nil
 }
@@ -347,16 +444,9 @@ func (s createLevelErrJobCatalogStore) ListJobProfiles(context.Context, string, 
 }
 
 type levelsListErrJobCatalogStore struct {
-	businessUnits []BusinessUnit
-	err           error
+	err error
 }
 
-func (s levelsListErrJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return append([]BusinessUnit(nil), s.businessUnits...), nil
-}
-func (s levelsListErrJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "SHARE", nil
-}
 func (s levelsListErrJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return nil
 }
@@ -391,16 +481,16 @@ func TestHandleJobCatalog_Post_CreateJobLevel_Success(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_level")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_level_code", "JL1")
 	form.Set("job_level_name", "Level1")
 	form.Set("job_level_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, store)
+	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -410,15 +500,15 @@ func TestHandleJobCatalog_Post_CreateJobLevel_MissingCode(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_level")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_level_code", "")
 	form.Set("job_level_name", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, newJobCatalogMemoryStore())
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -430,17 +520,17 @@ func TestHandleJobCatalog_Post_CreateJobFamily_Success(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_name", "Backend")
 	form.Set("job_family_group_code", "JFG-ENG")
 	form.Set("job_family_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, store)
+	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -450,12 +540,6 @@ type createJobFamilyErrStore struct {
 	err error
 }
 
-func (s createJobFamilyErrStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}, nil
-}
-func (s createJobFamilyErrStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "SHARE", nil
-}
 func (s createJobFamilyErrStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return nil
 }
@@ -488,17 +572,17 @@ func TestHandleJobCatalog_Post_CreateJobFamily_Error_ShowsPage(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_name", "Backend")
 	form.Set("job_family_group_code", "JFG-ENG")
 	form.Set("job_family_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, createJobFamilyErrStore{err: errors.New("boom")})
+	handleJobCatalogWithDefaultOrgStore(rec, req, createJobFamilyErrStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -511,16 +595,16 @@ func TestHandleJobCatalog_Post_CreateJobFamily_MissingGroup(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_name", "Backend")
 	form.Set("job_family_group_code", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, newJobCatalogMemoryStore())
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -533,15 +617,15 @@ func TestHandleJobCatalog_Post_UpdateJobFamilyGroup_Success(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "update_job_family_group")
 	form.Set("effective_date", "2026-02-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_group_code", "JFG-SALES")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, store)
+	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -551,15 +635,15 @@ func TestHandleJobCatalog_Post_UpdateJobFamilyGroup_MissingFields(t *testing.T) 
 	form := url.Values{}
 	form.Set("action", "update_job_family_group")
 	form.Set("effective_date", "2026-02-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_code", "")
 	form.Set("job_family_group_code", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, newJobCatalogMemoryStore())
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -569,12 +653,6 @@ type updateJobFamilyGroupErrStore struct {
 	err error
 }
 
-func (s updateJobFamilyGroupErrStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}, nil
-}
-func (s updateJobFamilyGroupErrStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "SHARE", nil
-}
 func (s updateJobFamilyGroupErrStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return nil
 }
@@ -607,15 +685,15 @@ func TestHandleJobCatalog_Post_UpdateJobFamilyGroup_Error_ShowsPage(t *testing.T
 	form := url.Values{}
 	form.Set("action", "update_job_family_group")
 	form.Set("effective_date", "2026-02-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_group_code", "JFG-SALES")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, updateJobFamilyGroupErrStore{err: errors.New("boom")})
+	handleJobCatalogWithDefaultOrgStore(rec, req, updateJobFamilyGroupErrStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -630,18 +708,18 @@ func TestHandleJobCatalog_Post_CreateJobProfile_Success(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_profile")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_profile_code", "JP-SWE")
 	form.Set("job_profile_name", "Software Engineer")
 	form.Set("job_profile_family_codes", "JF-BE,JF-FE")
 	form.Set("job_profile_primary_family_code", "JF-BE")
 	form.Set("job_profile_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, store)
+	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -651,12 +729,6 @@ type createJobProfileErrStore struct {
 	err error
 }
 
-func (s createJobProfileErrStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}, nil
-}
-func (s createJobProfileErrStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "SHARE", nil
-}
 func (s createJobProfileErrStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return nil
 }
@@ -689,17 +761,17 @@ func TestHandleJobCatalog_Post_CreateJobProfile_Error_ShowsPage(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_profile")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_profile_code", "JP-SWE")
 	form.Set("job_profile_name", "Software Engineer")
 	form.Set("job_profile_family_codes", "JF-BE,JF-FE")
 	form.Set("job_profile_primary_family_code", "JF-BE")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, createJobProfileErrStore{err: errors.New("boom")})
+	handleJobCatalogWithDefaultOrgStore(rec, req, createJobProfileErrStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -712,17 +784,17 @@ func TestHandleJobCatalog_Post_CreateJobProfile_MissingFamilies(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_profile")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_profile_code", "JP-SWE")
 	form.Set("job_profile_name", "Software Engineer")
 	form.Set("job_profile_family_codes", "")
 	form.Set("job_profile_primary_family_code", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, newJobCatalogMemoryStore())
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -732,12 +804,6 @@ type listFamiliesErrJobCatalogStore struct {
 	err error
 }
 
-func (s listFamiliesErrJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}, nil
-}
-func (s listFamiliesErrJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "SHARE", nil
-}
 func (s listFamiliesErrJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return nil
 }
@@ -767,10 +833,10 @@ func (s listFamiliesErrJobCatalogStore) ListJobProfiles(context.Context, string,
 }
 
 func TestHandleJobCatalog_Get_ListFamiliesError_ShowsError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&business_unit_id=BU000", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, listFamiliesErrJobCatalogStore{err: errors.New("boom")})
+	handleJobCatalogWithDefaultOrgStore(rec, req, listFamiliesErrJobCatalogStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -783,12 +849,6 @@ type listProfilesErrJobCatalogStore struct {
 	err error
 }
 
-func (s listProfilesErrJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}, nil
-}
-func (s listProfilesErrJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "SHARE", nil
-}
 func (s listProfilesErrJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return nil
 }
@@ -818,10 +878,10 @@ func (s listProfilesErrJobCatalogStore) ListJobProfiles(context.Context, string,
 }
 
 func TestHandleJobCatalog_Get_ListProfilesError_ShowsError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&business_unit_id=BU000", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, listProfilesErrJobCatalogStore{err: errors.New("boom")})
+	handleJobCatalogWithDefaultOrgStore(rec, req, listProfilesErrJobCatalogStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -831,21 +891,20 @@ func TestHandleJobCatalog_Get_ListProfilesError_ShowsError(t *testing.T) {
 }
 
 func TestHandleJobCatalog_Post_CreateJobLevel_Error(t *testing.T) {
-	bus := []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}
-	store := createLevelErrJobCatalogStore{businessUnits: bus, err: errors.New("boom")}
+	store := createLevelErrJobCatalogStore{err: errors.New("boom")}
 
 	form := url.Values{}
 	form.Set("action", "create_job_level")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_level_code", "JL1")
 	form.Set("job_level_name", "Level1")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, store)
+	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -855,13 +914,12 @@ func TestHandleJobCatalog_Post_CreateJobLevel_Error(t *testing.T) {
 }
 
 func TestHandleJobCatalog_Get_ListJobLevelsError(t *testing.T) {
-	bus := []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}
-	store := levelsListErrJobCatalogStore{businessUnits: bus, err: errors.New("boom")}
+	store := levelsListErrJobCatalogStore{err: errors.New("boom")}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?business_unit_id=BU000&as_of=2026-01-01", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?org_unit_id=BU000&as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, store)
+	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1382,18 +1440,18 @@ func TestJobCatalogPGStore_ListJobLevels_Errors(t *testing.T) {
 
 func TestJobCatalogMemoryStore_CreateAndListJobLevels_DefaultBU(t *testing.T) {
 	store := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
-	if err := store.CreateJobLevel(context.Background(), "t1", "", "2026-01-01", "JL1", "Level 1", ""); err != nil {
+	if err := store.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL1", "Level 1", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := store.CreateJobLevel(context.Background(), "t1", "", "2026-01-01", "JL2", "Level 2", ""); err != nil {
+	if err := store.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL2", "Level 2", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 
-	levels, resolved, err := store.ListJobLevels(context.Background(), "t1", "", "2026-01-01")
+	levels, resolved, err := store.ListJobLevels(context.Background(), "t1", "BU000", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if resolved != "SHARE" {
+	if resolved != "DEFLT" {
 		t.Fatalf("resolved=%q", resolved)
 	}
 	if len(levels) != 2 {
@@ -1403,21 +1461,21 @@ func TestJobCatalogMemoryStore_CreateAndListJobLevels_DefaultBU(t *testing.T) {
 
 func TestJobCatalogMemoryStore_CreateAndListJobFamilies_DefaultBU(t *testing.T) {
 	store := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
-	if err := store.CreateJobFamily(context.Background(), "t1", "", "2026-01-01", "JF-BE", "Backend", "", "JFG-ENG"); err != nil {
+	if err := store.CreateJobFamily(context.Background(), "t1", "BU000", "2026-01-01", "JF-BE", "Backend", "", "JFG-ENG"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := store.UpdateJobFamilyGroup(context.Background(), "t1", "", "2026-02-01", "JF-BE", "JFG-SALES"); err != nil {
+	if err := store.UpdateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-02-01", "JF-BE", "JFG-SALES"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := store.UpdateJobFamilyGroup(context.Background(), "t1", "", "2026-02-01", "NOPE", "JFG-SALES"); err != nil {
+	if err := store.UpdateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-02-01", "NOPE", "JFG-SALES"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 
-	families, resolved, err := store.ListJobFamilies(context.Background(), "t1", "", "2026-01-01")
+	families, resolved, err := store.ListJobFamilies(context.Background(), "t1", "BU000", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if resolved != "SHARE" {
+	if resolved != "DEFLT" {
 		t.Fatalf("resolved=%q", resolved)
 	}
 	if len(families) != 1 {
@@ -1427,14 +1485,14 @@ func TestJobCatalogMemoryStore_CreateAndListJobFamilies_DefaultBU(t *testing.T) 
 
 func TestJobCatalogMemoryStore_CreateAndListJobProfiles_DefaultBU(t *testing.T) {
 	store := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
-	if err := store.CreateJobProfile(context.Background(), "t1", "", "2026-01-01", "JP-SWE", "Software Engineer", "", []string{"JF-BE", "JF-FE"}, "JF-BE"); err != nil {
+	if err := store.CreateJobProfile(context.Background(), "t1", "BU000", "2026-01-01", "JP-SWE", "Software Engineer", "", []string{"JF-BE", "JF-FE"}, "JF-BE"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	profiles, resolved, err := store.ListJobProfiles(context.Background(), "t1", "", "2026-01-01")
+	profiles, resolved, err := store.ListJobProfiles(context.Background(), "t1", "BU000", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if resolved != "SHARE" {
+	if resolved != "DEFLT" {
 		t.Fatalf("resolved=%q", resolved)
 	}
 	if len(profiles) != 1 {
@@ -1457,7 +1515,7 @@ func TestQuoteAll(t *testing.T) {
 }
 
 func TestRenderJobCatalog_RendersFamiliesAndProfiles(t *testing.T) {
-	bus := []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}
+	nodes := []OrgUnitNode{{ID: "BU000", Name: "Default BU", IsBusinessUnit: true}}
 	html := renderJobCatalog(
 		[]JobFamilyGroup{
 			{ID: "g1", Code: "JFG-ENG", Name: "Engineering", IsActive: true, EffectiveDay: "2026-01-01"},
@@ -1475,7 +1533,7 @@ func TestRenderJobCatalog_RendersFamiliesAndProfiles(t *testing.T) {
 			{ID: "p1", Code: "JP-SWE", Name: "Software Engineer", IsActive: true, EffectiveDay: "2026-01-01", FamilyCodesCSV: "JF-BE,JF-FE", PrimaryFamilyCode: "JF-BE"},
 			{ID: "p2", Code: "JP-OFF", Name: "Off", IsActive: false, EffectiveDay: "2026-01-01", FamilyCodesCSV: "JF-OFF", PrimaryFamilyCode: "JF-OFF"},
 		},
-		bus,
+		nodes,
 		Tenant{Name: "T"},
 		"BU000",
 		"err",
@@ -1489,15 +1547,6 @@ func TestRenderJobCatalog_RendersFamiliesAndProfiles(t *testing.T) {
 
 type resolvedFallbackJobCatalogStore struct{}
 
-func (resolvedFallbackJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return []BusinessUnit{
-		{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"},
-		{BusinessUnitID: "BU001", Name: "Other BU", Status: "active"},
-	}, nil
-}
-func (resolvedFallbackJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "SHARE", nil
-}
 func (resolvedFallbackJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return nil
 }
@@ -1527,10 +1576,10 @@ func (resolvedFallbackJobCatalogStore) ListJobProfiles(context.Context, string, 
 }
 
 func TestHandleJobCatalog_Get_ResolvedFallbackToLevels(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&business_unit_id=BU001", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU001", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, resolvedFallbackJobCatalogStore{})
+	handleJobCatalogWithDefaultOrgStore(rec, req, resolvedFallbackJobCatalogStore{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1541,15 +1590,6 @@ func TestHandleJobCatalog_Get_ResolvedFallbackToLevels(t *testing.T) {
 
 type resolvedFallbackToProfilesJobCatalogStore struct{}
 
-func (resolvedFallbackToProfilesJobCatalogStore) ListBusinessUnits(context.Context, string) ([]BusinessUnit, error) {
-	return []BusinessUnit{
-		{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"},
-		{BusinessUnitID: "BU001", Name: "Other BU", Status: "active"},
-	}, nil
-}
-func (resolvedFallbackToProfilesJobCatalogStore) ResolveSetID(context.Context, string, string, string) (string, error) {
-	return "SHARE", nil
-}
 func (resolvedFallbackToProfilesJobCatalogStore) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
 	return nil
 }
@@ -1579,10 +1619,10 @@ func (resolvedFallbackToProfilesJobCatalogStore) ListJobProfiles(context.Context
 }
 
 func TestHandleJobCatalog_Get_ResolvedFallbackToProfiles(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&business_unit_id=BU001", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU001", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, resolvedFallbackToProfilesJobCatalogStore{})
+	handleJobCatalogWithDefaultOrgStore(rec, req, resolvedFallbackToProfilesJobCatalogStore{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1595,10 +1635,10 @@ func TestHandleJobCatalog_Get_RendersJobLevels(t *testing.T) {
 	store := newJobCatalogMemoryStore()
 	_ = store.CreateJobLevel(context.Background(), "t1", "BU000", "2026-01-01", "JL1", "Level 1", "")
 
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&business_unit_id=BU000", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, store)
+	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1612,40 +1652,38 @@ func TestHandleJobCatalog_DefaultsAndMethodNotAllowed(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, store)
+	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
 
-	bus := []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}
-	_ = renderJobCatalog(nil, nil, nil, nil, bus, Tenant{Name: "T"}, "BU000", "", "2026-01-01", "")
-	_ = renderJobCatalog([]JobFamilyGroup{{ID: "g1", Code: "C", Name: "N", IsActive: true, EffectiveDay: "2026-01-01"}}, nil, nil, nil, bus, Tenant{Name: "T"}, "BU000", "err", "2026-01-01", "SHARE")
+	nodes := []OrgUnitNode{{ID: "BU000", Name: "Default BU", IsBusinessUnit: true}}
+	_ = renderJobCatalog(nil, nil, nil, nil, nodes, Tenant{Name: "T"}, "BU000", "", "2026-01-01", "")
+	_ = renderJobCatalog([]JobFamilyGroup{{ID: "g1", Code: "C", Name: "N", IsActive: true, EffectiveDay: "2026-01-01"}}, nil, nil, nil, nodes, Tenant{Name: "T"}, "BU000", "err", "2026-01-01", "SHARE")
 
 	req2 := httptest.NewRequest(http.MethodPut, "/org/job-catalog?as_of=2026-01-01", nil)
 	req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec2 := httptest.NewRecorder()
-	handleJobCatalog(rec2, req2, store)
+	handleJobCatalogWithDefaultOrgStore(rec2, req2, store)
 	if rec2.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status=%d", rec2.Code)
 	}
 }
 
 func TestHandleJobCatalog_MergeMsgBranches(t *testing.T) {
-	bus := []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}
-
-	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&business_unit_id=BU000", nil)
+	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", nil)
 	reqGet = reqGet.WithContext(withTenant(reqGet.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recGet := httptest.NewRecorder()
-	handleJobCatalog(recGet, reqGet, partialJobCatalogStore{businessUnits: bus, listErr: errors.New("boom")})
+	handleJobCatalogWithDefaultOrgStore(recGet, reqGet, partialJobCatalogStore{listErr: errors.New("boom")})
 	if recGet.Code != http.StatusOK {
 		t.Fatalf("get status=%d", recGet.Code)
 	}
 
-	reqPost2 := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader("%"))
+	reqPost2 := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", strings.NewReader("%"))
 	reqPost2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqPost2 = reqPost2.WithContext(withTenant(reqPost2.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recPost2 := httptest.NewRecorder()
-	handleJobCatalog(recPost2, reqPost2, partialJobCatalogStore{businessUnits: bus, listErr: errors.New("boom")})
+	handleJobCatalogWithDefaultOrgStore(recPost2, reqPost2, partialJobCatalogStore{listErr: errors.New("boom")})
 	if recPost2.Code != http.StatusOK {
 		t.Fatalf("post status=%d", recPost2.Code)
 	}
@@ -1653,11 +1691,11 @@ func TestHandleJobCatalog_MergeMsgBranches(t *testing.T) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 
-	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader("%"))
+	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&org_unit_id=BU000", strings.NewReader("%"))
 	reqPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqPost = reqPost.WithContext(withTenant(reqPost.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recPost := httptest.NewRecorder()
-	handleJobCatalog(recPost, reqPost, partialJobCatalogStore{businessUnits: bus, listErr: errors.New("")})
+	handleJobCatalogWithDefaultOrgStore(recPost, reqPost, partialJobCatalogStore{listErr: errors.New("")})
 	if recPost.Code != http.StatusOK {
 		t.Fatalf("post status=%d", recPost.Code)
 	}
@@ -1667,27 +1705,25 @@ func TestHandleJobCatalog_MergeMsgBranches(t *testing.T) {
 }
 
 func TestHandleJobCatalog_SortsActiveBUs(t *testing.T) {
-	bus := []BusinessUnit{
-		{BusinessUnitID: "BU002", Name: "BU 2", Status: "active"},
-		{BusinessUnitID: "BU001", Name: "BU 1", Status: "active"},
+	nodes := []OrgUnitNode{
+		{ID: "BU002", Name: "BU 2", IsBusinessUnit: true},
+		{ID: "BU001", Name: "BU 1", IsBusinessUnit: true},
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, partialJobCatalogStore{businessUnits: bus})
+	handleJobCatalog(rec, req, orgStoreStub{nodes: nodes}, partialJobCatalogStore{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
 }
 
 func TestHandleJobCatalog_CreateJobFamilyGroupError_ShowsPage(t *testing.T) {
-	bus := []BusinessUnit{{BusinessUnitID: "BU000", Name: "Default BU", Status: "active"}}
-
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("business_unit_id", "BU000")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 
@@ -1695,7 +1731,7 @@ func TestHandleJobCatalog_CreateJobFamilyGroupError_ShowsPage(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, createErrJobCatalogStore{businessUnits: bus, err: errors.New("boom")})
+	handleJobCatalogWithDefaultOrgStore(rec, req, createErrJobCatalogStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1709,14 +1745,14 @@ func TestHandleJobCatalog_Post_DefaultActionAndEffectiveDate(t *testing.T) {
 	reqPre := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01", nil)
 	reqPre = reqPre.WithContext(withTenant(reqPre.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recPre := httptest.NewRecorder()
-	handleJobCatalog(recPre, reqPre, store)
+	handleJobCatalogWithDefaultOrgStore(recPre, reqPre, store)
 	if recPre.Code != http.StatusOK {
 		t.Fatalf("pre status=%d", recPre.Code)
 	}
 
 	form := url.Values{}
 	form.Set("effective_date", "")
-	form.Set("business_unit_id", "")
+	form.Set("org_unit_id", "BU000")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	form.Set("job_family_group_description", "")
@@ -1724,42 +1760,104 @@ func TestHandleJobCatalog_Post_DefaultActionAndEffectiveDate(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, store)
+	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
+}
+
+func TestResolveSetIDOrDefaultTx(t *testing.T) {
+	t.Run("fallback to default", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{err: &pgconn.PgError{Message: "SETID_BINDING_MISSING"}}}
+		got, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01")
+		if err != nil || got != "DEFLT" {
+			t.Fatalf("got=%q err=%v", got, err)
+		}
+		if tx.execN != 3 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+
+	t.Run("success path", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{"S2601"}}}
+		got, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01")
+		if err != nil || got != "S2601" {
+			t.Fatalf("got=%q err=%v", got, err)
+		}
+		if tx.execN != 2 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+
+	t.Run("savepoint error", func(t *testing.T) {
+		tx := &stubTx{execErr: errors.New("savepoint fail"), execErrAt: 1}
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "savepoint fail") {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if tx.execN != 1 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+
+	t.Run("release error after success", func(t *testing.T) {
+		tx := &stubTx{
+			execErr:   errors.New("release fail"),
+			execErrAt: 2,
+			row:       &stubRow{vals: []any{"S2601"}},
+		}
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "release fail") {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if tx.execN != 2 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+
+	t.Run("rollback error after resolve failure", func(t *testing.T) {
+		tx := &stubTx{
+			execErr:   errors.New("rollback fail"),
+			execErrAt: 2,
+			row:       &stubRow{err: &pgconn.PgError{Message: "SETID_BINDING_MISSING"}},
+		}
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "rollback fail") {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if tx.execN != 2 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+
+	t.Run("release error after rollback", func(t *testing.T) {
+		tx := &stubTx{
+			execErr:   errors.New("release fail"),
+			execErrAt: 3,
+			row:       &stubRow{err: &pgconn.PgError{Message: "SETID_BINDING_MISSING"}},
+		}
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "release fail") {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if tx.execN != 3 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+
+	t.Run("non-binding error returns", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{err: &pgconn.PgError{Message: "ORG_NOT_FOUND_AS_OF"}}}
+		if _, err := resolveSetIDOrDefaultTx(context.Background(), tx, "t1", "BU000", "2026-01-01"); err == nil || !strings.Contains(err.Error(), "ORG_NOT_FOUND_AS_OF") {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if tx.execN != 3 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
 }
 
 func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 	beginErrStore := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return nil, errors.New("begin fail")
 	})}
-	if _, err := beginErrStore.ListBusinessUnits(context.Background(), "t1"); err == nil {
+	if _, _, err := beginErrStore.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
-	}
-
-	tx := &stubTx{rows: &jobcatalogRows{rows: [][]any{{"BU000", "Default BU", "active"}}}}
-	s := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-	if bus, err := s.ListBusinessUnits(context.Background(), "t1"); err != nil || len(bus) != 1 {
-		t.Fatalf("len=%d err=%v", len(bus), err)
-	}
-
-	txBootstrapErr := &stubTx{execErr: errors.New("bootstrap fail"), execErrAt: 2}
-	sBootstrapErr := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txBootstrapErr, nil })}
-	if _, err := sBootstrapErr.ListBusinessUnits(context.Background(), "t1"); err == nil {
-		t.Fatal("expected error")
-	}
-
-	txScanErr := &stubTx{rows: &scanErrRows{}}
-	sScanErr := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txScanErr, nil })}
-	if _, err := sScanErr.ListBusinessUnits(context.Background(), "t1"); err == nil {
-		t.Fatal("expected error")
-	}
-
-	tx2 := &stubTx{row: fakeRow{vals: []any{"SHARE"}}}
-	s2 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx2, nil })}
-	if sid, err := s2.ResolveSetID(context.Background(), "t1", "BU000", "jobcatalog"); err != nil || sid != "SHARE" {
-		t.Fatalf("sid=%q err=%v", sid, err)
 	}
 
 	tx3 := &stubTx{
@@ -1852,13 +1950,13 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 func TestJobCatalogPGStore_Errors(t *testing.T) {
 	tx := &stubTx{queryErr: errors.New("query fail")}
 	s := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-	if _, err := s.ListBusinessUnits(context.Background(), "t1"); err == nil {
+	if _, _, err := s.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx2 := &stubTx{rowErr: errors.New("row fail")}
 	s2 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx2, nil })}
-	if _, err := s2.ResolveSetID(context.Background(), "t1", "BU000", "jobcatalog"); err == nil {
+	if _, _, err := s2.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
@@ -1882,22 +1980,22 @@ func TestJobCatalogPGStore_Errors(t *testing.T) {
 
 	tx5 := &stubTx{execErr: errors.New("set_config fail"), execErrAt: 1}
 	s5 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx5, nil })}
-	if _, err := s5.ListBusinessUnits(context.Background(), "t1"); err == nil {
+	if _, _, err := s5.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx6 := &stubTx{execErr: errors.New("bootstrap fail"), execErrAt: 2}
 	s6 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx6, nil })}
-	if _, err := s6.ResolveSetID(context.Background(), "t1", "BU000", "jobcatalog"); err == nil {
+	if err := s6.CreateJobFamilyGroup(context.Background(), "t1", "BU000", "2026-01-01", "JC1", "Group1", ""); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx7 := &stubTx{
 		commitErr: errors.New("commit fail"),
-		rows:      &jobcatalogRows{rows: [][]any{{"BU000", "Default BU", "active"}}},
+		rows:      &jobcatalogRows{rows: [][]any{{"g1", "JC1", "Group1", true, "2026-01-01"}}},
 	}
 	s7 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx7, nil })}
-	if _, err := s7.ListBusinessUnits(context.Background(), "t1"); err == nil {
+	if _, _, err := s7.ListJobFamilyGroups(context.Background(), "t1", "BU000", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 }

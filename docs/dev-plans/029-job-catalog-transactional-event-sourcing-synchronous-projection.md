@@ -29,7 +29,7 @@
 
 - schema/迁移：`modules/jobcatalog/infrastructure/persistence/schema/00001_jobcatalog_schema.sql`、`modules/jobcatalog/infrastructure/persistence/schema/00002_jobcatalog_job_family_groups.sql`、`modules/jobcatalog/infrastructure/persistence/schema/00003_jobcatalog_engine.sql`、`migrations/jobcatalog/20260106102000_jobcatalog_schema.sql`、`migrations/jobcatalog/20260106102500_jobcatalog_engine.sql`
 - UI 闭环入口：`/org/job-catalog`（实现：`internal/server/jobcatalog.go`；allowlist：`config/routing/allowlist.yaml`）
-- SetID 解析依赖：`pkg/setid/setid.go` + `orgunit.resolve_setid(...)`
+- SetID 解析依赖：`pkg/setid/setid.go` + `orgunit.resolve_setid(tenant_id, org_unit_id, as_of_date)`（对齐 `DEV-PLAN-070`）
 - 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
 - **SSOT 链接**：
   - 触发器矩阵与本地必跑：`AGENTS.md`
@@ -45,7 +45,7 @@
 
 > 009M1 的落地样板已把 `setid` 引入 Job Catalog 的 schema 与写入口（并通过 OrgUnit 的 Set Control Mapping 解析得到）。为避免后续实现继续出现“文档与实现分叉”，本计划自此将 `setid` 视为 Job Catalog 的一等维度：
 - **所有 Job Catalog identity/events/versions 表均包含 `setid`**（同一租户内允许不同 `setid` 下 code 重名）。
-- **所有 Kernel 写入口/读快照均显式接收 `p_setid`**；Go/HTTP 层通过 BU→SetID 解析来填充该参数（对齐 `DEV-PLAN-028` 的 SetID 语义与 `internal/server/jobcatalog.go` 的现状）。
+- **所有 Kernel 写入口/读快照均显式接收 `p_setid`**；Go/HTTP 层通过 `org_unit_id + as_of_date` 解析 SetID 来填充该参数（对齐 `DEV-PLAN-070` 与 `internal/server/jobcatalog.go` 的改造目标）。
 
 ## 2.6 落地路径（可验收分步）
 > 目标：把实现拆成“每步可验收”的闭环，避免实现期即兴补丁与契约漂移。

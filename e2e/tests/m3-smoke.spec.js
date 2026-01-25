@@ -100,13 +100,46 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
     .locator(`form[method="POST"][action="/org/nodes?as_of=${asOf}"]`)
     .filter({ has: page.locator('input[name="name"]') })
     .first();
+  const setBusinessUnitFlag = async (enabled) => {
+    const input = orgCreateForm.locator('input[name="is_business_unit"]');
+    if ((await input.count()) === 0) {
+      if (enabled) {
+        throw new Error("missing is_business_unit field in /org/nodes form");
+      }
+      return;
+    }
+    const inputType = (await input.first().getAttribute("type")) || "";
+    if (inputType === "checkbox") {
+      if (enabled) {
+        await input.first().check();
+      } else if (await input.first().isChecked()) {
+        await input.first().uncheck();
+      }
+      return;
+    }
+    await input.first().fill(enabled ? "true" : "false");
+  };
   if (parentID) {
     await orgCreateForm.locator('input[name="parent_id"]').fill(parentID);
   }
+  await setBusinessUnitFlag(!parentID);
   await orgCreateForm.locator('input[name="name"]').fill(orgName);
   await orgCreateForm.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(new RegExp(`/org/nodes\\?as_of=${asOf}$`));
   await expect(page.locator("ul li", { hasText: orgName })).toBeVisible();
+  const createdOrgID = (await page.locator("ul li", { hasText: orgName }).first().locator("code").innerText()).trim();
+  expect(createdOrgID).not.toBe("");
+  if (!parentID) {
+    const bindResp = await appContext.request.post("/orgunit/api/setid-bindings", {
+      data: {
+        org_unit_id: createdOrgID,
+        setid: "DEFLT",
+        effective_date: asOf,
+        request_id: `smoke-bind-root-${runID}`
+      }
+    });
+    expect(bindResp.status(), await bindResp.text()).toBe(201);
+  }
 
   await page.goto(`/person/persons?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Person");
@@ -129,10 +162,9 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
     .getAttribute("value");
   expect(orgUnitID).not.toBeNull();
   await posCreateForm.locator('select[name="org_unit_id"]').selectOption(orgUnitID);
-  await posCreateForm.locator('select[name="business_unit_id"]').selectOption("BU000");
   await posCreateForm.locator('input[name="name"]').fill(posName);
   await posCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&business_unit_id=BU000$`));
+  await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&org_unit_id=${orgUnitID}$`));
 
   const posRow = page.locator("tr", { hasText: posName });
   await expect(posRow).toBeVisible();

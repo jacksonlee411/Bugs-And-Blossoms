@@ -77,6 +77,18 @@ entrypoints:
       - path: /org/api/assignment-events:rescind
         methods: [POST]
         route_class: internal_api
+      - path: /orgunit/api/setids
+        methods: [POST]
+        route_class: internal_api
+      - path: /orgunit/api/setid-bindings
+        methods: [POST]
+        route_class: internal_api
+      - path: /orgunit/api/global-setids
+        methods: [POST]
+        route_class: internal_api
+      - path: /orgunit/api/org-units/set-business-unit
+        methods: [POST]
+        route_class: internal_api
   superadmin:
     routes:
       - path: /

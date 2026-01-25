@@ -10,13 +10,15 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
 type OrgUnitNode struct {
-	ID        string
-	Name      string
-	CreatedAt time.Time
+	ID             string
+	Name           string
+	IsBusinessUnit bool
+	CreatedAt      time.Time
 }
 
 type OrgUnitStore interface {
@@ -25,6 +27,7 @@ type OrgUnitStore interface {
 	OrgUnitNodesCurrentRenamer
 	OrgUnitNodesCurrentMover
 	OrgUnitNodesCurrentDisabler
+	OrgUnitNodesCurrentBusinessUnitSetter
 }
 
 type OrgUnitNodesCurrentReader interface {
@@ -32,7 +35,7 @@ type OrgUnitNodesCurrentReader interface {
 }
 
 type OrgUnitNodesCurrentWriter interface {
-	CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error)
+	CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string, isBusinessUnit bool) (OrgUnitNode, error)
 }
 
 type OrgUnitNodesCurrentRenamer interface {
@@ -45,6 +48,10 @@ type OrgUnitNodesCurrentMover interface {
 
 type OrgUnitNodesCurrentDisabler interface {
 	DisableNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string) error
+}
+
+type OrgUnitNodesCurrentBusinessUnitSetter interface {
+	SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestID string) error
 }
 
 type orgUnitPGStore struct {
@@ -72,12 +79,13 @@ func (s *orgUnitPGStore) ListNodesCurrent(ctx context.Context, tenantID string, 
 
 	rows, err := tx.Query(ctx, `
 WITH snapshot AS (
-  SELECT org_id, name
+  SELECT org_id, name, is_business_unit
   FROM orgunit.get_org_snapshot($1::uuid, $2::date)
 )
 SELECT
   s.org_id::text,
   s.name,
+  s.is_business_unit,
   e.transaction_time
 FROM snapshot s
 JOIN orgunit.org_unit_versions v
@@ -98,7 +106,7 @@ ORDER BY e.transaction_time DESC
 	var out []OrgUnitNode
 	for rows.Next() {
 		var n OrgUnitNode
-		if err := rows.Scan(&n.ID, &n.Name, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.Name, &n.IsBusinessUnit, &n.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, n)
@@ -112,7 +120,7 @@ ORDER BY e.transaction_time DESC
 	return out, nil
 }
 
-func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string) (OrgUnitNode, error) {
+func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string, isBusinessUnit bool) (OrgUnitNode, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return OrgUnitNode{}, err
@@ -141,6 +149,7 @@ func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string,
 	if strings.TrimSpace(parentID) != "" {
 		payload += `,"parent_id":` + strconv.Quote(parentID)
 	}
+	payload += `,"is_business_unit":` + strconv.FormatBool(isBusinessUnit)
 	payload += `}`
 
 	_, err = tx.Exec(ctx, `
@@ -173,7 +182,7 @@ WHERE tenant_id = $1::uuid AND event_id = $2::uuid
 		return OrgUnitNode{}, err
 	}
 
-	return OrgUnitNode{ID: orgID, Name: name, CreatedAt: createdAt}, nil
+	return OrgUnitNode{ID: orgID, Name: name, IsBusinessUnit: isBusinessUnit, CreatedAt: createdAt}, nil
 }
 
 func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, newName string) error {
@@ -324,6 +333,79 @@ SELECT orgunit.submit_org_event(
 	return nil
 }
 
+func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(effectiveDate) == "" {
+		return errors.New("effective_date is required")
+	}
+	if strings.TrimSpace(orgID) == "" {
+		return errors.New("org_id is required")
+	}
+
+	var eventID string
+	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+		return err
+	}
+	if strings.TrimSpace(requestID) == "" {
+		requestID = eventID
+	}
+
+	payload := `{"is_business_unit":` + strconv.FormatBool(isBusinessUnit) + `}`
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_set_business_unit;`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+  $2::uuid,
+  'OrgUnit',
+  $3::uuid,
+  'SET_BUSINESS_UNIT',
+  $4::date,
+  $5::jsonb,
+	  $6::text,
+	  $7::uuid
+	)
+	`, eventID, tenantID, orgID, effectiveDate, []byte(payload), requestID, tenantID); err != nil {
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_set_business_unit;`); rbErr != nil {
+			return rbErr
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr != nil && pgErr.Code == "23505" && pgErr.ConstraintName == "org_events_one_per_day_unique" {
+			var current bool
+			if queryErr := tx.QueryRow(ctx, `
+		SELECT is_business_unit
+		FROM orgunit.org_unit_versions
+		WHERE tenant_id = $1::uuid
+		  AND hierarchy_type = 'OrgUnit'
+		  AND org_id = $2::uuid
+		  AND status = 'active'
+		  AND validity @> $3::date
+		ORDER BY lower(validity) DESC
+		LIMIT 1;
+	`, tenantID, orgID, effectiveDate).Scan(&current); queryErr == nil && current == isBusinessUnit {
+				return tx.Commit(ctx)
+			}
+		}
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
 type orgUnitMemoryStore struct {
 	nodes map[string][]OrgUnitNode
 	now   func() time.Time
@@ -340,11 +422,12 @@ func (s *orgUnitMemoryStore) listNodes(tenantID string) ([]OrgUnitNode, error) {
 	return append([]OrgUnitNode(nil), s.nodes[tenantID]...), nil
 }
 
-func (s *orgUnitMemoryStore) createNode(tenantID string, name string) (OrgUnitNode, error) {
+func (s *orgUnitMemoryStore) createNode(tenantID string, name string, isBusinessUnit bool) (OrgUnitNode, error) {
 	n := OrgUnitNode{
-		ID:        "mem-" + strings.ToLower(strings.ReplaceAll(name, " ", "-")),
-		Name:      name,
-		CreatedAt: s.now(),
+		ID:             "mem-" + strings.ToLower(strings.ReplaceAll(name, " ", "-")),
+		Name:           name,
+		IsBusinessUnit: isBusinessUnit,
+		CreatedAt:      s.now(),
 	}
 	s.nodes[tenantID] = append([]OrgUnitNode{n}, s.nodes[tenantID]...)
 	return n, nil
@@ -354,8 +437,8 @@ func (s *orgUnitMemoryStore) ListNodesCurrent(_ context.Context, tenantID string
 	return s.listNodes(tenantID)
 }
 
-func (s *orgUnitMemoryStore) CreateNodeCurrent(_ context.Context, tenantID string, _ string, name string, _ string) (OrgUnitNode, error) {
-	return s.createNode(tenantID, name)
+func (s *orgUnitMemoryStore) CreateNodeCurrent(_ context.Context, tenantID string, _ string, name string, _ string, isBusinessUnit bool) (OrgUnitNode, error) {
+	return s.createNode(tenantID, name, isBusinessUnit)
 }
 
 func (s *orgUnitMemoryStore) RenameNodeCurrent(_ context.Context, tenantID string, _ string, orgID string, newName string) error {
@@ -400,6 +483,22 @@ func (s *orgUnitMemoryStore) DisableNodeCurrent(_ context.Context, tenantID stri
 	for i := range nodes {
 		if nodes[i].ID == orgID {
 			s.nodes[tenantID] = append(nodes[:i], nodes[i+1:]...)
+			return nil
+		}
+	}
+	return errors.New("org_id not found")
+}
+
+func (s *orgUnitMemoryStore) SetBusinessUnitCurrent(_ context.Context, tenantID string, _ string, orgID string, isBusinessUnit bool, _ string) error {
+	if strings.TrimSpace(orgID) == "" {
+		return errors.New("org_id is required")
+	}
+
+	nodes := s.nodes[tenantID]
+	for i := range nodes {
+		if nodes[i].ID == orgID {
+			nodes[i].IsBusinessUnit = isBusinessUnit
+			s.nodes[tenantID] = nodes
 			return nil
 		}
 	}
@@ -452,7 +551,21 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			action = "create"
 		}
 
-		if action == "rename" || action == "move" || action == "disable" {
+		parseBusinessUnitFlag := func(v string) (bool, error) {
+			if strings.TrimSpace(v) == "" {
+				return false, nil
+			}
+			switch strings.ToLower(strings.TrimSpace(v)) {
+			case "1", "true", "on", "yes":
+				return true, nil
+			case "0", "false", "off", "no":
+				return false, nil
+			default:
+				return false, errors.New("is_business_unit 无效")
+			}
+		}
+
+		if action == "rename" || action == "move" || action == "disable" || action == "set_business_unit" {
 			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
 			if effectiveDate == "" {
 				effectiveDate = asOf
@@ -499,7 +612,19 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 					return
 				}
-			default:
+			case "set_business_unit":
+				isBusinessUnit, err := parseBusinessUnitFlag(r.Form.Get("is_business_unit"))
+				if err != nil {
+					nodes, errMsg := listNodes(err.Error())
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+					return
+				}
+				reqID := "ui:orgunit:set-business-unit:" + orgID + ":" + effectiveDate
+				if err := store.SetBusinessUnitCurrent(r.Context(), tenant.ID, effectiveDate, orgID, isBusinessUnit, reqID); err != nil {
+					nodes, errMsg := listNodes(err.Error())
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+					return
+				}
 			}
 
 			http.Redirect(w, r, "/org/nodes?as_of="+effectiveDate, http.StatusSeeOther)
@@ -524,7 +649,14 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			return
 		}
 
-		if _, err := store.CreateNodeCurrent(r.Context(), tenant.ID, effectiveDate, name, parentID); err != nil {
+		isBusinessUnit, err := parseBusinessUnitFlag(r.Form.Get("is_business_unit"))
+		if err != nil {
+			nodes, errMsg := listNodes(err.Error())
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+			return
+		}
+
+		if _, err := store.CreateNodeCurrent(r.Context(), tenant.ID, effectiveDate, name, parentID, isBusinessUnit); err != nil {
 			nodes, errMsg := listNodes(err.Error())
 			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 			return
@@ -555,7 +687,8 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
 	b.WriteString(`<form method="POST" action="` + postAction + `">`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
 	b.WriteString(`<label>Parent ID (optional) <input name="parent_id" /></label><br/>`)
-	b.WriteString(`<label>Name <input name="name" /></label>`)
+	b.WriteString(`<label>Name <input name="name" /></label> `)
+	b.WriteString(`<label>Is Business Unit <input type="checkbox" name="is_business_unit" value="true" /></label>`)
 	b.WriteString(`<button type="submit">Create</button>`)
 	b.WriteString(`</form>`)
 
@@ -569,6 +702,9 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
 	for _, n := range nodes {
 		b.WriteString("<li>")
 		b.WriteString(html.EscapeString(n.Name) + " <code>" + html.EscapeString(n.ID) + "</code>")
+		if n.IsBusinessUnit {
+			b.WriteString(` <span>(BU)</span>`)
+		}
 		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
 		b.WriteString(`<input type="hidden" name="action" value="rename" />`)
 		b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
@@ -590,6 +726,18 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
 		b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
 		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
 		b.WriteString(`<button type="submit">Disable</button>`)
+		b.WriteString(`</form>`)
+
+		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
+		b.WriteString(`<input type="hidden" name="action" value="set_business_unit" />`)
+		b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
+		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
+		checked := ""
+		if n.IsBusinessUnit {
+			checked = " checked"
+		}
+		b.WriteString(`<label>Is Business Unit <input type="checkbox" name="is_business_unit" value="true"` + checked + ` /></label> `)
+		b.WriteString(`<button type="submit">Set BU</button>`)
 		b.WriteString(`</form>`)
 		b.WriteString("</li>")
 	}

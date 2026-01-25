@@ -6,8 +6,8 @@ RETURNS TABLE (
   position_id uuid,
   org_unit_id uuid,
   reports_to_position_id uuid,
-  business_unit_id text,
   jobcatalog_setid text,
+  jobcatalog_setid_as_of date,
   job_profile_id uuid,
   job_profile_code text,
   name text,
@@ -28,12 +28,12 @@ BEGIN
 
 	  RETURN QUERY
 	  SELECT
-	    pv.position_id,
-	    pv.org_unit_id,
-	    pv.reports_to_position_id,
-	    pv.business_unit_id,
-	    pv.jobcatalog_setid,
-	    pv.job_profile_id,
+    pv.position_id,
+    pv.org_unit_id,
+    pv.reports_to_position_id,
+    pv.jobcatalog_setid,
+    pv.jobcatalog_setid_as_of,
+    pv.job_profile_id,
 	    jp.code::text AS job_profile_code,
 	    pv.name,
 	    pv.lifecycle_status,

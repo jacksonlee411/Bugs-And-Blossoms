@@ -90,11 +90,32 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     return ((await li.locator("code").first().innerText()) || "").trim();
   };
 
-  const createOrgUnit = async (effectiveDate, parentID, name) => {
+  const setBusinessUnitFlag = async (form, enabled) => {
+    const input = form.locator('input[name="is_business_unit"]');
+    if ((await input.count()) === 0) {
+      if (enabled) {
+        throw new Error("missing is_business_unit field in /org/nodes form");
+      }
+      return;
+    }
+    const inputType = (await input.first().getAttribute("type")) || "";
+    if (inputType === "checkbox") {
+      if (enabled) {
+        await input.first().check();
+      } else if (await input.first().isChecked()) {
+        await input.first().uncheck();
+      }
+      return;
+    }
+    await input.first().fill(enabled ? "true" : "false");
+  };
+
+  const createOrgUnit = async (effectiveDate, parentID, name, isBusinessUnit = false) => {
     const form = page.locator(`form[method="POST"][action="/org/nodes?as_of=${asOf}"]`).first();
     await form.locator('input[name="effective_date"]').fill(effectiveDate);
     await form.locator('input[name="parent_id"]').fill(parentID);
     await form.locator('input[name="name"]').fill(name);
+    await setBusinessUnitFlag(form, isBusinessUnit);
     await form.locator('button[type="submit"]').click();
     await expect(page).toHaveURL(new RegExp(`/org/nodes\\?as_of=${asOf}$`));
   };
@@ -105,7 +126,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   const rootName = "Bugs & Blossoms Co., Ltd.";
   let rootID = await findOrgUnitID(rootName);
   if (!rootID) {
-    await createOrgUnit(asOf, "", rootName);
+    await createOrgUnit(asOf, "", rootName, true);
     rootID = await findOrgUnitID(rootName);
   }
   expect(rootID).not.toBe("");
@@ -116,9 +137,37 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     if (id) {
       continue;
     }
-    await createOrgUnit(asOf, rootID, name);
+    await createOrgUnit(asOf, rootID, name, name === "R&D" || name === "Sales");
     expect(await findOrgUnitID(name)).not.toBe("");
   }
+
+  const orgIDsFromTree = {
+    Root: rootID,
+    HQ: await findOrgUnitID("HQ"),
+    "R&D": await findOrgUnitID("R&D"),
+    Sales: await findOrgUnitID("Sales"),
+    Ops: await findOrgUnitID("Ops"),
+    Plant: await findOrgUnitID("Plant")
+  };
+  for (const [name, id] of Object.entries(orgIDsFromTree)) {
+    expect(id).not.toBe("");
+  }
+
+  const ensureBusinessUnit = async (orgUnitID, label) => {
+    const resp = await appContext.request.post("/orgunit/api/org-units/set-business-unit", {
+      data: {
+        org_unit_id: orgUnitID,
+        effective_date: asOf,
+        is_business_unit: true,
+        request_id: `tp060-02-bu-${label}-${runID}`
+      }
+    });
+    expect(resp.status(), await resp.text()).toBe(201);
+  };
+
+  await ensureBusinessUnit(orgIDsFromTree.Root, "root");
+  await ensureBusinessUnit(orgIDsFromTree["R&D"], "rd");
+  await ensureBusinessUnit(orgIDsFromTree.Sales, "sales");
 
   const emptyNameForm = page.locator(`form[method="POST"][action="/org/nodes?as_of=${asOf}"]`).first();
   await emptyNameForm.locator('input[name="effective_date"]').fill(asOf);
@@ -137,12 +186,29 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await expect(page).toHaveURL(new RegExp(`/org/setid\\?as_of=${asOf}$`));
   };
 
-  const createBU = async (bu, name) => {
+  const bindSetID = async (orgUnitID, setid, effectiveDate) => {
     const form = page.locator(`form[method="POST"][action="/org/setid?as_of=${asOf}"]`).filter({
-      has: page.locator('input[name="business_unit_id"]')
+      has: page.locator('input[name="action"][value="bind_setid"]')
     });
-    await form.locator('input[name="business_unit_id"]').fill(bu);
-    await form.locator('input[name="name"]').fill(name);
+    if ((await form.count()) === 0) {
+      throw new Error("missing bind_setid form in /org/setid");
+    }
+    const fillField = async (name, value) => {
+      const select = form.locator(`select[name="${name}"]`);
+      if ((await select.count()) > 0) {
+        await select.first().selectOption(value);
+        return;
+      }
+      const input = form.locator(`input[name="${name}"]`);
+      if ((await input.count()) > 0) {
+        await input.first().fill(value);
+        return;
+      }
+      throw new Error(`missing field ${name} in bind_setid form`);
+    };
+    await fillField("org_unit_id", orgUnitID);
+    await fillField("setid", setid);
+    await fillField("effective_date", effectiveDate);
     await form.locator('button[type="submit"]').click();
     await expect(page).toHaveURL(new RegExp(`/org/setid\\?as_of=${asOf}$`));
   };
@@ -158,20 +224,27 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   if ((await page.locator("tr", { hasText: "S2601" }).count()) === 0) {
     await createSetID("S2601", "SetID S2601");
   }
-  if ((await page.locator("tr", { hasText: "BU000" }).count()) === 0) {
-    await createBU("BU000", "BU000");
-  }
-  if ((await page.locator("tr", { hasText: "BU901" }).count()) === 0) {
-    await createBU("BU901", "BU901");
+  await expect(setidsTable).toContainText("DEFLT");
+
+  const rdBindingExists =
+    (await page.locator("tr", { hasText: orgIDsFromTree["R&D"] }).filter({ hasText: "S2601" }).count()) > 0 ||
+    (await page.locator("tr", { hasText: "R&D" }).filter({ hasText: "S2601" }).count()) > 0;
+  if (!rdBindingExists) {
+    await bindSetID(orgIDsFromTree["R&D"], "S2601", asOf);
   }
 
-  const mappingsForm = page.locator(`form[method="POST"][action="/org/setid?as_of=${asOf}"]`).filter({
-    has: page.getByRole("button", { name: "Save Mappings" })
-  });
-  await mappingsForm.locator('select[name="map_BU000"]').selectOption("SHARE");
-  await mappingsForm.locator('select[name="map_BU901"]').selectOption("S2601");
-  await mappingsForm.getByRole("button", { name: "Save Mappings" }).click();
-  await expect(page).toHaveURL(new RegExp(`/org/setid\\?as_of=${asOf}$`));
+  {
+    const resp = await appContext.request.post("/orgunit/api/setid-bindings", {
+      data: {
+        org_unit_id: orgIDsFromTree.HQ,
+        setid: "S2601",
+        effective_date: asOf,
+        request_id: `tp060-02-bind-hq-${runID}`
+      }
+    });
+    expect(resp.status(), await resp.text()).toBe(422);
+    expect((await resp.json()).code).toBe("ORG_NOT_BUSINESS_UNIT_AS_OF");
+  }
 
   const asOfJobCatalogBase = asOf;
   const asOfJobCatalogBeforeReparent = "2026-01-15";
@@ -179,7 +252,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   const reparentEffectiveDate = "2026-02-01";
   const beforeJobCatalogExists = "2025-12-31";
 
-  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&business_unit_id=BU901`);
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&org_unit_id=${orgIDsFromTree["R&D"]}`);
   await expect(page.locator("h1")).toHaveText("Job Catalog");
   await expect(page.getByText("Resolved SetID:")).toBeVisible();
   await expect(page.getByText("Resolved SetID:")).toContainText("S2601");
@@ -194,7 +267,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await form.locator('input[name="job_family_group_code"]').fill(code);
     await form.locator('input[name="job_family_group_name"]').fill(name);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU901&as_of=${asOfJobCatalogBase}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?org_unit_id=${orgIDsFromTree["R&D"]}&as_of=${asOfJobCatalogBase}$`));
   };
   await ensureJobFamilyGroup("JFG-ENG", "Engineering");
   await ensureJobFamilyGroup("JFG-SALES", "Sales");
@@ -215,7 +288,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await form.locator('input[name="job_family_name"]').fill(name);
     await form.locator('input[name="job_family_group_code"]').fill(groupCode);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU901&as_of=${asOfJobCatalogBase}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?org_unit_id=${orgIDsFromTree["R&D"]}&as_of=${asOfJobCatalogBase}$`));
   };
   await ensureJobFamily("JF-BE", "Backend", "JFG-ENG");
   await ensureJobFamily("JF-FE", "Frontend", "JFG-ENG");
@@ -234,23 +307,23 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await form.locator('input[name="job_family_code"]').fill("JF-BE");
     await form.locator('input[name="job_family_group_code"]').fill("JFG-SALES");
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU901&as_of=${reparentEffectiveDate}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?org_unit_id=${orgIDsFromTree["R&D"]}&as_of=${reparentEffectiveDate}$`));
   }
-  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBeforeReparent}&business_unit_id=BU901`);
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBeforeReparent}&org_unit_id=${orgIDsFromTree["R&D"]}`);
   await expect(page.locator("h1")).toHaveText("Job Catalog");
   await expect(page.getByText("Resolved SetID:")).toContainText("S2601");
   await expect(
     page.locator('h2:has-text("Job Families")').locator("xpath=following-sibling::table[1]").locator("tr", { hasText: "JF-BE" })
   ).toContainText("JFG-ENG");
 
-  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogAfterReparent}&business_unit_id=BU901`);
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogAfterReparent}&org_unit_id=${orgIDsFromTree["R&D"]}`);
   await expect(page.locator("h1")).toHaveText("Job Catalog");
   await expect(page.getByText("Resolved SetID:")).toContainText("S2601");
   await expect(
     page.locator('h2:has-text("Job Families")').locator("xpath=following-sibling::table[1]").locator("tr", { hasText: "JF-BE" })
   ).toContainText("JFG-SALES");
 
-  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&business_unit_id=BU901`);
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&org_unit_id=${orgIDsFromTree["R&D"]}`);
   const ensureJobLevel = async (code, name) => {
     if ((await page.locator("tr", { hasText: code }).count()) > 0) {
       return;
@@ -261,7 +334,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await form.locator('input[name="job_level_code"]').fill(code);
     await form.locator('input[name="job_level_name"]').fill(name);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU901&as_of=${asOfJobCatalogBase}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?org_unit_id=${orgIDsFromTree["R&D"]}&as_of=${asOfJobCatalogBase}$`));
   };
   await ensureJobLevel("JL-1", "Level 1");
   const levelsTable = page
@@ -269,14 +342,14 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     .locator("xpath=following-sibling::table[1]");
   await expect(levelsTable).toContainText("JL-1");
 
-  await page.goto(`/org/job-catalog?as_of=${beforeJobCatalogExists}&business_unit_id=BU901`);
+  await page.goto(`/org/job-catalog?as_of=${beforeJobCatalogExists}&org_unit_id=${orgIDsFromTree["R&D"]}`);
   await expect(page.locator("h1")).toHaveText("Job Catalog");
   const levelsTableBefore = page
     .locator('h2:has-text("Job Levels")')
     .locator("xpath=following-sibling::table[1]");
   await expect(levelsTableBefore.locator("tr", { hasText: "JL-1" })).toHaveCount(0);
 
-  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&business_unit_id=BU901`);
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&org_unit_id=${orgIDsFromTree["R&D"]}`);
   const ensureJobProfile = async (code, name, familyCodesCSV, primaryFamilyCode) => {
     if ((await page.locator("tr", { hasText: code }).count()) > 0) {
       return;
@@ -289,7 +362,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await form.locator('input[name="job_profile_family_codes"]').fill(familyCodesCSV);
     await form.locator('input[name="job_profile_primary_family_code"]').fill(primaryFamilyCode);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU901&as_of=${asOfJobCatalogBase}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?org_unit_id=${orgIDsFromTree["R&D"]}&as_of=${asOfJobCatalogBase}$`));
   };
   await ensureJobProfile("JP-SWE", "Software Engineer", "JF-BE,JF-FE", "JF-BE");
   const profilesTable = page
@@ -311,47 +384,33 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await expect(page.locator('div[style*="border:1px solid #c00"]')).toBeVisible();
   }
 
-  await page.goto(`/org/setid?as_of=${asOf}`);
-  if ((await page.locator("tr", { hasText: "BU902" }).count()) === 0) {
-    await createBU("BU902", "BU902");
-  }
-  await expect(page.locator('select[name="map_BU902"]')).toBeVisible();
-
-  await page.goto(`/org/job-catalog?as_of=${asOf}&business_unit_id=BU902`);
+  await page.goto(`/org/job-catalog?as_of=${asOf}&org_unit_id=${orgIDsFromTree.HQ}`);
   await expect(page.locator("h1")).toHaveText("Job Catalog");
-  await expect(page.getByText("Resolved SetID:")).toContainText("SHARE");
+  await expect(page.getByText("Resolved SetID:")).toContainText("DEFLT");
 
-  await page.goto(`/org/job-catalog?as_of=${asOf}&business_unit_id=BU999`);
+  await page.goto(`/org/job-catalog?as_of=${asOf}&org_unit_id=00000000-0000-0000-0000-000000000000`);
   await expect(page.locator("h1")).toHaveText("Job Catalog");
   await expect(page.getByText("Resolved SetID:")).toHaveCount(0);
   await expect(page.locator('div[style*="border:1px solid #c00"]')).toBeVisible();
 
   // Prepare another SetID + Job Profile for cross-setid reference tests (M5 fail-closed).
-  // Keep the earlier "BU902 resolves to SHARE" assertion above; after this point BU902 will map to S2602.
   await page.goto(`/org/setid?as_of=${asOf}`);
   if ((await page.locator("tr", { hasText: "S2602" }).count()) === 0) {
     await createSetID("S2602", "SetID S2602");
   }
-  if ((await page.locator("tr", { hasText: "BU902" }).count()) === 0) {
-    await createBU("BU902", "BU902");
-  }
-  {
-    const mappingsForm2 = page.locator(`form[method="POST"][action="/org/setid?as_of=${asOf}"]`).filter({
-      has: page.getByRole("button", { name: "Save Mappings" })
-    });
-    await mappingsForm2.locator('select[name="map_BU000"]').selectOption("SHARE");
-    await mappingsForm2.locator('select[name="map_BU901"]').selectOption("S2601");
-    await mappingsForm2.locator('select[name="map_BU902"]').selectOption("S2602");
-    await mappingsForm2.getByRole("button", { name: "Save Mappings" }).click();
-    await expect(page).toHaveURL(new RegExp(`/org/setid\\?as_of=${asOf}$`));
+  const salesBindingExists =
+    (await page.locator("tr", { hasText: orgIDsFromTree.Sales }).filter({ hasText: "S2602" }).count()) > 0 ||
+    (await page.locator("tr", { hasText: "Sales" }).filter({ hasText: "S2602" }).count()) > 0;
+  if (!salesBindingExists) {
+    await bindSetID(orgIDsFromTree.Sales, "S2602", asOf);
   }
 
-  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&business_unit_id=BU902`);
+  await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&org_unit_id=${orgIDsFromTree.Sales}`);
   await expect(page.locator("h1")).toHaveText("Job Catalog");
   await expect(page.getByText("Resolved SetID:")).toBeVisible();
   await expect(page.getByText("Resolved SetID:")).toContainText("S2602");
 
-  const ensureJobFamilyGroupBU902 = async (code, name) => {
+  const ensureJobFamilyGroupSales = async (code, name) => {
     if ((await page.locator("tr", { hasText: code }).count()) > 0) {
       return;
     }
@@ -361,11 +420,11 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await form.locator('input[name="job_family_group_code"]').fill(code);
     await form.locator('input[name="job_family_group_name"]').fill(name);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU902&as_of=${asOfJobCatalogBase}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?org_unit_id=${orgIDsFromTree.Sales}&as_of=${asOfJobCatalogBase}$`));
   };
-  await ensureJobFamilyGroupBU902("JFG-OPS", "Operations");
+  await ensureJobFamilyGroupSales("JFG-OPS", "Operations");
 
-  const ensureJobFamilyBU902 = async (code, name, groupCode) => {
+  const ensureJobFamilySales = async (code, name, groupCode) => {
     if ((await page.locator("tr", { hasText: code }).count()) > 0) {
       return;
     }
@@ -376,11 +435,11 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await form.locator('input[name="job_family_name"]').fill(name);
     await form.locator('input[name="job_family_group_code"]').fill(groupCode);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU902&as_of=${asOfJobCatalogBase}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?org_unit_id=${orgIDsFromTree.Sales}&as_of=${asOfJobCatalogBase}$`));
   };
-  await ensureJobFamilyBU902("JF-OPS", "Ops", "JFG-OPS");
+  await ensureJobFamilySales("JF-OPS", "Ops", "JFG-OPS");
 
-  const ensureJobProfileBU902 = async (code, name, familyCodesCSV, primaryFamilyCode) => {
+  const ensureJobProfileSales = async (code, name, familyCodesCSV, primaryFamilyCode) => {
     if ((await page.locator("tr", { hasText: code }).count()) > 0) {
       return;
     }
@@ -392,9 +451,9 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await form.locator('input[name="job_profile_family_codes"]').fill(familyCodesCSV);
     await form.locator('input[name="job_profile_primary_family_code"]').fill(primaryFamilyCode);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?business_unit_id=BU902&as_of=${asOfJobCatalogBase}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?org_unit_id=${orgIDsFromTree.Sales}&as_of=${asOfJobCatalogBase}$`));
   };
-  await ensureJobProfileBU902("JP-OPS", "Ops Profile", "JF-OPS", "JF-OPS");
+  await ensureJobProfileSales("JP-OPS", "Ops Profile", "JF-OPS", "JF-OPS");
 
   await page.goto(`/org/positions?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Positions");
@@ -407,7 +466,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     expect(value).not.toBeNull();
     return value;
   };
-  const orgIDs = {
+  const orgSelectIDs = {
     HQ: await findOrgUnitOptionValue("HQ"),
     "R&D": await findOrgUnitOptionValue("R&D"),
     Sales: await findOrgUnitOptionValue("Sales"),
@@ -416,16 +475,16 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   };
 
   const positionSpecs = [
-    { name: "P-ENG-01", org: orgIDs["R&D"] },
-    { name: "P-ENG-02", org: orgIDs["R&D"] },
-    { name: "P-SALES-01", org: orgIDs.Sales },
-    { name: "P-HR-01", org: orgIDs.HQ },
-    { name: "P-FIN-01", org: orgIDs.HQ },
-    { name: "P-MGR-01", org: orgIDs.HQ },
-    { name: "P-OPS-01", org: orgIDs.Ops },
-    { name: "P-SUPPORT-01", org: orgIDs.Ops },
-    { name: "P-PLANT-01", org: orgIDs.Plant },
-    { name: "P-PLANT-02", org: orgIDs.Plant }
+    { name: "P-ENG-01", org: orgSelectIDs["R&D"] },
+    { name: "P-ENG-02", org: orgSelectIDs["R&D"] },
+    { name: "P-SALES-01", org: orgSelectIDs.Sales },
+    { name: "P-HR-01", org: orgSelectIDs.HQ },
+    { name: "P-FIN-01", org: orgSelectIDs.HQ },
+    { name: "P-MGR-01", org: orgSelectIDs.HQ },
+    { name: "P-OPS-01", org: orgSelectIDs.Ops },
+    { name: "P-SUPPORT-01", org: orgSelectIDs.Ops },
+    { name: "P-PLANT-01", org: orgSelectIDs.Plant },
+    { name: "P-PLANT-02", org: orgSelectIDs.Plant }
   ];
 
   for (const spec of positionSpecs) {
@@ -434,21 +493,20 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     }
     await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
     await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(spec.org);
-    await positionCreateForm.locator('select[name="business_unit_id"]').selectOption("BU000");
     await positionCreateForm.locator('input[name="name"]').fill(spec.name);
     await positionCreateForm.getByRole("button", { name: "Create" }).click();
-    await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&business_unit_id=BU000$`));
+    await expect(page).toHaveURL(new RegExp(`/org/positions\\?as_of=${asOf}&org_unit_id=${spec.org}$`));
   }
   for (const spec of positionSpecs) {
     await expect(page.locator("tr", { hasText: spec.name })).toBeVisible();
   }
 
-  // Position M5: bind BU + Job Profile, and assert stable fail-closed errors via internal API.
+  // Position M5: bind OrgUnit + Job Profile, and assert stable fail-closed errors via internal API.
   const pEng01Row = page.locator("tr", { hasText: "P-ENG-01" }).first();
   const pEng01ID = (await pEng01Row.locator("td").nth(1).innerText()).trim();
   expect(pEng01ID).not.toBe("");
 
-  await page.goto(`/org/positions?as_of=${asOf}&business_unit_id=BU901`);
+  await page.goto(`/org/positions?as_of=${asOf}&org_unit_id=${orgIDsFromTree["R&D"]}`);
   await expect(page.getByText("Resolved SetID:")).toBeVisible();
   await expect(page.getByText("Resolved SetID:")).toContainText("S2601");
 
@@ -461,42 +519,41 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       data: {
         effective_date: m5EffectiveDate,
         position_id: pEng01ID,
-        business_unit_id: "BU901",
+        org_unit_id: orgIDsFromTree["R&D"],
         job_profile_id: jpSweID
       }
     });
     expect(bindResp.status(), await bindResp.text()).toBe(200);
   }
 
-  await page.goto(`/org/positions?as_of=${m5EffectiveDate}&business_unit_id=BU901`);
+  await page.goto(`/org/positions?as_of=${m5EffectiveDate}&org_unit_id=${orgIDsFromTree["R&D"]}`);
   const pEng01BoundRow = page.locator("tr", { hasText: "P-ENG-01" }).first();
-  await expect(pEng01BoundRow).toContainText("BU901");
+  await expect(pEng01BoundRow).toContainText(orgIDsFromTree["R&D"]);
   await expect(pEng01BoundRow).toContainText("S2601");
   await expect(pEng01BoundRow).toContainText("JP-SWE");
 
   {
     const resp = await appContext.request.post(`/org/api/positions?as_of=${asOf}`, {
-      data: { effective_date: asOf, org_unit_id: orgIDs.HQ, job_profile_id: jpSweID, name: `TP060-02 BAD NO BU ${runID}` }
+      data: { effective_date: asOf, job_profile_id: jpSweID, name: `TP060-02 BAD NO ORG ${runID}` }
     });
     expect(resp.status(), await resp.text()).toBe(400);
-    expect((await resp.json()).code).toBe("business_unit_id is required");
+    expect((await resp.json()).code).toBe("org_unit_id is required");
   }
   {
     const resp = await appContext.request.post(`/org/api/positions?as_of=${asOf}`, {
       data: {
         effective_date: asOf,
-        org_unit_id: orgIDs.HQ,
-        business_unit_id: "BU999",
+        org_unit_id: "00000000-0000-0000-0000-000000000000",
         job_profile_id: jpSweID,
-        name: `TP060-02 BAD BU999 ${runID}`
+        name: `TP060-02 BAD ORG404 ${runID}`
       }
     });
     expect(resp.status(), await resp.text()).toBe(422);
-    expect((await resp.json()).code).toBe("BUSINESS_UNIT_NOT_FOUND");
+    expect((await resp.json()).code).toBe("STAFFING_ORG_UNIT_NOT_FOUND_AS_OF");
   }
 
-  // Cross-setid Job Profile reference must fail-closed (BU901 resolves to S2601, JP-OPS is in S2602).
-  await page.goto(`/org/positions?as_of=${asOf}&business_unit_id=BU902`);
+  // Cross-setid Job Profile reference must fail-closed (R&D resolves to S2601, JP-OPS is in S2602).
+  await page.goto(`/org/positions?as_of=${asOf}&org_unit_id=${orgIDsFromTree.Sales}`);
   await expect(page.getByText("Resolved SetID:")).toBeVisible();
   await expect(page.getByText("Resolved SetID:")).toContainText("S2602");
   const jpOpsOpt = page.locator('select[name="job_profile_id"] option', { hasText: "JP-OPS" }).first();
@@ -508,7 +565,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       data: {
         effective_date: m5CrossEffectiveDate,
         position_id: pEng01ID,
-        business_unit_id: "BU901",
+        org_unit_id: orgIDsFromTree["R&D"],
         job_profile_id: jpOpsID
       }
     });
@@ -516,16 +573,16 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     expect((await resp.json()).code).toBe("JOBCATALOG_REFERENCE_NOT_FOUND");
   }
 
-  // Clear job profile binding should keep BU + resolved setid visible.
+  // Clear job profile binding should keep org_unit_id + resolved setid visible.
   {
     const resp = await appContext.request.post(`/org/api/positions?as_of=${m5ClearEffectiveDate}`, {
       data: { effective_date: m5ClearEffectiveDate, position_id: pEng01ID, job_profile_id: "__CLEAR__" }
     });
     expect(resp.status(), await resp.text()).toBe(200);
   }
-  await page.goto(`/org/positions?as_of=${m5ClearEffectiveDate}&business_unit_id=BU901`);
+  await page.goto(`/org/positions?as_of=${m5ClearEffectiveDate}&org_unit_id=${orgIDsFromTree["R&D"]}`);
   const pEng01ClearedRow = page.locator("tr", { hasText: "P-ENG-01" }).first();
-  await expect(pEng01ClearedRow).toContainText("BU901");
+  await expect(pEng01ClearedRow).toContainText(orgIDsFromTree["R&D"]);
   await expect(pEng01ClearedRow).toContainText("S2601");
   await expect(pEng01ClearedRow).not.toContainText("JP-SWE");
 

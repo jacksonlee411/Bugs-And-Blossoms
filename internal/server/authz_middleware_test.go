@@ -259,6 +259,30 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/assignment-events:rescind"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/setids"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/setids"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/setid-bindings"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/setid-bindings"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/global-setids"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/global-setids"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/org-units/set-business-unit"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/org-units/set-business-unit"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, ""); ok {
 		t.Fatal("expected ok=false")
 	}

@@ -1,6 +1,11 @@
 # DEV-PLAN-028：SetID 管理（Greenfield）
 
-**状态**: 进行中（2026-01-12 09:38 UTC）— 009M1 最小闭环已落地；根据评审补齐 PeopleSoft 机制差异与缺口标注
+**状态**: 已废弃（2026-01-24 04:25 UTC）— 已被 DEV-PLAN-070 取代，后续以 070 为准
+
+> **重要**：本文件仅作为历史记录保留，不再作为实现/评审/验收契约。所有涉及 `business_unit_id` / `record_group` 的设计与口径均已废弃，必须以 `docs/dev-plans/070-setid-orgunit-binding-redesign.md` 为 SSOT。
+> **提醒**：本文以下内容仅供历史追溯，禁止在实现/测试/门禁中引用或执行。
+
+> 本计划作为历史记录保留，新的 SetID 方案以 `docs/dev-plans/070-setid-orgunit-binding-redesign.md` 为准。
 
 > 适用范围：**Greenfield 全新实现**（路线图见 `DEV-PLAN-009`）。  
 > 本文研究 PeopleSoft 的 SetID 机制，并提出引入 SetID 的最小可执行方案：在同一租户内实现“主数据按业务单元共享/隔离”的配置能力，且可被门禁验证，避免实现期各模块各写一套数据共享规则导致漂移。

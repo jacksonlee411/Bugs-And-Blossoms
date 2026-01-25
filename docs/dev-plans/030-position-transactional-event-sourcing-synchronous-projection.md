@@ -2,6 +2,8 @@
 
 **状态**: 进行中（2026-01-11 20:55 UTC）— M3/M4a/M5/M6a/M7 已落地；M4b/M6b 作为可选里程碑见 §10
 
+> **更新说明（DEV-PLAN-070）**：本计划中涉及 `business_unit_id` / `record_group` 的 SetID 解析口径已被 `docs/dev-plans/070-setid-orgunit-binding-redesign.md` 取代；以下内容已按“`org_unit_id + as_of_date` 解析”更新。历史实现细节仅供追溯，不再作为契约。
+
 > 本计划的定位：作为 Greenfield HR 的 Position/Assignment 子域，提供 **Position/Assignment 的权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026`（OrgUnit）对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
 ## 0. 进度速记（基于实现事实）
@@ -91,14 +93,14 @@
 - [X] E2E：`e2e/tests/tp060-03-person-and-assignments.spec.js`（可见链路 + cycle 负例）
 
 ## 2.7 已落地范围（M5，主干）
-> 说明：M5 的增量以“JobCatalog（SetID）组合” 为核心：Position **必填** `business_unit_id`（强一致：人员 BU 可由 assignment→position 推导），绑定 `job_profile_id` 时在 Kernel 中解析 `jobcatalog_setid` 并做引用存在性校验（fail-closed）。
+> 说明：M5 的增量以“JobCatalog（SetID）组合” 为核心：Position 基于 `org_unit_id` + `effective_date`（作为 `as_of_date`）解析 `jobcatalog_setid` 并记录 `jobcatalog_setid_as_of`；移除 `business_unit_id`。绑定 `job_profile_id` 时在 Kernel 中解析并做引用存在性校验（fail-closed）。
 
 - [X] 迁移闭环（staffing）：`migrations/staffing/20260111203000_staffing_position_jobcatalog_m5.sql`
-- [X] Schema（staffing）：`modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql`（新增 `business_unit_id/jobcatalog_setid/job_profile_id`）
-- [X] Kernel（staffing）：`modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql`（`orgunit.resolve_setid(...,'jobcatalog')` + `JOBCATALOG_REFERENCE_NOT_FOUND` 校验）
+- [X] Schema（staffing）：`modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql`（新增 `jobcatalog_setid/jobcatalog_setid_as_of/job_profile_id`；移除 `business_unit_id`）
+- [X] Kernel（staffing）：`modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql`（`orgunit.resolve_setid(tenant_id, org_unit_id, effective_date)` + `JOBCATALOG_REFERENCE_NOT_FOUND` 校验）
 - [X] 说明：跨模块 FK 默认禁止（`DEV-PLAN-024`），因此本阶段不落物理 FK，采用 Kernel 校验（soft FK）
-- [X] UI/Internal API：`internal/server/staffing_handlers.go`、`internal/server/staffing.go`（BU/Job Profile 选择与展示；list/join 显示 job_profile_code）
-- [X] Tests：`internal/server/staffing_test.go`、`internal/server/handler_test.go`（覆盖 BU/job_profile 绑定与清空、JobCatalog store 分支、redirect 保留 BU、100% coverage 门禁）
+- [X] UI/Internal API：`internal/server/staffing_handlers.go`、`internal/server/staffing.go`（OrgUnit/Job Profile 选择与展示；list/join 显示 job_profile_code）
+- [X] Tests：`internal/server/staffing_test.go`、`internal/server/handler_test.go`（覆盖 org_unit_id/job_profile 绑定与清空、JobCatalog store 分支、redirect 保留 org_unit_id、100% coverage 门禁）
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 Kernel 边界（与 026 对齐）
@@ -144,7 +146,7 @@
 >
 > 因此 Position 若要绑定 Job Profile/Level，必须先明确“SetID 从哪里来/如何落盘/如何校验”的策略；禁止在实现期隐式采用“默认 SHARE”或跨 setid 混用导致历史 as-of 语义不可解释。
 
-- [X] M5：选定并落地 SetID 传递策略：Position 在切片中写入 `business_unit_id` 并通过 `orgunit.resolve_setid(...)` 投射 `jobcatalog_setid`（fail-closed；禁止默认 SHARE），细化见 §10.M5。
+- [X] M5：选定并落地 SetID 传递策略：Position 基于 `org_unit_id` + `effective_date` 解析 `jobcatalog_setid` 并记录 `jobcatalog_setid_as_of`（fail-closed；禁止默认 SHARE），细化见 §10.M5。
 
 ### 3.10 Position 生命周期与任职交叉不变量（M3，先冻结边界）
 > 目的：把“Position disable”与“Assignment 引用 Position”的交叉语义先冻结，避免实现期为了让页面能用而临时加后门或分叉逻辑（对齐 `DEV-PLAN-003`）。
@@ -200,7 +202,7 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
 ```
 
 事件合同（M2）：
-- [X] `CREATE`：必填 `payload.org_unit_id` + `payload.business_unit_id`；可选 `payload.name`。
+- [X] `CREATE`：必填 `payload.org_unit_id`；可选 `payload.name`（SetID 解析以 `effective_date` 作为 `as_of_date`）。
 - [X] `UPDATE`：payload 为 patch；M2 仅允许 keys：`org_unit_id`、`name`。  
   实现现状：未知 key 会被 DB 约束拒绝（fail-closed；见 `*_events_payload_allowed_keys_check`）。
 
@@ -243,8 +245,8 @@ CREATE TABLE IF NOT EXISTS staffing.position_versions (
 ```
 
 M5+ 增量字段（SSOT：`modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql`）：
-- `business_unit_id text NOT NULL`（强一致：Position 必须归属 BU）
-- `jobcatalog_setid text NULL`（由 `orgunit.resolve_setid(...,'jobcatalog')` 解析投射；绑定 `job_profile_id` 时必须可解析且 active）
+- `jobcatalog_setid text NULL`（由 `orgunit.resolve_setid(tenant_id, org_unit_id, effective_date)` 解析投射；绑定 `job_profile_id` 时必须可解析且 active）
+- `jobcatalog_setid_as_of date NOT NULL`（用于记录解析快照日期；默认等于 `effective_date`）
 - `job_profile_id uuid NULL`
 
 合同要点（M2）：
@@ -334,7 +336,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] Assignment（示例）：`STAFFING_ASSIGNMENT_ALLOCATED_FTE_INVALID` / `STAFFING_ASSIGNMENT_BASE_SALARY_INVALID` / `STAFFING_ASSIGNMENT_CURRENCY_UNSUPPORTED` / `STAFFING_ASSIGNMENT_PROFILE_INVALID`
 - [X] M3 生命周期/交叉不变量：`STAFFING_POSITION_NOT_FOUND_AS_OF` / `STAFFING_POSITION_DISABLED_AS_OF` / `STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF`
 - [X] M4 汇报线：`STAFFING_POSITION_REPORTS_TO_SELF` / `STAFFING_POSITION_REPORTS_TO_CYCLE`（引用不存在/disabled 复用 `STAFFING_POSITION_NOT_FOUND_AS_OF` / `STAFFING_POSITION_DISABLED_AS_OF`）
-- [X] M5 SetID/BU（来自 `orgunit.resolve_setid`）：`BUSINESS_UNIT_NOT_FOUND` / `BUSINESS_UNIT_DISABLED` / `SETID_MAPPING_MISSING` / `SETID_NOT_FOUND` / `SETID_DISABLED`
+- [X] M5 SetID（来自 `orgunit.resolve_setid`）：`ORG_NOT_FOUND_AS_OF` / `ORG_INACTIVE_AS_OF` / `ORG_NOT_BUSINESS_UNIT_AS_OF` / `SETID_BINDING_MISSING` / `SETID_NOT_FOUND` / `SETID_DISABLED`
 - [X] M6 容量：`STAFFING_POSITION_CAPACITY_EXCEEDED`（`allocated_fte` 或 `SUM(allocated_fte)` 超出；含降容 fail-closed）
 
 ## 8. 测试与验收标准 (Acceptance Criteria)
@@ -349,7 +351,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] M4a 汇报线：开放编辑后仍必须满足 as-of 无环/禁止自指/引用可用性（forward-only）。
 - [ ] M4b（可选）：若要支持 retro 写入，必须定义并实现“再验证窗口/锁策略”，确保 retro 不会让未来日期出现环。
 - [X] M2 占编：同一时点一个 position 最多被一个 active assignment 占用（`assignment_versions_position_no_overlap`）。
-- [X] M5 SetID：Position 绑定 JobCatalog 时必须 fail-closed（BU/SetID/mapping 缺失或 disabled），且不允许跨 setid 引用。
+- [X] M5 SetID：Position 绑定 JobCatalog 时必须 fail-closed（org_unit/绑定/SetID 缺失或 disabled），且不允许跨 setid 引用。
 - [X] M6a 容量：`capacity_fte` 可编辑且裁决 `allocated_fte <= capacity_fte`（仍一岗一人）。
 - [ ] M6b 容量：若允许并发多人任职，必须以 `capacity_fte` + `SUM(allocated_fte) <= capacity_fte` 裁决，并覆盖 Position 降容的 fail-closed。
 - [X] M7 可排障：读快照函数可复用（DB/Go 收敛查询形状），且错误码映射稳定、回归可定位。
@@ -382,11 +384,11 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [ ] M4b（可选，retro）：若要允许 retro 写入，需定义“再验证窗口”（哪些日期需要重检）并实现，确保 retro 不会让未来日期出现环；补齐对应 tests 与证据。
 
 ### 10.M5：与 JobCatalog 组合（SetID 一等公民）
-- [X] SetID 策略定稿（见 §3.8）：引入 `business_unit_id`，在投射中调用 `orgunit.resolve_setid(..., 'jobcatalog')` 生成 `jobcatalog_setid`（fail-closed；禁止默认 SHARE）。
+- [X] SetID 策略定稿（见 §3.8）：基于 `org_unit_id` + `effective_date` 调用 `orgunit.resolve_setid(...)` 生成 `jobcatalog_setid` 并记录 `jobcatalog_setid_as_of`（fail-closed；禁止默认 SHARE）。
 - [X] 范围收敛：先只绑定 `job_profile`（暂不引入 `job_level`），避免一次性引入多维组合导致 UI/校验膨胀。
 - [X] DB：为 Position 增加 JobCatalog 绑定字段；引用校验口径对齐 `DEV-PLAN-029`：**只要求 identity 存在**，不强制 as-of active。说明：跨模块 FK 默认禁止（`DEV-PLAN-024`），因此本阶段采用 Kernel 校验（soft FK），不落物理 FK。
-- [X] UI：`/org/positions` 引入 Business Unit / Job Profile 选择与显示（可解释 SetID 来源与 resolved 结果）。
-- [X] Tests：补齐业务字段分支覆盖（BU/job_profile 绑定与清空、JobCatalog store error 分支、redirect 保留 BU 等）；DB fail-closed 负例留待 M7 错误码收敛后增强到端到端断言。
+- [X] UI：`/org/positions` 引入 OrgUnit / Job Profile 选择与显示（可解释 SetID 来源与 resolved 结果）。
+- [X] Tests：补齐业务字段分支覆盖（org_unit_id/job_profile 绑定与清空、JobCatalog store error 分支、redirect 保留 org_unit_id 等）；DB fail-closed 负例留待 M7 错误码收敛后增强到端到端断言。
 
 ### 10.M6：容量模型升级（拆分：M6a/M6b）
 - [X] M6a（先交付）：开放 `capacity_fte` 编辑并投射；任职写入时裁决 `allocated_fte <= capacity_fte`（仍保持“一岗一人”的排他约束不变）；Position 降容必须 fail-closed（避免把既有任职“挤爆”）。
@@ -403,5 +405,5 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
 - [X] M4 拆分：先交付 forward-only（M4a），retro 作为可选子里程碑（M4b），避免一次性引入全局图 retro 校验导致偶然复杂度爆炸。
 - [X] M6 拆分：先交付 `capacity_fte` 可编辑（M6a），多人并发（M6b）延后并要求先冻结锁与校验算法。
 - [X] M3 选择：沿用 `event_type='UPDATE'` + `payload.lifecycle_status` 表达 disable（对齐 `staffing.time_profile_events` 的既有模式），避免为“好看”引入更多 event_type 分支。
-- [X] M5 SetID 策略：已定稿并落地“BU/SetID 来源、落盘字段、引用校验口径”（禁止默认 SHARE），并明确先只绑定 `job_profile`。
+- [X] M5 SetID 策略：已定稿并落地“org_unit_id/SetID 来源、落盘字段、引用校验口径”（禁止默认 SHARE），并明确先只绑定 `job_profile`。
 - [X] M7 错误码收敛：冻结“稳定码集合 + Go 层映射策略 + 最小回归断言”，避免继续累积 `create_failed/upsert_failed` 这类泛化错误。

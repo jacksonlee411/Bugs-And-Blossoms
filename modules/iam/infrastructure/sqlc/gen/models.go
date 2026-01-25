@@ -247,22 +247,22 @@ type JobcatalogJobProfileVersionJobFamily struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
-type OrgunitBusinessUnit struct {
-	TenantID       pgtype.UUID        `json:"tenant_id"`
-	BusinessUnitID string             `json:"business_unit_id"`
-	Name           string             `json:"name"`
-	Status         string             `json:"status"`
-	LastEventID    int64              `json:"last_event_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+type OrgunitGlobalSetid struct {
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	Setid       string             `json:"setid"`
+	Name        string             `json:"name"`
+	Status      string             `json:"status"`
+	LastEventID int64              `json:"last_event_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-type OrgunitBusinessUnitEvent struct {
+type OrgunitGlobalSetidEvent struct {
 	ID              int64              `json:"id"`
 	EventID         pgtype.UUID        `json:"event_id"`
 	TenantID        pgtype.UUID        `json:"tenant_id"`
 	EventType       string             `json:"event_type"`
-	BusinessUnitID  string             `json:"business_unit_id"`
+	Setid           string             `json:"setid"`
 	Payload         []byte             `json:"payload"`
 	RequestID       string             `json:"request_id"`
 	InitiatorID     pgtype.UUID        `json:"initiator_id"`
@@ -294,41 +294,19 @@ type OrgunitOrgTree struct {
 }
 
 type OrgunitOrgUnitVersion struct {
-	ID            int64                     `json:"id"`
-	TenantID      pgtype.UUID               `json:"tenant_id"`
-	HierarchyType string                    `json:"hierarchy_type"`
-	OrgID         pgtype.UUID               `json:"org_id"`
-	ParentID      pgtype.UUID               `json:"parent_id"`
-	NodePath      string                    `json:"node_path"`
-	Validity      pgtype.Range[pgtype.Date] `json:"validity"`
-	PathIds       []pgtype.UUID             `json:"path_ids"`
-	Name          string                    `json:"name"`
-	Status        string                    `json:"status"`
-	ManagerID     pgtype.UUID               `json:"manager_id"`
-	LastEventID   int64                     `json:"last_event_id"`
-}
-
-type OrgunitSetControlMapping struct {
-	TenantID       pgtype.UUID        `json:"tenant_id"`
-	BusinessUnitID string             `json:"business_unit_id"`
-	RecordGroup    string             `json:"record_group"`
-	Setid          string             `json:"setid"`
-	LastEventID    int64              `json:"last_event_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
-type OrgunitSetControlMappingEvent struct {
-	ID              int64              `json:"id"`
-	EventID         pgtype.UUID        `json:"event_id"`
-	TenantID        pgtype.UUID        `json:"tenant_id"`
-	EventType       string             `json:"event_type"`
-	RecordGroup     string             `json:"record_group"`
-	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	InitiatorID     pgtype.UUID        `json:"initiator_id"`
-	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	ID             int64                     `json:"id"`
+	TenantID       pgtype.UUID               `json:"tenant_id"`
+	HierarchyType  string                    `json:"hierarchy_type"`
+	OrgID          pgtype.UUID               `json:"org_id"`
+	ParentID       pgtype.UUID               `json:"parent_id"`
+	NodePath       string                    `json:"node_path"`
+	Validity       pgtype.Range[pgtype.Date] `json:"validity"`
+	PathIds        []pgtype.UUID             `json:"path_ids"`
+	Name           string                    `json:"name"`
+	Status         string                    `json:"status"`
+	IsBusinessUnit bool                      `json:"is_business_unit"`
+	ManagerID      pgtype.UUID               `json:"manager_id"`
+	LastEventID    int64                     `json:"last_event_id"`
 }
 
 type OrgunitSetid struct {
@@ -339,6 +317,31 @@ type OrgunitSetid struct {
 	LastEventID int64              `json:"last_event_id"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OrgunitSetidBindingEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	OrgID           pgtype.UUID        `json:"org_id"`
+	EventType       string             `json:"event_type"`
+	EffectiveDate   pgtype.Date        `json:"effective_date"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type OrgunitSetidBindingVersion struct {
+	ID          int64                     `json:"id"`
+	TenantID    pgtype.UUID               `json:"tenant_id"`
+	OrgID       pgtype.UUID               `json:"org_id"`
+	Setid       string                    `json:"setid"`
+	Validity    pgtype.Range[pgtype.Date] `json:"validity"`
+	LastEventID int64                     `json:"last_event_id"`
+	CreatedAt   pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz        `json:"updated_at"`
 }
 
 type OrgunitSetidEvent struct {
@@ -462,7 +465,7 @@ type StaffingPositionVersion struct {
 	Profile             []byte                    `json:"profile"`
 	Validity            pgtype.Range[pgtype.Date] `json:"validity"`
 	LastEventID         int64                     `json:"last_event_id"`
-	BusinessUnitID      string                    `json:"business_unit_id"`
 	JobcatalogSetid     *string                   `json:"jobcatalog_setid"`
+	JobcatalogSetidAsOf pgtype.Date               `json:"jobcatalog_setid_as_of"`
 	JobProfileID        pgtype.UUID               `json:"job_profile_id"`
 }

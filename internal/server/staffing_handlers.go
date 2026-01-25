@@ -27,33 +27,25 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 		return
 	}
 
-	businessUnitID := strings.TrimSpace(r.URL.Query().Get("business_unit_id"))
+	orgUnitID := strings.TrimSpace(r.URL.Query().Get("org_unit_id"))
 
 	nodes, err := orgStore.ListNodesCurrent(r.Context(), tenant.ID, asOf)
 	if err != nil {
-		writePage(w, r, renderPositions(nil, nil, tenant, asOf, nil, businessUnitID, "", nil, stablePgMessage(err)))
+		writePage(w, r, renderPositions(nil, nil, tenant, asOf, orgUnitID, "", nil, stablePgMessage(err)))
 		return
 	}
 	positions, err := store.ListPositionsCurrent(r.Context(), tenant.ID, asOf)
 	if err != nil {
-		writePage(w, r, renderPositions(nil, nodes, tenant, asOf, nil, businessUnitID, "", nil, stablePgMessage(err)))
+		writePage(w, r, renderPositions(nil, nodes, tenant, asOf, orgUnitID, "", nil, stablePgMessage(err)))
 		return
 	}
 
-	var businessUnits []BusinessUnit
 	var jobProfiles []JobProfile
 	resolvedSetID := ""
 	jobCatalogMsg := ""
 	if jobStore != nil {
-		bus, err := jobStore.ListBusinessUnits(r.Context(), tenant.ID)
-		if err != nil {
-			jobCatalogMsg = mergeMsg(jobCatalogMsg, stablePgMessage(err))
-		} else {
-			businessUnits = bus
-		}
-
-		if businessUnitID != "" {
-			profiles, resolved, err := jobStore.ListJobProfiles(r.Context(), tenant.ID, businessUnitID, asOf)
+		if orgUnitID != "" {
+			profiles, resolved, err := jobStore.ListJobProfiles(r.Context(), tenant.ID, orgUnitID, asOf)
 			if err != nil {
 				jobCatalogMsg = mergeMsg(jobCatalogMsg, stablePgMessage(err))
 			} else {
@@ -65,11 +57,11 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 
 	switch r.Method {
 	case http.MethodGet:
-		writePage(w, r, renderPositions(positions, nodes, tenant, asOf, businessUnits, businessUnitID, resolvedSetID, jobProfiles, jobCatalogMsg))
+		writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, resolvedSetID, jobProfiles, jobCatalogMsg))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
-			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, businessUnits, businessUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, "bad form")))
+			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, "bad form")))
 			return
 		}
 
@@ -78,13 +70,15 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 			effectiveDate = asOf
 		}
 		if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
-			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, businessUnits, businessUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, "effective_date 无效: "+err.Error())))
+			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, "effective_date 无效: "+err.Error())))
 			return
 		}
 
 		positionID := strings.TrimSpace(r.Form.Get("position_id"))
-		orgUnitID := strings.TrimSpace(r.Form.Get("org_unit_id"))
-		businessUnitID := strings.TrimSpace(r.Form.Get("business_unit_id"))
+		formOrgUnitID := strings.TrimSpace(r.Form.Get("org_unit_id"))
+		if formOrgUnitID != "" {
+			orgUnitID = formOrgUnitID
+		}
 		reportsToPositionID := strings.TrimSpace(r.Form.Get("reports_to_position_id"))
 		jobProfileID := strings.TrimSpace(r.Form.Get("job_profile_id"))
 		capacityFTE := strings.TrimSpace(r.Form.Get("capacity_fte"))
@@ -92,20 +86,20 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 		lifecycleStatus := strings.TrimSpace(r.Form.Get("lifecycle_status"))
 
 		if positionID == "" {
-			if _, err := store.CreatePositionCurrent(r.Context(), tenant.ID, effectiveDate, orgUnitID, businessUnitID, jobProfileID, capacityFTE, name); err != nil {
-				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, businessUnits, businessUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
+			if _, err := store.CreatePositionCurrent(r.Context(), tenant.ID, effectiveDate, formOrgUnitID, jobProfileID, capacityFTE, name); err != nil {
+				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
 		} else {
-			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionID, effectiveDate, orgUnitID, businessUnitID, reportsToPositionID, jobProfileID, capacityFTE, name, lifecycleStatus); err != nil {
-				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, businessUnits, businessUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
+			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionID, effectiveDate, formOrgUnitID, reportsToPositionID, jobProfileID, capacityFTE, name, lifecycleStatus); err != nil {
+				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, resolvedSetID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
 		}
 
 		redirectURL := "/org/positions?as_of=" + url.QueryEscape(effectiveDate)
-		if businessUnitID != "" {
-			redirectURL += "&business_unit_id=" + url.QueryEscape(businessUnitID)
+		if formOrgUnitID != "" {
+			redirectURL += "&org_unit_id=" + url.QueryEscape(formOrgUnitID)
 		}
 		http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 		return
@@ -119,7 +113,6 @@ type staffingPositionsAPIRequest struct {
 	EffectiveDate       string `json:"effective_date"`
 	PositionID          string `json:"position_id"`
 	OrgUnitID           string `json:"org_unit_id"`
-	BusinessUnitID      string `json:"business_unit_id"`
 	ReportsToPositionID string `json:"reports_to_position_id"`
 	JobProfileID        string `json:"job_profile_id"`
 	CapacityFTE         string `json:"capacity_fte"`
@@ -182,9 +175,9 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionSt
 		var p Position
 		var err error
 		if strings.TrimSpace(req.PositionID) == "" {
-			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, req.OrgUnitID, req.BusinessUnitID, req.JobProfileID, req.CapacityFTE, req.Name)
+			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, req.OrgUnitID, req.JobProfileID, req.CapacityFTE, req.Name)
 		} else {
-			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionID, req.EffectiveDate, req.OrgUnitID, req.BusinessUnitID, req.ReportsToPositionID, req.JobProfileID, req.CapacityFTE, req.Name, req.LifecycleStatus)
+			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionID, req.EffectiveDate, req.OrgUnitID, req.ReportsToPositionID, req.JobProfileID, req.CapacityFTE, req.Name, req.LifecycleStatus)
 		}
 		if err != nil {
 			code := stablePgMessage(err)
@@ -449,8 +442,7 @@ func renderPositions(
 	nodes []OrgUnitNode,
 	tenant Tenant,
 	asOf string,
-	businessUnits []BusinessUnit,
-	businessUnitID string,
+	orgUnitID string,
 	resolvedSetID string,
 	jobProfiles []JobProfile,
 	errMsg string,
@@ -466,25 +458,26 @@ func renderPositions(
 	b.WriteString(`<h2>Job Catalog Context</h2>`)
 	b.WriteString(`<form method="GET" action="/org/positions">`)
 	b.WriteString(`<input type="hidden" name="as_of" value="` + html.EscapeString(asOf) + `" />`)
-	b.WriteString(`<label>Business Unit <select name="business_unit_id">`)
+	b.WriteString(`<label>Org Unit <select name="org_unit_id">`)
 	b.WriteString(`<option value="">(not set)</option>`)
-	for _, bu := range businessUnits {
-		if bu.Status != "active" {
-			continue
+	if len(nodes) > 0 {
+		sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
+		for _, n := range nodes {
+			selected := ""
+			if n.ID == orgUnitID {
+				selected = " selected"
+			}
+			label := n.Name + " (" + n.ID + ")"
+			if n.IsBusinessUnit {
+				label = label + " [BU]"
+			}
+			b.WriteString(`<option value="` + html.EscapeString(n.ID) + `"` + selected + `>` + html.EscapeString(label) + `</option>`)
 		}
-		selected := ""
-		if bu.BusinessUnitID == businessUnitID {
-			selected = " selected"
-		}
-		b.WriteString(
-			`<option value="` + html.EscapeString(bu.BusinessUnitID) + `"` + selected + `>` +
-				html.EscapeString(bu.BusinessUnitID) + `</option>`,
-		)
 	}
 	b.WriteString(`</select></label> `)
 	b.WriteString(`<button type="submit">Load</button>`)
 	b.WriteString(`</form>`)
-	if businessUnitID != "" && resolvedSetID != "" {
+	if orgUnitID != "" && resolvedSetID != "" {
 		b.WriteString(`<p>Resolved SetID: <code>` + html.EscapeString(resolvedSetID) + `</code></p>`)
 	}
 
@@ -495,23 +488,17 @@ func renderPositions(
 	if len(nodes) == 0 {
 		b.WriteString(`<option value="">(no org units)</option>`)
 	} else {
-		sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
 		for _, n := range nodes {
-			b.WriteString(`<option value="` + html.EscapeString(n.ID) + `">` + html.EscapeString(n.Name) + ` (` + html.EscapeString(n.ID) + `)</option>`)
+			selected := ""
+			if n.ID == orgUnitID {
+				selected = " selected"
+			}
+			label := n.Name + " (" + n.ID + ")"
+			if n.IsBusinessUnit {
+				label = label + " [BU]"
+			}
+			b.WriteString(`<option value="` + html.EscapeString(n.ID) + `"` + selected + `>` + html.EscapeString(label) + `</option>`)
 		}
-	}
-	b.WriteString(`</select></label><br/>`)
-	b.WriteString(`<label>Business Unit <select name="business_unit_id" required>`)
-	b.WriteString(`<option value="">(required)</option>`)
-	for _, bu := range businessUnits {
-		if bu.Status != "active" {
-			continue
-		}
-		selected := ""
-		if bu.BusinessUnitID == businessUnitID {
-			selected = " selected"
-		}
-		b.WriteString(`<option value="` + html.EscapeString(bu.BusinessUnitID) + `"` + selected + `>` + html.EscapeString(bu.BusinessUnitID) + `</option>`)
 	}
 	b.WriteString(`</select></label><br/>`)
 	b.WriteString(`<label>Job Profile <select name="job_profile_id">`)
@@ -545,19 +532,13 @@ func renderPositions(
 	b.WriteString(`<label>Org Unit <select name="org_unit_id">`)
 	b.WriteString(`<option value="">(no change)</option>`)
 	if len(nodes) > 0 {
-		sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
 		for _, n := range nodes {
-			b.WriteString(`<option value="` + html.EscapeString(n.ID) + `">` + html.EscapeString(n.Name) + ` (` + html.EscapeString(n.ID) + `)</option>`)
+			label := n.Name + " (" + n.ID + ")"
+			if n.IsBusinessUnit {
+				label = label + " [BU]"
+			}
+			b.WriteString(`<option value="` + html.EscapeString(n.ID) + `">` + html.EscapeString(label) + `</option>`)
 		}
-	}
-	b.WriteString(`</select></label><br/>`)
-	b.WriteString(`<label>Business Unit <select name="business_unit_id">`)
-	b.WriteString(`<option value="">(no change)</option>`)
-	for _, bu := range businessUnits {
-		if bu.Status != "active" {
-			continue
-		}
-		b.WriteString(`<option value="` + html.EscapeString(bu.BusinessUnitID) + `">` + html.EscapeString(bu.BusinessUnitID) + `</option>`)
 	}
 	b.WriteString(`</select></label><br/>`)
 	b.WriteString(`<label>Reports To <select name="reports_to_position_id">`)
@@ -595,7 +576,7 @@ func renderPositions(
 	}
 
 	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr>` +
-		`<th>effective_date</th><th>position_id</th><th>reports_to_position_id</th><th>business_unit_id</th><th>jobcatalog_setid</th><th>job_profile</th><th>capacity_fte</th><th>lifecycle_status</th><th>org_unit_id</th><th>name</th>` +
+		`<th>effective_date</th><th>position_id</th><th>reports_to_position_id</th><th>jobcatalog_setid</th><th>jobcatalog_setid_as_of</th><th>job_profile</th><th>capacity_fte</th><th>lifecycle_status</th><th>org_unit_id</th><th>name</th>` +
 		`</tr></thead><tbody>`)
 	for _, p := range positions {
 		jobProfileLabel := ""
@@ -608,8 +589,8 @@ func renderPositions(
 		b.WriteString(`<tr><td><code>` + html.EscapeString(p.EffectiveAt) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.ID) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.ReportsToID) + `</code></td>` +
-			`<td><code>` + html.EscapeString(p.BusinessUnitID) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.JobCatalogSetID) + `</code></td>` +
+			`<td><code>` + html.EscapeString(p.JobCatalogSetIDAsOf) + `</code></td>` +
 			`<td><code>` + html.EscapeString(jobProfileLabel) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.CapacityFTE) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.LifecycleStatus) + `</code></td>` +
