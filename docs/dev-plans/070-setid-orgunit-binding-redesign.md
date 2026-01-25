@@ -353,7 +353,7 @@ CREATE TABLE orgunit.setid_binding_versions (
 4. [X] 制定迁移窗口与切换策略（停写切换、无双写）（2026-01-25 00:45 UTC）。
 5. [X] 明确 `orgunit.global_tenant_id()` 与共享层 RLS/读写入口合同（含共享读取专用入口）（2026-01-25 01:08 UTC）。
 6. [X] 将 `DEV-PLAN-026` 的 schema/函数/迁移落到模块实现（含 `is_business_unit` 与 `SET_BUSINESS_UNIT`），并同步 SetID 绑定入口的业务单元校验（2026-01-25 01:15 UTC）。
-7. [ ] 设计并实现 `setid_binding_events` + `setid_binding_versions`（One Door）。
+7. [X] 设计并实现 `setid_binding_events` + `setid_binding_versions`（One Door）（2026-01-25 01:18 UTC）。
 8. [ ] 替换解析入口与调用链（Go/SQL），所有 setid-controlled 入口统一改为 `org_unit_id` 解析。
 9. [ ] 改造 UI/路由/鉴权（去 BU/record_group、加 org 绑定 + 业务单元标记编辑 + 权限点补齐）。
 10. [ ] 完成迁移脚本与数据 bootstrap（DEFLT + root 绑定），并修复存量 `setid` 规范（5 位/大写）。
