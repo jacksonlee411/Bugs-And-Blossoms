@@ -2144,7 +2144,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_groups (
   code varchar(64) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_family_groups_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_family_groups_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_family_groups_tenant_setid_code_key UNIQUE (tenant_id, setid, code),
   CONSTRAINT job_family_groups_tenant_setid_id_unique UNIQUE (tenant_id, setid, id)
 );
@@ -2162,7 +2162,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_events (
   initiator_id uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_family_group_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_family_group_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_family_group_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
   CONSTRAINT job_family_group_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT job_family_group_events_one_per_day_unique UNIQUE (tenant_id, setid, job_family_group_id, effective_date),
@@ -2187,7 +2187,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_versions (
   last_event_id bigint NOT NULL REFERENCES jobcatalog.job_family_group_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_family_group_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_family_group_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_family_group_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT job_family_group_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT job_family_group_versions_group_fk
@@ -2290,7 +2290,7 @@ BEGIN
       DETAIL = 'setid is required';
   END IF;
   v := upper(btrim(p_setid));
-  IF v !~ '^[A-Z0-9]{1,5}$' THEN
+  IF v !~ '^[A-Z0-9]{5}$' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
@@ -2711,7 +2711,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_families (
   code varchar(64) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_families_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_families_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_families_tenant_setid_code_key UNIQUE (tenant_id, setid, code),
   CONSTRAINT job_families_tenant_setid_id_unique UNIQUE (tenant_id, setid, id)
 );
@@ -2729,7 +2729,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_events (
   initiator_id uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_family_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_family_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_family_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
   CONSTRAINT job_family_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT job_family_events_one_per_day_unique UNIQUE (tenant_id, setid, job_family_id, effective_date),
@@ -2755,7 +2755,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_versions (
   last_event_id bigint NOT NULL REFERENCES jobcatalog.job_family_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_family_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_family_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_family_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT job_family_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT job_family_versions_family_fk
@@ -2799,7 +2799,6 @@ DROP POLICY IF EXISTS tenant_isolation ON jobcatalog.job_family_versions;
 CREATE POLICY tenant_isolation ON jobcatalog.job_family_versions
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
-
 
 -- end: modules/jobcatalog/infrastructure/persistence/schema/00004_jobcatalog_job_families.sql
 
@@ -3289,7 +3288,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_levels (
   code varchar(64) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_levels_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_levels_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_levels_tenant_setid_code_key UNIQUE (tenant_id, setid, code),
   CONSTRAINT job_levels_tenant_setid_id_unique UNIQUE (tenant_id, setid, id)
 );
@@ -3307,7 +3306,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_level_events (
   initiator_id uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_level_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_level_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_level_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
   CONSTRAINT job_level_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT job_level_events_one_per_day_unique UNIQUE (tenant_id, setid, job_level_id, effective_date),
@@ -3332,7 +3331,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_level_versions (
   last_event_id bigint NOT NULL REFERENCES jobcatalog.job_level_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_level_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_level_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_level_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT job_level_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT job_level_versions_level_fk
@@ -3374,7 +3373,6 @@ DROP POLICY IF EXISTS tenant_isolation ON jobcatalog.job_level_versions;
 CREATE POLICY tenant_isolation ON jobcatalog.job_level_versions
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
-
 
 -- end: modules/jobcatalog/infrastructure/persistence/schema/00006_jobcatalog_job_levels.sql
 
@@ -3791,7 +3789,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_profiles (
   code varchar(64) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_profiles_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_profiles_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_profiles_tenant_setid_code_key UNIQUE (tenant_id, setid, code),
   CONSTRAINT job_profiles_tenant_setid_id_unique UNIQUE (tenant_id, setid, id)
 );
@@ -3809,7 +3807,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_profile_events (
   initiator_id uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_profile_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_profile_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_profile_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
   CONSTRAINT job_profile_events_event_id_unique UNIQUE (event_id),
   CONSTRAINT job_profile_events_one_per_day_unique UNIQUE (tenant_id, setid, job_profile_id, effective_date),
@@ -3834,7 +3832,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_profile_versions (
   last_event_id bigint NOT NULL REFERENCES jobcatalog.job_profile_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_profile_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_profile_versions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_profile_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT job_profile_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT job_profile_versions_profile_fk
@@ -3864,7 +3862,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_profile_version_job_families (
   is_primary boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_profile_version_job_families_setid_format_check CHECK (setid ~ '^[A-Z0-9]{1,5}$'),
+  CONSTRAINT job_profile_version_job_families_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT job_profile_version_job_families_version_fk
     FOREIGN KEY (job_profile_version_id) REFERENCES jobcatalog.job_profile_versions(id) ON DELETE CASCADE,
   CONSTRAINT job_profile_version_job_families_family_fk
@@ -3906,7 +3904,6 @@ DROP POLICY IF EXISTS tenant_isolation ON jobcatalog.job_profile_version_job_fam
 CREATE POLICY tenant_isolation ON jobcatalog.job_profile_version_job_families
 USING (tenant_id = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
-
 
 -- end: modules/jobcatalog/infrastructure/persistence/schema/00008_jobcatalog_job_profiles.sql
 
