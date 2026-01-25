@@ -207,8 +207,17 @@ CREATE TABLE orgunit.setid_binding_versions (
 ### 4.2 迁移策略
 - **Up**：新增组织绑定表与解析函数；创建 `orgunit.global_tenant_id()` 哨兵与共享层约束；各业务域按“组织绑定 + 继承解析”替换旧入口。
 - **Down**：生产环境不执行破坏性 Down；回滚走“环境级停写 + 修复后重试”，并保持无 legacy 双链路。
-- 依赖清单：系统性梳理 `business_unit_id` / `record_group` 的字段、函数、事件、API、路由与 UI 入口，作为删除与回归验证的基准（覆盖所有 setid-controlled 业务域）。
-- 迁移窗口：先做离线/脚本化校验与数据准备；切换时采用维护窗口或环境级停写，直接切到新写入口；完成后移除旧结构与旧解析入口，**禁止双写/兼容兜底**。
+- **切换原则**：全域一次性切换；停写窗口内完成切换；**禁止双写/兼容兜底**（No Legacy）。
+- **准备期**：
+  - 依赖清单：系统性梳理 `business_unit_id` / `record_group` 的字段、函数、事件、API、路由与 UI 入口，作为删除与回归验证的基准（覆盖所有 setid-controlled 业务域）。
+  - 数据校验：存量 `setid` 格式（全大写 + 5 位）、根组织 `is_business_unit=true`、既有绑定有效期与缺失绑定清单。
+  - 演练：在预发布环境跑完整门禁与 E2E，验证 “org_unit_id + as_of_date” 全链路。
+- **切换窗口（停写）**：
+  - 环境级停写：关闭所有 `submit_*` 写入口（API/HTMX/UI），仅允许只读验证。
+  - 执行迁移：更新 schema/函数/迁移，部署新入口与解析链路。
+  - Bootstrap：确保 `DEFLT` 存在且根组织绑定 `DEFLT`；共享层 `SHARE` 保持只读。
+  - 回归验证：跑关键门禁与 E2E；确认无 `SETID_BINDING_MISSING`/RLS 误拒绝。
+  - 复写入：验证通过后解除停写；立即移除旧入口与旧结构。
 - 数据层：删除 BU/record_group 相关表与函数；新增组织绑定表与解析函数；创建 `orgunit.global_tenant_id()` 哨兵与共享层约束。
 - 现有租户：自动创建 `DEFLT`，并把租户根组织绑定至 `DEFLT`（bootstrap）。
 - 现有租户：租户根组织必须标记为 `is_business_unit=true`（如现有数据不满足，需先修复再切换）。
@@ -332,7 +341,7 @@ CREATE TABLE orgunit.setid_binding_versions (
 3. [ ] 更新相关 dev-plans 与测试用例（TP-060/子计划等），统一“全域迁移”口径，改为 `org_unit_id + as_of_date` 解析并移除 BU/record_group 约束。
    - dev-plans：`docs/dev-plans/028-setid-management.md`（标注历史/弃用口径，指向 070）；`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`（解析上下文切换）；`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`（去 BU/record_group、改解析与错误码口径）；`docs/dev-plans/060-business-e2e-test-suite.md`（数据集/步骤改为 org_unit 绑定）；`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`（步骤/断言/契约引用改为 org_unit + as_of）。
    - 测试用例：`e2e/tests/tp060-02-master-data.spec.js`（去 BU/mapping，改 org_unit 绑定与断言）；`e2e/tests/tp060-03-person-and-assignments.spec.js`（Position 创建与 URL 断言改 org_unit）；`e2e/tests/m3-smoke.spec.js`（Position 创建改 org_unit）；`internal/server/jobcatalog_test.go`（请求参数与断言改 org_unit）；`internal/server/staffing_test.go`（Position 相关断言改 org_unit）；`internal/server/handler_test.go`（JobCatalog/Position 相关断言改 org_unit）；`internal/server/setid_test.go`（SetID 管理改组织绑定）。
-4. [ ] 制定迁移窗口与切换策略（停写切换、无双写）。
+4. [X] 制定迁移窗口与切换策略（停写切换、无双写）（2026-01-25 00:45 UTC）。
 5. [ ] 明确 `orgunit.global_tenant_id()` 与共享层 RLS/读写入口合同（含共享读取专用入口）。
 6. [ ] 将 `DEV-PLAN-026` 的 schema/函数/迁移落到模块实现（含 `is_business_unit` 与 `SET_BUSINESS_UNIT`），并同步 SetID 绑定入口的业务单元校验。
 7. [ ] 设计并实现 `setid_binding_events` + `setid_binding_versions`（One Door）。
