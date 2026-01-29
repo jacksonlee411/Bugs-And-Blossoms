@@ -73,6 +73,9 @@ DECLARE
   v_evt_db_id bigint;
   v_root_org_id uuid;
   v_root_valid_from date;
+  v_scope_code text;
+  v_scope_share_mode text;
+  v_package_id uuid;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_id);
   PERFORM orgunit.lock_setid_governance(p_tenant_id);
@@ -95,6 +98,72 @@ BEGIN
     VALUES (p_tenant_id, 'DEFLT', 'Default', 'active', v_evt_db_id)
     ON CONFLICT (tenant_id, setid) DO NOTHING;
   END IF;
+
+  FOR v_scope_code, v_scope_share_mode IN
+    SELECT scope_code, share_mode
+    FROM orgunit.scope_code_registry()
+    WHERE is_stable = true
+  LOOP
+    IF v_scope_share_mode = 'shared-only' THEN
+      CONTINUE;
+    END IF;
+
+    SELECT p.package_id INTO v_package_id
+    FROM orgunit.setid_scope_packages p
+    WHERE p.tenant_id = p_tenant_id
+      AND p.scope_code = v_scope_code
+      AND p.package_code = 'DEFLT';
+
+    IF v_package_id IS NULL THEN
+      v_package_id := gen_random_uuid();
+      PERFORM orgunit.submit_scope_package_event(
+        gen_random_uuid(),
+        p_tenant_id,
+        v_scope_code,
+        v_package_id,
+        'BOOTSTRAP',
+        current_date,
+        jsonb_build_object('package_code', 'DEFLT', 'name', 'Default'),
+        format('bootstrap:scope-package:deflt:%s', v_scope_code),
+        p_initiator_id
+      );
+
+      SELECT p.package_id INTO v_package_id
+      FROM orgunit.setid_scope_packages p
+      WHERE p.tenant_id = p_tenant_id
+        AND p.scope_code = v_scope_code
+        AND p.package_code = 'DEFLT';
+    END IF;
+
+    IF v_package_id IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SUBSCRIPTION_DEFLT_MISSING',
+        DETAIL = format('scope_code=%s', v_scope_code);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM orgunit.setid_scope_subscriptions s
+      WHERE s.tenant_id = p_tenant_id
+        AND s.setid = 'DEFLT'
+        AND s.scope_code = v_scope_code
+        AND s.validity @> current_date
+    ) THEN
+      PERFORM orgunit.submit_scope_subscription_event(
+        gen_random_uuid(),
+        p_tenant_id,
+        'DEFLT',
+        v_scope_code,
+        v_package_id,
+        p_tenant_id,
+        'BOOTSTRAP',
+        current_date,
+        format('bootstrap:scope-subscription:deflt:%s', v_scope_code),
+        p_initiator_id
+      );
+    END IF;
+  END LOOP;
 
   SELECT t.root_org_id INTO v_root_org_id
   FROM orgunit.org_trees t
