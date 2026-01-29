@@ -41,6 +41,13 @@ ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, 
 ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
   SET search_path = pg_catalog, orgunit;
 
+ALTER FUNCTION orgunit.ensure_setid_bootstrap(uuid, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.ensure_setid_bootstrap(uuid, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.ensure_setid_bootstrap(uuid, uuid)
+  SET search_path = pg_catalog, orgunit;
+
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
@@ -97,6 +104,13 @@ ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, 
 ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
   RESET search_path;
 ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
+  OWNER TO app;
+
+ALTER FUNCTION orgunit.ensure_setid_bootstrap(uuid, uuid)
+  SECURITY INVOKER;
+ALTER FUNCTION orgunit.ensure_setid_bootstrap(uuid, uuid)
+  RESET search_path;
+ALTER FUNCTION orgunit.ensure_setid_bootstrap(uuid, uuid)
   OWNER TO app;
 
 DO $$
