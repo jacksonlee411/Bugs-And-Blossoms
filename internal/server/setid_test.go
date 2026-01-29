@@ -551,6 +551,22 @@ func TestRenderSetIDPage_NoBusinessUnits(t *testing.T) {
 	}
 }
 
+func TestRenderSetIDPage_SelectedSetID(t *testing.T) {
+	html := renderSetIDPage(
+		[]SetID{{SetID: "A0001", Name: "A", Status: "active"}},
+		nil,
+		nil,
+		Tenant{Name: "T"},
+		"2026-01-07",
+		"A0001",
+		"en",
+		"",
+	)
+	if !strings.Contains(html, "/orgunit/setids/A0001/scope-subscriptions") {
+		t.Fatalf("unexpected html: %q", html)
+	}
+}
+
 func TestHandleSetID_Post_DefaultAction(t *testing.T) {
 	form := url.Values{}
 	form.Set("setid", "A0001")

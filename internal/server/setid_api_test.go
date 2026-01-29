@@ -50,6 +50,20 @@ func TestHandleSetIDsAPI_InvalidRequest(t *testing.T) {
 	}
 }
 
+func TestHandleSetIDsAPI_InvalidEffectiveDate(t *testing.T) {
+	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","effective_date":"bad","request_id":"r1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setids", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetIDsAPI(rec, req, newSetIDMemoryStore())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "invalid_effective_date") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
 func TestHandleSetIDsAPI_EnsureBootstrapError(t *testing.T) {
 	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","request_id":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setids", body)
