@@ -58,7 +58,12 @@ db_name="${DB_NAME:-bugs_and_blossoms}"
 db_pass="${DB_PASSWORD:-app}"
 db_sslmode="${DB_SSLMODE:-disable}"
 
-export DATABASE_URL="postgres://app_runtime:${db_pass}@${db_host}:${db_port}/${db_name}?sslmode=${db_sslmode}"
+admin_db_user="${DB_USER:-app}"
+runtime_db_user="app_runtime"
+admin_db_url="postgres://${admin_db_user}:${db_pass}@${db_host}:${db_port}/${db_name}?sslmode=${db_sslmode}"
+runtime_db_url="postgres://${runtime_db_user}:${db_pass}@${db_host}:${db_port}/${db_name}?sslmode=${db_sslmode}"
+
+export DATABASE_URL="$runtime_db_url"
 
 echo "[e2e] start infra: docker compose"
 make dev-up
@@ -143,11 +148,11 @@ if [[ "$sa_role_line" != "f|f|t" ]]; then
 fi
 
 echo "[e2e] migrate: iam/orgunit/jobcatalog/person/staffing"
-make iam migrate up
-make orgunit migrate up
-make jobcatalog migrate up
-make person migrate up
-make staffing migrate up
+DATABASE_URL="$admin_db_url" make iam migrate up
+DATABASE_URL="$admin_db_url" make orgunit migrate up
+DATABASE_URL="$admin_db_url" make jobcatalog migrate up
+DATABASE_URL="$admin_db_url" make person migrate up
+DATABASE_URL="$admin_db_url" make staffing migrate up
 
 mkdir -p "$(dirname "$server_log")"
 mkdir -p "$(dirname "$superadmin_log")"
