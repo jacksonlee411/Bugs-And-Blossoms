@@ -211,12 +211,9 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const posCreateForm = page
     .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${asOf}"]`)
     .first();
-  const orgUnitID = await posCreateForm
-    .locator('select[name="org_unit_id"] option', { hasText: orgName })
-    .first()
-    .getAttribute("value");
-  expect(orgUnitID).not.toBeNull();
-  await posCreateForm.locator('select[name="org_unit_id"]').selectOption(orgUnitID);
+  const orgUnitID = createdOrgID;
+  const orgUnitHiddenValue = await posCreateForm.locator('input[name="org_unit_id"]').getAttribute("value");
+  expect(orgUnitHiddenValue).toBe(orgUnitID);
   const jobProfileOption = posCreateForm.locator('select[name="job_profile_id"] option', { hasText: jobProfileCode }).first();
   const jobProfileID = await jobProfileOption.getAttribute("value");
   expect(jobProfileID).not.toBeNull();
