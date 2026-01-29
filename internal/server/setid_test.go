@@ -46,7 +46,7 @@ func (s partialSetIDStore) ListSetIDs(context.Context, string) ([]SetID, error) 
 	return []SetID{{SetID: "DEFLT", Name: "Default", Status: "active"}}, nil
 }
 func (s partialSetIDStore) ListGlobalSetIDs(context.Context) ([]SetID, error) {
-	return []SetID{{SetID: "SHARE", Name: "Shared", Status: "active"}}, nil
+	return []SetID{{SetID: "SHARE", Name: "Shared", Status: "active", IsShared: true}}, nil
 }
 func (s partialSetIDStore) CreateSetID(context.Context, string, string, string, string, string) error {
 	return s.createSetErr
@@ -467,17 +467,21 @@ func TestSetIDMemoryStore_CreateGlobalSetID(t *testing.T) {
 
 func TestRenderSetIDPage_SkipsDisabledOptions(t *testing.T) {
 	html := renderSetIDPage(
-		[]SetID{{SetID: "SHARE", Name: "Shared", Status: "active"}, {SetID: "A0001", Name: "A", Status: "disabled"}},
+		[]SetID{{SetID: "SHARE", Name: "Shared", Status: "active", IsShared: true}, {SetID: "A0001", Name: "A", Status: "disabled"}},
 		[]SetIDBindingRow{{OrgUnitID: "org1", SetID: "SHARE", ValidFrom: "2026-01-01"}},
 		[]OrgUnitNode{{ID: "org1", Name: "BU 1", IsBusinessUnit: true}, {ID: "org2", Name: "BU 0", IsBusinessUnit: true}},
 		Tenant{Name: "T"},
 		"2026-01-07",
+		"en",
 		"",
 	)
-	if !strings.Contains(html, "option value=\"SHARE\"") {
+	if strings.Contains(html, "option value=\"SHARE\"") {
 		t.Fatalf("unexpected html: %q", html)
 	}
 	if strings.Contains(html, "option value=\"A0001\"") {
+		t.Fatalf("unexpected html: %q", html)
+	}
+	if !strings.Contains(html, "Shared/Read-only (共享/只读)") {
 		t.Fatalf("unexpected html: %q", html)
 	}
 }
@@ -489,6 +493,7 @@ func TestRenderSetIDPage_NoBusinessUnits(t *testing.T) {
 		[]OrgUnitNode{{ID: "org1", Name: "Org 1", IsBusinessUnit: false}},
 		Tenant{Name: "T"},
 		"2026-01-07",
+		"en",
 		"",
 	)
 	if !strings.Contains(html, "(no business units)") {

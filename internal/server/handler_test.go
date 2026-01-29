@@ -653,6 +653,12 @@ func TestUI_ShellAndPartials(t *testing.T) {
 
 	_ = tr("en", "unknown")
 	_ = tr("zh", "unknown")
+	if got := tr("zh", "shared_readonly"); got != "共享/只读" {
+		t.Fatalf("shared_readonly zh=%q", got)
+	}
+	if got := tr("zh", "tenant_owned"); got != "租户" {
+		t.Fatalf("tenant_owned zh=%q", got)
+	}
 
 	rNoCookie := &http.Request{Header: http.Header{}}
 	_ = lang(rNoCookie)

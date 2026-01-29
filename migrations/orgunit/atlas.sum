@@ -1,4 +1,4 @@
-h1:l0Xlhwjv1yMJ88Afvi37dbzKbLRPR7UyU6zmolWJLjc=
+h1:5IxozTyFMdqEXbzQdY5PMKoJoNGVl44h14W9CEkSJMw=
 20260106080000_orgunit_schema.sql h1:/d/LPcc7jj/HrDGxARdqklD1UvRhk7eQOTk/TAbsUzE=
 20260106083000_orgunit_engine.sql h1:q6h7LOep6ekoy+1p6ubEeWAr/09Oa4gEjN29vs7fx2Y=
 20260106090000_orgunit_read.sql h1:sUauPLiUpVe8iCDBffBvVKuyPaSywBfjG6jN3u7oqOY=
@@ -6,3 +6,4 @@ h1:l0Xlhwjv1yMJ88Afvi37dbzKbLRPR7UyU6zmolWJLjc=
 20260106100000_orgunit_setid_schema.sql h1:lWY+XRGBhsHGtT08vGWY67tOAm34n2nPBViACfMaxt4=
 20260106100500_orgunit_setid_engine.sql h1:hzdF6LOAFPqtGmEZxaQsAxAVH6FCGgzHl5RIpZ727Ho=
 20260125024500_orgunit_setid_bootstrap.sql h1:yaoJtltsdC8lXPFodBxX5fpi9V3X7cmwth6VGUu1ymY=
+20260129160000_orgunit_setid_kernel_privileges.sql h1:HDuUipzf9OOlOuxWWpYzpKzBalW4Xrkip3jK+4tfBQQ=
