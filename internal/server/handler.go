@@ -566,6 +566,10 @@ func tr(lang string, key string) string {
 			return "人员"
 		case "as_of":
 			return "有效日期"
+		case "shared_readonly":
+			return "共享/只读"
+		case "tenant_owned":
+			return "租户"
 		}
 	}
 
@@ -584,6 +588,10 @@ func tr(lang string, key string) string {
 		return "Person"
 	case "as_of":
 		return "As-of"
+	case "shared_readonly":
+		return "Shared/Read-only (共享/只读)"
+	case "tenant_owned":
+		return "Tenant"
 	default:
 		return ""
 	}

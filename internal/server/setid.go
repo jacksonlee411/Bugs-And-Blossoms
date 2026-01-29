@@ -15,9 +15,10 @@ import (
 )
 
 type SetID struct {
-	SetID  string
-	Name   string
-	Status string
+	SetID    string
+	Name     string
+	Status   string
+	IsShared bool
 }
 
 type SetIDBindingRow struct {
@@ -251,6 +252,7 @@ ORDER BY setid ASC
 		if err := rows.Scan(&r.SetID, &r.Name, &r.Status); err != nil {
 			return nil, err
 		}
+		r.IsShared = true
 		out = append(out, r)
 	}
 	if err := rows.Err(); err != nil {
@@ -340,7 +342,7 @@ func (s *setidMemoryStore) ListGlobalSetIDs(_ context.Context) ([]SetID, error) 
 	if s.globalSetIDName == "" {
 		return nil, nil
 	}
-	return []SetID{{SetID: "SHARE", Name: s.globalSetIDName, Status: "active"}}, nil
+	return []SetID{{SetID: "SHARE", Name: s.globalSetIDName, Status: "active", IsShared: true}}, nil
 }
 
 func (s *setidMemoryStore) CreateSetID(_ context.Context, tenantID string, setID string, name string, _ string, _ string) error {
@@ -418,7 +420,7 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 
 	initiatorID := tenant.ID
 	if err := store.EnsureBootstrap(r.Context(), tenant.ID, initiatorID); err != nil {
-		writePage(w, r, renderSetIDPage(nil, nil, nil, tenant, asOf, err.Error()))
+		writePage(w, r, renderSetIDPage(nil, nil, nil, tenant, asOf, lang(r), err.Error()))
 		return
 	}
 
@@ -454,12 +456,12 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 	switch r.Method {
 	case http.MethodGet:
 		sids, bindings, nodes, errMsg := list("")
-		writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, errMsg))
+		writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, lang(r), errMsg))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
 			sids, bindings, nodes, errMsg := list("bad form")
-			writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, errMsg))
+			writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, lang(r), errMsg))
 			return
 		}
 
@@ -476,13 +478,13 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 			name := strings.TrimSpace(r.Form.Get("name"))
 			if sid == "" || name == "" {
 				sids, bindings, nodes, errMsg := list("setid/name is required")
-				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, errMsg))
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, lang(r), errMsg))
 				return
 			}
 			reqID := "ui:setid:create:" + sid
 			if err := store.CreateSetID(r.Context(), tenant.ID, sid, name, reqID, initiatorID); err != nil {
 				sids, bindings, nodes, errMsg := list(err.Error())
-				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, errMsg))
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, lang(r), errMsg))
 				return
 			}
 		case "bind_setid":
@@ -494,24 +496,24 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 			}
 			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
 				sids, bindings, nodes, errMsg := list("effective_date 无效: " + err.Error())
-				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, errMsg))
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, lang(r), errMsg))
 				return
 			}
 			if orgUnitID == "" || sid == "" {
 				sids, bindings, nodes, errMsg := list("org_unit_id/setid is required")
-				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, errMsg))
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, lang(r), errMsg))
 				return
 			}
 			reqID := "ui:setid:bind:" + orgUnitID + ":" + sid + ":" + effectiveDate
 			if err := store.BindSetID(r.Context(), tenant.ID, orgUnitID, effectiveDate, sid, reqID, initiatorID); err != nil {
 				sids, bindings, nodes, errMsg := list(err.Error())
-				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, errMsg))
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, lang(r), errMsg))
 				return
 			}
 			redirectAsOf = effectiveDate
 		default:
 			sids, bindings, nodes, errMsg := list("unknown action")
-			writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, errMsg))
+			writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, lang(r), errMsg))
 			return
 		}
 
@@ -523,7 +525,7 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 	}
 }
 
-func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnitNode, tenant Tenant, asOf string, errMsg string) string {
+func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnitNode, tenant Tenant, asOf string, pageLang string, errMsg string) string {
 	var b strings.Builder
 	b.WriteString("<h1>SetID Governance</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
@@ -541,12 +543,17 @@ func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnit
 	b.WriteString(`<button type="submit">Create</button>`)
 	b.WriteString(`</form>`)
 
-	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>setid</th><th>name</th><th>status</th></tr></thead><tbody>`)
+	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>setid</th><th>name</th><th>status</th><th>scope</th></tr></thead><tbody>`)
 	for _, s := range setids {
 		b.WriteString("<tr>")
 		b.WriteString("<td>" + html.EscapeString(s.SetID) + "</td>")
 		b.WriteString("<td>" + html.EscapeString(s.Name) + "</td>")
 		b.WriteString("<td>" + html.EscapeString(s.Status) + "</td>")
+		scopeLabel := tr(pageLang, "tenant_owned")
+		if s.IsShared {
+			scopeLabel = tr(pageLang, "shared_readonly")
+		}
+		b.WriteString("<td>" + html.EscapeString(scopeLabel) + "</td>")
 		b.WriteString("</tr>")
 	}
 	b.WriteString("</tbody></table>")
@@ -607,7 +614,7 @@ func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnit
 	b.WriteString(`<label>SetID <select name="setid">`)
 	b.WriteString(`<option value="">(select)</option>`)
 	for _, sid := range setids {
-		if sid.Status != "active" {
+		if sid.Status != "active" || sid.IsShared {
 			continue
 		}
 		b.WriteString(`<option value="` + html.EscapeString(sid.SetID) + `">` + html.EscapeString(sid.SetID) + `</option>`)
