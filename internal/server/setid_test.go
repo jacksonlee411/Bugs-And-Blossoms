@@ -30,6 +30,30 @@ func (s errSetIDStore) BindSetID(context.Context, string, string, string, string
 func (s errSetIDStore) CreateGlobalSetID(context.Context, string, string, string, string) error {
 	return s.err
 }
+func (s errSetIDStore) ListScopeCodes(context.Context, string) ([]ScopeCode, error) {
+	return nil, s.err
+}
+func (s errSetIDStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, s.err
+}
+func (s errSetIDStore) DisableScopePackage(context.Context, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, s.err
+}
+func (s errSetIDStore) ListScopePackages(context.Context, string, string) ([]ScopePackage, error) {
+	return nil, s.err
+}
+func (s errSetIDStore) CreateScopeSubscription(context.Context, string, string, string, string, string, string, string, string) (ScopeSubscription, error) {
+	return ScopeSubscription{}, s.err
+}
+func (s errSetIDStore) GetScopeSubscription(context.Context, string, string, string, string) (ScopeSubscription, error) {
+	return ScopeSubscription{}, s.err
+}
+func (s errSetIDStore) CreateGlobalScopePackage(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, s.err
+}
+func (s errSetIDStore) ListGlobalScopePackages(context.Context, string) ([]ScopePackage, error) {
+	return nil, s.err
+}
 
 type partialSetIDStore struct {
 	listSetErr   error
@@ -59,6 +83,30 @@ func (s partialSetIDStore) ListSetIDBindings(context.Context, string, string) ([
 }
 func (s partialSetIDStore) BindSetID(context.Context, string, string, string, string, string, string) error {
 	return s.bindErr
+}
+func (s partialSetIDStore) ListScopeCodes(context.Context, string) ([]ScopeCode, error) {
+	return nil, nil
+}
+func (s partialSetIDStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, nil
+}
+func (s partialSetIDStore) DisableScopePackage(context.Context, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, nil
+}
+func (s partialSetIDStore) ListScopePackages(context.Context, string, string) ([]ScopePackage, error) {
+	return nil, nil
+}
+func (s partialSetIDStore) CreateScopeSubscription(context.Context, string, string, string, string, string, string, string, string) (ScopeSubscription, error) {
+	return ScopeSubscription{}, nil
+}
+func (s partialSetIDStore) GetScopeSubscription(context.Context, string, string, string, string) (ScopeSubscription, error) {
+	return ScopeSubscription{}, nil
+}
+func (s partialSetIDStore) CreateGlobalScopePackage(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, nil
+}
+func (s partialSetIDStore) ListGlobalScopePackages(context.Context, string) ([]ScopePackage, error) {
+	return nil, nil
 }
 func (s partialSetIDStore) CreateGlobalSetID(context.Context, string, string, string, string) error {
 	return nil
@@ -472,6 +520,7 @@ func TestRenderSetIDPage_SkipsDisabledOptions(t *testing.T) {
 		[]OrgUnitNode{{ID: "org1", Name: "BU 1", IsBusinessUnit: true}, {ID: "org2", Name: "BU 0", IsBusinessUnit: true}},
 		Tenant{Name: "T"},
 		"2026-01-07",
+		"",
 		"en",
 		"",
 	)
@@ -493,6 +542,7 @@ func TestRenderSetIDPage_NoBusinessUnits(t *testing.T) {
 		[]OrgUnitNode{{ID: "org1", Name: "Org 1", IsBusinessUnit: false}},
 		Tenant{Name: "T"},
 		"2026-01-07",
+		"",
 		"en",
 		"",
 	)

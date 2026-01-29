@@ -215,6 +215,35 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await expect(page).toHaveURL(new RegExp(`/org/setid\\?as_of=${asOf}$`));
   };
 
+  const createScopePackage = async (scopeCode, packageCode, name, effectiveDate) => {
+    const resp = await appContext.request.post("/orgunit/api/scope-packages", {
+      data: {
+        scope_code: scopeCode,
+        package_code: packageCode,
+        name,
+        effective_date: effectiveDate,
+        request_id: `req:${runID}:scope-pkg:${packageCode}`
+      }
+    });
+    expect(resp.status(), await resp.text()).toBe(201);
+    const body = await resp.json();
+    return body.package_id;
+  };
+
+  const subscribeScope = async (setid, scopeCode, packageID, effectiveDate) => {
+    const resp = await appContext.request.post("/orgunit/api/scope-subscriptions", {
+      data: {
+        setid,
+        scope_code: scopeCode,
+        package_id: packageID,
+        package_owner: "tenant",
+        effective_date: effectiveDate,
+        request_id: `req:${runID}:scope-sub:${setid}:${scopeCode}`
+      }
+    });
+    expect(resp.status(), await resp.text()).toBe(201);
+  };
+
   await page.goto(`/org/setid?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("SetID Governance");
   await expect(page.getByRole("heading", { name: "SetIDs" })).toBeVisible();
@@ -462,6 +491,16 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   if (!salesBindingExists) {
     await bindSetID(orgIDsFromTree.Sales, "S2602", asOf);
   }
+
+  const s2602PkgSuffix = String(runID).slice(-4);
+  const s2602PkgCode = `S2602_${s2602PkgSuffix}`.toUpperCase();
+  const s2602JobCatalogPackageID = await createScopePackage(
+    "jobcatalog",
+    s2602PkgCode,
+    `S2602 JobCatalog ${runID}`,
+    asOf
+  );
+  await subscribeScope("S2602", "jobcatalog", s2602JobCatalogPackageID, asOf);
 
   await page.goto(`/org/job-catalog?as_of=${asOfJobCatalogBase}&setid=S2602`);
   await expect(page.locator("h1")).toHaveText("Job Catalog");
