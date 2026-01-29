@@ -2148,6 +2148,8 @@ GRANT SELECT, INSERT, UPDATE ON TABLE
   orgunit.org_trees
 TO orgunit_kernel;
 
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA orgunit TO orgunit_kernel;
+
 ALTER FUNCTION orgunit.submit_setid_event(uuid, uuid, text, text, jsonb, text, uuid)
   OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.submit_setid_event(uuid, uuid, text, text, jsonb, text, uuid)

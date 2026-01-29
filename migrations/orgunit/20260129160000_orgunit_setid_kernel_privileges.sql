@@ -20,6 +20,8 @@ GRANT SELECT, INSERT, UPDATE ON TABLE
   orgunit.org_trees
 TO orgunit_kernel;
 
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA orgunit TO orgunit_kernel;
+
 ALTER FUNCTION orgunit.submit_setid_event(uuid, uuid, text, text, jsonb, text, uuid)
   OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.submit_setid_event(uuid, uuid, text, text, jsonb, text, uuid)
@@ -157,6 +159,7 @@ REVOKE ALL PRIVILEGES ON TABLE
   orgunit.org_unit_versions,
   orgunit.org_trees
 FROM orgunit_kernel;
+REVOKE USAGE, SELECT ON ALL SEQUENCES IN SCHEMA orgunit FROM orgunit_kernel;
 REVOKE USAGE ON SCHEMA orgunit FROM orgunit_kernel;
 DROP ROLE IF EXISTS orgunit_kernel;
 -- +goose StatementEnd
