@@ -358,6 +358,79 @@ func staffingSmoke(args []string) {
 		fatal(err)
 	}
 
+	scopePackageID := "00000000-0000-0000-0000-00000000d201"
+	scopePackageEventID := "00000000-0000-0000-0000-00000000d202"
+	scopePackageRequestID := "dbtool-staffing-scope-package"
+	scopeSubEventID := "00000000-0000-0000-0000-00000000d203"
+	scopeSubRequestID := "dbtool-staffing-scope-subscribe"
+
+	resolveJobCatalogScope := func() (string, string, error) {
+		var packageID string
+		var ownerTenantID string
+		if err := tx.QueryRow(ctx, `
+	SELECT package_id::text, package_owner_tenant_id::text
+	FROM orgunit.resolve_scope_package($1::uuid, $2::text, 'jobcatalog', $3::date)
+	`, tenantA, jobcatalogSetID, effectiveDate).Scan(&packageID, &ownerTenantID); err != nil {
+			return "", "", err
+		}
+		return packageID, ownerTenantID, nil
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_jobcatalog_scope;`); err != nil {
+		fatal(err)
+	}
+
+	jobcatalogPackageID, jobcatalogOwnerTenantID, err := resolveJobCatalogScope()
+	if err != nil {
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_jobcatalog_scope;`); rbErr != nil {
+			fatal(rbErr)
+		}
+		var pkgEventDBID int64
+		if err := tx.QueryRow(ctx, `
+	SELECT orgunit.submit_scope_package_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::text,
+	  $4::uuid,
+	  'CREATE',
+	  $5::date,
+	  jsonb_build_object('package_code', 'SMOKE_STAFF', 'name', 'Staffing Smoke Package'),
+	  $6::text,
+	  $7::uuid
+	);
+	`, scopePackageEventID, tenantA, "jobcatalog", scopePackageID, effectiveDate, scopePackageRequestID, initiatorID).Scan(&pkgEventDBID); err != nil {
+			fatal(err)
+		}
+		var subEventDBID int64
+		if err := tx.QueryRow(ctx, `
+	SELECT orgunit.submit_scope_subscription_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::text,
+	  $4::text,
+	  $5::uuid,
+	  $6::uuid,
+	  'SUBSCRIBE',
+	  $7::date,
+	  $8::text,
+	  $9::uuid
+	);
+	`, scopeSubEventID, tenantA, jobcatalogSetID, "jobcatalog", scopePackageID, tenantA, effectiveDate, scopeSubRequestID, initiatorID).Scan(&subEventDBID); err != nil {
+			fatal(err)
+		}
+		jobcatalogPackageID, jobcatalogOwnerTenantID, err = resolveJobCatalogScope()
+		if err != nil {
+			fatal(err)
+		}
+	} else {
+		if _, rbErr := tx.Exec(ctx, `RELEASE SAVEPOINT sp_jobcatalog_scope;`); rbErr != nil {
+			fatal(rbErr)
+		}
+	}
+	if jobcatalogOwnerTenantID != tenantA {
+		fatalf("expected jobcatalog package owner to be %s, got %s", tenantA, jobcatalogOwnerTenantID)
+	}
+
 	jobFamilyGroupID := "00000000-0000-0000-0000-00000000d101"
 	jobFamilyGroupEventID := "00000000-0000-0000-0000-00000000d102"
 	jobFamilyGroupRequestID := "dbtool-staffing-smoke-jfg-create"
@@ -373,7 +446,7 @@ func staffingSmoke(args []string) {
 		  $6::text,
 		  $7::uuid
 		);
-	`, jobFamilyGroupEventID, tenantA, jobcatalogSetID, jobFamilyGroupID, effectiveDate, jobFamilyGroupRequestID, initiatorID); err != nil {
+	`, jobFamilyGroupEventID, tenantA, jobcatalogPackageID, jobFamilyGroupID, effectiveDate, jobFamilyGroupRequestID, initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -392,7 +465,7 @@ func staffingSmoke(args []string) {
 		  $7::text,
 		  $8::uuid
 		);
-	`, jobFamilyEventID, tenantA, jobcatalogSetID, jobFamilyID, effectiveDate, jobFamilyGroupID, jobFamilyRequestID, initiatorID); err != nil {
+	`, jobFamilyEventID, tenantA, jobcatalogPackageID, jobFamilyID, effectiveDate, jobFamilyGroupID, jobFamilyRequestID, initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -418,7 +491,7 @@ func staffingSmoke(args []string) {
 		  $7::text,
 		  $8::uuid
 		);
-	`, jobProfileEventID, tenantA, jobcatalogSetID, jobProfileID, effectiveDate, jobFamilyID, jobProfileRequestID, initiatorID).Scan(&jobProfileEventDBID); err != nil {
+	`, jobProfileEventID, tenantA, jobcatalogPackageID, jobProfileID, effectiveDate, jobFamilyID, jobProfileRequestID, initiatorID).Scan(&jobProfileEventDBID); err != nil {
 		fatal(err)
 	}
 	if jobProfileEventDBID <= 0 {

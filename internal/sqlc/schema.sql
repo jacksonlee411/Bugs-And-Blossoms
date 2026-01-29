@@ -7188,6 +7188,7 @@ DECLARE
   v_reports_to_position_id uuid;
   v_jobcatalog_setid text;
   v_jobcatalog_setid_as_of date;
+  v_jobcatalog_package_id uuid;
   v_job_profile_id uuid;
   v_name text;
   v_lifecycle_status text;
@@ -7464,12 +7465,15 @@ BEGIN
 
     v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_org_unit_id, v_row.effective_date);
     v_jobcatalog_setid_as_of := v_row.effective_date;
+    SELECT package_id
+    INTO v_jobcatalog_package_id
+    FROM orgunit.resolve_scope_package(p_tenant_id, v_jobcatalog_setid, 'jobcatalog', v_row.effective_date);
 
     IF NOT EXISTS (
       SELECT 1
       FROM jobcatalog.job_profile_versions jpv
       WHERE jpv.tenant_id = p_tenant_id
-        AND jpv.setid = v_jobcatalog_setid
+        AND jpv.package_id = v_jobcatalog_package_id
         AND jpv.job_profile_id = v_job_profile_id
         AND jpv.is_active = true
         AND jpv.validity @> v_row.effective_date
