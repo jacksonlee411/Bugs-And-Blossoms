@@ -51,6 +51,7 @@
 > 目标：把实现拆成“每步可验收”的闭环，避免实现期即兴补丁与契约漂移。
 
 建议按以下顺序推进（每一步都可单独验收并回滚）：
+0) **前置依赖（必须）**：先落地 `DEV-PLAN-071` 的 `scope_package`/订阅模型与 `ResolveScopePackage`，否则无法提供合法 `package_id` 且会触发 No Legacy 风险。
 1) **Schema 落盘（不含函数逻辑）**：identity / events / versions / 关系表与必要扩展（例如 `btree_gist` 以支持 `gist_uuid_ops`）；确认约束命名与错误映射口径可稳定识别（见 7.1）。
 2) **RLS 落盘**：对所有 tenant-scoped 表开启 RLS 与 fail-closed 策略；定义“tenant 注入缺失/不一致”时的稳定失败形状（见 `DEV-PLAN-021`）。
 3) **Kernel 写入口函数（先闭环入库与拒绝）**：实现 `submit_*_event` 的参数校验、幂等与同日唯一（依赖唯一约束）；业务级拒绝必须使用 `MESSAGE` 稳定 code + `DETAIL` 动态信息（见 7.1）。
