@@ -1,6 +1,6 @@
 # DEV-PLAN-070：SetID 绑定组织架构重构方案
 
-**状态**: 进行中（2026-01-29 01:22 UTC）
+**状态**: 进行中（2026-01-29 06:42 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：替代 `DEV-PLAN-028` 的 SetID 方案升级，落地“SetID 绑定组织架构 + 层级继承解析 + 单一共享层”新需求。
@@ -79,6 +79,7 @@ graph TD
 - **版本固定**：`ResolveSetID` 严格以 `as_of_date` 固化组织与绑定版本，不依赖“当前组织树”。
 - **绑定存储权威**：仅采用 `setid_binding_events` + `setid_binding_versions`（无并行绑定表）。
 - **写入快照**：配置主数据写入口记录显式 `setid`；业务数据写入口记录解析得到的 `setid` 与业务有效期；不记录 `resolved_setid*`，禁止默认 `current_date`。
+- **历史读取口径**：业务读取/回放以 `ResolveSetID(..., as_of_date)` 重新解析为准；写入落库的 `setid` 仅用于审计/排障，不参与业务配置选择。
 - **全局租户常量**：新增 `orgunit.global_tenant_id()` 作为唯一来源；共享层表 `tenant_id` 固定为该值，并与真实租户 ID 保证不冲突（保留常量/哨兵记录）。
 - **集合ID范围**：全模块共用一个 SetID 集合（不按模块拆分）。
 - **继承与补充**：子组织默认继承父级 SetID；本阶段不提供克隆/补充入口，不做运行时合并。
@@ -290,6 +291,19 @@ CREATE TABLE orgunit.setid_binding_versions (
   - 配置主数据（如 JobCatalog）：`GET/POST` 必须显式携带 `setid` + `as_of`（UI）/`setid` + `effective_date`（API）；页面展示 `setid`，缺失/非法必须 fail-closed。
   - 业务数据（如 Position）：`org_unit_id` 必填，用于解析 `setid` 以加载可选配置；不要求手工选择 `setid`。
   - 示例：`/org/job-catalog?as_of=YYYY-MM-DD&setid=ABCDE`、`/org/positions?as_of=YYYY-MM-DD&org_unit_id=...`。
+  - 共享白名单配置（shared-only）：使用独立入口或显式 `share=on`，只读共享表；租户不可写，禁止与租户配置入口混用。
+
+### 5.6 共享白名单配置入口（新增）
+- 共享白名单属于配置主数据入口的一种**显式模式**：
+  - **租户配置模式**：必须显式 `setid`；只读/写租户表；禁止读取 `SHARE`。
+  - **共享配置模式**：显式 `share=on`（或独立 `/org/share/*` 路由）；只读共享表；租户写入一律拒绝。
+- 物理隔离与读开关：
+  - 共享读取必须在同一事务内 `SET LOCAL app.current_tenant = orgunit.global_tenant_id()` + `SET LOCAL app.allow_share_read=on`。
+  - 禁止 SQL OR 合并共享与租户数据，应用层需要合并时以两次请求完成。
+- 白名单与权限：
+  - 仅白名单 scope 允许共享配置模式。
+  - 共享写入仅 SaaS 允许（`app.current_actor_scope=saas`）。
+- UI/接口文案必须区分“业务口径（重新解析）”与“审计口径（写入记录）”，避免误解。
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 解析算法（fail-closed）
@@ -401,10 +415,14 @@ CREATE TABLE orgunit.setid_binding_versions (
 - [X] `/org/nodes` 可修改业务单元标记并持久化（`SET_BUSINESS_UNIT`），权限不足时必须被拒绝。
 - [X] 业务主数据域仅使用租户 SetID：配置主数据必须显式传入 `setid`，业务数据通过 `org_unit_id` 解析 setid，不读取 `SHARE`。
 - [ ] 共享层仅在白名单入口可见，UI 文案标注“共享/只读”，共享项不可编辑。
+- [ ] 共享白名单配置入口必须显式 `share=on` 或独立路由；禁止与租户配置入口混用。
+- [ ] 共享读取必须显式开启共享读开关，且不得用 SQL OR 合并租户/共享数据。
 - [X] 移除 `business_unit_id` 与 `record_group` 的实现与存量结构。
 - [X] `business_unit_id` / `record_group` 全局无新增引用（依赖清单与门禁验证）。
 - [X] SetID 格式更新为 `[A-Z0-9]{5}` 并统一校验。
 - [X] 配置主数据写入口必须显式 `setid` 并落库；业务数据写入口必须解析并记录 `setid` 与 `as_of_date` 用于审计，禁止默认 `current_date` 或记录 `resolved_setid*`。
+- [ ] 历史读取口径以 `ResolveSetID(..., as_of_date)` 重新解析为准；审计 `setid` 仅用于审计/排障。
+- [ ] UI/接口必须标注业务口径与审计口径的差异说明。
 - [X] 租户写 `SHARE` 必失败（DB 约束 + RLS + 入口校验）。
 - [X] SaaS 写 `SHARE` 必成功（仅通过专用写入口）。
 - [X] 租户读取 `SHARE` 仅只读可见。
