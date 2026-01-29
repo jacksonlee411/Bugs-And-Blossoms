@@ -1,4 +1,4 @@
-h1:C4B+ql//I99/UYpDWSBnosq4a82g3l3xWvUo/B4+Ysk=
+h1:bHmEG7zJOPsEjbP/OGc+r3CrF+uo4+QZM+iJqjuAGak=
 20260106080000_orgunit_schema.sql h1:/d/LPcc7jj/HrDGxARdqklD1UvRhk7eQOTk/TAbsUzE=
 20260106083000_orgunit_engine.sql h1:q6h7LOep6ekoy+1p6ubEeWAr/09Oa4gEjN29vs7fx2Y=
 20260106090000_orgunit_read.sql h1:sUauPLiUpVe8iCDBffBvVKuyPaSywBfjG6jN3u7oqOY=
@@ -17,3 +17,5 @@ h1:C4B+ql//I99/UYpDWSBnosq4a82g3l3xWvUo/B4+Ysk=
 20260130002000_orgunit_setid_bootstrap_default_subscriptions.sql h1:lRbTQLX6yBnLko8At4Emy5OMnGfoB9q+y4St/qtzXVY=
 20260130003000_orgunit_setid_default_subscriptions_on_create.sql h1:4jv/J63FIqQwQCq3qMKku4gNCdGHdBF/5kealys8irw=
 20260130004000_orgunit_setid_subscription_effective_date.sql h1:IWE0oEQm580k7CeUCPUzvw503DMH0DtPeGdYX11gNZg=
+20260130080000_orgunit_setid_scope_shared_defaults.sql h1:MgvmASduMf2IH/lX2RdXRuz8ukndONvVqOmZNdOlZvg=
+20260130081000_orgunit_setid_scope_tenant_backfill.sql h1:FZY1c8Rv2yn0SOujMEqcc+psYOqiEpfCrpTfkKyt89g=
