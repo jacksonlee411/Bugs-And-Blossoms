@@ -1,6 +1,6 @@
 # DEV-PLAN-070：SetID 绑定组织架构重构方案
 
-**状态**: 进行中（2026-01-29 01:22 UTC）
+**状态**: 进行中（2026-01-29 05:44 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：替代 `DEV-PLAN-028` 的 SetID 方案升级，落地“SetID 绑定组织架构 + 层级继承解析 + 单一共享层”新需求。
@@ -290,6 +290,18 @@ CREATE TABLE orgunit.setid_binding_versions (
   - 配置主数据（如 JobCatalog）：`GET/POST` 必须显式携带 `setid` + `as_of`（UI）/`setid` + `effective_date`（API）；页面展示 `setid`，缺失/非法必须 fail-closed。
   - 业务数据（如 Position）：`org_unit_id` 必填，用于解析 `setid` 以加载可选配置；不要求手工选择 `setid`。
   - 示例：`/org/job-catalog?as_of=YYYY-MM-DD&setid=ABCDE`、`/org/positions?as_of=YYYY-MM-DD&org_unit_id=...`。
+  - 共享白名单配置（shared-only）：使用独立入口或显式 `share=on`，只读共享表；租户不可写，禁止与租户配置入口混用。
+
+### 5.6 共享白名单配置入口（新增）
+- 共享白名单属于配置主数据入口的一种**显式模式**：
+  - **租户配置模式**：必须显式 `setid`；只读/写租户表；禁止读取 `SHARE`。
+  - **共享配置模式**：显式 `share=on`（或独立 `/org/share/*` 路由）；只读共享表；租户写入一律拒绝。
+- 物理隔离与读开关：
+  - 共享读取必须在同一事务内 `SET LOCAL app.current_tenant = orgunit.global_tenant_id()` + `SET LOCAL app.allow_share_read=on`。
+  - 禁止 SQL OR 合并共享与租户数据，应用层需要合并时以两次请求完成。
+- 白名单与权限：
+  - 仅白名单 scope 允许共享配置模式。
+  - 共享写入仅 SaaS 允许（`app.current_actor_scope=saas`）。
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 解析算法（fail-closed）
@@ -401,6 +413,8 @@ CREATE TABLE orgunit.setid_binding_versions (
 - [X] `/org/nodes` 可修改业务单元标记并持久化（`SET_BUSINESS_UNIT`），权限不足时必须被拒绝。
 - [X] 业务主数据域仅使用租户 SetID：配置主数据必须显式传入 `setid`，业务数据通过 `org_unit_id` 解析 setid，不读取 `SHARE`。
 - [ ] 共享层仅在白名单入口可见，UI 文案标注“共享/只读”，共享项不可编辑。
+- [ ] 共享白名单配置入口必须显式 `share=on` 或独立路由；禁止与租户配置入口混用。
+- [ ] 共享读取必须显式开启共享读开关，且不得用 SQL OR 合并租户/共享数据。
 - [X] 移除 `business_unit_id` 与 `record_group` 的实现与存量结构。
 - [X] `business_unit_id` / `record_group` 全局无新增引用（依赖清单与门禁验证）。
 - [X] SetID 格式更新为 `[A-Z0-9]{5}` 并统一校验。

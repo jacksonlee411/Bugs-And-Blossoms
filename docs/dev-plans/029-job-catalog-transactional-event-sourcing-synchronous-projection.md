@@ -29,7 +29,7 @@
 
 - schema/迁移：`modules/jobcatalog/infrastructure/persistence/schema/00001_jobcatalog_schema.sql`、`modules/jobcatalog/infrastructure/persistence/schema/00002_jobcatalog_job_family_groups.sql`、`modules/jobcatalog/infrastructure/persistence/schema/00003_jobcatalog_engine.sql`、`migrations/jobcatalog/20260106102000_jobcatalog_schema.sql`、`migrations/jobcatalog/20260106102500_jobcatalog_engine.sql`
 - UI 闭环入口：`/org/job-catalog`（实现：`internal/server/jobcatalog.go`；allowlist：`config/routing/allowlist.yaml`）
-- SetID 规范化与校验：`pkg/setid/setid.go`（格式校验/大写收敛）；**Job Catalog 配置主数据入口**必须显式传 `setid`（不通过 `org_unit_id` 推导；业务数据入口另见 `DEV-PLAN-030/070`）。
+- Scope Package 解析：`orgunit.resolve_scope_package(...)`（基于 `setid + scope_code` 解析 `package_id`；对齐 `DEV-PLAN-071`）；**Job Catalog 配置主数据入口**必须显式传 `package_id`，不再直接用 `setid` 过滤（业务数据入口另见 `DEV-PLAN-030/070`）。
 - 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
 - **SSOT 链接**：
   - 触发器矩阵与本地必跑：`AGENTS.md`
@@ -41,11 +41,11 @@
   - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（认证与租户上下文：`docs/dev-plans/019-tenant-and-authn.md`）
   - 时间语义（Valid Time=DATE）：`AGENTS.md`（时间语义章节）、`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（Valid Time 口径）与 `docs/dev-plans/032-effective-date-day-granularity.md`
 
-## 2.5 合同更新（对齐 009M1：SetID 一等公民）
+## 2.5 合同更新（对齐 DEV-PLAN-071：Package 一等公民）
 
-> 009M1 的落地样板已把 `setid` 引入 Job Catalog 的 schema 与写入口（旧实现曾通过 OrgUnit 的 Set Control Mapping 解析；现统一改为 **显式 `setid`（仅限 Job Catalog 配置主数据入口）**）。为避免后续实现继续出现“文档与实现分叉”，本计划自此将 `setid` 视为 Job Catalog 的一等维度：
-- **所有 Job Catalog identity/events/versions 表均包含 `setid`**（同一租户内不同 `setid` 不允许 code 重名）。
-- **所有 Job Catalog Kernel 写入口/读快照均显式接收 `p_setid`**；Go/HTTP 层必须显式传入 `setid`（不通过 `org_unit_id`/`as_of_date` 推导或默认；业务数据入口对齐 `DEV-PLAN-030/070`），并同步 `internal/server/jobcatalog.go` 的入口契约。
+> 009M1 的落地样板曾把 `setid` 引入 Job Catalog 的 schema 与写入口；引入 `DEV-PLAN-071` 后，配置主数据改为 **以 `package_id` 为一等维度**（`setid + scope_code` 解析得到 `package_id`），`setid` 不再作为配置表过滤维度。为避免后续实现继续出现“文档与实现分叉”，本计划自此将 `package_id` 视为 Job Catalog 的一等维度：
+- **所有 Job Catalog identity/events/versions 表均包含 `package_id`**（同一 `package_id` 内 `code` 唯一；不同 package 允许同码）。
+- **所有 Job Catalog Kernel 写入口/读快照均显式接收 `p_package_id`**；Go/HTTP 层必须显式传入 `package_id`（`setid` 仅用于解析 `package_id`，不作为过滤维度），并同步 `internal/server/jobcatalog.go` 的入口契约。
 
 ## 2.6 落地路径（可验收分步）
 > 目标：把实现拆成“每步可验收”的闭环，避免实现期即兴补丁与契约漂移。
@@ -56,7 +56,7 @@
 3) **Kernel 写入口函数（先闭环入库与拒绝）**：实现 `submit_*_event` 的参数校验、幂等与同日唯一（依赖唯一约束）；业务级拒绝必须使用 `MESSAGE` 稳定 code + `DETAIL` 动态信息（见 7.1）。
 4) **replay（投射）闭环**：实现 `replay_*_versions`（delete+rebuild）与 gapless/no-overlap 校验；并在 `replay_job_profile_versions` 内裁决 `job_profile_version_job_families` 的“至少一个 family + 恰好一个 primary”不变量（v1 默认不引入触发器分支，保持简单）。
 5) **Go Facade 闭环**：实现最小命令层（事务 + tenant 注入 + 调 `submit_*_event`），并把 DB 错误稳定映射到 `pkg/serrors`（见 7.1）。
-6) **读模型快照（SQL）**：实现 `get_job_catalog_snapshot(p_tenant_id, p_setid, p_query_date)`，并提供最小查询验收（as-of 一致性）。
+6) **读模型快照（SQL）**：实现 `get_job_catalog_snapshot(p_tenant_id, p_package_id, p_query_date)`，并提供最小查询验收（as-of 一致性）。
 7) **端到端最小可发现入口（可选，另计划承接）**：若需要用户可见能力，请在 jobcatalog 模块 presentation 增加最小页面/路由入口或明确由 `DEV-PLAN-009M1` 承接（避免“僵尸能力”）。
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
@@ -103,13 +103,13 @@
 ```sql
 -- 说明：所有 events 表形状同构；每类实体独立表以保持简单。
 -- - 幂等：UNIQUE(event_id)
--- - 同日唯一：UNIQUE(tenant_id, <entity_id>, effective_date)
+-- - 同日唯一：UNIQUE(tenant_id, package_id, <entity_id>, effective_date)
 
 CREATE TABLE job_family_group_events (
   id               bigserial PRIMARY KEY,
   event_id         uuid NOT NULL DEFAULT gen_random_uuid(),
   tenant_id        uuid NOT NULL,
-  setid            text NOT NULL,
+  package_id       uuid NOT NULL,
   job_family_group_id uuid NOT NULL,
   event_type       text NOT NULL,
   effective_date   date NOT NULL,
@@ -119,16 +119,16 @@ CREATE TABLE job_family_group_events (
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at       timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_family_group_events_event_id_unique UNIQUE (event_id),
-  CONSTRAINT job_family_group_events_one_per_day_unique UNIQUE (tenant_id, setid, job_family_group_id, effective_date),
+  CONSTRAINT job_family_group_events_one_per_day_unique UNIQUE (tenant_id, package_id, job_family_group_id, effective_date),
   CONSTRAINT job_family_group_events_request_id_unique UNIQUE (tenant_id, request_id),
-  CONSTRAINT job_family_group_events_group_fk FOREIGN KEY (tenant_id, setid, job_family_group_id) REFERENCES job_family_groups(tenant_id, setid, id) ON DELETE RESTRICT
+  CONSTRAINT job_family_group_events_group_fk FOREIGN KEY (tenant_id, package_id, job_family_group_id) REFERENCES job_family_groups(tenant_id, package_id, id) ON DELETE RESTRICT
 );
 
 CREATE TABLE job_family_events (
   id               bigserial PRIMARY KEY,
   event_id         uuid NOT NULL DEFAULT gen_random_uuid(),
   tenant_id        uuid NOT NULL,
-  setid            text NOT NULL,
+  package_id       uuid NOT NULL,
   job_family_id    uuid NOT NULL,
   event_type       text NOT NULL,
   effective_date   date NOT NULL,
@@ -138,16 +138,16 @@ CREATE TABLE job_family_events (
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at       timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_family_events_event_id_unique UNIQUE (event_id),
-  CONSTRAINT job_family_events_one_per_day_unique UNIQUE (tenant_id, setid, job_family_id, effective_date),
+  CONSTRAINT job_family_events_one_per_day_unique UNIQUE (tenant_id, package_id, job_family_id, effective_date),
   CONSTRAINT job_family_events_request_id_unique UNIQUE (tenant_id, request_id),
-  CONSTRAINT job_family_events_family_fk FOREIGN KEY (tenant_id, setid, job_family_id) REFERENCES job_families(tenant_id, setid, id) ON DELETE RESTRICT
+  CONSTRAINT job_family_events_family_fk FOREIGN KEY (tenant_id, package_id, job_family_id) REFERENCES job_families(tenant_id, package_id, id) ON DELETE RESTRICT
 );
 
 CREATE TABLE job_level_events (
   id               bigserial PRIMARY KEY,
   event_id         uuid NOT NULL DEFAULT gen_random_uuid(),
   tenant_id        uuid NOT NULL,
-  setid            text NOT NULL,
+  package_id       uuid NOT NULL,
   job_level_id     uuid NOT NULL,
   event_type       text NOT NULL,
   effective_date   date NOT NULL,
@@ -157,16 +157,16 @@ CREATE TABLE job_level_events (
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at       timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_level_events_event_id_unique UNIQUE (event_id),
-  CONSTRAINT job_level_events_one_per_day_unique UNIQUE (tenant_id, setid, job_level_id, effective_date),
+  CONSTRAINT job_level_events_one_per_day_unique UNIQUE (tenant_id, package_id, job_level_id, effective_date),
   CONSTRAINT job_level_events_request_id_unique UNIQUE (tenant_id, request_id),
-  CONSTRAINT job_level_events_level_fk FOREIGN KEY (tenant_id, setid, job_level_id) REFERENCES job_levels(tenant_id, setid, id) ON DELETE RESTRICT
+  CONSTRAINT job_level_events_level_fk FOREIGN KEY (tenant_id, package_id, job_level_id) REFERENCES job_levels(tenant_id, package_id, id) ON DELETE RESTRICT
 );
 
 CREATE TABLE job_profile_events (
   id               bigserial PRIMARY KEY,
   event_id         uuid NOT NULL DEFAULT gen_random_uuid(),
   tenant_id        uuid NOT NULL,
-  setid            text NOT NULL,
+  package_id       uuid NOT NULL,
   job_profile_id   uuid NOT NULL,
   event_type       text NOT NULL,
   effective_date   date NOT NULL,
@@ -176,9 +176,9 @@ CREATE TABLE job_profile_events (
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at       timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT job_profile_events_event_id_unique UNIQUE (event_id),
-  CONSTRAINT job_profile_events_one_per_day_unique UNIQUE (tenant_id, setid, job_profile_id, effective_date),
+  CONSTRAINT job_profile_events_one_per_day_unique UNIQUE (tenant_id, package_id, job_profile_id, effective_date),
   CONSTRAINT job_profile_events_request_id_unique UNIQUE (tenant_id, request_id),
-  CONSTRAINT job_profile_events_profile_fk FOREIGN KEY (tenant_id, setid, job_profile_id) REFERENCES job_profiles(tenant_id, setid, id) ON DELETE RESTRICT
+  CONSTRAINT job_profile_events_profile_fk FOREIGN KEY (tenant_id, package_id, job_profile_id) REFERENCES job_profiles(tenant_id, package_id, id) ON DELETE RESTRICT
 );
 ```
 
@@ -230,51 +230,51 @@ CREATE TABLE job_profile_events (
 ### 4.2 Identity（code 唯一性事实源）
 > 说明：identity 表用于承载 **稳定 ID**（被外部引用的锚点）与 **code 唯一性**；所有有效期属性与可变关系统一落在 versions 表。
 >
-> **code 唯一性口径（选定）**：Job Catalog 的 code 唯一性以 `(tenant_id, code)` 为事实源；同一租户下不同 `setid` 不允许 code 重名。
+> **code 唯一性口径（选定）**：Job Catalog 的 code 唯一性以 `(tenant_id, package_id, code)` 为事实源；同一租户下不同 package 允许 code 重名。
 
 ```sql
 CREATE TABLE job_family_groups (
   tenant_id uuid NOT NULL,
-  setid     text NOT NULL,
+  package_id uuid NOT NULL,
   id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   code      varchar(64) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_family_groups_tenant_setid_id_key UNIQUE (tenant_id, setid, id),
-  CONSTRAINT job_family_groups_tenant_code_key UNIQUE (tenant_id, code)
+  CONSTRAINT job_family_groups_tenant_package_id_id_key UNIQUE (tenant_id, package_id, id),
+  CONSTRAINT job_family_groups_tenant_package_id_code_key UNIQUE (tenant_id, package_id, code)
 );
 
 CREATE TABLE job_families (
   tenant_id uuid NOT NULL,
-  setid     text NOT NULL,
+  package_id uuid NOT NULL,
   id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   code      varchar(64) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_families_tenant_setid_id_key UNIQUE (tenant_id, setid, id),
-  CONSTRAINT job_families_tenant_code_key UNIQUE (tenant_id, code)
+  CONSTRAINT job_families_tenant_package_id_id_key UNIQUE (tenant_id, package_id, id),
+  CONSTRAINT job_families_tenant_package_id_code_key UNIQUE (tenant_id, package_id, code)
 );
 
 CREATE TABLE job_levels (
   tenant_id uuid NOT NULL,
-  setid     text NOT NULL,
+  package_id uuid NOT NULL,
   id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   code      varchar(64) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_levels_tenant_setid_id_key UNIQUE (tenant_id, setid, id),
-  CONSTRAINT job_levels_tenant_code_key UNIQUE (tenant_id, code)
+  CONSTRAINT job_levels_tenant_package_id_id_key UNIQUE (tenant_id, package_id, id),
+  CONSTRAINT job_levels_tenant_package_id_code_key UNIQUE (tenant_id, package_id, code)
 );
 
 CREATE TABLE job_profiles (
   tenant_id uuid NOT NULL,
-  setid     text NOT NULL,
+  package_id uuid NOT NULL,
   id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   code      varchar(64) NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT job_profiles_tenant_setid_id_key UNIQUE (tenant_id, setid, id),
-  CONSTRAINT job_profiles_tenant_code_key UNIQUE (tenant_id, code)
+  CONSTRAINT job_profiles_tenant_package_id_id_key UNIQUE (tenant_id, package_id, id),
+  CONSTRAINT job_profiles_tenant_package_id_code_key UNIQUE (tenant_id, package_id, code)
 );
 ```
 
@@ -282,13 +282,13 @@ CREATE TABLE job_profiles (
 
 **选定（避免边界漂移）**：
 - **支持 effective-dated reparenting**：`job_family_group_id` 作为有效期属性，落在 `job_family_versions`（而不是 identity），通过 `job_family_events → replay_job_family_versions` 变更。
-- **code 唯一性口径（选定）**：`job_*` 的 `code` 在 schema 层以 `(tenant_id, code)` 唯一；不引入“按 group 维度的时态唯一性”。
+- **code 唯一性口径（选定）**：`job_*` 的 `code` 在 schema 层以 `(tenant_id, package_id, code)` 唯一；不引入“按 group 维度的时态唯一性”。
 
 > v1 约束（建议固化以保持简单）：identity 的 `code` 视为不可变；如需更换 code，采用“新建实体 + disable 旧实体（versions）”，避免更新 identity 引入第二事实源。
 
 identity 合同补充（v1）：
 - identity 行仅允许由各自 `submit_*_event(event_type='CREATE')` 创建；应用层禁止直写。
-- `job_*.(tenant_id,code)` 的唯一性是 schema 层强约束；SetID 变化不再允许同码并行存在。
+- `job_*.(tenant_id, package_id, code)` 的唯一性是 schema 层强约束；不同 package 允许同码并行存在。
 
 ### 4.3 Versions（Read Side / Projection）
 > 说明：各实体 versions 使用 `daterange validity` + EXCLUDE no-overlap，并由 replay 生成 gapless（相邻切片无间隙且末段 infinity）。
@@ -298,7 +298,7 @@ identity 合同补充（v1）：
 CREATE TABLE job_profile_versions (
   id              bigserial PRIMARY KEY,
   tenant_id       uuid NOT NULL,
-  setid           text NOT NULL,
+  package_id      uuid NOT NULL,
   job_profile_id  uuid NOT NULL,
 
   name            text NOT NULL,
@@ -312,17 +312,17 @@ CREATE TABLE job_profile_versions (
   CONSTRAINT job_profile_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT job_profile_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT job_profile_versions_external_refs_is_object_check CHECK (jsonb_typeof(external_refs) = 'object'),
-  CONSTRAINT job_profile_versions_profile_fk FOREIGN KEY (tenant_id, setid, job_profile_id) REFERENCES job_profiles(tenant_id, setid, id) ON DELETE RESTRICT
+  CONSTRAINT job_profile_versions_profile_fk FOREIGN KEY (tenant_id, package_id, job_profile_id) REFERENCES job_profiles(tenant_id, package_id, id) ON DELETE RESTRICT
 );
 
 ALTER TABLE job_profile_versions
-  ADD CONSTRAINT job_profile_versions_tenant_setid_id_key UNIQUE (tenant_id, setid, id);
+  ADD CONSTRAINT job_profile_versions_tenant_package_id_id_key UNIQUE (tenant_id, package_id, id);
 
 ALTER TABLE job_profile_versions
   ADD CONSTRAINT job_profile_versions_no_overlap
   EXCLUDE USING gist (
     tenant_id gist_uuid_ops WITH =,
-    setid gist_text_ops WITH =,
+    package_id gist_uuid_ops WITH =,
     job_profile_id gist_uuid_ops WITH =,
     validity WITH &&
   );
@@ -333,7 +333,7 @@ ALTER TABLE job_profile_versions
 CREATE TABLE job_family_versions (
   id              bigserial PRIMARY KEY,
   tenant_id       uuid NOT NULL,
-  setid           text NOT NULL,
+  package_id      uuid NOT NULL,
   job_family_id   uuid NOT NULL,
   job_family_group_id uuid NOT NULL,
 
@@ -348,15 +348,15 @@ CREATE TABLE job_family_versions (
   CONSTRAINT job_family_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT job_family_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT job_family_versions_external_refs_is_object_check CHECK (jsonb_typeof(external_refs) = 'object'),
-  CONSTRAINT job_family_versions_family_fk FOREIGN KEY (tenant_id, setid, job_family_id) REFERENCES job_families(tenant_id, setid, id) ON DELETE RESTRICT,
-  CONSTRAINT job_family_versions_group_fk FOREIGN KEY (tenant_id, setid, job_family_group_id) REFERENCES job_family_groups(tenant_id, setid, id) ON DELETE RESTRICT
+  CONSTRAINT job_family_versions_family_fk FOREIGN KEY (tenant_id, package_id, job_family_id) REFERENCES job_families(tenant_id, package_id, id) ON DELETE RESTRICT,
+  CONSTRAINT job_family_versions_group_fk FOREIGN KEY (tenant_id, package_id, job_family_group_id) REFERENCES job_family_groups(tenant_id, package_id, id) ON DELETE RESTRICT
 );
 
 ALTER TABLE job_family_versions
   ADD CONSTRAINT job_family_versions_no_overlap
   EXCLUDE USING gist (
     tenant_id gist_uuid_ops WITH =,
-    setid gist_text_ops WITH =,
+    package_id gist_uuid_ops WITH =,
     job_family_id gist_uuid_ops WITH =,
     validity WITH &&
   );
@@ -376,21 +376,21 @@ ALTER TABLE job_family_versions
 ```sql
 CREATE TABLE job_profile_version_job_families (
   tenant_id            uuid NOT NULL,
-  setid                text NOT NULL,
+  package_id           uuid NOT NULL,
   job_profile_version_id bigint NOT NULL,
   job_family_id        uuid NOT NULL,
   is_primary           boolean NOT NULL DEFAULT FALSE,
   created_at           timestamptz NOT NULL DEFAULT now(),
   updated_at           timestamptz NOT NULL DEFAULT now(),
 
-  CONSTRAINT job_profile_version_job_families_pkey PRIMARY KEY (tenant_id, setid, job_profile_version_id, job_family_id),
+  CONSTRAINT job_profile_version_job_families_pkey PRIMARY KEY (tenant_id, package_id, job_profile_version_id, job_family_id),
   CONSTRAINT job_profile_version_job_families_profile_version_fk
-    FOREIGN KEY (tenant_id, setid, job_profile_version_id) REFERENCES job_profile_versions(tenant_id, setid, id) ON DELETE CASCADE,
-  CONSTRAINT job_profile_version_job_families_family_fk FOREIGN KEY (tenant_id, setid, job_family_id) REFERENCES job_families(tenant_id, setid, id) ON DELETE RESTRICT
+    FOREIGN KEY (tenant_id, package_id, job_profile_version_id) REFERENCES job_profile_versions(tenant_id, package_id, id) ON DELETE CASCADE,
+  CONSTRAINT job_profile_version_job_families_family_fk FOREIGN KEY (tenant_id, package_id, job_family_id) REFERENCES job_families(tenant_id, package_id, id) ON DELETE RESTRICT
 );
 
 CREATE UNIQUE INDEX job_profile_version_job_families_primary_unique
-  ON job_profile_version_job_families (tenant_id, setid, job_profile_version_id)
+  ON job_profile_version_job_families (tenant_id, package_id, job_profile_version_id)
   WHERE is_primary = TRUE;
 ```
 
@@ -410,7 +410,7 @@ CREATE UNIQUE INDEX job_profile_version_job_families_primary_unique
 CREATE OR REPLACE FUNCTION submit_job_family_group_event(
   p_event_id uuid,
   p_tenant_id uuid,
-  p_setid text,
+  p_package_id uuid,
   p_job_family_group_id uuid,
   p_event_type text,
   p_effective_date date,
@@ -422,7 +422,7 @@ CREATE OR REPLACE FUNCTION submit_job_family_group_event(
 CREATE OR REPLACE FUNCTION submit_job_family_event(
   p_event_id uuid,
   p_tenant_id uuid,
-  p_setid text,
+  p_package_id uuid,
   p_job_family_id uuid,
   p_event_type text,
   p_effective_date date,
@@ -434,7 +434,7 @@ CREATE OR REPLACE FUNCTION submit_job_family_event(
 CREATE OR REPLACE FUNCTION submit_job_level_event(
   p_event_id uuid,
   p_tenant_id uuid,
-  p_setid text,
+  p_package_id uuid,
   p_job_level_id uuid,
   p_event_type text,
   p_effective_date date,
@@ -446,7 +446,7 @@ CREATE OR REPLACE FUNCTION submit_job_level_event(
 CREATE OR REPLACE FUNCTION submit_job_profile_event(
   p_event_id uuid,
   p_tenant_id uuid,
-  p_setid text,
+  p_package_id uuid,
   p_job_profile_id uuid,
   p_event_type text,
   p_effective_date date,
@@ -460,24 +460,24 @@ CREATE OR REPLACE FUNCTION submit_job_profile_event(
 0) 多租户上下文（RLS）：写入口函数开头必须断言 `p_tenant_id` 与 `app.current_tenant` 一致（对齐 `DEV-PLAN-021`）。
 1) 获取互斥锁：`jobcatalog:write-lock:<tenant_id>:JobCatalog`（同一事务内）。
 2) 参数校验：`p_event_type` 必须为 `CREATE/UPDATE/DISABLE`；`p_payload` 必须为 object（空则视为 `{}`）。
-   - `p_setid` 必须可 normalize（格式校验与大小写收敛）；写入口应统一使用 `v_setid := normalize_setid(p_setid)`。
-   - `v_setid` 必须存在于租户 SetID 且为 `active`；租户写入口禁止使用 `SHARE`。
+   - `p_package_id` 必须为有效 uuid；写入口应统一使用 `v_package_id := p_package_id`。
+   - `v_package_id` 必须存在且为 `active`（由 `ResolveScopePackage(tenant_id, setid, scope_code, as_of_date)` 解析并校验后传入）。
 3) identity 处理：
-   - `CREATE`：从 `payload.code` 创建对应 identity 行（包含 `tenant_id/setid/id/code`）；code 冲突应可稳定映射（推荐用 `23505 + constraint name`）。
-   - 非 `CREATE`：要求 identity 行已存在（至少满足 `(tenant_id,setid,id)`）；否则拒绝（稳定错误码见 7.1）。
+   - `CREATE`：从 `payload.code` 创建对应 identity 行（包含 `tenant_id/package_id/id/code`）；code 冲突应可稳定映射（推荐用 `23505 + constraint name`）。
+   - 非 `CREATE`：要求 identity 行已存在（至少满足 `(tenant_id,package_id,id)`）；否则拒绝（稳定错误码见 7.1）。
 4) 引用字段校验（选定，见 10.2）：仅校验被引用实体的 identity 存在且属于同一 `p_tenant_id`（`job_family_group_id/job_family_ids/primary_job_family_id`）；不强制 referenced entity 在 `effective_date` 上 `is_active=true` 或“存在有效 versions”。
    - 若在同一事务内既创建依赖方 identity 又创建引用方（例如先建 group 再建 family），必须保证调用顺序先依赖后引用。
 5) 写入对应 `*_events`（以 `event_id` 幂等；同一实体同日唯一由约束拒绝）。
 6) 幂等复用校验：若 `event_id` 已存在但参数不同，拒绝；若完全相同则返回既有 event 行 id（不重复投射）。
-7) 插入成功后调用对应 `replay_*_versions(p_tenant_id, v_setid, <entity_id>)`（同一事务内）生成 gapless versions，并裁决 `job_profile_version_job_families` 等不变量（4.4）。
+7) 插入成功后调用对应 `replay_*_versions(p_tenant_id, v_package_id, <entity_id>)`（同一事务内）生成 gapless versions，并裁决 `job_profile_version_job_families` 等不变量（4.4）。
 
 > 说明：不提供 `submit_job_catalog_event(entity_type, ...)` 这种分发器入口，避免多主体共享事件流带来的复杂度与漂移。
 
 ### 5.3 replay（按实体，全量重放）
-- `replay_job_family_group_versions(p_tenant_id uuid, p_setid text, p_job_family_group_id uuid)`
-- `replay_job_family_versions(p_tenant_id uuid, p_setid text, p_job_family_id uuid)`
-- `replay_job_level_versions(p_tenant_id uuid, p_setid text, p_job_level_id uuid)`
-- `replay_job_profile_versions(p_tenant_id uuid, p_setid text, p_job_profile_id uuid)`：重建 `job_profile_versions` 与 `job_profile_version_job_families`（删除旧 versions 行后可依赖 FK `ON DELETE CASCADE` 清理旧关系）。
+- `replay_job_family_group_versions(p_tenant_id uuid, p_package_id uuid, p_job_family_group_id uuid)`
+- `replay_job_family_versions(p_tenant_id uuid, p_package_id uuid, p_job_family_id uuid)`
+- `replay_job_level_versions(p_tenant_id uuid, p_package_id uuid, p_job_level_id uuid)`
+- `replay_job_profile_versions(p_tenant_id uuid, p_package_id uuid, p_job_profile_id uuid)`：重建 `job_profile_versions` 与 `job_profile_version_job_families`（删除旧 versions 行后可依赖 FK `ON DELETE CASCADE` 清理旧关系）。
 
 > `replay_*` / `apply_*_logic` 属于 Kernel 内部实现细节：用于把事件投射到各 `*_versions` 与关系表，禁止应用角色直接执行。
 
@@ -488,13 +488,13 @@ CREATE OR REPLACE FUNCTION submit_job_profile_event(
 ```sql
 CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
   p_tenant_id uuid,
-  p_setid text,
+  p_package_id uuid,
   p_query_date date
 ) RETURNS TABLE (...);
 ```
 
 语义：
-- `get_job_catalog_snapshot(p_tenant_id, p_setid, p_query_date)`：返回指定 `setid` 下、as-of 的 group/family/level/profile（含 profile↔families 关系）。
+- `get_job_catalog_snapshot(p_tenant_id, p_package_id, p_query_date)`：返回指定 `package_id` 下、as-of 的 group/family/level/profile（含 profile↔families 关系）。
   - 返回结果应同时包含：identity 的稳定锚点（`<entity_id>` + `code`）与 versions 的有效期属性（`name/description/is_active/external_refs/validity/last_event_id`）。
   - v1 不强制按 `is_active` 过滤：快照返回“事实”（含 `is_active` 值），展示/筛选由上层决定（对齐 10.2 的“identity-only 引用校验”口径）。
 
@@ -517,7 +517,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 | --- | --- | --- | --- |
 | Job Catalog 实体不存在 | `submit_*_event` 明确拒绝 | DB exception `MESSAGE` | `JOBCATALOG_NOT_FOUND` |
 | 参数/事件类型/payload 不合法 | `submit_*_event` 明确拒绝 | DB exception `MESSAGE` | `JOBCATALOG_INVALID_ARGUMENT` |
-| SetID 不合法/不存在/已禁用 | `submit_*_event` 参数校验 | DB exception `MESSAGE` | `JOBCATALOG_SETID_INVALID` / `JOBCATALOG_SETID_NOT_FOUND` / `JOBCATALOG_SETID_DISABLED` |
+| Package 不合法/不存在/已禁用 | `submit_*_event` 参数校验 | DB exception `MESSAGE` | `JOBCATALOG_PACKAGE_INVALID` / `JOBCATALOG_PACKAGE_NOT_FOUND` / `JOBCATALOG_PACKAGE_DISABLED` |
 | 幂等键复用但参数不同 | `submit_*_event` 明确拒绝 | DB exception `MESSAGE` | `JOBCATALOG_IDEMPOTENCY_REUSED` |
 | 引用字段指向不存在的 identity | `submit_*_event` 参数校验 | DB exception `MESSAGE` | `JOBCATALOG_REFERENCE_NOT_FOUND` |
 | code 唯一性冲突 | identity 表唯一约束 | `23505` + constraint name | `JOBCATALOG_CODE_CONFLICT` |
@@ -528,7 +528,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 
 ## 8. 测试与验收标准 (Acceptance Criteria)
 - [ ] RLS（对齐 021）：缺失 `app.current_tenant` 时对 tenant-scoped 表的读写必须 fail-closed；tenant mismatch 必须稳定失败可映射。
-- [ ] 显式 SetID：写入口必须显式 `setid` 且为租户 `active`（禁止 `SHARE`）；缺失/非法需稳定映射错误码。
+- [ ] 显式 Package：写入口必须显式 `package_id` 且为 `active`；缺失/非法需稳定映射错误码。
 - [ ] 事件幂等：同 `event_id` 重试不重复投射。
 - [ ] 全量重放：每次写入都在同一事务内 delete+replay 对应 versions，且写后读强一致。
 - [ ] 同日唯一：同一实体同日提交第二条事件被拒绝且可稳定映射错误码（每类实体独立 events 表）。
@@ -540,10 +540,10 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 
 ## 9. 运维与灾备（Rebuild / Replay）
 当投射逻辑缺陷导致 versions 错误时，可通过 replay 重建读模型（versions 可丢弃重建）：
-- Group：`SELECT replay_job_family_group_versions('<tenant_id>'::uuid, '<setid>'::text, '<job_family_group_id>'::uuid);`
-- Family：`SELECT replay_job_family_versions('<tenant_id>'::uuid, '<setid>'::text, '<job_family_id>'::uuid);`
-- Level：`SELECT replay_job_level_versions('<tenant_id>'::uuid, '<setid>'::text, '<job_level_id>'::uuid);`
-- Profile：`SELECT replay_job_profile_versions('<tenant_id>'::uuid, '<setid>'::text, '<job_profile_id>'::uuid);`
+- Group：`SELECT replay_job_family_group_versions('<tenant_id>'::uuid, '<package_id>'::uuid, '<job_family_group_id>'::uuid);`
+- Family：`SELECT replay_job_family_versions('<tenant_id>'::uuid, '<package_id>'::uuid, '<job_family_id>'::uuid);`
+- Level：`SELECT replay_job_level_versions('<tenant_id>'::uuid, '<package_id>'::uuid, '<job_level_id>'::uuid);`
+- Profile：`SELECT replay_job_profile_versions('<tenant_id>'::uuid, '<package_id>'::uuid, '<job_profile_id>'::uuid);`
 
 > 建议在执行前复用同一把维护互斥锁（`jobcatalog:write-lock:<tenant_id>:JobCatalog`）确保与在线写入互斥。
 
@@ -575,7 +575,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 - [x] **M2：合同对齐补丁（在既有 009M1 上收口）**
   - 范围：在不扩展业务实体的前提下，先把已落地的 `job_family_groups` 补齐到“可作为模板复用”的合同口径。
   - 交付物（至少）：
-    - schema：为 `jobcatalog.job_family_groups` 增加 `UNIQUE (tenant_id, setid, id)`（用于后续复合 FK 的稳定锚点），并将 events/versions 侧 FK/唯一约束命名收敛到可稳定映射。
+    - schema：为 `jobcatalog.job_family_groups` 增加 `UNIQUE (tenant_id, package_id, id)`（用于后续复合 FK 的稳定锚点），并将 events/versions 侧 FK/唯一约束命名收敛到可稳定映射。
     - kernel：为 `submit_job_family_group_event` 引入 tenant 内写互斥锁（`jobcatalog:write-lock:<tenant_id>:JobCatalog`），并补齐 `event_id` 幂等语义（同 `event_id` 完全相同则返回既有 event_db_id；参数不同则拒绝 `JOBCATALOG_IDEMPOTENCY_REUSED`）。
     - replay：确保 delete+replay 仍保持 gapless/no-overlap 的裁决路径与稳定错误形状。
   - Done（最小验收）：
@@ -585,7 +585,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 - [x] **M3：Job Family（`job_families`，含 effective-dated reparenting）**
   - 范围：落地 Job Family 的 identity/events/versions + submit/replay；支持 `job_family_group_id` 的有效期归属变更（reparenting）。
   - 交付物（至少）：
-    - schema：`jobcatalog.job_families/job_family_events/job_family_versions`（含 `setid`、RLS、约束、索引）。
+    - schema：`jobcatalog.job_families/job_family_events/job_family_versions`（含 `package_id`、RLS、约束、索引）。
     - kernel：`submit_job_family_event(...)` + `replay_job_family_versions(...)`（同事务 delete+replay；引用校验按 §10.2）。
   - Done（最小验收）：
     - 具备：CREATE/UPDATE/DISABLE 写入 → as-of 读取（直接查 versions 或通过快照函数；快照可留到 M6）。
@@ -594,7 +594,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 - [x] **M4：Job Level（`job_levels`）**
   - 范围：落地 Job Level 的 identity/events/versions + submit/replay。
   - 交付物（至少）：
-    - schema：`jobcatalog.job_levels/job_level_events/job_level_versions`（含 `setid`、RLS、约束、索引）。
+    - schema：`jobcatalog.job_levels/job_level_events/job_level_versions`（含 `package_id`、RLS、约束、索引）。
     - kernel：`submit_job_level_event(...)` + `replay_job_level_versions(...)`（幂等/同日唯一/全量重放对齐 M2 口径）。
   - Done（最小验收）：
     - 具备：CREATE/UPDATE/DISABLE 写入 → as-of 读取闭环。
@@ -603,7 +603,7 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
 - [x] **M5：Job Profile（`job_profiles`）+ Profile↔Families 关系**
   - 范围：落地 Job Profile 的 identity/events/versions + submit/replay，并实现 `job_profile_version_job_families` 关系表与“至少一个 family + 恰好一个 primary”的不变量裁决。
   - 交付物（至少）：
-    - schema：`jobcatalog.job_profiles/job_profile_events/job_profile_versions/job_profile_version_job_families`（含 `setid`、RLS、约束、索引）。
+    - schema：`jobcatalog.job_profiles/job_profile_events/job_profile_versions/job_profile_version_job_families`（含 `package_id`、RLS、约束、索引）。
     - kernel：`submit_job_profile_event(...)` + `replay_job_profile_versions(...)`，在 replay 内裁决：
       - families 非空、去重；
       - primary 恰好一个且属于 families；
@@ -613,13 +613,13 @@ CREATE OR REPLACE FUNCTION get_job_catalog_snapshot(
   - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证（覆盖 profile CREATE/UPDATE/DISABLE 与 “至少一个 family + 恰好一个 primary”）。
 
 - [x] **M6：读模型快照（`get_job_catalog_snapshot`）**
-  - 范围：实现 `get_job_catalog_snapshot(p_tenant_id, p_setid, p_query_date)`，返回 as-of 的 group/family/level/profile（含 profile↔families）。
+  - 范围：实现 `get_job_catalog_snapshot(p_tenant_id, p_package_id, p_query_date)`，返回 as-of 的 group/family/level/profile（含 profile↔families）。
   - 交付物（至少）：
     - SQL：快照函数本体（RLS 口径 fail-closed），并提供最小查询验收脚本/示例。
   - Done（最小验收）：
     - §8 的 “as-of 查询一致性” 可通过快照函数稳定验收。
   - 记录：已通过 `make jobcatalog plan && make jobcatalog lint && make jobcatalog migrate up`（含 `jobcatalog-smoke`）验证（`jobcatalog-smoke` 覆盖 `get_job_catalog_snapshot(...)` 调用）。
-  - 示例：`SELECT * FROM jobcatalog.get_job_catalog_snapshot('<tenant_id>'::uuid, '<setid>'::text, '<query_date>'::date);`
+  - 示例：`SELECT * FROM jobcatalog.get_job_catalog_snapshot('<tenant_id>'::uuid, '<package_id>'::uuid, '<query_date>'::date);`
 
 - [x] **M7：Go Facade + UI 可见闭环（可选扩展，但推荐）**
   - 说明：本里程碑用于满足“用户可见性原则”，避免长期积累只有 DB 没有入口的僵尸能力；若短期不做 UI，也必须在 `DEV-PLAN-018`/测试计划中明确验收方式（例如仅用 curl/SQL 验收）。
