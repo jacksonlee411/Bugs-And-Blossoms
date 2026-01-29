@@ -82,13 +82,13 @@ fi
 echo "[e2e] wait postgres ready"
 role_line=""
 get_role_line() {
-  docker exec -i "$postgres_cid" psql -U app -d postgres -tAc \
+  docker exec -i "$postgres_cid" psql -h localhost -U app -d postgres -tAc \
     "SELECT (CASE WHEN rolsuper THEN 't' ELSE 'f' END) || '|' || (CASE WHEN rolbypassrls THEN 't' ELSE 'f' END) || '|' || (CASE WHEN rolcanlogin THEN 't' ELSE 'f' END) FROM pg_roles WHERE rolname='app_runtime';" \
     2>/dev/null || true
 }
 
 for i in $(seq 1 120); do
-  if ! docker exec -i "$postgres_cid" pg_isready -U app -d postgres >/dev/null 2>&1; then
+  if ! docker exec -i "$postgres_cid" pg_isready -h localhost -U app -d postgres >/dev/null 2>&1; then
     sleep 0.5
     continue
   fi
@@ -112,7 +112,7 @@ if [[ "$role_line" != "f|f|t" ]]; then
 fi
 
 echo "[e2e] ensure superadmin_runtime role exists (dev-only)"
-docker exec -i "$postgres_cid" psql -U app -d postgres -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
+docker exec -i "$postgres_cid" psql -h localhost -U app -d postgres -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'superadmin_runtime') THEN
@@ -133,7 +133,7 @@ SQL
 
 echo "[e2e] assert superadmin_runtime role exists"
 sa_role_line="$(
-  docker exec -i "$postgres_cid" psql -U app -d postgres -tAc \
+  docker exec -i "$postgres_cid" psql -h localhost -U app -d postgres -tAc \
     "SELECT (CASE WHEN rolsuper THEN 't' ELSE 'f' END) || '|' || (CASE WHEN rolbypassrls THEN 't' ELSE 'f' END) || '|' || (CASE WHEN rolcanlogin THEN 't' ELSE 'f' END) FROM pg_roles WHERE rolname='superadmin_runtime';" \
     2>/dev/null || true
 )"
