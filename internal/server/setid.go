@@ -32,7 +32,7 @@ type SetIDGovernanceStore interface {
 	EnsureBootstrap(ctx context.Context, tenantID string, initiatorID string) error
 	ListSetIDs(ctx context.Context, tenantID string) ([]SetID, error)
 	ListGlobalSetIDs(ctx context.Context) ([]SetID, error)
-	CreateSetID(ctx context.Context, tenantID string, setID string, name string, requestID string, initiatorID string) error
+	CreateSetID(ctx context.Context, tenantID string, setID string, name string, effectiveDate string, requestID string, initiatorID string) error
 	ListSetIDBindings(ctx context.Context, tenantID string, asOfDate string) ([]SetIDBindingRow, error)
 	BindSetID(ctx context.Context, tenantID string, orgUnitID string, effectiveDate string, setID string, requestID string, initiatorID string) error
 	CreateGlobalSetID(ctx context.Context, name string, requestID string, initiatorID string, actorScope string) error
@@ -108,7 +108,7 @@ ORDER BY setid ASC
 	return out, nil
 }
 
-func (s *setidPGStore) CreateSetID(ctx context.Context, tenantID string, setID string, name string, requestID string, initiatorID string) error {
+func (s *setidPGStore) CreateSetID(ctx context.Context, tenantID string, setID string, name string, effectiveDate string, requestID string, initiatorID string) error {
 	return s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
 SELECT orgunit.submit_setid_event(
@@ -116,11 +116,11 @@ SELECT orgunit.submit_setid_event(
   $1::uuid,
   'CREATE',
   $2::text,
-  jsonb_build_object('name', $3::text),
-  $4::text,
-  $5::uuid
+  jsonb_build_object('name', $3::text, 'effective_date', $4::text),
+  $5::text,
+  $6::uuid
 );
-`, tenantID, setID, name, requestID, initiatorID)
+`, tenantID, setID, name, effectiveDate, requestID, initiatorID)
 		return err
 	})
 }
@@ -345,7 +345,7 @@ func (s *setidMemoryStore) ListGlobalSetIDs(_ context.Context) ([]SetID, error) 
 	return []SetID{{SetID: "SHARE", Name: s.globalSetIDName, Status: "active", IsShared: true}}, nil
 }
 
-func (s *setidMemoryStore) CreateSetID(_ context.Context, tenantID string, setID string, name string, _ string, _ string) error {
+func (s *setidMemoryStore) CreateSetID(_ context.Context, tenantID string, setID string, name string, _ string, _ string, _ string) error {
 	setID = strings.ToUpper(strings.TrimSpace(setID))
 	if setID == "" {
 		return errors.New("setid is required")
@@ -482,7 +482,7 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 				return
 			}
 			reqID := "ui:setid:create:" + sid
-			if err := store.CreateSetID(r.Context(), tenant.ID, sid, name, reqID, initiatorID); err != nil {
+			if err := store.CreateSetID(r.Context(), tenant.ID, sid, name, asOf, reqID, initiatorID); err != nil {
 				sids, bindings, nodes, errMsg := list(err.Error())
 				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, lang(r), errMsg))
 				return

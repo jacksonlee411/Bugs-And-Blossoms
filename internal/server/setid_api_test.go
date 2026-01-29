@@ -143,7 +143,7 @@ func TestHandleSetIDBindingsAPI_Success(t *testing.T) {
 	if err := store.EnsureBootstrap(context.Background(), "t1", "t1"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := store.CreateSetID(context.Background(), "t1", "A0001", "A", "r1", "t1"); err != nil {
+	if err := store.CreateSetID(context.Background(), "t1", "A0001", "A", "2026-01-01", "r1", "t1"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 

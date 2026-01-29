@@ -694,7 +694,7 @@ WITH CHECK (
 5. 插入新订阅切片并写入事件（One Door），确保 exclusion 约束不重叠。
 
 ### 6.3 SetID 创建默认订阅
-1. 创建 SetID 成功后，默认订阅的 `effective_date = current_date`。
+1. 创建 SetID 成功后，默认订阅的 `effective_date` 优先取创建请求的有效日期（如 `as_of`/`effective_date`），未提供则使用 `current_date`。
 2. 遍历 `scope_code_registry()` 中 `is_stable = true` 的列表。
 3. 对每个 scope，选择其 `DEFLT` 包（shared-only 用 global 包，其余用租户包）。
 4. 若 `DEFLT` 包不存在或在 `current_date` 无有效版本，返回 `SUBSCRIPTION_DEFLT_MISSING` 并终止 SetID 创建。

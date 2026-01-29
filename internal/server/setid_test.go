@@ -18,7 +18,7 @@ type errSetIDStore struct{ err error }
 func (s errSetIDStore) EnsureBootstrap(context.Context, string, string) error { return s.err }
 func (s errSetIDStore) ListSetIDs(context.Context, string) ([]SetID, error)   { return nil, s.err }
 func (s errSetIDStore) ListGlobalSetIDs(context.Context) ([]SetID, error)     { return nil, s.err }
-func (s errSetIDStore) CreateSetID(context.Context, string, string, string, string, string) error {
+func (s errSetIDStore) CreateSetID(context.Context, string, string, string, string, string, string) error {
 	return s.err
 }
 func (s errSetIDStore) ListSetIDBindings(context.Context, string, string) ([]SetIDBindingRow, error) {
@@ -48,7 +48,7 @@ func (s partialSetIDStore) ListSetIDs(context.Context, string) ([]SetID, error) 
 func (s partialSetIDStore) ListGlobalSetIDs(context.Context) ([]SetID, error) {
 	return []SetID{{SetID: "SHARE", Name: "Shared", Status: "active", IsShared: true}}, nil
 }
-func (s partialSetIDStore) CreateSetID(context.Context, string, string, string, string, string) error {
+func (s partialSetIDStore) CreateSetID(context.Context, string, string, string, string, string, string) error {
 	return s.createSetErr
 }
 func (s partialSetIDStore) ListSetIDBindings(context.Context, string, string) ([]SetIDBindingRow, error) {
@@ -388,16 +388,16 @@ func TestHandleSetID_Post_WriteErrors(t *testing.T) {
 
 func TestSetIDMemoryStore_Errors(t *testing.T) {
 	s := newSetIDMemoryStore().(*setidMemoryStore)
-	if err := s.CreateSetID(context.Background(), "t1", "", "n", "", ""); err == nil {
+	if err := s.CreateSetID(context.Background(), "t1", "", "n", "2026-01-01", "", ""); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.CreateSetID(context.Background(), "t1", "SHARE", "n", "", ""); err == nil {
+	if err := s.CreateSetID(context.Background(), "t1", "SHARE", "n", "2026-01-01", "", ""); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.CreateSetID(context.Background(), "t1", "A0001", "n", "", ""); err != nil {
+	if err := s.CreateSetID(context.Background(), "t1", "A0001", "n", "2026-01-01", "", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := s.CreateSetID(context.Background(), "t1", "A0001", "n", "", ""); err == nil {
+	if err := s.CreateSetID(context.Background(), "t1", "A0001", "n", "2026-01-01", "", ""); err == nil {
 		t.Fatal("expected error")
 	}
 	if err := s.BindSetID(context.Background(), "t1", "", "2026-01-01", "A0001", "", ""); err == nil {
@@ -419,10 +419,10 @@ func TestSetIDMemoryStore_ListSortsWithMultipleItems(t *testing.T) {
 	if err := s.EnsureBootstrap(context.Background(), "t1", "i1"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := s.CreateSetID(context.Background(), "t1", "B0001", "B", "", ""); err != nil {
+	if err := s.CreateSetID(context.Background(), "t1", "B0001", "B", "2026-01-01", "", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := s.CreateSetID(context.Background(), "t1", "A0001", "A", "", ""); err != nil {
+	if err := s.CreateSetID(context.Background(), "t1", "A0001", "A", "2026-01-01", "", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 	if err := s.BindSetID(context.Background(), "t1", "org-b", "2026-01-01", "B0001", "", ""); err != nil {
@@ -878,13 +878,13 @@ func TestSetIDPGStore_ListSetIDBindings(t *testing.T) {
 func TestSetIDPGStore_CreateSetID_Errors(t *testing.T) {
 	tx1 := &stubTx{execErr: errors.New("exec fail"), execErrAt: 1}
 	s1 := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx1, nil })}
-	if err := s1.CreateSetID(context.Background(), "t1", "A0001", "A", "r1", "p1"); err == nil {
+	if err := s1.CreateSetID(context.Background(), "t1", "A0001", "A", "2026-01-01", "r1", "p1"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx2 := &stubTx{execErr: errors.New("exec fail"), execErrAt: 2}
 	s2 := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx2, nil })}
-	if err := s2.CreateSetID(context.Background(), "t1", "A0001", "A", "r1", "p1"); err == nil {
+	if err := s2.CreateSetID(context.Background(), "t1", "A0001", "A", "2026-01-01", "r1", "p1"); err == nil {
 		t.Fatal("expected error")
 	}
 }
