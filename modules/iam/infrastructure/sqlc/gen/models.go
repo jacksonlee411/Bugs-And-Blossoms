@@ -270,6 +270,44 @@ type OrgunitGlobalSetidEvent struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type OrgunitGlobalSetidScopePackage struct {
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	ScopeCode   string             `json:"scope_code"`
+	PackageID   pgtype.UUID        `json:"package_id"`
+	PackageCode string             `json:"package_code"`
+	Name        string             `json:"name"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OrgunitGlobalSetidScopePackageEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	ScopeCode       string             `json:"scope_code"`
+	PackageID       pgtype.UUID        `json:"package_id"`
+	EventType       string             `json:"event_type"`
+	EffectiveDate   pgtype.Date        `json:"effective_date"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type OrgunitGlobalSetidScopePackageVersion struct {
+	ID          int64                     `json:"id"`
+	TenantID    pgtype.UUID               `json:"tenant_id"`
+	ScopeCode   string                    `json:"scope_code"`
+	PackageID   pgtype.UUID               `json:"package_id"`
+	PackageCode string                    `json:"package_code"`
+	Name        string                    `json:"name"`
+	Status      string                    `json:"status"`
+	Validity    pgtype.Range[pgtype.Date] `json:"validity"`
+	LastEventID int64                     `json:"last_event_id"`
+}
+
 type OrgunitOrgEvent struct {
 	ID              int64              `json:"id"`
 	EventID         pgtype.UUID        `json:"event_id"`
@@ -355,6 +393,74 @@ type OrgunitSetidEvent struct {
 	InitiatorID     pgtype.UUID        `json:"initiator_id"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type OrgunitSetidScopePackage struct {
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	ScopeCode   string             `json:"scope_code"`
+	PackageID   pgtype.UUID        `json:"package_id"`
+	PackageCode string             `json:"package_code"`
+	Name        string             `json:"name"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OrgunitSetidScopePackageEvent struct {
+	ID              int64              `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	TenantID        pgtype.UUID        `json:"tenant_id"`
+	ScopeCode       string             `json:"scope_code"`
+	PackageID       pgtype.UUID        `json:"package_id"`
+	EventType       string             `json:"event_type"`
+	EffectiveDate   pgtype.Date        `json:"effective_date"`
+	Payload         []byte             `json:"payload"`
+	RequestID       string             `json:"request_id"`
+	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type OrgunitSetidScopePackageVersion struct {
+	ID          int64                     `json:"id"`
+	TenantID    pgtype.UUID               `json:"tenant_id"`
+	ScopeCode   string                    `json:"scope_code"`
+	PackageID   pgtype.UUID               `json:"package_id"`
+	PackageCode string                    `json:"package_code"`
+	Name        string                    `json:"name"`
+	Status      string                    `json:"status"`
+	Validity    pgtype.Range[pgtype.Date] `json:"validity"`
+	LastEventID int64                     `json:"last_event_id"`
+}
+
+type OrgunitSetidScopeSubscription struct {
+	ID                   int64                     `json:"id"`
+	TenantID             pgtype.UUID               `json:"tenant_id"`
+	Setid                string                    `json:"setid"`
+	ScopeCode            string                    `json:"scope_code"`
+	PackageID            pgtype.UUID               `json:"package_id"`
+	PackageOwnerTenantID pgtype.UUID               `json:"package_owner_tenant_id"`
+	Validity             pgtype.Range[pgtype.Date] `json:"validity"`
+	LastEventID          int64                     `json:"last_event_id"`
+	CreatedAt            pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz        `json:"updated_at"`
+}
+
+type OrgunitSetidScopeSubscriptionEvent struct {
+	ID                   int64              `json:"id"`
+	EventID              pgtype.UUID        `json:"event_id"`
+	TenantID             pgtype.UUID        `json:"tenant_id"`
+	Setid                string             `json:"setid"`
+	ScopeCode            string             `json:"scope_code"`
+	PackageID            pgtype.UUID        `json:"package_id"`
+	PackageOwnerTenantID pgtype.UUID        `json:"package_owner_tenant_id"`
+	EventType            string             `json:"event_type"`
+	EffectiveDate        pgtype.Date        `json:"effective_date"`
+	Payload              []byte             `json:"payload"`
+	RequestID            string             `json:"request_id"`
+	InitiatorID          pgtype.UUID        `json:"initiator_id"`
+	TransactionTime      pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 }
 
 type PersonPerson struct {
