@@ -522,26 +522,21 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   const loadPositions = async (orgUnitID) => {
     await page.goto(`/org/positions?as_of=${asOf}&org_unit_id=${orgUnitID}`);
     await expect(page.locator("h1")).toHaveText("Staffing / Positions");
-    return page
+    const form = page
       .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${asOf}"]`)
       .first();
+    const hiddenValue = await form.locator('input[name="org_unit_id"]').getAttribute("value");
+    expect(hiddenValue).toBe(orgUnitID);
+    return form;
   };
 
   let positionCreateForm = await loadPositions(orgIDsFromTree["R&D"]);
-  await expect(positionCreateForm.locator('select[name="org_unit_id"] option', { hasText: "(no org units)" })).toHaveCount(0);
-
-  const findOrgUnitOptionValue = async (name) => {
-    const option = positionCreateForm.locator('select[name="org_unit_id"] option', { hasText: name }).first();
-    const value = await option.getAttribute("value");
-    expect(value).not.toBeNull();
-    return value;
-  };
   const orgSelectIDs = {
-    HQ: await findOrgUnitOptionValue("HQ"),
-    "R&D": await findOrgUnitOptionValue("R&D"),
-    Sales: await findOrgUnitOptionValue("Sales"),
-    Ops: await findOrgUnitOptionValue("Ops"),
-    Plant: await findOrgUnitOptionValue("Plant")
+    HQ: orgIDsFromTree.HQ,
+    "R&D": orgIDsFromTree["R&D"],
+    Sales: orgIDsFromTree.Sales,
+    Ops: orgIDsFromTree.Ops,
+    Plant: orgIDsFromTree.Plant
   };
 
   const jpSweOpt = positionCreateForm.locator('select[name="job_profile_id"] option', { hasText: "JP-SWE" }).first();
@@ -574,14 +569,17 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   ];
   const positionSpecs = [...positionSpecsS2601, ...positionSpecsS2602, ...positionSpecsDeflt];
 
-  const createPositions = async (contextOrgUnitID, jobProfileID, specs) => {
-    positionCreateForm = await loadPositions(contextOrgUnitID);
+  const createPositions = async (jobProfileID, specs) => {
+    let currentOrgUnitID = "";
     for (const spec of specs) {
       if ((await page.locator("tr", { hasText: spec.name }).count()) > 0) {
         continue;
       }
+      if (currentOrgUnitID !== spec.org) {
+        positionCreateForm = await loadPositions(spec.org);
+        currentOrgUnitID = spec.org;
+      }
       await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
-      await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(spec.org);
       await positionCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
       await positionCreateForm.locator('input[name="name"]').fill(spec.name);
       await positionCreateForm.getByRole("button", { name: "Create" }).click();
@@ -591,9 +589,9 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     }
   };
 
-  await createPositions(orgIDsFromTree["R&D"], jpSweID, positionSpecsS2601);
-  await createPositions(orgIDsFromTree.Sales, jpOpsID, positionSpecsS2602);
-  await createPositions(orgIDsFromTree.HQ, jpDefID, positionSpecsDeflt);
+  await createPositions(jpSweID, positionSpecsS2601);
+  await createPositions(jpOpsID, positionSpecsS2602);
+  await createPositions(jpDefID, positionSpecsDeflt);
 
   for (const spec of positionSpecs) {
     await expect(page.locator("tr", { hasText: spec.name })).toBeVisible();

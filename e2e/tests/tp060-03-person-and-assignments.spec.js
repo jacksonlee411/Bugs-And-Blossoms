@@ -199,11 +199,11 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const positionCreateForm = page
     .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${asOf}"]`)
     .first();
-  const orgOptionValue = await positionCreateForm
-    .locator('select[name="org_unit_id"] option', { hasText: rootName })
-    .first()
+  const orgOptionValue = rootID;
+  const orgUnitHiddenValue = await positionCreateForm
+    .locator('input[name="org_unit_id"]')
     .getAttribute("value");
-  expect(orgOptionValue).not.toBeNull();
+  expect(orgUnitHiddenValue).toBe(orgOptionValue);
   const jobProfileOption = positionCreateForm.locator('select[name="job_profile_id"] option', { hasText: jobProfileCode }).first();
   const jobProfileID = await jobProfileOption.getAttribute("value");
   expect(jobProfileID).not.toBeNull();
@@ -213,7 +213,6 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   for (const pernr of pernrByIndex) {
     const positionName = `TP060-03 Position ${pernr} ${runID}`;
     await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
-    await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
     await positionCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
     await positionCreateForm.locator('input[name="capacity_fte"]').fill(pernr === "104" ? "0.50" : "1.0");
     await positionCreateForm.locator('input[name="name"]').fill(positionName);
@@ -231,7 +230,6 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
 
   const updateTargetPositionName = `TP060-03 UpdateTarget Position ${runID}`;
   await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
-  await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
   await positionCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
   await positionCreateForm.locator('input[name="capacity_fte"]').fill("1.0");
   await positionCreateForm.locator('input[name="name"]').fill(updateTargetPositionName);
@@ -247,7 +245,6 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
 
   const disabledPositionName = `TP060-03 Disabled Position ${runID}`;
   await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
-  await positionCreateForm.locator('select[name="org_unit_id"]').selectOption(orgOptionValue);
   await positionCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
   await positionCreateForm.locator('input[name="name"]').fill(disabledPositionName);
   await positionCreateForm.locator('button[type="submit"]').click();
