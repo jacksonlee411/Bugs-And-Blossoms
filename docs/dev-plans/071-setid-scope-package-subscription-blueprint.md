@@ -765,7 +765,8 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
 - **完成记录**：
   - 2026-01-29：完成 M1（schema/权限/解析函数基座）
   - 2026-01-29：完成 M2（写入口 + 版本投射）
-- 2026-01-29：完成 M3（jobcatalog 切换至 package_id + dbtool smoke 通过；补齐 SetID 创建/DEFLT bootstrap 默认订阅（tenant-only 稳定 scope））
+  - 2026-01-29：完成 M3（jobcatalog 切换至 package_id + dbtool smoke 通过；补齐 SetID 创建/DEFLT bootstrap 默认订阅（tenant-only 稳定 scope））
+  - 2026-01-30：修复 Staffing Positions 快照读取，按 `resolve_scope_package` 解析 jobcatalog package_id 以恢复 `job_profile_code` 展示
 
 ### 8.1 里程碑触发器与门禁（对齐 2.1/AGENTS.md）
 - **M1**：必跑 `make <module> plan && make <module> lint && make <module> migrate up`；如涉及 sqlc 生成则 `make sqlc-generate`；如变更文档则 `make check doc`。
