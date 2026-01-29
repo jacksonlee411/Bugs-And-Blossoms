@@ -460,6 +460,26 @@ func renderPositions(
 ) string {
 	b := strings.Builder{}
 	action := "/org/positions?as_of=" + url.QueryEscape(asOf)
+	sortedNodes := nodes
+	if len(nodes) > 1 {
+		sortedNodes = append([]OrgUnitNode(nil), nodes...)
+		sort.Slice(sortedNodes, func(i, j int) bool { return sortedNodes[i].Name < sortedNodes[j].Name })
+	}
+	orgUnitLabel := "(not set)"
+	if orgUnitID != "" {
+		orgUnitLabel = orgUnitID
+		for _, n := range sortedNodes {
+			if n.ID != orgUnitID {
+				continue
+			}
+			label := n.Name + " (" + n.ID + ")"
+			if n.IsBusinessUnit {
+				label = label + " [BU]"
+			}
+			orgUnitLabel = label
+			break
+		}
+	}
 	b.WriteString("<h1>Staffing / Positions</h1>")
 	b.WriteString(`<p>Tenant: <code>` + html.EscapeString(tenant.Name) + `</code> (<code>` + html.EscapeString(tenant.ID) + `</code>)</p>`)
 	b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code> | <a href="/org/assignments?as_of=` + url.QueryEscape(asOf) + `">Assignments</a></p>`)
@@ -467,28 +487,28 @@ func renderPositions(
 		b.WriteString(`<p style="color:#b00">` + html.EscapeString(errMsg) + `</p>`)
 	}
 
-	b.WriteString(`<h2>Job Catalog Context</h2>`)
-	b.WriteString(`<form method="GET" action="/org/positions">`)
+	b.WriteString(`<h2>Org Unit Context</h2>`)
+	b.WriteString(`<form method="GET" action="/org/positions" hx-get="/org/positions" hx-target="#content" hx-push-url="true" hx-trigger="change">`)
 	b.WriteString(`<input type="hidden" name="as_of" value="` + html.EscapeString(asOf) + `" />`)
 	b.WriteString(`<label>Org Unit <select name="org_unit_id">`)
 	b.WriteString(`<option value="">(not set)</option>`)
-	if len(nodes) > 0 {
-		sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
-		for _, n := range nodes {
-			selected := ""
-			if n.ID == orgUnitID {
-				selected = " selected"
-			}
-			label := n.Name + " (" + n.ID + ")"
-			if n.IsBusinessUnit {
-				label = label + " [BU]"
-			}
-			b.WriteString(`<option value="` + html.EscapeString(n.ID) + `"` + selected + `>` + html.EscapeString(label) + `</option>`)
+	for _, n := range sortedNodes {
+		selected := ""
+		if n.ID == orgUnitID {
+			selected = " selected"
 		}
+		label := n.Name + " (" + n.ID + ")"
+		if n.IsBusinessUnit {
+			label = label + " [BU]"
+		}
+		b.WriteString(`<option value="` + html.EscapeString(n.ID) + `"` + selected + `>` + html.EscapeString(label) + `</option>`)
 	}
 	b.WriteString(`</select></label> `)
 	b.WriteString(`<button type="submit">Load</button>`)
 	b.WriteString(`</form>`)
+	if orgUnitID == "" {
+		b.WriteString(`<p style="color:#555">请选择 Org Unit 以加载可用的 Job Profile。</p>`)
+	}
 	if setID != "" {
 		b.WriteString(`<p>SetID: <code>` + html.EscapeString(setID) + `</code></p>`)
 	}
@@ -496,23 +516,8 @@ func renderPositions(
 	b.WriteString(`<h2>Create</h2>`)
 	b.WriteString(`<form method="POST" action="` + html.EscapeString(action) + `">`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-	b.WriteString(`<label>Org Unit <select name="org_unit_id">`)
-	if len(nodes) == 0 {
-		b.WriteString(`<option value="">(no org units)</option>`)
-	} else {
-		for _, n := range nodes {
-			selected := ""
-			if n.ID == orgUnitID {
-				selected = " selected"
-			}
-			label := n.Name + " (" + n.ID + ")"
-			if n.IsBusinessUnit {
-				label = label + " [BU]"
-			}
-			b.WriteString(`<option value="` + html.EscapeString(n.ID) + `"` + selected + `>` + html.EscapeString(label) + `</option>`)
-		}
-	}
-	b.WriteString(`</select></label><br/>`)
+	b.WriteString(`<label>Org Unit <input type="text" value="` + html.EscapeString(orgUnitLabel) + `" disabled /></label><br/>`)
+	b.WriteString(`<input type="hidden" name="org_unit_id" value="` + html.EscapeString(orgUnitID) + `" />`)
 	b.WriteString(`<label>Job Profile <select name="job_profile_id">`)
 	b.WriteString(`<option value="">(not set)</option>`)
 	for _, jp := range jobProfiles {
@@ -543,14 +548,12 @@ func renderPositions(
 	b.WriteString(`</select></label><br/>`)
 	b.WriteString(`<label>Org Unit <select name="org_unit_id">`)
 	b.WriteString(`<option value="">(no change)</option>`)
-	if len(nodes) > 0 {
-		for _, n := range nodes {
-			label := n.Name + " (" + n.ID + ")"
-			if n.IsBusinessUnit {
-				label = label + " [BU]"
-			}
-			b.WriteString(`<option value="` + html.EscapeString(n.ID) + `">` + html.EscapeString(label) + `</option>`)
+	for _, n := range sortedNodes {
+		label := n.Name + " (" + n.ID + ")"
+		if n.IsBusinessUnit {
+			label = label + " [BU]"
 		}
+		b.WriteString(`<option value="` + html.EscapeString(n.ID) + `">` + html.EscapeString(label) + `</option>`)
 	}
 	b.WriteString(`</select></label><br/>`)
 	b.WriteString(`<label>Reports To <select name="reports_to_position_id">`)

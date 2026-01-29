@@ -1,0 +1,14 @@
+{
+  "sqltools.connections": [
+    {
+      "name": "Bugs-And-Blossoms (dev)",
+      "driver": "PostgreSQL",
+      "server": "127.0.0.1",
+      "port": 5438,
+      "database": "bugs_and_blossoms",
+      "username": "app",
+      "password": "app",
+      "previewLimit": 50
+    }
+  ]
+}

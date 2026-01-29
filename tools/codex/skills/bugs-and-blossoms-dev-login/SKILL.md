@@ -69,6 +69,28 @@ cd "$(git rev-parse --show-toplevel)"
 make dev-server
 ```
 
+## 一键启动 + seed + 验证登录（推荐）
+
+说明：适合本地临时启动（包含 dev-up、IAM 迁移、kratosstub、seed、server 启动与登录验证）。会在当前终端保持前台运行；按 Ctrl+C 结束。
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+make dev-up
+make iam migrate up
+make dev-kratos-stub &
+sleep 0.5
+./tools/codex/skills/bugs-and-blossoms-dev-login/scripts/seed_kratosstub_identity.sh \
+  --tenant-id 00000000-0000-0000-0000-000000000001 \
+  --email admin@localhost \
+  --password admin123 \
+  --role-slug tenant-admin
+make dev-server &
+sleep 0.5
+curl -i -X POST -H 'Host: localhost:8080' \
+  -d 'email=admin@localhost&password=admin123' \
+  http://127.0.0.1:8080/login
+```
+
 ## 验证（必须用 localhost）
 
 1) 打开登录页：`http://localhost:8080/login`

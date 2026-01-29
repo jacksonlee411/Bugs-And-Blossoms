@@ -1,6 +1,6 @@
 # DEV-PLAN-070：SetID 绑定组织架构重构方案
 
-**状态**: 草拟中（2026-01-24 04:25 UTC）
+**状态**: 进行中（2026-01-29 01:22 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：替代 `DEV-PLAN-028` 的 SetID 方案升级，落地“SetID 绑定组织架构 + 层级继承解析 + 单一共享层”新需求。
@@ -364,7 +364,7 @@ CREATE TABLE orgunit.setid_binding_versions (
 6. [X] 将 `DEV-PLAN-026` 的 schema/函数/迁移落到模块实现（含 `is_business_unit` 与 `SET_BUSINESS_UNIT`），并同步 SetID 绑定入口的业务单元校验（2026-01-25 01:15 UTC）。
 7. [X] 设计并实现 `setid_binding_events` + `setid_binding_versions`（One Door）（2026-01-25 01:18 UTC）。
 8. [X] 切换解析入口与调用链（Go/SQL），配置主数据入口显式 `setid`，业务数据入口改为 `org_unit_id` 解析 `setid`。（2026-01-25 11:01 UTC）
-9. [ ] 改造 UI/路由/鉴权（去 BU/record_group、加 org 绑定 + 业务单元标记编辑 + 权限点补齐），补齐配置主数据的显式 `setid` 选择与展示，并展示业务数据的解析结果。
+9. [X] 改造 UI/路由/鉴权（去 BU/record_group、加 org 绑定 + 业务单元标记编辑 + 权限点补齐），补齐配置主数据的显式 `setid` 选择与展示，并展示业务数据的解析结果。（2026-01-29 01:22 UTC）
 10. [X] 完成迁移脚本与数据 bootstrap（DEFLT + root 绑定），并修复存量 `setid` 规范（5 位/大写）（2026-01-25 02:57 UTC）。
 11. [X] 补齐门禁与测试用例（参考 `AGENTS.md` 与 `DEV-PLAN-012`），覆盖“配置主数据显式 setid + 业务数据 org_unit 解析 setid”的新口径。（2026-01-25 11:01 UTC）
 
@@ -388,28 +388,28 @@ CREATE TABLE orgunit.setid_binding_versions (
 - 门禁与证据：按 §2.3 触发器执行并在执行记录中提供证据块。
 
 ### 9.3 验收标准
-- [ ] `SHARE` 仅存在于全局 tenant，可被租户读取但不可写。
-- [ ] 共享层数据表与租户表物理隔离，租户表 RLS 不引入 `global` OR 条件。
-- [ ] 仅允许单一共享 SetID（`SHARE`），且状态固定为 `active`。
-- [ ] 每个租户自动拥有 `DEFLT`，根组织强制绑定 `DEFLT`。
-- [ ] `DEFLT` 状态固定为 `active`，禁用/删除必须被拒绝。
+- [X] `SHARE` 仅存在于全局 tenant，可被租户读取但不可写。
+- [X] 共享层数据表与租户表物理隔离，租户表 RLS 不引入 `global` OR 条件。
+- [X] 仅允许单一共享 SetID（`SHARE`），且状态固定为 `active`。
+- [X] 每个租户自动拥有 `DEFLT`，根组织强制绑定 `DEFLT`。
+- [X] `DEFLT` 状态固定为 `active`，禁用/删除必须被拒绝。
 - [ ] `orgunit.global_tenant_id()` 对应哨兵租户存在，且与真实租户 ID 不冲突。
 - [ ] 根组织 `is_business_unit=true`。
-- [ ] `ResolveSetID(tenant_id, org_unit_id, as_of_date)` 可解析并遵守继承规则。
-- [ ] 目标组织节点在 `as_of_date` 必须为 `active`；禁用节点解析失败（fail-closed）。
-- [ ] SetID 仅可绑定到业务单元节点（`is_business_unit=true`）。
-- [ ] `/org/nodes` 可修改业务单元标记并持久化（`SET_BUSINESS_UNIT`），权限不足时必须被拒绝。
-- [ ] 业务主数据域仅使用租户 SetID：配置主数据必须显式传入 `setid`，业务数据通过 `org_unit_id` 解析 setid，不读取 `SHARE`。
+- [X] `ResolveSetID(tenant_id, org_unit_id, as_of_date)` 可解析并遵守继承规则。
+- [X] 目标组织节点在 `as_of_date` 必须为 `active`；禁用节点解析失败（fail-closed）。
+- [X] SetID 仅可绑定到业务单元节点（`is_business_unit=true`）。
+- [X] `/org/nodes` 可修改业务单元标记并持久化（`SET_BUSINESS_UNIT`），权限不足时必须被拒绝。
+- [X] 业务主数据域仅使用租户 SetID：配置主数据必须显式传入 `setid`，业务数据通过 `org_unit_id` 解析 setid，不读取 `SHARE`。
 - [ ] 共享层仅在白名单入口可见，UI 文案标注“共享/只读”，共享项不可编辑。
-- [ ] 移除 `business_unit_id` 与 `record_group` 的实现与存量结构。
-- [ ] `business_unit_id` / `record_group` 全局无新增引用（依赖清单与门禁验证）。
-- [ ] SetID 格式更新为 `[A-Z0-9]{5}` 并统一校验。
-- [ ] 配置主数据写入口必须显式 `setid` 并落库；业务数据写入口必须解析并记录 `setid` 与 `as_of_date` 用于审计，禁止默认 `current_date` 或记录 `resolved_setid*`。
-- [ ] 租户写 `SHARE` 必失败（DB 约束 + RLS + 入口校验）。
-- [ ] SaaS 写 `SHARE` 必成功（仅通过专用写入口）。
-- [ ] 租户读取 `SHARE` 仅只读可见。
-- [ ] 共享读取必须显式设置 `app.current_tenant=orgunit.global_tenant_id()` + `app.allow_share_read=on` 才可访问。
-- [ ] 未设置或未知 `app.current_actor_scope` 的写请求必失败。
+- [X] 移除 `business_unit_id` 与 `record_group` 的实现与存量结构。
+- [X] `business_unit_id` / `record_group` 全局无新增引用（依赖清单与门禁验证）。
+- [X] SetID 格式更新为 `[A-Z0-9]{5}` 并统一校验。
+- [X] 配置主数据写入口必须显式 `setid` 并落库；业务数据写入口必须解析并记录 `setid` 与 `as_of_date` 用于审计，禁止默认 `current_date` 或记录 `resolved_setid*`。
+- [X] 租户写 `SHARE` 必失败（DB 约束 + RLS + 入口校验）。
+- [X] SaaS 写 `SHARE` 必成功（仅通过专用写入口）。
+- [X] 租户读取 `SHARE` 仅只读可见。
+- [X] 共享读取必须显式设置 `app.current_tenant=orgunit.global_tenant_id()` + `app.allow_share_read=on` 才可访问。
+- [X] 未设置或未知 `app.current_actor_scope` 的写请求必失败。
 - [ ] SetID/绑定写入必须通过 kernel 入口，禁止直接写表。
 
 ## 10. 运维与监控 (Ops & Monitoring)
