@@ -298,6 +298,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/setid", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetID(w, r, setidStore, orgStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/orgunit/setids/{setid}/scope-subscriptions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleSetIDScopeSubscriptionsUI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodPost, "/orgunit/setids/{setid}/scope-subscriptions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleSetIDScopeSubscriptionsUI(w, r, setidStore)
+	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleJobCatalog(w, r, orgStore, jobcatalogStore)
 	}))
@@ -340,11 +346,32 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/setid-bindings", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetIDBindingsAPI(w, r, setidStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/orgunit/api/scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleScopePackagesAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleScopePackagesAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/scope-packages/{package_id}/disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleScopePackageDisableAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/orgunit/api/scope-subscriptions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleScopeSubscriptionsAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/scope-subscriptions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleScopeSubscriptionsAPI(w, r, setidStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/global-setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleGlobalSetIDsAPI(w, r, setidStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/orgunit/api/global-setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleGlobalSetIDsAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/orgunit/api/global-scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleGlobalScopePackagesAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/global-scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleGlobalScopePackagesAPI(w, r, setidStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/org-units/set-business-unit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsBusinessUnitAPI(w, r, orgStore)

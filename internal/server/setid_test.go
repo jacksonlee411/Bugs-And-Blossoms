@@ -18,7 +18,7 @@ type errSetIDStore struct{ err error }
 func (s errSetIDStore) EnsureBootstrap(context.Context, string, string) error { return s.err }
 func (s errSetIDStore) ListSetIDs(context.Context, string) ([]SetID, error)   { return nil, s.err }
 func (s errSetIDStore) ListGlobalSetIDs(context.Context) ([]SetID, error)     { return nil, s.err }
-func (s errSetIDStore) CreateSetID(context.Context, string, string, string, string, string) error {
+func (s errSetIDStore) CreateSetID(context.Context, string, string, string, string, string, string) error {
 	return s.err
 }
 func (s errSetIDStore) ListSetIDBindings(context.Context, string, string) ([]SetIDBindingRow, error) {
@@ -29,6 +29,30 @@ func (s errSetIDStore) BindSetID(context.Context, string, string, string, string
 }
 func (s errSetIDStore) CreateGlobalSetID(context.Context, string, string, string, string) error {
 	return s.err
+}
+func (s errSetIDStore) ListScopeCodes(context.Context, string) ([]ScopeCode, error) {
+	return nil, s.err
+}
+func (s errSetIDStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, s.err
+}
+func (s errSetIDStore) DisableScopePackage(context.Context, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, s.err
+}
+func (s errSetIDStore) ListScopePackages(context.Context, string, string) ([]ScopePackage, error) {
+	return nil, s.err
+}
+func (s errSetIDStore) CreateScopeSubscription(context.Context, string, string, string, string, string, string, string, string) (ScopeSubscription, error) {
+	return ScopeSubscription{}, s.err
+}
+func (s errSetIDStore) GetScopeSubscription(context.Context, string, string, string, string) (ScopeSubscription, error) {
+	return ScopeSubscription{}, s.err
+}
+func (s errSetIDStore) CreateGlobalScopePackage(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, s.err
+}
+func (s errSetIDStore) ListGlobalScopePackages(context.Context, string) ([]ScopePackage, error) {
+	return nil, s.err
 }
 
 type partialSetIDStore struct {
@@ -48,7 +72,7 @@ func (s partialSetIDStore) ListSetIDs(context.Context, string) ([]SetID, error) 
 func (s partialSetIDStore) ListGlobalSetIDs(context.Context) ([]SetID, error) {
 	return []SetID{{SetID: "SHARE", Name: "Shared", Status: "active", IsShared: true}}, nil
 }
-func (s partialSetIDStore) CreateSetID(context.Context, string, string, string, string, string) error {
+func (s partialSetIDStore) CreateSetID(context.Context, string, string, string, string, string, string) error {
 	return s.createSetErr
 }
 func (s partialSetIDStore) ListSetIDBindings(context.Context, string, string) ([]SetIDBindingRow, error) {
@@ -59,6 +83,30 @@ func (s partialSetIDStore) ListSetIDBindings(context.Context, string, string) ([
 }
 func (s partialSetIDStore) BindSetID(context.Context, string, string, string, string, string, string) error {
 	return s.bindErr
+}
+func (s partialSetIDStore) ListScopeCodes(context.Context, string) ([]ScopeCode, error) {
+	return nil, nil
+}
+func (s partialSetIDStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, nil
+}
+func (s partialSetIDStore) DisableScopePackage(context.Context, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, nil
+}
+func (s partialSetIDStore) ListScopePackages(context.Context, string, string) ([]ScopePackage, error) {
+	return nil, nil
+}
+func (s partialSetIDStore) CreateScopeSubscription(context.Context, string, string, string, string, string, string, string, string) (ScopeSubscription, error) {
+	return ScopeSubscription{}, nil
+}
+func (s partialSetIDStore) GetScopeSubscription(context.Context, string, string, string, string) (ScopeSubscription, error) {
+	return ScopeSubscription{}, nil
+}
+func (s partialSetIDStore) CreateGlobalScopePackage(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+	return ScopePackage{}, nil
+}
+func (s partialSetIDStore) ListGlobalScopePackages(context.Context, string) ([]ScopePackage, error) {
+	return nil, nil
 }
 func (s partialSetIDStore) CreateGlobalSetID(context.Context, string, string, string, string) error {
 	return nil
@@ -388,16 +436,16 @@ func TestHandleSetID_Post_WriteErrors(t *testing.T) {
 
 func TestSetIDMemoryStore_Errors(t *testing.T) {
 	s := newSetIDMemoryStore().(*setidMemoryStore)
-	if err := s.CreateSetID(context.Background(), "t1", "", "n", "", ""); err == nil {
+	if err := s.CreateSetID(context.Background(), "t1", "", "n", "2026-01-01", "", ""); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.CreateSetID(context.Background(), "t1", "SHARE", "n", "", ""); err == nil {
+	if err := s.CreateSetID(context.Background(), "t1", "SHARE", "n", "2026-01-01", "", ""); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.CreateSetID(context.Background(), "t1", "A0001", "n", "", ""); err != nil {
+	if err := s.CreateSetID(context.Background(), "t1", "A0001", "n", "2026-01-01", "", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := s.CreateSetID(context.Background(), "t1", "A0001", "n", "", ""); err == nil {
+	if err := s.CreateSetID(context.Background(), "t1", "A0001", "n", "2026-01-01", "", ""); err == nil {
 		t.Fatal("expected error")
 	}
 	if err := s.BindSetID(context.Background(), "t1", "", "2026-01-01", "A0001", "", ""); err == nil {
@@ -419,10 +467,10 @@ func TestSetIDMemoryStore_ListSortsWithMultipleItems(t *testing.T) {
 	if err := s.EnsureBootstrap(context.Background(), "t1", "i1"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := s.CreateSetID(context.Background(), "t1", "B0001", "B", "", ""); err != nil {
+	if err := s.CreateSetID(context.Background(), "t1", "B0001", "B", "2026-01-01", "", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if err := s.CreateSetID(context.Background(), "t1", "A0001", "A", "", ""); err != nil {
+	if err := s.CreateSetID(context.Background(), "t1", "A0001", "A", "2026-01-01", "", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 	if err := s.BindSetID(context.Background(), "t1", "org-b", "2026-01-01", "B0001", "", ""); err != nil {
@@ -472,6 +520,7 @@ func TestRenderSetIDPage_SkipsDisabledOptions(t *testing.T) {
 		[]OrgUnitNode{{ID: "org1", Name: "BU 1", IsBusinessUnit: true}, {ID: "org2", Name: "BU 0", IsBusinessUnit: true}},
 		Tenant{Name: "T"},
 		"2026-01-07",
+		"",
 		"en",
 		"",
 	)
@@ -493,10 +542,27 @@ func TestRenderSetIDPage_NoBusinessUnits(t *testing.T) {
 		[]OrgUnitNode{{ID: "org1", Name: "Org 1", IsBusinessUnit: false}},
 		Tenant{Name: "T"},
 		"2026-01-07",
+		"",
 		"en",
 		"",
 	)
 	if !strings.Contains(html, "(no business units)") {
+		t.Fatalf("unexpected html: %q", html)
+	}
+}
+
+func TestRenderSetIDPage_SelectedSetID(t *testing.T) {
+	html := renderSetIDPage(
+		[]SetID{{SetID: "A0001", Name: "A", Status: "active"}},
+		nil,
+		nil,
+		Tenant{Name: "T"},
+		"2026-01-07",
+		"A0001",
+		"en",
+		"",
+	)
+	if !strings.Contains(html, "/orgunit/setids/A0001/scope-subscriptions") {
 		t.Fatalf("unexpected html: %q", html)
 	}
 }
@@ -878,13 +944,13 @@ func TestSetIDPGStore_ListSetIDBindings(t *testing.T) {
 func TestSetIDPGStore_CreateSetID_Errors(t *testing.T) {
 	tx1 := &stubTx{execErr: errors.New("exec fail"), execErrAt: 1}
 	s1 := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx1, nil })}
-	if err := s1.CreateSetID(context.Background(), "t1", "A0001", "A", "r1", "p1"); err == nil {
+	if err := s1.CreateSetID(context.Background(), "t1", "A0001", "A", "2026-01-01", "r1", "p1"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx2 := &stubTx{execErr: errors.New("exec fail"), execErrAt: 2}
 	s2 := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx2, nil })}
-	if err := s2.CreateSetID(context.Background(), "t1", "A0001", "A", "r1", "p1"); err == nil {
+	if err := s2.CreateSetID(context.Background(), "t1", "A0001", "A", "2026-01-01", "r1", "p1"); err == nil {
 		t.Fatal("expected error")
 	}
 }

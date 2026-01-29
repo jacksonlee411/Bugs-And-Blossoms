@@ -8,7 +8,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_state jsonb;
   v_prev jsonb;
   v_row RECORD;
@@ -20,20 +20,20 @@ DECLARE
   v_family_id uuid;
 BEGIN
   PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM jobcatalog.job_profile_versions
-  WHERE tenant_id = p_tenant_id AND setid = v_setid AND job_profile_id = p_job_profile_id;
+  WHERE tenant_id = p_tenant_id AND package_id = v_setid AND job_profile_id = p_job_profile_id;
 
   v_prev := NULL;
   FOR v_row IN
     SELECT id, event_type, effective_date, payload
     FROM jobcatalog.job_profile_events
     WHERE tenant_id = p_tenant_id
-      AND setid = v_setid
+      AND package_id = v_setid
       AND job_profile_id = p_job_profile_id
     ORDER BY effective_date ASC, id ASC
   LOOP
@@ -156,7 +156,7 @@ BEGIN
     SELECT e.effective_date INTO v_next_date
     FROM jobcatalog.job_profile_events e
     WHERE e.tenant_id = p_tenant_id
-      AND e.setid = v_setid
+      AND e.package_id = v_setid
       AND e.job_profile_id = p_job_profile_id
       AND (e.effective_date, e.id) > (v_row.effective_date, v_row.id)
     ORDER BY e.effective_date ASC, e.id ASC
@@ -166,7 +166,7 @@ BEGIN
 
     INSERT INTO jobcatalog.job_profile_versions (
       tenant_id,
-      setid,
+      package_id,
       job_profile_id,
       validity,
       name,
@@ -193,7 +193,7 @@ BEGIN
     FOREACH v_family_id IN ARRAY v_family_ids LOOP
       INSERT INTO jobcatalog.job_profile_version_job_families (
         tenant_id,
-        setid,
+        package_id,
         job_profile_version_id,
         job_family_id,
         is_primary
@@ -216,7 +216,7 @@ BEGIN
         lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
       FROM jobcatalog.job_profile_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_profile_id = p_job_profile_id
     )
     SELECT 1
@@ -237,7 +237,7 @@ BEGIN
       SELECT validity
       FROM jobcatalog.job_profile_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_profile_id = p_job_profile_id
       ORDER BY lower(validity) DESC
       LIMIT 1
@@ -250,6 +250,19 @@ BEGIN
       MESSAGE = 'JOBCATALOG_VALIDITY_NOT_INFINITE',
       DETAIL = format('job_profile_id=%s', p_job_profile_id);
   END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION jobcatalog.replay_job_profile_versions(
+  p_tenant_id uuid,
+  p_package_id uuid,
+  p_job_profile_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM jobcatalog.replay_job_profile_versions(p_tenant_id, p_package_id::text, p_job_profile_id);
 END;
 $$;
 
@@ -269,7 +282,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_evt_db_id bigint;
   v_code text;
   v_name text;
@@ -318,7 +331,7 @@ BEGIN
       DETAIL = format('unsupported event_type=%s', p_event_type);
   END IF;
 
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
@@ -506,7 +519,7 @@ BEGIN
         DETAIL = 'code/name is required';
     END IF;
 
-    INSERT INTO jobcatalog.job_profiles (tenant_id, setid, id, code)
+    INSERT INTO jobcatalog.job_profiles (tenant_id, package_id, id, code)
     VALUES (p_tenant_id, v_setid, p_job_profile_id, v_code)
     ON CONFLICT (id) DO NOTHING;
 
@@ -515,7 +528,7 @@ BEGIN
     WHERE id = p_job_profile_id;
 
     IF v_existing_profile.tenant_id <> p_tenant_id
-      OR v_existing_profile.setid <> v_setid
+      OR v_existing_profile.package_id <> v_setid
       OR v_existing_profile.code <> v_code
     THEN
       RAISE EXCEPTION USING
@@ -526,7 +539,7 @@ BEGIN
   ELSE
     IF NOT EXISTS (
       SELECT 1 FROM jobcatalog.job_profiles
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = p_job_profile_id
+      WHERE tenant_id = p_tenant_id AND package_id = v_setid AND id = p_job_profile_id
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -542,7 +555,7 @@ BEGIN
       FROM unnest(v_family_ids) AS t(id)
       LEFT JOIN jobcatalog.job_families f
         ON f.tenant_id = p_tenant_id
-       AND f.setid = v_setid
+       AND f.package_id = v_setid
        AND f.id = t.id
       WHERE f.id IS NULL
       LIMIT 1
@@ -559,7 +572,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM jobcatalog.job_families
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = v_primary_family_id
+      WHERE tenant_id = p_tenant_id AND package_id = v_setid AND id = v_primary_family_id
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -569,7 +582,7 @@ BEGIN
   END IF;
 
   INSERT INTO jobcatalog.job_profile_events (
-    event_id, tenant_id, setid, job_profile_id, event_type, effective_date, payload, request_id, initiator_id
+    event_id, tenant_id, package_id, job_profile_id, event_type, effective_date, payload, request_id, initiator_id
   )
   VALUES (
     p_event_id, p_tenant_id, v_setid, p_job_profile_id, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_id
@@ -583,7 +596,7 @@ BEGIN
     WHERE event_id = p_event_id;
 
     IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.setid <> v_setid
+      OR v_existing.package_id <> v_setid
       OR v_existing.job_profile_id <> p_job_profile_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date

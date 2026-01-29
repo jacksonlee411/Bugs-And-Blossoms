@@ -555,6 +555,7 @@ WITH CHECK (
     - `scope_code`：string，必填，需在 `scope_code_registry()` 中存在。
     - `package_code`：string，可选；空则服务端生成 `PKG_<8位A-Z0-9>`；`DEFLT` 为保留值，禁止通过该 API 创建。
     - `name`：string，必填，长度 1-64。
+    - `effective_date`：date，可选；空则默认 `current_date`（`YYYY-MM-DD`）。
     - `request_id`：string，必填，非空。
   - Example：
     ```json
@@ -562,6 +563,7 @@ WITH CHECK (
       "scope_code": "jobcatalog",
       "package_code": "STD_01",
       "name": "标准方案",
+      "effective_date": "2025-01-29",
       "request_id": "req:2025-01-29:001"
     }
     ```
@@ -650,7 +652,7 @@ WITH CHECK (
 
 ### 5.3 JSON API：共享包管理（SaaS only）
 - `POST /orgunit/api/global-scope-packages`
-  - Request（JSON）：`scope_code`、`package_code`、`name`、`request_id`
+  - Request（JSON）：`scope_code`、`package_code`、`name`、`effective_date`（可选，空则 `current_date`）、`request_id`
   - 幂等：同一 `tenant_id + request_id` 重复请求返回既有结果，不重复写事件。
   - Error Codes（HTTP）：
     - 403 `ACTOR_SCOPE_FORBIDDEN`
@@ -694,7 +696,7 @@ WITH CHECK (
 5. 插入新订阅切片并写入事件（One Door），确保 exclusion 约束不重叠。
 
 ### 6.3 SetID 创建默认订阅
-1. 创建 SetID 成功后，默认订阅的 `effective_date = current_date`。
+1. 创建 SetID 成功后，默认订阅的 `effective_date` 优先取创建请求的有效日期（如 `as_of`/`effective_date`），未提供则使用 `current_date`。
 2. 遍历 `scope_code_registry()` 中 `is_stable = true` 的列表。
 3. 对每个 scope，选择其 `DEFLT` 包（shared-only 用 global 包，其余用租户包）。
 4. 若 `DEFLT` 包不存在或在 `current_date` 无有效版本，返回 `SUBSCRIPTION_DEFLT_MISSING` 并终止 SetID 创建。
@@ -758,13 +760,17 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
 - **里程碑**：
   1. [x] **M1：Schema 与权限基座**：新增包/版本/订阅/事件表与索引、RLS 策略、`resolve_scope_package`/`assert_scope_package_active_as_of`，并设定最小权限 owner/search_path（先确认新增表）。
   2. [x] **M2：Kernel 写入口 + 版本投射**：`submit_*_event` 同步投射版本表（或回放函数），解析改读版本表，订阅写入口强校验包存在/归属/有效期。
-  3. [ ] **M3：模块切换到 package_id**：按模块分步替换读写口径（优先 jobcatalog，其次 orgunit/person），保持跨模块通过 `pkg/**` 调用。
-  4. [ ] **M4：UI/管理入口 + Authz/路由**：补齐包/订阅 API 与 HTMX 交互，shared-only 只读 UI，补 Casbin 权限与 routing 门禁。
+  3. [x] **M3：模块切换到 package_id**：按模块分步替换读写口径（优先 jobcatalog，其次 orgunit/person），保持跨模块通过 `pkg/**` 调用。
+  4. [x] **M4：UI/管理入口 + Authz/路由**：补齐包/订阅 API 与 HTMX 交互，shared-only 只读 UI，补 Casbin 权限与 routing 门禁。
   5. [ ] **M5：回填与验证闭环**：stable scope 回填、证据记录、单测/集成测与门禁结果落档。
 
 - **完成记录**：
-  - 2026-01-29：完成 M1（schema/权限/解析函数基座）
-  - 2026-01-29：完成 M2（写入口 + 版本投射）
+- 2026-01-29：完成 M1（schema/权限/解析函数基座）
+- 2026-01-29：完成 M2（写入口 + 版本投射）
+- 2026-01-29：完成 M3（jobcatalog 切换至 package_id + dbtool smoke 通过；补齐 SetID 创建/DEFLT bootstrap 默认订阅（tenant-only 稳定 scope））
+- 2026-01-29：完成 M4（scope package/subscription API + UI 入口；shared-only 只读 UI；补齐路由与 Casbin 门禁；E2E 增加 SetID 订阅脚本）
+- 2026-01-30：修复 Staffing Positions 快照读取，按 `resolve_scope_package` 解析 jobcatalog package_id 以恢复 `job_profile_code` 展示
+- 2026-01-30：补齐 scope package/subscription 路由与 API/UI 覆盖率至 100%，`make test` 通过
 
 ### 8.1 里程碑触发器与门禁（对齐 2.1/AGENTS.md）
 - **M1**：必跑 `make <module> plan && make <module> lint && make <module> migrate up`；如涉及 sqlc 生成则 `make sqlc-generate`；如变更文档则 `make check doc`。

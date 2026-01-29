@@ -7,6 +7,10 @@ p, role:tenant-admin, *, orgunit.orgunits, admin
 p, role:tenant-admin, *, orgunit.setid, read
 p, role:tenant-admin, *, orgunit.setid, admin
 p, role:tenant-admin, *, org.share_read, read
+p, role:tenant-admin, *, org.scope_package, read
+p, role:tenant-admin, *, org.scope_package, admin
+p, role:tenant-admin, *, org.scope_subscription, read
+p, role:tenant-admin, *, org.scope_subscription, admin
 p, role:tenant-admin, *, jobcatalog.catalog, read
 p, role:tenant-admin, *, jobcatalog.catalog, admin
 p, role:tenant-admin, *, staffing.positions, read
@@ -19,6 +23,8 @@ p, role:tenant-viewer, *, iam.session, admin
 p, role:tenant-viewer, *, orgunit.orgunits, read
 p, role:tenant-viewer, *, orgunit.setid, read
 p, role:tenant-viewer, *, org.share_read, read
+p, role:tenant-viewer, *, org.scope_package, read
+p, role:tenant-viewer, *, org.scope_subscription, read
 p, role:tenant-viewer, *, jobcatalog.catalog, read
 p, role:tenant-viewer, *, staffing.positions, read
 p, role:tenant-viewer, *, staffing.assignments, read

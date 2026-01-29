@@ -47,6 +47,9 @@ entrypoints:
       - path: /org/setid
         methods: [GET, POST]
         route_class: ui
+      - path: /orgunit/setids/{setid}/scope-subscriptions
+        methods: [GET, POST]
+        route_class: ui
       - path: /org/job-catalog
         methods: [GET, POST]
         route_class: ui
@@ -83,7 +86,19 @@ entrypoints:
       - path: /orgunit/api/setid-bindings
         methods: [POST]
         route_class: internal_api
+      - path: /orgunit/api/scope-packages
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /orgunit/api/scope-packages/{package_id}/disable
+        methods: [POST]
+        route_class: internal_api
+      - path: /orgunit/api/scope-subscriptions
+        methods: [GET, POST]
+        route_class: internal_api
       - path: /orgunit/api/global-setids
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /orgunit/api/global-scope-packages
         methods: [GET, POST]
         route_class: internal_api
       - path: /orgunit/api/org-units/set-business-unit

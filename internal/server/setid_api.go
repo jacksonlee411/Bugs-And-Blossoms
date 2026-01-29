@@ -10,9 +10,10 @@ import (
 )
 
 type setidCreateAPIRequest struct {
-	SetID     string `json:"setid"`
-	Name      string `json:"name"`
-	RequestID string `json:"request_id"`
+	SetID         string `json:"setid"`
+	Name          string `json:"name"`
+	EffectiveDate string `json:"effective_date"`
+	RequestID     string `json:"request_id"`
 }
 
 func handleSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
@@ -35,9 +36,17 @@ func handleSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernan
 
 	req.SetID = strings.TrimSpace(req.SetID)
 	req.Name = strings.TrimSpace(req.Name)
+	req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
 	req.RequestID = strings.TrimSpace(req.RequestID)
 	if req.SetID == "" || req.Name == "" || req.RequestID == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid/name/request_id required")
+		return
+	}
+	if req.EffectiveDate == "" {
+		req.EffectiveDate = time.Now().UTC().Format("2006-01-02")
+	}
+	if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
 		return
 	}
 
@@ -46,7 +55,7 @@ func handleSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernan
 		return
 	}
 
-	if err := store.CreateSetID(r.Context(), tenant.ID, req.SetID, req.Name, req.RequestID, tenant.ID); err != nil {
+	if err := store.CreateSetID(r.Context(), tenant.ID, req.SetID, req.Name, req.EffectiveDate, req.RequestID, tenant.ID); err != nil {
 		writeInternalAPIError(w, r, err, "setid_create_failed")
 		return
 	}

@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION staffing.get_position_snapshot(
   p_tenant_id uuid,
   p_query_date date
@@ -26,19 +28,19 @@ BEGIN
       DETAIL = 'query_date is required';
   END IF;
 
-	  RETURN QUERY
-	  SELECT
+  RETURN QUERY
+  SELECT
     pv.position_id,
     pv.org_unit_id,
     pv.reports_to_position_id,
     pv.jobcatalog_setid,
     pv.jobcatalog_setid_as_of,
     pv.job_profile_id,
-	    jp.code::text AS job_profile_code,
-	    pv.name,
-	    pv.lifecycle_status,
-	    pv.capacity_fte,
-	    lower(pv.validity) AS effective_date
+    jp.code::text AS job_profile_code,
+    pv.name,
+    pv.lifecycle_status,
+    pv.capacity_fte,
+    lower(pv.validity) AS effective_date
   FROM staffing.position_versions pv
   LEFT JOIN LATERAL orgunit.resolve_scope_package(
     p_tenant_id,
@@ -55,46 +57,9 @@ BEGIN
     AND pv.validity @> p_query_date;
 END;
 $$;
+-- +goose StatementEnd
 
-CREATE OR REPLACE FUNCTION staffing.get_assignment_snapshot(
-  p_tenant_id uuid,
-  p_person_uuid uuid,
-  p_query_date date
-)
-RETURNS TABLE (
-  assignment_id uuid,
-  person_uuid uuid,
-  position_id uuid,
-  status text,
-  effective_date date
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  PERFORM staffing.assert_current_tenant(p_tenant_id);
-  IF p_person_uuid IS NULL THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-      DETAIL = 'person_uuid is required';
-  END IF;
-  IF p_query_date IS NULL THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-      DETAIL = 'query_date is required';
-  END IF;
-
-  RETURN QUERY
-  SELECT
-    av.assignment_id,
-    av.person_uuid,
-    av.position_id,
-    av.status,
-    lower(av.validity) AS effective_date
-  FROM staffing.assignment_versions av
-  WHERE av.tenant_id = p_tenant_id
-    AND av.person_uuid = p_person_uuid
-    AND av.validity @> p_query_date;
-END;
-$$;
+-- +goose Down
+-- +goose StatementBegin
+-- no-op
+-- +goose StatementEnd

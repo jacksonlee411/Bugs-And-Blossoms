@@ -12,7 +12,7 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_setid text;
+  v_setid uuid;
 BEGIN
   PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
   IF p_query_date IS NULL THEN
@@ -22,7 +22,7 @@ BEGIN
       DETAIL = 'query_date is required';
   END IF;
 
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   RETURN QUERY
   SELECT
@@ -44,11 +44,11 @@ BEGIN
       FROM jobcatalog.job_family_groups g
       JOIN jobcatalog.job_family_group_versions v
         ON v.tenant_id = p_tenant_id
-       AND v.setid = v_setid
+       AND v.package_id = v_setid
        AND v.job_family_group_id = g.id
        AND v.validity @> p_query_date
       WHERE g.tenant_id = p_tenant_id
-        AND g.setid = v_setid
+        AND g.package_id = v_setid
     ), '[]'::jsonb) AS groups,
     COALESCE((
       SELECT jsonb_agg(
@@ -69,11 +69,11 @@ BEGIN
       FROM jobcatalog.job_families f
       JOIN jobcatalog.job_family_versions v
         ON v.tenant_id = p_tenant_id
-       AND v.setid = v_setid
+       AND v.package_id = v_setid
        AND v.job_family_id = f.id
        AND v.validity @> p_query_date
       WHERE f.tenant_id = p_tenant_id
-        AND f.setid = v_setid
+        AND f.package_id = v_setid
     ), '[]'::jsonb) AS families,
     COALESCE((
       SELECT jsonb_agg(
@@ -93,11 +93,11 @@ BEGIN
       FROM jobcatalog.job_levels l
       JOIN jobcatalog.job_level_versions v
         ON v.tenant_id = p_tenant_id
-       AND v.setid = v_setid
+       AND v.package_id = v_setid
        AND v.job_level_id = l.id
        AND v.validity @> p_query_date
       WHERE l.tenant_id = p_tenant_id
-        AND l.setid = v_setid
+        AND l.package_id = v_setid
     ), '[]'::jsonb) AS levels,
     COALESCE((
       SELECT jsonb_agg(
@@ -119,7 +119,7 @@ BEGIN
       FROM jobcatalog.job_profiles p
       JOIN jobcatalog.job_profile_versions v
         ON v.tenant_id = p_tenant_id
-       AND v.setid = v_setid
+       AND v.package_id = v_setid
        AND v.job_profile_id = p.id
        AND v.validity @> p_query_date
       LEFT JOIN LATERAL (
@@ -129,18 +129,18 @@ BEGIN
             SELECT f2.job_family_id
             FROM jobcatalog.job_profile_version_job_families f2
             WHERE f2.tenant_id = p_tenant_id
-              AND f2.setid = v_setid
+              AND f2.package_id = v_setid
               AND f2.job_profile_version_id = v.id
               AND f2.is_primary = true
             LIMIT 1
           ) AS primary_job_family_id
         FROM jobcatalog.job_profile_version_job_families f
         WHERE f.tenant_id = p_tenant_id
-          AND f.setid = v_setid
+          AND f.package_id = v_setid
           AND f.job_profile_version_id = v.id
       ) fam ON true
       WHERE p.tenant_id = p_tenant_id
-        AND p.setid = v_setid
+        AND p.package_id = v_setid
     ), '[]'::jsonb) AS profiles;
 END;
 $$;

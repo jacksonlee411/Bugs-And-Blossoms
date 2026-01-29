@@ -122,6 +122,22 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 }
 
 func authzRequirementForRoute(method string, path string) (object string, action string, ok bool) {
+	if pathMatchRouteTemplate(path, "/orgunit/api/scope-packages/{package_id}/disable") {
+		if method == http.MethodPost {
+			return authz.ObjectOrgScopePackage, authz.ActionAdmin, true
+		}
+		return "", "", false
+	}
+	if pathMatchRouteTemplate(path, "/orgunit/setids/{setid}/scope-subscriptions") {
+		if method == http.MethodGet {
+			return authz.ObjectOrgScopeSubscription, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectOrgScopeSubscription, authz.ActionAdmin, true
+		}
+		return "", "", false
+	}
+
 	switch path {
 	case "/login":
 		if method == http.MethodGet {
@@ -214,12 +230,36 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/orgunit/api/scope-packages":
+		if method == http.MethodGet {
+			return authz.ObjectOrgScopePackage, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectOrgScopePackage, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/orgunit/api/scope-subscriptions":
+		if method == http.MethodGet {
+			return authz.ObjectOrgScopeSubscription, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectOrgScopeSubscription, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/orgunit/api/global-setids":
 		if method == http.MethodGet {
 			return authz.ObjectOrgShareRead, authz.ActionRead, true
 		}
 		if method == http.MethodPost {
 			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/orgunit/api/global-scope-packages":
+		if method == http.MethodGet {
+			return authz.ObjectOrgScopePackage, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectOrgScopePackage, authz.ActionAdmin, true
 		}
 		return "", "", false
 	case "/orgunit/api/org-units/set-business-unit":

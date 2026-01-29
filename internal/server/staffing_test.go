@@ -2155,6 +2155,12 @@ func TestStaffingHandlers(t *testing.T) {
 	t.Run("renderPositions with nodes and positions", func(t *testing.T) {
 		_ = renderPositions([]Position{{ID: "pos1", OrgUnitID: "org1", Name: "A", EffectiveAt: "2026-01-01"}}, []OrgUnitNode{{ID: "org1", Name: "B"}, {ID: "org2", Name: "A"}}, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "", "", nil, "err")
 	})
+	t.Run("renderPositions org unit missing in nodes", func(t *testing.T) {
+		out := renderPositions(nil, []OrgUnitNode{{ID: "org1", Name: "Org"}}, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "missing", "", nil, "")
+		if !strings.Contains(out, "missing") {
+			t.Fatalf("unexpected output: %s", out)
+		}
+	})
 	t.Run("renderPositions job catalog context", func(t *testing.T) {
 		out := renderPositions(
 			[]Position{

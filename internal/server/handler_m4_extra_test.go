@@ -107,3 +107,93 @@ func TestHandler_InternalAssignmentEventRoutes(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec2.Code, rec2.Body.String())
 	}
 }
+
+func TestHandler_ScopePackageRoutes(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver:  localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{Email: "tenant-admin@example.invalid", KratosIdentityID: "kid1", RoleSlug: authz.RoleTenantAdmin}},
+		OrgUnitStore:     newOrgUnitMemoryStore(),
+		SetIDStore:       scopeAPIStore{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	loginReq.Host = "localhost:8080"
+	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginRec := httptest.NewRecorder()
+	h.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusFound {
+		t.Fatalf("login status=%d", loginRec.Code)
+	}
+	sidCookie := loginRec.Result().Cookies()[0]
+	if sidCookie == nil || sidCookie.Name != "sid" || sidCookie.Value == "" {
+		t.Fatalf("unexpected sid cookie: %#v", sidCookie)
+	}
+
+	doReq := func(method string, path string, body string, headers map[string]string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Host = "localhost:8080"
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		req.AddCookie(sidCookie)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := doReq(http.MethodGet, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("scope subscriptions ui get status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(http.MethodPost, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", "scope_code=jobcatalog&package_id=p1&request_id=r1", map[string]string{
+		"Content-Type": "application/x-www-form-urlencoded",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("scope subscriptions ui post status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	if rec := doReq(http.MethodGet, "/orgunit/api/scope-packages?scope_code=jobcatalog", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("scope packages get status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(http.MethodPost, "/orgunit/api/scope-packages", `{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_id":"r1"}`, map[string]string{
+		"Content-Type": "application/json",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("scope packages post status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", `{"request_id":"r1"}`, map[string]string{
+		"Content-Type": "application/json",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("scope package disable status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	if rec := doReq(http.MethodGet, "/orgunit/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog&as_of=2026-01-01", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("scope subscriptions get status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(http.MethodPost, "/orgunit/api/scope-subscriptions", `{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_id":"r1"}`, map[string]string{
+		"Content-Type": "application/json",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("scope subscriptions post status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	if rec := doReq(http.MethodGet, "/orgunit/api/global-scope-packages?scope_code=jobcatalog", "", map[string]string{
+		"X-Actor-Scope": "saas",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("global scope packages get status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(http.MethodPost, "/orgunit/api/global-scope-packages", `{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_id":"r1"}`, map[string]string{
+		"Content-Type":  "application/json",
+		"X-Actor-Scope": "saas",
+	}); rec.Code != http.StatusCreated {
+		t.Fatalf("global scope packages post status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}

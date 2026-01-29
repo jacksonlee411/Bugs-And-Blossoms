@@ -953,8 +953,9 @@ func TestJobCatalogPGStore_CreateAndListJobLevels(t *testing.T) {
 	makeTx := func() *stubTx {
 		return &stubTx{
 			row:  &stubRow{vals: []any{"active"}},
-			row2: &stubRow{vals: []any{"level-id"}},
-			row3: &stubRow{vals: []any{"event-id"}},
+			row2: &stubRow{vals: []any{"pkg-1", "t1"}},
+			row3: &stubRow{vals: []any{"level-id"}},
+			row4: &stubRow{vals: []any{"event-id"}},
 		}
 	}
 
@@ -977,6 +978,7 @@ func TestJobCatalogPGStore_CreateAndListJobLevels(t *testing.T) {
 	store3 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return &stubTx{
 			row:  &stubRow{vals: []any{"active"}},
+			row2: &stubRow{vals: []any{"pkg-1", "t1"}},
 			rows: rows,
 		}, nil
 	})).(*jobcatalogPGStore)
@@ -993,9 +995,10 @@ func TestJobCatalogPGStore_CreateAndListJobFamilies(t *testing.T) {
 	makeTx := func() *stubTx {
 		return &stubTx{
 			row:  &stubRow{vals: []any{"active"}},
-			row2: &stubRow{vals: []any{"group-id"}},
-			row3: &stubRow{vals: []any{"family-id"}},
-			row4: &stubRow{vals: []any{"event-id"}},
+			row2: &stubRow{vals: []any{"pkg-1", "t1"}},
+			row3: &stubRow{vals: []any{"group-id"}},
+			row4: &stubRow{vals: []any{"family-id"}},
+			row5: &stubRow{vals: []any{"event-id"}},
 		}
 	}
 
@@ -1017,6 +1020,7 @@ func TestJobCatalogPGStore_CreateAndListJobFamilies(t *testing.T) {
 	store2 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return &stubTx{
 			row:  &stubRow{vals: []any{"active"}},
+			row2: &stubRow{vals: []any{"pkg-1", "t1"}},
 			rows: rows,
 		}, nil
 	})).(*jobcatalogPGStore)
@@ -1047,22 +1051,22 @@ func TestJobCatalogPGStore_CreateJobFamily_Errors(t *testing.T) {
 		},
 		{
 			name:      "group_lookup_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2Err: errors.New("boom")},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, row3Err: errors.New("boom")},
 			wantError: true,
 		},
 		{
 			name:      "family_uuid_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"group-id"}}, row3Err: errors.New("boom")},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, row3: &stubRow{vals: []any{"group-id"}}, row4Err: errors.New("boom")},
 			wantError: true,
 		},
 		{
 			name:      "event_uuid_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"group-id"}}, row3: &stubRow{vals: []any{"family-id"}}, row4Err: errors.New("boom")},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, row3: &stubRow{vals: []any{"group-id"}}, row4: &stubRow{vals: []any{"family-id"}}, row5Err: errors.New("boom")},
 			wantError: true,
 		},
 		{
 			name:      "submit_exec_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"group-id"}}, row3: &stubRow{vals: []any{"family-id"}}, row4: &stubRow{vals: []any{"event-id"}}, execErr: errors.New("boom"), execErrAt: 3},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, row3: &stubRow{vals: []any{"group-id"}}, row4: &stubRow{vals: []any{"family-id"}}, row5: &stubRow{vals: []any{"event-id"}}, execErr: errors.New("boom"), execErrAt: 3},
 			wantError: true,
 		},
 	}
@@ -1098,17 +1102,17 @@ func TestJobCatalogPGStore_ListJobFamilies_Errors(t *testing.T) {
 		},
 		{
 			name:      "query_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, queryErr: errors.New("boom"), queryErrAt: 1},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, queryErr: errors.New("boom"), queryErrAt: 1},
 			wantError: true,
 		},
 		{
 			name:      "scan_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: [][]any{{"id1", "JF-BE", "JFG-ENG", "Backend", true, "2026-01-01"}}, scanErr: errors.New("boom")}},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: [][]any{{"id1", "JF-BE", "JFG-ENG", "Backend", true, "2026-01-01"}}, scanErr: errors.New("boom")}},
 			wantError: true,
 		},
 		{
 			name:      "rows_err",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: nil, err: errors.New("boom")}},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: nil, err: errors.New("boom")}},
 			wantError: true,
 		},
 	}
@@ -1144,22 +1148,22 @@ func TestJobCatalogPGStore_UpdateJobFamilyGroup_Errors(t *testing.T) {
 		},
 		{
 			name:      "group_lookup_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2Err: errors.New("boom")},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, row3Err: errors.New("boom")},
 			wantError: true,
 		},
 		{
 			name:      "family_lookup_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"group-id"}}, row3Err: errors.New("boom")},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, row3: &stubRow{vals: []any{"group-id"}}, row4Err: errors.New("boom")},
 			wantError: true,
 		},
 		{
 			name:      "event_uuid_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"group-id"}}, row3: &stubRow{vals: []any{"family-id"}}, row4Err: errors.New("boom")},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, row3: &stubRow{vals: []any{"group-id"}}, row4: &stubRow{vals: []any{"family-id"}}, row5Err: errors.New("boom")},
 			wantError: true,
 		},
 		{
 			name:      "submit_exec_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"group-id"}}, row3: &stubRow{vals: []any{"family-id"}}, row4: &stubRow{vals: []any{"event-id"}}, execErr: errors.New("boom"), execErrAt: 3},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, row3: &stubRow{vals: []any{"group-id"}}, row4: &stubRow{vals: []any{"family-id"}}, row5: &stubRow{vals: []any{"event-id"}}, execErr: errors.New("boom"), execErrAt: 3},
 			wantError: true,
 		},
 	}
@@ -1182,9 +1186,10 @@ func TestJobCatalogPGStore_CreateAndListJobProfiles(t *testing.T) {
 	store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return &stubTx{
 			row:  &stubRow{vals: []any{"active"}},
+			row2: &stubRow{vals: []any{"pkg-1", "t1"}},
 			rows: rows,
-			row2: &stubRow{vals: []any{"profile-id"}},
-			row3: &stubRow{vals: []any{"event-id"}},
+			row3: &stubRow{vals: []any{"profile-id"}},
+			row4: &stubRow{vals: []any{"event-id"}},
 		}, nil
 	})).(*jobcatalogPGStore)
 	if err := store.CreateJobProfile(context.Background(), "t1", "S2601", "2026-01-01", "JP-SWE", "Software Engineer", "desc", []string{"JF-BE", "JF-FE"}, "JF-BE"); err != nil {
@@ -1194,9 +1199,10 @@ func TestJobCatalogPGStore_CreateAndListJobProfiles(t *testing.T) {
 	storePrimaryNotInFamilies := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return &stubTx{
 			row:  &stubRow{vals: []any{"active"}},
+			row2: &stubRow{vals: []any{"pkg-1", "t1"}},
 			rows: rows2,
-			row2: &stubRow{vals: []any{"profile-id"}},
-			row3: &stubRow{vals: []any{"event-id"}},
+			row3: &stubRow{vals: []any{"profile-id"}},
+			row4: &stubRow{vals: []any{"event-id"}},
 		}, nil
 	})).(*jobcatalogPGStore)
 	if err := storePrimaryNotInFamilies.CreateJobProfile(context.Background(), "t1", "S2601", "2026-01-01", "JP-BAD", "Bad", "", []string{"JF-BE"}, "JF-FE"); err != nil {
@@ -1207,6 +1213,7 @@ func TestJobCatalogPGStore_CreateAndListJobProfiles(t *testing.T) {
 	store2 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 		return &stubTx{
 			row:  &stubRow{vals: []any{"active"}},
+			row2: &stubRow{vals: []any{"pkg-1", "t1"}},
 			rows: rowsProfiles,
 		}, nil
 	})).(*jobcatalogPGStore)
@@ -1243,56 +1250,56 @@ func TestJobCatalogPGStore_CreateJobProfile_Errors(t *testing.T) {
 		},
 		{
 			name:      "family_query_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, queryErr: errors.New("boom"), queryErrAt: 1},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, queryErr: errors.New("boom"), queryErrAt: 1},
 			families:  []string{"JF-BE"},
 			primary:   "JF-BE",
 			wantError: true,
 		},
 		{
 			name:      "family_scan_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}, scanErr: errors.New("boom")}},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}, scanErr: errors.New("boom")}},
 			families:  []string{"JF-BE"},
 			primary:   "JF-BE",
 			wantError: true,
 		},
 		{
 			name:      "family_rows_err",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: nil, err: errors.New("boom")}},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: nil, err: errors.New("boom")}},
 			families:  []string{"JF-BE"},
 			primary:   "JF-BE",
 			wantError: true,
 		},
 		{
 			name:      "family_missing",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}}},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}}},
 			families:  []string{"JF-BE", "JF-FE"},
 			primary:   "JF-BE",
 			wantError: true,
 		},
 		{
 			name:      "primary_missing",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}}},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}}},
 			families:  []string{"JF-BE"},
 			primary:   "JF-FE",
 			wantError: true,
 		},
 		{
 			name:      "profile_uuid_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}}, row2Err: errors.New("boom")},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}}, row3Err: errors.New("boom")},
 			families:  []string{"JF-BE"},
 			primary:   "JF-BE",
 			wantError: true,
 		},
 		{
 			name:      "event_uuid_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}}, row2: &stubRow{vals: []any{"profile-id"}}, row3Err: errors.New("boom")},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}}, row3: &stubRow{vals: []any{"profile-id"}}, row4Err: errors.New("boom")},
 			families:  []string{"JF-BE"},
 			primary:   "JF-BE",
 			wantError: true,
 		},
 		{
 			name:      "submit_exec_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}}, row2: &stubRow{vals: []any{"profile-id"}}, row3: &stubRow{vals: []any{"event-id"}}, execErr: errors.New("boom"), execErrAt: 3},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: [][]any{{"JF-BE", "family1"}}}, row3: &stubRow{vals: []any{"profile-id"}}, row4: &stubRow{vals: []any{"event-id"}}, execErr: errors.New("boom"), execErrAt: 3},
 			families:  []string{"JF-BE"},
 			primary:   "JF-BE",
 			wantError: true,
@@ -1330,17 +1337,17 @@ func TestJobCatalogPGStore_ListJobProfiles_Errors(t *testing.T) {
 		},
 		{
 			name:      "query_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, queryErr: errors.New("boom"), queryErrAt: 1},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, queryErr: errors.New("boom"), queryErrAt: 1},
 			wantError: true,
 		},
 		{
 			name:      "scan_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: [][]any{{"id1", "JP-SWE", "Software Engineer", true, "2026-01-01", "JF-BE", "JF-BE"}}, scanErr: errors.New("boom")}},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: [][]any{{"id1", "JP-SWE", "Software Engineer", true, "2026-01-01", "JF-BE", "JF-BE"}}, scanErr: errors.New("boom")}},
 			wantError: true,
 		},
 		{
 			name:      "rows_err",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: nil, err: errors.New("boom")}},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: nil, err: errors.New("boom")}},
 			wantError: true,
 		},
 	}
@@ -1376,17 +1383,17 @@ func TestJobCatalogPGStore_CreateJobLevel_Errors(t *testing.T) {
 		},
 		{
 			name:      "level_uuid_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2Err: errors.New("boom")},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, row3Err: errors.New("boom")},
 			wantError: true,
 		},
 		{
 			name:      "event_uuid_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"level-id"}}, row3Err: errors.New("boom")},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, row3: &stubRow{vals: []any{"level-id"}}, row4Err: errors.New("boom")},
 			wantError: true,
 		},
 		{
 			name:      "submit_exec_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"level-id"}}, row3: &stubRow{vals: []any{"event-id"}}, execErr: errors.New("boom"), execErrAt: 3},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, row3: &stubRow{vals: []any{"level-id"}}, row4: &stubRow{vals: []any{"event-id"}}, execErr: errors.New("boom"), execErrAt: 3},
 			wantError: true,
 		},
 	}
@@ -1422,17 +1429,17 @@ func TestJobCatalogPGStore_ListJobLevels_Errors(t *testing.T) {
 		},
 		{
 			name:      "query_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, queryErr: errors.New("boom"), queryErrAt: 1},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, queryErr: errors.New("boom"), queryErrAt: 1},
 			wantError: true,
 		},
 		{
 			name:      "scan_error",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: [][]any{{"id1", "JL1", "Level 1", true, "2026-01-01"}}, scanErr: errors.New("boom")}},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: [][]any{{"id1", "JL1", "Level 1", true, "2026-01-01"}}, scanErr: errors.New("boom")}},
 			wantError: true,
 		},
 		{
 			name:      "rows_err",
-			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, rows: &jobcatalogRows{rows: nil, err: errors.New("boom")}},
+			tx:        &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-1", "t1"}}, rows: &jobcatalogRows{rows: nil, err: errors.New("boom")}},
 			wantError: true,
 		},
 	}
@@ -1689,12 +1696,22 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 
 	tx3 := &stubTx{
 		row:  fakeRow{vals: []any{"active"}},
-		row2: fakeRow{vals: []any{"g1"}},
-		row3: fakeRow{vals: []any{"e1"}},
+		row2: fakeRow{vals: []any{"pkg-1", "t1"}},
+		row3: fakeRow{vals: []any{"g1"}},
+		row4: fakeRow{vals: []any{"e1"}},
 	}
 	s3 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3, nil })}
 	if err := s3.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", ""); err != nil {
 		t.Fatalf("err=%v", err)
+	}
+
+	tx3OwnerMismatch := &stubTx{
+		row:  fakeRow{vals: []any{"active"}},
+		row2: fakeRow{vals: []any{"pkg-1", "t2"}},
+	}
+	s3OwnerMismatch := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3OwnerMismatch, nil })}
+	if err := s3OwnerMismatch.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", ""); err == nil || err.Error() != "JOBCATALOG_PACKAGE_OWNER_INVALID" {
+		t.Fatalf("expected JOBCATALOG_PACKAGE_OWNER_INVALID, got %v", err)
 	}
 
 	tx3a := &stubTx{execErr: errors.New("bootstrap fail"), execErrAt: 2}
@@ -1703,7 +1720,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	tx3ResolveErr := &stubTx{rowErr: errors.New("resolve fail")}
+	tx3ResolveErr := &stubTx{row: fakeRow{vals: []any{"active"}}, row2Err: errors.New("resolve fail")}
 	s3ResolveErr := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3ResolveErr, nil })}
 	if err := s3ResolveErr.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
 		t.Fatal("expected error")
@@ -1711,7 +1728,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 
 	tx3b := &stubTx{
 		row:     fakeRow{vals: []any{"active"}},
-		row2:    fakeRow{vals: []any{"g1"}},
+		row2:    fakeRow{vals: []any{"pkg-1", "t1"}},
 		row3Err: errors.New("uuid fail"),
 	}
 	s3b := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3b, nil })}
@@ -1719,12 +1736,24 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
+	tx3EventIDErr := &stubTx{
+		row:     fakeRow{vals: []any{"active"}},
+		row2:    fakeRow{vals: []any{"pkg-1", "t1"}},
+		row3:    fakeRow{vals: []any{"g1"}},
+		row4Err: errors.New("event id fail"),
+	}
+	s3EventIDErr := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3EventIDErr, nil })}
+	if err := s3EventIDErr.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
+		t.Fatal("expected error")
+	}
+
 	tx3c := &stubTx{
 		execErr:   errors.New("exec fail"),
 		execErrAt: 3,
 		row:       fakeRow{vals: []any{"active"}},
-		row2:      fakeRow{vals: []any{"g1"}},
-		row3:      fakeRow{vals: []any{"e1"}},
+		row2:      fakeRow{vals: []any{"pkg-1", "t1"}},
+		row3:      fakeRow{vals: []any{"g1"}},
+		row4:      fakeRow{vals: []any{"e1"}},
 	}
 	s3c := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3c, nil })}
 	if err := s3c.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", "desc"); err == nil {
@@ -1732,7 +1761,8 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 	}
 
 	tx4 := &stubTx{
-		row: fakeRow{vals: []any{"active"}},
+		row:  fakeRow{vals: []any{"active"}},
+		row2: fakeRow{vals: []any{"pkg-1", "t1"}},
 		rows: &jobcatalogRows{rows: [][]any{
 			{"g1", "JC1", "Group1", true, "2026-01-01"},
 		}},
@@ -1749,7 +1779,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	tx4ResolveErr := &stubTx{rowErr: errors.New("resolve fail")}
+	tx4ResolveErr := &stubTx{row: fakeRow{vals: []any{"active"}}, row2Err: errors.New("resolve fail")}
 	s4ResolveErr := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4ResolveErr, nil })}
 	if _, err := s4ResolveErr.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
@@ -1757,6 +1787,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 
 	tx4b := &stubTx{
 		row:      fakeRow{vals: []any{"active"}},
+		row2:     fakeRow{vals: []any{"pkg-1", "t1"}},
 		queryErr: errors.New("query fail"),
 	}
 	s4b := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4b, nil })}
@@ -1766,6 +1797,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 
 	tx4c := &stubTx{
 		row:  fakeRow{vals: []any{"active"}},
+		row2: fakeRow{vals: []any{"pkg-1", "t1"}},
 		rows: &scanErrRows{},
 	}
 	s4c := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4c, nil })}
@@ -1775,7 +1807,7 @@ func TestJobCatalogPGStore_WithTxAndMethods(t *testing.T) {
 }
 
 func TestJobCatalogPGStore_Errors(t *testing.T) {
-	tx := &stubTx{queryErr: errors.New("query fail")}
+	tx := &stubTx{row: fakeRow{vals: []any{"active"}}, row2: fakeRow{vals: []any{"pkg-1", "t1"}}, queryErr: errors.New("query fail")}
 	s := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 	if _, err := s.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
@@ -1789,7 +1821,8 @@ func TestJobCatalogPGStore_Errors(t *testing.T) {
 
 	tx3 := &stubTx{
 		row:     fakeRow{vals: []any{"active"}},
-		row2Err: errors.New("uuid fail"),
+		row2:    fakeRow{vals: []any{"pkg-1", "t1"}},
+		row3Err: errors.New("uuid fail"),
 	}
 	s3 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3, nil })}
 	if err := s3.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC1", "Group1", ""); err == nil {
@@ -1798,6 +1831,7 @@ func TestJobCatalogPGStore_Errors(t *testing.T) {
 
 	tx4 := &stubTx{
 		row:  fakeRow{vals: []any{"active"}},
+		row2: fakeRow{vals: []any{"pkg-1", "t1"}},
 		rows: &jobcatalogRows{err: errors.New("rows err")},
 	}
 	s4 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4, nil })}
@@ -1819,6 +1853,8 @@ func TestJobCatalogPGStore_Errors(t *testing.T) {
 
 	tx7 := &stubTx{
 		commitErr: errors.New("commit fail"),
+		row:       fakeRow{vals: []any{"active"}},
+		row2:      fakeRow{vals: []any{"pkg-1", "t1"}},
 		rows:      &jobcatalogRows{rows: [][]any{{"g1", "JC1", "Group1", true, "2026-01-01"}}},
 	}
 	s7 := &jobcatalogPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx7, nil })}
