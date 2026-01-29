@@ -276,13 +276,33 @@ WHERE tenant_id = $1::uuid
 	return setID, nil
 }
 
+func resolveJobCatalogPackage(ctx context.Context, tx pgx.Tx, tenantID string, setID string, asOfDate string) (string, error) {
+	resolvedSetID, err := ensureSetIDActive(ctx, tx, tenantID, setID)
+	if err != nil {
+		return "", err
+	}
+
+	var packageID string
+	var ownerTenantID string
+	if err := tx.QueryRow(ctx, `
+SELECT package_id::text, package_owner_tenant_id::text
+FROM orgunit.resolve_scope_package($1::uuid, $2::text, 'jobcatalog', $3::date)
+`, tenantID, resolvedSetID, asOfDate).Scan(&packageID, &ownerTenantID); err != nil {
+		return "", err
+	}
+	if ownerTenantID != tenantID {
+		return "", errors.New("JOBCATALOG_PACKAGE_OWNER_INVALID")
+	}
+	return packageID, nil
+}
+
 func (s *jobcatalogPGStore) CreateJobFamilyGroup(ctx context.Context, tenantID string, setID string, effectiveDate string, code string, name string, description string) error {
 	return s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if err := setid.EnsureBootstrap(ctx, tx, tenantID, tenantID); err != nil {
 			return err
 		}
 
-		resolved, err := ensureSetIDActive(ctx, tx, tenantID, setID)
+		resolved, err := resolveJobCatalogPackage(ctx, tx, tenantID, setID, effectiveDate)
 		if err != nil {
 			return err
 		}
@@ -328,7 +348,7 @@ func (s *jobcatalogPGStore) ListJobFamilyGroups(ctx context.Context, tenantID st
 		if err := setid.EnsureBootstrap(ctx, tx, tenantID, tenantID); err != nil {
 			return err
 		}
-		v, err := ensureSetIDActive(ctx, tx, tenantID, setID)
+		v, err := resolveJobCatalogPackage(ctx, tx, tenantID, setID, asOfDate)
 		if err != nil {
 			return err
 		}
@@ -343,10 +363,10 @@ SELECT
 FROM jobcatalog.job_family_groups g
 JOIN jobcatalog.job_family_group_versions v
   ON v.tenant_id = $1::uuid
- AND v.setid = $2::text
+ AND v.package_id = $2::uuid
  AND v.job_family_group_id = g.id
 WHERE g.tenant_id = $1::uuid
-  AND g.setid = $2::text
+  AND g.package_id = $2::uuid
   AND v.validity @> $3::date
 ORDER BY g.code ASC
 `, tenantID, v, asOfDate)
@@ -373,7 +393,7 @@ func (s *jobcatalogPGStore) CreateJobFamily(ctx context.Context, tenantID string
 			return err
 		}
 
-		resolved, err := ensureSetIDActive(ctx, tx, tenantID, setID)
+		resolved, err := resolveJobCatalogPackage(ctx, tx, tenantID, setID, effectiveDate)
 		if err != nil {
 			return err
 		}
@@ -383,7 +403,7 @@ func (s *jobcatalogPGStore) CreateJobFamily(ctx context.Context, tenantID string
 SELECT g.id::text
 FROM jobcatalog.job_family_groups g
 WHERE g.tenant_id = $1::uuid
-  AND g.setid = $2::text
+  AND g.package_id = $2::uuid
   AND g.code = $3::text
 `, tenantID, resolved, groupCode).Scan(&groupID); err != nil {
 			return err
@@ -431,7 +451,7 @@ func (s *jobcatalogPGStore) UpdateJobFamilyGroup(ctx context.Context, tenantID s
 			return err
 		}
 
-		resolved, err := ensureSetIDActive(ctx, tx, tenantID, setID)
+		resolved, err := resolveJobCatalogPackage(ctx, tx, tenantID, setID, effectiveDate)
 		if err != nil {
 			return err
 		}
@@ -441,7 +461,7 @@ func (s *jobcatalogPGStore) UpdateJobFamilyGroup(ctx context.Context, tenantID s
 SELECT g.id::text
 FROM jobcatalog.job_family_groups g
 WHERE g.tenant_id = $1::uuid
-  AND g.setid = $2::text
+  AND g.package_id = $2::uuid
   AND g.code = $3::text
 `, tenantID, resolved, groupCode).Scan(&groupID); err != nil {
 			return err
@@ -452,7 +472,7 @@ WHERE g.tenant_id = $1::uuid
 SELECT f.id::text
 FROM jobcatalog.job_families f
 WHERE f.tenant_id = $1::uuid
-  AND f.setid = $2::text
+  AND f.package_id = $2::uuid
   AND f.code = $3::text
 `, tenantID, resolved, familyCode).Scan(&familyID); err != nil {
 			return err
@@ -488,7 +508,7 @@ func (s *jobcatalogPGStore) ListJobFamilies(ctx context.Context, tenantID string
 		if err := setid.EnsureBootstrap(ctx, tx, tenantID, tenantID); err != nil {
 			return err
 		}
-		v, err := ensureSetIDActive(ctx, tx, tenantID, setID)
+		v, err := resolveJobCatalogPackage(ctx, tx, tenantID, setID, asOfDate)
 		if err != nil {
 			return err
 		}
@@ -504,14 +524,14 @@ SELECT
 FROM jobcatalog.job_families f
 JOIN jobcatalog.job_family_versions v
   ON v.tenant_id = $1::uuid
- AND v.setid = $2::text
+ AND v.package_id = $2::uuid
  AND v.job_family_id = f.id
 JOIN jobcatalog.job_family_groups g
   ON g.tenant_id = $1::uuid
- AND g.setid = $2::text
+ AND g.package_id = $2::uuid
  AND g.id = v.job_family_group_id
 WHERE f.tenant_id = $1::uuid
-  AND f.setid = $2::text
+  AND f.package_id = $2::uuid
   AND v.validity @> $3::date
 ORDER BY f.code ASC
 `, tenantID, v, asOfDate)
@@ -538,7 +558,7 @@ func (s *jobcatalogPGStore) CreateJobLevel(ctx context.Context, tenantID string,
 			return err
 		}
 
-		resolved, err := ensureSetIDActive(ctx, tx, tenantID, setID)
+		resolved, err := resolveJobCatalogPackage(ctx, tx, tenantID, setID, effectiveDate)
 		if err != nil {
 			return err
 		}
@@ -584,7 +604,7 @@ func (s *jobcatalogPGStore) ListJobLevels(ctx context.Context, tenantID string, 
 		if err := setid.EnsureBootstrap(ctx, tx, tenantID, tenantID); err != nil {
 			return err
 		}
-		v, err := ensureSetIDActive(ctx, tx, tenantID, setID)
+		v, err := resolveJobCatalogPackage(ctx, tx, tenantID, setID, asOfDate)
 		if err != nil {
 			return err
 		}
@@ -599,10 +619,10 @@ func (s *jobcatalogPGStore) ListJobLevels(ctx context.Context, tenantID string, 
 	FROM jobcatalog.job_levels l
 	JOIN jobcatalog.job_level_versions v
 	  ON v.tenant_id = $1::uuid
-	 AND v.setid = $2::text
+	 AND v.package_id = $2::uuid
 	 AND v.job_level_id = l.id
 	WHERE l.tenant_id = $1::uuid
-	  AND l.setid = $2::text
+	  AND l.package_id = $2::uuid
 	  AND v.validity @> $3::date
 	ORDER BY l.code ASC
 	`, tenantID, v, asOfDate)
@@ -629,7 +649,7 @@ func (s *jobcatalogPGStore) CreateJobProfile(ctx context.Context, tenantID strin
 			return err
 		}
 
-		resolved, err := ensureSetIDActive(ctx, tx, tenantID, setID)
+		resolved, err := resolveJobCatalogPackage(ctx, tx, tenantID, setID, effectiveDate)
 		if err != nil {
 			return err
 		}
@@ -659,7 +679,7 @@ func (s *jobcatalogPGStore) CreateJobProfile(ctx context.Context, tenantID strin
 SELECT f.code, f.id::text
 FROM jobcatalog.job_families f
 WHERE f.tenant_id = $1::uuid
-  AND f.setid = $2::text
+  AND f.package_id = $2::uuid
   AND f.code = ANY($3::text[])
 `, tenantID, resolved, lookupCodes)
 			if err != nil {
@@ -734,7 +754,7 @@ func (s *jobcatalogPGStore) ListJobProfiles(ctx context.Context, tenantID string
 		if err := setid.EnsureBootstrap(ctx, tx, tenantID, tenantID); err != nil {
 			return err
 		}
-		v, err := ensureSetIDActive(ctx, tx, tenantID, setID)
+		v, err := resolveJobCatalogPackage(ctx, tx, tenantID, setID, asOfDate)
 		if err != nil {
 			return err
 		}
@@ -752,10 +772,10 @@ SELECT
     FROM jobcatalog.job_profile_version_job_families pf2
     JOIN jobcatalog.job_families f2
       ON f2.tenant_id = $1::uuid
-     AND f2.setid = $2::text
+     AND f2.package_id = $2::uuid
      AND f2.id = pf2.job_family_id
     WHERE pf2.tenant_id = $1::uuid
-      AND pf2.setid = $2::text
+      AND pf2.package_id = $2::uuid
       AND pf2.job_profile_version_id = v.id
       AND pf2.is_primary = true
     LIMIT 1
@@ -763,19 +783,19 @@ SELECT
 FROM jobcatalog.job_profiles p
 JOIN jobcatalog.job_profile_versions v
   ON v.tenant_id = $1::uuid
- AND v.setid = $2::text
+ AND v.package_id = $2::uuid
  AND v.job_profile_id = p.id
  AND v.validity @> $3::date
 LEFT JOIN jobcatalog.job_profile_version_job_families pf
   ON pf.tenant_id = $1::uuid
- AND pf.setid = $2::text
+ AND pf.package_id = $2::uuid
  AND pf.job_profile_version_id = v.id
 LEFT JOIN jobcatalog.job_families f
   ON f.tenant_id = $1::uuid
- AND f.setid = $2::text
+ AND f.package_id = $2::uuid
  AND f.id = pf.job_family_id
 WHERE p.tenant_id = $1::uuid
-  AND p.setid = $2::text
+  AND p.package_id = $2::uuid
 GROUP BY p.id, p.code, v.id, v.name, v.is_active, v.validity
 ORDER BY p.code ASC
 `, tenantID, v, asOfDate)

@@ -1,4 +1,4 @@
-h1:eIj51gB3/sDDApnkh9IyX9mmcn8BxnzhHkDU9a/ntQI=
+h1:rEG8ySZ0CJrW45SW93bhFYyr66vmpubdXvlxwszj9GQ=
 20260106102000_jobcatalog_schema.sql h1:CDdfO75OzPzPBH7oQX266lijpRnNYkQ6bKcrkytHEbI=
 20260106102500_jobcatalog_engine.sql h1:mhB6MXtBbWHLcyOFBU1YYh6uTwxCyJ2vcztdXDQofSo=
 20260111114500_jobcatalog_m2_group_contract_align.sql h1:AUN+lWhuIJgJPvZpy6Dlr3kyQu3Vf6SEVi1y9Gktbic=
@@ -11,3 +11,6 @@ h1:eIj51gB3/sDDApnkh9IyX9mmcn8BxnzhHkDU9a/ntQI=
 20260111131500_jobcatalog_job_profile_engine.sql h1:belTmjUINXyvH/X1pK6cuHXhFyGxVWVUCJc6MkTVNJY=
 20260111133000_jobcatalog_read_snapshot.sql h1:QVxvwWMBrr+fSs3RdRY/TZYB1SRPeT+aOYEqH1XIKcE=
 20260125024600_jobcatalog_setid_format_5.sql h1:mFWOKhzJ+YEB20Fd3MwSFWmYbMRcDHi1xqSPiW7nf/Y=
+20260129200000_jobcatalog_package_id_schema.sql h1:bQ2fY3dpC9FW7x3yrVuTj/uiZQQSAY/qUK8WRuoZtuQ=
+20260129201000_jobcatalog_package_id_engine.sql h1:cJLExt+oCJQ3KZjW+asxNBKfF/kHRvW2iuoACMubkQ4=
+20260129234500_jobcatalog_replay_versions_uuid_overload.sql h1:esi89LqcDEzsGOW6SdDlbT8cM6JJys7LW3MKFTix4z8=

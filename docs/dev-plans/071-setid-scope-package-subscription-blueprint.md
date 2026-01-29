@@ -758,13 +758,14 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
 - **里程碑**：
   1. [x] **M1：Schema 与权限基座**：新增包/版本/订阅/事件表与索引、RLS 策略、`resolve_scope_package`/`assert_scope_package_active_as_of`，并设定最小权限 owner/search_path（先确认新增表）。
   2. [x] **M2：Kernel 写入口 + 版本投射**：`submit_*_event` 同步投射版本表（或回放函数），解析改读版本表，订阅写入口强校验包存在/归属/有效期。
-  3. [ ] **M3：模块切换到 package_id**：按模块分步替换读写口径（优先 jobcatalog，其次 orgunit/person），保持跨模块通过 `pkg/**` 调用。
+  3. [x] **M3：模块切换到 package_id**：按模块分步替换读写口径（优先 jobcatalog，其次 orgunit/person），保持跨模块通过 `pkg/**` 调用。
   4. [ ] **M4：UI/管理入口 + Authz/路由**：补齐包/订阅 API 与 HTMX 交互，shared-only 只读 UI，补 Casbin 权限与 routing 门禁。
   5. [ ] **M5：回填与验证闭环**：stable scope 回填、证据记录、单测/集成测与门禁结果落档。
 
 - **完成记录**：
   - 2026-01-29：完成 M1（schema/权限/解析函数基座）
   - 2026-01-29：完成 M2（写入口 + 版本投射）
+  - 2026-01-29：完成 M3（jobcatalog 切换至 package_id + dbtool smoke 通过）
 
 ### 8.1 里程碑触发器与门禁（对齐 2.1/AGENTS.md）
 - **M1**：必跑 `make <module> plan && make <module> lint && make <module> migrate up`；如涉及 sqlc 生成则 `make sqlc-generate`；如变更文档则 `make check doc`。

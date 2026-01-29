@@ -1787,25 +1787,103 @@ func jobcatalogSmoke(args []string) {
 		fatal(err)
 	}
 
+	initiatorID := "00000000-0000-0000-0000-00000000f001"
+	scopeSetID := "DEFLT"
+	scopeAsOf := "2026-01-01"
+	scopePackageID := "00000000-0000-0000-0000-00000000d101"
+	scopePackageEventID := "00000000-0000-0000-0000-00000000d102"
+	scopePackageRequestID := "dbtool-jobcatalog-scope-package"
+	scopeSubEventID := "00000000-0000-0000-0000-00000000d103"
+	scopeSubRequestID := "dbtool-jobcatalog-scope-subscribe"
+
+	resolveScope := func() (string, string, error) {
+		var packageID string
+		var ownerTenantID string
+		if err := tx.QueryRow(ctx, `
+SELECT package_id::text, package_owner_tenant_id::text
+FROM orgunit.resolve_scope_package($1::uuid, $2::text, 'jobcatalog', $3::date)
+`, tenantA, scopeSetID, scopeAsOf).Scan(&packageID, &ownerTenantID); err != nil {
+			return "", "", err
+		}
+		return packageID, ownerTenantID, nil
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT sp_scope_resolve;`); err != nil {
+		fatal(err)
+	}
+
+	packageID, ownerTenantID, err := resolveScope()
+	if err != nil {
+		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_scope_resolve;`); rbErr != nil {
+			fatal(rbErr)
+		}
+
+		var pkgEventDBID int64
+		if err := tx.QueryRow(ctx, `
+SELECT orgunit.submit_scope_package_event(
+  $1::uuid,
+  $2::uuid,
+  $3::text,
+  $4::uuid,
+  'CREATE',
+  $5::date,
+  jsonb_build_object('package_code', 'SMOKE', 'name', 'Smoke Package'),
+  $6::text,
+  $7::uuid
+);
+`, scopePackageEventID, tenantA, "jobcatalog", scopePackageID, scopeAsOf, scopePackageRequestID, initiatorID).Scan(&pkgEventDBID); err != nil {
+			fatal(err)
+		}
+
+		var subEventDBID int64
+		if err := tx.QueryRow(ctx, `
+SELECT orgunit.submit_scope_subscription_event(
+  $1::uuid,
+  $2::uuid,
+  $3::text,
+  $4::text,
+  $5::uuid,
+  $6::uuid,
+  'SUBSCRIBE',
+  $7::date,
+  $8::text,
+  $9::uuid
+);
+`, scopeSubEventID, tenantA, scopeSetID, "jobcatalog", scopePackageID, tenantA, scopeAsOf, scopeSubRequestID, initiatorID).Scan(&subEventDBID); err != nil {
+			fatal(err)
+		}
+
+		packageID, ownerTenantID, err = resolveScope()
+		if err != nil {
+			fatal(err)
+		}
+	} else {
+		if _, rbErr := tx.Exec(ctx, `RELEASE SAVEPOINT sp_scope_resolve;`); rbErr != nil {
+			fatal(rbErr)
+		}
+	}
+	if ownerTenantID != tenantA {
+		fatalf("expected jobcatalog package owner to be %s, got %s", tenantA, ownerTenantID)
+	}
+
 	groupID := "00000000-0000-0000-0000-00000000c101"
 	eventID := "00000000-0000-0000-0000-00000000c102"
 	requestID := "dbtool-jobcatalog-smoke-create"
-	initiatorID := "00000000-0000-0000-0000-00000000f001"
 
 	var createdEventDBID int64
 	if err := tx.QueryRow(ctx, `
 SELECT jobcatalog.submit_job_family_group_event(
   $1::uuid,
   $2::uuid,
-  'SHARE',
-  $3::uuid,
+  $3::text,
+  $4::uuid,
   'CREATE',
-  $4::date,
+  $5::date,
   jsonb_build_object('code', 'JC1', 'name', 'Job Family Group 1', 'description', null),
-  $5::text,
-  $6::uuid
+  $6::text,
+  $7::uuid
 );
-`, eventID, tenantA, groupID, "2026-01-01", requestID, initiatorID).Scan(&createdEventDBID); err != nil {
+`, eventID, tenantA, packageID, groupID, "2026-01-01", requestID, initiatorID).Scan(&createdEventDBID); err != nil {
 		fatal(err)
 	}
 
@@ -1814,15 +1892,15 @@ SELECT jobcatalog.submit_job_family_group_event(
 SELECT jobcatalog.submit_job_family_group_event(
   $1::uuid,
   $2::uuid,
-  'SHARE',
-  $3::uuid,
+  $3::text,
+  $4::uuid,
   'CREATE',
-  $4::date,
+  $5::date,
   jsonb_build_object('code', 'JC1', 'name', 'Job Family Group 1', 'description', null),
-  $5::text,
-  $6::uuid
+  $6::text,
+  $7::uuid
 );
-`, eventID, tenantA, groupID, "2026-01-01", requestID, initiatorID).Scan(&retriedEventDBID); err != nil {
+`, eventID, tenantA, packageID, groupID, "2026-01-01", requestID, initiatorID).Scan(&retriedEventDBID); err != nil {
 		fatal(err)
 	}
 	if retriedEventDBID != createdEventDBID {
@@ -1851,15 +1929,15 @@ SELECT jobcatalog.submit_job_family_group_event(
 SELECT jobcatalog.submit_job_family_group_event(
   $1::uuid,
   $2::uuid,
-  'SHARE',
-  $3::uuid,
+  $3::text,
+  $4::uuid,
   'CREATE',
-  $4::date,
+  $5::date,
   jsonb_build_object('code', 'JC2', 'name', 'Job Family Group 2', 'description', null),
-  $5::text,
-  $6::uuid
+  $6::text,
+  $7::uuid
 );
-`, eventID2, tenantA, groupID2, "2026-01-01", requestID2, initiatorID); err != nil {
+`, eventID2, tenantA, packageID, groupID2, "2026-01-01", requestID2, initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -1872,15 +1950,15 @@ SELECT jobcatalog.submit_job_family_group_event(
 SELECT jobcatalog.submit_job_family_event(
   $1::uuid,
   $2::uuid,
-  'SHARE',
-  $3::uuid,
+  $3::text,
+  $4::uuid,
   'CREATE',
-  $4::date,
-  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_id', $5::uuid),
-  $6::text,
-  $7::uuid
+  $5::date,
+  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_id', $6::uuid),
+  $7::text,
+  $8::uuid
 );
-`, familyCreateEventID, tenantA, familyID, "2026-01-01", groupID, familyCreateRequestID, initiatorID).Scan(&familyCreatedEventDBID); err != nil {
+`, familyCreateEventID, tenantA, packageID, familyID, "2026-01-01", groupID, familyCreateRequestID, initiatorID).Scan(&familyCreatedEventDBID); err != nil {
 		fatal(err)
 	}
 
@@ -1889,15 +1967,15 @@ SELECT jobcatalog.submit_job_family_event(
 SELECT jobcatalog.submit_job_family_event(
   $1::uuid,
   $2::uuid,
-  'SHARE',
-  $3::uuid,
+  $3::text,
+  $4::uuid,
   'CREATE',
-  $4::date,
-  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_id', $5::uuid),
-  $6::text,
-  $7::uuid
+  $5::date,
+  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_id', $6::uuid),
+  $7::text,
+  $8::uuid
 );
-`, familyCreateEventID, tenantA, familyID, "2026-01-01", groupID, familyCreateRequestID, initiatorID).Scan(&familyRetriedEventDBID); err != nil {
+`, familyCreateEventID, tenantA, packageID, familyID, "2026-01-01", groupID, familyCreateRequestID, initiatorID).Scan(&familyRetriedEventDBID); err != nil {
 		fatal(err)
 	}
 	if familyRetriedEventDBID != familyCreatedEventDBID {
@@ -1911,15 +1989,15 @@ SELECT jobcatalog.submit_job_family_event(
 SELECT jobcatalog.submit_job_family_event(
   $1::uuid,
   $2::uuid,
-  'SHARE',
-  $3::uuid,
+  $3::text,
+  $4::uuid,
   'UPDATE',
-  $4::date,
-  jsonb_build_object('job_family_group_id', $5::uuid),
-  $6::text,
-  $7::uuid
+  $5::date,
+  jsonb_build_object('job_family_group_id', $6::uuid),
+  $7::text,
+  $8::uuid
 );
-`, familyUpdateEventID, tenantA, familyID, "2026-02-01", groupID2, familyUpdateRequestID, initiatorID); err != nil {
+`, familyUpdateEventID, tenantA, packageID, familyID, "2026-02-01", groupID2, familyUpdateRequestID, initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -1930,15 +2008,15 @@ SELECT jobcatalog.submit_job_family_event(
 SELECT jobcatalog.submit_job_family_event(
   $1::uuid,
   $2::uuid,
-  'SHARE',
-  $3::uuid,
+  $3::text,
+  $4::uuid,
   'DISABLE',
-  $4::date,
+  $5::date,
   '{}'::jsonb,
-  $5::text,
-  $6::uuid
+  $6::text,
+  $7::uuid
 );
-`, familyDisableEventID, tenantA, familyID, "2026-03-01", familyDisableRequestID, initiatorID); err != nil {
+`, familyDisableEventID, tenantA, packageID, familyID, "2026-03-01", familyDisableRequestID, initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -1947,11 +2025,11 @@ SELECT jobcatalog.submit_job_family_event(
 SELECT job_family_group_id::text
 FROM jobcatalog.job_family_versions
 WHERE tenant_id = $1::uuid
-  AND setid = 'SHARE'
-  AND job_family_id = $2::uuid
-  AND validity @> $3::date
+  AND package_id = $2::uuid
+  AND job_family_id = $3::uuid
+  AND validity @> $4::date
 LIMIT 1
-`, tenantA, familyID, "2026-01-15").Scan(&familyGroupAtJan); err != nil {
+`, tenantA, packageID, familyID, "2026-01-15").Scan(&familyGroupAtJan); err != nil {
 		fatal(err)
 	}
 	if familyGroupAtJan != groupID {
@@ -1963,11 +2041,11 @@ LIMIT 1
 SELECT job_family_group_id::text
 FROM jobcatalog.job_family_versions
 WHERE tenant_id = $1::uuid
-  AND setid = 'SHARE'
-  AND job_family_id = $2::uuid
-  AND validity @> $3::date
+  AND package_id = $2::uuid
+  AND job_family_id = $3::uuid
+  AND validity @> $4::date
 LIMIT 1
-`, tenantA, familyID, "2026-02-15").Scan(&familyGroupAtFeb); err != nil {
+`, tenantA, packageID, familyID, "2026-02-15").Scan(&familyGroupAtFeb); err != nil {
 		fatal(err)
 	}
 	if familyGroupAtFeb != groupID2 {
@@ -1979,11 +2057,11 @@ LIMIT 1
 SELECT is_active
 FROM jobcatalog.job_family_versions
 WHERE tenant_id = $1::uuid
-  AND setid = 'SHARE'
-  AND job_family_id = $2::uuid
-  AND validity @> $3::date
+  AND package_id = $2::uuid
+  AND job_family_id = $3::uuid
+  AND validity @> $4::date
 LIMIT 1
-`, tenantA, familyID, "2026-03-15").Scan(&familyIsActiveAtMar); err != nil {
+`, tenantA, packageID, familyID, "2026-03-15").Scan(&familyIsActiveAtMar); err != nil {
 		fatal(err)
 	}
 	if familyIsActiveAtMar {
@@ -1995,18 +2073,18 @@ LIMIT 1
 	family2CreateRequestID := "dbtool-jobcatalog-smoke-family2-create"
 
 	if _, err := tx.Exec(ctx, `
-	SELECT jobcatalog.submit_job_family_event(
+SELECT jobcatalog.submit_job_family_event(
 	  $1::uuid,
 	  $2::uuid,
-	  'SHARE',
-	  $3::uuid,
+	  $3::text,
+	  $4::uuid,
 	  'CREATE',
-	  $4::date,
-	  jsonb_build_object('code', 'JF2', 'name', 'Job Family 2', 'description', null, 'job_family_group_id', $5::uuid),
-	  $6::text,
-	  $7::uuid
+	  $5::date,
+	  jsonb_build_object('code', 'JF2', 'name', 'Job Family 2', 'description', null, 'job_family_group_id', $6::uuid),
+	  $7::text,
+	  $8::uuid
 	);
-	`, family2CreateEventID, tenantA, familyID2, "2026-01-01", groupID, family2CreateRequestID, initiatorID); err != nil {
+	`, family2CreateEventID, tenantA, packageID, familyID2, "2026-01-01", groupID, family2CreateRequestID, initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -2019,21 +2097,21 @@ LIMIT 1
 	SELECT jobcatalog.submit_job_profile_event(
 	  $1::uuid,
 	  $2::uuid,
-	  'SHARE',
-	  $3::uuid,
+	  $3::text,
+	  $4::uuid,
 	  'CREATE',
-	  $4::date,
+	  $5::date,
 	  jsonb_build_object(
 	    'code', 'JP1',
 	    'name', 'Job Profile 1',
 	    'description', null,
-	    'job_family_ids', jsonb_build_array($5::uuid, $6::uuid),
-	    'primary_job_family_id', $5::uuid
+	    'job_family_ids', jsonb_build_array($6::uuid, $7::uuid),
+	    'primary_job_family_id', $6::uuid
 	  ),
-	  $7::text,
-	  $8::uuid
+	  $8::text,
+	  $9::uuid
 	);
-	`, profileCreateEventID, tenantA, profileID, "2026-01-01", familyID, familyID2, profileCreateRequestID, initiatorID).Scan(&profileCreatedEventDBID); err != nil {
+	`, profileCreateEventID, tenantA, packageID, profileID, "2026-01-01", familyID, familyID2, profileCreateRequestID, initiatorID).Scan(&profileCreatedEventDBID); err != nil {
 		fatal(err)
 	}
 	if profileCreatedEventDBID <= 0 {
@@ -2046,18 +2124,18 @@ LIMIT 1
 	SELECT jobcatalog.submit_job_profile_event(
 	  $1::uuid,
 	  $2::uuid,
-	  'SHARE',
-	  $3::uuid,
+	  $3::text,
+	  $4::uuid,
 	  'UPDATE',
-	  $4::date,
+	  $5::date,
 	  jsonb_build_object(
-	    'job_family_ids', jsonb_build_array($5::uuid),
-	    'primary_job_family_id', $5::uuid
+	    'job_family_ids', jsonb_build_array($6::uuid),
+	    'primary_job_family_id', $6::uuid
 	  ),
-	  $6::text,
-	  $7::uuid
+	  $7::text,
+	  $8::uuid
 	);
-	`, profileUpdateEventID, tenantA, profileID, "2026-02-01", familyID2, profileUpdateRequestID, initiatorID); err != nil {
+	`, profileUpdateEventID, tenantA, packageID, profileID, "2026-02-01", familyID2, profileUpdateRequestID, initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -2067,15 +2145,15 @@ LIMIT 1
 	SELECT jobcatalog.submit_job_profile_event(
 	  $1::uuid,
 	  $2::uuid,
-	  'SHARE',
-	  $3::uuid,
+	  $3::text,
+	  $4::uuid,
 	  'DISABLE',
-	  $4::date,
+	  $5::date,
 	  '{}'::jsonb,
-	  $5::text,
-	  $6::uuid
+	  $6::text,
+	  $7::uuid
 	);
-	`, profileDisableEventID, tenantA, profileID, "2026-03-01", profileDisableRequestID, initiatorID); err != nil {
+	`, profileDisableEventID, tenantA, packageID, profileID, "2026-03-01", profileDisableRequestID, initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -2088,11 +2166,13 @@ LIMIT 1
 	FROM jobcatalog.job_profile_versions v
 	JOIN jobcatalog.job_profile_version_job_families f
 	  ON f.job_profile_version_id = v.id
+	 AND f.tenant_id = v.tenant_id
+	 AND f.package_id = v.package_id
 	WHERE v.tenant_id = $1::uuid
-	  AND v.setid = 'SHARE'
-	  AND v.job_profile_id = $2::uuid
-	  AND v.validity @> $3::date
-	`, tenantA, profileID, "2026-01-15").Scan(&profileFamiliesAtJan, &profilePrimaryCountAtJan); err != nil {
+	  AND v.package_id = $2::uuid
+	  AND v.job_profile_id = $3::uuid
+	  AND v.validity @> $4::date
+	`, tenantA, packageID, profileID, "2026-01-15").Scan(&profileFamiliesAtJan, &profilePrimaryCountAtJan); err != nil {
 		fatal(err)
 	}
 	if profileFamiliesAtJan != 2 {
@@ -2108,13 +2188,15 @@ LIMIT 1
 	FROM jobcatalog.job_profile_versions v
 	JOIN jobcatalog.job_profile_version_job_families f
 	  ON f.job_profile_version_id = v.id
+	 AND f.tenant_id = v.tenant_id
+	 AND f.package_id = v.package_id
 	WHERE v.tenant_id = $1::uuid
-	  AND v.setid = 'SHARE'
-	  AND v.job_profile_id = $2::uuid
-	  AND v.validity @> $3::date
+	  AND v.package_id = $2::uuid
+	  AND v.job_profile_id = $3::uuid
+	  AND v.validity @> $4::date
 	  AND f.is_primary = true
 	LIMIT 1
-	`, tenantA, profileID, "2026-01-15").Scan(&profilePrimaryFamilyAtJan); err != nil {
+	`, tenantA, packageID, profileID, "2026-01-15").Scan(&profilePrimaryFamilyAtJan); err != nil {
 		fatal(err)
 	}
 	if profilePrimaryFamilyAtJan != familyID {
@@ -2130,11 +2212,13 @@ LIMIT 1
 	FROM jobcatalog.job_profile_versions v
 	JOIN jobcatalog.job_profile_version_job_families f
 	  ON f.job_profile_version_id = v.id
+	 AND f.tenant_id = v.tenant_id
+	 AND f.package_id = v.package_id
 	WHERE v.tenant_id = $1::uuid
-	  AND v.setid = 'SHARE'
-	  AND v.job_profile_id = $2::uuid
-	  AND v.validity @> $3::date
-	`, tenantA, profileID, "2026-02-15").Scan(&profileFamiliesAtFeb, &profilePrimaryCountAtFeb); err != nil {
+	  AND v.package_id = $2::uuid
+	  AND v.job_profile_id = $3::uuid
+	  AND v.validity @> $4::date
+	`, tenantA, packageID, profileID, "2026-02-15").Scan(&profileFamiliesAtFeb, &profilePrimaryCountAtFeb); err != nil {
 		fatal(err)
 	}
 	if profileFamiliesAtFeb != 1 {
@@ -2146,14 +2230,14 @@ LIMIT 1
 
 	var profileIsActiveAtMar bool
 	if err := tx.QueryRow(ctx, `
-	SELECT is_active
-	FROM jobcatalog.job_profile_versions
-	WHERE tenant_id = $1::uuid
-	  AND setid = 'SHARE'
-	  AND job_profile_id = $2::uuid
-	  AND validity @> $3::date
-	LIMIT 1
-	`, tenantA, profileID, "2026-03-15").Scan(&profileIsActiveAtMar); err != nil {
+SELECT is_active
+FROM jobcatalog.job_profile_versions
+WHERE tenant_id = $1::uuid
+  AND package_id = $2::uuid
+  AND job_profile_id = $3::uuid
+  AND validity @> $4::date
+LIMIT 1
+	`, tenantA, packageID, profileID, "2026-03-15").Scan(&profileIsActiveAtMar); err != nil {
 		fatal(err)
 	}
 	if profileIsActiveAtMar {
@@ -2169,15 +2253,15 @@ LIMIT 1
 SELECT jobcatalog.submit_job_level_event(
   $1::uuid,
   $2::uuid,
-  'SHARE',
-  $3::uuid,
+  $3::text,
+  $4::uuid,
   'CREATE',
-  $4::date,
+  $5::date,
   jsonb_build_object('code', 'JL1', 'name', 'Job Level 1', 'description', null),
-  $5::text,
-  $6::uuid
+  $6::text,
+  $7::uuid
 );
-`, levelCreateEventID, tenantA, levelID, "2026-01-01", levelCreateRequestID, initiatorID).Scan(&levelCreatedEventDBID); err != nil {
+`, levelCreateEventID, tenantA, packageID, levelID, "2026-01-01", levelCreateRequestID, initiatorID).Scan(&levelCreatedEventDBID); err != nil {
 		fatal(err)
 	}
 
@@ -2186,15 +2270,15 @@ SELECT jobcatalog.submit_job_level_event(
 SELECT jobcatalog.submit_job_level_event(
   $1::uuid,
   $2::uuid,
-  'SHARE',
-  $3::uuid,
+  $3::text,
+  $4::uuid,
   'CREATE',
-  $4::date,
+  $5::date,
   jsonb_build_object('code', 'JL1', 'name', 'Job Level 1', 'description', null),
-  $5::text,
-  $6::uuid
+  $6::text,
+  $7::uuid
 );
-`, levelCreateEventID, tenantA, levelID, "2026-01-01", levelCreateRequestID, initiatorID).Scan(&levelRetriedEventDBID); err != nil {
+`, levelCreateEventID, tenantA, packageID, levelID, "2026-01-01", levelCreateRequestID, initiatorID).Scan(&levelRetriedEventDBID); err != nil {
 		fatal(err)
 	}
 	if levelRetriedEventDBID != levelCreatedEventDBID {
@@ -2208,15 +2292,15 @@ SELECT jobcatalog.submit_job_level_event(
 SELECT jobcatalog.submit_job_level_event(
   $1::uuid,
   $2::uuid,
-  'SHARE',
-  $3::uuid,
+  $3::text,
+  $4::uuid,
   'UPDATE',
-  $4::date,
+  $5::date,
   jsonb_build_object('name', 'Job Level 1 Updated'),
-  $5::text,
-  $6::uuid
+  $6::text,
+  $7::uuid
 );
-`, levelUpdateEventID, tenantA, levelID, "2026-02-01", levelUpdateRequestID, initiatorID); err != nil {
+`, levelUpdateEventID, tenantA, packageID, levelID, "2026-02-01", levelUpdateRequestID, initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -2227,15 +2311,15 @@ SELECT jobcatalog.submit_job_level_event(
 SELECT jobcatalog.submit_job_level_event(
   $1::uuid,
   $2::uuid,
-  'SHARE',
-  $3::uuid,
+  $3::text,
+  $4::uuid,
   'DISABLE',
-  $4::date,
+  $5::date,
   '{}'::jsonb,
-  $5::text,
-  $6::uuid
+  $6::text,
+  $7::uuid
 );
-`, levelDisableEventID, tenantA, levelID, "2026-03-01", levelDisableRequestID, initiatorID); err != nil {
+`, levelDisableEventID, tenantA, packageID, levelID, "2026-03-01", levelDisableRequestID, initiatorID); err != nil {
 		fatal(err)
 	}
 
@@ -2244,11 +2328,11 @@ SELECT jobcatalog.submit_job_level_event(
 SELECT name
 FROM jobcatalog.job_level_versions
 WHERE tenant_id = $1::uuid
-  AND setid = 'SHARE'
-  AND job_level_id = $2::uuid
-  AND validity @> $3::date
+  AND package_id = $2::uuid
+  AND job_level_id = $3::uuid
+  AND validity @> $4::date
 LIMIT 1
-`, tenantA, levelID, "2026-02-15").Scan(&levelNameAtFeb); err != nil {
+`, tenantA, packageID, levelID, "2026-02-15").Scan(&levelNameAtFeb); err != nil {
 		fatal(err)
 	}
 	if levelNameAtFeb != "Job Level 1 Updated" {
@@ -2260,11 +2344,11 @@ LIMIT 1
 SELECT is_active
 FROM jobcatalog.job_level_versions
 WHERE tenant_id = $1::uuid
-  AND setid = 'SHARE'
-  AND job_level_id = $2::uuid
-  AND validity @> $3::date
+  AND package_id = $2::uuid
+  AND job_level_id = $3::uuid
+  AND validity @> $4::date
 LIMIT 1
-`, tenantA, levelID, "2026-03-15").Scan(&levelIsActiveAtMar); err != nil {
+`, tenantA, packageID, levelID, "2026-03-15").Scan(&levelIsActiveAtMar); err != nil {
 		fatal(err)
 	}
 	if levelIsActiveAtMar {
@@ -2273,8 +2357,8 @@ LIMIT 1
 
 	if _, err := tx.Exec(ctx, `
 	SELECT *
-	FROM jobcatalog.get_job_catalog_snapshot($1::uuid, 'SHARE', $2::date);
-	`, tenantA, "2026-02-15"); err != nil {
+	FROM jobcatalog.get_job_catalog_snapshot($1::uuid, $2::text, $3::date);
+	`, tenantA, packageID, "2026-02-15"); err != nil {
 		fatal(err)
 	}
 

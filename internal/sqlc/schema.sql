@@ -2645,6 +2645,8 @@ DECLARE
   v_scope_mode text;
   v_ctx_tenant text;
   v_allow_share text;
+  v_package_id uuid;
+  v_package_owner_tenant_id uuid;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_id);
 
@@ -2675,7 +2677,7 @@ BEGIN
   END IF;
 
   SELECT s.package_id, s.package_owner_tenant_id
-  INTO package_id, package_owner_tenant_id
+  INTO v_package_id, v_package_owner_tenant_id
   FROM orgunit.setid_scope_subscriptions s
   WHERE s.tenant_id = p_tenant_id
     AND s.setid = v_setid
@@ -2684,7 +2686,7 @@ BEGIN
   ORDER BY lower(s.validity) DESC
   LIMIT 1;
 
-  IF package_id IS NULL THEN
+  IF v_package_id IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SCOPE_SUBSCRIPTION_MISSING',
@@ -2695,7 +2697,7 @@ BEGIN
   v_ctx_tenant := current_setting('app.current_tenant');
   v_allow_share := current_setting('app.allow_share_read', true);
 
-  IF package_owner_tenant_id = p_tenant_id THEN
+  IF v_package_owner_tenant_id = p_tenant_id THEN
     IF v_scope_mode = 'shared-only' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -2706,7 +2708,7 @@ BEGIN
       FROM orgunit.setid_scope_package_versions v
       WHERE v.tenant_id = p_tenant_id
         AND v.scope_code = p_scope_code
-        AND v.package_id = package_id
+        AND v.package_id = v_package_id
         AND v.validity @> p_as_of_date
         AND v.status = 'active'
     ) THEN
@@ -2714,7 +2716,7 @@ BEGIN
         ERRCODE = 'P0001',
         MESSAGE = 'PACKAGE_INACTIVE_AS_OF';
     END IF;
-  ELSIF package_owner_tenant_id = orgunit.global_tenant_id() THEN
+  ELSIF v_package_owner_tenant_id = orgunit.global_tenant_id() THEN
     IF v_scope_mode = 'tenant-only' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -2727,7 +2729,7 @@ BEGIN
       FROM orgunit.global_setid_scope_package_versions v
       WHERE v.tenant_id = orgunit.global_tenant_id()
         AND v.scope_code = p_scope_code
-        AND v.package_id = package_id
+        AND v.package_id = v_package_id
         AND v.validity @> p_as_of_date
         AND v.status = 'active'
     ) THEN
@@ -2744,6 +2746,8 @@ BEGIN
   PERFORM set_config('app.current_tenant', v_ctx_tenant, true);
   PERFORM set_config('app.allow_share_read', COALESCE(v_allow_share, 'off'), true);
 
+  package_id := v_package_id;
+  package_owner_tenant_id := v_package_owner_tenant_id;
   RETURN NEXT;
 END;
 $$;
@@ -3963,27 +3967,29 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION jobcatalog.normalize_setid(p_setid text)
-RETURNS text
+CREATE OR REPLACE FUNCTION jobcatalog.normalize_package_id(p_package_id text)
+RETURNS uuid
 LANGUAGE plpgsql
 IMMUTABLE
 AS $$
 DECLARE
-  v text;
+  v uuid;
 BEGIN
-  IF p_setid IS NULL OR btrim(p_setid) = '' THEN
+  IF p_package_id IS NULL OR btrim(p_package_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'setid is required';
+      DETAIL = 'package_id is required';
   END IF;
-  v := upper(btrim(p_setid));
-  IF v !~ '^[A-Z0-9]{5}$' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = format('setid=%s', v);
-  END IF;
+  BEGIN
+    v := btrim(p_package_id)::uuid;
+  EXCEPTION
+    WHEN invalid_text_representation THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+        DETAIL = format('package_id=%s', p_package_id);
+  END;
   RETURN v;
 END;
 $$;
@@ -3998,7 +4004,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_state jsonb;
   v_prev jsonb;
   v_row RECORD;
@@ -4006,20 +4012,20 @@ DECLARE
   v_validity daterange;
 BEGIN
   PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM jobcatalog.job_family_group_versions
-  WHERE tenant_id = p_tenant_id AND setid = v_setid AND job_family_group_id = p_job_family_group_id;
+  WHERE tenant_id = p_tenant_id AND package_id = v_setid AND job_family_group_id = p_job_family_group_id;
 
   v_prev := NULL;
   FOR v_row IN
     SELECT id, event_type, effective_date, payload
     FROM jobcatalog.job_family_group_events
     WHERE tenant_id = p_tenant_id
-      AND setid = v_setid
+      AND package_id = v_setid
       AND job_family_group_id = p_job_family_group_id
     ORDER BY effective_date ASC, id ASC
   LOOP
@@ -4076,7 +4082,7 @@ BEGIN
     SELECT e.effective_date INTO v_next_date
     FROM jobcatalog.job_family_group_events e
     WHERE e.tenant_id = p_tenant_id
-      AND e.setid = v_setid
+      AND e.package_id = v_setid
       AND e.job_family_group_id = p_job_family_group_id
       AND (e.effective_date, e.id) > (v_row.effective_date, v_row.id)
     ORDER BY e.effective_date ASC, e.id ASC
@@ -4086,7 +4092,7 @@ BEGIN
 
     INSERT INTO jobcatalog.job_family_group_versions (
       tenant_id,
-      setid,
+      package_id,
       job_family_group_id,
       validity,
       name,
@@ -4119,7 +4125,7 @@ BEGIN
         lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
       FROM jobcatalog.job_family_group_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_family_group_id = p_job_family_group_id
     )
     SELECT 1
@@ -4140,7 +4146,7 @@ BEGIN
       SELECT validity
       FROM jobcatalog.job_family_group_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_family_group_id = p_job_family_group_id
       ORDER BY lower(validity) DESC
       LIMIT 1
@@ -4153,6 +4159,19 @@ BEGIN
       MESSAGE = 'JOBCATALOG_VALIDITY_NOT_INFINITE',
       DETAIL = format('job_family_group_id=%s', p_job_family_group_id);
   END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION jobcatalog.replay_job_family_group_versions(
+  p_tenant_id uuid,
+  p_package_id uuid,
+  p_job_family_group_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM jobcatalog.replay_job_family_group_versions(p_tenant_id, p_package_id::text, p_job_family_group_id);
 END;
 $$;
 
@@ -4172,7 +4191,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_evt_db_id bigint;
   v_code text;
   v_name text;
@@ -4218,7 +4237,7 @@ BEGIN
       DETAIL = format('unsupported event_type=%s', p_event_type);
   END IF;
 
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
@@ -4322,7 +4341,7 @@ BEGIN
         DETAIL = 'code/name is required';
     END IF;
 
-    INSERT INTO jobcatalog.job_family_groups (tenant_id, setid, id, code)
+    INSERT INTO jobcatalog.job_family_groups (tenant_id, package_id, id, code)
     VALUES (p_tenant_id, v_setid, p_job_family_group_id, v_code)
     ON CONFLICT (id) DO NOTHING;
 
@@ -4331,7 +4350,7 @@ BEGIN
     WHERE id = p_job_family_group_id;
 
     IF v_existing_group.tenant_id <> p_tenant_id
-      OR v_existing_group.setid <> v_setid
+      OR v_existing_group.package_id <> v_setid
       OR v_existing_group.code <> v_code
     THEN
       RAISE EXCEPTION USING
@@ -4342,7 +4361,7 @@ BEGIN
   ELSE
     IF NOT EXISTS (
       SELECT 1 FROM jobcatalog.job_family_groups
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = p_job_family_group_id
+      WHERE tenant_id = p_tenant_id AND package_id = v_setid AND id = p_job_family_group_id
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -4352,7 +4371,7 @@ BEGIN
   END IF;
 
   INSERT INTO jobcatalog.job_family_group_events (
-    event_id, tenant_id, setid, job_family_group_id, event_type, effective_date, payload, request_id, initiator_id
+    event_id, tenant_id, package_id, job_family_group_id, event_type, effective_date, payload, request_id, initiator_id
   )
   VALUES (
     p_event_id, p_tenant_id, v_setid, p_job_family_group_id, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_id
@@ -4366,7 +4385,7 @@ BEGIN
     WHERE event_id = p_event_id;
 
     IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.setid <> v_setid
+      OR v_existing.package_id <> v_setid
       OR v_existing.job_family_group_id <> p_job_family_group_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
@@ -4501,7 +4520,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_state jsonb;
   v_prev jsonb;
   v_row RECORD;
@@ -4510,20 +4529,20 @@ DECLARE
   v_group_id uuid;
 BEGIN
   PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM jobcatalog.job_family_versions
-  WHERE tenant_id = p_tenant_id AND setid = v_setid AND job_family_id = p_job_family_id;
+  WHERE tenant_id = p_tenant_id AND package_id = v_setid AND job_family_id = p_job_family_id;
 
   v_prev := NULL;
   FOR v_row IN
     SELECT id, event_type, effective_date, payload
     FROM jobcatalog.job_family_events
     WHERE tenant_id = p_tenant_id
-      AND setid = v_setid
+      AND package_id = v_setid
       AND job_family_id = p_job_family_id
     ORDER BY effective_date ASC, id ASC
   LOOP
@@ -4586,7 +4605,7 @@ BEGIN
     SELECT e.effective_date INTO v_next_date
     FROM jobcatalog.job_family_events e
     WHERE e.tenant_id = p_tenant_id
-      AND e.setid = v_setid
+      AND e.package_id = v_setid
       AND e.job_family_id = p_job_family_id
       AND (e.effective_date, e.id) > (v_row.effective_date, v_row.id)
     ORDER BY e.effective_date ASC, e.id ASC
@@ -4596,7 +4615,7 @@ BEGIN
 
     INSERT INTO jobcatalog.job_family_versions (
       tenant_id,
-      setid,
+      package_id,
       job_family_id,
       validity,
       name,
@@ -4631,7 +4650,7 @@ BEGIN
         lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
       FROM jobcatalog.job_family_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_family_id = p_job_family_id
     )
     SELECT 1
@@ -4652,7 +4671,7 @@ BEGIN
       SELECT validity
       FROM jobcatalog.job_family_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_family_id = p_job_family_id
       ORDER BY lower(validity) DESC
       LIMIT 1
@@ -4665,6 +4684,19 @@ BEGIN
       MESSAGE = 'JOBCATALOG_VALIDITY_NOT_INFINITE',
       DETAIL = format('job_family_id=%s', p_job_family_id);
   END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION jobcatalog.replay_job_family_versions(
+  p_tenant_id uuid,
+  p_package_id uuid,
+  p_job_family_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM jobcatalog.replay_job_family_versions(p_tenant_id, p_package_id::text, p_job_family_id);
 END;
 $$;
 
@@ -4684,7 +4716,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_evt_db_id bigint;
   v_code text;
   v_name text;
@@ -4731,7 +4763,7 @@ BEGIN
       DETAIL = format('unsupported event_type=%s', p_event_type);
   END IF;
 
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
@@ -4861,7 +4893,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM jobcatalog.job_family_groups
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = v_group_id
+      WHERE tenant_id = p_tenant_id AND package_id = v_setid AND id = v_group_id
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -4869,7 +4901,7 @@ BEGIN
         DETAIL = format('job_family_group_id=%s', v_group_id);
     END IF;
 
-    INSERT INTO jobcatalog.job_families (tenant_id, setid, id, code)
+    INSERT INTO jobcatalog.job_families (tenant_id, package_id, id, code)
     VALUES (p_tenant_id, v_setid, p_job_family_id, v_code)
     ON CONFLICT (id) DO NOTHING;
 
@@ -4878,7 +4910,7 @@ BEGIN
     WHERE id = p_job_family_id;
 
     IF v_existing_family.tenant_id <> p_tenant_id
-      OR v_existing_family.setid <> v_setid
+      OR v_existing_family.package_id <> v_setid
       OR v_existing_family.code <> v_code
     THEN
       RAISE EXCEPTION USING
@@ -4889,7 +4921,7 @@ BEGIN
   ELSE
     IF NOT EXISTS (
       SELECT 1 FROM jobcatalog.job_families
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = p_job_family_id
+      WHERE tenant_id = p_tenant_id AND package_id = v_setid AND id = p_job_family_id
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -4919,7 +4951,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM jobcatalog.job_family_groups
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = v_group_id
+      WHERE tenant_id = p_tenant_id AND package_id = v_setid AND id = v_group_id
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -4929,7 +4961,7 @@ BEGIN
   END IF;
 
   INSERT INTO jobcatalog.job_family_events (
-    event_id, tenant_id, setid, job_family_id, event_type, effective_date, payload, request_id, initiator_id
+    event_id, tenant_id, package_id, job_family_id, event_type, effective_date, payload, request_id, initiator_id
   )
   VALUES (
     p_event_id, p_tenant_id, v_setid, p_job_family_id, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_id
@@ -4943,7 +4975,7 @@ BEGIN
     WHERE event_id = p_event_id;
 
     IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.setid <> v_setid
+      OR v_existing.package_id <> v_setid
       OR v_existing.job_family_id <> p_job_family_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
@@ -5075,7 +5107,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_state jsonb;
   v_prev jsonb;
   v_row RECORD;
@@ -5083,20 +5115,20 @@ DECLARE
   v_validity daterange;
 BEGIN
   PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM jobcatalog.job_level_versions
-  WHERE tenant_id = p_tenant_id AND setid = v_setid AND job_level_id = p_job_level_id;
+  WHERE tenant_id = p_tenant_id AND package_id = v_setid AND job_level_id = p_job_level_id;
 
   v_prev := NULL;
   FOR v_row IN
     SELECT id, event_type, effective_date, payload
     FROM jobcatalog.job_level_events
     WHERE tenant_id = p_tenant_id
-      AND setid = v_setid
+      AND package_id = v_setid
       AND job_level_id = p_job_level_id
     ORDER BY effective_date ASC, id ASC
   LOOP
@@ -5153,7 +5185,7 @@ BEGIN
     SELECT e.effective_date INTO v_next_date
     FROM jobcatalog.job_level_events e
     WHERE e.tenant_id = p_tenant_id
-      AND e.setid = v_setid
+      AND e.package_id = v_setid
       AND e.job_level_id = p_job_level_id
       AND (e.effective_date, e.id) > (v_row.effective_date, v_row.id)
     ORDER BY e.effective_date ASC, e.id ASC
@@ -5163,7 +5195,7 @@ BEGIN
 
     INSERT INTO jobcatalog.job_level_versions (
       tenant_id,
-      setid,
+      package_id,
       job_level_id,
       validity,
       name,
@@ -5196,7 +5228,7 @@ BEGIN
         lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
       FROM jobcatalog.job_level_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_level_id = p_job_level_id
     )
     SELECT 1
@@ -5217,7 +5249,7 @@ BEGIN
       SELECT validity
       FROM jobcatalog.job_level_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_level_id = p_job_level_id
       ORDER BY lower(validity) DESC
       LIMIT 1
@@ -5230,6 +5262,19 @@ BEGIN
       MESSAGE = 'JOBCATALOG_VALIDITY_NOT_INFINITE',
       DETAIL = format('job_level_id=%s', p_job_level_id);
   END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION jobcatalog.replay_job_level_versions(
+  p_tenant_id uuid,
+  p_package_id uuid,
+  p_job_level_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM jobcatalog.replay_job_level_versions(p_tenant_id, p_package_id::text, p_job_level_id);
 END;
 $$;
 
@@ -5249,7 +5294,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_evt_db_id bigint;
   v_code text;
   v_name text;
@@ -5295,7 +5340,7 @@ BEGIN
       DETAIL = format('unsupported event_type=%s', p_event_type);
   END IF;
 
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
@@ -5399,7 +5444,7 @@ BEGIN
         DETAIL = 'code/name is required';
     END IF;
 
-    INSERT INTO jobcatalog.job_levels (tenant_id, setid, id, code)
+    INSERT INTO jobcatalog.job_levels (tenant_id, package_id, id, code)
     VALUES (p_tenant_id, v_setid, p_job_level_id, v_code)
     ON CONFLICT (id) DO NOTHING;
 
@@ -5408,7 +5453,7 @@ BEGIN
     WHERE id = p_job_level_id;
 
     IF v_existing_level.tenant_id <> p_tenant_id
-      OR v_existing_level.setid <> v_setid
+      OR v_existing_level.package_id <> v_setid
       OR v_existing_level.code <> v_code
     THEN
       RAISE EXCEPTION USING
@@ -5419,7 +5464,7 @@ BEGIN
   ELSE
     IF NOT EXISTS (
       SELECT 1 FROM jobcatalog.job_levels
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = p_job_level_id
+      WHERE tenant_id = p_tenant_id AND package_id = v_setid AND id = p_job_level_id
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -5429,7 +5474,7 @@ BEGIN
   END IF;
 
   INSERT INTO jobcatalog.job_level_events (
-    event_id, tenant_id, setid, job_level_id, event_type, effective_date, payload, request_id, initiator_id
+    event_id, tenant_id, package_id, job_level_id, event_type, effective_date, payload, request_id, initiator_id
   )
   VALUES (
     p_event_id, p_tenant_id, v_setid, p_job_level_id, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_id
@@ -5443,7 +5488,7 @@ BEGIN
     WHERE event_id = p_event_id;
 
     IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.setid <> v_setid
+      OR v_existing.package_id <> v_setid
       OR v_existing.job_level_id <> p_job_level_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
@@ -5465,7 +5510,6 @@ BEGIN
   RETURN v_evt_db_id;
 END;
 $$;
-
 
 -- end: modules/jobcatalog/infrastructure/persistence/schema/00007_jobcatalog_job_level_engine.sql
 
@@ -5606,7 +5650,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_state jsonb;
   v_prev jsonb;
   v_row RECORD;
@@ -5618,20 +5662,20 @@ DECLARE
   v_family_id uuid;
 BEGIN
   PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM jobcatalog.job_profile_versions
-  WHERE tenant_id = p_tenant_id AND setid = v_setid AND job_profile_id = p_job_profile_id;
+  WHERE tenant_id = p_tenant_id AND package_id = v_setid AND job_profile_id = p_job_profile_id;
 
   v_prev := NULL;
   FOR v_row IN
     SELECT id, event_type, effective_date, payload
     FROM jobcatalog.job_profile_events
     WHERE tenant_id = p_tenant_id
-      AND setid = v_setid
+      AND package_id = v_setid
       AND job_profile_id = p_job_profile_id
     ORDER BY effective_date ASC, id ASC
   LOOP
@@ -5754,7 +5798,7 @@ BEGIN
     SELECT e.effective_date INTO v_next_date
     FROM jobcatalog.job_profile_events e
     WHERE e.tenant_id = p_tenant_id
-      AND e.setid = v_setid
+      AND e.package_id = v_setid
       AND e.job_profile_id = p_job_profile_id
       AND (e.effective_date, e.id) > (v_row.effective_date, v_row.id)
     ORDER BY e.effective_date ASC, e.id ASC
@@ -5764,7 +5808,7 @@ BEGIN
 
     INSERT INTO jobcatalog.job_profile_versions (
       tenant_id,
-      setid,
+      package_id,
       job_profile_id,
       validity,
       name,
@@ -5791,7 +5835,7 @@ BEGIN
     FOREACH v_family_id IN ARRAY v_family_ids LOOP
       INSERT INTO jobcatalog.job_profile_version_job_families (
         tenant_id,
-        setid,
+        package_id,
         job_profile_version_id,
         job_family_id,
         is_primary
@@ -5814,7 +5858,7 @@ BEGIN
         lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
       FROM jobcatalog.job_profile_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_profile_id = p_job_profile_id
     )
     SELECT 1
@@ -5835,7 +5879,7 @@ BEGIN
       SELECT validity
       FROM jobcatalog.job_profile_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_profile_id = p_job_profile_id
       ORDER BY lower(validity) DESC
       LIMIT 1
@@ -5848,6 +5892,19 @@ BEGIN
       MESSAGE = 'JOBCATALOG_VALIDITY_NOT_INFINITE',
       DETAIL = format('job_profile_id=%s', p_job_profile_id);
   END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION jobcatalog.replay_job_profile_versions(
+  p_tenant_id uuid,
+  p_package_id uuid,
+  p_job_profile_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM jobcatalog.replay_job_profile_versions(p_tenant_id, p_package_id::text, p_job_profile_id);
 END;
 $$;
 
@@ -5867,7 +5924,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_evt_db_id bigint;
   v_code text;
   v_name text;
@@ -5916,7 +5973,7 @@ BEGIN
       DETAIL = format('unsupported event_type=%s', p_event_type);
   END IF;
 
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
@@ -6104,7 +6161,7 @@ BEGIN
         DETAIL = 'code/name is required';
     END IF;
 
-    INSERT INTO jobcatalog.job_profiles (tenant_id, setid, id, code)
+    INSERT INTO jobcatalog.job_profiles (tenant_id, package_id, id, code)
     VALUES (p_tenant_id, v_setid, p_job_profile_id, v_code)
     ON CONFLICT (id) DO NOTHING;
 
@@ -6113,7 +6170,7 @@ BEGIN
     WHERE id = p_job_profile_id;
 
     IF v_existing_profile.tenant_id <> p_tenant_id
-      OR v_existing_profile.setid <> v_setid
+      OR v_existing_profile.package_id <> v_setid
       OR v_existing_profile.code <> v_code
     THEN
       RAISE EXCEPTION USING
@@ -6124,7 +6181,7 @@ BEGIN
   ELSE
     IF NOT EXISTS (
       SELECT 1 FROM jobcatalog.job_profiles
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = p_job_profile_id
+      WHERE tenant_id = p_tenant_id AND package_id = v_setid AND id = p_job_profile_id
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -6140,7 +6197,7 @@ BEGIN
       FROM unnest(v_family_ids) AS t(id)
       LEFT JOIN jobcatalog.job_families f
         ON f.tenant_id = p_tenant_id
-       AND f.setid = v_setid
+       AND f.package_id = v_setid
        AND f.id = t.id
       WHERE f.id IS NULL
       LIMIT 1
@@ -6157,7 +6214,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM jobcatalog.job_families
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = v_primary_family_id
+      WHERE tenant_id = p_tenant_id AND package_id = v_setid AND id = v_primary_family_id
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -6167,7 +6224,7 @@ BEGIN
   END IF;
 
   INSERT INTO jobcatalog.job_profile_events (
-    event_id, tenant_id, setid, job_profile_id, event_type, effective_date, payload, request_id, initiator_id
+    event_id, tenant_id, package_id, job_profile_id, event_type, effective_date, payload, request_id, initiator_id
   )
   VALUES (
     p_event_id, p_tenant_id, v_setid, p_job_profile_id, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_id
@@ -6181,7 +6238,7 @@ BEGIN
     WHERE event_id = p_event_id;
 
     IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.setid <> v_setid
+      OR v_existing.package_id <> v_setid
       OR v_existing.job_profile_id <> p_job_profile_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
@@ -6221,7 +6278,7 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_setid text;
+  v_setid uuid;
 BEGIN
   PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
   IF p_query_date IS NULL THEN
@@ -6231,7 +6288,7 @@ BEGIN
       DETAIL = 'query_date is required';
   END IF;
 
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   RETURN QUERY
   SELECT
@@ -6253,11 +6310,11 @@ BEGIN
       FROM jobcatalog.job_family_groups g
       JOIN jobcatalog.job_family_group_versions v
         ON v.tenant_id = p_tenant_id
-       AND v.setid = v_setid
+       AND v.package_id = v_setid
        AND v.job_family_group_id = g.id
        AND v.validity @> p_query_date
       WHERE g.tenant_id = p_tenant_id
-        AND g.setid = v_setid
+        AND g.package_id = v_setid
     ), '[]'::jsonb) AS groups,
     COALESCE((
       SELECT jsonb_agg(
@@ -6278,11 +6335,11 @@ BEGIN
       FROM jobcatalog.job_families f
       JOIN jobcatalog.job_family_versions v
         ON v.tenant_id = p_tenant_id
-       AND v.setid = v_setid
+       AND v.package_id = v_setid
        AND v.job_family_id = f.id
        AND v.validity @> p_query_date
       WHERE f.tenant_id = p_tenant_id
-        AND f.setid = v_setid
+        AND f.package_id = v_setid
     ), '[]'::jsonb) AS families,
     COALESCE((
       SELECT jsonb_agg(
@@ -6302,11 +6359,11 @@ BEGIN
       FROM jobcatalog.job_levels l
       JOIN jobcatalog.job_level_versions v
         ON v.tenant_id = p_tenant_id
-       AND v.setid = v_setid
+       AND v.package_id = v_setid
        AND v.job_level_id = l.id
        AND v.validity @> p_query_date
       WHERE l.tenant_id = p_tenant_id
-        AND l.setid = v_setid
+        AND l.package_id = v_setid
     ), '[]'::jsonb) AS levels,
     COALESCE((
       SELECT jsonb_agg(
@@ -6328,7 +6385,7 @@ BEGIN
       FROM jobcatalog.job_profiles p
       JOIN jobcatalog.job_profile_versions v
         ON v.tenant_id = p_tenant_id
-       AND v.setid = v_setid
+       AND v.package_id = v_setid
        AND v.job_profile_id = p.id
        AND v.validity @> p_query_date
       LEFT JOIN LATERAL (
@@ -6338,24 +6395,336 @@ BEGIN
             SELECT f2.job_family_id
             FROM jobcatalog.job_profile_version_job_families f2
             WHERE f2.tenant_id = p_tenant_id
-              AND f2.setid = v_setid
+              AND f2.package_id = v_setid
               AND f2.job_profile_version_id = v.id
               AND f2.is_primary = true
             LIMIT 1
           ) AS primary_job_family_id
         FROM jobcatalog.job_profile_version_job_families f
         WHERE f.tenant_id = p_tenant_id
-          AND f.setid = v_setid
+          AND f.package_id = v_setid
           AND f.job_profile_version_id = v.id
       ) fam ON true
       WHERE p.tenant_id = p_tenant_id
-        AND p.setid = v_setid
+        AND p.package_id = v_setid
     ), '[]'::jsonb) AS profiles;
 END;
 $$;
 
 
 -- end: modules/jobcatalog/infrastructure/persistence/schema/00010_jobcatalog_read.sql
+
+-- begin: modules/jobcatalog/infrastructure/persistence/schema/00011_jobcatalog_package_id_schema.sql
+ALTER TABLE jobcatalog.job_family_groups
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_family_groups
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_family_groups
+  DROP CONSTRAINT IF EXISTS job_family_groups_setid_format_check;
+ALTER TABLE jobcatalog.job_family_groups
+  DROP CONSTRAINT IF EXISTS job_family_groups_tenant_setid_code_key;
+ALTER TABLE jobcatalog.job_family_groups
+  DROP CONSTRAINT IF EXISTS job_family_groups_tenant_setid_id_unique CASCADE;
+ALTER TABLE jobcatalog.job_family_groups
+  ADD CONSTRAINT job_family_groups_tenant_pkg_code_key UNIQUE (tenant_id, package_id, code);
+ALTER TABLE jobcatalog.job_family_groups
+  ADD CONSTRAINT job_family_groups_tenant_pkg_id_unique UNIQUE (tenant_id, package_id, id);
+
+ALTER TABLE jobcatalog.job_family_group_events
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_family_group_events
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_family_group_events
+  DROP CONSTRAINT IF EXISTS job_family_group_events_setid_format_check;
+ALTER TABLE jobcatalog.job_family_group_events
+  DROP CONSTRAINT IF EXISTS job_family_group_events_one_per_day_unique;
+ALTER TABLE jobcatalog.job_family_group_events
+  DROP CONSTRAINT IF EXISTS job_family_group_events_group_fk;
+ALTER TABLE jobcatalog.job_family_group_events
+  ADD CONSTRAINT job_family_group_events_one_per_day_unique UNIQUE (tenant_id, package_id, job_family_group_id, effective_date);
+ALTER TABLE jobcatalog.job_family_group_events
+  ADD CONSTRAINT job_family_group_events_group_fk
+    FOREIGN KEY (tenant_id, package_id, job_family_group_id)
+    REFERENCES jobcatalog.job_family_groups(tenant_id, package_id, id) ON DELETE RESTRICT;
+
+DROP INDEX IF EXISTS jobcatalog.job_family_group_events_tenant_effective_idx;
+CREATE INDEX IF NOT EXISTS job_family_group_events_tenant_effective_idx
+  ON jobcatalog.job_family_group_events (tenant_id, package_id, job_family_group_id, effective_date, id);
+
+ALTER TABLE jobcatalog.job_family_group_versions
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_family_group_versions
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_family_group_versions
+  DROP CONSTRAINT IF EXISTS job_family_group_versions_setid_format_check;
+ALTER TABLE jobcatalog.job_family_group_versions
+  DROP CONSTRAINT IF EXISTS job_family_group_versions_group_fk;
+ALTER TABLE jobcatalog.job_family_group_versions
+  DROP CONSTRAINT IF EXISTS job_family_group_versions_no_overlap;
+ALTER TABLE jobcatalog.job_family_group_versions
+  ADD CONSTRAINT job_family_group_versions_group_fk
+    FOREIGN KEY (tenant_id, package_id, job_family_group_id)
+    REFERENCES jobcatalog.job_family_groups(tenant_id, package_id, id) ON DELETE RESTRICT;
+ALTER TABLE jobcatalog.job_family_group_versions
+  ADD CONSTRAINT job_family_group_versions_no_overlap
+    EXCLUDE USING gist (
+      tenant_id gist_uuid_ops WITH =,
+      package_id gist_uuid_ops WITH =,
+      job_family_group_id gist_uuid_ops WITH =,
+      validity WITH &&
+    );
+
+DROP INDEX IF EXISTS jobcatalog.job_family_group_versions_active_day_gist;
+CREATE INDEX IF NOT EXISTS job_family_group_versions_active_day_gist
+  ON jobcatalog.job_family_group_versions
+  USING gist (tenant_id gist_uuid_ops, package_id gist_uuid_ops, validity)
+  WHERE is_active = true;
+
+DROP INDEX IF EXISTS jobcatalog.job_family_group_versions_lookup_btree;
+CREATE INDEX IF NOT EXISTS job_family_group_versions_lookup_btree
+  ON jobcatalog.job_family_group_versions (tenant_id, package_id, job_family_group_id, lower(validity));
+
+ALTER TABLE jobcatalog.job_families
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_families
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_families
+  DROP CONSTRAINT IF EXISTS job_families_setid_format_check;
+ALTER TABLE jobcatalog.job_families
+  DROP CONSTRAINT IF EXISTS job_families_tenant_setid_code_key;
+ALTER TABLE jobcatalog.job_families
+  DROP CONSTRAINT IF EXISTS job_families_tenant_setid_id_unique CASCADE;
+ALTER TABLE jobcatalog.job_families
+  ADD CONSTRAINT job_families_tenant_pkg_code_key UNIQUE (tenant_id, package_id, code);
+ALTER TABLE jobcatalog.job_families
+  ADD CONSTRAINT job_families_tenant_pkg_id_unique UNIQUE (tenant_id, package_id, id);
+
+ALTER TABLE jobcatalog.job_family_events
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_family_events
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_family_events
+  DROP CONSTRAINT IF EXISTS job_family_events_setid_format_check;
+ALTER TABLE jobcatalog.job_family_events
+  DROP CONSTRAINT IF EXISTS job_family_events_one_per_day_unique;
+ALTER TABLE jobcatalog.job_family_events
+  DROP CONSTRAINT IF EXISTS job_family_events_family_fk;
+ALTER TABLE jobcatalog.job_family_events
+  ADD CONSTRAINT job_family_events_one_per_day_unique UNIQUE (tenant_id, package_id, job_family_id, effective_date);
+ALTER TABLE jobcatalog.job_family_events
+  ADD CONSTRAINT job_family_events_family_fk
+    FOREIGN KEY (tenant_id, package_id, job_family_id)
+    REFERENCES jobcatalog.job_families(tenant_id, package_id, id) ON DELETE RESTRICT;
+
+DROP INDEX IF EXISTS jobcatalog.job_family_events_tenant_effective_idx;
+CREATE INDEX IF NOT EXISTS job_family_events_tenant_effective_idx
+  ON jobcatalog.job_family_events (tenant_id, package_id, job_family_id, effective_date, id);
+
+ALTER TABLE jobcatalog.job_family_versions
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_family_versions
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_family_versions
+  DROP CONSTRAINT IF EXISTS job_family_versions_setid_format_check;
+ALTER TABLE jobcatalog.job_family_versions
+  DROP CONSTRAINT IF EXISTS job_family_versions_family_fk;
+ALTER TABLE jobcatalog.job_family_versions
+  DROP CONSTRAINT IF EXISTS job_family_versions_group_fk;
+ALTER TABLE jobcatalog.job_family_versions
+  DROP CONSTRAINT IF EXISTS job_family_versions_no_overlap;
+ALTER TABLE jobcatalog.job_family_versions
+  ADD CONSTRAINT job_family_versions_family_fk
+    FOREIGN KEY (tenant_id, package_id, job_family_id)
+    REFERENCES jobcatalog.job_families(tenant_id, package_id, id) ON DELETE RESTRICT;
+ALTER TABLE jobcatalog.job_family_versions
+  ADD CONSTRAINT job_family_versions_group_fk
+    FOREIGN KEY (tenant_id, package_id, job_family_group_id)
+    REFERENCES jobcatalog.job_family_groups(tenant_id, package_id, id) ON DELETE RESTRICT;
+ALTER TABLE jobcatalog.job_family_versions
+  ADD CONSTRAINT job_family_versions_no_overlap
+    EXCLUDE USING gist (
+      tenant_id gist_uuid_ops WITH =,
+      package_id gist_uuid_ops WITH =,
+      job_family_id gist_uuid_ops WITH =,
+      validity WITH &&
+    );
+
+DROP INDEX IF EXISTS jobcatalog.job_family_versions_active_day_gist;
+CREATE INDEX IF NOT EXISTS job_family_versions_active_day_gist
+  ON jobcatalog.job_family_versions
+  USING gist (tenant_id gist_uuid_ops, package_id gist_uuid_ops, validity)
+  WHERE is_active = true;
+
+DROP INDEX IF EXISTS jobcatalog.job_family_versions_lookup_btree;
+CREATE INDEX IF NOT EXISTS job_family_versions_lookup_btree
+  ON jobcatalog.job_family_versions (tenant_id, package_id, job_family_id, lower(validity));
+
+ALTER TABLE jobcatalog.job_levels
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_levels
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_levels
+  DROP CONSTRAINT IF EXISTS job_levels_setid_format_check;
+ALTER TABLE jobcatalog.job_levels
+  DROP CONSTRAINT IF EXISTS job_levels_tenant_setid_code_key;
+ALTER TABLE jobcatalog.job_levels
+  DROP CONSTRAINT IF EXISTS job_levels_tenant_setid_id_unique CASCADE;
+ALTER TABLE jobcatalog.job_levels
+  ADD CONSTRAINT job_levels_tenant_pkg_code_key UNIQUE (tenant_id, package_id, code);
+ALTER TABLE jobcatalog.job_levels
+  ADD CONSTRAINT job_levels_tenant_pkg_id_unique UNIQUE (tenant_id, package_id, id);
+
+ALTER TABLE jobcatalog.job_level_events
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_level_events
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_level_events
+  DROP CONSTRAINT IF EXISTS job_level_events_setid_format_check;
+ALTER TABLE jobcatalog.job_level_events
+  DROP CONSTRAINT IF EXISTS job_level_events_one_per_day_unique;
+ALTER TABLE jobcatalog.job_level_events
+  DROP CONSTRAINT IF EXISTS job_level_events_level_fk;
+ALTER TABLE jobcatalog.job_level_events
+  ADD CONSTRAINT job_level_events_one_per_day_unique UNIQUE (tenant_id, package_id, job_level_id, effective_date);
+ALTER TABLE jobcatalog.job_level_events
+  ADD CONSTRAINT job_level_events_level_fk
+    FOREIGN KEY (tenant_id, package_id, job_level_id)
+    REFERENCES jobcatalog.job_levels(tenant_id, package_id, id) ON DELETE RESTRICT;
+
+DROP INDEX IF EXISTS jobcatalog.job_level_events_tenant_effective_idx;
+CREATE INDEX IF NOT EXISTS job_level_events_tenant_effective_idx
+  ON jobcatalog.job_level_events (tenant_id, package_id, job_level_id, effective_date, id);
+
+ALTER TABLE jobcatalog.job_level_versions
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_level_versions
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_level_versions
+  DROP CONSTRAINT IF EXISTS job_level_versions_setid_format_check;
+ALTER TABLE jobcatalog.job_level_versions
+  DROP CONSTRAINT IF EXISTS job_level_versions_level_fk;
+ALTER TABLE jobcatalog.job_level_versions
+  DROP CONSTRAINT IF EXISTS job_level_versions_no_overlap;
+ALTER TABLE jobcatalog.job_level_versions
+  ADD CONSTRAINT job_level_versions_level_fk
+    FOREIGN KEY (tenant_id, package_id, job_level_id)
+    REFERENCES jobcatalog.job_levels(tenant_id, package_id, id) ON DELETE RESTRICT;
+ALTER TABLE jobcatalog.job_level_versions
+  ADD CONSTRAINT job_level_versions_no_overlap
+    EXCLUDE USING gist (
+      tenant_id gist_uuid_ops WITH =,
+      package_id gist_uuid_ops WITH =,
+      job_level_id gist_uuid_ops WITH =,
+      validity WITH &&
+    );
+
+DROP INDEX IF EXISTS jobcatalog.job_level_versions_active_day_gist;
+CREATE INDEX IF NOT EXISTS job_level_versions_active_day_gist
+  ON jobcatalog.job_level_versions
+  USING gist (tenant_id gist_uuid_ops, package_id gist_uuid_ops, validity)
+  WHERE is_active = true;
+
+DROP INDEX IF EXISTS jobcatalog.job_level_versions_lookup_btree;
+CREATE INDEX IF NOT EXISTS job_level_versions_lookup_btree
+  ON jobcatalog.job_level_versions (tenant_id, package_id, job_level_id, lower(validity));
+
+ALTER TABLE jobcatalog.job_profiles
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_profiles
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_profiles
+  DROP CONSTRAINT IF EXISTS job_profiles_setid_format_check;
+ALTER TABLE jobcatalog.job_profiles
+  DROP CONSTRAINT IF EXISTS job_profiles_tenant_setid_code_key;
+ALTER TABLE jobcatalog.job_profiles
+  DROP CONSTRAINT IF EXISTS job_profiles_tenant_setid_id_unique CASCADE;
+ALTER TABLE jobcatalog.job_profiles
+  ADD CONSTRAINT job_profiles_tenant_pkg_code_key UNIQUE (tenant_id, package_id, code);
+ALTER TABLE jobcatalog.job_profiles
+  ADD CONSTRAINT job_profiles_tenant_pkg_id_unique UNIQUE (tenant_id, package_id, id);
+
+ALTER TABLE jobcatalog.job_profile_events
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_profile_events
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_profile_events
+  DROP CONSTRAINT IF EXISTS job_profile_events_setid_format_check;
+ALTER TABLE jobcatalog.job_profile_events
+  DROP CONSTRAINT IF EXISTS job_profile_events_one_per_day_unique;
+ALTER TABLE jobcatalog.job_profile_events
+  DROP CONSTRAINT IF EXISTS job_profile_events_profile_fk;
+ALTER TABLE jobcatalog.job_profile_events
+  ADD CONSTRAINT job_profile_events_one_per_day_unique UNIQUE (tenant_id, package_id, job_profile_id, effective_date);
+ALTER TABLE jobcatalog.job_profile_events
+  ADD CONSTRAINT job_profile_events_profile_fk
+    FOREIGN KEY (tenant_id, package_id, job_profile_id)
+    REFERENCES jobcatalog.job_profiles(tenant_id, package_id, id) ON DELETE RESTRICT;
+
+DROP INDEX IF EXISTS jobcatalog.job_profile_events_tenant_effective_idx;
+CREATE INDEX IF NOT EXISTS job_profile_events_tenant_effective_idx
+  ON jobcatalog.job_profile_events (tenant_id, package_id, job_profile_id, effective_date, id);
+
+ALTER TABLE jobcatalog.job_profile_versions
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_profile_versions
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_profile_versions
+  DROP CONSTRAINT IF EXISTS job_profile_versions_setid_format_check;
+ALTER TABLE jobcatalog.job_profile_versions
+  DROP CONSTRAINT IF EXISTS job_profile_versions_profile_fk;
+ALTER TABLE jobcatalog.job_profile_versions
+  DROP CONSTRAINT IF EXISTS job_profile_versions_no_overlap;
+ALTER TABLE jobcatalog.job_profile_versions
+  ADD CONSTRAINT job_profile_versions_profile_fk
+    FOREIGN KEY (tenant_id, package_id, job_profile_id)
+    REFERENCES jobcatalog.job_profiles(tenant_id, package_id, id) ON DELETE RESTRICT;
+ALTER TABLE jobcatalog.job_profile_versions
+  ADD CONSTRAINT job_profile_versions_no_overlap
+    EXCLUDE USING gist (
+      tenant_id gist_uuid_ops WITH =,
+      package_id gist_uuid_ops WITH =,
+      job_profile_id gist_uuid_ops WITH =,
+      validity WITH &&
+    );
+
+DROP INDEX IF EXISTS jobcatalog.job_profile_versions_active_day_gist;
+CREATE INDEX IF NOT EXISTS job_profile_versions_active_day_gist
+  ON jobcatalog.job_profile_versions
+  USING gist (tenant_id gist_uuid_ops, package_id gist_uuid_ops, validity)
+  WHERE is_active = true;
+
+DROP INDEX IF EXISTS jobcatalog.job_profile_versions_lookup_btree;
+CREATE INDEX IF NOT EXISTS job_profile_versions_lookup_btree
+  ON jobcatalog.job_profile_versions (tenant_id, package_id, job_profile_id, lower(validity));
+
+ALTER TABLE jobcatalog.job_profile_version_job_families
+  ADD COLUMN package_id uuid;
+ALTER TABLE jobcatalog.job_profile_version_job_families
+  ALTER COLUMN setid DROP NOT NULL;
+ALTER TABLE jobcatalog.job_profile_version_job_families
+  DROP CONSTRAINT IF EXISTS job_profile_version_job_families_setid_format_check;
+ALTER TABLE jobcatalog.job_profile_version_job_families
+  DROP CONSTRAINT IF EXISTS job_profile_version_job_families_family_fk;
+ALTER TABLE jobcatalog.job_profile_version_job_families
+  DROP CONSTRAINT IF EXISTS job_profile_version_job_families_unique;
+ALTER TABLE jobcatalog.job_profile_version_job_families
+  ADD CONSTRAINT job_profile_version_job_families_family_fk
+    FOREIGN KEY (tenant_id, package_id, job_family_id)
+    REFERENCES jobcatalog.job_families(tenant_id, package_id, id) ON DELETE RESTRICT;
+ALTER TABLE jobcatalog.job_profile_version_job_families
+  ADD CONSTRAINT job_profile_version_job_families_unique
+    UNIQUE (tenant_id, package_id, job_profile_version_id, job_family_id);
+
+DROP INDEX IF EXISTS jobcatalog.job_profile_version_job_families_one_primary_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS job_profile_version_job_families_one_primary_unique
+  ON jobcatalog.job_profile_version_job_families (tenant_id, package_id, job_profile_version_id)
+  WHERE is_primary = true;
+
+DROP INDEX IF EXISTS jobcatalog.job_profile_version_job_families_family_lookup_btree;
+CREATE INDEX IF NOT EXISTS job_profile_version_job_families_family_lookup_btree
+  ON jobcatalog.job_profile_version_job_families (tenant_id, package_id, job_family_id);
+
+-- end: modules/jobcatalog/infrastructure/persistence/schema/00011_jobcatalog_package_id_schema.sql
 
 -- begin: modules/staffing/infrastructure/persistence/schema/00001_staffing_schema.sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

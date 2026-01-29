@@ -40,27 +40,29 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION jobcatalog.normalize_setid(p_setid text)
-RETURNS text
+CREATE OR REPLACE FUNCTION jobcatalog.normalize_package_id(p_package_id text)
+RETURNS uuid
 LANGUAGE plpgsql
 IMMUTABLE
 AS $$
 DECLARE
-  v text;
+  v uuid;
 BEGIN
-  IF p_setid IS NULL OR btrim(p_setid) = '' THEN
+  IF p_package_id IS NULL OR btrim(p_package_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'setid is required';
+      DETAIL = 'package_id is required';
   END IF;
-  v := upper(btrim(p_setid));
-  IF v !~ '^[A-Z0-9]{5}$' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = format('setid=%s', v);
-  END IF;
+  BEGIN
+    v := btrim(p_package_id)::uuid;
+  EXCEPTION
+    WHEN invalid_text_representation THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
+        DETAIL = format('package_id=%s', p_package_id);
+  END;
   RETURN v;
 END;
 $$;
@@ -75,7 +77,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_state jsonb;
   v_prev jsonb;
   v_row RECORD;
@@ -83,20 +85,20 @@ DECLARE
   v_validity daterange;
 BEGIN
   PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM jobcatalog.job_family_group_versions
-  WHERE tenant_id = p_tenant_id AND setid = v_setid AND job_family_group_id = p_job_family_group_id;
+  WHERE tenant_id = p_tenant_id AND package_id = v_setid AND job_family_group_id = p_job_family_group_id;
 
   v_prev := NULL;
   FOR v_row IN
     SELECT id, event_type, effective_date, payload
     FROM jobcatalog.job_family_group_events
     WHERE tenant_id = p_tenant_id
-      AND setid = v_setid
+      AND package_id = v_setid
       AND job_family_group_id = p_job_family_group_id
     ORDER BY effective_date ASC, id ASC
   LOOP
@@ -153,7 +155,7 @@ BEGIN
     SELECT e.effective_date INTO v_next_date
     FROM jobcatalog.job_family_group_events e
     WHERE e.tenant_id = p_tenant_id
-      AND e.setid = v_setid
+      AND e.package_id = v_setid
       AND e.job_family_group_id = p_job_family_group_id
       AND (e.effective_date, e.id) > (v_row.effective_date, v_row.id)
     ORDER BY e.effective_date ASC, e.id ASC
@@ -163,7 +165,7 @@ BEGIN
 
     INSERT INTO jobcatalog.job_family_group_versions (
       tenant_id,
-      setid,
+      package_id,
       job_family_group_id,
       validity,
       name,
@@ -196,7 +198,7 @@ BEGIN
         lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
       FROM jobcatalog.job_family_group_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_family_group_id = p_job_family_group_id
     )
     SELECT 1
@@ -217,7 +219,7 @@ BEGIN
       SELECT validity
       FROM jobcatalog.job_family_group_versions
       WHERE tenant_id = p_tenant_id
-        AND setid = v_setid
+        AND package_id = v_setid
         AND job_family_group_id = p_job_family_group_id
       ORDER BY lower(validity) DESC
       LIMIT 1
@@ -230,6 +232,19 @@ BEGIN
       MESSAGE = 'JOBCATALOG_VALIDITY_NOT_INFINITE',
       DETAIL = format('job_family_group_id=%s', p_job_family_group_id);
   END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION jobcatalog.replay_job_family_group_versions(
+  p_tenant_id uuid,
+  p_package_id uuid,
+  p_job_family_group_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM jobcatalog.replay_job_family_group_versions(p_tenant_id, p_package_id::text, p_job_family_group_id);
 END;
 $$;
 
@@ -249,7 +264,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid text;
+  v_setid uuid;
   v_evt_db_id bigint;
   v_code text;
   v_name text;
@@ -295,7 +310,7 @@ BEGIN
       DETAIL = format('unsupported event_type=%s', p_event_type);
   END IF;
 
-  v_setid := jobcatalog.normalize_setid(p_setid);
+  v_setid := jobcatalog.normalize_package_id(p_setid);
 
   v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
@@ -399,7 +414,7 @@ BEGIN
         DETAIL = 'code/name is required';
     END IF;
 
-    INSERT INTO jobcatalog.job_family_groups (tenant_id, setid, id, code)
+    INSERT INTO jobcatalog.job_family_groups (tenant_id, package_id, id, code)
     VALUES (p_tenant_id, v_setid, p_job_family_group_id, v_code)
     ON CONFLICT (id) DO NOTHING;
 
@@ -408,7 +423,7 @@ BEGIN
     WHERE id = p_job_family_group_id;
 
     IF v_existing_group.tenant_id <> p_tenant_id
-      OR v_existing_group.setid <> v_setid
+      OR v_existing_group.package_id <> v_setid
       OR v_existing_group.code <> v_code
     THEN
       RAISE EXCEPTION USING
@@ -419,7 +434,7 @@ BEGIN
   ELSE
     IF NOT EXISTS (
       SELECT 1 FROM jobcatalog.job_family_groups
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = p_job_family_group_id
+      WHERE tenant_id = p_tenant_id AND package_id = v_setid AND id = p_job_family_group_id
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -429,7 +444,7 @@ BEGIN
   END IF;
 
   INSERT INTO jobcatalog.job_family_group_events (
-    event_id, tenant_id, setid, job_family_group_id, event_type, effective_date, payload, request_id, initiator_id
+    event_id, tenant_id, package_id, job_family_group_id, event_type, effective_date, payload, request_id, initiator_id
   )
   VALUES (
     p_event_id, p_tenant_id, v_setid, p_job_family_group_id, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_id
@@ -443,7 +458,7 @@ BEGIN
     WHERE event_id = p_event_id;
 
     IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.setid <> v_setid
+      OR v_existing.package_id <> v_setid
       OR v_existing.job_family_group_id <> p_job_family_group_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
