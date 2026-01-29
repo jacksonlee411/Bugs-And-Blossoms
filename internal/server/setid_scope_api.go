@@ -43,14 +43,6 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 
 	switch r.Method {
 	case http.MethodGet:
-		actorScope := strings.TrimSpace(r.Header.Get("X-Actor-Scope"))
-		if actorScope == "" {
-			actorScope = strings.TrimSpace(r.Header.Get("x-actor-scope"))
-		}
-		if strings.ToLower(actorScope) != "saas" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "actor_scope_forbidden", "actor scope forbidden")
-			return
-		}
 		scopeCode := strings.TrimSpace(r.URL.Query().Get("scope_code"))
 		if scopeCode == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code required")
@@ -245,6 +237,14 @@ func handleScopeSubscriptionsAPI(w http.ResponseWriter, r *http.Request, store S
 func handleGlobalScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
 	switch r.Method {
 	case http.MethodGet:
+		actorScope := strings.TrimSpace(r.Header.Get("X-Actor-Scope"))
+		if actorScope == "" {
+			actorScope = strings.TrimSpace(r.Header.Get("x-actor-scope"))
+		}
+		if strings.ToLower(actorScope) != "saas" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "actor_scope_forbidden", "actor scope forbidden")
+			return
+		}
 		scopeCode := strings.TrimSpace(r.URL.Query().Get("scope_code"))
 		if scopeCode == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code required")
