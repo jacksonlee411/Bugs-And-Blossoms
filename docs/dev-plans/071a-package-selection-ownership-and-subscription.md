@@ -32,7 +32,7 @@
   - [x] Authz（`make authz-pack && make authz-test && make authz-lint`）
   - [x] 路由治理（`make check routing`）
   - [x] DB 迁移 / Schema（按模块/域对应入口执行）
-  - [ ] sqlc（如引入 sqlc 代码生成，则 `make sqlc-generate`）
+  - [x] sqlc（如引入 sqlc 代码生成，则 `make sqlc-generate`）
   - [ ] Outbox（按 `DEV-PLAN-017` 与 runbook 执行）
   - [x] 文档（`make check doc`）
 - **SSOT 链接**：
@@ -309,12 +309,14 @@ ALTER TABLE orgunit.setid_scope_package_versions
     - `DEFLT` 属于租户层（非共享表），`SHARE` 仅存在于全局租户。
     - 业务主数据域仅使用租户 SetID（含 `DEFLT`），不读取 `SHARE`。
 - **里程碑**:
-  1. [ ] Schema 迁移：`owner_setid` 与排他约束落地。
+  1. [x] Schema 迁移：`owner_setid` 与排他约束落地。
   2. [ ] Scope Package 写入链路支持 `owner_setid`（含回填）。
   3. [ ] 新增 owned-scope-packages API。
   4. [ ] SetID Governance UI 可交互订阅切换。
   5. [ ] Job Catalog UI 改为 package_code 输入。
   6. [ ] 迁移记录与文档更新。
+  - **完成记录**:
+    - 2026-01-30：完成里程碑 1。命令：`./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/orgunit?format=goose"`、`./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/jobcatalog?format=goose"`、`make orgunit plan`、`make jobcatalog plan`、`make orgunit lint`、`make jobcatalog lint`、`make orgunit migrate up`、`make jobcatalog migrate up`、`make sqlc-generate`、`make test`（coverage=100%）、`make check doc`。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 - **单元/集成测试**:
