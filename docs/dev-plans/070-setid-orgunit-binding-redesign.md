@@ -11,13 +11,13 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] SetID 绑定组织架构，支持“就近祖先覆盖”的继承解析。
-- [ ] SetID 仅允许绑定在业务单元节点（`is_business_unit=true`），根组织强制为业务单元。
-- [ ] **配置主数据入口**必须显式 `setid`；**业务数据入口**通过 `org_unit_id` 解析 `setid` 以选择可用配置集。
+- [X] SetID 绑定组织架构，支持“就近祖先覆盖”的继承解析。（执行日志：ResolveSetID/绑定约束已实现）
+- [ ] SetID 仅允许绑定在业务单元节点（`is_business_unit=true`），根组织强制为业务单元。（执行日志：绑定约束已实现；根组织业务单元验证待完成）
+- [X] **配置主数据入口**必须显式 `setid`；**业务数据入口**通过 `org_unit_id` 解析 `setid` 以选择可用配置集。（执行日志：里程碑 9 覆盖）
 - [ ] 完成 SetID **全域迁移**：覆盖所有 setid-controlled 业务域与入口，统一切换到“配置主数据显式 setid + 业务数据通过 org_unit 解析 setid 并落库审计”。
-- [ ] 移除 `business_unit_id` 与 `record_group` 设计（全域清理，禁止残留引用）。
-- [ ] 实例级共享 SetID：`SHARE`（Shared），只读给租户、仅 SaaS 厂商维护。
-- [ ] 租户级默认 SetID：`DEFLT`（Default），绑定租户根组织。
+- [X] 移除 `business_unit_id` 与 `record_group` 设计（全域清理，禁止残留引用）。（执行日志：残留排查仅命中文档说明）
+- [X] 实例级共享 SetID：`SHARE`（Shared），只读给租户、仅 SaaS 厂商维护。（执行日志：SHARE 规则已实现）
+- [X] 租户级默认 SetID：`DEFLT`（Default），绑定租户根组织。（执行日志：DEFLT 规则已实现）
 - [ ] SetID 格式统一为 `[A-Z0-9]{5}` 并存储为大写。
 - [ ] 业务主数据域仅使用租户 SetID，不引入 `SHARE`（共享层仅在白名单入口可读）。
 - [ ] 继续满足 One Door、No Tx/No RLS、Valid Time（date）等仓库级不变量。
@@ -407,14 +407,14 @@ CREATE TABLE orgunit.setid_binding_versions (
 - [X] 仅允许单一共享 SetID（`SHARE`），且状态固定为 `active`。
 - [X] 每个租户自动拥有 `DEFLT`，根组织强制绑定 `DEFLT`。
 - [X] `DEFLT` 状态固定为 `active`，禁用/删除必须被拒绝。
-- [ ] `orgunit.global_tenant_id()` 对应哨兵租户存在，且与真实租户 ID 不冲突。
+- [X] `orgunit.global_tenant_id()` 对应哨兵租户存在，且与真实租户 ID 不冲突。（执行日志已验证）
 - [ ] 根组织 `is_business_unit=true`。
 - [X] `ResolveSetID(tenant_id, org_unit_id, as_of_date)` 可解析并遵守继承规则。
 - [X] 目标组织节点在 `as_of_date` 必须为 `active`；禁用节点解析失败（fail-closed）。
 - [X] SetID 仅可绑定到业务单元节点（`is_business_unit=true`）。
 - [X] `/org/nodes` 可修改业务单元标记并持久化（`SET_BUSINESS_UNIT`），权限不足时必须被拒绝。
 - [X] 业务主数据域仅使用租户 SetID：配置主数据必须显式传入 `setid`，业务数据通过 `org_unit_id` 解析 setid，不读取 `SHARE`。
-- [ ] 共享层仅在白名单入口可见，UI 文案标注“共享/只读”，共享项不可编辑。
+- [X] 共享层仅在白名单入口可见，UI 文案标注“共享/只读”，共享项不可编辑。（执行日志：共享只读 UI）
 - [ ] 共享白名单配置入口必须显式 `share=on` 或独立路由；禁止与租户配置入口混用。
 - [ ] 共享读取必须显式开启共享读开关，且不得用 SQL OR 合并租户/共享数据。
 - [X] 移除 `business_unit_id` 与 `record_group` 的实现与存量结构。
@@ -428,7 +428,7 @@ CREATE TABLE orgunit.setid_binding_versions (
 - [X] 租户读取 `SHARE` 仅只读可见。
 - [X] 共享读取必须显式设置 `app.current_tenant=orgunit.global_tenant_id()` + `app.allow_share_read=on` 才可访问。
 - [X] 未设置或未知 `app.current_actor_scope` 的写请求必失败。
-- [ ] SetID/绑定写入必须通过 kernel 入口，禁止直接写表。
+- [X] SetID/绑定写入必须通过 kernel 入口，禁止直接写表。（执行日志：role/grant 验证）
 
 ## 10. 运维与监控 (Ops & Monitoring)
 - Feature Flag：不引入开关切换（对齐 `AGENTS.md` 的“早期阶段不过度运维”）。
