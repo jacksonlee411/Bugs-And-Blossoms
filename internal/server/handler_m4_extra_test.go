@@ -165,6 +165,9 @@ func TestHandler_ScopePackageRoutes(t *testing.T) {
 	if rec := doReq(http.MethodGet, "/orgunit/api/scope-packages?scope_code=jobcatalog", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("scope packages get status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	if rec := doReq(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("owned scope packages get status=%d body=%s", rec.Code, rec.Body.String())
+	}
 	if rec := doReq(http.MethodPost, "/orgunit/api/scope-packages", `{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","name":"Pkg","request_id":"r1"}`, map[string]string{
 		"Content-Type": "application/json",
 	}); rec.Code != http.StatusCreated {

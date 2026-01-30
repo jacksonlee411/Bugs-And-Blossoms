@@ -10,12 +10,14 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type scopeAPIStore struct {
 	listScopePackagesFn        func(context.Context, string, string) ([]ScopePackage, error)
+	listOwnedScopePackagesFn   func(context.Context, string, string, string) ([]OwnedScopePackage, error)
 	createScopePackageFn       func(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error)
 	disableScopePackageFn      func(context.Context, string, string, string, string) (ScopePackage, error)
 	createScopeSubscriptionFn  func(context.Context, string, string, string, string, string, string, string, string) (ScopeSubscription, error)
@@ -59,6 +61,12 @@ func (s scopeAPIStore) ListScopePackages(ctx context.Context, tenantID string, s
 		return nil, nil
 	}
 	return s.listScopePackagesFn(ctx, tenantID, scopeCode)
+}
+func (s scopeAPIStore) ListOwnedScopePackages(ctx context.Context, tenantID string, scopeCode string, asOfDate string) ([]OwnedScopePackage, error) {
+	if s.listOwnedScopePackagesFn == nil {
+		return nil, nil
+	}
+	return s.listOwnedScopePackagesFn(ctx, tenantID, scopeCode, asOfDate)
 }
 func (s scopeAPIStore) CreateScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, requestID string, initiatorID string) (ScopeSubscription, error) {
 	if s.createScopeSubscriptionFn == nil {
@@ -174,6 +182,156 @@ func TestHandleScopePackagesAPI_Get(t *testing.T) {
 		}
 		if len(got) != 1 || got[0].PackageID != "p1" {
 			t.Fatalf("unexpected payload: %+v", got)
+		}
+	})
+}
+
+func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog", nil)
+		rec := httptest.NewRecorder()
+		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("scope_code required", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
+		rec := httptest.NewRecorder()
+		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("invalid as_of", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=bad", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
+		rec := httptest.NewRecorder()
+		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("no principal returns empty", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if strings.TrimSpace(rec.Body.String()) != "[]" {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
+	t.Run("empty role returns empty", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: " ", Status: "active"}))
+		rec := httptest.NewRecorder()
+		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if strings.TrimSpace(rec.Body.String()) != "[]" {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
+	t.Run("not admin returns empty", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-viewer", Status: "active"}))
+		rec := httptest.NewRecorder()
+		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{
+			listOwnedScopePackagesFn: func(context.Context, string, string, string) ([]OwnedScopePackage, error) {
+				return []OwnedScopePackage{{PackageID: "p1"}}, nil
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if strings.TrimSpace(rec.Body.String()) != "[]" {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
+	t.Run("store error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
+		rec := httptest.NewRecorder()
+		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{
+			listOwnedScopePackagesFn: func(context.Context, string, string, string) ([]OwnedScopePackage, error) {
+				return nil, errors.New("boom")
+			},
+		})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("as_of default", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
+		rec := httptest.NewRecorder()
+		expectedAsOf := time.Now().UTC().Format("2006-01-02")
+		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{
+			listOwnedScopePackagesFn: func(_ context.Context, _ string, _ string, asOfDate string) ([]OwnedScopePackage, error) {
+				if asOfDate != expectedAsOf {
+					return nil, errors.New("as_of not defaulted")
+				}
+				return []OwnedScopePackage{}, nil
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("returns rows", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
+		rec := httptest.NewRecorder()
+		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{
+			listOwnedScopePackagesFn: func(context.Context, string, string, string) ([]OwnedScopePackage, error) {
+				return []OwnedScopePackage{
+					{
+						PackageID:     "p1",
+						ScopeCode:     "jobcatalog",
+						PackageCode:   "PKG1",
+						OwnerSetID:    "A0001",
+						Name:          "Pkg",
+						Status:        "active",
+						EffectiveDate: "2026-01-01",
+					},
+				}, nil
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "PKG1") {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
 		}
 	})
 }

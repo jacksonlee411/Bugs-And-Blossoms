@@ -45,6 +45,16 @@ type ScopePackage struct {
 	Status      string
 }
 
+type OwnedScopePackage struct {
+	PackageID     string `json:"package_id"`
+	ScopeCode     string `json:"scope_code"`
+	PackageCode   string `json:"package_code"`
+	OwnerSetID    string `json:"owner_setid"`
+	Name          string `json:"name"`
+	Status        string `json:"status"`
+	EffectiveDate string `json:"effective_date"`
+}
+
 type ScopeSubscription struct {
 	SetID         string
 	ScopeCode     string
@@ -66,6 +76,7 @@ type SetIDGovernanceStore interface {
 	CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error)
 	DisableScopePackage(ctx context.Context, tenantID string, packageID string, requestID string, initiatorID string) (ScopePackage, error)
 	ListScopePackages(ctx context.Context, tenantID string, scopeCode string) ([]ScopePackage, error)
+	ListOwnedScopePackages(ctx context.Context, tenantID string, scopeCode string, asOfDate string) ([]OwnedScopePackage, error)
 	CreateScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, requestID string, initiatorID string) (ScopeSubscription, error)
 	GetScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, asOfDate string) (ScopeSubscription, error)
 	CreateGlobalScopePackage(ctx context.Context, scopeCode string, packageCode string, name string, effectiveDate string, requestID string, initiatorID string, actorScope string) (ScopePackage, error)
@@ -497,6 +508,47 @@ ORDER BY package_code ASC
 	return out, err
 }
 
+func (s *setidPGStore) ListOwnedScopePackages(ctx context.Context, tenantID string, scopeCode string, asOfDate string) ([]OwnedScopePackage, error) {
+	var out []OwnedScopePackage
+	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+SELECT p.package_id::text,
+       p.scope_code,
+       p.package_code,
+       p.owner_setid,
+       p.name,
+       v.status,
+       lower(v.validity)::text
+FROM orgunit.setid_scope_packages p
+JOIN orgunit.setid_scope_package_versions v
+  ON v.tenant_id = p.tenant_id
+ AND v.package_id = p.package_id
+ AND v.validity @> $3::date
+JOIN orgunit.setids s
+  ON s.tenant_id = p.tenant_id
+ AND s.setid = p.owner_setid
+ AND s.status = 'active'
+WHERE p.tenant_id = $1::uuid
+  AND p.scope_code = $2::text
+  AND v.status = 'active'
+ORDER BY p.package_code ASC
+`, tenantID, scopeCode, asOfDate)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var r OwnedScopePackage
+			if err := rows.Scan(&r.PackageID, &r.ScopeCode, &r.PackageCode, &r.OwnerSetID, &r.Name, &r.Status, &r.EffectiveDate); err != nil {
+				return err
+			}
+			out = append(out, r)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 func (s *setidPGStore) CreateScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, requestID string, initiatorID string) (ScopeSubscription, error) {
 	var out ScopeSubscription
 	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
@@ -881,6 +933,30 @@ func (s *setidMemoryStore) ListScopePackages(_ context.Context, tenantID string,
 	out := make([]ScopePackage, 0, len(pkgs))
 	for _, p := range pkgs {
 		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].PackageCode < out[j].PackageCode })
+	return out, nil
+}
+
+func (s *setidMemoryStore) ListOwnedScopePackages(_ context.Context, tenantID string, scopeCode string, asOfDate string) ([]OwnedScopePackage, error) {
+	pkgs := s.scopePackages[tenantID][scopeCode]
+	out := make([]OwnedScopePackage, 0, len(pkgs))
+	for _, p := range pkgs {
+		if p.Status != "active" {
+			continue
+		}
+		if setid, ok := s.setids[tenantID][p.OwnerSetID]; ok && setid.Status != "active" {
+			continue
+		}
+		out = append(out, OwnedScopePackage{
+			PackageID:     p.PackageID,
+			ScopeCode:     p.ScopeCode,
+			PackageCode:   p.PackageCode,
+			OwnerSetID:    p.OwnerSetID,
+			Name:          p.Name,
+			Status:        p.Status,
+			EffectiveDate: asOfDate,
+		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].PackageCode < out[j].PackageCode })
 	return out, nil

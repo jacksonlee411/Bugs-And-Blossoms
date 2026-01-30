@@ -89,6 +89,9 @@ entrypoints:
       - path: /orgunit/api/scope-packages
         methods: [GET, POST]
         route_class: internal_api
+      - path: /orgunit/api/owned-scope-packages
+        methods: [GET]
+        route_class: internal_api
       - path: /orgunit/api/scope-packages/{package_id}/disable
         methods: [POST]
         route_class: internal_api

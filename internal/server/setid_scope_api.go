@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 )
 
 type scopePackageCreateAPIRequest struct {
@@ -114,6 +116,50 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
+}
+
+func handleOwnedScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	scopeCode := strings.TrimSpace(r.URL.Query().Get("scope_code"))
+	if scopeCode == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code required")
+		return
+	}
+	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
+	if asOf == "" {
+		asOf = time.Now().UTC().Format("2006-01-02")
+	}
+	if _, err := time.Parse("2006-01-02", asOf); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+		return
+	}
+
+	if !canEditOwnedScopePackages(r.Context()) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode([]OwnedScopePackage{})
+		return
+	}
+
+	rows, err := store.ListOwnedScopePackages(r.Context(), tenant.ID, scopeCode, asOf)
+	if err != nil {
+		writeScopeAPIError(w, r, err, "owned_scope_package_list_failed")
+		return
+	}
+	if rows == nil {
+		rows = []OwnedScopePackage{}
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(rows)
 }
 
 func handleScopePackageDisableAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
@@ -328,6 +374,18 @@ func handleGlobalScopePackagesAPI(w http.ResponseWriter, r *http.Request, store 
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
+}
+
+func canEditOwnedScopePackages(ctx context.Context) bool {
+	p, ok := currentPrincipal(ctx)
+	if !ok {
+		return false
+	}
+	role := strings.ToLower(strings.TrimSpace(p.RoleSlug))
+	if role == "" {
+		return false
+	}
+	return role == authz.RoleTenantAdmin
 }
 
 func parseScopePackageID(path string) string {

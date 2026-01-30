@@ -311,13 +311,14 @@ ALTER TABLE orgunit.setid_scope_package_versions
 - **里程碑**:
   1. [x] Schema 迁移：`owner_setid` 与排他约束落地。
   2. [x] Scope Package 写入链路支持 `owner_setid`（含回填）。
-  3. [ ] 新增 owned-scope-packages API。
+  3. [x] 新增 owned-scope-packages API。
   4. [ ] SetID Governance UI 可交互订阅切换。
   5. [ ] Job Catalog UI 改为 package_code 输入。
   6. [ ] 迁移记录与文档更新。
   - **完成记录**:
     - 2026-01-30：完成里程碑 1。命令：`./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/orgunit?format=goose"`、`./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/jobcatalog?format=goose"`、`make orgunit plan`、`make jobcatalog plan`、`make orgunit lint`、`make jobcatalog lint`、`make orgunit migrate up`、`make jobcatalog migrate up`、`make sqlc-generate`、`make test`（coverage=100%）、`make check doc`。
     - 2026-01-30：完成里程碑 2（owner_setid 写入 + 回填 + 包订阅同事务）。命令：`./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/orgunit?format=goose"`、`./scripts/db/run_atlas.sh migrate hash --dir "file://migrations/jobcatalog?format=goose"`、`make orgunit plan`、`make jobcatalog plan`、`make orgunit lint`、`make jobcatalog lint`、`make orgunit migrate up`、`make jobcatalog migrate up`、`make sqlc-generate`、`go fmt ./...`、`go vet ./...`、`make check lint`、`make test`（coverage=100%）、`make check doc`；回填决策记录见 `docs/dev-records/dev-plan-071-execution-log.md`。
+    - 2026-01-30：完成里程碑 3（owned-scope-packages API）。命令：`go fmt ./...`、`go vet ./...`、`make check lint`、`make test`（coverage=100%）、`make check routing`。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 - **单元/集成测试**:
