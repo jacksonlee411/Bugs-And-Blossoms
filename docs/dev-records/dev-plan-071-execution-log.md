@@ -103,3 +103,7 @@
   - 创建 SetID：`SMK01`（name=Smoke Owner）。
   - `scope_package`：`package_id=00000000-0000-0000-0000-00000000d101` 设置 `owner_setid=SMK01`。
   - `scope_package_versions`：同步 `owner_setid=SMK01` 且 `status=active`，保障 `jobcatalog-smoke` 可用。
+
+## 071A E2E 修复（2026-01-30 / dev）
+
+- 修复 `tp060-02-master-data` E2E：创建 scope package 时补齐 `owner_setid`，避免 `POST /orgunit/api/scope-packages` 的 `invalid_request`。
