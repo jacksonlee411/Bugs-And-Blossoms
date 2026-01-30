@@ -40,6 +40,7 @@ type ScopePackage struct {
 	PackageID   string
 	ScopeCode   string
 	PackageCode string
+	OwnerSetID  string
 	Name        string
 	Status      string
 }
@@ -62,7 +63,7 @@ type SetIDGovernanceStore interface {
 	BindSetID(ctx context.Context, tenantID string, orgUnitID string, effectiveDate string, setID string, requestID string, initiatorID string) error
 	CreateGlobalSetID(ctx context.Context, name string, requestID string, initiatorID string, actorScope string) error
 	ListScopeCodes(ctx context.Context, tenantID string) ([]ScopeCode, error)
-	CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error)
+	CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error)
 	DisableScopePackage(ctx context.Context, tenantID string, packageID string, requestID string, initiatorID string) (ScopePackage, error)
 	ListScopePackages(ctx context.Context, tenantID string, scopeCode string) ([]ScopePackage, error)
 	CreateScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, requestID string, initiatorID string) (ScopeSubscription, error)
@@ -356,7 +357,7 @@ ORDER BY scope_code ASC
 	return out, err
 }
 
-func (s *setidPGStore) CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error) {
+func (s *setidPGStore) CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error) {
 	var out ScopePackage
 	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, initiatorID); err != nil {
@@ -380,11 +381,36 @@ SELECT orgunit.submit_scope_package_event(
   $4::uuid,
   'CREATE',
   $5::date,
-  jsonb_build_object('package_code', $6::text, 'name', $7::text),
+  jsonb_build_object('package_code', $6::text, 'owner_setid', $7::text, 'name', $8::text),
+  $9::text,
+  $10::uuid
+);
+`, eventID, tenantID, scopeCode, packageID, effectiveDate, packageCode, ownerSetID, name, requestID, initiatorID); err != nil {
+			return err
+		}
+
+		subEventID := ""
+		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&subEventID); err != nil {
+			return err
+		}
+		subRequestID := requestID
+		if subRequestID != "" {
+			subRequestID = subRequestID + ":owner-sub"
+		}
+		if _, err := tx.Exec(ctx, `
+SELECT orgunit.submit_scope_subscription_event(
+  $1::uuid,
+  $2::uuid,
+  $3::text,
+  $4::text,
+  $5::uuid,
+  $6::uuid,
+  'SUBSCRIBE',
+  $7::date,
   $8::text,
   $9::uuid
 );
-`, eventID, tenantID, scopeCode, packageID, effectiveDate, packageCode, name, requestID, initiatorID); err != nil {
+`, subEventID, tenantID, ownerSetID, scopeCode, packageID, tenantID, effectiveDate, subRequestID, initiatorID); err != nil {
 			return err
 		}
 
@@ -450,7 +476,7 @@ func (s *setidPGStore) ListScopePackages(ctx context.Context, tenantID string, s
 	var out []ScopePackage
 	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-SELECT package_id::text, scope_code, package_code, name, status
+SELECT package_id::text, scope_code, package_code, owner_setid, name, status
 FROM orgunit.setid_scope_packages
 WHERE tenant_id = $1::uuid AND scope_code = $2::text
 ORDER BY package_code ASC
@@ -461,7 +487,7 @@ ORDER BY package_code ASC
 		defer rows.Close()
 		for rows.Next() {
 			var r ScopePackage
-			if err := rows.Scan(&r.PackageID, &r.ScopeCode, &r.PackageCode, &r.Name, &r.Status); err != nil {
+			if err := rows.Scan(&r.PackageID, &r.ScopeCode, &r.PackageCode, &r.OwnerSetID, &r.Name, &r.Status); err != nil {
 				return err
 			}
 			out = append(out, r)
@@ -618,7 +644,7 @@ func (s *setidPGStore) ListGlobalScopePackages(ctx context.Context, scopeCode st
 	}
 
 	rows, err := tx.Query(ctx, `
-SELECT package_id::text, scope_code, package_code, name, status
+SELECT package_id::text, scope_code, package_code, ''::text AS owner_setid, name, status
 FROM orgunit.global_setid_scope_packages
 WHERE tenant_id = $1::uuid AND scope_code = $2::text
 ORDER BY package_code ASC
@@ -631,7 +657,7 @@ ORDER BY package_code ASC
 	var out []ScopePackage
 	for rows.Next() {
 		var r ScopePackage
-		if err := rows.Scan(&r.PackageID, &r.ScopeCode, &r.PackageCode, &r.Name, &r.Status); err != nil {
+		if err := rows.Scan(&r.PackageID, &r.ScopeCode, &r.PackageCode, &r.OwnerSetID, &r.Name, &r.Status); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -646,16 +672,21 @@ ORDER BY package_code ASC
 }
 
 func fetchScopePackageByID(ctx context.Context, tx pgx.Tx, tenantID string, packageID string, isGlobal bool) (ScopePackage, error) {
-	table := "orgunit.setid_scope_packages"
-	if isGlobal {
-		table = "orgunit.global_setid_scope_packages"
-	}
 	var out ScopePackage
-	err := tx.QueryRow(ctx, `
-SELECT package_id::text, scope_code, package_code, name, status
-FROM `+table+`
+	var err error
+	if isGlobal {
+		err = tx.QueryRow(ctx, `
+SELECT package_id::text, scope_code, package_code, ''::text AS owner_setid, name, status
+FROM orgunit.global_setid_scope_packages
 WHERE tenant_id = $1::uuid AND package_id = $2::uuid
-`, tenantID, packageID).Scan(&out.PackageID, &out.ScopeCode, &out.PackageCode, &out.Name, &out.Status)
+`, tenantID, packageID).Scan(&out.PackageID, &out.ScopeCode, &out.PackageCode, &out.OwnerSetID, &out.Name, &out.Status)
+	} else {
+		err = tx.QueryRow(ctx, `
+SELECT package_id::text, scope_code, package_code, owner_setid, name, status
+FROM orgunit.setid_scope_packages
+WHERE tenant_id = $1::uuid AND package_id = $2::uuid
+`, tenantID, packageID).Scan(&out.PackageID, &out.ScopeCode, &out.PackageCode, &out.OwnerSetID, &out.Name, &out.Status)
+	}
 	return out, err
 }
 
@@ -812,7 +843,7 @@ func (s *setidMemoryStore) ListScopeCodes(_ context.Context, _ string) ([]ScopeC
 	}, nil
 }
 
-func (s *setidMemoryStore) CreateScopePackage(_ context.Context, tenantID string, scopeCode string, packageCode string, name string, effectiveDate string, _ string, _ string) (ScopePackage, error) {
+func (s *setidMemoryStore) CreateScopePackage(_ context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, _ string, _ string) (ScopePackage, error) {
 	if s.scopePackages[tenantID] == nil {
 		s.scopePackages[tenantID] = make(map[string]map[string]ScopePackage)
 	}
@@ -825,6 +856,7 @@ func (s *setidMemoryStore) CreateScopePackage(_ context.Context, tenantID string
 		PackageID:   packageID,
 		ScopeCode:   scopeCode,
 		PackageCode: packageCode,
+		OwnerSetID:  ownerSetID,
 		Name:        name,
 		Status:      "active",
 	}

@@ -394,11 +394,11 @@ func staffingSmoke(args []string) {
 	  $4::uuid,
 	  'CREATE',
 	  $5::date,
-	  jsonb_build_object('package_code', 'SMOKE_STAFF', 'name', 'Staffing Smoke Package'),
-	  $6::text,
-	  $7::uuid
+	  jsonb_build_object('package_code', 'SMOKE_STAFF', 'owner_setid', $6::text, 'name', 'Staffing Smoke Package'),
+	  $7::text,
+	  $8::uuid
 	);
-	`, scopePackageEventID, tenantA, "jobcatalog", scopePackageID, effectiveDate, scopePackageRequestID, initiatorID).Scan(&pkgEventDBID); err != nil {
+	`, scopePackageEventID, tenantA, "jobcatalog", scopePackageID, effectiveDate, jobcatalogSetID, scopePackageRequestID, initiatorID).Scan(&pkgEventDBID); err != nil {
 			fatal(err)
 		}
 		var subEventDBID int64
@@ -1893,18 +1893,18 @@ FROM orgunit.resolve_scope_package($1::uuid, $2::text, 'jobcatalog', $3::date)
 
 		var pkgEventDBID int64
 		if err := tx.QueryRow(ctx, `
-SELECT orgunit.submit_scope_package_event(
-  $1::uuid,
-  $2::uuid,
-  $3::text,
-  $4::uuid,
-  'CREATE',
-  $5::date,
-  jsonb_build_object('package_code', 'SMOKE', 'name', 'Smoke Package'),
-  $6::text,
-  $7::uuid
-);
-`, scopePackageEventID, tenantA, "jobcatalog", scopePackageID, scopeAsOf, scopePackageRequestID, initiatorID).Scan(&pkgEventDBID); err != nil {
+	SELECT orgunit.submit_scope_package_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::text,
+	  $4::uuid,
+	  'CREATE',
+	  $5::date,
+	  jsonb_build_object('package_code', 'SMOKE', 'owner_setid', $6::text, 'name', 'Smoke Package'),
+	  $7::text,
+	  $8::uuid
+	);
+	`, scopePackageEventID, tenantA, "jobcatalog", scopePackageID, scopeAsOf, scopeSetID, scopePackageRequestID, initiatorID).Scan(&pkgEventDBID); err != nil {
 			fatal(err)
 		}
 

@@ -165,7 +165,7 @@ func TestHandler_ScopePackageRoutes(t *testing.T) {
 	if rec := doReq(http.MethodGet, "/orgunit/api/scope-packages?scope_code=jobcatalog", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("scope packages get status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := doReq(http.MethodPost, "/orgunit/api/scope-packages", `{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_id":"r1"}`, map[string]string{
+	if rec := doReq(http.MethodPost, "/orgunit/api/scope-packages", `{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","name":"Pkg","request_id":"r1"}`, map[string]string{
 		"Content-Type": "application/json",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("scope packages post status=%d body=%s", rec.Code, rec.Body.String())

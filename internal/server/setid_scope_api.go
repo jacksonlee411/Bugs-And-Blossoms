@@ -14,6 +14,7 @@ import (
 type scopePackageCreateAPIRequest struct {
 	ScopeCode     string `json:"scope_code"`
 	PackageCode   string `json:"package_code"`
+	OwnerSetID    string `json:"owner_setid"`
 	Name          string `json:"name"`
 	EffectiveDate string `json:"effective_date"`
 	RequestID     string `json:"request_id"`
@@ -67,11 +68,12 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 		}
 		req.ScopeCode = strings.TrimSpace(req.ScopeCode)
 		req.PackageCode = strings.ToUpper(strings.TrimSpace(req.PackageCode))
+		req.OwnerSetID = strings.ToUpper(strings.TrimSpace(req.OwnerSetID))
 		req.Name = strings.TrimSpace(req.Name)
 		req.RequestID = strings.TrimSpace(req.RequestID)
 		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
-		if req.ScopeCode == "" || req.Name == "" || req.RequestID == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code/name/request_id required")
+		if req.ScopeCode == "" || req.Name == "" || req.RequestID == "" || req.OwnerSetID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code/owner_setid/name/request_id required")
 			return
 		}
 		if req.EffectiveDate == "" {
@@ -93,7 +95,7 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 			return
 		}
 
-		pkg, err := store.CreateScopePackage(r.Context(), tenant.ID, req.ScopeCode, req.PackageCode, req.Name, req.EffectiveDate, req.RequestID, tenant.ID)
+		pkg, err := store.CreateScopePackage(r.Context(), tenant.ID, req.ScopeCode, req.PackageCode, req.OwnerSetID, req.Name, req.EffectiveDate, req.RequestID, tenant.ID)
 		if err != nil {
 			writeScopeAPIError(w, r, err, "scope_package_create_failed")
 			return
@@ -104,6 +106,7 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 			"package_id":   pkg.PackageID,
 			"scope_code":   pkg.ScopeCode,
 			"package_code": pkg.PackageCode,
+			"owner_setid":  pkg.OwnerSetID,
 			"status":       pkg.Status,
 		})
 		return

@@ -430,7 +430,7 @@ type OrgunitSetidScopePackage struct {
 	Status      string             `json:"status"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	OwnerSetid  *string            `json:"owner_setid"`
+	OwnerSetid  string             `json:"owner_setid"`
 }
 
 type OrgunitSetidScopePackageEvent struct {
@@ -458,7 +458,7 @@ type OrgunitSetidScopePackageVersion struct {
 	Status      string                    `json:"status"`
 	Validity    pgtype.Range[pgtype.Date] `json:"validity"`
 	LastEventID int64                     `json:"last_event_id"`
-	OwnerSetid  *string                   `json:"owner_setid"`
+	OwnerSetid  string                    `json:"owner_setid"`
 }
 
 type OrgunitSetidScopeSubscription struct {

@@ -17,8 +17,10 @@ DECLARE
   v_payload jsonb;
   v_scope_mode text;
   v_package_code text;
+  v_owner_setid text;
   v_name text;
   v_status text;
+  v_owner_status text;
   v_existing_pkg orgunit.setid_scope_packages%ROWTYPE;
   v_existing_version orgunit.setid_scope_package_versions%ROWTYPE;
   v_next_start date;
@@ -122,6 +124,7 @@ BEGIN
 
   IF p_event_type IN ('BOOTSTRAP', 'CREATE') THEN
     v_package_code := upper(btrim(COALESCE(v_payload->>'package_code', '')));
+    v_owner_setid := NULLIF(btrim(COALESCE(v_payload->>'owner_setid', '')), '');
     v_name := NULLIF(btrim(COALESCE(v_payload->>'name', '')), '');
 
     IF v_package_code = '' THEN
@@ -138,6 +141,34 @@ BEGIN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'PACKAGE_CODE_RESERVED';
+    END IF;
+    IF v_owner_setid IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
+        DETAIL = 'owner_setid is required';
+    END IF;
+    v_owner_setid := orgunit.normalize_setid(v_owner_setid);
+    IF v_owner_setid = 'SHARE' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_RESERVED_WORD',
+        DETAIL = 'SHARE is reserved';
+    END IF;
+    SELECT status INTO v_owner_status
+    FROM orgunit.setids
+    WHERE tenant_id = p_tenant_id AND setid = v_owner_setid;
+    IF v_owner_status IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_NOT_FOUND',
+        DETAIL = format('setid=%s', v_owner_setid);
+    END IF;
+    IF v_owner_status <> 'active' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_DISABLED',
+        DETAIL = format('setid=%s', v_owner_setid);
     END IF;
     IF v_name IS NULL THEN
       RAISE EXCEPTION USING
@@ -166,6 +197,7 @@ BEGIN
       scope_code,
       package_id,
       package_code,
+      owner_setid,
       name,
       status
     )
@@ -174,12 +206,14 @@ BEGIN
       p_scope_code,
       p_package_id,
       v_package_code,
+      v_owner_setid,
       v_name,
       v_status
     )
     ON CONFLICT (tenant_id, package_id) DO UPDATE
     SET scope_code = EXCLUDED.scope_code,
         package_code = EXCLUDED.package_code,
+        owner_setid = EXCLUDED.owner_setid,
         name = EXCLUDED.name,
         status = EXCLUDED.status,
         updated_at = now();
@@ -205,6 +239,7 @@ BEGIN
     END IF;
 
     v_package_code := v_existing_pkg.package_code;
+    v_owner_setid := v_existing_pkg.owner_setid;
     v_status := v_existing_pkg.status;
 
     UPDATE orgunit.setid_scope_packages
@@ -231,6 +266,7 @@ BEGIN
     END IF;
 
     v_package_code := v_existing_pkg.package_code;
+    v_owner_setid := v_existing_pkg.owner_setid;
     v_name := v_existing_pkg.name;
     v_status := 'disabled';
 
@@ -263,6 +299,7 @@ BEGIN
         UPDATE orgunit.setid_scope_package_versions
         SET scope_code = p_scope_code,
             package_code = v_package_code,
+            owner_setid = v_owner_setid,
             name = v_name,
             status = v_status,
             last_event_id = v_evt_db_id
@@ -277,6 +314,7 @@ BEGIN
           scope_code,
           package_id,
           package_code,
+          owner_setid,
           name,
           status,
           validity,
@@ -287,6 +325,7 @@ BEGIN
           p_scope_code,
           p_package_id,
           v_package_code,
+          v_owner_setid,
           v_name,
           v_status,
           daterange(p_effective_date, v_current_end, '[)'),
@@ -299,6 +338,7 @@ BEGIN
         scope_code,
         package_id,
         package_code,
+        owner_setid,
         name,
         status,
         validity,
@@ -309,6 +349,7 @@ BEGIN
         p_scope_code,
         p_package_id,
         v_package_code,
+        v_owner_setid,
         v_name,
         v_status,
         daterange(p_effective_date, v_next_start, '[)'),

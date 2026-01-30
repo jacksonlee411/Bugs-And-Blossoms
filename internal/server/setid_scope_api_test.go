@@ -16,7 +16,7 @@ import (
 
 type scopeAPIStore struct {
 	listScopePackagesFn        func(context.Context, string, string) ([]ScopePackage, error)
-	createScopePackageFn       func(context.Context, string, string, string, string, string, string, string) (ScopePackage, error)
+	createScopePackageFn       func(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error)
 	disableScopePackageFn      func(context.Context, string, string, string, string) (ScopePackage, error)
 	createScopeSubscriptionFn  func(context.Context, string, string, string, string, string, string, string, string) (ScopeSubscription, error)
 	getScopeSubscriptionFn     func(context.Context, string, string, string, string) (ScopeSubscription, error)
@@ -42,11 +42,11 @@ func (s scopeAPIStore) CreateGlobalSetID(context.Context, string, string, string
 func (s scopeAPIStore) ListScopeCodes(context.Context, string) ([]ScopeCode, error) {
 	return nil, nil
 }
-func (s scopeAPIStore) CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error) {
+func (s scopeAPIStore) CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error) {
 	if s.createScopePackageFn == nil {
 		return ScopePackage{}, nil
 	}
-	return s.createScopePackageFn(ctx, tenantID, scopeCode, packageCode, name, effectiveDate, requestID, initiatorID)
+	return s.createScopePackageFn(ctx, tenantID, scopeCode, packageCode, ownerSetID, name, effectiveDate, requestID, initiatorID)
 }
 func (s scopeAPIStore) DisableScopePackage(ctx context.Context, tenantID string, packageID string, requestID string, initiatorID string) (ScopePackage, error) {
 	if s.disableScopePackageFn == nil {
@@ -211,7 +211,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("invalid effective date", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","name":"Pkg","effective_date":"bad","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","name":"Pkg","effective_date":"bad","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -222,7 +222,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("reserved code", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"DEFLT","name":"Pkg","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"DEFLT","owner_setid":"A0001","name":"Pkg","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -233,7 +233,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("invalid code", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"bad-code","name":"Pkg","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"bad-code","owner_setid":"A0001","name":"Pkg","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -244,12 +244,12 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("create error", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","name":"Pkg","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{
-			createScopePackageFn: func(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+			createScopePackageFn: func(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error) {
 				return ScopePackage{}, errors.New("PACKAGE_CODE_DUPLICATE")
 			},
 		})
@@ -259,13 +259,13 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"","name":"Pkg","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"","owner_setid":"A0001","name":"Pkg","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{
-			createScopePackageFn: func(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
-				return ScopePackage{PackageID: "p1", ScopeCode: "jobcatalog", PackageCode: "PKG1", Status: "active"}, nil
+			createScopePackageFn: func(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error) {
+				return ScopePackage{PackageID: "p1", ScopeCode: "jobcatalog", PackageCode: "PKG1", OwnerSetID: "A0001", Status: "active"}, nil
 			},
 		})
 		if rec.Code != http.StatusCreated {

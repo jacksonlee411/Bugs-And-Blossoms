@@ -33,7 +33,7 @@ func (s errSetIDStore) CreateGlobalSetID(context.Context, string, string, string
 func (s errSetIDStore) ListScopeCodes(context.Context, string) ([]ScopeCode, error) {
 	return nil, s.err
 }
-func (s errSetIDStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+func (s errSetIDStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error) {
 	return ScopePackage{}, s.err
 }
 func (s errSetIDStore) DisableScopePackage(context.Context, string, string, string, string) (ScopePackage, error) {
@@ -87,7 +87,7 @@ func (s partialSetIDStore) BindSetID(context.Context, string, string, string, st
 func (s partialSetIDStore) ListScopeCodes(context.Context, string) ([]ScopeCode, error) {
 	return nil, nil
 }
-func (s partialSetIDStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+func (s partialSetIDStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error) {
 	return ScopePackage{}, nil
 }
 func (s partialSetIDStore) DisableScopePackage(context.Context, string, string, string, string) (ScopePackage, error) {

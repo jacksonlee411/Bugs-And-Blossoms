@@ -1,66 +1,5 @@
-CREATE OR REPLACE FUNCTION orgunit.normalize_setid(p_setid text)
-RETURNS text
-LANGUAGE plpgsql
-IMMUTABLE
-AS $$
-DECLARE
-  v text;
-BEGIN
-  IF p_setid IS NULL OR btrim(p_setid) = '' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_INVALID_FORMAT',
-      DETAIL = 'setid is required';
-  END IF;
-
-  v := upper(btrim(p_setid));
-  IF v !~ '^[A-Z0-9]{5}$' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_INVALID_FORMAT',
-      DETAIL = format('setid=%s', v);
-  END IF;
-
-  RETURN v;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.lock_setid_governance(p_tenant_id uuid)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  k bigint;
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
-  k := hashtextextended('orgunit.setid.governance:' || p_tenant_id::text, 0);
-  PERFORM pg_advisory_xact_lock(k);
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.assert_actor_scope_saas()
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_scope text;
-BEGIN
-  v_scope := current_setting('app.current_actor_scope', true);
-  IF v_scope IS NULL OR btrim(v_scope) = '' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'ACTOR_SCOPE_FORBIDDEN',
-      DETAIL = 'app.current_actor_scope is required';
-  END IF;
-  IF v_scope <> 'saas' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'ACTOR_SCOPE_FORBIDDEN',
-      DETAIL = format('app.current_actor_scope=%s', v_scope);
-  END IF;
-END;
-$$;
-
+-- +goose Up
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION orgunit.ensure_setid_bootstrap(
   p_tenant_id uuid,
   p_initiator_id uuid
@@ -615,11 +554,13 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION orgunit.submit_global_setid_event(
+CREATE OR REPLACE FUNCTION orgunit.submit_scope_package_event(
   p_event_id uuid,
   p_tenant_id uuid,
+  p_scope_code text,
+  p_package_id uuid,
   p_event_type text,
-  p_setid text,
+  p_effective_date date,
   p_payload jsonb,
   p_request_id text,
   p_initiator_id uuid
@@ -628,231 +569,82 @@ RETURNS bigint
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_setid text;
   v_evt_db_id bigint;
+  v_payload jsonb;
+  v_scope_mode text;
+  v_package_code text;
+  v_owner_setid text;
   v_name text;
-BEGIN
-  IF p_tenant_id <> orgunit.global_tenant_id() THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'ACTOR_SCOPE_FORBIDDEN',
-      DETAIL = format('tenant_id=%s', p_tenant_id);
-  END IF;
-
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
-  PERFORM orgunit.assert_actor_scope_saas();
-
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_id is required';
-  END IF;
-  IF p_event_type IS NULL OR btrim(p_event_type) = '' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'event_type is required';
-  END IF;
-
-  v_setid := orgunit.normalize_setid(p_setid);
-  IF v_setid <> 'SHARE' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_RESERVED_WORD',
-      DETAIL = 'only SHARE is allowed';
-  END IF;
-
-  INSERT INTO orgunit.global_setid_events (event_id, tenant_id, event_type, setid, payload, request_id, initiator_id)
-  VALUES (p_event_id, p_tenant_id, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_id, p_initiator_id)
-  ON CONFLICT (tenant_id, request_id) DO NOTHING;
-
-  SELECT id INTO v_evt_db_id
-  FROM orgunit.global_setid_events
-  WHERE tenant_id = p_tenant_id AND request_id = p_request_id
-  ORDER BY id DESC
-  LIMIT 1;
-
-  IF p_event_type IN ('BOOTSTRAP','CREATE') THEN
-    v_name := NULLIF(btrim(COALESCE(p_payload->>'name', '')), '');
-    IF v_name IS NULL THEN
-      RAISE EXCEPTION USING
-        ERRCODE = 'P0001',
-        MESSAGE = 'SETID_INVALID_ARGUMENT',
-        DETAIL = 'name is required';
-    END IF;
-
-    INSERT INTO orgunit.global_setids (tenant_id, setid, name, status, last_event_id)
-    VALUES (p_tenant_id, v_setid, v_name, 'active', v_evt_db_id)
-    ON CONFLICT (tenant_id, setid) DO UPDATE
-    SET name = EXCLUDED.name,
-        status = 'active',
-        last_event_id = EXCLUDED.last_event_id,
-        updated_at = now();
-  ELSIF p_event_type = 'RENAME' THEN
-    v_name := NULLIF(btrim(COALESCE(p_payload->>'name', '')), '');
-    IF v_name IS NULL THEN
-      RAISE EXCEPTION USING
-        ERRCODE = 'P0001',
-        MESSAGE = 'SETID_INVALID_ARGUMENT',
-        DETAIL = 'name is required';
-    END IF;
-    UPDATE orgunit.global_setids
-    SET name = v_name,
-        last_event_id = v_evt_db_id,
-        updated_at = now()
-    WHERE tenant_id = p_tenant_id AND setid = v_setid;
-    IF NOT FOUND THEN
-      RAISE EXCEPTION USING
-        ERRCODE = 'P0001',
-        MESSAGE = 'SETID_NOT_FOUND',
-        DETAIL = format('setid=%s', v_setid);
-    END IF;
-  ELSIF p_event_type = 'DISABLE' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_RESERVED_WORD',
-      DETAIL = 'SHARE cannot be disabled';
-  ELSE
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = format('unsupported event_type=%s', p_event_type);
-  END IF;
-
-  RETURN v_evt_db_id;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.submit_setid_binding_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
-  p_org_id uuid,
-  p_effective_date date,
-  p_setid text,
-  p_request_id text,
-  p_initiator_id uuid
-)
-RETURNS bigint
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_setid text;
-  v_evt_db_id bigint;
-  v_org_status text;
-  v_org_is_bu boolean;
-  v_existing orgunit.setid_binding_versions%ROWTYPE;
+  v_status text;
+  v_owner_status text;
+  v_existing_pkg orgunit.setid_scope_packages%ROWTYPE;
+  v_existing_version orgunit.setid_scope_package_versions%ROWTYPE;
   v_next_start date;
   v_current_end date;
-  v_root_org_id uuid;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_id);
   PERFORM orgunit.lock_setid_governance(p_tenant_id);
 
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_id is required';
-  END IF;
   IF p_event_id IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
-      MESSAGE = 'SETID_INVALID_ARGUMENT',
+      MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
       DETAIL = 'event_id is required';
   END IF;
-  IF p_org_id IS NULL THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
-      MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'org_id is required';
+      MESSAGE = 'REQUEST_ID_REQUIRED';
+  END IF;
+  IF p_scope_code IS NULL OR NOT orgunit.scope_code_is_valid(p_scope_code) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'SCOPE_CODE_INVALID';
+  END IF;
+  IF p_package_id IS NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = 'P0001',
+      MESSAGE = 'PACKAGE_NOT_FOUND';
   END IF;
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
-      MESSAGE = 'SETID_INVALID_ARGUMENT',
+      MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
       DETAIL = 'effective_date is required';
   END IF;
-
-  v_setid := orgunit.normalize_setid(p_setid);
-  IF v_setid = 'SHARE' THEN
+  IF p_initiator_id IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
-      MESSAGE = 'SETID_SHARE_FORBIDDEN',
-      DETAIL = 'SHARE is reserved';
+      MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
+      DETAIL = 'initiator_id is required';
   END IF;
-
-  SELECT status INTO v_org_status
-  FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
-    AND v.hierarchy_type = 'OrgUnit'
-    AND v.org_id = p_org_id
-    AND v.validity @> p_effective_date
-  ORDER BY lower(v.validity) DESC
-  LIMIT 1;
-
-  IF v_org_status IS NULL THEN
+  IF p_event_type NOT IN ('BOOTSTRAP', 'CREATE', 'RENAME', 'DISABLE') THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
-      MESSAGE = 'ORG_NOT_FOUND_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
+      MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
+      DETAIL = format('unsupported event_type=%s', p_event_type);
   END IF;
-  IF v_org_status <> 'active' THEN
+
+  v_scope_mode := orgunit.scope_code_share_mode(p_scope_code);
+  IF v_scope_mode = 'shared-only' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
-      MESSAGE = 'ORG_INACTIVE_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
+      MESSAGE = 'PACKAGE_SCOPE_MISMATCH';
   END IF;
 
-  SELECT is_business_unit INTO v_org_is_bu
-  FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
-    AND v.hierarchy_type = 'OrgUnit'
-    AND v.org_id = p_org_id
-    AND v.validity @> p_effective_date
-  ORDER BY lower(v.validity) DESC
-  LIMIT 1;
-
-  IF v_org_is_bu IS DISTINCT FROM true THEN
+  v_payload := COALESCE(p_payload, '{}'::jsonb);
+  IF jsonb_typeof(v_payload) <> 'object' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
-      MESSAGE = 'ORG_NOT_BUSINESS_UNIT_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
+      MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
+      DETAIL = 'payload must be an object';
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM orgunit.setids WHERE tenant_id = p_tenant_id AND setid = v_setid
-  ) THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_NOT_FOUND',
-      DETAIL = format('setid=%s', v_setid);
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM orgunit.setids WHERE tenant_id = p_tenant_id AND setid = v_setid AND status <> 'active'
-  ) THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_DISABLED',
-      DETAIL = format('setid=%s', v_setid);
-  END IF;
-
-  SELECT t.root_org_id INTO v_root_org_id
-  FROM orgunit.org_trees t
-  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = 'OrgUnit';
-
-  IF v_root_org_id IS NOT NULL AND v_root_org_id = p_org_id AND v_setid <> 'DEFLT' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_ROOT_BINDING_FORBIDDEN',
-      DETAIL = format('org_id=%s setid=%s', p_org_id, v_setid);
-  END IF;
-
-  INSERT INTO orgunit.setid_binding_events (
+  INSERT INTO orgunit.setid_scope_package_events (
     event_id,
     tenant_id,
-    org_id,
+    scope_code,
+    package_id,
     event_type,
     effective_date,
     payload,
@@ -862,31 +654,195 @@ BEGIN
   VALUES (
     p_event_id,
     p_tenant_id,
-    p_org_id,
-    'BIND',
+    p_scope_code,
+    p_package_id,
+    p_event_type,
     p_effective_date,
-    jsonb_build_object('setid', v_setid),
+    v_payload,
     p_request_id,
     p_initiator_id
   )
   ON CONFLICT (tenant_id, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
-  FROM orgunit.setid_binding_events
+  FROM orgunit.setid_scope_package_events
   WHERE tenant_id = p_tenant_id AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 
+  IF EXISTS (
+    SELECT 1
+    FROM orgunit.setid_scope_package_versions
+    WHERE last_event_id = v_evt_db_id
+  ) THEN
+    RETURN v_evt_db_id;
+  END IF;
+
+  IF p_event_type IN ('BOOTSTRAP', 'CREATE') THEN
+    v_package_code := upper(btrim(COALESCE(v_payload->>'package_code', '')));
+    v_owner_setid := NULLIF(btrim(COALESCE(v_payload->>'owner_setid', '')), '');
+    v_name := NULLIF(btrim(COALESCE(v_payload->>'name', '')), '');
+
+    IF v_package_code = '' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'PACKAGE_CODE_INVALID';
+    END IF;
+    IF v_package_code !~ '^[A-Z0-9_]{1,16}$' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'PACKAGE_CODE_INVALID';
+    END IF;
+    IF p_event_type = 'CREATE' AND v_package_code = 'DEFLT' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'PACKAGE_CODE_RESERVED';
+    END IF;
+    IF v_owner_setid IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
+        DETAIL = 'owner_setid is required';
+    END IF;
+    v_owner_setid := orgunit.normalize_setid(v_owner_setid);
+    IF v_owner_setid = 'SHARE' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_RESERVED_WORD',
+        DETAIL = 'SHARE is reserved';
+    END IF;
+    SELECT status INTO v_owner_status
+    FROM orgunit.setids
+    WHERE tenant_id = p_tenant_id AND setid = v_owner_setid;
+    IF v_owner_status IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_NOT_FOUND',
+        DETAIL = format('setid=%s', v_owner_setid);
+    END IF;
+    IF v_owner_status <> 'active' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_DISABLED',
+        DETAIL = format('setid=%s', v_owner_setid);
+    END IF;
+    IF v_name IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
+        DETAIL = 'name is required';
+    END IF;
+
+    IF EXISTS (
+      SELECT 1
+      FROM orgunit.setid_scope_packages
+      WHERE tenant_id = p_tenant_id
+        AND scope_code = p_scope_code
+        AND package_code = v_package_code
+        AND package_id <> p_package_id
+    ) THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'PACKAGE_CODE_DUPLICATE';
+    END IF;
+
+    v_status := 'active';
+
+    INSERT INTO orgunit.setid_scope_packages (
+      tenant_id,
+      scope_code,
+      package_id,
+      package_code,
+      owner_setid,
+      name,
+      status
+    )
+    VALUES (
+      p_tenant_id,
+      p_scope_code,
+      p_package_id,
+      v_package_code,
+      v_owner_setid,
+      v_name,
+      v_status
+    )
+    ON CONFLICT (tenant_id, package_id) DO UPDATE
+    SET scope_code = EXCLUDED.scope_code,
+        package_code = EXCLUDED.package_code,
+        owner_setid = EXCLUDED.owner_setid,
+        name = EXCLUDED.name,
+        status = EXCLUDED.status,
+        updated_at = now();
+  ELSIF p_event_type = 'RENAME' THEN
+    v_name := NULLIF(btrim(COALESCE(v_payload->>'name', '')), '');
+    IF v_name IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
+        DETAIL = 'name is required';
+    END IF;
+
+    SELECT * INTO v_existing_pkg
+    FROM orgunit.setid_scope_packages
+    WHERE tenant_id = p_tenant_id
+      AND package_id = p_package_id
+    FOR UPDATE;
+
+    IF v_existing_pkg.package_id IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'PACKAGE_NOT_FOUND';
+    END IF;
+
+    v_package_code := v_existing_pkg.package_code;
+    v_owner_setid := v_existing_pkg.owner_setid;
+    v_status := v_existing_pkg.status;
+
+    UPDATE orgunit.setid_scope_packages
+    SET name = v_name,
+        updated_at = now()
+    WHERE tenant_id = p_tenant_id
+      AND package_id = p_package_id;
+  ELSIF p_event_type = 'DISABLE' THEN
+    SELECT * INTO v_existing_pkg
+    FROM orgunit.setid_scope_packages
+    WHERE tenant_id = p_tenant_id
+      AND package_id = p_package_id
+    FOR UPDATE;
+
+    IF v_existing_pkg.package_id IS NULL THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'PACKAGE_NOT_FOUND';
+    END IF;
+    IF v_existing_pkg.package_code = 'DEFLT' THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'PACKAGE_DEFLT_FORBIDDEN';
+    END IF;
+
+    v_package_code := v_existing_pkg.package_code;
+    v_owner_setid := v_existing_pkg.owner_setid;
+    v_name := v_existing_pkg.name;
+    v_status := 'disabled';
+
+    UPDATE orgunit.setid_scope_packages
+    SET status = 'disabled',
+        updated_at = now()
+    WHERE tenant_id = p_tenant_id
+      AND package_id = p_package_id;
+  END IF;
+
   SELECT min(lower(validity)) INTO v_next_start
-  FROM orgunit.setid_binding_versions
+  FROM orgunit.setid_scope_package_versions
   WHERE tenant_id = p_tenant_id
-    AND org_id = p_org_id
+    AND package_id = p_package_id
     AND lower(validity) > p_effective_date;
 
-  SELECT * INTO v_existing
-  FROM orgunit.setid_binding_versions
+  SELECT * INTO v_existing_version
+  FROM orgunit.setid_scope_package_versions
   WHERE tenant_id = p_tenant_id
-    AND org_id = p_org_id
+    AND package_id = p_package_id
     AND validity @> p_effective_date
   ORDER BY lower(validity) DESC
   LIMIT 1
@@ -894,46 +850,64 @@ BEGIN
 
   BEGIN
     IF FOUND THEN
-      v_current_end := upper(v_existing.validity);
-      IF lower(v_existing.validity) = p_effective_date THEN
-        UPDATE orgunit.setid_binding_versions
-        SET setid = v_setid,
-            last_event_id = v_evt_db_id,
-            updated_at = now()
-        WHERE id = v_existing.id;
+      v_current_end := upper(v_existing_version.validity);
+      IF lower(v_existing_version.validity) = p_effective_date THEN
+        UPDATE orgunit.setid_scope_package_versions
+        SET scope_code = p_scope_code,
+            package_code = v_package_code,
+            owner_setid = v_owner_setid,
+            name = v_name,
+            status = v_status,
+            last_event_id = v_evt_db_id
+        WHERE id = v_existing_version.id;
       ELSE
-        UPDATE orgunit.setid_binding_versions
-        SET validity = daterange(lower(v_existing.validity), p_effective_date, '[)'),
-            updated_at = now()
-        WHERE id = v_existing.id;
+        UPDATE orgunit.setid_scope_package_versions
+        SET validity = daterange(lower(v_existing_version.validity), p_effective_date, '[)')
+        WHERE id = v_existing_version.id;
 
-        INSERT INTO orgunit.setid_binding_versions (
+        INSERT INTO orgunit.setid_scope_package_versions (
           tenant_id,
-          org_id,
-          setid,
+          scope_code,
+          package_id,
+          package_code,
+          owner_setid,
+          name,
+          status,
           validity,
           last_event_id
         )
         VALUES (
           p_tenant_id,
-          p_org_id,
-          v_setid,
+          p_scope_code,
+          p_package_id,
+          v_package_code,
+          v_owner_setid,
+          v_name,
+          v_status,
           daterange(p_effective_date, v_current_end, '[)'),
           v_evt_db_id
         );
       END IF;
     ELSE
-      INSERT INTO orgunit.setid_binding_versions (
+      INSERT INTO orgunit.setid_scope_package_versions (
         tenant_id,
-        org_id,
-        setid,
+        scope_code,
+        package_id,
+        package_code,
+        owner_setid,
+        name,
+        status,
         validity,
         last_event_id
       )
       VALUES (
         p_tenant_id,
-        p_org_id,
-        v_setid,
+        p_scope_code,
+        p_package_id,
+        v_package_code,
+        v_owner_setid,
+        v_name,
+        v_status,
         daterange(p_effective_date, v_next_start, '[)'),
         v_evt_db_id
       );
@@ -942,104 +916,11 @@ BEGIN
     WHEN exclusion_violation THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
-        MESSAGE = 'SETID_BINDING_OVERLAP',
-        DETAIL = format('org_id=%s effective_date=%s', p_org_id, p_effective_date);
+        MESSAGE = 'PACKAGE_VERSION_OVERLAP',
+        DETAIL = format('package_id=%s effective_date=%s', p_package_id, p_effective_date);
   END;
 
   RETURN v_evt_db_id;
 END;
 $$;
-
-CREATE OR REPLACE FUNCTION orgunit.resolve_setid(
-  p_tenant_id uuid,
-  p_org_id uuid,
-  p_as_of_date date
-)
-RETURNS text
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_node_path ltree;
-  v_org_status text;
-  v_setid text;
-  v_setid_status text;
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
-
-  IF p_org_id IS NULL THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'org_id is required';
-  END IF;
-  IF p_as_of_date IS NULL THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'as_of_date is required';
-  END IF;
-
-  SELECT v.status, v.node_path INTO v_org_status, v_node_path
-  FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
-    AND v.hierarchy_type = 'OrgUnit'
-    AND v.org_id = p_org_id
-    AND v.validity @> p_as_of_date
-  ORDER BY lower(v.validity) DESC
-  LIMIT 1;
-
-  IF v_org_status IS NULL THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'ORG_NOT_FOUND_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_as_of_date);
-  END IF;
-  IF v_org_status <> 'active' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'ORG_INACTIVE_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_as_of_date);
-  END IF;
-
-  SELECT b.setid INTO v_setid
-  FROM orgunit.setid_binding_versions b
-  JOIN orgunit.org_unit_versions o
-    ON o.tenant_id = b.tenant_id
-   AND o.hierarchy_type = 'OrgUnit'
-   AND o.org_id = b.org_id
-  WHERE b.tenant_id = p_tenant_id
-    AND b.validity @> p_as_of_date
-    AND o.validity @> p_as_of_date
-    AND o.status = 'active'
-    AND o.is_business_unit = true
-    AND o.node_path @> v_node_path
-  ORDER BY nlevel(o.node_path) DESC
-  LIMIT 1;
-
-  IF v_setid IS NULL THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_BINDING_MISSING',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_as_of_date);
-  END IF;
-
-  SELECT status INTO v_setid_status
-  FROM orgunit.setids
-  WHERE tenant_id = p_tenant_id AND setid = v_setid;
-
-  IF v_setid_status IS NULL THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_NOT_FOUND',
-      DETAIL = format('setid=%s', v_setid);
-  END IF;
-  IF v_setid_status <> 'active' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'SETID_DISABLED',
-      DETAIL = format('setid=%s', v_setid);
-  END IF;
-
-  RETURN v_setid;
-END;
-$$;
+-- +goose StatementEnd

@@ -27,6 +27,7 @@ type stubTx struct {
 	row3Err    error
 	row4Err    error
 	row5Err    error
+	row6Err    error
 
 	rows  pgx.Rows
 	rows2 pgx.Rows
@@ -36,6 +37,7 @@ type stubTx struct {
 	row3  pgx.Row
 	row4  pgx.Row
 	row5  pgx.Row
+	row6  pgx.Row
 }
 
 func (t *stubTx) Begin(ctx context.Context) (pgx.Tx, error) { return t, nil }
@@ -130,6 +132,14 @@ func (t *stubTx) QueryRow(context.Context, string, ...any) pgx.Row {
 	if t.row5 != nil {
 		r := t.row5
 		t.row5 = nil
+		return r
+	}
+	if t.row6Err != nil {
+		return &stubRow{err: t.row6Err}
+	}
+	if t.row6 != nil {
+		r := t.row6
+		t.row6 = nil
 		return r
 	}
 	return fakeRow{}
