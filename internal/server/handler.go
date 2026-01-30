@@ -305,10 +305,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleSetIDScopeSubscriptionsUI(w, r, setidStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleJobCatalog(w, r, orgStore, jobcatalogStore)
+		handleJobCatalog(w, r, orgStore, setidStore, jobcatalogStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleJobCatalog(w, r, orgStore, jobcatalogStore)
+		handleJobCatalog(w, r, orgStore, setidStore, jobcatalogStore)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePositions(w, r, orgStore, positionStore, jobcatalogStore)

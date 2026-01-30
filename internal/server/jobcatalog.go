@@ -51,6 +51,8 @@ type JobProfile struct {
 }
 
 type JobCatalogStore interface {
+	ResolveJobCatalogPackageByCode(ctx context.Context, tenantID string, packageCode string, asOfDate string) (JobCatalogPackage, error)
+	ResolveJobCatalogPackageBySetID(ctx context.Context, tenantID string, setID string, asOfDate string) (string, error)
 	CreateJobFamilyGroup(ctx context.Context, tenantID string, setID string, effectiveDate string, code string, name string, description string) error
 	ListJobFamilyGroups(ctx context.Context, tenantID string, setID string, asOfDate string) ([]JobFamilyGroup, error)
 	CreateJobFamily(ctx context.Context, tenantID string, setID string, effectiveDate string, code string, name string, description string, groupCode string) error
@@ -60,6 +62,12 @@ type JobCatalogStore interface {
 	ListJobLevels(ctx context.Context, tenantID string, setID string, asOfDate string) ([]JobLevel, error)
 	CreateJobProfile(ctx context.Context, tenantID string, setID string, effectiveDate string, code string, name string, description string, familyCodes []string, primaryFamilyCode string) error
 	ListJobProfiles(ctx context.Context, tenantID string, setID string, asOfDate string) ([]JobProfile, error)
+}
+
+type JobCatalogPackage struct {
+	PackageID   string
+	PackageCode string
+	OwnerSetID  string
 }
 
 type jobcatalogPGStore struct {
@@ -99,6 +107,26 @@ func (s *jobcatalogMemoryStore) ensure(tenantID string) {
 	if s.profiles[tenantID] == nil {
 		s.profiles[tenantID] = make(map[string][]JobProfile)
 	}
+}
+
+func (s *jobcatalogMemoryStore) ResolveJobCatalogPackageByCode(_ context.Context, _ string, packageCode string, _ string) (JobCatalogPackage, error) {
+	packageCode = strings.ToUpper(strings.TrimSpace(packageCode))
+	if packageCode == "" {
+		return JobCatalogPackage{}, errors.New("PACKAGE_CODE_INVALID")
+	}
+	return JobCatalogPackage{
+		PackageID:   packageCode,
+		PackageCode: packageCode,
+		OwnerSetID:  packageCode,
+	}, nil
+}
+
+func (s *jobcatalogMemoryStore) ResolveJobCatalogPackageBySetID(_ context.Context, _ string, setID string, _ string) (string, error) {
+	setID = normalizeSetID(setID)
+	if setID == "" {
+		return "", errors.New("setid is required")
+	}
+	return setID, nil
 }
 
 func (s *jobcatalogMemoryStore) CreateJobFamilyGroup(_ context.Context, tenantID string, setID string, effectiveDate string, code string, name string, _ string) error {
@@ -294,6 +322,66 @@ FROM orgunit.resolve_scope_package($1::uuid, $2::text, 'jobcatalog', $3::date)
 		return "", errors.New("JOBCATALOG_PACKAGE_OWNER_INVALID")
 	}
 	return packageID, nil
+}
+
+func resolveJobCatalogPackageByCode(ctx context.Context, tx pgx.Tx, tenantID string, packageCode string, asOfDate string) (JobCatalogPackage, error) {
+	packageCode = strings.ToUpper(strings.TrimSpace(packageCode))
+	if packageCode == "" {
+		return JobCatalogPackage{}, errors.New("PACKAGE_CODE_INVALID")
+	}
+
+	var out JobCatalogPackage
+	if err := tx.QueryRow(ctx, `
+SELECT package_id::text, owner_setid
+FROM orgunit.setid_scope_packages
+WHERE tenant_id = $1::uuid
+  AND scope_code = 'jobcatalog'
+  AND package_code = $2::text
+`, tenantID, packageCode).Scan(&out.PackageID, &out.OwnerSetID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return JobCatalogPackage{}, errors.New("PACKAGE_NOT_FOUND")
+		}
+		return JobCatalogPackage{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+SELECT orgunit.assert_scope_package_active_as_of(
+  $1::uuid,
+  'jobcatalog',
+  $2::uuid,
+  $1::uuid,
+  $3::date
+);
+`, tenantID, out.PackageID, asOfDate); err != nil {
+		return JobCatalogPackage{}, err
+	}
+	out.PackageCode = packageCode
+	return out, nil
+}
+
+func (s *jobcatalogPGStore) ResolveJobCatalogPackageByCode(ctx context.Context, tenantID string, packageCode string, asOfDate string) (JobCatalogPackage, error) {
+	var out JobCatalogPackage
+	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
+		resolved, err := resolveJobCatalogPackageByCode(ctx, tx, tenantID, packageCode, asOfDate)
+		if err != nil {
+			return err
+		}
+		out = resolved
+		return nil
+	})
+	return out, err
+}
+
+func (s *jobcatalogPGStore) ResolveJobCatalogPackageBySetID(ctx context.Context, tenantID string, setID string, asOfDate string) (string, error) {
+	var out string
+	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
+		resolved, err := resolveJobCatalogPackage(ctx, tx, tenantID, setID, asOfDate)
+		if err != nil {
+			return err
+		}
+		out = resolved
+		return nil
+	})
+	return out, err
 }
 
 func (s *jobcatalogPGStore) CreateJobFamilyGroup(ctx context.Context, tenantID string, setID string, effectiveDate string, code string, name string, description string) error {
@@ -816,7 +904,130 @@ ORDER BY p.code ASC
 	return out, err
 }
 
-func handleJobCatalog(w http.ResponseWriter, r *http.Request, orgStore OrgUnitStore, store JobCatalogStore) {
+type jobCatalogSetIDStore interface {
+	ListSetIDs(ctx context.Context, tenantID string) ([]SetID, error)
+	ListOwnedScopePackages(ctx context.Context, tenantID string, scopeCode string, asOfDate string) ([]OwnedScopePackage, error)
+}
+
+type jobCatalogView struct {
+	PackageCode  string
+	OwnerSetID   string
+	SetID        string
+	ReadOnly     bool
+	HasSelection bool
+}
+
+func (v jobCatalogView) listSetID() string {
+	if !v.HasSelection {
+		return ""
+	}
+	if v.ReadOnly {
+		return v.SetID
+	}
+	return v.OwnerSetID
+}
+
+func normalizePackageCode(input string) string {
+	return strings.ToUpper(strings.TrimSpace(input))
+}
+
+func canEditDefltPackage(ctx context.Context) bool {
+	if !canEditOwnedScopePackages(ctx) {
+		return false
+	}
+	p, _ := currentPrincipal(ctx)
+	return strings.EqualFold(strings.TrimSpace(p.Status), "active")
+}
+
+func ownerSetIDEditable(ctx context.Context, setidStore jobCatalogSetIDStore, tenantID string, ownerSetID string) bool {
+	if !canEditOwnedScopePackages(ctx) {
+		return false
+	}
+	if setidStore == nil {
+		return false
+	}
+	ownerSetID = normalizeSetID(ownerSetID)
+	if ownerSetID == "" {
+		return false
+	}
+	rows, err := setidStore.ListSetIDs(ctx, tenantID)
+	if err != nil {
+		return false
+	}
+	for _, row := range rows {
+		if normalizeSetID(row.SetID) == ownerSetID && strings.EqualFold(strings.TrimSpace(row.Status), "active") {
+			return true
+		}
+	}
+	return false
+}
+
+func loadOwnedJobCatalogPackages(ctx context.Context, setidStore jobCatalogSetIDStore, tenantID string, asOf string) ([]OwnedScopePackage, error) {
+	if setidStore == nil {
+		return []OwnedScopePackage{}, nil
+	}
+	if !canEditOwnedScopePackages(ctx) {
+		return []OwnedScopePackage{}, nil
+	}
+	rows, err := setidStore.ListOwnedScopePackages(ctx, tenantID, "jobcatalog", asOf)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []OwnedScopePackage{}, nil
+	}
+	return rows, nil
+}
+
+func resolveJobCatalogView(ctx context.Context, store JobCatalogStore, setidStore jobCatalogSetIDStore, tenantID string, asOf string, packageCode string, setID string) (jobCatalogView, string) {
+	view := jobCatalogView{PackageCode: packageCode}
+	if packageCode == "" && setID == "" {
+		return view, ""
+	}
+	if setID != "" {
+		view.SetID = setID
+		view.ReadOnly = true
+		view.HasSelection = true
+		return view, ""
+	}
+
+	view.HasSelection = true
+	if !canEditOwnedScopePackages(ctx) {
+		return view, "OWNER_SETID_FORBIDDEN"
+	}
+	pkg, err := store.ResolveJobCatalogPackageByCode(ctx, tenantID, packageCode, asOf)
+	if err != nil {
+		return view, err.Error()
+	}
+	view.PackageCode = pkg.PackageCode
+	view.OwnerSetID = pkg.OwnerSetID
+	if !ownerSetIDEditable(ctx, setidStore, tenantID, pkg.OwnerSetID) {
+		return view, "OWNER_SETID_FORBIDDEN"
+	}
+	if strings.EqualFold(pkg.PackageCode, "DEFLT") && !canEditDefltPackage(ctx) {
+		return view, "DEFLT_EDIT_FORBIDDEN"
+	}
+	resolvedID, err := store.ResolveJobCatalogPackageBySetID(ctx, tenantID, pkg.OwnerSetID, asOf)
+	if err != nil {
+		return view, err.Error()
+	}
+	if resolvedID != pkg.PackageID {
+		return view, "PACKAGE_CODE_MISMATCH"
+	}
+	return view, ""
+}
+
+func jobCatalogStatusForError(errMsg string) int {
+	if strings.Contains(errMsg, "DEFLT_EDIT_FORBIDDEN") || strings.Contains(errMsg, "OWNER_SETID_FORBIDDEN") {
+		return http.StatusForbidden
+	}
+	if strings.Contains(errMsg, "PACKAGE_CODE_MISMATCH") {
+		return http.StatusUnprocessableEntity
+	}
+	return http.StatusOK
+}
+
+func handleJobCatalog(w http.ResponseWriter, r *http.Request, orgStore OrgUnitStore, setidStore jobCatalogSetIDStore, store JobCatalogStore) {
 	_ = orgStore
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -829,62 +1040,98 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSt
 		return
 	}
 
-	setID := normalizeSetID(r.URL.Query().Get("setid"))
-
-	list := func(errHint string) (groups []JobFamilyGroup, families []JobFamily, levels []JobLevel, profiles []JobProfile, errMsg string) {
-		mergeMsg := func(hint string, msg string) string {
-			if hint == "" {
-				return msg
-			}
-			if msg == "" {
-				return hint
-			}
-			return hint + "；" + msg
+	mergeMsg := func(hint string, msg string) string {
+		if hint == "" {
+			return msg
 		}
+		if msg == "" {
+			return hint
+		}
+		return hint + "；" + msg
+	}
+
+	queryPackageCode := normalizePackageCode(r.URL.Query().Get("package_code"))
+	querySetID := normalizeSetID(r.URL.Query().Get("setid"))
+	if queryPackageCode != "" && querySetID != "" {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "invalid_request", "package_code and setid are mutually exclusive")
+		return
+	}
+
+	ownedPackages, ownedErr := loadOwnedJobCatalogPackages(r.Context(), setidStore, tenant.ID, asOf)
+	if ownedErr != nil {
+		ownedPackages = []OwnedScopePackage{}
+	}
+	mergeOwned := func(errMsg string) string {
+		if ownedErr != nil {
+			return mergeMsg(errMsg, ownedErr.Error())
+		}
+		return errMsg
+	}
+
+	list := func(errHint string, packageCode string, setID string) (groups []JobFamilyGroup, families []JobFamily, levels []JobLevel, profiles []JobProfile, view jobCatalogView, errMsg string) {
 		var err error
-
-		if setID == "" {
-			return nil, nil, nil, nil, mergeMsg(errHint, "setid is required")
+		view, errMsg = resolveJobCatalogView(r.Context(), store, setidStore, tenant.ID, asOf, packageCode, setID)
+		if errMsg != "" {
+			return nil, nil, nil, nil, view, mergeMsg(errHint, errMsg)
 		}
 
-		groups, err = store.ListJobFamilyGroups(r.Context(), tenant.ID, setID, asOf)
+		listSetID := view.listSetID()
+		if listSetID == "" {
+			return nil, nil, nil, nil, view, errHint
+		}
+
+		groups, err = store.ListJobFamilyGroups(r.Context(), tenant.ID, listSetID, asOf)
 		if err != nil {
-			return nil, nil, nil, nil, mergeMsg(errHint, err.Error())
+			return nil, nil, nil, nil, view, mergeMsg(errHint, err.Error())
 		}
 
-		families, err = store.ListJobFamilies(r.Context(), tenant.ID, setID, asOf)
+		families, err = store.ListJobFamilies(r.Context(), tenant.ID, listSetID, asOf)
 		if err != nil {
-			return groups, nil, nil, nil, mergeMsg(errHint, err.Error())
+			return groups, nil, nil, nil, view, mergeMsg(errHint, err.Error())
 		}
 
-		levels, err = store.ListJobLevels(r.Context(), tenant.ID, setID, asOf)
+		levels, err = store.ListJobLevels(r.Context(), tenant.ID, listSetID, asOf)
 		if err != nil {
-			return groups, families, nil, nil, mergeMsg(errHint, err.Error())
+			return groups, families, nil, nil, view, mergeMsg(errHint, err.Error())
 		}
 
-		profiles, err = store.ListJobProfiles(r.Context(), tenant.ID, setID, asOf)
+		profiles, err = store.ListJobProfiles(r.Context(), tenant.ID, listSetID, asOf)
 		if err != nil {
-			return groups, families, levels, nil, mergeMsg(errHint, err.Error())
+			return groups, families, levels, nil, view, mergeMsg(errHint, err.Error())
 		}
 
-		return groups, families, levels, profiles, errHint
+		return groups, families, levels, profiles, view, errHint
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		groups, families, levels, profiles, errMsg := list("")
-		writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+		groups, families, levels, profiles, view, errMsg := list("", queryPackageCode, querySetID)
+		errMsg = mergeOwned(errMsg)
+		writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
-			groups, families, levels, profiles, errMsg := list("bad form")
-			writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+			groups, families, levels, profiles, view, errMsg := list("bad form", queryPackageCode, querySetID)
+			errMsg = mergeOwned(errMsg)
+			writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 			return
 		}
 
+		formPackageCode := normalizePackageCode(r.Form.Get("package_code"))
+		packageCode := queryPackageCode
+		if formPackageCode != "" {
+			packageCode = formPackageCode
+		}
+
 		formSetID := normalizeSetID(r.Form.Get("setid"))
+		setID := querySetID
 		if formSetID != "" {
 			setID = formSetID
+		}
+
+		if packageCode != "" && setID != "" {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "invalid_request", "package_code and setid are mutually exclusive")
+			return
 		}
 
 		action := strings.TrimSpace(strings.ToLower(r.Form.Get("action")))
@@ -894,8 +1141,9 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSt
 		switch action {
 		case "create_job_family_group", "create_job_family", "update_job_family_group", "create_job_level", "create_job_profile":
 		default:
-			groups, families, levels, profiles, errMsg := list("unknown action")
-			writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+			groups, families, levels, profiles, view, errMsg := list("unknown action", packageCode, setID)
+			errMsg = mergeOwned(errMsg)
+			writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 			return
 		}
 
@@ -904,16 +1152,37 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSt
 			effectiveDate = asOf
 		}
 		if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
-			groups, families, levels, profiles, errMsg := list("effective_date 无效: " + err.Error())
-			writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+			groups, families, levels, profiles, view, errMsg := list("effective_date 无效: "+err.Error(), packageCode, setID)
+			errMsg = mergeOwned(errMsg)
+			writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 			return
 		}
 
-		if setID == "" {
-			groups, families, levels, profiles, errMsg := list("setid is required")
-			writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+		if setID != "" {
+			groups, families, levels, profiles, view, errMsg := list("setid is read-only; use package_code", packageCode, setID)
+			errMsg = mergeOwned(errMsg)
+			status := jobCatalogStatusForError(errMsg)
+			writePageWithStatus(w, r, status, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 			return
 		}
+
+		if packageCode == "" {
+			groups, families, levels, profiles, view, errMsg := list("package_code is required", packageCode, setID)
+			errMsg = mergeOwned(errMsg)
+			writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
+			return
+		}
+
+		writeView, writeErr := resolveJobCatalogView(r.Context(), store, setidStore, tenant.ID, effectiveDate, packageCode, "")
+		if writeErr != "" {
+			groups, families, levels, profiles, view, errMsg := list(writeErr, packageCode, setID)
+			errMsg = mergeOwned(errMsg)
+			status := jobCatalogStatusForError(writeErr)
+			writePageWithStatus(w, r, status, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
+			return
+		}
+
+		ownerSetID := writeView.OwnerSetID
 
 		switch action {
 		case "create_job_family_group":
@@ -921,13 +1190,15 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSt
 			name := strings.TrimSpace(r.Form.Get("job_family_group_name"))
 			desc := strings.TrimSpace(r.Form.Get("job_family_group_description"))
 			if code == "" || name == "" {
-				groups, families, levels, profiles, errMsg := list("code/name is required")
-				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+				groups, families, levels, profiles, view, errMsg := list("code/name is required", packageCode, setID)
+				errMsg = mergeOwned(errMsg)
+				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 				return
 			}
-			if err := store.CreateJobFamilyGroup(r.Context(), tenant.ID, setID, effectiveDate, code, name, desc); err != nil {
-				groups, families, levels, profiles, errMsg := list(err.Error())
-				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+			if err := store.CreateJobFamilyGroup(r.Context(), tenant.ID, ownerSetID, effectiveDate, code, name, desc); err != nil {
+				groups, families, levels, profiles, view, errMsg := list(err.Error(), packageCode, "")
+				errMsg = mergeOwned(errMsg)
+				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 				return
 			}
 		case "create_job_family":
@@ -936,26 +1207,30 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSt
 			desc := strings.TrimSpace(r.Form.Get("job_family_description"))
 			groupCode := strings.TrimSpace(r.Form.Get("job_family_group_code"))
 			if code == "" || name == "" || groupCode == "" {
-				groups, families, levels, profiles, errMsg := list("code/name/group is required")
-				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+				groups, families, levels, profiles, view, errMsg := list("code/name/group is required", packageCode, setID)
+				errMsg = mergeOwned(errMsg)
+				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 				return
 			}
-			if err := store.CreateJobFamily(r.Context(), tenant.ID, setID, effectiveDate, code, name, desc, groupCode); err != nil {
-				groups, families, levels, profiles, errMsg := list(err.Error())
-				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+			if err := store.CreateJobFamily(r.Context(), tenant.ID, ownerSetID, effectiveDate, code, name, desc, groupCode); err != nil {
+				groups, families, levels, profiles, view, errMsg := list(err.Error(), packageCode, "")
+				errMsg = mergeOwned(errMsg)
+				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 				return
 			}
 		case "update_job_family_group":
 			familyCode := strings.TrimSpace(r.Form.Get("job_family_code"))
 			groupCode := strings.TrimSpace(r.Form.Get("job_family_group_code"))
 			if familyCode == "" || groupCode == "" {
-				groups, families, levels, profiles, errMsg := list("family/group is required")
-				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+				groups, families, levels, profiles, view, errMsg := list("family/group is required", packageCode, setID)
+				errMsg = mergeOwned(errMsg)
+				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 				return
 			}
-			if err := store.UpdateJobFamilyGroup(r.Context(), tenant.ID, setID, effectiveDate, familyCode, groupCode); err != nil {
-				groups, families, levels, profiles, errMsg := list(err.Error())
-				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+			if err := store.UpdateJobFamilyGroup(r.Context(), tenant.ID, ownerSetID, effectiveDate, familyCode, groupCode); err != nil {
+				groups, families, levels, profiles, view, errMsg := list(err.Error(), packageCode, "")
+				errMsg = mergeOwned(errMsg)
+				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 				return
 			}
 		case "create_job_level":
@@ -963,13 +1238,15 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSt
 			name := strings.TrimSpace(r.Form.Get("job_level_name"))
 			desc := strings.TrimSpace(r.Form.Get("job_level_description"))
 			if code == "" || name == "" {
-				groups, families, levels, profiles, errMsg := list("code/name is required")
-				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+				groups, families, levels, profiles, view, errMsg := list("code/name is required", packageCode, setID)
+				errMsg = mergeOwned(errMsg)
+				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 				return
 			}
-			if err := store.CreateJobLevel(r.Context(), tenant.ID, setID, effectiveDate, code, name, desc); err != nil {
-				groups, families, levels, profiles, errMsg := list(err.Error())
-				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+			if err := store.CreateJobLevel(r.Context(), tenant.ID, ownerSetID, effectiveDate, code, name, desc); err != nil {
+				groups, families, levels, profiles, view, errMsg := list(err.Error(), packageCode, "")
+				errMsg = mergeOwned(errMsg)
+				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 				return
 			}
 		case "create_job_profile":
@@ -980,18 +1257,20 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSt
 			primary := strings.TrimSpace(r.Form.Get("job_profile_primary_family_code"))
 			familyCodes := splitCSV(familiesCSV)
 			if code == "" || name == "" || len(familyCodes) == 0 || primary == "" {
-				groups, families, levels, profiles, errMsg := list("code/name/families/primary is required")
-				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+				groups, families, levels, profiles, view, errMsg := list("code/name/families/primary is required", packageCode, setID)
+				errMsg = mergeOwned(errMsg)
+				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 				return
 			}
-			if err := store.CreateJobProfile(r.Context(), tenant.ID, setID, effectiveDate, code, name, desc, familyCodes, primary); err != nil {
-				groups, families, levels, profiles, errMsg := list(err.Error())
-				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, setID, errMsg, asOf))
+			if err := store.CreateJobProfile(r.Context(), tenant.ID, ownerSetID, effectiveDate, code, name, desc, familyCodes, primary); err != nil {
+				groups, families, levels, profiles, view, errMsg := list(err.Error(), packageCode, "")
+				errMsg = mergeOwned(errMsg)
+				writePage(w, r, renderJobCatalog(groups, families, levels, profiles, tenant, view, errMsg, asOf, ownedPackages))
 				return
 			}
 		}
 
-		http.Redirect(w, r, "/org/job-catalog?setid="+url.QueryEscape(setID)+"&as_of="+url.QueryEscape(effectiveDate), http.StatusSeeOther)
+		http.Redirect(w, r, "/org/job-catalog?package_code="+url.QueryEscape(packageCode)+"&as_of="+url.QueryEscape(effectiveDate), http.StatusSeeOther)
 		return
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -999,7 +1278,7 @@ func handleJobCatalog(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSt
 	}
 }
 
-func renderJobCatalog(groups []JobFamilyGroup, families []JobFamily, levels []JobLevel, profiles []JobProfile, tenant Tenant, setID string, errMsg string, asOf string) string {
+func renderJobCatalog(groups []JobFamilyGroup, families []JobFamily, levels []JobLevel, profiles []JobProfile, tenant Tenant, view jobCatalogView, errMsg string, asOf string, ownedPackages []OwnedScopePackage) string {
 	var b strings.Builder
 	b.WriteString("<h1>Job Catalog</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
@@ -1007,149 +1286,201 @@ func renderJobCatalog(groups []JobFamilyGroup, families []JobFamily, levels []Jo
 
 	b.WriteString(`<form method="GET" action="/org/job-catalog">`)
 	b.WriteString(`<label>As-of <input type="date" name="as_of" value="` + html.EscapeString(asOf) + `" /></label> `)
-	b.WriteString(`<label>SetID <input name="setid" value="` + html.EscapeString(setID) + `" /></label> `)
+	b.WriteString(`<label>Package <select name="package_code">`)
+	b.WriteString(`<option value="">(select)</option>`)
+	for _, pkg := range ownedPackages {
+		label := pkg.PackageCode
+		if strings.TrimSpace(pkg.Name) != "" {
+			label += " - " + pkg.Name
+		}
+		if strings.TrimSpace(pkg.OwnerSetID) != "" {
+			label += " (" + pkg.OwnerSetID + ")"
+		}
+		selected := ""
+		if strings.EqualFold(pkg.PackageCode, view.PackageCode) {
+			selected = ` selected="selected"`
+		}
+		b.WriteString(`<option value="` + html.EscapeString(pkg.PackageCode) + `"` + selected + `>` + html.EscapeString(label) + `</option>`)
+	}
+	b.WriteString(`</select></label> `)
 	b.WriteString(`<button type="submit">Apply</button>`)
 	b.WriteString(`</form>`)
 
-	showSetID := setID != "" &&
-		!strings.Contains(errMsg, "setid is required") &&
-		!strings.Contains(errMsg, "JOBCATALOG_SETID_INVALID")
-	if showSetID {
-		b.WriteString(`<p>SetID: <code>` + html.EscapeString(setID) + `</code></p>`)
+	if view.ReadOnly && view.SetID != "" {
+		b.WriteString(`<p><strong>只读视图</strong>：通过 SetID 访问。如需编辑，请选择 package_code。</p>`)
+		b.WriteString(`<p>SetID: <code>` + html.EscapeString(view.SetID) + `</code></p>`)
+	}
+
+	if !view.ReadOnly && view.PackageCode != "" {
+		b.WriteString(`<p>Package: <code>` + html.EscapeString(view.PackageCode) + `</code></p>`)
+		if view.OwnerSetID != "" {
+			b.WriteString(`<p>Owner SetID: <code>` + html.EscapeString(view.OwnerSetID) + `</code></p>`)
+		}
+	}
+
+	if !view.HasSelection {
+		b.WriteString(`<p>请选择 package_code 以进入编辑。</p>`)
 	}
 
 	if errMsg != "" {
 		b.WriteString(`<div style="padding:8px;border:1px solid #c00;color:#c00">` + html.EscapeString(errMsg) + `</div>`)
 	}
 
-	postAction := "/org/job-catalog?setid=" + url.QueryEscape(setID) + "&as_of=" + url.QueryEscape(asOf)
-	b.WriteString(`<h2>Create Job Family Group</h2>`)
-	b.WriteString(`<form method="POST" action="` + postAction + `">`)
-	b.WriteString(`<input type="hidden" name="action" value="create_job_family_group" />`)
-	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-	b.WriteString(`<label>SetID <input name="setid" value="` + html.EscapeString(setID) + `" /></label><br/>`)
-	b.WriteString(`<label>Code <input name="job_family_group_code" /></label><br/>`)
-	b.WriteString(`<label>Name <input name="job_family_group_name" /></label><br/>`)
-	b.WriteString(`<label>Description <input name="job_family_group_description" /></label><br/>`)
-	b.WriteString(`<button type="submit">Create</button>`)
-	b.WriteString(`</form>`)
-
-	b.WriteString(`<h2>Job Family Groups</h2>`)
-	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>name</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
-	for _, g := range groups {
-		active := "false"
-		if g.IsActive {
-			active = "true"
-		}
-		b.WriteString("<tr>")
-		b.WriteString("<td>" + html.EscapeString(g.Code) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(g.Name) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(active) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(g.EffectiveDay) + "</td>")
-		b.WriteString("<td><code>" + html.EscapeString(g.ID) + "</code></td>")
-		b.WriteString("</tr>")
+	editBlocked := strings.Contains(errMsg, "OWNER_SETID_FORBIDDEN") ||
+		strings.Contains(errMsg, "PACKAGE_CODE_MISMATCH") ||
+		strings.Contains(errMsg, "DEFLT_EDIT_FORBIDDEN") ||
+		strings.Contains(errMsg, "PACKAGE_CODE_INVALID") ||
+		strings.Contains(errMsg, "PACKAGE_NOT_FOUND") ||
+		strings.Contains(errMsg, "PACKAGE_INACTIVE_AS_OF")
+	showForms := view.HasSelection && !view.ReadOnly && view.PackageCode != "" && !editBlocked
+	postAction := ""
+	if showForms {
+		postAction = "/org/job-catalog?package_code=" + url.QueryEscape(view.PackageCode) + "&as_of=" + url.QueryEscape(asOf)
 	}
-	b.WriteString("</tbody></table>")
 
-	b.WriteString(`<h2>Create Job Family</h2>`)
-	b.WriteString(`<form method="POST" action="` + postAction + `">`)
-	b.WriteString(`<input type="hidden" name="action" value="create_job_family" />`)
-	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-	b.WriteString(`<label>SetID <input name="setid" value="` + html.EscapeString(setID) + `" /></label><br/>`)
-	b.WriteString(`<label>Code <input name="job_family_code" /></label><br/>`)
-	b.WriteString(`<label>Name <input name="job_family_name" /></label><br/>`)
-	b.WriteString(`<label>Group Code <input name="job_family_group_code" /></label><br/>`)
-	b.WriteString(`<label>Description <input name="job_family_description" /></label><br/>`)
-	b.WriteString(`<button type="submit">Create</button>`)
-	b.WriteString(`</form>`)
-
-	b.WriteString(`<h2>Reparent Job Family (UPDATE group)</h2>`)
-	b.WriteString(`<form method="POST" action="` + postAction + `">`)
-	b.WriteString(`<input type="hidden" name="action" value="update_job_family_group" />`)
-	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-	b.WriteString(`<label>SetID <input name="setid" value="` + html.EscapeString(setID) + `" /></label><br/>`)
-	b.WriteString(`<label>Family Code <input name="job_family_code" /></label><br/>`)
-	b.WriteString(`<label>New Group Code <input name="job_family_group_code" /></label><br/>`)
-	b.WriteString(`<button type="submit">Update</button>`)
-	b.WriteString(`</form>`)
-
-	b.WriteString(`<h2>Job Families</h2>`)
-	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>group</th><th>name</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
-	for _, f := range families {
-		active := "false"
-		if f.IsActive {
-			active = "true"
-		}
-		b.WriteString("<tr>")
-		b.WriteString("<td>" + html.EscapeString(f.Code) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(f.GroupCode) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(f.Name) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(active) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(f.EffectiveDay) + "</td>")
-		b.WriteString("<td><code>" + html.EscapeString(f.ID) + "</code></td>")
-		b.WriteString("</tr>")
+	if showForms {
+		b.WriteString(`<h2>Create Job Family Group</h2>`)
+		b.WriteString(`<form method="POST" action="` + postAction + `">`)
+		b.WriteString(`<input type="hidden" name="action" value="create_job_family_group" />`)
+		b.WriteString(`<input type="hidden" name="package_code" value="` + html.EscapeString(view.PackageCode) + `" />`)
+		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
+		b.WriteString(`<label>Code <input name="job_family_group_code" /></label><br/>`)
+		b.WriteString(`<label>Name <input name="job_family_group_name" /></label><br/>`)
+		b.WriteString(`<label>Description <input name="job_family_group_description" /></label><br/>`)
+		b.WriteString(`<button type="submit">Create</button>`)
+		b.WriteString(`</form>`)
 	}
-	b.WriteString("</tbody></table>")
 
-	b.WriteString(`<h2>Create Job Level</h2>`)
-	b.WriteString(`<form method="POST" action="` + postAction + `">`)
-	b.WriteString(`<input type="hidden" name="action" value="create_job_level" />`)
-	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-	b.WriteString(`<label>SetID <input name="setid" value="` + html.EscapeString(setID) + `" /></label><br/>`)
-	b.WriteString(`<label>Code <input name="job_level_code" /></label><br/>`)
-	b.WriteString(`<label>Name <input name="job_level_name" /></label><br/>`)
-	b.WriteString(`<label>Description <input name="job_level_description" /></label><br/>`)
-	b.WriteString(`<button type="submit">Create</button>`)
-	b.WriteString(`</form>`)
-
-	b.WriteString(`<h2>Job Levels</h2>`)
-	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>name</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
-	for _, l := range levels {
-		active := "false"
-		if l.IsActive {
-			active = "true"
+	if view.HasSelection {
+		b.WriteString(`<h2>Job Family Groups</h2>`)
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>name</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
+		for _, g := range groups {
+			active := "false"
+			if g.IsActive {
+				active = "true"
+			}
+			b.WriteString("<tr>")
+			b.WriteString("<td>" + html.EscapeString(g.Code) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(g.Name) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(active) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(g.EffectiveDay) + "</td>")
+			b.WriteString("<td><code>" + html.EscapeString(g.ID) + "</code></td>")
+			b.WriteString("</tr>")
 		}
-		b.WriteString("<tr>")
-		b.WriteString("<td>" + html.EscapeString(l.Code) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(l.Name) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(active) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(l.EffectiveDay) + "</td>")
-		b.WriteString("<td><code>" + html.EscapeString(l.ID) + "</code></td>")
-		b.WriteString("</tr>")
+		b.WriteString("</tbody></table>")
 	}
-	b.WriteString("</tbody></table>")
 
-	b.WriteString(`<h2>Create Job Profile</h2>`)
-	b.WriteString(`<form method="POST" action="` + postAction + `">`)
-	b.WriteString(`<input type="hidden" name="action" value="create_job_profile" />`)
-	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-	b.WriteString(`<label>SetID <input name="setid" value="` + html.EscapeString(setID) + `" /></label><br/>`)
-	b.WriteString(`<label>Code <input name="job_profile_code" /></label><br/>`)
-	b.WriteString(`<label>Name <input name="job_profile_name" /></label><br/>`)
-	b.WriteString(`<label>Family Codes (comma-separated) <input name="job_profile_family_codes" /></label><br/>`)
-	b.WriteString(`<label>Primary Family Code <input name="job_profile_primary_family_code" /></label><br/>`)
-	b.WriteString(`<label>Description <input name="job_profile_description" /></label><br/>`)
-	b.WriteString(`<button type="submit">Create</button>`)
-	b.WriteString(`</form>`)
+	if showForms {
+		b.WriteString(`<h2>Create Job Family</h2>`)
+		b.WriteString(`<form method="POST" action="` + postAction + `">`)
+		b.WriteString(`<input type="hidden" name="action" value="create_job_family" />`)
+		b.WriteString(`<input type="hidden" name="package_code" value="` + html.EscapeString(view.PackageCode) + `" />`)
+		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
+		b.WriteString(`<label>Code <input name="job_family_code" /></label><br/>`)
+		b.WriteString(`<label>Name <input name="job_family_name" /></label><br/>`)
+		b.WriteString(`<label>Group Code <input name="job_family_group_code" /></label><br/>`)
+		b.WriteString(`<label>Description <input name="job_family_description" /></label><br/>`)
+		b.WriteString(`<button type="submit">Create</button>`)
+		b.WriteString(`</form>`)
 
-	b.WriteString(`<h2>Job Profiles</h2>`)
-	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>name</th><th>families</th><th>primary</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
-	for _, p := range profiles {
-		active := "false"
-		if p.IsActive {
-			active = "true"
+		b.WriteString(`<h2>Reparent Job Family (UPDATE group)</h2>`)
+		b.WriteString(`<form method="POST" action="` + postAction + `">`)
+		b.WriteString(`<input type="hidden" name="action" value="update_job_family_group" />`)
+		b.WriteString(`<input type="hidden" name="package_code" value="` + html.EscapeString(view.PackageCode) + `" />`)
+		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
+		b.WriteString(`<label>Family Code <input name="job_family_code" /></label><br/>`)
+		b.WriteString(`<label>New Group Code <input name="job_family_group_code" /></label><br/>`)
+		b.WriteString(`<button type="submit">Update</button>`)
+		b.WriteString(`</form>`)
+	}
+
+	if view.HasSelection {
+		b.WriteString(`<h2>Job Families</h2>`)
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>group</th><th>name</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
+		for _, f := range families {
+			active := "false"
+			if f.IsActive {
+				active = "true"
+			}
+			b.WriteString("<tr>")
+			b.WriteString("<td>" + html.EscapeString(f.Code) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(f.GroupCode) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(f.Name) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(active) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(f.EffectiveDay) + "</td>")
+			b.WriteString("<td><code>" + html.EscapeString(f.ID) + "</code></td>")
+			b.WriteString("</tr>")
 		}
-		b.WriteString("<tr>")
-		b.WriteString("<td>" + html.EscapeString(p.Code) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(p.Name) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(p.FamilyCodesCSV) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(p.PrimaryFamilyCode) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(active) + "</td>")
-		b.WriteString("<td>" + html.EscapeString(p.EffectiveDay) + "</td>")
-		b.WriteString("<td><code>" + html.EscapeString(p.ID) + "</code></td>")
-		b.WriteString("</tr>")
+		b.WriteString("</tbody></table>")
 	}
-	b.WriteString("</tbody></table>")
+
+	if showForms {
+		b.WriteString(`<h2>Create Job Level</h2>`)
+		b.WriteString(`<form method="POST" action="` + postAction + `">`)
+		b.WriteString(`<input type="hidden" name="action" value="create_job_level" />`)
+		b.WriteString(`<input type="hidden" name="package_code" value="` + html.EscapeString(view.PackageCode) + `" />`)
+		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
+		b.WriteString(`<label>Code <input name="job_level_code" /></label><br/>`)
+		b.WriteString(`<label>Name <input name="job_level_name" /></label><br/>`)
+		b.WriteString(`<label>Description <input name="job_level_description" /></label><br/>`)
+		b.WriteString(`<button type="submit">Create</button>`)
+		b.WriteString(`</form>`)
+	}
+
+	if view.HasSelection {
+		b.WriteString(`<h2>Job Levels</h2>`)
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>name</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
+		for _, l := range levels {
+			active := "false"
+			if l.IsActive {
+				active = "true"
+			}
+			b.WriteString("<tr>")
+			b.WriteString("<td>" + html.EscapeString(l.Code) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(l.Name) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(active) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(l.EffectiveDay) + "</td>")
+			b.WriteString("<td><code>" + html.EscapeString(l.ID) + "</code></td>")
+			b.WriteString("</tr>")
+		}
+		b.WriteString("</tbody></table>")
+	}
+
+	if showForms {
+		b.WriteString(`<h2>Create Job Profile</h2>`)
+		b.WriteString(`<form method="POST" action="` + postAction + `">`)
+		b.WriteString(`<input type="hidden" name="action" value="create_job_profile" />`)
+		b.WriteString(`<input type="hidden" name="package_code" value="` + html.EscapeString(view.PackageCode) + `" />`)
+		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
+		b.WriteString(`<label>Code <input name="job_profile_code" /></label><br/>`)
+		b.WriteString(`<label>Name <input name="job_profile_name" /></label><br/>`)
+		b.WriteString(`<label>Family Codes (comma-separated) <input name="job_profile_family_codes" /></label><br/>`)
+		b.WriteString(`<label>Primary Family Code <input name="job_profile_primary_family_code" /></label><br/>`)
+		b.WriteString(`<label>Description <input name="job_profile_description" /></label><br/>`)
+		b.WriteString(`<button type="submit">Create</button>`)
+		b.WriteString(`</form>`)
+	}
+
+	if view.HasSelection {
+		b.WriteString(`<h2>Job Profiles</h2>`)
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>name</th><th>families</th><th>primary</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
+		for _, p := range profiles {
+			active := "false"
+			if p.IsActive {
+				active = "true"
+			}
+			b.WriteString("<tr>")
+			b.WriteString("<td>" + html.EscapeString(p.Code) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(p.Name) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(p.FamilyCodesCSV) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(p.PrimaryFamilyCode) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(active) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(p.EffectiveDay) + "</td>")
+			b.WriteString("<td><code>" + html.EscapeString(p.ID) + "</code></td>")
+			b.WriteString("</tr>")
+		}
+		b.WriteString("</tbody></table>")
+	}
 
 	return b.String()
 }
