@@ -37,7 +37,7 @@ func (s scopeUIStore) ListScopeCodes(ctx context.Context, tenantID string) ([]Sc
 	}
 	return s.listScopeCodesFn(ctx, tenantID)
 }
-func (s scopeUIStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string) (ScopePackage, error) {
+func (s scopeUIStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error) {
 	return ScopePackage{}, nil
 }
 func (s scopeUIStore) DisableScopePackage(context.Context, string, string, string, string) (ScopePackage, error) {

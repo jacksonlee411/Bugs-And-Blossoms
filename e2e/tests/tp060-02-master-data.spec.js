@@ -215,12 +215,13 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await expect(page).toHaveURL(new RegExp(`/org/setid\\?as_of=${asOf}$`));
   };
 
-  const createScopePackage = async (scopeCode, packageCode, name, effectiveDate) => {
+  const createScopePackage = async (scopeCode, packageCode, name, effectiveDate, ownerSetID) => {
     const resp = await appContext.request.post("/orgunit/api/scope-packages", {
       data: {
         scope_code: scopeCode,
         package_code: packageCode,
         name,
+        owner_setid: ownerSetID,
         effective_date: effectiveDate,
         request_id: `req:${runID}:scope-pkg:${packageCode}`
       }
@@ -498,7 +499,8 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     "jobcatalog",
     s2602PkgCode,
     `S2602 JobCatalog ${runID}`,
-    asOf
+    asOf,
+    "S2602"
   );
   await subscribeScope("S2602", "jobcatalog", s2602JobCatalogPackageID, asOf);
 
