@@ -423,7 +423,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("setid post status=%d", recSetIDPost.Code)
 	}
 
-	reqJobCatalogPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&setid=S2601", strings.NewReader("action=create_job_family_group&effective_date=2026-01-01&setid=S2601&job_family_group_code=JC1&job_family_group_name=Group1"))
+	reqJobCatalogPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&package_code=DEFLT", strings.NewReader("action=create_job_family_group&effective_date=2026-01-01&package_code=DEFLT&job_family_group_code=JC1&job_family_group_name=Group1"))
 	reqJobCatalogPost.Host = "localhost:8080"
 	reqJobCatalogPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqJobCatalogPost.AddCookie(session)

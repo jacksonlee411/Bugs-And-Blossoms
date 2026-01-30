@@ -144,7 +144,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const jobFamilyCode = `JF-TP06003-${runID}`;
   const jobProfileCode = `JP-TP06003-${runID}`;
 
-  await page.goto(`/org/job-catalog?as_of=${asOf}&setid=DEFLT`);
+  await page.goto(`/org/job-catalog?as_of=${asOf}&package_code=DEFLT`);
   await expect(page.locator("h1")).toHaveText("Job Catalog");
 
   const ensureJobFamilyGroup = async (code, name) => {
@@ -157,7 +157,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     await form.locator('input[name="job_family_group_code"]').fill(code);
     await form.locator('input[name="job_family_group_name"]').fill(name);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*setid=DEFLT)(?=.*as_of=${asOf}).*$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*package_code=DEFLT)(?=.*as_of=${asOf}).*$`));
   };
 
   const ensureJobFamily = async (code, name, groupCode) => {
@@ -171,7 +171,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     await form.locator('input[name="job_family_name"]').fill(name);
     await form.locator('input[name="job_family_group_code"]').fill(groupCode);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*setid=DEFLT)(?=.*as_of=${asOf}).*$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*package_code=DEFLT)(?=.*as_of=${asOf}).*$`));
   };
 
   const ensureJobProfile = async (code, name, familyCodesCSV, primaryFamilyCode) => {
@@ -186,7 +186,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     await form.locator('input[name="job_profile_family_codes"]').fill(familyCodesCSV);
     await form.locator('input[name="job_profile_primary_family_code"]').fill(primaryFamilyCode);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*setid=DEFLT)(?=.*as_of=${asOf}).*$`));
+    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*package_code=DEFLT)(?=.*as_of=${asOf}).*$`));
   };
 
   await ensureJobFamilyGroup(jobFamilyGroupCode, `TP060-03 Group ${runID}`);

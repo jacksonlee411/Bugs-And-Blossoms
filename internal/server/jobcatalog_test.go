@@ -54,6 +54,96 @@ func (r *jobcatalogRows) Values() ([]any, error) { return nil, nil }
 func (r *jobcatalogRows) RawValues() [][]byte    { return nil }
 func (r *jobcatalogRows) Conn() *pgx.Conn        { return nil }
 
+type jobCatalogResolveStub struct{}
+
+func (jobCatalogResolveStub) ResolveJobCatalogPackageByCode(_ context.Context, _ string, packageCode string, _ string) (JobCatalogPackage, error) {
+	packageCode = normalizePackageCode(packageCode)
+	if packageCode == "" {
+		return JobCatalogPackage{}, errors.New("PACKAGE_CODE_INVALID")
+	}
+	return JobCatalogPackage{PackageID: packageCode, PackageCode: packageCode, OwnerSetID: packageCode}, nil
+}
+
+func (jobCatalogResolveStub) ResolveJobCatalogPackageBySetID(_ context.Context, _ string, setID string, _ string) (string, error) {
+	setID = normalizeSetID(setID)
+	if setID == "" {
+		return "", errors.New("setid is required")
+	}
+	return setID, nil
+}
+
+type jobCatalogSetIDStoreStub struct {
+	setids []SetID
+	owned  []OwnedScopePackage
+	err    error
+}
+
+func (s jobCatalogSetIDStoreStub) ListSetIDs(_ context.Context, _ string) ([]SetID, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return append([]SetID(nil), s.setids...), nil
+}
+
+func (s jobCatalogSetIDStoreStub) ListOwnedScopePackages(_ context.Context, _ string, _ string, _ string) ([]OwnedScopePackage, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return append([]OwnedScopePackage(nil), s.owned...), nil
+}
+
+type resolveJobCatalogStoreStub struct {
+	pkg            JobCatalogPackage
+	pkgErr         error
+	setidPackageID string
+	setidErr       error
+}
+
+func (s resolveJobCatalogStoreStub) ResolveJobCatalogPackageByCode(_ context.Context, _ string, _ string, _ string) (JobCatalogPackage, error) {
+	if s.pkgErr != nil {
+		return JobCatalogPackage{}, s.pkgErr
+	}
+	return s.pkg, nil
+}
+
+func (s resolveJobCatalogStoreStub) ResolveJobCatalogPackageBySetID(_ context.Context, _ string, _ string, _ string) (string, error) {
+	if s.setidErr != nil {
+		return "", s.setidErr
+	}
+	if s.setidPackageID != "" {
+		return s.setidPackageID, nil
+	}
+	return "", nil
+}
+
+func (s resolveJobCatalogStoreStub) CreateJobFamilyGroup(context.Context, string, string, string, string, string, string) error {
+	return nil
+}
+func (s resolveJobCatalogStoreStub) ListJobFamilyGroups(context.Context, string, string, string) ([]JobFamilyGroup, error) {
+	return nil, nil
+}
+func (s resolveJobCatalogStoreStub) CreateJobFamily(context.Context, string, string, string, string, string, string, string) error {
+	return nil
+}
+func (s resolveJobCatalogStoreStub) UpdateJobFamilyGroup(context.Context, string, string, string, string, string) error {
+	return nil
+}
+func (s resolveJobCatalogStoreStub) ListJobFamilies(context.Context, string, string, string) ([]JobFamily, error) {
+	return nil, nil
+}
+func (s resolveJobCatalogStoreStub) CreateJobLevel(context.Context, string, string, string, string, string, string) error {
+	return nil
+}
+func (s resolveJobCatalogStoreStub) ListJobLevels(context.Context, string, string, string) ([]JobLevel, error) {
+	return nil, nil
+}
+func (s resolveJobCatalogStoreStub) CreateJobProfile(context.Context, string, string, string, string, string, string, []string, string) error {
+	return nil
+}
+func (s resolveJobCatalogStoreStub) ListJobProfiles(context.Context, string, string, string) ([]JobProfile, error) {
+	return nil, nil
+}
+
 type orgStoreStub struct {
 	nodes []OrgUnitNode
 	err   error
@@ -85,11 +175,32 @@ func defaultJobCatalogOrgStore() OrgUnitStore {
 	return orgStoreStub{nodes: []OrgUnitNode{{ID: "org1", Name: "Root Org", IsBusinessUnit: true}}}
 }
 
+func defaultJobCatalogSetIDStore() jobCatalogSetIDStoreStub {
+	return jobCatalogSetIDStoreStub{
+		setids: []SetID{
+			{SetID: "PKG1", Status: "active"},
+			{SetID: "S2601", Status: "active"},
+			{SetID: "DEFLT", Status: "active"},
+		},
+		owned: []OwnedScopePackage{
+			{PackageCode: "PKG1", OwnerSetID: "PKG1", Name: "Package 1", Status: "active"},
+			{PackageCode: "DEFLT", OwnerSetID: "DEFLT", Name: "Default", Status: "active"},
+		},
+	}
+}
+
 func handleJobCatalogWithDefaultOrgStore(w http.ResponseWriter, r *http.Request, store JobCatalogStore) {
-	handleJobCatalog(w, r, defaultJobCatalogOrgStore(), store)
+	handleJobCatalog(w, r, defaultJobCatalogOrgStore(), defaultJobCatalogSetIDStore(), store)
+}
+
+func withTenantAdminRequest(r *http.Request) *http.Request {
+	r = r.WithContext(withTenant(r.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	r = r.WithContext(withPrincipal(r.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
+	return r
 }
 
 type errJobCatalogStore struct {
+	jobCatalogResolveStub
 	err error
 }
 
@@ -122,6 +233,7 @@ func (s errJobCatalogStore) ListJobProfiles(context.Context, string, string, str
 }
 
 type partialJobCatalogStore struct {
+	jobCatalogResolveStub
 	listErr error
 }
 
@@ -154,6 +266,7 @@ func (s partialJobCatalogStore) ListJobProfiles(context.Context, string, string,
 }
 
 type createErrJobCatalogStore struct {
+	jobCatalogResolveStub
 	err error
 }
 
@@ -251,6 +364,103 @@ func TestJobCatalogMemoryStore_Branches(t *testing.T) {
 	}
 }
 
+func TestJobCatalogMemoryStore_ResolvePackage(t *testing.T) {
+	ctx := context.Background()
+	store := newJobCatalogMemoryStore()
+
+	if _, err := store.ResolveJobCatalogPackageByCode(ctx, "t1", "", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	pkg, err := store.ResolveJobCatalogPackageByCode(ctx, "t1", "pkg1", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if pkg.PackageID == "" || pkg.PackageCode != "PKG1" || pkg.OwnerSetID != "PKG1" {
+		t.Fatalf("unexpected pkg=%+v", pkg)
+	}
+	if _, err := store.ResolveJobCatalogPackageBySetID(ctx, "t1", "", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	resolved, err := store.ResolveJobCatalogPackageBySetID(ctx, "t1", "S2601", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if resolved != "S2601" {
+		t.Fatalf("resolved=%s", resolved)
+	}
+}
+
+func TestJobCatalogView_ListSetID(t *testing.T) {
+	if got := (jobCatalogView{}).listSetID(); got != "" {
+		t.Fatalf("got=%q", got)
+	}
+	view := jobCatalogView{HasSelection: true, ReadOnly: true, SetID: "S1"}
+	if got := view.listSetID(); got != "S1" {
+		t.Fatalf("got=%q", got)
+	}
+	view = jobCatalogView{HasSelection: true, OwnerSetID: "S2"}
+	if got := view.listSetID(); got != "S2" {
+		t.Fatalf("got=%q", got)
+	}
+}
+
+func TestOwnerSetIDEditableAndLoadOwnedPackages(t *testing.T) {
+	ctx := context.Background()
+	if ownerSetIDEditable(ctx, nil, "t1", "S1") {
+		t.Fatal("expected false")
+	}
+	viewerCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-viewer"})
+	if ownerSetIDEditable(viewerCtx, defaultJobCatalogSetIDStore(), "t1", "S1") {
+		t.Fatal("expected false")
+	}
+	adminCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin"})
+	if ownerSetIDEditable(adminCtx, nil, "t1", "S1") {
+		t.Fatal("expected false")
+	}
+	if ownerSetIDEditable(adminCtx, defaultJobCatalogSetIDStore(), "t1", "") {
+		t.Fatal("expected false")
+	}
+	if ownerSetIDEditable(adminCtx, jobCatalogSetIDStoreStub{err: errors.New("boom")}, "t1", "S1") {
+		t.Fatal("expected false")
+	}
+	if ownerSetIDEditable(adminCtx, jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "disabled"}}}, "t1", "S1") {
+		t.Fatal("expected false")
+	}
+	if !ownerSetIDEditable(adminCtx, jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}, "t1", "S1") {
+		t.Fatal("expected true")
+	}
+
+	owned, err := loadOwnedJobCatalogPackages(ctx, nil, "t1", "2026-01-01")
+	if err != nil || len(owned) != 0 {
+		t.Fatalf("owned=%v err=%v", owned, err)
+	}
+	owned, err = loadOwnedJobCatalogPackages(viewerCtx, defaultJobCatalogSetIDStore(), "t1", "2026-01-01")
+	if err != nil || len(owned) != 0 {
+		t.Fatalf("owned=%v err=%v", owned, err)
+	}
+	if _, err := loadOwnedJobCatalogPackages(adminCtx, jobCatalogSetIDStoreStub{err: errors.New("boom")}, "t1", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	owned, err = loadOwnedJobCatalogPackages(adminCtx, jobCatalogSetIDStoreStub{}, "t1", "2026-01-01")
+	if err != nil || len(owned) != 0 {
+		t.Fatalf("owned=%v err=%v", owned, err)
+	}
+}
+
+func TestCanEditDefltPackage(t *testing.T) {
+	if canEditDefltPackage(context.Background()) {
+		t.Fatal("expected false")
+	}
+	inactiveCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "disabled"})
+	if canEditDefltPackage(inactiveCtx) {
+		t.Fatal("expected false")
+	}
+	activeCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "active"})
+	if !canEditDefltPackage(activeCtx) {
+		t.Fatal("expected true")
+	}
+}
+
 func TestJobCatalogPGStore_SetIDValidation(t *testing.T) {
 	ctx := context.Background()
 
@@ -282,6 +492,76 @@ func TestJobCatalogPGStore_SetIDValidation(t *testing.T) {
 	})
 }
 
+func TestResolveJobCatalogPackageByCode_PG(t *testing.T) {
+	ctx := context.Background()
+	if _, err := resolveJobCatalogPackageByCode(ctx, &stubTx{}, "t1", "", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := resolveJobCatalogPackageByCode(ctx, &stubTx{rowErr: errors.New("boom")}, "t1", "PKG1", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := resolveJobCatalogPackageByCode(ctx, &stubTx{rowErr: pgx.ErrNoRows}, "t1", "PKG1", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	txExecErr := &stubTx{row: &stubRow{vals: []any{"pkg-1", "S2601"}}, execErr: errors.New("boom")}
+	if _, err := resolveJobCatalogPackageByCode(ctx, txExecErr, "t1", "PKG1", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	txOK := &stubTx{row: &stubRow{vals: []any{"pkg-1", "S2601"}}}
+	pkg, err := resolveJobCatalogPackageByCode(ctx, txOK, "t1", "PKG1", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if pkg.PackageID != "pkg-1" || pkg.OwnerSetID != "S2601" || pkg.PackageCode != "PKG1" {
+		t.Fatalf("unexpected pkg=%+v", pkg)
+	}
+}
+
+func TestJobCatalogPGStore_ResolvePackages(t *testing.T) {
+	ctx := context.Background()
+	storeErr := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		return nil, errors.New("begin fail")
+	})).(*jobcatalogPGStore)
+	if _, err := storeErr.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := storeErr.ResolveJobCatalogPackageBySetID(ctx, "t1", "S2601", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	storeResolveErr := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		return &stubTx{rowErr: errors.New("boom")}, nil
+	})).(*jobcatalogPGStore)
+	if _, err := storeResolveErr.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := storeResolveErr.ResolveJobCatalogPackageBySetID(ctx, "t1", "S2601", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	store := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		return &stubTx{row: &stubRow{vals: []any{"pkg-1", "S2601"}}}, nil
+	})).(*jobcatalogPGStore)
+	pkg, err := store.ResolveJobCatalogPackageByCode(ctx, "t1", "PKG1", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if pkg.PackageID != "pkg-1" || pkg.OwnerSetID != "S2601" || pkg.PackageCode != "PKG1" {
+		t.Fatalf("unexpected pkg=%+v", pkg)
+	}
+
+	store2 := newJobCatalogPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		return &stubTx{row: &stubRow{vals: []any{"active"}}, row2: &stubRow{vals: []any{"pkg-2", "t1"}}}, nil
+	})).(*jobcatalogPGStore)
+	resolved, err := store2.ResolveJobCatalogPackageBySetID(ctx, "t1", "S2601", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if resolved != "pkg-2" {
+		t.Fatalf("resolved=%s", resolved)
+	}
+}
+
 func TestHandleJobCatalog_TenantMissing(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog", nil)
 	rec := httptest.NewRecorder()
@@ -295,7 +575,7 @@ func TestHandleJobCatalog_OrgStoreMissing(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, nil, newJobCatalogMemoryStore())
+	handleJobCatalog(rec, req, nil, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -311,28 +591,193 @@ func TestHandleJobCatalog_InvalidAsOf(t *testing.T) {
 	}
 }
 
-func TestHandleJobCatalog_PostMissingSetID(t *testing.T) {
-	body := strings.NewReader("action=create_job_family_group&job_family_group_code=JC1&job_family_group_name=Group1")
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", body)
+func TestResolveJobCatalogView_Branches(t *testing.T) {
+	adminCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "active"})
+	inactiveAdminCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "inactive"})
+	setidStore := jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}
+	store := resolveJobCatalogStoreStub{
+		pkg:            JobCatalogPackage{PackageID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
+		setidPackageID: "pkg-1",
+	}
+
+	view, errMsg := resolveJobCatalogView(context.Background(), store, setidStore, "t1", "2026-01-01", "", "")
+	if view.HasSelection || errMsg != "" {
+		t.Fatalf("unexpected view=%+v err=%s", view, errMsg)
+	}
+
+	view, errMsg = resolveJobCatalogView(context.Background(), store, setidStore, "t1", "2026-01-01", "", "S1")
+	if !view.ReadOnly || view.SetID != "S1" || errMsg != "" {
+		t.Fatalf("unexpected view=%+v err=%s", view, errMsg)
+	}
+
+	_, errMsg = resolveJobCatalogView(context.Background(), store, setidStore, "t1", "2026-01-01", "PKG1", "")
+	if errMsg != "OWNER_SETID_FORBIDDEN" {
+		t.Fatalf("err=%s", errMsg)
+	}
+
+	_, errMsg = resolveJobCatalogView(adminCtx, store, jobCatalogSetIDStoreStub{}, "t1", "2026-01-01", "PKG1", "")
+	if errMsg != "OWNER_SETID_FORBIDDEN" {
+		t.Fatalf("err=%s", errMsg)
+	}
+
+	_, errMsg = resolveJobCatalogView(adminCtx, resolveJobCatalogStoreStub{pkgErr: errors.New("PACKAGE_NOT_FOUND")}, setidStore, "t1", "2026-01-01", "PKG1", "")
+	if errMsg != "PACKAGE_NOT_FOUND" {
+		t.Fatalf("err=%s", errMsg)
+	}
+
+	_, errMsg = resolveJobCatalogView(adminCtx, resolveJobCatalogStoreStub{
+		pkg:            JobCatalogPackage{PackageID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
+		setidPackageID: "pkg-2",
+	}, setidStore, "t1", "2026-01-01", "PKG1", "")
+	if errMsg != "PACKAGE_CODE_MISMATCH" {
+		t.Fatalf("err=%s", errMsg)
+	}
+
+	_, errMsg = resolveJobCatalogView(adminCtx, resolveJobCatalogStoreStub{
+		pkg:      JobCatalogPackage{PackageID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
+		setidErr: errors.New("resolve failed"),
+	}, setidStore, "t1", "2026-01-01", "PKG1", "")
+	if errMsg != "resolve failed" {
+		t.Fatalf("err=%s", errMsg)
+	}
+
+	_, errMsg = resolveJobCatalogView(inactiveAdminCtx, resolveJobCatalogStoreStub{
+		pkg:            JobCatalogPackage{PackageID: "deflt-id", PackageCode: "DEFLT", OwnerSetID: "DEFLT"},
+		setidPackageID: "deflt-id",
+	}, jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "DEFLT", Status: "active"}}}, "t1", "2026-01-01", "DEFLT", "")
+	if errMsg != "DEFLT_EDIT_FORBIDDEN" {
+		t.Fatalf("err=%s", errMsg)
+	}
+
+	view, errMsg = resolveJobCatalogView(adminCtx, store, setidStore, "t1", "2026-01-01", "PKG1", "")
+	if errMsg != "" || view.OwnerSetID != "S1" || !view.HasSelection {
+		t.Fatalf("unexpected view=%+v err=%s", view, errMsg)
+	}
+}
+
+func TestJobCatalogStatusForError(t *testing.T) {
+	if jobCatalogStatusForError("OWNER_SETID_FORBIDDEN") != http.StatusForbidden {
+		t.Fatal("expected forbidden")
+	}
+	if jobCatalogStatusForError("DEFLT_EDIT_FORBIDDEN") != http.StatusForbidden {
+		t.Fatal("expected forbidden")
+	}
+	if jobCatalogStatusForError("PACKAGE_CODE_MISMATCH") != http.StatusUnprocessableEntity {
+		t.Fatal("expected unprocessable")
+	}
+	if jobCatalogStatusForError("other") != http.StatusOK {
+		t.Fatal("expected ok")
+	}
+}
+
+func TestHandleJobCatalog_MutualExclusiveParams(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&package_code=PKG1&setid=S2601", nil)
+	req = withTenantAdminRequest(req)
+	rec := httptest.NewRecorder()
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleJobCatalog_Post_ReadOnlySetID(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "create_job_family_group")
+	form.Set("effective_date", "2026-01-01")
+	form.Set("setid", "S2601")
+	form.Set("job_family_group_code", "JC1")
+	form.Set("job_family_group_name", "Group1")
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&setid=S2601", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "setid is required") {
+	if body := rec.Body.String(); !strings.Contains(body, "setid is read-only") {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleJobCatalog_Post_MutualExclusiveParams(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "create_job_family_group")
+	form.Set("effective_date", "2026-01-01")
+	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
+	form.Set("job_family_group_code", "JC1")
+	form.Set("job_family_group_name", "Group1")
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&setid=S2601", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = withTenantAdminRequest(req)
+	rec := httptest.NewRecorder()
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleJobCatalog_Post_PackageCodeMismatch(t *testing.T) {
+	store := resolveJobCatalogStoreStub{
+		pkg:            JobCatalogPackage{PackageID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
+		setidPackageID: "pkg-2",
+	}
+	setidStore := jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}
+	form := url.Values{}
+	form.Set("action", "create_job_family_group")
+	form.Set("effective_date", "2026-01-01")
+	form.Set("package_code", "PKG1")
+	form.Set("job_family_group_code", "JC1")
+	form.Set("job_family_group_name", "Group1")
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&package_code=PKG1", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = withTenantAdminRequest(req)
+	rec := httptest.NewRecorder()
+	handleJobCatalog(rec, req, defaultJobCatalogOrgStore(), setidStore, store)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "PACKAGE_CODE_MISMATCH") {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleJobCatalog_LoadOwnedPackagesError_ShowsError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&package_code=PKG1", nil)
+	req = withTenantAdminRequest(req)
+	rec := httptest.NewRecorder()
+	handleJobCatalog(rec, req, defaultJobCatalogOrgStore(), jobCatalogSetIDStoreStub{err: errors.New("boom")}, newJobCatalogMemoryStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "boom") {
+		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleJobCatalog_PostMissingSetID(t *testing.T) {
+	body := strings.NewReader("action=create_job_family_group&job_family_group_code=JC1&job_family_group_name=Group1")
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = withTenantAdminRequest(req)
+	rec := httptest.NewRecorder()
+	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "package_code is required") {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
 
 func TestHandleJobCatalog_GetAndPost_Create(t *testing.T) {
 	store := newJobCatalogMemoryStore()
-	_ = store.CreateJobFamilyGroup(context.Background(), "t1", "S2601", "2026-01-01", "JC0", "G0", "")
-	_, _ = store.ListJobFamilyGroups(context.Background(), "t1", "S2601", "2026-01-01")
+	_ = store.CreateJobFamilyGroup(context.Background(), "t1", "PKG1", "2026-01-01", "JC0", "G0", "")
+	_, _ = store.ListJobFamilyGroups(context.Background(), "t1", "PKG1", "2026-01-01")
 
-	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?setid=S2601&as_of=2026-01-01", nil)
-	reqGet = reqGet.WithContext(withTenant(reqGet.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", nil)
+	reqGet = withTenantAdminRequest(reqGet)
 	recGet := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(recGet, reqGet, store)
 	if recGet.Code != http.StatusOK {
@@ -342,14 +787,14 @@ func TestHandleJobCatalog_GetAndPost_Create(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	form.Set("job_family_group_description", "")
 
-	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	reqPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqPost = reqPost.WithContext(withTenant(reqPost.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	reqPost = withTenantAdminRequest(reqPost)
 	recPost := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(recPost, reqPost, store)
 	if recPost.Code != http.StatusSeeOther {
@@ -360,7 +805,7 @@ func TestHandleJobCatalog_GetAndPost_Create(t *testing.T) {
 func TestHandleJobCatalog_Post_BadForm(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader("%"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
@@ -373,7 +818,7 @@ func TestHandleJobCatalog_Post_UnknownAction(t *testing.T) {
 	form.Set("action", "nope")
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
@@ -385,12 +830,12 @@ func TestHandleJobCatalog_Post_InvalidEffectiveDate(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "bad")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
@@ -402,12 +847,12 @@ func TestHandleJobCatalog_Post_MissingCode(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_group_code", "")
 	form.Set("job_family_group_name", "")
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
@@ -419,12 +864,12 @@ func TestHandleJobCatalog_Post_CreateError(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, errJobCatalogStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
@@ -433,6 +878,7 @@ func TestHandleJobCatalog_Post_CreateError(t *testing.T) {
 }
 
 type createLevelErrJobCatalogStore struct {
+	jobCatalogResolveStub
 	err error
 }
 
@@ -465,6 +911,7 @@ func (s createLevelErrJobCatalogStore) ListJobProfiles(context.Context, string, 
 }
 
 type levelsListErrJobCatalogStore struct {
+	jobCatalogResolveStub
 	err error
 }
 
@@ -502,14 +949,14 @@ func TestHandleJobCatalog_Post_CreateJobLevel_Success(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_level")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_level_code", "JL1")
 	form.Set("job_level_name", "Level1")
 	form.Set("job_level_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusSeeOther {
@@ -521,13 +968,13 @@ func TestHandleJobCatalog_Post_CreateJobLevel_MissingCode(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_level")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_level_code", "")
 	form.Set("job_level_name", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
@@ -541,15 +988,15 @@ func TestHandleJobCatalog_Post_CreateJobFamily_Success(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_name", "Backend")
 	form.Set("job_family_group_code", "JFG-ENG")
 	form.Set("job_family_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusSeeOther {
@@ -558,6 +1005,7 @@ func TestHandleJobCatalog_Post_CreateJobFamily_Success(t *testing.T) {
 }
 
 type createJobFamilyErrStore struct {
+	jobCatalogResolveStub
 	err error
 }
 
@@ -593,15 +1041,15 @@ func TestHandleJobCatalog_Post_CreateJobFamily_Error_ShowsPage(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_name", "Backend")
 	form.Set("job_family_group_code", "JFG-ENG")
 	form.Set("job_family_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, createJobFamilyErrStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
@@ -616,14 +1064,14 @@ func TestHandleJobCatalog_Post_CreateJobFamily_MissingGroup(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_name", "Backend")
 	form.Set("job_family_group_code", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
@@ -633,18 +1081,18 @@ func TestHandleJobCatalog_Post_CreateJobFamily_MissingGroup(t *testing.T) {
 
 func TestHandleJobCatalog_Post_UpdateJobFamilyGroup_Success(t *testing.T) {
 	store := newJobCatalogMemoryStore()
-	_ = store.CreateJobFamily(context.Background(), "t1", "S2601", "2026-01-01", "JF-BE", "Backend", "", "JFG-ENG")
+	_ = store.CreateJobFamily(context.Background(), "t1", "PKG1", "2026-01-01", "JF-BE", "Backend", "", "JFG-ENG")
 
 	form := url.Values{}
 	form.Set("action", "update_job_family_group")
 	form.Set("effective_date", "2026-02-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_group_code", "JFG-SALES")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusSeeOther {
@@ -656,13 +1104,13 @@ func TestHandleJobCatalog_Post_UpdateJobFamilyGroup_MissingFields(t *testing.T) 
 	form := url.Values{}
 	form.Set("action", "update_job_family_group")
 	form.Set("effective_date", "2026-02-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_code", "")
 	form.Set("job_family_group_code", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
@@ -671,6 +1119,7 @@ func TestHandleJobCatalog_Post_UpdateJobFamilyGroup_MissingFields(t *testing.T) 
 }
 
 type updateJobFamilyGroupErrStore struct {
+	jobCatalogResolveStub
 	err error
 }
 
@@ -706,13 +1155,13 @@ func TestHandleJobCatalog_Post_UpdateJobFamilyGroup_Error_ShowsPage(t *testing.T
 	form := url.Values{}
 	form.Set("action", "update_job_family_group")
 	form.Set("effective_date", "2026-02-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_code", "JF-BE")
 	form.Set("job_family_group_code", "JFG-SALES")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, updateJobFamilyGroupErrStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
@@ -729,16 +1178,16 @@ func TestHandleJobCatalog_Post_CreateJobProfile_Success(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_profile")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_profile_code", "JP-SWE")
 	form.Set("job_profile_name", "Software Engineer")
 	form.Set("job_profile_family_codes", "JF-BE,JF-FE")
 	form.Set("job_profile_primary_family_code", "JF-BE")
 	form.Set("job_profile_description", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusSeeOther {
@@ -747,6 +1196,7 @@ func TestHandleJobCatalog_Post_CreateJobProfile_Success(t *testing.T) {
 }
 
 type createJobProfileErrStore struct {
+	jobCatalogResolveStub
 	err error
 }
 
@@ -782,15 +1232,15 @@ func TestHandleJobCatalog_Post_CreateJobProfile_Error_ShowsPage(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_profile")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_profile_code", "JP-SWE")
 	form.Set("job_profile_name", "Software Engineer")
 	form.Set("job_profile_family_codes", "JF-BE,JF-FE")
 	form.Set("job_profile_primary_family_code", "JF-BE")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, createJobProfileErrStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
@@ -805,15 +1255,15 @@ func TestHandleJobCatalog_Post_CreateJobProfile_MissingFamilies(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_profile")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_profile_code", "JP-SWE")
 	form.Set("job_profile_name", "Software Engineer")
 	form.Set("job_profile_family_codes", "")
 	form.Set("job_profile_primary_family_code", "")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, newJobCatalogMemoryStore())
 	if rec.Code != http.StatusOK {
@@ -822,6 +1272,7 @@ func TestHandleJobCatalog_Post_CreateJobProfile_MissingFamilies(t *testing.T) {
 }
 
 type listFamiliesErrJobCatalogStore struct {
+	jobCatalogResolveStub
 	err error
 }
 
@@ -854,8 +1305,8 @@ func (s listFamiliesErrJobCatalogStore) ListJobProfiles(context.Context, string,
 }
 
 func TestHandleJobCatalog_Get_ListFamiliesError_ShowsError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&setid=S2601", nil)
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&package_code=PKG1", nil)
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, listFamiliesErrJobCatalogStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
@@ -867,6 +1318,7 @@ func TestHandleJobCatalog_Get_ListFamiliesError_ShowsError(t *testing.T) {
 }
 
 type listProfilesErrJobCatalogStore struct {
+	jobCatalogResolveStub
 	err error
 }
 
@@ -899,8 +1351,8 @@ func (s listProfilesErrJobCatalogStore) ListJobProfiles(context.Context, string,
 }
 
 func TestHandleJobCatalog_Get_ListProfilesError_ShowsError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&setid=S2601", nil)
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&package_code=PKG1", nil)
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, listProfilesErrJobCatalogStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
@@ -917,13 +1369,13 @@ func TestHandleJobCatalog_Post_CreateJobLevel_Error(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_level")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_level_code", "JL1")
 	form.Set("job_level_name", "Level1")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?setid=S2601&as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusOK {
@@ -937,8 +1389,8 @@ func TestHandleJobCatalog_Post_CreateJobLevel_Error(t *testing.T) {
 func TestHandleJobCatalog_Get_ListJobLevelsError(t *testing.T) {
 	store := levelsListErrJobCatalogStore{err: errors.New("boom")}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?setid=S2601&as_of=2026-01-01", nil)
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?package_code=PKG1&as_of=2026-01-01", nil)
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusOK {
@@ -1543,21 +1995,34 @@ func TestRenderJobCatalog_RendersFamiliesAndProfiles(t *testing.T) {
 			{ID: "p2", Code: "JP-OFF", Name: "Off", IsActive: false, EffectiveDay: "2026-01-01", FamilyCodesCSV: "JF-OFF", PrimaryFamilyCode: "JF-OFF"},
 		},
 		Tenant{Name: "T"},
-		"S2601",
+		jobCatalogView{PackageCode: "PKG1", OwnerSetID: "PKG1", HasSelection: true},
 		"err",
 		"2026-01-01",
+		nil,
 	)
 	if !strings.Contains(html, "Job Families") || !strings.Contains(html, "Job Profiles") {
 		t.Fatalf("unexpected html")
 	}
 }
 
+func TestRenderJobCatalog_ReadOnlyAndEditBlocked(t *testing.T) {
+	html := renderJobCatalog(nil, nil, nil, nil, Tenant{Name: "T"}, jobCatalogView{ReadOnly: true, SetID: "S1", HasSelection: true}, "", "2026-01-01", nil)
+	if !strings.Contains(html, "只读视图") {
+		t.Fatalf("unexpected html: %q", html)
+	}
+
+	html = renderJobCatalog(nil, nil, nil, nil, Tenant{Name: "T"}, jobCatalogView{PackageCode: "PKG1", OwnerSetID: "S1", HasSelection: true}, "OWNER_SETID_FORBIDDEN", "2026-01-01", nil)
+	if strings.Contains(html, "Create Job Family Group") {
+		t.Fatalf("expected forms to be hidden")
+	}
+}
+
 func TestHandleJobCatalog_Get_RendersJobLevels(t *testing.T) {
 	store := newJobCatalogMemoryStore()
-	_ = store.CreateJobLevel(context.Background(), "t1", "S2601", "2026-01-01", "JL1", "Level 1", "")
+	_ = store.CreateJobLevel(context.Background(), "t1", "PKG1", "2026-01-01", "JL1", "Level 1", "")
 
-	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&setid=S2601", nil)
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&package_code=PKG1", nil)
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusOK {
@@ -1578,8 +2043,18 @@ func TestHandleJobCatalog_DefaultsAndMethodNotAllowed(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 
-	_ = renderJobCatalog(nil, nil, nil, nil, Tenant{Name: "T"}, "S2601", "", "2026-01-01")
-	_ = renderJobCatalog([]JobFamilyGroup{{ID: "g1", Code: "C", Name: "N", IsActive: true, EffectiveDay: "2026-01-01"}}, nil, nil, nil, Tenant{Name: "T"}, "S2601", "err", "2026-01-01")
+	_ = renderJobCatalog(nil, nil, nil, nil, Tenant{Name: "T"}, jobCatalogView{}, "", "2026-01-01", nil)
+	_ = renderJobCatalog(
+		[]JobFamilyGroup{{ID: "g1", Code: "C", Name: "N", IsActive: true, EffectiveDay: "2026-01-01"}},
+		nil,
+		nil,
+		nil,
+		Tenant{Name: "T"},
+		jobCatalogView{PackageCode: "PKG1", OwnerSetID: "PKG1", HasSelection: true},
+		"err",
+		"2026-01-01",
+		nil,
+	)
 
 	req2 := httptest.NewRequest(http.MethodPut, "/org/job-catalog?as_of=2026-01-01", nil)
 	req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -1591,17 +2066,17 @@ func TestHandleJobCatalog_DefaultsAndMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleJobCatalog_MergeMsgBranches(t *testing.T) {
-	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&setid=S2601", nil)
-	reqGet = reqGet.WithContext(withTenant(reqGet.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	reqGet := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01&package_code=PKG1", nil)
+	reqGet = withTenantAdminRequest(reqGet)
 	recGet := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(recGet, reqGet, partialJobCatalogStore{listErr: errors.New("boom")})
 	if recGet.Code != http.StatusOK {
 		t.Fatalf("get status=%d", recGet.Code)
 	}
 
-	reqPost2 := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&setid=S2601", strings.NewReader("%"))
+	reqPost2 := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&package_code=PKG1", strings.NewReader("%"))
 	reqPost2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqPost2 = reqPost2.WithContext(withTenant(reqPost2.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	reqPost2 = withTenantAdminRequest(reqPost2)
 	recPost2 := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(recPost2, reqPost2, partialJobCatalogStore{listErr: errors.New("boom")})
 	if recPost2.Code != http.StatusOK {
@@ -1611,9 +2086,9 @@ func TestHandleJobCatalog_MergeMsgBranches(t *testing.T) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 
-	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&setid=S2601", strings.NewReader("%"))
+	reqPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&package_code=PKG1", strings.NewReader("%"))
 	reqPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqPost = reqPost.WithContext(withTenant(reqPost.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	reqPost = withTenantAdminRequest(reqPost)
 	recPost := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(recPost, reqPost, partialJobCatalogStore{listErr: errors.New("")})
 	if recPost.Code != http.StatusOK {
@@ -1633,7 +2108,7 @@ func TestHandleJobCatalog_SortsActiveBUs(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/job-catalog?as_of=2026-01-01", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleJobCatalog(rec, req, orgStoreStub{nodes: nodes}, partialJobCatalogStore{})
+	handleJobCatalog(rec, req, orgStoreStub{nodes: nodes}, defaultJobCatalogSetIDStore(), partialJobCatalogStore{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1643,13 +2118,13 @@ func TestHandleJobCatalog_CreateJobFamilyGroupError_ShowsPage(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "create_job_family_group")
 	form.Set("effective_date", "2026-01-01")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, createErrJobCatalogStore{err: errors.New("boom")})
 	if rec.Code != http.StatusOK {
@@ -1672,13 +2147,13 @@ func TestHandleJobCatalog_Post_DefaultActionAndEffectiveDate(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("effective_date", "")
-	form.Set("setid", "S2601")
+	form.Set("package_code", "PKG1")
 	form.Set("job_family_group_code", "JC1")
 	form.Set("job_family_group_name", "Group1")
 	form.Set("job_family_group_description", "")
 	req := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	req = withTenantAdminRequest(req)
 	rec := httptest.NewRecorder()
 	handleJobCatalogWithDefaultOrgStore(rec, req, store)
 	if rec.Code != http.StatusSeeOther {
