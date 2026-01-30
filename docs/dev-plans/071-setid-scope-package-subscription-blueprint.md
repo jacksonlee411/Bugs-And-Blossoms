@@ -1,6 +1,6 @@
 # DEV-PLAN-071：SetID Scope Package 订阅详细设计
 
-**状态**: 草拟中（2026-01-29 06:48 UTC）
+**状态**: 进行中（2026-01-30 00:13 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`
@@ -762,7 +762,7 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
   2. [x] **M2：Kernel 写入口 + 版本投射**：`submit_*_event` 同步投射版本表（或回放函数），解析改读版本表，订阅写入口强校验包存在/归属/有效期。
   3. [x] **M3：模块切换到 package_id**：按模块分步替换读写口径（优先 jobcatalog，其次 orgunit/person），保持跨模块通过 `pkg/**` 调用。
   4. [x] **M4：UI/管理入口 + Authz/路由**：补齐包/订阅 API 与 HTMX 交互，shared-only 只读 UI，补 Casbin 权限与 routing 门禁。
-  5. [ ] **M5：回填与验证闭环**：stable scope 回填、证据记录、单测/集成测与门禁结果落档。
+  5. [x] **M5：回填与验证闭环**：stable scope 回填、证据记录、单测/集成测与门禁结果落档。
 
 - **完成记录**：
 - 2026-01-29：完成 M1（schema/权限/解析函数基座）
@@ -771,6 +771,8 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
 - 2026-01-29：完成 M4（scope package/subscription API + UI 入口；shared-only 只读 UI；补齐路由与 Casbin 门禁；E2E 增加 SetID 订阅脚本）
 - 2026-01-30：修复 Staffing Positions 快照读取，按 `resolve_scope_package` 解析 jobcatalog package_id 以恢复 `job_profile_code` 展示
 - 2026-01-30：补齐 scope package/subscription 路由与 API/UI 覆盖率至 100%，`make test` 通过
+- 2026-01-29：完成 M5（stable scope 回填 + shared-only 默认包与订阅回填；证据记录见 `docs/dev-records/dev-plan-071-execution-log.md`）
+- 2026-01-30：补齐 `ensure_setid_bootstrap` 对既有 DEFLT 包的有效期版本（修复 CI `PACKAGE_INACTIVE_AS_OF`）
 
 ### 8.1 里程碑触发器与门禁（对齐 2.1/AGENTS.md）
 - **M1**：必跑 `make <module> plan && make <module> lint && make <module> migrate up`；如涉及 sqlc 生成则 `make sqlc-generate`；如变更文档则 `make check doc`。
@@ -799,7 +801,7 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
   - [ ] `as_of_date` 解析基于包版本：后续停用不影响历史日期解析结果。
   - [ ] `package_code` 在同一 `tenant_id + scope_code` 内唯一。
   - [ ] 每个 `scope_code` 存在 `DEFLT` 默认包且新建 SetID 自动订阅。
-  - [ ] 新增 `is_stable=true` scope 时，已完成回填并在 `dev-records` 记录数量核对证据。
+  - [x] 新增 `is_stable=true` scope 时，已完成回填并在 `dev-records` 记录数量核对证据。
   - [ ] 共享包订阅仅限共享模式 scope，且读取必须显式共享读开关。
   - [ ] 迁移后无旧 `setid` 直连路径残留。
 
