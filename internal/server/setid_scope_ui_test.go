@@ -49,6 +49,9 @@ func (s scopeUIStore) ListScopePackages(ctx context.Context, tenantID string, sc
 	}
 	return s.listScopePackagesFn(ctx, tenantID, scopeCode)
 }
+func (s scopeUIStore) ListOwnedScopePackages(context.Context, string, string, string) ([]OwnedScopePackage, error) {
+	return nil, nil
+}
 func (s scopeUIStore) CreateScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, requestID string, initiatorID string) (ScopeSubscription, error) {
 	if s.createScopeSubscriptionFn == nil {
 		return ScopeSubscription{}, nil

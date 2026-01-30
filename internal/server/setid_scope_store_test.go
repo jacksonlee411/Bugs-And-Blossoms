@@ -252,6 +252,37 @@ func TestSetIDPGStore_ListScopePackages(t *testing.T) {
 	}
 }
 
+func TestSetIDPGStore_ListOwnedScopePackages(t *testing.T) {
+	tx := &stubTx{
+		rows: &tableRows{rows: [][]any{
+			{"p1", "jobcatalog", "PKG1", "A0001", "Pkg", "active", "2026-01-01"},
+		}},
+	}
+	store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+	pkgs, err := store.ListOwnedScopePackages(context.Background(), "t1", "jobcatalog", "2026-01-01")
+	if err != nil || len(pkgs) != 1 {
+		t.Fatalf("len=%d err=%v", len(pkgs), err)
+	}
+
+	txQueryErr := &stubTx{queryErr: errors.New("query fail")}
+	storeQueryErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txQueryErr, nil })}
+	if _, err := storeQueryErr.ListOwnedScopePackages(context.Background(), "t1", "jobcatalog", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	txScanErr := &stubTx{rows: &scanErrRows{}}
+	storeScanErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txScanErr, nil })}
+	if _, err := storeScanErr.ListOwnedScopePackages(context.Background(), "t1", "jobcatalog", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	txRowsErr := &stubTx{rows: &tableRows{rows: [][]any{}, err: errors.New("rows err")}}
+	storeRowsErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txRowsErr, nil })}
+	if _, err := storeRowsErr.ListOwnedScopePackages(context.Background(), "t1", "jobcatalog", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestSetIDPGStore_CreateScopeSubscription(t *testing.T) {
 	t.Run("tenant success", func(t *testing.T) {
 		tx := &stubTx{

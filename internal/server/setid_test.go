@@ -42,6 +42,9 @@ func (s errSetIDStore) DisableScopePackage(context.Context, string, string, stri
 func (s errSetIDStore) ListScopePackages(context.Context, string, string) ([]ScopePackage, error) {
 	return nil, s.err
 }
+func (s errSetIDStore) ListOwnedScopePackages(context.Context, string, string, string) ([]OwnedScopePackage, error) {
+	return nil, s.err
+}
 func (s errSetIDStore) CreateScopeSubscription(context.Context, string, string, string, string, string, string, string, string) (ScopeSubscription, error) {
 	return ScopeSubscription{}, s.err
 }
@@ -96,6 +99,9 @@ func (s partialSetIDStore) DisableScopePackage(context.Context, string, string, 
 func (s partialSetIDStore) ListScopePackages(context.Context, string, string) ([]ScopePackage, error) {
 	return nil, nil
 }
+func (s partialSetIDStore) ListOwnedScopePackages(context.Context, string, string, string) ([]OwnedScopePackage, error) {
+	return nil, nil
+}
 func (s partialSetIDStore) CreateScopeSubscription(context.Context, string, string, string, string, string, string, string, string) (ScopeSubscription, error) {
 	return ScopeSubscription{}, nil
 }
@@ -110,6 +116,37 @@ func (s partialSetIDStore) ListGlobalScopePackages(context.Context, string) ([]S
 }
 func (s partialSetIDStore) CreateGlobalSetID(context.Context, string, string, string, string) error {
 	return nil
+}
+
+func TestSetIDMemoryStore_ListOwnedScopePackages(t *testing.T) {
+	store := newSetIDMemoryStore().(*setidMemoryStore)
+	tenantID := "t1"
+	store.setids[tenantID] = map[string]SetID{
+		"A0001": {SetID: "A0001", Name: "A", Status: "active"},
+		"B0001": {SetID: "B0001", Name: "B", Status: "disabled"},
+	}
+	store.scopePackages[tenantID] = map[string]map[string]ScopePackage{
+		"jobcatalog": {
+			"pkg0": {PackageID: "pkg0", ScopeCode: "jobcatalog", PackageCode: "PKG0", OwnerSetID: "A0001", Name: "Pkg0", Status: "active"},
+			"pkg1": {PackageID: "pkg1", ScopeCode: "jobcatalog", PackageCode: "PKG1", OwnerSetID: "A0001", Name: "Pkg1", Status: "active"},
+			"pkg2": {PackageID: "pkg2", ScopeCode: "jobcatalog", PackageCode: "PKG2", OwnerSetID: "B0001", Name: "Pkg2", Status: "active"},
+			"pkg3": {PackageID: "pkg3", ScopeCode: "jobcatalog", PackageCode: "PKG3", OwnerSetID: "A0001", Name: "Pkg3", Status: "disabled"},
+		},
+	}
+
+	rows, err := store.ListOwnedScopePackages(context.Background(), tenantID, "jobcatalog", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows=%d", len(rows))
+	}
+	if rows[0].PackageID != "pkg0" || rows[0].EffectiveDate != "2026-01-01" {
+		t.Fatalf("unexpected row[0]: %#v", rows[0])
+	}
+	if rows[1].PackageID != "pkg1" {
+		t.Fatalf("unexpected row[1]: %#v", rows[1])
+	}
 }
 
 type errOrgUnitStore struct{ err error }

@@ -238,6 +238,11 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgScopePackage, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/orgunit/api/owned-scope-packages":
+		if method == http.MethodGet {
+			return authz.ObjectJobCatalogCatalog, authz.ActionRead, true
+		}
+		return "", "", false
 	case "/orgunit/api/scope-subscriptions":
 		if method == http.MethodGet {
 			return authz.ObjectOrgScopeSubscription, authz.ActionRead, true

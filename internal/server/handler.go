@@ -352,6 +352,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleScopePackagesAPI(w, r, setidStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/orgunit/api/owned-scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOwnedScopePackagesAPI(w, r, setidStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/scope-packages/{package_id}/disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleScopePackageDisableAPI(w, r, setidStore)
 	}))

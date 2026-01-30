@@ -306,6 +306,12 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/scope-packages/p1/disable"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/owned-scope-packages"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/owned-scope-packages"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/scope-subscriptions"); !ok {
 		t.Fatal("expected ok=true")
 	}
