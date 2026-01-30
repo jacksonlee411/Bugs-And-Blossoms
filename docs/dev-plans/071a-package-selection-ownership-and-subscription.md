@@ -1,6 +1,6 @@
 # DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化（TDD）
 
-**状态**: 草拟中（2026-01-30 11:31 UTC）
+**状态**: 草拟中（2026-01-30 12:07 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**: `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md` + SetID/Job Catalog 实际使用反馈。
@@ -250,6 +250,7 @@ ALTER TABLE orgunit.setid_scope_package_versions
 
 ### 5.6 Job Catalog 写入接口错误码（HTMX）
 - `POST /org/job-catalog`（各类 create/update）若 `PACKAGE_CODE_MISMATCH`，返回 422 并在表单区域显示错误（沿用现有错误渲染方式）。
+- `POST /org/job-catalog` 若 `DEFLT_EDIT_FORBIDDEN`，返回 403 或 422（以现有错误渲染约定为准），提示“DEFLT 包仅限根组织权限管理员修改”。
 
 ## 6. 核心逻辑与算法 (Business Logic)
 ### 6.1 创建包（治理入口）
@@ -267,8 +268,9 @@ ALTER TABLE orgunit.setid_scope_package_versions
 1. 从 `package_code` 查找 `package_id` + `owner_setid`（`orgunit.setid_scope_packages`）。
 2. 校验包 active 且 `as_of` 命中（`orgunit.assert_scope_package_active_as_of`）。
 3. 校验当前用户具备 `owner_setid` 编辑权限。
-4. 写入 `jobcatalog.submit_*_event`（传入 `package_id`，并写入 `package_code` 到 events/versions）。
-5. 若 `package_code` 与 `package_id` 不一致 → `PACKAGE_CODE_MISMATCH`（Fail-Closed）。
+4. 若 `package_code == 'DEFLT'` 且不具备“根组织权限管理员” → `DEFLT_EDIT_FORBIDDEN`（Fail-Closed）。
+5. 写入 `jobcatalog.submit_*_event`（传入 `package_id`，并写入 `package_code` 到 events/versions）。
+6. 若 `package_code` 与 `package_id` 不一致 → `PACKAGE_CODE_MISMATCH`（Fail-Closed）。
 
 ### 6.4 读取配置数据（业务单元视角）
 保持现有 `ResolveScopePackage`：`org_unit -> setid -> scope -> package_id`。
@@ -278,8 +280,11 @@ ALTER TABLE orgunit.setid_scope_package_versions
   - 订阅治理：`org.scope_subscription` (admin)
   - 包治理：`org.scope_package` (admin)
   - 业务配置编辑：`jobcatalog.catalog` (admin)
+  - `orgunit.setid` 为**既有对象**（见 `pkg/authz/registry.go` 与 `config/access/policy.csv`），非新对象/别名。
 - **owner_setid 校验**：除 Casbin 外，必须追加“当前用户对 owner_setid 具备编辑权限”的二次校验（Fail-Closed）。
 - **RLS/事务**：所有写入路径必须在事务内显式注入 `app.current_tenant`。
+- **DEFLT 包修改权限**：仅具备“租户根组织（root node）管理权限”的管理员可修改 `package_code=DEFLT` 的包。
+  - 当前阶段未引入用户-OrgUnit 权限模型，暂以 `org.scope_package` admin + `orgunit.setid` admin 的租户管理员作为等效准入；后续引入 root-node 授权后替换为真实根组织权限校验。
 
 ### 7.1 owner_setid 可编辑判定（当前阶段）
 > 现阶段权限模型为租户级角色（无用户-OrgUnit 映射），因此“可编辑 owner_setid”以**角色 + SetID 状态**为准。
@@ -298,6 +303,11 @@ ALTER TABLE orgunit.setid_scope_package_versions
 - **依赖**:
   - `DEV-PLAN-070`（SetID 与 OrgUnit 绑定）
   - `DEV-PLAN-071`（Scope Package/Subscription 基础）
+  - **DEFLT 约定（引用 DEV-PLAN-070，不在本计划重定义）**：
+    - 每租户必须存在 `DEFLT`，且绑定租户根组织。
+    - `DEFLT` 状态固定为 `active`，禁止禁用/删除/重命名（DB 约束 + 写入口双重阻断）。
+    - `DEFLT` 属于租户层（非共享表），`SHARE` 仅存在于全局租户。
+    - 业务主数据域仅使用租户 SetID（含 `DEFLT`），不读取 `SHARE`。
 - **里程碑**:
   1. [ ] Schema 迁移：`owner_setid` 与排他约束落地。
   2. [ ] Scope Package 写入链路支持 `owner_setid`（含回填）。
@@ -318,3 +328,18 @@ ALTER TABLE orgunit.setid_scope_package_versions
 
 ## 10. 运维与监控 (Ops & Monitoring)
 本阶段不引入新的开关与监控（遵循 `AGENTS.md` 3.6）。
+
+## 附录 A：Package 权限与可见性矩阵（SSOT 摘要）
+> 目的：集中展示“创建/停用/编辑/查看”的权限口径，详细实现仍以 DEV-PLAN-071 与 access policy 为准。
+
+| 场景 | 入口 | 权限对象 | 说明 |
+| --- | --- | --- | --- |
+| 租户包创建 | `/org/setid` → Scope Packages / `POST /orgunit/api/scope-packages` | `org.scope_package` admin + `orgunit.setid` admin | `DEFLT` 为保留值，禁止手工创建 |
+| 租户包停用 | `/org/setid` → Disable / `POST /orgunit/api/scope-packages/{id}/disable` | `org.scope_package` admin + `orgunit.setid` admin | `DEFLT` 包禁止停用 |
+| 共享包创建/停用 | SaaS 专用 API | SaaS (`actor_scope=saas`) | 租户不可写 |
+| 业务配置编辑（包内数据） | `/org/job-catalog`（package_code） | `jobcatalog.catalog` admin + owner_setid 可编辑 | 订阅者只读 |
+| DEFLT 包内数据编辑 | `/org/job-catalog`（package_code=DEFLT） | 根组织权限管理员 | 非 root 权限返回 `DEFLT_EDIT_FORBIDDEN` |
+| 可编辑包列表 | `GET /orgunit/api/owned-scope-packages` | 同上 | 仅返回可编辑包 |
+| 包列表查看 | `GET /orgunit/api/scope-packages` | `org.scope_package` read | 不含共享包 |
+| 订阅查看 | `GET /orgunit/api/scope-subscriptions` | `org.scope_subscription` read | shared-only 只读 |
+| DEFLT 包修改 | 治理入口 | 根组织权限管理员 | 当前阶段等价为 `org.scope_package` admin + `orgunit.setid` admin |
