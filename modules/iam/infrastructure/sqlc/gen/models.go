@@ -81,13 +81,14 @@ type IamTenantDomain struct {
 }
 
 type JobcatalogJobFamily struct {
-	TenantID  pgtype.UUID        `json:"tenant_id"`
-	Setid     *string            `json:"setid"`
-	ID        pgtype.UUID        `json:"id"`
-	Code      string             `json:"code"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	PackageID pgtype.UUID        `json:"package_id"`
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	Setid       *string            `json:"setid"`
+	ID          pgtype.UUID        `json:"id"`
+	Code        string             `json:"code"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	PackageID   pgtype.UUID        `json:"package_id"`
+	PackageCode *string            `json:"package_code"`
 }
 
 type JobcatalogJobFamilyEvent struct {
@@ -104,16 +105,18 @@ type JobcatalogJobFamilyEvent struct {
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	PackageID       pgtype.UUID        `json:"package_id"`
+	PackageCode     *string            `json:"package_code"`
 }
 
 type JobcatalogJobFamilyGroup struct {
-	TenantID  pgtype.UUID        `json:"tenant_id"`
-	Setid     *string            `json:"setid"`
-	ID        pgtype.UUID        `json:"id"`
-	Code      string             `json:"code"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	PackageID pgtype.UUID        `json:"package_id"`
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	Setid       *string            `json:"setid"`
+	ID          pgtype.UUID        `json:"id"`
+	Code        string             `json:"code"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	PackageID   pgtype.UUID        `json:"package_id"`
+	PackageCode *string            `json:"package_code"`
 }
 
 type JobcatalogJobFamilyGroupEvent struct {
@@ -130,6 +133,7 @@ type JobcatalogJobFamilyGroupEvent struct {
 	TransactionTime  pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	PackageID        pgtype.UUID        `json:"package_id"`
+	PackageCode      *string            `json:"package_code"`
 }
 
 type JobcatalogJobFamilyGroupVersion struct {
@@ -146,6 +150,7 @@ type JobcatalogJobFamilyGroupVersion struct {
 	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
 	PackageID        pgtype.UUID               `json:"package_id"`
+	PackageCode      *string                   `json:"package_code"`
 }
 
 type JobcatalogJobFamilyVersion struct {
@@ -163,16 +168,18 @@ type JobcatalogJobFamilyVersion struct {
 	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
 	PackageID        pgtype.UUID               `json:"package_id"`
+	PackageCode      *string                   `json:"package_code"`
 }
 
 type JobcatalogJobLevel struct {
-	TenantID  pgtype.UUID        `json:"tenant_id"`
-	Setid     *string            `json:"setid"`
-	ID        pgtype.UUID        `json:"id"`
-	Code      string             `json:"code"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	PackageID pgtype.UUID        `json:"package_id"`
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	Setid       *string            `json:"setid"`
+	ID          pgtype.UUID        `json:"id"`
+	Code        string             `json:"code"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	PackageID   pgtype.UUID        `json:"package_id"`
+	PackageCode *string            `json:"package_code"`
 }
 
 type JobcatalogJobLevelEvent struct {
@@ -189,6 +196,7 @@ type JobcatalogJobLevelEvent struct {
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	PackageID       pgtype.UUID        `json:"package_id"`
+	PackageCode     *string            `json:"package_code"`
 }
 
 type JobcatalogJobLevelVersion struct {
@@ -205,16 +213,18 @@ type JobcatalogJobLevelVersion struct {
 	CreatedAt    pgtype.Timestamptz        `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz        `json:"updated_at"`
 	PackageID    pgtype.UUID               `json:"package_id"`
+	PackageCode  *string                   `json:"package_code"`
 }
 
 type JobcatalogJobProfile struct {
-	TenantID  pgtype.UUID        `json:"tenant_id"`
-	Setid     *string            `json:"setid"`
-	ID        pgtype.UUID        `json:"id"`
-	Code      string             `json:"code"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	PackageID pgtype.UUID        `json:"package_id"`
+	TenantID    pgtype.UUID        `json:"tenant_id"`
+	Setid       *string            `json:"setid"`
+	ID          pgtype.UUID        `json:"id"`
+	Code        string             `json:"code"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	PackageID   pgtype.UUID        `json:"package_id"`
+	PackageCode *string            `json:"package_code"`
 }
 
 type JobcatalogJobProfileEvent struct {
@@ -231,6 +241,7 @@ type JobcatalogJobProfileEvent struct {
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	PackageID       pgtype.UUID        `json:"package_id"`
+	PackageCode     *string            `json:"package_code"`
 }
 
 type JobcatalogJobProfileVersion struct {
@@ -247,6 +258,7 @@ type JobcatalogJobProfileVersion struct {
 	CreatedAt    pgtype.Timestamptz        `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz        `json:"updated_at"`
 	PackageID    pgtype.UUID               `json:"package_id"`
+	PackageCode  *string                   `json:"package_code"`
 }
 
 type JobcatalogJobProfileVersionJobFamily struct {
@@ -258,6 +270,7 @@ type JobcatalogJobProfileVersionJobFamily struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	PackageID           pgtype.UUID        `json:"package_id"`
+	PackageCode         *string            `json:"package_code"`
 }
 
 type OrgunitGlobalSetid struct {
@@ -417,6 +430,7 @@ type OrgunitSetidScopePackage struct {
 	Status      string             `json:"status"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	OwnerSetid  *string            `json:"owner_setid"`
 }
 
 type OrgunitSetidScopePackageEvent struct {
@@ -444,6 +458,7 @@ type OrgunitSetidScopePackageVersion struct {
 	Status      string                    `json:"status"`
 	Validity    pgtype.Range[pgtype.Date] `json:"validity"`
 	LastEventID int64                     `json:"last_event_id"`
+	OwnerSetid  *string                   `json:"owner_setid"`
 }
 
 type OrgunitSetidScopeSubscription struct {

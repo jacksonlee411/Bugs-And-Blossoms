@@ -4116,6 +4116,49 @@ $$;
 
 -- end: modules/orgunit/infrastructure/persistence/schema/00011_orgunit_setid_scope_write_engine.sql
 
+-- begin: modules/orgunit/infrastructure/persistence/schema/00012_orgunit_scope_package_owner_setid.sql
+ALTER TABLE orgunit.setid_scope_packages
+  ADD COLUMN IF NOT EXISTS owner_setid text;
+
+ALTER TABLE orgunit.setid_scope_packages
+  ADD CONSTRAINT setid_scope_packages_owner_format_check
+    CHECK (owner_setid ~ '^[A-Z0-9]{5}$');
+
+ALTER TABLE orgunit.setid_scope_packages
+  ADD CONSTRAINT setid_scope_packages_owner_fk
+    FOREIGN KEY (tenant_id, owner_setid)
+    REFERENCES orgunit.setids (tenant_id, setid);
+
+CREATE INDEX IF NOT EXISTS setid_scope_packages_owner_lookup_idx
+  ON orgunit.setid_scope_packages (tenant_id, scope_code, owner_setid, status);
+
+ALTER TABLE orgunit.setid_scope_package_versions
+  ADD COLUMN IF NOT EXISTS owner_setid text;
+
+ALTER TABLE orgunit.setid_scope_package_versions
+  ADD CONSTRAINT setid_scope_package_versions_owner_format_check
+    CHECK (owner_setid ~ '^[A-Z0-9]{5}$');
+
+ALTER TABLE orgunit.setid_scope_package_versions
+  ADD CONSTRAINT setid_scope_package_versions_owner_fk
+    FOREIGN KEY (tenant_id, owner_setid)
+    REFERENCES orgunit.setids (tenant_id, setid);
+
+CREATE INDEX IF NOT EXISTS setid_scope_package_versions_owner_lookup_idx
+  ON orgunit.setid_scope_package_versions (tenant_id, scope_code, owner_setid, lower(validity));
+
+ALTER TABLE orgunit.setid_scope_package_versions
+  ADD CONSTRAINT setid_scope_package_versions_owner_scope_no_overlap
+  EXCLUDE USING gist (
+    tenant_id WITH =,
+    scope_code gist_text_ops WITH =,
+    owner_setid gist_text_ops WITH =,
+    validity WITH &&
+  )
+  WHERE (status = 'active');
+
+-- end: modules/orgunit/infrastructure/persistence/schema/00012_orgunit_scope_package_owner_setid.sql
+
 -- begin: modules/orgunit/infrastructure/persistence/schema/00012_orgunit_setid_scope_write_kernel_privileges.sql
 ALTER FUNCTION orgunit.submit_scope_package_event(uuid, uuid, text, uuid, text, date, jsonb, text, uuid)
   OWNER TO orgunit_kernel;
@@ -7064,6 +7107,48 @@ CREATE INDEX IF NOT EXISTS job_profile_version_job_families_family_lookup_btree
   ON jobcatalog.job_profile_version_job_families (tenant_id, package_id, job_family_id);
 
 -- end: modules/jobcatalog/infrastructure/persistence/schema/00011_jobcatalog_package_id_schema.sql
+
+-- begin: modules/jobcatalog/infrastructure/persistence/schema/00012_jobcatalog_package_code_schema.sql
+ALTER TABLE jobcatalog.job_family_groups
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_family_group_events
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_family_group_versions
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_families
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_family_events
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_family_versions
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_levels
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_level_events
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_level_versions
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_profiles
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_profile_events
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_profile_versions
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+ALTER TABLE jobcatalog.job_profile_version_job_families
+  ADD COLUMN IF NOT EXISTS package_code text;
+
+-- end: modules/jobcatalog/infrastructure/persistence/schema/00012_jobcatalog_package_code_schema.sql
 
 -- begin: modules/staffing/infrastructure/persistence/schema/00001_staffing_schema.sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
