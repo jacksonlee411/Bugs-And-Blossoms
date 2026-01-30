@@ -1496,9 +1496,16 @@ DECLARE
   v_scope_code text;
   v_scope_share_mode text;
   v_package_id uuid;
+  v_global_tenant_id uuid;
+  v_prev_actor text;
+  v_prev_allow_share text;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_id);
   PERFORM orgunit.lock_setid_governance(p_tenant_id);
+
+  v_global_tenant_id := orgunit.global_tenant_id();
+  v_prev_actor := current_setting('app.current_actor_scope', true);
+  v_prev_allow_share := current_setting('app.allow_share_read', true);
 
   IF NOT EXISTS (
     SELECT 1 FROM orgunit.setids WHERE tenant_id = p_tenant_id AND setid = 'DEFLT'
@@ -1552,6 +1559,91 @@ BEGIN
     WHERE is_stable = true
   LOOP
     IF v_scope_share_mode = 'shared-only' THEN
+      PERFORM set_config('app.current_actor_scope', 'saas', true);
+      PERFORM set_config('app.current_tenant', v_global_tenant_id::text, true);
+      PERFORM set_config('app.allow_share_read', 'on', true);
+
+      SELECT p.package_id INTO v_package_id
+      FROM orgunit.global_setid_scope_packages p
+      WHERE p.tenant_id = v_global_tenant_id
+        AND p.scope_code = v_scope_code
+        AND p.package_code = 'DEFLT';
+
+      IF v_package_id IS NULL THEN
+        v_package_id := gen_random_uuid();
+        PERFORM orgunit.submit_global_scope_package_event(
+          gen_random_uuid(),
+          v_global_tenant_id,
+          v_scope_code,
+          v_package_id,
+          'BOOTSTRAP',
+          v_root_valid_from,
+          jsonb_build_object('package_code', 'DEFLT', 'name', 'Default'),
+          format('bootstrap:global-scope-package:deflt:%s', v_scope_code),
+          v_global_tenant_id
+        );
+
+        SELECT p.package_id INTO v_package_id
+        FROM orgunit.global_setid_scope_packages p
+        WHERE p.tenant_id = v_global_tenant_id
+          AND p.scope_code = v_scope_code
+          AND p.package_code = 'DEFLT';
+      END IF;
+
+      IF v_package_id IS NULL THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = 'SUBSCRIPTION_DEFLT_MISSING',
+          DETAIL = format('scope_code=%s', v_scope_code);
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM orgunit.global_setid_scope_package_versions v
+        WHERE v.tenant_id = v_global_tenant_id
+          AND v.scope_code = v_scope_code
+          AND v.package_id = v_package_id
+          AND v.status = 'active'
+          AND v.validity @> v_root_valid_from
+      ) THEN
+        PERFORM orgunit.submit_global_scope_package_event(
+          gen_random_uuid(),
+          v_global_tenant_id,
+          v_scope_code,
+          v_package_id,
+          'BOOTSTRAP',
+          v_root_valid_from,
+          jsonb_build_object('package_code', 'DEFLT', 'name', 'Default'),
+          format('bootstrap:global-scope-package:deflt:%s:%s', v_scope_code, v_root_valid_from),
+          v_global_tenant_id
+        );
+      END IF;
+
+      PERFORM set_config('app.current_tenant', p_tenant_id::text, true);
+      PERFORM set_config('app.allow_share_read', COALESCE(v_prev_allow_share, 'off'), true);
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM orgunit.setid_scope_subscriptions s
+        WHERE s.tenant_id = p_tenant_id
+          AND s.setid = 'DEFLT'
+          AND s.scope_code = v_scope_code
+          AND s.validity @> v_root_valid_from
+      ) THEN
+        PERFORM orgunit.submit_scope_subscription_event(
+          gen_random_uuid(),
+          p_tenant_id,
+          'DEFLT',
+          v_scope_code,
+          v_package_id,
+          v_global_tenant_id,
+          'BOOTSTRAP',
+          v_root_valid_from,
+          format('bootstrap:scope-subscription:deflt:%s', v_scope_code),
+          p_initiator_id
+        );
+      END IF;
+
       CONTINUE;
     END IF;
 
@@ -1591,6 +1683,28 @@ BEGIN
 
     IF NOT EXISTS (
       SELECT 1
+      FROM orgunit.setid_scope_package_versions v
+      WHERE v.tenant_id = p_tenant_id
+        AND v.scope_code = v_scope_code
+        AND v.package_id = v_package_id
+        AND v.status = 'active'
+        AND v.validity @> v_root_valid_from
+    ) THEN
+      PERFORM orgunit.submit_scope_package_event(
+        gen_random_uuid(),
+        p_tenant_id,
+        v_scope_code,
+        v_package_id,
+        'BOOTSTRAP',
+        v_root_valid_from,
+        jsonb_build_object('package_code', 'DEFLT', 'name', 'Default'),
+        format('bootstrap:scope-package:deflt:%s:%s', v_scope_code, v_root_valid_from),
+        p_initiator_id
+      );
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
       FROM orgunit.setid_scope_subscriptions s
       WHERE s.tenant_id = p_tenant_id
         AND s.setid = 'DEFLT'
@@ -1611,6 +1725,10 @@ BEGIN
       );
     END IF;
   END LOOP;
+
+  PERFORM set_config('app.current_tenant', p_tenant_id::text, true);
+  PERFORM set_config('app.current_actor_scope', COALESCE(v_prev_actor, ''), true);
+  PERFORM set_config('app.allow_share_read', COALESCE(v_prev_allow_share, 'off'), true);
 
   IF NOT EXISTS (
     SELECT 1
@@ -1652,9 +1770,16 @@ DECLARE
   v_scope_share_mode text;
   v_package_id uuid;
   v_effective_date date;
+  v_global_tenant_id uuid;
+  v_prev_actor text;
+  v_prev_allow_share text;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_id);
   PERFORM orgunit.lock_setid_governance(p_tenant_id);
+
+  v_global_tenant_id := orgunit.global_tenant_id();
+  v_prev_actor := current_setting('app.current_actor_scope', true);
+  v_prev_allow_share := current_setting('app.allow_share_read', true);
 
   IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
@@ -1727,6 +1852,69 @@ BEGIN
       WHERE is_stable = true
     LOOP
       IF v_scope_share_mode = 'shared-only' THEN
+        PERFORM set_config('app.current_actor_scope', 'saas', true);
+        PERFORM set_config('app.current_tenant', v_global_tenant_id::text, true);
+        PERFORM set_config('app.allow_share_read', 'on', true);
+
+        SELECT p.package_id INTO v_package_id
+        FROM orgunit.global_setid_scope_packages p
+        WHERE p.tenant_id = v_global_tenant_id
+          AND p.scope_code = v_scope_code
+          AND p.package_code = 'DEFLT';
+
+        IF v_package_id IS NULL THEN
+          v_package_id := gen_random_uuid();
+          PERFORM orgunit.submit_global_scope_package_event(
+            gen_random_uuid(),
+            v_global_tenant_id,
+            v_scope_code,
+            v_package_id,
+            'BOOTSTRAP',
+            v_effective_date,
+            jsonb_build_object('package_code', 'DEFLT', 'name', 'Default'),
+            format('bootstrap:global-scope-package:deflt:%s', v_scope_code),
+            v_global_tenant_id
+          );
+
+          SELECT p.package_id INTO v_package_id
+          FROM orgunit.global_setid_scope_packages p
+          WHERE p.tenant_id = v_global_tenant_id
+            AND p.scope_code = v_scope_code
+            AND p.package_code = 'DEFLT';
+        END IF;
+
+        IF v_package_id IS NULL THEN
+          RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'SUBSCRIPTION_DEFLT_MISSING',
+            DETAIL = format('setid=%s scope_code=%s', v_setid, v_scope_code);
+        END IF;
+
+        PERFORM set_config('app.current_tenant', p_tenant_id::text, true);
+        PERFORM set_config('app.allow_share_read', COALESCE(v_prev_allow_share, 'off'), true);
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM orgunit.setid_scope_subscriptions s
+          WHERE s.tenant_id = p_tenant_id
+            AND s.setid = v_setid
+            AND s.scope_code = v_scope_code
+            AND s.validity @> v_effective_date
+        ) THEN
+          PERFORM orgunit.submit_scope_subscription_event(
+            gen_random_uuid(),
+            p_tenant_id,
+            v_setid,
+            v_scope_code,
+            v_package_id,
+            v_global_tenant_id,
+            'BOOTSTRAP',
+            v_effective_date,
+            format('bootstrap:scope-subscription:%s:%s', v_setid, v_scope_code),
+            p_initiator_id
+          );
+        END IF;
+
         CONTINUE;
       END IF;
 
@@ -1786,6 +1974,10 @@ BEGIN
         );
       END IF;
     END LOOP;
+
+    PERFORM set_config('app.current_tenant', p_tenant_id::text, true);
+    PERFORM set_config('app.current_actor_scope', COALESCE(v_prev_actor, ''), true);
+    PERFORM set_config('app.allow_share_read', COALESCE(v_prev_allow_share, 'off'), true);
   ELSIF p_event_type = 'RENAME' THEN
     v_name := NULLIF(btrim(COALESCE(p_payload->>'name', '')), '');
     IF v_name IS NULL THEN

@@ -1,6 +1,6 @@
 # DEV-PLAN-071：SetID Scope Package 订阅详细设计
 
-**状态**: 进行中（2026-01-29 23:52 UTC）
+**状态**: 进行中（2026-01-30 00:13 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`
@@ -772,6 +772,7 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
 - 2026-01-30：修复 Staffing Positions 快照读取，按 `resolve_scope_package` 解析 jobcatalog package_id 以恢复 `job_profile_code` 展示
 - 2026-01-30：补齐 scope package/subscription 路由与 API/UI 覆盖率至 100%，`make test` 通过
 - 2026-01-29：完成 M5（stable scope 回填 + shared-only 默认包与订阅回填；证据记录见 `docs/dev-records/dev-plan-071-execution-log.md`）
+- 2026-01-30：补齐 `ensure_setid_bootstrap` 对既有 DEFLT 包的有效期版本（修复 CI `PACKAGE_INACTIVE_AS_OF`）
 
 ### 8.1 里程碑触发器与门禁（对齐 2.1/AGENTS.md）
 - **M1**：必跑 `make <module> plan && make <module> lint && make <module> migrate up`；如涉及 sqlc 生成则 `make sqlc-generate`；如变更文档则 `make check doc`。

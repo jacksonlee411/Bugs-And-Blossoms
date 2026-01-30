@@ -177,6 +177,28 @@ BEGIN
           DETAIL = format('scope_code=%s', v_scope_code);
       END IF;
 
+      IF NOT EXISTS (
+        SELECT 1
+        FROM orgunit.global_setid_scope_package_versions v
+        WHERE v.tenant_id = v_global_tenant_id
+          AND v.scope_code = v_scope_code
+          AND v.package_id = v_package_id
+          AND v.status = 'active'
+          AND v.validity @> v_root_valid_from
+      ) THEN
+        PERFORM orgunit.submit_global_scope_package_event(
+          gen_random_uuid(),
+          v_global_tenant_id,
+          v_scope_code,
+          v_package_id,
+          'BOOTSTRAP',
+          v_root_valid_from,
+          jsonb_build_object('package_code', 'DEFLT', 'name', 'Default'),
+          format('bootstrap:global-scope-package:deflt:%s:%s', v_scope_code, v_root_valid_from),
+          v_global_tenant_id
+        );
+      END IF;
+
       PERFORM set_config('app.current_tenant', p_tenant_id::text, true);
       PERFORM set_config('app.allow_share_read', COALESCE(v_prev_allow_share, 'off'), true);
 
@@ -237,6 +259,28 @@ BEGIN
         ERRCODE = 'P0001',
         MESSAGE = 'SUBSCRIPTION_DEFLT_MISSING',
         DETAIL = format('scope_code=%s', v_scope_code);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM orgunit.setid_scope_package_versions v
+      WHERE v.tenant_id = p_tenant_id
+        AND v.scope_code = v_scope_code
+        AND v.package_id = v_package_id
+        AND v.status = 'active'
+        AND v.validity @> v_root_valid_from
+    ) THEN
+      PERFORM orgunit.submit_scope_package_event(
+        gen_random_uuid(),
+        p_tenant_id,
+        v_scope_code,
+        v_package_id,
+        'BOOTSTRAP',
+        v_root_valid_from,
+        jsonb_build_object('package_code', 'DEFLT', 'name', 'Default'),
+        format('bootstrap:scope-package:deflt:%s:%s', v_scope_code, v_root_valid_from),
+        p_initiator_id
+      );
     END IF;
 
     IF NOT EXISTS (

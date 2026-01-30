@@ -44,3 +44,10 @@
   - `person_credential_type|1`
   - `person_education_type|1`
   - `person_school|1`
+
+## 追加修复（2026-01-30 00:13 UTC / dev）
+
+- 修复 CI 中 `jobcatalog-smoke` 触发的 `PACKAGE_INACTIVE_AS_OF`：确保 `ensure_setid_bootstrap` 在复用既有 DEFLT 包时补齐 `v_root_valid_from` 版本。
+- 新增迁移：`migrations/orgunit/20260130100000_orgunit_setid_bootstrap_deflt_effective_date.sql`。
+- 重新生成 sqlc：`make sqlc-generate`。
+- DB 门禁复跑：`make orgunit plan` / `make orgunit lint` / `make orgunit migrate up`（已执行到 `20260130100000`）。
