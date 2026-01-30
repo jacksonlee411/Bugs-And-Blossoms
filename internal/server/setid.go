@@ -1174,6 +1174,23 @@ func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnit
 	b.WriteString("</tbody></table>")
 
 	b.WriteString("<h2>Scope Subscriptions</h2>")
+	b.WriteString(`<form method="GET" action="/org/setid" hx-get="/org/setid" hx-target="#content" hx-push-url="true">`)
+	b.WriteString(`<input type="hidden" name="as_of" value="` + html.EscapeString(asOf) + `" />`)
+	b.WriteString(`<label>SetID <select name="setid">`)
+	b.WriteString(`<option value="">(select)</option>`)
+	for _, sid := range setids {
+		if sid.Status != "active" || sid.IsShared {
+			continue
+		}
+		selected := ""
+		if sid.SetID == selectedSetID {
+			selected = " selected"
+		}
+		b.WriteString(`<option value="` + html.EscapeString(sid.SetID) + `"` + selected + `>` + html.EscapeString(sid.SetID) + `</option>`)
+	}
+	b.WriteString(`</select></label> `)
+	b.WriteString(`<button type="submit">Load</button>`)
+	b.WriteString(`</form>`)
 	if selectedSetID == "" {
 		b.WriteString("<p>(select a SetID)</p>")
 	} else {
