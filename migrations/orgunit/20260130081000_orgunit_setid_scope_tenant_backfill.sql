@@ -5,6 +5,7 @@ DECLARE
   v_scope_code text;
   v_tenant_id uuid;
   v_setid text;
+  v_owner_setid text;
   v_package_id uuid;
 BEGIN
   FOR v_tenant_id IN
@@ -12,6 +13,11 @@ BEGIN
     FROM orgunit.setids
   LOOP
     PERFORM set_config('app.current_tenant', v_tenant_id::text, true);
+    SELECT setid INTO v_owner_setid
+    FROM orgunit.setids
+    WHERE tenant_uuid = v_tenant_id
+    ORDER BY setid ASC
+    LIMIT 1;
 
     FOR v_scope_code IN
       SELECT scope_code
@@ -33,7 +39,7 @@ BEGIN
           v_package_id,
           'BOOTSTRAP',
           current_date,
-          jsonb_build_object('package_code', 'DEFLT', 'name', 'Default'),
+          jsonb_build_object('package_code', 'DEFLT', 'owner_setid', v_owner_setid, 'name', 'Default'),
           format('bootstrap:scope-package:deflt:%s', v_scope_code),
           v_tenant_id
         );

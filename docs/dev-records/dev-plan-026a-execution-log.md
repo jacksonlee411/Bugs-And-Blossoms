@@ -8,6 +8,7 @@
 - 事件幂等键改为 UUID v7，新增 `uuidv7` 生成器
 - `full_name_path` 预计算并落地，读侧不再祖先链 JOIN
 - Go/SQL/迁移与测试全量对齐，覆盖新增校验与错误分支
+- 修复默认 Scope Package 回填迁移，补充 `owner_setid`
 
 ## 本地验证
 
@@ -16,3 +17,6 @@
 - 已通过：`make check lint`
 - 已通过：`make test`
 - 已通过：`make check doc`
+- 未通过：`make orgunit plan`（本地 DB 缺少函数 `orgunit.submit_setid_binding_event`）
+- 已通过：`make orgunit lint`
+- 未通过：`make orgunit migrate up`（本地 DB 未启动，连接被拒绝）
