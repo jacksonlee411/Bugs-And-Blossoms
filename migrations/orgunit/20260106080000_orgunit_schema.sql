@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_uuid, hierarchy_type, org_id, effective_date)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_id_unique ON orgunit.org_events (event_uuid);
+CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_events (event_uuid);
 CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);
 CREATE INDEX IF NOT EXISTS org_events_tenant_type_effective_idx ON orgunit.org_events (tenant_uuid, hierarchy_type, effective_date, id);
 
