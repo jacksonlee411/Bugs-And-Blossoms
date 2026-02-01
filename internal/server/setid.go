@@ -37,12 +37,14 @@ type ScopeCode struct {
 }
 
 type ScopePackage struct {
-	PackageID   string
-	ScopeCode   string
-	PackageCode string
-	OwnerSetID  string
-	Name        string
-	Status      string
+	PackageID     string
+	ScopeCode     string
+	PackageCode   string
+	OwnerSetID    string
+	Name          string
+	Status        string
+	EffectiveDate string `json:"-"`
+	UpdatedAt     string `json:"-"`
 }
 
 type OwnedScopePackage struct {
@@ -487,9 +489,24 @@ func (s *setidPGStore) ListScopePackages(ctx context.Context, tenantID string, s
 	var out []ScopePackage
 	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-SELECT package_id::text, scope_code, package_code, owner_setid, name, status
-FROM orgunit.setid_scope_packages
-WHERE tenant_id = $1::uuid AND scope_code = $2::text
+SELECT p.package_id::text,
+       p.scope_code,
+       p.package_code,
+       p.owner_setid,
+       p.name,
+       p.status,
+       COALESCE(lower(v.validity)::text, '') AS effective_date,
+       COALESCE(p.updated_at::text, '') AS updated_at
+FROM orgunit.setid_scope_packages p
+LEFT JOIN LATERAL (
+  SELECT validity
+  FROM orgunit.setid_scope_package_versions v
+  WHERE v.tenant_id = p.tenant_id
+    AND v.package_id = p.package_id
+  ORDER BY v.last_event_id DESC
+  LIMIT 1
+) v ON true
+WHERE p.tenant_id = $1::uuid AND p.scope_code = $2::text
 ORDER BY package_code ASC
 `, tenantID, scopeCode)
 		if err != nil {
@@ -498,7 +515,7 @@ ORDER BY package_code ASC
 		defer rows.Close()
 		for rows.Next() {
 			var r ScopePackage
-			if err := rows.Scan(&r.PackageID, &r.ScopeCode, &r.PackageCode, &r.OwnerSetID, &r.Name, &r.Status); err != nil {
+			if err := rows.Scan(&r.PackageID, &r.ScopeCode, &r.PackageCode, &r.OwnerSetID, &r.Name, &r.Status, &r.EffectiveDate, &r.UpdatedAt); err != nil {
 				return err
 			}
 			out = append(out, r)
@@ -905,14 +922,15 @@ func (s *setidMemoryStore) CreateScopePackage(_ context.Context, tenantID string
 	s.seq++
 	packageID := "pkg-" + strconv.Itoa(s.seq)
 	pkg := ScopePackage{
-		PackageID:   packageID,
-		ScopeCode:   scopeCode,
-		PackageCode: packageCode,
-		OwnerSetID:  ownerSetID,
-		Name:        name,
-		Status:      "active",
+		PackageID:     packageID,
+		ScopeCode:     scopeCode,
+		PackageCode:   packageCode,
+		OwnerSetID:    ownerSetID,
+		Name:          name,
+		Status:        "active",
+		EffectiveDate: effectiveDate,
+		UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
-	_ = effectiveDate
 	s.scopePackages[tenantID][scopeCode][packageID] = pkg
 	return pkg, nil
 }
@@ -921,6 +939,7 @@ func (s *setidMemoryStore) DisableScopePackage(_ context.Context, tenantID strin
 	for scopeCode, pkgs := range s.scopePackages[tenantID] {
 		if pkg, ok := pkgs[packageID]; ok {
 			pkg.Status = "disabled"
+			pkg.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 			s.scopePackages[tenantID][scopeCode][packageID] = pkg
 			return pkg, nil
 		}
@@ -1033,11 +1052,11 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 
 	initiatorID := tenant.ID
 	if err := store.EnsureBootstrap(r.Context(), tenant.ID, initiatorID); err != nil {
-		writePage(w, r, renderSetIDPage(nil, nil, nil, tenant, asOf, selectedSetID, lang(r), err.Error()))
+		writePage(w, r, renderSetIDPage(nil, nil, nil, nil, nil, tenant, asOf, selectedSetID, lang(r), err.Error()))
 		return
 	}
 
-	list := func(errHint string) (setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnitNode, errMsg string) {
+	list := func(errHint string) (setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnitNode, scopes []ScopeCode, scopePackages []ScopePackage, errMsg string) {
 		mergeMsg := func(hint string, msg string) string {
 			if hint == "" {
 				return msg
@@ -1050,31 +1069,54 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 
 		setids, err := store.ListSetIDs(r.Context(), tenant.ID)
 		if err != nil {
-			return nil, nil, nil, mergeMsg(errHint, err.Error())
+			return nil, nil, nil, nil, nil, mergeMsg(errHint, err.Error())
 		}
 		bindings, err = store.ListSetIDBindings(r.Context(), tenant.ID, asOf)
 		if err != nil {
-			return setids, nil, nil, mergeMsg(errHint, err.Error())
+			return setids, nil, nil, nil, nil, mergeMsg(errHint, err.Error())
 		}
 		if orgStore == nil {
-			return setids, bindings, nil, mergeMsg(errHint, "orgunit store missing")
+			return setids, bindings, nil, nil, nil, mergeMsg(errHint, "orgunit store missing")
 		}
 		nodes, err = orgStore.ListNodesCurrent(r.Context(), tenant.ID, asOf)
 		if err != nil {
-			return setids, bindings, nil, mergeMsg(errHint, err.Error())
+			return setids, bindings, nil, nil, nil, mergeMsg(errHint, err.Error())
 		}
-		return setids, bindings, nodes, errHint
+		allScopes, err := store.ListScopeCodes(r.Context(), tenant.ID)
+		if err != nil {
+			return setids, bindings, nodes, nil, nil, mergeMsg(errHint, err.Error())
+		}
+		for _, s := range allScopes {
+			if strings.EqualFold(s.ShareMode, "shared-only") {
+				continue
+			}
+			scopes = append(scopes, s)
+		}
+		for _, s := range scopes {
+			rows, err := store.ListScopePackages(r.Context(), tenant.ID, s.ScopeCode)
+			if err != nil {
+				return setids, bindings, nodes, scopes, nil, mergeMsg(errHint, err.Error())
+			}
+			scopePackages = append(scopePackages, rows...)
+		}
+		sort.Slice(scopePackages, func(i, j int) bool {
+			if scopePackages[i].ScopeCode == scopePackages[j].ScopeCode {
+				return scopePackages[i].PackageCode < scopePackages[j].PackageCode
+			}
+			return scopePackages[i].ScopeCode < scopePackages[j].ScopeCode
+		})
+		return setids, bindings, nodes, scopes, scopePackages, errHint
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		sids, bindings, nodes, errMsg := list("")
-		writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, selectedSetID, lang(r), errMsg))
+		sids, bindings, nodes, scopes, scopePackages, errMsg := list("")
+		writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
-			sids, bindings, nodes, errMsg := list("bad form")
-			writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, selectedSetID, lang(r), errMsg))
+			sids, bindings, nodes, scopes, scopePackages, errMsg := list("bad form")
+			writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 			return
 		}
 
@@ -1090,14 +1132,14 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 			sid := strings.TrimSpace(r.Form.Get("setid"))
 			name := strings.TrimSpace(r.Form.Get("name"))
 			if sid == "" || name == "" {
-				sids, bindings, nodes, errMsg := list("setid/name is required")
-				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, selectedSetID, lang(r), errMsg))
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list("setid/name is required")
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 				return
 			}
 			reqID := "ui:setid:create:" + sid
 			if err := store.CreateSetID(r.Context(), tenant.ID, sid, name, asOf, reqID, initiatorID); err != nil {
-				sids, bindings, nodes, errMsg := list(err.Error())
-				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, selectedSetID, lang(r), errMsg))
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list(err.Error())
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 				return
 			}
 		case "bind_setid":
@@ -1108,25 +1150,106 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 				effectiveDate = asOf
 			}
 			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
-				sids, bindings, nodes, errMsg := list("effective_date 无效: " + err.Error())
-				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, selectedSetID, lang(r), errMsg))
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list("effective_date 无效: " + err.Error())
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 				return
 			}
 			if orgUnitID == "" || sid == "" {
-				sids, bindings, nodes, errMsg := list("org_unit_id/setid is required")
-				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, selectedSetID, lang(r), errMsg))
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list("org_unit_id/setid is required")
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 				return
 			}
 			reqID := "ui:setid:bind:" + orgUnitID + ":" + sid + ":" + effectiveDate
 			if err := store.BindSetID(r.Context(), tenant.ID, orgUnitID, effectiveDate, sid, reqID, initiatorID); err != nil {
-				sids, bindings, nodes, errMsg := list(err.Error())
-				writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, selectedSetID, lang(r), errMsg))
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list(err.Error())
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 				return
 			}
 			redirectAsOf = effectiveDate
+		case "create_scope_package":
+			scopeCode := strings.TrimSpace(r.Form.Get("scope_code"))
+			packageCode := strings.ToUpper(strings.TrimSpace(r.Form.Get("package_code")))
+			ownerSetID := strings.ToUpper(strings.TrimSpace(r.Form.Get("owner_setid")))
+			name := strings.TrimSpace(r.Form.Get("name"))
+			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
+			if effectiveDate == "" {
+				effectiveDate = asOf
+			}
+			if scopeCode == "" || ownerSetID == "" || name == "" {
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list("scope_code/owner_setid/name is required")
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
+				return
+			}
+			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list("effective_date 无效: " + err.Error())
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
+				return
+			}
+			scopes, err := store.ListScopeCodes(r.Context(), tenant.ID)
+			if err != nil {
+				sids, bindings, nodes, listScopes, scopePackages, errMsg := list(err.Error())
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, listScopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
+				return
+			}
+			validScope := false
+			for _, s := range scopes {
+				if s.ScopeCode != scopeCode {
+					continue
+				}
+				if strings.EqualFold(s.ShareMode, "shared-only") {
+					validScope = false
+					break
+				}
+				validScope = true
+				break
+			}
+			if !validScope {
+				sids, bindings, nodes, listScopes, scopePackages, errMsg := list("SCOPE_CODE_INVALID")
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, listScopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
+				return
+			}
+			if packageCode == "" {
+				packageCode = generatePackageCode()
+			}
+			if packageCode == "DEFLT" {
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list("PACKAGE_CODE_RESERVED")
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
+				return
+			}
+			if !packageCodePattern.MatchString(packageCode) {
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list("PACKAGE_CODE_INVALID")
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
+				return
+			}
+			reqID := strings.TrimSpace(r.Form.Get("request_id"))
+			if reqID == "" {
+				reqID = "ui:scope-pkg:create:" + scopeCode + ":" + strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
+			}
+			if _, err := store.CreateScopePackage(r.Context(), tenant.ID, scopeCode, packageCode, ownerSetID, name, effectiveDate, reqID, initiatorID); err != nil {
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list(stablePgMessage(err))
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
+				return
+			}
+			redirectAsOf = effectiveDate
+		case "disable_scope_package":
+			packageID := strings.TrimSpace(r.Form.Get("package_id"))
+			if packageID == "" {
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list("package_id is required")
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
+				return
+			}
+			reqID := strings.TrimSpace(r.Form.Get("request_id"))
+			if reqID == "" {
+				reqID = "ui:scope-pkg:disable:" + packageID + ":" + strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
+			}
+			if _, err := store.DisableScopePackage(r.Context(), tenant.ID, packageID, reqID, initiatorID); err != nil {
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list(stablePgMessage(err))
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
+				return
+			}
 		default:
-			sids, bindings, nodes, errMsg := list("unknown action")
-			writePage(w, r, renderSetIDPage(sids, bindings, nodes, tenant, asOf, selectedSetID, lang(r), errMsg))
+			sids, bindings, nodes, scopes, scopePackages, errMsg := list("unknown action")
+			writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 			return
 		}
 
@@ -1138,11 +1261,12 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 	}
 }
 
-func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnitNode, tenant Tenant, asOf string, selectedSetID string, pageLang string, errMsg string) string {
+func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnitNode, scopes []ScopeCode, scopePackages []ScopePackage, tenant Tenant, asOf string, selectedSetID string, pageLang string, errMsg string) string {
 	var b strings.Builder
 	b.WriteString("<h1>SetID Governance</h1>")
 	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
 	b.WriteString(`<p><a href="/org/job-catalog?as_of=` + html.EscapeString(asOf) + `" hx-get="/org/job-catalog?as_of=` + html.EscapeString(asOf) + `" hx-target="#content" hx-push-url="true">Go to Job Catalog</a></p>`)
+	formAction := "/org/setid?as_of=" + url.QueryEscape(asOf)
 
 	if errMsg != "" {
 		b.WriteString(`<div style="padding:8px;border:1px solid #c00;color:#c00">` + html.EscapeString(errMsg) + `</div>`)
@@ -1172,6 +1296,89 @@ func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnit
 		b.WriteString("</tr>")
 	}
 	b.WriteString("</tbody></table>")
+
+	b.WriteString("<h2>Scope Packages</h2>")
+	if len(scopes) == 0 {
+		b.WriteString("<p>(no scopes)</p>")
+	} else {
+		activeSetIDs := make([]SetID, 0, len(setids))
+		for _, sid := range setids {
+			if sid.Status != "active" || sid.IsShared {
+				continue
+			}
+			activeSetIDs = append(activeSetIDs, sid)
+		}
+		reqID := "ui:scope-pkg:create:" + strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
+		b.WriteString(`<form method="POST" action="` + html.EscapeString(formAction) + `">`)
+		b.WriteString(`<input type="hidden" name="action" value="create_scope_package" />`)
+		b.WriteString(`<label>Scope <select name="scope_code">`)
+		b.WriteString(`<option value="">(select)</option>`)
+		for _, s := range scopes {
+			b.WriteString(`<option value="` + html.EscapeString(s.ScopeCode) + `">` + html.EscapeString(s.ScopeCode) + `</option>`)
+		}
+		b.WriteString(`</select></label> `)
+		b.WriteString(`<label>Owner SetID <select name="owner_setid">`)
+		if len(activeSetIDs) == 0 {
+			b.WriteString(`<option value="">(no active setids)</option>`)
+		} else {
+			b.WriteString(`<option value="">(select)</option>`)
+			for _, sid := range activeSetIDs {
+				b.WriteString(`<option value="` + html.EscapeString(sid.SetID) + `">` + html.EscapeString(sid.SetID) + `</option>`)
+			}
+		}
+		b.WriteString(`</select></label> `)
+		b.WriteString(`<label>Package Code <input name="package_code" placeholder="(optional)" /></label> `)
+		b.WriteString(`<label>Name <input name="name" /></label> `)
+		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
+		b.WriteString(`<input type="hidden" name="request_id" value="` + html.EscapeString(reqID) + `" />`)
+		b.WriteString(`<button type="submit">Create Package</button>`)
+		b.WriteString(`</form>`)
+	}
+
+	if len(scopePackages) == 0 {
+		b.WriteString("<p>(no packages)</p>")
+	} else {
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr>` +
+			`<th>scope_code</th><th>package_code</th><th>name</th><th>owner_setid</th><th>status</th><th>effective_date</th><th>last_updated</th><th>action</th>` +
+			`</tr></thead><tbody>`)
+		for _, pkg := range scopePackages {
+			b.WriteString("<tr>")
+			b.WriteString("<td>" + html.EscapeString(pkg.ScopeCode) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(pkg.PackageCode) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(pkg.Name) + "</td>")
+			ownerLabel := pkg.OwnerSetID
+			if ownerLabel == "" {
+				ownerLabel = "-"
+			}
+			b.WriteString("<td>" + html.EscapeString(ownerLabel) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(pkg.Status) + "</td>")
+			effectiveDate := pkg.EffectiveDate
+			if effectiveDate == "" {
+				effectiveDate = "-"
+			}
+			b.WriteString("<td>" + html.EscapeString(effectiveDate) + "</td>")
+			updatedAt := pkg.UpdatedAt
+			if updatedAt == "" {
+				updatedAt = "-"
+			}
+			b.WriteString("<td>" + html.EscapeString(updatedAt) + "</td>")
+			if strings.EqualFold(pkg.Status, "active") && !strings.EqualFold(pkg.PackageCode, "DEFLT") {
+				disableReqID := "ui:scope-pkg:disable:" + pkg.PackageID + ":" + strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
+				b.WriteString(`<td><form method="POST" action="` + html.EscapeString(formAction) + `">`)
+				b.WriteString(`<input type="hidden" name="action" value="disable_scope_package" />`)
+				b.WriteString(`<input type="hidden" name="package_id" value="` + html.EscapeString(pkg.PackageID) + `" />`)
+				b.WriteString(`<input type="hidden" name="request_id" value="` + html.EscapeString(disableReqID) + `" />`)
+				b.WriteString(`<button type="submit">Disable</button>`)
+				b.WriteString(`</form></td>`)
+			} else if strings.EqualFold(pkg.PackageCode, "DEFLT") {
+				b.WriteString("<td>(protected)</td>")
+			} else {
+				b.WriteString("<td>(disabled)</td>")
+			}
+			b.WriteString("</tr>")
+		}
+		b.WriteString("</tbody></table>")
+	}
 
 	b.WriteString("<h2>Scope Subscriptions</h2>")
 	b.WriteString(`<form method="GET" action="/org/setid" hx-get="/org/setid" hx-target="#content" hx-push-url="true">`)
