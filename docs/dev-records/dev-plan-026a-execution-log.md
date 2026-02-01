@@ -9,6 +9,7 @@
 - `full_name_path` 预计算并落地，读侧不再祖先链 JOIN
 - Go/SQL/迁移与测试全量对齐，覆盖新增校验与错误分支
 - 修复默认 Scope Package 回填迁移，补充 `owner_setid`
+- 前置添加 `owner_setid` 列迁移，确保写入函数与表结构顺序一致
 
 ## 本地验证
 
