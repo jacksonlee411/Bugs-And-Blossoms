@@ -161,7 +161,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         org_unit_id: orgUnitID,
         effective_date: asOf,
         is_business_unit: true,
-        request_id: `tp060-02-bu-${label}-${runID}`
+        request_code: `tp060-02-bu-${label}-${runID}`
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
@@ -223,7 +223,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         name,
         owner_setid: ownerSetID,
         effective_date: effectiveDate,
-        request_id: `req:${runID}:scope-pkg:${packageCode}`
+        request_code: `req:${runID}:scope-pkg:${packageCode}`
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
@@ -239,7 +239,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         package_id: packageID,
         package_owner: "tenant",
         effective_date: effectiveDate,
-        request_id: `req:${runID}:scope-sub:${setid}:${scopeCode}`
+        request_code: `req:${runID}:scope-sub:${setid}:${scopeCode}`
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
@@ -275,7 +275,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         org_unit_id: orgIDsFromTree.HQ,
         setid: "S2601",
         effective_date: asOf,
-        request_id: `tp060-02-bind-hq-${runID}`
+        request_code: `tp060-02-bind-hq-${runID}`
       }
     });
     expect(resp.status(), await resp.text()).toBe(422);
