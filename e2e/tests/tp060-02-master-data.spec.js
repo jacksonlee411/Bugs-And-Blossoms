@@ -683,7 +683,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     const resp = await appContext.request.post(`/org/api/positions?as_of=${asOf}`, {
       data: {
         effective_date: asOf,
-        org_unit_id: "00000000-0000-0000-0000-000000000000",
+        org_unit_id: "99999999",
         job_profile_id: jpSweID,
         name: `TP060-02 BAD ORG404 ${runID}`
       }
