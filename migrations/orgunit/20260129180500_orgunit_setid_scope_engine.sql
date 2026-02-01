@@ -1,10 +1,10 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION orgunit.assert_scope_package_active_as_of(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_scope_code text,
   p_package_id uuid,
-  p_package_owner_tenant_id uuid,
+  p_package_owner_tenant_uuid uuid,
   p_as_of_date date
 )
 RETURNS void
@@ -16,7 +16,7 @@ DECLARE
   v_ctx_tenant text;
   v_allow_share text;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_scope_code IS NULL OR NOT orgunit.scope_code_is_valid(p_scope_code) THEN
     RAISE EXCEPTION USING
@@ -39,7 +39,7 @@ BEGIN
   v_ctx_tenant := current_setting('app.current_tenant');
   v_allow_share := current_setting('app.allow_share_read', true);
 
-  IF p_package_owner_tenant_id = p_tenant_id THEN
+  IF p_package_owner_tenant_uuid = p_tenant_uuid THEN
     IF v_scope_mode = 'shared-only' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -48,7 +48,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.setid_scope_packages p
-      WHERE p.tenant_id = p_tenant_id
+      WHERE p.tenant_uuid = p_tenant_uuid
         AND p.scope_code = p_scope_code
         AND p.package_id = p_package_id
     ) THEN
@@ -59,7 +59,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.setid_scope_package_versions v
-      WHERE v.tenant_id = p_tenant_id
+      WHERE v.tenant_uuid = p_tenant_uuid
         AND v.scope_code = p_scope_code
         AND v.package_id = p_package_id
         AND v.validity @> p_as_of_date
@@ -69,7 +69,7 @@ BEGIN
         ERRCODE = 'P0001',
         MESSAGE = 'PACKAGE_INACTIVE_AS_OF';
     END IF;
-  ELSIF p_package_owner_tenant_id = orgunit.global_tenant_id() THEN
+  ELSIF p_package_owner_tenant_uuid = orgunit.global_tenant_id() THEN
     IF v_scope_mode = 'tenant-only' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -80,7 +80,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.global_setid_scope_packages p
-      WHERE p.tenant_id = orgunit.global_tenant_id()
+      WHERE p.tenant_uuid = orgunit.global_tenant_id()
         AND p.scope_code = p_scope_code
         AND p.package_id = p_package_id
     ) THEN
@@ -91,7 +91,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.global_setid_scope_package_versions v
-      WHERE v.tenant_id = orgunit.global_tenant_id()
+      WHERE v.tenant_uuid = orgunit.global_tenant_id()
         AND v.scope_code = p_scope_code
         AND v.package_id = p_package_id
         AND v.validity @> p_as_of_date
@@ -113,12 +113,12 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.resolve_scope_package(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_setid text,
   p_scope_code text,
   p_as_of_date date
 )
-RETURNS TABLE(package_id uuid, package_owner_tenant_id uuid)
+RETURNS TABLE(package_id uuid, package_owner_tenant_uuid uuid)
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
@@ -127,8 +127,10 @@ DECLARE
   v_scope_mode text;
   v_ctx_tenant text;
   v_allow_share text;
+  v_package_id uuid;
+  v_package_owner_tenant_uuid uuid;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_setid IS NULL OR btrim(p_setid) = '' THEN
     RAISE EXCEPTION USING
@@ -156,17 +158,17 @@ BEGIN
       DETAIL = 'SHARE is reserved';
   END IF;
 
-  SELECT s.package_id, s.package_owner_tenant_id
-  INTO package_id, package_owner_tenant_id
+  SELECT s.package_id, s.package_owner_tenant_uuid
+  INTO v_package_id, v_package_owner_tenant_uuid
   FROM orgunit.setid_scope_subscriptions s
-  WHERE s.tenant_id = p_tenant_id
+  WHERE s.tenant_uuid = p_tenant_uuid
     AND s.setid = v_setid
     AND s.scope_code = p_scope_code
     AND s.validity @> p_as_of_date
   ORDER BY lower(s.validity) DESC
   LIMIT 1;
 
-  IF package_id IS NULL THEN
+  IF v_package_id IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SCOPE_SUBSCRIPTION_MISSING',
@@ -177,7 +179,7 @@ BEGIN
   v_ctx_tenant := current_setting('app.current_tenant');
   v_allow_share := current_setting('app.allow_share_read', true);
 
-  IF package_owner_tenant_id = p_tenant_id THEN
+  IF v_package_owner_tenant_uuid = p_tenant_uuid THEN
     IF v_scope_mode = 'shared-only' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -186,9 +188,9 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.setid_scope_package_versions v
-      WHERE v.tenant_id = p_tenant_id
+      WHERE v.tenant_uuid = p_tenant_uuid
         AND v.scope_code = p_scope_code
-        AND v.package_id = package_id
+        AND v.package_id = v_package_id
         AND v.validity @> p_as_of_date
         AND v.status = 'active'
     ) THEN
@@ -196,7 +198,7 @@ BEGIN
         ERRCODE = 'P0001',
         MESSAGE = 'PACKAGE_INACTIVE_AS_OF';
     END IF;
-  ELSIF package_owner_tenant_id = orgunit.global_tenant_id() THEN
+  ELSIF v_package_owner_tenant_uuid = orgunit.global_tenant_id() THEN
     IF v_scope_mode = 'tenant-only' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -207,9 +209,9 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.global_setid_scope_package_versions v
-      WHERE v.tenant_id = orgunit.global_tenant_id()
+      WHERE v.tenant_uuid = orgunit.global_tenant_id()
         AND v.scope_code = p_scope_code
-        AND v.package_id = package_id
+        AND v.package_id = v_package_id
         AND v.validity @> p_as_of_date
         AND v.status = 'active'
     ) THEN
@@ -226,6 +228,8 @@ BEGIN
   PERFORM set_config('app.current_tenant', v_ctx_tenant, true);
   PERFORM set_config('app.allow_share_read', COALESCE(v_allow_share, 'off'), true);
 
+  package_id := v_package_id;
+  package_owner_tenant_uuid := v_package_owner_tenant_uuid;
   RETURN NEXT;
 END;
 $$;

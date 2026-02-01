@@ -16,7 +16,7 @@ BEGIN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_FORMAT_INVALID',
-      DETAIL = 'tenant_id=global table=orgunit.global_setid_events';
+      DETAIL = 'tenant_uuid=global table=orgunit.global_setid_events';
   END IF;
 
   IF EXISTS (
@@ -25,7 +25,7 @@ BEGIN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_FORMAT_INVALID',
-      DETAIL = 'tenant_id=global table=orgunit.global_setids';
+      DETAIL = 'tenant_uuid=global table=orgunit.global_setids';
   END IF;
 
   PERFORM set_config('app.current_actor_scope', 'saas', true);
@@ -51,7 +51,7 @@ BEGIN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'SETID_FORMAT_INVALID',
-          DETAIL = format('tenant_id=%s table=orgunit.setid_events', v_tenant_id);
+          DETAIL = format('tenant_uuid=%s table=orgunit.setid_events', v_tenant_id);
       END IF;
 
       IF EXISTS (
@@ -60,7 +60,7 @@ BEGIN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'SETID_FORMAT_INVALID',
-          DETAIL = format('tenant_id=%s table=orgunit.setids', v_tenant_id);
+          DETAIL = format('tenant_uuid=%s table=orgunit.setids', v_tenant_id);
       END IF;
 
       IF EXISTS (
@@ -69,7 +69,7 @@ BEGIN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'SETID_FORMAT_INVALID',
-          DETAIL = format('tenant_id=%s table=orgunit.setid_binding_versions', v_tenant_id);
+          DETAIL = format('tenant_uuid=%s table=orgunit.setid_binding_versions', v_tenant_id);
       END IF;
 
       IF EXISTS (
@@ -81,7 +81,7 @@ BEGIN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'SETID_FORMAT_INVALID',
-          DETAIL = format('tenant_id=%s table=orgunit.setid_binding_events', v_tenant_id);
+          DETAIL = format('tenant_uuid=%s table=orgunit.setid_binding_events', v_tenant_id);
       END IF;
 
       PERFORM orgunit.ensure_setid_bootstrap(v_tenant_id, v_tenant_id);
@@ -95,25 +95,25 @@ END $$;
 DELETE FROM orgunit.setid_binding_versions v
 USING orgunit.setid_binding_events e
 WHERE v.last_event_id = e.id
-  AND e.request_id = 'bootstrap:binding:deflt';
+  AND e.request_code = 'bootstrap:binding:deflt';
 
 DELETE FROM orgunit.setid_binding_events
-WHERE request_id = 'bootstrap:binding:deflt';
+WHERE request_code = 'bootstrap:binding:deflt';
 
 DELETE FROM orgunit.setids s
 WHERE s.setid = 'DEFLT'
   AND s.last_event_id IN (
-    SELECT id FROM orgunit.setid_events WHERE request_id = 'bootstrap:deflt'
+    SELECT id FROM orgunit.setid_events WHERE request_code = 'bootstrap:deflt'
   )
   AND NOT EXISTS (
     SELECT 1 FROM orgunit.setid_events e
-    WHERE e.tenant_id = s.tenant_id
+    WHERE e.tenant_uuid = s.tenant_uuid
       AND e.setid = s.setid
-      AND e.request_id <> 'bootstrap:deflt'
+      AND e.request_code <> 'bootstrap:deflt'
   );
 
 DELETE FROM orgunit.setid_events e
-WHERE e.request_id = 'bootstrap:deflt'
+WHERE e.request_code = 'bootstrap:deflt'
   AND NOT EXISTS (
     SELECT 1 FROM orgunit.setids s WHERE s.last_event_id = e.id
   );
@@ -121,9 +121,9 @@ WHERE e.request_id = 'bootstrap:deflt'
 DELETE FROM orgunit.global_setids s
 WHERE s.setid = 'SHARE'
   AND s.last_event_id IN (
-    SELECT id FROM orgunit.global_setid_events WHERE request_id = 'bootstrap:share'
+    SELECT id FROM orgunit.global_setid_events WHERE request_code = 'bootstrap:share'
   );
 
 DELETE FROM orgunit.global_setid_events
-WHERE request_id = 'bootstrap:share';
+WHERE request_code = 'bootstrap:share';
 -- +goose StatementEnd

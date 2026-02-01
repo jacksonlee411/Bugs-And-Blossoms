@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS staffing.position_versions (
   id bigserial PRIMARY KEY,
   tenant_id uuid NOT NULL,
   position_id uuid NOT NULL,
-  org_unit_id uuid NOT NULL,
+  org_unit_id int NOT NULL CHECK (org_unit_id BETWEEN 10000000 AND 99999999),
   reports_to_position_id uuid NULL,
   name text NULL,
   lifecycle_status text NOT NULL DEFAULT 'active',

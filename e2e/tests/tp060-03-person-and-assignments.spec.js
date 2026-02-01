@@ -135,7 +135,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       org_unit_id: rootID,
       setid: "DEFLT",
       effective_date: asOf,
-      request_id: `tp060-03-bind-root-${runID}`
+      request_code: `tp060-03-bind-root-${runID}`
     }
   });
   expect(bindResp.status(), await bindResp.text()).toBe(201);

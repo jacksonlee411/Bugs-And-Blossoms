@@ -7,32 +7,32 @@ DECLARE
   v_version_missing_count integer;
 BEGIN
   WITH subs AS (
-    SELECT s.tenant_id,
+    SELECT s.tenant_uuid,
            s.package_id,
            array_agg(DISTINCT s.setid) AS setids,
            count(DISTINCT s.setid) AS setid_count
     FROM orgunit.setid_scope_subscriptions s
-    WHERE s.package_owner_tenant_id = s.tenant_id
-    GROUP BY s.tenant_id, s.package_id
+    WHERE s.package_owner_tenant_uuid = s.tenant_uuid
+    GROUP BY s.tenant_uuid, s.package_id
   )
   UPDATE orgunit.setid_scope_packages p
   SET owner_setid = subs.setids[1]
   FROM subs
-  WHERE p.tenant_id = subs.tenant_id
+  WHERE p.tenant_uuid = subs.tenant_uuid
     AND p.package_id = subs.package_id
     AND subs.setid_count = 1
     AND p.owner_setid IS NULL;
 
   SELECT count(*) INTO v_multi_count
   FROM (
-    SELECT p.tenant_id, p.package_id
+    SELECT p.tenant_uuid, p.package_id
     FROM orgunit.setid_scope_packages p
     JOIN orgunit.setid_scope_subscriptions s
-      ON s.tenant_id = p.tenant_id
+      ON s.tenant_uuid = p.tenant_uuid
      AND s.package_id = p.package_id
-     AND s.package_owner_tenant_id = s.tenant_id
+     AND s.package_owner_tenant_uuid = s.tenant_uuid
     WHERE p.owner_setid IS NULL
-    GROUP BY p.tenant_id, p.package_id
+    GROUP BY p.tenant_uuid, p.package_id
     HAVING count(DISTINCT s.setid) > 1
   ) t;
 
@@ -57,7 +57,7 @@ BEGIN
   UPDATE orgunit.setid_scope_package_versions v
   SET owner_setid = p.owner_setid
   FROM orgunit.setid_scope_packages p
-  WHERE v.tenant_id = p.tenant_id
+  WHERE v.tenant_uuid = p.tenant_uuid
     AND v.package_id = p.package_id
     AND v.owner_setid IS NULL;
 

@@ -36,11 +36,11 @@ ALTER FUNCTION orgunit.submit_global_setid_event(uuid, uuid, text, text, jsonb, 
 ALTER FUNCTION orgunit.submit_global_setid_event(uuid, uuid, text, text, jsonb, text, uuid)
   SET search_path = pg_catalog, orgunit;
 
-ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
+ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, int, date, text, text, uuid)
   OWNER TO orgunit_kernel;
-ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
+ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, int, date, text, text, uuid)
   SECURITY DEFINER;
-ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
+ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, int, date, text, text, uuid)
   SET search_path = pg_catalog, orgunit;
 
 ALTER FUNCTION orgunit.ensure_setid_bootstrap(uuid, uuid)
@@ -101,11 +101,11 @@ ALTER FUNCTION orgunit.submit_global_setid_event(uuid, uuid, text, text, jsonb, 
 ALTER FUNCTION orgunit.submit_global_setid_event(uuid, uuid, text, text, jsonb, text, uuid)
   OWNER TO app;
 
-ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
+ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, int, date, text, text, uuid)
   SECURITY INVOKER;
-ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
+ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, int, date, text, text, uuid)
   RESET search_path;
-ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
+ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, int, date, text, text, uuid)
   OWNER TO app;
 
 ALTER FUNCTION orgunit.ensure_setid_bootstrap(uuid, uuid)

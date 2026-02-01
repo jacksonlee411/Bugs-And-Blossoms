@@ -39,7 +39,7 @@ func (r *positionRows) Scan(dest ...any) error {
 		return r.scanErr
 	}
 	*(dest[0].(*string)) = "pos1"
-	*(dest[1].(*string)) = "org1"
+	*(dest[1].(*string)) = "10000001"
 	*(dest[2].(*string)) = ""
 	*(dest[3].(*string)) = ""
 	*(dest[4].(*string)) = ""
@@ -285,7 +285,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -295,7 +295,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -305,7 +305,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "", "org1", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "", "10000001", "", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -321,11 +321,21 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		}
 	})
 
+	t.Run("invalid org_unit_id", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "bad", "jp1", "", "A")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
 	t.Run("missing job_profile_id", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -335,7 +345,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -347,7 +357,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			return tx, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -360,7 +370,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -373,7 +383,7 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -384,10 +394,10 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx := &stubTx{commitErr: errors.New("commit")}
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
-			tx.row3 = &stubRow{vals: []any{"pos1", "org1", "", "", "", "jp1", "", "A", "active", "1.0", "2026-01-01"}}
+			tx.row3 = &stubRow{vals: []any{"pos1", "10000001", "", "", "", "jp1", "", "A", "active", "1.0", "2026-01-01"}}
 			return tx, nil
 		}))
-		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
+		_, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -398,18 +408,18 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
-			tx.row3 = &stubRow{vals: []any{"pos1", "org1", "", "S2601", "2026-01-01", "00000000-0000-0000-0000-000000000001", "JP1", "A", "active", "2.50", "2026-01-01"}}
+			tx.row3 = &stubRow{vals: []any{"pos1", "10000001", "", "S2601", "2026-01-01", "00000000-0000-0000-0000-000000000001", "JP1", "A", "active", "2.50", "2026-01-01"}}
 			return tx, nil
 		}))
-		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "00000000-0000-0000-0000-000000000001", " 2.50 ", " A ")
+		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "00000000-0000-0000-0000-000000000001", " 2.50 ", " A ")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if p.ID != "pos1" {
 			t.Fatalf("expected pos1, got %q", p.ID)
 		}
-		if p.OrgUnitID != "org1" {
-			t.Fatalf("expected org1, got %q", p.OrgUnitID)
+		if p.OrgUnitID != "10000001" {
+			t.Fatalf("expected 10000001, got %q", p.OrgUnitID)
 		}
 		if p.JobProfileID == "" {
 			t.Fatal("expected job_profile_id")
@@ -427,10 +437,10 @@ func TestStaffingPGStore_CreatePositionCurrent(t *testing.T) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"pos1"}}
 			tx.row2 = &stubRow{vals: []any{"evt1"}}
-			tx.row3 = &stubRow{vals: []any{"pos1", "org1", "", "S2601", "2026-01-01", "jp1", "", "A", "active", "1.0", "2026-01-01"}}
+			tx.row3 = &stubRow{vals: []any{"pos1", "10000001", "", "S2601", "2026-01-01", "jp1", "", "A", "active", "1.0", "2026-01-01"}}
 			return tx, nil
 		}))
-		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A")
+		p, err := store.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -445,7 +455,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -455,7 +465,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{execErr: errors.New("exec")}, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -465,7 +475,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "", "org1", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "", "10000001", "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -475,7 +485,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "", "2026-01-01", "org1", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "", "2026-01-01", "10000001", "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -491,11 +501,21 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		}
 	})
 
+	t.Run("invalid org_unit_id", func(t *testing.T) {
+		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "bad", "", "", "", "A", "disabled")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
 	t.Run("gen event id error", func(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -507,7 +527,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -519,7 +539,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 			tx.row = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -529,10 +549,10 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{commitErr: errors.New("commit")}
 			tx.row = &stubRow{vals: []any{"evt1"}}
-			tx.row2 = &stubRow{vals: []any{"pos1", "org1", "", "", "", "", "", "Name", "disabled", "1.0", "2026-01-01"}}
+			tx.row2 = &stubRow{vals: []any{"pos1", "10000001", "", "", "", "", "", "Name", "disabled", "1.0", "2026-01-01"}}
 			return tx, nil
 		}))
-		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "org1", "", "", "", "A", "disabled")
+		_, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "10000001", "", "", "", "A", "disabled")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -542,10 +562,10 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"evt1"}}
-			tx.row2 = &stubRow{vals: []any{"pos1", "org1", "mgr1", "", "", "", "", "Name", "disabled", "1.25", "2026-01-01"}}
+			tx.row2 = &stubRow{vals: []any{"pos1", "10000001", "mgr1", "", "", "", "", "Name", "disabled", "1.25", "2026-01-01"}}
 			return tx, nil
 		}))
-		p, err := store.UpdatePositionCurrent(context.Background(), "t1", " pos1 ", "2026-01-01", " org1 ", " mgr1 ", "", " 1.25 ", " Name ", " disabled ")
+		p, err := store.UpdatePositionCurrent(context.Background(), "t1", " pos1 ", "2026-01-01", " 10000001 ", " mgr1 ", "", " 1.25 ", " Name ", " disabled ")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -564,7 +584,7 @@ func TestStaffingPGStore_UpdatePositionCurrent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{"evt1"}}
-			tx.row2 = &stubRow{vals: []any{"pos1", "org1", "mgr1", "", "", "", "", "Name", "disabled", "1.0", "2026-01-01"}}
+			tx.row2 = &stubRow{vals: []any{"pos1", "10000001", "mgr1", "", "", "", "", "Name", "disabled", "1.0", "2026-01-01"}}
 			return tx, nil
 		}))
 		if _, err := store.UpdatePositionCurrent(context.Background(), "t1", "pos1", "2026-01-01", "", "", "00000000-0000-0000-0000-000000000002", "", "", ""); err != nil {
@@ -826,19 +846,19 @@ func TestStaffingMemoryStore(t *testing.T) {
 	s := newStaffingMemoryStore()
 
 	t.Run("create position invalid", func(t *testing.T) {
-		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "", "org1", "", "", "A"); err == nil {
+		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "", "10000001", "", "", "A"); err == nil {
 			t.Fatal("expected error")
 		}
 		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "", "jp1", "", "A"); err == nil {
 			t.Fatal("expected error")
 		}
-		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "", "", "A"); err == nil {
+		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "", "", "A"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("create position ok", func(t *testing.T) {
-		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "org1", "jp1", "", "A"); err != nil {
+		if _, err := s.CreatePositionCurrent(context.Background(), "t1", "2026-01-01", "10000001", "jp1", "", "A"); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -880,11 +900,11 @@ func TestStaffingMemoryStore(t *testing.T) {
 			t.Fatalf("expected 1, got %d", len(positions))
 		}
 
-		updated, err := s.UpdatePositionCurrent(context.Background(), "t1", positions[0].ID, "2026-02-01", "org2", "mgr1", "jp1", "2.5", "B", "disabled")
+		updated, err := s.UpdatePositionCurrent(context.Background(), "t1", positions[0].ID, "2026-02-01", "10000002", "mgr1", "jp1", "2.5", "B", "disabled")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if updated.OrgUnitID != "org2" || updated.ReportsToID != "mgr1" || updated.JobProfileID != "jp1" || updated.Name != "B" || updated.LifecycleStatus != "disabled" || updated.EffectiveAt != "2026-02-01" {
+		if updated.OrgUnitID != "10000002" || updated.ReportsToID != "mgr1" || updated.JobProfileID != "jp1" || updated.Name != "B" || updated.LifecycleStatus != "disabled" || updated.EffectiveAt != "2026-02-01" {
 			t.Fatalf("unexpected updated position: %+v", updated)
 		}
 	})
@@ -1063,7 +1083,7 @@ func TestStaffingHandlers(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{
 				listFn: func(context.Context, string, string) ([]Position, error) { return nil, errors.New("list") },
@@ -1083,7 +1103,7 @@ func TestStaffingHandlers(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{
 				listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
@@ -1099,13 +1119,13 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositions post invalid effective_date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=bad&org_unit_id=org1&name=A"))
+		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=bad&org_unit_id=10000001&name=A"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{
 				listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
@@ -1121,13 +1141,13 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositions post create error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-01&org_unit_id=org1&job_profile_id=jp1&name=A"))
+		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-01&org_unit_id=10000001&job_profile_id=jp1&name=A"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{
 				listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
@@ -1143,13 +1163,13 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositions post ok", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_unit_id=org1&job_profile_id=jp1&name=A"))
+		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_unit_id=10000001&job_profile_id=jp1&name=A"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{
 				listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
@@ -1165,18 +1185,18 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositions post ok (preserve org_unit_id)", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_unit_id=org1&job_profile_id=1&name=A"))
+		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_unit_id=10000001&job_profile_id=1&name=A"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{
 				listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
 				createFn: func(_ context.Context, _ string, _ string, orgUnitID string, jobProfileID string, _ string, _ string) (Position, error) {
-					if orgUnitID != "org1" || jobProfileID != "1" {
+					if orgUnitID != "10000001" || jobProfileID != "1" {
 						return Position{}, errors.New("unexpected job profile fields")
 					}
 					return Position{ID: "pos1"}, nil
@@ -1188,7 +1208,7 @@ func TestStaffingHandlers(t *testing.T) {
 			t.Fatalf("status=%d", rec.Code)
 		}
 		loc := rec.Header().Get("Location")
-		if !strings.Contains(loc, "org_unit_id=org1") {
+		if !strings.Contains(loc, "org_unit_id=10000001") {
 			t.Fatalf("location=%q", loc)
 		}
 	})
@@ -1197,12 +1217,12 @@ func TestStaffingHandlers(t *testing.T) {
 		jobStore := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
 		_ = jobStore.CreateJobProfile(context.Background(), "t1", "S2601", "2026-01-01", "JP1", "Job Profile 1", "", nil, "")
 
-		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=org1", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) {
 				return []Position{{ID: "pos1", Name: "A"}}, nil
@@ -1215,13 +1235,13 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositions with resolve error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=org1", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{
 				listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-					return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+					return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 				},
 				resolveFn: func(context.Context, string, string, string) (string, error) {
 					return "", errors.New("resolve")
@@ -1236,12 +1256,12 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositions with job store errors", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=org1", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil }},
 			jobStoreErrStub{JobCatalogStore: newJobCatalogMemoryStore()},
@@ -1258,7 +1278,7 @@ func TestStaffingHandlers(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{
 				listFn: func(context.Context, string, string) ([]Position, error) {
@@ -1285,7 +1305,7 @@ func TestStaffingHandlers(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{
 				listFn: func(context.Context, string, string) ([]Position, error) {
@@ -1306,13 +1326,13 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositions post default effective_date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("org_unit_id=org1&job_profile_id=jp1&name=A"))
+		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("org_unit_id=10000001&job_profile_id=jp1&name=A"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{
 				listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil },
@@ -1336,7 +1356,7 @@ func TestStaffingHandlers(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handlePositions(rec, req,
 			staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-				return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+				return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 			}},
 			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil }},
 			nil,
@@ -1414,7 +1434,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositionsAPI post invalid effective_date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"effective_date":"bad","org_unit_id":"org1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"effective_date":"bad","org_unit_id":"10000001"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, &staffingMemoryStore{})
@@ -1424,7 +1444,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositionsAPI post create error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"effective_date":"2026-01-01","org_unit_id":"org1","job_profile_id":"jp1","name":"A"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"effective_date":"2026-01-01","org_unit_id":"10000001","job_profile_id":"jp1","name":"A"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, positionStoreStub{
@@ -1438,7 +1458,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositionsAPI post ok", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"org1","job_profile_id":"jp1","name":"A"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"10000001","job_profile_id":"jp1","name":"A"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, positionStoreStub{
@@ -1466,7 +1486,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositionsAPI post error conflict", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"org1","job_profile_id":"jp1","name":"A"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"10000001","job_profile_id":"jp1","name":"A"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, positionStoreStub{
@@ -2153,10 +2173,10 @@ func TestStaffingHandlers(t *testing.T) {
 		_ = renderPositions(nil, nil, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "", "", nil, "")
 	})
 	t.Run("renderPositions with nodes and positions", func(t *testing.T) {
-		_ = renderPositions([]Position{{ID: "pos1", OrgUnitID: "org1", Name: "A", EffectiveAt: "2026-01-01"}}, []OrgUnitNode{{ID: "org1", Name: "B"}, {ID: "org2", Name: "A"}}, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "", "", nil, "err")
+		_ = renderPositions([]Position{{ID: "pos1", OrgUnitID: "10000001", Name: "A", EffectiveAt: "2026-01-01"}}, []OrgUnitNode{{ID: "10000001", Name: "B"}, {ID: "10000002", Name: "A"}}, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "", "", nil, "err")
 	})
 	t.Run("renderPositions org unit missing in nodes", func(t *testing.T) {
-		out := renderPositions(nil, []OrgUnitNode{{ID: "org1", Name: "Org"}}, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "missing", "", nil, "")
+		out := renderPositions(nil, []OrgUnitNode{{ID: "10000001", Name: "Org"}}, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "missing", "", nil, "")
 		if !strings.Contains(out, "missing") {
 			t.Fatalf("unexpected output: %s", out)
 		}
@@ -2164,13 +2184,13 @@ func TestStaffingHandlers(t *testing.T) {
 	t.Run("renderPositions job catalog context", func(t *testing.T) {
 		out := renderPositions(
 			[]Position{
-				{ID: "pos1", OrgUnitID: "org1", Name: "A", EffectiveAt: "2026-01-01", LifecycleStatus: "active", JobCatalogSetID: "SHARE", JobProfileID: "1", JobProfileCode: "JP1"},
-				{ID: "pos2", OrgUnitID: "org2", Name: "", EffectiveAt: "2026-01-02", LifecycleStatus: "disabled", JobCatalogSetID: "", JobProfileID: "2", JobProfileCode: ""},
+				{ID: "pos1", OrgUnitID: "10000001", Name: "A", EffectiveAt: "2026-01-01", LifecycleStatus: "active", JobCatalogSetID: "SHARE", JobProfileID: "1", JobProfileCode: "JP1"},
+				{ID: "pos2", OrgUnitID: "10000002", Name: "", EffectiveAt: "2026-01-02", LifecycleStatus: "disabled", JobCatalogSetID: "", JobProfileID: "2", JobProfileCode: ""},
 			},
-			[]OrgUnitNode{{ID: "org1", Name: "Org", IsBusinessUnit: true}, {ID: "org2", Name: "Org2"}},
+			[]OrgUnitNode{{ID: "10000001", Name: "Org", IsBusinessUnit: true}, {ID: "10000002", Name: "Org2"}},
 			Tenant{ID: "t1", Name: "T"},
 			"2026-01-01",
-			"org1",
+			"10000001",
 			"SHARE",
 			[]JobProfile{{ID: "1", Code: "JP1"}, {ID: "2", Code: "JP2"}},
 			"err",
@@ -2226,7 +2246,7 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("handlePositionsAPI tenant missing on post", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"org1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"10000001"}`)))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, &staffingMemoryStore{})
 		if rec.Code != http.StatusInternalServerError {
@@ -2236,13 +2256,13 @@ func TestStaffingHandlers(t *testing.T) {
 }
 
 func TestStaffingHandlers_JSONRoundTrip(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"org1","job_profile_id":"jp1","name":"A"}`)))
+	req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_unit_id":"10000001","job_profile_id":"jp1","name":"A"}`)))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
 
 	handlePositionsAPI(rec, req, positionStoreStub{
 		createFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
-			return Position{ID: "pos1", OrgUnitID: "org1", Name: "A", EffectiveAt: "2026-01-01"}, nil
+			return Position{ID: "pos1", OrgUnitID: "10000001", Name: "A", EffectiveAt: "2026-01-01"}, nil
 		},
 	})
 	if rec.Code != http.StatusOK {
@@ -2279,7 +2299,7 @@ func TestStaffingHandlers_ParseDefaultDates(t *testing.T) {
 
 	handlePositions(rec, req,
 		staffingOrgStoreStub{listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
-			return []OrgUnitNode{{ID: "org1", Name: "Org"}}, nil
+			return []OrgUnitNode{{ID: "10000001", Name: "Org"}}, nil
 		}},
 		positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) { return nil, nil }},
 		nil,

@@ -5,13 +5,19 @@ DECLARE
   v_scope_code text;
   v_tenant_id uuid;
   v_setid text;
+  v_owner_setid text;
   v_package_id uuid;
 BEGIN
   FOR v_tenant_id IN
-    SELECT DISTINCT tenant_id
+    SELECT DISTINCT tenant_uuid
     FROM orgunit.setids
   LOOP
     PERFORM set_config('app.current_tenant', v_tenant_id::text, true);
+    SELECT setid INTO v_owner_setid
+    FROM orgunit.setids
+    WHERE tenant_uuid = v_tenant_id
+    ORDER BY setid ASC
+    LIMIT 1;
 
     FOR v_scope_code IN
       SELECT scope_code
@@ -20,7 +26,7 @@ BEGIN
     LOOP
       SELECT p.package_id INTO v_package_id
       FROM orgunit.setid_scope_packages p
-      WHERE p.tenant_id = v_tenant_id
+      WHERE p.tenant_uuid = v_tenant_id
         AND p.scope_code = v_scope_code
         AND p.package_code = 'DEFLT';
 
@@ -33,14 +39,14 @@ BEGIN
           v_package_id,
           'BOOTSTRAP',
           current_date,
-          jsonb_build_object('package_code', 'DEFLT', 'name', 'Default'),
+          jsonb_build_object('package_code', 'DEFLT', 'owner_setid', v_owner_setid, 'name', 'Default'),
           format('bootstrap:scope-package:deflt:%s', v_scope_code),
           v_tenant_id
         );
 
         SELECT p.package_id INTO v_package_id
         FROM orgunit.setid_scope_packages p
-        WHERE p.tenant_id = v_tenant_id
+        WHERE p.tenant_uuid = v_tenant_id
           AND p.scope_code = v_scope_code
           AND p.package_code = 'DEFLT';
       END IF;
@@ -55,12 +61,12 @@ BEGIN
       FOR v_setid IN
         SELECT setid
         FROM orgunit.setids
-        WHERE tenant_id = v_tenant_id
+        WHERE tenant_uuid = v_tenant_id
       LOOP
         IF NOT EXISTS (
           SELECT 1
           FROM orgunit.setid_scope_subscriptions s
-          WHERE s.tenant_id = v_tenant_id
+          WHERE s.tenant_uuid = v_tenant_id
             AND s.setid = v_setid
             AND s.scope_code = v_scope_code
             AND s.validity @> current_date

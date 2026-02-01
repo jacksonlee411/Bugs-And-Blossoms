@@ -206,85 +206,78 @@ $$;
 CREATE EXTENSION IF NOT EXISTS ltree;
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
--- uuid -> ltree label (32 hex)
-CREATE OR REPLACE FUNCTION orgunit.org_ltree_label(p_id uuid)
+-- org_id -> ltree label (8-digit int)
+CREATE OR REPLACE FUNCTION orgunit.org_ltree_label(p_id int)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
 AS $$
-  SELECT replace(lower(p_id::text), '-', '');
+  SELECT p_id::text;
 $$;
 
--- 32 hex -> uuid
-CREATE OR REPLACE FUNCTION orgunit.org_uuid_from_hex32(p_hex text)
-RETURNS uuid
-LANGUAGE sql
-IMMUTABLE
-AS $$
-  SELECT (
-    substr(p_hex, 1, 8) || '-' ||
-    substr(p_hex, 9, 4) || '-' ||
-    substr(p_hex, 13, 4) || '-' ||
-    substr(p_hex, 17, 4) || '-' ||
-    substr(p_hex, 21, 12)
-  )::uuid;
-$$;
-
--- ltree path -> uuid[] (for long name / ancestors join)
+-- ltree path -> int[] (for long name / ancestors join)
 CREATE OR REPLACE FUNCTION orgunit.org_path_ids(p_path ltree)
-RETURNS uuid[]
+RETURNS int[]
 LANGUAGE sql
 IMMUTABLE
 AS $$
-  SELECT array_agg(orgunit.org_uuid_from_hex32(t.part) ORDER BY t.ord)
+  SELECT array_agg((t.part)::int ORDER BY t.ord)
   FROM unnest(string_to_array(p_path::text, '.')) WITH ORDINALITY AS t(part, ord);
 $$;
 
+CREATE SEQUENCE IF NOT EXISTS orgunit.org_id_seq
+  START WITH 10000000
+  INCREMENT BY 1
+  MINVALUE 10000000
+  MAXVALUE 99999999
+  NO CYCLE;
+
 CREATE TABLE IF NOT EXISTS orgunit.org_trees (
-  tenant_id uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
   hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
-  root_org_id uuid NOT NULL,
+  root_org_id int NOT NULL CHECK (root_org_id BETWEEN 10000000 AND 99999999),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, hierarchy_type),
+  PRIMARY KEY (tenant_uuid, hierarchy_type),
   CONSTRAINT org_trees_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit'))
 );
 
 CREATE TABLE IF NOT EXISTS orgunit.org_events (
   id bigserial PRIMARY KEY,
-  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL,
+  event_uuid uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
   hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
-  org_id uuid NOT NULL,
+  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_id text NOT NULL,
-  initiator_id uuid NOT NULL,
+  request_code text NOT NULL,
+  initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT org_events_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit')),
   CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT')),
-  CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_id, hierarchy_type, org_id, effective_date)
+  CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_uuid, hierarchy_type, org_id, effective_date)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_id_unique ON orgunit.org_events (event_id);
-CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_id, org_id, effective_date, id);
-CREATE INDEX IF NOT EXISTS org_events_tenant_type_effective_idx ON orgunit.org_events (tenant_id, hierarchy_type, effective_date, id);
+CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_events (event_uuid);
+CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);
+CREATE INDEX IF NOT EXISTS org_events_tenant_type_effective_idx ON orgunit.org_events (tenant_uuid, hierarchy_type, effective_date, id);
 
 CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
   id bigserial PRIMARY KEY,
-  tenant_id uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
   hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
-  org_id uuid NOT NULL,
-  parent_id uuid NULL,
+  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
+  parent_id int NULL CHECK (parent_id BETWEEN 10000000 AND 99999999),
   node_path ltree NOT NULL,
   validity daterange NOT NULL,
-  path_ids uuid[] GENERATED ALWAYS AS (orgunit.org_path_ids(node_path)) STORED,
+  path_ids int[] GENERATED ALWAYS AS (orgunit.org_path_ids(node_path)) STORED,
   name varchar(255) NOT NULL,
+  full_name_path text NOT NULL,
   status text NOT NULL DEFAULT 'active',
   is_business_unit boolean NOT NULL DEFAULT false,
-  manager_id uuid NULL,
+  manager_uuid uuid NULL,
   last_event_id bigint NOT NULL REFERENCES orgunit.org_events(id),
   CONSTRAINT org_unit_versions_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit')),
   CONSTRAINT org_unit_versions_status_check CHECK (status IN ('active','disabled')),
@@ -292,24 +285,24 @@ CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
   CONSTRAINT org_unit_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT org_unit_versions_no_overlap
     EXCLUDE USING gist (
-      tenant_id gist_uuid_ops WITH =,
+      tenant_uuid gist_uuid_ops WITH =,
       hierarchy_type gist_text_ops WITH =,
-      org_id gist_uuid_ops WITH =,
+      org_id gist_int4_ops WITH =,
       validity WITH &&
     )
 );
 
 CREATE INDEX IF NOT EXISTS org_unit_versions_search_gist
   ON orgunit.org_unit_versions
-  USING gist (tenant_id gist_uuid_ops, hierarchy_type gist_text_ops, node_path, validity);
+  USING gist (tenant_uuid gist_uuid_ops, hierarchy_type gist_text_ops, node_path, validity);
 
 CREATE INDEX IF NOT EXISTS org_unit_versions_active_day_gist
   ON orgunit.org_unit_versions
-  USING gist (tenant_id gist_uuid_ops, hierarchy_type gist_text_ops, validity)
+  USING gist (tenant_uuid gist_uuid_ops, hierarchy_type gist_text_ops, validity)
   WHERE status = 'active';
 
 CREATE INDEX IF NOT EXISTS org_unit_versions_lookup_btree
-  ON orgunit.org_unit_versions (tenant_id, hierarchy_type, org_id, lower(validity));
+  ON orgunit.org_unit_versions (tenant_uuid, hierarchy_type, org_id, lower(validity));
 
 CREATE INDEX IF NOT EXISTS org_unit_versions_path_ids_gin
   ON orgunit.org_unit_versions
@@ -319,27 +312,27 @@ ALTER TABLE orgunit.org_trees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.org_trees FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_trees;
 CREATE POLICY tenant_isolation ON orgunit.org_trees
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.org_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.org_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_events;
 CREATE POLICY tenant_isolation ON orgunit.org_events
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.org_unit_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.org_unit_versions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_unit_versions;
 CREATE POLICY tenant_isolation ON orgunit.org_unit_versions
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 -- end: modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql
 
 -- begin: modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql
-CREATE OR REPLACE FUNCTION orgunit.assert_current_tenant(p_tenant_id uuid)
+CREATE OR REPLACE FUNCTION orgunit.assert_current_tenant(p_tenant_uuid uuid)
 RETURNS void
 LANGUAGE plpgsql
 AS $$
@@ -347,11 +340,11 @@ DECLARE
   v_ctx_raw text;
   v_ctx_tenant uuid;
 BEGIN
-  IF p_tenant_id IS NULL THEN
+  IF p_tenant_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = 'tenant_id is required';
+      DETAIL = 'tenant_uuid is required';
   END IF;
 
   v_ctx_raw := current_setting('app.current_tenant', true);
@@ -372,19 +365,19 @@ BEGIN
         DETAIL = format('app.current_tenant=%s', v_ctx_raw);
   END;
 
-  IF v_ctx_tenant <> p_tenant_id THEN
+  IF v_ctx_tenant <> p_tenant_uuid THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'RLS_TENANT_MISMATCH',
-      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_id, v_ctx_tenant);
+      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_uuid, v_ctx_tenant);
   END IF;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.split_org_unit_version_at(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
+  p_org_id int,
   p_effective_date date,
   p_event_db_id bigint
 )
@@ -394,7 +387,7 @@ AS $$
 DECLARE
   v_row orgunit.org_unit_versions%ROWTYPE;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -410,7 +403,7 @@ BEGIN
 
   SELECT * INTO v_row
   FROM orgunit.org_unit_versions
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND hierarchy_type = p_hierarchy_type
     AND org_id = p_org_id
     AND validity @> p_effective_date
@@ -428,42 +421,44 @@ BEGIN
   WHERE id = v_row.id;
 
   INSERT INTO orgunit.org_unit_versions (
-    tenant_id,
+    tenant_uuid,
     hierarchy_type,
     org_id,
     parent_id,
     node_path,
     validity,
     name,
+    full_name_path,
     status,
     is_business_unit,
-    manager_id,
+    manager_uuid,
     last_event_id
   )
   VALUES (
-    v_row.tenant_id,
+    v_row.tenant_uuid,
     v_row.hierarchy_type,
     v_row.org_id,
     v_row.parent_id,
     v_row.node_path,
     daterange(p_effective_date, upper(v_row.validity), '[)'),
     v_row.name,
+    v_row.full_name_path,
     v_row.status,
     v_row.is_business_unit,
-    v_row.manager_id,
+    v_row.manager_uuid,
     p_event_db_id
   );
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.apply_create_logic(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
-  p_parent_id uuid,
+  p_org_id int,
+  p_parent_id int,
   p_effective_date date,
   p_name text,
-  p_manager_id uuid,
+  p_manager_uuid uuid,
   p_is_business_unit boolean,
   p_event_db_id bigint
 )
@@ -473,10 +468,10 @@ AS $$
 DECLARE
   v_parent_path ltree;
   v_node_path ltree;
-  v_root_org_id uuid;
+  v_root_org_id int;
   v_is_business_unit boolean;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -496,7 +491,7 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM orgunit.org_unit_versions
-    WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type AND org_id = p_org_id
+    WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type AND org_id = p_org_id
     LIMIT 1
   ) THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_ALREADY_EXISTS', DETAIL = format('org_id=%s', p_org_id);
@@ -505,7 +500,7 @@ BEGIN
   IF p_parent_id IS NULL THEN
     SELECT t.root_org_id INTO v_root_org_id
     FROM orgunit.org_trees t
-    WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type
+    WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = p_hierarchy_type
     FOR UPDATE;
 
     IF v_root_org_id IS NOT NULL THEN
@@ -514,8 +509,8 @@ BEGIN
         DETAIL = format('root_org_id=%s', v_root_org_id);
     END IF;
 
-    INSERT INTO orgunit.org_trees (tenant_id, hierarchy_type, root_org_id)
-    VALUES (p_tenant_id, p_hierarchy_type, p_org_id);
+    INSERT INTO orgunit.org_trees (tenant_uuid, hierarchy_type, root_org_id)
+    VALUES (p_tenant_uuid, p_hierarchy_type, p_org_id);
 
     v_node_path := text2ltree(orgunit.org_ltree_label(p_org_id));
     IF p_is_business_unit IS NOT NULL AND p_is_business_unit = false THEN
@@ -527,17 +522,17 @@ BEGIN
   ELSE
     SELECT t.root_org_id INTO v_root_org_id
     FROM orgunit.org_trees t
-    WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type;
+    WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = p_hierarchy_type;
 
     IF v_root_org_id IS NULL THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_TREE_NOT_INITIALIZED',
-        DETAIL = format('tenant_id=%s', p_tenant_id);
+        DETAIL = format('tenant_uuid=%s', p_tenant_uuid);
     END IF;
 
     SELECT v.node_path INTO v_parent_path
     FROM orgunit.org_unit_versions v
-    WHERE v.tenant_id = p_tenant_id
+    WHERE v.tenant_uuid = p_tenant_uuid
       AND v.hierarchy_type = p_hierarchy_type
       AND v.org_id = p_parent_id
       AND v.status = 'active'
@@ -555,39 +550,41 @@ BEGIN
   END IF;
 
   INSERT INTO orgunit.org_unit_versions (
-    tenant_id,
+    tenant_uuid,
     hierarchy_type,
     org_id,
     parent_id,
     node_path,
     validity,
     name,
+    full_name_path,
     status,
     is_business_unit,
-    manager_id,
+    manager_uuid,
     last_event_id
   )
   VALUES (
-    p_tenant_id,
+    p_tenant_uuid,
 	    p_hierarchy_type,
 	    p_org_id,
 	    p_parent_id,
     v_node_path,
     daterange(p_effective_date, NULL, '[)'),
     p_name,
+    p_name,
     'active',
     v_is_business_unit,
-    p_manager_id,
+    p_manager_uuid,
     p_event_db_id
   );
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.apply_move_logic(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
-  p_new_parent_id uuid,
+  p_org_id int,
+  p_new_parent_id int,
   p_effective_date date,
   p_event_db_id bigint
 )
@@ -595,13 +592,13 @@ RETURNS void
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_root_org_id uuid;
+  v_root_org_id int;
   v_old_path ltree;
   v_new_parent_path ltree;
   v_new_prefix ltree;
   v_old_level int;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -620,12 +617,12 @@ BEGIN
 
   SELECT t.root_org_id INTO v_root_org_id
   FROM orgunit.org_trees t
-  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type;
+  WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = p_hierarchy_type;
 
   IF v_root_org_id IS NULL THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_TREE_NOT_INITIALIZED',
-      DETAIL = format('tenant_id=%s', p_tenant_id);
+      DETAIL = format('tenant_uuid=%s', p_tenant_uuid);
   END IF;
   IF v_root_org_id = p_org_id THEN
     RAISE EXCEPTION USING
@@ -635,7 +632,7 @@ BEGIN
 
   SELECT v.node_path INTO v_old_path
   FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = p_hierarchy_type
     AND v.org_id = p_org_id
     AND v.status = 'active'
@@ -652,7 +649,7 @@ BEGIN
 
   SELECT v.node_path INTO v_new_parent_path
   FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = p_hierarchy_type
     AND v.org_id = p_new_parent_id
     AND v.status = 'active'
@@ -677,7 +674,7 @@ BEGIN
   WITH split AS (
     SELECT *
     FROM orgunit.org_unit_versions
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND hierarchy_type = p_hierarchy_type
       AND node_path <@ v_old_path
       AND validity @> p_effective_date
@@ -691,20 +688,21 @@ BEGIN
     RETURNING s.*
   )
   INSERT INTO orgunit.org_unit_versions (
-    tenant_id,
+    tenant_uuid,
     hierarchy_type,
     org_id,
     parent_id,
     node_path,
     validity,
     name,
+    full_name_path,
     status,
     is_business_unit,
-    manager_id,
+    manager_uuid,
     last_event_id
   )
   SELECT
-    u.tenant_id,
+    u.tenant_uuid,
     u.hierarchy_type,
     u.org_id,
     CASE WHEN u.org_id = p_org_id THEN p_new_parent_id ELSE u.parent_id END,
@@ -714,9 +712,10 @@ BEGIN
     END,
     daterange(p_effective_date, upper(u.validity), '[)'),
     u.name,
+    u.full_name_path,
     u.status,
     u.is_business_unit,
-    u.manager_id,
+    u.manager_uuid,
     p_event_db_id
   FROM upd u;
 
@@ -728,7 +727,7 @@ BEGIN
       END,
     parent_id = CASE WHEN v.org_id = p_org_id THEN p_new_parent_id ELSE v.parent_id END,
     last_event_id = p_event_db_id
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = p_hierarchy_type
     AND v.node_path <@ v_old_path
     AND lower(v.validity) >= p_effective_date;
@@ -736,9 +735,9 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.apply_rename_logic(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
+  p_org_id int,
   p_effective_date date,
   p_new_name text,
   p_event_db_id bigint
@@ -749,7 +748,7 @@ AS $$
 DECLARE
   v_stop_date date;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -769,7 +768,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM orgunit.org_unit_versions
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND hierarchy_type = p_hierarchy_type
       AND org_id = p_org_id
       AND validity @> p_effective_date
@@ -780,11 +779,11 @@ BEGIN
       DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
   END IF;
 
-  PERFORM orgunit.split_org_unit_version_at(p_tenant_id, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
+  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
 
   SELECT MIN(e.effective_date) INTO v_stop_date
   FROM orgunit.org_events e
-  WHERE e.tenant_id = p_tenant_id
+  WHERE e.tenant_uuid = p_tenant_uuid
     AND e.hierarchy_type = p_hierarchy_type
     AND e.org_id = p_org_id
     AND e.event_type = 'RENAME'
@@ -792,7 +791,7 @@ BEGIN
 
   UPDATE orgunit.org_unit_versions
   SET name = p_new_name, last_event_id = p_event_db_id
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND hierarchy_type = p_hierarchy_type
     AND org_id = p_org_id
     AND lower(validity) >= p_effective_date
@@ -801,9 +800,9 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.apply_disable_logic(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
+  p_org_id int,
   p_effective_date date,
   p_event_db_id bigint
 )
@@ -811,7 +810,7 @@ RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -828,7 +827,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM orgunit.org_unit_versions
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND hierarchy_type = p_hierarchy_type
       AND org_id = p_org_id
       AND validity @> p_effective_date
@@ -839,11 +838,11 @@ BEGIN
       DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
   END IF;
 
-  PERFORM orgunit.split_org_unit_version_at(p_tenant_id, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
+  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
 
   UPDATE orgunit.org_unit_versions
   SET status = 'disabled', last_event_id = p_event_db_id
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND hierarchy_type = p_hierarchy_type
     AND org_id = p_org_id
     AND lower(validity) >= p_effective_date;
@@ -851,9 +850,9 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.apply_set_business_unit_logic(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
+  p_org_id int,
   p_effective_date date,
   p_is_business_unit boolean,
   p_event_db_id bigint
@@ -864,9 +863,9 @@ AS $$
 DECLARE
   v_stop_date date;
   v_status text;
-  v_root_org_id uuid;
+  v_root_org_id int;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -885,7 +884,7 @@ BEGIN
 
   SELECT v.status INTO v_status
   FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = p_hierarchy_type
     AND v.org_id = p_org_id
     AND v.validity @> p_effective_date
@@ -905,7 +904,7 @@ BEGIN
 
   SELECT t.root_org_id INTO v_root_org_id
   FROM orgunit.org_trees t
-  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type;
+  WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = p_hierarchy_type;
 
   IF v_root_org_id IS NOT NULL AND v_root_org_id = p_org_id AND p_is_business_unit = false THEN
     RAISE EXCEPTION USING
@@ -913,11 +912,11 @@ BEGIN
       DETAIL = format('org_id=%s', p_org_id);
   END IF;
 
-  PERFORM orgunit.split_org_unit_version_at(p_tenant_id, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
+  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
 
   SELECT MIN(e.effective_date) INTO v_stop_date
   FROM orgunit.org_events e
-  WHERE e.tenant_id = p_tenant_id
+  WHERE e.tenant_uuid = p_tenant_uuid
     AND e.hierarchy_type = p_hierarchy_type
     AND e.org_id = p_org_id
     AND e.event_type = 'SET_BUSINESS_UNIT'
@@ -925,7 +924,7 @@ BEGIN
 
   UPDATE orgunit.org_unit_versions
   SET is_business_unit = p_is_business_unit, last_event_id = p_event_db_id
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND hierarchy_type = p_hierarchy_type
     AND org_id = p_org_id
     AND lower(validity) >= p_effective_date
@@ -934,7 +933,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.replay_org_unit_versions(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text
 )
 RETURNS void
@@ -944,14 +943,14 @@ DECLARE
   v_lock_key text;
   v_event orgunit.org_events%ROWTYPE;
   v_payload jsonb;
-  v_parent_id uuid;
-  v_new_parent_id uuid;
+  v_parent_id int;
+  v_new_parent_id int;
   v_name text;
   v_new_name text;
-  v_manager_id uuid;
+  v_manager_uuid uuid;
   v_is_business_unit boolean;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -959,27 +958,27 @@ BEGIN
       DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
   END IF;
 
-  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s:%s', p_tenant_uuid, p_hierarchy_type);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM orgunit.org_unit_versions
-  WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type;
+  WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type;
 
   DELETE FROM orgunit.org_trees
-  WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type;
+  WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type;
 
   FOR v_event IN
     SELECT *
     FROM orgunit.org_events
-    WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type
+    WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type
     ORDER BY effective_date, id
   LOOP
     v_payload := COALESCE(v_event.payload, '{}'::jsonb);
 
     IF v_event.event_type = 'CREATE' THEN
-      v_parent_id := NULLIF(v_payload->>'parent_id', '')::uuid;
+      v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
       v_name := NULLIF(btrim(v_payload->>'name'), '');
-      v_manager_id := NULLIF(v_payload->>'manager_id', '')::uuid;
+      v_manager_uuid := NULLIF(v_payload->>'manager_uuid', '')::uuid;
       v_is_business_unit := NULL;
       IF v_payload ? 'is_business_unit' THEN
         BEGIN
@@ -991,15 +990,15 @@ BEGIN
               DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
         END;
       END IF;
-      PERFORM orgunit.apply_create_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_parent_id, v_event.effective_date, v_name, v_manager_id, v_is_business_unit, v_event.id);
+      PERFORM orgunit.apply_create_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_parent_id, v_event.effective_date, v_name, v_manager_uuid, v_is_business_unit, v_event.id);
     ELSIF v_event.event_type = 'MOVE' THEN
-      v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::uuid;
-      PERFORM orgunit.apply_move_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_new_parent_id, v_event.effective_date, v_event.id);
+      v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::int;
+      PERFORM orgunit.apply_move_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_new_parent_id, v_event.effective_date, v_event.id);
     ELSIF v_event.event_type = 'RENAME' THEN
       v_new_name := NULLIF(btrim(v_payload->>'new_name'), '');
-      PERFORM orgunit.apply_rename_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_new_name, v_event.id);
+      PERFORM orgunit.apply_rename_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_new_name, v_event.id);
     ELSIF v_event.event_type = 'DISABLE' THEN
-      PERFORM orgunit.apply_disable_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_event.id);
+      PERFORM orgunit.apply_disable_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_event.id);
     ELSIF v_event.event_type = 'SET_BUSINESS_UNIT' THEN
       IF NOT (v_payload ? 'is_business_unit') THEN
         RAISE EXCEPTION USING
@@ -1014,7 +1013,7 @@ BEGIN
             MESSAGE = 'ORG_INVALID_ARGUMENT',
             DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
       END;
-      PERFORM orgunit.apply_set_business_unit_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_is_business_unit, v_event.id);
+      PERFORM orgunit.apply_set_business_unit_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_is_business_unit, v_event.id);
     ELSE
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_INVALID_ARGUMENT',
@@ -1029,7 +1028,7 @@ BEGIN
         validity,
         lag(validity) OVER (PARTITION BY org_id ORDER BY lower(validity)) AS prev_validity
       FROM orgunit.org_unit_versions
-      WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type
+      WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type
     )
     SELECT 1
     FROM ordered
@@ -1047,7 +1046,7 @@ BEGIN
     FROM (
       SELECT DISTINCT ON (org_id) org_id, validity
       FROM orgunit.org_unit_versions
-      WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type
+      WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type
       ORDER BY org_id, lower(validity) DESC
     ) last
     WHERE NOT upper_inf(last.validity)
@@ -1057,19 +1056,32 @@ BEGIN
       MESSAGE = 'ORG_VALIDITY_NOT_INFINITE',
       DETAIL = 'last version validity must be unbounded (infinity)';
   END IF;
+
+  UPDATE orgunit.org_unit_versions v
+  SET full_name_path = (
+    SELECT string_agg(a.name, ' / ' ORDER BY t.idx)
+    FROM unnest(v.path_ids) WITH ORDINALITY AS t(uid, idx)
+    JOIN orgunit.org_unit_versions a
+      ON a.tenant_uuid = v.tenant_uuid
+     AND a.hierarchy_type = v.hierarchy_type
+     AND a.org_id = t.uid
+     AND a.validity @> lower(v.validity)
+  )
+  WHERE v.tenant_uuid = p_tenant_uuid
+    AND v.hierarchy_type = 'OrgUnit';
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
+  p_org_id int,
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -1080,10 +1092,10 @@ DECLARE
   v_existing orgunit.org_events%ROWTYPE;
   v_payload jsonb;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
-  IF p_event_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  IF p_event_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'event_uuid is required';
   END IF;
   IF p_org_id IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
@@ -1091,11 +1103,11 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  IF p_initiator_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
@@ -1109,7 +1121,7 @@ BEGIN
       DETAIL = format('unsupported event_type: %s', p_event_type);
   END IF;
 
-  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s:%s', p_tenant_uuid, p_hierarchy_type);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
@@ -1130,53 +1142,53 @@ BEGIN
   END IF;
 
   INSERT INTO orgunit.org_events (
-    event_id,
-    tenant_id,
+    event_uuid,
+    tenant_uuid,
     hierarchy_type,
     org_id,
     event_type,
     effective_date,
     payload,
-    request_id,
-    initiator_id
+    request_code,
+    initiator_uuid
   )
   VALUES (
-    p_event_id,
-    p_tenant_id,
+    p_event_uuid,
+    p_tenant_uuid,
     p_hierarchy_type,
     p_org_id,
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_id,
-    p_initiator_id
+    p_request_code,
+    p_initiator_uuid
   )
-  ON CONFLICT (event_id) DO NOTHING
+  ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_event_db_id;
 
   IF v_event_db_id IS NULL THEN
     SELECT * INTO v_existing
     FROM orgunit.org_events
-    WHERE event_id = p_event_id;
+    WHERE event_uuid = p_event_uuid;
 
-    IF v_existing.tenant_id <> p_tenant_id
+    IF v_existing.tenant_uuid <> p_tenant_uuid
       OR v_existing.hierarchy_type <> p_hierarchy_type
       OR v_existing.org_id <> p_org_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_id <> p_request_id
-      OR v_existing.initiator_id <> p_initiator_id
+      OR v_existing.request_code <> p_request_code
+      OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_IDEMPOTENCY_REUSED',
-        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+        DETAIL = format('event_uuid=%s existing_id=%s', p_event_uuid, v_existing.id);
     END IF;
 
     RETURN v_existing.id;
   END IF;
 
-  PERFORM orgunit.replay_org_unit_versions(p_tenant_id, p_hierarchy_type);
+  PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid, p_hierarchy_type);
 
   RETURN v_event_db_id;
 END;
@@ -1185,21 +1197,21 @@ $$;
 -- end: modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql
 
 -- begin: modules/orgunit/infrastructure/persistence/schema/00004_orgunit_read.sql
-CREATE OR REPLACE FUNCTION orgunit.get_org_snapshot(p_tenant_id uuid, p_query_date date)
+CREATE OR REPLACE FUNCTION orgunit.get_org_snapshot(p_tenant_uuid uuid, p_query_date date)
 RETURNS TABLE (
-  org_id uuid,
-  parent_id uuid,
+  org_id int,
+  parent_id int,
   name varchar(255),
   is_business_unit boolean,
   full_name_path text,
   depth int,
-  manager_id uuid,
+  manager_uuid uuid,
   node_path ltree
 )
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_query_date IS NULL THEN
     RAISE EXCEPTION USING
@@ -1208,40 +1220,21 @@ BEGIN
   END IF;
 
   RETURN QUERY
-  WITH snapshot AS (
-    SELECT
-      v.org_id,
-      v.parent_id,
-      v.node_path,
-      v.name,
-      v.is_business_unit,
-      v.manager_id,
-      v.path_ids
-    FROM orgunit.org_unit_versions v
-    WHERE v.tenant_id = p_tenant_id
-      AND v.hierarchy_type = 'OrgUnit'
-      AND v.status = 'active'
-      AND v.validity @> p_query_date
-  )
   SELECT
-    s.org_id,
-    s.parent_id,
-    s.name,
-    s.is_business_unit,
-    (
-      SELECT string_agg(a.name, ' / ' ORDER BY t.idx)
-      FROM unnest(s.path_ids) WITH ORDINALITY AS t(uid, idx)
-      JOIN orgunit.org_unit_versions a
-        ON a.tenant_id = p_tenant_id
-       AND a.hierarchy_type = 'OrgUnit'
-       AND a.org_id = t.uid
-       AND a.validity @> p_query_date
-    ) AS full_name_path,
-    nlevel(s.node_path) - 1 AS depth,
-    s.manager_id,
-    s.node_path
-  FROM snapshot s
-  ORDER BY s.node_path;
+    v.org_id,
+    v.parent_id,
+    v.name,
+    v.is_business_unit,
+    v.full_name_path,
+    nlevel(v.node_path) - 1 AS depth,
+    v.manager_uuid,
+    v.node_path
+  FROM orgunit.org_unit_versions v
+  WHERE v.tenant_uuid = p_tenant_uuid
+    AND v.hierarchy_type = 'OrgUnit'
+    AND v.status = 'active'
+    AND v.validity @> p_query_date
+  ORDER BY v.node_path;
 END;
 $$;
 
@@ -1250,33 +1243,33 @@ $$;
 -- begin: modules/orgunit/infrastructure/persistence/schema/00005_orgunit_setid_schema.sql
 CREATE TABLE IF NOT EXISTS orgunit.setid_events (
   id bigserial PRIMARY KEY,
-  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL,
+  event_uuid uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
   event_type text NOT NULL,
   setid text NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_id text NOT NULL,
-  initiator_id uuid NOT NULL,
+  request_code text NOT NULL,
+  initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT setid_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','CREATE','RENAME','DISABLE')),
   CONSTRAINT setid_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT setid_events_share_forbidden CHECK (setid <> 'SHARE'),
-  CONSTRAINT setid_events_request_id_unique UNIQUE (tenant_id, request_id)
+  CONSTRAINT setid_events_request_id_unique UNIQUE (tenant_uuid, request_code)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS setid_events_event_id_unique ON orgunit.setid_events (event_id);
-CREATE INDEX IF NOT EXISTS setid_events_tenant_time_idx ON orgunit.setid_events (tenant_id, transaction_time DESC, id DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS setid_events_event_id_unique ON orgunit.setid_events (event_uuid);
+CREATE INDEX IF NOT EXISTS setid_events_tenant_time_idx ON orgunit.setid_events (tenant_uuid, transaction_time DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS orgunit.setids (
-  tenant_id uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
   setid text NOT NULL,
   name text NOT NULL,
   status text NOT NULL DEFAULT 'active',
   last_event_id bigint NOT NULL REFERENCES orgunit.setid_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, setid),
+  PRIMARY KEY (tenant_uuid, setid),
   CONSTRAINT setids_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT setids_share_forbidden CHECK (setid <> 'SHARE'),
   CONSTRAINT setids_status_check CHECK (status IN ('active','disabled')),
@@ -1285,74 +1278,74 @@ CREATE TABLE IF NOT EXISTS orgunit.setids (
 
 CREATE TABLE IF NOT EXISTS orgunit.global_setid_events (
   id bigserial PRIMARY KEY,
-  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
+  event_uuid uuid NOT NULL,
+  tenant_uuid uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
   event_type text NOT NULL,
   setid text NOT NULL DEFAULT 'SHARE',
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_id text NOT NULL,
-  initiator_id uuid NOT NULL,
+  request_code text NOT NULL,
+  initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT global_setid_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','CREATE','RENAME','DISABLE')),
   CONSTRAINT global_setid_events_setid_check CHECK (setid = 'SHARE'),
-  CONSTRAINT global_setid_events_tenant_check CHECK (tenant_id = orgunit.global_tenant_id()),
-  CONSTRAINT global_setid_events_request_id_unique UNIQUE (tenant_id, request_id)
+  CONSTRAINT global_setid_events_tenant_check CHECK (tenant_uuid = orgunit.global_tenant_id()),
+  CONSTRAINT global_setid_events_request_id_unique UNIQUE (tenant_uuid, request_code)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS global_setid_events_event_id_unique ON orgunit.global_setid_events (event_id);
-CREATE INDEX IF NOT EXISTS global_setid_events_tenant_time_idx ON orgunit.global_setid_events (tenant_id, transaction_time DESC, id DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS global_setid_events_event_id_unique ON orgunit.global_setid_events (event_uuid);
+CREATE INDEX IF NOT EXISTS global_setid_events_tenant_time_idx ON orgunit.global_setid_events (tenant_uuid, transaction_time DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS orgunit.global_setids (
-  tenant_id uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
+  tenant_uuid uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
   setid text NOT NULL DEFAULT 'SHARE',
   name text NOT NULL,
   status text NOT NULL DEFAULT 'active',
   last_event_id bigint NOT NULL REFERENCES orgunit.global_setid_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, setid),
+  PRIMARY KEY (tenant_uuid, setid),
   CONSTRAINT global_setids_share_only CHECK (setid = 'SHARE'),
-  CONSTRAINT global_setids_tenant_check CHECK (tenant_id = orgunit.global_tenant_id()),
+  CONSTRAINT global_setids_tenant_check CHECK (tenant_uuid = orgunit.global_tenant_id()),
   CONSTRAINT global_setids_status_check CHECK (status = 'active')
 );
 
 CREATE TABLE IF NOT EXISTS orgunit.setid_binding_events (
   id bigserial PRIMARY KEY,
-  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL,
-  org_id uuid NOT NULL,
+  event_uuid uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
+  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_id text NOT NULL,
-  initiator_id uuid NOT NULL,
+  request_code text NOT NULL,
+  initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT setid_binding_events_event_type_check CHECK (event_type IN ('BIND')),
-  CONSTRAINT setid_binding_events_event_id_unique UNIQUE (event_id),
-  CONSTRAINT setid_binding_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT setid_binding_events_event_id_unique UNIQUE (event_uuid),
+  CONSTRAINT setid_binding_events_request_id_unique UNIQUE (tenant_uuid, request_code),
   CONSTRAINT setid_binding_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
 
-CREATE INDEX IF NOT EXISTS setid_binding_events_tenant_effective_idx ON orgunit.setid_binding_events (tenant_id, org_id, effective_date, id);
+CREATE INDEX IF NOT EXISTS setid_binding_events_tenant_effective_idx ON orgunit.setid_binding_events (tenant_uuid, org_id, effective_date, id);
 
 CREATE TABLE IF NOT EXISTS orgunit.setid_binding_versions (
   id bigserial PRIMARY KEY,
-  tenant_id uuid NOT NULL,
-  org_id uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
+  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
   setid text NOT NULL,
   validity daterange NOT NULL,
   last_event_id bigint NOT NULL REFERENCES orgunit.setid_binding_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT setid_binding_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
-  CONSTRAINT setid_binding_setid_fk FOREIGN KEY (tenant_id, setid) REFERENCES orgunit.setids (tenant_id, setid),
+  CONSTRAINT setid_binding_setid_fk FOREIGN KEY (tenant_uuid, setid) REFERENCES orgunit.setids (tenant_uuid, setid),
   CONSTRAINT setid_binding_no_share CHECK (setid <> 'SHARE'),
   CONSTRAINT setid_binding_validity_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT setid_binding_no_overlap EXCLUDE USING gist (
-    tenant_id WITH =,
-    org_id WITH =,
+    tenant_uuid WITH =,
+    org_id gist_int4_ops WITH =,
     validity WITH &&
   )
 );
@@ -1361,41 +1354,41 @@ ALTER TABLE orgunit.setid_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.setid_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.setid_events;
 CREATE POLICY tenant_isolation ON orgunit.setid_events
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.setids ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.setids FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.setids;
 CREATE POLICY tenant_isolation ON orgunit.setids
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.setid_binding_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.setid_binding_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.setid_binding_events;
 CREATE POLICY tenant_isolation ON orgunit.setid_binding_events
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.setid_binding_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.setid_binding_versions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.setid_binding_versions;
 CREATE POLICY tenant_isolation ON orgunit.setid_binding_versions
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.global_setid_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.global_setid_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS share_scope ON orgunit.global_setid_events;
 CREATE POLICY share_scope ON orgunit.global_setid_events
 USING (
-  tenant_id = orgunit.global_tenant_id()
+  tenant_uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
   AND current_setting('app.allow_share_read', true) = 'on'
 )
 WITH CHECK (
-  tenant_id = orgunit.global_tenant_id()
+  tenant_uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_actor_scope', true) = 'saas'
 );
@@ -1405,12 +1398,12 @@ ALTER TABLE orgunit.global_setids FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS share_scope ON orgunit.global_setids;
 CREATE POLICY share_scope ON orgunit.global_setids
 USING (
-  tenant_id = orgunit.global_tenant_id()
+  tenant_uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
   AND current_setting('app.allow_share_read', true) = 'on'
 )
 WITH CHECK (
-  tenant_id = orgunit.global_tenant_id()
+  tenant_uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_actor_scope', true) = 'saas'
 );
@@ -1445,15 +1438,15 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION orgunit.lock_setid_governance(p_tenant_id uuid)
+CREATE OR REPLACE FUNCTION orgunit.lock_setid_governance(p_tenant_uuid uuid)
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 DECLARE
   k bigint;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
-  k := hashtextextended('orgunit.setid.governance:' || p_tenant_id::text, 0);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
+  k := hashtextextended('orgunit.setid.governance:' || p_tenant_uuid::text, 0);
   PERFORM pg_advisory_xact_lock(k);
 END;
 $$;
@@ -1482,8 +1475,8 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.ensure_setid_bootstrap(
-  p_tenant_id uuid,
-  p_initiator_id uuid
+  p_tenant_uuid uuid,
+  p_initiator_uuid uuid
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -1491,7 +1484,7 @@ AS $$
 DECLARE
   v_evt_id uuid;
   v_evt_db_id bigint;
-  v_root_org_id uuid;
+  v_root_org_id int;
   v_root_valid_from date;
   v_scope_code text;
   v_scope_share_mode text;
@@ -1500,35 +1493,35 @@ DECLARE
   v_prev_actor text;
   v_prev_allow_share text;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
-  PERFORM orgunit.lock_setid_governance(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
+  PERFORM orgunit.lock_setid_governance(p_tenant_uuid);
 
   v_global_tenant_id := orgunit.global_tenant_id();
   v_prev_actor := current_setting('app.current_actor_scope', true);
   v_prev_allow_share := current_setting('app.allow_share_read', true);
 
   IF NOT EXISTS (
-    SELECT 1 FROM orgunit.setids WHERE tenant_id = p_tenant_id AND setid = 'DEFLT'
+    SELECT 1 FROM orgunit.setids WHERE tenant_uuid = p_tenant_uuid AND setid = 'DEFLT'
   ) THEN
     v_evt_id := gen_random_uuid();
-    INSERT INTO orgunit.setid_events (event_id, tenant_id, event_type, setid, payload, request_id, initiator_id)
-    VALUES (v_evt_id, p_tenant_id, 'BOOTSTRAP', 'DEFLT', jsonb_build_object('name', 'Default'), 'bootstrap:deflt', p_initiator_id)
-    ON CONFLICT (tenant_id, request_id) DO NOTHING;
+    INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
+    VALUES (v_evt_id, p_tenant_uuid, 'BOOTSTRAP', 'DEFLT', jsonb_build_object('name', 'Default'), 'bootstrap:deflt', p_initiator_uuid)
+    ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
 
     SELECT id INTO v_evt_db_id
     FROM orgunit.setid_events
-    WHERE tenant_id = p_tenant_id AND request_id = 'bootstrap:deflt'
+    WHERE tenant_uuid = p_tenant_uuid AND request_code = 'bootstrap:deflt'
     ORDER BY id DESC
     LIMIT 1;
 
-    INSERT INTO orgunit.setids (tenant_id, setid, name, status, last_event_id)
-    VALUES (p_tenant_id, 'DEFLT', 'Default', 'active', v_evt_db_id)
-    ON CONFLICT (tenant_id, setid) DO NOTHING;
+    INSERT INTO orgunit.setids (tenant_uuid, setid, name, status, last_event_id)
+    VALUES (p_tenant_uuid, 'DEFLT', 'Default', 'active', v_evt_db_id)
+    ON CONFLICT (tenant_uuid, setid) DO NOTHING;
   END IF;
 
   SELECT t.root_org_id INTO v_root_org_id
   FROM orgunit.org_trees t
-  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = 'OrgUnit'
+  WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = 'OrgUnit'
   FOR UPDATE;
 
   IF v_root_org_id IS NULL THEN
@@ -1537,7 +1530,7 @@ BEGIN
 
   SELECT lower(v.validity)::date INTO v_root_valid_from
   FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = 'OrgUnit'
     AND v.org_id = v_root_org_id
     AND v.status = 'active'
@@ -1565,7 +1558,7 @@ BEGIN
 
       SELECT p.package_id INTO v_package_id
       FROM orgunit.global_setid_scope_packages p
-      WHERE p.tenant_id = v_global_tenant_id
+      WHERE p.tenant_uuid = v_global_tenant_id
         AND p.scope_code = v_scope_code
         AND p.package_code = 'DEFLT';
 
@@ -1585,7 +1578,7 @@ BEGIN
 
         SELECT p.package_id INTO v_package_id
         FROM orgunit.global_setid_scope_packages p
-        WHERE p.tenant_id = v_global_tenant_id
+        WHERE p.tenant_uuid = v_global_tenant_id
           AND p.scope_code = v_scope_code
           AND p.package_code = 'DEFLT';
       END IF;
@@ -1600,7 +1593,7 @@ BEGIN
       IF NOT EXISTS (
         SELECT 1
         FROM orgunit.global_setid_scope_package_versions v
-        WHERE v.tenant_id = v_global_tenant_id
+        WHERE v.tenant_uuid = v_global_tenant_id
           AND v.scope_code = v_scope_code
           AND v.package_id = v_package_id
           AND v.status = 'active'
@@ -1619,20 +1612,20 @@ BEGIN
         );
       END IF;
 
-      PERFORM set_config('app.current_tenant', p_tenant_id::text, true);
+      PERFORM set_config('app.current_tenant', p_tenant_uuid::text, true);
       PERFORM set_config('app.allow_share_read', COALESCE(v_prev_allow_share, 'off'), true);
 
       IF NOT EXISTS (
         SELECT 1
         FROM orgunit.setid_scope_subscriptions s
-        WHERE s.tenant_id = p_tenant_id
+        WHERE s.tenant_uuid = p_tenant_uuid
           AND s.setid = 'DEFLT'
           AND s.scope_code = v_scope_code
           AND s.validity @> v_root_valid_from
       ) THEN
         PERFORM orgunit.submit_scope_subscription_event(
           gen_random_uuid(),
-          p_tenant_id,
+          p_tenant_uuid,
           'DEFLT',
           v_scope_code,
           v_package_id,
@@ -1640,7 +1633,7 @@ BEGIN
           'BOOTSTRAP',
           v_root_valid_from,
           format('bootstrap:scope-subscription:deflt:%s', v_scope_code),
-          p_initiator_id
+          p_initiator_uuid
         );
       END IF;
 
@@ -1649,7 +1642,7 @@ BEGIN
 
     SELECT p.package_id INTO v_package_id
     FROM orgunit.setid_scope_packages p
-    WHERE p.tenant_id = p_tenant_id
+    WHERE p.tenant_uuid = p_tenant_uuid
       AND p.scope_code = v_scope_code
       AND p.package_code = 'DEFLT';
 
@@ -1657,19 +1650,19 @@ BEGIN
       v_package_id := gen_random_uuid();
       PERFORM orgunit.submit_scope_package_event(
         gen_random_uuid(),
-        p_tenant_id,
+        p_tenant_uuid,
         v_scope_code,
         v_package_id,
         'BOOTSTRAP',
         v_root_valid_from,
         jsonb_build_object('package_code', 'DEFLT', 'name', 'Default', 'owner_setid', 'DEFLT'),
         format('bootstrap:scope-package:deflt:%s', v_scope_code),
-        p_initiator_id
+        p_initiator_uuid
       );
 
       SELECT p.package_id INTO v_package_id
       FROM orgunit.setid_scope_packages p
-      WHERE p.tenant_id = p_tenant_id
+      WHERE p.tenant_uuid = p_tenant_uuid
         AND p.scope_code = v_scope_code
         AND p.package_code = 'DEFLT';
     END IF;
@@ -1684,7 +1677,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.setid_scope_package_versions v
-      WHERE v.tenant_id = p_tenant_id
+      WHERE v.tenant_uuid = p_tenant_uuid
         AND v.scope_code = v_scope_code
         AND v.package_id = v_package_id
         AND v.status = 'active'
@@ -1692,72 +1685,72 @@ BEGIN
     ) THEN
       PERFORM orgunit.submit_scope_package_event(
         gen_random_uuid(),
-        p_tenant_id,
+        p_tenant_uuid,
         v_scope_code,
         v_package_id,
         'BOOTSTRAP',
         v_root_valid_from,
         jsonb_build_object('package_code', 'DEFLT', 'name', 'Default', 'owner_setid', 'DEFLT'),
         format('bootstrap:scope-package:deflt:%s:%s', v_scope_code, v_root_valid_from),
-        p_initiator_id
+        p_initiator_uuid
       );
     END IF;
 
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.setid_scope_subscriptions s
-      WHERE s.tenant_id = p_tenant_id
+      WHERE s.tenant_uuid = p_tenant_uuid
         AND s.setid = 'DEFLT'
         AND s.scope_code = v_scope_code
         AND s.validity @> v_root_valid_from
     ) THEN
       PERFORM orgunit.submit_scope_subscription_event(
         gen_random_uuid(),
-        p_tenant_id,
+        p_tenant_uuid,
         'DEFLT',
         v_scope_code,
         v_package_id,
-        p_tenant_id,
+        p_tenant_uuid,
         'BOOTSTRAP',
         v_root_valid_from,
         format('bootstrap:scope-subscription:deflt:%s', v_scope_code),
-        p_initiator_id
+        p_initiator_uuid
       );
     END IF;
   END LOOP;
 
-  PERFORM set_config('app.current_tenant', p_tenant_id::text, true);
+  PERFORM set_config('app.current_tenant', p_tenant_uuid::text, true);
   PERFORM set_config('app.current_actor_scope', COALESCE(v_prev_actor, ''), true);
   PERFORM set_config('app.allow_share_read', COALESCE(v_prev_allow_share, 'off'), true);
 
   IF NOT EXISTS (
     SELECT 1
     FROM orgunit.setid_binding_versions
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND org_id = v_root_org_id
       AND validity @> v_root_valid_from
   ) THEN
     PERFORM orgunit.submit_setid_binding_event(
       gen_random_uuid(),
-      p_tenant_id,
+      p_tenant_uuid,
       v_root_org_id,
       v_root_valid_from,
       'DEFLT',
       'bootstrap:binding:deflt',
-      p_initiator_id
+      p_initiator_uuid
     );
   END IF;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.submit_setid_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
   p_event_type text,
   p_setid text,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -1774,18 +1767,18 @@ DECLARE
   v_prev_actor text;
   v_prev_allow_share text;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
-  PERFORM orgunit.lock_setid_governance(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
+  PERFORM orgunit.lock_setid_governance(p_tenant_uuid);
 
   v_global_tenant_id := orgunit.global_tenant_id();
   v_prev_actor := current_setting('app.current_actor_scope', true);
   v_prev_allow_share := current_setting('app.allow_share_read', true);
 
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_id is required';
+      DETAIL = 'request_code is required';
   END IF;
   IF p_event_type IS NULL OR btrim(p_event_type) = '' THEN
     RAISE EXCEPTION USING
@@ -1802,13 +1795,13 @@ BEGIN
       DETAIL = 'SHARE is reserved';
   END IF;
 
-  INSERT INTO orgunit.setid_events (event_id, tenant_id, event_type, setid, payload, request_id, initiator_id)
-  VALUES (p_event_id, p_tenant_id, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_id, p_initiator_id)
-  ON CONFLICT (tenant_id, request_id) DO NOTHING;
+  INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
+  VALUES (p_event_uuid, p_tenant_uuid, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_code, p_initiator_uuid)
+  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_events
-  WHERE tenant_id = p_tenant_id AND request_id = p_request_id
+  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
   ORDER BY id DESC
   LIMIT 1;
 
@@ -1822,7 +1815,7 @@ BEGIN
     END IF;
 
     IF p_event_type = 'CREATE' AND EXISTS (
-      SELECT 1 FROM orgunit.setids WHERE tenant_id = p_tenant_id AND setid = v_setid
+      SELECT 1 FROM orgunit.setids WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -1830,9 +1823,9 @@ BEGIN
         DETAIL = format('setid=%s', v_setid);
     END IF;
 
-    INSERT INTO orgunit.setids (tenant_id, setid, name, status, last_event_id)
-    VALUES (p_tenant_id, v_setid, v_name, 'active', v_evt_db_id)
-    ON CONFLICT (tenant_id, setid) DO UPDATE
+    INSERT INTO orgunit.setids (tenant_uuid, setid, name, status, last_event_id)
+    VALUES (p_tenant_uuid, v_setid, v_name, 'active', v_evt_db_id)
+    ON CONFLICT (tenant_uuid, setid) DO UPDATE
     SET name = EXCLUDED.name,
         status = 'active',
         last_event_id = EXCLUDED.last_event_id,
@@ -1858,7 +1851,7 @@ BEGIN
 
         SELECT p.package_id INTO v_package_id
         FROM orgunit.global_setid_scope_packages p
-        WHERE p.tenant_id = v_global_tenant_id
+        WHERE p.tenant_uuid = v_global_tenant_id
           AND p.scope_code = v_scope_code
           AND p.package_code = 'DEFLT';
 
@@ -1878,7 +1871,7 @@ BEGIN
 
           SELECT p.package_id INTO v_package_id
           FROM orgunit.global_setid_scope_packages p
-          WHERE p.tenant_id = v_global_tenant_id
+          WHERE p.tenant_uuid = v_global_tenant_id
             AND p.scope_code = v_scope_code
             AND p.package_code = 'DEFLT';
         END IF;
@@ -1890,20 +1883,20 @@ BEGIN
             DETAIL = format('setid=%s scope_code=%s', v_setid, v_scope_code);
         END IF;
 
-        PERFORM set_config('app.current_tenant', p_tenant_id::text, true);
+        PERFORM set_config('app.current_tenant', p_tenant_uuid::text, true);
         PERFORM set_config('app.allow_share_read', COALESCE(v_prev_allow_share, 'off'), true);
 
         IF NOT EXISTS (
           SELECT 1
           FROM orgunit.setid_scope_subscriptions s
-          WHERE s.tenant_id = p_tenant_id
+          WHERE s.tenant_uuid = p_tenant_uuid
             AND s.setid = v_setid
             AND s.scope_code = v_scope_code
             AND s.validity @> v_effective_date
         ) THEN
           PERFORM orgunit.submit_scope_subscription_event(
             gen_random_uuid(),
-            p_tenant_id,
+            p_tenant_uuid,
             v_setid,
             v_scope_code,
             v_package_id,
@@ -1911,7 +1904,7 @@ BEGIN
             'BOOTSTRAP',
             v_effective_date,
             format('bootstrap:scope-subscription:%s:%s', v_setid, v_scope_code),
-            p_initiator_id
+            p_initiator_uuid
           );
         END IF;
 
@@ -1920,7 +1913,7 @@ BEGIN
 
       SELECT p.package_id INTO v_package_id
       FROM orgunit.setid_scope_packages p
-      WHERE p.tenant_id = p_tenant_id
+      WHERE p.tenant_uuid = p_tenant_uuid
         AND p.scope_code = v_scope_code
         AND p.package_code = 'DEFLT';
 
@@ -1928,19 +1921,19 @@ BEGIN
         v_package_id := gen_random_uuid();
         PERFORM orgunit.submit_scope_package_event(
           gen_random_uuid(),
-          p_tenant_id,
+          p_tenant_uuid,
           v_scope_code,
           v_package_id,
           'BOOTSTRAP',
           v_effective_date,
           jsonb_build_object('package_code', 'DEFLT', 'name', 'Default', 'owner_setid', 'DEFLT'),
           format('bootstrap:scope-package:deflt:%s', v_scope_code),
-          p_initiator_id
+          p_initiator_uuid
         );
 
         SELECT p.package_id INTO v_package_id
         FROM orgunit.setid_scope_packages p
-        WHERE p.tenant_id = p_tenant_id
+        WHERE p.tenant_uuid = p_tenant_uuid
           AND p.scope_code = v_scope_code
           AND p.package_code = 'DEFLT';
       END IF;
@@ -1955,27 +1948,27 @@ BEGIN
       IF NOT EXISTS (
         SELECT 1
         FROM orgunit.setid_scope_subscriptions s
-        WHERE s.tenant_id = p_tenant_id
+        WHERE s.tenant_uuid = p_tenant_uuid
           AND s.setid = v_setid
           AND s.scope_code = v_scope_code
           AND s.validity @> current_date
       ) THEN
         PERFORM orgunit.submit_scope_subscription_event(
           gen_random_uuid(),
-          p_tenant_id,
+          p_tenant_uuid,
           v_setid,
           v_scope_code,
           v_package_id,
-          p_tenant_id,
+          p_tenant_uuid,
           'BOOTSTRAP',
           v_effective_date,
           format('bootstrap:scope-subscription:%s:%s', v_setid, v_scope_code),
-          p_initiator_id
+          p_initiator_uuid
         );
       END IF;
     END LOOP;
 
-    PERFORM set_config('app.current_tenant', p_tenant_id::text, true);
+    PERFORM set_config('app.current_tenant', p_tenant_uuid::text, true);
     PERFORM set_config('app.current_actor_scope', COALESCE(v_prev_actor, ''), true);
     PERFORM set_config('app.allow_share_read', COALESCE(v_prev_allow_share, 'off'), true);
   ELSIF p_event_type = 'RENAME' THEN
@@ -1990,7 +1983,7 @@ BEGIN
     SET name = v_name,
         last_event_id = v_evt_db_id,
         updated_at = now()
-    WHERE tenant_id = p_tenant_id AND setid = v_setid;
+    WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid;
     IF NOT FOUND THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -2006,7 +1999,7 @@ BEGIN
     END IF;
     IF EXISTS (
       SELECT 1 FROM orgunit.setid_binding_versions
-      WHERE tenant_id = p_tenant_id AND setid = v_setid
+      WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -2017,7 +2010,7 @@ BEGIN
     SET status = 'disabled',
         last_event_id = v_evt_db_id,
         updated_at = now()
-    WHERE tenant_id = p_tenant_id AND setid = v_setid;
+    WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid;
     IF NOT FOUND THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -2036,13 +2029,13 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.submit_global_setid_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
   p_event_type text,
   p_setid text,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -2052,21 +2045,21 @@ DECLARE
   v_evt_db_id bigint;
   v_name text;
 BEGIN
-  IF p_tenant_id <> orgunit.global_tenant_id() THEN
+  IF p_tenant_uuid <> orgunit.global_tenant_id() THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'ACTOR_SCOPE_FORBIDDEN',
-      DETAIL = format('tenant_id=%s', p_tenant_id);
+      DETAIL = format('tenant_uuid=%s', p_tenant_uuid);
   END IF;
 
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
   PERFORM orgunit.assert_actor_scope_saas();
 
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_id is required';
+      DETAIL = 'request_code is required';
   END IF;
   IF p_event_type IS NULL OR btrim(p_event_type) = '' THEN
     RAISE EXCEPTION USING
@@ -2083,13 +2076,13 @@ BEGIN
       DETAIL = 'only SHARE is allowed';
   END IF;
 
-  INSERT INTO orgunit.global_setid_events (event_id, tenant_id, event_type, setid, payload, request_id, initiator_id)
-  VALUES (p_event_id, p_tenant_id, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_id, p_initiator_id)
-  ON CONFLICT (tenant_id, request_id) DO NOTHING;
+  INSERT INTO orgunit.global_setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
+  VALUES (p_event_uuid, p_tenant_uuid, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_code, p_initiator_uuid)
+  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.global_setid_events
-  WHERE tenant_id = p_tenant_id AND request_id = p_request_id
+  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
   ORDER BY id DESC
   LIMIT 1;
 
@@ -2102,9 +2095,9 @@ BEGIN
         DETAIL = 'name is required';
     END IF;
 
-    INSERT INTO orgunit.global_setids (tenant_id, setid, name, status, last_event_id)
-    VALUES (p_tenant_id, v_setid, v_name, 'active', v_evt_db_id)
-    ON CONFLICT (tenant_id, setid) DO UPDATE
+    INSERT INTO orgunit.global_setids (tenant_uuid, setid, name, status, last_event_id)
+    VALUES (p_tenant_uuid, v_setid, v_name, 'active', v_evt_db_id)
+    ON CONFLICT (tenant_uuid, setid) DO UPDATE
     SET name = EXCLUDED.name,
         status = 'active',
         last_event_id = EXCLUDED.last_event_id,
@@ -2121,7 +2114,7 @@ BEGIN
     SET name = v_name,
         last_event_id = v_evt_db_id,
         updated_at = now()
-    WHERE tenant_id = p_tenant_id AND setid = v_setid;
+    WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid;
     IF NOT FOUND THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -2145,13 +2138,13 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.submit_setid_binding_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
-  p_org_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
+  p_org_id int,
   p_effective_date date,
   p_setid text,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -2164,22 +2157,22 @@ DECLARE
   v_existing orgunit.setid_binding_versions%ROWTYPE;
   v_next_start date;
   v_current_end date;
-  v_root_org_id uuid;
+  v_root_org_id int;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
-  PERFORM orgunit.lock_setid_governance(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
+  PERFORM orgunit.lock_setid_governance(p_tenant_uuid);
 
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_id is required';
+      DETAIL = 'request_code is required';
   END IF;
-  IF p_event_id IS NULL THEN
+  IF p_event_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'event_id is required';
+      DETAIL = 'event_uuid is required';
   END IF;
   IF p_org_id IS NULL THEN
     RAISE EXCEPTION USING
@@ -2204,7 +2197,7 @@ BEGIN
 
   SELECT status INTO v_org_status
   FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = 'OrgUnit'
     AND v.org_id = p_org_id
     AND v.validity @> p_effective_date
@@ -2226,7 +2219,7 @@ BEGIN
 
   SELECT is_business_unit INTO v_org_is_bu
   FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = 'OrgUnit'
     AND v.org_id = p_org_id
     AND v.validity @> p_effective_date
@@ -2241,7 +2234,7 @@ BEGIN
   END IF;
 
   IF NOT EXISTS (
-    SELECT 1 FROM orgunit.setids WHERE tenant_id = p_tenant_id AND setid = v_setid
+    SELECT 1 FROM orgunit.setids WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid
   ) THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
@@ -2250,7 +2243,7 @@ BEGIN
   END IF;
 
   IF EXISTS (
-    SELECT 1 FROM orgunit.setids WHERE tenant_id = p_tenant_id AND setid = v_setid AND status <> 'active'
+    SELECT 1 FROM orgunit.setids WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid AND status <> 'active'
   ) THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
@@ -2260,7 +2253,7 @@ BEGIN
 
   SELECT t.root_org_id INTO v_root_org_id
   FROM orgunit.org_trees t
-  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = 'OrgUnit';
+  WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = 'OrgUnit';
 
   IF v_root_org_id IS NOT NULL AND v_root_org_id = p_org_id AND v_setid <> 'DEFLT' THEN
     RAISE EXCEPTION USING
@@ -2270,42 +2263,42 @@ BEGIN
   END IF;
 
   INSERT INTO orgunit.setid_binding_events (
-    event_id,
-    tenant_id,
+    event_uuid,
+    tenant_uuid,
     org_id,
     event_type,
     effective_date,
     payload,
-    request_id,
-    initiator_id
+    request_code,
+    initiator_uuid
   )
   VALUES (
-    p_event_id,
-    p_tenant_id,
+    p_event_uuid,
+    p_tenant_uuid,
     p_org_id,
     'BIND',
     p_effective_date,
     jsonb_build_object('setid', v_setid),
-    p_request_id,
-    p_initiator_id
+    p_request_code,
+    p_initiator_uuid
   )
-  ON CONFLICT (tenant_id, request_id) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_binding_events
-  WHERE tenant_id = p_tenant_id AND request_id = p_request_id
+  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
   ORDER BY id DESC
   LIMIT 1;
 
   SELECT min(lower(validity)) INTO v_next_start
   FROM orgunit.setid_binding_versions
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND org_id = p_org_id
     AND lower(validity) > p_effective_date;
 
   SELECT * INTO v_existing
   FROM orgunit.setid_binding_versions
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND org_id = p_org_id
     AND validity @> p_effective_date
   ORDER BY lower(validity) DESC
@@ -2328,14 +2321,14 @@ BEGIN
         WHERE id = v_existing.id;
 
         INSERT INTO orgunit.setid_binding_versions (
-          tenant_id,
+          tenant_uuid,
           org_id,
           setid,
           validity,
           last_event_id
         )
         VALUES (
-          p_tenant_id,
+          p_tenant_uuid,
           p_org_id,
           v_setid,
           daterange(p_effective_date, v_current_end, '[)'),
@@ -2344,14 +2337,14 @@ BEGIN
       END IF;
     ELSE
       INSERT INTO orgunit.setid_binding_versions (
-        tenant_id,
+        tenant_uuid,
         org_id,
         setid,
         validity,
         last_event_id
       )
       VALUES (
-        p_tenant_id,
+        p_tenant_uuid,
         p_org_id,
         v_setid,
         daterange(p_effective_date, v_next_start, '[)'),
@@ -2371,8 +2364,8 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.resolve_setid(
-  p_tenant_id uuid,
-  p_org_id uuid,
+  p_tenant_uuid uuid,
+  p_org_id int,
   p_as_of_date date
 )
 RETURNS text
@@ -2384,7 +2377,7 @@ DECLARE
   v_setid text;
   v_setid_status text;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_org_id IS NULL THEN
     RAISE EXCEPTION USING
@@ -2401,7 +2394,7 @@ BEGIN
 
   SELECT v.status, v.node_path INTO v_org_status, v_node_path
   FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = 'OrgUnit'
     AND v.org_id = p_org_id
     AND v.validity @> p_as_of_date
@@ -2424,10 +2417,10 @@ BEGIN
   SELECT b.setid INTO v_setid
   FROM orgunit.setid_binding_versions b
   JOIN orgunit.org_unit_versions o
-    ON o.tenant_id = b.tenant_id
+    ON o.tenant_uuid = b.tenant_uuid
    AND o.hierarchy_type = 'OrgUnit'
    AND o.org_id = b.org_id
-  WHERE b.tenant_id = p_tenant_id
+  WHERE b.tenant_uuid = p_tenant_uuid
     AND b.validity @> p_as_of_date
     AND o.validity @> p_as_of_date
     AND o.status = 'active'
@@ -2445,7 +2438,7 @@ BEGIN
 
   SELECT status INTO v_setid_status
   FROM orgunit.setids
-  WHERE tenant_id = p_tenant_id AND setid = v_setid;
+  WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid;
 
   IF v_setid_status IS NULL THEN
     RAISE EXCEPTION USING
@@ -2503,11 +2496,11 @@ ALTER FUNCTION orgunit.submit_global_setid_event(uuid, uuid, text, text, jsonb, 
 ALTER FUNCTION orgunit.submit_global_setid_event(uuid, uuid, text, text, jsonb, text, uuid)
   SET search_path = pg_catalog, orgunit;
 
-ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
+ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, int, date, text, text, uuid)
   OWNER TO orgunit_kernel;
-ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
+ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, int, date, text, text, uuid)
   SECURITY DEFINER;
-ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, uuid, date, text, text, uuid)
+ALTER FUNCTION orgunit.submit_setid_binding_event(uuid, uuid, int, date, text, text, uuid)
   SET search_path = pg_catalog, orgunit;
 
 ALTER FUNCTION orgunit.ensure_setid_bootstrap(uuid, uuid)
@@ -2578,7 +2571,7 @@ RETURNS text AS $$
 $$ LANGUAGE SQL IMMUTABLE;
 
 CREATE TABLE IF NOT EXISTS orgunit.setid_scope_packages (
-  tenant_id uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
   scope_code text NOT NULL,
   package_id uuid NOT NULL,
   package_code text NOT NULL,
@@ -2586,8 +2579,8 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_scope_packages (
   status text NOT NULL DEFAULT 'active',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT setid_scope_packages_pk PRIMARY KEY (tenant_id, package_id),
-  CONSTRAINT setid_scope_packages_code_unique UNIQUE (tenant_id, scope_code, package_code),
+  CONSTRAINT setid_scope_packages_pk PRIMARY KEY (tenant_uuid, package_id),
+  CONSTRAINT setid_scope_packages_code_unique UNIQUE (tenant_uuid, scope_code, package_code),
   CONSTRAINT setid_scope_packages_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
   CONSTRAINT setid_scope_packages_code_check CHECK (package_code ~ '^[A-Z0-9_]{1,16}$'),
   CONSTRAINT setid_scope_packages_status_check CHECK (status IN ('active', 'disabled')),
@@ -2595,7 +2588,7 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_scope_packages (
 );
 
 CREATE TABLE IF NOT EXISTS orgunit.global_setid_scope_packages (
-  tenant_id uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
+  tenant_uuid uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
   scope_code text NOT NULL,
   package_id uuid NOT NULL,
   package_code text NOT NULL,
@@ -2603,9 +2596,9 @@ CREATE TABLE IF NOT EXISTS orgunit.global_setid_scope_packages (
   status text NOT NULL DEFAULT 'active',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT global_scope_packages_pk PRIMARY KEY (tenant_id, package_id),
-  CONSTRAINT global_scope_packages_tenant_check CHECK (tenant_id = orgunit.global_tenant_id()),
-  CONSTRAINT global_scope_packages_code_unique UNIQUE (tenant_id, scope_code, package_code),
+  CONSTRAINT global_scope_packages_pk PRIMARY KEY (tenant_uuid, package_id),
+  CONSTRAINT global_scope_packages_tenant_check CHECK (tenant_uuid = orgunit.global_tenant_id()),
+  CONSTRAINT global_scope_packages_code_unique UNIQUE (tenant_uuid, scope_code, package_code),
   CONSTRAINT global_scope_packages_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
   CONSTRAINT global_scope_packages_code_check CHECK (package_code ~ '^[A-Z0-9_]{1,16}$'),
   CONSTRAINT global_scope_packages_status_check CHECK (status IN ('active', 'disabled')),
@@ -2614,54 +2607,54 @@ CREATE TABLE IF NOT EXISTS orgunit.global_setid_scope_packages (
 
 CREATE TABLE IF NOT EXISTS orgunit.setid_scope_package_events (
   id bigserial PRIMARY KEY,
-  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL,
+  event_uuid uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
   scope_code text NOT NULL,
   package_id uuid NOT NULL,
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_id text NOT NULL,
-  initiator_id uuid NOT NULL,
+  request_code text NOT NULL,
+  initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT setid_scope_package_events_event_id_unique UNIQUE (event_id),
-  CONSTRAINT setid_scope_package_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT setid_scope_package_events_event_id_unique UNIQUE (event_uuid),
+  CONSTRAINT setid_scope_package_events_request_id_unique UNIQUE (tenant_uuid, request_code),
   CONSTRAINT setid_scope_package_events_event_type_check CHECK (event_type IN ('BOOTSTRAP', 'CREATE', 'RENAME', 'DISABLE')),
   CONSTRAINT setid_scope_package_events_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
   CONSTRAINT setid_scope_package_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
 
 CREATE INDEX IF NOT EXISTS setid_scope_package_events_tenant_time_idx
-  ON orgunit.setid_scope_package_events (tenant_id, transaction_time DESC, id DESC);
+  ON orgunit.setid_scope_package_events (tenant_uuid, transaction_time DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS orgunit.global_setid_scope_package_events (
   id bigserial PRIMARY KEY,
-  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
+  event_uuid uuid NOT NULL,
+  tenant_uuid uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
   scope_code text NOT NULL,
   package_id uuid NOT NULL,
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_id text NOT NULL,
-  initiator_id uuid NOT NULL,
+  request_code text NOT NULL,
+  initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT global_scope_package_events_event_id_unique UNIQUE (event_id),
-  CONSTRAINT global_scope_package_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT global_scope_package_events_event_id_unique UNIQUE (event_uuid),
+  CONSTRAINT global_scope_package_events_request_id_unique UNIQUE (tenant_uuid, request_code),
   CONSTRAINT global_scope_package_events_event_type_check CHECK (event_type IN ('BOOTSTRAP', 'CREATE', 'RENAME', 'DISABLE')),
-  CONSTRAINT global_scope_package_events_tenant_check CHECK (tenant_id = orgunit.global_tenant_id()),
+  CONSTRAINT global_scope_package_events_tenant_check CHECK (tenant_uuid = orgunit.global_tenant_id()),
   CONSTRAINT global_scope_package_events_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
   CONSTRAINT global_scope_package_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
 
 CREATE INDEX IF NOT EXISTS global_scope_package_events_tenant_time_idx
-  ON orgunit.global_setid_scope_package_events (tenant_id, transaction_time DESC, id DESC);
+  ON orgunit.global_setid_scope_package_events (tenant_uuid, transaction_time DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS orgunit.setid_scope_package_versions (
   id bigserial PRIMARY KEY,
-  tenant_id uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
   scope_code text NOT NULL,
   package_id uuid NOT NULL,
   package_code text NOT NULL,
@@ -2669,8 +2662,8 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_scope_package_versions (
   status text NOT NULL DEFAULT 'active',
   validity daterange NOT NULL,
   last_event_id bigint NOT NULL REFERENCES orgunit.setid_scope_package_events(id),
-  CONSTRAINT setid_scope_package_versions_pkg_fk FOREIGN KEY (tenant_id, package_id)
-    REFERENCES orgunit.setid_scope_packages (tenant_id, package_id),
+  CONSTRAINT setid_scope_package_versions_pkg_fk FOREIGN KEY (tenant_uuid, package_id)
+    REFERENCES orgunit.setid_scope_packages (tenant_uuid, package_id),
   CONSTRAINT setid_scope_package_versions_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
   CONSTRAINT setid_scope_package_versions_code_check CHECK (package_code ~ '^[A-Z0-9_]{1,16}$'),
   CONSTRAINT setid_scope_package_versions_status_check CHECK (status IN ('active', 'disabled')),
@@ -2678,18 +2671,18 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_scope_package_versions (
   CONSTRAINT setid_scope_package_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT setid_scope_package_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT setid_scope_package_versions_no_overlap EXCLUDE USING gist (
-    tenant_id WITH =,
+    tenant_uuid WITH =,
     package_id WITH =,
     validity WITH &&
   )
 );
 
 CREATE INDEX IF NOT EXISTS setid_scope_package_versions_lookup_idx
-  ON orgunit.setid_scope_package_versions (tenant_id, package_id, lower(validity));
+  ON orgunit.setid_scope_package_versions (tenant_uuid, package_id, lower(validity));
 
 CREATE TABLE IF NOT EXISTS orgunit.global_setid_scope_package_versions (
   id bigserial PRIMARY KEY,
-  tenant_id uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
+  tenant_uuid uuid NOT NULL DEFAULT orgunit.global_tenant_id(),
   scope_code text NOT NULL,
   package_id uuid NOT NULL,
   package_code text NOT NULL,
@@ -2697,9 +2690,9 @@ CREATE TABLE IF NOT EXISTS orgunit.global_setid_scope_package_versions (
   status text NOT NULL DEFAULT 'active',
   validity daterange NOT NULL,
   last_event_id bigint NOT NULL REFERENCES orgunit.global_setid_scope_package_events(id),
-  CONSTRAINT global_scope_package_versions_pkg_fk FOREIGN KEY (tenant_id, package_id)
-    REFERENCES orgunit.global_setid_scope_packages (tenant_id, package_id),
-  CONSTRAINT global_scope_package_versions_tenant_check CHECK (tenant_id = orgunit.global_tenant_id()),
+  CONSTRAINT global_scope_package_versions_pkg_fk FOREIGN KEY (tenant_uuid, package_id)
+    REFERENCES orgunit.global_setid_scope_packages (tenant_uuid, package_id),
+  CONSTRAINT global_scope_package_versions_tenant_check CHECK (tenant_uuid = orgunit.global_tenant_id()),
   CONSTRAINT global_scope_package_versions_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
   CONSTRAINT global_scope_package_versions_code_check CHECK (package_code ~ '^[A-Z0-9_]{1,16}$'),
   CONSTRAINT global_scope_package_versions_status_check CHECK (status IN ('active', 'disabled')),
@@ -2707,64 +2700,64 @@ CREATE TABLE IF NOT EXISTS orgunit.global_setid_scope_package_versions (
   CONSTRAINT global_scope_package_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT global_scope_package_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT global_scope_package_versions_no_overlap EXCLUDE USING gist (
-    tenant_id WITH =,
+    tenant_uuid WITH =,
     package_id WITH =,
     validity WITH &&
   )
 );
 
 CREATE INDEX IF NOT EXISTS global_scope_package_versions_lookup_idx
-  ON orgunit.global_setid_scope_package_versions (tenant_id, package_id, lower(validity));
+  ON orgunit.global_setid_scope_package_versions (tenant_uuid, package_id, lower(validity));
 
 CREATE TABLE IF NOT EXISTS orgunit.setid_scope_subscription_events (
   id bigserial PRIMARY KEY,
-  event_id uuid NOT NULL DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL,
+  event_uuid uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
   setid text NOT NULL,
   scope_code text NOT NULL,
   package_id uuid NOT NULL,
-  package_owner_tenant_id uuid NOT NULL,
+  package_owner_tenant_uuid uuid NOT NULL,
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_id text NOT NULL,
-  initiator_id uuid NOT NULL,
+  request_code text NOT NULL,
+  initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT setid_scope_subscription_events_event_id_unique UNIQUE (event_id),
-  CONSTRAINT setid_scope_subscription_events_request_id_unique UNIQUE (tenant_id, request_id),
+  CONSTRAINT setid_scope_subscription_events_event_id_unique UNIQUE (event_uuid),
+  CONSTRAINT setid_scope_subscription_events_request_id_unique UNIQUE (tenant_uuid, request_code),
   CONSTRAINT setid_scope_subscription_events_event_type_check CHECK (event_type IN ('BOOTSTRAP', 'SUBSCRIBE')),
   CONSTRAINT setid_scope_subscription_events_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
   CONSTRAINT setid_scope_subscription_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT setid_scope_subscription_events_owner_check CHECK (
-    package_owner_tenant_id = tenant_id OR package_owner_tenant_id = orgunit.global_tenant_id()
+    package_owner_tenant_uuid = tenant_uuid OR package_owner_tenant_uuid = orgunit.global_tenant_id()
   ),
   CONSTRAINT setid_scope_subscription_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
 
 CREATE INDEX IF NOT EXISTS setid_scope_subscription_events_tenant_idx
-  ON orgunit.setid_scope_subscription_events (tenant_id, setid, scope_code, effective_date, id);
+  ON orgunit.setid_scope_subscription_events (tenant_uuid, setid, scope_code, effective_date, id);
 
 CREATE TABLE IF NOT EXISTS orgunit.setid_scope_subscriptions (
   id bigserial PRIMARY KEY,
-  tenant_id uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
   setid text NOT NULL,
   scope_code text NOT NULL,
   package_id uuid NOT NULL,
-  package_owner_tenant_id uuid NOT NULL,
+  package_owner_tenant_uuid uuid NOT NULL,
   validity daterange NOT NULL,
   last_event_id bigint NOT NULL REFERENCES orgunit.setid_scope_subscription_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT setid_scope_subscriptions_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT setid_scope_subscriptions_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
-  CONSTRAINT setid_scope_subscriptions_setid_fk FOREIGN KEY (tenant_id, setid) REFERENCES orgunit.setids (tenant_id, setid),
+  CONSTRAINT setid_scope_subscriptions_setid_fk FOREIGN KEY (tenant_uuid, setid) REFERENCES orgunit.setids (tenant_uuid, setid),
   CONSTRAINT setid_scope_subscriptions_validity_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT setid_scope_subscriptions_owner_check CHECK (
-    package_owner_tenant_id = tenant_id OR package_owner_tenant_id = orgunit.global_tenant_id()
+    package_owner_tenant_uuid = tenant_uuid OR package_owner_tenant_uuid = orgunit.global_tenant_id()
   ),
   CONSTRAINT setid_scope_subscriptions_no_overlap EXCLUDE USING gist (
-    tenant_id WITH =,
+    tenant_uuid WITH =,
     setid WITH =,
     scope_code WITH =,
     validity WITH &&
@@ -2772,54 +2765,54 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_scope_subscriptions (
 );
 
 CREATE INDEX IF NOT EXISTS setid_scope_subscriptions_lookup_idx
-  ON orgunit.setid_scope_subscriptions (tenant_id, setid, scope_code, lower(validity));
+  ON orgunit.setid_scope_subscriptions (tenant_uuid, setid, scope_code, lower(validity));
 
 ALTER TABLE orgunit.setid_scope_packages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.setid_scope_packages FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.setid_scope_packages;
 CREATE POLICY tenant_isolation ON orgunit.setid_scope_packages
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.setid_scope_package_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.setid_scope_package_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.setid_scope_package_events;
 CREATE POLICY tenant_isolation ON orgunit.setid_scope_package_events
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.setid_scope_package_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.setid_scope_package_versions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.setid_scope_package_versions;
 CREATE POLICY tenant_isolation ON orgunit.setid_scope_package_versions
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.setid_scope_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.setid_scope_subscriptions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.setid_scope_subscriptions;
 CREATE POLICY tenant_isolation ON orgunit.setid_scope_subscriptions
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.setid_scope_subscription_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.setid_scope_subscription_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.setid_scope_subscription_events;
 CREATE POLICY tenant_isolation ON orgunit.setid_scope_subscription_events
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ALTER TABLE orgunit.global_setid_scope_packages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.global_setid_scope_packages FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS share_scope ON orgunit.global_setid_scope_packages;
 CREATE POLICY share_scope ON orgunit.global_setid_scope_packages
 USING (
-  tenant_id = orgunit.global_tenant_id()
+  tenant_uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
   AND current_setting('app.allow_share_read', true) = 'on'
 )
 WITH CHECK (
-  tenant_id = orgunit.global_tenant_id()
+  tenant_uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_actor_scope', true) = 'saas'
 );
@@ -2829,12 +2822,12 @@ ALTER TABLE orgunit.global_setid_scope_package_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS share_scope ON orgunit.global_setid_scope_package_events;
 CREATE POLICY share_scope ON orgunit.global_setid_scope_package_events
 USING (
-  tenant_id = orgunit.global_tenant_id()
+  tenant_uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
   AND current_setting('app.allow_share_read', true) = 'on'
 )
 WITH CHECK (
-  tenant_id = orgunit.global_tenant_id()
+  tenant_uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_actor_scope', true) = 'saas'
 );
@@ -2844,12 +2837,12 @@ ALTER TABLE orgunit.global_setid_scope_package_versions FORCE ROW LEVEL SECURITY
 DROP POLICY IF EXISTS share_scope ON orgunit.global_setid_scope_package_versions;
 CREATE POLICY share_scope ON orgunit.global_setid_scope_package_versions
 USING (
-  tenant_id = orgunit.global_tenant_id()
+  tenant_uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
   AND current_setting('app.allow_share_read', true) = 'on'
 )
 WITH CHECK (
-  tenant_id = orgunit.global_tenant_id()
+  tenant_uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_tenant')::uuid = orgunit.global_tenant_id()
   AND current_setting('app.current_actor_scope', true) = 'saas'
 );
@@ -2858,10 +2851,10 @@ WITH CHECK (
 
 -- begin: modules/orgunit/infrastructure/persistence/schema/00009_orgunit_setid_scope_engine.sql
 CREATE OR REPLACE FUNCTION orgunit.assert_scope_package_active_as_of(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_scope_code text,
   p_package_id uuid,
-  p_package_owner_tenant_id uuid,
+  p_package_owner_tenant_uuid uuid,
   p_as_of_date date
 )
 RETURNS void
@@ -2873,7 +2866,7 @@ DECLARE
   v_ctx_tenant text;
   v_allow_share text;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_scope_code IS NULL OR NOT orgunit.scope_code_is_valid(p_scope_code) THEN
     RAISE EXCEPTION USING
@@ -2896,7 +2889,7 @@ BEGIN
   v_ctx_tenant := current_setting('app.current_tenant');
   v_allow_share := current_setting('app.allow_share_read', true);
 
-  IF p_package_owner_tenant_id = p_tenant_id THEN
+  IF p_package_owner_tenant_uuid = p_tenant_uuid THEN
     IF v_scope_mode = 'shared-only' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -2905,7 +2898,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.setid_scope_packages p
-      WHERE p.tenant_id = p_tenant_id
+      WHERE p.tenant_uuid = p_tenant_uuid
         AND p.scope_code = p_scope_code
         AND p.package_id = p_package_id
     ) THEN
@@ -2916,7 +2909,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.setid_scope_package_versions v
-      WHERE v.tenant_id = p_tenant_id
+      WHERE v.tenant_uuid = p_tenant_uuid
         AND v.scope_code = p_scope_code
         AND v.package_id = p_package_id
         AND v.validity @> p_as_of_date
@@ -2926,7 +2919,7 @@ BEGIN
         ERRCODE = 'P0001',
         MESSAGE = 'PACKAGE_INACTIVE_AS_OF';
     END IF;
-  ELSIF p_package_owner_tenant_id = orgunit.global_tenant_id() THEN
+  ELSIF p_package_owner_tenant_uuid = orgunit.global_tenant_id() THEN
     IF v_scope_mode = 'tenant-only' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -2937,7 +2930,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.global_setid_scope_packages p
-      WHERE p.tenant_id = orgunit.global_tenant_id()
+      WHERE p.tenant_uuid = orgunit.global_tenant_id()
         AND p.scope_code = p_scope_code
         AND p.package_id = p_package_id
     ) THEN
@@ -2948,7 +2941,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.global_setid_scope_package_versions v
-      WHERE v.tenant_id = orgunit.global_tenant_id()
+      WHERE v.tenant_uuid = orgunit.global_tenant_id()
         AND v.scope_code = p_scope_code
         AND v.package_id = p_package_id
         AND v.validity @> p_as_of_date
@@ -2970,12 +2963,12 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.resolve_scope_package(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_setid text,
   p_scope_code text,
   p_as_of_date date
 )
-RETURNS TABLE(package_id uuid, package_owner_tenant_id uuid)
+RETURNS TABLE(package_id uuid, package_owner_tenant_uuid uuid)
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
@@ -2985,9 +2978,9 @@ DECLARE
   v_ctx_tenant text;
   v_allow_share text;
   v_package_id uuid;
-  v_package_owner_tenant_id uuid;
+  v_package_owner_tenant_uuid uuid;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_setid IS NULL OR btrim(p_setid) = '' THEN
     RAISE EXCEPTION USING
@@ -3015,10 +3008,10 @@ BEGIN
       DETAIL = 'SHARE is reserved';
   END IF;
 
-  SELECT s.package_id, s.package_owner_tenant_id
-  INTO v_package_id, v_package_owner_tenant_id
+  SELECT s.package_id, s.package_owner_tenant_uuid
+  INTO v_package_id, v_package_owner_tenant_uuid
   FROM orgunit.setid_scope_subscriptions s
-  WHERE s.tenant_id = p_tenant_id
+  WHERE s.tenant_uuid = p_tenant_uuid
     AND s.setid = v_setid
     AND s.scope_code = p_scope_code
     AND s.validity @> p_as_of_date
@@ -3036,7 +3029,7 @@ BEGIN
   v_ctx_tenant := current_setting('app.current_tenant');
   v_allow_share := current_setting('app.allow_share_read', true);
 
-  IF v_package_owner_tenant_id = p_tenant_id THEN
+  IF v_package_owner_tenant_uuid = p_tenant_uuid THEN
     IF v_scope_mode = 'shared-only' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -3045,7 +3038,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.setid_scope_package_versions v
-      WHERE v.tenant_id = p_tenant_id
+      WHERE v.tenant_uuid = p_tenant_uuid
         AND v.scope_code = p_scope_code
         AND v.package_id = v_package_id
         AND v.validity @> p_as_of_date
@@ -3055,7 +3048,7 @@ BEGIN
         ERRCODE = 'P0001',
         MESSAGE = 'PACKAGE_INACTIVE_AS_OF';
     END IF;
-  ELSIF v_package_owner_tenant_id = orgunit.global_tenant_id() THEN
+  ELSIF v_package_owner_tenant_uuid = orgunit.global_tenant_id() THEN
     IF v_scope_mode = 'tenant-only' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -3066,7 +3059,7 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.global_setid_scope_package_versions v
-      WHERE v.tenant_id = orgunit.global_tenant_id()
+      WHERE v.tenant_uuid = orgunit.global_tenant_id()
         AND v.scope_code = p_scope_code
         AND v.package_id = v_package_id
         AND v.validity @> p_as_of_date
@@ -3086,7 +3079,7 @@ BEGIN
   PERFORM set_config('app.allow_share_read', COALESCE(v_allow_share, 'off'), true);
 
   package_id := v_package_id;
-  package_owner_tenant_id := v_package_owner_tenant_id;
+  package_owner_tenant_uuid := v_package_owner_tenant_uuid;
   RETURN NEXT;
 END;
 $$;
@@ -3207,15 +3200,15 @@ END $$;
 
 -- begin: modules/orgunit/infrastructure/persistence/schema/00011_orgunit_setid_scope_write_engine.sql
 CREATE OR REPLACE FUNCTION orgunit.submit_scope_package_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
   p_scope_code text,
   p_package_id uuid,
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -3234,19 +3227,19 @@ DECLARE
   v_next_start date;
   v_current_end date;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
-  PERFORM orgunit.lock_setid_governance(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
+  PERFORM orgunit.lock_setid_governance(p_tenant_uuid);
 
-  IF p_event_id IS NULL THEN
+  IF p_event_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
-      DETAIL = 'event_id is required';
+      DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
-      MESSAGE = 'REQUEST_ID_REQUIRED';
+      MESSAGE = 'REQUEST_CODE_REQUIRED';
   END IF;
   IF p_scope_code IS NULL OR NOT orgunit.scope_code_is_valid(p_scope_code) THEN
     RAISE EXCEPTION USING
@@ -3264,11 +3257,11 @@ BEGIN
       MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
       DETAIL = 'effective_date is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
+  IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
-      DETAIL = 'initiator_id is required';
+      DETAIL = 'initiator_uuid is required';
   END IF;
   IF p_event_type NOT IN ('BOOTSTRAP', 'CREATE', 'RENAME', 'DISABLE') THEN
     RAISE EXCEPTION USING
@@ -3293,32 +3286,32 @@ BEGIN
   END IF;
 
   INSERT INTO orgunit.setid_scope_package_events (
-    event_id,
-    tenant_id,
+    event_uuid,
+    tenant_uuid,
     scope_code,
     package_id,
     event_type,
     effective_date,
     payload,
-    request_id,
-    initiator_id
+    request_code,
+    initiator_uuid
   )
   VALUES (
-    p_event_id,
-    p_tenant_id,
+    p_event_uuid,
+    p_tenant_uuid,
     p_scope_code,
     p_package_id,
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_id,
-    p_initiator_id
+    p_request_code,
+    p_initiator_uuid
   )
-  ON CONFLICT (tenant_id, request_id) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_scope_package_events
-  WHERE tenant_id = p_tenant_id AND request_id = p_request_id
+  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
   ORDER BY id DESC
   LIMIT 1;
 
@@ -3365,7 +3358,7 @@ BEGIN
     END IF;
     SELECT status INTO v_owner_status
     FROM orgunit.setids
-    WHERE tenant_id = p_tenant_id AND setid = v_owner_setid;
+    WHERE tenant_uuid = p_tenant_uuid AND setid = v_owner_setid;
     IF v_owner_status IS NULL THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -3388,7 +3381,7 @@ BEGIN
     IF EXISTS (
       SELECT 1
       FROM orgunit.setid_scope_packages
-      WHERE tenant_id = p_tenant_id
+      WHERE tenant_uuid = p_tenant_uuid
         AND scope_code = p_scope_code
         AND package_code = v_package_code
         AND package_id <> p_package_id
@@ -3401,7 +3394,7 @@ BEGIN
     v_status := 'active';
 
     INSERT INTO orgunit.setid_scope_packages (
-      tenant_id,
+      tenant_uuid,
       scope_code,
       package_id,
       package_code,
@@ -3410,7 +3403,7 @@ BEGIN
       status
     )
     VALUES (
-      p_tenant_id,
+      p_tenant_uuid,
       p_scope_code,
       p_package_id,
       v_package_code,
@@ -3418,7 +3411,7 @@ BEGIN
       v_name,
       v_status
     )
-    ON CONFLICT (tenant_id, package_id) DO UPDATE
+    ON CONFLICT (tenant_uuid, package_id) DO UPDATE
     SET scope_code = EXCLUDED.scope_code,
         package_code = EXCLUDED.package_code,
         owner_setid = EXCLUDED.owner_setid,
@@ -3436,7 +3429,7 @@ BEGIN
 
     SELECT * INTO v_existing_pkg
     FROM orgunit.setid_scope_packages
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND package_id = p_package_id
     FOR UPDATE;
 
@@ -3453,12 +3446,12 @@ BEGIN
     UPDATE orgunit.setid_scope_packages
     SET name = v_name,
         updated_at = now()
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND package_id = p_package_id;
   ELSIF p_event_type = 'DISABLE' THEN
     SELECT * INTO v_existing_pkg
     FROM orgunit.setid_scope_packages
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND package_id = p_package_id
     FOR UPDATE;
 
@@ -3481,19 +3474,19 @@ BEGIN
     UPDATE orgunit.setid_scope_packages
     SET status = 'disabled',
         updated_at = now()
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND package_id = p_package_id;
   END IF;
 
   SELECT min(lower(validity)) INTO v_next_start
   FROM orgunit.setid_scope_package_versions
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND package_id = p_package_id
     AND lower(validity) > p_effective_date;
 
   SELECT * INTO v_existing_version
   FROM orgunit.setid_scope_package_versions
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND package_id = p_package_id
     AND validity @> p_effective_date
   ORDER BY lower(validity) DESC
@@ -3518,7 +3511,7 @@ BEGIN
         WHERE id = v_existing_version.id;
 
         INSERT INTO orgunit.setid_scope_package_versions (
-          tenant_id,
+          tenant_uuid,
           scope_code,
           package_id,
           package_code,
@@ -3529,7 +3522,7 @@ BEGIN
           last_event_id
         )
         VALUES (
-          p_tenant_id,
+          p_tenant_uuid,
           p_scope_code,
           p_package_id,
           v_package_code,
@@ -3542,7 +3535,7 @@ BEGIN
       END IF;
     ELSE
       INSERT INTO orgunit.setid_scope_package_versions (
-        tenant_id,
+        tenant_uuid,
         scope_code,
         package_id,
         package_code,
@@ -3553,7 +3546,7 @@ BEGIN
         last_event_id
       )
       VALUES (
-        p_tenant_id,
+        p_tenant_uuid,
         p_scope_code,
         p_package_id,
         v_package_code,
@@ -3577,15 +3570,15 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.submit_global_scope_package_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
   p_scope_code text,
   p_package_id uuid,
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -3602,26 +3595,26 @@ DECLARE
   v_next_start date;
   v_current_end date;
 BEGIN
-  IF p_tenant_id <> orgunit.global_tenant_id() THEN
+  IF p_tenant_uuid <> orgunit.global_tenant_id() THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'ACTOR_SCOPE_FORBIDDEN',
-      DETAIL = format('tenant_id=%s', p_tenant_id);
+      DETAIL = format('tenant_uuid=%s', p_tenant_uuid);
   END IF;
 
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
   PERFORM orgunit.assert_actor_scope_saas();
 
-  IF p_event_id IS NULL THEN
+  IF p_event_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
-      DETAIL = 'event_id is required';
+      DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
-      MESSAGE = 'REQUEST_ID_REQUIRED';
+      MESSAGE = 'REQUEST_CODE_REQUIRED';
   END IF;
   IF p_scope_code IS NULL OR NOT orgunit.scope_code_is_valid(p_scope_code) THEN
     RAISE EXCEPTION USING
@@ -3639,11 +3632,11 @@ BEGIN
       MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
       DETAIL = 'effective_date is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
+  IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
-      DETAIL = 'initiator_id is required';
+      DETAIL = 'initiator_uuid is required';
   END IF;
   IF p_event_type NOT IN ('BOOTSTRAP', 'CREATE', 'RENAME', 'DISABLE') THEN
     RAISE EXCEPTION USING
@@ -3668,32 +3661,32 @@ BEGIN
   END IF;
 
   INSERT INTO orgunit.global_setid_scope_package_events (
-    event_id,
-    tenant_id,
+    event_uuid,
+    tenant_uuid,
     scope_code,
     package_id,
     event_type,
     effective_date,
     payload,
-    request_id,
-    initiator_id
+    request_code,
+    initiator_uuid
   )
   VALUES (
-    p_event_id,
-    p_tenant_id,
+    p_event_uuid,
+    p_tenant_uuid,
     p_scope_code,
     p_package_id,
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_id,
-    p_initiator_id
+    p_request_code,
+    p_initiator_uuid
   )
-  ON CONFLICT (tenant_id, request_id) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.global_setid_scope_package_events
-  WHERE tenant_id = p_tenant_id AND request_id = p_request_id
+  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
   ORDER BY id DESC
   LIMIT 1;
 
@@ -3734,7 +3727,7 @@ BEGIN
     IF EXISTS (
       SELECT 1
       FROM orgunit.global_setid_scope_packages
-      WHERE tenant_id = p_tenant_id
+      WHERE tenant_uuid = p_tenant_uuid
         AND scope_code = p_scope_code
         AND package_code = v_package_code
         AND package_id <> p_package_id
@@ -3747,7 +3740,7 @@ BEGIN
     v_status := 'active';
 
     INSERT INTO orgunit.global_setid_scope_packages (
-      tenant_id,
+      tenant_uuid,
       scope_code,
       package_id,
       package_code,
@@ -3755,14 +3748,14 @@ BEGIN
       status
     )
     VALUES (
-      p_tenant_id,
+      p_tenant_uuid,
       p_scope_code,
       p_package_id,
       v_package_code,
       v_name,
       v_status
     )
-    ON CONFLICT (tenant_id, package_id) DO UPDATE
+    ON CONFLICT (tenant_uuid, package_id) DO UPDATE
     SET scope_code = EXCLUDED.scope_code,
         package_code = EXCLUDED.package_code,
         name = EXCLUDED.name,
@@ -3779,7 +3772,7 @@ BEGIN
 
     SELECT * INTO v_existing_pkg
     FROM orgunit.global_setid_scope_packages
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND package_id = p_package_id
     FOR UPDATE;
 
@@ -3795,12 +3788,12 @@ BEGIN
     UPDATE orgunit.global_setid_scope_packages
     SET name = v_name,
         updated_at = now()
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND package_id = p_package_id;
   ELSIF p_event_type = 'DISABLE' THEN
     SELECT * INTO v_existing_pkg
     FROM orgunit.global_setid_scope_packages
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND package_id = p_package_id
     FOR UPDATE;
 
@@ -3822,19 +3815,19 @@ BEGIN
     UPDATE orgunit.global_setid_scope_packages
     SET status = 'disabled',
         updated_at = now()
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND package_id = p_package_id;
   END IF;
 
   SELECT min(lower(validity)) INTO v_next_start
   FROM orgunit.global_setid_scope_package_versions
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND package_id = p_package_id
     AND lower(validity) > p_effective_date;
 
   SELECT * INTO v_existing_version
   FROM orgunit.global_setid_scope_package_versions
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND package_id = p_package_id
     AND validity @> p_effective_date
   ORDER BY lower(validity) DESC
@@ -3858,7 +3851,7 @@ BEGIN
         WHERE id = v_existing_version.id;
 
         INSERT INTO orgunit.global_setid_scope_package_versions (
-          tenant_id,
+          tenant_uuid,
           scope_code,
           package_id,
           package_code,
@@ -3868,7 +3861,7 @@ BEGIN
           last_event_id
         )
         VALUES (
-          p_tenant_id,
+          p_tenant_uuid,
           p_scope_code,
           p_package_id,
           v_package_code,
@@ -3880,7 +3873,7 @@ BEGIN
       END IF;
     ELSE
       INSERT INTO orgunit.global_setid_scope_package_versions (
-        tenant_id,
+        tenant_uuid,
         scope_code,
         package_id,
         package_code,
@@ -3890,7 +3883,7 @@ BEGIN
         last_event_id
       )
       VALUES (
-        p_tenant_id,
+        p_tenant_uuid,
         p_scope_code,
         p_package_id,
         v_package_code,
@@ -3913,16 +3906,16 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.submit_scope_subscription_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
   p_setid text,
   p_scope_code text,
   p_package_id uuid,
-  p_package_owner_tenant_id uuid,
+  p_package_owner_tenant_uuid uuid,
   p_event_type text,
   p_effective_date date,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -3936,19 +3929,19 @@ DECLARE
   v_current_end date;
   v_setid_status text;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
-  PERFORM orgunit.lock_setid_governance(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
+  PERFORM orgunit.lock_setid_governance(p_tenant_uuid);
 
-  IF p_event_id IS NULL THEN
+  IF p_event_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SCOPE_SUBSCRIPTION_INVALID_ARGUMENT',
-      DETAIL = 'event_id is required';
+      DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
-      MESSAGE = 'REQUEST_ID_REQUIRED';
+      MESSAGE = 'REQUEST_CODE_REQUIRED';
   END IF;
   IF p_scope_code IS NULL OR NOT orgunit.scope_code_is_valid(p_scope_code) THEN
     RAISE EXCEPTION USING
@@ -3960,7 +3953,7 @@ BEGIN
       ERRCODE = 'P0001',
       MESSAGE = 'PACKAGE_NOT_FOUND';
   END IF;
-  IF p_package_owner_tenant_id IS NULL THEN
+  IF p_package_owner_tenant_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'PACKAGE_OWNER_INVALID';
@@ -3971,11 +3964,11 @@ BEGIN
       MESSAGE = 'SCOPE_SUBSCRIPTION_INVALID_ARGUMENT',
       DETAIL = 'effective_date is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
+  IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SCOPE_SUBSCRIPTION_INVALID_ARGUMENT',
-      DETAIL = 'initiator_id is required';
+      DETAIL = 'initiator_uuid is required';
   END IF;
   IF p_event_type NOT IN ('BOOTSTRAP', 'SUBSCRIBE') THEN
     RAISE EXCEPTION USING
@@ -3994,7 +3987,7 @@ BEGIN
 
   SELECT status INTO v_setid_status
   FROM orgunit.setids
-  WHERE tenant_id = p_tenant_id AND setid = v_setid;
+  WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid;
 
   IF v_setid_status IS NULL THEN
     RAISE EXCEPTION USING
@@ -4009,8 +4002,8 @@ BEGIN
       DETAIL = format('setid=%s', v_setid);
   END IF;
 
-  IF p_package_owner_tenant_id <> p_tenant_id
-     AND p_package_owner_tenant_id <> orgunit.global_tenant_id() THEN
+  IF p_package_owner_tenant_uuid <> p_tenant_uuid
+     AND p_package_owner_tenant_uuid <> orgunit.global_tenant_id() THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'PACKAGE_OWNER_INVALID';
@@ -4022,44 +4015,44 @@ BEGIN
   END IF;
 
   PERFORM orgunit.assert_scope_package_active_as_of(
-    p_tenant_id,
+    p_tenant_uuid,
     p_scope_code,
     p_package_id,
-    p_package_owner_tenant_id,
+    p_package_owner_tenant_uuid,
     p_effective_date
   );
 
   INSERT INTO orgunit.setid_scope_subscription_events (
-    event_id,
-    tenant_id,
+    event_uuid,
+    tenant_uuid,
     setid,
     scope_code,
     package_id,
-    package_owner_tenant_id,
+    package_owner_tenant_uuid,
     event_type,
     effective_date,
     payload,
-    request_id,
-    initiator_id
+    request_code,
+    initiator_uuid
   )
   VALUES (
-    p_event_id,
-    p_tenant_id,
+    p_event_uuid,
+    p_tenant_uuid,
     v_setid,
     p_scope_code,
     p_package_id,
-    p_package_owner_tenant_id,
+    p_package_owner_tenant_uuid,
     p_event_type,
     p_effective_date,
     '{}'::jsonb,
-    p_request_id,
-    p_initiator_id
+    p_request_code,
+    p_initiator_uuid
   )
-  ON CONFLICT (tenant_id, request_id) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_scope_subscription_events
-  WHERE tenant_id = p_tenant_id AND request_id = p_request_id
+  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
   ORDER BY id DESC
   LIMIT 1;
 
@@ -4073,14 +4066,14 @@ BEGIN
 
   SELECT min(lower(validity)) INTO v_next_start
   FROM orgunit.setid_scope_subscriptions
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND setid = v_setid
     AND scope_code = p_scope_code
     AND lower(validity) > p_effective_date;
 
   SELECT * INTO v_existing
   FROM orgunit.setid_scope_subscriptions
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND setid = v_setid
     AND scope_code = p_scope_code
     AND validity @> p_effective_date
@@ -4094,7 +4087,7 @@ BEGIN
       IF lower(v_existing.validity) = p_effective_date THEN
         UPDATE orgunit.setid_scope_subscriptions
         SET package_id = p_package_id,
-            package_owner_tenant_id = p_package_owner_tenant_id,
+            package_owner_tenant_uuid = p_package_owner_tenant_uuid,
             last_event_id = v_evt_db_id,
             updated_at = now()
         WHERE id = v_existing.id;
@@ -4105,40 +4098,40 @@ BEGIN
         WHERE id = v_existing.id;
 
         INSERT INTO orgunit.setid_scope_subscriptions (
-          tenant_id,
+          tenant_uuid,
           setid,
           scope_code,
           package_id,
-          package_owner_tenant_id,
+          package_owner_tenant_uuid,
           validity,
           last_event_id
         )
         VALUES (
-          p_tenant_id,
+          p_tenant_uuid,
           v_setid,
           p_scope_code,
           p_package_id,
-          p_package_owner_tenant_id,
+          p_package_owner_tenant_uuid,
           daterange(p_effective_date, v_current_end, '[)'),
           v_evt_db_id
         );
       END IF;
     ELSE
       INSERT INTO orgunit.setid_scope_subscriptions (
-        tenant_id,
+        tenant_uuid,
         setid,
         scope_code,
         package_id,
-        package_owner_tenant_id,
+        package_owner_tenant_uuid,
         validity,
         last_event_id
       )
       VALUES (
-        p_tenant_id,
+        p_tenant_uuid,
         v_setid,
         p_scope_code,
         p_package_id,
-        p_package_owner_tenant_id,
+        p_package_owner_tenant_uuid,
         daterange(p_effective_date, v_next_start, '[)'),
         v_evt_db_id
       );
@@ -4167,11 +4160,11 @@ ALTER TABLE orgunit.setid_scope_packages
 
 ALTER TABLE orgunit.setid_scope_packages
   ADD CONSTRAINT setid_scope_packages_owner_fk
-    FOREIGN KEY (tenant_id, owner_setid)
-    REFERENCES orgunit.setids (tenant_id, setid);
+    FOREIGN KEY (tenant_uuid, owner_setid)
+    REFERENCES orgunit.setids (tenant_uuid, setid);
 
 CREATE INDEX IF NOT EXISTS setid_scope_packages_owner_lookup_idx
-  ON orgunit.setid_scope_packages (tenant_id, scope_code, owner_setid, status);
+  ON orgunit.setid_scope_packages (tenant_uuid, scope_code, owner_setid, status);
 
 ALTER TABLE orgunit.setid_scope_package_versions
   ADD COLUMN IF NOT EXISTS owner_setid text;
@@ -4182,16 +4175,16 @@ ALTER TABLE orgunit.setid_scope_package_versions
 
 ALTER TABLE orgunit.setid_scope_package_versions
   ADD CONSTRAINT setid_scope_package_versions_owner_fk
-    FOREIGN KEY (tenant_id, owner_setid)
-    REFERENCES orgunit.setids (tenant_id, setid);
+    FOREIGN KEY (tenant_uuid, owner_setid)
+    REFERENCES orgunit.setids (tenant_uuid, setid);
 
 CREATE INDEX IF NOT EXISTS setid_scope_package_versions_owner_lookup_idx
-  ON orgunit.setid_scope_package_versions (tenant_id, scope_code, owner_setid, lower(validity));
+  ON orgunit.setid_scope_package_versions (tenant_uuid, scope_code, owner_setid, lower(validity));
 
 ALTER TABLE orgunit.setid_scope_package_versions
   ADD CONSTRAINT setid_scope_package_versions_owner_scope_no_overlap
   EXCLUDE USING gist (
-    tenant_id WITH =,
+    tenant_uuid WITH =,
     scope_code gist_text_ops WITH =,
     owner_setid gist_text_ops WITH =,
     validity WITH &&
@@ -7256,7 +7249,7 @@ CREATE TABLE IF NOT EXISTS staffing.position_versions (
   id bigserial PRIMARY KEY,
   tenant_id uuid NOT NULL,
   position_id uuid NOT NULL,
-  org_unit_id uuid NOT NULL,
+  org_unit_id int NOT NULL CHECK (org_unit_id BETWEEN 10000000 AND 99999999),
   reports_to_position_id uuid NULL,
   name text NULL,
   lifecycle_status text NOT NULL DEFAULT 'active',
@@ -7658,7 +7651,7 @@ DECLARE
   v_lock_key text;
   v_prev_effective date;
   v_last_validity daterange;
-  v_org_unit_id uuid;
+  v_org_unit_id int;
   v_reports_to_position_id uuid;
   v_jobcatalog_setid text;
   v_jobcatalog_setid_as_of date;
@@ -7726,7 +7719,7 @@ BEGIN
           DETAIL = 'org_unit_id is required';
       END IF;
       BEGIN
-        v_org_unit_id := v_tmp_text::uuid;
+        v_org_unit_id := v_tmp_text::int;
       EXCEPTION
         WHEN invalid_text_representation THEN
           RAISE EXCEPTION USING
@@ -7825,7 +7818,7 @@ BEGIN
             DETAIL = 'org_unit_id is required';
         END IF;
         BEGIN
-          v_org_unit_id := v_tmp_text::uuid;
+          v_org_unit_id := v_tmp_text::int;
         EXCEPTION
           WHEN invalid_text_representation THEN
             RAISE EXCEPTION USING
@@ -7916,7 +7909,7 @@ BEGIN
       IF NOT EXISTS (
         SELECT 1
         FROM orgunit.org_unit_versions ouv
-        WHERE ouv.tenant_id = p_tenant_id
+        WHERE ouv.tenant_uuid = p_tenant_id
           AND ouv.hierarchy_type = 'OrgUnit'
           AND ouv.org_id = v_org_unit_id
           AND ouv.status = 'active'
@@ -8916,7 +8909,7 @@ CREATE OR REPLACE FUNCTION staffing.get_position_snapshot(
 )
 RETURNS TABLE (
   position_id uuid,
-  org_unit_id uuid,
+  org_unit_id int,
   reports_to_position_id uuid,
   jobcatalog_setid text,
   jobcatalog_setid_as_of date,
@@ -8957,7 +8950,7 @@ BEGIN
     pv.jobcatalog_setid,
     'jobcatalog',
     pv.jobcatalog_setid_as_of
-  ) sp(package_id, package_owner_tenant_id)
+  ) sp(package_id, package_owner_tenant_uuid)
     ON pv.jobcatalog_setid IS NOT NULL
   LEFT JOIN jobcatalog.job_profiles jp
     ON jp.tenant_id = pv.tenant_id

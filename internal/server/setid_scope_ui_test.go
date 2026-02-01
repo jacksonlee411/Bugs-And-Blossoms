@@ -183,7 +183,7 @@ func TestHandleSetIDScopeSubscriptionsUI(t *testing.T) {
 	})
 
 	t.Run("post missing fields", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", strings.NewReader("scope_code=&package_id=&request_id="))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", strings.NewReader("scope_code=&package_id=&request_code="))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -195,13 +195,13 @@ func TestHandleSetIDScopeSubscriptionsUI(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
-		if !strings.Contains(rec.Body.String(), "scope_code/package_id/request_id required") {
+		if !strings.Contains(rec.Body.String(), "scope_code/package_id/request_code required") {
 			t.Fatalf("unexpected body: %q", rec.Body.String())
 		}
 	})
 
 	t.Run("post invalid effective date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", strings.NewReader("scope_code=jobcatalog&package_id=p1&effective_date=bad&request_id=r1"))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", strings.NewReader("scope_code=jobcatalog&package_id=p1&effective_date=bad&request_code=r1"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -219,7 +219,7 @@ func TestHandleSetIDScopeSubscriptionsUI(t *testing.T) {
 	})
 
 	t.Run("post create error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", strings.NewReader("scope_code=jobcatalog&package_id=p1&effective_date=2026-01-01&request_id=r1"))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", strings.NewReader("scope_code=jobcatalog&package_id=p1&effective_date=2026-01-01&request_code=r1"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -240,7 +240,7 @@ func TestHandleSetIDScopeSubscriptionsUI(t *testing.T) {
 	})
 
 	t.Run("post success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", strings.NewReader("scope_code=jobcatalog&package_id=p1&effective_date=2026-01-01&request_id=r1"))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", strings.NewReader("scope_code=jobcatalog&package_id=p1&effective_date=2026-01-01&request_code=r1"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()

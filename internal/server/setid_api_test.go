@@ -40,7 +40,7 @@ func TestHandleSetIDsAPI_BadJSON(t *testing.T) {
 }
 
 func TestHandleSetIDsAPI_InvalidRequest(t *testing.T) {
-	body := bytes.NewBufferString(`{"setid":"","name":"","request_id":""}`)
+	body := bytes.NewBufferString(`{"setid":"","name":"","request_code":""}`)
 	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setids", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -51,7 +51,7 @@ func TestHandleSetIDsAPI_InvalidRequest(t *testing.T) {
 }
 
 func TestHandleSetIDsAPI_InvalidEffectiveDate(t *testing.T) {
-	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","effective_date":"bad","request_id":"r1"}`)
+	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","effective_date":"bad","request_code":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setids", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -65,7 +65,7 @@ func TestHandleSetIDsAPI_InvalidEffectiveDate(t *testing.T) {
 }
 
 func TestHandleSetIDsAPI_EnsureBootstrapError(t *testing.T) {
-	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","request_id":"r1"}`)
+	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","request_code":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setids", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -76,7 +76,7 @@ func TestHandleSetIDsAPI_EnsureBootstrapError(t *testing.T) {
 }
 
 func TestHandleSetIDsAPI_CreateSetIDError(t *testing.T) {
-	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","request_id":"r1"}`)
+	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","request_code":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setids", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -87,7 +87,7 @@ func TestHandleSetIDsAPI_CreateSetIDError(t *testing.T) {
 }
 
 func TestHandleSetIDsAPI_Success(t *testing.T) {
-	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","request_id":"r1"}`)
+	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","request_code":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setids", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -132,7 +132,7 @@ func TestHandleSetIDBindingsAPI_BadInputs(t *testing.T) {
 		t.Fatalf("status=%d", missingRec.Code)
 	}
 
-	badDate := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", bytes.NewBufferString(`{"org_unit_id":"org1","setid":"A0001","effective_date":"bad","request_id":"r1"}`))
+	badDate := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", bytes.NewBufferString(`{"org_unit_id":"10000001","setid":"A0001","effective_date":"bad","request_code":"r1"}`))
 	badDate = badDate.WithContext(withTenant(badDate.Context(), Tenant{ID: "t1", Name: "T"}))
 	badDateRec := httptest.NewRecorder()
 	handleSetIDBindingsAPI(badDateRec, badDate, newSetIDMemoryStore())
@@ -142,7 +142,7 @@ func TestHandleSetIDBindingsAPI_BadInputs(t *testing.T) {
 }
 
 func TestHandleSetIDBindingsAPI_StoreError(t *testing.T) {
-	body := bytes.NewBufferString(`{"org_unit_id":"org1","setid":"A0001","effective_date":"2026-01-01","request_id":"r1"}`)
+	body := bytes.NewBufferString(`{"org_unit_id":"10000001","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -161,7 +161,7 @@ func TestHandleSetIDBindingsAPI_Success(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 
-	body := bytes.NewBufferString(`{"org_unit_id":"org1","setid":"A0001","effective_date":"2026-01-01","request_id":"r1"}`)
+	body := bytes.NewBufferString(`{"org_unit_id":"10000001","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -228,7 +228,7 @@ func TestHandleGlobalSetIDsAPI_BadInputs(t *testing.T) {
 		t.Fatalf("status=%d", missingRec.Code)
 	}
 
-	forbidden := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-setids", bytes.NewBufferString(`{"name":"Shared","request_id":"r1"}`))
+	forbidden := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-setids", bytes.NewBufferString(`{"name":"Shared","request_code":"r1"}`))
 	forbidden = forbidden.WithContext(withTenant(forbidden.Context(), Tenant{ID: "t1", Name: "T"}))
 	forbiddenRec := httptest.NewRecorder()
 	handleGlobalSetIDsAPI(forbiddenRec, forbidden, newSetIDMemoryStore())
@@ -238,7 +238,7 @@ func TestHandleGlobalSetIDsAPI_BadInputs(t *testing.T) {
 }
 
 func TestHandleGlobalSetIDsAPI_StoreErrorAndSuccess(t *testing.T) {
-	body := bytes.NewBufferString(`{"name":"Shared","request_id":"r1"}`)
+	body := bytes.NewBufferString(`{"name":"Shared","request_code":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-setids", body)
 	req.Header.Set("X-Actor-Scope", "saas")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
@@ -248,7 +248,7 @@ func TestHandleGlobalSetIDsAPI_StoreErrorAndSuccess(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 
-	okBody := bytes.NewBufferString(`{"name":"Shared","request_id":"r2"}`)
+	okBody := bytes.NewBufferString(`{"name":"Shared","request_code":"r2"}`)
 	okReq := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-setids", okBody)
 	okReq.Header.Set("X-Actor-Scope", "saas")
 	okReq = okReq.WithContext(withTenant(okReq.Context(), Tenant{ID: "t1", Name: "T"}))

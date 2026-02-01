@@ -172,7 +172,7 @@ func (s orgStoreStub) SetBusinessUnitCurrent(context.Context, string, string, st
 }
 
 func defaultJobCatalogOrgStore() OrgUnitStore {
-	return orgStoreStub{nodes: []OrgUnitNode{{ID: "org1", Name: "Root Org", IsBusinessUnit: true}}}
+	return orgStoreStub{nodes: []OrgUnitNode{{ID: "10000001", Name: "Root Org", IsBusinessUnit: true}}}
 }
 
 func defaultJobCatalogSetIDStore() jobCatalogSetIDStoreStub {

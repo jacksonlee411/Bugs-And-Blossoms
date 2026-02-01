@@ -82,7 +82,7 @@ func (s partialSetIDStore) ListSetIDBindings(context.Context, string, string) ([
 	if s.listBindErr != nil {
 		return nil, s.listBindErr
 	}
-	return []SetIDBindingRow{{OrgUnitID: "org1", SetID: "DEFLT", ValidFrom: "2026-01-01"}}, nil
+	return []SetIDBindingRow{{OrgUnitID: "10000001", SetID: "DEFLT", ValidFrom: "2026-01-01"}}, nil
 }
 func (s partialSetIDStore) BindSetID(context.Context, string, string, string, string, string, string) error {
 	return s.bindErr
@@ -436,7 +436,7 @@ func TestHandleSetID_Post_BindSetID(t *testing.T) {
 
 	bind := url.Values{}
 	bind.Set("action", "bind_setid")
-	bind.Set("org_unit_id", "org1")
+	bind.Set("org_unit_id", "10000001")
 	bind.Set("setid", "B0001")
 	bind.Set("effective_date", "2026-01-01")
 	reqB := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(bind.Encode()))
@@ -802,7 +802,7 @@ func TestHandleSetID_Post_WriteErrors(t *testing.T) {
 
 	bind := url.Values{}
 	bind.Set("action", "bind_setid")
-	bind.Set("org_unit_id", "org1")
+	bind.Set("org_unit_id", "10000001")
 	bind.Set("setid", "DEFLT")
 	reqBind := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(bind.Encode()))
 	reqBind.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -831,13 +831,13 @@ func TestSetIDMemoryStore_Errors(t *testing.T) {
 	if err := s.BindSetID(context.Background(), "t1", "", "2026-01-01", "A0001", "", ""); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.BindSetID(context.Background(), "t1", "org1", "2026-01-01", "", "", ""); err == nil {
+	if err := s.BindSetID(context.Background(), "t1", "10000001", "2026-01-01", "", "", ""); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.BindSetID(context.Background(), "t1", "org1", "2026-01-01", "NOPE", "", ""); err == nil {
+	if err := s.BindSetID(context.Background(), "t1", "10000001", "2026-01-01", "NOPE", "", ""); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := s.BindSetID(context.Background(), "t1", "org1", "2026-01-01", "A0001", "", ""); err != nil {
+	if err := s.BindSetID(context.Background(), "t1", "10000001", "2026-01-01", "A0001", "", ""); err != nil {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -930,8 +930,8 @@ func TestSetIDMemoryStore_CreateGlobalSetID(t *testing.T) {
 func TestRenderSetIDPage_SkipsDisabledOptions(t *testing.T) {
 	html := renderSetIDPage(
 		[]SetID{{SetID: "SHARE", Name: "Shared", Status: "active", IsShared: true}, {SetID: "A0001", Name: "A", Status: "disabled"}},
-		[]SetIDBindingRow{{OrgUnitID: "org1", SetID: "SHARE", ValidFrom: "2026-01-01"}},
-		[]OrgUnitNode{{ID: "org1", Name: "BU 1", IsBusinessUnit: true}, {ID: "org2", Name: "BU 0", IsBusinessUnit: true}},
+		[]SetIDBindingRow{{OrgUnitID: "10000001", SetID: "SHARE", ValidFrom: "2026-01-01"}},
+		[]OrgUnitNode{{ID: "10000001", Name: "BU 1", IsBusinessUnit: true}, {ID: "10000002", Name: "BU 0", IsBusinessUnit: true}},
 		nil,
 		nil,
 		Tenant{Name: "T"},
@@ -1007,7 +1007,7 @@ func TestRenderSetIDPage_NoBusinessUnits(t *testing.T) {
 	html := renderSetIDPage(
 		[]SetID{{SetID: "DEFLT", Name: "Default", Status: "active"}},
 		nil,
-		[]OrgUnitNode{{ID: "org1", Name: "Org 1", IsBusinessUnit: false}},
+		[]OrgUnitNode{{ID: "10000001", Name: "Org 1", IsBusinessUnit: false}},
 		nil,
 		nil,
 		Tenant{Name: "T"},
@@ -1070,7 +1070,7 @@ func TestHandleSetID_OrgStoreMissing(t *testing.T) {
 func TestHandleSetID_BindInvalidEffectiveDate(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "bind_setid")
-	form.Set("org_unit_id", "org1")
+	form.Set("org_unit_id", "10000001")
 	form.Set("setid", "DEFLT")
 	form.Set("effective_date", "bad")
 
@@ -1375,7 +1375,7 @@ func TestSetIDPGStore_ListSetIDs_GlobalErrors(t *testing.T) {
 func TestSetIDPGStore_ListSetIDBindings(t *testing.T) {
 	tx := &stubTx{
 		rows: &tableRows{rows: [][]any{
-			{"org1", "SHARE", "2026-01-01", ""},
+			{"10000001", "SHARE", "2026-01-01", ""},
 		}},
 	}
 	s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
@@ -1384,7 +1384,7 @@ func TestSetIDPGStore_ListSetIDBindings(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("len=%d err=%v", len(rows), err)
 	}
-	if rows[0].OrgUnitID != "org1" {
+	if rows[0].OrgUnitID != "10000001" {
 		t.Fatalf("unexpected org=%q", rows[0].OrgUnitID)
 	}
 
@@ -1425,20 +1425,119 @@ func TestSetIDPGStore_CreateSetID_Errors(t *testing.T) {
 	if err := s2.CreateSetID(context.Background(), "t1", "A0001", "A", "2026-01-01", "r1", "p1"); err == nil {
 		t.Fatal("expected error")
 	}
+
+	tx3 := &stubTx{}
+	s3 := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3, nil })}
+	withRandReader(t, randErrReader{}, func() {
+		if err := s3.CreateSetID(context.Background(), "t1", "A0001", "A", "2026-01-01", "r1", "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
 }
 
 func TestSetIDPGStore_BindSetID_Errors(t *testing.T) {
+	tx1 := &stubTx{}
+	s1 := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx1, nil })}
+	if err := s1.BindSetID(context.Background(), "t1", "bad", "2026-01-01", "SHARE", "r1", "p1"); err == nil {
+		t.Fatal("expected error")
+	}
+
 	tx2 := &stubTx{execErr: errors.New("exec fail"), execErrAt: 2}
 	s2 := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx2, nil })}
-	if err := s2.BindSetID(context.Background(), "t1", "org1", "2026-01-01", "SHARE", "r1", "p1"); err == nil {
+	if err := s2.BindSetID(context.Background(), "t1", "10000001", "2026-01-01", "SHARE", "r1", "p1"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	tx3 := &stubTx{execErr: errors.New("exec fail"), execErrAt: 3}
 	s3 := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx3, nil })}
-	if err := s3.BindSetID(context.Background(), "t1", "org1", "2026-01-01", "SHARE", "r1", "p1"); err == nil {
+	if err := s3.BindSetID(context.Background(), "t1", "10000001", "2026-01-01", "SHARE", "r1", "p1"); err == nil {
 		t.Fatal("expected error")
 	}
+
+	tx4 := &stubTx{}
+	s4 := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx4, nil })}
+	withRandReader(t, randErrReader{}, func() {
+		if err := s4.BindSetID(context.Background(), "t1", "10000001", "2026-01-01", "SHARE", "r1", "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestSetIDPGStore_EnsureGlobalShareSetID(t *testing.T) {
+	t.Run("begin error", func(t *testing.T) {
+		s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin fail")
+		})}
+		if err := s.ensureGlobalShareSetID(context.Background(), "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("global tenant id error", func(t *testing.T) {
+		tx := &stubTx{rowErr: errors.New("row fail")}
+		s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if err := s.ensureGlobalShareSetID(context.Background(), "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set_config current tenant error", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{"gt1"}}, execErr: errors.New("exec fail"), execErrAt: 1}
+		s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if err := s.ensureGlobalShareSetID(context.Background(), "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set_config actor scope error", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{"gt1"}}, execErr: errors.New("exec fail"), execErrAt: 2}
+		s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if err := s.ensureGlobalShareSetID(context.Background(), "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set_config allow share read error", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{"gt1"}}, execErr: errors.New("exec fail"), execErrAt: 3}
+		s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if err := s.ensureGlobalShareSetID(context.Background(), "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("event id error", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{"gt1"}}}
+		s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		withRandReader(t, randErrReader{}, func() {
+			if err := s.ensureGlobalShareSetID(context.Background(), "p1"); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	})
+
+	t.Run("submit error", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{"gt1"}}, execErr: errors.New("exec fail"), execErrAt: 4}
+		s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if err := s.ensureGlobalShareSetID(context.Background(), "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{"gt1"}}, commitErr: errors.New("commit fail")}
+		s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if err := s.ensureGlobalShareSetID(context.Background(), "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{"gt1"}}}
+		s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if err := s.ensureGlobalShareSetID(context.Background(), "p1"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+	})
 }
 
 func TestSetIDPGStore_CreateGlobalSetID(t *testing.T) {
@@ -1472,6 +1571,14 @@ func TestSetIDPGStore_CreateGlobalSetID(t *testing.T) {
 	if err := sExecErr3.CreateGlobalSetID(context.Background(), "Shared", "r1", "p1", "saas"); err == nil {
 		t.Fatal("expected error")
 	}
+
+	txEventErr := &stubTx{row: &stubRow{vals: []any{"gt1"}}}
+	sEventErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txEventErr, nil })}
+	withRandReader(t, randErrReader{}, func() {
+		if err := sEventErr.CreateGlobalSetID(context.Background(), "Shared", "r1", "p1", "saas"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
 
 	txCommitErr := &stubTx{row: &stubRow{vals: []any{"gt1"}}, commitErr: errors.New("commit fail")}
 	sCommitErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txCommitErr, nil })}

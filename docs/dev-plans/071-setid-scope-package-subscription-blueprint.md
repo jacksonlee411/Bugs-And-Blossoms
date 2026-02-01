@@ -163,7 +163,7 @@ CREATE OR REPLACE FUNCTION orgunit.assert_scope_package_active_as_of(
   p_tenant_id uuid,
   p_scope_code text,
   p_package_id uuid,
-  p_package_owner_tenant_id uuid,
+  p_package_owner_tenant_uuid uuid,
   p_as_of_date date
 )
 RETURNS void
@@ -191,7 +191,7 @@ BEGIN
   v_ctx_tenant := current_setting('app.current_tenant');
   v_allow_share := current_setting('app.allow_share_read', true);
 
-  IF p_package_owner_tenant_id = p_tenant_id THEN
+  IF p_package_owner_tenant_uuid = p_tenant_id THEN
     IF v_scope_mode = 'shared-only' THEN
       RAISE EXCEPTION USING MESSAGE = 'PACKAGE_SCOPE_MISMATCH';
     END IF;
@@ -215,7 +215,7 @@ BEGIN
     ) THEN
       RAISE EXCEPTION USING MESSAGE = 'PACKAGE_INACTIVE_AS_OF';
     END IF;
-  ELSIF p_package_owner_tenant_id = orgunit.global_tenant_id() THEN
+  ELSIF p_package_owner_tenant_uuid = orgunit.global_tenant_id() THEN
     IF v_scope_mode = 'tenant-only' THEN
       RAISE EXCEPTION USING MESSAGE = 'PACKAGE_SCOPE_MISMATCH';
     END IF;
@@ -384,7 +384,7 @@ CREATE TABLE orgunit.setid_scope_subscription_events (
   setid text NOT NULL,
   scope_code text NOT NULL,
   package_id uuid NOT NULL,
-  package_owner_tenant_id uuid NOT NULL,
+  package_owner_tenant_uuid uuid NOT NULL,
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -398,7 +398,7 @@ CREATE TABLE orgunit.setid_scope_subscription_events (
   CONSTRAINT setid_scope_subscription_events_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
   CONSTRAINT setid_scope_subscription_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT setid_scope_subscription_events_owner_check CHECK (
-    package_owner_tenant_id = tenant_id OR package_owner_tenant_id = orgunit.global_tenant_id()
+    package_owner_tenant_uuid = tenant_id OR package_owner_tenant_uuid = orgunit.global_tenant_id()
   ),
   CONSTRAINT setid_scope_subscription_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
@@ -409,7 +409,7 @@ CREATE TABLE orgunit.setid_scope_subscriptions (
   setid text NOT NULL,
   scope_code text NOT NULL,
   package_id uuid NOT NULL,
-  package_owner_tenant_id uuid NOT NULL,
+  package_owner_tenant_uuid uuid NOT NULL,
   validity daterange NOT NULL,
   last_event_id bigint NOT NULL REFERENCES orgunit.setid_scope_subscription_events(id),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -419,7 +419,7 @@ CREATE TABLE orgunit.setid_scope_subscriptions (
   CONSTRAINT setid_scope_subscriptions_setid_fk FOREIGN KEY (tenant_id, setid) REFERENCES orgunit.setids (tenant_id, setid),
   CONSTRAINT setid_scope_subscriptions_validity_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT setid_scope_subscriptions_owner_check CHECK (
-    package_owner_tenant_id = tenant_id OR package_owner_tenant_id = orgunit.global_tenant_id()
+    package_owner_tenant_uuid = tenant_id OR package_owner_tenant_uuid = orgunit.global_tenant_id()
   ),
   CONSTRAINT setid_scope_subscriptions_no_overlap EXCLUDE USING gist (
     tenant_id WITH =,
@@ -625,7 +625,7 @@ WITH CHECK (
     }
     ```
   - 幂等：同一 `tenant_id + request_id` 重复请求返回既有结果，不重复写事件。
-  - 解析规则：`package_owner=tenant` 解析为 `package_owner_tenant_id = current_tenant`；`global` 解析为 `orgunit.global_tenant_id()`。
+  - 解析规则：`package_owner=tenant` 解析为 `package_owner_tenant_uuid = current_tenant`；`global` 解析为 `orgunit.global_tenant_id()`。
   - `shared-only` scope：仅 SaaS 允许创建/变更订阅；普通租户仅可读取当前订阅结果；写入事务 `app.current_tenant` 保持目标租户，包校验由 SECURITY DEFINER 函数内部切换共享读上下文完成。
   - Error Codes（HTTP）：
     - 404 `SETID_NOT_FOUND`
@@ -676,17 +676,17 @@ WITH CHECK (
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 `ResolveScopePackage`（fail-closed）
 **实现**：DB 函数 `orgunit.resolve_scope_package(p_tenant_id uuid, p_setid text, p_scope_code text, p_as_of_date date)`（`SECURITY DEFINER`）。
-返回：`(package_id uuid, package_owner_tenant_id uuid)`（供调用方决定租户/共享读上下文）。
+返回：`(package_id uuid, package_owner_tenant_uuid uuid)`（供调用方决定租户/共享读上下文）。
 说明：`p_as_of_date` 为空时默认 `current_date`。
 1. 开启事务并注入 `app.current_tenant`（租户上下文），函数内校验与 `p_tenant_id` 一致。
 2. 查询 `setid_scope_subscriptions`：`tenant_id + setid + scope_code + as_of_date` 命中有效 `validity`；无则返回 `SCOPE_SUBSCRIPTION_MISSING`。
-3. 若 `package_owner_tenant_id = tenant_id`：
+3. 若 `package_owner_tenant_uuid = tenant_id`：
    - 在 `setid_scope_package_versions` 查询 `package_id` 的版本，要求 `validity @> as_of_date` 且 `status=active`。
-4. 若 `package_owner_tenant_id = orgunit.global_tenant_id()`：
+4. 若 `package_owner_tenant_uuid = orgunit.global_tenant_id()`：
    - 校验该 scope 为 `shared-only` 或 `shared-allowed`。
    - 在函数内临时 `SET LOCAL app.current_tenant = orgunit.global_tenant_id()` + `SET LOCAL app.allow_share_read=on` 后读取 `global_setid_scope_package_versions`（`validity @> as_of_date` 且 `status=active`），并在返回前恢复原租户上下文。
 5. 若未命中有效版本则 fail-closed（包在该日期不可用）。
-6. 返回 `package_id` 与 `package_owner_tenant_id`；调用方无需手动切换/恢复上下文。
+6. 返回 `package_id` 与 `package_owner_tenant_uuid`；调用方无需手动切换/恢复上下文。
 
 ### 6.2 订阅变更（validity split）
 1. 开启事务，注入 `app.current_tenant`（shared-only 订阅仍保持为目标租户上下文）。
@@ -807,7 +807,7 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
 
 ## 10. 运维与监控 (Ops & Monitoring)
 - Feature Flag：不引入开关（对齐 `AGENTS.md`）。
-- 关键日志：记录 `request_id`、`tenant_id`、`setid`、`scope_code`、`package_id`、`package_owner_tenant_id`。
+- 关键日志：记录 `request_id`、`tenant_id`、`setid`、`scope_code`、`package_id`、`package_owner_tenant_uuid`。
 - 关键指标：
   - `resolve_scope_package_latency_ms`（P95/P99）
   - `scope_subscription_write_latency_ms`

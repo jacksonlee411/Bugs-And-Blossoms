@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-CREATE OR REPLACE FUNCTION orgunit.assert_current_tenant(p_tenant_id uuid)
+CREATE OR REPLACE FUNCTION orgunit.assert_current_tenant(p_tenant_uuid uuid)
 RETURNS void
 LANGUAGE plpgsql
 AS $$
@@ -8,11 +8,11 @@ DECLARE
   v_ctx_raw text;
   v_ctx_tenant uuid;
 BEGIN
-  IF p_tenant_id IS NULL THEN
+  IF p_tenant_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = 'tenant_id is required';
+      DETAIL = 'tenant_uuid is required';
   END IF;
 
   v_ctx_raw := current_setting('app.current_tenant', true);
@@ -33,19 +33,19 @@ BEGIN
         DETAIL = format('app.current_tenant=%s', v_ctx_raw);
   END;
 
-  IF v_ctx_tenant <> p_tenant_id THEN
+  IF v_ctx_tenant <> p_tenant_uuid THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'RLS_TENANT_MISMATCH',
-      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_id, v_ctx_tenant);
+      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_uuid, v_ctx_tenant);
   END IF;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.split_org_unit_version_at(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
+  p_org_id int,
   p_effective_date date,
   p_event_db_id bigint
 )
@@ -55,7 +55,7 @@ AS $$
 DECLARE
   v_row orgunit.org_unit_versions%ROWTYPE;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -71,7 +71,7 @@ BEGIN
 
   SELECT * INTO v_row
   FROM orgunit.org_unit_versions
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND hierarchy_type = p_hierarchy_type
     AND org_id = p_org_id
     AND validity @> p_effective_date
@@ -89,42 +89,44 @@ BEGIN
   WHERE id = v_row.id;
 
   INSERT INTO orgunit.org_unit_versions (
-    tenant_id,
+    tenant_uuid,
     hierarchy_type,
     org_id,
     parent_id,
     node_path,
     validity,
     name,
+    full_name_path,
     status,
     is_business_unit,
-    manager_id,
+    manager_uuid,
     last_event_id
   )
   VALUES (
-    v_row.tenant_id,
+    v_row.tenant_uuid,
     v_row.hierarchy_type,
     v_row.org_id,
     v_row.parent_id,
     v_row.node_path,
     daterange(p_effective_date, upper(v_row.validity), '[)'),
     v_row.name,
+    v_row.full_name_path,
     v_row.status,
     v_row.is_business_unit,
-    v_row.manager_id,
+    v_row.manager_uuid,
     p_event_db_id
   );
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.apply_create_logic(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
-  p_parent_id uuid,
+  p_org_id int,
+  p_parent_id int,
   p_effective_date date,
   p_name text,
-  p_manager_id uuid,
+  p_manager_uuid uuid,
   p_is_business_unit boolean,
   p_event_db_id bigint
 )
@@ -134,10 +136,10 @@ AS $$
 DECLARE
   v_parent_path ltree;
   v_node_path ltree;
-  v_root_org_id uuid;
+  v_root_org_id int;
   v_is_business_unit boolean;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -157,7 +159,7 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM orgunit.org_unit_versions
-    WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type AND org_id = p_org_id
+    WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type AND org_id = p_org_id
     LIMIT 1
   ) THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_ALREADY_EXISTS', DETAIL = format('org_id=%s', p_org_id);
@@ -166,7 +168,7 @@ BEGIN
   IF p_parent_id IS NULL THEN
     SELECT t.root_org_id INTO v_root_org_id
     FROM orgunit.org_trees t
-    WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type
+    WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = p_hierarchy_type
     FOR UPDATE;
 
     IF v_root_org_id IS NOT NULL THEN
@@ -175,8 +177,8 @@ BEGIN
         DETAIL = format('root_org_id=%s', v_root_org_id);
     END IF;
 
-    INSERT INTO orgunit.org_trees (tenant_id, hierarchy_type, root_org_id)
-    VALUES (p_tenant_id, p_hierarchy_type, p_org_id);
+    INSERT INTO orgunit.org_trees (tenant_uuid, hierarchy_type, root_org_id)
+    VALUES (p_tenant_uuid, p_hierarchy_type, p_org_id);
 
     v_node_path := text2ltree(orgunit.org_ltree_label(p_org_id));
     IF p_is_business_unit IS NOT NULL AND p_is_business_unit = false THEN
@@ -188,17 +190,17 @@ BEGIN
   ELSE
     SELECT t.root_org_id INTO v_root_org_id
     FROM orgunit.org_trees t
-    WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type;
+    WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = p_hierarchy_type;
 
     IF v_root_org_id IS NULL THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_TREE_NOT_INITIALIZED',
-        DETAIL = format('tenant_id=%s', p_tenant_id);
+        DETAIL = format('tenant_uuid=%s', p_tenant_uuid);
     END IF;
 
     SELECT v.node_path INTO v_parent_path
     FROM orgunit.org_unit_versions v
-    WHERE v.tenant_id = p_tenant_id
+    WHERE v.tenant_uuid = p_tenant_uuid
       AND v.hierarchy_type = p_hierarchy_type
       AND v.org_id = p_parent_id
       AND v.status = 'active'
@@ -216,39 +218,41 @@ BEGIN
   END IF;
 
   INSERT INTO orgunit.org_unit_versions (
-    tenant_id,
+    tenant_uuid,
     hierarchy_type,
     org_id,
     parent_id,
     node_path,
     validity,
     name,
+    full_name_path,
     status,
     is_business_unit,
-    manager_id,
+    manager_uuid,
     last_event_id
   )
   VALUES (
-    p_tenant_id,
-    p_hierarchy_type,
-    p_org_id,
-    p_parent_id,
+    p_tenant_uuid,
+	    p_hierarchy_type,
+	    p_org_id,
+	    p_parent_id,
     v_node_path,
     daterange(p_effective_date, NULL, '[)'),
     p_name,
+    p_name,
     'active',
     v_is_business_unit,
-    p_manager_id,
+    p_manager_uuid,
     p_event_db_id
   );
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.apply_move_logic(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
-  p_new_parent_id uuid,
+  p_org_id int,
+  p_new_parent_id int,
   p_effective_date date,
   p_event_db_id bigint
 )
@@ -256,13 +260,13 @@ RETURNS void
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_root_org_id uuid;
+  v_root_org_id int;
   v_old_path ltree;
   v_new_parent_path ltree;
   v_new_prefix ltree;
   v_old_level int;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -281,12 +285,12 @@ BEGIN
 
   SELECT t.root_org_id INTO v_root_org_id
   FROM orgunit.org_trees t
-  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type;
+  WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = p_hierarchy_type;
 
   IF v_root_org_id IS NULL THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_TREE_NOT_INITIALIZED',
-      DETAIL = format('tenant_id=%s', p_tenant_id);
+      DETAIL = format('tenant_uuid=%s', p_tenant_uuid);
   END IF;
   IF v_root_org_id = p_org_id THEN
     RAISE EXCEPTION USING
@@ -296,7 +300,7 @@ BEGIN
 
   SELECT v.node_path INTO v_old_path
   FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = p_hierarchy_type
     AND v.org_id = p_org_id
     AND v.status = 'active'
@@ -313,7 +317,7 @@ BEGIN
 
   SELECT v.node_path INTO v_new_parent_path
   FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = p_hierarchy_type
     AND v.org_id = p_new_parent_id
     AND v.status = 'active'
@@ -338,7 +342,7 @@ BEGIN
   WITH split AS (
     SELECT *
     FROM orgunit.org_unit_versions
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND hierarchy_type = p_hierarchy_type
       AND node_path <@ v_old_path
       AND validity @> p_effective_date
@@ -352,20 +356,21 @@ BEGIN
     RETURNING s.*
   )
   INSERT INTO orgunit.org_unit_versions (
-    tenant_id,
+    tenant_uuid,
     hierarchy_type,
     org_id,
     parent_id,
     node_path,
     validity,
     name,
+    full_name_path,
     status,
     is_business_unit,
-    manager_id,
+    manager_uuid,
     last_event_id
   )
   SELECT
-    u.tenant_id,
+    u.tenant_uuid,
     u.hierarchy_type,
     u.org_id,
     CASE WHEN u.org_id = p_org_id THEN p_new_parent_id ELSE u.parent_id END,
@@ -375,9 +380,10 @@ BEGIN
     END,
     daterange(p_effective_date, upper(u.validity), '[)'),
     u.name,
+    u.full_name_path,
     u.status,
     u.is_business_unit,
-    u.manager_id,
+    u.manager_uuid,
     p_event_db_id
   FROM upd u;
 
@@ -389,7 +395,7 @@ BEGIN
       END,
     parent_id = CASE WHEN v.org_id = p_org_id THEN p_new_parent_id ELSE v.parent_id END,
     last_event_id = p_event_db_id
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = p_hierarchy_type
     AND v.node_path <@ v_old_path
     AND lower(v.validity) >= p_effective_date;
@@ -397,9 +403,9 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.apply_rename_logic(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
+  p_org_id int,
   p_effective_date date,
   p_new_name text,
   p_event_db_id bigint
@@ -410,7 +416,7 @@ AS $$
 DECLARE
   v_stop_date date;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -430,7 +436,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM orgunit.org_unit_versions
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND hierarchy_type = p_hierarchy_type
       AND org_id = p_org_id
       AND validity @> p_effective_date
@@ -441,11 +447,11 @@ BEGIN
       DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
   END IF;
 
-  PERFORM orgunit.split_org_unit_version_at(p_tenant_id, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
+  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
 
   SELECT MIN(e.effective_date) INTO v_stop_date
   FROM orgunit.org_events e
-  WHERE e.tenant_id = p_tenant_id
+  WHERE e.tenant_uuid = p_tenant_uuid
     AND e.hierarchy_type = p_hierarchy_type
     AND e.org_id = p_org_id
     AND e.event_type = 'RENAME'
@@ -453,7 +459,7 @@ BEGIN
 
   UPDATE orgunit.org_unit_versions
   SET name = p_new_name, last_event_id = p_event_db_id
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND hierarchy_type = p_hierarchy_type
     AND org_id = p_org_id
     AND lower(validity) >= p_effective_date
@@ -462,9 +468,9 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.apply_disable_logic(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
+  p_org_id int,
   p_effective_date date,
   p_event_db_id bigint
 )
@@ -472,7 +478,7 @@ RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -489,7 +495,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM orgunit.org_unit_versions
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND hierarchy_type = p_hierarchy_type
       AND org_id = p_org_id
       AND validity @> p_effective_date
@@ -500,11 +506,11 @@ BEGIN
       DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
   END IF;
 
-  PERFORM orgunit.split_org_unit_version_at(p_tenant_id, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
+  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
 
   UPDATE orgunit.org_unit_versions
   SET status = 'disabled', last_event_id = p_event_db_id
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND hierarchy_type = p_hierarchy_type
     AND org_id = p_org_id
     AND lower(validity) >= p_effective_date;
@@ -512,9 +518,9 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.apply_set_business_unit_logic(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
+  p_org_id int,
   p_effective_date date,
   p_is_business_unit boolean,
   p_event_db_id bigint
@@ -525,9 +531,9 @@ AS $$
 DECLARE
   v_stop_date date;
   v_status text;
-  v_root_org_id uuid;
+  v_root_org_id int;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -546,7 +552,7 @@ BEGIN
 
   SELECT v.status INTO v_status
   FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = p_hierarchy_type
     AND v.org_id = p_org_id
     AND v.validity @> p_effective_date
@@ -566,7 +572,7 @@ BEGIN
 
   SELECT t.root_org_id INTO v_root_org_id
   FROM orgunit.org_trees t
-  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type;
+  WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = p_hierarchy_type;
 
   IF v_root_org_id IS NOT NULL AND v_root_org_id = p_org_id AND p_is_business_unit = false THEN
     RAISE EXCEPTION USING
@@ -574,11 +580,11 @@ BEGIN
       DETAIL = format('org_id=%s', p_org_id);
   END IF;
 
-  PERFORM orgunit.split_org_unit_version_at(p_tenant_id, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
+  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
 
   SELECT MIN(e.effective_date) INTO v_stop_date
   FROM orgunit.org_events e
-  WHERE e.tenant_id = p_tenant_id
+  WHERE e.tenant_uuid = p_tenant_uuid
     AND e.hierarchy_type = p_hierarchy_type
     AND e.org_id = p_org_id
     AND e.event_type = 'SET_BUSINESS_UNIT'
@@ -586,7 +592,7 @@ BEGIN
 
   UPDATE orgunit.org_unit_versions
   SET is_business_unit = p_is_business_unit, last_event_id = p_event_db_id
-  WHERE tenant_id = p_tenant_id
+  WHERE tenant_uuid = p_tenant_uuid
     AND hierarchy_type = p_hierarchy_type
     AND org_id = p_org_id
     AND lower(validity) >= p_effective_date
@@ -595,7 +601,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.replay_org_unit_versions(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text
 )
 RETURNS void
@@ -605,14 +611,14 @@ DECLARE
   v_lock_key text;
   v_event orgunit.org_events%ROWTYPE;
   v_payload jsonb;
-  v_parent_id uuid;
-  v_new_parent_id uuid;
+  v_parent_id int;
+  v_new_parent_id int;
   v_name text;
   v_new_name text;
-  v_manager_id uuid;
+  v_manager_uuid uuid;
   v_is_business_unit boolean;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
     RAISE EXCEPTION USING
@@ -620,27 +626,27 @@ BEGIN
       DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
   END IF;
 
-  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s:%s', p_tenant_uuid, p_hierarchy_type);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM orgunit.org_unit_versions
-  WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type;
+  WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type;
 
   DELETE FROM orgunit.org_trees
-  WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type;
+  WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type;
 
   FOR v_event IN
     SELECT *
     FROM orgunit.org_events
-    WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type
+    WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type
     ORDER BY effective_date, id
   LOOP
     v_payload := COALESCE(v_event.payload, '{}'::jsonb);
 
     IF v_event.event_type = 'CREATE' THEN
-      v_parent_id := NULLIF(v_payload->>'parent_id', '')::uuid;
+      v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
       v_name := NULLIF(btrim(v_payload->>'name'), '');
-      v_manager_id := NULLIF(v_payload->>'manager_id', '')::uuid;
+      v_manager_uuid := NULLIF(v_payload->>'manager_uuid', '')::uuid;
       v_is_business_unit := NULL;
       IF v_payload ? 'is_business_unit' THEN
         BEGIN
@@ -652,15 +658,15 @@ BEGIN
               DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
         END;
       END IF;
-      PERFORM orgunit.apply_create_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_parent_id, v_event.effective_date, v_name, v_manager_id, v_is_business_unit, v_event.id);
+      PERFORM orgunit.apply_create_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_parent_id, v_event.effective_date, v_name, v_manager_uuid, v_is_business_unit, v_event.id);
     ELSIF v_event.event_type = 'MOVE' THEN
-      v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::uuid;
-      PERFORM orgunit.apply_move_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_new_parent_id, v_event.effective_date, v_event.id);
+      v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::int;
+      PERFORM orgunit.apply_move_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_new_parent_id, v_event.effective_date, v_event.id);
     ELSIF v_event.event_type = 'RENAME' THEN
       v_new_name := NULLIF(btrim(v_payload->>'new_name'), '');
-      PERFORM orgunit.apply_rename_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_new_name, v_event.id);
+      PERFORM orgunit.apply_rename_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_new_name, v_event.id);
     ELSIF v_event.event_type = 'DISABLE' THEN
-      PERFORM orgunit.apply_disable_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_event.id);
+      PERFORM orgunit.apply_disable_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_event.id);
     ELSIF v_event.event_type = 'SET_BUSINESS_UNIT' THEN
       IF NOT (v_payload ? 'is_business_unit') THEN
         RAISE EXCEPTION USING
@@ -675,7 +681,7 @@ BEGIN
             MESSAGE = 'ORG_INVALID_ARGUMENT',
             DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
       END;
-      PERFORM orgunit.apply_set_business_unit_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_is_business_unit, v_event.id);
+      PERFORM orgunit.apply_set_business_unit_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_is_business_unit, v_event.id);
     ELSE
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_INVALID_ARGUMENT',
@@ -690,7 +696,7 @@ BEGIN
         validity,
         lag(validity) OVER (PARTITION BY org_id ORDER BY lower(validity)) AS prev_validity
       FROM orgunit.org_unit_versions
-      WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type
+      WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type
     )
     SELECT 1
     FROM ordered
@@ -708,7 +714,7 @@ BEGIN
     FROM (
       SELECT DISTINCT ON (org_id) org_id, validity
       FROM orgunit.org_unit_versions
-      WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type
+      WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type
       ORDER BY org_id, lower(validity) DESC
     ) last
     WHERE NOT upper_inf(last.validity)
@@ -718,19 +724,32 @@ BEGIN
       MESSAGE = 'ORG_VALIDITY_NOT_INFINITE',
       DETAIL = 'last version validity must be unbounded (infinity)';
   END IF;
+
+  UPDATE orgunit.org_unit_versions v
+  SET full_name_path = (
+    SELECT string_agg(a.name, ' / ' ORDER BY t.idx)
+    FROM unnest(v.path_ids) WITH ORDINALITY AS t(uid, idx)
+    JOIN orgunit.org_unit_versions a
+      ON a.tenant_uuid = v.tenant_uuid
+     AND a.hierarchy_type = v.hierarchy_type
+     AND a.org_id = t.uid
+     AND a.validity @> lower(v.validity)
+  )
+  WHERE v.tenant_uuid = p_tenant_uuid
+    AND v.hierarchy_type = 'OrgUnit';
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
   p_hierarchy_type text,
-  p_org_id uuid,
+  p_org_id int,
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -741,10 +760,10 @@ DECLARE
   v_existing orgunit.org_events%ROWTYPE;
   v_payload jsonb;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
-  IF p_event_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  IF p_event_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'event_uuid is required';
   END IF;
   IF p_org_id IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
@@ -752,11 +771,11 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  IF p_initiator_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
 
   IF p_hierarchy_type <> 'OrgUnit' THEN
@@ -770,7 +789,7 @@ BEGIN
       DETAIL = format('unsupported event_type: %s', p_event_type);
   END IF;
 
-  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s:%s', p_tenant_uuid, p_hierarchy_type);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
@@ -791,53 +810,53 @@ BEGIN
   END IF;
 
   INSERT INTO orgunit.org_events (
-    event_id,
-    tenant_id,
+    event_uuid,
+    tenant_uuid,
     hierarchy_type,
     org_id,
     event_type,
     effective_date,
     payload,
-    request_id,
-    initiator_id
+    request_code,
+    initiator_uuid
   )
   VALUES (
-    p_event_id,
-    p_tenant_id,
+    p_event_uuid,
+    p_tenant_uuid,
     p_hierarchy_type,
     p_org_id,
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_id,
-    p_initiator_id
+    p_request_code,
+    p_initiator_uuid
   )
-  ON CONFLICT (event_id) DO NOTHING
+  ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_event_db_id;
 
   IF v_event_db_id IS NULL THEN
     SELECT * INTO v_existing
     FROM orgunit.org_events
-    WHERE event_id = p_event_id;
+    WHERE event_uuid = p_event_uuid;
 
-    IF v_existing.tenant_id <> p_tenant_id
+    IF v_existing.tenant_uuid <> p_tenant_uuid
       OR v_existing.hierarchy_type <> p_hierarchy_type
       OR v_existing.org_id <> p_org_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_id <> p_request_id
-      OR v_existing.initiator_id <> p_initiator_id
+      OR v_existing.request_code <> p_request_code
+      OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_IDEMPOTENCY_REUSED',
-        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+        DETAIL = format('event_uuid=%s existing_id=%s', p_event_uuid, v_existing.id);
     END IF;
 
     RETURN v_existing.id;
   END IF;
 
-  PERFORM orgunit.replay_org_unit_versions(p_tenant_id, p_hierarchy_type);
+  PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid, p_hierarchy_type);
 
   RETURN v_event_db_id;
 END;
@@ -846,13 +865,13 @@ $$;
 
 -- +goose Down
 -- +goose StatementBegin
-DROP FUNCTION IF EXISTS orgunit.submit_org_event(uuid, uuid, text, uuid, text, date, jsonb, text, uuid);
+DROP FUNCTION IF EXISTS orgunit.submit_org_event(uuid, uuid, text, int, text, date, jsonb, text, uuid);
 DROP FUNCTION IF EXISTS orgunit.replay_org_unit_versions(uuid, text);
-DROP FUNCTION IF EXISTS orgunit.apply_set_business_unit_logic(uuid, text, uuid, date, boolean, bigint);
-DROP FUNCTION IF EXISTS orgunit.apply_disable_logic(uuid, text, uuid, date, bigint);
-DROP FUNCTION IF EXISTS orgunit.apply_rename_logic(uuid, text, uuid, date, text, bigint);
-DROP FUNCTION IF EXISTS orgunit.apply_move_logic(uuid, text, uuid, uuid, date, bigint);
-DROP FUNCTION IF EXISTS orgunit.apply_create_logic(uuid, text, uuid, uuid, date, text, uuid, boolean, bigint);
-DROP FUNCTION IF EXISTS orgunit.split_org_unit_version_at(uuid, text, uuid, date, bigint);
+DROP FUNCTION IF EXISTS orgunit.apply_set_business_unit_logic(uuid, text, int, date, boolean, bigint);
+DROP FUNCTION IF EXISTS orgunit.apply_disable_logic(uuid, text, int, date, bigint);
+DROP FUNCTION IF EXISTS orgunit.apply_rename_logic(uuid, text, int, date, text, bigint);
+DROP FUNCTION IF EXISTS orgunit.apply_move_logic(uuid, text, int, int, date, bigint);
+DROP FUNCTION IF EXISTS orgunit.apply_create_logic(uuid, text, int, int, date, text, uuid, boolean, bigint);
+DROP FUNCTION IF EXISTS orgunit.split_org_unit_version_at(uuid, text, int, date, bigint);
 DROP FUNCTION IF EXISTS orgunit.assert_current_tenant(uuid);
 -- +goose StatementEnd
