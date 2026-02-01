@@ -21,3 +21,8 @@
 - 未通过：`make orgunit plan`（本地 DB 缺少函数 `orgunit.submit_setid_binding_event`）
 - 已通过：`make orgunit lint`
 - 未通过：`make orgunit migrate up`（本地 DB 未启动，连接被拒绝）
+
+## CI/合并记录
+
+- 2026-02-01：PR #246 触发 Quality Gates 全绿（Code Quality & Formatting / Unit & Integration Tests / Routing Gates / E2E Tests）。
+- 2026-02-01：PR #246 已采用 merge commit 合并至 `origin/main`（合并时间：2026-02-01 13:09:25 UTC）。
