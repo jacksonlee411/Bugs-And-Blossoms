@@ -1,8 +1,8 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION orgunit.ensure_setid_bootstrap(
-  p_tenant_id uuid,
-  p_initiator_id uuid
+  p_tenant_uuid uuid,
+  p_initiator_uuid uuid
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -10,32 +10,32 @@ AS $$
 DECLARE
   v_evt_id uuid;
   v_evt_db_id bigint;
-  v_root_org_id uuid;
+  v_root_org_id int;
   v_root_valid_from date;
   v_scope_code text;
   v_scope_share_mode text;
   v_package_id uuid;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
-  PERFORM orgunit.lock_setid_governance(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
+  PERFORM orgunit.lock_setid_governance(p_tenant_uuid);
 
   IF NOT EXISTS (
-    SELECT 1 FROM orgunit.setids WHERE tenant_id = p_tenant_id AND setid = 'DEFLT'
+    SELECT 1 FROM orgunit.setids WHERE tenant_uuid = p_tenant_uuid AND setid = 'DEFLT'
   ) THEN
     v_evt_id := gen_random_uuid();
-    INSERT INTO orgunit.setid_events (event_id, tenant_id, event_type, setid, payload, request_id, initiator_id)
-    VALUES (v_evt_id, p_tenant_id, 'BOOTSTRAP', 'DEFLT', jsonb_build_object('name', 'Default'), 'bootstrap:deflt', p_initiator_id)
-    ON CONFLICT (tenant_id, request_id) DO NOTHING;
+    INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
+    VALUES (v_evt_id, p_tenant_uuid, 'BOOTSTRAP', 'DEFLT', jsonb_build_object('name', 'Default'), 'bootstrap:deflt', p_initiator_uuid)
+    ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
 
     SELECT id INTO v_evt_db_id
     FROM orgunit.setid_events
-    WHERE tenant_id = p_tenant_id AND request_id = 'bootstrap:deflt'
+    WHERE tenant_uuid = p_tenant_uuid AND request_code = 'bootstrap:deflt'
     ORDER BY id DESC
     LIMIT 1;
 
-    INSERT INTO orgunit.setids (tenant_id, setid, name, status, last_event_id)
-    VALUES (p_tenant_id, 'DEFLT', 'Default', 'active', v_evt_db_id)
-    ON CONFLICT (tenant_id, setid) DO NOTHING;
+    INSERT INTO orgunit.setids (tenant_uuid, setid, name, status, last_event_id)
+    VALUES (p_tenant_uuid, 'DEFLT', 'Default', 'active', v_evt_db_id)
+    ON CONFLICT (tenant_uuid, setid) DO NOTHING;
   END IF;
 
   FOR v_scope_code, v_scope_share_mode IN
@@ -49,7 +49,7 @@ BEGIN
 
     SELECT p.package_id INTO v_package_id
     FROM orgunit.setid_scope_packages p
-    WHERE p.tenant_id = p_tenant_id
+    WHERE p.tenant_uuid = p_tenant_uuid
       AND p.scope_code = v_scope_code
       AND p.package_code = 'DEFLT';
 
@@ -57,19 +57,19 @@ BEGIN
       v_package_id := gen_random_uuid();
       PERFORM orgunit.submit_scope_package_event(
         gen_random_uuid(),
-        p_tenant_id,
+        p_tenant_uuid,
         v_scope_code,
         v_package_id,
         'BOOTSTRAP',
         current_date,
         jsonb_build_object('package_code', 'DEFLT', 'name', 'Default'),
         format('bootstrap:scope-package:deflt:%s', v_scope_code),
-        p_initiator_id
+        p_initiator_uuid
       );
 
       SELECT p.package_id INTO v_package_id
       FROM orgunit.setid_scope_packages p
-      WHERE p.tenant_id = p_tenant_id
+      WHERE p.tenant_uuid = p_tenant_uuid
         AND p.scope_code = v_scope_code
         AND p.package_code = 'DEFLT';
     END IF;
@@ -84,29 +84,29 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM orgunit.setid_scope_subscriptions s
-      WHERE s.tenant_id = p_tenant_id
+      WHERE s.tenant_uuid = p_tenant_uuid
         AND s.setid = 'DEFLT'
         AND s.scope_code = v_scope_code
         AND s.validity @> current_date
     ) THEN
       PERFORM orgunit.submit_scope_subscription_event(
         gen_random_uuid(),
-        p_tenant_id,
+        p_tenant_uuid,
         'DEFLT',
         v_scope_code,
         v_package_id,
-        p_tenant_id,
+        p_tenant_uuid,
         'BOOTSTRAP',
         current_date,
         format('bootstrap:scope-subscription:deflt:%s', v_scope_code),
-        p_initiator_id
+        p_initiator_uuid
       );
     END IF;
   END LOOP;
 
   SELECT t.root_org_id INTO v_root_org_id
   FROM orgunit.org_trees t
-  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = 'OrgUnit'
+  WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = 'OrgUnit'
   FOR UPDATE;
 
   IF v_root_org_id IS NULL THEN
@@ -115,7 +115,7 @@ BEGIN
 
   SELECT lower(v.validity)::date INTO v_root_valid_from
   FROM orgunit.org_unit_versions v
-  WHERE v.tenant_id = p_tenant_id
+  WHERE v.tenant_uuid = p_tenant_uuid
     AND v.hierarchy_type = 'OrgUnit'
     AND v.org_id = v_root_org_id
     AND v.status = 'active'
@@ -134,18 +134,18 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM orgunit.setid_binding_versions
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND org_id = v_root_org_id
       AND validity @> v_root_valid_from
   ) THEN
     PERFORM orgunit.submit_setid_binding_event(
       gen_random_uuid(),
-      p_tenant_id,
+      p_tenant_uuid,
       v_root_org_id,
       v_root_valid_from,
       'DEFLT',
       'bootstrap:binding:deflt',
-      p_initiator_id
+      p_initiator_uuid
     );
   END IF;
 END;

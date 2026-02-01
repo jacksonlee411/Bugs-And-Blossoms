@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
 )
 
 type OrgUnitNode struct {
@@ -52,7 +53,7 @@ type OrgUnitNodesCurrentDisabler interface {
 }
 
 type OrgUnitNodesCurrentBusinessUnitSetter interface {
-	SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestID string) error
+	SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestCode string) error
 }
 
 type orgUnitPGStore struct {
@@ -65,6 +66,36 @@ type pgBeginner interface {
 
 func newOrgUnitPGStore(pool pgBeginner) OrgUnitStore {
 	return &orgUnitPGStore{pool: pool}
+}
+
+func parseOrgID8(input string) (int, error) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return 0, errors.New("org_id is required")
+	}
+	if len(trimmed) != 8 {
+		return 0, errors.New("org_id must be 8 digits")
+	}
+	value, err := strconv.Atoi(trimmed)
+	if err != nil {
+		return 0, errors.New("org_id must be 8 digits")
+	}
+	if value < 10000000 || value > 99999999 {
+		return 0, errors.New("org_id must be 8 digits")
+	}
+	return value, nil
+}
+
+func parseOptionalOrgID8(input string) (int, bool, error) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return 0, false, nil
+	}
+	value, err := parseOrgID8(trimmed)
+	if err != nil {
+		return 0, false, err
+	}
+	return value, true, nil
 }
 
 func (s *orgUnitPGStore) ListNodesCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
@@ -90,7 +121,7 @@ SELECT
   e.transaction_time
 FROM snapshot s
 JOIN orgunit.org_unit_versions v
-  ON v.tenant_id = $1::uuid
+  ON v.tenant_uuid = $1::uuid
  AND v.hierarchy_type = 'OrgUnit'
  AND v.org_id = s.org_id
  AND v.status = 'active'
@@ -132,6 +163,10 @@ func (s *orgUnitPGStore) ResolveSetID(ctx context.Context, tenantID string, orgU
 		return "", err
 	}
 
+	if _, err := parseOrgID8(orgUnitID); err != nil {
+		return "", err
+	}
+
 	out, err := setid.Resolve(ctx, tx, tenantID, orgUnitID, asOfDate)
 	if err != nil {
 		return "", err
@@ -157,13 +192,19 @@ func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string,
 		return OrgUnitNode{}, errors.New("effective_date is required")
 	}
 
-	var orgID string
-	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&orgID); err != nil {
+	if _, ok, err := parseOptionalOrgID8(parentID); err != nil {
+		return OrgUnitNode{}, err
+	} else if ok {
+		parentID = strings.TrimSpace(parentID)
+	}
+
+	var orgID int
+	if err := tx.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::int;`).Scan(&orgID); err != nil {
 		return OrgUnitNode{}, err
 	}
 
-	var eventID string
-	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+	eventID, err := uuidv7.NewString()
+	if err != nil {
 		return OrgUnitNode{}, err
 	}
 
@@ -179,7 +220,7 @@ SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
   'OrgUnit',
-  $3::uuid,
+  $3::int,
   'CREATE',
   $4::date,
   $5::jsonb,
@@ -195,7 +236,7 @@ SELECT orgunit.submit_org_event(
 	if err := tx.QueryRow(ctx, `
 SELECT transaction_time
 FROM orgunit.org_events
-WHERE tenant_id = $1::uuid AND event_id = $2::uuid
+WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
 `, tenantID, eventID).Scan(&createdAt); err != nil {
 		return OrgUnitNode{}, err
 	}
@@ -204,7 +245,7 @@ WHERE tenant_id = $1::uuid AND event_id = $2::uuid
 		return OrgUnitNode{}, err
 	}
 
-	return OrgUnitNode{ID: orgID, Name: name, IsBusinessUnit: isBusinessUnit, CreatedAt: createdAt}, nil
+	return OrgUnitNode{ID: strconv.Itoa(orgID), Name: name, IsBusinessUnit: isBusinessUnit, CreatedAt: createdAt}, nil
 }
 
 func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, newName string) error {
@@ -222,15 +263,15 @@ func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string,
 		return errors.New("effective_date is required")
 	}
 
-	if strings.TrimSpace(orgID) == "" {
-		return errors.New("org_id is required")
+	if _, err := parseOrgID8(orgID); err != nil {
+		return err
 	}
 	if strings.TrimSpace(newName) == "" {
 		return errors.New("new_name is required")
 	}
 
-	var eventID string
-	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+	eventID, err := uuidv7.NewString()
+	if err != nil {
 		return err
 	}
 
@@ -241,7 +282,7 @@ SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
   'OrgUnit',
-  $3::uuid,
+  $3::int,
   'RENAME',
   $4::date,
   $5::jsonb,
@@ -273,17 +314,19 @@ func (s *orgUnitPGStore) MoveNodeCurrent(ctx context.Context, tenantID string, e
 		return errors.New("effective_date is required")
 	}
 
-	if strings.TrimSpace(orgID) == "" {
-		return errors.New("org_id is required")
+	if _, err := parseOrgID8(orgID); err != nil {
+		return err
 	}
 
-	var eventID string
-	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+	eventID, err := uuidv7.NewString()
+	if err != nil {
 		return err
 	}
 
 	payload := `{}`
-	if strings.TrimSpace(newParentID) != "" {
+	if _, ok, err := parseOptionalOrgID8(newParentID); err != nil {
+		return err
+	} else if ok {
 		payload = `{"new_parent_id":` + strconv.Quote(newParentID) + `}`
 	}
 
@@ -292,7 +335,7 @@ SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
   'OrgUnit',
-  $3::uuid,
+  $3::int,
   'MOVE',
   $4::date,
   $5::jsonb,
@@ -324,12 +367,12 @@ func (s *orgUnitPGStore) DisableNodeCurrent(ctx context.Context, tenantID string
 		return errors.New("effective_date is required")
 	}
 
-	if strings.TrimSpace(orgID) == "" {
-		return errors.New("org_id is required")
+	if _, err := parseOrgID8(orgID); err != nil {
+		return err
 	}
 
-	var eventID string
-	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+	eventID, err := uuidv7.NewString()
+	if err != nil {
 		return err
 	}
 
@@ -338,7 +381,7 @@ SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
   'OrgUnit',
-  $3::uuid,
+  $3::int,
   'DISABLE',
   $4::date,
   '{}'::jsonb,
@@ -355,7 +398,7 @@ SELECT orgunit.submit_org_event(
 	return nil
 }
 
-func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestID string) error {
+func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestCode string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -369,16 +412,16 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 	if strings.TrimSpace(effectiveDate) == "" {
 		return errors.New("effective_date is required")
 	}
-	if strings.TrimSpace(orgID) == "" {
-		return errors.New("org_id is required")
-	}
-
-	var eventID string
-	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+	if _, err := parseOrgID8(orgID); err != nil {
 		return err
 	}
-	if strings.TrimSpace(requestID) == "" {
-		requestID = eventID
+
+	eventID, err := uuidv7.NewString()
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(requestCode) == "" {
+		requestCode = eventID
 	}
 
 	payload := `{"is_business_unit":` + strconv.FormatBool(isBusinessUnit) + `}`
@@ -391,14 +434,14 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 	  $1::uuid,
   $2::uuid,
   'OrgUnit',
-  $3::uuid,
+  $3::int,
   'SET_BUSINESS_UNIT',
   $4::date,
   $5::jsonb,
 	  $6::text,
 	  $7::uuid
 	)
-	`, eventID, tenantID, orgID, effectiveDate, []byte(payload), requestID, tenantID); err != nil {
+	`, eventID, tenantID, orgID, effectiveDate, []byte(payload), requestCode, tenantID); err != nil {
 		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_set_business_unit;`); rbErr != nil {
 			return rbErr
 		}
@@ -408,9 +451,9 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 			if queryErr := tx.QueryRow(ctx, `
 		SELECT is_business_unit
 		FROM orgunit.org_unit_versions
-		WHERE tenant_id = $1::uuid
+		WHERE tenant_uuid = $1::uuid
 		  AND hierarchy_type = 'OrgUnit'
-		  AND org_id = $2::uuid
+		  AND org_id = $2::int
 		  AND status = 'active'
 		  AND validity @> $3::date
 		ORDER BY lower(validity) DESC
@@ -429,14 +472,16 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 }
 
 type orgUnitMemoryStore struct {
-	nodes map[string][]OrgUnitNode
-	now   func() time.Time
+	nodes  map[string][]OrgUnitNode
+	now    func() time.Time
+	nextID int
 }
 
 func newOrgUnitMemoryStore() *orgUnitMemoryStore {
 	return &orgUnitMemoryStore{
-		nodes: make(map[string][]OrgUnitNode),
-		now:   time.Now,
+		nodes:  make(map[string][]OrgUnitNode),
+		now:    time.Now,
+		nextID: 10000000,
 	}
 }
 
@@ -445,8 +490,10 @@ func (s *orgUnitMemoryStore) listNodes(tenantID string) ([]OrgUnitNode, error) {
 }
 
 func (s *orgUnitMemoryStore) createNode(tenantID string, name string, isBusinessUnit bool) (OrgUnitNode, error) {
+	id := s.nextID
+	s.nextID++
 	n := OrgUnitNode{
-		ID:             "mem-" + strings.ToLower(strings.ReplaceAll(name, " ", "-")),
+		ID:             strconv.Itoa(id),
 		Name:           name,
 		IsBusinessUnit: isBusinessUnit,
 		CreatedAt:      s.now(),
@@ -460,8 +507,8 @@ func (s *orgUnitMemoryStore) ListNodesCurrent(_ context.Context, tenantID string
 }
 
 func (s *orgUnitMemoryStore) ResolveSetID(_ context.Context, _ string, orgUnitID string, _ string) (string, error) {
-	if strings.TrimSpace(orgUnitID) == "" {
-		return "", errors.New("org_unit_id is required")
+	if _, err := parseOrgID8(orgUnitID); err != nil {
+		return "", err
 	}
 	return "S2601", nil
 }
@@ -471,8 +518,8 @@ func (s *orgUnitMemoryStore) CreateNodeCurrent(_ context.Context, tenantID strin
 }
 
 func (s *orgUnitMemoryStore) RenameNodeCurrent(_ context.Context, tenantID string, _ string, orgID string, newName string) error {
-	if strings.TrimSpace(orgID) == "" {
-		return errors.New("org_id is required")
+	if _, err := parseOrgID8(orgID); err != nil {
+		return err
 	}
 	if strings.TrimSpace(newName) == "" {
 		return errors.New("new_name is required")
@@ -490,8 +537,8 @@ func (s *orgUnitMemoryStore) RenameNodeCurrent(_ context.Context, tenantID strin
 }
 
 func (s *orgUnitMemoryStore) MoveNodeCurrent(_ context.Context, tenantID string, _ string, orgID string, _ string) error {
-	if strings.TrimSpace(orgID) == "" {
-		return errors.New("org_id is required")
+	if _, err := parseOrgID8(orgID); err != nil {
+		return err
 	}
 
 	nodes := s.nodes[tenantID]
@@ -504,8 +551,8 @@ func (s *orgUnitMemoryStore) MoveNodeCurrent(_ context.Context, tenantID string,
 }
 
 func (s *orgUnitMemoryStore) DisableNodeCurrent(_ context.Context, tenantID string, _ string, orgID string) error {
-	if strings.TrimSpace(orgID) == "" {
-		return errors.New("org_id is required")
+	if _, err := parseOrgID8(orgID); err != nil {
+		return err
 	}
 
 	nodes := s.nodes[tenantID]
@@ -519,8 +566,8 @@ func (s *orgUnitMemoryStore) DisableNodeCurrent(_ context.Context, tenantID stri
 }
 
 func (s *orgUnitMemoryStore) SetBusinessUnitCurrent(_ context.Context, tenantID string, _ string, orgID string, isBusinessUnit bool, _ string) error {
-	if strings.TrimSpace(orgID) == "" {
-		return errors.New("org_id is required")
+	if _, err := parseOrgID8(orgID); err != nil {
+		return err
 	}
 
 	nodes := s.nodes[tenantID]

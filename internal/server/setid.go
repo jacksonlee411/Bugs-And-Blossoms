@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
 )
 
 type SetID struct {
@@ -70,18 +71,18 @@ type SetIDGovernanceStore interface {
 	EnsureBootstrap(ctx context.Context, tenantID string, initiatorID string) error
 	ListSetIDs(ctx context.Context, tenantID string) ([]SetID, error)
 	ListGlobalSetIDs(ctx context.Context) ([]SetID, error)
-	CreateSetID(ctx context.Context, tenantID string, setID string, name string, effectiveDate string, requestID string, initiatorID string) error
+	CreateSetID(ctx context.Context, tenantID string, setID string, name string, effectiveDate string, requestCode string, initiatorID string) error
 	ListSetIDBindings(ctx context.Context, tenantID string, asOfDate string) ([]SetIDBindingRow, error)
-	BindSetID(ctx context.Context, tenantID string, orgUnitID string, effectiveDate string, setID string, requestID string, initiatorID string) error
-	CreateGlobalSetID(ctx context.Context, name string, requestID string, initiatorID string, actorScope string) error
+	BindSetID(ctx context.Context, tenantID string, orgUnitID string, effectiveDate string, setID string, requestCode string, initiatorID string) error
+	CreateGlobalSetID(ctx context.Context, name string, requestCode string, initiatorID string, actorScope string) error
 	ListScopeCodes(ctx context.Context, tenantID string) ([]ScopeCode, error)
-	CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error)
-	DisableScopePackage(ctx context.Context, tenantID string, packageID string, requestID string, initiatorID string) (ScopePackage, error)
+	CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestCode string, initiatorID string) (ScopePackage, error)
+	DisableScopePackage(ctx context.Context, tenantID string, packageID string, requestCode string, initiatorID string) (ScopePackage, error)
 	ListScopePackages(ctx context.Context, tenantID string, scopeCode string) ([]ScopePackage, error)
 	ListOwnedScopePackages(ctx context.Context, tenantID string, scopeCode string, asOfDate string) ([]OwnedScopePackage, error)
-	CreateScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, requestID string, initiatorID string) (ScopeSubscription, error)
+	CreateScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, requestCode string, initiatorID string) (ScopeSubscription, error)
 	GetScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, asOfDate string) (ScopeSubscription, error)
-	CreateGlobalScopePackage(ctx context.Context, scopeCode string, packageCode string, name string, effectiveDate string, requestID string, initiatorID string, actorScope string) (ScopePackage, error)
+	CreateGlobalScopePackage(ctx context.Context, scopeCode string, packageCode string, name string, effectiveDate string, requestCode string, initiatorID string, actorScope string) (ScopePackage, error)
 	ListGlobalScopePackages(ctx context.Context, scopeCode string) ([]ScopePackage, error)
 }
 
@@ -126,7 +127,7 @@ func (s *setidPGStore) ListSetIDs(ctx context.Context, tenantID string) ([]SetID
 		rows, err := tx.Query(ctx, `
 	SELECT setid, name, status
 	FROM orgunit.setids
-	WHERE tenant_id = $1::uuid
+	WHERE tenant_uuid = $1::uuid
 ORDER BY setid ASC
 `, tenantID)
 		if err != nil {
@@ -155,19 +156,23 @@ ORDER BY setid ASC
 	return out, nil
 }
 
-func (s *setidPGStore) CreateSetID(ctx context.Context, tenantID string, setID string, name string, effectiveDate string, requestID string, initiatorID string) error {
+func (s *setidPGStore) CreateSetID(ctx context.Context, tenantID string, setID string, name string, effectiveDate string, requestCode string, initiatorID string) error {
 	return s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `
+		eventID, err := uuidv7.NewString()
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
 SELECT orgunit.submit_setid_event(
-  gen_random_uuid(),
   $1::uuid,
+  $2::uuid,
   'CREATE',
-  $2::text,
-  jsonb_build_object('name', $3::text, 'effective_date', $4::text),
-  $5::text,
-  $6::uuid
+  $3::text,
+  jsonb_build_object('name', $4::text, 'effective_date', $5::text),
+  $6::text,
+  $7::uuid
 );
-`, tenantID, setID, name, effectiveDate, requestID, initiatorID)
+`, eventID, tenantID, setID, name, effectiveDate, requestCode, initiatorID)
 		return err
 	})
 }
@@ -182,7 +187,7 @@ SELECT
   lower(validity)::text,
   COALESCE(upper(validity)::text, '')
 FROM orgunit.setid_binding_versions
-WHERE tenant_id = $1::uuid
+WHERE tenant_uuid = $1::uuid
   AND validity @> $2::date
 ORDER BY org_id::text ASC
 `, tenantID, asOfDate)
@@ -203,22 +208,29 @@ ORDER BY org_id::text ASC
 	return out, err
 }
 
-func (s *setidPGStore) BindSetID(ctx context.Context, tenantID string, orgUnitID string, effectiveDate string, setID string, requestID string, initiatorID string) error {
+func (s *setidPGStore) BindSetID(ctx context.Context, tenantID string, orgUnitID string, effectiveDate string, setID string, requestCode string, initiatorID string) error {
 	return s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, initiatorID); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `
+		if _, err := parseOrgID8(orgUnitID); err != nil {
+			return err
+		}
+		eventID, err := uuidv7.NewString()
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
 SELECT orgunit.submit_setid_binding_event(
-  gen_random_uuid(),
   $1::uuid,
   $2::uuid,
-  $3::date,
-  $4::text,
+  $3::int,
+  $4::date,
   $5::text,
-  $6::uuid
+  $6::text,
+  $7::uuid
 );
-`, tenantID, orgUnitID, effectiveDate, setID, requestID, initiatorID)
+`, eventID, tenantID, orgUnitID, effectiveDate, setID, requestCode, initiatorID)
 		return err
 	})
 }
@@ -244,17 +256,21 @@ func (s *setidPGStore) ensureGlobalShareSetID(ctx context.Context, initiatorID s
 		return err
 	}
 
+	eventID, err := uuidv7.NewString()
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
 SELECT orgunit.submit_global_setid_event(
-  gen_random_uuid(),
   $1::uuid,
+  $2::uuid,
   'BOOTSTRAP',
   'SHARE',
   jsonb_build_object('name', 'Shared'),
   'bootstrap:share',
-  $2::uuid
+  $3::uuid
 );
-`, globalTenantID, initiatorID); err != nil {
+`, eventID, globalTenantID, initiatorID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -285,7 +301,7 @@ func (s *setidPGStore) listGlobalSetIDs(ctx context.Context) ([]SetID, error) {
 	rows, err := tx.Query(ctx, `
 SELECT setid, name, status
 FROM orgunit.global_setids
-WHERE tenant_id = $1::uuid
+WHERE tenant_uuid = $1::uuid
 ORDER BY setid ASC
 `, globalTenantID)
 	if err != nil {
@@ -311,7 +327,7 @@ ORDER BY setid ASC
 	return out, nil
 }
 
-func (s *setidPGStore) CreateGlobalSetID(ctx context.Context, name string, requestID string, initiatorID string, actorScope string) error {
+func (s *setidPGStore) CreateGlobalSetID(ctx context.Context, name string, requestCode string, initiatorID string, actorScope string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -329,17 +345,21 @@ func (s *setidPGStore) CreateGlobalSetID(ctx context.Context, name string, reque
 		return err
 	}
 
+	eventID, err := uuidv7.NewString()
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
 SELECT orgunit.submit_global_setid_event(
-  gen_random_uuid(),
   $1::uuid,
+  $2::uuid,
   'CREATE',
   'SHARE',
-  jsonb_build_object('name', $2::text),
-  $3::text,
-  $4::uuid
+  jsonb_build_object('name', $3::text),
+  $4::text,
+  $5::uuid
 );
-`, globalTenantID, name, requestID, initiatorID); err != nil {
+`, eventID, globalTenantID, name, requestCode, initiatorID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -370,7 +390,7 @@ ORDER BY scope_code ASC
 	return out, err
 }
 
-func (s *setidPGStore) CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error) {
+func (s *setidPGStore) CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestCode string, initiatorID string) (ScopePackage, error) {
 	var out ScopePackage
 	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $2::uuid);`, tenantID, initiatorID); err != nil {
@@ -381,8 +401,8 @@ func (s *setidPGStore) CreateScopePackage(ctx context.Context, tenantID string, 
 		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&packageID); err != nil {
 			return err
 		}
-		var eventID string
-		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+		eventID, err := uuidv7.NewString()
+		if err != nil {
 			return err
 		}
 
@@ -398,17 +418,17 @@ SELECT orgunit.submit_scope_package_event(
   $9::text,
   $10::uuid
 );
-`, eventID, tenantID, scopeCode, packageID, effectiveDate, packageCode, ownerSetID, name, requestID, initiatorID); err != nil {
+`, eventID, tenantID, scopeCode, packageID, effectiveDate, packageCode, ownerSetID, name, requestCode, initiatorID); err != nil {
 			return err
 		}
 
-		subEventID := ""
-		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&subEventID); err != nil {
+		subEventID, err := uuidv7.NewString()
+		if err != nil {
 			return err
 		}
-		subRequestID := requestID
-		if subRequestID != "" {
-			subRequestID = subRequestID + ":owner-sub"
+		subRequestCode := requestCode
+		if subRequestCode != "" {
+			subRequestCode = subRequestCode + ":owner-sub"
 		}
 		if _, err := tx.Exec(ctx, `
 SELECT orgunit.submit_scope_subscription_event(
@@ -423,7 +443,7 @@ SELECT orgunit.submit_scope_subscription_event(
   $8::text,
   $9::uuid
 );
-`, subEventID, tenantID, ownerSetID, scopeCode, packageID, tenantID, effectiveDate, subRequestID, initiatorID); err != nil {
+`, subEventID, tenantID, ownerSetID, scopeCode, packageID, tenantID, effectiveDate, subRequestCode, initiatorID); err != nil {
 			return err
 		}
 
@@ -433,10 +453,10 @@ SELECT orgunit.submit_scope_subscription_event(
 			if err := tx.QueryRow(ctx, `
 SELECT package_id::text
 FROM orgunit.setid_scope_package_events
-WHERE tenant_id = $1::uuid AND request_id = $2::text
+WHERE tenant_uuid = $1::uuid AND request_code = $2::text
 ORDER BY id DESC
 LIMIT 1
-`, tenantID, requestID).Scan(&existingID); err != nil {
+`, tenantID, requestCode).Scan(&existingID); err != nil {
 				return err
 			}
 			pkg, err = fetchScopePackageByID(ctx, tx, tenantID, existingID, false)
@@ -452,11 +472,11 @@ LIMIT 1
 	return out, err
 }
 
-func (s *setidPGStore) DisableScopePackage(ctx context.Context, tenantID string, packageID string, requestID string, initiatorID string) (ScopePackage, error) {
+func (s *setidPGStore) DisableScopePackage(ctx context.Context, tenantID string, packageID string, requestCode string, initiatorID string) (ScopePackage, error) {
 	var out ScopePackage
 	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
-		var eventID string
-		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+		eventID, err := uuidv7.NewString()
+		if err != nil {
 			return err
 		}
 		effectiveDate := time.Now().UTC().Format("2006-01-02")
@@ -464,7 +484,7 @@ func (s *setidPGStore) DisableScopePackage(ctx context.Context, tenantID string,
 SELECT orgunit.submit_scope_package_event(
   $1::uuid,
   $2::uuid,
-  (SELECT scope_code FROM orgunit.setid_scope_packages WHERE tenant_id = $2::uuid AND package_id = $3::uuid),
+  (SELECT scope_code FROM orgunit.setid_scope_packages WHERE tenant_uuid = $2::uuid AND package_id = $3::uuid),
   $3::uuid,
   'DISABLE',
   $4::date,
@@ -472,7 +492,7 @@ SELECT orgunit.submit_scope_package_event(
   $5::text,
   $6::uuid
 );
-`, eventID, tenantID, packageID, effectiveDate, requestID, initiatorID); err != nil {
+`, eventID, tenantID, packageID, effectiveDate, requestCode, initiatorID); err != nil {
 			return err
 		}
 		pkg, err := fetchScopePackageByID(ctx, tx, tenantID, packageID, false)
@@ -501,12 +521,12 @@ FROM orgunit.setid_scope_packages p
 LEFT JOIN LATERAL (
   SELECT validity
   FROM orgunit.setid_scope_package_versions v
-  WHERE v.tenant_id = p.tenant_id
+  WHERE v.tenant_uuid = p.tenant_uuid
     AND v.package_id = p.package_id
   ORDER BY v.last_event_id DESC
   LIMIT 1
 ) v ON true
-WHERE p.tenant_id = $1::uuid AND p.scope_code = $2::text
+WHERE p.tenant_uuid = $1::uuid AND p.scope_code = $2::text
 ORDER BY package_code ASC
 `, tenantID, scopeCode)
 		if err != nil {
@@ -538,14 +558,14 @@ SELECT p.package_id::text,
        lower(v.validity)::text
 FROM orgunit.setid_scope_packages p
 JOIN orgunit.setid_scope_package_versions v
-  ON v.tenant_id = p.tenant_id
+  ON v.tenant_uuid = p.tenant_uuid
  AND v.package_id = p.package_id
  AND v.validity @> $3::date
 JOIN orgunit.setids s
-  ON s.tenant_id = p.tenant_id
+  ON s.tenant_uuid = p.tenant_uuid
  AND s.setid = p.owner_setid
  AND s.status = 'active'
-WHERE p.tenant_id = $1::uuid
+WHERE p.tenant_uuid = $1::uuid
   AND p.scope_code = $2::text
   AND v.status = 'active'
 ORDER BY p.package_code ASC
@@ -566,11 +586,11 @@ ORDER BY p.package_code ASC
 	return out, err
 }
 
-func (s *setidPGStore) CreateScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, requestID string, initiatorID string) (ScopeSubscription, error) {
+func (s *setidPGStore) CreateScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, requestCode string, initiatorID string) (ScopeSubscription, error) {
 	var out ScopeSubscription
 	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
-		var eventID string
-		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+		eventID, err := uuidv7.NewString()
+		if err != nil {
 			return err
 		}
 		ownerTenantID := tenantID
@@ -592,7 +612,7 @@ SELECT orgunit.submit_scope_subscription_event(
   $8::text,
   $9::uuid
 );
-`, eventID, tenantID, setID, scopeCode, packageID, ownerTenantID, effectiveDate, requestID, initiatorID); err != nil {
+`, eventID, tenantID, setID, scopeCode, packageID, ownerTenantID, effectiveDate, requestCode, initiatorID); err != nil {
 			return err
 		}
 		sub, err := fetchScopeSubscription(ctx, tx, tenantID, setID, scopeCode, effectiveDate)
@@ -621,7 +641,7 @@ func (s *setidPGStore) GetScopeSubscription(ctx context.Context, tenantID string
 	return out, err
 }
 
-func (s *setidPGStore) CreateGlobalScopePackage(ctx context.Context, scopeCode string, packageCode string, name string, effectiveDate string, requestID string, initiatorID string, actorScope string) (ScopePackage, error) {
+func (s *setidPGStore) CreateGlobalScopePackage(ctx context.Context, scopeCode string, packageCode string, name string, effectiveDate string, requestCode string, initiatorID string, actorScope string) (ScopePackage, error) {
 	var out ScopePackage
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -647,8 +667,8 @@ func (s *setidPGStore) CreateGlobalScopePackage(ctx context.Context, scopeCode s
 	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&packageID); err != nil {
 		return out, err
 	}
-	var eventID string
-	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+	eventID, err := uuidv7.NewString()
+	if err != nil {
 		return out, err
 	}
 
@@ -664,7 +684,7 @@ SELECT orgunit.submit_global_scope_package_event(
   $8::text,
   $9::uuid
 );
-`, eventID, globalTenantID, scopeCode, packageID, effectiveDate, packageCode, name, requestID, initiatorID); err != nil {
+`, eventID, globalTenantID, scopeCode, packageID, effectiveDate, packageCode, name, requestCode, initiatorID); err != nil {
 		return out, err
 	}
 
@@ -674,10 +694,10 @@ SELECT orgunit.submit_global_scope_package_event(
 		if err := tx.QueryRow(ctx, `
 SELECT package_id::text
 FROM orgunit.global_setid_scope_package_events
-WHERE tenant_id = $1::uuid AND request_id = $2::text
+WHERE tenant_uuid = $1::uuid AND request_code = $2::text
 ORDER BY id DESC
 LIMIT 1
-`, globalTenantID, requestID).Scan(&existingID); err != nil {
+`, globalTenantID, requestCode).Scan(&existingID); err != nil {
 			return out, err
 		}
 		pkg, err = fetchScopePackageByID(ctx, tx, globalTenantID, existingID, true)
@@ -715,7 +735,7 @@ func (s *setidPGStore) ListGlobalScopePackages(ctx context.Context, scopeCode st
 	rows, err := tx.Query(ctx, `
 SELECT package_id::text, scope_code, package_code, ''::text AS owner_setid, name, status
 FROM orgunit.global_setid_scope_packages
-WHERE tenant_id = $1::uuid AND scope_code = $2::text
+WHERE tenant_uuid = $1::uuid AND scope_code = $2::text
 ORDER BY package_code ASC
 `, globalTenantID, scopeCode)
 	if err != nil {
@@ -747,13 +767,13 @@ func fetchScopePackageByID(ctx context.Context, tx pgx.Tx, tenantID string, pack
 		err = tx.QueryRow(ctx, `
 SELECT package_id::text, scope_code, package_code, ''::text AS owner_setid, name, status
 FROM orgunit.global_setid_scope_packages
-WHERE tenant_id = $1::uuid AND package_id = $2::uuid
+WHERE tenant_uuid = $1::uuid AND package_id = $2::uuid
 `, tenantID, packageID).Scan(&out.PackageID, &out.ScopeCode, &out.PackageCode, &out.OwnerSetID, &out.Name, &out.Status)
 	} else {
 		err = tx.QueryRow(ctx, `
 SELECT package_id::text, scope_code, package_code, owner_setid, name, status
 FROM orgunit.setid_scope_packages
-WHERE tenant_id = $1::uuid AND package_id = $2::uuid
+WHERE tenant_uuid = $1::uuid AND package_id = $2::uuid
 `, tenantID, packageID).Scan(&out.PackageID, &out.ScopeCode, &out.PackageCode, &out.OwnerSetID, &out.Name, &out.Status)
 	}
 	return out, err
@@ -764,11 +784,11 @@ func fetchScopeSubscription(ctx context.Context, tx pgx.Tx, tenantID string, set
 	var ownerTenantID string
 	var endDate string
 	if err := tx.QueryRow(ctx, `
-SELECT setid, scope_code, package_id::text, package_owner_tenant_id::text,
+SELECT setid, scope_code, package_id::text, package_owner_tenant_uuid::text,
   lower(validity)::text,
   COALESCE(upper(validity)::text, '')
 FROM orgunit.setid_scope_subscriptions
-WHERE tenant_id = $1::uuid
+WHERE tenant_uuid = $1::uuid
   AND setid = $2::text
   AND scope_code = $3::text
   AND validity @> $4::date
@@ -1221,7 +1241,7 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 				return
 			}
-			reqID := strings.TrimSpace(r.Form.Get("request_id"))
+			reqID := strings.TrimSpace(r.Form.Get("request_code"))
 			if reqID == "" {
 				reqID = "ui:scope-pkg:create:" + scopeCode + ":" + strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
 			}
@@ -1238,7 +1258,7 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 				return
 			}
-			reqID := strings.TrimSpace(r.Form.Get("request_id"))
+			reqID := strings.TrimSpace(r.Form.Get("request_code"))
 			if reqID == "" {
 				reqID = "ui:scope-pkg:disable:" + packageID + ":" + strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
 			}
@@ -1330,7 +1350,7 @@ func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnit
 		b.WriteString(`<label>Package Code <input name="package_code" placeholder="(optional)" /></label> `)
 		b.WriteString(`<label>Name <input name="name" /></label> `)
 		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
-		b.WriteString(`<input type="hidden" name="request_id" value="` + html.EscapeString(reqID) + `" />`)
+		b.WriteString(`<input type="hidden" name="request_code" value="` + html.EscapeString(reqID) + `" />`)
 		b.WriteString(`<button type="submit">Create Package</button>`)
 		b.WriteString(`</form>`)
 	}
@@ -1367,7 +1387,7 @@ func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnit
 				b.WriteString(`<td><form method="POST" action="` + html.EscapeString(formAction) + `">`)
 				b.WriteString(`<input type="hidden" name="action" value="disable_scope_package" />`)
 				b.WriteString(`<input type="hidden" name="package_id" value="` + html.EscapeString(pkg.PackageID) + `" />`)
-				b.WriteString(`<input type="hidden" name="request_id" value="` + html.EscapeString(disableReqID) + `" />`)
+				b.WriteString(`<input type="hidden" name="request_code" value="` + html.EscapeString(disableReqID) + `" />`)
 				b.WriteString(`<button type="submit">Disable</button>`)
 				b.WriteString(`</form></td>`)
 			} else if strings.EqualFold(pkg.PackageCode, "DEFLT") {

@@ -8,7 +8,7 @@ DECLARE
   v_package_id uuid;
 BEGIN
   FOR v_tenant_id IN
-    SELECT DISTINCT tenant_id
+    SELECT DISTINCT tenant_uuid
     FROM orgunit.setids
   LOOP
     PERFORM set_config('app.current_tenant', v_tenant_id::text, true);
@@ -20,7 +20,7 @@ BEGIN
     LOOP
       SELECT p.package_id INTO v_package_id
       FROM orgunit.setid_scope_packages p
-      WHERE p.tenant_id = v_tenant_id
+      WHERE p.tenant_uuid = v_tenant_id
         AND p.scope_code = v_scope_code
         AND p.package_code = 'DEFLT';
 
@@ -40,7 +40,7 @@ BEGIN
 
         SELECT p.package_id INTO v_package_id
         FROM orgunit.setid_scope_packages p
-        WHERE p.tenant_id = v_tenant_id
+        WHERE p.tenant_uuid = v_tenant_id
           AND p.scope_code = v_scope_code
           AND p.package_code = 'DEFLT';
       END IF;
@@ -55,12 +55,12 @@ BEGIN
       FOR v_setid IN
         SELECT setid
         FROM orgunit.setids
-        WHERE tenant_id = v_tenant_id
+        WHERE tenant_uuid = v_tenant_id
       LOOP
         IF NOT EXISTS (
           SELECT 1
           FROM orgunit.setid_scope_subscriptions s
-          WHERE s.tenant_id = v_tenant_id
+          WHERE s.tenant_uuid = v_tenant_id
             AND s.setid = v_setid
             AND s.scope_code = v_scope_code
             AND s.validity @> current_date

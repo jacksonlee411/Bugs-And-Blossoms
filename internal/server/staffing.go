@@ -233,6 +233,9 @@ func (s *staffingPGStore) CreatePositionCurrent(ctx context.Context, tenantID st
 	if orgUnitID == "" {
 		return Position{}, newBadRequestError("org_unit_id is required")
 	}
+	if _, err := parseOrgID8(orgUnitID); err != nil {
+		return Position{}, newBadRequestError("org_unit_id must be 8 digits")
+	}
 	jobProfileID = strings.TrimSpace(jobProfileID)
 	if jobProfileID == "" {
 		return Position{}, newBadRequestError("job_profile_id is required")
@@ -339,6 +342,12 @@ func (s *staffingPGStore) UpdatePositionCurrent(ctx context.Context, tenantID st
 	capacityFTE = strings.TrimSpace(capacityFTE)
 	name = strings.TrimSpace(name)
 	lifecycleStatus = strings.TrimSpace(lifecycleStatus)
+
+	if orgUnitID != "" {
+		if _, err := parseOrgID8(orgUnitID); err != nil {
+			return Position{}, newBadRequestError("org_unit_id must be 8 digits")
+		}
+	}
 
 	payloadParts := make([]string, 0, 6)
 	if orgUnitID != "" {

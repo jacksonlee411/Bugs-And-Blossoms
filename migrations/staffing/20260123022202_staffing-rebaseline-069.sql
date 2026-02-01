@@ -143,7 +143,7 @@ CREATE TABLE "staffing"."position_versions" (
   "id" bigserial NOT NULL,
   "tenant_id" uuid NOT NULL,
   "position_id" uuid NOT NULL,
-  "org_unit_id" uuid NOT NULL,
+  "org_unit_id" int NOT NULL CHECK (org_unit_id BETWEEN 10000000 AND 99999999),
   "reports_to_position_id" uuid NULL,
   "name" text NULL,
   "lifecycle_status" text NOT NULL DEFAULT 'active',
@@ -402,7 +402,7 @@ DECLARE
   v_lock_key text;
   v_prev_effective date;
   v_last_validity daterange;
-  v_org_unit_id uuid;
+  v_org_unit_id int;
   v_reports_to_position_id uuid;
   v_jobcatalog_setid text;
   v_jobcatalog_setid_as_of date;
@@ -469,7 +469,7 @@ BEGIN
           DETAIL = 'org_unit_id is required';
       END IF;
       BEGIN
-        v_org_unit_id := v_tmp_text::uuid;
+        v_org_unit_id := v_tmp_text::int;
       EXCEPTION
         WHEN invalid_text_representation THEN
           RAISE EXCEPTION USING
@@ -568,7 +568,7 @@ BEGIN
             DETAIL = 'org_unit_id is required';
         END IF;
         BEGIN
-          v_org_unit_id := v_tmp_text::uuid;
+          v_org_unit_id := v_tmp_text::int;
         EXCEPTION
           WHEN invalid_text_representation THEN
             RAISE EXCEPTION USING
@@ -659,7 +659,7 @@ BEGIN
       IF NOT EXISTS (
         SELECT 1
         FROM orgunit.org_unit_versions ouv
-        WHERE ouv.tenant_id = p_tenant_id
+        WHERE ouv.tenant_uuid = p_tenant_id
           AND ouv.hierarchy_type = 'OrgUnit'
           AND ouv.org_id = v_org_unit_id
           AND ouv.status = 'active'
@@ -1653,7 +1653,7 @@ CREATE OR REPLACE FUNCTION staffing.get_position_snapshot(
 )
 RETURNS TABLE (
   position_id uuid,
-  org_unit_id uuid,
+  org_unit_id int,
   reports_to_position_id uuid,
   jobcatalog_setid text,
   jobcatalog_setid_as_of date,

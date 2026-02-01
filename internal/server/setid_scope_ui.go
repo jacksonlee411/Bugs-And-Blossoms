@@ -49,12 +49,12 @@ func handleSetIDScopeSubscriptionsUI(w http.ResponseWriter, r *http.Request, sto
 		scopeCode := strings.TrimSpace(r.Form.Get("scope_code"))
 		packageID := strings.TrimSpace(r.Form.Get("package_id"))
 		effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
-		requestID := strings.TrimSpace(r.Form.Get("request_id"))
+		requestID := strings.TrimSpace(r.Form.Get("request_code"))
 		if effectiveDate == "" {
 			effectiveDate = asOf
 		}
 		if scopeCode == "" || packageID == "" || requestID == "" {
-			htmlOut := renderScopeSubscriptionsPartial(r, store, tenant.ID, setID, asOf, "scope_code/package_id/request_id required")
+			htmlOut := renderScopeSubscriptionsPartial(r, store, tenant.ID, setID, asOf, "scope_code/package_id/request_code required")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = w.Write([]byte(htmlOut))
 			return
@@ -163,7 +163,7 @@ func renderScopeSubscriptionsPartial(r *http.Request, store SetIDGovernanceStore
 			}
 			b.WriteString(`</select></label> `)
 			b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
-			b.WriteString(`<input type="hidden" name="request_id" value="` + html.EscapeString(reqID) + `" />`)
+			b.WriteString(`<input type="hidden" name="request_code" value="` + html.EscapeString(reqID) + `" />`)
 			b.WriteString(`<button type="submit">Subscribe</button>`)
 			b.WriteString(`</form></td>`)
 		}

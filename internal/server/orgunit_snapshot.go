@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
 )
 
 type OrgUnitSnapshotRow struct {
@@ -16,7 +17,7 @@ type OrgUnitSnapshotRow struct {
 	Name         string
 	FullNamePath string
 	Depth        int
-	ManagerID    string
+	ManagerUUID  string
 	NodePath     string
 }
 
@@ -51,7 +52,7 @@ SELECT
   name,
   COALESCE(full_name_path, ''),
   depth,
-  COALESCE(manager_id::text, ''),
+  COALESCE(manager_uuid::text, ''),
   node_path::text
 FROM orgunit.get_org_snapshot($1::uuid, $2::date)
 ORDER BY node_path
@@ -64,7 +65,7 @@ ORDER BY node_path
 	var out []OrgUnitSnapshotRow
 	for rows.Next() {
 		var row OrgUnitSnapshotRow
-		if err := rows.Scan(&row.OrgID, &row.ParentID, &row.Name, &row.FullNamePath, &row.Depth, &row.ManagerID, &row.NodePath); err != nil {
+		if err := rows.Scan(&row.OrgID, &row.ParentID, &row.Name, &row.FullNamePath, &row.Depth, &row.ManagerUUID, &row.NodePath); err != nil {
 			return nil, err
 		}
 		out = append(out, row)
@@ -89,13 +90,19 @@ func (s *orgUnitSnapshotPGStore) CreateOrgUnit(ctx context.Context, tenantID str
 		return "", err
 	}
 
-	var orgID string
-	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&orgID); err != nil {
+	if _, ok, err := parseOptionalOrgID8(parentID); err != nil {
+		return "", err
+	} else if ok {
+		parentID = strings.TrimSpace(parentID)
+	}
+
+	var orgID int
+	if err := tx.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::int;`).Scan(&orgID); err != nil {
 		return "", err
 	}
 
-	var eventID string
-	if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()::text;`).Scan(&eventID); err != nil {
+	eventID, err := uuidv7.NewString()
+	if err != nil {
 		return "", err
 	}
 
@@ -110,7 +117,7 @@ SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
   'OrgUnit',
-  $3::uuid,
+  $3::int,
   'CREATE',
   $4::date,
   $5::jsonb,
@@ -125,7 +132,7 @@ SELECT orgunit.submit_org_event(
 	if err := tx.Commit(ctx); err != nil {
 		return "", err
 	}
-	return orgID, nil
+	return strconv.Itoa(orgID), nil
 }
 
 func handleOrgSnapshot(w http.ResponseWriter, r *http.Request, store OrgUnitSnapshotStore) {

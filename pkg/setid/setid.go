@@ -24,7 +24,7 @@ func Resolve(ctx context.Context, q QueryRower, tenantID string, orgUnitID strin
 	var out string
 	if err := q.QueryRow(
 		ctx,
-		`SELECT orgunit.resolve_setid($1::uuid, $2::uuid, $3::date);`,
+		`SELECT orgunit.resolve_setid($1::uuid, $2::int, $3::date);`,
 		tenantID,
 		orgUnitID,
 		asOfDate,

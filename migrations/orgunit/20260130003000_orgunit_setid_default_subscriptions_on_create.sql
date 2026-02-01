@@ -1,13 +1,13 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION orgunit.submit_setid_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
   p_event_type text,
   p_setid text,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -20,14 +20,14 @@ DECLARE
   v_scope_share_mode text;
   v_package_id uuid;
 BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_id);
-  PERFORM orgunit.lock_setid_governance(p_tenant_id);
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
+  PERFORM orgunit.lock_setid_governance(p_tenant_uuid);
 
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_id is required';
+      DETAIL = 'request_code is required';
   END IF;
   IF p_event_type IS NULL OR btrim(p_event_type) = '' THEN
     RAISE EXCEPTION USING
@@ -44,13 +44,13 @@ BEGIN
       DETAIL = 'SHARE is reserved';
   END IF;
 
-  INSERT INTO orgunit.setid_events (event_id, tenant_id, event_type, setid, payload, request_id, initiator_id)
-  VALUES (p_event_id, p_tenant_id, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_id, p_initiator_id)
-  ON CONFLICT (tenant_id, request_id) DO NOTHING;
+  INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
+  VALUES (p_event_uuid, p_tenant_uuid, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_code, p_initiator_uuid)
+  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_events
-  WHERE tenant_id = p_tenant_id AND request_id = p_request_id
+  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
   ORDER BY id DESC
   LIMIT 1;
 
@@ -64,7 +64,7 @@ BEGIN
     END IF;
 
     IF p_event_type = 'CREATE' AND EXISTS (
-      SELECT 1 FROM orgunit.setids WHERE tenant_id = p_tenant_id AND setid = v_setid
+      SELECT 1 FROM orgunit.setids WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -72,9 +72,9 @@ BEGIN
         DETAIL = format('setid=%s', v_setid);
     END IF;
 
-    INSERT INTO orgunit.setids (tenant_id, setid, name, status, last_event_id)
-    VALUES (p_tenant_id, v_setid, v_name, 'active', v_evt_db_id)
-    ON CONFLICT (tenant_id, setid) DO UPDATE
+    INSERT INTO orgunit.setids (tenant_uuid, setid, name, status, last_event_id)
+    VALUES (p_tenant_uuid, v_setid, v_name, 'active', v_evt_db_id)
+    ON CONFLICT (tenant_uuid, setid) DO UPDATE
     SET name = EXCLUDED.name,
         status = 'active',
         last_event_id = EXCLUDED.last_event_id,
@@ -91,7 +91,7 @@ BEGIN
 
       SELECT p.package_id INTO v_package_id
       FROM orgunit.setid_scope_packages p
-      WHERE p.tenant_id = p_tenant_id
+      WHERE p.tenant_uuid = p_tenant_uuid
         AND p.scope_code = v_scope_code
         AND p.package_code = 'DEFLT';
 
@@ -99,19 +99,19 @@ BEGIN
         v_package_id := gen_random_uuid();
         PERFORM orgunit.submit_scope_package_event(
           gen_random_uuid(),
-          p_tenant_id,
+          p_tenant_uuid,
           v_scope_code,
           v_package_id,
           'BOOTSTRAP',
           current_date,
           jsonb_build_object('package_code', 'DEFLT', 'name', 'Default'),
           format('bootstrap:scope-package:deflt:%s', v_scope_code),
-          p_initiator_id
+          p_initiator_uuid
         );
 
         SELECT p.package_id INTO v_package_id
         FROM orgunit.setid_scope_packages p
-        WHERE p.tenant_id = p_tenant_id
+        WHERE p.tenant_uuid = p_tenant_uuid
           AND p.scope_code = v_scope_code
           AND p.package_code = 'DEFLT';
       END IF;
@@ -126,22 +126,22 @@ BEGIN
       IF NOT EXISTS (
         SELECT 1
         FROM orgunit.setid_scope_subscriptions s
-        WHERE s.tenant_id = p_tenant_id
+        WHERE s.tenant_uuid = p_tenant_uuid
           AND s.setid = v_setid
           AND s.scope_code = v_scope_code
           AND s.validity @> current_date
       ) THEN
         PERFORM orgunit.submit_scope_subscription_event(
           gen_random_uuid(),
-          p_tenant_id,
+          p_tenant_uuid,
           v_setid,
           v_scope_code,
           v_package_id,
-          p_tenant_id,
+          p_tenant_uuid,
           'BOOTSTRAP',
           current_date,
           format('bootstrap:scope-subscription:%s:%s', v_setid, v_scope_code),
-          p_initiator_id
+          p_initiator_uuid
         );
       END IF;
     END LOOP;
@@ -157,7 +157,7 @@ BEGIN
     SET name = v_name,
         last_event_id = v_evt_db_id,
         updated_at = now()
-    WHERE tenant_id = p_tenant_id AND setid = v_setid;
+    WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid;
     IF NOT FOUND THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -173,7 +173,7 @@ BEGIN
     END IF;
     IF EXISTS (
       SELECT 1 FROM orgunit.setid_binding_versions
-      WHERE tenant_id = p_tenant_id AND setid = v_setid
+      WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
@@ -184,7 +184,7 @@ BEGIN
     SET status = 'disabled',
         last_event_id = v_evt_db_id,
         updated_at = now()
-    WHERE tenant_id = p_tenant_id AND setid = v_setid;
+    WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid;
     IF NOT FOUND THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',

@@ -358,7 +358,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("invalid request", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"","name":"","request_id":""}`)
+		body := bytes.NewBufferString(`{"scope_code":"","name":"","request_code":""}`)
 		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -369,7 +369,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("invalid effective date", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","name":"Pkg","effective_date":"bad","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","name":"Pkg","effective_date":"bad","request_code":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -380,7 +380,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("reserved code", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"DEFLT","owner_setid":"A0001","name":"Pkg","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"DEFLT","owner_setid":"A0001","name":"Pkg","request_code":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -391,7 +391,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("invalid code", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"bad-code","owner_setid":"A0001","name":"Pkg","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"bad-code","owner_setid":"A0001","name":"Pkg","request_code":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -402,7 +402,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("create error", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","name":"Pkg","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","name":"Pkg","request_code":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -417,7 +417,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"","owner_setid":"A0001","name":"Pkg","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"","owner_setid":"A0001","name":"Pkg","request_code":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -437,7 +437,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 
 func TestHandleScopePackageDisableAPI(t *testing.T) {
 	t.Run("tenant missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":"r1"}`))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
 		if rec.Code != http.StatusInternalServerError {
@@ -476,7 +476,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("missing request id", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_id":""}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":""}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -486,7 +486,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{
@@ -500,7 +500,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{
@@ -618,7 +618,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post invalid date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"bad","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"bad","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -628,7 +628,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post owner invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"nope","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"nope","effective_date":"2026-01-01","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -638,7 +638,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{
@@ -652,7 +652,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{
@@ -729,7 +729,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post tenant missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
 		if rec.Code != http.StatusInternalServerError {
@@ -748,7 +748,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post invalid request", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"","name":"","request_id":""}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"","name":"","request_code":""}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -758,7 +758,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post invalid date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","effective_date":"bad","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","effective_date":"bad","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -768,7 +768,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post reserved code", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"DEFLT","name":"Pkg","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"DEFLT","name":"Pkg","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -778,7 +778,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post invalid code", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"bad-code","name":"Pkg","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"bad-code","name":"Pkg","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -788,7 +788,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post actor scope required", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -798,7 +798,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -813,7 +813,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -828,7 +828,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post generate code", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"","name":"Pkg","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"","name":"Pkg","request_code":"r1"}`))
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()

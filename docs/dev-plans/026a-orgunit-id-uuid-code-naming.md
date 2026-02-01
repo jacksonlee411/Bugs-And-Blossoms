@@ -1,6 +1,6 @@
 # DEV-PLAN-026A：OrgUnit 8位编号与 UUID/Code 命名规范
 
-**状态**: 草拟中（2026-02-01 00:00 UTC）
+**状态**: 已完成（2026-02-01 00:00 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：DEV-PLAN-026（OrgUnit 事件溯源 + 同步投射）。
@@ -464,12 +464,11 @@ $$;
 
 ### 6.6 `event_uuid` 生成位置（Go 层）
 ```go
-// 位置建议：pkg/ids 或 internal/composables
-id, err := uuid.NewV7()
+// 位置建议：pkg/uuidv7 或 internal/composables
+eventUUID, err := uuidv7.NewString()
 if err != nil {
   return err
 }
-eventUUID := id.String()
 ```
 
 ### 6.7 `org_id` 生成位置（DB 侧）
@@ -487,11 +486,11 @@ SELECT nextval('orgunit.org_id_seq')::int;
 - DEV-PLAN-021（RLS 强租户隔离）
 
 ### 8.2 里程碑
-1. [ ] 更新 `orgunit` schema：字段类型与命名规则落地（含约束与索引），保留 `org_events.id`/`org_unit_versions.last_event_id` 作为内部关联键。
-2. [ ] 更新 DB 函数：`org_ltree_label` / `org_path_ids` / `submit_org_event` / `replay_org_unit_versions` / `get_org_snapshot`。
-3. [ ] 更新 Go 层调用与 SQL：参数名、字段名、类型转换；`event_uuid` 由应用层生成 UUID v7 并传入。
-4. [ ] 更新依赖模块（若有）对 OrgUnit 标识的引用与解析。
-5. [ ] 补充/更新相关测试与基线验证记录（命令入口以 `AGENTS.md` 为准）。
+1. [x] 更新 `orgunit` schema：字段类型与命名规则落地（含约束与索引），保留 `org_events.id`/`org_unit_versions.last_event_id` 作为内部关联键。
+2. [x] 更新 DB 函数：`org_ltree_label` / `org_path_ids` / `submit_org_event` / `replay_org_unit_versions` / `get_org_snapshot`。
+3. [x] 更新 Go 层调用与 SQL：参数名、字段名、类型转换；`event_uuid` 由应用层生成 UUID v7 并传入。
+4. [x] 更新依赖模块（若有）对 OrgUnit 标识的引用与解析。
+5. [x] 补充/更新相关测试与基线验证记录（命令入口以 `AGENTS.md` 为准）。
 
 ### 8.3 影响面清单
 - OrgUnit API/SQL 参数命名与类型（`*_uuid`、`*_id`、`*_code`）。
@@ -507,6 +506,12 @@ SELECT nextval('orgunit.org_id_seq')::int;
 - `modules/staffing/infrastructure/persistence/schema/00003_staffing_engine.sql`：`v_org_unit_id` 改为 `int`，payload 解析与校验更新，`orgunit.org_unit_versions` 查询改为 `tenant_uuid`/`org_id int4`，`resolve_setid` 调用签名更新。
 - `modules/staffing/infrastructure/persistence/schema/00015_staffing_read.sql`：`org_unit_id` 返回类型改为 `int`。
 - 其他引用 `orgunit.org_unit_versions` 的 SQL/查询需将 `tenant_id`→`tenant_uuid`、`org_id`→`int4`。
+- `migrations/staffing/20260123022202_staffing-rebaseline-069.sql`：`org_unit_id` 改为 `int4`，校验与解析更新。
+- `migrations/staffing/20260130001000_staffing_jobcatalog_package_id_validation.sql`：`org_unit_id` 解析为 `int`，OrgUnit 校验按 `tenant_uuid`。
+- `migrations/staffing/20260130002000_staffing_position_snapshot_job_profile_code.sql`：`org_unit_id` 返回类型改为 `int`。
+- `modules/orgunit/infrastructure/persistence/schema/00005_orgunit_setid_schema.sql` / `00008_orgunit_setid_scope_schema.sql`：移除 `event_uuid` v4 默认值，要求应用层 v7。
+- `cmd/dbtool/main.go`：OrgUnit smoke 使用 `org_id_seq` 与 v7 `event_uuid`。
+- `pkg/uuidv7/uuidv7.go`：新增 v7 生成器供 OrgUnit/SetID 事件使用。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 ### 9.1 单元测试

@@ -4,7 +4,7 @@ CREATE OR REPLACE FUNCTION staffing.get_position_snapshot(
 )
 RETURNS TABLE (
   position_id uuid,
-  org_unit_id uuid,
+  org_unit_id int,
   reports_to_position_id uuid,
   jobcatalog_setid text,
   jobcatalog_setid_as_of date,
@@ -45,7 +45,7 @@ BEGIN
     pv.jobcatalog_setid,
     'jobcatalog',
     pv.jobcatalog_setid_as_of
-  ) sp(package_id, package_owner_tenant_id)
+  ) sp(package_id, package_owner_tenant_uuid)
     ON pv.jobcatalog_setid IS NOT NULL
   LEFT JOIN jobcatalog.job_profiles jp
     ON jp.tenant_id = pv.tenant_id

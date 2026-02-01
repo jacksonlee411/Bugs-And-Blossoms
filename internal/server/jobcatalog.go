@@ -290,7 +290,7 @@ func ensureSetIDActive(ctx context.Context, tx pgx.Tx, tenantID string, setID st
 	if err := tx.QueryRow(ctx, `
 SELECT status
 FROM orgunit.setids
-WHERE tenant_id = $1::uuid
+WHERE tenant_uuid = $1::uuid
   AND setid = $2::text
 `, tenantID, setID).Scan(&status); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -313,7 +313,7 @@ func resolveJobCatalogPackage(ctx context.Context, tx pgx.Tx, tenantID string, s
 	var packageID string
 	var ownerTenantID string
 	if err := tx.QueryRow(ctx, `
-SELECT package_id::text, package_owner_tenant_id::text
+SELECT package_id::text, package_owner_tenant_uuid::text
 FROM orgunit.resolve_scope_package($1::uuid, $2::text, 'jobcatalog', $3::date)
 `, tenantID, resolvedSetID, asOfDate).Scan(&packageID, &ownerTenantID); err != nil {
 		return "", err
@@ -334,7 +334,7 @@ func resolveJobCatalogPackageByCode(ctx context.Context, tx pgx.Tx, tenantID str
 	if err := tx.QueryRow(ctx, `
 SELECT package_id::text, owner_setid
 FROM orgunit.setid_scope_packages
-WHERE tenant_id = $1::uuid
+WHERE tenant_uuid = $1::uuid
   AND scope_code = 'jobcatalog'
   AND package_code = $2::text
 `, tenantID, packageCode).Scan(&out.PackageID, &out.OwnerSetID); err != nil {

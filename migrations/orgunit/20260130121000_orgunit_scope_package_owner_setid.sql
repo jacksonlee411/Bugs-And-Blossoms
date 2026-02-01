@@ -9,11 +9,11 @@ ALTER TABLE orgunit.setid_scope_packages
 
 ALTER TABLE orgunit.setid_scope_packages
   ADD CONSTRAINT setid_scope_packages_owner_fk
-    FOREIGN KEY (tenant_id, owner_setid)
-    REFERENCES orgunit.setids (tenant_id, setid);
+    FOREIGN KEY (tenant_uuid, owner_setid)
+    REFERENCES orgunit.setids (tenant_uuid, setid);
 
 CREATE INDEX IF NOT EXISTS setid_scope_packages_owner_lookup_idx
-  ON orgunit.setid_scope_packages (tenant_id, scope_code, owner_setid, status);
+  ON orgunit.setid_scope_packages (tenant_uuid, scope_code, owner_setid, status);
 
 ALTER TABLE orgunit.setid_scope_package_versions
   ADD COLUMN IF NOT EXISTS owner_setid text;
@@ -24,19 +24,20 @@ ALTER TABLE orgunit.setid_scope_package_versions
 
 ALTER TABLE orgunit.setid_scope_package_versions
   ADD CONSTRAINT setid_scope_package_versions_owner_fk
-    FOREIGN KEY (tenant_id, owner_setid)
-    REFERENCES orgunit.setids (tenant_id, setid);
+    FOREIGN KEY (tenant_uuid, owner_setid)
+    REFERENCES orgunit.setids (tenant_uuid, setid);
 
 CREATE INDEX IF NOT EXISTS setid_scope_package_versions_owner_lookup_idx
-  ON orgunit.setid_scope_package_versions (tenant_id, scope_code, owner_setid, lower(validity));
+  ON orgunit.setid_scope_package_versions (tenant_uuid, scope_code, owner_setid, lower(validity));
 
 ALTER TABLE orgunit.setid_scope_package_versions
   ADD CONSTRAINT setid_scope_package_versions_owner_scope_no_overlap
   EXCLUDE USING gist (
-    tenant_id WITH =,
+    tenant_uuid WITH =,
     scope_code gist_text_ops WITH =,
     owner_setid gist_text_ops WITH =,
     validity WITH &&
   )
   WHERE (status = 'active');
 -- +goose StatementEnd
+

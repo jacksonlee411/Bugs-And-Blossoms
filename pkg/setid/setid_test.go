@@ -66,7 +66,7 @@ func TestEnsureBootstrap_Error(t *testing.T) {
 
 func TestResolve(t *testing.T) {
 	q := &fakeQueryRower{row: fakeRow{val: "SHARE"}}
-	got, err := Resolve(context.Background(), q, "t1", "org1", "2026-01-01")
+	got, err := Resolve(context.Background(), q, "t1", "10000001", "2026-01-01")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -81,7 +81,7 @@ func TestResolve(t *testing.T) {
 func TestResolve_Error(t *testing.T) {
 	want := errors.New("scan fail")
 	q := &fakeQueryRower{row: fakeRow{err: want}}
-	_, err := Resolve(context.Background(), q, "t1", "org1", "2026-01-01")
+	_, err := Resolve(context.Background(), q, "t1", "10000001", "2026-01-01")
 	if !errors.Is(err, want) {
 		t.Fatalf("err=%v", err)
 	}

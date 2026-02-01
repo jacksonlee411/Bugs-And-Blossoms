@@ -201,6 +201,7 @@ func (b *fakeBeginner) Begin(context.Context) (pgx.Tx, error) {
 
 type fakeTx struct {
 	beginCount int
+	orgIDN     int
 	uuidN      int
 	committed  bool
 	rolled     bool
@@ -215,6 +216,10 @@ func (t *fakeTx) Query(context.Context, string, ...any) (pgx.Rows, error) {
 }
 
 func (t *fakeTx) QueryRow(_ context.Context, q string, _ ...any) pgx.Row {
+	if strings.Contains(q, "nextval('orgunit.org_id_seq')") {
+		t.orgIDN++
+		return fakeRow{vals: []any{10000000 + t.orgIDN}}
+	}
 	if strings.Contains(q, "gen_random_uuid") {
 		t.uuidN++
 		switch t.uuidN {
