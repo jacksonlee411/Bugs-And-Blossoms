@@ -172,6 +172,7 @@ modules/{module}/
 - DEV-PLAN-071：SetID Scope Package 订阅蓝图：`docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
 - DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化：`docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
+- DEV-PLAN-026A：OrgUnit 8位编号与 UUID/Code 命名规范：`docs/dev-plans/026a-orgunit-id-uuid-code-naming.md`
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 - Org（事务性事件溯源 + 同步投射）：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`

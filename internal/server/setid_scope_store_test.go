@@ -224,7 +224,7 @@ func TestSetIDPGStore_DisableScopePackage(t *testing.T) {
 func TestSetIDPGStore_ListScopePackages(t *testing.T) {
 	tx := &stubTx{
 		rows: &tableRows{rows: [][]any{
-			{"p1", "jobcatalog", "PKG1", "A0001", "Pkg", "active"},
+			{"p1", "jobcatalog", "PKG1", "A0001", "Pkg", "active", "2026-01-01", "2026-01-02T00:00:00Z"},
 		}},
 	}
 	store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}

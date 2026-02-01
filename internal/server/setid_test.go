@@ -555,6 +555,8 @@ func TestRenderSetIDPage_SkipsDisabledOptions(t *testing.T) {
 		[]SetID{{SetID: "SHARE", Name: "Shared", Status: "active", IsShared: true}, {SetID: "A0001", Name: "A", Status: "disabled"}},
 		[]SetIDBindingRow{{OrgUnitID: "org1", SetID: "SHARE", ValidFrom: "2026-01-01"}},
 		[]OrgUnitNode{{ID: "org1", Name: "BU 1", IsBusinessUnit: true}, {ID: "org2", Name: "BU 0", IsBusinessUnit: true}},
+		nil,
+		nil,
 		Tenant{Name: "T"},
 		"2026-01-07",
 		"",
@@ -577,6 +579,8 @@ func TestRenderSetIDPage_NoBusinessUnits(t *testing.T) {
 		[]SetID{{SetID: "DEFLT", Name: "Default", Status: "active"}},
 		nil,
 		[]OrgUnitNode{{ID: "org1", Name: "Org 1", IsBusinessUnit: false}},
+		nil,
+		nil,
 		Tenant{Name: "T"},
 		"2026-01-07",
 		"",
@@ -591,6 +595,8 @@ func TestRenderSetIDPage_NoBusinessUnits(t *testing.T) {
 func TestRenderSetIDPage_SelectedSetID(t *testing.T) {
 	html := renderSetIDPage(
 		[]SetID{{SetID: "A0001", Name: "A", Status: "active"}},
+		nil,
+		nil,
 		nil,
 		nil,
 		Tenant{Name: "T"},
