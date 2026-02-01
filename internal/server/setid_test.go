@@ -118,6 +118,60 @@ func (s partialSetIDStore) CreateGlobalSetID(context.Context, string, string, st
 	return nil
 }
 
+type scopeTestStore struct {
+	partialSetIDStore
+	scopes             []ScopeCode
+	scopePackages      map[string][]ScopePackage
+	listScopeErr       error
+	listScopePkgErr    error
+	createScopePkgErr  error
+	disableScopePkgErr error
+}
+
+func (s scopeTestStore) ListScopeCodes(context.Context, string) ([]ScopeCode, error) {
+	if s.listScopeErr != nil {
+		return nil, s.listScopeErr
+	}
+	if s.scopes != nil {
+		return s.scopes, nil
+	}
+	return []ScopeCode{{ScopeCode: "jobcatalog", OwnerModule: "jobcatalog", ShareMode: "tenant-only", IsStable: true}}, nil
+}
+
+func (s scopeTestStore) ListScopePackages(_ context.Context, _ string, scopeCode string) ([]ScopePackage, error) {
+	if s.listScopePkgErr != nil {
+		return nil, s.listScopePkgErr
+	}
+	if s.scopePackages != nil {
+		return s.scopePackages[scopeCode], nil
+	}
+	return nil, nil
+}
+
+func (s scopeTestStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error) {
+	if s.createScopePkgErr != nil {
+		return ScopePackage{}, s.createScopePkgErr
+	}
+	return ScopePackage{
+		PackageID:   "p1",
+		ScopeCode:   "jobcatalog",
+		PackageCode: "PKG1",
+		OwnerSetID:  "A0001",
+		Name:        "Pkg",
+		Status:      "active",
+	}, nil
+}
+
+func (s scopeTestStore) DisableScopePackage(context.Context, string, string, string, string) (ScopePackage, error) {
+	if s.disableScopePkgErr != nil {
+		return ScopePackage{}, s.disableScopePkgErr
+	}
+	return ScopePackage{
+		PackageID: "p1",
+		Status:    "disabled",
+	}, nil
+}
+
 func TestSetIDMemoryStore_ListOwnedScopePackages(t *testing.T) {
 	store := newSetIDMemoryStore().(*setidMemoryStore)
 	tenantID := "t1"
@@ -258,6 +312,72 @@ func TestHandleSetID_MissingAsOfRedirects(t *testing.T) {
 	}
 }
 
+func TestHandleSetID_ListScopeCodesError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/setid?as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, scopeTestStore{listScopeErr: errors.New("scopes boom")}, newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "scopes boom") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_ListScopePackagesError(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/setid?as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, scopeTestStore{
+		scopes:          []ScopeCode{{ScopeCode: "jobcatalog", OwnerModule: "jobcatalog", ShareMode: "tenant-only", IsStable: true}},
+		listScopePkgErr: errors.New("pkg boom"),
+	}, newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "pkg boom") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_ListScopePackagesSortSameScope(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/setid?as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, scopeTestStore{
+		scopes: []ScopeCode{{ScopeCode: "jobcatalog", OwnerModule: "jobcatalog", ShareMode: "tenant-only", IsStable: true}},
+		scopePackages: map[string][]ScopePackage{
+			"jobcatalog": {
+				{PackageID: "p2", ScopeCode: "jobcatalog", PackageCode: "PKG2", OwnerSetID: "A0001", Name: "Pkg2", Status: "active"},
+				{PackageID: "p1", ScopeCode: "jobcatalog", PackageCode: "PKG1", OwnerSetID: "A0001", Name: "Pkg1", Status: "active"},
+			},
+		},
+	}, newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleSetID_ListScopePackagesSortDifferentScope(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/setid?as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, scopeTestStore{
+		scopes: []ScopeCode{
+			{ScopeCode: "jobcatalog", OwnerModule: "jobcatalog", ShareMode: "tenant-only", IsStable: true},
+			{ScopeCode: "orgunit_location", OwnerModule: "orgunit", ShareMode: "tenant-only", IsStable: true},
+		},
+		scopePackages: map[string][]ScopePackage{
+			"jobcatalog":      {{PackageID: "p1", ScopeCode: "jobcatalog", PackageCode: "PKG1", OwnerSetID: "A0001", Name: "Pkg1", Status: "active"}},
+			"orgunit_location": {{PackageID: "p2", ScopeCode: "orgunit_location", PackageCode: "PKG2", OwnerSetID: "A0001", Name: "Pkg2", Status: "active"}},
+		},
+	}, newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
 func TestHandleSetID_InvalidAsOfReturns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/setid?as_of=BAD", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
@@ -326,6 +446,229 @@ func TestHandleSetID_Post_BindSetID(t *testing.T) {
 	handleSetID(recB, reqB, store, newTestOrgStore())
 	if recB.Code != http.StatusSeeOther {
 		t.Fatalf("bind setid status=%d", recB.Code)
+	}
+}
+
+func TestHandleSetID_Post_CreateScopePackage_MissingFields(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "create_scope_package")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, newSetIDMemoryStore(), newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "scope_code/owner_setid/name is required") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_Post_CreateScopePackage_InvalidEffectiveDate(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "create_scope_package")
+	form.Set("scope_code", "jobcatalog")
+	form.Set("owner_setid", "A0001")
+	form.Set("name", "Pkg")
+	form.Set("effective_date", "bad")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, newSetIDMemoryStore(), newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "effective_date 无效") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_Post_CreateScopePackage_InvalidScope(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "create_scope_package")
+	form.Set("scope_code", "orgunit_geo_admin")
+	form.Set("owner_setid", "A0001")
+	form.Set("name", "Pkg")
+	form.Set("effective_date", "2026-01-01")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, newSetIDMemoryStore(), newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "SCOPE_CODE_INVALID") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_Post_CreateScopePackage_ReservedPackageCode(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "create_scope_package")
+	form.Set("scope_code", "jobcatalog")
+	form.Set("owner_setid", "A0001")
+	form.Set("name", "Pkg")
+	form.Set("package_code", "DEFLT")
+	form.Set("effective_date", "2026-01-01")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, newSetIDMemoryStore(), newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "PACKAGE_CODE_RESERVED") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_Post_CreateScopePackage_InvalidPackageCode(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "create_scope_package")
+	form.Set("scope_code", "jobcatalog")
+	form.Set("owner_setid", "A0001")
+	form.Set("name", "Pkg")
+	form.Set("package_code", "bad-code")
+	form.Set("effective_date", "2026-01-01")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, newSetIDMemoryStore(), newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "PACKAGE_CODE_INVALID") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_Post_CreateScopePackage_ListScopeCodesError(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "create_scope_package")
+	form.Set("scope_code", "jobcatalog")
+	form.Set("owner_setid", "A0001")
+	form.Set("name", "Pkg")
+	form.Set("effective_date", "2026-01-01")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, scopeTestStore{listScopeErr: errors.New("scope fail")}, newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "scope fail") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_Post_CreateScopePackage_CreateError(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "create_scope_package")
+	form.Set("scope_code", "jobcatalog")
+	form.Set("owner_setid", "A0001")
+	form.Set("name", "Pkg")
+	form.Set("package_code", "PKG1")
+	form.Set("effective_date", "2026-01-01")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, scopeTestStore{
+		scopes:            []ScopeCode{{ScopeCode: "jobcatalog", OwnerModule: "jobcatalog", ShareMode: "tenant-only", IsStable: true}},
+		createScopePkgErr: errors.New("boom"),
+	}, newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "boom") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_Post_CreateScopePackage_Success(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "create_scope_package")
+	form.Set("scope_code", "jobcatalog")
+	form.Set("owner_setid", "A0001")
+	form.Set("name", "Pkg")
+	form.Set("effective_date", "2026-01-01")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, newSetIDMemoryStore(), newTestOrgStore())
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleSetID_Post_DisableScopePackage_MissingPackageID(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "disable_scope_package")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, newSetIDMemoryStore(), newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "package_id is required") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_Post_DisableScopePackage_Error(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "disable_scope_package")
+	form.Set("package_id", "p1")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, scopeTestStore{disableScopePkgErr: errors.New("boom")}, newTestOrgStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "boom") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_Post_DisableScopePackage_Success(t *testing.T) {
+	store := newSetIDMemoryStore().(*setidMemoryStore)
+	pkg, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "i1")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+
+	form := url.Values{}
+	form.Set("action", "disable_scope_package")
+	form.Set("package_id", pkg.PackageID)
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, store, newTestOrgStore())
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d", rec.Code)
 	}
 }
 
@@ -534,6 +877,40 @@ func TestSetIDMemoryStore_ListSortsWithMultipleItems(t *testing.T) {
 	}
 }
 
+func TestSetIDMemoryStore_ScopePackageLifecycle(t *testing.T) {
+	store := newSetIDMemoryStore().(*setidMemoryStore)
+	pkg, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "i1")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if pkg.EffectiveDate != "2026-01-01" {
+		t.Fatalf("effective_date=%q", pkg.EffectiveDate)
+	}
+	if pkg.UpdatedAt == "" {
+		t.Fatal("expected updated_at")
+	}
+
+	pkgs, err := store.ListScopePackages(context.Background(), "t1", "jobcatalog")
+	if err != nil || len(pkgs) != 1 {
+		t.Fatalf("len=%d err=%v", len(pkgs), err)
+	}
+
+	disabled, err := store.DisableScopePackage(context.Background(), "t1", pkg.PackageID, "r2", "i1")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if disabled.Status != "disabled" {
+		t.Fatalf("status=%q", disabled.Status)
+	}
+	if disabled.UpdatedAt == "" {
+		t.Fatal("expected updated_at")
+	}
+
+	if _, err := store.DisableScopePackage(context.Background(), "t1", "missing", "r3", "i1"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestSetIDMemoryStore_CreateGlobalSetID(t *testing.T) {
 	s := newSetIDMemoryStore().(*setidMemoryStore)
 	if err := s.CreateGlobalSetID(context.Background(), "", "", "", "saas"); err == nil {
@@ -570,6 +947,58 @@ func TestRenderSetIDPage_SkipsDisabledOptions(t *testing.T) {
 		t.Fatalf("unexpected html: %q", html)
 	}
 	if !strings.Contains(html, "Shared/Read-only (共享/只读)") {
+		t.Fatalf("unexpected html: %q", html)
+	}
+}
+
+func TestRenderSetIDPage_ScopePackagesNoActiveSetIDs(t *testing.T) {
+	html := renderSetIDPage(
+		[]SetID{{SetID: "SHARE", Name: "Shared", Status: "active", IsShared: true}, {SetID: "A0001", Name: "A", Status: "disabled"}},
+		nil,
+		nil,
+		[]ScopeCode{{ScopeCode: "jobcatalog", OwnerModule: "jobcatalog", ShareMode: "tenant-only", IsStable: true}},
+		nil,
+		Tenant{Name: "T"},
+		"2026-01-07",
+		"",
+		"en",
+		"",
+	)
+	if !strings.Contains(html, "(no active setids)") {
+		t.Fatalf("unexpected html: %q", html)
+	}
+}
+
+func TestRenderSetIDPage_ScopePackages(t *testing.T) {
+	html := renderSetIDPage(
+		[]SetID{{SetID: "A0001", Name: "A", Status: "active"}},
+		nil,
+		nil,
+		[]ScopeCode{{ScopeCode: "jobcatalog", OwnerModule: "jobcatalog", ShareMode: "tenant-only", IsStable: true}},
+		[]ScopePackage{
+			{PackageID: "p1", ScopeCode: "jobcatalog", PackageCode: "PKG1", OwnerSetID: "A0001", Name: "Pkg1", Status: "active", EffectiveDate: "2026-01-01", UpdatedAt: "2026-01-02T00:00:00Z"},
+			{PackageID: "p2", ScopeCode: "jobcatalog", PackageCode: "DEFLT", OwnerSetID: "", Name: "Default", Status: "active"},
+			{PackageID: "p3", ScopeCode: "jobcatalog", PackageCode: "PKG2", OwnerSetID: "A0001", Name: "Pkg2", Status: "disabled"},
+		},
+		Tenant{Name: "T"},
+		"2026-01-07",
+		"",
+		"en",
+		"",
+	)
+	if !strings.Contains(html, "Create Package") {
+		t.Fatalf("unexpected html: %q", html)
+	}
+	if !strings.Contains(html, "option value=\"A0001\"") {
+		t.Fatalf("unexpected html: %q", html)
+	}
+	if !strings.Contains(html, "(protected)") {
+		t.Fatalf("unexpected html: %q", html)
+	}
+	if !strings.Contains(html, "(disabled)") {
+		t.Fatalf("unexpected html: %q", html)
+	}
+	if !strings.Contains(html, "Disable</button>") {
 		t.Fatalf("unexpected html: %q", html)
 	}
 }

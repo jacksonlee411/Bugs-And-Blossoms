@@ -117,6 +117,32 @@ func TestSetIDPGStore_CreateScopePackage(t *testing.T) {
 		}
 	})
 
+	t.Run("subscription event id error", func(t *testing.T) {
+		tx := &stubTx{
+			row:     &stubRow{vals: []any{"p1"}},
+			row2:    &stubRow{vals: []any{"e1"}},
+			row3Err: errors.New("row fail"),
+		}
+		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("subscription submit error", func(t *testing.T) {
+		tx := &stubTx{
+			row:       &stubRow{vals: []any{"p1"}},
+			row2:      &stubRow{vals: []any{"e1"}},
+			row3:      &stubRow{vals: []any{"se1"}},
+			execErr:   errors.New("exec fail"),
+			execErrAt: 4,
+		}
+		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, err := store.CreateScopePackage(context.Background(), "t1", "jobcatalog", "PKG1", "A0001", "Pkg", "2026-01-01", "r1", "p1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
 	t.Run("fetch error", func(t *testing.T) {
 		tx := &stubTx{
 			row:     &stubRow{vals: []any{"p1"}},
