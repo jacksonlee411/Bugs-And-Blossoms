@@ -369,7 +369,7 @@ func TestHandleSetID_ListScopePackagesSortDifferentScope(t *testing.T) {
 			{ScopeCode: "orgunit_location", OwnerModule: "orgunit", ShareMode: "tenant-only", IsStable: true},
 		},
 		scopePackages: map[string][]ScopePackage{
-			"jobcatalog":      {{PackageID: "p1", ScopeCode: "jobcatalog", PackageCode: "PKG1", OwnerSetID: "A0001", Name: "Pkg1", Status: "active"}},
+			"jobcatalog":       {{PackageID: "p1", ScopeCode: "jobcatalog", PackageCode: "PKG1", OwnerSetID: "A0001", Name: "Pkg1", Status: "active"}},
 			"orgunit_location": {{PackageID: "p2", ScopeCode: "orgunit_location", PackageCode: "PKG2", OwnerSetID: "A0001", Name: "Pkg2", Status: "active"}},
 		},
 	}, newTestOrgStore())
