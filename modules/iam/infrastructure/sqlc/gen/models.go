@@ -349,6 +349,12 @@ type OrgunitOrgEvent struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type OrgunitOrgIDAllocator struct {
+	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
+	NextOrgID  int32              `json:"next_org_id"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type OrgunitOrgTree struct {
 	TenantUuid    pgtype.UUID        `json:"tenant_uuid"`
 	HierarchyType string             `json:"hierarchy_type"`
