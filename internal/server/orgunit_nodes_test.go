@@ -1776,19 +1776,6 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 		})
 	})
 
-	t.Run("transaction_time_scan", func(t *testing.T) {
-		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &stubTx{}
-			tx.row = &stubRow{vals: []any{10000001}}
-			tx.row2 = &stubRow{err: errors.New("row2")}
-			return tx, nil
-		})}
-		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A001", "A", "", false)
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
 	t.Run("submit_exec", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{execErr: errors.New("exec"), execErrAt: 2}

@@ -259,12 +259,6 @@ func staffingSmoke(args []string) {
 		fatal(err)
 	}
 	orgEventID = mustUUIDv7()
-	if err := tx.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&orgUnitID); err != nil {
-		fatal(err)
-	}
-	if err := tx.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&missingOrgUnitID); err != nil {
-		fatal(err)
-	}
 
 	var existingRootOrgID string
 	err = tx.QueryRow(ctx, `
@@ -304,9 +298,24 @@ func staffingSmoke(args []string) {
 			  $5::text,
 			  $6::uuid
 			);
-		`, orgEventID, tenantA, orgUnitID, effectiveDate, requestID+"-org", initiatorID); err != nil {
+		`, orgEventID, tenantA, nil, effectiveDate, requestID+"-org", initiatorID); err != nil {
 			fatal(err)
 		}
+		if err := tx.QueryRow(ctx, `
+			SELECT org_id::text
+			FROM orgunit.org_events
+			WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+		`, tenantA, orgEventID).Scan(&orgUnitID); err != nil {
+			fatal(err)
+		}
+	}
+
+	if err := tx.QueryRow(ctx, `
+		SELECT COALESCE(MAX(org_id) + 1, 10000000)::text
+		FROM orgunit.org_unit_versions
+		WHERE tenant_uuid = $1::uuid AND hierarchy_type = 'OrgUnit';
+	`, tenantA).Scan(&missingOrgUnitID); err != nil {
+		fatal(err)
 	}
 
 	var rootIsBU bool
@@ -1423,9 +1432,6 @@ func orgunitSmoke(args []string) {
 	requestID := "dbtool-orgunit-smoke-a"
 	eventIDA := mustUUIDv7()
 	var orgIDA string
-	if err := tx.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&orgIDA); err != nil {
-		fatal(err)
-	}
 
 	var dbIDA int64
 	if err := tx.QueryRow(ctx, `
@@ -1440,7 +1446,14 @@ SELECT orgunit.submit_org_event(
 	  $5::text,
 	  $6::uuid
 	)
-	`, eventIDA, tenantA, orgIDA, "2026-01-01", requestID, initiatorID).Scan(&dbIDA); err != nil {
+	`, eventIDA, tenantA, nil, "2026-01-01", requestID, initiatorID).Scan(&dbIDA); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `
+		SELECT org_id::text
+		FROM orgunit.org_events
+		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+	`, tenantA, eventIDA).Scan(&orgIDA); err != nil {
 		fatal(err)
 	}
 
@@ -1543,15 +1556,6 @@ SELECT orgunit.submit_org_event(
 	var orgRootID string
 	var orgChildID string
 	var orgParent2ID string
-	if err := tx3.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&orgRootID); err != nil {
-		fatal(err)
-	}
-	if err := tx3.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&orgChildID); err != nil {
-		fatal(err)
-	}
-	if err := tx3.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&orgParent2ID); err != nil {
-		fatal(err)
-	}
 
 	eventCreateRoot := mustUUIDv7()
 	eventCreateChild := mustUUIDv7()
@@ -1573,7 +1577,14 @@ SELECT orgunit.submit_org_event(
   $5::text,
   $6::uuid
 )
-`, eventCreateRoot, tenantC, orgRootID, "2026-01-01", requestID, initiatorID).Scan(&createRootDBID); err != nil {
+`, eventCreateRoot, tenantC, nil, "2026-01-01", requestID, initiatorID).Scan(&createRootDBID); err != nil {
+		fatal(err)
+	}
+	if err := tx3.QueryRow(ctx, `
+		SELECT org_id::text
+		FROM orgunit.org_events
+		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+	`, tenantC, eventCreateRoot).Scan(&orgRootID); err != nil {
 		fatal(err)
 	}
 
@@ -1590,7 +1601,7 @@ SELECT orgunit.submit_org_event(
   $5::text,
   $6::uuid
 )
-`, eventCreateRoot, tenantC, orgRootID, "2026-01-01", requestID, initiatorID).Scan(&createRootDBID2); err != nil {
+`, eventCreateRoot, tenantC, nil, "2026-01-01", requestID, initiatorID).Scan(&createRootDBID2); err != nil {
 		fatal(err)
 	}
 	if createRootDBID2 != createRootDBID {
@@ -1609,7 +1620,14 @@ SELECT orgunit.submit_org_event(
   $6::text,
   $7::uuid
 )
-`, eventCreateChild, tenantC, orgChildID, "2026-01-01", orgRootID, requestID, initiatorID); err != nil {
+`, eventCreateChild, tenantC, nil, "2026-01-01", orgRootID, requestID, initiatorID); err != nil {
+		fatal(err)
+	}
+	if err := tx3.QueryRow(ctx, `
+		SELECT org_id::text
+		FROM orgunit.org_events
+		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+	`, tenantC, eventCreateChild).Scan(&orgChildID); err != nil {
 		fatal(err)
 	}
 
@@ -1625,7 +1643,14 @@ SELECT orgunit.submit_org_event(
   $6::text,
   $7::uuid
 )
-`, eventCreateParent2, tenantC, orgParent2ID, "2026-01-03", orgRootID, requestID, initiatorID); err != nil {
+`, eventCreateParent2, tenantC, nil, "2026-01-03", orgRootID, requestID, initiatorID); err != nil {
+		fatal(err)
+	}
+	if err := tx3.QueryRow(ctx, `
+		SELECT org_id::text
+		FROM orgunit.org_events
+		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+	`, tenantC, eventCreateParent2).Scan(&orgParent2ID); err != nil {
 		fatal(err)
 	}
 

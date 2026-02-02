@@ -338,7 +338,7 @@ Response 200：
 - [ ] `org_code` 唯一性与解析一致性通过校验。
 - [ ] `org_code` 归一化与格式校验按契约拒绝（400/409/404）。
 - [ ] 对外响应回显的 `org_code` 一律为大写。
-- [ ] CREATE 不再使用全局 `org_id_seq`，`org_id` 按租户隔离分配。
+- [x] CREATE 不再使用全局 `org_id_seq`，`org_id` 按租户隔离分配。
 - [ ] 并发分配不产生重复/冲突；号段耗尽返回 `ORG_ID_EXHAUSTED`。
 
 ## 9.1 门禁对齐（触发器与验证入口）
@@ -356,7 +356,7 @@ Response 200：
 4. [x] API/UI：对外仅暴露 `org_code`，禁止 `org_id` 透出；输入需归一化且回显大写。（完成：2026-02-02，已通过 `make test` / `make check doc` / `make e2e`）
 5. [x] 写入口唯一性：落地 DB 权限/触发器/代码层禁写措施。（完成：2026-02-02，已通过 `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate`）
 6. [x] org_id 分配器：新增 `org_id_allocators` 表 + 分配函数；`submit_org_event` 内部分配。（完成：2026-02-02，已通过 `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate`）
-7. [ ] 移除应用层对 `org_id_seq` 的直接依赖并物理删除序列。
+7. [x] 移除应用层对 `org_id_seq` 的直接依赖并物理删除序列。（完成：2026-02-02，已通过 `go fmt ./...` / `go vet ./...` / `make check lint` / `make test` / `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate` / `make check doc`）
 8. [ ] 移除旧写入口：删除 `/orgunit/api/*` 相关路由、handler、authz 映射与 allowlist。
 9. [ ] hierarchy_type 彻底移除：更新 026/026A 中的 schema、函数签名、索引与锁粒度（单树模型）。
 10. [ ] 迁移与校验：回填、归一化、唯一性校验与冲突清单。

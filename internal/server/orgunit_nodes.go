@@ -257,11 +257,6 @@ func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string,
 		parentID = strings.TrimSpace(parentID)
 	}
 
-	var orgID int
-	if err := tx.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::int;`).Scan(&orgID); err != nil {
-		return OrgUnitNode{}, err
-	}
-
 	eventID, err := uuidv7.NewString()
 	if err != nil {
 		return OrgUnitNode{}, err
@@ -286,17 +281,18 @@ SELECT orgunit.submit_org_event(
   $6::text,
   $7::uuid
 )
-`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, tenantID)
+`, eventID, tenantID, nil, effectiveDate, []byte(payload), eventID, tenantID)
 	if err != nil {
 		return OrgUnitNode{}, err
 	}
 
+	var orgID int
 	var createdAt time.Time
 	if err := tx.QueryRow(ctx, `
-SELECT transaction_time
+SELECT org_id, transaction_time
 FROM orgunit.org_events
 WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
-`, tenantID, eventID).Scan(&createdAt); err != nil {
+`, tenantID, eventID).Scan(&orgID, &createdAt); err != nil {
 		return OrgUnitNode{}, err
 	}
 
