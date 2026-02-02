@@ -3,16 +3,19 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"html"
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	staffingcontrollers "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/presentation/controllers"
 	staffingservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/services"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type orgUnitSetIDResolver interface {
@@ -31,36 +34,58 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 		return
 	}
 
-	orgUnitID := strings.TrimSpace(r.URL.Query().Get("org_unit_id"))
+	orgCodeInput := r.URL.Query().Get("org_code")
+	orgCode := ""
+	orgUnitID := ""
+	orgMsg := ""
+	if orgCodeInput != "" {
+		normalized, err := orgunitpkg.NormalizeOrgCode(orgCodeInput)
+		if err != nil {
+			orgMsg = mergeMsg(orgMsg, "org_code invalid")
+		} else {
+			orgCode = normalized
+			resolvedID, err := orgStore.ResolveOrgID(r.Context(), tenant.ID, normalized)
+			if err != nil {
+				switch {
+				case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+					orgMsg = mergeMsg(orgMsg, "org_code invalid")
+				case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+					orgMsg = mergeMsg(orgMsg, "org_code not found")
+				default:
+					orgMsg = mergeMsg(orgMsg, stablePgMessage(err))
+				}
+			} else {
+				orgUnitID = strconv.Itoa(resolvedID)
+			}
+		}
+	}
 
 	nodes, err := orgStore.ListNodesCurrent(r.Context(), tenant.ID, asOf)
 	if err != nil {
-		writePage(w, r, renderPositions(nil, nil, tenant, asOf, orgUnitID, "", nil, stablePgMessage(err)))
+		writePage(w, r, renderPositions(nil, nil, tenant, asOf, orgCode, "", nil, mergeMsg(orgMsg, stablePgMessage(err))))
 		return
 	}
 	positions, err := store.ListPositionsCurrent(r.Context(), tenant.ID, asOf)
 	if err != nil {
-		writePage(w, r, renderPositions(nil, nodes, tenant, asOf, orgUnitID, "", nil, stablePgMessage(err)))
+		writePage(w, r, renderPositions(nil, nodes, tenant, asOf, orgCode, "", nil, mergeMsg(orgMsg, stablePgMessage(err))))
 		return
 	}
 
 	var jobProfiles []JobProfile
-	jobCatalogMsg := ""
+	jobCatalogMsg := orgMsg
 	setID := ""
-	if jobStore != nil {
-		if orgUnitID != "" {
-			if resolver, ok := orgStore.(orgUnitSetIDResolver); ok {
-				resolved, err := resolver.ResolveSetID(r.Context(), tenant.ID, orgUnitID, asOf)
+	if jobStore != nil && orgUnitID != "" {
+		if resolver, ok := orgStore.(orgUnitSetIDResolver); ok {
+			resolved, err := resolver.ResolveSetID(r.Context(), tenant.ID, orgUnitID, asOf)
+			if err != nil {
+				jobCatalogMsg = mergeMsg(jobCatalogMsg, stablePgMessage(err))
+			} else {
+				setID = resolved
+				profiles, err := jobStore.ListJobProfiles(r.Context(), tenant.ID, resolved, asOf)
 				if err != nil {
 					jobCatalogMsg = mergeMsg(jobCatalogMsg, stablePgMessage(err))
 				} else {
-					setID = resolved
-					profiles, err := jobStore.ListJobProfiles(r.Context(), tenant.ID, resolved, asOf)
-					if err != nil {
-						jobCatalogMsg = mergeMsg(jobCatalogMsg, stablePgMessage(err))
-					} else {
-						jobProfiles = profiles
-					}
+					jobProfiles = profiles
 				}
 			}
 		}
@@ -68,11 +93,11 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 
 	switch r.Method {
 	case http.MethodGet:
-		writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, setID, jobProfiles, jobCatalogMsg))
+		writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, jobCatalogMsg))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
-			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, setID, jobProfiles, mergeMsg(jobCatalogMsg, "bad form")))
+			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "bad form")))
 			return
 		}
 
@@ -81,14 +106,36 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 			effectiveDate = asOf
 		}
 		if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
-			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, setID, jobProfiles, mergeMsg(jobCatalogMsg, "effective_date 无效: "+err.Error())))
+			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "effective_date 无效: "+err.Error())))
 			return
 		}
 
 		positionID := strings.TrimSpace(r.Form.Get("position_id"))
-		formOrgUnitID := strings.TrimSpace(r.Form.Get("org_unit_id"))
-		if formOrgUnitID != "" {
-			orgUnitID = formOrgUnitID
+		formOrgCode := r.Form.Get("org_code")
+		formOrgUnitID := ""
+		if formOrgCode != "" {
+			normalized, err := orgunitpkg.NormalizeOrgCode(formOrgCode)
+			if err != nil {
+				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "org_code invalid")))
+				return
+			}
+			resolvedID, err := orgStore.ResolveOrgID(r.Context(), tenant.ID, normalized)
+			if err != nil {
+				msg := "org_code invalid"
+				switch {
+				case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+					msg = "org_code invalid"
+				case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+					msg = "org_code not found"
+				default:
+					msg = stablePgMessage(err)
+				}
+				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, msg)))
+				return
+			}
+			formOrgCode = normalized
+			orgCode = normalized
+			formOrgUnitID = strconv.Itoa(resolvedID)
 		}
 		reportsToPositionID := strings.TrimSpace(r.Form.Get("reports_to_position_id"))
 		jobProfileID := strings.TrimSpace(r.Form.Get("job_profile_id"))
@@ -97,20 +144,24 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 		lifecycleStatus := strings.TrimSpace(r.Form.Get("lifecycle_status"))
 
 		if positionID == "" {
+			if formOrgUnitID == "" {
+				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "org_code is required")))
+				return
+			}
 			if _, err := store.CreatePositionCurrent(r.Context(), tenant.ID, effectiveDate, formOrgUnitID, jobProfileID, capacityFTE, name); err != nil {
-				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
+				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
 		} else {
 			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionID, effectiveDate, formOrgUnitID, reportsToPositionID, jobProfileID, capacityFTE, name, lifecycleStatus); err != nil {
-				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgUnitID, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
+				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
 		}
 
 		redirectURL := "/org/positions?as_of=" + url.QueryEscape(effectiveDate)
-		if formOrgUnitID != "" {
-			redirectURL += "&org_unit_id=" + url.QueryEscape(formOrgUnitID)
+		if formOrgCode != "" {
+			redirectURL += "&org_code=" + url.QueryEscape(formOrgCode)
 		}
 		http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 		return
@@ -123,7 +174,7 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 type staffingPositionsAPIRequest struct {
 	EffectiveDate       string `json:"effective_date"`
 	PositionID          string `json:"position_id"`
-	OrgUnitID           string `json:"org_unit_id"`
+	OrgCode             string `json:"org_code"`
 	ReportsToPositionID string `json:"reports_to_position_id"`
 	JobProfileID        string `json:"job_profile_id"`
 	CapacityFTE         string `json:"capacity_fte"`
@@ -131,7 +182,21 @@ type staffingPositionsAPIRequest struct {
 	LifecycleStatus     string `json:"lifecycle_status"`
 }
 
-func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionStore) {
+type staffingPositionAPIResponse struct {
+	PositionID          string `json:"position_id"`
+	OrgCode             string `json:"org_code"`
+	ReportsToPositionID string `json:"reports_to_position_id"`
+	JobCatalogSetID     string `json:"jobcatalog_setid"`
+	JobCatalogSetIDAsOf string `json:"jobcatalog_setid_as_of"`
+	JobProfileID        string `json:"job_profile_id"`
+	JobProfileCode      string `json:"job_profile_code"`
+	Name                string `json:"name"`
+	LifecycleStatus     string `json:"lifecycle_status"`
+	CapacityFTE         string `json:"capacity_fte"`
+	EffectiveDate       string `json:"effective_date"`
+}
+
+func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgUnitCodeResolver, store PositionStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -162,11 +227,51 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionSt
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "list failed")
 			return
 		}
+		orgCodes := map[string]string{}
+		for _, p := range positions {
+			if p.OrgUnitID == "" {
+				continue
+			}
+			if _, ok := orgCodes[p.OrgUnitID]; ok {
+				continue
+			}
+			if orgResolver == nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
+				return
+			}
+			orgID, err := strconv.Atoi(p.OrgUnitID)
+			if err != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_id_invalid", "invalid orgunit id")
+				return
+			}
+			code, err := orgResolver.ResolveOrgCode(r.Context(), tenant.ID, orgID)
+			if err != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolve_org_code_failed", "resolve org_code failed")
+				return
+			}
+			orgCodes[p.OrgUnitID] = code
+		}
+		responsePositions := make([]staffingPositionAPIResponse, 0, len(positions))
+		for _, p := range positions {
+			responsePositions = append(responsePositions, staffingPositionAPIResponse{
+				PositionID:          p.ID,
+				OrgCode:             orgCodes[p.OrgUnitID],
+				ReportsToPositionID: p.ReportsToID,
+				JobCatalogSetID:     p.JobCatalogSetID,
+				JobCatalogSetIDAsOf: p.JobCatalogSetIDAsOf,
+				JobProfileID:        p.JobProfileID,
+				JobProfileCode:      p.JobProfileCode,
+				Name:                p.Name,
+				LifecycleStatus:     p.LifecycleStatus,
+				CapacityFTE:         p.CapacityFTE,
+				EffectiveDate:       p.EffectiveAt,
+			})
+		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"as_of":     asOf,
 			"tenant":    tenant.ID,
-			"positions": positions,
+			"positions": responsePositions,
 		})
 		return
 	case http.MethodPost:
@@ -183,12 +288,42 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionSt
 			return
 		}
 
+		orgUnitID := ""
+		if strings.TrimSpace(req.OrgCode) != "" {
+			normalized, err := orgunitpkg.NormalizeOrgCode(req.OrgCode)
+			if err != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+				return
+			}
+			if orgResolver == nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
+				return
+			}
+			resolvedID, err := orgResolver.ResolveOrgID(r.Context(), tenant.ID, normalized)
+			if err != nil {
+				switch {
+				case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+				case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
+				default:
+					writeInternalAPIError(w, r, err, "orgunit_resolve_org_code_failed")
+				}
+				return
+			}
+			orgUnitID = strconv.Itoa(resolvedID)
+			req.OrgCode = normalized
+		} else if strings.TrimSpace(req.PositionID) == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
+			return
+		}
+
 		var p Position
 		var err error
 		if strings.TrimSpace(req.PositionID) == "" {
-			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, req.OrgUnitID, req.JobProfileID, req.CapacityFTE, req.Name)
+			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, orgUnitID, req.JobProfileID, req.CapacityFTE, req.Name)
 		} else {
-			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionID, req.EffectiveDate, req.OrgUnitID, req.ReportsToPositionID, req.JobProfileID, req.CapacityFTE, req.Name, req.LifecycleStatus)
+			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionID, req.EffectiveDate, orgUnitID, req.ReportsToPositionID, req.JobProfileID, req.CapacityFTE, req.Name, req.LifecycleStatus)
 		}
 		if err != nil {
 			code := stablePgMessage(err)
@@ -207,8 +342,38 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, store PositionSt
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, "upsert failed")
 			return
 		}
+		respOrgCode := ""
+		if p.OrgUnitID != "" {
+			if orgResolver == nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
+				return
+			}
+			orgID, err := strconv.Atoi(p.OrgUnitID)
+			if err != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_id_invalid", "invalid orgunit id")
+				return
+			}
+			code, err := orgResolver.ResolveOrgCode(r.Context(), tenant.ID, orgID)
+			if err != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolve_org_code_failed", "resolve org_code failed")
+				return
+			}
+			respOrgCode = code
+		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(p)
+		_ = json.NewEncoder(w).Encode(staffingPositionAPIResponse{
+			PositionID:          p.ID,
+			OrgCode:             respOrgCode,
+			ReportsToPositionID: p.ReportsToID,
+			JobCatalogSetID:     p.JobCatalogSetID,
+			JobCatalogSetIDAsOf: p.JobCatalogSetIDAsOf,
+			JobProfileID:        p.JobProfileID,
+			JobProfileCode:      p.JobProfileCode,
+			Name:                p.Name,
+			LifecycleStatus:     p.LifecycleStatus,
+			CapacityFTE:         p.CapacityFTE,
+			EffectiveDate:       p.EffectiveAt,
+		})
 		return
 	default:
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -453,7 +618,7 @@ func renderPositions(
 	nodes []OrgUnitNode,
 	tenant Tenant,
 	asOf string,
-	orgUnitID string,
+	orgCode string,
 	setID string,
 	jobProfiles []JobProfile,
 	errMsg string,
@@ -465,19 +630,23 @@ func renderPositions(
 		sortedNodes = append([]OrgUnitNode(nil), nodes...)
 		sort.Slice(sortedNodes, func(i, j int) bool { return sortedNodes[i].Name < sortedNodes[j].Name })
 	}
-	orgUnitLabel := "(not set)"
-	if orgUnitID != "" {
-		orgUnitLabel = orgUnitID
-		for _, n := range sortedNodes {
-			if n.ID != orgUnitID {
-				continue
-			}
-			label := n.Name + " (" + n.ID + ")"
+	orgCodeByID := make(map[string]string, len(nodes))
+	nodeByCode := make(map[string]OrgUnitNode, len(nodes))
+	for _, n := range nodes {
+		orgCodeByID[n.ID] = n.OrgCode
+		if n.OrgCode != "" {
+			nodeByCode[n.OrgCode] = n
+		}
+	}
+	orgCodeLabel := "(not set)"
+	if orgCode != "" {
+		orgCodeLabel = orgCode
+		if n, ok := nodeByCode[orgCode]; ok {
+			label := n.Name + " (" + n.OrgCode + ")"
 			if n.IsBusinessUnit {
 				label = label + " [BU]"
 			}
-			orgUnitLabel = label
-			break
+			orgCodeLabel = label
 		}
 	}
 	b.WriteString("<h1>Staffing / Positions</h1>")
@@ -490,23 +659,23 @@ func renderPositions(
 	b.WriteString(`<h2>Org Unit Context</h2>`)
 	b.WriteString(`<form method="GET" action="/org/positions" hx-get="/org/positions" hx-target="#content" hx-push-url="true" hx-trigger="change">`)
 	b.WriteString(`<input type="hidden" name="as_of" value="` + html.EscapeString(asOf) + `" />`)
-	b.WriteString(`<label>Org Unit <select name="org_unit_id">`)
+	b.WriteString(`<label>Org Unit <select name="org_code">`)
 	b.WriteString(`<option value="">(not set)</option>`)
 	for _, n := range sortedNodes {
 		selected := ""
-		if n.ID == orgUnitID {
+		if n.OrgCode == orgCode {
 			selected = " selected"
 		}
-		label := n.Name + " (" + n.ID + ")"
+		label := n.Name + " (" + n.OrgCode + ")"
 		if n.IsBusinessUnit {
 			label = label + " [BU]"
 		}
-		b.WriteString(`<option value="` + html.EscapeString(n.ID) + `"` + selected + `>` + html.EscapeString(label) + `</option>`)
+		b.WriteString(`<option value="` + html.EscapeString(n.OrgCode) + `"` + selected + `>` + html.EscapeString(label) + `</option>`)
 	}
 	b.WriteString(`</select></label> `)
 	b.WriteString(`<button type="submit">Load</button>`)
 	b.WriteString(`</form>`)
-	if orgUnitID == "" {
+	if orgCode == "" {
 		b.WriteString(`<p style="color:#555">请选择 Org Unit 以加载可用的 Job Profile。</p>`)
 	}
 	if setID != "" {
@@ -516,8 +685,8 @@ func renderPositions(
 	b.WriteString(`<h2>Create</h2>`)
 	b.WriteString(`<form method="POST" action="` + html.EscapeString(action) + `">`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-	b.WriteString(`<label>Org Unit <input type="text" value="` + html.EscapeString(orgUnitLabel) + `" disabled /></label><br/>`)
-	b.WriteString(`<input type="hidden" name="org_unit_id" value="` + html.EscapeString(orgUnitID) + `" />`)
+	b.WriteString(`<label>Org Unit <input type="text" value="` + html.EscapeString(orgCodeLabel) + `" disabled /></label><br/>`)
+	b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(orgCode) + `" />`)
 	b.WriteString(`<label>Job Profile <select name="job_profile_id">`)
 	b.WriteString(`<option value="">(not set)</option>`)
 	for _, jp := range jobProfiles {
@@ -546,14 +715,14 @@ func renderPositions(
 		}
 	}
 	b.WriteString(`</select></label><br/>`)
-	b.WriteString(`<label>Org Unit <select name="org_unit_id">`)
+	b.WriteString(`<label>Org Unit <select name="org_code">`)
 	b.WriteString(`<option value="">(no change)</option>`)
 	for _, n := range sortedNodes {
-		label := n.Name + " (" + n.ID + ")"
+		label := n.Name + " (" + n.OrgCode + ")"
 		if n.IsBusinessUnit {
 			label = label + " [BU]"
 		}
-		b.WriteString(`<option value="` + html.EscapeString(n.ID) + `">` + html.EscapeString(label) + `</option>`)
+		b.WriteString(`<option value="` + html.EscapeString(n.OrgCode) + `">` + html.EscapeString(label) + `</option>`)
 	}
 	b.WriteString(`</select></label><br/>`)
 	b.WriteString(`<label>Reports To <select name="reports_to_position_id">`)
@@ -590,7 +759,7 @@ func renderPositions(
 	}
 
 	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr>` +
-		`<th>effective_date</th><th>position_id</th><th>reports_to_position_id</th><th>jobcatalog_setid</th><th>jobcatalog_setid_as_of</th><th>job_profile</th><th>capacity_fte</th><th>lifecycle_status</th><th>org_unit_id</th><th>name</th>` +
+		`<th>effective_date</th><th>position_id</th><th>reports_to_position_id</th><th>jobcatalog_setid</th><th>jobcatalog_setid_as_of</th><th>job_profile</th><th>capacity_fte</th><th>lifecycle_status</th><th>org_code</th><th>name</th>` +
 		`</tr></thead><tbody>`)
 	for _, p := range positions {
 		jobProfileLabel := ""
@@ -608,7 +777,7 @@ func renderPositions(
 			`<td><code>` + html.EscapeString(jobProfileLabel) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.CapacityFTE) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.LifecycleStatus) + `</code></td>` +
-			`<td><code>` + html.EscapeString(p.OrgUnitID) + `</code></td>` +
+			`<td><code>` + html.EscapeString(orgCodeByID[p.OrgUnitID]) + `</code></td>` +
 			`<td>` + html.EscapeString(p.Name) + `</td></tr>`)
 	}
 	b.WriteString(`</tbody></table>`)

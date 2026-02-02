@@ -8,6 +8,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const tenantAdminPass = process.env.E2E_TENANT_ADMIN_PASS || "pw";
   const pernr = `${Math.floor(10000000 + Math.random() * 90000000)}`;
   const orgName = `E2E OrgUnit ${runID}`;
+  const orgCode = `ORG${runID.slice(-6)}`;
   const posName = `E2E Position ${runID}`;
 
   const superadminBaseURL = process.env.E2E_SUPERADMIN_BASE_URL || "http://localhost:8081";
@@ -95,7 +96,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await expect(page.locator("h1")).toHaveText("OrgUnit");
   const nodeIDLocator = page.locator("ul li code").first();
   const hasAnyNode = (await nodeIDLocator.count()) > 0;
-  const parentID = hasAnyNode ? (await nodeIDLocator.innerText()).trim() : "";
+  const parentCode = hasAnyNode ? (await nodeIDLocator.innerText()).trim() : "";
   const orgCreateForm = page
     .locator(`form[method="POST"][action="/org/nodes?as_of=${asOf}"]`)
     .filter({ has: page.locator('input[name="name"]') })
@@ -119,20 +120,21 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
     }
     await input.first().fill(enabled ? "true" : "false");
   };
-  if (parentID) {
-    await orgCreateForm.locator('input[name="parent_id"]').fill(parentID);
+  await orgCreateForm.locator('input[name="org_code"]').fill(orgCode);
+  if (parentCode) {
+    await orgCreateForm.locator('input[name="parent_code"]').fill(parentCode);
   }
-  await setBusinessUnitFlag(!parentID);
+  await setBusinessUnitFlag(!parentCode);
   await orgCreateForm.locator('input[name="name"]').fill(orgName);
   await orgCreateForm.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(new RegExp(`/org/nodes\\?as_of=${asOf}$`));
   await expect(page.locator("ul li", { hasText: orgName })).toBeVisible();
-  const createdOrgID = (await page.locator("ul li", { hasText: orgName }).first().locator("code").innerText()).trim();
-  expect(createdOrgID).not.toBe("");
-  if (!parentID) {
+  const createdOrgCode = (await page.locator("ul li", { hasText: orgName }).first().locator("code").innerText()).trim();
+  expect(createdOrgCode).not.toBe("");
+  if (!parentCode) {
     const bindResp = await appContext.request.post("/orgunit/api/setid-bindings", {
       data: {
-        org_unit_id: createdOrgID,
+        org_code: createdOrgCode,
         setid: "DEFLT",
         effective_date: asOf,
         request_code: `smoke-bind-root-${runID}`
@@ -206,14 +208,14 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const personUUID = (await personRow.locator("code").innerText()).trim();
   expect(personUUID).not.toBe("");
 
-  await page.goto(`/org/positions?as_of=${asOf}&org_unit_id=${createdOrgID}`);
+  await page.goto(`/org/positions?as_of=${asOf}&org_code=${createdOrgCode}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Positions");
   const posCreateForm = page
     .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${asOf}"]`)
     .first();
-  const orgUnitID = createdOrgID;
-  const orgUnitHiddenValue = await posCreateForm.locator('input[name="org_unit_id"]').getAttribute("value");
-  expect(orgUnitHiddenValue).toBe(orgUnitID);
+  const orgUnitCode = createdOrgCode;
+  const orgUnitHiddenValue = await posCreateForm.locator('input[name="org_code"]').getAttribute("value");
+  expect(orgUnitHiddenValue).toBe(orgUnitCode);
   const jobProfileOption = posCreateForm.locator('select[name="job_profile_id"] option', { hasText: jobProfileCode }).first();
   const jobProfileID = await jobProfileOption.getAttribute("value");
   expect(jobProfileID).not.toBeNull();
@@ -221,7 +223,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await posCreateForm.locator('input[name="name"]').fill(posName);
   await posCreateForm.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(
-    new RegExp(`/org/positions\\?(?=.*as_of=${asOf})(?=.*org_unit_id=${orgUnitID}).*$`)
+    new RegExp(`/org/positions\\?(?=.*as_of=${asOf})(?=.*org_code=${orgUnitCode}).*$`)
   );
 
   const posRow = page.locator("tr", { hasText: posName });

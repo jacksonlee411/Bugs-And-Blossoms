@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
 )
 
@@ -1163,7 +1164,7 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 				return
 			}
 		case "bind_setid":
-			orgUnitID := strings.TrimSpace(r.Form.Get("org_unit_id"))
+			orgCode := strings.TrimSpace(r.Form.Get("org_code"))
 			sid := strings.TrimSpace(r.Form.Get("setid"))
 			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
 			if effectiveDate == "" {
@@ -1174,12 +1175,34 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 				return
 			}
-			if orgUnitID == "" || sid == "" {
-				sids, bindings, nodes, scopes, scopePackages, errMsg := list("org_unit_id/setid is required")
+			if orgCode == "" || sid == "" {
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list("org_code/setid is required")
 				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
 				return
 			}
-			reqID := "ui:setid:bind:" + orgUnitID + ":" + sid + ":" + effectiveDate
+			normalized, err := orgunitpkg.NormalizeOrgCode(orgCode)
+			if err != nil {
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list("org_code invalid")
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
+				return
+			}
+			orgID, err := orgStore.ResolveOrgID(r.Context(), tenant.ID, normalized)
+			if err != nil {
+				msg := "org_code invalid"
+				switch {
+				case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+					msg = "org_code invalid"
+				case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+					msg = "org_code not found"
+				default:
+					msg = err.Error()
+				}
+				sids, bindings, nodes, scopes, scopePackages, errMsg := list(msg)
+				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
+				return
+			}
+			orgUnitID := strconv.Itoa(orgID)
+			reqID := "ui:setid:bind:" + normalized + ":" + sid + ":" + effectiveDate
 			if err := store.BindSetID(r.Context(), tenant.ID, orgUnitID, effectiveDate, sid, reqID, initiatorID); err != nil {
 				sids, bindings, nodes, scopes, scopePackages, errMsg := list(err.Error())
 				writePage(w, r, renderSetIDPage(sids, bindings, nodes, scopes, scopePackages, tenant, asOf, selectedSetID, lang(r), errMsg))
@@ -1442,7 +1465,7 @@ func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnit
 	if len(businessUnits) == 0 {
 		b.WriteString("<p>(no business units)</p>")
 	} else {
-		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>org_unit_id</th><th>name</th><th>setid</th><th>valid_from</th><th>valid_to</th></tr></thead><tbody>`)
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>org_code</th><th>name</th><th>setid</th><th>valid_from</th><th>valid_to</th></tr></thead><tbody>`)
 		for _, n := range businessUnits {
 			row := bindingByOrg[n.ID]
 			setidVal := ""
@@ -1454,7 +1477,7 @@ func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnit
 				validTo = row.ValidTo
 			}
 			b.WriteString("<tr>")
-			b.WriteString("<td>" + html.EscapeString(n.ID) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(n.OrgCode) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(n.Name) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(setidVal) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(validFrom) + "</td>")
@@ -1468,13 +1491,13 @@ func renderSetIDPage(setids []SetID, bindings []SetIDBindingRow, nodes []OrgUnit
 	b.WriteString(`<form method="POST" action="/org/setid?as_of=` + html.EscapeString(asOf) + `">`)
 	b.WriteString(`<input type="hidden" name="action" value="bind_setid" />`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-	b.WriteString(`<label>Org Unit <select name="org_unit_id">`)
+	b.WriteString(`<label>Org Unit <select name="org_code">`)
 	if len(businessUnits) == 0 {
 		b.WriteString(`<option value="">(no business units)</option>`)
 	} else {
 		for _, n := range businessUnits {
-			label := n.Name + " (" + n.ID + ")"
-			b.WriteString(`<option value="` + html.EscapeString(n.ID) + `">` + html.EscapeString(label) + `</option>`)
+			label := n.Name + " (" + n.OrgCode + ")"
+			b.WriteString(`<option value="` + html.EscapeString(n.OrgCode) + `">` + html.EscapeString(label) + `</option>`)
 		}
 	}
 	b.WriteString(`</select></label><br/>`)

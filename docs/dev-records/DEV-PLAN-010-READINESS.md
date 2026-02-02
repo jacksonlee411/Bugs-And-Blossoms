@@ -98,8 +98,8 @@
   - 启动：`make dev-server`
   - 登录：`curl -i -X POST -H 'Host: localhost:8080' -c /tmp/bb_cookies.txt http://127.0.0.1:8080/login`（拿到 `session=ok`）
   - SetID 创建：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=create_setid&setid=S2601&name=Smoke+SetID' http://127.0.0.1:8080/org/setid`（303）
-  - OrgUnit 创建并标记 BU：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'effective_date=2026-01-01&name=BU901&is_business_unit=true' 'http://127.0.0.1:8080/org/nodes?as_of=2026-01-01'`（303；从 `/org/nodes` 列表复制生成的 `org_unit_id`）
-  - SetID 绑定（OrgUnit）：`curl -X POST -H 'Host: localhost:8080' -H 'Content-Type: application/json' -b /tmp/bb_cookies.txt -d '{\"org_unit_id\":\"<ORG_ID>\",\"setid\":\"S2601\",\"effective_date\":\"2026-01-01\",\"request_id\":\"smoke:setid:bind\"}' http://127.0.0.1:8080/orgunit/api/setid-bindings`（201）
+  - OrgUnit 创建并标记 BU：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'effective_date=2026-01-01&org_code=BU901&name=BU901&is_business_unit=true' 'http://127.0.0.1:8080/org/nodes?as_of=2026-01-01'`（303；从 `/org/nodes` 列表复制生成的 `org_code`）
+  - SetID 绑定（OrgUnit）：`curl -X POST -H 'Host: localhost:8080' -H 'Content-Type: application/json' -b /tmp/bb_cookies.txt -d '{\"org_code\":\"<ORG_CODE>\",\"setid\":\"S2601\",\"effective_date\":\"2026-01-01\",\"request_code\":\"smoke:setid:bind\"}' http://127.0.0.1:8080/orgunit/api/setid-bindings`（201）
   - JobCatalog 页面验证：`curl -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt 'http://127.0.0.1:8080/org/job-catalog?as_of=2026-01-01&setid=S2601'`（页面显示 `SetID: S2601`）
   - Job Family Group 创建：`curl -X POST -H 'Host: localhost:8080' -b /tmp/bb_cookies.txt -d 'action=create_job_family_group&effective_date=2026-01-01&job_family_group_code=JC901&job_family_group_name=Smoke+Group&job_family_group_description=' 'http://127.0.0.1:8080/org/job-catalog?as_of=2026-01-01&setid=S2601'`（303）
   - 列表读取验证：同 GET 页面可见 `JC901 / Smoke Group` 行与 `SetID: S2601`（写入→列表读取闭环）
@@ -126,12 +126,12 @@ DB 闭环（迁移 + smoke）：
   - `curl -i -X POST -H 'Host: localhost:8080' -c /tmp/bb_m2_cookies.txt http://127.0.0.1:8080/login`
 - 创建 Person（pernr 1-8 位数字；含前导 0 同值）：
   - `curl -i -X POST -H 'Host: localhost:8080' -b /tmp/bb_m2_cookies.txt -d 'pernr=101&display_name=Smoke+Person+101' http://127.0.0.1:8080/person/persons`
-- 确保存在 OrgUnit（用于 Position 的 `org_unit_id` 输入来源）：
-  - 打开 `http://localhost:8080/org/nodes?as_of=2026-01-07`，若为空则创建 1 条 OrgUnit；记录任一 `org_unit_id`，用于 `/org/positions` 的查询与创建。
-- 创建 Position（`job_profile_id` 必填；`setid` 由 `org_unit_id + effective_date` 解析并落库，不手工输入）：
+- 确保存在 OrgUnit（用于 Position 的 `org_code` 输入来源）：
+  - 打开 `http://localhost:8080/org/nodes?as_of=2026-01-07`，若为空则创建 1 条 OrgUnit；记录任一 `org_code`，用于 `/org/positions` 的查询与创建。
+- 创建 Position（`job_profile_id` 必填；`setid` 由 `org_code + effective_date` 解析并落库，不手工输入）：
   - 若无 Job Profile，先在 `http://localhost:8080/org/job-catalog?as_of=2026-01-07&setid=DEFLT` 创建 1 条 Job Profile 并记录其 `id`。
-  - `curl -i -X POST -H 'Host: localhost:8080' -b /tmp/bb_m2_cookies.txt -d 'effective_date=2026-01-07&org_unit_id=<uuid>&job_profile_id=<uuid>&name=Smoke+Position+101' http://127.0.0.1:8080/org/positions?as_of=2026-01-07&org_unit_id=<uuid>`
-  - 验证列表：`http://localhost:8080/org/positions?as_of=2026-01-07&org_unit_id=<uuid>` 可见新行（包含 `position_id`）。
+  - `curl -i -X POST -H 'Host: localhost:8080' -b /tmp/bb_m2_cookies.txt -d 'effective_date=2026-01-07&org_code=<ORG_CODE>&job_profile_id=<uuid>&name=Smoke+Position+101' http://127.0.0.1:8080/org/positions?as_of=2026-01-07&org_code=<ORG_CODE>`
+  - 验证列表：`http://localhost:8080/org/positions?as_of=2026-01-07&org_code=<ORG_CODE>` 可见新行（包含 `position_id`）。
 - 创建/更新 Assignment（primary upsert；写侧权威输入为 `person_uuid`，UI 允许输入 pernr 并解析）：
   - `curl -i -X POST -H 'Host: localhost:8080' -b /tmp/bb_m2_cookies.txt -d 'effective_date=2026-01-07&pernr=101&position_id=<uuid>' http://127.0.0.1:8080/org/assignments?as_of=2026-01-07`
   - 验证时间线：`http://localhost:8080/org/assignments?as_of=2026-01-07&pernr=101` 可见新增行，且 UI 只展示 `effective_date`（不展示 `end_date`）。

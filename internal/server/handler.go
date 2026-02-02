@@ -323,10 +323,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleAssignments(w, r, positionStore, assignmentStore, personStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePositionsAPI(w, r, positionStore)
+		handlePositionsAPI(w, r, orgStore, positionStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePositionsAPI(w, r, positionStore)
+		handlePositionsAPI(w, r, orgStore, positionStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssignmentsAPI(w, r, assignmentStore)
@@ -344,7 +344,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleSetIDsAPI(w, r, setidStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/orgunit/api/setid-bindings", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDBindingsAPI(w, r, setidStore)
+		handleSetIDBindingsAPI(w, r, setidStore, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/orgunit/api/scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleScopePackagesAPI(w, r, setidStore)
