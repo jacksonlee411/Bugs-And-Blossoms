@@ -121,6 +121,7 @@ CREATE OR REPLACE FUNCTION orgunit.apply_create_logic(
   p_tenant_uuid uuid,
   p_hierarchy_type text,
   p_org_id int,
+  p_org_code text,
   p_parent_id int,
   p_effective_date date,
   p_name text,
@@ -136,6 +137,7 @@ DECLARE
   v_node_path ltree;
   v_root_org_id int;
   v_is_business_unit boolean;
+  v_org_code text;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
@@ -213,6 +215,13 @@ BEGIN
 
     v_node_path := v_parent_path || text2ltree(orgunit.org_ltree_label(p_org_id));
     v_is_business_unit := COALESCE(p_is_business_unit, false);
+  END IF;
+
+  v_org_code := NULLIF(btrim(p_org_code), '');
+  IF v_org_code IS NOT NULL THEN
+    v_org_code := upper(v_org_code);
+    INSERT INTO orgunit.org_unit_codes (tenant_uuid, org_id, org_code)
+    VALUES (p_tenant_uuid, p_org_id, v_org_code);
   END IF;
 
   INSERT INTO orgunit.org_unit_versions (
@@ -615,6 +624,7 @@ DECLARE
   v_new_name text;
   v_manager_uuid uuid;
   v_is_business_unit boolean;
+  v_org_code text;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
@@ -633,6 +643,9 @@ BEGIN
   DELETE FROM orgunit.org_trees
   WHERE tenant_uuid = p_tenant_uuid AND hierarchy_type = p_hierarchy_type;
 
+  DELETE FROM orgunit.org_unit_codes
+  WHERE tenant_uuid = p_tenant_uuid;
+
   FOR v_event IN
     SELECT *
     FROM orgunit.org_events
@@ -645,6 +658,7 @@ BEGIN
       v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
       v_name := NULLIF(btrim(v_payload->>'name'), '');
       v_manager_uuid := NULLIF(v_payload->>'manager_uuid', '')::uuid;
+      v_org_code := NULLIF(btrim(v_payload->>'org_code'), '');
       v_is_business_unit := NULL;
       IF v_payload ? 'is_business_unit' THEN
         BEGIN
@@ -656,7 +670,7 @@ BEGIN
               DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
         END;
       END IF;
-      PERFORM orgunit.apply_create_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_parent_id, v_event.effective_date, v_name, v_manager_uuid, v_is_business_unit, v_event.id);
+      PERFORM orgunit.apply_create_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_org_code, v_parent_id, v_event.effective_date, v_name, v_manager_uuid, v_is_business_unit, v_event.id);
     ELSIF v_event.event_type = 'MOVE' THEN
       v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::int;
       PERFORM orgunit.apply_move_logic(p_tenant_uuid, p_hierarchy_type, v_event.org_id, v_new_parent_id, v_event.effective_date, v_event.id);
