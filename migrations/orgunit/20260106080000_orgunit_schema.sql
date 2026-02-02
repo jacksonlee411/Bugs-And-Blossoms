@@ -31,13 +31,6 @@ AS $$
   FROM unnest(string_to_array(p_path::text, '.')) WITH ORDINALITY AS t(part, ord);
 $$;
 
-CREATE SEQUENCE IF NOT EXISTS orgunit.org_id_seq
-  START WITH 10000000
-  INCREMENT BY 1
-  MINVALUE 10000000
-  MAXVALUE 99999999
-  NO CYCLE;
-
 CREATE TABLE IF NOT EXISTS orgunit.org_trees (
   tenant_uuid uuid NOT NULL,
   hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
@@ -151,7 +144,6 @@ ALTER TABLE IF EXISTS orgunit.org_trees DISABLE ROW LEVEL SECURITY;
 DROP TABLE IF EXISTS orgunit.org_trees;
 
 DROP FUNCTION IF EXISTS orgunit.org_path_ids(ltree);
-DROP SEQUENCE IF EXISTS orgunit.org_id_seq;
 DROP FUNCTION IF EXISTS orgunit.org_ltree_label(int);
 DROP FUNCTION IF EXISTS orgunit.global_tenant_id();
 -- +goose StatementEnd

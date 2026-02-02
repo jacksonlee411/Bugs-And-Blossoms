@@ -96,11 +96,6 @@ func (s *orgUnitSnapshotPGStore) CreateOrgUnit(ctx context.Context, tenantID str
 		parentID = strings.TrimSpace(parentID)
 	}
 
-	var orgID int
-	if err := tx.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::int;`).Scan(&orgID); err != nil {
-		return "", err
-	}
-
 	eventID, err := uuidv7.NewString()
 	if err != nil {
 		return "", err
@@ -124,8 +119,17 @@ SELECT orgunit.submit_org_event(
   $6::text,
   $7::uuid
 )
-`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, tenantID)
+`, eventID, tenantID, nil, effectiveDate, []byte(payload), eventID, tenantID)
 	if err != nil {
+		return "", err
+	}
+
+	var orgID int
+	if err := tx.QueryRow(ctx, `
+SELECT org_id
+FROM orgunit.org_events
+WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+`, tenantID, eventID).Scan(&orgID); err != nil {
 		return "", err
 	}
 

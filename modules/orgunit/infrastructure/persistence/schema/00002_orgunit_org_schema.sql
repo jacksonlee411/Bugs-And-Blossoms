@@ -20,13 +20,6 @@ AS $$
   FROM unnest(string_to_array(p_path::text, '.')) WITH ORDINALITY AS t(part, ord);
 $$;
 
-CREATE SEQUENCE IF NOT EXISTS orgunit.org_id_seq
-  START WITH 10000000
-  INCREMENT BY 1
-  MINVALUE 10000000
-  MAXVALUE 99999999
-  NO CYCLE;
-
 CREATE TABLE IF NOT EXISTS orgunit.org_trees (
   tenant_uuid uuid NOT NULL,
   hierarchy_type text NOT NULL DEFAULT 'OrgUnit',

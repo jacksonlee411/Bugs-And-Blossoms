@@ -225,13 +225,6 @@ AS $$
   FROM unnest(string_to_array(p_path::text, '.')) WITH ORDINALITY AS t(part, ord);
 $$;
 
-CREATE SEQUENCE IF NOT EXISTS orgunit.org_id_seq
-  START WITH 10000000
-  INCREMENT BY 1
-  MINVALUE 10000000
-  MAXVALUE 99999999
-  NO CYCLE;
-
 CREATE TABLE IF NOT EXISTS orgunit.org_trees (
   tenant_uuid uuid NOT NULL,
   hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
@@ -4397,6 +4390,13 @@ BEGIN
   RETURN v_next;
 END;
 $$;
+
+ALTER TABLE IF EXISTS orgunit.org_id_allocators OWNER TO orgunit_kernel;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE orgunit.org_id_allocators TO orgunit_kernel;
+
+ALTER FUNCTION orgunit.allocate_org_id(uuid) OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.allocate_org_id(uuid) SECURITY DEFINER;
+ALTER FUNCTION orgunit.allocate_org_id(uuid) SET search_path = pg_catalog, orgunit, public;
 
 CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
   p_event_uuid uuid,
