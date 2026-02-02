@@ -111,7 +111,6 @@ func (s *orgUnitSnapshotPGStore) CreateOrgUnit(ctx context.Context, tenantID str
 SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
-  'OrgUnit',
   $3::int,
   'CREATE',
   $4::date,

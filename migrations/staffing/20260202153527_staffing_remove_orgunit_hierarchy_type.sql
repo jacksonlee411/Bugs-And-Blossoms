@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION staffing.assert_current_tenant(p_tenant_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -1420,3 +1422,9 @@ BEGIN
   RETURN v_rescind_db_id;
 END;
 $$;
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+SELECT 1;
+-- +goose StatementEnd
