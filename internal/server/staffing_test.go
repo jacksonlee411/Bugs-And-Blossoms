@@ -977,6 +977,12 @@ func (staffingOrgStoreStub) DisableNodeCurrent(context.Context, string, string, 
 func (staffingOrgStoreStub) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
 	return nil
 }
+func (staffingOrgStoreStub) ResolveOrgID(context.Context, string, string) (int, error) {
+	return 10000001, nil
+}
+func (staffingOrgStoreStub) ResolveOrgCode(context.Context, string, int) (string, error) {
+	return "A001", nil
+}
 
 func (s staffingOrgStoreStub) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
 	if s.resolveFn != nil {
