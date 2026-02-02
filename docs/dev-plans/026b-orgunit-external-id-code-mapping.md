@@ -350,7 +350,7 @@ Response 200：
 - 文档：`make check doc`
 
 ## 10. 实施步骤 (Steps)
-1. [ ] Schema：新增 `org_unit_codes` 表与 RLS 策略（需用户确认）。
+1. [x] Schema：新增 `org_unit_codes` 表与 RLS 策略（需用户确认）。
 2. [ ] Go/投射：在 `CREATE` 投射时写入 `org_code` 映射，拒绝冲突。
 3. [ ] Resolver：新增 `ResolveOrgID/ResolveOrgCode` 组件，并在边界层统一调用。
 4. [ ] API/UI：对外仅暴露 `org_code`，禁止 `org_id` 透出；输入需归一化且回显大写。

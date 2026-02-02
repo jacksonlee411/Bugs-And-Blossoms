@@ -357,6 +357,14 @@ type OrgunitOrgTree struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
+type OrgunitOrgUnitCode struct {
+	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
+	OrgID      int32              `json:"org_id"`
+	OrgCode    string             `json:"org_code"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type OrgunitOrgUnitVersion struct {
 	ID             int64                     `json:"id"`
 	TenantUuid     pgtype.UUID               `json:"tenant_uuid"`
