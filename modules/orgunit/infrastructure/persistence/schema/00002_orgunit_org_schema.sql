@@ -22,19 +22,16 @@ $$;
 
 CREATE TABLE IF NOT EXISTS orgunit.org_trees (
   tenant_uuid uuid NOT NULL,
-  hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
   root_org_id int NOT NULL CHECK (root_org_id BETWEEN 10000000 AND 99999999),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_uuid, hierarchy_type),
-  CONSTRAINT org_trees_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit'))
+  PRIMARY KEY (tenant_uuid)
 );
 
 CREATE TABLE IF NOT EXISTS orgunit.org_events (
   id bigserial PRIMARY KEY,
   event_uuid uuid NOT NULL,
   tenant_uuid uuid NOT NULL,
-  hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
   org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
   event_type text NOT NULL,
   effective_date date NOT NULL,
@@ -43,19 +40,17 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_events_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit')),
   CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT')),
-  CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_uuid, hierarchy_type, org_id, effective_date)
+  CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_uuid, org_id, effective_date)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_events (event_uuid);
 CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);
-CREATE INDEX IF NOT EXISTS org_events_tenant_type_effective_idx ON orgunit.org_events (tenant_uuid, hierarchy_type, effective_date, id);
+CREATE INDEX IF NOT EXISTS org_events_tenant_effective_idx ON orgunit.org_events (tenant_uuid, effective_date, id);
 
 CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
   id bigserial PRIMARY KEY,
   tenant_uuid uuid NOT NULL,
-  hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
   org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
   parent_id int NULL CHECK (parent_id BETWEEN 10000000 AND 99999999),
   node_path ltree NOT NULL,
@@ -67,14 +62,12 @@ CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
   is_business_unit boolean NOT NULL DEFAULT false,
   manager_uuid uuid NULL,
   last_event_id bigint NOT NULL REFERENCES orgunit.org_events(id),
-  CONSTRAINT org_unit_versions_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit')),
   CONSTRAINT org_unit_versions_status_check CHECK (status IN ('active','disabled')),
   CONSTRAINT org_unit_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT org_unit_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT org_unit_versions_no_overlap
     EXCLUDE USING gist (
       tenant_uuid gist_uuid_ops WITH =,
-      hierarchy_type gist_text_ops WITH =,
       org_id gist_int4_ops WITH =,
       validity WITH &&
     )
@@ -82,15 +75,15 @@ CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
 
 CREATE INDEX IF NOT EXISTS org_unit_versions_search_gist
   ON orgunit.org_unit_versions
-  USING gist (tenant_uuid gist_uuid_ops, hierarchy_type gist_text_ops, node_path, validity);
+  USING gist (tenant_uuid gist_uuid_ops, node_path, validity);
 
 CREATE INDEX IF NOT EXISTS org_unit_versions_active_day_gist
   ON orgunit.org_unit_versions
-  USING gist (tenant_uuid gist_uuid_ops, hierarchy_type gist_text_ops, validity)
+  USING gist (tenant_uuid gist_uuid_ops, validity)
   WHERE status = 'active';
 
 CREATE INDEX IF NOT EXISTS org_unit_versions_lookup_btree
-  ON orgunit.org_unit_versions (tenant_uuid, hierarchy_type, org_id, lower(validity));
+  ON orgunit.org_unit_versions (tenant_uuid, org_id, lower(validity));
 
 CREATE INDEX IF NOT EXISTS org_unit_versions_path_ids_gin
   ON orgunit.org_unit_versions

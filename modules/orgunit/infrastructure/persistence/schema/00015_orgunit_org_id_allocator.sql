@@ -49,7 +49,6 @@ ALTER FUNCTION orgunit.allocate_org_id(uuid) SET search_path = pg_catalog, orgun
 CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
   p_event_uuid uuid,
   p_tenant_uuid uuid,
-  p_hierarchy_type text,
   p_org_id int,
   p_event_type text,
   p_effective_date date,
@@ -82,18 +81,13 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
 
-  IF p_hierarchy_type <> 'OrgUnit' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
-  END IF;
   IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT') THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_INVALID_ARGUMENT',
       DETAIL = format('unsupported event_type: %s', p_event_type);
   END IF;
 
-  v_lock_key := format('org:write-lock:%s:%s', p_tenant_uuid, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s', p_tenant_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
@@ -120,7 +114,6 @@ BEGIN
 
     IF FOUND THEN
       IF v_existing.tenant_uuid <> p_tenant_uuid
-        OR v_existing.hierarchy_type <> p_hierarchy_type
         OR v_existing.event_type <> p_event_type
         OR v_existing.effective_date <> p_effective_date
         OR v_existing.payload <> v_payload
@@ -146,7 +139,6 @@ BEGIN
   INSERT INTO orgunit.org_events (
     event_uuid,
     tenant_uuid,
-    hierarchy_type,
     org_id,
     event_type,
     effective_date,
@@ -157,7 +149,6 @@ BEGIN
   VALUES (
     p_event_uuid,
     p_tenant_uuid,
-    p_hierarchy_type,
     v_org_id,
     p_event_type,
     p_effective_date,
@@ -174,7 +165,6 @@ BEGIN
     WHERE event_uuid = p_event_uuid;
 
     IF v_existing.tenant_uuid <> p_tenant_uuid
-      OR v_existing.hierarchy_type <> p_hierarchy_type
       OR v_existing.org_id <> v_org_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
@@ -190,7 +180,7 @@ BEGIN
     RETURN v_existing.id;
   END IF;
 
-  PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid, p_hierarchy_type);
+  PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
 
   RETURN v_event_db_id;
 END;

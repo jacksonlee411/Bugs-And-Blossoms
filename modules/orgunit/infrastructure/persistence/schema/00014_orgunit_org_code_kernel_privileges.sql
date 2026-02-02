@@ -16,11 +16,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   orgunit.org_unit_codes
 TO orgunit_kernel;
 
-ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, text, int, text, date, jsonb, text, uuid)
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
   OWNER TO orgunit_kernel;
-ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, text, int, text, date, jsonb, text, uuid)
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
   SECURITY DEFINER;
-ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, text, int, text, date, jsonb, text, uuid)
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
   SET search_path = pg_catalog, orgunit, public;
 
 REVOKE ALL ON TABLE orgunit.org_unit_codes FROM PUBLIC;

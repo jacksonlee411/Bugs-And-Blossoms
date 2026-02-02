@@ -1,4 +1,4 @@
-h1:DW2QFZov0iPzM5u1TfkcR6XjywLPzI5eHnJ+NIUXiM8=
+h1:nC6khUGKwM/CBzbRtA/519LyrvuC0a+TNMPDvWt93ZQ=
 20260106080000_orgunit_schema.sql h1:HFHg7VD/+mXhD0M38Bc7Q1oH7REn9g85BtxYfpRrmkU=
 20260106083000_orgunit_engine.sql h1:fbvwyooh8vn2dv//BfuvTJR8X78l5Jv3hzA/Ltk4o7M=
 20260106090000_orgunit_read.sql h1:Bpp/OMYtGbOo4t7+sQe58ieiD6sY06ifXEMlVhgjMeM=
@@ -30,3 +30,4 @@ h1:DW2QFZov0iPzM5u1TfkcR6XjywLPzI5eHnJ+NIUXiM8=
 20260202141000_orgunit_org_id_allocator.sql h1:kEgmBa41bgJFApI+dbATAkDXkR5CojhwCrQ++25b7lc=
 20260202153000_orgunit_drop_org_id_seq.sql h1:OB1nz0tRVmAk+ueR8hOxObWPrgn3s0baaLUz5/AJss0=
 20260202154500_orgunit_org_id_allocator_privileges.sql h1:il+JTDif6xFEXMKqrHWYEnGTC6G8f8dkm4iEq8e2rXE=
+20260202160000_orgunit_remove_hierarchy_type.sql h1:v7JOBmN++y43s+Oa6dDxOh/NqvWFyRIJNrAsH09R/QY=

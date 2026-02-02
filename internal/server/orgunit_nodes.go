@@ -174,11 +174,10 @@ FROM snapshot s
 JOIN orgunit.org_unit_codes c
   ON c.tenant_uuid = $1::uuid
  AND c.org_id = s.org_id
-JOIN orgunit.org_unit_versions v
-  ON v.tenant_uuid = $1::uuid
- AND v.hierarchy_type = 'OrgUnit'
- AND v.org_id = s.org_id
- AND v.status = 'active'
+	JOIN orgunit.org_unit_versions v
+	  ON v.tenant_uuid = $1::uuid
+	 AND v.org_id = s.org_id
+	 AND v.status = 'active'
  AND v.validity @> $2::date
 JOIN orgunit.org_events e
   ON e.id = v.last_event_id
@@ -273,7 +272,6 @@ func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string,
 SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
-  'OrgUnit',
   $3::int,
   'CREATE',
   $4::date,
@@ -336,7 +334,6 @@ func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string,
 SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
-  'OrgUnit',
   $3::int,
   'RENAME',
   $4::date,
@@ -389,7 +386,6 @@ func (s *orgUnitPGStore) MoveNodeCurrent(ctx context.Context, tenantID string, e
 SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
-  'OrgUnit',
   $3::int,
   'MOVE',
   $4::date,
@@ -435,7 +431,6 @@ func (s *orgUnitPGStore) DisableNodeCurrent(ctx context.Context, tenantID string
 SELECT orgunit.submit_org_event(
   $1::uuid,
   $2::uuid,
-  'OrgUnit',
   $3::int,
   'DISABLE',
   $4::date,
@@ -487,11 +482,10 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 	if _, err := tx.Exec(ctx, `
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
-  $2::uuid,
-  'OrgUnit',
-  $3::int,
-  'SET_BUSINESS_UNIT',
-  $4::date,
+	  $2::uuid,
+	  $3::int,
+	  'SET_BUSINESS_UNIT',
+	  $4::date,
   $5::jsonb,
 	  $6::text,
 	  $7::uuid
@@ -504,12 +498,11 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 		if errors.As(err, &pgErr) && pgErr != nil && pgErr.Code == "23505" && pgErr.ConstraintName == "org_events_one_per_day_unique" {
 			var current bool
 			if queryErr := tx.QueryRow(ctx, `
-		SELECT is_business_unit
-		FROM orgunit.org_unit_versions
-		WHERE tenant_uuid = $1::uuid
-		  AND hierarchy_type = 'OrgUnit'
-		  AND org_id = $2::int
-		  AND status = 'active'
+			SELECT is_business_unit
+			FROM orgunit.org_unit_versions
+			WHERE tenant_uuid = $1::uuid
+			  AND org_id = $2::int
+			  AND status = 'active'
 		  AND validity @> $3::date
 		ORDER BY lower(validity) DESC
 		LIMIT 1;
