@@ -1,6 +1,6 @@
 # DEV-PLAN-026：Org（事务性事件溯源 + 同步投射）完整方案（Greenfield）
 
-**状态**: 草拟中（2026-01-04 04:40 UTC；2026-01-06 起进入实施）
+**状态**: 草拟中（2026-02-02 06:57 UTC；对齐 026A/026B 的 org_id 分配）
 
 > 本计划是“干净/完整”的方案设计稿：以 **`org_events` 为 SoT**，以 **同步投射** 在同一事务内维护 **`org_unit_versions` 读模型**，并提供强一致读、可重放重建与并发互斥策略。  
 > **暂不考虑迁移与兼容**：不要求与现有 `modules/org` 的 schema/API/事件契约兼容；也不提供双写/灰度/回滚路径（另开计划承接）。
@@ -15,6 +15,11 @@
    - 证据：#22 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/22 、#28 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/28 、#29 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/29
 6. [X] 禁止 `read=legacy`：不提供任何 legacy 回退通道；回滚仅允许走“环境级保护 + 只读/停写/修复后重试”，并由门禁阻断再次引入（对齐 `DEV-PLAN-004M1`）。
    - 证据（历史 PR）：#27 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/27（后续以 `DEV-PLAN-004M1` 为合同收敛）
+
+## 0.1 实现对齐说明（避免契约漂移）
+- **ID 类型与分配以 `DEV-PLAN-026A/026B` 为准**：当前实现使用 8 位 `int4`，并按租户隔离在 DB 内部分配 `org_id`。
+- 本文中的 UUID 示例属于早期设计稿，不再作为实现事实源；实现时应以 026A/026B 的命名与分配策略为准。
+- **层级维度已收敛为单树**：`hierarchy_type` 已移除；表结构、函数签名与锁粒度统一按 `tenant_id` 维度。
 
 ## 1. 背景与上下文 (Context)
 HR SaaS 的组织架构场景常见约束：
@@ -81,7 +86,7 @@ flowchart TD
    - 写入按“树维度”加 advisory lock：`pg_try_advisory_xact_lock(hashtextextended(lock_key, 0))`（fail-fast）或 `pg_advisory_xact_lock`（阻塞）。
    - 不使用 `hashtext`（32-bit）作为锁键哈希，避免高并发下的哈希碰撞导致“误互斥”。
 6. **同日事件唯一性（选定）**
-   - 明确规则：同一 `tenant_id + hierarchy_type + org_id + effective_date` **只能存在一条事件**（不引入 `EFFSEQ`，不支持同日多次变更）。
+- 明确规则：同一 `tenant_id + org_id + effective_date` **只能存在一条事件**（不引入 `EFFSEQ`，不支持同日多次变更）。
    - 落地方式：在 `org_events` 上施加唯一性约束（见 4.4），把“事件顺序”从隐式约定变成可验证不变量。
 7. **gapless（选定，纳入合同）**
    - `org_unit_versions` 必须无间隙：相邻切片必须满足 `upper(prev.validity)=lower(next.validity)`，最后一段 `upper(validity)='infinity'`；停用用 `status='disabled'` 表达而不是制造空洞。
@@ -182,14 +187,12 @@ $$;
 
 ```sql
 CREATE TABLE org_trees (
-  tenant_id      uuid NOT NULL,
-  hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
-  root_org_id    uuid NOT NULL,
-  created_at     timestamptz NOT NULL DEFAULT now(),
-  updated_at     timestamptz NOT NULL DEFAULT now(),
+  tenant_id   uuid NOT NULL,
+  root_org_id uuid NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now(),
 
-  PRIMARY KEY (tenant_id, hierarchy_type),
-  CONSTRAINT org_trees_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit'))
+  PRIMARY KEY (tenant_id)
 );
 ```
 
@@ -199,7 +202,6 @@ CREATE TABLE org_events (
   id               bigserial PRIMARY KEY,
   event_id         uuid NOT NULL DEFAULT gen_random_uuid(), -- 幂等键（建议由应用传入；默认生成）
   tenant_id        uuid NOT NULL,
-  hierarchy_type   text NOT NULL DEFAULT 'OrgUnit',
 
   org_id           uuid NOT NULL,                 -- 目标节点
   event_type       text NOT NULL,                 -- CREATE/MOVE/RENAME/DISABLE/SET_BUSINESS_UNIT
@@ -211,16 +213,15 @@ CREATE TABLE org_events (
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at       timestamptz NOT NULL DEFAULT now(),
 
-  CONSTRAINT org_events_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit')),
   CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT')),
 
   -- 不变量：同一节点同一生效日只允许一条事件（不引入 effseq）
-  CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_id, hierarchy_type, org_id, effective_date)
+  CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_id, org_id, effective_date)
 );
 
 CREATE UNIQUE INDEX org_events_event_id_unique ON org_events (event_id);
 CREATE INDEX org_events_tenant_org_effective_idx ON org_events (tenant_id, org_id, effective_date, id);
-CREATE INDEX org_events_tenant_type_effective_idx ON org_events (tenant_id, hierarchy_type, effective_date, id);
+CREATE INDEX org_events_tenant_effective_idx ON org_events (tenant_id, effective_date, id);
 ```
 
 > 说明：
@@ -232,7 +233,6 @@ CREATE INDEX org_events_tenant_type_effective_idx ON org_events (tenant_id, hier
 CREATE TABLE org_unit_versions (
   id            bigserial PRIMARY KEY,
   tenant_id     uuid NOT NULL,
-  hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
 
   org_id        uuid NOT NULL,
   parent_id     uuid NULL,
@@ -248,7 +248,6 @@ CREATE TABLE org_unit_versions (
 
   last_event_id bigint NOT NULL REFERENCES org_events(id),
 
-  CONSTRAINT org_unit_versions_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit')),
   CONSTRAINT org_unit_versions_status_check CHECK (status IN ('active','disabled')),
   CONSTRAINT org_unit_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT org_unit_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
@@ -257,7 +256,6 @@ CREATE TABLE org_unit_versions (
   CONSTRAINT org_unit_versions_no_overlap
     EXCLUDE USING gist (
       tenant_id gist_uuid_ops WITH =,
-      hierarchy_type gist_text_ops WITH =,
       org_id gist_uuid_ops WITH =,
       validity WITH &&
     )
@@ -266,20 +264,20 @@ CREATE TABLE org_unit_versions (
 -- 核心联合索引：Path + Time
 CREATE INDEX org_unit_versions_search_gist
   ON org_unit_versions
-  USING gist (tenant_id gist_uuid_ops, hierarchy_type gist_text_ops, node_path, validity);
+  USING gist (tenant_id gist_uuid_ops, node_path, validity);
 
 -- 快照场景（无 node_path 条件）：按 day 过滤 active 行
 CREATE INDEX org_unit_versions_active_day_gist
   ON org_unit_versions
-  USING gist (tenant_id gist_uuid_ops, hierarchy_type gist_text_ops, validity)
+  USING gist (tenant_id gist_uuid_ops, validity)
   WHERE status = 'active';
 
 -- 点查：某节点 as-of（配合 validity @> date）
 CREATE INDEX org_unit_versions_lookup_btree
-  ON org_unit_versions (tenant_id, hierarchy_type, org_id, lower(validity));
+  ON org_unit_versions (tenant_id, org_id, lower(validity));
 
 -- 说明：
--- - `org_unit_versions_no_overlap` 的 EXCLUDE 会生成一份 GiST 索引（tenant_id/hierarchy_type/org_id/validity），可被点查复用；
+-- - `org_unit_versions_no_overlap` 的 EXCLUDE 会生成一份 GiST 索引（tenant_id/org_id/validity），可被点查复用；
 -- - `org_unit_versions_lookup_btree` 是否需要，应以实际查询与 `EXPLAIN (ANALYZE, BUFFERS)` 验证（避免重复索引与写放大）。
 
 -- path_ids 加速（长名称/祖先 join）
@@ -292,9 +290,9 @@ CREATE INDEX org_unit_versions_path_ids_gin
 > 目标：应用层只做鉴权/锁/事务边界；投射逻辑在 DB 内同步完成。
 
 ### 5.1 并发互斥（Advisory Lock）
-**锁粒度（选定）**：同一 `tenant_id + hierarchy_type` 串行化写入，避免并发 Move/Correct 导致死锁与 path 漂移。
+**锁粒度（选定）**：同一 `tenant_id` 串行化写入，避免并发 Move/Correct 导致死锁与 path 漂移。
 
-锁 key（文本）：`org:write-lock:<tenant_id>:<hierarchy_type>`
+锁 key（文本）：`org:write-lock:<tenant_id>`
 
 在事务内调用（阻塞版）：
 ```sql
@@ -313,7 +311,6 @@ SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0));
 CREATE OR REPLACE FUNCTION submit_org_event(
   p_event_id uuid,
   p_tenant_id uuid,
-  p_hierarchy_type text,
   p_org_id uuid,
   p_event_type text,
   p_effective_date date,
@@ -328,7 +325,6 @@ CREATE OR REPLACE FUNCTION submit_org_event(
 CREATE OR REPLACE FUNCTION submit_org_event(
   p_event_id uuid,
   p_tenant_id uuid,
-  p_hierarchy_type text,
   p_org_id uuid,
   p_event_type text,
   p_effective_date date,
@@ -346,11 +342,6 @@ DECLARE
 BEGIN
   PERFORM assert_current_tenant(p_tenant_id);
 
-  IF p_hierarchy_type <> 'OrgUnit' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
-  END IF;
 
   IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT') THEN
     RAISE EXCEPTION USING
@@ -358,7 +349,7 @@ BEGIN
       DETAIL = format('unsupported event_type: %s', p_event_type);
   END IF;
 
-  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s', p_tenant_id);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
@@ -366,7 +357,6 @@ BEGIN
   INSERT INTO org_events (
     event_id,
     tenant_id,
-    hierarchy_type,
     org_id,
     event_type,
     effective_date,
@@ -376,7 +366,6 @@ BEGIN
   ) VALUES (
     p_event_id,
     p_tenant_id,
-    p_hierarchy_type,
     p_org_id,
     p_event_type,
     p_effective_date,
@@ -395,7 +384,6 @@ BEGIN
 
     -- 防止“同一幂等键复用但参数不同”被静默吞掉
     IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.hierarchy_type <> p_hierarchy_type
       OR v_existing.org_id <> p_org_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
@@ -414,7 +402,7 @@ BEGIN
   -- - 若同一 org_id + effective_date 已存在另一事件（不同 event_id），INSERT 将因约束失败而直接报错并回滚（无投射副作用）。
 
   -- 全量重放：删除并重建 versions（同一事务内完成，写后读强一致）
-  PERFORM replay_org_unit_versions(p_tenant_id, p_hierarchy_type);
+  PERFORM replay_org_unit_versions(p_tenant_id);
 
   RETURN v_event_db_id;
 END;
@@ -432,8 +420,7 @@ $$;
 实现（可直接执行的 plpgsql；复用 `apply_*_logic` 作为每条事件的投射步骤）：
 ```sql
 CREATE OR REPLACE FUNCTION replay_org_unit_versions(
-  p_tenant_id uuid,
-  p_hierarchy_type text
+  p_tenant_id uuid
 ) RETURNS void
 LANGUAGE plpgsql
 AS $$
@@ -450,26 +437,21 @@ DECLARE
 BEGIN
   PERFORM assert_current_tenant(p_tenant_id);
 
-  IF p_hierarchy_type <> 'OrgUnit' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
-  END IF;
 
-  v_lock_key := format('org:write-lock:%s:%s', p_tenant_id, p_hierarchy_type);
+  v_lock_key := format('org:write-lock:%s', p_tenant_id);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM org_unit_versions
-  WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type;
+  WHERE tenant_id = p_tenant_id;
 
   -- org_trees 作为 root 锚点/不变量载体：在全量重放中同样由事件重建
   DELETE FROM org_trees
-  WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type;
+  WHERE tenant_id = p_tenant_id;
 
   FOR v_event IN
     SELECT *
     FROM org_events
-    WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type
+    WHERE tenant_id = p_tenant_id
     ORDER BY effective_date, id
   LOOP
     v_payload := COALESCE(v_event.payload, '{}'::jsonb);
@@ -479,18 +461,18 @@ BEGIN
       v_name := NULLIF(btrim(v_payload->>'name'), '');
       v_is_business_unit := COALESCE(NULLIF(v_payload->>'is_business_unit', '')::boolean, false);
       v_manager_id := NULLIF(v_payload->>'manager_id', '')::uuid;
-      PERFORM apply_create_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_parent_id, v_event.effective_date, v_name, v_is_business_unit, v_manager_id, v_event.id);
+      PERFORM apply_create_logic(p_tenant_id, v_event.org_id, v_parent_id, v_event.effective_date, v_name, v_is_business_unit, v_manager_id, v_event.id);
     ELSIF v_event.event_type = 'MOVE' THEN
       v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::uuid;
-      PERFORM apply_move_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_new_parent_id, v_event.effective_date, v_event.id);
+      PERFORM apply_move_logic(p_tenant_id, v_event.org_id, v_new_parent_id, v_event.effective_date, v_event.id);
     ELSIF v_event.event_type = 'RENAME' THEN
       v_new_name := NULLIF(btrim(v_payload->>'new_name'), '');
-      PERFORM apply_rename_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_new_name, v_event.id);
+      PERFORM apply_rename_logic(p_tenant_id, v_event.org_id, v_event.effective_date, v_new_name, v_event.id);
     ELSIF v_event.event_type = 'SET_BUSINESS_UNIT' THEN
       v_is_business_unit := NULLIF(v_payload->>'is_business_unit', '')::boolean;
-      PERFORM apply_set_business_unit_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_is_business_unit, v_event.id);
+      PERFORM apply_set_business_unit_logic(p_tenant_id, v_event.org_id, v_event.effective_date, v_is_business_unit, v_event.id);
     ELSIF v_event.event_type = 'DISABLE' THEN
-      PERFORM apply_disable_logic(p_tenant_id, p_hierarchy_type, v_event.org_id, v_event.effective_date, v_event.id);
+      PERFORM apply_disable_logic(p_tenant_id, v_event.org_id, v_event.effective_date, v_event.id);
     ELSE
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_INVALID_ARGUMENT',
@@ -506,7 +488,7 @@ BEGIN
         validity,
         lag(validity) OVER (PARTITION BY org_id ORDER BY lower(validity)) AS prev_validity
       FROM org_unit_versions
-      WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type
+      WHERE tenant_id = p_tenant_id
     )
     SELECT 1
     FROM ordered
@@ -524,7 +506,7 @@ BEGIN
     FROM (
       SELECT DISTINCT ON (org_id) org_id, validity
       FROM org_unit_versions
-      WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type
+      WHERE tenant_id = p_tenant_id
       ORDER BY org_id, lower(validity) DESC
     ) last
     WHERE NOT upper_inf(last.validity)
@@ -552,7 +534,7 @@ payload（v1）：
 关键约束：
 - `parent_id` 非空时：parent 在 `p_effective_date` 必须 active（版本存在且 `status='active'`）。
 - 同一 `org_id` 只允许 create 一次（greenfield 简化约束）。
-- 根节点（`parent_id=null`）在一个 tenant/hierarchy 内只能存在一个（通过 `org_trees` 固化）。
+- 根节点（`parent_id=null`）在一个 tenant 内只能存在一个（通过 `org_trees` 固化）。
 - 根节点必须为业务单元（`is_business_unit=true`）。
 
 投射策略：
@@ -565,7 +547,6 @@ SQL 实现（v1）：
 ```sql
 CREATE OR REPLACE FUNCTION apply_create_logic(
   p_tenant_id uuid,
-  p_hierarchy_type text,
   p_org_id uuid,
   p_parent_id uuid,
   p_effective_date date,
@@ -581,11 +562,6 @@ DECLARE
   v_node_path ltree;
   v_root_org_id uuid;
 BEGIN
-  IF p_hierarchy_type <> 'OrgUnit' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
-  END IF;
   IF p_name IS NULL THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_INVALID_ARGUMENT',
@@ -596,7 +572,7 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM org_unit_versions
-    WHERE tenant_id = p_tenant_id AND hierarchy_type = p_hierarchy_type AND org_id = p_org_id
+    WHERE tenant_id = p_tenant_id AND org_id = p_org_id
   ) THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_ALREADY_EXISTS',
@@ -613,7 +589,7 @@ BEGIN
 
     SELECT t.root_org_id INTO v_root_org_id
     FROM org_trees t
-    WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type
+    WHERE t.tenant_id = p_tenant_id
     FOR UPDATE;
 
     IF v_root_org_id IS NOT NULL THEN
@@ -622,15 +598,15 @@ BEGIN
         DETAIL = format('root already exists: %s', v_root_org_id);
     END IF;
 
-    INSERT INTO org_trees (tenant_id, hierarchy_type, root_org_id)
-    VALUES (p_tenant_id, p_hierarchy_type, p_org_id);
+    INSERT INTO org_trees (tenant_id, root_org_id)
+    VALUES (p_tenant_id, p_org_id);
 
     v_node_path := org_ltree_label(p_org_id)::ltree;
   ELSE
     -- 子节点要求 root 已初始化（保证树锚点存在）
     SELECT t.root_org_id INTO v_root_org_id
     FROM org_trees t
-    WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type;
+    WHERE t.tenant_id = p_tenant_id;
 
     IF v_root_org_id IS NULL THEN
       RAISE EXCEPTION USING
@@ -641,7 +617,6 @@ BEGIN
     SELECT v.node_path INTO v_parent_path
     FROM org_unit_versions v
     WHERE v.tenant_id = p_tenant_id
-      AND v.hierarchy_type = p_hierarchy_type
       AND v.org_id = p_parent_id
       AND v.status = 'active'
       AND v.validity @> p_effective_date
@@ -658,7 +633,6 @@ BEGIN
 
   INSERT INTO org_unit_versions (
     tenant_id,
-    hierarchy_type,
     org_id,
     parent_id,
     node_path,
@@ -670,7 +644,6 @@ BEGIN
     last_event_id
   ) VALUES (
     p_tenant_id,
-    p_hierarchy_type,
     p_org_id,
     p_parent_id,
     v_node_path,
@@ -718,7 +691,6 @@ SQL 实现（v1）：
 ```sql
 CREATE OR REPLACE FUNCTION apply_move_logic(
   p_tenant_id uuid,
-  p_hierarchy_type text,
   p_org_id uuid,
   p_new_parent_id uuid,
   p_effective_date date,
@@ -733,11 +705,6 @@ DECLARE
   v_old_level int;
   v_root_org_id uuid;
 BEGIN
-  IF p_hierarchy_type <> 'OrgUnit' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
-  END IF;
   IF p_new_parent_id IS NULL THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_INVALID_ARGUMENT',
@@ -752,7 +719,7 @@ BEGIN
   -- root 不允许被移动（root 固化在 org_trees）
   SELECT t.root_org_id INTO v_root_org_id
   FROM org_trees t
-  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type;
+  WHERE t.tenant_id = p_tenant_id;
   IF v_root_org_id = p_org_id THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_ROOT_CANNOT_BE_MOVED',
@@ -763,7 +730,6 @@ BEGIN
   SELECT v.node_path INTO v_old_path
   FROM org_unit_versions v
   WHERE v.tenant_id = p_tenant_id
-    AND v.hierarchy_type = p_hierarchy_type
     AND v.org_id = p_org_id
     AND v.status = 'active'
     AND v.validity @> p_effective_date
@@ -779,7 +745,6 @@ BEGIN
   SELECT v.node_path INTO v_new_parent_path
   FROM org_unit_versions v
   WHERE v.tenant_id = p_tenant_id
-    AND v.hierarchy_type = p_hierarchy_type
     AND v.org_id = p_new_parent_id
     AND v.status = 'active'
     AND v.validity @> p_effective_date
@@ -806,7 +771,6 @@ BEGIN
     SELECT *
     FROM org_unit_versions
     WHERE tenant_id = p_tenant_id
-      AND hierarchy_type = p_hierarchy_type
       AND node_path <@ v_old_path
       AND validity @> p_effective_date
       AND lower(validity) < p_effective_date
@@ -820,7 +784,6 @@ BEGIN
   )
   INSERT INTO org_unit_versions (
     tenant_id,
-    hierarchy_type,
     org_id,
     parent_id,
     node_path,
@@ -833,7 +796,6 @@ BEGIN
   )
   SELECT
     u.tenant_id,
-    u.hierarchy_type,
     u.org_id,
     CASE WHEN u.org_id = p_org_id THEN p_new_parent_id ELSE u.parent_id END,
     CASE
@@ -857,7 +819,6 @@ BEGIN
       parent_id = CASE WHEN v.org_id = p_org_id THEN p_new_parent_id ELSE v.parent_id END,
       last_event_id = p_event_db_id
   WHERE v.tenant_id = p_tenant_id
-    AND v.hierarchy_type = p_hierarchy_type
     AND v.node_path <@ v_old_path
     AND lower(v.validity) >= p_effective_date;
 END;
@@ -888,7 +849,6 @@ SQL 实现（v1）：
 -- 单节点 split helper：把覆盖 p_effective_date 的版本切成 [start, effective) 与 [effective, end)
 CREATE OR REPLACE FUNCTION split_org_unit_version_at(
   p_tenant_id uuid,
-  p_hierarchy_type text,
   p_org_id uuid,
   p_effective_date date,
   p_event_db_id bigint
@@ -901,7 +861,6 @@ BEGIN
   SELECT * INTO v_row
   FROM org_unit_versions
   WHERE tenant_id = p_tenant_id
-    AND hierarchy_type = p_hierarchy_type
     AND org_id = p_org_id
     AND validity @> p_effective_date
     AND lower(validity) < p_effective_date
@@ -917,7 +876,6 @@ BEGIN
 
   INSERT INTO org_unit_versions (
     tenant_id,
-    hierarchy_type,
     org_id,
     parent_id,
     node_path,
@@ -929,7 +887,6 @@ BEGIN
     last_event_id
   ) VALUES (
     v_row.tenant_id,
-    v_row.hierarchy_type,
     v_row.org_id,
     v_row.parent_id,
     v_row.node_path,
@@ -945,7 +902,6 @@ $$;
 
 CREATE OR REPLACE FUNCTION apply_rename_logic(
   p_tenant_id uuid,
-  p_hierarchy_type text,
   p_org_id uuid,
   p_effective_date date,
   p_new_name text,
@@ -956,11 +912,6 @@ AS $$
 DECLARE
   v_stop_date date;
 BEGIN
-  IF p_hierarchy_type <> 'OrgUnit' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
-  END IF;
   IF p_new_name IS NULL THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_INVALID_ARGUMENT',
@@ -972,7 +923,6 @@ BEGIN
     SELECT 1
     FROM org_unit_versions
     WHERE tenant_id = p_tenant_id
-      AND hierarchy_type = p_hierarchy_type
       AND org_id = p_org_id
       AND status = 'active'
       AND validity @> p_effective_date
@@ -982,12 +932,11 @@ BEGIN
       DETAIL = format('org not found at date (org_id=%s, as_of=%s)', p_org_id, p_effective_date);
   END IF;
 
-  PERFORM split_org_unit_version_at(p_tenant_id, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
+  PERFORM split_org_unit_version_at(p_tenant_id, p_org_id, p_effective_date, p_event_db_id);
 
   SELECT MIN(e.effective_date) INTO v_stop_date
   FROM org_events e
   WHERE e.tenant_id = p_tenant_id
-    AND e.hierarchy_type = p_hierarchy_type
     AND e.org_id = p_org_id
     AND e.event_type = 'RENAME'
     AND e.effective_date > p_effective_date;
@@ -996,7 +945,6 @@ BEGIN
   SET name = p_new_name,
       last_event_id = p_event_db_id
   WHERE v.tenant_id = p_tenant_id
-    AND v.hierarchy_type = p_hierarchy_type
     AND v.org_id = p_org_id
     AND lower(v.validity) >= p_effective_date
     AND (v_stop_date IS NULL OR lower(v.validity) < v_stop_date);
@@ -1019,7 +967,6 @@ SQL 实现（v1）：
 ```sql
 CREATE OR REPLACE FUNCTION apply_set_business_unit_logic(
   p_tenant_id uuid,
-  p_hierarchy_type text,
   p_org_id uuid,
   p_effective_date date,
   p_is_business_unit boolean,
@@ -1031,11 +978,6 @@ DECLARE
   v_stop_date date;
   v_root_org_id uuid;
 BEGIN
-  IF p_hierarchy_type <> 'OrgUnit' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
-  END IF;
   IF p_is_business_unit IS NULL THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_INVALID_ARGUMENT',
@@ -1044,7 +986,7 @@ BEGIN
 
   SELECT t.root_org_id INTO v_root_org_id
   FROM org_trees t
-  WHERE t.tenant_id = p_tenant_id AND t.hierarchy_type = p_hierarchy_type;
+  WHERE t.tenant_id = p_tenant_id;
   IF v_root_org_id = p_org_id AND p_is_business_unit IS NOT TRUE THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_ROOT_MUST_BE_BUSINESS_UNIT',
@@ -1055,7 +997,6 @@ BEGIN
     SELECT 1
     FROM org_unit_versions
     WHERE tenant_id = p_tenant_id
-      AND hierarchy_type = p_hierarchy_type
       AND org_id = p_org_id
       AND status = 'active'
       AND validity @> p_effective_date
@@ -1065,12 +1006,11 @@ BEGIN
       DETAIL = format('org not found at date (org_id=%s, as_of=%s)', p_org_id, p_effective_date);
   END IF;
 
-  PERFORM split_org_unit_version_at(p_tenant_id, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
+  PERFORM split_org_unit_version_at(p_tenant_id, p_org_id, p_effective_date, p_event_db_id);
 
   SELECT MIN(e.effective_date) INTO v_stop_date
   FROM org_events e
   WHERE e.tenant_id = p_tenant_id
-    AND e.hierarchy_type = p_hierarchy_type
     AND e.org_id = p_org_id
     AND e.event_type = 'SET_BUSINESS_UNIT'
     AND e.effective_date > p_effective_date;
@@ -1079,7 +1019,6 @@ BEGIN
   SET is_business_unit = p_is_business_unit,
       last_event_id = p_event_db_id
   WHERE v.tenant_id = p_tenant_id
-    AND v.hierarchy_type = p_hierarchy_type
     AND v.org_id = p_org_id
     AND lower(v.validity) >= p_effective_date
     AND (v_stop_date IS NULL OR lower(v.validity) < v_stop_date);
@@ -1098,7 +1037,6 @@ SQL 实现（v1）：
 ```sql
 CREATE OR REPLACE FUNCTION apply_disable_logic(
   p_tenant_id uuid,
-  p_hierarchy_type text,
   p_org_id uuid,
   p_effective_date date,
   p_event_db_id bigint
@@ -1106,17 +1044,11 @@ CREATE OR REPLACE FUNCTION apply_disable_logic(
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF p_hierarchy_type <> 'OrgUnit' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = format('unsupported hierarchy_type: %s', p_hierarchy_type);
-  END IF;
 
   IF NOT EXISTS (
     SELECT 1
     FROM org_unit_versions
     WHERE tenant_id = p_tenant_id
-      AND hierarchy_type = p_hierarchy_type
       AND org_id = p_org_id
       AND status = 'active'
       AND validity @> p_effective_date
@@ -1126,13 +1058,12 @@ BEGIN
       DETAIL = format('org not found at date (org_id=%s, as_of=%s)', p_org_id, p_effective_date);
   END IF;
 
-  PERFORM split_org_unit_version_at(p_tenant_id, p_hierarchy_type, p_org_id, p_effective_date, p_event_db_id);
+  PERFORM split_org_unit_version_at(p_tenant_id, p_org_id, p_effective_date, p_event_db_id);
 
   UPDATE org_unit_versions v
   SET status = 'disabled',
       last_event_id = p_event_db_id
   WHERE v.tenant_id = p_tenant_id
-    AND v.hierarchy_type = p_hierarchy_type
     AND v.org_id = p_org_id
     AND lower(v.validity) >= p_effective_date;
 END;
@@ -1172,7 +1103,6 @@ AS $$
     SELECT v.*
     FROM org_unit_versions v
     WHERE v.tenant_id = p_tenant_id
-      AND v.hierarchy_type = 'OrgUnit'
       AND v.status = 'active'
       AND v.validity @> p_query_date
   )
@@ -1184,7 +1114,6 @@ AS $$
       FROM unnest(s.path_ids) WITH ORDINALITY AS t(uid, idx)
       JOIN org_unit_versions a
         ON a.tenant_id = p_tenant_id
-       AND a.hierarchy_type = 'OrgUnit'
        AND a.org_id = t.uid
        AND a.validity @> p_query_date
     ) AS full_name_path,
@@ -1208,13 +1137,12 @@ WHERE full_name_path LIKE '总公司 / 产研中心%';
 WITH target AS (
   SELECT node_path
   FROM org_unit_versions
-  WHERE tenant_id=$1 AND hierarchy_type='OrgUnit' AND org_id=$2 AND validity @> $3::date
+  WHERE tenant_id=$1 AND org_id=$2 AND validity @> $3::date
   LIMIT 1
 )
 SELECT *
 FROM org_unit_versions v
 WHERE v.tenant_id=$1
-  AND v.hierarchy_type='OrgUnit'
   AND v.validity @> $3::date
   AND v.node_path <@ (SELECT node_path FROM target);
 ```
@@ -1303,7 +1231,7 @@ func (s *OrgService) MoveOrg(ctx context.Context, tenantID uuid.UUID, cmd MoveCm
 - 正确性（必须）：
   - [ ] Create→Move→Rename→Disable 的组合在任意 as-of 日期下可得到唯一且无重叠的版本窗（EXCLUDE 约束验证）。
   - [ ] Move 触发子树 path 重写后，祖先/子树查询与长名称拼接一致且不缺段。
-  - [ ] 并发写：同一 tenant/hierarchy 下同时发起两次写入，第二个在 fail-fast 模式下稳定返回“busy”错误码。
+  - [ ] 并发写：同一 tenant 下同时发起两次写入，第二个在 fail-fast 模式下稳定返回“busy”错误码。
   - [ ] 同一 `org_id` 在同一 `effective_date` 第二次提交（不同 `event_id`）稳定失败，并映射为 `ORG_EVENT_CONFLICT_SAME_DAY`。
   - [ ] root 必须为业务单元；`SET_BUSINESS_UNIT` 在 as-of 维度下正确生效，且 root 不允许被设为非业务单元。
 	  - [ ] RLS（对齐 `DEV-PLAN-021`）：缺失 `app.current_tenant` 时对 Greenfield 表的读写必须 fail-closed（不得以“空结果”掩盖注入遗漏）。
