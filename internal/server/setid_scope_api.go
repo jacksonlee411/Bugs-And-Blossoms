@@ -389,7 +389,7 @@ func canEditOwnedScopePackages(ctx context.Context) bool {
 }
 
 func parseScopePackageID(path string) string {
-	const prefix = "/orgunit/api/scope-packages/"
+	const prefix = "/org/api/scope-packages/"
 	const suffix = "/disable"
 	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
 		return ""

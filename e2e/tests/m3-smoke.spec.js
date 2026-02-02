@@ -132,7 +132,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const createdOrgCode = (await page.locator("ul li", { hasText: orgName }).first().locator("code").innerText()).trim();
   expect(createdOrgCode).not.toBe("");
   if (!parentCode) {
-    const bindResp = await appContext.request.post("/orgunit/api/setid-bindings", {
+    const bindResp = await appContext.request.post("/org/api/setid-bindings", {
       data: {
         org_code: createdOrgCode,
         setid: "DEFLT",

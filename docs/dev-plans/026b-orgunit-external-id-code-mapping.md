@@ -357,7 +357,7 @@ Response 200：
 5. [x] 写入口唯一性：落地 DB 权限/触发器/代码层禁写措施。（完成：2026-02-02，已通过 `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate`）
 6. [x] org_id 分配器：新增 `org_id_allocators` 表 + 分配函数；`submit_org_event` 内部分配。（完成：2026-02-02，已通过 `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate`）
 7. [x] 移除应用层对 `org_id_seq` 的直接依赖并物理删除序列。（完成：2026-02-02，已通过 `go fmt ./...` / `go vet ./...` / `make check lint` / `make test` / `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate` / `make check doc`）
-8. [ ] 移除旧写入口：删除 `/orgunit/api/*` 相关路由、handler、authz 映射与 allowlist。
+8. [x] 移除旧写入口：删除 `/orgunit/api/*` 相关路由、handler、authz 映射与 allowlist。（完成：2026-02-02，已通过 `go fmt ./...` / `go vet ./...` / `make check lint` / `make test` / `make check routing` / `make authz-pack` / `make authz-test` / `make authz-lint` / `make e2e` / `make check doc`）
 9. [ ] hierarchy_type 彻底移除：更新 026/026A 中的 schema、函数签名、索引与锁粒度（单树模型）。
 10. [ ] 迁移与校验：回填、归一化、唯一性校验与冲突清单。
 11. [ ] 测试：覆盖解析器、唯一性、归一化、并发分配、号段耗尽与边界错误路径。

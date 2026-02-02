@@ -65,7 +65,7 @@ func TestGateC_JSONOnlyErrorsForAPIAndWebhook(t *testing.T) {
 	tests := []struct {
 		path string
 	}{
-		{path: "/orgunit/api/unknown"},
+		{path: "/org/api/unknown"},
 		{path: "/api/v1/unknown"},
 		{path: "/webhooks/foo/unknown"},
 	}

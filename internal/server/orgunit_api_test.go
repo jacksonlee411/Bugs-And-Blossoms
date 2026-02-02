@@ -12,7 +12,7 @@ import (
 )
 
 func TestHandleOrgUnitsBusinessUnitAPI_TenantMissing(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", nil)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", nil)
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, newOrgUnitMemoryStore())
 	if rec.Code != http.StatusInternalServerError {
@@ -21,7 +21,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_TenantMissing(t *testing.T) {
 }
 
 func TestHandleOrgUnitsBusinessUnitAPI_MethodNotAllowed(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/orgunit/api/org-units/set-business-unit", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/set-business-unit", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, newOrgUnitMemoryStore())
@@ -31,7 +31,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleOrgUnitsBusinessUnitAPI_BadJSON(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", strings.NewReader("{"))
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", strings.NewReader("{"))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, newOrgUnitMemoryStore())
@@ -42,7 +42,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_BadJSON(t *testing.T) {
 
 func TestHandleOrgUnitsBusinessUnitAPI_InvalidRequest(t *testing.T) {
 	body := bytes.NewBufferString(`{"org_code":"","effective_date":"","request_code":""}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, newOrgUnitMemoryStore())
@@ -53,7 +53,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_InvalidRequest(t *testing.T) {
 
 func TestHandleOrgUnitsBusinessUnitAPI_BothOrgIDAndCode(t *testing.T) {
 	body := bytes.NewBufferString(`{"org_unit_id":"10000001","org_code":"A1","effective_date":"2026-01-01","request_code":"r1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, newOrgUnitMemoryStore())
@@ -64,7 +64,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_BothOrgIDAndCode(t *testing.T) {
 
 func TestHandleOrgUnitsBusinessUnitAPI_InvalidEffectiveDate(t *testing.T) {
 	body := bytes.NewBufferString(`{"org_code":"A1","effective_date":"bad","is_business_unit":true,"request_code":"r1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, &resolveOrgCodeStore{resolveID: 10000001})
@@ -75,7 +75,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_InvalidEffectiveDate(t *testing.T) {
 
 func TestHandleOrgUnitsBusinessUnitAPI_OrgUnitIDProvided(t *testing.T) {
 	body := bytes.NewBufferString(`{"org_unit_id":"123","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, newOrgUnitMemoryStore())
@@ -86,7 +86,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_OrgUnitIDProvided(t *testing.T) {
 
 func TestHandleOrgUnitsBusinessUnitAPI_StoreError(t *testing.T) {
 	body := bytes.NewBufferString(`{"org_code":"A1","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, errOrgUnitStore{err: errBoom{}})
@@ -134,7 +134,7 @@ func (s *resolveOrgCodeStore) ResolveOrgCode(context.Context, string, int) (stri
 func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeInvalid(t *testing.T) {
 	store := &resolveOrgCodeStore{}
 	body := bytes.NewBufferString(`{"org_code":" bad ","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, store)
@@ -146,7 +146,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeInvalid(t *testing.T) {
 func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeNotFound(t *testing.T) {
 	store := &resolveOrgCodeStore{resolveErr: orgunitpkg.ErrOrgCodeNotFound}
 	body := bytes.NewBufferString(`{"org_code":"A1","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, store)
@@ -158,7 +158,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeNotFound(t *testing.T) {
 func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeResolveInvalid(t *testing.T) {
 	store := &resolveOrgCodeStore{resolveErr: orgunitpkg.ErrOrgCodeInvalid}
 	body := bytes.NewBufferString(`{"org_code":"A1","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, store)
@@ -170,7 +170,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeResolveInvalid(t *testing.T) {
 func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeResolveError(t *testing.T) {
 	store := &resolveOrgCodeStore{resolveErr: errBoom{}}
 	body := bytes.NewBufferString(`{"org_code":"A1","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, store)
@@ -182,7 +182,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeResolveError(t *testing.T) {
 func TestHandleOrgUnitsBusinessUnitAPI_SetBusinessUnitError(t *testing.T) {
 	store := &resolveOrgCodeStore{resolveID: 10000001, setErr: errBoom{}}
 	body := bytes.NewBufferString(`{"org_code":"A1","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, store)
@@ -194,7 +194,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_SetBusinessUnitError(t *testing.T) {
 func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeSuccess(t *testing.T) {
 	store := &resolveOrgCodeStore{resolveID: 10000001}
 	body := bytes.NewBufferString(`{"org_code":"A1","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, store)
@@ -214,7 +214,7 @@ func TestHandleOrgUnitsBusinessUnitAPI_Success(t *testing.T) {
 	}
 
 	body := bytes.NewBufferString(`{"org_code":"` + created.OrgCode + `","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/org-units/set-business-unit", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsBusinessUnitAPI(rec, req, store)
