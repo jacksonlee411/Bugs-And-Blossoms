@@ -319,6 +319,7 @@ Response 200：
 - 回填必须先做归一化与唯一性校验；冲突数据阻断迁移并输出清单。
 - 若无可用外部 ID，可暂以格式化 `org_id` 作为占位，但需标记来源（避免误当真实外部 ID）。
 - 初始化 `org_id_allocators.next_org_id`：按租户取 `max(org_id)+1`，空表则使用 `10000000`。
+- 提供 `dbtool orgunit-code-validate`：读取 `org_id,org_code` CSV，执行归一化/唯一性/存在性校验；冲突输出清单，无冲突可输出归一化映射供事件导入。
 
 ### 7.3 迁移校验
 - 租户内 `org_code` 唯一性校验。
@@ -359,7 +360,7 @@ Response 200：
 7. [x] 移除应用层对 `org_id_seq` 的直接依赖并物理删除序列。（完成：2026-02-02，已通过 `go fmt ./...` / `go vet ./...` / `make check lint` / `make test` / `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate` / `make check doc`）
 8. [x] 移除旧写入口：删除 `/orgunit/api/*` 相关路由、handler、authz 映射与 allowlist。（完成：2026-02-02，已通过 `go fmt ./...` / `go vet ./...` / `make check lint` / `make test` / `make check routing` / `make authz-pack` / `make authz-test` / `make authz-lint` / `make e2e` / `make check doc`）
 9. [x] hierarchy_type 彻底移除：更新 026/026A 中的 schema、函数签名、索引与锁粒度（单树模型）。（完成：2026-02-02，已通过 `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make staffing plan` / `make staffing lint` / `make staffing migrate up` / `make sqlc-generate` / `go fmt ./...` / `go vet ./...` / `make check lint` / `make test`）
-10. [ ] 迁移与校验：回填、归一化、唯一性校验与冲突清单。
+10. [x] 迁移与校验：回填、归一化、唯一性校验与冲突清单。（完成：2026-02-02，已通过 `go fmt ./...` / `go vet ./...` / `make check lint` / `make test` / `make check doc`）
 11. [ ] 测试：覆盖解析器、唯一性、归一化、并发分配、号段耗尽与边界错误路径。
 12. [ ] 文档对齐：同步更新 `DEV-PLAN-026A/026` 中的 org_id 分配说明，避免契约漂移。
 13. [ ] 物理清理：全仓库禁止出现 `org_id_seq` 引用（SQL/Go/测试/脚手架）。
