@@ -182,7 +182,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         request_code: `tp060-02-bu-${label}-${runID}`
       }
     });
-    expect(resp.status(), await resp.text()).toBe(201);
+    expect(resp.status(), await resp.text()).toBe(200);
   };
 
   await ensureBusinessUnit(orgCodesFromTree.Root, "root");
