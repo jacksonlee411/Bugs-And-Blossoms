@@ -1164,7 +1164,7 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 				return
 			}
 		case "bind_setid":
-			orgCode := strings.TrimSpace(r.Form.Get("org_code"))
+			orgCode := r.Form.Get("org_code")
 			sid := strings.TrimSpace(r.Form.Get("setid"))
 			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
 			if effectiveDate == "" {
