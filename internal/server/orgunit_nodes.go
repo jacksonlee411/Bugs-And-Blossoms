@@ -19,6 +19,7 @@ import (
 
 type OrgUnitNode struct {
 	ID             string
+	OrgCode        string
 	Name           string
 	IsBusinessUnit bool
 	CreatedAt      time.Time
@@ -39,7 +40,7 @@ type OrgUnitNodesCurrentReader interface {
 }
 
 type OrgUnitNodesCurrentWriter interface {
-	CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string, isBusinessUnit bool) (OrgUnitNode, error)
+	CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgCode string, name string, parentID string, isBusinessUnit bool) (OrgUnitNode, error)
 }
 
 type OrgUnitNodesCurrentRenamer interface {
@@ -165,10 +166,14 @@ WITH snapshot AS (
 )
 SELECT
   s.org_id::text,
+  c.org_code,
   s.name,
   s.is_business_unit,
   e.transaction_time
 FROM snapshot s
+JOIN orgunit.org_unit_codes c
+  ON c.tenant_uuid = $1::uuid
+ AND c.org_id = s.org_id
 JOIN orgunit.org_unit_versions v
   ON v.tenant_uuid = $1::uuid
  AND v.hierarchy_type = 'OrgUnit'
@@ -187,7 +192,7 @@ ORDER BY e.transaction_time DESC
 	var out []OrgUnitNode
 	for rows.Next() {
 		var n OrgUnitNode
-		if err := rows.Scan(&n.ID, &n.Name, &n.IsBusinessUnit, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.OrgCode, &n.Name, &n.IsBusinessUnit, &n.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, n)
@@ -226,7 +231,7 @@ func (s *orgUnitPGStore) ResolveSetID(ctx context.Context, tenantID string, orgU
 	}
 	return out, nil
 }
-func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, name string, parentID string, isBusinessUnit bool) (OrgUnitNode, error) {
+func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgCode string, name string, parentID string, isBusinessUnit bool) (OrgUnitNode, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return OrgUnitNode{}, err
@@ -239,6 +244,11 @@ func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string,
 
 	if strings.TrimSpace(effectiveDate) == "" {
 		return OrgUnitNode{}, errors.New("effective_date is required")
+	}
+
+	normalizedCode, err := orgunitpkg.NormalizeOrgCode(orgCode)
+	if err != nil {
+		return OrgUnitNode{}, err
 	}
 
 	if _, ok, err := parseOptionalOrgID8(parentID); err != nil {
@@ -257,7 +267,7 @@ func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string,
 		return OrgUnitNode{}, err
 	}
 
-	payload := `{"name":` + strconv.Quote(name)
+	payload := `{"org_code":` + strconv.Quote(normalizedCode) + `,"name":` + strconv.Quote(name)
 	if strings.TrimSpace(parentID) != "" {
 		payload += `,"parent_id":` + strconv.Quote(parentID)
 	}
@@ -294,7 +304,7 @@ WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
 		return OrgUnitNode{}, err
 	}
 
-	return OrgUnitNode{ID: strconv.Itoa(orgID), Name: name, IsBusinessUnit: isBusinessUnit, CreatedAt: createdAt}, nil
+	return OrgUnitNode{ID: strconv.Itoa(orgID), OrgCode: normalizedCode, Name: name, IsBusinessUnit: isBusinessUnit, CreatedAt: createdAt}, nil
 }
 
 func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, newName string) error {
@@ -538,11 +548,16 @@ func (s *orgUnitMemoryStore) listNodes(tenantID string) ([]OrgUnitNode, error) {
 	return append([]OrgUnitNode(nil), s.nodes[tenantID]...), nil
 }
 
-func (s *orgUnitMemoryStore) createNode(tenantID string, name string, isBusinessUnit bool) (OrgUnitNode, error) {
+func (s *orgUnitMemoryStore) createNode(tenantID string, orgCode string, name string, isBusinessUnit bool) (OrgUnitNode, error) {
+	normalizedCode, err := orgunitpkg.NormalizeOrgCode(orgCode)
+	if err != nil {
+		return OrgUnitNode{}, err
+	}
 	id := s.nextID
 	s.nextID++
 	n := OrgUnitNode{
 		ID:             strconv.Itoa(id),
+		OrgCode:        normalizedCode,
 		Name:           name,
 		IsBusinessUnit: isBusinessUnit,
 		CreatedAt:      s.now(),
@@ -562,8 +577,8 @@ func (s *orgUnitMemoryStore) ResolveSetID(_ context.Context, _ string, orgUnitID
 	return "S2601", nil
 }
 
-func (s *orgUnitMemoryStore) CreateNodeCurrent(_ context.Context, tenantID string, _ string, name string, _ string, isBusinessUnit bool) (OrgUnitNode, error) {
-	return s.createNode(tenantID, name, isBusinessUnit)
+func (s *orgUnitMemoryStore) CreateNodeCurrent(_ context.Context, tenantID string, _ string, orgCode string, name string, _ string, isBusinessUnit bool) (OrgUnitNode, error) {
+	return s.createNode(tenantID, orgCode, name, isBusinessUnit)
 }
 
 func (s *orgUnitMemoryStore) RenameNodeCurrent(_ context.Context, tenantID string, _ string, orgID string, newName string) error {
@@ -630,11 +645,25 @@ func (s *orgUnitMemoryStore) SetBusinessUnitCurrent(_ context.Context, tenantID 
 	return errors.New("org_id not found")
 }
 
-func (s *orgUnitMemoryStore) ResolveOrgID(_ context.Context, _ string, _ string) (int, error) {
+func (s *orgUnitMemoryStore) ResolveOrgID(_ context.Context, tenantID string, orgCode string) (int, error) {
+	normalizedCode, err := orgunitpkg.NormalizeOrgCode(orgCode)
+	if err != nil {
+		return 0, err
+	}
+	for _, node := range s.nodes[tenantID] {
+		if node.OrgCode == normalizedCode {
+			return strconv.Atoi(node.ID)
+		}
+	}
 	return 0, orgunitpkg.ErrOrgCodeNotFound
 }
 
-func (s *orgUnitMemoryStore) ResolveOrgCode(_ context.Context, _ string, _ int) (string, error) {
+func (s *orgUnitMemoryStore) ResolveOrgCode(_ context.Context, tenantID string, orgID int) (string, error) {
+	for _, node := range s.nodes[tenantID] {
+		if node.ID == strconv.Itoa(orgID) {
+			return node.OrgCode, nil
+		}
+	}
 	return "", orgunitpkg.ErrOrgIDNotFound
 }
 
@@ -698,6 +727,33 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			}
 		}
 
+		resolveOrgID := func(code string, field string, required bool) (string, bool) {
+			if code == "" {
+				if !required {
+					return "", true
+				}
+				nodes, errMsg := listNodes(field + " is required")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+				return "", false
+			}
+			orgID, err := store.ResolveOrgID(r.Context(), tenant.ID, code)
+			if err != nil {
+				msg := field + " invalid"
+				switch {
+				case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+					msg = field + " invalid"
+				case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+					msg = field + " not found"
+				default:
+					msg = err.Error()
+				}
+				nodes, errMsg := listNodes(msg)
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+				return "", false
+			}
+			return strconv.Itoa(orgID), true
+		}
+
 		if action == "rename" || action == "move" || action == "disable" || action == "set_business_unit" {
 			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
 			if effectiveDate == "" {
@@ -709,10 +765,8 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 				return
 			}
 
-			orgID := strings.TrimSpace(r.Form.Get("org_id"))
-			if orgID == "" {
-				nodes, errMsg := listNodes("org_id is required")
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+			orgID, ok := resolveOrgID(r.Form.Get("org_code"), "org_code", true)
+			if !ok {
 				return
 			}
 
@@ -731,8 +785,10 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 					return
 				}
 			case "move":
-				newParentID := strings.TrimSpace(r.Form.Get("new_parent_id"))
-
+				newParentID, ok := resolveOrgID(r.Form.Get("new_parent_code"), "new_parent_code", false)
+				if !ok {
+					return
+				}
 				if err := store.MoveNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newParentID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
@@ -764,6 +820,13 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			return
 		}
 
+		orgCode := r.Form.Get("org_code")
+		if orgCode == "" {
+			nodes, errMsg := listNodes("org_code is required")
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+			return
+		}
+
 		name := strings.TrimSpace(r.Form.Get("name"))
 		if name == "" {
 			nodes, errMsg := listNodes("name is required")
@@ -775,7 +838,14 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 		if effectiveDate == "" {
 			effectiveDate = asOf
 		}
-		parentID := strings.TrimSpace(r.Form.Get("parent_id"))
+		parentID := ""
+		if r.Form.Get("parent_code") != "" {
+			resolvedID, ok := resolveOrgID(r.Form.Get("parent_code"), "parent_code", false)
+			if !ok {
+				return
+			}
+			parentID = resolvedID
+		}
 		if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
 			nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
 			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
@@ -789,7 +859,12 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			return
 		}
 
-		if _, err := store.CreateNodeCurrent(r.Context(), tenant.ID, effectiveDate, name, parentID, isBusinessUnit); err != nil {
+		if _, err := store.CreateNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgCode, name, parentID, isBusinessUnit); err != nil {
+			if errors.Is(err, orgunitpkg.ErrOrgCodeInvalid) {
+				nodes, errMsg := listNodes("org_code invalid")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+				return
+			}
 			nodes, errMsg := listNodes(err.Error())
 			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
 			return
@@ -819,7 +894,8 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
 	postAction := "/org/nodes?as_of=" + html.EscapeString(asOf)
 	b.WriteString(`<form method="POST" action="` + postAction + `">`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-	b.WriteString(`<label>Parent ID (optional) <input name="parent_id" /></label><br/>`)
+	b.WriteString(`<label>Org Code <input name="org_code" /></label><br/>`)
+	b.WriteString(`<label>Parent Code (optional) <input name="parent_code" /></label><br/>`)
 	b.WriteString(`<label>Name <input name="name" /></label> `)
 	b.WriteString(`<label>Is Business Unit <input type="checkbox" name="is_business_unit" value="true" /></label>`)
 	b.WriteString(`<button type="submit">Create</button>`)
@@ -834,13 +910,17 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
 	b.WriteString("<ul>")
 	for _, n := range nodes {
 		b.WriteString("<li>")
-		b.WriteString(html.EscapeString(n.Name) + " <code>" + html.EscapeString(n.ID) + "</code>")
+		codeLabel := n.OrgCode
+		if strings.TrimSpace(codeLabel) == "" {
+			codeLabel = "(missing org_code)"
+		}
+		b.WriteString(html.EscapeString(n.Name) + " <code>" + html.EscapeString(codeLabel) + "</code>")
 		if n.IsBusinessUnit {
 			b.WriteString(` <span>(BU)</span>`)
 		}
 		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
 		b.WriteString(`<input type="hidden" name="action" value="rename" />`)
-		b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
+		b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(n.OrgCode) + `" />`)
 		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
 		b.WriteString(`<label>New Name <input name="new_name" value="` + html.EscapeString(n.Name) + `" /></label> `)
 		b.WriteString(`<button type="submit">Rename</button>`)
@@ -848,22 +928,22 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
 
 		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
 		b.WriteString(`<input type="hidden" name="action" value="move" />`)
-		b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
+		b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(n.OrgCode) + `" />`)
 		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
-		b.WriteString(`<label>New Parent ID (optional) <input name="new_parent_id" /></label> `)
+		b.WriteString(`<label>New Parent Code (optional) <input name="new_parent_code" /></label> `)
 		b.WriteString(`<button type="submit">Move</button>`)
 		b.WriteString(`</form>`)
 
 		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
 		b.WriteString(`<input type="hidden" name="action" value="disable" />`)
-		b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
+		b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(n.OrgCode) + `" />`)
 		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
 		b.WriteString(`<button type="submit">Disable</button>`)
 		b.WriteString(`</form>`)
 
 		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
 		b.WriteString(`<input type="hidden" name="action" value="set_business_unit" />`)
-		b.WriteString(`<input type="hidden" name="org_id" value="` + html.EscapeString(n.ID) + `" />`)
+		b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(n.OrgCode) + `" />`)
 		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
 		checked := ""
 		if n.IsBusinessUnit {

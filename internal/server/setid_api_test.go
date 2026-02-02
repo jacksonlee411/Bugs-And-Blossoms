@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 func TestHandleSetIDsAPI_TenantMissing(t *testing.T) {
@@ -103,7 +105,7 @@ func TestHandleSetIDsAPI_Success(t *testing.T) {
 func TestHandleSetIDBindingsAPI_BadInputs(t *testing.T) {
 	badTenant := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", nil)
 	badTenantRec := httptest.NewRecorder()
-	handleSetIDBindingsAPI(badTenantRec, badTenant, newSetIDMemoryStore())
+	handleSetIDBindingsAPI(badTenantRec, badTenant, newSetIDMemoryStore(), newOrgUnitMemoryStore())
 	if badTenantRec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", badTenantRec.Code)
 	}
@@ -111,7 +113,7 @@ func TestHandleSetIDBindingsAPI_BadInputs(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/orgunit/api/setid-bindings", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleSetIDBindingsAPI(rec, req, newSetIDMemoryStore())
+	handleSetIDBindingsAPI(rec, req, newSetIDMemoryStore(), newOrgUnitMemoryStore())
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -119,34 +121,89 @@ func TestHandleSetIDBindingsAPI_BadInputs(t *testing.T) {
 	badJSON := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", strings.NewReader("{"))
 	badJSON = badJSON.WithContext(withTenant(badJSON.Context(), Tenant{ID: "t1", Name: "T"}))
 	badJSONRec := httptest.NewRecorder()
-	handleSetIDBindingsAPI(badJSONRec, badJSON, newSetIDMemoryStore())
+	handleSetIDBindingsAPI(badJSONRec, badJSON, newSetIDMemoryStore(), newOrgUnitMemoryStore())
 	if badJSONRec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", badJSONRec.Code)
 	}
 
-	missing := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", bytes.NewBufferString(`{"org_unit_id":""}`))
+	missing := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", bytes.NewBufferString(`{"org_code":""}`))
 	missing = missing.WithContext(withTenant(missing.Context(), Tenant{ID: "t1", Name: "T"}))
 	missingRec := httptest.NewRecorder()
-	handleSetIDBindingsAPI(missingRec, missing, newSetIDMemoryStore())
+	handleSetIDBindingsAPI(missingRec, missing, newSetIDMemoryStore(), newOrgUnitMemoryStore())
 	if missingRec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", missingRec.Code)
 	}
 
-	badDate := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", bytes.NewBufferString(`{"org_unit_id":"10000001","setid":"A0001","effective_date":"bad","request_code":"r1"}`))
+	badDate := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", bytes.NewBufferString(`{"org_code":"A001","setid":"A0001","effective_date":"bad","request_code":"r1"}`))
 	badDate = badDate.WithContext(withTenant(badDate.Context(), Tenant{ID: "t1", Name: "T"}))
 	badDateRec := httptest.NewRecorder()
-	handleSetIDBindingsAPI(badDateRec, badDate, newSetIDMemoryStore())
+	handleSetIDBindingsAPI(badDateRec, badDate, newSetIDMemoryStore(), newOrgUnitMemoryStore())
 	if badDateRec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", badDateRec.Code)
 	}
 }
 
-func TestHandleSetIDBindingsAPI_StoreError(t *testing.T) {
-	body := bytes.NewBufferString(`{"org_unit_id":"10000001","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
+func TestHandleSetIDBindingsAPI_OrgCodeInvalid(t *testing.T) {
+	body := bytes.NewBufferString(`{"org_code":" bad ","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleSetIDBindingsAPI(rec, req, errSetIDStore{err: errBoom{}})
+	handleSetIDBindingsAPI(rec, req, newSetIDMemoryStore(), newOrgUnitMemoryStore())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "org_code_invalid") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetIDBindingsAPI_OrgCodeNotFound(t *testing.T) {
+	body := bytes.NewBufferString(`{"org_code":"A001","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetIDBindingsAPI(rec, req, newSetIDMemoryStore(), newOrgUnitMemoryStore())
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "org_code_not_found") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetIDBindingsAPI_OrgCodeResolveInvalid(t *testing.T) {
+	body := bytes.NewBufferString(`{"org_code":"A001","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetIDBindingsAPI(rec, req, newSetIDMemoryStore(), errOrgUnitStore{err: orgunitpkg.ErrOrgCodeInvalid})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "org_code_invalid") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetIDBindingsAPI_OrgCodeResolveError(t *testing.T) {
+	body := bytes.NewBufferString(`{"org_code":"A001","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetIDBindingsAPI(rec, req, newSetIDMemoryStore(), errOrgUnitStore{err: errBoom{}})
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleSetIDBindingsAPI_StoreError(t *testing.T) {
+	orgStore := newOrgUnitMemoryStore()
+	_, _ = orgStore.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "A001", "Org", "", true)
+	body := bytes.NewBufferString(`{"org_code":"A001","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetIDBindingsAPI(rec, req, errSetIDStore{err: errBoom{}}, orgStore)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -161,11 +218,13 @@ func TestHandleSetIDBindingsAPI_Success(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 
-	body := bytes.NewBufferString(`{"org_unit_id":"10000001","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
+	orgStore := newOrgUnitMemoryStore()
+	_, _ = orgStore.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "A001", "Org", "", true)
+	body := bytes.NewBufferString(`{"org_code":"A001","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/orgunit/api/setid-bindings", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
-	handleSetIDBindingsAPI(rec, req, store)
+	handleSetIDBindingsAPI(rec, req, store, orgStore)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status=%d", rec.Code)
 	}

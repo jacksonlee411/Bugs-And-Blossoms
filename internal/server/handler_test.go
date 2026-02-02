@@ -443,7 +443,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("org snapshot post status=%d", recOrgSnapshotPost.Code)
 	}
 
-	reqCreate := httptest.NewRequest(http.MethodPost, "/org/nodes", strings.NewReader("name=NodeA"))
+	reqCreate := httptest.NewRequest(http.MethodPost, "/org/nodes", strings.NewReader("org_code=ORG-1&name=NodeA"))
 	reqCreate.Host = "localhost:8080"
 	reqCreate.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqCreate.AddCookie(session)
@@ -575,7 +575,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("person options status=%d", recPersonOptions.Code)
 	}
 
-	reqPosCreate := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_unit_id":"10000001","job_profile_id":"jp1","name":"A"}`))
+	reqPosCreate := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_code":"ORG-1","job_profile_id":"jp1","name":"A"}`))
 	reqPosCreate.Host = "localhost:8080"
 	reqPosCreate.Header.Set("Content-Type", "application/json")
 	reqPosCreate.AddCookie(session)
@@ -585,12 +585,12 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("positions api post status=%d", recPosCreate.Code)
 	}
 	var posResp struct {
-		ID string `json:"ID"`
+		PositionID string `json:"position_id"`
 	}
 	if err := json.NewDecoder(recPosCreate.Body).Decode(&posResp); err != nil {
 		t.Fatal(err)
 	}
-	if posResp.ID == "" {
+	if posResp.PositionID == "" {
 		t.Fatal("missing position id")
 	}
 
@@ -603,7 +603,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("positions api get status=%d", recPosList.Code)
 	}
 
-	reqAssignCreate := httptest.NewRequest(http.MethodPost, "/org/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"`+pResp.PersonUUID+`","position_id":"`+posResp.ID+`"}`))
+	reqAssignCreate := httptest.NewRequest(http.MethodPost, "/org/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"`+pResp.PersonUUID+`","position_id":"`+posResp.PositionID+`"}`))
 	reqAssignCreate.Host = "localhost:8080"
 	reqAssignCreate.Header.Set("Content-Type", "application/json")
 	reqAssignCreate.AddCookie(session)
@@ -622,7 +622,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("assignments api get status=%d", recAssignList.Code)
 	}
 
-	reqPosUIPost := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_unit_id=10000001&job_profile_id=jp1&name=A"))
+	reqPosUIPost := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_code=ORG-1&job_profile_id=jp1&name=A"))
 	reqPosUIPost.Host = "localhost:8080"
 	reqPosUIPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqPosUIPost.AddCookie(session)
@@ -641,7 +641,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("positions ui get status=%d", recPosUIGet.Code)
 	}
 
-	reqAssignUIPost := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&pernr=1&position_id="+posResp.ID))
+	reqAssignUIPost := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&pernr=1&position_id="+posResp.PositionID))
 	reqAssignUIPost.Host = "localhost:8080"
 	reqAssignUIPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqAssignUIPost.AddCookie(session)
@@ -678,7 +678,7 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 
 	orgStore := newOrgUnitMemoryStore()
 	tenantID := "00000000-0000-0000-0000-000000000001"
-	node, err := orgStore.CreateNodeCurrent(context.Background(), tenantID, "2026-01-01", "Org1", "", false)
+	node, err := orgStore.CreateNodeCurrent(context.Background(), tenantID, "2026-01-01", "ORG1", "Org1", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -745,7 +745,7 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("setid status=%d", recSet.Code)
 	}
 
-	recBind := postJSON("/orgunit/api/setid-bindings", `{"org_unit_id":"`+node.ID+`","setid":"A0001","effective_date":"2026-01-01","request_code":"r2"}`, nil)
+	recBind := postJSON("/orgunit/api/setid-bindings", `{"org_code":"`+node.OrgCode+`","setid":"A0001","effective_date":"2026-01-01","request_code":"r2"}`, nil)
 	if recBind.Code != http.StatusCreated {
 		t.Fatalf("binding status=%d", recBind.Code)
 	}
@@ -759,8 +759,8 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("global setid list status=%d", recGlobalList.Code)
 	}
 
-	recBU := postJSON("/orgunit/api/org-units/set-business-unit", `{"org_unit_id":"`+node.ID+`","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r4"}`, nil)
-	if recBU.Code != http.StatusCreated {
+	recBU := postJSON("/orgunit/api/org-units/set-business-unit", `{"org_code":"`+node.OrgCode+`","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r4"}`, nil)
+	if recBU.Code != http.StatusOK {
 		t.Fatalf("set business unit status=%d", recBU.Code)
 	}
 }

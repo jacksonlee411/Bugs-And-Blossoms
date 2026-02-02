@@ -131,8 +131,8 @@
 | SetID | `S2601` | 示例 SetID |
 | SetID | `S2602` | 跨 SetID 负例 |
 | 根组织绑定 | `DEFLT` | 根节点绑定租户默认 SetID |
-| 业务单元节点 | `R&D` | `is_business_unit=true` 且绑定 `S2601`（记录 `org_unit_id` 供职位归属） |
-| 业务单元节点 | `Sales` | `is_business_unit=true` 且绑定 `S2602`（记录 `org_unit_id` 供职位归属） |
+| 业务单元节点 | `R&D` | `is_business_unit=true` 且绑定 `S2601`（记录 `org_code` 供职位归属） |
+| 业务单元节点 | `Sales` | `is_business_unit=true` 且绑定 `S2602`（记录 `org_code` 供职位归属） |
 | SHARE | `SHARE` | 仅白名单入口可读 |
 
 ### 5.4 职位分类（JobCatalog，按 `setid=S2601` + `as_of=2026-01-01`）
@@ -166,7 +166,7 @@
 | P-MGR-01 | HQ | 管理岗（用于任职变更样例） |
 
 备注：
-- Position 创建必须选择 Job Profile；可选列表由 `org_unit_id` 解析得到的 setid 决定，不需要手工选择 setid。
+- Position 创建必须选择 Job Profile；可选列表由 `org_code` 解析得到的 setid 决定，不需要手工选择 setid。
 
 ### 5.6 员工数据（10 人，均需存在 Person + Assignment）
 

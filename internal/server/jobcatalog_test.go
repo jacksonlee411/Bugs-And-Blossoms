@@ -155,7 +155,7 @@ func (s orgStoreStub) ListNodesCurrent(context.Context, string, string) ([]OrgUn
 	}
 	return append([]OrgUnitNode(nil), s.nodes...), nil
 }
-func (s orgStoreStub) CreateNodeCurrent(context.Context, string, string, string, string, bool) (OrgUnitNode, error) {
+func (s orgStoreStub) CreateNodeCurrent(context.Context, string, string, string, string, string, bool) (OrgUnitNode, error) {
 	return OrgUnitNode{}, s.err
 }
 func (s orgStoreStub) RenameNodeCurrent(context.Context, string, string, string, string) error {
