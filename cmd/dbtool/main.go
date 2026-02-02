@@ -1905,109 +1905,8 @@ WHERE tenant_uuid = $1::uuid
 		fatal(orgRows.Err())
 	}
 
-	conflictKey := make(map[string]struct{})
-	addConflict := func(conflict orgunitCodeConflict) {
-		key := fmt.Sprintf("%d:%s", conflict.line, conflict.reason)
-		if _, ok := conflictKey[key]; ok {
-			return
-		}
-		conflicts = append(conflicts, conflict)
-		conflictKey[key] = struct{}{}
-	}
-
-	codeSeen := make(map[string]orgunitCodeRow)
-	orgSeen := make(map[int]orgunitCodeRow)
-	for _, row := range rows {
-		if row.normalized == "" || row.orgID == 0 {
-			continue
-		}
-		if prev, ok := codeSeen[row.normalized]; ok {
-			addConflict(orgunitCodeConflict{
-				line:       row.line,
-				orgID:      row.orgID,
-				rawCode:    row.rawCode,
-				normalized: row.normalized,
-				reason:     "org_code_duplicate_input",
-				detail:     fmt.Sprintf("first_line=%d", prev.line),
-			})
-			addConflict(orgunitCodeConflict{
-				line:       prev.line,
-				orgID:      prev.orgID,
-				rawCode:    prev.rawCode,
-				normalized: prev.normalized,
-				reason:     "org_code_duplicate_input",
-				detail:     fmt.Sprintf("duplicate_line=%d", row.line),
-			})
-		} else {
-			codeSeen[row.normalized] = row
-		}
-		if prev, ok := orgSeen[row.orgID]; ok {
-			addConflict(orgunitCodeConflict{
-				line:       row.line,
-				orgID:      row.orgID,
-				rawCode:    row.rawCode,
-				normalized: row.normalized,
-				reason:     "org_id_duplicate_input",
-				detail:     fmt.Sprintf("first_line=%d", prev.line),
-			})
-			addConflict(orgunitCodeConflict{
-				line:       prev.line,
-				orgID:      prev.orgID,
-				rawCode:    prev.rawCode,
-				normalized: prev.normalized,
-				reason:     "org_id_duplicate_input",
-				detail:     fmt.Sprintf("duplicate_line=%d", row.line),
-			})
-		} else {
-			orgSeen[row.orgID] = row
-		}
-	}
-
-	validRows := make([]orgunitCodeRow, 0, len(rows))
-	for i, row := range rows {
-		if row.normalized == "" || row.orgID == 0 {
-			continue
-		}
-		if _, ok := existingOrgSet[row.orgID]; !ok {
-			addConflict(orgunitCodeConflict{
-				line:       row.line,
-				orgID:      row.orgID,
-				rawCode:    row.rawCode,
-				normalized: row.normalized,
-				reason:     "org_id_missing_db",
-				detail:     "org_id not found in org_unit_versions",
-			})
-			continue
-		}
-		if existingOrgCode, ok := existingOrgIDs[row.orgID]; ok && existingOrgCode != row.normalized {
-			addConflict(orgunitCodeConflict{
-				line:       row.line,
-				orgID:      row.orgID,
-				rawCode:    row.rawCode,
-				normalized: row.normalized,
-				reason:     "org_id_conflict_db",
-				detail:     fmt.Sprintf("existing_org_code=%s", existingOrgCode),
-			})
-		}
-		if existingOrgID, ok := existingCodes[row.normalized]; ok && existingOrgID != row.orgID {
-			addConflict(orgunitCodeConflict{
-				line:       row.line,
-				orgID:      row.orgID,
-				rawCode:    row.rawCode,
-				normalized: row.normalized,
-				reason:     "org_code_conflict_db",
-				detail:     fmt.Sprintf("existing_org_id=%d", existingOrgID),
-			})
-		}
-		if existingOrgCode, ok := existingOrgIDs[row.orgID]; ok && existingOrgCode == row.normalized {
-			row.alreadyMapped = true
-		}
-		if existingOrgID, ok := existingCodes[row.normalized]; ok && existingOrgID == row.orgID {
-			row.alreadyMapped = true
-		}
-		rows[i] = row
-		validRows = append(validRows, row)
-	}
+	validRows, rowConflicts := validateOrgunitCodeRows(rows, existingOrgSet, existingCodes, existingOrgIDs)
+	conflicts = append(conflicts, rowConflicts...)
 
 	var conflictOut io.Writer = os.Stdout
 	var conflictFile *os.File
@@ -2129,6 +2028,118 @@ func readOrgunitCodeCSV(path string) ([]orgunitCodeRow, []orgunitCodeConflict) {
 		})
 	}
 	return rows, conflicts
+}
+
+func validateOrgunitCodeRows(
+	rows []orgunitCodeRow,
+	existingOrgSet map[int]struct{},
+	existingCodes map[string]int,
+	existingOrgIDs map[int]string,
+) ([]orgunitCodeRow, []orgunitCodeConflict) {
+	conflictKey := make(map[string]struct{})
+	conflicts := make([]orgunitCodeConflict, 0)
+	addConflict := func(conflict orgunitCodeConflict) {
+		key := fmt.Sprintf("%d:%s", conflict.line, conflict.reason)
+		if _, ok := conflictKey[key]; ok {
+			return
+		}
+		conflicts = append(conflicts, conflict)
+		conflictKey[key] = struct{}{}
+	}
+
+	codeSeen := make(map[string]orgunitCodeRow)
+	orgSeen := make(map[int]orgunitCodeRow)
+	for _, row := range rows {
+		if row.normalized == "" || row.orgID == 0 {
+			continue
+		}
+		if prev, ok := codeSeen[row.normalized]; ok {
+			addConflict(orgunitCodeConflict{
+				line:       row.line,
+				orgID:      row.orgID,
+				rawCode:    row.rawCode,
+				normalized: row.normalized,
+				reason:     "org_code_duplicate_input",
+				detail:     fmt.Sprintf("first_line=%d", prev.line),
+			})
+			addConflict(orgunitCodeConflict{
+				line:       prev.line,
+				orgID:      prev.orgID,
+				rawCode:    prev.rawCode,
+				normalized: prev.normalized,
+				reason:     "org_code_duplicate_input",
+				detail:     fmt.Sprintf("duplicate_line=%d", row.line),
+			})
+		} else {
+			codeSeen[row.normalized] = row
+		}
+		if prev, ok := orgSeen[row.orgID]; ok {
+			addConflict(orgunitCodeConflict{
+				line:       row.line,
+				orgID:      row.orgID,
+				rawCode:    row.rawCode,
+				normalized: row.normalized,
+				reason:     "org_id_duplicate_input",
+				detail:     fmt.Sprintf("first_line=%d", prev.line),
+			})
+			addConflict(orgunitCodeConflict{
+				line:       prev.line,
+				orgID:      prev.orgID,
+				rawCode:    prev.rawCode,
+				normalized: prev.normalized,
+				reason:     "org_id_duplicate_input",
+				detail:     fmt.Sprintf("duplicate_line=%d", row.line),
+			})
+		} else {
+			orgSeen[row.orgID] = row
+		}
+	}
+
+	validRows := make([]orgunitCodeRow, 0, len(rows))
+	for _, row := range rows {
+		if row.normalized == "" || row.orgID == 0 {
+			continue
+		}
+		if _, ok := existingOrgSet[row.orgID]; !ok {
+			addConflict(orgunitCodeConflict{
+				line:       row.line,
+				orgID:      row.orgID,
+				rawCode:    row.rawCode,
+				normalized: row.normalized,
+				reason:     "org_id_missing_db",
+				detail:     "org_id not found in org_unit_versions",
+			})
+			continue
+		}
+		if existingOrgCode, ok := existingOrgIDs[row.orgID]; ok && existingOrgCode != row.normalized {
+			addConflict(orgunitCodeConflict{
+				line:       row.line,
+				orgID:      row.orgID,
+				rawCode:    row.rawCode,
+				normalized: row.normalized,
+				reason:     "org_id_conflict_db",
+				detail:     fmt.Sprintf("existing_org_code=%s", existingOrgCode),
+			})
+		}
+		if existingOrgID, ok := existingCodes[row.normalized]; ok && existingOrgID != row.orgID {
+			addConflict(orgunitCodeConflict{
+				line:       row.line,
+				orgID:      row.orgID,
+				rawCode:    row.rawCode,
+				normalized: row.normalized,
+				reason:     "org_code_conflict_db",
+				detail:     fmt.Sprintf("existing_org_id=%d", existingOrgID),
+			})
+		}
+		if existingOrgCode, ok := existingOrgIDs[row.orgID]; ok && existingOrgCode == row.normalized {
+			row.alreadyMapped = true
+		}
+		if existingOrgID, ok := existingCodes[row.normalized]; ok && existingOrgID == row.orgID {
+			row.alreadyMapped = true
+		}
+		validRows = append(validRows, row)
+	}
+	return validRows, conflicts
 }
 
 func isOrgunitCodeHeader(record []string) bool {
