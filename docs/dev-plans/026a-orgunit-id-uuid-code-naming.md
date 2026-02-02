@@ -1,6 +1,6 @@
 # DEV-PLAN-026A：OrgUnit 8位编号与 UUID/Code 命名规范
 
-**状态**: 已完成（2026-02-01 00:00 UTC）
+**状态**: 已完成（2026-02-02 06:57 UTC — 对齐 026B 租户隔离 org_id 分配）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：DEV-PLAN-026（OrgUnit 事件溯源 + 同步投射）。
@@ -63,7 +63,7 @@ graph TD
 - 预计算字段：`full_name_path`（`text`）
 
 约束：所有 8 位标识字段使用 `CHECK (x BETWEEN 10000000 AND 99999999)`。
-> 生成策略：`org_id` 使用 DB sequence 分配（见 4.4.1），确保 8 位范围。
+> 生成策略：`org_id` 按租户隔离分配（见 4.4.1，细节对齐 `DEV-PLAN-026B`），确保 8 位范围。
 
 ### 4.3 旧字段 → 新字段对照表
 | 位置 | 旧字段 | 新字段 | 类型 | 说明 |
@@ -83,27 +83,57 @@ graph TD
 | org_unit_versions | last_event_id | last_event_id | bigint | 关联 `org_events.id`（保留） |
 
 ### 4.4 DDL / 索引改写清单
-#### 4.4.1 org_id 分配序列
+#### 4.4.1 org_id 分配器（租户隔离）
 ```sql
-CREATE SEQUENCE orgunit.org_id_seq
-  START WITH 10000000
-  INCREMENT BY 1
-  MINVALUE 10000000
-  MAXVALUE 99999999
-  NO CYCLE;
+CREATE TABLE orgunit.org_id_allocators (
+  tenant_uuid uuid NOT NULL,
+  next_org_id int NOT NULL CHECK (next_org_id BETWEEN 10000000 AND 100000000),
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_uuid)
+);
+
+CREATE OR REPLACE FUNCTION orgunit.allocate_org_id(p_tenant_uuid uuid)
+RETURNS int
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_next int;
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
+
+  UPDATE orgunit.org_id_allocators
+  SET next_org_id = next_org_id + 1,
+      updated_at = now()
+  WHERE tenant_uuid = p_tenant_uuid
+  RETURNING next_org_id - 1 INTO v_next;
+
+  IF v_next IS NULL THEN
+    INSERT INTO orgunit.org_id_allocators (tenant_uuid, next_org_id)
+    VALUES (p_tenant_uuid, 10000001)
+    RETURNING 10000000 INTO v_next;
+  END IF;
+
+  IF v_next > 99999999 THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_ID_EXHAUSTED',
+      DETAIL = format('tenant=%s', p_tenant_uuid);
+  END IF;
+
+  RETURN v_next;
+END;
+$$;
 ```
-> 说明：序列耗尽视为容量上限，需另行计划扩展策略。
+> 说明：`next_org_id` 为“下一个可分配值”；达到上限时报错并阻断写入。  
+> 补充：本计划已移除 `hierarchy_type`，单租户单树模型；表结构与函数签名均按 `tenant_uuid` 维度收敛。
 
 #### org_trees
 ```sql
 CREATE TABLE orgunit.org_trees (
-  tenant_uuid   uuid NOT NULL,
-  hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
-  root_org_id   int NOT NULL CHECK (root_org_id BETWEEN 10000000 AND 99999999),
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_uuid, hierarchy_type),
-  CONSTRAINT org_trees_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit'))
+  tenant_uuid  uuid NOT NULL,
+  root_org_id  int NOT NULL CHECK (root_org_id BETWEEN 10000000 AND 99999999),
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_uuid)
 );
 ```
 
@@ -113,7 +143,6 @@ CREATE TABLE orgunit.org_events (
   id               bigserial PRIMARY KEY,
   event_uuid       uuid NOT NULL,
   tenant_uuid      uuid NOT NULL,
-  hierarchy_type   text NOT NULL DEFAULT 'OrgUnit',
   org_id           int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
   event_type       text NOT NULL,
   effective_date   date NOT NULL,
@@ -122,14 +151,13 @@ CREATE TABLE orgunit.org_events (
   initiator_uuid   uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at       timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_events_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit')),
   CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT')),
-  CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_uuid, hierarchy_type, org_id, effective_date)
+  CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_uuid, org_id, effective_date)
 );
 
 CREATE UNIQUE INDEX org_events_event_uuid_unique ON orgunit.org_events (event_uuid);
 CREATE INDEX org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);
-CREATE INDEX org_events_tenant_type_effective_idx ON orgunit.org_events (tenant_uuid, hierarchy_type, effective_date, id);
+CREATE INDEX org_events_tenant_effective_idx ON orgunit.org_events (tenant_uuid, effective_date, id);
 ```
 > 说明：`event_uuid` 必须由应用层生成 UUID v7 并传入，不提供 v4 默认值。
 
@@ -138,7 +166,6 @@ CREATE INDEX org_events_tenant_type_effective_idx ON orgunit.org_events (tenant_
 CREATE TABLE orgunit.org_unit_versions (
   id             bigserial PRIMARY KEY,
   tenant_uuid    uuid NOT NULL,
-  hierarchy_type text NOT NULL DEFAULT 'OrgUnit',
   org_id         int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
   parent_id      int NULL CHECK (parent_id BETWEEN 10000000 AND 99999999),
   node_path      ltree NOT NULL,
@@ -150,14 +177,12 @@ CREATE TABLE orgunit.org_unit_versions (
   is_business_unit boolean NOT NULL DEFAULT false,
   manager_uuid   uuid NULL,
   last_event_id  bigint NOT NULL REFERENCES orgunit.org_events(id),
-  CONSTRAINT org_unit_versions_hierarchy_type_check CHECK (hierarchy_type IN ('OrgUnit')),
   CONSTRAINT org_unit_versions_status_check CHECK (status IN ('active','disabled')),
   CONSTRAINT org_unit_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT org_unit_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
   CONSTRAINT org_unit_versions_no_overlap
     EXCLUDE USING gist (
       tenant_uuid gist_uuid_ops WITH =,
-      hierarchy_type gist_text_ops WITH =,
       org_id gist_int4_ops WITH =,
       validity WITH &&
     )
@@ -165,15 +190,15 @@ CREATE TABLE orgunit.org_unit_versions (
 
 CREATE INDEX org_unit_versions_search_gist
   ON orgunit.org_unit_versions
-  USING gist (tenant_uuid gist_uuid_ops, hierarchy_type gist_text_ops, node_path, validity);
+  USING gist (tenant_uuid gist_uuid_ops, node_path, validity);
 
 CREATE INDEX org_unit_versions_active_day_gist
   ON orgunit.org_unit_versions
-  USING gist (tenant_uuid gist_uuid_ops, hierarchy_type gist_text_ops, validity)
+  USING gist (tenant_uuid gist_uuid_ops, validity)
   WHERE status = 'active';
 
 CREATE INDEX org_unit_versions_lookup_btree
-  ON orgunit.org_unit_versions (tenant_uuid, hierarchy_type, org_id, lower(validity));
+  ON orgunit.org_unit_versions (tenant_uuid, org_id, lower(validity));
 
 CREATE INDEX org_unit_versions_path_ids_gin
   ON orgunit.org_unit_versions
@@ -191,12 +216,12 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 ### 4.5 迁移策略（新项目默认方案）
 - **Up（schema 更新）**：
-  - 在 `orgunit` schema 内新增 `org_id_seq` 序列。
+  - 在 `orgunit` schema 内新增 `org_id_allocators` 表与 `allocate_org_id(...)`。
   - 列重命名：`tenant_id`→`tenant_uuid`，`request_id`→`request_code`，`event_id`→`event_uuid`。
   - 列类型：`org_id`/`parent_id`/`root_org_id`→`int4`（8 位约束），`path_ids`→`int[]`。
   - 新增/调整索引与约束：`event_uuid` 唯一索引、`path_ids` GIN、`full_name_path` NOT NULL。
 - **Down（仅开发环境）**：
-  - 回退列名与类型，删除序列与新增索引。
+  - 回退列名与类型，删除分配器表/函数与新增索引。
   - 生产环境不执行破坏性 Down；如需回退，以“重建库 + 重放”方式处理。
 
 ## 5. 接口契约 (API Contracts)
@@ -336,7 +361,7 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 - Response 201: `package_id`、`scope_code`、`package_code`、`status`
 
 ### 5.2 DB Function Contract
-- `submit_org_event(p_event_uuid uuid, p_tenant_uuid uuid, p_hierarchy_type text, p_org_id int, p_event_type text, p_effective_date date, p_payload jsonb, p_request_code text, p_initiator_uuid uuid) RETURNS bigint`
+- `submit_org_event(p_event_uuid uuid, p_tenant_uuid uuid, p_org_id int, p_event_type text, p_effective_date date, p_payload jsonb, p_request_code text, p_initiator_uuid uuid) RETURNS bigint`
 - `get_org_snapshot(p_tenant_uuid uuid, p_query_date date) RETURNS TABLE (..., full_name_path text, ...)`
 
 ### 5.3 参数命名与类型（影响面）
@@ -378,7 +403,6 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 SELECT orgunit.submit_org_event(
   $1::uuid,  -- event_uuid (v7)
   $2::uuid,  -- tenant_uuid
-  'OrgUnit',
   $3::int,   -- org_id (8位)
   'CREATE',
   $4::date,
@@ -403,7 +427,6 @@ SELECT
 FROM snapshot s
 JOIN orgunit.org_unit_versions v
   ON v.tenant_uuid = $1::uuid
- AND v.hierarchy_type = 'OrgUnit'
  AND v.org_id = s.org_id
  AND v.status = 'active'
  AND v.validity @> $2::date
@@ -420,12 +443,11 @@ SET full_name_path = (
   FROM unnest(v.path_ids) WITH ORDINALITY AS t(uid, idx)
   JOIN orgunit.org_unit_versions a
     ON a.tenant_uuid = v.tenant_uuid
-   AND a.hierarchy_type = v.hierarchy_type
    AND a.org_id = t.uid
    AND a.validity @> lower(v.validity)
 )
 WHERE v.tenant_uuid = $1::uuid
-  AND v.hierarchy_type = 'OrgUnit';
+;
 ```
 
 ### 6.5 `get_org_snapshot`（新版：直接读取 `full_name_path`）
@@ -455,7 +477,6 @@ AS $$
     v.node_path
   FROM orgunit.org_unit_versions v
   WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.hierarchy_type = 'OrgUnit'
     AND v.status = 'active'
     AND v.validity @> p_query_date
   ORDER BY v.node_path;
@@ -473,7 +494,8 @@ if err != nil {
 
 ### 6.7 `org_id` 生成位置（DB 侧）
 ```sql
-SELECT nextval('orgunit.org_id_seq')::int;
+-- CREATE 事件由 DB 内部分配（租户隔离）
+SELECT orgunit.allocate_org_id(p_tenant_uuid)::int;
 ```
 
 ## 7. 安全与鉴权 (Security & Authz)
@@ -494,12 +516,12 @@ SELECT nextval('orgunit.org_id_seq')::int;
 
 ### 8.3 影响面清单
 - OrgUnit API/SQL 参数命名与类型（`*_uuid`、`*_id`、`*_code`）。
-- `modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql`：字段改名/类型改为 `tenant_uuid` + `org_id int4`，新增 `full_name_path` 与 `org_id_seq`。
+- `modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql`：字段改名/类型改为 `tenant_uuid` + `org_id int4`，新增 `full_name_path` 与 `org_id_allocators`。
 - `modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`：函数参数与表字段改名（`tenant_uuid`/`org_id int4`），`org_ltree_label`/`org_path_ids`/`apply_*` 全量更新。
 - `modules/orgunit/infrastructure/persistence/schema/00004_orgunit_read.sql`：`get_org_snapshot` 直接返回 `full_name_path`，并使用 `tenant_uuid`。
 - `modules/orgunit/infrastructure/persistence/schema/00006_orgunit_setid_engine.sql`：`resolve_setid(p_org_id int)` 签名调整，内部引用 `org_unit_versions.tenant_uuid`/`org_id int4`。
 - `modules/orgunit/infrastructure/persistence/schema/00010_orgunit_setid_scope_kernel_privileges.sql`：若函数签名参数名变化，需同步权限定义。
-- `internal/server/orgunit_nodes.go`：`org_id` 改为 `nextval('orgunit.org_id_seq')`，`event_uuid` 改为 v7 生成，SQL casts/字段名更新。
+- `internal/server/orgunit_nodes.go`：CREATE 不再直接 `nextval`；由 DB 内部分配 `org_id`，`event_uuid` 改为 v7 生成，SQL casts/字段名更新。
 - `pkg/setid/setid.go`：`resolve_setid` 调用改为 `$2::int`，入参与校验改为 8 位数字。
 - `internal/server/setid.go`：调用 orgunit setid 相关函数的参数类型与字段名同步更新（`tenant_uuid`）。
 - `modules/staffing/infrastructure/persistence/schema/00002_staffing_tables.sql`：`org_unit_id` 列类型改为 `int4`（8 位约束）。
@@ -510,7 +532,7 @@ SELECT nextval('orgunit.org_id_seq')::int;
 - `migrations/staffing/20260130001000_staffing_jobcatalog_package_id_validation.sql`：`org_unit_id` 解析为 `int`，OrgUnit 校验按 `tenant_uuid`。
 - `migrations/staffing/20260130002000_staffing_position_snapshot_job_profile_code.sql`：`org_unit_id` 返回类型改为 `int`。
 - `modules/orgunit/infrastructure/persistence/schema/00005_orgunit_setid_schema.sql` / `00008_orgunit_setid_scope_schema.sql`：移除 `event_uuid` v4 默认值，要求应用层 v7。
-- `cmd/dbtool/main.go`：OrgUnit smoke 使用 `org_id_seq` 与 v7 `event_uuid`。
+- `cmd/dbtool/main.go`：OrgUnit smoke 改为使用 DB 内部分配 `org_id`（不再直连 `org_id_seq`）。
 - `pkg/uuidv7/uuidv7.go`：新增 v7 生成器供 OrgUnit/SetID 事件使用。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
