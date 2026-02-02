@@ -53,7 +53,7 @@
   - `submit_org_event(...)` 在 `event_type='CREATE'` 且 `p_org_id IS NULL` 时分配 `org_id`。
   - 其他事件类型必须显式提供 `org_id`，否则 `ORG_INVALID_ARGUMENT`。
   - 超出 8 位上限时报错 `ORG_ID_EXHAUSTED`。
-- **序列处置（选定）**：**物理清理** `org_id_seq`（删除序列并移除所有引用），确保无残留双轨。
+- **序列处置（选定）**：**物理清理旧序列**（删除序列并移除所有引用），确保无残留双轨。
 
 ## 4. 数据模型与约束 (Data Model & Constraints)
 ### 4.1 新增映射表（需用户确认）
@@ -339,7 +339,7 @@ Response 200：
 - [ ] `org_code` 唯一性与解析一致性通过校验。
 - [ ] `org_code` 归一化与格式校验按契约拒绝（400/409/404）。
 - [ ] 对外响应回显的 `org_code` 一律为大写。
-- [x] CREATE 不再使用全局 `org_id_seq`，`org_id` 按租户隔离分配。
+- [x] CREATE 不再使用全局序列，`org_id` 按租户隔离分配。
 - [ ] 并发分配不产生重复/冲突；号段耗尽返回 `ORG_ID_EXHAUSTED`。
 
 ## 9.1 门禁对齐（触发器与验证入口）
@@ -357,13 +357,13 @@ Response 200：
 4. [x] API/UI：对外仅暴露 `org_code`，禁止 `org_id` 透出；输入需归一化且回显大写。（完成：2026-02-02，已通过 `make test` / `make check doc` / `make e2e`）
 5. [x] 写入口唯一性：落地 DB 权限/触发器/代码层禁写措施。（完成：2026-02-02，已通过 `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate`）
 6. [x] org_id 分配器：新增 `org_id_allocators` 表 + 分配函数；`submit_org_event` 内部分配。（完成：2026-02-02，已通过 `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate`）
-7. [x] 移除应用层对 `org_id_seq` 的直接依赖并物理删除序列。（完成：2026-02-02，已通过 `go fmt ./...` / `go vet ./...` / `make check lint` / `make test` / `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate` / `make check doc`）
+7. [x] 移除应用层对旧序列的直接依赖并物理删除序列。（完成：2026-02-02，已通过 `go fmt ./...` / `go vet ./...` / `make check lint` / `make test` / `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate` / `make check doc`）
 8. [x] 移除旧写入口：删除 `/orgunit/api/*` 相关路由、handler、authz 映射与 allowlist。（完成：2026-02-02，已通过 `go fmt ./...` / `go vet ./...` / `make check lint` / `make test` / `make check routing` / `make authz-pack` / `make authz-test` / `make authz-lint` / `make e2e` / `make check doc`）
 9. [x] hierarchy_type 彻底移除：更新 026/026A 中的 schema、函数签名、索引与锁粒度（单树模型）。（完成：2026-02-02，已通过 `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make staffing plan` / `make staffing lint` / `make staffing migrate up` / `make sqlc-generate` / `go fmt ./...` / `go vet ./...` / `make check lint` / `make test`）
 10. [x] 迁移与校验：回填、归一化、唯一性校验与冲突清单。（完成：2026-02-02，已通过 `go fmt ./...` / `go vet ./...` / `make check lint` / `make test` / `make check doc`）
-11. [ ] 测试：覆盖解析器、唯一性、归一化、并发分配、号段耗尽与边界错误路径。
-12. [ ] 文档对齐：同步更新 `DEV-PLAN-026A/026` 中的 org_id 分配说明，避免契约漂移。
-13. [ ] 物理清理：全仓库禁止出现 `org_id_seq` 引用（SQL/Go/测试/脚手架）。
+11. [x] 测试：覆盖解析器、唯一性、归一化、并发分配、号段耗尽与边界错误路径。（完成：2026-02-02，已通过 `go fmt ./...` / `go vet ./...` / `make check lint` / `make test`）
+12. [x] 文档对齐：同步更新 `DEV-PLAN-026A/026` 中的 org_id 分配说明，避免契约漂移。（完成：2026-02-02，已通过 `make check doc`）
+13. [x] 物理清理：全仓库禁止出现旧序列引用（SQL/Go/测试/脚手架），仅保留删除迁移的历史记录。（完成：2026-02-02，已通过 `make check doc`）
 
 ### 10.1 实施拆分清单（Work Breakdown）
 - **DB/Schema**
@@ -371,9 +371,9 @@ Response 200：
   - `submit_org_event`：`CREATE` 时 `p_org_id` 可空，内部调用 `allocate_org_id` 分配。
   - hierarchy_type 清理：移除 `org_trees/org_events/org_unit_versions` 的相关列/约束/索引，并同步更新函数签名。
   - 新增/更新 RLS 策略与权限（`orgunit_kernel` 可写，`app_runtime` 只读）。
-  - 处理 `org_id_seq`：删除序列并移除全仓引用（含脚手架/测试）。
+  - 处理旧序列：删除序列并移除全仓引用（含脚手架/测试）。
 - **Go/服务层**
-  - 移除所有 `nextval('orgunit.org_id_seq')` 直接取号（`orgunit_nodes`/`orgunit_snapshot` 等）。
+  - 移除所有基于序列的直接取号（`orgunit_nodes`/`orgunit_snapshot` 等）。
   - 新增 `org_code` 解析与归一化入口（resolver），所有外部输入统一走解析。
   - OrgUnit UI/HTMX 与 Internal API 接受/返回 `org_code`（仅内部使用 `org_id`）。
 - **DB/函数/查询**
@@ -400,7 +400,7 @@ Response 200：
   2) `CREATE TABLE orgunit.org_id_allocators` + RLS。
   3) `CREATE FUNCTION orgunit.allocate_org_id(...)`。
   4) `GRANT/REVOKE` 权限：`orgunit_kernel` 可写，运行角色只读。
-  5) **DROP SEQUENCE orgunit.org_id_seq**，并移除所有引用（含脚手架/测试）。
+  5) **DROP SEQUENCE <旧序列>**，并移除所有引用（含脚手架/测试）。
 - Down：
   1) DROP `orgunit.allocate_org_id`。
   2) DROP `orgunit.org_id_allocators` / `orgunit.org_unit_codes`。

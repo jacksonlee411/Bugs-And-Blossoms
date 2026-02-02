@@ -18,6 +18,7 @@
 
 ## 0.1 实现对齐说明（避免契约漂移）
 - **ID 类型与分配以 `DEV-PLAN-026A/026B` 为准**：当前实现使用 8 位 `int4`，并按租户隔离在 DB 内部分配 `org_id`。
+- **org_id 分配入口**：`submit_org_event` 在 `CREATE` 且 `p_org_id IS NULL` 时调用 `allocate_org_id` 分配；非 `CREATE` 事件必须提供 `p_org_id`，否则返回 `ORG_INVALID_ARGUMENT`。
 - 本文中的 UUID 示例属于早期设计稿，不再作为实现事实源；实现时应以 026A/026B 的命名与分配策略为准。
 - **层级维度已收敛为单树**：`hierarchy_type` 已移除；表结构、函数签名与锁粒度统一按 `tenant_id` 维度。
 
