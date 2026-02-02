@@ -354,7 +354,7 @@ Response 200：
 2. [x] Go/投射：在 `CREATE` 投射时写入 `org_code` 映射，拒绝冲突。
 3. [x] Resolver：新增 `ResolveOrgID/ResolveOrgCode` 组件，并在边界层统一调用。
 4. [x] API/UI：对外仅暴露 `org_code`，禁止 `org_id` 透出；输入需归一化且回显大写。（完成：2026-02-02，已通过 `make test` / `make check doc` / `make e2e`）
-5. [ ] 写入口唯一性：落地 DB 权限/触发器/代码层禁写措施。
+5. [x] 写入口唯一性：落地 DB 权限/触发器/代码层禁写措施。（完成：2026-02-02，已通过 `make orgunit plan` / `make orgunit lint` / `make orgunit migrate up` / `make sqlc-generate`）
 6. [ ] org_id 分配器：新增 `org_id_allocators` 表 + 分配函数；`submit_org_event` 内部分配。
 7. [ ] 移除应用层对 `org_id_seq` 的直接依赖并物理删除序列。
 8. [ ] 移除旧写入口：删除 `/orgunit/api/*` 相关路由、handler、authz 映射与 allowlist。
