@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
 )
@@ -30,6 +31,7 @@ type OrgUnitStore interface {
 	OrgUnitNodesCurrentMover
 	OrgUnitNodesCurrentDisabler
 	OrgUnitNodesCurrentBusinessUnitSetter
+	OrgUnitCodeResolver
 }
 
 type OrgUnitNodesCurrentReader interface {
@@ -54,6 +56,11 @@ type OrgUnitNodesCurrentDisabler interface {
 
 type OrgUnitNodesCurrentBusinessUnitSetter interface {
 	SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestCode string) error
+}
+
+type OrgUnitCodeResolver interface {
+	ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error)
+	ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error)
 }
 
 type orgUnitPGStore struct {
@@ -96,6 +103,48 @@ func parseOptionalOrgID8(input string) (int, bool, error) {
 		return 0, false, err
 	}
 	return value, true, nil
+}
+
+func (s *orgUnitPGStore) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return 0, err
+	}
+
+	orgID, err := orgunitpkg.ResolveOrgID(ctx, tx, tenantID, orgCode)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return orgID, nil
+}
+
+func (s *orgUnitPGStore) ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return "", err
+	}
+
+	orgCode, err := orgunitpkg.ResolveOrgCode(ctx, tx, tenantID, orgID)
+	if err != nil {
+		return "", err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+	return orgCode, nil
 }
 
 func (s *orgUnitPGStore) ListNodesCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
@@ -579,6 +628,14 @@ func (s *orgUnitMemoryStore) SetBusinessUnitCurrent(_ context.Context, tenantID 
 		}
 	}
 	return errors.New("org_id not found")
+}
+
+func (s *orgUnitMemoryStore) ResolveOrgID(_ context.Context, _ string, _ string) (int, error) {
+	return 0, orgunitpkg.ErrOrgCodeNotFound
+}
+
+func (s *orgUnitMemoryStore) ResolveOrgCode(_ context.Context, _ string, _ int) (string, error) {
+	return "", orgunitpkg.ErrOrgIDNotFound
 }
 
 func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {

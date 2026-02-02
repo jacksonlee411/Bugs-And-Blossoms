@@ -223,6 +223,12 @@ func (s errOrgUnitStore) DisableNodeCurrent(context.Context, string, string, str
 func (s errOrgUnitStore) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
 	return s.err
 }
+func (s errOrgUnitStore) ResolveOrgID(context.Context, string, string) (int, error) {
+	return 0, s.err
+}
+func (s errOrgUnitStore) ResolveOrgCode(context.Context, string, int) (string, error) {
+	return "", s.err
+}
 
 type tableRows struct {
 	idx  int

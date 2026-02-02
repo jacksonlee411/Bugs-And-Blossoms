@@ -170,6 +170,12 @@ func (s orgStoreStub) DisableNodeCurrent(context.Context, string, string, string
 func (s orgStoreStub) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
 	return s.err
 }
+func (s orgStoreStub) ResolveOrgID(context.Context, string, string) (int, error) {
+	return 0, s.err
+}
+func (s orgStoreStub) ResolveOrgCode(context.Context, string, int) (string, error) {
+	return "", s.err
+}
 
 func defaultJobCatalogOrgStore() OrgUnitStore {
 	return orgStoreStub{nodes: []OrgUnitNode{{ID: "10000001", Name: "Root Org", IsBusinessUnit: true}}}
