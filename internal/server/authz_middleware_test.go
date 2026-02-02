@@ -116,7 +116,7 @@ func TestWithAuthz_ShareReadForbidden(t *testing.T) {
 	})
 	h := withAuthz(mustTestClassifier(t), stubAuthorizer{allowed: false, enforced: true}, next)
 
-	req := httptest.NewRequest(http.MethodGet, "/orgunit/api/global-setids", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/api/global-setids", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 	rec := httptest.NewRecorder()
@@ -279,70 +279,70 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/assignment-events:rescind"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/setids"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setids"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/setids"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setids"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/setid-bindings"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-bindings"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/setid-bindings"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setid-bindings"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/scope-packages"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/scope-packages"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/scope-packages"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/scope-packages"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/orgunit/api/scope-packages"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/scope-packages"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/scope-packages/p1/disable"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/scope-packages/p1/disable"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/scope-packages/p1/disable"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/scope-packages/p1/disable"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/owned-scope-packages"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/owned-scope-packages"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/owned-scope-packages"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/owned-scope-packages"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/scope-subscriptions"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/scope-subscriptions"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/scope-subscriptions"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/scope-subscriptions"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/orgunit/api/scope-subscriptions"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/scope-subscriptions"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/global-setids"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/global-setids"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/global-setids"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/global-setids"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/orgunit/api/global-setids"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/global-setids"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/global-scope-packages"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/global-scope-packages"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/global-scope-packages"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/global-scope-packages"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/orgunit/api/global-scope-packages"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/global-scope-packages"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/orgunit/api/org-units/set-business-unit"); !ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/set-business-unit"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/api/org-units/set-business-unit"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/set-business-unit"); ok {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/orgunit/setids/S2601/scope-subscriptions"); !ok {

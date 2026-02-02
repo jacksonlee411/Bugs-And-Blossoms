@@ -740,26 +740,26 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		return rec
 	}
 
-	recSet := postJSON("/orgunit/api/setids", `{"setid":"A0001","name":"Default","request_code":"r1"}`, nil)
+	recSet := postJSON("/org/api/setids", `{"setid":"A0001","name":"Default","request_code":"r1"}`, nil)
 	if recSet.Code != http.StatusCreated {
 		t.Fatalf("setid status=%d", recSet.Code)
 	}
 
-	recBind := postJSON("/orgunit/api/setid-bindings", `{"org_code":"`+node.OrgCode+`","setid":"A0001","effective_date":"2026-01-01","request_code":"r2"}`, nil)
+	recBind := postJSON("/org/api/setid-bindings", `{"org_code":"`+node.OrgCode+`","setid":"A0001","effective_date":"2026-01-01","request_code":"r2"}`, nil)
 	if recBind.Code != http.StatusCreated {
 		t.Fatalf("binding status=%d", recBind.Code)
 	}
 
-	recGlobal := postJSON("/orgunit/api/global-setids", `{"name":"Shared","request_code":"r3"}`, map[string]string{"X-Actor-Scope": "saas"})
+	recGlobal := postJSON("/org/api/global-setids", `{"name":"Shared","request_code":"r3"}`, map[string]string{"X-Actor-Scope": "saas"})
 	if recGlobal.Code != http.StatusCreated {
 		t.Fatalf("global setid status=%d", recGlobal.Code)
 	}
-	recGlobalList := getJSON("/orgunit/api/global-setids", nil)
+	recGlobalList := getJSON("/org/api/global-setids", nil)
 	if recGlobalList.Code != http.StatusOK {
 		t.Fatalf("global setid list status=%d", recGlobalList.Code)
 	}
 
-	recBU := postJSON("/orgunit/api/org-units/set-business-unit", `{"org_code":"`+node.OrgCode+`","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r4"}`, nil)
+	recBU := postJSON("/org/api/org-units/set-business-unit", `{"org_code":"`+node.OrgCode+`","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r4"}`, nil)
 	if recBU.Code != http.StatusOK {
 		t.Fatalf("set business unit status=%d", recBU.Code)
 	}

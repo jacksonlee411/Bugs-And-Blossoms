@@ -22,10 +22,10 @@ func TestClassifier_SegmentBoundary(t *testing.T) {
 	if got := c.Classify("/api/v1x"); got == RouteClassPublicAPI {
 		t.Fatalf("unexpected public api: %q", got)
 	}
-	if got := c.Classify("/orgunit/api"); got != RouteClassInternalAPI {
+	if got := c.Classify("/org/api"); got != RouteClassInternalAPI {
 		t.Fatalf("got=%q", got)
 	}
-	if got := c.Classify("/orgunit/apix"); got == RouteClassInternalAPI {
+	if got := c.Classify("/org/apix"); got == RouteClassInternalAPI {
 		t.Fatalf("unexpected internal api: %q", got)
 	}
 

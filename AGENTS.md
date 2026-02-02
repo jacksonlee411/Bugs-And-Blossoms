@@ -175,6 +175,7 @@ modules/{module}/
 - DEV-PLAN-026A：OrgUnit 8位编号与 UUID/Code 命名规范：`docs/dev-plans/026a-orgunit-id-uuid-code-naming.md`
 - DEV-PLAN-026A 执行日志：`docs/dev-records/dev-plan-026a-execution-log.md`
 - DEV-PLAN-026B：OrgUnit 外部ID兼容（org_code 映射）方案：`docs/dev-plans/026b-orgunit-external-id-code-mapping.md`
+- DEV-PLAN-026C：OrgUnit 外部ID兼容（org_code 映射）评审与修订方案：`docs/dev-plans/026c-orgunit-external-id-code-mapping-review-and-revision.md`
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 - Org（事务性事件溯源 + 同步投射）：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`

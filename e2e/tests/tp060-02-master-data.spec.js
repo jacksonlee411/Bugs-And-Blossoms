@@ -174,7 +174,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   }
 
   const ensureBusinessUnit = async (orgCode, label) => {
-    const resp = await appContext.request.post("/orgunit/api/org-units/set-business-unit", {
+    const resp = await appContext.request.post("/org/api/org-units/set-business-unit", {
       data: {
         org_code: orgCode,
         effective_date: asOf,
@@ -235,7 +235,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   };
 
   const createScopePackage = async (scopeCode, packageCode, name, effectiveDate, ownerSetID) => {
-    const resp = await appContext.request.post("/orgunit/api/scope-packages", {
+    const resp = await appContext.request.post("/org/api/scope-packages", {
       data: {
         scope_code: scopeCode,
         package_code: packageCode,
@@ -251,7 +251,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   };
 
   const subscribeScope = async (setid, scopeCode, packageID, effectiveDate) => {
-    const resp = await appContext.request.post("/orgunit/api/scope-subscriptions", {
+    const resp = await appContext.request.post("/org/api/scope-subscriptions", {
       data: {
         setid,
         scope_code: scopeCode,
@@ -289,7 +289,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await createScopePackage("jobcatalog", s2601PkgCode, `S2601 JobCatalog ${runID}`, asOf, "S2601");
 
   {
-    const resp = await appContext.request.post("/orgunit/api/setid-bindings", {
+    const resp = await appContext.request.post("/org/api/setid-bindings", {
       data: {
         org_code: orgCodesFromTree.HQ,
         setid: "S2601",

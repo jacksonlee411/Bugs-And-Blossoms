@@ -122,7 +122,7 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 }
 
 func authzRequirementForRoute(method string, path string) (object string, action string, ok bool) {
-	if pathMatchRouteTemplate(path, "/orgunit/api/scope-packages/{package_id}/disable") {
+	if pathMatchRouteTemplate(path, "/org/api/scope-packages/{package_id}/disable") {
 		if method == http.MethodPost {
 			return authz.ObjectOrgScopePackage, authz.ActionAdmin, true
 		}
@@ -220,17 +220,17 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectStaffingAssignments, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/orgunit/api/setids":
+	case "/org/api/setids":
 		if method == http.MethodPost {
 			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/orgunit/api/setid-bindings":
+	case "/org/api/setid-bindings":
 		if method == http.MethodPost {
 			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/orgunit/api/scope-packages":
+	case "/org/api/scope-packages":
 		if method == http.MethodGet {
 			return authz.ObjectOrgScopePackage, authz.ActionRead, true
 		}
@@ -238,12 +238,12 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgScopePackage, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/orgunit/api/owned-scope-packages":
+	case "/org/api/owned-scope-packages":
 		if method == http.MethodGet {
 			return authz.ObjectJobCatalogCatalog, authz.ActionRead, true
 		}
 		return "", "", false
-	case "/orgunit/api/scope-subscriptions":
+	case "/org/api/scope-subscriptions":
 		if method == http.MethodGet {
 			return authz.ObjectOrgScopeSubscription, authz.ActionRead, true
 		}
@@ -251,7 +251,7 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgScopeSubscription, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/orgunit/api/global-setids":
+	case "/org/api/global-setids":
 		if method == http.MethodGet {
 			return authz.ObjectOrgShareRead, authz.ActionRead, true
 		}
@@ -259,7 +259,7 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/orgunit/api/global-scope-packages":
+	case "/org/api/global-scope-packages":
 		if method == http.MethodGet {
 			return authz.ObjectOrgScopePackage, authz.ActionRead, true
 		}
@@ -267,7 +267,7 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgScopePackage, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/orgunit/api/org-units/set-business-unit":
+	case "/org/api/org-units/set-business-unit":
 		if method == http.MethodPost {
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
 		}

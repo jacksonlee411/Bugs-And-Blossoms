@@ -132,7 +132,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const rootOrgCode = (await page.locator("ul li", { hasText: rootName }).first().locator("code").first().innerText()).trim();
   expect(rootOrgCode).not.toBe("");
 
-  const bindResp = await appContext.request.post("/orgunit/api/setid-bindings", {
+  const bindResp = await appContext.request.post("/org/api/setid-bindings", {
     data: {
       org_code: rootOrgCode,
       setid: "DEFLT",

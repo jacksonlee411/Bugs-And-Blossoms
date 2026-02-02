@@ -95,7 +95,7 @@ func (s scopeAPIStore) ListGlobalScopePackages(ctx context.Context, scopeCode st
 
 func TestHandleScopePackagesAPI_Get(t *testing.T) {
 	t.Run("tenant missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-packages?scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-packages?scope_code=jobcatalog", nil)
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{})
 		if rec.Code != http.StatusInternalServerError {
@@ -104,7 +104,7 @@ func TestHandleScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("empty rows", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-packages?scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-packages?scope_code=jobcatalog", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{
@@ -121,7 +121,7 @@ func TestHandleScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("actor scope optional", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-packages?scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-packages?scope_code=jobcatalog", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{
@@ -135,7 +135,7 @@ func TestHandleScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("scope_code required", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-packages", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-packages", nil)
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -146,7 +146,7 @@ func TestHandleScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-packages?scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-packages?scope_code=jobcatalog", nil)
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -164,7 +164,7 @@ func TestHandleScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-packages?scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-packages?scope_code=jobcatalog", nil)
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -188,7 +188,7 @@ func TestHandleScopePackagesAPI_Get(t *testing.T) {
 
 func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 	t.Run("tenant missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/owned-scope-packages?scope_code=jobcatalog", nil)
 		rec := httptest.NewRecorder()
 		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{})
 		if rec.Code != http.StatusInternalServerError {
@@ -197,7 +197,7 @@ func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodPost, "/org/api/owned-scope-packages?scope_code=jobcatalog", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -207,7 +207,7 @@ func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("scope_code required", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/owned-scope-packages", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 		rec := httptest.NewRecorder()
@@ -218,7 +218,7 @@ func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("invalid as_of", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=bad", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/owned-scope-packages?scope_code=jobcatalog&as_of=bad", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 		rec := httptest.NewRecorder()
@@ -229,7 +229,7 @@ func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("no principal returns empty", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -242,7 +242,7 @@ func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("empty role returns empty", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: " ", Status: "active"}))
 		rec := httptest.NewRecorder()
@@ -256,7 +256,7 @@ func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("not admin returns empty", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-viewer", Status: "active"}))
 		rec := httptest.NewRecorder()
@@ -274,7 +274,7 @@ func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 		rec := httptest.NewRecorder()
@@ -289,7 +289,7 @@ func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("as_of default", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/owned-scope-packages?scope_code=jobcatalog", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 		rec := httptest.NewRecorder()
@@ -308,7 +308,7 @@ func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 	})
 
 	t.Run("returns rows", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
 		rec := httptest.NewRecorder()
@@ -337,7 +337,7 @@ func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 }
 
 func TestHandleScopePackagesAPI_MethodNotAllowed(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPut, "/orgunit/api/scope-packages", nil)
+	req := httptest.NewRequest(http.MethodPut, "/org/api/scope-packages", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
 	handleScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -348,7 +348,7 @@ func TestHandleScopePackagesAPI_MethodNotAllowed(t *testing.T) {
 
 func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	t.Run("bad json", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", strings.NewReader("{"))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", strings.NewReader("{"))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -359,7 +359,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 
 	t.Run("invalid request", func(t *testing.T) {
 		body := bytes.NewBufferString(`{"scope_code":"","name":"","request_code":""}`)
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -370,7 +370,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 
 	t.Run("invalid effective date", func(t *testing.T) {
 		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","name":"Pkg","effective_date":"bad","request_code":"r1"}`)
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -381,7 +381,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 
 	t.Run("reserved code", func(t *testing.T) {
 		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"DEFLT","owner_setid":"A0001","name":"Pkg","request_code":"r1"}`)
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -392,7 +392,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 
 	t.Run("invalid code", func(t *testing.T) {
 		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"bad-code","owner_setid":"A0001","name":"Pkg","request_code":"r1"}`)
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -403,7 +403,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 
 	t.Run("create error", func(t *testing.T) {
 		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","name":"Pkg","request_code":"r1"}`)
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{
@@ -418,7 +418,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"","owner_setid":"A0001","name":"Pkg","request_code":"r1"}`)
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", body)
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackagesAPI(rec, req, scopeAPIStore{
@@ -437,7 +437,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 
 func TestHandleScopePackageDisableAPI(t *testing.T) {
 	t.Run("tenant missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":"r1"}`))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
 		if rec.Code != http.StatusInternalServerError {
@@ -446,7 +446,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-packages/p1/disable", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-packages/p1/disable", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -456,7 +456,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages", nil)
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -466,7 +466,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("bad json", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader("{"))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader("{"))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -476,7 +476,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("missing request id", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":""}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":""}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -486,7 +486,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{
@@ -500,7 +500,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{
@@ -519,7 +519,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 
 func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	t.Run("tenant missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog&as_of=2026-01-01", nil)
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
 		if rec.Code != http.StatusInternalServerError {
@@ -528,7 +528,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("get missing params", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-subscriptions", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-subscriptions", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -538,7 +538,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("get invalid date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog&as_of=bad", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog&as_of=bad", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -548,7 +548,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("get store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog&as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{
@@ -562,7 +562,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("get success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog&as_of=2026-01-01", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog&as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{
@@ -580,7 +580,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 
 	t.Run("get default as_of", func(t *testing.T) {
 		var gotAsOf string
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{
@@ -598,7 +598,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post bad json", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader("{"))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader("{"))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -608,7 +608,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post missing fields", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":""}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":""}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -618,7 +618,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post invalid date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"bad","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"bad","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -628,7 +628,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post owner invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"nope","effective_date":"2026-01-01","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"nope","effective_date":"2026-01-01","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -638,7 +638,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{
@@ -652,7 +652,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{
@@ -667,7 +667,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 }
 
 func TestHandleScopeSubscriptionsAPI_MethodNotAllowed(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPut, "/orgunit/api/scope-subscriptions", nil)
+	req := httptest.NewRequest(http.MethodPut, "/org/api/scope-subscriptions", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
 	handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -678,7 +678,7 @@ func TestHandleScopeSubscriptionsAPI_MethodNotAllowed(t *testing.T) {
 
 func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	t.Run("get actor scope required", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/global-scope-packages?scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/global-scope-packages?scope_code=jobcatalog", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -688,7 +688,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("get scope_code required", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/global-scope-packages", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/global-scope-packages", nil)
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -699,7 +699,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("get store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/global-scope-packages?scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/global-scope-packages?scope_code=jobcatalog", nil)
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -714,7 +714,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("get success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/orgunit/api/global-scope-packages?scope_code=jobcatalog", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/global-scope-packages?scope_code=jobcatalog", nil)
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -729,7 +729,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post tenant missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
 		if rec.Code != http.StatusInternalServerError {
@@ -738,7 +738,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post bad json", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader("{"))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader("{"))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -748,7 +748,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post invalid request", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"","name":"","request_code":""}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader(`{"scope_code":"","name":"","request_code":""}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -758,7 +758,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post invalid date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","effective_date":"bad","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","effective_date":"bad","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -768,7 +768,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post reserved code", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"DEFLT","name":"Pkg","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"DEFLT","name":"Pkg","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -778,7 +778,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post invalid code", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"bad-code","name":"Pkg","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"bad-code","name":"Pkg","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -788,7 +788,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post actor scope required", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -798,7 +798,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -813,7 +813,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","request_code":"r1"}`))
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -828,7 +828,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 	})
 
 	t.Run("post generate code", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/orgunit/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"","name":"Pkg","request_code":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"","name":"Pkg","request_code":"r1"}`))
 		req.Header.Set("X-Actor-Scope", "saas")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -850,7 +850,7 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 }
 
 func TestHandleGlobalScopePackagesAPI_MethodNotAllowed(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPut, "/orgunit/api/global-scope-packages", nil)
+	req := httptest.NewRequest(http.MethodPut, "/org/api/global-scope-packages", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
 	handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
@@ -860,7 +860,7 @@ func TestHandleGlobalScopePackagesAPI_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWriteScopeAPIError_StatusMapping(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/orgunit/api/scope-packages", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/api/scope-packages", nil)
 
 	for _, tc := range []struct {
 		name   string
@@ -887,10 +887,10 @@ func TestWriteScopeAPIError_StatusMapping(t *testing.T) {
 }
 
 func TestScopeAPIHelpers(t *testing.T) {
-	if got := parseScopePackageID("/orgunit/api/scope-packages/p1/disable"); got != "p1" {
+	if got := parseScopePackageID("/org/api/scope-packages/p1/disable"); got != "p1" {
 		t.Fatalf("got=%q", got)
 	}
-	if got := parseScopePackageID("/orgunit/api/scope-packages"); got != "" {
+	if got := parseScopePackageID("/org/api/scope-packages"); got != "" {
 		t.Fatalf("expected empty, got=%q", got)
 	}
 
