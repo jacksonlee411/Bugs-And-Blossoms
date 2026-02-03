@@ -23,6 +23,28 @@ ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text
 ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
   SET search_path = pg_catalog, orgunit, public;
 
+REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app') THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM app';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM app_runtime';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_nobypassrls') THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM app_nobypassrls';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'superadmin_runtime') THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM superadmin_runtime';
+  END IF;
+END $$;
+
+GRANT EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) TO orgunit_kernel;
+ALTER FUNCTION orgunit.replay_org_unit_versions(uuid) OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.replay_org_unit_versions(uuid) SET search_path = pg_catalog, orgunit, public;
+
 REVOKE ALL ON TABLE orgunit.org_unit_codes FROM PUBLIC;
 
 DO $$
