@@ -64,6 +64,8 @@ ALTER TABLE jobcatalog.job_family_group_versions
 ALTER TABLE jobcatalog.job_family_group_versions
   DROP CONSTRAINT IF EXISTS job_family_group_versions_setid_format_check;
 ALTER TABLE jobcatalog.job_family_group_versions
+  DROP CONSTRAINT IF EXISTS job_family_group_versions_job_family_group_uuid_fkey;
+ALTER TABLE jobcatalog.job_family_group_versions
   DROP CONSTRAINT IF EXISTS job_family_group_versions_group_fk;
 ALTER TABLE jobcatalog.job_family_group_versions
   DROP CONSTRAINT IF EXISTS job_family_group_versions_no_overlap;

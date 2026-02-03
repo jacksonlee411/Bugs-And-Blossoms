@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS iam.superadmin_audit_logs (
   CONSTRAINT superadmin_audit_logs_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS superadmin_audit_logs_event_id_unique ON iam.superadmin_audit_logs (event_uuid);
+CREATE UNIQUE INDEX IF NOT EXISTS superadmin_audit_logs_event_uuid_unique ON iam.superadmin_audit_logs (event_uuid);
 CREATE INDEX IF NOT EXISTS superadmin_audit_logs_target_tenant_idx ON iam.superadmin_audit_logs (target_tenant_uuid, id);
 
 DO $$

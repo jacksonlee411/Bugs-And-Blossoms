@@ -14,7 +14,7 @@ UPDATE jobcatalog.job_family_groups g
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE g.tenant_uuid = p.tenant_uuid
-  AND g.package_uuid = p.package_uuid
+  AND g.package_uuid = p.package_id
   AND g.package_code IS NULL;
 $SQL$;
 
@@ -23,7 +23,7 @@ UPDATE jobcatalog.job_family_group_events e
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE e.tenant_uuid = p.tenant_uuid
-  AND e.package_uuid = p.package_uuid
+  AND e.package_uuid = p.package_id
   AND e.package_code IS NULL;
 $SQL$;
 
@@ -32,7 +32,7 @@ UPDATE jobcatalog.job_family_group_versions v
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE v.tenant_uuid = p.tenant_uuid
-  AND v.package_uuid = p.package_uuid
+  AND v.package_uuid = p.package_id
   AND v.package_code IS NULL;
 $SQL$;
 
@@ -41,7 +41,7 @@ UPDATE jobcatalog.job_families f
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE f.tenant_uuid = p.tenant_uuid
-  AND f.package_uuid = p.package_uuid
+  AND f.package_uuid = p.package_id
   AND f.package_code IS NULL;
 $SQL$;
 
@@ -50,7 +50,7 @@ UPDATE jobcatalog.job_family_events e
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE e.tenant_uuid = p.tenant_uuid
-  AND e.package_uuid = p.package_uuid
+  AND e.package_uuid = p.package_id
   AND e.package_code IS NULL;
 $SQL$;
 
@@ -59,7 +59,7 @@ UPDATE jobcatalog.job_family_versions v
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE v.tenant_uuid = p.tenant_uuid
-  AND v.package_uuid = p.package_uuid
+  AND v.package_uuid = p.package_id
   AND v.package_code IS NULL;
 $SQL$;
 
@@ -68,7 +68,7 @@ UPDATE jobcatalog.job_levels l
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE l.tenant_uuid = p.tenant_uuid
-  AND l.package_uuid = p.package_uuid
+  AND l.package_uuid = p.package_id
   AND l.package_code IS NULL;
 $SQL$;
 
@@ -77,7 +77,7 @@ UPDATE jobcatalog.job_level_events e
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE e.tenant_uuid = p.tenant_uuid
-  AND e.package_uuid = p.package_uuid
+  AND e.package_uuid = p.package_id
   AND e.package_code IS NULL;
 $SQL$;
 
@@ -86,7 +86,7 @@ UPDATE jobcatalog.job_level_versions v
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE v.tenant_uuid = p.tenant_uuid
-  AND v.package_uuid = p.package_uuid
+  AND v.package_uuid = p.package_id
   AND v.package_code IS NULL;
 $SQL$;
 
@@ -95,7 +95,7 @@ UPDATE jobcatalog.job_profiles j
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE j.tenant_uuid = p.tenant_uuid
-  AND j.package_uuid = p.package_uuid
+  AND j.package_uuid = p.package_id
   AND j.package_code IS NULL;
 $SQL$;
 
@@ -104,7 +104,7 @@ UPDATE jobcatalog.job_profile_events e
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE e.tenant_uuid = p.tenant_uuid
-  AND e.package_uuid = p.package_uuid
+  AND e.package_uuid = p.package_id
   AND e.package_code IS NULL;
 $SQL$;
 
@@ -113,7 +113,7 @@ UPDATE jobcatalog.job_profile_versions v
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE v.tenant_uuid = p.tenant_uuid
-  AND v.package_uuid = p.package_uuid
+  AND v.package_uuid = p.package_id
   AND v.package_code IS NULL;
 $SQL$;
 
@@ -122,7 +122,7 @@ UPDATE jobcatalog.job_profile_version_job_families jvf
 SET package_code = p.package_code
 FROM orgunit.setid_scope_packages p
 WHERE jvf.tenant_uuid = p.tenant_uuid
-  AND jvf.package_uuid = p.package_uuid
+  AND jvf.package_uuid = p.package_id
   AND jvf.package_code IS NULL;
 $SQL$;
 

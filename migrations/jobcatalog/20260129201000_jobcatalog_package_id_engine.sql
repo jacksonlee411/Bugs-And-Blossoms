@@ -1,5 +1,15 @@
 -- +goose Up
 -- +goose StatementBegin
+DROP FUNCTION IF EXISTS jobcatalog.replay_job_family_group_versions(uuid, text, uuid);
+DROP FUNCTION IF EXISTS jobcatalog.submit_job_family_group_event(uuid, uuid, text, uuid, text, date, jsonb, text, uuid);
+DROP FUNCTION IF EXISTS jobcatalog.replay_job_family_versions(uuid, text, uuid);
+DROP FUNCTION IF EXISTS jobcatalog.submit_job_family_event(uuid, uuid, text, uuid, text, date, jsonb, text, uuid);
+DROP FUNCTION IF EXISTS jobcatalog.replay_job_level_versions(uuid, text, uuid);
+DROP FUNCTION IF EXISTS jobcatalog.submit_job_level_event(uuid, uuid, text, uuid, text, date, jsonb, text, uuid);
+DROP FUNCTION IF EXISTS jobcatalog.replay_job_profile_versions(uuid, text, uuid);
+DROP FUNCTION IF EXISTS jobcatalog.submit_job_profile_event(uuid, uuid, text, uuid, text, date, jsonb, text, uuid);
+DROP FUNCTION IF EXISTS jobcatalog.get_job_catalog_snapshot(uuid, text, date);
+
 CREATE OR REPLACE FUNCTION jobcatalog.assert_current_tenant(p_tenant_uuid uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -316,7 +326,7 @@ BEGIN
     IF EXISTS (
       SELECT 1
       FROM jsonb_object_keys(v_payload) AS k
-      WHERE k NOT IN ('code', 'name', 'description', 'external_refs')
+      WHERE k NOT IN ('job_family_group_code', 'name', 'description', 'external_refs')
       LIMIT 1
     ) THEN
       RAISE EXCEPTION USING
@@ -727,7 +737,7 @@ BEGIN
     IF EXISTS (
       SELECT 1
       FROM jsonb_object_keys(v_payload) AS k
-      WHERE k NOT IN ('code', 'name', 'description', 'external_refs', 'job_family_group_uuid')
+      WHERE k NOT IN ('job_family_code', 'name', 'description', 'external_refs', 'job_family_group_uuid')
       LIMIT 1
     ) THEN
       RAISE EXCEPTION USING
@@ -1192,7 +1202,7 @@ BEGIN
     IF EXISTS (
       SELECT 1
       FROM jsonb_object_keys(v_payload) AS k
-      WHERE k NOT IN ('code', 'name', 'description', 'external_refs')
+      WHERE k NOT IN ('job_level_code', 'name', 'description', 'external_refs')
       LIMIT 1
     ) THEN
       RAISE EXCEPTION USING
@@ -1684,7 +1694,7 @@ BEGIN
     IF EXISTS (
       SELECT 1
       FROM jsonb_object_keys(v_payload) AS k
-      WHERE k NOT IN ('code', 'name', 'description', 'external_refs', 'job_family_uuids', 'primary_job_family_uuid')
+      WHERE k NOT IN ('job_profile_code', 'name', 'description', 'external_refs', 'job_family_uuids', 'primary_job_family_uuid')
       LIMIT 1
     ) THEN
       RAISE EXCEPTION USING

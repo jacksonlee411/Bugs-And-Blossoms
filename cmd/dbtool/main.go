@@ -451,7 +451,7 @@ func staffingSmoke(args []string) {
 		  $4::uuid,
 		  'CREATE',
 		  $5::date,
-		  jsonb_build_object('code', 'SMKFG1', 'name', 'Staffing Smoke Group', 'description', null),
+		  jsonb_build_object('job_family_group_code', 'SMKFG1', 'name', 'Staffing Smoke Group', 'description', null),
 		  $6::text,
 		  $7::uuid
 		);
@@ -470,7 +470,7 @@ func staffingSmoke(args []string) {
 		  $4::uuid,
 		  'CREATE',
 		  $5::date,
-		  jsonb_build_object('code', 'SMKJF1', 'name', 'Staffing Smoke Family', 'description', null, 'job_family_group_uuid', $6::uuid),
+		  jsonb_build_object('job_family_code', 'SMKJF1', 'name', 'Staffing Smoke Family', 'description', null, 'job_family_group_uuid', $6::uuid),
 		  $7::text,
 		  $8::uuid
 		);
@@ -491,7 +491,7 @@ func staffingSmoke(args []string) {
 		  'CREATE',
 		  $5::date,
 		  jsonb_build_object(
-		    'code', 'SMKJP1',
+		    'job_profile_code', 'SMKJP1',
 		    'name', 'Staffing Smoke Profile',
 		    'description', null,
 		    'job_family_uuids', jsonb_build_array($6::uuid),
@@ -2392,7 +2392,7 @@ SELECT jobcatalog.submit_job_family_group_event(
   $4::uuid,
   'CREATE',
   $5::date,
-  jsonb_build_object('code', 'JC1', 'name', 'Job Family Group 1', 'description', null),
+  jsonb_build_object('job_family_group_code', 'JC1', 'name', 'Job Family Group 1', 'description', null),
   $6::text,
   $7::uuid
 );
@@ -2409,7 +2409,7 @@ SELECT jobcatalog.submit_job_family_group_event(
   $4::uuid,
   'CREATE',
   $5::date,
-  jsonb_build_object('code', 'JC1', 'name', 'Job Family Group 1', 'description', null),
+  jsonb_build_object('job_family_group_code', 'JC1', 'name', 'Job Family Group 1', 'description', null),
   $6::text,
   $7::uuid
 );
@@ -2446,7 +2446,7 @@ SELECT jobcatalog.submit_job_family_group_event(
   $4::uuid,
   'CREATE',
   $5::date,
-  jsonb_build_object('code', 'JC2', 'name', 'Job Family Group 2', 'description', null),
+  jsonb_build_object('job_family_group_code', 'JC2', 'name', 'Job Family Group 2', 'description', null),
   $6::text,
   $7::uuid
 );
@@ -2467,7 +2467,7 @@ SELECT jobcatalog.submit_job_family_event(
   $4::uuid,
   'CREATE',
   $5::date,
-  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_uuid', $6::uuid),
+  jsonb_build_object('job_family_code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_uuid', $6::uuid),
   $7::text,
   $8::uuid
 );
@@ -2484,7 +2484,7 @@ SELECT jobcatalog.submit_job_family_event(
   $4::uuid,
   'CREATE',
   $5::date,
-  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_uuid', $6::uuid),
+  jsonb_build_object('job_family_code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_uuid', $6::uuid),
   $7::text,
   $8::uuid
 );
@@ -2593,7 +2593,7 @@ SELECT jobcatalog.submit_job_family_event(
 	  $4::uuid,
 	  'CREATE',
 	  $5::date,
-	  jsonb_build_object('code', 'JF2', 'name', 'Job Family 2', 'description', null, 'job_family_group_uuid', $6::uuid),
+	  jsonb_build_object('job_family_code', 'JF2', 'name', 'Job Family 2', 'description', null, 'job_family_group_uuid', $6::uuid),
 	  $7::text,
 	  $8::uuid
 	);
@@ -2614,8 +2614,8 @@ SELECT jobcatalog.submit_job_family_event(
 	  $4::uuid,
 	  'CREATE',
 	  $5::date,
-	  jsonb_build_object(
-	    'code', 'JP1',
+  jsonb_build_object(
+    'job_profile_code', 'JP1',
 	    'name', 'Job Profile 1',
 	    'description', null,
 	    'job_family_uuids', jsonb_build_array($6::uuid, $7::uuid),
@@ -2770,7 +2770,7 @@ SELECT jobcatalog.submit_job_level_event(
   $4::uuid,
   'CREATE',
   $5::date,
-  jsonb_build_object('code', 'JL1', 'name', 'Job Level 1', 'description', null),
+  jsonb_build_object('job_level_code', 'JL1', 'name', 'Job Level 1', 'description', null),
   $6::text,
   $7::uuid
 );
@@ -2787,7 +2787,7 @@ SELECT jobcatalog.submit_job_level_event(
   $4::uuid,
   'CREATE',
   $5::date,
-  jsonb_build_object('code', 'JL1', 'name', 'Job Level 1', 'description', null),
+  jsonb_build_object('job_level_code', 'JL1', 'name', 'Job Level 1', 'description', null),
   $6::text,
   $7::uuid
 );
