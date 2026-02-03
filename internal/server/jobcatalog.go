@@ -332,7 +332,7 @@ func resolveJobCatalogPackageByCode(ctx context.Context, tx pgx.Tx, tenantID str
 
 	var out JobCatalogPackage
 	if err := tx.QueryRow(ctx, `
-SELECT package_uuid::text, owner_setid
+SELECT package_id::text, owner_setid
 FROM orgunit.setid_scope_packages
 WHERE tenant_uuid = $1::uuid
   AND scope_code = 'jobcatalog'
