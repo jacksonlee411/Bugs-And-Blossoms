@@ -74,7 +74,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     `${tenantID}:${tenantAdminEmail}`,
     tenantAdminEmail,
     tenantAdminPass,
-    { tenant_id: tenantID, role_slug: "tenant-admin" }
+    { tenant_uuid: tenantID, role_slug: "tenant-admin" }
   );
   await superadminContext.close();
 

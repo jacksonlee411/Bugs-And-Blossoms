@@ -67,7 +67,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     `${tenantID}:${tenantAdminEmail}`,
     tenantAdminEmail,
     tenantAdminPass,
-    { tenant_id: tenantID }
+    { tenant_uuid: tenantID }
   );
   await superadminContext.close();
 

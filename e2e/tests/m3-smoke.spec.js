@@ -62,7 +62,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const createIdentityResp = await superadminContext.request.post(`${kratosAdminURL}/admin/identities`, {
     data: {
       schema_id: "default",
-      traits: { tenant_id: tenantID, email: tenantAdminEmail },
+      traits: { tenant_uuid: tenantID, email: tenantAdminEmail },
       credentials: {
         password: {
           identifiers: [identifier],
