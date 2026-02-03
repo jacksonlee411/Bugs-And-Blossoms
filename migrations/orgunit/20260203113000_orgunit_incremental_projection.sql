@@ -1,50 +1,91 @@
-CREATE TABLE IF NOT EXISTS orgunit.org_id_allocators (
-  tenant_uuid uuid NOT NULL,
-  next_org_id int NOT NULL CHECK (next_org_id BETWEEN 10000000 AND 100000000),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_uuid)
-);
-
-ALTER TABLE orgunit.org_id_allocators ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orgunit.org_id_allocators FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_id_allocators;
-CREATE POLICY tenant_isolation ON orgunit.org_id_allocators
-USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
-
-CREATE OR REPLACE FUNCTION orgunit.allocate_org_id(p_tenant_uuid uuid)
-RETURNS int
+-- +goose Up
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION orgunit.rebuild_full_name_path_subtree(
+  p_tenant_uuid uuid,
+  p_root_path ltree,
+  p_from_date date
+)
+RETURNS void
 LANGUAGE plpgsql
 AS $$
-DECLARE
-  v_next int;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
-  INSERT INTO orgunit.org_id_allocators (tenant_uuid, next_org_id)
-  VALUES (p_tenant_uuid, 10000001)
-  ON CONFLICT (tenant_uuid) DO UPDATE
-  SET next_org_id = orgunit.org_id_allocators.next_org_id + 1,
-      updated_at = now()
-  WHERE orgunit.org_id_allocators.next_org_id <= 99999999
-  RETURNING next_org_id - 1 INTO v_next;
-
-  IF v_next IS NULL THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_ID_EXHAUSTED',
-      DETAIL = format('tenant_uuid=%s', p_tenant_uuid);
+  IF p_root_path IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'root_path is required';
+  END IF;
+  IF p_from_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'from_date is required';
   END IF;
 
-  RETURN v_next;
+  UPDATE orgunit.org_unit_versions v
+  SET full_name_path = (
+    SELECT string_agg(a.name, ' / ' ORDER BY t.idx)
+    FROM unnest(v.path_ids) WITH ORDINALITY AS t(uid, idx)
+    JOIN orgunit.org_unit_versions a
+      ON a.tenant_uuid = v.tenant_uuid
+     AND a.org_id = t.uid
+     AND a.validity @> lower(v.validity)
+  )
+  WHERE v.tenant_uuid = p_tenant_uuid
+    AND v.node_path <@ p_root_path
+    AND lower(v.validity) >= p_from_date;
 END;
 $$;
 
-ALTER TABLE IF EXISTS orgunit.org_id_allocators OWNER TO orgunit_kernel;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE orgunit.org_id_allocators TO orgunit_kernel;
+CREATE OR REPLACE FUNCTION orgunit.assert_org_unit_validity(
+  p_tenant_uuid uuid,
+  p_org_ids int[]
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
-ALTER FUNCTION orgunit.allocate_org_id(uuid) OWNER TO orgunit_kernel;
-ALTER FUNCTION orgunit.allocate_org_id(uuid) SECURITY DEFINER;
-ALTER FUNCTION orgunit.allocate_org_id(uuid) SET search_path = pg_catalog, orgunit, public;
+  IF p_org_ids IS NULL OR array_length(p_org_ids, 1) IS NULL THEN
+    RETURN;
+  END IF;
+
+  IF EXISTS (
+    WITH ordered AS (
+      SELECT
+        org_id,
+        validity,
+        lag(validity) OVER (PARTITION BY org_id ORDER BY lower(validity)) AS prev_validity
+      FROM orgunit.org_unit_versions
+      WHERE tenant_uuid = p_tenant_uuid
+        AND org_id = ANY(p_org_ids)
+    )
+    SELECT 1
+    FROM ordered
+    WHERE prev_validity IS NOT NULL
+      AND lower(validity) <> upper(prev_validity)
+    LIMIT 1
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_VALIDITY_GAP',
+      DETAIL = 'org_unit_versions must be gapless';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM (
+      SELECT DISTINCT ON (org_id) org_id, validity
+      FROM orgunit.org_unit_versions
+      WHERE tenant_uuid = p_tenant_uuid
+        AND org_id = ANY(p_org_ids)
+      ORDER BY org_id, lower(validity) DESC
+    ) last
+    WHERE NOT upper_inf(last.validity)
+    LIMIT 1
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_VALIDITY_NOT_INFINITE',
+      DETAIL = 'last version validity must be unbounded (infinity)';
+  END IF;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
   p_event_uuid uuid,
@@ -256,3 +297,31 @@ BEGIN
   RETURN v_event_db_id;
 END;
 $$;
+
+REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app') THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM app';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM app_runtime';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_nobypassrls') THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM app_nobypassrls';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'superadmin_runtime') THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM superadmin_runtime';
+  END IF;
+END $$;
+
+GRANT EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) TO orgunit_kernel;
+ALTER FUNCTION orgunit.replay_org_unit_versions(uuid) OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.replay_org_unit_versions(uuid) SET search_path = pg_catalog, orgunit, public;
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+SELECT 1;
+-- +goose StatementEnd

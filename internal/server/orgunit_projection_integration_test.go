@@ -1,46 +1,296 @@
-CREATE OR REPLACE FUNCTION orgunit.assert_current_tenant(p_tenant_uuid uuid)
+package server
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+)
+
+func TestOrgunitProjection_IncrementalMatchesReplay(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	t.Cleanup(cancel)
+
+	adminConn, _, ok := connectTestPostgres(ctx, t)
+	if !ok {
+		return
+	}
+	t.Cleanup(func() { _ = adminConn.Close(context.Background()) })
+
+	if err := ensureOrgunitProjectionSchemaForTest(ctx, adminConn); err != nil {
+		t.Fatal(err)
+	}
+
+	tenant := "00000000-0000-0000-0000-0000000000a1"
+	initiator := "00000000-0000-0000-0000-0000000000b1"
+
+	tx, err := adminConn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenant); err != nil {
+		t.Fatal(err)
+	}
+
+	cleanup := []string{
+		`DELETE FROM orgunit.org_unit_codes WHERE tenant_uuid = $1::uuid;`,
+		`DELETE FROM orgunit.org_unit_versions WHERE tenant_uuid = $1::uuid;`,
+		`DELETE FROM orgunit.org_trees WHERE tenant_uuid = $1::uuid;`,
+		`DELETE FROM orgunit.org_events WHERE tenant_uuid = $1::uuid;`,
+		`DELETE FROM orgunit.org_id_allocators WHERE tenant_uuid = $1::uuid;`,
+	}
+	for _, stmt := range cleanup {
+		if _, err := tx.Exec(ctx, stmt, tenant); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	submit := func(eventUUID string, orgID int, eventType, effectiveDate, payload, requestCode string) {
+		_, err := tx.Exec(ctx, `SELECT orgunit.submit_org_event($1::uuid, $2::uuid, $3::int, $4::text, $5::date, $6::jsonb, $7::text, $8::uuid);`,
+			eventUUID, tenant, orgID, eventType, effectiveDate, payload, requestCode, initiator)
+		if err != nil {
+			t.Fatalf("submit %s: %v", eventType, err)
+		}
+	}
+
+	submit("00000000-0000-0000-0000-000000000101", 10000001, "CREATE", "2026-01-01", `{"name":"Root","org_code":"R1","is_business_unit":true}`, "r1")
+	submit("00000000-0000-0000-0000-000000000102", 10000002, "CREATE", "2026-01-01", `{"parent_id":10000001,"name":"ChildA","org_code":"C1"}`, "r2")
+	submit("00000000-0000-0000-0000-000000000103", 10000003, "CREATE", "2026-01-01", `{"parent_id":10000002,"name":"Grand","org_code":"G1"}`, "r3")
+	submit("00000000-0000-0000-0000-000000000104", 10000004, "CREATE", "2026-01-01", `{"parent_id":10000001,"name":"Branch","org_code":"B1"}`, "r4")
+	submit("00000000-0000-0000-0000-000000000105", 10000002, "RENAME", "2026-02-01", `{"new_name":"ChildA2"}`, "r5")
+	submit("00000000-0000-0000-0000-000000000106", 10000004, "SET_BUSINESS_UNIT", "2026-02-10", `{"is_business_unit":true}`, "r6")
+	submit("00000000-0000-0000-0000-000000000107", 10000002, "MOVE", "2026-03-01", `{"new_parent_id":10000004}`, "r7")
+	submit("00000000-0000-0000-0000-000000000108", 10000003, "DISABLE", "2026-04-01", `{}`, "r8")
+
+	if _, err := tx.Exec(ctx, `
+CREATE TEMP TABLE inc_versions AS
+SELECT tenant_uuid, org_id, parent_id, node_path, validity, name, full_name_path, status, is_business_unit, manager_uuid, last_event_id
+FROM orgunit.org_unit_versions
+WHERE tenant_uuid = $1::uuid;`, tenant); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+CREATE TEMP TABLE inc_trees AS
+SELECT tenant_uuid, root_org_id
+FROM orgunit.org_trees
+WHERE tenant_uuid = $1::uuid;`, tenant); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+CREATE TEMP TABLE inc_codes AS
+SELECT tenant_uuid, org_id, org_code
+FROM orgunit.org_unit_codes
+WHERE tenant_uuid = $1::uuid;`, tenant); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `SELECT orgunit.replay_org_unit_versions($1::uuid);`, tenant); err != nil {
+		t.Fatal(err)
+	}
+
+	assertNoDiff := func(name, query string, args ...any) {
+		var n int
+		if err := tx.QueryRow(ctx, query, args...).Scan(&n); err != nil {
+			t.Fatalf("query %s: %v", name, err)
+		}
+		if n != 0 {
+			t.Fatalf("%s mismatch: %d", name, n)
+		}
+	}
+
+	assertNoDiff("versions inc->replay", `
+SELECT count(*) FROM (
+  SELECT * FROM inc_versions
+  EXCEPT
+  SELECT tenant_uuid, org_id, parent_id, node_path, validity, name, full_name_path, status, is_business_unit, manager_uuid, last_event_id
+  FROM orgunit.org_unit_versions
+  WHERE tenant_uuid = $1::uuid
+) diff;`, tenant)
+
+	assertNoDiff("versions replay->inc", `
+SELECT count(*) FROM (
+  SELECT tenant_uuid, org_id, parent_id, node_path, validity, name, full_name_path, status, is_business_unit, manager_uuid, last_event_id
+  FROM orgunit.org_unit_versions
+  WHERE tenant_uuid = $1::uuid
+  EXCEPT
+  SELECT * FROM inc_versions
+) diff;`, tenant)
+
+	assertNoDiff("trees inc->replay", `
+SELECT count(*) FROM (
+  SELECT * FROM inc_trees
+  EXCEPT
+  SELECT tenant_uuid, root_org_id
+  FROM orgunit.org_trees
+  WHERE tenant_uuid = $1::uuid
+) diff;`, tenant)
+
+	assertNoDiff("trees replay->inc", `
+SELECT count(*) FROM (
+  SELECT tenant_uuid, root_org_id
+  FROM orgunit.org_trees
+  WHERE tenant_uuid = $1::uuid
+  EXCEPT
+  SELECT * FROM inc_trees
+) diff;`, tenant)
+
+	assertNoDiff("codes inc->replay", `
+SELECT count(*) FROM (
+  SELECT * FROM inc_codes
+  EXCEPT
+  SELECT tenant_uuid, org_id, org_code
+  FROM orgunit.org_unit_codes
+  WHERE tenant_uuid = $1::uuid
+) diff;`, tenant)
+
+	assertNoDiff("codes replay->inc", `
+SELECT count(*) FROM (
+  SELECT tenant_uuid, org_id, org_code
+  FROM orgunit.org_unit_codes
+  WHERE tenant_uuid = $1::uuid
+  EXCEPT
+  SELECT * FROM inc_codes
+) diff;`, tenant)
+}
+
+func ensureOrgunitProjectionSchemaForTest(ctx context.Context, conn *pgx.Conn) error {
+	ddl := []string{
+		`CREATE EXTENSION IF NOT EXISTS ltree;`,
+		`CREATE EXTENSION IF NOT EXISTS btree_gist;`,
+		`CREATE SCHEMA IF NOT EXISTS orgunit;`,
+		`CREATE OR REPLACE FUNCTION orgunit.org_ltree_label(p_id int)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT p_id::text;
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.org_path_ids(p_path ltree)
+RETURNS int[]
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT array_agg((t.part)::int ORDER BY t.ord)
+  FROM unnest(string_to_array(p_path::text, '.')) WITH ORDINALITY AS t(part, ord);
+$$;`,
+		`CREATE TABLE IF NOT EXISTS orgunit.org_trees (
+  tenant_uuid uuid NOT NULL,
+  root_org_id int NOT NULL CHECK (root_org_id BETWEEN 10000000 AND 99999999),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_uuid)
+);`,
+		`CREATE TABLE IF NOT EXISTS orgunit.org_events (
+  id bigserial PRIMARY KEY,
+  event_uuid uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
+  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
+  event_type text NOT NULL,
+  effective_date date NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_code text NOT NULL,
+  initiator_uuid uuid NOT NULL,
+  transaction_time timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT')),
+  CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_uuid, org_id, effective_date)
+);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_events (event_uuid);`,
+		`CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);`,
+		`CREATE INDEX IF NOT EXISTS org_events_tenant_effective_idx ON orgunit.org_events (tenant_uuid, effective_date, id);`,
+		`CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
+  id bigserial PRIMARY KEY,
+  tenant_uuid uuid NOT NULL,
+  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
+  parent_id int NULL CHECK (parent_id BETWEEN 10000000 AND 99999999),
+  node_path ltree NOT NULL,
+  validity daterange NOT NULL,
+  path_ids int[] GENERATED ALWAYS AS (orgunit.org_path_ids(node_path)) STORED,
+  name varchar(255) NOT NULL,
+  full_name_path text NOT NULL,
+  status text NOT NULL DEFAULT 'active',
+  is_business_unit boolean NOT NULL DEFAULT false,
+  manager_uuid uuid NULL,
+  last_event_id bigint NOT NULL REFERENCES orgunit.org_events(id),
+  CONSTRAINT org_unit_versions_status_check CHECK (status IN ('active','disabled')),
+  CONSTRAINT org_unit_versions_validity_check CHECK (NOT isempty(validity)),
+  CONSTRAINT org_unit_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
+  CONSTRAINT org_unit_versions_no_overlap
+    EXCLUDE USING gist (
+      tenant_uuid gist_uuid_ops WITH =,
+      org_id gist_int4_ops WITH =,
+      validity WITH &&
+    )
+);`,
+		`CREATE TABLE IF NOT EXISTS orgunit.org_unit_codes (
+  tenant_uuid uuid NOT NULL,
+  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
+  org_code text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_uuid, org_id),
+  CONSTRAINT org_unit_codes_org_code_format CHECK (
+    length(org_code) BETWEEN 1 AND 16
+    AND org_code = upper(btrim(org_code))
+    AND org_code ~ '^[A-Z0-9_-]{1,16}$'
+  ),
+  CONSTRAINT org_unit_codes_org_code_unique UNIQUE (tenant_uuid, org_code)
+);`,
+		`CREATE TABLE IF NOT EXISTS orgunit.org_id_allocators (
+  tenant_uuid uuid NOT NULL,
+  next_org_id int NOT NULL CHECK (next_org_id BETWEEN 10000000 AND 100000000),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_uuid)
+);`,
+		`CREATE OR REPLACE FUNCTION orgunit.assert_current_tenant(p_tenant_uuid uuid)
 RETURNS void
 LANGUAGE plpgsql
 AS $$
-DECLARE
-  v_ctx_raw text;
-  v_ctx_tenant uuid;
 BEGIN
-  IF p_tenant_uuid IS NULL THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = 'tenant_uuid is required';
+  IF current_setting('app.current_tenant', true) IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'RLS_TENANT_CONTEXT_MISSING';
   END IF;
-
-  v_ctx_raw := current_setting('app.current_tenant', true);
-  IF v_ctx_raw IS NULL OR btrim(v_ctx_raw) = '' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'RLS_TENANT_CONTEXT_MISSING',
-      DETAIL = 'app.current_tenant is required';
-  END IF;
-
-  BEGIN
-    v_ctx_tenant := v_ctx_raw::uuid;
-  EXCEPTION
-    WHEN invalid_text_representation THEN
-      RAISE EXCEPTION USING
-        ERRCODE = 'P0001',
-        MESSAGE = 'RLS_TENANT_CONTEXT_INVALID',
-        DETAIL = format('app.current_tenant=%s', v_ctx_raw);
-  END;
-
-  IF v_ctx_tenant <> p_tenant_uuid THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'RLS_TENANT_MISMATCH',
-      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_uuid, v_ctx_tenant);
+  IF current_setting('app.current_tenant')::uuid <> p_tenant_uuid THEN
+    RAISE EXCEPTION USING MESSAGE = 'RLS_TENANT_MISMATCH';
   END IF;
 END;
-$$;
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.allocate_org_id(p_tenant_uuid uuid)
+RETURNS int
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_next int;
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
-CREATE OR REPLACE FUNCTION orgunit.split_org_unit_version_at(
+  INSERT INTO orgunit.org_id_allocators (tenant_uuid, next_org_id)
+  VALUES (p_tenant_uuid, 10000001)
+  ON CONFLICT (tenant_uuid) DO UPDATE
+  SET next_org_id = orgunit.org_id_allocators.next_org_id + 1,
+      updated_at = now()
+  WHERE orgunit.org_id_allocators.next_org_id <= 99999999
+  RETURNING next_org_id - 1 INTO v_next;
+
+  IF v_next IS NULL THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_ID_EXHAUSTED',
+      DETAIL = format('tenant_uuid=%s', p_tenant_uuid);
+  END IF;
+
+  RETURN v_next;
+END;
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.split_org_unit_version_at(
   p_tenant_uuid uuid,
   p_org_id int,
   p_effective_date date,
@@ -106,9 +356,8 @@ BEGIN
     p_event_db_id
   );
 END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.apply_create_logic(
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.apply_create_logic(
   p_tenant_uuid uuid,
   p_org_id int,
   p_org_code text,
@@ -235,9 +484,8 @@ BEGIN
     p_event_db_id
   );
 END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.apply_move_logic(
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.apply_move_logic(
   p_tenant_uuid uuid,
   p_org_id int,
   p_new_parent_id int,
@@ -377,9 +625,8 @@ BEGIN
     AND v.node_path <@ v_old_path
     AND lower(v.validity) >= p_effective_date;
 END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.apply_rename_logic(
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.apply_rename_logic(
   p_tenant_uuid uuid,
   p_org_id int,
   p_effective_date date,
@@ -433,9 +680,8 @@ BEGIN
     AND lower(validity) >= p_effective_date
     AND (v_stop_date IS NULL OR lower(validity) < v_stop_date);
 END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.apply_disable_logic(
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.apply_disable_logic(
   p_tenant_uuid uuid,
   p_org_id int,
   p_effective_date date,
@@ -475,9 +721,8 @@ BEGIN
     AND org_id = p_org_id
     AND lower(validity) >= p_effective_date;
 END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.apply_set_business_unit_logic(
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.apply_set_business_unit_logic(
   p_tenant_uuid uuid,
   p_org_id int,
   p_effective_date date,
@@ -549,9 +794,8 @@ BEGIN
     AND lower(validity) >= p_effective_date
     AND (v_stop_date IS NULL OR lower(validity) < v_stop_date);
 END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.rebuild_full_name_path_subtree(
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.rebuild_full_name_path_subtree(
   p_tenant_uuid uuid,
   p_root_path ltree,
   p_from_date date
@@ -582,9 +826,8 @@ BEGIN
     AND v.node_path <@ p_root_path
     AND lower(v.validity) >= p_from_date;
 END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.assert_org_unit_validity(
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.assert_org_unit_validity(
   p_tenant_uuid uuid,
   p_org_ids int[]
 )
@@ -636,9 +879,8 @@ BEGIN
       DETAIL = 'last version validity must be unbounded (infinity)';
   END IF;
 END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.replay_org_unit_versions(
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.replay_org_unit_versions(
   p_tenant_uuid uuid
 )
 RETURNS void
@@ -773,9 +1015,8 @@ BEGIN
   WHERE v.tenant_uuid = p_tenant_uuid
 ;
 END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
+$$;`,
+		`CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
   p_event_uuid uuid,
   p_tenant_uuid uuid,
   p_org_id int,
@@ -793,6 +1034,7 @@ DECLARE
   v_event_db_id bigint;
   v_existing orgunit.org_events%ROWTYPE;
   v_payload jsonb;
+  v_org_id int;
   v_parent_id int;
   v_new_parent_id int;
   v_name text;
@@ -807,9 +1049,6 @@ BEGIN
 
   IF p_event_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'event_uuid is required';
-  END IF;
-  IF p_org_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
   END IF;
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
@@ -847,6 +1086,35 @@ BEGIN
     END;
   END IF;
 
+  IF p_event_type = 'CREATE' AND p_org_id IS NULL THEN
+    SELECT * INTO v_existing
+    FROM orgunit.org_events
+    WHERE event_uuid = p_event_uuid;
+
+    IF FOUND THEN
+      IF v_existing.tenant_uuid <> p_tenant_uuid
+        OR v_existing.event_type <> p_event_type
+        OR v_existing.effective_date <> p_effective_date
+        OR v_existing.payload <> v_payload
+        OR v_existing.request_code <> p_request_code
+        OR v_existing.initiator_uuid <> p_initiator_uuid
+      THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'ORG_IDEMPOTENCY_REUSED',
+          DETAIL = format('event_uuid=%s existing_id=%s', p_event_uuid, v_existing.id);
+      END IF;
+
+      RETURN v_existing.id;
+    END IF;
+
+    v_org_id := orgunit.allocate_org_id(p_tenant_uuid);
+  ELSE
+    IF p_org_id IS NULL THEN
+      RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
+    END IF;
+    v_org_id := p_org_id;
+  END IF;
+
   INSERT INTO orgunit.org_events (
     event_uuid,
     tenant_uuid,
@@ -860,7 +1128,7 @@ BEGIN
   VALUES (
     p_event_uuid,
     p_tenant_uuid,
-    p_org_id,
+    v_org_id,
     p_event_type,
     p_effective_date,
     v_payload,
@@ -876,7 +1144,7 @@ BEGIN
     WHERE event_uuid = p_event_uuid;
 
     IF v_existing.tenant_uuid <> p_tenant_uuid
-      OR v_existing.org_id <> p_org_id
+      OR v_existing.org_id <> v_org_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
@@ -907,23 +1175,23 @@ BEGIN
             DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
       END;
     END IF;
-    PERFORM orgunit.apply_create_logic(p_tenant_uuid, p_org_id, v_org_code, v_parent_id, p_effective_date, v_name, v_manager_uuid, v_is_business_unit, v_event_db_id);
+    PERFORM orgunit.apply_create_logic(p_tenant_uuid, v_org_id, v_org_code, v_parent_id, p_effective_date, v_name, v_manager_uuid, v_is_business_unit, v_event_db_id);
     SELECT v.node_path INTO v_root_path
     FROM orgunit.org_unit_versions v
     WHERE v.tenant_uuid = p_tenant_uuid
-      AND v.org_id = p_org_id
+      AND v.org_id = v_org_id
       AND v.validity @> p_effective_date
     ORDER BY lower(v.validity) DESC
     LIMIT 1;
     PERFORM orgunit.rebuild_full_name_path_subtree(p_tenant_uuid, v_root_path, p_effective_date);
-    v_org_ids := ARRAY[p_org_id];
+    v_org_ids := ARRAY[v_org_id];
   ELSIF p_event_type = 'MOVE' THEN
     v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::int;
-    PERFORM orgunit.apply_move_logic(p_tenant_uuid, p_org_id, v_new_parent_id, p_effective_date, v_event_db_id);
+    PERFORM orgunit.apply_move_logic(p_tenant_uuid, v_org_id, v_new_parent_id, p_effective_date, v_event_db_id);
     SELECT v.node_path INTO v_root_path
     FROM orgunit.org_unit_versions v
     WHERE v.tenant_uuid = p_tenant_uuid
-      AND v.org_id = p_org_id
+      AND v.org_id = v_org_id
       AND v.validity @> p_effective_date
     ORDER BY lower(v.validity) DESC
     LIMIT 1;
@@ -934,27 +1202,36 @@ BEGIN
       AND v.node_path <@ v_root_path;
   ELSIF p_event_type = 'RENAME' THEN
     v_new_name := NULLIF(btrim(v_payload->>'new_name'), '');
-    PERFORM orgunit.apply_rename_logic(p_tenant_uuid, p_org_id, p_effective_date, v_new_name, v_event_db_id);
+    PERFORM orgunit.apply_rename_logic(p_tenant_uuid, v_org_id, p_effective_date, v_new_name, v_event_db_id);
     SELECT v.node_path INTO v_root_path
     FROM orgunit.org_unit_versions v
     WHERE v.tenant_uuid = p_tenant_uuid
-      AND v.org_id = p_org_id
+      AND v.org_id = v_org_id
       AND v.validity @> p_effective_date
     ORDER BY lower(v.validity) DESC
     LIMIT 1;
     PERFORM orgunit.rebuild_full_name_path_subtree(p_tenant_uuid, v_root_path, p_effective_date);
-    v_org_ids := ARRAY[p_org_id];
+    v_org_ids := ARRAY[v_org_id];
   ELSIF p_event_type = 'DISABLE' THEN
-    PERFORM orgunit.apply_disable_logic(p_tenant_uuid, p_org_id, p_effective_date, v_event_db_id);
-    v_org_ids := ARRAY[p_org_id];
+    PERFORM orgunit.apply_disable_logic(p_tenant_uuid, v_org_id, p_effective_date, v_event_db_id);
+    v_org_ids := ARRAY[v_org_id];
   ELSIF p_event_type = 'SET_BUSINESS_UNIT' THEN
     v_is_business_unit := (v_payload->>'is_business_unit')::boolean;
-    PERFORM orgunit.apply_set_business_unit_logic(p_tenant_uuid, p_org_id, p_effective_date, v_is_business_unit, v_event_db_id);
-    v_org_ids := ARRAY[p_org_id];
+    PERFORM orgunit.apply_set_business_unit_logic(p_tenant_uuid, v_org_id, p_effective_date, v_is_business_unit, v_event_db_id);
+    v_org_ids := ARRAY[v_org_id];
   END IF;
 
   PERFORM orgunit.assert_org_unit_validity(p_tenant_uuid, v_org_ids);
 
   RETURN v_event_db_id;
 END;
-$$;
+$$;`,
+	}
+
+	for _, stmt := range ddl {
+		if _, err := conn.Exec(ctx, stmt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
