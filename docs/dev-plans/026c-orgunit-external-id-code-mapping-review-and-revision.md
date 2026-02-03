@@ -1,6 +1,6 @@
 # DEV-PLAN-026C：OrgUnit 外部ID兼容（org_code 映射）评审与修订方案
 
-**状态**: 部分完成（2026-02-03，迁移样本统计待补）
+**状态**: 部分完成（2026-02-03，迁移样本统计豁免：无样本数据，审批人：我）
 
 ## 1. 背景与目的
 - 本文为 DEV-PLAN-026B 的评审与修订计划，聚焦“契约一致性、可迁移性、可重放性、边界清晰”。
@@ -24,11 +24,11 @@
 - [X] 现有投射重建是否有“清表重放/幂等 upsert”约定与实现（作为 026B 重放策略的前提）。
   - 结论：采用同事务 delete+replay（清表重放），非 upsert。
   - 证据：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`；`modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`。
-- [X] API 输入校验是否保留原始输入（用于空格/\\t 允许语义与“非全空白”判定）。
+- [X] API 输入校验是否保留原始输入（用于空格/\\t/全角空白允许语义与“非全空白”判定）。
   - 结论：多数入口保留原始输入；SetID UI 路径在 Normalize 前先 Trim，导致语义不一致。
   - 证据：`pkg/orgunit/resolve.go`；`internal/server/orgunit_nodes.go`；`internal/server/staffing_handlers.go`；`internal/server/orgunit_api.go`；`internal/server/setid.go`。
-- [ ] 迁移样本统计：历史 org_code 的长度/字符集分布是否覆盖 026B 约束。
-  - 现状：未在 `docs/dev-plans/` 或 `docs/dev-records/` 找到迁移样本统计记录。
+- [~] 迁移样本统计：历史 org_code 的长度/字符集分布是否覆盖 026B 约束（**豁免：无样本数据，审批人：我**）。
+  - 现状：未在 `docs/dev-plans/` 或 `docs/dev-records/` 找到迁移样本统计记录；本次按豁免处理。
 - [X] "ROOT" 是否为保留 org_code，若不是需修订示例。
   - 结论：未发现 “ROOT 为保留 org_code” 的规则或校验；root 语义由 parent_id 为空与 root_org_id 约束定义。
   - 证据：`docs/dev-plans/026b-orgunit-external-id-code-mapping.md`；`modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`。
@@ -40,7 +40,7 @@
 
 ### 4.2 org_code 校验语义不一致
 - 旧版 026B 使用“trim + upper”，与“允许空格/\\t/全角字符”存在冲突风险。
-- 修订建议：统一为 **仅 upper（不 trim）** + 白名单校验 + 长度 1~64 + 禁止全空白；DB 约束改为 `org_code = upper(org_code)` + 白名单正则，避免语义冲突。
+- 修订建议：统一为 **仅 upper（不 trim）** + 白名单校验 + 长度 1~64 + 禁止全空白（空格/\\t/全角空白）；DB 约束改为 `org_code = upper(org_code)` + 白名单正则，避免语义冲突。
 
 ### 4.3 org_id 分配器边界与返回语义不一致
 - `next_org_id` 上限与分配函数条件不一致；“返回值 + 自增”语义与实现对齐不足。
@@ -113,7 +113,7 @@
 - [x] 迁移占位策略有明确规则或被显式禁止。
 - [ ] 示例与保留字规则一致，无隐性假设。
 - [ ] 相关实现与测试对齐修订后的契约（验证入口引用 SSOT）。
-- [ ] 迁移样本统计已完成并有结论；若不满足约束，有明确处置策略。
+- [~] 迁移样本统计已完成并有结论；若无样本数据则按豁免记录（审批人：我）。
 
 ## 9. 实施步骤
 1. [ ] 核实前置事实（投射重建、输入校验、迁移样本、ROOT 语义）。

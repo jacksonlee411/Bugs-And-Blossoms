@@ -130,10 +130,13 @@ func (s *resolveOrgCodeStore) ResolveOrgID(context.Context, string, string) (int
 func (s *resolveOrgCodeStore) ResolveOrgCode(context.Context, string, int) (string, error) {
 	return "", nil
 }
+func (s *resolveOrgCodeStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
+	return map[int]string{}, nil
+}
 
 func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeInvalid(t *testing.T) {
 	store := &resolveOrgCodeStore{}
-	body := bytes.NewBufferString(`{"org_code":" bad ","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
+	body := bytes.NewBufferString(`{"org_code":"bad\u007f","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()

@@ -1,54 +1,54 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION jobcatalog.replay_job_family_group_versions(
-  p_tenant_id uuid,
-  p_package_id uuid,
-  p_job_family_group_id uuid
+  p_tenant_uuid uuid,
+  p_package_uuid uuid,
+  p_job_family_group_uuid uuid
 )
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  PERFORM jobcatalog.replay_job_family_group_versions(p_tenant_id, p_package_id::text, p_job_family_group_id);
+  PERFORM jobcatalog.replay_job_family_group_versions(p_tenant_uuid, p_package_uuid::text, p_job_family_group_uuid);
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION jobcatalog.replay_job_family_versions(
-  p_tenant_id uuid,
-  p_package_id uuid,
-  p_job_family_id uuid
+  p_tenant_uuid uuid,
+  p_package_uuid uuid,
+  p_job_family_uuid uuid
 )
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  PERFORM jobcatalog.replay_job_family_versions(p_tenant_id, p_package_id::text, p_job_family_id);
+  PERFORM jobcatalog.replay_job_family_versions(p_tenant_uuid, p_package_uuid::text, p_job_family_uuid);
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION jobcatalog.replay_job_level_versions(
-  p_tenant_id uuid,
-  p_package_id uuid,
-  p_job_level_id uuid
+  p_tenant_uuid uuid,
+  p_package_uuid uuid,
+  p_job_level_uuid uuid
 )
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  PERFORM jobcatalog.replay_job_level_versions(p_tenant_id, p_package_id::text, p_job_level_id);
+  PERFORM jobcatalog.replay_job_level_versions(p_tenant_uuid, p_package_uuid::text, p_job_level_uuid);
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION jobcatalog.replay_job_profile_versions(
-  p_tenant_id uuid,
-  p_package_id uuid,
-  p_job_profile_id uuid
+  p_tenant_uuid uuid,
+  p_package_uuid uuid,
+  p_job_profile_uuid uuid
 )
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  PERFORM jobcatalog.replay_job_profile_versions(p_tenant_id, p_package_id::text, p_job_profile_id);
+  PERFORM jobcatalog.replay_job_profile_versions(p_tenant_uuid, p_package_uuid::text, p_job_profile_uuid);
 END;
 $$;
 -- +goose StatementEnd

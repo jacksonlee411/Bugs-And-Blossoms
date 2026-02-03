@@ -265,9 +265,9 @@ func (s *pgPrincipalStore) GetOrCreateTenantAdmin(ctx context.Context, tenantID 
 	p.RoleSlug = roleSlug
 
 	err := s.q.QueryRow(ctx, `
-INSERT INTO iam.principals (tenant_id, email, role_slug, status)
+INSERT INTO iam.principals (tenant_uuid, email, role_slug, status)
 VALUES ($1, $2, $3, 'active')
-ON CONFLICT (tenant_id, email) DO UPDATE SET
+ON CONFLICT (tenant_uuid, email) DO UPDATE SET
   role_slug = EXCLUDED.role_slug,
   status = EXCLUDED.status,
   updated_at = now()
@@ -291,9 +291,9 @@ func (s *pgPrincipalStore) UpsertFromKratos(ctx context.Context, tenantID string
 	p.KratosIdentityID = kratosIdentityID
 
 	err := s.q.QueryRow(ctx, `
-	INSERT INTO iam.principals (tenant_id, email, role_slug, status, kratos_identity_id)
+	INSERT INTO iam.principals (tenant_uuid, email, role_slug, status, kratos_identity_id)
 	VALUES ($1, $2, $3, 'active', $4::uuid)
-	ON CONFLICT (tenant_id, email) DO UPDATE SET
+	ON CONFLICT (tenant_uuid, email) DO UPDATE SET
 	  kratos_identity_id = COALESCE(iam.principals.kratos_identity_id, EXCLUDED.kratos_identity_id),
 	  updated_at = now()
 	RETURNING id::text, role_slug, status, COALESCE(kratos_identity_id::text, '');
@@ -316,9 +316,9 @@ func (s *pgPrincipalStore) UpsertFromKratos(ctx context.Context, tenantID string
 func (s *pgPrincipalStore) GetByID(ctx context.Context, tenantID string, principalID string) (Principal, bool, error) {
 	var p Principal
 	err := s.q.QueryRow(ctx, `
-SELECT id::text, tenant_id::text, email, role_slug, status
+SELECT id::text, tenant_uuid::text, email, role_slug, status
 FROM iam.principals
-WHERE tenant_id = $1 AND id = $2;
+WHERE tenant_uuid = $1 AND id = $2;
 	`, tenantID, principalID).Scan(&p.ID, &p.TenantID, &p.Email, &p.RoleSlug, &p.Status)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -349,7 +349,7 @@ func (s *pgSessionStore) Create(ctx context.Context, tenantID string, principalI
 		return "", err
 	}
 	_, err = s.q.Exec(ctx, `
-INSERT INTO iam.sessions (token_sha256, tenant_id, principal_id, expires_at, ip, user_agent)
+INSERT INTO iam.sessions (token_sha256, tenant_uuid, principal_id, expires_at, ip, user_agent)
 VALUES ($1, $2, $3, $4, $5, $6);
 `, tokenSha256, tenantID, principalID, expiresAt, ip, userAgent)
 	if err != nil {
@@ -364,7 +364,7 @@ func (s *pgSessionStore) Lookup(ctx context.Context, sid string) (Session, bool,
 	out.RevokedAt = nil
 	var revokedAt *time.Time
 	err := s.q.QueryRow(ctx, `
-SELECT tenant_id::text, principal_id::text, expires_at, revoked_at
+SELECT tenant_uuid::text, principal_id::text, expires_at, revoked_at
 FROM iam.sessions
 WHERE token_sha256 = $1;
 	`, sum[:]).Scan(&out.TenantID, &out.PrincipalID, &out.ExpiresAt, &revokedAt)

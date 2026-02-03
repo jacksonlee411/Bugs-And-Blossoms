@@ -87,7 +87,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 		}
 	})
 
-	t.Run("handleAssignmentEventsCorrectAPI missing assignment_id", func(t *testing.T) {
+	t.Run("handleAssignmentEventsCorrectAPI missing assignment_uuid", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"target_effective_date":"2026-01-01","replacement_payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -98,7 +98,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignmentEventsCorrectAPI missing target_effective_date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_id":"a1","replacement_payload":{}}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_uuid":"a1","replacement_payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentEventsCorrectAPI(rec, req, &staffingMemoryStore{})
@@ -108,7 +108,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignmentEventsCorrectAPI error conflict", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentEventsCorrectAPI(rec, req, assignmentStoreStub{
@@ -122,7 +122,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignmentEventsCorrectAPI error bad request", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentEventsCorrectAPI(rec, req, assignmentStoreStub{
@@ -136,7 +136,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignmentEventsCorrectAPI error invalid input", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentEventsCorrectAPI(rec, req, assignmentStoreStub{
@@ -150,7 +150,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignmentEventsCorrectAPI error unprocessable", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentEventsCorrectAPI(rec, req, assignmentStoreStub{
@@ -192,7 +192,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 		}
 	})
 
-	t.Run("handleAssignmentEventsRescindAPI missing assignment_id", func(t *testing.T) {
+	t.Run("handleAssignmentEventsRescindAPI missing assignment_uuid", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"target_effective_date":"2026-01-01","payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -203,7 +203,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignmentEventsRescindAPI missing target_effective_date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_id":"a1","payload":{}}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_uuid":"a1","payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentEventsRescindAPI(rec, req, &staffingMemoryStore{})
@@ -213,7 +213,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignmentEventsRescindAPI invalid target date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"bad","payload":{}}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"bad","payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentEventsRescindAPI(rec, req, &staffingMemoryStore{})
@@ -223,7 +223,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignmentEventsRescindAPI ok", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","payload":{"note":"x"}}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","payload":{"note":"x"}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentEventsRescindAPI(rec, req, assignmentStoreStub{
@@ -237,7 +237,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignmentEventsRescindAPI error bad request", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","payload":{}}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentEventsRescindAPI(rec, req, assignmentStoreStub{
@@ -251,7 +251,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignmentEventsRescindAPI error invalid input", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","payload":{}}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleAssignmentEventsRescindAPI(rec, req, assignmentStoreStub{
@@ -266,22 +266,22 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 
 	t.Run("handleAssignments correct_event branches", func(t *testing.T) {
 		positionStore := positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) {
-			return []Position{{ID: "pos1", LifecycleStatus: "active"}}, nil
+			return []Position{{PositionUUID: "pos1", LifecycleStatus: "active"}}, nil
 		}}
 
-		t.Run("missing assignment_id/target_effective_date", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&position_id=pos1"))
+		t.Run("missing assignment_uuid/target_effective_date", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&position_uuid=pos1"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 			rec := httptest.NewRecorder()
 			handleAssignments(rec, req, positionStore, assignmentStoreStub{listFn: func(context.Context, string, string, string) ([]Assignment, error) { return nil, nil }}, newPersonMemoryStore())
-			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "assignment_id/target_effective_date is required") {
+			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "assignment_uuid/target_effective_date is required") {
 				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 			}
 		})
 
 		t.Run("invalid target_effective_date", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_id=as1&target_effective_date=bad&position_id=pos1"))
+			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_uuid=as1&target_effective_date=bad&position_uuid=pos1"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 			rec := httptest.NewRecorder()
@@ -291,19 +291,19 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 			}
 		})
 
-		t.Run("missing position_id", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_id=as1&target_effective_date=2026-01-01"))
+		t.Run("missing position_uuid", func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_uuid=as1&target_effective_date=2026-01-01"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 			rec := httptest.NewRecorder()
 			handleAssignments(rec, req, positionStore, assignmentStoreStub{listFn: func(context.Context, string, string, string) ([]Assignment, error) { return nil, nil }}, newPersonMemoryStore())
-			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "position_id is required") {
+			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "position_uuid is required") {
 				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 			}
 		})
 
 		t.Run("store error", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_id=as1&target_effective_date=2026-01-01&position_id=pos1"))
+			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_uuid=as1&target_effective_date=2026-01-01&position_uuid=pos1"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 			rec := httptest.NewRecorder()
@@ -319,7 +319,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 		})
 
 		t.Run("ok (covers optional fields)", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_id=as1&target_effective_date=2026-01-01&position_id=pos1&allocated_fte=0.5&status=inactive"))
+			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_uuid=as1&target_effective_date=2026-01-01&position_uuid=pos1&allocated_fte=0.5&status=inactive"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 			rec := httptest.NewRecorder()
@@ -344,22 +344,22 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 
 	t.Run("handleAssignments rescind_event branches", func(t *testing.T) {
 		positionStore := positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) {
-			return []Position{{ID: "pos1", LifecycleStatus: "active"}}, nil
+			return []Position{{PositionUUID: "pos1", LifecycleStatus: "active"}}, nil
 		}}
 
-		t.Run("missing assignment_id/target_effective_date", func(t *testing.T) {
+		t.Run("missing assignment_uuid/target_effective_date", func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=rescind_event&effective_date=2026-01-01&person_uuid=p1"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 			rec := httptest.NewRecorder()
 			handleAssignments(rec, req, positionStore, assignmentStoreStub{listFn: func(context.Context, string, string, string) ([]Assignment, error) { return nil, nil }}, newPersonMemoryStore())
-			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "assignment_id/target_effective_date is required") {
+			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "assignment_uuid/target_effective_date is required") {
 				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 			}
 		})
 
 		t.Run("invalid target_effective_date", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=rescind_event&effective_date=2026-01-01&person_uuid=p1&assignment_id=as1&target_effective_date=bad"))
+			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=rescind_event&effective_date=2026-01-01&person_uuid=p1&assignment_uuid=as1&target_effective_date=bad"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 			rec := httptest.NewRecorder()
@@ -370,7 +370,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 		})
 
 		t.Run("store error", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=rescind_event&effective_date=2026-01-01&person_uuid=p1&assignment_id=as1&target_effective_date=2026-01-01"))
+			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=rescind_event&effective_date=2026-01-01&person_uuid=p1&assignment_uuid=as1&target_effective_date=2026-01-01"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 			rec := httptest.NewRecorder()
@@ -386,7 +386,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 		})
 
 		t.Run("ok (covers note payload)", func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=rescind_event&effective_date=2026-01-01&person_uuid=p1&assignment_id=as1&target_effective_date=2026-01-01&note=hello"))
+			req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=rescind_event&effective_date=2026-01-01&person_uuid=p1&assignment_uuid=as1&target_effective_date=2026-01-01&note=hello"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 			rec := httptest.NewRecorder()
@@ -410,13 +410,13 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignments unknown action", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=unknown&effective_date=2026-01-01&person_uuid=p1&position_id=pos1"))
+		req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("action=unknown&effective_date=2026-01-01&person_uuid=p1&position_uuid=pos1"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handleAssignments(rec, req,
 			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) {
-				return []Position{{ID: "pos1", LifecycleStatus: "active"}}, nil
+				return []Position{{PositionUUID: "pos1", LifecycleStatus: "active"}}, nil
 			}},
 			assignmentStoreStub{listFn: func(context.Context, string, string, string) ([]Assignment, error) { return []Assignment{}, nil }},
 			newPersonMemoryStore(),
@@ -427,13 +427,13 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 	})
 
 	t.Run("handleAssignments correct_event uses assignmentStore.CorrectAssignmentEvent request format", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", bytes.NewBufferString("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_id=as1&target_effective_date=2026-01-01&position_id=pos1"))
+		req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", bytes.NewBufferString("action=correct_event&effective_date=2026-01-01&person_uuid=p1&assignment_uuid=as1&target_effective_date=2026-01-01&position_uuid=pos1"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handleAssignments(rec, req,
 			positionStoreStub{listFn: func(context.Context, string, string) ([]Position, error) {
-				return []Position{{ID: "pos1", LifecycleStatus: "active"}}, nil
+				return []Position{{PositionUUID: "pos1", LifecycleStatus: "active"}}, nil
 			}},
 			assignmentStoreStub{
 				listFn: func(context.Context, string, string, string) ([]Assignment, error) { return []Assignment{}, nil },

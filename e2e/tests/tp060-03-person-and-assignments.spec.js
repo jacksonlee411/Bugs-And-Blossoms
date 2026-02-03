@@ -74,7 +74,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     `${tenantID}:${tenantAdminEmail}`,
     tenantAdminEmail,
     tenantAdminPass,
-    { tenant_id: tenantID, role_slug: "tenant-admin" }
+    { tenant_uuid: tenantID, role_slug: "tenant-admin" }
   );
   await superadminContext.close();
 
@@ -206,7 +206,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     .locator('input[name="org_code"]')
     .getAttribute("value");
   expect(orgUnitHiddenValue).toBe(orgOptionValue);
-  const jobProfileOption = positionCreateForm.locator('select[name="job_profile_id"] option', { hasText: jobProfileCode }).first();
+  const jobProfileOption = positionCreateForm.locator('select[name="job_profile_uuid"] option', { hasText: jobProfileCode }).first();
   const jobProfileID = await jobProfileOption.getAttribute("value");
   expect(jobProfileID).not.toBeNull();
 
@@ -215,7 +215,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   for (const pernr of pernrByIndex) {
     const positionName = `TP060-03 Position ${pernr} ${runID}`;
     await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
-    await positionCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
+    await positionCreateForm.locator('select[name="job_profile_uuid"]').selectOption(jobProfileID);
     await positionCreateForm.locator('input[name="capacity_fte"]').fill(pernr === "104" ? "0.50" : "1.0");
     await positionCreateForm.locator('input[name="name"]').fill(positionName);
     await positionCreateForm.locator('button[type="submit"]').click();
@@ -232,7 +232,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
 
   const updateTargetPositionName = `TP060-03 UpdateTarget Position ${runID}`;
   await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
-  await positionCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
+  await positionCreateForm.locator('select[name="job_profile_uuid"]').selectOption(jobProfileID);
   await positionCreateForm.locator('input[name="capacity_fte"]').fill("1.0");
   await positionCreateForm.locator('input[name="name"]').fill(updateTargetPositionName);
   await positionCreateForm.locator('button[type="submit"]').click();
@@ -247,7 +247,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
 
   const disabledPositionName = `TP060-03 Disabled Position ${runID}`;
   await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
-  await positionCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
+  await positionCreateForm.locator('select[name="job_profile_uuid"]').selectOption(jobProfileID);
   await positionCreateForm.locator('input[name="name"]').fill(disabledPositionName);
   await positionCreateForm.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(
@@ -285,7 +285,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${asOf}"]`)
     .nth(1);
   await positionUpdateForm.locator('input[name="effective_date"]').fill(lateEffectiveDate);
-  await positionUpdateForm.locator('select[name="position_id"]').selectOption(disabledPositionID);
+  await positionUpdateForm.locator('select[name="position_uuid"]').selectOption(disabledPositionID);
   await positionUpdateForm.locator('select[name="lifecycle_status"]').selectOption("disabled");
   await positionUpdateForm.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(
@@ -308,8 +308,8 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   expect(reporteePositionID).not.toBeUndefined();
 
   await positionUpdateFormLate.locator('input[name="effective_date"]').fill(lateEffectiveDate);
-  await positionUpdateFormLate.locator('select[name="position_id"]').selectOption(reporteePositionID);
-  await positionUpdateFormLate.locator('select[name="reports_to_position_id"]').selectOption(managerPositionID);
+  await positionUpdateFormLate.locator('select[name="position_uuid"]').selectOption(reporteePositionID);
+  await positionUpdateFormLate.locator('select[name="reports_to_position_uuid"]').selectOption(managerPositionID);
   await positionUpdateFormLate.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(
     new RegExp(`/org/positions\\?(?=.*as_of=${lateEffectiveDate}).*$`)
@@ -322,8 +322,8 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const reportsToCycleResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
     data: {
       effective_date: lateEffectiveDate,
-      position_id: managerPositionID,
-      reports_to_position_id: reporteePositionID
+      position_uuid: managerPositionID,
+      reports_to_position_uuid: reporteePositionID
     }
   });
   expect(reportsToCycleResp.status()).toBe(422);
@@ -332,8 +332,8 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const reportsToSelfResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
     data: {
       effective_date: lateEffectiveDate,
-      position_id: managerPositionID,
-      reports_to_position_id: managerPositionID
+      position_uuid: managerPositionID,
+      reports_to_position_uuid: managerPositionID
     }
   });
   expect(reportsToSelfResp.status()).toBe(422);
@@ -342,8 +342,8 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const reportsToRetroResp = await appContext.request.post(`/org/api/positions?as_of=${midEffectiveDate}`, {
     data: {
       effective_date: midEffectiveDate,
-      position_id: reporteePositionID,
-      reports_to_position_id: managerPositionID
+      position_uuid: reporteePositionID,
+      reports_to_position_uuid: managerPositionID
     }
   });
   expect(reportsToRetroResp.status()).toBe(422);
@@ -378,7 +378,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     data: {
       effective_date: lateEffectiveDate,
       person_uuid: personUUIDByPernr.get("101"),
-      position_id: disabledPositionID,
+      position_uuid: disabledPositionID,
       allocated_fte: "1.0"
     }
   });
@@ -387,7 +387,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
 
   await page.goto(`/org/assignments?as_of=${lateEffectiveDate}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Assignments");
-  await expect(page.locator(`select[name="position_id"] option[value="${disabledPositionID}"]`)).toHaveCount(0);
+  await expect(page.locator(`select[name="position_uuid"] option[value="${disabledPositionID}"]`)).toHaveCount(0);
 
   await page.goto(`/org/assignments?as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("Staffing / Assignments");
@@ -413,7 +413,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     expect(positionID).toBeTruthy();
 
     await upsertForm.locator('input[name="effective_date"]').fill(effectiveDate);
-    await upsertForm.locator('select[name="position_id"]').selectOption(positionID);
+    await upsertForm.locator('select[name="position_uuid"]').selectOption(positionID);
     await upsertForm.locator('input[name="allocated_fte"]').fill(allocatedFte);
     await upsertForm.getByRole("button", { name: "Submit" }).click();
     await expect(page).toHaveURL(new RegExp(`/org/assignments\\?as_of=${effectiveDate}&pernr=${pernr}$`));
@@ -449,7 +449,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       data: {
         effective_date: midEffectiveDate,
         person_uuid: p101,
-        position_id: updateTargetPositionID,
+        position_uuid: updateTargetPositionID,
         allocated_fte: "1.0"
       }
     });
@@ -459,15 +459,15 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     expect(beforeResp.status(), await beforeResp.text()).toBe(200);
     const beforeJSON = await beforeResp.json();
     expect(beforeJSON.assignments).toHaveLength(1);
-    expect(beforeJSON.assignments[0].EffectiveAt).toBe(asOf);
-    expect(beforeJSON.assignments[0].PositionID).toBe(pos101);
+    expect(beforeJSON.assignments[0].effective_date).toBe(asOf);
+    expect(beforeJSON.assignments[0].position_uuid).toBe(pos101);
 
     const afterResp = await appContext.request.get(`/org/api/assignments?as_of=${midEffectiveDate}&person_uuid=${encodeURIComponent(p101)}`);
     expect(afterResp.status(), await afterResp.text()).toBe(200);
     const afterJSON = await afterResp.json();
     expect(afterJSON.assignments).toHaveLength(1);
-    expect(afterJSON.assignments[0].EffectiveAt).toBe(midEffectiveDate);
-    expect(afterJSON.assignments[0].PositionID).toBe(updateTargetPositionID);
+    expect(afterJSON.assignments[0].effective_date).toBe(midEffectiveDate);
+    expect(afterJSON.assignments[0].position_uuid).toBe(updateTargetPositionID);
   }
 
   // Rerunnable upsert: same effective_date same payload => OK; different payload => 409 STAFFING_IDEMPOTENCY_REUSED.
@@ -476,7 +476,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       data: {
         effective_date: midEffectiveDate,
         person_uuid: p101,
-        position_id: updateTargetPositionID,
+        position_uuid: updateTargetPositionID,
         allocated_fte: "1.0"
       }
     });
@@ -486,7 +486,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       data: {
         effective_date: midEffectiveDate,
         person_uuid: p101,
-        position_id: updateTargetPositionID,
+        position_uuid: updateTargetPositionID,
         allocated_fte: "0.75"
       }
     });
@@ -500,7 +500,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       data: {
         effective_date: midEffectiveDate,
         person_uuid: p102,
-        position_id: pos104,
+        position_uuid: pos104,
         allocated_fte: "0.25"
       }
     });
@@ -517,7 +517,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     data: {
       effective_date: lateEffectiveDate,
       person_uuid: capacityPersonUUID,
-      position_id: capacityPositionID,
+      position_uuid: capacityPositionID,
       allocated_fte: "1.0"
     }
   });
@@ -527,7 +527,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const reduceCapacityResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
     data: {
       effective_date: lateEffectiveDate,
-      position_id: capacityPositionID,
+      position_uuid: capacityPositionID,
       capacity_fte: "0.25"
     }
   });
@@ -537,7 +537,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const disableConflictResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
     data: {
       effective_date: lateEffectiveDate,
-      position_id: capacityPositionID,
+      position_uuid: capacityPositionID,
       lifecycle_status: "disabled"
     }
   });

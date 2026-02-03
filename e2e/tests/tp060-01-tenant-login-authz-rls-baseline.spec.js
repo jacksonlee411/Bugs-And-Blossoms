@@ -94,22 +94,22 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
   const tenantBID = await ensureTenant(tenantBHost, `TP060-01 Tenant B ${runID}`);
 
   await createKratosIdentity(superadminContext.request, kratosAdminURL, {
-    traits: { tenant_id: tenantAID, email: t060AdminEmail, role_slug: "tenant-admin" },
+    traits: { tenant_uuid: tenantAID, email: t060AdminEmail, role_slug: "tenant-admin" },
     identifier: `${tenantAID}:${t060AdminEmail}`,
     password: tenantAdminPass
   });
   await createKratosIdentity(superadminContext.request, kratosAdminURL, {
-    traits: { tenant_id: tenantAID, email: t060ViewerEmail, role_slug: "tenant-viewer" },
+    traits: { tenant_uuid: tenantAID, email: t060ViewerEmail, role_slug: "tenant-viewer" },
     identifier: `${tenantAID}:${t060ViewerEmail}`,
     password: tenantViewerPass
   });
   await createKratosIdentity(superadminContext.request, kratosAdminURL, {
-    traits: { tenant_id: tenantBID, email: t060bAdminEmail, role_slug: "tenant-admin" },
+    traits: { tenant_uuid: tenantBID, email: t060bAdminEmail, role_slug: "tenant-admin" },
     identifier: `${tenantBID}:${t060bAdminEmail}`,
     password: tenantAdminPass
   });
   await createKratosIdentity(superadminContext.request, kratosAdminURL, {
-    traits: { tenant_id: tenantBID, email: t060bViewerEmail, role_slug: "tenant-viewer" },
+    traits: { tenant_uuid: tenantBID, email: t060bViewerEmail, role_slug: "tenant-viewer" },
     identifier: `${tenantBID}:${t060bViewerEmail}`,
     password: tenantViewerPass
   });

@@ -33,10 +33,10 @@
 - **允许字符（白名单）**：
   - ASCII 可打印字符：`\\x20-\\x7E`（包含字母数字与所有 ASCII 标点，含空格）
   - 水平制表符：`\\t`
+  - 中文标点与全角空白（CJK Symbols and Punctuation）：`\\u3000-\\u303F`
   - 全角字符（Fullwidth Forms）：`\\uFF01-\\uFF60`、`\\uFFE0-\\uFFEE`
-  - 中文标点补充集：`\\u3002`、`\\u300A-\\u300B`、`\\u3010-\\u3011`、`\\u2018-\\u201D`、`\\u2026`
-- **格式约束**：长度 1~64；**禁止全空白**（仅空格/\\t）；首尾空白允许。
-- **推荐正则（输入/存储）**：`^[\\t\\x20-\\x7E\\u3002\\u300A\\u300B\\u3010\\u3011\\u2018-\\u201D\\u2026\\uFF01-\\uFF60\\uFFE0-\\uFFEE]{1,64}$`
+- **格式约束**：长度 1~64；**禁止全空白**（空格/\\t/全角空白）；首尾空白允许。
+- **推荐正则（输入/存储）**：`^[\\t\\x20-\\x7E\\u3000-\\u303F\\uFF01-\\uFF60\\uFFE0-\\uFFEE]{1,64}$`
 - **存储一致性**：强制 `org_code = upper(org_code)`，确保大小写统一（ASCII/全角）。
 - 若未来需要“改码”，必须新增显式事件类型并执行专项方案（另立 dev-plan）。
 
@@ -75,8 +75,8 @@ CREATE TABLE orgunit.org_unit_codes (
     length(org_code) BETWEEN 1 AND 64
     AND org_code = upper(org_code)
     -- regex 字面量需支持 Unicode 范围；可用 U&'' 或直接字面量。
-    AND org_code ~ E'^[\t\x20-\x7E\u3002\u300A\u300B\u3010\u3011\u2018-\u201D\u2026\uFF01-\uFF60\uFFE0-\uFFEE]{1,64}$'
-    AND org_code !~ E'^[\t\x20]+$'
+    AND org_code ~ E'^[\t\x20-\x7E\u3000-\u303F\uFF01-\uFF60\uFFE0-\uFFEE]{1,64}$'
+    AND org_code !~ E'^[\t\x20\u3000]+$'
   ),
   CONSTRAINT org_unit_codes_org_code_unique UNIQUE (tenant_uuid, org_code)
 );

@@ -62,7 +62,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const createIdentityResp = await superadminContext.request.post(`${kratosAdminURL}/admin/identities`, {
     data: {
       schema_id: "default",
-      traits: { tenant_id: tenantID, email: tenantAdminEmail },
+      traits: { tenant_uuid: tenantID, email: tenantAdminEmail },
       credentials: {
         password: {
           identifiers: [identifier],
@@ -216,10 +216,10 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   const orgUnitCode = createdOrgCode;
   const orgUnitHiddenValue = await posCreateForm.locator('input[name="org_code"]').getAttribute("value");
   expect(orgUnitHiddenValue).toBe(orgUnitCode);
-  const jobProfileOption = posCreateForm.locator('select[name="job_profile_id"] option', { hasText: jobProfileCode }).first();
+  const jobProfileOption = posCreateForm.locator('select[name="job_profile_uuid"] option', { hasText: jobProfileCode }).first();
   const jobProfileID = await jobProfileOption.getAttribute("value");
   expect(jobProfileID).not.toBeNull();
-  await posCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
+  await posCreateForm.locator('select[name="job_profile_uuid"]').selectOption(jobProfileID);
   await posCreateForm.locator('input[name="name"]').fill(posName);
   await posCreateForm.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(
@@ -241,11 +241,11 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await expect(page).toHaveURL(new RegExp(`/org/assignments\\?as_of=${asOf}&pernr=${pernr}$`));
 
   const positionOption = await page
-    .locator('form[method="POST"] select[name="position_id"] option', { hasText: posName })
+    .locator('form[method="POST"] select[name="position_uuid"] option', { hasText: posName })
     .first()
     .getAttribute("value");
   expect(positionOption).not.toBeNull();
-  await page.locator('form[method="POST"] select[name="position_id"]').selectOption(positionOption);
+  await page.locator('form[method="POST"] select[name="position_uuid"]').selectOption(positionOption);
   await page.locator('form[method="POST"] button[type="submit"]').click();
 
   await expect(page).toHaveURL(new RegExp(`/org/assignments\\?as_of=${asOf}&pernr=${pernr}$`));

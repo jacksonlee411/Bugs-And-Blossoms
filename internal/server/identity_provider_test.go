@@ -90,8 +90,8 @@ func TestKratosIdentityProvider_AuthenticatePassword(t *testing.T) {
 			"identity": map[string]any{
 				"id": st.whoamiID,
 				"traits": map[string]any{
-					"tenant_id": st.tenantID,
-					"email":     st.email,
+					"tenant_uuid": st.tenantID,
+					"email":       st.email,
 				},
 			},
 		})

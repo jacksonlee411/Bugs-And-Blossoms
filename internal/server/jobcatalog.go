@@ -16,33 +16,33 @@ import (
 )
 
 type JobFamilyGroup struct {
-	ID           string
-	Code         string
-	Name         string
-	IsActive     bool
-	EffectiveDay string
+	JobFamilyGroupUUID string
+	JobFamilyGroupCode string
+	Name               string
+	IsActive           bool
+	EffectiveDay       string
 }
 
 type JobLevel struct {
-	ID           string
-	Code         string
+	JobLevelUUID string
+	JobLevelCode string
 	Name         string
 	IsActive     bool
 	EffectiveDay string
 }
 
 type JobFamily struct {
-	ID           string
-	Code         string
-	GroupCode    string
-	Name         string
-	IsActive     bool
-	EffectiveDay string
+	JobFamilyUUID      string
+	JobFamilyCode      string
+	JobFamilyGroupCode string
+	Name               string
+	IsActive           bool
+	EffectiveDay       string
 }
 
 type JobProfile struct {
-	ID                string
-	Code              string
+	JobProfileUUID    string
+	JobProfileCode    string
 	Name              string
 	IsActive          bool
 	EffectiveDay      string
@@ -65,7 +65,7 @@ type JobCatalogStore interface {
 }
 
 type JobCatalogPackage struct {
-	PackageID   string
+	PackageUUID string
 	PackageCode string
 	OwnerSetID  string
 }
@@ -115,7 +115,7 @@ func (s *jobcatalogMemoryStore) ResolveJobCatalogPackageByCode(_ context.Context
 		return JobCatalogPackage{}, errors.New("PACKAGE_CODE_INVALID")
 	}
 	return JobCatalogPackage{
-		PackageID:   packageCode,
+		PackageUUID: packageCode,
 		PackageCode: packageCode,
 		OwnerSetID:  packageCode,
 	}, nil
@@ -139,11 +139,11 @@ func (s *jobcatalogMemoryStore) CreateJobFamilyGroup(_ context.Context, tenantID
 		s.groups[tenantID][setID] = []JobFamilyGroup{}
 	}
 	s.groups[tenantID][setID] = append(s.groups[tenantID][setID], JobFamilyGroup{
-		ID:           strconv.Itoa(len(s.groups[tenantID][setID]) + 1),
-		Code:         code,
-		Name:         name,
-		IsActive:     true,
-		EffectiveDay: effectiveDate,
+		JobFamilyGroupUUID: strconv.Itoa(len(s.groups[tenantID][setID]) + 1),
+		JobFamilyGroupCode: code,
+		Name:               name,
+		IsActive:           true,
+		EffectiveDay:       effectiveDate,
 	})
 	return nil
 }
@@ -167,12 +167,12 @@ func (s *jobcatalogMemoryStore) CreateJobFamily(_ context.Context, tenantID stri
 		s.families[tenantID][setID] = []JobFamily{}
 	}
 	s.families[tenantID][setID] = append(s.families[tenantID][setID], JobFamily{
-		ID:           strconv.Itoa(len(s.families[tenantID][setID]) + 1),
-		Code:         code,
-		GroupCode:    groupCode,
-		Name:         name,
-		IsActive:     true,
-		EffectiveDay: effectiveDate,
+		JobFamilyUUID:      strconv.Itoa(len(s.families[tenantID][setID]) + 1),
+		JobFamilyCode:      code,
+		JobFamilyGroupCode: groupCode,
+		Name:               name,
+		IsActive:           true,
+		EffectiveDay:       effectiveDate,
 	})
 	return nil
 }
@@ -184,8 +184,8 @@ func (s *jobcatalogMemoryStore) UpdateJobFamilyGroup(_ context.Context, tenantID
 		return errors.New("setid is required")
 	}
 	for i := range s.families[tenantID][setID] {
-		if s.families[tenantID][setID][i].Code == familyCode {
-			s.families[tenantID][setID][i].GroupCode = groupCode
+		if s.families[tenantID][setID][i].JobFamilyCode == familyCode {
+			s.families[tenantID][setID][i].JobFamilyGroupCode = groupCode
 			s.families[tenantID][setID][i].EffectiveDay = effectiveDate
 			return nil
 		}
@@ -212,8 +212,8 @@ func (s *jobcatalogMemoryStore) CreateJobLevel(_ context.Context, tenantID strin
 		s.levels[tenantID][setID] = []JobLevel{}
 	}
 	s.levels[tenantID][setID] = append(s.levels[tenantID][setID], JobLevel{
-		ID:           strconv.Itoa(len(s.levels[tenantID][setID]) + 1),
-		Code:         code,
+		JobLevelUUID: strconv.Itoa(len(s.levels[tenantID][setID]) + 1),
+		JobLevelCode: code,
 		Name:         name,
 		IsActive:     true,
 		EffectiveDay: effectiveDate,
@@ -240,8 +240,8 @@ func (s *jobcatalogMemoryStore) CreateJobProfile(_ context.Context, tenantID str
 		s.profiles[tenantID][setID] = []JobProfile{}
 	}
 	s.profiles[tenantID][setID] = append(s.profiles[tenantID][setID], JobProfile{
-		ID:                strconv.Itoa(len(s.profiles[tenantID][setID]) + 1),
-		Code:              code,
+		JobProfileUUID:    strconv.Itoa(len(s.profiles[tenantID][setID]) + 1),
+		JobProfileCode:    code,
 		Name:              name,
 		IsActive:          true,
 		EffectiveDay:      effectiveDate,
@@ -337,7 +337,7 @@ FROM orgunit.setid_scope_packages
 WHERE tenant_uuid = $1::uuid
   AND scope_code = 'jobcatalog'
   AND package_code = $2::text
-`, tenantID, packageCode).Scan(&out.PackageID, &out.OwnerSetID); err != nil {
+`, tenantID, packageCode).Scan(&out.PackageUUID, &out.OwnerSetID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return JobCatalogPackage{}, errors.New("PACKAGE_NOT_FOUND")
 		}
@@ -351,7 +351,7 @@ SELECT orgunit.assert_scope_package_active_as_of(
   $1::uuid,
   $3::date
 );
-`, tenantID, out.PackageID, asOfDate); err != nil {
+`, tenantID, out.PackageUUID, asOfDate); err != nil {
 		return JobCatalogPackage{}, err
 	}
 	out.PackageCode = packageCode
@@ -404,7 +404,7 @@ func (s *jobcatalogPGStore) CreateJobFamilyGroup(ctx context.Context, tenantID s
 			return err
 		}
 
-		payload := `{"code":` + strconv.Quote(code) +
+		payload := `{"job_family_group_code":` + strconv.Quote(code) +
 			`,"name":` + strconv.Quote(name)
 		if strings.TrimSpace(description) != "" {
 			payload += `,"description":` + strconv.Quote(description)
@@ -443,20 +443,20 @@ func (s *jobcatalogPGStore) ListJobFamilyGroups(ctx context.Context, tenantID st
 
 		rows, err := tx.Query(ctx, `
 SELECT
-  g.id::text,
-  g.code,
+  g.job_family_group_uuid::text,
+  g.job_family_group_code,
   v.name,
   v.is_active,
   lower(v.validity)::text
 FROM jobcatalog.job_family_groups g
 JOIN jobcatalog.job_family_group_versions v
-  ON v.tenant_id = $1::uuid
- AND v.package_id = $2::uuid
- AND v.job_family_group_id = g.id
-WHERE g.tenant_id = $1::uuid
-  AND g.package_id = $2::uuid
+  ON v.tenant_uuid = $1::uuid
+ AND v.package_uuid = $2::uuid
+ AND v.job_family_group_uuid = g.job_family_group_uuid
+WHERE g.tenant_uuid = $1::uuid
+  AND g.package_uuid = $2::uuid
   AND v.validity @> $3::date
-ORDER BY g.code ASC
+ORDER BY g.job_family_group_code ASC
 `, tenantID, v, asOfDate)
 		if err != nil {
 			return err
@@ -465,7 +465,7 @@ ORDER BY g.code ASC
 
 		for rows.Next() {
 			var g JobFamilyGroup
-			if err := rows.Scan(&g.ID, &g.Code, &g.Name, &g.IsActive, &g.EffectiveDay); err != nil {
+			if err := rows.Scan(&g.JobFamilyGroupUUID, &g.JobFamilyGroupCode, &g.Name, &g.IsActive, &g.EffectiveDay); err != nil {
 				return err
 			}
 			out = append(out, g)
@@ -488,11 +488,11 @@ func (s *jobcatalogPGStore) CreateJobFamily(ctx context.Context, tenantID string
 
 		var groupID string
 		if err := tx.QueryRow(ctx, `
-SELECT g.id::text
+SELECT g.job_family_group_uuid::text
 FROM jobcatalog.job_family_groups g
-WHERE g.tenant_id = $1::uuid
-  AND g.package_id = $2::uuid
-  AND g.code = $3::text
+WHERE g.tenant_uuid = $1::uuid
+  AND g.package_uuid = $2::uuid
+  AND g.job_family_group_code = $3::text
 `, tenantID, resolved, groupCode).Scan(&groupID); err != nil {
 			return err
 		}
@@ -506,9 +506,9 @@ WHERE g.tenant_id = $1::uuid
 			return err
 		}
 
-		payload := `{"code":` + strconv.Quote(code) +
+		payload := `{"job_family_code":` + strconv.Quote(code) +
 			`,"name":` + strconv.Quote(name) +
-			`,"job_family_group_id":` + strconv.Quote(groupID)
+			`,"job_family_group_uuid":` + strconv.Quote(groupID)
 		if strings.TrimSpace(description) != "" {
 			payload += `,"description":` + strconv.Quote(description)
 		} else {
@@ -546,22 +546,22 @@ func (s *jobcatalogPGStore) UpdateJobFamilyGroup(ctx context.Context, tenantID s
 
 		var groupID string
 		if err := tx.QueryRow(ctx, `
-SELECT g.id::text
+SELECT g.job_family_group_uuid::text
 FROM jobcatalog.job_family_groups g
-WHERE g.tenant_id = $1::uuid
-  AND g.package_id = $2::uuid
-  AND g.code = $3::text
+WHERE g.tenant_uuid = $1::uuid
+  AND g.package_uuid = $2::uuid
+  AND g.job_family_group_code = $3::text
 `, tenantID, resolved, groupCode).Scan(&groupID); err != nil {
 			return err
 		}
 
 		var familyID string
 		if err := tx.QueryRow(ctx, `
-SELECT f.id::text
+SELECT f.job_family_uuid::text
 FROM jobcatalog.job_families f
-WHERE f.tenant_id = $1::uuid
-  AND f.package_id = $2::uuid
-  AND f.code = $3::text
+WHERE f.tenant_uuid = $1::uuid
+  AND f.package_uuid = $2::uuid
+  AND f.job_family_code = $3::text
 `, tenantID, resolved, familyCode).Scan(&familyID); err != nil {
 			return err
 		}
@@ -571,7 +571,7 @@ WHERE f.tenant_id = $1::uuid
 			return err
 		}
 
-		payload := `{"job_family_group_id":` + strconv.Quote(groupID) + `}`
+		payload := `{"job_family_group_uuid":` + strconv.Quote(groupID) + `}`
 
 		_, err = tx.Exec(ctx, `
 SELECT jobcatalog.submit_job_family_event(
@@ -603,25 +603,25 @@ func (s *jobcatalogPGStore) ListJobFamilies(ctx context.Context, tenantID string
 
 		rows, err := tx.Query(ctx, `
 SELECT
-  f.id::text,
-  f.code,
-  g.code AS group_code,
+  f.job_family_uuid::text,
+  f.job_family_code,
+  g.job_family_group_code AS job_family_group_code,
   v.name,
   v.is_active,
   lower(v.validity)::text
 FROM jobcatalog.job_families f
 JOIN jobcatalog.job_family_versions v
-  ON v.tenant_id = $1::uuid
- AND v.package_id = $2::uuid
- AND v.job_family_id = f.id
+  ON v.tenant_uuid = $1::uuid
+ AND v.package_uuid = $2::uuid
+ AND v.job_family_uuid = f.job_family_uuid
 JOIN jobcatalog.job_family_groups g
-  ON g.tenant_id = $1::uuid
- AND g.package_id = $2::uuid
- AND g.id = v.job_family_group_id
-WHERE f.tenant_id = $1::uuid
-  AND f.package_id = $2::uuid
+  ON g.tenant_uuid = $1::uuid
+ AND g.package_uuid = $2::uuid
+ AND g.job_family_group_uuid = v.job_family_group_uuid
+WHERE f.tenant_uuid = $1::uuid
+  AND f.package_uuid = $2::uuid
   AND v.validity @> $3::date
-ORDER BY f.code ASC
+ORDER BY f.job_family_code ASC
 `, tenantID, v, asOfDate)
 		if err != nil {
 			return err
@@ -630,7 +630,7 @@ ORDER BY f.code ASC
 
 		for rows.Next() {
 			var f JobFamily
-			if err := rows.Scan(&f.ID, &f.Code, &f.GroupCode, &f.Name, &f.IsActive, &f.EffectiveDay); err != nil {
+			if err := rows.Scan(&f.JobFamilyUUID, &f.JobFamilyCode, &f.JobFamilyGroupCode, &f.Name, &f.IsActive, &f.EffectiveDay); err != nil {
 				return err
 			}
 			out = append(out, f)
@@ -660,7 +660,7 @@ func (s *jobcatalogPGStore) CreateJobLevel(ctx context.Context, tenantID string,
 			return err
 		}
 
-		payload := `{"code":` + strconv.Quote(code) +
+		payload := `{"job_level_code":` + strconv.Quote(code) +
 			`,"name":` + strconv.Quote(name)
 		if strings.TrimSpace(description) != "" {
 			payload += `,"description":` + strconv.Quote(description)
@@ -699,20 +699,20 @@ func (s *jobcatalogPGStore) ListJobLevels(ctx context.Context, tenantID string, 
 
 		rows, err := tx.Query(ctx, `
 	SELECT
-	  l.id::text,
-	  l.code,
+	  l.job_level_uuid::text,
+	  l.job_level_code,
 	  v.name,
 	  v.is_active,
 	  lower(v.validity)::text
 	FROM jobcatalog.job_levels l
 	JOIN jobcatalog.job_level_versions v
-	  ON v.tenant_id = $1::uuid
-	 AND v.package_id = $2::uuid
-	 AND v.job_level_id = l.id
-	WHERE l.tenant_id = $1::uuid
-	  AND l.package_id = $2::uuid
+	  ON v.tenant_uuid = $1::uuid
+	 AND v.package_uuid = $2::uuid
+	 AND v.job_level_uuid = l.job_level_uuid
+	WHERE l.tenant_uuid = $1::uuid
+	  AND l.package_uuid = $2::uuid
 	  AND v.validity @> $3::date
-	ORDER BY l.code ASC
+	ORDER BY l.job_level_code ASC
 	`, tenantID, v, asOfDate)
 		if err != nil {
 			return err
@@ -721,7 +721,7 @@ func (s *jobcatalogPGStore) ListJobLevels(ctx context.Context, tenantID string, 
 
 		for rows.Next() {
 			var l JobLevel
-			if err := rows.Scan(&l.ID, &l.Code, &l.Name, &l.IsActive, &l.EffectiveDay); err != nil {
+			if err := rows.Scan(&l.JobLevelUUID, &l.JobLevelCode, &l.Name, &l.IsActive, &l.EffectiveDay); err != nil {
 				return err
 			}
 			out = append(out, l)
@@ -764,11 +764,11 @@ func (s *jobcatalogPGStore) CreateJobProfile(ctx context.Context, tenantID strin
 		familyByCode := make(map[string]string, len(lookupCodes))
 		if len(lookupCodes) > 0 {
 			rows, err := tx.Query(ctx, `
-SELECT f.code, f.id::text
+SELECT f.job_family_code, f.job_family_uuid::text
 FROM jobcatalog.job_families f
-WHERE f.tenant_id = $1::uuid
-  AND f.package_id = $2::uuid
-  AND f.code = ANY($3::text[])
+WHERE f.tenant_uuid = $1::uuid
+  AND f.package_uuid = $2::uuid
+  AND f.job_family_code = ANY($3::text[])
 `, tenantID, resolved, lookupCodes)
 			if err != nil {
 				return err
@@ -808,10 +808,10 @@ WHERE f.tenant_id = $1::uuid
 			return err
 		}
 
-		payload := `{"code":` + strconv.Quote(code) +
+		payload := `{"job_profile_code":` + strconv.Quote(code) +
 			`,"name":` + strconv.Quote(name) +
-			`,"job_family_ids":[` + strings.Join(quoteAll(familyIDs), ",") + `]` +
-			`,"primary_job_family_id":` + strconv.Quote(primaryID)
+			`,"job_family_uuids":[` + strings.Join(quoteAll(familyIDs), ",") + `]` +
+			`,"primary_job_family_uuid":` + strconv.Quote(primaryID)
 		if strings.TrimSpace(description) != "" {
 			payload += `,"description":` + strconv.Quote(description)
 		} else {
@@ -849,43 +849,43 @@ func (s *jobcatalogPGStore) ListJobProfiles(ctx context.Context, tenantID string
 
 		rows, err := tx.Query(ctx, `
 SELECT
-  p.id::text,
-  p.code,
+  p.job_profile_uuid::text,
+  p.job_profile_code,
   v.name,
   v.is_active,
   lower(v.validity)::text,
-  COALESCE(string_agg(f.code, ',' ORDER BY f.code) FILTER (WHERE f.code IS NOT NULL), '') AS family_codes_csv,
+  COALESCE(string_agg(f.job_family_code, ',' ORDER BY f.job_family_code) FILTER (WHERE f.job_family_code IS NOT NULL), '') AS family_codes_csv,
   COALESCE((
-    SELECT f2.code
+    SELECT f2.job_family_code
     FROM jobcatalog.job_profile_version_job_families pf2
     JOIN jobcatalog.job_families f2
-      ON f2.tenant_id = $1::uuid
-     AND f2.package_id = $2::uuid
-     AND f2.id = pf2.job_family_id
-    WHERE pf2.tenant_id = $1::uuid
-      AND pf2.package_id = $2::uuid
+      ON f2.tenant_uuid = $1::uuid
+     AND f2.package_uuid = $2::uuid
+     AND f2.job_family_uuid = pf2.job_family_uuid
+    WHERE pf2.tenant_uuid = $1::uuid
+      AND pf2.package_uuid = $2::uuid
       AND pf2.job_profile_version_id = v.id
       AND pf2.is_primary = true
     LIMIT 1
   ), '') AS primary_family_code
 FROM jobcatalog.job_profiles p
 JOIN jobcatalog.job_profile_versions v
-  ON v.tenant_id = $1::uuid
- AND v.package_id = $2::uuid
- AND v.job_profile_id = p.id
+  ON v.tenant_uuid = $1::uuid
+ AND v.package_uuid = $2::uuid
+ AND v.job_profile_uuid = p.job_profile_uuid
  AND v.validity @> $3::date
 LEFT JOIN jobcatalog.job_profile_version_job_families pf
-  ON pf.tenant_id = $1::uuid
- AND pf.package_id = $2::uuid
+  ON pf.tenant_uuid = $1::uuid
+ AND pf.package_uuid = $2::uuid
  AND pf.job_profile_version_id = v.id
 LEFT JOIN jobcatalog.job_families f
-  ON f.tenant_id = $1::uuid
- AND f.package_id = $2::uuid
- AND f.id = pf.job_family_id
-WHERE p.tenant_id = $1::uuid
-  AND p.package_id = $2::uuid
-GROUP BY p.id, p.code, v.id, v.name, v.is_active, v.validity
-ORDER BY p.code ASC
+  ON f.tenant_uuid = $1::uuid
+ AND f.package_uuid = $2::uuid
+ AND f.job_family_uuid = pf.job_family_uuid
+WHERE p.tenant_uuid = $1::uuid
+  AND p.package_uuid = $2::uuid
+GROUP BY p.job_profile_uuid, p.job_profile_code, v.id, v.name, v.is_active, v.validity
+ORDER BY p.job_profile_code ASC
 `, tenantID, v, asOfDate)
 		if err != nil {
 			return err
@@ -894,7 +894,7 @@ ORDER BY p.code ASC
 
 		for rows.Next() {
 			var p JobProfile
-			if err := rows.Scan(&p.ID, &p.Code, &p.Name, &p.IsActive, &p.EffectiveDay, &p.FamilyCodesCSV, &p.PrimaryFamilyCode); err != nil {
+			if err := rows.Scan(&p.JobProfileUUID, &p.JobProfileCode, &p.Name, &p.IsActive, &p.EffectiveDay, &p.FamilyCodesCSV, &p.PrimaryFamilyCode); err != nil {
 				return err
 			}
 			out = append(out, p)
@@ -1011,7 +1011,7 @@ func resolveJobCatalogView(ctx context.Context, store JobCatalogStore, setidStor
 	if err != nil {
 		return view, err.Error()
 	}
-	if resolvedID != pkg.PackageID {
+	if resolvedID != pkg.PackageUUID {
 		return view, "PACKAGE_CODE_MISMATCH"
 	}
 	return view, ""
@@ -1353,18 +1353,18 @@ func renderJobCatalog(groups []JobFamilyGroup, families []JobFamily, levels []Jo
 
 	if view.HasSelection {
 		b.WriteString(`<h2>Job Family Groups</h2>`)
-		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>name</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>job_family_group_code</th><th>name</th><th>active</th><th>effective_date</th><th>job_family_group_uuid</th></tr></thead><tbody>`)
 		for _, g := range groups {
 			active := "false"
 			if g.IsActive {
 				active = "true"
 			}
 			b.WriteString("<tr>")
-			b.WriteString("<td>" + html.EscapeString(g.Code) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(g.JobFamilyGroupCode) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(g.Name) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(active) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(g.EffectiveDay) + "</td>")
-			b.WriteString("<td><code>" + html.EscapeString(g.ID) + "</code></td>")
+			b.WriteString("<td><code>" + html.EscapeString(g.JobFamilyGroupUUID) + "</code></td>")
 			b.WriteString("</tr>")
 		}
 		b.WriteString("</tbody></table>")
@@ -1396,19 +1396,19 @@ func renderJobCatalog(groups []JobFamilyGroup, families []JobFamily, levels []Jo
 
 	if view.HasSelection {
 		b.WriteString(`<h2>Job Families</h2>`)
-		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>group</th><th>name</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>job_family_code</th><th>job_family_group_code</th><th>name</th><th>active</th><th>effective_date</th><th>job_family_uuid</th></tr></thead><tbody>`)
 		for _, f := range families {
 			active := "false"
 			if f.IsActive {
 				active = "true"
 			}
 			b.WriteString("<tr>")
-			b.WriteString("<td>" + html.EscapeString(f.Code) + "</td>")
-			b.WriteString("<td>" + html.EscapeString(f.GroupCode) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(f.JobFamilyCode) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(f.JobFamilyGroupCode) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(f.Name) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(active) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(f.EffectiveDay) + "</td>")
-			b.WriteString("<td><code>" + html.EscapeString(f.ID) + "</code></td>")
+			b.WriteString("<td><code>" + html.EscapeString(f.JobFamilyUUID) + "</code></td>")
 			b.WriteString("</tr>")
 		}
 		b.WriteString("</tbody></table>")
@@ -1429,18 +1429,18 @@ func renderJobCatalog(groups []JobFamilyGroup, families []JobFamily, levels []Jo
 
 	if view.HasSelection {
 		b.WriteString(`<h2>Job Levels</h2>`)
-		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>name</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>job_level_code</th><th>name</th><th>active</th><th>effective_date</th><th>job_level_uuid</th></tr></thead><tbody>`)
 		for _, l := range levels {
 			active := "false"
 			if l.IsActive {
 				active = "true"
 			}
 			b.WriteString("<tr>")
-			b.WriteString("<td>" + html.EscapeString(l.Code) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(l.JobLevelCode) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(l.Name) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(active) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(l.EffectiveDay) + "</td>")
-			b.WriteString("<td><code>" + html.EscapeString(l.ID) + "</code></td>")
+			b.WriteString("<td><code>" + html.EscapeString(l.JobLevelUUID) + "</code></td>")
 			b.WriteString("</tr>")
 		}
 		b.WriteString("</tbody></table>")
@@ -1463,20 +1463,20 @@ func renderJobCatalog(groups []JobFamilyGroup, families []JobFamily, levels []Jo
 
 	if view.HasSelection {
 		b.WriteString(`<h2>Job Profiles</h2>`)
-		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>code</th><th>name</th><th>families</th><th>primary</th><th>active</th><th>effective_date</th><th>id</th></tr></thead><tbody>`)
+		b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>job_profile_code</th><th>name</th><th>families</th><th>primary</th><th>active</th><th>effective_date</th><th>job_profile_uuid</th></tr></thead><tbody>`)
 		for _, p := range profiles {
 			active := "false"
 			if p.IsActive {
 				active = "true"
 			}
 			b.WriteString("<tr>")
-			b.WriteString("<td>" + html.EscapeString(p.Code) + "</td>")
+			b.WriteString("<td>" + html.EscapeString(p.JobProfileCode) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(p.Name) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(p.FamilyCodesCSV) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(p.PrimaryFamilyCode) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(active) + "</td>")
 			b.WriteString("<td>" + html.EscapeString(p.EffectiveDay) + "</td>")
-			b.WriteString("<td><code>" + html.EscapeString(p.ID) + "</code></td>")
+			b.WriteString("<td><code>" + html.EscapeString(p.JobProfileUUID) + "</code></td>")
 			b.WriteString("</tr>")
 		}
 		b.WriteString("</tbody></table>")

@@ -64,7 +64,7 @@ func (r *tenancyDBResolver) ResolveTenant(ctx context.Context, hostname string) 
 	err := r.q.QueryRow(ctx, `
 SELECT t.id::text, t.name
 FROM iam.tenant_domains d
-JOIN iam.tenants t ON t.id = d.tenant_id
+JOIN iam.tenants t ON t.id = d.tenant_uuid
 WHERE d.hostname = $1
   AND t.is_active = true
 LIMIT 1

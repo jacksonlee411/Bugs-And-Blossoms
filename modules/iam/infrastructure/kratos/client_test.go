@@ -77,8 +77,8 @@ func TestClient_LoginPassword_Success(t *testing.T) {
 			"identity": map[string]any{
 				"id": "ident1",
 				"traits": map[string]any{
-					"tenant_id": "t1",
-					"email":     "a@example.invalid",
+					"tenant_uuid": "t1",
+					"email":       "a@example.invalid",
 				},
 			},
 		})

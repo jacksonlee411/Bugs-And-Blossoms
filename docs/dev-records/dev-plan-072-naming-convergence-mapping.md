@@ -1,9 +1,16 @@
-# DEV-PLAN-072 记录：命名收敛差异清单与映射表（草拟）
+# DEV-PLAN-072 记录：命名收敛差异清单与映射表（冻结）
 
-**状态**: 草拟中（2026-02-02 14:34 UTC）
+**状态**: 冻结（2026-02-03 09:00 UTC）
+
+**冻结元数据**
+- 冻结时间：2026-02-03 09:00 UTC
+- 冻结提交号：9027007584b9d501db6d2dbb4f5d4c37ac174a5e
+- 覆盖模块范围：jobcatalog / staffing / iam / person
+- 变更审批人：我
+- 迁移样本统计：豁免（无样本数据）
 
 > 本记录用于支撑 `docs/dev-plans/072-repo-wide-id-code-naming-convergence.md` 的步骤 1（差异清单与映射表）。
-> 范围仅覆盖 Job Catalog 与 Staffing（职位/任职），**OrgUnit 由 026B 承接**。
+> 范围覆盖 Job Catalog、Staffing、IAM、Person；**OrgUnit 由 026B 承接**。
 
 ## 1. 扫描摘要（可复现）
 
@@ -13,6 +20,12 @@ rg -n "tenant_id|event_id|request_id|initiator_id|_id\b|\bcode\b" modules/jobcat
 
 # Staffing（Position/Assignment）
 rg -n "tenant_id|event_id|request_id|initiator_id|position_id|assignment_id|reports_to_position_id|job_profile_id|org_unit_id|jobcatalog_setid" modules/staffing internal/server
+
+# IAM
+rg -n "tenant_id|target_tenant_id|event_id|request_id|initiator_id|org_unit_id" modules/iam internal/server internal/superadmin
+
+# Person
+rg -n "tenant_id" modules/person internal/server/person.go
 ```
 
 ## 2. 差异清单（当前命名偏差）
@@ -28,6 +41,14 @@ rg -n "tenant_id|event_id|request_id|initiator_id|position_id|assignment_id|repo
 - 事件字段仍使用 `event_id/request_id/initiator_id`，未对齐 `event_uuid/request_code/initiator_uuid`。
 - `tenant_id` 未对齐 `tenant_uuid`。
 - 边界层仍暴露 `org_unit_id`（将由 026B 解析器转换为 `org_id`；对外字段在 072 执行收敛）。
+
+### 2.3 IAM
+- `tenant_id/target_tenant_id` 未对齐 `tenant_uuid/target_tenant_uuid`。
+- 事件字段仍使用 `event_id/request_id/initiator_id`，未对齐 `event_uuid/request_code/initiator_uuid`。
+- `org_unit_id` 出现在生成模型与部分查询（需评估是否应改名为 `org_unit_id` 保持 8 位结构标识或转 `org_unit_uuid`）。
+
+### 2.4 Person
+- `tenant_id` 未对齐 `tenant_uuid`（表/索引/RLS/函数参数均需同步改名）。
 
 ## 3. 收敛映射表
 
@@ -46,6 +67,8 @@ rg -n "tenant_id|event_id|request_id|initiator_id|position_id|assignment_id|repo
 | fk | job_family_id | job_family_uuid | events/versions/relations |
 | fk | job_level_id | job_level_uuid | events/versions/relations |
 | fk | job_profile_id | job_profile_uuid | events/versions/relations |
+| payload | job_family_ids | job_family_uuids | Job Profile payload 列表字段 |
+| payload | primary_job_family_id | primary_job_family_uuid | Job Profile payload 主引用 |
 | keep | last_event_id | last_event_id | `bigserial` 技术字段，保持 `id` 语义 |
 | keep | setid | setid | 专有名词豁免 `_code` 后缀 |
 
@@ -71,6 +94,24 @@ rg -n "tenant_id|event_id|request_id|initiator_id|position_id|assignment_id|repo
 | keep | last_event_id | last_event_id | `bigserial` 技术字段 |
 
 > 注：payload/HTTP 字段名需与上述映射同步，避免“外部字段名与内部字段名分叉”。
+
+### 3.3 IAM
+
+| 类别 | 旧字段 | 新字段 | 备注 |
+| --- | --- | --- | --- |
+| common | tenant_id | tenant_uuid | 表字段/函数参数/索引 |
+| common | target_tenant_id | target_tenant_uuid | superadmin audit 等 |
+| common | event_id | event_uuid | audit/events |
+| common | request_id | request_code | audit/events |
+| common | initiator_id | initiator_uuid | audit/events |
+| keep | last_event_id | last_event_id | `bigserial` 技术字段 |
+| keep | org_unit_id | org_unit_id | 若为 8 位结构标识，保持不改名 |
+
+### 3.4 Person
+
+| 类别 | 旧字段 | 新字段 | 备注 |
+| --- | --- | --- | --- |
+| common | tenant_id | tenant_uuid | 表字段/索引/RLS/函数参数 |
 
 ## 4. 后续补充
 - 具体到文件级的替换清单与 PR 原子切换范围，将在实施前拆分为模块级子清单。
@@ -124,3 +165,30 @@ rg -n "tenant_id|event_id|request_id|initiator_id|position_id|assignment_id|repo
 - `internal/server/staffing_correct_rescind_store_test.go`
 - `internal/server/handler_test.go`
 - `internal/server/handler_m4_extra_test.go`
+
+### 5.3 IAM（SQL/迁移/Go/测试）
+- `modules/iam/infrastructure/persistence/schema/00001_iam_baseline.sql`
+- `modules/iam/infrastructure/persistence/schema/00002_iam_tenancy.sql`
+- `modules/iam/infrastructure/persistence/schema/00003_iam_superadmin_audit.sql`
+- `modules/iam/infrastructure/persistence/schema/00004_iam_principals_and_sessions.sql`
+- `modules/iam/infrastructure/sqlc/gen/models.go`（生成物）
+- `internal/server/tenancy.go`
+- `internal/server/session_store.go`
+- `internal/server/identity_provider.go`
+- `internal/superadmin/handler.go`
+- `internal/server/identity_provider_test.go`
+- `internal/server/handler_test.go`
+- `internal/routing/classifier_test.go`
+- `internal/routing/router_test.go`
+
+### 5.4 Person（SQL/迁移/Go/测试）
+- `modules/person/infrastructure/persistence/schema/00002_person_persons.sql`
+- `modules/person/infrastructure/persistence/schema/00003_person_engine.sql`
+- `internal/server/person.go`
+- `internal/server/person_test.go`
+
+### 5.5 工具与 E2E 对齐（覆盖收敛后的字段名）
+- `cmd/dbtool/main.go`
+- `e2e/tests/m3-smoke.spec.js`
+- `e2e/tests/tp060-02-master-data.spec.js`
+- `e2e/tests/tp060-03-person-and-assignments.spec.js`

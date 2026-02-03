@@ -13,132 +13,132 @@ BEGIN
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_family_groups
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_family_groups', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_family_groups', v_tenant_id);
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_family_group_events
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_family_group_events', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_family_group_events', v_tenant_id);
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_family_group_versions
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_family_group_versions', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_family_group_versions', v_tenant_id);
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_families
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_families', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_families', v_tenant_id);
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_family_events
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_family_events', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_family_events', v_tenant_id);
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_family_versions
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_family_versions', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_family_versions', v_tenant_id);
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_levels
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_levels', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_levels', v_tenant_id);
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_level_events
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_level_events', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_level_events', v_tenant_id);
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_level_versions
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_level_versions', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_level_versions', v_tenant_id);
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_profiles
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_profiles', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_profiles', v_tenant_id);
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_profile_events
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_profile_events', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_profile_events', v_tenant_id);
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM jobcatalog.job_profile_versions
-      WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+      WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'SETID_FORMAT_INVALID',
-        DETAIL = format('tenant_id=%s table=jobcatalog.job_profile_versions', v_tenant_id);
+        DETAIL = format('tenant_uuid=%s table=jobcatalog.job_profile_versions', v_tenant_id);
     END IF;
 
       IF EXISTS (
         SELECT 1 FROM jobcatalog.job_profile_version_job_families
-        WHERE tenant_id = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
+        WHERE tenant_uuid = v_tenant_id AND setid !~ '^[A-Z0-9]{5}$'
       ) THEN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'SETID_FORMAT_INVALID',
-          DETAIL = format('tenant_id=%s table=jobcatalog.job_profile_version_job_families', v_tenant_id);
+          DETAIL = format('tenant_uuid=%s table=jobcatalog.job_profile_version_job_families', v_tenant_id);
       END IF;
     END LOOP;
   END IF;

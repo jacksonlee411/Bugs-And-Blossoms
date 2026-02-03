@@ -70,25 +70,25 @@ func TestStaffingAssignmentDB_RerunnableUpsert(t *testing.T) {
 		if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantA); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO staffing.positions (tenant_id, id) VALUES ($1::uuid, $2::uuid) ON CONFLICT DO NOTHING;`, tenantA, position1); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO staffing.positions (tenant_uuid, position_uuid) VALUES ($1::uuid, $2::uuid) ON CONFLICT DO NOTHING;`, tenantA, position1); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO staffing.positions (tenant_id, id) VALUES ($1::uuid, $2::uuid) ON CONFLICT DO NOTHING;`, tenantA, position2); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO staffing.positions (tenant_uuid, position_uuid) VALUES ($1::uuid, $2::uuid) ON CONFLICT DO NOTHING;`, tenantA, position2); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_versions WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_event_rescinds WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_event_rescinds WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_event_corrections WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_event_corrections WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_events WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignments WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignments WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 			t.Fatal(err)
 		}
 		if err := tx.Commit(ctx); err != nil {
@@ -106,8 +106,8 @@ func TestStaffingAssignmentDB_RerunnableUpsert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("upsert-2 (rerun): %v", err)
 	}
-	if a1.AssignmentID == "" || a1.AssignmentID != a2.AssignmentID {
-		t.Fatalf("expected same assignment_id on rerun, got %q vs %q", a1.AssignmentID, a2.AssignmentID)
+	if a1.AssignmentUUID == "" || a1.AssignmentUUID != a2.AssignmentUUID {
+		t.Fatalf("expected same assignment_uuid on rerun, got %q vs %q", a1.AssignmentUUID, a2.AssignmentUUID)
 	}
 
 	func() {
@@ -124,8 +124,8 @@ func TestStaffingAssignmentDB_RerunnableUpsert(t *testing.T) {
 		if err := tx.QueryRow(ctx, `
 	SELECT count(*)
 	FROM staffing.assignment_events
-	WHERE tenant_id = $1::uuid AND assignment_id = $2::uuid AND effective_date = $3::date
-	`, tenantA, a1.AssignmentID, effectiveDate).Scan(&n); err != nil {
+	WHERE tenant_uuid = $1::uuid AND assignment_uuid = $2::uuid AND effective_date = $3::date
+	`, tenantA, a1.AssignmentUUID, effectiveDate).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		if n != 1 {
@@ -186,25 +186,25 @@ func TestStaffingAssignmentDB_CorrectRescind(t *testing.T) {
 		if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantA); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO staffing.positions (tenant_id, id) VALUES ($1::uuid, $2::uuid) ON CONFLICT DO NOTHING;`, tenantA, position1); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO staffing.positions (tenant_uuid, position_uuid) VALUES ($1::uuid, $2::uuid) ON CONFLICT DO NOTHING;`, tenantA, position1); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO staffing.positions (tenant_id, id) VALUES ($1::uuid, $2::uuid) ON CONFLICT DO NOTHING;`, tenantA, position2); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO staffing.positions (tenant_uuid, position_uuid) VALUES ($1::uuid, $2::uuid) ON CONFLICT DO NOTHING;`, tenantA, position2); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_versions WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_event_rescinds WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_event_rescinds WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_event_corrections WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_event_corrections WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_events WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignments WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignments WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 			t.Fatal(err)
 		}
 		if err := tx.Commit(ctx); err != nil {
@@ -219,7 +219,7 @@ func TestStaffingAssignmentDB_CorrectRescind(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	_, err = store.CorrectAssignmentEvent(ctx, tenantA, a1.AssignmentID, "2026-01-01", []byte(`{"position_id":"`+position1+`","allocated_fte":"0.75"}`))
+	_, err = store.CorrectAssignmentEvent(ctx, tenantA, a1.AssignmentUUID, "2026-01-01", []byte(`{"position_uuid":"`+position1+`","allocated_fte":"0.75"}`))
 	if err != nil {
 		t.Fatalf("correct: %v", err)
 	}
@@ -237,9 +237,9 @@ func TestStaffingAssignmentDB_CorrectRescind(t *testing.T) {
 		if err := tx.QueryRow(ctx, `
 			SELECT COALESCE(allocated_fte::text,'')
 			FROM staffing.assignment_versions
-			WHERE tenant_id = $1::uuid AND assignment_id = $2::uuid AND validity @> '2026-01-15'::date
+			WHERE tenant_uuid = $1::uuid AND assignment_uuid = $2::uuid AND validity @> '2026-01-15'::date
 			LIMIT 1;
-		`, tenantA, a1.AssignmentID).Scan(&allocatedFte); err != nil {
+		`, tenantA, a1.AssignmentUUID).Scan(&allocatedFte); err != nil {
 			t.Fatal(err)
 		}
 		if allocatedFte != "0.75" {
@@ -252,7 +252,7 @@ func TestStaffingAssignmentDB_CorrectRescind(t *testing.T) {
 		t.Fatalf("update: %v", err)
 	}
 
-	_, err = store.RescindAssignmentEvent(ctx, tenantA, a1.AssignmentID, "2026-02-01", []byte(`{}`))
+	_, err = store.RescindAssignmentEvent(ctx, tenantA, a1.AssignmentUUID, "2026-02-01", []byte(`{}`))
 	if err != nil {
 		t.Fatalf("rescind: %v", err)
 	}
@@ -268,19 +268,19 @@ func TestStaffingAssignmentDB_CorrectRescind(t *testing.T) {
 		}
 		var pos string
 		if err := tx.QueryRow(ctx, `
-			SELECT position_id::text
+			SELECT position_uuid::text
 			FROM staffing.assignment_versions
-			WHERE tenant_id = $1::uuid AND assignment_id = $2::uuid AND validity @> '2026-02-15'::date
+			WHERE tenant_uuid = $1::uuid AND assignment_uuid = $2::uuid AND validity @> '2026-02-15'::date
 			LIMIT 1;
-		`, tenantA, a1.AssignmentID).Scan(&pos); err != nil {
+		`, tenantA, a1.AssignmentUUID).Scan(&pos); err != nil {
 			t.Fatal(err)
 		}
 		if pos != position1 {
-			t.Fatalf("expected stitched position_id=%s, got %s", position1, pos)
+			t.Fatalf("expected stitched position_uuid=%s, got %s", position1, pos)
 		}
 	}()
 
-	_, err = store.RescindAssignmentEvent(ctx, tenantA, a1.AssignmentID, "2026-01-01", []byte(`{}`))
+	_, err = store.RescindAssignmentEvent(ctx, tenantA, a1.AssignmentUUID, "2026-01-01", []byte(`{}`))
 	if err == nil {
 		t.Fatal("expected rescind CREATE to fail")
 	}
@@ -289,7 +289,7 @@ func TestStaffingAssignmentDB_CorrectRescind(t *testing.T) {
 		t.Fatalf("expected STAFFING_ASSIGNMENT_CREATE_CANNOT_RESCIND, got err=%v", err)
 	}
 
-	_, err = store.CorrectAssignmentEvent(ctx, tenantA, a1.AssignmentID, "2026-02-01", []byte(`{"position_id":"`+position2+`"}`))
+	_, err = store.CorrectAssignmentEvent(ctx, tenantA, a1.AssignmentUUID, "2026-02-01", []byte(`{"position_uuid":"`+position2+`"}`))
 	if err == nil {
 		t.Fatal("expected correct rescinded to fail")
 	}
@@ -304,8 +304,19 @@ func ensureStaffingAssignmentSchemaForTest(ctx context.Context, conn *pgx.Conn) 
 	ddl := []string{
 		`CREATE EXTENSION IF NOT EXISTS pgcrypto;`,
 		`CREATE SCHEMA IF NOT EXISTS staffing;`,
+		`DROP TABLE IF EXISTS staffing.assignment_versions CASCADE;`,
+		`DROP TABLE IF EXISTS staffing.assignment_event_rescinds CASCADE;`,
+		`DROP TABLE IF EXISTS staffing.assignment_event_corrections CASCADE;`,
+		`DROP TABLE IF EXISTS staffing.assignment_events CASCADE;`,
+		`DROP TABLE IF EXISTS staffing.assignments CASCADE;`,
+		`DROP TABLE IF EXISTS staffing.positions CASCADE;`,
+		`DROP FUNCTION IF EXISTS staffing.assert_current_tenant(uuid);`,
+		`DROP FUNCTION IF EXISTS staffing.replay_assignment_versions(uuid, uuid);`,
+		`DROP FUNCTION IF EXISTS staffing.submit_assignment_event_correction(uuid, uuid, uuid, date, jsonb, text, uuid);`,
+		`DROP FUNCTION IF EXISTS staffing.submit_assignment_event_rescind(uuid, uuid, uuid, date, jsonb, text, uuid);`,
+		`DROP FUNCTION IF EXISTS staffing.submit_assignment_event(uuid, uuid, uuid, uuid, text, text, date, jsonb, text, uuid);`,
 		`
-CREATE OR REPLACE FUNCTION staffing.assert_current_tenant(p_tenant_id uuid)
+CREATE OR REPLACE FUNCTION staffing.assert_current_tenant(p_tenant_uuid uuid)
 RETURNS void
 LANGUAGE plpgsql
 AS $$
@@ -313,7 +324,7 @@ BEGIN
   IF current_setting('app.current_tenant', true) IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_TENANT_MISSING';
   END IF;
-  IF current_setting('app.current_tenant')::uuid <> p_tenant_id THEN
+  IF current_setting('app.current_tenant')::uuid <> p_tenant_uuid THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_TENANT_MISMATCH';
   END IF;
 END;
@@ -321,11 +332,11 @@ END;
 	`,
 		`
 	CREATE TABLE IF NOT EXISTS staffing.positions (
-	  tenant_id uuid NOT NULL,
-	  id uuid NOT NULL,
+	  tenant_uuid uuid NOT NULL,
+	  position_uuid uuid NOT NULL,
 	  created_at timestamptz NOT NULL DEFAULT now(),
 	  updated_at timestamptz NOT NULL DEFAULT now(),
-	  PRIMARY KEY (tenant_id, id)
+	  PRIMARY KEY (tenant_uuid, position_uuid)
 	);
 	`,
 		`
@@ -339,84 +350,84 @@ $$;
 `,
 		`
 CREATE TABLE IF NOT EXISTS staffing.assignments (
-  tenant_id uuid NOT NULL,
-  id uuid PRIMARY KEY,
+  tenant_uuid uuid NOT NULL,
+  assignment_uuid uuid PRIMARY KEY,
   person_uuid uuid NOT NULL,
   assignment_type text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT assignments_person_assignment_type_unique UNIQUE (tenant_id, person_uuid, assignment_type),
+  CONSTRAINT assignments_person_assignment_type_unique UNIQUE (tenant_uuid, person_uuid, assignment_type),
   CONSTRAINT assignments_assignment_type_check CHECK (assignment_type IN ('primary'))
 );
 `,
-		`CREATE UNIQUE INDEX IF NOT EXISTS assignments_identity_unique ON staffing.assignments (tenant_id, person_uuid, assignment_type);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS assignments_identity_unique ON staffing.assignments (tenant_uuid, person_uuid, assignment_type);`,
 		`
 CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   id bigserial PRIMARY KEY,
-  event_id uuid NOT NULL,
-  tenant_id uuid NOT NULL,
-  assignment_id uuid NOT NULL,
+  event_uuid uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
+  assignment_uuid uuid NOT NULL,
   person_uuid uuid NOT NULL,
   assignment_type text NOT NULL,
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_id text NOT NULL,
-  initiator_id uuid NOT NULL,
+  request_code text NOT NULL,
+  initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT assignment_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE')),
   CONSTRAINT assignment_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
-  CONSTRAINT assignment_events_event_id_unique UNIQUE (event_id),
-  CONSTRAINT assignment_events_one_per_day_unique UNIQUE (tenant_id, assignment_id, effective_date),
-  CONSTRAINT assignment_events_request_id_unique UNIQUE (tenant_id, request_id)
+  CONSTRAINT assignment_events_event_uuid_unique UNIQUE (event_uuid),
+  CONSTRAINT assignment_events_one_per_day_unique UNIQUE (tenant_uuid, assignment_uuid, effective_date),
+  CONSTRAINT assignment_events_request_code_unique UNIQUE (tenant_uuid, request_code)
 );
 `,
-		`CREATE UNIQUE INDEX IF NOT EXISTS assignment_events_event_id_unique_idx ON staffing.assignment_events (event_id);`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS assignment_events_one_per_day_unique_idx ON staffing.assignment_events (tenant_id, assignment_id, effective_date);`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS assignment_events_request_id_unique_idx ON staffing.assignment_events (tenant_id, request_id);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS assignment_events_event_uuid_unique_idx ON staffing.assignment_events (event_uuid);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS assignment_events_one_per_day_unique_idx ON staffing.assignment_events (tenant_uuid, assignment_uuid, effective_date);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS assignment_events_request_code_unique_idx ON staffing.assignment_events (tenant_uuid, request_code);`,
 		`
 	CREATE TABLE IF NOT EXISTS staffing.assignment_event_corrections (
 	  id bigserial PRIMARY KEY,
-	  event_id uuid NOT NULL,
-	  tenant_id uuid NOT NULL,
-	  assignment_id uuid NOT NULL,
+	  event_uuid uuid NOT NULL,
+	  tenant_uuid uuid NOT NULL,
+	  assignment_uuid uuid NOT NULL,
 	  target_effective_date date NOT NULL,
 	  replacement_payload jsonb NOT NULL,
-	  request_id text NOT NULL,
-	  initiator_id uuid NOT NULL,
+	  request_code text NOT NULL,
+	  initiator_uuid uuid NOT NULL,
 	  transaction_time timestamptz NOT NULL DEFAULT now(),
 	  created_at timestamptz NOT NULL DEFAULT now(),
 	  CONSTRAINT assignment_event_corrections_payload_is_object_check CHECK (jsonb_typeof(replacement_payload) = 'object'),
-	  CONSTRAINT assignment_event_corrections_event_id_unique UNIQUE (event_id),
-	  CONSTRAINT assignment_event_corrections_target_unique UNIQUE (tenant_id, assignment_id, target_effective_date),
-	  CONSTRAINT assignment_event_corrections_request_id_unique UNIQUE (tenant_id, request_id)
+	  CONSTRAINT assignment_event_corrections_event_uuid_unique UNIQUE (event_uuid),
+	  CONSTRAINT assignment_event_corrections_target_unique UNIQUE (tenant_uuid, assignment_uuid, target_effective_date),
+	  CONSTRAINT assignment_event_corrections_request_code_unique UNIQUE (tenant_uuid, request_code)
 	);
 	`,
 		`
 	CREATE TABLE IF NOT EXISTS staffing.assignment_event_rescinds (
 	  id bigserial PRIMARY KEY,
-	  event_id uuid NOT NULL,
-	  tenant_id uuid NOT NULL,
-	  assignment_id uuid NOT NULL,
+	  event_uuid uuid NOT NULL,
+	  tenant_uuid uuid NOT NULL,
+	  assignment_uuid uuid NOT NULL,
 	  target_effective_date date NOT NULL,
 	  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-	  request_id text NOT NULL,
-	  initiator_id uuid NOT NULL,
+	  request_code text NOT NULL,
+	  initiator_uuid uuid NOT NULL,
 	  transaction_time timestamptz NOT NULL DEFAULT now(),
 	  created_at timestamptz NOT NULL DEFAULT now(),
 	  CONSTRAINT assignment_event_rescinds_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
-	  CONSTRAINT assignment_event_rescinds_event_id_unique UNIQUE (event_id),
-	  CONSTRAINT assignment_event_rescinds_target_unique UNIQUE (tenant_id, assignment_id, target_effective_date),
-	  CONSTRAINT assignment_event_rescinds_request_id_unique UNIQUE (tenant_id, request_id)
+	  CONSTRAINT assignment_event_rescinds_event_uuid_unique UNIQUE (event_uuid),
+	  CONSTRAINT assignment_event_rescinds_target_unique UNIQUE (tenant_uuid, assignment_uuid, target_effective_date),
+	  CONSTRAINT assignment_event_rescinds_request_code_unique UNIQUE (tenant_uuid, request_code)
 	);
 	`,
 		`
 	CREATE TABLE IF NOT EXISTS staffing.assignment_versions (
 	  id bigserial PRIMARY KEY,
-	  tenant_id uuid NOT NULL,
-	  assignment_id uuid NOT NULL,
+	  tenant_uuid uuid NOT NULL,
+	  assignment_uuid uuid NOT NULL,
 	  person_uuid uuid NOT NULL,
-	  position_id uuid NOT NULL,
+	  position_uuid uuid NOT NULL,
 	  assignment_type text NOT NULL,
 	  status text NOT NULL DEFAULT 'active',
 	  allocated_fte numeric(9,2) NOT NULL DEFAULT 1.0,
@@ -429,51 +440,51 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
 		`DROP POLICY IF EXISTS tenant_isolation ON staffing.positions;`,
 		`
 	CREATE POLICY tenant_isolation ON staffing.positions
-	USING (tenant_id = current_setting('app.current_tenant')::uuid)
-	WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+	USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+	WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 	`,
 		`ALTER TABLE staffing.assignments ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE staffing.assignments FORCE ROW LEVEL SECURITY;`,
 		`DROP POLICY IF EXISTS tenant_isolation ON staffing.assignments;`,
 		`
 CREATE POLICY tenant_isolation ON staffing.assignments
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 `,
 		`ALTER TABLE staffing.assignment_events ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE staffing.assignment_events FORCE ROW LEVEL SECURITY;`,
 		`DROP POLICY IF EXISTS tenant_isolation ON staffing.assignment_events;`,
 		`
 	CREATE POLICY tenant_isolation ON staffing.assignment_events
-	USING (tenant_id = current_setting('app.current_tenant')::uuid)
-	WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+	USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+	WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 	`,
 		`ALTER TABLE staffing.assignment_event_corrections ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE staffing.assignment_event_corrections FORCE ROW LEVEL SECURITY;`,
 		`DROP POLICY IF EXISTS tenant_isolation ON staffing.assignment_event_corrections;`,
 		`
 	CREATE POLICY tenant_isolation ON staffing.assignment_event_corrections
-	USING (tenant_id = current_setting('app.current_tenant')::uuid)
-	WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+	USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+	WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 	`,
 		`ALTER TABLE staffing.assignment_event_rescinds ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE staffing.assignment_event_rescinds FORCE ROW LEVEL SECURITY;`,
 		`DROP POLICY IF EXISTS tenant_isolation ON staffing.assignment_event_rescinds;`,
 		`
 	CREATE POLICY tenant_isolation ON staffing.assignment_event_rescinds
-	USING (tenant_id = current_setting('app.current_tenant')::uuid)
-	WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+	USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+	WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 	`,
 		`ALTER TABLE staffing.assignment_versions ENABLE ROW LEVEL SECURITY;`,
 		`ALTER TABLE staffing.assignment_versions FORCE ROW LEVEL SECURITY;`,
 		`DROP POLICY IF EXISTS tenant_isolation ON staffing.assignment_versions;`,
 		`
 	CREATE POLICY tenant_isolation ON staffing.assignment_versions
-	USING (tenant_id = current_setting('app.current_tenant')::uuid)
-	WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+	USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+	WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 	`,
 		`
-	CREATE OR REPLACE FUNCTION staffing.replay_assignment_versions(p_tenant_id uuid, p_assignment_id uuid)
+	CREATE OR REPLACE FUNCTION staffing.replay_assignment_versions(p_tenant_uuid uuid, p_assignment_uuid uuid)
 	RETURNS void
 	LANGUAGE plpgsql
 	AS $$
@@ -482,28 +493,28 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	  v_prev_effective date;
 	  v_person_uuid uuid;
 	  v_assignment_type text;
-	  v_position_id uuid;
+	  v_position_uuid uuid;
 	  v_status text;
 	  v_allocated_fte numeric(9,2);
 	  v_tmp_text text;
 	  v_row RECORD;
 	  v_validity daterange;
 	BEGIN
-	  PERFORM staffing.assert_current_tenant(p_tenant_id);
+	  PERFORM staffing.assert_current_tenant(p_tenant_uuid);
 	
-	  IF p_assignment_id IS NULL THEN
-	    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_id is required';
+	  IF p_assignment_uuid IS NULL THEN
+	    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_uuid is required';
 	  END IF;
 	
-	  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_id, p_assignment_id);
+	  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_uuid, p_assignment_uuid);
 	  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 	
 	  DELETE FROM staffing.assignment_versions
-	  WHERE tenant_id = p_tenant_id AND assignment_id = p_assignment_id;
+	  WHERE tenant_uuid = p_tenant_uuid AND assignment_uuid = p_assignment_uuid;
 	
 	  v_person_uuid := NULL;
 	  v_assignment_type := NULL;
-	  v_position_id := NULL;
+	  v_position_uuid := NULL;
 	  v_status := 'active';
 	  v_allocated_fte := 1.0;
 	  v_prev_effective := NULL;
@@ -520,15 +531,15 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	        (r.id IS NOT NULL) AS is_rescinded
 	      FROM staffing.assignment_events e
 	      LEFT JOIN staffing.assignment_event_corrections c
-	        ON c.tenant_id = e.tenant_id
-	       AND c.assignment_id = e.assignment_id
+	        ON c.tenant_uuid = e.tenant_uuid
+	       AND c.assignment_uuid = e.assignment_uuid
 	       AND c.target_effective_date = e.effective_date
 	      LEFT JOIN staffing.assignment_event_rescinds r
-	        ON r.tenant_id = e.tenant_id
-	       AND r.assignment_id = e.assignment_id
+	        ON r.tenant_uuid = e.tenant_uuid
+	       AND r.assignment_uuid = e.assignment_uuid
 	       AND r.target_effective_date = e.effective_date
-	      WHERE e.tenant_id = p_tenant_id
-	        AND e.assignment_id = p_assignment_id
+	      WHERE e.tenant_uuid = p_tenant_uuid
+	        AND e.assignment_uuid = p_assignment_uuid
 	    ),
 	    filtered AS (
 	      SELECT *
@@ -558,9 +569,9 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	      v_person_uuid := v_row.person_uuid;
 	      v_assignment_type := v_row.assignment_type;
 	
-	      v_position_id := NULLIF(v_row.payload->>'position_id', '')::uuid;
-	      IF v_position_id IS NULL THEN
-	        RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'position_id is required';
+	      v_position_uuid := NULLIF(v_row.payload->>'position_uuid', '')::uuid;
+	      IF v_position_uuid IS NULL THEN
+	        RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'position_uuid is required';
 	      END IF;
 	      v_status := 'active';
 	    ELSIF v_row.event_type = 'UPDATE' THEN
@@ -568,10 +579,10 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	        RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_EVENT', DETAIL = 'UPDATE requires prior state';
 	      END IF;
 	
-	      IF v_row.payload ? 'position_id' THEN
-	        v_position_id := NULLIF(v_row.payload->>'position_id', '')::uuid;
-	        IF v_position_id IS NULL THEN
-	          RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'position_id is required';
+	      IF v_row.payload ? 'position_uuid' THEN
+	        v_position_uuid := NULLIF(v_row.payload->>'position_uuid', '')::uuid;
+	        IF v_position_uuid IS NULL THEN
+	          RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'position_uuid is required';
 	        END IF;
 	      END IF;
 	
@@ -605,10 +616,10 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	    END IF;
 	
 	    INSERT INTO staffing.assignment_versions (
-	      tenant_id,
-	      assignment_id,
+	      tenant_uuid,
+	      assignment_uuid,
 	      person_uuid,
-	      position_id,
+	      position_uuid,
 	      assignment_type,
 	      status,
 	      allocated_fte,
@@ -616,10 +627,10 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	      last_event_id
 	    )
 	    VALUES (
-	      p_tenant_id,
-	      p_assignment_id,
+	      p_tenant_uuid,
+	      p_assignment_uuid,
 	      v_person_uuid,
-	      v_position_id,
+	      v_position_uuid,
 	      v_assignment_type,
 	      v_status,
 	      v_allocated_fte,
@@ -634,22 +645,22 @@ WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 	`,
 		`
 CREATE TABLE IF NOT EXISTS staffing.positions (
-  tenant_id uuid NOT NULL,
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  tenant_uuid uuid NOT NULL,
+  position_uuid uuid NOT NULL DEFAULT gen_random_uuid(),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, id)
+  PRIMARY KEY (tenant_uuid, position_uuid)
 );
 `,
 		`
 	CREATE OR REPLACE FUNCTION staffing.submit_assignment_event_correction(
-	  p_event_id uuid,
-	  p_tenant_id uuid,
-	  p_assignment_id uuid,
+	  p_event_uuid uuid,
+	  p_tenant_uuid uuid,
+	  p_assignment_uuid uuid,
 	  p_target_effective_date date,
 	  p_replacement_payload jsonb,
-	  p_request_id text,
-	  p_initiator_id uuid
+	  p_request_code text,
+	  p_initiator_uuid uuid
 	)
 	RETURNS bigint
 	LANGUAGE plpgsql
@@ -662,22 +673,22 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	  v_existing_by_event staffing.assignment_event_corrections%ROWTYPE;
 	  v_existing_by_target staffing.assignment_event_corrections%ROWTYPE;
 	BEGIN
-	  PERFORM staffing.assert_current_tenant(p_tenant_id);
+	  PERFORM staffing.assert_current_tenant(p_tenant_uuid);
 	
-	  IF p_event_id IS NULL OR p_assignment_id IS NULL OR p_target_effective_date IS NULL OR p_request_id IS NULL OR p_initiator_id IS NULL THEN
+	  IF p_event_uuid IS NULL OR p_assignment_uuid IS NULL OR p_target_effective_date IS NULL OR p_request_code IS NULL OR p_initiator_uuid IS NULL THEN
 	    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT';
 	  END IF;
 	  IF p_replacement_payload IS NULL OR jsonb_typeof(p_replacement_payload) <> 'object' THEN
 	    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT';
 	  END IF;
 	
-	  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_id, p_assignment_id);
+	  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_uuid, p_assignment_uuid);
 	  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 	
 	  SELECT * INTO v_target
 	  FROM staffing.assignment_events
-	  WHERE tenant_id = p_tenant_id
-	    AND assignment_id = p_assignment_id
+	  WHERE tenant_uuid = p_tenant_uuid
+	    AND assignment_uuid = p_assignment_uuid
 	    AND effective_date = p_target_effective_date
 	  LIMIT 1;
 	
@@ -688,8 +699,8 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	  IF EXISTS (
 	    SELECT 1
 	    FROM staffing.assignment_event_rescinds r
-	    WHERE r.tenant_id = p_tenant_id
-	      AND r.assignment_id = p_assignment_id
+	    WHERE r.tenant_uuid = p_tenant_uuid
+	      AND r.assignment_uuid = p_assignment_uuid
 	      AND r.target_effective_date = p_target_effective_date
 	    LIMIT 1
 	  ) THEN
@@ -699,22 +710,22 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	  v_payload := p_replacement_payload;
 	
 	  INSERT INTO staffing.assignment_event_corrections (
-	    event_id,
-	    tenant_id,
-	    assignment_id,
+	    event_uuid,
+	    tenant_uuid,
+	    assignment_uuid,
 	    target_effective_date,
 	    replacement_payload,
-	    request_id,
-	    initiator_id
+	    request_code,
+	    initiator_uuid
 	  )
 	  VALUES (
-	    p_event_id,
-	    p_tenant_id,
-	    p_assignment_id,
+	    p_event_uuid,
+	    p_tenant_uuid,
+	    p_assignment_uuid,
 	    p_target_effective_date,
 	    v_payload,
-	    p_request_id,
-	    p_initiator_id
+	    p_request_code,
+	    p_initiator_uuid
 	  )
 	  ON CONFLICT DO NOTHING
 	  RETURNING id INTO v_correction_db_id;
@@ -722,7 +733,7 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	  IF v_correction_db_id IS NULL THEN
 	    SELECT * INTO v_existing_by_event
 	    FROM staffing.assignment_event_corrections
-	    WHERE event_id = p_event_id;
+	    WHERE event_uuid = p_event_uuid;
 	
 	    IF FOUND THEN
 	      IF v_existing_by_event.replacement_payload <> v_payload THEN
@@ -732,8 +743,8 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	    ELSE
 	      SELECT * INTO v_existing_by_target
 	      FROM staffing.assignment_event_corrections
-	      WHERE tenant_id = p_tenant_id
-	        AND assignment_id = p_assignment_id
+	      WHERE tenant_uuid = p_tenant_uuid
+	        AND assignment_uuid = p_assignment_uuid
 	        AND target_effective_date = p_target_effective_date
 	      LIMIT 1;
 	
@@ -749,20 +760,20 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	    END IF;
 	  END IF;
 	
-	  PERFORM staffing.replay_assignment_versions(p_tenant_id, p_assignment_id);
+	  PERFORM staffing.replay_assignment_versions(p_tenant_uuid, p_assignment_uuid);
 	  RETURN v_correction_db_id;
 	END;
 	$$;
 	`,
 		`
 	CREATE OR REPLACE FUNCTION staffing.submit_assignment_event_rescind(
-	  p_event_id uuid,
-	  p_tenant_id uuid,
-	  p_assignment_id uuid,
+	  p_event_uuid uuid,
+	  p_tenant_uuid uuid,
+	  p_assignment_uuid uuid,
 	  p_target_effective_date date,
 	  p_payload jsonb,
-	  p_request_id text,
-	  p_initiator_id uuid
+	  p_request_code text,
+	  p_initiator_uuid uuid
 	)
 	RETURNS bigint
 	LANGUAGE plpgsql
@@ -775,9 +786,9 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	  v_existing_by_event staffing.assignment_event_rescinds%ROWTYPE;
 	  v_existing_by_target staffing.assignment_event_rescinds%ROWTYPE;
 	BEGIN
-	  PERFORM staffing.assert_current_tenant(p_tenant_id);
+	  PERFORM staffing.assert_current_tenant(p_tenant_uuid);
 	
-	  IF p_event_id IS NULL OR p_assignment_id IS NULL OR p_target_effective_date IS NULL OR p_request_id IS NULL OR p_initiator_id IS NULL THEN
+	  IF p_event_uuid IS NULL OR p_assignment_uuid IS NULL OR p_target_effective_date IS NULL OR p_request_code IS NULL OR p_initiator_uuid IS NULL THEN
 	    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT';
 	  END IF;
 	
@@ -786,13 +797,13 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT';
 	  END IF;
 	
-	  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_id, p_assignment_id);
+	  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_uuid, p_assignment_uuid);
 	  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 	
 	  SELECT * INTO v_target
 	  FROM staffing.assignment_events
-	  WHERE tenant_id = p_tenant_id
-	    AND assignment_id = p_assignment_id
+	  WHERE tenant_uuid = p_tenant_uuid
+	    AND assignment_uuid = p_assignment_uuid
 	    AND effective_date = p_target_effective_date
 	  LIMIT 1;
 	
@@ -804,22 +815,22 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	  END IF;
 	
 	  INSERT INTO staffing.assignment_event_rescinds (
-	    event_id,
-	    tenant_id,
-	    assignment_id,
+	    event_uuid,
+	    tenant_uuid,
+	    assignment_uuid,
 	    target_effective_date,
 	    payload,
-	    request_id,
-	    initiator_id
+	    request_code,
+	    initiator_uuid
 	  )
 	  VALUES (
-	    p_event_id,
-	    p_tenant_id,
-	    p_assignment_id,
+	    p_event_uuid,
+	    p_tenant_uuid,
+	    p_assignment_uuid,
 	    p_target_effective_date,
 	    v_payload,
-	    p_request_id,
-	    p_initiator_id
+	    p_request_code,
+	    p_initiator_uuid
 	  )
 	  ON CONFLICT DO NOTHING
 	  RETURNING id INTO v_rescind_db_id;
@@ -827,7 +838,7 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	  IF v_rescind_db_id IS NULL THEN
 	    SELECT * INTO v_existing_by_event
 	    FROM staffing.assignment_event_rescinds
-	    WHERE event_id = p_event_id;
+	    WHERE event_uuid = p_event_uuid;
 	
 	    IF FOUND THEN
 	      IF v_existing_by_event.payload <> v_payload THEN
@@ -837,8 +848,8 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	    ELSE
 	      SELECT * INTO v_existing_by_target
 	      FROM staffing.assignment_event_rescinds
-	      WHERE tenant_id = p_tenant_id
-	        AND assignment_id = p_assignment_id
+	      WHERE tenant_uuid = p_tenant_uuid
+	        AND assignment_uuid = p_assignment_uuid
 	        AND target_effective_date = p_target_effective_date
 	      LIMIT 1;
 	
@@ -850,23 +861,23 @@ CREATE TABLE IF NOT EXISTS staffing.positions (
 	    END IF;
 	  END IF;
 	
-	  PERFORM staffing.replay_assignment_versions(p_tenant_id, p_assignment_id);
+	  PERFORM staffing.replay_assignment_versions(p_tenant_uuid, p_assignment_uuid);
 	  RETURN v_rescind_db_id;
 	END;
 	$$;
 	`,
 		`
 CREATE OR REPLACE FUNCTION staffing.submit_assignment_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
-  p_assignment_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
+  p_assignment_uuid uuid,
   p_person_uuid uuid,
   p_assignment_type text,
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -876,15 +887,15 @@ DECLARE
   v_event_db_id bigint;
   v_existing staffing.assignment_events%ROWTYPE;
   v_payload jsonb;
-  v_existing_assignment_id uuid;
+  v_existing_assignment_uuid uuid;
 BEGIN
-  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  PERFORM staffing.assert_current_tenant(p_tenant_uuid);
 
-  IF p_event_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  IF p_event_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_uuid is required';
   END IF;
-  IF p_assignment_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_id is required';
+  IF p_assignment_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_uuid is required';
   END IF;
   IF p_person_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
@@ -898,87 +909,87 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  IF p_initiator_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
   IF p_event_type NOT IN ('CREATE','UPDATE') THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = format('unsupported event_type: %s', p_event_type);
   END IF;
 
-  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_id, p_assignment_id);
+  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_uuid, p_assignment_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
-  INSERT INTO staffing.assignments (tenant_id, id, person_uuid, assignment_type)
-  VALUES (p_tenant_id, p_assignment_id, p_person_uuid, p_assignment_type)
-  ON CONFLICT (tenant_id, person_uuid, assignment_type) DO NOTHING;
+  INSERT INTO staffing.assignments (tenant_uuid, assignment_uuid, person_uuid, assignment_type)
+  VALUES (p_tenant_uuid, p_assignment_uuid, p_person_uuid, p_assignment_type)
+  ON CONFLICT (tenant_uuid, person_uuid, assignment_type) DO NOTHING;
 
-  SELECT id INTO v_existing_assignment_id
+  SELECT assignment_uuid INTO v_existing_assignment_uuid
   FROM staffing.assignments
-  WHERE tenant_id = p_tenant_id AND person_uuid = p_person_uuid AND assignment_type = p_assignment_type;
+  WHERE tenant_uuid = p_tenant_uuid AND person_uuid = p_person_uuid AND assignment_type = p_assignment_type;
 
-  IF v_existing_assignment_id IS NULL THEN
+  IF v_existing_assignment_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment identity missing';
   END IF;
-  IF v_existing_assignment_id <> p_assignment_id THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_ASSIGNMENT_ID_MISMATCH', DETAIL = format('assignment_id=%s existing_id=%s', p_assignment_id, v_existing_assignment_id);
+  IF v_existing_assignment_uuid <> p_assignment_uuid THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_ASSIGNMENT_ID_MISMATCH', DETAIL = format('assignment_uuid=%s existing_assignment_uuid=%s', p_assignment_uuid, v_existing_assignment_uuid);
   END IF;
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
 
   INSERT INTO staffing.assignment_events (
-    event_id,
-    tenant_id,
-    assignment_id,
+    event_uuid,
+    tenant_uuid,
+    assignment_uuid,
     person_uuid,
     assignment_type,
     event_type,
     effective_date,
     payload,
-    request_id,
-    initiator_id
+    request_code,
+    initiator_uuid
   )
   VALUES (
-    p_event_id,
-    p_tenant_id,
-    p_assignment_id,
+    p_event_uuid,
+    p_tenant_uuid,
+    p_assignment_uuid,
     p_person_uuid,
     p_assignment_type,
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_id,
-    p_initiator_id
+    p_request_code,
+    p_initiator_uuid
   )
-  ON CONFLICT (event_id) DO NOTHING
+  ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_event_db_id;
 
   IF v_event_db_id IS NULL THEN
     SELECT * INTO v_existing
     FROM staffing.assignment_events
-    WHERE event_id = p_event_id;
+    WHERE event_uuid = p_event_uuid;
 
-    IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.assignment_id <> p_assignment_id
+    IF v_existing.tenant_uuid <> p_tenant_uuid
+      OR v_existing.assignment_uuid <> p_assignment_uuid
       OR v_existing.person_uuid <> p_person_uuid
       OR v_existing.assignment_type <> p_assignment_type
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_id <> p_request_id
-      OR v_existing.initiator_id <> p_initiator_id
+      OR v_existing.request_code <> p_request_code
+      OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+        DETAIL = format('event_uuid=%s existing_id=%s', p_event_uuid, v_existing.id);
     END IF;
 
     RETURN v_existing.id;
   END IF;
 
-  PERFORM staffing.replay_assignment_versions(p_tenant_id, p_assignment_id);
+  PERFORM staffing.replay_assignment_versions(p_tenant_uuid, p_assignment_uuid);
 
   RETURN v_event_db_id;
 END;

@@ -10,7 +10,7 @@ BEGIN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'PERSON_INVALID_ARGUMENT',
-      DETAIL = 'tenant_id is required';
+      DETAIL = 'tenant_uuid is required';
   END IF;
 
   v_ctx_raw := current_setting('app.current_tenant', true);

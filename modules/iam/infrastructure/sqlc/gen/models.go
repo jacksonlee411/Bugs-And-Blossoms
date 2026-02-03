@@ -10,7 +10,7 @@ import (
 
 type IamPrincipal struct {
 	ID               pgtype.UUID        `json:"id"`
-	TenantID         pgtype.UUID        `json:"tenant_id"`
+	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
 	Email            string             `json:"email"`
 	RoleSlug         string             `json:"role_slug"`
 	DisplayName      *string            `json:"display_name"`
@@ -22,7 +22,7 @@ type IamPrincipal struct {
 
 type IamSession struct {
 	TokenSha256 []byte             `json:"token_sha256"`
-	TenantID    pgtype.UUID        `json:"tenant_id"`
+	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
 	PrincipalID pgtype.UUID        `json:"principal_id"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
 	RevokedAt   pgtype.Timestamptz `json:"revoked_at"`
@@ -32,15 +32,15 @@ type IamSession struct {
 }
 
 type IamSuperadminAuditLog struct {
-	ID              int64              `json:"id"`
-	EventID         pgtype.UUID        `json:"event_id"`
-	Actor           string             `json:"actor"`
-	Action          string             `json:"action"`
-	TargetTenantID  pgtype.UUID        `json:"target_tenant_id"`
-	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	ID               int64              `json:"id"`
+	EventUuid        pgtype.UUID        `json:"event_uuid"`
+	Actor            string             `json:"actor"`
+	Action           string             `json:"action"`
+	TargetTenantUuid pgtype.UUID        `json:"target_tenant_uuid"`
+	Payload          []byte             `json:"payload"`
+	RequestCode      string             `json:"request_code"`
+	TransactionTime  pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 }
 
 type IamSuperadminPrincipal struct {
@@ -72,138 +72,138 @@ type IamTenant struct {
 }
 
 type IamTenantDomain struct {
-	ID        pgtype.UUID        `json:"id"`
-	TenantID  pgtype.UUID        `json:"tenant_id"`
-	Hostname  string             `json:"hostname"`
-	IsPrimary bool               `json:"is_primary"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID         pgtype.UUID        `json:"id"`
+	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
+	Hostname   string             `json:"hostname"`
+	IsPrimary  bool               `json:"is_primary"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
 type JobcatalogJobFamily struct {
-	TenantID    pgtype.UUID        `json:"tenant_id"`
-	Setid       *string            `json:"setid"`
-	ID          pgtype.UUID        `json:"id"`
-	Code        string             `json:"code"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	PackageID   pgtype.UUID        `json:"package_id"`
-	PackageCode *string            `json:"package_code"`
+	TenantUuid    pgtype.UUID        `json:"tenant_uuid"`
+	Setid         *string            `json:"setid"`
+	JobFamilyUuid pgtype.UUID        `json:"job_family_uuid"`
+	JobFamilyCode string             `json:"job_family_code"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	PackageUuid   pgtype.UUID        `json:"package_uuid"`
+	PackageCode   *string            `json:"package_code"`
 }
 
 type JobcatalogJobFamilyEvent struct {
 	ID              int64              `json:"id"`
-	EventID         pgtype.UUID        `json:"event_id"`
-	TenantID        pgtype.UUID        `json:"tenant_id"`
+	EventUuid       pgtype.UUID        `json:"event_uuid"`
+	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
 	Setid           *string            `json:"setid"`
-	JobFamilyID     pgtype.UUID        `json:"job_family_id"`
+	JobFamilyUuid   pgtype.UUID        `json:"job_family_uuid"`
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	RequestCode     string             `json:"request_code"`
+	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	PackageID       pgtype.UUID        `json:"package_id"`
+	PackageUuid     pgtype.UUID        `json:"package_uuid"`
 	PackageCode     *string            `json:"package_code"`
 }
 
 type JobcatalogJobFamilyGroup struct {
-	TenantID    pgtype.UUID        `json:"tenant_id"`
-	Setid       *string            `json:"setid"`
-	ID          pgtype.UUID        `json:"id"`
-	Code        string             `json:"code"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	PackageID   pgtype.UUID        `json:"package_id"`
-	PackageCode *string            `json:"package_code"`
+	TenantUuid         pgtype.UUID        `json:"tenant_uuid"`
+	Setid              *string            `json:"setid"`
+	JobFamilyGroupUuid pgtype.UUID        `json:"job_family_group_uuid"`
+	JobFamilyGroupCode string             `json:"job_family_group_code"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	PackageUuid        pgtype.UUID        `json:"package_uuid"`
+	PackageCode        *string            `json:"package_code"`
 }
 
 type JobcatalogJobFamilyGroupEvent struct {
-	ID               int64              `json:"id"`
-	EventID          pgtype.UUID        `json:"event_id"`
-	TenantID         pgtype.UUID        `json:"tenant_id"`
-	Setid            *string            `json:"setid"`
-	JobFamilyGroupID pgtype.UUID        `json:"job_family_group_id"`
-	EventType        string             `json:"event_type"`
-	EffectiveDate    pgtype.Date        `json:"effective_date"`
-	Payload          []byte             `json:"payload"`
-	RequestID        string             `json:"request_id"`
-	InitiatorID      pgtype.UUID        `json:"initiator_id"`
-	TransactionTime  pgtype.Timestamptz `json:"transaction_time"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	PackageID        pgtype.UUID        `json:"package_id"`
-	PackageCode      *string            `json:"package_code"`
+	ID                 int64              `json:"id"`
+	EventUuid          pgtype.UUID        `json:"event_uuid"`
+	TenantUuid         pgtype.UUID        `json:"tenant_uuid"`
+	Setid              *string            `json:"setid"`
+	JobFamilyGroupUuid pgtype.UUID        `json:"job_family_group_uuid"`
+	EventType          string             `json:"event_type"`
+	EffectiveDate      pgtype.Date        `json:"effective_date"`
+	Payload            []byte             `json:"payload"`
+	RequestCode        string             `json:"request_code"`
+	InitiatorUuid      pgtype.UUID        `json:"initiator_uuid"`
+	TransactionTime    pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	PackageUuid        pgtype.UUID        `json:"package_uuid"`
+	PackageCode        *string            `json:"package_code"`
 }
 
 type JobcatalogJobFamilyGroupVersion struct {
-	ID               int64                     `json:"id"`
-	TenantID         pgtype.UUID               `json:"tenant_id"`
-	Setid            *string                   `json:"setid"`
-	JobFamilyGroupID pgtype.UUID               `json:"job_family_group_id"`
-	Validity         pgtype.Range[pgtype.Date] `json:"validity"`
-	Name             string                    `json:"name"`
-	Description      *string                   `json:"description"`
-	IsActive         bool                      `json:"is_active"`
-	ExternalRefs     []byte                    `json:"external_refs"`
-	LastEventID      int64                     `json:"last_event_id"`
-	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
-	PackageID        pgtype.UUID               `json:"package_id"`
-	PackageCode      *string                   `json:"package_code"`
+	ID                 int64                     `json:"id"`
+	TenantUuid         pgtype.UUID               `json:"tenant_uuid"`
+	Setid              *string                   `json:"setid"`
+	JobFamilyGroupUuid pgtype.UUID               `json:"job_family_group_uuid"`
+	Validity           pgtype.Range[pgtype.Date] `json:"validity"`
+	Name               string                    `json:"name"`
+	Description        *string                   `json:"description"`
+	IsActive           bool                      `json:"is_active"`
+	ExternalRefs       []byte                    `json:"external_refs"`
+	LastEventID        int64                     `json:"last_event_id"`
+	CreatedAt          pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz        `json:"updated_at"`
+	PackageUuid        pgtype.UUID               `json:"package_uuid"`
+	PackageCode        *string                   `json:"package_code"`
 }
 
 type JobcatalogJobFamilyVersion struct {
-	ID               int64                     `json:"id"`
-	TenantID         pgtype.UUID               `json:"tenant_id"`
-	Setid            *string                   `json:"setid"`
-	JobFamilyID      pgtype.UUID               `json:"job_family_id"`
-	Validity         pgtype.Range[pgtype.Date] `json:"validity"`
-	Name             string                    `json:"name"`
-	Description      *string                   `json:"description"`
-	IsActive         bool                      `json:"is_active"`
-	ExternalRefs     []byte                    `json:"external_refs"`
-	JobFamilyGroupID pgtype.UUID               `json:"job_family_group_id"`
-	LastEventID      int64                     `json:"last_event_id"`
-	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
-	PackageID        pgtype.UUID               `json:"package_id"`
-	PackageCode      *string                   `json:"package_code"`
+	ID                 int64                     `json:"id"`
+	TenantUuid         pgtype.UUID               `json:"tenant_uuid"`
+	Setid              *string                   `json:"setid"`
+	JobFamilyUuid      pgtype.UUID               `json:"job_family_uuid"`
+	Validity           pgtype.Range[pgtype.Date] `json:"validity"`
+	Name               string                    `json:"name"`
+	Description        *string                   `json:"description"`
+	IsActive           bool                      `json:"is_active"`
+	ExternalRefs       []byte                    `json:"external_refs"`
+	JobFamilyGroupUuid pgtype.UUID               `json:"job_family_group_uuid"`
+	LastEventID        int64                     `json:"last_event_id"`
+	CreatedAt          pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz        `json:"updated_at"`
+	PackageUuid        pgtype.UUID               `json:"package_uuid"`
+	PackageCode        *string                   `json:"package_code"`
 }
 
 type JobcatalogJobLevel struct {
-	TenantID    pgtype.UUID        `json:"tenant_id"`
-	Setid       *string            `json:"setid"`
-	ID          pgtype.UUID        `json:"id"`
-	Code        string             `json:"code"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	PackageID   pgtype.UUID        `json:"package_id"`
-	PackageCode *string            `json:"package_code"`
+	TenantUuid   pgtype.UUID        `json:"tenant_uuid"`
+	Setid        *string            `json:"setid"`
+	JobLevelUuid pgtype.UUID        `json:"job_level_uuid"`
+	JobLevelCode string             `json:"job_level_code"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	PackageUuid  pgtype.UUID        `json:"package_uuid"`
+	PackageCode  *string            `json:"package_code"`
 }
 
 type JobcatalogJobLevelEvent struct {
 	ID              int64              `json:"id"`
-	EventID         pgtype.UUID        `json:"event_id"`
-	TenantID        pgtype.UUID        `json:"tenant_id"`
+	EventUuid       pgtype.UUID        `json:"event_uuid"`
+	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
 	Setid           *string            `json:"setid"`
-	JobLevelID      pgtype.UUID        `json:"job_level_id"`
+	JobLevelUuid    pgtype.UUID        `json:"job_level_uuid"`
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	RequestCode     string             `json:"request_code"`
+	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	PackageID       pgtype.UUID        `json:"package_id"`
+	PackageUuid     pgtype.UUID        `json:"package_uuid"`
 	PackageCode     *string            `json:"package_code"`
 }
 
 type JobcatalogJobLevelVersion struct {
 	ID           int64                     `json:"id"`
-	TenantID     pgtype.UUID               `json:"tenant_id"`
+	TenantUuid   pgtype.UUID               `json:"tenant_uuid"`
 	Setid        *string                   `json:"setid"`
-	JobLevelID   pgtype.UUID               `json:"job_level_id"`
+	JobLevelUuid pgtype.UUID               `json:"job_level_uuid"`
 	Validity     pgtype.Range[pgtype.Date] `json:"validity"`
 	Name         string                    `json:"name"`
 	Description  *string                   `json:"description"`
@@ -212,64 +212,64 @@ type JobcatalogJobLevelVersion struct {
 	LastEventID  int64                     `json:"last_event_id"`
 	CreatedAt    pgtype.Timestamptz        `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz        `json:"updated_at"`
-	PackageID    pgtype.UUID               `json:"package_id"`
+	PackageUuid  pgtype.UUID               `json:"package_uuid"`
 	PackageCode  *string                   `json:"package_code"`
 }
 
 type JobcatalogJobProfile struct {
-	TenantID    pgtype.UUID        `json:"tenant_id"`
-	Setid       *string            `json:"setid"`
-	ID          pgtype.UUID        `json:"id"`
-	Code        string             `json:"code"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	PackageID   pgtype.UUID        `json:"package_id"`
-	PackageCode *string            `json:"package_code"`
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	Setid          *string            `json:"setid"`
+	JobProfileUuid pgtype.UUID        `json:"job_profile_uuid"`
+	JobProfileCode string             `json:"job_profile_code"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	PackageUuid    pgtype.UUID        `json:"package_uuid"`
+	PackageCode    *string            `json:"package_code"`
 }
 
 type JobcatalogJobProfileEvent struct {
 	ID              int64              `json:"id"`
-	EventID         pgtype.UUID        `json:"event_id"`
-	TenantID        pgtype.UUID        `json:"tenant_id"`
+	EventUuid       pgtype.UUID        `json:"event_uuid"`
+	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
 	Setid           *string            `json:"setid"`
-	JobProfileID    pgtype.UUID        `json:"job_profile_id"`
+	JobProfileUuid  pgtype.UUID        `json:"job_profile_uuid"`
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	RequestCode     string             `json:"request_code"`
+	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	PackageID       pgtype.UUID        `json:"package_id"`
+	PackageUuid     pgtype.UUID        `json:"package_uuid"`
 	PackageCode     *string            `json:"package_code"`
 }
 
 type JobcatalogJobProfileVersion struct {
-	ID           int64                     `json:"id"`
-	TenantID     pgtype.UUID               `json:"tenant_id"`
-	Setid        *string                   `json:"setid"`
-	JobProfileID pgtype.UUID               `json:"job_profile_id"`
-	Validity     pgtype.Range[pgtype.Date] `json:"validity"`
-	Name         string                    `json:"name"`
-	Description  *string                   `json:"description"`
-	IsActive     bool                      `json:"is_active"`
-	ExternalRefs []byte                    `json:"external_refs"`
-	LastEventID  int64                     `json:"last_event_id"`
-	CreatedAt    pgtype.Timestamptz        `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz        `json:"updated_at"`
-	PackageID    pgtype.UUID               `json:"package_id"`
-	PackageCode  *string                   `json:"package_code"`
+	ID             int64                     `json:"id"`
+	TenantUuid     pgtype.UUID               `json:"tenant_uuid"`
+	Setid          *string                   `json:"setid"`
+	JobProfileUuid pgtype.UUID               `json:"job_profile_uuid"`
+	Validity       pgtype.Range[pgtype.Date] `json:"validity"`
+	Name           string                    `json:"name"`
+	Description    *string                   `json:"description"`
+	IsActive       bool                      `json:"is_active"`
+	ExternalRefs   []byte                    `json:"external_refs"`
+	LastEventID    int64                     `json:"last_event_id"`
+	CreatedAt      pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz        `json:"updated_at"`
+	PackageUuid    pgtype.UUID               `json:"package_uuid"`
+	PackageCode    *string                   `json:"package_code"`
 }
 
 type JobcatalogJobProfileVersionJobFamily struct {
-	TenantID            pgtype.UUID        `json:"tenant_id"`
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
 	Setid               *string            `json:"setid"`
 	JobProfileVersionID int64              `json:"job_profile_version_id"`
-	JobFamilyID         pgtype.UUID        `json:"job_family_id"`
+	JobFamilyUuid       pgtype.UUID        `json:"job_family_uuid"`
 	IsPrimary           bool               `json:"is_primary"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	PackageID           pgtype.UUID        `json:"package_id"`
+	PackageUuid         pgtype.UUID        `json:"package_uuid"`
 	PackageCode         *string            `json:"package_code"`
 }
 
@@ -504,7 +504,7 @@ type OrgunitSetidScopeSubscriptionEvent struct {
 }
 
 type PersonPerson struct {
-	TenantID    pgtype.UUID        `json:"tenant_id"`
+	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
 	PersonUuid  pgtype.UUID        `json:"person_uuid"`
 	Pernr       string             `json:"pernr"`
 	DisplayName string             `json:"display_name"`
@@ -514,8 +514,8 @@ type PersonPerson struct {
 }
 
 type StaffingAssignment struct {
-	TenantID       pgtype.UUID        `json:"tenant_id"`
-	ID             pgtype.UUID        `json:"id"`
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	AssignmentUuid pgtype.UUID        `json:"assignment_uuid"`
 	PersonUuid     pgtype.UUID        `json:"person_uuid"`
 	AssignmentType string             `json:"assignment_type"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
@@ -524,52 +524,52 @@ type StaffingAssignment struct {
 
 type StaffingAssignmentEvent struct {
 	ID              int64              `json:"id"`
-	EventID         pgtype.UUID        `json:"event_id"`
-	TenantID        pgtype.UUID        `json:"tenant_id"`
-	AssignmentID    pgtype.UUID        `json:"assignment_id"`
+	EventUuid       pgtype.UUID        `json:"event_uuid"`
+	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
+	AssignmentUuid  pgtype.UUID        `json:"assignment_uuid"`
 	PersonUuid      pgtype.UUID        `json:"person_uuid"`
 	AssignmentType  string             `json:"assignment_type"`
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	RequestCode     string             `json:"request_code"`
+	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type StaffingAssignmentEventCorrection struct {
 	ID                  int64              `json:"id"`
-	EventID             pgtype.UUID        `json:"event_id"`
-	TenantID            pgtype.UUID        `json:"tenant_id"`
-	AssignmentID        pgtype.UUID        `json:"assignment_id"`
+	EventUuid           pgtype.UUID        `json:"event_uuid"`
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
+	AssignmentUuid      pgtype.UUID        `json:"assignment_uuid"`
 	TargetEffectiveDate pgtype.Date        `json:"target_effective_date"`
 	ReplacementPayload  []byte             `json:"replacement_payload"`
-	RequestID           string             `json:"request_id"`
-	InitiatorID         pgtype.UUID        `json:"initiator_id"`
+	RequestCode         string             `json:"request_code"`
+	InitiatorUuid       pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime     pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 }
 
 type StaffingAssignmentEventRescind struct {
 	ID                  int64              `json:"id"`
-	EventID             pgtype.UUID        `json:"event_id"`
-	TenantID            pgtype.UUID        `json:"tenant_id"`
-	AssignmentID        pgtype.UUID        `json:"assignment_id"`
+	EventUuid           pgtype.UUID        `json:"event_uuid"`
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
+	AssignmentUuid      pgtype.UUID        `json:"assignment_uuid"`
 	TargetEffectiveDate pgtype.Date        `json:"target_effective_date"`
 	Payload             []byte             `json:"payload"`
-	RequestID           string             `json:"request_id"`
-	InitiatorID         pgtype.UUID        `json:"initiator_id"`
+	RequestCode         string             `json:"request_code"`
+	InitiatorUuid       pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime     pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 }
 
 type StaffingAssignmentVersion struct {
 	ID             int64                     `json:"id"`
-	TenantID       pgtype.UUID               `json:"tenant_id"`
-	AssignmentID   pgtype.UUID               `json:"assignment_id"`
+	TenantUuid     pgtype.UUID               `json:"tenant_uuid"`
+	AssignmentUuid pgtype.UUID               `json:"assignment_uuid"`
 	PersonUuid     pgtype.UUID               `json:"person_uuid"`
-	PositionID     pgtype.UUID               `json:"position_id"`
+	PositionUuid   pgtype.UUID               `json:"position_uuid"`
 	AssignmentType string                    `json:"assignment_type"`
 	Status         string                    `json:"status"`
 	AllocatedFte   pgtype.Numeric            `json:"allocated_fte"`
@@ -579,39 +579,39 @@ type StaffingAssignmentVersion struct {
 }
 
 type StaffingPosition struct {
-	TenantID  pgtype.UUID        `json:"tenant_id"`
-	ID        pgtype.UUID        `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	TenantUuid   pgtype.UUID        `json:"tenant_uuid"`
+	PositionUuid pgtype.UUID        `json:"position_uuid"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type StaffingPositionEvent struct {
 	ID              int64              `json:"id"`
-	EventID         pgtype.UUID        `json:"event_id"`
-	TenantID        pgtype.UUID        `json:"tenant_id"`
-	PositionID      pgtype.UUID        `json:"position_id"`
+	EventUuid       pgtype.UUID        `json:"event_uuid"`
+	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
+	PositionUuid    pgtype.UUID        `json:"position_uuid"`
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestID       string             `json:"request_id"`
-	InitiatorID     pgtype.UUID        `json:"initiator_id"`
+	RequestCode     string             `json:"request_code"`
+	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type StaffingPositionVersion struct {
-	ID                  int64                     `json:"id"`
-	TenantID            pgtype.UUID               `json:"tenant_id"`
-	PositionID          pgtype.UUID               `json:"position_id"`
-	OrgUnitID           int32                     `json:"org_unit_id"`
-	ReportsToPositionID pgtype.UUID               `json:"reports_to_position_id"`
-	Name                *string                   `json:"name"`
-	LifecycleStatus     string                    `json:"lifecycle_status"`
-	CapacityFte         pgtype.Numeric            `json:"capacity_fte"`
-	Profile             []byte                    `json:"profile"`
-	Validity            pgtype.Range[pgtype.Date] `json:"validity"`
-	LastEventID         int64                     `json:"last_event_id"`
-	JobcatalogSetid     *string                   `json:"jobcatalog_setid"`
-	JobcatalogSetidAsOf pgtype.Date               `json:"jobcatalog_setid_as_of"`
-	JobProfileID        pgtype.UUID               `json:"job_profile_id"`
+	ID                    int64                     `json:"id"`
+	TenantUuid            pgtype.UUID               `json:"tenant_uuid"`
+	PositionUuid          pgtype.UUID               `json:"position_uuid"`
+	OrgUnitID             int32                     `json:"org_unit_id"`
+	ReportsToPositionUuid pgtype.UUID               `json:"reports_to_position_uuid"`
+	Name                  *string                   `json:"name"`
+	LifecycleStatus       string                    `json:"lifecycle_status"`
+	CapacityFte           pgtype.Numeric            `json:"capacity_fte"`
+	Profile               []byte                    `json:"profile"`
+	Validity              pgtype.Range[pgtype.Date] `json:"validity"`
+	LastEventID           int64                     `json:"last_event_id"`
+	JobcatalogSetid       *string                   `json:"jobcatalog_setid"`
+	JobcatalogSetidAsOf   pgtype.Date               `json:"jobcatalog_setid_as_of"`
+	JobProfileUuid        pgtype.UUID               `json:"job_profile_uuid"`
 }

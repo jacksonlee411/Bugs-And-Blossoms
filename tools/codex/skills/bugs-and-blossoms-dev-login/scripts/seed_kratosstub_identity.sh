@@ -49,7 +49,7 @@ payload="$(cat <<JSON
 {
   "schema_id": "default",
   "traits": {
-    "tenant_id": "${tenant_id}",
+    "tenant_uuid": "${tenant_id}",
     "email": "${email}",
     "role_slug": "${role_slug}"
   },
@@ -83,4 +83,3 @@ case "$code" in
     exit 1
     ;;
 esac
-
