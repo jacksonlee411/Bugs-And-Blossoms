@@ -171,7 +171,9 @@ modules/{module}/
 - DEV-PLAN-070 执行日志：`docs/dev-records/dev-plan-070-execution-log.md`
 - DEV-PLAN-071：SetID Scope Package 订阅蓝图：`docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
 - DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化：`docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- DEV-PLAN-072：全仓 ID/Code 命名与对外标识收敛：`docs/dev-plans/072-repo-wide-id-code-naming-convergence.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
+- DEV-PLAN-072 记录：命名收敛差异清单与映射表：`docs/dev-records/dev-plan-072-naming-convergence-mapping.md`
 - DEV-PLAN-026A：OrgUnit 8位编号与 UUID/Code 命名规范：`docs/dev-plans/026a-orgunit-id-uuid-code-naming.md`
 - DEV-PLAN-026A 执行日志：`docs/dev-records/dev-plan-026a-execution-log.md`
 - DEV-PLAN-026B：OrgUnit 外部ID兼容（org_code 映射）方案：`docs/dev-plans/026b-orgunit-external-id-code-mapping.md`
