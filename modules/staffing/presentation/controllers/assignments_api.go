@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -24,19 +25,19 @@ type AssignmentsController struct {
 type assignmentsAPIRequest struct {
 	EffectiveDate string `json:"effective_date"`
 	PersonUUID    string `json:"person_uuid"`
-	PositionID    string `json:"position_id"`
+	PositionUUID  string `json:"position_uuid"`
 	Status        string `json:"status"`
 	AllocatedFte  string `json:"allocated_fte"`
 }
 
 type assignmentEventsCorrectAPIRequest struct {
-	AssignmentID        string          `json:"assignment_id"`
+	AssignmentUUID      string          `json:"assignment_uuid"`
 	TargetEffectiveDate string          `json:"target_effective_date"`
 	ReplacementPayload  json.RawMessage `json:"replacement_payload"`
 }
 
 type assignmentEventsRescindAPIRequest struct {
-	AssignmentID        string          `json:"assignment_id"`
+	AssignmentUUID      string          `json:"assignment_uuid"`
 	TargetEffectiveDate string          `json:"target_effective_date"`
 	Payload             json.RawMessage `json:"payload"`
 }
@@ -92,8 +93,22 @@ func (c AssignmentsController) HandleAssignmentsAPI(w http.ResponseWriter, r *ht
 		return
 
 	case http.MethodPost:
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "bad_json", "bad json")
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(body, &raw); err != nil {
+			writeError(w, r, http.StatusBadRequest, "bad_json", "bad json")
+			return
+		}
+		if _, ok := raw["position_id"]; ok {
+			writeError(w, r, http.StatusBadRequest, "invalid_request", "use position_uuid")
+			return
+		}
 		var req assignmentsAPIRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.Unmarshal(body, &req); err != nil {
 			writeError(w, r, http.StatusBadRequest, "bad_json", "bad json")
 			return
 		}
@@ -110,7 +125,7 @@ func (c AssignmentsController) HandleAssignmentsAPI(w http.ResponseWriter, r *ht
 			return
 		}
 
-		a, err := c.Facade.UpsertPrimaryAssignmentForPerson(r.Context(), tenantID, req.EffectiveDate, req.PersonUUID, req.PositionID, req.Status, req.AllocatedFte)
+		a, err := c.Facade.UpsertPrimaryAssignmentForPerson(r.Context(), tenantID, req.EffectiveDate, req.PersonUUID, req.PositionUUID, req.Status, req.AllocatedFte)
 		if err != nil {
 			code := stablePgMessage(err)
 			status := http.StatusInternalServerError
@@ -150,15 +165,29 @@ func (c AssignmentsController) HandleAssignmentEventsCorrectAPI(w http.ResponseW
 		return
 	}
 
-	var req assignmentEventsCorrectAPIRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_json", "bad json")
 		return
 	}
-	req.AssignmentID = strings.TrimSpace(req.AssignmentID)
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		writeError(w, r, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+	if _, ok := raw["assignment_id"]; ok {
+		writeError(w, r, http.StatusBadRequest, "invalid_request", "use assignment_uuid")
+		return
+	}
+	var req assignmentEventsCorrectAPIRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, r, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+	req.AssignmentUUID = strings.TrimSpace(req.AssignmentUUID)
 	req.TargetEffectiveDate = strings.TrimSpace(req.TargetEffectiveDate)
-	if req.AssignmentID == "" {
-		writeError(w, r, http.StatusBadRequest, "missing_assignment_id", "assignment_id is required")
+	if req.AssignmentUUID == "" {
+		writeError(w, r, http.StatusBadRequest, "missing_assignment_uuid", "assignment_uuid is required")
 		return
 	}
 	if req.TargetEffectiveDate == "" {
@@ -169,8 +198,17 @@ func (c AssignmentsController) HandleAssignmentEventsCorrectAPI(w http.ResponseW
 		writeError(w, r, http.StatusBadRequest, "invalid_target_effective_date", "invalid target_effective_date")
 		return
 	}
+	if len(req.ReplacementPayload) > 0 {
+		var payload map[string]json.RawMessage
+		if err := json.Unmarshal(req.ReplacementPayload, &payload); err == nil {
+			if _, ok := payload["position_id"]; ok {
+				writeError(w, r, http.StatusBadRequest, "invalid_request", "use position_uuid")
+				return
+			}
+		}
+	}
 
-	eventID, err := c.Facade.CorrectAssignmentEvent(r.Context(), tenantID, req.AssignmentID, req.TargetEffectiveDate, req.ReplacementPayload)
+	eventID, err := c.Facade.CorrectAssignmentEvent(r.Context(), tenantID, req.AssignmentUUID, req.TargetEffectiveDate, req.ReplacementPayload)
 	if err != nil {
 		code := stablePgMessage(err)
 		status := http.StatusInternalServerError
@@ -191,7 +229,7 @@ func (c AssignmentsController) HandleAssignmentEventsCorrectAPI(w http.ResponseW
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"correction_event_id":   eventID,
+		"correction_event_uuid": eventID,
 		"target_effective_date": req.TargetEffectiveDate,
 	})
 }
@@ -208,15 +246,29 @@ func (c AssignmentsController) HandleAssignmentEventsRescindAPI(w http.ResponseW
 		return
 	}
 
-	var req assignmentEventsRescindAPIRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_json", "bad json")
 		return
 	}
-	req.AssignmentID = strings.TrimSpace(req.AssignmentID)
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		writeError(w, r, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+	if _, ok := raw["assignment_id"]; ok {
+		writeError(w, r, http.StatusBadRequest, "invalid_request", "use assignment_uuid")
+		return
+	}
+	var req assignmentEventsRescindAPIRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeError(w, r, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+	req.AssignmentUUID = strings.TrimSpace(req.AssignmentUUID)
 	req.TargetEffectiveDate = strings.TrimSpace(req.TargetEffectiveDate)
-	if req.AssignmentID == "" {
-		writeError(w, r, http.StatusBadRequest, "missing_assignment_id", "assignment_id is required")
+	if req.AssignmentUUID == "" {
+		writeError(w, r, http.StatusBadRequest, "missing_assignment_uuid", "assignment_uuid is required")
 		return
 	}
 	if req.TargetEffectiveDate == "" {
@@ -228,7 +280,7 @@ func (c AssignmentsController) HandleAssignmentEventsRescindAPI(w http.ResponseW
 		return
 	}
 
-	eventID, err := c.Facade.RescindAssignmentEvent(r.Context(), tenantID, req.AssignmentID, req.TargetEffectiveDate, req.Payload)
+	eventID, err := c.Facade.RescindAssignmentEvent(r.Context(), tenantID, req.AssignmentUUID, req.TargetEffectiveDate, req.Payload)
 	if err != nil {
 		code := stablePgMessage(err)
 		status := http.StatusInternalServerError
@@ -249,7 +301,7 @@ func (c AssignmentsController) HandleAssignmentEventsRescindAPI(w http.ResponseW
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"rescind_event_id":      eventID,
+		"rescind_event_uuid":    eventID,
 		"target_effective_date": req.TargetEffectiveDate,
 	})
 }
@@ -257,7 +309,7 @@ func (c AssignmentsController) HandleAssignmentEventsRescindAPI(w http.ResponseW
 type errorEnvelope struct {
 	Code      string            `json:"code"`
 	Message   string            `json:"message"`
-	RequestID string            `json:"request_id"`
+	RequestID string            `json:"request_code"`
 	Meta      errorEnvelopeMeta `json:"meta"`
 }
 

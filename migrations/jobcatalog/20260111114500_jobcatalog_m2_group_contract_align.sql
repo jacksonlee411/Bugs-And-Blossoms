@@ -5,21 +5,21 @@ ALTER TABLE jobcatalog.job_family_group_events DISABLE ROW LEVEL SECURITY;
 ALTER TABLE jobcatalog.job_family_group_versions DISABLE ROW LEVEL SECURITY;
 
 ALTER TABLE jobcatalog.job_family_groups
-  ADD CONSTRAINT job_family_groups_tenant_setid_id_unique UNIQUE (tenant_id, setid, id);
+  ADD CONSTRAINT job_family_groups_tenant_setid_id_unique UNIQUE (tenant_uuid, setid, job_family_group_uuid);
 
-DROP INDEX IF EXISTS jobcatalog.job_family_group_events_event_id_unique;
+DROP INDEX IF EXISTS jobcatalog.job_family_group_events_event_uuid_unique;
 ALTER TABLE jobcatalog.job_family_group_events
-  ADD CONSTRAINT job_family_group_events_event_id_unique UNIQUE (event_id);
+  ADD CONSTRAINT job_family_group_events_event_uuid_unique UNIQUE (event_uuid);
 
 ALTER TABLE jobcatalog.job_family_group_events
   ADD CONSTRAINT job_family_group_events_group_fk
-  FOREIGN KEY (tenant_id, setid, job_family_group_id) REFERENCES jobcatalog.job_family_groups(tenant_id, setid, id) ON DELETE RESTRICT;
+  FOREIGN KEY (tenant_uuid, setid, job_family_group_uuid) REFERENCES jobcatalog.job_family_groups(tenant_uuid, setid, job_family_group_uuid) ON DELETE RESTRICT;
 
 ALTER TABLE jobcatalog.job_family_group_versions
   DROP CONSTRAINT IF EXISTS job_family_group_versions_job_family_group_id_fkey;
 ALTER TABLE jobcatalog.job_family_group_versions
   ADD CONSTRAINT job_family_group_versions_group_fk
-  FOREIGN KEY (tenant_id, setid, job_family_group_id) REFERENCES jobcatalog.job_family_groups(tenant_id, setid, id) ON DELETE RESTRICT;
+  FOREIGN KEY (tenant_uuid, setid, job_family_group_uuid) REFERENCES jobcatalog.job_family_groups(tenant_uuid, setid, job_family_group_uuid) ON DELETE RESTRICT;
 
 ALTER TABLE jobcatalog.job_family_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE jobcatalog.job_family_groups FORCE ROW LEVEL SECURITY;
@@ -29,9 +29,9 @@ ALTER TABLE jobcatalog.job_family_group_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE jobcatalog.job_family_group_versions FORCE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION jobcatalog.replay_job_family_group_versions(
-  p_tenant_id uuid,
+  p_tenant_uuid uuid,
   p_setid text,
-  p_job_family_group_id uuid
+  p_job_family_group_uuid uuid
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -45,22 +45,22 @@ DECLARE
   v_next_date date;
   v_validity daterange;
 BEGIN
-  PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
+  PERFORM jobcatalog.assert_current_tenant(p_tenant_uuid);
   v_setid := jobcatalog.normalize_setid(p_setid);
 
-  v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
+  v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_uuid, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM jobcatalog.job_family_group_versions
-  WHERE tenant_id = p_tenant_id AND setid = v_setid AND job_family_group_id = p_job_family_group_id;
+  WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid AND job_family_group_uuid = p_job_family_group_uuid;
 
   v_prev := NULL;
   FOR v_row IN
     SELECT id, event_type, effective_date, payload
     FROM jobcatalog.job_family_group_events
-    WHERE tenant_id = p_tenant_id
+    WHERE tenant_uuid = p_tenant_uuid
       AND setid = v_setid
-      AND job_family_group_id = p_job_family_group_id
+      AND job_family_group_uuid = p_job_family_group_uuid
     ORDER BY effective_date ASC, id ASC
   LOOP
     v_state := COALESCE(v_prev, '{}'::jsonb);
@@ -115,9 +115,9 @@ BEGIN
     v_next_date := NULL;
     SELECT e.effective_date INTO v_next_date
     FROM jobcatalog.job_family_group_events e
-    WHERE e.tenant_id = p_tenant_id
+    WHERE e.tenant_uuid = p_tenant_uuid
       AND e.setid = v_setid
-      AND e.job_family_group_id = p_job_family_group_id
+      AND e.job_family_group_uuid = p_job_family_group_uuid
       AND (e.effective_date, e.id) > (v_row.effective_date, v_row.id)
     ORDER BY e.effective_date ASC, e.id ASC
     LIMIT 1;
@@ -125,9 +125,9 @@ BEGIN
     v_validity := daterange(v_row.effective_date, v_next_date, '[)');
 
     INSERT INTO jobcatalog.job_family_group_versions (
-      tenant_id,
+      tenant_uuid,
       setid,
-      job_family_group_id,
+      job_family_group_uuid,
       validity,
       name,
       description,
@@ -135,9 +135,9 @@ BEGIN
       external_refs,
       last_event_id
     ) VALUES (
-      p_tenant_id,
+      p_tenant_uuid,
       v_setid,
-      p_job_family_group_id,
+      p_job_family_group_uuid,
       v_validity,
       COALESCE(NULLIF(btrim(v_state->>'name'), ''), '[missing]'),
       CASE
@@ -158,9 +158,9 @@ BEGIN
         validity,
         lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
       FROM jobcatalog.job_family_group_versions
-      WHERE tenant_id = p_tenant_id
+      WHERE tenant_uuid = p_tenant_uuid
         AND setid = v_setid
-        AND job_family_group_id = p_job_family_group_id
+        AND job_family_group_uuid = p_job_family_group_uuid
     )
     SELECT 1
     FROM ordered
@@ -171,7 +171,7 @@ BEGIN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_VALIDITY_GAP',
-      DETAIL = format('job_family_group_id=%s', p_job_family_group_id);
+      DETAIL = format('job_family_group_uuid=%s', p_job_family_group_uuid);
   END IF;
 
   IF EXISTS (
@@ -179,9 +179,9 @@ BEGIN
     FROM (
       SELECT validity
       FROM jobcatalog.job_family_group_versions
-      WHERE tenant_id = p_tenant_id
+      WHERE tenant_uuid = p_tenant_uuid
         AND setid = v_setid
-        AND job_family_group_id = p_job_family_group_id
+        AND job_family_group_uuid = p_job_family_group_uuid
       ORDER BY lower(validity) DESC
       LIMIT 1
     ) last
@@ -191,21 +191,21 @@ BEGIN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_VALIDITY_NOT_INFINITE',
-      DETAIL = format('job_family_group_id=%s', p_job_family_group_id);
+      DETAIL = format('job_family_group_uuid=%s', p_job_family_group_uuid);
   END IF;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION jobcatalog.submit_job_family_group_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
   p_setid text,
-  p_job_family_group_id uuid,
+  p_job_family_group_uuid uuid,
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -220,24 +220,24 @@ DECLARE
   v_existing jobcatalog.job_family_group_events%ROWTYPE;
   v_existing_group jobcatalog.job_family_groups%ROWTYPE;
 BEGIN
-  PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
-  IF p_event_id IS NULL THEN
+  PERFORM jobcatalog.assert_current_tenant(p_tenant_uuid);
+  IF p_event_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'event_id is required';
+      DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'request_id is required';
+      DETAIL = 'request_code is required';
   END IF;
-  IF p_job_family_group_id IS NULL THEN
+  IF p_job_family_group_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'job_family_group_id is required';
+      DETAIL = 'job_family_group_uuid is required';
   END IF;
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING
@@ -245,11 +245,11 @@ BEGIN
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
       DETAIL = 'effective_date is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
+  IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'initiator_id is required';
+      DETAIL = 'initiator_uuid is required';
   END IF;
   IF p_event_type NOT IN ('CREATE','UPDATE','DISABLE') THEN
     RAISE EXCEPTION USING
@@ -260,7 +260,7 @@ BEGIN
 
   v_setid := jobcatalog.normalize_setid(p_setid);
 
-  v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
+  v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_uuid, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
@@ -275,7 +275,7 @@ BEGIN
     IF EXISTS (
       SELECT 1
       FROM jsonb_object_keys(v_payload) AS k
-      WHERE k NOT IN ('code', 'name', 'description', 'external_refs')
+      WHERE k NOT IN ('job_family_group_code', 'name', 'description', 'external_refs')
       LIMIT 1
     ) THEN
       RAISE EXCEPTION USING
@@ -296,11 +296,11 @@ BEGIN
         DETAIL = 'payload.external_refs must be an object';
     END IF;
   ELSIF p_event_type = 'UPDATE' THEN
-    IF v_payload ? 'code' THEN
+    IF v_payload ? 'job_family_group_code' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-        DETAIL = 'payload.code is not allowed for UPDATE';
+        DETAIL = 'payload.job_family_group_code is not allowed for UPDATE';
     END IF;
     IF EXISTS (
       SELECT 1
@@ -353,77 +353,77 @@ BEGIN
   END IF;
 
   IF p_event_type = 'CREATE' THEN
-    v_code := NULLIF(btrim(COALESCE(v_payload->>'code', '')), '');
+    v_code := NULLIF(btrim(COALESCE(v_payload->>'job_family_group_code', '')), '');
     v_name := NULLIF(btrim(COALESCE(v_payload->>'name', '')), '');
     IF v_code IS NULL OR v_name IS NULL THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-        DETAIL = 'code/name is required';
+        DETAIL = 'job_family_group_code/name is required';
     END IF;
 
-    INSERT INTO jobcatalog.job_family_groups (tenant_id, setid, id, code)
-    VALUES (p_tenant_id, v_setid, p_job_family_group_id, v_code)
-    ON CONFLICT (id) DO NOTHING;
+    INSERT INTO jobcatalog.job_family_groups (tenant_uuid, setid, job_family_group_uuid, job_family_group_code)
+    VALUES (p_tenant_uuid, v_setid, p_job_family_group_uuid, v_code)
+    ON CONFLICT (job_family_group_uuid) DO NOTHING;
 
     SELECT * INTO v_existing_group
     FROM jobcatalog.job_family_groups
-    WHERE id = p_job_family_group_id;
+    WHERE job_family_group_uuid = p_job_family_group_uuid;
 
-    IF v_existing_group.tenant_id <> p_tenant_id
+    IF v_existing_group.tenant_uuid <> p_tenant_uuid
       OR v_existing_group.setid <> v_setid
-      OR v_existing_group.code <> v_code
+      OR v_existing_group.job_family_group_code <> v_code
     THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-        DETAIL = format('job_family_group_id=%s', p_job_family_group_id);
+        DETAIL = format('job_family_group_uuid=%s', p_job_family_group_uuid);
     END IF;
   ELSE
     IF NOT EXISTS (
       SELECT 1 FROM jobcatalog.job_family_groups
-      WHERE tenant_id = p_tenant_id AND setid = v_setid AND id = p_job_family_group_id
+      WHERE tenant_uuid = p_tenant_uuid AND setid = v_setid AND job_family_group_uuid = p_job_family_group_uuid
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_NOT_FOUND',
-        DETAIL = format('job_family_group_id=%s', p_job_family_group_id);
+        DETAIL = format('job_family_group_uuid=%s', p_job_family_group_uuid);
     END IF;
   END IF;
 
   INSERT INTO jobcatalog.job_family_group_events (
-    event_id, tenant_id, setid, job_family_group_id, event_type, effective_date, payload, request_id, initiator_id
+    event_uuid, tenant_uuid, setid, job_family_group_uuid, event_type, effective_date, payload, request_code, initiator_uuid
   )
   VALUES (
-    p_event_id, p_tenant_id, v_setid, p_job_family_group_id, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_id
+    p_event_uuid, p_tenant_uuid, v_setid, p_job_family_group_uuid, p_event_type, p_effective_date, v_payload, p_request_code, p_initiator_uuid
   )
-  ON CONFLICT (event_id) DO NOTHING
+  ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_evt_db_id;
 
   IF v_evt_db_id IS NULL THEN
     SELECT * INTO v_existing
     FROM jobcatalog.job_family_group_events
-    WHERE event_id = p_event_id;
+    WHERE event_uuid = p_event_uuid;
 
-    IF v_existing.tenant_id <> p_tenant_id
+    IF v_existing.tenant_uuid <> p_tenant_uuid
       OR v_existing.setid <> v_setid
-      OR v_existing.job_family_group_id <> p_job_family_group_id
+      OR v_existing.job_family_group_uuid <> p_job_family_group_uuid
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_id <> p_request_id
-      OR v_existing.initiator_id <> p_initiator_id
+      OR v_existing.request_code <> p_request_code
+      OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_IDEMPOTENCY_REUSED',
-        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+        DETAIL = format('event_uuid=%s existing_id=%s', p_event_uuid, v_existing.id);
     END IF;
 
     RETURN v_existing.id;
   END IF;
 
-  PERFORM jobcatalog.replay_job_family_group_versions(p_tenant_id, v_setid, p_job_family_group_id);
+  PERFORM jobcatalog.replay_job_family_group_versions(p_tenant_uuid, v_setid, p_job_family_group_uuid);
 
   RETURN v_evt_db_id;
 END;
@@ -439,8 +439,8 @@ ALTER TABLE jobcatalog.job_family_group_events
   DROP CONSTRAINT IF EXISTS job_family_group_events_group_fk;
 
 ALTER TABLE jobcatalog.job_family_group_events
-  DROP CONSTRAINT IF EXISTS job_family_group_events_event_id_unique;
-CREATE UNIQUE INDEX IF NOT EXISTS job_family_group_events_event_id_unique ON jobcatalog.job_family_group_events (event_id);
+  DROP CONSTRAINT IF EXISTS job_family_group_events_event_uuid_unique;
+CREATE UNIQUE INDEX IF NOT EXISTS job_family_group_events_event_uuid_unique ON jobcatalog.job_family_group_events (event_uuid);
 
 ALTER TABLE jobcatalog.job_family_groups
   DROP CONSTRAINT IF EXISTS job_family_groups_tenant_setid_id_unique;

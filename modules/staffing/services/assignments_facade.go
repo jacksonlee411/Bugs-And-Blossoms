@@ -20,14 +20,14 @@ func (f AssignmentsFacade) ListAssignmentsForPerson(ctx context.Context, tenantI
 	return f.store.ListAssignmentsForPerson(ctx, tenantID, asOfDate, personUUID)
 }
 
-func (f AssignmentsFacade) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionID string, status string, allocatedFte string) (types.Assignment, error) {
-	return f.store.UpsertPrimaryAssignmentForPerson(ctx, tenantID, effectiveDate, personUUID, positionID, status, allocatedFte)
+func (f AssignmentsFacade) UpsertPrimaryAssignmentForPerson(ctx context.Context, tenantID string, effectiveDate string, personUUID string, positionUUID string, status string, allocatedFte string) (types.Assignment, error) {
+	return f.store.UpsertPrimaryAssignmentForPerson(ctx, tenantID, effectiveDate, personUUID, positionUUID, status, allocatedFte)
 }
 
-func (f AssignmentsFacade) CorrectAssignmentEvent(ctx context.Context, tenantID string, assignmentID string, targetEffectiveDate string, replacementPayload json.RawMessage) (string, error) {
-	return f.store.CorrectAssignmentEvent(ctx, tenantID, assignmentID, targetEffectiveDate, replacementPayload)
+func (f AssignmentsFacade) CorrectAssignmentEvent(ctx context.Context, tenantID string, assignmentUUID string, targetEffectiveDate string, replacementPayload json.RawMessage) (string, error) {
+	return f.store.CorrectAssignmentEvent(ctx, tenantID, assignmentUUID, targetEffectiveDate, replacementPayload)
 }
 
-func (f AssignmentsFacade) RescindAssignmentEvent(ctx context.Context, tenantID string, assignmentID string, targetEffectiveDate string, payload json.RawMessage) (string, error) {
-	return f.store.RescindAssignmentEvent(ctx, tenantID, assignmentID, targetEffectiveDate, payload)
+func (f AssignmentsFacade) RescindAssignmentEvent(ctx context.Context, tenantID string, assignmentUUID string, targetEffectiveDate string, payload json.RawMessage) (string, error) {
+	return f.store.RescindAssignmentEvent(ctx, tenantID, assignmentUUID, targetEffectiveDate, payload)
 }

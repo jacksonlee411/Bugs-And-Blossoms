@@ -351,7 +351,7 @@ ORDER BY created_at ASC, id ASC
 	}
 
 	domainRows, err := pool.Query(ctx, `
-SELECT tenant_id::text, hostname, is_primary
+SELECT tenant_uuid::text, hostname, is_primary
 FROM iam.tenant_domains
 ORDER BY is_primary DESC, hostname ASC
 `)
@@ -483,7 +483,7 @@ RETURNING id::text
 	}
 
 	if _, err := tx.Exec(ctx, `
-INSERT INTO iam.tenant_domains(tenant_id, hostname, is_primary)
+INSERT INTO iam.tenant_domains(tenant_uuid, hostname, is_primary)
 VALUES ($1::uuid, $2, true)
 `, tenantID, hostname); err != nil {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "db_error", "db error")
@@ -598,7 +598,7 @@ func handleTenantBindDomain(w http.ResponseWriter, r *http.Request, pool pgBegin
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	if _, err := tx.Exec(ctx, `
-INSERT INTO iam.tenant_domains(tenant_id, hostname, is_primary)
+INSERT INTO iam.tenant_domains(tenant_uuid, hostname, is_primary)
 VALUES ($1::uuid, $2, false)
 `, tenantID, hostname); err != nil {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "db_error", "db error")
@@ -638,7 +638,7 @@ func insertAudit(ctx context.Context, tx pgx.Tx, actor string, action string, te
 		payload = []byte(`{}`)
 	}
 	_, err := tx.Exec(ctx, `
-INSERT INTO iam.superadmin_audit_logs(actor, action, target_tenant_id, payload, request_id)
+INSERT INTO iam.superadmin_audit_logs(actor, action, target_tenant_uuid, payload, request_code)
 VALUES ($1, $2, $3::uuid, $4::jsonb, $5)
 `, actor, action, tenantID, payload, reqID)
 	return err

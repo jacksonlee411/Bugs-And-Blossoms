@@ -115,7 +115,7 @@ func TestStaffingPGStore_CorrectRescindAssignmentEvent(t *testing.T) {
 		store := newStaffingPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		}))
-		got, err := store.CorrectAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", []byte(`{"position_id":"p1"}`))
+		got, err := store.CorrectAssignmentEvent(context.Background(), "t1", "a1", "2026-01-01", []byte(`{"position_uuid":"p1"}`))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -254,20 +254,20 @@ func TestStaffingMemoryStore_CorrectRescindAssignmentEvent(t *testing.T) {
 		assignmentID := "as1"
 		s.assigns[tenantID] = map[string][]Assignment{
 			personUUID: {{
-				AssignmentID: assignmentID,
-				PersonUUID:   personUUID,
-				PositionID:   "pos1",
-				Status:       "active",
-				EffectiveAt:  "2026-01-01",
+				AssignmentUUID: assignmentID,
+				PersonUUID:     personUUID,
+				PositionUUID:   "pos1",
+				Status:         "active",
+				EffectiveAt:    "2026-01-01",
 			}},
 		}
 
-		_, err := s.CorrectAssignmentEvent(context.Background(), tenantID, assignmentID, "2026-01-01", []byte(`{"position_id":"pos2","status":"inactive"}`))
+		_, err := s.CorrectAssignmentEvent(context.Background(), tenantID, assignmentID, "2026-01-01", []byte(`{"position_uuid":"pos2","status":"inactive"}`))
 		if err != nil {
 			t.Fatal(err)
 		}
 		got := s.assigns[tenantID][personUUID][0]
-		if got.PositionID != "pos2" || got.Status != "inactive" {
+		if got.PositionUUID != "pos2" || got.Status != "inactive" {
 			t.Fatalf("got=%#v", got)
 		}
 	})
@@ -286,8 +286,8 @@ func TestStaffingMemoryStore_CorrectRescindAssignmentEvent(t *testing.T) {
 		personUUID := "p1"
 		s.assigns[tenantID] = map[string][]Assignment{
 			personUUID: {
-				{AssignmentID: "other", PersonUUID: personUUID, PositionID: "pos1", Status: "active", EffectiveAt: "2026-01-01"},
-				{AssignmentID: "as1", PersonUUID: personUUID, PositionID: "pos1", Status: "active", EffectiveAt: "2026-01-01"},
+				{AssignmentUUID: "other", PersonUUID: personUUID, PositionUUID: "pos1", Status: "active", EffectiveAt: "2026-01-01"},
+				{AssignmentUUID: "as1", PersonUUID: personUUID, PositionUUID: "pos1", Status: "active", EffectiveAt: "2026-01-01"},
 			},
 		}
 		_, err := s.CorrectAssignmentEvent(context.Background(), tenantID, "as1", "2026-01-01", []byte(`{"status":"inactive"}`))
@@ -306,15 +306,15 @@ func TestStaffingMemoryStore_CorrectRescindAssignmentEvent(t *testing.T) {
 		assignmentID := "as1"
 		s.assigns[tenantID] = map[string][]Assignment{
 			personUUID: {{
-				AssignmentID: assignmentID,
-				PersonUUID:   personUUID,
-				PositionID:   "pos1",
-				Status:       "active",
-				EffectiveAt:  "2026-01-01",
+				AssignmentUUID: assignmentID,
+				PersonUUID:     personUUID,
+				PositionUUID:   "pos1",
+				Status:         "active",
+				EffectiveAt:    "2026-01-01",
 			}},
 		}
 
-		_, err := s.CorrectAssignmentEvent(context.Background(), tenantID, assignmentID, "2026-01-01", []byte(`{"position_id":1e309}`))
+		_, err := s.CorrectAssignmentEvent(context.Background(), tenantID, assignmentID, "2026-01-01", []byte(`{"position_uuid":1e309}`))
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -323,7 +323,7 @@ func TestStaffingMemoryStore_CorrectRescindAssignmentEvent(t *testing.T) {
 	t.Run("correct not found", func(t *testing.T) {
 		s := newStaffingMemoryStore()
 		s.assigns["t1"] = map[string][]Assignment{"p1": {}}
-		_, err := s.CorrectAssignmentEvent(context.Background(), "t1", "as1", "2026-01-01", []byte(`{"position_id":"pos2"}`))
+		_, err := s.CorrectAssignmentEvent(context.Background(), "t1", "as1", "2026-01-01", []byte(`{"position_uuid":"pos2"}`))
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -336,8 +336,8 @@ func TestStaffingMemoryStore_CorrectRescindAssignmentEvent(t *testing.T) {
 		assignmentID := "as1"
 		s.assigns[tenantID] = map[string][]Assignment{
 			personUUID: {
-				{AssignmentID: assignmentID, PersonUUID: personUUID, PositionID: "pos1", Status: "active", EffectiveAt: "2026-01-01"},
-				{AssignmentID: assignmentID, PersonUUID: personUUID, PositionID: "pos2", Status: "active", EffectiveAt: "2026-02-01"},
+				{AssignmentUUID: assignmentID, PersonUUID: personUUID, PositionUUID: "pos1", Status: "active", EffectiveAt: "2026-01-01"},
+				{AssignmentUUID: assignmentID, PersonUUID: personUUID, PositionUUID: "pos2", Status: "active", EffectiveAt: "2026-02-01"},
 			},
 		}
 		_, err := s.RescindAssignmentEvent(context.Background(), tenantID, assignmentID, "2026-01-01", nil)
@@ -361,7 +361,7 @@ func TestStaffingMemoryStore_CorrectRescindAssignmentEvent(t *testing.T) {
 		assignmentID := "as1"
 		s.assigns[tenantID] = map[string][]Assignment{
 			personUUID: {
-				{AssignmentID: assignmentID, PersonUUID: personUUID, PositionID: "pos1", Status: "active", EffectiveAt: "2026-01-01"},
+				{AssignmentUUID: assignmentID, PersonUUID: personUUID, PositionUUID: "pos1", Status: "active", EffectiveAt: "2026-01-01"},
 			},
 		}
 		_, err := s.RescindAssignmentEvent(context.Background(), tenantID, assignmentID, "2026-01-01", nil)
@@ -380,9 +380,9 @@ func TestStaffingMemoryStore_CorrectRescindAssignmentEvent(t *testing.T) {
 		assignmentID := "as1"
 		s.assigns[tenantID] = map[string][]Assignment{
 			personUUID: {
-				{AssignmentID: "other", PersonUUID: personUUID, PositionID: "pos0", Status: "active", EffectiveAt: "2026-01-01"},
-				{AssignmentID: assignmentID, PersonUUID: personUUID, PositionID: "pos1", Status: "active", EffectiveAt: "2026-01-01"},
-				{AssignmentID: assignmentID, PersonUUID: personUUID, PositionID: "pos2", Status: "active", EffectiveAt: "2026-02-01"},
+				{AssignmentUUID: "other", PersonUUID: personUUID, PositionUUID: "pos0", Status: "active", EffectiveAt: "2026-01-01"},
+				{AssignmentUUID: assignmentID, PersonUUID: personUUID, PositionUUID: "pos1", Status: "active", EffectiveAt: "2026-01-01"},
+				{AssignmentUUID: assignmentID, PersonUUID: personUUID, PositionUUID: "pos2", Status: "active", EffectiveAt: "2026-02-01"},
 			},
 		}
 		_, err := s.RescindAssignmentEvent(context.Background(), tenantID, assignmentID, "2026-02-01", json.RawMessage(`{}`))

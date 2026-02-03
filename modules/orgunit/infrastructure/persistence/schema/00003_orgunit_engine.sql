@@ -201,7 +201,7 @@ BEGIN
     v_is_business_unit := COALESCE(p_is_business_unit, false);
   END IF;
 
-  v_org_code := NULLIF(btrim(p_org_code), '');
+  v_org_code := NULLIF(p_org_code, '');
   IF v_org_code IS NOT NULL THEN
     v_org_code := upper(v_org_code);
     INSERT INTO orgunit.org_unit_codes (tenant_uuid, org_id, org_code)
@@ -682,7 +682,7 @@ BEGIN
       v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
       v_name := NULLIF(btrim(v_payload->>'name'), '');
       v_manager_uuid := NULLIF(v_payload->>'manager_uuid', '')::uuid;
-      v_org_code := NULLIF(btrim(v_payload->>'org_code'), '');
+      v_org_code := NULLIF(v_payload->>'org_code', '');
       v_is_business_unit := NULL;
       IF v_payload ? 'is_business_unit' THEN
         BEGIN
@@ -895,7 +895,7 @@ BEGIN
     v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
     v_name := NULLIF(btrim(v_payload->>'name'), '');
     v_manager_uuid := NULLIF(v_payload->>'manager_uuid', '')::uuid;
-    v_org_code := NULLIF(btrim(v_payload->>'org_code'), '');
+    v_org_code := NULLIF(v_payload->>'org_code', '');
     v_is_business_unit := NULL;
     IF v_payload ? 'is_business_unit' THEN
       BEGIN

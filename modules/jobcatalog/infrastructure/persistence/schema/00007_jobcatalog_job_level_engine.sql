@@ -1,36 +1,36 @@
 CREATE OR REPLACE FUNCTION jobcatalog.replay_job_level_versions(
-  p_tenant_id uuid,
-  p_setid text,
-  p_job_level_id uuid
+  p_tenant_uuid uuid,
+  p_package_uuid text,
+  p_job_level_uuid uuid
 )
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid uuid;
+  v_package_uuid uuid;
   v_state jsonb;
   v_prev jsonb;
   v_row RECORD;
   v_next_date date;
   v_validity daterange;
 BEGIN
-  PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
-  v_setid := jobcatalog.normalize_package_id(p_setid);
+  PERFORM jobcatalog.assert_current_tenant(p_tenant_uuid);
+  v_package_uuid := jobcatalog.normalize_package_uuid(p_package_uuid);
 
-  v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
+  v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_uuid, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM jobcatalog.job_level_versions
-  WHERE tenant_id = p_tenant_id AND package_id = v_setid AND job_level_id = p_job_level_id;
+  WHERE tenant_uuid = p_tenant_uuid AND package_uuid = v_package_uuid AND job_level_uuid = p_job_level_uuid;
 
   v_prev := NULL;
   FOR v_row IN
     SELECT id, event_type, effective_date, payload
     FROM jobcatalog.job_level_events
-    WHERE tenant_id = p_tenant_id
-      AND package_id = v_setid
-      AND job_level_id = p_job_level_id
+    WHERE tenant_uuid = p_tenant_uuid
+      AND package_uuid = v_package_uuid
+      AND job_level_uuid = p_job_level_uuid
     ORDER BY effective_date ASC, id ASC
   LOOP
     v_state := COALESCE(v_prev, '{}'::jsonb);
@@ -85,9 +85,9 @@ BEGIN
     v_next_date := NULL;
     SELECT e.effective_date INTO v_next_date
     FROM jobcatalog.job_level_events e
-    WHERE e.tenant_id = p_tenant_id
-      AND e.package_id = v_setid
-      AND e.job_level_id = p_job_level_id
+    WHERE e.tenant_uuid = p_tenant_uuid
+      AND e.package_uuid = v_package_uuid
+      AND e.job_level_uuid = p_job_level_uuid
       AND (e.effective_date, e.id) > (v_row.effective_date, v_row.id)
     ORDER BY e.effective_date ASC, e.id ASC
     LIMIT 1;
@@ -95,9 +95,9 @@ BEGIN
     v_validity := daterange(v_row.effective_date, v_next_date, '[)');
 
     INSERT INTO jobcatalog.job_level_versions (
-      tenant_id,
-      package_id,
-      job_level_id,
+      tenant_uuid,
+      package_uuid,
+      job_level_uuid,
       validity,
       name,
       description,
@@ -105,9 +105,9 @@ BEGIN
       external_refs,
       last_event_id
     ) VALUES (
-      p_tenant_id,
-      v_setid,
-      p_job_level_id,
+      p_tenant_uuid,
+      v_package_uuid,
+      p_job_level_uuid,
       v_validity,
       COALESCE(NULLIF(btrim(v_state->>'name'), ''), '[missing]'),
       CASE
@@ -128,9 +128,9 @@ BEGIN
         validity,
         lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
       FROM jobcatalog.job_level_versions
-      WHERE tenant_id = p_tenant_id
-        AND package_id = v_setid
-        AND job_level_id = p_job_level_id
+      WHERE tenant_uuid = p_tenant_uuid
+        AND package_uuid = v_package_uuid
+        AND job_level_uuid = p_job_level_uuid
     )
     SELECT 1
     FROM ordered
@@ -141,7 +141,7 @@ BEGIN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_VALIDITY_GAP',
-      DETAIL = format('job_level_id=%s', p_job_level_id);
+      DETAIL = format('job_level_uuid=%s', p_job_level_uuid);
   END IF;
 
   IF EXISTS (
@@ -149,9 +149,9 @@ BEGIN
     FROM (
       SELECT validity
       FROM jobcatalog.job_level_versions
-      WHERE tenant_id = p_tenant_id
-        AND package_id = v_setid
-        AND job_level_id = p_job_level_id
+      WHERE tenant_uuid = p_tenant_uuid
+        AND package_uuid = v_package_uuid
+        AND job_level_uuid = p_job_level_uuid
       ORDER BY lower(validity) DESC
       LIMIT 1
     ) last
@@ -161,41 +161,41 @@ BEGIN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_VALIDITY_NOT_INFINITE',
-      DETAIL = format('job_level_id=%s', p_job_level_id);
+      DETAIL = format('job_level_uuid=%s', p_job_level_uuid);
   END IF;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION jobcatalog.replay_job_level_versions(
-  p_tenant_id uuid,
-  p_package_id uuid,
-  p_job_level_id uuid
+  p_tenant_uuid uuid,
+  p_package_uuid uuid,
+  p_job_level_uuid uuid
 )
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  PERFORM jobcatalog.replay_job_level_versions(p_tenant_id, p_package_id::text, p_job_level_id);
+  PERFORM jobcatalog.replay_job_level_versions(p_tenant_uuid, p_package_uuid::text, p_job_level_uuid);
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION jobcatalog.submit_job_level_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
-  p_setid text,
-  p_job_level_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
+  p_package_uuid text,
+  p_job_level_uuid uuid,
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
 AS $$
 DECLARE
   v_lock_key text;
-  v_setid uuid;
+  v_package_uuid uuid;
   v_evt_db_id bigint;
   v_code text;
   v_name text;
@@ -203,24 +203,24 @@ DECLARE
   v_existing jobcatalog.job_level_events%ROWTYPE;
   v_existing_level jobcatalog.job_levels%ROWTYPE;
 BEGIN
-  PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
-  IF p_event_id IS NULL THEN
+  PERFORM jobcatalog.assert_current_tenant(p_tenant_uuid);
+  IF p_event_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'event_id is required';
+      DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'request_id is required';
+      DETAIL = 'request_code is required';
   END IF;
-  IF p_job_level_id IS NULL THEN
+  IF p_job_level_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'job_level_id is required';
+      DETAIL = 'job_level_uuid is required';
   END IF;
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING
@@ -228,11 +228,11 @@ BEGIN
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
       DETAIL = 'effective_date is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
+  IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'initiator_id is required';
+      DETAIL = 'initiator_uuid is required';
   END IF;
   IF p_event_type NOT IN ('CREATE','UPDATE','DISABLE') THEN
     RAISE EXCEPTION USING
@@ -241,9 +241,9 @@ BEGIN
       DETAIL = format('unsupported event_type=%s', p_event_type);
   END IF;
 
-  v_setid := jobcatalog.normalize_package_id(p_setid);
+  v_package_uuid := jobcatalog.normalize_package_uuid(p_package_uuid);
 
-  v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_id, 'JobCatalog');
+  v_lock_key := format('jobcatalog:write-lock:%s:%s', p_tenant_uuid, 'JobCatalog');
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
@@ -258,7 +258,7 @@ BEGIN
     IF EXISTS (
       SELECT 1
       FROM jsonb_object_keys(v_payload) AS k
-      WHERE k NOT IN ('code', 'name', 'description', 'external_refs')
+      WHERE k NOT IN ('job_level_code', 'name', 'description', 'external_refs')
       LIMIT 1
     ) THEN
       RAISE EXCEPTION USING
@@ -279,11 +279,11 @@ BEGIN
         DETAIL = 'payload.external_refs must be an object';
     END IF;
   ELSIF p_event_type = 'UPDATE' THEN
-    IF v_payload ? 'code' THEN
+    IF v_payload ? 'job_level_code' THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-        DETAIL = 'payload.code is not allowed for UPDATE';
+        DETAIL = 'payload.job_level_code is not allowed for UPDATE';
     END IF;
     IF EXISTS (
       SELECT 1
@@ -336,77 +336,77 @@ BEGIN
   END IF;
 
   IF p_event_type = 'CREATE' THEN
-    v_code := NULLIF(btrim(COALESCE(v_payload->>'code', '')), '');
+    v_code := NULLIF(btrim(COALESCE(v_payload->>'job_level_code', '')), '');
     v_name := NULLIF(btrim(COALESCE(v_payload->>'name', '')), '');
     IF v_code IS NULL OR v_name IS NULL THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-        DETAIL = 'code/name is required';
+        DETAIL = 'job_level_code/name is required';
     END IF;
 
-    INSERT INTO jobcatalog.job_levels (tenant_id, package_id, id, code)
-    VALUES (p_tenant_id, v_setid, p_job_level_id, v_code)
-    ON CONFLICT (id) DO NOTHING;
+    INSERT INTO jobcatalog.job_levels (tenant_uuid, package_uuid, job_level_uuid, job_level_code)
+    VALUES (p_tenant_uuid, v_package_uuid, p_job_level_uuid, v_code)
+    ON CONFLICT (job_level_uuid) DO NOTHING;
 
     SELECT * INTO v_existing_level
     FROM jobcatalog.job_levels
-    WHERE id = p_job_level_id;
+    WHERE job_level_uuid = p_job_level_uuid;
 
-    IF v_existing_level.tenant_id <> p_tenant_id
-      OR v_existing_level.package_id <> v_setid
-      OR v_existing_level.code <> v_code
+    IF v_existing_level.tenant_uuid <> p_tenant_uuid
+      OR v_existing_level.package_uuid <> v_package_uuid
+      OR v_existing_level.job_level_code <> v_code
     THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-        DETAIL = format('job_level_id=%s', p_job_level_id);
+        DETAIL = format('job_level_uuid=%s', p_job_level_uuid);
     END IF;
   ELSE
     IF NOT EXISTS (
       SELECT 1 FROM jobcatalog.job_levels
-      WHERE tenant_id = p_tenant_id AND package_id = v_setid AND id = p_job_level_id
+      WHERE tenant_uuid = p_tenant_uuid AND package_uuid = v_package_uuid AND job_level_uuid = p_job_level_uuid
     ) THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_NOT_FOUND',
-        DETAIL = format('job_level_id=%s', p_job_level_id);
+        DETAIL = format('job_level_uuid=%s', p_job_level_uuid);
     END IF;
   END IF;
 
   INSERT INTO jobcatalog.job_level_events (
-    event_id, tenant_id, package_id, job_level_id, event_type, effective_date, payload, request_id, initiator_id
+    event_uuid, tenant_uuid, package_uuid, job_level_uuid, event_type, effective_date, payload, request_code, initiator_uuid
   )
   VALUES (
-    p_event_id, p_tenant_id, v_setid, p_job_level_id, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_id
+    p_event_uuid, p_tenant_uuid, v_package_uuid, p_job_level_uuid, p_event_type, p_effective_date, v_payload, p_request_code, p_initiator_uuid
   )
-  ON CONFLICT (event_id) DO NOTHING
+  ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_evt_db_id;
 
   IF v_evt_db_id IS NULL THEN
     SELECT * INTO v_existing
     FROM jobcatalog.job_level_events
-    WHERE event_id = p_event_id;
+    WHERE event_uuid = p_event_uuid;
 
-    IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.package_id <> v_setid
-      OR v_existing.job_level_id <> p_job_level_id
+    IF v_existing.tenant_uuid <> p_tenant_uuid
+      OR v_existing.package_uuid <> v_package_uuid
+      OR v_existing.job_level_uuid <> p_job_level_uuid
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_id <> p_request_id
-      OR v_existing.initiator_id <> p_initiator_id
+      OR v_existing.request_code <> p_request_code
+      OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_IDEMPOTENCY_REUSED',
-        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+        DETAIL = format('event_uuid=%s existing_id=%s', p_event_uuid, v_existing.id);
     END IF;
 
     RETURN v_existing.id;
   END IF;
 
-  PERFORM jobcatalog.replay_job_level_versions(p_tenant_id, v_setid, p_job_level_id);
+  PERFORM jobcatalog.replay_job_level_versions(p_tenant_uuid, v_package_uuid, p_job_level_uuid);
 
   RETURN v_evt_db_id;
 END;

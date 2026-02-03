@@ -76,7 +76,7 @@ func (s *personPGStore) ListPersons(ctx context.Context, tenantID string) ([]Per
 	rows, err := tx.Query(ctx, `
 SELECT person_uuid::text, pernr, display_name, status, created_at
 FROM person.persons
-WHERE tenant_id = $1::uuid
+WHERE tenant_uuid = $1::uuid
 ORDER BY created_at DESC, person_uuid DESC
 LIMIT 200
 `, tenantID)
@@ -128,7 +128,7 @@ func (s *personPGStore) CreatePerson(ctx context.Context, tenantID string, pernr
 	p.DisplayName = displayName
 	p.Status = "active"
 	if err := tx.QueryRow(ctx, `
-INSERT INTO person.persons (tenant_id, pernr, display_name, status)
+INSERT INTO person.persons (tenant_uuid, pernr, display_name, status)
 VALUES ($1::uuid, $2::text, $3::text, 'active')
 RETURNING person_uuid::text, created_at
 `, tenantID, canonical, displayName).Scan(&p.UUID, &p.CreatedAt); err != nil {
@@ -161,7 +161,7 @@ func (s *personPGStore) FindPersonByPernr(ctx context.Context, tenantID string, 
 	if err := tx.QueryRow(ctx, `
 SELECT person_uuid::text, pernr, display_name, status, created_at
 FROM person.persons
-WHERE tenant_id = $1::uuid AND pernr = $2::text
+WHERE tenant_uuid = $1::uuid AND pernr = $2::text
 `, tenantID, canonical).Scan(&p.UUID, &p.Pernr, &p.DisplayName, &p.Status, &p.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Person{}, pgx.ErrNoRows
@@ -204,7 +204,7 @@ func (s *personPGStore) ListPersonOptions(ctx context.Context, tenantID string, 
 	rows, err := tx.Query(ctx, `
 SELECT person_uuid::text, pernr, display_name
 FROM person.persons
-WHERE tenant_id = $1::uuid
+WHERE tenant_uuid = $1::uuid
   AND (
     $2::text = '' OR pernr LIKE ($2::text || '%')
     OR display_name ILIKE ('%' || $3::text || '%')

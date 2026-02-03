@@ -98,7 +98,7 @@ func TestLogin_UsesDefaultKratosIdentityProviderWhenNil(t *testing.T) {
 		if r.Header.Get("X-Session-Token") != "st1" {
 			t.Fatalf("missing session token header")
 		}
-		_, _ = w.Write([]byte(`{"identity":{"id":"` + st.whoamiID + `","traits":{"tenant_id":"` + st.tenantID + `","email":"` + st.email + `"}}}`))
+		_, _ = w.Write([]byte(`{"identity":{"id":"` + st.whoamiID + `","traits":{"tenant_uuid":"` + st.tenantID + `","email":"` + st.email + `"}}}`))
 	})
 
 	srv := httptest.NewServer(mux)
@@ -575,7 +575,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("person options status=%d", recPersonOptions.Code)
 	}
 
-	reqPosCreate := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_code":"ORG-1","job_profile_id":"jp1","name":"A"}`))
+	reqPosCreate := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_code":"ORG-1","job_profile_uuid":"jp1","name":"A"}`))
 	reqPosCreate.Host = "localhost:8080"
 	reqPosCreate.Header.Set("Content-Type", "application/json")
 	reqPosCreate.AddCookie(session)
@@ -585,12 +585,12 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("positions api post status=%d", recPosCreate.Code)
 	}
 	var posResp struct {
-		PositionID string `json:"position_id"`
+		PositionUUID string `json:"position_uuid"`
 	}
 	if err := json.NewDecoder(recPosCreate.Body).Decode(&posResp); err != nil {
 		t.Fatal(err)
 	}
-	if posResp.PositionID == "" {
+	if posResp.PositionUUID == "" {
 		t.Fatal("missing position id")
 	}
 
@@ -603,7 +603,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("positions api get status=%d", recPosList.Code)
 	}
 
-	reqAssignCreate := httptest.NewRequest(http.MethodPost, "/org/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"`+pResp.PersonUUID+`","position_id":"`+posResp.PositionID+`"}`))
+	reqAssignCreate := httptest.NewRequest(http.MethodPost, "/org/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"`+pResp.PersonUUID+`","position_uuid":"`+posResp.PositionUUID+`"}`))
 	reqAssignCreate.Host = "localhost:8080"
 	reqAssignCreate.Header.Set("Content-Type", "application/json")
 	reqAssignCreate.AddCookie(session)
@@ -622,7 +622,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("assignments api get status=%d", recAssignList.Code)
 	}
 
-	reqPosUIPost := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_code=ORG-1&job_profile_id=jp1&name=A"))
+	reqPosUIPost := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_code=ORG-1&job_profile_uuid=jp1&name=A"))
 	reqPosUIPost.Host = "localhost:8080"
 	reqPosUIPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqPosUIPost.AddCookie(session)
@@ -641,7 +641,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("positions ui get status=%d", recPosUIGet.Code)
 	}
 
-	reqAssignUIPost := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&pernr=1&position_id="+posResp.PositionID))
+	reqAssignUIPost := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&pernr=1&position_uuid="+posResp.PositionUUID))
 	reqAssignUIPost.Host = "localhost:8080"
 	reqAssignUIPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqAssignUIPost.AddCookie(session)

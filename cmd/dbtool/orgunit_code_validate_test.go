@@ -24,7 +24,7 @@ func TestReadOrgunitCodeCSV_NormalizeAndHeader(t *testing.T) {
 }
 
 func TestReadOrgunitCodeCSV_Invalids(t *testing.T) {
-	content := "org_id,org_code\ninvalid,A1\n10000001, A1\n"
+	content := "org_id,org_code\ninvalid,A1\n10000001,bad\x7f\n"
 	path := writeTempFile(t, content)
 
 	_, conflicts := readOrgunitCodeCSV(path)

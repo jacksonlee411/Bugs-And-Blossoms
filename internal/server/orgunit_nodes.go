@@ -62,6 +62,7 @@ type OrgUnitNodesCurrentBusinessUnitSetter interface {
 type OrgUnitCodeResolver interface {
 	ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error)
 	ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error)
+	ResolveOrgCodes(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error)
 }
 
 type orgUnitPGStore struct {
@@ -146,6 +147,27 @@ func (s *orgUnitPGStore) ResolveOrgCode(ctx context.Context, tenantID string, or
 		return "", err
 	}
 	return orgCode, nil
+}
+
+func (s *orgUnitPGStore) ResolveOrgCodes(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	codes, err := orgunitpkg.ResolveOrgCodes(ctx, tx, tenantID, orgIDs)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return codes, nil
 }
 
 func (s *orgUnitPGStore) ListNodesCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
@@ -654,6 +676,29 @@ func (s *orgUnitMemoryStore) ResolveOrgCode(_ context.Context, tenantID string, 
 		}
 	}
 	return "", orgunitpkg.ErrOrgIDNotFound
+}
+
+func (s *orgUnitMemoryStore) ResolveOrgCodes(_ context.Context, tenantID string, orgIDs []int) (map[int]string, error) {
+	out := make(map[int]string)
+	if len(orgIDs) == 0 {
+		return out, nil
+	}
+	byID := make(map[int]string)
+	for _, node := range s.nodes[tenantID] {
+		id, err := strconv.Atoi(node.ID)
+		if err != nil {
+			continue
+		}
+		byID[id] = node.OrgCode
+	}
+	for _, orgID := range orgIDs {
+		code, ok := byID[orgID]
+		if !ok {
+			return nil, orgunitpkg.ErrOrgIDNotFound
+		}
+		out[orgID] = code
+	}
+	return out, nil
 }
 
 func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {

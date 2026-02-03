@@ -66,13 +66,20 @@ graph TD
 - **决策 3**：拒绝双轨字段与兼容层（No Legacy）；切换以“模块级原子收敛”方式进行。
 - **决策 4**：列表/批量场景避免 N+1，优先批量解析或联表查询（对齐 026C 风险评估结论）。
 
+### 4.3 收敛范围（模块级）
+- OrgUnit：由 `DEV-PLAN-026B` 承接，不在本计划实施范围（避免与 026B 重复交付；本计划仅对齐依赖与边界契约）。
+- Staffing（Position/Assignment）：边界层字段命名与 UI/API 输入输出需从 `org_unit_id` 收敛为 `org_code`，内部仍使用 `org_id`。
+- Job Catalog：保持“外部 code / 内部 id”的模型，但字段命名需按 026A 规则收敛（`tenant_uuid/request_code/event_uuid/initiator_uuid`）。
+- IAM：纳入命名收敛（`tenant_uuid/event_uuid/request_code/initiator_uuid` 等），对外路由参数名暂不调整（避免契约漂移）。
+- Person：纳入命名收敛（`tenant_uuid` 等），对外契约如涉及需另行补充。
+
 ## 5. 数据模型与约束 (Data Model & Constraints)
 ### 5.1 命名与约束规则（SSOT）
 - 命名与类型规则：`DEV-PLAN-026A`（字段后缀与类型规则、UUID v7、request_code）。
 - 对外标识规则：`DEV-PLAN-026B`（外部仅 `org_code`、内部仅 `org_id`、边界解析）。
 - 校验/占位与输入语义修订：`DEV-PLAN-026C`（校验链路、占位规则、示例一致性）。
 - 例外：`setid` 属于专有名词，**豁免** `_code` 后缀要求，保持 `setid` 命名。
-- `org_code` 约束（**放宽版**，以 026B/026C 更新为准）：仅做 `upper` 归一化（不 trim）；长度 **1~64**；白名单字符为 **ASCII 可打印字符**（含空格）、`\\t`、全角字符（Fullwidth Forms）与中文标点补充集；**禁止全空白**。更严格的约束交由租户配置执行；对外回显统一大写；错误码仍为 `org_code_invalid/org_code_not_found/org_code_conflict`。推荐正则：`^[\\t\\x20-\\x7E\\u3002\\u300A\\u300B\\u3010\\u3011\\u2018-\\u201D\\u2026\\uFF01-\\uFF60\\uFFE0-\\uFFEE]{1,64}$`。
+- `org_code` 约束（**放宽版**，以 026B/026C 更新为准）：仅做 `upper` 归一化（不 trim）；长度 **1~64**；白名单字符为 **ASCII 可打印字符**（含空格）、`\\t`、中文标点与全角空白（CJK Symbols and Punctuation：`\\u3000-\\u303F`）与全角字符（Fullwidth Forms：`\\uFF01-\\uFF60`、`\\uFFE0-\\uFFEE`）；**禁止全空白**（空格/\\t/全角空白）。更严格的约束交由租户配置执行；对外回显统一大写；错误码仍为 `org_code_invalid/org_code_not_found/org_code_conflict`。推荐正则：`^[\\t\\x20-\\x7E\\u3000-\\u303F\\uFF01-\\uFF60\\uFFE0-\\uFFEE]{1,64}$`。
 
 ### 5.2 Staffing（Position/Assignment）数据模型变更
 - 仅命名收敛，不引入新表；如需新增表，必须先获用户确认。
@@ -162,7 +169,7 @@ graph TD
 - 对外严格隐藏 `org_id`，避免形成新的外部契约。
 
 ## 9. 实施步骤与里程碑 (Dependencies & Milestones)
-1. [ ] 更新 026B/026C：明确放宽后的 `org_code` 长度/字符集约束，并完成迁移样本统计与示例/保留字一致性对齐。
+1. [ ] 更新 026B/026C：明确放宽后的 `org_code` 长度/字符集约束，并完成迁移样本统计与示例/保留字一致性对齐；若无样本数据则记录豁免（审批人：我）。
 2. [ ] 冻结差异清单（字段/接口/SQL/测试）：`docs/dev-records/dev-plan-072-naming-convergence-mapping.md`（记录冻结时间/提交号/覆盖范围/审批人）。
 3. [ ] Staffing 边界收敛：UI 表单与 Internal API 入参/出参改为 `org_code`；旧字段拒绝；冲突规则落地；错误码与测试更新。
 4. [ ] Staffing 命名收敛：Schema/SQL/Go 按 026A 规则统一命名。

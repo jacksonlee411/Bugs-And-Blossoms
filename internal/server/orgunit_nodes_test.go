@@ -102,7 +102,7 @@ func TestOrgUnitMemoryStore(t *testing.T) {
 
 func TestOrgUnitMemoryStore_ResolveOrgID_Errors(t *testing.T) {
 	s := newOrgUnitMemoryStore()
-	if _, err := s.ResolveOrgID(context.Background(), "t1", " bad "); !errors.Is(err, orgunitpkg.ErrOrgCodeInvalid) {
+	if _, err := s.ResolveOrgID(context.Background(), "t1", "bad\x7f"); !errors.Is(err, orgunitpkg.ErrOrgCodeInvalid) {
 		t.Fatalf("err=%v", err)
 	}
 	if _, err := s.ResolveOrgID(context.Background(), "t1", "A001"); !errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
@@ -287,6 +287,101 @@ func TestOrgUnitPGStore_ResolveOrgCode(t *testing.T) {
 		got, err := store.ResolveOrgCode(ctx, "t1", 10000001)
 		if err != nil || got != "A1" {
 			t.Fatalf("got=%q err=%v", got, err)
+		}
+	})
+}
+
+func TestOrgUnitMemoryStore_ResolveOrgCodes(t *testing.T) {
+	ctx := context.Background()
+	store := newOrgUnitMemoryStore()
+
+	got, err := store.ResolveOrgCodes(ctx, "t1", nil)
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected empty map, got %v", got)
+	}
+
+	n1, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "A1", "A", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n2, err := store.CreateNodeCurrent(ctx, "t1", "2026-01-01", "B1", "B", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id1, _ := parseOrgID8(n1.ID)
+	id2, _ := parseOrgID8(n2.ID)
+
+	codes, err := store.ResolveOrgCodes(ctx, "t1", []int{id1, id2})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if codes[id1] != "A1" || codes[id2] != "B1" {
+		t.Fatalf("unexpected codes: %v", codes)
+	}
+
+	if _, err := store.ResolveOrgCodes(ctx, "t1", []int{id1, 99999999}); !errors.Is(err, orgunitpkg.ErrOrgIDNotFound) {
+		t.Fatalf("err=%v", err)
+	}
+
+	badStore := newOrgUnitMemoryStore()
+	badStore.nodes["t1"] = []OrgUnitNode{{ID: "bad", OrgCode: "A1"}}
+	if _, err := badStore.ResolveOrgCodes(ctx, "t1", []int{10000001}); !errors.Is(err, orgunitpkg.ErrOrgIDNotFound) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestOrgUnitPGStore_ResolveOrgCodes(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("begin error", func(t *testing.T) {
+		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		})).(*orgUnitPGStore)
+		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{0}); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		})).(*orgUnitPGStore)
+		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{0}); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("resolve error", func(t *testing.T) {
+		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{queryErr: errors.New("resolve")}, nil
+		})).(*orgUnitPGStore)
+		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{0}); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{commitErr: errors.New("commit"), rows: &fakeRows{}}, nil
+		})).(*orgUnitPGStore)
+		if _, err := store.ResolveOrgCodes(ctx, "t1", []int{0}); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &fakeRows{}}, nil
+		})).(*orgUnitPGStore)
+		got, err := store.ResolveOrgCodes(ctx, "t1", []int{0})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if got[0] != "n1" {
+			t.Fatalf("unexpected codes: %v", got)
 		}
 	})
 }
@@ -638,6 +733,9 @@ func (errStore) SetBusinessUnitCurrent(context.Context, string, string, string, 
 }
 func (errStore) ResolveOrgID(context.Context, string, string) (int, error)   { return 0, errBoom{} }
 func (errStore) ResolveOrgCode(context.Context, string, int) (string, error) { return "", errBoom{} }
+func (errStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
+	return nil, errBoom{}
+}
 
 type errBoom struct{}
 
@@ -672,6 +770,9 @@ func (emptyErrStore) ResolveOrgID(context.Context, string, string) (int, error) 
 }
 func (emptyErrStore) ResolveOrgCode(context.Context, string, int) (string, error) {
 	return "", emptyErr{}
+}
+func (emptyErrStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
+	return nil, emptyErr{}
 }
 
 func TestHandleOrgNodes_GET_StoreError(t *testing.T) {
@@ -767,7 +868,7 @@ func TestHandleOrgNodes_POST_EmptyName(t *testing.T) {
 
 func TestHandleOrgNodes_POST_Create_InvalidOrgCode(t *testing.T) {
 	store := newOrgUnitMemoryStore()
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", bytes.NewBufferString("org_code= bad &name=A"))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", bytes.NewBufferString("org_code=bad%7F&name=A"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -860,6 +961,16 @@ func (s *writeSpyStore) ResolveOrgCode(context.Context, string, int) (string, er
 	}
 	return "A001", nil
 }
+func (s *writeSpyStore) ResolveOrgCodes(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	out := make(map[int]string, len(orgIDs))
+	for _, orgID := range orgIDs {
+		out[orgID] = "A001"
+	}
+	return out, nil
+}
 
 type actionErrStore struct {
 	renameErr          error
@@ -907,6 +1018,11 @@ func (s *actionErrStore) ResolveOrgID(ctx context.Context, tenantID string, orgC
 func (s *actionErrStore) ResolveOrgCode(context.Context, string, int) (string, error) {
 	return "A001", nil
 }
+func (s *actionErrStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
+	out := make(map[int]string)
+	out[10000001] = "A001"
+	return out, nil
+}
 
 type asOfSpyStore struct {
 	gotAsOf string
@@ -928,6 +1044,11 @@ func (s *asOfSpyStore) MoveNodeCurrent(context.Context, string, string, string, 
 func (s *asOfSpyStore) DisableNodeCurrent(context.Context, string, string, string) error { return nil }
 func (s *asOfSpyStore) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
 	return nil
+}
+func (s *asOfSpyStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
+	out := make(map[int]string)
+	out[10000001] = "A001"
+	return out, nil
 }
 func (s *asOfSpyStore) ResolveOrgID(context.Context, string, string) (int, error) {
 	return 10000001, nil
@@ -1485,7 +1606,7 @@ func TestHandleOrgNodes_POST_Rename_MissingOrgCode(t *testing.T) {
 
 func TestHandleOrgNodes_POST_Rename_InvalidOrgCode(t *testing.T) {
 	store := &writeSpyStore{}
-	body := bytes.NewBufferString("action=rename&org_code= bad &new_name=New&effective_date=2026-01-05")
+	body := bytes.NewBufferString("action=rename&org_code=bad%7F&new_name=New&effective_date=2026-01-05")
 	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
@@ -1737,7 +1858,7 @@ func TestOrgUnitPGStore_CreateNodeCurrent_Errors(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{}, nil
 		})}
-		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", " bad ", "A", "", false)
+		_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "bad\x7f", "A", "", false)
 		if !errors.Is(err, orgunitpkg.ErrOrgCodeInvalid) {
 			t.Fatalf("expected ErrOrgCodeInvalid, got %v", err)
 		}

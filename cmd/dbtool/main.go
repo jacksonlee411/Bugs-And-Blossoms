@@ -90,7 +90,7 @@ func personSmoke(args []string) {
 		fatal(err)
 	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM person.persons WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM person.persons WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
 
@@ -99,7 +99,7 @@ func personSmoke(args []string) {
 		fatal(err)
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO person.persons (tenant_id, person_uuid, pernr, display_name, status)
+		INSERT INTO person.persons (tenant_uuid, person_uuid, pernr, display_name, status)
 		VALUES ($1::uuid, $2::uuid, '1', 'Smoke Person', 'active');
 	`, tenantA, personUUID); err != nil {
 		fatal(err)
@@ -109,7 +109,7 @@ func personSmoke(args []string) {
 		fatal(err)
 	}
 	_, err = tx.Exec(ctx, `
-		INSERT INTO person.persons (tenant_id, pernr, display_name, status)
+		INSERT INTO person.persons (tenant_uuid, pernr, display_name, status)
 		VALUES ($1::uuid, '2', 'Cross Tenant', 'active');
 	`, tenantB)
 	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_cross_insert;`); rbErr != nil {
@@ -120,7 +120,7 @@ func personSmoke(args []string) {
 	}
 
 	var countA int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM person.persons WHERE tenant_id = $1::uuid;`, tenantA).Scan(&countA); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM person.persons WHERE tenant_uuid = $1::uuid;`, tenantA).Scan(&countA); err != nil {
 		fatal(err)
 	}
 	if countA != 1 {
@@ -197,13 +197,13 @@ func staffingSmoke(args []string) {
 		fatal(err)
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO staffing.positions (tenant_id, id)
+		INSERT INTO staffing.positions (tenant_uuid, position_uuid)
 		VALUES ($1::uuid, $2::uuid);
 	`, tenantA, seedPositionID); err != nil {
 		fatal(err)
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO staffing.position_events (tenant_id, position_id, event_type, effective_date, payload, request_id, initiator_id)
+		INSERT INTO staffing.position_events (tenant_uuid, position_uuid, event_type, effective_date, payload, request_code, initiator_uuid)
 		VALUES ($1::uuid, $2::uuid, 'CREATE', '2026-01-01'::date, '{}'::jsonb, $3, $2::uuid);
 	`, tenantA, seedPositionID, "dbtool-seed-"+seedPositionID); err != nil {
 		fatal(err)
@@ -227,22 +227,22 @@ func staffingSmoke(args []string) {
 		fatal(err)
 	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_versions WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignment_events WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignments WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.assignments WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM staffing.position_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.position_versions WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM staffing.position_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.position_events WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM staffing.positions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM staffing.positions WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
 
@@ -470,7 +470,7 @@ func staffingSmoke(args []string) {
 		  $4::uuid,
 		  'CREATE',
 		  $5::date,
-		  jsonb_build_object('code', 'SMKJF1', 'name', 'Staffing Smoke Family', 'description', null, 'job_family_group_id', $6::uuid),
+		  jsonb_build_object('code', 'SMKJF1', 'name', 'Staffing Smoke Family', 'description', null, 'job_family_group_uuid', $6::uuid),
 		  $7::text,
 		  $8::uuid
 		);
@@ -494,8 +494,8 @@ func staffingSmoke(args []string) {
 		    'code', 'SMKJP1',
 		    'name', 'Staffing Smoke Profile',
 		    'description', null,
-		    'job_family_ids', jsonb_build_array($6::uuid),
-		    'primary_job_family_id', $6::uuid
+		    'job_family_uuids', jsonb_build_array($6::uuid),
+		    'primary_job_family_uuid', $6::uuid
 		  ),
 		  $7::text,
 		  $8::uuid
@@ -517,7 +517,7 @@ func staffingSmoke(args []string) {
 			  $3::uuid,
 			  'CREATE',
 			  $4::date,
-			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position', 'job_profile_id', $6::text),
+			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position', 'job_profile_uuid', $6::text),
 			  $7::text,
 			  $8::uuid
 			);
@@ -540,7 +540,7 @@ func staffingSmoke(args []string) {
 			  $3::uuid,
 			  'CREATE',
 			  $4::date,
-			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position', 'job_profile_id', $6::text),
+			  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position', 'job_profile_uuid', $6::text),
 			  $7::text,
 			  $8::uuid
 			);
@@ -555,7 +555,7 @@ func staffingSmoke(args []string) {
 	if err := tx.QueryRow(ctx, `
 		SELECT count(*)
 		FROM staffing.position_versions
-		WHERE tenant_id = $1::uuid AND position_id = $2::uuid AND validity @> $3::date;
+		WHERE tenant_uuid = $1::uuid AND position_uuid = $2::uuid AND validity @> $3::date;
 	`, tenantA, positionID, effectiveDate).Scan(&positionVersions); err != nil {
 		fatal(err)
 	}
@@ -587,7 +587,7 @@ func staffingSmoke(args []string) {
 			  'CREATE',
 			  $5::date,
 			  jsonb_build_object(
-			    'position_id', $6::text,
+			    'position_uuid', $6::text,
 			    'allocated_fte', '1.0',
 			    'profile', '{}'::jsonb
 			  ),
@@ -605,7 +605,7 @@ func staffingSmoke(args []string) {
 	if err := tx.QueryRow(ctx, `
 		SELECT count(*)
 		FROM staffing.assignment_versions
-		WHERE tenant_id = $1::uuid AND assignment_id = $2::uuid AND validity @> $3::date;
+		WHERE tenant_uuid = $1::uuid AND assignment_uuid = $2::uuid AND validity @> $3::date;
 	`, tenantA, assignmentID, effectiveDate).Scan(&assignmentVersions); err != nil {
 		fatal(err)
 	}
@@ -632,7 +632,7 @@ func staffingSmoke(args []string) {
 				  'primary',
 				  'UPDATE',
 				  $5::date,
-				  jsonb_build_object('position_id', $6::text),
+				  jsonb_build_object('position_uuid', $6::text),
 				  $7::text,
 				  $8::uuid
 				);
@@ -641,7 +641,7 @@ func staffingSmoke(args []string) {
 			fatal(rbErr)
 		}
 		if err == nil {
-			fatalf("expected submit_assignment_event to fail when (tenant_id, assignment_id, effective_date) is reused with a different event_id")
+			fatalf("expected submit_assignment_event to fail when (tenant_uuid, assignment_uuid, effective_date) is reused with a different event_uuid")
 		}
 		constraint, hasConstraint := pgErrorConstraintName(err)
 		if hasConstraint && constraint == "assignment_events_one_per_day_unique" {
@@ -685,7 +685,7 @@ func staffingSmoke(args []string) {
 				  'CREATE',
 				  $5::date,
 				  jsonb_build_object(
-				    'position_id', $6::text,
+				    'position_uuid', $6::text,
 				    'allocated_fte', '1.0',
 				    'profile', '{}'::jsonb
 				  ),
@@ -718,7 +718,7 @@ func staffingSmoke(args []string) {
 				  $3::uuid,
 				  $4::date,
 				  jsonb_build_object(
-				    'position_id', $5::text,
+				    'position_uuid', $5::text,
 				    'allocated_fte', '0.75',
 				    'profile', '{}'::jsonb
 				  ),
@@ -733,8 +733,8 @@ func staffingSmoke(args []string) {
 		if err := tx.QueryRow(ctx, `
 				SELECT COALESCE(allocated_fte::text, '')
 				FROM staffing.assignment_versions
-				WHERE tenant_id = $1::uuid
-				  AND assignment_id = $2::uuid
+				WHERE tenant_uuid = $1::uuid
+				  AND assignment_uuid = $2::uuid
 				  AND validity @> $3::date
 				LIMIT 1;
 			`, tenantA, assignmentID, effectiveDate).Scan(&allocatedFte); err != nil {
@@ -763,7 +763,7 @@ func staffingSmoke(args []string) {
 					  $3::uuid,
 					  'CREATE',
 					  $4::date,
-					  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position 2', 'job_profile_id', $6::text),
+					  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Position 2', 'job_profile_uuid', $6::text),
 					  $7::text,
 					  $8::uuid
 					);
@@ -785,7 +785,7 @@ func staffingSmoke(args []string) {
 				  'primary',
 				  'UPDATE',
 				  $5::date,
-				  jsonb_build_object('position_id', $6::text),
+				  jsonb_build_object('position_uuid', $6::text),
 				  $7::text,
 				  $8::uuid
 				);
@@ -815,17 +815,17 @@ func staffingSmoke(args []string) {
 		asOfAfterUpdate := "2026-02-15"
 		var posAfter string
 		if err := tx.QueryRow(ctx, `
-				SELECT position_id::text
+				SELECT position_uuid::text
 				FROM staffing.assignment_versions
-				WHERE tenant_id = $1::uuid
-				  AND assignment_id = $2::uuid
+				WHERE tenant_uuid = $1::uuid
+				  AND assignment_uuid = $2::uuid
 				  AND validity @> $3::date
 				LIMIT 1;
 			`, tenantA, assignmentID, asOfAfterUpdate).Scan(&posAfter); err != nil {
 			fatal(err)
 		}
 		if posAfter != positionID {
-			fatalf("expected stitched position_id=%s after rescind, got %s", positionID, posAfter)
+			fatalf("expected stitched position_uuid=%s after rescind, got %s", positionID, posAfter)
 		}
 
 		// Not allowed to rescind CREATE (when later events exist).
@@ -871,7 +871,7 @@ func staffingSmoke(args []string) {
 				  $2::uuid,
 				  $3::uuid,
 				  $4::date,
-				  jsonb_build_object('position_id', $5::text),
+				  jsonb_build_object('position_uuid', $5::text),
 				  $6::text,
 				  $7::uuid
 				);
@@ -902,7 +902,7 @@ func staffingSmoke(args []string) {
 				  $2::uuid,
 				  $3::uuid,
 				  '2099-01-01'::date,
-				  jsonb_build_object('position_id', $4::text),
+				  jsonb_build_object('position_uuid', $4::text),
 				  $5::text,
 				  $6::uuid
 				);
@@ -939,7 +939,7 @@ func staffingSmoke(args []string) {
 				  $3::uuid,
 				  'CREATE',
 				  $4::date,
-				  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Disable Test Position', 'job_profile_id', $6::text),
+				  jsonb_build_object('org_unit_id', $5::text, 'name', 'Smoke Disable Test Position', 'job_profile_uuid', $6::text),
 				  $7::text,
 				  $8::uuid
 				);
@@ -969,7 +969,7 @@ func staffingSmoke(args []string) {
 			  'CREATE',
 			  $5::date,
 			  jsonb_build_object(
-			    'position_id', $6::text,
+			    'position_uuid', $6::text,
 			    'allocated_fte', '1.0',
 			    'profile', '{}'::jsonb
 			  ),
@@ -1082,7 +1082,7 @@ func staffingSmoke(args []string) {
 				  'CREATE',
 				  $5::date,
 				  jsonb_build_object(
-				    'position_id', $6::text,
+				    'position_uuid', $6::text,
 				    'allocated_fte', '1.0',
 				    'profile', '{}'::jsonb
 				  ),
@@ -1128,7 +1128,7 @@ func staffingSmoke(args []string) {
 					  $3::uuid,
 					  'CREATE',
 					  $4::date,
-					  jsonb_build_object('org_unit_id', $5::text, 'name', $6::text, 'job_profile_id', $7::text),
+					  jsonb_build_object('org_unit_id', $5::text, 'name', $6::text, 'job_profile_uuid', $7::text),
 					  $8::text,
 					  $9::uuid
 					);
@@ -1149,7 +1149,7 @@ func staffingSmoke(args []string) {
 				  $3::uuid,
 				  'UPDATE',
 				  $4::date,
-				  jsonb_build_object('reports_to_position_id', $5::text),
+				  jsonb_build_object('reports_to_position_uuid', $5::text),
 				  $6::text,
 				  $7::uuid
 				);
@@ -1276,7 +1276,7 @@ func rlsSmoke(args []string) {
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	_ = trySetRole(ctx, tx, "app_nobypassrls")
-	if _, err := tx.Exec(ctx, `CREATE TEMP TABLE rls_smoke (tenant_id uuid NOT NULL, val text NOT NULL);`); err != nil {
+	if _, err := tx.Exec(ctx, `CREATE TEMP TABLE rls_smoke (tenant_uuid uuid NOT NULL, val text NOT NULL);`); err != nil {
 		fatal(err)
 	}
 	if _, err := tx.Exec(ctx, `ALTER TABLE rls_smoke ENABLE ROW LEVEL SECURITY;`); err != nil {
@@ -1287,8 +1287,8 @@ func rlsSmoke(args []string) {
 	}
 	if _, err := tx.Exec(ctx, `
 CREATE POLICY tenant_isolation ON rls_smoke
-USING (tenant_id = public.current_tenant_id())
-WITH CHECK (tenant_id = public.current_tenant_id());`); err != nil {
+USING (tenant_uuid = public.current_tenant_id())
+WITH CHECK (tenant_uuid = public.current_tenant_id());`); err != nil {
 		fatal(err)
 	}
 
@@ -1309,14 +1309,14 @@ WITH CHECK (tenant_id = public.current_tenant_id());`); err != nil {
 		fatal(err)
 	}
 
-	if _, err := tx.Exec(ctx, `INSERT INTO rls_smoke (tenant_id, val) VALUES ($1, 'a');`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO rls_smoke (tenant_uuid, val) VALUES ($1, 'a');`, tenantA); err != nil {
 		fatal(err)
 	}
 
 	if _, err := tx.Exec(ctx, `SAVEPOINT sp_cross_insert;`); err != nil {
 		fatal(err)
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO rls_smoke (tenant_id, val) VALUES ($1, 'b');`, tenantB)
+	_, err = tx.Exec(ctx, `INSERT INTO rls_smoke (tenant_uuid, val) VALUES ($1, 'b');`, tenantB)
 	if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_cross_insert;`); rbErr != nil {
 		fatal(rbErr)
 	}
@@ -1352,7 +1352,7 @@ WITH CHECK (tenant_id = public.current_tenant_id());`); err != nil {
 	if count != 0 {
 		fatalf("expected count=0 under tenant B, got %d", count)
 	}
-	if _, err := tx2.Exec(ctx, `INSERT INTO rls_smoke (tenant_id, val) VALUES ($1, 'b');`, tenantB); err != nil {
+	if _, err := tx2.Exec(ctx, `INSERT INTO rls_smoke (tenant_uuid, val) VALUES ($1, 'b');`, tenantB); err != nil {
 		fatal(err)
 	}
 	if err := tx2.QueryRow(ctx, `SELECT count(*) FROM rls_smoke;`).Scan(&count); err != nil {
@@ -1509,7 +1509,7 @@ func orgunitSmoke(args []string) {
 		fatal(err)
 	}
 	if visible != 0 {
-		fatalf("expected event created under tenant A to be invisible under tenant B, got visible=%d event_id=%s", visible, eventIDA)
+		fatalf("expected event created under tenant A to be invisible under tenant B, got visible=%d event_uuid=%s", visible, eventIDA)
 	}
 	if err := tx2.Commit(ctx); err != nil {
 		fatal(err)
@@ -1783,7 +1783,7 @@ WHERE tenant_uuid = $1::uuid
 		fatal(rbErr)
 	}
 	if err == nil {
-		fatalf("expected tenant mismatch when orgunit.submit_org_event tenant_id differs from app.current_tenant")
+		fatalf("expected tenant mismatch when orgunit.submit_org_event tenant_uuid differs from app.current_tenant")
 	}
 	if msg, ok := pgErrorMessage(err); !ok || msg != "RLS_TENANT_MISMATCH" {
 		fatalf("expected pg error message=RLS_TENANT_MISMATCH, got ok=%v message=%q err=%v", ok, msg, err)
@@ -2257,46 +2257,46 @@ func jobcatalogSmoke(args []string) {
 	// SetID bootstrap is part of 009M1 dependency chain; smoke uses it to avoid hidden coupling.
 	_, _ = tx.Exec(ctx, `SELECT orgunit.ensure_setid_bootstrap($1::uuid, $1::uuid);`, tenantA)
 
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profile_version_job_families WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profile_version_job_families WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profile_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profile_versions WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profile_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profile_events WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profiles WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
-		fatal(err)
-	}
-
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_level_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
-		fatal(err)
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_level_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
-		fatal(err)
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_levels WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_profiles WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_level_versions WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_level_events WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_families WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_levels WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_group_versions WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_versions WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_group_events WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_events WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_groups WHERE tenant_id = $1::uuid;`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_families WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_group_versions WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_group_events WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM jobcatalog.job_family_groups WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
 
@@ -2421,7 +2421,7 @@ SELECT jobcatalog.submit_job_family_group_event(
 	}
 
 	var count int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM jobcatalog.job_family_group_events WHERE tenant_id = $1::uuid;`, tenantA).Scan(&count); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM jobcatalog.job_family_group_events WHERE tenant_uuid = $1::uuid;`, tenantA).Scan(&count); err != nil {
 		fatal(err)
 	}
 	if count != 1 {
@@ -2467,7 +2467,7 @@ SELECT jobcatalog.submit_job_family_event(
   $4::uuid,
   'CREATE',
   $5::date,
-  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_id', $6::uuid),
+  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_uuid', $6::uuid),
   $7::text,
   $8::uuid
 );
@@ -2484,7 +2484,7 @@ SELECT jobcatalog.submit_job_family_event(
   $4::uuid,
   'CREATE',
   $5::date,
-  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_id', $6::uuid),
+  jsonb_build_object('code', 'JF1', 'name', 'Job Family 1', 'description', null, 'job_family_group_uuid', $6::uuid),
   $7::text,
   $8::uuid
 );
@@ -2506,7 +2506,7 @@ SELECT jobcatalog.submit_job_family_event(
   $4::uuid,
   'UPDATE',
   $5::date,
-  jsonb_build_object('job_family_group_id', $6::uuid),
+  jsonb_build_object('job_family_group_uuid', $6::uuid),
   $7::text,
   $8::uuid
 );
@@ -2535,11 +2535,11 @@ SELECT jobcatalog.submit_job_family_event(
 
 	var familyGroupAtJan string
 	if err := tx.QueryRow(ctx, `
-SELECT job_family_group_id::text
+SELECT job_family_group_uuid::text
 FROM jobcatalog.job_family_versions
-WHERE tenant_id = $1::uuid
-  AND package_id = $2::uuid
-  AND job_family_id = $3::uuid
+WHERE tenant_uuid = $1::uuid
+  AND package_uuid = $2::uuid
+  AND job_family_uuid = $3::uuid
   AND validity @> $4::date
 LIMIT 1
 `, tenantA, packageID, familyID, "2026-01-15").Scan(&familyGroupAtJan); err != nil {
@@ -2551,11 +2551,11 @@ LIMIT 1
 
 	var familyGroupAtFeb string
 	if err := tx.QueryRow(ctx, `
-SELECT job_family_group_id::text
+SELECT job_family_group_uuid::text
 FROM jobcatalog.job_family_versions
-WHERE tenant_id = $1::uuid
-  AND package_id = $2::uuid
-  AND job_family_id = $3::uuid
+WHERE tenant_uuid = $1::uuid
+  AND package_uuid = $2::uuid
+  AND job_family_uuid = $3::uuid
   AND validity @> $4::date
 LIMIT 1
 `, tenantA, packageID, familyID, "2026-02-15").Scan(&familyGroupAtFeb); err != nil {
@@ -2569,9 +2569,9 @@ LIMIT 1
 	if err := tx.QueryRow(ctx, `
 SELECT is_active
 FROM jobcatalog.job_family_versions
-WHERE tenant_id = $1::uuid
-  AND package_id = $2::uuid
-  AND job_family_id = $3::uuid
+WHERE tenant_uuid = $1::uuid
+  AND package_uuid = $2::uuid
+  AND job_family_uuid = $3::uuid
   AND validity @> $4::date
 LIMIT 1
 `, tenantA, packageID, familyID, "2026-03-15").Scan(&familyIsActiveAtMar); err != nil {
@@ -2593,7 +2593,7 @@ SELECT jobcatalog.submit_job_family_event(
 	  $4::uuid,
 	  'CREATE',
 	  $5::date,
-	  jsonb_build_object('code', 'JF2', 'name', 'Job Family 2', 'description', null, 'job_family_group_id', $6::uuid),
+	  jsonb_build_object('code', 'JF2', 'name', 'Job Family 2', 'description', null, 'job_family_group_uuid', $6::uuid),
 	  $7::text,
 	  $8::uuid
 	);
@@ -2618,8 +2618,8 @@ SELECT jobcatalog.submit_job_family_event(
 	    'code', 'JP1',
 	    'name', 'Job Profile 1',
 	    'description', null,
-	    'job_family_ids', jsonb_build_array($6::uuid, $7::uuid),
-	    'primary_job_family_id', $6::uuid
+	    'job_family_uuids', jsonb_build_array($6::uuid, $7::uuid),
+	    'primary_job_family_uuid', $6::uuid
 	  ),
 	  $8::text,
 	  $9::uuid
@@ -2642,8 +2642,8 @@ SELECT jobcatalog.submit_job_family_event(
 	  'UPDATE',
 	  $5::date,
 	  jsonb_build_object(
-	    'job_family_ids', jsonb_build_array($6::uuid),
-	    'primary_job_family_id', $6::uuid
+	    'job_family_uuids', jsonb_build_array($6::uuid),
+	    'primary_job_family_uuid', $6::uuid
 	  ),
 	  $7::text,
 	  $8::uuid
@@ -2679,11 +2679,11 @@ SELECT jobcatalog.submit_job_family_event(
 	FROM jobcatalog.job_profile_versions v
 	JOIN jobcatalog.job_profile_version_job_families f
 	  ON f.job_profile_version_id = v.id
-	 AND f.tenant_id = v.tenant_id
-	 AND f.package_id = v.package_id
-	WHERE v.tenant_id = $1::uuid
-	  AND v.package_id = $2::uuid
-	  AND v.job_profile_id = $3::uuid
+	 AND f.tenant_uuid = v.tenant_uuid
+	 AND f.package_uuid = v.package_uuid
+	WHERE v.tenant_uuid = $1::uuid
+	  AND v.package_uuid = $2::uuid
+	  AND v.job_profile_uuid = $3::uuid
 	  AND v.validity @> $4::date
 	`, tenantA, packageID, profileID, "2026-01-15").Scan(&profileFamiliesAtJan, &profilePrimaryCountAtJan); err != nil {
 		fatal(err)
@@ -2697,15 +2697,15 @@ SELECT jobcatalog.submit_job_family_event(
 
 	var profilePrimaryFamilyAtJan string
 	if err := tx.QueryRow(ctx, `
-	SELECT f.job_family_id::text
+	SELECT f.job_family_uuid::text
 	FROM jobcatalog.job_profile_versions v
 	JOIN jobcatalog.job_profile_version_job_families f
 	  ON f.job_profile_version_id = v.id
-	 AND f.tenant_id = v.tenant_id
-	 AND f.package_id = v.package_id
-	WHERE v.tenant_id = $1::uuid
-	  AND v.package_id = $2::uuid
-	  AND v.job_profile_id = $3::uuid
+	 AND f.tenant_uuid = v.tenant_uuid
+	 AND f.package_uuid = v.package_uuid
+	WHERE v.tenant_uuid = $1::uuid
+	  AND v.package_uuid = $2::uuid
+	  AND v.job_profile_uuid = $3::uuid
 	  AND v.validity @> $4::date
 	  AND f.is_primary = true
 	LIMIT 1
@@ -2725,11 +2725,11 @@ SELECT jobcatalog.submit_job_family_event(
 	FROM jobcatalog.job_profile_versions v
 	JOIN jobcatalog.job_profile_version_job_families f
 	  ON f.job_profile_version_id = v.id
-	 AND f.tenant_id = v.tenant_id
-	 AND f.package_id = v.package_id
-	WHERE v.tenant_id = $1::uuid
-	  AND v.package_id = $2::uuid
-	  AND v.job_profile_id = $3::uuid
+	 AND f.tenant_uuid = v.tenant_uuid
+	 AND f.package_uuid = v.package_uuid
+	WHERE v.tenant_uuid = $1::uuid
+	  AND v.package_uuid = $2::uuid
+	  AND v.job_profile_uuid = $3::uuid
 	  AND v.validity @> $4::date
 	`, tenantA, packageID, profileID, "2026-02-15").Scan(&profileFamiliesAtFeb, &profilePrimaryCountAtFeb); err != nil {
 		fatal(err)
@@ -2745,9 +2745,9 @@ SELECT jobcatalog.submit_job_family_event(
 	if err := tx.QueryRow(ctx, `
 SELECT is_active
 FROM jobcatalog.job_profile_versions
-WHERE tenant_id = $1::uuid
-  AND package_id = $2::uuid
-  AND job_profile_id = $3::uuid
+WHERE tenant_uuid = $1::uuid
+  AND package_uuid = $2::uuid
+  AND job_profile_uuid = $3::uuid
   AND validity @> $4::date
 LIMIT 1
 	`, tenantA, packageID, profileID, "2026-03-15").Scan(&profileIsActiveAtMar); err != nil {
@@ -2840,9 +2840,9 @@ SELECT jobcatalog.submit_job_level_event(
 	if err := tx.QueryRow(ctx, `
 SELECT name
 FROM jobcatalog.job_level_versions
-WHERE tenant_id = $1::uuid
-  AND package_id = $2::uuid
-  AND job_level_id = $3::uuid
+WHERE tenant_uuid = $1::uuid
+  AND package_uuid = $2::uuid
+  AND job_level_uuid = $3::uuid
   AND validity @> $4::date
 LIMIT 1
 `, tenantA, packageID, levelID, "2026-02-15").Scan(&levelNameAtFeb); err != nil {
@@ -2856,9 +2856,9 @@ LIMIT 1
 	if err := tx.QueryRow(ctx, `
 SELECT is_active
 FROM jobcatalog.job_level_versions
-WHERE tenant_id = $1::uuid
-  AND package_id = $2::uuid
-  AND job_level_id = $3::uuid
+WHERE tenant_uuid = $1::uuid
+  AND package_uuid = $2::uuid
+  AND job_level_uuid = $3::uuid
   AND validity @> $4::date
 LIMIT 1
 `, tenantA, packageID, levelID, "2026-03-15").Scan(&levelIsActiveAtMar); err != nil {

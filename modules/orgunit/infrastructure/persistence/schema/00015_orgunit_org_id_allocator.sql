@@ -205,7 +205,7 @@ BEGIN
     v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
     v_name := NULLIF(btrim(v_payload->>'name'), '');
     v_manager_uuid := NULLIF(v_payload->>'manager_uuid', '')::uuid;
-    v_org_code := NULLIF(btrim(v_payload->>'org_code'), '');
+    v_org_code := NULLIF(v_payload->>'org_code', '');
     v_is_business_unit := NULL;
     IF v_payload ? 'is_business_unit' THEN
       BEGIN
