@@ -13,6 +13,7 @@ import (
 
 type OrgUnitSnapshotRow struct {
 	OrgID        string
+	OrgCode      string
 	ParentID     string
 	Name         string
 	FullNamePath string
@@ -46,17 +47,21 @@ func (s *orgUnitSnapshotPGStore) GetSnapshot(ctx context.Context, tenantID strin
 	}
 
 	rows, err := tx.Query(ctx, `
-SELECT
-  org_id::text,
-  COALESCE(parent_id::text, ''),
-  name,
-  COALESCE(full_name_path, ''),
-  depth,
-  COALESCE(manager_uuid::text, ''),
-  node_path::text
-FROM orgunit.get_org_snapshot($1::uuid, $2::date)
-ORDER BY node_path
-`, tenantID, asOfDate)
+	SELECT
+	  s.org_id::text,
+	  COALESCE(c.org_code, ''),
+	  COALESCE(s.parent_id::text, ''),
+	  s.name,
+	  COALESCE(s.full_name_path, ''),
+	  s.depth,
+	  COALESCE(s.manager_uuid::text, ''),
+	  s.node_path::text
+	FROM orgunit.get_org_snapshot($1::uuid, $2::date) s
+	LEFT JOIN orgunit.org_unit_codes c
+	  ON c.tenant_uuid = $1::uuid
+	 AND c.org_id = s.org_id
+	ORDER BY node_path
+	`, tenantID, asOfDate)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +70,7 @@ ORDER BY node_path
 	var out []OrgUnitSnapshotRow
 	for rows.Next() {
 		var row OrgUnitSnapshotRow
-		if err := rows.Scan(&row.OrgID, &row.ParentID, &row.Name, &row.FullNamePath, &row.Depth, &row.ManagerUUID, &row.NodePath); err != nil {
+		if err := rows.Scan(&row.OrgID, &row.OrgCode, &row.ParentID, &row.Name, &row.FullNamePath, &row.Depth, &row.ManagerUUID, &row.NodePath); err != nil {
 			return nil, err
 		}
 		out = append(out, row)
@@ -228,11 +233,16 @@ func renderOrgSnapshot(rows []OrgUnitSnapshotRow, tenant Tenant, asOfDate string
 	}
 
 	b.WriteString(`<table border="1" cellpadding="6" cellspacing="0">`)
-	b.WriteString(`<thead><tr><th>Depth</th><th>Name</th><th>Full Name</th><th>Org ID</th><th>Parent ID</th><th>Node Path</th></tr></thead>`)
+	b.WriteString(`<thead><tr><th>Depth</th><th>Org Code</th><th>Name</th><th>Full Name</th><th>Org ID</th><th>Parent ID</th><th>Node Path</th></tr></thead>`)
 	b.WriteString(`<tbody>`)
 	for _, r := range rows {
 		b.WriteString("<tr>")
 		b.WriteString("<td>" + html.EscapeString(strconv.Itoa(r.Depth)) + "</td>")
+		orgCode := r.OrgCode
+		if strings.TrimSpace(orgCode) == "" {
+			orgCode = "(missing org_code)"
+		}
+		b.WriteString("<td><code>" + html.EscapeString(orgCode) + "</code></td>")
 		b.WriteString("<td>" + html.EscapeString(r.Name) + "</td>")
 		b.WriteString("<td>" + html.EscapeString(r.FullNamePath) + "</td>")
 		b.WriteString("<td><code>" + html.EscapeString(r.OrgID) + "</code></td>")
