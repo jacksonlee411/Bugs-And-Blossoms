@@ -122,8 +122,8 @@ func main() {
 				"id": ident.ID,
 				"traits": map[string]any{
 					"tenant_uuid": ident.TenantUUID,
-					"email":     ident.Email,
-					"role_slug": ident.RoleSlug,
+					"email":       ident.Email,
+					"role_slug":   ident.RoleSlug,
 				},
 			},
 		})
@@ -202,8 +202,8 @@ func main() {
 			"id": id,
 			"traits": map[string]any{
 				"tenant_uuid": tenantUUID,
-				"email":     email,
-				"role_slug": roleSlug,
+				"email":       email,
+				"role_slug":   roleSlug,
 			},
 		})
 	})
