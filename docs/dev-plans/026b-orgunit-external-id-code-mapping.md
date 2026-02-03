@@ -29,11 +29,15 @@
 
 ### 3.2 org_code 的刚性规则
 - **默认不可变**：org_code 在创建时确定，后续不允许修改（降低一致性风险）。
-- **统一归一化**：写入前进行 `trim + upper`；允许输入 `a-z`，存储统一为 `A-Z`；含首尾空白直接判 `org_code_invalid`。
-- **允许字符**：`A-Z`、`a-z`、`0-9`、`-`、`_`（允许连续分隔符）。
-- **格式约束**：长度 1~16；禁止全空白；禁止首尾空白（由归一化与 DB 约束保证）。
-- **推荐正则（输入校验）**：`^[A-Za-z0-9_-]{1,16}$`
-- **推荐正则（存储约束）**：`^[A-Z0-9_-]{1,16}$`
+- **统一归一化**：写入前仅做 `upper`（ASCII 与全角字母统一为大写）；**不做 trim**；允许空格与 `\\t`；除 `\\t` 外所有控制字符禁止。
+- **允许字符（白名单）**：
+  - ASCII 可打印字符：`\\x20-\\x7E`（包含字母数字与所有 ASCII 标点，含空格）
+  - 水平制表符：`\\t`
+  - 全角字符（Fullwidth Forms）：`\\uFF01-\\uFF60`、`\\uFFE0-\\uFFEE`
+  - 中文标点补充集：`\\u3002`、`\\u300A-\\u300B`、`\\u3010-\\u3011`、`\\u2018-\\u201D`、`\\u2026`
+- **格式约束**：长度 1~64；**禁止全空白**（仅空格/\\t）；首尾空白允许。
+- **推荐正则（输入/存储）**：`^[\\t\\x20-\\x7E\\u3002\\u300A\\u300B\\u3010\\u3011\\u2018-\\u201D\\u2026\\uFF01-\\uFF60\\uFFE0-\\uFFEE]{1,64}$`
+- **存储一致性**：强制 `org_code = upper(org_code)`，确保大小写统一（ASCII/全角）。
 - 若未来需要“改码”，必须新增显式事件类型并执行专项方案（另立 dev-plan）。
 
 ### 3.3 写入口唯一性与权威来源
@@ -68,9 +72,11 @@ CREATE TABLE orgunit.org_unit_codes (
   updated_at     timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_uuid, org_id),
   CONSTRAINT org_unit_codes_org_code_format CHECK (
-    length(org_code) BETWEEN 1 AND 16
-    AND org_code = upper(btrim(org_code))
-    AND org_code ~ '^[A-Z0-9_-]{1,16}$'
+    length(org_code) BETWEEN 1 AND 64
+    AND org_code = upper(org_code)
+    -- regex 字面量需支持 Unicode 范围；可用 U&'' 或直接字面量。
+    AND org_code ~ E'^[\t\x20-\x7E\u3002\u300A\u300B\u3010\u3011\u2018-\u201D\u2026\uFF01-\uFF60\uFFE0-\uFFEE]{1,64}$'
+    AND org_code !~ E'^[\t\x20]+$'
   ),
   CONSTRAINT org_unit_codes_org_code_unique UNIQUE (tenant_uuid, org_code)
 );
@@ -135,7 +141,7 @@ $$;
 - **对外请求/响应仅使用 `org_code`**。
 - **禁止** 在外部接口中暴露 `org_id`。
 - 同时传 `org_id` 与 `org_code` 视为错误（400）。
-- 对外输入允许 `a-z`，服务端会 `trim + upper` 归一化；若含首尾空白或非法字符则 400。
+- 对外输入允许小写与全角字符，服务端仅做 `upper` 归一化；允许空格与 `\\t`；若含非法字符、超长或全空白则 400。
 - **响应一律返回归一化后的 `org_code`（全大写）**，避免大小写歧义。
 
 ### 5.2 对外契约示例（必须对齐既有路由体系）
@@ -149,7 +155,7 @@ $$;
 **`POST /org/nodes?as_of=YYYY-MM-DD`**
 - Form（字段名冻结为 `org_code` / `parent_code` / `new_parent_code`，不再出现 `org_id`）：  
   - 通用：`action`（可选，默认 `create`），`effective_date`（可选，默认 `as_of`）。  
-  - `create`：`org_code`（必填，1~16；可输入小写但会被归一化为大写）、`name`（必填），`parent_code`（可选），`is_business_unit`（可选，bool）。  
+  - `create`：`org_code`（必填，1~64；允许空格/\\t/全角/中文标点，服务端 `upper` 归一化）、`name`（必填），`parent_code`（可选），`is_business_unit`（可选，bool）。  
   - `rename`：`org_code`（必填），`new_name`（必填）。  
   - `move`：`org_code`（必填），`new_parent_code`（可选）。  
   - `disable`：`org_code`（必填）。  
@@ -289,7 +295,7 @@ Response 200：
   - `parent_id` → `parent_code`
   - `org_id` → `org_code`
   - `new_parent_id` → `new_parent_code`
-- 表单/校验提示文案同步调整（明确 1~16、允许小写输入会转大写）。
+- 表单/校验提示文案同步调整（明确 1~64、允许空格/\\t/全角/中文标点；输入会做 `upper` 归一化）。
 - 相关测试与文档同步更新：
   - `internal/server/orgunit_nodes_test.go`、`e2e/tests/*`、`docs/dev-records/DEV-PLAN-010-READINESS.md` 中涉及 `org_unit_id/org_id` 的断言与示例。
 
