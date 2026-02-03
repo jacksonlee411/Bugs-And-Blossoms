@@ -2,11 +2,14 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type setidCreateAPIRequest struct {
@@ -70,12 +73,13 @@ func handleSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernan
 
 type setidBindingAPIRequest struct {
 	OrgUnitID     string `json:"org_unit_id"`
+	OrgCode       string `json:"org_code"`
 	SetID         string `json:"setid"`
 	EffectiveDate string `json:"effective_date"`
 	RequestCode   string `json:"request_code"`
 }
 
-func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
+func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore, orgStore OrgUnitStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -97,8 +101,8 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 	req.SetID = strings.TrimSpace(req.SetID)
 	req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
 	req.RequestCode = strings.TrimSpace(req.RequestCode)
-	if req.OrgUnitID == "" || req.SetID == "" || req.EffectiveDate == "" || req.RequestCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_unit_id/setid/effective_date/request_code required")
+	if req.OrgUnitID != "" || req.OrgCode == "" || req.SetID == "" || req.EffectiveDate == "" || req.RequestCode == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code/setid/effective_date/request_code required")
 		return
 	}
 	if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
@@ -106,7 +110,25 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 		return
 	}
 
-	if err := store.BindSetID(r.Context(), tenant.ID, req.OrgUnitID, req.EffectiveDate, req.SetID, req.RequestCode, tenant.ID); err != nil {
+	normalizedCode, err := orgunitpkg.NormalizeOrgCode(req.OrgCode)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+		return
+	}
+	orgID, err := orgStore.ResolveOrgID(r.Context(), tenant.ID, normalizedCode)
+	if err != nil {
+		switch {
+		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+		case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
+		default:
+			writeInternalAPIError(w, r, err, "setid_resolve_org_code_failed")
+		}
+		return
+	}
+
+	if err := store.BindSetID(r.Context(), tenant.ID, strconv.Itoa(orgID), req.EffectiveDate, req.SetID, req.RequestCode, tenant.ID); err != nil {
 		writeInternalAPIError(w, r, err, "setid_binding_failed")
 		return
 	}
@@ -114,7 +136,7 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"org_unit_id":    req.OrgUnitID,
+		"org_code":       normalizedCode,
 		"setid":          strings.ToUpper(req.SetID),
 		"effective_date": req.EffectiveDate,
 	})

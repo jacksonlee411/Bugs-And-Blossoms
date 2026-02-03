@@ -32,7 +32,6 @@ BEGIN
     v.node_path
   FROM orgunit.org_unit_versions v
   WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.hierarchy_type = 'OrgUnit'
     AND v.status = 'active'
     AND v.validity @> p_query_date
   ORDER BY v.node_path;

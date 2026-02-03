@@ -338,7 +338,6 @@ type OrgunitOrgEvent struct {
 	ID              int64              `json:"id"`
 	EventUuid       pgtype.UUID        `json:"event_uuid"`
 	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
-	HierarchyType   string             `json:"hierarchy_type"`
 	OrgID           int32              `json:"org_id"`
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
@@ -349,18 +348,30 @@ type OrgunitOrgEvent struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type OrgunitOrgIDAllocator struct {
+	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
+	NextOrgID  int32              `json:"next_org_id"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type OrgunitOrgTree struct {
-	TenantUuid    pgtype.UUID        `json:"tenant_uuid"`
-	HierarchyType string             `json:"hierarchy_type"`
-	RootOrgID     int32              `json:"root_org_id"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
+	RootOrgID  int32              `json:"root_org_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OrgunitOrgUnitCode struct {
+	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
+	OrgID      int32              `json:"org_id"`
+	OrgCode    string             `json:"org_code"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
 type OrgunitOrgUnitVersion struct {
 	ID             int64                     `json:"id"`
 	TenantUuid     pgtype.UUID               `json:"tenant_uuid"`
-	HierarchyType  string                    `json:"hierarchy_type"`
 	OrgID          int32                     `json:"org_id"`
 	ParentID       *int32                    `json:"parent_id"`
 	NodePath       string                    `json:"node_path"`

@@ -108,7 +108,7 @@ BEGIN
 
   SELECT t.root_org_id INTO v_root_org_id
   FROM orgunit.org_trees t
-  WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = 'OrgUnit'
+  WHERE t.tenant_uuid = p_tenant_uuid
   FOR UPDATE;
 
   IF v_root_org_id IS NULL THEN
@@ -118,7 +118,6 @@ BEGIN
   SELECT lower(v.validity)::date INTO v_root_valid_from
   FROM orgunit.org_unit_versions v
   WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.hierarchy_type = 'OrgUnit'
     AND v.org_id = v_root_org_id
     AND v.status = 'active'
     AND v.is_business_unit = true
@@ -785,7 +784,6 @@ BEGIN
   SELECT status INTO v_org_status
   FROM orgunit.org_unit_versions v
   WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.hierarchy_type = 'OrgUnit'
     AND v.org_id = p_org_id
     AND v.validity @> p_effective_date
   ORDER BY lower(v.validity) DESC
@@ -807,7 +805,6 @@ BEGIN
   SELECT is_business_unit INTO v_org_is_bu
   FROM orgunit.org_unit_versions v
   WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.hierarchy_type = 'OrgUnit'
     AND v.org_id = p_org_id
     AND v.validity @> p_effective_date
   ORDER BY lower(v.validity) DESC
@@ -840,7 +837,7 @@ BEGIN
 
   SELECT t.root_org_id INTO v_root_org_id
   FROM orgunit.org_trees t
-  WHERE t.tenant_uuid = p_tenant_uuid AND t.hierarchy_type = 'OrgUnit';
+  WHERE t.tenant_uuid = p_tenant_uuid;
 
   IF v_root_org_id IS NOT NULL AND v_root_org_id = p_org_id AND v_setid <> 'DEFLT' THEN
     RAISE EXCEPTION USING
@@ -982,7 +979,6 @@ BEGIN
   SELECT v.status, v.node_path INTO v_org_status, v_node_path
   FROM orgunit.org_unit_versions v
   WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.hierarchy_type = 'OrgUnit'
     AND v.org_id = p_org_id
     AND v.validity @> p_as_of_date
   ORDER BY lower(v.validity) DESC
@@ -1005,7 +1001,6 @@ BEGIN
   FROM orgunit.setid_binding_versions b
   JOIN orgunit.org_unit_versions o
     ON o.tenant_uuid = b.tenant_uuid
-   AND o.hierarchy_type = 'OrgUnit'
    AND o.org_id = b.org_id
   WHERE b.tenant_uuid = p_tenant_uuid
     AND b.validity @> p_as_of_date

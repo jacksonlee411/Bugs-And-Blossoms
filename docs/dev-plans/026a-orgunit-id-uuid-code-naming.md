@@ -125,6 +125,7 @@ $$;
 ```
 > 说明：`next_org_id` 为“下一个可分配值”；达到上限时报错并阻断写入。  
 > 补充：本计划已移除 `hierarchy_type`，单租户单树模型；表结构与函数签名均按 `tenant_uuid` 维度收敛。
+> 补充：`submit_org_event` 在 `CREATE` 且 `p_org_id IS NULL` 时调用 `allocate_org_id` 分配；非 `CREATE` 事件必须提供 `p_org_id`，否则返回 `ORG_INVALID_ARGUMENT`。
 
 #### org_trees
 ```sql
@@ -532,7 +533,7 @@ SELECT orgunit.allocate_org_id(p_tenant_uuid)::int;
 - `migrations/staffing/20260130001000_staffing_jobcatalog_package_id_validation.sql`：`org_unit_id` 解析为 `int`，OrgUnit 校验按 `tenant_uuid`。
 - `migrations/staffing/20260130002000_staffing_position_snapshot_job_profile_code.sql`：`org_unit_id` 返回类型改为 `int`。
 - `modules/orgunit/infrastructure/persistence/schema/00005_orgunit_setid_schema.sql` / `00008_orgunit_setid_scope_schema.sql`：移除 `event_uuid` v4 默认值，要求应用层 v7。
-- `cmd/dbtool/main.go`：OrgUnit smoke 改为使用 DB 内部分配 `org_id`（不再直连 `org_id_seq`）。
+- `cmd/dbtool/main.go`：OrgUnit smoke 改为使用 DB 内部分配 `org_id`（不再直连旧序列）。
 - `pkg/uuidv7/uuidv7.go`：新增 v7 生成器供 OrgUnit/SetID 事件使用。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)

@@ -155,7 +155,7 @@ func (s orgStoreStub) ListNodesCurrent(context.Context, string, string) ([]OrgUn
 	}
 	return append([]OrgUnitNode(nil), s.nodes...), nil
 }
-func (s orgStoreStub) CreateNodeCurrent(context.Context, string, string, string, string, bool) (OrgUnitNode, error) {
+func (s orgStoreStub) CreateNodeCurrent(context.Context, string, string, string, string, string, bool) (OrgUnitNode, error) {
 	return OrgUnitNode{}, s.err
 }
 func (s orgStoreStub) RenameNodeCurrent(context.Context, string, string, string, string) error {
@@ -169,6 +169,12 @@ func (s orgStoreStub) DisableNodeCurrent(context.Context, string, string, string
 }
 func (s orgStoreStub) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
 	return s.err
+}
+func (s orgStoreStub) ResolveOrgID(context.Context, string, string) (int, error) {
+	return 0, s.err
+}
+func (s orgStoreStub) ResolveOrgCode(context.Context, string, int) (string, error) {
+	return "", s.err
 }
 
 func defaultJobCatalogOrgStore() OrgUnitStore {

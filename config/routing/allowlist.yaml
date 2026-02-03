@@ -80,31 +80,31 @@ entrypoints:
       - path: /org/api/assignment-events:rescind
         methods: [POST]
         route_class: internal_api
-      - path: /orgunit/api/setids
+      - path: /org/api/setids
         methods: [POST]
         route_class: internal_api
-      - path: /orgunit/api/setid-bindings
+      - path: /org/api/setid-bindings
         methods: [POST]
         route_class: internal_api
-      - path: /orgunit/api/scope-packages
+      - path: /org/api/scope-packages
         methods: [GET, POST]
         route_class: internal_api
-      - path: /orgunit/api/owned-scope-packages
+      - path: /org/api/owned-scope-packages
         methods: [GET]
         route_class: internal_api
-      - path: /orgunit/api/scope-packages/{package_id}/disable
+      - path: /org/api/scope-packages/{package_id}/disable
         methods: [POST]
         route_class: internal_api
-      - path: /orgunit/api/scope-subscriptions
+      - path: /org/api/scope-subscriptions
         methods: [GET, POST]
         route_class: internal_api
-      - path: /orgunit/api/global-setids
+      - path: /org/api/global-setids
         methods: [GET, POST]
         route_class: internal_api
-      - path: /orgunit/api/global-scope-packages
+      - path: /org/api/global-scope-packages
         methods: [GET, POST]
         route_class: internal_api
-      - path: /orgunit/api/org-units/set-business-unit
+      - path: /org/api/org-units/set-business-unit
         methods: [POST]
         route_class: internal_api
   superadmin:

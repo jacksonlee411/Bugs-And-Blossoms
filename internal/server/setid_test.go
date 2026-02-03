@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type errSetIDStore struct{ err error }
@@ -208,7 +209,7 @@ type errOrgUnitStore struct{ err error }
 func (s errOrgUnitStore) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
 	return nil, s.err
 }
-func (s errOrgUnitStore) CreateNodeCurrent(context.Context, string, string, string, string, bool) (OrgUnitNode, error) {
+func (s errOrgUnitStore) CreateNodeCurrent(context.Context, string, string, string, string, string, bool) (OrgUnitNode, error) {
 	return OrgUnitNode{}, s.err
 }
 func (s errOrgUnitStore) RenameNodeCurrent(context.Context, string, string, string, string) error {
@@ -222,6 +223,12 @@ func (s errOrgUnitStore) DisableNodeCurrent(context.Context, string, string, str
 }
 func (s errOrgUnitStore) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
 	return s.err
+}
+func (s errOrgUnitStore) ResolveOrgID(context.Context, string, string) (int, error) {
+	return 0, s.err
+}
+func (s errOrgUnitStore) ResolveOrgCode(context.Context, string, int) (string, error) {
+	return "", s.err
 }
 
 type tableRows struct {
@@ -287,6 +294,35 @@ func (r *scanErrRows) Conn() *pgx.Conn     { return nil }
 
 func newTestOrgStore() OrgUnitStore {
 	return newOrgUnitMemoryStore()
+}
+
+type resolveErrOrgStore struct {
+	err error
+}
+
+func (resolveErrOrgStore) ListNodesCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
+	return []OrgUnitNode{{ID: "c1", OrgCode: "ORG-1", Name: "Org"}}, nil
+}
+func (resolveErrOrgStore) CreateNodeCurrent(context.Context, string, string, string, string, string, bool) (OrgUnitNode, error) {
+	return OrgUnitNode{}, nil
+}
+func (resolveErrOrgStore) RenameNodeCurrent(context.Context, string, string, string, string) error {
+	return nil
+}
+func (resolveErrOrgStore) MoveNodeCurrent(context.Context, string, string, string, string) error {
+	return nil
+}
+func (resolveErrOrgStore) DisableNodeCurrent(context.Context, string, string, string) error {
+	return nil
+}
+func (resolveErrOrgStore) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
+	return nil
+}
+func (s resolveErrOrgStore) ResolveOrgID(context.Context, string, string) (int, error) {
+	return 0, s.err
+}
+func (resolveErrOrgStore) ResolveOrgCode(context.Context, string, int) (string, error) {
+	return "ORG-1", nil
 }
 
 func TestHandleSetID_TenantMissing(t *testing.T) {
@@ -420,6 +456,8 @@ func TestHandleSetID_Post_CreateSetID(t *testing.T) {
 
 func TestHandleSetID_Post_BindSetID(t *testing.T) {
 	store := newSetIDMemoryStore()
+	orgStore := newOrgUnitMemoryStore()
+	_, _ = orgStore.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "ORG-1", "Org", "", true)
 
 	createSetID := url.Values{}
 	createSetID.Set("action", "create_setid")
@@ -429,23 +467,63 @@ func TestHandleSetID_Post_BindSetID(t *testing.T) {
 	reqS.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqS = reqS.WithContext(withTenant(reqS.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recS := httptest.NewRecorder()
-	handleSetID(recS, reqS, store, newTestOrgStore())
+	handleSetID(recS, reqS, store, orgStore)
 	if recS.Code != http.StatusSeeOther {
 		t.Fatalf("create setid status=%d", recS.Code)
 	}
 
 	bind := url.Values{}
 	bind.Set("action", "bind_setid")
-	bind.Set("org_unit_id", "10000001")
+	bind.Set("org_code", "ORG-1")
 	bind.Set("setid", "B0001")
 	bind.Set("effective_date", "2026-01-01")
 	reqB := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(bind.Encode()))
 	reqB.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqB = reqB.WithContext(withTenant(reqB.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recB := httptest.NewRecorder()
-	handleSetID(recB, reqB, store, newTestOrgStore())
+	handleSetID(recB, reqB, store, orgStore)
 	if recB.Code != http.StatusSeeOther {
 		t.Fatalf("bind setid status=%d", recB.Code)
+	}
+}
+
+func TestHandleSetID_Post_BindSetID_OrgCodeInvalid(t *testing.T) {
+	store := newSetIDMemoryStore()
+	form := url.Values{}
+	form.Set("action", "bind_setid")
+	form.Set("org_code", "bad!")
+	form.Set("setid", "A0001")
+	form.Set("effective_date", "2026-01-01")
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, store, newOrgUnitMemoryStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "org_code invalid") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_Post_BindSetID_OrgCodeNotFound(t *testing.T) {
+	store := newSetIDMemoryStore()
+	form := url.Values{}
+	form.Set("action", "bind_setid")
+	form.Set("org_code", "ORG-404")
+	form.Set("setid", "A0001")
+	form.Set("effective_date", "2026-01-01")
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, store, newOrgUnitMemoryStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "org_code not found") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
 }
 
@@ -800,15 +878,17 @@ func TestHandleSetID_Post_WriteErrors(t *testing.T) {
 		t.Fatalf("status=%d", recSet.Code)
 	}
 
+	orgStore := newOrgUnitMemoryStore()
+	_, _ = orgStore.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "ORG-1", "Org", "", true)
 	bind := url.Values{}
 	bind.Set("action", "bind_setid")
-	bind.Set("org_unit_id", "10000001")
+	bind.Set("org_code", "ORG-1")
 	bind.Set("setid", "DEFLT")
 	reqBind := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(bind.Encode()))
 	reqBind.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqBind = reqBind.WithContext(withTenant(reqBind.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
 	recBind := httptest.NewRecorder()
-	handleSetID(recBind, reqBind, partialSetIDStore{bindErr: errors.New("boom")}, newTestOrgStore())
+	handleSetID(recBind, reqBind, partialSetIDStore{bindErr: errors.New("boom")}, orgStore)
 	if recBind.Code != http.StatusOK {
 		t.Fatalf("status=%d", recBind.Code)
 	}
@@ -1070,7 +1150,7 @@ func TestHandleSetID_OrgStoreMissing(t *testing.T) {
 func TestHandleSetID_BindInvalidEffectiveDate(t *testing.T) {
 	form := url.Values{}
 	form.Set("action", "bind_setid")
-	form.Set("org_unit_id", "10000001")
+	form.Set("org_code", "ORG-1")
 	form.Set("setid", "DEFLT")
 	form.Set("effective_date", "bad")
 
@@ -1083,6 +1163,66 @@ func TestHandleSetID_BindInvalidEffectiveDate(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), "effective_date 无效") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_BindOrgCodeInvalid(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "bind_setid")
+	form.Set("org_code", "ORG-1")
+	form.Set("setid", "DEFLT")
+	form.Set("effective_date", "2026-01-01")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, newSetIDMemoryStore(), resolveErrOrgStore{err: orgunitpkg.ErrOrgCodeInvalid})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "org_code invalid") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_BindOrgCodeNotFound(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "bind_setid")
+	form.Set("org_code", "ORG-1")
+	form.Set("setid", "DEFLT")
+	form.Set("effective_date", "2026-01-01")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, newSetIDMemoryStore(), resolveErrOrgStore{err: orgunitpkg.ErrOrgCodeNotFound})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "org_code not found") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetID_BindOrgCodeResolveError(t *testing.T) {
+	form := url.Values{}
+	form.Set("action", "bind_setid")
+	form.Set("org_code", "ORG-1")
+	form.Set("setid", "DEFLT")
+	form.Set("effective_date", "2026-01-01")
+
+	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, newSetIDMemoryStore(), resolveErrOrgStore{err: errors.New("boom")})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "boom") {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
 }

@@ -2,21 +2,26 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|jobcatalog-smoke|person-smoke|staffing-smoke> [args]")
+		fatalf("usage: dbtool <rls-smoke|orgunit-smoke|orgunit-code-validate|jobcatalog-smoke|person-smoke|staffing-smoke> [args]")
 	}
 
 	switch os.Args[1] {
@@ -24,6 +29,8 @@ func main() {
 		rlsSmoke(os.Args[2:])
 	case "orgunit-smoke":
 		orgunitSmoke(os.Args[2:])
+	case "orgunit-code-validate":
+		orgunitCodeValidate(os.Args[2:])
 	case "jobcatalog-smoke":
 		jobcatalogSmoke(os.Args[2:])
 	case "person-smoke":
@@ -259,32 +266,25 @@ func staffingSmoke(args []string) {
 		fatal(err)
 	}
 	orgEventID = mustUUIDv7()
-	if err := tx.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&orgUnitID); err != nil {
-		fatal(err)
-	}
-	if err := tx.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&missingOrgUnitID); err != nil {
-		fatal(err)
-	}
 
 	var existingRootOrgID string
 	err = tx.QueryRow(ctx, `
-		SELECT root_org_id::text
-		FROM orgunit.org_trees
-		WHERE tenant_uuid = $1::uuid AND hierarchy_type = 'OrgUnit';
-	`, tenantA).Scan(&existingRootOrgID)
+			SELECT root_org_id::text
+			FROM orgunit.org_trees
+			WHERE tenant_uuid = $1::uuid;
+		`, tenantA).Scan(&existingRootOrgID)
 	if err != nil && err != pgx.ErrNoRows {
 		fatal(err)
 	}
 	if err == nil {
 		orgUnitID = existingRootOrgID
 		if err := tx.QueryRow(ctx, `
-			SELECT lower(validity)::text
-			FROM orgunit.org_unit_versions
-			WHERE tenant_uuid = $1::uuid
-			  AND hierarchy_type = 'OrgUnit'
-			  AND org_id = $2::int
-			  AND status = 'active'
-			ORDER BY lower(validity) DESC
+				SELECT lower(validity)::text
+				FROM orgunit.org_unit_versions
+				WHERE tenant_uuid = $1::uuid
+				  AND org_id = $2::int
+				  AND status = 'active'
+				ORDER BY lower(validity) DESC
 			LIMIT 1;
 		`, tenantA, orgUnitID).Scan(&effectiveDate); err != nil {
 			fatal(err)
@@ -293,30 +293,43 @@ func staffingSmoke(args []string) {
 
 	if existingRootOrgID == "" {
 		if _, err := tx.Exec(ctx, `
-			SELECT orgunit.submit_org_event(
-			  $1::uuid,
-			  $2::uuid,
-			  'OrgUnit',
-			  $3::int,
-			  'CREATE',
-			  $4::date,
+				SELECT orgunit.submit_org_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::int,
+				  'CREATE',
+				  $4::date,
 			  jsonb_build_object('name', 'Smoke Org', 'is_business_unit', true),
 			  $5::text,
 			  $6::uuid
 			);
-		`, orgEventID, tenantA, orgUnitID, effectiveDate, requestID+"-org", initiatorID); err != nil {
+		`, orgEventID, tenantA, nil, effectiveDate, requestID+"-org", initiatorID); err != nil {
+			fatal(err)
+		}
+		if err := tx.QueryRow(ctx, `
+			SELECT org_id::text
+			FROM orgunit.org_events
+			WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+		`, tenantA, orgEventID).Scan(&orgUnitID); err != nil {
 			fatal(err)
 		}
 	}
 
+	if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(MAX(org_id) + 1, 10000000)::text
+			FROM orgunit.org_unit_versions
+			WHERE tenant_uuid = $1::uuid;
+		`, tenantA).Scan(&missingOrgUnitID); err != nil {
+		fatal(err)
+	}
+
 	var rootIsBU bool
 	err = tx.QueryRow(ctx, `
-		SELECT is_business_unit
-		FROM orgunit.org_unit_versions
-		WHERE tenant_uuid = $1::uuid
-		  AND hierarchy_type = 'OrgUnit'
-		  AND org_id = $2::int
-		  AND status = 'active'
+			SELECT is_business_unit
+			FROM orgunit.org_unit_versions
+			WHERE tenant_uuid = $1::uuid
+			  AND org_id = $2::int
+			  AND status = 'active'
 		  AND validity @> $3::date
 		ORDER BY lower(validity) DESC
 		LIMIT 1;
@@ -328,15 +341,14 @@ func staffingSmoke(args []string) {
 		var buEventID string
 		buEventID = mustUUIDv7()
 		if _, err := tx.Exec(ctx, `
-			SELECT orgunit.submit_org_event(
-			  $1::uuid,
-			  $2::uuid,
-			  'OrgUnit',
-			  $3::int,
-			  'SET_BUSINESS_UNIT',
-			  $4::date,
-			  jsonb_build_object('is_business_unit', true),
-			  $5::text,
+				SELECT orgunit.submit_org_event(
+				  $1::uuid,
+				  $2::uuid,
+				  $3::int,
+				  'SET_BUSINESS_UNIT',
+				  $4::date,
+				  jsonb_build_object('is_business_unit', true),
+				  $5::text,
 			  $6::uuid
 			);
 		`, buEventID, tenantA, orgUnitID, effectiveDate, requestID+"-bu", initiatorID); err != nil {
@@ -1404,18 +1416,18 @@ func orgunitSmoke(args []string) {
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM orgunit.org_unit_versions WHERE tenant_uuid = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM orgunit.org_unit_versions WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM orgunit.org_trees WHERE tenant_uuid = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM orgunit.org_trees WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM orgunit.org_events WHERE tenant_uuid = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantA); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM orgunit.org_events WHERE tenant_uuid = $1::uuid;`, tenantA); err != nil {
 		fatal(err)
 	}
 
 	var countA0 int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM orgunit.org_events WHERE hierarchy_type = 'OrgUnit';`).Scan(&countA0); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM orgunit.org_events;`).Scan(&countA0); err != nil {
 		fatal(err)
 	}
 
@@ -1423,29 +1435,32 @@ func orgunitSmoke(args []string) {
 	requestID := "dbtool-orgunit-smoke-a"
 	eventIDA := mustUUIDv7()
 	var orgIDA string
-	if err := tx.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&orgIDA); err != nil {
-		fatal(err)
-	}
 
 	var dbIDA int64
 	if err := tx.QueryRow(ctx, `
-SELECT orgunit.submit_org_event(
-  $1::uuid,
-  $2::uuid,
-  'OrgUnit',
-  $3::int,
-  'CREATE',
-  $4::date,
-  jsonb_build_object('name', 'A1'),
-	  $5::text,
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::int,
+	  'CREATE',
+	  $4::date,
+	  jsonb_build_object('name', 'A1'),
+		  $5::text,
 	  $6::uuid
 	)
-	`, eventIDA, tenantA, orgIDA, "2026-01-01", requestID, initiatorID).Scan(&dbIDA); err != nil {
+	`, eventIDA, tenantA, nil, "2026-01-01", requestID, initiatorID).Scan(&dbIDA); err != nil {
+		fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `
+		SELECT org_id::text
+		FROM orgunit.org_events
+		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+	`, tenantA, eventIDA).Scan(&orgIDA); err != nil {
 		fatal(err)
 	}
 
 	var countA1 int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM orgunit.org_events WHERE hierarchy_type = 'OrgUnit';`).Scan(&countA1); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM orgunit.org_events;`).Scan(&countA1); err != nil {
 		fatal(err)
 	}
 	if countA1 != countA0+1 {
@@ -1460,7 +1475,6 @@ SELECT orgunit.submit_org_event(
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
 	  $2::uuid,
-	  'OrgUnit',
 	  $3::int,
 	  'CREATE',
 	  '2026-01-01'::date,
@@ -1528,13 +1542,13 @@ SELECT orgunit.submit_org_event(
 		fatal(err)
 	}
 
-	if _, err := tx3.Exec(ctx, `DELETE FROM orgunit.org_unit_versions WHERE tenant_uuid = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantC); err != nil {
+	if _, err := tx3.Exec(ctx, `DELETE FROM orgunit.org_unit_versions WHERE tenant_uuid = $1::uuid;`, tenantC); err != nil {
 		fatal(err)
 	}
-	if _, err := tx3.Exec(ctx, `DELETE FROM orgunit.org_trees WHERE tenant_uuid = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantC); err != nil {
+	if _, err := tx3.Exec(ctx, `DELETE FROM orgunit.org_trees WHERE tenant_uuid = $1::uuid;`, tenantC); err != nil {
 		fatal(err)
 	}
-	if _, err := tx3.Exec(ctx, `DELETE FROM orgunit.org_events WHERE tenant_uuid = $1::uuid AND hierarchy_type = 'OrgUnit';`, tenantC); err != nil {
+	if _, err := tx3.Exec(ctx, `DELETE FROM orgunit.org_events WHERE tenant_uuid = $1::uuid;`, tenantC); err != nil {
 		fatal(err)
 	}
 
@@ -1543,15 +1557,6 @@ SELECT orgunit.submit_org_event(
 	var orgRootID string
 	var orgChildID string
 	var orgParent2ID string
-	if err := tx3.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&orgRootID); err != nil {
-		fatal(err)
-	}
-	if err := tx3.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&orgChildID); err != nil {
-		fatal(err)
-	}
-	if err := tx3.QueryRow(ctx, `SELECT nextval('orgunit.org_id_seq')::text;`).Scan(&orgParent2ID); err != nil {
-		fatal(err)
-	}
 
 	eventCreateRoot := mustUUIDv7()
 	eventCreateChild := mustUUIDv7()
@@ -1562,35 +1567,40 @@ SELECT orgunit.submit_org_event(
 
 	var createRootDBID int64
 	if err := tx3.QueryRow(ctx, `
-SELECT orgunit.submit_org_event(
-  $1::uuid,
-  $2::uuid,
-  'OrgUnit',
-  $3::int,
-  'CREATE',
-  $4::date,
-  jsonb_build_object('name', 'Root'),
-  $5::text,
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::int,
+	  'CREATE',
+	  $4::date,
+	  jsonb_build_object('name', 'Root'),
+	  $5::text,
   $6::uuid
 )
-`, eventCreateRoot, tenantC, orgRootID, "2026-01-01", requestID, initiatorID).Scan(&createRootDBID); err != nil {
+`, eventCreateRoot, tenantC, nil, "2026-01-01", requestID, initiatorID).Scan(&createRootDBID); err != nil {
+		fatal(err)
+	}
+	if err := tx3.QueryRow(ctx, `
+		SELECT org_id::text
+		FROM orgunit.org_events
+		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+	`, tenantC, eventCreateRoot).Scan(&orgRootID); err != nil {
 		fatal(err)
 	}
 
 	var createRootDBID2 int64
 	if err := tx3.QueryRow(ctx, `
-SELECT orgunit.submit_org_event(
-  $1::uuid,
-  $2::uuid,
-  'OrgUnit',
-  $3::int,
-  'CREATE',
-  $4::date,
-  jsonb_build_object('name', 'Root'),
-  $5::text,
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::int,
+	  'CREATE',
+	  $4::date,
+	  jsonb_build_object('name', 'Root'),
+	  $5::text,
   $6::uuid
 )
-`, eventCreateRoot, tenantC, orgRootID, "2026-01-01", requestID, initiatorID).Scan(&createRootDBID2); err != nil {
+`, eventCreateRoot, tenantC, nil, "2026-01-01", requestID, initiatorID).Scan(&createRootDBID2); err != nil {
 		fatal(err)
 	}
 	if createRootDBID2 != createRootDBID {
@@ -1598,47 +1608,58 @@ SELECT orgunit.submit_org_event(
 	}
 
 	if _, err := tx3.Exec(ctx, `
-SELECT orgunit.submit_org_event(
-  $1::uuid,
-  $2::uuid,
-  'OrgUnit',
-  $3::int,
-  'CREATE',
-  $4::date,
-  jsonb_build_object('parent_id', $5::int, 'name', 'Child'),
-  $6::text,
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::int,
+	  'CREATE',
+	  $4::date,
+	  jsonb_build_object('parent_id', $5::int, 'name', 'Child'),
+	  $6::text,
   $7::uuid
 )
-`, eventCreateChild, tenantC, orgChildID, "2026-01-01", orgRootID, requestID, initiatorID); err != nil {
+`, eventCreateChild, tenantC, nil, "2026-01-01", orgRootID, requestID, initiatorID); err != nil {
+		fatal(err)
+	}
+	if err := tx3.QueryRow(ctx, `
+		SELECT org_id::text
+		FROM orgunit.org_events
+		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+	`, tenantC, eventCreateChild).Scan(&orgChildID); err != nil {
 		fatal(err)
 	}
 
 	if _, err := tx3.Exec(ctx, `
-SELECT orgunit.submit_org_event(
-  $1::uuid,
-  $2::uuid,
-  'OrgUnit',
-  $3::int,
-  'CREATE',
-  $4::date,
-  jsonb_build_object('parent_id', $5::int, 'name', 'Parent2'),
-  $6::text,
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::int,
+	  'CREATE',
+	  $4::date,
+	  jsonb_build_object('parent_id', $5::int, 'name', 'Parent2'),
+	  $6::text,
   $7::uuid
 )
-`, eventCreateParent2, tenantC, orgParent2ID, "2026-01-03", orgRootID, requestID, initiatorID); err != nil {
+`, eventCreateParent2, tenantC, nil, "2026-01-03", orgRootID, requestID, initiatorID); err != nil {
+		fatal(err)
+	}
+	if err := tx3.QueryRow(ctx, `
+		SELECT org_id::text
+		FROM orgunit.org_events
+		WHERE tenant_uuid = $1::uuid AND event_uuid = $2::uuid
+	`, tenantC, eventCreateParent2).Scan(&orgParent2ID); err != nil {
 		fatal(err)
 	}
 
 	if _, err := tx3.Exec(ctx, `
-SELECT orgunit.submit_org_event(
-  $1::uuid,
-  $2::uuid,
-  'OrgUnit',
-  $3::int,
-  'RENAME',
-  $4::date,
-  jsonb_build_object('new_name', 'Child2'),
-  $5::text,
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::int,
+	  'RENAME',
+	  $4::date,
+	  jsonb_build_object('new_name', 'Child2'),
+	  $5::text,
   $6::uuid
 )
 `, eventRenameChild, tenantC, orgChildID, "2026-01-02", requestID, initiatorID); err != nil {
@@ -1646,15 +1667,14 @@ SELECT orgunit.submit_org_event(
 	}
 
 	if _, err := tx3.Exec(ctx, `
-SELECT orgunit.submit_org_event(
-  $1::uuid,
-  $2::uuid,
-  'OrgUnit',
-  $3::int,
-  'MOVE',
-  $4::date,
-  jsonb_build_object('new_parent_id', $5::int),
-  $6::text,
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::int,
+	  'MOVE',
+	  $4::date,
+	  jsonb_build_object('new_parent_id', $5::int),
+	  $6::text,
   $7::uuid
 )
 `, eventMoveChild, tenantC, orgChildID, "2026-01-04", orgParent2ID, requestID, initiatorID); err != nil {
@@ -1662,15 +1682,14 @@ SELECT orgunit.submit_org_event(
 	}
 
 	if _, err := tx3.Exec(ctx, `
-SELECT orgunit.submit_org_event(
-  $1::uuid,
-  $2::uuid,
-  'OrgUnit',
-  $3::int,
-  'DISABLE',
-  $4::date,
-  '{}'::jsonb,
-  $5::text,
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::int,
+	  'DISABLE',
+	  $4::date,
+	  '{}'::jsonb,
+	  $5::text,
   $6::uuid
 )
 `, eventDisableChild, tenantC, orgChildID, "2026-01-06", requestID, initiatorID); err != nil {
@@ -1681,7 +1700,7 @@ SELECT orgunit.submit_org_event(
 	if err := tx3.QueryRow(ctx, `
 SELECT count(*)
 FROM orgunit.org_unit_versions
-WHERE tenant_uuid = $1::uuid AND hierarchy_type = 'OrgUnit' AND org_id = $2::int
+WHERE tenant_uuid = $1::uuid AND org_id = $2::int
 `, tenantC, orgChildID).Scan(&childSlices); err != nil {
 		fatal(err)
 	}
@@ -1707,7 +1726,6 @@ WHERE tenant_uuid = $1::uuid AND hierarchy_type = 'OrgUnit' AND org_id = $2::int
 SELECT name, status, parent_id::text, node_path::text
 FROM orgunit.org_unit_versions
 WHERE tenant_uuid = $1::uuid
-  AND hierarchy_type = 'OrgUnit'
   AND org_id = $2::int
   AND validity @> $3::date
 `, tenantC, orgChildID, "2026-01-03").Scan(&name0301, &status0301, &parent0301, &path0301); err != nil {
@@ -1722,7 +1740,6 @@ WHERE tenant_uuid = $1::uuid
 SELECT name, status, parent_id::text, node_path::text
 FROM orgunit.org_unit_versions
 WHERE tenant_uuid = $1::uuid
-  AND hierarchy_type = 'OrgUnit'
   AND org_id = $2::int
   AND validity @> $3::date
 `, tenantC, orgChildID, "2026-01-05").Scan(&name0501, &status0501, &parent0501, &path0501); err != nil {
@@ -1737,7 +1754,6 @@ WHERE tenant_uuid = $1::uuid
 SELECT status
 FROM orgunit.org_unit_versions
 WHERE tenant_uuid = $1::uuid
-  AND hierarchy_type = 'OrgUnit'
   AND org_id = $2::int
   AND validity @> $3::date
 `, tenantC, orgChildID, "2026-01-07").Scan(&status0701); err != nil {
@@ -1752,15 +1768,14 @@ WHERE tenant_uuid = $1::uuid
 	}
 	tenantMismatchEventID := mustUUIDv7()
 	_, err = tx3.Exec(ctx, `
-SELECT orgunit.submit_org_event(
-  $1::uuid,
-  $2::uuid,
-  'OrgUnit',
-  $3::int,
-  'CREATE',
-  $4::date,
-  jsonb_build_object('name', 'X'),
-  $5::text,
+	SELECT orgunit.submit_org_event(
+	  $1::uuid,
+	  $2::uuid,
+	  $3::int,
+	  'CREATE',
+	  $4::date,
+	  jsonb_build_object('name', 'X'),
+	  $5::text,
   $6::uuid
 )
 `, tenantMismatchEventID, tenantB, orgRootID, "2026-01-01", requestID, initiatorID)
@@ -1775,6 +1790,420 @@ SELECT orgunit.submit_org_event(
 	}
 
 	fmt.Println("[orgunit-smoke] OK")
+}
+
+type orgunitCodeRow struct {
+	line          int
+	orgID         int
+	rawCode       string
+	normalized    string
+	alreadyMapped bool
+}
+
+type orgunitCodeConflict struct {
+	line       int
+	orgID      int
+	rawCode    string
+	normalized string
+	reason     string
+	detail     string
+}
+
+func orgunitCodeValidate(args []string) {
+	fs := flag.NewFlagSet("orgunit-code-validate", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var url string
+	var tenantUUID string
+	var inputPath string
+	var conflictOutPath string
+	var normalizedOutPath string
+	fs.StringVar(&url, "url", "", "postgres connection string")
+	fs.StringVar(&tenantUUID, "tenant", "", "tenant uuid")
+	fs.StringVar(&inputPath, "input", "", "csv path (org_id,org_code)")
+	fs.StringVar(&conflictOutPath, "out", "", "conflict csv output (default stdout)")
+	fs.StringVar(&normalizedOutPath, "normalized-out", "", "normalized mapping csv output when no conflicts")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if url == "" {
+		fatalf("missing --url")
+	}
+	if tenantUUID == "" {
+		fatalf("missing --tenant")
+	}
+	if inputPath == "" {
+		fatalf("missing --input")
+	}
+
+	rows, conflicts := readOrgunitCodeCSV(inputPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		fatal(err)
+	}
+	defer conn.Close(context.Background())
+
+	_ = tryEnsureRole(ctx, conn, "app_nobypassrls")
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		fatal(err)
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	_ = trySetRole(ctx, tx, "app_nobypassrls")
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantUUID); err != nil {
+		fatal(err)
+	}
+
+	existingCodes := make(map[string]int)
+	existingOrgIDs := make(map[int]string)
+	rowsResult, err := tx.Query(ctx, `
+SELECT org_id, org_code
+FROM orgunit.org_unit_codes
+WHERE tenant_uuid = $1::uuid
+`, tenantUUID)
+	if err != nil {
+		fatal(err)
+	}
+	for rowsResult.Next() {
+		var orgID int
+		var orgCode string
+		if err := rowsResult.Scan(&orgID, &orgCode); err != nil {
+			fatal(err)
+		}
+		existingCodes[orgCode] = orgID
+		existingOrgIDs[orgID] = orgCode
+	}
+	rowsResult.Close()
+	if rowsResult.Err() != nil {
+		fatal(rowsResult.Err())
+	}
+
+	existingOrgSet := make(map[int]struct{})
+	orgRows, err := tx.Query(ctx, `
+SELECT DISTINCT org_id
+FROM orgunit.org_unit_versions
+WHERE tenant_uuid = $1::uuid
+`, tenantUUID)
+	if err != nil {
+		fatal(err)
+	}
+	for orgRows.Next() {
+		var orgID int
+		if err := orgRows.Scan(&orgID); err != nil {
+			fatal(err)
+		}
+		existingOrgSet[orgID] = struct{}{}
+	}
+	orgRows.Close()
+	if orgRows.Err() != nil {
+		fatal(orgRows.Err())
+	}
+
+	validRows, rowConflicts := validateOrgunitCodeRows(rows, existingOrgSet, existingCodes, existingOrgIDs)
+	conflicts = append(conflicts, rowConflicts...)
+
+	var conflictOut io.Writer = os.Stdout
+	var conflictFile *os.File
+	if conflictOutPath != "" {
+		file, err := os.Create(conflictOutPath)
+		if err != nil {
+			fatal(err)
+		}
+		conflictFile = file
+		conflictOut = file
+	}
+	if conflictFile != nil {
+		defer conflictFile.Close()
+	}
+
+	if len(conflicts) > 0 {
+		if err := writeOrgunitCodeConflicts(conflictOut, conflicts); err != nil {
+			fatal(err)
+		}
+		fatalf("orgunit-code-validate: conflicts=%d (see output)", len(conflicts))
+	}
+	if conflictOutPath != "" {
+		if err := writeOrgunitCodeConflicts(conflictOut, nil); err != nil {
+			fatal(err)
+		}
+	}
+	if normalizedOutPath != "" {
+		if err := writeOrgunitCodeNormalized(normalizedOutPath, validRows); err != nil {
+			fatal(err)
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "orgunit-code-validate: ok rows=%d already_mapped=%d\n", len(validRows), countAlreadyMapped(validRows))
+}
+
+func readOrgunitCodeCSV(path string) ([]orgunitCodeRow, []orgunitCodeConflict) {
+	file, err := os.Open(path)
+	if err != nil {
+		fatal(err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	reader.FieldsPerRecord = -1
+	reader.TrimLeadingSpace = false
+
+	var rows []orgunitCodeRow
+	var conflicts []orgunitCodeConflict
+	line := 0
+	for {
+		record, err := reader.Read()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		line++
+		if err != nil {
+			conflicts = append(conflicts, orgunitCodeConflict{
+				line:   line,
+				reason: "csv_read_error",
+				detail: err.Error(),
+			})
+			continue
+		}
+		if len(record) == 0 {
+			continue
+		}
+		if line == 1 && isOrgunitCodeHeader(record) {
+			continue
+		}
+		if len(record) < 2 {
+			conflicts = append(conflicts, orgunitCodeConflict{
+				line:   line,
+				reason: "csv_columns",
+				detail: "expected org_id,org_code",
+			})
+			continue
+		}
+
+		orgIDRaw := strings.TrimSpace(record[0])
+		orgCodeRaw := record[1]
+		orgID, err := strconv.Atoi(orgIDRaw)
+		if err != nil {
+			conflicts = append(conflicts, orgunitCodeConflict{
+				line:    line,
+				rawCode: orgCodeRaw,
+				reason:  "org_id_invalid",
+				detail:  fmt.Sprintf("org_id=%s", orgIDRaw),
+			})
+			rows = append(rows, orgunitCodeRow{line: line, rawCode: orgCodeRaw})
+			continue
+		}
+		if orgID < 10000000 || orgID > 99999999 {
+			conflicts = append(conflicts, orgunitCodeConflict{
+				line:    line,
+				orgID:   orgID,
+				rawCode: orgCodeRaw,
+				reason:  "org_id_out_of_range",
+				detail:  fmt.Sprintf("org_id=%d", orgID),
+			})
+		}
+		normalized, err := orgunit.NormalizeOrgCode(orgCodeRaw)
+		if err != nil {
+			conflicts = append(conflicts, orgunitCodeConflict{
+				line:    line,
+				orgID:   orgID,
+				rawCode: orgCodeRaw,
+				reason:  "org_code_invalid",
+				detail:  err.Error(),
+			})
+			rows = append(rows, orgunitCodeRow{line: line, orgID: orgID, rawCode: orgCodeRaw})
+			continue
+		}
+
+		rows = append(rows, orgunitCodeRow{
+			line:       line,
+			orgID:      orgID,
+			rawCode:    orgCodeRaw,
+			normalized: normalized,
+		})
+	}
+	return rows, conflicts
+}
+
+func validateOrgunitCodeRows(
+	rows []orgunitCodeRow,
+	existingOrgSet map[int]struct{},
+	existingCodes map[string]int,
+	existingOrgIDs map[int]string,
+) ([]orgunitCodeRow, []orgunitCodeConflict) {
+	conflictKey := make(map[string]struct{})
+	conflicts := make([]orgunitCodeConflict, 0)
+	addConflict := func(conflict orgunitCodeConflict) {
+		key := fmt.Sprintf("%d:%s", conflict.line, conflict.reason)
+		if _, ok := conflictKey[key]; ok {
+			return
+		}
+		conflicts = append(conflicts, conflict)
+		conflictKey[key] = struct{}{}
+	}
+
+	codeSeen := make(map[string]orgunitCodeRow)
+	orgSeen := make(map[int]orgunitCodeRow)
+	for _, row := range rows {
+		if row.normalized == "" || row.orgID == 0 {
+			continue
+		}
+		if prev, ok := codeSeen[row.normalized]; ok {
+			addConflict(orgunitCodeConflict{
+				line:       row.line,
+				orgID:      row.orgID,
+				rawCode:    row.rawCode,
+				normalized: row.normalized,
+				reason:     "org_code_duplicate_input",
+				detail:     fmt.Sprintf("first_line=%d", prev.line),
+			})
+			addConflict(orgunitCodeConflict{
+				line:       prev.line,
+				orgID:      prev.orgID,
+				rawCode:    prev.rawCode,
+				normalized: prev.normalized,
+				reason:     "org_code_duplicate_input",
+				detail:     fmt.Sprintf("duplicate_line=%d", row.line),
+			})
+		} else {
+			codeSeen[row.normalized] = row
+		}
+		if prev, ok := orgSeen[row.orgID]; ok {
+			addConflict(orgunitCodeConflict{
+				line:       row.line,
+				orgID:      row.orgID,
+				rawCode:    row.rawCode,
+				normalized: row.normalized,
+				reason:     "org_id_duplicate_input",
+				detail:     fmt.Sprintf("first_line=%d", prev.line),
+			})
+			addConflict(orgunitCodeConflict{
+				line:       prev.line,
+				orgID:      prev.orgID,
+				rawCode:    prev.rawCode,
+				normalized: prev.normalized,
+				reason:     "org_id_duplicate_input",
+				detail:     fmt.Sprintf("duplicate_line=%d", row.line),
+			})
+		} else {
+			orgSeen[row.orgID] = row
+		}
+	}
+
+	validRows := make([]orgunitCodeRow, 0, len(rows))
+	for _, row := range rows {
+		if row.normalized == "" || row.orgID == 0 {
+			continue
+		}
+		if _, ok := existingOrgSet[row.orgID]; !ok {
+			addConflict(orgunitCodeConflict{
+				line:       row.line,
+				orgID:      row.orgID,
+				rawCode:    row.rawCode,
+				normalized: row.normalized,
+				reason:     "org_id_missing_db",
+				detail:     "org_id not found in org_unit_versions",
+			})
+			continue
+		}
+		if existingOrgCode, ok := existingOrgIDs[row.orgID]; ok && existingOrgCode != row.normalized {
+			addConflict(orgunitCodeConflict{
+				line:       row.line,
+				orgID:      row.orgID,
+				rawCode:    row.rawCode,
+				normalized: row.normalized,
+				reason:     "org_id_conflict_db",
+				detail:     fmt.Sprintf("existing_org_code=%s", existingOrgCode),
+			})
+		}
+		if existingOrgID, ok := existingCodes[row.normalized]; ok && existingOrgID != row.orgID {
+			addConflict(orgunitCodeConflict{
+				line:       row.line,
+				orgID:      row.orgID,
+				rawCode:    row.rawCode,
+				normalized: row.normalized,
+				reason:     "org_code_conflict_db",
+				detail:     fmt.Sprintf("existing_org_id=%d", existingOrgID),
+			})
+		}
+		if existingOrgCode, ok := existingOrgIDs[row.orgID]; ok && existingOrgCode == row.normalized {
+			row.alreadyMapped = true
+		}
+		if existingOrgID, ok := existingCodes[row.normalized]; ok && existingOrgID == row.orgID {
+			row.alreadyMapped = true
+		}
+		validRows = append(validRows, row)
+	}
+	return validRows, conflicts
+}
+
+func isOrgunitCodeHeader(record []string) bool {
+	if len(record) < 2 {
+		return false
+	}
+	first := strings.TrimSpace(strings.ToLower(record[0]))
+	second := strings.TrimSpace(strings.ToLower(record[1]))
+	return first == "org_id" && second == "org_code"
+}
+
+func writeOrgunitCodeConflicts(out io.Writer, conflicts []orgunitCodeConflict) error {
+	writer := csv.NewWriter(out)
+	if err := writer.Write([]string{"line", "org_id", "org_code", "org_code_normalized", "reason", "detail"}); err != nil {
+		return err
+	}
+	for _, conflict := range conflicts {
+		row := []string{
+			strconv.Itoa(conflict.line),
+			strconv.Itoa(conflict.orgID),
+			conflict.rawCode,
+			conflict.normalized,
+			conflict.reason,
+			conflict.detail,
+		}
+		if err := writer.Write(row); err != nil {
+			return err
+		}
+	}
+	writer.Flush()
+	return writer.Error()
+}
+
+func writeOrgunitCodeNormalized(path string, rows []orgunitCodeRow) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	if err := writer.Write([]string{"org_id", "org_code"}); err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if row.alreadyMapped {
+			continue
+		}
+		if err := writer.Write([]string{strconv.Itoa(row.orgID), row.normalized}); err != nil {
+			return err
+		}
+	}
+	writer.Flush()
+	return writer.Error()
+}
+
+func countAlreadyMapped(rows []orgunitCodeRow) int {
+	count := 0
+	for _, row := range rows {
+		if row.alreadyMapped {
+			count++
+		}
+	}
+	return count
 }
 
 func jobcatalogSmoke(args []string) {

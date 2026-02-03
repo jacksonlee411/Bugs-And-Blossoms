@@ -432,7 +432,6 @@ BEGIN
         SELECT 1
         FROM orgunit.org_unit_versions ouv
         WHERE ouv.tenant_uuid = p_tenant_id
-          AND ouv.hierarchy_type = 'OrgUnit'
           AND ouv.org_id = v_org_unit_id
           AND ouv.status = 'active'
           AND ouv.validity @> v_row.effective_date

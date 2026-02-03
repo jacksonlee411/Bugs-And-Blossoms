@@ -216,10 +216,6 @@ func (t *fakeTx) Query(context.Context, string, ...any) (pgx.Rows, error) {
 }
 
 func (t *fakeTx) QueryRow(_ context.Context, q string, _ ...any) pgx.Row {
-	if strings.Contains(q, "nextval('orgunit.org_id_seq')") {
-		t.orgIDN++
-		return fakeRow{vals: []any{10000000 + t.orgIDN}}
-	}
 	if strings.Contains(q, "gen_random_uuid") {
 		t.uuidN++
 		switch t.uuidN {
@@ -230,7 +226,8 @@ func (t *fakeTx) QueryRow(_ context.Context, q string, _ ...any) pgx.Row {
 		}
 	}
 	if strings.Contains(q, "FROM orgunit.org_events") {
-		return fakeRow{vals: []any{time.Unix(789, 0).UTC()}}
+		t.orgIDN++
+		return fakeRow{vals: []any{10000000 + t.orgIDN, time.Unix(789, 0).UTC()}}
 	}
 	return &stubRow{err: errors.New("unexpected QueryRow")}
 }

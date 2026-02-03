@@ -37,12 +37,13 @@ func (r *snapshotRows) Scan(dest ...any) error {
 		return r.scanErr
 	}
 	*(dest[0].(*string)) = "10000001"
-	*(dest[1].(*string)) = "parent1"
-	*(dest[2].(*string)) = "Name"
-	*(dest[3].(*string)) = "Root / Name"
-	*(dest[4].(*int)) = 1
-	*(dest[5].(*string)) = "mgr1"
-	*(dest[6].(*string)) = "path1"
+	*(dest[1].(*string)) = "ORG001"
+	*(dest[2].(*string)) = "parent1"
+	*(dest[3].(*string)) = "Name"
+	*(dest[4].(*string)) = "Root / Name"
+	*(dest[5].(*int)) = 1
+	*(dest[6].(*string)) = "mgr1"
+	*(dest[7].(*string)) = "path1"
 	return nil
 }
 func (r *snapshotRows) Values() ([]any, error) { return nil, nil }
@@ -172,7 +173,6 @@ func TestOrgUnitSnapshotPGStore_CreateOrgUnit(t *testing.T) {
 		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{10000001}}
-			tx.row2 = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
 		id, err := store.CreateOrgUnit(context.Background(), "t1", "2026-01-01", "Root", "")
@@ -188,7 +188,6 @@ func TestOrgUnitSnapshotPGStore_CreateOrgUnit(t *testing.T) {
 		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{}
 			tx.row = &stubRow{vals: []any{10000001}}
-			tx.row2 = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
 		_, err := store.CreateOrgUnit(context.Background(), "t1", "2026-01-01", "Child", "10000002")
@@ -217,7 +216,7 @@ func TestOrgUnitSnapshotPGStore_CreateOrgUnit(t *testing.T) {
 		}
 	})
 
-	t.Run("gen org id error", func(t *testing.T) {
+	t.Run("fetch org id error", func(t *testing.T) {
 		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rowErr: errors.New("row")}, nil
 		}))
@@ -229,9 +228,7 @@ func TestOrgUnitSnapshotPGStore_CreateOrgUnit(t *testing.T) {
 
 	t.Run("gen event id error", func(t *testing.T) {
 		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			tx := &stubTx{}
-			tx.row = &stubRow{vals: []any{10000001}}
-			return tx, nil
+			return &stubTx{}, nil
 		}))
 		withRandReader(t, randErrReader{}, func() {
 			if _, err := store.CreateOrgUnit(context.Background(), "t1", "2026-01-01", "A", ""); err == nil {
@@ -248,7 +245,6 @@ func TestOrgUnitSnapshotPGStore_CreateOrgUnit(t *testing.T) {
 				execN:   0,
 			}
 			tx.row = &stubRow{vals: []any{10000001}}
-			tx.row2 = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
 		_, err := store.CreateOrgUnit(context.Background(), "t1", "2026-01-01", "A", "")
@@ -261,7 +257,6 @@ func TestOrgUnitSnapshotPGStore_CreateOrgUnit(t *testing.T) {
 		store := newOrgUnitSnapshotPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			tx := &stubTx{commitErr: errors.New("commit")}
 			tx.row = &stubRow{vals: []any{10000001}}
-			tx.row2 = &stubRow{vals: []any{"evt1"}}
 			return tx, nil
 		}))
 		_, err := store.CreateOrgUnit(context.Background(), "t1", "2026-01-01", "A", "")

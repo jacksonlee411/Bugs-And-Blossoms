@@ -19,7 +19,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/positions", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handlePositionsAPI(rec, req, positionStoreStub{
+		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
 			listFn: func(_ context.Context, _ string, asOfDate string) ([]Position, error) {
 				if _, err := time.Parse("2006-01-02", asOfDate); err != nil {
 					t.Fatal(err)
@@ -53,7 +53,7 @@ func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/positions?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handlePositionsAPI(rec, req, positionStoreStub{
+		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
 			listFn: func(context.Context, string, string) ([]Position, error) {
 				return nil, newBadRequestError("bad")
 			},
