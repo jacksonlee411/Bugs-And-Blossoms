@@ -298,6 +298,13 @@ BEGIN
 END;
 $$;
 
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
 REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM PUBLIC;
 
 DO $$
