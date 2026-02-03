@@ -201,7 +201,7 @@ func main() {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id": id,
 			"traits": map[string]any{
-				"tenant_id": tenantID,
+				"tenant_uuid": tenantUUID,
 				"email":     email,
 				"role_slug": roleSlug,
 			},
