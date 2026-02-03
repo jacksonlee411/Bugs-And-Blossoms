@@ -37,12 +37,13 @@ func (r *snapshotRows) Scan(dest ...any) error {
 		return r.scanErr
 	}
 	*(dest[0].(*string)) = "10000001"
-	*(dest[1].(*string)) = "parent1"
-	*(dest[2].(*string)) = "Name"
-	*(dest[3].(*string)) = "Root / Name"
-	*(dest[4].(*int)) = 1
-	*(dest[5].(*string)) = "mgr1"
-	*(dest[6].(*string)) = "path1"
+	*(dest[1].(*string)) = "ORG001"
+	*(dest[2].(*string)) = "parent1"
+	*(dest[3].(*string)) = "Name"
+	*(dest[4].(*string)) = "Root / Name"
+	*(dest[5].(*int)) = 1
+	*(dest[6].(*string)) = "mgr1"
+	*(dest[7].(*string)) = "path1"
 	return nil
 }
 func (r *snapshotRows) Values() ([]any, error) { return nil, nil }
