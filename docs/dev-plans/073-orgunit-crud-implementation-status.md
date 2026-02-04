@@ -768,9 +768,9 @@ END LOOP;
 2. [x] 新增表手工确认（阻断点）
 3. [x] Schema 迁移（含更正表与幂等约束）
 4. [x] 服务层实现 + 单测（幂等/更正/重放/租户 fail-closed；manager_pernr as_of 校验待 Person 有效期补齐）
-5. [ ] 接口实现（children/details/search + corrections）+ 路由 allowlist/Authz 策略
+5. [x] 接口实现（children/details/search + corrections）+ 路由 allowlist/Authz 策略
 6. [x] Shoelace 资源接入 + UI 对接（树/详情/搜索定位、事件桥接）
-7. [ ] Readiness 记录（门禁执行证据与关键结果）
+7. [x] Readiness 记录（门禁执行证据与关键结果）
 
 #### PR 计划（草案）
 **PR 1｜DB 与内核：更正表 + 叠加视图基础**
@@ -785,16 +785,16 @@ END LOOP;
 - [ ] 备注：`manager_pernr` 的 as_of 校验依赖 Person 有效期模型，当前仅校验存在/active，待 Person 有效期补齐后完善。
 
 **PR 3｜读服务 + 新路由：children/details/search**
-- 目标：实现 `OrgUnitReadService` 与 3 个只读路由，并补齐 Authz 与 allowlist。
-- 验证：`make check routing` + Go 门禁
+- [x] 完成：实现 `OrgUnitReadService` 与 3 个只读路由，并补齐 Authz 与 allowlist。
+- [x] 验证：`make check routing` + Go 门禁
 
 **PR 4｜UI 集成：Shoelace Tree + 事件桥接**
 - [x] 完成：接入 Shoelace 资源、树/详情容器与事件桥接。
 - [x] 验证：`make generate && make css`（完成后 `git status --short` 为空）
 
 **PR 5｜Readiness 记录**
-- 目标：写入 `docs/dev-records/` 的证据与门禁结果。
-- 验证：`make check doc`
+- [x] 完成：写入 `docs/dev-records/` 的证据与门禁结果。
+- [x] 验证：`make check doc`
 
 ### 9. 测试与验收
 - 单测：更正多次、改生效日落在原区间内、改生效日越界、同日冲突、幂等 request_id 冲突、pernr 不存在、RLS 失效路径。
