@@ -102,7 +102,7 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
 
-  IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT') THEN
+  IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT') THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_INVALID_ARGUMENT',
       DETAIL = format('unsupported event_type: %s', p_event_type);
@@ -256,6 +256,9 @@ BEGIN
     v_org_ids := ARRAY[v_org_id];
   ELSIF p_event_type = 'DISABLE' THEN
     PERFORM orgunit.apply_disable_logic(p_tenant_uuid, v_org_id, p_effective_date, v_event_db_id);
+    v_org_ids := ARRAY[v_org_id];
+  ELSIF p_event_type = 'ENABLE' THEN
+    PERFORM orgunit.apply_enable_logic(p_tenant_uuid, v_org_id, p_effective_date, v_event_db_id);
     v_org_ids := ARRAY[v_org_id];
   ELSIF p_event_type = 'SET_BUSINESS_UNIT' THEN
     v_is_business_unit := (v_payload->>'is_business_unit')::boolean;

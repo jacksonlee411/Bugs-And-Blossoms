@@ -245,13 +245,54 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT')),
+  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')),
   CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_uuid, org_id, effective_date)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_events (event_uuid);
 CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);
 CREATE INDEX IF NOT EXISTS org_events_tenant_effective_idx ON orgunit.org_events (tenant_uuid, effective_date, id);
+
+CREATE TABLE IF NOT EXISTS orgunit.org_event_corrections_current (
+  event_uuid uuid PRIMARY KEY,
+  tenant_uuid uuid NOT NULL,
+  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
+  target_effective_date date NOT NULL,
+  corrected_effective_date date NOT NULL,
+  original_event jsonb NOT NULL,
+  replacement_payload jsonb NOT NULL,
+  initiator_uuid uuid NOT NULL,
+  request_id text NOT NULL,
+  request_hash text NOT NULL,
+  corrected_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT org_event_corrections_current_original_event_obj_check CHECK (jsonb_typeof(original_event) = 'object'),
+  CONSTRAINT org_event_corrections_current_replacement_payload_obj_check CHECK (jsonb_typeof(replacement_payload) = 'object'),
+  CONSTRAINT org_event_corrections_current_target_unique UNIQUE (tenant_uuid, org_id, target_effective_date)
+);
+
+CREATE INDEX IF NOT EXISTS org_event_corrections_current_tenant_org_target_idx
+  ON orgunit.org_event_corrections_current (tenant_uuid, org_id, target_effective_date);
+
+CREATE INDEX IF NOT EXISTS org_event_corrections_current_tenant_org_corrected_idx
+  ON orgunit.org_event_corrections_current (tenant_uuid, org_id, corrected_effective_date);
+
+CREATE TABLE IF NOT EXISTS orgunit.org_event_corrections_history (
+  correction_uuid uuid PRIMARY KEY,
+  event_uuid uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
+  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
+  target_effective_date date NOT NULL,
+  corrected_effective_date date NOT NULL,
+  original_event jsonb NOT NULL,
+  replacement_payload jsonb NOT NULL,
+  initiator_uuid uuid NOT NULL,
+  request_id text NOT NULL,
+  request_hash text NOT NULL,
+  corrected_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT org_event_corrections_history_original_event_obj_check CHECK (jsonb_typeof(original_event) = 'object'),
+  CONSTRAINT org_event_corrections_history_replacement_payload_obj_check CHECK (jsonb_typeof(replacement_payload) = 'object'),
+  CONSTRAINT org_event_corrections_history_request_unique UNIQUE (tenant_uuid, request_id)
+);
 
 CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
   id bigserial PRIMARY KEY,
@@ -324,6 +365,20 @@ CREATE POLICY tenant_isolation ON orgunit.org_events
 USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
+ALTER TABLE orgunit.org_event_corrections_current ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.org_event_corrections_current FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_event_corrections_current;
+CREATE POLICY tenant_isolation ON orgunit.org_event_corrections_current
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE orgunit.org_event_corrections_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.org_event_corrections_history FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_event_corrections_history;
+CREATE POLICY tenant_isolation ON orgunit.org_event_corrections_history
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
 ALTER TABLE orgunit.org_unit_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.org_unit_versions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_unit_versions;
@@ -382,6 +437,25 @@ BEGIN
   END IF;
 END;
 $$;
+
+CREATE OR REPLACE VIEW orgunit.org_events_effective AS
+SELECT
+  e.id,
+  e.event_uuid,
+  e.tenant_uuid,
+  e.org_id,
+  e.event_type,
+  COALESCE(c.corrected_effective_date, e.effective_date) AS effective_date,
+  COALESCE(c.replacement_payload, e.payload) AS payload,
+  e.request_code,
+  e.initiator_uuid,
+  e.transaction_time,
+  e.created_at
+FROM orgunit.org_events e
+LEFT JOIN orgunit.org_event_corrections_current c
+  ON c.event_uuid = e.event_uuid
+ AND c.tenant_uuid = e.tenant_uuid
+ AND c.org_id = e.org_id;
 
 CREATE OR REPLACE FUNCTION orgunit.split_org_unit_version_at(
   p_tenant_uuid uuid,
@@ -763,7 +837,7 @@ BEGIN
   PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_org_id, p_effective_date, p_event_db_id);
 
   SELECT MIN(e.effective_date) INTO v_stop_date
-  FROM orgunit.org_events e
+  FROM orgunit.org_events_effective e
   WHERE e.tenant_uuid = p_tenant_uuid
     AND e.org_id = p_org_id
     AND e.event_type = 'RENAME'
@@ -814,6 +888,48 @@ BEGIN
 
   UPDATE orgunit.org_unit_versions
   SET status = 'disabled', last_event_id = p_event_db_id
+  WHERE tenant_uuid = p_tenant_uuid
+    AND org_id = p_org_id
+    AND lower(validity) >= p_effective_date;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.apply_enable_logic(
+  p_tenant_uuid uuid,
+  p_org_id int,
+  p_effective_date date,
+  p_event_db_id bigint
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
+
+  IF p_org_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
+  END IF;
+  IF p_effective_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM orgunit.org_unit_versions
+    WHERE tenant_uuid = p_tenant_uuid
+      AND org_id = p_org_id
+      AND validity @> p_effective_date
+    LIMIT 1
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_NOT_FOUND_AS_OF',
+      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
+  END IF;
+
+  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_org_id, p_effective_date, p_event_db_id);
+
+  UPDATE orgunit.org_unit_versions
+  SET status = 'active', last_event_id = p_event_db_id
   WHERE tenant_uuid = p_tenant_uuid
     AND org_id = p_org_id
     AND lower(validity) >= p_effective_date;
@@ -879,7 +995,7 @@ BEGIN
   PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_org_id, p_effective_date, p_event_db_id);
 
   SELECT MIN(e.effective_date) INTO v_stop_date
-  FROM orgunit.org_events e
+  FROM orgunit.org_events_effective e
   WHERE e.tenant_uuid = p_tenant_uuid
     AND e.org_id = p_org_id
     AND e.event_type = 'SET_BUSINESS_UNIT'
@@ -1015,7 +1131,7 @@ BEGIN
 
   FOR v_event IN
     SELECT *
-    FROM orgunit.org_events
+    FROM orgunit.org_events_effective
     WHERE tenant_uuid = p_tenant_uuid
     ORDER BY effective_date, id
   LOOP
@@ -1046,6 +1162,8 @@ BEGIN
       PERFORM orgunit.apply_rename_logic(p_tenant_uuid, v_event.org_id, v_event.effective_date, v_new_name, v_event.id);
     ELSIF v_event.event_type = 'DISABLE' THEN
       PERFORM orgunit.apply_disable_logic(p_tenant_uuid, v_event.org_id, v_event.effective_date, v_event.id);
+    ELSIF v_event.event_type = 'ENABLE' THEN
+      PERFORM orgunit.apply_enable_logic(p_tenant_uuid, v_event.org_id, v_event.effective_date, v_event.id);
     ELSIF v_event.event_type = 'SET_BUSINESS_UNIT' THEN
       IF NOT (v_payload ? 'is_business_unit') THEN
         RAISE EXCEPTION USING
@@ -1164,7 +1282,7 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
 
-  IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT') THEN
+  IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT') THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_INVALID_ARGUMENT',
       DETAIL = format('unsupported event_type: %s', p_event_type);
@@ -1290,6 +1408,9 @@ BEGIN
   ELSIF p_event_type = 'DISABLE' THEN
     PERFORM orgunit.apply_disable_logic(p_tenant_uuid, p_org_id, p_effective_date, v_event_db_id);
     v_org_ids := ARRAY[p_org_id];
+  ELSIF p_event_type = 'ENABLE' THEN
+    PERFORM orgunit.apply_enable_logic(p_tenant_uuid, p_org_id, p_effective_date, v_event_db_id);
+    v_org_ids := ARRAY[p_org_id];
   ELSIF p_event_type = 'SET_BUSINESS_UNIT' THEN
     v_is_business_unit := (v_payload->>'is_business_unit')::boolean;
     PERFORM orgunit.apply_set_business_unit_logic(p_tenant_uuid, p_org_id, p_effective_date, v_is_business_unit, v_event_db_id);
@@ -1299,6 +1420,209 @@ BEGIN
   PERFORM orgunit.assert_org_unit_validity(p_tenant_uuid, v_org_ids);
 
   RETURN v_event_db_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.submit_org_event_correction(
+  p_tenant_uuid uuid,
+  p_org_id int,
+  p_target_effective_date date,
+  p_patch jsonb,
+  p_request_id text,
+  p_initiator_uuid uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_lock_key text;
+  v_target orgunit.org_events%ROWTYPE;
+  v_existing orgunit.org_event_corrections_history%ROWTYPE;
+  v_request_hash text;
+  v_payload jsonb;
+  v_new_effective date;
+  v_next_effective date;
+  v_correction_uuid uuid;
+BEGIN
+  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
+
+  IF p_org_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
+  END IF;
+  IF p_target_effective_date IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'target_effective_date is required';
+  END IF;
+  IF p_patch IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'patch is required';
+  END IF;
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  END IF;
+  IF p_initiator_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
+  END IF;
+
+  v_payload := p_patch;
+  IF jsonb_typeof(v_payload) <> 'object' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'patch must be an object';
+  END IF;
+
+  v_lock_key := format('org:write-lock:%s', p_tenant_uuid);
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
+
+  v_request_hash := encode(
+    digest(format('%s|%s|%s', p_org_id, p_target_effective_date, v_payload::text), 'sha256'),
+    'hex'
+  );
+
+  SELECT * INTO v_existing
+  FROM orgunit.org_event_corrections_history
+  WHERE tenant_uuid = p_tenant_uuid
+    AND request_id = p_request_id
+  LIMIT 1;
+
+  IF FOUND THEN
+    IF v_existing.request_hash <> v_request_hash THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'REQUEST_DUPLICATE',
+        DETAIL = format('request_id=%s', p_request_id);
+    END IF;
+
+    RETURN v_existing.correction_uuid;
+  END IF;
+
+  SELECT * INTO v_target
+  FROM orgunit.org_events
+  WHERE tenant_uuid = p_tenant_uuid
+    AND org_id = p_org_id
+    AND effective_date = p_target_effective_date
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_EVENT_NOT_FOUND',
+      DETAIL = format('org_id=%s target_effective_date=%s', p_org_id, p_target_effective_date);
+  END IF;
+
+  v_payload := COALESCE(v_target.payload, '{}'::jsonb) || v_payload;
+  v_new_effective := v_target.effective_date;
+
+  IF v_payload ? 'effective_date' THEN
+    BEGIN
+      v_new_effective := NULLIF(btrim(v_payload->>'effective_date'), '')::date;
+    EXCEPTION
+      WHEN invalid_text_representation THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'EFFECTIVE_DATE_INVALID',
+          DETAIL = format('effective_date=%s', v_payload->>'effective_date');
+    END;
+    IF v_new_effective IS NULL THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'EFFECTIVE_DATE_INVALID',
+        DETAIL = 'effective_date is required';
+    END IF;
+    v_payload := v_payload - 'effective_date';
+  END IF;
+
+  SELECT MIN(e.effective_date) INTO v_next_effective
+  FROM orgunit.org_events e
+  WHERE e.tenant_uuid = p_tenant_uuid
+    AND e.org_id = p_org_id
+    AND e.effective_date > v_target.effective_date;
+
+  IF v_new_effective < v_target.effective_date THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'EFFECTIVE_DATE_OUT_OF_RANGE',
+      DETAIL = format('target=%s new=%s', v_target.effective_date, v_new_effective);
+  END IF;
+  IF v_next_effective IS NOT NULL AND v_new_effective >= v_next_effective THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'EFFECTIVE_DATE_OUT_OF_RANGE',
+      DETAIL = format('next=%s new=%s', v_next_effective, v_new_effective);
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM orgunit.org_events_effective e
+    WHERE e.tenant_uuid = p_tenant_uuid
+      AND e.org_id = p_org_id
+      AND e.effective_date = v_new_effective
+      AND e.event_uuid <> v_target.event_uuid
+    LIMIT 1
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'EVENT_DATE_CONFLICT',
+      DETAIL = format('org_id=%s effective_date=%s', p_org_id, v_new_effective);
+  END IF;
+
+  v_correction_uuid := gen_random_uuid();
+
+  INSERT INTO orgunit.org_event_corrections_history (
+    correction_uuid,
+    event_uuid,
+    tenant_uuid,
+    org_id,
+    target_effective_date,
+    corrected_effective_date,
+    original_event,
+    replacement_payload,
+    initiator_uuid,
+    request_id,
+    request_hash
+  )
+  VALUES (
+    v_correction_uuid,
+    v_target.event_uuid,
+    p_tenant_uuid,
+    p_org_id,
+    p_target_effective_date,
+    v_new_effective,
+    to_jsonb(v_target),
+    v_payload,
+    p_initiator_uuid,
+    p_request_id,
+    v_request_hash
+  );
+
+  INSERT INTO orgunit.org_event_corrections_current (
+    event_uuid,
+    tenant_uuid,
+    org_id,
+    target_effective_date,
+    corrected_effective_date,
+    original_event,
+    replacement_payload,
+    initiator_uuid,
+    request_id,
+    request_hash
+  )
+  VALUES (
+    v_target.event_uuid,
+    p_tenant_uuid,
+    p_org_id,
+    p_target_effective_date,
+    v_new_effective,
+    to_jsonb(v_target),
+    v_payload,
+    p_initiator_uuid,
+    p_request_id,
+    v_request_hash
+  )
+  ON CONFLICT (event_uuid) DO UPDATE SET
+    tenant_uuid = EXCLUDED.tenant_uuid,
+    org_id = EXCLUDED.org_id,
+    target_effective_date = EXCLUDED.target_effective_date,
+    corrected_effective_date = EXCLUDED.corrected_effective_date,
+    original_event = EXCLUDED.original_event,
+    replacement_payload = EXCLUDED.replacement_payload,
+    initiator_uuid = EXCLUDED.initiator_uuid,
+    request_id = EXCLUDED.request_id,
+    request_hash = EXCLUDED.request_hash,
+    corrected_at = EXCLUDED.corrected_at;
+
+  PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
+
+  RETURN v_correction_uuid;
 END;
 $$;
 
@@ -4360,6 +4684,9 @@ ALTER TABLE IF EXISTS orgunit.org_unit_codes OWNER TO orgunit_kernel;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   orgunit.org_events,
+  orgunit.org_event_corrections_current,
+  orgunit.org_event_corrections_history,
+  orgunit.org_events_effective,
   orgunit.org_unit_versions,
   orgunit.org_trees,
   orgunit.org_unit_codes
@@ -4370,6 +4697,13 @@ ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text
 ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
   SECURITY DEFINER;
 ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
   SET search_path = pg_catalog, orgunit, public;
 
 REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM PUBLIC;
@@ -4549,7 +4883,7 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
 
-  IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE','SET_BUSINESS_UNIT') THEN
+  IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT') THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_INVALID_ARGUMENT',
       DETAIL = format('unsupported event_type: %s', p_event_type);
@@ -4703,6 +5037,9 @@ BEGIN
     v_org_ids := ARRAY[v_org_id];
   ELSIF p_event_type = 'DISABLE' THEN
     PERFORM orgunit.apply_disable_logic(p_tenant_uuid, v_org_id, p_effective_date, v_event_db_id);
+    v_org_ids := ARRAY[v_org_id];
+  ELSIF p_event_type = 'ENABLE' THEN
+    PERFORM orgunit.apply_enable_logic(p_tenant_uuid, v_org_id, p_effective_date, v_event_db_id);
     v_org_ids := ARRAY[v_org_id];
   ELSIF p_event_type = 'SET_BUSINESS_UNIT' THEN
     v_is_business_unit := (v_payload->>'is_business_unit')::boolean;
