@@ -393,6 +393,19 @@ func TestCreateParentResolveError(t *testing.T) {
 	}
 }
 
+func TestCreateParentInvalidOrgCode(t *testing.T) {
+	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
+	_, err := svc.Create(context.Background(), "t1", CreateOrgUnitRequest{
+		EffectiveDate: "2026-01-01",
+		OrgCode:       "ROOT",
+		Name:          "Root",
+		ParentOrgCode: "A\n1",
+	})
+	if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgCodeInvalid {
+		t.Fatalf("expected org code invalid, got %v", err)
+	}
+}
+
 func TestCreateManagerInvalid(t *testing.T) {
 	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
 	_, err := svc.Create(context.Background(), "t1", CreateOrgUnitRequest{
@@ -1409,6 +1422,16 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventMove}, OrgUnitCorrectionPatch{
 			ParentOrgCode: stringPtr(" "),
+		})
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected patch field not allowed, got %v", err)
+		}
+	})
+
+	t.Run("parent_not_allowed", func(t *testing.T) {
+		svc := newWriteService(orgUnitWriteStoreStub{})
+		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
+			ParentOrgCode: stringPtr("PARENT"),
 		})
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected patch field not allowed, got %v", err)

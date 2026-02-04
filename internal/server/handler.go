@@ -16,6 +16,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/infrastructure/persistence"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 )
 
@@ -27,15 +29,16 @@ func NewHandler() (http.Handler, error) {
 }
 
 type HandlerOptions struct {
-	TenancyResolver  TenancyResolver
-	IdentityProvider identityProvider
-	OrgUnitStore     OrgUnitStore
-	OrgUnitSnapshot  OrgUnitSnapshotStore
-	SetIDStore       SetIDGovernanceStore
-	JobCatalogStore  JobCatalogStore
-	PersonStore      PersonStore
-	PositionStore    PositionStore
-	AssignmentStore  AssignmentStore
+	TenancyResolver     TenancyResolver
+	IdentityProvider    identityProvider
+	OrgUnitStore        OrgUnitStore
+	OrgUnitWriteService orgunitservices.OrgUnitWriteService
+	OrgUnitSnapshot     OrgUnitSnapshotStore
+	SetIDStore          SetIDGovernanceStore
+	JobCatalogStore     JobCatalogStore
+	PersonStore         PersonStore
+	PositionStore       PositionStore
+	AssignmentStore     AssignmentStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -59,6 +62,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}
 
 	orgStore := opts.OrgUnitStore
+	orgUnitWriteService := opts.OrgUnitWriteService
 	orgSnapshotStore := opts.OrgUnitSnapshot
 	setidStore := opts.SetIDStore
 	jobcatalogStore := opts.JobCatalogStore
@@ -77,6 +81,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		}
 		pgPool = pool
 		orgStore = newOrgUnitPGStore(pgPool)
+	}
+
+	if orgUnitWriteService == nil {
+		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
+			orgUnitWriteService = orgunitservices.NewOrgUnitWriteService(orgunitpersistence.NewOrgUnitPGStore(pgStore.pool))
+		}
 	}
 
 	if orgSnapshotStore == nil {
@@ -384,6 +394,21 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/global-scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleGlobalScopePackagesAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/rename", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsRenameAPI(w, r, orgUnitWriteService)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/move", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsMoveAPI(w, r, orgUnitWriteService)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsDisableAPI(w, r, orgUnitWriteService)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/set-business-unit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsBusinessUnitAPI(w, r, orgStore)

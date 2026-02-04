@@ -11,11 +11,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
+	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 )
 
 type staticIdentityProvider struct {
 	ident authenticatedIdentity
 	err   error
+}
+
+type fakePGBeginner struct{}
+
+func (fakePGBeginner) Begin(context.Context) (pgx.Tx, error) {
+	return nil, errors.New("boom")
 }
 
 func (s staticIdentityProvider) AuthenticatePassword(context.Context, Tenant, string, string) (authenticatedIdentity, error) {
@@ -262,6 +272,26 @@ func TestNewHandlerWithOptions_MissingTenancyResolver_Error(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestNewHandlerWithOptions_OrgUnitWriteServiceDefault(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
+
+	_, err = NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		OrgUnitStore:    &orgUnitPGStore{pool: fakePGBeginner{}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -710,6 +740,15 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	setidStore := newSetIDMemoryStore().(*setidMemoryStore)
+	writeSvc := orgUnitWriteServiceStub{
+		createFn: func(_ context.Context, _ string, req orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			return orgunittypes.OrgUnitResult{
+				OrgID:         "10000002",
+				OrgCode:       req.OrgCode,
+				EffectiveDate: req.EffectiveDate,
+			}, nil
+		},
+	}
 
 	h, err := NewHandlerWithOptions(HandlerOptions{
 		TenancyResolver: localTenancyResolver(),
@@ -717,8 +756,9 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 			KratosIdentityID: "00000000-0000-0000-0000-0000000000aa",
 			Email:            "tenant-admin@example.invalid",
 		}},
-		OrgUnitStore: orgStore,
-		SetIDStore:   setidStore,
+		OrgUnitStore:        orgStore,
+		OrgUnitWriteService: writeSvc,
+		SetIDStore:          setidStore,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -789,6 +829,31 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 	recBU := postJSON("/org/api/org-units/set-business-unit", `{"org_code":"`+node.OrgCode+`","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r4"}`, nil)
 	if recBU.Code != http.StatusOK {
 		t.Fatalf("set business unit status=%d", recBU.Code)
+	}
+
+	recOrgList := getJSON("/org/api/org-units?as_of=2026-01-01", nil)
+	if recOrgList.Code != http.StatusOK {
+		t.Fatalf("org units list status=%d", recOrgList.Code)
+	}
+
+	recOrgCreate := postJSON("/org/api/org-units", `{"org_code":"ORG2","name":"Org2","effective_date":"2026-01-01"}`, nil)
+	if recOrgCreate.Code != http.StatusCreated {
+		t.Fatalf("org units create status=%d", recOrgCreate.Code)
+	}
+
+	recOrgRename := postJSON("/org/api/org-units/rename", `{"org_code":"ORG2","new_name":"Org2b","effective_date":"2026-01-01"}`, nil)
+	if recOrgRename.Code != http.StatusOK {
+		t.Fatalf("org units rename status=%d", recOrgRename.Code)
+	}
+
+	recOrgMove := postJSON("/org/api/org-units/move", `{"org_code":"ORG2","new_parent_org_code":"ORG1","effective_date":"2026-01-01"}`, nil)
+	if recOrgMove.Code != http.StatusOK {
+		t.Fatalf("org units move status=%d", recOrgMove.Code)
+	}
+
+	recOrgDisable := postJSON("/org/api/org-units/disable", `{"org_code":"ORG2","effective_date":"2026-01-01"}`, nil)
+	if recOrgDisable.Code != http.StatusOK {
+		t.Fatalf("org units disable status=%d", recOrgDisable.Code)
 	}
 }
 
