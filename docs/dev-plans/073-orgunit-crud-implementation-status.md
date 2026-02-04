@@ -604,6 +604,7 @@ type OrgUnitReadService interface {
 - [x] Kernel：新增 `submit_org_event_correction(...)` + 修改 `replay_org_unit_versions` 读叠加视图。
 - [x] Kernel：事件类型扩展 `ENABLE`，补齐 `apply_enable_logic(...)` 与写入入口。
 - [x] 校验：补齐“区间内改生效日/同日冲突/幂等复用”路径的最小 SQL 校验。
+- [x] 修复：补齐 `submit_org_event` 的 `SECURITY DEFINER` / `search_path`（新增迁移 `20260204173000_orgunit_submit_org_event_security_definer.sql`）。
 
 #### 6.5 SQL 伪代码草案（更正函数 / 叠加视图）
 > 说明：以下为结构性伪代码，字段名与错误码以最终实现为准。
