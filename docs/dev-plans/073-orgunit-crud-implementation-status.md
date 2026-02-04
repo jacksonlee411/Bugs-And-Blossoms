@@ -589,21 +589,21 @@ type OrgUnitReadService interface {
 5) 保持 `submit_org_event` 作为新增事件入口，避免第二写入口。
 
 #### 6.3 执行清单（DB Kernel）
-- [ ] 新增表：`org_event_corrections_current/history`（含 `target_effective_date`、`corrected_effective_date`、`original_event`、`replacement_payload`、`initiator_uuid`、`request_id`、`request_hash`）。
-- [ ] 约束与索引：同日唯一、请求幂等、事件唯一；`replacement_payload` 为 object；补齐必要索引（按 tenant/org_id/target_effective_date 与 tenant/request_id）。
-- [ ] 事件类型扩展：`org_events.event_type` 增加 `ENABLE`，并补齐 `apply_enable_logic(...)` 与写入入口。
-- [ ] RLS：对更正表启用 `tenant_isolation`（与 `org_events`/`org_unit_versions` 对齐）。
-- [ ] 叠加视图：`org_events_effective`（`effective_date`/`payload` 使用更正结果，保留原 `event_uuid`/`org_id`/`event_type` 供 replay 使用）。
-- [ ] 更正写入函数：`submit_org_event_correction(...)`（目标事件存在性、区间校验、同日冲突、幂等处理、写 current+history、触发 replay）。
-- [ ] 重放入口修改：`replay_org_unit_versions` 从 `org_events_effective` 读入并按“更正后 effective_date + event_id”排序。
+- [x] 新增表：`org_event_corrections_current/history`（含 `target_effective_date`、`corrected_effective_date`、`original_event`、`replacement_payload`、`initiator_uuid`、`request_id`、`request_hash`）。
+- [x] 约束与索引：同日唯一、请求幂等、事件唯一；`replacement_payload` 为 object；补齐必要索引（按 tenant/org_id/target_effective_date 与 tenant/request_id）。
+- [x] 事件类型扩展：`org_events.event_type` 增加 `ENABLE`，并补齐 `apply_enable_logic(...)` 与写入入口。
+- [x] RLS：对更正表启用 `tenant_isolation`（与 `org_events`/`org_unit_versions` 对齐）。
+- [x] 叠加视图：`org_events_effective`（`effective_date`/`payload` 使用更正结果，保留原 `event_uuid`/`org_id`/`event_type` 供 replay 使用）。
+- [x] 更正写入函数：`submit_org_event_correction(...)`（目标事件存在性、区间校验、同日冲突、幂等处理、写 current+history、触发 replay）。
+- [x] 重放入口修改：`replay_org_unit_versions` 从 `org_events_effective` 读入并按“更正后 effective_date + event_id”排序。
 
 #### 6.4 PR 级任务拆分（DB Kernel）
 **PR 1｜DB 与内核：更正表 + 叠加视图基础（细化）**
-- DDL：新增更正表与索引 + RLS 策略。
-- 视图：新增 `org_events_effective`（用于重放与冲突检查）。
-- Kernel：新增 `submit_org_event_correction(...)` + 修改 `replay_org_unit_versions` 读叠加视图。
-- Kernel：事件类型扩展 `ENABLE`，补齐 `apply_enable_logic(...)` 与写入入口。
-- 校验：补齐“区间内改生效日/同日冲突/幂等复用”路径的最小 SQL 校验。
+- [x] DDL：新增更正表与索引 + RLS 策略。
+- [x] 视图：新增 `org_events_effective`（用于重放与冲突检查）。
+- [x] Kernel：新增 `submit_org_event_correction(...)` + 修改 `replay_org_unit_versions` 读叠加视图。
+- [x] Kernel：事件类型扩展 `ENABLE`，补齐 `apply_enable_logic(...)` 与写入入口。
+- [x] 校验：补齐“区间内改生效日/同日冲突/幂等复用”路径的最小 SQL 校验。
 
 #### 6.5 SQL 伪代码草案（更正函数 / 叠加视图）
 > 说明：以下为结构性伪代码，字段名与错误码以最终实现为准。
@@ -757,9 +757,9 @@ END LOOP;
 - 新增更正表审批完成（手工确认）。
 
 **里程碑（顺序）**：
-1. [ ] 设计确认（更正叠加视图取舍、字段元数据/不可更正清单、UI 交互口径与 as_of 规则、API/路由/权限口径）
-2. [ ] 新增表手工确认（阻断点）
-3. [ ] Schema 迁移（含更正表与幂等约束）
+1. [x] 设计确认（更正叠加视图取舍、字段元数据/不可更正清单、UI 交互口径与 as_of 规则、API/路由/权限口径）
+2. [x] 新增表手工确认（阻断点）
+3. [x] Schema 迁移（含更正表与幂等约束）
 4. [ ] 服务层实现 + 单测（幂等/更正/重放/租户 fail-closed、manager_pernr as_of 校验）
 5. [ ] 接口实现（children/details/search + corrections）+ 路由 allowlist/Authz 策略
 6. [ ] Shoelace 资源接入 + UI 对接（树/详情/搜索定位、事件桥接）
@@ -767,8 +767,8 @@ END LOOP;
 
 #### PR 计划（草案）
 **PR 1｜DB 与内核：更正表 + 叠加视图基础**
-- 目标：新增更正表、幂等约束与必要索引，为更正与重放提供基础。
-- 验证：`make orgunit plan && make orgunit lint && make orgunit migrate up`
+- [x] 目标：新增更正表、幂等约束与必要索引，为更正与重放提供基础。
+- [x] 验证：`make orgunit plan && make orgunit lint && make orgunit migrate up`
 
 **PR 2｜服务层：写入服务 + 更正流程**
 - 目标：落地 `OrgUnitWriteService`，实现幂等/更正/重放与租户 fail-closed。
@@ -816,9 +816,9 @@ END LOOP;
 - UI 生成：`make generate && make css`（完成后 `git status --short` 必须为空）
 
 ## 新增表确认记录
-- 批准人：待确认
-- 时间（UTC）：待确认
-- 范围（表名/用途）：待确认（未获批前禁止迁移）
+- 批准人：用户确认（shangmeilin）
+- 时间（UTC）：2026-02-04 07:24:13 UTC
+- 范围（表名/用途）：`org_event_corrections_current/history`（OrgUnit 更正 current+history，支持幂等与重放）
 
 ## 关联文档
 - `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`

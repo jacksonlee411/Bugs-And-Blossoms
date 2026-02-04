@@ -348,6 +348,49 @@ type OrgunitOrgEvent struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type OrgunitOrgEventCorrectionsCurrent struct {
+	EventUuid              pgtype.UUID        `json:"event_uuid"`
+	TenantUuid             pgtype.UUID        `json:"tenant_uuid"`
+	OrgID                  int32              `json:"org_id"`
+	TargetEffectiveDate    pgtype.Date        `json:"target_effective_date"`
+	CorrectedEffectiveDate pgtype.Date        `json:"corrected_effective_date"`
+	OriginalEvent          []byte             `json:"original_event"`
+	ReplacementPayload     []byte             `json:"replacement_payload"`
+	InitiatorUuid          pgtype.UUID        `json:"initiator_uuid"`
+	RequestID              string             `json:"request_id"`
+	RequestHash            string             `json:"request_hash"`
+	CorrectedAt            pgtype.Timestamptz `json:"corrected_at"`
+}
+
+type OrgunitOrgEventCorrectionsHistory struct {
+	CorrectionUuid         pgtype.UUID        `json:"correction_uuid"`
+	EventUuid              pgtype.UUID        `json:"event_uuid"`
+	TenantUuid             pgtype.UUID        `json:"tenant_uuid"`
+	OrgID                  int32              `json:"org_id"`
+	TargetEffectiveDate    pgtype.Date        `json:"target_effective_date"`
+	CorrectedEffectiveDate pgtype.Date        `json:"corrected_effective_date"`
+	OriginalEvent          []byte             `json:"original_event"`
+	ReplacementPayload     []byte             `json:"replacement_payload"`
+	InitiatorUuid          pgtype.UUID        `json:"initiator_uuid"`
+	RequestID              string             `json:"request_id"`
+	RequestHash            string             `json:"request_hash"`
+	CorrectedAt            pgtype.Timestamptz `json:"corrected_at"`
+}
+
+type OrgunitOrgEventsEffective struct {
+	ID              int64              `json:"id"`
+	EventUuid       pgtype.UUID        `json:"event_uuid"`
+	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
+	OrgID           int32              `json:"org_id"`
+	EventType       string             `json:"event_type"`
+	EffectiveDate   pgtype.Date        `json:"effective_date"`
+	Payload         []byte             `json:"payload"`
+	RequestCode     string             `json:"request_code"`
+	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type OrgunitOrgIDAllocator struct {
 	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
 	NextOrgID  int32              `json:"next_org_id"`
