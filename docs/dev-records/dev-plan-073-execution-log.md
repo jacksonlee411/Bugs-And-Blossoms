@@ -10,6 +10,7 @@
 - PR #275：扩展 OrgUnit Internal API 与独立详情页的契约/里程碑定义
 - PR #276：实现 OrgUnit Internal API（`/org/api/org-units` CRUD），补齐路由 allowlist/Authz 映射与服务层/路由层覆盖率；修复 SetID 绑定表单的 BU 列表覆盖层级，补齐 Positions 当前表格的 org_code 显示，并更新 E2E 用例
 - PR #277：新增 OrgUnit 独立详情页 `/org/nodes/view`，详情片段增加跳转入口，补齐路由 allowlist/Authz 与读服务覆盖
+- PR #278：更新 DEV-PLAN-073 中独立详情页完成状态与 PR 7 验证记录
 
 ## 本地验证
 
@@ -32,3 +33,4 @@
 - PR #275：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/275
 - PR #276：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/276
 - PR #277：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/277
+- PR #278：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/278
