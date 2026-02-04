@@ -9,6 +9,12 @@ const asOfToken = '__BB_AS_OF__';
 		<meta name="generator" content={Astro.generator} />
 		<title>Bugs &amp; Blossoms</title>
 		<link rel="stylesheet" href="/assets/app.css" />
+		<link rel="stylesheet" href="/assets/shoelace/themes/light.css" />
+		<script is:inline type="module">
+			import { setBasePath } from '/assets/shoelace/utilities/base-path.js';
+			setBasePath('/assets/shoelace');
+			import('/assets/shoelace/shoelace.js');
+		</script>
 		<script is:inline src="/assets/js/lib/htmx.min.js"></script>
 		<script is:inline defer src="/assets/js/lib/alpine.min.js"></script>
 	</head>
