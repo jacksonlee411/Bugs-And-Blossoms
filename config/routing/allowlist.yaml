@@ -41,6 +41,15 @@ entrypoints:
       - path: /org/nodes
         methods: [GET, POST]
         route_class: ui
+      - path: /org/nodes/children
+        methods: [GET]
+        route_class: ui
+      - path: /org/nodes/details
+        methods: [GET]
+        route_class: ui
+      - path: /org/nodes/search
+        methods: [GET]
+        route_class: ui
       - path: /org/snapshot
         methods: [GET, POST]
         route_class: ui

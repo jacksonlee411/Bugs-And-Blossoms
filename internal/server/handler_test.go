@@ -453,6 +453,33 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("org create status=%d", recCreate.Code)
 	}
 
+	reqChildren := httptest.NewRequest(http.MethodGet, "/org/nodes/children?as_of=2026-01-01&parent_id=10000000", nil)
+	reqChildren.Host = "localhost:8080"
+	reqChildren.AddCookie(session)
+	recChildren := httptest.NewRecorder()
+	h.ServeHTTP(recChildren, reqChildren)
+	if recChildren.Code != http.StatusOK {
+		t.Fatalf("org children status=%d", recChildren.Code)
+	}
+
+	reqDetails := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-01&org_id=10000000", nil)
+	reqDetails.Host = "localhost:8080"
+	reqDetails.AddCookie(session)
+	recDetails := httptest.NewRecorder()
+	h.ServeHTTP(recDetails, reqDetails)
+	if recDetails.Code != http.StatusOK {
+		t.Fatalf("org details status=%d", recDetails.Code)
+	}
+
+	reqSearch := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=2026-01-01&query=ORG-1", nil)
+	reqSearch.Host = "localhost:8080"
+	reqSearch.AddCookie(session)
+	recSearch := httptest.NewRecorder()
+	h.ServeHTTP(recSearch, reqSearch)
+	if recSearch.Code != http.StatusOK {
+		t.Fatalf("org search status=%d", recSearch.Code)
+	}
+
 	reqNavZH := httptest.NewRequest(http.MethodGet, "/ui/nav?as_of=2026-01-01", nil)
 	reqNavZH.Host = "localhost:8080"
 	reqNavZH.AddCookie(session)

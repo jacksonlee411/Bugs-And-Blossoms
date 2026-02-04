@@ -207,6 +207,24 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPatch, "/org/nodes"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/nodes/children"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/nodes/children"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/nodes/details"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/nodes/details"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/nodes/search"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/nodes/search"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/snapshot"); !ok {
 		t.Fatal("expected ok=true")
 	}

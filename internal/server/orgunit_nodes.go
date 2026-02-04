@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"html"
 	"net/http"
@@ -25,6 +26,36 @@ type OrgUnitNode struct {
 	CreatedAt      time.Time
 }
 
+type OrgUnitChild struct {
+	OrgID       int
+	OrgCode     string
+	Name        string
+	HasChildren bool
+}
+
+type OrgUnitNodeDetails struct {
+	OrgID          int
+	OrgCode        string
+	Name           string
+	ParentID       int
+	ParentCode     string
+	ParentName     string
+	IsBusinessUnit bool
+	ManagerPernr   string
+	ManagerName    string
+}
+
+type OrgUnitSearchResult struct {
+	TargetOrgID   int      `json:"target_org_id"`
+	TargetOrgCode string   `json:"target_org_code"`
+	TargetName    string   `json:"target_name"`
+	PathOrgIDs    []int    `json:"path_org_ids"`
+	PathOrgCodes  []string `json:"path_org_codes,omitempty"`
+	AsOf          string   `json:"as_of"`
+}
+
+var errOrgUnitNotFound = errors.New("org_unit_not_found")
+
 type OrgUnitStore interface {
 	OrgUnitNodesCurrentReader
 	OrgUnitNodesCurrentWriter
@@ -33,6 +64,9 @@ type OrgUnitStore interface {
 	OrgUnitNodesCurrentDisabler
 	OrgUnitNodesCurrentBusinessUnitSetter
 	OrgUnitCodeResolver
+	OrgUnitNodeChildrenReader
+	OrgUnitNodeDetailsReader
+	OrgUnitNodeSearchReader
 }
 
 type OrgUnitNodesCurrentReader interface {
@@ -63,6 +97,18 @@ type OrgUnitCodeResolver interface {
 	ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error)
 	ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error)
 	ResolveOrgCodes(ctx context.Context, tenantID string, orgIDs []int) (map[int]string, error)
+}
+
+type OrgUnitNodeChildrenReader interface {
+	ListChildren(ctx context.Context, tenantID string, parentID int, asOfDate string) ([]OrgUnitChild, error)
+}
+
+type OrgUnitNodeDetailsReader interface {
+	GetNodeDetails(ctx context.Context, tenantID string, orgID int, asOfDate string) (OrgUnitNodeDetails, error)
+}
+
+type OrgUnitNodeSearchReader interface {
+	SearchNode(ctx context.Context, tenantID string, query string, asOfDate string) (OrgUnitSearchResult, error)
 }
 
 type orgUnitPGStore struct {
@@ -225,6 +271,214 @@ ORDER BY e.transaction_time DESC
 		return nil, err
 	}
 	return out, nil
+}
+
+func (s *orgUnitPGStore) ListChildren(ctx context.Context, tenantID string, parentID int, asOfDate string) ([]OrgUnitChild, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	var exists bool
+	if err := tx.QueryRow(ctx, `
+	SELECT EXISTS (
+	  SELECT 1
+	  FROM orgunit.org_unit_versions
+	  WHERE tenant_uuid = $1::uuid
+	    AND org_id = $2::int
+	    AND status = 'active'
+	    AND validity @> $3::date
+	)
+	`, tenantID, parentID, asOfDate).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, errOrgUnitNotFound
+	}
+
+	rows, err := tx.Query(ctx, `
+	SELECT
+	  v.org_id,
+	  c.org_code,
+	  v.name,
+	  EXISTS (
+	    SELECT 1
+	    FROM orgunit.org_unit_versions child
+	    WHERE child.tenant_uuid = $1::uuid
+	      AND child.parent_id = v.org_id
+	      AND child.status = 'active'
+	      AND child.validity @> $3::date
+	  ) AS has_children
+	FROM orgunit.org_unit_versions v
+	JOIN orgunit.org_unit_codes c
+	  ON c.tenant_uuid = $1::uuid
+	 AND c.org_id = v.org_id
+	WHERE v.tenant_uuid = $1::uuid
+	  AND v.parent_id = $2::int
+	  AND v.status = 'active'
+	  AND v.validity @> $3::date
+	ORDER BY v.node_path
+	`, tenantID, parentID, asOfDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []OrgUnitChild
+	for rows.Next() {
+		var item OrgUnitChild
+		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.HasChildren); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *orgUnitPGStore) GetNodeDetails(ctx context.Context, tenantID string, orgID int, asOfDate string) (OrgUnitNodeDetails, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return OrgUnitNodeDetails{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return OrgUnitNodeDetails{}, err
+	}
+
+	var details OrgUnitNodeDetails
+	if err := tx.QueryRow(ctx, `
+	SELECT
+	  v.org_id,
+	  c.org_code,
+	  v.name,
+	  COALESCE(v.parent_id, 0) AS parent_id,
+	  COALESCE(pc.org_code, '') AS parent_org_code,
+	  COALESCE(pv.name, '') AS parent_name,
+	  v.is_business_unit,
+	  COALESCE(p.pernr, '') AS manager_pernr,
+	  COALESCE(p.display_name, '') AS manager_name
+	FROM orgunit.org_unit_versions v
+	JOIN orgunit.org_unit_codes c
+	  ON c.tenant_uuid = $1::uuid
+	 AND c.org_id = v.org_id
+	LEFT JOIN orgunit.org_unit_codes pc
+	  ON pc.tenant_uuid = $1::uuid
+	 AND pc.org_id = v.parent_id
+	LEFT JOIN orgunit.org_unit_versions pv
+	  ON pv.tenant_uuid = $1::uuid
+	 AND pv.org_id = v.parent_id
+	 AND pv.status = 'active'
+	 AND pv.validity @> $3::date
+	LEFT JOIN person.persons p
+	  ON p.tenant_uuid = $1::uuid
+	 AND p.person_uuid = v.manager_uuid
+	WHERE v.tenant_uuid = $1::uuid
+	  AND v.org_id = $2::int
+	  AND v.status = 'active'
+	  AND v.validity @> $3::date
+	LIMIT 1
+	`, tenantID, orgID, asOfDate).Scan(
+		&details.OrgID,
+		&details.OrgCode,
+		&details.Name,
+		&details.ParentID,
+		&details.ParentCode,
+		&details.ParentName,
+		&details.IsBusinessUnit,
+		&details.ManagerPernr,
+		&details.ManagerName,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return OrgUnitNodeDetails{}, errOrgUnitNotFound
+		}
+		return OrgUnitNodeDetails{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return OrgUnitNodeDetails{}, err
+	}
+	return details, nil
+}
+
+func (s *orgUnitPGStore) SearchNode(ctx context.Context, tenantID string, query string, asOfDate string) (OrgUnitSearchResult, error) {
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return OrgUnitSearchResult{}, errors.New("query is required")
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+
+	var result OrgUnitSearchResult
+	var pathIDs []int
+	found := false
+
+	if normalized, err := orgunitpkg.NormalizeOrgCode(trimmed); err == nil {
+		if err := tx.QueryRow(ctx, `
+		SELECT v.org_id, c.org_code, v.name, v.path_ids
+		FROM orgunit.org_unit_versions v
+		JOIN orgunit.org_unit_codes c
+		  ON c.tenant_uuid = $1::uuid
+		 AND c.org_id = v.org_id
+		WHERE v.tenant_uuid = $1::uuid
+		  AND v.status = 'active'
+		  AND v.validity @> $3::date
+		  AND c.org_code = $2::text
+		LIMIT 1
+		`, tenantID, normalized, asOfDate).Scan(&result.TargetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err == nil {
+			found = true
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return OrgUnitSearchResult{}, err
+		}
+	}
+
+	if !found {
+		if err := tx.QueryRow(ctx, `
+		SELECT v.org_id, c.org_code, v.name, v.path_ids
+		FROM orgunit.org_unit_versions v
+		JOIN orgunit.org_unit_codes c
+		  ON c.tenant_uuid = $1::uuid
+		 AND c.org_id = v.org_id
+		WHERE v.tenant_uuid = $1::uuid
+		  AND v.status = 'active'
+		  AND v.validity @> $3::date
+		  AND v.name ILIKE $2::text
+		ORDER BY v.node_path
+		LIMIT 1
+		`, tenantID, "%"+trimmed+"%", asOfDate).Scan(&result.TargetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return OrgUnitSearchResult{}, errOrgUnitNotFound
+			}
+			return OrgUnitSearchResult{}, err
+		}
+	}
+
+	result.PathOrgIDs = append([]int(nil), pathIDs...)
+	result.AsOf = asOfDate
+
+	if err := tx.Commit(ctx); err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+	return result, nil
 }
 
 func (s *orgUnitPGStore) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
@@ -701,6 +955,75 @@ func (s *orgUnitMemoryStore) ResolveOrgCodes(_ context.Context, tenantID string,
 	return out, nil
 }
 
+func (s *orgUnitMemoryStore) ListChildren(_ context.Context, tenantID string, parentID int, _ string) ([]OrgUnitChild, error) {
+	parentIDStr := strconv.Itoa(parentID)
+	for _, node := range s.nodes[tenantID] {
+		if node.ID == parentIDStr {
+			return []OrgUnitChild{}, nil
+		}
+	}
+	return nil, errOrgUnitNotFound
+}
+
+func (s *orgUnitMemoryStore) GetNodeDetails(_ context.Context, tenantID string, orgID int, _ string) (OrgUnitNodeDetails, error) {
+	orgIDStr := strconv.Itoa(orgID)
+	for _, node := range s.nodes[tenantID] {
+		if node.ID == orgIDStr {
+			return OrgUnitNodeDetails{
+				OrgID:          orgID,
+				OrgCode:        node.OrgCode,
+				Name:           node.Name,
+				IsBusinessUnit: node.IsBusinessUnit,
+			}, nil
+		}
+	}
+	return OrgUnitNodeDetails{}, errOrgUnitNotFound
+}
+
+func (s *orgUnitMemoryStore) SearchNode(_ context.Context, tenantID string, query string, asOfDate string) (OrgUnitSearchResult, error) {
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return OrgUnitSearchResult{}, errors.New("query is required")
+	}
+
+	if normalized, err := orgunitpkg.NormalizeOrgCode(trimmed); err == nil {
+		for _, node := range s.nodes[tenantID] {
+			if node.OrgCode == normalized {
+				id, convErr := strconv.Atoi(node.ID)
+				if convErr != nil {
+					break
+				}
+				return OrgUnitSearchResult{
+					TargetOrgID:   id,
+					TargetOrgCode: node.OrgCode,
+					TargetName:    node.Name,
+					PathOrgIDs:    []int{id},
+					AsOf:          asOfDate,
+				}, nil
+			}
+		}
+	}
+
+	lower := strings.ToLower(trimmed)
+	for _, node := range s.nodes[tenantID] {
+		if strings.Contains(strings.ToLower(node.Name), lower) {
+			id, convErr := strconv.Atoi(node.ID)
+			if convErr != nil {
+				break
+			}
+			return OrgUnitSearchResult{
+				TargetOrgID:   id,
+				TargetOrgCode: node.OrgCode,
+				TargetName:    node.Name,
+				PathOrgIDs:    []int{id},
+				AsOf:          asOfDate,
+			}, nil
+		}
+	}
+
+	return OrgUnitSearchResult{}, errOrgUnitNotFound
+}
+
 func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -910,6 +1233,181 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+}
+
+func handleOrgNodeChildren(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
+		return
+	}
+
+	parentIDRaw := strings.TrimSpace(r.URL.Query().Get("parent_id"))
+	if parentIDRaw == "" {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "parent_id_required", "parent_id required")
+		return
+	}
+	parentID, err := parseOrgID8(parentIDRaw)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "parent_id_invalid", "parent_id invalid")
+		return
+	}
+
+	children, err := store.ListChildren(r.Context(), tenant.ID, parentID, asOf)
+	if err != nil {
+		if errors.Is(err, errOrgUnitNotFound) {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+			return
+		}
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "org_children_error", "org nodes children error")
+		return
+	}
+
+	var b strings.Builder
+	for _, child := range children {
+		b.WriteString(`<sl-tree-item data-org-id="`)
+		b.WriteString(strconv.Itoa(child.OrgID))
+		b.WriteString(`" data-org-code="`)
+		b.WriteString(html.EscapeString(child.OrgCode))
+		b.WriteString(`" data-has-children="`)
+		b.WriteString(strconv.FormatBool(child.HasChildren))
+		b.WriteString(`"`)
+		if child.HasChildren {
+			b.WriteString(` lazy`)
+		}
+		b.WriteString(`>`)
+		b.WriteString(html.EscapeString(child.Name))
+		b.WriteString(`</sl-tree-item>`)
+	}
+
+	writeContent(w, r, b.String())
+}
+
+func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
+		return
+	}
+
+	orgIDRaw := strings.TrimSpace(r.URL.Query().Get("org_id"))
+	if orgIDRaw == "" {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "org_id_required", "org_id required")
+		return
+	}
+	orgID, err := parseOrgID8(orgIDRaw)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "org_id_invalid", "org_id invalid")
+		return
+	}
+
+	details, err := store.GetNodeDetails(r.Context(), tenant.ID, orgID, asOf)
+	if err != nil {
+		if errors.Is(err, errOrgUnitNotFound) {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+			return
+		}
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "org_details_error", "org node details error")
+		return
+	}
+
+	parentLabel := "-"
+	if details.ParentID != 0 {
+		label := details.ParentCode
+		if label != "" && details.ParentName != "" {
+			label = label + " · " + details.ParentName
+		} else if details.ParentName != "" {
+			label = details.ParentName
+		}
+		if label != "" {
+			parentLabel = label
+		}
+	}
+
+	managerLabel := "-"
+	if details.ManagerPernr != "" || details.ManagerName != "" {
+		managerLabel = strings.TrimSpace(details.ManagerPernr + " " + details.ManagerName)
+		if managerLabel == "" {
+			managerLabel = "-"
+		}
+	}
+
+	buLabel := "No"
+	if details.IsBusinessUnit {
+		buLabel = "Yes"
+	}
+
+	var b strings.Builder
+	b.WriteString(`<div class="org-node-details">`)
+	b.WriteString(`<h3>OrgUnit</h3>`)
+	b.WriteString(`<dl>`)
+	b.WriteString(`<dt>Org Code</dt><dd>` + html.EscapeString(details.OrgCode) + `</dd>`)
+	b.WriteString(`<dt>Name</dt><dd>` + html.EscapeString(details.Name) + `</dd>`)
+	b.WriteString(`<dt>Parent</dt><dd>` + html.EscapeString(parentLabel) + `</dd>`)
+	b.WriteString(`<dt>Manager</dt><dd>` + html.EscapeString(managerLabel) + `</dd>`)
+	b.WriteString(`<dt>Business Unit</dt><dd>` + html.EscapeString(buLabel) + `</dd>`)
+	b.WriteString(`</dl>`)
+	b.WriteString(`</div>`)
+
+	writeContent(w, r, b.String())
+}
+
+func handleOrgNodeSearch(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
+		return
+	}
+
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	if query == "" {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "query_required", "query required")
+		return
+	}
+
+	result, err := store.SearchNode(r.Context(), tenant.ID, query, asOf)
+	if err != nil {
+		if errors.Is(err, errOrgUnitNotFound) {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+			return
+		}
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "org_search_error", "org node search error")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(result)
 }
 
 func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf string) string {

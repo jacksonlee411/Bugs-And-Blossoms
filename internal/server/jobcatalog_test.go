@@ -182,6 +182,15 @@ func (s orgStoreStub) ResolveOrgCodes(context.Context, string, []int) (map[int]s
 	}
 	return map[int]string{}, nil
 }
+func (s orgStoreStub) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
+	return nil, s.err
+}
+func (s orgStoreStub) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	return OrgUnitNodeDetails{}, s.err
+}
+func (s orgStoreStub) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
+	return OrgUnitSearchResult{}, s.err
+}
 
 func defaultJobCatalogOrgStore() OrgUnitStore {
 	return orgStoreStub{nodes: []OrgUnitNode{{ID: "10000001", Name: "Root Org", IsBusinessUnit: true}}}

@@ -286,6 +286,15 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/nodes", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgNodes(w, r, orgStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes/children", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgNodeChildren(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes/details", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgNodeDetails(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes/search", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgNodeSearch(w, r, orgStore)
+	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/snapshot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgSnapshot(w, r, orgSnapshotStore)
 	}))
