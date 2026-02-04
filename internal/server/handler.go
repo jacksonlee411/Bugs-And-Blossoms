@@ -302,6 +302,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes/details", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgNodeDetails(w, r, orgStore)
 	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes/view", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgNodeDetailsPage(w, r, orgStore)
+	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes/search", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgNodeSearch(w, r, orgStore)
 	}))

@@ -610,6 +610,128 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 	})
 }
 
+func TestRenderOrgNodeDetails(t *testing.T) {
+	out := renderOrgNodeDetails(OrgUnitNodeDetails{
+		OrgID:          10000001,
+		OrgCode:        "A001",
+		Name:           "Root",
+		IsBusinessUnit: true,
+		ManagerPernr:   "1001",
+		ManagerName:    "Boss",
+	})
+	if !strings.Contains(out, "A001") || !strings.Contains(out, "Yes") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+
+	out2 := renderOrgNodeDetails(OrgUnitNodeDetails{
+		OrgID:      10000002,
+		OrgCode:    "B002",
+		Name:       "Child",
+		ParentID:   10000001,
+		ParentCode: "A001",
+		ParentName: "Root",
+	})
+	if !strings.Contains(out2, "A001 · Root") || !strings.Contains(out2, "No") {
+		t.Fatalf("unexpected output: %q", out2)
+	}
+}
+
+func TestHandleOrgNodeDetailsPage(t *testing.T) {
+	t.Run("missing tenant", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+	t.Run("method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+	t.Run("invalid as_of", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=bad&org_id=10000001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+	t.Run("missing org_id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+	t.Run("invalid org_id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=bad", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+	t.Run("not found", func(t *testing.T) {
+		store := &orgUnitReadStoreStub{
+			orgUnitMemoryStore: newOrgUnitMemoryStore(),
+			detailsFn: func(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+				return OrgUnitNodeDetails{}, errOrgUnitNotFound
+			},
+		}
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, store)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+	t.Run("store error", func(t *testing.T) {
+		store := &orgUnitReadStoreStub{
+			orgUnitMemoryStore: newOrgUnitMemoryStore(),
+			detailsFn: func(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+				return OrgUnitNodeDetails{}, errors.New("boom")
+			},
+		}
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, store)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+	t.Run("success", func(t *testing.T) {
+		store := &orgUnitReadStoreStub{
+			orgUnitMemoryStore: newOrgUnitMemoryStore(),
+			detailsFn: func(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+				return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
+			},
+		}
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, store)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "OrgUnit / Details") || !strings.Contains(body, "A001") {
+			t.Fatalf("unexpected body: %q", body)
+		}
+	})
+}
+
 func TestHandleOrgNodeSearch(t *testing.T) {
 	t.Run("missing tenant", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=2026-01-06&query=A001", nil)

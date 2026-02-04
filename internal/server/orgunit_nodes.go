@@ -6,6 +6,7 @@ import (
 	"errors"
 	"html"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -1352,6 +1353,48 @@ func handleOrgNodeChildren(w http.ResponseWriter, r *http.Request, store OrgUnit
 	writeContent(w, r, b.String())
 }
 
+func renderOrgNodeDetails(details OrgUnitNodeDetails) string {
+	parentLabel := "-"
+	if details.ParentID != 0 {
+		label := details.ParentCode
+		if label != "" && details.ParentName != "" {
+			label = label + " · " + details.ParentName
+		} else if details.ParentName != "" {
+			label = details.ParentName
+		}
+		if label != "" {
+			parentLabel = label
+		}
+	}
+
+	managerLabel := "-"
+	if details.ManagerPernr != "" || details.ManagerName != "" {
+		managerLabel = strings.TrimSpace(details.ManagerPernr + " " + details.ManagerName)
+		if managerLabel == "" {
+			managerLabel = "-"
+		}
+	}
+
+	buLabel := "No"
+	if details.IsBusinessUnit {
+		buLabel = "Yes"
+	}
+
+	var b strings.Builder
+	b.WriteString(`<div class="org-node-details">`)
+	b.WriteString(`<h3>OrgUnit</h3>`)
+	b.WriteString(`<dl>`)
+	b.WriteString(`<dt>Org ID</dt><dd>` + html.EscapeString(strconv.Itoa(details.OrgID)) + `</dd>`)
+	b.WriteString(`<dt>Org Code</dt><dd>` + html.EscapeString(details.OrgCode) + `</dd>`)
+	b.WriteString(`<dt>Name</dt><dd>` + html.EscapeString(details.Name) + `</dd>`)
+	b.WriteString(`<dt>Parent</dt><dd>` + html.EscapeString(parentLabel) + `</dd>`)
+	b.WriteString(`<dt>Manager</dt><dd>` + html.EscapeString(managerLabel) + `</dd>`)
+	b.WriteString(`<dt>Business Unit</dt><dd>` + html.EscapeString(buLabel) + `</dd>`)
+	b.WriteString(`</dl>`)
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
 func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -1390,45 +1433,61 @@ func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitS
 		return
 	}
 
-	parentLabel := "-"
-	if details.ParentID != 0 {
-		label := details.ParentCode
-		if label != "" && details.ParentName != "" {
-			label = label + " · " + details.ParentName
-		} else if details.ParentName != "" {
-			label = details.ParentName
-		}
-		if label != "" {
-			parentLabel = label
-		}
-	}
-
-	managerLabel := "-"
-	if details.ManagerPernr != "" || details.ManagerName != "" {
-		managerLabel = strings.TrimSpace(details.ManagerPernr + " " + details.ManagerName)
-		if managerLabel == "" {
-			managerLabel = "-"
-		}
-	}
-
-	buLabel := "No"
-	if details.IsBusinessUnit {
-		buLabel = "Yes"
-	}
-
+	detailsURL := "/org/nodes/view?org_id=" + url.QueryEscape(strconv.Itoa(details.OrgID)) + "&as_of=" + url.QueryEscape(asOf)
+	escapedURL := html.EscapeString(detailsURL)
 	var b strings.Builder
-	b.WriteString(`<div class="org-node-details">`)
-	b.WriteString(`<h3>OrgUnit</h3>`)
-	b.WriteString(`<dl>`)
-	b.WriteString(`<dt>Org Code</dt><dd>` + html.EscapeString(details.OrgCode) + `</dd>`)
-	b.WriteString(`<dt>Name</dt><dd>` + html.EscapeString(details.Name) + `</dd>`)
-	b.WriteString(`<dt>Parent</dt><dd>` + html.EscapeString(parentLabel) + `</dd>`)
-	b.WriteString(`<dt>Manager</dt><dd>` + html.EscapeString(managerLabel) + `</dd>`)
-	b.WriteString(`<dt>Business Unit</dt><dd>` + html.EscapeString(buLabel) + `</dd>`)
-	b.WriteString(`</dl>`)
-	b.WriteString(`</div>`)
+	b.WriteString(renderOrgNodeDetails(details))
+	b.WriteString(`<p class="org-node-details-link"><a href="` + escapedURL + `" hx-get="` + escapedURL + `" hx-target="#content" hx-push-url="true">Open details page</a></p>`)
 
 	writeContent(w, r, b.String())
+}
+
+func handleOrgNodeDetailsPage(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	asOf, ok := requireAsOf(w, r)
+	if !ok {
+		return
+	}
+
+	orgIDRaw := strings.TrimSpace(r.URL.Query().Get("org_id"))
+	if orgIDRaw == "" {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "org_id_required", "org_id required")
+		return
+	}
+	orgID, err := parseOrgID8(orgIDRaw)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "org_id_invalid", "org_id invalid")
+		return
+	}
+
+	details, err := store.GetNodeDetails(r.Context(), tenant.ID, orgID, asOf)
+	if err != nil {
+		if errors.Is(err, errOrgUnitNotFound) {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+			return
+		}
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "org_details_error", "org node details error")
+		return
+	}
+
+	nodesURL := "/org/nodes?as_of=" + url.QueryEscape(asOf)
+	escapedNodesURL := html.EscapeString(nodesURL)
+	var b strings.Builder
+	b.WriteString("<h1>OrgUnit / Details</h1>")
+	b.WriteString(`<p>Tenant: <code>` + html.EscapeString(tenant.Name) + `</code> (<code>` + html.EscapeString(tenant.ID) + `</code>)</p>`)
+	b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code> | <a href="` + escapedNodesURL + `" hx-get="` + escapedNodesURL + `" hx-target="#content" hx-push-url="true">Back to Org Nodes</a></p>`)
+	b.WriteString(renderOrgNodeDetails(details))
+	writePage(w, r, b.String())
 }
 
 func handleOrgNodeSearch(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
