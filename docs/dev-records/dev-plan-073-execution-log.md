@@ -1,0 +1,24 @@
+# DEV-PLAN-073 执行日志
+
+> 目的：记录 DEV-PLAN-073 的落地变更与可复现验证入口。
+
+## 变更摘要
+
+- PR #271：新增 `/org/nodes/children`、`/org/nodes/details`、`/org/nodes/search` 读服务与路由，补齐 allowlist/Authz 与单测覆盖
+- PR #272：Shoelace Tree 资源接入与 `/org/nodes` UI 对接（树/详情/搜索事件桥接），Astro Shell 与样式更新，build-astro 产物同步至 `internal/server/assets/`
+
+## 本地验证
+
+- 已通过：`go fmt ./...`
+- 已通过：`go vet ./...`
+- 已通过：`make test`
+- 已通过：`make check routing`
+- 已通过：`make generate`
+- 已通过：`make css`
+- 已通过：`make check doc`
+- 未通过：`make check lint`（go-cleanarch 拉取 GitHub 失败，本地网络问题；CI 已通过）
+
+## CI 证据
+
+- PR #271：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/271
+- PR #272：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/272
