@@ -233,6 +233,15 @@ func (s errOrgUnitStore) ResolveOrgCode(context.Context, string, int) (string, e
 func (s errOrgUnitStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
 	return nil, s.err
 }
+func (s errOrgUnitStore) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
+	return nil, s.err
+}
+func (s errOrgUnitStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	return OrgUnitNodeDetails{}, s.err
+}
+func (s errOrgUnitStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
+	return OrgUnitSearchResult{}, s.err
+}
 
 type tableRows struct {
 	idx  int
@@ -331,6 +340,15 @@ func (resolveErrOrgStore) ResolveOrgCodes(context.Context, string, []int) (map[i
 	out := make(map[int]string)
 	out[10000001] = "ORG-1"
 	return out, nil
+}
+func (resolveErrOrgStore) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
+	return []OrgUnitChild{}, nil
+}
+func (resolveErrOrgStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	return OrgUnitNodeDetails{}, nil
+}
+func (resolveErrOrgStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
+	return OrgUnitSearchResult{}, nil
 }
 
 func TestHandleSetID_TenantMissing(t *testing.T) {

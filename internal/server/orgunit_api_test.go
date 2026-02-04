@@ -133,6 +133,15 @@ func (s *resolveOrgCodeStore) ResolveOrgCode(context.Context, string, int) (stri
 func (s *resolveOrgCodeStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
 	return map[int]string{}, nil
 }
+func (s *resolveOrgCodeStore) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
+	return []OrgUnitChild{}, nil
+}
+func (s *resolveOrgCodeStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	return OrgUnitNodeDetails{}, nil
+}
+func (s *resolveOrgCodeStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
+	return OrgUnitSearchResult{}, nil
+}
 
 func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeInvalid(t *testing.T) {
 	store := &resolveOrgCodeStore{}

@@ -160,6 +160,21 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/org/nodes/children":
+		if method == http.MethodGet {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true
+		}
+		return "", "", false
+	case "/org/nodes/details":
+		if method == http.MethodGet {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true
+		}
+		return "", "", false
+	case "/org/nodes/search":
+		if method == http.MethodGet {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true
+		}
+		return "", "", false
 	case "/org/snapshot":
 		return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true
 	case "/org/setid":

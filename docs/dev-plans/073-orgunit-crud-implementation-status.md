@@ -28,8 +28,14 @@
    证据：`internal/server/handler.go:289`、`internal/server/orgunit_snapshot.go:164`
 8. [X] 快照页创建（仅 name/parent_id）— `/org/snapshot` POST
    证据：`internal/server/orgunit_snapshot.go:173`
-9. [ ] 独立详情页 / 组织单元详情视图（UI）
-   说明：未发现路由或模板实现（`modules/orgunit/presentation/*` 为空）。
+9. [X] 子节点读取（组织树懒加载）— `/org/nodes/children` GET
+   证据：`internal/server/handler.go:289`、`internal/server/orgunit_nodes.go:1239`
+10. [X] 详情读取（组织单元详情片段）— `/org/nodes/details` GET
+   证据：`internal/server/handler.go:292`、`internal/server/orgunit_nodes.go:1296`
+11. [X] 搜索定位（org_code/name）— `/org/nodes/search` GET
+   证据：`internal/server/handler.go:295`、`internal/server/orgunit_nodes.go:1375`
+12. [ ] 独立详情页 / 组织单元详情视图（UI）
+   说明：已有详情片段接口（`/org/nodes/details`），但尚未接入完整 UI（`modules/orgunit/presentation/*` 为空）。
 
 ### API（Internal API）
 1. [X] 设置 BU — `POST /org/api/org-units/set-business-unit`

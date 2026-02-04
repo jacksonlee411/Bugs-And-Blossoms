@@ -736,6 +736,15 @@ func (errStore) ResolveOrgCode(context.Context, string, int) (string, error) { r
 func (errStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
 	return nil, errBoom{}
 }
+func (errStore) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
+	return nil, errBoom{}
+}
+func (errStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	return OrgUnitNodeDetails{}, errBoom{}
+}
+func (errStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
+	return OrgUnitSearchResult{}, errBoom{}
+}
 
 type errBoom struct{}
 
@@ -773,6 +782,15 @@ func (emptyErrStore) ResolveOrgCode(context.Context, string, int) (string, error
 }
 func (emptyErrStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
 	return nil, emptyErr{}
+}
+func (emptyErrStore) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
+	return nil, emptyErr{}
+}
+func (emptyErrStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	return OrgUnitNodeDetails{}, emptyErr{}
+}
+func (emptyErrStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
+	return OrgUnitSearchResult{}, emptyErr{}
 }
 
 func TestHandleOrgNodes_GET_StoreError(t *testing.T) {
@@ -971,6 +989,24 @@ func (s *writeSpyStore) ResolveOrgCodes(ctx context.Context, tenantID string, or
 	}
 	return out, nil
 }
+func (s *writeSpyStore) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return []OrgUnitChild{}, nil
+}
+func (s *writeSpyStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	if s.err != nil {
+		return OrgUnitNodeDetails{}, s.err
+	}
+	return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
+}
+func (s *writeSpyStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
+	if s.err != nil {
+		return OrgUnitSearchResult{}, s.err
+	}
+	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, AsOf: "2026-01-06"}, nil
+}
 
 type actionErrStore struct {
 	renameErr          error
@@ -1023,6 +1059,15 @@ func (s *actionErrStore) ResolveOrgCodes(context.Context, string, []int) (map[in
 	out[10000001] = "A001"
 	return out, nil
 }
+func (s *actionErrStore) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
+	return []OrgUnitChild{}, nil
+}
+func (s *actionErrStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
+}
+func (s *actionErrStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
+	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, AsOf: "2026-01-06"}, nil
+}
 
 type asOfSpyStore struct {
 	gotAsOf string
@@ -1045,16 +1090,23 @@ func (s *asOfSpyStore) DisableNodeCurrent(context.Context, string, string, strin
 func (s *asOfSpyStore) SetBusinessUnitCurrent(context.Context, string, string, string, bool, string) error {
 	return nil
 }
-func (s *asOfSpyStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
-	out := make(map[int]string)
-	out[10000001] = "A001"
-	return out, nil
-}
 func (s *asOfSpyStore) ResolveOrgID(context.Context, string, string) (int, error) {
 	return 10000001, nil
 }
 func (s *asOfSpyStore) ResolveOrgCode(context.Context, string, int) (string, error) {
 	return "A001", nil
+}
+func (s *asOfSpyStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
+	return map[int]string{10000001: "A001"}, nil
+}
+func (s *asOfSpyStore) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
+	return []OrgUnitChild{}, nil
+}
+func (s *asOfSpyStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
+}
+func (s *asOfSpyStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
+	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, AsOf: "2026-01-06"}, nil
 }
 
 func TestHandleOrgNodes_POST_Rename_UsesStore(t *testing.T) {

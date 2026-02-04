@@ -1019,6 +1019,18 @@ func (s staffingOrgStoreStub) ResolveSetID(ctx context.Context, tenantID string,
 	return "S2601", nil
 }
 
+func (staffingOrgStoreStub) ListChildren(context.Context, string, int, string) ([]OrgUnitChild, error) {
+	return []OrgUnitChild{}, nil
+}
+
+func (staffingOrgStoreStub) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	return OrgUnitNodeDetails{}, nil
+}
+
+func (staffingOrgStoreStub) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
+	return OrgUnitSearchResult{}, nil
+}
+
 type jobStoreErrStub struct{ JobCatalogStore }
 
 func (jobStoreErrStub) ListJobProfiles(context.Context, string, string, string) ([]JobProfile, error) {
