@@ -7,6 +7,7 @@
 - PR #271：新增 `/org/nodes/children`、`/org/nodes/details`、`/org/nodes/search` 读服务与路由，补齐 allowlist/Authz 与单测覆盖
 - PR #272：Shoelace Tree 资源接入与 `/org/nodes` UI 对接（树/详情/搜索事件桥接），Astro Shell 与样式更新，build-astro 产物同步至 `internal/server/assets/`
 - PR #273：新增 DEV-PLAN-073 执行日志，并补齐 AGENTS Doc Map 链接
+- PR #275：扩展 OrgUnit Internal API 与独立详情页的契约/里程碑定义
 
 ## 本地验证
 
@@ -24,3 +25,4 @@
 - PR #271：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/271
 - PR #272：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/272
 - PR #273：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/273
+- PR #275：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/275
