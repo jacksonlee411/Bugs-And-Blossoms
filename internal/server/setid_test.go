@@ -230,6 +230,9 @@ func (s errOrgUnitStore) ResolveOrgID(context.Context, string, string) (int, err
 func (s errOrgUnitStore) ResolveOrgCode(context.Context, string, int) (string, error) {
 	return "", s.err
 }
+func (s errOrgUnitStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
+	return nil, s.err
+}
 
 type tableRows struct {
 	idx  int
@@ -323,6 +326,11 @@ func (s resolveErrOrgStore) ResolveOrgID(context.Context, string, string) (int, 
 }
 func (resolveErrOrgStore) ResolveOrgCode(context.Context, string, int) (string, error) {
 	return "ORG-1", nil
+}
+func (resolveErrOrgStore) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
+	out := make(map[int]string)
+	out[10000001] = "ORG-1"
+	return out, nil
 }
 
 func TestHandleSetID_TenantMissing(t *testing.T) {
@@ -491,7 +499,7 @@ func TestHandleSetID_Post_BindSetID_OrgCodeInvalid(t *testing.T) {
 	store := newSetIDMemoryStore()
 	form := url.Values{}
 	form.Set("action", "bind_setid")
-	form.Set("org_code", "bad!")
+	form.Set("org_code", "bad\u007f")
 	form.Set("setid", "A0001")
 	form.Set("effective_date", "2026-01-01")
 	req := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader(form.Encode()))

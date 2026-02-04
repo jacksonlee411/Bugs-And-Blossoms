@@ -67,7 +67,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     `${tenantID}:${tenantAdminEmail}`,
     tenantAdminEmail,
     tenantAdminPass,
-    { tenant_id: tenantID }
+    { tenant_uuid: tenantID }
   );
   await superadminContext.close();
 
@@ -602,17 +602,17 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     Plant: orgCodesFromTree.Plant
   };
 
-  const jpSweOpt = positionCreateForm.locator('select[name="job_profile_id"] option', { hasText: "JP-SWE" }).first();
+  const jpSweOpt = positionCreateForm.locator('select[name="job_profile_uuid"] option', { hasText: "JP-SWE" }).first();
   const jpSweID = (await jpSweOpt.getAttribute("value")) || "";
   expect(jpSweID).not.toBe("");
 
   positionCreateForm = await loadPositions(orgCodesFromTree.Sales);
-  const jpOpsOpt = positionCreateForm.locator('select[name="job_profile_id"] option', { hasText: "JP-OPS" }).first();
+  const jpOpsOpt = positionCreateForm.locator('select[name="job_profile_uuid"] option', { hasText: "JP-OPS" }).first();
   const jpOpsID = (await jpOpsOpt.getAttribute("value")) || "";
   expect(jpOpsID).not.toBe("");
 
   positionCreateForm = await loadPositions(orgCodesFromTree.HQ);
-  const jpDefOpt = positionCreateForm.locator('select[name="job_profile_id"] option', { hasText: defltJobProfileCode }).first();
+  const jpDefOpt = positionCreateForm.locator('select[name="job_profile_uuid"] option', { hasText: defltJobProfileCode }).first();
   const jpDefID = (await jpDefOpt.getAttribute("value")) || "";
   expect(jpDefID).not.toBe("");
 
@@ -643,7 +643,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         currentOrgUnitID = spec.org;
       }
       await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
-      await positionCreateForm.locator('select[name="job_profile_id"]').selectOption(jobProfileID);
+      await positionCreateForm.locator('select[name="job_profile_uuid"]').selectOption(jobProfileID);
       await positionCreateForm.locator('input[name="name"]').fill(spec.name);
       await positionCreateForm.getByRole("button", { name: "Create" }).click();
       await expect(page).toHaveURL(
@@ -673,9 +673,9 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     const bindResp = await appContext.request.post(`/org/api/positions?as_of=${m5EffectiveDate}`, {
       data: {
         effective_date: m5EffectiveDate,
-        position_id: pEng01ID,
+        position_uuid: pEng01ID,
         org_code: orgCodesFromTree["R&D"],
-        job_profile_id: jpSweID
+        job_profile_uuid: jpSweID
       }
     });
     expect(bindResp.status(), await bindResp.text()).toBe(200);
@@ -691,7 +691,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     const resp = await appContext.request.post(`/org/api/positions?as_of=${asOf}`, {
       data: {
         effective_date: asOf,
-        job_profile_id: jpSweID,
+        job_profile_uuid: jpSweID,
         name: `TP060-02 BAD NO ORG ${runID}`
       }
     });
@@ -703,7 +703,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       data: {
         effective_date: asOf,
         org_code: "99999999",
-        job_profile_id: jpSweID,
+        job_profile_uuid: jpSweID,
         name: `TP060-02 BAD ORG404 ${runID}`
       }
     });
@@ -719,7 +719,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       }
     });
     expect(resp.status(), await resp.text()).toBe(400);
-    expect((await resp.json()).code).toBe("job_profile_id is required");
+    expect((await resp.json()).code).toBe("job_profile_uuid is required");
   }
 
   // Cross-setid Job Profile reference must fail-closed (org_unit resolves S2601, JP-OPS is in S2602).
@@ -730,9 +730,9 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     const resp = await appContext.request.post(`/org/api/positions?as_of=${m5CrossEffectiveDate}`, {
       data: {
         effective_date: m5CrossEffectiveDate,
-        position_id: pEng01ID,
+        position_uuid: pEng01ID,
         org_code: orgCodesFromTree["R&D"],
-        job_profile_id: jpOpsID
+        job_profile_uuid: jpOpsID
       }
     });
     expect(resp.status(), await resp.text()).toBe(422);

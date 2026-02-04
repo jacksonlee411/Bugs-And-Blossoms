@@ -1,6 +1,6 @@
 CREATE OR REPLACE FUNCTION jobcatalog.get_job_catalog_snapshot(
-  p_tenant_id uuid,
-  p_setid text,
+  p_tenant_uuid uuid,
+  p_package_uuid text,
   p_query_date date
 )
 RETURNS TABLE (
@@ -12,9 +12,9 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_setid uuid;
+  v_package_uuid uuid;
 BEGIN
-  PERFORM jobcatalog.assert_current_tenant(p_tenant_id);
+  PERFORM jobcatalog.assert_current_tenant(p_tenant_uuid);
   IF p_query_date IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
@@ -22,15 +22,15 @@ BEGIN
       DETAIL = 'query_date is required';
   END IF;
 
-  v_setid := jobcatalog.normalize_package_id(p_setid);
+  v_package_uuid := jobcatalog.normalize_package_uuid(p_package_uuid);
 
   RETURN QUERY
   SELECT
     COALESCE((
       SELECT jsonb_agg(
         jsonb_build_object(
-          'job_family_group_id', g.id,
-          'code', g.code,
+          'job_family_group_uuid', g.job_family_group_uuid,
+          'job_family_group_code', g.job_family_group_code,
           'name', v.name,
           'description', v.description,
           'is_active', v.is_active,
@@ -39,23 +39,23 @@ BEGIN
           'valid_to_excl', upper(v.validity),
           'last_event_db_id', v.last_event_id
         )
-        ORDER BY g.code
+        ORDER BY g.job_family_group_code
       )
       FROM jobcatalog.job_family_groups g
       JOIN jobcatalog.job_family_group_versions v
-        ON v.tenant_id = p_tenant_id
-       AND v.package_id = v_setid
-       AND v.job_family_group_id = g.id
+        ON v.tenant_uuid = p_tenant_uuid
+       AND v.package_uuid = v_package_uuid
+       AND v.job_family_group_uuid = g.job_family_group_uuid
        AND v.validity @> p_query_date
-      WHERE g.tenant_id = p_tenant_id
-        AND g.package_id = v_setid
+      WHERE g.tenant_uuid = p_tenant_uuid
+        AND g.package_uuid = v_package_uuid
     ), '[]'::jsonb) AS groups,
     COALESCE((
       SELECT jsonb_agg(
         jsonb_build_object(
-          'job_family_id', f.id,
-          'code', f.code,
-          'job_family_group_id', v.job_family_group_id,
+          'job_family_uuid', f.job_family_uuid,
+          'job_family_code', f.job_family_code,
+          'job_family_group_uuid', v.job_family_group_uuid,
           'name', v.name,
           'description', v.description,
           'is_active', v.is_active,
@@ -64,22 +64,22 @@ BEGIN
           'valid_to_excl', upper(v.validity),
           'last_event_db_id', v.last_event_id
         )
-        ORDER BY f.code
+        ORDER BY f.job_family_code
       )
       FROM jobcatalog.job_families f
       JOIN jobcatalog.job_family_versions v
-        ON v.tenant_id = p_tenant_id
-       AND v.package_id = v_setid
-       AND v.job_family_id = f.id
+        ON v.tenant_uuid = p_tenant_uuid
+       AND v.package_uuid = v_package_uuid
+       AND v.job_family_uuid = f.job_family_uuid
        AND v.validity @> p_query_date
-      WHERE f.tenant_id = p_tenant_id
-        AND f.package_id = v_setid
+      WHERE f.tenant_uuid = p_tenant_uuid
+        AND f.package_uuid = v_package_uuid
     ), '[]'::jsonb) AS families,
     COALESCE((
       SELECT jsonb_agg(
         jsonb_build_object(
-          'job_level_id', l.id,
-          'code', l.code,
+          'job_level_uuid', l.job_level_uuid,
+          'job_level_code', l.job_level_code,
           'name', v.name,
           'description', v.description,
           'is_active', v.is_active,
@@ -88,22 +88,22 @@ BEGIN
           'valid_to_excl', upper(v.validity),
           'last_event_db_id', v.last_event_id
         )
-        ORDER BY l.code
+        ORDER BY l.job_level_code
       )
       FROM jobcatalog.job_levels l
       JOIN jobcatalog.job_level_versions v
-        ON v.tenant_id = p_tenant_id
-       AND v.package_id = v_setid
-       AND v.job_level_id = l.id
+        ON v.tenant_uuid = p_tenant_uuid
+       AND v.package_uuid = v_package_uuid
+       AND v.job_level_uuid = l.job_level_uuid
        AND v.validity @> p_query_date
-      WHERE l.tenant_id = p_tenant_id
-        AND l.package_id = v_setid
+      WHERE l.tenant_uuid = p_tenant_uuid
+        AND l.package_uuid = v_package_uuid
     ), '[]'::jsonb) AS levels,
     COALESCE((
       SELECT jsonb_agg(
         jsonb_build_object(
-          'job_profile_id', p.id,
-          'code', p.code,
+          'job_profile_uuid', p.job_profile_uuid,
+          'job_profile_code', p.job_profile_code,
           'name', v.name,
           'description', v.description,
           'is_active', v.is_active,
@@ -111,37 +111,36 @@ BEGIN
           'valid_from', lower(v.validity),
           'valid_to_excl', upper(v.validity),
           'last_event_db_id', v.last_event_id,
-          'job_family_ids', COALESCE(fam.job_family_ids, '[]'::jsonb),
-          'primary_job_family_id', fam.primary_job_family_id
+          'job_family_uuids', COALESCE(fam.job_family_uuids, '[]'::jsonb),
+          'primary_job_family_uuid', fam.primary_job_family_uuid
         )
-        ORDER BY p.code
+        ORDER BY p.job_profile_code
       )
       FROM jobcatalog.job_profiles p
       JOIN jobcatalog.job_profile_versions v
-        ON v.tenant_id = p_tenant_id
-       AND v.package_id = v_setid
-       AND v.job_profile_id = p.id
+        ON v.tenant_uuid = p_tenant_uuid
+       AND v.package_uuid = v_package_uuid
+       AND v.job_profile_uuid = p.job_profile_uuid
        AND v.validity @> p_query_date
       LEFT JOIN LATERAL (
         SELECT
-          jsonb_agg(f.job_family_id ORDER BY f.job_family_id) AS job_family_ids,
+          jsonb_agg(f.job_family_uuid ORDER BY f.job_family_uuid) AS job_family_uuids,
           (
-            SELECT f2.job_family_id
+            SELECT f2.job_family_uuid
             FROM jobcatalog.job_profile_version_job_families f2
-            WHERE f2.tenant_id = p_tenant_id
-              AND f2.package_id = v_setid
+            WHERE f2.tenant_uuid = p_tenant_uuid
+              AND f2.package_uuid = v_package_uuid
               AND f2.job_profile_version_id = v.id
               AND f2.is_primary = true
             LIMIT 1
-          ) AS primary_job_family_id
+          ) AS primary_job_family_uuid
         FROM jobcatalog.job_profile_version_job_families f
-        WHERE f.tenant_id = p_tenant_id
-          AND f.package_id = v_setid
+        WHERE f.tenant_uuid = p_tenant_uuid
+          AND f.package_uuid = v_package_uuid
           AND f.job_profile_version_id = v.id
       ) fam ON true
-      WHERE p.tenant_id = p_tenant_id
-        AND p.package_id = v_setid
+      WHERE p.tenant_uuid = p_tenant_uuid
+        AND p.package_uuid = v_package_uuid
     ), '[]'::jsonb) AS profiles;
 END;
 $$;
-

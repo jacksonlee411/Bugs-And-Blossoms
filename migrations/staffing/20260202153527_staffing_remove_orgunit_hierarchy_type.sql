@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-CREATE OR REPLACE FUNCTION staffing.assert_current_tenant(p_tenant_id uuid)
+CREATE OR REPLACE FUNCTION staffing.assert_current_tenant(p_tenant_uuid uuid)
 RETURNS void
 LANGUAGE plpgsql
 AS $$
@@ -8,11 +8,11 @@ DECLARE
   v_ctx_raw text;
   v_ctx_tenant uuid;
 BEGIN
-  IF p_tenant_id IS NULL THEN
+  IF p_tenant_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-      DETAIL = 'tenant_id is required';
+      DETAIL = 'tenant_uuid is required';
   END IF;
 
   v_ctx_raw := current_setting('app.current_tenant', true);
@@ -33,24 +33,24 @@ BEGIN
         DETAIL = format('app.current_tenant=%s', v_ctx_raw);
   END;
 
-  IF v_ctx_tenant <> p_tenant_id THEN
+  IF v_ctx_tenant <> p_tenant_uuid THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'RLS_TENANT_MISMATCH',
-      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_id, v_ctx_tenant);
+      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_uuid, v_ctx_tenant);
   END IF;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION staffing.submit_position_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
-  p_position_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
+  p_position_uuid uuid,
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -63,22 +63,22 @@ DECLARE
   v_payload jsonb;
   v_prev_effective_max date;
 BEGIN
-  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  PERFORM staffing.assert_current_tenant(p_tenant_uuid);
 
-  IF p_event_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  IF p_event_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_uuid is required';
   END IF;
-  IF p_position_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'position_id is required';
+  IF p_position_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'position_uuid is required';
   END IF;
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  IF p_initiator_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
   IF p_event_type NOT IN ('CREATE','UPDATE') THEN
     RAISE EXCEPTION USING
@@ -88,85 +88,85 @@ BEGIN
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
 
-  IF v_payload ? 'reports_to_position_id' THEN
-    v_reports_to_lock_key := format('staffing:position-reports-to:%s', p_tenant_id);
+  IF v_payload ? 'reports_to_position_uuid' THEN
+    v_reports_to_lock_key := format('staffing:position-reports-to:%s', p_tenant_uuid);
     PERFORM pg_advisory_xact_lock(hashtextextended(v_reports_to_lock_key, 0));
   END IF;
 
-  v_lock_key := format('staffing:position:%s:%s', p_tenant_id, p_position_id);
+  v_lock_key := format('staffing:position:%s:%s', p_tenant_uuid, p_position_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
-  INSERT INTO staffing.positions (tenant_id, id)
-  VALUES (p_tenant_id, p_position_id)
+  INSERT INTO staffing.positions (tenant_uuid, position_uuid)
+  VALUES (p_tenant_uuid, p_position_uuid)
   ON CONFLICT DO NOTHING;
 
   INSERT INTO staffing.position_events (
-    event_id,
-    tenant_id,
-    position_id,
+    event_uuid,
+    tenant_uuid,
+    position_uuid,
     event_type,
     effective_date,
     payload,
-    request_id,
-    initiator_id
+    request_code,
+    initiator_uuid
   )
   VALUES (
-    p_event_id,
-    p_tenant_id,
-    p_position_id,
+    p_event_uuid,
+    p_tenant_uuid,
+    p_position_uuid,
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_id,
-    p_initiator_id
+    p_request_code,
+    p_initiator_uuid
   )
-  ON CONFLICT (event_id) DO NOTHING
+  ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_event_db_id;
 
   IF v_event_db_id IS NULL THEN
     SELECT * INTO v_existing
     FROM staffing.position_events
-    WHERE event_id = p_event_id;
+    WHERE event_uuid = p_event_uuid;
 
-    IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.position_id <> p_position_id
+    IF v_existing.tenant_uuid <> p_tenant_uuid
+      OR v_existing.position_uuid <> p_position_uuid
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_id <> p_request_id
-      OR v_existing.initiator_id <> p_initiator_id
+      OR v_existing.request_code <> p_request_code
+      OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+        DETAIL = format('event_uuid=%s existing_id=%s', p_event_uuid, v_existing.id);
     END IF;
 
     RETURN v_existing.id;
   END IF;
 
-  IF p_event_type = 'UPDATE' AND v_payload ? 'reports_to_position_id' THEN
+  IF p_event_type = 'UPDATE' AND v_payload ? 'reports_to_position_uuid' THEN
     SELECT max(effective_date) INTO v_prev_effective_max
     FROM staffing.position_events
-    WHERE tenant_id = p_tenant_id
-      AND position_id = p_position_id
+    WHERE tenant_uuid = p_tenant_uuid
+      AND position_uuid = p_position_uuid
       AND id <> v_event_db_id;
 
     IF v_prev_effective_max IS NOT NULL AND p_effective_date <= v_prev_effective_max THEN
       RAISE EXCEPTION USING
         MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-        DETAIL = format('reports_to_position_id updates must be forward-only: effective_date=%s last_effective_date=%s', p_effective_date, v_prev_effective_max);
+        DETAIL = format('reports_to_position_uuid updates must be forward-only: effective_date=%s last_effective_date=%s', p_effective_date, v_prev_effective_max);
     END IF;
   END IF;
 
-  PERFORM staffing.replay_position_versions(p_tenant_id, p_position_id);
+  PERFORM staffing.replay_position_versions(p_tenant_uuid, p_position_uuid);
 
   RETURN v_event_db_id;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION staffing.replay_position_versions(
-  p_tenant_id uuid,
-  p_position_id uuid
+  p_tenant_uuid uuid,
+  p_position_uuid uuid
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -176,11 +176,11 @@ DECLARE
   v_prev_effective date;
   v_last_validity daterange;
   v_org_unit_id int;
-  v_reports_to_position_id uuid;
+  v_reports_to_position_uuid uuid;
   v_jobcatalog_setid text;
   v_jobcatalog_setid_as_of date;
-  v_jobcatalog_package_id uuid;
-  v_job_profile_id uuid;
+  v_jobcatalog_package_uuid uuid;
+  v_job_profile_uuid uuid;
   v_name text;
   v_lifecycle_status text;
   v_capacity_fte numeric(9,2);
@@ -190,26 +190,26 @@ DECLARE
   v_row RECORD;
   v_validity daterange;
 BEGIN
-  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  PERFORM staffing.assert_current_tenant(p_tenant_uuid);
 
-  IF p_position_id IS NULL THEN
+  IF p_position_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-      DETAIL = 'position_id is required';
+      DETAIL = 'position_uuid is required';
   END IF;
 
-  v_lock_key := format('staffing:position:%s:%s', p_tenant_id, p_position_id);
+  v_lock_key := format('staffing:position:%s:%s', p_tenant_uuid, p_position_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM staffing.position_versions
-  WHERE tenant_id = p_tenant_id AND position_id = p_position_id;
+  WHERE tenant_uuid = p_tenant_uuid AND position_uuid = p_position_uuid;
 
   v_org_unit_id := NULL;
-  v_reports_to_position_id := NULL;
+  v_reports_to_position_uuid := NULL;
   v_jobcatalog_setid := NULL;
   v_jobcatalog_setid_as_of := NULL;
-  v_job_profile_id := NULL;
+  v_job_profile_uuid := NULL;
   v_name := NULL;
   v_lifecycle_status := 'active';
   v_capacity_fte := 1.0;
@@ -224,8 +224,8 @@ BEGIN
       e.payload,
       lead(effective_date) OVER (ORDER BY effective_date ASC, id ASC) AS next_effective
     FROM staffing.position_events e
-    WHERE e.tenant_id = p_tenant_id
-      AND e.position_id = p_position_id
+    WHERE e.tenant_uuid = p_tenant_uuid
+      AND e.position_uuid = p_position_uuid
     ORDER BY effective_date ASC, id ASC
   LOOP
     IF v_row.event_type = 'CREATE' THEN
@@ -253,22 +253,22 @@ BEGIN
 
       v_name := NULLIF(btrim(v_row.payload->>'name'), '');
 
-      IF v_row.payload ? 'reports_to_position_id' THEN
-        v_tmp_text := NULLIF(btrim(v_row.payload->>'reports_to_position_id'), '');
+      IF v_row.payload ? 'reports_to_position_uuid' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'reports_to_position_uuid'), '');
         IF v_tmp_text IS NULL THEN
-          v_reports_to_position_id := NULL;
+          v_reports_to_position_uuid := NULL;
         ELSE
           BEGIN
-            v_reports_to_position_id := v_tmp_text::uuid;
+            v_reports_to_position_uuid := v_tmp_text::uuid;
           EXCEPTION
             WHEN invalid_text_representation THEN
               RAISE EXCEPTION USING
                 MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-                DETAIL = format('reports_to_position_id=%s', v_row.payload->>'reports_to_position_id');
+                DETAIL = format('reports_to_position_uuid=%s', v_row.payload->>'reports_to_position_uuid');
           END;
         END IF;
       ELSE
-        v_reports_to_position_id := NULL;
+        v_reports_to_position_uuid := NULL;
       END IF;
 
       IF v_row.payload ? 'lifecycle_status' THEN
@@ -307,21 +307,21 @@ BEGIN
         v_capacity_fte := 1.0;
       END IF;
 
-      IF v_row.payload ? 'job_profile_id' THEN
-        IF v_row.payload->'job_profile_id' IS NULL THEN
-          v_job_profile_id := NULL;
+      IF v_row.payload ? 'job_profile_uuid' THEN
+        IF v_row.payload->'job_profile_uuid' IS NULL THEN
+          v_job_profile_uuid := NULL;
         ELSE
-          v_tmp_text := NULLIF(btrim(v_row.payload->>'job_profile_id'), '');
+          v_tmp_text := NULLIF(btrim(v_row.payload->>'job_profile_uuid'), '');
           IF v_tmp_text IS NULL THEN
-            v_job_profile_id := NULL;
+            v_job_profile_uuid := NULL;
           ELSE
             BEGIN
-              v_job_profile_id := v_tmp_text::uuid;
+              v_job_profile_uuid := v_tmp_text::uuid;
             EXCEPTION
               WHEN invalid_text_representation THEN
                 RAISE EXCEPTION USING
                   MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-                  DETAIL = format('job_profile_id=%s', v_row.payload->>'job_profile_id');
+                  DETAIL = format('job_profile_uuid=%s', v_row.payload->>'job_profile_uuid');
             END;
           END IF;
         END IF;
@@ -351,18 +351,18 @@ BEGIN
         END;
       END IF;
 
-      IF v_row.payload ? 'reports_to_position_id' THEN
-        v_tmp_text := NULLIF(btrim(v_row.payload->>'reports_to_position_id'), '');
+      IF v_row.payload ? 'reports_to_position_uuid' THEN
+        v_tmp_text := NULLIF(btrim(v_row.payload->>'reports_to_position_uuid'), '');
         IF v_tmp_text IS NULL THEN
-          v_reports_to_position_id := NULL;
+          v_reports_to_position_uuid := NULL;
         ELSE
           BEGIN
-            v_reports_to_position_id := v_tmp_text::uuid;
+            v_reports_to_position_uuid := v_tmp_text::uuid;
           EXCEPTION
             WHEN invalid_text_representation THEN
               RAISE EXCEPTION USING
                 MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-                DETAIL = format('reports_to_position_id=%s', v_row.payload->>'reports_to_position_id');
+                DETAIL = format('reports_to_position_uuid=%s', v_row.payload->>'reports_to_position_uuid');
           END;
         END IF;
       END IF;
@@ -403,21 +403,21 @@ BEGIN
         END IF;
       END IF;
 
-      IF v_row.payload ? 'job_profile_id' THEN
-        IF v_row.payload->'job_profile_id' IS NULL THEN
-          v_job_profile_id := NULL;
+      IF v_row.payload ? 'job_profile_uuid' THEN
+        IF v_row.payload->'job_profile_uuid' IS NULL THEN
+          v_job_profile_uuid := NULL;
         ELSE
-          v_tmp_text := NULLIF(btrim(v_row.payload->>'job_profile_id'), '');
+          v_tmp_text := NULLIF(btrim(v_row.payload->>'job_profile_uuid'), '');
           IF v_tmp_text IS NULL THEN
-            v_job_profile_id := NULL;
+            v_job_profile_uuid := NULL;
           ELSE
             BEGIN
-              v_job_profile_id := v_tmp_text::uuid;
+              v_job_profile_uuid := v_tmp_text::uuid;
             EXCEPTION
               WHEN invalid_text_representation THEN
                 RAISE EXCEPTION USING
                   MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-                  DETAIL = format('job_profile_id=%s', v_row.payload->>'job_profile_id');
+                  DETAIL = format('job_profile_uuid=%s', v_row.payload->>'job_profile_uuid');
             END;
           END IF;
         END IF;
@@ -433,7 +433,7 @@ BEGIN
       IF NOT EXISTS (
         SELECT 1
         FROM orgunit.org_unit_versions ouv
-        WHERE ouv.tenant_uuid = p_tenant_id
+        WHERE ouv.tenant_uuid = p_tenant_uuid
           AND ouv.org_id = v_org_unit_id
           AND ouv.status = 'active'
           AND ouv.validity @> v_row.effective_date
@@ -446,25 +446,25 @@ BEGIN
       END IF;
     END IF;
 
-    IF v_job_profile_id IS NULL THEN
+    IF v_job_profile_uuid IS NULL THEN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-        DETAIL = 'job_profile_id is required';
+        DETAIL = 'job_profile_uuid is required';
     END IF;
 
-    v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_id, v_org_unit_id, v_row.effective_date);
+    v_jobcatalog_setid := orgunit.resolve_setid(p_tenant_uuid, v_org_unit_id, v_row.effective_date);
     v_jobcatalog_setid_as_of := v_row.effective_date;
     SELECT package_id
-    INTO v_jobcatalog_package_id
-    FROM orgunit.resolve_scope_package(p_tenant_id, v_jobcatalog_setid, 'jobcatalog', v_row.effective_date);
+    INTO v_jobcatalog_package_uuid
+    FROM orgunit.resolve_scope_package(p_tenant_uuid, v_jobcatalog_setid, 'jobcatalog', v_row.effective_date);
 
     IF NOT EXISTS (
       SELECT 1
       FROM jobcatalog.job_profile_versions jpv
-      WHERE jpv.tenant_id = p_tenant_id
-        AND jpv.package_id = v_jobcatalog_package_id
-        AND jpv.job_profile_id = v_job_profile_id
+      WHERE jpv.tenant_uuid = p_tenant_uuid
+        AND jpv.package_uuid = v_jobcatalog_package_uuid
+        AND jpv.job_profile_uuid = v_job_profile_uuid
         AND jpv.is_active = true
         AND jpv.validity @> v_row.effective_date
       LIMIT 1
@@ -472,21 +472,21 @@ BEGIN
       RAISE EXCEPTION USING
         ERRCODE = 'P0001',
         MESSAGE = 'JOBCATALOG_REFERENCE_NOT_FOUND',
-        DETAIL = format('job_profile_id=%s', v_job_profile_id);
+        DETAIL = format('job_profile_uuid=%s', v_job_profile_uuid);
     END IF;
 
-    IF v_reports_to_position_id IS NOT NULL THEN
-      IF v_reports_to_position_id = p_position_id THEN
+    IF v_reports_to_position_uuid IS NOT NULL THEN
+      IF v_reports_to_position_uuid = p_position_uuid THEN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'STAFFING_POSITION_REPORTS_TO_SELF',
-          DETAIL = format('position_id=%s', p_position_id);
+          DETAIL = format('position_uuid=%s', p_position_uuid);
       END IF;
 
       SELECT lifecycle_status INTO v_target_status
       FROM staffing.position_versions pv
-      WHERE pv.tenant_id = p_tenant_id
-        AND pv.position_id = v_reports_to_position_id
+      WHERE pv.tenant_uuid = p_tenant_uuid
+        AND pv.position_uuid = v_reports_to_position_uuid
         AND pv.validity @> v_row.effective_date
       ORDER BY lower(pv.validity) DESC
       LIMIT 1;
@@ -494,40 +494,40 @@ BEGIN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'STAFFING_POSITION_NOT_FOUND_AS_OF',
-          DETAIL = format('position_id=%s as_of=%s', v_reports_to_position_id, v_row.effective_date);
+          DETAIL = format('position_uuid=%s as_of=%s', v_reports_to_position_uuid, v_row.effective_date);
       END IF;
       IF v_target_status <> 'active' THEN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'STAFFING_POSITION_DISABLED_AS_OF',
-          DETAIL = format('position_id=%s as_of=%s', v_reports_to_position_id, v_row.effective_date);
+          DETAIL = format('position_uuid=%s as_of=%s', v_reports_to_position_uuid, v_row.effective_date);
       END IF;
 
       IF EXISTS (
         WITH RECURSIVE chain AS (
-          SELECT pv.position_id, pv.reports_to_position_id
+          SELECT pv.position_uuid, pv.reports_to_position_uuid
           FROM staffing.position_versions pv
-          WHERE pv.tenant_id = p_tenant_id
-            AND pv.position_id = v_reports_to_position_id
+          WHERE pv.tenant_uuid = p_tenant_uuid
+            AND pv.position_uuid = v_reports_to_position_uuid
             AND pv.validity @> v_row.effective_date
           UNION ALL
-          SELECT pv.position_id, pv.reports_to_position_id
+          SELECT pv.position_uuid, pv.reports_to_position_uuid
           FROM staffing.position_versions pv
-          JOIN chain c ON pv.position_id = c.reports_to_position_id
-          WHERE pv.tenant_id = p_tenant_id
+          JOIN chain c ON pv.position_uuid = c.reports_to_position_uuid
+          WHERE pv.tenant_uuid = p_tenant_uuid
             AND pv.validity @> v_row.effective_date
-            AND c.reports_to_position_id IS NOT NULL
+            AND c.reports_to_position_uuid IS NOT NULL
         )
         SELECT 1
         FROM chain
-        WHERE position_id = p_position_id
-           OR reports_to_position_id = p_position_id
+        WHERE position_uuid = p_position_uuid
+           OR reports_to_position_uuid = p_position_uuid
         LIMIT 1
       ) THEN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'STAFFING_POSITION_REPORTS_TO_CYCLE',
-          DETAIL = format('position_id=%s', p_position_id);
+          DETAIL = format('position_uuid=%s', p_position_uuid);
       END IF;
     END IF;
 
@@ -541,8 +541,8 @@ BEGIN
       IF EXISTS (
         SELECT 1
         FROM staffing.assignment_versions av
-        WHERE av.tenant_id = p_tenant_id
-          AND av.position_id = p_position_id
+        WHERE av.tenant_uuid = p_tenant_uuid
+          AND av.position_uuid = p_position_uuid
           AND av.status = 'active'
           AND av.validity && v_validity
         LIMIT 1
@@ -550,15 +550,15 @@ BEGIN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF',
-          DETAIL = format('position_id=%s as_of=%s', p_position_id, v_row.effective_date);
+          DETAIL = format('position_uuid=%s as_of=%s', p_position_uuid, v_row.effective_date);
       END IF;
     END IF;
 
     INSERT INTO staffing.position_versions (
-      tenant_id,
-      position_id,
+      tenant_uuid,
+      position_uuid,
       org_unit_id,
-      reports_to_position_id,
+      reports_to_position_uuid,
       name,
       lifecycle_status,
       capacity_fte,
@@ -567,13 +567,13 @@ BEGIN
       last_event_id,
       jobcatalog_setid,
       jobcatalog_setid_as_of,
-      job_profile_id
+      job_profile_uuid
     )
     VALUES (
-      p_tenant_id,
-      p_position_id,
+      p_tenant_uuid,
+      p_position_uuid,
       v_org_unit_id,
-      v_reports_to_position_id,
+      v_reports_to_position_uuid,
       v_name,
       v_lifecycle_status,
       v_capacity_fte,
@@ -582,11 +582,11 @@ BEGIN
       v_row.event_db_id,
       v_jobcatalog_setid,
       v_jobcatalog_setid_as_of,
-      v_job_profile_id
+      v_job_profile_uuid
     );
 
     IF v_lifecycle_status = 'active' THEN
-      PERFORM staffing.assert_position_capacity(p_tenant_id, p_position_id, v_validity);
+      PERFORM staffing.assert_position_capacity(p_tenant_uuid, p_position_uuid, v_validity);
     END IF;
 
     v_prev_effective := v_row.effective_date;
@@ -598,7 +598,7 @@ BEGIN
         validity,
         lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
       FROM staffing.position_versions
-      WHERE tenant_id = p_tenant_id AND position_id = p_position_id
+      WHERE tenant_uuid = p_tenant_uuid AND position_uuid = p_position_uuid
     )
     SELECT 1
     FROM ordered
@@ -614,7 +614,7 @@ BEGIN
 
   SELECT validity INTO v_last_validity
   FROM staffing.position_versions
-  WHERE tenant_id = p_tenant_id AND position_id = p_position_id
+  WHERE tenant_uuid = p_tenant_uuid AND position_uuid = p_position_uuid
   ORDER BY lower(validity) DESC
   LIMIT 1;
   IF v_last_validity IS NOT NULL AND upper(v_last_validity) IS NOT NULL THEN
@@ -627,21 +627,21 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION staffing.assert_position_capacity(
-  p_tenant_id uuid,
-  p_position_id uuid,
+  p_tenant_uuid uuid,
+  p_position_uuid uuid,
   p_validity daterange
 )
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  PERFORM staffing.assert_current_tenant(p_tenant_uuid);
 
-  IF p_position_id IS NULL THEN
+  IF p_position_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-      DETAIL = 'position_id is required';
+      DETAIL = 'position_uuid is required';
   END IF;
   IF p_validity IS NULL OR isempty(p_validity) THEN
     RAISE EXCEPTION USING
@@ -654,11 +654,11 @@ BEGIN
     SELECT 1
     FROM staffing.assignment_versions av
     JOIN staffing.position_versions pv
-      ON pv.tenant_id = av.tenant_id
-     AND pv.position_id = av.position_id
+      ON pv.tenant_uuid = av.tenant_uuid
+     AND pv.position_uuid = av.position_uuid
      AND pv.validity && av.validity
-    WHERE av.tenant_id = p_tenant_id
-      AND av.position_id = p_position_id
+    WHERE av.tenant_uuid = p_tenant_uuid
+      AND av.position_uuid = p_position_uuid
       AND av.status = 'active'
       AND av.validity && p_validity
       AND av.allocated_fte > pv.capacity_fte
@@ -667,14 +667,14 @@ BEGIN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'STAFFING_POSITION_CAPACITY_EXCEEDED',
-      DETAIL = format('position_id=%s', p_position_id);
+      DETAIL = format('position_uuid=%s', p_position_uuid);
   END IF;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION staffing.replay_assignment_versions(
-  p_tenant_id uuid,
-  p_assignment_id uuid
+  p_tenant_uuid uuid,
+  p_assignment_uuid uuid
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -685,7 +685,7 @@ DECLARE
   v_last_validity daterange;
   v_person_uuid uuid;
   v_assignment_type text;
-  v_position_id uuid;
+  v_position_uuid uuid;
   v_status text;
   v_allocated_fte numeric(9,2);
   v_profile jsonb;
@@ -693,24 +693,24 @@ DECLARE
   v_row RECORD;
   v_validity daterange;
 BEGIN
-  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  PERFORM staffing.assert_current_tenant(p_tenant_uuid);
 
-  IF p_assignment_id IS NULL THEN
+  IF p_assignment_uuid IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-      DETAIL = 'assignment_id is required';
+      DETAIL = 'assignment_uuid is required';
   END IF;
 
-  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_id, p_assignment_id);
+  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_uuid, p_assignment_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   DELETE FROM staffing.assignment_versions
-  WHERE tenant_id = p_tenant_id AND assignment_id = p_assignment_id;
+  WHERE tenant_uuid = p_tenant_uuid AND assignment_uuid = p_assignment_uuid;
 
   v_person_uuid := NULL;
   v_assignment_type := NULL;
-  v_position_id := NULL;
+  v_position_uuid := NULL;
   v_status := 'active';
   v_allocated_fte := 1.0;
   v_profile := '{}'::jsonb;
@@ -728,15 +728,15 @@ BEGIN
         (r.id IS NOT NULL) AS is_rescinded
       FROM staffing.assignment_events e
       LEFT JOIN staffing.assignment_event_corrections c
-        ON c.tenant_id = e.tenant_id
-       AND c.assignment_id = e.assignment_id
+        ON c.tenant_uuid = e.tenant_uuid
+       AND c.assignment_uuid = e.assignment_uuid
        AND c.target_effective_date = e.effective_date
       LEFT JOIN staffing.assignment_event_rescinds r
-        ON r.tenant_id = e.tenant_id
-       AND r.assignment_id = e.assignment_id
+        ON r.tenant_uuid = e.tenant_uuid
+       AND r.assignment_uuid = e.assignment_uuid
        AND r.target_effective_date = e.effective_date
-      WHERE e.tenant_id = p_tenant_id
-        AND e.assignment_id = p_assignment_id
+      WHERE e.tenant_uuid = p_tenant_uuid
+        AND e.assignment_uuid = p_assignment_uuid
     ),
     filtered AS (
       SELECT *
@@ -769,12 +769,12 @@ BEGIN
       v_person_uuid := v_row.person_uuid;
       v_assignment_type := v_row.assignment_type;
 
-      v_position_id := NULLIF(v_row.payload->>'position_id', '')::uuid;
-      IF v_position_id IS NULL THEN
+      v_position_uuid := NULLIF(v_row.payload->>'position_uuid', '')::uuid;
+      IF v_position_uuid IS NULL THEN
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-          DETAIL = 'position_id is required';
+          DETAIL = 'position_uuid is required';
       END IF;
       v_status := 'active';
 
@@ -816,13 +816,13 @@ BEGIN
           DETAIL = 'UPDATE requires prior state';
       END IF;
 
-      IF v_row.payload ? 'position_id' THEN
-        v_position_id := NULLIF(v_row.payload->>'position_id', '')::uuid;
-        IF v_position_id IS NULL THEN
+      IF v_row.payload ? 'position_uuid' THEN
+        v_position_uuid := NULLIF(v_row.payload->>'position_uuid', '')::uuid;
+        IF v_position_uuid IS NULL THEN
           RAISE EXCEPTION USING
             ERRCODE = 'P0001',
             MESSAGE = 'STAFFING_INVALID_ARGUMENT',
-            DETAIL = 'position_id is required';
+            DETAIL = 'position_uuid is required';
 	      END IF;
       END IF;
 
@@ -883,8 +883,8 @@ BEGIN
       IF NOT EXISTS (
         SELECT 1
         FROM staffing.position_versions pv
-        WHERE pv.tenant_id = p_tenant_id
-          AND pv.position_id = v_position_id
+        WHERE pv.tenant_uuid = p_tenant_uuid
+          AND pv.position_uuid = v_position_uuid
           AND pv.lifecycle_status = 'active'
           AND pv.validity @> v_row.effective_date
         LIMIT 1
@@ -892,29 +892,29 @@ BEGIN
         IF EXISTS (
           SELECT 1
           FROM staffing.position_versions pv
-          WHERE pv.tenant_id = p_tenant_id
-            AND pv.position_id = v_position_id
+          WHERE pv.tenant_uuid = p_tenant_uuid
+            AND pv.position_uuid = v_position_uuid
             AND pv.validity @> v_row.effective_date
           LIMIT 1
         ) THEN
           RAISE EXCEPTION USING
             ERRCODE = 'P0001',
             MESSAGE = 'STAFFING_POSITION_DISABLED_AS_OF',
-            DETAIL = format('position_id=%s as_of=%s', v_position_id, v_row.effective_date);
+            DETAIL = format('position_uuid=%s as_of=%s', v_position_uuid, v_row.effective_date);
         END IF;
 
         RAISE EXCEPTION USING
           ERRCODE = 'P0001',
           MESSAGE = 'STAFFING_POSITION_NOT_FOUND_AS_OF',
-          DETAIL = format('position_id=%s as_of=%s', v_position_id, v_row.effective_date);
+          DETAIL = format('position_uuid=%s as_of=%s', v_position_uuid, v_row.effective_date);
       END IF;
     END IF;
 
     INSERT INTO staffing.assignment_versions (
-      tenant_id,
-      assignment_id,
+      tenant_uuid,
+      assignment_uuid,
       person_uuid,
-      position_id,
+      position_uuid,
       assignment_type,
       status,
       allocated_fte,
@@ -923,10 +923,10 @@ BEGIN
       last_event_id
     )
     VALUES (
-      p_tenant_id,
-      p_assignment_id,
+      p_tenant_uuid,
+      p_assignment_uuid,
       v_person_uuid,
-      v_position_id,
+      v_position_uuid,
       v_assignment_type,
       v_status,
       v_allocated_fte,
@@ -936,7 +936,7 @@ BEGIN
     );
 
     IF v_status = 'active' THEN
-      PERFORM staffing.assert_position_capacity(p_tenant_id, v_position_id, v_validity);
+      PERFORM staffing.assert_position_capacity(p_tenant_uuid, v_position_uuid, v_validity);
     END IF;
 
     v_prev_effective := v_row.effective_date;
@@ -948,7 +948,7 @@ BEGIN
         validity,
         lag(validity) OVER (ORDER BY lower(validity)) AS prev_validity
       FROM staffing.assignment_versions
-      WHERE tenant_id = p_tenant_id AND assignment_id = p_assignment_id
+      WHERE tenant_uuid = p_tenant_uuid AND assignment_uuid = p_assignment_uuid
     )
     SELECT 1
     FROM ordered
@@ -964,7 +964,7 @@ BEGIN
 
   SELECT validity INTO v_last_validity
   FROM staffing.assignment_versions
-  WHERE tenant_id = p_tenant_id AND assignment_id = p_assignment_id
+  WHERE tenant_uuid = p_tenant_uuid AND assignment_uuid = p_assignment_uuid
   ORDER BY lower(validity) DESC
   LIMIT 1;
 
@@ -978,16 +978,16 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION staffing.submit_assignment_event(
-  p_event_id uuid,
-  p_tenant_id uuid,
-  p_assignment_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
+  p_assignment_uuid uuid,
   p_person_uuid uuid,
   p_assignment_type text,
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -997,15 +997,15 @@ DECLARE
   v_event_db_id bigint;
   v_existing staffing.assignment_events%ROWTYPE;
   v_payload jsonb;
-  v_existing_assignment_id uuid;
+  v_existing_assignment_uuid uuid;
 BEGIN
-  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  PERFORM staffing.assert_current_tenant(p_tenant_uuid);
 
-  IF p_event_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  IF p_event_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_uuid is required';
   END IF;
-  IF p_assignment_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_id is required';
+  IF p_assignment_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_uuid is required';
   END IF;
   IF p_person_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'person_uuid is required';
@@ -1019,11 +1019,11 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  IF p_initiator_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
   IF p_event_type NOT IN ('CREATE','UPDATE') THEN
     RAISE EXCEPTION USING
@@ -1031,94 +1031,94 @@ BEGIN
       DETAIL = format('unsupported event_type: %s', p_event_type);
   END IF;
 
-  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_id, p_assignment_id);
+  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_uuid, p_assignment_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
-  INSERT INTO staffing.assignments (tenant_id, id, person_uuid, assignment_type)
-  VALUES (p_tenant_id, p_assignment_id, p_person_uuid, p_assignment_type)
-  ON CONFLICT (tenant_id, person_uuid, assignment_type) DO NOTHING;
+  INSERT INTO staffing.assignments (tenant_uuid, assignment_uuid, person_uuid, assignment_type)
+  VALUES (p_tenant_uuid, p_assignment_uuid, p_person_uuid, p_assignment_type)
+  ON CONFLICT (tenant_uuid, person_uuid, assignment_type) DO NOTHING;
 
-  SELECT id INTO v_existing_assignment_id
+  SELECT assignment_uuid INTO v_existing_assignment_uuid
   FROM staffing.assignments
-  WHERE tenant_id = p_tenant_id AND person_uuid = p_person_uuid AND assignment_type = p_assignment_type;
+  WHERE tenant_uuid = p_tenant_uuid AND person_uuid = p_person_uuid AND assignment_type = p_assignment_type;
 
-  IF v_existing_assignment_id IS NULL THEN
+  IF v_existing_assignment_uuid IS NULL THEN
     RAISE EXCEPTION USING
       MESSAGE = 'STAFFING_INVALID_ARGUMENT',
       DETAIL = 'assignment identity missing';
   END IF;
-  IF v_existing_assignment_id <> p_assignment_id THEN
+  IF v_existing_assignment_uuid <> p_assignment_uuid THEN
     RAISE EXCEPTION USING
       MESSAGE = 'STAFFING_ASSIGNMENT_ID_MISMATCH',
-      DETAIL = format('assignment_id=%s existing_id=%s', p_assignment_id, v_existing_assignment_id);
+      DETAIL = format('assignment_uuid=%s existing_id=%s', p_assignment_uuid, v_existing_assignment_uuid);
   END IF;
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
 
   INSERT INTO staffing.assignment_events (
-    event_id,
-    tenant_id,
-    assignment_id,
+    event_uuid,
+    tenant_uuid,
+    assignment_uuid,
     person_uuid,
     assignment_type,
     event_type,
     effective_date,
     payload,
-    request_id,
-    initiator_id
+    request_code,
+    initiator_uuid
   )
   VALUES (
-    p_event_id,
-    p_tenant_id,
-    p_assignment_id,
+    p_event_uuid,
+    p_tenant_uuid,
+    p_assignment_uuid,
     p_person_uuid,
     p_assignment_type,
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_id,
-    p_initiator_id
+    p_request_code,
+    p_initiator_uuid
   )
-  ON CONFLICT (event_id) DO NOTHING
+  ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_event_db_id;
 
   IF v_event_db_id IS NULL THEN
     SELECT * INTO v_existing
     FROM staffing.assignment_events
-    WHERE event_id = p_event_id;
+    WHERE event_uuid = p_event_uuid;
 
-    IF v_existing.tenant_id <> p_tenant_id
-      OR v_existing.assignment_id <> p_assignment_id
+    IF v_existing.tenant_uuid <> p_tenant_uuid
+      OR v_existing.assignment_uuid <> p_assignment_uuid
       OR v_existing.person_uuid <> p_person_uuid
       OR v_existing.assignment_type <> p_assignment_type
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_id <> p_request_id
-      OR v_existing.initiator_id <> p_initiator_id
+      OR v_existing.request_code <> p_request_code
+      OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-        DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing.id);
+        DETAIL = format('event_uuid=%s existing_id=%s', p_event_uuid, v_existing.id);
     END IF;
 
     RETURN v_existing.id;
   END IF;
 
-  PERFORM staffing.replay_assignment_versions(p_tenant_id, p_assignment_id);
+  PERFORM staffing.replay_assignment_versions(p_tenant_uuid, p_assignment_uuid);
 
   RETURN v_event_db_id;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION staffing.submit_assignment_event_correction(
-  p_event_id uuid,
-  p_tenant_id uuid,
-  p_assignment_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
+  p_assignment_uuid uuid,
   p_target_effective_date date,
   p_replacement_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -1132,13 +1132,13 @@ DECLARE
   v_payload jsonb;
   v_correction_db_id bigint;
 BEGIN
-  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  PERFORM staffing.assert_current_tenant(p_tenant_uuid);
 
-  IF p_event_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  IF p_event_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_uuid is required';
   END IF;
-  IF p_assignment_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_id is required';
+  IF p_assignment_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_uuid is required';
   END IF;
   IF p_target_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'target_effective_date is required';
@@ -1146,11 +1146,11 @@ BEGIN
   IF p_replacement_payload IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'replacement_payload is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  IF p_initiator_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
 
   v_payload := p_replacement_payload;
@@ -1158,52 +1158,52 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'replacement_payload must be an object';
   END IF;
 
-  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_id, p_assignment_id);
+  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_uuid, p_assignment_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   SELECT * INTO v_target
   FROM staffing.assignment_events
-  WHERE tenant_id = p_tenant_id
-    AND assignment_id = p_assignment_id
+  WHERE tenant_uuid = p_tenant_uuid
+    AND assignment_uuid = p_assignment_uuid
     AND effective_date = p_target_effective_date
   LIMIT 1;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION USING
       MESSAGE = 'STAFFING_ASSIGNMENT_EVENT_NOT_FOUND',
-      DETAIL = format('assignment_id=%s target_effective_date=%s', p_assignment_id, p_target_effective_date);
+      DETAIL = format('assignment_uuid=%s target_effective_date=%s', p_assignment_uuid, p_target_effective_date);
   END IF;
 
   IF EXISTS (
     SELECT 1
     FROM staffing.assignment_event_rescinds r
-    WHERE r.tenant_id = p_tenant_id
-      AND r.assignment_id = p_assignment_id
+    WHERE r.tenant_uuid = p_tenant_uuid
+      AND r.assignment_uuid = p_assignment_uuid
       AND r.target_effective_date = p_target_effective_date
     LIMIT 1
   ) THEN
     RAISE EXCEPTION USING
       MESSAGE = 'STAFFING_ASSIGNMENT_EVENT_ALREADY_RESCINDED',
-      DETAIL = format('assignment_id=%s target_effective_date=%s', p_assignment_id, p_target_effective_date);
+      DETAIL = format('assignment_uuid=%s target_effective_date=%s', p_assignment_uuid, p_target_effective_date);
   END IF;
 
   INSERT INTO staffing.assignment_event_corrections (
-    event_id,
-    tenant_id,
-    assignment_id,
+    event_uuid,
+    tenant_uuid,
+    assignment_uuid,
     target_effective_date,
     replacement_payload,
-    request_id,
-    initiator_id
+    request_code,
+    initiator_uuid
   )
   VALUES (
-    p_event_id,
-    p_tenant_id,
-    p_assignment_id,
+    p_event_uuid,
+    p_tenant_uuid,
+    p_assignment_uuid,
     p_target_effective_date,
     v_payload,
-    p_request_id,
-    p_initiator_id
+    p_request_code,
+    p_initiator_uuid
   )
   ON CONFLICT DO NOTHING
   RETURNING id INTO v_correction_db_id;
@@ -1211,46 +1211,46 @@ BEGIN
   IF v_correction_db_id IS NULL THEN
     SELECT * INTO v_existing_by_event
     FROM staffing.assignment_event_corrections
-    WHERE event_id = p_event_id;
+    WHERE event_uuid = p_event_uuid;
 
     IF FOUND THEN
-      IF v_existing_by_event.tenant_id <> p_tenant_id
-        OR v_existing_by_event.assignment_id <> p_assignment_id
+      IF v_existing_by_event.tenant_uuid <> p_tenant_uuid
+        OR v_existing_by_event.assignment_uuid <> p_assignment_uuid
         OR v_existing_by_event.target_effective_date <> p_target_effective_date
         OR v_existing_by_event.replacement_payload <> v_payload
-        OR v_existing_by_event.request_id <> p_request_id
-        OR v_existing_by_event.initiator_id <> p_initiator_id
+        OR v_existing_by_event.request_code <> p_request_code
+        OR v_existing_by_event.initiator_uuid <> p_initiator_uuid
       THEN
         RAISE EXCEPTION USING
           MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-          DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing_by_event.id);
+          DETAIL = format('event_uuid=%s existing_id=%s', p_event_uuid, v_existing_by_event.id);
       END IF;
       v_correction_db_id := v_existing_by_event.id;
     ELSE
       SELECT * INTO v_existing_by_request
       FROM staffing.assignment_event_corrections
-      WHERE tenant_id = p_tenant_id
-        AND request_id = p_request_id
+      WHERE tenant_uuid = p_tenant_uuid
+        AND request_code = p_request_code
       LIMIT 1;
 
       IF FOUND THEN
-        IF v_existing_by_request.tenant_id <> p_tenant_id
-          OR v_existing_by_request.assignment_id <> p_assignment_id
+        IF v_existing_by_request.tenant_uuid <> p_tenant_uuid
+          OR v_existing_by_request.assignment_uuid <> p_assignment_uuid
           OR v_existing_by_request.target_effective_date <> p_target_effective_date
           OR v_existing_by_request.replacement_payload <> v_payload
-          OR v_existing_by_request.request_id <> p_request_id
-          OR v_existing_by_request.initiator_id <> p_initiator_id
+          OR v_existing_by_request.request_code <> p_request_code
+          OR v_existing_by_request.initiator_uuid <> p_initiator_uuid
         THEN
           RAISE EXCEPTION USING
             MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-            DETAIL = format('request_id=%s existing_id=%s', p_request_id, v_existing_by_request.id);
+            DETAIL = format('request_code=%s existing_id=%s', p_request_code, v_existing_by_request.id);
         END IF;
         v_correction_db_id := v_existing_by_request.id;
       ELSE
         SELECT * INTO v_existing_by_target
         FROM staffing.assignment_event_corrections
-        WHERE tenant_id = p_tenant_id
-          AND assignment_id = p_assignment_id
+        WHERE tenant_uuid = p_tenant_uuid
+          AND assignment_uuid = p_assignment_uuid
           AND target_effective_date = p_target_effective_date
         LIMIT 1;
 
@@ -1260,7 +1260,7 @@ BEGIN
           ELSE
             RAISE EXCEPTION USING
               MESSAGE = 'STAFFING_ASSIGNMENT_EVENT_ALREADY_CORRECTED',
-              DETAIL = format('assignment_id=%s target_effective_date=%s existing_id=%s', p_assignment_id, p_target_effective_date, v_existing_by_target.id);
+              DETAIL = format('assignment_uuid=%s target_effective_date=%s existing_id=%s', p_assignment_uuid, p_target_effective_date, v_existing_by_target.id);
           END IF;
         ELSE
           RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'correction insert failed';
@@ -1269,20 +1269,20 @@ BEGIN
     END IF;
   END IF;
 
-  PERFORM staffing.replay_assignment_versions(p_tenant_id, p_assignment_id);
+  PERFORM staffing.replay_assignment_versions(p_tenant_uuid, p_assignment_uuid);
 
   RETURN v_correction_db_id;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION staffing.submit_assignment_event_rescind(
-  p_event_id uuid,
-  p_tenant_id uuid,
-  p_assignment_id uuid,
+  p_event_uuid uuid,
+  p_tenant_uuid uuid,
+  p_assignment_uuid uuid,
   p_target_effective_date date,
   p_payload jsonb,
-  p_request_id text,
-  p_initiator_id uuid
+  p_request_code text,
+  p_initiator_uuid uuid
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -1296,22 +1296,22 @@ DECLARE
   v_payload jsonb;
   v_rescind_db_id bigint;
 BEGIN
-  PERFORM staffing.assert_current_tenant(p_tenant_id);
+  PERFORM staffing.assert_current_tenant(p_tenant_uuid);
 
-  IF p_event_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_id is required';
+  IF p_event_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'event_uuid is required';
   END IF;
-  IF p_assignment_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_id is required';
+  IF p_assignment_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'assignment_uuid is required';
   END IF;
   IF p_target_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'target_effective_date is required';
   END IF;
-  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
+  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
   END IF;
-  IF p_initiator_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_id is required';
+  IF p_initiator_uuid IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
 
   v_payload := COALESCE(p_payload, '{}'::jsonb);
@@ -1319,45 +1319,45 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'payload must be an object';
   END IF;
 
-  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_id, p_assignment_id);
+  v_lock_key := format('staffing:assignment:%s:%s', p_tenant_uuid, p_assignment_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
   SELECT * INTO v_target
   FROM staffing.assignment_events
-  WHERE tenant_id = p_tenant_id
-    AND assignment_id = p_assignment_id
+  WHERE tenant_uuid = p_tenant_uuid
+    AND assignment_uuid = p_assignment_uuid
     AND effective_date = p_target_effective_date
   LIMIT 1;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION USING
       MESSAGE = 'STAFFING_ASSIGNMENT_EVENT_NOT_FOUND',
-      DETAIL = format('assignment_id=%s target_effective_date=%s', p_assignment_id, p_target_effective_date);
+      DETAIL = format('assignment_uuid=%s target_effective_date=%s', p_assignment_uuid, p_target_effective_date);
   END IF;
 
   IF v_target.event_type = 'CREATE' THEN
     RAISE EXCEPTION USING
       MESSAGE = 'STAFFING_ASSIGNMENT_CREATE_CANNOT_RESCIND',
-      DETAIL = format('assignment_id=%s target_effective_date=%s', p_assignment_id, p_target_effective_date);
+      DETAIL = format('assignment_uuid=%s target_effective_date=%s', p_assignment_uuid, p_target_effective_date);
   END IF;
 
   INSERT INTO staffing.assignment_event_rescinds (
-    event_id,
-    tenant_id,
-    assignment_id,
+    event_uuid,
+    tenant_uuid,
+    assignment_uuid,
     target_effective_date,
     payload,
-    request_id,
-    initiator_id
+    request_code,
+    initiator_uuid
   )
   VALUES (
-    p_event_id,
-    p_tenant_id,
-    p_assignment_id,
+    p_event_uuid,
+    p_tenant_uuid,
+    p_assignment_uuid,
     p_target_effective_date,
     v_payload,
-    p_request_id,
-    p_initiator_id
+    p_request_code,
+    p_initiator_uuid
   )
   ON CONFLICT DO NOTHING
   RETURNING id INTO v_rescind_db_id;
@@ -1365,46 +1365,46 @@ BEGIN
   IF v_rescind_db_id IS NULL THEN
     SELECT * INTO v_existing_by_event
     FROM staffing.assignment_event_rescinds
-    WHERE event_id = p_event_id;
+    WHERE event_uuid = p_event_uuid;
 
     IF FOUND THEN
-      IF v_existing_by_event.tenant_id <> p_tenant_id
-        OR v_existing_by_event.assignment_id <> p_assignment_id
+      IF v_existing_by_event.tenant_uuid <> p_tenant_uuid
+        OR v_existing_by_event.assignment_uuid <> p_assignment_uuid
         OR v_existing_by_event.target_effective_date <> p_target_effective_date
         OR v_existing_by_event.payload <> v_payload
-        OR v_existing_by_event.request_id <> p_request_id
-        OR v_existing_by_event.initiator_id <> p_initiator_id
+        OR v_existing_by_event.request_code <> p_request_code
+        OR v_existing_by_event.initiator_uuid <> p_initiator_uuid
       THEN
         RAISE EXCEPTION USING
           MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-          DETAIL = format('event_id=%s existing_id=%s', p_event_id, v_existing_by_event.id);
+          DETAIL = format('event_uuid=%s existing_id=%s', p_event_uuid, v_existing_by_event.id);
       END IF;
       v_rescind_db_id := v_existing_by_event.id;
     ELSE
       SELECT * INTO v_existing_by_request
       FROM staffing.assignment_event_rescinds
-      WHERE tenant_id = p_tenant_id
-        AND request_id = p_request_id
+      WHERE tenant_uuid = p_tenant_uuid
+        AND request_code = p_request_code
       LIMIT 1;
 
       IF FOUND THEN
-        IF v_existing_by_request.tenant_id <> p_tenant_id
-          OR v_existing_by_request.assignment_id <> p_assignment_id
+        IF v_existing_by_request.tenant_uuid <> p_tenant_uuid
+          OR v_existing_by_request.assignment_uuid <> p_assignment_uuid
           OR v_existing_by_request.target_effective_date <> p_target_effective_date
           OR v_existing_by_request.payload <> v_payload
-          OR v_existing_by_request.request_id <> p_request_id
-          OR v_existing_by_request.initiator_id <> p_initiator_id
+          OR v_existing_by_request.request_code <> p_request_code
+          OR v_existing_by_request.initiator_uuid <> p_initiator_uuid
         THEN
           RAISE EXCEPTION USING
             MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-            DETAIL = format('request_id=%s existing_id=%s', p_request_id, v_existing_by_request.id);
+            DETAIL = format('request_code=%s existing_id=%s', p_request_code, v_existing_by_request.id);
         END IF;
         v_rescind_db_id := v_existing_by_request.id;
       ELSE
         SELECT * INTO v_existing_by_target
         FROM staffing.assignment_event_rescinds
-        WHERE tenant_id = p_tenant_id
-          AND assignment_id = p_assignment_id
+        WHERE tenant_uuid = p_tenant_uuid
+          AND assignment_uuid = p_assignment_uuid
           AND target_effective_date = p_target_effective_date
         LIMIT 1;
 
@@ -1417,7 +1417,7 @@ BEGIN
     END IF;
   END IF;
 
-  PERFORM staffing.replay_assignment_versions(p_tenant_id, p_assignment_id);
+  PERFORM staffing.replay_assignment_versions(p_tenant_uuid, p_assignment_uuid);
 
   RETURN v_rescind_db_id;
 END;

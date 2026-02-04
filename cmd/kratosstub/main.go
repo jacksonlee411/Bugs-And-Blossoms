@@ -18,7 +18,7 @@ import (
 
 type identity struct {
 	ID         string
-	TenantID   string
+	TenantUUID string
 	Email      string
 	RoleSlug   string
 	Identifier string
@@ -121,9 +121,9 @@ func main() {
 			"identity": map[string]any{
 				"id": ident.ID,
 				"traits": map[string]any{
-					"tenant_id": ident.TenantID,
-					"email":     ident.Email,
-					"role_slug": ident.RoleSlug,
+					"tenant_uuid": ident.TenantUUID,
+					"email":       ident.Email,
+					"role_slug":   ident.RoleSlug,
 				},
 			},
 		})
@@ -139,9 +139,9 @@ func main() {
 		var req struct {
 			SchemaID string `json:"schema_id"`
 			Traits   struct {
-				TenantID string `json:"tenant_id"`
-				Email    string `json:"email"`
-				RoleSlug string `json:"role_slug"`
+				TenantUUID string `json:"tenant_uuid"`
+				Email      string `json:"email"`
+				RoleSlug   string `json:"role_slug"`
 			} `json:"traits"`
 			Credentials struct {
 				Password struct {
@@ -156,7 +156,7 @@ func main() {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		tenantID := strings.TrimSpace(req.Traits.TenantID)
+		tenantUUID := strings.TrimSpace(req.Traits.TenantUUID)
 		email := strings.ToLower(strings.TrimSpace(req.Traits.Email))
 		roleSlug := strings.ToLower(strings.TrimSpace(req.Traits.RoleSlug))
 		password := req.Credentials.Password.Config.Password
@@ -169,7 +169,7 @@ func main() {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		if tenantID == "" && !isSuperadmin {
+		if tenantUUID == "" && !isSuperadmin {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -189,7 +189,7 @@ func main() {
 		id := identityUUID(identifier)
 		ident := identity{
 			ID:         id,
-			TenantID:   tenantID,
+			TenantUUID: tenantUUID,
 			Email:      email,
 			RoleSlug:   roleSlug,
 			Identifier: identifier,
@@ -201,9 +201,9 @@ func main() {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"id": id,
 			"traits": map[string]any{
-				"tenant_id": tenantID,
-				"email":     email,
-				"role_slug": roleSlug,
+				"tenant_uuid": tenantUUID,
+				"email":       email,
+				"role_slug":   roleSlug,
 			},
 		})
 	})

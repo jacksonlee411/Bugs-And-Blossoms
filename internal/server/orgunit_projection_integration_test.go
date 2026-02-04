@@ -239,9 +239,10 @@ $$;`,
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_uuid, org_id),
   CONSTRAINT org_unit_codes_org_code_format CHECK (
-    length(org_code) BETWEEN 1 AND 16
-    AND org_code = upper(btrim(org_code))
-    AND org_code ~ '^[A-Z0-9_-]{1,16}$'
+    length(org_code) BETWEEN 1 AND 64
+    AND org_code = upper(org_code)
+    AND org_code ~ E'^[\t\x20-\x7E\u3000-\u303F\uFF01-\uFF60\uFFE0-\uFFEE]{1,64}$'
+    AND org_code !~ E'^[\t\x20\u3000]+$'
   ),
   CONSTRAINT org_unit_codes_org_code_unique UNIQUE (tenant_uuid, org_code)
 );`,
@@ -450,7 +451,7 @@ BEGIN
     v_is_business_unit := COALESCE(p_is_business_unit, false);
   END IF;
 
-  v_org_code := NULLIF(btrim(p_org_code), '');
+  v_org_code := NULLIF(p_org_code, '');
   IF v_org_code IS NOT NULL THEN
     v_org_code := upper(v_org_code);
     INSERT INTO orgunit.org_unit_codes (tenant_uuid, org_id, org_code)
@@ -924,7 +925,7 @@ BEGIN
       v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
       v_name := NULLIF(btrim(v_payload->>'name'), '');
       v_manager_uuid := NULLIF(v_payload->>'manager_uuid', '')::uuid;
-      v_org_code := NULLIF(btrim(v_payload->>'org_code'), '');
+      v_org_code := NULLIF(v_payload->>'org_code', '');
       v_is_business_unit := NULL;
       IF v_payload ? 'is_business_unit' THEN
         BEGIN
@@ -1163,7 +1164,7 @@ BEGIN
     v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
     v_name := NULLIF(btrim(v_payload->>'name'), '');
     v_manager_uuid := NULLIF(v_payload->>'manager_uuid', '')::uuid;
-    v_org_code := NULLIF(btrim(v_payload->>'org_code'), '');
+    v_org_code := NULLIF(v_payload->>'org_code', '');
     v_is_business_unit := NULL;
     IF v_payload ? 'is_business_unit' THEN
       BEGIN

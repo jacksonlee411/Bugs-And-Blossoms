@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"html"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -31,6 +32,14 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 
 	asOf, ok := requireAsOf(w, r)
 	if !ok {
+		return
+	}
+	if legacy := findLegacyField(r.URL.Query(), "position_id", "assignment_id"); legacy != "" {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "invalid_request", "use position_uuid/assignment_uuid")
+		return
+	}
+	if legacy := findLegacyField(r.URL.Query(), "org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"); legacy != "" {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "invalid_request", "use org_code/position_uuid")
 		return
 	}
 
@@ -100,6 +109,10 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "bad form")))
 			return
 		}
+		if legacy := findLegacyField(r.Form, "org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"); legacy != "" {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "invalid_request", "use org_code/position_uuid")
+			return
+		}
 
 		effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
 		if effectiveDate == "" {
@@ -110,7 +123,7 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 			return
 		}
 
-		positionID := strings.TrimSpace(r.Form.Get("position_id"))
+		positionUUID := strings.TrimSpace(r.Form.Get("position_uuid"))
 		formOrgCode := r.Form.Get("org_code")
 		formOrgUnitID := ""
 		if formOrgCode != "" {
@@ -137,23 +150,23 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 			orgCode = normalized
 			formOrgUnitID = strconv.Itoa(resolvedID)
 		}
-		reportsToPositionID := strings.TrimSpace(r.Form.Get("reports_to_position_id"))
-		jobProfileID := strings.TrimSpace(r.Form.Get("job_profile_id"))
+		reportsToPositionUUID := strings.TrimSpace(r.Form.Get("reports_to_position_uuid"))
+		jobProfileUUID := strings.TrimSpace(r.Form.Get("job_profile_uuid"))
 		capacityFTE := strings.TrimSpace(r.Form.Get("capacity_fte"))
 		name := strings.TrimSpace(r.Form.Get("name"))
 		lifecycleStatus := strings.TrimSpace(r.Form.Get("lifecycle_status"))
 
-		if positionID == "" {
+		if positionUUID == "" {
 			if formOrgUnitID == "" {
 				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "org_code is required")))
 				return
 			}
-			if _, err := store.CreatePositionCurrent(r.Context(), tenant.ID, effectiveDate, formOrgUnitID, jobProfileID, capacityFTE, name); err != nil {
+			if _, err := store.CreatePositionCurrent(r.Context(), tenant.ID, effectiveDate, formOrgUnitID, jobProfileUUID, capacityFTE, name); err != nil {
 				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
 		} else {
-			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionID, effectiveDate, formOrgUnitID, reportsToPositionID, jobProfileID, capacityFTE, name, lifecycleStatus); err != nil {
+			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionUUID, effectiveDate, formOrgUnitID, reportsToPositionUUID, jobProfileUUID, capacityFTE, name, lifecycleStatus); err != nil {
 				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
@@ -172,28 +185,28 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 }
 
 type staffingPositionsAPIRequest struct {
-	EffectiveDate       string `json:"effective_date"`
-	PositionID          string `json:"position_id"`
-	OrgCode             string `json:"org_code"`
-	ReportsToPositionID string `json:"reports_to_position_id"`
-	JobProfileID        string `json:"job_profile_id"`
-	CapacityFTE         string `json:"capacity_fte"`
-	Name                string `json:"name"`
-	LifecycleStatus     string `json:"lifecycle_status"`
+	EffectiveDate         string `json:"effective_date"`
+	PositionUUID          string `json:"position_uuid"`
+	OrgCode               string `json:"org_code"`
+	ReportsToPositionUUID string `json:"reports_to_position_uuid"`
+	JobProfileUUID        string `json:"job_profile_uuid"`
+	CapacityFTE           string `json:"capacity_fte"`
+	Name                  string `json:"name"`
+	LifecycleStatus       string `json:"lifecycle_status"`
 }
 
 type staffingPositionAPIResponse struct {
-	PositionID          string `json:"position_id"`
-	OrgCode             string `json:"org_code"`
-	ReportsToPositionID string `json:"reports_to_position_id"`
-	JobCatalogSetID     string `json:"jobcatalog_setid"`
-	JobCatalogSetIDAsOf string `json:"jobcatalog_setid_as_of"`
-	JobProfileID        string `json:"job_profile_id"`
-	JobProfileCode      string `json:"job_profile_code"`
-	Name                string `json:"name"`
-	LifecycleStatus     string `json:"lifecycle_status"`
-	CapacityFTE         string `json:"capacity_fte"`
-	EffectiveDate       string `json:"effective_date"`
+	PositionUUID          string `json:"position_uuid"`
+	OrgCode               string `json:"org_code"`
+	ReportsToPositionUUID string `json:"reports_to_position_uuid"`
+	JobCatalogSetID       string `json:"jobcatalog_setid"`
+	JobCatalogSetIDAsOf   string `json:"jobcatalog_setid_as_of"`
+	JobProfileUUID        string `json:"job_profile_uuid"`
+	JobProfileCode        string `json:"job_profile_code"`
+	Name                  string `json:"name"`
+	LifecycleStatus       string `json:"lifecycle_status"`
+	CapacityFTE           string `json:"capacity_fte"`
+	EffectiveDate         string `json:"effective_date"`
 }
 
 func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgUnitCodeResolver, store PositionStore) {
@@ -209,6 +222,10 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 	}
 	if _, err := time.Parse("2006-01-02", asOf); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+		return
+	}
+	if legacy := findLegacyField(r.URL.Query(), "org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"); legacy != "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "use org_code/position_uuid")
 		return
 	}
 
@@ -228,43 +245,56 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 			return
 		}
 		orgCodes := map[string]string{}
+		orgIDByStr := map[string]int{}
+		orgIDs := make([]int, 0)
 		for _, p := range positions {
 			if p.OrgUnitID == "" {
 				continue
 			}
-			if _, ok := orgCodes[p.OrgUnitID]; ok {
+			if _, ok := orgIDByStr[p.OrgUnitID]; ok {
 				continue
-			}
-			if orgResolver == nil {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
-				return
 			}
 			orgID, err := strconv.Atoi(p.OrgUnitID)
 			if err != nil {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_id_invalid", "invalid orgunit id")
 				return
 			}
-			code, err := orgResolver.ResolveOrgCode(r.Context(), tenant.ID, orgID)
+			orgIDByStr[p.OrgUnitID] = orgID
+			orgIDs = append(orgIDs, orgID)
+		}
+		if len(orgIDs) > 0 {
+			if orgResolver == nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolver_missing", "orgunit resolver missing")
+				return
+			}
+			codes, err := orgResolver.ResolveOrgCodes(r.Context(), tenant.ID, orgIDs)
 			if err != nil {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolve_org_code_failed", "resolve org_code failed")
 				return
 			}
-			orgCodes[p.OrgUnitID] = code
+			for orgIDStr, orgID := range orgIDByStr {
+				code, ok := codes[orgID]
+				if !ok {
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_resolve_org_code_failed", "resolve org_code failed")
+					return
+				}
+				orgCodes[orgIDStr] = code
+			}
 		}
 		responsePositions := make([]staffingPositionAPIResponse, 0, len(positions))
 		for _, p := range positions {
 			responsePositions = append(responsePositions, staffingPositionAPIResponse{
-				PositionID:          p.ID,
-				OrgCode:             orgCodes[p.OrgUnitID],
-				ReportsToPositionID: p.ReportsToID,
-				JobCatalogSetID:     p.JobCatalogSetID,
-				JobCatalogSetIDAsOf: p.JobCatalogSetIDAsOf,
-				JobProfileID:        p.JobProfileID,
-				JobProfileCode:      p.JobProfileCode,
-				Name:                p.Name,
-				LifecycleStatus:     p.LifecycleStatus,
-				CapacityFTE:         p.CapacityFTE,
-				EffectiveDate:       p.EffectiveAt,
+				PositionUUID:          p.PositionUUID,
+				OrgCode:               orgCodes[p.OrgUnitID],
+				ReportsToPositionUUID: p.ReportsToPositionUUID,
+				JobCatalogSetID:       p.JobCatalogSetID,
+				JobCatalogSetIDAsOf:   p.JobCatalogSetIDAsOf,
+				JobProfileUUID:        p.JobProfileUUID,
+				JobProfileCode:        p.JobProfileCode,
+				Name:                  p.Name,
+				LifecycleStatus:       p.LifecycleStatus,
+				CapacityFTE:           p.CapacityFTE,
+				EffectiveDate:         p.EffectiveAt,
 			})
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -275,8 +305,24 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 		})
 		return
 	case http.MethodPost:
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+			return
+		}
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(body, &raw); err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+			return
+		}
+		for _, key := range []string{"org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"} {
+			if _, ok := raw[key]; ok {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "use org_code/position_uuid")
+				return
+			}
+		}
 		var req staffingPositionsAPIRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.Unmarshal(body, &req); err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
 			return
 		}
@@ -313,17 +359,16 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 			}
 			orgUnitID = strconv.Itoa(resolvedID)
 			req.OrgCode = normalized
-		} else if strings.TrimSpace(req.PositionID) == "" {
+		} else if strings.TrimSpace(req.PositionUUID) == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
 			return
 		}
 
 		var p Position
-		var err error
-		if strings.TrimSpace(req.PositionID) == "" {
-			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, orgUnitID, req.JobProfileID, req.CapacityFTE, req.Name)
+		if strings.TrimSpace(req.PositionUUID) == "" {
+			p, err = store.CreatePositionCurrent(r.Context(), tenant.ID, req.EffectiveDate, orgUnitID, req.JobProfileUUID, req.CapacityFTE, req.Name)
 		} else {
-			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionID, req.EffectiveDate, orgUnitID, req.ReportsToPositionID, req.JobProfileID, req.CapacityFTE, req.Name, req.LifecycleStatus)
+			p, err = store.UpdatePositionCurrent(r.Context(), tenant.ID, req.PositionUUID, req.EffectiveDate, orgUnitID, req.ReportsToPositionUUID, req.JobProfileUUID, req.CapacityFTE, req.Name, req.LifecycleStatus)
 		}
 		if err != nil {
 			code := stablePgMessage(err)
@@ -362,17 +407,17 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(staffingPositionAPIResponse{
-			PositionID:          p.ID,
-			OrgCode:             respOrgCode,
-			ReportsToPositionID: p.ReportsToID,
-			JobCatalogSetID:     p.JobCatalogSetID,
-			JobCatalogSetIDAsOf: p.JobCatalogSetIDAsOf,
-			JobProfileID:        p.JobProfileID,
-			JobProfileCode:      p.JobProfileCode,
-			Name:                p.Name,
-			LifecycleStatus:     p.LifecycleStatus,
-			CapacityFTE:         p.CapacityFTE,
-			EffectiveDate:       p.EffectiveAt,
+			PositionUUID:          p.PositionUUID,
+			OrgCode:               respOrgCode,
+			ReportsToPositionUUID: p.ReportsToPositionUUID,
+			JobCatalogSetID:       p.JobCatalogSetID,
+			JobCatalogSetIDAsOf:   p.JobCatalogSetIDAsOf,
+			JobProfileUUID:        p.JobProfileUUID,
+			JobProfileCode:        p.JobProfileCode,
+			Name:                  p.Name,
+			LifecycleStatus:       p.LifecycleStatus,
+			CapacityFTE:           p.CapacityFTE,
+			EffectiveDate:         p.EffectiveAt,
 		})
 		return
 	default:
@@ -472,6 +517,10 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 			writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, personUUID, pernr, displayName, mergeMsg(errMsg, "bad form")))
 			return
 		}
+		if legacy := findLegacyField(r.Form, "position_id", "assignment_id"); legacy != "" {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "invalid_request", "use position_uuid/assignment_uuid")
+			return
+		}
 
 		action := strings.TrimSpace(r.Form.Get("action"))
 
@@ -487,7 +536,7 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 
 		postPernr := strings.TrimSpace(r.Form.Get("pernr"))
 		postPersonUUID := strings.TrimSpace(r.Form.Get("person_uuid"))
-		positionID := strings.TrimSpace(r.Form.Get("position_id"))
+		positionID := strings.TrimSpace(r.Form.Get("position_uuid"))
 		allocatedFte := strings.TrimSpace(r.Form.Get("allocated_fte"))
 		status := strings.TrimSpace(r.Form.Get("status"))
 		if status != "" && status != "active" && status != "inactive" {
@@ -525,11 +574,11 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 				return
 			}
 		case "correct_event":
-			assignmentID := strings.TrimSpace(r.Form.Get("assignment_id"))
+			assignmentID := strings.TrimSpace(r.Form.Get("assignment_uuid"))
 			targetEffectiveDate := strings.TrimSpace(r.Form.Get("target_effective_date"))
 			if assignmentID == "" || targetEffectiveDate == "" {
 				assigns, errMsg := list()
-				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "assignment_id/target_effective_date is required")))
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "assignment_uuid/target_effective_date is required")))
 				return
 			}
 			if _, err := time.Parse("2006-01-02", targetEffectiveDate); err != nil {
@@ -539,12 +588,12 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 			}
 			if positionID == "" {
 				assigns, errMsg := list()
-				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "position_id is required")))
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "position_uuid is required")))
 				return
 			}
 
 			replacementPayload := map[string]any{
-				"position_id": positionID,
+				"position_uuid": positionID,
 			}
 			if allocatedFte != "" {
 				replacementPayload["allocated_fte"] = allocatedFte
@@ -560,12 +609,12 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 				return
 			}
 		case "rescind_event":
-			assignmentID := strings.TrimSpace(r.Form.Get("assignment_id"))
+			assignmentID := strings.TrimSpace(r.Form.Get("assignment_uuid"))
 			targetEffectiveDate := strings.TrimSpace(r.Form.Get("target_effective_date"))
 			note := strings.TrimSpace(r.Form.Get("note"))
 			if assignmentID == "" || targetEffectiveDate == "" {
 				assigns, errMsg := list()
-				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "assignment_id/target_effective_date is required")))
+				writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, postPersonUUID, postPernr, displayName, mergeMsg(errMsg, "assignment_uuid/target_effective_date is required")))
 				return
 			}
 			if _, err := time.Parse("2006-01-02", targetEffectiveDate); err != nil {
@@ -601,6 +650,15 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
+}
+
+func findLegacyField(values url.Values, keys ...string) string {
+	for _, key := range keys {
+		if values.Has(key) {
+			return key
+		}
+	}
+	return ""
 }
 
 func mergeMsg(a string, b string) string {
@@ -687,11 +745,11 @@ func renderPositions(
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
 	b.WriteString(`<label>Org Unit <input type="text" value="` + html.EscapeString(orgCodeLabel) + `" disabled /></label><br/>`)
 	b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(orgCode) + `" />`)
-	b.WriteString(`<label>Job Profile <select name="job_profile_id">`)
+	b.WriteString(`<label>Job Profile <select name="job_profile_uuid">`)
 	b.WriteString(`<option value="">(not set)</option>`)
 	for _, jp := range jobProfiles {
-		label := jp.Code + " (" + jp.ID + ")"
-		b.WriteString(`<option value="` + html.EscapeString(jp.ID) + `">` + html.EscapeString(label) + `</option>`)
+		label := jp.JobProfileCode + " (" + jp.JobProfileUUID + ")"
+		b.WriteString(`<option value="` + html.EscapeString(jp.JobProfileUUID) + `">` + html.EscapeString(label) + `</option>`)
 	}
 	b.WriteString(`</select></label><br/>`)
 	b.WriteString(`<label>Capacity FTE <input type="number" name="capacity_fte" step="0.01" min="0.01" value="1.0" /></label><br/>`)
@@ -702,16 +760,16 @@ func renderPositions(
 	b.WriteString(`<h2>Update / Disable</h2>`)
 	b.WriteString(`<form method="POST" action="` + html.EscapeString(action) + `">`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-	b.WriteString(`<label>Position <select name="position_id">`)
+	b.WriteString(`<label>Position <select name="position_uuid">`)
 	if len(positions) == 0 {
 		b.WriteString(`<option value="">(no positions)</option>`)
 	} else {
 		for _, p := range positions {
-			label := p.ID
+			label := p.PositionUUID
 			if p.Name != "" {
-				label = p.Name + " (" + p.ID + ")"
+				label = p.Name + " (" + p.PositionUUID + ")"
 			}
-			b.WriteString(`<option value="` + html.EscapeString(p.ID) + `">` + html.EscapeString(label) + `</option>`)
+			b.WriteString(`<option value="` + html.EscapeString(p.PositionUUID) + `">` + html.EscapeString(label) + `</option>`)
 		}
 	}
 	b.WriteString(`</select></label><br/>`)
@@ -725,21 +783,21 @@ func renderPositions(
 		b.WriteString(`<option value="` + html.EscapeString(n.OrgCode) + `">` + html.EscapeString(label) + `</option>`)
 	}
 	b.WriteString(`</select></label><br/>`)
-	b.WriteString(`<label>Reports To <select name="reports_to_position_id">`)
+	b.WriteString(`<label>Reports To <select name="reports_to_position_uuid">`)
 	b.WriteString(`<option value="">(no change)</option>`)
 	for _, p := range filterActivePositions(positions) {
-		label := p.ID
+		label := p.PositionUUID
 		if p.Name != "" {
-			label = p.Name + " (" + p.ID + ")"
+			label = p.Name + " (" + p.PositionUUID + ")"
 		}
-		b.WriteString(`<option value="` + html.EscapeString(p.ID) + `">` + html.EscapeString(label) + `</option>`)
+		b.WriteString(`<option value="` + html.EscapeString(p.PositionUUID) + `">` + html.EscapeString(label) + `</option>`)
 	}
 	b.WriteString(`</select></label><br/>`)
-	b.WriteString(`<label>Job Profile <select name="job_profile_id">` +
+	b.WriteString(`<label>Job Profile <select name="job_profile_uuid">` +
 		`<option value="">(no change)</option>`)
 	for _, jp := range jobProfiles {
-		label := jp.Code + " (" + jp.ID + ")"
-		b.WriteString(`<option value="` + html.EscapeString(jp.ID) + `">` + html.EscapeString(label) + `</option>`)
+		label := jp.JobProfileCode + " (" + jp.JobProfileUUID + ")"
+		b.WriteString(`<option value="` + html.EscapeString(jp.JobProfileUUID) + `">` + html.EscapeString(label) + `</option>`)
 	}
 	b.WriteString(`</select></label><br/>`)
 	b.WriteString(`<label>Capacity FTE <input type="number" name="capacity_fte" step="0.01" min="0.01" placeholder="(no change)" /></label><br/>`)
@@ -759,19 +817,19 @@ func renderPositions(
 	}
 
 	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr>` +
-		`<th>effective_date</th><th>position_id</th><th>reports_to_position_id</th><th>jobcatalog_setid</th><th>jobcatalog_setid_as_of</th><th>job_profile</th><th>capacity_fte</th><th>lifecycle_status</th><th>org_code</th><th>name</th>` +
+		`<th>effective_date</th><th>position_uuid</th><th>reports_to_position_uuid</th><th>jobcatalog_setid</th><th>jobcatalog_setid_as_of</th><th>job_profile</th><th>capacity_fte</th><th>lifecycle_status</th><th>org_code</th><th>name</th>` +
 		`</tr></thead><tbody>`)
 	for _, p := range positions {
 		jobProfileLabel := ""
-		if p.JobProfileID != "" {
-			jobProfileLabel = p.JobProfileID
+		if p.JobProfileUUID != "" {
+			jobProfileLabel = p.JobProfileUUID
 			if p.JobProfileCode != "" {
-				jobProfileLabel = p.JobProfileCode + " (" + p.JobProfileID + ")"
+				jobProfileLabel = p.JobProfileCode + " (" + p.JobProfileUUID + ")"
 			}
 		}
 		b.WriteString(`<tr><td><code>` + html.EscapeString(p.EffectiveAt) + `</code></td>` +
-			`<td><code>` + html.EscapeString(p.ID) + `</code></td>` +
-			`<td><code>` + html.EscapeString(p.ReportsToID) + `</code></td>` +
+			`<td><code>` + html.EscapeString(p.PositionUUID) + `</code></td>` +
+			`<td><code>` + html.EscapeString(p.ReportsToPositionUUID) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.JobCatalogSetID) + `</code></td>` +
 			`<td><code>` + html.EscapeString(p.JobCatalogSetIDAsOf) + `</code></td>` +
 			`<td><code>` + html.EscapeString(jobProfileLabel) + `</code></td>` +
@@ -823,16 +881,16 @@ func renderAssignments(assignments []Assignment, positions []Position, tenant Te
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
 	b.WriteString(`<label>Pernr <input type="text" name="pernr" value="` + html.EscapeString(pernr) + `" /></label><br/>`)
 	b.WriteString(`<input type="hidden" name="person_uuid" value="` + html.EscapeString(personUUID) + `" />`)
-	b.WriteString(`<label>Position <select name="position_id">`)
+	b.WriteString(`<label>Position <select name="position_uuid">`)
 	if len(positions) == 0 {
 		b.WriteString(`<option value="">(no positions)</option>`)
 	} else {
 		for _, p := range positions {
-			label := p.ID
+			label := p.PositionUUID
 			if p.Name != "" {
-				label = p.Name + " (" + p.ID + ")"
+				label = p.Name + " (" + p.PositionUUID + ")"
 			}
-			b.WriteString(`<option value="` + html.EscapeString(p.ID) + `">` + html.EscapeString(label) + `</option>`)
+			b.WriteString(`<option value="` + html.EscapeString(p.PositionUUID) + `">` + html.EscapeString(label) + `</option>`)
 		}
 	}
 	b.WriteString(`</select></label><br/>`)
@@ -855,12 +913,12 @@ func renderAssignments(assignments []Assignment, positions []Position, tenant Te
 	}
 
 	b.WriteString(`<table border="1" cellspacing="0" cellpadding="6"><thead><tr>` +
-		`<th>effective_date</th><th>assignment_id</th><th>position_id</th><th>status</th><th>actions</th>` +
+		`<th>effective_date</th><th>assignment_uuid</th><th>position_uuid</th><th>status</th><th>actions</th>` +
 		`</tr></thead><tbody>`)
 	for _, a := range assignments {
 		b.WriteString(`<tr><td><code>` + html.EscapeString(a.EffectiveAt) + `</code></td>` +
-			`<td><code>` + html.EscapeString(a.AssignmentID) + `</code></td>` +
-			`<td><code>` + html.EscapeString(a.PositionID) + `</code></td>` +
+			`<td><code>` + html.EscapeString(a.AssignmentUUID) + `</code></td>` +
+			`<td><code>` + html.EscapeString(a.PositionUUID) + `</code></td>` +
 			`<td>` + html.EscapeString(a.Status) + `</td>` +
 			`<td>` +
 			`<form method="POST" action="/org/assignments?as_of=` + url.QueryEscape(asOf) + `" style="display:inline-block;margin-right:8px">` +
@@ -868,7 +926,7 @@ func renderAssignments(assignments []Assignment, positions []Position, tenant Te
 			`<input type="hidden" name="effective_date" value="` + html.EscapeString(asOf) + `" />` +
 			`<input type="hidden" name="pernr" value="` + html.EscapeString(pernr) + `" />` +
 			`<input type="hidden" name="person_uuid" value="` + html.EscapeString(personUUID) + `" />` +
-			`<input type="hidden" name="assignment_id" value="` + html.EscapeString(a.AssignmentID) + `" />` +
+			`<input type="hidden" name="assignment_uuid" value="` + html.EscapeString(a.AssignmentUUID) + `" />` +
 			`<input type="hidden" name="target_effective_date" value="` + html.EscapeString(a.EffectiveAt) + `" />` +
 			`<button type="submit">Rescind</button>` +
 			`</form>` +
@@ -877,9 +935,9 @@ func renderAssignments(assignments []Assignment, positions []Position, tenant Te
 			`<input type="hidden" name="effective_date" value="` + html.EscapeString(asOf) + `" />` +
 			`<input type="hidden" name="pernr" value="` + html.EscapeString(pernr) + `" />` +
 			`<input type="hidden" name="person_uuid" value="` + html.EscapeString(personUUID) + `" />` +
-			`<input type="hidden" name="assignment_id" value="` + html.EscapeString(a.AssignmentID) + `" />` +
+			`<input type="hidden" name="assignment_uuid" value="` + html.EscapeString(a.AssignmentUUID) + `" />` +
 			`<input type="hidden" name="target_effective_date" value="` + html.EscapeString(a.EffectiveAt) + `" />` +
-			`<input type="hidden" name="position_id" value="` + html.EscapeString(a.PositionID) + `" />` +
+			`<input type="hidden" name="position_uuid" value="` + html.EscapeString(a.PositionUUID) + `" />` +
 			`<label>allocated_fte <input type="number" name="allocated_fte" step="0.01" min="0.01" max="1.00" style="width:80px" /></label> ` +
 			`<label>status <select name="status">` +
 			`<option value=""></option>` +

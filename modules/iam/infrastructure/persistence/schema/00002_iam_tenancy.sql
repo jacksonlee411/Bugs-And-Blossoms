@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS iam.tenants (
 
 CREATE TABLE IF NOT EXISTS iam.tenant_domains (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL REFERENCES iam.tenants(id) ON DELETE CASCADE,
+  tenant_uuid uuid NOT NULL REFERENCES iam.tenants(id) ON DELETE CASCADE,
   hostname text NOT NULL,
   is_primary boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS iam.tenant_domains (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS tenant_domains_hostname_unique ON iam.tenant_domains (hostname);
-CREATE INDEX IF NOT EXISTS tenant_domains_tenant_idx ON iam.tenant_domains (tenant_id);
-CREATE UNIQUE INDEX IF NOT EXISTS tenant_domains_primary_unique ON iam.tenant_domains (tenant_id) WHERE is_primary = true;
+CREATE INDEX IF NOT EXISTS tenant_domains_tenant_idx ON iam.tenant_domains (tenant_uuid);
+CREATE UNIQUE INDEX IF NOT EXISTS tenant_domains_primary_unique ON iam.tenant_domains (tenant_uuid) WHERE is_primary = true;
 
 DO $$
 BEGIN

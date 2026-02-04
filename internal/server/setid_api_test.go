@@ -144,7 +144,7 @@ func TestHandleSetIDBindingsAPI_BadInputs(t *testing.T) {
 }
 
 func TestHandleSetIDBindingsAPI_OrgCodeInvalid(t *testing.T) {
-	body := bytes.NewBufferString(`{"org_code":" bad ","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
+	body := bytes.NewBufferString(`{"org_code":"bad\u007f","setid":"A0001","effective_date":"2026-01-01","request_code":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/org/api/setid-bindings", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()

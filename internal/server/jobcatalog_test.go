@@ -61,7 +61,7 @@ func (jobCatalogResolveStub) ResolveJobCatalogPackageByCode(_ context.Context, _
 	if packageCode == "" {
 		return JobCatalogPackage{}, errors.New("PACKAGE_CODE_INVALID")
 	}
-	return JobCatalogPackage{PackageID: packageCode, PackageCode: packageCode, OwnerSetID: packageCode}, nil
+	return JobCatalogPackage{PackageUUID: packageCode, PackageCode: packageCode, OwnerSetID: packageCode}, nil
 }
 
 func (jobCatalogResolveStub) ResolveJobCatalogPackageBySetID(_ context.Context, _ string, setID string, _ string) (string, error) {
@@ -93,10 +93,10 @@ func (s jobCatalogSetIDStoreStub) ListOwnedScopePackages(_ context.Context, _ st
 }
 
 type resolveJobCatalogStoreStub struct {
-	pkg            JobCatalogPackage
-	pkgErr         error
-	setidPackageID string
-	setidErr       error
+	pkg              JobCatalogPackage
+	pkgErr           error
+	setidPackageUUID string
+	setidErr         error
 }
 
 func (s resolveJobCatalogStoreStub) ResolveJobCatalogPackageByCode(_ context.Context, _ string, _ string, _ string) (JobCatalogPackage, error) {
@@ -110,8 +110,8 @@ func (s resolveJobCatalogStoreStub) ResolveJobCatalogPackageBySetID(_ context.Co
 	if s.setidErr != nil {
 		return "", s.setidErr
 	}
-	if s.setidPackageID != "" {
-		return s.setidPackageID, nil
+	if s.setidPackageUUID != "" {
+		return s.setidPackageUUID, nil
 	}
 	return "", nil
 }
@@ -175,6 +175,12 @@ func (s orgStoreStub) ResolveOrgID(context.Context, string, string) (int, error)
 }
 func (s orgStoreStub) ResolveOrgCode(context.Context, string, int) (string, error) {
 	return "", s.err
+}
+func (s orgStoreStub) ResolveOrgCodes(context.Context, string, []int) (map[int]string, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return map[int]string{}, nil
 }
 
 func defaultJobCatalogOrgStore() OrgUnitStore {
@@ -381,7 +387,7 @@ func TestJobCatalogMemoryStore_ResolvePackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if pkg.PackageID == "" || pkg.PackageCode != "PKG1" || pkg.OwnerSetID != "PKG1" {
+	if pkg.PackageUUID == "" || pkg.PackageCode != "PKG1" || pkg.OwnerSetID != "PKG1" {
 		t.Fatalf("unexpected pkg=%+v", pkg)
 	}
 	if _, err := store.ResolveJobCatalogPackageBySetID(ctx, "t1", "", "2026-01-01"); err == nil {
@@ -518,7 +524,7 @@ func TestResolveJobCatalogPackageByCode_PG(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if pkg.PackageID != "pkg-1" || pkg.OwnerSetID != "S2601" || pkg.PackageCode != "PKG1" {
+	if pkg.PackageUUID != "pkg-1" || pkg.OwnerSetID != "S2601" || pkg.PackageCode != "PKG1" {
 		t.Fatalf("unexpected pkg=%+v", pkg)
 	}
 }
@@ -552,7 +558,7 @@ func TestJobCatalogPGStore_ResolvePackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if pkg.PackageID != "pkg-1" || pkg.OwnerSetID != "S2601" || pkg.PackageCode != "PKG1" {
+	if pkg.PackageUUID != "pkg-1" || pkg.OwnerSetID != "S2601" || pkg.PackageCode != "PKG1" {
 		t.Fatalf("unexpected pkg=%+v", pkg)
 	}
 
@@ -602,8 +608,8 @@ func TestResolveJobCatalogView_Branches(t *testing.T) {
 	inactiveAdminCtx := withPrincipal(context.Background(), Principal{RoleSlug: "tenant-admin", Status: "inactive"})
 	setidStore := jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}
 	store := resolveJobCatalogStoreStub{
-		pkg:            JobCatalogPackage{PackageID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
-		setidPackageID: "pkg-1",
+		pkg:              JobCatalogPackage{PackageUUID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
+		setidPackageUUID: "pkg-1",
 	}
 
 	view, errMsg := resolveJobCatalogView(context.Background(), store, setidStore, "t1", "2026-01-01", "", "")
@@ -632,15 +638,15 @@ func TestResolveJobCatalogView_Branches(t *testing.T) {
 	}
 
 	_, errMsg = resolveJobCatalogView(adminCtx, resolveJobCatalogStoreStub{
-		pkg:            JobCatalogPackage{PackageID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
-		setidPackageID: "pkg-2",
+		pkg:              JobCatalogPackage{PackageUUID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
+		setidPackageUUID: "pkg-2",
 	}, setidStore, "t1", "2026-01-01", "PKG1", "")
 	if errMsg != "PACKAGE_CODE_MISMATCH" {
 		t.Fatalf("err=%s", errMsg)
 	}
 
 	_, errMsg = resolveJobCatalogView(adminCtx, resolveJobCatalogStoreStub{
-		pkg:      JobCatalogPackage{PackageID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
+		pkg:      JobCatalogPackage{PackageUUID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
 		setidErr: errors.New("resolve failed"),
 	}, setidStore, "t1", "2026-01-01", "PKG1", "")
 	if errMsg != "resolve failed" {
@@ -648,8 +654,8 @@ func TestResolveJobCatalogView_Branches(t *testing.T) {
 	}
 
 	_, errMsg = resolveJobCatalogView(inactiveAdminCtx, resolveJobCatalogStoreStub{
-		pkg:            JobCatalogPackage{PackageID: "deflt-id", PackageCode: "DEFLT", OwnerSetID: "DEFLT"},
-		setidPackageID: "deflt-id",
+		pkg:              JobCatalogPackage{PackageUUID: "deflt-id", PackageCode: "DEFLT", OwnerSetID: "DEFLT"},
+		setidPackageUUID: "deflt-id",
 	}, jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "DEFLT", Status: "active"}}}, "t1", "2026-01-01", "DEFLT", "")
 	if errMsg != "DEFLT_EDIT_FORBIDDEN" {
 		t.Fatalf("err=%s", errMsg)
@@ -726,8 +732,8 @@ func TestHandleJobCatalog_Post_MutualExclusiveParams(t *testing.T) {
 
 func TestHandleJobCatalog_Post_PackageCodeMismatch(t *testing.T) {
 	store := resolveJobCatalogStoreStub{
-		pkg:            JobCatalogPackage{PackageID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
-		setidPackageID: "pkg-2",
+		pkg:              JobCatalogPackage{PackageUUID: "pkg-1", PackageCode: "PKG1", OwnerSetID: "S1"},
+		setidPackageUUID: "pkg-2",
 	}
 	setidStore := jobCatalogSetIDStoreStub{setids: []SetID{{SetID: "S1", Status: "active"}}}
 	form := url.Values{}
@@ -1985,20 +1991,20 @@ func TestQuoteAll(t *testing.T) {
 func TestRenderJobCatalog_RendersFamiliesAndProfiles(t *testing.T) {
 	html := renderJobCatalog(
 		[]JobFamilyGroup{
-			{ID: "g1", Code: "JFG-ENG", Name: "Engineering", IsActive: true, EffectiveDay: "2026-01-01"},
-			{ID: "g2", Code: "JFG-OFF", Name: "Off", IsActive: false, EffectiveDay: "2026-01-01"},
+			{JobFamilyGroupUUID: "g1", JobFamilyGroupCode: "JFG-ENG", Name: "Engineering", IsActive: true, EffectiveDay: "2026-01-01"},
+			{JobFamilyGroupUUID: "g2", JobFamilyGroupCode: "JFG-OFF", Name: "Off", IsActive: false, EffectiveDay: "2026-01-01"},
 		},
 		[]JobFamily{
-			{ID: "f1", Code: "JF-BE", GroupCode: "JFG-ENG", Name: "Backend", IsActive: true, EffectiveDay: "2026-01-01"},
-			{ID: "f2", Code: "JF-OFF", GroupCode: "JFG-OFF", Name: "Off", IsActive: false, EffectiveDay: "2026-01-01"},
+			{JobFamilyUUID: "f1", JobFamilyCode: "JF-BE", JobFamilyGroupCode: "JFG-ENG", Name: "Backend", IsActive: true, EffectiveDay: "2026-01-01"},
+			{JobFamilyUUID: "f2", JobFamilyCode: "JF-OFF", JobFamilyGroupCode: "JFG-OFF", Name: "Off", IsActive: false, EffectiveDay: "2026-01-01"},
 		},
 		[]JobLevel{
-			{ID: "l1", Code: "JL-1", Name: "Level 1", IsActive: true, EffectiveDay: "2026-01-01"},
-			{ID: "l2", Code: "JL-OFF", Name: "Off", IsActive: false, EffectiveDay: "2026-01-01"},
+			{JobLevelUUID: "l1", JobLevelCode: "JL-1", Name: "Level 1", IsActive: true, EffectiveDay: "2026-01-01"},
+			{JobLevelUUID: "l2", JobLevelCode: "JL-OFF", Name: "Off", IsActive: false, EffectiveDay: "2026-01-01"},
 		},
 		[]JobProfile{
-			{ID: "p1", Code: "JP-SWE", Name: "Software Engineer", IsActive: true, EffectiveDay: "2026-01-01", FamilyCodesCSV: "JF-BE,JF-FE", PrimaryFamilyCode: "JF-BE"},
-			{ID: "p2", Code: "JP-OFF", Name: "Off", IsActive: false, EffectiveDay: "2026-01-01", FamilyCodesCSV: "JF-OFF", PrimaryFamilyCode: "JF-OFF"},
+			{JobProfileUUID: "p1", JobProfileCode: "JP-SWE", Name: "Software Engineer", IsActive: true, EffectiveDay: "2026-01-01", FamilyCodesCSV: "JF-BE,JF-FE", PrimaryFamilyCode: "JF-BE"},
+			{JobProfileUUID: "p2", JobProfileCode: "JP-OFF", Name: "Off", IsActive: false, EffectiveDay: "2026-01-01", FamilyCodesCSV: "JF-OFF", PrimaryFamilyCode: "JF-OFF"},
 		},
 		Tenant{Name: "T"},
 		jobCatalogView{PackageCode: "PKG1", OwnerSetID: "PKG1", HasSelection: true},
@@ -2051,7 +2057,7 @@ func TestHandleJobCatalog_DefaultsAndMethodNotAllowed(t *testing.T) {
 
 	_ = renderJobCatalog(nil, nil, nil, nil, Tenant{Name: "T"}, jobCatalogView{}, "", "2026-01-01", nil)
 	_ = renderJobCatalog(
-		[]JobFamilyGroup{{ID: "g1", Code: "C", Name: "N", IsActive: true, EffectiveDay: "2026-01-01"}},
+		[]JobFamilyGroup{{JobFamilyGroupUUID: "g1", JobFamilyGroupCode: "C", Name: "N", IsActive: true, EffectiveDay: "2026-01-01"}},
 		nil,
 		nil,
 		nil,

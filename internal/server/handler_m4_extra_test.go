@@ -89,7 +89,7 @@ func TestHandler_InternalAssignmentEventRoutes(t *testing.T) {
 		t.Fatalf("unexpected sid cookie: %#v", sidCookie)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
+	req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
 	req.Host = "localhost:8080"
 	req.AddCookie(sidCookie)
 	rec := httptest.NewRecorder()
@@ -98,7 +98,7 @@ func TestHandler_InternalAssignmentEventRoutes(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	req2 := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","payload":{}}`))
+	req2 := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","payload":{}}`))
 	req2.Host = "localhost:8080"
 	req2.AddCookie(sidCookie)
 	rec2 := httptest.NewRecorder()

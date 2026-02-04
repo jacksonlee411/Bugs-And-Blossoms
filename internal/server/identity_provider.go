@@ -53,7 +53,7 @@ func (p *kratosIdentityProvider) AuthenticatePassword(ctx context.Context, tenan
 		return authenticatedIdentity{}, err
 	}
 
-	tenantTrait, ok := stringTrait(ident.Traits, "tenant_id")
+	tenantTrait, ok := stringTrait(ident.Traits, "tenant_uuid")
 	if !ok || tenantTrait != tenant.ID {
 		return authenticatedIdentity{}, errors.New("server: kratos tenant mismatch")
 	}

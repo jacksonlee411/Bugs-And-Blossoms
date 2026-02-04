@@ -1,6 +1,6 @@
 # DEV-PLAN-026C：OrgUnit 外部ID兼容（org_code 映射）评审与修订方案
 
-**状态**: 部分完成（2026-02-03，迁移样本统计待补）
+**状态**: 部分完成（2026-02-03，迁移样本统计豁免：无样本数据，审批人：我）
 
 ## 1. 背景与目的
 - 本文为 DEV-PLAN-026B 的评审与修订计划，聚焦“契约一致性、可迁移性、可重放性、边界清晰”。
@@ -24,11 +24,11 @@
 - [X] 现有投射重建是否有“清表重放/幂等 upsert”约定与实现（作为 026B 重放策略的前提）。
   - 结论：采用同事务 delete+replay（清表重放），非 upsert。
   - 证据：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`；`modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`。
-- [X] API 输入校验是否保留原始输入（用于“首尾空白判 invalid”语义）。
+- [X] API 输入校验是否保留原始输入（用于空格/\\t/全角空白允许语义与“非全空白”判定）。
   - 结论：多数入口保留原始输入；SetID UI 路径在 Normalize 前先 Trim，导致语义不一致。
   - 证据：`pkg/orgunit/resolve.go`；`internal/server/orgunit_nodes.go`；`internal/server/staffing_handlers.go`；`internal/server/orgunit_api.go`；`internal/server/setid.go`。
-- [ ] 迁移样本统计：历史 org_code 的长度/字符集分布是否覆盖 026B 约束。
-  - 现状：未在 `docs/dev-plans/` 或 `docs/dev-records/` 找到迁移样本统计记录。
+- [~] 迁移样本统计：历史 org_code 的长度/字符集分布是否覆盖 026B 约束（**豁免：无样本数据，审批人：我**）。
+  - 现状：未在 `docs/dev-plans/` 或 `docs/dev-records/` 找到迁移样本统计记录；本次按豁免处理。
 - [X] "ROOT" 是否为保留 org_code，若不是需修订示例。
   - 结论：未发现 “ROOT 为保留 org_code” 的规则或校验；root 语义由 parent_id 为空与 root_org_id 约束定义。
   - 证据：`docs/dev-plans/026b-orgunit-external-id-code-mapping.md`；`modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`。
@@ -39,8 +39,8 @@
 - 修订建议：完成记录迁移到 `docs/dev-records/`，计划文档仅保留可执行步骤与状态。
 
 ### 4.2 org_code 校验语义不一致
-- 026B 同时声明“trim + upper”与“首尾空白直接判 invalid”，且 DB 约束采用 `upper(btrim())`。
-- 修订建议：明确“输入层拒绝原始首尾空白”，并将 DB 约束定位为“存储值一致性”，避免语义冲突。
+- 旧版 026B 使用“trim + upper”，与“允许空格/\\t/全角字符”存在冲突风险。
+- 修订建议：统一为 **仅 upper（不 trim）** + 白名单校验 + 长度 1~64 + 禁止全空白（空格/\\t/全角空白）；DB 约束改为 `org_code = upper(org_code)` + 白名单正则，避免语义冲突。
 
 ### 4.3 org_id 分配器边界与返回语义不一致
 - `next_org_id` 上限与分配函数条件不一致；“返回值 + 自增”语义与实现对齐不足。
@@ -70,9 +70,9 @@
 - 将 026B 的“完成记录”迁移至 `docs/dev-records/`，计划文档改为“待办 + 验收”格式。
 
 ### 7.2 校验与归一化链路
-- 明确校验顺序：原始输入校验（首尾空白/非法字符）→ 归一化（trim + upper）→ 存储一致性校验。
+- 明确校验顺序：原始输入校验（白名单/长度/控制字符/非全空白）→ 归一化（upper，不 trim）→ 存储一致性校验。
 - DB 约束仅保证存储值合法，不作为原始输入校验替代。
-- 必改入口：SetID UI 当前在 Normalize 前先 Trim（导致“首尾空白判 invalid”语义失真），需调整为保留原始输入或显式拒绝含首尾空白的原始输入。
+- 必改入口：SetID UI 不得在 Normalize 前先 Trim（需保留空格/\\t 的允许语义）。
 
 ### 7.3 org_id 分配器一致性修订
 - 统一 `next_org_id` 取值边界并修正文档语义（返回值/自增规则一致）。
@@ -113,13 +113,13 @@
 - [x] 迁移占位策略有明确规则或被显式禁止。
 - [ ] 示例与保留字规则一致，无隐性假设。
 - [ ] 相关实现与测试对齐修订后的契约（验证入口引用 SSOT）。
-- [ ] 迁移样本统计已完成并有结论；若不满足约束，有明确处置策略。
+- [~] 迁移样本统计已完成并有结论；若无样本数据则按豁免记录（审批人：我）。
 
 ## 9. 实施步骤
 1. [ ] 核实前置事实（投射重建、输入校验、迁移样本、ROOT 语义）。
 2. [X] 修订 026B 文档：校验链路、分配语义、重放策略、占位策略、示例。
 3. [X] 形成对应 `dev-records` 证据记录（如涉及已完成事项）。
-4. [X] 修复 SetID UI 输入链路（避免 Normalize 前 Trim，确保首尾空白判 invalid 语义一致）。
+4. [X] 修复 SetID UI 输入链路（避免 Normalize 前 Trim，确保空格/\\t 允许语义一致）。
 5. [X] 评估并记录 N+1 风险（批量解析/联表方案是否必要）。
 6. [X] 若修订涉及实现差异，提交最小代码变更与测试用例。
 7. [X] 依据 SSOT 门禁进行验证并记录结果（见 `AGENTS.md`）。
