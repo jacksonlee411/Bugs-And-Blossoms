@@ -45,7 +45,13 @@ fi
 
 rm -rf "$shoelace_out"
 mkdir -p "$shoelace_out"
-cp -a "${shoelace_src}/." "$shoelace_out/"
+cp -a "${shoelace_src}/shoelace.js" "$shoelace_out/"
+
+for dir in assets chunks components internal styles themes translations utilities; do
+  if [[ -d "${shoelace_src}/${dir}" ]]; then
+    cp -a "${shoelace_src}/${dir}" "$shoelace_out/"
+  fi
+done
 
 echo "[ui] OK: ${out_dir}/app.html"
 echo "[ui] OK: ${shoelace_out}"
