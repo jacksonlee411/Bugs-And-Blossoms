@@ -34,7 +34,7 @@
    证据：`internal/server/handler.go:292`、`internal/server/orgunit_nodes.go:1296`
 11. [X] 搜索定位（org_code/name）— `/org/nodes/search` GET
    证据：`internal/server/handler.go:295`、`internal/server/orgunit_nodes.go:1375`
-12. [ ] 独立详情页 / 组织单元详情视图（UI）
+12. [x] 独立详情页 / 组织单元详情视图（UI）
    说明：已有详情片段接口（`/org/nodes/details`），但尚未接入完整 UI（`modules/orgunit/presentation/*` 为空）。
 
 ### API（Internal API）
@@ -861,7 +861,7 @@ END LOOP;
 6. [x] Shoelace 资源接入 + UI 对接（树/详情/搜索定位、事件桥接）
 7. [x] Readiness 记录（门禁执行证据与关键结果）
 8. [x] Internal API：OrgUnit CRUD（create/rename/move/disable/list）+ 路由 allowlist/Authz
-9. [ ] 独立详情页 / 组织单元详情视图（UI）
+9. [x] 独立详情页 / 组织单元详情视图（UI）
 
 #### PR 计划（草案）
 **PR 1｜DB 与内核：更正表 + 叠加视图基础**
@@ -892,8 +892,8 @@ END LOOP;
 - [x] 验证：`go fmt ./... && go vet ./... && make check lint && make test && make check routing`
 
 **PR 7｜UI：独立详情页**
-- [ ] 目标：新增 OrgUnit 独立详情页（基于 `/org/nodes/details` 复用数据），提供可被 UI 直接访问的详情视图入口。
-- [ ] 验证：`make generate && make css`（如涉及前端资源）+ `make check routing`
+- [x] 目标：新增 OrgUnit 独立详情页（基于 `/org/nodes/details` 复用数据），提供可被 UI 直接访问的详情视图入口。
+- [x] 验证：未涉及前端资源（已跑 `make check routing`）
 
 ### 9. 测试与验收
 - 单测：更正多次、改生效日落在原区间内、改生效日越界、同日冲突、幂等 request_id 冲突、pernr 不存在、RLS 失效路径。
