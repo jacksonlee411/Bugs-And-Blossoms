@@ -1,6 +1,6 @@
 # DEV-PLAN-073：OrgUnit CRUD 实现清单（页面与 API）
 
-**状态**: 进行中（2026-02-04 11:45 UTC）
+**状态**: 进行中（2026-02-04 13:02 UTC）
 
 ## 背景
 - 需要基于当前代码，列出 OrgUnit CRUD 在页面与 API 的实现情况，作为后续补齐的入口。
@@ -40,12 +40,12 @@
 ### API（Internal API）
 1. [X] 设置 BU — `POST /org/api/org-units/set-business-unit`
    证据：`internal/server/handler.go:379`、`internal/server/orgunit_api.go:23`
-2. [ ] 创建 OrgUnit（JSON API）
-   说明：未发现对应路由/handler。
-3. [ ] 更新（rename/move/disable）API
-   说明：未发现对应路由/handler。
-4. [ ] 列表/查询 OrgUnit API
-   说明：未发现对应路由/handler。
+2. [X] 创建 OrgUnit（JSON API）
+   证据：`internal/server/handler.go:398`、`internal/server/orgunit_api.go:147`
+3. [X] 更新（rename/move/disable）API
+   证据：`internal/server/handler.go:404`、`internal/server/orgunit_api.go:265`
+4. [X] 列表/查询 OrgUnit API
+   证据：`internal/server/handler.go:398`、`internal/server/orgunit_api.go:147`
 
 ### 存储/事件与读模型
 1. [X] 事件表 + 事件类型约束（CREATE/MOVE/RENAME/DISABLE/SET_BUSINESS_UNIT）
@@ -860,7 +860,7 @@ END LOOP;
 5. [x] 接口实现（children/details/search + corrections）+ 路由 allowlist/Authz 策略
 6. [x] Shoelace 资源接入 + UI 对接（树/详情/搜索定位、事件桥接）
 7. [x] Readiness 记录（门禁执行证据与关键结果）
-8. [ ] Internal API：OrgUnit CRUD（create/rename/move/disable/list）+ 路由 allowlist/Authz
+8. [x] Internal API：OrgUnit CRUD（create/rename/move/disable/list）+ 路由 allowlist/Authz
 9. [ ] 独立详情页 / 组织单元详情视图（UI）
 
 #### PR 计划（草案）
@@ -888,8 +888,8 @@ END LOOP;
 - [x] 验证：`make check doc`
 
 **PR 6｜Internal API：OrgUnit CRUD**
-- [ ] 目标：补齐 `/org/api/org-units` 列表与创建接口，新增 `/org/api/org-units/{rename|move|disable}` 操作接口，统一走 OrgUnitWriteService。
-- [ ] 验证：`go fmt ./... && go vet ./... && make check lint && make test && make check routing`
+- [x] 目标：补齐 `/org/api/org-units` 列表与创建接口，新增 `/org/api/org-units/{rename|move|disable}` 操作接口，统一走 OrgUnitWriteService。
+- [x] 验证：`go fmt ./... && go vet ./... && make check lint && make test && make check routing`
 
 **PR 7｜UI：独立详情页**
 - [ ] 目标：新增 OrgUnit 独立详情页（基于 `/org/nodes/details` 复用数据），提供可被 UI 直接访问的详情视图入口。
