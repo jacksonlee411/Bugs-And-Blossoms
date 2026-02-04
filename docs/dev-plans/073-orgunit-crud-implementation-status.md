@@ -769,7 +769,7 @@ END LOOP;
 3. [x] Schema 迁移（含更正表与幂等约束）
 4. [x] 服务层实现 + 单测（幂等/更正/重放/租户 fail-closed；manager_pernr as_of 校验待 Person 有效期补齐）
 5. [ ] 接口实现（children/details/search + corrections）+ 路由 allowlist/Authz 策略
-6. [ ] Shoelace 资源接入 + UI 对接（树/详情/搜索定位、事件桥接）
+6. [x] Shoelace 资源接入 + UI 对接（树/详情/搜索定位、事件桥接）
 7. [ ] Readiness 记录（门禁执行证据与关键结果）
 
 #### PR 计划（草案）
@@ -789,8 +789,8 @@ END LOOP;
 - 验证：`make check routing` + Go 门禁
 
 **PR 4｜UI 集成：Shoelace Tree + 事件桥接**
-- 目标：接入 Shoelace 资源、树/详情容器与事件桥接。
-- 验证：`make generate && make css`（完成后 `git status --short` 为空）
+- [x] 完成：接入 Shoelace 资源、树/详情容器与事件桥接。
+- [x] 验证：`make generate && make css`（完成后 `git status --short` 为空）
 
 **PR 5｜Readiness 记录**
 - 目标：写入 `docs/dev-records/` 的证据与门禁结果。

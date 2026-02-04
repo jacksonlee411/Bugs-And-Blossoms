@@ -247,9 +247,10 @@ JOIN orgunit.org_unit_codes c
 	 AND v.org_id = s.org_id
 	 AND v.status = 'active'
  AND v.validity @> $2::date
+ AND v.parent_id IS NULL
 JOIN orgunit.org_events e
   ON e.id = v.last_event_id
-ORDER BY e.transaction_time DESC
+ORDER BY v.node_path
 `, tenantID, asOfDate)
 	if err != nil {
 		return nil, err
@@ -1424,6 +1425,168 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
 	}
 
 	postAction := "/org/nodes?as_of=" + html.EscapeString(asOf)
+	b.WriteString(`<div class="org-nodes-layout">`)
+	b.WriteString(`<section class="org-nodes-panel">`)
+	b.WriteString(`<div class="org-nodes-tree-header">`)
+	b.WriteString(`<h2>Tree</h2>`)
+	b.WriteString(`<form id="org-node-search-form" class="org-node-search" method="GET" action="/org/nodes/search">`)
+	b.WriteString(`<input type="hidden" name="as_of" value="` + html.EscapeString(asOf) + `" />`)
+	b.WriteString(`<input name="query" placeholder="Search org code or name" />`)
+	b.WriteString(`<button type="submit">Search</button>`)
+	b.WriteString(`</form>`)
+	b.WriteString(`<div id="org-node-search-error" class="org-node-search-error" aria-live="polite"></div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<sl-tree id="org-node-tree" selection="single">`)
+	if len(nodes) == 0 {
+		b.WriteString(`<sl-tree-item disabled>(none)</sl-tree-item>`)
+	} else {
+		for _, n := range nodes {
+			codeLabel := n.OrgCode
+			if strings.TrimSpace(codeLabel) == "" {
+				codeLabel = "(missing org_code)"
+			}
+			b.WriteString(`<sl-tree-item data-org-id="`)
+			b.WriteString(html.EscapeString(n.ID))
+			b.WriteString(`" data-org-code="`)
+			b.WriteString(html.EscapeString(n.OrgCode))
+			b.WriteString(`" data-has-children="true" lazy>`)
+			b.WriteString(html.EscapeString(n.Name))
+			b.WriteString(` <span class="org-node-code">` + html.EscapeString(codeLabel) + `</span>`)
+			if n.IsBusinessUnit {
+				b.WriteString(` <span class="org-node-bu">(BU)</span>`)
+			}
+			b.WriteString(`</sl-tree-item>`)
+		}
+	}
+	b.WriteString(`</sl-tree>`)
+	b.WriteString(`</section>`)
+	b.WriteString(`<section class="org-nodes-panel">`)
+	b.WriteString(`<h2>Details</h2>`)
+	b.WriteString(`<div id="org-node-details">Select a node.</div>`)
+	b.WriteString(`</section>`)
+	b.WriteString(`</div>`)
+
+	b.WriteString(`<script>
+(function() {
+  const tree = document.getElementById('org-node-tree');
+  if (!tree || !window.htmx) {
+    return;
+  }
+
+  const errorEl = document.getElementById('org-node-search-error');
+  const setError = (msg) => {
+    if (errorEl) {
+      errorEl.textContent = msg || '';
+    }
+  };
+
+  const getAsOf = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('as_of') || '';
+  };
+
+  const loadChildren = (item) => {
+    if (!item || item.dataset.loading === 'true' || item.lazy !== true) {
+      return Promise.resolve();
+    }
+    const orgId = item.dataset.orgId;
+    const asOf = getAsOf();
+    if (!orgId || !asOf) {
+      return Promise.resolve();
+    }
+    item.dataset.loading = 'true';
+    const url = '/org/nodes/children?parent_id=' + encodeURIComponent(orgId) + '&as_of=' + encodeURIComponent(asOf);
+    return htmx.ajax('GET', url, { target: item, swap: 'innerHTML' })
+      .then(() => {
+        item.lazy = false;
+      })
+      .finally(() => {
+        delete item.dataset.loading;
+      });
+  };
+
+  const loadDetails = (orgId) => {
+    const asOf = getAsOf();
+    if (!orgId || !asOf) {
+      return;
+    }
+    const url = '/org/nodes/details?org_id=' + encodeURIComponent(orgId) + '&as_of=' + encodeURIComponent(asOf);
+    htmx.ajax('GET', url, { target: '#org-node-details', swap: 'innerHTML' });
+  };
+
+  tree.addEventListener('sl-lazy-load', (event) => {
+    const item = event.detail.item;
+    loadChildren(item).catch(() => {});
+  });
+
+  tree.addEventListener('sl-selection-change', (event) => {
+    const item = event.detail.item;
+    const orgId = item && item.dataset ? item.dataset.orgId : '';
+    if (!orgId) {
+      return;
+    }
+    loadDetails(orgId);
+  });
+
+  const form = document.getElementById('org-node-search-form');
+  if (form) {
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const query = String(formData.get('query') || '').trim();
+      if (!query) {
+        setError('Query required.');
+        return;
+      }
+      const asOf = getAsOf();
+      if (!asOf) {
+        setError('Missing as_of.');
+        return;
+      }
+      setError('');
+      const url = '/org/nodes/search?query=' + encodeURIComponent(query) + '&as_of=' + encodeURIComponent(asOf);
+      fetch(url, { headers: { 'Accept': 'application/json' } })
+        .then((resp) => {
+          if (!resp.ok) {
+            throw new Error('search failed');
+          }
+          return resp.json();
+        })
+        .then(async (data) => {
+          if (!data || !Array.isArray(data.path_org_ids)) {
+            throw new Error('invalid response');
+          }
+          let current = null;
+          for (const orgId of data.path_org_ids) {
+            let item = tree.querySelector('sl-tree-item[data-org-id=\"' + orgId + '\"]');
+            if (!item && current) {
+              await loadChildren(current);
+              item = tree.querySelector('sl-tree-item[data-org-id=\"' + orgId + '\"]');
+            }
+            if (!item) {
+              break;
+            }
+            item.expanded = true;
+            current = item;
+          }
+          if (!current) {
+            setError('Node not found.');
+            return;
+          }
+          current.selected = true;
+          current.scrollIntoView({ block: 'center' });
+          if (current.dataset && current.dataset.orgId) {
+            loadDetails(current.dataset.orgId);
+          }
+        })
+        .catch(() => {
+          setError('Search failed.');
+        });
+    });
+  }
+})();
+</script>`)
+
 	b.WriteString(`<form method="POST" action="` + postAction + `">`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
 	b.WriteString(`<label>Org Code <input name="org_code" /></label><br/>`)

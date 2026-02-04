@@ -35,4 +35,23 @@ cp -a "${dist_dir}/." "$out_dir/"
 rm -f "${out_dir}/index.html"
 cp "${dist_dir}/index.html" "${out_dir}/app.html"
 
+shoelace_src="apps/web/node_modules/@shoelace-style/shoelace/dist"
+shoelace_out="internal/server/assets/shoelace"
+
+if [[ ! -d "${shoelace_src}" ]]; then
+  echo "[ui] missing ${shoelace_src}; Shoelace assets not found" >&2
+  exit 2
+fi
+
+rm -rf "$shoelace_out"
+mkdir -p "$shoelace_out"
+cp -a "${shoelace_src}/shoelace.js" "$shoelace_out/"
+
+for dir in assets chunks components internal styles themes translations utilities; do
+  if [[ -d "${shoelace_src}/${dir}" ]]; then
+    cp -a "${shoelace_src}/${dir}" "$shoelace_out/"
+  fi
+done
+
 echo "[ui] OK: ${out_dir}/app.html"
+echo "[ui] OK: ${shoelace_out}"
