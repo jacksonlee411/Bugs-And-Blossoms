@@ -274,6 +274,64 @@ ORDER BY v.node_path
 	return out, nil
 }
 
+func (s *orgUnitPGStore) ListBusinessUnitsCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	rows, err := tx.Query(ctx, `
+WITH snapshot AS (
+  SELECT org_id, name, is_business_unit
+  FROM orgunit.get_org_snapshot($1::uuid, $2::date)
+)
+SELECT
+  s.org_id::text,
+  c.org_code,
+  s.name,
+  s.is_business_unit,
+  e.transaction_time
+FROM snapshot s
+JOIN orgunit.org_unit_codes c
+  ON c.tenant_uuid = $1::uuid
+ AND c.org_id = s.org_id
+JOIN orgunit.org_unit_versions v
+  ON v.tenant_uuid = $1::uuid
+ AND v.org_id = s.org_id
+ AND v.status = 'active'
+ AND v.validity @> $2::date
+JOIN orgunit.org_events e
+  ON e.id = v.last_event_id
+WHERE s.is_business_unit
+ORDER BY v.node_path
+`, tenantID, asOfDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []OrgUnitNode
+	for rows.Next() {
+		var n OrgUnitNode
+		if err := rows.Scan(&n.ID, &n.OrgCode, &n.Name, &n.IsBusinessUnit, &n.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (s *orgUnitPGStore) ListChildren(ctx context.Context, tenantID string, parentID int, asOfDate string) ([]OrgUnitChild, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

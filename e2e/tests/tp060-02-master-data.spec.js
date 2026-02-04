@@ -101,11 +101,17 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   };
 
   const findOrgUnitCode = async (name) => {
-    const li = page.locator("ul li", { hasText: name }).first();
-    if ((await li.count()) === 0) {
-      return "";
+    const resp = await appContext.request.get(
+      `/org/nodes/search?query=${encodeURIComponent(name)}&as_of=${encodeURIComponent(asOf)}`
+    );
+    if (resp.status() === 200) {
+      const data = await resp.json();
+      return (data && data.target_org_code) ? String(data.target_org_code) : "";
     }
-    return ((await li.locator("code").first().innerText()) || "").trim();
+    if (resp.status() !== 404) {
+      throw new Error(`search org node failed: ${resp.status()}`);
+    }
+    return "";
   };
 
   const setBusinessUnitFlag = async (form, enabled) => {

@@ -113,6 +113,18 @@ entrypoints:
       - path: /org/api/global-scope-packages
         methods: [GET, POST]
         route_class: internal_api
+      - path: /org/api/org-units
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /org/api/org-units/rename
+        methods: [POST]
+        route_class: internal_api
+      - path: /org/api/org-units/move
+        methods: [POST]
+        route_class: internal_api
+      - path: /org/api/org-units/disable
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/org-units/set-business-unit
         methods: [POST]
         route_class: internal_api

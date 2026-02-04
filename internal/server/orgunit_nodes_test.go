@@ -1813,6 +1813,81 @@ func TestOrgUnitPGStore_ListNodesCurrent_AndCreateCurrent(t *testing.T) {
 	}
 }
 
+func TestOrgUnitPGStore_ListBusinessUnitsCurrent(t *testing.T) {
+	pool := &fakeBeginner{}
+	store := &orgUnitPGStore{pool: pool}
+
+	nodes, err := store.ListBusinessUnitsCurrent(context.Background(), "t1", "2026-01-06")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0].ID != "n1" {
+		t.Fatalf("nodes=%+v", nodes)
+	}
+}
+
+func TestOrgUnitPGStore_ListBusinessUnitsCurrent_Errors(t *testing.T) {
+	t.Run("begin", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		})}
+		_, err := store.ListBusinessUnitsCurrent(context.Background(), "t1", "2026-01-06")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set_config", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		})}
+		_, err := store.ListBusinessUnitsCurrent(context.Background(), "t1", "2026-01-06")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{queryErr: errors.New("query")}, nil
+		})}
+		_, err := store.ListBusinessUnitsCurrent(context.Background(), "t1", "2026-01-06")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("scan", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &stubRows{scanErr: errors.New("scan")}}, nil
+		})}
+		_, err := store.ListBusinessUnitsCurrent(context.Background(), "t1", "2026-01-06")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rows_err", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &stubRows{err: errors.New("rows")}}, nil
+		})}
+		_, err := store.ListBusinessUnitsCurrent(context.Background(), "t1", "2026-01-06")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{commitErr: errors.New("commit")}, nil
+		})}
+		_, err := store.ListBusinessUnitsCurrent(context.Background(), "t1", "2026-01-06")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
 func TestOrgUnitPGStore_ListNodesCurrent_Errors(t *testing.T) {
 	t.Run("begin", func(t *testing.T) {
 		store := newOrgUnitPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {

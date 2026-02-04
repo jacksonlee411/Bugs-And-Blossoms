@@ -87,6 +87,10 @@ type SetIDGovernanceStore interface {
 	ListGlobalScopePackages(ctx context.Context, scopeCode string) ([]ScopePackage, error)
 }
 
+type businessUnitLister interface {
+	ListBusinessUnitsCurrent(ctx context.Context, tenantID string, asOfDate string) ([]OrgUnitNode, error)
+}
+
 type setidPGStore struct {
 	pool pgBeginner
 }
@@ -1058,6 +1062,23 @@ func (s *setidMemoryStore) ListGlobalScopePackages(_ context.Context, scopeCode 
 	return out, nil
 }
 
+func listBusinessUnitsCurrent(ctx context.Context, orgStore OrgUnitStore, tenantID string, asOf string) ([]OrgUnitNode, error) {
+	if lister, ok := orgStore.(businessUnitLister); ok {
+		return lister.ListBusinessUnitsCurrent(ctx, tenantID, asOf)
+	}
+	nodes, err := orgStore.ListNodesCurrent(ctx, tenantID, asOf)
+	if err != nil {
+		return nil, err
+	}
+	businessUnits := make([]OrgUnitNode, 0, len(nodes))
+	for _, n := range nodes {
+		if n.IsBusinessUnit {
+			businessUnits = append(businessUnits, n)
+		}
+	}
+	return businessUnits, nil
+}
+
 func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore, orgStore OrgUnitStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -1099,7 +1120,7 @@ func handleSetID(w http.ResponseWriter, r *http.Request, store SetIDGovernanceSt
 		if orgStore == nil {
 			return setids, bindings, nil, nil, nil, mergeMsg(errHint, "orgunit store missing")
 		}
-		nodes, err = orgStore.ListNodesCurrent(r.Context(), tenant.ID, asOf)
+		nodes, err = listBusinessUnitsCurrent(r.Context(), orgStore, tenant.ID, asOf)
 		if err != nil {
 			return setids, bindings, nil, nil, nil, mergeMsg(errHint, err.Error())
 		}

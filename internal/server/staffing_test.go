@@ -2752,12 +2752,13 @@ func TestStaffingHandlers(t *testing.T) {
 	})
 
 	t.Run("renderPositions empty nodes branch", func(t *testing.T) {
-		_ = renderPositions(nil, nil, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "", "", nil, "")
+		_ = renderPositions(nil, nil, nil, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "", "", nil, "")
 	})
 	t.Run("renderPositions with nodes and positions", func(t *testing.T) {
 		_ = renderPositions(
 			[]Position{{PositionUUID: "pos1", OrgUnitID: "10000001", Name: "A", EffectiveAt: "2026-01-01"}},
 			[]OrgUnitNode{{ID: "10000001", OrgCode: "ORG-1", Name: "B"}, {ID: "10000002", OrgCode: "ORG-2", Name: "A"}},
+			nil,
 			Tenant{ID: "t1", Name: "T"},
 			"2026-01-01",
 			"",
@@ -2767,7 +2768,7 @@ func TestStaffingHandlers(t *testing.T) {
 		)
 	})
 	t.Run("renderPositions org unit missing in nodes", func(t *testing.T) {
-		out := renderPositions(nil, []OrgUnitNode{{ID: "10000001", OrgCode: "ORG-1", Name: "Org"}}, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "MISSING", "", nil, "")
+		out := renderPositions(nil, []OrgUnitNode{{ID: "10000001", OrgCode: "ORG-1", Name: "Org"}}, nil, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "MISSING", "", nil, "")
 		if !strings.Contains(out, "MISSING") {
 			t.Fatalf("unexpected output: %s", out)
 		}
@@ -2779,6 +2780,7 @@ func TestStaffingHandlers(t *testing.T) {
 				{PositionUUID: "pos2", OrgUnitID: "10000002", Name: "", EffectiveAt: "2026-01-02", LifecycleStatus: "disabled", JobCatalogSetID: "", JobProfileUUID: "2", JobProfileCode: ""},
 			},
 			[]OrgUnitNode{{ID: "10000001", OrgCode: "ORG-1", Name: "Org", IsBusinessUnit: true}, {ID: "10000002", OrgCode: "ORG-2", Name: "Org2"}},
+			nil,
 			Tenant{ID: "t1", Name: "T"},
 			"2026-01-01",
 			"ORG-1",
@@ -2787,6 +2789,22 @@ func TestStaffingHandlers(t *testing.T) {
 			"err",
 		)
 		if !strings.Contains(out, "SetID") {
+			t.Fatalf("unexpected output: %s", out)
+		}
+	})
+	t.Run("renderPositions org code fallback", func(t *testing.T) {
+		out := renderPositions(
+			[]Position{{PositionUUID: "pos1", OrgUnitID: "20000000", Name: "A", EffectiveAt: "2026-01-01"}},
+			nil,
+			map[string]string{"20000000": "ORG-X"},
+			Tenant{ID: "t1", Name: "T"},
+			"2026-01-01",
+			"",
+			"",
+			nil,
+			"",
+		)
+		if !strings.Contains(out, "ORG-X") {
 			t.Fatalf("unexpected output: %s", out)
 		}
 	})
@@ -2884,6 +2902,66 @@ func TestMergeMsg(t *testing.T) {
 	if mergeMsg("a", "b") != "a；b" {
 		t.Fatal("expected merged")
 	}
+}
+
+func TestResolvePositionOrgCodes(t *testing.T) {
+	t.Run("empty positions", func(t *testing.T) {
+		out, err := resolvePositionOrgCodes(context.Background(), nil, "t1", nil)
+		if err != nil {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if len(out) != 0 {
+			t.Fatalf("expected empty, got=%v", out)
+		}
+	})
+
+	t.Run("invalid org unit id", func(t *testing.T) {
+		_, err := resolvePositionOrgCodes(context.Background(), staffingOrgStoreStub{}, "t1", []Position{{OrgUnitID: "bad"}})
+		if err == nil || err.Error() != "orgunit_id_invalid" {
+			t.Fatalf("expected orgunit_id_invalid, got=%v", err)
+		}
+	})
+
+	t.Run("missing resolver", func(t *testing.T) {
+		_, err := resolvePositionOrgCodes(context.Background(), nil, "t1", []Position{{OrgUnitID: "10000001"}})
+		if err == nil || err.Error() != "orgunit_resolver_missing" {
+			t.Fatalf("expected orgunit_resolver_missing, got=%v", err)
+		}
+	})
+
+	t.Run("resolve missing code", func(t *testing.T) {
+		resolver := staffingOrgStoreStub{
+			resolveOrgCodesFn: func(context.Context, string, []int) (map[int]string, error) {
+				return map[int]string{}, nil
+			},
+		}
+		_, err := resolvePositionOrgCodes(context.Background(), resolver, "t1", []Position{{OrgUnitID: "10000001"}})
+		if err == nil || err.Error() != "orgunit_resolve_org_code_failed" {
+			t.Fatalf("expected orgunit_resolve_org_code_failed, got=%v", err)
+		}
+	})
+
+	t.Run("resolve ok", func(t *testing.T) {
+		resolver := staffingOrgStoreStub{
+			resolveOrgCodesFn: func(context.Context, string, []int) (map[int]string, error) {
+				return map[int]string{
+					10000001: "ORG-1",
+					10000002: "ORG-2",
+				}, nil
+			},
+		}
+		out, err := resolvePositionOrgCodes(context.Background(), resolver, "t1", []Position{
+			{OrgUnitID: "10000001"},
+			{OrgUnitID: "10000001"},
+			{OrgUnitID: "10000002"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if out["10000001"] != "ORG-1" || out["10000002"] != "ORG-2" {
+			t.Fatalf("unexpected map=%v", out)
+		}
+	})
 }
 
 func TestStaffingHandlers_ParseDefaultDates(t *testing.T) {

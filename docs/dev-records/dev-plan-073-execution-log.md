@@ -8,6 +8,7 @@
 - PR #272：Shoelace Tree 资源接入与 `/org/nodes` UI 对接（树/详情/搜索事件桥接），Astro Shell 与样式更新，build-astro 产物同步至 `internal/server/assets/`
 - PR #273：新增 DEV-PLAN-073 执行日志，并补齐 AGENTS Doc Map 链接
 - PR #275：扩展 OrgUnit Internal API 与独立详情页的契约/里程碑定义
+- PR #276：实现 OrgUnit Internal API（`/org/api/org-units` CRUD），补齐路由 allowlist/Authz 映射与服务层/路由层覆盖率；修复 SetID 绑定表单的 BU 列表覆盖层级，补齐 Positions 当前表格的 org_code 显示，并更新 E2E 用例
 
 ## 本地验证
 
@@ -15,6 +16,7 @@
 - 已通过：`go vet ./...`
 - 已通过：`make test`
 - 已通过：`make check routing`
+- 已通过：`go test ./internal/server -run TestStaffing`
 - 已通过：`make generate`
 - 已通过：`make css`
 - 已通过：`make check doc`
@@ -26,3 +28,4 @@
 - PR #272：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/272
 - PR #273：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/273
 - PR #275：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/275
+- PR #276：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/276

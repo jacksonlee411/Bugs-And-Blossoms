@@ -282,6 +282,19 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgScopePackage, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/org/api/org-units":
+		if method == http.MethodGet {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/org-units/rename", "/org/api/org-units/move", "/org/api/org-units/disable":
+		if method == http.MethodPost {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/org/api/org-units/set-business-unit":
 		if method == http.MethodPost {
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true

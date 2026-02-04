@@ -308,6 +308,15 @@ func newTestOrgStore() OrgUnitStore {
 	return newOrgUnitMemoryStore()
 }
 
+type businessUnitListerOrgStore struct {
+	OrgUnitStore
+	nodes []OrgUnitNode
+}
+
+func (s businessUnitListerOrgStore) ListBusinessUnitsCurrent(context.Context, string, string) ([]OrgUnitNode, error) {
+	return s.nodes, nil
+}
+
 type resolveErrOrgStore struct {
 	err error
 }
@@ -461,6 +470,22 @@ func TestHandleSetID_Get(t *testing.T) {
 	}
 	if body := rec.Body.String(); !strings.Contains(body, "SetID Governance") {
 		t.Fatalf("unexpected body: %q", body)
+	}
+}
+
+func TestHandleSetID_UsesBusinessUnitLister(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/setid?as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Domain: "localhost", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetID(rec, req, newSetIDMemoryStore(), businessUnitListerOrgStore{
+		OrgUnitStore: newOrgUnitMemoryStore(),
+		nodes:        []OrgUnitNode{{ID: "bu1", OrgCode: "BU-LISTER", Name: "BU", IsBusinessUnit: true}},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "BU-LISTER") {
+		t.Fatalf("expected business unit option, got: %q", body)
 	}
 }
 
