@@ -1157,6 +1157,33 @@ func TestStaffingHandlers(t *testing.T) {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
+	t.Run("handlePositions org codes error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handlePositions(rec, req,
+			staffingOrgStoreStub{
+				listFn: func(context.Context, string, string) ([]OrgUnitNode, error) {
+					return []OrgUnitNode{{ID: "10000001", OrgCode: "ORG-1", Name: "Org"}}, nil
+				},
+				resolveOrgCodesFn: func(context.Context, string, []int) (map[int]string, error) {
+					return nil, errors.New("resolve boom")
+				},
+			},
+			positionStoreStub{
+				listFn: func(context.Context, string, string) ([]Position, error) {
+					return []Position{{PositionUUID: "pos1", OrgUnitID: "10000001", EffectiveAt: "2026-01-01"}}, nil
+				},
+			},
+			nil,
+		)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "resolve boom") {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
 
 	t.Run("handlePositions post bad form", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", nil)
@@ -2808,6 +2835,19 @@ func TestStaffingHandlers(t *testing.T) {
 			t.Fatalf("unexpected output: %s", out)
 		}
 	})
+	t.Run("renderPositions org code empty fallback", func(t *testing.T) {
+		_ = renderPositions(
+			[]Position{{PositionUUID: "pos1", OrgUnitID: "20000001", Name: "B", EffectiveAt: "2026-01-01"}},
+			nil,
+			map[string]string{"20000001": ""},
+			Tenant{ID: "t1", Name: "T"},
+			"2026-01-01",
+			"",
+			"",
+			nil,
+			"",
+		)
+	})
 	t.Run("renderAssignments without person branch", func(t *testing.T) {
 		_ = renderAssignments(nil, nil, Tenant{ID: "t1", Name: "T"}, "2026-01-01", "", "", "", "")
 	})
@@ -2938,6 +2978,18 @@ func TestResolvePositionOrgCodes(t *testing.T) {
 		_, err := resolvePositionOrgCodes(context.Background(), resolver, "t1", []Position{{OrgUnitID: "10000001"}})
 		if err == nil || err.Error() != "orgunit_resolve_org_code_failed" {
 			t.Fatalf("expected orgunit_resolve_org_code_failed, got=%v", err)
+		}
+	})
+
+	t.Run("resolve error", func(t *testing.T) {
+		resolver := staffingOrgStoreStub{
+			resolveOrgCodesFn: func(context.Context, string, []int) (map[int]string, error) {
+				return nil, errors.New("boom")
+			},
+		}
+		_, err := resolvePositionOrgCodes(context.Background(), resolver, "t1", []Position{{OrgUnitID: "10000001"}})
+		if err == nil || err.Error() != "boom" {
+			t.Fatalf("expected boom, got=%v", err)
 		}
 	})
 

@@ -47,6 +47,9 @@ entrypoints:
       - path: /org/nodes/details
         methods: [GET]
         route_class: ui
+      - path: /org/nodes/view
+        methods: [GET]
+        route_class: ui
       - path: /org/nodes/search
         methods: [GET]
         route_class: ui
