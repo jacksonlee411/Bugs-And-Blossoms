@@ -761,7 +761,7 @@ END LOOP;
 1. [x] 设计确认（更正叠加视图取舍、字段元数据/不可更正清单、UI 交互口径与 as_of 规则、API/路由/权限口径）
 2. [x] 新增表手工确认（阻断点）
 3. [x] Schema 迁移（含更正表与幂等约束）
-4. [ ] 服务层实现 + 单测（幂等/更正/重放/租户 fail-closed、manager_pernr as_of 校验）
+4. [x] 服务层实现 + 单测（幂等/更正/重放/租户 fail-closed；manager_pernr as_of 校验待 Person 有效期补齐）
 5. [ ] 接口实现（children/details/search + corrections）+ 路由 allowlist/Authz 策略
 6. [ ] Shoelace 资源接入 + UI 对接（树/详情/搜索定位、事件桥接）
 7. [ ] Readiness 记录（门禁执行证据与关键结果）
@@ -772,8 +772,11 @@ END LOOP;
 - [x] 验证：`make orgunit plan && make orgunit lint && make orgunit migrate up`
 
 **PR 2｜服务层：写入服务 + 更正流程**
-- 目标：落地 `OrgUnitWriteService`，实现幂等/更正/重放与租户 fail-closed。
-- 验证：`go fmt ./... && go vet ./... && make check lint && make test`
+- [x] 完成：新增 `OrgUnitWriteService`/`OrgUnitWriteStore` + PG 实现，覆盖 create/rename/move/disable/set_business_unit/correct 与 patch 校验。
+- [x] 完成：`manager_pernr` 规范校验（digits 1-8）+ 双写 `manager_uuid`/`manager_pernr`。
+- [x] 单测：服务层/持久层覆盖率补齐，满足 100% 覆盖率门禁。
+- [x] 验证：`go fmt ./... && go vet ./... && make check lint && make test`
+- [ ] 备注：`manager_pernr` 的 as_of 校验依赖 Person 有效期模型，当前仅校验存在/active，待 Person 有效期补齐后完善。
 
 **PR 3｜读服务 + 新路由：children/details/search**
 - 目标：实现 `OrgUnitReadService` 与 3 个只读路由，并补齐 Authz 与 allowlist。
