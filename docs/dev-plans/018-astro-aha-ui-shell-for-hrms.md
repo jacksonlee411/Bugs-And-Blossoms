@@ -122,6 +122,7 @@ flowchart LR
 - **Astro = 壳与组件编译层**：负责 layout/导航组件/页面框架/静态资源与 build pipeline；尽量不承载业务数据渲染。
 - **HTMX = 业务交互与数据驱动渲染**：业务页面内容以 server-rendered HTML partial 为主，依赖 `hx-get/hx-post/hx-target` 做局部刷新。
 - **Alpine = 局部状态与微交互**：导航折叠、快捷键、弹窗、表单局部校验提示等；不做跨页面状态管理。
+ - **Web Components = 允许用于交互型 UI 组件**：可引入框架无关的 Web Component（如树组件），但必须保持“服务端权威数据 + HTMX 交互 + as_of 透传”，禁止引入 SPA/全局状态管理。
 
 ### 4.2 “壳（Shell）”与“内容（Content）”分离
 引入一个统一的 App Shell：
