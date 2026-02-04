@@ -71,18 +71,22 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 
 	nodes, err := orgStore.ListNodesCurrent(r.Context(), tenant.ID, asOf)
 	if err != nil {
-		writePage(w, r, renderPositions(nil, nil, tenant, asOf, orgCode, "", nil, mergeMsg(orgMsg, stablePgMessage(err))))
+		writePage(w, r, renderPositions(nil, nil, nil, tenant, asOf, orgCode, "", nil, mergeMsg(orgMsg, stablePgMessage(err))))
 		return
 	}
 	positions, err := store.ListPositionsCurrent(r.Context(), tenant.ID, asOf)
 	if err != nil {
-		writePage(w, r, renderPositions(nil, nodes, tenant, asOf, orgCode, "", nil, mergeMsg(orgMsg, stablePgMessage(err))))
+		writePage(w, r, renderPositions(nil, nodes, nil, tenant, asOf, orgCode, "", nil, mergeMsg(orgMsg, stablePgMessage(err))))
 		return
 	}
 
 	var jobProfiles []JobProfile
 	jobCatalogMsg := orgMsg
 	setID := ""
+	orgCodesByID, orgCodesErr := resolvePositionOrgCodes(r.Context(), orgStore, tenant.ID, positions)
+	if orgCodesErr != nil {
+		jobCatalogMsg = mergeMsg(jobCatalogMsg, stablePgMessage(orgCodesErr))
+	}
 	if jobStore != nil && orgUnitID != "" {
 		if resolver, ok := orgStore.(orgUnitSetIDResolver); ok {
 			resolved, err := resolver.ResolveSetID(r.Context(), tenant.ID, orgUnitID, asOf)
@@ -102,11 +106,11 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 
 	switch r.Method {
 	case http.MethodGet:
-		writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, jobCatalogMsg))
+		writePage(w, r, renderPositions(positions, nodes, orgCodesByID, tenant, asOf, orgCode, setID, jobProfiles, jobCatalogMsg))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
-			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "bad form")))
+			writePage(w, r, renderPositions(positions, nodes, orgCodesByID, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "bad form")))
 			return
 		}
 		if legacy := findLegacyField(r.Form, "org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"); legacy != "" {
@@ -119,7 +123,7 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 			effectiveDate = asOf
 		}
 		if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
-			writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "effective_date 无效: "+err.Error())))
+			writePage(w, r, renderPositions(positions, nodes, orgCodesByID, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "effective_date 无效: "+err.Error())))
 			return
 		}
 
@@ -129,7 +133,7 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 		if formOrgCode != "" {
 			normalized, err := orgunitpkg.NormalizeOrgCode(formOrgCode)
 			if err != nil {
-				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "org_code invalid")))
+				writePage(w, r, renderPositions(positions, nodes, orgCodesByID, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "org_code invalid")))
 				return
 			}
 			resolvedID, err := orgStore.ResolveOrgID(r.Context(), tenant.ID, normalized)
@@ -143,7 +147,7 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 				default:
 					msg = stablePgMessage(err)
 				}
-				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, msg)))
+				writePage(w, r, renderPositions(positions, nodes, orgCodesByID, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, msg)))
 				return
 			}
 			formOrgCode = normalized
@@ -158,16 +162,16 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 
 		if positionUUID == "" {
 			if formOrgUnitID == "" {
-				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "org_code is required")))
+				writePage(w, r, renderPositions(positions, nodes, orgCodesByID, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "org_code is required")))
 				return
 			}
 			if _, err := store.CreatePositionCurrent(r.Context(), tenant.ID, effectiveDate, formOrgUnitID, jobProfileUUID, capacityFTE, name); err != nil {
-				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
+				writePage(w, r, renderPositions(positions, nodes, orgCodesByID, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
 		} else {
 			if _, err := store.UpdatePositionCurrent(r.Context(), tenant.ID, positionUUID, effectiveDate, formOrgUnitID, reportsToPositionUUID, jobProfileUUID, capacityFTE, name, lifecycleStatus); err != nil {
-				writePage(w, r, renderPositions(positions, nodes, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
+				writePage(w, r, renderPositions(positions, nodes, orgCodesByID, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, stablePgMessage(err))))
 				return
 			}
 		}
@@ -671,9 +675,51 @@ func mergeMsg(a string, b string) string {
 	return a + "；" + b
 }
 
+func resolvePositionOrgCodes(ctx context.Context, resolver OrgUnitCodeResolver, tenantID string, positions []Position) (map[string]string, error) {
+	out := map[string]string{}
+	if len(positions) == 0 {
+		return out, nil
+	}
+	orgIDByStr := map[string]int{}
+	orgIDs := make([]int, 0)
+	for _, p := range positions {
+		if p.OrgUnitID == "" {
+			continue
+		}
+		if _, ok := orgIDByStr[p.OrgUnitID]; ok {
+			continue
+		}
+		orgID, err := strconv.Atoi(p.OrgUnitID)
+		if err != nil {
+			return nil, errors.New("orgunit_id_invalid")
+		}
+		orgIDByStr[p.OrgUnitID] = orgID
+		orgIDs = append(orgIDs, orgID)
+	}
+	if len(orgIDs) == 0 {
+		return out, nil
+	}
+	if resolver == nil {
+		return nil, errors.New("orgunit_resolver_missing")
+	}
+	codes, err := resolver.ResolveOrgCodes(ctx, tenantID, orgIDs)
+	if err != nil {
+		return nil, err
+	}
+	for orgIDStr, orgID := range orgIDByStr {
+		code, ok := codes[orgID]
+		if !ok {
+			return nil, errors.New("orgunit_resolve_org_code_failed")
+		}
+		out[orgIDStr] = code
+	}
+	return out, nil
+}
+
 func renderPositions(
 	positions []Position,
 	nodes []OrgUnitNode,
+	orgCodesByID map[string]string,
 	tenant Tenant,
 	asOf string,
 	orgCode string,
@@ -695,6 +741,12 @@ func renderPositions(
 		if n.OrgCode != "" {
 			nodeByCode[n.OrgCode] = n
 		}
+	}
+	for id, code := range orgCodesByID {
+		if code == "" {
+			continue
+		}
+		orgCodeByID[id] = code
 	}
 	orgCodeLabel := "(not set)"
 	if orgCode != "" {
