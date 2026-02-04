@@ -1,6 +1,6 @@
 # DEV-PLAN-073：OrgUnit CRUD 实现清单（页面与 API）
 
-**状态**: 草拟中（2026-02-03 00:00 UTC）
+**状态**: 进行中（2026-02-04 11:45 UTC）
 
 ## 背景
 - 需要基于当前代码，列出 OrgUnit CRUD 在页面与 API 的实现情况，作为后续补齐的入口。
@@ -364,7 +364,79 @@ type OrgUnitReadService interface {
 - 写入必须走 DB Kernel（`submit_*_event` + `replay_*`），避免第二写入口。
 
 ### 5. 接口契约（草案）
-**Internal API：更正历史记录**
+#### 5.1 Internal API：OrgUnit CRUD
+
+**路由**：
+- `GET /org/api/org-units`
+- `POST /org/api/org-units`
+- `POST /org/api/org-units/rename`
+- `POST /org/api/org-units/move`
+- `POST /org/api/org-units/disable`
+- `POST /org/api/org-units/set-business-unit`（已有）
+
+**GET /org/api/org-units**
+- Query：
+  - `as_of`（可选；默认当天 UTC）
+  - `parent_org_code`（可选；有值时返回该节点子列表，无值时返回根节点列表）
+- Response（200 OK）：
+```json
+{
+  "as_of": "2026-02-04",
+  "org_units": [
+    {
+      "org_code": "A001",
+      "name": "销售一部",
+      "is_business_unit": false
+    }
+  ]
+}
+```
+
+**POST /org/api/org-units（创建）**
+- Request（JSON）：
+  - `org_code`（必填）
+  - `name`（必填）
+  - `effective_date`（可选，YYYY-MM-DD，缺省为当天 UTC）
+  - `parent_org_code`（可选）
+  - `is_business_unit`（可选，缺省 false）
+  - `manager_pernr`（可选；`^[0-9]{1,8}$`）
+- Response（201 Created）：
+```json
+{
+  "org_code": "A001",
+  "effective_date": "2026-02-04",
+  "fields": {
+    "name": "销售一部",
+    "parent_org_code": "A0001",
+    "is_business_unit": false,
+    "manager_pernr": "1002001",
+    "manager_name": "张三"
+  }
+}
+```
+
+**POST /org/api/org-units/rename（重命名）**
+- Request：`org_code`（必填）、`new_name`（必填）、`effective_date`（可选）
+- Response：`200 OK`
+
+**POST /org/api/org-units/move（移动）**
+- Request：`org_code`（必填）、`new_parent_org_code`（必填）、`effective_date`（可选）
+- Response：`200 OK`
+
+**POST /org/api/org-units/disable（停用）**
+- Request：`org_code`（必填）、`effective_date`（可选）
+- Response：`200 OK`
+
+**错误码（示例）**：
+- `400`：参数非法（`org_code`/`effective_date`/`manager_pernr`/`new_parent_org_code` 等）
+- `404`：目标组织或上级不存在（`ORG_CODE_NOT_FOUND` / `PARENT_NOT_FOUND_AS_OF`）
+- `409`：同日事件冲突（唯一约束冲突）
+- `422`：数据库稳定错误码（由 DB Kernel 返回）
+
+**写入约束**：
+- 所有写入必须走 `OrgUnitWriteService`（`submit_*_event` + `replay_*`）。
+
+#### 5.2 Internal API：更正历史记录
 - `POST /org/api/org-units/corrections`
 - Request（JSON）：
   - `org_code`（必填）
@@ -380,7 +452,7 @@ type OrgUnitReadService interface {
 **UI（/org/nodes）**
 - 通过统一服务层提交更正；错误返回在右侧详情区展示。
 
-#### 5.1 Internal API 详细契约
+#### 5.3 Internal API 详细契约（更正历史记录）
 **路由**：`POST /org/api/org-units/corrections`
 
 **Request 示例**：
@@ -434,7 +506,7 @@ type OrgUnitReadService interface {
 ```
 说明：若发生改生效日，`effective_date` 返回更正后的生效日。
 
-#### 5.2 UI（/org/nodes）表单字段
+#### 5.4 UI（/org/nodes）表单字段
 - 右侧详情 Tab 中提供“更正”表单：按字段元数据渲染当前可更正业务属性（本期至少包含 `effective_date`/`parent_org_code`/`name`/`manager_pernr`）。
   - `effective_date`（日期选择；允许调整，但必须落在原区间内。提交时保留原 `effective_date` 作为定位值；若用户修改，则在 `patch.effective_date` 传入新值）
   - `parent_org_code`（可选）
@@ -442,7 +514,7 @@ type OrgUnitReadService interface {
   - `manager_pernr`（可选；输入后自动带出 `manager_name` 只读）
 - as_of 翻页与更正表单联动：翻页后表单默认填充该生效日的当前值。
 
-#### 5.3 校验规则（统一服务层）
+#### 5.5 校验规则（统一服务层）
 - `org_code`：`^[A-Z0-9_-]{1,16}$`，禁止前后空白。
 - `effective_date`：合法日期（YYYY-MM-DD）。
 - `patch`：仅允许业务属性字段；明确“不可更正清单”（含 `org_code`）并拒绝更正。
@@ -457,7 +529,7 @@ type OrgUnitReadService interface {
 - 同日停用（DISABLE）：`effective_date` 与既有事件同日则拒绝，返回 `EVENT_DATE_CONFLICT`（409）。
 - 末状态禁用约束：若该 org 的最后状态为 `disabled`，拒绝除 `ENABLE` 之外的任何更大生效日事件。
 
-#### 5.4 错误码（建议）
+#### 5.6 错误码（建议）
 - `ORG_CODE_INVALID`（400）
 - `EFFECTIVE_DATE_INVALID`（400）
 - `EFFECTIVE_DATE_OUT_OF_RANGE`（409）
@@ -471,7 +543,18 @@ type OrgUnitReadService interface {
 - `ORG_ENABLE_REQUIRED`（409，末状态为 disabled，仅允许 ENABLE）
 - `REQUEST_DUPLICATE`（409，幂等请求冲突）
 
-#### 5.5 组织树组件接口（Shoelace Tree）
+#### 5.7 UI：独立详情页
+**路由**：`GET /org/nodes/view?org_code=...&as_of=YYYY-MM-DD`
+
+**行为**：
+- 使用 `org_code` 解析 `org_id`，复用 `/org/nodes/details` 的数据口径渲染完整页面。
+- 页面提供“返回组织树”入口，保持 `as_of` 参数。
+
+**错误处理**：
+- `400`：`org_code/as_of` 非法或缺失。
+- `404`：`org_code` 不存在或 as_of 下无有效记录。
+
+#### 5.8 组织树组件接口（Shoelace Tree）
 **目标**：在 AHA 栈内以 Web Component 实现“树 + 详情”，服务端保持权威数据来源。
 
 **UI 入口**：
@@ -549,7 +632,7 @@ type OrgUnitReadService interface {
 - 404：节点或路径不存在。
 - 403：无权限。
 
-#### 5.6 路由与权限口径（Authz）
+#### 5.9 路由与权限口径（Authz）
 **对象/动作**：`orgunit.orgunits` + `read/admin`
 
 **UI 路由**：
@@ -558,8 +641,14 @@ type OrgUnitReadService interface {
 - `GET /org/nodes/children`：read
 - `GET /org/nodes/details`：read
 - `GET /org/nodes/search`：read
+- `GET /org/nodes/view`：read
 
 **API 路由（internal）**：
+- `GET /org/api/org-units`：read
+- `POST /org/api/org-units`：admin
+- `POST /org/api/org-units/rename`：admin
+- `POST /org/api/org-units/move`：admin
+- `POST /org/api/org-units/disable`：admin
 - `POST /org/api/org-units/corrections`：admin
 - `POST /org/api/org-units/set-business-unit`：admin（既有）
 
@@ -771,6 +860,8 @@ END LOOP;
 5. [x] 接口实现（children/details/search + corrections）+ 路由 allowlist/Authz 策略
 6. [x] Shoelace 资源接入 + UI 对接（树/详情/搜索定位、事件桥接）
 7. [x] Readiness 记录（门禁执行证据与关键结果）
+8. [ ] Internal API：OrgUnit CRUD（create/rename/move/disable/list）+ 路由 allowlist/Authz
+9. [ ] 独立详情页 / 组织单元详情视图（UI）
 
 #### PR 计划（草案）
 **PR 1｜DB 与内核：更正表 + 叠加视图基础**
@@ -795,6 +886,14 @@ END LOOP;
 **PR 5｜Readiness 记录**
 - [x] 完成：写入 `docs/dev-records/` 的证据与门禁结果。
 - [x] 验证：`make check doc`
+
+**PR 6｜Internal API：OrgUnit CRUD**
+- [ ] 目标：补齐 `/org/api/org-units` 列表与创建接口，新增 `/org/api/org-units/{rename|move|disable}` 操作接口，统一走 OrgUnitWriteService。
+- [ ] 验证：`go fmt ./... && go vet ./... && make check lint && make test && make check routing`
+
+**PR 7｜UI：独立详情页**
+- [ ] 目标：新增 OrgUnit 独立详情页（基于 `/org/nodes/details` 复用数据），提供可被 UI 直接访问的详情视图入口。
+- [ ] 验证：`make generate && make css`（如涉及前端资源）+ `make check routing`
 
 ### 9. 测试与验收
 - 单测：更正多次、改生效日落在原区间内、改生效日越界、同日冲突、幂等 request_id 冲突、pernr 不存在、RLS 失效路径。
