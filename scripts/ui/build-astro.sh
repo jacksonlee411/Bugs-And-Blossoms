@@ -53,5 +53,47 @@ for dir in assets chunks components internal styles themes translations utilitie
   fi
 done
 
+vendor_out="${shoelace_out}/vendor"
+pnpm_store="apps/web/node_modules/.pnpm"
+
+copy_vendor_pkg() {
+  local pkg="$1"
+  local pattern="$2"
+  local match=""
+  local glob="${pnpm_store}/${pattern}"
+
+  match=$(ls -d ${glob} 2>/dev/null | head -n 1 || true)
+  if [[ -z "$match" ]]; then
+    echo "[ui] missing ${pkg} (pattern: ${pattern})" >&2
+    exit 2
+  fi
+
+  local src="${match}/node_modules/${pkg}"
+  if [[ ! -d "$src" ]]; then
+    echo "[ui] missing ${pkg} at ${src}" >&2
+    exit 2
+  fi
+
+  local dest="${vendor_out}/${pkg}"
+  mkdir -p "$dest"
+  cp -a "$src/." "$dest/"
+}
+
+rm -rf "$vendor_out"
+mkdir -p "$vendor_out"
+copy_vendor_pkg "lit" "lit@*"
+copy_vendor_pkg "lit-html" "lit-html@*"
+copy_vendor_pkg "lit-element" "lit-element@*"
+copy_vendor_pkg "@lit/reactive-element" "@lit+reactive-element@*"
+copy_vendor_pkg "@lit/react" "@lit+react@*"
+copy_vendor_pkg "@shoelace-style/localize" "@shoelace-style+localize@*"
+copy_vendor_pkg "@shoelace-style/animations" "@shoelace-style+animations@*"
+copy_vendor_pkg "@floating-ui/dom" "@floating-ui+dom@*"
+copy_vendor_pkg "@floating-ui/core" "@floating-ui+core@*"
+copy_vendor_pkg "@floating-ui/utils" "@floating-ui+utils@*"
+copy_vendor_pkg "@ctrl/tinycolor" "@ctrl+tinycolor@*"
+copy_vendor_pkg "composed-offset-position" "composed-offset-position@*"
+copy_vendor_pkg "qr-creator" "qr-creator@*"
+
 echo "[ui] OK: ${out_dir}/app.html"
 echo "[ui] OK: ${shoelace_out}"
