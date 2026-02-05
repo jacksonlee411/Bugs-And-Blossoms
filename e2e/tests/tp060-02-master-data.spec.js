@@ -134,8 +134,15 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await input.first().fill(enabled ? "true" : "false");
   };
 
+  const openCreateForm = async () => {
+    await page.locator(".org-node-create-btn").click();
+    const form = page.locator(`#org-node-details form[method="POST"][action="/org/nodes?as_of=${asOf}"]`).first();
+    await expect(form).toBeVisible();
+    return form;
+  };
+
   const createOrgUnit = async (effectiveDate, parentCode, name, isBusinessUnit = false) => {
-    const form = page.locator(`form[method="POST"][action="/org/nodes?as_of=${asOf}"]`).first();
+    const form = await openCreateForm();
     await form.locator('input[name="effective_date"]').fill(effectiveDate);
     const orgCode = orgCodeByName(name);
     await form.locator('input[name="org_code"]').fill(orgCode);
@@ -195,7 +202,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await ensureBusinessUnit(orgCodesFromTree["R&D"], "rd");
   await ensureBusinessUnit(orgCodesFromTree.Sales, "sales");
 
-  const emptyNameForm = page.locator(`form[method="POST"][action="/org/nodes?as_of=${asOf}"]`).first();
+  const emptyNameForm = await openCreateForm();
   await emptyNameForm.locator('input[name="effective_date"]').fill(asOf);
   await emptyNameForm.locator('input[name="org_code"]').fill("EMPTYNAME");
   await emptyNameForm.locator('input[name="parent_code"]').fill(rootCode);

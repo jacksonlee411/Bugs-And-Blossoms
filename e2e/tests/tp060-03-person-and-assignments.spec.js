@@ -114,8 +114,15 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     await input.first().fill(enabled ? "true" : "false");
   };
 
+  const openCreateForm = async () => {
+    await page.locator(".org-node-create-btn").click();
+    const form = page.locator(`#org-node-details form[method="POST"][action="/org/nodes?as_of=${asOf}"]`).first();
+    await expect(form).toBeVisible();
+    return form;
+  };
+
   const createOrgUnit = async (effectiveDate, parentCode, orgCode, name, isBusinessUnit = false) => {
-    const form = page.locator(`form[method="POST"][action="/org/nodes?as_of=${asOf}"]`).first();
+    const form = await openCreateForm();
     await form.locator('input[name="effective_date"]').fill(effectiveDate);
     await form.locator('input[name="org_code"]').fill(orgCode);
     await form.locator('input[name="parent_code"]').fill(parentCode);
@@ -129,7 +136,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const rootCode = `ROOT${runID.slice(-6)}`;
   await createOrgUnit(asOf, "", rootCode, rootName, true);
 
-  const rootOrgCode = (await page.locator("ul li", { hasText: rootName }).first().locator("code").first().innerText()).trim();
+  const rootOrgCode = (await page.locator("sl-tree-item", { hasText: rootName }).first().locator(".org-node-code").innerText()).trim();
   expect(rootOrgCode).not.toBe("");
 
   const bindResp = await appContext.request.post("/org/api/setid-bindings", {
