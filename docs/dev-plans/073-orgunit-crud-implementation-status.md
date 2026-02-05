@@ -146,6 +146,20 @@
 - 右侧：组织详情面板，支持 Tab 切换。
 - 详情支持按不同生效日期翻页/切换（参考 PeopleSoft 风格）。
 
+#### 记录新增/插入/删除（/org/nodes）
+- **POST `/org/nodes?as_of=YYYY-MM-DD`**
+  - `action=add_record`：追加一条记录（生效日必须晚于当前最后一条记录）。
+  - `action=insert_record`：插入一条记录（生效日位于前后记录之间）。
+  - `action=delete_record`：删除记录（当前阶段实现为 `DISABLE` 事件，属于软删除/停用语义）。
+- **输入字段**：
+  - `org_code`（必填）
+  - `effective_date`（必填）
+  - `name`（可选；默认沿用当前名称）
+- **实现约束（保持无 DB 迁移）**：
+  - `add_record` / `insert_record` 通过提交 `RENAME` 事件建立记录；当 `name` 为空时使用当前名称。
+  - `delete_record` 通过提交 `DISABLE` 事件实现；若仅剩一条记录则拒绝（409）。
+  - 同一 `effective_date` 已存在记录则拒绝（409）。
+
 #### UI 交互口径（HR 用户视角）
 1) 明确“历史更正模式”：在页面显眼位置提示当前模式，避免用户在错误模式下操作。
 2) 生效日定位清晰：用时间轴/列表标识历史/当前/未来，并支持快速跳转到指定生效日。
@@ -588,6 +602,12 @@ type OrgUnitReadService interface {
   - `path_org_codes`（可选，用于 UI 展示与校验）
   - `as_of`
 - 客户端按 `path_org_ids` 逐级展开并选中目标节点。
+
+**搜索多匹配（panel）**：
+- `GET /org/nodes/search?query=...&as_of=YYYY-MM-DD&format=panel`
+- Response：HTML fragment（候选列表，支持 0..N 条）：
+  - 每条必须包含 `data-org-id` 与 `data-org-code`，并展示名称。
+  - UI 选择某条后，使用该条的 `org_code` 触发 JSON 搜索以展开路径并回填详情。
 
 **搜索交互流程（建议）**：
 1) 用户输入编码/名称 → 请求 `/org/nodes/search`。
