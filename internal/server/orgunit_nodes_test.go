@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
@@ -38,6 +39,24 @@ func TestParseOrgID8(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestCanEditOrgNodes(t *testing.T) {
+	if canEditOrgNodes(context.Background()) {
+		t.Fatal("expected false without principal")
+	}
+	if canEditOrgNodes(withPrincipal(context.Background(), Principal{RoleSlug: " "})) {
+		t.Fatal("expected false for empty role")
+	}
+	if canEditOrgNodes(withPrincipal(context.Background(), Principal{RoleSlug: "tenant-viewer"})) {
+		t.Fatal("expected false for viewer")
+	}
+	if !canEditOrgNodes(withPrincipal(context.Background(), Principal{RoleSlug: authz.RoleTenantAdmin})) {
+		t.Fatal("expected true for tenant admin")
+	}
+	if !canEditOrgNodes(withPrincipal(context.Background(), Principal{RoleSlug: " SUPERADMIN "})) {
+		t.Fatal("expected true for superadmin")
 	}
 }
 
@@ -745,6 +764,12 @@ func (errStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNod
 func (errStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
 	return OrgUnitSearchResult{}, errBoom{}
 }
+func (errStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
+	return nil, errBoom{}
+}
+func (errStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
+	return nil, errBoom{}
+}
 
 type errBoom struct{}
 
@@ -791,6 +816,12 @@ func (emptyErrStore) GetNodeDetails(context.Context, string, int, string) (OrgUn
 }
 func (emptyErrStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
 	return OrgUnitSearchResult{}, emptyErr{}
+}
+func (emptyErrStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
+	return nil, emptyErr{}
+}
+func (emptyErrStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
+	return nil, emptyErr{}
 }
 
 func TestHandleOrgNodes_GET_StoreError(t *testing.T) {
@@ -1007,6 +1038,18 @@ func (s *writeSpyStore) SearchNode(context.Context, string, string, string) (Org
 	}
 	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, AsOf: "2026-01-06"}, nil
 }
+func (s *writeSpyStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return []OrgUnitSearchCandidate{{OrgID: 10000001, OrgCode: "A001", Name: "Root"}}, nil
+}
+func (s *writeSpyStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-06", EventType: "RENAME"}}, nil
+}
 
 type actionErrStore struct {
 	renameErr          error
@@ -1068,6 +1111,49 @@ func (s *actionErrStore) GetNodeDetails(context.Context, string, int, string) (O
 func (s *actionErrStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
 	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, AsOf: "2026-01-06"}, nil
 }
+func (s *actionErrStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
+	return []OrgUnitSearchCandidate{{OrgID: 10000001, OrgCode: "A001", Name: "Root"}}, nil
+}
+func (s *actionErrStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
+	return []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-06", EventType: "RENAME"}}, nil
+}
+
+type recordActionStore struct {
+	actionErrStore
+	versions      []OrgUnitNodeVersion
+	versionsErr   error
+	details       OrgUnitNodeDetails
+	detailsErr    error
+	renameCalled  int
+	disableCalled int
+}
+
+func (s *recordActionStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
+	if s.versionsErr != nil {
+		return nil, s.versionsErr
+	}
+	return s.versions, nil
+}
+
+func (s *recordActionStore) GetNodeDetails(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+	if s.detailsErr != nil {
+		return OrgUnitNodeDetails{}, s.detailsErr
+	}
+	if s.details.OrgID == 0 && s.details.OrgCode == "" && s.details.Name == "" {
+		return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
+	}
+	return s.details, nil
+}
+
+func (s *recordActionStore) RenameNodeCurrent(_ context.Context, _ string, _ string, _ string, _ string) error {
+	s.renameCalled++
+	return s.renameErr
+}
+
+func (s *recordActionStore) DisableNodeCurrent(_ context.Context, _ string, _ string, _ string) error {
+	s.disableCalled++
+	return s.disableErr
+}
 
 type asOfSpyStore struct {
 	gotAsOf string
@@ -1107,6 +1193,22 @@ func (s *asOfSpyStore) GetNodeDetails(context.Context, string, int, string) (Org
 }
 func (s *asOfSpyStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
 	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, AsOf: "2026-01-06"}, nil
+}
+func (s *asOfSpyStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
+	return []OrgUnitSearchCandidate{{OrgID: 10000001, OrgCode: "A001", Name: "Root"}}, nil
+}
+func (s *asOfSpyStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
+	return []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-06", EventType: "RENAME"}}, nil
+}
+
+func postOrgNodesForm(t *testing.T, store OrgUnitStore, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+	handleOrgNodes(rec, req, store)
+	return rec
 }
 
 func TestHandleOrgNodes_POST_Rename_UsesStore(t *testing.T) {
@@ -1767,18 +1869,18 @@ func TestHandleOrgNodes_TenantMissing(t *testing.T) {
 }
 
 func TestRenderOrgNodes(t *testing.T) {
-	out := renderOrgNodes(nil, Tenant{Name: "T"}, "", "2026-01-06")
+	out := renderOrgNodes(nil, Tenant{Name: "T"}, "", "2026-01-06", true)
 	if out == "" {
 		t.Fatal("expected output")
 	}
-	out2 := renderOrgNodes([]OrgUnitNode{{ID: "1", OrgCode: "N001", Name: "N", IsBusinessUnit: true}}, Tenant{Name: "T"}, "err", "2026-01-06")
+	out2 := renderOrgNodes([]OrgUnitNode{{ID: "1", OrgCode: "N001", Name: "N", IsBusinessUnit: true}}, Tenant{Name: "T"}, "err", "2026-01-06", true)
 	if out2 == "" {
 		t.Fatal("expected output")
 	}
-	if !strings.Contains(out2, "(BU)") || !strings.Contains(out2, "checked") {
+	if !strings.Contains(out2, "(BU)") {
 		t.Fatalf("unexpected output: %q", out2)
 	}
-	out3 := renderOrgNodes([]OrgUnitNode{{ID: "2", Name: "MissingCode"}}, Tenant{Name: "T"}, "", "2026-01-06")
+	out3 := renderOrgNodes([]OrgUnitNode{{ID: "2", Name: "MissingCode"}}, Tenant{Name: "T"}, "", "2026-01-06", false)
 	if !strings.Contains(out3, "(missing org_code)") {
 		t.Fatalf("unexpected output: %q", out3)
 	}
@@ -2304,5 +2406,147 @@ func TestOrgUnitPGStore_RenameMoveDisableCurrent(t *testing.T) {
 				t.Fatal("expected error")
 			}
 		})
+	})
+}
+
+func TestHandleOrgNodes_RecordActions(t *testing.T) {
+	baseVersions := []OrgUnitNodeVersion{
+		{EventID: 1, EffectiveDate: "2026-01-01", EventType: "RENAME"},
+		{EventID: 2, EffectiveDate: "2026-01-10", EventType: "RENAME"},
+	}
+	versionsWithEmpty := []OrgUnitNodeVersion{
+		{EventID: 1, EffectiveDate: "", EventType: "RENAME"},
+		{EventID: 2, EffectiveDate: "2026-01-05", EventType: "RENAME"},
+		{EventID: 3, EffectiveDate: "2026-01-10", EventType: "RENAME"},
+	}
+
+	t.Run("add_record missing effective_date", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "effective_date is required") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record invalid effective_date", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=bad")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "effective_date 无效") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record invalid org_code", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		store.resolveFn = func(context.Context, string, string) (int, error) {
+			return 0, orgunitpkg.ErrOrgCodeInvalid
+		}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=BAD&effective_date=2026-01-11")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "org_code invalid") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record versions error", func(t *testing.T) {
+		store := &recordActionStore{versionsErr: errors.New("versions")}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "versions") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record no versions", func(t *testing.T) {
+		store := &recordActionStore{versions: []OrgUnitNodeVersion{}}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "no versions found") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record conflict", func(t *testing.T) {
+		store := &recordActionStore{versions: versionsWithEmpty}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-10")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "effective_date conflict") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("insert_record date exists", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2026-01-01")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "effective_date conflict") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("insert_record out of range", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2026-01-11")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "effective_date must be between existing records") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("delete_record last record", func(t *testing.T) {
+		store := &recordActionStore{versions: []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-01"}}}
+		rec := postOrgNodesForm(t, store, "action=delete_record&org_code=A001&effective_date=2026-01-01")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "cannot delete last record") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("delete_record not found", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=delete_record&org_code=A001&effective_date=2026-01-05")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "record not found") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("delete_record disable error", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		store.disableErr = errors.New("disable")
+		rec := postOrgNodesForm(t, store, "action=delete_record&org_code=A001&effective_date=2026-01-01")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "disable") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("delete_record success", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=delete_record&org_code=A001&effective_date=2026-01-01")
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if store.disableCalled != 1 {
+			t.Fatalf("disable called=%d", store.disableCalled)
+		}
+		if loc := rec.Header().Get("Location"); loc != "/org/nodes?as_of=2026-01-01" {
+			t.Fatalf("location=%q", loc)
+		}
+	})
+	t.Run("add_record details error", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions, detailsErr: errors.New("details")}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "details") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record name required after details", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions, details: OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: ""}}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "name is required") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record rename error", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		store.renameErr = errors.New("rename")
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11&name=NewName")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "rename") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record success uses details name", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions, details: OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "FromDetails"}}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11")
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if store.renameCalled != 1 {
+			t.Fatalf("rename called=%d", store.renameCalled)
+		}
+		if loc := rec.Header().Get("Location"); loc != "/org/nodes?as_of=2026-01-11" {
+			t.Fatalf("location=%q", loc)
+		}
 	})
 }

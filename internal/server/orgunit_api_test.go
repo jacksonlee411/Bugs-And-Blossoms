@@ -156,6 +156,12 @@ func (s *resolveOrgCodeStore) GetNodeDetails(context.Context, string, int, strin
 func (s *resolveOrgCodeStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
 	return OrgUnitSearchResult{}, nil
 }
+func (s *resolveOrgCodeStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
+	return []OrgUnitSearchCandidate{}, nil
+}
+func (s *resolveOrgCodeStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
+	return []OrgUnitNodeVersion{}, nil
+}
 
 func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeInvalid(t *testing.T) {
 	store := &resolveOrgCodeStore{}

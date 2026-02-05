@@ -1030,6 +1030,12 @@ func (staffingOrgStoreStub) GetNodeDetails(context.Context, string, int, string)
 func (staffingOrgStoreStub) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
 	return OrgUnitSearchResult{}, nil
 }
+func (staffingOrgStoreStub) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
+	return []OrgUnitSearchCandidate{}, nil
+}
+func (staffingOrgStoreStub) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
+	return []OrgUnitNodeVersion{}, nil
+}
 
 type jobStoreErrStub struct{ JobCatalogStore }
 

@@ -242,6 +242,12 @@ func (s errOrgUnitStore) GetNodeDetails(context.Context, string, int, string) (O
 func (s errOrgUnitStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
 	return OrgUnitSearchResult{}, s.err
 }
+func (s errOrgUnitStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
+	return nil, s.err
+}
+func (s errOrgUnitStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
+	return nil, s.err
+}
 
 type tableRows struct {
 	idx  int
@@ -358,6 +364,12 @@ func (resolveErrOrgStore) GetNodeDetails(context.Context, string, int, string) (
 }
 func (resolveErrOrgStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
 	return OrgUnitSearchResult{}, nil
+}
+func (resolveErrOrgStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
+	return []OrgUnitSearchCandidate{}, nil
+}
+func (resolveErrOrgStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
+	return []OrgUnitNodeVersion{}, nil
 }
 
 func TestHandleSetID_TenantMissing(t *testing.T) {

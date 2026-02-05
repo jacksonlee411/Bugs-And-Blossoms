@@ -855,6 +855,21 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 	if recOrgDisable.Code != http.StatusOK {
 		t.Fatalf("org units disable status=%d", recOrgDisable.Code)
 	}
+
+	recOrgCorrect := postJSON("/org/api/org-units/corrections", `{"org_code":"ORG2","effective_date":"2026-01-01","request_id":"r9","patch":{}}`, nil)
+	if recOrgCorrect.Code != http.StatusOK {
+		t.Fatalf("org units corrections status=%d", recOrgCorrect.Code)
+	}
+
+	reqView := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-01&org_id="+node.ID, nil)
+	reqView.Host = "localhost:8080"
+	reqView.Header.Set("HX-Request", "true")
+	reqView.AddCookie(session)
+	recView := httptest.NewRecorder()
+	h.ServeHTTP(recView, reqView)
+	if recView.Code != http.StatusOK {
+		t.Fatalf("org nodes view status=%d", recView.Code)
+	}
 }
 
 func TestNewHandlerWithOptions_DefaultOrgUnitSnapshotStoreFromPGStore(t *testing.T) {
