@@ -125,6 +125,21 @@ type orgUnitDisableAPIRequest struct {
 	EffectiveDate string `json:"effective_date"`
 }
 
+type orgUnitCorrectionPatchRequest struct {
+	EffectiveDate  *string `json:"effective_date"`
+	Name           *string `json:"name"`
+	ParentOrgCode  *string `json:"parent_org_code"`
+	IsBusinessUnit *bool   `json:"is_business_unit"`
+	ManagerPernr   *string `json:"manager_pernr"`
+}
+
+type orgUnitCorrectionAPIRequest struct {
+	OrgCode       string                        `json:"org_code"`
+	EffectiveDate string                        `json:"effective_date"`
+	Patch         orgUnitCorrectionPatchRequest `json:"patch"`
+	RequestID     string                        `json:"request_id"`
+}
+
 var errOrgUnitBadJSON = errors.New("orgunit_bad_json")
 
 const (
@@ -307,6 +322,48 @@ func handleOrgUnitsDisableAPI(w http.ResponseWriter, r *http.Request, writeSvc o
 		})
 		return req.OrgCode, req.EffectiveDate, err
 	})
+}
+
+func handleOrgUnitsCorrectionsAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {
+	if r.Method != http.MethodPost {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+	if writeSvc == nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_service_missing", "orgunit service missing")
+		return
+	}
+
+	var req orgUnitCorrectionAPIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+
+	result, err := writeSvc.Correct(r.Context(), tenant.ID, orgunitservices.CorrectOrgUnitRequest{
+		OrgCode:             req.OrgCode,
+		TargetEffectiveDate: req.EffectiveDate,
+		RequestID:           req.RequestID,
+		Patch: orgunitservices.OrgUnitCorrectionPatch{
+			EffectiveDate:  req.Patch.EffectiveDate,
+			Name:           req.Patch.Name,
+			ParentOrgCode:  req.Patch.ParentOrgCode,
+			IsBusinessUnit: req.Patch.IsBusinessUnit,
+			ManagerPernr:   req.Patch.ManagerPernr,
+		},
+	})
+	if err != nil {
+		writeOrgUnitServiceError(w, r, err, "orgunit_correct_failed")
+		return
+	}
+
+	writeOrgUnitResult(w, r, http.StatusOK, result)
 }
 
 func handleOrgUnitWriteAction(

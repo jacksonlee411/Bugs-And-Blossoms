@@ -852,16 +852,23 @@ END LOOP;
 - 路由 allowlist 与 Authz 策略更新可用。
 - 新增更正表审批完成（手工确认）。
 
+**待办事项（补充）**：
+- [x] 补齐 Internal API：`POST /org/api/org-units/corrections`（handler + allowlist/Authz + tests）
+- [ ] UI `/org/nodes` 更正表单与错误回显（走 OrgUnitWriteService）
+- [ ] `manager_pernr` 的 as_of 校验（依赖 Person 有效期模型）
+- [ ] 在“新增表审批流程/记录”补记批准人、时间（UTC）与范围
+- [ ] 同步里程碑与 PR 状态（更正接口/UI 完成后再勾选）
+
 **里程碑（顺序）**：
-1. [x] 设计确认（更正叠加视图取舍、字段元数据/不可更正清单、UI 交互口径与 as_of 规则、API/路由/权限口径）
-2. [x] 新增表手工确认（阻断点）
-3. [x] Schema 迁移（含更正表与幂等约束）
-4. [x] 服务层实现 + 单测（幂等/更正/重放/租户 fail-closed；manager_pernr as_of 校验待 Person 有效期补齐）
-5. [x] 接口实现（children/details/search + corrections）+ 路由 allowlist/Authz 策略
-6. [x] Shoelace 资源接入 + UI 对接（树/详情/搜索定位、事件桥接）
-7. [x] Readiness 记录（门禁执行证据与关键结果）
-8. [x] Internal API：OrgUnit CRUD（create/rename/move/disable/list）+ 路由 allowlist/Authz
-9. [x] 独立详情页 / 组织单元详情视图（UI）
+M1. [x] 设计确认（更正叠加视图取舍、字段元数据/不可更正清单、UI 交互口径与 as_of 规则、API/路由/权限口径）
+M2. [x] 新增表手工确认（阻断点）
+M3. [x] Schema 迁移（含更正表与幂等约束）
+M4. [x] 服务层实现 + 单测（幂等/更正/重放/租户 fail-closed；manager_pernr as_of 校验待 Person 有效期补齐）
+M5. [x] 接口实现（children/details/search + corrections）+ 路由 allowlist/Authz 策略
+M6. [x] Shoelace 资源接入 + UI 对接（树/详情/搜索定位、事件桥接）
+M7. [x] Readiness 记录（门禁执行证据与关键结果）
+M8. [x] Internal API：OrgUnit CRUD（create/rename/move/disable/list）+ 路由 allowlist/Authz
+M9. [x] 独立详情页 / 组织单元详情视图（UI）
 
 #### PR 计划（草案）
 **PR 1｜DB 与内核：更正表 + 叠加视图基础**
@@ -894,6 +901,15 @@ END LOOP;
 **PR 7｜UI：独立详情页**
 - [x] 目标：新增 OrgUnit 独立详情页（基于 `/org/nodes/details` 复用数据），提供可被 UI 直接访问的详情视图入口。
 - [x] 验证：未涉及前端资源（已跑 `make check routing`）
+
+**PR 8｜Internal API：OrgUnit Corrections**
+- [x] 目标：补齐 `POST /org/api/org-units/corrections`，走 OrgUnitWriteService。
+- [x] 变更：handler + allowlist/Authz + 单测（含 400/404/409/422）。
+- [x] 验证：`go fmt ./... && go vet ./... && make check lint && make test && make check routing`
+
+**PR 9｜UI：历史更正表单**
+- [ ] 目标：在 `/org/nodes` 右侧详情区提供更正表单与错误回显（更正生效日/上级/名称/负责人）。
+- [ ] 验证：`make generate && make css`（完成后 `git status --short` 为空）
 
 ### 9. 测试与验收
 - 单测：更正多次、改生效日落在原区间内、改生效日越界、同日冲突、幂等 request_id 冲突、pernr 不存在、RLS 失效路径。
