@@ -93,14 +93,22 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await expect(page.locator("h1")).toHaveText("Home");
 
   await page.goto(`/org/nodes?as_of=${asOf}`);
-  await expect(page.locator("h1")).toHaveText("OrgUnit");
-  const nodeIDLocator = page.locator("ul li code").first();
+  await expect(page.locator("h1")).toHaveText("OrgUnit Details");
+  const nodeIDLocator = page.locator("sl-tree-item").first();
   const hasAnyNode = (await nodeIDLocator.count()) > 0;
-  const parentCode = hasAnyNode ? (await nodeIDLocator.innerText()).trim() : "";
+  let parentCode = "";
+  if (hasAnyNode) {
+    const codeLocator = nodeIDLocator.locator(".org-node-code");
+    if ((await codeLocator.count()) > 0) {
+      parentCode = (await codeLocator.innerText()).trim();
+    }
+  }
+  await page.locator(".org-node-create-btn").click();
   const orgCreateForm = page
-    .locator(`form[method="POST"][action="/org/nodes?as_of=${asOf}"]`)
+    .locator(`#org-node-details form[method="POST"][action="/org/nodes?as_of=${asOf}"]`)
     .filter({ has: page.locator('input[name="name"]') })
     .first();
+  await expect(orgCreateForm).toBeVisible();
   const setBusinessUnitFlag = async (enabled) => {
     const input = orgCreateForm.locator('input[name="is_business_unit"]');
     if ((await input.count()) === 0) {
@@ -128,8 +136,8 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await orgCreateForm.locator('input[name="name"]').fill(orgName);
   await orgCreateForm.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(new RegExp(`/org/nodes\\?as_of=${asOf}$`));
-  await expect(page.locator("ul li", { hasText: orgName })).toBeVisible();
-  const createdOrgCode = (await page.locator("ul li", { hasText: orgName }).first().locator("code").innerText()).trim();
+  await expect(page.locator("sl-tree-item", { hasText: orgName })).toBeVisible();
+  const createdOrgCode = (await page.locator("sl-tree-item", { hasText: orgName }).first().locator(".org-node-code").innerText()).trim();
   expect(createdOrgCode).not.toBe("");
   if (!parentCode) {
     const bindResp = await appContext.request.post("/org/api/setid-bindings", {

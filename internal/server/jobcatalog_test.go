@@ -191,6 +191,12 @@ func (s orgStoreStub) GetNodeDetails(context.Context, string, int, string) (OrgU
 func (s orgStoreStub) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
 	return OrgUnitSearchResult{}, s.err
 }
+func (s orgStoreStub) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
+	return nil, s.err
+}
+func (s orgStoreStub) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
+	return nil, s.err
+}
 
 func defaultJobCatalogOrgStore() OrgUnitStore {
 	return orgStoreStub{nodes: []OrgUnitNode{{ID: "10000001", Name: "Root Org", IsBusinessUnit: true}}}

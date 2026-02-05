@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
@@ -44,6 +45,11 @@ type OrgUnitNodeDetails struct {
 	IsBusinessUnit bool
 	ManagerPernr   string
 	ManagerName    string
+	PathIDs        []int
+	FullNamePath   string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	EventUUID      string
 }
 
 type OrgUnitSearchResult struct {
@@ -55,7 +61,32 @@ type OrgUnitSearchResult struct {
 	AsOf          string   `json:"as_of"`
 }
 
+type OrgUnitSearchCandidate struct {
+	OrgID   int
+	OrgCode string
+	Name    string
+}
+
+type OrgUnitNodeVersion struct {
+	EventID       int64
+	EventUUID     string
+	EffectiveDate string
+	EventType     string
+}
+
 var errOrgUnitNotFound = errors.New("org_unit_not_found")
+
+func canEditOrgNodes(ctx context.Context) bool {
+	p, ok := currentPrincipal(ctx)
+	if !ok {
+		return false
+	}
+	role := strings.ToLower(strings.TrimSpace(p.RoleSlug))
+	if role == "" {
+		return false
+	}
+	return role == authz.RoleTenantAdmin || role == authz.RoleSuperadmin
+}
 
 type OrgUnitStore interface {
 	OrgUnitNodesCurrentReader
@@ -68,6 +99,8 @@ type OrgUnitStore interface {
 	OrgUnitNodeChildrenReader
 	OrgUnitNodeDetailsReader
 	OrgUnitNodeSearchReader
+	OrgUnitNodeSearchCandidatesReader
+	OrgUnitNodeVersionReader
 }
 
 type OrgUnitNodesCurrentReader interface {
@@ -110,6 +143,14 @@ type OrgUnitNodeDetailsReader interface {
 
 type OrgUnitNodeSearchReader interface {
 	SearchNode(ctx context.Context, tenantID string, query string, asOfDate string) (OrgUnitSearchResult, error)
+}
+
+type OrgUnitNodeSearchCandidatesReader interface {
+	SearchNodeCandidates(ctx context.Context, tenantID string, query string, asOfDate string, limit int) ([]OrgUnitSearchCandidate, error)
+}
+
+type OrgUnitNodeVersionReader interface {
+	ListNodeVersions(ctx context.Context, tenantID string, orgID int) ([]OrgUnitNodeVersion, error)
 }
 
 type orgUnitPGStore struct {
@@ -428,11 +469,18 @@ func (s *orgUnitPGStore) GetNodeDetails(ctx context.Context, tenantID string, or
 	  COALESCE(pv.name, '') AS parent_name,
 	  v.is_business_unit,
 	  COALESCE(p.pernr, '') AS manager_pernr,
-	  COALESCE(p.display_name, '') AS manager_name
+	  COALESCE(p.display_name, '') AS manager_name,
+	  v.path_ids,
+	  COALESCE(v.full_name_path, '') AS full_name_path,
+	  c.created_at,
+	  e.transaction_time,
+	  e.event_uuid
 	FROM orgunit.org_unit_versions v
 	JOIN orgunit.org_unit_codes c
 	  ON c.tenant_uuid = $1::uuid
 	 AND c.org_id = v.org_id
+	JOIN orgunit.org_events e
+	  ON e.id = v.last_event_id
 	LEFT JOIN orgunit.org_unit_codes pc
 	  ON pc.tenant_uuid = $1::uuid
 	 AND pc.org_id = v.parent_id
@@ -459,6 +507,11 @@ func (s *orgUnitPGStore) GetNodeDetails(ctx context.Context, tenantID string, or
 		&details.IsBusinessUnit,
 		&details.ManagerPernr,
 		&details.ManagerName,
+		&details.PathIDs,
+		&details.FullNamePath,
+		&details.CreatedAt,
+		&details.UpdatedAt,
+		&details.EventUUID,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return OrgUnitNodeDetails{}, errOrgUnitNotFound
@@ -539,6 +592,142 @@ func (s *orgUnitPGStore) SearchNode(ctx context.Context, tenantID string, query 
 		return OrgUnitSearchResult{}, err
 	}
 	return result, nil
+}
+
+func (s *orgUnitPGStore) SearchNodeCandidates(ctx context.Context, tenantID string, query string, asOfDate string, limit int) ([]OrgUnitSearchCandidate, error) {
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return nil, errors.New("query is required")
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	if normalized, err := orgunitpkg.NormalizeOrgCode(trimmed); err == nil {
+		rows, err := tx.Query(ctx, `
+		SELECT v.org_id, c.org_code, v.name
+		FROM orgunit.org_unit_versions v
+		JOIN orgunit.org_unit_codes c
+		  ON c.tenant_uuid = $1::uuid
+		 AND c.org_id = v.org_id
+		WHERE v.tenant_uuid = $1::uuid
+		  AND v.status = 'active'
+		  AND v.validity @> $3::date
+		  AND c.org_code = $2::text
+		LIMIT 1
+		`, tenantID, normalized, asOfDate)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		var out []OrgUnitSearchCandidate
+		for rows.Next() {
+			var item OrgUnitSearchCandidate
+			if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name); err != nil {
+				return nil, err
+			}
+			out = append(out, item)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		if len(out) > 0 {
+			if err := tx.Commit(ctx); err != nil {
+				return nil, err
+			}
+			return out, nil
+		}
+	}
+
+	rows, err := tx.Query(ctx, `
+	SELECT v.org_id, c.org_code, v.name
+	FROM orgunit.org_unit_versions v
+	JOIN orgunit.org_unit_codes c
+	  ON c.tenant_uuid = $1::uuid
+	 AND c.org_id = v.org_id
+	WHERE v.tenant_uuid = $1::uuid
+	  AND v.status = 'active'
+	  AND v.validity @> $3::date
+	  AND v.name ILIKE $2::text
+	ORDER BY v.node_path
+	LIMIT $4::int
+	`, tenantID, "%"+trimmed+"%", asOfDate, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []OrgUnitSearchCandidate
+	for rows.Next() {
+		var item OrgUnitSearchCandidate
+		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, errOrgUnitNotFound
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *orgUnitPGStore) ListNodeVersions(ctx context.Context, tenantID string, orgID int) ([]OrgUnitNodeVersion, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	rows, err := tx.Query(ctx, `
+	SELECT e.id, e.event_uuid, e.effective_date, e.event_type
+	FROM orgunit.org_events_effective e
+	WHERE e.tenant_uuid = $1::uuid
+	  AND e.org_id = $2::int
+	ORDER BY e.effective_date, e.id
+	`, tenantID, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []OrgUnitNodeVersion
+	for rows.Next() {
+		var item OrgUnitNodeVersion
+		var effective time.Time
+		if err := rows.Scan(&item.EventID, &item.EventUUID, &effective, &item.EventType); err != nil {
+			return nil, err
+		}
+		item.EffectiveDate = effective.Format("2006-01-02")
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (s *orgUnitPGStore) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
@@ -1034,6 +1223,11 @@ func (s *orgUnitMemoryStore) GetNodeDetails(_ context.Context, tenantID string, 
 				OrgCode:        node.OrgCode,
 				Name:           node.Name,
 				IsBusinessUnit: node.IsBusinessUnit,
+				PathIDs:        []int{orgID},
+				FullNamePath:   node.Name,
+				CreatedAt:      node.CreatedAt,
+				UpdatedAt:      node.CreatedAt,
+				EventUUID:      "",
 			}, nil
 		}
 	}
@@ -1084,6 +1278,61 @@ func (s *orgUnitMemoryStore) SearchNode(_ context.Context, tenantID string, quer
 	return OrgUnitSearchResult{}, errOrgUnitNotFound
 }
 
+func (s *orgUnitMemoryStore) SearchNodeCandidates(_ context.Context, tenantID string, query string, _ string, limit int) ([]OrgUnitSearchCandidate, error) {
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return nil, errors.New("query is required")
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+	if normalized, err := orgunitpkg.NormalizeOrgCode(trimmed); err == nil {
+		for _, node := range s.nodes[tenantID] {
+			if node.OrgCode == normalized {
+				id, convErr := strconv.Atoi(node.ID)
+				if convErr != nil {
+					break
+				}
+				return []OrgUnitSearchCandidate{{OrgID: id, OrgCode: node.OrgCode, Name: node.Name}}, nil
+			}
+		}
+	}
+
+	lower := strings.ToLower(trimmed)
+	var out []OrgUnitSearchCandidate
+	for _, node := range s.nodes[tenantID] {
+		if strings.Contains(strings.ToLower(node.Name), lower) {
+			id, convErr := strconv.Atoi(node.ID)
+			if convErr != nil {
+				continue
+			}
+			out = append(out, OrgUnitSearchCandidate{OrgID: id, OrgCode: node.OrgCode, Name: node.Name})
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil, errOrgUnitNotFound
+	}
+	return out, nil
+}
+
+func (s *orgUnitMemoryStore) ListNodeVersions(_ context.Context, tenantID string, orgID int) ([]OrgUnitNodeVersion, error) {
+	orgIDStr := strconv.Itoa(orgID)
+	for _, node := range s.nodes[tenantID] {
+		if node.ID == orgIDStr {
+			return []OrgUnitNodeVersion{{
+				EventID:       1,
+				EventUUID:     "",
+				EffectiveDate: "2026-01-01",
+				EventType:     "RENAME",
+			}}, nil
+		}
+	}
+	return nil, errOrgUnitNotFound
+}
+
 func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -1095,6 +1344,7 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 	if !ok {
 		return
 	}
+	canEdit := canEditOrgNodes(r.Context())
 
 	listNodes := func(errHint string) ([]OrgUnitNode, string) {
 		mergeMsg := func(hint string, msg string) string {
@@ -1117,12 +1367,12 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 	switch r.Method {
 	case http.MethodGet:
 		nodes, errMsg := listNodes("")
-		writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+		writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
 			nodes, errMsg := listNodes("bad form")
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 			return
 		}
 		action := strings.TrimSpace(strings.ToLower(r.Form.Get("action")))
@@ -1150,7 +1400,7 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 					return "", true
 				}
 				nodes, errMsg := listNodes(field + " is required")
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 				return "", false
 			}
 			orgID, err := store.ResolveOrgID(r.Context(), tenant.ID, code)
@@ -1165,10 +1415,125 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 					msg = err.Error()
 				}
 				nodes, errMsg := listNodes(msg)
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 				return "", false
 			}
 			return strconv.Itoa(orgID), true
+		}
+
+		if action == "add_record" || action == "insert_record" || action == "delete_record" {
+			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
+			if effectiveDate == "" {
+				nodes, errMsg := listNodes("effective_date is required")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+				return
+			}
+			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
+				nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+				return
+			}
+
+			orgID, ok := resolveOrgID(r.Form.Get("org_code"), "org_code", true)
+			if !ok {
+				return
+			}
+			orgIDInt, _ := strconv.Atoi(orgID)
+
+			versions, err := store.ListNodeVersions(r.Context(), tenant.ID, orgIDInt)
+			if err != nil {
+				nodes, errMsg := listNodes(err.Error())
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+				return
+			}
+			if len(versions) == 0 {
+				nodes, errMsg := listNodes("no versions found")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+				return
+			}
+
+			minDate := ""
+			maxDate := ""
+			dateExists := false
+			for _, v := range versions {
+				if v.EffectiveDate == "" {
+					continue
+				}
+				if minDate == "" || v.EffectiveDate < minDate {
+					minDate = v.EffectiveDate
+				}
+				if maxDate == "" || v.EffectiveDate > maxDate {
+					maxDate = v.EffectiveDate
+				}
+				if v.EffectiveDate == effectiveDate {
+					dateExists = true
+				}
+			}
+
+			switch action {
+			case "add_record":
+				if dateExists || (maxDate != "" && effectiveDate <= maxDate) {
+					nodes, errMsg := listNodes("effective_date conflict")
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+					return
+				}
+			case "insert_record":
+				if dateExists {
+					nodes, errMsg := listNodes("effective_date conflict")
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+					return
+				}
+				if minDate != "" && maxDate != "" {
+					if effectiveDate <= minDate || effectiveDate >= maxDate {
+						nodes, errMsg := listNodes("effective_date must be between existing records")
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+						return
+					}
+				}
+			case "delete_record":
+				if len(versions) <= 1 {
+					nodes, errMsg := listNodes("cannot delete last record")
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+					return
+				}
+				if !dateExists {
+					nodes, errMsg := listNodes("record not found")
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+					return
+				}
+			}
+
+			if action == "delete_record" {
+				if err := store.DisableNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID); err != nil {
+					nodes, errMsg := listNodes(err.Error())
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+					return
+				}
+			} else {
+				name := strings.TrimSpace(r.Form.Get("name"))
+				if name == "" {
+					details, err := store.GetNodeDetails(r.Context(), tenant.ID, orgIDInt, asOf)
+					if err != nil {
+						nodes, errMsg := listNodes(err.Error())
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+						return
+					}
+					name = strings.TrimSpace(details.Name)
+				}
+				if name == "" {
+					nodes, errMsg := listNodes("name is required")
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+					return
+				}
+				if err := store.RenameNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, name); err != nil {
+					nodes, errMsg := listNodes(err.Error())
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
+					return
+				}
+			}
+
+			http.Redirect(w, r, "/org/nodes?as_of="+effectiveDate, http.StatusSeeOther)
+			return
 		}
 
 		if action == "rename" || action == "move" || action == "disable" || action == "set_business_unit" {
@@ -1178,7 +1543,7 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			}
 			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
 				nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 				return
 			}
 
@@ -1192,13 +1557,13 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 				newName := strings.TrimSpace(r.Form.Get("new_name"))
 				if newName == "" {
 					nodes, errMsg := listNodes("new_name is required")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 					return
 				}
 
 				if err := store.RenameNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newName); err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 					return
 				}
 			case "move":
@@ -1208,27 +1573,27 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 				}
 				if err := store.MoveNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newParentID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 					return
 				}
 			case "disable":
 
 				if err := store.DisableNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 					return
 				}
 			case "set_business_unit":
 				isBusinessUnit, err := parseBusinessUnitFlag(r.Form.Get("is_business_unit"))
 				if err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 					return
 				}
 				reqID := "ui:orgunit:set-business-unit:" + orgID + ":" + effectiveDate
 				if err := store.SetBusinessUnitCurrent(r.Context(), tenant.ID, effectiveDate, orgID, isBusinessUnit, reqID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 					return
 				}
 			}
@@ -1240,14 +1605,14 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 		orgCode := r.Form.Get("org_code")
 		if orgCode == "" {
 			nodes, errMsg := listNodes("org_code is required")
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 			return
 		}
 
 		name := strings.TrimSpace(r.Form.Get("name"))
 		if name == "" {
 			nodes, errMsg := listNodes("name is required")
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 			return
 		}
 
@@ -1265,25 +1630,25 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 		}
 		if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
 			nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 			return
 		}
 
 		isBusinessUnit, err := parseBusinessUnitFlag(r.Form.Get("is_business_unit"))
 		if err != nil {
 			nodes, errMsg := listNodes(err.Error())
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 			return
 		}
 
 		if _, err := store.CreateNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgCode, name, parentID, isBusinessUnit); err != nil {
 			if errors.Is(err, orgunitpkg.ErrOrgCodeInvalid) {
 				nodes, errMsg := listNodes("org_code invalid")
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 				return
 			}
 			nodes, errMsg := listNodes(err.Error())
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, asOf, canEdit))
 			return
 		}
 
@@ -1353,7 +1718,7 @@ func handleOrgNodeChildren(w http.ResponseWriter, r *http.Request, store OrgUnit
 	writeContent(w, r, b.String())
 }
 
-func renderOrgNodeDetails(details OrgUnitNodeDetails) string {
+func renderOrgNodeDetails(details OrgUnitNodeDetails, asOf string, versions []OrgUnitNodeVersion, canEdit bool, flash string) string {
 	parentLabel := "-"
 	if details.ParentID != 0 {
 		label := details.ParentCode
@@ -1375,256 +1740,183 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails) string {
 		}
 	}
 
-	buLabel := "No"
-	if details.IsBusinessUnit {
-		buLabel = "Yes"
+	fullNamePath := details.FullNamePath
+	if strings.TrimSpace(fullNamePath) == "" {
+		fullNamePath = "-"
+	}
+
+	selectedVersion, selectedIdx := selectOrgNodeVersion(asOf, versions)
+	currentEffectiveDate := asOf
+	currentEventID := ""
+	if selectedIdx >= 0 {
+		currentEffectiveDate = selectedVersion.EffectiveDate
+		if selectedVersion.EventID != 0 {
+			currentEventID = strconv.FormatInt(selectedVersion.EventID, 10)
+		}
+	}
+
+	prevDate := ""
+	nextDate := ""
+	if selectedIdx > 0 {
+		prevDate = versions[selectedIdx-1].EffectiveDate
+	}
+	if selectedIdx >= 0 && selectedIdx < len(versions)-1 {
+		nextDate = versions[selectedIdx+1].EffectiveDate
+	}
+
+	successMsg := ""
+	if flash == "success" {
+		successMsg = "更新成功"
+	}
+	warnMsg := ""
+	if !canEdit {
+		warnMsg = "无更新权限，无法编辑"
+	}
+
+	disabledAttr := ""
+	if !canEdit {
+		disabledAttr = " disabled"
 	}
 
 	var b strings.Builder
-	b.WriteString(`<div class="org-node-details">`)
-	b.WriteString(`<h3>OrgUnit</h3>`)
-	b.WriteString(`<dl>`)
-	b.WriteString(`<dt>Org ID</dt><dd>` + html.EscapeString(strconv.Itoa(details.OrgID)) + `</dd>`)
-	b.WriteString(`<dt>Org Code</dt><dd>` + html.EscapeString(details.OrgCode) + `</dd>`)
-	b.WriteString(`<dt>Name</dt><dd>` + html.EscapeString(details.Name) + `</dd>`)
-	b.WriteString(`<dt>Parent</dt><dd>` + html.EscapeString(parentLabel) + `</dd>`)
-	b.WriteString(`<dt>Manager</dt><dd>` + html.EscapeString(managerLabel) + `</dd>`)
-	b.WriteString(`<dt>Business Unit</dt><dd>` + html.EscapeString(buLabel) + `</dd>`)
-	b.WriteString(`</dl>`)
-	b.WriteString(`</div>`)
-	return b.String()
-}
+	b.WriteString(`<div class="org-node-details-panel" data-org-id="` + html.EscapeString(strconv.Itoa(details.OrgID)) + `"`)
+	b.WriteString(` data-org-code="` + html.EscapeString(details.OrgCode) + `"`)
+	b.WriteString(` data-current-effective-date="` + html.EscapeString(currentEffectiveDate) + `"`)
+	b.WriteString(` data-current-event-id="` + html.EscapeString(currentEventID) + `"`)
+	b.WriteString(` data-mode="readonly">`)
 
-func renderOrgNodeCorrectionForm(details OrgUnitNodeDetails, asOf string) string {
-	var b strings.Builder
-	b.WriteString(`<div class="org-node-correction">`)
-	b.WriteString(`<h3>History Correction</h3>`)
-	b.WriteString(`<div id="org-node-correction-error" class="org-node-correction-error" aria-live="polite"></div>`)
-	b.WriteString(`<div id="org-node-correction-success" class="org-node-correction-success" aria-live="polite"></div>`)
-	b.WriteString(`<form id="org-node-correction-form" data-org-code="` + html.EscapeString(details.OrgCode) + `"`)
-	b.WriteString(` data-original-effective-date="` + html.EscapeString(asOf) + `"`)
+	b.WriteString(`<div class="org-node-status-messages">`)
+	b.WriteString(`<div class="org-node-status-row org-node-status-success">` + html.EscapeString(successMsg) + `</div>`)
+	b.WriteString(`<div class="org-node-status-row org-node-status-error"></div>`)
+	b.WriteString(`<div class="org-node-status-row org-node-status-warn">` + html.EscapeString(warnMsg) + `</div>`)
+	b.WriteString(`</div>`)
+
+	b.WriteString(`<div class="org-node-header">`)
+	b.WriteString(`<div class="org-node-header-main">`)
+	b.WriteString(`<div class="org-node-name">` + html.EscapeString(details.Name) + `</div>`)
+	b.WriteString(`<div class="org-node-code">` + html.EscapeString(details.OrgCode) + `</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<span class="org-node-status-badge">Active</span>`)
+	b.WriteString(`<div class="org-node-header-spacer"></div>`)
+	b.WriteString(`<button type="button" class="org-node-edit-btn"` + disabledAttr + `>编辑</button>`)
+	b.WriteString(`</div>`)
+
+	b.WriteString(`<div class="org-node-records">`)
+	b.WriteString(`<div class="org-node-records-header">`)
+	b.WriteString(`<span class="org-node-records-title">生效记录</span>`)
+	b.WriteString(`<div class="org-node-records-actions">`)
+	b.WriteString(`<button type="button" class="org-node-record-btn" data-action="add_record"` + disabledAttr + `>新增记录</button>`)
+	b.WriteString(`<button type="button" class="org-node-record-btn is-muted" data-action="insert_record"` + disabledAttr + `>插入记录</button>`)
+	b.WriteString(`<button type="button" class="org-node-record-btn is-danger" data-action="delete_record"` + disabledAttr + `>删除记录</button>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`</div>`)
+
+	b.WriteString(`<div class="org-node-version-nav">`)
+	prevDisabled := ""
+	if prevDate == "" {
+		prevDisabled = " disabled"
+	}
+	nextDisabled := ""
+	if nextDate == "" {
+		nextDisabled = " disabled"
+	}
+	b.WriteString(`<button type="button" class="org-node-version-btn" data-target-date="` + html.EscapeString(prevDate) + `"` + prevDisabled + `>上一条</button>`)
+	b.WriteString(`<button type="button" class="org-node-version-btn" data-target-date="` + html.EscapeString(nextDate) + `"` + nextDisabled + `>下一条</button>`)
+	b.WriteString(`<div class="org-node-version-spacer"></div>`)
+	b.WriteString(`<select class="org-node-version-select">`)
+	if len(versions) == 0 {
+		b.WriteString(`<option value="` + html.EscapeString(asOf) + `" selected>` + html.EscapeString(asOf) + `</option>`)
+	} else {
+		for i, v := range versions {
+			label := v.EffectiveDate
+			if v.EventType != "" {
+				label = label + " · " + v.EventType
+			}
+			selected := ""
+			if i == selectedIdx {
+				selected = " selected"
+			}
+			b.WriteString(`<option value="` + html.EscapeString(v.EffectiveDate) + `"` + selected + `>` + html.EscapeString(label) + `</option>`)
+		}
+	}
+	b.WriteString(`</select>`)
+	if len(versions) > 0 && selectedIdx >= 0 {
+		b.WriteString(`<div class="org-node-version-count">` + strconv.Itoa(selectedIdx+1) + `/` + strconv.Itoa(len(versions)) + `</div>`)
+	}
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-records-hint">切换版本后，下方编辑区加载对应记录</div>`)
+
+	b.WriteString(`<div class="org-node-record-form" data-open="false">`)
+	b.WriteString(`<div class="org-node-record-form-title">新增记录</div>`)
+	b.WriteString(`<form method="POST" class="org-node-record-action-form" action="/org/nodes?as_of=` + html.EscapeString(asOf) + `">`)
+	b.WriteString(`<input type="hidden" name="action" value="add_record" />`)
+	b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(details.OrgCode) + `" />`)
+	b.WriteString(`<label>生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(currentEffectiveDate) + `" /></label>`)
+	b.WriteString(`<label class="org-node-record-name">组织名称（可选） <input name="name" value="" /></label>`)
+	b.WriteString(`<div class="org-node-record-form-actions">`)
+	b.WriteString(`<button type="submit" class="org-node-record-submit">保存</button>`)
+	b.WriteString(`<button type="button" class="org-node-record-cancel">取消</button>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-record-form-hint"></div>`)
+	b.WriteString(`</form>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`</div>`)
+
+	b.WriteString(`<div class="org-node-tabs">`)
+	b.WriteString(`<button type="button" class="org-node-tab-btn is-active" data-tab="basic">基本信息</button>`)
+	b.WriteString(`<button type="button" class="org-node-tab-btn" data-tab="change">修改记录</button>`)
+	b.WriteString(`<div class="org-node-tab-spacer"></div>`)
+	b.WriteString(`</div>`)
+
+	b.WriteString(`<div class="org-node-readonly" data-panel="readonly">`)
+	b.WriteString(`<div class="org-node-info-list" data-tab-content="basic">`)
+	b.WriteString(`<div class="org-node-info-item">生效日期：` + html.EscapeString(currentEffectiveDate) + `</div>`)
+	b.WriteString(`<div class="org-node-info-item">组织名称：` + html.EscapeString(details.Name) + `</div>`)
+	b.WriteString(`<div class="org-node-info-item">组织编码：` + html.EscapeString(details.OrgCode) + `</div>`)
+	b.WriteString(`<div class="org-node-info-item">上级组织：` + html.EscapeString(parentLabel) + `</div>`)
+	b.WriteString(`<div class="org-node-info-item">部门负责人：` + html.EscapeString(managerLabel) + `</div>`)
+	b.WriteString(`<div class="org-node-info-item">组织长名称：` + html.EscapeString(fullNamePath) + `</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-info-list" data-tab-content="change" style="display:none">`)
+	b.WriteString(`<div class="org-node-info-item">组织ID：` + html.EscapeString(strconv.Itoa(details.OrgID)) + `</div>`)
+	b.WriteString(`<div class="org-node-info-item">组织ID链：` + html.EscapeString(formatOrgNodePathIDs(details.PathIDs)) + `</div>`)
+	b.WriteString(`<div class="org-node-info-item">修改人：-</div>`)
+	b.WriteString(`<div class="org-node-info-item">创建日期：` + html.EscapeString(formatOrgNodeDate(details.CreatedAt)) + `</div>`)
+	b.WriteString(`<div class="org-node-info-item">修改日期：` + html.EscapeString(formatOrgNodeDate(details.UpdatedAt)) + `</div>`)
+	b.WriteString(`<div class="org-node-info-item">UUID：` + html.EscapeString(details.EventUUID) + `</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`</div>`)
+
+	b.WriteString(`<div class="org-node-edit" data-panel="edit">`)
+	b.WriteString(`<div class="org-node-edit-header">`)
+	b.WriteString(`<div class="org-node-edit-title">组织信息</div>`)
+	b.WriteString(`<div class="org-node-header-spacer"></div>`)
+	b.WriteString(`<div class="org-node-edit-actions">`)
+	b.WriteString(`<button type="button" class="org-node-save-btn"` + disabledAttr + `>保存</button>`)
+	b.WriteString(`<button type="button" class="org-node-cancel-btn">取消</button>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-unsaved" style="display:none">未保存变更</div>`)
+	b.WriteString(`<form class="org-node-edit-form" data-org-code="` + html.EscapeString(details.OrgCode) + `"`)
+	b.WriteString(` data-original-effective-date="` + html.EscapeString(currentEffectiveDate) + `"`)
 	b.WriteString(` data-original-name="` + html.EscapeString(details.Name) + `"`)
 	b.WriteString(` data-original-parent-code="` + html.EscapeString(details.ParentCode) + `"`)
 	b.WriteString(` data-original-manager-pernr="` + html.EscapeString(details.ManagerPernr) + `"`)
-	b.WriteString(` data-original-manager-name="` + html.EscapeString(details.ManagerName) + `"`)
-	b.WriteString(`>`)
-	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label>`)
-	b.WriteString(`<label>Parent Org Code <input name="parent_org_code" value="` + html.EscapeString(details.ParentCode) + `" /></label>`)
-	b.WriteString(`<label>Name <input name="name" value="` + html.EscapeString(details.Name) + `" /></label>`)
-	b.WriteString(`<label>Manager Pernr <input name="manager_pernr" value="` + html.EscapeString(details.ManagerPernr) + `" /></label>`)
-	b.WriteString(`<label>Manager Name <input name="manager_name" value="` + html.EscapeString(details.ManagerName) + `" readonly /></label>`)
-	b.WriteString(`<button type="submit">Submit Correction</button>`)
+	b.WriteString(` data-original-manager-name="` + html.EscapeString(details.ManagerName) + `">`)
+	b.WriteString(`<label>生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(currentEffectiveDate) + `" /></label>`)
+	b.WriteString(`<label>组织名称* <input name="name" value="` + html.EscapeString(details.Name) + `" /></label>`)
+	b.WriteString(`<label>组织编码* <input name="org_code" value="` + html.EscapeString(details.OrgCode) + `" readonly /></label>`)
+	b.WriteString(`<label>上级组织 <input name="parent_org_code" value="` + html.EscapeString(details.ParentCode) + `" /></label>`)
+	b.WriteString(`<label>部门负责人 <input name="manager_pernr" value="` + html.EscapeString(details.ManagerPernr) + `" /></label>`)
+	b.WriteString(`<label>负责人姓名 <input name="manager_name" value="` + html.EscapeString(details.ManagerName) + `" readonly /></label>`)
+	b.WriteString(`<label>组织长名称 <input name="full_name_path" value="` + html.EscapeString(fullNamePath) + `" readonly /></label>`)
 	b.WriteString(`</form>`)
+	b.WriteString(`<div class="org-node-edit-note">保存失败时保留已编辑内容并提示重试。</div>`)
 	b.WriteString(`</div>`)
-	b.WriteString(`<script>
-(function() {
-  const form = document.getElementById('org-node-correction-form');
-  if (!form || form.dataset.ready === 'true') {
-    return;
-  }
-  form.dataset.ready = 'true';
 
-  const errorEl = document.getElementById('org-node-correction-error');
-  const successEl = document.getElementById('org-node-correction-success');
-  const managerInput = form.querySelector('input[name="manager_pernr"]');
-  const managerNameInput = form.querySelector('input[name="manager_name"]');
-
-  const setError = (msg) => {
-    if (errorEl) {
-      errorEl.textContent = msg || '';
-    }
-  };
-  const setSuccess = (msg) => {
-    if (successEl) {
-      successEl.textContent = msg || '';
-    }
-  };
-
-  const original = {
-    effectiveDate: form.dataset.originalEffectiveDate || '',
-    name: form.dataset.originalName || '',
-    parentCode: form.dataset.originalParentCode || '',
-    managerPernr: form.dataset.originalManagerPernr || '',
-    managerName: form.dataset.originalManagerName || '',
-  };
-
-  const newRequestID = () => {
-    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-      return window.crypto.randomUUID();
-    }
-    return 'corr-' + Date.now() + '-' + Math.random().toString(16).slice(2);
-  };
-
-  const getRequestID = () => {
-    if (!form.dataset.requestId) {
-      form.dataset.requestId = newRequestID();
-    }
-    return form.dataset.requestId;
-  };
-
-  const resetRequestID = () => {
-    delete form.dataset.requestId;
-  };
-
-  const resetRequestOnInput = () => {
-    resetRequestID();
-    setSuccess('');
-  };
-
-  const formatError = (code, message) => {
-    const mapping = {
-      ORG_CODE_INVALID: 'Org code invalid.',
-      ORG_CODE_NOT_FOUND: 'Org code not found.',
-      EFFECTIVE_DATE_INVALID: 'Effective date invalid.',
-      EFFECTIVE_DATE_OUT_OF_RANGE: 'Effective date out of range.',
-      ORG_EVENT_NOT_FOUND: 'No event found on that effective date.',
-      PARENT_NOT_FOUND_AS_OF: 'Parent not found at that date.',
-      MANAGER_PERNR_INVALID: 'Manager pernr invalid.',
-      MANAGER_PERNR_NOT_FOUND: 'Manager not found.',
-      MANAGER_PERNR_INACTIVE: 'Manager inactive.',
-      PATCH_FIELD_NOT_ALLOWED: 'Field not allowed for this event.',
-      PATCH_REQUIRED: 'No changes to correct.',
-      EVENT_DATE_CONFLICT: 'Event date conflict.',
-      REQUEST_DUPLICATE: 'Duplicate request.',
-      ORG_ENABLE_REQUIRED: 'Enable required before changes.',
-    };
-    if (code && mapping[code]) {
-      return mapping[code];
-    }
-    if (message) {
-      return message;
-    }
-    return 'Request failed.';
-  };
-
-  const lookupManager = async (pernr) => {
-    if (!managerNameInput) {
-      return;
-    }
-    const trimmed = String(pernr || '').trim();
-    if (!trimmed) {
-      managerNameInput.value = '';
-      return;
-    }
-    try {
-      const url = '/person/api/persons:by-pernr?pernr=' + encodeURIComponent(trimmed);
-      const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
-      if (!resp.ok) {
-        managerNameInput.value = '';
-        return;
-      }
-      const data = await resp.json();
-      managerNameInput.value = (data && data.display_name) ? data.display_name : '';
-    } catch (_) {
-      managerNameInput.value = '';
-    }
-  };
-
-  if (managerInput) {
-    managerInput.addEventListener('blur', () => {
-      lookupManager(managerInput.value);
-    });
-  }
-  const inputs = form.querySelectorAll('input');
-  inputs.forEach((input) => {
-    input.addEventListener('input', resetRequestOnInput);
-  });
-
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    setError('');
-    setSuccess('');
-
-    const orgCode = form.dataset.orgCode || '';
-    const targetEffectiveDate = original.effectiveDate;
-    const effectiveInput = form.querySelector('input[name=\"effective_date\"]');
-    const parentInput = form.querySelector('input[name=\"parent_org_code\"]');
-    const nameInput = form.querySelector('input[name=\"name\"]');
-
-    if (!orgCode || !targetEffectiveDate) {
-      setError('Missing org_code or effective date.');
-      return;
-    }
-
-    const patch = {};
-    const newEffectiveDate = effectiveInput ? String(effectiveInput.value || '').trim() : '';
-    if (newEffectiveDate && newEffectiveDate !== targetEffectiveDate) {
-      patch.effective_date = newEffectiveDate;
-    }
-
-    const parentCode = parentInput ? String(parentInput.value || '').trim() : '';
-    if (parentCode !== original.parentCode) {
-      patch.parent_org_code = parentCode;
-    }
-
-    const newName = nameInput ? String(nameInput.value || '').trim() : '';
-    if (newName !== original.name) {
-      if (!newName) {
-        setError('Name is required.');
-        return;
-      }
-      patch.name = newName;
-    }
-
-    const managerPernr = managerInput ? String(managerInput.value || '').trim() : '';
-    if (managerPernr !== original.managerPernr) {
-      if (!managerPernr) {
-        setError('Manager pernr is required.');
-        return;
-      }
-      patch.manager_pernr = managerPernr;
-    }
-
-    if (Object.keys(patch).length === 0) {
-      setError('No changes to correct.');
-      return;
-    }
-
-    const payload = {
-      org_code: orgCode,
-      effective_date: targetEffectiveDate,
-      patch: patch,
-      request_id: getRequestID(),
-    };
-
-    try {
-      const resp = await fetch('/org/api/org-units/corrections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      let data = null;
-      try {
-        data = await resp.json();
-      } catch (_) {
-        data = null;
-      }
-
-      if (!resp.ok) {
-        const code = data && data.code ? data.code : '';
-        const message = data && data.message ? data.message : '';
-        setError(formatError(code, message));
-        return;
-      }
-
-      resetRequestID();
-      const nextAsOf = (data && data.effective_date) ? data.effective_date : newEffectiveDate || targetEffectiveDate;
-      setSuccess('Correction saved.');
-      if (nextAsOf) {
-        window.location.href = '/org/nodes?as_of=' + encodeURIComponent(nextAsOf);
-        return;
-      }
-      window.location.reload();
-    } catch (err) {
-      setError('Request failed.');
-    }
-  });
-})();
-</script>`)
+	b.WriteString(`</div>`)
 	return b.String()
 }
-
 func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -1663,14 +1955,19 @@ func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitS
 		return
 	}
 
-	detailsURL := "/org/nodes/view?org_id=" + url.QueryEscape(strconv.Itoa(details.OrgID)) + "&as_of=" + url.QueryEscape(asOf)
-	escapedURL := html.EscapeString(detailsURL)
-	var b strings.Builder
-	b.WriteString(renderOrgNodeDetails(details))
-	b.WriteString(`<p class="org-node-details-link"><a href="` + escapedURL + `" hx-get="` + escapedURL + `" hx-target="#content" hx-push-url="true">Open details page</a></p>`)
-	b.WriteString(renderOrgNodeCorrectionForm(details, asOf))
+	versions, err := store.ListNodeVersions(r.Context(), tenant.ID, details.OrgID)
+	if err != nil {
+		if errors.Is(err, errOrgUnitNotFound) {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+			return
+		}
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "org_details_error", "org node details error")
+		return
+	}
 
-	writeContent(w, r, b.String())
+	flash := strings.TrimSpace(r.URL.Query().Get("flash"))
+	panel := renderOrgNodeDetails(details, asOf, versions, canEditOrgNodes(r.Context()), flash)
+	writeContent(w, r, panel)
 }
 
 func handleOrgNodeDetailsPage(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
@@ -1711,13 +2008,23 @@ func handleOrgNodeDetailsPage(w http.ResponseWriter, r *http.Request, store OrgU
 		return
 	}
 
+	versions, err := store.ListNodeVersions(r.Context(), tenant.ID, details.OrgID)
+	if err != nil {
+		if errors.Is(err, errOrgUnitNotFound) {
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+			return
+		}
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "org_details_error", "org node details error")
+		return
+	}
+
 	nodesURL := "/org/nodes?as_of=" + url.QueryEscape(asOf)
 	escapedNodesURL := html.EscapeString(nodesURL)
 	var b strings.Builder
 	b.WriteString("<h1>OrgUnit / Details</h1>")
 	b.WriteString(`<p>Tenant: <code>` + html.EscapeString(tenant.Name) + `</code> (<code>` + html.EscapeString(tenant.ID) + `</code>)</p>`)
 	b.WriteString(`<p>As-of: <code>` + html.EscapeString(asOf) + `</code> | <a href="` + escapedNodesURL + `" hx-get="` + escapedNodesURL + `" hx-target="#content" hx-push-url="true">Back to Org Nodes</a></p>`)
-	b.WriteString(renderOrgNodeDetails(details))
+	b.WriteString(renderOrgNodeDetails(details, asOf, versions, canEditOrgNodes(r.Context()), ""))
 	writePage(w, r, b.String())
 }
 
@@ -1744,6 +2051,21 @@ func handleOrgNodeSearch(w http.ResponseWriter, r *http.Request, store OrgUnitSt
 		return
 	}
 
+	format := strings.TrimSpace(r.URL.Query().Get("format"))
+	if format == "panel" {
+		items, err := store.SearchNodeCandidates(r.Context(), tenant.ID, query, asOf, 8)
+		if err != nil {
+			if errors.Is(err, errOrgUnitNotFound) {
+				writeContent(w, r, renderOrgNodeSearchPanel(nil))
+				return
+			}
+			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "org_search_error", "org node search error")
+			return
+		}
+		writeContent(w, r, renderOrgNodeSearchPanel(items))
+		return
+	}
+
 	result, err := store.SearchNode(r.Context(), tenant.ID, query, asOf)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
@@ -1759,31 +2081,109 @@ func handleOrgNodeSearch(w http.ResponseWriter, r *http.Request, store OrgUnitSt
 	_ = json.NewEncoder(w).Encode(result)
 }
 
-func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf string) string {
+func renderOrgNodeSearchPanel(items []OrgUnitSearchCandidate) string {
 	var b strings.Builder
-	b.WriteString("<h1>OrgUnit</h1>")
-	b.WriteString("<p>Tenant: " + html.EscapeString(tenant.Name) + "</p>")
-	b.WriteString(`<form method="GET" action="/org/nodes">`)
-	b.WriteString(`<label>As-of <input type="date" name="as_of" value="` + html.EscapeString(asOf) + `" /></label> `)
+	b.WriteString(`<div class="org-node-search-panel" data-count="`)
+	b.WriteString(strconv.Itoa(len(items)))
+	b.WriteString(`">`)
+	if len(items) == 0 {
+		b.WriteString(`<div class="org-node-search-empty">未找到匹配组织</div>`)
+		b.WriteString(`</div>`)
+		return b.String()
+	}
+	b.WriteString(`<div class="org-node-search-hint">匹配多个结果时可选择回填</div>`)
+	for _, item := range items {
+		b.WriteString(`<button type="button" class="org-node-search-item" data-org-id="`)
+		b.WriteString(strconv.Itoa(item.OrgID))
+		b.WriteString(`" data-org-code="`)
+		b.WriteString(html.EscapeString(item.OrgCode))
+		b.WriteString(`">`)
+		b.WriteString(`<span class="org-node-search-name">` + html.EscapeString(item.Name) + `</span>`)
+		b.WriteString(`<span class="org-node-search-code">` + html.EscapeString(item.OrgCode) + `</span>`)
+		b.WriteString(`</button>`)
+	}
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
+func formatOrgNodeDate(t time.Time) string {
+	if t.IsZero() {
+		return "-"
+	}
+	return t.UTC().Format("2006-01-02")
+}
+
+func formatOrgNodePathIDs(pathIDs []int) string {
+	if len(pathIDs) == 0 {
+		return "-"
+	}
+	out := make([]string, 0, len(pathIDs))
+	for _, id := range pathIDs {
+		out = append(out, strconv.Itoa(id))
+	}
+	return strings.Join(out, ".")
+}
+
+func selectOrgNodeVersion(asOf string, versions []OrgUnitNodeVersion) (OrgUnitNodeVersion, int) {
+	if len(versions) == 0 {
+		return OrgUnitNodeVersion{}, -1
+	}
+	asOfTime, err := time.Parse("2006-01-02", asOf)
+	if err != nil {
+		return versions[len(versions)-1], len(versions) - 1
+	}
+	selected := versions[0]
+	idx := 0
+	for i, v := range versions {
+		t, err := time.Parse("2006-01-02", v.EffectiveDate)
+		if err != nil {
+			continue
+		}
+		if t.After(asOfTime) {
+			break
+		}
+		selected = v
+		idx = i
+	}
+	return selected, idx
+}
+
+func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf string, canEdit bool) string {
+	var b strings.Builder
+	b.WriteString(`<div class="org-nodes-shell" id="org-nodes-root" data-can-edit="`)
+	if canEdit {
+		b.WriteString(`true`)
+	} else {
+		b.WriteString(`false`)
+	}
+	b.WriteString(`">`)
+
+	b.WriteString(`<div class="org-nodes-header">`)
+	b.WriteString(`<div class="org-nodes-header-main">`)
+	b.WriteString(`<h1 class="org-nodes-title">OrgUnit Details</h1>`)
+	b.WriteString(`<div class="org-nodes-meta">Tenant: ` + html.EscapeString(tenant.Name) + `</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<form method="GET" action="/org/nodes" class="org-nodes-asof">`)
+	b.WriteString(`<label class="org-nodes-asof-label">As-of</label>`)
+	b.WriteString(`<input type="date" name="as_of" value="` + html.EscapeString(asOf) + `" />`)
 	b.WriteString(`<button type="submit">Apply</button>`)
 	b.WriteString(`</form>`)
+	b.WriteString(`</div>`)
 
 	if errMsg != "" {
-		b.WriteString(`<div style="padding:8px;border:1px solid #c00;color:#c00">` + html.EscapeString(errMsg) + `</div>`)
+		b.WriteString(`<div class="org-node-banner org-node-banner-error">` + html.EscapeString(errMsg) + `</div>`)
 	}
 
-	postAction := "/org/nodes?as_of=" + html.EscapeString(asOf)
 	b.WriteString(`<div class="org-nodes-layout">`)
-	b.WriteString(`<section class="org-nodes-panel">`)
-	b.WriteString(`<div class="org-nodes-tree-header">`)
-	b.WriteString(`<h2>Tree</h2>`)
-	b.WriteString(`<form id="org-node-search-form" class="org-node-search" method="GET" action="/org/nodes/search">`)
-	b.WriteString(`<input type="hidden" name="as_of" value="` + html.EscapeString(asOf) + `" />`)
-	b.WriteString(`<input name="query" placeholder="Search org code or name" />`)
-	b.WriteString(`<button type="submit">Search</button>`)
-	b.WriteString(`</form>`)
-	b.WriteString(`<div id="org-node-search-error" class="org-node-search-error" aria-live="polite"></div>`)
-	b.WriteString(`</div>`)
+	b.WriteString(`<section class="org-nodes-panel org-nodes-tree-panel">`)
+	b.WriteString(`<div class="org-nodes-panel-title">Nodes</div>`)
+	b.WriteString(`<div class="org-nodes-panel-hint">当前仅显示根节点。可在右侧详情中查找并编辑组织。</div>`)
+	createDisabled := ""
+	if !canEdit {
+		createDisabled = " disabled"
+	}
+	b.WriteString(`<button type="button" class="org-node-create-btn"` + createDisabled + `>新建部门</button>`)
+	b.WriteString(`<div class="org-node-tree-wrap">`)
 	b.WriteString(`<sl-tree id="org-node-tree" selection="single">`)
 	if len(nodes) == 0 {
 		b.WriteString(`<sl-tree-item disabled>(none)</sl-tree-item>`)
@@ -1807,213 +2207,820 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
 		}
 	}
 	b.WriteString(`</sl-tree>`)
+	b.WriteString(`</div>`)
 	b.WriteString(`</section>`)
-	b.WriteString(`<section class="org-nodes-panel">`)
-	b.WriteString(`<h2>Details</h2>`)
-	b.WriteString(`<div id="org-node-details">Select a node.</div>`)
+	b.WriteString(`<div class="org-nodes-resize-handle" aria-hidden="true"></div>`)
+	b.WriteString(`<section class="org-nodes-panel org-nodes-details-panel">`)
+	b.WriteString(`<div class="org-node-search-block">`)
+	b.WriteString(`<div class="org-node-search-label">查找组织（ID / Code / 名称）</div>`)
+	b.WriteString(`<form class="org-node-search-form" method="GET" action="/org/nodes/search">`)
+	b.WriteString(`<input type="hidden" name="as_of" value="` + html.EscapeString(asOf) + `" />`)
+	b.WriteString(`<div class="org-node-search-row">`)
+	b.WriteString(`<input name="query" placeholder="输入 ID / Code / 名称" />`)
+	b.WriteString(`<button type="submit">查找</button>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`</form>`)
+	b.WriteString(`<div id="org-node-search-error" class="org-node-search-error" aria-live="polite"></div>`)
+	b.WriteString(`<div id="org-node-search-results" class="org-node-search-results"></div>`)
+	b.WriteString(`<div class="org-node-search-helper">未找到匹配组织时提示：未找到匹配组织</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-details-container" id="org-node-details">`)
+	b.WriteString(`<div class="org-node-placeholder">请选择左侧组织，或在上方查找。</div>`)
+	b.WriteString(`</div>`)
 	b.WriteString(`</section>`)
 	b.WriteString(`</div>`)
 
+	b.WriteString(renderOrgNodeCreateTemplate(asOf, canEdit))
+
 	b.WriteString(`<script>
-	(function() {
-	  const init = () => {
-	    const tree = document.getElementById('org-node-tree');
-	    if (!tree || !window.htmx) {
-	      return false;
-	    }
-	    if (tree.dataset.orgNodesReady === 'true') {
-	      return true;
-	    }
-
-	  const errorEl = document.getElementById('org-node-search-error');
-	  const setError = (msg) => {
-	    if (errorEl) {
-      errorEl.textContent = msg || '';
+(function() {
+  const init = () => {
+    const root = document.getElementById("org-nodes-root");
+    const tree = document.getElementById("org-node-tree");
+    if (!root || !tree || !window.htmx) {
+      return false;
     }
-  };
-
-  const getAsOf = () => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('as_of') || '';
-  };
-
-  const loadChildren = (item) => {
-    if (!item || item.dataset.loading === 'true' || item.lazy !== true) {
-      return Promise.resolve();
+    if (tree.dataset.orgNodesReady === "true") {
+      return true;
     }
-    const orgId = item.dataset.orgId;
-    const asOf = getAsOf();
-    if (!orgId || !asOf) {
-      return Promise.resolve();
-    }
-    item.dataset.loading = 'true';
-    const url = '/org/nodes/children?parent_id=' + encodeURIComponent(orgId) + '&as_of=' + encodeURIComponent(asOf);
-    return htmx.ajax('GET', url, { target: item, swap: 'beforeend' })
-      .then(() => {
-        item.lazy = false;
-      })
-      .finally(() => {
-        delete item.dataset.loading;
+
+    const canEdit = root.dataset.canEdit === "true";
+    let lastSelectedOrgId = "";
+
+    const getAsOf = () => {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("as_of") || "";
+    };
+
+    const getDetailsContainer = () => document.getElementById("org-node-details");
+
+    const setSearchError = (msg) => {
+      const errorEl = document.getElementById("org-node-search-error");
+      if (errorEl) {
+        errorEl.textContent = msg || "";
+      }
+    };
+
+    const setSearchResults = (html) => {
+      const target = document.getElementById("org-node-search-results");
+      if (!target) {
+        return null;
+      }
+      target.innerHTML = html || "";
+      return target.querySelector(".org-node-search-panel");
+    };
+
+    const getDetailsPanel = () => {
+      const container = getDetailsContainer();
+      if (!container) {
+        return null;
+      }
+      return container.querySelector(".org-node-details-panel") || container.querySelector(".org-node-create-panel");
+    };
+
+    const setStatus = (panel, kind, msg) => {
+      if (!panel) {
+        return;
+      }
+      const el = panel.querySelector(".org-node-status-" + kind);
+      if (el) {
+        el.textContent = msg || "";
+      }
+    };
+
+    const clearStatus = (panel) => {
+      setStatus(panel, "success", "");
+      setStatus(panel, "error", "");
+      setStatus(panel, "warn", "");
+    };
+
+    const setTab = (panel, tab) => {
+      if (!panel) {
+        return;
+      }
+      const tabs = panel.querySelectorAll(".org-node-tab-btn");
+      tabs.forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.tab === tab);
       });
-  };
+      const contents = panel.querySelectorAll("[data-tab-content]");
+      contents.forEach((el) => {
+        el.style.display = el.dataset.tabContent === tab ? "block" : "none";
+      });
+      panel.dataset.activeTab = tab;
+    };
 
-	  const loadDetails = (orgId) => {
-	    const asOf = getAsOf();
-	    if (!orgId || !asOf) {
-	      return;
-	    }
-	    const url = '/org/nodes/details?org_id=' + encodeURIComponent(orgId) + '&as_of=' + encodeURIComponent(asOf);
-	    htmx.ajax('GET', url, { target: '#org-node-details', swap: 'innerHTML' });
-	  };
-
-	  tree.addEventListener('sl-lazy-load', (event) => {
-	    const item = (event.detail && event.detail.item) || event.target;
-	    loadChildren(item).catch(() => {});
-	  });
-
-	  tree.addEventListener('sl-selection-change', () => {
-	    const item = tree.selectedItems && tree.selectedItems.length > 0 ? tree.selectedItems[0] : null;
-	    const orgId = item && item.dataset ? item.dataset.orgId : '';
-	    if (!orgId) {
-	      return;
-	    }
-	    loadDetails(orgId);
-	  });
-
-  const form = document.getElementById('org-node-search-form');
-  if (form) {
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const formData = new FormData(form);
-      const query = String(formData.get('query') || '').trim();
-      if (!query) {
-        setError('Query required.');
+    const setDirty = (panel, dirty) => {
+      if (!panel) {
         return;
       }
+      panel.dataset.dirty = dirty ? "true" : "false";
+      const badge = panel.querySelector(".org-node-unsaved");
+      if (badge) {
+        badge.style.display = dirty ? "block" : "none";
+      }
+    };
+
+    const isDirty = () => {
+      const panel = getDetailsPanel();
+      return panel && panel.dataset.dirty === "true";
+    };
+
+    const confirmDiscard = () => {
+      if (!isDirty()) {
+        return true;
+      }
+      return window.confirm("未保存变更将丢失，确认继续？");
+    };
+
+    const initDetailsPanel = () => {
+      const panel = getDetailsPanel();
+      if (!panel || panel.dataset.ready === "true") {
+        return;
+      }
+      panel.dataset.ready = "true";
+      if (panel.classList.contains("org-node-details-panel")) {
+        if (!panel.dataset.mode) {
+          panel.dataset.mode = "readonly";
+        }
+        setTab(panel, panel.dataset.activeTab || "basic");
+        if (panel.dataset.orgId) {
+          lastSelectedOrgId = panel.dataset.orgId;
+        }
+      }
+    };
+
+    const loadDetails = (orgId, opts) => {
+      const asOf = opts && opts.asOf ? opts.asOf : getAsOf();
+      if (!orgId || !asOf) {
+        return Promise.resolve();
+      }
+      let url = "/org/nodes/details?org_id=" + encodeURIComponent(orgId) + "&as_of=" + encodeURIComponent(asOf);
+      if (opts && opts.flash) {
+        url += "&flash=" + encodeURIComponent(opts.flash);
+      }
+      return htmx.ajax("GET", url, { target: "#org-node-details", swap: "innerHTML" })
+        .then(() => {
+          initDetailsPanel();
+        })
+        .catch(() => {});
+    };
+
+    const loadChildren = (item) => {
+      if (!item || item.dataset.loading === "true" || item.lazy !== true) {
+        return Promise.resolve();
+      }
+      const orgId = item.dataset.orgId;
       const asOf = getAsOf();
-      if (!asOf) {
-        setError('Missing as_of.');
+      if (!orgId || !asOf) {
+        return Promise.resolve();
+      }
+      item.dataset.loading = "true";
+      const url = "/org/nodes/children?parent_id=" + encodeURIComponent(orgId) + "&as_of=" + encodeURIComponent(asOf);
+      return htmx.ajax("GET", url, { target: item, swap: "beforeend" })
+        .then(() => {
+          item.lazy = false;
+        })
+        .finally(() => {
+          delete item.dataset.loading;
+        });
+    };
+
+    const selectTreeItemByOrgId = (orgId) => {
+      if (!orgId) {
         return;
       }
-      setError('');
-      const url = '/org/nodes/search?query=' + encodeURIComponent(query) + '&as_of=' + encodeURIComponent(asOf);
-      fetch(url, { headers: { 'Accept': 'application/json' } })
+      const item = tree.querySelector("sl-tree-item[data-org-id=\"" + orgId + "\"]");
+      if (item) {
+        item.selected = true;
+        item.scrollIntoView({ block: "center" });
+      }
+    };
+
+    const selectByOrgCode = async (orgCode) => {
+      const asOf = getAsOf();
+      if (!orgCode || !asOf) {
+        return;
+      }
+      if (!confirmDiscard()) {
+        return;
+      }
+      setSearchError("");
+      const url = "/org/nodes/search?query=" + encodeURIComponent(orgCode) + "&as_of=" + encodeURIComponent(asOf);
+      try {
+        const resp = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (!resp.ok) {
+          throw new Error("search failed");
+        }
+        const data = await resp.json();
+        if (!data || !Array.isArray(data.path_org_ids)) {
+          throw new Error("invalid response");
+        }
+        let current = null;
+        for (const orgId of data.path_org_ids) {
+          let item = tree.querySelector("sl-tree-item[data-org-id=\"" + orgId + "\"]");
+          if (!item && current) {
+            await loadChildren(current);
+            item = tree.querySelector("sl-tree-item[data-org-id=\"" + orgId + "\"]");
+          }
+          if (!item) {
+            break;
+          }
+          item.expanded = true;
+          current = item;
+        }
+        if (!current) {
+          setSearchError("未找到匹配组织");
+          return;
+        }
+        current.selected = true;
+        current.scrollIntoView({ block: "center" });
+        if (current.dataset && current.dataset.orgId) {
+          if (window.localStorage) {
+            window.localStorage.setItem("org_nodes_last_org_code", data.target_org_code || orgCode);
+          }
+          await loadDetails(current.dataset.orgId);
+          lastSelectedOrgId = current.dataset.orgId;
+        }
+      } catch (_) {
+        setSearchError("查找失败");
+      }
+    };
+
+    const showCreatePanel = () => {
+      const container = getDetailsContainer();
+      if (!container) {
+        return;
+      }
+      if (!confirmDiscard()) {
+        return;
+      }
+      if (!canEdit) {
+        const panel = getDetailsPanel();
+        if (panel && panel.classList.contains("org-node-details-panel")) {
+          setStatus(panel, "warn", "无更新权限，无法编辑");
+        } else {
+          container.innerHTML = "<div class=\"org-node-status-row org-node-status-warn\">无更新权限，无法编辑</div>";
+        }
+        return;
+      }
+      const tpl = document.getElementById("org-node-create-template");
+      if (!tpl) {
+        return;
+      }
+      container.innerHTML = tpl.innerHTML;
+      initDetailsPanel();
+    };
+
+    const recordActionConfig = {
+      add_record: { title: "新增记录", hint: "新增记录将追加为最新版本", showName: true, submit: "保存" },
+      insert_record: { title: "插入记录", hint: "生效日需位于已有记录之间", showName: true, submit: "保存" },
+      delete_record: { title: "删除记录", hint: "删除记录将停用该组织", showName: false, submit: "删除" },
+    };
+
+    tree.addEventListener("sl-lazy-load", (event) => {
+      const item = (event.detail && event.detail.item) || event.target;
+      loadChildren(item).catch(() => {});
+    });
+
+    tree.addEventListener("sl-selection-change", () => {
+      const item = tree.selectedItems && tree.selectedItems.length > 0 ? tree.selectedItems[0] : null;
+      const orgId = item && item.dataset ? item.dataset.orgId : "";
+      if (!orgId) {
+        return;
+      }
+      if (!confirmDiscard()) {
+        selectTreeItemByOrgId(lastSelectedOrgId);
+        return;
+      }
+      if (window.localStorage && item.dataset && item.dataset.orgCode) {
+        window.localStorage.setItem("org_nodes_last_org_code", item.dataset.orgCode);
+      }
+      loadDetails(orgId).then(() => {
+        lastSelectedOrgId = orgId;
+      });
+    });
+
+    document.addEventListener("submit", (event) => {
+      const form = event.target;
+      if (form && form.classList && form.classList.contains("org-node-search-form")) {
+        event.preventDefault();
+        const formData = new FormData(form);
+        const query = String(formData.get("query") || "").trim();
+        if (!query) {
+          setSearchError("请输入查找条件");
+          return;
+        }
+        const asOf = getAsOf();
+        if (!asOf) {
+          setSearchError("缺少 as_of");
+          return;
+        }
+        setSearchError("");
+        const url = "/org/nodes/search?query=" + encodeURIComponent(query) + "&as_of=" + encodeURIComponent(asOf) + "&format=panel";
+        fetch(url, { headers: { "Accept": "text/html" } })
+          .then((resp) => {
+            if (!resp.ok) {
+              throw new Error("search failed");
+            }
+            return resp.text();
+          })
+          .then((html) => {
+            const panel = setSearchResults(html);
+            if (!panel) {
+              return;
+            }
+            const count = Number(panel.dataset.count || "0");
+            if (count === 1) {
+              const item = panel.querySelector(".org-node-search-item");
+              if (item && item.dataset && item.dataset.orgCode) {
+                selectByOrgCode(item.dataset.orgCode);
+              }
+            }
+          })
+          .catch(() => {
+            setSearchError("查找失败");
+          });
+        return;
+      }
+
+      if (form && form.classList && form.classList.contains("org-node-edit-form")) {
+        event.preventDefault();
+        const panel = form.closest(".org-node-details-panel");
+        if (!panel) {
+          return;
+        }
+        clearStatus(panel);
+        if (!canEdit) {
+          setStatus(panel, "warn", "无更新权限，无法编辑");
+          return;
+        }
+
+        const original = {
+          effectiveDate: form.dataset.originalEffectiveDate || "",
+          name: form.dataset.originalName || "",
+          parentCode: form.dataset.originalParentCode || "",
+          managerPernr: form.dataset.originalManagerPernr || "",
+          managerName: form.dataset.originalManagerName || "",
+        };
+
+        const effectiveInput = form.querySelector("input[name=\"effective_date\"]");
+        const parentInput = form.querySelector("input[name=\"parent_org_code\"]");
+        const nameInput = form.querySelector("input[name=\"name\"]");
+        const managerInput = form.querySelector("input[name=\"manager_pernr\"]");
+
+        const patch = {};
+        const newEffectiveDate = effectiveInput ? String(effectiveInput.value || "").trim() : "";
+        if (newEffectiveDate && newEffectiveDate !== original.effectiveDate) {
+          patch.effective_date = newEffectiveDate;
+        }
+
+        const parentCode = parentInput ? String(parentInput.value || "").trim() : "";
+        if (parentCode !== original.parentCode) {
+          patch.parent_org_code = parentCode;
+        }
+
+        const newName = nameInput ? String(nameInput.value || "").trim() : "";
+        if (newName !== original.name) {
+          if (!newName) {
+            setStatus(panel, "error", "组织名称为必填");
+            return;
+          }
+          patch.name = newName;
+        }
+
+        const managerPernr = managerInput ? String(managerInput.value || "").trim() : "";
+        if (managerPernr !== original.managerPernr) {
+          if (!managerPernr) {
+            setStatus(panel, "error", "负责人编号为必填");
+            return;
+          }
+          patch.manager_pernr = managerPernr;
+        }
+
+        if (Object.keys(patch).length === 0) {
+          setStatus(panel, "error", "未检测到变更");
+          return;
+        }
+
+        if (!form.dataset.requestId) {
+          if (window.crypto && typeof window.crypto.randomUUID === "function") {
+            form.dataset.requestId = window.crypto.randomUUID();
+          } else {
+            form.dataset.requestId = "corr-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+          }
+        }
+
+        const payload = {
+          org_code: form.dataset.orgCode || "",
+          effective_date: original.effectiveDate,
+          patch: patch,
+          request_id: form.dataset.requestId,
+        };
+
+        fetch("/org/api/org-units/corrections", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify(payload),
+        })
+          .then(async (resp) => {
+            let data = null;
+            try {
+              data = await resp.json();
+            } catch (_) {
+              data = null;
+            }
+            if (!resp.ok) {
+              const code = data && data.code ? data.code : "";
+              const message = data && data.message ? data.message : "";
+              const mapping = {
+                ORG_CODE_INVALID: "组织编码无效",
+                ORG_CODE_NOT_FOUND: "组织编码不存在",
+                EFFECTIVE_DATE_INVALID: "生效日期无效",
+                EFFECTIVE_DATE_OUT_OF_RANGE: "生效日期超出范围",
+                ORG_EVENT_NOT_FOUND: "未找到该生效日记录",
+                PARENT_NOT_FOUND_AS_OF: "该日期上级组织不存在",
+                MANAGER_PERNR_INVALID: "负责人编号无效",
+                MANAGER_PERNR_NOT_FOUND: "负责人不存在",
+                MANAGER_PERNR_INACTIVE: "负责人已失效",
+                PATCH_FIELD_NOT_ALLOWED: "字段不允许更正",
+                PATCH_REQUIRED: "未检测到变更",
+                EVENT_DATE_CONFLICT: "生效日期冲突",
+                REQUEST_DUPLICATE: "重复请求",
+                ORG_ENABLE_REQUIRED: "需要先启用组织",
+              };
+              const msg = (code && mapping[code]) ? mapping[code] : (message || "保存失败，请重试");
+              setStatus(panel, "error", msg);
+              if (resp.status === 403) {
+                setStatus(panel, "warn", "无更新权限，无法编辑");
+              }
+              return;
+            }
+            setDirty(panel, false);
+            panel.dataset.mode = "readonly";
+            const nextAsOf = (data && data.effective_date) ? data.effective_date : newEffectiveDate || original.effectiveDate;
+            if (panel.dataset.orgId) {
+              loadDetails(panel.dataset.orgId, { asOf: nextAsOf, flash: "success" });
+            } else if (nextAsOf) {
+              window.location.href = "/org/nodes?as_of=" + encodeURIComponent(nextAsOf);
+            }
+          })
+          .catch(() => {
+            setStatus(panel, "error", "请求失败");
+          });
+        return;
+      }
+
+      if (form && form.classList && form.classList.contains("org-node-record-action-form")) {
+        const actionInput = form.querySelector("input[name=\"action\"]");
+        if (actionInput && actionInput.value === "delete_record") {
+          if (!window.confirm("确认删除该生效记录？")) {
+            event.preventDefault();
+          }
+        }
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      const searchItem = event.target && event.target.closest ? event.target.closest(".org-node-search-item") : null;
+      if (searchItem && searchItem.dataset && searchItem.dataset.orgCode) {
+        selectByOrgCode(searchItem.dataset.orgCode);
+        return;
+      }
+
+      const createBtn = event.target && event.target.closest ? event.target.closest(".org-node-create-btn") : null;
+      if (createBtn) {
+        showCreatePanel();
+        return;
+      }
+
+      const editBtn = event.target && event.target.closest ? event.target.closest(".org-node-edit-btn") : null;
+      if (editBtn) {
+        const panel = editBtn.closest(".org-node-details-panel");
+        if (!panel) {
+          return;
+        }
+        clearStatus(panel);
+        if (!canEdit) {
+          setStatus(panel, "warn", "无更新权限，无法编辑");
+          return;
+        }
+        panel.dataset.mode = "edit";
+        return;
+      }
+
+      const saveBtn = event.target && event.target.closest ? event.target.closest(".org-node-save-btn") : null;
+      if (saveBtn) {
+        const panel = saveBtn.closest(".org-node-details-panel");
+        if (!panel) {
+          return;
+        }
+        const form = panel.querySelector(".org-node-edit-form");
+        if (form) {
+          if (typeof form.requestSubmit === "function") {
+            form.requestSubmit();
+          } else {
+            form.submit();
+          }
+        }
+        return;
+      }
+
+      const cancelBtn = event.target && event.target.closest ? event.target.closest(".org-node-cancel-btn") : null;
+      if (cancelBtn) {
+        const panel = cancelBtn.closest(".org-node-details-panel");
+        if (!panel) {
+          return;
+        }
+        if (!confirmDiscard()) {
+          return;
+        }
+        const form = panel.querySelector(".org-node-edit-form");
+        if (form) {
+          const orig = {
+            effectiveDate: form.dataset.originalEffectiveDate || "",
+            name: form.dataset.originalName || "",
+            parentCode: form.dataset.originalParentCode || "",
+            managerPernr: form.dataset.originalManagerPernr || "",
+            managerName: form.dataset.originalManagerName || "",
+          };
+          const effectiveInput = form.querySelector("input[name=\"effective_date\"]");
+          const nameInput = form.querySelector("input[name=\"name\"]");
+          const parentInput = form.querySelector("input[name=\"parent_org_code\"]");
+          const managerInput = form.querySelector("input[name=\"manager_pernr\"]");
+          const managerNameInput = form.querySelector("input[name=\"manager_name\"]");
+          if (effectiveInput) {
+            effectiveInput.value = orig.effectiveDate;
+          }
+          if (nameInput) {
+            nameInput.value = orig.name;
+          }
+          if (parentInput) {
+            parentInput.value = orig.parentCode;
+          }
+          if (managerInput) {
+            managerInput.value = orig.managerPernr;
+          }
+          if (managerNameInput) {
+            managerNameInput.value = orig.managerName;
+          }
+        }
+        panel.dataset.mode = "readonly";
+        setDirty(panel, false);
+        clearStatus(panel);
+        return;
+      }
+
+      const tabBtn = event.target && event.target.closest ? event.target.closest(".org-node-tab-btn") : null;
+      if (tabBtn) {
+        const panel = tabBtn.closest(".org-node-details-panel");
+        if (!panel) {
+          return;
+        }
+        setTab(panel, tabBtn.dataset.tab || "basic");
+        return;
+      }
+
+      const recordBtn = event.target && event.target.closest ? event.target.closest(".org-node-record-btn") : null;
+      if (recordBtn) {
+        const panel = recordBtn.closest(".org-node-details-panel");
+        if (!panel) {
+          return;
+        }
+        clearStatus(panel);
+        if (!canEdit) {
+          setStatus(panel, "warn", "无更新权限，无法编辑");
+          return;
+        }
+        if (!confirmDiscard()) {
+          return;
+        }
+        const action = recordBtn.dataset.action || "";
+        const config = recordActionConfig[action];
+        if (!config) {
+          return;
+        }
+        const formWrap = panel.querySelector(".org-node-record-form");
+        if (!formWrap) {
+          return;
+        }
+        formWrap.dataset.open = "true";
+        const title = formWrap.querySelector(".org-node-record-form-title");
+        if (title) {
+          title.textContent = config.title;
+        }
+        const form = formWrap.querySelector("form");
+        if (form) {
+          const actionInput = form.querySelector("input[name=\"action\"]");
+          if (actionInput) {
+            actionInput.value = action;
+          }
+          const effectiveInput = form.querySelector("input[name=\"effective_date\"]");
+          if (effectiveInput && panel.dataset.currentEffectiveDate) {
+            effectiveInput.value = panel.dataset.currentEffectiveDate;
+          }
+          const nameLabel = form.querySelector(".org-node-record-name");
+          if (nameLabel) {
+            nameLabel.style.display = config.showName ? "grid" : "none";
+          }
+          const submit = form.querySelector(".org-node-record-submit");
+          if (submit) {
+            submit.textContent = config.submit;
+          }
+          const hint = form.querySelector(".org-node-record-form-hint");
+          if (hint) {
+            hint.textContent = config.hint;
+          }
+        }
+        formWrap.scrollIntoView({ block: "nearest" });
+        return;
+      }
+
+      const recordCancel = event.target && event.target.closest ? event.target.closest(".org-node-record-cancel") : null;
+      if (recordCancel) {
+        const formWrap = recordCancel.closest(".org-node-record-form");
+        if (formWrap) {
+          formWrap.dataset.open = "false";
+        }
+        return;
+      }
+
+      const createCancel = event.target && event.target.closest ? event.target.closest(".org-node-create-cancel") : null;
+      if (createCancel) {
+        const container = getDetailsContainer();
+        if (!container) {
+          return;
+        }
+        if (lastSelectedOrgId) {
+          loadDetails(lastSelectedOrgId);
+        } else {
+          container.innerHTML = "<div class=\"org-node-placeholder\">请选择左侧组织，或在上方查找。</div>";
+        }
+      }
+    });
+
+    document.addEventListener("input", (event) => {
+      const input = event.target;
+      if (!input) {
+        return;
+      }
+      const form = input.closest ? input.closest(".org-node-edit-form") : null;
+      if (!form) {
+        return;
+      }
+      delete form.dataset.requestId;
+      const panel = form.closest(".org-node-details-panel");
+      if (!panel) {
+        return;
+      }
+      const orig = {
+        effectiveDate: form.dataset.originalEffectiveDate || "",
+        name: form.dataset.originalName || "",
+        parentCode: form.dataset.originalParentCode || "",
+        managerPernr: form.dataset.originalManagerPernr || "",
+      };
+      const effectiveInput = form.querySelector("input[name=\"effective_date\"]");
+      const nameInput = form.querySelector("input[name=\"name\"]");
+      const parentInput = form.querySelector("input[name=\"parent_org_code\"]");
+      const managerInput = form.querySelector("input[name=\"manager_pernr\"]");
+      const dirty = (
+        (effectiveInput && String(effectiveInput.value || "").trim() !== orig.effectiveDate) ||
+        (nameInput && String(nameInput.value || "").trim() !== orig.name) ||
+        (parentInput && String(parentInput.value || "").trim() !== orig.parentCode) ||
+        (managerInput && String(managerInput.value || "").trim() !== orig.managerPernr)
+      );
+      setDirty(panel, dirty);
+    });
+
+    document.addEventListener("focusout", (event) => {
+      const input = event.target;
+      if (!input || input.name !== "manager_pernr") {
+        return;
+      }
+      const form = input.closest ? input.closest(".org-node-edit-form") : null;
+      if (!form) {
+        return;
+      }
+      const managerNameInput = form.querySelector("input[name=\"manager_name\"]");
+      if (!managerNameInput) {
+        return;
+      }
+      const trimmed = String(input.value || "").trim();
+      if (!trimmed) {
+        managerNameInput.value = "";
+        return;
+      }
+      fetch("/person/api/persons:by-pernr?pernr=" + encodeURIComponent(trimmed), { headers: { "Accept": "application/json" } })
         .then((resp) => {
           if (!resp.ok) {
-            throw new Error('search failed');
+            managerNameInput.value = "";
+            return null;
           }
           return resp.json();
         })
-        .then(async (data) => {
-          if (!data || !Array.isArray(data.path_org_ids)) {
-            throw new Error('invalid response');
-          }
-          let current = null;
-          for (const orgId of data.path_org_ids) {
-            let item = tree.querySelector('sl-tree-item[data-org-id=\"' + orgId + '\"]');
-            if (!item && current) {
-              await loadChildren(current);
-              item = tree.querySelector('sl-tree-item[data-org-id=\"' + orgId + '\"]');
-            }
-            if (!item) {
-              break;
-            }
-            item.expanded = true;
-            current = item;
-          }
-          if (!current) {
-            setError('Node not found.');
-            return;
-          }
-          current.selected = true;
-          current.scrollIntoView({ block: 'center' });
-          if (current.dataset && current.dataset.orgId) {
-            loadDetails(current.dataset.orgId);
-          }
+        .then((data) => {
+          managerNameInput.value = data && data.display_name ? data.display_name : "";
         })
         .catch(() => {
-          setError('Search failed.');
-	        });
-	    });
-	  }
+          managerNameInput.value = "";
+        });
+    });
 
-	    tree.dataset.orgNodesReady = 'true';
-	    return true;
-	  };
+    document.addEventListener("change", (event) => {
+      const select = event.target;
+      if (!select || !select.classList || !select.classList.contains("org-node-version-select")) {
+        return;
+      }
+      const panel = select.closest(".org-node-details-panel");
+      if (!panel) {
+        return;
+      }
+      const targetDate = select.value;
+      if (!targetDate) {
+        return;
+      }
+      if (!confirmDiscard()) {
+        if (panel.dataset.currentEffectiveDate) {
+          select.value = panel.dataset.currentEffectiveDate;
+        }
+        return;
+      }
+      window.location.href = "/org/nodes?as_of=" + encodeURIComponent(targetDate);
+    });
 
-	  if (init()) {
-	    return;
-	  }
-	  const timer = setInterval(() => {
-	    if (init()) {
-	      clearInterval(timer);
-	    }
-	  }, 50);
-	})();
-	</script>`)
+    document.addEventListener("click", (event) => {
+      const versionBtn = event.target && event.target.closest ? event.target.closest(".org-node-version-btn") : null;
+      if (!versionBtn) {
+        return;
+      }
+      const targetDate = versionBtn.dataset.targetDate || "";
+      if (!targetDate) {
+        return;
+      }
+      if (!confirmDiscard()) {
+        return;
+      }
+      window.location.href = "/org/nodes?as_of=" + encodeURIComponent(targetDate);
+    });
 
-	b.WriteString(`<form method="POST" action="` + postAction + `">`)
-	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)
-	b.WriteString(`<label>Org Code <input name="org_code" /></label><br/>`)
-	b.WriteString(`<label>Parent Code (optional) <input name="parent_code" /></label><br/>`)
-	b.WriteString(`<label>Name <input name="name" /></label> `)
-	b.WriteString(`<label>Is Business Unit <input type="checkbox" name="is_business_unit" value="true" /></label>`)
-	b.WriteString(`<button type="submit">Create</button>`)
+    window.orgNodes = {
+      getAsOf: getAsOf,
+      loadChildren: loadChildren,
+      loadDetails: loadDetails,
+      selectByOrgCode: selectByOrgCode,
+      showCreatePanel: showCreatePanel,
+    };
+
+    if (window.localStorage) {
+      const lastOrgCode = window.localStorage.getItem("org_nodes_last_org_code");
+      if (lastOrgCode) {
+        selectByOrgCode(lastOrgCode);
+      }
+    }
+
+    initDetailsPanel();
+    tree.dataset.orgNodesReady = "true";
+    return true;
+  };
+
+  if (init()) {
+    return;
+  }
+  const timer = setInterval(() => {
+    if (init()) {
+      clearInterval(timer);
+    }
+  }, 50);
+})();
+</script>`)
+
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
+func renderOrgNodeCreateTemplate(asOf string, canEdit bool) string {
+	disabledAttr := ""
+	if !canEdit {
+		disabledAttr = " disabled"
+	}
+	var b strings.Builder
+	b.WriteString(`<template id="org-node-create-template">`)
+	b.WriteString(`<div class="org-node-create-panel" data-mode="create">`)
+	b.WriteString(`<div class="org-node-create-header">新建部门</div>`)
+	if !canEdit {
+		b.WriteString(`<div class="org-node-status-row org-node-status-warn">无更新权限，无法编辑</div>`)
+	}
+	b.WriteString(`<form method="POST" action="/org/nodes?as_of=` + html.EscapeString(asOf) + `">`)
+	b.WriteString(`<label>生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `"` + disabledAttr + ` /></label>`)
+	b.WriteString(`<label>组织编码* <input name="org_code"` + disabledAttr + ` /></label>`)
+	b.WriteString(`<label>组织名称* <input name="name"` + disabledAttr + ` /></label>`)
+	b.WriteString(`<label>上级组织编码 <input name="parent_code"` + disabledAttr + ` /></label>`)
+	b.WriteString(`<label class="org-node-create-checkbox"><input type="checkbox" name="is_business_unit" value="true"` + disabledAttr + ` /> 业务单元</label>`)
+	b.WriteString(`<div class="org-node-create-actions">`)
+	b.WriteString(`<button type="submit"` + disabledAttr + `>保存</button>`)
+	b.WriteString(`<button type="button" class="org-node-create-cancel">取消</button>`)
+	b.WriteString(`</div>`)
 	b.WriteString(`</form>`)
-
-	b.WriteString("<h2>Nodes</h2>")
-	if len(nodes) == 0 {
-		b.WriteString("<p>(none)</p>")
-		return b.String()
-	}
-
-	b.WriteString("<ul>")
-	for _, n := range nodes {
-		b.WriteString("<li>")
-		codeLabel := n.OrgCode
-		if strings.TrimSpace(codeLabel) == "" {
-			codeLabel = "(missing org_code)"
-		}
-		b.WriteString(html.EscapeString(n.Name) + " <code>" + html.EscapeString(codeLabel) + "</code>")
-		if n.IsBusinessUnit {
-			b.WriteString(` <span>(BU)</span>`)
-		}
-		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
-		b.WriteString(`<input type="hidden" name="action" value="rename" />`)
-		b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(n.OrgCode) + `" />`)
-		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
-		b.WriteString(`<label>New Name <input name="new_name" value="` + html.EscapeString(n.Name) + `" /></label> `)
-		b.WriteString(`<button type="submit">Rename</button>`)
-		b.WriteString(`</form>`)
-
-		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
-		b.WriteString(`<input type="hidden" name="action" value="move" />`)
-		b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(n.OrgCode) + `" />`)
-		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
-		b.WriteString(`<label>New Parent Code (optional) <input name="new_parent_code" /></label> `)
-		b.WriteString(`<button type="submit">Move</button>`)
-		b.WriteString(`</form>`)
-
-		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
-		b.WriteString(`<input type="hidden" name="action" value="disable" />`)
-		b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(n.OrgCode) + `" />`)
-		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
-		b.WriteString(`<button type="submit">Disable</button>`)
-		b.WriteString(`</form>`)
-
-		b.WriteString(`<form method="POST" action="` + postAction + `" style="margin-top:4px">`)
-		b.WriteString(`<input type="hidden" name="action" value="set_business_unit" />`)
-		b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(n.OrgCode) + `" />`)
-		b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label> `)
-		checked := ""
-		if n.IsBusinessUnit {
-			checked = " checked"
-		}
-		b.WriteString(`<label>Is Business Unit <input type="checkbox" name="is_business_unit" value="true"` + checked + ` /></label> `)
-		b.WriteString(`<button type="submit">Set BU</button>`)
-		b.WriteString(`</form>`)
-		b.WriteString("</li>")
-	}
-	b.WriteString("</ul>")
+	b.WriteString(`</div>`)
+	b.WriteString(`</template>`)
 	return b.String()
 }
