@@ -1395,6 +1395,236 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails) string {
 	return b.String()
 }
 
+func renderOrgNodeCorrectionForm(details OrgUnitNodeDetails, asOf string) string {
+	var b strings.Builder
+	b.WriteString(`<div class="org-node-correction">`)
+	b.WriteString(`<h3>History Correction</h3>`)
+	b.WriteString(`<div id="org-node-correction-error" class="org-node-correction-error" aria-live="polite"></div>`)
+	b.WriteString(`<div id="org-node-correction-success" class="org-node-correction-success" aria-live="polite"></div>`)
+	b.WriteString(`<form id="org-node-correction-form" data-org-code="` + html.EscapeString(details.OrgCode) + `"`)
+	b.WriteString(` data-original-effective-date="` + html.EscapeString(asOf) + `"`)
+	b.WriteString(` data-original-name="` + html.EscapeString(details.Name) + `"`)
+	b.WriteString(` data-original-parent-code="` + html.EscapeString(details.ParentCode) + `"`)
+	b.WriteString(` data-original-manager-pernr="` + html.EscapeString(details.ManagerPernr) + `"`)
+	b.WriteString(` data-original-manager-name="` + html.EscapeString(details.ManagerName) + `"`)
+	b.WriteString(`>`)
+	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label>`)
+	b.WriteString(`<label>Parent Org Code <input name="parent_org_code" value="` + html.EscapeString(details.ParentCode) + `" /></label>`)
+	b.WriteString(`<label>Name <input name="name" value="` + html.EscapeString(details.Name) + `" /></label>`)
+	b.WriteString(`<label>Manager Pernr <input name="manager_pernr" value="` + html.EscapeString(details.ManagerPernr) + `" /></label>`)
+	b.WriteString(`<label>Manager Name <input name="manager_name" value="` + html.EscapeString(details.ManagerName) + `" readonly /></label>`)
+	b.WriteString(`<button type="submit">Submit Correction</button>`)
+	b.WriteString(`</form>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<script>
+(function() {
+  const form = document.getElementById('org-node-correction-form');
+  if (!form || form.dataset.ready === 'true') {
+    return;
+  }
+  form.dataset.ready = 'true';
+
+  const errorEl = document.getElementById('org-node-correction-error');
+  const successEl = document.getElementById('org-node-correction-success');
+  const managerInput = form.querySelector('input[name="manager_pernr"]');
+  const managerNameInput = form.querySelector('input[name="manager_name"]');
+
+  const setError = (msg) => {
+    if (errorEl) {
+      errorEl.textContent = msg || '';
+    }
+  };
+  const setSuccess = (msg) => {
+    if (successEl) {
+      successEl.textContent = msg || '';
+    }
+  };
+
+  const original = {
+    effectiveDate: form.dataset.originalEffectiveDate || '',
+    name: form.dataset.originalName || '',
+    parentCode: form.dataset.originalParentCode || '',
+    managerPernr: form.dataset.originalManagerPernr || '',
+    managerName: form.dataset.originalManagerName || '',
+  };
+
+  const newRequestID = () => {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID();
+    }
+    return 'corr-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+  };
+
+  const getRequestID = () => {
+    if (!form.dataset.requestId) {
+      form.dataset.requestId = newRequestID();
+    }
+    return form.dataset.requestId;
+  };
+
+  const resetRequestID = () => {
+    delete form.dataset.requestId;
+  };
+
+  const resetRequestOnInput = () => {
+    resetRequestID();
+    setSuccess('');
+  };
+
+  const formatError = (code, message) => {
+    const mapping = {
+      ORG_CODE_INVALID: 'Org code invalid.',
+      ORG_CODE_NOT_FOUND: 'Org code not found.',
+      EFFECTIVE_DATE_INVALID: 'Effective date invalid.',
+      EFFECTIVE_DATE_OUT_OF_RANGE: 'Effective date out of range.',
+      ORG_EVENT_NOT_FOUND: 'No event found on that effective date.',
+      PARENT_NOT_FOUND_AS_OF: 'Parent not found at that date.',
+      MANAGER_PERNR_INVALID: 'Manager pernr invalid.',
+      MANAGER_PERNR_NOT_FOUND: 'Manager not found.',
+      MANAGER_PERNR_INACTIVE: 'Manager inactive.',
+      PATCH_FIELD_NOT_ALLOWED: 'Field not allowed for this event.',
+      PATCH_REQUIRED: 'No changes to correct.',
+      EVENT_DATE_CONFLICT: 'Event date conflict.',
+      REQUEST_DUPLICATE: 'Duplicate request.',
+      ORG_ENABLE_REQUIRED: 'Enable required before changes.',
+    };
+    if (code && mapping[code]) {
+      return mapping[code];
+    }
+    if (message) {
+      return message;
+    }
+    return 'Request failed.';
+  };
+
+  const lookupManager = async (pernr) => {
+    if (!managerNameInput) {
+      return;
+    }
+    const trimmed = String(pernr || '').trim();
+    if (!trimmed) {
+      managerNameInput.value = '';
+      return;
+    }
+    try {
+      const url = '/person/api/persons:by-pernr?pernr=' + encodeURIComponent(trimmed);
+      const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!resp.ok) {
+        managerNameInput.value = '';
+        return;
+      }
+      const data = await resp.json();
+      managerNameInput.value = (data && data.display_name) ? data.display_name : '';
+    } catch (_) {
+      managerNameInput.value = '';
+    }
+  };
+
+  if (managerInput) {
+    managerInput.addEventListener('blur', () => {
+      lookupManager(managerInput.value);
+    });
+  }
+  const inputs = form.querySelectorAll('input');
+  inputs.forEach((input) => {
+    input.addEventListener('input', resetRequestOnInput);
+  });
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    setError('');
+    setSuccess('');
+
+    const orgCode = form.dataset.orgCode || '';
+    const targetEffectiveDate = original.effectiveDate;
+    const effectiveInput = form.querySelector('input[name=\"effective_date\"]');
+    const parentInput = form.querySelector('input[name=\"parent_org_code\"]');
+    const nameInput = form.querySelector('input[name=\"name\"]');
+
+    if (!orgCode || !targetEffectiveDate) {
+      setError('Missing org_code or effective date.');
+      return;
+    }
+
+    const patch = {};
+    const newEffectiveDate = effectiveInput ? String(effectiveInput.value || '').trim() : '';
+    if (newEffectiveDate && newEffectiveDate !== targetEffectiveDate) {
+      patch.effective_date = newEffectiveDate;
+    }
+
+    const parentCode = parentInput ? String(parentInput.value || '').trim() : '';
+    if (parentCode !== original.parentCode) {
+      patch.parent_org_code = parentCode;
+    }
+
+    const newName = nameInput ? String(nameInput.value || '').trim() : '';
+    if (newName !== original.name) {
+      if (!newName) {
+        setError('Name is required.');
+        return;
+      }
+      patch.name = newName;
+    }
+
+    const managerPernr = managerInput ? String(managerInput.value || '').trim() : '';
+    if (managerPernr !== original.managerPernr) {
+      if (!managerPernr) {
+        setError('Manager pernr is required.');
+        return;
+      }
+      patch.manager_pernr = managerPernr;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      setError('No changes to correct.');
+      return;
+    }
+
+    const payload = {
+      org_code: orgCode,
+      effective_date: targetEffectiveDate,
+      patch: patch,
+      request_id: getRequestID(),
+    };
+
+    try {
+      const resp = await fetch('/org/api/org-units/corrections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      let data = null;
+      try {
+        data = await resp.json();
+      } catch (_) {
+        data = null;
+      }
+
+      if (!resp.ok) {
+        const code = data && data.code ? data.code : '';
+        const message = data && data.message ? data.message : '';
+        setError(formatError(code, message));
+        return;
+      }
+
+      resetRequestID();
+      const nextAsOf = (data && data.effective_date) ? data.effective_date : newEffectiveDate || targetEffectiveDate;
+      setSuccess('Correction saved.');
+      if (nextAsOf) {
+        window.location.href = '/org/nodes?as_of=' + encodeURIComponent(nextAsOf);
+        return;
+      }
+      window.location.reload();
+    } catch (err) {
+      setError('Request failed.');
+    }
+  });
+})();
+</script>`)
+	return b.String()
+}
+
 func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -1438,6 +1668,7 @@ func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitS
 	var b strings.Builder
 	b.WriteString(renderOrgNodeDetails(details))
 	b.WriteString(`<p class="org-node-details-link"><a href="` + escapedURL + `" hx-get="` + escapedURL + `" hx-target="#content" hx-push-url="true">Open details page</a></p>`)
+	b.WriteString(renderOrgNodeCorrectionForm(details, asOf))
 
 	writeContent(w, r, b.String())
 }
@@ -1554,24 +1785,24 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
 	b.WriteString(`<div id="org-node-search-error" class="org-node-search-error" aria-live="polite"></div>`)
 	b.WriteString(`</div>`)
 	b.WriteString(`<sl-tree id="org-node-tree" selection="single">`)
-		if len(nodes) == 0 {
-			b.WriteString(`<sl-tree-item disabled>(none)</sl-tree-item>`)
-		} else {
-			for _, n := range nodes {
-				codeLabel := n.OrgCode
-				if strings.TrimSpace(codeLabel) == "" {
-					codeLabel = "(missing org_code)"
-				}
-				b.WriteString(`<sl-tree-item data-org-id="`)
-				b.WriteString(html.EscapeString(n.ID))
-				b.WriteString(`" data-org-code="`)
-				b.WriteString(html.EscapeString(n.OrgCode))
-				b.WriteString(`" data-has-children="true" lazy>`)
-				b.WriteString(html.EscapeString(n.Name))
-				b.WriteString(` <span class="org-node-code">` + html.EscapeString(codeLabel) + `</span>`)
-				if n.IsBusinessUnit {
-					b.WriteString(` <span class="org-node-bu">(BU)</span>`)
-				}
+	if len(nodes) == 0 {
+		b.WriteString(`<sl-tree-item disabled>(none)</sl-tree-item>`)
+	} else {
+		for _, n := range nodes {
+			codeLabel := n.OrgCode
+			if strings.TrimSpace(codeLabel) == "" {
+				codeLabel = "(missing org_code)"
+			}
+			b.WriteString(`<sl-tree-item data-org-id="`)
+			b.WriteString(html.EscapeString(n.ID))
+			b.WriteString(`" data-org-code="`)
+			b.WriteString(html.EscapeString(n.OrgCode))
+			b.WriteString(`" data-has-children="true" lazy>`)
+			b.WriteString(html.EscapeString(n.Name))
+			b.WriteString(` <span class="org-node-code">` + html.EscapeString(codeLabel) + `</span>`)
+			if n.IsBusinessUnit {
+				b.WriteString(` <span class="org-node-bu">(BU)</span>`)
+			}
 			b.WriteString(`</sl-tree-item>`)
 		}
 	}
