@@ -12,6 +12,12 @@ ul{list-style:none;padding:0;margin:0;display:grid;gap:8px}
 .org-node-search input{flex:1}
 .org-node-search-error{color:#c00;font-size:.9em;margin:4px 0 8px}
 #org-node-details{min-height:120px}
+.org-node-correction{margin-top:16px;border-top:1px dashed #e5e7eb;padding-top:12px}
+.org-node-correction form{display:grid;gap:8px}
+.org-node-correction label{display:grid;gap:4px;font-size:.9em}
+.org-node-correction input{padding:4px 6px}
+.org-node-correction-error{color:#c00;font-size:.9em;margin-bottom:6px}
+.org-node-correction-success{color:#065f46;font-size:.9em;margin-bottom:6px}
 sl-tree{display:block;max-height:60vh;overflow:auto;border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff}
 #org-node-tree{--sl-color-neutral-700:#111827;--sl-color-neutral-600:#4b5563;--sl-color-neutral-500:#6b7280;--sl-color-primary-600:#09a7a3}
 #org-node-tree sl-tree-item::part(label){color:#111827}
