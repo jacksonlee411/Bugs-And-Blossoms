@@ -384,6 +384,9 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/disable"); !ok {
 		t.Fatal("expected ok=true")
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/corrections"); !ok {
+		t.Fatal("expected ok=true")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/set-business-unit"); !ok {
 		t.Fatal("expected ok=true")
 	}

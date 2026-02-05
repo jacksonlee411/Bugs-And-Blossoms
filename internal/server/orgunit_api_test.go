@@ -624,6 +624,100 @@ func TestHandleOrgUnitsDisableAPI_BadJSON(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsCorrectionsAPI_Success(t *testing.T) {
+	called := false
+	svc := orgUnitWriteServiceStub{
+		correctFn: func(_ context.Context, tenantID string, req orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			called = true
+			if tenantID != "t1" {
+				t.Fatalf("unexpected tenant: %s", tenantID)
+			}
+			if req.TargetEffectiveDate != "2026-01-01" {
+				t.Fatalf("unexpected effective date: %s", req.TargetEffectiveDate)
+			}
+			if req.RequestID != "r1" {
+				t.Fatalf("unexpected request_id: %s", req.RequestID)
+			}
+			if req.Patch.Name == nil || *req.Patch.Name != "New Name" {
+				t.Fatalf("expected patch name")
+			}
+			return orgunittypes.OrgUnitResult{
+				OrgCode:       "A001",
+				EffectiveDate: "2026-01-01",
+				Fields:        map[string]any{"name": "New Name"},
+			}, nil
+		},
+	}
+	body := strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","patch":{"name":"New Name"},"request_id":"r1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsCorrectionsAPI(rec, req, svc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !called {
+		t.Fatalf("expected correct call")
+	}
+	if !strings.Contains(rec.Body.String(), "A001") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsCorrectionsAPI_TenantMissing(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", strings.NewReader(`{"org_code":"A001"}`))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsCorrectionsAPI(rec, req, orgUnitWriteServiceStub{})
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleOrgUnitsCorrectionsAPI_MethodNotAllowed(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/corrections", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsCorrectionsAPI(rec, req, orgUnitWriteServiceStub{})
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleOrgUnitsCorrectionsAPI_BadJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", strings.NewReader("{"))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsCorrectionsAPI(rec, req, orgUnitWriteServiceStub{})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleOrgUnitsCorrectionsAPI_MissingService(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","patch":{"name":"New"},"request_id":"r1"}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsCorrectionsAPI(rec, req, nil)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleOrgUnitsCorrectionsAPI_NotFound(t *testing.T) {
+	svc := orgUnitWriteServiceStub{
+		correctFn: func(context.Context, string, orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			return orgunittypes.OrgUnitResult{}, errors.New("ORG_EVENT_NOT_FOUND")
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","patch":{"name":"New"},"request_id":"r1"}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsCorrectionsAPI(rec, req, svc)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
 func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -654,6 +748,7 @@ type orgUnitWriteServiceStub struct {
 	renameFn  func(context.Context, string, orgunitservices.RenameOrgUnitRequest) error
 	moveFn    func(context.Context, string, orgunitservices.MoveOrgUnitRequest) error
 	disableFn func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error
+	correctFn func(context.Context, string, orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 }
 
 func (s orgUnitWriteServiceStub) Create(ctx context.Context, tenantID string, req orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
@@ -688,6 +783,9 @@ func (s orgUnitWriteServiceStub) SetBusinessUnit(context.Context, string, orguni
 	return nil
 }
 
-func (s orgUnitWriteServiceStub) Correct(context.Context, string, orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
-	return orgunittypes.OrgUnitResult{}, nil
+func (s orgUnitWriteServiceStub) Correct(ctx context.Context, tenantID string, req orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+	if s.correctFn == nil {
+		return orgunittypes.OrgUnitResult{}, nil
+	}
+	return s.correctFn(ctx, tenantID, req)
 }
