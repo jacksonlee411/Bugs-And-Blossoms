@@ -602,23 +602,30 @@ type OrgUnitReadService interface {
 **最小事件桥接（草案）**：
 ```html
 <script>
-  document.addEventListener('sl-lazy-load', async (event) => {
-    const item = event.detail.item;
-    const orgId = item.dataset.orgId;
-    const asOf = new URLSearchParams(location.search).get('as_of');
+  const getAsOf = () => new URLSearchParams(location.search).get('as_of') || '';
+
+  const tree = document.getElementById('org-node-tree');
+  if (!tree) return;
+
+  tree.addEventListener('sl-lazy-load', (event) => {
+    // 注意：Shoelace 运行时 detail.item 可能为空，应优先取 event.target
+    const item = (event.detail && event.detail.item) || event.target;
+    const orgId = item && item.dataset ? item.dataset.orgId : '';
+    const asOf = getAsOf();
     if (!orgId || !asOf) return;
 
     const url = `/org/nodes/children?parent_id=${encodeURIComponent(orgId)}&as_of=${encodeURIComponent(asOf)}`;
     // 使用 HTMX 拉取子节点片段并插入当前节点
-    htmx.ajax('GET', url, { target: item, swap: 'innerHTML' })
+    // 注意：不能使用 innerHTML，否则会覆盖当前节点的 label
+    htmx.ajax('GET', url, { target: item, swap: 'beforeend' })
       .then(() => { item.lazy = false; })
       .catch(() => { /* 由统一错误出口处理 */ });
   });
 
-  document.addEventListener('sl-selection-change', (event) => {
-    const item = event.detail.item;
-    const orgId = item?.dataset?.orgId;
-    const asOf = new URLSearchParams(location.search).get('as_of');
+  tree.addEventListener('sl-selection-change', () => {
+    const item = tree.selectedItems && tree.selectedItems.length > 0 ? tree.selectedItems[0] : null;
+    const orgId = item && item.dataset ? item.dataset.orgId : '';
+    const asOf = getAsOf();
     if (!orgId || !asOf) return;
 
     const url = `/org/nodes/details?org_id=${encodeURIComponent(orgId)}&as_of=${encodeURIComponent(asOf)}`;

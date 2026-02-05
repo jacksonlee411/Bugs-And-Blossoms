@@ -1335,7 +1335,7 @@ func handleOrgNodeChildren(w http.ResponseWriter, r *http.Request, store OrgUnit
 
 	var b strings.Builder
 	for _, child := range children {
-		b.WriteString(`<sl-tree-item data-org-id="`)
+		b.WriteString(`<sl-tree-item slot="children" data-org-id="`)
 		b.WriteString(strconv.Itoa(child.OrgID))
 		b.WriteString(`" data-org-code="`)
 		b.WriteString(html.EscapeString(child.OrgCode))
@@ -1554,24 +1554,24 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
 	b.WriteString(`<div id="org-node-search-error" class="org-node-search-error" aria-live="polite"></div>`)
 	b.WriteString(`</div>`)
 	b.WriteString(`<sl-tree id="org-node-tree" selection="single">`)
-	if len(nodes) == 0 {
-		b.WriteString(`<sl-tree-item disabled>(none)</sl-tree-item>`)
-	} else {
-		for _, n := range nodes {
-			codeLabel := n.OrgCode
-			if strings.TrimSpace(codeLabel) == "" {
-				codeLabel = "(missing org_code)"
-			}
-			b.WriteString(`<sl-tree-item data-org-id="`)
-			b.WriteString(html.EscapeString(n.ID))
-			b.WriteString(`" data-org-code="`)
-			b.WriteString(html.EscapeString(n.OrgCode))
-			b.WriteString(`" data-has-children="true" lazy>`)
-			b.WriteString(html.EscapeString(n.Name))
-			b.WriteString(` <span class="org-node-code">` + html.EscapeString(codeLabel) + `</span>`)
-			if n.IsBusinessUnit {
-				b.WriteString(` <span class="org-node-bu">(BU)</span>`)
-			}
+		if len(nodes) == 0 {
+			b.WriteString(`<sl-tree-item disabled>(none)</sl-tree-item>`)
+		} else {
+			for _, n := range nodes {
+				codeLabel := n.OrgCode
+				if strings.TrimSpace(codeLabel) == "" {
+					codeLabel = "(missing org_code)"
+				}
+				b.WriteString(`<sl-tree-item data-org-id="`)
+				b.WriteString(html.EscapeString(n.ID))
+				b.WriteString(`" data-org-code="`)
+				b.WriteString(html.EscapeString(n.OrgCode))
+				b.WriteString(`" data-has-children="true" lazy>`)
+				b.WriteString(html.EscapeString(n.Name))
+				b.WriteString(` <span class="org-node-code">` + html.EscapeString(codeLabel) + `</span>`)
+				if n.IsBusinessUnit {
+					b.WriteString(` <span class="org-node-bu">(BU)</span>`)
+				}
 			b.WriteString(`</sl-tree-item>`)
 		}
 	}
@@ -1584,15 +1584,19 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
 	b.WriteString(`</div>`)
 
 	b.WriteString(`<script>
-(function() {
-  const tree = document.getElementById('org-node-tree');
-  if (!tree || !window.htmx) {
-    return;
-  }
+	(function() {
+	  const init = () => {
+	    const tree = document.getElementById('org-node-tree');
+	    if (!tree || !window.htmx) {
+	      return false;
+	    }
+	    if (tree.dataset.orgNodesReady === 'true') {
+	      return true;
+	    }
 
-  const errorEl = document.getElementById('org-node-search-error');
-  const setError = (msg) => {
-    if (errorEl) {
+	  const errorEl = document.getElementById('org-node-search-error');
+	  const setError = (msg) => {
+	    if (errorEl) {
       errorEl.textContent = msg || '';
     }
   };
@@ -1613,7 +1617,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
     }
     item.dataset.loading = 'true';
     const url = '/org/nodes/children?parent_id=' + encodeURIComponent(orgId) + '&as_of=' + encodeURIComponent(asOf);
-    return htmx.ajax('GET', url, { target: item, swap: 'innerHTML' })
+    return htmx.ajax('GET', url, { target: item, swap: 'beforeend' })
       .then(() => {
         item.lazy = false;
       })
@@ -1622,28 +1626,28 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
       });
   };
 
-  const loadDetails = (orgId) => {
-    const asOf = getAsOf();
-    if (!orgId || !asOf) {
-      return;
-    }
-    const url = '/org/nodes/details?org_id=' + encodeURIComponent(orgId) + '&as_of=' + encodeURIComponent(asOf);
-    htmx.ajax('GET', url, { target: '#org-node-details', swap: 'innerHTML' });
-  };
+	  const loadDetails = (orgId) => {
+	    const asOf = getAsOf();
+	    if (!orgId || !asOf) {
+	      return;
+	    }
+	    const url = '/org/nodes/details?org_id=' + encodeURIComponent(orgId) + '&as_of=' + encodeURIComponent(asOf);
+	    htmx.ajax('GET', url, { target: '#org-node-details', swap: 'innerHTML' });
+	  };
 
-  tree.addEventListener('sl-lazy-load', (event) => {
-    const item = event.detail.item;
-    loadChildren(item).catch(() => {});
-  });
+	  tree.addEventListener('sl-lazy-load', (event) => {
+	    const item = (event.detail && event.detail.item) || event.target;
+	    loadChildren(item).catch(() => {});
+	  });
 
-  tree.addEventListener('sl-selection-change', (event) => {
-    const item = event.detail.item;
-    const orgId = item && item.dataset ? item.dataset.orgId : '';
-    if (!orgId) {
-      return;
-    }
-    loadDetails(orgId);
-  });
+	  tree.addEventListener('sl-selection-change', () => {
+	    const item = tree.selectedItems && tree.selectedItems.length > 0 ? tree.selectedItems[0] : null;
+	    const orgId = item && item.dataset ? item.dataset.orgId : '';
+	    if (!orgId) {
+	      return;
+	    }
+	    loadDetails(orgId);
+	  });
 
   const form = document.getElementById('org-node-search-form');
   if (form) {
@@ -1698,11 +1702,24 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, asOf stri
         })
         .catch(() => {
           setError('Search failed.');
-        });
-    });
-  }
-})();
-</script>`)
+	        });
+	    });
+	  }
+
+	    tree.dataset.orgNodesReady = 'true';
+	    return true;
+	  };
+
+	  if (init()) {
+	    return;
+	  }
+	  const timer = setInterval(() => {
+	    if (init()) {
+	      clearInterval(timer);
+	    }
+	  }, 50);
+	})();
+	</script>`)
 
 	b.WriteString(`<form method="POST" action="` + postAction + `">`)
 	b.WriteString(`<label>Effective Date <input type="date" name="effective_date" value="` + html.EscapeString(asOf) + `" /></label><br/>`)

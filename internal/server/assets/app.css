@@ -13,4 +13,6 @@ ul{list-style:none;padding:0;margin:0;display:grid;gap:8px}
 .org-node-search-error{color:#c00;font-size:.9em;margin:4px 0 8px}
 #org-node-details{min-height:120px}
 sl-tree{display:block;max-height:60vh;overflow:auto;border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#fff}
+#org-node-tree{--sl-color-neutral-700:#111827;--sl-color-neutral-600:#4b5563;--sl-color-neutral-500:#6b7280;--sl-color-primary-600:#09a7a3}
+#org-node-tree sl-tree-item::part(label){color:#111827}
 .org-node-code{color:#6b7280;font-size:.9em;margin-left:4px}
