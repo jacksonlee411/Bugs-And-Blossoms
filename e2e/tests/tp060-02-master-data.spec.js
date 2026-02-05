@@ -147,7 +147,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   };
 
   await page.goto(`/org/nodes?as_of=${asOf}`);
-  await expect(page.locator("h1")).toHaveText("OrgUnit");
+  await expect(page.locator("h1")).toHaveText("OrgUnit Details");
 
   const rootName = "Bugs & Blossoms Co., Ltd.";
   let rootCode = await findOrgUnitCode(rootName);

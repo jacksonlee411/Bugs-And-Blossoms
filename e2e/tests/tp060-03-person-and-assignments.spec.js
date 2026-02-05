@@ -92,7 +92,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   await expect(page).toHaveURL(/\/app\?as_of=\d{4}-\d{2}-\d{2}$/);
 
   await page.goto(`/org/nodes?as_of=${asOf}`);
-  await expect(page.locator("h1")).toHaveText("OrgUnit");
+  await expect(page.locator("h1")).toHaveText("OrgUnit Details");
 
   const setBusinessUnitFlag = async (form, enabled) => {
     const input = form.locator('input[name="is_business_unit"]');

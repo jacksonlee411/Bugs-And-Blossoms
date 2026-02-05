@@ -93,7 +93,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await expect(page.locator("h1")).toHaveText("Home");
 
   await page.goto(`/org/nodes?as_of=${asOf}`);
-  await expect(page.locator("h1")).toHaveText("OrgUnit");
+  await expect(page.locator("h1")).toHaveText("OrgUnit Details");
   const nodeIDLocator = page.locator("ul li code").first();
   const hasAnyNode = (await nodeIDLocator.count()) > 0;
   const parentCode = hasAnyNode ? (await nodeIDLocator.innerText()).trim() : "";
