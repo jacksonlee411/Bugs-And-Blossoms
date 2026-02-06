@@ -15,6 +15,7 @@
 - 已通过：`make check lint`
 - 已通过：`make test`（coverage 100%）
 - 已通过：`make check doc`
+- 已通过：`make sqlc-generate`
 - 已通过：`make orgunit plan`
 - 已通过：`make orgunit lint`
 - 已通过：`make orgunit migrate up`

@@ -1440,8 +1440,12 @@ DECLARE
   v_existing orgunit.org_event_corrections_history%ROWTYPE;
   v_request_hash text;
   v_payload jsonb;
+  v_effective_payload jsonb;
+  v_target_effective date;
+  v_prev_effective date;
   v_new_effective date;
   v_next_effective date;
+  v_parent_id int;
   v_correction_uuid uuid;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
@@ -1499,13 +1503,39 @@ BEGIN
   LIMIT 1;
 
   IF NOT FOUND THEN
+    SELECT e.* INTO v_target
+    FROM orgunit.org_events e
+    JOIN orgunit.org_events_effective ee
+      ON ee.event_uuid = e.event_uuid
+     AND ee.tenant_uuid = e.tenant_uuid
+     AND ee.org_id = e.org_id
+    WHERE e.tenant_uuid = p_tenant_uuid
+      AND e.org_id = p_org_id
+      AND ee.effective_date = p_target_effective_date
+    LIMIT 1;
+  END IF;
+
+  IF NOT FOUND THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_EVENT_NOT_FOUND',
       DETAIL = format('org_id=%s target_effective_date=%s', p_org_id, p_target_effective_date);
   END IF;
 
-  v_payload := COALESCE(v_target.payload, '{}'::jsonb) || v_payload;
-  v_new_effective := v_target.effective_date;
+  SELECT ee.effective_date, ee.payload
+  INTO v_target_effective, v_effective_payload
+  FROM orgunit.org_events_effective ee
+  WHERE ee.tenant_uuid = p_tenant_uuid
+    AND ee.org_id = p_org_id
+    AND ee.event_uuid = v_target.event_uuid
+  LIMIT 1;
+
+  IF v_target_effective IS NULL THEN
+    v_target_effective := v_target.effective_date;
+    v_effective_payload := v_target.payload;
+  END IF;
+
+  v_payload := COALESCE(v_effective_payload, '{}'::jsonb) || v_payload;
+  v_new_effective := v_target_effective;
 
   IF v_payload ? 'effective_date' THEN
     BEGIN
@@ -1524,16 +1554,22 @@ BEGIN
     v_payload := v_payload - 'effective_date';
   END IF;
 
-  SELECT MIN(e.effective_date) INTO v_next_effective
-  FROM orgunit.org_events e
+  SELECT MAX(e.effective_date) INTO v_prev_effective
+  FROM orgunit.org_events_effective e
   WHERE e.tenant_uuid = p_tenant_uuid
     AND e.org_id = p_org_id
-    AND e.effective_date > v_target.effective_date;
+    AND e.effective_date < v_target_effective;
 
-  IF v_new_effective < v_target.effective_date THEN
+  SELECT MIN(e.effective_date) INTO v_next_effective
+  FROM orgunit.org_events_effective e
+  WHERE e.tenant_uuid = p_tenant_uuid
+    AND e.org_id = p_org_id
+    AND e.effective_date > v_target_effective;
+
+  IF v_prev_effective IS NOT NULL AND v_new_effective <= v_prev_effective THEN
     RAISE EXCEPTION USING
       MESSAGE = 'EFFECTIVE_DATE_OUT_OF_RANGE',
-      DETAIL = format('target=%s new=%s', v_target.effective_date, v_new_effective);
+      DETAIL = format('prev=%s new=%s', v_prev_effective, v_new_effective);
   END IF;
   IF v_next_effective IS NOT NULL AND v_new_effective >= v_next_effective THEN
     RAISE EXCEPTION USING
@@ -1553,6 +1589,36 @@ BEGIN
     RAISE EXCEPTION USING
       MESSAGE = 'EVENT_DATE_CONFLICT',
       DETAIL = format('org_id=%s effective_date=%s', p_org_id, v_new_effective);
+  END IF;
+
+  IF v_target.event_type = 'CREATE' THEN
+    v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
+  ELSIF v_target.event_type = 'MOVE' THEN
+    v_parent_id := NULLIF(v_payload->>'new_parent_id', '')::int;
+  ELSE
+    SELECT v.parent_id INTO v_parent_id
+    FROM orgunit.org_unit_versions v
+    WHERE v.tenant_uuid = p_tenant_uuid
+      AND v.org_id = p_org_id
+      AND v.validity @> v_new_effective
+    ORDER BY lower(v.validity) DESC
+    LIMIT 1;
+  END IF;
+
+  IF v_parent_id IS NOT NULL THEN
+    PERFORM 1
+    FROM orgunit.org_unit_versions v
+    WHERE v.tenant_uuid = p_tenant_uuid
+      AND v.org_id = v_parent_id
+      AND v.status = 'active'
+      AND v.validity @> v_new_effective
+    LIMIT 1;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'ORG_PARENT_NOT_FOUND_AS_OF',
+        DETAIL = format('parent_id=%s as_of=%s', v_parent_id, v_new_effective);
+    END IF;
   END IF;
 
   v_correction_uuid := gen_random_uuid();
