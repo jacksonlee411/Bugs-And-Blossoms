@@ -41,6 +41,14 @@ ALTER FUNCTION orgunit.submit_org_event_rescind(uuid, int, date, text, text, uui
 ALTER FUNCTION orgunit.submit_org_event_rescind(uuid, int, date, text, text, uuid)
   SET search_path = pg_catalog, orgunit, public;
 
+
+ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
 ALTER FUNCTION orgunit.guard_event_rescind_priority()
   OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.guard_event_rescind_priority()
