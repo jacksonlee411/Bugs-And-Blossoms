@@ -215,7 +215,7 @@ graph TD
 ### 9.1 验收记录（2026-02-06）
 - 新建部门：E2E 覆盖创建 OrgUnit 并回显（`m3-smoke` / `tp060-02` / `tp060-03`），本地 `make e2e` 通过；详见 `docs/dev-records/dev-plan-074-execution-log.md`。
 - 多匹配查找：单测覆盖 `format=panel` 返回与候选渲染（`orgunit_nodes_read_test.go`），逻辑通过；UI 交互需后续手工走查补截图。
-- 版本切换：单测覆盖版本选择逻辑（`selectOrgNodeVersion`），逻辑通过；UI 交互需后续手工走查补截图。
+- 版本切换：已于 2026-02-06 通过 Playwright 复验（`pnpm -C e2e exec playwright test tests/tmp-orgunit-version-switch.spec.js`）：点击“上一条/下一条”与下拉切换后 URL `as_of` 变更，详情头部组织名称与“生效日期”文本随版本更新；后续如需截图留档可补拍。
 - 新增/插入/删除记录：单测覆盖 `add_record/insert_record/delete_record` 校验与写入路径（`orgunit_nodes_test.go`），逻辑通过；UI 交互需后续手工走查补截图。
 - 无权限：单测覆盖 `canEditOrgNodes` 权限判定（`orgunit_nodes_test.go`），UI 禁用逻辑已落地；需后续手工走查补截图。
 - 门禁：`make check doc`（2026-02-06）通过；`go fmt ./... && go vet ./... && make check lint && make test`、`make e2e` 通过记录见执行日志。
