@@ -6,7 +6,7 @@
 - 需要基于当前代码，列出 OrgUnit CRUD 在页面与 API 的实现情况，作为后续补齐的入口。
 
 ## 范围
-- 组织单元 CRUD（Create/Read/Update/Disable），包含有效日期 as_of/effective_date 语义。
+- 组织单元 CRUD（Create/Read/Update/Disable），包含树生效日期 `tree_as_of` 与详情版本 `effective_date` 语义。
 - 不包含 SetID/Scope Package 等周边能力。
 
 ## 清单
@@ -116,7 +116,7 @@
 #### 更正叠加视图的性能策略（确认）
 - “当前更正表 + 历史更正表”：`org_event_corrections_current` 仅保留每个 `event_uuid` 最新更正；`org_event_corrections_history` 保存全量更正记录（审计）。
 - 叠加视图仅 JOIN `*_current`，避免排序/多行合并；历史表只用于审计查询。
-- 读取路径先按 tenant/org_id/as_of 过滤，再 JOIN 更正表，减少 JOIN 行数。
+- 读取路径先按 tenant/org_id/target_effective_date 过滤，再 JOIN 更正表，减少 JOIN 行数。
 - 索引最小集：`org_event_corrections_current(event_uuid)` 主键；`(tenant_uuid, org_id, target_effective_date)` 用于目标定位；`(tenant_uuid, org_id, corrected_effective_date)` 用于冲突校验与范围查询；`org_event_corrections_history(tenant_uuid, request_id)` 唯一约束用于幂等。
 - UI/业务读取优先走读模型（`org_unit_versions`），更正后触发重放以更新读模型。
 
@@ -147,7 +147,7 @@
 - 详情支持按不同生效日期翻页/切换（参考 PeopleSoft 风格）。
 
 #### 记录新增/插入/删除（/org/nodes）
-- **POST `/org/nodes?as_of=YYYY-MM-DD`**
+- **POST `/org/nodes?tree_as_of=YYYY-MM-DD`**
   - `action=add_record`：追加一条记录（生效日必须晚于当前最后一条记录）。
   - `action=insert_record`：插入一条记录（生效日位于前后记录之间）。
   - `action=delete_record`：删除记录（当前阶段实现为 `DISABLE` 事件，属于软删除/停用语义）。
@@ -155,6 +155,7 @@
   - `org_code`（必填）
   - `effective_date`（必填）
   - `name`（可选；默认沿用当前名称）
+  - `tree_as_of`（隐藏字段；用于回跳上下文）
 - **实现约束（保持无 DB 迁移）**：
   - `add_record` / `insert_record` 通过提交 `RENAME` 事件建立记录；当 `name` 为空时使用当前名称。
   - `delete_record` 通过提交 `DISABLE` 事件实现；若仅剩一条记录则拒绝（409）。
@@ -169,26 +170,29 @@
 6) 影响范围可视化：提交前展示“更正将影响的未来记录范围/报表口径”。
 7) 状态变更提示：当末状态为停用时，明确提示“需先启用，才能新增其他更大生效日变更”。
 
-#### 数据来源与一致性规则（as_of）
+#### 数据来源与一致性规则（tree_as_of / effective_date）
 **树数据来源**：
-- 以组织单元“版本读模型”为唯一来源，按 as_of 过滤有效区间并仅取 active。
+- 以组织单元“版本读模型”为唯一来源，按 `tree_as_of` 过滤有效区间并仅取 active。
 - 树形顺序使用 node_path（或等价路径字段）排序；编码来自 org_code 映射表。
 - 事件表仅用于审计显示，不作为树值来源。
 
 **详情数据来源**：
-- 详情字段（名称、上级、负责人、BU 等）来自同一读模型，按 org_id + as_of 取值。
-- 负责人姓名来自人员模块，按同一 as_of 校验与展示。
+- 详情字段（名称、上级、负责人、BU 等）来自同一读模型，按 `org_id + effective_date` 取值。
+- 负责人姓名来自人员模块，按同一 `effective_date` 校验与展示。
 - 审计字段（如最后变更时间）可来自事件表，仅作说明，不覆盖读模型字段。
 
 **一致性规则**：
-- 同一页面内树与详情必须使用同一 as_of 与同一租户上下文。
-- 若该 as_of 下 org_id 无有效版本，详情显示“该生效日无记录/已停用”。
+- 页面内 `tree_as_of` 与 `effective_date` 分离，不得相互覆盖；树刷新不强制重置详情版本。
+- 若 `effective_date` 下 org_id 无有效版本，详情显示“该生效日无记录/已停用”。
 - 禁止混用事件表直接拼装业务字段，避免树与详情不一致。
 
-**as_of 规则**：
-- as_of 为必填日粒度日期；为空/非法直接提示错误并阻止查询。
-- 切换 as_of 必须同时刷新树与详情。
-- 更正提交后默认跳转/刷新到该更正的生效日。
+**tree_as_of 规则**：
+- `tree_as_of` 为必填日粒度日期；为空/非法直接提示错误并阻止查询。
+- 切换 `tree_as_of` 仅刷新树（不强制刷新详情）。
+
+**effective_date 规则**：
+- `effective_date` 用于详情版本切换；缺失时服务端选择默认版本（系统日命中优先，否则最近可用/最新）。
+- 更正提交后默认跳转/刷新到该更正的 `effective_date`（仅影响详情区）。
 
 #### 组织树组件选型（UI）
 **首选**：Shoelace Tree（Web Component）
@@ -199,7 +203,7 @@
 **集成方式（约束）**：
 - 组件资源由 Astro build 产物打包并通过 go:embed 分发（禁止运行时外链依赖）。
 - 业务数据仍由服务端渲染与 HTMX 拉取，组件只负责交互与展示。
-- as_of 必须透传到树节点展开与详情加载的所有请求中。
+- `tree_as_of` 必须透传到树节点展开与搜索请求中；详情加载使用 `effective_date`。
 
 **搜索定位（必须）**：
 - 提供“编码/名称搜索”入口，返回目标节点路径并逐级展开定位。
@@ -212,7 +216,7 @@
 
 ### 评审结论与处置（编号）
 1. 事件不可变性：已明确采用“更正叠加视图”，避免改写原始事件。
-2. `manager_pernr` 校验/契约：采纳，需补充按 as_of 校验与失败路径。
+2. `manager_pernr` 校验/契约：采纳，需补充按 `effective_date` 校验与失败路径。
 3. 字段范围：允许更正除 `org_code` 外的业务属性；本期 UI 暴露负责人/上级/名称。
 4. 重放策略：采纳。优先复用现有 `orgunit.replay_org_unit_versions(...)`；如需优化范围，新增“按 org_id/子树重放”也必须复用同一核心逻辑，不另起一套。
 5. UI 验收口径：采纳，已补充 HR 视角交互口径与确认规则。
@@ -238,7 +242,7 @@
 **核心目标**：
 - [ ] 提供“原地更正历史记录”的能力（含上级、名称、负责人）。
 - [ ] 负责人录入使用 `manager_pernr`，姓名自动带出，UI 禁用 UUID。
-- [ ] UI 改造为“树 + 详情 + as_of 翻页”的 PeopleSoft 风格。
+- [ ] UI 改造为“树 + 详情 + tree_as_of 控件 + 版本切换”的 PeopleSoft 风格。
 - [ ] 写入路径统一到模块 services 层，UI/API 共用。
 - [ ] 明确触发器与门禁对齐（见 2.1）。
 
@@ -270,6 +274,8 @@ graph TD
   S --> C[Corrections Tables]
   S --> P[Person Lookup]
 ```
+
+说明：Internal API 的 `as_of` 参数保留；UI 路由已改用 `tree_as_of/effective_date`（见 §5.7/§5.8）。
 
 **关键决策**：
 1) **更正叠加视图**：采用“更正当前表 + 历史表 + 叠加视图”，避免直接改写原始事件。
@@ -325,7 +331,7 @@ org_event_corrections_history(
 
 **负责人字段**：
 - 现状为 `manager_uuid`（历史字段）；目标新增/迁移为 `manager_pernr`（text / digits 1-8）。
-- 校验：`manager_pernr` 符合 `^[0-9]{1,8}$`，并按 as_of 校验 person 存在且可用。
+- 校验：`manager_pernr` 符合 `^[0-9]{1,8}$`，并按 `effective_date` 校验 person 存在且可用。
 
 **迁移策略（manager_pernr）**：
 - 双写期：写入时同时填充 `manager_uuid` 与 `manager_pernr`（若可得）。
@@ -344,9 +350,9 @@ org_event_corrections_history(
 | --- | --- | --- | --- |
 | `effective_date` | date | 是 | 仅允许调整到原区间内（介于前后生效日之间；缺失一侧边界时视为单侧无界），且不得与其他事件同日冲突 |
 | `name` | text | 是 | 非空字符串 |
-| `parent_org_code` | text | 是 | as_of 时点必须存在且 active；为空表示无上级 |
+| `parent_org_code` | text | 是 | `effective_date` 时点必须存在且 active；为空表示无上级 |
 | `is_business_unit` | boolean | 是 | 与现有 SET_BUSINESS_UNIT 语义一致 |
-| `manager_pernr` | text | 是 | `^[0-9]{1,8}$`，按 as_of 校验 person 存在且 active |
+| `manager_pernr` | text | 是 | `^[0-9]{1,8}$`，按 `effective_date` 校验 person 存在且 active |
 
 **未来扩展字段（需先落表与更新契约）**：
 `short_name` / `description` / `org_type` / `org_level` / `external_id` / `legacy_id` / `company` / `business_unit` / `department` / `cost_center` / `location_code` / `location_name` / `timezone`
@@ -367,9 +373,9 @@ type OrgUnitWriteService interface {
 
 // 读服务建议分离（树/详情/搜索）
 type OrgUnitReadService interface {
-  ListChildren(ctx context.Context, tenantID string, asOf string, parentID string) ([]OrgUnitNode, error)
-  GetDetails(ctx context.Context, tenantID string, asOf string, orgID string) (OrgUnitDetails, error)
-  SearchPath(ctx context.Context, tenantID string, asOf string, query string) (OrgUnitPathResult, error)
+  ListChildren(ctx context.Context, tenantID string, treeAsOf string, parentID string) ([]OrgUnitNode, error)
+  GetDetails(ctx context.Context, tenantID string, effectiveDate string, orgID string) (OrgUnitDetails, error)
+  SearchPath(ctx context.Context, tenantID string, treeAsOf string, query string) (OrgUnitPathResult, error)
 }
 ```
 
@@ -526,7 +532,7 @@ type OrgUnitReadService interface {
   - `parent_org_code`（可选）
   - `name`（可选）
   - `manager_pernr`（可选；输入后自动带出 `manager_name` 只读）
-- as_of 翻页与更正表单联动：翻页后表单默认填充该生效日的当前值。
+- 版本切换（`effective_date`）与更正表单联动：切换后表单默认填充该生效日的当前值。
 
 #### 5.5 校验规则（统一服务层）
 - `org_code`：`^[A-Z0-9_-]{1,16}$`，禁止前后空白。
@@ -558,24 +564,24 @@ type OrgUnitReadService interface {
 - `REQUEST_DUPLICATE`（409，幂等请求冲突）
 
 #### 5.7 UI：独立详情页
-**路由**：`GET /org/nodes/view?org_code=...&as_of=YYYY-MM-DD`
+**路由**：`GET /org/nodes/view?org_code=...&effective_date=YYYY-MM-DD&tree_as_of=YYYY-MM-DD`
 
 **行为**：
 - 使用 `org_code` 解析 `org_id`，复用 `/org/nodes/details` 的数据口径渲染完整页面。
-- 页面提供“返回组织树”入口，保持 `as_of` 参数。
+- `tree_as_of` 可选，仅用于“返回组织树”入口的回跳上下文。
 
 **错误处理**：
-- `400`：`org_code/as_of` 非法或缺失。
-- `404`：`org_code` 不存在或 as_of 下无有效记录。
+- `400`：`org_code/effective_date` 非法或缺失。
+- `404`：`org_code` 不存在或 `effective_date` 下无有效记录。
 
 #### 5.8 组织树组件接口（Shoelace Tree）
 **目标**：在 AHA 栈内以 Web Component 实现“树 + 详情”，服务端保持权威数据来源。
 
 **UI 入口**：
-- `/org/nodes?as_of=YYYY-MM-DD`：渲染页面壳 + 初始根节点（或顶层节点）。
+- `/org/nodes?tree_as_of=YYYY-MM-DD`：渲染页面壳 + 初始根节点（或顶层节点）。
 
 **子节点懒加载（必须）**：
-- `GET /org/nodes/children?parent_id=...&as_of=YYYY-MM-DD`
+- `GET /org/nodes/children?parent_id=...&tree_as_of=YYYY-MM-DD`
 - Response：HTML fragment，包含 `sl-tree-item` 列表。
   - 每个 `sl-tree-item` 必须包含：
     - `data-org-id`
@@ -587,24 +593,24 @@ type OrgUnitReadService interface {
     ```
 
 **节点详情加载（右侧面板）**：
-- `GET /org/nodes/details?org_id=...&as_of=YYYY-MM-DD`
+- `GET /org/nodes/details?org_id=...&effective_date=YYYY-MM-DD`
 - Response：HTML fragment（详情面板内容）。
-- 详情必须与树使用同一 as_of 与租户上下文。
+- 详情使用 `effective_date`，不要求与 `tree_as_of` 相同。
 - 详情面板容器建议固定为 `#org-node-details`。
 
 **搜索定位（必须）**：
-- `GET /org/nodes/search?query=...&as_of=YYYY-MM-DD`
+- `GET /org/nodes/search?query=...&tree_as_of=YYYY-MM-DD`
 - Response：JSON（用于定位并展开路径）：
   - `target_org_id`
   - `target_org_code`
   - `target_name`
   - `path_org_ids`（从根到目标的 org_id 列表）
   - `path_org_codes`（可选，用于 UI 展示与校验）
-  - `as_of`
+  - `tree_as_of`
 - 客户端按 `path_org_ids` 逐级展开并选中目标节点。
 
 **搜索多匹配（panel）**：
-- `GET /org/nodes/search?query=...&as_of=YYYY-MM-DD&format=panel`
+- `GET /org/nodes/search?query=...&tree_as_of=YYYY-MM-DD&format=panel`
 - Response：HTML fragment（候选列表，支持 0..N 条）：
   - 每条必须包含 `data-org-id` 与 `data-org-code`，并展示名称。
   - UI 选择某条后，使用该条的 `org_code` 触发 JSON 搜索以展开路径并回填详情。
@@ -622,7 +628,7 @@ type OrgUnitReadService interface {
 **最小事件桥接（草案）**：
 ```html
 <script>
-  const getAsOf = () => new URLSearchParams(location.search).get('as_of') || '';
+  const getTreeAsOf = () => new URLSearchParams(location.search).get('tree_as_of') || '';
 
   const tree = document.getElementById('org-node-tree');
   if (!tree) return;
@@ -631,10 +637,10 @@ type OrgUnitReadService interface {
     // 注意：Shoelace 运行时 detail.item 可能为空，应优先取 event.target
     const item = (event.detail && event.detail.item) || event.target;
     const orgId = item && item.dataset ? item.dataset.orgId : '';
-    const asOf = getAsOf();
-    if (!orgId || !asOf) return;
+    const treeAsOf = getTreeAsOf();
+    if (!orgId || !treeAsOf) return;
 
-    const url = `/org/nodes/children?parent_id=${encodeURIComponent(orgId)}&as_of=${encodeURIComponent(asOf)}`;
+    const url = `/org/nodes/children?parent_id=${encodeURIComponent(orgId)}&tree_as_of=${encodeURIComponent(treeAsOf)}`;
     // 使用 HTMX 拉取子节点片段并插入当前节点
     // 注意：不能使用 innerHTML，否则会覆盖当前节点的 label
     htmx.ajax('GET', url, { target: item, swap: 'beforeend' })
@@ -645,17 +651,16 @@ type OrgUnitReadService interface {
   tree.addEventListener('sl-selection-change', () => {
     const item = tree.selectedItems && tree.selectedItems.length > 0 ? tree.selectedItems[0] : null;
     const orgId = item && item.dataset ? item.dataset.orgId : '';
-    const asOf = getAsOf();
-    if (!orgId || !asOf) return;
+    if (!orgId) return;
 
-    const url = `/org/nodes/details?org_id=${encodeURIComponent(orgId)}&as_of=${encodeURIComponent(asOf)}`;
+    const url = `/org/nodes/details?org_id=${encodeURIComponent(orgId)}`;
     htmx.ajax('GET', url, { target: '#org-node-details', swap: 'innerHTML' });
   });
 </script>
 ```
 
 **错误处理**：
-- 400：as_of 非法、参数缺失。
+- 400：`tree_as_of` 或 `effective_date` 非法、参数缺失。
 - 404：节点或路径不存在。
 - 403：无权限。
 
@@ -688,7 +693,7 @@ type OrgUnitReadService interface {
    - 若存在且 `request_hash` 一致：直接返回当前结果（视为重复请求）。
    - 若存在但 `request_hash` 不一致：返回 `REQUEST_DUPLICATE`（409）。
 3) 解析 `org_code` → `org_id`；定位目标事件（`org_id + effective_date` 原值）。
-4) 校验 `patch` 中各字段（含 `manager_pernr` 的 as_of 校验）。若包含 `patch.effective_date` 且与原值不同：
+4) 校验 `patch` 中各字段（含 `manager_pernr` 的 `effective_date` 校验）。若包含 `patch.effective_date` 且与原值不同：
    - 计算前后相邻生效日（prev/next，来自原始 `org_events` 基准序列，不受更正影响）并验证新日期落在原区间内（介于前后生效日之间；缺失一侧边界时视为单侧无界）。
    - 基于更正叠加视图检查同日冲突（排除当前 event_uuid）。
 5) 写入更正历史表；UPSERT 当前更正表（若改生效日，`corrected_effective_date` 存为新值；`target_effective_date` 存原值）。
@@ -882,15 +887,15 @@ END LOOP;
 **待办事项（补充）**：
 - [x] 补齐 Internal API：`POST /org/api/org-units/corrections`（handler + allowlist/Authz + tests）
 - [ ] UI `/org/nodes` 更正表单与错误回显（走 OrgUnitWriteService）
-- [ ] `manager_pernr` 的 as_of 校验（依赖 Person 有效期模型）
+- [ ] `manager_pernr` 的 `effective_date` 校验（依赖 Person 有效期模型）
 - [ ] 在“新增表审批流程/记录”补记批准人、时间（UTC）与范围
 - [ ] 同步里程碑与 PR 状态（更正接口/UI 完成后再勾选）
 
 **里程碑（顺序）**：
-M1. [x] 设计确认（更正叠加视图取舍、字段元数据/不可更正清单、UI 交互口径与 as_of 规则、API/路由/权限口径）
+M1. [x] 设计确认（更正叠加视图取舍、字段元数据/不可更正清单、UI 交互口径与 `tree_as_of/effective_date` 规则、API/路由/权限口径）
 M2. [x] 新增表手工确认（阻断点）
 M3. [x] Schema 迁移（含更正表与幂等约束）
-M4. [x] 服务层实现 + 单测（幂等/更正/重放/租户 fail-closed；manager_pernr as_of 校验待 Person 有效期补齐）
+M4. [x] 服务层实现 + 单测（幂等/更正/重放/租户 fail-closed；manager_pernr `effective_date` 校验待 Person 有效期补齐）
 M5. [x] 接口实现（children/details/search + corrections）+ 路由 allowlist/Authz 策略
 M6. [x] Shoelace 资源接入 + UI 对接（树/详情/搜索定位、事件桥接）
 M7. [x] Readiness 记录（门禁执行证据与关键结果）
@@ -907,7 +912,7 @@ M9. [x] 独立详情页 / 组织单元详情视图（UI）
 - [x] 完成：`manager_pernr` 规范校验（digits 1-8）+ 双写 `manager_uuid`/`manager_pernr`。
 - [x] 单测：服务层/持久层覆盖率补齐，满足 100% 覆盖率门禁。
 - [x] 验证：`go fmt ./... && go vet ./... && make check lint && make test`
-- [ ] 备注：`manager_pernr` 的 as_of 校验依赖 Person 有效期模型，当前仅校验存在/active，待 Person 有效期补齐后完善。
+- [ ] 备注：`manager_pernr` 的 `effective_date` 校验依赖 Person 有效期模型，当前仅校验存在/active，待 Person 有效期补齐后完善。
 
 **PR 3｜读服务 + 新路由：children/details/search**
 - [x] 完成：实现 `OrgUnitReadService` 与 3 个只读路由，并补齐 Authz 与 allowlist。
@@ -940,7 +945,7 @@ M9. [x] 独立详情页 / 组织单元详情视图（UI）
 
 ### 9. 测试与验收
 - 单测：更正多次、改生效日落在原区间内、改生效日越界、同日冲突、幂等 request_id 冲突、pernr 不存在、RLS 失效路径。
-- 集成：改生效日后触发重放且读模型区间一致（旧/新 as_of 结果符合预期）。
+- 集成：改生效日后触发重放且读模型区间一致（旧/新 `effective_date` 结果符合预期）。
 - 门禁：按 `AGENTS.md` 触发器执行并记录。
 
 ### 10. 运维与监控
