@@ -52,7 +52,7 @@
 ### 3.1 架构图 (Mermaid)
 ```mermaid
 graph TD
-  U[User Browser] --> P[GET /org/nodes?as_of=...]
+  U[User Browser] --> P[GET /org/nodes?tree_as_of=...]
   P --> N[Nodes Panel (Tree)]
   P --> D[Details Panel]
   N --> C[GET /org/nodes/children]
@@ -113,14 +113,14 @@ graph TD
 > 现有路由与字段口径以 DEV-PLAN-073 为准；本计划在 UI 层新增/扩展交互时必须同步修订对应契约文档。
 
 ### 5.1 页面与树
-- **GET `/org/nodes?as_of=YYYY-MM-DD`**
+- **GET `/org/nodes?tree_as_of=YYYY-MM-DD`**
   - 渲染页面壳 + 初始根节点（或顶层节点）。
-- **GET `/org/nodes/children?parent_id=...&as_of=YYYY-MM-DD`**
+- **GET `/org/nodes/children?parent_id=...&tree_as_of=YYYY-MM-DD`**
   - 返回 HTML fragment（`sl-tree-item` 列表）。
   - `sl-tree-item` 必须包含 `data-org-id`/`data-org-code`/`data-has-children`。
 
 ### 5.2 详情面板
-- **GET `/org/nodes/details?org_id=...&as_of=YYYY-MM-DD`**
+- **GET `/org/nodes/details?org_id=...&effective_date=YYYY-MM-DD`**
   - 返回详情面板 HTML fragment（容器建议为 `#org-node-details`）。
   - 面板内容需包含：查找组织、版本选择器、Tab（基本信息/修改记录）、编辑表单与状态提示。
   - **版本选择器最小数据**（建议内嵌在 fragment 中，避免额外 API）：
@@ -130,15 +130,15 @@ graph TD
 
 ### 5.3 查找组织（多匹配）
 - **现有路径定位（保持兼容）**：
-  - `GET /org/nodes/search?query=...&as_of=YYYY-MM-DD` 返回 JSON（含 `target_org_id` 与 `path_org_ids`）。
+  - `GET /org/nodes/search?query=...&tree_as_of=YYYY-MM-DD` 返回 JSON（含 `target_org_id` 与 `path_org_ids`）。
 - **多匹配下拉列表（确定方案）**：
-  - 使用同一路由：`GET /org/nodes/search?query=...&as_of=...&format=panel`。
+  - 使用同一路由：`GET /org/nodes/search?query=...&tree_as_of=...&format=panel`。
   - `format=panel` 返回 HTML 列表项（至少包含 `data-org-id`、`data-org-code`、`name`）。
   - 点击列表项后触发 `/org/nodes/details` 回填详情与版本选择器。
   - 该参数与返回格式需同步写入 DEV-PLAN-073 契约。
 
 ### 5.4 写入操作（复用 `/org/nodes`）
-- **POST `/org/nodes?as_of=YYYY-MM-DD`**
+- **POST `/org/nodes?tree_as_of=YYYY-MM-DD`**
   - 沿用现有 action/字段命名（SSOT：DEV-PLAN-073、DEV-PLAN-026a/026b）。
   - 本计划新增 UI 行为：新增记录 / 插入记录 / 删除记录。
   - **action（确定命名）**：

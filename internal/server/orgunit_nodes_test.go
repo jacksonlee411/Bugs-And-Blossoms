@@ -701,7 +701,7 @@ func TestHandleOrgNodes_GET_HX(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	_, _ = store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A001", "A", "", false)
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?tree_as_of=2026-01-06", nil)
 	req.Header.Set("HX-Request", "true")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -719,7 +719,7 @@ func TestHandleOrgNodes_GET_Success(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	_, _ = store.CreateNodeCurrent(context.Background(), "t1", "2026-01-06", "A002", "A", "", false)
 
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?tree_as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -769,6 +769,12 @@ func (errStore) SearchNodeCandidates(context.Context, string, string, string, in
 }
 func (errStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
 	return nil, errBoom{}
+}
+func (errStore) MaxEffectiveDateOnOrBefore(context.Context, string, string) (string, bool, error) {
+	return "", false, errBoom{}
+}
+func (errStore) MinEffectiveDate(context.Context, string) (string, bool, error) {
+	return "", false, errBoom{}
 }
 
 type errBoom struct{}
@@ -823,9 +829,15 @@ func (emptyErrStore) SearchNodeCandidates(context.Context, string, string, strin
 func (emptyErrStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
 	return nil, emptyErr{}
 }
+func (emptyErrStore) MaxEffectiveDateOnOrBefore(context.Context, string, string) (string, bool, error) {
+	return "", false, emptyErr{}
+}
+func (emptyErrStore) MinEffectiveDate(context.Context, string) (string, bool, error) {
+	return "", false, emptyErr{}
+}
 
 func TestHandleOrgNodes_GET_StoreError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?as_of=2026-01-06", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?tree_as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -838,8 +850,8 @@ func TestHandleOrgNodes_GET_StoreError(t *testing.T) {
 	}
 }
 
-func TestHandleOrgNodes_GET_BadAsOf(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?as_of=bad", nil)
+func TestHandleOrgNodes_GET_DeprecatedAsOf(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -847,7 +859,7 @@ func TestHandleOrgNodes_GET_BadAsOf(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("invalid as_of")) {
+	if body := rec.Body.String(); !bytes.Contains([]byte(body), []byte("deprecated as_of")) {
 		t.Fatalf("unexpected body: %q", body)
 	}
 }
@@ -855,7 +867,7 @@ func TestHandleOrgNodes_GET_BadAsOf(t *testing.T) {
 func TestHandleOrgNodes_POST_BadForm(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	body := bytes.NewBufferString("%zz")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -868,7 +880,7 @@ func TestHandleOrgNodes_POST_BadForm(t *testing.T) {
 
 func TestHandleOrgNodes_POST_BadForm_MergesEmptyStoreError(t *testing.T) {
 	body := bytes.NewBufferString("%zz")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -884,7 +896,7 @@ func TestHandleOrgNodes_POST_BadForm_MergesEmptyStoreError(t *testing.T) {
 
 func TestHandleOrgNodes_POST_BadForm_MergesNonEmptyStoreError(t *testing.T) {
 	body := bytes.NewBufferString("%zz")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -901,7 +913,7 @@ func TestHandleOrgNodes_POST_BadForm_MergesNonEmptyStoreError(t *testing.T) {
 
 func TestHandleOrgNodes_POST_EmptyName(t *testing.T) {
 	store := newOrgUnitMemoryStore()
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", bytes.NewBufferString("org_code=A001&name="))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", bytes.NewBufferString("org_code=A001&name="))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -917,7 +929,7 @@ func TestHandleOrgNodes_POST_EmptyName(t *testing.T) {
 
 func TestHandleOrgNodes_POST_Create_InvalidOrgCode(t *testing.T) {
 	store := newOrgUnitMemoryStore()
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", bytes.NewBufferString("org_code=bad%7F&name=A"))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", bytes.NewBufferString("org_code=bad%7F&name=A"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -934,7 +946,7 @@ func TestHandleOrgNodes_POST_Create_InvalidOrgCode(t *testing.T) {
 func TestHandleOrgNodes_POST_SuccessRedirect(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	body := bytes.NewBufferString("org_code=A002&name=A&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -943,7 +955,7 @@ func TestHandleOrgNodes_POST_SuccessRedirect(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?as_of=2026-01-06" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?tree_as_of=2026-01-06" {
 		t.Fatalf("location=%q", loc)
 	}
 }
@@ -1036,7 +1048,7 @@ func (s *writeSpyStore) SearchNode(context.Context, string, string, string) (Org
 	if s.err != nil {
 		return OrgUnitSearchResult{}, s.err
 	}
-	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, AsOf: "2026-01-06"}, nil
+	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, TreeAsOf: "2026-01-06"}, nil
 }
 func (s *writeSpyStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
 	if s.err != nil {
@@ -1049,6 +1061,18 @@ func (s *writeSpyStore) ListNodeVersions(context.Context, string, int) ([]OrgUni
 		return nil, s.err
 	}
 	return []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-06", EventType: "RENAME"}}, nil
+}
+func (s *writeSpyStore) MaxEffectiveDateOnOrBefore(_ context.Context, _ string, asOfDate string) (string, bool, error) {
+	if s.err != nil {
+		return "", false, s.err
+	}
+	return asOfDate, true, nil
+}
+func (s *writeSpyStore) MinEffectiveDate(_ context.Context, _ string) (string, bool, error) {
+	if s.err != nil {
+		return "", false, s.err
+	}
+	return "2026-01-01", true, nil
 }
 
 type actionErrStore struct {
@@ -1109,13 +1133,19 @@ func (s *actionErrStore) GetNodeDetails(context.Context, string, int, string) (O
 	return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
 }
 func (s *actionErrStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
-	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, AsOf: "2026-01-06"}, nil
+	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, TreeAsOf: "2026-01-06"}, nil
 }
 func (s *actionErrStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
 	return []OrgUnitSearchCandidate{{OrgID: 10000001, OrgCode: "A001", Name: "Root"}}, nil
 }
 func (s *actionErrStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
 	return []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-06", EventType: "RENAME"}}, nil
+}
+func (s *actionErrStore) MaxEffectiveDateOnOrBefore(_ context.Context, _ string, asOfDate string) (string, bool, error) {
+	return asOfDate, true, nil
+}
+func (s *actionErrStore) MinEffectiveDate(_ context.Context, _ string) (string, bool, error) {
+	return "2026-01-01", true, nil
 }
 
 type recordActionStore struct {
@@ -1192,7 +1222,7 @@ func (s *asOfSpyStore) GetNodeDetails(context.Context, string, int, string) (Org
 	return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
 }
 func (s *asOfSpyStore) SearchNode(context.Context, string, string, string) (OrgUnitSearchResult, error) {
-	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, AsOf: "2026-01-06"}, nil
+	return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, TreeAsOf: "2026-01-06"}, nil
 }
 func (s *asOfSpyStore) SearchNodeCandidates(context.Context, string, string, string, int) ([]OrgUnitSearchCandidate, error) {
 	return []OrgUnitSearchCandidate{{OrgID: 10000001, OrgCode: "A001", Name: "Root"}}, nil
@@ -1200,10 +1230,16 @@ func (s *asOfSpyStore) SearchNodeCandidates(context.Context, string, string, str
 func (s *asOfSpyStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
 	return []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-06", EventType: "RENAME"}}, nil
 }
+func (s *asOfSpyStore) MaxEffectiveDateOnOrBefore(context.Context, string, string) (string, bool, error) {
+	return "", false, nil
+}
+func (s *asOfSpyStore) MinEffectiveDate(context.Context, string) (string, bool, error) {
+	return "", false, nil
+}
 
 func postOrgNodesForm(t *testing.T, store OrgUnitStore, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", bytes.NewBufferString(body))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1214,7 +1250,7 @@ func postOrgNodesForm(t *testing.T, store OrgUnitStore, body string) *httptest.R
 func TestHandleOrgNodes_POST_Rename_UsesStore(t *testing.T) {
 	store := &writeSpyStore{}
 	body := bytes.NewBufferString("action=rename&org_code=ORG-1&new_name=New&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1229,7 +1265,7 @@ func TestHandleOrgNodes_POST_Rename_UsesStore(t *testing.T) {
 	if got := strings.Join(store.argsRename, "|"); got != "t1|2026-01-05|10000001|New" {
 		t.Fatalf("args=%q", got)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/org/nodes?as_of=2026-01-05" {
+	if loc := rec.Header().Get("Location"); loc != "/org/nodes?tree_as_of=2026-01-06" {
 		t.Fatalf("location=%q", loc)
 	}
 }
@@ -1237,7 +1273,7 @@ func TestHandleOrgNodes_POST_Rename_UsesStore(t *testing.T) {
 func TestHandleOrgNodes_POST_Rename_DefaultsEffectiveDateToAsOf(t *testing.T) {
 	store := &writeSpyStore{}
 	body := bytes.NewBufferString("action=rename&org_code=ORG-1&new_name=New")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1264,7 +1300,7 @@ func TestHandleOrgNodes_POST_SetBusinessUnit_InvalidFlag(t *testing.T) {
 	form.Set("effective_date", "2026-01-06")
 	form.Set("is_business_unit", "maybe")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1291,7 +1327,7 @@ func TestHandleOrgNodes_POST_SetBusinessUnit_Success(t *testing.T) {
 	form.Set("effective_date", "2026-01-06")
 	form.Set("is_business_unit", "true")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1317,7 +1353,7 @@ func TestHandleOrgNodes_POST_SetBusinessUnit_StoreError(t *testing.T) {
 	form.Set("effective_date", "2026-01-06")
 	form.Set("is_business_unit", "true")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1334,7 +1370,7 @@ func TestHandleOrgNodes_POST_SetBusinessUnit_StoreError(t *testing.T) {
 func TestHandleOrgNodes_POST_Rename_Error_ShowsErrorAndNodes(t *testing.T) {
 	store := &writeSpyStore{err: errors.New("boom")}
 	body := bytes.NewBufferString("action=rename&org_code=ORG-1&new_name=New&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1351,7 +1387,7 @@ func TestHandleOrgNodes_POST_Rename_Error_ShowsErrorAndNodes(t *testing.T) {
 func TestHandleOrgNodes_POST_Rename_StoreError(t *testing.T) {
 	store := &actionErrStore{renameErr: errors.New("boom")}
 	body := bytes.NewBufferString("action=rename&org_code=ORG-1&new_name=New&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1372,7 +1408,7 @@ func TestHandleOrgNodes_POST_Move_EmptyParent_AllowsEmpty(t *testing.T) {
 	form.Set("org_code", "ORG-1")
 	form.Set("effective_date", "2026-01-06")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1404,7 +1440,7 @@ func TestHandleOrgNodes_POST_Move_InvalidParent_ShowsError(t *testing.T) {
 	form.Set("new_parent_code", "PARENT")
 	form.Set("effective_date", "2026-01-06")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1426,7 +1462,7 @@ func TestHandleOrgNodes_POST_Move_StoreError(t *testing.T) {
 	form.Set("new_parent_code", "PARENT")
 	form.Set("effective_date", "2026-01-06")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1447,7 +1483,7 @@ func TestHandleOrgNodes_POST_Disable_StoreError(t *testing.T) {
 	form.Set("org_code", "ORG-1")
 	form.Set("effective_date", "2026-01-06")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1469,7 +1505,7 @@ func TestHandleOrgNodes_POST_SetBusinessUnit_ErrorFromStore(t *testing.T) {
 	form.Set("effective_date", "2026-01-06")
 	form.Set("is_business_unit", "true")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1491,7 +1527,7 @@ func TestHandleOrgNodes_POST_Create_WithParentCode(t *testing.T) {
 	form.Set("effective_date", "2026-01-06")
 	form.Set("parent_code", "PARENT")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1520,7 +1556,7 @@ func TestHandleOrgNodes_POST_Create_ParentCodeResolveError(t *testing.T) {
 	form.Set("effective_date", "2026-01-06")
 	form.Set("parent_code", "PARENT")
 
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1537,7 +1573,7 @@ func TestHandleOrgNodes_POST_Create_ParentCodeResolveError(t *testing.T) {
 func TestHandleOrgNodes_POST_Create_BadEffectiveDate(t *testing.T) {
 	store := &writeSpyStore{}
 	body := bytes.NewBufferString("org_code=A010&name=A&effective_date=bad")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1561,7 +1597,7 @@ func TestHandleOrgNodes_POST_Create_BusinessUnitFalse(t *testing.T) {
 	form.Set("name", "A")
 	form.Set("effective_date", "2026-01-06")
 	form.Set("is_business_unit", "no")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1582,7 +1618,7 @@ func TestHandleOrgNodes_POST_Create_InvalidBusinessUnitFlag(t *testing.T) {
 	form.Set("name", "A")
 	form.Set("effective_date", "2026-01-06")
 	form.Set("is_business_unit", "maybe")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1599,7 +1635,7 @@ func TestHandleOrgNodes_POST_Create_InvalidBusinessUnitFlag(t *testing.T) {
 func TestHandleOrgNodes_POST_Create_Error_ShowsError(t *testing.T) {
 	store := &writeSpyStore{err: errors.New("boom")}
 	body := bytes.NewBufferString("org_code=A013&name=A&effective_date=2026-01-06")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1616,7 +1652,7 @@ func TestHandleOrgNodes_POST_Create_Error_ShowsError(t *testing.T) {
 func TestHandleOrgNodes_POST_Move_UsesStore(t *testing.T) {
 	store := &writeSpyStore{}
 	body := bytes.NewBufferString("action=move&org_code=ORG-1&new_parent_code=PARENT&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1636,7 +1672,7 @@ func TestHandleOrgNodes_POST_Move_UsesStore(t *testing.T) {
 func TestHandleOrgNodes_POST_Disable_UsesStore(t *testing.T) {
 	store := &writeSpyStore{}
 	body := bytes.NewBufferString("action=disable&org_code=ORG-1&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1656,7 +1692,7 @@ func TestHandleOrgNodes_POST_Disable_UsesStore(t *testing.T) {
 func TestHandleOrgNodes_POST_Disable_BadEffectiveDate(t *testing.T) {
 	store := &writeSpyStore{}
 	body := bytes.NewBufferString("action=disable&org_code=ORG-1&effective_date=bad")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1676,7 +1712,7 @@ func TestHandleOrgNodes_POST_Disable_BadEffectiveDate(t *testing.T) {
 func TestHandleOrgNodes_POST_Move_Error_ShowsErrorAndNodes(t *testing.T) {
 	store := &writeSpyStore{err: errors.New("boom")}
 	body := bytes.NewBufferString("action=move&org_code=ORG-1&new_parent_code=PARENT&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1693,7 +1729,7 @@ func TestHandleOrgNodes_POST_Move_Error_ShowsErrorAndNodes(t *testing.T) {
 func TestHandleOrgNodes_POST_Disable_Error_ShowsErrorAndNodes(t *testing.T) {
 	store := &writeSpyStore{err: errors.New("boom")}
 	body := bytes.NewBufferString("action=disable&org_code=ORG-1&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1710,7 +1746,7 @@ func TestHandleOrgNodes_POST_Disable_Error_ShowsErrorAndNodes(t *testing.T) {
 func TestHandleOrgNodes_POST_MergesErrorHints(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	body := bytes.NewBufferString("name=")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=bad", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=bad", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1719,7 +1755,7 @@ func TestHandleOrgNodes_POST_MergesErrorHints(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if bodyOut := rec.Body.String(); !strings.Contains(bodyOut, "invalid as_of") {
+	if bodyOut := rec.Body.String(); !strings.Contains(bodyOut, "invalid tree_as_of") {
 		t.Fatalf("unexpected body: %q", bodyOut)
 	}
 }
@@ -1727,7 +1763,7 @@ func TestHandleOrgNodes_POST_MergesErrorHints(t *testing.T) {
 func TestHandleOrgNodes_POST_DefaultsEffectiveDateToAsOf(t *testing.T) {
 	store := &writeSpyStore{}
 	body := bytes.NewBufferString("org_code=A001&name=A")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1744,7 +1780,7 @@ func TestHandleOrgNodes_POST_DefaultsEffectiveDateToAsOf(t *testing.T) {
 func TestHandleOrgNodes_POST_Rename_MissingOrgCode(t *testing.T) {
 	store := &writeSpyStore{}
 	body := bytes.NewBufferString("action=rename&org_code=&new_name=New&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1761,7 +1797,7 @@ func TestHandleOrgNodes_POST_Rename_MissingOrgCode(t *testing.T) {
 func TestHandleOrgNodes_POST_Rename_InvalidOrgCode(t *testing.T) {
 	store := &writeSpyStore{}
 	body := bytes.NewBufferString("action=rename&org_code=bad%7F&new_name=New&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1778,7 +1814,7 @@ func TestHandleOrgNodes_POST_Rename_InvalidOrgCode(t *testing.T) {
 func TestHandleOrgNodes_POST_Rename_OrgCodeNotFound(t *testing.T) {
 	store := newOrgUnitMemoryStore()
 	body := bytes.NewBufferString("action=rename&org_code=ORG-404&new_name=New&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1795,7 +1831,7 @@ func TestHandleOrgNodes_POST_Rename_OrgCodeNotFound(t *testing.T) {
 func TestHandleOrgNodes_POST_Rename_MissingNewName(t *testing.T) {
 	store := &writeSpyStore{}
 	body := bytes.NewBufferString("action=rename&org_code=ORG-1&new_name=&effective_date=2026-01-05")
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", body)
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1820,7 +1856,7 @@ func TestHandleOrgNodes_GET_DefaultAsOf_UsesToday(t *testing.T) {
 		t.Fatalf("status=%d", rec.Code)
 	}
 	loc := rec.Header().Get("Location")
-	if !strings.Contains(loc, "/org/nodes?as_of=") {
+	if !strings.Contains(loc, "/org/nodes?tree_as_of=") {
 		t.Fatalf("location=%q", loc)
 	}
 	wantAsOf := time.Now().UTC().Format("2006-01-02")
@@ -1831,7 +1867,7 @@ func TestHandleOrgNodes_GET_DefaultAsOf_UsesToday(t *testing.T) {
 
 func TestHandleOrgNodes_MethodNotAllowed(t *testing.T) {
 	store := newOrgUnitMemoryStore()
-	req := httptest.NewRequest(http.MethodPut, "/org/nodes", nil)
+	req := httptest.NewRequest(http.MethodPut, "/org/nodes?tree_as_of=2026-01-06", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
@@ -1841,9 +1877,25 @@ func TestHandleOrgNodes_MethodNotAllowed(t *testing.T) {
 	}
 }
 
+func TestHandleOrgNodes_POST_MissingTreeAsOf(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes", strings.NewReader("org_code=A001&name=Root"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodes(rec, req, store)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "tree_as_of") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
 func TestHandleOrgNodes_CreateMissingOrgCode(t *testing.T) {
 	store := newOrgUnitMemoryStore()
-	req := httptest.NewRequest(http.MethodPost, "/org/nodes?as_of=2026-01-06", strings.NewReader("name=A"))
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader("name=A"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
@@ -1859,7 +1911,7 @@ func TestHandleOrgNodes_CreateMissingOrgCode(t *testing.T) {
 
 func TestHandleOrgNodes_TenantMissing(t *testing.T) {
 	store := newOrgUnitMemoryStore()
-	req := httptest.NewRequest(http.MethodGet, "/org/nodes?as_of=2026-01-01", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/nodes?tree_as_of=2026-01-01", nil)
 	rec := httptest.NewRecorder()
 
 	handleOrgNodes(rec, req, store)
@@ -2510,7 +2562,7 @@ func TestHandleOrgNodes_RecordActions(t *testing.T) {
 		if store.disableCalled != 1 {
 			t.Fatalf("disable called=%d", store.disableCalled)
 		}
-		if loc := rec.Header().Get("Location"); loc != "/org/nodes?as_of=2026-01-01" {
+		if loc := rec.Header().Get("Location"); loc != "/org/nodes?tree_as_of=2026-01-06" {
 			t.Fatalf("location=%q", loc)
 		}
 	})
@@ -2545,7 +2597,7 @@ func TestHandleOrgNodes_RecordActions(t *testing.T) {
 		if store.renameCalled != 1 {
 			t.Fatalf("rename called=%d", store.renameCalled)
 		}
-		if loc := rec.Header().Get("Location"); loc != "/org/nodes?as_of=2026-01-11" {
+		if loc := rec.Header().Get("Location"); loc != "/org/nodes?tree_as_of=2026-01-06" {
 			t.Fatalf("location=%q", loc)
 		}
 	})

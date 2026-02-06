@@ -197,6 +197,18 @@ func (s orgStoreStub) SearchNodeCandidates(context.Context, string, string, stri
 func (s orgStoreStub) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
 	return nil, s.err
 }
+func (s orgStoreStub) MaxEffectiveDateOnOrBefore(context.Context, string, string) (string, bool, error) {
+	if s.err != nil {
+		return "", false, s.err
+	}
+	return "", false, nil
+}
+func (s orgStoreStub) MinEffectiveDate(context.Context, string) (string, bool, error) {
+	if s.err != nil {
+		return "", false, s.err
+	}
+	return "", false, nil
+}
 
 func defaultJobCatalogOrgStore() OrgUnitStore {
 	return orgStoreStub{nodes: []OrgUnitNode{{ID: "10000001", Name: "Root Org", IsBusinessUnit: true}}}

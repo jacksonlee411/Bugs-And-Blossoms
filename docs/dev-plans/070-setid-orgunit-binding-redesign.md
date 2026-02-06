@@ -286,7 +286,7 @@ CREATE TABLE orgunit.setid_binding_versions (
     - `action=bind_setid`：`org_unit_id` + `setid` + `effective_date`
   - 成功后 `303` 跳回 `GET`，失败返回带错误的表单片段。
 - `/org/nodes`：
-  - `POST /org/nodes?as_of=...` 支持设置业务单元标记（触发 `SET_BUSINESS_UNIT` 事件）。
+  - `POST /org/nodes?tree_as_of=...` 支持设置业务单元标记（触发 `SET_BUSINESS_UNIT` 事件）。
 - setid-controlled 入口：
   - 配置主数据（如 JobCatalog）：`GET/POST` 必须显式携带 `setid` + `as_of`（UI）/`setid` + `effective_date`（API）；页面展示 `setid`，缺失/非法必须 fail-closed。
   - 业务数据（如 Position）：`org_unit_id` 必填，用于解析 `setid` 以加载可选配置；不要求手工选择 `setid`。

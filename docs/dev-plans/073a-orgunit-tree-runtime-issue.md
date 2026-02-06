@@ -6,7 +6,7 @@
 - 本记录用于补充 DEV-PLAN-073 的运行态验证结果，聚焦组织架构树 UI 的实际可用性。
 
 ## 问题描述
-- `/org/nodes?as_of=2026-02-05` 页面能渲染 `sl-tree` 的 HTML 结构，但 Shoelace Web Components 未注册。
+- `/org/nodes?tree_as_of=2026-02-05` 页面能渲染 `sl-tree` 的 HTML 结构，但 Shoelace Web Components 未注册。
 - 浏览器控制台报错：`Failed to resolve module specifier "lit/directives/class-map.js". Relative references must start with either "/", "./", or "../".`
 - 结果：树的展开/折叠与懒加载事件（`sl-lazy-load`）无法正常工作，导致子节点无法通过 UI 交互加载。
 
@@ -21,7 +21,7 @@
 
 ## 复现步骤
 1. 登录：`http://localhost:8080/login`（账号 `admin@localhost` / `admin123`）。
-2. 打开：`http://localhost:8080/org/nodes?as_of=2026-02-05`。
+2. 打开：`http://localhost:8080/org/nodes?tree_as_of=2026-02-05`。
 3. 打开浏览器控制台，出现 Shoelace 依赖加载错误；展开节点无效。
 
 ## 证据（本地验证）
@@ -53,7 +53,7 @@
 - 修复：将 swap 改为 `beforeend`，仅追加子节点，保留父节点 label。
 
 ### 验证结果
-- 打开：`/org/nodes?as_of=2026-02-05`。
+- 打开：`/org/nodes?tree_as_of=2026-02-05`。
 - 点击“飞虫与鲜花”（org_id=10000000）展开：
   - `HTMX GET /org/nodes/children?parent_id=10000000&as_of=2026-02-05` 返回 200。
   - 2 秒内 `lazy=false`、`loading=false`，子节点渲染数量 `children=3`。

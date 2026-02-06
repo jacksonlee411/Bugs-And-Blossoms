@@ -619,7 +619,7 @@ func TestOrgUnitPGStore_ListNodeVersions(t *testing.T) {
 
 func TestHandleOrgNodeChildren(t *testing.T) {
 	t.Run("missing tenant", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?as_of=2026-01-06&parent_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?tree_as_of=2026-01-06&parent_id=10000001", nil)
 		rec := httptest.NewRecorder()
 		handleOrgNodeChildren(rec, req, newOrgUnitMemoryStore())
 		if rec.Code != http.StatusInternalServerError {
@@ -627,7 +627,7 @@ func TestHandleOrgNodeChildren(t *testing.T) {
 		}
 	})
 	t.Run("method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/nodes/children?as_of=2026-01-06&parent_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodPost, "/org/nodes/children?tree_as_of=2026-01-06&parent_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeChildren(rec, req, newOrgUnitMemoryStore())
@@ -635,8 +635,8 @@ func TestHandleOrgNodeChildren(t *testing.T) {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
-	t.Run("invalid as_of", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?as_of=bad&parent_id=10000001", nil)
+	t.Run("invalid tree_as_of", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?tree_as_of=bad&parent_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeChildren(rec, req, newOrgUnitMemoryStore())
@@ -645,7 +645,7 @@ func TestHandleOrgNodeChildren(t *testing.T) {
 		}
 	})
 	t.Run("missing parent", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?as_of=2026-01-06", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?tree_as_of=2026-01-06", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeChildren(rec, req, newOrgUnitMemoryStore())
@@ -654,7 +654,7 @@ func TestHandleOrgNodeChildren(t *testing.T) {
 		}
 	})
 	t.Run("invalid parent", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?as_of=2026-01-06&parent_id=bad", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?tree_as_of=2026-01-06&parent_id=bad", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeChildren(rec, req, newOrgUnitMemoryStore())
@@ -669,7 +669,7 @@ func TestHandleOrgNodeChildren(t *testing.T) {
 				return nil, errOrgUnitNotFound
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?as_of=2026-01-06&parent_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?tree_as_of=2026-01-06&parent_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeChildren(rec, req, store)
@@ -684,7 +684,7 @@ func TestHandleOrgNodeChildren(t *testing.T) {
 				return nil, errors.New("boom")
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?as_of=2026-01-06&parent_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?tree_as_of=2026-01-06&parent_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeChildren(rec, req, store)
@@ -699,7 +699,7 @@ func TestHandleOrgNodeChildren(t *testing.T) {
 				return []OrgUnitChild{{OrgID: 10000001, OrgCode: "A001", Name: "Root", HasChildren: true}}, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?as_of=2026-01-06&parent_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/children?tree_as_of=2026-01-06&parent_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeChildren(rec, req, store)
@@ -715,7 +715,7 @@ func TestHandleOrgNodeChildren(t *testing.T) {
 
 func TestHandleOrgNodeDetails(t *testing.T) {
 	t.Run("missing tenant", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-06&org_id=10000001", nil)
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, newOrgUnitMemoryStore())
 		if rec.Code != http.StatusInternalServerError {
@@ -723,7 +723,7 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 		}
 	})
 	t.Run("method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/nodes/details?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodPost, "/org/nodes/details?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, newOrgUnitMemoryStore())
@@ -731,8 +731,26 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
-	t.Run("invalid as_of", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=bad&org_id=10000001", nil)
+	t.Run("deprecated as_of", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-06&org_id=10000001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetails(rec, req, newOrgUnitMemoryStore())
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+	t.Run("invalid effective_date", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=bad&org_id=10000001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetails(rec, req, newOrgUnitMemoryStore())
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+	t.Run("invalid tree_as_of", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-06&org_id=10000001&tree_as_of=bad", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, newOrgUnitMemoryStore())
@@ -741,7 +759,7 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 		}
 	})
 	t.Run("missing org_id", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-06", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-06", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, newOrgUnitMemoryStore())
@@ -750,7 +768,7 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 		}
 	})
 	t.Run("invalid org_id", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-06&org_id=bad", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-06&org_id=bad", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, newOrgUnitMemoryStore())
@@ -765,7 +783,7 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 				return OrgUnitNodeDetails{}, errOrgUnitNotFound
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, store)
@@ -780,7 +798,7 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 				return OrgUnitNodeDetails{}, errors.New("boom")
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, store)
@@ -798,7 +816,7 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 				return nil, errOrgUnitNotFound
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, store)
@@ -816,7 +834,7 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 				return nil, errors.New("boom")
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, store)
@@ -831,7 +849,7 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 				return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root", IsBusinessUnit: true, ManagerPernr: "1001", ManagerName: "Manager"}, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, store)
@@ -857,7 +875,7 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 				}, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-06&org_id=10000002", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-06&org_id=10000002", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, store)
@@ -882,7 +900,7 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 				}, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-06&org_id=10000003", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-06&org_id=10000003", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetails(rec, req, store)
@@ -891,6 +909,29 @@ func TestHandleOrgNodeDetails(t *testing.T) {
 		}
 		if body := rec.Body.String(); !strings.Contains(body, "Parent Only") {
 			t.Fatalf("unexpected body: %q", body)
+		}
+	})
+	t.Run("default effective_date uses today", func(t *testing.T) {
+		var gotEffectiveDate string
+		store := &orgUnitReadStoreStub{
+			orgUnitMemoryStore: newOrgUnitMemoryStore(),
+			detailsFn: func(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+				return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
+			},
+		}
+		store.detailsFn = func(_ context.Context, _ string, _ int, asOfDate string) (OrgUnitNodeDetails, error) {
+			gotEffectiveDate = asOfDate
+			return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
+		}
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/details?org_id=10000001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetails(rec, req, store)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if want := currentUTCDateString(); gotEffectiveDate != want {
+			t.Fatalf("effective_date=%q want=%q", gotEffectiveDate, want)
 		}
 	})
 }
@@ -903,7 +944,7 @@ func TestRenderOrgNodeDetails(t *testing.T) {
 		IsBusinessUnit: true,
 		ManagerPernr:   "1001",
 		ManagerName:    "Boss",
-	}, "2026-01-06", []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-01", EventType: "RENAME"}}, true, "")
+	}, "2026-01-06", "2026-01-06", []OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-01", EventType: "RENAME"}}, true, "")
 	if !strings.Contains(out, "A001") || !strings.Contains(out, "Root") {
 		t.Fatalf("unexpected output: %q", out)
 	}
@@ -915,7 +956,7 @@ func TestRenderOrgNodeDetails(t *testing.T) {
 		ParentID:   10000001,
 		ParentCode: "A001",
 		ParentName: "Root",
-	}, "2026-01-06", []OrgUnitNodeVersion{{EventID: 2, EffectiveDate: "2026-01-01", EventType: "RENAME"}}, true, "")
+	}, "2026-01-06", "2026-01-06", []OrgUnitNodeVersion{{EventID: 2, EffectiveDate: "2026-01-01", EventType: "RENAME"}}, true, "")
 	if !strings.Contains(out2, "A001 · Root") || !strings.Contains(out2, "上级组织") {
 		t.Fatalf("unexpected output: %q", out2)
 	}
@@ -924,7 +965,7 @@ func TestRenderOrgNodeDetails(t *testing.T) {
 		OrgID:   10000003,
 		OrgCode: "C003",
 		Name:    "Middle",
-	}, "2026-01-15", []OrgUnitNodeVersion{
+	}, "2026-01-15", "2026-01-06", []OrgUnitNodeVersion{
 		{EventID: 1, EffectiveDate: "2026-01-01", EventType: "RENAME"},
 		{EventID: 2, EffectiveDate: "2026-01-10", EventType: "MOVE"},
 		{EventID: 3, EffectiveDate: "2026-01-20", EventType: "RENAME"},
@@ -952,7 +993,7 @@ func TestSelectOrgNodeVersion(t *testing.T) {
 			t.Fatalf("unexpected idx=%d", idx)
 		}
 	})
-	t.Run("bad as_of uses last", func(t *testing.T) {
+	t.Run("bad effective_date uses last", func(t *testing.T) {
 		versions := []OrgUnitNodeVersion{
 			{EventID: 1, EffectiveDate: "2026-01-01", EventType: "RENAME"},
 			{EventID: 2, EffectiveDate: "2026-01-10", EventType: "MOVE"},
@@ -987,7 +1028,7 @@ func TestSelectOrgNodeVersion(t *testing.T) {
 
 func TestHandleOrgNodeDetailsPage(t *testing.T) {
 	t.Run("missing tenant", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-06&org_id=10000001", nil)
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
 		if rec.Code != http.StatusInternalServerError {
@@ -995,7 +1036,7 @@ func TestHandleOrgNodeDetailsPage(t *testing.T) {
 		}
 	})
 	t.Run("method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodPost, "/org/nodes/view?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
@@ -1003,8 +1044,26 @@ func TestHandleOrgNodeDetailsPage(t *testing.T) {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
-	t.Run("invalid as_of", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=bad&org_id=10000001", nil)
+	t.Run("deprecated as_of", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+	t.Run("invalid effective_date", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=bad&org_id=10000001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+	t.Run("invalid tree_as_of", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-06&org_id=10000001&tree_as_of=bad", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
@@ -1013,7 +1072,7 @@ func TestHandleOrgNodeDetailsPage(t *testing.T) {
 		}
 	})
 	t.Run("missing org_id", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-06", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
@@ -1022,7 +1081,7 @@ func TestHandleOrgNodeDetailsPage(t *testing.T) {
 		}
 	})
 	t.Run("invalid org_id", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=bad", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-06&org_id=bad", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetailsPage(rec, req, newOrgUnitMemoryStore())
@@ -1037,7 +1096,7 @@ func TestHandleOrgNodeDetailsPage(t *testing.T) {
 				return OrgUnitNodeDetails{}, errOrgUnitNotFound
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetailsPage(rec, req, store)
@@ -1052,7 +1111,7 @@ func TestHandleOrgNodeDetailsPage(t *testing.T) {
 				return OrgUnitNodeDetails{}, errors.New("boom")
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetailsPage(rec, req, store)
@@ -1070,7 +1129,7 @@ func TestHandleOrgNodeDetailsPage(t *testing.T) {
 				return nil, errOrgUnitNotFound
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetailsPage(rec, req, store)
@@ -1088,7 +1147,7 @@ func TestHandleOrgNodeDetailsPage(t *testing.T) {
 				return nil, errors.New("boom")
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetailsPage(rec, req, store)
@@ -1103,7 +1162,7 @@ func TestHandleOrgNodeDetailsPage(t *testing.T) {
 				return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-06&org_id=10000001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-06&org_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeDetailsPage(rec, req, store)
@@ -1115,11 +1174,34 @@ func TestHandleOrgNodeDetailsPage(t *testing.T) {
 			t.Fatalf("unexpected body: %q", body)
 		}
 	})
+	t.Run("default effective_date uses today", func(t *testing.T) {
+		var gotEffectiveDate string
+		store := &orgUnitReadStoreStub{
+			orgUnitMemoryStore: newOrgUnitMemoryStore(),
+			detailsFn: func(context.Context, string, int, string) (OrgUnitNodeDetails, error) {
+				return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
+			},
+		}
+		store.detailsFn = func(_ context.Context, _ string, _ int, asOfDate string) (OrgUnitNodeDetails, error) {
+			gotEffectiveDate = asOfDate
+			return OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root"}, nil
+		}
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?org_id=10000001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, store)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if want := currentUTCDateString(); gotEffectiveDate != want {
+			t.Fatalf("effective_date=%q want=%q", gotEffectiveDate, want)
+		}
+	})
 }
 
 func TestHandleOrgNodeSearch(t *testing.T) {
 	t.Run("missing tenant", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=2026-01-06&query=A001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?tree_as_of=2026-01-06&query=A001", nil)
 		rec := httptest.NewRecorder()
 		handleOrgNodeSearch(rec, req, newOrgUnitMemoryStore())
 		if rec.Code != http.StatusInternalServerError {
@@ -1127,7 +1209,7 @@ func TestHandleOrgNodeSearch(t *testing.T) {
 		}
 	})
 	t.Run("method not allowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/nodes/search?as_of=2026-01-06&query=A001", nil)
+		req := httptest.NewRequest(http.MethodPost, "/org/nodes/search?tree_as_of=2026-01-06&query=A001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeSearch(rec, req, newOrgUnitMemoryStore())
@@ -1135,8 +1217,8 @@ func TestHandleOrgNodeSearch(t *testing.T) {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
-	t.Run("invalid as_of", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=bad&query=A001", nil)
+	t.Run("invalid tree_as_of", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?tree_as_of=bad&query=A001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeSearch(rec, req, newOrgUnitMemoryStore())
@@ -1145,7 +1227,7 @@ func TestHandleOrgNodeSearch(t *testing.T) {
 		}
 	})
 	t.Run("missing query", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=2026-01-06", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?tree_as_of=2026-01-06", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeSearch(rec, req, newOrgUnitMemoryStore())
@@ -1160,7 +1242,7 @@ func TestHandleOrgNodeSearch(t *testing.T) {
 				return OrgUnitSearchResult{}, errOrgUnitNotFound
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=2026-01-06&query=A001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?tree_as_of=2026-01-06&query=A001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeSearch(rec, req, store)
@@ -1175,7 +1257,7 @@ func TestHandleOrgNodeSearch(t *testing.T) {
 				return OrgUnitSearchResult{}, errors.New("boom")
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=2026-01-06&query=A001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?tree_as_of=2026-01-06&query=A001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeSearch(rec, req, store)
@@ -1187,10 +1269,10 @@ func TestHandleOrgNodeSearch(t *testing.T) {
 		store := &orgUnitReadStoreStub{
 			orgUnitMemoryStore: newOrgUnitMemoryStore(),
 			searchFn: func(context.Context, string, string, string) (OrgUnitSearchResult, error) {
-				return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, AsOf: "2026-01-06"}, nil
+				return OrgUnitSearchResult{TargetOrgID: 10000001, TargetOrgCode: "A001", TargetName: "Root", PathOrgIDs: []int{10000001}, TreeAsOf: "2026-01-06"}, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=2026-01-06&query=A001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?tree_as_of=2026-01-06&query=A001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeSearch(rec, req, store)
@@ -1212,7 +1294,7 @@ func TestHandleOrgNodeSearch(t *testing.T) {
 				return nil, errOrgUnitNotFound
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=2026-01-06&query=A001&format=panel", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?tree_as_of=2026-01-06&query=A001&format=panel", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeSearch(rec, req, store)
@@ -1230,7 +1312,7 @@ func TestHandleOrgNodeSearch(t *testing.T) {
 				return nil, errors.New("boom")
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=2026-01-06&query=A001&format=panel", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?tree_as_of=2026-01-06&query=A001&format=panel", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeSearch(rec, req, store)
@@ -1245,7 +1327,7 @@ func TestHandleOrgNodeSearch(t *testing.T) {
 				return []OrgUnitSearchCandidate{{OrgID: 10000001, OrgCode: "A001", Name: "Root"}}, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=2026-01-06&query=A001&format=panel", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/search?tree_as_of=2026-01-06&query=A001&format=panel", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 		rec := httptest.NewRecorder()
 		handleOrgNodeSearch(rec, req, store)

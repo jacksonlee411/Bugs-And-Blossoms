@@ -248,6 +248,12 @@ func (s errOrgUnitStore) SearchNodeCandidates(context.Context, string, string, s
 func (s errOrgUnitStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
 	return nil, s.err
 }
+func (s errOrgUnitStore) MaxEffectiveDateOnOrBefore(context.Context, string, string) (string, bool, error) {
+	return "", false, s.err
+}
+func (s errOrgUnitStore) MinEffectiveDate(context.Context, string) (string, bool, error) {
+	return "", false, s.err
+}
 
 type tableRows struct {
 	idx  int
@@ -370,6 +376,12 @@ func (resolveErrOrgStore) SearchNodeCandidates(context.Context, string, string, 
 }
 func (resolveErrOrgStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
 	return []OrgUnitNodeVersion{}, nil
+}
+func (resolveErrOrgStore) MaxEffectiveDateOnOrBefore(context.Context, string, string) (string, bool, error) {
+	return "", false, nil
+}
+func (resolveErrOrgStore) MinEffectiveDate(context.Context, string) (string, bool, error) {
+	return "", false, nil
 }
 
 func TestHandleSetID_TenantMissing(t *testing.T) {

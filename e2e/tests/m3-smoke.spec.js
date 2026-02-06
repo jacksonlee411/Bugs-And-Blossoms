@@ -92,7 +92,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await expect(page).toHaveURL(/\/app\?as_of=\d{4}-\d{2}-\d{2}$/);
   await expect(page.locator("h1")).toHaveText("Home");
 
-  await page.goto(`/org/nodes?as_of=${asOf}`);
+  await page.goto(`/org/nodes?tree_as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("OrgUnit Details");
   const nodeIDLocator = page.locator("sl-tree-item").first();
   const hasAnyNode = (await nodeIDLocator.count()) > 0;
@@ -105,7 +105,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   }
   await page.locator(".org-node-create-btn").click();
   const orgCreateForm = page
-    .locator(`#org-node-details form[method="POST"][action="/org/nodes?as_of=${asOf}"]`)
+    .locator(`#org-node-details form[method="POST"][action="/org/nodes?tree_as_of=${asOf}"]`)
     .filter({ has: page.locator('input[name="name"]') })
     .first();
   await expect(orgCreateForm).toBeVisible();
@@ -135,7 +135,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await setBusinessUnitFlag(!parentCode);
   await orgCreateForm.locator('input[name="name"]').fill(orgName);
   await orgCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/nodes\\?as_of=${asOf}$`));
+  await expect(page).toHaveURL(new RegExp(`/org/nodes\\?tree_as_of=${asOf}$`));
   await expect(page.locator("sl-tree-item", { hasText: orgName })).toBeVisible();
   const createdOrgCode = (await page.locator("sl-tree-item", { hasText: orgName }).first().locator(".org-node-code").innerText()).trim();
   expect(createdOrgCode).not.toBe("");
