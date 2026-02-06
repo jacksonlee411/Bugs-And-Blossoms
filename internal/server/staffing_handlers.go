@@ -34,11 +34,11 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 	if !ok {
 		return
 	}
-	if legacy := findLegacyField(r.URL.Query(), "position_id", "assignment_id"); legacy != "" {
+	if deprecatedField := findDeprecatedField(r.URL.Query(), "position_id", "assignment_id"); deprecatedField != "" {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "invalid_request", "use position_uuid/assignment_uuid")
 		return
 	}
-	if legacy := findLegacyField(r.URL.Query(), "org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"); legacy != "" {
+	if deprecatedField := findDeprecatedField(r.URL.Query(), "org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"); deprecatedField != "" {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "invalid_request", "use org_code/position_uuid")
 		return
 	}
@@ -113,7 +113,7 @@ func handlePositions(w http.ResponseWriter, r *http.Request, orgStore OrgUnitSto
 			writePage(w, r, renderPositions(positions, nodes, orgCodesByID, tenant, asOf, orgCode, setID, jobProfiles, mergeMsg(jobCatalogMsg, "bad form")))
 			return
 		}
-		if legacy := findLegacyField(r.Form, "org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"); legacy != "" {
+		if deprecatedField := findDeprecatedField(r.Form, "org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"); deprecatedField != "" {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "invalid_request", "use org_code/position_uuid")
 			return
 		}
@@ -228,7 +228,7 @@ func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgU
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
 		return
 	}
-	if legacy := findLegacyField(r.URL.Query(), "org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"); legacy != "" {
+	if deprecatedField := findDeprecatedField(r.URL.Query(), "org_unit_id", "position_id", "reports_to_position_id", "job_profile_id"); deprecatedField != "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "use org_code/position_uuid")
 		return
 	}
@@ -521,7 +521,7 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 			writePage(w, r, renderAssignments(assigns, positions, tenant, asOf, personUUID, pernr, displayName, mergeMsg(errMsg, "bad form")))
 			return
 		}
-		if legacy := findLegacyField(r.Form, "position_id", "assignment_id"); legacy != "" {
+		if deprecatedField := findDeprecatedField(r.Form, "position_id", "assignment_id"); deprecatedField != "" {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusBadRequest, "invalid_request", "use position_uuid/assignment_uuid")
 			return
 		}
@@ -656,7 +656,7 @@ func handleAssignments(w http.ResponseWriter, r *http.Request, positionStore Pos
 	}
 }
 
-func findLegacyField(values url.Values, keys ...string) string {
+func findDeprecatedField(values url.Values, keys ...string) string {
 	for _, key := range keys {
 		if values.Has(key) {
 			return key
