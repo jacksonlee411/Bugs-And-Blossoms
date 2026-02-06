@@ -102,7 +102,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
 
   const findOrgUnitCode = async (name) => {
     const resp = await appContext.request.get(
-      `/org/nodes/search?query=${encodeURIComponent(name)}&as_of=${encodeURIComponent(asOf)}`
+      `/org/nodes/search?query=${encodeURIComponent(name)}&tree_as_of=${encodeURIComponent(asOf)}`
     );
     if (resp.status() === 200) {
       const data = await resp.json();
@@ -150,7 +150,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     await form.locator('input[name="name"]').fill(name);
     await setBusinessUnitFlag(form, isBusinessUnit);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/nodes\\?as_of=${asOf}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/nodes\\?tree_as_of=${asOf}$`));
   };
 
   await page.goto(`/org/nodes?tree_as_of=${asOf}`);

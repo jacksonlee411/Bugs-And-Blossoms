@@ -135,7 +135,7 @@ test("smoke: superadmin -> create tenant -> /login -> /app -> org/person/staffin
   await setBusinessUnitFlag(!parentCode);
   await orgCreateForm.locator('input[name="name"]').fill(orgName);
   await orgCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(new RegExp(`/org/nodes\\?as_of=${asOf}$`));
+  await expect(page).toHaveURL(new RegExp(`/org/nodes\\?tree_as_of=${asOf}$`));
   await expect(page.locator("sl-tree-item", { hasText: orgName })).toBeVisible();
   const createdOrgCode = (await page.locator("sl-tree-item", { hasText: orgName }).first().locator(".org-node-code").innerText()).trim();
   expect(createdOrgCode).not.toBe("");

@@ -129,7 +129,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     await form.locator('input[name="name"]').fill(name);
     await setBusinessUnitFlag(form, isBusinessUnit);
     await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/nodes\\?as_of=${asOf}$`));
+    await expect(page).toHaveURL(new RegExp(`/org/nodes\\?tree_as_of=${asOf}$`));
   };
 
   const rootName = `TP060-03 Root ${runID}`;
