@@ -1036,6 +1036,12 @@ func (staffingOrgStoreStub) SearchNodeCandidates(context.Context, string, string
 func (staffingOrgStoreStub) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
 	return []OrgUnitNodeVersion{}, nil
 }
+func (staffingOrgStoreStub) MaxEffectiveDateOnOrBefore(context.Context, string, string) (string, bool, error) {
+	return "", false, nil
+}
+func (staffingOrgStoreStub) MinEffectiveDate(context.Context, string) (string, bool, error) {
+	return "", false, nil
+}
 
 type jobStoreErrStub struct{ JobCatalogStore }
 

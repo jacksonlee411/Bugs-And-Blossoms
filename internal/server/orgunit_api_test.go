@@ -162,6 +162,12 @@ func (s *resolveOrgCodeStore) SearchNodeCandidates(context.Context, string, stri
 func (s *resolveOrgCodeStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
 	return []OrgUnitNodeVersion{}, nil
 }
+func (s *resolveOrgCodeStore) MaxEffectiveDateOnOrBefore(context.Context, string, string) (string, bool, error) {
+	return "", false, nil
+}
+func (s *resolveOrgCodeStore) MinEffectiveDate(context.Context, string) (string, bool, error) {
+	return "", false, nil
+}
 
 func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeInvalid(t *testing.T) {
 	store := &resolveOrgCodeStore{}

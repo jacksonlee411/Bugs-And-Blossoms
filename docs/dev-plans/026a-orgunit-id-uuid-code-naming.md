@@ -232,19 +232,19 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 - 服务端校验：`^\d{8}$`，不合法返回 422；同日重复事件返回 409（对应唯一性约束）。
 
 #### 5.1.1 UI/HTMX（RouteClassUI）
-**`GET /org/nodes?as_of=YYYY-MM-DD`**
-- Query: `as_of`（必填；缺失时 302 重定向到当日 UTC 日期）。
+**`GET /org/nodes?tree_as_of=YYYY-MM-DD`**
+- Query: `tree_as_of`（必填；缺失/非法时 302 重定向到当日 UTC 日期）。
 - Response: HTML 页面（包含创建/操作表单与节点列表）。
 
-**`POST /org/nodes?as_of=YYYY-MM-DD`**
+**`POST /org/nodes?tree_as_of=YYYY-MM-DD`**
 - Form:
-  - 通用：`action`（可选，默认 `create`），`effective_date`（可选，默认 `as_of`）。
+  - 通用：`action`（可选，默认 `create`），`effective_date`（可选，默认 `tree_as_of`），`tree_as_of`（隐藏字段，用于回跳上下文）。
   - `create`：`name`（必填），`parent_id`（可选，8 位数字），`is_business_unit`（可选，bool）。
   - `rename`：`org_id`（必填，8 位数字），`new_name`（必填）。
   - `move`：`org_id`（必填，8 位数字），`new_parent_id`（可选，8 位数字）。
   - `disable`：`org_id`（必填，8 位数字）。
   - `set_business_unit`：`org_id`（必填，8 位数字），`is_business_unit`（可选，bool）。
-- Response: 303 重定向到 `/org/nodes?as_of=<effective_date>`；校验失败返回 HTML 错误提示。
+- Response: 303 重定向到 `/org/nodes?tree_as_of=<tree_as_of>`；校验失败返回 HTML 错误提示。
 
 **`GET /org/snapshot?as_of=YYYY-MM-DD[&created_id=...]`**
 - Query: `as_of`（必填；缺失时 302 重定向到当日 UTC 日期），`created_id`（可选）。

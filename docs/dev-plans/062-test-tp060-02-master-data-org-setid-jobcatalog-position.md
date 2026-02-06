@@ -132,8 +132,8 @@
 
 ### 6.1 OrgUnit：`/org/nodes`（UI）
 
-- `GET /org/nodes?as_of=YYYY-MM-DD`：展示节点列表与创建表单。
-- `POST /org/nodes?as_of=YYYY-MM-DD`：创建节点（成功后 `303` 跳回 `/org/nodes?as_of=<effective_date>`）。
+- `GET /org/nodes?tree_as_of=YYYY-MM-DD`：展示节点列表与创建表单。
+- `POST /org/nodes?tree_as_of=YYYY-MM-DD`：创建节点（成功后 `303` 跳回 `/org/nodes?tree_as_of=<tree_as_of>`）。
 - 关键字段：
   - `effective_date`（默认：`as_of`；必须是 `YYYY-MM-DD`）
   - `parent_id`（可空）
@@ -192,7 +192,7 @@
 
 ### 7.1 OrgUnit：创建与可见
 
-1. [ ] 打开：`/org/nodes?as_of=2026-01-01`
+1. [ ] 打开：`/org/nodes?tree_as_of=2026-01-01`
 2. [ ] 确认 Root（若不存在则创建；若已存在则记录并复用）
    - 表单：`effective_date=2026-01-01`，`parent_id=`（空），`name=Bugs & Blossoms Co., Ltd.`
    - 断言：Root 在列表可见，并能看到其 `org_code`
@@ -314,7 +314,7 @@
 ## 8. 验收证据（最小）
 
 - OrgUnit：
-  - `/org/nodes?as_of=2026-01-01` 页面证据（Root + 5 节点可见）
+  - `/org/nodes?tree_as_of=2026-01-01` 页面证据（Root + 5 节点可见）
   - 记录表：`root_org_code` + 5 个 L1 `org_code`
 - SetID：
   - `/org/setid?as_of=2026-01-01` 页面证据（包含 `S2601`，以及绑定：Root→`DEFLT`、`R&D`→`S2601`、`Sales`→`S2602`）

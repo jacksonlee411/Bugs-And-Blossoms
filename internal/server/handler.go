@@ -263,7 +263,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		writePage(w, r, `<h1>Home</h1>`+
 			`<p>Pick a module:</p>`+
 			`<ul>`+
-			`<li><a href="/org/nodes?as_of=`+asOf+`" hx-get="/org/nodes?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit")+`</a></li>`+
+			`<li><a href="/org/nodes?tree_as_of=`+asOf+`" hx-get="/org/nodes?tree_as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit")+`</a></li>`+
 			`<li><a href="/org/snapshot?as_of=`+asOf+`" hx-get="/org/snapshot?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit_snapshot")+`</a></li>`+
 			`<li><a href="/org/setid?as_of=`+asOf+`" hx-get="/org/setid?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_setid")+`</a></li>`+
 			`<li><a href="/org/job-catalog?as_of=`+asOf+`" hx-get="/org/job-catalog?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_jobcatalog")+`</a></li>`+
@@ -551,7 +551,7 @@ func pathHasPrefixSegment(path, prefix string) bool {
 func renderNav(r *http.Request, asOf string) string {
 	l := lang(r)
 	return `<nav><ul>` +
-		`<li><a href="/org/nodes?as_of=` + asOf + `" hx-get="/org/nodes?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit") + `</a></li>` +
+		`<li><a href="/org/nodes?tree_as_of=` + asOf + `" hx-get="/org/nodes?tree_as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit") + `</a></li>` +
 		`<li><a href="/org/snapshot?as_of=` + asOf + `" hx-get="/org/snapshot?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit_snapshot") + `</a></li>` +
 		`<li><a href="/org/setid?as_of=` + asOf + `" hx-get="/org/setid?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_setid") + `</a></li>` +
 		`<li><a href="/org/job-catalog?as_of=` + asOf + `" hx-get="/org/job-catalog?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +

@@ -157,7 +157,7 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
   await expect(pageA.locator("#topbar").getByText("有效日期", { exact: true })).toBeVisible();
   await expect(pageA.getByRole("link", { name: "组织架构", exact: true })).toBeVisible();
 
-  await pageA.goto(`/org/nodes?as_of=${asOf}`);
+  await pageA.goto(`/org/nodes?tree_as_of=${asOf}`);
   await expect(pageA.locator("#topbar").getByText("有效日期", { exact: true })).toBeVisible();
 
   await pageA.getByRole("link", { name: "EN" }).click();
@@ -216,10 +216,10 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
   });
   expect(viewerLoginResp.status()).toBe(302);
 
-  const viewerOrgGet = await tenantAViewerContext.request.get(`/org/nodes?as_of=${asOf}`);
+  const viewerOrgGet = await tenantAViewerContext.request.get(`/org/nodes?tree_as_of=${asOf}`);
   expect(viewerOrgGet.status()).toBe(200);
 
-  const viewerOrgPost = await tenantAViewerContext.request.post(`/org/nodes?as_of=${asOf}`, {
+  const viewerOrgPost = await tenantAViewerContext.request.post(`/org/nodes?tree_as_of=${asOf}`, {
     headers: { Accept: "application/json" },
     form: { name: `TP060-01 Forbidden ${runID}` },
     maxRedirects: 0

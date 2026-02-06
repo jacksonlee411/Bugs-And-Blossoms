@@ -397,7 +397,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		"/ui/flash?as_of=2026-01-01",
 		"/ui/nav?as_of=2026-01-01",
 		"/ui/topbar?as_of=2026-01-01",
-		"/org/nodes?as_of=2026-01-01",
+		"/org/nodes?tree_as_of=2026-01-01",
 		"/org/snapshot?as_of=2026-01-01",
 		"/org/setid?as_of=2026-01-01",
 		"/org/job-catalog?as_of=2026-01-01",
@@ -473,7 +473,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("org snapshot post status=%d", recOrgSnapshotPost.Code)
 	}
 
-	reqCreate := httptest.NewRequest(http.MethodPost, "/org/nodes", strings.NewReader("org_code=ORG-1&name=NodeA"))
+	reqCreate := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-01", strings.NewReader("org_code=ORG-1&name=NodeA"))
 	reqCreate.Host = "localhost:8080"
 	reqCreate.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	reqCreate.AddCookie(session)
@@ -483,7 +483,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("org create status=%d", recCreate.Code)
 	}
 
-	reqChildren := httptest.NewRequest(http.MethodGet, "/org/nodes/children?as_of=2026-01-01&parent_id=10000000", nil)
+	reqChildren := httptest.NewRequest(http.MethodGet, "/org/nodes/children?tree_as_of=2026-01-01&parent_id=10000000", nil)
 	reqChildren.Host = "localhost:8080"
 	reqChildren.AddCookie(session)
 	recChildren := httptest.NewRecorder()
@@ -492,7 +492,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("org children status=%d", recChildren.Code)
 	}
 
-	reqDetails := httptest.NewRequest(http.MethodGet, "/org/nodes/details?as_of=2026-01-01&org_id=10000000", nil)
+	reqDetails := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-01&org_id=10000000", nil)
 	reqDetails.Host = "localhost:8080"
 	reqDetails.AddCookie(session)
 	recDetails := httptest.NewRecorder()
@@ -501,7 +501,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("org details status=%d", recDetails.Code)
 	}
 
-	reqSearch := httptest.NewRequest(http.MethodGet, "/org/nodes/search?as_of=2026-01-01&query=ORG-1", nil)
+	reqSearch := httptest.NewRequest(http.MethodGet, "/org/nodes/search?tree_as_of=2026-01-01&query=ORG-1", nil)
 	reqSearch.Host = "localhost:8080"
 	reqSearch.AddCookie(session)
 	recSearch := httptest.NewRecorder()
@@ -861,7 +861,7 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("org units corrections status=%d", recOrgCorrect.Code)
 	}
 
-	reqView := httptest.NewRequest(http.MethodGet, "/org/nodes/view?as_of=2026-01-01&org_id="+node.ID, nil)
+	reqView := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-01&org_id="+node.ID, nil)
 	reqView.Host = "localhost:8080"
 	reqView.Header.Set("HX-Request", "true")
 	reqView.AddCookie(session)

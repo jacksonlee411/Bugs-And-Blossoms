@@ -91,7 +91,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   await page.getByRole("button", { name: "Login" }).click();
   await expect(page).toHaveURL(/\/app\?as_of=\d{4}-\d{2}-\d{2}$/);
 
-  await page.goto(`/org/nodes?as_of=${asOf}`);
+  await page.goto(`/org/nodes?tree_as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("OrgUnit Details");
 
   const setBusinessUnitFlag = async (form, enabled) => {
@@ -116,7 +116,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
 
   const openCreateForm = async () => {
     await page.locator(".org-node-create-btn").click();
-    const form = page.locator(`#org-node-details form[method="POST"][action="/org/nodes?as_of=${asOf}"]`).first();
+    const form = page.locator(`#org-node-details form[method="POST"][action="/org/nodes?tree_as_of=${asOf}"]`).first();
     await expect(form).toBeVisible();
     return form;
   };

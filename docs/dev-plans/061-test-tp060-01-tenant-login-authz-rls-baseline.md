@@ -71,7 +71,7 @@
 | 登录成功建立 session | `t-060.localhost:8080` | POST | `/login` | 302 `Location=/app?as_of=...` + `Set-Cookie: sid=...` | Network/`curl -i` 记录 `Set-Cookie` |
 | 跨租户 Host/Session 隔离 | `t-060b.localhost:8080` | GET | `/app?as_of=2026-01-01` | 302 `Location=/login` + 清 `sid` cookie | 记录 `Location` + `Set-Cookie`（MaxAge<0） |
 | 跨租户数据隔离（确定性断言） | `t-060.localhost:8080` | GET | `/person/api/persons:by-pernr?pernr=201` | 404 JSON `code=PERSON_NOT_FOUND` | 记录响应 JSON |
-| Authz 可拒绝（只读 403） | `t-060.localhost:8080` | POST | `/org/nodes?as_of=2026-01-01` | 403（可选：JSON `code=forbidden`） | 浏览器提示/或 `Accept: application/json` |
+| Authz 可拒绝（只读 403） | `t-060.localhost:8080` | POST | `/org/nodes?tree_as_of=2026-01-01` | 403（可选：JSON `code=forbidden`） | 浏览器提示/或 `Accept: application/json` |
 
 ## 4. 数据准备要求（最小集）
 
@@ -125,7 +125,7 @@
 4. [X] **Tenant App：登录与导航可发现**
    - 访问 `http://t-060.localhost:8080/login` 登录成功（302）并记录 `Set-Cookie: sid=...`。
    - 访问 `http://t-060.localhost:8080/app?as_of=2026-01-01`，确保 UI 壳可见。
-   - 抽样 2 页验证中英文切换与导航入口可见（建议：`/org/nodes?as_of=2026-01-01` 与 `/person/persons?as_of=2026-01-01`）。
+   - 抽样 2 页验证中英文切换与导航入口可见（建议：`/org/nodes?tree_as_of=2026-01-01` 与 `/person/persons?as_of=2026-01-01`）。
 5. [X] **Tenancy fail-closed（错误 Host）**
    - 访问 `http://t-060-nope.localhost:8080/login` 必须 404（可选：用 `Accept: application/json` 断言 `code=tenant_not_found`）。
 6. [X] **跨租户隔离（Host/Session）**
@@ -137,9 +137,9 @@
    - （可选，用户可见性证据）在 `T060` 打开 `http://t-060.localhost:8080/person/persons?as_of=2026-01-01`，确认列表不出现 `pernr=201`。
 8. [X] **Authz 可拒绝（只读 403）**
    - 前置：存在“只读角色”且可分配到某个 principal（见 §4.4）；否则将本步标记为阻塞并记录问题。
-   - 以只读角色访问 `GET /org/nodes?as_of=2026-01-01`：
+   - 以只读角色访问 `GET /org/nodes?tree_as_of=2026-01-01`：
      - 期望：200（read 允许）。
-   - 以只读角色提交任一 POST/ADMIN 动作（示例：`POST /org/nodes?as_of=2026-01-01` 创建节点）：
+   - 以只读角色提交任一 POST/ADMIN 动作（示例：`POST /org/nodes?tree_as_of=2026-01-01` 创建节点）：
      - 期望：403（可选：用 `Accept: application/json` 断言 `code=forbidden`）。
 
 ## 6. 验收证据（最小）

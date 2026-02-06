@@ -148,19 +148,19 @@ $$;
 > 本节在不改变既有路由的前提下，**冻结字段名与参数名**；路径命名仍需遵循 `DEV-PLAN-017`。
 
 #### 5.2.1 UI/HTMX（RouteClassUI）
-**`GET /org/nodes?as_of=YYYY-MM-DD`**
-- Query: `as_of`（必填；缺失时 302 重定向到当日 UTC 日期）。
+**`GET /org/nodes?tree_as_of=YYYY-MM-DD`**
+- Query: `tree_as_of`（必填；缺失/非法时 302 重定向到当日 UTC 日期）。
 - Response: HTML 页面（列表与表单中仅展示/提交 `org_code`）。
 
-**`POST /org/nodes?as_of=YYYY-MM-DD`**
+**`POST /org/nodes?tree_as_of=YYYY-MM-DD`**
 - Form（字段名冻结为 `org_code` / `parent_code` / `new_parent_code`，不再出现 `org_id`）：  
-  - 通用：`action`（可选，默认 `create`），`effective_date`（可选，默认 `as_of`）。  
+  - 通用：`action`（可选，默认 `create`），`effective_date`（可选，默认 `tree_as_of`），`tree_as_of`（隐藏字段，用于回跳上下文）。  
   - `create`：`org_code`（必填，1~64；允许空格/\\t/全角/中文标点，服务端 `upper` 归一化）、`name`（必填），`parent_code`（可选），`is_business_unit`（可选，bool）。  
   - `rename`：`org_code`（必填），`new_name`（必填）。  
   - `move`：`org_code`（必填），`new_parent_code`（可选）。  
   - `disable`：`org_code`（必填）。  
   - `set_business_unit`：`org_code`（必填），`is_business_unit`（必填，bool）。  
-- Response: 303 重定向到 `/org/nodes?as_of=<effective_date>`；校验失败返回 HTML 错误提示。
+- Response: 303 重定向到 `/org/nodes?tree_as_of=<tree_as_of>`；校验失败返回 HTML 错误提示。
 
 #### 5.2.2 Internal API（RouteClassInternalAPI）
 **`POST /org/api/org-units`（创建示例）**  
