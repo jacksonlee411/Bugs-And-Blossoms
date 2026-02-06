@@ -844,7 +844,7 @@ func (s *orgUnitPGStore) MaxEffectiveDateOnOrBefore(ctx context.Context, tenantI
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
-	if _, err := tx.Exec(ctx, `SELECT set_config(app.current_tenant, $1, true);`, tenantID); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
 		return "", false, err
 	}
 
@@ -874,7 +874,7 @@ func (s *orgUnitPGStore) MinEffectiveDate(ctx context.Context, tenantID string) 
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
-	if _, err := tx.Exec(ctx, `SELECT set_config(app.current_tenant, $1, true);`, tenantID); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
 		return "", false, err
 	}
 
@@ -1146,7 +1146,7 @@ func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID 
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
-	if _, err := tx.Exec(ctx, `SELECT set_config(app.current_tenant, $1, true);`, tenantID); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
 		return err
 	}
 
