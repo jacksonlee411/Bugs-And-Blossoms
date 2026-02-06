@@ -39,16 +39,6 @@
               "name": "spacer",
               "width": "fill_container",
               "height": 1
-            },
-            {
-              "type": "text",
-              "id": "lSTcD",
-              "name": "asof",
-              "fill": "#64748B",
-              "content": "as_of: 2026-01-01",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "normal"
             }
           ]
         },
@@ -91,6 +81,47 @@
                   "fontFamily": "Inter",
                   "fontSize": 12,
                   "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "J6yQq",
+                  "name": "treeAsOf",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "rIcty",
+                      "name": "treeAsOfLabel",
+                      "fill": "#0F172A",
+                      "content": "生效日期",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QxYz1",
+                      "name": "treeAsOfInput",
+                      "width": "fill_container",
+                      "height": 32,
+                      "fill": "#F8FAFC",
+                      "cornerRadius": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "E2Ft1",
+                          "fill": "#0F172A",
+                          "content": "2026-01-03",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "frame",
@@ -1518,16 +1549,6 @@
               "name": "spacer",
               "width": "fill_container",
               "height": 1
-            },
-            {
-              "type": "text",
-              "id": "0BXWX",
-              "name": "asof",
-              "fill": "#64748B",
-              "content": "as_of: 2026-01-01",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "normal"
             }
           ]
         },
@@ -1570,6 +1591,47 @@
                   "fontFamily": "Inter",
                   "fontSize": 12,
                   "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "TYp8K",
+                  "name": "treeAsOf",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "IxprI",
+                      "name": "treeAsOfLabel",
+                      "fill": "#0F172A",
+                      "content": "生效日期",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "dtfA7",
+                      "name": "treeAsOfInput",
+                      "width": "fill_container",
+                      "height": 32,
+                      "fill": "#F8FAFC",
+                      "cornerRadius": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "m04mb",
+                          "fill": "#0F172A",
+                          "content": "2026-01-03",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "frame",
@@ -2998,16 +3060,6 @@
               "name": "spacer",
               "width": "fill_container",
               "height": 1
-            },
-            {
-              "type": "text",
-              "id": "bziOM",
-              "name": "asof",
-              "fill": "#64748B",
-              "content": "as_of: 2026-01-01",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "normal"
             }
           ]
         },
@@ -3050,6 +3102,47 @@
                   "fontFamily": "Inter",
                   "fontSize": 12,
                   "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "K3mZp",
+                  "name": "treeAsOf",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "aT9vL",
+                      "name": "treeAsOfLabel",
+                      "fill": "#0F172A",
+                      "content": "生效日期",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "N7uQ2",
+                      "name": "treeAsOfInput",
+                      "width": "fill_container",
+                      "height": 32,
+                      "fill": "#F8FAFC",
+                      "cornerRadius": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "m3Rb8",
+                          "fill": "#0F172A",
+                          "content": "2026-01-03",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "frame",
@@ -4479,16 +4572,6 @@
               "name": "spacer",
               "width": "fill_container",
               "height": 1
-            },
-            {
-              "type": "text",
-              "id": "vp3Hj",
-              "name": "asof",
-              "fill": "#64748B",
-              "content": "as_of: 2026-01-01",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "normal"
             }
           ]
         },
@@ -4531,6 +4614,47 @@
                   "fontFamily": "Inter",
                   "fontSize": 12,
                   "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "d2LpQ",
+                  "name": "treeAsOf",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "u4Ke9",
+                      "name": "treeAsOfLabel",
+                      "fill": "#0F172A",
+                      "content": "生效日期",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "r8Xf3",
+                      "name": "treeAsOfInput",
+                      "width": "fill_container",
+                      "height": 32,
+                      "fill": "#F8FAFC",
+                      "cornerRadius": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "p6Zm1",
+                          "fill": "#0F172A",
+                          "content": "2026-01-03",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "frame",
@@ -5974,16 +6098,6 @@
               "name": "spacer",
               "width": "fill_container",
               "height": 1
-            },
-            {
-              "type": "text",
-              "id": "cwEHc",
-              "name": "asof",
-              "fill": "#64748B",
-              "content": "as_of: 2026-01-01",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "normal"
             }
           ]
         },
@@ -6026,6 +6140,47 @@
                   "fontFamily": "Inter",
                   "fontSize": 12,
                   "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "sV7hQ",
+                  "name": "treeAsOf",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "w2Tk9",
+                      "name": "treeAsOfLabel",
+                      "fill": "#0F172A",
+                      "content": "生效日期",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "g4Rj1",
+                      "name": "treeAsOfInput",
+                      "width": "fill_container",
+                      "height": 32,
+                      "fill": "#F8FAFC",
+                      "cornerRadius": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n8Pc2",
+                          "fill": "#0F172A",
+                          "content": "2026-01-03",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "frame",
@@ -7455,16 +7610,6 @@
               "name": "spacer",
               "width": "fill_container",
               "height": 1
-            },
-            {
-              "type": "text",
-              "id": "aKLq0",
-              "name": "asof",
-              "fill": "#64748B",
-              "content": "as_of: 2026-01-01",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "normal"
             }
           ]
         },
@@ -7507,6 +7652,47 @@
                   "fontFamily": "Inter",
                   "fontSize": 12,
                   "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "f1WqL",
+                  "name": "treeAsOf",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "y9Bp3",
+                      "name": "treeAsOfLabel",
+                      "fill": "#0F172A",
+                      "content": "生效日期",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "h6Mn8",
+                      "name": "treeAsOfInput",
+                      "width": "fill_container",
+                      "height": 32,
+                      "fill": "#F8FAFC",
+                      "cornerRadius": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "c2Ds7",
+                          "fill": "#0F172A",
+                          "content": "2026-01-03",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "frame",
@@ -8936,16 +9122,6 @@
               "name": "spacer",
               "width": "fill_container",
               "height": 1
-            },
-            {
-              "type": "text",
-              "id": "1oKwC",
-              "name": "asof",
-              "fill": "#64748B",
-              "content": "as_of: 2026-01-01",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "normal"
             }
           ]
         },
@@ -8988,6 +9164,47 @@
                   "fontFamily": "Inter",
                   "fontSize": 12,
                   "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "q4JzT",
+                  "name": "treeAsOf",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "e7Va5",
+                      "name": "treeAsOfLabel",
+                      "fill": "#0F172A",
+                      "content": "生效日期",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "x3Lu9",
+                      "name": "treeAsOfInput",
+                      "width": "fill_container",
+                      "height": 32,
+                      "fill": "#F8FAFC",
+                      "cornerRadius": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "b5Nk1",
+                          "fill": "#0F172A",
+                          "content": "2026-01-03",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "frame",
