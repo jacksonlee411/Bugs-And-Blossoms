@@ -861,6 +861,16 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("org units corrections status=%d", recOrgCorrect.Code)
 	}
 
+	recOrgRescind := postJSON("/org/api/org-units/rescinds", `{"org_code":"ORG2","effective_date":"2026-01-01","request_id":"r10","reason":"bad-data"}`, nil)
+	if recOrgRescind.Code != http.StatusOK {
+		t.Fatalf("org units rescinds status=%d", recOrgRescind.Code)
+	}
+
+	recOrgRescindOrg := postJSON("/org/api/org-units/rescinds/org", `{"org_code":"ORG2","request_id":"r11","reason":"bad-org"}`, nil)
+	if recOrgRescindOrg.Code != http.StatusOK {
+		t.Fatalf("org units rescinds org status=%d", recOrgRescindOrg.Code)
+	}
+
 	reqView := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-01&org_id="+node.ID, nil)
 	reqView.Host = "localhost:8080"
 	reqView.Header.Set("HX-Request", "true")

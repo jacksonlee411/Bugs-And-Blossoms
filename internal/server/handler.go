@@ -291,10 +291,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgNodes(w, r, orgStore)
+		handleOrgNodesWithWriteService(w, r, orgStore, orgUnitWriteService)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/nodes", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgNodes(w, r, orgStore)
+		handleOrgNodesWithWriteService(w, r, orgStore, orgUnitWriteService)
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes/children", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgNodeChildren(w, r, orgStore)
@@ -415,6 +415,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/corrections", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsCorrectionsAPI(w, r, orgUnitWriteService)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/rescinds", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsRescindsAPI(w, r, orgUnitWriteService)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/rescinds/org", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsRescindsOrgAPI(w, r, orgUnitWriteService)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/set-business-unit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsBusinessUnitAPI(w, r, orgStore)

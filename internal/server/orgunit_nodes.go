@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
@@ -79,6 +80,37 @@ type OrgUnitNodeEffectiveDateCorrector interface {
 }
 
 var errOrgUnitNotFound = errors.New("org_unit_not_found")
+
+const (
+	orgNodeDeleteRecordReason = "UI 删除记录（错误数据）"
+	orgNodeDeleteOrgReason    = "UI 删除组织（错误建档）"
+)
+
+func orgNodeWriteErrorMessage(err error) string {
+	code := strings.TrimSpace(err.Error())
+	messages := map[string]string{
+		"ORG_CODE_INVALID":                   "组织编码无效",
+		"ORG_CODE_NOT_FOUND":                 "组织编码不存在",
+		"ORG_EVENT_NOT_FOUND":                "未找到该生效日记录",
+		"ORG_REQUEST_ID_CONFLICT":            "请求编号冲突，请刷新后重试",
+		"ORG_REPLAY_FAILED":                  "重放失败，操作已回滚",
+		"ORG_ROOT_DELETE_FORBIDDEN":          "根组织不允许删除",
+		"ORG_HAS_CHILDREN_CANNOT_DELETE":     "存在下级组织，不能删除",
+		"ORG_HAS_DEPENDENCIES_CANNOT_DELETE": "存在下游依赖，不能删除",
+		"ORG_EVENT_RESCINDED":                "该记录已删除",
+		"EFFECTIVE_DATE_INVALID":             "生效日期无效",
+		"ORG_INVALID_ARGUMENT":               "请求参数不完整",
+	}
+	if msg, ok := messages[code]; ok {
+		return msg
+	}
+	return err.Error()
+}
+
+func newOrgNodeRequestID(prefix string) string {
+	id, _ := uuidv7.NewString()
+	return prefix + ":" + id
+}
 
 func canEditOrgNodes(ctx context.Context) bool {
 	p, ok := currentPrincipal(ctx)
@@ -1559,6 +1591,10 @@ func (s *orgUnitMemoryStore) MinEffectiveDate(_ context.Context, tenantID string
 }
 
 func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
+	handleOrgNodesWithWriteService(w, r, store, nil)
+}
+
+func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, store OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -1661,7 +1697,7 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			return strconv.Itoa(orgID), true
 		}
 
-		if action == "add_record" || action == "insert_record" || action == "delete_record" {
+		if action == "add_record" || action == "insert_record" || action == "delete_record" || action == "delete_org" {
 			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
 			if effectiveDate == "" {
 				nodes, errMsg := listNodes("effective_date is required")
@@ -1796,8 +1832,39 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 			}
 
 			if action == "delete_record" {
-				if err := store.DisableNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID); err != nil {
-					nodes, errMsg := listNodes(err.Error())
+				requestID := strings.TrimSpace(r.Form.Get("request_id"))
+				if requestID == "" {
+					requestID = newOrgNodeRequestID("ui:orgunit:rescind_event")
+				}
+				reason := strings.TrimSpace(r.Form.Get("reason"))
+				if reason == "" {
+					reason = orgNodeDeleteRecordReason
+				}
+				if _, err := writeSvc.RescindRecord(r.Context(), tenant.ID, orgunitservices.RescindRecordOrgUnitRequest{
+					OrgCode:             r.Form.Get("org_code"),
+					TargetEffectiveDate: effectiveDate,
+					RequestID:           requestID,
+					Reason:              reason,
+				}); err != nil {
+					nodes, errMsg := listNodes(orgNodeWriteErrorMessage(err))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					return
+				}
+			} else if action == "delete_org" {
+				requestID := strings.TrimSpace(r.Form.Get("request_id"))
+				if requestID == "" {
+					requestID = newOrgNodeRequestID("ui:orgunit:rescind_org")
+				}
+				reason := strings.TrimSpace(r.Form.Get("reason"))
+				if reason == "" {
+					reason = orgNodeDeleteOrgReason
+				}
+				if _, err := writeSvc.RescindOrg(r.Context(), tenant.ID, orgunitservices.RescindOrgUnitRequest{
+					OrgCode:   r.Form.Get("org_code"),
+					RequestID: requestID,
+					Reason:    reason,
+				}); err != nil {
+					nodes, errMsg := listNodes(orgNodeWriteErrorMessage(err))
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
 					return
 				}
@@ -2175,9 +2242,10 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(`</div>`)
 	b.WriteString(`<div class="org-node-records-section is-danger">`)
 	b.WriteString(`<div class="org-node-records-section-title">危险操作</div>`)
-	b.WriteString(`<div class="org-node-records-section-hint">删除后不可恢复，请谨慎</div>`)
+	b.WriteString(`<div class="org-node-records-section-hint">该操作将删除错误数据（通过事件撤销实现），并立即重放版本；操作可审计，不可撤销。</div>`)
 	b.WriteString(`<div class="org-node-records-section-actions">`)
-	b.WriteString(`<button type="button" class="org-node-record-btn is-danger" data-action="delete_record"` + disabledAttr + `>删除记录</button>`)
+	b.WriteString(`<button type="button" class="org-node-record-btn is-danger" data-action="delete_record"` + disabledAttr + `>删除记录（错误数据）</button>`)
+	b.WriteString(`<button type="button" class="org-node-record-btn is-danger" data-action="delete_org"` + disabledAttr + `>删除组织（错误建档）</button>`)
 	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
@@ -2224,6 +2292,8 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(`<input type="hidden" name="tree_as_of" value="` + html.EscapeString(treeAsOf) + `" />`)
 	b.WriteString(`<input type="hidden" name="current_effective_date" value="` + html.EscapeString(currentEffectiveDate) + `" />`)
 	b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(details.OrgCode) + `" />`)
+	b.WriteString(`<input type="hidden" name="request_id" value="" />`)
+	b.WriteString(`<input type="hidden" name="reason" value="" />`)
 	b.WriteString(`<div class="org-node-record-stepper">`)
 	b.WriteString(`<span class="org-node-record-stepper-item" data-step="1">1 意图</span>`)
 	b.WriteString(`<span class="org-node-record-stepper-item" data-step="2">2 日期</span>`)
@@ -2914,7 +2984,8 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
     const recordActionConfig = {
       add_record: { title: "新增记录", hint: "新增记录将追加为最新版本", showFields: true, submit: "保存" },
       insert_record: { title: "插入记录", hint: "生效日需位于相邻记录之间（可早于所选记录）", showFields: true, submit: "保存" },
-      delete_record: { title: "删除记录", hint: "删除记录将停用该组织", showFields: false, submit: "删除" },
+      delete_record: { title: "删除记录（错误数据）", hint: "该操作将删除错误数据（通过事件撤销实现），并立即重放版本；操作可审计，不可撤销。", showFields: false, submit: "删除记录" },
+      delete_org: { title: "删除组织（错误建档）", hint: "该操作将删除错误建档组织（通过事件撤销实现），并立即重放版本；操作可审计，不可撤销。", showFields: false, submit: "删除组织" },
     };
 
     const parseDate = (value) => {
@@ -2977,7 +3048,8 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
     const recordActionLabelMap = {
       add_record: "新增记录",
       insert_record: "插入记录",
-      delete_record: "删除记录",
+      delete_record: "删除记录（错误数据）",
+      delete_org: "删除组织（错误建档）",
     };
 
     const recordChangeLabelMap = {
@@ -3034,8 +3106,8 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       const actionLabel = recordActionLabelMap[action] || "记录操作";
       const effectiveInput = form.querySelector("input[name=\"effective_date\"]");
       const effectiveDate = effectiveInput ? String(effectiveInput.value || "").trim() : "";
-      if (action === "delete_record") {
-        summary.textContent = "将执行：" + actionLabel + "，生效日期：" + (effectiveDate || "(未填写)") + "。删除后不可恢复。";
+      if (action === "delete_record" || action === "delete_org") {
+        summary.textContent = "将执行：" + actionLabel + "。该操作会通过事件撤销删除错误数据并立即重放，操作可审计且不可撤销。";
         return;
       }
       const changeSelect = form.querySelector("select[name=\"record_change_type\"]");
@@ -3142,7 +3214,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
         if (!parseDate(effectiveDate)) {
           return "effective_date 无效";
         }
-        if (!panel || action === "delete_record") {
+        if (!panel || action === "delete_record" || action === "delete_org") {
           return "";
         }
         const currentEffectiveDate = panel.dataset.currentEffectiveDate || "";
@@ -3357,6 +3429,12 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
                 EVENT_DATE_CONFLICT: "生效日期冲突",
                 REQUEST_DUPLICATE: "重复请求",
                 ORG_ENABLE_REQUIRED: "需要先启用组织",
+                ORG_REQUEST_ID_CONFLICT: "请求编号冲突，请刷新后重试",
+                ORG_REPLAY_FAILED: "重放失败，操作已回滚",
+                ORG_ROOT_DELETE_FORBIDDEN: "根组织不允许删除",
+                ORG_HAS_CHILDREN_CANNOT_DELETE: "存在下级组织，不能删除",
+                ORG_HAS_DEPENDENCIES_CANNOT_DELETE: "存在下游依赖，不能删除",
+                ORG_EVENT_RESCINDED: "该记录已删除",
               };
               const msg = (code && mapping[code]) ? mapping[code] : (message || "保存失败，请重试");
               setStatus(panel, "error", msg);
@@ -3416,8 +3494,11 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
           return;
         }
         const actionInput = form.querySelector("input[name=\"action\"]");
-        if (actionInput && actionInput.value === "delete_record") {
-          if (!window.confirm("确认删除该生效记录？")) {
+        if (actionInput && (actionInput.value === "delete_record" || actionInput.value === "delete_org")) {
+          const confirmText = actionInput.value === "delete_org"
+            ? "确认删除该组织（错误建档）？该操作会撤销该组织全部事件并立即重放，且不可撤销。"
+            : "确认删除该生效记录（错误数据）？该操作会撤销事件并立即重放，且不可撤销。";
+          if (!window.confirm(confirmText)) {
             event.preventDefault();
           }
         }

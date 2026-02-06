@@ -92,6 +92,67 @@ SELECT orgunit.submit_org_event_correction(
 	return correctionUUID, nil
 }
 
+func (s *OrgUnitPGStore) SubmitRescindEvent(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return "", err
+	}
+
+	var correctionUUID string
+	if err := tx.QueryRow(ctx, `
+SELECT orgunit.submit_org_event_rescind(
+  $1::uuid,
+  $2::int,
+  $3::date,
+  $4::text,
+  $5::text,
+  $6::uuid
+)
+`, tenantID, orgID, targetEffectiveDate, reason, requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
+		return "", err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+	return correctionUUID, nil
+}
+
+func (s *OrgUnitPGStore) SubmitRescindOrg(ctx context.Context, tenantID string, orgID int, reason string, requestID string, initiatorUUID string) (int, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return 0, err
+	}
+
+	var rescindedEvents int
+	if err := tx.QueryRow(ctx, `
+SELECT orgunit.submit_org_rescind(
+  $1::uuid,
+  $2::int,
+  $3::text,
+  $4::text,
+  $5::uuid
+)
+`, tenantID, orgID, reason, requestID, initiatorUUID).Scan(&rescindedEvents); err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return rescindedEvents, nil
+}
+
 func (s *OrgUnitPGStore) FindEventByUUID(ctx context.Context, tenantID string, eventUUID string) (types.OrgUnitEvent, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

@@ -13,6 +13,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
@@ -57,6 +59,15 @@ func TestCanEditOrgNodes(t *testing.T) {
 	}
 	if !canEditOrgNodes(withPrincipal(context.Background(), Principal{RoleSlug: " SUPERADMIN "})) {
 		t.Fatal("expected true for superadmin")
+	}
+}
+
+func TestOrgNodeWriteErrorMessage(t *testing.T) {
+	if got := orgNodeWriteErrorMessage(errors.New("ORG_REPLAY_FAILED")); got != "重放失败，操作已回滚" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := orgNodeWriteErrorMessage(errors.New("boom")); got != "boom" {
+		t.Fatalf("got=%q", got)
 	}
 }
 
@@ -852,7 +863,7 @@ func TestHandleOrgNodes_GET_HX(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -869,7 +880,7 @@ func TestHandleOrgNodes_GET_Success(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1018,7 +1029,7 @@ func TestHandleOrgNodes_POST_BadForm(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1064,7 +1075,7 @@ func TestHandleOrgNodes_POST_EmptyName(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1080,7 +1091,7 @@ func TestHandleOrgNodes_POST_Create_InvalidOrgCode(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1097,7 +1108,7 @@ func TestHandleOrgNodes_POST_SuccessRedirect(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1408,7 +1419,17 @@ func postOrgNodesForm(t *testing.T, store OrgUnitStore, body string) *httptest.R
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
+	return rec
+}
+
+func postOrgNodesFormWithWriteSvc(t *testing.T, store OrgUnitStore, writeSvc orgUnitWriteServiceStub, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+	handleOrgNodesWithWriteService(rec, req, store, writeSvc)
 	return rec
 }
 
@@ -1420,7 +1441,7 @@ func TestHandleOrgNodes_POST_Rename_UsesStore(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1443,7 +1464,7 @@ func TestHandleOrgNodes_POST_Rename_DefaultsEffectiveDateToAsOf(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1470,7 +1491,7 @@ func TestHandleOrgNodes_POST_SetBusinessUnit_InvalidFlag(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1497,7 +1518,7 @@ func TestHandleOrgNodes_POST_SetBusinessUnit_Success(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1523,7 +1544,7 @@ func TestHandleOrgNodes_POST_SetBusinessUnit_StoreError(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1540,7 +1561,7 @@ func TestHandleOrgNodes_POST_Rename_Error_ShowsErrorAndNodes(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1557,7 +1578,7 @@ func TestHandleOrgNodes_POST_Rename_StoreError(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1578,7 +1599,7 @@ func TestHandleOrgNodes_POST_Move_EmptyParent_AllowsEmpty(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1610,7 +1631,7 @@ func TestHandleOrgNodes_POST_Move_InvalidParent_ShowsError(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1632,7 +1653,7 @@ func TestHandleOrgNodes_POST_Move_StoreError(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1653,7 +1674,7 @@ func TestHandleOrgNodes_POST_Disable_StoreError(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1675,7 +1696,7 @@ func TestHandleOrgNodes_POST_SetBusinessUnit_ErrorFromStore(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1697,7 +1718,7 @@ func TestHandleOrgNodes_POST_Create_WithParentCode(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1726,7 +1747,7 @@ func TestHandleOrgNodes_POST_Create_ParentCodeResolveError(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1743,7 +1764,7 @@ func TestHandleOrgNodes_POST_Create_BadEffectiveDate(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1767,7 +1788,7 @@ func TestHandleOrgNodes_POST_Create_BusinessUnitFalse(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1788,7 +1809,7 @@ func TestHandleOrgNodes_POST_Create_InvalidBusinessUnitFlag(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1805,7 +1826,7 @@ func TestHandleOrgNodes_POST_Create_Error_ShowsError(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1822,7 +1843,7 @@ func TestHandleOrgNodes_POST_Move_UsesStore(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1842,7 +1863,7 @@ func TestHandleOrgNodes_POST_Disable_UsesStore(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1862,7 +1883,7 @@ func TestHandleOrgNodes_POST_Disable_BadEffectiveDate(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1882,7 +1903,7 @@ func TestHandleOrgNodes_POST_Move_Error_ShowsErrorAndNodes(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1899,7 +1920,7 @@ func TestHandleOrgNodes_POST_Disable_Error_ShowsErrorAndNodes(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1916,7 +1937,7 @@ func TestHandleOrgNodes_POST_MergesErrorHints(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1933,7 +1954,7 @@ func TestHandleOrgNodes_POST_DefaultsEffectiveDateToAsOf(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1950,7 +1971,7 @@ func TestHandleOrgNodes_POST_Rename_MissingOrgCode(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1967,7 +1988,7 @@ func TestHandleOrgNodes_POST_Rename_InvalidOrgCode(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -1984,7 +2005,7 @@ func TestHandleOrgNodes_POST_Rename_OrgCodeNotFound(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -2001,7 +2022,7 @@ func TestHandleOrgNodes_POST_Rename_MissingNewName(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -2016,7 +2037,7 @@ func TestHandleOrgNodes_GET_DefaultAsOf_UsesToday(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -2036,7 +2057,7 @@ func TestHandleOrgNodes_MethodNotAllowed(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -2049,11 +2070,27 @@ func TestHandleOrgNodes_POST_MissingTreeAsOf(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), "tree_as_of") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleOrgNodes_POST_InvalidTreeAsOfInForm(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", strings.NewReader("tree_as_of=bad&org_code=A001&name=Root"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+	rec := httptest.NewRecorder()
+
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "invalid tree_as_of") {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
 }
@@ -2065,7 +2102,7 @@ func TestHandleOrgNodes_CreateMissingOrgCode(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -2079,7 +2116,7 @@ func TestHandleOrgNodes_TenantMissing(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes?tree_as_of=2026-01-01", nil)
 	rec := httptest.NewRecorder()
 
-	handleOrgNodes(rec, req, store)
+	handleOrgNodesWithWriteService(rec, req, store, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
@@ -2760,27 +2797,87 @@ func TestHandleOrgNodes_RecordActions(t *testing.T) {
 			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
 		}
 	})
-	t.Run("delete_record disable error", func(t *testing.T) {
+	t.Run("delete_record rescind error", func(t *testing.T) {
 		store := &recordActionStore{versions: baseVersions}
-		store.disableErr = errors.New("disable")
-		rec := postOrgNodesForm(t, store, "action=delete_record&org_code=A001&effective_date=2026-01-01")
-		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "disable") {
+		writeSvc := orgUnitWriteServiceStub{
+			rescindRecordFn: func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+				return orgunittypes.OrgUnitResult{}, errors.New("ORG_REPLAY_FAILED")
+			},
+		}
+		rec := postOrgNodesFormWithWriteSvc(t, store, writeSvc, "action=delete_record&org_code=A001&effective_date=2026-01-01")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "重放失败") {
 			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
 		}
 	})
 	t.Run("delete_record success", func(t *testing.T) {
 		store := &recordActionStore{versions: baseVersions}
-		rec := postOrgNodesForm(t, store, "action=delete_record&org_code=A001&effective_date=2026-01-01")
+		called := 0
+		writeSvc := orgUnitWriteServiceStub{
+			rescindRecordFn: func(_ context.Context, _ string, req orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+				called++
+				if req.OrgCode != "A001" {
+					t.Fatalf("org_code=%q", req.OrgCode)
+				}
+				if req.TargetEffectiveDate != "2026-01-01" {
+					t.Fatalf("effective_date=%q", req.TargetEffectiveDate)
+				}
+				if strings.TrimSpace(req.RequestID) == "" {
+					t.Fatalf("missing request_id")
+				}
+				if strings.TrimSpace(req.Reason) == "" {
+					t.Fatalf("missing reason")
+				}
+				return orgunittypes.OrgUnitResult{}, nil
+			},
+		}
+		rec := postOrgNodesFormWithWriteSvc(t, store, writeSvc, "action=delete_record&org_code=A001&effective_date=2026-01-01")
 		if rec.Code != http.StatusSeeOther {
 			t.Fatalf("status=%d", rec.Code)
 		}
-		if store.disableCalled != 1 {
-			t.Fatalf("disable called=%d", store.disableCalled)
+		if called != 1 {
+			t.Fatalf("called=%d", called)
 		}
 		if loc := rec.Header().Get("Location"); loc != "/org/nodes?tree_as_of=2026-01-06" {
 			t.Fatalf("location=%q", loc)
 		}
 	})
+	t.Run("delete_org success", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		called := 0
+		writeSvc := orgUnitWriteServiceStub{
+			rescindOrgFn: func(_ context.Context, _ string, req orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+				called++
+				if req.OrgCode != "A001" {
+					t.Fatalf("org_code=%q", req.OrgCode)
+				}
+				if strings.TrimSpace(req.RequestID) == "" || strings.TrimSpace(req.Reason) == "" {
+					t.Fatalf("request or reason empty")
+				}
+				return orgunittypes.OrgUnitResult{Fields: map[string]any{"rescinded_events": 2}}, nil
+			},
+		}
+		rec := postOrgNodesFormWithWriteSvc(t, store, writeSvc, "action=delete_org&org_code=A001&effective_date=2026-01-01")
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		}
+		if called != 1 {
+			t.Fatalf("called=%d", called)
+		}
+	})
+
+	t.Run("delete_org conflict", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		writeSvc := orgUnitWriteServiceStub{
+			rescindOrgFn: func(_ context.Context, _ string, _ orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+				return orgunittypes.OrgUnitResult{}, errors.New("ORG_ROOT_DELETE_FORBIDDEN")
+			},
+		}
+		rec := postOrgNodesFormWithWriteSvc(t, store, writeSvc, "action=delete_org&org_code=A001&effective_date=2026-01-01")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "根组织不允许删除") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("add_record details error", func(t *testing.T) {
 		store := &recordActionStore{versions: baseVersions, detailsErr: errors.New("details")}
 		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11")
