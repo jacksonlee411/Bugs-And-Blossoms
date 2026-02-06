@@ -18,6 +18,7 @@ type stubTx struct {
 	execErr    error
 	execErrAt  int
 	execN      int
+	execSQLs   []string
 	queryErr   error
 	queryErrAt int
 	queryN     int
@@ -53,7 +54,8 @@ func (t *stubTx) Prepare(context.Context, string, string) (*pgconn.StatementDesc
 }
 func (t *stubTx) Conn() *pgx.Conn { return nil }
 
-func (t *stubTx) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
+func (t *stubTx) Exec(_ context.Context, sql string, _ ...any) (pgconn.CommandTag, error) {
+	t.execSQLs = append(t.execSQLs, sql)
 	t.execN++
 	if t.execErr != nil {
 		at := t.execErrAt
