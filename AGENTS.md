@@ -179,6 +179,8 @@ modules/{module}/
 - DEV-PLAN-075：OrgUnit 生效日期不允许回溯的限制评估：`docs/dev-plans/075-orgunit-effective-date-backdating-assessment.md`
 - DEV-PLAN-075 执行日志：`docs/dev-records/dev-plan-075-execution-log.md`
 - DEV-PLAN-075A：OrgUnit 记录新增/插入 UI 与可编辑字段问题记录：`docs/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
+- DEV-PLAN-075B：Root Unit A 生效日回溯可行性调查与修复方案：`docs/dev-plans/075b-orgunit-root-backdating-feasibility-and-fix-plan.md`
+- DEV-PLAN-075B 执行日志：`docs/dev-records/dev-plan-075b-execution-log.md`
 - DEV-PLAN-076：OrgUnit 版本切换导致选中组织丢失问题与修复方案：`docs/dev-plans/076-orgunit-version-switch-selection-retention.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`

@@ -780,6 +780,61 @@ func TestOrgUnitPGStore_CorrectNodeEffectiveDate_Success(t *testing.T) {
 	}
 }
 
+func TestOrgUnitPGStore_UsesQuotedCurrentTenantKey(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("MaxEffectiveDateOnOrBefore", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)}}}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return tx, nil
+		})}
+
+		if _, _, err := store.MaxEffectiveDateOnOrBefore(ctx, "t1", "2026-01-02"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if len(tx.execSQLs) == 0 {
+			t.Fatal("expected set_config call")
+		}
+		if got := tx.execSQLs[0]; !strings.Contains(got, "set_config('app.current_tenant', $1, true)") {
+			t.Fatalf("unexpected sql: %q", got)
+		}
+	})
+
+	t.Run("MinEffectiveDate", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return tx, nil
+		})}
+
+		if _, _, err := store.MinEffectiveDate(ctx, "t1"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if len(tx.execSQLs) == 0 {
+			t.Fatal("expected set_config call")
+		}
+		if got := tx.execSQLs[0]; !strings.Contains(got, "set_config('app.current_tenant', $1, true)") {
+			t.Fatalf("unexpected sql: %q", got)
+		}
+	})
+
+	t.Run("CorrectNodeEffectiveDate", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{"c1"}}}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return tx, nil
+		})}
+
+		if err := store.CorrectNodeEffectiveDate(ctx, "t1", 10000001, "2026-01-01", "2025-12-31", "r1"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if len(tx.execSQLs) == 0 {
+			t.Fatal("expected set_config call")
+		}
+		if got := tx.execSQLs[0]; !strings.Contains(got, "set_config('app.current_tenant', $1, true)") {
+			t.Fatalf("unexpected sql: %q", got)
+		}
+	})
+}
+
 func TestHandleOrgNodes_MissingTenant(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes", nil)
