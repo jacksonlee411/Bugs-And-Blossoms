@@ -1116,7 +1116,7 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("handlePositions legacy position_id query", func(t *testing.T) {
+	t.Run("handlePositions rejects deprecated position_id query", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&position_id=pos1", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
@@ -1126,7 +1126,7 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("handlePositions legacy org_unit_id query", func(t *testing.T) {
+	t.Run("handlePositions rejects deprecated org_unit_id query", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01&org_unit_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
@@ -1220,7 +1220,7 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("handlePositions post legacy field", func(t *testing.T) {
+	t.Run("handlePositions post deprecated field", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("org_unit_id=10000001"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
@@ -1690,7 +1690,7 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("handlePositionsAPI legacy query field", func(t *testing.T) {
+	t.Run("handlePositionsAPI deprecated query field", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/positions?as_of=2026-01-01&org_unit_id=10000001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -1865,7 +1865,7 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("handlePositionsAPI post legacy field", func(t *testing.T) {
+	t.Run("handlePositionsAPI post deprecated field", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"position_id":"pos1","org_code":"ORG-1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -2161,7 +2161,7 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("handleAssignmentsAPI post legacy field", func(t *testing.T) {
+	t.Run("handleAssignmentsAPI post deprecated field", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/assignments?as_of=2026-01-01", bytes.NewReader([]byte(`{"person_uuid":"p1","position_id":"pos1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -2304,7 +2304,7 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("handleAssignmentEventsCorrectAPI legacy field", func(t *testing.T) {
+	t.Run("handleAssignmentEventsCorrectAPI deprecated field", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:correct", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","replacement_payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -2352,7 +2352,7 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("handleAssignmentEventsRescindAPI legacy field", func(t *testing.T) {
+	t.Run("handleAssignmentEventsRescindAPI deprecated field", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/assignment-events:rescind", strings.NewReader(`{"assignment_id":"a1","target_effective_date":"2026-01-01","payload":{}}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -2513,7 +2513,7 @@ func TestStaffingHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("handleAssignments post legacy field", func(t *testing.T) {
+	t.Run("handleAssignments post deprecated field", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01&person_uuid=p1", strings.NewReader("position_id=pos1&person_uuid=p1"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))

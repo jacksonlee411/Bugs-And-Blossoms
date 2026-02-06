@@ -16,6 +16,7 @@ exclude_globs=(
   --glob '!**/yarn.lock'
   --glob '!scripts/ci/**'
   --glob '!scripts/ci/check-no-legacy.sh'
+  --glob '!internal/server/assets/shoelace/vendor/**'
 )
 
 include_globs=(

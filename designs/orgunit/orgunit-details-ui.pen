@@ -527,70 +527,221 @@
                           "name": "recordsSpacer",
                           "width": "fill_container",
                           "height": 1
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "kmwCM",
+                      "name": "新版本操作",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "CIeCC",
+                          "name": "newTitle3",
+                          "fill": "#0F172A",
+                          "content": "新版本操作",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "5aWS7",
+                          "name": "newHint3",
+                          "fill": "#94A3B8",
+                          "content": "新增/插入将生成新版本，不改写历史",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
-                          "id": "Td7BG",
-                          "name": "addRecordBtn",
-                          "width": 72,
+                          "id": "dNSuF",
+                          "name": "newButtons",
+                          "width": "fill_container",
                           "height": 28,
-                          "fill": "#09A7A3",
-                          "cornerRadius": 6,
-                          "padding": 8,
+                          "gap": 8,
                           "children": [
                             {
-                              "type": "text",
-                              "id": "lTODs",
-                              "name": "addRecordText",
-                              "fill": "#FFFFFF",
-                              "content": "新增记录",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
+                              "type": "frame",
+                              "id": "Y7auG",
+                              "name": "btnAdd3",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#09A7A3",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "oTIb2",
+                                  "name": "addRecordText",
+                                  "fill": "#FFFFFF",
+                                  "content": "新增记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "HSgNW",
+                              "name": "btnInsert3",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#E2E8F0",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "5MEbC",
+                                  "name": "insTxt4",
+                                  "fill": "#0F172A",
+                                  "content": "插入记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
                             }
                           ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RRWfq",
+                      "name": "历史修正",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YqFVr",
+                          "name": "corrTitle3",
+                          "fill": "#0F172A",
+                          "content": "历史修正",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "DgxXm",
+                          "name": "corrHint3",
+                          "fill": "#94A3B8",
+                          "content": "更正当前选中版本（历史纠错）",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
-                          "id": "2zx0p",
-                          "name": "insertRecordBtn",
-                          "width": 72,
+                          "id": "cP5Ir",
+                          "name": "correctionButtons",
+                          "width": "fill_container",
                           "height": 28,
-                          "fill": "#E2E8F0",
-                          "cornerRadius": 6,
-                          "padding": 8,
+                          "gap": 8,
                           "children": [
                             {
-                              "type": "text",
-                              "id": "Iz9q3",
-                              "name": "insTxt4",
-                              "fill": "#0F172A",
-                              "content": "插入记录",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
+                              "type": "frame",
+                              "id": "TCfzl",
+                              "name": "btnCorr3",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#F59E0B",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "IOrvm",
+                                  "name": "addRecordText",
+                                  "fill": "#FFFFFF",
+                                  "content": "修正记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
                             }
                           ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wZNhC",
+                      "name": "危险操作",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xvcxr",
+                          "name": "dangerTitle3",
+                          "fill": "#0F172A",
+                          "content": "危险操作",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "StyRc",
+                          "name": "dangerHint3",
+                          "fill": "#94A3B8",
+                          "content": "删除后不可恢复，请谨慎",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
-                          "id": "IQXpB",
-                          "name": "deleteRecordBtn",
-                          "width": 72,
+                          "id": "OHxx0",
+                          "name": "dangerButtons",
+                          "width": "fill_container",
                           "height": 28,
-                          "fill": "#FEE2E2",
-                          "cornerRadius": 6,
-                          "padding": 8,
+                          "gap": 8,
                           "children": [
                             {
-                              "type": "text",
-                              "id": "asCTk",
-                              "name": "delTxt4",
-                              "fill": "#B91C1C",
-                              "content": "删除记录",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
+                              "type": "frame",
+                              "id": "z9Pll",
+                              "name": "btnDel3",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#FEE2E2",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Ys93C",
+                                  "name": "delTxt4",
+                                  "fill": "#B91C1C",
+                                  "content": "删除记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
                             }
                           ]
                         }
@@ -2038,70 +2189,221 @@
                           "name": "recordsSpacer",
                           "width": "fill_container",
                           "height": 1
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "OX1FI",
+                      "name": "新版本操作",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "6PPYj",
+                          "name": "newTitle2",
+                          "fill": "#0F172A",
+                          "content": "新版本操作",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "PhZWE",
+                          "name": "newHint2",
+                          "fill": "#94A3B8",
+                          "content": "新增/插入将生成新版本，不改写历史",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
-                          "id": "Bjj01",
-                          "name": "addRecordBtn",
-                          "width": 72,
+                          "id": "gqd4R",
+                          "name": "newButtons",
+                          "width": "fill_container",
                           "height": 28,
-                          "fill": "#09A7A3",
-                          "cornerRadius": 6,
-                          "padding": 8,
+                          "gap": 8,
                           "children": [
                             {
-                              "type": "text",
-                              "id": "nfydF",
-                              "name": "addRecordText",
-                              "fill": "#FFFFFF",
-                              "content": "新增记录",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
+                              "type": "frame",
+                              "id": "n5NTq",
+                              "name": "btnAdd2",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#09A7A3",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "5NVk8",
+                                  "name": "addRecordText",
+                                  "fill": "#FFFFFF",
+                                  "content": "新增记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "P4PrI",
+                              "name": "btnInsert2",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#E2E8F0",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Cty1U",
+                                  "name": "insTxt4",
+                                  "fill": "#0F172A",
+                                  "content": "插入记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
                             }
                           ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "fiocv",
+                      "name": "历史修正",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "XZYCy",
+                          "name": "corrTitle2",
+                          "fill": "#0F172A",
+                          "content": "历史修正",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "sBwgF",
+                          "name": "corrHint2",
+                          "fill": "#94A3B8",
+                          "content": "更正当前选中版本（历史纠错）",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
-                          "id": "ehlGV",
-                          "name": "insertRecordBtn",
-                          "width": 72,
+                          "id": "0u6A9",
+                          "name": "correctionButtons",
+                          "width": "fill_container",
                           "height": 28,
-                          "fill": "#E2E8F0",
-                          "cornerRadius": 6,
-                          "padding": 8,
+                          "gap": 8,
                           "children": [
                             {
-                              "type": "text",
-                              "id": "xcqCO",
-                              "name": "insTxt4",
-                              "fill": "#0F172A",
-                              "content": "插入记录",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
+                              "type": "frame",
+                              "id": "pBDhA",
+                              "name": "btnCorr2",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#F59E0B",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Mn6yg",
+                                  "name": "addRecordText",
+                                  "fill": "#FFFFFF",
+                                  "content": "修正记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
                             }
                           ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "1zKVH",
+                      "name": "危险操作",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "awoV8",
+                          "name": "dangerTitle2",
+                          "fill": "#0F172A",
+                          "content": "危险操作",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ctGHe",
+                          "name": "dangerHint2",
+                          "fill": "#94A3B8",
+                          "content": "删除后不可恢复，请谨慎",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
-                          "id": "WYs8C",
-                          "name": "deleteRecordBtn",
-                          "width": 72,
+                          "id": "QRRJV",
+                          "name": "dangerButtons",
+                          "width": "fill_container",
                           "height": 28,
-                          "fill": "#FEE2E2",
-                          "cornerRadius": 6,
-                          "padding": 8,
+                          "gap": 8,
                           "children": [
                             {
-                              "type": "text",
-                              "id": "5Q9VA",
-                              "name": "delTxt4",
-                              "fill": "#B91C1C",
-                              "content": "删除记录",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
+                              "type": "frame",
+                              "id": "PTrSm",
+                              "name": "btnDel2",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#FEE2E2",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "cMH5y",
+                                  "name": "delTxt4",
+                                  "fill": "#B91C1C",
+                                  "content": "删除记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
                             }
                           ]
                         }
@@ -9610,70 +9912,221 @@
                           "name": "recordsSpacer",
                           "width": "fill_container",
                           "height": 1
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ugcz7",
+                      "name": "新版本操作",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "83Urr",
+                          "name": "sectionTitle",
+                          "fill": "#0F172A",
+                          "content": "新版本操作",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "QuhYj",
+                          "name": "sectionHint",
+                          "fill": "#94A3B8",
+                          "content": "新增/插入将生成新版本，不改写历史",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
-                          "id": "apoIP",
-                          "name": "addRecordBtn",
-                          "width": 72,
+                          "id": "xFeDX",
+                          "name": "newButtons",
+                          "width": "fill_container",
                           "height": 28,
-                          "fill": "#09A7A3",
-                          "cornerRadius": 6,
-                          "padding": 8,
+                          "gap": 8,
                           "children": [
                             {
-                              "type": "text",
-                              "id": "SzL54",
-                              "name": "addRecordText",
-                              "fill": "#FFFFFF",
-                              "content": "新增记录",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
+                              "type": "frame",
+                              "id": "X6ogK",
+                              "name": "btnAdd",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#09A7A3",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "35qKD",
+                                  "name": "addRecordText",
+                                  "fill": "#FFFFFF",
+                                  "content": "新增记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "cfsLC",
+                              "name": "btnInsert",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#E2E8F0",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "ORDwu",
+                                  "name": "insTxt4",
+                                  "fill": "#0F172A",
+                                  "content": "插入记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
                             }
                           ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mywWV",
+                      "name": "历史修正",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "VFyOn",
+                          "name": "corrTitle",
+                          "fill": "#0F172A",
+                          "content": "历史修正",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ywAYz",
+                          "name": "corrHint",
+                          "fill": "#94A3B8",
+                          "content": "更正当前选中版本（历史纠错）",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
-                          "id": "zm0NQ",
-                          "name": "insertRecordBtn",
-                          "width": 72,
+                          "id": "IDgID",
+                          "name": "correctionButtons",
+                          "width": "fill_container",
                           "height": 28,
-                          "fill": "#E2E8F0",
-                          "cornerRadius": 6,
-                          "padding": 8,
+                          "gap": 8,
                           "children": [
                             {
-                              "type": "text",
-                              "id": "bcQOg",
-                              "name": "insTxt4",
-                              "fill": "#0F172A",
-                              "content": "插入记录",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
+                              "type": "frame",
+                              "id": "2o2RG",
+                              "name": "btnCorr",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#F59E0B",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "mCIzd",
+                                  "name": "addRecordText",
+                                  "fill": "#FFFFFF",
+                                  "content": "修正记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
                             }
                           ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "o6icn",
+                      "name": "危险操作",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 6,
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ChHRM",
+                          "name": "dangerTitle",
+                          "fill": "#0F172A",
+                          "content": "危险操作",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "P14kz",
+                          "name": "dangerHint",
+                          "fill": "#94A3B8",
+                          "content": "删除后不可恢复，请谨慎",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "frame",
-                          "id": "TwbKG",
-                          "name": "deleteRecordBtn",
-                          "width": 72,
+                          "id": "JfW2l",
+                          "name": "dangerButtons",
+                          "width": "fill_container",
                           "height": 28,
-                          "fill": "#FEE2E2",
-                          "cornerRadius": 6,
-                          "padding": 8,
+                          "gap": 8,
                           "children": [
                             {
-                              "type": "text",
-                              "id": "xxZYs",
-                              "name": "delTxt4",
-                              "fill": "#B91C1C",
-                              "content": "删除记录",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
+                              "type": "frame",
+                              "id": "sIl6o",
+                              "name": "btnDel",
+                              "width": 72,
+                              "height": 28,
+                              "fill": "#FEE2E2",
+                              "cornerRadius": 6,
+                              "padding": 8,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "smcfs",
+                                  "name": "delTxt4",
+                                  "fill": "#B91C1C",
+                                  "content": "删除记录",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
                             }
                           ]
                         }

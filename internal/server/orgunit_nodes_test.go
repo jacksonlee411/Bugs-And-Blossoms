@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1242,15 +1241,17 @@ func (s *actionErrStore) MinEffectiveDate(_ context.Context, _ string) (string, 
 
 type recordActionStore struct {
 	actionErrStore
-	versions      []OrgUnitNodeVersion
-	versionsErr   error
-	details       OrgUnitNodeDetails
-	detailsErr    error
-	renameCalled  int
-	disableCalled int
-	correctCalled int
-	correctArgs   []string
-	correctErr    error
+	versions              []OrgUnitNodeVersion
+	versionsErr           error
+	details               OrgUnitNodeDetails
+	detailsErr            error
+	renameCalled          int
+	disableCalled         int
+	moveCalled            int
+	setBusinessUnitCalled int
+	setBusinessUnitArgs   []string
+	setBusinessUnitValue  bool
+	setBusinessUnitReqID  string
 }
 
 func (s *recordActionStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
@@ -1275,15 +1276,23 @@ func (s *recordActionStore) RenameNodeCurrent(_ context.Context, _ string, _ str
 	return s.renameErr
 }
 
+func (s *recordActionStore) MoveNodeCurrent(_ context.Context, tenantID string, effectiveDate string, orgID string, newParentID string) error {
+	s.moveCalled++
+	s.moveArgs = []string{tenantID, effectiveDate, orgID, newParentID}
+	return s.moveErr
+}
+
 func (s *recordActionStore) DisableNodeCurrent(_ context.Context, _ string, _ string, _ string) error {
 	s.disableCalled++
 	return s.disableErr
 }
 
-func (s *recordActionStore) CorrectNodeEffectiveDate(_ context.Context, tenantID string, orgID int, targetEffectiveDate string, newEffectiveDate string, requestID string) error {
-	s.correctCalled++
-	s.correctArgs = []string{tenantID, strconv.Itoa(orgID), targetEffectiveDate, newEffectiveDate, requestID}
-	return s.correctErr
+func (s *recordActionStore) SetBusinessUnitCurrent(_ context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestID string) error {
+	s.setBusinessUnitCalled++
+	s.setBusinessUnitArgs = []string{tenantID, effectiveDate, orgID}
+	s.setBusinessUnitValue = isBusinessUnit
+	s.setBusinessUnitReqID = requestID
+	return s.setBusinessUnitErr
 }
 
 type asOfSpyStore struct {
@@ -2672,48 +2681,14 @@ func TestHandleOrgNodes_RecordActions(t *testing.T) {
 			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
 		}
 	})
-	t.Run("insert_record backdate earliest uses correction", func(t *testing.T) {
+	t.Run("insert_record backdate earliest uses regular insert", func(t *testing.T) {
 		store := &recordActionStore{versions: baseVersions}
 		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2025-12-31&current_effective_date=2026-01-01")
 		if rec.Code != http.StatusSeeOther {
 			t.Fatalf("status=%d", rec.Code)
 		}
-		if store.correctCalled != 1 {
-			t.Fatalf("correct called=%d", store.correctCalled)
-		}
-		if len(store.correctArgs) < 4 {
-			t.Fatalf("missing correct args")
-		}
-		if got := strings.Join(store.correctArgs[:4], "|"); got != "t1|10000001|2026-01-01|2025-12-31" {
-			t.Fatalf("unexpected correct args: %s", got)
-		}
-	})
-	t.Run("insert_record backdate correction error", func(t *testing.T) {
-		store := &recordActionStore{versions: baseVersions, correctErr: errors.New("corr")}
-		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2025-12-31&current_effective_date=2026-01-01")
-		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "corr") {
-			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
-		}
-	})
-	t.Run("insert_record backdate uuid error", func(t *testing.T) {
-		store := &recordActionStore{versions: baseVersions}
-		var rec *httptest.ResponseRecorder
-		withRandReader(t, randErrReader{}, func() {
-			rec = postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2025-12-31&current_effective_date=2026-01-01")
-		})
-		if rec == nil {
-			t.Fatal("missing response")
-		}
-		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "boom") {
-			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
-		}
-	})
-	t.Run("insert_record backdate without corrector", func(t *testing.T) {
-		store := newOrgUnitMemoryStore()
-		_, _ = store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "A001", "A", "", false)
-		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2025-12-31&current_effective_date=2026-01-01")
-		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "correction not supported") {
-			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		if store.renameCalled != 1 {
+			t.Fatalf("rename called=%d", store.renameCalled)
 		}
 	})
 	t.Run("delete_record last record", func(t *testing.T) {
@@ -2784,6 +2759,81 @@ func TestHandleOrgNodes_RecordActions(t *testing.T) {
 		}
 		if loc := rec.Header().Get("Location"); loc != "/org/nodes?tree_as_of=2026-01-06" {
 			t.Fatalf("location=%q", loc)
+		}
+	})
+	t.Run("add_record invalid change_type", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11&record_change_type=bad")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "record_change_type invalid") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record move invalid parent_org_code", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		store.resolveFn = func(_ context.Context, _ string, orgCode string) (int, error) {
+			if orgCode == "BAD" {
+				return 0, orgunitpkg.ErrOrgCodeNotFound
+			}
+			return 10000001, nil
+		}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11&record_change_type=move&parent_org_code=BAD")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "parent_org_code not found") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record move success allows root", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions, detailsErr: errors.New("details")}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11&record_change_type=move")
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if store.moveCalled != 1 {
+			t.Fatalf("move called=%d", store.moveCalled)
+		}
+		if got := strings.Join(store.moveArgs, "|"); got != "t1|2026-01-11|10000001|" {
+			t.Fatalf("unexpected move args: %q", got)
+		}
+	})
+	t.Run("add_record move error", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		store.moveErr = errors.New("move")
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11&record_change_type=move&parent_org_code=PARENT")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "move") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record set_business_unit invalid value", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11&record_change_type=set_business_unit&is_business_unit=maybe")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "is_business_unit 无效") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record set_business_unit error", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		store.setBusinessUnitErr = errors.New("set bu")
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11&record_change_type=set_business_unit&is_business_unit=true")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "set bu") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("add_record set_business_unit success", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=add_record&org_code=A001&effective_date=2026-01-11&record_change_type=set_business_unit&is_business_unit=true")
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if store.setBusinessUnitCalled != 1 {
+			t.Fatalf("set_business_unit called=%d", store.setBusinessUnitCalled)
+		}
+		if got := strings.Join(store.setBusinessUnitArgs, "|"); got != "t1|2026-01-11|10000001" {
+			t.Fatalf("unexpected set_business_unit args: %q", got)
+		}
+		if !store.setBusinessUnitValue {
+			t.Fatal("expected set_business_unit value true")
+		}
+		if store.setBusinessUnitReqID != "ui:orgunit:record:set-business-unit:10000001:2026-01-11" {
+			t.Fatalf("unexpected request id: %q", store.setBusinessUnitReqID)
 		}
 	})
 }

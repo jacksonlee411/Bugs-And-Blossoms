@@ -1757,9 +1757,7 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 					return
 				}
 				if currentEffectiveDate != "" {
-					if prevDate == "" && effectiveDate < currentEffectiveDate {
-						// allow backdating earliest record via correction
-					} else if nextDate == "" {
+					if nextDate == "" {
 						if maxDate != "" && effectiveDate <= maxDate {
 							nodes, errMsg := listNodes("effective_date conflict")
 							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
@@ -1797,28 +1795,6 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 				}
 			}
 
-			if action == "insert_record" && currentEffectiveDate != "" && prevDate == "" && effectiveDate < currentEffectiveDate {
-				corrector, ok := store.(OrgUnitNodeEffectiveDateCorrector)
-				if !ok {
-					nodes, errMsg := listNodes("correction not supported")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
-					return
-				}
-				requestID, err := uuidv7.NewString()
-				if err != nil {
-					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
-					return
-				}
-				if err := corrector.CorrectNodeEffectiveDate(r.Context(), tenant.ID, orgIDInt, currentEffectiveDate, effectiveDate, requestID); err != nil {
-					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
-					return
-				}
-				http.Redirect(w, r, "/org/nodes?tree_as_of="+url.QueryEscape(treeAsOf), http.StatusSeeOther)
-				return
-			}
-
 			if action == "delete_record" {
 				if err := store.DisableNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
@@ -1826,27 +1802,63 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 					return
 				}
 			} else {
-				name := strings.TrimSpace(r.Form.Get("name"))
-				if name == "" {
-					baseEffectiveDate := strings.TrimSpace(r.Form.Get("current_effective_date"))
-					if baseEffectiveDate == "" {
-						baseEffectiveDate = effectiveDate
+				changeType := strings.TrimSpace(strings.ToLower(r.Form.Get("record_change_type")))
+				if changeType == "" {
+					changeType = "rename"
+				}
+
+				switch changeType {
+				case "rename":
+					name := strings.TrimSpace(r.Form.Get("name"))
+					if name == "" {
+						baseEffectiveDate := strings.TrimSpace(r.Form.Get("current_effective_date"))
+						if baseEffectiveDate == "" {
+							baseEffectiveDate = effectiveDate
+						}
+						baseDetails, err := store.GetNodeDetails(r.Context(), tenant.ID, orgIDInt, baseEffectiveDate)
+						if err != nil {
+							nodes, errMsg := listNodes(err.Error())
+							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+							return
+						}
+						name = strings.TrimSpace(baseDetails.Name)
 					}
-					details, err := store.GetNodeDetails(r.Context(), tenant.ID, orgIDInt, baseEffectiveDate)
+					if name == "" {
+						nodes, errMsg := listNodes("name is required")
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+						return
+					}
+					if err := store.RenameNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, name); err != nil {
+						nodes, errMsg := listNodes(err.Error())
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+						return
+					}
+				case "move":
+					parentCode := strings.TrimSpace(r.Form.Get("parent_org_code"))
+					newParentID, ok := resolveOrgID(parentCode, "parent_org_code", false)
+					if !ok {
+						return
+					}
+					if err := store.MoveNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newParentID); err != nil {
+						nodes, errMsg := listNodes(err.Error())
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+						return
+					}
+				case "set_business_unit":
+					isBusinessUnit, err := parseBusinessUnitFlag(r.Form.Get("is_business_unit"))
 					if err != nil {
 						nodes, errMsg := listNodes(err.Error())
 						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
 						return
 					}
-					name = strings.TrimSpace(details.Name)
-				}
-				if name == "" {
-					nodes, errMsg := listNodes("name is required")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
-					return
-				}
-				if err := store.RenameNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, name); err != nil {
-					nodes, errMsg := listNodes(err.Error())
+					reqID := "ui:orgunit:record:set-business-unit:" + orgID + ":" + effectiveDate
+					if err := store.SetBusinessUnitCurrent(r.Context(), tenant.ID, effectiveDate, orgID, isBusinessUnit, reqID); err != nil {
+						nodes, errMsg := listNodes(err.Error())
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+						return
+					}
+				default:
+					nodes, errMsg := listNodes("record_change_type invalid")
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
 					return
 				}
@@ -2116,6 +2128,9 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(` data-org-code="` + html.EscapeString(details.OrgCode) + `"`)
 	b.WriteString(` data-current-effective-date="` + html.EscapeString(currentEffectiveDate) + `"`)
 	b.WriteString(` data-current-event-id="` + html.EscapeString(currentEventID) + `"`)
+	b.WriteString(` data-current-name="` + html.EscapeString(details.Name) + `"`)
+	b.WriteString(` data-current-parent-code="` + html.EscapeString(details.ParentCode) + `"`)
+	b.WriteString(` data-current-is-business-unit="` + html.EscapeString(strconv.FormatBool(details.IsBusinessUnit)) + `"`)
 	b.WriteString(` data-min-effective-date="` + html.EscapeString(minDate) + `"`)
 	b.WriteString(` data-max-effective-date="` + html.EscapeString(maxDate) + `"`)
 	b.WriteString(` data-prev-effective-date="` + html.EscapeString(prevDate) + `"`)
@@ -2141,10 +2156,29 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(`<div class="org-node-records">`)
 	b.WriteString(`<div class="org-node-records-header">`)
 	b.WriteString(`<span class="org-node-records-title">生效记录</span>`)
+	b.WriteString(`</div>`)
 	b.WriteString(`<div class="org-node-records-actions">`)
+	b.WriteString(`<div class="org-node-records-section">`)
+	b.WriteString(`<div class="org-node-records-section-title">新版本操作</div>`)
+	b.WriteString(`<div class="org-node-records-section-hint">新增/插入将生成新版本，不改写历史</div>`)
+	b.WriteString(`<div class="org-node-records-section-actions">`)
 	b.WriteString(`<button type="button" class="org-node-record-btn" data-action="add_record"` + disabledAttr + `>新增记录</button>`)
 	b.WriteString(`<button type="button" class="org-node-record-btn is-muted" data-action="insert_record"` + disabledAttr + `>插入记录</button>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-records-section">`)
+	b.WriteString(`<div class="org-node-records-section-title">历史修正</div>`)
+	b.WriteString(`<div class="org-node-records-section-hint">更正当前选中版本（历史纠错）</div>`)
+	b.WriteString(`<div class="org-node-records-section-actions">`)
+	b.WriteString(`<button type="button" class="org-node-record-btn is-warning" data-action="correct_record"` + disabledAttr + `>修正记录</button>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-records-section is-danger">`)
+	b.WriteString(`<div class="org-node-records-section-title">危险操作</div>`)
+	b.WriteString(`<div class="org-node-records-section-hint">删除后不可恢复，请谨慎</div>`)
+	b.WriteString(`<div class="org-node-records-section-actions">`)
 	b.WriteString(`<button type="button" class="org-node-record-btn is-danger" data-action="delete_record"` + disabledAttr + `>删除记录</button>`)
+	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 
@@ -2190,9 +2224,31 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(`<input type="hidden" name="tree_as_of" value="` + html.EscapeString(treeAsOf) + `" />`)
 	b.WriteString(`<input type="hidden" name="current_effective_date" value="` + html.EscapeString(currentEffectiveDate) + `" />`)
 	b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(details.OrgCode) + `" />`)
+	b.WriteString(`<div class="org-node-record-stepper">`)
+	b.WriteString(`<span class="org-node-record-stepper-item" data-step="1">1 意图</span>`)
+	b.WriteString(`<span class="org-node-record-stepper-item" data-step="2">2 日期</span>`)
+	b.WriteString(`<span class="org-node-record-stepper-item" data-step="3">3 字段</span>`)
+	b.WriteString(`<span class="org-node-record-stepper-item" data-step="4">4 确认</span>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-record-step" data-step="1"><div class="org-node-record-intent"></div></div>`)
+	b.WriteString(`<div class="org-node-record-step" data-step="2">`)
 	b.WriteString(`<label>生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(currentEffectiveDate) + `" /></label>`)
-	b.WriteString(`<label class="org-node-record-name">组织名称（可选） <input name="name" value="" /></label>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-record-step" data-step="3">`)
+	b.WriteString(`<label class="org-node-record-change">变更类型 `)
+	b.WriteString(`<select name="record_change_type">`)
+	b.WriteString(`<option value="rename">组织名称</option>`)
+	b.WriteString(`<option value="move">上级组织</option>`)
+	b.WriteString(`<option value="set_business_unit">业务单元</option>`)
+	b.WriteString(`</select></label>`)
+	b.WriteString(`<label class="org-node-record-name">组织名称 <input name="name" value="" /></label>`)
+	b.WriteString(`<label class="org-node-record-parent">上级组织 <input name="parent_org_code" value="" /></label>`)
+	b.WriteString(`<label class="org-node-record-business-unit"><input type="checkbox" name="is_business_unit" value="true" /> 业务单元</label>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-record-step" data-step="4"><div class="org-node-record-summary"></div></div>`)
 	b.WriteString(`<div class="org-node-record-form-actions">`)
+	b.WriteString(`<button type="button" class="org-node-record-prev">上一步</button>`)
+	b.WriteString(`<button type="button" class="org-node-record-next">下一步</button>`)
 	b.WriteString(`<button type="submit" class="org-node-record-submit">保存</button>`)
 	b.WriteString(`<button type="button" class="org-node-record-cancel">取消</button>`)
 	b.WriteString(`</div>`)
@@ -2856,9 +2912,9 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
     };
 
     const recordActionConfig = {
-      add_record: { title: "新增记录", hint: "新增记录将追加为最新版本", showName: true, submit: "保存" },
-      insert_record: { title: "插入记录", hint: "生效日需位于相邻记录之间（可早于所选记录）", showName: true, submit: "保存" },
-      delete_record: { title: "删除记录", hint: "删除记录将停用该组织", showName: false, submit: "删除" },
+      add_record: { title: "新增记录", hint: "新增记录将追加为最新版本", showFields: true, submit: "保存" },
+      insert_record: { title: "插入记录", hint: "生效日需位于相邻记录之间（可早于所选记录）", showFields: true, submit: "保存" },
+      delete_record: { title: "删除记录", hint: "删除记录将停用该组织", showFields: false, submit: "删除" },
     };
 
     const parseDate = (value) => {
@@ -2896,6 +2952,238 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       }
       date.setUTCDate(date.getUTCDate() + days);
       return formatDate(date);
+    };
+
+    const updateRecordChangeFields = (form) => {
+      if (!form) {
+        return;
+      }
+      const changeSelect = form.querySelector("select[name=\"record_change_type\"]");
+      const changeType = changeSelect ? String(changeSelect.value || "").trim() : "rename";
+      const nameRow = form.querySelector(".org-node-record-name");
+      const parentRow = form.querySelector(".org-node-record-parent");
+      const buRow = form.querySelector(".org-node-record-business-unit");
+      if (nameRow) {
+        nameRow.style.display = changeType === "rename" ? "grid" : "none";
+      }
+      if (parentRow) {
+        parentRow.style.display = changeType === "move" ? "grid" : "none";
+      }
+      if (buRow) {
+        buRow.style.display = changeType === "set_business_unit" ? "flex" : "none";
+      }
+    };
+
+    const recordActionLabelMap = {
+      add_record: "新增记录",
+      insert_record: "插入记录",
+      delete_record: "删除记录",
+    };
+
+    const recordChangeLabelMap = {
+      rename: "组织名称",
+      move: "上级组织",
+      set_business_unit: "业务单元",
+    };
+
+    const setRecordHint = (form, text, isError) => {
+      if (!form) {
+        return;
+      }
+      const hint = form.querySelector(".org-node-record-form-hint");
+      if (!hint) {
+        return;
+      }
+      hint.textContent = text || "";
+      if (isError) {
+        hint.classList.add("is-error");
+      } else {
+        hint.classList.remove("is-error");
+      }
+    };
+
+    const getRecordCurrentStep = (form) => {
+      const n = Number(form && form.dataset ? form.dataset.currentStep : "1");
+      if (!Number.isFinite(n) || n < 1) {
+        return 1;
+      }
+      if (n > 4) {
+        return 4;
+      }
+      return n;
+    };
+
+    const setRecordCurrentStep = (form, step) => {
+      if (!form || !form.dataset) {
+        return;
+      }
+      const next = Math.min(4, Math.max(1, Number(step) || 1));
+      form.dataset.currentStep = String(next);
+    };
+
+    const updateRecordSummary = (form) => {
+      if (!form) {
+        return;
+      }
+      const summary = form.querySelector(".org-node-record-summary");
+      if (!summary) {
+        return;
+      }
+      const actionInput = form.querySelector("input[name=\"action\"]");
+      const action = actionInput ? String(actionInput.value || "") : "";
+      const actionLabel = recordActionLabelMap[action] || "记录操作";
+      const effectiveInput = form.querySelector("input[name=\"effective_date\"]");
+      const effectiveDate = effectiveInput ? String(effectiveInput.value || "").trim() : "";
+      if (action === "delete_record") {
+        summary.textContent = "将执行：" + actionLabel + "，生效日期：" + (effectiveDate || "(未填写)") + "。删除后不可恢复。";
+        return;
+      }
+      const changeSelect = form.querySelector("select[name=\"record_change_type\"]");
+      const changeType = changeSelect ? String(changeSelect.value || "").trim() : "rename";
+      const changeLabel = recordChangeLabelMap[changeType] || changeType;
+      let detail = "";
+      if (changeType === "rename") {
+        const nameInput = form.querySelector("input[name=\"name\"]");
+        detail = "组织名称：" + (nameInput ? String(nameInput.value || "").trim() : "");
+      } else if (changeType === "move") {
+        const parentInput = form.querySelector("input[name=\"parent_org_code\"]");
+        const parentCode = parentInput ? String(parentInput.value || "").trim() : "";
+        detail = "上级组织：" + (parentCode || "(空=设为根组织)");
+      } else if (changeType === "set_business_unit") {
+        const buInput = form.querySelector("input[name=\"is_business_unit\"]");
+        detail = "业务单元：" + ((buInput && buInput.checked) ? "是" : "否");
+      }
+      summary.textContent = "将执行：" + actionLabel + "，生效日期：" + (effectiveDate || "(未填写)") + "，变更类型：" + changeLabel + (detail ? "，" + detail : "") + "。";
+    };
+
+    const updateRecordWizardStep = (form) => {
+      if (!form) {
+        return;
+      }
+      const step = getRecordCurrentStep(form);
+      const actionInput = form.querySelector("input[name=\"action\"]");
+      const action = actionInput ? String(actionInput.value || "") : "add_record";
+      const config = recordActionConfig[action] || recordActionConfig.add_record;
+      const steps = form.querySelectorAll(".org-node-record-step");
+      steps.forEach((node) => {
+        const nodeStep = Number(node.dataset.step || "0");
+        node.dataset.active = nodeStep === step ? "true" : "false";
+      });
+      const items = form.querySelectorAll(".org-node-record-stepper-item");
+      items.forEach((item) => {
+        const nodeStep = Number(item.dataset.step || "0");
+        item.classList.toggle("is-active", nodeStep === step);
+        item.classList.toggle("is-done", nodeStep > 0 && nodeStep < step);
+      });
+      const prevBtn = form.querySelector(".org-node-record-prev");
+      if (prevBtn) {
+        prevBtn.style.display = step > 1 ? "inline-flex" : "none";
+      }
+      const nextBtn = form.querySelector(".org-node-record-next");
+      if (nextBtn) {
+        nextBtn.style.display = step < 4 ? "inline-flex" : "none";
+      }
+      const submitBtn = form.querySelector(".org-node-record-submit");
+      if (submitBtn) {
+        submitBtn.style.display = step === 4 ? "inline-flex" : "none";
+        submitBtn.textContent = config.submit;
+      }
+      const intent = form.querySelector(".org-node-record-intent");
+      if (intent) {
+        intent.textContent = "当前操作：" + (recordActionLabelMap[action] || "记录操作") + "。" + config.hint;
+      }
+      const changeRow = form.querySelector(".org-node-record-change");
+      const nameLabel = form.querySelector(".org-node-record-name");
+      const parentLabel = form.querySelector(".org-node-record-parent");
+      const buLabel = form.querySelector(".org-node-record-business-unit");
+      if (changeRow) {
+        changeRow.style.display = config.showFields ? "grid" : "none";
+      }
+      if (config.showFields) {
+        updateRecordChangeFields(form);
+      } else {
+        if (nameLabel) {
+          nameLabel.style.display = "none";
+        }
+        if (parentLabel) {
+          parentLabel.style.display = "none";
+        }
+        if (buLabel) {
+          buLabel.style.display = "none";
+        }
+      }
+      updateRecordSummary(form);
+      let stepHint = "";
+      if (step === 1) {
+        stepHint = config.hint;
+      } else if (step === 2) {
+        stepHint = form.dataset.rangeHint || config.hint;
+      } else if (step === 3) {
+        stepHint = config.showFields ? "按变更类型填写字段后继续。" : "删除操作无需填写字段，继续确认即可。";
+      } else {
+        stepHint = "请确认摘要后提交。";
+      }
+      setRecordHint(form, stepHint, false);
+    };
+
+    const validateRecordStep = (form, panel, step) => {
+      if (!form) {
+        return "";
+      }
+      const actionInput = form.querySelector("input[name=\"action\"]");
+      const action = actionInput ? String(actionInput.value || "") : "add_record";
+      const config = recordActionConfig[action] || recordActionConfig.add_record;
+      if (step === 2) {
+        const effectiveInput = form.querySelector("input[name=\"effective_date\"]");
+        const effectiveDate = effectiveInput ? String(effectiveInput.value || "").trim() : "";
+        if (!effectiveDate) {
+          return "effective_date is required";
+        }
+        if (!parseDate(effectiveDate)) {
+          return "effective_date 无效";
+        }
+        if (!panel || action === "delete_record") {
+          return "";
+        }
+        const currentEffectiveDate = panel.dataset.currentEffectiveDate || "";
+        const prevEffectiveDate = panel.dataset.prevEffectiveDate || "";
+        const nextEffectiveDate = panel.dataset.nextEffectiveDate || "";
+        const maxEffectiveDate = panel.dataset.maxEffectiveDate || "";
+        if (action === "add_record") {
+          if (maxEffectiveDate && effectiveDate <= maxEffectiveDate) {
+            return "effective_date conflict";
+          }
+          return "";
+        }
+        if (action === "insert_record") {
+          if (!nextEffectiveDate) {
+            if (maxEffectiveDate && effectiveDate <= maxEffectiveDate) {
+              return "effective_date conflict";
+            }
+            return "";
+          }
+          if (effectiveDate === currentEffectiveDate) {
+            return "effective_date conflict";
+          }
+          if (prevEffectiveDate && effectiveDate <= prevEffectiveDate) {
+            return "effective_date must be between existing records";
+          }
+          if (effectiveDate >= nextEffectiveDate) {
+            return "effective_date must be between existing records";
+          }
+        }
+      }
+      if (step === 3 && config.showFields) {
+        const changeSelect = form.querySelector("select[name=\"record_change_type\"]");
+        const changeType = changeSelect ? String(changeSelect.value || "").trim() : "rename";
+        if (changeType === "rename") {
+          const nameInput = form.querySelector("input[name=\"name\"]");
+          if (!nameInput || !String(nameInput.value || "").trim()) {
+            return "name is required";
+          }
+        }
+      }
+      return "";
     };
 
     tree.addEventListener("sl-lazy-load", (event) => {
@@ -3098,6 +3386,35 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       }
 
       if (form && form.classList && form.classList.contains("org-node-record-action-form")) {
+        const panel = form.closest(".org-node-details-panel");
+        const currentStep = getRecordCurrentStep(form);
+        if (currentStep < 4) {
+          event.preventDefault();
+          const err = validateRecordStep(form, panel, currentStep);
+          if (err) {
+            setRecordHint(form, err, true);
+            return;
+          }
+          setRecordCurrentStep(form, currentStep + 1);
+          updateRecordWizardStep(form);
+          return;
+        }
+        const step2Err = validateRecordStep(form, panel, 2);
+        if (step2Err) {
+          event.preventDefault();
+          setRecordCurrentStep(form, 2);
+          updateRecordWizardStep(form);
+          setRecordHint(form, step2Err, true);
+          return;
+        }
+        const step3Err = validateRecordStep(form, panel, 3);
+        if (step3Err) {
+          event.preventDefault();
+          setRecordCurrentStep(form, 3);
+          updateRecordWizardStep(form);
+          setRecordHint(form, step3Err, true);
+          return;
+        }
         const actionInput = form.querySelector("input[name=\"action\"]");
         if (actionInput && actionInput.value === "delete_record") {
           if (!window.confirm("确认删除该生效记录？")) {
@@ -3207,6 +3524,35 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
         return;
       }
 
+      const recordPrev = event.target && event.target.closest ? event.target.closest(".org-node-record-prev") : null;
+      if (recordPrev) {
+        const form = recordPrev.closest ? recordPrev.closest(".org-node-record-action-form") : null;
+        if (!form) {
+          return;
+        }
+        setRecordCurrentStep(form, getRecordCurrentStep(form) - 1);
+        updateRecordWizardStep(form);
+        return;
+      }
+
+      const recordNext = event.target && event.target.closest ? event.target.closest(".org-node-record-next") : null;
+      if (recordNext) {
+        const form = recordNext.closest ? recordNext.closest(".org-node-record-action-form") : null;
+        if (!form) {
+          return;
+        }
+        const panel = form.closest(".org-node-details-panel");
+        const step = getRecordCurrentStep(form);
+        const err = validateRecordStep(form, panel, step);
+        if (err) {
+          setRecordHint(form, err, true);
+          return;
+        }
+        setRecordCurrentStep(form, step + 1);
+        updateRecordWizardStep(form);
+        return;
+      }
+
       const recordBtn = event.target && event.target.closest ? event.target.closest(".org-node-record-btn") : null;
       if (recordBtn) {
         const panel = recordBtn.closest(".org-node-details-panel");
@@ -3222,6 +3568,10 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
           return;
         }
         const action = recordBtn.dataset.action || "";
+        if (action === "correct_record") {
+          panel.dataset.mode = "edit";
+          return;
+        }
         const config = recordActionConfig[action];
         if (!config) {
           return;
@@ -3240,6 +3590,10 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
           const actionInput = form.querySelector("input[name=\"action\"]");
           if (actionInput) {
             actionInput.value = action;
+          }
+          const changeSelect = form.querySelector("select[name=\"record_change_type\"]");
+          if (changeSelect) {
+            changeSelect.value = "rename";
           }
           const currentEffectiveDate = panel.dataset.currentEffectiveDate || "";
           const prevEffectiveDate = panel.dataset.prevEffectiveDate || "";
@@ -3279,18 +3633,24 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
           if (effectiveInput) {
             effectiveInput.value = defaultDate;
           }
-          const nameLabel = form.querySelector(".org-node-record-name");
-          if (nameLabel) {
-            nameLabel.style.display = config.showName ? "grid" : "none";
+          const nameInput = form.querySelector("input[name=\"name\"]");
+          const parentInput = form.querySelector("input[name=\"parent_org_code\"]");
+          const buInput = form.querySelector("input[name=\"is_business_unit\"]");
+          const currentName = panel.dataset.currentName || "";
+          const currentParent = panel.dataset.currentParentCode || "";
+          const currentIsBusinessUnit = panel.dataset.currentIsBusinessUnit === "true";
+          if (nameInput) {
+            nameInput.value = currentName;
           }
-          const submit = form.querySelector(".org-node-record-submit");
-          if (submit) {
-            submit.textContent = config.submit;
+          if (parentInput) {
+            parentInput.value = currentParent;
           }
-          const hint = form.querySelector(".org-node-record-form-hint");
-          if (hint) {
-            hint.textContent = hintText;
+          if (buInput) {
+            buInput.checked = currentIsBusinessUnit;
           }
+          form.dataset.rangeHint = hintText;
+          setRecordCurrentStep(form, 1);
+          updateRecordWizardStep(form);
         }
         formWrap.scrollIntoView({ block: "nearest" });
         return;
@@ -3322,6 +3682,14 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
     document.addEventListener("input", (event) => {
       const input = event.target;
       if (!input) {
+        return;
+      }
+      const recordForm = input.closest ? input.closest(".org-node-record-action-form") : null;
+      if (recordForm) {
+        if (input.name === "record_change_type") {
+          updateRecordChangeFields(recordForm);
+        }
+        updateRecordSummary(recordForm);
         return;
       }
       const form = input.closest ? input.closest(".org-node-edit-form") : null;
@@ -3388,7 +3756,18 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
 
     document.addEventListener("change", (event) => {
       const select = event.target;
-      if (!select || !select.classList || !select.classList.contains("org-node-version-select")) {
+      if (!select) {
+        return;
+      }
+      const recordForm = select.closest ? select.closest(".org-node-record-action-form") : null;
+      if (recordForm) {
+        if (select.name === "record_change_type") {
+          updateRecordChangeFields(recordForm);
+        }
+        updateRecordSummary(recordForm);
+        return;
+      }
+      if (!select.classList || !select.classList.contains("org-node-version-select")) {
         return;
       }
       const panel = select.closest(".org-node-details-panel");
