@@ -260,6 +260,7 @@ modules/staffing/
 - [X] **Correct（更正）**：对某一条既有 `assignment_event` 提交“payload 替换”，replay 时使用替换后的 payload 解释该事件。
   - 不新增 `assignment_events` 行，因此不触发同日唯一冲突。
   - 更正只改变“该事件对时间线的解释”，不改变其 `effective_date`。
+  - 若未来需要支持 `effective_date` 调整，必须另立计划并遵循 `DEV-PLAN-032` 的有效期调整规则（前后边界、不冲突、关联有效性）；本计划明确不做。
 - [X] **Rescind（撤销/作废）**：对某一条既有 `assignment_event` 标记为“在 replay 中忽略”，从而实现 delete-slice + stitch（删某片段并自动缝合）。
   - Rescind 不改变原事件行；replay 时跳过该事件。
 - [X] **Rescind 限制**：只允许撤销 `event_type='UPDATE'`；禁止撤销首事件/CREATE（避免时间线失锚与隐式重建语义）。

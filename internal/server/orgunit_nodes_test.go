@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -688,6 +689,97 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_RollbackError(t *testing.T) {
 	}
 }
 
+func TestOrgUnitPGStore_CorrectNodeEffectiveDate_Errors(t *testing.T) {
+	cases := []struct {
+		name            string
+		store           *orgUnitPGStore
+		targetEffective string
+		newEffective    string
+		requestID       string
+	}{
+		{
+			name: "begin error",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return nil, errors.New("begin fail")
+			})},
+			targetEffective: "2026-01-01",
+			newEffective:    "2026-01-02",
+			requestID:       "r1",
+		},
+		{
+			name: "set_config error",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{execErr: errors.New("exec fail"), execErrAt: 1}, nil
+			})},
+			targetEffective: "2026-01-01",
+			newEffective:    "2026-01-02",
+			requestID:       "r1",
+		},
+		{
+			name: "missing target",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{}, nil
+			})},
+			targetEffective: "",
+			newEffective:    "2026-01-02",
+			requestID:       "r1",
+		},
+		{
+			name: "missing new date",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{}, nil
+			})},
+			targetEffective: "2026-01-01",
+			newEffective:    "",
+			requestID:       "r1",
+		},
+		{
+			name: "missing request",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{}, nil
+			})},
+			targetEffective: "2026-01-01",
+			newEffective:    "2026-01-02",
+			requestID:       "",
+		},
+		{
+			name: "submit error",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{rowErr: errors.New("row")}, nil
+			})},
+			targetEffective: "2026-01-01",
+			newEffective:    "2026-01-02",
+			requestID:       "r1",
+		},
+		{
+			name: "commit error",
+			store: &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+				return &stubTx{row: &stubRow{vals: []any{"c1"}}, commitErr: errors.New("commit")}, nil
+			})},
+			targetEffective: "2026-01-01",
+			newEffective:    "2026-01-02",
+			requestID:       "r1",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.store.CorrectNodeEffectiveDate(context.Background(), "t1", 10000001, tc.targetEffective, tc.newEffective, tc.requestID); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestOrgUnitPGStore_CorrectNodeEffectiveDate_Success(t *testing.T) {
+	store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+		return &stubTx{row: &stubRow{vals: []any{"c1"}}}, nil
+	})}
+	if err := store.CorrectNodeEffectiveDate(context.Background(), "t1", 10000001, "2026-01-01", "2026-01-02", "r1"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestHandleOrgNodes_MissingTenant(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/org/nodes", nil)
@@ -1156,6 +1248,9 @@ type recordActionStore struct {
 	detailsErr    error
 	renameCalled  int
 	disableCalled int
+	correctCalled int
+	correctArgs   []string
+	correctErr    error
 }
 
 func (s *recordActionStore) ListNodeVersions(context.Context, string, int) ([]OrgUnitNodeVersion, error) {
@@ -1183,6 +1278,12 @@ func (s *recordActionStore) RenameNodeCurrent(_ context.Context, _ string, _ str
 func (s *recordActionStore) DisableNodeCurrent(_ context.Context, _ string, _ string, _ string) error {
 	s.disableCalled++
 	return s.disableErr
+}
+
+func (s *recordActionStore) CorrectNodeEffectiveDate(_ context.Context, tenantID string, orgID int, targetEffectiveDate string, newEffectiveDate string, requestID string) error {
+	s.correctCalled++
+	s.correctArgs = []string{tenantID, strconv.Itoa(orgID), targetEffectiveDate, newEffectiveDate, requestID}
+	return s.correctErr
 }
 
 type asOfSpyStore struct {
@@ -2466,6 +2567,11 @@ func TestHandleOrgNodes_RecordActions(t *testing.T) {
 		{EventID: 1, EffectiveDate: "2026-01-01", EventType: "RENAME"},
 		{EventID: 2, EffectiveDate: "2026-01-10", EventType: "RENAME"},
 	}
+	tripleVersions := []OrgUnitNodeVersion{
+		{EventID: 1, EffectiveDate: "2026-01-01", EventType: "RENAME"},
+		{EventID: 2, EffectiveDate: "2026-01-10", EventType: "RENAME"},
+		{EventID: 3, EffectiveDate: "2026-01-20", EventType: "RENAME"},
+	}
 	versionsWithEmpty := []OrgUnitNodeVersion{
 		{EventID: 1, EffectiveDate: "", EventType: "RENAME"},
 		{EventID: 2, EffectiveDate: "2026-01-05", EventType: "RENAME"},
@@ -2517,17 +2623,96 @@ func TestHandleOrgNodes_RecordActions(t *testing.T) {
 			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
 		}
 	})
+	t.Run("insert_record invalid current_effective_date", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2026-01-05&current_effective_date=bad")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "current_effective_date 无效") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("insert_record selected record not found", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2026-01-05&current_effective_date=2026-01-03")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "record not found") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("insert_record without current_effective_date", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2026-01-11")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "effective_date must be between existing records") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
 	t.Run("insert_record date exists", func(t *testing.T) {
 		store := &recordActionStore{versions: baseVersions}
-		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2026-01-01")
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2026-01-01&current_effective_date=2026-01-10")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "effective_date conflict") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("insert_record last record conflict", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2026-01-05&current_effective_date=2026-01-10")
 		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "effective_date conflict") {
 			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
 		}
 	})
 	t.Run("insert_record out of range", func(t *testing.T) {
 		store := &recordActionStore{versions: baseVersions}
-		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2026-01-11")
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2026-01-11&current_effective_date=2026-01-01")
 		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "effective_date must be between existing records") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("insert_record before prev range", func(t *testing.T) {
+		store := &recordActionStore{versions: tripleVersions}
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2025-12-31&current_effective_date=2026-01-10")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "effective_date must be between existing records") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("insert_record backdate earliest uses correction", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2025-12-31&current_effective_date=2026-01-01")
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if store.correctCalled != 1 {
+			t.Fatalf("correct called=%d", store.correctCalled)
+		}
+		if len(store.correctArgs) < 4 {
+			t.Fatalf("missing correct args")
+		}
+		if got := strings.Join(store.correctArgs[:4], "|"); got != "t1|10000001|2026-01-01|2025-12-31" {
+			t.Fatalf("unexpected correct args: %s", got)
+		}
+	})
+	t.Run("insert_record backdate correction error", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions, correctErr: errors.New("corr")}
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2025-12-31&current_effective_date=2026-01-01")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "corr") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("insert_record backdate uuid error", func(t *testing.T) {
+		store := &recordActionStore{versions: baseVersions}
+		var rec *httptest.ResponseRecorder
+		withRandReader(t, randErrReader{}, func() {
+			rec = postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2025-12-31&current_effective_date=2026-01-01")
+		})
+		if rec == nil {
+			t.Fatal("missing response")
+		}
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "boom") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+	t.Run("insert_record backdate without corrector", func(t *testing.T) {
+		store := newOrgUnitMemoryStore()
+		_, _ = store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "A001", "A", "", false)
+		rec := postOrgNodesForm(t, store, "action=insert_record&org_code=A001&effective_date=2025-12-31&current_effective_date=2026-01-01")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "correction not supported") {
 			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
 		}
 	})

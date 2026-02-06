@@ -177,6 +177,7 @@ modules/{module}/
 - DEV-PLAN-074：OrgUnit Details 集成更新能力与 UI 优化方案：`docs/dev-plans/074-orgunit-details-update-ui-optimization.md`
 - DEV-PLAN-074 执行日志：`docs/dev-records/dev-plan-074-execution-log.md`
 - DEV-PLAN-075：OrgUnit 生效日期不允许回溯的限制评估：`docs/dev-plans/075-orgunit-effective-date-backdating-assessment.md`
+- DEV-PLAN-075 执行日志：`docs/dev-records/dev-plan-075-execution-log.md`
 - DEV-PLAN-075A：OrgUnit 记录新增/插入 UI 与可编辑字段问题记录：`docs/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
 - DEV-PLAN-076：OrgUnit 版本切换导致选中组织丢失问题与修复方案：`docs/dev-plans/076-orgunit-version-switch-selection-retention.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`

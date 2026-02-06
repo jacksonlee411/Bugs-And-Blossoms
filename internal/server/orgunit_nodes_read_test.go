@@ -973,6 +973,18 @@ func TestRenderOrgNodeDetails(t *testing.T) {
 	if !strings.Contains(out3, "更新成功") || !strings.Contains(out3, "2026-01-01") || !strings.Contains(out3, "2026-01-20") {
 		t.Fatalf("unexpected output: %q", out3)
 	}
+
+	out4 := renderOrgNodeDetails(OrgUnitNodeDetails{
+		OrgID:   10000004,
+		OrgCode: "D004",
+		Name:    "Leaf",
+	}, "2026-01-05", "2026-01-06", []OrgUnitNodeVersion{
+		{EventID: 1, EffectiveDate: "", EventType: "RENAME"},
+		{EventID: 2, EffectiveDate: "2026-01-05", EventType: "RENAME"},
+	}, true, "")
+	if !strings.Contains(out4, `data-min-effective-date="2026-01-05"`) {
+		t.Fatalf("unexpected output: %q", out4)
+	}
 }
 
 func TestRenderOrgNodeSearchPanel(t *testing.T) {
