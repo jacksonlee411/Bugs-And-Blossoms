@@ -133,7 +133,7 @@
 - 原地修改范围：以“不可更正清单”为准（含 `status`）；本期 UI 暴露负责人/上级/名称。
 - 改生效日：不新增显式字段；允许在更正 `patch` 中修改 `effective_date`，**可向前或向后调整**，但新日期必须落在该事件原区间内（介于前后生效日之间；缺失一侧边界时视为单侧无界），超出则拒绝；同时新日期不得早于上级组织最早生效日期且该日期上级组织必须有效；修改生效日期必须触发重放。
 - 状态变更：必须通过显式事件（`ENABLE` / `DISABLE`），不允许通过更正修改 `status`。
-- 删除记录：定义为“物理删除错误事件 + 重放”，不再等价于 `DISABLE`。
+- 删除记录：定义为“撤销错误事件（rescind）+ 重放”，不再等价于 `DISABLE`，且不物理删除 `org_events`。
 - 删除组织：V1 仅支持“无子组织”的错误建档删除；根组织禁止删除。
 - 审计：第一阶段复用 `org_event_corrections_history`，不新增审计表。
 
@@ -153,8 +153,8 @@
 - **POST `/org/nodes?tree_as_of=YYYY-MM-DD`**
   - `action=add_record`：追加一条记录（生效日必须晚于当前最后一条记录）。
   - `action=insert_record`：插入一条记录（生效日位于前后记录之间，允许早于所选记录）；若选择的是最晚记录，则视同 `add_record`，生效日必须晚于最晚记录。
-  - `action=delete_record`：删除记录（删除错误数据；物理删除目标事件并触发重放）。
-  - `action=delete_org`：删除组织（删除该组织全部历史事件；V1 限制为“无子组织且非根组织”）。
+  - `action=delete_record`：删除记录（删除错误数据；通过撤销目标事件并触发重放）。
+  - `action=delete_org`：删除组织（撤销该组织全部历史事件；V1 限制为“无子组织且非根组织”）。
 - **输入字段**：
   - `org_code`（必填）
   - `effective_date`（必填）
@@ -174,9 +174,9 @@
   - 重放失败：`删除后重放失败，操作已回滚`
 - **实现约束（保持低复杂度）**：
   - `add_record` / `insert_record` 通过提交 `RENAME` 事件建立记录；当 `name` 为空时使用当前名称。
-  - `delete_record` 不写 `DISABLE` 事件，改为“审计快照 + 物理删除目标事件 + replay”；任一步失败整体回滚。
-  - `delete_org` 采用同一事务语义（审计 + 删除 + replay）；有子组织或根组织场景拒绝。
-  - 删除审计复用 `org_event_corrections_history`（`replacement_payload.op=PURGE_RECORD|PURGE_ORG`），第一阶段不新增审计表。
+  - `delete_record` 不写 `DISABLE` 事件，改为“审计快照 + 撤销目标事件 + replay”；任一步失败整体回滚。
+  - `delete_org` 采用同一事务语义（审计 + 批量撤销 + replay）；有子组织或根组织场景拒绝。
+  - 删除审计复用 `org_event_corrections_history`（`replacement_payload.op=RESCIND_EVENT|RESCIND_ORG`），第一阶段不新增审计表。
   - 同一 `effective_date` 已存在记录则拒绝（409）。
 
 #### UI 交互口径（HR 用户视角）
