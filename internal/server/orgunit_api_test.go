@@ -812,6 +812,32 @@ func TestHandleOrgUnitsRescindsAPI_BasicErrors(t *testing.T) {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
+
+	t.Run("request id conflict", func(t *testing.T) {
+		svc := orgUnitWriteServiceStub{rescindRecordFn: func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			return orgunittypes.OrgUnitResult{}, errors.New("ORG_REQUEST_ID_CONFLICT")
+		}}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds", strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","request_id":"r1","reason":"bad"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsAPI(rec, req, svc)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("replay failed", func(t *testing.T) {
+		svc := orgUnitWriteServiceStub{rescindRecordFn: func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			return orgunittypes.OrgUnitResult{}, errors.New("ORG_REPLAY_FAILED")
+		}}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds", strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","request_id":"r1","reason":"bad"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsAPI(rec, req, svc)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
 }
 
 func TestHandleOrgUnitsRescindsOrgAPI_Success(t *testing.T) {
@@ -929,6 +955,32 @@ func TestHandleOrgUnitsRescindsOrgAPI_BasicErrors(t *testing.T) {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
+
+	t.Run("has children conflict", func(t *testing.T) {
+		svc := orgUnitWriteServiceStub{rescindOrgFn: func(context.Context, string, orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			return orgunittypes.OrgUnitResult{}, errors.New("ORG_HAS_CHILDREN_CANNOT_DELETE")
+		}}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds/org", strings.NewReader(`{"org_code":"A001","request_id":"r2","reason":"bad-org"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsOrgAPI(rec, req, svc)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("has dependencies conflict", func(t *testing.T) {
+		svc := orgUnitWriteServiceStub{rescindOrgFn: func(context.Context, string, orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			return orgunittypes.OrgUnitResult{}, errors.New("ORG_HAS_DEPENDENCIES_CANNOT_DELETE")
+		}}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds/org", strings.NewReader(`{"org_code":"A001","request_id":"r2","reason":"bad-org"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsOrgAPI(rec, req, svc)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
 }
 
 func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
@@ -940,6 +992,9 @@ func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
 		{"not_found", errors.New("ORG_CODE_NOT_FOUND"), http.StatusNotFound},
 		{"bad_request_code", errors.New("ORG_CODE_INVALID"), http.StatusBadRequest},
 		{"conflict", errors.New("EVENT_DATE_CONFLICT"), http.StatusConflict},
+		{"request_id_conflict", errors.New("ORG_REQUEST_ID_CONFLICT"), http.StatusConflict},
+		{"replay_failed", errors.New("ORG_REPLAY_FAILED"), http.StatusConflict},
+		{"root_delete_forbidden", errors.New("ORG_ROOT_DELETE_FORBIDDEN"), http.StatusConflict},
 		{"bad_request_msg", newBadRequestError("name is required"), http.StatusBadRequest},
 		{"stable_unknown", errors.New("SOME_DB_CODE"), http.StatusUnprocessableEntity},
 		{"unknown", errors.New("boom"), http.StatusInternalServerError},
