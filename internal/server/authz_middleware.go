@@ -295,7 +295,7 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/org/api/org-units/rename", "/org/api/org-units/move", "/org/api/org-units/disable", "/org/api/org-units/corrections":
+	case "/org/api/org-units/rename", "/org/api/org-units/move", "/org/api/org-units/disable", "/org/api/org-units/corrections", "/org/api/org-units/rescinds", "/org/api/org-units/rescinds/org":
 		if method == http.MethodPost {
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
 		}

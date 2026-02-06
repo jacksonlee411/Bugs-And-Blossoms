@@ -15,6 +15,8 @@ import (
 type orgUnitWriteStoreStub struct {
 	submitEventFn          func(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestCode string, initiatorUUID string) (int64, error)
 	submitCorrectionFn     func(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, patch json.RawMessage, requestID string, initiatorUUID string) (string, error)
+	submitRescindEventFn   func(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error)
+	submitRescindOrgFn     func(ctx context.Context, tenantID string, orgID int, reason string, requestID string, initiatorUUID string) (int, error)
 	findEventByUUIDFn      func(ctx context.Context, tenantID string, eventUUID string) (types.OrgUnitEvent, error)
 	findEventByEffectiveFn func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (types.OrgUnitEvent, error)
 	resolveOrgIDFn         func(ctx context.Context, tenantID string, orgCode string) (int, error)
@@ -34,6 +36,20 @@ func (s orgUnitWriteStoreStub) SubmitCorrection(ctx context.Context, tenantID st
 		return "", errors.New("SubmitCorrection not mocked")
 	}
 	return s.submitCorrectionFn(ctx, tenantID, orgID, targetEffectiveDate, patch, requestID, initiatorUUID)
+}
+
+func (s orgUnitWriteStoreStub) SubmitRescindEvent(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error) {
+	if s.submitRescindEventFn == nil {
+		return "", errors.New("SubmitRescindEvent not mocked")
+	}
+	return s.submitRescindEventFn(ctx, tenantID, orgID, targetEffectiveDate, reason, requestID, initiatorUUID)
+}
+
+func (s orgUnitWriteStoreStub) SubmitRescindOrg(ctx context.Context, tenantID string, orgID int, reason string, requestID string, initiatorUUID string) (int, error) {
+	if s.submitRescindOrgFn == nil {
+		return 0, errors.New("SubmitRescindOrg not mocked")
+	}
+	return s.submitRescindOrgFn(ctx, tenantID, orgID, reason, requestID, initiatorUUID)
 }
 
 func (s orgUnitWriteStoreStub) FindEventByUUID(ctx context.Context, tenantID string, eventUUID string) (types.OrgUnitEvent, error) {
@@ -243,6 +259,170 @@ func TestCorrectRequiresPatch(t *testing.T) {
 	})
 	if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchRequired {
 		t.Fatalf("expected patch required, got %v", err)
+	}
+}
+
+func TestRescindRecordSuccess(t *testing.T) {
+	called := false
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, orgCode string) (int, error) {
+			if orgCode != "ROOT" {
+				t.Fatalf("orgCode=%s", orgCode)
+			}
+			return 10000001, nil
+		},
+		submitRescindEventFn: func(_ context.Context, tenantID string, orgID int, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error) {
+			called = true
+			if tenantID != "t1" || orgID != 10000001 || targetEffectiveDate != "2026-01-01" || reason != "bad-data" || requestID != "req-1" || initiatorUUID != "t1" {
+				t.Fatalf("unexpected args: tenant=%s orgID=%d target=%s reason=%s request=%s initiator=%s", tenantID, orgID, targetEffectiveDate, reason, requestID, initiatorUUID)
+			}
+			return "corr", nil
+		},
+	}
+
+	svc := NewOrgUnitWriteService(store)
+	got, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{
+		OrgCode:             "root",
+		TargetEffectiveDate: "2026-01-01",
+		RequestID:           "req-1",
+		Reason:              "bad-data",
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if !called {
+		t.Fatalf("expected rescind call")
+	}
+	if got.OrgCode != "ROOT" || got.EffectiveDate != "2026-01-01" {
+		t.Fatalf("result=%+v", got)
+	}
+}
+
+func TestRescindRecordValidationAndNotFound(t *testing.T) {
+	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
+		t.Fatalf("expected request_id bad request, got %v", err)
+	}
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestID: "r1"}); err == nil || !httperr.IsBadRequest(err) {
+		t.Fatalf("expected reason bad request, got %v", err)
+	}
+
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 0, orgunitpkg.ErrOrgCodeNotFound
+		},
+	}
+	svc = NewOrgUnitWriteService(store)
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != errOrgCodeNotFound {
+		t.Fatalf("expected org not found, got %v", err)
+	}
+}
+
+func TestRescindOrgSuccessAndValidation(t *testing.T) {
+	called := false
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, orgCode string) (int, error) {
+			if orgCode != "ROOT" {
+				t.Fatalf("orgCode=%s", orgCode)
+			}
+			return 10000001, nil
+		},
+		submitRescindOrgFn: func(_ context.Context, tenantID string, orgID int, reason string, requestID string, initiatorUUID string) (int, error) {
+			called = true
+			if tenantID != "t1" || orgID != 10000001 || reason != "bad-org" || requestID != "req-2" || initiatorUUID != "t1" {
+				t.Fatalf("unexpected args")
+			}
+			return 3, nil
+		},
+	}
+
+	svc := NewOrgUnitWriteService(store)
+	got, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "root", RequestID: "req-2", Reason: "bad-org"})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if !called {
+		t.Fatalf("expected rescind org call")
+	}
+	if got.Fields["rescinded_events"] != 3 {
+		t.Fatalf("fields=%+v", got.Fields)
+	}
+
+	svc = NewOrgUnitWriteService(orgUnitWriteStoreStub{})
+	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
+		t.Fatalf("expected request_id bad request, got %v", err)
+	}
+	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestID: "r1"}); err == nil || !httperr.IsBadRequest(err) {
+		t.Fatalf("expected reason bad request, got %v", err)
+	}
+}
+
+func TestRescindRecordStoreErrorPaths(t *testing.T) {
+	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "bad", RequestID: "r1", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
+		t.Fatalf("expected bad date, got %v", err)
+	}
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "bad\n", TargetEffectiveDate: "2026-01-01", RequestID: "r1", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
+		t.Fatalf("expected bad org code, got %v", err)
+	}
+
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 0, errors.New("resolve")
+		},
+	}
+	svc = NewOrgUnitWriteService(store)
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != "resolve" {
+		t.Fatalf("expected resolve error, got %v", err)
+	}
+
+	store = orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 10000001, nil
+		},
+		submitRescindEventFn: func(_ context.Context, _ string, _ int, _ string, _ string, _ string, _ string) (string, error) {
+			return "", errors.New("submit")
+		},
+	}
+	svc = NewOrgUnitWriteService(store)
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != "submit" {
+		t.Fatalf("expected submit error, got %v", err)
+	}
+}
+
+func TestRescindOrgStoreErrorPaths(t *testing.T) {
+	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
+	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "bad\n", RequestID: "r1", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
+		t.Fatalf("expected bad org code, got %v", err)
+	}
+
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 0, errors.New("resolve")
+		},
+	}
+	svc = NewOrgUnitWriteService(store)
+	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != "resolve" {
+		t.Fatalf("expected resolve error, got %v", err)
+	}
+
+	store = orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 10000001, nil
+		},
+		submitRescindOrgFn: func(_ context.Context, _ string, _ int, _ string, _ string, _ string) (int, error) {
+			return 0, errors.New("submit")
+		},
+	}
+	svc = NewOrgUnitWriteService(store)
+	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != "submit" {
+		t.Fatalf("expected submit error, got %v", err)
+	}
+
+	store = orgUnitWriteStoreStub{resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) { return 0, orgunitpkg.ErrOrgCodeNotFound }}
+	svc = NewOrgUnitWriteService(store)
+	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != errOrgCodeNotFound {
+		t.Fatalf("expected org not found, got %v", err)
 	}
 }
 

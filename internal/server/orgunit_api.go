@@ -140,23 +140,42 @@ type orgUnitCorrectionAPIRequest struct {
 	RequestID     string                        `json:"request_id"`
 }
 
+type orgUnitRescindRecordAPIRequest struct {
+	OrgCode       string `json:"org_code"`
+	EffectiveDate string `json:"effective_date"`
+	RequestID     string `json:"request_id"`
+	Reason        string `json:"reason"`
+}
+
+type orgUnitRescindOrgAPIRequest struct {
+	OrgCode   string `json:"org_code"`
+	RequestID string `json:"request_id"`
+	Reason    string `json:"reason"`
+}
+
 var errOrgUnitBadJSON = errors.New("orgunit_bad_json")
 
 const (
-	orgUnitErrCodeInvalid          = "ORG_CODE_INVALID"
-	orgUnitErrCodeNotFound         = "ORG_CODE_NOT_FOUND"
-	orgUnitErrEffectiveDate        = "EFFECTIVE_DATE_INVALID"
-	orgUnitErrPatchFieldNotAllowed = "PATCH_FIELD_NOT_ALLOWED"
-	orgUnitErrPatchRequired        = "PATCH_REQUIRED"
-	orgUnitErrEventNotFound        = "ORG_EVENT_NOT_FOUND"
-	orgUnitErrParentNotFound       = "PARENT_NOT_FOUND_AS_OF"
-	orgUnitErrManagerInvalid       = "MANAGER_PERNR_INVALID"
-	orgUnitErrManagerNotFound      = "MANAGER_PERNR_NOT_FOUND"
-	orgUnitErrManagerInactive      = "MANAGER_PERNR_INACTIVE"
-	orgUnitErrEffectiveOutOfRange  = "EFFECTIVE_DATE_OUT_OF_RANGE"
-	orgUnitErrEventDateConflict    = "EVENT_DATE_CONFLICT"
-	orgUnitErrRequestDuplicate     = "REQUEST_DUPLICATE"
-	orgUnitErrEnableRequired       = "ORG_ENABLE_REQUIRED"
+	orgUnitErrCodeInvalid                 = "ORG_CODE_INVALID"
+	orgUnitErrCodeNotFound                = "ORG_CODE_NOT_FOUND"
+	orgUnitErrEffectiveDate               = "EFFECTIVE_DATE_INVALID"
+	orgUnitErrPatchFieldNotAllowed        = "PATCH_FIELD_NOT_ALLOWED"
+	orgUnitErrPatchRequired               = "PATCH_REQUIRED"
+	orgUnitErrEventNotFound               = "ORG_EVENT_NOT_FOUND"
+	orgUnitErrParentNotFound              = "PARENT_NOT_FOUND_AS_OF"
+	orgUnitErrManagerInvalid              = "MANAGER_PERNR_INVALID"
+	orgUnitErrManagerNotFound             = "MANAGER_PERNR_NOT_FOUND"
+	orgUnitErrManagerInactive             = "MANAGER_PERNR_INACTIVE"
+	orgUnitErrEffectiveOutOfRange         = "EFFECTIVE_DATE_OUT_OF_RANGE"
+	orgUnitErrEventDateConflict           = "EVENT_DATE_CONFLICT"
+	orgUnitErrRequestDuplicate            = "REQUEST_DUPLICATE"
+	orgUnitErrEnableRequired              = "ORG_ENABLE_REQUIRED"
+	orgUnitErrRequestIDConflict           = "ORG_REQUEST_ID_CONFLICT"
+	orgUnitErrReplayFailed                = "ORG_REPLAY_FAILED"
+	orgUnitErrRootDeleteForbidden         = "ORG_ROOT_DELETE_FORBIDDEN"
+	orgUnitErrHasChildrenCannotDelete     = "ORG_HAS_CHILDREN_CANNOT_DELETE"
+	orgUnitErrHasDependenciesCannotDelete = "ORG_HAS_DEPENDENCIES_CANNOT_DELETE"
+	orgUnitErrEventRescinded              = "ORG_EVENT_RESCINDED"
 )
 
 func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService) {
@@ -366,6 +385,104 @@ func handleOrgUnitsCorrectionsAPI(w http.ResponseWriter, r *http.Request, writeS
 	writeOrgUnitResult(w, r, http.StatusOK, result)
 }
 
+func handleOrgUnitsRescindsAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {
+	if r.Method != http.MethodPost {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+	if writeSvc == nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_service_missing", "orgunit service missing")
+		return
+	}
+
+	var req orgUnitRescindRecordAPIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+
+	result, err := writeSvc.RescindRecord(r.Context(), tenant.ID, orgunitservices.RescindRecordOrgUnitRequest{
+		OrgCode:             req.OrgCode,
+		TargetEffectiveDate: req.EffectiveDate,
+		RequestID:           req.RequestID,
+		Reason:              req.Reason,
+	})
+	if err != nil {
+		writeOrgUnitServiceError(w, r, err, "orgunit_rescind_failed")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"org_code":       result.OrgCode,
+		"effective_date": result.EffectiveDate,
+		"operation":      "RESCIND_EVENT",
+		"request_id":     req.RequestID,
+	})
+}
+
+func handleOrgUnitsRescindsOrgAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {
+	if r.Method != http.MethodPost {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+	if writeSvc == nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_service_missing", "orgunit service missing")
+		return
+	}
+
+	var req orgUnitRescindOrgAPIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+
+	result, err := writeSvc.RescindOrg(r.Context(), tenant.ID, orgunitservices.RescindOrgUnitRequest{
+		OrgCode:   req.OrgCode,
+		RequestID: req.RequestID,
+		Reason:    req.Reason,
+	})
+	if err != nil {
+		writeOrgUnitServiceError(w, r, err, "orgunit_rescind_org_failed")
+		return
+	}
+
+	rescindedEvents := 0
+	if raw, ok := result.Fields["rescinded_events"]; ok {
+		switch v := raw.(type) {
+		case int:
+			rescindedEvents = v
+		case int32:
+			rescindedEvents = int(v)
+		case int64:
+			rescindedEvents = int(v)
+		case float64:
+			rescindedEvents = int(v)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"org_code":         result.OrgCode,
+		"operation":        "RESCIND_ORG",
+		"request_id":       req.RequestID,
+		"rescinded_events": rescindedEvents,
+	})
+}
+
 func handleOrgUnitWriteAction(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -484,7 +601,13 @@ func orgUnitAPIStatusForCode(code string) (int, bool) {
 		orgUnitErrEffectiveOutOfRange,
 		orgUnitErrEventDateConflict,
 		orgUnitErrRequestDuplicate,
-		orgUnitErrEnableRequired:
+		orgUnitErrEnableRequired,
+		orgUnitErrRequestIDConflict,
+		orgUnitErrReplayFailed,
+		orgUnitErrRootDeleteForbidden,
+		orgUnitErrHasChildrenCannotDelete,
+		orgUnitErrHasDependenciesCannotDelete,
+		orgUnitErrEventRescinded:
 		return http.StatusConflict, true
 	default:
 		return 0, false

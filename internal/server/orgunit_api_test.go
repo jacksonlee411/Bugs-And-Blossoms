@@ -730,6 +730,207 @@ func TestHandleOrgUnitsCorrectionsAPI_NotFound(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsRescindsAPI_Success(t *testing.T) {
+	called := false
+	svc := orgUnitWriteServiceStub{
+		rescindRecordFn: func(_ context.Context, tenantID string, req orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			called = true
+			if tenantID != "t1" {
+				t.Fatalf("tenant=%s", tenantID)
+			}
+			if req.OrgCode != "A001" || req.TargetEffectiveDate != "2026-01-01" || req.RequestID != "r1" || req.Reason != "bad" {
+				t.Fatalf("unexpected request: %+v", req)
+			}
+			return orgunittypes.OrgUnitResult{OrgCode: "A001", EffectiveDate: "2026-01-01"}, nil
+		},
+	}
+	body := strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","request_id":"r1","reason":"bad"}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsRescindsAPI(rec, req, svc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !called {
+		t.Fatalf("expected rescind call")
+	}
+	if !strings.Contains(rec.Body.String(), "RESCIND_EVENT") {
+		t.Fatalf("body=%q", rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsRescindsAPI_BasicErrors(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds", strings.NewReader(`{"org_code":"A001"}`))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsAPI(rec, req, orgUnitWriteServiceStub{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/rescinds", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsAPI(rec, req, orgUnitWriteServiceStub{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("bad json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds", strings.NewReader("{"))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsAPI(rec, req, orgUnitWriteServiceStub{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("service missing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds", strings.NewReader(`{"org_code":"A001"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsAPI(rec, req, nil)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		svc := orgUnitWriteServiceStub{rescindRecordFn: func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			return orgunittypes.OrgUnitResult{}, errors.New("ORG_EVENT_NOT_FOUND")
+		}}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds", strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","request_id":"r1","reason":"bad"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsAPI(rec, req, svc)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+}
+
+func TestHandleOrgUnitsRescindsOrgAPI_Success(t *testing.T) {
+	called := false
+	svc := orgUnitWriteServiceStub{
+		rescindOrgFn: func(_ context.Context, tenantID string, req orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			called = true
+			if tenantID != "t1" {
+				t.Fatalf("tenant=%s", tenantID)
+			}
+			if req.OrgCode != "A001" || req.RequestID != "r2" || req.Reason != "bad-org" {
+				t.Fatalf("unexpected request: %+v", req)
+			}
+			return orgunittypes.OrgUnitResult{OrgCode: "A001", Fields: map[string]any{"rescinded_events": int64(3)}}, nil
+		},
+	}
+	body := strings.NewReader(`{"org_code":"A001","request_id":"r2","reason":"bad-org"}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds/org", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsRescindsOrgAPI(rec, req, svc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !called {
+		t.Fatalf("expected rescind org call")
+	}
+	if !strings.Contains(rec.Body.String(), "\"rescinded_events\":3") {
+		t.Fatalf("body=%q", rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsRescindsOrgAPI_RescindedEventsFieldTypes(t *testing.T) {
+	cases := []struct {
+		name  string
+		field any
+		want  string
+	}{
+		{name: "int", field: 3, want: `"rescinded_events":3`},
+		{name: "int32", field: int32(4), want: `"rescinded_events":4`},
+		{name: "int64", field: int64(5), want: `"rescinded_events":5`},
+		{name: "float64", field: float64(6), want: `"rescinded_events":6`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := orgUnitWriteServiceStub{
+				rescindOrgFn: func(context.Context, string, orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+					return orgunittypes.OrgUnitResult{OrgCode: "A001", Fields: map[string]any{"rescinded_events": tc.field}}, nil
+				},
+			}
+			req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds/org", strings.NewReader(`{"org_code":"A001","request_id":"r2","reason":"bad-org"}`))
+			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+			rec := httptest.NewRecorder()
+			handleOrgUnitsRescindsOrgAPI(rec, req, svc)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("body=%q", rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandleOrgUnitsRescindsOrgAPI_BasicErrors(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds/org", strings.NewReader(`{"org_code":"A001"}`))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsOrgAPI(rec, req, orgUnitWriteServiceStub{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/rescinds/org", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsOrgAPI(rec, req, orgUnitWriteServiceStub{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("bad json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds/org", strings.NewReader("{"))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsOrgAPI(rec, req, orgUnitWriteServiceStub{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("service missing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds/org", strings.NewReader(`{"org_code":"A001"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsOrgAPI(rec, req, nil)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("conflict", func(t *testing.T) {
+		svc := orgUnitWriteServiceStub{rescindOrgFn: func(context.Context, string, orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			return orgunittypes.OrgUnitResult{}, errors.New("ORG_ROOT_DELETE_FORBIDDEN")
+		}}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds/org", strings.NewReader(`{"org_code":"A001","request_id":"r2","reason":"bad-org"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsRescindsOrgAPI(rec, req, svc)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+}
+
 func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -756,11 +957,13 @@ func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
 }
 
 type orgUnitWriteServiceStub struct {
-	createFn  func(context.Context, string, orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
-	renameFn  func(context.Context, string, orgunitservices.RenameOrgUnitRequest) error
-	moveFn    func(context.Context, string, orgunitservices.MoveOrgUnitRequest) error
-	disableFn func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error
-	correctFn func(context.Context, string, orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
+	createFn        func(context.Context, string, orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
+	renameFn        func(context.Context, string, orgunitservices.RenameOrgUnitRequest) error
+	moveFn          func(context.Context, string, orgunitservices.MoveOrgUnitRequest) error
+	disableFn       func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error
+	correctFn       func(context.Context, string, orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
+	rescindRecordFn func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
+	rescindOrgFn    func(context.Context, string, orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 }
 
 func (s orgUnitWriteServiceStub) Create(ctx context.Context, tenantID string, req orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
@@ -800,4 +1003,18 @@ func (s orgUnitWriteServiceStub) Correct(ctx context.Context, tenantID string, r
 		return orgunittypes.OrgUnitResult{}, nil
 	}
 	return s.correctFn(ctx, tenantID, req)
+}
+
+func (s orgUnitWriteServiceStub) RescindRecord(ctx context.Context, tenantID string, req orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+	if s.rescindRecordFn == nil {
+		return orgunittypes.OrgUnitResult{}, nil
+	}
+	return s.rescindRecordFn(ctx, tenantID, req)
+}
+
+func (s orgUnitWriteServiceStub) RescindOrg(ctx context.Context, tenantID string, req orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+	if s.rescindOrgFn == nil {
+		return orgunittypes.OrgUnitResult{}, nil
+	}
+	return s.rescindOrgFn(ctx, tenantID, req)
 }

@@ -17,16 +17,22 @@ import (
 )
 
 const (
-	errOrgCodeInvalid       = "ORG_CODE_INVALID"
-	errOrgCodeNotFound      = "ORG_CODE_NOT_FOUND"
-	errEffectiveDateInvalid = "EFFECTIVE_DATE_INVALID"
-	errPatchFieldNotAllowed = "PATCH_FIELD_NOT_ALLOWED"
-	errPatchRequired        = "PATCH_REQUIRED"
-	errOrgEventNotFound     = "ORG_EVENT_NOT_FOUND"
-	errParentNotFoundAsOf   = "PARENT_NOT_FOUND_AS_OF"
-	errManagerPernrInvalid  = "MANAGER_PERNR_INVALID"
-	errManagerPernrNotFound = "MANAGER_PERNR_NOT_FOUND"
-	errManagerPernrInactive = "MANAGER_PERNR_INACTIVE"
+	errOrgCodeInvalid                 = "ORG_CODE_INVALID"
+	errOrgCodeNotFound                = "ORG_CODE_NOT_FOUND"
+	errEffectiveDateInvalid           = "EFFECTIVE_DATE_INVALID"
+	errPatchFieldNotAllowed           = "PATCH_FIELD_NOT_ALLOWED"
+	errPatchRequired                  = "PATCH_REQUIRED"
+	errOrgEventNotFound               = "ORG_EVENT_NOT_FOUND"
+	errParentNotFoundAsOf             = "PARENT_NOT_FOUND_AS_OF"
+	errManagerPernrInvalid            = "MANAGER_PERNR_INVALID"
+	errManagerPernrNotFound           = "MANAGER_PERNR_NOT_FOUND"
+	errManagerPernrInactive           = "MANAGER_PERNR_INACTIVE"
+	errOrgRequestIDConflict           = "ORG_REQUEST_ID_CONFLICT"
+	errOrgRootDeleteForbidden         = "ORG_ROOT_DELETE_FORBIDDEN"
+	errOrgHasChildrenCannotDelete     = "ORG_HAS_CHILDREN_CANNOT_DELETE"
+	errOrgHasDependenciesCannotDelete = "ORG_HAS_DEPENDENCIES_CANNOT_DELETE"
+	errOrgReplayFailed                = "ORG_REPLAY_FAILED"
+	errOrgEventRescinded              = "ORG_EVENT_RESCINDED"
 )
 
 var (
@@ -41,6 +47,8 @@ type OrgUnitWriteService interface {
 	Disable(ctx context.Context, tenantID string, req DisableOrgUnitRequest) error
 	SetBusinessUnit(ctx context.Context, tenantID string, req SetBusinessUnitRequest) error
 	Correct(ctx context.Context, tenantID string, req CorrectOrgUnitRequest) (types.OrgUnitResult, error)
+	RescindRecord(ctx context.Context, tenantID string, req RescindRecordOrgUnitRequest) (types.OrgUnitResult, error)
+	RescindOrg(ctx context.Context, tenantID string, req RescindOrgUnitRequest) (types.OrgUnitResult, error)
 }
 
 type CreateOrgUnitRequest struct {
@@ -80,6 +88,19 @@ type CorrectOrgUnitRequest struct {
 	TargetEffectiveDate string
 	Patch               OrgUnitCorrectionPatch
 	RequestID           string
+}
+
+type RescindRecordOrgUnitRequest struct {
+	OrgCode             string
+	TargetEffectiveDate string
+	RequestID           string
+	Reason              string
+}
+
+type RescindOrgUnitRequest struct {
+	OrgCode   string
+	RequestID string
+	Reason    string
 }
 
 type OrgUnitCorrectionPatch struct {
@@ -400,6 +421,91 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 		OrgCode:       orgCode,
 		EffectiveDate: correctedDate,
 		Fields:        fields,
+	}, nil
+}
+
+func (s *orgUnitWriteService) RescindRecord(ctx context.Context, tenantID string, req RescindRecordOrgUnitRequest) (types.OrgUnitResult, error) {
+	targetEffectiveDate, err := validateDate(req.TargetEffectiveDate)
+	if err != nil {
+		return types.OrgUnitResult{}, err
+	}
+
+	orgCode, err := normalizeOrgCode(req.OrgCode)
+	if err != nil {
+		return types.OrgUnitResult{}, err
+	}
+
+	requestID := strings.TrimSpace(req.RequestID)
+	if requestID == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
+	}
+
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("reason is required")
+	}
+
+	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil {
+		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
+			return types.OrgUnitResult{}, errors.New(errOrgCodeNotFound)
+		}
+		return types.OrgUnitResult{}, err
+	}
+
+	if _, err := s.store.SubmitRescindEvent(ctx, tenantID, orgID, targetEffectiveDate, reason, requestID, tenantID); err != nil {
+		return types.OrgUnitResult{}, err
+	}
+
+	return types.OrgUnitResult{
+		OrgID:         strconv.Itoa(orgID),
+		OrgCode:       orgCode,
+		EffectiveDate: targetEffectiveDate,
+		Fields: map[string]any{
+			"operation":  "RESCIND_EVENT",
+			"request_id": requestID,
+		},
+	}, nil
+}
+
+func (s *orgUnitWriteService) RescindOrg(ctx context.Context, tenantID string, req RescindOrgUnitRequest) (types.OrgUnitResult, error) {
+	orgCode, err := normalizeOrgCode(req.OrgCode)
+	if err != nil {
+		return types.OrgUnitResult{}, err
+	}
+
+	requestID := strings.TrimSpace(req.RequestID)
+	if requestID == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
+	}
+
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("reason is required")
+	}
+
+	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil {
+		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
+			return types.OrgUnitResult{}, errors.New(errOrgCodeNotFound)
+		}
+		return types.OrgUnitResult{}, err
+	}
+
+	rescindedEvents, err := s.store.SubmitRescindOrg(ctx, tenantID, orgID, reason, requestID, tenantID)
+	if err != nil {
+		return types.OrgUnitResult{}, err
+	}
+
+	return types.OrgUnitResult{
+		OrgID:         strconv.Itoa(orgID),
+		OrgCode:       orgCode,
+		EffectiveDate: "",
+		Fields: map[string]any{
+			"operation":        "RESCIND_ORG",
+			"request_id":       requestID,
+			"rescinded_events": rescindedEvents,
+		},
 	}, nil
 }
 
