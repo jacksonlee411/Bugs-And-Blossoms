@@ -74,6 +74,10 @@ type OrgUnitNodeVersion struct {
 	EventType     string
 }
 
+type OrgUnitNodeEffectiveDateCorrector interface {
+	CorrectNodeEffectiveDate(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, newEffectiveDate string, requestID string) error
+}
+
 var errOrgUnitNotFound = errors.New("org_unit_not_found")
 
 func canEditOrgNodes(ctx context.Context) bool {
@@ -1135,6 +1139,48 @@ SELECT orgunit.submit_org_event(
 	return nil
 }
 
+func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, newEffectiveDate string, requestID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config(app.current_tenant, $1, true);`, tenantID); err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(targetEffectiveDate) == "" {
+		return errors.New("effective_date is required")
+	}
+	if strings.TrimSpace(newEffectiveDate) == "" {
+		return errors.New("effective_date is required")
+	}
+	if strings.TrimSpace(requestID) == "" {
+		return errors.New("request_id is required")
+	}
+
+	patch := `{"effective_date":` + strconv.Quote(newEffectiveDate) + `}`
+	var correctionUUID string
+	if err := tx.QueryRow(ctx, `
+SELECT orgunit.submit_org_event_correction(
+  $1::uuid,
+  $2::int,
+  $3::date,
+  $4::jsonb,
+  $5::text,
+  $6::uuid
+)
+`, tenantID, orgID, targetEffectiveDate, []byte(patch), requestID, tenantID).Scan(&correctionUUID); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestCode string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -1646,9 +1692,21 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 				return
 			}
 
+			currentEffectiveDate := strings.TrimSpace(r.Form.Get("current_effective_date"))
+			if currentEffectiveDate != "" {
+				if _, err := time.Parse("2006-01-02", currentEffectiveDate); err != nil {
+					nodes, errMsg := listNodes("current_effective_date 无效: " + err.Error())
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					return
+				}
+			}
+
 			minDate := ""
 			maxDate := ""
+			prevDate := ""
+			nextDate := ""
 			dateExists := false
+			selectedExists := false
 			for _, v := range versions {
 				if v.EffectiveDate == "" {
 					continue
@@ -1662,6 +1720,27 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 				if v.EffectiveDate == effectiveDate {
 					dateExists = true
 				}
+				if currentEffectiveDate != "" {
+					if v.EffectiveDate == currentEffectiveDate {
+						selectedExists = true
+					}
+					if v.EffectiveDate < currentEffectiveDate {
+						if prevDate == "" || v.EffectiveDate > prevDate {
+							prevDate = v.EffectiveDate
+						}
+					}
+					if v.EffectiveDate > currentEffectiveDate {
+						if nextDate == "" || v.EffectiveDate < nextDate {
+							nextDate = v.EffectiveDate
+						}
+					}
+				}
+			}
+
+			if currentEffectiveDate != "" && !selectedExists {
+				nodes, errMsg := listNodes("record not found")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+				return
 			}
 
 			switch action {
@@ -1677,7 +1756,28 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
 					return
 				}
-				if minDate != "" && maxDate != "" {
+				if currentEffectiveDate != "" {
+					if prevDate == "" && effectiveDate < currentEffectiveDate {
+						// allow backdating earliest record via correction
+					} else if nextDate == "" {
+						if maxDate != "" && effectiveDate <= maxDate {
+							nodes, errMsg := listNodes("effective_date conflict")
+							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+							return
+						}
+					} else {
+						if prevDate != "" && effectiveDate <= prevDate {
+							nodes, errMsg := listNodes("effective_date must be between existing records")
+							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+							return
+						}
+						if effectiveDate >= nextDate {
+							nodes, errMsg := listNodes("effective_date must be between existing records")
+							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+							return
+						}
+					}
+				} else if minDate != "" && maxDate != "" {
 					if effectiveDate <= minDate || effectiveDate >= maxDate {
 						nodes, errMsg := listNodes("effective_date must be between existing records")
 						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
@@ -1695,6 +1795,28 @@ func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) 
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
 					return
 				}
+			}
+
+			if action == "insert_record" && currentEffectiveDate != "" && prevDate == "" && effectiveDate < currentEffectiveDate {
+				corrector, ok := store.(OrgUnitNodeEffectiveDateCorrector)
+				if !ok {
+					nodes, errMsg := listNodes("correction not supported")
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					return
+				}
+				requestID, err := uuidv7.NewString()
+				if err != nil {
+					nodes, errMsg := listNodes(err.Error())
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					return
+				}
+				if err := corrector.CorrectNodeEffectiveDate(r.Context(), tenant.ID, orgIDInt, currentEffectiveDate, effectiveDate, requestID); err != nil {
+					nodes, errMsg := listNodes(err.Error())
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					return
+				}
+				http.Redirect(w, r, "/org/nodes?tree_as_of="+url.QueryEscape(treeAsOf), http.StatusSeeOther)
+				return
 			}
 
 			if action == "delete_record" {
@@ -1961,6 +2083,19 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	if selectedIdx >= 0 && selectedIdx < len(versions)-1 {
 		nextDate = versions[selectedIdx+1].EffectiveDate
 	}
+	minDate := ""
+	maxDate := ""
+	for _, v := range versions {
+		if v.EffectiveDate == "" {
+			continue
+		}
+		if minDate == "" || v.EffectiveDate < minDate {
+			minDate = v.EffectiveDate
+		}
+		if maxDate == "" || v.EffectiveDate > maxDate {
+			maxDate = v.EffectiveDate
+		}
+	}
 
 	successMsg := ""
 	if flash == "success" {
@@ -1981,6 +2116,10 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(` data-org-code="` + html.EscapeString(details.OrgCode) + `"`)
 	b.WriteString(` data-current-effective-date="` + html.EscapeString(currentEffectiveDate) + `"`)
 	b.WriteString(` data-current-event-id="` + html.EscapeString(currentEventID) + `"`)
+	b.WriteString(` data-min-effective-date="` + html.EscapeString(minDate) + `"`)
+	b.WriteString(` data-max-effective-date="` + html.EscapeString(maxDate) + `"`)
+	b.WriteString(` data-prev-effective-date="` + html.EscapeString(prevDate) + `"`)
+	b.WriteString(` data-next-effective-date="` + html.EscapeString(nextDate) + `"`)
 	b.WriteString(` data-mode="readonly">`)
 
 	b.WriteString(`<div class="org-node-status-messages">`)
@@ -2718,8 +2857,45 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
 
     const recordActionConfig = {
       add_record: { title: "新增记录", hint: "新增记录将追加为最新版本", showName: true, submit: "保存" },
-      insert_record: { title: "插入记录", hint: "生效日需位于已有记录之间", showName: true, submit: "保存" },
+      insert_record: { title: "插入记录", hint: "生效日需位于相邻记录之间（可早于所选记录）", showName: true, submit: "保存" },
       delete_record: { title: "删除记录", hint: "删除记录将停用该组织", showName: false, submit: "删除" },
+    };
+
+    const parseDate = (value) => {
+      if (!value) {
+        return null;
+      }
+      const parts = String(value).split("-");
+      if (parts.length !== 3) {
+        return null;
+      }
+      const year = Number(parts[0]);
+      const month = Number(parts[1]);
+      const day = Number(parts[2]);
+      if (!year || !month || !day) {
+        return null;
+      }
+      const date = new Date(Date.UTC(year, month - 1, day));
+      if (Number.isNaN(date.getTime())) {
+        return null;
+      }
+      return date;
+    };
+
+    const formatDate = (date) => {
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(date.getUTCDate()).padStart(2, "0");
+      return year + "-" + month + "-" + day;
+    };
+
+    const addDays = (value, days) => {
+      const date = parseDate(value);
+      if (!date) {
+        return "";
+      }
+      date.setUTCDate(date.getUTCDate() + days);
+      return formatDate(date);
     };
 
     tree.addEventListener("sl-lazy-load", (event) => {
@@ -2883,7 +3059,8 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
                 EFFECTIVE_DATE_INVALID: "生效日期无效",
                 EFFECTIVE_DATE_OUT_OF_RANGE: "生效日期超出范围",
                 ORG_EVENT_NOT_FOUND: "未找到该生效日记录",
-                PARENT_NOT_FOUND_AS_OF: "该日期上级组织不存在",
+                PARENT_NOT_FOUND_AS_OF: "所选日期上级组织未生效或已失效，请调整日期",
+                ORG_PARENT_NOT_FOUND_AS_OF: "所选日期上级组织未生效或已失效，请调整日期",
                 MANAGER_PERNR_INVALID: "负责人编号无效",
                 MANAGER_PERNR_NOT_FOUND: "负责人不存在",
                 MANAGER_PERNR_INACTIVE: "负责人已失效",
@@ -3064,9 +3241,43 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
           if (actionInput) {
             actionInput.value = action;
           }
+          const currentEffectiveDate = panel.dataset.currentEffectiveDate || "";
+          const prevEffectiveDate = panel.dataset.prevEffectiveDate || "";
+          const nextEffectiveDate = panel.dataset.nextEffectiveDate || "";
+          const maxEffectiveDate = panel.dataset.maxEffectiveDate || "";
+          let defaultDate = currentEffectiveDate;
+          let hintText = config.hint;
+          if (action === "add_record") {
+            if (maxEffectiveDate) {
+              defaultDate = addDays(maxEffectiveDate, 1);
+              hintText = "新增记录日期需晚于 " + maxEffectiveDate;
+            }
+          }
+          if (action === "insert_record") {
+            if (!nextEffectiveDate) {
+              const base = maxEffectiveDate || currentEffectiveDate;
+              if (base) {
+                defaultDate = addDays(base, 1);
+              }
+              if (maxEffectiveDate) {
+                hintText = "当前为最晚记录，插入视同新增；日期需晚于 " + maxEffectiveDate;
+              } else {
+                hintText = "当前为最晚记录，插入视同新增";
+              }
+            } else {
+              if (currentEffectiveDate) {
+                defaultDate = addDays(currentEffectiveDate, 1);
+              }
+              if (prevEffectiveDate) {
+                hintText = "插入日期需介于 " + prevEffectiveDate + " ~ " + nextEffectiveDate + " 之间（可早于所选记录）";
+              } else {
+                hintText = "插入日期需早于 " + nextEffectiveDate + "（可早于所选记录）";
+              }
+            }
+          }
           const effectiveInput = form.querySelector("input[name=\"effective_date\"]");
-          if (effectiveInput && panel.dataset.currentEffectiveDate) {
-            effectiveInput.value = panel.dataset.currentEffectiveDate;
+          if (effectiveInput) {
+            effectiveInput.value = defaultDate;
           }
           const nameLabel = form.querySelector(".org-node-record-name");
           if (nameLabel) {
@@ -3078,7 +3289,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
           }
           const hint = form.querySelector(".org-node-record-form-hint");
           if (hint) {
-            hint.textContent = config.hint;
+            hint.textContent = hintText;
           }
         }
         formWrap.scrollIntoView({ block: "nearest" });

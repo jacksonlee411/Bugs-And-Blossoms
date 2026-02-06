@@ -141,7 +141,7 @@ func (s *OrgUnitPGStore) FindEventByEffectiveDate(ctx context.Context, tenantID 
 	var payload []byte
 	if err := tx.QueryRow(ctx, `
 SELECT id, event_uuid::text, org_id, event_type, effective_date::text, payload, transaction_time
-FROM orgunit.org_events
+FROM orgunit.org_events_effective
 WHERE tenant_uuid = $1::uuid AND org_id = $2::int AND effective_date = $3::date
 `, tenantID, orgID, effectiveDate).Scan(&event.ID, &event.EventUUID, &event.OrgID, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
