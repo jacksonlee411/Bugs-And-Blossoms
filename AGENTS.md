@@ -179,6 +179,7 @@ modules/{module}/
 - DEV-PLAN-075：OrgUnit 生效日期不允许回溯的限制评估：`docs/dev-plans/075-orgunit-effective-date-backdating-assessment.md`
 - DEV-PLAN-075 执行日志：`docs/dev-records/dev-plan-075-execution-log.md`
 - DEV-PLAN-075A：OrgUnit 记录新增/插入 UI 与可编辑字段问题记录：`docs/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
+- DEV-PLAN-075C：OrgUnit 删除记录/停用语义混用调查与收敛方案：`docs/dev-plans/075c-orgunit-delete-disable-semantics-alignment.md`
 - DEV-PLAN-076：OrgUnit 版本切换导致选中组织丢失问题与修复方案：`docs/dev-plans/076-orgunit-version-switch-selection-retention.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`

@@ -6,7 +6,7 @@
 - 需要基于当前代码，列出 OrgUnit CRUD 在页面与 API 的实现情况，作为后续补齐的入口。
 
 ## 范围
-- 组织单元 CRUD（Create/Read/Update/Disable），包含树生效日期 `tree_as_of` 与详情版本 `effective_date` 语义。
+- 组织单元 CRUD（Create/Read/Update）+ 状态停用/启用 + 错误数据删除（Delete/Purge），包含树生效日期 `tree_as_of` 与详情版本 `effective_date` 语义。
 - 不包含 SetID/Scope Package 等周边能力。
 
 ## 清单
@@ -124,7 +124,7 @@
 - 直接修改 `org_events` 或 `org_unit_versions` 的历史记录与生效日期。
 - 风险：破坏事件不可变性、审计链与幂等性，需明确审批与合规约束。
 
-确认结论（来自当前需求）：
+确认结论（来自当前需求，2026-02-06 按 DEV-PLAN-075C 收敛）：
 - 不允许同一 org_id 同日多条事件（维持 `(tenant_uuid, org_id, effective_date)` 唯一约束）。
 - 同日停用：默认拒绝（同日唯一约束冲突），返回 `EVENT_DATE_CONFLICT`（409）。
 - “原地修改”需保留修改前快照，不需要记录原因。
@@ -133,6 +133,9 @@
 - 原地修改范围：以“不可更正清单”为准（含 `status`）；本期 UI 暴露负责人/上级/名称。
 - 改生效日：不新增显式字段；允许在更正 `patch` 中修改 `effective_date`，**可向前或向后调整**，但新日期必须落在该事件原区间内（介于前后生效日之间；缺失一侧边界时视为单侧无界），超出则拒绝；同时新日期不得早于上级组织最早生效日期且该日期上级组织必须有效；修改生效日期必须触发重放。
 - 状态变更：必须通过显式事件（`ENABLE` / `DISABLE`），不允许通过更正修改 `status`。
+- 删除记录：定义为“物理删除错误事件 + 重放”，不再等价于 `DISABLE`。
+- 删除组织：V1 仅支持“无子组织”的错误建档删除；根组织禁止删除。
+- 审计：第一阶段复用 `org_event_corrections_history`，不新增审计表。
 
 ### 3) 状态变更事件（ENABLE / DISABLE）
 目标：为“恢复有效 / 停用”提供明确事件类型与入口，避免通过更正直接修改 `status`。
@@ -150,7 +153,8 @@
 - **POST `/org/nodes?tree_as_of=YYYY-MM-DD`**
   - `action=add_record`：追加一条记录（生效日必须晚于当前最后一条记录）。
   - `action=insert_record`：插入一条记录（生效日位于前后记录之间，允许早于所选记录）；若选择的是最晚记录，则视同 `add_record`，生效日必须晚于最晚记录。
-  - `action=delete_record`：删除记录（当前阶段实现为 `DISABLE` 事件，属于软删除/停用语义）。
+  - `action=delete_record`：删除记录（删除错误数据；物理删除目标事件并触发重放）。
+  - `action=delete_org`：删除组织（删除该组织全部历史事件；V1 限制为“无子组织且非根组织”）。
 - **输入字段**：
   - `org_code`（必填）
   - `effective_date`（必填）
@@ -166,9 +170,13 @@
   - 区间超限：`日期需介于 {min} ~ {max} 之间（可早于所选记录）`
   - 同日冲突：`该日期已存在记录，请选择其它日期`
   - 上级组织无效：`所选日期上级组织未生效或已失效，请调整日期`
-- **实现约束（保持无 DB 迁移）**：
+  - 删除受限：`当前组织存在子组织或为根组织，不能执行删除组织`
+  - 重放失败：`删除后重放失败，操作已回滚`
+- **实现约束（保持低复杂度）**：
   - `add_record` / `insert_record` 通过提交 `RENAME` 事件建立记录；当 `name` 为空时使用当前名称。
-  - `delete_record` 通过提交 `DISABLE` 事件实现；若仅剩一条记录则拒绝（409）。
+  - `delete_record` 不写 `DISABLE` 事件，改为“审计快照 + 物理删除目标事件 + replay”；任一步失败整体回滚。
+  - `delete_org` 采用同一事务语义（审计 + 删除 + replay）；有子组织或根组织场景拒绝。
+  - 删除审计复用 `org_event_corrections_history`（`replacement_payload.op=PURGE_RECORD|PURGE_ORG`），第一阶段不新增审计表。
   - 同一 `effective_date` 已存在记录则拒绝（409）。
 
 #### UI 交互口径（HR 用户视角）
@@ -573,6 +581,9 @@ type OrgUnitReadService interface {
 - `EVENT_DATE_CONFLICT`（409）
 - `ORG_ENABLE_REQUIRED`（409，末状态为 disabled，仅允许 ENABLE）
 - `REQUEST_DUPLICATE`（409，幂等请求冲突）
+- `ORG_ROOT_DELETE_FORBIDDEN`（409）
+- `ORG_HAS_CHILDREN_CANNOT_DELETE`（409）
+- `ORG_REPLAY_FAILED`（409 或 422，删除后重放失败并回滚）
 
 **UI 提示文案（建议）**：
 - `EFFECTIVE_DATE_INVALID` → `请输入 YYYY-MM-DD 格式的日期`
