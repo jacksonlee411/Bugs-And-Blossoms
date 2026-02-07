@@ -1202,6 +1202,120 @@ func TestDisableSuccess(t *testing.T) {
 	}
 }
 
+func TestEnableInvalidDate(t *testing.T) {
+	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
+	err := svc.Enable(context.Background(), "t1", EnableOrgUnitRequest{
+		EffectiveDate: "2026-13-01",
+		OrgCode:       "ROOT",
+	})
+	if err == nil || !httperr.IsBadRequest(err) || err.Error() != errEffectiveDateInvalid {
+		t.Fatalf("expected effective date invalid, got %v", err)
+	}
+}
+
+func TestEnableInvalidOrgCode(t *testing.T) {
+	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
+	err := svc.Enable(context.Background(), "t1", EnableOrgUnitRequest{
+		EffectiveDate: "2026-01-01",
+		OrgCode:       " 	 ",
+	})
+	if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgCodeInvalid {
+		t.Fatalf("expected org code invalid, got %v", err)
+	}
+}
+
+func TestEnableOrgCodeNotFound(t *testing.T) {
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 0, orgunitpkg.ErrOrgCodeNotFound
+		},
+	}
+	svc := NewOrgUnitWriteService(store)
+	err := svc.Enable(context.Background(), "t1", EnableOrgUnitRequest{
+		EffectiveDate: "2026-01-01",
+		OrgCode:       "ROOT",
+	})
+	if err == nil || err.Error() != errOrgCodeNotFound {
+		t.Fatalf("expected org code not found, got %v", err)
+	}
+}
+
+func TestEnableResolveError(t *testing.T) {
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 0, errors.New("resolve")
+		},
+	}
+	svc := NewOrgUnitWriteService(store)
+	err := svc.Enable(context.Background(), "t1", EnableOrgUnitRequest{
+		EffectiveDate: "2026-01-01",
+		OrgCode:       "ROOT",
+	})
+	if err == nil || err.Error() != "resolve" {
+		t.Fatalf("expected resolve error, got %v", err)
+	}
+}
+
+func TestEnableUUIDError(t *testing.T) {
+	withNewUUID(t, func() (string, error) {
+		return "", errors.New("uuid")
+	})
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 10000001, nil
+		},
+	}
+	svc := NewOrgUnitWriteService(store)
+	err := svc.Enable(context.Background(), "t1", EnableOrgUnitRequest{
+		EffectiveDate: "2026-01-01",
+		OrgCode:       "ROOT",
+	})
+	if err == nil || err.Error() != "uuid" {
+		t.Fatalf("expected uuid error, got %v", err)
+	}
+}
+
+func TestEnableSubmitEventError(t *testing.T) {
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 10000001, nil
+		},
+		submitEventFn: func(_ context.Context, _ string, _ string, _ *int, _ string, _ string, _ json.RawMessage, _ string, _ string) (int64, error) {
+			return 0, errors.New("submit")
+		},
+	}
+	svc := NewOrgUnitWriteService(store)
+	err := svc.Enable(context.Background(), "t1", EnableOrgUnitRequest{
+		EffectiveDate: "2026-01-01",
+		OrgCode:       "ROOT",
+	})
+	if err == nil || err.Error() != "submit" {
+		t.Fatalf("expected submit error, got %v", err)
+	}
+}
+
+func TestEnableSuccess(t *testing.T) {
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 10000001, nil
+		},
+		submitEventFn: func(_ context.Context, _ string, _ string, _ *int, eventType string, _ string, _ json.RawMessage, _ string, _ string) (int64, error) {
+			if eventType != "ENABLE" {
+				t.Fatalf("event_type=%q", eventType)
+			}
+			return 1, nil
+		},
+	}
+	svc := NewOrgUnitWriteService(store)
+	err := svc.Enable(context.Background(), "t1", EnableOrgUnitRequest{
+		EffectiveDate: "2026-01-01",
+		OrgCode:       "ROOT",
+	})
+	if err != nil {
+		t.Fatalf("expected ok, got %v", err)
+	}
+}
+
 func TestSetBusinessUnitInvalidDate(t *testing.T) {
 	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
 	err := svc.SetBusinessUnit(context.Background(), "t1", SetBusinessUnitRequest{

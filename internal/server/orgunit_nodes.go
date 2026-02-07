@@ -426,6 +426,18 @@ func orgUnitStatusLabel(status string) string {
 	return "有效"
 }
 
+func normalizeOrgUnitTargetStatus(raw string) (string, error) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	switch value {
+	case "active", "enabled", "有效":
+		return "active", nil
+	case "disabled", "inactive", "无效":
+		return "disabled", nil
+	default:
+		return "", errors.New("target_status invalid")
+	}
+}
+
 func (s *orgUnitPGStore) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -2199,6 +2211,82 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 			return strconv.Itoa(orgID), true
 		}
 
+		if action == "change_status" {
+			if writeSvc == nil {
+				nodes, errMsg := listNodes("orgunit service missing")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
+				return
+			}
+
+			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
+			if effectiveDate == "" {
+				effectiveDate = treeAsOf
+			}
+			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
+				nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
+				return
+			}
+
+			targetStatus, err := normalizeOrgUnitTargetStatus(r.Form.Get("target_status"))
+			if err != nil {
+				nodes, errMsg := listNodes(err.Error())
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
+				return
+			}
+
+			orgID, ok := resolveOrgID(r.Form.Get("org_code"), "org_code", true)
+			if !ok {
+				return
+			}
+			orgIDInt, _ := strconv.Atoi(orgID)
+			details, err := getNodeDetailsByVisibility(r.Context(), store, tenant.ID, orgIDInt, effectiveDate, true)
+			if err != nil {
+				nodes, errMsg := listNodes(err.Error())
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
+				return
+			}
+
+			currentStatus := strings.ToLower(strings.TrimSpace(details.Status))
+			if currentStatus == "" {
+				currentStatus = "active"
+			}
+			if targetStatus == currentStatus {
+				nodes, errMsg := listNodes("未检测到状态变更")
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
+				return
+			}
+
+			orgCode := strings.TrimSpace(details.OrgCode)
+			if orgCode == "" {
+				orgCode = strings.TrimSpace(r.Form.Get("org_code"))
+			}
+
+			if targetStatus == "disabled" {
+				err = writeSvc.Disable(r.Context(), tenant.ID, orgunitservices.DisableOrgUnitRequest{
+					EffectiveDate: effectiveDate,
+					OrgCode:       orgCode,
+				})
+			} else {
+				err = writeSvc.Enable(r.Context(), tenant.ID, orgunitservices.EnableOrgUnitRequest{
+					EffectiveDate: effectiveDate,
+					OrgCode:       orgCode,
+				})
+			}
+			if err != nil {
+				nodes, errMsg := listNodes(orgNodeWriteErrorMessage(err))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
+				return
+			}
+
+			detailsURL := "/org/nodes/view?effective_date=" + url.QueryEscape(effectiveDate) + "&tree_as_of=" + url.QueryEscape(treeAsOf) + "&org_id=" + url.QueryEscape(orgID)
+			if includeDisabled {
+				detailsURL += "&include_disabled=1"
+			}
+			http.Redirect(w, r, detailsURL, http.StatusSeeOther)
+			return
+		}
+
 		if action == "add_record" || action == "insert_record" || action == "delete_record" || action == "delete_org" {
 			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
 			if effectiveDate == "" {
@@ -2766,6 +2854,13 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(`<button type="button" class="org-node-record-btn is-warning" data-action="correct_record"` + disabledAttr + `>修正记录</button>`)
 	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-records-section">`)
+	b.WriteString(`<div class="org-node-records-section-title">状态变更</div>`)
+	b.WriteString(`<div class="org-node-records-section-hint">在有效/无效之间显式切换状态（独立动作，不与字段变更混用）</div>`)
+	b.WriteString(`<div class="org-node-records-section-actions">`)
+	b.WriteString(`<button type="button" class="org-node-record-btn" data-action="change_status"` + disabledAttr + `>状态变更</button>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`</div>`)
 	b.WriteString(`<div class="org-node-records-section is-danger">`)
 	b.WriteString(`<div class="org-node-records-section-title">危险操作</div>`)
 	b.WriteString(`<div class="org-node-records-section-hint">该操作将删除错误数据（通过事件撤销实现），并立即重放版本；操作可审计，不可撤销。</div>`)
@@ -2841,6 +2936,11 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(`<label class="org-node-record-name">组织名称 <input name="name" value="" /></label>`)
 	b.WriteString(`<label class="org-node-record-parent">上级组织 <input name="parent_org_code" value="" /></label>`)
 	b.WriteString(`<label class="org-node-record-business-unit"><input type="checkbox" name="is_business_unit" value="true" /> 业务单元</label>`)
+	b.WriteString(`<label class="org-node-record-status">状态 `)
+	b.WriteString(`<select name="target_status">`)
+	b.WriteString(`<option value="active">有效</option>`)
+	b.WriteString(`<option value="disabled">无效</option>`)
+	b.WriteString(`</select></label>`)
 	b.WriteString(`</div>`)
 	b.WriteString(`<div class="org-node-record-step" data-step="4"><div class="org-node-record-summary"></div></div>`)
 	b.WriteString(`<div class="org-node-record-form-actions">`)
@@ -3578,10 +3678,27 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
     };
 
     const recordActionConfig = {
-      add_record: { title: "新增记录", hint: "新增记录将追加为最新版本", showFields: true, submit: "保存" },
-      insert_record: { title: "插入记录", hint: "生效日需位于相邻记录之间（可早于所选记录）", showFields: true, submit: "保存" },
-      delete_record: { title: "删除记录（错误数据）", hint: "该操作将删除错误数据（通过事件撤销实现），并立即重放版本；操作可审计，不可撤销。", showFields: false, submit: "删除记录" },
-      delete_org: { title: "删除组织（错误建档）", hint: "该操作将删除错误建档组织（通过事件撤销实现），并立即重放版本；操作可审计，不可撤销。", showFields: false, submit: "删除组织" },
+      add_record: { title: "新增记录", hint: "新增记录将追加为最新版本", showFields: true, showStatus: false, submit: "保存" },
+      insert_record: { title: "插入记录", hint: "生效日需位于相邻记录之间（可早于所选记录）", showFields: true, showStatus: false, submit: "保存" },
+      change_status: { title: "状态变更", hint: "在有效/无效之间显式切换状态。", showFields: false, showStatus: true, submit: "保存" },
+      delete_record: { title: "删除记录（错误数据）", hint: "该操作将删除错误数据（通过事件撤销实现），并立即重放版本；操作可审计，不可撤销。", showFields: false, showStatus: false, submit: "删除记录" },
+      delete_org: { title: "删除组织（错误建档）", hint: "该操作将删除错误建档组织（通过事件撤销实现），并立即重放版本；操作可审计，不可撤销。", showFields: false, showStatus: false, submit: "删除组织" },
+    };
+
+    const normalizeTargetStatus = (value) => {
+      const normalized = String(value || "").trim().toLowerCase();
+      if (normalized === "enabled" || normalized === "有效") {
+        return "active";
+      }
+      if (normalized === "inactive" || normalized === "无效") {
+        return "disabled";
+      }
+      return normalized;
+    };
+
+    const statusLabelMap = {
+      active: "有效",
+      disabled: "无效",
     };
 
     const parseDate = (value) => {
@@ -3644,6 +3761,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
     const recordActionLabelMap = {
       add_record: "新增记录",
       insert_record: "插入记录",
+      change_status: "状态变更",
       delete_record: "删除记录（错误数据）",
       delete_org: "删除组织（错误建档）",
     };
@@ -3706,6 +3824,13 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
         summary.textContent = "将执行：" + actionLabel + "。该操作会通过事件撤销删除错误数据并立即重放，操作可审计且不可撤销。";
         return;
       }
+      if (action === "change_status") {
+        const targetSelect = form.querySelector("select[name=\"target_status\"]");
+        const targetStatus = normalizeTargetStatus(targetSelect ? targetSelect.value : "");
+        const statusLabel = statusLabelMap[targetStatus] || "(未选择)";
+        summary.textContent = "将执行：" + actionLabel + "，生效日期：" + (effectiveDate || "(未填写)") + "，目标状态：" + statusLabel + "。";
+        return;
+      }
       const changeSelect = form.querySelector("select[name=\"record_change_type\"]");
       const changeType = changeSelect ? String(changeSelect.value || "").trim() : "rename";
       const changeLabel = recordChangeLabelMap[changeType] || changeType;
@@ -3754,7 +3879,13 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       const submitBtn = form.querySelector(".org-node-record-submit");
       if (submitBtn) {
         submitBtn.style.display = step === 4 ? "inline-flex" : "none";
-        submitBtn.textContent = config.submit;
+        let submitText = config.submit;
+        if (action === "change_status") {
+          const targetSelect = form.querySelector("select[name=\"target_status\"]");
+          const targetStatus = normalizeTargetStatus(targetSelect ? targetSelect.value : "");
+          submitText = targetStatus === "active" ? "启用" : "停用";
+        }
+        submitBtn.textContent = submitText;
       }
       const intent = form.querySelector(".org-node-record-intent");
       if (intent) {
@@ -3764,8 +3895,12 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       const nameLabel = form.querySelector(".org-node-record-name");
       const parentLabel = form.querySelector(".org-node-record-parent");
       const buLabel = form.querySelector(".org-node-record-business-unit");
+      const statusLabel = form.querySelector(".org-node-record-status");
       if (changeRow) {
         changeRow.style.display = config.showFields ? "grid" : "none";
+      }
+      if (statusLabel) {
+        statusLabel.style.display = config.showStatus ? "grid" : "none";
       }
       if (config.showFields) {
         updateRecordChangeFields(form);
@@ -3787,7 +3922,13 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       } else if (step === 2) {
         stepHint = form.dataset.rangeHint || config.hint;
       } else if (step === 3) {
-        stepHint = config.showFields ? "按变更类型填写字段后继续。" : "删除操作无需填写字段，继续确认即可。";
+        if (config.showFields) {
+          stepHint = "按变更类型填写字段后继续。";
+        } else if (config.showStatus) {
+          stepHint = "请选择目标状态后继续。";
+        } else {
+          stepHint = "删除操作无需填写字段，继续确认即可。";
+        }
       } else {
         stepHint = "请确认摘要后提交。";
       }
@@ -3839,6 +3980,13 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
           if (effectiveDate >= nextEffectiveDate) {
             return "effective_date must be between existing records";
           }
+        }
+      }
+      if (step === 3 && action === "change_status") {
+        const statusSelect = form.querySelector("select[name=\"target_status\"]");
+        const targetStatus = normalizeTargetStatus(statusSelect ? statusSelect.value : "");
+        if (targetStatus !== "active" && targetStatus !== "disabled") {
+          return "target_status invalid";
         }
       }
       if (step === 3 && config.showFields) {
@@ -4278,6 +4426,11 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
           if (changeSelect) {
             changeSelect.value = "rename";
           }
+          const targetSelect = form.querySelector("select[name=\"target_status\"]");
+          if (targetSelect) {
+            const currentStatus = normalizeTargetStatus(panel.dataset.currentStatus || "active");
+            targetSelect.value = currentStatus === "disabled" ? "disabled" : "active";
+          }
           const currentEffectiveDate = panel.dataset.currentEffectiveDate || "";
           const prevEffectiveDate = panel.dataset.prevEffectiveDate || "";
           const nextEffectiveDate = panel.dataset.nextEffectiveDate || "";
@@ -4369,10 +4522,11 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       }
       const recordForm = input.closest ? input.closest(".org-node-record-action-form") : null;
       if (recordForm) {
-        if (input.name === "record_change_type") {
-          updateRecordChangeFields(recordForm);
+        if (input.name === "record_change_type" || input.name === "target_status") {
+          updateRecordWizardStep(recordForm);
+        } else {
+          updateRecordSummary(recordForm);
         }
-        updateRecordSummary(recordForm);
         return;
       }
       const form = input.closest ? input.closest(".org-node-edit-form") : null;
@@ -4444,10 +4598,11 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       }
       const recordForm = select.closest ? select.closest(".org-node-record-action-form") : null;
       if (recordForm) {
-        if (select.name === "record_change_type") {
-          updateRecordChangeFields(recordForm);
+        if (select.name === "record_change_type" || select.name === "target_status") {
+          updateRecordWizardStep(recordForm);
+        } else {
+          updateRecordSummary(recordForm);
         }
-        updateRecordSummary(recordForm);
         return;
       }
       if (!select.classList || !select.classList.contains("org-node-version-select")) {

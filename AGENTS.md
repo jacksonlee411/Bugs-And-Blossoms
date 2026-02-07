@@ -184,6 +184,7 @@ modules/{module}/
 - DEV-PLAN-075B 执行日志：`docs/dev-records/dev-plan-075b-execution-log.md`
 - DEV-PLAN-075C：OrgUnit 删除记录/停用语义混用调查与收敛方案：`docs/dev-plans/075c-orgunit-delete-disable-semantics-alignment.md`
 - DEV-PLAN-075D：OrgUnit 页面状态字段与有效/无效显式切换：`docs/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
+- DEV-PLAN-075D 执行日志：`docs/dev-records/dev-plan-075d-execution-log.md`
 - DEV-PLAN-076：OrgUnit 版本切换导致选中组织丢失问题与修复方案：`docs/dev-plans/076-orgunit-version-switch-selection-retention.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
