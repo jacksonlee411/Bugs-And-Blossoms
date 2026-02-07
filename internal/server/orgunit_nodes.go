@@ -4540,6 +4540,10 @@ func renderOrgNodeCreateTemplate(treeAsOf string, includeDisabled bool, canEdit 
 	if includeDisabled {
 		includeDisabledValue = "1"
 	}
+	formAction := `/org/nodes?tree_as_of=` + html.EscapeString(treeAsOf)
+	if includeDisabled {
+		formAction += `&include_disabled=1`
+	}
 	var b strings.Builder
 	b.WriteString(`<template id="org-node-create-template">`)
 	b.WriteString(`<div class="org-node-create-panel" data-mode="create">`)
@@ -4547,7 +4551,7 @@ func renderOrgNodeCreateTemplate(treeAsOf string, includeDisabled bool, canEdit 
 	if !canEdit {
 		b.WriteString(`<div class="org-node-status-row org-node-status-warn">无更新权限，无法编辑</div>`)
 	}
-	b.WriteString(`<form method="POST" action="/org/nodes?tree_as_of=` + html.EscapeString(treeAsOf) + `&include_disabled=` + html.EscapeString(includeDisabledValue) + `">`)
+	b.WriteString(`<form method="POST" action="` + formAction + `">`)
 	b.WriteString(`<input type="hidden" name="tree_as_of" value="` + html.EscapeString(treeAsOf) + `" />`)
 	b.WriteString(`<input type="hidden" name="include_disabled" value="` + html.EscapeString(includeDisabledValue) + `" />`)
 	b.WriteString(`<label>生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(treeAsOf) + `"` + disabledAttr + ` /></label>`)
