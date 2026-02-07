@@ -45,6 +45,7 @@ type OrgUnitWriteService interface {
 	Rename(ctx context.Context, tenantID string, req RenameOrgUnitRequest) error
 	Move(ctx context.Context, tenantID string, req MoveOrgUnitRequest) error
 	Disable(ctx context.Context, tenantID string, req DisableOrgUnitRequest) error
+	Enable(ctx context.Context, tenantID string, req EnableOrgUnitRequest) error
 	SetBusinessUnit(ctx context.Context, tenantID string, req SetBusinessUnitRequest) error
 	Correct(ctx context.Context, tenantID string, req CorrectOrgUnitRequest) (types.OrgUnitResult, error)
 	RescindRecord(ctx context.Context, tenantID string, req RescindRecordOrgUnitRequest) (types.OrgUnitResult, error)
@@ -73,6 +74,11 @@ type MoveOrgUnitRequest struct {
 }
 
 type DisableOrgUnitRequest struct {
+	EffectiveDate string
+	OrgCode       string
+}
+
+type EnableOrgUnitRequest struct {
 	EffectiveDate string
 	OrgCode       string
 }
@@ -329,6 +335,34 @@ func (s *orgUnitWriteService) Disable(ctx context.Context, tenantID string, req 
 	}
 
 	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventDisable), effectiveDate, json.RawMessage(`{}`), eventUUID, tenantID)
+	return err
+}
+
+func (s *orgUnitWriteService) Enable(ctx context.Context, tenantID string, req EnableOrgUnitRequest) error {
+	effectiveDate, err := validateDate(req.EffectiveDate)
+	if err != nil {
+		return err
+	}
+
+	orgCode, err := normalizeOrgCode(req.OrgCode)
+	if err != nil {
+		return err
+	}
+
+	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil {
+		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
+			return errors.New(errOrgCodeNotFound)
+		}
+		return err
+	}
+
+	eventUUID, err := newUUID()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventEnable), effectiveDate, json.RawMessage(`{}`), eventUUID, tenantID)
 	return err
 }
 

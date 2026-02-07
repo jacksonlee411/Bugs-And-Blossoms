@@ -2992,4 +2992,175 @@ func TestHandleOrgNodes_RecordActions(t *testing.T) {
 			t.Fatalf("unexpected request id: %q", store.setBusinessUnitReqID)
 		}
 	})
+
+	t.Run("change_status invalid target", func(t *testing.T) {
+		store := &recordActionStore{details: OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root", Status: "active"}}
+		rec := postOrgNodesFormWithWriteSvc(t, store, orgUnitWriteServiceStub{}, "action=change_status&org_code=A001&effective_date=2026-01-11&target_status=bad")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "target_status invalid") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("change_status no change", func(t *testing.T) {
+		store := &recordActionStore{details: OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root", Status: "disabled"}}
+		disableCalled := false
+		enableCalled := false
+		writeSvc := orgUnitWriteServiceStub{
+			disableFn: func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error {
+				disableCalled = true
+				return nil
+			},
+			enableFn: func(context.Context, string, orgunitservices.EnableOrgUnitRequest) error {
+				enableCalled = true
+				return nil
+			},
+		}
+		rec := postOrgNodesFormWithWriteSvc(t, store, writeSvc, "action=change_status&org_code=A001&effective_date=2026-01-11&target_status=disabled")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "未检测到状态变更") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+		if disableCalled || enableCalled {
+			t.Fatalf("unexpected calls disable=%v enable=%v", disableCalled, enableCalled)
+		}
+	})
+
+	t.Run("change_status active to disabled", func(t *testing.T) {
+		store := &recordActionStore{details: OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root", Status: "active"}}
+		called := false
+		var got orgunitservices.DisableOrgUnitRequest
+		writeSvc := orgUnitWriteServiceStub{
+			disableFn: func(_ context.Context, tenantID string, req orgunitservices.DisableOrgUnitRequest) error {
+				called = true
+				if tenantID != "t1" {
+					t.Fatalf("tenantID=%q", tenantID)
+				}
+				got = req
+				return nil
+			},
+		}
+		rec := postOrgNodesFormWithWriteSvc(t, store, writeSvc, "action=change_status&org_code=A001&effective_date=2026-01-11&target_status=disabled")
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !called {
+			t.Fatal("expected disable call")
+		}
+		if got.OrgCode != "A001" || got.EffectiveDate != "2026-01-11" {
+			t.Fatalf("unexpected disable req: %+v", got)
+		}
+		if loc := rec.Header().Get("Location"); loc != "/org/nodes/view?effective_date=2026-01-11&tree_as_of=2026-01-06&org_id=10000001" {
+			t.Fatalf("location=%q", loc)
+		}
+	})
+
+	t.Run("change_status disabled to active", func(t *testing.T) {
+		store := &recordActionStore{details: OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root", Status: "disabled"}}
+		called := false
+		var got orgunitservices.EnableOrgUnitRequest
+		writeSvc := orgUnitWriteServiceStub{
+			enableFn: func(_ context.Context, tenantID string, req orgunitservices.EnableOrgUnitRequest) error {
+				called = true
+				if tenantID != "t1" {
+					t.Fatalf("tenantID=%q", tenantID)
+				}
+				got = req
+				return nil
+			},
+		}
+		rec := postOrgNodesFormWithWriteSvc(t, store, writeSvc, "action=change_status&org_code=A001&effective_date=2026-01-11&target_status=active")
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !called {
+			t.Fatal("expected enable call")
+		}
+		if got.OrgCode != "A001" || got.EffectiveDate != "2026-01-11" {
+			t.Fatalf("unexpected enable req: %+v", got)
+		}
+		if loc := rec.Header().Get("Location"); loc != "/org/nodes/view?effective_date=2026-01-11&tree_as_of=2026-01-06&org_id=10000001" {
+			t.Fatalf("location=%q", loc)
+		}
+	})
+
+	t.Run("change_status write service missing", func(t *testing.T) {
+		store := &recordActionStore{details: OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root", Status: "active"}}
+		req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06", bytes.NewBufferString("action=change_status&org_code=A001&effective_date=2026-01-11&target_status=disabled"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodesWithWriteService(rec, req, store, nil)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "orgunit service missing") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("change_status defaults effective_date and keeps include_disabled", func(t *testing.T) {
+		store := &recordActionStore{details: OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "", Name: "Root", Status: ""}}
+		called := false
+		var got orgunitservices.DisableOrgUnitRequest
+		writeSvc := orgUnitWriteServiceStub{
+			disableFn: func(_ context.Context, tenantID string, req orgunitservices.DisableOrgUnitRequest) error {
+				called = true
+				if tenantID != "t1" {
+					t.Fatalf("tenantID=%q", tenantID)
+				}
+				got = req
+				return nil
+			},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-06&include_disabled=1", bytes.NewBufferString("action=change_status&org_code=A001&target_status=disabled"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodesWithWriteService(rec, req, store, writeSvc)
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !called {
+			t.Fatal("expected disable call")
+		}
+		if got.EffectiveDate != "2026-01-06" || got.OrgCode != "A001" {
+			t.Fatalf("unexpected disable req: %+v", got)
+		}
+		if loc := rec.Header().Get("Location"); loc != "/org/nodes/view?effective_date=2026-01-06&tree_as_of=2026-01-06&org_id=10000001&include_disabled=1" {
+			t.Fatalf("location=%q", loc)
+		}
+	})
+
+	t.Run("change_status invalid effective_date", func(t *testing.T) {
+		store := &recordActionStore{}
+		rec := postOrgNodesFormWithWriteSvc(t, store, orgUnitWriteServiceStub{}, "action=change_status&org_code=A001&effective_date=bad&target_status=disabled")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "effective_date 无效") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("change_status missing org_code", func(t *testing.T) {
+		store := &recordActionStore{}
+		rec := postOrgNodesFormWithWriteSvc(t, store, orgUnitWriteServiceStub{}, "action=change_status&effective_date=2026-01-11&target_status=disabled")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "org_code is required") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("change_status details error", func(t *testing.T) {
+		store := &recordActionStore{detailsErr: errors.New("details failed")}
+		rec := postOrgNodesFormWithWriteSvc(t, store, orgUnitWriteServiceStub{}, "action=change_status&org_code=A001&effective_date=2026-01-11&target_status=disabled")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "details failed") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("change_status write error", func(t *testing.T) {
+		store := &recordActionStore{details: OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root", Status: "active"}}
+		writeSvc := orgUnitWriteServiceStub{
+			disableFn: func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error {
+				return errors.New("disable failed")
+			},
+		}
+		rec := postOrgNodesFormWithWriteSvc(t, store, writeSvc, "action=change_status&org_code=A001&effective_date=2026-01-11&target_status=disabled")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "disable failed") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
+		}
+	})
 }

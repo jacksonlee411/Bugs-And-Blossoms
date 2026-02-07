@@ -125,6 +125,11 @@ type orgUnitDisableAPIRequest struct {
 	EffectiveDate string `json:"effective_date"`
 }
 
+type orgUnitEnableAPIRequest struct {
+	OrgCode       string `json:"org_code"`
+	EffectiveDate string `json:"effective_date"`
+}
+
 type orgUnitCorrectionPatchRequest struct {
 	EffectiveDate  *string `json:"effective_date"`
 	Name           *string `json:"name"`
@@ -336,6 +341,21 @@ func handleOrgUnitsDisableAPI(w http.ResponseWriter, r *http.Request, writeSvc o
 		}
 		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
 		err := writeSvc.Disable(ctx, tenantID, orgunitservices.DisableOrgUnitRequest{
+			EffectiveDate: req.EffectiveDate,
+			OrgCode:       req.OrgCode,
+		})
+		return req.OrgCode, req.EffectiveDate, err
+	})
+}
+
+func handleOrgUnitsEnableAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {
+	handleOrgUnitWriteAction(w, r, writeSvc, "orgunit_enable_failed", func(ctx context.Context, tenantID string) (string, string, error) {
+		var req orgUnitEnableAPIRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			return "", "", errOrgUnitBadJSON
+		}
+		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
+		err := writeSvc.Enable(ctx, tenantID, orgunitservices.EnableOrgUnitRequest{
 			EffectiveDate: req.EffectiveDate,
 			OrgCode:       req.OrgCode,
 		})

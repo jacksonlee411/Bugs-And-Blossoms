@@ -636,6 +636,40 @@ func TestHandleOrgUnitsDisableAPI_BadJSON(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsEnableAPI_Success(t *testing.T) {
+	called := false
+	svc := orgUnitWriteServiceStub{
+		enableFn: func(_ context.Context, _ string, req orgunitservices.EnableOrgUnitRequest) error {
+			called = true
+			if req.OrgCode == "" {
+				t.Fatalf("expected org code")
+			}
+			return nil
+		},
+	}
+	body := strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01"}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/enable", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsEnableAPI(rec, req, svc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !called {
+		t.Fatalf("expected enable call")
+	}
+}
+
+func TestHandleOrgUnitsEnableAPI_BadJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/enable", strings.NewReader("{"))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsEnableAPI(rec, req, orgUnitWriteServiceStub{})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
 func TestHandleOrgUnitsCorrectionsAPI_Success(t *testing.T) {
 	called := false
 	svc := orgUnitWriteServiceStub{
@@ -1016,6 +1050,7 @@ type orgUnitWriteServiceStub struct {
 	renameFn        func(context.Context, string, orgunitservices.RenameOrgUnitRequest) error
 	moveFn          func(context.Context, string, orgunitservices.MoveOrgUnitRequest) error
 	disableFn       func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error
+	enableFn        func(context.Context, string, orgunitservices.EnableOrgUnitRequest) error
 	correctFn       func(context.Context, string, orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 	rescindRecordFn func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 	rescindOrgFn    func(context.Context, string, orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
@@ -1047,6 +1082,13 @@ func (s orgUnitWriteServiceStub) Disable(ctx context.Context, tenantID string, r
 		return nil
 	}
 	return s.disableFn(ctx, tenantID, req)
+}
+
+func (s orgUnitWriteServiceStub) Enable(ctx context.Context, tenantID string, req orgunitservices.EnableOrgUnitRequest) error {
+	if s.enableFn == nil {
+		return nil
+	}
+	return s.enableFn(ctx, tenantID, req)
 }
 
 func (s orgUnitWriteServiceStub) SetBusinessUnit(context.Context, string, orgunitservices.SetBusinessUnitRequest) error {

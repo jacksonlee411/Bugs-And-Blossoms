@@ -128,6 +128,9 @@ entrypoints:
       - path: /org/api/org-units/disable
         methods: [POST]
         route_class: internal_api
+      - path: /org/api/org-units/enable
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/org-units/corrections
         methods: [POST]
         route_class: internal_api

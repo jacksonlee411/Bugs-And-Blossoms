@@ -1745,7 +1745,7 @@ func TestOrgUnitPGStore_SearchNodeWithVisibility(t *testing.T) {
 		}
 	})
 	t.Run("name query error", func(t *testing.T) {
-		tx := &stubTx{rowErr: pgx.ErrNoRows, row2Err: errors.New("row2")}
+		tx := &stubTx{row: &stubRow{err: pgx.ErrNoRows}, row2Err: errors.New("row2")}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, err := store.SearchNodeWithVisibility(ctx, "t1", "A001", "2026-01-06", true); err == nil {
 			t.Fatal("expected error")

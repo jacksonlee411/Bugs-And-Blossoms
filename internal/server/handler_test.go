@@ -856,6 +856,11 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("org units disable status=%d", recOrgDisable.Code)
 	}
 
+	recOrgEnable := postJSON("/org/api/org-units/enable", `{"org_code":"ORG2","effective_date":"2026-01-01"}`, nil)
+	if recOrgEnable.Code != http.StatusOK {
+		t.Fatalf("org units enable status=%d", recOrgEnable.Code)
+	}
+
 	recOrgCorrect := postJSON("/org/api/org-units/corrections", `{"org_code":"ORG2","effective_date":"2026-01-01","request_id":"r9","patch":{}}`, nil)
 	if recOrgCorrect.Code != http.StatusOK {
 		t.Fatalf("org units corrections status=%d", recOrgCorrect.Code)
