@@ -25,6 +25,7 @@ type OrgUnitNode struct {
 	ID             string
 	OrgCode        string
 	Name           string
+	Status         string
 	IsBusinessUnit bool
 	CreatedAt      time.Time
 }
@@ -33,6 +34,7 @@ type OrgUnitChild struct {
 	OrgID       int
 	OrgCode     string
 	Name        string
+	Status      string
 	HasChildren bool
 }
 
@@ -40,6 +42,7 @@ type OrgUnitNodeDetails struct {
 	OrgID          int
 	OrgCode        string
 	Name           string
+	Status         string
 	ParentID       int
 	ParentCode     string
 	ParentName     string
@@ -66,6 +69,7 @@ type OrgUnitSearchCandidate struct {
 	OrgID   int
 	OrgCode string
 	Name    string
+	Status  string
 }
 
 type OrgUnitNodeVersion struct {
@@ -193,6 +197,14 @@ type OrgUnitNodeVersionReader interface {
 type OrgUnitTreeAsOfReader interface {
 	MaxEffectiveDateOnOrBefore(ctx context.Context, tenantID string, asOfDate string) (string, bool, error)
 	MinEffectiveDate(ctx context.Context, tenantID string) (string, bool, error)
+}
+
+type orgUnitNodesVisibilityReader interface {
+	ListNodesCurrentWithVisibility(ctx context.Context, tenantID string, asOfDate string, includeDisabled bool) ([]OrgUnitNode, error)
+	ListChildrenWithVisibility(ctx context.Context, tenantID string, parentID int, asOfDate string, includeDisabled bool) ([]OrgUnitChild, error)
+	GetNodeDetailsWithVisibility(ctx context.Context, tenantID string, orgID int, asOfDate string, includeDisabled bool) (OrgUnitNodeDetails, error)
+	SearchNodeWithVisibility(ctx context.Context, tenantID string, query string, asOfDate string, includeDisabled bool) (OrgUnitSearchResult, error)
+	SearchNodeCandidatesWithVisibility(ctx context.Context, tenantID string, query string, asOfDate string, limit int, includeDisabled bool) ([]OrgUnitSearchCandidate, error)
 }
 
 type orgUnitPGStore struct {
@@ -334,6 +346,86 @@ func parseOptionalTreeAsOf(w http.ResponseWriter, r *http.Request) (string, bool
 	return value, true
 }
 
+func parseIncludeDisabled(raw string) bool {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func includeDisabledFromURL(r *http.Request) bool {
+	return parseIncludeDisabled(r.URL.Query().Get("include_disabled"))
+}
+
+func includeDisabledFromFormOrURL(r *http.Request) bool {
+	if parseIncludeDisabled(r.Form.Get("include_disabled")) {
+		return true
+	}
+	return includeDisabledFromURL(r)
+}
+
+func includeDisabledQuerySuffix(includeDisabled bool) string {
+	if includeDisabled {
+		return "&include_disabled=1"
+	}
+	return ""
+}
+
+func listNodesCurrentByVisibility(ctx context.Context, store OrgUnitStore, tenantID string, asOfDate string, includeDisabled bool) ([]OrgUnitNode, error) {
+	if includeDisabled {
+		if vStore, ok := store.(orgUnitNodesVisibilityReader); ok {
+			return vStore.ListNodesCurrentWithVisibility(ctx, tenantID, asOfDate, true)
+		}
+	}
+	return store.ListNodesCurrent(ctx, tenantID, asOfDate)
+}
+
+func listChildrenByVisibility(ctx context.Context, store OrgUnitStore, tenantID string, parentID int, asOfDate string, includeDisabled bool) ([]OrgUnitChild, error) {
+	if includeDisabled {
+		if vStore, ok := store.(orgUnitNodesVisibilityReader); ok {
+			return vStore.ListChildrenWithVisibility(ctx, tenantID, parentID, asOfDate, true)
+		}
+	}
+	return store.ListChildren(ctx, tenantID, parentID, asOfDate)
+}
+
+func getNodeDetailsByVisibility(ctx context.Context, store OrgUnitStore, tenantID string, orgID int, asOfDate string, includeDisabled bool) (OrgUnitNodeDetails, error) {
+	if includeDisabled {
+		if vStore, ok := store.(orgUnitNodesVisibilityReader); ok {
+			return vStore.GetNodeDetailsWithVisibility(ctx, tenantID, orgID, asOfDate, true)
+		}
+	}
+	return store.GetNodeDetails(ctx, tenantID, orgID, asOfDate)
+}
+
+func searchNodeByVisibility(ctx context.Context, store OrgUnitStore, tenantID string, query string, asOfDate string, includeDisabled bool) (OrgUnitSearchResult, error) {
+	if includeDisabled {
+		if vStore, ok := store.(orgUnitNodesVisibilityReader); ok {
+			return vStore.SearchNodeWithVisibility(ctx, tenantID, query, asOfDate, true)
+		}
+	}
+	return store.SearchNode(ctx, tenantID, query, asOfDate)
+}
+
+func searchNodeCandidatesByVisibility(ctx context.Context, store OrgUnitStore, tenantID string, query string, asOfDate string, limit int, includeDisabled bool) ([]OrgUnitSearchCandidate, error) {
+	if includeDisabled {
+		if vStore, ok := store.(orgUnitNodesVisibilityReader); ok {
+			return vStore.SearchNodeCandidatesWithVisibility(ctx, tenantID, query, asOfDate, limit, true)
+		}
+	}
+	return store.SearchNodeCandidates(ctx, tenantID, query, asOfDate, limit)
+}
+
+func orgUnitStatusLabel(status string) string {
+	if strings.EqualFold(strings.TrimSpace(status), "disabled") {
+		return "无效"
+	}
+	return "有效"
+}
+
 func (s *orgUnitPGStore) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -442,6 +534,63 @@ ORDER BY v.node_path
 	for rows.Next() {
 		var n OrgUnitNode
 		if err := rows.Scan(&n.ID, &n.OrgCode, &n.Name, &n.IsBusinessUnit, &n.CreatedAt); err != nil {
+			return nil, err
+		}
+		n.Status = "active"
+		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *orgUnitPGStore) ListNodesCurrentWithVisibility(ctx context.Context, tenantID string, asOfDate string, includeDisabled bool) ([]OrgUnitNode, error) {
+	if !includeDisabled {
+		return s.ListNodesCurrent(ctx, tenantID, asOfDate)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	rows, err := tx.Query(ctx, `
+SELECT
+  v.org_id::text,
+  c.org_code,
+  v.name,
+  v.status,
+  v.is_business_unit,
+  e.transaction_time
+FROM orgunit.org_unit_versions v
+JOIN orgunit.org_unit_codes c
+  ON c.tenant_uuid = $1::uuid
+ AND c.org_id = v.org_id
+JOIN orgunit.org_events e
+  ON e.id = v.last_event_id
+WHERE v.tenant_uuid = $1::uuid
+  AND v.validity @> $2::date
+  AND v.parent_id IS NULL
+ORDER BY v.node_path
+`, tenantID, asOfDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []OrgUnitNode
+	for rows.Next() {
+		var n OrgUnitNode
+		if err := rows.Scan(&n.ID, &n.OrgCode, &n.Name, &n.Status, &n.IsBusinessUnit, &n.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, n)
@@ -575,6 +724,82 @@ func (s *orgUnitPGStore) ListChildren(ctx context.Context, tenantID string, pare
 		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.HasChildren); err != nil {
 			return nil, err
 		}
+		item.Status = "active"
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *orgUnitPGStore) ListChildrenWithVisibility(ctx context.Context, tenantID string, parentID int, asOfDate string, includeDisabled bool) ([]OrgUnitChild, error) {
+	if !includeDisabled {
+		return s.ListChildren(ctx, tenantID, parentID, asOfDate)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	var exists bool
+	if err := tx.QueryRow(ctx, `
+	SELECT EXISTS (
+	  SELECT 1
+	  FROM orgunit.org_unit_versions
+	  WHERE tenant_uuid = $1::uuid
+	    AND org_id = $2::int
+	    AND validity @> $3::date
+	)
+	`, tenantID, parentID, asOfDate).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, errOrgUnitNotFound
+	}
+
+	rows, err := tx.Query(ctx, `
+	SELECT
+	  v.org_id,
+	  c.org_code,
+	  v.name,
+	  v.status,
+	  EXISTS (
+	    SELECT 1
+	    FROM orgunit.org_unit_versions child
+	    WHERE child.tenant_uuid = $1::uuid
+	      AND child.parent_id = v.org_id
+	      AND child.validity @> $3::date
+	  ) AS has_children
+	FROM orgunit.org_unit_versions v
+	JOIN orgunit.org_unit_codes c
+	  ON c.tenant_uuid = $1::uuid
+	 AND c.org_id = v.org_id
+	WHERE v.tenant_uuid = $1::uuid
+	  AND v.parent_id = $2::int
+	  AND v.validity @> $3::date
+	ORDER BY v.node_path
+	`, tenantID, parentID, asOfDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []OrgUnitChild
+	for rows.Next() {
+		var item OrgUnitChild
+		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.Status, &item.HasChildren); err != nil {
+			return nil, err
+		}
 		out = append(out, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -603,6 +828,7 @@ func (s *orgUnitPGStore) GetNodeDetails(ctx context.Context, tenantID string, or
 	  v.org_id,
 	  c.org_code,
 	  v.name,
+	  v.status,
 	  COALESCE(v.parent_id, 0) AS parent_id,
 	  COALESCE(pc.org_code, '') AS parent_org_code,
 	  COALESCE(pv.name, '') AS parent_name,
@@ -640,6 +866,89 @@ func (s *orgUnitPGStore) GetNodeDetails(ctx context.Context, tenantID string, or
 		&details.OrgID,
 		&details.OrgCode,
 		&details.Name,
+		&details.Status,
+		&details.ParentID,
+		&details.ParentCode,
+		&details.ParentName,
+		&details.IsBusinessUnit,
+		&details.ManagerPernr,
+		&details.ManagerName,
+		&details.PathIDs,
+		&details.FullNamePath,
+		&details.CreatedAt,
+		&details.UpdatedAt,
+		&details.EventUUID,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return OrgUnitNodeDetails{}, errOrgUnitNotFound
+		}
+		return OrgUnitNodeDetails{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return OrgUnitNodeDetails{}, err
+	}
+	return details, nil
+}
+
+func (s *orgUnitPGStore) GetNodeDetailsWithVisibility(ctx context.Context, tenantID string, orgID int, asOfDate string, includeDisabled bool) (OrgUnitNodeDetails, error) {
+	if !includeDisabled {
+		return s.GetNodeDetails(ctx, tenantID, orgID, asOfDate)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return OrgUnitNodeDetails{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return OrgUnitNodeDetails{}, err
+	}
+
+	var details OrgUnitNodeDetails
+	if err := tx.QueryRow(ctx, `
+	SELECT
+	  v.org_id,
+	  c.org_code,
+	  v.name,
+	  v.status,
+	  COALESCE(v.parent_id, 0) AS parent_id,
+	  COALESCE(pc.org_code, '') AS parent_org_code,
+	  COALESCE(pv.name, '') AS parent_name,
+	  v.is_business_unit,
+	  COALESCE(p.pernr, '') AS manager_pernr,
+	  COALESCE(p.display_name, '') AS manager_name,
+	  v.path_ids,
+	  COALESCE(v.full_name_path, '') AS full_name_path,
+	  c.created_at,
+	  e.transaction_time,
+	  e.event_uuid
+	FROM orgunit.org_unit_versions v
+	JOIN orgunit.org_unit_codes c
+	  ON c.tenant_uuid = $1::uuid
+	 AND c.org_id = v.org_id
+	JOIN orgunit.org_events e
+	  ON e.id = v.last_event_id
+	LEFT JOIN orgunit.org_unit_codes pc
+	  ON pc.tenant_uuid = $1::uuid
+	 AND pc.org_id = v.parent_id
+	LEFT JOIN orgunit.org_unit_versions pv
+	  ON pv.tenant_uuid = $1::uuid
+	 AND pv.org_id = v.parent_id
+	 AND pv.validity @> $3::date
+	LEFT JOIN person.persons p
+	  ON p.tenant_uuid = $1::uuid
+	 AND p.person_uuid = v.manager_uuid
+	WHERE v.tenant_uuid = $1::uuid
+	  AND v.org_id = $2::int
+	  AND v.validity @> $3::date
+	LIMIT 1
+	`, tenantID, orgID, asOfDate).Scan(
+		&details.OrgID,
+		&details.OrgCode,
+		&details.Name,
+		&details.Status,
 		&details.ParentID,
 		&details.ParentCode,
 		&details.ParentName,
@@ -733,6 +1042,77 @@ func (s *orgUnitPGStore) SearchNode(ctx context.Context, tenantID string, query 
 	return result, nil
 }
 
+func (s *orgUnitPGStore) SearchNodeWithVisibility(ctx context.Context, tenantID string, query string, asOfDate string, includeDisabled bool) (OrgUnitSearchResult, error) {
+	if !includeDisabled {
+		return s.SearchNode(ctx, tenantID, query, asOfDate)
+	}
+
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return OrgUnitSearchResult{}, errors.New("query is required")
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+
+	var result OrgUnitSearchResult
+	var pathIDs []int
+	found := false
+
+	if normalized, err := orgunitpkg.NormalizeOrgCode(trimmed); err == nil {
+		if err := tx.QueryRow(ctx, `
+		SELECT v.org_id, c.org_code, v.name, v.path_ids
+		FROM orgunit.org_unit_versions v
+		JOIN orgunit.org_unit_codes c
+		  ON c.tenant_uuid = $1::uuid
+		 AND c.org_id = v.org_id
+		WHERE v.tenant_uuid = $1::uuid
+		  AND v.validity @> $3::date
+		  AND c.org_code = $2::text
+		LIMIT 1
+		`, tenantID, normalized, asOfDate).Scan(&result.TargetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err == nil {
+			found = true
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return OrgUnitSearchResult{}, err
+		}
+	}
+
+	if !found {
+		if err := tx.QueryRow(ctx, `
+		SELECT v.org_id, c.org_code, v.name, v.path_ids
+		FROM orgunit.org_unit_versions v
+		JOIN orgunit.org_unit_codes c
+		  ON c.tenant_uuid = $1::uuid
+		 AND c.org_id = v.org_id
+		WHERE v.tenant_uuid = $1::uuid
+		  AND v.validity @> $3::date
+		  AND v.name ILIKE $2::text
+		ORDER BY v.node_path
+		LIMIT 1
+		`, tenantID, "%"+trimmed+"%", asOfDate).Scan(&result.TargetOrgID, &result.TargetOrgCode, &result.TargetName, &pathIDs); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return OrgUnitSearchResult{}, errOrgUnitNotFound
+			}
+			return OrgUnitSearchResult{}, err
+		}
+	}
+
+	result.PathOrgIDs = append([]int(nil), pathIDs...)
+	result.TreeAsOf = asOfDate
+
+	if err := tx.Commit(ctx); err != nil {
+		return OrgUnitSearchResult{}, err
+	}
+	return result, nil
+}
+
 func (s *orgUnitPGStore) SearchNodeCandidates(ctx context.Context, tenantID string, query string, asOfDate string, limit int) ([]OrgUnitSearchCandidate, error) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
@@ -776,6 +1156,7 @@ func (s *orgUnitPGStore) SearchNodeCandidates(ctx context.Context, tenantID stri
 			if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name); err != nil {
 				return nil, err
 			}
+			item.Status = "active"
 			out = append(out, item)
 		}
 		if err := rows.Err(); err != nil {
@@ -811,6 +1192,103 @@ func (s *orgUnitPGStore) SearchNodeCandidates(ctx context.Context, tenantID stri
 	for rows.Next() {
 		var item OrgUnitSearchCandidate
 		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name); err != nil {
+			return nil, err
+		}
+		item.Status = "active"
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, errOrgUnitNotFound
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *orgUnitPGStore) SearchNodeCandidatesWithVisibility(ctx context.Context, tenantID string, query string, asOfDate string, limit int, includeDisabled bool) ([]OrgUnitSearchCandidate, error) {
+	if !includeDisabled {
+		return s.SearchNodeCandidates(ctx, tenantID, query, asOfDate, limit)
+	}
+
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return nil, errors.New("query is required")
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	if normalized, err := orgunitpkg.NormalizeOrgCode(trimmed); err == nil {
+		rows, err := tx.Query(ctx, `
+		SELECT v.org_id, c.org_code, v.name, v.status
+		FROM orgunit.org_unit_versions v
+		JOIN orgunit.org_unit_codes c
+		  ON c.tenant_uuid = $1::uuid
+		 AND c.org_id = v.org_id
+		WHERE v.tenant_uuid = $1::uuid
+		  AND v.validity @> $3::date
+		  AND c.org_code = $2::text
+		LIMIT 1
+		`, tenantID, normalized, asOfDate)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		var out []OrgUnitSearchCandidate
+		for rows.Next() {
+			var item OrgUnitSearchCandidate
+			if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.Status); err != nil {
+				return nil, err
+			}
+			out = append(out, item)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		if len(out) > 0 {
+			if err := tx.Commit(ctx); err != nil {
+				return nil, err
+			}
+			return out, nil
+		}
+	}
+
+	rows, err := tx.Query(ctx, `
+	SELECT v.org_id, c.org_code, v.name, v.status
+	FROM orgunit.org_unit_versions v
+	JOIN orgunit.org_unit_codes c
+	  ON c.tenant_uuid = $1::uuid
+	 AND c.org_id = v.org_id
+	WHERE v.tenant_uuid = $1::uuid
+	  AND v.validity @> $3::date
+	  AND v.name ILIKE $2::text
+	ORDER BY v.node_path
+	LIMIT $4::int
+	`, tenantID, "%"+trimmed+"%", asOfDate, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []OrgUnitSearchCandidate
+	for rows.Next() {
+		var item OrgUnitSearchCandidate
+		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.Status); err != nil {
 			return nil, err
 		}
 		out = append(out, item)
@@ -1313,6 +1791,7 @@ func (s *orgUnitMemoryStore) createNode(tenantID string, orgCode string, name st
 		ID:             strconv.Itoa(id),
 		OrgCode:        normalizedCode,
 		Name:           name,
+		Status:         "active",
 		IsBusinessUnit: isBusinessUnit,
 		CreatedAt:      s.now(),
 	}
@@ -1321,6 +1800,10 @@ func (s *orgUnitMemoryStore) createNode(tenantID string, orgCode string, name st
 }
 
 func (s *orgUnitMemoryStore) ListNodesCurrent(_ context.Context, tenantID string, _ string) ([]OrgUnitNode, error) {
+	return s.listNodes(tenantID)
+}
+
+func (s *orgUnitMemoryStore) ListNodesCurrentWithVisibility(_ context.Context, tenantID string, _ string, _ bool) ([]OrgUnitNode, error) {
 	return s.listNodes(tenantID)
 }
 
@@ -1454,6 +1937,10 @@ func (s *orgUnitMemoryStore) ListChildren(_ context.Context, tenantID string, pa
 	return nil, errOrgUnitNotFound
 }
 
+func (s *orgUnitMemoryStore) ListChildrenWithVisibility(ctx context.Context, tenantID string, parentID int, asOfDate string, _ bool) ([]OrgUnitChild, error) {
+	return s.ListChildren(ctx, tenantID, parentID, asOfDate)
+}
+
 func (s *orgUnitMemoryStore) GetNodeDetails(_ context.Context, tenantID string, orgID int, _ string) (OrgUnitNodeDetails, error) {
 	orgIDStr := strconv.Itoa(orgID)
 	for _, node := range s.nodes[tenantID] {
@@ -1462,6 +1949,7 @@ func (s *orgUnitMemoryStore) GetNodeDetails(_ context.Context, tenantID string, 
 				OrgID:          orgID,
 				OrgCode:        node.OrgCode,
 				Name:           node.Name,
+				Status:         strings.TrimSpace(node.Status),
 				IsBusinessUnit: node.IsBusinessUnit,
 				PathIDs:        []int{orgID},
 				FullNamePath:   node.Name,
@@ -1472,6 +1960,10 @@ func (s *orgUnitMemoryStore) GetNodeDetails(_ context.Context, tenantID string, 
 		}
 	}
 	return OrgUnitNodeDetails{}, errOrgUnitNotFound
+}
+
+func (s *orgUnitMemoryStore) GetNodeDetailsWithVisibility(ctx context.Context, tenantID string, orgID int, asOfDate string, _ bool) (OrgUnitNodeDetails, error) {
+	return s.GetNodeDetails(ctx, tenantID, orgID, asOfDate)
 }
 
 func (s *orgUnitMemoryStore) SearchNode(_ context.Context, tenantID string, query string, asOfDate string) (OrgUnitSearchResult, error) {
@@ -1518,6 +2010,10 @@ func (s *orgUnitMemoryStore) SearchNode(_ context.Context, tenantID string, quer
 	return OrgUnitSearchResult{}, errOrgUnitNotFound
 }
 
+func (s *orgUnitMemoryStore) SearchNodeWithVisibility(ctx context.Context, tenantID string, query string, asOfDate string, _ bool) (OrgUnitSearchResult, error) {
+	return s.SearchNode(ctx, tenantID, query, asOfDate)
+}
+
 func (s *orgUnitMemoryStore) SearchNodeCandidates(_ context.Context, tenantID string, query string, _ string, limit int) ([]OrgUnitSearchCandidate, error) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
@@ -1533,7 +2029,7 @@ func (s *orgUnitMemoryStore) SearchNodeCandidates(_ context.Context, tenantID st
 				if convErr != nil {
 					break
 				}
-				return []OrgUnitSearchCandidate{{OrgID: id, OrgCode: node.OrgCode, Name: node.Name}}, nil
+				return []OrgUnitSearchCandidate{{OrgID: id, OrgCode: node.OrgCode, Name: node.Name, Status: strings.TrimSpace(node.Status)}}, nil
 			}
 		}
 	}
@@ -1546,7 +2042,7 @@ func (s *orgUnitMemoryStore) SearchNodeCandidates(_ context.Context, tenantID st
 			if convErr != nil {
 				continue
 			}
-			out = append(out, OrgUnitSearchCandidate{OrgID: id, OrgCode: node.OrgCode, Name: node.Name})
+			out = append(out, OrgUnitSearchCandidate{OrgID: id, OrgCode: node.OrgCode, Name: node.Name, Status: strings.TrimSpace(node.Status)})
 			if len(out) >= limit {
 				break
 			}
@@ -1556,6 +2052,10 @@ func (s *orgUnitMemoryStore) SearchNodeCandidates(_ context.Context, tenantID st
 		return nil, errOrgUnitNotFound
 	}
 	return out, nil
+}
+
+func (s *orgUnitMemoryStore) SearchNodeCandidatesWithVisibility(ctx context.Context, tenantID string, query string, asOfDate string, limit int, _ bool) ([]OrgUnitSearchCandidate, error) {
+	return s.SearchNodeCandidates(ctx, tenantID, query, asOfDate, limit)
 }
 
 func (s *orgUnitMemoryStore) ListNodeVersions(_ context.Context, tenantID string, orgID int) ([]OrgUnitNodeVersion, error) {
@@ -1615,6 +2115,7 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 		}
 		treeAsOf = resolved
 	}
+	includeDisabled := includeDisabledFromURL(r)
 	canEdit := canEditOrgNodes(r.Context())
 
 	listNodes := func(errHint string) ([]OrgUnitNode, string) {
@@ -1628,7 +2129,7 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 			return hint + "；" + msg
 		}
 
-		nodes, err := store.ListNodesCurrent(r.Context(), tenant.ID, treeAsOf)
+		nodes, err := listNodesCurrentByVisibility(r.Context(), store, tenant.ID, treeAsOf, includeDisabled)
 		if err != nil {
 			return nil, mergeMsg(errHint, err.Error())
 		}
@@ -1638,12 +2139,12 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 	switch r.Method {
 	case http.MethodGet:
 		nodes, errMsg := listNodes("")
-		writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+		writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 		return
 	case http.MethodPost:
 		if err := r.ParseForm(); err != nil {
 			nodes, errMsg := listNodes("bad form")
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 			return
 		}
 		resolvedTreeAsOf, ok := treeAsOfFromForm(w, r)
@@ -1651,6 +2152,7 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 			return
 		}
 		treeAsOf = resolvedTreeAsOf
+		includeDisabled = includeDisabledFromFormOrURL(r)
 		action := strings.TrimSpace(strings.ToLower(r.Form.Get("action")))
 		if action == "" {
 			action = "create"
@@ -1676,7 +2178,7 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 					return "", true
 				}
 				nodes, errMsg := listNodes(field + " is required")
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 				return "", false
 			}
 			orgID, err := store.ResolveOrgID(r.Context(), tenant.ID, code)
@@ -1691,7 +2193,7 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 					msg = err.Error()
 				}
 				nodes, errMsg := listNodes(msg)
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 				return "", false
 			}
 			return strconv.Itoa(orgID), true
@@ -1701,12 +2203,12 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 			effectiveDate := strings.TrimSpace(r.Form.Get("effective_date"))
 			if effectiveDate == "" {
 				nodes, errMsg := listNodes("effective_date is required")
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 				return
 			}
 			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
 				nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 				return
 			}
 
@@ -1719,12 +2221,12 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 			versions, err := store.ListNodeVersions(r.Context(), tenant.ID, orgIDInt)
 			if err != nil {
 				nodes, errMsg := listNodes(err.Error())
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 				return
 			}
 			if len(versions) == 0 {
 				nodes, errMsg := listNodes("no versions found")
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 				return
 			}
 
@@ -1732,7 +2234,7 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 			if currentEffectiveDate != "" {
 				if _, err := time.Parse("2006-01-02", currentEffectiveDate); err != nil {
 					nodes, errMsg := listNodes("current_effective_date 无效: " + err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 			}
@@ -1775,7 +2277,7 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 
 			if currentEffectiveDate != "" && !selectedExists {
 				nodes, errMsg := listNodes("record not found")
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 				return
 			}
 
@@ -1783,50 +2285,50 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 			case "add_record":
 				if dateExists || (maxDate != "" && effectiveDate <= maxDate) {
 					nodes, errMsg := listNodes("effective_date conflict")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 			case "insert_record":
 				if dateExists {
 					nodes, errMsg := listNodes("effective_date conflict")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 				if currentEffectiveDate != "" {
 					if nextDate == "" {
 						if maxDate != "" && effectiveDate <= maxDate {
 							nodes, errMsg := listNodes("effective_date conflict")
-							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 							return
 						}
 					} else {
 						if prevDate != "" && effectiveDate <= prevDate {
 							nodes, errMsg := listNodes("effective_date must be between existing records")
-							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 							return
 						}
 						if effectiveDate >= nextDate {
 							nodes, errMsg := listNodes("effective_date must be between existing records")
-							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 							return
 						}
 					}
 				} else if minDate != "" && maxDate != "" {
 					if effectiveDate <= minDate || effectiveDate >= maxDate {
 						nodes, errMsg := listNodes("effective_date must be between existing records")
-						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 						return
 					}
 				}
 			case "delete_record":
 				if len(versions) <= 1 {
 					nodes, errMsg := listNodes("cannot delete last record")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 				if !dateExists {
 					nodes, errMsg := listNodes("record not found")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 			}
@@ -1847,7 +2349,7 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 					Reason:              reason,
 				}); err != nil {
 					nodes, errMsg := listNodes(orgNodeWriteErrorMessage(err))
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 			} else if action == "delete_org" {
@@ -1865,7 +2367,7 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 					Reason:    reason,
 				}); err != nil {
 					nodes, errMsg := listNodes(orgNodeWriteErrorMessage(err))
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 			} else {
@@ -1882,22 +2384,22 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 						if baseEffectiveDate == "" {
 							baseEffectiveDate = effectiveDate
 						}
-						baseDetails, err := store.GetNodeDetails(r.Context(), tenant.ID, orgIDInt, baseEffectiveDate)
+						baseDetails, err := getNodeDetailsByVisibility(r.Context(), store, tenant.ID, orgIDInt, baseEffectiveDate, includeDisabled)
 						if err != nil {
 							nodes, errMsg := listNodes(err.Error())
-							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+							writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 							return
 						}
 						name = strings.TrimSpace(baseDetails.Name)
 					}
 					if name == "" {
 						nodes, errMsg := listNodes("name is required")
-						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 						return
 					}
 					if err := store.RenameNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, name); err != nil {
 						nodes, errMsg := listNodes(err.Error())
-						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 						return
 					}
 				case "move":
@@ -1908,30 +2410,30 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 					}
 					if err := store.MoveNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newParentID); err != nil {
 						nodes, errMsg := listNodes(err.Error())
-						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 						return
 					}
 				case "set_business_unit":
 					isBusinessUnit, err := parseBusinessUnitFlag(r.Form.Get("is_business_unit"))
 					if err != nil {
 						nodes, errMsg := listNodes(err.Error())
-						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 						return
 					}
 					reqID := "ui:orgunit:record:set-business-unit:" + orgID + ":" + effectiveDate
 					if err := store.SetBusinessUnitCurrent(r.Context(), tenant.ID, effectiveDate, orgID, isBusinessUnit, reqID); err != nil {
 						nodes, errMsg := listNodes(err.Error())
-						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+						writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 						return
 					}
 				default:
 					nodes, errMsg := listNodes("record_change_type invalid")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 			}
 
-			http.Redirect(w, r, "/org/nodes?tree_as_of="+url.QueryEscape(treeAsOf), http.StatusSeeOther)
+			http.Redirect(w, r, "/org/nodes?tree_as_of="+url.QueryEscape(treeAsOf)+includeDisabledQuerySuffix(includeDisabled), http.StatusSeeOther)
 			return
 		}
 
@@ -1942,7 +2444,7 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 			}
 			if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
 				nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 				return
 			}
 
@@ -1956,13 +2458,13 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 				newName := strings.TrimSpace(r.Form.Get("new_name"))
 				if newName == "" {
 					nodes, errMsg := listNodes("new_name is required")
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 
 				if err := store.RenameNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newName); err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 			case "move":
@@ -1972,46 +2474,46 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 				}
 				if err := store.MoveNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID, newParentID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 			case "disable":
 
 				if err := store.DisableNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 			case "set_business_unit":
 				isBusinessUnit, err := parseBusinessUnitFlag(r.Form.Get("is_business_unit"))
 				if err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 				reqID := "ui:orgunit:set-business-unit:" + orgID + ":" + effectiveDate
 				if err := store.SetBusinessUnitCurrent(r.Context(), tenant.ID, effectiveDate, orgID, isBusinessUnit, reqID); err != nil {
 					nodes, errMsg := listNodes(err.Error())
-					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 					return
 				}
 			}
 
-			http.Redirect(w, r, "/org/nodes?tree_as_of="+url.QueryEscape(treeAsOf), http.StatusSeeOther)
+			http.Redirect(w, r, "/org/nodes?tree_as_of="+url.QueryEscape(treeAsOf)+includeDisabledQuerySuffix(includeDisabled), http.StatusSeeOther)
 			return
 		}
 
 		orgCode := r.Form.Get("org_code")
 		if orgCode == "" {
 			nodes, errMsg := listNodes("org_code is required")
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 			return
 		}
 
 		name := strings.TrimSpace(r.Form.Get("name"))
 		if name == "" {
 			nodes, errMsg := listNodes("name is required")
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 			return
 		}
 
@@ -2029,29 +2531,29 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 		}
 		if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
 			nodes, errMsg := listNodes("effective_date 无效: " + err.Error())
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 			return
 		}
 
 		isBusinessUnit, err := parseBusinessUnitFlag(r.Form.Get("is_business_unit"))
 		if err != nil {
 			nodes, errMsg := listNodes(err.Error())
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 			return
 		}
 
 		if _, err := store.CreateNodeCurrent(r.Context(), tenant.ID, effectiveDate, orgCode, name, parentID, isBusinessUnit); err != nil {
 			if errors.Is(err, orgunitpkg.ErrOrgCodeInvalid) {
 				nodes, errMsg := listNodes("org_code invalid")
-				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+				writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 				return
 			}
 			nodes, errMsg := listNodes(err.Error())
-			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, canEdit))
+			writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
 			return
 		}
 
-		http.Redirect(w, r, "/org/nodes?tree_as_of="+url.QueryEscape(treeAsOf), http.StatusSeeOther)
+		http.Redirect(w, r, "/org/nodes?tree_as_of="+url.QueryEscape(treeAsOf)+includeDisabledQuerySuffix(includeDisabled), http.StatusSeeOther)
 		return
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -2075,6 +2577,7 @@ func handleOrgNodeChildren(w http.ResponseWriter, r *http.Request, store OrgUnit
 	if !ok {
 		return
 	}
+	includeDisabled := includeDisabledFromURL(r)
 
 	parentIDRaw := strings.TrimSpace(r.URL.Query().Get("parent_id"))
 	if parentIDRaw == "" {
@@ -2087,7 +2590,7 @@ func handleOrgNodeChildren(w http.ResponseWriter, r *http.Request, store OrgUnit
 		return
 	}
 
-	children, err := store.ListChildren(r.Context(), tenant.ID, parentID, treeAsOf)
+	children, err := listChildrenByVisibility(r.Context(), store, tenant.ID, parentID, treeAsOf, includeDisabled)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -2111,13 +2614,16 @@ func handleOrgNodeChildren(w http.ResponseWriter, r *http.Request, store OrgUnit
 		}
 		b.WriteString(`>`)
 		b.WriteString(html.EscapeString(child.Name))
+		if strings.EqualFold(strings.TrimSpace(child.Status), "disabled") {
+			b.WriteString(` <span class="org-node-status-tag">(无效)</span>`)
+		}
 		b.WriteString(`</sl-tree-item>`)
 	}
 
 	writeContent(w, r, b.String())
 }
 
-func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, treeAsOf string, versions []OrgUnitNodeVersion, canEdit bool, flash string) string {
+func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, treeAsOf string, includeDisabled bool, versions []OrgUnitNodeVersion, canEdit bool, flash string) string {
 	parentLabel := "-"
 	if details.ParentID != 0 {
 		label := details.ParentCode
@@ -2180,14 +2686,32 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	if flash == "success" {
 		successMsg = "更新成功"
 	}
+	currentStatus := strings.ToLower(strings.TrimSpace(details.Status))
+	if currentStatus == "" {
+		currentStatus = "active"
+	}
+	statusLabel := orgUnitStatusLabel(currentStatus)
 	warnMsg := ""
 	if !canEdit {
 		warnMsg = "无更新权限，无法编辑"
+	}
+	if flash == "status_disabled_visible" {
+		msg := "当前组织为无效状态，可切换为有效"
+		if warnMsg == "" {
+			warnMsg = msg
+		} else {
+			warnMsg = warnMsg + "；" + msg
+		}
 	}
 
 	disabledAttr := ""
 	if !canEdit {
 		disabledAttr = " disabled"
+	}
+
+	includeDisabledValue := "0"
+	if includeDisabled {
+		includeDisabledValue = "1"
 	}
 
 	var b strings.Builder
@@ -2196,6 +2720,8 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(` data-current-effective-date="` + html.EscapeString(currentEffectiveDate) + `"`)
 	b.WriteString(` data-current-event-id="` + html.EscapeString(currentEventID) + `"`)
 	b.WriteString(` data-current-name="` + html.EscapeString(details.Name) + `"`)
+	b.WriteString(` data-current-status="` + html.EscapeString(currentStatus) + `"`)
+	b.WriteString(` data-include-disabled="` + html.EscapeString(includeDisabledValue) + `"`)
 	b.WriteString(` data-current-parent-code="` + html.EscapeString(details.ParentCode) + `"`)
 	b.WriteString(` data-current-is-business-unit="` + html.EscapeString(strconv.FormatBool(details.IsBusinessUnit)) + `"`)
 	b.WriteString(` data-min-effective-date="` + html.EscapeString(minDate) + `"`)
@@ -2215,7 +2741,7 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(`<div class="org-node-name">` + html.EscapeString(details.Name) + `</div>`)
 	b.WriteString(`<div class="org-node-code">` + html.EscapeString(details.OrgCode) + `</div>`)
 	b.WriteString(`</div>`)
-	b.WriteString(`<span class="org-node-status-badge">Active</span>`)
+	b.WriteString(`<span class="org-node-status-badge">` + html.EscapeString(statusLabel) + `</span>`)
 	b.WriteString(`<div class="org-node-header-spacer"></div>`)
 	b.WriteString(`<button type="button" class="org-node-edit-btn"` + disabledAttr + `>编辑</button>`)
 	b.WriteString(`</div>`)
@@ -2287,9 +2813,10 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 
 	b.WriteString(`<div class="org-node-record-form" data-open="false">`)
 	b.WriteString(`<div class="org-node-record-form-title">新增记录</div>`)
-	b.WriteString(`<form method="POST" class="org-node-record-action-form" action="/org/nodes?tree_as_of=` + html.EscapeString(treeAsOf) + `">`)
+	b.WriteString(`<form method="POST" class="org-node-record-action-form" action="/org/nodes?tree_as_of=` + html.EscapeString(treeAsOf) + `&include_disabled=` + html.EscapeString(includeDisabledValue) + `">`)
 	b.WriteString(`<input type="hidden" name="action" value="add_record" />`)
 	b.WriteString(`<input type="hidden" name="tree_as_of" value="` + html.EscapeString(treeAsOf) + `" />`)
+	b.WriteString(`<input type="hidden" name="include_disabled" value="` + html.EscapeString(includeDisabledValue) + `" />`)
 	b.WriteString(`<input type="hidden" name="current_effective_date" value="` + html.EscapeString(currentEffectiveDate) + `" />`)
 	b.WriteString(`<input type="hidden" name="org_code" value="` + html.EscapeString(details.OrgCode) + `" />`)
 	b.WriteString(`<input type="hidden" name="request_id" value="" />`)
@@ -2336,6 +2863,7 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(`<div class="org-node-readonly" data-panel="readonly">`)
 	b.WriteString(`<div class="org-node-info-list" data-tab-content="basic">`)
 	b.WriteString(`<div class="org-node-info-item">生效日期：` + html.EscapeString(currentEffectiveDate) + `</div>`)
+	b.WriteString(`<div class="org-node-info-item">状态：` + html.EscapeString(statusLabel) + `</div>`)
 	b.WriteString(`<div class="org-node-info-item">组织名称：` + html.EscapeString(details.Name) + `</div>`)
 	b.WriteString(`<div class="org-node-info-item">组织编码：` + html.EscapeString(details.OrgCode) + `</div>`)
 	b.WriteString(`<div class="org-node-info-item">上级组织：` + html.EscapeString(parentLabel) + `</div>`)
@@ -2413,6 +2941,7 @@ func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitS
 	if treeAsOf == "" {
 		treeAsOf = currentUTCDateString()
 	}
+	includeDisabled := includeDisabledFromURL(r)
 
 	orgIDRaw := strings.TrimSpace(r.URL.Query().Get("org_id"))
 	if orgIDRaw == "" {
@@ -2425,7 +2954,17 @@ func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitS
 		return
 	}
 
-	details, err := store.GetNodeDetails(r.Context(), tenant.ID, orgID, effectiveDate)
+	details, err := getNodeDetailsByVisibility(r.Context(), store, tenant.ID, orgID, effectiveDate, includeDisabled)
+	if err != nil {
+		if !includeDisabled && errors.Is(err, errOrgUnitNotFound) {
+			fallback, fallbackErr := getNodeDetailsByVisibility(r.Context(), store, tenant.ID, orgID, effectiveDate, true)
+			if fallbackErr == nil {
+				details = fallback
+				includeDisabled = true
+				err = nil
+			}
+		}
+	}
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -2446,7 +2985,10 @@ func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitS
 	}
 
 	flash := strings.TrimSpace(r.URL.Query().Get("flash"))
-	panel := renderOrgNodeDetails(details, effectiveDate, treeAsOf, versions, canEditOrgNodes(r.Context()), flash)
+	if flash == "" && strings.EqualFold(strings.TrimSpace(details.Status), "disabled") {
+		flash = "status_disabled_visible"
+	}
+	panel := renderOrgNodeDetails(details, effectiveDate, treeAsOf, includeDisabled, versions, canEditOrgNodes(r.Context()), flash)
 	writeContent(w, r, panel)
 }
 
@@ -2481,6 +3023,7 @@ func handleOrgNodeDetailsPage(w http.ResponseWriter, r *http.Request, store OrgU
 	if treeAsOf == "" {
 		treeAsOf = currentUTCDateString()
 	}
+	includeDisabled := includeDisabledFromURL(r)
 
 	orgIDRaw := strings.TrimSpace(r.URL.Query().Get("org_id"))
 	if orgIDRaw == "" {
@@ -2493,7 +3036,17 @@ func handleOrgNodeDetailsPage(w http.ResponseWriter, r *http.Request, store OrgU
 		return
 	}
 
-	details, err := store.GetNodeDetails(r.Context(), tenant.ID, orgID, effectiveDate)
+	details, err := getNodeDetailsByVisibility(r.Context(), store, tenant.ID, orgID, effectiveDate, includeDisabled)
+	if err != nil {
+		if !includeDisabled && errors.Is(err, errOrgUnitNotFound) {
+			fallback, fallbackErr := getNodeDetailsByVisibility(r.Context(), store, tenant.ID, orgID, effectiveDate, true)
+			if fallbackErr == nil {
+				details = fallback
+				includeDisabled = true
+				err = nil
+			}
+		}
+	}
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -2514,12 +3067,15 @@ func handleOrgNodeDetailsPage(w http.ResponseWriter, r *http.Request, store OrgU
 	}
 
 	nodesURL := "/org/nodes?tree_as_of=" + url.QueryEscape(treeAsOf)
+	if includeDisabled {
+		nodesURL += "&include_disabled=1"
+	}
 	escapedNodesURL := html.EscapeString(nodesURL)
 	var b strings.Builder
 	b.WriteString("<h1>OrgUnit / Details</h1>")
 	b.WriteString(`<p>Tenant: <code>` + html.EscapeString(tenant.Name) + `</code> (<code>` + html.EscapeString(tenant.ID) + `</code>)</p>`)
 	b.WriteString(`<p>Tree as-of: <code>` + html.EscapeString(treeAsOf) + `</code> | <a href="` + escapedNodesURL + `" hx-get="` + escapedNodesURL + `" hx-target="#content" hx-push-url="true">Back to Org Nodes</a></p>`)
-	b.WriteString(renderOrgNodeDetails(details, effectiveDate, treeAsOf, versions, canEditOrgNodes(r.Context()), ""))
+	b.WriteString(renderOrgNodeDetails(details, effectiveDate, treeAsOf, includeDisabled, versions, canEditOrgNodes(r.Context()), ""))
 	writePage(w, r, b.String())
 }
 
@@ -2539,6 +3095,7 @@ func handleOrgNodeSearch(w http.ResponseWriter, r *http.Request, store OrgUnitSt
 	if !ok {
 		return
 	}
+	includeDisabled := includeDisabledFromURL(r)
 
 	query := strings.TrimSpace(r.URL.Query().Get("query"))
 	if query == "" {
@@ -2548,7 +3105,7 @@ func handleOrgNodeSearch(w http.ResponseWriter, r *http.Request, store OrgUnitSt
 
 	format := strings.TrimSpace(r.URL.Query().Get("format"))
 	if format == "panel" {
-		items, err := store.SearchNodeCandidates(r.Context(), tenant.ID, query, treeAsOf, 8)
+		items, err := searchNodeCandidatesByVisibility(r.Context(), store, tenant.ID, query, treeAsOf, 8, includeDisabled)
 		if err != nil {
 			if errors.Is(err, errOrgUnitNotFound) {
 				writeContent(w, r, renderOrgNodeSearchPanel(nil))
@@ -2561,7 +3118,7 @@ func handleOrgNodeSearch(w http.ResponseWriter, r *http.Request, store OrgUnitSt
 		return
 	}
 
-	result, err := store.SearchNode(r.Context(), tenant.ID, query, treeAsOf)
+	result, err := searchNodeByVisibility(r.Context(), store, tenant.ID, query, treeAsOf, includeDisabled)
 	if err != nil {
 		if errors.Is(err, errOrgUnitNotFound) {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -2595,6 +3152,9 @@ func renderOrgNodeSearchPanel(items []OrgUnitSearchCandidate) string {
 		b.WriteString(`">`)
 		b.WriteString(`<span class="org-node-search-name">` + html.EscapeString(item.Name) + `</span>`)
 		b.WriteString(`<span class="org-node-search-code">` + html.EscapeString(item.OrgCode) + `</span>`)
+		if strings.EqualFold(strings.TrimSpace(item.Status), "disabled") {
+			b.WriteString(`<span class="org-node-status-tag">无效</span>`)
+		}
 		b.WriteString(`</button>`)
 	}
 	b.WriteString(`</div>`)
@@ -2643,7 +3203,7 @@ func selectOrgNodeVersion(asOf string, versions []OrgUnitNodeVersion) (OrgUnitNo
 	return selected, idx
 }
 
-func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf string, canEdit bool) string {
+func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf string, includeDisabled bool, canEdit bool) string {
 	var b strings.Builder
 	b.WriteString(`<div class="org-nodes-shell" id="org-nodes-root" data-can-edit="`)
 	if canEdit {
@@ -2651,7 +3211,20 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
 	} else {
 		b.WriteString(`false`)
 	}
+	b.WriteString(`" data-include-disabled="`)
+	if includeDisabled {
+		b.WriteString(`true`)
+	} else {
+		b.WriteString(`false`)
+	}
 	b.WriteString(`">`)
+
+	includeDisabledValue := "0"
+	includeDisabledChecked := ""
+	if includeDisabled {
+		includeDisabledValue = "1"
+		includeDisabledChecked = " checked"
+	}
 
 	b.WriteString(`<div class="org-nodes-header">`)
 	b.WriteString(`<div class="org-nodes-header-main">`)
@@ -2671,6 +3244,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
 	b.WriteString(`<form method="GET" action="/org/nodes" class="org-nodes-tree-asof">`)
 	b.WriteString(`<label class="org-nodes-asof-label">生效日期</label>`)
 	b.WriteString(`<input type="date" name="tree_as_of" value="` + html.EscapeString(treeAsOf) + `" />`)
+	b.WriteString(`<label class="org-node-include-disabled"><input type="checkbox" name="include_disabled" value="1"` + includeDisabledChecked + ` /> 显示无效组织</label>`)
 	b.WriteString(`<button type="submit">应用</button>`)
 	b.WriteString(`</form>`)
 	createDisabled := ""
@@ -2699,6 +3273,9 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
 			if n.IsBusinessUnit {
 				b.WriteString(` <span class="org-node-bu">(BU)</span>`)
 			}
+			if strings.EqualFold(strings.TrimSpace(n.Status), "disabled") {
+				b.WriteString(` <span class="org-node-status-tag">(无效)</span>`)
+			}
 			b.WriteString(`</sl-tree-item>`)
 		}
 	}
@@ -2711,6 +3288,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
 	b.WriteString(`<div class="org-node-search-label">查找组织（ID / Code / 名称）</div>`)
 	b.WriteString(`<form class="org-node-search-form" method="GET" action="/org/nodes/search">`)
 	b.WriteString(`<input type="hidden" name="tree_as_of" value="` + html.EscapeString(treeAsOf) + `" />`)
+	b.WriteString(`<input type="hidden" name="include_disabled" value="` + includeDisabledValue + `" />`)
 	b.WriteString(`<div class="org-node-search-row">`)
 	b.WriteString(`<input name="query" placeholder="输入 ID / Code / 名称" />`)
 	b.WriteString(`<button type="submit">查找</button>`)
@@ -2726,7 +3304,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
 	b.WriteString(`</section>`)
 	b.WriteString(`</div>`)
 
-	b.WriteString(renderOrgNodeCreateTemplate(treeAsOf, canEdit))
+	b.WriteString(renderOrgNodeCreateTemplate(treeAsOf, includeDisabled, canEdit))
 
 	b.WriteString(`<script>
 (function() {
@@ -2743,10 +3321,16 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
     const canEdit = root.dataset.canEdit === "true";
     let lastSelectedOrgId = "";
 
-    const getTreeAsOf = () => {
-      const params = new URLSearchParams(window.location.search);
-      return params.get("tree_as_of") || "";
-    };
+	    const getTreeAsOf = () => {
+	      const params = new URLSearchParams(window.location.search);
+	      return params.get("tree_as_of") || "";
+	    };
+
+	    const includeDisabledEnabled = () => {
+	      const params = new URLSearchParams(window.location.search);
+	      const raw = String(params.get("include_disabled") || "").trim().toLowerCase();
+	      return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+	    };
 
     const getDetailsContainer = () => document.getElementById("org-node-details");
 
@@ -2845,22 +3429,26 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       }
     };
 
-    const loadDetails = (orgId, opts) => {
-      const effectiveDate = opts && opts.effectiveDate ? opts.effectiveDate : "";
-      const treeAsOf = getTreeAsOf();
-      if (!orgId) {
-        return Promise.resolve();
-      }
-      let url = "/org/nodes/details?org_id=" + encodeURIComponent(orgId);
+	    const loadDetails = (orgId, opts) => {
+	      const effectiveDate = opts && opts.effectiveDate ? opts.effectiveDate : "";
+	      const treeAsOf = getTreeAsOf();
+	      const includeDisabled = includeDisabledEnabled();
+	      if (!orgId) {
+	        return Promise.resolve();
+	      }
+	      let url = "/org/nodes/details?org_id=" + encodeURIComponent(orgId);
       if (effectiveDate) {
         url += "&effective_date=" + encodeURIComponent(effectiveDate);
       }
-      if (treeAsOf) {
-        url += "&tree_as_of=" + encodeURIComponent(treeAsOf);
-      }
-      if (opts && opts.flash) {
-        url += "&flash=" + encodeURIComponent(opts.flash);
-      }
+	      if (treeAsOf) {
+	        url += "&tree_as_of=" + encodeURIComponent(treeAsOf);
+	      }
+	      if (includeDisabled) {
+	        url += "&include_disabled=1";
+	      }
+	      if (opts && opts.flash) {
+	        url += "&flash=" + encodeURIComponent(opts.flash);
+	      }
       return htmx.ajax("GET", url, { target: "#org-node-details", swap: "innerHTML" })
         .then(() => {
           initDetailsPanel();
@@ -2875,17 +3463,21 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
         });
     };
 
-    const loadChildren = (item) => {
+	    const loadChildren = (item) => {
       if (!item || item.dataset.loading === "true" || item.lazy !== true) {
         return Promise.resolve();
       }
-      const orgId = item.dataset.orgId;
-      const treeAsOf = getTreeAsOf();
-      if (!orgId || !treeAsOf) {
-        return Promise.resolve();
-      }
-      item.dataset.loading = "true";
-      const url = "/org/nodes/children?parent_id=" + encodeURIComponent(orgId) + "&tree_as_of=" + encodeURIComponent(treeAsOf);
+	      const orgId = item.dataset.orgId;
+	      const treeAsOf = getTreeAsOf();
+	      const includeDisabled = includeDisabledEnabled();
+	      if (!orgId || !treeAsOf) {
+	        return Promise.resolve();
+	      }
+	      item.dataset.loading = "true";
+	      let url = "/org/nodes/children?parent_id=" + encodeURIComponent(orgId) + "&tree_as_of=" + encodeURIComponent(treeAsOf);
+	      if (includeDisabled) {
+	        url += "&include_disabled=1";
+	      }
       return htmx.ajax("GET", url, { target: item, swap: "beforeend" })
         .then(() => {
           item.lazy = false;
@@ -2906,16 +3498,20 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       }
     };
 
-    const selectByOrgCode = async (orgCode) => {
-      const treeAsOf = getTreeAsOf();
-      if (!orgCode || !treeAsOf) {
-        return;
-      }
+	    const selectByOrgCode = async (orgCode) => {
+	      const treeAsOf = getTreeAsOf();
+	      const includeDisabled = includeDisabledEnabled();
+	      if (!orgCode || !treeAsOf) {
+	        return;
+	      }
       if (!confirmDiscard()) {
         return;
       }
       setSearchError("");
-      const url = "/org/nodes/search?query=" + encodeURIComponent(orgCode) + "&tree_as_of=" + encodeURIComponent(treeAsOf);
+	      let url = "/org/nodes/search?query=" + encodeURIComponent(orgCode) + "&tree_as_of=" + encodeURIComponent(treeAsOf);
+	      if (includeDisabled) {
+	        url += "&include_disabled=1";
+	      }
       try {
         const resp = await fetch(url, { headers: { "Accept": "application/json" } });
         if (!resp.ok) {
@@ -3291,13 +3887,17 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
           setSearchError("请输入查找条件");
           return;
         }
-        const treeAsOf = getTreeAsOf();
-        if (!treeAsOf) {
-          setSearchError("缺少 tree_as_of");
-          return;
-        }
-        setSearchError("");
-        const url = "/org/nodes/search?query=" + encodeURIComponent(query) + "&tree_as_of=" + encodeURIComponent(treeAsOf) + "&format=panel";
+	        const treeAsOf = getTreeAsOf();
+	        const includeDisabled = includeDisabledEnabled();
+	        if (!treeAsOf) {
+	          setSearchError("缺少 tree_as_of");
+	          return;
+	        }
+	        setSearchError("");
+	        let url = "/org/nodes/search?query=" + encodeURIComponent(query) + "&tree_as_of=" + encodeURIComponent(treeAsOf) + "&format=panel";
+	        if (includeDisabled) {
+	          url += "&include_disabled=1";
+	        }
         fetch(url, { headers: { "Accept": "text/html" } })
           .then((resp) => {
             if (!resp.ok) {
@@ -3448,14 +4048,16 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
             const nextEffectiveDate = (data && data.effective_date) ? data.effective_date : newEffectiveDate || original.effectiveDate;
             if (panel.dataset.orgId) {
               loadDetails(panel.dataset.orgId, { effectiveDate: nextEffectiveDate, flash: "success" });
-            } else {
-              const treeAsOf = getTreeAsOf();
-              if (treeAsOf) {
-                window.location.href = "/org/nodes?tree_as_of=" + encodeURIComponent(treeAsOf);
-              } else if (nextEffectiveDate) {
-                window.location.href = "/org/nodes?tree_as_of=" + encodeURIComponent(nextEffectiveDate);
-              }
-            }
+	            } else {
+	              const treeAsOf = getTreeAsOf();
+	              const includeDisabled = includeDisabledEnabled();
+	              const includeDisabledPart = includeDisabled ? "&include_disabled=1" : "";
+	              if (treeAsOf) {
+	                window.location.href = "/org/nodes?tree_as_of=" + encodeURIComponent(treeAsOf) + includeDisabledPart;
+	              } else if (nextEffectiveDate) {
+	                window.location.href = "/org/nodes?tree_as_of=" + encodeURIComponent(nextEffectiveDate) + includeDisabledPart;
+	              }
+	            }
           })
           .catch(() => {
             setStatus(panel, "error", "请求失败");
@@ -3929,10 +4531,14 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
 	return b.String()
 }
 
-func renderOrgNodeCreateTemplate(treeAsOf string, canEdit bool) string {
+func renderOrgNodeCreateTemplate(treeAsOf string, includeDisabled bool, canEdit bool) string {
 	disabledAttr := ""
 	if !canEdit {
 		disabledAttr = " disabled"
+	}
+	includeDisabledValue := "0"
+	if includeDisabled {
+		includeDisabledValue = "1"
 	}
 	var b strings.Builder
 	b.WriteString(`<template id="org-node-create-template">`)
@@ -3941,8 +4547,9 @@ func renderOrgNodeCreateTemplate(treeAsOf string, canEdit bool) string {
 	if !canEdit {
 		b.WriteString(`<div class="org-node-status-row org-node-status-warn">无更新权限，无法编辑</div>`)
 	}
-	b.WriteString(`<form method="POST" action="/org/nodes?tree_as_of=` + html.EscapeString(treeAsOf) + `">`)
+	b.WriteString(`<form method="POST" action="/org/nodes?tree_as_of=` + html.EscapeString(treeAsOf) + `&include_disabled=` + html.EscapeString(includeDisabledValue) + `">`)
 	b.WriteString(`<input type="hidden" name="tree_as_of" value="` + html.EscapeString(treeAsOf) + `" />`)
+	b.WriteString(`<input type="hidden" name="include_disabled" value="` + html.EscapeString(includeDisabledValue) + `" />`)
 	b.WriteString(`<label>生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(treeAsOf) + `"` + disabledAttr + ` /></label>`)
 	b.WriteString(`<label>组织编码* <input name="org_code"` + disabledAttr + ` /></label>`)
 	b.WriteString(`<label>组织名称* <input name="name"` + disabledAttr + ` /></label>`)
