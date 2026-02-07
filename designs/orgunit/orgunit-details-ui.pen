@@ -985,6 +985,16 @@
                           "fontFamily": "Inter",
                           "fontSize": 12,
                           "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "E2WLd",
+                          "name": "roA",
+                          "fill": "#0F172A",
+                          "content": "状态：有效",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -1273,6 +1283,48 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "hoF7w",
+                          "name": "labelA",
+                          "fill": "#0F172A",
+                          "content": "状态",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "318uB",
+                          "name": "inputStatus",
+                          "width": "fill_container",
+                          "height": 32,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 6,
+                          "padding": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Anvd5",
+                              "name": "textA",
+                              "fill": "#0F172A",
+                              "content": "有效 ▼",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "GFjov",
+                          "name": "hintA",
+                          "fill": "#64748B",
+                          "content": "可选：有效 / 无效",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "text",
@@ -2649,6 +2701,16 @@
                           "fontFamily": "Inter",
                           "fontSize": 12,
                           "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Q7fhP",
+                          "name": "roB",
+                          "fill": "#0F172A",
+                          "content": "状态：有效",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -2935,6 +2997,48 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "HcLoT",
+                          "name": "labelB",
+                          "fill": "#0F172A",
+                          "content": "状态",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "tvYtq",
+                          "name": "inputStatus",
+                          "width": "fill_container",
+                          "height": 32,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 6,
+                          "padding": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "xR4tT",
+                              "name": "textB",
+                              "fill": "#0F172A",
+                              "content": "有效 ▼",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "X3SNj",
+                          "name": "hintB",
+                          "fill": "#64748B",
+                          "content": "可选：有效 / 无效",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "text",
@@ -4157,6 +4261,16 @@
                           "fontFamily": "Inter",
                           "fontSize": 12,
                           "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "uEcfG",
+                          "name": "roC",
+                          "fill": "#0F172A",
+                          "content": "状态：有效",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -4445,6 +4559,48 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "Ty5OT",
+                          "name": "labelC",
+                          "fill": "#0F172A",
+                          "content": "状态",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "O1UFq",
+                          "name": "inputStatus",
+                          "width": "fill_container",
+                          "height": 32,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 6,
+                          "padding": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "DVhRt",
+                              "name": "textC",
+                              "fill": "#0F172A",
+                              "content": "有效 ▼",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "TmHkC",
+                          "name": "hintC",
+                          "fill": "#64748B",
+                          "content": "可选：有效 / 无效",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "text",
@@ -5673,6 +5829,16 @@
                           "fontFamily": "Inter",
                           "fontSize": 12,
                           "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "iNf0H",
+                          "name": "roD",
+                          "fill": "#0F172A",
+                          "content": "状态：有效",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -5959,6 +6125,48 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "J0YBp",
+                          "name": "labelD",
+                          "fill": "#0F172A",
+                          "content": "状态",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "P534D",
+                          "name": "inputStatus",
+                          "width": "fill_container",
+                          "height": 32,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 6,
+                          "padding": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "6ZOhr",
+                              "name": "textD",
+                              "fill": "#0F172A",
+                              "content": "有效 ▼",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "ULk3Z",
+                          "name": "hintD",
+                          "fill": "#64748B",
+                          "content": "可选：有效 / 无效",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "text",
@@ -7199,6 +7407,16 @@
                           "fontFamily": "Inter",
                           "fontSize": 12,
                           "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ZNnSF",
+                          "name": "roE",
+                          "fill": "#0F172A",
+                          "content": "状态：有效",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -7485,6 +7703,48 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "k7r5E",
+                          "name": "labelE",
+                          "fill": "#0F172A",
+                          "content": "状态",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "KJO19",
+                          "name": "inputStatus",
+                          "width": "fill_container",
+                          "height": 32,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 6,
+                          "padding": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "orKv8",
+                              "name": "textE",
+                              "fill": "#0F172A",
+                              "content": "有效 ▼",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "3v1vq",
+                          "name": "hintE",
+                          "fill": "#64748B",
+                          "content": "可选：有效 / 无效",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "text",
@@ -8711,6 +8971,16 @@
                           "fontFamily": "Inter",
                           "fontSize": 12,
                           "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "r3IL5",
+                          "name": "roF",
+                          "fill": "#0F172A",
+                          "content": "状态：有效",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -8997,6 +9267,48 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "mssOr",
+                          "name": "labelF",
+                          "fill": "#0F172A",
+                          "content": "状态",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "f7eAP",
+                          "name": "inputStatus",
+                          "width": "fill_container",
+                          "height": 32,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 6,
+                          "padding": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "uIYfk",
+                              "name": "textF",
+                              "fill": "#0F172A",
+                              "content": "有效 ▼",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "vuMCa",
+                          "name": "hintF",
+                          "fill": "#64748B",
+                          "content": "可选：有效 / 无效",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "text",
@@ -10372,6 +10684,16 @@
                           "fontFamily": "Inter",
                           "fontSize": 12,
                           "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "WsydQ",
+                          "name": "roG",
+                          "fill": "#0F172A",
+                          "content": "状态：有效",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -10658,6 +10980,48 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "nxSCw",
+                          "name": "labelG",
+                          "fill": "#0F172A",
+                          "content": "状态",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "dcban",
+                          "name": "inputStatus",
+                          "width": "fill_container",
+                          "height": 32,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 6,
+                          "padding": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "92CuT",
+                              "name": "textG",
+                              "fill": "#0F172A",
+                              "content": "有效 ▼",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "WvQoo",
+                          "name": "hintG",
+                          "fill": "#64748B",
+                          "content": "可选：有效 / 无效",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         },
                         {
                           "type": "text",
