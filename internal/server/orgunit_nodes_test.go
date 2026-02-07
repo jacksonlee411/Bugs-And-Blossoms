@@ -2123,20 +2123,24 @@ func TestHandleOrgNodes_TenantMissing(t *testing.T) {
 }
 
 func TestRenderOrgNodes(t *testing.T) {
-	out := renderOrgNodes(nil, Tenant{Name: "T"}, "", "2026-01-06", true)
+	out := renderOrgNodes(nil, Tenant{Name: "T"}, "", "2026-01-06", false, true)
 	if out == "" {
 		t.Fatal("expected output")
 	}
-	out2 := renderOrgNodes([]OrgUnitNode{{ID: "1", OrgCode: "N001", Name: "N", IsBusinessUnit: true}}, Tenant{Name: "T"}, "err", "2026-01-06", true)
+	out2 := renderOrgNodes([]OrgUnitNode{{ID: "1", OrgCode: "N001", Name: "N", IsBusinessUnit: true}}, Tenant{Name: "T"}, "err", "2026-01-06", false, true)
 	if out2 == "" {
 		t.Fatal("expected output")
 	}
 	if !strings.Contains(out2, "(BU)") {
 		t.Fatalf("unexpected output: %q", out2)
 	}
-	out3 := renderOrgNodes([]OrgUnitNode{{ID: "2", Name: "MissingCode"}}, Tenant{Name: "T"}, "", "2026-01-06", false)
+	out3 := renderOrgNodes([]OrgUnitNode{{ID: "2", Name: "MissingCode"}}, Tenant{Name: "T"}, "", "2026-01-06", false, false)
 	if !strings.Contains(out3, "(missing org_code)") {
 		t.Fatalf("unexpected output: %q", out3)
+	}
+	out4 := renderOrgNodes([]OrgUnitNode{{ID: "3", OrgCode: "D003", Name: "Disabled", Status: "disabled"}}, Tenant{Name: "T"}, "", "2026-01-06", true, true)
+	if !strings.Contains(out4, `data-include-disabled="true"`) || !strings.Contains(out4, "(无效)") {
+		t.Fatalf("unexpected output: %q", out4)
 	}
 }
 
