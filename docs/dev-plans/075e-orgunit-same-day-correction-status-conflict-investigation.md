@@ -1,6 +1,8 @@
 # DEV-PLAN-075E：OrgUnit 同日状态修正（生效日不变）方案
 
-**状态**: 规划中（2026-02-08 14:05 UTC）
+**状态**: 已完成（2026-02-08 15:20 UTC）
+
+> 实施与修复已合并：PR #307（功能落地）+ PR #308（补齐迁移闭环，修复 `submit_org_status_correction` 缺失）。
 
 ## 背景
 - 用户在 OrgUnit 页面存在“状态误维护”场景：目标是把某天（例如 `2026-01-01`）的状态从错误值修正为正确值，且**生效日期不变**。
@@ -120,10 +122,10 @@
 **目标**：先冻结边界，避免实现期漂移。  
 **范围**：文档/契约，不改业务代码。  
 **交付**：
-1. [ ] 冻结 `status correction` 请求/响应契约（字段、错误码、幂等语义）。
-2. [ ] 冻结 Authz 口径（与 `change_status` 保持同级权限）。
-3. [ ] 冻结“旧路径冲突时的引导策略”（继续报冲突 vs UI 提供跳转纠错入口）。
-4. [ ] 输出评审决策记录（函数名、API 路径、冲突码统一策略）。
+1. [x] 冻结 `status correction` 请求/响应契约（字段、错误码、幂等语义）。
+2. [x] 冻结 Authz 口径（与 `change_status` 保持同级权限）。
+3. [x] 冻结“旧路径冲突时的引导策略”（继续报冲突 vs UI 提供跳转纠错入口）。
+4. [x] 输出评审决策记录（函数名、API 路径、冲突码统一策略）。
 **DoD**：
 - 评审会上对“是否新增同日事件”达成一致：明确**不新增**；
 - 错误码矩阵可直接用于测试用例编写；
@@ -133,11 +135,11 @@
 **目标**：先打通后端原子能力，确保可测试。  
 **范围**：DB Kernel、Go Service、Internal API。  
 **交付**：
-1. [ ] DB：新增 `submit_org_status_correction(...)` 及 effective-view 投影规则。
-2. [ ] DB：迁移与 schema 同步，保持 Atlas/Goose 闭环。
-3. [ ] Service：新增 `CorrectStatus(...)`，含参数校验与幂等透传。
-4. [ ] API：新增 `POST /org/api/org-units/status-corrections`，错误码映射稳定。
-5. [ ] API：将 `23505 + org_events_one_per_day_unique` 映射为业务冲突语义（`EVENT_DATE_CONFLICT`）。
+1. [x] DB：新增 `submit_org_status_correction(...)` 及 effective-view 投影规则。
+2. [x] DB：迁移与 schema 同步，保持 Atlas/Goose 闭环。
+3. [x] Service：新增 `CorrectStatus(...)`，含参数校验与幂等透传。
+4. [x] API：新增 `POST /org/api/org-units/status-corrections`，错误码映射稳定。
+5. [x] API：将 `23505 + org_events_one_per_day_unique` 映射为业务冲突语义（`EVENT_DATE_CONFLICT`）。
 **DoD**：
 - 单测覆盖成功路径、目标不存在、幂等冲突、权限拒绝、已撤销拒绝、非状态事件拒绝；
 - API 层不再向上透出 SQLSTATE 原文；
@@ -148,11 +150,11 @@
 **目标**：让用户可发现、可操作，并与 075D 协同。  
 **范围**：OrgUnit 页面交互、提示文案、回归测试与执行记录。  
 **交付**：
-1. [ ] UI：新增“修正同日状态”入口（与“状态变更”并列但语义区分）。
-2. [ ] UI：状态冲突时给出可操作提示（引导用户走同日修正入口）。
-3. [ ] UI：提交结果/失败提示与 API 稳定错误码一致。
-4. [ ] 测试：补齐 UI/Handler/E2E 回归（含 JSON/HTMX/HTML 的 403/409 一致性）。
-5. [ ] 记录：在 `docs/dev-records/` 写入门禁与关键场景证据。
+1. [x] UI：新增“修正同日状态”入口（与“状态变更”并列但语义区分）。
+2. [x] UI：状态冲突时给出可操作提示（引导用户走同日修正入口）。
+3. [x] UI：提交结果/失败提示与 API 稳定错误码一致。
+4. [x] 测试：补齐 UI/Handler/E2E 回归（含 JSON/HTMX/HTML 的 403/409 一致性）。
+5. [x] 记录：在 `docs/dev-records/` 写入门禁与关键场景证据。
 **DoD**：
 - 用户无需改日期即可完成状态纠错；
 - UI 文案与行为无歧义（“状态变更” vs “状态纠错”）；

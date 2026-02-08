@@ -186,6 +186,7 @@ modules/{module}/
 - DEV-PLAN-075D：OrgUnit 页面状态字段与有效/无效显式切换：`docs/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
 - DEV-PLAN-075E：OrgUnit 同日状态修正（生效日不变）方案：`docs/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
 - DEV-PLAN-075D 执行日志：`docs/dev-records/dev-plan-075d-execution-log.md`
+- DEV-PLAN-075E 执行日志：`docs/dev-records/dev-plan-075e-execution-log.md`
 - DEV-PLAN-076：OrgUnit 版本切换导致选中组织丢失问题与修复方案：`docs/dev-plans/076-orgunit-version-switch-selection-retention.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
