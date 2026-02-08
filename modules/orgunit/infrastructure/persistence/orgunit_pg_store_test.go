@@ -186,6 +186,45 @@ func TestOrgUnitPGStore_SubmitCorrection(t *testing.T) {
 	}
 }
 
+func TestOrgUnitPGStore_SubmitStatusCorrection(t *testing.T) {
+	ctx := context.Background()
+
+	store := NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return nil, errors.New("begin")
+	}))
+	if _, err := store.SubmitStatusCorrection(ctx, "t1", 1, "2026-01-01", "disabled", "req", "t1"); err == nil {
+		t.Fatal("expected begin error")
+	}
+
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return &txStub{execErr: errors.New("exec")}, nil
+	}))
+	if _, err := store.SubmitStatusCorrection(ctx, "t1", 1, "2026-01-01", "disabled", "req", "t1"); err == nil {
+		t.Fatal("expected exec error")
+	}
+
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return &txStub{row: stubRow{err: errors.New("row")}}, nil
+	}))
+	if _, err := store.SubmitStatusCorrection(ctx, "t1", 1, "2026-01-01", "disabled", "req", "t1"); err == nil {
+		t.Fatal("expected row error")
+	}
+
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return &txStub{row: stubRow{vals: []any{"corr"}}, commitErr: errors.New("commit")}, nil
+	}))
+	if _, err := store.SubmitStatusCorrection(ctx, "t1", 1, "2026-01-01", "disabled", "req", "t1"); err == nil {
+		t.Fatal("expected commit error")
+	}
+
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return &txStub{row: stubRow{vals: []any{"corr"}}}, nil
+	}))
+	if _, err := store.SubmitStatusCorrection(ctx, "t1", 1, "2026-01-01", "disabled", "req", "t1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestOrgUnitPGStore_SubmitRescindEvent(t *testing.T) {
 	ctx := context.Background()
 

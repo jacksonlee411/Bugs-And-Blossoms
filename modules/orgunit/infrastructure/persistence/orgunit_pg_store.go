@@ -92,6 +92,37 @@ SELECT orgunit.submit_org_event_correction(
 	return correctionUUID, nil
 }
 
+func (s *OrgUnitPGStore) SubmitStatusCorrection(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, targetStatus string, requestID string, initiatorUUID string) (string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return "", err
+	}
+
+	var correctionUUID string
+	if err := tx.QueryRow(ctx, `
+SELECT orgunit.submit_org_status_correction(
+  $1::uuid,
+  $2::int,
+  $3::date,
+  $4::text,
+  $5::text,
+  $6::uuid
+)
+`, tenantID, orgID, targetEffectiveDate, targetStatus, requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
+		return "", err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+	return correctionUUID, nil
+}
+
 func (s *OrgUnitPGStore) SubmitRescindEvent(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

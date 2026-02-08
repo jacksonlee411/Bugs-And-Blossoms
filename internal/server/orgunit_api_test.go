@@ -764,6 +764,90 @@ func TestHandleOrgUnitsCorrectionsAPI_NotFound(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsStatusCorrectionsAPI_Success(t *testing.T) {
+	called := false
+	svc := orgUnitWriteServiceStub{
+		correctStatusFn: func(_ context.Context, tenantID string, req orgunitservices.CorrectStatusOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			called = true
+			if tenantID != "t1" {
+				t.Fatalf("tenant=%s", tenantID)
+			}
+			if req.OrgCode != "A001" || req.TargetEffectiveDate != "2026-01-01" || req.TargetStatus != "disabled" || req.RequestID != "r1" {
+				t.Fatalf("unexpected request: %+v", req)
+			}
+			return orgunittypes.OrgUnitResult{OrgCode: "A001", EffectiveDate: "2026-01-01", Fields: map[string]any{"target_status": "disabled"}}, nil
+		},
+	}
+	body := strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","target_status":"disabled","request_id":"r1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/status-corrections", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsStatusCorrectionsAPI(rec, req, svc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !called {
+		t.Fatalf("expected correct status call")
+	}
+	if !strings.Contains(rec.Body.String(), "A001") {
+		t.Fatalf("body=%q", rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsStatusCorrectionsAPI_BasicErrors(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/status-corrections", strings.NewReader(`{"org_code":"A001"}`))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsStatusCorrectionsAPI(rec, req, orgUnitWriteServiceStub{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/status-corrections", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsStatusCorrectionsAPI(rec, req, orgUnitWriteServiceStub{})
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("bad json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/status-corrections", strings.NewReader("{"))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsStatusCorrectionsAPI(rec, req, orgUnitWriteServiceStub{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("service missing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/status-corrections", strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","target_status":"disabled","request_id":"r1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsStatusCorrectionsAPI(rec, req, nil)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("status correction unsupported", func(t *testing.T) {
+		svc := orgUnitWriteServiceStub{correctStatusFn: func(context.Context, string, orgunitservices.CorrectStatusOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			return orgunittypes.OrgUnitResult{}, errors.New("ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET")
+		}}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/status-corrections", strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","target_status":"disabled","request_id":"r1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsStatusCorrectionsAPI(rec, req, svc)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+}
+
 func TestHandleOrgUnitsRescindsAPI_Success(t *testing.T) {
 	called := false
 	svc := orgUnitWriteServiceStub{
@@ -1027,6 +1111,7 @@ func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
 		{"bad_request_code", errors.New("ORG_CODE_INVALID"), http.StatusBadRequest},
 		{"conflict", errors.New("EVENT_DATE_CONFLICT"), http.StatusConflict},
 		{"request_id_conflict", errors.New("ORG_REQUEST_ID_CONFLICT"), http.StatusConflict},
+		{"status_correction_unsupported", errors.New("ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET"), http.StatusConflict},
 		{"replay_failed", errors.New("ORG_REPLAY_FAILED"), http.StatusConflict},
 		{"root_delete_forbidden", errors.New("ORG_ROOT_DELETE_FORBIDDEN"), http.StatusConflict},
 		{"bad_request_msg", newBadRequestError("name is required"), http.StatusBadRequest},
@@ -1052,6 +1137,7 @@ type orgUnitWriteServiceStub struct {
 	disableFn       func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error
 	enableFn        func(context.Context, string, orgunitservices.EnableOrgUnitRequest) error
 	correctFn       func(context.Context, string, orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
+	correctStatusFn func(context.Context, string, orgunitservices.CorrectStatusOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 	rescindRecordFn func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 	rescindOrgFn    func(context.Context, string, orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 }
@@ -1100,6 +1186,13 @@ func (s orgUnitWriteServiceStub) Correct(ctx context.Context, tenantID string, r
 		return orgunittypes.OrgUnitResult{}, nil
 	}
 	return s.correctFn(ctx, tenantID, req)
+}
+
+func (s orgUnitWriteServiceStub) CorrectStatus(ctx context.Context, tenantID string, req orgunitservices.CorrectStatusOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+	if s.correctStatusFn == nil {
+		return orgunittypes.OrgUnitResult{}, nil
+	}
+	return s.correctStatusFn(ctx, tenantID, req)
 }
 
 func (s orgUnitWriteServiceStub) RescindRecord(ctx context.Context, tenantID string, req orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {

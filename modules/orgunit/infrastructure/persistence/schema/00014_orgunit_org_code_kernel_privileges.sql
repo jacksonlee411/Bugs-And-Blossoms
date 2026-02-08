@@ -33,6 +33,12 @@ ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text,
 ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
   SET search_path = pg_catalog, orgunit, public;
 
+ALTER FUNCTION orgunit.submit_org_status_correction(uuid, int, date, text, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_status_correction(uuid, int, date, text, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_status_correction(uuid, int, date, text, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
 
 ALTER FUNCTION orgunit.submit_org_event_rescind(uuid, int, date, text, text, uuid)
   OWNER TO orgunit_kernel;

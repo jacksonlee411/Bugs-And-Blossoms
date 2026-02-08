@@ -13,15 +13,16 @@ import (
 )
 
 type orgUnitWriteStoreStub struct {
-	submitEventFn          func(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestCode string, initiatorUUID string) (int64, error)
-	submitCorrectionFn     func(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, patch json.RawMessage, requestID string, initiatorUUID string) (string, error)
-	submitRescindEventFn   func(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error)
-	submitRescindOrgFn     func(ctx context.Context, tenantID string, orgID int, reason string, requestID string, initiatorUUID string) (int, error)
-	findEventByUUIDFn      func(ctx context.Context, tenantID string, eventUUID string) (types.OrgUnitEvent, error)
-	findEventByEffectiveFn func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (types.OrgUnitEvent, error)
-	resolveOrgIDFn         func(ctx context.Context, tenantID string, orgCode string) (int, error)
-	resolveOrgCodeFn       func(ctx context.Context, tenantID string, orgID int) (string, error)
-	findPersonByPernrFn    func(ctx context.Context, tenantID string, pernr string) (types.Person, error)
+	submitEventFn            func(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestCode string, initiatorUUID string) (int64, error)
+	submitCorrectionFn       func(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, patch json.RawMessage, requestID string, initiatorUUID string) (string, error)
+	submitStatusCorrectionFn func(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, targetStatus string, requestID string, initiatorUUID string) (string, error)
+	submitRescindEventFn     func(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error)
+	submitRescindOrgFn       func(ctx context.Context, tenantID string, orgID int, reason string, requestID string, initiatorUUID string) (int, error)
+	findEventByUUIDFn        func(ctx context.Context, tenantID string, eventUUID string) (types.OrgUnitEvent, error)
+	findEventByEffectiveFn   func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (types.OrgUnitEvent, error)
+	resolveOrgIDFn           func(ctx context.Context, tenantID string, orgCode string) (int, error)
+	resolveOrgCodeFn         func(ctx context.Context, tenantID string, orgID int) (string, error)
+	findPersonByPernrFn      func(ctx context.Context, tenantID string, pernr string) (types.Person, error)
 }
 
 func (s orgUnitWriteStoreStub) SubmitEvent(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestCode string, initiatorUUID string) (int64, error) {
@@ -36,6 +37,13 @@ func (s orgUnitWriteStoreStub) SubmitCorrection(ctx context.Context, tenantID st
 		return "", errors.New("SubmitCorrection not mocked")
 	}
 	return s.submitCorrectionFn(ctx, tenantID, orgID, targetEffectiveDate, patch, requestID, initiatorUUID)
+}
+
+func (s orgUnitWriteStoreStub) SubmitStatusCorrection(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, targetStatus string, requestID string, initiatorUUID string) (string, error) {
+	if s.submitStatusCorrectionFn == nil {
+		return "", errors.New("SubmitStatusCorrection not mocked")
+	}
+	return s.submitStatusCorrectionFn(ctx, tenantID, orgID, targetEffectiveDate, targetStatus, requestID, initiatorUUID)
 }
 
 func (s orgUnitWriteStoreStub) SubmitRescindEvent(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error) {
@@ -259,6 +267,81 @@ func TestCorrectRequiresPatch(t *testing.T) {
 	})
 	if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchRequired {
 		t.Fatalf("expected patch required, got %v", err)
+	}
+}
+
+func TestCorrectStatusSuccess(t *testing.T) {
+	called := false
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, orgCode string) (int, error) {
+			if orgCode != "ROOT" {
+				t.Fatalf("orgCode=%s", orgCode)
+			}
+			return 10000001, nil
+		},
+		submitStatusCorrectionFn: func(_ context.Context, tenantID string, orgID int, targetEffectiveDate string, targetStatus string, requestID string, initiatorUUID string) (string, error) {
+			called = true
+			if tenantID != "t1" || orgID != 10000001 || targetEffectiveDate != "2026-01-01" || targetStatus != "disabled" || requestID != "req-1" || initiatorUUID != "t1" {
+				t.Fatalf("unexpected args: tenant=%s orgID=%d target=%s status=%s request=%s initiator=%s", tenantID, orgID, targetEffectiveDate, targetStatus, requestID, initiatorUUID)
+			}
+			return "corr", nil
+		},
+	}
+
+	svc := NewOrgUnitWriteService(store)
+	got, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{
+		OrgCode:             "root",
+		TargetEffectiveDate: "2026-01-01",
+		TargetStatus:        "inactive",
+		RequestID:           "req-1",
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if !called {
+		t.Fatalf("expected status correction call")
+	}
+	if got.OrgCode != "ROOT" || got.EffectiveDate != "2026-01-01" {
+		t.Fatalf("result=%+v", got)
+	}
+	if got.Fields["target_status"] != "disabled" {
+		t.Fatalf("fields=%+v", got.Fields)
+	}
+}
+
+func TestCorrectStatusValidationAndErrors(t *testing.T) {
+	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
+	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetStatus: "active", RequestID: "r1"}); err == nil || !httperr.IsBadRequest(err) {
+		t.Fatalf("expected bad date, got %v", err)
+	}
+	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestID: "r1"}); err == nil || !httperr.IsBadRequest(err) {
+		t.Fatalf("expected bad target status, got %v", err)
+	}
+	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", TargetStatus: "active"}); err == nil || !httperr.IsBadRequest(err) {
+		t.Fatalf("expected request_id bad request, got %v", err)
+	}
+
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 0, orgunitpkg.ErrOrgCodeNotFound
+		},
+	}
+	svc = NewOrgUnitWriteService(store)
+	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", TargetStatus: "active", RequestID: "r1"}); err == nil || err.Error() != errOrgCodeNotFound {
+		t.Fatalf("expected org not found, got %v", err)
+	}
+
+	store = orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 10000001, nil
+		},
+		submitStatusCorrectionFn: func(_ context.Context, _ string, _ int, _ string, _ string, _ string, _ string) (string, error) {
+			return "", errors.New("submit")
+		},
+	}
+	svc = NewOrgUnitWriteService(store)
+	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", TargetStatus: "active", RequestID: "r1"}); err == nil || err.Error() != "submit" {
+		t.Fatalf("expected submit error, got %v", err)
 	}
 }
 

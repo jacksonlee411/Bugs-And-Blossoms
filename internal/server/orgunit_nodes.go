@@ -93,17 +93,19 @@ const (
 func orgNodeWriteErrorMessage(err error) string {
 	code := strings.TrimSpace(err.Error())
 	messages := map[string]string{
-		"ORG_CODE_INVALID":                   "组织编码无效",
-		"ORG_CODE_NOT_FOUND":                 "组织编码不存在",
-		"ORG_EVENT_NOT_FOUND":                "未找到该生效日记录",
-		"ORG_REQUEST_ID_CONFLICT":            "请求编号冲突，请刷新后重试",
-		"ORG_REPLAY_FAILED":                  "重放失败，操作已回滚",
-		"ORG_ROOT_DELETE_FORBIDDEN":          "根组织不允许删除",
-		"ORG_HAS_CHILDREN_CANNOT_DELETE":     "存在下级组织，不能删除",
-		"ORG_HAS_DEPENDENCIES_CANNOT_DELETE": "存在下游依赖，不能删除",
-		"ORG_EVENT_RESCINDED":                "该记录已删除",
-		"EFFECTIVE_DATE_INVALID":             "生效日期无效",
-		"ORG_INVALID_ARGUMENT":               "请求参数不完整",
+		"ORG_CODE_INVALID":                         "组织编码无效",
+		"ORG_CODE_NOT_FOUND":                       "组织编码不存在",
+		"ORG_EVENT_NOT_FOUND":                      "未找到该生效日记录",
+		"EVENT_DATE_CONFLICT":                      "生效日期冲突，请勾选“同日状态纠错”后重试",
+		"ORG_REQUEST_ID_CONFLICT":                  "请求编号冲突，请刷新后重试",
+		"ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET": "该记录不支持同日状态纠错",
+		"ORG_REPLAY_FAILED":                        "重放失败，操作已回滚",
+		"ORG_ROOT_DELETE_FORBIDDEN":                "根组织不允许删除",
+		"ORG_HAS_CHILDREN_CANNOT_DELETE":           "存在下级组织，不能删除",
+		"ORG_HAS_DEPENDENCIES_CANNOT_DELETE":       "存在下游依赖，不能删除",
+		"ORG_EVENT_RESCINDED":                      "该记录已删除",
+		"EFFECTIVE_DATE_INVALID":                   "生效日期无效",
+		"ORG_INVALID_ARGUMENT":                     "请求参数不完整",
 	}
 	if msg, ok := messages[code]; ok {
 		return msg
@@ -2262,7 +2264,19 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 				orgCode = strings.TrimSpace(r.Form.Get("org_code"))
 			}
 
-			if targetStatus == "disabled" {
+			useStatusCorrection := strings.EqualFold(strings.TrimSpace(r.Form.Get("use_status_correction")), "1") || strings.EqualFold(strings.TrimSpace(r.Form.Get("use_status_correction")), "true")
+			if useStatusCorrection {
+				requestID := strings.TrimSpace(r.Form.Get("request_id"))
+				if requestID == "" {
+					requestID = newOrgNodeRequestID("ui:orgunit:status-correction")
+				}
+				_, err = writeSvc.CorrectStatus(r.Context(), tenant.ID, orgunitservices.CorrectStatusOrgUnitRequest{
+					OrgCode:             orgCode,
+					TargetEffectiveDate: effectiveDate,
+					TargetStatus:        targetStatus,
+					RequestID:           requestID,
+				})
+			} else if targetStatus == "disabled" {
 				err = writeSvc.Disable(r.Context(), tenant.ID, orgunitservices.DisableOrgUnitRequest{
 					EffectiveDate: effectiveDate,
 					OrgCode:       orgCode,
@@ -2941,6 +2955,7 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(`<option value="active">有效</option>`)
 	b.WriteString(`<option value="disabled">无效</option>`)
 	b.WriteString(`</select></label>`)
+	b.WriteString(`<label class="org-node-record-status-correction"><input type="checkbox" name="use_status_correction" value="1" /> 同日状态纠错（仅在同日冲突时使用）</label>`)
 	b.WriteString(`</div>`)
 	b.WriteString(`<div class="org-node-record-step" data-step="4"><div class="org-node-record-summary"></div></div>`)
 	b.WriteString(`<div class="org-node-record-form-actions">`)
@@ -3680,7 +3695,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
     const recordActionConfig = {
       add_record: { title: "新增记录", hint: "新增记录将追加为最新版本", showFields: true, showStatus: false, submit: "保存" },
       insert_record: { title: "插入记录", hint: "生效日需位于相邻记录之间（可早于所选记录）", showFields: true, showStatus: false, submit: "保存" },
-      change_status: { title: "状态变更", hint: "在有效/无效之间显式切换状态。", showFields: false, showStatus: true, submit: "保存" },
+      change_status: { title: "状态变更", hint: "在有效/无效之间显式切换状态；同日冲突时勾选“同日状态纠错”。", showFields: false, showStatus: true, submit: "保存" },
       delete_record: { title: "删除记录（错误数据）", hint: "该操作将删除错误数据（通过事件撤销实现），并立即重放版本；操作可审计，不可撤销。", showFields: false, showStatus: false, submit: "删除记录" },
       delete_org: { title: "删除组织（错误建档）", hint: "该操作将删除错误建档组织（通过事件撤销实现），并立即重放版本；操作可审计，不可撤销。", showFields: false, showStatus: false, submit: "删除组织" },
     };
@@ -3828,7 +3843,9 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
         const targetSelect = form.querySelector("select[name=\"target_status\"]");
         const targetStatus = normalizeTargetStatus(targetSelect ? targetSelect.value : "");
         const statusLabel = statusLabelMap[targetStatus] || "(未选择)";
-        summary.textContent = "将执行：" + actionLabel + "，生效日期：" + (effectiveDate || "(未填写)") + "，目标状态：" + statusLabel + "。";
+        const correctionCheckbox = form.querySelector("input[name=\"use_status_correction\"]");
+        const correctionLabel = correctionCheckbox && correctionCheckbox.checked ? "是" : "否";
+        summary.textContent = "将执行：" + actionLabel + "，生效日期：" + (effectiveDate || "(未填写)") + "，目标状态：" + statusLabel + "，同日状态纠错：" + correctionLabel + "。";
         return;
       }
       const changeSelect = form.querySelector("select[name=\"record_change_type\"]");
@@ -3883,7 +3900,12 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
         if (action === "change_status") {
           const targetSelect = form.querySelector("select[name=\"target_status\"]");
           const targetStatus = normalizeTargetStatus(targetSelect ? targetSelect.value : "");
-          submitText = targetStatus === "active" ? "启用" : "停用";
+          const correctionCheckbox = form.querySelector("input[name=\"use_status_correction\"]");
+          if (correctionCheckbox && correctionCheckbox.checked) {
+            submitText = targetStatus === "active" ? "修正为启用" : "修正为停用";
+          } else {
+            submitText = targetStatus === "active" ? "启用" : "停用";
+          }
         }
         submitBtn.textContent = submitText;
       }
@@ -3896,11 +3918,15 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       const parentLabel = form.querySelector(".org-node-record-parent");
       const buLabel = form.querySelector(".org-node-record-business-unit");
       const statusLabel = form.querySelector(".org-node-record-status");
+      const statusCorrectionLabel = form.querySelector(".org-node-record-status-correction");
       if (changeRow) {
         changeRow.style.display = config.showFields ? "grid" : "none";
       }
       if (statusLabel) {
         statusLabel.style.display = config.showStatus ? "grid" : "none";
+      }
+      if (statusCorrectionLabel) {
+        statusCorrectionLabel.style.display = config.showStatus ? "flex" : "none";
       }
       if (config.showFields) {
         updateRecordChangeFields(form);
@@ -4174,10 +4200,11 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
                 MANAGER_PERNR_INACTIVE: "负责人已失效",
                 PATCH_FIELD_NOT_ALLOWED: "字段不允许更正",
                 PATCH_REQUIRED: "未检测到变更",
-                EVENT_DATE_CONFLICT: "生效日期冲突",
+                EVENT_DATE_CONFLICT: "生效日期冲突，请改用同日状态纠错",
                 REQUEST_DUPLICATE: "重复请求",
                 ORG_ENABLE_REQUIRED: "需要先启用组织",
                 ORG_REQUEST_ID_CONFLICT: "请求编号冲突，请刷新后重试",
+                ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET: "该记录不支持同日状态纠错",
                 ORG_REPLAY_FAILED: "重放失败，操作已回滚",
                 ORG_ROOT_DELETE_FORBIDDEN: "根组织不允许删除",
                 ORG_HAS_CHILDREN_CANNOT_DELETE: "存在下级组织，不能删除",
@@ -4431,6 +4458,10 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
             const currentStatus = normalizeTargetStatus(panel.dataset.currentStatus || "active");
             targetSelect.value = currentStatus === "disabled" ? "disabled" : "active";
           }
+          const correctionCheckbox = form.querySelector("input[name=\"use_status_correction\"]");
+          if (correctionCheckbox) {
+            correctionCheckbox.checked = false;
+          }
           const currentEffectiveDate = panel.dataset.currentEffectiveDate || "";
           const prevEffectiveDate = panel.dataset.prevEffectiveDate || "";
           const nextEffectiveDate = panel.dataset.nextEffectiveDate || "";
@@ -4522,7 +4553,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       }
       const recordForm = input.closest ? input.closest(".org-node-record-action-form") : null;
       if (recordForm) {
-        if (input.name === "record_change_type" || input.name === "target_status") {
+        if (input.name === "record_change_type" || input.name === "target_status" || input.name === "use_status_correction") {
           updateRecordWizardStep(recordForm);
         } else {
           updateRecordSummary(recordForm);
@@ -4598,7 +4629,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       }
       const recordForm = select.closest ? select.closest(".org-node-record-action-form") : null;
       if (recordForm) {
-        if (select.name === "record_change_type" || select.name === "target_status") {
+        if (select.name === "record_change_type" || select.name === "target_status" || select.name === "use_status_correction") {
           updateRecordWizardStep(recordForm);
         } else {
           updateRecordSummary(recordForm);
