@@ -66,6 +66,12 @@ func TestOrgNodeWriteErrorMessage(t *testing.T) {
 	if got := orgNodeWriteErrorMessage(errors.New("ORG_REPLAY_FAILED")); got != "重放失败，操作已回滚" {
 		t.Fatalf("got=%q", got)
 	}
+	if got := orgNodeWriteErrorMessage(errors.New("EVENT_DATE_CONFLICT")); got != "生效日期冲突，请勾选“同日状态纠错”后重试" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := orgNodeWriteErrorMessage(errors.New("ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET")); got != "该记录不支持同日状态纠错" {
+		t.Fatalf("got=%q", got)
+	}
 	if got := orgNodeWriteErrorMessage(errors.New("boom")); got != "boom" {
 		t.Fatalf("got=%q", got)
 	}
@@ -3079,6 +3085,48 @@ func TestHandleOrgNodes_RecordActions(t *testing.T) {
 		}
 		if loc := rec.Header().Get("Location"); loc != "/org/nodes/view?effective_date=2026-01-11&tree_as_of=2026-01-06&org_id=10000001" {
 			t.Fatalf("location=%q", loc)
+		}
+	})
+
+	t.Run("change_status with status correction", func(t *testing.T) {
+		store := &recordActionStore{details: OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root", Status: "active"}}
+		called := false
+		var got orgunitservices.CorrectStatusOrgUnitRequest
+		writeSvc := orgUnitWriteServiceStub{
+			correctStatusFn: func(_ context.Context, tenantID string, req orgunitservices.CorrectStatusOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+				called = true
+				if tenantID != "t1" {
+					t.Fatalf("tenantID=%q", tenantID)
+				}
+				got = req
+				return orgunittypes.OrgUnitResult{OrgCode: req.OrgCode, EffectiveDate: req.TargetEffectiveDate}, nil
+			},
+		}
+		rec := postOrgNodesFormWithWriteSvc(t, store, writeSvc, "action=change_status&org_code=A001&effective_date=2026-01-11&target_status=disabled&use_status_correction=1")
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !called {
+			t.Fatal("expected status correction call")
+		}
+		if got.OrgCode != "A001" || got.TargetEffectiveDate != "2026-01-11" || got.TargetStatus != "disabled" {
+			t.Fatalf("unexpected correct status req: %+v", got)
+		}
+		if !strings.HasPrefix(got.RequestID, "ui:orgunit:status-correction:") {
+			t.Fatalf("unexpected request id: %q", got.RequestID)
+		}
+	})
+
+	t.Run("change_status conflict guidance", func(t *testing.T) {
+		store := &recordActionStore{details: OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root", Status: "active"}}
+		writeSvc := orgUnitWriteServiceStub{
+			disableFn: func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error {
+				return errors.New("EVENT_DATE_CONFLICT")
+			},
+		}
+		rec := postOrgNodesFormWithWriteSvc(t, store, writeSvc, "action=change_status&org_code=A001&effective_date=2026-01-11&target_status=disabled")
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "同日状态纠错") {
+			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
 		}
 	})
 

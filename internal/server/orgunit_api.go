@@ -145,6 +145,13 @@ type orgUnitCorrectionAPIRequest struct {
 	RequestID     string                        `json:"request_id"`
 }
 
+type orgUnitStatusCorrectionAPIRequest struct {
+	OrgCode       string `json:"org_code"`
+	EffectiveDate string `json:"effective_date"`
+	TargetStatus  string `json:"target_status"`
+	RequestID     string `json:"request_id"`
+}
+
 type orgUnitRescindRecordAPIRequest struct {
 	OrgCode       string `json:"org_code"`
 	EffectiveDate string `json:"effective_date"`
@@ -176,6 +183,7 @@ const (
 	orgUnitErrRequestDuplicate            = "REQUEST_DUPLICATE"
 	orgUnitErrEnableRequired              = "ORG_ENABLE_REQUIRED"
 	orgUnitErrRequestIDConflict           = "ORG_REQUEST_ID_CONFLICT"
+	orgUnitErrStatusCorrectionUnsupported = "ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET"
 	orgUnitErrReplayFailed                = "ORG_REPLAY_FAILED"
 	orgUnitErrRootDeleteForbidden         = "ORG_ROOT_DELETE_FORBIDDEN"
 	orgUnitErrHasChildrenCannotDelete     = "ORG_HAS_CHILDREN_CANNOT_DELETE"
@@ -405,6 +413,42 @@ func handleOrgUnitsCorrectionsAPI(w http.ResponseWriter, r *http.Request, writeS
 	writeOrgUnitResult(w, r, http.StatusOK, result)
 }
 
+func handleOrgUnitsStatusCorrectionsAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {
+	if r.Method != http.MethodPost {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+	if writeSvc == nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_service_missing", "orgunit service missing")
+		return
+	}
+
+	var req orgUnitStatusCorrectionAPIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+
+	result, err := writeSvc.CorrectStatus(r.Context(), tenant.ID, orgunitservices.CorrectStatusOrgUnitRequest{
+		OrgCode:             req.OrgCode,
+		TargetEffectiveDate: req.EffectiveDate,
+		TargetStatus:        req.TargetStatus,
+		RequestID:           req.RequestID,
+	})
+	if err != nil {
+		writeOrgUnitServiceError(w, r, err, "orgunit_correct_status_failed")
+		return
+	}
+
+	writeOrgUnitResult(w, r, http.StatusOK, result)
+}
+
 func handleOrgUnitsRescindsAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {
 	if r.Method != http.MethodPost {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -623,6 +667,7 @@ func orgUnitAPIStatusForCode(code string) (int, bool) {
 		orgUnitErrRequestDuplicate,
 		orgUnitErrEnableRequired,
 		orgUnitErrRequestIDConflict,
+		orgUnitErrStatusCorrectionUnsupported,
 		orgUnitErrReplayFailed,
 		orgUnitErrRootDeleteForbidden,
 		orgUnitErrHasChildrenCannotDelete,

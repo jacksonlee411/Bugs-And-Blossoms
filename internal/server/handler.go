@@ -419,6 +419,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/corrections", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsCorrectionsAPI(w, r, orgUnitWriteService)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/status-corrections", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsStatusCorrectionsAPI(w, r, orgUnitWriteService)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/rescinds", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsRescindsAPI(w, r, orgUnitWriteService)
 	}))

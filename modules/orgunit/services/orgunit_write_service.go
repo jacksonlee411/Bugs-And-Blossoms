@@ -48,6 +48,7 @@ type OrgUnitWriteService interface {
 	Enable(ctx context.Context, tenantID string, req EnableOrgUnitRequest) error
 	SetBusinessUnit(ctx context.Context, tenantID string, req SetBusinessUnitRequest) error
 	Correct(ctx context.Context, tenantID string, req CorrectOrgUnitRequest) (types.OrgUnitResult, error)
+	CorrectStatus(ctx context.Context, tenantID string, req CorrectStatusOrgUnitRequest) (types.OrgUnitResult, error)
 	RescindRecord(ctx context.Context, tenantID string, req RescindRecordOrgUnitRequest) (types.OrgUnitResult, error)
 	RescindOrg(ctx context.Context, tenantID string, req RescindOrgUnitRequest) (types.OrgUnitResult, error)
 }
@@ -93,6 +94,13 @@ type CorrectOrgUnitRequest struct {
 	OrgCode             string
 	TargetEffectiveDate string
 	Patch               OrgUnitCorrectionPatch
+	RequestID           string
+}
+
+type CorrectStatusOrgUnitRequest struct {
+	OrgCode             string
+	TargetEffectiveDate string
+	TargetStatus        string
 	RequestID           string
 }
 
@@ -458,6 +466,53 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 	}, nil
 }
 
+func (s *orgUnitWriteService) CorrectStatus(ctx context.Context, tenantID string, req CorrectStatusOrgUnitRequest) (types.OrgUnitResult, error) {
+	targetEffectiveDate, err := validateDate(req.TargetEffectiveDate)
+	if err != nil {
+		return types.OrgUnitResult{}, err
+	}
+
+	orgCode, err := normalizeOrgCode(req.OrgCode)
+	if err != nil {
+		return types.OrgUnitResult{}, err
+	}
+
+	targetStatus, err := normalizeTargetStatus(req.TargetStatus)
+	if err != nil {
+		return types.OrgUnitResult{}, err
+	}
+
+	requestID := strings.TrimSpace(req.RequestID)
+	if requestID == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
+	}
+
+	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+	if err != nil {
+		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
+			return types.OrgUnitResult{}, errors.New(errOrgCodeNotFound)
+		}
+		return types.OrgUnitResult{}, err
+	}
+
+	if _, err := s.store.SubmitStatusCorrection(ctx, tenantID, orgID, targetEffectiveDate, targetStatus, requestID, tenantID); err != nil {
+		return types.OrgUnitResult{}, err
+	}
+
+	fields := map[string]any{
+		"operation":     "CORRECT_STATUS",
+		"target_status": targetStatus,
+		"request_id":    requestID,
+	}
+
+	return types.OrgUnitResult{
+		OrgID:         strconv.Itoa(orgID),
+		OrgCode:       orgCode,
+		EffectiveDate: targetEffectiveDate,
+		Fields:        fields,
+	}, nil
+}
+
 func (s *orgUnitWriteService) RescindRecord(ctx context.Context, tenantID string, req RescindRecordOrgUnitRequest) (types.OrgUnitResult, error) {
 	targetEffectiveDate, err := validateDate(req.TargetEffectiveDate)
 	if err != nil {
@@ -695,6 +750,20 @@ func normalizeOrgCode(raw string) (string, error) {
 		return "", httperr.NewBadRequest(errOrgCodeInvalid)
 	}
 	return normalized, nil
+}
+
+func normalizeTargetStatus(raw string) (string, error) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	switch value {
+	case "enabled", "有效":
+		return "active", nil
+	case "inactive", "无效":
+		return "disabled", nil
+	case "active", "disabled":
+		return value, nil
+	default:
+		return "", httperr.NewBadRequest("target_status invalid")
+	}
 }
 
 func validateDate(raw string) (string, error) {

@@ -134,6 +134,9 @@ entrypoints:
       - path: /org/api/org-units/corrections
         methods: [POST]
         route_class: internal_api
+      - path: /org/api/org-units/status-corrections
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/org-units/rescinds
         methods: [POST]
         route_class: internal_api
