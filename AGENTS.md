@@ -188,6 +188,8 @@ modules/{module}/
 - DEV-PLAN-075D 执行日志：`docs/dev-records/dev-plan-075d-execution-log.md`
 - DEV-PLAN-075E 执行日志：`docs/dev-records/dev-plan-075e-execution-log.md`
 - DEV-PLAN-076：OrgUnit 版本切换导致选中组织丢失问题与修复方案：`docs/dev-plans/076-orgunit-version-switch-selection-retention.md`
+- DEV-PLAN-077：OrgUnit Replay 写放大评估与收敛方案：`docs/dev-plans/077-orgunit-replay-write-amplification-assessment-and-mitigation.md`
+- DEV-PLAN-077 记录：OrgUnit Replay 写放大基线测量：`docs/dev-records/dev-plan-077-write-amplification-baseline.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
 - DEV-PLAN-072 记录：命名收敛差异清单与映射表：`docs/dev-records/dev-plan-072-naming-convergence-mapping.md`
