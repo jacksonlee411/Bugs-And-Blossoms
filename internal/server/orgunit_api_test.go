@@ -1113,6 +1113,7 @@ func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
 		{"request_id_conflict", errors.New("ORG_REQUEST_ID_CONFLICT"), http.StatusConflict},
 		{"status_correction_unsupported", errors.New("ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET"), http.StatusConflict},
 		{"replay_failed", errors.New("ORG_REPLAY_FAILED"), http.StatusConflict},
+		{"high_risk_reorder", errors.New("ORG_HIGH_RISK_REORDER_FORBIDDEN"), http.StatusConflict},
 		{"root_delete_forbidden", errors.New("ORG_ROOT_DELETE_FORBIDDEN"), http.StatusConflict},
 		{"bad_request_msg", newBadRequestError("name is required"), http.StatusBadRequest},
 		{"stable_unknown", errors.New("SOME_DB_CODE"), http.StatusUnprocessableEntity},

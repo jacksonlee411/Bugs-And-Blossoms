@@ -72,6 +72,9 @@ func TestOrgNodeWriteErrorMessage(t *testing.T) {
 	if got := orgNodeWriteErrorMessage(errors.New("ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET")); got != "该记录不支持同日状态纠错" {
 		t.Fatalf("got=%q", got)
 	}
+	if got := orgNodeWriteErrorMessage(errors.New("ORG_HIGH_RISK_REORDER_FORBIDDEN")); got != "该变更会触发高风险全量重放，请改用新增/插入记录" {
+		t.Fatalf("got=%q", got)
+	}
 	if got := orgNodeWriteErrorMessage(errors.New("boom")); got != "boom" {
 		t.Fatalf("got=%q", got)
 	}
