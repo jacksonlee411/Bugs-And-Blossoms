@@ -1,6 +1,6 @@
 # DEV-PLAN-077：OrgUnit Replay 写放大评估与收敛方案
 
-**状态**: 进行中（2026-02-08 12:05 UTC）
+**状态**: 进行中（2026-02-08 12:32 UTC）
 
 ## 背景
 - 075E 上线后，OrgUnit 的 correction/rescind/status-correction 路径稳定可用，但均会触发 `replay_org_unit_versions(...)`。
@@ -83,8 +83,9 @@
 3. [X] 形成证据记录并纳入 `docs/dev-records/`。
 
 ### P1：短期护栏（待实施）
-1. [ ] 在 correction 前增加“高风险重排预校验”（根节点/祖先节点早移直接 fail-fast）。
-2. [ ] 在 API 层补充稳定错误语义，避免用户触发高成本失败重放。
+- 已落地：新增稳定错误码 `ORG_HIGH_RISK_REORDER_FORBIDDEN`（DB fail-fast + API/页面映射）。
+1. [X] 在 correction 前增加“高风险重排预校验”（根节点/祖先节点早移直接 fail-fast）。
+2. [X] 在 API 层补充稳定错误语义，避免用户触发高成本失败重放。
 3. [ ] 增加 replay 耗时与行写统计日志（最小字段：tenant/org_id/request_id/op）。
 
 ### P2：中期收敛（待实施）

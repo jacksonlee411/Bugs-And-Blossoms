@@ -104,6 +104,7 @@ func orgNodeWriteErrorMessage(err error) string {
 		"ORG_HAS_CHILDREN_CANNOT_DELETE":           "存在下级组织，不能删除",
 		"ORG_HAS_DEPENDENCIES_CANNOT_DELETE":       "存在下游依赖，不能删除",
 		"ORG_EVENT_RESCINDED":                      "该记录已删除",
+		"ORG_HIGH_RISK_REORDER_FORBIDDEN":          "该变更会触发高风险全量重放，请改用新增/插入记录",
 		"EFFECTIVE_DATE_INVALID":                   "生效日期无效",
 		"ORG_INVALID_ARGUMENT":                     "请求参数不完整",
 	}
@@ -4210,6 +4211,7 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
                 ORG_HAS_CHILDREN_CANNOT_DELETE: "存在下级组织，不能删除",
                 ORG_HAS_DEPENDENCIES_CANNOT_DELETE: "存在下游依赖，不能删除",
                 ORG_EVENT_RESCINDED: "该记录已删除",
+                ORG_HIGH_RISK_REORDER_FORBIDDEN: "该变更会触发高风险全量重放，请改用新增/插入记录",
               };
               const msg = (code && mapping[code]) ? mapping[code] : (message || "保存失败，请重试");
               setStatus(panel, "error", msg);

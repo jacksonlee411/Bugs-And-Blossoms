@@ -189,6 +189,7 @@ const (
 	orgUnitErrHasChildrenCannotDelete     = "ORG_HAS_CHILDREN_CANNOT_DELETE"
 	orgUnitErrHasDependenciesCannotDelete = "ORG_HAS_DEPENDENCIES_CANNOT_DELETE"
 	orgUnitErrEventRescinded              = "ORG_EVENT_RESCINDED"
+	orgUnitErrHighRiskReorderForbidden    = "ORG_HIGH_RISK_REORDER_FORBIDDEN"
 )
 
 func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService) {
@@ -672,7 +673,8 @@ func orgUnitAPIStatusForCode(code string) (int, bool) {
 		orgUnitErrRootDeleteForbidden,
 		orgUnitErrHasChildrenCannotDelete,
 		orgUnitErrHasDependenciesCannotDelete,
-		orgUnitErrEventRescinded:
+		orgUnitErrEventRescinded,
+		orgUnitErrHighRiskReorderForbidden:
 		return http.StatusConflict, true
 	default:
 		return 0, false

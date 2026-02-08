@@ -1570,6 +1570,8 @@ DECLARE
   v_new_effective date;
   v_next_effective date;
   v_parent_id int;
+  v_target_path ltree;
+  v_descendant_min_create date;
   v_correction_uuid uuid;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
@@ -1742,6 +1744,45 @@ BEGIN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_PARENT_NOT_FOUND_AS_OF',
         DETAIL = format('parent_id=%s as_of=%s', v_parent_id, v_new_effective);
+    END IF;
+  END IF;
+
+  -- Guard high-risk create reordering that would force replay to fail after full-table churn.
+  IF v_target.event_type = 'CREATE' AND v_new_effective > v_target_effective THEN
+    SELECT v.node_path INTO v_target_path
+    FROM orgunit.org_unit_versions v
+    WHERE v.tenant_uuid = p_tenant_uuid
+      AND v.org_id = p_org_id
+      AND v.validity @> v_target_effective
+    ORDER BY lower(v.validity) DESC
+    LIMIT 1;
+
+    IF v_target_path IS NOT NULL THEN
+      SELECT MIN(e.effective_date) INTO v_descendant_min_create
+      FROM orgunit.org_events_effective e
+      WHERE e.tenant_uuid = p_tenant_uuid
+        AND e.event_type = 'CREATE'
+        AND e.org_id <> p_org_id
+        AND EXISTS (
+          SELECT 1
+          FROM orgunit.org_unit_versions dv
+          WHERE dv.tenant_uuid = p_tenant_uuid
+            AND dv.org_id = e.org_id
+            AND dv.node_path <@ v_target_path
+          LIMIT 1
+        );
+
+      IF v_descendant_min_create IS NOT NULL AND v_descendant_min_create < v_new_effective THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'ORG_HIGH_RISK_REORDER_FORBIDDEN',
+          DETAIL = format(
+            'org_id=%s target_effective=%s new_effective=%s descendant_create=%s',
+            p_org_id,
+            v_target_effective,
+            v_new_effective,
+            v_descendant_min_create
+          );
+      END IF;
     END IF;
   END IF;
 
