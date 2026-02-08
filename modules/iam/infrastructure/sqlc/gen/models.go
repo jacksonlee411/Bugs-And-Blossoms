@@ -382,7 +382,7 @@ type OrgunitOrgEventsEffective struct {
 	EventUuid       pgtype.UUID        `json:"event_uuid"`
 	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
 	OrgID           int32              `json:"org_id"`
-	EventType       string             `json:"event_type"`
+	EventType       interface{}        `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
 	RequestCode     string             `json:"request_code"`
