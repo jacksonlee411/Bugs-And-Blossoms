@@ -37,14 +37,16 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT
-    COALESCE(NULLIF(btrim(p.display_name), ''), NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text),
-    COALESCE(NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text)
-  INTO v_name, v_employee
-  FROM iam.principals p
-  WHERE p.tenant_uuid = NEW.tenant_uuid
-    AND p.id = NEW.initiator_uuid
-  LIMIT 1;
+  IF to_regclass('iam.principals') IS NOT NULL THEN
+    SELECT
+      COALESCE(NULLIF(btrim(p.display_name), ''), NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text),
+      COALESCE(NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text)
+    INTO v_name, v_employee
+    FROM iam.principals p
+    WHERE p.tenant_uuid = NEW.tenant_uuid
+      AND p.id = NEW.initiator_uuid
+    LIMIT 1;
+  END IF;
 
   NEW.initiator_name := COALESCE(NULLIF(btrim(COALESCE(NEW.initiator_name, '')), ''), v_name, NEW.initiator_uuid::text);
   NEW.initiator_employee_id := COALESCE(NULLIF(btrim(COALESCE(NEW.initiator_employee_id, '')), ''), v_employee, NEW.initiator_uuid::text);
@@ -59,16 +61,21 @@ BEFORE INSERT ON orgunit.org_events
 FOR EACH ROW
 EXECUTE FUNCTION orgunit.fill_org_event_audit_snapshot();
 
-UPDATE orgunit.org_events e
-SET initiator_name = COALESCE(NULLIF(btrim(e.initiator_name), ''), p.display_name, p.email, e.initiator_uuid::text),
-    initiator_employee_id = COALESCE(NULLIF(btrim(e.initiator_employee_id), ''), p.email, e.initiator_uuid::text)
-FROM iam.principals p
-WHERE p.tenant_uuid = e.tenant_uuid
-  AND p.id = e.initiator_uuid
-  AND (
-    NULLIF(btrim(COALESCE(e.initiator_name, '')), '') IS NULL
-    OR NULLIF(btrim(COALESCE(e.initiator_employee_id, '')), '') IS NULL
-  );
+DO $$
+BEGIN
+  IF to_regclass('iam.principals') IS NOT NULL THEN
+    UPDATE orgunit.org_events e
+    SET initiator_name = COALESCE(NULLIF(btrim(e.initiator_name), ''), p.display_name, p.email, e.initiator_uuid::text),
+        initiator_employee_id = COALESCE(NULLIF(btrim(e.initiator_employee_id), ''), p.email, e.initiator_uuid::text)
+    FROM iam.principals p
+    WHERE p.tenant_uuid = e.tenant_uuid
+      AND p.id = e.initiator_uuid
+      AND (
+        NULLIF(btrim(COALESCE(e.initiator_name, '')), '') IS NULL
+        OR NULLIF(btrim(COALESCE(e.initiator_employee_id, '')), '') IS NULL
+      );
+  END IF;
+END $$;
 
 UPDATE orgunit.org_events e
 SET initiator_name = COALESCE(NULLIF(btrim(e.initiator_name), ''), e.initiator_uuid::text),
@@ -79,8 +86,12 @@ WHERE NULLIF(btrim(COALESCE(e.initiator_name, '')), '') IS NULL
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'orgunit_kernel') THEN
-    GRANT USAGE ON SCHEMA iam TO orgunit_kernel;
-    GRANT SELECT ON TABLE iam.principals TO orgunit_kernel;
+    IF to_regnamespace('iam') IS NOT NULL THEN
+      GRANT USAGE ON SCHEMA iam TO orgunit_kernel;
+    END IF;
+    IF to_regclass('iam.principals') IS NOT NULL THEN
+      GRANT SELECT ON TABLE iam.principals TO orgunit_kernel;
+    END IF;
     ALTER FUNCTION orgunit.fill_org_event_audit_snapshot() OWNER TO orgunit_kernel;
     ALTER FUNCTION orgunit.fill_org_event_audit_snapshot() SECURITY DEFINER;
     ALTER FUNCTION orgunit.fill_org_event_audit_snapshot() SET search_path = pg_catalog, orgunit, iam, public;

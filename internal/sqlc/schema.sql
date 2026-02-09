@@ -418,14 +418,16 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT
-    COALESCE(NULLIF(btrim(p.display_name), ''), NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text),
-    COALESCE(NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text)
-  INTO v_name, v_employee
-  FROM iam.principals p
-  WHERE p.tenant_uuid = NEW.tenant_uuid
-    AND p.id = NEW.initiator_uuid
-  LIMIT 1;
+  IF to_regclass('iam.principals') IS NOT NULL THEN
+    SELECT
+      COALESCE(NULLIF(btrim(p.display_name), ''), NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text),
+      COALESCE(NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text)
+    INTO v_name, v_employee
+    FROM iam.principals p
+    WHERE p.tenant_uuid = NEW.tenant_uuid
+      AND p.id = NEW.initiator_uuid
+    LIMIT 1;
+  END IF;
 
   NEW.initiator_name := COALESCE(NULLIF(btrim(COALESCE(NEW.initiator_name, '')), ''), v_name, NEW.initiator_uuid::text);
   NEW.initiator_employee_id := COALESCE(NULLIF(btrim(COALESCE(NEW.initiator_employee_id, '')), ''), v_employee, NEW.initiator_uuid::text);
@@ -5373,8 +5375,16 @@ BEGIN
 END $$;
 
 GRANT USAGE ON SCHEMA orgunit TO orgunit_kernel;
-GRANT USAGE ON SCHEMA iam TO orgunit_kernel;
-GRANT SELECT ON TABLE iam.principals TO orgunit_kernel;
+
+DO $$
+BEGIN
+  IF to_regnamespace('iam') IS NOT NULL THEN
+    GRANT USAGE ON SCHEMA iam TO orgunit_kernel;
+  END IF;
+  IF to_regclass('iam.principals') IS NOT NULL THEN
+    GRANT SELECT ON TABLE iam.principals TO orgunit_kernel;
+  END IF;
+END $$;
 
 ALTER TABLE IF EXISTS orgunit.org_unit_codes OWNER TO orgunit_kernel;
 

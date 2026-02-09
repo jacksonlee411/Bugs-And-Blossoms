@@ -6,8 +6,16 @@ BEGIN
 END $$;
 
 GRANT USAGE ON SCHEMA orgunit TO orgunit_kernel;
-GRANT USAGE ON SCHEMA iam TO orgunit_kernel;
-GRANT SELECT ON TABLE iam.principals TO orgunit_kernel;
+
+DO $$
+BEGIN
+  IF to_regnamespace('iam') IS NOT NULL THEN
+    GRANT USAGE ON SCHEMA iam TO orgunit_kernel;
+  END IF;
+  IF to_regclass('iam.principals') IS NOT NULL THEN
+    GRANT SELECT ON TABLE iam.principals TO orgunit_kernel;
+  END IF;
+END $$;
 
 ALTER TABLE IF EXISTS orgunit.org_unit_codes OWNER TO orgunit_kernel;
 
