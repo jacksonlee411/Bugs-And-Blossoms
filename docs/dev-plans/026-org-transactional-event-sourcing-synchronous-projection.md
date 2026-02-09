@@ -1,6 +1,9 @@
 # DEV-PLAN-026：Org（事务性事件溯源 + 同步投射）完整方案（Greenfield）
 
-**状态**: 草拟中（2026-02-02 06:57 UTC；对齐 026A/026B 的 org_id 分配）
+**状态**: 已被 DEV-PLAN-078 替代（2026-02-09；保留为历史参考）
+
+> 变更说明：本计划的“事件 SoT + 同事务全量重放”方案已由 **DEV-PLAN-078** 变更为“状态 SoT + 事件审计”。
+> 如需当前实施口径，请以 `docs/dev-plans/078-orgunit-write-model-alternatives-comparison-and-decision.md` 为准。
 
 > 本计划是“干净/完整”的方案设计稿：以 **`org_events` 为 SoT**，以 **同步投射** 在同一事务内维护 **`org_unit_versions` 读模型**，并提供强一致读、可重放重建与并发互斥策略。  
 > **暂不考虑迁移与兼容**：不要求与现有 `modules/org` 的 schema/API/事件契约兼容；也不提供双写/灰度/回滚路径（另开计划承接）。

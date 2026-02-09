@@ -30,6 +30,32 @@
   - 最后全量更新 `full_name_path`。
 - 同日唯一约束仍生效：`(tenant_uuid, org_id, effective_date)`。
 
+## 面向用户的解释（本计划口径）
+
+### 什么是“重放（replay）”
+- 对用户可理解为：**把组织事件流水重新过一遍，重算组织树结果**。
+- 事件表（`org_events`）是“原始流水/事实账本”，投影表（`org_unit_versions`/`org_trees`/`org_unit_codes`）是“可读结果/报表”。
+- replay 的作用是：当 correction/rescind 这类操作改变了历史事件语义后，系统用同一套规则重算当前正确状态。
+
+### 哪些表会受 replay 直接影响
+- **会被清空并重建（按租户）**：
+  - `orgunit.org_unit_versions`
+  - `orgunit.org_trees`
+  - `orgunit.org_unit_codes`
+- 这三张表是投影层，属于“可由事件重建”的结果数据。
+
+### 哪些表不受 replay 直接清空影响
+- **不会被 replay 删除/重建**：
+  - `orgunit.org_events`（事件 SoT，仅被读取用于重算）
+  - `orgunit.org_id_allocators`（org_id 分配器）
+  - `orgunit.org_event_corrections_current`
+  - `orgunit.org_event_corrections_history`
+- 说明：上述 correction 表不会被 replay 清空，但 correction/rescind 操作会触发 replay。
+
+### 与 026D 的关系（避免口径混淆）
+- 026D 已将 `submit_org_event` 的常规写路径收敛为增量投影（不再每次全量 replay）。
+- 本计划 077 聚焦的是 correction/status-correction/rescind 这几条路径，它们当前仍会触发 replay，因此写放大问题依然成立。
+
 > 参考：
 > - `modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`
 > - `migrations/orgunit/20260202160000_orgunit_remove_hierarchy_type.sql`
