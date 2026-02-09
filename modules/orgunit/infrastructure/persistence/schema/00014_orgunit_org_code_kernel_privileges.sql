@@ -60,27 +60,27 @@ ALTER FUNCTION orgunit.guard_event_rescind_priority()
 ALTER FUNCTION orgunit.guard_event_rescind_priority()
   SET search_path = pg_catalog, orgunit, public;
 
-REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) FROM PUBLIC;
 
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app') THEN
-    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM app';
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) FROM app';
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
-    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM app_runtime';
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) FROM app_runtime';
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_nobypassrls') THEN
-    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM app_nobypassrls';
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) FROM app_nobypassrls';
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'superadmin_runtime') THEN
-    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) FROM superadmin_runtime';
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) FROM superadmin_runtime';
   END IF;
 END $$;
 
-GRANT EXECUTE ON FUNCTION orgunit.replay_org_unit_versions(uuid) TO orgunit_kernel;
-ALTER FUNCTION orgunit.replay_org_unit_versions(uuid) OWNER TO orgunit_kernel;
-ALTER FUNCTION orgunit.replay_org_unit_versions(uuid) SET search_path = pg_catalog, orgunit, public;
+GRANT EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) TO orgunit_kernel;
+ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) SET search_path = pg_catalog, orgunit, public;
 
 REVOKE ALL ON TABLE orgunit.org_unit_codes FROM PUBLIC;
 
