@@ -243,6 +243,8 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   request_code text NOT NULL,
   initiator_uuid uuid NOT NULL,
+  initiator_name text NULL,
+  initiator_employee_id text NULL,
   reason text NULL,
   before_snapshot jsonb NULL,
   after_snapshot jsonb NULL,
@@ -250,13 +252,20 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')),
+  CONSTRAINT org_events_target_event_uuid_required CHECK (
+    event_type NOT IN ('CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')
+    OR (
+      payload ? 'target_event_uuid'
+      AND NULLIF(btrim(payload->>'target_event_uuid'), '') IS NOT NULL
+    )
+  ),
   CONSTRAINT org_events_request_code_unique UNIQUE (tenant_uuid, request_code)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_events (event_uuid);
 CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);
 CREATE INDEX IF NOT EXISTS org_events_tenant_effective_idx ON orgunit.org_events (tenant_uuid, effective_date, id);
-CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx ON orgunit.org_events (tenant_uuid, tx_time);
+CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx ON orgunit.org_events (tenant_uuid, tx_time DESC, id DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS org_events_one_per_day_unique
   ON orgunit.org_events (tenant_uuid, org_id, effective_date)
   WHERE event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT');
@@ -390,6 +399,46 @@ BEGIN
   END IF;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION orgunit.fill_org_event_audit_snapshot()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_name text;
+  v_employee text;
+BEGIN
+  IF NEW.tx_time IS NULL THEN
+    NEW.tx_time := COALESCE(NEW.transaction_time, now());
+  END IF;
+
+  IF NULLIF(btrim(COALESCE(NEW.initiator_name, '')), '') IS NOT NULL
+    AND NULLIF(btrim(COALESCE(NEW.initiator_employee_id, '')), '') IS NOT NULL
+  THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT
+    COALESCE(NULLIF(btrim(p.display_name), ''), NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text),
+    COALESCE(NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text)
+  INTO v_name, v_employee
+  FROM iam.principals p
+  WHERE p.tenant_uuid = NEW.tenant_uuid
+    AND p.id = NEW.initiator_uuid
+  LIMIT 1;
+
+  NEW.initiator_name := COALESCE(NULLIF(btrim(COALESCE(NEW.initiator_name, '')), ''), v_name, NEW.initiator_uuid::text);
+  NEW.initiator_employee_id := COALESCE(NULLIF(btrim(COALESCE(NEW.initiator_employee_id, '')), ''), v_employee, NEW.initiator_uuid::text);
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS org_events_fill_audit_snapshot ON orgunit.org_events;
+CREATE TRIGGER org_events_fill_audit_snapshot
+BEFORE INSERT ON orgunit.org_events
+FOR EACH ROW
+EXECUTE FUNCTION orgunit.fill_org_event_audit_snapshot();
 
 CREATE OR REPLACE VIEW orgunit.org_events_effective AS
 WITH correction_events AS (
@@ -5324,6 +5373,8 @@ BEGIN
 END $$;
 
 GRANT USAGE ON SCHEMA orgunit TO orgunit_kernel;
+GRANT USAGE ON SCHEMA iam TO orgunit_kernel;
+GRANT SELECT ON TABLE iam.principals TO orgunit_kernel;
 
 ALTER TABLE IF EXISTS orgunit.org_unit_codes OWNER TO orgunit_kernel;
 
@@ -5371,6 +5422,13 @@ ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
   SECURITY DEFINER;
 ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
   SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.fill_org_event_audit_snapshot()
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.fill_org_event_audit_snapshot()
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.fill_org_event_audit_snapshot()
+  SET search_path = pg_catalog, orgunit, iam, public;
 
 REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) FROM PUBLIC;
 

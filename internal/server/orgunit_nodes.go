@@ -1436,7 +1436,7 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
-	if _, err := tx.Exec(ctx, `SELECT set_config(app.current_tenant, $1, true);`, tenantID); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
 		return nil, err
 	}
 
@@ -1452,11 +1452,11 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 	  e.event_type,
 	  e.effective_date,
 	  e.tx_time,
-	  COALESCE(e.initiator_name, ),
-	  COALESCE(e.initiator_employee_id, ),
-	  COALESCE(e.request_code, ),
-	  COALESCE(e.reason, ),
-	  COALESCE(e.payload, {}::jsonb),
+	  COALESCE(e.initiator_name, ''),
+	  COALESCE(e.initiator_employee_id, ''),
+	  COALESCE(e.request_code, ''),
+	  COALESCE(e.reason, ''),
+	  COALESCE(e.payload, '{}'::jsonb),
 	  e.before_snapshot,
 	  e.after_snapshot
 	FROM orgunit.org_events e
