@@ -31,7 +31,6 @@ const (
 	errOrgRootDeleteForbidden         = "ORG_ROOT_DELETE_FORBIDDEN"
 	errOrgHasChildrenCannotDelete     = "ORG_HAS_CHILDREN_CANNOT_DELETE"
 	errOrgHasDependenciesCannotDelete = "ORG_HAS_DEPENDENCIES_CANNOT_DELETE"
-	errOrgReplayFailed                = "ORG_REPLAY_FAILED"
 	errOrgEventRescinded              = "ORG_EVENT_RESCINDED"
 )
 

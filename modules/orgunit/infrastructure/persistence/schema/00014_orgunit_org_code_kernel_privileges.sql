@@ -11,14 +11,13 @@ ALTER TABLE IF EXISTS orgunit.org_unit_codes OWNER TO orgunit_kernel;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   orgunit.org_events,
-  orgunit.org_event_corrections_current,
-  orgunit.org_event_corrections_history,
   orgunit.org_events_effective,
   orgunit.org_unit_versions,
   orgunit.org_trees,
   orgunit.org_unit_codes
 TO orgunit_kernel;
 
+
 ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
   OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
@@ -53,11 +52,6 @@ ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
 ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
   SECURITY DEFINER;
 ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
-  SET search_path = pg_catalog, orgunit, public;
-
-ALTER FUNCTION orgunit.guard_event_rescind_priority()
-  OWNER TO orgunit_kernel;
-ALTER FUNCTION orgunit.guard_event_rescind_priority()
   SET search_path = pg_catalog, orgunit, public;
 
 REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) FROM PUBLIC;

@@ -944,18 +944,6 @@ func TestHandleOrgUnitsRescindsAPI_BasicErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("replay failed", func(t *testing.T) {
-		svc := orgUnitWriteServiceStub{rescindRecordFn: func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
-			return orgunittypes.OrgUnitResult{}, errors.New("ORG_REPLAY_FAILED")
-		}}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rescinds", strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","request_id":"r1","reason":"bad"}`))
-		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
-		rec := httptest.NewRecorder()
-		handleOrgUnitsRescindsAPI(rec, req, svc)
-		if rec.Code != http.StatusConflict {
-			t.Fatalf("status=%d", rec.Code)
-		}
-	})
 }
 
 func TestHandleOrgUnitsRescindsOrgAPI_Success(t *testing.T) {
@@ -1112,7 +1100,6 @@ func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
 		{"conflict", errors.New("EVENT_DATE_CONFLICT"), http.StatusConflict},
 		{"request_id_conflict", errors.New("ORG_REQUEST_ID_CONFLICT"), http.StatusConflict},
 		{"status_correction_unsupported", errors.New("ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET"), http.StatusConflict},
-		{"replay_failed", errors.New("ORG_REPLAY_FAILED"), http.StatusConflict},
 		{"high_risk_reorder", errors.New("ORG_HIGH_RISK_REORDER_FORBIDDEN"), http.StatusConflict},
 		{"root_delete_forbidden", errors.New("ORG_ROOT_DELETE_FORBIDDEN"), http.StatusConflict},
 		{"bad_request_msg", newBadRequestError("name is required"), http.StatusBadRequest},

@@ -268,14 +268,7 @@ BEGIN
       corrected_at = EXCLUDED.corrected_at;
   END LOOP;
 
-  BEGIN
-    PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_REPLAY_FAILED',
-        DETAIL = format('tenant_uuid=%s org_id=%s cause=%s', p_tenant_uuid, p_org_id, SQLERRM);
-  END;
+  PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
 
   RETURN v_event_count;
 END;

@@ -184,7 +184,6 @@ const (
 	orgUnitErrEnableRequired              = "ORG_ENABLE_REQUIRED"
 	orgUnitErrRequestIDConflict           = "ORG_REQUEST_ID_CONFLICT"
 	orgUnitErrStatusCorrectionUnsupported = "ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET"
-	orgUnitErrReplayFailed                = "ORG_REPLAY_FAILED"
 	orgUnitErrRootDeleteForbidden         = "ORG_ROOT_DELETE_FORBIDDEN"
 	orgUnitErrHasChildrenCannotDelete     = "ORG_HAS_CHILDREN_CANNOT_DELETE"
 	orgUnitErrHasDependenciesCannotDelete = "ORG_HAS_DEPENDENCIES_CANNOT_DELETE"
@@ -669,7 +668,6 @@ func orgUnitAPIStatusForCode(code string) (int, bool) {
 		orgUnitErrEnableRequired,
 		orgUnitErrRequestIDConflict,
 		orgUnitErrStatusCorrectionUnsupported,
-		orgUnitErrReplayFailed,
 		orgUnitErrRootDeleteForbidden,
 		orgUnitErrHasChildrenCannotDelete,
 		orgUnitErrHasDependenciesCannotDelete,

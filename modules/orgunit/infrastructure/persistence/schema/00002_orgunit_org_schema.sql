@@ -38,56 +38,23 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   request_code text NOT NULL,
   initiator_uuid uuid NOT NULL,
+  reason text NULL,
+  before_snapshot jsonb NULL,
+  after_snapshot jsonb NULL,
+  tx_time timestamptz NOT NULL DEFAULT now(),
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')),
-  CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_uuid, org_id, effective_date)
+  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')),
+  CONSTRAINT org_events_request_code_unique UNIQUE (tenant_uuid, request_code)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_events (event_uuid);
 CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);
 CREATE INDEX IF NOT EXISTS org_events_tenant_effective_idx ON orgunit.org_events (tenant_uuid, effective_date, id);
-
-CREATE TABLE IF NOT EXISTS orgunit.org_event_corrections_current (
-  event_uuid uuid PRIMARY KEY,
-  tenant_uuid uuid NOT NULL,
-  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
-  target_effective_date date NOT NULL,
-  corrected_effective_date date NOT NULL,
-  original_event jsonb NOT NULL,
-  replacement_payload jsonb NOT NULL,
-  initiator_uuid uuid NOT NULL,
-  request_id text NOT NULL,
-  request_hash text NOT NULL,
-  corrected_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_event_corrections_current_original_event_obj_check CHECK (jsonb_typeof(original_event) = 'object'),
-  CONSTRAINT org_event_corrections_current_replacement_payload_obj_check CHECK (jsonb_typeof(replacement_payload) = 'object'),
-  CONSTRAINT org_event_corrections_current_target_unique UNIQUE (tenant_uuid, org_id, target_effective_date)
-);
-
-CREATE INDEX IF NOT EXISTS org_event_corrections_current_tenant_org_target_idx
-  ON orgunit.org_event_corrections_current (tenant_uuid, org_id, target_effective_date);
-
-CREATE INDEX IF NOT EXISTS org_event_corrections_current_tenant_org_corrected_idx
-  ON orgunit.org_event_corrections_current (tenant_uuid, org_id, corrected_effective_date);
-
-CREATE TABLE IF NOT EXISTS orgunit.org_event_corrections_history (
-  correction_uuid uuid PRIMARY KEY,
-  event_uuid uuid NOT NULL,
-  tenant_uuid uuid NOT NULL,
-  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
-  target_effective_date date NOT NULL,
-  corrected_effective_date date NOT NULL,
-  original_event jsonb NOT NULL,
-  replacement_payload jsonb NOT NULL,
-  initiator_uuid uuid NOT NULL,
-  request_id text NOT NULL,
-  request_hash text NOT NULL,
-  corrected_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_event_corrections_history_original_event_obj_check CHECK (jsonb_typeof(original_event) = 'object'),
-  CONSTRAINT org_event_corrections_history_replacement_payload_obj_check CHECK (jsonb_typeof(replacement_payload) = 'object'),
-  CONSTRAINT org_event_corrections_history_request_unique UNIQUE (tenant_uuid, request_id)
-);
+CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx ON orgunit.org_events (tenant_uuid, tx_time);
+CREATE UNIQUE INDEX IF NOT EXISTS org_events_one_per_day_unique
+  ON orgunit.org_events (tenant_uuid, org_id, effective_date)
+  WHERE event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT');
 
 CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
   id bigserial PRIMARY KEY,
@@ -157,20 +124,6 @@ ALTER TABLE orgunit.org_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.org_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_events;
 CREATE POLICY tenant_isolation ON orgunit.org_events
-USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
-
-ALTER TABLE orgunit.org_event_corrections_current ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orgunit.org_event_corrections_current FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_event_corrections_current;
-CREATE POLICY tenant_isolation ON orgunit.org_event_corrections_current
-USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
-
-ALTER TABLE orgunit.org_event_corrections_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orgunit.org_event_corrections_history FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_event_corrections_history;
-CREATE POLICY tenant_isolation ON orgunit.org_event_corrections_history
 USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 

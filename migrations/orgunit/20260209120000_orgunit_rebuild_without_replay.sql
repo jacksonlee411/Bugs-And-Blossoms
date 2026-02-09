@@ -364,14 +364,7 @@ BEGIN
     request_hash = EXCLUDED.request_hash,
     corrected_at = EXCLUDED.corrected_at;
 
-  BEGIN
-    PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_REPLAY_FAILED',
-        DETAIL = format('tenant_uuid=%s org_id=%s cause=%s', p_tenant_uuid, p_org_id, SQLERRM);
-  END;
+  PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
 
   RETURN v_correction_uuid;
 END;
@@ -647,14 +640,7 @@ BEGIN
       corrected_at = EXCLUDED.corrected_at;
   END LOOP;
 
-  BEGIN
-    PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_REPLAY_FAILED',
-        DETAIL = format('tenant_uuid=%s org_id=%s cause=%s', p_tenant_uuid, p_org_id, SQLERRM);
-  END;
+  PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
 
   RETURN v_event_count;
 END;
@@ -1044,14 +1030,7 @@ BEGIN
     request_hash = EXCLUDED.request_hash,
     corrected_at = EXCLUDED.corrected_at;
 
-  BEGIN
-    PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_REPLAY_FAILED',
-        DETAIL = format('tenant_uuid=%s org_id=%s cause=%s', p_tenant_uuid, p_org_id, SQLERRM);
-  END;
+  PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
 
   RETURN v_correction_uuid;
 END;
@@ -1422,14 +1401,7 @@ BEGIN
     request_hash = EXCLUDED.request_hash,
     corrected_at = EXCLUDED.corrected_at;
 
-  BEGIN
-    PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_REPLAY_FAILED',
-        DETAIL = format('tenant_uuid=%s org_id=%s cause=%s', p_tenant_uuid, p_org_id, SQLERRM);
-  END;
+  PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
 
   RETURN v_correction_uuid;
 END;
@@ -1703,14 +1675,7 @@ BEGIN
       corrected_at = EXCLUDED.corrected_at;
   END LOOP;
 
-  BEGIN
-    PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_REPLAY_FAILED',
-        DETAIL = format('tenant_uuid=%s org_id=%s cause=%s', p_tenant_uuid, p_org_id, SQLERRM);
-  END;
+  PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
 
   RETURN v_event_count;
 END;
@@ -2228,14 +2193,7 @@ BEGIN
     request_hash = EXCLUDED.request_hash,
     corrected_at = EXCLUDED.corrected_at;
 
-  BEGIN
-    PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_REPLAY_FAILED',
-        DETAIL = format('tenant_uuid=%s org_id=%s cause=%s', p_tenant_uuid, p_org_id, SQLERRM);
-  END;
+  PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
 
   RETURN v_correction_uuid;
 END;

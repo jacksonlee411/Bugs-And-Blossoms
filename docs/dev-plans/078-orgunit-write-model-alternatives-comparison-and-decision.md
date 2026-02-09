@@ -1,6 +1,6 @@
 # DEV-PLAN-078：OrgUnit 写模型替代方案对比与决策建议
 
-**状态**: 评审中（2026-02-08）
+**状态**: 评审中（2026-02-09 — 对齐 DEV-PLAN-080 审计链收敛方向）
 
 ## 0. 背景与问题定义
 - DEV-PLAN-075C/075D/075E 已收敛“删除标记、正常停用/启用、同日状态修正”的语义边界，但修正类写入仍会触发 replay。
@@ -66,11 +66,12 @@
    - 唯一约束建议：`(tenant_id, org_unit_id, effective_date)`（其中 `effective_date = lower(validity)`）。
    - 关键列：`status, name, parent_id, validity, row_version`。
    - 时间语义：按 DEV-PLAN-032，写入口使用 `effective_date(date)`，区间落库统一为 `validity daterange [start, end)`。
-2. 审计事件表（Append-only）：`org_events_audit`
-   - 记录“谁在何时做了什么修正”，用于审计与回放分析。
-   - 关键列：`event_type, request_id, actor, reason, before_snapshot, after_snapshot, tx_time`。
+2. 审计事件表（Append-only）：`org_events`
+   - 记录“谁在何时做了什么修正”，用于审计与回放分析（**唯一审计链**，对齐 DEV-PLAN-080）。
+   - 关键列：`event_type, request_code, actor, reason, before_snapshot, after_snapshot, tx_time`。
+   - 约束建议：`request_code`（或对外 `request_id` 的映射字段）在 tenant 级唯一。
 3. 幂等键
-   - 在写入口强制 `request_id` 在 **tenant 级唯一**（建议唯一约束：`(tenant_id, request_id)`），防重复提交。
+   - 在写入口强制 `request_code/request_id` 在 **tenant 级唯一**，防重复提交（对齐 DEV-PLAN-080 的 `request_code` 口径）。
 
 ### 3.3 写路径（同事务）
 > 统一模板：前置条件 -> 影响集合 -> 区间变换 -> 审计写入 -> 后置不变量 -> 幂等语义/错误码。
@@ -79,7 +80,7 @@
    - 前置条件：`effective_date=D` 合法；新增时该 `org_unit_id` 尚无版本；启用时目标日存在快照且可被启用。
    - 影响集合：从 `D` 起到“下一次状态切换日”前的连续段。
    - 区间变换：在 `D` 处分裂区间；新增时插入 `[D, +inf)`；启用时将受影响段 `status=active`。
-   - 审计写入：写入 `org_events_audit`（event_type=CREATE/ENABLE，记录 request_id/actor/reason/before/after）。
+   - 审计写入：写入 `org_events`（event_type=CREATE/ENABLE，记录 request_code/request_id、actor、reason、before/after）。
    - 后置不变量：保持 `no-overlap`/`gapless`/末段一致性；同日仅一条有效快照。
    - 幂等/错误码：同 `request_id` 同语义幂等成功；异语义返回 `ORG_REQUEST_ID_CONFLICT`；目标不存在返回 `ORG_NOT_FOUND_AS_OF`。
 
@@ -87,7 +88,7 @@
    - 前置条件：目标日存在快照，且允许停用。
    - 影响集合：从 `D` 起到“下一次状态切换日”前的连续段。
    - 区间变换：在 `D` 处分裂；将受影响段 `status=disabled`；前一段上界截断为 `D`（半开区间，不使用 `D-1`）。
-   - 审计写入：写入 `org_events_audit`（event_type=DISABLE）。
+   - 审计写入：写入 `org_events`（event_type=DISABLE）。
    - 后置不变量：保持 `no-overlap`/`gapless`/末段一致性。
    - 幂等/错误码：同 `request_id` 同语义幂等成功；异语义返回 `ORG_REQUEST_ID_CONFLICT`。
 
@@ -95,7 +96,7 @@
    - 前置条件：目标日存在快照；对应审计事件语义为 ENABLE/DISABLE；目标事件未被撤销（rescind）。
    - 影响集合：从 `D` 起到“下一次状态切换日”前的连续段。
    - 区间变换：仅修正该连续段的 `status`，**不改 `effective_date`**，不触碰非状态字段。
-   - 审计写入：写入 `org_events_audit`（event_type=CORRECT_STATUS），保留 before/after。
+   - 审计写入：写入 `org_events`（event_type=CORRECT_STATUS），保留 before/after。
    - 后置不变量：保持 `no-overlap`/`gapless`/末段一致性；同日仍只有一条有效快照。
    - 幂等/错误码：同 `request_id` 同语义幂等成功；异语义返回 `ORG_REQUEST_ID_CONFLICT`；目标不存在返回 `ORG_EVENT_NOT_FOUND`；目标已撤销返回 `ORG_EVENT_RESCINDED`。
 
@@ -104,7 +105,7 @@
    - 前置条件：目标事件存在；`request_id`/`reason` 必填。
    - 影响集合：目标事件对应的业务可见区间，以及相邻可合并区间。
    - 区间变换：撤销目标事件的业务可见性，回补/合并相邻区间（不物理删除审计与事件）。
-   - 审计写入：写入 `org_events_audit`（event_type=RESCIND/DELETE_RECORD，记录 before/after）。
+   - 审计写入：写入 `org_events`（event_type=RESCIND/DELETE_RECORD，记录 before/after）。
    - 后置不变量：保持 `no-overlap`/`gapless`/末段一致性。
    - 幂等/错误码：同 `request_id` 同语义幂等成功；异语义返回 `ORG_REQUEST_ID_CONFLICT`；目标不存在返回 `ORG_EVENT_NOT_FOUND`。
 
@@ -144,7 +145,7 @@
 ## 4. 迁移策略（开发早期：一次性重基线）
 
 ### 4.1 阶段 0：契约冻结与切换窗口（必做）
-- 冻结唯一目标模型：`org_unit_versions`（状态 SoT）+ `org_events_audit`（append-only 审计）。
+- 冻结唯一目标模型：`org_unit_versions`（状态 SoT）+ `org_events`（append-only 审计，唯一审计链）。
 - 冻结时间语义与不变量：`effective_date + validity [start,end)`、同日唯一、no-overlap、gapless。
 - 约定一次性切换窗口：窗口内允许清空/重建测试数据，不做在线灰度。
 
@@ -178,7 +179,8 @@
 
 ### 4.6 稳态收敛
 - `org_unit_versions` 成为唯一业务读写 SoT。
-- `org_events_audit` 保留 append-only 审计角色。
+- `org_events` 成为唯一 append-only 审计链。
+- `org_events_audit` 与 `org_event_corrections_*` 被移除。
 - 系统中不再保留 replay 函数、调用链与运行时入口。
 
 ### 4.7 受影响 API 分组（实施范围）
@@ -223,13 +225,10 @@
 
 ### 4.8 实施子计划（表级清单：新增/改造/删除）
 
-> 注意：新增表必须先获得用户手工确认（已确认）。所有 DDL 变更通过 Atlas+Goose 闭环。
+> 注意：本次不新增表；如后续新增表必须先获得用户手工确认。所有 DDL 变更通过 Atlas+Goose 闭环。
 
 #### 新增表（New）
-- `orgunit.org_events_audit`
-  - DDL 要点：append-only 审计表；包含 `event_type`、`request_id`、`actor`、`reason`、`before_snapshot`、`after_snapshot`、`tx_time`（`timestamptz`）。
-  - 约束建议：`tx_time` 默认 `now()`；与 `tenant_uuid` 组合索引（按租户+时间查询）。
-  - 目的：替代 replay 作为“历史可解释性”载体，不参与业务读写链路。
+- 无（对齐 DEV-PLAN-080：审计链收敛到 `org_events`，不新增审计表）。
 
 #### 改造表（Alter/Behavioral）
 - `orgunit.org_unit_versions`
@@ -245,18 +244,13 @@
   - 语义变化：移除“全量重放后重建”的依赖。
 
 - `orgunit.org_events`
-  - DDL 要点：结构不变；若保留作为审计链，需明确不再作为 SoT（仅事件记录）。
-  - 语义变化：不再触发 replay；修正/撤销通过区间增量逻辑直接更新状态表。
-
-- `orgunit.org_event_corrections_current`
-  - DDL 要点：结构不变；用于记录最新修正态。
-  - 语义变化：修正逻辑改为增量区间写入；删除 replay 触发与相关错误码。
-
-- `orgunit.org_event_corrections_history`
-  - DDL 要点：结构不变；保留审计链。
-  - 语义变化：同上，增量区间写入，不触发 replay。
+  - DDL 要点：作为唯一审计链；补齐 `request_code`/`reason`/`before_snapshot`/`after_snapshot`/`tx_time`；`request_code` 施加 tenant 级唯一约束。
+  - 语义变化：不再触发 replay；修正/撤销通过区间增量逻辑直接更新状态表；审计写入统一落在 `org_events`。
 
 #### 删除对象（Drop）
+- `orgunit.org_events_audit`（若已存在，需在迁移中删除）
+- `orgunit.org_event_corrections_current`
+- `orgunit.org_event_corrections_history`
 - `orgunit.replay_org_unit_versions(...)` 及其权限配置/入口
   - DDL 要点：`DROP FUNCTION` + 清理 `GRANT/REVOKE` 相关脚本。
   - 同步删除：`ORG_REPLAY_FAILED` 错误码映射与测试用例。
@@ -302,18 +296,19 @@
 - 依赖：075/075B/075E 口径；026D 增量投影逻辑。
 - 回滚：进入只读/停写保护并修复后重试，禁止回退旧链路。
 
-#### 078B：新增审计表 + 表级重基线
-- 背景与上下文：去 replay 后仍需可解释审计链。
-- 目标：新增 `orgunit.org_events_audit`，完成表级 DDL 变更与重基线。
-- 非目标：不引入历史兼容表或影子表。
+#### 078B：审计链收敛（`org_events`）+ 纠错表清理 + 表级重基线
+- 背景与上下文：DEV-PLAN-080 要求单一审计链；去 replay 后需统一审计口径。
+- 目标：将 `org_events` 扩展为唯一审计链；删除 `org_events_audit` 与 `org_event_corrections_*`；完成表级 DDL 变更与重基线。
+- 非目标：不引入历史兼容表或影子表，不引入双链路。
 - 触发器与门禁：DB 迁移/Schema（Atlas+Goose 闭环）。
 - 数据模型与约束：
-  - `org_events_audit` 为 append-only；`tx_time` 默认 `now()`；`tenant_uuid + tx_time` 索引。
-  - 不与业务读写链路耦合。
-- 核心逻辑：写入与业务写同事务提交；写失败应 fail-closed。
-- 验收：`make orgunit plan` 无漂移；表结构与索引满足计划口径。
-- 依赖：078A 完成删除 replay 后再收口审计口径。
-- 回滚：早期可 drop 表并重基线（需记录证据）。
+  - `org_events` 为 append-only；`tx_time` 默认 `now()`；`tenant_uuid + tx_time` 索引。
+  - `request_code` tenant 级唯一；补齐 `reason/before_snapshot/after_snapshot`。
+  - 不与业务读写链路耦合（仅审计）。
+- 核心逻辑：审计写入与业务写同事务提交；写失败应 fail-closed；纠错/撤销不再写入纠错表。
+- 验收：`make orgunit plan` 无漂移；`org_events_audit` 与 `org_event_corrections_*` 不再存在；表结构与索引满足计划口径。
+- 依赖：078A 完成删除 replay 后再收口审计口径；对齐 DEV-PLAN-080。
+- 回滚：早期可清库重灌并重基线（需记录证据），禁止回退双链路。
 
 #### 078C：API/错误码/UI 文案清理（删除 ORG_REPLAY_FAILED）
 - 背景与上下文：replay 移除后该错误码不应继续暴露。
@@ -323,7 +318,7 @@
 - 接口契约：对外错误码集合中移除 `ORG_REPLAY_FAILED`。
 - 失败路径：删除映射后，相关错误需被其他稳定错误码覆盖或 fail-closed。
 - 验收：`rg -n "ORG_REPLAY_FAILED"` 结果为空；相关测试更新通过。
-- 依赖：078A 删除 replay 调用；078B 完成审计表。
+- 依赖：078A 删除 replay 调用；078B 完成审计链收敛。
 - 回滚：回滚代码与迁移即可恢复旧映射（仅限早期）。
 
 #### 078D：回归与一致性测试
@@ -360,13 +355,15 @@
 
 1. M1（契约冻结）
    - 文档冻结“一次性重基线 + 无双链路 + 无迁移期开关”。
-   - 不变量映射为可执行检查：`no-overlap`、`gapless`、同日唯一、`request_id` 幂等。
+   - 不变量映射为可执行检查：`no-overlap`、`gapless`、同日唯一、`request_code/request_id` 幂等。
    - 验收方式：评审清单签字 + 执行日志中记录冻结日期与 commit hash。
 
 2. M2（数据库重基线完成）
    - 必跑命令：`make orgunit plan && make orgunit lint && make orgunit migrate up && make orgunit plan`。
    - 通过标准：最后一次 `make orgunit plan` 为 No Changes；迁移期对象（`*_v2`/影子表/临时对账对象）清理完成。
-   - 删除标准：`rg -n "replay_org_unit_versions|ORG_REPLAY_FAILED" modules/orgunit migrations/orgunit internal/server` 结果为空。
+  - 删除标准（以最终 Schema/SSOT 与代码为准，历史迁移文本不纳入扫描范围）：
+     - `rg -n "org_events_audit|org_event_corrections_" modules/orgunit/infrastructure/persistence/schema internal/sqlc/schema.sql internal/server` 结果为空。
+     - `rg -n "replay_org_unit_versions|ORG_REPLAY_FAILED" modules/orgunit/infrastructure/persistence/schema internal/sqlc/schema.sql internal/server` 结果为空。
    - 数据标准：测试数据重灌成功（最小可复现 seed 可重复执行）。
 
 3. M3（功能与门禁验收）
@@ -385,7 +382,7 @@
 
 1. 契约冻结与门槛确认（M1）
    - 明确“状态 SoT + 事件审计”已替代 026，路线图与入口一致。
-   - 幂等口径：`request_id` 仅在 tenant 级唯一（建议唯一约束：`(tenant_id, request_id)`）。
+   - 幂等口径：`request_code/request_id` 仅在 tenant 级唯一（建议唯一约束：`(tenant_id, request_code)`）。
    - 明确“本阶段不引入派生表离线重建工具”。
    - 记录冻结日期与 commit hash 到执行日志。
 
@@ -395,7 +392,8 @@
    - 保持 One Door：写入仅走 DB Kernel 入口。
 
 3. 数据库重基线（078B）
-   - 新增 `orgunit.org_events_audit`（append-only 审计）。
+   - 扩展 `orgunit.org_events` 为唯一审计链（append-only）。
+   - 删除 `orgunit.org_events_audit` 与 `org_event_corrections_*`（若已存在，迁移中清理）。
    - `org_unit_versions` 升格为 SoT；强化 `no-overlap/gapless/upper_inf` 校验入口。
    - 清理 `*_v2`/影子表/临时对账对象（若存在）。
    - 删除 `replay_org_unit_versions` 及相关权限脚本与错误码映射。
@@ -437,7 +435,14 @@
 - `docs/dev-plans/077-orgunit-replay-write-amplification-assessment-and-mitigation.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
 - `docs/dev-records/dev-plan-077-write-amplification-baseline.md`
+- `docs/dev-plans/080-orgunit-audit-chain-consolidation.md`
 
 ## 9. 变更登记
 - 2026-02-09：PR #312 合并（merge commit `1164bce78c0684862172ec39e19dc2ec73d6685f`）
-  - 影响：确立本计划为当前实施口径；明确 `request_id` tenant 级唯一；明确本阶段不引入派生表离线重建工具；新增“实施步骤与路径（执行清单）”。
+  - 影响：确立本计划为当前实施口径；明确 `request_code/request_id` tenant 级唯一；明确本阶段不引入派生表离线重建工具；新增“实施步骤与路径（执行清单）”。
+- 2026-02-09：078A 完成（PR #314）
+  - 影响：去 replay + 修正/撤销增量化；删除 replay 调用链，correction/rescind/status-correction 全量改为增量区间运算。
+- 2026-02-09：078B 完成（PR #315）
+  - 影响：新增 `orgunit.org_events_audit` 审计表与写入逻辑；补齐权限与迁移；同步 sqlc 产物并修正相关测试。
+- 2026-02-09：方向调整（对齐 DEV-PLAN-080）
+  - 影响：审计链收敛到 `org_events`；`org_events_audit`/`org_event_corrections_*` 路线标记为需回收；更新 078B/表级清单/里程碑与验收口径。

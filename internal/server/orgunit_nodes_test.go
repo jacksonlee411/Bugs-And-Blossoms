@@ -63,9 +63,6 @@ func TestCanEditOrgNodes(t *testing.T) {
 }
 
 func TestOrgNodeWriteErrorMessage(t *testing.T) {
-	if got := orgNodeWriteErrorMessage(errors.New("ORG_REPLAY_FAILED")); got != "重放失败，操作已回滚" {
-		t.Fatalf("got=%q", got)
-	}
 	if got := orgNodeWriteErrorMessage(errors.New("EVENT_DATE_CONFLICT")); got != "生效日期冲突，请勾选“同日状态纠错”后重试" {
 		t.Fatalf("got=%q", got)
 	}
@@ -2814,11 +2811,11 @@ func TestHandleOrgNodes_RecordActions(t *testing.T) {
 		store := &recordActionStore{versions: baseVersions}
 		writeSvc := orgUnitWriteServiceStub{
 			rescindRecordFn: func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
-				return orgunittypes.OrgUnitResult{}, errors.New("ORG_REPLAY_FAILED")
+				return orgunittypes.OrgUnitResult{}, errors.New("ORG_REQUEST_ID_CONFLICT")
 			},
 		}
 		rec := postOrgNodesFormWithWriteSvc(t, store, writeSvc, "action=delete_record&org_code=A001&effective_date=2026-01-01")
-		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "重放失败") {
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "请求编号冲突") {
 			t.Fatalf("unexpected response: %d %q", rec.Code, rec.Body.String())
 		}
 	})
