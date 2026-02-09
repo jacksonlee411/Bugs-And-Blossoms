@@ -393,3 +393,7 @@
 - `docs/dev-plans/077-orgunit-replay-write-amplification-assessment-and-mitigation.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
 - `docs/dev-records/dev-plan-077-write-amplification-baseline.md`
+
+## 9. 变更登记
+- 2026-02-09：PR #312 合并（merge commit `1164bce78c0684862172ec39e19dc2ec73d6685f`）
+  - 影响：确立本计划为当前实施口径；明确 `request_id` tenant 级唯一；明确本阶段不引入派生表离线重建工具；新增“实施步骤与路径（执行清单）”。
