@@ -75,6 +75,9 @@ LEFT JOIN latest_corrections lc
 WHERE e.event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')
   AND COALESCE(lc.correction_type, '') NOT IN ('RESCIND_EVENT', 'RESCIND_ORG');
 
+ALTER VIEW orgunit.org_events_effective OWNER TO orgunit_kernel;
+GRANT SELECT ON orgunit.org_events_effective TO orgunit_kernel;
+
 CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
   p_event_uuid uuid,
   p_tenant_uuid uuid,
@@ -313,6 +316,13 @@ BEGIN
   RETURN v_event_db_id;
 END;
 $$;
+
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
 
 CREATE OR REPLACE FUNCTION orgunit.submit_org_event_rescind(
   p_tenant_uuid uuid,
