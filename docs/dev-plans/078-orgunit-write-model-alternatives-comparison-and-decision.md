@@ -73,11 +73,48 @@
    - 在写入口强制 `request_id` 在 **tenant 级唯一**（建议唯一约束：`(tenant_id, request_id)`），防重复提交。
 
 ### 3.3 写路径（同事务）
-1. 新增/正常启用：插入新 `effective_date` 版本，并通过区间运算维护相邻片段 `validity`。
-2. 正常停用：在目标日期写 `DISABLED` 版本，并将前一段 `validity` 上界截断为 `D`（半开区间，不使用 `D-1`）。
-3. 同日状态修正：只更新当日行的 `status`（不改 `effective_date`）。
-4. rescind：撤销“业务可见性”，但不物理删审计；状态表按逆操作回补。
-5. 删除记录（语义删除）：仅作用于状态表可见区间，审计链保留。
+> 统一模板：前置条件 -> 影响集合 -> 区间变换 -> 审计写入 -> 后置不变量 -> 幂等语义/错误码。
+
+1. 新增/正常启用（CREATE/ENABLE）
+   - 前置条件：`effective_date=D` 合法；新增时该 `org_unit_id` 尚无版本；启用时目标日存在快照且可被启用。
+   - 影响集合：从 `D` 起到“下一次状态切换日”前的连续段。
+   - 区间变换：在 `D` 处分裂区间；新增时插入 `[D, +inf)`；启用时将受影响段 `status=active`。
+   - 审计写入：写入 `org_events_audit`（event_type=CREATE/ENABLE，记录 request_id/actor/reason/before/after）。
+   - 后置不变量：保持 `no-overlap`/`gapless`/末段一致性；同日仅一条有效快照。
+   - 幂等/错误码：同 `request_id` 同语义幂等成功；异语义返回 `ORG_REQUEST_ID_CONFLICT`；目标不存在返回 `ORG_NOT_FOUND_AS_OF`。
+
+2. 正常停用（DISABLE）
+   - 前置条件：目标日存在快照，且允许停用。
+   - 影响集合：从 `D` 起到“下一次状态切换日”前的连续段。
+   - 区间变换：在 `D` 处分裂；将受影响段 `status=disabled`；前一段上界截断为 `D`（半开区间，不使用 `D-1`）。
+   - 审计写入：写入 `org_events_audit`（event_type=DISABLE）。
+   - 后置不变量：保持 `no-overlap`/`gapless`/末段一致性。
+   - 幂等/错误码：同 `request_id` 同语义幂等成功；异语义返回 `ORG_REQUEST_ID_CONFLICT`。
+
+3. 同日状态修正（CORRECT_STATUS）
+   - 前置条件：目标日存在快照；对应审计事件语义为 ENABLE/DISABLE；目标事件未被撤销（rescind）。
+   - 影响集合：从 `D` 起到“下一次状态切换日”前的连续段。
+   - 区间变换：仅修正该连续段的 `status`，**不改 `effective_date`**，不触碰非状态字段。
+   - 审计写入：写入 `org_events_audit`（event_type=CORRECT_STATUS），保留 before/after。
+   - 后置不变量：保持 `no-overlap`/`gapless`/末段一致性；同日仍只有一条有效快照。
+   - 幂等/错误码：同 `request_id` 同语义幂等成功；异语义返回 `ORG_REQUEST_ID_CONFLICT`；目标不存在返回 `ORG_EVENT_NOT_FOUND`；目标已撤销返回 `ORG_EVENT_RESCINDED`。
+
+4. 删除记录（语义删除 = Rescind Event）
+   - 说明：**删除记录即 rescind**，只是用户语义别名；实现必须走同一内核函数与审计通道，不得出现双入口。
+   - 前置条件：目标事件存在；`request_id`/`reason` 必填。
+   - 影响集合：目标事件对应的业务可见区间，以及相邻可合并区间。
+   - 区间变换：撤销目标事件的业务可见性，回补/合并相邻区间（不物理删除审计与事件）。
+   - 审计写入：写入 `org_events_audit`（event_type=RESCIND/DELETE_RECORD，记录 before/after）。
+   - 后置不变量：保持 `no-overlap`/`gapless`/末段一致性。
+   - 幂等/错误码：同 `request_id` 同语义幂等成功；异语义返回 `ORG_REQUEST_ID_CONFLICT`；目标不存在返回 `ORG_EVENT_NOT_FOUND`。
+
+5. 边界用例（日期示例）
+   - 首段停用：已有 `active [2025-01-01, +inf)`，在 `2026-01-01` 停用 -> `active [2025-01-01, 2026-01-01)` + `disabled [2026-01-01, +inf)`。
+   - 末段停用：已有 `active [2025-01-01, 2026-02-01)`，在 `2026-02-01` 停用 -> `disabled [2026-02-01, +inf)`。
+   - 同日冲突：`2026-03-01` 已有状态事件，重复写 ENABLE/DISABLE 走 `EVENT_DATE_CONFLICT`，需引导 CORRECT_STATUS。
+   - rescind 后再修正：`2026-01-15` 事件已 rescind，再发 CORRECT_STATUS -> `ORG_EVENT_RESCINDED`。
+   - 重复 request_id（同语义）：同 `request_id` 重放同一操作 -> 幂等成功。
+   - 重复 request_id（异语义）：同 `request_id` 但不同操作/参数 -> `ORG_REQUEST_ID_CONFLICT`。
 
 ### 3.4 必须满足的不变量
 1. 同一 `org_unit_id` 的有效期区间 `no-overlap`（不可重叠）。
@@ -93,7 +130,7 @@
 - 冲突策略：fail-fast + 重试指引，避免长事务阻塞。
 
 ### 3.6 与 075 语义映射
-- 075C 删除语义：继续区分“删除记录”与“停用”。
+- 075C 删除语义：继续区分“删除记录”与“停用”；**删除记录=Rescind 事件**（语义别名，同一内核函数）。
 - 075D 显式状态切换：仍保持有效/无效显式入口。
 - 075E 同日修正：映射为“同日快照改写”，不再依赖 replay。
 - 077-P1 高风险重排禁令：在方案 A 中保留为防呆护栏。
@@ -298,6 +335,13 @@
 - 验收：`make check lint && make test` 通过；关键场景具备最小证据记录。
 - 依赖：078A/078B/078C 完成后执行。
 - 回滚：测试失败即阻断合并，修复后重跑。
+- 最小回归用例草案（日期固定，可直接转测试用例）：
+  1. 首段停用：前置已有 `active [2025-01-01, +inf)`；操作 `DISABLE@2026-01-01`；期望 `active [2025-01-01, 2026-01-01)` + `disabled [2026-01-01, +inf)`，不变量通过。
+  2. 末段停用：前置已有 `active [2025-01-01, 2026-02-01)`；操作 `DISABLE@2026-02-01`；期望 `disabled [2026-02-01, +inf)`，不变量通过。
+  3. 同日冲突：`2026-03-01` 已有状态事件；操作 `ENABLE@2026-03-01`；期望 `EVENT_DATE_CONFLICT`，引导走 `CORRECT_STATUS`。
+  4. rescind 后再修正：`2026-01-15` 事件已 rescind；操作 `CORRECT_STATUS@2026-01-15`；期望 `ORG_EVENT_RESCINDED`。
+  5. 重复 request_id（同语义）：同 `request_id` 重放同一操作；期望幂等成功（结果一致）。
+  6. 重复 request_id（异语义）：同 `request_id` 但不同操作/参数；期望 `ORG_REQUEST_ID_CONFLICT`。
 
 #### 078E：测试数据重灌 + 最小 E2E 样板
 - 背景与上下文：开发早期数据可重建，需要可重复的最小样板。
@@ -393,3 +437,7 @@
 - `docs/dev-plans/077-orgunit-replay-write-amplification-assessment-and-mitigation.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
 - `docs/dev-records/dev-plan-077-write-amplification-baseline.md`
+
+## 9. 变更登记
+- 2026-02-09：PR #312 合并（merge commit `1164bce78c0684862172ec39e19dc2ec73d6685f`）
+  - 影响：确立本计划为当前实施口径；明确 `request_id` tenant 级唯一；明确本阶段不引入派生表离线重建工具；新增“实施步骤与路径（执行清单）”。
