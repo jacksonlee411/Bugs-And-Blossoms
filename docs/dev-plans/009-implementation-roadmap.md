@@ -212,7 +212,8 @@ flowchart TD
 - `docs/dev-plans/023-superadmin-authn.md`
 - `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - `docs/dev-plans/025-sqlc-guidelines.md`
-- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（已被 DEV-PLAN-078 替代，历史参考）
+- `docs/dev-plans/078-orgunit-write-model-alternatives-comparison-and-decision.md`
 - `docs/dev-plans/027-person-minimal-identity-for-staffing.md`
 - `docs/dev-plans/028-setid-management.md`
 - `docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
