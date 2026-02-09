@@ -1552,7 +1552,7 @@ func orgunitSmoke(args []string) {
 		fatal(err)
 	}
 
-	requestID = "dbtool-orgunit-smoke"
+	requestID = "dbtool-orgunit-smoke-root"
 
 	var orgRootID string
 	var orgChildID string
@@ -1607,6 +1607,7 @@ func orgunitSmoke(args []string) {
 		fatalf("expected idempotent submit_org_event to return same db id, got %d then %d", createRootDBID, createRootDBID2)
 	}
 
+	requestID = "dbtool-orgunit-smoke-child"
 	if _, err := tx3.Exec(ctx, `
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
@@ -1629,6 +1630,7 @@ func orgunitSmoke(args []string) {
 		fatal(err)
 	}
 
+	requestID = "dbtool-orgunit-smoke-parent2"
 	if _, err := tx3.Exec(ctx, `
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
@@ -1651,6 +1653,7 @@ func orgunitSmoke(args []string) {
 		fatal(err)
 	}
 
+	requestID = "dbtool-orgunit-smoke-rename"
 	if _, err := tx3.Exec(ctx, `
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
@@ -1666,6 +1669,7 @@ func orgunitSmoke(args []string) {
 		fatal(err)
 	}
 
+	requestID = "dbtool-orgunit-smoke-move"
 	if _, err := tx3.Exec(ctx, `
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
@@ -1681,6 +1685,7 @@ func orgunitSmoke(args []string) {
 		fatal(err)
 	}
 
+	requestID = "dbtool-orgunit-smoke-disable"
 	if _, err := tx3.Exec(ctx, `
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
@@ -1767,6 +1772,7 @@ WHERE tenant_uuid = $1::uuid
 		fatal(err)
 	}
 	tenantMismatchEventID := mustUUIDv7()
+	requestID = "dbtool-orgunit-smoke-tenant-mismatch"
 	_, err = tx3.Exec(ctx, `
 	SELECT orgunit.submit_org_event(
 	  $1::uuid,
