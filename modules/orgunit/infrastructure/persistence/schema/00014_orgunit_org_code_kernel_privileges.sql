@@ -7,6 +7,16 @@ END $$;
 
 GRANT USAGE ON SCHEMA orgunit TO orgunit_kernel;
 
+DO $$
+BEGIN
+  IF to_regnamespace('iam') IS NOT NULL THEN
+    GRANT USAGE ON SCHEMA iam TO orgunit_kernel;
+  END IF;
+  IF to_regclass('iam.principals') IS NOT NULL THEN
+    GRANT SELECT ON TABLE iam.principals TO orgunit_kernel;
+  END IF;
+END $$;
+
 ALTER TABLE IF EXISTS orgunit.org_unit_codes OWNER TO orgunit_kernel;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
@@ -53,6 +63,13 @@ ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
   SECURITY DEFINER;
 ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
   SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.fill_org_event_audit_snapshot()
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.fill_org_event_audit_snapshot()
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.fill_org_event_audit_snapshot()
+  SET search_path = pg_catalog, orgunit, iam, public;
 
 REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) FROM PUBLIC;
 

@@ -335,21 +335,23 @@ type OrgunitGlobalSetidScopePackageVersion struct {
 }
 
 type OrgunitOrgEvent struct {
-	ID              int64              `json:"id"`
-	EventUuid       pgtype.UUID        `json:"event_uuid"`
-	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
-	OrgID           int32              `json:"org_id"`
-	EventType       string             `json:"event_type"`
-	EffectiveDate   pgtype.Date        `json:"effective_date"`
-	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
-	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
-	Reason          *string            `json:"reason"`
-	BeforeSnapshot  []byte             `json:"before_snapshot"`
-	AfterSnapshot   []byte             `json:"after_snapshot"`
-	TxTime          pgtype.Timestamptz `json:"tx_time"`
-	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	ID                  int64              `json:"id"`
+	EventUuid           pgtype.UUID        `json:"event_uuid"`
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
+	OrgID               int32              `json:"org_id"`
+	EventType           string             `json:"event_type"`
+	EffectiveDate       pgtype.Date        `json:"effective_date"`
+	Payload             []byte             `json:"payload"`
+	RequestCode         string             `json:"request_code"`
+	InitiatorUuid       pgtype.UUID        `json:"initiator_uuid"`
+	InitiatorName       *string            `json:"initiator_name"`
+	InitiatorEmployeeID *string            `json:"initiator_employee_id"`
+	Reason              *string            `json:"reason"`
+	BeforeSnapshot      []byte             `json:"before_snapshot"`
+	AfterSnapshot       []byte             `json:"after_snapshot"`
+	TxTime              pgtype.Timestamptz `json:"tx_time"`
+	TransactionTime     pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 }
 
 type OrgunitOrgEventsEffective struct {

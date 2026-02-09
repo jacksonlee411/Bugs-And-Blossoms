@@ -1945,3 +1945,65 @@ func stringPtr(v string) *string {
 func boolPtr(v bool) *bool {
 	return &v
 }
+
+func TestCorrectStatusAdditionalBranches(t *testing.T) {
+	t.Run("invalid org code", func(t *testing.T) {
+		svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
+		_, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{
+			OrgCode:             " ",
+			TargetEffectiveDate: "2026-01-01",
+			TargetStatus:        "active",
+			RequestID:           "r1",
+		})
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgCodeInvalid {
+			t.Fatalf("expected org code invalid, got %v", err)
+		}
+	})
+
+	t.Run("resolve org unexpected error", func(t *testing.T) {
+		store := orgUnitWriteStoreStub{
+			resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+				return 0, errors.New("resolve")
+			},
+		}
+		svc := NewOrgUnitWriteService(store)
+		_, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{
+			OrgCode:             "ROOT",
+			TargetEffectiveDate: "2026-01-01",
+			TargetStatus:        "active",
+			RequestID:           "r1",
+		})
+		if err == nil || err.Error() != "resolve" {
+			t.Fatalf("expected resolve error, got %v", err)
+		}
+	})
+}
+
+func TestNormalizeTargetStatusAdditionalAliases(t *testing.T) {
+	cases := map[string]string{
+		"enabled":  "active",
+		"有效":       "active",
+		"inactive": "disabled",
+		"无效":       "disabled",
+		"active":   "active",
+		"disabled": "disabled",
+	}
+	for input, expected := range cases {
+		got, err := normalizeTargetStatus(input)
+		if err != nil {
+			t.Fatalf("input=%q err=%v", input, err)
+		}
+		if got != expected {
+			t.Fatalf("input=%q got=%q want=%q", input, got, expected)
+		}
+	}
+}
+
+func TestResolveInitiatorUUID(t *testing.T) {
+	if got := resolveInitiatorUUID(" user-1 ", "tenant-1"); got != "user-1" {
+		t.Fatalf("got=%q", got)
+	}
+	if got := resolveInitiatorUUID(" ", " tenant-1 "); got != "tenant-1" {
+		t.Fatalf("got=%q", got)
+	}
+}

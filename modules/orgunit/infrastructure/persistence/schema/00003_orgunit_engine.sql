@@ -40,6 +40,48 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION orgunit.fill_org_event_audit_snapshot()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_name text;
+  v_employee text;
+BEGIN
+  IF NEW.tx_time IS NULL THEN
+    NEW.tx_time := COALESCE(NEW.transaction_time, now());
+  END IF;
+
+  IF NULLIF(btrim(COALESCE(NEW.initiator_name, '')), '') IS NOT NULL
+    AND NULLIF(btrim(COALESCE(NEW.initiator_employee_id, '')), '') IS NOT NULL
+  THEN
+    RETURN NEW;
+  END IF;
+
+  IF to_regclass('iam.principals') IS NOT NULL THEN
+    SELECT
+      COALESCE(NULLIF(btrim(p.display_name), ''), NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text),
+      COALESCE(NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text)
+    INTO v_name, v_employee
+    FROM iam.principals p
+    WHERE p.tenant_uuid = NEW.tenant_uuid
+      AND p.id = NEW.initiator_uuid
+    LIMIT 1;
+  END IF;
+
+  NEW.initiator_name := COALESCE(NULLIF(btrim(COALESCE(NEW.initiator_name, '')), ''), v_name, NEW.initiator_uuid::text);
+  NEW.initiator_employee_id := COALESCE(NULLIF(btrim(COALESCE(NEW.initiator_employee_id, '')), ''), v_employee, NEW.initiator_uuid::text);
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS org_events_fill_audit_snapshot ON orgunit.org_events;
+CREATE TRIGGER org_events_fill_audit_snapshot
+BEFORE INSERT ON orgunit.org_events
+FOR EACH ROW
+EXECUTE FUNCTION orgunit.fill_org_event_audit_snapshot();
+
 CREATE OR REPLACE VIEW orgunit.org_events_effective AS
 WITH correction_events AS (
   SELECT

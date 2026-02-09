@@ -295,6 +295,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			ParentOrgCode:  req.ParentOrgCode,
 			IsBusinessUnit: req.IsBusinessUnit,
 			ManagerPernr:   req.ManagerPernr,
+			InitiatorUUID:  orgUnitInitiatorUUID(r.Context(), tenant.ID),
 		})
 		if err != nil {
 			writeOrgUnitServiceError(w, r, err, "orgunit_create_failed")
@@ -316,10 +317,12 @@ func handleOrgUnitsRenameAPI(w http.ResponseWriter, r *http.Request, writeSvc or
 			return "", "", errOrgUnitBadJSON
 		}
 		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
+		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 		err := writeSvc.Rename(ctx, tenantID, orgunitservices.RenameOrgUnitRequest{
 			EffectiveDate: req.EffectiveDate,
 			OrgCode:       req.OrgCode,
 			NewName:       req.NewName,
+			InitiatorUUID: initiatorUUID,
 		})
 		return req.OrgCode, req.EffectiveDate, err
 	})
@@ -332,10 +335,12 @@ func handleOrgUnitsMoveAPI(w http.ResponseWriter, r *http.Request, writeSvc orgu
 			return "", "", errOrgUnitBadJSON
 		}
 		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
+		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 		err := writeSvc.Move(ctx, tenantID, orgunitservices.MoveOrgUnitRequest{
 			EffectiveDate:    req.EffectiveDate,
 			OrgCode:          req.OrgCode,
 			NewParentOrgCode: req.NewParentOrgCode,
+			InitiatorUUID:    initiatorUUID,
 		})
 		return req.OrgCode, req.EffectiveDate, err
 	})
@@ -348,9 +353,11 @@ func handleOrgUnitsDisableAPI(w http.ResponseWriter, r *http.Request, writeSvc o
 			return "", "", errOrgUnitBadJSON
 		}
 		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
+		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 		err := writeSvc.Disable(ctx, tenantID, orgunitservices.DisableOrgUnitRequest{
 			EffectiveDate: req.EffectiveDate,
 			OrgCode:       req.OrgCode,
+			InitiatorUUID: initiatorUUID,
 		})
 		return req.OrgCode, req.EffectiveDate, err
 	})
@@ -363,9 +370,11 @@ func handleOrgUnitsEnableAPI(w http.ResponseWriter, r *http.Request, writeSvc or
 			return "", "", errOrgUnitBadJSON
 		}
 		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
+		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 		err := writeSvc.Enable(ctx, tenantID, orgunitservices.EnableOrgUnitRequest{
 			EffectiveDate: req.EffectiveDate,
 			OrgCode:       req.OrgCode,
+			InitiatorUUID: initiatorUUID,
 		})
 		return req.OrgCode, req.EffectiveDate, err
 	})
@@ -397,6 +406,7 @@ func handleOrgUnitsCorrectionsAPI(w http.ResponseWriter, r *http.Request, writeS
 		OrgCode:             req.OrgCode,
 		TargetEffectiveDate: req.EffectiveDate,
 		RequestID:           req.RequestID,
+		InitiatorUUID:       orgUnitInitiatorUUID(r.Context(), tenant.ID),
 		Patch: orgunitservices.OrgUnitCorrectionPatch{
 			EffectiveDate:  req.Patch.EffectiveDate,
 			Name:           req.Patch.Name,
@@ -440,6 +450,7 @@ func handleOrgUnitsStatusCorrectionsAPI(w http.ResponseWriter, r *http.Request, 
 		TargetEffectiveDate: req.EffectiveDate,
 		TargetStatus:        req.TargetStatus,
 		RequestID:           req.RequestID,
+		InitiatorUUID:       orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	})
 	if err != nil {
 		writeOrgUnitServiceError(w, r, err, "orgunit_correct_status_failed")
@@ -476,6 +487,7 @@ func handleOrgUnitsRescindsAPI(w http.ResponseWriter, r *http.Request, writeSvc 
 		TargetEffectiveDate: req.EffectiveDate,
 		RequestID:           req.RequestID,
 		Reason:              req.Reason,
+		InitiatorUUID:       orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	})
 	if err != nil {
 		writeOrgUnitServiceError(w, r, err, "orgunit_rescind_failed")
@@ -515,9 +527,10 @@ func handleOrgUnitsRescindsOrgAPI(w http.ResponseWriter, r *http.Request, writeS
 	}
 
 	result, err := writeSvc.RescindOrg(r.Context(), tenant.ID, orgunitservices.RescindOrgUnitRequest{
-		OrgCode:   req.OrgCode,
-		RequestID: req.RequestID,
-		Reason:    req.Reason,
+		OrgCode:       req.OrgCode,
+		RequestID:     req.RequestID,
+		Reason:        req.Reason,
+		InitiatorUUID: orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	})
 	if err != nil {
 		writeOrgUnitServiceError(w, r, err, "orgunit_rescind_org_failed")
