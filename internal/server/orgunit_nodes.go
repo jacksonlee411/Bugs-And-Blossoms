@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -80,6 +82,22 @@ type OrgUnitNodeVersion struct {
 	EventType     string
 }
 
+type OrgUnitNodeAuditEvent struct {
+	EventID             int64
+	EventUUID           string
+	OrgID               int
+	EventType           string
+	EffectiveDate       string
+	TxTime              time.Time
+	InitiatorName       string
+	InitiatorEmployeeID string
+	RequestCode         string
+	Reason              string
+	Payload             json.RawMessage
+	BeforeSnapshot      json.RawMessage
+	AfterSnapshot       json.RawMessage
+}
+
 type OrgUnitNodeEffectiveDateCorrector interface {
 	CorrectNodeEffectiveDate(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, newEffectiveDate string, requestID string) error
 }
@@ -89,6 +107,7 @@ var errOrgUnitNotFound = errors.New("org_unit_not_found")
 const (
 	orgNodeDeleteRecordReason = "UI 删除记录（错误数据）"
 	orgNodeDeleteOrgReason    = "UI 删除组织（错误建档）"
+	orgNodeAuditPageSize      = 20
 )
 
 func orgNodeWriteErrorMessage(err error) string {
@@ -376,6 +395,29 @@ func includeDisabledFromURL(r *http.Request) bool {
 	return parseIncludeDisabled(r.URL.Query().Get("include_disabled"))
 }
 
+func orgNodeAuditLimitFromURL(r *http.Request) int {
+	v := strings.TrimSpace(r.URL.Query().Get("limit"))
+	if v == "" {
+		return orgNodeAuditPageSize
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return orgNodeAuditPageSize
+	}
+	if n <= 0 {
+		return orgNodeAuditPageSize
+	}
+	return n
+}
+
+func orgNodeActiveTabFromURL(r *http.Request) string {
+	v := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tab")))
+	if v == "change" {
+		return "change"
+	}
+	return "basic"
+}
+
 func includeDisabledFromFormOrURL(r *http.Request) bool {
 	if parseIncludeDisabled(r.Form.Get("include_disabled")) {
 		return true
@@ -388,6 +430,18 @@ func includeDisabledQuerySuffix(includeDisabled bool) string {
 		return "&include_disabled=1"
 	}
 	return ""
+}
+
+type orgUnitNodeAuditReader interface {
+	ListNodeAuditEvents(ctx context.Context, tenantID string, orgID int, limit int) ([]OrgUnitNodeAuditEvent, error)
+}
+
+func listNodeAuditEvents(ctx context.Context, store OrgUnitStore, tenantID string, orgID int, limit int) ([]OrgUnitNodeAuditEvent, error) {
+	reader, ok := store.(orgUnitNodeAuditReader)
+	if !ok {
+		return []OrgUnitNodeAuditEvent{}, nil
+	}
+	return reader.ListNodeAuditEvents(ctx, tenantID, orgID, limit)
 }
 
 func listNodesCurrentByVisibility(ctx context.Context, store OrgUnitStore, tenantID string, asOfDate string, includeDisabled bool) ([]OrgUnitNode, error) {
@@ -1375,6 +1429,91 @@ func (s *orgUnitPGStore) ListNodeVersions(ctx context.Context, tenantID string, 
 	return out, nil
 }
 
+func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID string, orgID int, limit int) ([]OrgUnitNodeAuditEvent, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config(app.current_tenant, $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	if limit <= 0 {
+		limit = orgNodeAuditPageSize
+	}
+
+	rows, err := tx.Query(ctx, `
+	SELECT
+	  e.id,
+	  e.event_uuid::text,
+	  e.org_id,
+	  e.event_type,
+	  e.effective_date,
+	  e.tx_time,
+	  COALESCE(e.initiator_name, ),
+	  COALESCE(e.initiator_employee_id, ),
+	  COALESCE(e.request_code, ),
+	  COALESCE(e.reason, ),
+	  COALESCE(e.payload, {}::jsonb),
+	  e.before_snapshot,
+	  e.after_snapshot
+	FROM orgunit.org_events e
+	WHERE e.tenant_uuid = $1::uuid
+	  AND e.org_id = $2::int
+	ORDER BY e.tx_time DESC, e.id DESC
+	LIMIT $3::int
+	`, tenantID, orgID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []OrgUnitNodeAuditEvent
+	for rows.Next() {
+		var item OrgUnitNodeAuditEvent
+		var effective time.Time
+		var payload []byte
+		var before []byte
+		var after []byte
+		if err := rows.Scan(
+			&item.EventID,
+			&item.EventUUID,
+			&item.OrgID,
+			&item.EventType,
+			&effective,
+			&item.TxTime,
+			&item.InitiatorName,
+			&item.InitiatorEmployeeID,
+			&item.RequestCode,
+			&item.Reason,
+			&payload,
+			&before,
+			&after,
+		); err != nil {
+			return nil, err
+		}
+		item.EffectiveDate = effective.Format(asOfLayout)
+		item.Payload = json.RawMessage(payload)
+		if len(before) > 0 {
+			item.BeforeSnapshot = json.RawMessage(before)
+		}
+		if len(after) > 0 {
+			item.AfterSnapshot = json.RawMessage(after)
+		}
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (s *orgUnitPGStore) MaxEffectiveDateOnOrBefore(ctx context.Context, tenantID string, asOfDate string) (string, bool, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -2107,6 +2246,35 @@ func (s *orgUnitMemoryStore) ListNodeVersions(_ context.Context, tenantID string
 	return nil, errOrgUnitNotFound
 }
 
+func (s *orgUnitMemoryStore) ListNodeAuditEvents(_ context.Context, tenantID string, orgID int, limit int) ([]OrgUnitNodeAuditEvent, error) {
+	orgIDStr := strconv.Itoa(orgID)
+	for _, node := range s.nodes[tenantID] {
+		if node.ID != orgIDStr {
+			continue
+		}
+		if limit <= 0 {
+			limit = orgNodeAuditPageSize
+		}
+		events := []OrgUnitNodeAuditEvent{{
+			EventID:             1,
+			EventUUID:           node.ID,
+			OrgID:               orgID,
+			EventType:           "RENAME",
+			EffectiveDate:       "2026-01-01",
+			TxTime:              s.now(),
+			InitiatorName:       "system",
+			InitiatorEmployeeID: "system",
+			RequestCode:         "memory",
+			Payload:             json.RawMessage(`{"op":"RENAME"}`),
+		}}
+		if limit < len(events) {
+			return events[:limit], nil
+		}
+		return events, nil
+	}
+	return nil, errOrgUnitNotFound
+}
+
 func (s *orgUnitMemoryStore) MaxEffectiveDateOnOrBefore(_ context.Context, tenantID string, asOfDate string) (string, bool, error) {
 	if len(s.nodes[tenantID]) == 0 {
 		return "", false, nil
@@ -2750,7 +2918,43 @@ func handleOrgNodeChildren(w http.ResponseWriter, r *http.Request, store OrgUnit
 	writeContent(w, r, b.String())
 }
 
-func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, treeAsOf string, includeDisabled bool, versions []OrgUnitNodeVersion, canEdit bool, flash string) string {
+func renderOrgNodeDetails(
+	details OrgUnitNodeDetails,
+	effectiveDate string,
+	treeAsOf string,
+	includeDisabled bool,
+	versions []OrgUnitNodeVersion,
+	canEdit bool,
+	flash string,
+) string {
+	return renderOrgNodeDetailsWithAudit(
+		details,
+		effectiveDate,
+		treeAsOf,
+		includeDisabled,
+		versions,
+		[]OrgUnitNodeAuditEvent{},
+		false,
+		orgNodeAuditPageSize,
+		canEdit,
+		flash,
+		"basic",
+	)
+}
+
+func renderOrgNodeDetailsWithAudit(
+	details OrgUnitNodeDetails,
+	effectiveDate string,
+	treeAsOf string,
+	includeDisabled bool,
+	versions []OrgUnitNodeVersion,
+	auditEvents []OrgUnitNodeAuditEvent,
+	auditHasMore bool,
+	auditLimit int,
+	canEdit bool,
+	flash string,
+	activeTab string,
+) string {
 	parentLabel := "-"
 	if details.ParentID != 0 {
 		label := details.ParentCode
@@ -2840,6 +3044,20 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	if includeDisabled {
 		includeDisabledValue = "1"
 	}
+	if activeTab != "change" {
+		activeTab = "basic"
+	}
+	basicTabClass := "org-node-tab-btn"
+	changeTabClass := "org-node-tab-btn"
+	basicDisplay := ""
+	changeDisplay := " style=\"display:none\""
+	if activeTab == "change" {
+		changeTabClass += " is-active"
+		changeDisplay = ""
+		basicDisplay = " style=\"display:none\""
+	} else {
+		basicTabClass += " is-active"
+	}
 
 	var b strings.Builder
 	b.WriteString(`<div class="org-node-details-panel" data-org-id="` + html.EscapeString(strconv.Itoa(details.OrgID)) + `"`)
@@ -2855,6 +3073,8 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(` data-max-effective-date="` + html.EscapeString(maxDate) + `"`)
 	b.WriteString(` data-prev-effective-date="` + html.EscapeString(prevDate) + `"`)
 	b.WriteString(` data-next-effective-date="` + html.EscapeString(nextDate) + `"`)
+	b.WriteString(` data-audit-limit="` + strconv.Itoa(auditLimit) + `"`)
+	b.WriteString(` data-active-tab="` + html.EscapeString(activeTab) + `"`)
 	b.WriteString(` data-mode="readonly">`)
 
 	b.WriteString(`<div class="org-node-status-messages">`)
@@ -2994,14 +3214,16 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 
+	nextAuditLimit := auditLimit + orgNodeAuditPageSize
+
 	b.WriteString(`<div class="org-node-tabs">`)
-	b.WriteString(`<button type="button" class="org-node-tab-btn is-active" data-tab="basic">基本信息</button>`)
-	b.WriteString(`<button type="button" class="org-node-tab-btn" data-tab="change">修改记录</button>`)
+	b.WriteString(`<button type="button" class="` + basicTabClass + `" data-tab="basic">基本信息</button>`)
+	b.WriteString(`<button type="button" class="` + changeTabClass + `" data-tab="change">变更日志</button>`)
 	b.WriteString(`<div class="org-node-tab-spacer"></div>`)
 	b.WriteString(`</div>`)
 
 	b.WriteString(`<div class="org-node-readonly" data-panel="readonly">`)
-	b.WriteString(`<div class="org-node-info-list" data-tab-content="basic">`)
+	b.WriteString(`<div class="org-node-info-list" data-tab-content="basic"` + basicDisplay + `>`)
 	b.WriteString(`<div class="org-node-info-item">生效日期：` + html.EscapeString(currentEffectiveDate) + `</div>`)
 	b.WriteString(`<div class="org-node-info-item">状态：` + html.EscapeString(statusLabel) + `</div>`)
 	b.WriteString(`<div class="org-node-info-item">组织名称：` + html.EscapeString(details.Name) + `</div>`)
@@ -3010,13 +3232,47 @@ func renderOrgNodeDetails(details OrgUnitNodeDetails, effectiveDate string, tree
 	b.WriteString(`<div class="org-node-info-item">部门负责人：` + html.EscapeString(managerLabel) + `</div>`)
 	b.WriteString(`<div class="org-node-info-item">组织长名称：` + html.EscapeString(fullNamePath) + `</div>`)
 	b.WriteString(`</div>`)
-	b.WriteString(`<div class="org-node-info-list" data-tab-content="change" style="display:none">`)
-	b.WriteString(`<div class="org-node-info-item">组织ID：` + html.EscapeString(strconv.Itoa(details.OrgID)) + `</div>`)
-	b.WriteString(`<div class="org-node-info-item">组织ID链：` + html.EscapeString(formatOrgNodePathIDs(details.PathIDs)) + `</div>`)
-	b.WriteString(`<div class="org-node-info-item">修改人：-</div>`)
-	b.WriteString(`<div class="org-node-info-item">创建日期：` + html.EscapeString(formatOrgNodeDate(details.CreatedAt)) + `</div>`)
-	b.WriteString(`<div class="org-node-info-item">修改日期：` + html.EscapeString(formatOrgNodeDate(details.UpdatedAt)) + `</div>`)
-	b.WriteString(`<div class="org-node-info-item">UUID：` + html.EscapeString(details.EventUUID) + `</div>`)
+	b.WriteString(`<div class="org-node-change-log" data-tab-content="change"` + changeDisplay + `>`)
+	b.WriteString(`<div class="org-node-change-log-left">`)
+	b.WriteString(`<div class="org-node-change-log-title">修改时间</div>`)
+	if len(auditEvents) == 0 {
+		b.WriteString(`<div class="org-node-change-empty">暂无变更日志</div>`)
+	} else {
+		b.WriteString(`<div class="org-node-change-items">`)
+		for i, event := range auditEvents {
+			itemClass := "org-node-change-item"
+			if i == 0 {
+				itemClass += " is-active"
+			}
+			b.WriteString(`<button type="button" class="` + itemClass + `" data-event-id="` + strconv.FormatInt(event.EventID, 10) + `" data-event-uuid="` + html.EscapeString(event.EventUUID) + `">`)
+			b.WriteString(`<span class="org-node-change-item-time">` + html.EscapeString(formatOrgNodeAuditTime(event.TxTime)) + `</span>`)
+			b.WriteString(`<span class="org-node-change-item-actor">` + html.EscapeString(formatOrgNodeAuditActor(event.InitiatorName, event.InitiatorEmployeeID)) + `</span>`)
+			b.WriteString(`</button>`)
+		}
+		b.WriteString(`</div>`)
+		if auditHasMore {
+			detailsURL := `/org/nodes/details?org_id=` + url.QueryEscape(strconv.Itoa(details.OrgID)) + `&effective_date=` + url.QueryEscape(currentEffectiveDate) + `&tree_as_of=` + url.QueryEscape(treeAsOf) + `&include_disabled=` + includeDisabledValue + `&limit=` + strconv.Itoa(nextAuditLimit) + `&tab=change`
+			b.WriteString(`<button type="button" class="org-node-change-load-more" hx-get="` + detailsURL + `" hx-target="closest .org-node-details-panel" hx-swap="outerHTML">加载更多</button>`)
+		}
+	}
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-change-log-right">`)
+	if len(auditEvents) == 0 {
+		b.WriteString(`<div class="org-node-change-detail-entry is-active"><div class="org-node-change-empty">暂无可展示事件</div></div>`)
+	} else {
+		for i, event := range auditEvents {
+			detailClass := "org-node-change-detail-entry"
+			style := ` style="display:none"`
+			if i == 0 {
+				detailClass += " is-active"
+				style = ""
+			}
+			b.WriteString(`<div class="` + detailClass + `" data-event-id="` + strconv.FormatInt(event.EventID, 10) + `"` + style + `>`)
+			b.WriteString(renderOrgNodeAuditDetailEntry(event))
+			b.WriteString(`</div>`)
+		}
+	}
+	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 
@@ -3082,6 +3338,8 @@ func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitS
 		treeAsOf = currentUTCDateString()
 	}
 	includeDisabled := includeDisabledFromURL(r)
+	auditLimit := orgNodeAuditLimitFromURL(r)
+	activeTab := orgNodeActiveTabFromURL(r)
 
 	orgIDRaw := strings.TrimSpace(r.URL.Query().Get("org_id"))
 	if orgIDRaw == "" {
@@ -3123,12 +3381,22 @@ func handleOrgNodeDetails(w http.ResponseWriter, r *http.Request, store OrgUnitS
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "org_details_error", "org node details error")
 		return
 	}
+	auditRows, err := listNodeAuditEvents(r.Context(), store, tenant.ID, details.OrgID, auditLimit+1)
+	if err != nil && !errors.Is(err, errOrgUnitNotFound) {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "org_details_error", "org node details error")
+		return
+	}
+	auditHasMore := false
+	if len(auditRows) > auditLimit {
+		auditHasMore = true
+		auditRows = auditRows[:auditLimit]
+	}
 
 	flash := strings.TrimSpace(r.URL.Query().Get("flash"))
 	if flash == "" && strings.EqualFold(strings.TrimSpace(details.Status), "disabled") {
 		flash = "status_disabled_visible"
 	}
-	panel := renderOrgNodeDetails(details, effectiveDate, treeAsOf, includeDisabled, versions, canEditOrgNodes(r.Context()), flash)
+	panel := renderOrgNodeDetailsWithAudit(details, effectiveDate, treeAsOf, includeDisabled, versions, auditRows, auditHasMore, auditLimit, canEditOrgNodes(r.Context()), flash, activeTab)
 	writeContent(w, r, panel)
 }
 
@@ -3164,6 +3432,8 @@ func handleOrgNodeDetailsPage(w http.ResponseWriter, r *http.Request, store OrgU
 		treeAsOf = currentUTCDateString()
 	}
 	includeDisabled := includeDisabledFromURL(r)
+	auditLimit := orgNodeAuditLimitFromURL(r)
+	activeTab := orgNodeActiveTabFromURL(r)
 
 	orgIDRaw := strings.TrimSpace(r.URL.Query().Get("org_id"))
 	if orgIDRaw == "" {
@@ -3205,6 +3475,16 @@ func handleOrgNodeDetailsPage(w http.ResponseWriter, r *http.Request, store OrgU
 		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "org_details_error", "org node details error")
 		return
 	}
+	auditRows, err := listNodeAuditEvents(r.Context(), store, tenant.ID, details.OrgID, auditLimit+1)
+	if err != nil && !errors.Is(err, errOrgUnitNotFound) {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "org_details_error", "org node details error")
+		return
+	}
+	auditHasMore := false
+	if len(auditRows) > auditLimit {
+		auditHasMore = true
+		auditRows = auditRows[:auditLimit]
+	}
 
 	nodesURL := "/org/nodes?tree_as_of=" + url.QueryEscape(treeAsOf)
 	if includeDisabled {
@@ -3215,7 +3495,7 @@ func handleOrgNodeDetailsPage(w http.ResponseWriter, r *http.Request, store OrgU
 	b.WriteString("<h1>OrgUnit / Details</h1>")
 	b.WriteString(`<p>Tenant: <code>` + html.EscapeString(tenant.Name) + `</code> (<code>` + html.EscapeString(tenant.ID) + `</code>)</p>`)
 	b.WriteString(`<p>Tree as-of: <code>` + html.EscapeString(treeAsOf) + `</code> | <a href="` + escapedNodesURL + `" hx-get="` + escapedNodesURL + `" hx-target="#content" hx-push-url="true">Back to Org Nodes</a></p>`)
-	b.WriteString(renderOrgNodeDetails(details, effectiveDate, treeAsOf, includeDisabled, versions, canEditOrgNodes(r.Context()), ""))
+	b.WriteString(renderOrgNodeDetailsWithAudit(details, effectiveDate, treeAsOf, includeDisabled, versions, auditRows, auditHasMore, auditLimit, canEditOrgNodes(r.Context()), "", activeTab))
 	writePage(w, r, b.String())
 }
 
@@ -3317,6 +3597,191 @@ func formatOrgNodePathIDs(pathIDs []int) string {
 		out = append(out, strconv.Itoa(id))
 	}
 	return strings.Join(out, ".")
+}
+
+var orgNodeAuditTZ = time.FixedZone("UTC+08:00", 8*3600)
+
+func formatOrgNodeAuditTime(t time.Time) string {
+	if t.IsZero() {
+		return "-"
+	}
+	return t.In(orgNodeAuditTZ).Format("2006-01-02 15:04")
+}
+
+func formatOrgNodeAuditActor(name string, employeeID string) string {
+	name = strings.TrimSpace(name)
+	employeeID = strings.TrimSpace(employeeID)
+	if name == "" {
+		name = "-"
+	}
+	if employeeID == "" {
+		employeeID = "-"
+	}
+	return name + "(" + employeeID + ")"
+}
+
+func orgNodeEventTypeLabel(eventType string) string {
+	switch strings.ToUpper(strings.TrimSpace(eventType)) {
+	case "CREATE":
+		return "新建组织"
+	case "MOVE":
+		return "调整上级"
+	case "RENAME":
+		return "组织更名"
+	case "DISABLE":
+		return "设为无效"
+	case "ENABLE":
+		return "设为有效"
+	case "SET_BUSINESS_UNIT":
+		return "业务单元变更"
+	case "CORRECT_EVENT":
+		return "修正记录"
+	case "CORRECT_STATUS":
+		return "同日状态修正"
+	case "RESCIND_EVENT":
+		return "撤销记录"
+	case "RESCIND_ORG":
+		return "撤销组织"
+	default:
+		return "-"
+	}
+}
+
+func orgNodeAuditMap(raw json.RawMessage) map[string]any {
+	if len(raw) == 0 {
+		return map[string]any{}
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return map[string]any{}
+	}
+	if out == nil {
+		return map[string]any{}
+	}
+	return out
+}
+
+func orgNodeAuditScalarString(v any) string {
+	switch value := v.(type) {
+	case nil:
+		return "-"
+	case string:
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return "-"
+		}
+		return trimmed
+	case bool:
+		if value {
+			return "true"
+		}
+		return "false"
+	default:
+		return fmt.Sprintf("%v", value)
+	}
+}
+
+func orgNodeAuditDiffRows(before map[string]any, after map[string]any) [][3]string {
+	keysMap := make(map[string]struct{}, len(before)+len(after))
+	for k := range before {
+		keysMap[k] = struct{}{}
+	}
+	for k := range after {
+		keysMap[k] = struct{}{}
+	}
+	keys := make([]string, 0, len(keysMap))
+	for k := range keysMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	rows := make([][3]string, 0, len(keys))
+	for _, k := range keys {
+		beforeText := orgNodeAuditScalarString(before[k])
+		afterText := orgNodeAuditScalarString(after[k])
+		if beforeText == afterText {
+			continue
+		}
+		rows = append(rows, [3]string{k, beforeText, afterText})
+	}
+	return rows
+}
+
+func renderOrgNodeAuditDetailEntry(event OrgUnitNodeAuditEvent) string {
+	var b strings.Builder
+	payload := orgNodeAuditMap(event.Payload)
+	before := orgNodeAuditMap(event.BeforeSnapshot)
+	after := orgNodeAuditMap(event.AfterSnapshot)
+	if len(after) == 0 {
+		after = payload
+	}
+
+	eventType := strings.TrimSpace(event.EventType)
+	eventLabel := orgNodeEventTypeLabel(eventType)
+	requestCode := strings.TrimSpace(event.RequestCode)
+	if requestCode == "" {
+		requestCode = "-"
+	}
+	reason := strings.TrimSpace(event.Reason)
+	if reason == "" {
+		reason = "-"
+	}
+
+	b.WriteString(`<div class="org-node-change-detail-head">`)
+	b.WriteString(`<div class="org-node-change-event-type">` + html.EscapeString(eventType) + `</div>`)
+	b.WriteString(`<div class="org-node-change-event-label">` + html.EscapeString(eventLabel) + `</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-change-summary">`)
+	b.WriteString(`<div>生效日期：` + html.EscapeString(event.EffectiveDate) + `</div>`)
+	b.WriteString(`<div>事务时间：` + html.EscapeString(formatOrgNodeAuditTime(event.TxTime)) + `</div>`)
+	b.WriteString(`<div>操作人：` + html.EscapeString(formatOrgNodeAuditActor(event.InitiatorName, event.InitiatorEmployeeID)) + `</div>`)
+	b.WriteString(`<div>请求编号：` + html.EscapeString(requestCode) + `</div>`)
+	b.WriteString(`<div>事件UUID：` + html.EscapeString(event.EventUUID) + `</div>`)
+	b.WriteString(`<div>原因：` + html.EscapeString(reason) + `</div>`)
+	b.WriteString(`</div>`)
+
+	targetUUID := strings.TrimSpace(orgNodeAuditScalarString(payload["target_event_uuid"]))
+	targetDate := strings.TrimSpace(orgNodeAuditScalarString(payload["target_effective_date"]))
+	if targetUUID != "-" || targetDate != "-" {
+		b.WriteString(`<div class="org-node-change-target">`)
+		b.WriteString(`<div>目标事件：` + html.EscapeString(targetUUID) + `</div>`)
+		b.WriteString(`<div>目标生效日：` + html.EscapeString(targetDate) + `</div>`)
+		if targetUUID != "-" {
+			b.WriteString(`<button type="button" class="org-node-change-target-jump" data-target-event-uuid="` + html.EscapeString(targetUUID) + `">跳转到目标事件</button>`)
+		}
+		b.WriteString(`</div>`)
+	}
+
+	diffRows := orgNodeAuditDiffRows(before, after)
+	b.WriteString(`<div class="org-node-change-diff">`)
+	b.WriteString(`<div class="org-node-change-diff-title">字段变更</div>`)
+	if len(diffRows) == 0 {
+		b.WriteString(`<div class="org-node-change-diff-empty">无字段差异</div>`)
+	} else {
+		b.WriteString(`<table class="org-node-change-diff-table"><thead><tr><th>字段</th><th>变更前</th><th>变更后</th></tr></thead><tbody>`)
+		for _, row := range diffRows {
+			b.WriteString(`<tr><td>` + html.EscapeString(row[0]) + `</td><td>` + html.EscapeString(row[1]) + `</td><td>` + html.EscapeString(row[2]) + `</td></tr>`)
+		}
+		b.WriteString(`</tbody></table>`)
+	}
+	b.WriteString(`</div>`)
+
+	rawObj := map[string]any{
+		"payload": payload,
+	}
+	if len(before) > 0 {
+		rawObj["before_snapshot"] = before
+	}
+	if len(after) > 0 {
+		rawObj["after_snapshot"] = after
+	}
+	rawJSON, err := json.MarshalIndent(rawObj, "", "  ")
+	if err != nil {
+		rawJSON = []byte("{}")
+	}
+	b.WriteString(`<details class="org-node-change-raw"><summary>原始数据</summary><pre>` + html.EscapeString(string(rawJSON)) + `</pre></details>`)
+
+	return b.String()
 }
 
 func selectOrgNodeVersion(asOf string, versions []OrgUnitNodeVersion) (OrgUnitNodeVersion, int) {
@@ -3522,10 +3987,10 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       tabs.forEach((btn) => {
         btn.classList.toggle("is-active", btn.dataset.tab === tab);
       });
-      const contents = panel.querySelectorAll("[data-tab-content]");
-      contents.forEach((el) => {
-        el.style.display = el.dataset.tabContent === tab ? "block" : "none";
-      });
+	      const contents = panel.querySelectorAll("[data-tab-content]");
+	      contents.forEach((el) => {
+	        el.style.display = el.dataset.tabContent === tab ? "" : "none";
+	      });
       panel.dataset.activeTab = tab;
     };
 
@@ -3569,39 +4034,47 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       }
     };
 
-	    const loadDetails = (orgId, opts) => {
-	      const effectiveDate = opts && opts.effectiveDate ? opts.effectiveDate : "";
-	      const treeAsOf = getTreeAsOf();
-	      const includeDisabled = includeDisabledEnabled();
-	      if (!orgId) {
-	        return Promise.resolve();
-	      }
-	      let url = "/org/nodes/details?org_id=" + encodeURIComponent(orgId);
-      if (effectiveDate) {
-        url += "&effective_date=" + encodeURIComponent(effectiveDate);
-      }
-	      if (treeAsOf) {
-	        url += "&tree_as_of=" + encodeURIComponent(treeAsOf);
-	      }
-	      if (includeDisabled) {
-	        url += "&include_disabled=1";
-	      }
-	      if (opts && opts.flash) {
-	        url += "&flash=" + encodeURIComponent(opts.flash);
-	      }
-      return htmx.ajax("GET", url, { target: "#org-node-details", swap: "innerHTML" })
-        .then(() => {
-          initDetailsPanel();
-          return true;
-        })
-        .catch(() => {
-          const panel = getDetailsPanel();
-          if (panel) {
-            setStatus(panel, "error", "加载失败");
-          }
-          return false;
-        });
-    };
+		    const loadDetails = (orgId, opts) => {
+		      const effectiveDate = opts && opts.effectiveDate ? opts.effectiveDate : "";
+		      const activeTab = opts && opts.activeTab ? opts.activeTab : "";
+		      const auditLimit = opts && opts.auditLimit ? String(opts.auditLimit) : "";
+		      const treeAsOf = getTreeAsOf();
+		      const includeDisabled = includeDisabledEnabled();
+		      if (!orgId) {
+		        return Promise.resolve();
+		      }
+		      let url = "/org/nodes/details?org_id=" + encodeURIComponent(orgId);
+		      if (effectiveDate) {
+		        url += "&effective_date=" + encodeURIComponent(effectiveDate);
+		      }
+		      if (treeAsOf) {
+		        url += "&tree_as_of=" + encodeURIComponent(treeAsOf);
+		      }
+		      if (includeDisabled) {
+		        url += "&include_disabled=1";
+		      }
+		      if (activeTab) {
+		        url += "&tab=" + encodeURIComponent(activeTab);
+		      }
+		      if (auditLimit) {
+		        url += "&limit=" + encodeURIComponent(auditLimit);
+		      }
+		      if (opts && opts.flash) {
+		        url += "&flash=" + encodeURIComponent(opts.flash);
+		      }
+		      return htmx.ajax("GET", url, { target: "#org-node-details", swap: "innerHTML" })
+		        .then(() => {
+		          initDetailsPanel();
+		          return true;
+		        })
+		        .catch(() => {
+		          const panel = getDetailsPanel();
+		          if (panel) {
+		            setStatus(panel, "error", "加载失败");
+		          }
+		          return false;
+		        });
+		    };
 
 	    const loadChildren = (item) => {
       if (!item || item.dataset.loading === "true" || item.lazy !== true) {
@@ -4407,6 +4880,44 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
         return;
       }
 
+      const changeItem = event.target && event.target.closest ? event.target.closest(".org-node-change-item") : null;
+      if (changeItem) {
+        const panel = changeItem.closest(".org-node-details-panel");
+        if (!panel) {
+          return;
+        }
+        const eventId = changeItem.dataset.eventId || "";
+        panel.querySelectorAll(".org-node-change-item").forEach((item) => {
+          item.classList.toggle("is-active", item === changeItem);
+        });
+        panel.querySelectorAll(".org-node-change-detail-entry").forEach((entry) => {
+          const active = eventId !== "" && entry.dataset.eventId === eventId;
+          entry.classList.toggle("is-active", active);
+          entry.style.display = active ? "block" : "none";
+        });
+        setTab(panel, "change");
+        return;
+      }
+
+      const targetJump = event.target && event.target.closest ? event.target.closest(".org-node-change-target-jump") : null;
+      if (targetJump) {
+        const panel = targetJump.closest(".org-node-details-panel");
+        if (!panel) {
+          return;
+        }
+        const targetEventUUID = (targetJump.dataset.targetEventUuid || "").trim();
+        if (!targetEventUUID) {
+          return;
+        }
+        const targetItem = panel.querySelector(".org-node-change-item[data-event-uuid=\"" + targetEventUUID + "\"]");
+        if (targetItem && typeof targetItem.click === "function") {
+          targetItem.click();
+        } else {
+          setStatus(panel, "warn", "目标事件未加载，请点击“加载更多”后重试");
+        }
+        return;
+      }
+
       const recordPrev = event.target && event.target.closest ? event.target.closest(".org-node-record-prev") : null;
       if (recordPrev) {
         const form = recordPrev.closest ? recordPrev.closest(".org-node-record-action-form") : null;
@@ -4681,11 +5192,15 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       if (!panel.dataset.orgId) {
         return;
       }
-      loadDetails(panel.dataset.orgId, { effectiveDate: targetDate }).then((ok) => {
-        if (!ok && panel.dataset.currentEffectiveDate) {
-          select.value = panel.dataset.currentEffectiveDate;
-        }
-      });
+	      loadDetails(panel.dataset.orgId, {
+	        effectiveDate: targetDate,
+	        activeTab: panel.dataset.activeTab || "basic",
+	        auditLimit: panel.dataset.auditLimit || "",
+	      }).then((ok) => {
+	        if (!ok && panel.dataset.currentEffectiveDate) {
+	          select.value = panel.dataset.currentEffectiveDate;
+	        }
+	      });
     });
 
     document.addEventListener("click", (event) => {
@@ -4704,7 +5219,11 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       if (!panel || !panel.dataset.orgId) {
         return;
       }
-      loadDetails(panel.dataset.orgId, { effectiveDate: targetDate }).catch(() => {});
+	      loadDetails(panel.dataset.orgId, {
+	        effectiveDate: targetDate,
+	        activeTab: panel.dataset.activeTab || "basic",
+	        auditLimit: panel.dataset.auditLimit || "",
+	      }).catch(() => {});
     });
 
     window.orgNodes = {
