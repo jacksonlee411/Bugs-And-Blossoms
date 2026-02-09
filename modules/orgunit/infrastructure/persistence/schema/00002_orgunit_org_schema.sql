@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   request_code text NOT NULL,
   initiator_uuid uuid NOT NULL,
+  initiator_name text NULL,
+  initiator_employee_id text NULL,
   reason text NULL,
   before_snapshot jsonb NULL,
   after_snapshot jsonb NULL,
@@ -45,13 +47,20 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')),
+  CONSTRAINT org_events_target_event_uuid_required CHECK (
+    event_type NOT IN ('CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')
+    OR (
+      payload ? 'target_event_uuid'
+      AND NULLIF(btrim(payload->>'target_event_uuid'), '') IS NOT NULL
+    )
+  ),
   CONSTRAINT org_events_request_code_unique UNIQUE (tenant_uuid, request_code)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_events (event_uuid);
 CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);
 CREATE INDEX IF NOT EXISTS org_events_tenant_effective_idx ON orgunit.org_events (tenant_uuid, effective_date, id);
-CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx ON orgunit.org_events (tenant_uuid, tx_time);
+CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx ON orgunit.org_events (tenant_uuid, tx_time DESC, id DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS org_events_one_per_day_unique
   ON orgunit.org_events (tenant_uuid, org_id, effective_date)
   WHERE event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT');

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
@@ -128,6 +129,19 @@ func canEditOrgNodes(ctx context.Context) bool {
 		return false
 	}
 	return role == authz.RoleTenantAdmin || role == authz.RoleSuperadmin
+}
+
+func orgUnitInitiatorUUID(ctx context.Context, tenantID string) string {
+	p, ok := currentPrincipal(ctx)
+	if ok {
+		candidate := strings.TrimSpace(p.ID)
+		if candidate != "" {
+			if _, err := uuid.Parse(candidate); err == nil {
+				return candidate
+			}
+		}
+	}
+	return strings.TrimSpace(tenantID)
 }
 
 type OrgUnitStore interface {
@@ -1475,6 +1489,7 @@ func (s *orgUnitPGStore) CreateNodeCurrent(ctx context.Context, tenantID string,
 	if err != nil {
 		return OrgUnitNode{}, err
 	}
+	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 
 	payload := `{"org_code":` + strconv.Quote(normalizedCode) + `,"name":` + strconv.Quote(name)
 	if strings.TrimSpace(parentID) != "" {
@@ -1494,7 +1509,7 @@ SELECT orgunit.submit_org_event(
   $6::text,
   $7::uuid
 )
-`, eventID, tenantID, nil, effectiveDate, []byte(payload), eventID, tenantID)
+	`, eventID, tenantID, nil, effectiveDate, []byte(payload), eventID, initiatorUUID)
 	if err != nil {
 		return OrgUnitNode{}, err
 	}
@@ -1542,6 +1557,7 @@ func (s *orgUnitPGStore) RenameNodeCurrent(ctx context.Context, tenantID string,
 	if err != nil {
 		return err
 	}
+	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 
 	payload := `{"new_name":` + strconv.Quote(newName) + `}`
 
@@ -1556,7 +1572,7 @@ SELECT orgunit.submit_org_event(
   $6::text,
   $7::uuid
 )
-`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, tenantID); err != nil {
+	`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, initiatorUUID); err != nil {
 		return err
 	}
 
@@ -1589,6 +1605,7 @@ func (s *orgUnitPGStore) MoveNodeCurrent(ctx context.Context, tenantID string, e
 	if err != nil {
 		return err
 	}
+	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 
 	payload := `{}`
 	if _, ok, err := parseOptionalOrgID8(newParentID); err != nil {
@@ -1608,7 +1625,7 @@ SELECT orgunit.submit_org_event(
   $6::text,
   $7::uuid
 )
-`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, tenantID); err != nil {
+	`, eventID, tenantID, orgID, effectiveDate, []byte(payload), eventID, initiatorUUID); err != nil {
 		return err
 	}
 
@@ -1641,6 +1658,7 @@ func (s *orgUnitPGStore) DisableNodeCurrent(ctx context.Context, tenantID string
 	if err != nil {
 		return err
 	}
+	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 
 	if _, err := tx.Exec(ctx, `
 SELECT orgunit.submit_org_event(
@@ -1653,7 +1671,7 @@ SELECT orgunit.submit_org_event(
   $5::text,
   $6::uuid
 )
-`, eventID, tenantID, orgID, effectiveDate, eventID, tenantID); err != nil {
+	`, eventID, tenantID, orgID, effectiveDate, eventID, initiatorUUID); err != nil {
 		return err
 	}
 
@@ -1683,6 +1701,7 @@ func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID 
 	if strings.TrimSpace(requestID) == "" {
 		return errors.New("request_id is required")
 	}
+	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 
 	patch := `{"effective_date":` + strconv.Quote(newEffectiveDate) + `}`
 	var correctionUUID string
@@ -1695,7 +1714,7 @@ SELECT orgunit.submit_org_event_correction(
   $5::text,
   $6::uuid
 )
-`, tenantID, orgID, targetEffectiveDate, []byte(patch), requestID, tenantID).Scan(&correctionUUID); err != nil {
+	`, tenantID, orgID, targetEffectiveDate, []byte(patch), requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
 		return err
 	}
 
@@ -1727,6 +1746,7 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 	if err != nil {
 		return err
 	}
+	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 	if strings.TrimSpace(requestCode) == "" {
 		requestCode = eventID
 	}
@@ -1747,7 +1767,7 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 	  $6::text,
 	  $7::uuid
 	)
-	`, eventID, tenantID, orgID, effectiveDate, []byte(payload), requestCode, tenantID); err != nil {
+		`, eventID, tenantID, orgID, effectiveDate, []byte(payload), requestCode, initiatorUUID); err != nil {
 		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_set_business_unit;`); rbErr != nil {
 			return rbErr
 		}
@@ -2275,16 +2295,19 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 					TargetEffectiveDate: effectiveDate,
 					TargetStatus:        targetStatus,
 					RequestID:           requestID,
+					InitiatorUUID:       orgUnitInitiatorUUID(r.Context(), tenant.ID),
 				})
 			} else if targetStatus == "disabled" {
 				err = writeSvc.Disable(r.Context(), tenant.ID, orgunitservices.DisableOrgUnitRequest{
 					EffectiveDate: effectiveDate,
 					OrgCode:       orgCode,
+					InitiatorUUID: orgUnitInitiatorUUID(r.Context(), tenant.ID),
 				})
 			} else {
 				err = writeSvc.Enable(r.Context(), tenant.ID, orgunitservices.EnableOrgUnitRequest{
 					EffectiveDate: effectiveDate,
 					OrgCode:       orgCode,
+					InitiatorUUID: orgUnitInitiatorUUID(r.Context(), tenant.ID),
 				})
 			}
 			if err != nil {
@@ -2449,6 +2472,7 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 					TargetEffectiveDate: effectiveDate,
 					RequestID:           requestID,
 					Reason:              reason,
+					InitiatorUUID:       orgUnitInitiatorUUID(r.Context(), tenant.ID),
 				}); err != nil {
 					nodes, errMsg := listNodes(orgNodeWriteErrorMessage(err))
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))
@@ -2464,9 +2488,10 @@ func handleOrgNodesWithWriteService(w http.ResponseWriter, r *http.Request, stor
 					reason = orgNodeDeleteOrgReason
 				}
 				if _, err := writeSvc.RescindOrg(r.Context(), tenant.ID, orgunitservices.RescindOrgUnitRequest{
-					OrgCode:   r.Form.Get("org_code"),
-					RequestID: requestID,
-					Reason:    reason,
+					OrgCode:       r.Form.Get("org_code"),
+					RequestID:     requestID,
+					Reason:        reason,
+					InitiatorUUID: orgUnitInitiatorUUID(r.Context(), tenant.ID),
 				}); err != nil {
 					nodes, errMsg := listNodes(orgNodeWriteErrorMessage(err))
 					writePage(w, r, renderOrgNodes(nodes, tenant, errMsg, treeAsOf, includeDisabled, canEdit))

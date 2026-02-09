@@ -59,34 +59,40 @@ type CreateOrgUnitRequest struct {
 	ParentOrgCode  string
 	IsBusinessUnit bool
 	ManagerPernr   string
+	InitiatorUUID  string
 }
 
 type RenameOrgUnitRequest struct {
 	EffectiveDate string
 	OrgCode       string
 	NewName       string
+	InitiatorUUID string
 }
 
 type MoveOrgUnitRequest struct {
 	EffectiveDate    string
 	OrgCode          string
 	NewParentOrgCode string
+	InitiatorUUID    string
 }
 
 type DisableOrgUnitRequest struct {
 	EffectiveDate string
 	OrgCode       string
+	InitiatorUUID string
 }
 
 type EnableOrgUnitRequest struct {
 	EffectiveDate string
 	OrgCode       string
+	InitiatorUUID string
 }
 
 type SetBusinessUnitRequest struct {
 	EffectiveDate  string
 	OrgCode        string
 	IsBusinessUnit bool
+	InitiatorUUID  string
 }
 
 type CorrectOrgUnitRequest struct {
@@ -94,6 +100,7 @@ type CorrectOrgUnitRequest struct {
 	TargetEffectiveDate string
 	Patch               OrgUnitCorrectionPatch
 	RequestID           string
+	InitiatorUUID       string
 }
 
 type CorrectStatusOrgUnitRequest struct {
@@ -101,6 +108,7 @@ type CorrectStatusOrgUnitRequest struct {
 	TargetEffectiveDate string
 	TargetStatus        string
 	RequestID           string
+	InitiatorUUID       string
 }
 
 type RescindRecordOrgUnitRequest struct {
@@ -108,12 +116,14 @@ type RescindRecordOrgUnitRequest struct {
 	TargetEffectiveDate string
 	RequestID           string
 	Reason              string
+	InitiatorUUID       string
 }
 
 type RescindOrgUnitRequest struct {
-	OrgCode   string
-	RequestID string
-	Reason    string
+	OrgCode       string
+	RequestID     string
+	Reason        string
+	InitiatorUUID string
 }
 
 type OrgUnitCorrectionPatch struct {
@@ -198,7 +208,7 @@ func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req C
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitEvent(ctx, tenantID, eventUUID, nil, string(types.OrgUnitEventCreate), effectiveDate, payloadJSON, eventUUID, tenantID); err != nil {
+	if _, err := s.store.SubmitEvent(ctx, tenantID, eventUUID, nil, string(types.OrgUnitEventCreate), effectiveDate, payloadJSON, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
@@ -262,7 +272,7 @@ func (s *orgUnitWriteService) Rename(ctx context.Context, tenantID string, req R
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventRename), effectiveDate, payloadJSON, eventUUID, tenantID)
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventRename), effectiveDate, payloadJSON, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -313,7 +323,7 @@ func (s *orgUnitWriteService) Move(ctx context.Context, tenantID string, req Mov
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventMove), effectiveDate, payloadJSON, eventUUID, tenantID)
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventMove), effectiveDate, payloadJSON, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -341,7 +351,7 @@ func (s *orgUnitWriteService) Disable(ctx context.Context, tenantID string, req 
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventDisable), effectiveDate, json.RawMessage(`{}`), eventUUID, tenantID)
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventDisable), effectiveDate, json.RawMessage(`{}`), eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -369,7 +379,7 @@ func (s *orgUnitWriteService) Enable(ctx context.Context, tenantID string, req E
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventEnable), effectiveDate, json.RawMessage(`{}`), eventUUID, tenantID)
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventEnable), effectiveDate, json.RawMessage(`{}`), eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -403,7 +413,7 @@ func (s *orgUnitWriteService) SetBusinessUnit(ctx context.Context, tenantID stri
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventSetBusinessUnit), effectiveDate, payloadJSON, eventUUID, tenantID)
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventSetBusinessUnit), effectiveDate, payloadJSON, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -449,7 +459,7 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitCorrection(ctx, tenantID, orgID, targetEffectiveDate, patchJSON, requestID, tenantID); err != nil {
+	if _, err := s.store.SubmitCorrection(ctx, tenantID, orgID, targetEffectiveDate, patchJSON, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
@@ -494,7 +504,7 @@ func (s *orgUnitWriteService) CorrectStatus(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitStatusCorrection(ctx, tenantID, orgID, targetEffectiveDate, targetStatus, requestID, tenantID); err != nil {
+	if _, err := s.store.SubmitStatusCorrection(ctx, tenantID, orgID, targetEffectiveDate, targetStatus, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
@@ -541,7 +551,7 @@ func (s *orgUnitWriteService) RescindRecord(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitRescindEvent(ctx, tenantID, orgID, targetEffectiveDate, reason, requestID, tenantID); err != nil {
+	if _, err := s.store.SubmitRescindEvent(ctx, tenantID, orgID, targetEffectiveDate, reason, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
@@ -580,7 +590,7 @@ func (s *orgUnitWriteService) RescindOrg(ctx context.Context, tenantID string, r
 		return types.OrgUnitResult{}, err
 	}
 
-	rescindedEvents, err := s.store.SubmitRescindOrg(ctx, tenantID, orgID, reason, requestID, tenantID)
+	rescindedEvents, err := s.store.SubmitRescindOrg(ctx, tenantID, orgID, reason, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	if err != nil {
 		return types.OrgUnitResult{}, err
 	}
@@ -774,4 +784,12 @@ func validateDate(raw string) (string, error) {
 		return "", httperr.NewBadRequest(errEffectiveDateInvalid)
 	}
 	return value, nil
+}
+
+func resolveInitiatorUUID(candidate string, tenantID string) string {
+	value := strings.TrimSpace(candidate)
+	if value != "" {
+		return value
+	}
+	return strings.TrimSpace(tenantID)
 }
