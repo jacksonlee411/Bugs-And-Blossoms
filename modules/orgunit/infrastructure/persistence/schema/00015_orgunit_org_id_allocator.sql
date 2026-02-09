@@ -75,6 +75,7 @@ DECLARE
   v_lock_key text;
   v_event_db_id bigint;
   v_existing orgunit.org_events%ROWTYPE;
+  v_existing_request orgunit.org_events%ROWTYPE;
   v_payload jsonb;
   v_org_id int;
   v_parent_id int;
@@ -157,6 +158,28 @@ BEGIN
     v_org_id := p_org_id;
   END IF;
 
+  SELECT * INTO v_existing_request
+  FROM orgunit.org_events
+  WHERE tenant_uuid = p_tenant_uuid
+    AND request_code = p_request_code
+  LIMIT 1;
+
+  IF FOUND THEN
+    IF v_existing_request.event_uuid <> p_event_uuid
+      OR v_existing_request.org_id <> v_org_id
+      OR v_existing_request.event_type <> p_event_type
+      OR v_existing_request.effective_date <> p_effective_date
+      OR v_existing_request.payload <> v_payload
+      OR v_existing_request.initiator_uuid <> p_initiator_uuid
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
+        DETAIL = format('request_code=%s', p_request_code);
+    END IF;
+
+    RETURN v_existing_request.id;
+  END IF;
+
   INSERT INTO orgunit.org_events (
     event_uuid,
     tenant_uuid,
@@ -165,7 +188,8 @@ BEGIN
     effective_date,
     payload,
     request_code,
-    initiator_uuid
+    initiator_uuid,
+    after_snapshot
   )
   VALUES (
     p_event_uuid,
@@ -175,35 +199,11 @@ BEGIN
     p_effective_date,
     v_payload,
     p_request_code,
-    p_initiator_uuid
+    p_initiator_uuid,
+    v_payload
   )
   ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_event_db_id;
-
-  IF v_event_db_id IS NOT NULL THEN
-    INSERT INTO orgunit.org_events_audit (
-      event_id,
-      event_uuid,
-      tenant_uuid,
-      org_id,
-      event_type,
-      effective_date,
-      payload,
-      request_code,
-      initiator_uuid
-    )
-    VALUES (
-      v_event_db_id,
-      p_event_uuid,
-      p_tenant_uuid,
-      v_org_id,
-      p_event_type,
-      p_effective_date,
-      v_payload,
-      p_request_code,
-      p_initiator_uuid
-    );
-  END IF;
 
   IF v_event_db_id IS NULL THEN
     SELECT * INTO v_existing

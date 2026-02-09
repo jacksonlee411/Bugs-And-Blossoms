@@ -243,74 +243,23 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   request_code text NOT NULL,
   initiator_uuid uuid NOT NULL,
+  reason text NULL,
+  before_snapshot jsonb NULL,
+  after_snapshot jsonb NULL,
+  tx_time timestamptz NOT NULL DEFAULT now(),
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')),
-  CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_uuid, org_id, effective_date)
+  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')),
+  CONSTRAINT org_events_request_code_unique UNIQUE (tenant_uuid, request_code)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_events (event_uuid);
 CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);
 CREATE INDEX IF NOT EXISTS org_events_tenant_effective_idx ON orgunit.org_events (tenant_uuid, effective_date, id);
-
-CREATE TABLE IF NOT EXISTS orgunit.org_events_audit (
-  id bigserial PRIMARY KEY,
-  event_id bigint NOT NULL REFERENCES orgunit.org_events(id),
-  event_uuid uuid NOT NULL,
-  tenant_uuid uuid NOT NULL,
-  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
-  event_type text NOT NULL,
-  effective_date date NOT NULL,
-  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
-  initiator_uuid uuid NOT NULL,
-  tx_time timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_events_audit_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT'))
-);
-
-CREATE INDEX IF NOT EXISTS org_events_audit_tenant_tx_time_idx
-  ON orgunit.org_events_audit (tenant_uuid, tx_time);
-
-CREATE TABLE IF NOT EXISTS orgunit.org_event_corrections_current (
-  event_uuid uuid PRIMARY KEY,
-  tenant_uuid uuid NOT NULL,
-  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
-  target_effective_date date NOT NULL,
-  corrected_effective_date date NOT NULL,
-  original_event jsonb NOT NULL,
-  replacement_payload jsonb NOT NULL,
-  initiator_uuid uuid NOT NULL,
-  request_id text NOT NULL,
-  request_hash text NOT NULL,
-  corrected_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_event_corrections_current_original_event_obj_check CHECK (jsonb_typeof(original_event) = 'object'),
-  CONSTRAINT org_event_corrections_current_replacement_payload_obj_check CHECK (jsonb_typeof(replacement_payload) = 'object'),
-  CONSTRAINT org_event_corrections_current_target_unique UNIQUE (tenant_uuid, org_id, target_effective_date)
-);
-
-CREATE INDEX IF NOT EXISTS org_event_corrections_current_tenant_org_target_idx
-  ON orgunit.org_event_corrections_current (tenant_uuid, org_id, target_effective_date);
-
-CREATE INDEX IF NOT EXISTS org_event_corrections_current_tenant_org_corrected_idx
-  ON orgunit.org_event_corrections_current (tenant_uuid, org_id, corrected_effective_date);
-
-CREATE TABLE IF NOT EXISTS orgunit.org_event_corrections_history (
-  correction_uuid uuid PRIMARY KEY,
-  event_uuid uuid NOT NULL,
-  tenant_uuid uuid NOT NULL,
-  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
-  target_effective_date date NOT NULL,
-  corrected_effective_date date NOT NULL,
-  original_event jsonb NOT NULL,
-  replacement_payload jsonb NOT NULL,
-  initiator_uuid uuid NOT NULL,
-  request_id text NOT NULL,
-  request_hash text NOT NULL,
-  corrected_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_event_corrections_history_original_event_obj_check CHECK (jsonb_typeof(original_event) = 'object'),
-  CONSTRAINT org_event_corrections_history_replacement_payload_obj_check CHECK (jsonb_typeof(replacement_payload) = 'object'),
-  CONSTRAINT org_event_corrections_history_request_unique UNIQUE (tenant_uuid, request_id)
-);
+CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx ON orgunit.org_events (tenant_uuid, tx_time);
+CREATE UNIQUE INDEX IF NOT EXISTS org_events_one_per_day_unique
+  ON orgunit.org_events (tenant_uuid, org_id, effective_date)
+  WHERE event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT');
 
 CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
   id bigserial PRIMARY KEY,
@@ -383,27 +332,6 @@ CREATE POLICY tenant_isolation ON orgunit.org_events
 USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
-ALTER TABLE orgunit.org_events_audit ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orgunit.org_events_audit FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_events_audit;
-CREATE POLICY tenant_isolation ON orgunit.org_events_audit
-USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
-
-ALTER TABLE orgunit.org_event_corrections_current ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orgunit.org_event_corrections_current FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_event_corrections_current;
-CREATE POLICY tenant_isolation ON orgunit.org_event_corrections_current
-USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
-
-ALTER TABLE orgunit.org_event_corrections_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE orgunit.org_event_corrections_history FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_event_corrections_history;
-CREATE POLICY tenant_isolation ON orgunit.org_event_corrections_history
-USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
-
 ALTER TABLE orgunit.org_unit_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.org_unit_versions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_unit_versions;
@@ -464,32 +392,61 @@ END;
 $$;
 
 CREATE OR REPLACE VIEW orgunit.org_events_effective AS
+WITH correction_events AS (
+  SELECT
+    e.*,
+    (e.payload->>'target_event_uuid')::uuid AS target_event_uuid
+  FROM orgunit.org_events e
+  WHERE e.event_type IN ('CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')
+    AND e.payload ? 'target_event_uuid'
+),
+latest_corrections AS (
+  SELECT DISTINCT ON (tenant_uuid, target_event_uuid)
+    tenant_uuid,
+    target_event_uuid,
+    event_type AS correction_type,
+    payload AS correction_payload,
+    tx_time,
+    id
+  FROM correction_events
+  ORDER BY tenant_uuid, target_event_uuid, tx_time DESC, id DESC
+)
 SELECT
   e.id,
   e.event_uuid,
   e.tenant_uuid,
   e.org_id,
   CASE
-    WHEN COALESCE(c.replacement_payload->>'op', '') = 'CORRECT_STATUS'
-      AND COALESCE(c.replacement_payload->>'target_status', '') = 'active'
+    WHEN lc.correction_type = 'CORRECT_STATUS'
+      AND COALESCE(lc.correction_payload->>'target_status', '') = 'active'
       THEN 'ENABLE'
-    WHEN COALESCE(c.replacement_payload->>'op', '') = 'CORRECT_STATUS'
-      AND COALESCE(c.replacement_payload->>'target_status', '') = 'disabled'
+    WHEN lc.correction_type = 'CORRECT_STATUS'
+      AND COALESCE(lc.correction_payload->>'target_status', '') = 'disabled'
       THEN 'DISABLE'
     ELSE e.event_type
   END AS event_type,
-  COALESCE(c.corrected_effective_date, e.effective_date) AS effective_date,
-  COALESCE(c.replacement_payload, e.payload) AS payload,
+  CASE
+    WHEN lc.correction_type = 'CORRECT_EVENT'
+      AND lc.correction_payload ? 'effective_date'
+      THEN NULLIF(btrim(lc.correction_payload->>'effective_date'), '')::date
+    ELSE e.effective_date
+  END AS effective_date,
+  CASE
+    WHEN lc.correction_type = 'CORRECT_EVENT'
+      THEN COALESCE(e.payload, '{}'::jsonb)
+           || (lc.correction_payload - 'effective_date' - 'target_event_uuid' - 'op')
+    ELSE e.payload
+  END AS payload,
   e.request_code,
   e.initiator_uuid,
   e.transaction_time,
   e.created_at
 FROM orgunit.org_events e
-LEFT JOIN orgunit.org_event_corrections_current c
-  ON c.event_uuid = e.event_uuid
- AND c.tenant_uuid = e.tenant_uuid
- AND c.org_id = e.org_id
-WHERE COALESCE(c.replacement_payload->>'op', '') NOT IN ('RESCIND_EVENT', 'RESCIND_ORG');
+LEFT JOIN latest_corrections lc
+  ON lc.tenant_uuid = e.tenant_uuid
+ AND lc.target_event_uuid = e.event_uuid
+WHERE e.event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')
+  AND COALESCE(lc.correction_type, '') NOT IN ('RESCIND_EVENT', 'RESCIND_ORG');
 
 CREATE OR REPLACE FUNCTION orgunit.split_org_unit_version_at(
   p_tenant_uuid uuid,
@@ -1313,6 +1270,7 @@ DECLARE
   v_lock_key text;
   v_event_db_id bigint;
   v_existing orgunit.org_events%ROWTYPE;
+  v_existing_request orgunit.org_events%ROWTYPE;
   v_payload jsonb;
   v_parent_id int;
   v_new_parent_id int;
@@ -1365,7 +1323,29 @@ BEGIN
         RAISE EXCEPTION USING
           MESSAGE = 'ORG_INVALID_ARGUMENT',
           DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
-    END;
+      END;
+  END IF;
+
+  SELECT * INTO v_existing_request
+  FROM orgunit.org_events
+  WHERE tenant_uuid = p_tenant_uuid
+    AND request_code = p_request_code
+  LIMIT 1;
+
+  IF FOUND THEN
+    IF v_existing_request.event_uuid <> p_event_uuid
+      OR v_existing_request.org_id <> p_org_id
+      OR v_existing_request.event_type <> p_event_type
+      OR v_existing_request.effective_date <> p_effective_date
+      OR v_existing_request.payload <> v_payload
+      OR v_existing_request.initiator_uuid <> p_initiator_uuid
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
+        DETAIL = format('request_code=%s', p_request_code);
+    END IF;
+
+    RETURN v_existing_request.id;
   END IF;
 
   INSERT INTO orgunit.org_events (
@@ -1376,7 +1356,8 @@ BEGIN
     effective_date,
     payload,
     request_code,
-    initiator_uuid
+    initiator_uuid,
+    after_snapshot
   )
   VALUES (
     p_event_uuid,
@@ -1386,35 +1367,11 @@ BEGIN
     p_effective_date,
     v_payload,
     p_request_code,
-    p_initiator_uuid
+    p_initiator_uuid,
+    v_payload
   )
   ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_event_db_id;
-
-  IF v_event_db_id IS NOT NULL THEN
-    INSERT INTO orgunit.org_events_audit (
-      event_id,
-      event_uuid,
-      tenant_uuid,
-      org_id,
-      event_type,
-      effective_date,
-      payload,
-      request_code,
-      initiator_uuid
-    )
-    VALUES (
-      v_event_db_id,
-      p_event_uuid,
-      p_tenant_uuid,
-      p_org_id,
-      p_event_type,
-      p_effective_date,
-      v_payload,
-      p_request_code,
-      p_initiator_uuid
-    );
-  END IF;
 
   IF v_event_db_id IS NULL THEN
     SELECT * INTO v_existing
@@ -1522,14 +1479,10 @@ AS $$
 DECLARE
   v_lock_key text;
   v_target orgunit.org_events%ROWTYPE;
-  v_existing orgunit.org_event_corrections_history%ROWTYPE;
-  v_existing_current orgunit.org_event_corrections_current%ROWTYPE;
-  v_existing_correction_uuid uuid;
-  v_request_hash text;
+  v_existing_request orgunit.org_events%ROWTYPE;
+  v_existing_rescind orgunit.org_events%ROWTYPE;
   v_reason text;
-  v_target_effective date;
-  v_effective_payload jsonb;
-  v_correction_uuid uuid;
+  v_event_uuid uuid;
   v_payload jsonb;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
@@ -1554,46 +1507,35 @@ BEGIN
   v_lock_key := format('org:write-lock:%s', p_tenant_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
-  v_request_hash := encode(
-    digest(format('%s|%s|%s', p_org_id, p_target_effective_date, v_reason), 'sha256'),
-    'hex'
-  );
-
-  SELECT * INTO v_existing
-  FROM orgunit.org_event_corrections_history
+  SELECT * INTO v_existing_request
+  FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_id = p_request_id
+    AND request_code = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
-    IF v_existing.request_hash <> v_request_hash THEN
+    IF v_existing_request.event_type <> 'RESCIND_EVENT'
+      OR v_existing_request.org_id <> p_org_id
+      OR v_existing_request.effective_date <> p_target_effective_date
+    THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
         DETAIL = format('request_id=%s', p_request_id);
     END IF;
 
-    RETURN v_existing.correction_uuid;
+    RETURN v_existing_request.event_uuid;
   END IF;
 
-  SELECT * INTO v_target
-  FROM orgunit.org_events
-  WHERE tenant_uuid = p_tenant_uuid
-    AND org_id = p_org_id
-    AND effective_date = p_target_effective_date
+  SELECT e.* INTO v_target
+  FROM orgunit.org_events e
+  JOIN orgunit.org_events_effective ee
+    ON ee.event_uuid = e.event_uuid
+   AND ee.tenant_uuid = e.tenant_uuid
+   AND ee.org_id = e.org_id
+  WHERE ee.tenant_uuid = p_tenant_uuid
+    AND ee.org_id = p_org_id
+    AND ee.effective_date = p_target_effective_date
   LIMIT 1;
-
-  IF NOT FOUND THEN
-    SELECT e.* INTO v_target
-    FROM orgunit.org_events e
-    JOIN orgunit.org_events_effective ee
-      ON ee.event_uuid = e.event_uuid
-     AND ee.tenant_uuid = e.tenant_uuid
-     AND ee.org_id = e.org_id
-    WHERE e.tenant_uuid = p_tenant_uuid
-      AND e.org_id = p_org_id
-      AND ee.effective_date = p_target_effective_date
-    LIMIT 1;
-  END IF;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION USING
@@ -1601,36 +1543,15 @@ BEGIN
       DETAIL = format('org_id=%s target_effective_date=%s', p_org_id, p_target_effective_date);
   END IF;
 
-  SELECT * INTO v_existing_current
-  FROM orgunit.org_event_corrections_current c
-  WHERE c.tenant_uuid = p_tenant_uuid
-    AND c.org_id = p_org_id
-    AND c.event_uuid = v_target.event_uuid
+  SELECT * INTO v_existing_rescind
+  FROM orgunit.org_events r
+  WHERE r.tenant_uuid = p_tenant_uuid
+    AND r.event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+    AND r.payload->>'target_event_uuid' = v_target.event_uuid::text
   LIMIT 1;
 
-  IF FOUND AND COALESCE(v_existing_current.replacement_payload->>'op', '') IN ('RESCIND_EVENT', 'RESCIND_ORG') THEN
-    SELECT h.correction_uuid INTO v_existing_correction_uuid
-    FROM orgunit.org_event_corrections_history h
-    WHERE h.tenant_uuid = p_tenant_uuid
-      AND h.request_id = v_existing_current.request_id
-    LIMIT 1;
-
-    IF v_existing_correction_uuid IS NOT NULL THEN
-      RETURN v_existing_correction_uuid;
-    END IF;
-  END IF;
-
-  SELECT ee.effective_date, ee.payload
-  INTO v_target_effective, v_effective_payload
-  FROM orgunit.org_events_effective ee
-  WHERE ee.tenant_uuid = p_tenant_uuid
-    AND ee.org_id = p_org_id
-    AND ee.event_uuid = v_target.event_uuid
-  LIMIT 1;
-
-  IF v_target_effective IS NULL THEN
-    v_target_effective := v_target.effective_date;
-    v_effective_payload := v_target.payload;
+  IF FOUND THEN
+    RETURN v_existing_rescind.event_uuid;
   END IF;
 
   v_payload := jsonb_build_object(
@@ -1640,81 +1561,38 @@ BEGIN
     'target_effective_date', p_target_effective_date
   );
 
-  v_correction_uuid := gen_random_uuid();
+  v_event_uuid := gen_random_uuid();
 
-  INSERT INTO orgunit.org_event_corrections_history (
-    correction_uuid,
-    event_uuid,
+  INSERT INTO orgunit.org_events (
     tenant_uuid,
     org_id,
-    target_effective_date,
-    corrected_effective_date,
-    original_event,
-    replacement_payload,
+    event_uuid,
+    event_type,
+    effective_date,
+    payload,
+    request_code,
     initiator_uuid,
-    request_id,
-    request_hash
+    reason,
+    before_snapshot,
+    after_snapshot
   )
   VALUES (
-    v_correction_uuid,
-    v_target.event_uuid,
     p_tenant_uuid,
     p_org_id,
+    v_event_uuid,
+    'RESCIND_EVENT',
     p_target_effective_date,
-    v_target_effective,
-    to_jsonb(v_target),
     v_payload,
-    p_initiator_uuid,
     p_request_id,
-    v_request_hash
+    p_initiator_uuid,
+    v_reason,
+    to_jsonb(v_target),
+    v_payload
   );
 
-  INSERT INTO orgunit.org_event_corrections_current (
-    event_uuid,
-    tenant_uuid,
-    org_id,
-    target_effective_date,
-    corrected_effective_date,
-    original_event,
-    replacement_payload,
-    initiator_uuid,
-    request_id,
-    request_hash
-  )
-  VALUES (
-    v_target.event_uuid,
-    p_tenant_uuid,
-    p_org_id,
-    p_target_effective_date,
-    v_target_effective,
-    to_jsonb(v_target),
-    v_payload,
-    p_initiator_uuid,
-    p_request_id,
-    v_request_hash
-  )
-  ON CONFLICT (event_uuid) DO UPDATE SET
-    tenant_uuid = EXCLUDED.tenant_uuid,
-    org_id = EXCLUDED.org_id,
-    target_effective_date = EXCLUDED.target_effective_date,
-    corrected_effective_date = EXCLUDED.corrected_effective_date,
-    original_event = EXCLUDED.original_event,
-    replacement_payload = EXCLUDED.replacement_payload,
-    initiator_uuid = EXCLUDED.initiator_uuid,
-    request_id = EXCLUDED.request_id,
-    request_hash = EXCLUDED.request_hash,
-    corrected_at = EXCLUDED.corrected_at;
+  PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
 
-  BEGIN
-    PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_REPLAY_FAILED',
-        DETAIL = format('tenant_uuid=%s org_id=%s cause=%s', p_tenant_uuid, p_org_id, SQLERRM);
-  END;
-
-  RETURN v_correction_uuid;
+  RETURN v_event_uuid;
 END;
 $$;
 
@@ -1737,9 +1615,9 @@ DECLARE
   v_existing_batch_count int;
   v_need_apply boolean;
   v_request_id_seq text;
-  v_request_hash text;
   v_payload jsonb;
-  v_existing orgunit.org_event_corrections_history%ROWTYPE;
+  v_existing_request orgunit.org_events%ROWTYPE;
+  v_existing_rescind orgunit.org_events%ROWTYPE;
   rec record;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
@@ -1761,10 +1639,10 @@ BEGIN
   v_lock_key := format('org:write-lock:%s', p_tenant_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
-  SELECT * INTO v_existing
-  FROM orgunit.org_event_corrections_history
+  SELECT * INTO v_existing_request
+  FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_id = p_request_id
+    AND request_code = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -1828,9 +1706,9 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO v_existing_batch_count
-  FROM orgunit.org_event_corrections_history h
-  WHERE h.tenant_uuid = p_tenant_uuid
-    AND h.request_id LIKE p_request_id || '#%';
+  FROM orgunit.org_events e
+  WHERE e.tenant_uuid = p_tenant_uuid
+    AND e.request_code LIKE p_request_id || '#%';
 
   IF v_existing_batch_count > 0 AND v_existing_batch_count <> v_event_count THEN
     RAISE EXCEPTION USING
@@ -1856,19 +1734,17 @@ BEGIN
     ORDER BY e.effective_date, e.id
   LOOP
     v_request_id_seq := format('%s#%s', p_request_id, lpad(rec.seq::text, 4, '0'));
-    v_request_hash := encode(
-      digest(format('%s|%s|%s|%s', p_org_id, rec.event_uuid, rec.target_effective_date, v_reason), 'sha256'),
-      'hex'
-    );
-
-    SELECT * INTO v_existing
-    FROM orgunit.org_event_corrections_history h
-    WHERE h.tenant_uuid = p_tenant_uuid
-      AND h.request_id = v_request_id_seq
+    SELECT * INTO v_existing_request
+    FROM orgunit.org_events e
+    WHERE e.tenant_uuid = p_tenant_uuid
+      AND e.request_code = v_request_id_seq
     LIMIT 1;
 
     IF FOUND THEN
-      IF v_existing.request_hash <> v_request_hash THEN
+      IF v_existing_request.event_type <> 'RESCIND_ORG'
+        OR v_existing_request.org_id <> p_org_id
+        OR COALESCE(v_existing_request.payload->>'target_event_uuid', '') <> rec.event_uuid::text
+      THEN
         RAISE EXCEPTION USING
           MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
           DETAIL = format('request_id=%s', p_request_id);
@@ -1899,15 +1775,21 @@ BEGIN
     ORDER BY e.effective_date, e.id
   LOOP
     v_request_id_seq := format('%s#%s', p_request_id, lpad(rec.seq::text, 4, '0'));
-    v_request_hash := encode(
-      digest(format('%s|%s|%s|%s', p_org_id, rec.event_uuid, rec.target_effective_date, v_reason), 'sha256'),
-      'hex'
-    );
+    SELECT * INTO v_existing_request
+    FROM orgunit.org_events e
+    WHERE e.tenant_uuid = p_tenant_uuid
+      AND e.request_code = v_request_id_seq
+    LIMIT 1;
 
-    SELECT * INTO v_existing
-    FROM orgunit.org_event_corrections_history h
-    WHERE h.tenant_uuid = p_tenant_uuid
-      AND h.request_id = v_request_id_seq
+    IF FOUND THEN
+      CONTINUE;
+    END IF;
+
+    SELECT * INTO v_existing_rescind
+    FROM orgunit.org_events r
+    WHERE r.tenant_uuid = p_tenant_uuid
+      AND r.event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+      AND r.payload->>'target_event_uuid' = rec.event_uuid::text
     LIMIT 1;
 
     IF FOUND THEN
@@ -1922,104 +1804,39 @@ BEGIN
       'target_effective_date', rec.target_effective_date
     );
 
-    INSERT INTO orgunit.org_event_corrections_history (
-      correction_uuid,
-      event_uuid,
+    INSERT INTO orgunit.org_events (
       tenant_uuid,
       org_id,
-      target_effective_date,
-      corrected_effective_date,
-      original_event,
-      replacement_payload,
+      event_uuid,
+      event_type,
+      effective_date,
+      payload,
+      request_code,
       initiator_uuid,
-      request_id,
-      request_hash
+      reason,
+      before_snapshot,
+      after_snapshot
     )
     VALUES (
+      p_tenant_uuid,
+      p_org_id,
       gen_random_uuid(),
-      rec.event_uuid,
-      p_tenant_uuid,
-      p_org_id,
+      'RESCIND_ORG',
       rec.target_effective_date,
-      rec.target_effective_date,
-      rec.original_event,
       v_payload,
-      p_initiator_uuid,
       v_request_id_seq,
-      v_request_hash
+      p_initiator_uuid,
+      v_reason,
+      rec.original_event,
+      v_payload
     );
-
-    INSERT INTO orgunit.org_event_corrections_current (
-      event_uuid,
-      tenant_uuid,
-      org_id,
-      target_effective_date,
-      corrected_effective_date,
-      original_event,
-      replacement_payload,
-      initiator_uuid,
-      request_id,
-      request_hash
-    )
-    VALUES (
-      rec.event_uuid,
-      p_tenant_uuid,
-      p_org_id,
-      rec.target_effective_date,
-      rec.target_effective_date,
-      rec.original_event,
-      v_payload,
-      p_initiator_uuid,
-      v_request_id_seq,
-      v_request_hash
-    )
-    ON CONFLICT (event_uuid) DO UPDATE SET
-      tenant_uuid = EXCLUDED.tenant_uuid,
-      org_id = EXCLUDED.org_id,
-      target_effective_date = EXCLUDED.target_effective_date,
-      corrected_effective_date = EXCLUDED.corrected_effective_date,
-      original_event = EXCLUDED.original_event,
-      replacement_payload = EXCLUDED.replacement_payload,
-      initiator_uuid = EXCLUDED.initiator_uuid,
-      request_id = EXCLUDED.request_id,
-      request_hash = EXCLUDED.request_hash,
-      corrected_at = EXCLUDED.corrected_at;
   END LOOP;
 
-  BEGIN
-    PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_REPLAY_FAILED',
-        DETAIL = format('tenant_uuid=%s org_id=%s cause=%s', p_tenant_uuid, p_org_id, SQLERRM);
-  END;
+  PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
 
   RETURN v_event_count;
 END;
 $$;
-
-CREATE OR REPLACE FUNCTION orgunit.guard_event_rescind_priority()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  IF COALESCE(OLD.replacement_payload->>'op', '') IN ('RESCIND_EVENT', 'RESCIND_ORG')
-    AND COALESCE(NEW.replacement_payload->>'op', '') NOT IN ('RESCIND_EVENT', 'RESCIND_ORG')
-  THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_EVENT_RESCINDED',
-      DETAIL = format('event_uuid=%s', OLD.event_uuid);
-  END IF;
-
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS guard_event_rescind_priority ON orgunit.org_event_corrections_current;
-CREATE TRIGGER guard_event_rescind_priority
-BEFORE UPDATE ON orgunit.org_event_corrections_current
-FOR EACH ROW EXECUTE FUNCTION orgunit.guard_event_rescind_priority();
 
 CREATE OR REPLACE FUNCTION orgunit.submit_org_event_correction(
   p_tenant_uuid uuid,
@@ -2035,8 +1852,8 @@ AS $$
 DECLARE
   v_lock_key text;
   v_target orgunit.org_events%ROWTYPE;
-  v_existing orgunit.org_event_corrections_history%ROWTYPE;
-  v_request_hash text;
+  v_existing_request orgunit.org_events%ROWTYPE;
+  v_existing_rescind orgunit.org_events%ROWTYPE;
   v_payload jsonb;
   v_effective_payload jsonb;
   v_target_effective date;
@@ -2046,7 +1863,7 @@ DECLARE
   v_parent_id int;
   v_target_path ltree;
   v_descendant_min_create date;
-  v_correction_uuid uuid;
+  v_event_uuid uuid;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
@@ -2074,51 +1891,34 @@ BEGIN
   v_lock_key := format('org:write-lock:%s', p_tenant_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
-  v_request_hash := encode(
-    digest(format('%s|%s|%s', p_org_id, p_target_effective_date, v_payload::text), 'sha256'),
-    'hex'
-  );
-
-  SELECT * INTO v_existing
-  FROM orgunit.org_event_corrections_history
-  WHERE tenant_uuid = p_tenant_uuid
-    AND request_id = p_request_id
+  SELECT e.* INTO v_target
+  FROM orgunit.org_events e
+  JOIN orgunit.org_events_effective ee
+    ON ee.event_uuid = e.event_uuid
+   AND ee.tenant_uuid = e.tenant_uuid
+   AND ee.org_id = e.org_id
+  WHERE ee.tenant_uuid = p_tenant_uuid
+    AND ee.org_id = p_org_id
+    AND ee.effective_date = p_target_effective_date
   LIMIT 1;
-
-  IF FOUND THEN
-    IF v_existing.request_hash <> v_request_hash THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'REQUEST_DUPLICATE',
-        DETAIL = format('request_id=%s', p_request_id);
-    END IF;
-
-    RETURN v_existing.correction_uuid;
-  END IF;
-
-  SELECT * INTO v_target
-  FROM orgunit.org_events
-  WHERE tenant_uuid = p_tenant_uuid
-    AND org_id = p_org_id
-    AND effective_date = p_target_effective_date
-  LIMIT 1;
-
-  IF NOT FOUND THEN
-    SELECT e.* INTO v_target
-    FROM orgunit.org_events e
-    JOIN orgunit.org_events_effective ee
-      ON ee.event_uuid = e.event_uuid
-     AND ee.tenant_uuid = e.tenant_uuid
-     AND ee.org_id = e.org_id
-    WHERE e.tenant_uuid = p_tenant_uuid
-      AND e.org_id = p_org_id
-      AND ee.effective_date = p_target_effective_date
-    LIMIT 1;
-  END IF;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_EVENT_NOT_FOUND',
       DETAIL = format('org_id=%s target_effective_date=%s', p_org_id, p_target_effective_date);
+  END IF;
+
+  SELECT * INTO v_existing_rescind
+  FROM orgunit.org_events r
+  WHERE r.tenant_uuid = p_tenant_uuid
+    AND r.event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+    AND r.payload->>'target_event_uuid' = v_target.event_uuid::text
+  LIMIT 1;
+
+  IF FOUND THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_EVENT_RESCINDED',
+      DETAIL = format('event_uuid=%s', v_target.event_uuid);
   END IF;
 
   SELECT ee.effective_date, ee.payload
@@ -2128,11 +1928,6 @@ BEGIN
     AND ee.org_id = p_org_id
     AND ee.event_uuid = v_target.event_uuid
   LIMIT 1;
-
-  IF v_target_effective IS NULL THEN
-    v_target_effective := v_target.effective_date;
-    v_effective_payload := v_target.payload;
-  END IF;
 
   v_payload := COALESCE(v_effective_payload, '{}'::jsonb) || v_payload;
   v_new_effective := v_target_effective;
@@ -2151,7 +1946,7 @@ BEGIN
         MESSAGE = 'EFFECTIVE_DATE_INVALID',
         DETAIL = 'effective_date is required';
     END IF;
-    v_payload := v_payload - 'effective_date';
+    -- keep effective_date in payload for audit and correction view
   END IF;
 
   SELECT MAX(e.effective_date) INTO v_prev_effective
@@ -2260,74 +2055,61 @@ BEGIN
     END IF;
   END IF;
 
-  v_correction_uuid := gen_random_uuid();
+  v_payload := jsonb_build_object(
+    'op', 'CORRECT_EVENT',
+    'target_event_uuid', v_target.event_uuid,
+    'target_effective_date', p_target_effective_date
+  ) || v_payload;
 
-  INSERT INTO orgunit.org_event_corrections_history (
-    correction_uuid,
-    event_uuid,
+  SELECT * INTO v_existing_request
+  FROM orgunit.org_events
+  WHERE tenant_uuid = p_tenant_uuid
+    AND request_code = p_request_id
+  LIMIT 1;
+
+  IF FOUND THEN
+    IF v_existing_request.event_type <> 'CORRECT_EVENT'
+      OR v_existing_request.org_id <> p_org_id
+      OR v_existing_request.payload <> v_payload
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
+        DETAIL = format('request_id=%s', p_request_id);
+    END IF;
+
+    RETURN v_existing_request.event_uuid;
+  END IF;
+
+  v_event_uuid := gen_random_uuid();
+
+  INSERT INTO orgunit.org_events (
     tenant_uuid,
     org_id,
-    target_effective_date,
-    corrected_effective_date,
-    original_event,
-    replacement_payload,
+    event_uuid,
+    event_type,
+    effective_date,
+    payload,
+    request_code,
     initiator_uuid,
-    request_id,
-    request_hash
+    before_snapshot,
+    after_snapshot
   )
   VALUES (
-    v_correction_uuid,
-    v_target.event_uuid,
     p_tenant_uuid,
     p_org_id,
+    v_event_uuid,
+    'CORRECT_EVENT',
     p_target_effective_date,
-    v_new_effective,
-    to_jsonb(v_target),
     v_payload,
-    p_initiator_uuid,
     p_request_id,
-    v_request_hash
+    p_initiator_uuid,
+    to_jsonb(v_target),
+    v_payload
   );
-
-  INSERT INTO orgunit.org_event_corrections_current (
-    event_uuid,
-    tenant_uuid,
-    org_id,
-    target_effective_date,
-    corrected_effective_date,
-    original_event,
-    replacement_payload,
-    initiator_uuid,
-    request_id,
-    request_hash
-  )
-  VALUES (
-    v_target.event_uuid,
-    p_tenant_uuid,
-    p_org_id,
-    p_target_effective_date,
-    v_new_effective,
-    to_jsonb(v_target),
-    v_payload,
-    p_initiator_uuid,
-    p_request_id,
-    v_request_hash
-  )
-  ON CONFLICT (event_uuid) DO UPDATE SET
-    tenant_uuid = EXCLUDED.tenant_uuid,
-    org_id = EXCLUDED.org_id,
-    target_effective_date = EXCLUDED.target_effective_date,
-    corrected_effective_date = EXCLUDED.corrected_effective_date,
-    original_event = EXCLUDED.original_event,
-    replacement_payload = EXCLUDED.replacement_payload,
-    initiator_uuid = EXCLUDED.initiator_uuid,
-    request_id = EXCLUDED.request_id,
-    request_hash = EXCLUDED.request_hash,
-    corrected_at = EXCLUDED.corrected_at;
 
   PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
 
-  RETURN v_correction_uuid;
+  RETURN v_event_uuid;
 END;
 $$;
 
@@ -2345,13 +2127,12 @@ AS $$
 DECLARE
   v_lock_key text;
   v_target orgunit.org_events%ROWTYPE;
-  v_existing orgunit.org_event_corrections_history%ROWTYPE;
-  v_existing_current orgunit.org_event_corrections_current%ROWTYPE;
-  v_request_hash text;
+  v_existing_request orgunit.org_events%ROWTYPE;
+  v_existing_rescind orgunit.org_events%ROWTYPE;
   v_target_status text;
   v_target_effective date;
   v_effective_payload jsonb;
-  v_correction_uuid uuid;
+  v_event_uuid uuid;
   v_payload jsonb;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
@@ -2382,46 +2163,16 @@ BEGIN
   v_lock_key := format('org:write-lock:%s', p_tenant_uuid);
   PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
 
-  v_request_hash := encode(
-    digest(format('%s|%s|%s|CORRECT_STATUS', p_org_id, p_target_effective_date, v_target_status), 'sha256'),
-    'hex'
-  );
-
-  SELECT * INTO v_existing
-  FROM orgunit.org_event_corrections_history
-  WHERE tenant_uuid = p_tenant_uuid
-    AND request_id = p_request_id
+  SELECT e.* INTO v_target
+  FROM orgunit.org_events e
+  JOIN orgunit.org_events_effective ee
+    ON ee.event_uuid = e.event_uuid
+   AND ee.tenant_uuid = e.tenant_uuid
+   AND ee.org_id = e.org_id
+  WHERE ee.tenant_uuid = p_tenant_uuid
+    AND ee.org_id = p_org_id
+    AND ee.effective_date = p_target_effective_date
   LIMIT 1;
-
-  IF FOUND THEN
-    IF v_existing.request_hash <> v_request_hash THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_id=%s', p_request_id);
-    END IF;
-
-    RETURN v_existing.correction_uuid;
-  END IF;
-
-  SELECT * INTO v_target
-  FROM orgunit.org_events
-  WHERE tenant_uuid = p_tenant_uuid
-    AND org_id = p_org_id
-    AND effective_date = p_target_effective_date
-  LIMIT 1;
-
-  IF NOT FOUND THEN
-    SELECT e.* INTO v_target
-    FROM orgunit.org_events e
-    JOIN orgunit.org_events_effective ee
-      ON ee.event_uuid = e.event_uuid
-     AND ee.tenant_uuid = e.tenant_uuid
-     AND ee.org_id = e.org_id
-    WHERE e.tenant_uuid = p_tenant_uuid
-      AND e.org_id = p_org_id
-      AND ee.effective_date = p_target_effective_date
-    LIMIT 1;
-  END IF;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION USING
@@ -2435,14 +2186,14 @@ BEGIN
       DETAIL = format('event_type=%s', v_target.event_type);
   END IF;
 
-  SELECT * INTO v_existing_current
-  FROM orgunit.org_event_corrections_current c
-  WHERE c.tenant_uuid = p_tenant_uuid
-    AND c.org_id = p_org_id
-    AND c.event_uuid = v_target.event_uuid
+  SELECT * INTO v_existing_rescind
+  FROM orgunit.org_events r
+  WHERE r.tenant_uuid = p_tenant_uuid
+    AND r.event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+    AND r.payload->>'target_event_uuid' = v_target.event_uuid::text
   LIMIT 1;
 
-  IF FOUND AND COALESCE(v_existing_current.replacement_payload->>'op', '') IN ('RESCIND_EVENT', 'RESCIND_ORG') THEN
+  IF FOUND THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_EVENT_RESCINDED',
       DETAIL = format('event_uuid=%s', v_target.event_uuid);
@@ -2468,81 +2219,55 @@ BEGIN
     'target_effective_date', p_target_effective_date
   );
 
-  v_correction_uuid := gen_random_uuid();
+  SELECT * INTO v_existing_request
+  FROM orgunit.org_events
+  WHERE tenant_uuid = p_tenant_uuid
+    AND request_code = p_request_id
+  LIMIT 1;
 
-  INSERT INTO orgunit.org_event_corrections_history (
-    correction_uuid,
-    event_uuid,
+  IF FOUND THEN
+    IF v_existing_request.event_type <> 'CORRECT_STATUS'
+      OR v_existing_request.org_id <> p_org_id
+      OR v_existing_request.payload <> v_payload
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
+        DETAIL = format('request_id=%s', p_request_id);
+    END IF;
+
+    RETURN v_existing_request.event_uuid;
+  END IF;
+
+  v_event_uuid := gen_random_uuid();
+
+  INSERT INTO orgunit.org_events (
     tenant_uuid,
     org_id,
-    target_effective_date,
-    corrected_effective_date,
-    original_event,
-    replacement_payload,
+    event_uuid,
+    event_type,
+    effective_date,
+    payload,
+    request_code,
     initiator_uuid,
-    request_id,
-    request_hash
+    before_snapshot,
+    after_snapshot
   )
   VALUES (
-    v_correction_uuid,
-    v_target.event_uuid,
     p_tenant_uuid,
     p_org_id,
+    v_event_uuid,
+    'CORRECT_STATUS',
     p_target_effective_date,
-    v_target_effective,
-    to_jsonb(v_target),
     v_payload,
-    p_initiator_uuid,
     p_request_id,
-    v_request_hash
+    p_initiator_uuid,
+    to_jsonb(v_target),
+    v_payload
   );
 
-  INSERT INTO orgunit.org_event_corrections_current (
-    event_uuid,
-    tenant_uuid,
-    org_id,
-    target_effective_date,
-    corrected_effective_date,
-    original_event,
-    replacement_payload,
-    initiator_uuid,
-    request_id,
-    request_hash
-  )
-  VALUES (
-    v_target.event_uuid,
-    p_tenant_uuid,
-    p_org_id,
-    p_target_effective_date,
-    v_target_effective,
-    to_jsonb(v_target),
-    v_payload,
-    p_initiator_uuid,
-    p_request_id,
-    v_request_hash
-  )
-  ON CONFLICT (event_uuid) DO UPDATE SET
-    tenant_uuid = EXCLUDED.tenant_uuid,
-    org_id = EXCLUDED.org_id,
-    target_effective_date = EXCLUDED.target_effective_date,
-    corrected_effective_date = EXCLUDED.corrected_effective_date,
-    original_event = EXCLUDED.original_event,
-    replacement_payload = EXCLUDED.replacement_payload,
-    initiator_uuid = EXCLUDED.initiator_uuid,
-    request_id = EXCLUDED.request_id,
-    request_hash = EXCLUDED.request_hash,
-    corrected_at = EXCLUDED.corrected_at;
+  PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
 
-  BEGIN
-    PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
-  EXCEPTION
-    WHEN OTHERS THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_REPLAY_FAILED',
-        DETAIL = format('tenant_uuid=%s org_id=%s cause=%s', p_tenant_uuid, p_org_id, SQLERRM);
-  END;
-
-  RETURN v_correction_uuid;
+  RETURN v_event_uuid;
 END;
 $$;
 
@@ -5604,15 +5329,12 @@ ALTER TABLE IF EXISTS orgunit.org_unit_codes OWNER TO orgunit_kernel;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   orgunit.org_events,
-  orgunit.org_event_corrections_current,
-  orgunit.org_event_corrections_history,
   orgunit.org_events_effective,
   orgunit.org_unit_versions,
   orgunit.org_trees,
   orgunit.org_unit_codes
 TO orgunit_kernel;
 
-GRANT SELECT, INSERT ON TABLE orgunit.org_events_audit TO orgunit_kernel;
 
 ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
   OWNER TO orgunit_kernel;
@@ -5648,11 +5370,6 @@ ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
 ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
   SECURITY DEFINER;
 ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
-  SET search_path = pg_catalog, orgunit, public;
-
-ALTER FUNCTION orgunit.guard_event_rescind_priority()
-  OWNER TO orgunit_kernel;
-ALTER FUNCTION orgunit.guard_event_rescind_priority()
   SET search_path = pg_catalog, orgunit, public;
 
 REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) FROM PUBLIC;
@@ -5805,6 +5522,7 @@ DECLARE
   v_lock_key text;
   v_event_db_id bigint;
   v_existing orgunit.org_events%ROWTYPE;
+  v_existing_request orgunit.org_events%ROWTYPE;
   v_payload jsonb;
   v_org_id int;
   v_parent_id int;
@@ -5887,6 +5605,28 @@ BEGIN
     v_org_id := p_org_id;
   END IF;
 
+  SELECT * INTO v_existing_request
+  FROM orgunit.org_events
+  WHERE tenant_uuid = p_tenant_uuid
+    AND request_code = p_request_code
+  LIMIT 1;
+
+  IF FOUND THEN
+    IF v_existing_request.event_uuid <> p_event_uuid
+      OR v_existing_request.org_id <> v_org_id
+      OR v_existing_request.event_type <> p_event_type
+      OR v_existing_request.effective_date <> p_effective_date
+      OR v_existing_request.payload <> v_payload
+      OR v_existing_request.initiator_uuid <> p_initiator_uuid
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
+        DETAIL = format('request_code=%s', p_request_code);
+    END IF;
+
+    RETURN v_existing_request.id;
+  END IF;
+
   INSERT INTO orgunit.org_events (
     event_uuid,
     tenant_uuid,
@@ -5895,7 +5635,8 @@ BEGIN
     effective_date,
     payload,
     request_code,
-    initiator_uuid
+    initiator_uuid,
+    after_snapshot
   )
   VALUES (
     p_event_uuid,
@@ -5905,35 +5646,11 @@ BEGIN
     p_effective_date,
     v_payload,
     p_request_code,
-    p_initiator_uuid
+    p_initiator_uuid,
+    v_payload
   )
   ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_event_db_id;
-
-  IF v_event_db_id IS NOT NULL THEN
-    INSERT INTO orgunit.org_events_audit (
-      event_id,
-      event_uuid,
-      tenant_uuid,
-      org_id,
-      event_type,
-      effective_date,
-      payload,
-      request_code,
-      initiator_uuid
-    )
-    VALUES (
-      v_event_db_id,
-      p_event_uuid,
-      p_tenant_uuid,
-      v_org_id,
-      p_event_type,
-      p_effective_date,
-      v_payload,
-      p_request_code,
-      p_initiator_uuid
-    );
-  END IF;
 
   IF v_event_db_id IS NULL THEN
     SELECT * INTO v_existing
