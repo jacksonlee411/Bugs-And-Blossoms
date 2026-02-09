@@ -377,6 +377,20 @@ type OrgunitOrgEventCorrectionsHistory struct {
 	CorrectedAt            pgtype.Timestamptz `json:"corrected_at"`
 }
 
+type OrgunitOrgEventsAudit struct {
+	ID            int64              `json:"id"`
+	EventID       int64              `json:"event_id"`
+	EventUuid     pgtype.UUID        `json:"event_uuid"`
+	TenantUuid    pgtype.UUID        `json:"tenant_uuid"`
+	OrgID         int32              `json:"org_id"`
+	EventType     string             `json:"event_type"`
+	EffectiveDate pgtype.Date        `json:"effective_date"`
+	Payload       []byte             `json:"payload"`
+	RequestCode   string             `json:"request_code"`
+	InitiatorUuid pgtype.UUID        `json:"initiator_uuid"`
+	TxTime        pgtype.Timestamptz `json:"tx_time"`
+}
+
 type OrgunitOrgEventsEffective struct {
 	ID              int64              `json:"id"`
 	EventUuid       pgtype.UUID        `json:"event_uuid"`

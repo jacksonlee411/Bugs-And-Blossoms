@@ -48,6 +48,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_ev
 CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);
 CREATE INDEX IF NOT EXISTS org_events_tenant_effective_idx ON orgunit.org_events (tenant_uuid, effective_date, id);
 
+CREATE TABLE IF NOT EXISTS orgunit.org_events_audit (
+  id bigserial PRIMARY KEY,
+  event_id bigint NOT NULL REFERENCES orgunit.org_events(id),
+  event_uuid uuid NOT NULL,
+  tenant_uuid uuid NOT NULL,
+  org_id int NOT NULL CHECK (org_id BETWEEN 10000000 AND 99999999),
+  event_type text NOT NULL,
+  effective_date date NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  request_code text NOT NULL,
+  initiator_uuid uuid NOT NULL,
+  tx_time timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT org_events_audit_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT'))
+);
+
+CREATE INDEX IF NOT EXISTS org_events_audit_tenant_tx_time_idx
+  ON orgunit.org_events_audit (tenant_uuid, tx_time);
+
 CREATE TABLE IF NOT EXISTS orgunit.org_event_corrections_current (
   event_uuid uuid PRIMARY KEY,
   tenant_uuid uuid NOT NULL,
@@ -157,6 +175,13 @@ ALTER TABLE orgunit.org_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orgunit.org_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_events;
 CREATE POLICY tenant_isolation ON orgunit.org_events
+USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
+
+ALTER TABLE orgunit.org_events_audit ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orgunit.org_events_audit FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON orgunit.org_events_audit;
+CREATE POLICY tenant_isolation ON orgunit.org_events_audit
 USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
 WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 

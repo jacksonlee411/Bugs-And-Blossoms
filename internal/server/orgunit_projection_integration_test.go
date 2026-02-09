@@ -94,13 +94,7 @@ WHERE tenant_uuid = $1::uuid;`, tenant); err != nil {
 	}
 
 	if _, err := tx.Exec(ctx, `
-SELECT orgunit.rebuild_org_unit_versions_for_org($1::uuid, s.org_id)
-FROM (
-  SELECT DISTINCT org_id
-  FROM orgunit.org_unit_versions
-  WHERE tenant_uuid = $1::uuid
-  ORDER BY org_id
-) s;`, tenant); err != nil {
+SELECT orgunit.rebuild_org_unit_versions_for_org($1::uuid, $2::int);`, tenant, 10000002); err != nil {
 		t.Fatal(err)
 	}
 

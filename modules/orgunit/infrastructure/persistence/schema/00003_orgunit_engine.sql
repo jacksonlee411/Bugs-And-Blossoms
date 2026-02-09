@@ -968,6 +968,31 @@ BEGIN
   ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_event_db_id;
 
+  IF v_event_db_id IS NOT NULL THEN
+    INSERT INTO orgunit.org_events_audit (
+      event_id,
+      event_uuid,
+      tenant_uuid,
+      org_id,
+      event_type,
+      effective_date,
+      payload,
+      request_code,
+      initiator_uuid
+    )
+    VALUES (
+      v_event_db_id,
+      p_event_uuid,
+      p_tenant_uuid,
+      p_org_id,
+      p_event_type,
+      p_effective_date,
+      v_payload,
+      p_request_code,
+      p_initiator_uuid
+    );
+  END IF;
+
   IF v_event_db_id IS NULL THEN
     SELECT * INTO v_existing
     FROM orgunit.org_events

@@ -19,6 +19,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   orgunit.org_unit_codes
 TO orgunit_kernel;
 
+GRANT SELECT, INSERT ON TABLE orgunit.org_events_audit TO orgunit_kernel;
+
 ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
   OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
