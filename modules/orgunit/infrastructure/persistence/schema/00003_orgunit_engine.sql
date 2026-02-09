@@ -708,14 +708,14 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION orgunit.replay_org_unit_versions(
-  p_tenant_uuid uuid
+CREATE OR REPLACE FUNCTION orgunit.rebuild_org_unit_versions_for_org(
+  p_tenant_uuid uuid,
+  p_org_id int
 )
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_lock_key text;
   v_event orgunit.org_events%ROWTYPE;
   v_payload jsonb;
   v_parent_id int;
@@ -725,25 +725,51 @@ DECLARE
   v_manager_uuid uuid;
   v_is_business_unit boolean;
   v_org_code text;
+  v_root_path ltree;
+  v_org_ids int[];
+  v_root_org_id int;
+  v_has_create boolean;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
-  v_lock_key := format('org:write-lock:%s', p_tenant_uuid);
-  PERFORM pg_advisory_xact_lock(hashtextextended(v_lock_key, 0));
+  IF p_org_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
+  END IF;
 
-  DELETE FROM orgunit.org_unit_versions
-  WHERE tenant_uuid = p_tenant_uuid;
+  SELECT t.root_org_id INTO v_root_org_id
+  FROM orgunit.org_trees t
+  WHERE t.tenant_uuid = p_tenant_uuid;
 
-  DELETE FROM orgunit.org_trees
-  WHERE tenant_uuid = p_tenant_uuid;
+  SELECT EXISTS (
+    SELECT 1
+    FROM orgunit.org_events_effective e
+    WHERE e.tenant_uuid = p_tenant_uuid
+      AND e.org_id = p_org_id
+      AND e.event_type = 'CREATE'
+  ) INTO v_has_create;
+
+  IF v_has_create AND v_root_org_id = p_org_id THEN
+    DELETE FROM orgunit.org_trees
+    WHERE tenant_uuid = p_tenant_uuid;
+  ELSIF v_root_org_id = p_org_id AND NOT v_has_create THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_INVALID_ARGUMENT',
+      DETAIL = format('root org missing create event: org_id=%s', p_org_id);
+  END IF;
 
   DELETE FROM orgunit.org_unit_codes
-  WHERE tenant_uuid = p_tenant_uuid;
+  WHERE tenant_uuid = p_tenant_uuid
+    AND org_id = p_org_id;
+
+  DELETE FROM orgunit.org_unit_versions
+  WHERE tenant_uuid = p_tenant_uuid
+    AND org_id = p_org_id;
 
   FOR v_event IN
     SELECT *
     FROM orgunit.org_events_effective
     WHERE tenant_uuid = p_tenant_uuid
+      AND org_id = p_org_id
     ORDER BY effective_date, id
   LOOP
     v_payload := COALESCE(v_event.payload, '{}'::jsonb);
@@ -765,12 +791,42 @@ BEGIN
         END;
       END IF;
       PERFORM orgunit.apply_create_logic(p_tenant_uuid, v_event.org_id, v_org_code, v_parent_id, v_event.effective_date, v_name, v_manager_uuid, v_is_business_unit, v_event.id);
+      SELECT v.node_path INTO v_root_path
+      FROM orgunit.org_unit_versions v
+      WHERE v.tenant_uuid = p_tenant_uuid
+        AND v.org_id = p_org_id
+        AND v.validity @> v_event.effective_date
+      ORDER BY lower(v.validity) DESC
+      LIMIT 1;
+      IF v_root_path IS NOT NULL THEN
+        PERFORM orgunit.rebuild_full_name_path_subtree(p_tenant_uuid, v_root_path, v_event.effective_date);
+      END IF;
     ELSIF v_event.event_type = 'MOVE' THEN
       v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::int;
       PERFORM orgunit.apply_move_logic(p_tenant_uuid, v_event.org_id, v_new_parent_id, v_event.effective_date, v_event.id);
+      SELECT v.node_path INTO v_root_path
+      FROM orgunit.org_unit_versions v
+      WHERE v.tenant_uuid = p_tenant_uuid
+        AND v.org_id = p_org_id
+        AND v.validity @> v_event.effective_date
+      ORDER BY lower(v.validity) DESC
+      LIMIT 1;
+      IF v_root_path IS NOT NULL THEN
+        PERFORM orgunit.rebuild_full_name_path_subtree(p_tenant_uuid, v_root_path, v_event.effective_date);
+      END IF;
     ELSIF v_event.event_type = 'RENAME' THEN
       v_new_name := NULLIF(btrim(v_payload->>'new_name'), '');
       PERFORM orgunit.apply_rename_logic(p_tenant_uuid, v_event.org_id, v_event.effective_date, v_new_name, v_event.id);
+      SELECT v.node_path INTO v_root_path
+      FROM orgunit.org_unit_versions v
+      WHERE v.tenant_uuid = p_tenant_uuid
+        AND v.org_id = p_org_id
+        AND v.validity @> v_event.effective_date
+      ORDER BY lower(v.validity) DESC
+      LIMIT 1;
+      IF v_root_path IS NOT NULL THEN
+        PERFORM orgunit.rebuild_full_name_path_subtree(p_tenant_uuid, v_root_path, v_event.effective_date);
+      END IF;
     ELSIF v_event.event_type = 'DISABLE' THEN
       PERFORM orgunit.apply_disable_logic(p_tenant_uuid, v_event.org_id, v_event.effective_date, v_event.id);
     ELSIF v_event.event_type = 'ENABLE' THEN
@@ -797,53 +853,23 @@ BEGIN
     END IF;
   END LOOP;
 
-  IF EXISTS (
-    WITH ordered AS (
-      SELECT
-        org_id,
-        validity,
-        lag(validity) OVER (PARTITION BY org_id ORDER BY lower(validity)) AS prev_validity
-      FROM orgunit.org_unit_versions
-      WHERE tenant_uuid = p_tenant_uuid
-    )
-    SELECT 1
-    FROM ordered
-    WHERE prev_validity IS NOT NULL
-      AND lower(validity) <> upper(prev_validity)
-    LIMIT 1
-  ) THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_VALIDITY_GAP',
-      DETAIL = 'org_unit_versions must be gapless';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1
-    FROM (
-      SELECT DISTINCT ON (org_id) org_id, validity
-      FROM orgunit.org_unit_versions
-      WHERE tenant_uuid = p_tenant_uuid
-      ORDER BY org_id, lower(validity) DESC
-    ) last
-    WHERE NOT upper_inf(last.validity)
-    LIMIT 1
-  ) THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_VALIDITY_NOT_INFINITE',
-      DETAIL = 'last version validity must be unbounded (infinity)';
-  END IF;
-
-  UPDATE orgunit.org_unit_versions v
-  SET full_name_path = (
-    SELECT string_agg(a.name, ' / ' ORDER BY t.idx)
-    FROM unnest(v.path_ids) WITH ORDINALITY AS t(uid, idx)
-    JOIN orgunit.org_unit_versions a
-      ON a.tenant_uuid = v.tenant_uuid
-     AND a.org_id = t.uid
-     AND a.validity @> lower(v.validity)
-  )
+  SELECT v.node_path INTO v_root_path
+  FROM orgunit.org_unit_versions v
   WHERE v.tenant_uuid = p_tenant_uuid
-;
+    AND v.org_id = p_org_id
+  ORDER BY lower(v.validity) DESC
+  LIMIT 1;
+
+  IF v_root_path IS NULL THEN
+    RETURN;
+  END IF;
+
+  SELECT array_agg(DISTINCT v.org_id) INTO v_org_ids
+  FROM orgunit.org_unit_versions v
+  WHERE v.tenant_uuid = p_tenant_uuid
+    AND v.node_path <@ v_root_path;
+
+  PERFORM orgunit.assert_org_unit_validity(p_tenant_uuid, v_org_ids);
 END;
 $$;
 
@@ -1232,7 +1258,7 @@ BEGIN
     corrected_at = EXCLUDED.corrected_at;
 
   BEGIN
-    PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
+    PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
   EXCEPTION
     WHEN OTHERS THEN
       RAISE EXCEPTION USING
@@ -1513,7 +1539,7 @@ BEGIN
   END LOOP;
 
   BEGIN
-    PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
+    PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
   EXCEPTION
     WHEN OTHERS THEN
       RAISE EXCEPTION USING
@@ -1851,7 +1877,7 @@ BEGIN
     request_hash = EXCLUDED.request_hash,
     corrected_at = EXCLUDED.corrected_at;
 
-  PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
+  PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
 
   RETURN v_correction_uuid;
 END;
@@ -2060,7 +2086,7 @@ BEGIN
     corrected_at = EXCLUDED.corrected_at;
 
   BEGIN
-    PERFORM orgunit.replay_org_unit_versions(p_tenant_uuid);
+    PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
   EXCEPTION
     WHEN OTHERS THEN
       RAISE EXCEPTION USING
