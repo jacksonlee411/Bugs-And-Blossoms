@@ -225,6 +225,35 @@ AS $$
   FROM unnest(string_to_array(p_path::text, '.')) WITH ORDINALITY AS t(part, ord);
 $$;
 
+-- snapshot presence predicate (single source for kernel assert + table CHECK)
+CREATE OR REPLACE FUNCTION orgunit.is_org_event_snapshot_presence_valid(
+  p_event_type text,
+  p_before_snapshot jsonb,
+  p_after_snapshot jsonb,
+  p_rescind_outcome text
+)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_event_type = 'CREATE'
+      THEN p_after_snapshot IS NOT NULL
+
+    WHEN p_event_type IN ('MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS')
+      THEN p_before_snapshot IS NOT NULL AND p_after_snapshot IS NOT NULL
+
+    WHEN p_event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+      THEN p_before_snapshot IS NOT NULL
+           AND (
+             (p_rescind_outcome = 'ABSENT' AND p_after_snapshot IS NULL)
+             OR (p_rescind_outcome = 'PRESENT' AND p_after_snapshot IS NOT NULL)
+           )
+
+    ELSE true
+  END;
+$$;
+
 CREATE TABLE IF NOT EXISTS orgunit.org_trees (
   tenant_uuid uuid NOT NULL,
   root_org_id int NOT NULL CHECK (root_org_id BETWEEN 10000000 AND 99999999),
@@ -248,6 +277,7 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   reason text NULL,
   before_snapshot jsonb NULL,
   after_snapshot jsonb NULL,
+  rescind_outcome text NULL,
   tx_time timestamptz NOT NULL DEFAULT now(),
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -262,6 +292,24 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   CONSTRAINT org_events_snapshot_shape_check CHECK (
     (before_snapshot IS NULL OR jsonb_typeof(before_snapshot) = 'object')
     AND (after_snapshot IS NULL OR jsonb_typeof(after_snapshot) = 'object')
+  ),
+  CONSTRAINT org_events_rescind_outcome_check CHECK (
+    (
+      event_type NOT IN ('RESCIND_EVENT','RESCIND_ORG')
+      AND rescind_outcome IS NULL
+    )
+    OR (
+      event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+      AND rescind_outcome IN ('PRESENT','ABSENT')
+    )
+  ),
+  CONSTRAINT org_events_snapshot_presence_check CHECK (
+    orgunit.is_org_event_snapshot_presence_valid(
+      event_type,
+      before_snapshot,
+      after_snapshot,
+      rescind_outcome
+    )
   ),
   CONSTRAINT org_events_request_code_unique UNIQUE (tenant_uuid, request_code)
 );
@@ -287,7 +335,11 @@ CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
   status text NOT NULL DEFAULT 'active',
   is_business_unit boolean NOT NULL DEFAULT false,
   manager_uuid uuid NULL,
-  last_event_id bigint NOT NULL REFERENCES orgunit.org_events(id),
+  last_event_id bigint NOT NULL,
+  CONSTRAINT org_unit_versions_last_event_id_fkey
+    FOREIGN KEY (last_event_id)
+    REFERENCES orgunit.org_events(id)
+    DEFERRABLE INITIALLY DEFERRED,
   CONSTRAINT org_unit_versions_status_check CHECK (status IN ('active','disabled')),
   CONSTRAINT org_unit_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT org_unit_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),
@@ -1143,15 +1195,147 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION orgunit.rebuild_org_unit_versions_for_org(
+CREATE OR REPLACE FUNCTION orgunit.org_events_effective_for_replay(
   p_tenant_uuid uuid,
-  p_org_id int
+  p_org_id int,
+  p_pending_event_id bigint,
+  p_pending_event_uuid uuid,
+  p_pending_event_type text,
+  p_pending_effective_date date,
+  p_pending_payload jsonb,
+  p_pending_request_code text,
+  p_pending_initiator_uuid uuid,
+  p_pending_tx_time timestamptz,
+  p_pending_transaction_time timestamptz,
+  p_pending_created_at timestamptz
+)
+RETURNS TABLE (
+  id bigint,
+  event_uuid uuid,
+  tenant_uuid uuid,
+  org_id int,
+  event_type text,
+  effective_date date,
+  payload jsonb,
+  request_code text,
+  initiator_uuid uuid,
+  transaction_time timestamptz,
+  created_at timestamptz
+)
+LANGUAGE sql
+STABLE
+AS $$
+  WITH source_events AS (
+    SELECT
+      e.id,
+      e.event_uuid,
+      e.tenant_uuid,
+      e.org_id,
+      e.event_type,
+      e.effective_date,
+      COALESCE(e.payload, '{}'::jsonb) AS payload,
+      e.request_code,
+      e.initiator_uuid,
+      e.tx_time,
+      e.transaction_time,
+      e.created_at
+    FROM orgunit.org_events e
+    WHERE e.tenant_uuid = p_tenant_uuid
+      AND e.org_id = p_org_id
+
+    UNION ALL
+
+    SELECT
+      p_pending_event_id,
+      p_pending_event_uuid,
+      p_tenant_uuid,
+      p_org_id,
+      p_pending_event_type,
+      p_pending_effective_date,
+      COALESCE(p_pending_payload, '{}'::jsonb),
+      p_pending_request_code,
+      p_pending_initiator_uuid,
+      p_pending_tx_time,
+      p_pending_transaction_time,
+      p_pending_created_at
+    WHERE p_pending_event_id IS NOT NULL
+  ),
+  correction_events AS (
+    SELECT
+      se.*,
+      (se.payload->>'target_event_uuid')::uuid AS target_event_uuid
+    FROM source_events se
+    WHERE se.event_type IN ('CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')
+      AND se.payload ? 'target_event_uuid'
+  ),
+  latest_corrections AS (
+    SELECT DISTINCT ON (tenant_uuid, target_event_uuid)
+      tenant_uuid,
+      target_event_uuid,
+      event_type AS correction_type,
+      payload AS correction_payload,
+      tx_time,
+      id
+    FROM correction_events
+    ORDER BY tenant_uuid, target_event_uuid, tx_time DESC, id DESC
+  )
+  SELECT
+    se.id,
+    se.event_uuid,
+    se.tenant_uuid,
+    se.org_id,
+    CASE
+      WHEN lc.correction_type = 'CORRECT_STATUS'
+        AND COALESCE(lc.correction_payload->>'target_status', '') = 'active'
+        THEN 'ENABLE'
+      WHEN lc.correction_type = 'CORRECT_STATUS'
+        AND COALESCE(lc.correction_payload->>'target_status', '') = 'disabled'
+        THEN 'DISABLE'
+      ELSE se.event_type
+    END AS event_type,
+    CASE
+      WHEN lc.correction_type = 'CORRECT_EVENT'
+        AND lc.correction_payload ? 'effective_date'
+        THEN NULLIF(btrim(lc.correction_payload->>'effective_date'), '')::date
+      ELSE se.effective_date
+    END AS effective_date,
+    CASE
+      WHEN lc.correction_type = 'CORRECT_EVENT'
+        THEN se.payload || (lc.correction_payload - 'effective_date' - 'target_event_uuid' - 'op')
+      ELSE se.payload
+    END AS payload,
+    se.request_code,
+    se.initiator_uuid,
+    se.transaction_time,
+    se.created_at
+  FROM source_events se
+  LEFT JOIN latest_corrections lc
+    ON lc.tenant_uuid = se.tenant_uuid
+   AND lc.target_event_uuid = se.event_uuid
+  WHERE se.event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')
+    AND COALESCE(lc.correction_type, '') NOT IN ('RESCIND_EVENT', 'RESCIND_ORG')
+  ORDER BY effective_date, id;
+$$;
+
+CREATE OR REPLACE FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  p_tenant_uuid uuid,
+  p_org_id int,
+  p_pending_event_id bigint,
+  p_pending_event_uuid uuid,
+  p_pending_event_type text,
+  p_pending_effective_date date,
+  p_pending_payload jsonb,
+  p_pending_request_code text,
+  p_pending_initiator_uuid uuid,
+  p_pending_tx_time timestamptz,
+  p_pending_transaction_time timestamptz,
+  p_pending_created_at timestamptz
 )
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_event orgunit.org_events%ROWTYPE;
+  v_event record;
   v_payload jsonb;
   v_parent_id int;
   v_new_parent_id int;
@@ -1171,16 +1355,43 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
   END IF;
 
+  IF p_pending_event_id IS NOT NULL THEN
+    IF p_pending_event_uuid IS NULL
+      OR p_pending_event_type IS NULL
+      OR p_pending_effective_date IS NULL
+      OR p_pending_request_code IS NULL
+      OR p_pending_initiator_uuid IS NULL
+      OR p_pending_tx_time IS NULL
+      OR p_pending_transaction_time IS NULL
+      OR p_pending_created_at IS NULL
+    THEN
+      RAISE EXCEPTION USING
+        MESSAGE = 'ORG_INVALID_ARGUMENT',
+        DETAIL = 'pending event metadata is incomplete';
+    END IF;
+  END IF;
+
   SELECT t.root_org_id INTO v_root_org_id
   FROM orgunit.org_trees t
   WHERE t.tenant_uuid = p_tenant_uuid;
 
   SELECT EXISTS (
     SELECT 1
-    FROM orgunit.org_events_effective e
-    WHERE e.tenant_uuid = p_tenant_uuid
-      AND e.org_id = p_org_id
-      AND e.event_type = 'CREATE'
+    FROM orgunit.org_events_effective_for_replay(
+      p_tenant_uuid,
+      p_org_id,
+      p_pending_event_id,
+      p_pending_event_uuid,
+      p_pending_event_type,
+      p_pending_effective_date,
+      p_pending_payload,
+      p_pending_request_code,
+      p_pending_initiator_uuid,
+      p_pending_tx_time,
+      p_pending_transaction_time,
+      p_pending_created_at
+    ) e
+    WHERE e.event_type = 'CREATE'
   ) INTO v_has_create;
 
   IF v_has_create AND v_root_org_id = p_org_id THEN
@@ -1202,9 +1413,20 @@ BEGIN
 
   FOR v_event IN
     SELECT *
-    FROM orgunit.org_events_effective
-    WHERE tenant_uuid = p_tenant_uuid
-      AND org_id = p_org_id
+    FROM orgunit.org_events_effective_for_replay(
+      p_tenant_uuid,
+      p_org_id,
+      p_pending_event_id,
+      p_pending_event_uuid,
+      p_pending_event_type,
+      p_pending_effective_date,
+      p_pending_payload,
+      p_pending_request_code,
+      p_pending_initiator_uuid,
+      p_pending_tx_time,
+      p_pending_transaction_time,
+      p_pending_created_at
+    )
     ORDER BY effective_date, id
   LOOP
     v_payload := COALESCE(v_event.payload, '{}'::jsonb);
@@ -1308,6 +1530,31 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION orgunit.rebuild_org_unit_versions_for_org(
+  p_tenant_uuid uuid,
+  p_org_id int
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+    p_tenant_uuid,
+    p_org_id,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+  );
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION orgunit.extract_orgunit_snapshot(
   p_tenant_uuid uuid,
   p_org_id int,
@@ -1366,7 +1613,8 @@ $$;
 CREATE OR REPLACE FUNCTION orgunit.assert_org_event_snapshots(
   p_event_type text,
   p_before_snapshot jsonb,
-  p_after_snapshot jsonb
+  p_after_snapshot jsonb,
+  p_rescind_outcome text
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -1384,31 +1632,41 @@ BEGIN
       DETAIL = format('event_type=%s after_snapshot_type=%s', p_event_type, jsonb_typeof(p_after_snapshot));
   END IF;
 
-  IF p_event_type = 'CREATE' THEN
-    IF p_after_snapshot IS NULL THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_AUDIT_SNAPSHOT_MISSING',
-        DETAIL = format('event_type=%s before=%s after=%s', p_event_type, p_before_snapshot IS NOT NULL, p_after_snapshot IS NOT NULL);
-    END IF;
-    RETURN;
+  IF NOT orgunit.is_org_event_snapshot_presence_valid(
+    p_event_type,
+    p_before_snapshot,
+    p_after_snapshot,
+    p_rescind_outcome
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_AUDIT_SNAPSHOT_MISSING',
+      DETAIL = format(
+        'event_type=%s before=%s after=%s rescind_outcome=%s',
+        p_event_type,
+        p_before_snapshot IS NOT NULL,
+        p_after_snapshot IS NOT NULL,
+        COALESCE(p_rescind_outcome, 'NULL')
+      );
   END IF;
+END;
+$$;
 
-  IF p_event_type IN ('MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS') THEN
-    IF p_before_snapshot IS NULL OR p_after_snapshot IS NULL THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_AUDIT_SNAPSHOT_MISSING',
-        DETAIL = format('event_type=%s before=%s after=%s', p_event_type, p_before_snapshot IS NOT NULL, p_after_snapshot IS NOT NULL);
-    END IF;
-    RETURN;
-  END IF;
-
-  IF p_event_type IN ('RESCIND_EVENT','RESCIND_ORG') THEN
-    IF p_before_snapshot IS NULL THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_AUDIT_SNAPSHOT_MISSING',
-        DETAIL = format('event_type=%s before=%s after=%s', p_event_type, p_before_snapshot IS NOT NULL, p_after_snapshot IS NOT NULL);
-    END IF;
-  END IF;
+-- Backward-compatible wrapper for existing 3-arg callers during rollout.
+CREATE OR REPLACE FUNCTION orgunit.assert_org_event_snapshots(
+  p_event_type text,
+  p_before_snapshot jsonb,
+  p_after_snapshot jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM orgunit.assert_org_event_snapshots(
+    p_event_type,
+    p_before_snapshot,
+    p_after_snapshot,
+    NULL
+  );
 END;
 $$;
 
@@ -1511,34 +1769,11 @@ BEGIN
 
   v_before_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_effective_date);
 
-  INSERT INTO orgunit.org_events (
-    event_uuid,
-    tenant_uuid,
-    org_id,
-    event_type,
-    effective_date,
-    payload,
-    request_code,
-    initiator_uuid
-  )
-  VALUES (
-    p_event_uuid,
-    p_tenant_uuid,
-    p_org_id,
-    p_event_type,
-    p_effective_date,
-    v_payload,
-    p_request_code,
-    p_initiator_uuid
-  )
-  ON CONFLICT (event_uuid) DO NOTHING
-  RETURNING id INTO v_event_db_id;
+  SELECT * INTO v_existing
+  FROM orgunit.org_events
+  WHERE event_uuid = p_event_uuid;
 
-  IF v_event_db_id IS NULL THEN
-    SELECT * INTO v_existing
-    FROM orgunit.org_events
-    WHERE event_uuid = p_event_uuid;
-
+  IF FOUND THEN
     IF v_existing.tenant_uuid <> p_tenant_uuid
       OR v_existing.org_id <> p_org_id
       OR v_existing.event_type <> p_event_type
@@ -1554,6 +1789,8 @@ BEGIN
 
     RETURN v_existing.id;
   END IF;
+
+  SELECT nextval(pg_get_serial_sequence('orgunit.org_events', 'id')) INTO v_event_db_id;
 
   IF p_event_type = 'CREATE' THEN
     v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
@@ -1623,12 +1860,34 @@ BEGIN
   PERFORM orgunit.assert_org_unit_validity(p_tenant_uuid, v_org_ids);
 
   v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_effective_date);
-  PERFORM orgunit.assert_org_event_snapshots(p_event_type, v_before_snapshot, v_after_snapshot);
+  PERFORM orgunit.assert_org_event_snapshots(p_event_type, v_before_snapshot, v_after_snapshot, NULL);
 
-  UPDATE orgunit.org_events
-  SET before_snapshot = v_before_snapshot,
-      after_snapshot = v_after_snapshot
-  WHERE id = v_event_db_id;
+  INSERT INTO orgunit.org_events (
+    id,
+    event_uuid,
+    tenant_uuid,
+    org_id,
+    event_type,
+    effective_date,
+    payload,
+    request_code,
+    initiator_uuid,
+    before_snapshot,
+    after_snapshot
+  )
+  VALUES (
+    v_event_db_id,
+    p_event_uuid,
+    p_tenant_uuid,
+    p_org_id,
+    p_event_type,
+    p_effective_date,
+    v_payload,
+    p_request_code,
+    p_initiator_uuid,
+    v_before_snapshot,
+    v_after_snapshot
+  );
 
   RETURN v_event_db_id;
 END;
@@ -1655,6 +1914,9 @@ DECLARE
   v_payload jsonb;
   v_before_snapshot jsonb;
   v_after_snapshot jsonb;
+  v_event_db_id bigint;
+  v_rescind_outcome text;
+  v_pending_time timestamptz;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
@@ -1734,8 +1996,30 @@ BEGIN
 
   v_before_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_target_effective_date);
   v_event_uuid := gen_random_uuid();
+  v_pending_time := now();
+  SELECT nextval(pg_get_serial_sequence('orgunit.org_events', 'id')) INTO v_event_db_id;
+
+  PERFORM orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+    p_tenant_uuid,
+    p_org_id,
+    v_event_db_id,
+    v_event_uuid,
+    'RESCIND_EVENT',
+    p_target_effective_date,
+    v_payload,
+    p_request_id,
+    p_initiator_uuid,
+    v_pending_time,
+    v_pending_time,
+    v_pending_time
+  );
+
+  v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_target_effective_date);
+  v_rescind_outcome := CASE WHEN v_after_snapshot IS NULL THEN 'ABSENT' ELSE 'PRESENT' END;
+  PERFORM orgunit.assert_org_event_snapshots('RESCIND_EVENT', v_before_snapshot, v_after_snapshot, v_rescind_outcome);
 
   INSERT INTO orgunit.org_events (
+    id,
     tenant_uuid,
     org_id,
     event_uuid,
@@ -1744,9 +2028,16 @@ BEGIN
     payload,
     request_code,
     initiator_uuid,
-    reason
+    reason,
+    before_snapshot,
+    after_snapshot,
+    rescind_outcome,
+    tx_time,
+    transaction_time,
+    created_at
   )
   VALUES (
+    v_event_db_id,
     p_tenant_uuid,
     p_org_id,
     v_event_uuid,
@@ -1755,18 +2046,14 @@ BEGIN
     v_payload,
     p_request_id,
     p_initiator_uuid,
-    v_reason
+    v_reason,
+    v_before_snapshot,
+    v_after_snapshot,
+    v_rescind_outcome,
+    v_pending_time,
+    v_pending_time,
+    v_pending_time
   );
-
-  PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
-
-  v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_target_effective_date);
-  PERFORM orgunit.assert_org_event_snapshots('RESCIND_EVENT', v_before_snapshot, v_after_snapshot);
-
-  UPDATE orgunit.org_events
-  SET before_snapshot = v_before_snapshot,
-      after_snapshot = v_after_snapshot
-  WHERE event_uuid = v_event_uuid;
 
   RETURN v_event_uuid;
 END;
@@ -1797,6 +2084,9 @@ DECLARE
   v_before_snapshot jsonb;
   v_after_snapshot jsonb;
   v_rescind_event_uuid uuid;
+  v_rescind_event_id bigint;
+  v_rescind_outcome text;
+  v_pending_time timestamptz;
   rec record;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
@@ -1983,8 +2273,30 @@ BEGIN
 
     v_before_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, rec.target_effective_date);
     v_rescind_event_uuid := gen_random_uuid();
+    v_pending_time := now();
+    SELECT nextval(pg_get_serial_sequence('orgunit.org_events', 'id')) INTO v_rescind_event_id;
+
+    PERFORM orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+      p_tenant_uuid,
+      p_org_id,
+      v_rescind_event_id,
+      v_rescind_event_uuid,
+      'RESCIND_ORG',
+      rec.target_effective_date,
+      v_payload,
+      v_request_id_seq,
+      p_initiator_uuid,
+      v_pending_time,
+      v_pending_time,
+      v_pending_time
+    );
+
+    v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, rec.target_effective_date);
+    v_rescind_outcome := CASE WHEN v_after_snapshot IS NULL THEN 'ABSENT' ELSE 'PRESENT' END;
+    PERFORM orgunit.assert_org_event_snapshots('RESCIND_ORG', v_before_snapshot, v_after_snapshot, v_rescind_outcome);
 
     INSERT INTO orgunit.org_events (
+      id,
       tenant_uuid,
       org_id,
       event_uuid,
@@ -1993,9 +2305,16 @@ BEGIN
       payload,
       request_code,
       initiator_uuid,
-      reason
+      reason,
+      before_snapshot,
+      after_snapshot,
+      rescind_outcome,
+      tx_time,
+      transaction_time,
+      created_at
     )
     VALUES (
+      v_rescind_event_id,
       p_tenant_uuid,
       p_org_id,
       v_rescind_event_uuid,
@@ -2004,18 +2323,14 @@ BEGIN
       v_payload,
       v_request_id_seq,
       p_initiator_uuid,
-      v_reason
+      v_reason,
+      v_before_snapshot,
+      v_after_snapshot,
+      v_rescind_outcome,
+      v_pending_time,
+      v_pending_time,
+      v_pending_time
     );
-
-    PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
-
-    v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, rec.target_effective_date);
-    PERFORM orgunit.assert_org_event_snapshots('RESCIND_ORG', v_before_snapshot, v_after_snapshot);
-
-    UPDATE orgunit.org_events
-    SET before_snapshot = v_before_snapshot,
-        after_snapshot = v_after_snapshot
-    WHERE event_uuid = v_rescind_event_uuid;
   END LOOP;
 
   RETURN v_event_count;
@@ -2050,6 +2365,8 @@ DECLARE
   v_event_uuid uuid;
   v_before_snapshot jsonb;
   v_after_snapshot jsonb;
+  v_event_db_id bigint;
+  v_pending_time timestamptz;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
@@ -2262,8 +2579,29 @@ BEGIN
 
   v_before_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_target_effective_date);
   v_event_uuid := gen_random_uuid();
+  v_pending_time := now();
+  SELECT nextval(pg_get_serial_sequence('orgunit.org_events', 'id')) INTO v_event_db_id;
+
+  PERFORM orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+    p_tenant_uuid,
+    p_org_id,
+    v_event_db_id,
+    v_event_uuid,
+    'CORRECT_EVENT',
+    p_target_effective_date,
+    v_payload,
+    p_request_id,
+    p_initiator_uuid,
+    v_pending_time,
+    v_pending_time,
+    v_pending_time
+  );
+
+  v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_target_effective_date);
+  PERFORM orgunit.assert_org_event_snapshots('CORRECT_EVENT', v_before_snapshot, v_after_snapshot, NULL);
 
   INSERT INTO orgunit.org_events (
+    id,
     tenant_uuid,
     org_id,
     event_uuid,
@@ -2271,9 +2609,15 @@ BEGIN
     effective_date,
     payload,
     request_code,
-    initiator_uuid
+    initiator_uuid,
+    before_snapshot,
+    after_snapshot,
+    tx_time,
+    transaction_time,
+    created_at
   )
   VALUES (
+    v_event_db_id,
     p_tenant_uuid,
     p_org_id,
     v_event_uuid,
@@ -2281,18 +2625,13 @@ BEGIN
     p_target_effective_date,
     v_payload,
     p_request_id,
-    p_initiator_uuid
+    p_initiator_uuid,
+    v_before_snapshot,
+    v_after_snapshot,
+    v_pending_time,
+    v_pending_time,
+    v_pending_time
   );
-
-  PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
-
-  v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_target_effective_date);
-  PERFORM orgunit.assert_org_event_snapshots('CORRECT_EVENT', v_before_snapshot, v_after_snapshot);
-
-  UPDATE orgunit.org_events
-  SET before_snapshot = v_before_snapshot,
-      after_snapshot = v_after_snapshot
-  WHERE event_uuid = v_event_uuid;
 
   RETURN v_event_uuid;
 END;
@@ -2321,6 +2660,8 @@ DECLARE
   v_payload jsonb;
   v_before_snapshot jsonb;
   v_after_snapshot jsonb;
+  v_event_db_id bigint;
+  v_pending_time timestamptz;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
@@ -2427,8 +2768,29 @@ BEGIN
 
   v_before_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_target_effective_date);
   v_event_uuid := gen_random_uuid();
+  v_pending_time := now();
+  SELECT nextval(pg_get_serial_sequence('orgunit.org_events', 'id')) INTO v_event_db_id;
+
+  PERFORM orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+    p_tenant_uuid,
+    p_org_id,
+    v_event_db_id,
+    v_event_uuid,
+    'CORRECT_STATUS',
+    p_target_effective_date,
+    v_payload,
+    p_request_id,
+    p_initiator_uuid,
+    v_pending_time,
+    v_pending_time,
+    v_pending_time
+  );
+
+  v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_target_effective_date);
+  PERFORM orgunit.assert_org_event_snapshots('CORRECT_STATUS', v_before_snapshot, v_after_snapshot, NULL);
 
   INSERT INTO orgunit.org_events (
+    id,
     tenant_uuid,
     org_id,
     event_uuid,
@@ -2436,9 +2798,15 @@ BEGIN
     effective_date,
     payload,
     request_code,
-    initiator_uuid
+    initiator_uuid,
+    before_snapshot,
+    after_snapshot,
+    tx_time,
+    transaction_time,
+    created_at
   )
   VALUES (
+    v_event_db_id,
     p_tenant_uuid,
     p_org_id,
     v_event_uuid,
@@ -2446,18 +2814,13 @@ BEGIN
     p_target_effective_date,
     v_payload,
     p_request_id,
-    p_initiator_uuid
+    p_initiator_uuid,
+    v_before_snapshot,
+    v_after_snapshot,
+    v_pending_time,
+    v_pending_time,
+    v_pending_time
   );
-
-  PERFORM orgunit.rebuild_org_unit_versions_for_org(p_tenant_uuid, p_org_id);
-
-  v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_target_effective_date);
-  PERFORM orgunit.assert_org_event_snapshots('CORRECT_STATUS', v_before_snapshot, v_after_snapshot);
-
-  UPDATE orgunit.org_events
-  SET before_snapshot = v_before_snapshot,
-      after_snapshot = v_after_snapshot
-  WHERE event_uuid = v_event_uuid;
 
   RETURN v_event_uuid;
 END;
@@ -5552,6 +5915,16 @@ ALTER FUNCTION orgunit.extract_orgunit_snapshot(uuid, int, date)
 ALTER FUNCTION orgunit.extract_orgunit_snapshot(uuid, int, date)
   SET search_path = pg_catalog, orgunit, public;
 
+ALTER FUNCTION orgunit.is_org_event_snapshot_presence_valid(text, jsonb, jsonb, text)
+  OWNER TO orgunit_kernel;
+
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb, text)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb, text)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb, text)
+  SET search_path = pg_catalog, orgunit, public;
+
 ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb)
   OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb)
@@ -5617,6 +5990,92 @@ END $$;
 GRANT EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) TO orgunit_kernel;
 ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) SET search_path = pg_catalog, orgunit, public;
+
+REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) TO orgunit_kernel;
+ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.org_events_effective_for_replay(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.org_events_effective_for_replay(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) SET search_path = pg_catalog, orgunit, public;
 
 REVOKE ALL ON TABLE orgunit.org_unit_codes FROM PUBLIC;
 
@@ -5855,34 +6314,11 @@ BEGIN
 
   v_before_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, v_org_id, p_effective_date);
 
-  INSERT INTO orgunit.org_events (
-    event_uuid,
-    tenant_uuid,
-    org_id,
-    event_type,
-    effective_date,
-    payload,
-    request_code,
-    initiator_uuid
-  )
-  VALUES (
-    p_event_uuid,
-    p_tenant_uuid,
-    v_org_id,
-    p_event_type,
-    p_effective_date,
-    v_payload,
-    p_request_code,
-    p_initiator_uuid
-  )
-  ON CONFLICT (event_uuid) DO NOTHING
-  RETURNING id INTO v_event_db_id;
+  SELECT * INTO v_existing
+  FROM orgunit.org_events
+  WHERE event_uuid = p_event_uuid;
 
-  IF v_event_db_id IS NULL THEN
-    SELECT * INTO v_existing
-    FROM orgunit.org_events
-    WHERE event_uuid = p_event_uuid;
-
+  IF FOUND THEN
     IF v_existing.tenant_uuid <> p_tenant_uuid
       OR v_existing.org_id <> v_org_id
       OR v_existing.event_type <> p_event_type
@@ -5898,6 +6334,8 @@ BEGIN
 
     RETURN v_existing.id;
   END IF;
+
+  SELECT nextval(pg_get_serial_sequence('orgunit.org_events', 'id')) INTO v_event_db_id;
 
   IF p_event_type = 'CREATE' THEN
     v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
@@ -5967,12 +6405,34 @@ BEGIN
   PERFORM orgunit.assert_org_unit_validity(p_tenant_uuid, v_org_ids);
 
   v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, v_org_id, p_effective_date);
-  PERFORM orgunit.assert_org_event_snapshots(p_event_type, v_before_snapshot, v_after_snapshot);
+  PERFORM orgunit.assert_org_event_snapshots(p_event_type, v_before_snapshot, v_after_snapshot, NULL);
 
-  UPDATE orgunit.org_events
-  SET before_snapshot = v_before_snapshot,
-      after_snapshot = v_after_snapshot
-  WHERE id = v_event_db_id;
+  INSERT INTO orgunit.org_events (
+    id,
+    event_uuid,
+    tenant_uuid,
+    org_id,
+    event_type,
+    effective_date,
+    payload,
+    request_code,
+    initiator_uuid,
+    before_snapshot,
+    after_snapshot
+  )
+  VALUES (
+    v_event_db_id,
+    p_event_uuid,
+    p_tenant_uuid,
+    v_org_id,
+    p_event_type,
+    p_effective_date,
+    v_payload,
+    p_request_code,
+    p_initiator_uuid,
+    v_before_snapshot,
+    v_after_snapshot
+  );
 
   RETURN v_event_db_id;
 END;

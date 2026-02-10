@@ -1,4 +1,4 @@
-h1:SK7fl/ySRXzNp7oT2OMYrPJqyKGXdmjO0uU8rVwRXYc=
+h1:Xc1ieVjWAYCui3AQd14Qx2TyjFVksRBdxwHPF9we8JI=
 20260106080000_orgunit_schema.sql h1:HFHg7VD/+mXhD0M38Bc7Q1oH7REn9g85BtxYfpRrmkU=
 20260106083000_orgunit_engine.sql h1:fbvwyooh8vn2dv//BfuvTJR8X78l5Jv3hzA/Ltk4o7M=
 20260106090000_orgunit_read.sql h1:Bpp/OMYtGbOo4t7+sQe58ieiD6sY06ifXEMlVhgjMeM=
@@ -46,3 +46,5 @@ h1:SK7fl/ySRXzNp7oT2OMYrPJqyKGXdmjO0uU8rVwRXYc=
 20260209223000_orgunit_audit_snapshot_actor_metadata.sql h1:tlOpEokZAoEp+rZWKjo2/VsRySFJ+ZJxHdFObonK4kg=
 20260210093000_orgunit_audit_snapshot_canonical.sql h1:TjlUuCg8UQTUXCiMgJRUsmAwObk4JmAwplI59iO/CIA=
 20260210101000_orgunit_corrections_kernel_privileges.sql h1:dmfWjCXCsywymtlO/Au80mLCLo5PKOFtkNzMuZJOnss=
+20260210153000_orgunit_snapshot_presence_table_constraints.sql h1:77w2nPdzMl35rXn5nQ8mzJu1T81iYh9t8uZ/b3I6RwA=
+20260210203000_orgunit_snapshot_insert_complete.sql h1:3qHykEJkqhunMJBYJka3W0N6ik/mQLKBkIaLZNLu2sY=

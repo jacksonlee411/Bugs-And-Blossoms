@@ -42,6 +42,16 @@ ALTER FUNCTION orgunit.extract_orgunit_snapshot(uuid, int, date)
 ALTER FUNCTION orgunit.extract_orgunit_snapshot(uuid, int, date)
   SET search_path = pg_catalog, orgunit, public;
 
+ALTER FUNCTION orgunit.is_org_event_snapshot_presence_valid(text, jsonb, jsonb, text)
+  OWNER TO orgunit_kernel;
+
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb, text)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb, text)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb, text)
+  SET search_path = pg_catalog, orgunit, public;
+
 ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb)
   OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb)
@@ -107,6 +117,92 @@ END $$;
 GRANT EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) TO orgunit_kernel;
 ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int) SET search_path = pg_catalog, orgunit, public;
+
+REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) TO orgunit_kernel;
+ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.org_events_effective_for_replay(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.org_events_effective_for_replay(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) SET search_path = pg_catalog, orgunit, public;
 
 REVOKE ALL ON TABLE orgunit.org_unit_codes FROM PUBLIC;
 

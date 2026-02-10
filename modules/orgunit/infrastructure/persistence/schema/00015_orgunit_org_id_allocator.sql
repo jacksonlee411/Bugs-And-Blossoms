@@ -184,34 +184,11 @@ BEGIN
 
   v_before_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, v_org_id, p_effective_date);
 
-  INSERT INTO orgunit.org_events (
-    event_uuid,
-    tenant_uuid,
-    org_id,
-    event_type,
-    effective_date,
-    payload,
-    request_code,
-    initiator_uuid
-  )
-  VALUES (
-    p_event_uuid,
-    p_tenant_uuid,
-    v_org_id,
-    p_event_type,
-    p_effective_date,
-    v_payload,
-    p_request_code,
-    p_initiator_uuid
-  )
-  ON CONFLICT (event_uuid) DO NOTHING
-  RETURNING id INTO v_event_db_id;
+  SELECT * INTO v_existing
+  FROM orgunit.org_events
+  WHERE event_uuid = p_event_uuid;
 
-  IF v_event_db_id IS NULL THEN
-    SELECT * INTO v_existing
-    FROM orgunit.org_events
-    WHERE event_uuid = p_event_uuid;
-
+  IF FOUND THEN
     IF v_existing.tenant_uuid <> p_tenant_uuid
       OR v_existing.org_id <> v_org_id
       OR v_existing.event_type <> p_event_type
@@ -227,6 +204,8 @@ BEGIN
 
     RETURN v_existing.id;
   END IF;
+
+  SELECT nextval(pg_get_serial_sequence('orgunit.org_events', 'id')) INTO v_event_db_id;
 
   IF p_event_type = 'CREATE' THEN
     v_parent_id := NULLIF(v_payload->>'parent_id', '')::int;
@@ -296,12 +275,34 @@ BEGIN
   PERFORM orgunit.assert_org_unit_validity(p_tenant_uuid, v_org_ids);
 
   v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, v_org_id, p_effective_date);
-  PERFORM orgunit.assert_org_event_snapshots(p_event_type, v_before_snapshot, v_after_snapshot);
+  PERFORM orgunit.assert_org_event_snapshots(p_event_type, v_before_snapshot, v_after_snapshot, NULL);
 
-  UPDATE orgunit.org_events
-  SET before_snapshot = v_before_snapshot,
-      after_snapshot = v_after_snapshot
-  WHERE id = v_event_db_id;
+  INSERT INTO orgunit.org_events (
+    id,
+    event_uuid,
+    tenant_uuid,
+    org_id,
+    event_type,
+    effective_date,
+    payload,
+    request_code,
+    initiator_uuid,
+    before_snapshot,
+    after_snapshot
+  )
+  VALUES (
+    v_event_db_id,
+    p_event_uuid,
+    p_tenant_uuid,
+    v_org_id,
+    p_event_type,
+    p_effective_date,
+    v_payload,
+    p_request_code,
+    p_initiator_uuid,
+    v_before_snapshot,
+    v_after_snapshot
+  );
 
   RETURN v_event_db_id;
 END;
