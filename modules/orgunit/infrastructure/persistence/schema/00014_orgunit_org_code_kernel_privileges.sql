@@ -35,6 +35,21 @@ ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text
 ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
   SET search_path = pg_catalog, orgunit, public;
 
+ALTER FUNCTION orgunit.extract_orgunit_snapshot(uuid, int, date)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.extract_orgunit_snapshot(uuid, int, date)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.extract_orgunit_snapshot(uuid, int, date)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb)
+  SET search_path = pg_catalog, orgunit, public;
+
+
 ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
   OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
