@@ -1206,6 +1206,43 @@ ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb)
   SECURITY DEFINER;
 ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb)
   SET search_path = pg_catalog, orgunit, public;
+
+-- Fix regression: CREATE OR REPLACE FUNCTION resets SECURITY/owner/search_path for kernel entrypoints.
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.submit_org_event_rescind(uuid, int, date, text, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_event_rescind(uuid, int, date, text, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_event_rescind(uuid, int, date, text, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.submit_org_status_correction(uuid, int, date, text, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_status_correction(uuid, int, date, text, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_status_correction(uuid, int, date, text, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
 -- +goose StatementEnd
 
 -- +goose Down
