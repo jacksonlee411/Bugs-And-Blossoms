@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
@@ -1099,7 +1100,9 @@ func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
 		{"bad_request_code", errors.New("ORG_CODE_INVALID"), http.StatusBadRequest},
 		{"conflict", errors.New("EVENT_DATE_CONFLICT"), http.StatusConflict},
 		{"request_id_conflict", errors.New("ORG_REQUEST_ID_CONFLICT"), http.StatusConflict},
+		{"request_id_conflict_pg_message", &pgconn.PgError{Message: "ORG_REQUEST_ID_CONFLICT"}, http.StatusConflict},
 		{"status_correction_unsupported", errors.New("ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET"), http.StatusConflict},
+		{"orgunit_codes_write_forbidden_pg_message", &pgconn.PgError{Message: "ORGUNIT_CODES_WRITE_FORBIDDEN"}, http.StatusUnprocessableEntity},
 		{"high_risk_reorder", errors.New("ORG_HIGH_RISK_REORDER_FORBIDDEN"), http.StatusConflict},
 		{"root_delete_forbidden", errors.New("ORG_ROOT_DELETE_FORBIDDEN"), http.StatusConflict},
 		{"bad_request_msg", newBadRequestError("name is required"), http.StatusBadRequest},
@@ -1115,6 +1118,66 @@ func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
 				t.Fatalf("status=%d", rec.Code)
 			}
 		})
+	}
+}
+
+func TestWriteOrgUnitServiceError_UsesStablePgMessageCode(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", nil)
+	rec := httptest.NewRecorder()
+
+	writeOrgUnitServiceError(rec, req, &pgconn.PgError{Message: "ORGUNIT_CODES_WRITE_FORBIDDEN", Code: "P0001"}, "orgunit_correct_failed")
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if got := payload["code"]; got != "ORGUNIT_CODES_WRITE_FORBIDDEN" {
+		t.Fatalf("code=%v", got)
+	}
+}
+
+func TestWriteOrgUnitServiceError_BadRequestStableUnknownCodePreserved(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", nil)
+	rec := httptest.NewRecorder()
+
+	writeOrgUnitServiceError(rec, req, newBadRequestError("SOME_DB_CODE"), "orgunit_correct_failed")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if got := payload["code"]; got != "SOME_DB_CODE" {
+		t.Fatalf("code=%v", got)
+	}
+	if got := payload["message"]; got != "orgunit_correct_failed" {
+		t.Fatalf("message=%v", got)
+	}
+}
+
+func TestWriteOrgUnitServiceError_BlankCodeFallsBackToDefault(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", nil)
+	rec := httptest.NewRecorder()
+
+	writeOrgUnitServiceError(rec, req, errors.New("   "), "orgunit_correct_failed")
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if got := payload["code"]; got != "orgunit_correct_failed" {
+		t.Fatalf("code=%v", got)
+	}
+	if got := payload["message"]; got != "orgunit_correct_failed" {
+		t.Fatalf("message=%v", got)
 	}
 }
 
