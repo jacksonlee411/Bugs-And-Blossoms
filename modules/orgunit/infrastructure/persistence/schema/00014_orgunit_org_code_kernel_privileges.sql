@@ -42,6 +42,16 @@ ALTER FUNCTION orgunit.extract_orgunit_snapshot(uuid, int, date)
 ALTER FUNCTION orgunit.extract_orgunit_snapshot(uuid, int, date)
   SET search_path = pg_catalog, orgunit, public;
 
+ALTER FUNCTION orgunit.is_org_event_snapshot_presence_valid(text, jsonb, jsonb, text)
+  OWNER TO orgunit_kernel;
+
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb, text)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb, text)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb, text)
+  SET search_path = pg_catalog, orgunit, public;
+
 ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb)
   OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb)

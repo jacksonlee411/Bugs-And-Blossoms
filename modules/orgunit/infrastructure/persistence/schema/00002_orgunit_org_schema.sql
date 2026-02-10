@@ -20,6 +20,41 @@ AS $$
   FROM unnest(string_to_array(p_path::text, '.')) WITH ORDINALITY AS t(part, ord);
 $$;
 
+-- snapshot presence predicate (single source for kernel assert + table CHECK)
+CREATE OR REPLACE FUNCTION orgunit.is_org_event_snapshot_presence_valid(
+  p_event_type text,
+  p_before_snapshot jsonb,
+  p_after_snapshot jsonb,
+  p_rescind_outcome text
+)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    -- Transitional allowance for two-step write paths (INSERT first, UPDATE snapshots later).
+    WHEN p_before_snapshot IS NULL AND p_after_snapshot IS NULL
+      THEN true
+
+    WHEN p_event_type = 'CREATE'
+      THEN p_after_snapshot IS NOT NULL
+
+    WHEN p_event_type IN ('MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS')
+      THEN p_before_snapshot IS NOT NULL AND p_after_snapshot IS NOT NULL
+
+    WHEN p_event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+      THEN p_before_snapshot IS NOT NULL
+           AND (
+             -- Transitional allowance: NULL means existing two-step path has not written rescind_outcome yet.
+             p_rescind_outcome IS NULL
+             OR (p_rescind_outcome = 'ABSENT' AND p_after_snapshot IS NULL)
+             OR (p_rescind_outcome = 'PRESENT' AND p_after_snapshot IS NOT NULL)
+           )
+
+    ELSE true
+  END;
+$$;
+
 CREATE TABLE IF NOT EXISTS orgunit.org_trees (
   tenant_uuid uuid NOT NULL,
   root_org_id int NOT NULL CHECK (root_org_id BETWEEN 10000000 AND 99999999),
@@ -43,6 +78,7 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   reason text NULL,
   before_snapshot jsonb NULL,
   after_snapshot jsonb NULL,
+  rescind_outcome text NULL,
   tx_time timestamptz NOT NULL DEFAULT now(),
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -57,6 +93,24 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   CONSTRAINT org_events_snapshot_shape_check CHECK (
     (before_snapshot IS NULL OR jsonb_typeof(before_snapshot) = 'object')
     AND (after_snapshot IS NULL OR jsonb_typeof(after_snapshot) = 'object')
+  ),
+  CONSTRAINT org_events_rescind_outcome_check CHECK (
+    (
+      event_type NOT IN ('RESCIND_EVENT','RESCIND_ORG')
+      AND rescind_outcome IS NULL
+    )
+    OR (
+      event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+      AND (rescind_outcome IS NULL OR rescind_outcome IN ('PRESENT','ABSENT'))
+    )
+  ),
+  CONSTRAINT org_events_snapshot_presence_check CHECK (
+    orgunit.is_org_event_snapshot_presence_valid(
+      event_type,
+      before_snapshot,
+      after_snapshot,
+      rescind_outcome
+    )
   ),
   CONSTRAINT org_events_request_code_unique UNIQUE (tenant_uuid, request_code)
 );
@@ -82,7 +136,11 @@ CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
   status text NOT NULL DEFAULT 'active',
   is_business_unit boolean NOT NULL DEFAULT false,
   manager_uuid uuid NULL,
-  last_event_id bigint NOT NULL REFERENCES orgunit.org_events(id),
+  last_event_id bigint NOT NULL,
+  CONSTRAINT org_unit_versions_last_event_id_fkey
+    FOREIGN KEY (last_event_id)
+    REFERENCES orgunit.org_events(id)
+    DEFERRABLE INITIALLY DEFERRED,
   CONSTRAINT org_unit_versions_status_check CHECK (status IN ('active','disabled')),
   CONSTRAINT org_unit_versions_validity_check CHECK (NOT isempty(validity)),
   CONSTRAINT org_unit_versions_validity_bounds_check CHECK (lower_inc(validity) AND NOT upper_inc(validity)),

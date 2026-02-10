@@ -349,6 +349,7 @@ type OrgunitOrgEvent struct {
 	Reason              *string            `json:"reason"`
 	BeforeSnapshot      []byte             `json:"before_snapshot"`
 	AfterSnapshot       []byte             `json:"after_snapshot"`
+	RescindOutcome      *string            `json:"rescind_outcome"`
 	TxTime              pgtype.Timestamptz `json:"tx_time"`
 	TransactionTime     pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`

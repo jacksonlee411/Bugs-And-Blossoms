@@ -1002,7 +1002,8 @@ $$;
 CREATE OR REPLACE FUNCTION orgunit.assert_org_event_snapshots(
   p_event_type text,
   p_before_snapshot jsonb,
-  p_after_snapshot jsonb
+  p_after_snapshot jsonb,
+  p_rescind_outcome text
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -1020,31 +1021,41 @@ BEGIN
       DETAIL = format('event_type=%s after_snapshot_type=%s', p_event_type, jsonb_typeof(p_after_snapshot));
   END IF;
 
-  IF p_event_type = 'CREATE' THEN
-    IF p_after_snapshot IS NULL THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_AUDIT_SNAPSHOT_MISSING',
-        DETAIL = format('event_type=%s before=%s after=%s', p_event_type, p_before_snapshot IS NOT NULL, p_after_snapshot IS NOT NULL);
-    END IF;
-    RETURN;
+  IF NOT orgunit.is_org_event_snapshot_presence_valid(
+    p_event_type,
+    p_before_snapshot,
+    p_after_snapshot,
+    p_rescind_outcome
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_AUDIT_SNAPSHOT_MISSING',
+      DETAIL = format(
+        'event_type=%s before=%s after=%s rescind_outcome=%s',
+        p_event_type,
+        p_before_snapshot IS NOT NULL,
+        p_after_snapshot IS NOT NULL,
+        COALESCE(p_rescind_outcome, 'NULL')
+      );
   END IF;
+END;
+$$;
 
-  IF p_event_type IN ('MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS') THEN
-    IF p_before_snapshot IS NULL OR p_after_snapshot IS NULL THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_AUDIT_SNAPSHOT_MISSING',
-        DETAIL = format('event_type=%s before=%s after=%s', p_event_type, p_before_snapshot IS NOT NULL, p_after_snapshot IS NOT NULL);
-    END IF;
-    RETURN;
-  END IF;
-
-  IF p_event_type IN ('RESCIND_EVENT','RESCIND_ORG') THEN
-    IF p_before_snapshot IS NULL THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_AUDIT_SNAPSHOT_MISSING',
-        DETAIL = format('event_type=%s before=%s after=%s', p_event_type, p_before_snapshot IS NOT NULL, p_after_snapshot IS NOT NULL);
-    END IF;
-  END IF;
+-- Backward-compatible wrapper for existing 3-arg callers during rollout.
+CREATE OR REPLACE FUNCTION orgunit.assert_org_event_snapshots(
+  p_event_type text,
+  p_before_snapshot jsonb,
+  p_after_snapshot jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM orgunit.assert_org_event_snapshots(
+    p_event_type,
+    p_before_snapshot,
+    p_after_snapshot,
+    NULL
+  );
 END;
 $$;
 
