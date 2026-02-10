@@ -179,7 +179,8 @@ test("tp060-02: orgunit record wizard (4-step add/delete flow)", async ({ browse
   expect(await detailsResp.text()).toContain(addRecordName);
 
   const panelAfterAdd = await selectNode();
-  const deleteBtn = panelAfterAdd.locator('.org-node-records-section.is-danger .org-node-record-btn[data-action="delete_record"]');
+  await panelAfterAdd.locator('.org-node-record-more-toggle').click();
+  const deleteBtn = panelAfterAdd.locator('.org-node-record-actions-more .org-node-record-btn[data-action="delete_record"]');
   await expect(deleteBtn).toBeVisible();
   await expect(deleteBtn).toHaveClass(/is-danger/);
 
