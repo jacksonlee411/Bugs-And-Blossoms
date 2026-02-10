@@ -3713,9 +3713,10 @@ func renderOrgNodeAuditDetailEntry(event OrgUnitNodeAuditEvent) string {
 	payload := orgNodeAuditMap(event.Payload)
 	before := orgNodeAuditMap(event.BeforeSnapshot)
 	after := orgNodeAuditMap(event.AfterSnapshot)
-	if len(after) == 0 {
-		after = payload
-	}
+
+	// 注意：after_snapshot 为空时不回退使用 payload（刻意暴露写链路问题）。
+	missingBefore := len(before) == 0
+	missingAfter := len(after) == 0
 
 	eventType := strings.TrimSpace(event.EventType)
 	eventLabel := orgNodeEventTypeLabel(eventType)
@@ -3740,6 +3741,20 @@ func renderOrgNodeAuditDetailEntry(event OrgUnitNodeAuditEvent) string {
 	b.WriteString(`<div>事件UUID：` + html.EscapeString(event.EventUUID) + `</div>`)
 	b.WriteString(`<div>原因：` + html.EscapeString(reason) + `</div>`)
 	b.WriteString(`</div>`)
+
+	if missingBefore || missingAfter {
+		b.WriteString(`<div class="org-node-change-diff-empty">快照缺失：`)
+		if missingBefore {
+			b.WriteString(`before_snapshot`)
+		}
+		if missingBefore && missingAfter {
+			b.WriteString(` / `)
+		}
+		if missingAfter {
+			b.WriteString(`after_snapshot`)
+		}
+		b.WriteString(` 为空（未回退 payload）。</div>`)
+	}
 
 	targetUUID := strings.TrimSpace(orgNodeAuditScalarString(payload["target_event_uuid"]))
 	targetDate := strings.TrimSpace(orgNodeAuditScalarString(payload["target_effective_date"]))
