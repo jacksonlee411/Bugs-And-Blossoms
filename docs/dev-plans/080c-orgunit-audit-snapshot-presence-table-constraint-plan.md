@@ -246,35 +246,35 @@ $$;
   - 080B 的函数权限修复规则必须继续保持。
 
 - **里程碑**:
-  1. [ ] M1：谓词函数 + 约束 DDL + deferrable FK 迁移草案。
-  2. [ ] M2：重建引擎支持 pending 输入（单引擎实现）。
-  3. [ ] M3：全部 submit_* 改为 INSERT 即写齐。
-  4. [ ] M4：测试契约升级（从“禁止 INSERT 快照列”改为“禁止后置 UPDATE 快照”）。
-  5. [ ] M5：门禁全通过并更新执行记录。
+  1. [x] M1：谓词函数 + 约束 DDL + deferrable FK 迁移草案。
+  2. [x] M2：重建引擎支持 pending 输入（单引擎实现）。
+  3. [x] M3：全部 submit_* 改为 INSERT 即写齐。
+  4. [x] M4：测试契约升级（从“禁止 INSERT 快照列”改为“禁止后置 UPDATE 快照”）。
+  5. [x] M5：门禁全通过并更新执行记录。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
 ### 9.1 单元/集成测试要求
-- [ ] presence 谓词矩阵测试（事件类型 x before/after/rescind_outcome）完整覆盖。
-- [ ] `submit_org_event*` / `submit_org_*rescind*` 无“INSERT 后 UPDATE 快照”语句路径。
+- [x] presence 谓词矩阵测试（事件类型 x before/after/rescind_outcome）完整覆盖。
+- [x] `submit_org_event*` / `submit_org_*rescind*` 无“INSERT 后 UPDATE 快照”语句路径。
 - [ ] RENAME diff 显示 `name old->new`，不出现 `new_name` 漂移。
-- [ ] CORRECT 缺 before/after 任一必须失败并返回稳定错误码。
-- [ ] RESCIND：
+- [x] CORRECT 缺 before/after 任一必须失败并返回稳定错误码。
+- [x] RESCIND：
   - `ABSENT -> after_snapshot IS NULL`
   - `PRESENT -> after_snapshot IS NOT NULL`
 - [ ] 幂等/冲突语义回归：不退化为裸 SQL 错误。
 
 ### 9.2 门禁执行清单
-- [ ] `make orgunit plan && make orgunit lint && make orgunit migrate up`
-- [ ] `make sqlc-generate` 且 `git status --short` 无额外生成物漂移
-- [ ] `go fmt ./... && go vet ./... && make check lint && make test`
-- [ ] `make check doc`
+- [x] `make orgunit plan && make orgunit lint && make orgunit migrate up`
+- [x] `make sqlc-generate` 且 `git status --short` 无额外生成物漂移
+- [x] `go fmt ./... && go vet ./... && make check lint && make test`
+- [x] `make check doc`
 
 ### 9.3 验收结论条件
-- [ ] 任一 presence 违规由数据库层阻断。
-- [ ] `org_events` 入表即完整（before/after/rescind_outcome 已齐）。
-- [ ] 项目内只有一个重建算法实现。
-- [ ] 无长期豁免窗口、无 legacy 分支。
+- [x] 任一 presence 违规由数据库层阻断。
+- [x] `org_events` 入表即完整（before/after/rescind_outcome 已齐）。
+- [x] 项目内只有一个重建算法实现。
+- [x] 无长期豁免窗口、无 legacy 分支。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 - 按 `AGENTS.md` 3.6：当前阶段不新增运维开关或监控开关。
@@ -284,22 +284,22 @@ $$;
 ## 11. 实施任务清单（可直接执行）
 
 ### 11.1 DDL/函数改造任务
-1. [ ] 在 `modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql` 新增 `is_org_event_snapshot_presence_valid(...)`。
-2. [ ] 更新 `assert_org_event_snapshots(...)` 参数与逻辑，调用新谓词。
-3. [ ] 在 `modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql` 增加 `rescind_outcome` 列及两个 CHECK。
-4. [ ] 在同 schema 文件把 `org_unit_versions.last_event_id` FK 调整为 `DEFERRABLE INITIALLY DEFERRED`。
-5. [ ] 在 `migrations/orgunit/*` 新增对应迁移并更新 `migrations/orgunit/atlas.sum`。
+1. [x] 在 `modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql` 新增 `is_org_event_snapshot_presence_valid(...)`。
+2. [x] 更新 `assert_org_event_snapshots(...)` 参数与逻辑，调用新谓词。
+3. [x] 在 `modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql` 增加 `rescind_outcome` 列及两个 CHECK。
+4. [x] 在同 schema 文件把 `org_unit_versions.last_event_id` FK 调整为 `DEFERRABLE INITIALLY DEFERRED`。
+5. [x] 在 `migrations/orgunit/*` 新增对应迁移并更新 `migrations/orgunit/atlas.sum`。
 
 ### 11.2 Kernel 写路径任务
-6. [ ] 改造 `submit_org_event`（含 allocator 场景）为单条 INSERT 写齐。
-7. [ ] 改造 `submit_org_event_correction` / `submit_org_status_correction` 为 pending 输入模式 + 单引擎重建。
-8. [ ] 改造 `submit_org_event_rescind` / `submit_org_rescind` 同步写入 `rescind_outcome`。
-9. [ ] 删除所有 `UPDATE orgunit.org_events SET before_snapshot=..., after_snapshot=...` 回写路径。
+6. [x] 改造 `submit_org_event`（含 allocator 场景）为单条 INSERT 写齐。
+7. [x] 改造 `submit_org_event_correction` / `submit_org_status_correction` 为 pending 输入模式 + 单引擎重建。
+8. [x] 改造 `submit_org_event_rescind` / `submit_org_rescind` 同步写入 `rescind_outcome`。
+9. [x] 删除所有 `UPDATE orgunit.org_events SET before_snapshot=..., after_snapshot=...` 回写路径。
 
 ### 11.3 测试与证据任务
-10. [ ] 更新 `internal/server/orgunit_audit_snapshot_schema_test.go` 的防回归断言。
-11. [ ] 新增/补齐 presence 谓词矩阵测试与 rescind_outcome 场景测试。
-12. [ ] 在 `docs/dev-records/dev-plan-080-execution-log.md` 增加 080C 证据块（命中触发器、命令、结果）。
+10. [x] 更新 `internal/server/orgunit_audit_snapshot_schema_test.go` 的防回归断言。
+11. [x] 新增/补齐 presence 谓词矩阵测试与 rescind_outcome 场景测试。
+12. [x] 在 `docs/dev-records/dev-plan-080-execution-log.md` 增加 080C 证据块（命中触发器、命令、结果）。
 
 ## 12. 关联文档
 - `docs/dev-plans/080-orgunit-audit-chain-consolidation.md`
