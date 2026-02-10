@@ -470,6 +470,18 @@ func TestRenderOrgNodeAuditDetailEntry(t *testing.T) {
 	if !strings.Contains(out4, "原始数据") {
 		t.Fatalf("unexpected output: %q", out4)
 	}
+
+	out5 := renderOrgNodeAuditDetailEntry(OrgUnitNodeAuditEvent{
+		EventID:       14,
+		EventUUID:     "evt-14",
+		EventType:     "RENAME",
+		EffectiveDate: "2026-01-06",
+		TxTime:        time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC),
+		Payload:       json.RawMessage("{"),
+	})
+	if !strings.Contains(out5, "&#34;payload&#34;: {}") {
+		t.Fatalf("unexpected output: %q", out5)
+	}
 }
 
 func TestRenderOrgNodeDetailsWithAudit_ChangeTabAndLoadMore(t *testing.T) {
@@ -478,7 +490,7 @@ func TestRenderOrgNodeDetailsWithAudit_ChangeTabAndLoadMore(t *testing.T) {
 		"2026-01-06",
 		"2026-01-06",
 		true,
-		[]OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-06", EventType: "RENAME"}},
+		[]OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-06", EventType: ""}},
 		[]OrgUnitNodeAuditEvent{{
 			EventID:             1,
 			EventUUID:           "evt-1",
@@ -497,10 +509,13 @@ func TestRenderOrgNodeDetailsWithAudit_ChangeTabAndLoadMore(t *testing.T) {
 		"",
 		"change",
 	)
-	for _, token := range []string{"data-active-tab=\"change\"", "org-node-change-load-more", "tab=change", "无更新权限"} {
+	for _, token := range []string{"data-active-tab=\"change\"", "org-node-change-load-more", "tab=change", "无更新权限", "org-node-record-actions-head", "org-node-record-item"} {
 		if !strings.Contains(out, token) {
 			t.Fatalf("missing %q in %q", token, out)
 		}
+	}
+	if strings.Contains(out, "org-node-basic-toolbar") {
+		t.Fatalf("unexpected old toolbar in %q", out)
 	}
 }
 
@@ -651,6 +666,33 @@ func TestHandleOrgNodeDetailsPage_AuditBranches(t *testing.T) {
 		}
 		if body := rec.Body.String(); !strings.Contains(body, "OrgUnit / Details") || !strings.Contains(body, "data-active-tab=\"change\"") {
 			t.Fatalf("body=%q", body)
+		}
+	})
+
+	t.Run("audit has more", func(t *testing.T) {
+		store := &orgUnitReadStoreWithAudit{
+			orgUnitReadStoreStub: base,
+			listAuditFn: func(_ context.Context, _ string, _ int, limit int) ([]OrgUnitNodeAuditEvent, error) {
+				if limit != 2 {
+					t.Fatalf("limit=%d", limit)
+				}
+				return []OrgUnitNodeAuditEvent{
+					{EventID: 2, EventUUID: "evt-2", EventType: "CORRECT_EVENT", EffectiveDate: "2026-01-06", TxTime: time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), InitiatorName: "A", InitiatorEmployeeID: "E1", Payload: json.RawMessage(`{"target_event_uuid":"evt-1","target_effective_date":"2026-01-05"}`)},
+					{EventID: 1, EventUUID: "evt-1", EventType: "RENAME", EffectiveDate: "2026-01-05", TxTime: time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), InitiatorName: "B", InitiatorEmployeeID: "E2", Payload: json.RawMessage(`{"name":"B"}`)},
+				}, nil
+			},
+		}
+		req := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-06&tree_as_of=2026-01-06&org_id=10000001&limit=1&tab=change", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "Tenant"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{RoleSlug: "viewer"}))
+		rec := httptest.NewRecorder()
+		handleOrgNodeDetailsPage(rec, req, store)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "org-node-change-load-more") || !strings.Contains(body, "tab=change") {
+			t.Fatalf("unexpected body: %q", body)
 		}
 	})
 }

@@ -497,6 +497,13 @@ func orgUnitStatusLabel(status string) string {
 	return "有效"
 }
 
+func orgUnitBusinessUnitText(isBusinessUnit bool) string {
+	if isBusinessUnit {
+		return "是"
+	}
+	return "否"
+}
+
 func normalizeOrgUnitTargetStatus(raw string) (string, error) {
 	value := strings.ToLower(strings.TrimSpace(raw))
 	switch value {
@@ -3091,80 +3098,114 @@ func renderOrgNodeDetailsWithAudit(
 	b.WriteString(`</div>`)
 	b.WriteString(`<span class="org-node-status-badge">` + html.EscapeString(statusLabel) + `</span>`)
 	b.WriteString(`<div class="org-node-header-spacer"></div>`)
+	b.WriteString(`<div class="org-node-header-actions">`)
+	b.WriteString(`<div class="org-node-record-actions-head">`)
+	b.WriteString(`<button type="button" class="org-node-record-action-btn is-primary org-node-record-btn" data-action="add_record"` + disabledAttr + `>新建版本</button>`)
+	b.WriteString(`<button type="button" class="org-node-record-action-btn org-node-record-btn" data-action="correct_record"` + disabledAttr + `>修正当前</button>`)
+	b.WriteString(`<button type="button" class="org-node-record-action-btn org-node-record-more-toggle"` + disabledAttr + `>更多 ▾</button>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-record-actions-more">`)
+	b.WriteString(`<button type="button" class="org-node-record-action-btn org-node-record-btn" data-action="change_status"` + disabledAttr + `>状态变更</button>`)
+	b.WriteString(`<button type="button" class="org-node-record-action-btn is-danger org-node-record-btn" data-action="delete_record"` + disabledAttr + `>删除记录</button>`)
+	b.WriteString(`<button type="button" class="org-node-record-action-btn is-danger org-node-record-btn" data-action="delete_org"` + disabledAttr + `>删除组织</button>`)
+	b.WriteString(`</div>`)
 	b.WriteString(`<button type="button" class="org-node-edit-btn"` + disabledAttr + `>编辑</button>`)
+	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 
 	b.WriteString(`<div class="org-node-records">`)
-	b.WriteString(`<div class="org-node-records-header">`)
-	b.WriteString(`<span class="org-node-records-title">生效记录</span>`)
+	b.WriteString(`<div class="org-node-tabs">`)
+	b.WriteString(`<button type="button" class="` + basicTabClass + `" data-tab="basic">基本信息</button>`)
+	b.WriteString(`<button type="button" class="` + changeTabClass + `" data-tab="change">变更日志</button>`)
+	b.WriteString(`<div class="org-node-tab-spacer"></div>`)
 	b.WriteString(`</div>`)
-	b.WriteString(`<div class="org-node-records-actions">`)
-	b.WriteString(`<div class="org-node-records-section">`)
-	b.WriteString(`<div class="org-node-records-section-title">新版本操作</div>`)
-	b.WriteString(`<div class="org-node-records-section-hint">新增/插入将生成新版本，不改写历史</div>`)
-	b.WriteString(`<div class="org-node-records-section-actions">`)
-	b.WriteString(`<button type="button" class="org-node-record-btn" data-action="add_record"` + disabledAttr + `>新增记录</button>`)
-	b.WriteString(`<button type="button" class="org-node-record-btn is-muted" data-action="insert_record"` + disabledAttr + `>插入记录</button>`)
-	b.WriteString(`</div>`)
-	b.WriteString(`</div>`)
-	b.WriteString(`<div class="org-node-records-section">`)
-	b.WriteString(`<div class="org-node-records-section-title">历史修正</div>`)
-	b.WriteString(`<div class="org-node-records-section-hint">更正当前选中版本（历史纠错）</div>`)
-	b.WriteString(`<div class="org-node-records-section-actions">`)
-	b.WriteString(`<button type="button" class="org-node-record-btn is-warning" data-action="correct_record"` + disabledAttr + `>修正记录</button>`)
-	b.WriteString(`</div>`)
-	b.WriteString(`</div>`)
-	b.WriteString(`<div class="org-node-records-section">`)
-	b.WriteString(`<div class="org-node-records-section-title">状态变更</div>`)
-	b.WriteString(`<div class="org-node-records-section-hint">在有效/无效之间显式切换状态（独立动作，不与字段变更混用）</div>`)
-	b.WriteString(`<div class="org-node-records-section-actions">`)
-	b.WriteString(`<button type="button" class="org-node-record-btn" data-action="change_status"` + disabledAttr + `>状态变更</button>`)
-	b.WriteString(`</div>`)
-	b.WriteString(`</div>`)
-	b.WriteString(`<div class="org-node-records-section is-danger">`)
-	b.WriteString(`<div class="org-node-records-section-title">危险操作</div>`)
-	b.WriteString(`<div class="org-node-records-section-hint">该操作将删除错误数据（通过事件撤销实现），并立即重放版本；操作可审计，不可撤销。</div>`)
-	b.WriteString(`<div class="org-node-records-section-actions">`)
-	b.WriteString(`<button type="button" class="org-node-record-btn is-danger" data-action="delete_record"` + disabledAttr + `>删除记录（错误数据）</button>`)
-	b.WriteString(`<button type="button" class="org-node-record-btn is-danger" data-action="delete_org"` + disabledAttr + `>删除组织（错误建档）</button>`)
-	b.WriteString(`</div>`)
+
+	b.WriteString(`<div class="org-node-readonly" data-panel="readonly">`)
+	b.WriteString(`<div class="org-node-basic-layout" data-tab-content="basic"` + basicDisplay + `>`)
+	b.WriteString(`<div class="org-node-basic-left">`)
+	b.WriteString(`<div class="org-node-basic-left-title">生效日期</div>`)
+	b.WriteString(`<div class="org-node-basic-left-list">`)
+	if len(versions) == 0 {
+		fallbackType := strings.TrimSpace(selectedVersion.EventType)
+		if fallbackType == "" {
+			fallbackType = "RECORD"
+		}
+		b.WriteString(`<button type="button" class="org-node-record-item is-active" data-target-date="` + html.EscapeString(currentEffectiveDate) + `">`)
+		b.WriteString(`<span class="org-node-record-item-date">` + html.EscapeString(currentEffectiveDate) + `</span>`)
+		b.WriteString(`<span class="org-node-record-item-type">` + html.EscapeString(fallbackType) + `</span>`)
+		b.WriteString(`</button>`)
+	} else {
+		for _, v := range versions {
+			itemClass := "org-node-record-item"
+			if v.EffectiveDate == currentEffectiveDate {
+				itemClass += " is-active"
+			}
+			eventType := strings.TrimSpace(v.EventType)
+			if eventType == "" {
+				eventType = "RECORD"
+			}
+			b.WriteString(`<button type="button" class="` + itemClass + `" data-target-date="` + html.EscapeString(v.EffectiveDate) + `">`)
+			b.WriteString(`<span class="org-node-record-item-date">` + html.EscapeString(v.EffectiveDate) + `</span>`)
+			b.WriteString(`<span class="org-node-record-item-type">` + html.EscapeString(eventType) + `</span>`)
+			b.WriteString(`</button>`)
+		}
+	}
 	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 
-	b.WriteString(`<div class="org-node-version-nav">`)
-	prevDisabled := ""
-	if prevDate == "" {
-		prevDisabled = " disabled"
-	}
-	nextDisabled := ""
-	if nextDate == "" {
-		nextDisabled = " disabled"
-	}
-	b.WriteString(`<button type="button" class="org-node-version-btn" data-target-date="` + html.EscapeString(prevDate) + `"` + prevDisabled + `>上一条</button>`)
-	b.WriteString(`<button type="button" class="org-node-version-btn" data-target-date="` + html.EscapeString(nextDate) + `"` + nextDisabled + `>下一条</button>`)
-	b.WriteString(`<div class="org-node-version-spacer"></div>`)
-	b.WriteString(`<select class="org-node-version-select">`)
-	if len(versions) == 0 {
-		b.WriteString(`<option value="` + html.EscapeString(currentEffectiveDate) + `" selected>` + html.EscapeString(currentEffectiveDate) + `</option>`)
+	b.WriteString(`<div class="org-node-basic-right">`)
+	b.WriteString(`<div class="org-node-basic-divider"></div>`)
+	b.WriteString(`<div class="org-node-basic-info-item">版本详情（当前选中）&nbsp;&nbsp;` + html.EscapeString(currentEffectiveDate) + `</div>`)
+	b.WriteString(`<div class="org-node-basic-info-item">状态：` + html.EscapeString(statusLabel) + ` · 事件：` + html.EscapeString(strings.TrimSpace(selectedVersion.EventType)) + `</div>`)
+	b.WriteString(`<div class="org-node-basic-info-item">组织编码：` + html.EscapeString(details.OrgCode) + ` · 上级：` + html.EscapeString(parentLabel) + `</div>`)
+	b.WriteString(`<div class="org-node-basic-info-item">负责人：` + html.EscapeString(managerLabel) + ` · 业务单元：` + html.EscapeString(orgUnitBusinessUnitText(details.IsBusinessUnit)) + `</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`</div>`)
+
+	nextAuditLimit := auditLimit + orgNodeAuditPageSize
+	b.WriteString(`<div class="org-node-change-log" data-tab-content="change"` + changeDisplay + `>`)
+	b.WriteString(`<div class="org-node-change-log-left">`)
+	b.WriteString(`<div class="org-node-change-log-title">修改时间</div>`)
+	if len(auditEvents) == 0 {
+		b.WriteString(`<div class="org-node-change-empty">暂无变更日志</div>`)
 	} else {
-		for i, v := range versions {
-			label := v.EffectiveDate
-			if v.EventType != "" {
-				label = label + " · " + v.EventType
+		b.WriteString(`<div class="org-node-change-items">`)
+		for i, event := range auditEvents {
+			itemClass := "org-node-change-item"
+			if i == 0 {
+				itemClass += " is-active"
 			}
-			selected := ""
-			if i == selectedIdx {
-				selected = " selected"
-			}
-			b.WriteString(`<option value="` + html.EscapeString(v.EffectiveDate) + `"` + selected + `>` + html.EscapeString(label) + `</option>`)
+			b.WriteString(`<button type="button" class="` + itemClass + `" data-event-id="` + strconv.FormatInt(event.EventID, 10) + `" data-event-uuid="` + html.EscapeString(event.EventUUID) + `">`)
+			b.WriteString(`<span class="org-node-change-item-time">` + html.EscapeString(formatOrgNodeAuditTime(event.TxTime)) + `</span>`)
+			b.WriteString(`<span class="org-node-change-item-actor">` + html.EscapeString(formatOrgNodeAuditActor(event.InitiatorName, event.InitiatorEmployeeID)) + `</span>`)
+			b.WriteString(`</button>`)
+		}
+		b.WriteString(`</div>`)
+		if auditHasMore {
+			detailsURL := `/org/nodes/details?org_id=` + url.QueryEscape(strconv.Itoa(details.OrgID)) + `&effective_date=` + url.QueryEscape(currentEffectiveDate) + `&tree_as_of=` + url.QueryEscape(treeAsOf) + `&include_disabled=` + includeDisabledValue + `&limit=` + strconv.Itoa(nextAuditLimit) + `&tab=change`
+			b.WriteString(`<button type="button" class="org-node-change-load-more" hx-get="` + detailsURL + `" hx-target="closest .org-node-details-panel" hx-swap="outerHTML">加载更多</button>`)
 		}
 	}
-	b.WriteString(`</select>`)
-	if len(versions) > 0 && selectedIdx >= 0 {
-		b.WriteString(`<div class="org-node-version-count">` + strconv.Itoa(selectedIdx+1) + `/` + strconv.Itoa(len(versions)) + `</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`<div class="org-node-change-log-right">`)
+	if len(auditEvents) == 0 {
+		b.WriteString(`<div class="org-node-change-detail-entry is-active"><div class="org-node-change-empty">暂无可展示事件</div></div>`)
+	} else {
+		for i, event := range auditEvents {
+			detailClass := "org-node-change-detail-entry"
+			style := ` style="display:none"`
+			if i == 0 {
+				detailClass += " is-active"
+				style = ""
+			}
+			b.WriteString(`<div class="` + detailClass + `" data-event-id="` + strconv.FormatInt(event.EventID, 10) + `"` + style + `>`)
+			b.WriteString(renderOrgNodeAuditDetailEntry(event))
+			b.WriteString(`</div>`)
+		}
 	}
 	b.WriteString(`</div>`)
-	b.WriteString(`<div class="org-node-records-hint">切换版本后，下方编辑区加载对应记录</div>`)
+	b.WriteString(`</div>`)
+	b.WriteString(`</div>`)
 
 	b.WriteString(`<div class="org-node-record-form" data-open="false">`)
 	b.WriteString(`<div class="org-node-record-form-title">新增记录</div>`)
@@ -3212,69 +3253,6 @@ func renderOrgNodeDetailsWithAudit(
 	b.WriteString(`</div>`)
 	b.WriteString(`<div class="org-node-record-form-hint"></div>`)
 	b.WriteString(`</form>`)
-	b.WriteString(`</div>`)
-	b.WriteString(`</div>`)
-
-	nextAuditLimit := auditLimit + orgNodeAuditPageSize
-
-	b.WriteString(`<div class="org-node-tabs">`)
-	b.WriteString(`<button type="button" class="` + basicTabClass + `" data-tab="basic">基本信息</button>`)
-	b.WriteString(`<button type="button" class="` + changeTabClass + `" data-tab="change">变更日志</button>`)
-	b.WriteString(`<div class="org-node-tab-spacer"></div>`)
-	b.WriteString(`</div>`)
-
-	b.WriteString(`<div class="org-node-readonly" data-panel="readonly">`)
-	b.WriteString(`<div class="org-node-info-list" data-tab-content="basic"` + basicDisplay + `>`)
-	b.WriteString(`<div class="org-node-info-item">生效日期：` + html.EscapeString(currentEffectiveDate) + `</div>`)
-	b.WriteString(`<div class="org-node-info-item">状态：` + html.EscapeString(statusLabel) + `</div>`)
-	b.WriteString(`<div class="org-node-info-item">组织名称：` + html.EscapeString(details.Name) + `</div>`)
-	b.WriteString(`<div class="org-node-info-item">组织编码：` + html.EscapeString(details.OrgCode) + `</div>`)
-	b.WriteString(`<div class="org-node-info-item">上级组织：` + html.EscapeString(parentLabel) + `</div>`)
-	b.WriteString(`<div class="org-node-info-item">部门负责人：` + html.EscapeString(managerLabel) + `</div>`)
-	b.WriteString(`<div class="org-node-info-item">组织长名称：` + html.EscapeString(fullNamePath) + `</div>`)
-	b.WriteString(`</div>`)
-	b.WriteString(`<div class="org-node-change-log" data-tab-content="change"` + changeDisplay + `>`)
-	b.WriteString(`<div class="org-node-change-log-left">`)
-	b.WriteString(`<div class="org-node-change-log-title">修改时间</div>`)
-	if len(auditEvents) == 0 {
-		b.WriteString(`<div class="org-node-change-empty">暂无变更日志</div>`)
-	} else {
-		b.WriteString(`<div class="org-node-change-items">`)
-		for i, event := range auditEvents {
-			itemClass := "org-node-change-item"
-			if i == 0 {
-				itemClass += " is-active"
-			}
-			b.WriteString(`<button type="button" class="` + itemClass + `" data-event-id="` + strconv.FormatInt(event.EventID, 10) + `" data-event-uuid="` + html.EscapeString(event.EventUUID) + `">`)
-			b.WriteString(`<span class="org-node-change-item-time">` + html.EscapeString(formatOrgNodeAuditTime(event.TxTime)) + `</span>`)
-			b.WriteString(`<span class="org-node-change-item-actor">` + html.EscapeString(formatOrgNodeAuditActor(event.InitiatorName, event.InitiatorEmployeeID)) + `</span>`)
-			b.WriteString(`</button>`)
-		}
-		b.WriteString(`</div>`)
-		if auditHasMore {
-			detailsURL := `/org/nodes/details?org_id=` + url.QueryEscape(strconv.Itoa(details.OrgID)) + `&effective_date=` + url.QueryEscape(currentEffectiveDate) + `&tree_as_of=` + url.QueryEscape(treeAsOf) + `&include_disabled=` + includeDisabledValue + `&limit=` + strconv.Itoa(nextAuditLimit) + `&tab=change`
-			b.WriteString(`<button type="button" class="org-node-change-load-more" hx-get="` + detailsURL + `" hx-target="closest .org-node-details-panel" hx-swap="outerHTML">加载更多</button>`)
-		}
-	}
-	b.WriteString(`</div>`)
-	b.WriteString(`<div class="org-node-change-log-right">`)
-	if len(auditEvents) == 0 {
-		b.WriteString(`<div class="org-node-change-detail-entry is-active"><div class="org-node-change-empty">暂无可展示事件</div></div>`)
-	} else {
-		for i, event := range auditEvents {
-			detailClass := "org-node-change-detail-entry"
-			style := ` style="display:none"`
-			if i == 0 {
-				detailClass += " is-active"
-				style = ""
-			}
-			b.WriteString(`<div class="` + detailClass + `" data-event-id="` + strconv.FormatInt(event.EventID, 10) + `"` + style + `>`)
-			b.WriteString(renderOrgNodeAuditDetailEntry(event))
-			b.WriteString(`</div>`)
-		}
-	}
-	b.WriteString(`</div>`)
-	b.WriteString(`</div>`)
 	b.WriteString(`</div>`)
 
 	b.WriteString(`<div class="org-node-edit" data-panel="edit">`)
@@ -4887,15 +4865,50 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
         return;
       }
 
-      const tabBtn = event.target && event.target.closest ? event.target.closest(".org-node-tab-btn") : null;
-      if (tabBtn) {
-        const panel = tabBtn.closest(".org-node-details-panel");
-        if (!panel) {
-          return;
-        }
-        setTab(panel, tabBtn.dataset.tab || "basic");
-        return;
-      }
+	      const tabBtn = event.target && event.target.closest ? event.target.closest(".org-node-tab-btn") : null;
+	      if (tabBtn) {
+	        const panel = tabBtn.closest(".org-node-details-panel");
+	        if (!panel) {
+	          return;
+	        }
+	        setTab(panel, tabBtn.dataset.tab || "basic");
+	        return;
+	      }
+
+	      const recordItem = event.target && event.target.closest ? event.target.closest(".org-node-record-item") : null;
+	      if (recordItem) {
+	        const panel = recordItem.closest(".org-node-details-panel");
+	        if (!panel || !panel.dataset.orgId) {
+	          return;
+	        }
+	        const targetDate = recordItem.dataset.targetDate || "";
+	        if (!targetDate || targetDate === panel.dataset.currentEffectiveDate) {
+	          setTab(panel, "basic");
+	          return;
+	        }
+	        if (!confirmDiscard()) {
+	          return;
+	        }
+	        loadDetails(panel.dataset.orgId, {
+	          effectiveDate: targetDate,
+	          activeTab: "basic",
+	          auditLimit: panel.dataset.auditLimit || "",
+	        }).catch(() => {});
+	        return;
+	      }
+
+	      const recordMoreToggle = event.target && event.target.closest ? event.target.closest(".org-node-record-more-toggle") : null;
+	      if (recordMoreToggle) {
+	        const panel = recordMoreToggle.closest(".org-node-details-panel");
+	        if (!panel) {
+	          return;
+	        }
+	        const moreWrap = panel.querySelector(".org-node-record-actions-more");
+	        if (moreWrap) {
+	          moreWrap.classList.toggle("is-open");
+	        }
+	        return;
+	      }
 
       const changeItem = event.target && event.target.closest ? event.target.closest(".org-node-change-item") : null;
       if (changeItem) {
@@ -4964,16 +4977,20 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
         return;
       }
 
-      const recordBtn = event.target && event.target.closest ? event.target.closest(".org-node-record-btn") : null;
-      if (recordBtn) {
-        const panel = recordBtn.closest(".org-node-details-panel");
-        if (!panel) {
-          return;
-        }
-        clearStatus(panel);
-        if (!canEdit) {
-          setStatus(panel, "warn", "无更新权限，无法编辑");
-          return;
+	      const recordBtn = event.target && event.target.closest ? event.target.closest(".org-node-record-btn") : null;
+	      if (recordBtn) {
+	        const panel = recordBtn.closest(".org-node-details-panel");
+	        if (!panel) {
+	          return;
+	        }
+	        const moreWrap = panel.querySelector(".org-node-record-actions-more");
+	        if (moreWrap) {
+	          moreWrap.classList.remove("is-open");
+	        }
+	        clearStatus(panel);
+	        if (!canEdit) {
+	          setStatus(panel, "warn", "无更新权限，无法编辑");
+	          return;
         }
         if (!confirmDiscard()) {
           return;
@@ -5180,68 +5197,15 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
       if (!select) {
         return;
       }
-      const recordForm = select.closest ? select.closest(".org-node-record-action-form") : null;
-      if (recordForm) {
-        if (select.name === "record_change_type" || select.name === "target_status" || select.name === "use_status_correction") {
-          updateRecordWizardStep(recordForm);
-        } else {
-          updateRecordSummary(recordForm);
-        }
-        return;
-      }
-      if (!select.classList || !select.classList.contains("org-node-version-select")) {
-        return;
-      }
-      const panel = select.closest(".org-node-details-panel");
-      if (!panel) {
-        return;
-      }
-      const targetDate = select.value;
-      if (!targetDate) {
-        return;
-      }
-      if (!confirmDiscard()) {
-        if (panel.dataset.currentEffectiveDate) {
-          select.value = panel.dataset.currentEffectiveDate;
-        }
-        return;
-      }
-      if (!panel.dataset.orgId) {
-        return;
-      }
-	      loadDetails(panel.dataset.orgId, {
-	        effectiveDate: targetDate,
-	        activeTab: panel.dataset.activeTab || "basic",
-	        auditLimit: panel.dataset.auditLimit || "",
-	      }).then((ok) => {
-	        if (!ok && panel.dataset.currentEffectiveDate) {
-	          select.value = panel.dataset.currentEffectiveDate;
+	      const recordForm = select.closest ? select.closest(".org-node-record-action-form") : null;
+	      if (recordForm) {
+	        if (select.name === "record_change_type" || select.name === "target_status" || select.name === "use_status_correction") {
+	          updateRecordWizardStep(recordForm);
+	        } else {
+	          updateRecordSummary(recordForm);
 	        }
-	      });
-    });
-
-    document.addEventListener("click", (event) => {
-      const versionBtn = event.target && event.target.closest ? event.target.closest(".org-node-version-btn") : null;
-      if (!versionBtn) {
-        return;
-      }
-      const targetDate = versionBtn.dataset.targetDate || "";
-      if (!targetDate) {
-        return;
-      }
-      if (!confirmDiscard()) {
-        return;
-      }
-      const panel = versionBtn.closest(".org-node-details-panel");
-      if (!panel || !panel.dataset.orgId) {
-        return;
-      }
-	      loadDetails(panel.dataset.orgId, {
-	        effectiveDate: targetDate,
-	        activeTab: panel.dataset.activeTab || "basic",
-	        auditLimit: panel.dataset.auditLimit || "",
-	      }).catch(() => {});
-    });
+	      }
+	    });
 
     window.orgNodes = {
       getTreeAsOf: getTreeAsOf,
