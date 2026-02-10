@@ -32,10 +32,6 @@ LANGUAGE sql
 IMMUTABLE
 AS $$
   SELECT CASE
-    -- Transitional allowance for two-step write paths (INSERT first, UPDATE snapshots later).
-    WHEN p_before_snapshot IS NULL AND p_after_snapshot IS NULL
-      THEN true
-
     WHEN p_event_type = 'CREATE'
       THEN p_after_snapshot IS NOT NULL
 
@@ -45,9 +41,7 @@ AS $$
     WHEN p_event_type IN ('RESCIND_EVENT','RESCIND_ORG')
       THEN p_before_snapshot IS NOT NULL
            AND (
-             -- Transitional allowance: NULL means existing two-step path has not written rescind_outcome yet.
-             p_rescind_outcome IS NULL
-             OR (p_rescind_outcome = 'ABSENT' AND p_after_snapshot IS NULL)
+             (p_rescind_outcome = 'ABSENT' AND p_after_snapshot IS NULL)
              OR (p_rescind_outcome = 'PRESENT' AND p_after_snapshot IS NOT NULL)
            )
 
@@ -101,7 +95,7 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
     )
     OR (
       event_type IN ('RESCIND_EVENT','RESCIND_ORG')
-      AND (rescind_outcome IS NULL OR rescind_outcome IN ('PRESENT','ABSENT'))
+      AND rescind_outcome IN ('PRESENT','ABSENT')
     )
   ),
   CONSTRAINT org_events_snapshot_presence_check CHECK (

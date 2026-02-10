@@ -1,783 +1,63 @@
-CREATE OR REPLACE FUNCTION orgunit.assert_current_tenant(p_tenant_uuid uuid)
-RETURNS void
-LANGUAGE plpgsql
+-- +goose Up
+-- +goose StatementBegin
+-- 080C follow-up: enforce INSERT-complete audit snapshots and strict rescind outcome semantics.
+
+CREATE OR REPLACE FUNCTION orgunit.is_org_event_snapshot_presence_valid(
+  p_event_type text,
+  p_before_snapshot jsonb,
+  p_after_snapshot jsonb,
+  p_rescind_outcome text
+)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
 AS $$
-DECLARE
-  v_ctx_raw text;
-  v_ctx_tenant uuid;
-BEGIN
-  IF p_tenant_uuid IS NULL THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'ORG_INVALID_ARGUMENT',
-      DETAIL = 'tenant_uuid is required';
-  END IF;
+  SELECT CASE
+    WHEN p_event_type = 'CREATE'
+      THEN p_after_snapshot IS NOT NULL
 
-  v_ctx_raw := current_setting('app.current_tenant', true);
-  IF v_ctx_raw IS NULL OR btrim(v_ctx_raw) = '' THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'RLS_TENANT_CONTEXT_MISSING',
-      DETAIL = 'app.current_tenant is required';
-  END IF;
+    WHEN p_event_type IN ('MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS')
+      THEN p_before_snapshot IS NOT NULL AND p_after_snapshot IS NOT NULL
 
-  BEGIN
-    v_ctx_tenant := v_ctx_raw::uuid;
-  EXCEPTION
-    WHEN invalid_text_representation THEN
-      RAISE EXCEPTION USING
-        ERRCODE = 'P0001',
-        MESSAGE = 'RLS_TENANT_CONTEXT_INVALID',
-        DETAIL = format('app.current_tenant=%s', v_ctx_raw);
+    WHEN p_event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+      THEN p_before_snapshot IS NOT NULL
+           AND (
+             (p_rescind_outcome = 'ABSENT' AND p_after_snapshot IS NULL)
+             OR (p_rescind_outcome = 'PRESENT' AND p_after_snapshot IS NOT NULL)
+           )
+
+    ELSE true
   END;
-
-  IF v_ctx_tenant <> p_tenant_uuid THEN
-    RAISE EXCEPTION USING
-      ERRCODE = 'P0001',
-      MESSAGE = 'RLS_TENANT_MISMATCH',
-      DETAIL = format('tenant_param=%s tenant_ctx=%s', p_tenant_uuid, v_ctx_tenant);
-  END IF;
-END;
 $$;
 
-CREATE OR REPLACE FUNCTION orgunit.fill_org_event_audit_snapshot()
-RETURNS trigger
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_name text;
-  v_employee text;
-BEGIN
-  IF NEW.tx_time IS NULL THEN
-    NEW.tx_time := COALESCE(NEW.transaction_time, now());
-  END IF;
-
-  IF NULLIF(btrim(COALESCE(NEW.initiator_name, '')), '') IS NOT NULL
-    AND NULLIF(btrim(COALESCE(NEW.initiator_employee_id, '')), '') IS NOT NULL
-  THEN
-    RETURN NEW;
-  END IF;
-
-  IF to_regclass('iam.principals') IS NOT NULL THEN
-    SELECT
-      COALESCE(NULLIF(btrim(p.display_name), ''), NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text),
-      COALESCE(NULLIF(btrim(p.email), ''), NEW.initiator_uuid::text)
-    INTO v_name, v_employee
-    FROM iam.principals p
-    WHERE p.tenant_uuid = NEW.tenant_uuid
-      AND p.id = NEW.initiator_uuid
-    LIMIT 1;
-  END IF;
-
-  NEW.initiator_name := COALESCE(NULLIF(btrim(COALESCE(NEW.initiator_name, '')), ''), v_name, NEW.initiator_uuid::text);
-  NEW.initiator_employee_id := COALESCE(NULLIF(btrim(COALESCE(NEW.initiator_employee_id, '')), ''), v_employee, NEW.initiator_uuid::text);
-
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS org_events_fill_audit_snapshot ON orgunit.org_events;
-CREATE TRIGGER org_events_fill_audit_snapshot
-BEFORE INSERT ON orgunit.org_events
-FOR EACH ROW
-EXECUTE FUNCTION orgunit.fill_org_event_audit_snapshot();
-
-CREATE OR REPLACE VIEW orgunit.org_events_effective AS
-WITH correction_events AS (
-  SELECT
-    e.*,
-    (e.payload->>'target_event_uuid')::uuid AS target_event_uuid
-  FROM orgunit.org_events e
-  WHERE e.event_type IN ('CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')
-    AND e.payload ? 'target_event_uuid'
-),
-latest_corrections AS (
-  SELECT DISTINCT ON (tenant_uuid, target_event_uuid)
-    tenant_uuid,
-    target_event_uuid,
-    event_type AS correction_type,
-    payload AS correction_payload,
-    tx_time,
-    id
-  FROM correction_events
-  ORDER BY tenant_uuid, target_event_uuid, tx_time DESC, id DESC
-)
-SELECT
-  e.id,
-  e.event_uuid,
-  e.tenant_uuid,
-  e.org_id,
-  CASE
-    WHEN lc.correction_type = 'CORRECT_STATUS'
-      AND COALESCE(lc.correction_payload->>'target_status', '') = 'active'
-      THEN 'ENABLE'
-    WHEN lc.correction_type = 'CORRECT_STATUS'
-      AND COALESCE(lc.correction_payload->>'target_status', '') = 'disabled'
-      THEN 'DISABLE'
-    ELSE e.event_type
-  END AS event_type,
-  CASE
-    WHEN lc.correction_type = 'CORRECT_EVENT'
-      AND lc.correction_payload ? 'effective_date'
-      THEN NULLIF(btrim(lc.correction_payload->>'effective_date'), '')::date
-    ELSE e.effective_date
-  END AS effective_date,
-  CASE
-    WHEN lc.correction_type = 'CORRECT_EVENT'
-      THEN COALESCE(e.payload, '{}'::jsonb)
-           || (lc.correction_payload - 'effective_date' - 'target_event_uuid' - 'op')
-    ELSE e.payload
-  END AS payload,
-  e.request_code,
-  e.initiator_uuid,
-  e.transaction_time,
-  e.created_at
-FROM orgunit.org_events e
-LEFT JOIN latest_corrections lc
-  ON lc.tenant_uuid = e.tenant_uuid
- AND lc.target_event_uuid = e.event_uuid
-WHERE e.event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')
-  AND COALESCE(lc.correction_type, '') NOT IN ('RESCIND_EVENT', 'RESCIND_ORG');
-
-CREATE OR REPLACE FUNCTION orgunit.split_org_unit_version_at(
-  p_tenant_uuid uuid,
-  p_org_id int,
-  p_effective_date date,
-  p_event_db_id bigint
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_row orgunit.org_unit_versions%ROWTYPE;
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
-
-  IF p_org_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
-  END IF;
-  IF p_effective_date IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
-  END IF;
-
-  SELECT * INTO v_row
-  FROM orgunit.org_unit_versions
-  WHERE tenant_uuid = p_tenant_uuid
-    AND org_id = p_org_id
-    AND validity @> p_effective_date
-    AND lower(validity) < p_effective_date
-  ORDER BY lower(validity) DESC
-  LIMIT 1
-  FOR UPDATE;
-
-  IF NOT FOUND THEN
-    RETURN;
-  END IF;
-
-  UPDATE orgunit.org_unit_versions
-  SET validity = daterange(lower(validity), p_effective_date, '[)')
-  WHERE id = v_row.id;
-
-  INSERT INTO orgunit.org_unit_versions (
-    tenant_uuid,
-    org_id,
-    parent_id,
-    node_path,
-    validity,
-    name,
-    full_name_path,
-    status,
-    is_business_unit,
-    manager_uuid,
-    last_event_id
-  )
-  VALUES (
-    v_row.tenant_uuid,
-    v_row.org_id,
-    v_row.parent_id,
-    v_row.node_path,
-    daterange(p_effective_date, upper(v_row.validity), '[)'),
-    v_row.name,
-    v_row.full_name_path,
-    v_row.status,
-    v_row.is_business_unit,
-    v_row.manager_uuid,
-    p_event_db_id
-  );
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.apply_create_logic(
-  p_tenant_uuid uuid,
-  p_org_id int,
-  p_org_code text,
-  p_parent_id int,
-  p_effective_date date,
-  p_name text,
-  p_manager_uuid uuid,
-  p_is_business_unit boolean,
-  p_event_db_id bigint
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_parent_path ltree;
-  v_node_path ltree;
-  v_root_org_id int;
-  v_is_business_unit boolean;
-  v_org_code text;
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
-
-  IF p_org_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
-  END IF;
-  IF p_effective_date IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
-  END IF;
-  IF p_name IS NULL OR btrim(p_name) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'name is required';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1
-    FROM orgunit.org_unit_versions
-    WHERE tenant_uuid = p_tenant_uuid AND org_id = p_org_id
-    LIMIT 1
-  ) THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_ALREADY_EXISTS', DETAIL = format('org_id=%s', p_org_id);
-  END IF;
-
-  IF p_parent_id IS NULL THEN
-    SELECT t.root_org_id INTO v_root_org_id
-    FROM orgunit.org_trees t
-    WHERE t.tenant_uuid = p_tenant_uuid
-    FOR UPDATE;
-
-    IF v_root_org_id IS NOT NULL THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_ROOT_ALREADY_EXISTS',
-        DETAIL = format('root_org_id=%s', v_root_org_id);
-    END IF;
-
-    INSERT INTO orgunit.org_trees (tenant_uuid, root_org_id)
-    VALUES (p_tenant_uuid, p_org_id);
-
-    v_node_path := text2ltree(orgunit.org_ltree_label(p_org_id));
-    IF p_is_business_unit IS NOT NULL AND p_is_business_unit = false THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_ROOT_BUSINESS_UNIT_REQUIRED',
-        DETAIL = format('org_id=%s', p_org_id);
-    END IF;
-    v_is_business_unit := true;
-  ELSE
-    SELECT t.root_org_id INTO v_root_org_id
-    FROM orgunit.org_trees t
-    WHERE t.tenant_uuid = p_tenant_uuid;
-
-    IF v_root_org_id IS NULL THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_TREE_NOT_INITIALIZED',
-        DETAIL = format('tenant_uuid=%s', p_tenant_uuid);
-    END IF;
-
-    SELECT v.node_path INTO v_parent_path
-    FROM orgunit.org_unit_versions v
-    WHERE v.tenant_uuid = p_tenant_uuid
-      AND v.org_id = p_parent_id
-      AND v.status = 'active'
-      AND v.validity @> p_effective_date
-    LIMIT 1;
-
-    IF v_parent_path IS NULL THEN
-      RAISE EXCEPTION USING
-        MESSAGE = 'ORG_PARENT_NOT_FOUND_AS_OF',
-        DETAIL = format('parent_id=%s as_of=%s', p_parent_id, p_effective_date);
-    END IF;
-
-    v_node_path := v_parent_path || text2ltree(orgunit.org_ltree_label(p_org_id));
-    v_is_business_unit := COALESCE(p_is_business_unit, false);
-  END IF;
-
-  v_org_code := NULLIF(p_org_code, '');
-  IF v_org_code IS NOT NULL THEN
-    v_org_code := upper(v_org_code);
-    INSERT INTO orgunit.org_unit_codes (tenant_uuid, org_id, org_code)
-    VALUES (p_tenant_uuid, p_org_id, v_org_code);
-  END IF;
-
-  INSERT INTO orgunit.org_unit_versions (
-    tenant_uuid,
-    org_id,
-    parent_id,
-    node_path,
-    validity,
-    name,
-    full_name_path,
-    status,
-    is_business_unit,
-    manager_uuid,
-    last_event_id
-  )
-  VALUES (
-    p_tenant_uuid,
-    p_org_id,
-    p_parent_id,
-    v_node_path,
-    daterange(p_effective_date, NULL, '[)'),
-    p_name,
-    p_name,
-    'active',
-    v_is_business_unit,
-    p_manager_uuid,
-    p_event_db_id
-  );
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.apply_move_logic(
-  p_tenant_uuid uuid,
-  p_org_id int,
-  p_new_parent_id int,
-  p_effective_date date,
-  p_event_db_id bigint
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_root_org_id int;
-  v_old_path ltree;
-  v_new_parent_path ltree;
-  v_new_prefix ltree;
-  v_old_level int;
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
-
-  IF p_org_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
-  END IF;
-  IF p_new_parent_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'new_parent_id is required';
-  END IF;
-  IF p_effective_date IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
-  END IF;
-
-  SELECT t.root_org_id INTO v_root_org_id
-  FROM orgunit.org_trees t
-  WHERE t.tenant_uuid = p_tenant_uuid;
-
-  IF v_root_org_id IS NULL THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_TREE_NOT_INITIALIZED',
-      DETAIL = format('tenant_uuid=%s', p_tenant_uuid);
-  END IF;
-  IF v_root_org_id = p_org_id THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_ROOT_CANNOT_BE_MOVED',
-      DETAIL = format('root_org_id=%s', v_root_org_id);
-  END IF;
-
-  SELECT v.node_path INTO v_old_path
-  FROM orgunit.org_unit_versions v
-  WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.org_id = p_org_id
-    AND v.status = 'active'
-    AND v.validity @> p_effective_date
-  ORDER BY lower(v.validity) DESC
-  LIMIT 1
-  FOR UPDATE;
-
-  IF v_old_path IS NULL THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_NOT_FOUND_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
-  END IF;
-
-  SELECT v.node_path INTO v_new_parent_path
-  FROM orgunit.org_unit_versions v
-  WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.org_id = p_new_parent_id
-    AND v.status = 'active'
-    AND v.validity @> p_effective_date
-  LIMIT 1;
-
-  IF v_new_parent_path IS NULL THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_PARENT_NOT_FOUND_AS_OF',
-      DETAIL = format('parent_id=%s as_of=%s', p_new_parent_id, p_effective_date);
-  END IF;
-
-  IF v_new_parent_path <@ v_old_path THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_CYCLE_MOVE',
-      DETAIL = format('cycle move: org_id=%s new_parent_id=%s', p_org_id, p_new_parent_id);
-  END IF;
-
-  v_new_prefix := v_new_parent_path || text2ltree(orgunit.org_ltree_label(p_org_id));
-  v_old_level := nlevel(v_old_path);
-
-  WITH split AS (
-    SELECT *
-    FROM orgunit.org_unit_versions
-    WHERE tenant_uuid = p_tenant_uuid
-      AND node_path <@ v_old_path
-      AND validity @> p_effective_date
-      AND lower(validity) < p_effective_date
-  ),
-  upd AS (
-    UPDATE orgunit.org_unit_versions v
-    SET validity = daterange(lower(v.validity), p_effective_date, '[)')
-    FROM split s
-    WHERE v.id = s.id
-    RETURNING s.*
-  )
-  INSERT INTO orgunit.org_unit_versions (
-    tenant_uuid,
-    org_id,
-    parent_id,
-    node_path,
-    validity,
-    name,
-    full_name_path,
-    status,
-    is_business_unit,
-    manager_uuid,
-    last_event_id
-  )
-  SELECT
-    u.tenant_uuid,
-    u.org_id,
-    CASE WHEN u.org_id = p_org_id THEN p_new_parent_id ELSE u.parent_id END,
-    CASE
-      WHEN u.org_id = p_org_id THEN v_new_prefix
-      ELSE v_new_prefix || subpath(u.node_path, v_old_level)
-    END,
-    daterange(p_effective_date, upper(u.validity), '[)'),
-    u.name,
-    u.full_name_path,
-    u.status,
-    u.is_business_unit,
-    u.manager_uuid,
-    p_event_db_id
-  FROM upd u;
-
-  UPDATE orgunit.org_unit_versions v
-  SET
-    node_path = CASE
-      WHEN v.org_id = p_org_id THEN v_new_prefix
-        ELSE v_new_prefix || subpath(v.node_path, v_old_level)
-      END,
-    parent_id = CASE WHEN v.org_id = p_org_id THEN p_new_parent_id ELSE v.parent_id END,
-    last_event_id = p_event_db_id
-  WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.node_path <@ v_old_path
-    AND lower(v.validity) >= p_effective_date;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.apply_rename_logic(
-  p_tenant_uuid uuid,
-  p_org_id int,
-  p_effective_date date,
-  p_new_name text,
-  p_event_db_id bigint
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_stop_date date;
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
-
-  IF p_org_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
-  END IF;
-  IF p_effective_date IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
-  END IF;
-  IF p_new_name IS NULL OR btrim(p_new_name) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'new_name is required';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM orgunit.org_unit_versions
-    WHERE tenant_uuid = p_tenant_uuid
-      AND org_id = p_org_id
-      AND validity @> p_effective_date
-    LIMIT 1
-  ) THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_NOT_FOUND_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
-  END IF;
-
-  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_org_id, p_effective_date, p_event_db_id);
-
-  SELECT MIN(e.effective_date) INTO v_stop_date
-  FROM orgunit.org_events_effective e
-  WHERE e.tenant_uuid = p_tenant_uuid
-    AND e.org_id = p_org_id
-    AND e.event_type = 'RENAME'
-    AND e.effective_date > p_effective_date;
-
-  UPDATE orgunit.org_unit_versions
-  SET name = p_new_name, last_event_id = p_event_db_id
-  WHERE tenant_uuid = p_tenant_uuid
-    AND org_id = p_org_id
-    AND lower(validity) >= p_effective_date
-    AND (v_stop_date IS NULL OR lower(validity) < v_stop_date);
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.apply_disable_logic(
-  p_tenant_uuid uuid,
-  p_org_id int,
-  p_effective_date date,
-  p_event_db_id bigint
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
-
-  IF p_org_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
-  END IF;
-  IF p_effective_date IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM orgunit.org_unit_versions
-    WHERE tenant_uuid = p_tenant_uuid
-      AND org_id = p_org_id
-      AND validity @> p_effective_date
-    LIMIT 1
-  ) THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_NOT_FOUND_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
-  END IF;
-
-  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_org_id, p_effective_date, p_event_db_id);
-
-  UPDATE orgunit.org_unit_versions
-  SET status = 'disabled', last_event_id = p_event_db_id
-  WHERE tenant_uuid = p_tenant_uuid
-    AND org_id = p_org_id
-    AND lower(validity) >= p_effective_date;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.apply_enable_logic(
-  p_tenant_uuid uuid,
-  p_org_id int,
-  p_effective_date date,
-  p_event_db_id bigint
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
-
-  IF p_org_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
-  END IF;
-  IF p_effective_date IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM orgunit.org_unit_versions
-    WHERE tenant_uuid = p_tenant_uuid
-      AND org_id = p_org_id
-      AND validity @> p_effective_date
-    LIMIT 1
-  ) THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_NOT_FOUND_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
-  END IF;
-
-  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_org_id, p_effective_date, p_event_db_id);
-
-  UPDATE orgunit.org_unit_versions
-  SET status = 'active', last_event_id = p_event_db_id
-  WHERE tenant_uuid = p_tenant_uuid
-    AND org_id = p_org_id
-    AND lower(validity) >= p_effective_date;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.apply_set_business_unit_logic(
-  p_tenant_uuid uuid,
-  p_org_id int,
-  p_effective_date date,
-  p_is_business_unit boolean,
-  p_event_db_id bigint
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_stop_date date;
-  v_status text;
-  v_root_org_id int;
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
-
-  IF p_org_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
-  END IF;
-  IF p_effective_date IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
-  END IF;
-  IF p_is_business_unit IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'is_business_unit is required';
-  END IF;
-
-  SELECT v.status INTO v_status
-  FROM orgunit.org_unit_versions v
-  WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.org_id = p_org_id
-    AND v.validity @> p_effective_date
-  ORDER BY lower(v.validity) DESC
-  LIMIT 1;
-
-  IF v_status IS NULL THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_NOT_FOUND_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
-  END IF;
-  IF v_status <> 'active' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_INACTIVE_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', p_org_id, p_effective_date);
-  END IF;
-
-  SELECT t.root_org_id INTO v_root_org_id
-  FROM orgunit.org_trees t
-  WHERE t.tenant_uuid = p_tenant_uuid;
-
-  IF v_root_org_id IS NOT NULL AND v_root_org_id = p_org_id AND p_is_business_unit = false THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_ROOT_BUSINESS_UNIT_REQUIRED',
-      DETAIL = format('org_id=%s', p_org_id);
-  END IF;
-
-  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_org_id, p_effective_date, p_event_db_id);
-
-  SELECT MIN(e.effective_date) INTO v_stop_date
-  FROM orgunit.org_events_effective e
-  WHERE e.tenant_uuid = p_tenant_uuid
-    AND e.org_id = p_org_id
-    AND e.event_type = 'SET_BUSINESS_UNIT'
-    AND e.effective_date > p_effective_date;
-
-  UPDATE orgunit.org_unit_versions
-  SET is_business_unit = p_is_business_unit, last_event_id = p_event_db_id
-  WHERE tenant_uuid = p_tenant_uuid
-    AND org_id = p_org_id
-    AND lower(validity) >= p_effective_date
-    AND (v_stop_date IS NULL OR lower(validity) < v_stop_date);
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.rebuild_full_name_path_subtree(
-  p_tenant_uuid uuid,
-  p_root_path ltree,
-  p_from_date date
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
-
-  IF p_root_path IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'root_path is required';
-  END IF;
-  IF p_from_date IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'from_date is required';
-  END IF;
-
-  UPDATE orgunit.org_unit_versions v
-  SET full_name_path = (
-    SELECT string_agg(a.name, ' / ' ORDER BY t.idx)
-    FROM unnest(v.path_ids) WITH ORDINALITY AS t(uid, idx)
-    JOIN orgunit.org_unit_versions a
-      ON a.tenant_uuid = v.tenant_uuid
-     AND a.org_id = t.uid
-     AND a.validity @> lower(v.validity)
-  )
-  WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.node_path <@ p_root_path
-    AND lower(v.validity) >= p_from_date;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.assert_org_unit_validity(
-  p_tenant_uuid uuid,
-  p_org_ids int[]
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
-
-  IF p_org_ids IS NULL OR array_length(p_org_ids, 1) IS NULL THEN
-    RETURN;
-  END IF;
-
-  IF EXISTS (
-    WITH ordered AS (
-      SELECT
-        org_id,
-        validity,
-        lag(validity) OVER (PARTITION BY org_id ORDER BY lower(validity)) AS prev_validity
-      FROM orgunit.org_unit_versions
-      WHERE tenant_uuid = p_tenant_uuid
-        AND org_id = ANY(p_org_ids)
+UPDATE orgunit.org_events
+SET rescind_outcome = CASE WHEN after_snapshot IS NULL THEN 'ABSENT' ELSE 'PRESENT' END
+WHERE event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+  AND rescind_outcome IS NULL;
+
+ALTER TABLE orgunit.org_events
+  DROP CONSTRAINT IF EXISTS org_events_rescind_outcome_check,
+  DROP CONSTRAINT IF EXISTS org_events_snapshot_presence_check;
+
+ALTER TABLE orgunit.org_events
+  ADD CONSTRAINT org_events_rescind_outcome_check CHECK (
+    (
+      event_type NOT IN ('RESCIND_EVENT','RESCIND_ORG')
+      AND rescind_outcome IS NULL
     )
-    SELECT 1
-    FROM ordered
-    WHERE prev_validity IS NOT NULL
-      AND lower(validity) <> upper(prev_validity)
-    LIMIT 1
-  ) THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_VALIDITY_GAP',
-      DETAIL = 'org_unit_versions must be gapless';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1
-    FROM (
-      SELECT DISTINCT ON (org_id) org_id, validity
-      FROM orgunit.org_unit_versions
-      WHERE tenant_uuid = p_tenant_uuid
-        AND org_id = ANY(p_org_ids)
-      ORDER BY org_id, lower(validity) DESC
-    ) last
-    WHERE NOT upper_inf(last.validity)
-    LIMIT 1
-  ) THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_VALIDITY_NOT_INFINITE',
-      DETAIL = 'last version validity must be unbounded (infinity)';
-  END IF;
-END;
-$$;
+    OR (
+      event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+      AND rescind_outcome IN ('PRESENT','ABSENT')
+    )
+  ) NOT VALID,
+  ADD CONSTRAINT org_events_snapshot_presence_check CHECK (
+    orgunit.is_org_event_snapshot_presence_valid(
+      event_type,
+      before_snapshot,
+      after_snapshot,
+      rescind_outcome
+    )
+  ) NOT VALID;
 
 CREATE OR REPLACE FUNCTION orgunit.org_events_effective_for_replay(
   p_tenant_uuid uuid,
@@ -1139,121 +419,6 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION orgunit.extract_orgunit_snapshot(
-  p_tenant_uuid uuid,
-  p_org_id int,
-  p_as_of date
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_row orgunit.org_unit_versions%ROWTYPE;
-  v_snapshot jsonb;
-  v_org_code text;
-BEGIN
-  PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
-
-  IF p_org_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
-  END IF;
-  IF p_as_of IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'as_of is required';
-  END IF;
-
-  SELECT * INTO v_row
-  FROM orgunit.org_unit_versions v
-  WHERE v.tenant_uuid = p_tenant_uuid
-    AND v.org_id = p_org_id
-    AND v.validity @> p_as_of
-  ORDER BY lower(v.validity) DESC
-  LIMIT 1;
-
-  IF NOT FOUND THEN
-    RETURN NULL;
-  END IF;
-
-  SELECT c.org_code INTO v_org_code
-  FROM orgunit.org_unit_codes c
-  WHERE c.tenant_uuid = p_tenant_uuid
-    AND c.org_id = p_org_id
-  LIMIT 1;
-
-  v_snapshot := to_jsonb(v_row) - 'id' - 'tenant_uuid' - 'last_event_id' - 'path_ids';
-  IF v_org_code IS NOT NULL THEN
-    v_snapshot := jsonb_set(v_snapshot, '{org_code}', to_jsonb(v_org_code), true);
-  END IF;
-
-  IF jsonb_typeof(v_snapshot) <> 'object' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_AUDIT_SNAPSHOT_INVALID',
-      DETAIL = format('org_id=%s as_of=%s snapshot_type=%s', p_org_id, p_as_of, COALESCE(jsonb_typeof(v_snapshot), 'null'));
-  END IF;
-
-  RETURN v_snapshot;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION orgunit.assert_org_event_snapshots(
-  p_event_type text,
-  p_before_snapshot jsonb,
-  p_after_snapshot jsonb,
-  p_rescind_outcome text
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  IF p_before_snapshot IS NOT NULL AND jsonb_typeof(p_before_snapshot) <> 'object' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_AUDIT_SNAPSHOT_INVALID',
-      DETAIL = format('event_type=%s before_snapshot_type=%s', p_event_type, jsonb_typeof(p_before_snapshot));
-  END IF;
-
-  IF p_after_snapshot IS NOT NULL AND jsonb_typeof(p_after_snapshot) <> 'object' THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_AUDIT_SNAPSHOT_INVALID',
-      DETAIL = format('event_type=%s after_snapshot_type=%s', p_event_type, jsonb_typeof(p_after_snapshot));
-  END IF;
-
-  IF NOT orgunit.is_org_event_snapshot_presence_valid(
-    p_event_type,
-    p_before_snapshot,
-    p_after_snapshot,
-    p_rescind_outcome
-  ) THEN
-    RAISE EXCEPTION USING
-      MESSAGE = 'ORG_AUDIT_SNAPSHOT_MISSING',
-      DETAIL = format(
-        'event_type=%s before=%s after=%s rescind_outcome=%s',
-        p_event_type,
-        p_before_snapshot IS NOT NULL,
-        p_after_snapshot IS NOT NULL,
-        COALESCE(p_rescind_outcome, 'NULL')
-      );
-  END IF;
-END;
-$$;
-
--- Backward-compatible wrapper for existing 3-arg callers during rollout.
-CREATE OR REPLACE FUNCTION orgunit.assert_org_event_snapshots(
-  p_event_type text,
-  p_before_snapshot jsonb,
-  p_after_snapshot jsonb
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  PERFORM orgunit.assert_org_event_snapshots(
-    p_event_type,
-    p_before_snapshot,
-    p_after_snapshot,
-    NULL
-  );
-END;
-$$;
-
 CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
   p_event_uuid uuid,
   p_tenant_uuid uuid,
@@ -1273,6 +438,7 @@ DECLARE
   v_existing orgunit.org_events%ROWTYPE;
   v_existing_request orgunit.org_events%ROWTYPE;
   v_payload jsonb;
+  v_org_id int;
   v_parent_id int;
   v_new_parent_id int;
   v_name text;
@@ -1289,9 +455,6 @@ BEGIN
 
   IF p_event_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'event_uuid is required';
-  END IF;
-  IF p_org_id IS NULL THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
   END IF;
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
@@ -1329,6 +492,35 @@ BEGIN
     END;
   END IF;
 
+  IF p_event_type = 'CREATE' AND p_org_id IS NULL THEN
+    SELECT * INTO v_existing
+    FROM orgunit.org_events
+    WHERE event_uuid = p_event_uuid;
+
+    IF FOUND THEN
+      IF v_existing.tenant_uuid <> p_tenant_uuid
+        OR v_existing.event_type <> p_event_type
+        OR v_existing.effective_date <> p_effective_date
+        OR v_existing.payload <> v_payload
+        OR v_existing.request_code <> p_request_code
+        OR v_existing.initiator_uuid <> p_initiator_uuid
+      THEN
+        RAISE EXCEPTION USING
+          MESSAGE = 'ORG_IDEMPOTENCY_REUSED',
+          DETAIL = format('event_uuid=%s existing_id=%s', p_event_uuid, v_existing.id);
+      END IF;
+
+      RETURN v_existing.id;
+    END IF;
+
+    v_org_id := orgunit.allocate_org_id(p_tenant_uuid);
+  ELSE
+    IF p_org_id IS NULL THEN
+      RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'org_id is required';
+    END IF;
+    v_org_id := p_org_id;
+  END IF;
+
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
@@ -1337,7 +529,7 @@ BEGIN
 
   IF FOUND THEN
     IF v_existing_request.event_uuid <> p_event_uuid
-      OR v_existing_request.org_id <> p_org_id
+      OR v_existing_request.org_id <> v_org_id
       OR v_existing_request.event_type <> p_event_type
       OR v_existing_request.effective_date <> p_effective_date
       OR v_existing_request.payload <> v_payload
@@ -1351,7 +543,7 @@ BEGIN
     RETURN v_existing_request.id;
   END IF;
 
-  v_before_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_effective_date);
+  v_before_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, v_org_id, p_effective_date);
 
   SELECT * INTO v_existing
   FROM orgunit.org_events
@@ -1359,7 +551,7 @@ BEGIN
 
   IF FOUND THEN
     IF v_existing.tenant_uuid <> p_tenant_uuid
-      OR v_existing.org_id <> p_org_id
+      OR v_existing.org_id <> v_org_id
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
@@ -1392,23 +584,23 @@ BEGIN
             DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
       END;
     END IF;
-    PERFORM orgunit.apply_create_logic(p_tenant_uuid, p_org_id, v_org_code, v_parent_id, p_effective_date, v_name, v_manager_uuid, v_is_business_unit, v_event_db_id);
+    PERFORM orgunit.apply_create_logic(p_tenant_uuid, v_org_id, v_org_code, v_parent_id, p_effective_date, v_name, v_manager_uuid, v_is_business_unit, v_event_db_id);
     SELECT v.node_path INTO v_root_path
     FROM orgunit.org_unit_versions v
     WHERE v.tenant_uuid = p_tenant_uuid
-      AND v.org_id = p_org_id
+      AND v.org_id = v_org_id
       AND v.validity @> p_effective_date
     ORDER BY lower(v.validity) DESC
     LIMIT 1;
     PERFORM orgunit.rebuild_full_name_path_subtree(p_tenant_uuid, v_root_path, p_effective_date);
-    v_org_ids := ARRAY[p_org_id];
+    v_org_ids := ARRAY[v_org_id];
   ELSIF p_event_type = 'MOVE' THEN
     v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::int;
-    PERFORM orgunit.apply_move_logic(p_tenant_uuid, p_org_id, v_new_parent_id, p_effective_date, v_event_db_id);
+    PERFORM orgunit.apply_move_logic(p_tenant_uuid, v_org_id, v_new_parent_id, p_effective_date, v_event_db_id);
     SELECT v.node_path INTO v_root_path
     FROM orgunit.org_unit_versions v
     WHERE v.tenant_uuid = p_tenant_uuid
-      AND v.org_id = p_org_id
+      AND v.org_id = v_org_id
       AND v.validity @> p_effective_date
     ORDER BY lower(v.validity) DESC
     LIMIT 1;
@@ -1419,31 +611,31 @@ BEGIN
       AND v.node_path <@ v_root_path;
   ELSIF p_event_type = 'RENAME' THEN
     v_new_name := NULLIF(btrim(v_payload->>'new_name'), '');
-    PERFORM orgunit.apply_rename_logic(p_tenant_uuid, p_org_id, p_effective_date, v_new_name, v_event_db_id);
+    PERFORM orgunit.apply_rename_logic(p_tenant_uuid, v_org_id, p_effective_date, v_new_name, v_event_db_id);
     SELECT v.node_path INTO v_root_path
     FROM orgunit.org_unit_versions v
     WHERE v.tenant_uuid = p_tenant_uuid
-      AND v.org_id = p_org_id
+      AND v.org_id = v_org_id
       AND v.validity @> p_effective_date
     ORDER BY lower(v.validity) DESC
     LIMIT 1;
     PERFORM orgunit.rebuild_full_name_path_subtree(p_tenant_uuid, v_root_path, p_effective_date);
-    v_org_ids := ARRAY[p_org_id];
+    v_org_ids := ARRAY[v_org_id];
   ELSIF p_event_type = 'DISABLE' THEN
-    PERFORM orgunit.apply_disable_logic(p_tenant_uuid, p_org_id, p_effective_date, v_event_db_id);
-    v_org_ids := ARRAY[p_org_id];
+    PERFORM orgunit.apply_disable_logic(p_tenant_uuid, v_org_id, p_effective_date, v_event_db_id);
+    v_org_ids := ARRAY[v_org_id];
   ELSIF p_event_type = 'ENABLE' THEN
-    PERFORM orgunit.apply_enable_logic(p_tenant_uuid, p_org_id, p_effective_date, v_event_db_id);
-    v_org_ids := ARRAY[p_org_id];
+    PERFORM orgunit.apply_enable_logic(p_tenant_uuid, v_org_id, p_effective_date, v_event_db_id);
+    v_org_ids := ARRAY[v_org_id];
   ELSIF p_event_type = 'SET_BUSINESS_UNIT' THEN
     v_is_business_unit := (v_payload->>'is_business_unit')::boolean;
-    PERFORM orgunit.apply_set_business_unit_logic(p_tenant_uuid, p_org_id, p_effective_date, v_is_business_unit, v_event_db_id);
-    v_org_ids := ARRAY[p_org_id];
+    PERFORM orgunit.apply_set_business_unit_logic(p_tenant_uuid, v_org_id, p_effective_date, v_is_business_unit, v_event_db_id);
+    v_org_ids := ARRAY[v_org_id];
   END IF;
 
   PERFORM orgunit.assert_org_unit_validity(p_tenant_uuid, v_org_ids);
 
-  v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, p_org_id, p_effective_date);
+  v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, v_org_id, p_effective_date);
   PERFORM orgunit.assert_org_event_snapshots(p_event_type, v_before_snapshot, v_after_snapshot, NULL);
 
   INSERT INTO orgunit.org_events (
@@ -1463,7 +655,7 @@ BEGIN
     v_event_db_id,
     p_event_uuid,
     p_tenant_uuid,
-    p_org_id,
+    v_org_id,
     p_event_type,
     p_effective_date,
     v_payload,
@@ -2409,3 +1601,195 @@ BEGIN
   RETURN v_event_uuid;
 END;
 $$;
+
+ALTER FUNCTION orgunit.is_org_event_snapshot_presence_valid(text, jsonb, jsonb, text)
+  OWNER TO orgunit_kernel;
+
+ALTER FUNCTION orgunit.org_events_effective_for_replay(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.org_events_effective_for_replay(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) SET search_path = pg_catalog, orgunit, public;
+
+REVOKE EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) TO orgunit_kernel;
+ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pending_event(
+  uuid,
+  int,
+  bigint,
+  uuid,
+  text,
+  date,
+  jsonb,
+  text,
+  uuid,
+  timestamptz,
+  timestamptz,
+  timestamptz
+) SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.rebuild_org_unit_versions_for_org(uuid, int)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.submit_org_event_rescind(uuid, int, date, text, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_event_rescind(uuid, int, date, text, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_event_rescind(uuid, int, date, text, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_rescind(uuid, int, text, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_event_correction(uuid, int, date, jsonb, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.submit_org_status_correction(uuid, int, date, text, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.submit_org_status_correction(uuid, int, date, text, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.submit_org_status_correction(uuid, int, date, text, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION orgunit.is_org_event_snapshot_presence_valid(
+  p_event_type text,
+  p_before_snapshot jsonb,
+  p_after_snapshot jsonb,
+  p_rescind_outcome text
+)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_before_snapshot IS NULL AND p_after_snapshot IS NULL
+      THEN true
+
+    WHEN p_event_type = 'CREATE'
+      THEN p_after_snapshot IS NOT NULL
+
+    WHEN p_event_type IN ('MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS')
+      THEN p_before_snapshot IS NOT NULL AND p_after_snapshot IS NOT NULL
+
+    WHEN p_event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+      THEN p_before_snapshot IS NOT NULL
+           AND (
+             p_rescind_outcome IS NULL
+             OR (p_rescind_outcome = 'ABSENT' AND p_after_snapshot IS NULL)
+             OR (p_rescind_outcome = 'PRESENT' AND p_after_snapshot IS NOT NULL)
+           )
+
+    ELSE true
+  END;
+$$;
+
+ALTER FUNCTION orgunit.is_org_event_snapshot_presence_valid(text, jsonb, jsonb, text)
+  OWNER TO orgunit_kernel;
+
+ALTER TABLE orgunit.org_events
+  DROP CONSTRAINT IF EXISTS org_events_rescind_outcome_check,
+  DROP CONSTRAINT IF EXISTS org_events_snapshot_presence_check;
+
+ALTER TABLE orgunit.org_events
+  ADD CONSTRAINT org_events_rescind_outcome_check CHECK (
+    (
+      event_type NOT IN ('RESCIND_EVENT','RESCIND_ORG')
+      AND rescind_outcome IS NULL
+    )
+    OR (
+      event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+      AND (rescind_outcome IS NULL OR rescind_outcome IN ('PRESENT','ABSENT'))
+    )
+  ) NOT VALID,
+  ADD CONSTRAINT org_events_snapshot_presence_check CHECK (
+    orgunit.is_org_event_snapshot_presence_valid(
+      event_type,
+      before_snapshot,
+      after_snapshot,
+      rescind_outcome
+    )
+  ) NOT VALID;
+-- +goose StatementEnd
