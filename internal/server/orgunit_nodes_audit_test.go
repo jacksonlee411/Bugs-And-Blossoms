@@ -444,6 +444,22 @@ func TestRenderOrgNodeAuditDetailEntry(t *testing.T) {
 		t.Fatalf("unexpected output: %q", out3)
 	}
 
+	outNoFallback := renderOrgNodeAuditDetailEntry(OrgUnitNodeAuditEvent{
+		EventID:       99,
+		EventUUID:     "evt-99",
+		EventType:     "RENAME",
+		EffectiveDate: "2026-01-06",
+		TxTime:        time.Date(2026, 2, 9, 11, 11, 0, 0, time.UTC),
+		Payload:       json.RawMessage(`{"new_name":"B"}`),
+		// after_snapshot 缺失时不应回退使用 payload 生成 diff。
+	})
+	if strings.Contains(outNoFallback, "<td>new_name</td>") {
+		t.Fatalf("expected no payload fallback diff row, got: %q", outNoFallback)
+	}
+	if !strings.Contains(outNoFallback, "快照缺失") {
+		t.Fatalf("expected missing snapshot warning, got: %q", outNoFallback)
+	}
+
 	out4 := renderOrgNodeAuditDetailEntry(OrgUnitNodeAuditEvent{
 		EventID:       13,
 		EventUUID:     "evt-13",

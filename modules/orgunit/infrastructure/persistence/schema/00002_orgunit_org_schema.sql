@@ -54,6 +54,10 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
       AND NULLIF(btrim(payload->>'target_event_uuid'), '') IS NOT NULL
     )
   ),
+  CONSTRAINT org_events_snapshot_shape_check CHECK (
+    (before_snapshot IS NULL OR jsonb_typeof(before_snapshot) = 'object')
+    AND (after_snapshot IS NULL OR jsonb_typeof(after_snapshot) = 'object')
+  ),
   CONSTRAINT org_events_request_code_unique UNIQUE (tenant_uuid, request_code)
 );
 

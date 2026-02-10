@@ -87,6 +87,8 @@ DECLARE
   v_org_code text;
   v_root_path ltree;
   v_org_ids int[];
+  v_before_snapshot jsonb;
+  v_after_snapshot jsonb;
 BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
 
@@ -180,6 +182,8 @@ BEGIN
     RETURN v_existing_request.id;
   END IF;
 
+  v_before_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, v_org_id, p_effective_date);
+
   INSERT INTO orgunit.org_events (
     event_uuid,
     tenant_uuid,
@@ -188,8 +192,7 @@ BEGIN
     effective_date,
     payload,
     request_code,
-    initiator_uuid,
-    after_snapshot
+    initiator_uuid
   )
   VALUES (
     p_event_uuid,
@@ -199,8 +202,7 @@ BEGIN
     p_effective_date,
     v_payload,
     p_request_code,
-    p_initiator_uuid,
-    v_payload
+    p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_event_db_id;
@@ -292,6 +294,14 @@ BEGIN
   END IF;
 
   PERFORM orgunit.assert_org_unit_validity(p_tenant_uuid, v_org_ids);
+
+  v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, v_org_id, p_effective_date);
+  PERFORM orgunit.assert_org_event_snapshots(p_event_type, v_before_snapshot, v_after_snapshot);
+
+  UPDATE orgunit.org_events
+  SET before_snapshot = v_before_snapshot,
+      after_snapshot = v_after_snapshot
+  WHERE id = v_event_db_id;
 
   RETURN v_event_db_id;
 END;
