@@ -193,6 +193,8 @@ modules/{module}/
 - DEV-PLAN-078 执行日志：`docs/dev-records/dev-plan-078-execution-log.md`
 - DEV-PLAN-078：OrgUnit 写模型替代方案对比与决策建议：`docs/dev-plans/078-orgunit-write-model-alternatives-comparison-and-decision.md`
 - DEV-PLAN-080：OrgUnit 审计链收敛（方向 1：单一审计链）：`docs/dev-plans/080-orgunit-audit-chain-consolidation.md`
+- DEV-PLAN-080A：OrgUnit before_snapshot/after_snapshot 机制调查与收敛修复方案：`docs/dev-plans/080a-orgunit-audit-snapshot-mechanism-and-fix.md`
+- DEV-PLAN-080C：OrgUnit 审计快照 presence 表级强约束（INSERT 即写齐）方案：`docs/dev-plans/080c-orgunit-audit-snapshot-presence-table-constraint-plan.md`
 - DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
