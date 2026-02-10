@@ -1139,6 +1139,48 @@ func TestWriteOrgUnitServiceError_UsesStablePgMessageCode(t *testing.T) {
 	}
 }
 
+func TestWriteOrgUnitServiceError_BadRequestStableUnknownCodePreserved(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", nil)
+	rec := httptest.NewRecorder()
+
+	writeOrgUnitServiceError(rec, req, newBadRequestError("SOME_DB_CODE"), "orgunit_correct_failed")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if got := payload["code"]; got != "SOME_DB_CODE" {
+		t.Fatalf("code=%v", got)
+	}
+	if got := payload["message"]; got != "orgunit_correct_failed" {
+		t.Fatalf("message=%v", got)
+	}
+}
+
+func TestWriteOrgUnitServiceError_BlankCodeFallsBackToDefault(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", nil)
+	rec := httptest.NewRecorder()
+
+	writeOrgUnitServiceError(rec, req, errors.New("   "), "orgunit_correct_failed")
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if got := payload["code"]; got != "orgunit_correct_failed" {
+		t.Fatalf("code=%v", got)
+	}
+	if got := payload["message"]; got != "orgunit_correct_failed" {
+		t.Fatalf("message=%v", got)
+	}
+}
+
 type orgUnitWriteServiceStub struct {
 	createFn        func(context.Context, string, orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 	renameFn        func(context.Context, string, orgunitservices.RenameOrgUnitRequest) error
