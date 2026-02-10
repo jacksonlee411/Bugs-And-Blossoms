@@ -72,6 +72,9 @@ func TestOrgNodeWriteErrorMessage(t *testing.T) {
 	if got := orgNodeWriteErrorMessage(errors.New("ORG_HIGH_RISK_REORDER_FORBIDDEN")); got != "该变更会触发高风险全量重放，请改用新增/插入记录" {
 		t.Fatalf("got=%q", got)
 	}
+	if got := orgNodeWriteErrorMessage(errors.New("ORGUNIT_CODES_WRITE_FORBIDDEN")); got != "系统写入权限异常（ORGUNIT_CODES_WRITE_FORBIDDEN），请联系管理员" {
+		t.Fatalf("got=%q", got)
+	}
 	if got := orgNodeWriteErrorMessage(errors.New("boom")); got != "boom" {
 		t.Fatalf("got=%q", got)
 	}

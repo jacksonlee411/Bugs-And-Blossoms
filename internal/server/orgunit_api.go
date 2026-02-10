@@ -639,7 +639,10 @@ func writeOrgUnitResult(w http.ResponseWriter, r *http.Request, status int, resu
 }
 
 func writeOrgUnitServiceError(w http.ResponseWriter, r *http.Request, err error, defaultCode string) {
-	code := strings.TrimSpace(err.Error())
+	code := strings.TrimSpace(stablePgMessage(err))
+	if code == "" {
+		code = strings.TrimSpace(err.Error())
+	}
 	status, ok := orgUnitAPIStatusForCode(code)
 	message := defaultCode
 
