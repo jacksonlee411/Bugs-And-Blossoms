@@ -193,6 +193,7 @@ modules/{module}/
 - DEV-PLAN-078 执行日志：`docs/dev-records/dev-plan-078-execution-log.md`
 - DEV-PLAN-078：OrgUnit 写模型替代方案对比与决策建议：`docs/dev-plans/078-orgunit-write-model-alternatives-comparison-and-decision.md`
 - DEV-PLAN-080：OrgUnit 审计链收敛（方向 1：单一审计链）：`docs/dev-plans/080-orgunit-audit-chain-consolidation.md`
+- DEV-PLAN-080B：OrgUnit 生效日更正失败（orgunit_correct_failed）专项调查与修复方案：`docs/dev-plans/080b-orgunit-correction-failure-investigation-and-remediation.md`
 - DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
