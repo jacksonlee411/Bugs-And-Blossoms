@@ -200,6 +200,12 @@ modules/{module}/
 - DEV-PLAN-081：OrgUnit Details 记录版本选择器双栏化（左生效日期 / 右详情）：`docs/dev-plans/081-orgunit-records-version-selector-two-pane-alignment.md`
 - DEV-PLAN-082：Org 模块业务字段修改规则全量调查（排除元数据）：`docs/dev-plans/082-org-module-field-mutation-rules-investigation.md`
 - DEV-PLAN-083：Org 白名单模型扩展性改造（规则单点化 + 能力矩阵外显）：`docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- DEV-PLAN-090：前端框架升级为 MUI X（对标 Workday UX）方案：`docs/dev-plans/090-mui-x-frontend-upgrade-plan.md`
+- DEV-PLAN-091：MUI X 升级子计划 P0（基座准备与许可落地）：`docs/dev-plans/091-mui-x-phase0-foundation-and-license-plan.md`
+- DEV-PLAN-092：MUI X 升级子计划 P1（壳与导航迁移）：`docs/dev-plans/092-mui-x-phase1-shell-navigation-plan.md`
+- DEV-PLAN-093：MUI X 升级子计划 P2（高价值模块迁移）：`docs/dev-plans/093-mui-x-phase2-high-value-modules-plan.md`
+- DEV-PLAN-094：MUI X 升级子计划 P3（长尾迁移与收口）：`docs/dev-plans/094-mui-x-phase3-long-tail-convergence-plan.md`
+- DEV-PLAN-095：MUI X 升级子计划 P4（稳定化与性能压测）：`docs/dev-plans/095-mui-x-phase4-stability-performance-plan.md`
 - DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
