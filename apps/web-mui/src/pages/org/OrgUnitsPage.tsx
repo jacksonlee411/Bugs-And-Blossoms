@@ -317,7 +317,9 @@ export function OrgUnitsPage() {
 
   const rootOrgUnits = useMemo(() => rootOrgUnitsQuery.data?.org_units ?? [], [rootOrgUnitsQuery.data])
   const selectedNodeCode = parseOptionalValue(searchParams.get('node')) ?? rootOrgUnits[0]?.org_code ?? null
-  const detailCode = detailCodeParam ?? selectedRowId ?? selectedNodeCode
+  // 详情抽屉仅在用户显式打开时展示（URL detail 参数或行点击），
+  // 避免页面初次加载时因默认选中节点而自动弹出且无法关闭。
+  const detailCode = detailCodeParam ?? selectedRowId
   const detailAsOf = parseDateOrDefault(detailEffectiveDateParam, asOf)
 
   useEffect(() => {
