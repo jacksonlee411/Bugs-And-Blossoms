@@ -209,6 +209,22 @@ func (s *resolveOrgCodeStore) MinEffectiveDate(context.Context, string) (string,
 	return "", false, nil
 }
 
+type orgUnitListPageReaderStore struct {
+	*resolveOrgCodeStore
+	items       []orgUnitListItem
+	total       int
+	err         error
+	capturedReq orgUnitListPageRequest
+}
+
+func (s *orgUnitListPageReaderStore) ListOrgUnitsPage(_ context.Context, _ string, req orgUnitListPageRequest) ([]orgUnitListItem, int, error) {
+	s.capturedReq = req
+	if s.err != nil {
+		return nil, 0, s.err
+	}
+	return append([]orgUnitListItem(nil), s.items...), s.total, nil
+}
+
 func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeInvalid(t *testing.T) {
 	store := &resolveOrgCodeStore{}
 	body := bytes.NewBufferString(`{"org_code":"bad\u007f","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
@@ -474,6 +490,419 @@ func TestHandleOrgUnitsAPI_ListChildrenSuccess(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "A002") {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
+}
+
+func TestHandleOrgUnitsAPI_ListServerModeChildren(t *testing.T) {
+	store := &resolveOrgCodeStore{
+		resolveID: 10000001,
+		listChildren: []OrgUnitChild{
+			{OrgID: 10000002, OrgCode: "A002", Name: "Finance", Status: "active", IsBusinessUnit: false, HasChildren: true},
+			{OrgID: 10000003, OrgCode: "A003", Name: "Admin", Status: "disabled", IsBusinessUnit: true, HasChildren: false},
+			{OrgID: 10000004, OrgCode: "B001", Name: "Budget", Status: "active", IsBusinessUnit: false, HasChildren: false},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&parent_org_code=A001&include_disabled=1&mode=grid&status=inactive&sort=name&order=asc&page=0&size=10", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAPI(rec, req, store, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Page     int               `json:"page"`
+		Size     int               `json:"size"`
+		Total    int               `json:"total"`
+		OrgUnits []orgUnitListItem `json:"org_units"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	if payload.Page != 0 || payload.Size != 10 || payload.Total != 1 {
+		t.Fatalf("unexpected page payload: %+v", payload)
+	}
+	if len(payload.OrgUnits) != 1 || payload.OrgUnits[0].OrgCode != "A003" {
+		t.Fatalf("unexpected rows: %+v", payload.OrgUnits)
+	}
+}
+
+func TestHandleOrgUnitsAPI_ListServerModePagingAndSort(t *testing.T) {
+	store := &resolveOrgCodeStore{
+		resolveID: 10000001,
+		listChildren: []OrgUnitChild{
+			{OrgID: 10000002, OrgCode: "A002", Name: "Finance", Status: "active"},
+			{OrgID: 10000003, OrgCode: "A003", Name: "Admin", Status: "active"},
+			{OrgID: 10000004, OrgCode: "B001", Name: "Budget", Status: "active"},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&parent_org_code=A001&mode=grid&q=A&sort=code&order=desc&page=0&size=2", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAPI(rec, req, store, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Total    int               `json:"total"`
+		OrgUnits []orgUnitListItem `json:"org_units"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	if payload.Total != 2 {
+		t.Fatalf("total=%d", payload.Total)
+	}
+	if len(payload.OrgUnits) != 2 {
+		t.Fatalf("len=%d", len(payload.OrgUnits))
+	}
+	if payload.OrgUnits[0].OrgCode != "A003" || payload.OrgUnits[1].OrgCode != "A002" {
+		t.Fatalf("unexpected order: %+v", payload.OrgUnits)
+	}
+}
+
+func TestHandleOrgUnitsAPI_ListServerModeInvalidQuery(t *testing.T) {
+	tests := []string{
+		"/org/api/org-units?as_of=2026-01-01&mode=grid&order=desc",
+		"/org/api/org-units?as_of=2026-01-01&mode=grid&sort=foo",
+		"/org/api/org-units?as_of=2026-01-01&mode=grid&page=-1",
+		"/org/api/org-units?as_of=2026-01-01&mode=grid&size=0",
+	}
+	for _, rawURL := range tests {
+		req := httptest.NewRequest(http.MethodGet, rawURL, nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsAPI(rec, req, newOrgUnitMemoryStore(), nil)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("url=%s status=%d body=%s", rawURL, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestHandleOrgUnitsAPI_ListServerModeNotFoundAndError(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
+		store := &resolveOrgCodeStore{
+			resolveID:       10000001,
+			listChildrenErr: errOrgUnitNotFound,
+		}
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&parent_org_code=A001&mode=grid&page=0&size=10", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsAPI(rec, req, store, nil)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("internal error", func(t *testing.T) {
+		store := &resolveOrgCodeStore{
+			listNodesErr: errBoom{},
+		}
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&mode=grid&page=0&size=10", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsAPI(rec, req, store, nil)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestParseOrgUnitListQueryOptions(t *testing.T) {
+	tests := []struct {
+		name    string
+		rawURL  string
+		wantAny bool
+		wantErr bool
+		check   func(t *testing.T, opts orgUnitListQueryOptions)
+	}{
+		{
+			name:    "empty",
+			rawURL:  "/org/api/org-units",
+			wantAny: false,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if opts.Page != orgUnitListDefaultPage || opts.PageSize != orgUnitListDefaultPageSize {
+					t.Fatalf("unexpected defaults: %+v", opts)
+				}
+			},
+		},
+		{
+			name:    "mode status and sort",
+			rawURL:  "/org/api/org-units?mode=grid&status=inactive&sort=name&order=desc&page=2&size=25&q=Root",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if opts.Status != orgUnitListStatusDisabled {
+					t.Fatalf("status=%s", opts.Status)
+				}
+				if opts.SortField != orgUnitListSortName || opts.SortOrder != orgUnitListSortOrderDesc {
+					t.Fatalf("sort=%+v", opts)
+				}
+				if !opts.Paginate || opts.Page != 2 || opts.PageSize != 25 {
+					t.Fatalf("paginate=%+v", opts)
+				}
+				if opts.Keyword != "Root" {
+					t.Fatalf("keyword=%q", opts.Keyword)
+				}
+			},
+		},
+		{
+			name:    "status empty and disabled",
+			rawURL:  "/org/api/org-units?status=&mode=grid",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if opts.Status != "" {
+					t.Fatalf("status=%q", opts.Status)
+				}
+			},
+		},
+		{
+			name:    "status disabled alias",
+			rawURL:  "/org/api/org-units?status=disabled",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if opts.Status != orgUnitListStatusDisabled {
+					t.Fatalf("status=%q", opts.Status)
+				}
+			},
+		},
+		{
+			name:    "status active",
+			rawURL:  "/org/api/org-units?status=active",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if opts.Status != orgUnitListStatusActive {
+					t.Fatalf("status=%q", opts.Status)
+				}
+			},
+		},
+		{
+			name:    "sort default order",
+			rawURL:  "/org/api/org-units?sort=code",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if opts.SortOrder != orgUnitListSortOrderAsc {
+					t.Fatalf("sort order=%s", opts.SortOrder)
+				}
+			},
+		},
+		{
+			name:    "page only",
+			rawURL:  "/org/api/org-units?page=1",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if !opts.Paginate || opts.Page != 1 || opts.PageSize != orgUnitListDefaultPageSize {
+					t.Fatalf("opts=%+v", opts)
+				}
+			},
+		},
+		{
+			name:    "size only",
+			rawURL:  "/org/api/org-units?size=50",
+			wantAny: true,
+			check: func(t *testing.T, opts orgUnitListQueryOptions) {
+				if !opts.Paginate || opts.Page != orgUnitListDefaultPage || opts.PageSize != 50 {
+					t.Fatalf("opts=%+v", opts)
+				}
+			},
+		},
+		{name: "status invalid", rawURL: "/org/api/org-units?status=bad", wantErr: true},
+		{name: "sort invalid", rawURL: "/org/api/org-units?sort=bad", wantErr: true},
+		{name: "sort empty", rawURL: "/org/api/org-units?sort=", wantErr: true},
+		{name: "order without sort", rawURL: "/org/api/org-units?order=asc", wantErr: true},
+		{name: "order invalid", rawURL: "/org/api/org-units?sort=code&order=bad", wantErr: true},
+		{name: "order empty", rawURL: "/org/api/org-units?sort=code&order=", wantErr: true},
+		{name: "page empty", rawURL: "/org/api/org-units?page=", wantErr: true},
+		{name: "page invalid", rawURL: "/org/api/org-units?page=-1", wantErr: true},
+		{name: "size empty", rawURL: "/org/api/org-units?size=", wantErr: true},
+		{name: "size too large", rawURL: "/org/api/org-units?size=9999", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.rawURL, nil)
+			opts, hasAny, err := parseOrgUnitListQueryOptions(req.URL.Query())
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected err=%v", err)
+			}
+			if hasAny != tt.wantAny {
+				t.Fatalf("hasAny=%v want=%v", hasAny, tt.wantAny)
+			}
+			if tt.check != nil {
+				tt.check(t, opts)
+			}
+		})
+	}
+}
+
+func TestFilterOrgUnitListItems(t *testing.T) {
+	items := []orgUnitListItem{
+		{OrgCode: "A001", Name: "Root Org", Status: ""},
+		{OrgCode: "B002", Name: "Beta Team", Status: "active"},
+		{OrgCode: "C003", Name: "Closed Team", Status: "disabled"},
+	}
+
+	all := filterOrgUnitListItems(items, "", "")
+	if len(all) != 3 {
+		t.Fatalf("len=%d", len(all))
+	}
+
+	byStatus := filterOrgUnitListItems(items, "", "active")
+	if len(byStatus) != 2 {
+		t.Fatalf("status len=%d", len(byStatus))
+	}
+
+	byKeyword := filterOrgUnitListItems(items, "closed", "")
+	if len(byKeyword) != 1 || byKeyword[0].OrgCode != "C003" {
+		t.Fatalf("keyword rows=%+v", byKeyword)
+	}
+}
+
+func TestSortOrgUnitListItems(t *testing.T) {
+	items := []orgUnitListItem{
+		{OrgCode: "B002", Name: "Beta", Status: "disabled"},
+		{OrgCode: "A001", Name: "Alpha", Status: "active"},
+		{OrgCode: "C003", Name: "Alpha", Status: "active"},
+	}
+
+	sortOrgUnitListItems(items, orgUnitListSortName, orgUnitListSortOrderAsc)
+	if items[0].OrgCode != "A001" || items[1].OrgCode != "C003" {
+		t.Fatalf("name asc order=%+v", items)
+	}
+
+	sortOrgUnitListItems(items, orgUnitListSortStatus, orgUnitListSortOrderDesc)
+	if items[0].Status != "disabled" {
+		t.Fatalf("status desc order=%+v", items)
+	}
+
+	sortOrgUnitListItems(items, "", "")
+	if len(items) != 3 {
+		t.Fatalf("unexpected rows=%+v", items)
+	}
+}
+
+func TestListOrgUnitListPage(t *testing.T) {
+	t.Run("pager store", func(t *testing.T) {
+		store := &orgUnitListPageReaderStore{
+			resolveOrgCodeStore: &resolveOrgCodeStore{},
+			items:               []orgUnitListItem{{OrgCode: "A001", Name: "Root", Status: "active"}},
+			total:               1,
+		}
+		items, total, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
+			AsOf: "2026-01-01",
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if total != 1 || len(items) != 1 || items[0].OrgCode != "A001" {
+			t.Fatalf("items=%+v total=%d", items, total)
+		}
+	})
+
+	t.Run("children and paging", func(t *testing.T) {
+		parentID := 10000001
+		store := &resolveOrgCodeStore{
+			listChildren: []OrgUnitChild{
+				{OrgID: 10000002, OrgCode: "A002", Name: "Two", Status: "", IsBusinessUnit: true, HasChildren: true},
+				{OrgID: 10000003, OrgCode: "A003", Name: "Three", Status: "disabled"},
+			},
+		}
+		items, total, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
+			AsOf:      "2026-01-01",
+			ParentID:  &parentID,
+			SortField: orgUnitListSortCode,
+			SortOrder: orgUnitListSortOrderAsc,
+			Limit:     1,
+			Offset:    -1,
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if total != 2 || len(items) != 1 {
+			t.Fatalf("items=%+v total=%d", items, total)
+		}
+		if items[0].Status != "active" {
+			t.Fatalf("status=%q", items[0].Status)
+		}
+		if items[0].IsBusinessUnit == nil || !*items[0].IsBusinessUnit {
+			t.Fatalf("is_business_unit missing")
+		}
+		if items[0].HasChildren == nil || !*items[0].HasChildren {
+			t.Fatalf("has_children missing")
+		}
+
+		empty, totalAfter, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
+			AsOf:     "2026-01-01",
+			ParentID: &parentID,
+			Limit:    1,
+			Offset:   5,
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if totalAfter != 2 || len(empty) != 0 {
+			t.Fatalf("unexpected empty=%+v total=%d", empty, totalAfter)
+		}
+
+		clamped, totalClamped, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
+			AsOf:     "2026-01-01",
+			ParentID: &parentID,
+			Limit:    5,
+			Offset:   0,
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if totalClamped != 2 || len(clamped) != 2 {
+			t.Fatalf("unexpected clamped=%+v total=%d", clamped, totalClamped)
+		}
+	})
+
+	t.Run("roots and errors", func(t *testing.T) {
+		store := &resolveOrgCodeStore{
+			listNodes: []OrgUnitNode{
+				{OrgCode: "Z009", Name: "Zero", Status: ""},
+				{OrgCode: "B002", Name: "Beta", Status: "disabled"},
+				{OrgCode: "A001", Name: "Alpha", Status: "active"},
+			},
+		}
+		items, total, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
+			AsOf:    "2026-01-01",
+			Keyword: "Alpha",
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if total != 1 || len(items) != 1 || items[0].OrgCode != "A001" {
+			t.Fatalf("items=%+v total=%d", items, total)
+		}
+
+		roots, totalRoots, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
+			AsOf: "2026-01-01",
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if totalRoots != 3 || len(roots) != 3 || roots[0].Status != orgUnitListStatusActive {
+			t.Fatalf("roots=%+v total=%d", roots, totalRoots)
+		}
+
+		errStore := &resolveOrgCodeStore{listNodesErr: errBoom{}}
+		if _, _, err := listOrgUnitListPage(context.Background(), errStore, "t1", orgUnitListPageRequest{AsOf: "2026-01-01"}); err == nil {
+			t.Fatalf("expected list nodes error")
+		}
+
+		childErrStore := &resolveOrgCodeStore{listChildrenErr: errBoom{}}
+		parentID := 10000001
+		if _, _, err := listOrgUnitListPage(context.Background(), childErrStore, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ParentID: &parentID}); err == nil {
+			t.Fatalf("expected list children error")
+		}
+	})
 }
 
 func TestHandleOrgUnitsAPI_ListNodesError(t *testing.T) {

@@ -34,11 +34,12 @@ type OrgUnitNode struct {
 }
 
 type OrgUnitChild struct {
-	OrgID       int
-	OrgCode     string
-	Name        string
-	Status      string
-	HasChildren bool
+	OrgID          int
+	OrgCode        string
+	Name           string
+	Status         string
+	IsBusinessUnit bool
+	HasChildren    bool
 }
 
 type OrgUnitNodeDetails struct {
@@ -790,6 +791,7 @@ func (s *orgUnitPGStore) ListChildren(ctx context.Context, tenantID string, pare
 	  v.org_id,
 	  c.org_code,
 	  v.name,
+	  v.is_business_unit,
 	  EXISTS (
 	    SELECT 1
 	    FROM orgunit.org_unit_versions child
@@ -816,7 +818,7 @@ func (s *orgUnitPGStore) ListChildren(ctx context.Context, tenantID string, pare
 	var out []OrgUnitChild
 	for rows.Next() {
 		var item OrgUnitChild
-		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.HasChildren); err != nil {
+		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.IsBusinessUnit, &item.HasChildren); err != nil {
 			return nil, err
 		}
 		item.Status = "active"
@@ -868,6 +870,7 @@ func (s *orgUnitPGStore) ListChildrenWithVisibility(ctx context.Context, tenantI
 	  c.org_code,
 	  v.name,
 	  v.status,
+	  v.is_business_unit,
 	  EXISTS (
 	    SELECT 1
 	    FROM orgunit.org_unit_versions child
@@ -892,7 +895,7 @@ func (s *orgUnitPGStore) ListChildrenWithVisibility(ctx context.Context, tenantI
 	var out []OrgUnitChild
 	for rows.Next() {
 		var item OrgUnitChild
-		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.Status, &item.HasChildren); err != nil {
+		if err := rows.Scan(&item.OrgID, &item.OrgCode, &item.Name, &item.Status, &item.IsBusinessUnit, &item.HasChildren); err != nil {
 			return nil, err
 		}
 		out = append(out, item)
