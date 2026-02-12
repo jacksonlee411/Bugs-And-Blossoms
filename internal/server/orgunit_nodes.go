@@ -1919,7 +1919,11 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 			return rbErr
 		}
 		var pgErr *pgconn.PgError
+		dayConflict := strings.Contains(err.Error(), "EVENT_DATE_CONFLICT")
 		if errors.As(err, &pgErr) && pgErr != nil && pgErr.Code == "23505" && pgErr.ConstraintName == "org_events_one_per_day_unique" {
+			dayConflict = true
+		}
+		if dayConflict {
 			var current bool
 			if queryErr := tx.QueryRow(ctx, `
 			SELECT is_business_unit
@@ -3101,6 +3105,7 @@ func renderOrgNodeDetailsWithAudit(
 	b.WriteString(`<div class="org-node-header-actions">`)
 	b.WriteString(`<div class="org-node-record-actions-head">`)
 	b.WriteString(`<button type="button" class="org-node-record-action-btn is-primary org-node-record-btn" data-action="add_record"` + disabledAttr + `>新建版本</button>`)
+	b.WriteString(`<button type="button" class="org-node-record-action-btn org-node-record-btn" data-action="insert_record"` + disabledAttr + `>插入版本</button>`)
 	b.WriteString(`<button type="button" class="org-node-record-action-btn org-node-record-btn" data-action="correct_record"` + disabledAttr + `>修正当前</button>`)
 	b.WriteString(`<button type="button" class="org-node-record-action-btn org-node-record-more-toggle"` + disabledAttr + `>更多 ▾</button>`)
 	b.WriteString(`</div>`)
@@ -3125,7 +3130,22 @@ func renderOrgNodeDetailsWithAudit(
 	b.WriteString(`<div class="org-node-basic-left">`)
 	b.WriteString(`<div class="org-node-basic-left-title">生效日期</div>`)
 	b.WriteString(`<div class="org-node-basic-left-list">`)
-	if len(versions) == 0 {
+	versionTimeline := append([]OrgUnitNodeVersion(nil), versions...)
+	sort.SliceStable(versionTimeline, func(i, j int) bool {
+		leftDate := strings.TrimSpace(versionTimeline[i].EffectiveDate)
+		rightDate := strings.TrimSpace(versionTimeline[j].EffectiveDate)
+		if leftDate == rightDate {
+			return versionTimeline[i].EventID > versionTimeline[j].EventID
+		}
+		if leftDate == "" {
+			return false
+		}
+		if rightDate == "" {
+			return true
+		}
+		return leftDate > rightDate
+	})
+	if len(versionTimeline) == 0 {
 		fallbackType := strings.TrimSpace(selectedVersion.EventType)
 		if fallbackType == "" {
 			fallbackType = "RECORD"
@@ -3135,7 +3155,7 @@ func renderOrgNodeDetailsWithAudit(
 		b.WriteString(`<span class="org-node-record-item-type">` + html.EscapeString(fallbackType) + `</span>`)
 		b.WriteString(`</button>`)
 	} else {
-		for _, v := range versions {
+		for _, v := range versionTimeline {
 			itemClass := "org-node-record-item"
 			if v.EffectiveDate == currentEffectiveDate {
 				itemClass += " is-active"
@@ -3225,7 +3245,7 @@ func renderOrgNodeDetailsWithAudit(
 	b.WriteString(`</div>`)
 	b.WriteString(`<div class="org-node-record-step" data-step="1"><div class="org-node-record-intent"></div></div>`)
 	b.WriteString(`<div class="org-node-record-step" data-step="2">`)
-	b.WriteString(`<label>生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(currentEffectiveDate) + `" /></label>`)
+	b.WriteString(`<label>记录生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(currentEffectiveDate) + `" /></label>`)
 	b.WriteString(`</div>`)
 	b.WriteString(`<div class="org-node-record-step" data-step="3">`)
 	b.WriteString(`<label class="org-node-record-change">变更类型 `)
@@ -3271,7 +3291,7 @@ func renderOrgNodeDetailsWithAudit(
 	b.WriteString(` data-original-parent-code="` + html.EscapeString(details.ParentCode) + `"`)
 	b.WriteString(` data-original-manager-pernr="` + html.EscapeString(details.ManagerPernr) + `"`)
 	b.WriteString(` data-original-manager-name="` + html.EscapeString(details.ManagerName) + `">`)
-	b.WriteString(`<label>生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(currentEffectiveDate) + `" /></label>`)
+	b.WriteString(`<label>记录生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(currentEffectiveDate) + `" /></label>`)
 	b.WriteString(`<label>组织名称* <input name="name" value="` + html.EscapeString(details.Name) + `" /></label>`)
 	b.WriteString(`<label>组织编码* <input name="org_code" value="` + html.EscapeString(details.OrgCode) + `" readonly /></label>`)
 	b.WriteString(`<label>上级组织 <input name="parent_org_code" value="` + html.EscapeString(details.ParentCode) + `" /></label>`)
@@ -3841,8 +3861,9 @@ func renderOrgNodes(nodes []OrgUnitNode, tenant Tenant, errMsg string, treeAsOf 
 	b.WriteString(`<div class="org-nodes-panel-title">Nodes</div>`)
 	b.WriteString(`<div class="org-nodes-panel-hint">当前仅显示根节点。可在右侧详情中查找并编辑组织。</div>`)
 	b.WriteString(`<form method="GET" action="/org/nodes" class="org-nodes-tree-asof">`)
-	b.WriteString(`<label class="org-nodes-asof-label">生效日期</label>`)
+	b.WriteString(`<label class="org-nodes-asof-label">树视图日期（tree_as_of）</label>`)
 	b.WriteString(`<input type="date" name="tree_as_of" value="` + html.EscapeString(treeAsOf) + `" />`)
+	b.WriteString(`<div class="org-nodes-tree-asof-hint">用于浏览树快照，不会直接写入组织记录。</div>`)
 	b.WriteString(`<label class="org-node-include-disabled"><input type="checkbox" name="include_disabled" value="1"` + includeDisabledChecked + ` /> 显示无效组织</label>`)
 	b.WriteString(`<button type="submit">应用</button>`)
 	b.WriteString(`</form>`)
@@ -5265,7 +5286,8 @@ func renderOrgNodeCreateTemplate(treeAsOf string, includeDisabled bool, canEdit 
 	b.WriteString(`<form method="POST" action="` + formAction + `">`)
 	b.WriteString(`<input type="hidden" name="tree_as_of" value="` + html.EscapeString(treeAsOf) + `" />`)
 	b.WriteString(`<input type="hidden" name="include_disabled" value="` + html.EscapeString(includeDisabledValue) + `" />`)
-	b.WriteString(`<label>生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(treeAsOf) + `"` + disabledAttr + ` /></label>`)
+	b.WriteString(`<label>建档生效日期 <input type="date" name="effective_date" value="` + html.EscapeString(treeAsOf) + `"` + disabledAttr + ` /></label>`)
+	b.WriteString(`<div class="org-node-create-date-hint">默认取当前树视图日期（tree_as_of），可按业务场景调整。</div>`)
 	b.WriteString(`<label>组织编码* <input name="org_code"` + disabledAttr + ` /></label>`)
 	b.WriteString(`<label>组织名称* <input name="name"` + disabledAttr + ` /></label>`)
 	b.WriteString(`<label>上级组织编码 <input name="parent_code"` + disabledAttr + ` /></label>`)

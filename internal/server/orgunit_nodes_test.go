@@ -679,6 +679,32 @@ func TestOrgUnitPGStore_SetBusinessUnitCurrent_Idempotent(t *testing.T) {
 			t.Fatal("expected error")
 		}
 	})
+
+	t.Run("already-set event-date-conflict", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{
+				row:       &stubRow{vals: []any{true}},
+				execErr:   errors.New("EVENT_DATE_CONFLICT"),
+				execErrAt: 3,
+			}, nil
+		})}
+		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "10000001", true, "r1"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("mismatch event-date-conflict", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{
+				row:       &stubRow{vals: []any{false}},
+				execErr:   errors.New("EVENT_DATE_CONFLICT"),
+				execErrAt: 3,
+			}, nil
+		})}
+		if err := store.SetBusinessUnitCurrent(context.Background(), "t1", "2026-01-01", "10000001", true, "r1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
 }
 
 type rollbackErrTx struct {
@@ -2136,6 +2162,15 @@ func TestRenderOrgNodes(t *testing.T) {
 	if out == "" {
 		t.Fatal("expected output")
 	}
+	if !strings.Contains(out, `树视图日期（tree_as_of）`) {
+		t.Fatalf("missing tree_as_of label: %q", out)
+	}
+	if !strings.Contains(out, `用于浏览树快照，不会直接写入组织记录。`) {
+		t.Fatalf("missing tree_as_of hint: %q", out)
+	}
+	if !strings.Contains(out, `建档生效日期`) {
+		t.Fatalf("missing create effective date label: %q", out)
+	}
 	out2 := renderOrgNodes([]OrgUnitNode{{ID: "1", OrgCode: "N001", Name: "N", IsBusinessUnit: true}}, Tenant{Name: "T"}, "err", "2026-01-06", false, true)
 	if out2 == "" {
 		t.Fatal("expected output")
@@ -2150,6 +2185,24 @@ func TestRenderOrgNodes(t *testing.T) {
 	out4 := renderOrgNodes([]OrgUnitNode{{ID: "3", OrgCode: "D003", Name: "Disabled", Status: "disabled"}}, Tenant{Name: "T"}, "", "2026-01-06", true, true)
 	if !strings.Contains(out4, `data-include-disabled="true"`) || !strings.Contains(out4, "(无效)") {
 		t.Fatalf("unexpected output: %q", out4)
+	}
+}
+
+func TestRenderOrgNodeDetails_RecordActionAndDateLabels(t *testing.T) {
+	out := renderOrgNodeDetails(
+		OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root", Status: "active"},
+		"2026-01-10",
+		"2026-01-10",
+		false,
+		[]OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-10", EventType: "CREATE"}},
+		true,
+		"",
+	)
+	if !strings.Contains(out, `data-action="insert_record"`) {
+		t.Fatalf("missing insert_record action button: %q", out)
+	}
+	if !strings.Contains(out, `记录生效日期`) {
+		t.Fatalf("missing record effective date label: %q", out)
 	}
 }
 

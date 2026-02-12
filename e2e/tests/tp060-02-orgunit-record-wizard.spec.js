@@ -133,6 +133,7 @@ test("tp060-02: orgunit record wizard (4-step add/delete flow)", async ({ browse
   };
 
   const panel = await selectNode();
+  await expect(panel.locator(".org-node-record-btn[data-action=insert_record]")).toBeVisible();
   const maxEffectiveDate = await panel.getAttribute("data-max-effective-date");
   expect(maxEffectiveDate).toBeTruthy();
 

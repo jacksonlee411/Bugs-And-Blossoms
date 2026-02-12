@@ -197,6 +197,8 @@ modules/{module}/
 - DEV-PLAN-080B：OrgUnit 生效日更正失败（orgunit_correct_failed）专项调查与修复方案：`docs/dev-plans/080b-orgunit-correction-failure-investigation-and-remediation.md`
 - DEV-PLAN-080C：OrgUnit 审计快照 presence 表级强约束（INSERT 即写齐）方案：`docs/dev-plans/080c-orgunit-audit-snapshot-presence-table-constraint-plan.md`
 - DEV-PLAN-081：OrgUnit Details 记录版本选择器双栏化（左生效日期 / 右详情）：`docs/dev-plans/081-orgunit-records-version-selector-two-pane-alignment.md`
+- DEV-PLAN-082：Org 模块业务字段修改规则全量调查（排除元数据）：`docs/dev-plans/082-org-module-field-mutation-rules-investigation.md`
+- DEV-PLAN-083：Org 白名单模型扩展性改造（规则单点化 + 能力矩阵外显）：`docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`

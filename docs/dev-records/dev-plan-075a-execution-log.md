@@ -26,3 +26,20 @@
 ## CI 证据
 
 - 待 PR 触发 CI 后补充。
+
+## 追加收尾记录（2026-02-12）
+
+- 详情页记录操作区补齐“插入版本”显式入口（`insert_record`），与“新建版本/修正当前”并列。
+- 日期语义文案分离：
+  - 树筛选：`树视图日期（tree_as_of）` + 浏览提示文案。
+  - 记录写入：`记录生效日期`。
+  - 创建组织：`建档生效日期` + 与 `tree_as_of` 关系提示。
+- 测试补点：
+  - `internal/server/orgunit_nodes_test.go` 新增渲染断言（插入入口、日期语义文案）。
+  - `e2e/tests/tp060-02-orgunit-record-wizard.spec.js` 新增“插入入口可见”断言。
+
+### 本地验证（2026-02-12）
+
+- 已通过：`go test ./internal/server -count=1`
+- 已通过：`make e2e`（5 passed）
+- 排障记录：首次失败原因为端口占用（`127.0.0.1:4433` 的 kratosstub 旧进程与 `:8080` 的旧 server 进程）；清理后复跑通过。
