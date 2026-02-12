@@ -1,6 +1,6 @@
 # DEV-PLAN-094：MUI X 升级子计划 P3（长尾迁移与收口）
 
-**状态**: 实施中（2026-02-12 08:53 UTC）
+**状态**: 实施中（2026-02-12 09:08 UTC）
 
 > 本计划承接 `DEV-PLAN-090` 的 §5.4（Phase 3），目标是把“高价值先行”阶段后的长尾页面与重复资产统一收口。
 
@@ -40,9 +40,10 @@
 3. [x] 树组件收口（第一轮）
    - 抽取统一 `TreePanel` 组件并在新页面落地复用。
    - 统一选中态显示与 loading/empty 文案口径。
-4. [ ] 视觉与文案收口
-   - 统一按钮风格、提示文案、表单错误反馈。
-   - 清理硬编码颜色与散落样式。
+4. [x] 视觉与文案收口（第一轮）
+   - 详情页头动作区收口（People 页面消除重复标题栏）。
+   - DataGrid 容器视觉收口到主题（圆角与背景口径统一）。
+   - 反馈文案收口到通用 key，支持变量插值（`{count}`）。
 5. [x] 重复资产清理（第一轮）
    - 删除不可达占位页（已无引用）。
    - 清理无引用 i18n key，避免长期漂移。
@@ -63,6 +64,7 @@
 - i18n 清理：移除无引用 key（coming-soon / select-department 等），保持 MessageKey 收敛：`apps/web-mui/src/i18n/messages.ts`
 - i18n 支持简单变量插值，并收敛通用反馈文案 key：`apps/web-mui/src/i18n/messages.ts`
 - DataGrid 容器样式收口到主题色板（修复暗色模式背景不一致）：`apps/web-mui/src/components/DataGridPage.tsx`
+- People 页面头部动作区收口，删除重复标题区：`apps/web-mui/src/pages/people/PeopleAssignmentsPage.tsx`
 
 ## 6. 验收标准
 
