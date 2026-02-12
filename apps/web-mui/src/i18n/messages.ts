@@ -1,4 +1,5 @@
 export type Locale = 'en' | 'zh'
+export type MessageVars = Record<string, string | number>
 
 const messages = {
   en: {
@@ -25,6 +26,8 @@ const messages = {
     common_cancel: 'Cancel',
     common_confirm: 'Confirm',
     common_select_rows: 'Select at least one row',
+    common_action_done: 'Action completed',
+    common_selected_count: '{count} selected',
     page_foundation_title: 'Foundation Demo',
     page_foundation_subtitle: 'P091 baseline: tree + grid + detail panel + filter bar',
     page_department_tree: 'Department Tree',
@@ -81,7 +84,6 @@ const messages = {
     approvals_action_approve: 'Approve',
     approvals_action_reject: 'Reject',
     approvals_action_forward: 'Forward',
-    approvals_feedback_done: 'Action completed',
     status_pending: 'Pending',
     status_approved: 'Approved',
     status_rejected: 'Rejected',
@@ -115,6 +117,8 @@ const messages = {
     common_cancel: '取消',
     common_confirm: '确认',
     common_select_rows: '请至少选择一条记录',
+    common_action_done: '操作已完成',
+    common_selected_count: '已选择 {count} 条',
     page_foundation_title: 'Foundation Demo',
     page_foundation_subtitle: 'P091 基座示例：树 + 表 + 详情侧栏 + 统一筛选栏',
     page_department_tree: '部门树',
@@ -171,7 +175,6 @@ const messages = {
     approvals_action_approve: '同意',
     approvals_action_reject: '拒绝',
     approvals_action_forward: '转交',
-    approvals_feedback_done: '操作已完成',
     status_pending: '待审批',
     status_approved: '已同意',
     status_rejected: '已拒绝',
@@ -185,6 +188,15 @@ const messages = {
 
 export type MessageKey = keyof typeof messages.en
 
-export function getMessage(locale: Locale, key: MessageKey): string {
-  return messages[locale][key]
+export function getMessage(locale: Locale, key: MessageKey, vars?: MessageVars): string {
+  let message: string = messages[locale][key]
+  if (!vars) {
+    return message
+  }
+
+  for (const [name, value] of Object.entries(vars)) {
+    message = message.replaceAll(`{${name}}`, String(value))
+  }
+
+  return message
 }

@@ -1,6 +1,6 @@
 # DEV-PLAN-094：MUI X 升级子计划 P3（长尾迁移与收口）
 
-**状态**: 实施中（2026-02-12 08:21 UTC）
+**状态**: 实施中（2026-02-12 08:53 UTC）
 
 > 本计划承接 `DEV-PLAN-090` 的 §5.4（Phase 3），目标是把“高价值先行”阶段后的长尾页面与重复资产统一收口。
 
@@ -24,11 +24,19 @@
 
 ## 4. 实施步骤
 
-1. [ ] 长尾页面盘点
-   - 输出《页面迁移清单》：页面路径、当前实现、目标组件、风险等级。
-2. [ ] 列表页收口
-   - 批量替换旧表格实现，统一到 `DataGridPage`。
-   - 统一分页/排序/筛选参数协议。
+1. [x] 长尾页面盘点
+   - 输出《页面迁移清单》（当前 `apps/web-mui` 范围）：
+
+| Route | 页面 | 当前实现 | 目标基线 | 风险 |
+| --- | --- | --- | --- | --- |
+| `/` | `FoundationDemoPage` | Tree + Grid + Detail | `TreePanel` + `DataGridPage` | 低 |
+| `/org/units` | `OrgUnitsPage` | Tree + Grid（server-mode 模拟） | `TreePanel` + `DataGridPage` + URL 协议 | 中 |
+| `/people` | `PeopleAssignmentsPage` | Grid + Bulk + Detail | `DataGridPage` + URL 协议 | 中 |
+| `/approvals` | `ApprovalsInboxPage` | Grid + 状态流转 + Detail | `DataGridPage` + URL 协议 | 中 |
+
+2. [x] 列表页收口
+   - 统一到 `DataGridPage`（含分页/排序/筛选与空态口径）。
+   - 统一 URL 参数协议：`q/status/page/size/sort/order`（并固化为 `gridQueryState` 工具）。
 3. [x] 树组件收口（第一轮）
    - 抽取统一 `TreePanel` 组件并在新页面落地复用。
    - 统一选中态显示与 loading/empty 文案口径。
@@ -45,8 +53,16 @@
 - 基座示例页与组织架构页改为复用 `TreePanel`：
   - `apps/web-mui/src/pages/FoundationDemoPage.tsx`
   - `apps/web-mui/src/pages/org/OrgUnitsPage.tsx`
+- 列表页参数协议工具化与落地：`apps/web-mui/src/utils/gridQueryState.ts`
+- 列表页统一支持 URL 可复现的分页/排序（Org 页为 server-mode 模拟）：
+  - `apps/web-mui/src/pages/FoundationDemoPage.tsx`
+  - `apps/web-mui/src/pages/org/OrgUnitsPage.tsx`
+  - `apps/web-mui/src/pages/people/PeopleAssignmentsPage.tsx`
+  - `apps/web-mui/src/pages/approvals/ApprovalsInboxPage.tsx`
 - 移除不可达占位页：`apps/web-mui/src/pages/ComingSoonPage.tsx`
 - i18n 清理：移除无引用 key（coming-soon / select-department 等），保持 MessageKey 收敛：`apps/web-mui/src/i18n/messages.ts`
+- i18n 支持简单变量插值，并收敛通用反馈文案 key：`apps/web-mui/src/i18n/messages.ts`
+- DataGrid 容器样式收口到主题色板（修复暗色模式背景不一致）：`apps/web-mui/src/components/DataGridPage.tsx`
 
 ## 6. 验收标准
 
@@ -68,6 +84,7 @@
   - `pnpm -C apps/web-mui typecheck`
   - `pnpm -C apps/web-mui test`
   - `pnpm -C apps/web-mui build`
+  - `pnpm -C apps/web-mui check`
 
 ## 9. 关联计划
 
