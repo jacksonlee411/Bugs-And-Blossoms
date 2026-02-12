@@ -37,7 +37,7 @@ export function DataGridPage({
         bgcolor: 'background.paper',
         border: 1,
         borderColor: 'divider',
-        borderRadius: 2,
+        borderRadius: 1,
         minHeight: 480,
         overflow: 'hidden'
       }}
