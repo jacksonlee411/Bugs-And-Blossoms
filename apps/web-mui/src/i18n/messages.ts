@@ -24,7 +24,6 @@ const messages = {
     common_detail: 'Details',
     common_cancel: 'Cancel',
     common_confirm: 'Confirm',
-    common_select_department: 'Select a department from tree',
     common_select_rows: 'Select at least one row',
     page_foundation_title: 'Foundation Demo',
     page_foundation_subtitle: 'P091 baseline: tree + grid + detail panel + filter bar',
@@ -89,8 +88,6 @@ const messages = {
     status_forwarded: 'Forwarded',
     assignment_primary: 'Primary',
     assignment_secondary: 'Secondary',
-    page_coming_soon_title: 'Coming Soon',
-    page_coming_soon_subtitle: 'This module will be migrated in DEV-PLAN-093.',
     page_no_access_title: 'No Access',
     page_no_access_subtitle: 'Current account has no permission for this page.'
   },
@@ -117,7 +114,6 @@ const messages = {
     common_detail: '详情',
     common_cancel: '取消',
     common_confirm: '确认',
-    common_select_department: '请先从左侧树选择组织',
     common_select_rows: '请至少选择一条记录',
     page_foundation_title: 'Foundation Demo',
     page_foundation_subtitle: 'P091 基座示例：树 + 表 + 详情侧栏 + 统一筛选栏',
@@ -182,8 +178,6 @@ const messages = {
     status_forwarded: '已转交',
     assignment_primary: '主岗',
     assignment_secondary: '兼岗',
-    page_coming_soon_title: '功能建设中',
-    page_coming_soon_subtitle: '该模块将在 DEV-PLAN-093 中迁移。',
     page_no_access_title: '无访问权限',
     page_no_access_subtitle: '当前账号无该页面访问权限。'
   }

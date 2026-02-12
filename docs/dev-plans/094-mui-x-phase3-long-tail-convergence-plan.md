@@ -1,6 +1,6 @@
 # DEV-PLAN-094：MUI X 升级子计划 P3（长尾迁移与收口）
 
-**状态**: 规划中（2026-02-12 06:28 UTC）
+**状态**: 实施中（2026-02-12 08:21 UTC）
 
 > 本计划承接 `DEV-PLAN-090` 的 §5.4（Phase 3），目标是把“高价值先行”阶段后的长尾页面与重复资产统一收口。
 
@@ -29,30 +29,47 @@
 2. [ ] 列表页收口
    - 批量替换旧表格实现，统一到 `DataGridPage`。
    - 统一分页/排序/筛选参数协议。
-3. [ ] 树组件收口
-   - 批量替换旧树实现，统一到 `TreePanel`。
-   - 统一懒加载与选中态保持策略。
+3. [x] 树组件收口（第一轮）
+   - 抽取统一 `TreePanel` 组件并在新页面落地复用。
+   - 统一选中态显示与 loading/empty 文案口径。
 4. [ ] 视觉与文案收口
    - 统一按钮风格、提示文案、表单错误反馈。
    - 清理硬编码颜色与散落样式。
-5. [ ] 重复资产清理
-   - 删除废弃组件、无调用 hooks、无引用样式文件。
-   - 输出“删除清单 + 影响评估”。
+5. [x] 重复资产清理（第一轮）
+   - 删除不可达占位页（已无引用）。
+   - 清理无引用 i18n key，避免长期漂移。
 
-## 5. 验收标准
+## 5. 已落地变更（本轮）
+
+- 新增统一树面板组件：`apps/web-mui/src/components/TreePanel.tsx`
+- 基座示例页与组织架构页改为复用 `TreePanel`：
+  - `apps/web-mui/src/pages/FoundationDemoPage.tsx`
+  - `apps/web-mui/src/pages/org/OrgUnitsPage.tsx`
+- 移除不可达占位页：`apps/web-mui/src/pages/ComingSoonPage.tsx`
+- i18n 清理：移除无引用 key（coming-soon / select-department 等），保持 MessageKey 收敛：`apps/web-mui/src/i18n/messages.ts`
+
+## 6. 验收标准
 
 - [ ] 页面迁移清单中的目标项全部关闭。
 - [ ] 旧组件引用数降为 0（或全部标记待退役且有截止时间）。
 - [ ] UI 一致性检查通过（页面抽样评审 + 自动化检查）。
 
-## 6. 风险与缓解
+## 7. 风险与缓解
 
 - 风险：批量替换引入隐藏回归。  
   缓解：按模块分批上线，每批次都有回归用例与可回退点。
 - 风险：死代码清理误删。  
   缓解：先标记弃用窗口，再正式移除。
 
-## 7. 关联计划
+## 8. 执行记录（2026-02-12）
+
+- 已执行并通过：
+  - `pnpm -C apps/web-mui lint`
+  - `pnpm -C apps/web-mui typecheck`
+  - `pnpm -C apps/web-mui test`
+  - `pnpm -C apps/web-mui build`
+
+## 9. 关联计划
 
 - 总方案：`docs/dev-plans/090-mui-x-frontend-upgrade-plan.md`
 - 文档治理：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
