@@ -1,8 +1,10 @@
 import { createBrowserRouter } from 'react-router-dom'
 import { AppShell } from '../layout/AppShell'
 import { navItems } from '../navigation/config'
-import { ComingSoonPage } from '../pages/ComingSoonPage'
+import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
 import { FoundationDemoPage } from '../pages/FoundationDemoPage'
+import { OrgUnitsPage } from '../pages/org/OrgUnitsPage'
+import { PeopleAssignmentsPage } from '../pages/people/PeopleAssignmentsPage'
 import { RequirePermission } from './RequirePermission'
 
 export const router = createBrowserRouter([
@@ -22,7 +24,7 @@ export const router = createBrowserRouter([
         path: 'org/units',
         element: (
           <RequirePermission permissionKey='orgunit.read'>
-            <ComingSoonPage moduleNameKey='nav_org_units' />
+            <OrgUnitsPage />
           </RequirePermission>
         )
       },
@@ -30,7 +32,7 @@ export const router = createBrowserRouter([
         path: 'people',
         element: (
           <RequirePermission permissionKey='person.read'>
-            <ComingSoonPage moduleNameKey='nav_people' />
+            <PeopleAssignmentsPage />
           </RequirePermission>
         )
       },
@@ -38,7 +40,7 @@ export const router = createBrowserRouter([
         path: 'approvals',
         element: (
           <RequirePermission permissionKey='approval.read'>
-            <ComingSoonPage moduleNameKey='nav_approvals' />
+            <ApprovalsInboxPage />
           </RequirePermission>
         )
       }
