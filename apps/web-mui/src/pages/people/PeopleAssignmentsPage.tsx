@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Button,
@@ -15,7 +16,7 @@ import {
   TextField,
   Typography
 } from '@mui/material'
-import type { GridColDef, GridRowSelectionModel } from '@mui/x-data-grid'
+import type { GridColDef, GridPaginationModel, GridRowSelectionModel, GridSortModel } from '@mui/x-data-grid'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { DataGridPage } from '../../components/DataGridPage'
 import { DetailPanel } from '../../components/DetailPanel'
@@ -23,6 +24,12 @@ import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
 import { StatusChip } from '../../components/StatusChip'
 import { trackUiEvent } from '../../observability/tracker'
+import {
+  fromGridSortModel,
+  parseGridQueryState,
+  patchGridQueryState,
+  toGridSortModel
+} from '../../utils/gridQueryState'
 
 type EmploymentStatus = 'active' | 'inactive'
 type AssignmentType = 'primary' | 'secondary'
@@ -77,25 +84,37 @@ const initialRows: PeopleRow[] = [
   }
 ]
 
+const sortableFields = ['employeeId', 'name', 'department', 'position', 'assignment', 'status'] as const
+
+function normalizeAssignmentType(raw: string | null): 'all' | AssignmentType {
+  return raw === 'primary' || raw === 'secondary' ? raw : 'all'
+}
+
 function statusColor(status: EmploymentStatus): 'success' | 'warning' {
   return status === 'active' ? 'success' : 'warning'
 }
 
 export function PeopleAssignmentsPage() {
   const { t, tenantId } = useAppPreferences()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const query = useMemo(
+    () =>
+      parseGridQueryState(searchParams, {
+        statusValues: ['active', 'inactive'] as const,
+        sortFields: sortableFields
+      }),
+    [searchParams]
+  )
+  const assignment = normalizeAssignmentType(searchParams.get('assignment'))
+
   const [rows, setRows] = useState<PeopleRow[]>(initialRows)
-  const [keywordInput, setKeywordInput] = useState('')
-  const [statusInput, setStatusInput] = useState<'all' | EmploymentStatus>('all')
-  const [assignmentInput, setAssignmentInput] = useState<'all' | AssignmentType>('all')
-  const [filters, setFilters] = useState({
-    keyword: '',
-    status: 'all' as 'all' | EmploymentStatus,
-    assignment: 'all' as 'all' | AssignmentType
-  })
+  const [keywordInput, setKeywordInput] = useState(query.keyword)
+  const [statusInput, setStatusInput] = useState<'all' | EmploymentStatus>(query.status)
+  const [assignmentInput, setAssignmentInput] = useState<'all' | AssignmentType>(assignment)
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [pendingBulkAction, setPendingBulkAction] = useState<BulkAction | null>(null)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' } | null>(null)
 
   const columns = useMemo<GridColDef<PeopleRow>[]>(
     () => [
@@ -128,10 +147,10 @@ export function PeopleAssignmentsPage() {
   )
 
   const filteredRows = useMemo(() => {
-    const normalizedKeyword = filters.keyword.trim().toLowerCase()
+    const normalizedKeyword = query.keyword.trim().toLowerCase()
     return rows.filter((row) => {
-      const byStatus = filters.status === 'all' ? true : row.status === filters.status
-      const byAssignment = filters.assignment === 'all' ? true : row.assignment === filters.assignment
+      const byStatus = query.status === 'all' ? true : row.status === query.status
+      const byAssignment = assignment === 'all' ? true : row.assignment === assignment
       const byKeyword =
         normalizedKeyword.length === 0
           ? true
@@ -141,17 +160,38 @@ export function PeopleAssignmentsPage() {
             row.position.toLowerCase().includes(normalizedKeyword)
       return byStatus && byAssignment && byKeyword
     })
-  }, [filters.assignment, filters.keyword, filters.status, rows])
+  }, [assignment, query.keyword, query.status, rows])
 
   const selectedRow = rows.find((row) => row.id === selectedRowId) ?? null
+  const sortModel = useMemo(
+    () => toGridSortModel(query.sortField, query.sortOrder),
+    [query.sortField, query.sortOrder]
+  )
+
+  const updateSearch = useCallback(
+    (
+      patch: Parameters<typeof patchGridQueryState>[1],
+      options?: { assignment?: 'all' | AssignmentType }
+    ) => {
+      const nextParams = patchGridQueryState(searchParams, patch)
+      if (options && Object.hasOwn(options, 'assignment')) {
+        nextParams.set('assignment', options.assignment ?? 'all')
+      }
+      setSearchParams(nextParams)
+    },
+    [searchParams, setSearchParams]
+  )
 
   function handleApplyFilters() {
     const startedAt = performance.now()
-    setFilters({
-      keyword: keywordInput,
-      status: statusInput,
-      assignment: assignmentInput
-    })
+    updateSearch(
+      {
+        keyword: keywordInput,
+        page: 0,
+        status: statusInput
+      },
+      { assignment: assignmentInput }
+    )
     trackUiEvent({
       eventName: 'filter_submit',
       tenant: tenantId,
@@ -168,9 +208,18 @@ export function PeopleAssignmentsPage() {
     })
   }
 
+  function handleSortChange(nextSortModel: GridSortModel) {
+    const nextSort = fromGridSortModel(nextSortModel, sortableFields)
+    updateSearch({
+      page: 0,
+      sortField: nextSort.sortField,
+      sortOrder: nextSort.sortOrder
+    })
+  }
+
   function handleBulkAction(action: BulkAction) {
     if (selectedIds.length === 0) {
-      setToastMessage(t('common_select_rows'))
+      setToast({ message: t('common_select_rows'), severity: 'warning' })
       return
     }
     setPendingBulkAction(action)
@@ -208,7 +257,7 @@ export function PeopleAssignmentsPage() {
     })
 
     setPendingBulkAction(null)
-    setToastMessage(t('approvals_feedback_done'))
+    setToast({ message: t('common_action_done'), severity: 'success' })
   }
 
   return (
@@ -273,15 +322,11 @@ export function PeopleAssignmentsPage() {
         columns={columns}
         gridProps={{
           checkboxSelection: true,
-          onRowSelectionModelChange: (selection: GridRowSelectionModel) => {
-            const ids = [...selection.ids].map((id) => Number(id))
-            setSelectedIds(ids)
-            const first = selection.ids.values().next().value
-            if (first === undefined) {
-              setSelectedRowId(null)
-              return
-            }
-            const nextId = Number(first)
+          onPaginationModelChange: (model: GridPaginationModel) => {
+            updateSearch({ page: model.page, pageSize: model.pageSize })
+          },
+          onRowClick: (params) => {
+            const nextId = typeof params.id === 'number' ? params.id : Number(params.id)
             setSelectedRowId(nextId)
             trackUiEvent({
               eventName: 'detail_open',
@@ -293,10 +338,19 @@ export function PeopleAssignmentsPage() {
               metadata: { row_id: nextId }
             })
           },
+          onRowSelectionModelChange: (selection: GridRowSelectionModel) => {
+            const ids = [...selection.ids].map((id) => Number(id))
+            setSelectedIds(ids)
+          },
+          onSortModelChange: handleSortChange,
+          pageSizeOptions: [10, 20, 50],
+          pagination: true,
+          paginationModel: { page: query.page, pageSize: query.pageSize },
           rowSelectionModel: {
             type: 'include',
             ids: new Set(selectedIds)
           },
+          sortModel,
           sx: { minHeight: 560 }
         }}
         noRowsLabel={t('text_no_data')}
@@ -329,7 +383,7 @@ export function PeopleAssignmentsPage() {
         <DialogContent>
           <Typography>{t('people_bulk_confirm_message')}</Typography>
           <Alert sx={{ mt: 2 }} severity='info'>
-            {selectedIds.length} records selected
+            {t('common_selected_count', { count: selectedIds.length })}
           </Alert>
         </DialogContent>
         <DialogActions>
@@ -340,13 +394,9 @@ export function PeopleAssignmentsPage() {
         </DialogActions>
       </Dialog>
 
-      <Snackbar
-        autoHideDuration={2000}
-        onClose={() => setToastMessage(null)}
-        open={toastMessage !== null}
-      >
-        <Alert severity='success' variant='filled'>
-          {toastMessage}
+      <Snackbar autoHideDuration={2000} onClose={() => setToast(null)} open={toast !== null}>
+        <Alert severity={toast?.severity ?? 'success'} variant='filled'>
+          {toast?.message ?? ''}
         </Alert>
       </Snackbar>
     </>

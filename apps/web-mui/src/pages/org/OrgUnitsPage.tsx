@@ -11,7 +11,7 @@ import {
   Box,
   Typography
 } from '@mui/material'
-import type { GridColDef, GridPaginationModel, GridRowSelectionModel } from '@mui/x-data-grid'
+import type { GridColDef, GridPaginationModel, GridSortModel } from '@mui/x-data-grid'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { DataGridPage } from '../../components/DataGridPage'
 import { DetailPanel } from '../../components/DetailPanel'
@@ -20,6 +20,12 @@ import { PageHeader } from '../../components/PageHeader'
 import { StatusChip } from '../../components/StatusChip'
 import { type TreePanelNode, TreePanel } from '../../components/TreePanel'
 import { trackUiEvent } from '../../observability/tracker'
+import {
+  fromGridSortModel,
+  parseGridQueryState,
+  patchGridQueryState,
+  toGridSortModel
+} from '../../utils/gridQueryState'
 
 type OrgStatus = 'active' | 'inactive'
 
@@ -97,6 +103,8 @@ const orgRows: OrgUnitRow[] = [
   }
 ]
 
+const sortableFields = ['code', 'name', 'manager', 'headcount', 'effectiveDate', 'status'] as const
+
 function collectDescendantIds(allRows: OrgUnitRow[], nodeId: number): Set<number> {
   const childrenMap = new Map<number, number[]>()
   allRows.forEach((row) => {
@@ -139,25 +147,42 @@ function buildTreeNodes(parentId: number | null, rows: OrgUnitRow[]): TreePanelN
     }))
 }
 
+function parseSelectedNode(raw: string | null): number {
+  if (!raw) {
+    return 1
+  }
+
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value <= 0) {
+    return 1
+  }
+
+  return value
+}
+
 export function OrgUnitsPage() {
   const { t, tenantId } = useAppPreferences()
   const [searchParams, setSearchParams] = useSearchParams()
+  const query = useMemo(
+    () =>
+      parseGridQueryState(searchParams, {
+        statusValues: ['active', 'inactive'] as const,
+        sortFields: sortableFields
+      }),
+    [searchParams]
+  )
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null)
   const [loadingTree, setLoadingTree] = useState(false)
 
-  const selectedNodeIdRaw = Number(searchParams.get('node') ?? '1')
-  const selectedNodeId =
-    Number.isFinite(selectedNodeIdRaw) && selectedNodeIdRaw > 0 ? selectedNodeIdRaw : 1
-  const keyword = searchParams.get('q') ?? ''
-  const status = (searchParams.get('status') ?? 'all') as 'all' | OrgStatus
-  const pageRaw = Number(searchParams.get('page') ?? '0')
-  const page = Number.isFinite(pageRaw) && pageRaw >= 0 ? pageRaw : 0
-  const pageSizeRaw = Number(searchParams.get('size') ?? '10')
-  const pageSize = Number.isFinite(pageSizeRaw) && pageSizeRaw > 0 ? pageSizeRaw : 10
-  const [keywordInput, setKeywordInput] = useState(keyword)
-  const [statusInput, setStatusInput] = useState(status)
+  const selectedNodeId = parseSelectedNode(searchParams.get('node'))
+  const [keywordInput, setKeywordInput] = useState(query.keyword)
+  const [statusInput, setStatusInput] = useState(query.status)
 
   const treeNodes = useMemo(() => buildTreeNodes(null, orgRows), [])
+  const sortModel = useMemo(
+    () => toGridSortModel(query.sortField, query.sortOrder),
+    [query.sortField, query.sortOrder]
+  )
 
   const visibleNodeIds = useMemo(
     () => collectDescendantIds(orgRows, selectedNodeId),
@@ -165,10 +190,10 @@ export function OrgUnitsPage() {
   )
 
   const filteredRows = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase()
+    const normalizedKeyword = query.keyword.trim().toLowerCase()
     return orgRows.filter((row) => {
       const byTree = visibleNodeIds.has(row.id)
-      const byStatus = status === 'all' ? true : row.status === status
+      const byStatus = query.status === 'all' ? true : row.status === query.status
       const byKeyword =
         normalizedKeyword.length === 0
           ? true
@@ -178,12 +203,32 @@ export function OrgUnitsPage() {
 
       return byTree && byStatus && byKeyword
     })
-  }, [keyword, status, visibleNodeIds])
+  }, [query.keyword, query.status, visibleNodeIds])
+
+  const sortedRows = useMemo(() => {
+    if (!query.sortField || !query.sortOrder) {
+      return filteredRows
+    }
+
+    const sorted = [...filteredRows]
+    const direction = query.sortOrder === 'asc' ? 1 : -1
+    sorted.sort((left, right) => {
+      const field = query.sortField
+      if (field === 'headcount') {
+        return (left.headcount - right.headcount) * direction
+      }
+
+      const leftValue = String(left[field as keyof OrgUnitRow] ?? '')
+      const rightValue = String(right[field as keyof OrgUnitRow] ?? '')
+      return leftValue.localeCompare(rightValue) * direction
+    })
+    return sorted
+  }, [filteredRows, query.sortField, query.sortOrder])
 
   const pagedRows = useMemo(() => {
-    const start = page * pageSize
-    return filteredRows.slice(start, start + pageSize)
-  }, [filteredRows, page, pageSize])
+    const start = query.page * query.pageSize
+    return sortedRows.slice(start, start + query.pageSize)
+  }, [query.page, query.pageSize, sortedRows])
 
   const selectedRow = orgRows.find((row) => row.id === selectedRowId) ?? null
 
@@ -210,23 +255,26 @@ export function OrgUnitsPage() {
     [t]
   )
 
-  const updateParam = useCallback(
-    (updater: (draft: URLSearchParams) => void) => {
-      const draft = new URLSearchParams(searchParams)
-      updater(draft)
-      setSearchParams(draft)
+  const updateSearch = useCallback(
+    (
+      patch: Parameters<typeof patchGridQueryState>[1],
+      options?: { selectedNodeId?: number }
+    ) => {
+      const nextParams = patchGridQueryState(searchParams, patch)
+      if (options && Object.hasOwn(options, 'selectedNodeId')) {
+        nextParams.set('node', String(options.selectedNodeId))
+      }
+      setSearchParams(nextParams)
     },
     [searchParams, setSearchParams]
   )
 
   function handleApplyFilters(nextKeyword: string, nextStatus: string) {
     const startedAt = performance.now()
-    updateParam((draft) => {
-      draft.set('q', nextKeyword)
-      draft.set('status', nextStatus)
-      draft.set('page', '0')
-      draft.set('size', String(pageSize))
-      draft.set('node', String(selectedNodeId))
+    updateSearch({
+      keyword: nextKeyword,
+      page: 0,
+      status: nextStatus
     })
 
     trackUiEvent({
@@ -244,12 +292,20 @@ export function OrgUnitsPage() {
   async function handleTreeSelect(nextNodeId: number) {
     setLoadingTree(true)
     await Promise.resolve()
-    updateParam((draft) => {
-      draft.set('node', String(nextNodeId))
-      draft.set('page', '0')
-      draft.set('size', String(pageSize))
-    })
+    updateSearch(
+      { page: 0 },
+      { selectedNodeId: nextNodeId }
+    )
     setLoadingTree(false)
+  }
+
+  function handleSortChange(nextSortModel: GridSortModel) {
+    const nextSort = fromGridSortModel(nextSortModel, sortableFields)
+    updateSearch({
+      page: 0,
+      sortField: nextSort.sortField,
+      sortOrder: nextSort.sortOrder
+    })
   }
 
   return (
@@ -297,18 +353,10 @@ export function OrgUnitsPage() {
             columns={columns}
             gridProps={{
               onPaginationModelChange: (model: GridPaginationModel) => {
-                updateParam((draft) => {
-                  draft.set('page', String(model.page))
-                  draft.set('size', String(model.pageSize))
-                })
+                updateSearch({ page: model.page, pageSize: model.pageSize })
               },
-              onRowSelectionModelChange: (selection: GridRowSelectionModel) => {
-                const first = selection.ids.values().next().value
-                if (first === undefined) {
-                  setSelectedRowId(null)
-                  return
-                }
-                const nextRowId = Number(first)
+              onRowClick: (params) => {
+                const nextRowId = typeof params.id === 'number' ? params.id : Number(params.id)
                 setSelectedRowId(nextRowId)
                 trackUiEvent({
                   eventName: 'detail_open',
@@ -320,15 +368,18 @@ export function OrgUnitsPage() {
                   metadata: { row_id: nextRowId }
                 })
               },
+              onSortModelChange: handleSortChange,
               pageSizeOptions: [10, 20, 50],
               pagination: true,
               paginationMode: 'server',
-              paginationModel: { page, pageSize },
-              rowCount: filteredRows.length,
+              paginationModel: { page: query.page, pageSize: query.pageSize },
+              rowCount: sortedRows.length,
               rowSelectionModel: {
                 type: 'include',
                 ids: selectedRowId === null ? new Set() : new Set([selectedRowId])
               },
+              sortModel,
+              sortingMode: 'server',
               sx: { minHeight: 520 }
             }}
             noRowsLabel={t('text_no_data')}

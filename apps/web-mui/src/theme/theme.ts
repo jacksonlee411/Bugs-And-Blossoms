@@ -9,7 +9,8 @@ export function buildAppTheme(mode: PaletteMode) {
         main: '#09a7a3'
       },
       background: {
-        default: mode === 'light' ? '#f7f9fb' : '#0f172a'
+        default: mode === 'light' ? '#f7f9fb' : '#0f172a',
+        paper: mode === 'light' ? '#fff' : '#0b1220'
       }
     },
     shape: {
@@ -31,7 +32,7 @@ export function buildAppTheme(mode: PaletteMode) {
         styleOverrides: {
           root: {
             border: 'none',
-            backgroundColor: mode === 'light' ? '#fff' : '#0b1220'
+            backgroundColor: 'transparent'
           }
         }
       }

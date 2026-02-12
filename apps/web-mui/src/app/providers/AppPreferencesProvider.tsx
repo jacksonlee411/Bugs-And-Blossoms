@@ -5,7 +5,7 @@ import {
   useState
 } from 'react'
 import type { PaletteMode } from '@mui/material'
-import { type Locale, type MessageKey, getMessage } from '../../i18n/messages'
+import { type Locale, type MessageKey, type MessageVars, getMessage } from '../../i18n/messages'
 import { AppPreferencesContext, type AppPreferencesContextValue } from './AppPreferencesContext'
 
 const THEME_STORAGE_KEY = 'web-mui-theme-mode'
@@ -71,7 +71,7 @@ export function AppPreferencesProvider({ children }: PropsWithChildren) {
     })
   }, [])
 
-  const t = useCallback((key: MessageKey) => getMessage(locale, key), [locale])
+  const t = useCallback((key: MessageKey, vars?: MessageVars) => getMessage(locale, key, vars), [locale])
 
   const value = useMemo<AppPreferencesContextValue>(
     () => ({

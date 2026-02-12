@@ -32,7 +32,16 @@ export function DataGridPage({
   gridProps
 }: DataGridPageProps) {
   return (
-    <Box sx={{ bgcolor: '#fff', borderRadius: 2, minHeight: 480 }}>
+    <Box
+      sx={{
+        bgcolor: 'background.paper',
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 2,
+        minHeight: 480,
+        overflow: 'hidden'
+      }}
+    >
       <DataGrid
         columns={columns}
         disableRowSelectionOnClick

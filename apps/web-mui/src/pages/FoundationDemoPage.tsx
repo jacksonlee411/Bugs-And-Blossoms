@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Button,
   Box,
@@ -10,7 +11,7 @@ import {
   TextField,
   Typography
 } from '@mui/material'
-import type { GridColDef, GridRowSelectionModel } from '@mui/x-data-grid'
+import type { GridColDef, GridPaginationModel, GridSortModel } from '@mui/x-data-grid'
 import { useAppPreferences } from '../app/providers/AppPreferencesContext'
 import { DataGridPage } from '../components/DataGridPage'
 import { DetailPanel } from '../components/DetailPanel'
@@ -18,6 +19,12 @@ import { FilterBar } from '../components/FilterBar'
 import { PageHeader } from '../components/PageHeader'
 import { type TreePanelNode, TreePanel } from '../components/TreePanel'
 import { trackUiEvent } from '../observability/tracker'
+import {
+  fromGridSortModel,
+  parseGridQueryState,
+  patchGridQueryState,
+  toGridSortModel
+} from '../utils/gridQueryState'
 
 interface DepartmentNode {
   id: number
@@ -53,6 +60,8 @@ const departmentTree: DepartmentNode[] = [
   }
 ]
 
+const sortableFields = ['name', 'department', 'position', 'status'] as const
+
 function mapDepartmentNodes(nodes: DepartmentNode[]): TreePanelNode[] {
   return nodes.map((node) => ({
     id: String(node.id),
@@ -68,15 +77,34 @@ const rows: EmployeeRow[] = [
   { id: 4, name: '赵六', department: '后端组', departmentId: 6, position: '后端工程师', status: 'inactive' }
 ]
 
+function parseDepartmentId(raw: string | null): number | null {
+  if (!raw) {
+    return null
+  }
+
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value <= 0) {
+    return null
+  }
+
+  return value
+}
+
 export function FoundationDemoPage() {
   const { t, tenantId } = useAppPreferences()
-  const [keywordInput, setKeywordInput] = useState('')
-  const [statusInput, setStatusInput] = useState<'all' | 'active' | 'inactive'>('all')
-  const [appliedFilters, setAppliedFilters] = useState({
-    keyword: '',
-    status: 'all' as 'all' | 'active' | 'inactive'
-  })
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const query = useMemo(
+    () =>
+      parseGridQueryState(searchParams, {
+        statusValues: ['active', 'inactive'] as const,
+        sortFields: sortableFields
+      }),
+    [searchParams]
+  )
+
+  const selectedDepartmentId = parseDepartmentId(searchParams.get('node'))
+  const [keywordInput, setKeywordInput] = useState(query.keyword)
+  const [statusInput, setStatusInput] = useState<'all' | 'active' | 'inactive'>(query.status)
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null)
 
   const columns = useMemo<GridColDef<EmployeeRow>[]>(
@@ -97,11 +125,11 @@ export function FoundationDemoPage() {
   )
 
   const filteredRows = useMemo(() => {
-    const normalizedKeyword = appliedFilters.keyword.trim().toLowerCase()
+    const normalizedKeyword = query.keyword.trim().toLowerCase()
 
     return rows.filter((row) => {
       const byDepartment = selectedDepartmentId ? row.departmentId === selectedDepartmentId : true
-      const byStatus = appliedFilters.status === 'all' ? true : row.status === appliedFilters.status
+      const byStatus = query.status === 'all' ? true : row.status === query.status
       const byKeyword =
         normalizedKeyword.length === 0
           ? true
@@ -111,15 +139,38 @@ export function FoundationDemoPage() {
 
       return byDepartment && byStatus && byKeyword
     })
-  }, [appliedFilters.keyword, appliedFilters.status, selectedDepartmentId])
+  }, [query.keyword, query.status, selectedDepartmentId])
 
   const selectedRow = rows.find((item) => item.id === selectedRowId) ?? null
+  const sortModel = useMemo(
+    () => toGridSortModel(query.sortField, query.sortOrder),
+    [query.sortField, query.sortOrder]
+  )
+
+  const updateSearch = useCallback(
+    (
+      patch: Parameters<typeof patchGridQueryState>[1],
+      options?: { departmentId?: number | null }
+    ) => {
+      const nextParams = patchGridQueryState(searchParams, patch)
+      if (options && Object.hasOwn(options, 'departmentId')) {
+        if (options.departmentId) {
+          nextParams.set('node', String(options.departmentId))
+        } else {
+          nextParams.delete('node')
+        }
+      }
+      setSearchParams(nextParams)
+    },
+    [searchParams, setSearchParams]
+  )
 
   function handleApplyFilters() {
     const startedAt = performance.now()
-    setAppliedFilters({
+    updateSearch({
       keyword: keywordInput,
-      status: statusInput
+      status: statusInput,
+      page: 0
     })
     trackUiEvent({
       eventName: 'filter_submit',
@@ -136,11 +187,34 @@ export function FoundationDemoPage() {
     })
   }
 
+  function handleSortChange(nextSortModel: GridSortModel) {
+    const nextSort = fromGridSortModel(nextSortModel, sortableFields)
+    updateSearch({
+      page: 0,
+      sortField: nextSort.sortField,
+      sortOrder: nextSort.sortOrder
+    })
+  }
+
+  function handleTreeSelect(nodeId: string) {
+    const nextDepartmentId = Number(nodeId)
+    if (!Number.isInteger(nextDepartmentId) || nextDepartmentId <= 0) {
+      return
+    }
+
+    updateSearch({ page: 0 }, { departmentId: nextDepartmentId })
+  }
+
   return (
     <>
       <PageHeader subtitle={t('page_foundation_subtitle')} title={t('page_foundation_title')} />
       <FilterBar>
-        <TextField fullWidth label={t('page_search_label')} onChange={(event) => setKeywordInput(event.target.value)} value={keywordInput} />
+        <TextField
+          fullWidth
+          label={t('page_search_label')}
+          onChange={(event) => setKeywordInput(event.target.value)}
+          value={keywordInput}
+        />
         <FormControl sx={{ minWidth: 180 }}>
           <InputLabel id='status-filter-label'>{t('page_status_label')}</InputLabel>
           <Select
@@ -164,7 +238,7 @@ export function FoundationDemoPage() {
           emptyLabel={t('text_no_data')}
           loadingLabel={t('text_loading')}
           nodes={mapDepartmentNodes(departmentTree)}
-          onSelect={(nodeId) => setSelectedDepartmentId(Number(nodeId))}
+          onSelect={handleTreeSelect}
           selectedItemId={selectedDepartmentId ? String(selectedDepartmentId) : undefined}
           title={t('page_department_tree')}
         />
@@ -173,14 +247,11 @@ export function FoundationDemoPage() {
           <DataGridPage
             columns={columns}
             gridProps={{
-              onRowSelectionModelChange: (selection: GridRowSelectionModel) => {
-                const first = selection.ids.values().next().value
-                if (first === undefined) {
-                  setSelectedRowId(null)
-                  return
-                }
-
-                const nextRowId = typeof first === 'number' ? first : Number(first)
+              onPaginationModelChange: (model: GridPaginationModel) => {
+                updateSearch({ page: model.page, pageSize: model.pageSize })
+              },
+              onRowClick: (params) => {
+                const nextRowId = typeof params.id === 'number' ? params.id : Number(params.id)
                 setSelectedRowId(nextRowId)
                 trackUiEvent({
                   eventName: 'detail_open',
@@ -192,10 +263,15 @@ export function FoundationDemoPage() {
                   metadata: { row_id: nextRowId }
                 })
               },
+              onSortModelChange: handleSortChange,
+              pageSizeOptions: [10, 20, 50],
+              pagination: true,
+              paginationModel: { page: query.page, pageSize: query.pageSize },
               rowSelectionModel: {
                 type: 'include',
                 ids: selectedRowId === null ? new Set() : new Set([selectedRowId])
               },
+              sortModel,
               sx: { minHeight: 480 }
             }}
             noRowsLabel={t('text_no_data')}

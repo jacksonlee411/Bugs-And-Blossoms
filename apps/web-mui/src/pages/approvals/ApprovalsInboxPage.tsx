@@ -1,6 +1,19 @@
-import { useState } from 'react'
-import { Alert, Box, Button, FormControl, InputLabel, MenuItem, Select, Snackbar, Stack, TextField, Typography } from '@mui/material'
-import type { GridColDef, GridRenderCellParams, GridRowSelectionModel } from '@mui/x-data-grid'
+import { useCallback, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import {
+  Alert,
+  Box,
+  Button,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Snackbar,
+  Stack,
+  TextField,
+  Typography
+} from '@mui/material'
+import type { GridColDef, GridPaginationModel, GridRenderCellParams, GridSortModel } from '@mui/x-data-grid'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { DataGridPage } from '../../components/DataGridPage'
 import { DetailPanel } from '../../components/DetailPanel'
@@ -8,6 +21,12 @@ import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
 import { StatusChip } from '../../components/StatusChip'
 import { trackUiEvent } from '../../observability/tracker'
+import {
+  fromGridSortModel,
+  parseGridQueryState,
+  patchGridQueryState,
+  toGridSortModel
+} from '../../utils/gridQueryState'
 
 type ApprovalStatus = 'approved' | 'forwarded' | 'pending' | 'rejected'
 type ApprovalAction = 'approve' | 'forward' | 'reject'
@@ -48,6 +67,8 @@ const initialRows: ApprovalRow[] = [
   }
 ]
 
+const sortableFields = ['requester', 'type', 'submittedAt', 'status'] as const
+
 function mapStatusToChipColor(status: ApprovalStatus): 'error' | 'info' | 'success' | 'warning' {
   if (status === 'approved') {
     return 'success'
@@ -63,19 +84,31 @@ function mapStatusToChipColor(status: ApprovalStatus): 'error' | 'info' | 'succe
 
 export function ApprovalsInboxPage() {
   const { t, tenantId } = useAppPreferences()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const query = useMemo(
+    () =>
+      parseGridQueryState(searchParams, {
+        statusValues: ['pending', 'approved', 'rejected', 'forwarded'] as const,
+        sortFields: sortableFields
+      }),
+    [searchParams]
+  )
   const [rows, setRows] = useState(initialRows)
-  const [statusInput, setStatusInput] = useState<'all' | ApprovalStatus>('all')
-  const [keywordInput, setKeywordInput] = useState('')
-  const [filters, setFilters] = useState({ status: 'all' as 'all' | ApprovalStatus, keyword: '' })
+  const [statusInput, setStatusInput] = useState<'all' | ApprovalStatus>(query.status)
+  const [keywordInput, setKeywordInput] = useState(query.keyword)
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const selectedRow = rows.find((row) => row.id === selectedRowId) ?? null
+  const sortModel = useMemo(
+    () => toGridSortModel(query.sortField, query.sortOrder),
+    [query.sortField, query.sortOrder]
+  )
 
-  const filteredRows = (() => {
-    const normalizedKeyword = filters.keyword.trim().toLowerCase()
+  const filteredRows = useMemo(() => {
+    const normalizedKeyword = query.keyword.trim().toLowerCase()
     return rows.filter((row) => {
-      const byStatus = filters.status === 'all' ? true : row.status === filters.status
+      const byStatus = query.status === 'all' ? true : row.status === query.status
       const byKeyword =
         normalizedKeyword.length === 0
           ? true
@@ -84,7 +117,15 @@ export function ApprovalsInboxPage() {
             row.summary.toLowerCase().includes(normalizedKeyword)
       return byStatus && byKeyword
     })
-  })()
+  }, [query.keyword, query.status, rows])
+
+  const updateSearch = useCallback(
+    (patch: Parameters<typeof patchGridQueryState>[1]) => {
+      const nextParams = patchGridQueryState(searchParams, patch)
+      setSearchParams(nextParams)
+    },
+    [searchParams, setSearchParams]
+  )
 
   function statusLabel(status: ApprovalStatus): string {
     if (status === 'approved') {
@@ -122,19 +163,40 @@ export function ApprovalsInboxPage() {
       metadata: { row_id: targetRowId }
     })
 
-    setToastMessage(t('approvals_feedback_done'))
+    setToastMessage(t('common_action_done'))
   }
 
   function renderActionButtons(rowId: number) {
     return (
       <Stack direction='row' spacing={1}>
-        <Button onClick={() => updateStatus(rowId, 'approve')} size='small' variant='text'>
+        <Button
+          onClick={(event) => {
+            event.stopPropagation()
+            updateStatus(rowId, 'approve')
+          }}
+          size='small'
+          variant='text'
+        >
           {t('approvals_action_approve')}
         </Button>
-        <Button onClick={() => updateStatus(rowId, 'reject')} size='small' variant='text'>
+        <Button
+          onClick={(event) => {
+            event.stopPropagation()
+            updateStatus(rowId, 'reject')
+          }}
+          size='small'
+          variant='text'
+        >
           {t('approvals_action_reject')}
         </Button>
-        <Button onClick={() => updateStatus(rowId, 'forward')} size='small' variant='text'>
+        <Button
+          onClick={(event) => {
+            event.stopPropagation()
+            updateStatus(rowId, 'forward')
+          }}
+          size='small'
+          variant='text'
+        >
           {t('approvals_action_forward')}
         </Button>
       </Stack>
@@ -167,7 +229,11 @@ export function ApprovalsInboxPage() {
 
   function handleApplyFilters() {
     const startedAt = performance.now()
-    setFilters({ keyword: keywordInput, status: statusInput })
+    updateSearch({
+      keyword: keywordInput,
+      page: 0,
+      status: statusInput
+    })
     trackUiEvent({
       eventName: 'filter_submit',
       tenant: tenantId,
@@ -180,6 +246,15 @@ export function ApprovalsInboxPage() {
         status: statusInput,
         has_keyword: keywordInput.trim().length > 0
       }
+    })
+  }
+
+  function handleSortChange(nextSortModel: GridSortModel) {
+    const nextSort = fromGridSortModel(nextSortModel, sortableFields)
+    updateSearch({
+      page: 0,
+      sortField: nextSort.sortField,
+      sortOrder: nextSort.sortOrder
     })
   }
 
@@ -216,14 +291,11 @@ export function ApprovalsInboxPage() {
       <DataGridPage
         columns={columns}
         gridProps={{
-          disableRowSelectionOnClick: false,
-          onRowSelectionModelChange: (selection: GridRowSelectionModel) => {
-            const first = selection.ids.values().next().value
-            if (first === undefined) {
-              setSelectedRowId(null)
-              return
-            }
-            const nextId = Number(first)
+          onPaginationModelChange: (model: GridPaginationModel) => {
+            updateSearch({ page: model.page, pageSize: model.pageSize })
+          },
+          onRowClick: (params) => {
+            const nextId = typeof params.id === 'number' ? params.id : Number(params.id)
             setSelectedRowId(nextId)
             trackUiEvent({
               eventName: 'detail_open',
@@ -235,10 +307,15 @@ export function ApprovalsInboxPage() {
               metadata: { row_id: nextId }
             })
           },
+          onSortModelChange: handleSortChange,
+          pageSizeOptions: [10, 20, 50],
+          pagination: true,
+          paginationModel: { page: query.page, pageSize: query.pageSize },
           rowSelectionModel: {
             type: 'include',
             ids: selectedRowId === null ? new Set() : new Set([selectedRowId])
           },
+          sortModel,
           sx: { minHeight: 560 }
         }}
         noRowsLabel={t('text_no_data')}
