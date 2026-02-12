@@ -119,7 +119,7 @@ const messages = {
     common_select_rows: '请至少选择一条记录',
     common_action_done: '操作已完成',
     common_selected_count: '已选择 {count} 条',
-    page_foundation_title: 'Foundation Demo',
+    page_foundation_title: '基座示例',
     page_foundation_subtitle: 'P091 基座示例：树 + 表 + 详情侧栏 + 统一筛选栏',
     page_department_tree: '部门树',
     page_search_label: '搜索（姓名/部门/岗位）',

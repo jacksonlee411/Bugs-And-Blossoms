@@ -262,7 +262,23 @@ export function PeopleAssignmentsPage() {
 
   return (
     <>
-      <PageHeader subtitle={t('page_people_subtitle')} title={t('page_people_title')} />
+      <PageHeader
+        actions={
+          <>
+            <Button onClick={() => handleBulkAction('disable')} size='small' variant='outlined'>
+              {t('people_bulk_disable')}
+            </Button>
+            <Button onClick={() => handleBulkAction('enable')} size='small' variant='outlined'>
+              {t('people_bulk_enable')}
+            </Button>
+            <Button onClick={() => handleBulkAction('transfer')} size='small' variant='outlined'>
+              {t('people_bulk_transfer')}
+            </Button>
+          </>
+        }
+        subtitle={t('page_people_subtitle')}
+        title={t('page_people_title')}
+      />
       <FilterBar>
         <TextField
           fullWidth
@@ -300,23 +316,6 @@ export function PeopleAssignmentsPage() {
           {t('action_apply_filters')}
         </Button>
       </FilterBar>
-
-      <PageHeader
-        actions={
-          <>
-            <Button onClick={() => handleBulkAction('disable')} size='small' variant='outlined'>
-              {t('people_bulk_disable')}
-            </Button>
-            <Button onClick={() => handleBulkAction('enable')} size='small' variant='outlined'>
-              {t('people_bulk_enable')}
-            </Button>
-            <Button onClick={() => handleBulkAction('transfer')} size='small' variant='outlined'>
-              {t('people_bulk_transfer')}
-            </Button>
-          </>
-        }
-        title={t('page_people_title')}
-      />
 
       <DataGridPage
         columns={columns}
