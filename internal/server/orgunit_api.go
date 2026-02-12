@@ -95,8 +95,68 @@ func handleOrgUnitsBusinessUnitAPI(w http.ResponseWriter, r *http.Request, store
 type orgUnitListItem struct {
 	OrgCode        string `json:"org_code"`
 	Name           string `json:"name"`
+	Status         string `json:"status"`
 	IsBusinessUnit *bool  `json:"is_business_unit,omitempty"`
 	HasChildren    *bool  `json:"has_children,omitempty"`
+}
+
+type orgUnitDetailsAPIItem struct {
+	OrgID          int       `json:"org_id"`
+	OrgCode        string    `json:"org_code"`
+	Name           string    `json:"name"`
+	Status         string    `json:"status"`
+	ParentOrgCode  string    `json:"parent_org_code"`
+	ParentName     string    `json:"parent_name"`
+	IsBusinessUnit bool      `json:"is_business_unit"`
+	ManagerPernr   string    `json:"manager_pernr"`
+	ManagerName    string    `json:"manager_name"`
+	FullNamePath   string    `json:"full_name_path"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	EventUUID      string    `json:"event_uuid"`
+}
+
+type orgUnitDetailsAPIResponse struct {
+	AsOf    string                `json:"as_of"`
+	OrgUnit orgUnitDetailsAPIItem `json:"org_unit"`
+}
+
+type orgUnitVersionAPIItem struct {
+	EventID       int64  `json:"event_id"`
+	EventUUID     string `json:"event_uuid"`
+	EffectiveDate string `json:"effective_date"`
+	EventType     string `json:"event_type"`
+}
+
+type orgUnitVersionsAPIResponse struct {
+	OrgCode  string                  `json:"org_code"`
+	Versions []orgUnitVersionAPIItem `json:"versions"`
+}
+
+type orgUnitAuditAPIItem struct {
+	EventID                int64           `json:"event_id"`
+	EventUUID              string          `json:"event_uuid"`
+	EventType              string          `json:"event_type"`
+	EffectiveDate          string          `json:"effective_date"`
+	TxTime                 time.Time       `json:"tx_time"`
+	InitiatorName          string          `json:"initiator_name"`
+	InitiatorEmployeeID    string          `json:"initiator_employee_id"`
+	RequestCode            string          `json:"request_code"`
+	Reason                 string          `json:"reason"`
+	IsRescinded            bool            `json:"is_rescinded"`
+	RescindedByEventUUID   string          `json:"rescinded_by_event_uuid"`
+	RescindedByTxTime      time.Time       `json:"rescinded_by_tx_time"`
+	RescindedByRequestCode string          `json:"rescinded_by_request_code"`
+	Payload                json.RawMessage `json:"payload"`
+	BeforeSnapshot         json.RawMessage `json:"before_snapshot"`
+	AfterSnapshot          json.RawMessage `json:"after_snapshot"`
+}
+
+type orgUnitAuditAPIResponse struct {
+	OrgCode string                `json:"org_code"`
+	Limit   int                   `json:"limit"`
+	HasMore bool                  `json:"has_more"`
+	Events  []orgUnitAuditAPIItem `json:"events"`
 }
 
 type orgUnitCreateAPIRequest struct {
@@ -205,6 +265,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
 			return
 		}
+		includeDisabled := parseIncludeDisabled(r.URL.Query().Get("include_disabled"))
 
 		parentCode := strings.TrimSpace(r.URL.Query().Get("parent_org_code"))
 		if parentCode != "" {
@@ -226,7 +287,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 				return
 			}
 
-			children, err := store.ListChildren(r.Context(), tenant.ID, parentID, asOf)
+			children, err := listChildrenByVisibility(r.Context(), store, tenant.ID, parentID, asOf, includeDisabled)
 			if err != nil {
 				if errors.Is(err, errOrgUnitNotFound) {
 					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -239,22 +300,28 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			items := make([]orgUnitListItem, 0, len(children))
 			for _, child := range children {
 				hasChildren := child.HasChildren
+				status := strings.TrimSpace(child.Status)
+				if status == "" {
+					status = "active"
+				}
 				items = append(items, orgUnitListItem{
 					OrgCode:     child.OrgCode,
 					Name:        child.Name,
+					Status:      status,
 					HasChildren: &hasChildren,
 				})
 			}
 
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"as_of":     asOf,
-				"org_units": items,
+				"as_of":            asOf,
+				"include_disabled": includeDisabled,
+				"org_units":        items,
 			})
 			return
 		}
 
-		nodes, err := store.ListNodesCurrent(r.Context(), tenant.ID, asOf)
+		nodes, err := listNodesCurrentByVisibility(r.Context(), store, tenant.ID, asOf, includeDisabled)
 		if err != nil {
 			writeInternalAPIError(w, r, err, "orgunit_list_failed")
 			return
@@ -263,17 +330,23 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		items := make([]orgUnitListItem, 0, len(nodes))
 		for _, node := range nodes {
 			isBU := node.IsBusinessUnit
+			status := strings.TrimSpace(node.Status)
+			if status == "" {
+				status = "active"
+			}
 			items = append(items, orgUnitListItem{
 				OrgCode:        node.OrgCode,
 				Name:           node.Name,
+				Status:         status,
 				IsBusinessUnit: &isBU,
 			})
 		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"as_of":     asOf,
-			"org_units": items,
+			"as_of":            asOf,
+			"include_disabled": includeDisabled,
+			"org_units":        items,
 		})
 		return
 	case http.MethodPost:
@@ -308,6 +381,282 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
+}
+
+func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+	if r.Method != http.MethodGet {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	asOf, err := orgUnitAPIAsOf(r)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+		return
+	}
+	includeDisabled := parseIncludeDisabled(r.URL.Query().Get("include_disabled"))
+
+	rawCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
+	if rawCode == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
+		return
+	}
+	normalized, err := orgunitpkg.NormalizeOrgCode(rawCode)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+		return
+	}
+
+	orgID, err := store.ResolveOrgID(r.Context(), tenant.ID, normalized)
+	if err != nil {
+		switch {
+		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+		case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
+		default:
+			writeInternalAPIError(w, r, err, "orgunit_resolve_org_code_failed")
+		}
+		return
+	}
+
+	details, err := getNodeDetailsByVisibility(r.Context(), store, tenant.ID, orgID, asOf, includeDisabled)
+	if err != nil {
+		if errors.Is(err, errOrgUnitNotFound) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+			return
+		}
+		writeInternalAPIError(w, r, err, "orgunit_details_failed")
+		return
+	}
+
+	resp := orgUnitDetailsAPIResponse{
+		AsOf: asOf,
+		OrgUnit: orgUnitDetailsAPIItem{
+			OrgID:          details.OrgID,
+			OrgCode:        details.OrgCode,
+			Name:           details.Name,
+			Status:         strings.TrimSpace(details.Status),
+			ParentOrgCode:  details.ParentCode,
+			ParentName:     details.ParentName,
+			IsBusinessUnit: details.IsBusinessUnit,
+			ManagerPernr:   details.ManagerPernr,
+			ManagerName:    details.ManagerName,
+			FullNamePath:   details.FullNamePath,
+			CreatedAt:      details.CreatedAt,
+			UpdatedAt:      details.UpdatedAt,
+			EventUUID:      details.EventUUID,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func handleOrgUnitsVersionsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+	if r.Method != http.MethodGet {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	rawCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
+	if rawCode == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
+		return
+	}
+	normalized, err := orgunitpkg.NormalizeOrgCode(rawCode)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+		return
+	}
+
+	orgID, err := store.ResolveOrgID(r.Context(), tenant.ID, normalized)
+	if err != nil {
+		switch {
+		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+		case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
+		default:
+			writeInternalAPIError(w, r, err, "orgunit_resolve_org_code_failed")
+		}
+		return
+	}
+
+	versions, err := store.ListNodeVersions(r.Context(), tenant.ID, orgID)
+	if err != nil {
+		if errors.Is(err, errOrgUnitNotFound) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+			return
+		}
+		writeInternalAPIError(w, r, err, "orgunit_versions_failed")
+		return
+	}
+
+	items := make([]orgUnitVersionAPIItem, 0, len(versions))
+	for _, v := range versions {
+		items = append(items, orgUnitVersionAPIItem{
+			EventID:       v.EventID,
+			EventUUID:     v.EventUUID,
+			EffectiveDate: v.EffectiveDate,
+			EventType:     v.EventType,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(orgUnitVersionsAPIResponse{
+		OrgCode:  normalized,
+		Versions: items,
+	})
+}
+
+func handleOrgUnitsAuditAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+	if r.Method != http.MethodGet {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	rawCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
+	if rawCode == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
+		return
+	}
+	normalized, err := orgunitpkg.NormalizeOrgCode(rawCode)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+		return
+	}
+
+	orgID, err := store.ResolveOrgID(r.Context(), tenant.ID, normalized)
+	if err != nil {
+		switch {
+		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+		case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
+		default:
+			writeInternalAPIError(w, r, err, "orgunit_resolve_org_code_failed")
+		}
+		return
+	}
+
+	limit := orgNodeAuditLimitFromURL(r)
+	rows, err := listNodeAuditEvents(r.Context(), store, tenant.ID, orgID, limit+1)
+	if err != nil {
+		if errors.Is(err, errOrgUnitNotFound) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+			return
+		}
+		writeInternalAPIError(w, r, err, "orgunit_audit_failed")
+		return
+	}
+
+	hasMore := len(rows) > limit
+	if hasMore {
+		rows = rows[:limit]
+	}
+
+	items := make([]orgUnitAuditAPIItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, orgUnitAuditAPIItem{
+			EventID:                row.EventID,
+			EventUUID:              row.EventUUID,
+			EventType:              row.EventType,
+			EffectiveDate:          row.EffectiveDate,
+			TxTime:                 row.TxTime,
+			InitiatorName:          row.InitiatorName,
+			InitiatorEmployeeID:    row.InitiatorEmployeeID,
+			RequestCode:            row.RequestCode,
+			Reason:                 row.Reason,
+			IsRescinded:            row.IsRescinded,
+			RescindedByEventUUID:   row.RescindedByEventUUID,
+			RescindedByTxTime:      row.RescindedByTxTime,
+			RescindedByRequestCode: row.RescindedByRequestCode,
+			Payload:                row.Payload,
+			BeforeSnapshot:         row.BeforeSnapshot,
+			AfterSnapshot:          row.AfterSnapshot,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(orgUnitAuditAPIResponse{
+		OrgCode: normalized,
+		Limit:   limit,
+		HasMore: hasMore,
+		Events:  items,
+	})
+}
+
+func handleOrgUnitsSearchAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+	if r.Method != http.MethodGet {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	asOf, err := orgUnitAPIAsOf(r)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+		return
+	}
+	includeDisabled := parseIncludeDisabled(r.URL.Query().Get("include_disabled"))
+
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	if query == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "query required")
+		return
+	}
+
+	result, err := searchNodeByVisibility(r.Context(), store, tenant.ID, query, asOf, includeDisabled)
+	if err != nil {
+		if errors.Is(err, errOrgUnitNotFound) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+			return
+		}
+		writeInternalAPIError(w, r, err, "orgunit_search_failed")
+		return
+	}
+
+	if len(result.PathOrgIDs) > 0 {
+		codes, err := store.ResolveOrgCodes(r.Context(), tenant.ID, result.PathOrgIDs)
+		if err != nil {
+			writeInternalAPIError(w, r, err, "orgunit_resolve_org_codes_failed")
+			return
+		}
+		pathCodes := make([]string, 0, len(result.PathOrgIDs))
+		for _, id := range result.PathOrgIDs {
+			if code, ok := codes[id]; ok && strings.TrimSpace(code) != "" {
+				pathCodes = append(pathCodes, code)
+			}
+		}
+		result.PathOrgCodes = pathCodes
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(result)
 }
 
 func handleOrgUnitsRenameAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {

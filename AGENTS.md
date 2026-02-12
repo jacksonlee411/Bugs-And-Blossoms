@@ -206,6 +206,7 @@ modules/{module}/
 - DEV-PLAN-093：MUI X 升级子计划 P2（高价值模块迁移）：`docs/dev-plans/093-mui-x-phase2-high-value-modules-plan.md`
 - DEV-PLAN-094：MUI X 升级子计划 P3（长尾迁移与收口）：`docs/dev-plans/094-mui-x-phase3-long-tail-convergence-plan.md`
 - DEV-PLAN-095：MUI X 升级子计划 P4（稳定化与性能压测）：`docs/dev-plans/095-mui-x-phase4-stability-performance-plan.md`
+- DEV-PLAN-096：Org 模块全量迁移至 MUI X 与统一体验收口方案：`docs/dev-plans/096-org-module-full-migration-and-ux-convergence-plan.md`
 - DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
