@@ -149,19 +149,9 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
 
   const pageA = await tenantAContext.newPage();
   await pageA.goto(`/app?as_of=${asOf}`);
-  await expect(pageA.getByRole("link", { name: "中文" })).toBeVisible();
-  await expect(pageA.locator("#topbar").getByText("As-of", { exact: true })).toBeVisible();
-  await expect(pageA.getByRole("link", { name: "OrgUnit", exact: true })).toBeVisible();
-
-  await pageA.getByRole("link", { name: "中文" }).click();
-  await expect(pageA.locator("#topbar").getByText("有效日期", { exact: true })).toBeVisible();
-  await expect(pageA.getByRole("link", { name: "组织架构", exact: true })).toBeVisible();
-
-  await pageA.goto(`/org/nodes?tree_as_of=${asOf}`);
-  await expect(pageA.locator("#topbar").getByText("有效日期", { exact: true })).toBeVisible();
-
-  await pageA.getByRole("link", { name: "EN" }).click();
-  await expect(pageA.locator("#topbar").getByText("As-of", { exact: true })).toBeVisible();
+  // /app 现为 MUI SPA：校验基础可见性（不再依赖旧 topbar/lang 链接）
+  await expect(pageA.locator("h1")).toContainText("Bugs & Blossoms");
+  await expect(pageA.getByText("组织架构", { exact: true })).toBeVisible();
 
   const sidCookie = (await tenantAContext.cookies()).find((c) => c.name === "sid");
   expect(sidCookie).toBeTruthy();

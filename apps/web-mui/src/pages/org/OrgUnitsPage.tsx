@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
+  Alert,
+  Box,
   Button,
   FormControl,
   InputLabel,
@@ -8,10 +10,11 @@ import {
   Select,
   Stack,
   TextField,
-  Box,
   Typography
 } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import type { GridColDef, GridPaginationModel, GridSortModel } from '@mui/x-data-grid'
+import { listOrgUnits, type OrgUnitAPIItem } from '../../api/orgUnits'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { DataGridPage } from '../../components/DataGridPage'
 import { DetailPanel } from '../../components/DetailPanel'
@@ -30,106 +33,61 @@ import {
 type OrgStatus = 'active' | 'inactive'
 
 interface OrgUnitRow {
-  id: number
-  parentId: number | null
+  id: string
   code: string
   name: string
   manager: string
-  headcount: number
+  headcount: string
   effectiveDate: string
   status: OrgStatus
 }
 
-const orgRows: OrgUnitRow[] = [
-  {
-    id: 1,
-    parentId: null,
-    code: '10000001',
-    name: '总部',
-    manager: '张涛',
-    headcount: 120,
-    effectiveDate: '2026-01-01',
-    status: 'active'
-  },
-  {
-    id: 2,
-    parentId: 1,
-    code: '10000002',
-    name: '人力资源部',
-    manager: '刘芳',
-    headcount: 32,
-    effectiveDate: '2026-01-01',
-    status: 'active'
-  },
-  {
-    id: 3,
-    parentId: 1,
-    code: '10000003',
-    name: '财务部',
-    manager: '王静',
-    headcount: 24,
-    effectiveDate: '2026-01-01',
-    status: 'active'
-  },
-  {
-    id: 4,
-    parentId: 1,
-    code: '10000004',
-    name: '研发中心',
-    manager: '李峰',
-    headcount: 280,
-    effectiveDate: '2026-01-01',
-    status: 'active'
-  },
-  {
-    id: 5,
-    parentId: 4,
-    code: '10000005',
-    name: '前端组',
-    manager: '周航',
-    headcount: 45,
-    effectiveDate: '2026-01-01',
-    status: 'active'
-  },
-  {
-    id: 6,
-    parentId: 4,
-    code: '10000006',
-    name: '后端组',
-    manager: '陈宁',
-    headcount: 58,
-    effectiveDate: '2026-01-01',
-    status: 'inactive'
+const sortableFields = ['code', 'name', 'status'] as const
+
+function formatAsOfDate(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+function parseSelectedNode(raw: string | null): string | null {
+  if (!raw) {
+    return null
   }
-]
 
-const sortableFields = ['code', 'name', 'manager', 'headcount', 'effectiveDate', 'status'] as const
+  const value = raw.trim()
+  if (value.length === 0) {
+    return null
+  }
 
-function collectDescendantIds(allRows: OrgUnitRow[], nodeId: number): Set<number> {
-  const childrenMap = new Map<number, number[]>()
-  allRows.forEach((row) => {
-    if (row.parentId === null) {
-      return
-    }
+  return value
+}
 
-    const list = childrenMap.get(row.parentId) ?? []
-    list.push(row.id)
-    childrenMap.set(row.parentId, list)
-  })
+function toOrgUnitRow(item: OrgUnitAPIItem, asOfDate: string): OrgUnitRow {
+  return {
+    id: item.org_code,
+    code: item.org_code,
+    name: item.name,
+    manager: '-',
+    headcount: '-',
+    effectiveDate: asOfDate,
+    status: 'active'
+  }
+}
 
-  const result = new Set<number>([nodeId])
-  const queue: number[] = [nodeId]
+function collectDescendantCodes(childrenByParent: Record<string, OrgUnitAPIItem[]>, nodeCode: string): Set<string> {
+  const result = new Set<string>([nodeCode])
+  const queue: string[] = [nodeCode]
+
   while (queue.length > 0) {
-    const currentId = queue.shift()
-    if (currentId === undefined) {
+    const currentCode = queue.shift()
+    if (!currentCode) {
       continue
     }
 
-    const children = childrenMap.get(currentId) ?? []
-    children.forEach((id) => {
-      if (!result.has(id)) {
-        result.add(id)
-        queue.push(id)
+    const children = childrenByParent[currentCode] ?? []
+    children.forEach((child) => {
+      if (!result.has(child.org_code)) {
+        result.add(child.org_code)
+        queue.push(child.org_code)
       }
     })
   }
@@ -137,27 +95,38 @@ function collectDescendantIds(allRows: OrgUnitRow[], nodeId: number): Set<number
   return result
 }
 
-function buildTreeNodes(parentId: number | null, rows: OrgUnitRow[]): TreePanelNode[] {
-  return rows
-    .filter((row) => row.parentId === parentId)
-    .map((row) => ({
-      id: String(row.id),
-      label: row.name,
-      children: buildTreeNodes(row.id, rows)
-    }))
+function buildTreeNodes(
+  roots: OrgUnitAPIItem[],
+  childrenByParent: Record<string, OrgUnitAPIItem[]>
+): TreePanelNode[] {
+  function build(item: OrgUnitAPIItem, path: Set<string>): TreePanelNode {
+    if (path.has(item.org_code)) {
+      return {
+        id: item.org_code,
+        label: `${item.name} (${item.org_code})`
+      }
+    }
+
+    const nextPath = new Set(path)
+    nextPath.add(item.org_code)
+    const children = childrenByParent[item.org_code] ?? []
+
+    return {
+      id: item.org_code,
+      label: `${item.name} (${item.org_code})`,
+      children: children.length > 0 ? children.map((child) => build(child, nextPath)) : undefined
+    }
+  }
+
+  return roots.map((root) => build(root, new Set()))
 }
 
-function parseSelectedNode(raw: string | null): number {
-  if (!raw) {
-    return 1
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
   }
 
-  const value = Number(raw)
-  if (!Number.isInteger(value) || value <= 0) {
-    return 1
-  }
-
-  return value
+  return String(error)
 }
 
 export function OrgUnitsPage() {
@@ -171,39 +140,107 @@ export function OrgUnitsPage() {
       }),
     [searchParams]
   )
-  const [selectedRowId, setSelectedRowId] = useState<number | null>(null)
-  const [loadingTree, setLoadingTree] = useState(false)
+  const asOfDate = useMemo(() => formatAsOfDate(new Date()), [])
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
+  const [childrenByParent, setChildrenByParent] = useState<Record<string, OrgUnitAPIItem[]>>({})
+  const [childrenLoading, setChildrenLoading] = useState(false)
+  const [childrenErrorMessage, setChildrenErrorMessage] = useState('')
 
-  const selectedNodeId = parseSelectedNode(searchParams.get('node'))
+  const rootOrgUnitsQuery = useQuery({
+    queryKey: ['org-units', 'roots', asOfDate],
+    queryFn: () => listOrgUnits({ asOf: asOfDate }),
+    staleTime: 60_000
+  })
+
+  const rootOrgUnits = useMemo(
+    () => rootOrgUnitsQuery.data?.org_units ?? [],
+    [rootOrgUnitsQuery.data]
+  )
+  const selectedNodeCode = parseSelectedNode(searchParams.get('node')) ?? rootOrgUnits[0]?.org_code ?? null
   const [keywordInput, setKeywordInput] = useState(query.keyword)
-  const [statusInput, setStatusInput] = useState(query.status)
+  const [statusInput, setStatusInput] = useState<'all' | OrgStatus>(query.status)
 
-  const treeNodes = useMemo(() => buildTreeNodes(null, orgRows), [])
+  const ensureChildrenLoaded = useCallback(
+    async (parentOrgCode: string) => {
+      if (Object.hasOwn(childrenByParent, parentOrgCode)) {
+        return
+      }
+
+      setChildrenLoading(true)
+      setChildrenErrorMessage('')
+      try {
+        const response = await listOrgUnits({ asOf: asOfDate, parentOrgCode })
+        setChildrenByParent((previous) => ({
+          ...previous,
+          [parentOrgCode]: response.org_units
+        }))
+      } catch (error) {
+        setChildrenErrorMessage(getErrorMessage(error))
+      } finally {
+        setChildrenLoading(false)
+      }
+    },
+    [asOfDate, childrenByParent]
+  )
+
+  const treeNodes = useMemo(
+    () => buildTreeNodes(rootOrgUnits, childrenByParent),
+    [childrenByParent, rootOrgUnits]
+  )
+
   const sortModel = useMemo(
     () => toGridSortModel(query.sortField, query.sortOrder),
     [query.sortField, query.sortOrder]
   )
 
-  const visibleNodeIds = useMemo(
-    () => collectDescendantIds(orgRows, selectedNodeId),
-    [selectedNodeId]
-  )
+  const knownOrgUnits = useMemo(() => {
+    const byCode = new Map<string, OrgUnitAPIItem>()
+
+    rootOrgUnits.forEach((item) => {
+      byCode.set(item.org_code, item)
+    })
+
+    Object.values(childrenByParent).forEach((children) => {
+      children.forEach((child) => {
+        byCode.set(child.org_code, child)
+      })
+    })
+
+    if (selectedNodeCode && !byCode.has(selectedNodeCode)) {
+      byCode.set(selectedNodeCode, {
+        org_code: selectedNodeCode,
+        name: selectedNodeCode
+      })
+    }
+
+    return byCode
+  }, [childrenByParent, rootOrgUnits, selectedNodeCode])
+
+  const baseRows = useMemo(() => {
+    if (!selectedNodeCode) {
+      return rootOrgUnits.map((item) => toOrgUnitRow(item, asOfDate))
+    }
+
+    const visibleCodes = collectDescendantCodes(childrenByParent, selectedNodeCode)
+    return Array.from(visibleCodes)
+      .map((code) => knownOrgUnits.get(code))
+      .filter((item): item is OrgUnitAPIItem => item !== undefined)
+      .map((item) => toOrgUnitRow(item, asOfDate))
+  }, [asOfDate, childrenByParent, knownOrgUnits, rootOrgUnits, selectedNodeCode])
 
   const filteredRows = useMemo(() => {
     const normalizedKeyword = query.keyword.trim().toLowerCase()
-    return orgRows.filter((row) => {
-      const byTree = visibleNodeIds.has(row.id)
+
+    return baseRows.filter((row) => {
       const byStatus = query.status === 'all' ? true : row.status === query.status
       const byKeyword =
         normalizedKeyword.length === 0
           ? true
-          : row.name.toLowerCase().includes(normalizedKeyword) ||
-            row.code.toLowerCase().includes(normalizedKeyword) ||
-            row.manager.toLowerCase().includes(normalizedKeyword)
+          : row.name.toLowerCase().includes(normalizedKeyword) || row.code.toLowerCase().includes(normalizedKeyword)
 
-      return byTree && byStatus && byKeyword
+      return byStatus && byKeyword
     })
-  }, [query.keyword, query.status, visibleNodeIds])
+  }, [baseRows, query.keyword, query.status])
 
   const sortedRows = useMemo(() => {
     if (!query.sortField || !query.sortOrder) {
@@ -214,14 +251,11 @@ export function OrgUnitsPage() {
     const direction = query.sortOrder === 'asc' ? 1 : -1
     sorted.sort((left, right) => {
       const field = query.sortField
-      if (field === 'headcount') {
-        return (left.headcount - right.headcount) * direction
-      }
-
       const leftValue = String(left[field as keyof OrgUnitRow] ?? '')
       const rightValue = String(right[field as keyof OrgUnitRow] ?? '')
       return leftValue.localeCompare(rightValue) * direction
     })
+
     return sorted
   }, [filteredRows, query.sortField, query.sortOrder])
 
@@ -230,15 +264,24 @@ export function OrgUnitsPage() {
     return sortedRows.slice(start, start + query.pageSize)
   }, [query.page, query.pageSize, sortedRows])
 
-  const selectedRow = orgRows.find((row) => row.id === selectedRowId) ?? null
+  const selectedRow = useMemo(
+    () => (selectedRowId ? baseRows.find((row) => row.id === selectedRowId) ?? null : null),
+    [baseRows, selectedRowId]
+  )
 
   const columns = useMemo<GridColDef<OrgUnitRow>[]>(
     () => [
       { field: 'code', headerName: t('org_column_code'), minWidth: 130, flex: 1 },
       { field: 'name', headerName: t('org_column_name'), minWidth: 180, flex: 1.3 },
-      { field: 'manager', headerName: t('org_column_manager'), minWidth: 140, flex: 1 },
-      { field: 'headcount', headerName: t('org_column_headcount'), minWidth: 130, flex: 0.8 },
-      { field: 'effectiveDate', headerName: t('org_column_effective_date'), minWidth: 140, flex: 1 },
+      { field: 'manager', headerName: t('org_column_manager'), minWidth: 140, flex: 1, sortable: false },
+      { field: 'headcount', headerName: t('org_column_headcount'), minWidth: 130, flex: 0.8, sortable: false },
+      {
+        field: 'effectiveDate',
+        headerName: t('org_column_effective_date'),
+        minWidth: 140,
+        flex: 1,
+        sortable: false
+      },
       {
         field: 'status',
         headerName: t('text_status'),
@@ -258,11 +301,15 @@ export function OrgUnitsPage() {
   const updateSearch = useCallback(
     (
       patch: Parameters<typeof patchGridQueryState>[1],
-      options?: { selectedNodeId?: number }
+      options?: { selectedNodeId?: string | null }
     ) => {
       const nextParams = patchGridQueryState(searchParams, patch)
       if (options && Object.hasOwn(options, 'selectedNodeId')) {
-        nextParams.set('node', String(options.selectedNodeId))
+        if (options.selectedNodeId) {
+          nextParams.set('node', options.selectedNodeId)
+        } else {
+          nextParams.delete('node')
+        }
       }
       setSearchParams(nextParams)
     },
@@ -289,14 +336,13 @@ export function OrgUnitsPage() {
     })
   }
 
-  async function handleTreeSelect(nextNodeId: number) {
-    setLoadingTree(true)
-    await Promise.resolve()
+  function handleTreeSelect(nextNodeId: string) {
     updateSearch(
       { page: 0 },
       { selectedNodeId: nextNodeId }
     )
-    setLoadingTree(false)
+    setSelectedRowId(null)
+    void ensureChildrenLoaded(nextNodeId)
   }
 
   function handleSortChange(nextSortModel: GridSortModel) {
@@ -307,6 +353,12 @@ export function OrgUnitsPage() {
       sortOrder: nextSort.sortOrder
     })
   }
+
+  const requestErrorMessage = rootOrgUnitsQuery.error
+    ? getErrorMessage(rootOrgUnitsQuery.error)
+    : childrenErrorMessage
+  const treeLoading = rootOrgUnitsQuery.isLoading || childrenLoading
+  const tableLoading = rootOrgUnitsQuery.isLoading || childrenLoading
 
   return (
     <>
@@ -337,15 +389,21 @@ export function OrgUnitsPage() {
         </Button>
       </FilterBar>
 
+      {requestErrorMessage.length > 0 ? (
+        <Alert severity='error' sx={{ mb: 2 }}>
+          {requestErrorMessage}
+        </Alert>
+      ) : null}
+
       <Stack direction={{ md: 'row', xs: 'column' }} spacing={2}>
         <TreePanel
           emptyLabel={t('text_no_data')}
-          loading={loadingTree}
+          loading={treeLoading}
           loadingLabel={t('text_loading')}
           minWidth={280}
           nodes={treeNodes}
-          onSelect={(nodeId) => void handleTreeSelect(Number(nodeId))}
-          selectedItemId={String(selectedNodeId)}
+          onSelect={handleTreeSelect}
+          selectedItemId={selectedNodeCode ?? undefined}
           title={t('org_tree_title')}
         />
         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -356,7 +414,7 @@ export function OrgUnitsPage() {
                 updateSearch({ page: model.page, pageSize: model.pageSize })
               },
               onRowClick: (params) => {
-                const nextRowId = typeof params.id === 'number' ? params.id : Number(params.id)
+                const nextRowId = String(params.id)
                 setSelectedRowId(nextRowId)
                 trackUiEvent({
                   eventName: 'detail_open',
@@ -382,6 +440,7 @@ export function OrgUnitsPage() {
               sortingMode: 'server',
               sx: { minHeight: 520 }
             }}
+            loading={tableLoading}
             loadingLabel={t('text_loading')}
             noRowsLabel={t('text_no_data')}
             rows={pagedRows}

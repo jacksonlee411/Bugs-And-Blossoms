@@ -140,7 +140,7 @@ func TestLogin_UsesDefaultKratosIdentityProviderWhenNil(t *testing.T) {
 	}
 }
 
-func TestAppHome_RedirectsWhenAsOfMissing(t *testing.T) {
+func TestAppHome_ServesWebMUIIndexWithoutAsOf(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -176,11 +176,11 @@ func TestAppHome_RedirectsWhenAsOfMissing(t *testing.T) {
 	req.AddCookie(sidCookie)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusFound {
+	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/app/home?as_of=") {
-		t.Fatalf("loc=%s", loc)
+	if body := rec.Body.String(); !strings.Contains(body, `<div id="root"></div>`) {
+		t.Fatalf("unexpected body=%q", body)
 	}
 }
 
@@ -421,7 +421,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	reqAppMissingAsOf.AddCookie(session)
 	recAppMissingAsOf := httptest.NewRecorder()
 	h.ServeHTTP(recAppMissingAsOf, reqAppMissingAsOf)
-	if recAppMissingAsOf.Code != http.StatusFound {
+	if recAppMissingAsOf.Code != http.StatusOK {
 		t.Fatalf("app (missing as_of) status=%d", recAppMissingAsOf.Code)
 	}
 

@@ -155,10 +155,26 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	principals := newPrincipalStore(pgPool)
 	sessions := newSessionStore(pgPool)
-	guarded := withTenantAndSession(tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, router))
-
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/app", http.StatusFound)
+	}))
+
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/nav", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asOf, ok := requireAsOf(w, r)
+		if !ok {
+			return
+		}
+		writeContent(w, r, renderNav(r, asOf))
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/topbar", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asOf, ok := requireAsOf(w, r)
+		if !ok {
+			return
+		}
+		writeContent(w, r, renderTopbar(r, asOf))
+	}))
+	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/flash", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeContent(w, r, "")
 	}))
 
 	router.Handle(routing.RouteClassOps, http.MethodGet, "/health", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -246,48 +262,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/lang/zh", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		setLangCookie(w, "zh")
 		redirectBack(w, r)
-	}))
-
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/app", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := requireAsOf(w, r); !ok {
-			return
-		}
-		writeShell(w, r, "")
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/app/home", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		asOf, ok := requireAsOf(w, r)
-		if !ok {
-			return
-		}
-		l := lang(r)
-		writePage(w, r, `<h1>Home</h1>`+
-			`<p>Pick a module:</p>`+
-			`<ul>`+
-			`<li><a href="/org/nodes?tree_as_of=`+asOf+`" hx-get="/org/nodes?tree_as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit")+`</a></li>`+
-			`<li><a href="/org/snapshot?as_of=`+asOf+`" hx-get="/org/snapshot?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_orgunit_snapshot")+`</a></li>`+
-			`<li><a href="/org/setid?as_of=`+asOf+`" hx-get="/org/setid?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_setid")+`</a></li>`+
-			`<li><a href="/org/job-catalog?as_of=`+asOf+`" hx-get="/org/job-catalog?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_jobcatalog")+`</a></li>`+
-			`<li><a href="/org/positions?as_of=`+asOf+`" hx-get="/org/positions?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_staffing")+`</a></li>`+
-			`<li><a href="/person/persons?as_of=`+asOf+`" hx-get="/person/persons?as_of=`+asOf+`" hx-target="#content" hx-push-url="true">`+tr(l, "nav_person")+`</a></li>`+
-			`</ul>`)
-	}))
-
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/nav", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		asOf, ok := requireAsOf(w, r)
-		if !ok {
-			return
-		}
-		writeContent(w, r, renderNav(r, asOf))
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/topbar", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		asOf, ok := requireAsOf(w, r)
-		if !ok {
-			return
-		}
-		writeContent(w, r, renderTopbar(r, asOf))
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/flash", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeContent(w, r, "")
 	}))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -446,11 +420,35 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
 
+	entrypoint := http.NewServeMux()
+	entrypoint.Handle("/app", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serveWebMUIIndex(w, r, embeddedAssets)
+	}))
+	entrypoint.Handle("/app/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serveWebMUIIndex(w, r, embeddedAssets)
+	}))
+	entrypoint.Handle("/", router)
+
+	guarded := withTenantAndSession(tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, entrypoint))
+
 	mux := http.NewServeMux()
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetsSub))))
 	mux.Handle("/", guarded)
 
 	return mux, nil
+}
+
+const webMUIIndexPath = "assets/web-mui/index.html"
+
+func serveWebMUIIndex(w http.ResponseWriter, r *http.Request, assets fs.FS) {
+	b, err := fs.ReadFile(assets, webMUIIndexPath)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "web_mui_index_missing", "web ui missing")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(b)
 }
 
 func MustNewHandler() http.Handler {

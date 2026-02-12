@@ -19,12 +19,20 @@ corepack prepare pnpm@10.24.0 --activate >/dev/null
 
 pnpm -C apps/web install --frozen-lockfile
 pnpm -C apps/web build
+pnpm -C apps/web-mui install --frozen-lockfile
+pnpm -C apps/web-mui build
 
 dist_dir="apps/web/dist"
 out_dir="internal/server/assets/astro"
+mui_dist_dir="apps/web-mui/dist"
+mui_out_dir="internal/server/assets/web-mui"
 
 if [[ ! -f "${dist_dir}/index.html" ]]; then
   echo "[ui] missing ${dist_dir}/index.html; build output unexpected" >&2
+  exit 2
+fi
+if [[ ! -f "${mui_dist_dir}/index.html" ]]; then
+  echo "[ui] missing ${mui_dist_dir}/index.html; build output unexpected" >&2
   exit 2
 fi
 
@@ -34,6 +42,10 @@ mkdir -p "$out_dir"
 cp -a "${dist_dir}/." "$out_dir/"
 rm -f "${out_dir}/index.html"
 cp "${dist_dir}/index.html" "${out_dir}/app.html"
+
+rm -rf "$mui_out_dir"
+mkdir -p "$mui_out_dir"
+cp -a "${mui_dist_dir}/." "$mui_out_dir/"
 
 shoelace_src="apps/web/node_modules/@shoelace-style/shoelace/dist"
 shoelace_out="internal/server/assets/shoelace"
@@ -96,4 +108,5 @@ copy_vendor_pkg "composed-offset-position" "composed-offset-position@*"
 copy_vendor_pkg "qr-creator" "qr-creator@*"
 
 echo "[ui] OK: ${out_dir}/app.html"
+echo "[ui] OK: ${mui_out_dir}/index.html"
 echo "[ui] OK: ${shoelace_out}"
