@@ -83,19 +83,24 @@ type OrgUnitNodeVersion struct {
 }
 
 type OrgUnitNodeAuditEvent struct {
-	EventID             int64
-	EventUUID           string
-	OrgID               int
-	EventType           string
-	EffectiveDate       string
-	TxTime              time.Time
-	InitiatorName       string
-	InitiatorEmployeeID string
-	RequestCode         string
-	Reason              string
-	Payload             json.RawMessage
-	BeforeSnapshot      json.RawMessage
-	AfterSnapshot       json.RawMessage
+	EventID                int64
+	EventUUID              string
+	OrgID                  int
+	EventType              string
+	EffectiveDate          string
+	TxTime                 time.Time
+	InitiatorName          string
+	InitiatorEmployeeID    string
+	RequestCode            string
+	Reason                 string
+	Payload                json.RawMessage
+	BeforeSnapshot         json.RawMessage
+	AfterSnapshot          json.RawMessage
+	RescindOutcome         string
+	IsRescinded            bool
+	RescindedByEventUUID   string
+	RescindedByTxTime      time.Time
+	RescindedByRequestCode string
 }
 
 type OrgUnitNodeEffectiveDateCorrector interface {
@@ -1466,8 +1471,23 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 	  COALESCE(e.reason, ''),
 	  COALESCE(e.payload, '{}'::jsonb),
 	  e.before_snapshot,
-	  e.after_snapshot
+	  e.after_snapshot,
+	  COALESCE(e.rescind_outcome, ''),
+	  (re.event_uuid IS NOT NULL) AS is_rescinded,
+	  COALESCE(re.event_uuid::text, ''),
+	  COALESCE(re.tx_time, 'epoch'::timestamptz),
+	  COALESCE(re.request_code, '')
 	FROM orgunit.org_events e
+	LEFT JOIN LATERAL (
+	  SELECT r.event_uuid, r.tx_time, r.request_code
+	  FROM orgunit.org_events r
+	  WHERE r.tenant_uuid = e.tenant_uuid
+	    AND r.org_id = e.org_id
+	    AND r.event_type IN ('RESCIND_EVENT', 'RESCIND_ORG')
+	    AND r.payload->>'target_event_uuid' = e.event_uuid::text
+	  ORDER BY r.tx_time DESC, r.id DESC
+	  LIMIT 1
+	) re ON true
 	WHERE e.tenant_uuid = $1::uuid
 	  AND e.org_id = $2::int
 	ORDER BY e.tx_time DESC, e.id DESC
@@ -1499,6 +1519,11 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 			&payload,
 			&before,
 			&after,
+			&item.RescindOutcome,
+			&item.IsRescinded,
+			&item.RescindedByEventUUID,
+			&item.RescindedByTxTime,
+			&item.RescindedByRequestCode,
 		); err != nil {
 			return nil, err
 		}
@@ -1509,6 +1534,11 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 		}
 		if len(after) > 0 {
 			item.AfterSnapshot = json.RawMessage(after)
+		}
+		if !item.IsRescinded {
+			item.RescindedByEventUUID = ""
+			item.RescindedByRequestCode = ""
+			item.RescindedByTxTime = time.Time{}
 		}
 		out = append(out, item)
 	}
@@ -2279,9 +2309,6 @@ func (s *orgUnitMemoryStore) ListNodeAuditEvents(_ context.Context, tenantID str
 			RequestCode:         "memory",
 			Payload:             json.RawMessage(`{"op":"RENAME"}`),
 		}}
-		if limit < len(events) {
-			return events[:limit], nil
-		}
 		return events, nil
 	}
 	return nil, errOrgUnitNotFound
@@ -3198,6 +3225,9 @@ func renderOrgNodeDetailsWithAudit(
 			b.WriteString(`<button type="button" class="` + itemClass + `" data-event-id="` + strconv.FormatInt(event.EventID, 10) + `" data-event-uuid="` + html.EscapeString(event.EventUUID) + `">`)
 			b.WriteString(`<span class="org-node-change-item-time">` + html.EscapeString(formatOrgNodeAuditTime(event.TxTime)) + `</span>`)
 			b.WriteString(`<span class="org-node-change-item-actor">` + html.EscapeString(formatOrgNodeAuditActor(event.InitiatorName, event.InitiatorEmployeeID)) + `</span>`)
+			if event.IsRescinded && !orgNodeAuditIsRescindEvent(event.EventType) {
+				b.WriteString(`<span class="org-node-change-item-status is-rescinded">已撤销</span>`)
+			}
 			b.WriteString(`</button>`)
 		}
 		b.WriteString(`</div>`)
@@ -3680,6 +3710,41 @@ func orgNodeAuditScalarString(v any) string {
 	}
 }
 
+func orgNodeAuditIsRescindEvent(eventType string) bool {
+	switch strings.ToUpper(strings.TrimSpace(eventType)) {
+	case "RESCIND_EVENT", "RESCIND_ORG":
+		return true
+	default:
+		return false
+	}
+}
+
+func orgNodeAuditHasRequiredSnapshotFields(snapshot map[string]any) bool {
+	if len(snapshot) == 0 {
+		return false
+	}
+	required := []string{"org_id", "name", "status", "parent_id", "node_path", "validity", "full_name_path", "is_business_unit"}
+	for _, key := range required {
+		if _, ok := snapshot[key]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func orgNodeAuditSnapshotRows(snapshot map[string]any) [][2]string {
+	keys := make([]string, 0, len(snapshot))
+	for k := range snapshot {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	rows := make([][2]string, 0, len(keys))
+	for _, k := range keys {
+		rows = append(rows, [2]string{k, orgNodeAuditScalarString(snapshot[k])})
+	}
+	return rows
+}
+
 func orgNodeAuditDiffRows(before map[string]any, after map[string]any) [][3]string {
 	keysMap := make(map[string]struct{}, len(before)+len(after))
 	for k := range before {
@@ -3705,6 +3770,8 @@ func orgNodeAuditDiffRows(before map[string]any, after map[string]any) [][3]stri
 	}
 	return rows
 }
+
+var orgNodeAuditMarshalIndent = json.MarshalIndent
 
 func renderOrgNodeAuditDetailEntry(event OrgUnitNodeAuditEvent) string {
 	var b strings.Builder
@@ -3740,6 +3807,15 @@ func renderOrgNodeAuditDetailEntry(event OrgUnitNodeAuditEvent) string {
 	b.WriteString(`<div>原因：` + html.EscapeString(reason) + `</div>`)
 	b.WriteString(`</div>`)
 
+	if event.IsRescinded && !orgNodeAuditIsRescindEvent(eventType) {
+		b.WriteString(`<div class="org-node-change-rescinded-flag">`)
+		b.WriteString(`<div class="org-node-change-rescinded-title">已撤销</div>`)
+		b.WriteString(`<div>撤销事件：` + html.EscapeString(orgNodeAuditScalarString(event.RescindedByEventUUID)) + `</div>`)
+		b.WriteString(`<div>撤销事务时间：` + html.EscapeString(formatOrgNodeAuditTime(event.RescindedByTxTime)) + `</div>`)
+		b.WriteString(`<div>撤销请求编号：` + html.EscapeString(orgNodeAuditScalarString(event.RescindedByRequestCode)) + `</div>`)
+		b.WriteString(`</div>`)
+	}
+
 	if missingBefore || missingAfter {
 		b.WriteString(`<div class="org-node-change-diff-empty">快照缺失：`)
 		if missingBefore {
@@ -3766,6 +3842,46 @@ func renderOrgNodeAuditDetailEntry(event OrgUnitNodeAuditEvent) string {
 		b.WriteString(`</div>`)
 	}
 
+	if orgNodeAuditIsRescindEvent(eventType) {
+		b.WriteString(`<div class="org-node-change-rescind-snapshots">`)
+		b.WriteString(`<div class="org-node-change-snapshot-card">`)
+		b.WriteString(`<div class="org-node-change-diff-title">撤销前完整快照</div>`)
+		if len(before) == 0 {
+			b.WriteString(`<div class="org-node-change-diff-empty">撤销前快照缺失</div>`)
+		} else {
+			rows := orgNodeAuditSnapshotRows(before)
+			b.WriteString(`<table class="org-node-change-diff-table"><thead><tr><th>字段</th><th>值</th></tr></thead><tbody>`)
+			for _, row := range rows {
+				b.WriteString(`<tr><td>` + html.EscapeString(row[0]) + `</td><td>` + html.EscapeString(row[1]) + `</td></tr>`)
+			}
+			b.WriteString(`</tbody></table>`)
+			if !orgNodeAuditHasRequiredSnapshotFields(before) {
+				b.WriteString(`<div class="org-node-change-diff-empty">撤销前快照字段不完整（历史数据）</div>`)
+			}
+		}
+		b.WriteString(`</div>`)
+
+		b.WriteString(`<div class="org-node-change-snapshot-card">`)
+		b.WriteString(`<div class="org-node-change-diff-title">撤销后快照</div>`)
+		if strings.EqualFold(strings.TrimSpace(event.RescindOutcome), "ABSENT") {
+			b.WriteString(`<div class="org-node-change-diff-empty">撤销后已不存在（ABSENT）</div>`)
+		} else if len(after) == 0 {
+			b.WriteString(`<div class="org-node-change-diff-empty">撤销后快照缺失</div>`)
+		} else {
+			rows := orgNodeAuditSnapshotRows(after)
+			b.WriteString(`<table class="org-node-change-diff-table"><thead><tr><th>字段</th><th>值</th></tr></thead><tbody>`)
+			for _, row := range rows {
+				b.WriteString(`<tr><td>` + html.EscapeString(row[0]) + `</td><td>` + html.EscapeString(row[1]) + `</td></tr>`)
+			}
+			b.WriteString(`</tbody></table>`)
+			if !orgNodeAuditHasRequiredSnapshotFields(after) {
+				b.WriteString(`<div class="org-node-change-diff-empty">撤销后快照字段不完整（历史数据）</div>`)
+			}
+		}
+		b.WriteString(`</div>`)
+		b.WriteString(`</div>`)
+	}
+
 	diffRows := orgNodeAuditDiffRows(before, after)
 	b.WriteString(`<div class="org-node-change-diff">`)
 	b.WriteString(`<div class="org-node-change-diff-title">字段变更</div>`)
@@ -3783,13 +3899,23 @@ func renderOrgNodeAuditDetailEntry(event OrgUnitNodeAuditEvent) string {
 	rawObj := map[string]any{
 		"payload": payload,
 	}
+	if strings.TrimSpace(event.RescindOutcome) != "" {
+		rawObj["rescind_outcome"] = strings.TrimSpace(event.RescindOutcome)
+	}
+	if event.IsRescinded {
+		rawObj["rescinded_by"] = map[string]any{
+			"event_uuid":   strings.TrimSpace(event.RescindedByEventUUID),
+			"tx_time":      formatOrgNodeAuditTime(event.RescindedByTxTime),
+			"request_code": strings.TrimSpace(event.RescindedByRequestCode),
+		}
+	}
 	if len(before) > 0 {
 		rawObj["before_snapshot"] = before
 	}
 	if len(after) > 0 {
 		rawObj["after_snapshot"] = after
 	}
-	rawJSON, err := json.MarshalIndent(rawObj, "", "  ")
+	rawJSON, err := orgNodeAuditMarshalIndent(rawObj, "", "  ")
 	if err != nil {
 		rawJSON = []byte("{}")
 	}
