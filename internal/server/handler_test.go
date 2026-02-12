@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/jackc/pgx/v5"
 	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
@@ -181,6 +182,15 @@ func TestAppHome_ServesWebMUIIndexWithoutAsOf(t *testing.T) {
 	}
 	if body := rec.Body.String(); !strings.Contains(body, `<div id="root"></div>`) {
 		t.Fatalf("unexpected body=%q", body)
+	}
+}
+
+func TestServeWebMUIIndex_MissingAsset(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/app", nil)
+	rec := httptest.NewRecorder()
+	serveWebMUIIndex(rec, req, fstest.MapFS{})
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
 	}
 }
 
@@ -834,6 +844,26 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 	recOrgList := getJSON("/org/api/org-units?as_of=2026-01-01", nil)
 	if recOrgList.Code != http.StatusOK {
 		t.Fatalf("org units list status=%d", recOrgList.Code)
+	}
+
+	recOrgDetails := getJSON("/org/api/org-units/details?org_code="+node.OrgCode+"&as_of=2026-01-01", nil)
+	if recOrgDetails.Code != http.StatusOK {
+		t.Fatalf("org units details status=%d body=%s", recOrgDetails.Code, recOrgDetails.Body.String())
+	}
+
+	recOrgVersions := getJSON("/org/api/org-units/versions?org_code="+node.OrgCode, nil)
+	if recOrgVersions.Code != http.StatusOK {
+		t.Fatalf("org units versions status=%d body=%s", recOrgVersions.Code, recOrgVersions.Body.String())
+	}
+
+	recOrgAudit := getJSON("/org/api/org-units/audit?org_code="+node.OrgCode+"&limit=1", nil)
+	if recOrgAudit.Code != http.StatusOK {
+		t.Fatalf("org units audit status=%d body=%s", recOrgAudit.Code, recOrgAudit.Body.String())
+	}
+
+	recOrgSearch := getJSON("/org/api/org-units/search?query="+node.OrgCode+"&as_of=2026-01-01", nil)
+	if recOrgSearch.Code != http.StatusOK {
+		t.Fatalf("org units search status=%d body=%s", recOrgSearch.Code, recOrgSearch.Body.String())
 	}
 
 	recOrgCreate := postJSON("/org/api/org-units", `{"org_code":"ORG2","name":"Org2","effective_date":"2026-01-01"}`, nil)

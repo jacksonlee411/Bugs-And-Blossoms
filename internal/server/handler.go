@@ -378,6 +378,18 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/details", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsDetailsAPI(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/versions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsVersionsAPI(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/audit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsAuditAPI(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/search", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsSearchAPI(w, r, orgStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/rename", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsRenameAPI(w, r, orgUnitWriteService)
 	}))

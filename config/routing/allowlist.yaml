@@ -119,6 +119,18 @@ entrypoints:
       - path: /org/api/org-units
         methods: [GET, POST]
         route_class: internal_api
+      - path: /org/api/org-units/details
+        methods: [GET]
+        route_class: internal_api
+      - path: /org/api/org-units/versions
+        methods: [GET]
+        route_class: internal_api
+      - path: /org/api/org-units/audit
+        methods: [GET]
+        route_class: internal_api
+      - path: /org/api/org-units/search
+        methods: [GET]
+        route_class: internal_api
       - path: /org/api/org-units/rename
         methods: [POST]
         route_class: internal_api

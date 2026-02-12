@@ -295,6 +295,11 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/org/api/org-units/details", "/org/api/org-units/versions", "/org/api/org-units/audit", "/org/api/org-units/search":
+		if method == http.MethodGet {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true
+		}
+		return "", "", false
 	case "/org/api/org-units/rename", "/org/api/org-units/move", "/org/api/org-units/disable", "/org/api/org-units/enable", "/org/api/org-units/corrections", "/org/api/org-units/status-corrections", "/org/api/org-units/rescinds", "/org/api/org-units/rescinds/org":
 		if method == http.MethodPost {
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
