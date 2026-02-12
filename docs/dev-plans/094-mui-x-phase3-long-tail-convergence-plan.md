@@ -51,6 +51,15 @@
 
 ## 5. 已落地变更（本轮）
 
+- `/app` 入口已切换为 MUI SPA（不保留旧 HTMX 壳兼容）：
+  - 服务端改造：`internal/server/handler.go`
+  - 前端路由基线：`apps/web-mui/src/router/index.tsx`（`basename=/app`）
+  - 构建产物入仓：`scripts/ui/build-astro.sh`（新增 `apps/web-mui -> internal/server/assets/web-mui`）
+- OrgUnits 页面完成首批真实数据接入（替换 mock）：
+  - API：`apps/web-mui/src/api/orgUnits.ts`（`/org/api/org-units`）
+  - 页面：`apps/web-mui/src/pages/org/OrgUnitsPage.tsx`（根节点 + 子节点查询、真实加载/空态/错误态）
+- MUI 静态资源统一挂载为 `/assets/web-mui/**`：
+  - `apps/web-mui/vite.config.ts`（`base=/assets/web-mui/`）
 - 新增统一树面板组件：`apps/web-mui/src/components/TreePanel.tsx`
 - 基座示例页与组织架构页改为复用 `TreePanel`：
   - `apps/web-mui/src/pages/FoundationDemoPage.tsx`
@@ -84,16 +93,28 @@
 ## 8. 执行记录（2026-02-12）
 
 - 已执行并通过：
+  - `go test ./internal/server/... ./internal/routing/...`
+  - `go test ./...`
   - `pnpm -C apps/web-mui lint`
   - `pnpm -C apps/web-mui typecheck`
   - `pnpm -C apps/web-mui test`
   - `pnpm -C apps/web-mui build`
   - `pnpm -C apps/web-mui check`
+  - `make css`
   - `make check doc`
 
 - 最终抽样走查（文案/空态/加载态口径）
   - 抽样页面：`/`、`/org/units`、`/people`、`/approvals`、`NoAccess`。
   - 校验点：空态统一 `text_no_data`；加载态统一 `text_loading`；状态反馈统一 `common_action_done/common_select_rows`；不保留不可达占位页与无引用 key。
+
+- 增补（2026-02-12）
+  - `OrgUnitsPage` 已不再使用页面内置组织 mock 列表，改为调用 `/org/api/org-units` 获取真实数据。
+  - 已执行并通过：
+    - `pnpm -C apps/web-mui lint`
+    - `pnpm -C apps/web-mui typecheck`
+    - `pnpm -C apps/web-mui test`
+    - `pnpm -C apps/web-mui build`
+    - `make css`
 
 ## 9. 关联计划
 

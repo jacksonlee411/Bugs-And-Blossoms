@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { Navigate, createBrowserRouter } from 'react-router-dom'
 import { AppShell } from '../layout/AppShell'
 import { navItems } from '../navigation/config'
 import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
@@ -19,6 +19,10 @@ export const router = createBrowserRouter([
             <FoundationDemoPage />
           </RequirePermission>
         )
+      },
+      {
+        path: 'home',
+        element: <Navigate replace to='/' />
       },
       {
         path: 'org/units',
@@ -43,7 +47,13 @@ export const router = createBrowserRouter([
             <ApprovalsInboxPage />
           </RequirePermission>
         )
+      },
+      {
+        path: '*',
+        element: <Navigate replace to='/' />
       }
     ]
   }
-])
+], {
+  basename: '/app'
+})
