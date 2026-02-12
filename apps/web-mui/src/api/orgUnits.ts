@@ -11,6 +11,9 @@ export interface OrgUnitAPIItem {
 export interface OrgUnitListResponse {
   as_of: string
   include_disabled?: boolean
+  page?: number
+  size?: number
+  total?: number
   org_units: OrgUnitAPIItem[]
 }
 
@@ -25,6 +28,51 @@ export async function listOrgUnits(options: {
   }
   if (options.includeDisabled) {
     query.set('include_disabled', '1')
+  }
+
+  return httpClient.get<OrgUnitListResponse>(`/org/api/org-units?${query.toString()}`)
+}
+
+export type OrgUnitListStatusFilter = 'all' | 'active' | 'inactive'
+export type OrgUnitListSortField = 'code' | 'name' | 'status'
+export type OrgUnitListSortOrder = 'asc' | 'desc'
+
+export async function listOrgUnitsPage(options: {
+  asOf: string
+  parentOrgCode?: string
+  includeDisabled?: boolean
+  keyword?: string
+  status?: OrgUnitListStatusFilter
+  page: number
+  pageSize: number
+  sortField?: OrgUnitListSortField | null
+  sortOrder?: OrgUnitListSortOrder | null
+}): Promise<OrgUnitListResponse> {
+  const query = new URLSearchParams({
+    as_of: options.asOf,
+    mode: 'grid',
+    page: String(options.page),
+    size: String(options.pageSize)
+  })
+  if (options.parentOrgCode) {
+    query.set('parent_org_code', options.parentOrgCode)
+  }
+  if (options.includeDisabled) {
+    query.set('include_disabled', '1')
+  }
+
+  const keyword = options.keyword?.trim() ?? ''
+  if (keyword.length > 0) {
+    query.set('q', keyword)
+  }
+
+  if (options.status && options.status !== 'all') {
+    query.set('status', options.status)
+  }
+
+  if (options.sortField && options.sortOrder) {
+    query.set('sort', options.sortField)
+    query.set('order', options.sortOrder)
   }
 
   return httpClient.get<OrgUnitListResponse>(`/org/api/org-units?${query.toString()}`)
@@ -252,4 +300,3 @@ export async function rescindOrgUnit(request: {
     request
   )
 }
-

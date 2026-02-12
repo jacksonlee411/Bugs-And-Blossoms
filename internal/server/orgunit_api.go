@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -98,6 +100,15 @@ type orgUnitListItem struct {
 	Status         string `json:"status"`
 	IsBusinessUnit *bool  `json:"is_business_unit,omitempty"`
 	HasChildren    *bool  `json:"has_children,omitempty"`
+}
+
+type orgUnitListResponse struct {
+	AsOf            string            `json:"as_of"`
+	IncludeDisabled bool              `json:"include_disabled"`
+	Page            *int              `json:"page,omitempty"`
+	Size            *int              `json:"size,omitempty"`
+	Total           *int              `json:"total,omitempty"`
+	OrgUnits        []orgUnitListItem `json:"org_units"`
 }
 
 type orgUnitDetailsAPIItem struct {
@@ -251,6 +262,294 @@ const (
 	orgUnitErrHighRiskReorderForbidden    = "ORG_HIGH_RISK_REORDER_FORBIDDEN"
 )
 
+const (
+	orgUnitListModeGrid        = "grid"
+	orgUnitListStatusAll       = "all"
+	orgUnitListStatusActive    = "active"
+	orgUnitListStatusInactive  = "inactive"
+	orgUnitListStatusDisabled  = "disabled"
+	orgUnitListSortCode        = "code"
+	orgUnitListSortName        = "name"
+	orgUnitListSortStatus      = "status"
+	orgUnitListSortOrderAsc    = "asc"
+	orgUnitListSortOrderDesc   = "desc"
+	orgUnitListDefaultPage     = 0
+	orgUnitListDefaultPageSize = 20
+	orgUnitListMaxPageSize     = 200
+)
+
+type orgUnitListQueryOptions struct {
+	Keyword   string
+	Status    string // "", "active", "disabled"
+	SortField string
+	SortOrder string
+	Paginate  bool
+	Page      int
+	PageSize  int
+}
+
+type orgUnitListPageRequest struct {
+	AsOf            string
+	IncludeDisabled bool
+	ParentID        *int
+	Keyword         string
+	Status          string // "", "active", "disabled"
+	SortField       string
+	SortOrder       string
+	Limit           int
+	Offset          int
+}
+
+type orgUnitListPageReader interface {
+	ListOrgUnitsPage(ctx context.Context, tenantID string, req orgUnitListPageRequest) ([]orgUnitListItem, int, error)
+}
+
+func parseOrgUnitListQueryOptions(values url.Values) (orgUnitListQueryOptions, bool, error) {
+	hasKey := func(key string) bool {
+		_, ok := values[key]
+		return ok
+	}
+
+	opts := orgUnitListQueryOptions{
+		Page:     orgUnitListDefaultPage,
+		PageSize: orgUnitListDefaultPageSize,
+	}
+
+	hasAny := false
+	if strings.EqualFold(strings.TrimSpace(values.Get("mode")), orgUnitListModeGrid) {
+		hasAny = true
+	}
+
+	if hasKey("q") {
+		hasAny = true
+		opts.Keyword = strings.TrimSpace(values.Get("q"))
+	}
+
+	if hasKey("status") {
+		hasAny = true
+		raw := strings.ToLower(strings.TrimSpace(values.Get("status")))
+		switch raw {
+		case "", orgUnitListStatusAll:
+			opts.Status = ""
+		case orgUnitListStatusActive:
+			opts.Status = orgUnitListStatusActive
+		case orgUnitListStatusInactive, orgUnitListStatusDisabled:
+			opts.Status = orgUnitListStatusDisabled
+		default:
+			return orgUnitListQueryOptions{}, false, errors.New("status invalid")
+		}
+	}
+
+	sortPresent := hasKey("sort")
+	orderPresent := hasKey("order")
+
+	if sortPresent {
+		hasAny = true
+		raw := strings.ToLower(strings.TrimSpace(values.Get("sort")))
+		switch raw {
+		case orgUnitListSortCode, orgUnitListSortName, orgUnitListSortStatus:
+			opts.SortField = raw
+		case "":
+			return orgUnitListQueryOptions{}, false, errors.New("sort invalid")
+		default:
+			return orgUnitListQueryOptions{}, false, errors.New("sort invalid")
+		}
+		opts.SortOrder = orgUnitListSortOrderAsc
+	}
+
+	if orderPresent {
+		hasAny = true
+		if !sortPresent {
+			return orgUnitListQueryOptions{}, false, errors.New("order requires sort")
+		}
+		raw := strings.ToLower(strings.TrimSpace(values.Get("order")))
+		switch raw {
+		case orgUnitListSortOrderAsc, orgUnitListSortOrderDesc:
+			opts.SortOrder = raw
+		case "":
+			return orgUnitListQueryOptions{}, false, errors.New("order invalid")
+		default:
+			return orgUnitListQueryOptions{}, false, errors.New("order invalid")
+		}
+	}
+
+	pagePresent := hasKey("page")
+	sizePresent := hasKey("size")
+	if pagePresent || sizePresent {
+		hasAny = true
+		opts.Paginate = true
+
+		if pagePresent {
+			raw := strings.TrimSpace(values.Get("page"))
+			if raw == "" {
+				return orgUnitListQueryOptions{}, false, errors.New("page invalid")
+			}
+			page, err := strconv.Atoi(raw)
+			if err != nil || page < 0 {
+				return orgUnitListQueryOptions{}, false, errors.New("page invalid")
+			}
+			opts.Page = page
+		} else {
+			opts.Page = orgUnitListDefaultPage
+		}
+
+		if sizePresent {
+			raw := strings.TrimSpace(values.Get("size"))
+			if raw == "" {
+				return orgUnitListQueryOptions{}, false, errors.New("size invalid")
+			}
+			size, err := strconv.Atoi(raw)
+			if err != nil || size <= 0 || size > orgUnitListMaxPageSize {
+				return orgUnitListQueryOptions{}, false, errors.New("size invalid")
+			}
+			opts.PageSize = size
+		} else {
+			opts.PageSize = orgUnitListDefaultPageSize
+		}
+	}
+
+	return opts, hasAny, nil
+}
+
+func listOrgUnitListPage(ctx context.Context, store OrgUnitStore, tenantID string, req orgUnitListPageRequest) ([]orgUnitListItem, int, error) {
+	if pager, ok := store.(orgUnitListPageReader); ok {
+		return pager.ListOrgUnitsPage(ctx, tenantID, req)
+	}
+
+	var items []orgUnitListItem
+	if req.ParentID != nil {
+		children, err := listChildrenByVisibility(ctx, store, tenantID, *req.ParentID, req.AsOf, req.IncludeDisabled)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = make([]orgUnitListItem, 0, len(children))
+		for _, child := range children {
+			isBU := child.IsBusinessUnit
+			hasChildren := child.HasChildren
+			status := strings.TrimSpace(child.Status)
+			if status == "" {
+				status = orgUnitListStatusActive
+			}
+			items = append(items, orgUnitListItem{
+				OrgCode:        child.OrgCode,
+				Name:           child.Name,
+				Status:         status,
+				IsBusinessUnit: &isBU,
+				HasChildren:    &hasChildren,
+			})
+		}
+	} else {
+		nodes, err := listNodesCurrentByVisibility(ctx, store, tenantID, req.AsOf, req.IncludeDisabled)
+		if err != nil {
+			return nil, 0, err
+		}
+		items = make([]orgUnitListItem, 0, len(nodes))
+		for _, node := range nodes {
+			isBU := node.IsBusinessUnit
+			status := strings.TrimSpace(node.Status)
+			if status == "" {
+				status = orgUnitListStatusActive
+			}
+			items = append(items, orgUnitListItem{
+				OrgCode:        node.OrgCode,
+				Name:           node.Name,
+				Status:         status,
+				IsBusinessUnit: &isBU,
+			})
+		}
+	}
+
+	items = filterOrgUnitListItems(items, req.Keyword, req.Status)
+	if req.SortField != "" {
+		sortOrgUnitListItems(items, req.SortField, req.SortOrder)
+	}
+
+	total := len(items)
+	if req.Limit <= 0 {
+		return items, total, nil
+	}
+
+	start := req.Offset
+	if start < 0 {
+		start = 0
+	}
+	if start >= total {
+		return []orgUnitListItem{}, total, nil
+	}
+
+	end := start + req.Limit
+	if end > total {
+		end = total
+	}
+
+	return items[start:end], total, nil
+}
+
+func filterOrgUnitListItems(items []orgUnitListItem, keyword string, status string) []orgUnitListItem {
+	normalizedKeyword := strings.ToLower(strings.TrimSpace(keyword))
+	normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+
+	if normalizedKeyword == "" && normalizedStatus == "" {
+		return items
+	}
+
+	out := make([]orgUnitListItem, 0, len(items))
+	for _, item := range items {
+		itemStatus := strings.ToLower(strings.TrimSpace(item.Status))
+		if itemStatus == "" {
+			itemStatus = orgUnitListStatusActive
+		}
+
+		if normalizedStatus != "" && itemStatus != normalizedStatus {
+			continue
+		}
+
+		if normalizedKeyword != "" {
+			code := strings.ToLower(item.OrgCode)
+			name := strings.ToLower(item.Name)
+			if !strings.Contains(code, normalizedKeyword) && !strings.Contains(name, normalizedKeyword) {
+				continue
+			}
+		}
+
+		out = append(out, item)
+	}
+
+	return out
+}
+
+func sortOrgUnitListItems(items []orgUnitListItem, sortField string, sortOrder string) {
+	normalizedField := strings.ToLower(strings.TrimSpace(sortField))
+	desc := strings.EqualFold(strings.TrimSpace(sortOrder), orgUnitListSortOrderDesc)
+
+	sort.SliceStable(items, func(i, j int) bool {
+		left := items[i]
+		right := items[j]
+
+		var cmp int
+		switch normalizedField {
+		case orgUnitListSortName:
+			cmp = strings.Compare(strings.ToLower(left.Name), strings.ToLower(right.Name))
+		case orgUnitListSortStatus:
+			cmp = strings.Compare(strings.ToLower(left.Status), strings.ToLower(right.Status))
+		case orgUnitListSortCode:
+			fallthrough
+		default:
+			cmp = strings.Compare(strings.ToLower(left.OrgCode), strings.ToLower(right.OrgCode))
+		}
+
+		// Stable tie-breaker.
+		if cmp == 0 {
+			cmp = strings.Compare(strings.ToLower(left.OrgCode), strings.ToLower(right.OrgCode))
+		}
+
+		if desc {
+			return cmp > 0
+		}
+		return cmp < 0
+	})
+}
+
 func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
@@ -265,16 +564,24 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
 			return
 		}
-		includeDisabled := parseIncludeDisabled(r.URL.Query().Get("include_disabled"))
+		q := r.URL.Query()
+		includeDisabled := parseIncludeDisabled(q.Get("include_disabled"))
 
-		parentCode := strings.TrimSpace(r.URL.Query().Get("parent_org_code"))
+		listOpts, hasListOpts, err := parseOrgUnitListQueryOptions(q)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+
+		var parentID *int
+		parentCode := strings.TrimSpace(q.Get("parent_org_code"))
 		if parentCode != "" {
 			normalized, err := orgunitpkg.NormalizeOrgCode(parentCode)
 			if err != nil {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
 				return
 			}
-			parentID, err := store.ResolveOrgID(r.Context(), tenant.ID, normalized)
+			resolvedID, err := store.ResolveOrgID(r.Context(), tenant.ID, normalized)
 			if err != nil {
 				switch {
 				case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
@@ -286,8 +593,59 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 				}
 				return
 			}
+			parentID = &resolvedID
+		}
 
-			children, err := listChildrenByVisibility(r.Context(), store, tenant.ID, parentID, asOf, includeDisabled)
+		if hasListOpts {
+			req := orgUnitListPageRequest{
+				AsOf:            asOf,
+				IncludeDisabled: includeDisabled,
+				ParentID:        parentID,
+				Keyword:         listOpts.Keyword,
+				Status:          listOpts.Status,
+				SortField:       listOpts.SortField,
+				SortOrder:       listOpts.SortOrder,
+			}
+
+			var pagePtr *int
+			var sizePtr *int
+			var totalPtr *int
+			if listOpts.Paginate {
+				req.Limit = listOpts.PageSize
+				req.Offset = listOpts.Page * listOpts.PageSize
+				pagePtr = &listOpts.Page
+				sizePtr = &listOpts.PageSize
+			}
+
+			items, total, err := listOrgUnitListPage(r.Context(), store, tenant.ID, req)
+			if err != nil {
+				if errors.Is(err, errOrgUnitNotFound) {
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+					return
+				}
+				writeInternalAPIError(w, r, err, "orgunit_list_failed")
+				return
+			}
+
+			if listOpts.Paginate {
+				totalPtr = &total
+			}
+
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_ = json.NewEncoder(w).Encode(orgUnitListResponse{
+				AsOf:            asOf,
+				IncludeDisabled: includeDisabled,
+				Page:            pagePtr,
+				Size:            sizePtr,
+				Total:           totalPtr,
+				OrgUnits:        items,
+			})
+			return
+		}
+
+		// 兼容旧语义：roots/children 请求不带 server-mode 参数时返回全量列表。
+		if parentID != nil {
+			children, err := listChildrenByVisibility(r.Context(), store, tenant.ID, *parentID, asOf, includeDisabled)
 			if err != nil {
 				if errors.Is(err, errOrgUnitNotFound) {
 					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
@@ -300,23 +658,25 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			items := make([]orgUnitListItem, 0, len(children))
 			for _, child := range children {
 				hasChildren := child.HasChildren
+				isBU := child.IsBusinessUnit
 				status := strings.TrimSpace(child.Status)
 				if status == "" {
 					status = "active"
 				}
 				items = append(items, orgUnitListItem{
-					OrgCode:     child.OrgCode,
-					Name:        child.Name,
-					Status:      status,
-					HasChildren: &hasChildren,
+					OrgCode:        child.OrgCode,
+					Name:           child.Name,
+					Status:         status,
+					IsBusinessUnit: &isBU,
+					HasChildren:    &hasChildren,
 				})
 			}
 
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"as_of":            asOf,
-				"include_disabled": includeDisabled,
-				"org_units":        items,
+			_ = json.NewEncoder(w).Encode(orgUnitListResponse{
+				AsOf:            asOf,
+				IncludeDisabled: includeDisabled,
+				OrgUnits:        items,
 			})
 			return
 		}
@@ -343,10 +703,10 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"as_of":            asOf,
-			"include_disabled": includeDisabled,
-			"org_units":        items,
+		_ = json.NewEncoder(w).Encode(orgUnitListResponse{
+			AsOf:            asOf,
+			IncludeDisabled: includeDisabled,
+			OrgUnits:        items,
 		})
 		return
 	case http.MethodPost:

@@ -417,19 +417,33 @@ type OrgUnitReadService interface {
 - Query：
   - `as_of`（可选；默认当天 UTC）
   - `parent_org_code`（可选；有值时返回该节点子列表，无值时返回根节点列表）
+  - `q`（可选；关键字，匹配 `org_code/name`）
+  - `status`（可选；`all|active|inactive`）
+  - `sort`（可选；`code|name|status`）
+  - `order`（可选；`asc|desc`）
+  - `page`（可选；`>=0`）
+  - `size`（可选；`1..200`）
 - Response（200 OK）：
 ```json
 {
   "as_of": "2026-02-04",
+  "page": 0,
+  "size": 20,
+  "total": 1,
   "org_units": [
     {
       "org_code": "A001",
       "name": "销售一部",
+      "status": "active",
       "is_business_unit": false
     }
   ]
 }
 ```
+
+补充口径（server-mode）：
+- 当请求包含 `page/size` 时，后端必须返回 `total`，由前端 DataGrid 使用服务端分页模式（禁止前端二次切片）。
+- 不包含 `page/size` 时保持历史语义（返回完整列表，兼容树 roots/children 场景）。
 
 **POST /org/api/org-units（创建）**
 - Request（JSON）：

@@ -35,13 +35,17 @@ import {
   listOrgUnitAudit,
   listOrgUnitVersions,
   listOrgUnits,
+  listOrgUnitsPage,
   moveOrgUnit,
   renameOrgUnit,
   rescindOrgUnit,
   rescindOrgUnitRecord,
   searchOrgUnit,
   setOrgUnitBusinessUnit,
-  type OrgUnitAPIItem
+  type OrgUnitAPIItem,
+  type OrgUnitListSortField,
+  type OrgUnitListSortOrder,
+  type OrgUnitListStatusFilter
 } from '../../api/orgUnits'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { DataGridPage } from '../../components/DataGridPage'
@@ -157,28 +161,6 @@ function toOrgUnitRow(item: OrgUnitAPIItem, asOfDate: string): OrgUnitRow {
     isBusinessUnit: Boolean(item.is_business_unit),
     effectiveDate: asOfDate
   }
-}
-
-function collectDescendantCodes(childrenByParent: Record<string, OrgUnitAPIItem[]>, nodeCode: string): Set<string> {
-  const result = new Set<string>([nodeCode])
-  const queue: string[] = [nodeCode]
-
-  while (queue.length > 0) {
-    const currentCode = queue.shift()
-    if (!currentCode) {
-      continue
-    }
-
-    const children = childrenByParent[currentCode] ?? []
-    children.forEach((child) => {
-      if (!result.has(child.org_code)) {
-        result.add(child.org_code)
-        queue.push(child.org_code)
-      }
-    })
-  }
-
-  return result
 }
 
 function buildTreeNodes(
@@ -383,68 +365,44 @@ export function OrgUnitsPage() {
   const treeNodes = useMemo(() => buildTreeNodes(rootOrgUnits, childrenByParent), [childrenByParent, rootOrgUnits])
   const sortModel = useMemo(() => toGridSortModel(query.sortField, query.sortOrder), [query.sortField, query.sortOrder])
 
-  const knownOrgUnits = useMemo(() => {
-    const byCode = new Map<string, OrgUnitAPIItem>()
-    rootOrgUnits.forEach((item) => byCode.set(item.org_code, item))
-    Object.values(childrenByParent).forEach((children) => {
-      children.forEach((child) => byCode.set(child.org_code, child))
-    })
-    if (selectedNodeCode && !byCode.has(selectedNodeCode)) {
-      byCode.set(selectedNodeCode, {
-        org_code: selectedNodeCode,
-        name: selectedNodeCode,
-        status: 'active'
+  const orgUnitListQuery = useQuery({
+    enabled: rootOrgUnitsQuery.isSuccess,
+    queryKey: [
+      'org-units',
+      'list',
+      asOf,
+      includeDisabled,
+      selectedNodeCode,
+      query.keyword,
+      query.status,
+      query.page,
+      query.pageSize,
+      query.sortField,
+      query.sortOrder
+    ],
+    queryFn: () =>
+      listOrgUnitsPage({
+        asOf,
+        includeDisabled,
+        parentOrgCode: selectedNodeCode ?? undefined,
+        keyword: query.keyword,
+        status: query.status as OrgUnitListStatusFilter,
+        page: query.page,
+        pageSize: query.pageSize,
+        sortField: (query.sortField as OrgUnitListSortField | null) ?? null,
+        sortOrder: (query.sortOrder as OrgUnitListSortOrder | null) ?? null
       })
-    }
-    return byCode
-  }, [childrenByParent, rootOrgUnits, selectedNodeCode])
+  })
 
-  const baseRows = useMemo(() => {
-    if (!selectedNodeCode) {
-      return rootOrgUnits.map((item) => toOrgUnitRow(item, asOf))
-    }
-    const visibleCodes = collectDescendantCodes(childrenByParent, selectedNodeCode)
-    return Array.from(visibleCodes)
-      .map((code) => knownOrgUnits.get(code))
-      .filter((item): item is OrgUnitAPIItem => item !== undefined)
-      .map((item) => toOrgUnitRow(item, asOf))
-  }, [asOf, childrenByParent, knownOrgUnits, rootOrgUnits, selectedNodeCode])
-
-  const filteredRows = useMemo(() => {
-    const normalizedKeyword = query.keyword.trim().toLowerCase()
-    return baseRows.filter((row) => {
-      const byStatus = query.status === 'all' ? true : row.status === query.status
-      const byKeyword =
-        normalizedKeyword.length === 0
-          ? true
-          : row.name.toLowerCase().includes(normalizedKeyword) || row.code.toLowerCase().includes(normalizedKeyword)
-      return byStatus && byKeyword
-    })
-  }, [baseRows, query.keyword, query.status])
-
-  const sortedRows = useMemo(() => {
-    if (!query.sortField || !query.sortOrder) {
-      return filteredRows
-    }
-    const sorted = [...filteredRows]
-    const direction = query.sortOrder === 'asc' ? 1 : -1
-    sorted.sort((left, right) => {
-      const field = query.sortField
-      const leftValue = String(left[field as keyof OrgUnitRow] ?? '')
-      const rightValue = String(right[field as keyof OrgUnitRow] ?? '')
-      return leftValue.localeCompare(rightValue) * direction
-    })
-    return sorted
-  }, [filteredRows, query.sortField, query.sortOrder])
-
-  const pagedRows = useMemo(() => {
-    const start = query.page * query.pageSize
-    return sortedRows.slice(start, start + query.pageSize)
-  }, [query.page, query.pageSize, sortedRows])
+  const gridRows = useMemo(
+    () => (orgUnitListQuery.data?.org_units ?? []).map((item) => toOrgUnitRow(item, asOf)),
+    [asOf, orgUnitListQuery.data]
+  )
+  const gridRowCount = orgUnitListQuery.data?.total ?? gridRows.length
 
   const selectedRow = useMemo(
-    () => (selectedRowId ? baseRows.find((row) => row.id === selectedRowId) ?? null : null),
-    [baseRows, selectedRowId]
+    () => (selectedRowId ? gridRows.find((row) => row.id === selectedRowId) ?? null : null),
+    [gridRows, selectedRowId]
   )
 
   const detailQuery = useQuery({
@@ -602,10 +560,12 @@ export function OrgUnitsPage() {
       { page: 0 },
       {
         selectedNodeCode: nextNodeCode,
-        detailCode: nextNodeCode
+        detailCode: nextNodeCode,
+        detailEffectiveDate: null
       }
     )
-    setSelectedRowId(nextNodeCode)
+    setSelectedRowId(null)
+    setSelectedIds([])
     void ensureChildrenLoaded(nextNodeCode)
   }
 
@@ -823,8 +783,10 @@ export function OrgUnitsPage() {
 
   const requestErrorMessage = rootOrgUnitsQuery.error
     ? getErrorMessage(rootOrgUnitsQuery.error)
+    : orgUnitListQuery.error
+    ? getErrorMessage(orgUnitListQuery.error)
     : childrenErrorMessage
-  const tableLoading = rootOrgUnitsQuery.isLoading || childrenLoading
+  const tableLoading = rootOrgUnitsQuery.isLoading || orgUnitListQuery.isFetching
 
   return (
     <>
@@ -974,11 +936,12 @@ export function OrgUnitsPage() {
               pagination: true,
               paginationMode: 'server',
               paginationModel: { page: query.page, pageSize: query.pageSize },
-              rowCount: sortedRows.length,
+              rowCount: gridRowCount,
               rowSelectionModel: {
                 type: 'include',
                 ids: new Set(selectedIds)
               },
+              showToolbar: true,
               sortModel,
               sortingMode: 'server',
               sx: { minHeight: 560 }
@@ -986,7 +949,8 @@ export function OrgUnitsPage() {
             loading={tableLoading}
             loadingLabel={t('text_loading')}
             noRowsLabel={t('text_no_data')}
-            rows={pagedRows}
+            rows={gridRows}
+            storageKey={`org-units-grid/${tenantId}`}
           />
         </Box>
       </Stack>

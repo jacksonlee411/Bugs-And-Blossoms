@@ -72,6 +72,9 @@
 
 4. [x] 树查询收口：懒加载、搜索定位、节点路径展开、选中态保持与 URL 可复现。
 5. [ ] 列表查询收口：分页/排序/筛选与 URL 参数协议统一，切到真实 server-mode。
+   - 约束：列表必须只依赖服务端返回的 `items + total`，禁止前端再做全量排序/筛选/切片（避免“名义 server-mode，实际 client slicing”）。
+   - 默认排序：未指定 `sort/order` 时按树顺序（`node_path`）稳定返回，保持与树浏览一致的“结构顺序”体验。
+   - 必须支持：`q/status/page/size/sort/order`（见 8.2）。
 6. [x] 详情读取收口：接入真实详情字段与版本记录；支持按 `effective_date` 切换历史记录。
 7. [x] 读链路错误码与回显策略收口（404/409/422/5xx）并统一中英文本键。
 
@@ -142,6 +145,67 @@
 - [x] `GET /org/api/org-units/details?org_code=...&as_of=...`
 - [x] `GET /org/api/org-units/versions?org_code=...`
 - [x] `GET /org/api/org-units/audit?org_code=...&limit=...`（或复用现有审计读模型）
+
+### 8.2 列表（DataGrid 真 server-mode）契约（冻结）
+
+> 目标：让 DataGrid 的分页/排序/筛选真实由后端承担，并保证 URL 可复现（复制链接即可回放同一列表状态）。
+
+**Endpoint**：`GET /org/api/org-units`
+
+**语义**：
+- `parent_org_code` 为空：返回“根节点列表”（用于树根加载）。
+- `parent_org_code` 有值：返回“该节点的直接子节点列表”（用于树懒加载与右侧列表）。
+- 当请求包含 `page/size` 时：启用分页模式，必须返回 `total`（DataGrid 需要总行数）。
+
+**Query 参数**：
+- `as_of=YYYY-MM-DD`（可选；默认当天 UTC）：Valid Time 查询日期（日粒度）。
+- `include_disabled=1`（可选；默认 0）：是否包含 disabled 记录。
+- `parent_org_code=<org_code>`（可选）：父节点 org_code；缺省表示 roots。
+- `q=<keyword>`（可选）：关键字（对 `org_code/name` 做 contains 匹配，大小写不敏感）。
+- `status=all|active|inactive`（可选；默认 all）：列表状态筛选；`inactive` 对齐后端 `disabled`。
+- `page=<int>=0..`（可选；缺省则不分页）。
+- `size=<int>=1..200`（可选；缺省则不分页）。
+- `sort=code|name|status`（可选；缺省则按树顺序返回）。
+- `order=asc|desc`（可选；仅当 `sort` 存在时生效）。
+
+**Response（200 OK）**：
+```json
+{
+  "as_of": "2026-02-12",
+  "include_disabled": false,
+  "page": 0,
+  "size": 20,
+  "total": 123,
+  "org_units": [
+    {
+      "org_code": "A001",
+      "name": "销售一部",
+      "status": "active",
+      "is_business_unit": false,
+      "has_children": true
+    }
+  ]
+}
+```
+
+**兼容性约束**：
+- 不带 `page/size` 的请求，保持旧行为（返回全量 `org_units`，可不返回 `total/page/size`）。
+- `status` 字段在 roots/children 返回体中均必须存在（避免前端再补默认值导致口径漂移）。
+
+### 8.3 列能力收口（持久化与统一口径）
+
+> 目标：把列相关能力从页面“各自实现”收口到 `DataGridPage`，并且刷新后保持用户偏好。
+
+**收口范围（本期最小闭环）**：
+- 列显示/隐藏：`columnVisibilityModel` 持久化。
+- 列顺序：拖拽 reorder 后持久化 `orderedFields`。
+- 列宽：resize 后持久化 `dimensions[field].width`。
+- 密度：`density`（compact/standard/comfortable）持久化。
+
+**持久化策略**：
+- 存储介质：`localStorage`（前端偏好，不进入业务数据）。
+- Key 约定：`web-mui-grid-prefs/<storage_key>`（页面传入 `storage_key`，建议带 tenant 前缀）。
+- 兼容：列字段增删时，未知字段忽略，新字段追加到末尾。
 
 ## 9. 工具链与质量门禁（SSOT 引用）
 
