@@ -1,4 +1,4 @@
-import { Box, Typography } from '@mui/material'
+import { Box, CircularProgress, Stack, Typography } from '@mui/material'
 import {
   DataGrid,
   type DataGridProps,
@@ -10,6 +10,7 @@ interface DataGridPageProps {
   columns: GridColDef[]
   rows: GridRowsProp
   noRowsLabel?: string
+  loadingLabel?: string
   loading?: boolean
   gridProps?: Partial<DataGridProps>
 }
@@ -24,10 +25,22 @@ function NoRowsOverlay({ label }: { label: string }) {
   )
 }
 
+function LoadingOverlay({ label }: { label: string }) {
+  return (
+    <Stack alignItems='center' spacing={1} sx={{ p: 3 }}>
+      <CircularProgress size={20} />
+      <Typography color='text.secondary' variant='body2'>
+        {label}
+      </Typography>
+    </Stack>
+  )
+}
+
 export function DataGridPage({
   columns,
   rows,
   noRowsLabel = 'No data',
+  loadingLabel = 'Loading...',
   loading = false,
   gridProps
 }: DataGridPageProps) {
@@ -48,7 +61,10 @@ export function DataGridPage({
         loading={loading}
         pageSizeOptions={[10, 20, 50]}
         rows={rows}
-        slots={{ noRowsOverlay: () => <NoRowsOverlay label={noRowsLabel} /> }}
+        slots={{
+          loadingOverlay: () => <LoadingOverlay label={loadingLabel} />,
+          noRowsOverlay: () => <NoRowsOverlay label={noRowsLabel} />
+        }}
         {...gridProps}
       />
     </Box>

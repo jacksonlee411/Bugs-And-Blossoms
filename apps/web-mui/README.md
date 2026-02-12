@@ -51,12 +51,13 @@ pnpm check
 - `/people`：复杂筛选 + 批量动作（二次确认）+ 详情侧栏。
 - `/approvals`：审批列表状态流转 + 操作反馈 + 详情联动。
 
-## P094 收口（进行中）
+## P094 收口（已完成）
 
 - 新增统一树面板组件 `TreePanel`，替换页面内重复树实现。
 - 统一列表页 URL 参数协议：`q/status/page/size/sort/order`，并落地分页/排序可复现。
 - i18n 支持简单变量插值（如 `{count}`），收敛通用反馈文案 key。
 - `DataGridPage` 容器样式收口到主题色板，修复暗色模式背景不一致。
+- `DataGridPage` 空态/加载态 Overlay 统一使用 `text_no_data / text_loading` 口径。
 - 删除不可达占位页与无引用文案键，降低重复资产。
 
 ## 环境变量
