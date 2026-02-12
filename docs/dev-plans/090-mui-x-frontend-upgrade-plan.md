@@ -53,9 +53,9 @@
 
 ### 3.2 MUI X 版本策略
 
-- 基线方案：`DataGridPro + TreeView(Community/Pro按能力选)`。
-- 若后续需要 row grouping / pivot / 高阶分析能力，再评估 `DataGridPremium`。
-- 授权策略前置：在 Phase 0 完成许可方案确认，避免中途因 license 影响里程碑。
+- 基线方案：`DataGridPremium + TreeViewPro + DatePickersPro`（已完成采购授权，可直接启用）。
+- Community 能力作为可选降级路径，但不再作为选型限制条件。
+- 组件选型原则：默认优先业务体验最优能力，再评估复杂度与维护成本。
 
 ### 3.3 设计系统策略
 
@@ -72,7 +72,7 @@
 
 ## 4. 功能映射（MUI X 能力落位）
 
-### 4.1 数据列表（DataGridPro）
+### 4.1 数据列表（DataGridPremium）
 
 - 服务端分页、排序、筛选（避免全量前端计算）。
 - 表头筛选（Header Filters）、快速筛选（Quick Filter）、多条件过滤。
@@ -102,7 +102,7 @@
 
 ### 5.1 Phase 0：基座准备（1~2 周）
 
-1. [ ] 锁定 React/MUI/MUI X 主版本与 license 方案。
+1. [ ] 锁定 React/MUI/MUI X 主版本与授权使用规范（Pro/Premium 已授权）。
 2. [ ] 建立新前端工程骨架（目录规范、路由骨架、主题骨架）。
 3. [ ] 建立平台组件层（Shell、Header、FilterBar、GridPage、DetailPanel）。
 4. [ ] 建立统一 API 客户端、错误处理与鉴权拦截器。
@@ -157,8 +157,8 @@
 
 ## 8. 风险与缓解
 
-1. **授权风险**：Pro/Premium 许可未及时确认，影响交付。
-   - 缓解：Phase 0 首周完成法务与采购确认，设置 stopline。
+1. **能力过配风险**：高级组件滥用导致页面复杂度抬升。
+   - 缓解：按任务闭环评估，只有在确实提升效率/可维护性时启用 Premium 能力。
 
 2. **迁移范围失控**：一次性改动过大导致进度失控。
    - 缓解：模块分批迁移，按页面清单逐批验收。
