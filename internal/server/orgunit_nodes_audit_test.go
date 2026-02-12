@@ -81,6 +81,8 @@ func (r *auditRows) Scan(dest ...any) error {
 			*d = rec[i].(string)
 		case *int:
 			*d = rec[i].(int)
+		case *bool:
+			*d = rec[i].(bool)
 		case *time.Time:
 			*d = rec[i].(time.Time)
 		case *[]byte:
@@ -233,7 +235,7 @@ func TestOrgUnitPGStore_ListNodeAuditEvents(t *testing.T) {
 		tx := &stubTx{
 			rows: &auditRows{records: [][]any{{
 				int64(10), "evt-10", 10000001, "RENAME", time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC), txTime,
-				"Alice", "E100", "req-1", "", []byte(`{"name":"B"}`), []byte(`{"name":"A"}`), []byte(`{"name":"B"}`),
+				"Alice", "E100", "req-1", "", []byte(`{"name":"B"}`), []byte(`{"name":"A"}`), []byte(`{"name":"B"}`), "", false, "", time.Time{}, "",
 			}}},
 			commitErr: errors.New("commit"),
 		}
@@ -247,11 +249,11 @@ func TestOrgUnitPGStore_ListNodeAuditEvents(t *testing.T) {
 		tx := &stubTx{rows: &auditRows{records: [][]any{
 			{
 				int64(10), "evt-10", 10000001, "CORRECT_EVENT", time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC), txTime,
-				"Alice", "E100", "req-1", "reason", []byte(`{"target_event_uuid":"evt-9"}`), []byte(`{"name":"A"}`), []byte(`{"name":"B"}`),
+				"Alice", "E100", "req-1", "reason", []byte(`{"target_event_uuid":"evt-9"}`), []byte(`{"name":"A"}`), []byte(`{"name":"B"}`), "", false, "", time.Time{}, "",
 			},
 			{
 				int64(9), "evt-9", 10000001, "RENAME", time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), txTime,
-				"Bob", "E101", "req-0", "", []byte(`{"name":"A"}`), []byte{}, []byte{},
+				"Bob", "E101", "req-0", "", []byte(`{"name":"A"}`), []byte{}, []byte{}, "", true, "resc-evt-1", time.Date(2026, 1, 6, 12, 0, 0, 0, time.UTC), "resc-req-1",
 			},
 		}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
@@ -266,6 +268,9 @@ func TestOrgUnitPGStore_ListNodeAuditEvents(t *testing.T) {
 			t.Fatalf("events[0]=%#v", events[0])
 		}
 		if len(events[1].BeforeSnapshot) != 0 || len(events[1].AfterSnapshot) != 0 {
+			t.Fatalf("events[1]=%#v", events[1])
+		}
+		if !events[1].IsRescinded || events[1].RescindedByEventUUID != "resc-evt-1" || events[1].RescindedByRequestCode != "resc-req-1" {
 			t.Fatalf("events[1]=%#v", events[1])
 		}
 	})
@@ -393,6 +398,34 @@ func TestOrgNodeAuditMapScalarAndDiff(t *testing.T) {
 			t.Fatalf("rows=%#v", rows)
 		}
 	}
+
+	if !orgNodeAuditIsRescindEvent("RESCIND_EVENT") || orgNodeAuditIsRescindEvent("RENAME") {
+		t.Fatal("unexpected rescind event classifier result")
+	}
+
+	if orgNodeAuditHasRequiredSnapshotFields(nil) {
+		t.Fatal("expected nil snapshot to be incomplete")
+	}
+	if orgNodeAuditHasRequiredSnapshotFields(map[string]any{"name": "A"}) {
+		t.Fatal("expected partial snapshot to be incomplete")
+	}
+	complete := map[string]any{
+		"org_id":           1,
+		"name":             "A",
+		"status":           "active",
+		"parent_id":        1,
+		"node_path":        "1",
+		"validity":         "[2026-01-01,)",
+		"full_name_path":   "A",
+		"is_business_unit": false,
+	}
+	if !orgNodeAuditHasRequiredSnapshotFields(complete) {
+		t.Fatal("expected complete snapshot to pass")
+	}
+	rows2 := orgNodeAuditSnapshotRows(map[string]any{"b": "2", "a": "1"})
+	if len(rows2) != 2 || rows2[0][0] != "a" || rows2[1][0] != "b" {
+		t.Fatalf("rows2=%#v", rows2)
+	}
 }
 
 func TestRenderOrgNodeAuditDetailEntry(t *testing.T) {
@@ -417,8 +450,102 @@ func TestRenderOrgNodeAuditDetailEntry(t *testing.T) {
 		}
 	}
 
-	out2 := renderOrgNodeAuditDetailEntry(OrgUnitNodeAuditEvent{
-		EventID:             11,
+	outRescinded := renderOrgNodeAuditDetailEntry(OrgUnitNodeAuditEvent{
+		EventID:                15,
+		EventUUID:              "evt-15",
+		EventType:              "RENAME",
+		EffectiveDate:          "2026-01-07",
+		TxTime:                 time.Date(2026, 1, 7, 1, 0, 0, 0, time.UTC),
+		InitiatorName:          "Ann",
+		InitiatorEmployeeID:    "E102",
+		RescindedByEventUUID:   "evt-r-1",
+		RescindedByTxTime:      time.Date(2026, 1, 8, 2, 0, 0, 0, time.UTC),
+		RescindedByRequestCode: "req-r-1",
+		IsRescinded:            true,
+		Payload:                json.RawMessage(`{"new_name":"X"}`),
+		BeforeSnapshot:         json.RawMessage(`{"name":"A"}`),
+		AfterSnapshot:          json.RawMessage(`{"name":"X"}`),
+	})
+	for _, token := range []string{"已撤销", "evt-r-1", "撤销请求编号：req-r-1"} {
+		if !strings.Contains(outRescinded, token) {
+			t.Fatalf("missing %q in %q", token, outRescinded)
+		}
+	}
+
+	outRescindEvent := renderOrgNodeAuditDetailEntry(OrgUnitNodeAuditEvent{
+		EventID:        16,
+		EventUUID:      "evt-16",
+		EventType:      "RESCIND_EVENT",
+		EffectiveDate:  "2026-01-07",
+		TxTime:         time.Date(2026, 1, 8, 2, 0, 0, 0, time.UTC),
+		RescindOutcome: "PRESENT",
+		Payload:        json.RawMessage(`{"target_event_uuid":"evt-9"}`),
+		BeforeSnapshot: json.RawMessage(`{"org_id":1,"name":"A","status":"active","parent_id":1,"node_path":"1","validity":"[2026-01-01,)","full_name_path":"A","is_business_unit":false}`),
+		AfterSnapshot:  json.RawMessage(`{"org_id":1,"name":"B","status":"active","parent_id":1,"node_path":"1","validity":"[2026-01-01,)","full_name_path":"B","is_business_unit":false}`),
+	})
+	for _, token := range []string{"撤销前完整快照", "撤销后快照", "org_id", "full_name_path"} {
+		if !strings.Contains(outRescindEvent, token) {
+			t.Fatalf("missing %q in %q", token, outRescindEvent)
+		}
+	}
+
+	outRescindBeforeMissing := renderOrgNodeAuditDetailEntry(OrgUnitNodeAuditEvent{
+		EventID:        17,
+		EventUUID:      "evt-17",
+		EventType:      "RESCIND_EVENT",
+		EffectiveDate:  "2026-01-08",
+		RescindOutcome: "ABSENT",
+		Payload:        json.RawMessage(`{"target_event_uuid":"evt-8"}`),
+	})
+	for _, token := range []string{"撤销前快照缺失", "撤销后已不存在（ABSENT）"} {
+		if !strings.Contains(outRescindBeforeMissing, token) {
+			t.Fatalf("missing %q in %q", token, outRescindBeforeMissing)
+		}
+	}
+
+	outRescindAfterMissing := renderOrgNodeAuditDetailEntry(OrgUnitNodeAuditEvent{
+		EventID:        18,
+		EventUUID:      "evt-18",
+		EventType:      "RESCIND_EVENT",
+		EffectiveDate:  "2026-01-08",
+		RescindOutcome: "PRESENT",
+		Payload:        json.RawMessage(`{"target_event_uuid":"evt-8"}`),
+		BeforeSnapshot: json.RawMessage(`{"name":"A"}`),
+	})
+	for _, token := range []string{"撤销前快照字段不完整（历史数据）", "撤销后快照缺失"} {
+		if !strings.Contains(outRescindAfterMissing, token) {
+			t.Fatalf("missing %q in %q", token, outRescindAfterMissing)
+		}
+	}
+
+	outRescindAfterPartial := renderOrgNodeAuditDetailEntry(OrgUnitNodeAuditEvent{
+		EventID:        19,
+		EventUUID:      "evt-19",
+		EventType:      "RESCIND_EVENT",
+		EffectiveDate:  "2026-01-08",
+		RescindOutcome: "PRESENT",
+		Payload:        json.RawMessage(`{"target_event_uuid":"evt-8"}`),
+		BeforeSnapshot: json.RawMessage(`{"org_id":1,"name":"A","status":"active","parent_id":1,"node_path":"1","validity":"[2026-01-01,)","full_name_path":"A","is_business_unit":false}`),
+		AfterSnapshot:  json.RawMessage(`{"name":"B"}`),
+	})
+	if !strings.Contains(outRescindAfterPartial, "撤销后快照字段不完整（历史数据）") {
+		t.Fatalf("unexpected output: %q", outRescindAfterPartial)
+	}
+
+	originalMarshal := orgNodeAuditMarshalIndent
+	t.Cleanup(func() {
+		orgNodeAuditMarshalIndent = originalMarshal
+	})
+	orgNodeAuditMarshalIndent = func(v any, prefix, indent string) ([]byte, error) {
+		return nil, errors.New("marshal failed")
+	}
+	outMarshalError := renderOrgNodeAuditDetailEntry(OrgUnitNodeAuditEvent{EventID: 20, EventUUID: "evt-20", EventType: "RENAME", EffectiveDate: "2026-01-08"})
+	orgNodeAuditMarshalIndent = originalMarshal
+	if !strings.Contains(outMarshalError, "<pre>{}</pre>") {
+		t.Fatalf("unexpected output: %q", outMarshalError)
+	}
+
+	out2 := renderOrgNodeAuditDetailEntry(OrgUnitNodeAuditEvent{EventID: 11,
 		EventUUID:           "evt-11",
 		EventType:           "UNKNOWN",
 		EffectiveDate:       "2026-01-06",
@@ -492,16 +619,18 @@ func TestRenderOrgNodeDetailsWithAudit_ChangeTabAndLoadMore(t *testing.T) {
 		true,
 		[]OrgUnitNodeVersion{{EventID: 1, EffectiveDate: "2026-01-06", EventType: ""}},
 		[]OrgUnitNodeAuditEvent{{
-			EventID:             1,
-			EventUUID:           "evt-1",
-			EventType:           "RENAME",
-			EffectiveDate:       "2026-01-06",
-			TxTime:              time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC),
-			InitiatorName:       "Alice",
-			InitiatorEmployeeID: "E100",
-			Payload:             json.RawMessage(`{"name":"B"}`),
-			BeforeSnapshot:      json.RawMessage(`{"name":"A"}`),
-			AfterSnapshot:       json.RawMessage(`{"name":"B"}`),
+			EventID:              1,
+			EventUUID:            "evt-1",
+			EventType:            "RENAME",
+			EffectiveDate:        "2026-01-06",
+			TxTime:               time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC),
+			InitiatorName:        "Alice",
+			InitiatorEmployeeID:  "E100",
+			IsRescinded:          true,
+			RescindedByEventUUID: "evt-r-1",
+			Payload:              json.RawMessage(`{"name":"B"}`),
+			BeforeSnapshot:       json.RawMessage(`{"name":"A"}`),
+			AfterSnapshot:        json.RawMessage(`{"name":"B"}`),
 		}},
 		true,
 		1,
@@ -509,7 +638,7 @@ func TestRenderOrgNodeDetailsWithAudit_ChangeTabAndLoadMore(t *testing.T) {
 		"",
 		"change",
 	)
-	for _, token := range []string{"data-active-tab=\"change\"", "org-node-change-load-more", "tab=change", "无更新权限", "org-node-record-actions-head", "org-node-record-item"} {
+	for _, token := range []string{"data-active-tab=\"change\"", "org-node-change-load-more", "tab=change", "无更新权限", "org-node-record-actions-head", "org-node-record-item", "org-node-change-item-status is-rescinded"} {
 		if !strings.Contains(out, token) {
 			t.Fatalf("missing %q in %q", token, out)
 		}
@@ -527,8 +656,9 @@ func TestRenderOrgNodeDetailsWithAudit_RecordTimelineDesc(t *testing.T) {
 		true,
 		[]OrgUnitNodeVersion{
 			{EventID: 1, EffectiveDate: "2026-01-01", EventType: "CREATE"},
-			{EventID: 2, EffectiveDate: "2026-01-10", EventType: "RENAME"},
-			{EventID: 3, EffectiveDate: "2026-01-20", EventType: "CORRECT_EVENT"},
+			{EventID: 2, EffectiveDate: "2026-01-10", EventType: "LOW"},
+			{EventID: 3, EffectiveDate: "2026-01-10", EventType: "HIGH"},
+			{EventID: 4, EffectiveDate: "", EventType: "EMPTY"},
 		},
 		nil,
 		false,
@@ -538,13 +668,14 @@ func TestRenderOrgNodeDetailsWithAudit_RecordTimelineDesc(t *testing.T) {
 		"basic",
 	)
 
-	idxLatest := strings.Index(out, `data-target-date="2026-01-20"`)
-	idxCurrent := strings.Index(out, `data-target-date="2026-01-10"`)
+	idxSameDateHigh := strings.Index(out, `org-node-record-item-type">HIGH</span>`)
+	idxSameDateLow := strings.Index(out, `org-node-record-item-type">LOW</span>`)
 	idxOldest := strings.Index(out, `data-target-date="2026-01-01"`)
-	if idxLatest == -1 || idxCurrent == -1 || idxOldest == -1 {
+	idxEmpty := strings.Index(out, `data-target-date=""`)
+	if idxSameDateHigh == -1 || idxSameDateLow == -1 || idxOldest == -1 || idxEmpty == -1 {
 		t.Fatalf("missing record item timeline in output: %q", out)
 	}
-	if !(idxLatest < idxCurrent && idxCurrent < idxOldest) {
+	if !(idxSameDateHigh < idxSameDateLow && idxSameDateLow < idxOldest && idxOldest < idxEmpty) {
 		t.Fatalf("expected record timeline in descending order, got: %q", out)
 	}
 	if !strings.Contains(out, `class="org-node-record-item is-active" data-target-date="2026-01-10"`) {

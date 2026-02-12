@@ -45,6 +45,12 @@ ALTER FUNCTION orgunit.extract_orgunit_snapshot(uuid, int, date)
 ALTER FUNCTION orgunit.is_org_event_snapshot_presence_valid(text, jsonb, jsonb, text)
   OWNER TO orgunit_kernel;
 
+ALTER FUNCTION orgunit.is_orgunit_snapshot_complete(jsonb)
+  OWNER TO orgunit_kernel;
+
+ALTER FUNCTION orgunit.is_org_event_snapshot_content_valid(text, jsonb, jsonb, text)
+  OWNER TO orgunit_kernel;
+
 ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb, text)
   OWNER TO orgunit_kernel;
 ALTER FUNCTION orgunit.assert_org_event_snapshots(text, jsonb, jsonb, text)

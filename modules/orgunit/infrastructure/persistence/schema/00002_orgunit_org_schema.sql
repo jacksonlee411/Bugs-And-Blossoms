@@ -49,6 +49,51 @@ AS $$
   END;
 $$;
 
+-- canonical snapshot content predicate for RESCIND_* events
+CREATE OR REPLACE FUNCTION orgunit.is_orgunit_snapshot_complete(p_snapshot jsonb)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT p_snapshot IS NOT NULL
+    AND jsonb_typeof(p_snapshot) = 'object'
+    AND p_snapshot ?& ARRAY[
+      'org_id',
+      'name',
+      'status',
+      'parent_id',
+      'node_path',
+      'validity',
+      'full_name_path',
+      'is_business_unit'
+    ];
+$$;
+
+-- snapshot content predicate (presence focuses on nullability; this focuses on completeness)
+CREATE OR REPLACE FUNCTION orgunit.is_org_event_snapshot_content_valid(
+  p_event_type text,
+  p_before_snapshot jsonb,
+  p_after_snapshot jsonb,
+  p_rescind_outcome text
+)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN p_event_type IN ('RESCIND_EVENT','RESCIND_ORG')
+      THEN orgunit.is_orgunit_snapshot_complete(p_before_snapshot)
+           AND (
+             p_rescind_outcome = 'ABSENT'
+             OR (
+               p_rescind_outcome = 'PRESENT'
+               AND orgunit.is_orgunit_snapshot_complete(p_after_snapshot)
+             )
+           )
+    ELSE true
+  END;
+$$;
+
 CREATE TABLE IF NOT EXISTS orgunit.org_trees (
   tenant_uuid uuid NOT NULL,
   root_org_id int NOT NULL CHECK (root_org_id BETWEEN 10000000 AND 99999999),
@@ -84,6 +129,15 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
       AND NULLIF(btrim(payload->>'target_event_uuid'), '') IS NOT NULL
     )
   ),
+  CONSTRAINT org_events_rescind_payload_required CHECK (
+    event_type NOT IN ('RESCIND_EVENT','RESCIND_ORG')
+    OR (
+      COALESCE(NULLIF(btrim(payload->>'op'), ''), '') = event_type
+      AND COALESCE(NULLIF(btrim(payload->>'reason'), ''), '') <> ''
+      AND COALESCE(NULLIF(btrim(payload->>'target_event_uuid'), ''), '') <> ''
+      AND COALESCE(NULLIF(btrim(payload->>'target_effective_date'), ''), '') = to_char(effective_date, 'YYYY-MM-DD')
+    )
+  ),
   CONSTRAINT org_events_snapshot_shape_check CHECK (
     (before_snapshot IS NULL OR jsonb_typeof(before_snapshot) = 'object')
     AND (after_snapshot IS NULL OR jsonb_typeof(after_snapshot) = 'object')
@@ -100,6 +154,14 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   ),
   CONSTRAINT org_events_snapshot_presence_check CHECK (
     orgunit.is_org_event_snapshot_presence_valid(
+      event_type,
+      before_snapshot,
+      after_snapshot,
+      rescind_outcome
+    )
+  ),
+  CONSTRAINT org_events_snapshot_content_check CHECK (
+    orgunit.is_org_event_snapshot_content_valid(
       event_type,
       before_snapshot,
       after_snapshot,

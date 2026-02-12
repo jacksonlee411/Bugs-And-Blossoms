@@ -109,6 +109,51 @@ func TestOrgunitSchema_PresencePredicateStrictRescindOutcome(t *testing.T) {
 	}
 }
 
+func TestOrgunitSchema_RescindSnapshotContentConstraints(t *testing.T) {
+	root := repoRootFromCurrentFile(t)
+	p := filepath.Join(root, "modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("read %s: %v", p, err)
+	}
+	s := string(b)
+
+	for _, token := range []string{
+		"CREATE OR REPLACE FUNCTION orgunit.is_orgunit_snapshot_complete(p_snapshot jsonb)",
+		"CREATE OR REPLACE FUNCTION orgunit.is_org_event_snapshot_content_valid(",
+		"CONSTRAINT org_events_rescind_payload_required CHECK",
+		"CONSTRAINT org_events_snapshot_content_check CHECK",
+	} {
+		if !strings.Contains(s, token) {
+			t.Fatalf("missing %q in %s", token, p)
+		}
+	}
+}
+
+func TestOrgunitMigration080D_BackfillsRescindSnapshotContent(t *testing.T) {
+	root := repoRootFromCurrentFile(t)
+	p := filepath.Join(root, "migrations/orgunit/20260212113000_orgunit_rescind_snapshot_completeness.sql")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("read %s: %v", p, err)
+	}
+	s := string(b)
+
+	for _, token := range []string{
+		"UPDATE orgunit.org_events e",
+		"jsonb_build_object(",
+		"'target_effective_date'",
+		"WITH target AS (",
+		"CONSTRAINT org_events_rescind_payload_required CHECK",
+		"CONSTRAINT org_events_snapshot_content_check CHECK",
+		"VALIDATE CONSTRAINT org_events_snapshot_content_check",
+	} {
+		if !strings.Contains(s, token) {
+			t.Fatalf("missing %q in %s", token, p)
+		}
+	}
+}
+
 func TestOrgunitMigration080C_IntroducesPendingReplayEngine(t *testing.T) {
 	root := repoRootFromCurrentFile(t)
 	p := filepath.Join(root, "migrations/orgunit/20260210203000_orgunit_snapshot_insert_complete.sql")

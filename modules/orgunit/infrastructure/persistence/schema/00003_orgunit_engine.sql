@@ -1232,6 +1232,21 @@ BEGIN
         COALESCE(p_rescind_outcome, 'NULL')
       );
   END IF;
+
+  IF NOT orgunit.is_org_event_snapshot_content_valid(
+    p_event_type,
+    p_before_snapshot,
+    p_after_snapshot,
+    p_rescind_outcome
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'ORG_AUDIT_SNAPSHOT_INVALID',
+      DETAIL = format(
+        'event_type=%s incomplete_snapshot_content=true rescind_outcome=%s',
+        p_event_type,
+        COALESCE(p_rescind_outcome, 'NULL')
+      );
+  END IF;
 END;
 $$;
 

@@ -123,6 +123,8 @@ ul{list-style:none;padding:0;margin:0;display:grid;gap:8px}
 .org-node-change-item.is-active{border-color:#09a7a3;background:#ecfeff}
 .org-node-change-item-time{font-size:12px;color:#0f172a;font-weight:600}
 .org-node-change-item-actor{font-size:11px;color:#64748b}
+.org-node-change-item-status{display:inline-flex;align-items:center;justify-content:center;width:max-content;font-size:11px;border-radius:999px;padding:2px 8px}
+.org-node-change-item-status.is-rescinded{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
 .org-node-change-load-more{border:0;background:#e2e8f0;color:#0f172a;border-radius:6px;padding:6px 8px;font-size:12px;cursor:pointer}
 .org-node-change-log-right{min-height:220px}
 .org-node-change-detail-entry{display:flex;flex-direction:column;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px}
@@ -130,7 +132,11 @@ ul{list-style:none;padding:0;margin:0;display:grid;gap:8px}
 .org-node-change-event-type{font-size:13px;font-weight:700;color:#0f172a}
 .org-node-change-event-label{font-size:12px;color:#64748b}
 .org-node-change-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:12px;color:#0f172a}
+.org-node-change-rescinded-flag{display:grid;gap:4px;padding:8px;background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;font-size:12px;color:#7f1d1d}
+.org-node-change-rescinded-title{font-size:12px;font-weight:700;color:#9f1239}
 .org-node-change-target{display:grid;gap:4px;padding:8px;background:#fff;border:1px dashed #cbd5e1;border-radius:6px;font-size:12px}
+.org-node-change-rescind-snapshots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.org-node-change-snapshot-card{display:grid;gap:6px;padding:8px;background:#fff;border:1px solid #e2e8f0;border-radius:6px}
 .org-node-change-target-jump{justify-self:start;border:0;background:#09a7a3;color:#fff;border-radius:6px;padding:4px 8px;cursor:pointer}
 .org-node-change-diff-title{font-size:12px;font-weight:600;color:#0f172a;margin-bottom:4px}
 .org-node-change-diff-empty{font-size:12px;color:#94a3b8}
