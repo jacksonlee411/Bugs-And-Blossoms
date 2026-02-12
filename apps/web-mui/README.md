@@ -45,6 +45,12 @@ pnpm check
 - 主题与语言切换：`light/dark`、`en/zh`，状态持久化到 `localStorage`。
 - 埋点基线：`nav_click/filter_submit/detail_open/bulk_action` 字段模型，开发环境可在 `window.__WEB_MUI_UI_EVENTS__` 观察。
 
+## P093 高价值模块迁移（进行中）
+
+- `/org/units`：组织树 + 列表 + URL 联动筛选 + 详情侧栏。
+- `/people`：复杂筛选 + 批量动作（二次确认）+ 详情侧栏。
+- `/approvals`：审批列表状态流转 + 操作反馈 + 详情联动。
+
 ## 环境变量
 
 ```bash
