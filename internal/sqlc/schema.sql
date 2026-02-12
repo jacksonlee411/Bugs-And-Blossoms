@@ -318,10 +318,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_ev
 CREATE INDEX IF NOT EXISTS org_events_tenant_org_effective_idx ON orgunit.org_events (tenant_uuid, org_id, effective_date, id);
 CREATE INDEX IF NOT EXISTS org_events_tenant_effective_idx ON orgunit.org_events (tenant_uuid, effective_date, id);
 CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx ON orgunit.org_events (tenant_uuid, tx_time DESC, id DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS org_events_one_per_day_unique
-  ON orgunit.org_events (tenant_uuid, org_id, effective_date)
-  WHERE event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT');
-
 CREATE TABLE IF NOT EXISTS orgunit.org_unit_versions (
   id bigserial PRIMARY KEY,
   tenant_uuid uuid NOT NULL,

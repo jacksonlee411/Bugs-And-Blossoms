@@ -519,6 +519,39 @@ func TestRenderOrgNodeDetailsWithAudit_ChangeTabAndLoadMore(t *testing.T) {
 	}
 }
 
+func TestRenderOrgNodeDetailsWithAudit_RecordTimelineDesc(t *testing.T) {
+	out := renderOrgNodeDetailsWithAudit(
+		OrgUnitNodeDetails{OrgID: 10000001, OrgCode: "A001", Name: "Root", Status: "active"},
+		"2026-01-10",
+		"2026-01-10",
+		true,
+		[]OrgUnitNodeVersion{
+			{EventID: 1, EffectiveDate: "2026-01-01", EventType: "CREATE"},
+			{EventID: 2, EffectiveDate: "2026-01-10", EventType: "RENAME"},
+			{EventID: 3, EffectiveDate: "2026-01-20", EventType: "CORRECT_EVENT"},
+		},
+		nil,
+		false,
+		orgNodeAuditPageSize,
+		true,
+		"",
+		"basic",
+	)
+
+	idxLatest := strings.Index(out, `data-target-date="2026-01-20"`)
+	idxCurrent := strings.Index(out, `data-target-date="2026-01-10"`)
+	idxOldest := strings.Index(out, `data-target-date="2026-01-01"`)
+	if idxLatest == -1 || idxCurrent == -1 || idxOldest == -1 {
+		t.Fatalf("missing record item timeline in output: %q", out)
+	}
+	if !(idxLatest < idxCurrent && idxCurrent < idxOldest) {
+		t.Fatalf("expected record timeline in descending order, got: %q", out)
+	}
+	if !strings.Contains(out, `class="org-node-record-item is-active" data-target-date="2026-01-10"`) {
+		t.Fatalf("expected current effective_date to stay active, got: %q", out)
+	}
+}
+
 func TestHandleOrgNodeDetails_AuditBranches(t *testing.T) {
 	base := &orgUnitReadStoreStub{
 		orgUnitMemoryStore: newOrgUnitMemoryStore(),

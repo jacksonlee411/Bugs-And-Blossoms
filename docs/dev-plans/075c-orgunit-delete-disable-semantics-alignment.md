@@ -1,6 +1,6 @@
 # DEV-PLAN-075C：OrgUnit 删除记录/停用语义对齐与最小化落地方案
 
-**状态**: 进行中（2026-02-07 修订版，P0/P1/P2 已完成）
+**状态**: 进行中（2026-02-12 修订版，P0/P1/P2 已完成；P3 进行中）
 
 ## 背景
 - 当前 OrgUnit 详情页存在“删除记录”入口，但实际执行是 `DISABLE`，与用户“删除错误数据”的预期不一致。
@@ -70,6 +70,24 @@
 - `org_events_effective` 在 V1 中引入“撤销过滤”：被撤销事件不进入 replay 输入流。
 - 若同一事件同时存在 correction 与 rescind：**rescind 优先**（即最终不参与重放）。
 - 事务顺序固定：`校验 -> 审计/撤销 -> replay -> 提交`。
+
+## 2026-02-12 补充：撤销事件不应占用“同日写入槽位”
+
+### 触发背景
+- 线上可复现场景：某日历史基础事件（`CREATE/MOVE/RENAME/DISABLE/ENABLE/SET_BUSINESS_UNIT`）已被 `RESCIND_EVENT` 撤销后，UI 依据 `org_events_effective` 判断可插入，但提交仍被底层唯一索引拒绝（`org_events_one_per_day_unique`）。
+- 根因：
+  - 读取口径使用 `org_events_effective`（已过滤 rescind）；
+  - 写入占位口径使用 `org_events` 原始基础事件唯一索引（未过滤 rescind）。
+
+### 本轮收敛决策（P3）
+1. “同日是否被占用”统一以 **effective 事件流** 判定（与 UI/重放口径一致）。
+2. 废除基于原始表的 `org_events_one_per_day_unique` 约束占位语义。
+3. 在 DB Kernel 层改为“插入前按 `org_events_effective` 做冲突判定”，冲突返回稳定错误码 `EVENT_DATE_CONFLICT`。
+
+### 验收口径（P3）
+- 已撤销事件所在日期可再次写入（新增/插入同日新事件应成功）。
+- 未撤销同日有效事件仍必须阻断（返回 `EVENT_DATE_CONFLICT`）。
+- `RESCIND_EVENT/RESCIND_ORG` 本身不参与同日占位。
 
 ## 幂等与冲突规则
 - 幂等键：`tenant_uuid + request_id`。
