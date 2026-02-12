@@ -25,11 +25,11 @@ pnpm check
 | --- | --- | --- |
 | React | 19.2.4 | OSS |
 | MUI Core (`@mui/material`) | 7.3.7 | MIT |
-| MUI X Data Grid (`@mui/x-data-grid`) | 8.27.0 | MIT（Community） |
-| MUI X Tree View (`@mui/x-tree-view`) | 8.27.0 | MIT（Community） |
-| MUI X Pro/Premium | 未启用 | 待法务/采购确认后按需接入 |
+| MUI X Community (`@mui/x-data-grid` / `@mui/x-tree-view` / `@mui/x-date-pickers`) | 8.27.0 | MIT |
+| MUI X Pro (`@mui/x-data-grid-pro` / `@mui/x-tree-view-pro` / `@mui/x-date-pickers-pro`) | 8.27.0 | 商业授权（已采购） |
+| MUI X Premium (`@mui/x-data-grid-premium`) | 8.27.0 | 商业授权（已采购） |
 
-> 本阶段先以 Community 能力完成基座搭建，Pro/Premium 作为后续里程碑决策点。
+> 已完成 Pro/Premium 采购与授权：后续设计与实现按“最佳组件优先”选型，不再受许可限制。
 
 ## 当前交付
 

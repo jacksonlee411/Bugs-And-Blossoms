@@ -1,6 +1,6 @@
 # DEV-PLAN-091：MUI X 升级子计划 P0（基座准备与许可落地）
 
-**状态**: 已完成（2026-02-12 07:07 UTC）
+**状态**: 已完成（2026-02-12 09:15 UTC）
 
 > 本计划承接 `DEV-PLAN-090` 的 §5.1（Phase 0），聚焦“先把地基打稳”：版本、许可、工程骨架、平台组件、API 基础能力。
 
@@ -12,7 +12,7 @@
 
 ## 2. 核心目标（DoD）
 
-- [x] 冻结 React/MUI/MUI X 版本策略与许可策略（含 Pro/Premium 边界说明）。
+- [x] 冻结 React/MUI/MUI X 版本策略与许可策略（Pro/Premium 已采购并可直接启用）。
 - [x] 新前端工程可独立启动、构建、测试，并纳入统一门禁入口。
 - [x] 平台组件层最小集合可用：`AppShell / PageHeader / FilterBar / DataGridPage / DetailPanel`。
 - [x] 统一 API 客户端能力落地：鉴权注入、错误归一、重试策略、请求追踪 ID 透传。
@@ -21,22 +21,21 @@
 
 - 不迁移任何业务模块页面。
 - 不在本阶段追求视觉细节对标 Workday。
-- 不在本阶段引入 Premium 专属功能（仅完成能力边界与许可决策）。
+- 不在本阶段一次性把所有业务页面都替换为 Premium 能力（按业务价值分批启用）。
 
 ## 4. 实施步骤
 
 1. [x] 版本与许可冻结
    - 输出《版本与许可决策表》，并写入 `apps/web-mui/README.md`。
-   - 许可边界冻结为：P091 仅启用 MUI X Community（MIT）；Pro/Premium 作为后续法务/采购决策点。
+   - 许可边界冻结为：MUI X Pro/Premium 已完成采购与授权，本项目可按“最佳组件优先”直接启用高级能力，不再受许可限制。
 
    | 组件 | 版本 | 许可策略 |
    | --- | --- | --- |
    | React | 19.2.4 | OSS |
    | MUI Core (`@mui/material`) | 7.3.7 | MIT |
-   | MUI X Data Grid (`@mui/x-data-grid`) | 8.27.0 | MIT（Community） |
-   | MUI X Tree View (`@mui/x-tree-view`) | 8.27.0 | MIT（Community） |
-   | MUI X Date Pickers (`@mui/x-date-pickers`) | 8.27.0 | MIT（Community） |
-   | MUI X Pro/Premium | 未启用 | 待法务/采购确认 |
+   | MUI X Community (`@mui/x-data-grid` / `@mui/x-tree-view` / `@mui/x-date-pickers`) | 8.27.0 | MIT |
+   | MUI X Pro (`@mui/x-data-grid-pro` / `@mui/x-tree-view-pro` / `@mui/x-date-pickers-pro`) | 8.27.0 | 商业授权（已采购） |
+   | MUI X Premium (`@mui/x-data-grid-premium`) | 8.27.0 | 商业授权（已采购） |
 
 2. [x] 工程骨架初始化
    - 初始化目录：`apps/web-mui`。
@@ -74,8 +73,8 @@
 
 ## 6. 风险与缓解
 
-- 风险：Pro/Premium 许可尚未最终确认，后续高级能力启用存在采购前置。  
-  缓解：P091 已冻结 Community 基线，不阻塞 P092/P093 开发；在进入 Pro 依赖前设置 stopline。
+- 风险：高级能力可用后，页面可能过度使用复杂组件导致交互负担上升。  
+  缓解：坚持“任务闭环优先 + 最小复杂度”原则，先证明业务价值再引入高级能力（如 row grouping/pivot）。
 - 风险：基座默认打包体积偏大（当前 Vite 输出存在 chunk size 警告）。  
   缓解：在 P092/P095 引入路由级代码分割与按需加载策略。
 
