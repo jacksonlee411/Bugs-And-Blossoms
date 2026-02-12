@@ -5,20 +5,18 @@ import {
   FormControl,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
   Stack,
   TextField,
   Typography
 } from '@mui/material'
-import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView'
-import { TreeItem } from '@mui/x-tree-view/TreeItem'
 import type { GridColDef, GridRowSelectionModel } from '@mui/x-data-grid'
 import { useAppPreferences } from '../app/providers/AppPreferencesContext'
 import { DataGridPage } from '../components/DataGridPage'
 import { DetailPanel } from '../components/DetailPanel'
 import { FilterBar } from '../components/FilterBar'
 import { PageHeader } from '../components/PageHeader'
+import { type TreePanelNode, TreePanel } from '../components/TreePanel'
 import { trackUiEvent } from '../observability/tracker'
 
 interface DepartmentNode {
@@ -55,28 +53,20 @@ const departmentTree: DepartmentNode[] = [
   }
 ]
 
+function mapDepartmentNodes(nodes: DepartmentNode[]): TreePanelNode[] {
+  return nodes.map((node) => ({
+    id: String(node.id),
+    label: node.name,
+    children: node.children ? mapDepartmentNodes(node.children) : undefined
+  }))
+}
+
 const rows: EmployeeRow[] = [
   { id: 1, name: '张三', department: '人力资源部', departmentId: 2, position: 'HRBP', status: 'active' },
   { id: 2, name: '李四', department: '财务部', departmentId: 3, position: '会计', status: 'active' },
   { id: 3, name: '王五', department: '前端组', departmentId: 5, position: '前端工程师', status: 'active' },
   { id: 4, name: '赵六', department: '后端组', departmentId: 6, position: '后端工程师', status: 'inactive' }
 ]
-
-function renderTree(nodes: DepartmentNode[], onSelect: (id: number) => void) {
-  return nodes.map((node) => (
-    <TreeItem
-      itemId={String(node.id)}
-      key={node.id}
-      label={
-        <Box onClick={() => onSelect(node.id)} sx={{ cursor: 'pointer', py: 0.5 }}>
-          {node.name}
-        </Box>
-      }
-    >
-      {node.children ? renderTree(node.children, onSelect) : null}
-    </TreeItem>
-  ))
-}
 
 export function FoundationDemoPage() {
   const { t, tenantId } = useAppPreferences()
@@ -170,12 +160,14 @@ export function FoundationDemoPage() {
       </FilterBar>
 
       <Stack direction={{ md: 'row', xs: 'column' }} spacing={2}>
-        <Paper sx={{ minWidth: 260, p: 2 }} variant='outlined'>
-          <Typography sx={{ mb: 1 }} variant='subtitle2'>
-            {t('page_department_tree')}
-          </Typography>
-          <SimpleTreeView>{renderTree(departmentTree, setSelectedDepartmentId)}</SimpleTreeView>
-        </Paper>
+        <TreePanel
+          emptyLabel={t('text_no_data')}
+          loadingLabel={t('text_loading')}
+          nodes={mapDepartmentNodes(departmentTree)}
+          onSelect={(nodeId) => setSelectedDepartmentId(Number(nodeId))}
+          selectedItemId={selectedDepartmentId ? String(selectedDepartmentId) : undefined}
+          title={t('page_department_tree')}
+        />
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <DataGridPage

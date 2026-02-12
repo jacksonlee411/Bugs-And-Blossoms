@@ -1,18 +1,16 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  Box,
+  Button,
   FormControl,
   InputLabel,
   MenuItem,
-  Paper,
   Select,
   Stack,
   TextField,
+  Box,
   Typography
 } from '@mui/material'
-import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView'
-import { TreeItem } from '@mui/x-tree-view/TreeItem'
 import type { GridColDef, GridPaginationModel, GridRowSelectionModel } from '@mui/x-data-grid'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { DataGridPage } from '../../components/DataGridPage'
@@ -20,6 +18,7 @@ import { DetailPanel } from '../../components/DetailPanel'
 import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
 import { StatusChip } from '../../components/StatusChip'
+import { type TreePanelNode, TreePanel } from '../../components/TreePanel'
 import { trackUiEvent } from '../../observability/tracker'
 
 type OrgStatus = 'active' | 'inactive'
@@ -130,26 +129,14 @@ function collectDescendantIds(allRows: OrgUnitRow[], nodeId: number): Set<number
   return result
 }
 
-function buildTree(
-  parentId: number | null,
-  rows: OrgUnitRow[],
-  onSelect: (id: number) => void
-) {
+function buildTreeNodes(parentId: number | null, rows: OrgUnitRow[]): TreePanelNode[] {
   return rows
     .filter((row) => row.parentId === parentId)
-    .map((row) => (
-      <TreeItem
-        itemId={String(row.id)}
-        key={row.id}
-        label={
-          <Box onClick={() => onSelect(row.id)} sx={{ cursor: 'pointer', py: 0.5 }}>
-            {row.name}
-          </Box>
-        }
-      >
-        {buildTree(row.id, rows, onSelect)}
-      </TreeItem>
-    ))
+    .map((row) => ({
+      id: String(row.id),
+      label: row.name,
+      children: buildTreeNodes(row.id, rows)
+    }))
 }
 
 export function OrgUnitsPage() {
@@ -158,11 +145,19 @@ export function OrgUnitsPage() {
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null)
   const [loadingTree, setLoadingTree] = useState(false)
 
-  const selectedNodeId = Number(searchParams.get('node') ?? '1')
+  const selectedNodeIdRaw = Number(searchParams.get('node') ?? '1')
+  const selectedNodeId =
+    Number.isFinite(selectedNodeIdRaw) && selectedNodeIdRaw > 0 ? selectedNodeIdRaw : 1
   const keyword = searchParams.get('q') ?? ''
   const status = (searchParams.get('status') ?? 'all') as 'all' | OrgStatus
-  const page = Number(searchParams.get('page') ?? '0')
-  const pageSize = Number(searchParams.get('size') ?? '10')
+  const pageRaw = Number(searchParams.get('page') ?? '0')
+  const page = Number.isFinite(pageRaw) && pageRaw >= 0 ? pageRaw : 0
+  const pageSizeRaw = Number(searchParams.get('size') ?? '10')
+  const pageSize = Number.isFinite(pageSizeRaw) && pageSizeRaw > 0 ? pageSizeRaw : 10
+  const [keywordInput, setKeywordInput] = useState(keyword)
+  const [statusInput, setStatusInput] = useState(status)
+
+  const treeNodes = useMemo(() => buildTreeNodes(null, orgRows), [])
 
   const visibleNodeIds = useMemo(
     () => collectDescendantIds(orgRows, selectedNodeId),
@@ -262,39 +257,41 @@ export function OrgUnitsPage() {
       <PageHeader subtitle={t('page_org_subtitle')} title={t('page_org_title')} />
       <FilterBar>
         <TextField
-          defaultValue={keyword}
           fullWidth
           label={t('org_filter_keyword')}
-          onBlur={(event) => handleApplyFilters(event.target.value, status)}
+          onChange={(event) => setKeywordInput(event.target.value)}
+          value={keywordInput}
         />
         <FormControl sx={{ minWidth: 180 }}>
           <InputLabel id='org-status-filter'>{t('org_filter_status')}</InputLabel>
           <Select
-            defaultValue={status}
             id='org-status-filter-select'
             label={t('org_filter_status')}
             labelId='org-status-filter'
-            onChange={(event) => handleApplyFilters(keyword, String(event.target.value))}
+            onChange={(event) => setStatusInput(String(event.target.value) as 'all' | OrgStatus)}
+            value={statusInput}
           >
             <MenuItem value='all'>{t('status_all')}</MenuItem>
             <MenuItem value='active'>{t('status_active')}</MenuItem>
             <MenuItem value='inactive'>{t('status_inactive')}</MenuItem>
           </Select>
         </FormControl>
+        <Button onClick={() => handleApplyFilters(keywordInput, statusInput)} variant='contained'>
+          {t('action_apply_filters')}
+        </Button>
       </FilterBar>
 
       <Stack direction={{ md: 'row', xs: 'column' }} spacing={2}>
-        <Paper sx={{ minWidth: 280, p: 2 }} variant='outlined'>
-          <Typography sx={{ mb: 1 }} variant='subtitle2'>
-            {t('org_tree_title')}
-          </Typography>
-          <SimpleTreeView>{buildTree(null, orgRows, handleTreeSelect)}</SimpleTreeView>
-          {loadingTree ? (
-            <Typography color='text.secondary' sx={{ mt: 1 }} variant='body2'>
-              {t('text_loading')}
-            </Typography>
-          ) : null}
-        </Paper>
+        <TreePanel
+          emptyLabel={t('text_no_data')}
+          loading={loadingTree}
+          loadingLabel={t('text_loading')}
+          minWidth={280}
+          nodes={treeNodes}
+          onSelect={(nodeId) => void handleTreeSelect(Number(nodeId))}
+          selectedItemId={String(selectedNodeId)}
+          title={t('org_tree_title')}
+        />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <DataGridPage
             columns={columns}
@@ -334,7 +331,7 @@ export function OrgUnitsPage() {
               },
               sx: { minHeight: 520 }
             }}
-            noRowsLabel={t('common_select_department')}
+            noRowsLabel={t('text_no_data')}
             rows={pagedRows}
           />
         </Box>
