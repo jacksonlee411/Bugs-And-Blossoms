@@ -352,6 +352,7 @@ export function PeopleAssignmentsPage() {
           sortModel,
           sx: { minHeight: 560 }
         }}
+        loadingLabel={t('text_loading')}
         noRowsLabel={t('text_no_data')}
         rows={filteredRows}
       />

@@ -382,6 +382,7 @@ export function OrgUnitsPage() {
               sortingMode: 'server',
               sx: { minHeight: 520 }
             }}
+            loadingLabel={t('text_loading')}
             noRowsLabel={t('text_no_data')}
             rows={pagedRows}
           />

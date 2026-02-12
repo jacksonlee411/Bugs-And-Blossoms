@@ -274,6 +274,7 @@ export function FoundationDemoPage() {
               sortModel,
               sx: { minHeight: 480 }
             }}
+            loadingLabel={t('text_loading')}
             noRowsLabel={t('text_no_data')}
             rows={filteredRows}
           />

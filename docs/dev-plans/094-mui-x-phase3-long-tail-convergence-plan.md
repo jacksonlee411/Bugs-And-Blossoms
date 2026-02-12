@@ -1,6 +1,6 @@
 # DEV-PLAN-094：MUI X 升级子计划 P3（长尾迁移与收口）
 
-**状态**: 实施中（2026-02-12 09:08 UTC）
+**状态**: 已完成（2026-02-12 09:26 UTC）
 
 > 本计划承接 `DEV-PLAN-090` 的 §5.4（Phase 3），目标是把“高价值先行”阶段后的长尾页面与重复资产统一收口。
 
@@ -14,7 +14,7 @@
 
 - [x] 旧列表页全面迁移到 DataGrid 基线组件。
 - [x] 旧树组件全面迁移到统一 Tree 基线组件。
-- [ ] 全仓 UI 文案、状态反馈、空态/加载态统一。
+- [x] 全仓 UI 文案、状态反馈、空态/加载态统一。
 - [x] 移除重复组件和不可达死代码，降低维护负担。
 
 ## 3. 非目标
@@ -44,6 +44,7 @@
    - 详情页头动作区收口（People 页面消除重复标题栏）。
    - DataGrid 容器视觉收口到主题（圆角与背景口径统一）。
    - 反馈文案收口到通用 key，支持变量插值（`{count}`）。
+   - 空态/加载态口径收口到 `text_no_data / text_loading`，避免页面散落硬编码。
 5. [x] 重复资产清理（第一轮）
    - 删除不可达占位页（已无引用）。
    - 清理无引用 i18n key，避免长期漂移。
@@ -64,13 +65,14 @@
 - i18n 清理：移除无引用 key（coming-soon / select-department 等），保持 MessageKey 收敛：`apps/web-mui/src/i18n/messages.ts`
 - i18n 支持简单变量插值，并收敛通用反馈文案 key：`apps/web-mui/src/i18n/messages.ts`
 - DataGrid 容器样式收口到主题色板（修复暗色模式背景不一致）：`apps/web-mui/src/components/DataGridPage.tsx`
+- DataGrid 空态/加载态 Overlay 统一，并由页面注入 `text_no_data / text_loading`：`apps/web-mui/src/components/DataGridPage.tsx`
 - People 页面头部动作区收口，删除重复标题区：`apps/web-mui/src/pages/people/PeopleAssignmentsPage.tsx`
 
 ## 6. 验收标准
 
 - [x] 页面迁移清单中的目标项全部关闭。
-- [ ] 旧组件引用数降为 0（或全部标记待退役且有截止时间）。
-- [ ] UI 一致性检查通过（页面抽样评审 + 自动化检查）。
+- [x] 旧组件引用数降为 0（tree/grid 均收口到统一组件）。
+- [x] UI 一致性检查通过（页面抽样评审 + 自动化检查）。
 
 ## 7. 风险与缓解
 
@@ -87,6 +89,11 @@
   - `pnpm -C apps/web-mui test`
   - `pnpm -C apps/web-mui build`
   - `pnpm -C apps/web-mui check`
+  - `make check doc`
+
+- 最终抽样走查（文案/空态/加载态口径）
+  - 抽样页面：`/`、`/org/units`、`/people`、`/approvals`、`NoAccess`。
+  - 校验点：空态统一 `text_no_data`；加载态统一 `text_loading`；状态反馈统一 `common_action_done/common_select_rows`；不保留不可达占位页与无引用 key。
 
 ## 9. 关联计划
 
