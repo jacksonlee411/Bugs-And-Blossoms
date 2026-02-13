@@ -53,6 +53,7 @@ import {
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { PageHeader } from '../../components/PageHeader'
 import type { MessageKey } from '../../i18n/messages'
+import { resolveOrgUnitEffectiveDate } from './orgUnitVersionSelection'
 
 type DetailTab = 'profile' | 'audit'
 type OrgStatus = 'active' | 'inactive'
@@ -272,15 +273,14 @@ export function OrgUnitDetailsPage() {
   const asOf = parseDateOrDefault(searchParams.get('as_of'), fallbackAsOf)
   const includeDisabled = parseBool(searchParams.get('include_disabled'))
   const detailTab = parseDetailTab(searchParams.get('tab'))
-  const effectiveDateParam = parseOptionalValue(searchParams.get('effective_date'))
-  const effectiveDate = parseDateOrDefault(effectiveDateParam, asOf)
+  const requestedEffectiveDate = parseOptionalValue(searchParams.get('effective_date'))
   const auditEventUUID = parseOptionalValue(searchParams.get('audit_event_uuid'))
 
   const canWrite = hasPermission('orgunit.admin')
   const orgCodeValue = (orgCode ?? '').trim()
 
   const [actionState, setActionState] = useState<OrgActionState | null>(null)
-  const [actionForm, setActionForm] = useState<OrgActionForm>(() => emptyActionForm(effectiveDate))
+  const [actionForm, setActionForm] = useState<OrgActionForm>(() => emptyActionForm(asOf))
   const [actionErrorMessage, setActionErrorMessage] = useState('')
   const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'error' } | null>(null)
   const [auditLimitByOrg, setAuditLimitByOrg] = useState<Record<string, number>>({})
@@ -341,16 +341,26 @@ export function OrgUnitDetailsPage() {
     [searchParams, setSearchParams]
   )
 
-  const detailQuery = useQuery({
-    enabled: orgCodeValue.length > 0,
-    queryKey: ['org-units', 'details', orgCodeValue, effectiveDate, includeDisabled],
-    queryFn: () => getOrgUnitDetails({ orgCode: orgCodeValue, asOf: effectiveDate, includeDisabled })
-  })
-
   const versionsQuery = useQuery({
     enabled: orgCodeValue.length > 0,
     queryKey: ['org-units', 'versions', orgCodeValue],
     queryFn: () => listOrgUnitVersions({ orgCode: orgCodeValue })
+  })
+
+  const versionItems = useMemo(() => versionsQuery.data?.versions ?? [], [versionsQuery.data])
+
+  const effectiveDate = useMemo(() => {
+    return resolveOrgUnitEffectiveDate({
+      asOf,
+      requestedEffectiveDate,
+      versions: versionItems
+    })
+  }, [asOf, requestedEffectiveDate, versionItems])
+
+  const detailQuery = useQuery({
+    enabled: orgCodeValue.length > 0,
+    queryKey: ['org-units', 'details', orgCodeValue, effectiveDate, includeDisabled],
+    queryFn: () => getOrgUnitDetails({ orgCode: orgCodeValue, asOf: effectiveDate, includeDisabled })
   })
 
   const auditQuery = useQuery({
@@ -359,26 +369,9 @@ export function OrgUnitDetailsPage() {
     queryFn: () => listOrgUnitAudit({ orgCode: orgCodeValue, limit: auditLimit })
   })
 
-  const versionItems = useMemo(() => {
-    const versions = versionsQuery.data?.versions ?? []
-    const hasSelected = versions.some((version) => version.effective_date === effectiveDate)
-    if (hasSelected || effectiveDate.length === 0) {
-      return versions
-    }
-    return [
-      {
-        event_id: -1,
-        event_uuid: detailQuery.data?.org_unit?.event_uuid ?? '',
-        effective_date: effectiveDate,
-        event_type: '-'
-      },
-      ...versions
-    ]
-  }, [detailQuery.data, effectiveDate, versionsQuery.data])
-
   const selectedVersionEventType = useMemo(() => {
-    return versionsQuery.data?.versions.find((version) => version.effective_date === effectiveDate)?.event_type?.trim() || '-'
-  }, [effectiveDate, versionsQuery.data])
+    return versionItems.find((version) => version.effective_date === effectiveDate)?.event_type?.trim() || '-'
+  }, [effectiveDate, versionItems])
 
   const selectedAuditEvent = useMemo(() => {
     const events = auditQuery.data?.events ?? []
