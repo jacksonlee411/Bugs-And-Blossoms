@@ -16,7 +16,7 @@
 1. [ ] OrgUnit 详情不再以抽屉弹出，改为独立详情页（与 CRUD Dashboard 示例一致的 page pattern）。
 2. [ ] 详情页顶部展示面包屑（Breadcrumbs），并提供返回到 org 列表页的可达路径。
 3. [ ] 详情页底部提供“返回”按钮（优先返回历史列表上下文；无历史时回退到 `/app/org/units`）。
-4. [ ] 迁移不丢能力：Profile/Records/Audit 三个 Tab、版本切换、审计列表、以及现有写操作入口继续可用（权限与错误回显口径不变）。
+	4. [ ] 迁移不丢能力：Basic Info/Change Log 两个 Tab（Records 信息合并进 Basic Info，见 `DEV-PLAN-099`）、版本切换、审计列表、以及现有写操作入口继续可用（权限与错误回显口径不变）。
 5. [ ] URL 可复现：详情页核心状态（`as_of/effective_date/tab/include_disabled`）可通过 URL 直接回放。
 
 ## 非目标
@@ -32,12 +32,13 @@
 > 说明：本节只定义“对外可观察的 URL 语义”，具体解析与默认值逻辑以实现为准。
 
 - 列表页：`/app/org/units`（保持不变）
-- 详情页：`/app/org/units/:org_code`
-  - Query：
-    - `as_of=YYYY-MM-DD`（Valid Time，日粒度；缺省为当天 UTC）
-    - `effective_date=YYYY-MM-DD`（可选；定位某条记录版本；缺省回落到 `as_of`）
-    - `tab=profile|records|audit`（可选；缺省 `profile`）
-    - `include_disabled=1`（可选；缺省 0）
+	- 详情页：`/app/org/units/:org_code`
+	  - Query：
+	    - `as_of=YYYY-MM-DD`（Valid Time，日粒度；缺省为当天 UTC）
+	    - `effective_date=YYYY-MM-DD`（可选；定位某条记录版本；缺省回落到 `as_of`）
+	    - `tab=profile|audit`（可选；缺省 `profile`）
+	    - `audit_event_uuid=<uuid>`（可选；仅 `tab=audit` 时用于复现右侧事件详情）
+	    - `include_disabled=1`（可选；缺省 0）
 
 > 与 `DEV-PLAN-096` 的关系：原先的 `detail=<org_code>` 将由路径参数承载；其余 query 参数保持语义一致。
 
@@ -58,7 +59,7 @@
 - 标题区：复用/扩展 `PageHeader`
   - Title：`{name} · 详情`（或 `{name} ({org_code})`）
   - Actions：承载当前详情相关的写操作入口（rename/move/set BU/enable/disable/correct/rescind...），按权限显隐/禁用并保持 fail-closed。
-- 内容区：沿用现有 `Tabs(profile/records/audit)` + 内容渲染与错误回显口径
+- 内容区：沿用现有 `Tabs(profile/audit)` + 内容渲染与错误回显口径
 - 底部：`返回`按钮（与示例一致，增强“可发现的退出路径”）
 
 ### 4) 代码落点（建议）
@@ -86,4 +87,3 @@
 - 详情页能直接通过 URL 打开（含无权限/404/422/5xx 的用户可理解回显）。
 - 面包屑与返回按钮在桌面/窄屏均可用；返回按钮行为符合“优先回到历史上下文”的预期。
 - 不存在抽屉详情入口残留（避免同一能力两种承载形态并行）。
-

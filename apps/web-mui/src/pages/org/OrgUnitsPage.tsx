@@ -398,7 +398,7 @@ export function OrgUnitsPage() {
         renderCell: (params) => (
           <StatusChip
             color={params.row.status === 'active' ? 'success' : 'warning'}
-            label={params.row.status === 'active' ? t('status_active_short') : t('status_inactive_short')}
+            label={params.row.status === 'active' ? t('org_status_active_short') : t('org_status_inactive_short')}
           />
         )
       }
