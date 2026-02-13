@@ -1,6 +1,6 @@
 # DEV-PLAN-100A：Org 模块宽表元数据落地 Phase 0：契约冻结与就绪检查（先文档后代码）
 
-**状态**: 草拟中（2026-02-13 06:44 UTC）
+**状态**: 冻结（2026-02-13 09:44 UTC）
 
 > 本文从 `DEV-PLAN-100` 的 Phase 0 拆分而来，作为 Phase 0 的 SSOT；`DEV-PLAN-100` 保持为整体路线图。
 
@@ -13,15 +13,15 @@
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
 - **核心目标**：
-  - [ ] 冻结 `DEV-PLAN-100` §4 的 D1~D8（关键设计决策）。  
-  - [ ] 对齐不变量检查清单（One Door / Valid Time / RLS / No Legacy），并明确本计划落地时的 fail-closed 位置与责任边界。  
-  - [ ] 冻结 MVP 字段定义清单（2~5 个），并为每个字段确定：`field_key`、`value_type`、`DICT/ENTITY`、options 数据源配置、读写能力边界。  
-  - [ ] 冻结扩展字段 payload 契约（命名空间、类型编码/序列化、错误码口径），并证明与现有 `orgunit.submit_*` payload key 不冲突。  
-  - [ ] 冻结能力模型契约（写入/查询）：
+  - [X] 冻结 `DEV-PLAN-100` §4 的 D1~D8（关键设计决策）。  
+  - [X] 对齐不变量检查清单（One Door / Valid Time / RLS / No Legacy），并明确本计划落地时的 fail-closed 位置与责任边界。  
+  - [X] 冻结 MVP 字段定义清单（2~5 个），并为每个字段确定：`field_key`、`value_type`、`PLAIN/DICT/ENTITY`、options 数据源配置、读写能力边界。  
+  - [X] 冻结扩展字段 payload 契约（命名空间、类型编码/序列化、错误码口径），并证明与现有 `orgunit.submit_*` payload key 不冲突。  
+  - [X] 冻结能力模型契约（写入/查询）：
     - 写入：在 `DEV-PLAN-083` 的策略矩阵下，补齐扩展字段的 `field_key -> payload_key` 规则、`deny_reasons` 与错误码对齐。  
     - 查询：补齐扩展字段 `field_key -> physical_col` 的 allowlist 口径（filter/sort/options）与 fail-closed 规则（承接 `DEV-PLAN-100` D7/D8）。  
-  - [ ] 冻结字段配置生命周期契约（启用/停用/停用后只读/不可复用/槽位耗尽），并明确 day 粒度生效与审计时间分离（SSOT：`DEV-PLAN-032`）。  
-  - [ ] 冻结“按阶段命中门禁清单”（routing/authz/sqlc/doc 等）并声明 SSOT 引用入口。  
+  - [X] 冻结字段配置生命周期契约（启用/停用/停用后只读/不可复用/槽位耗尽），并明确 day 粒度生效与审计时间分离（SSOT：`DEV-PLAN-032`）。  
+  - [X] 冻结“按阶段命中门禁清单”（routing/authz/sqlc/doc 等）并声明 SSOT 引用入口。  
 - **非目标（本阶段不做）**：
   - 不做任何 DB 迁移（不新建表/不加列）。  
   - 不改 Kernel/Service/API 代码。  
@@ -78,6 +78,13 @@ graph TD
   - 选定（MVP）：后端提供“可启用字段定义列表”（2~5 个），UI 只能从该列表选择 `field_key`（对齐 `DEV-PLAN-101`）。  
   - 非目标：本期不支持租户自由创建任意 `field_key`。
 
+- **ADR-100A-05：options 数据源类型（补齐 PLAIN，避免把“无 options 字段”误塞进 DICT/ENTITY）**
+  - 选定：`data_source_type` 枚举冻结为：`PLAIN|DICT|ENTITY`。  
+    - `PLAIN`：自由输入字段（无 options）；`data_source_config` 必须为 `{}`。  
+    - `DICT`：值为 code（通常 `text`），options 来自 `dict_code` 枚举；DICT label 快照写入 `payload.ext_labels_snapshot`（见 `DEV-PLAN-100` D3/D4）。  
+    - `ENTITY`：值为实体主键（`uuid|int`），options 来自 `entity` 枚举 + 固定 SQL 模板（`DEV-PLAN-100` D7）。  
+  - 目的：让“是否有 options/如何取 options”成为显式契约，避免后续 UI/API/Kernel 各自发明隐式规则。
+
 ## 4. 数据模型与约束 (Data Model & Constraints)
 
 > 本阶段不做迁移，但必须冻结 Phase 1 将要落地的数据模型与约束口径，避免实现时再做设计决策。
@@ -89,8 +96,8 @@ graph TD
   - `field_key text not null`（稳定业务键；MVP 仅来自“字段定义列表”）
   - `physical_col text not null`（例如 `ext_str_01`；由后端分配）
   - `value_type text not null`（`text|int|uuid|bool|date`）
-  - `data_source_type text not null`（`DICT|ENTITY`）
-  - `data_source_config jsonb not null`（见 §4.3）
+  - `data_source_type text not null`（`PLAIN|DICT|ENTITY`；见 §4.3）
+  - `data_source_config jsonb not null default '{}'::jsonb`（见 §4.3）
   - `enabled_on date not null`
   - `disabled_on date null`
   - `created_at timestamptz not null`
@@ -101,8 +108,18 @@ graph TD
   - 唯一：`(tenant_uuid, field_key)`  
   - 槽位唯一：`(tenant_uuid, physical_col)`  
   - 映射不可变：`field_key/physical_col/value_type/data_source_type/data_source_config/enabled_on` 启用后不可修改（DB trigger 拒绝）。  
-  - 停用规则：`disabled_on` 只能从 `NULL -> <date>`（允许“未来停用排程”；是否允许调整未来日期在 Phase 0 评审中冻结）。  
-  - 日期约束：`disabled_on is null OR disabled_on >= enabled_on`。
+  - 停用规则：
+    - `disabled_on` 允许从 `NULL -> <date>`（允许未来停用排程）。  
+    - `disabled_on` 不允许回溯（MVP 冻结）：必须满足 `disabled_on >= current_date`（UTC day；允许 `disabled_on = current_date` 表示“立即停用生效”）。  
+    - `disabled_on` 允许从 `<date> -> <date>` 调整，但必须同时满足：
+      - 原 `disabled_on` **尚未生效**（冻结口径：以 UTC day 判定，要求 `current_date < old_disabled_on`）。  
+      - 仅允许 **向后延迟**（`new_disabled_on > old_disabled_on`）。  
+    - 不允许 `disabled_on` 从非空回滚为 `NULL`（避免“看起来重新启用”的隐式语义漂移）。  
+  - 日期约束：`disabled_on is null OR disabled_on >= enabled_on`（day 粒度）。
+
+- **有效期语义（必须冻结，避免同日歧义）**：
+  - 采用 day 粒度半开区间模型：字段在某日 `d` 生效当且仅当：`enabled_on <= d AND (disabled_on IS NULL OR d < disabled_on)`。  
+  - 说明：这是 `[enabled_on, disabled_on)` 模型，与仓库 day 粒度 Valid Time 约定一致（SSOT：`DEV-PLAN-032`）；并与 UI 口径对齐：当 `as_of >= disabled_on` 时该字段不可写/不可见。
 
 - **RLS（必须）**：
   - `ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`；
@@ -115,6 +132,9 @@ graph TD
 
 ### 4.3 `data_source_config` 约束（禁止任意表/列透传）
 
+- `PLAIN`：
+  - 形状：`{}`
+  - 约束：必须为空对象；不允许透传任意 options 配置。
 - `DICT`：
   - 形状：`{"dict_code":"<enum>"}`  
   - 约束：`dict_code` 必须为枚举（来源与加载策略由 Phase 0 冻结；不得传任意 SQL 片段/表名）。
@@ -122,13 +142,27 @@ graph TD
   - 形状：`{"entity":"<enum>","id_kind":"uuid|int"}`  
   - 约束：`entity` 必须为枚举；实际 join 模板由后端固定映射（`DEV-PLAN-100` D7）。
 
+### 4.4 审计与幂等（`request_code` / `initiator_uuid`）——冻结
+
+> 背景：Phase 1 的 Kernel 函数签名已包含 `p_request_code/p_initiator_uuid`（SSOT：`DEV-PLAN-100B`），因此 Phase 0 必须冻结其“幂等键与审计落点”，避免实现期临时发明口径。
+
+- **幂等键（必须）**：
+  - `request_code` 为同租户内的幂等键：同一 `tenant_uuid + request_code` 的重复请求必须幂等（重试不应产生第二次写入/第二个映射）。  
+  - 若 `request_code` 已被用于不同的请求输入（例如不同 `field_key` 或不同 `enabled_on/disabled_on/data_source_*`），必须拒绝并抛稳定错误码（建议复用 `ORG_REQUEST_ID_CONFLICT`，与 OrgUnit 既有 request_code 冲突口径一致）。
+- **审计落点（必须可追溯）**：
+  - 必须在 DB 中可追溯：`request_code`、`initiator_uuid`、`tx_time`、`action(enable|disable)`、`field_key`、`enabled_on/disabled_on`、`physical_col`。  
+  - 推荐实现方式：新增事件/审计表 `orgunit.tenant_field_config_events`，并对 `(tenant_uuid, request_code)` 加唯一约束；表级启用并强制 RLS，且仅允许 `orgunit_kernel` 写入（实现细节在 Phase 1 落地）。
+
 ## 5. 接口契约 (API Contracts)
 
 > 本阶段不实现 API，但必须冻结“后续实现将遵循的契约”，避免 UI/Service/Kernel 三方漂移。
 
 ### 5.1 扩展字段写入 payload（Kernel 输入）
 
-- **约定**：扩展字段值统一写入 `payload.ext`，key 为 `field_key`；DICT 的 label 快照写入 `payload.ext_labels_snapshot`，key 同为 `field_key`。  
+- **约定**：
+  - 扩展字段值统一写入 `payload.ext`，key 为 `field_key`。  
+  - DICT 的 label 快照写入 `payload.ext_labels_snapshot`，key 同为 `field_key`。  
+  - `payload.ext_labels_snapshot` 为 Kernel/审计所需输入：**由服务层生成并写入**（UI 不提交该字段）；Kernel 对 DICT 字段缺失 label 快照必须 fail-closed（细节在 Phase 2/3 落地，SSOT：`DEV-PLAN-100C/100D`）。
 - **示例（CREATE）**：
 
 ```json
@@ -155,7 +189,9 @@ graph TD
     - `value_type`
     - `data_source_type`
     - `data_source_config`（若可配置则返回 allowed options；若固定则返回 fixed config）
-    - `i18n_key`（或直接返回 `label`；但需对齐 `DEV-PLAN-020`）
+    - `label_i18n_key`（或直接返回 `label`；但需对齐 `DEV-PLAN-020`）
+
+> 约束：当 `data_source_type=PLAIN` 时，该字段无 options，`data_source_config` 必须为 `{}`。
 
 ### 5.3 字段配置管理（启用/停用/列表）
 
@@ -163,12 +199,14 @@ graph TD
 - `POST /org/api/org-units/field-configs`（启用字段，后端分配 `physical_col`）
 - `POST /org/api/org-units/field-configs:disable`（停用字段，设置 `disabled_on`；路径形态在 Phase 0 评审中冻结，并需通过 `make check routing`）
 
+> 约束：启用/停用写请求必须携带 `request_code`；`initiator_uuid` 由服务端会话上下文注入并传递给 Kernel（不得由 UI 提交/伪造）。
+
 ### 5.4 Mutation capabilities 扩展字段口径（承接 DEV-PLAN-083）
 
 - `GET /org/api/org-units/mutation-capabilities?org_code=<...>&effective_date=<...>`（SSOT：`DEV-PLAN-083`）
 - **扩展字段要求**：
   - `allowed_fields` 必须包含扩展字段的 `field_key`（在允许写入的动作里）。
-  - `field_payload_keys[field_key]` 对扩展字段统一返回 `ext.<field_key>`。
+  - `field_payload_keys[field_key]` 对扩展字段统一返回 `ext.<field_key>`（dot-path 字符串；表示 payload 内 `ext` 对象下的 key）。
   - `deny_reasons` 与错误码口径保持稳定（服务层与 Kernel 对齐，fail-closed）。
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
@@ -177,7 +215,7 @@ graph TD
 
 1. 开启事务（显式 tx + tenant 注入；fail-closed）。
 2. 校验 `field_key` 在 `field-definitions` 列表中，且该租户未存在同 `field_key` 配置。
-3. 根据 `value_type/data_source_type` 选择槽位分组（例如 `DICT -> ext_str_*`）。
+3. 根据 `value_type/data_source_type` 选择槽位分组（例如 `PLAIN(text)/DICT(text) -> ext_str_*`；`ENTITY(uuid) -> ext_uuid_*`）。
 4. 分配第一个空闲 `physical_col`（同租户下未占用）。
 5. 写入 `tenant_field_configs`（由 Kernel 函数执行；应用层禁止直写）。
 6. 提交事务。
@@ -211,37 +249,38 @@ graph TD
   - `DEV-PLAN-017`（路由策略与门禁）
 
 - **里程碑（Phase 0 待办）**：
-  1. [ ] 冻结 D1~D8（在 `DEV-PLAN-100` 与本文标记为冻结，并评审确认）。
-  2. [ ] 在 `DEV-PLAN-098` 增加“由 DEV-PLAN-100 承接实施”链接（保持文档可追踪）。  
-  3. [ ] 冻结 MVP 字段定义清单（2~5 个，见 §9.1 表格）。  
-  4. [ ] 冻结 payload 契约（`payload.ext`/`payload.ext_labels_snapshot`）与错误码口径。  
-  5. [ ] 冻结字段配置生命周期（启用/停用/只读/不可复用/槽位耗尽）。  
-  6. [ ] 冻结 capabilities 扩展字段口径（`allowed_fields/field_payload_keys/deny_reasons`）。  
-  7. [ ] 冻结“按阶段命中门禁清单”（routing/authz/sqlc/doc）并对齐 SSOT 引用入口。  
-  8. [ ] 通过文档门禁：`make check doc`（并在 PR 中记录时间戳与结果）。
+  1. [X] 冻结 D1~D8（在 `DEV-PLAN-100` 与本文标记为冻结，并评审确认）。
+  2. [X] 在 `DEV-PLAN-098` 增加“由 DEV-PLAN-100 承接实施”链接（保持文档可追踪）。  
+  3. [X] 冻结 MVP 字段定义清单（2~5 个，见 §9.1 表格）。  
+  4. [X] 冻结 payload 契约（`payload.ext`/`payload.ext_labels_snapshot`）与错误码口径。  
+  5. [X] 冻结字段配置生命周期（启用/停用/只读/不可复用/槽位耗尽）。  
+  6. [X] 冻结 capabilities 扩展字段口径（`allowed_fields/field_payload_keys/deny_reasons`）。  
+  7. [X] 冻结“按阶段命中门禁清单”（routing/authz/sqlc/doc）并对齐 SSOT 引用入口。  
+  8. [X] 通过文档门禁：`make check doc`（2026-02-13 09:44 UTC；`[doc] OK`）。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
-### 9.1 MVP 字段定义清单（待 Phase 0 评审冻结）
+### 9.1 MVP 字段定义清单（已冻结）
 
 | field_key | value_type | data_source_type | data_source_config | 读能力（filter/sort/options） | 写能力（MVP） |
 | --- | --- | --- | --- | --- | --- |
-| `short_name` | `text` | TBD | TBD | TBD | `CREATE + CORRECT_EVENT(target=CREATE)` |
-| `description` | `text` | TBD | TBD | TBD | `CREATE + CORRECT_EVENT(target=CREATE)` |
-| `org_type` | `text` | `DICT` | `{"dict_code":"org_type"}` | TBD | `CREATE + CORRECT_EVENT(target=CREATE)` |
-| `location_code` | `text` | TBD | TBD | TBD | `CREATE + CORRECT_EVENT(target=CREATE)` |
-| `cost_center` | TBD | TBD | TBD | TBD | `CREATE + CORRECT_EVENT(target=CREATE)` |
+| `short_name` | `text` | `PLAIN` | `{}` | `filter: no; sort: no; options: n/a` | `CREATE + CORRECT_EVENT(target=CREATE)` |
+| `description` | `text` | `PLAIN` | `{}` | `filter: no; sort: no; options: n/a` | `CREATE + CORRECT_EVENT(target=CREATE)` |
+| `org_type` | `text` | `DICT` | `{"dict_code":"org_type"}` | `filter: yes; sort: yes; options: yes` | `CREATE + CORRECT_EVENT(target=CREATE)` |
+| `location_code` | `text` | `PLAIN` | `{}` | `filter: no; sort: no; options: n/a` | `CREATE + CORRECT_EVENT(target=CREATE)` |
+| `cost_center` | `text` | `PLAIN` | `{}` | `filter: no; sort: no; options: n/a` | `CREATE + CORRECT_EVENT(target=CREATE)` |
+
+> MVP 约定：列表筛选/排序命中扩展字段的最小闭环字段为 `org_type`（DICT，含 options + label snapshot），其余字段先走“详情可见/可写”闭环，避免一次性扩大动态 SQL/索引面。
 
 > 注：字段候选来源可参考 `DEV-PLAN-073` “组织单元属性扩展候选集合”；最终以 Phase 0 评审冻结为准。
 
 ### 9.2 本阶段 DoD（完成即允许进入 Phase 1）
 
-- [ ] `DEV-PLAN-100A` 完成评审：字段清单、payload 契约、能力模型口径、生命周期契约全部冻结。  
-- [ ] `DEV-PLAN-100` 的 Phase 0 已指向本文，且不再重复维护 Phase 0 细节。  
-- [ ] `AGENTS.md` Doc Map 已收录本文链接（可发现性）。  
-- [ ] `make check doc` 通过（命令、时间戳、结果在 PR 描述或 `docs/dev-records/` 记录中可追溯）。
+- [X] `DEV-PLAN-100A` 完成评审：字段清单、payload 契约、能力模型口径、生命周期契约全部冻结。  
+- [X] `DEV-PLAN-100` 的 Phase 0 已指向本文，且不再重复维护 Phase 0 细节。  
+- [X] `AGENTS.md` Doc Map 已收录本文链接（可发现性）。  
+- [X] `make check doc` 通过（2026-02-13 09:44 UTC；`[doc] OK`；建议在 PR 描述或 `docs/dev-records/` 留证）。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 
 - 本阶段不引入运维/监控开关；遵循 `AGENTS.md` “早期阶段避免过度运维与监控”的约束。
-

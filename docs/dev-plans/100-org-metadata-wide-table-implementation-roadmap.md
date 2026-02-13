@@ -4,7 +4,7 @@
 
 ## 1. 背景与目标
 
-`DEV-PLAN-098` 已完成“架构评估”，结论是：在 PostgreSQL + 多租户 + 有效期（day 粒度）场景下，采用“原生宽表预留字段 + 元数据驱动 + DICT/ENTITY 分流”具备可行性与性能优势。  
+`DEV-PLAN-098` 已完成“架构评估”，结论是：在 PostgreSQL + 多租户 + 有效期（day 粒度）场景下，采用“原生宽表预留字段 + 元数据驱动 + PLAIN/DICT/ENTITY 分流（PLAIN 无 options）”具备可行性与性能优势。  
 本计划（DEV-PLAN-100）把评估结论转化为**可执行的分阶段实施路线图**，并严格对齐仓库不变量（One Door / No Tx, No RLS / Valid Time / No Legacy）。
 
 本计划的目标不是一次性做“全量动态表单平台”，而是先在 OrgUnit 做一个风险可控、可验证、可回滚的最小闭环（MVP）。
@@ -43,7 +43,7 @@
 - 写入链路：Create/Correct 事件支持扩展字段 payload 并同步投射。
 - 读取链路：详情读取、列表筛选/排序（仅白名单字段）。
 - 能力外显：mutation capabilities（承接 `DEV-PLAN-083`，含 `deny_reasons`）与扩展字段 `filter/sort/options` allowlist。
-- Options 接口：DICT 与 ENTITY 双通道读取。
+- Options 接口：DICT 与 ENTITY 双通道读取（PLAIN 无 options）。
 - 字段配置管理：管理端字段启用/停用的 API + UI（UI IA 见 `DEV-PLAN-101`）。
 
 ### 3.2 非目标（Out of Scope）
@@ -65,8 +65,9 @@
 - 采用固定槽位命名（示例）：`ext_str_01..ext_str_30`、`ext_int_01..ext_int_10`、`ext_uuid_01..ext_uuid_10`、`ext_bool_01..ext_bool_10`、`ext_date_01..ext_date_10`。
 - 元数据启用后不可变更 `physical_col`；停用不等于可复用。
 
-### D3. DICT vs ENTITY
+### D3. PLAIN/DICT/ENTITY（数据源与展示策略）
 
+- `PLAIN`：无 options；versions 直接存值；事件 payload 不需要也不接受该字段的 label 快照（如出现则视为非法输入）。  
 - `DICT`：versions 存 `code`（通常进入 `ext_str_xx`），事件 payload 同时写 `ext_labels_snapshot`（按字段 key 存 label）。  
 - `ENTITY`：versions 存主键 ID（`ext_int_xx` 或 `ext_uuid_xx`），展示时按 `as_of` join 实体表拿 label。
 
@@ -122,11 +123,13 @@
 
 ### 4A：详情页编辑态能力外显（承接 DEV-PLAN-083）
 
+已拆分为独立实施计划（SSOT）：`docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`。
+
 1. [ ] OrgUnit 详情页展示扩展字段（按字段配置动态渲染）。
 2. [ ] 详情页编辑态严格按 mutation capabilities 控制字段可编辑性、动作可用性与原因解释（`deny_reasons`）；接口不可用时 fail-closed（只读/禁用）。
 3. [ ] Select 字段接入 options endpoint（DICT/ENTITY 双通道）。
 
-### 4B：字段配置管理页（承接 DEV-PLAN-101）
+### 4B：字段配置管理页（由DEV-PLAN-101承接）
 
 4. [ ] 字段配置管理页（UI）可发现且可操作（仅管理员可见/可达；启用/停用；映射槽位只读），IA/页面结构以 `DEV-PLAN-101` 为准。
 
@@ -219,6 +222,7 @@
 - `docs/dev-plans/100b-org-metadata-wide-table-phase1-schema-and-metadata-skeleton.md`
 - `docs/dev-plans/100c-org-metadata-wide-table-phase2-kernel-projection-extension-one-door.md`
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
+- `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
 - `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
 - `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
