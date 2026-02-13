@@ -227,6 +227,7 @@ graph TD
   "ext_fields": [
     {
       "field_key": "org_type",
+      "label_i18n_key": "org.fields.org_type",
       "value_type": "text",
       "data_source_type": "DICT",
       "value": "DEPARTMENT",
@@ -238,7 +239,8 @@ graph TD
 
 约束：
 
-- `ext_fields` 仅包含 `as_of` 下 enabled 的字段（day 粒度）。  
+- `ext_fields` 必须包含 `as_of` 下 enabled 的字段全集（day 粒度）；即使当前无值也必须返回（`value=null`），避免 UI 出现“字段已启用但不可见/不可编辑”。  
+- `label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`），用于 UI 动态渲染；字段 key 到 label 的映射不得由 UI 另建第二套规则。  
 - `display_value`：
   - DICT：优先来自 `versions.ext_labels_snapshot[field_key]`；
   - ENTITY：通过枚举化实体 join（as_of）获取；
