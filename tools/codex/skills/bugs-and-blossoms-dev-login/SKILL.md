@@ -71,7 +71,10 @@ make dev-server
 
 ## 一键启动 + seed + 验证登录（推荐）
 
-说明：适合本地临时启动（包含 dev-up、IAM 迁移、kratosstub、seed、server 启动与登录验证）。会在当前终端保持前台运行；按 Ctrl+C 结束。
+说明：适合本地临时启动（包含 dev-up、IAM 迁移、kratosstub、seed、server 启动与登录验证）。
+
+- 下面脚本会把 `kratosstub` 与 `dev-server` 放到后台运行（使用 `&`）。
+- 脚本结束后服务仍会继续占用端口；停止方式见本文的“关闭”小节。
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -96,11 +99,13 @@ curl -i -X POST -H 'Host: localhost:8080' \
 1) 打开登录页：`http://localhost:8080/login`
 2) 用账号登录：`admin@localhost` / `admin123`
 3) 预期：302 到 `/app?as_of=...`，并设置 `sid` cookie。
+4) 登录后可直接访问：`http://localhost:8080/app/org/units`（未登录时访问 `/app/*` 会 302 到 `/login`，属正常行为）。
 
 （注意）不要用 `http://127.0.0.1:8080/login`：租户解析基于 Host，IAM 默认只插入了 `localhost` 域名，`127.0.0.1` 会 404（tenant not found）。
 
 ## 常见排障
 
+- 浏览器提示“无法访问此网站 / 连接被拒绝”：先确认服务是否在监听 8080（`curl -fsS http://localhost:8080/healthz` 预期输出 `ok`）。若连接失败，重新执行 `make dev-server` 并查看其输出。
 - 404 tenant not found：确认用的是 `localhost`；并确认 `make iam migrate up` 已执行。
 - 登录一直 invalid credentials：确认 KratosStub 在跑；并确认已按 `tenant_id:email` seed 过同一密码。
 - 登录显示 identity error：确认 KratosStub 在跑（4433/4434）；未设置时默认 `KRATOS_PUBLIC_URL=http://127.0.0.1:4433`；并确认已执行 seed。
@@ -110,6 +115,16 @@ curl -i -X POST -H 'Host: localhost:8080' \
 - 8080 端口占用：用 `HTTP_ADDR=:8080` 或换端口后相应调整访问地址；但本技能的目标是跑通 8080。
 
 ## 关闭（默认保留数据）
+
+说明：
+- 如果你在前台运行了 `make dev-server` / `make dev-kratos-stub`：用 Ctrl+C 结束即可。
+- 如果你使用了 `&` 放到后台：`make dev-down` 只会停 Docker（Postgres/Redis），不会自动停止本机上的 Go 进程；请先手工停止它们。
+
+（Linux）查看监听端口与 PID（然后 `kill <pid>`）：
+
+```bash
+ss -ltnp | grep -E ':(8080|8081|4433|4434)'
+```
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
