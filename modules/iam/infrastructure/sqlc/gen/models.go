@@ -391,19 +391,29 @@ type OrgunitOrgUnitCode struct {
 }
 
 type OrgunitOrgUnitVersion struct {
-	ID             int64                     `json:"id"`
-	TenantUuid     pgtype.UUID               `json:"tenant_uuid"`
-	OrgID          int32                     `json:"org_id"`
-	ParentID       *int32                    `json:"parent_id"`
-	NodePath       string                    `json:"node_path"`
-	Validity       pgtype.Range[pgtype.Date] `json:"validity"`
-	PathIds        []int32                   `json:"path_ids"`
-	Name           string                    `json:"name"`
-	FullNamePath   string                    `json:"full_name_path"`
-	Status         string                    `json:"status"`
-	IsBusinessUnit bool                      `json:"is_business_unit"`
-	ManagerUuid    pgtype.UUID               `json:"manager_uuid"`
-	LastEventID    int64                     `json:"last_event_id"`
+	ID                int64                     `json:"id"`
+	TenantUuid        pgtype.UUID               `json:"tenant_uuid"`
+	OrgID             int32                     `json:"org_id"`
+	ParentID          *int32                    `json:"parent_id"`
+	NodePath          string                    `json:"node_path"`
+	Validity          pgtype.Range[pgtype.Date] `json:"validity"`
+	PathIds           []int32                   `json:"path_ids"`
+	Name              string                    `json:"name"`
+	FullNamePath      string                    `json:"full_name_path"`
+	Status            string                    `json:"status"`
+	IsBusinessUnit    bool                      `json:"is_business_unit"`
+	ManagerUuid       pgtype.UUID               `json:"manager_uuid"`
+	LastEventID       int64                     `json:"last_event_id"`
+	ExtStr01          *string                   `json:"ext_str_01"`
+	ExtStr02          *string                   `json:"ext_str_02"`
+	ExtStr03          *string                   `json:"ext_str_03"`
+	ExtStr04          *string                   `json:"ext_str_04"`
+	ExtStr05          *string                   `json:"ext_str_05"`
+	ExtInt01          *int32                    `json:"ext_int_01"`
+	ExtUuid01         pgtype.UUID               `json:"ext_uuid_01"`
+	ExtBool01         *bool                     `json:"ext_bool_01"`
+	ExtDate01         pgtype.Date               `json:"ext_date_01"`
+	ExtLabelsSnapshot []byte                    `json:"ext_labels_snapshot"`
 }
 
 type OrgunitSetid struct {
@@ -522,6 +532,33 @@ type OrgunitSetidScopeSubscriptionEvent struct {
 	InitiatorUuid          pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime        pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+}
+
+type OrgunitTenantFieldConfig struct {
+	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
+	FieldKey         string             `json:"field_key"`
+	PhysicalCol      string             `json:"physical_col"`
+	ValueType        string             `json:"value_type"`
+	DataSourceType   string             `json:"data_source_type"`
+	DataSourceConfig []byte             `json:"data_source_config"`
+	EnabledOn        pgtype.Date        `json:"enabled_on"`
+	DisabledOn       pgtype.Date        `json:"disabled_on"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DisabledAt       pgtype.Timestamptz `json:"disabled_at"`
+}
+
+type OrgunitTenantFieldConfigEvent struct {
+	ID              int64              `json:"id"`
+	EventUuid       pgtype.UUID        `json:"event_uuid"`
+	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
+	EventType       string             `json:"event_type"`
+	FieldKey        string             `json:"field_key"`
+	Payload         []byte             `json:"payload"`
+	RequestCode     string             `json:"request_code"`
+	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type PersonPerson struct {

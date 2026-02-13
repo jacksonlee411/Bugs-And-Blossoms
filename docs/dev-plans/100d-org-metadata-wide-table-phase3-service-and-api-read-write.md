@@ -24,7 +24,7 @@
   - [ ] 在 `internal/server/orgunit_api.go` 增加/扩展 Internal API：
     - 字段配置管理（list/enable/disable；仅管理端可见）
     - 字段定义列表（可启用字段；供 UI 选择）
-    - DICT/ENTITY options（支持 keyword + as_of）
+    - DICT/ENTITY options（支持 keyword + as_of；PLAIN 无 options）
     - 详情接口返回扩展字段值与展示值
     - mutation capabilities（承接 `DEV-PLAN-083`，含 `deny_reasons`，并包含扩展字段映射）
   - [ ] 列表接口支持扩展字段筛选/排序（仅 allowlist 字段；列名来源可证明且值参数化）
@@ -101,6 +101,13 @@ graph TD
 ```json
 {
   "fields": [
+    {
+      "field_key": "short_name",
+      "value_type": "text",
+      "data_source_type": "PLAIN",
+      "data_source_config": {},
+      "label_i18n_key": "org.fields.short_name"
+    },
     {
       "field_key": "org_type",
       "value_type": "text",
@@ -179,7 +186,7 @@ graph TD
 
 > 字段配置写入口必须调用 Phase 1 的 Kernel 函数；应用角色不得直写 `tenant_field_configs`（SSOT：`DEV-PLAN-100B`）。
 
-### 5.3 Options（DICT/ENTITY 双通道）
+### 5.3 Options（DICT/ENTITY；PLAIN 无 options）
 
 - `GET /org/api/org-units/fields:options?field_key=<...>&as_of=YYYY-MM-DD&q=<keyword>&limit=<n>`
 - **Authz**：`orgunit.read`（或等价 read 权限；具体权限点按 `DEV-PLAN-022` 冻结）
@@ -198,6 +205,7 @@ graph TD
 约束：
 
 - `field_key` 必须在 `as_of` 下 enabled；否则返回 404/403（fail-closed，具体口径冻结后实现）。
+- 若该字段 `data_source_type=PLAIN`：options 不适用，必须 fail-closed（推荐返回 404，避免 UI/调用方误用）。
 - `ENTITY` 的目标实体必须为枚举映射（禁止透传任意表名/列名；SSOT：`DEV-PLAN-100` D7）。
 
 ### 5.4 详情接口：返回扩展字段值 + 展示值
@@ -288,7 +296,7 @@ graph TD
    - `payload.ext[field_key]=value`
    - `payload.ext_labels_snapshot[field_key]=label`（仅 DICT）  
 
-### 6.3 Options resolver（DICT/ENTITY）
+### 6.3 Options resolver（DICT/ENTITY；PLAIN 不支持）
 
 - DICT：
   - 以 `dict_code` 为枚举键；
@@ -330,7 +338,7 @@ graph TD
 - **里程碑（Phase 3 待办）**：
   1. [ ] 服务层：实现元数据解析 + payload/patch 构造器（扩展字段映射与 DICT label snapshot 生成）。  
   2. [ ] API：实现 field-definitions/field-configs（list/enable/disable）。  
-  3. [ ] API：实现 fields:options（DICT/ENTITY）。  
+  3. [ ] API：实现 fields:options（DICT/ENTITY；PLAIN 必拒绝）。  
   4. [ ] API：扩展 details 返回 ext_fields。  
   5. [ ] API：实现 mutation-capabilities，并包含扩展字段映射（`ext.<field_key>`）。  
   6. [ ] 列表：支持 ext 字段 filter/sort（allowlist + 参数化 + 可审计）。  
@@ -340,7 +348,7 @@ graph TD
 
 - **API 契约测试**（至少覆盖）：
   - [ ] field-configs：启用/停用/列表（含权限拒绝、槽位耗尽/冲突错误映射）。  
-  - [ ] options：DICT/ENTITY（含未启用字段 fail-closed）。  
+  - [ ] options：DICT/ENTITY（含未启用字段 fail-closed；PLAIN 字段必须拒绝）。  
   - [ ] details：返回 ext_fields（含 DICT display_value 来源）。  
   - [ ] mutation-capabilities：扩展字段进入 `allowed_fields/field_payload_keys`，且 `deny_reasons` 可解释。  
   - [ ] list：ext filter/sort 在 allowlist 内可用，越权字段被拒绝。  

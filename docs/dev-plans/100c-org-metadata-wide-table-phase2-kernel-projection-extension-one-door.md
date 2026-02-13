@@ -124,6 +124,8 @@ graph TD
 - **新增约定**：
   - `payload.ext`：object，可选。  
   - `payload.ext_labels_snapshot`：object，可选；但当写入 DICT 字段时必须提供相应 key 的 label（否则拒绝）。  
+    - 仅允许为 `data_source_type='DICT'` 的字段提供 label 快照；对 `PLAIN/ENTITY` 字段出现同名 key 的 label 快照必须拒绝（fail-closed）。  
+    - 禁止信任 UI 传入 label：`ext_labels_snapshot` 必须由服务层按 `as_of/effective_date` 解析并写入（SSOT：`DEV-PLAN-100D`）。
 
 **示例（CREATE）**：
 
@@ -156,6 +158,7 @@ graph TD
 - `ORG_EXT_FIELD_TYPE_MISMATCH`：值类型与 `value_type/physical_col` 不一致或无法转换。  
 - `ORG_EXT_PAYLOAD_NOT_ALLOWED_FOR_EVENT`：在不允许的 event_type/correction 目标上出现扩展字段 payload。  
 - `ORG_EXT_LABEL_SNAPSHOT_REQUIRED`：DICT 字段缺少 label 快照。  
+- `ORG_EXT_LABEL_SNAPSHOT_NOT_ALLOWED`：为非 DICT 字段提供了 label 快照。  
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 
@@ -169,6 +172,7 @@ graph TD
    - 查 `tenant_field_configs`（同租户）并按 §4.2 判定 enabled；不存在或未生效 -> 拒绝。  
    - 校验 `value_type` 与 `physical_col` 分组匹配；尝试类型转换（失败 -> 拒绝）。  
    - 若 `data_source_type='DICT'`：要求 `ext_labels_snapshot[field_key]` 存在且为非空字符串（否则拒绝）。  
+   - 若 `data_source_type<>'DICT'`：要求 `ext_labels_snapshot[field_key]` 不存在（否则拒绝）。  
 4. **投射写入**：
    - 将 `field_key -> physical_col` 映射为对 `org_unit_versions.<physical_col>` 的写入；
    - 同步写 `org_unit_versions.ext_labels_snapshot`（DICT 快照；只允许 object；键集合限定在启用字段之内）。  
@@ -235,4 +239,3 @@ graph TD
 ## 10. 运维与监控 (Ops & Monitoring)
 
 本阶段不引入运维/监控开关；遵循 `AGENTS.md` “早期阶段避免过度运维与监控”的约束。
-
