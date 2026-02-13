@@ -272,6 +272,14 @@ BEGIN
     v_org_ids := ARRAY[v_org_id];
   END IF;
 
+  PERFORM orgunit.apply_org_event_ext_payload(
+    p_tenant_uuid,
+    v_org_id,
+    p_effective_date,
+    p_event_type,
+    v_payload
+  );
+
   PERFORM orgunit.assert_org_unit_validity(p_tenant_uuid, v_org_ids);
 
   v_after_snapshot := orgunit.extract_orgunit_snapshot(p_tenant_uuid, v_org_id, p_effective_date);
