@@ -1,6 +1,6 @@
 # DEV-PLAN-100E：Org 模块宽表元数据落地 Phase 4A：OrgUnit 详情页扩展字段展示与 Capabilities 驱动编辑（MUI）
 
-**状态**: 草拟中（2026-02-13 10:29 UTC）
+**状态**: 草拟中（2026-02-13；已对齐 `DEV-PLAN-100D` Phase 3 冻结契约）
 
 > 本文从 `DEV-PLAN-100` Phase 4 的 4A 拆分而来，作为 4A 的 SSOT；`DEV-PLAN-100` 继续保持为整体路线图。  
 > 本文聚焦 **UI 侧**的“详情页扩展字段展示 + 编辑态能力外显（fail-closed）”，并明确：开展 4A 前必须具备 `DEV-PLAN-083` 的核心产物可用（mutation policy 单点 + capabilities API）。
@@ -87,26 +87,36 @@ UI 需要以下字段以实现“展示 + 编辑控件选择 + options 调用”
 ```ts
 export type ExtValueType = 'text' | 'int' | 'uuid' | 'bool' | 'date'
 export type ExtDataSourceType = 'PLAIN' | 'DICT' | 'ENTITY'
+export type ExtDisplayValueSource =
+  | 'plain'
+  | 'versions_snapshot'
+  | 'events_snapshot'
+  | 'dict_fallback'
+  | 'entity_join'
+  | 'unresolved'
+export type ExtScalarValue = string | number | boolean | null
 
 export interface OrgUnitExtField {
   field_key: string
   label_i18n_key: string
   value_type: ExtValueType
   data_source_type: ExtDataSourceType
-  value: unknown | null
-  display_value: string
+  value: ExtScalarValue
+  display_value: string | null
+  display_value_source: ExtDisplayValueSource
 }
 ```
 
 约束：
 
 - `value` 的解析与校验以服务端为准；UI 仅做基本格式约束（例如 date 输入必须为 `YYYY-MM-DD`）。
+- `value` 的 JSON 标量类型口径（对齐 `DEV-PLAN-100D`）：
+  - `text/uuid/date`：`string | null`
+  - `int`：`number | null`
+  - `bool`：`boolean | null`
 - 当 `data_source_type=PLAIN`：UI 禁止调用 options endpoint。
 - `ext_fields` 必须包含 `as_of` 下 **enabled 的字段全集**（即使该字段当前无值，`value=null` 也必须返回），避免出现“字段已启用但页面不可见/不可编辑”的僵尸体验。
-- `field_key` 命名必须满足稳定、可枚举、可校验：
-  - 推荐格式：`^[a-z][a-z0-9_]*$`；
-  - **禁止包含 `.`**（保留给 `ext.<field_key>` 路径语义）；
-  - **禁止与基础字段保留字冲突**（至少包含：`effective_date/name/parent_org_code/manager_pernr/is_business_unit/status/org_code`）。冲突必须在服务端配置启用时 fail-closed 拒绝（并在 details/options/capabilities 三个接口保持一致口径）。
+- `field_key` 由服务端保证稳定与可校验（field-definitions SSOT）；UI 将其视为不透明标识，**不得**在前端维护“保留字列表”或二次推导 payload 路径，路径一律以 `field_payload_keys` 为准。
 
 ### 4.2 Capabilities（编辑态能力外显）
 
@@ -154,7 +164,8 @@ UI 最小需要：
       "value_type": "text",
       "data_source_type": "DICT",
       "value": "DEPARTMENT",
-      "display_value": "Department"
+      "display_value": "Department",
+      "display_value_source": "versions_snapshot"
     }
   ]
 }
@@ -164,6 +175,11 @@ UI 最小需要：
 
 - `ext_fields` 必须包含 `as_of` 下 enabled 的字段全集（即使 `value=null`）；day 粒度口径见 `DEV-PLAN-100D`。
 - `label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`）；服务端必须返回该字段，UI 不维护第二套“字段 -> label”映射。
+- `ext_fields` 排序必须稳定（按 `field_key` 升序；对齐 `DEV-PLAN-100D`），避免 UI 抖动与测试不稳定。
+- `display_value/display_value_source` 必须成对使用（对齐 `DEV-PLAN-100D`）：
+  - DICT 允许：`versions_snapshot/events_snapshot/dict_fallback/unresolved`；
+  - PLAIN：`plain`；ENTITY：`entity_join`；
+  - `display_value_source='unresolved'` 时允许 `display_value=null`，UI 必须展示可排障提示，不得静默伪造值。
 - UI 展示层仅允许兜底：若 `label_i18n_key` 缺失/为空/找不到翻译，则显示 `field_key` 并展示 warning（可排障），但不得静默吞掉。
 
 ### 5.2 Mutation Capabilities：编辑态能力外显（SSOT：DEV-PLAN-083）
@@ -231,8 +247,12 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 
 约束：
 
-- 若字段在 `as_of` 下未启用：必须 fail-closed（404/403 口径由 `DEV-PLAN-100D` 冻结）。
-- 若 `data_source_type=PLAIN`：options 不适用，必须 fail-closed（推荐 404）。
+- 若字段在 `as_of` 下未启用：必须 fail-closed，返回 404 `ORG_FIELD_OPTIONS_FIELD_NOT_ENABLED_AS_OF`（SSOT：`DEV-PLAN-100D` §5.7）。
+- 若 `data_source_type=PLAIN`：options 不适用，必须 fail-closed，返回 404 `ORG_FIELD_OPTIONS_NOT_SUPPORTED`（SSOT：`DEV-PLAN-100D` §5.7）。
+- `q` 可选，服务端对输入做 trim；为空时返回“前 N 个”。
+- `limit` 可选：缺失/非法默认 `10`，上限 `50`。
+- 返回顺序稳定：按 `label` 升序，其次 `value` 升序。
+- `label` 为 canonical label（非本地化展示名），UI 不对其做 i18n 替换；字段标题仍使用 `label_i18n_key`。
 
 ### 5.4 写入：更正接口扩展字段 patch（依赖项，SSOT：DEV-PLAN-083/100D）
 
@@ -275,13 +295,19 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 3. 渲染 `ext_fields[]`：
    - label：`t(label_i18n_key)`；若缺失，回退展示 `field_key`（并显示 warning badge，避免静默漂移）。
    - value：优先展示 `display_value`；为空时展示 `-`。
+   - source（`display_value_source`）：
+     - `dict_fallback`：展示“历史标签兜底”warning（非阻断）；
+     - `unresolved`：展示“展示值不可解析”warning（可排障，禁止静默）。
 
 ### 6.2 更正（Correct）弹窗（编辑态，capabilities-driven）
 
 打开弹窗前置：
 
-- 必须 `hasPermission('orgunit.admin')`，否则不允许打开（按钮禁用）。
 - 以当前选中版本的 `effective_date` 调用 `mutation-capabilities` 获取 `capabilities.correct_event`。
+- “更正”按钮可见性与可用性分离：
+  - 可见：具备 `orgunit.read` 即可可见（便于解释不可用原因）；
+  - 可用：仅当 `capabilities.correct_event.enabled=true`。
+- 若用户无 `orgunit.admin`，应由 capabilities 返回 `enabled=false + deny_reasons`；UI 仅消费结果，不自造第二套授权判定。
 
 弹窗字段渲染规则：
 
@@ -294,7 +320,7 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
    - 弹窗顶部展示 `deny_reasons`（按列表展示，或映射为 i18n 文案）。
 5. 若 capabilities 请求失败：
    - 弹窗顶部展示错误；
-   - 全部输入禁用 + 禁用确认按钮（fail-closed）。
+   - 全部输入禁用 + 禁用确认按钮（fail-closed，不做本地乐观放行）。
 
 提交（构造 patch）规则（关键：避免“禁用但仍提交”）：
 
@@ -311,6 +337,7 @@ Select 字段（DICT/ENTITY）控件策略：
   - 输入时按 `q` 触发 options endpoint；
   - query 固定携带 `as_of=<effective_date>`；
   - 选中后在 form state 保存 `option.value`（DICT 为 code；ENTITY 为 id）。
+- 清空选择（clear）时：必须将对应字段写为 `null`（进入 patch，表示显式清空），不得“忽略不提交”。
 - 任何 options 请求失败：该字段进入只读并提示错误（避免提交无效值）。
 
 ## 7. 安全与鉴权 (Security & Authz)
@@ -319,6 +346,7 @@ Select 字段（DICT/ENTITY）控件策略：
 - 写入动作（既有）：仅 `orgunit.admin` 可触发（按钮禁用 + 服务端 403 双重保证）。
 - 能力外显：
   - UI 不做“默认放行”；capabilities 缺失或异常时 fail-closed。
+  - UI 可将 `hasPermission('orgunit.admin')` 作为“预判提示”，但**不得**替代 capabilities/服务端最终判定。
   - UI 不拼装 SQL / 不透传列名/表名；所有动态查询由后端 allowlist/枚举映射保证（SSOT：`DEV-PLAN-100` D7）。
   - capabilities 响应必须体现 Authz（`enabled/deny_reasons`），避免 UI 侧硬编码复杂“写权限判定”分支。
 
@@ -330,8 +358,8 @@ Select 字段（DICT/ENTITY）控件策略：
   - [ ] mutation policy 单点（`ResolvePolicy/AllowedFields/ValidatePatch`）已落地并有单测覆盖（最少覆盖 `correct_event`）。
   - [ ] `GET /org/api/org-units/mutation-capabilities` 已实现并冻结返回字段（含 `allowed_fields/field_payload_keys/deny_reasons`），且错误码稳定（避免 UI 猜测）。
 - [ ] `DEV-PLAN-100D` 提供 4A 所需接口：
-  - [ ] details 返回 `ext_fields[]`（含 `label_i18n_key/value_type/data_source_type/value/display_value`），且 **enabled 字段全集必须返回（即使 value=null）**。
-  - [ ] options endpoint 可用（DICT/ENTITY；PLAIN 必拒绝）。
+  - [ ] details 返回 `ext_fields[]`（含 `label_i18n_key/value_type/data_source_type/value/display_value/display_value_source`），且 **enabled 字段全集必须返回（即使 value=null）**。
+  - [ ] options endpoint 可用（DICT/ENTITY；PLAIN 必拒绝），并冻结 404 错误码与 `q/limit` 口径。
   - [ ] corrections 写入链路可接收扩展字段 patch（`patch.ext`），并与 capabilities 校验一致（fail-closed）。
 
 ### 8.2 里程碑（本计划待办）
@@ -339,7 +367,7 @@ Select 字段（DICT/ENTITY）控件策略：
 1. [ ] Web API client：在 `apps/web-mui/src/api/orgUnits.ts` 增加（或拆分新文件）：
    - `getOrgUnitMutationCapabilities(...)`
    - `getOrgUnitFieldOptions(...)`
-   - 更新 `getOrgUnitDetails(...)` 类型以包含 `ext_fields`
+   - 更新 `getOrgUnitDetails(...)` 类型以包含 `ext_fields` + `display_value_source`
 2. [ ] 详情页展示：在 `apps/web-mui/src/pages/org/OrgUnitDetailsPage.tsx` profile 区新增 ext_fields 展示区块（与既有两栏布局一致）。
 3. [ ] 更正弹窗改造：
    - 引入 capabilities fetch（按 `effective_date`）。
@@ -350,6 +378,8 @@ Select 字段（DICT/ENTITY）控件策略：
    - [ ] deny reason 的展示策略冻结（可先展示 reason code，后续逐步补齐映射）。
 5. [ ] 测试：
    - [ ] 前端单测：capabilities 不可用时 fail-closed；allowed_fields 控制输入禁用；DICT options 错误态可解释。
+   - [ ] 前端单测：`display_value_source` 的渲染分支（`versions_snapshot/dict_fallback/unresolved`）可解释且稳定。
+   - [ ] 前端单测：DICT/ENTITY clear 动作会提交 `patch.ext[field_key]=null`（显式清空）。
    - [ ] E2E（若命中 TP-060 相关场景）：至少覆盖“字段可见 -> 可更正 -> 保存成功 -> 详情回显”一条路径。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
@@ -359,10 +389,12 @@ Select 字段（DICT/ENTITY）控件策略：
   - [ ] capabilities 返回 enabled 时：allowed_fields 内字段可编辑；非 allowed 字段禁用且原因可解释。
   - [ ] capabilities 返回 disabled 时：确认按钮禁用，且 deny_reasons 可见。
   - [ ] capabilities API 失败时：全表单只读/禁用（fail-closed），不允许提交。
+- [ ] 非 `orgunit.admin` 用户可见“更正”入口但默认不可用，并能看到稳定 deny_reasons（避免“为什么不能改”不可解释）。
 - [ ] DICT/ENTITY 字段 options 可搜索；options 失败时该字段不可编辑且有明确错误提示。
 - [ ] 写入后刷新：成功后 details 的 ext_fields 回显新值（且不出现“看似成功但实际未生效”）。
 - [ ] 提交更正时，HTTP 请求的 `patch` 只包含 **变更字段** 且严格受 `allowed_fields` 裁剪；不得出现“字段被禁用但仍随请求提交”。
 - [ ] 已启用但当前无值的扩展字段在 details 中仍可见（`value=null`），并在编辑态可按 capabilities 允许进行赋值（避免僵尸字段）。
+- [ ] DICT/ENTITY 字段支持显式清空：清空后提交 `patch.ext[field_key]=null` 并在详情中回显为空值。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 
