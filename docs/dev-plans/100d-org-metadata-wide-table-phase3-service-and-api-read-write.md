@@ -1,6 +1,6 @@
 # DEV-PLAN-100D：Org 模块宽表元数据落地 Phase 3：服务层与 API（读写可用）
 
-**状态**: 草拟中（2026-02-13 07:37 UTC）
+**状态**: 草拟中（2026-02-13；已按评审补齐 Phase 3 冻结项）
 
 > 本文从 `DEV-PLAN-100` 的 Phase 3 拆分而来，作为 Phase 3 的 SSOT；`DEV-PLAN-100` 保持为整体路线图。
 
@@ -75,6 +75,20 @@ graph TD
 - **ADR-100D-03：动态 SQL 仅允许“枚举化实体 + allowlist 列名 + 参数化值”**
   - 选定：所有动态列名/实体名必须来自服务端枚举映射（field_key -> physical_col；entity_code -> 固定 SQL 模板），值一律参数化；任何解析失败直接拒绝（fail-closed）。
 
+- **ADR-100D-04：字段定义是配置写入口的唯一来源（避免第二套 SSOT）**
+  - 选定：`field-definitions` 是“字段元数据”（`value_type/data_source_type/data_source_config/label_i18n_key`）的唯一来源；`field-configs` 的 enable 请求只允许提交 `field_key/enabled_on/request_code`，禁止客户端提交或覆盖 `value_type/data_source_type/data_source_config/physical_col`。  
+  - 原因：避免 UI/API/Kernel 出现第二套字段定义与隐藏配置，降低 drift 风险（对齐 `DEV-PLAN-003` Simple > Easy）。
+
+- **ADR-100D-05：DICT 展示值遵循 D4 兜底链路，但必须显式标记来源**
+  - 选定：DICT 的 `display_value` 读取遵循 `DEV-PLAN-100` D4：`versions 快照 -> events 快照 -> 当前字典 label`；但必须通过 `display_value_source`（与可选 warning code）显式标记兜底路径，禁止静默“当前名称覆盖历史”。
+
+- **ADR-100D-06：options 的 label 为“规范化展示名”（不做 i18n）**
+  - 选定：`fields:options` 返回的 `label` 与写入 `payload.ext_labels_snapshot` 的内容均为**非本地化**的规范化展示名（canonical label），不随 UI 语言变化；字段标题的 i18n 仍通过 `label_i18n_key`（`DEV-PLAN-020`）。  
+  - 说明：如未来需要“业务枚举值多语言 label”，必须另立 dev-plan（不在 Phase 3 扩展，避免把业务数据 i18n 混入现有契约）。
+
+- **ADR-100D-07：`request_code` 幂等语义与 HTTP 状态码冻结**
+  - 选定：`request_code` 是同租户内的幂等键（SSOT：`DEV-PLAN-100A/100B`）。enable 的首次创建返回 201；同 `request_code` 的重试（输入完全一致）返回 200 且回放同一行（含同一 `physical_col`）；输入不一致返回 409 `ORG_REQUEST_ID_CONFLICT`。
+
 ## 4. 数据模型与约束 (Data Model & Constraints)
 
 本阶段不新增 schema；依赖：
@@ -147,6 +161,12 @@ graph TD
 }
 ```
 
+status 口径冻结：
+
+- `enabled`：`enabled_on <= as_of` 且（`disabled_on IS NULL OR as_of < disabled_on`）（半开区间；对齐 `DEV-PLAN-100C` §4.2）
+- `disabled`：不满足 `enabled` 条件但行存在（包括“未来生效（as_of < enabled_on）”与“已停用（disabled_on <= as_of）”）
+- `all`：返回全部行
+
 #### 5.2.2 Enable（启用字段）
 
 - `POST /org/api/org-units/field-configs`
@@ -157,16 +177,17 @@ graph TD
 {
   "field_key": "org_type",
   "enabled_on": "2026-02-01",
-  "data_source_config": { "dict_code": "org_type" },
   "request_code": "req-uuid-or-stable-string"
 }
 ```
 
 - **Response 201**：返回新配置行（含 `physical_col`）
-- **Error**（示例）：
-  - 409：`field_key already enabled`
-  - 409：`physical slots exhausted`
-  - 403：无权限
+- **Response 200（幂等重试）**：同 `request_code` 且输入一致时返回已存在行（禁止重新分配 `physical_col`）
+
+约束（冻结）：
+
+- `initiator_uuid` 必须由服务端会话上下文注入并传递给 Kernel；**不得由 UI 提交/伪造**（SSOT：`DEV-PLAN-100A`）。
+- `value_type/data_source_type/data_source_config` 必须来自 `field-definitions`（ADR-100D-04）；若 `field_key` 不在定义列表，返回 404 `ORG_FIELD_DEFINITION_NOT_FOUND`。
 
 #### 5.2.3 Disable（停用字段）
 
@@ -183,6 +204,7 @@ graph TD
 ```
 
 - **Response 200**：返回更新后的配置行
+- **Response 200（幂等重试）**：同 `request_code` 且输入一致时返回更新后的配置行
 
 > 字段配置写入口必须调用 Phase 1 的 Kernel 函数；应用角色不得直写 `tenant_field_configs`（SSOT：`DEV-PLAN-100B`）。
 
@@ -204,9 +226,13 @@ graph TD
 
 约束：
 
-- `field_key` 必须在 `as_of` 下 enabled；否则返回 404/403（fail-closed，具体口径冻结后实现）。
+- `field_key` 必须在 `as_of` 下 enabled；否则返回 404（fail-closed；错误码见 §5.7）。
 - 若该字段 `data_source_type=PLAIN`：options 不适用，必须 fail-closed（推荐返回 404，避免 UI/调用方误用）。
 - `ENTITY` 的目标实体必须为枚举映射（禁止透传任意表名/列名；SSOT：`DEV-PLAN-100` D7）。
+- `label` 为 **canonical label**（ADR-100D-06）：不随 UI locale 变化，且用于生成 `payload.ext_labels_snapshot`（DICT）。
+- `q`（keyword）可选：服务端对输入做 trim；为空时返回“前 N 个”（按稳定排序）。
+- `limit` 可选：缺失或非法时默认 `10`；最大 `50`（超出按 `50` 处理），避免 options 无界返回。
+- `options` 返回顺序必须稳定：默认按 `label` 升序，其次按 `value` 升序（便于缓存与测试）。
 
 ### 5.4 详情接口：返回扩展字段值 + 展示值
 
@@ -231,7 +257,8 @@ graph TD
       "value_type": "text",
       "data_source_type": "DICT",
       "value": "DEPARTMENT",
-      "display_value": "Department"
+      "display_value": "Department",
+      "display_value_source": "versions_snapshot"
     }
   ]
 }
@@ -240,11 +267,16 @@ graph TD
 约束：
 
 - `ext_fields` 必须包含 `as_of` 下 enabled 的字段全集（day 粒度）；即使当前无值也必须返回（`value=null`），避免 UI 出现“字段已启用但不可见/不可编辑”。  
+- `ext_fields` 的返回顺序必须稳定：按 `field_key` 升序排序（避免 UI 抖动与测试不稳定）。  
 - `label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`），用于 UI 动态渲染；字段 key 到 label 的映射不得由 UI 另建第二套规则。  
-- `display_value`：
-  - DICT：优先来自 `versions.ext_labels_snapshot[field_key]`；
-  - ENTITY：通过枚举化实体 join（as_of）获取；
-  - 无法解析时 fail-closed：返回错误或返回空并附带可排障信息（口径在实现时冻结，禁止静默“当前名称覆盖历史”）。  
+- `display_value` 与 `display_value_source`（冻结）：
+  - PLAIN：`display_value` 为 `value` 的规范化字符串表示；`display_value_source="plain"`。  
+  - DICT：遵循 `DEV-PLAN-100` D4（ADR-100D-05）：
+    - 优先：`versions.ext_labels_snapshot[field_key]` → `display_value_source="versions_snapshot"`；
+    - 兜底 1：`events.payload.ext_labels_snapshot[field_key]` → `display_value_source="events_snapshot"`；
+    - 兜底 2：按 `value(code)` 查当前字典 label → `display_value_source="dict_fallback"`（必须显式标记，禁止静默覆盖历史）。  
+  - ENTITY：按 `as_of` join 枚举化实体模板获取 → `display_value_source="entity_join"`（严格 as_of 语义，禁止“当前名称覆盖历史”）。  
+  - 无法解析时 fail-closed：`display_value=null` 且 `display_value_source="unresolved"`（不得返回误导性值）。
 
 ### 5.5 mutation capabilities（承接 DEV-PLAN-083，包含扩展字段）
 
@@ -256,6 +288,7 @@ graph TD
 - `allowed_fields` 包含扩展字段的 `field_key`（在允许写入的动作里）。  
 - `field_payload_keys[field_key]` 对扩展字段统一返回：`ext.<field_key>`。  
 - `deny_reasons` 必须可解释且稳定；API 不可用/解析失败时，UI 必须 fail-closed（只读/禁用）。  
+- 对扩展字段：`allowed_fields` 只能包含在该 `effective_date` 下 enabled 的字段（避免 UI 出现“可编辑但必失败”）。
 
 ### 5.6 列表接口：扩展字段筛选/排序
 
@@ -271,8 +304,36 @@ graph TD
 
 约束：
 
-- 仅允许 filter/sort allowlist 字段（SSOT：`DEV-PLAN-100` D7/D8）；否则返回 400/403（fail-closed）。  
+- **适用模式冻结**：扩展字段 filter/sort 仅支持 “grid/list 查询”模式（例如 `mode=grid` 或显式分页参数）；对 roots/children 兼容路径（未进入 list 模式）与 `parent_org_code` 子树查询，必须返回 400（避免在树查询上引入动态 SQL 与额外索引面）。  
+- `ext_filter_field_key` 与 `ext_filter_value` 必须成对出现；仅出现其一返回 400。  
+- 仅允许 filter/sort allowlist 字段（SSOT：`DEV-PLAN-100` D7/D8），且字段必须在 `as_of` 下 enabled；否则返回 400（fail-closed）。  
 - 列名只能来自 `field_key -> physical_col` 映射，且必须通过严格格式校验；值必须参数化。  
+
+解析规则（冻结）：
+
+- `value_type=text`：按原样（trim）作为 string；
+- `value_type=int`：十进制整数；
+- `value_type=uuid`：标准 UUID 字符串；
+- `value_type=bool`：仅接受 `true|false|1|0`（大小写不敏感）；
+- `value_type=date`：`YYYY-MM-DD`。
+
+### 5.7 稳定错误码与 HTTP 映射（Phase 3 冻结）
+
+> 说明：本节冻结“错误码（`code`）→ HTTP status”的对外契约；实现时应在 `orgUnitAPIStatusForCode(...)` 或对应 handler 中确保一致，避免 UI/测试漂移。
+
+| 场景 | code（稳定） | HTTP | 备注 |
+| --- | --- | --- | --- |
+| enable：field_key 不在 field-definitions | `ORG_FIELD_DEFINITION_NOT_FOUND` | 404 | 管理端可见；用于防止 UI 启用未知字段 |
+| enable/disable：request_code 幂等键冲突 | `ORG_REQUEST_ID_CONFLICT` | 409 | SSOT：`DEV-PLAN-100B` 错误码表 |
+| enable：field_key 已启用 | `ORG_FIELD_CONFIG_ALREADY_ENABLED` | 409 | SSOT：`DEV-PLAN-100B` |
+| enable：槽位耗尽 | `ORG_FIELD_CONFIG_SLOT_EXHAUSTED` | 409 | SSOT：`DEV-PLAN-100B` |
+| disable：配置不存在 | `ORG_FIELD_CONFIG_NOT_FOUND` | 404 | SSOT：`DEV-PLAN-100B` |
+| disable：disabled_on 规则不满足 | `ORG_FIELD_CONFIG_DISABLED_ON_INVALID` | 409 | SSOT：`DEV-PLAN-100B` |
+| 参数缺失/格式非法（日期/必填） | `ORG_INVALID_ARGUMENT` / `invalid_request` | 400 | `ORG_INVALID_ARGUMENT` 为 Kernel 稳定码；handler 可用 `invalid_request` |
+| options：字段未启用（as_of 不在 enabled 区间） | `ORG_FIELD_OPTIONS_FIELD_NOT_ENABLED_AS_OF` | 404 | fail-closed；避免 UI 误用 |
+| options：PLAIN 字段请求 options | `ORG_FIELD_OPTIONS_NOT_SUPPORTED` | 404 | fail-closed（推荐 404） |
+| list：ext filter/sort 不允许（非 allowlist 或未 enabled） | `ORG_EXT_QUERY_FIELD_NOT_ALLOWED` | 400 | 仅用于调试；UI 不应构造该请求 |
+| list：ext_filter 参数不成对/格式非法 | `invalid_request` | 400 | |
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 
@@ -293,7 +354,7 @@ graph TD
 2. 对扩展字段：
    - 校验字段在 `effective_date` enabled；否则拒绝。  
    - 依据 `value_type` 做类型解析（uuid/int/bool/date/text），失败拒绝。  
-   - DICT：通过 options resolver 反查 `label`，写入 `payload.ext_labels_snapshot[field_key]=label`（禁止信任 UI 传入 label）。  
+   - DICT：通过 options resolver 反查 **canonical label**，写入 `payload.ext_labels_snapshot[field_key]=label`（禁止信任 UI 传入 label；ADR-100D-06）。  
 3. 组装最终 payload：
    - `payload.ext[field_key]=value`
    - `payload.ext_labels_snapshot[field_key]=label`（仅 DICT）  
@@ -311,7 +372,7 @@ graph TD
 
 - 从 query param 得到 `field_key`，通过元数据解析得到 `physical_col`；
 - 校验 `physical_col` 符合严格正则（只允许 `ext_(str|int|uuid|bool|date)_\\d{2}`）；
-- 仅把 `physical_col` 作为 SQL identifier（`%I`/quote_ident）拼入固定模板；所有值使用占位符参数化；
+- 仅把 `physical_col` 作为 SQL identifier 拼入固定模板，且必须先做 identifier quoting（例如 `pgx.Identifier{physical_col}.Sanitize()` 或在 DB 侧 `quote_ident/format('%I', ...)`）；所有值使用占位符参数化；
 - 任何解析失败直接拒绝（fail-closed），并打审计日志：tenant_uuid/field_key/physical_col/query_mode。
 
 ## 7. 安全与鉴权 (Security & Authz)
@@ -350,10 +411,12 @@ graph TD
 
 - **API 契约测试**（至少覆盖）：
   - [ ] field-configs：启用/停用/列表（含权限拒绝、槽位耗尽/冲突错误映射）。  
+  - [ ] field-configs：幂等重试（同 `request_code` 同输入返回 200，且 `physical_col` 不变化；不同输入返回 409 `ORG_REQUEST_ID_CONFLICT`）。  
   - [ ] options：DICT/ENTITY（含未启用字段 fail-closed；PLAIN 字段必须拒绝）。  
-  - [ ] details：返回 ext_fields（含 DICT display_value 来源）。  
+  - [ ] options：未启用字段返回 404 `ORG_FIELD_OPTIONS_FIELD_NOT_ENABLED_AS_OF`；PLAIN 返回 404 `ORG_FIELD_OPTIONS_NOT_SUPPORTED`。  
+  - [ ] details：返回 ext_fields（全集 + 稳定排序；DICT display_value_source 覆盖 snapshot/fallback/unresolved）。  
   - [ ] mutation-capabilities：扩展字段进入 `allowed_fields/field_payload_keys`，且 `deny_reasons` 可解释。  
-  - [ ] list：ext filter/sort 在 allowlist 内可用，越权字段被拒绝。  
+  - [ ] list：ext filter/sort 在 allowlist 内可用；非 allowlist/未 enabled 返回 400 `ORG_EXT_QUERY_FIELD_NOT_ALLOWED`；非 grid 模式请求 ext filter/sort 返回 400。  
 
 - **安全验收**：
   - [ ] 无 SQL 注入风险（列名与实体来源可证明为 allowlist/枚举；值参数化）。  
