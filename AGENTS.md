@@ -207,6 +207,8 @@ modules/{module}/
 - DEV-PLAN-094：MUI X 升级子计划 P3（长尾迁移与收口）：`docs/dev-plans/094-mui-x-phase3-long-tail-convergence-plan.md`
 - DEV-PLAN-095：MUI X 升级子计划 P4（稳定化与性能压测）：`docs/dev-plans/095-mui-x-phase4-stability-performance-plan.md`
 - DEV-PLAN-096：Org 模块全量迁移至 MUI X 与统一体验收口方案：`docs/dev-plans/096-org-module-full-migration-and-ux-convergence-plan.md`
+- DEV-PLAN-097：OrgUnit 详情从抽屉（Drawer）迁移为独立页面（对齐 MUI CRUD Dashboard）：`docs/dev-plans/097-orgunit-details-drawer-to-page-migration.md`
+- DEV-PLAN-098：组织架构模块架构评估——多类型宽表预留字段 + 元数据驱动（V2.0）：`docs/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
 - DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
