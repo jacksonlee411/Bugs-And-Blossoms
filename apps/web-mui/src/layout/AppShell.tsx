@@ -129,7 +129,16 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      <AppBar enableColorOnDark color='primary' position='fixed' sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+      <AppBar
+        enableColorOnDark
+        color='primary'
+        position='fixed'
+        sx={{
+          zIndex: (theme) => theme.zIndex.drawer + 1,
+          color: 'common.white',
+          '& .MuiSvgIcon-root': { color: 'common.white' }
+        }}
+      >
         <Toolbar sx={{ gap: 1 }}>
           <Typography component='h1' variant='h6'>
             {t('app_title')}
@@ -153,10 +162,17 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
           </Tooltip>
           <FormControl size='small' sx={{ minWidth: 120 }}>
             <Select
+              sx={{
+                color: 'common.white',
+                '& .MuiSelect-icon': { color: 'common.white' },
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'common.white' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'common.white' }
+              }}
               onChange={(event) => setLocale(event.target.value as 'en' | 'zh')}
               startAdornment={
                 <InputAdornment position='start'>
-                  <LanguageIcon fontSize='small' />
+                  <LanguageIcon fontSize='small' sx={{ color: 'common.white' }} />
                 </InputAdornment>
               }
               value={locale}
