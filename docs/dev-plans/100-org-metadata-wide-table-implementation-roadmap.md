@@ -1,6 +1,6 @@
 # DEV-PLAN-100：Org 模块宽表预留字段 + 元数据驱动落地实施计划与路线图（承接 DEV-PLAN-098）
 
-**状态**: 规划中（2026-02-13 03:44 UTC）
+**状态**: 规划中（2026-02-13 07:37 UTC）
 
 ## 1. 背景与目标
 
@@ -101,69 +101,19 @@
 
 ## Phase 0：契约冻结与就绪检查（先文档后代码）
 
-1. [ ] 在本计划内冻结 D1~D8 决策，不再口头变更。  
-2. [ ] 在 `DEV-PLAN-098` 增加“由 DEV-PLAN-100 承接实施”链接（保持文档可追踪）。  
-3. [ ] 对齐不变量检查清单（One Door / Valid Time / RLS / No Legacy）。  
-4. [ ] 确认 MVP 字段清单（2~5 个）及每个字段的 `DICT/ENTITY` 归类。
-5. [ ] 冻结能力模型契约（写入/查询）：以 `DEV-PLAN-083` 的策略键、合法组合约束与 fail-closed 为 mutation 能力 SSOT，并在本计划内补齐“扩展字段”的能力与映射口径（包括：哪些动作可写、`field_key -> payload_key -> physical_col`、`deny_reasons` 与错误码对齐）。
-6. [ ] 冻结扩展字段 payload 契约（命名空间、类型编码、错误码），并明确与既有 `submit_org_event(...)` payload 键不冲突。
-7. [ ] 冻结字段配置生命周期契约：新增、启用、停用、停用后只读、不可复用（含状态机与错误码）。
-8. [ ] 冻结“按阶段命中门禁清单”：路由（`make check routing`）、authz（`make authz-pack && make authz-test && make authz-lint`）、sqlc（`make sqlc-generate`）与文档门禁（`make check doc`）。
-
-**出口条件**：字段清单、映射策略、历史策略、能力模型（承接 083）、payload 契约、门禁清单全部冻结并经评审确认。
+已拆分为独立实施计划（SSOT）：`docs/dev-plans/100a-org-metadata-wide-table-phase0-contract-freeze-readiness.md`。
 
 ## Phase 1：Schema 与元数据骨架（最小数据库闭环）
 
-1. [ ] 新增元数据表（建议：`orgunit.tenant_field_configs`），包含：
-   - `tenant_uuid`, `field_key`, `physical_col`, `value_type`, `data_source_type`, `data_source_config`, `status`, `enabled_on(date)`, `disabled_on(date)`, `created_at/updated_at/disabled_at(timestamptz)`。
-2. [ ] 在 `orgunit.org_unit_versions` 增加第一批扩展列（仅 MVP 类型与数量）。
-3. [ ] 在 `orgunit.org_unit_versions` 增加 `ext_labels_snapshot jsonb`（仅 DICT 快照，控制大小并限定键集合）。
-4. [ ] 增加元数据约束：
-   - 唯一约束：`(tenant_uuid, field_key)`；
-   - 槽位唯一约束：`(tenant_uuid, physical_col)`；
-   - 不可变映射约束（通过 trigger 拒绝修改 `physical_col`）。
-5. [ ] 新增 RLS 与权限约束：
-   - `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`；
-   - `tenant_isolation` policy 与既有 orgunit 表口径一致；
-   - 应用角色仅授予读取/受限写权限，不允许直写绕过管理入口。
-6. [ ] 增加字段配置管理 Kernel 函数（单写入口）与审计记录，应用层调用函数而非直接写表。
-7. [ ] 按热点预置少量索引（默认仅 `(tenant_uuid, ext_col)`，必要时 `WHERE ext_col IS NOT NULL`）。
-
-> 注意：本阶段涉及新建表/新增列，执行前需用户手工确认（遵循 AGENTS 红线）。
-
-**出口条件**：`make orgunit plan && make orgunit lint && make orgunit migrate up` 在本地通过。
+已拆分为独立实施计划（SSOT）：`docs/dev-plans/100b-org-metadata-wide-table-phase1-schema-and-metadata-skeleton.md`。
 
 ## Phase 2：Kernel/Projection 扩展（保持 One Door）
 
-1. [ ] 扩展 `orgunit.submit_org_event(...)` 与 correction 链路的 payload 校验：
-   - 仅允许元数据声明字段写入；
-   - 字段值类型与槽位类型一致；
-   - 字段在 `effective_date` 当天必须处于 enabled 状态（按 `enabled_on/disabled_on` 判定）。
-   - 扩展字段 payload 仅允许出现在本计划支持的 mutation 动作/事件类型中（以 `DEV-PLAN-083` 策略矩阵为准）；其余事件若出现扩展字段 payload 必须拒绝（fail-closed，错误码稳定）。
-2. [ ] 扩展 `orgunit.apply_*_logic` / replay 逻辑，确保扩展值投射到 `org_unit_versions`。
-3. [ ] correction/rescind 重放路径保持扩展字段一致性（不得出现“主字段回放、扩展字段丢失”）。
-4. [ ] DICT 快照投射规则固定：提交事件时写 `payload.ext_labels_snapshot`，投射时同步写 `versions.ext_labels_snapshot`。
-5. [ ] 审计快照中包含扩展字段变更（遵循 080 系列快照约束）。
-
-**出口条件**：
-- `internal/server/orgunit_audit_snapshot_schema_test.go` 相关测试保持通过；
-- 新增扩展字段重放回归测试通过。
+已拆分为独立实施计划（SSOT）：`docs/dev-plans/100c-org-metadata-wide-table-phase2-kernel-projection-extension-one-door.md`。
 
 ## Phase 3：服务层与 API（读写可用）
 
-1. [ ] 在 `modules/orgunit/services` 增加元数据解析与 patch 构造器：
-   - 输入业务字段 + mutation 上下文 -> 输出 `payload + physical_col` 映射（能力与字段映射以 `DEV-PLAN-083` 策略矩阵为准）。
-2. [ ] 在 `internal/server/orgunit_api.go` 增加/扩展接口：
-   - 字段配置管理接口（新增/启停/查询；仅管理端可见）；
-   - DICT/ENTITY options 接口（支持 keyword + as_of）；
-   - 详情接口返回扩展字段值与展示值。
-   - mutation capabilities 接口（承接 `DEV-PLAN-083`，含 `deny_reasons`），并确保扩展字段进入 `allowed_fields/field_payload_keys`。
-3. [ ] 列表接口支持扩展字段筛选/排序（仅 capability 解析器产出的 allowlist 字段）。
-4. [ ] 所有动态 SQL 使用固定模板 + 参数化，不拼接用户输入列名；`ENTITY` options/join 的目标实体仅允许枚举映射。
-
-**出口条件**：
-- API 契约测试覆盖新增字段；
-- 无 SQL 注入风险（列名与实体来源可证明）。
+已拆分为独立实施计划（SSOT）：`docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`。
 
 ## Phase 4：UI 集成（用户可见闭环）
 
@@ -201,10 +151,10 @@
 
 ## 6. 里程碑交付物（按阶段）
 
-- M0（Phase 0）：契约冻结版文档 + 字段清单。  
-- M1（Phase 1）：迁移脚本 + 元数据表 + 扩展列 + 基础约束。  
-- M2（Phase 2）：Kernel/Projection 支持扩展字段写入与回放。  
-- M3（Phase 3）：API 可读写 + options + mutation-capabilities + 列表筛选/排序。  
+- M0（Phase 0）：契约冻结版文档（SSOT：`DEV-PLAN-100A`）+ 字段清单。  
+- M1（Phase 1）：迁移脚本（SSOT：`DEV-PLAN-100B`）+ 元数据表 + 扩展列 + 基础约束。  
+- M2（Phase 2）：Kernel/Projection 支持扩展字段写入与回放（SSOT：`DEV-PLAN-100C`）。  
+- M3（Phase 3）：API 可读写 + options + mutation-capabilities + 列表筛选/排序（SSOT：`DEV-PLAN-100D`）。  
 - M4（Phase 4）：UI 可操作闭环（字段配置管理页 + 详情页 capabilities 驱动编辑 + 列表筛选/排序）。  
 - M5（Phase 5）：性能与稳定性报告。
 
@@ -248,7 +198,7 @@
 
 ## 10. 依赖关系与并行策略
 
-- 强依赖：`098 -> 100 Phase 0 -> Phase 1 -> Phase 2`。
+- 强依赖：`098 -> 100A(Phase 0) -> 100B(Phase 1) -> 100C(Phase 2) -> 100D(Phase 3) -> 100 Phase 4`。
 - 可并行：Phase 3（API）与 Phase 4（UI）可部分并行，但必须在 Phase 2 出口后合并。
 - 质量收口：Phase 5 在 Phase 3/4 功能闭环后统一执行。
 
@@ -265,6 +215,10 @@
 
 ## 12. 关联文档
 
+- `docs/dev-plans/100a-org-metadata-wide-table-phase0-contract-freeze-readiness.md`
+- `docs/dev-plans/100b-org-metadata-wide-table-phase1-schema-and-metadata-skeleton.md`
+- `docs/dev-plans/100c-org-metadata-wide-table-phase2-kernel-projection-extension-one-door.md`
+- `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
 - `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
