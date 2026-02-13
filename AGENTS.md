@@ -211,6 +211,10 @@ modules/{module}/
 - DEV-PLAN-098：组织架构模块架构评估——多类型宽表预留字段 + 元数据驱动（V2.0）：`docs/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
 - DEV-PLAN-099：OrgUnit 信息页双栏化（左生效日期/修改时间，右侧详情）——对齐示例：`docs/dev-plans/099-orgunit-details-two-pane-info-audit-mui.md`
 - DEV-PLAN-100：Org 模块宽表预留字段 + 元数据驱动落地实施计划与路线图（承接 DEV-PLAN-098）：`docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
+- DEV-PLAN-100A：Org 模块宽表元数据落地 Phase 0：契约冻结与就绪检查：`docs/dev-plans/100a-org-metadata-wide-table-phase0-contract-freeze-readiness.md`
+- DEV-PLAN-100B：Org 模块宽表元数据落地 Phase 1：Schema 与元数据骨架（最小数据库闭环）：`docs/dev-plans/100b-org-metadata-wide-table-phase1-schema-and-metadata-skeleton.md`
+- DEV-PLAN-100C：Org 模块宽表元数据落地 Phase 2：Kernel/Projection 扩展（保持 One Door）：`docs/dev-plans/100c-org-metadata-wide-table-phase2-kernel-projection-extension-one-door.md`
+- DEV-PLAN-100D：Org 模块宽表元数据落地 Phase 3：服务层与 API（读写可用）：`docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - DEV-PLAN-101：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）：`docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
