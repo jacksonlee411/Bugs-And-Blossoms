@@ -94,7 +94,7 @@
 - `field_label`：字段名称（来自“字段定义”，只读）
 - `field_key`：稳定键（只读）
 - `value_type`：`text/int/uuid/bool/date`（只读）
-- `data_source_type`：`DICT/ENTITY`（只读）
+- `data_source_type`：`PLAIN/DICT/ENTITY`（只读）
 - `status`：`enabled/disabled`（Chip）
 - `enabled_on`：date
 - `disabled_on`：date（为空表示未计划停用）
@@ -119,6 +119,7 @@
   2) `enabled_on`：
      - `TextField type="date"`，默认等于当前 `as_of`
   3) `data_source_config`：
+     - PLAIN：不展示（或只读展示为 `{}`），因为该类型无 options/无外部数据源。
      - DICT：显示 `dict_code`（若该字段允许配置则为 Select；若字段定义固定 dict 则只读展示）
      - ENTITY：显示 `entity`（枚举化标识，只读或 Select；不得允许输入任意表/列名，对齐 `DEV-PLAN-100` D7）
 - `DialogActions`：
@@ -196,4 +197,3 @@
 - `docs/dev-plans/017-routing-strategy.md`
 - `docs/dev-plans/020-i18n-en-zh-only.md`
 - `AGENTS.md`
-
