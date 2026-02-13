@@ -258,6 +258,8 @@ CREATE TABLE tenant_ranks (
 
 > 目的：把“理论可行”收敛到“在本仓库约束下可交付”。本节强调边界、不变量与最小闭环路径，避免把 098 变成引入第二写入口/弱一致性的借口。
 
+**实施承接**：落地实施步骤与路线图见 `DEV-PLAN-100`：`docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`。
+
 ### 10.1 现有基座（可直接复用）
 
 - **树结构与查询基座已存在**：OrgUnit 已采用 `ltree`（路径列为 `node_path`）表达层级结构，并配套 GiST/Gin 索引支撑子树/路径查询（见 `modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql:178`）。
