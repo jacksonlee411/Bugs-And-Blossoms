@@ -129,7 +129,7 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      <AppBar color='inherit' position='fixed' sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+      <AppBar enableColorOnDark color='primary' position='fixed' sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
         <Toolbar sx={{ gap: 1 }}>
           <Typography component='h1' variant='h6'>
             {t('app_title')}
@@ -137,7 +137,7 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
           <Box sx={{ flex: 1 }} />
           <Tooltip title='Ctrl/Cmd + K'>
             <IconButton
-              color='primary'
+              color='inherit'
               onClick={() => {
                 setSearchOpen(true)
                 void runSearch(searchQuery, false)
@@ -147,7 +147,7 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
             </IconButton>
           </Tooltip>
           <Tooltip title={t(themeMode === 'light' ? 'theme_dark' : 'theme_light')}>
-            <IconButton color='primary' onClick={toggleThemeMode}>
+            <IconButton color='inherit' onClick={toggleThemeMode}>
               {themeMode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
             </IconButton>
           </Tooltip>

@@ -3,6 +3,7 @@ import { AppShell } from '../layout/AppShell'
 import { navItems } from '../navigation/config'
 import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
 import { FoundationDemoPage } from '../pages/FoundationDemoPage'
+import { OrgUnitDetailsPage } from '../pages/org/OrgUnitDetailsPage'
 import { OrgUnitsPage } from '../pages/org/OrgUnitsPage'
 import { PeopleAssignmentsPage } from '../pages/people/PeopleAssignmentsPage'
 import { RequirePermission } from './RequirePermission'
@@ -23,6 +24,14 @@ export const router = createBrowserRouter([
       {
         path: 'home',
         element: <Navigate replace to='/' />
+      },
+      {
+        path: 'org/units/:orgCode',
+        element: (
+          <RequirePermission permissionKey='orgunit.read'>
+            <OrgUnitDetailsPage />
+          </RequirePermission>
+        )
       },
       {
         path: 'org/units',
