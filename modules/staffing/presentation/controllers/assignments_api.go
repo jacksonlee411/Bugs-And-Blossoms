@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/services"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/httperr"
 )
@@ -82,6 +83,9 @@ func (c AssignmentsController) HandleAssignmentsAPI(w http.ResponseWriter, r *ht
 			}
 			writeError(w, r, status, code, "list failed")
 			return
+		}
+		if assigns == nil {
+			assigns = make([]types.Assignment, 0)
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(map[string]any{

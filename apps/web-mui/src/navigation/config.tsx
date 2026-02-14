@@ -1,7 +1,11 @@
 import ApartmentIcon from '@mui/icons-material/Apartment'
+import AssignmentIndIcon from '@mui/icons-material/AssignmentInd'
+import CategoryIcon from '@mui/icons-material/Category'
 import GroupsIcon from '@mui/icons-material/Groups'
+import HubIcon from '@mui/icons-material/Hub'
 import HomeWorkIcon from '@mui/icons-material/HomeWork'
 import PendingActionsIcon from '@mui/icons-material/PendingActions'
+import WorkOutlineIcon from '@mui/icons-material/WorkOutline'
 import type { NavItem, SearchEntry } from '../types/navigation'
 
 export const navItems: NavItem[] = [
@@ -24,11 +28,47 @@ export const navItems: NavItem[] = [
     keywords: ['org', 'unit', 'department', '组织', '部门']
   },
   {
+    key: 'org-setid',
+    path: '/org/setid',
+    labelKey: 'nav_setid',
+    icon: <HubIcon fontSize='small' />,
+    order: 25,
+    permissionKey: 'orgunit.read',
+    keywords: ['setid', 'scope', 'package', '治理', '共享', '只读']
+  },
+  {
+    key: 'jobcatalog',
+    path: '/jobcatalog',
+    labelKey: 'nav_jobcatalog',
+    icon: <CategoryIcon fontSize='small' />,
+    order: 30,
+    permissionKey: 'jobcatalog.read',
+    keywords: ['jobcatalog', 'job', 'catalog', '职位族', '职位', '分类']
+  },
+  {
+    key: 'staffing-positions',
+    path: '/staffing/positions',
+    labelKey: 'nav_staffing_positions',
+    icon: <WorkOutlineIcon fontSize='small' />,
+    order: 40,
+    permissionKey: 'staffing.positions.read',
+    keywords: ['staffing', 'position', '职位', '岗位']
+  },
+  {
+    key: 'staffing-assignments',
+    path: '/staffing/assignments',
+    labelKey: 'nav_staffing_assignments',
+    icon: <AssignmentIndIcon fontSize='small' />,
+    order: 50,
+    permissionKey: 'staffing.assignments.read',
+    keywords: ['staffing', 'assignment', '任职', '用工']
+  },
+  {
     key: 'people-directory',
-    path: '/people',
+    path: '/person/persons',
     labelKey: 'nav_people',
     icon: <GroupsIcon fontSize='small' />,
-    order: 30,
+    order: 60,
     permissionKey: 'person.read',
     keywords: ['people', 'person', 'employee', '人员', '员工']
   },
@@ -37,7 +77,7 @@ export const navItems: NavItem[] = [
     path: '/approvals',
     labelKey: 'nav_approvals',
     icon: <PendingActionsIcon fontSize='small' />,
-    order: 40,
+    order: 70,
     permissionKey: 'approval.read',
     keywords: ['approval', 'workflow', 'task', '审批', '待办']
   }

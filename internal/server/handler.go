@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"html"
 	"io/fs"
@@ -61,7 +62,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 
 	orgStore := opts.OrgUnitStore
 	orgUnitWriteService := opts.OrgUnitWriteService
-	orgSnapshotStore := opts.OrgUnitSnapshot
 	setidStore := opts.SetIDStore
 	jobcatalogStore := opts.JobCatalogStore
 	personStore := opts.PersonStore
@@ -84,12 +84,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	if orgUnitWriteService == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
 			orgUnitWriteService = orgunitservices.NewOrgUnitWriteService(orgunitpersistence.NewOrgUnitPGStore(pgStore.pool))
-		}
-	}
-
-	if orgSnapshotStore == nil {
-		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
-			orgSnapshotStore = newOrgUnitSnapshotPGStore(pgStore.pool)
 		}
 	}
 
@@ -157,16 +151,6 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		http.Redirect(w, r, "/app", http.StatusFound)
 	}))
 
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/nav", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeContent(w, r, renderNav(r))
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/topbar", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeContent(w, r, renderTopbar(r))
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/flash", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeContent(w, r, "")
-	}))
-
 	router.Handle(routing.RouteClassOps, http.MethodGet, "/health", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
@@ -176,20 +160,21 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		_, _ = w.Write([]byte("ok\n"))
 	}))
 
-	router.Handle(routing.RouteClassAuthn, http.MethodGet, "/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeShell(w, r, renderLoginForm(""))
-	}))
-	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/login", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/iam/api/sessions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tenant, _ := currentTenant(r.Context())
 
-		if err := r.ParseForm(); err != nil {
-			writeShellWithStatus(w, r, http.StatusUnprocessableEntity, renderLoginForm("invalid form"))
+		var req struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_json", "invalid json")
 			return
 		}
-		email := r.FormValue("email")
-		password := r.FormValue("password")
-		if email == "" || password == "" {
-			writeShellWithStatus(w, r, http.StatusUnprocessableEntity, renderLoginForm("email and password required"))
+		email := strings.TrimSpace(req.Email)
+		password := req.Password
+		if email == "" || strings.TrimSpace(password) == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_form", "email and password required")
 			return
 		}
 
@@ -197,7 +182,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		if provider == nil {
 			p, err := newKratosIdentityProviderFromEnv()
 			if err != nil {
-				routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "identity_provider_error", "identity provider error")
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "identity_provider_error", "identity provider error")
 				return
 			}
 			provider = p
@@ -206,10 +191,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		ident, err := provider.AuthenticatePassword(r.Context(), tenant, email, password)
 		if err != nil {
 			if errors.Is(err, errInvalidCredentials) {
-				writeShellWithStatus(w, r, http.StatusUnprocessableEntity, renderLoginForm("invalid credentials"))
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_credentials", "invalid credentials")
 				return
 			}
-			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "identity_error", "identity error")
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "identity_error", "identity error")
 			return
 		}
 
@@ -218,101 +203,41 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			roleSlug = authz.RoleTenantAdmin
 		}
 		if roleSlug != authz.RoleTenantAdmin && roleSlug != authz.RoleTenantViewer {
-			writeShellWithStatus(w, r, http.StatusUnprocessableEntity, renderLoginForm("invalid identity role"))
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_identity_role", "invalid identity role")
 			return
 		}
 
 		p, err := principals.UpsertFromKratos(r.Context(), tenant.ID, ident.Email, roleSlug, ident.KratosIdentityID)
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "principal_error", "principal error")
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "principal_error", "principal error")
 			return
 		}
 
 		expiresAt := time.Now().Add(sidTTLFromEnv())
 		sid, err := sessions.Create(r.Context(), tenant.ID, p.ID, expiresAt, r.RemoteAddr, r.UserAgent())
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "session_error", "session error")
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "session_error", "session error")
 			return
 		}
 		setSIDCookie(w, sid)
-		http.Redirect(w, r, "/app", http.StatusFound)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusNoContent)
 	}))
 	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if sid, ok := readSID(r); ok {
 			_ = sessions.Revoke(r.Context(), sid)
 		}
 		clearSIDCookie(w)
-		http.Redirect(w, r, "/login", http.StatusFound)
-	}))
-
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/lang/en", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		setLangCookie(w, "en")
-		redirectBack(w, r)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/lang/zh", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		setLangCookie(w, "zh")
-		redirectBack(w, r)
-	}))
-
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgNodesWithWriteService(w, r, orgStore, orgUnitWriteService)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/nodes", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgNodesWithWriteService(w, r, orgStore, orgUnitWriteService)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes/children", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgNodeChildren(w, r, orgStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes/details", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgNodeDetails(w, r, orgStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes/view", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgNodeDetailsPage(w, r, orgStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/nodes/search", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgNodeSearch(w, r, orgStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/snapshot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgSnapshot(w, r, orgSnapshotStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/snapshot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgSnapshot(w, r, orgSnapshotStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/setid", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetID(w, r, setidStore, orgStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/setid", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetID(w, r, setidStore, orgStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/orgunit/setids/{setid}/scope-subscriptions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDScopeSubscriptionsUI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodPost, "/orgunit/setids/{setid}/scope-subscriptions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSetIDScopeSubscriptionsUI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleJobCatalog(w, r, orgStore, setidStore, jobcatalogStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/job-catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleJobCatalog(w, r, orgStore, setidStore, jobcatalogStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePositions(w, r, orgStore, positionStore, jobcatalogStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePositions(w, r, orgStore, positionStore, jobcatalogStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/org/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssignments(w, r, positionStore, assignmentStore, personStore)
-	}))
-	router.Handle(routing.RouteClassUI, http.MethodPost, "/org/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleAssignments(w, r, positionStore, assignmentStore, personStore)
+		http.Redirect(w, r, "/app/login", http.StatusFound)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePositionsAPI(w, r, orgStore, positionStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/positions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePositionsAPI(w, r, orgStore, positionStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/positions:options", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePositionsOptionsAPI(w, r, orgStore, jobcatalogStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/assignments", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssignmentsAPI(w, r, assignmentStore)
@@ -326,8 +251,14 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/assignment-events:rescind", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssignmentEventsRescindAPI(w, r, assignmentStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleSetIDsAPI(w, r, setidStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetIDsAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-bindings", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleSetIDBindingsAPI(w, r, setidStore, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-bindings", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetIDBindingsAPI(w, r, setidStore, orgStore)
@@ -425,17 +356,23 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/set-business-unit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsBusinessUnitAPI(w, r, orgStore)
 	}))
-	router.Handle(routing.RouteClassUI, http.MethodGet, "/person/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePersons(w, r, personStore)
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/person/api/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePersonsAPI(w, r, personStore)
 	}))
-	router.Handle(routing.RouteClassUI, http.MethodPost, "/person/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlePersons(w, r, personStore)
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/person/api/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlePersonsAPI(w, r, personStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/person/api/persons:options", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePersonOptionsAPI(w, r, personStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/person/api/persons:by-pernr", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePersonByPernrAPI(w, r, personStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/jobcatalog/api/catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleJobCatalogAPI(w, r, setidStore, jobcatalogStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/jobcatalog/api/catalog/actions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleJobCatalogWriteAPI(w, r, setidStore, jobcatalogStore)
 	}))
 
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
@@ -449,7 +386,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	entrypoint.Handle("/", router)
 
-	guarded := withTenantAndSession(tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, entrypoint))
+	guarded := withTenantAndSession(classifier, tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, entrypoint))
 
 	mux := http.NewServeMux()
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(assetsSub))))
@@ -458,7 +395,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	return mux, nil
 }
 
-const webMUIIndexPath = "assets/web-mui/index.html"
+const webMUIIndexPath = "assets/web/index.html"
 
 func serveWebMUIIndex(w http.ResponseWriter, r *http.Request, assets fs.FS) {
 	b, err := fs.ReadFile(assets, webMUIIndexPath)
@@ -512,9 +449,13 @@ func setLangCookie(w http.ResponseWriter, lang string) {
 	})
 }
 
-func withTenantAndSession(tenants TenancyResolver, principals principalStore, sessions sessionStore, next http.Handler) http.Handler {
+func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolver, principals principalStore, sessions sessionStore, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
+		rc := routing.RouteClassUI
+		if classifier != nil {
+			rc = classifier.Classify(path)
+		}
 
 		if path == "/health" || path == "/healthz" || path == "/assets" || pathHasPrefixSegment(path, "/assets") {
 			next.ServeHTTP(w, r)
@@ -524,45 +465,57 @@ func withTenantAndSession(tenants TenancyResolver, principals principalStore, se
 		tenantDomain := effectiveHost(r)
 		t, ok, err := tenants.ResolveTenant(r.Context(), tenantDomain)
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "tenant_resolve_error", "tenant resolve error")
+			routing.WriteError(w, r, rc, http.StatusInternalServerError, "tenant_resolve_error", "tenant resolve error")
 			return
 		}
 		if !ok {
-			routing.WriteError(w, r, routing.RouteClassUI, http.StatusNotFound, "tenant_not_found", "tenant not found")
+			routing.WriteError(w, r, rc, http.StatusNotFound, "tenant_not_found", "tenant not found")
 			return
 		}
 		r = r.WithContext(withTenant(r.Context(), t))
 
-		if path == "/login" || pathHasPrefixSegment(path, "/lang") {
+		if path == "/app/login" || path == "/login" || (path == "/iam/api/sessions" && r.Method == http.MethodPost) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
 		sid, ok := readSID(r)
 		if !ok {
-			http.Redirect(w, r, "/login", http.StatusFound)
+			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
+				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
+				return
+			}
+			http.Redirect(w, r, "/app/login", http.StatusFound)
 			return
 		}
 
 		sess, ok, err := sessions.Lookup(r.Context(), sid)
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "session_lookup_error", "session lookup error")
+			routing.WriteError(w, r, rc, http.StatusInternalServerError, "session_lookup_error", "session lookup error")
 			return
 		}
 		if !ok || sess.TenantID != t.ID {
 			clearSIDCookie(w)
-			http.Redirect(w, r, "/login", http.StatusFound)
+			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
+				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
+				return
+			}
+			http.Redirect(w, r, "/app/login", http.StatusFound)
 			return
 		}
 
 		p, ok, err := principals.GetByID(r.Context(), t.ID, sess.PrincipalID)
 		if err != nil {
-			routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "principal_lookup_error", "principal lookup error")
+			routing.WriteError(w, r, rc, http.StatusInternalServerError, "principal_lookup_error", "principal lookup error")
 			return
 		}
 		if !ok || p.Status != "active" {
 			clearSIDCookie(w)
-			http.Redirect(w, r, "/login", http.StatusFound)
+			if rc == routing.RouteClassInternalAPI || rc == routing.RouteClassPublicAPI || rc == routing.RouteClassWebhook {
+				routing.WriteError(w, r, rc, http.StatusUnauthorized, "unauthorized", "unauthorized")
+				return
+			}
+			http.Redirect(w, r, "/app/login", http.StatusFound)
 			return
 		}
 		r = r.WithContext(withPrincipal(r.Context(), p))
@@ -681,20 +634,11 @@ func writeShellWithStatus(w http.ResponseWriter, r *http.Request, status int, bo
 }
 
 func writeShellWithStatusFromAssets(w http.ResponseWriter, r *http.Request, status int, bodyHTML string, assets fs.FS) {
-	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	if asOf == "" {
-		asOf = currentUTCDateString()
-	}
-
-	out, err := renderAstroShellFromAssets(assets, r, asOf, bodyHTML)
-	if err != nil {
-		routing.WriteError(w, r, routing.RouteClassUI, http.StatusInternalServerError, "shell_error", "shell error")
-		return
-	}
+	_ = assets // DEV-PLAN-103: Astro shell removed; keep signature to avoid wide churn.
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(out))
+	_, _ = w.Write([]byte(renderMinimalShell(bodyHTML)))
 }
 
 func writeContent(w http.ResponseWriter, _ *http.Request, bodyHTML string) {
@@ -725,62 +669,15 @@ func writePageWithStatus(w http.ResponseWriter, r *http.Request, status int, bod
 	writeShellWithStatus(w, r, status, bodyHTML)
 }
 
-const astroShellPath = "assets/astro/app.html"
-const astroAsOfToken = "__BB_AS_OF__"
-
-func renderAstroShellFromAssets(assets fs.FS, r *http.Request, asOf string, bodyHTML string) (string, error) {
-	b, err := fs.ReadFile(assets, astroShellPath)
-	if err != nil {
-		return "", err
-	}
-	return renderAstroShellFromTemplate(string(b), r, asOf, bodyHTML)
-}
-
-func renderAstroShellFromTemplate(shell string, r *http.Request, asOf string, bodyHTML string) (string, error) {
-	if bodyHTML != "" {
-		var err error
-		shell, err = replaceMainContent(shell, bodyHTML)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	if _, ok := currentPrincipal(r.Context()); !ok {
-		shell = strings.ReplaceAll(shell, ` hx-trigger="load"`, "")
-	}
-
-	if strings.Contains(shell, astroAsOfToken) {
-		shell = strings.ReplaceAll(shell, astroAsOfToken, asOf)
-		if strings.Contains(shell, astroAsOfToken) {
-			return "", errors.New("shell still contains as_of token after injection")
-		}
-	}
-
-	return shell, nil
-}
-
-func replaceMainContent(shell string, bodyHTML string) (string, error) {
-	idIdx := strings.Index(shell, `id="content"`)
-	if idIdx < 0 {
-		return "", errors.New("shell missing #content mount")
-	}
-
-	openStart := strings.LastIndex(shell[:idIdx], "<main")
-	if openStart < 0 {
-		return "", errors.New("shell missing <main> for #content")
-	}
-
-	openEndRel := strings.Index(shell[openStart:], ">")
-	if openEndRel < 0 {
-		return "", errors.New("shell has unterminated <main> tag")
-	}
-	openEnd := openStart + openEndRel
-
-	closeRel := strings.Index(shell[openEnd+1:], "</main>")
-	if closeRel < 0 {
-		return "", errors.New("shell missing closing </main> for #content")
-	}
-	closeIdx := openEnd + 1 + closeRel
-
-	return shell[:openEnd+1] + bodyHTML + shell[closeIdx:], nil
+func renderMinimalShell(bodyHTML string) string {
+	var b strings.Builder
+	b.WriteString("<!doctype html><html><head>")
+	b.WriteString(`<meta charset="utf-8">`)
+	b.WriteString(`<meta name="viewport" content="width=device-width, initial-scale=1">`)
+	b.WriteString("<title>Bugs &amp; Blossoms</title>")
+	b.WriteString("</head><body>")
+	b.WriteString(`<main id="content">`)
+	b.WriteString(bodyHTML)
+	b.WriteString("</main></body></html>")
+	return b.String()
 }

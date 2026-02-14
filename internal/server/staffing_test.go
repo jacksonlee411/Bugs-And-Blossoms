@@ -932,6 +932,16 @@ func TestStaffingMemoryStore(t *testing.T) {
 		}
 	})
 
+	t.Run("upsert default status active", func(t *testing.T) {
+		a, err := s.UpsertPrimaryAssignmentForPerson(context.Background(), "t1", "2026-01-02", "p2", "pos2", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a.Status != "active" {
+			t.Fatalf("expected active, got %q", a.Status)
+		}
+	})
+
 	t.Run("list assignments ok", func(t *testing.T) {
 		as, err := s.ListAssignmentsForPerson(context.Background(), "t1", "2026-01-01", "p1")
 		if err != nil {

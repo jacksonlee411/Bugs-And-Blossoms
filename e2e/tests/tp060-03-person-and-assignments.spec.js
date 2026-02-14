@@ -1,5 +1,35 @@
 import { expect, test } from "@playwright/test";
 
+async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
+  const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
+    data: {
+      schema_id: "default",
+      traits,
+      credentials: {
+        password: {
+          identifiers: [identifier],
+          config: { password }
+        }
+      }
+    }
+  });
+  if (!resp.ok()) {
+    expect(resp.status(), `unexpected status: ${resp.status()} (${await resp.text()})`).toBe(409);
+  }
+}
+
+async function createJobCatalogAction(ctx, { packageCode, effectiveDate, action, body }) {
+  const resp = await ctx.request.post("/jobcatalog/api/catalog/actions", {
+    data: {
+      package_code: packageCode,
+      effective_date: effectiveDate,
+      action,
+      ...body
+    }
+  });
+  expect(resp.status(), await resp.text()).toBe(201);
+}
+
 test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) => {
   test.setTimeout(240_000);
 
@@ -8,6 +38,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const asOfBeforeMid = "2026-01-09";
   const lateEffectiveDate = "2026-01-15";
   const runID = `${Date.now()}`;
+  const suffix = runID.slice(-4);
 
   const tenantHost = `t-tp060-03-${runID}.localhost`;
   const tenantName = `TP060-03 Tenant ${runID}`;
@@ -24,26 +55,19 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const superadminEmail = process.env.E2E_SUPERADMIN_EMAIL || defaultSuperadminEmail;
   const superadminLoginPass = process.env.E2E_SUPERADMIN_LOGIN_PASS || superadminPass;
 
-  const ensureIdentity = async (ctx, identifier, email, password, traits) => {
-    const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
-      data: {
-        schema_id: "default",
-        traits: { email, ...traits },
-        credentials: { password: { identifiers: [identifier], config: { password } } }
-      }
-    });
-    if (!resp.ok()) {
-      expect(resp.status(), `unexpected status: ${resp.status()} (${await resp.text()})`).toBe(409);
-    }
-  };
-
   const superadminContext = await browser.newContext({
     baseURL: superadminBaseURL,
     httpCredentials: { username: superadminUser, password: superadminPass }
   });
   const superadminPage = await superadminContext.newPage();
 
-  await ensureIdentity(superadminContext, `sa:${superadminEmail.toLowerCase()}`, superadminEmail, superadminLoginPass, {});
+  if (!process.env.E2E_SUPERADMIN_EMAIL) {
+    await ensureKratosIdentity(superadminContext, kratosAdminURL, {
+      traits: { email: superadminEmail },
+      identifier: `sa:${superadminEmail.toLowerCase()}`,
+      password: superadminLoginPass
+    });
+  }
 
   await superadminPage.goto("/superadmin/login");
   await expect(superadminPage.locator("h1")).toHaveText("SuperAdmin Login");
@@ -54,14 +78,14 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
 
   const ensureTenant = async (hostname, name) => {
     await superadminPage.goto("/superadmin/tenants");
-    const tenantRow = superadminPage.locator("tr", { hasText: name }).first();
+    const tenantRow = superadminPage.locator("tr", { hasText: hostname }).first();
     if ((await tenantRow.count()) === 0) {
       await superadminPage.locator('form[action="/superadmin/tenants"] input[name="name"]').fill(name);
       await superadminPage.locator('form[action="/superadmin/tenants"] input[name="hostname"]').fill(hostname);
       await superadminPage.locator('form[action="/superadmin/tenants"] button[type="submit"]').click();
       await expect(superadminPage).toHaveURL(/\/superadmin\/tenants$/);
     }
-    await expect(tenantRow).toBeVisible({ timeout: 60000 });
+    await expect(tenantRow).toBeVisible({ timeout: 60_000 });
     const tenantID = (await tenantRow.locator("code").first().innerText()).trim();
     expect(tenantID).not.toBe("");
     return tenantID;
@@ -69,264 +93,177 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
 
   const tenantID = await ensureTenant(tenantHost, tenantName);
 
-  await ensureIdentity(
-    superadminContext,
-    `${tenantID}:${tenantAdminEmail}`,
-    tenantAdminEmail,
-    tenantAdminPass,
-    { tenant_uuid: tenantID, role_slug: "tenant-admin" }
-  );
+  await ensureKratosIdentity(superadminContext, kratosAdminURL, {
+    traits: { tenant_uuid: tenantID, email: tenantAdminEmail, role_slug: "tenant-admin" },
+    identifier: `${tenantID}:${tenantAdminEmail}`,
+    password: tenantAdminPass
+  });
   await superadminContext.close();
 
+  const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
   const appContext = await browser.newContext({
-    baseURL: process.env.E2E_BASE_URL || "http://localhost:8080",
+    baseURL: appBaseURL,
     extraHTTPHeaders: { "X-Forwarded-Host": tenantHost }
   });
   const page = await appContext.newPage();
 
-  await page.goto("/login");
-  await expect(page.locator("h1")).toHaveText("Login");
-  await page.locator('input[name="email"]').fill(tenantAdminEmail);
-  await page.locator('input[name="password"]').fill(tenantAdminPass);
-  await page.getByRole("button", { name: "Login" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  const legacyLoginGet = await appContext.request.get("/login");
+  expect(legacyLoginGet.status()).toBe(404);
 
-  await page.goto(`/org/nodes?tree_as_of=${asOf}`);
-  await expect(page.locator("h1")).toHaveText("OrgUnit Details");
+  const loginResp = await appContext.request.post("/iam/api/sessions", {
+    data: { email: tenantAdminEmail, password: tenantAdminPass }
+  });
+  expect(loginResp.status(), await loginResp.text()).toBe(204);
 
-  const setBusinessUnitFlag = async (form, enabled) => {
-    const input = form.locator('input[name="is_business_unit"]');
-    if ((await input.count()) === 0) {
-      if (enabled) {
-        throw new Error("missing is_business_unit field in /org/nodes form");
+  await page.goto(`/app?as_of=${asOf}`);
+  await expect(page.locator("h1")).toContainText("Bugs & Blossoms");
+
+  // Ensure SetID bootstrap.
+  const setidsResp = await appContext.request.get("/org/api/setids");
+  expect(setidsResp.status(), await setidsResp.text()).toBe(200);
+
+  const rootOrgCode = `TP06003R${suffix}`.toUpperCase();
+  {
+    const createOrgResp = await appContext.request.post("/org/api/org-units", {
+      data: {
+        org_code: rootOrgCode,
+        name: `TP060-03 Root ${runID}`,
+        effective_date: asOf,
+        parent_org_code: "",
+        is_business_unit: true
       }
-      return;
-    }
-    const inputType = (await input.first().getAttribute("type")) || "";
-    if (inputType === "checkbox") {
-      if (enabled) {
-        await input.first().check();
-      } else if (await input.first().isChecked()) {
-        await input.first().uncheck();
+    });
+    expect(createOrgResp.status(), await createOrgResp.text()).toBe(201);
+
+    const bindResp = await appContext.request.post("/org/api/setid-bindings", {
+      data: {
+        org_code: rootOrgCode,
+        setid: "DEFLT",
+        effective_date: asOf,
+        request_code: `tp060-03-bind-root-${runID}`
       }
-      return;
-    }
-    await input.first().fill(enabled ? "true" : "false");
-  };
+    });
+    expect(bindResp.status(), await bindResp.text()).toBe(201);
+  }
 
-  const openCreateForm = async () => {
-    await page.locator(".org-node-create-btn").click();
-    const form = page.locator(`#org-node-details form[method="POST"][action="/org/nodes?tree_as_of=${asOf}"]`).first();
-    await expect(form).toBeVisible();
-    return form;
-  };
+  // JobCatalog: create a dedicated job profile under DEFLT.
+  const jobFamilyGroupCode = `JFG_063_${suffix}`.toUpperCase();
+  const jobFamilyCode = `JF_063_${suffix}`.toUpperCase();
+  const jobProfileCode = `JP_063_${suffix}`.toUpperCase();
 
-  const createOrgUnit = async (effectiveDate, parentCode, orgCode, name, isBusinessUnit = false) => {
-    const form = await openCreateForm();
-    await form.locator('input[name="effective_date"]').fill(effectiveDate);
-    await form.locator('input[name="org_code"]').fill(orgCode);
-    await form.locator('input[name="parent_code"]').fill(parentCode);
-    await form.locator('input[name="name"]').fill(name);
-    await setBusinessUnitFlag(form, isBusinessUnit);
-    await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/nodes\\?tree_as_of=${asOf}$`));
-  };
-
-  const rootName = `TP060-03 Root ${runID}`;
-  const rootCode = `ROOT${runID.slice(-6)}`;
-  await createOrgUnit(asOf, "", rootCode, rootName, true);
-
-  const rootOrgCode = (await page.locator("sl-tree-item", { hasText: rootName }).first().locator(".org-node-code").innerText()).trim();
-  expect(rootOrgCode).not.toBe("");
-
-  const bindResp = await appContext.request.post("/org/api/setid-bindings", {
-    data: {
-      org_code: rootOrgCode,
-      setid: "DEFLT",
-      effective_date: asOf,
-      request_code: `tp060-03-bind-root-${runID}`
+  await createJobCatalogAction(appContext, {
+    packageCode: "DEFLT",
+    effectiveDate: asOf,
+    action: "create_job_family_group",
+    body: { code: jobFamilyGroupCode, name: `TP060-03 Group ${runID}` }
+  });
+  await createJobCatalogAction(appContext, {
+    packageCode: "DEFLT",
+    effectiveDate: asOf,
+    action: "create_job_family",
+    body: { code: jobFamilyCode, name: `TP060-03 Family ${runID}`, group_code: jobFamilyGroupCode }
+  });
+  await createJobCatalogAction(appContext, {
+    packageCode: "DEFLT",
+    effectiveDate: asOf,
+    action: "create_job_profile",
+    body: {
+      code: jobProfileCode,
+      name: `TP060-03 Profile ${runID}`,
+      family_codes_csv: jobFamilyCode,
+      primary_family_code: jobFamilyCode
     }
   });
-  expect(bindResp.status(), await bindResp.text()).toBe(201);
 
-  const jobFamilyGroupCode = `JFG-TP06003-${runID}`;
-  const jobFamilyCode = `JF-TP06003-${runID}`;
-  const jobProfileCode = `JP-TP06003-${runID}`;
+  // Resolve Job Profile UUID via options API.
+  const optionsResp = await appContext.request.get(
+    `/org/api/positions:options?as_of=${encodeURIComponent(asOf)}&org_code=${encodeURIComponent(rootOrgCode)}`
+  );
+  expect(optionsResp.status(), await optionsResp.text()).toBe(200);
+  const options = await optionsResp.json();
+  const jobProfileOpt = (options.job_profiles || []).find((p) => p.job_profile_code === jobProfileCode);
+  expect(jobProfileOpt && jobProfileOpt.job_profile_uuid).toBeTruthy();
 
-  await page.goto(`/org/job-catalog?as_of=${asOf}&package_code=DEFLT`);
-  await expect(page.locator("h1")).toHaveText("Job Catalog");
-
-  const ensureJobFamilyGroup = async (code, name) => {
-    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
-      return;
-    }
-    const form = page.locator(`form[method="POST"]`).filter({
-      has: page.locator('input[name="action"][value="create_job_family_group"]')
+  const upsertPosition = async (effectiveDate, payload) => {
+    const resp = await appContext.request.post(`/org/api/positions?as_of=${encodeURIComponent(effectiveDate)}`, {
+      data: { effective_date: effectiveDate, ...payload }
     });
-    await form.locator('input[name="job_family_group_code"]').fill(code);
-    await form.locator('input[name="job_family_group_name"]').fill(name);
-    await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*package_code=DEFLT)(?=.*as_of=${asOf}).*$`));
+    expect(resp.status(), await resp.text()).toBe(200);
+    return resp.json();
   };
-
-  const ensureJobFamily = async (code, name, groupCode) => {
-    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
-      return;
-    }
-    const form = page.locator(`form[method="POST"]`).filter({
-      has: page.locator('input[name="action"][value="create_job_family"]')
-    });
-    await form.locator('input[name="job_family_code"]').fill(code);
-    await form.locator('input[name="job_family_name"]').fill(name);
-    await form.locator('input[name="job_family_group_code"]').fill(groupCode);
-    await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*package_code=DEFLT)(?=.*as_of=${asOf}).*$`));
-  };
-
-  const ensureJobProfile = async (code, name, familyCodesCSV, primaryFamilyCode) => {
-    if ((await page.locator("tr", { hasText: code }).count()) > 0) {
-      return;
-    }
-    const form = page.locator(`form[method="POST"]`).filter({
-      has: page.locator('input[name="action"][value="create_job_profile"]')
-    });
-    await form.locator('input[name="job_profile_code"]').fill(code);
-    await form.locator('input[name="job_profile_name"]').fill(name);
-    await form.locator('input[name="job_profile_family_codes"]').fill(familyCodesCSV);
-    await form.locator('input[name="job_profile_primary_family_code"]').fill(primaryFamilyCode);
-    await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/org/job-catalog\\?(?=.*package_code=DEFLT)(?=.*as_of=${asOf}).*$`));
-  };
-
-  await ensureJobFamilyGroup(jobFamilyGroupCode, `TP060-03 Group ${runID}`);
-  await ensureJobFamily(jobFamilyCode, `TP060-03 Family ${runID}`, jobFamilyGroupCode);
-  await ensureJobProfile(jobProfileCode, `TP060-03 Profile ${runID}`, jobFamilyCode, jobFamilyCode);
-
-  await page.goto(`/org/positions?as_of=${asOf}&org_code=${rootOrgCode}`);
-  await expect(page.locator("h1")).toHaveText("Staffing / Positions");
-
-  const positionCreateForm = page
-    .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${asOf}"]`)
-    .first();
-  const orgOptionValue = rootOrgCode;
-  const orgUnitHiddenValue = await positionCreateForm
-    .locator('input[name="org_code"]')
-    .getAttribute("value");
-  expect(orgUnitHiddenValue).toBe(orgOptionValue);
-  const jobProfileOption = positionCreateForm.locator('select[name="job_profile_uuid"] option', { hasText: jobProfileCode }).first();
-  const jobProfileID = await jobProfileOption.getAttribute("value");
-  expect(jobProfileID).not.toBeNull();
 
   const pernrByIndex = Array.from({ length: 10 }, (_, i) => `${101 + i}`);
   const positionIDsByPernr = new Map();
   for (const pernr of pernrByIndex) {
     const positionName = `TP060-03 Position ${pernr} ${runID}`;
-    await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
-    await positionCreateForm.locator('select[name="job_profile_uuid"]').selectOption(jobProfileID);
-    await positionCreateForm.locator('input[name="capacity_fte"]').fill(pernr === "104" ? "0.50" : "1.0");
-    await positionCreateForm.locator('input[name="name"]').fill(positionName);
-    await positionCreateForm.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(
-      new RegExp(`/org/positions\\?(?=.*as_of=${asOf})(?=.*org_code=${orgOptionValue}).*$`)
-    );
-
-    const row = page.locator("tr", { hasText: positionName }).first();
-    await expect(row).toBeVisible();
-    const positionID = (await row.locator("td").nth(1).innerText()).trim();
-    expect(positionID).not.toBe("");
-    positionIDsByPernr.set(pernr, positionID);
+    const created = await upsertPosition(asOf, {
+      org_code: rootOrgCode,
+      job_profile_uuid: jobProfileOpt.job_profile_uuid,
+      capacity_fte: pernr === "104" ? "0.50" : "1.0",
+      name: positionName
+    });
+    expect(created.position_uuid).toBeTruthy();
+    positionIDsByPernr.set(pernr, created.position_uuid);
   }
 
   const updateTargetPositionName = `TP060-03 UpdateTarget Position ${runID}`;
-  await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
-  await positionCreateForm.locator('select[name="job_profile_uuid"]').selectOption(jobProfileID);
-  await positionCreateForm.locator('input[name="capacity_fte"]').fill("1.0");
-  await positionCreateForm.locator('input[name="name"]').fill(updateTargetPositionName);
-  await positionCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(
-    new RegExp(`/org/positions\\?(?=.*as_of=${asOf})(?=.*org_code=${orgOptionValue}).*$`)
-  );
-
-  const updateTargetRow = page.locator("tr", { hasText: updateTargetPositionName }).first();
-  await expect(updateTargetRow).toBeVisible();
-  const updateTargetPositionID = (await updateTargetRow.locator("td").nth(1).innerText()).trim();
-  expect(updateTargetPositionID).not.toBe("");
+  const updateTarget = await upsertPosition(asOf, {
+    org_code: rootOrgCode,
+    job_profile_uuid: jobProfileOpt.job_profile_uuid,
+    capacity_fte: "1.0",
+    name: updateTargetPositionName
+  });
+  const updateTargetPositionID = updateTarget.position_uuid;
+  expect(updateTargetPositionID).toBeTruthy();
 
   const disabledPositionName = `TP060-03 Disabled Position ${runID}`;
-  await positionCreateForm.locator('input[name="effective_date"]').fill(asOf);
-  await positionCreateForm.locator('select[name="job_profile_uuid"]').selectOption(jobProfileID);
-  await positionCreateForm.locator('input[name="name"]').fill(disabledPositionName);
-  await positionCreateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(
-    new RegExp(`/org/positions\\?(?=.*as_of=${asOf})(?=.*org_code=${orgOptionValue}).*$`)
-  );
+  const disabledCreated = await upsertPosition(asOf, {
+    org_code: rootOrgCode,
+    job_profile_uuid: jobProfileOpt.job_profile_uuid,
+    name: disabledPositionName
+  });
+  const disabledPositionID = disabledCreated.position_uuid;
+  expect(disabledPositionID).toBeTruthy();
 
-  const disabledRow = page.locator("tr", { hasText: disabledPositionName }).first();
-  await expect(disabledRow).toBeVisible();
-  const disabledPositionID = (await disabledRow.locator("td").nth(1).innerText()).trim();
-  expect(disabledPositionID).not.toBe("");
-
-  await page.goto(`/person/persons?as_of=${asOf}`);
-  await expect(page.locator("h1")).toHaveText("Person");
-
+  // Persons: create 10 persons via JSON API.
   const personUUIDByPernr = new Map();
   for (const pernr of pernrByIndex) {
     const displayName = `TP060-03 Person ${pernr} ${runID}`;
-    const form = page.locator(`form[action="/person/persons?as_of=${asOf}"]`).first();
-    await form.locator('input[name="pernr"]').fill(pernr);
-    await form.locator('input[name="display_name"]').fill(displayName);
-    await form.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL(new RegExp(`/person/persons\\?as_of=${asOf}$`));
-
-    const row = page.locator("tr", { hasText: pernr }).first();
-    await expect(row).toBeVisible();
-    const personUUID = (await row.locator("code").first().innerText()).trim();
-    expect(personUUID).not.toBe("");
-    personUUIDByPernr.set(pernr, personUUID);
+    const resp = await appContext.request.post("/person/api/persons", {
+      data: { pernr, display_name: displayName }
+    });
+    expect(resp.status(), await resp.text()).toBe(201);
+    const json = await resp.json();
+    expect(json.person_uuid).toBeTruthy();
+    personUUIDByPernr.set(pernr, json.person_uuid);
   }
 
-  await page.goto(`/org/positions?as_of=${asOf}&org_code=${rootOrgCode}`);
-  await expect(page.locator("h1")).toHaveText("Staffing / Positions");
+  // Disable one position at lateEffectiveDate.
+  await upsertPosition(lateEffectiveDate, {
+    position_uuid: disabledPositionID,
+    lifecycle_status: "disabled"
+  });
 
-  const positionUpdateForm = page
-    .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${asOf}"]`)
-    .nth(1);
-  await positionUpdateForm.locator('input[name="effective_date"]').fill(lateEffectiveDate);
-  await positionUpdateForm.locator('select[name="position_uuid"]').selectOption(disabledPositionID);
-  await positionUpdateForm.locator('select[name="lifecycle_status"]').selectOption("disabled");
-  await positionUpdateForm.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(
-    new RegExp(`/org/positions\\?(?=.*as_of=${lateEffectiveDate}).*$`)
-  );
+  const listLateResp = await appContext.request.get(`/org/api/positions?as_of=${encodeURIComponent(lateEffectiveDate)}`);
+  expect(listLateResp.status(), await listLateResp.text()).toBe(200);
+  const listLate = await listLateResp.json();
+  const disabledLate = (listLate.positions || []).find((p) => p.position_uuid === disabledPositionID);
+  expect(disabledLate && disabledLate.lifecycle_status).toBe("disabled");
 
-  await expect(page.locator("tr", { hasText: disabledPositionName }).first()).toContainText("disabled");
-
-  const positionUpdateFormLate = page
-    .locator(`form[method="POST"][action*="/org/positions"][action*="as_of=${lateEffectiveDate}"]`)
-    .nth(1);
-
+  // Reports-to relationships + fail-closed cycles/self/retro.
   const managerPernr = "101";
   const reporteePernr = "102";
-  const managerPositionName = `TP060-03 Position ${managerPernr} ${runID}`;
-  const reporteePositionName = `TP060-03 Position ${reporteePernr} ${runID}`;
   const managerPositionID = positionIDsByPernr.get(managerPernr);
   const reporteePositionID = positionIDsByPernr.get(reporteePernr);
-  expect(managerPositionID).not.toBeUndefined();
-  expect(reporteePositionID).not.toBeUndefined();
+  expect(managerPositionID).toBeTruthy();
+  expect(reporteePositionID).toBeTruthy();
 
-  await positionUpdateFormLate.locator('input[name="effective_date"]').fill(lateEffectiveDate);
-  await positionUpdateFormLate.locator('select[name="position_uuid"]').selectOption(reporteePositionID);
-  await positionUpdateFormLate.locator('select[name="reports_to_position_uuid"]').selectOption(managerPositionID);
-  await positionUpdateFormLate.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(
-    new RegExp(`/org/positions\\?(?=.*as_of=${lateEffectiveDate}).*$`)
-  );
+  await upsertPosition(lateEffectiveDate, {
+    position_uuid: reporteePositionID,
+    reports_to_position_uuid: managerPositionID
+  });
 
-  const reporteeRow = page.locator("tr", { hasText: reporteePositionName }).first();
-  await expect(reporteeRow).toBeVisible();
-  await expect(reporteeRow).toContainText(managerPositionID);
-
-  const reportsToCycleResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
+  const reportsToCycleResp = await appContext.request.post(`/org/api/positions?as_of=${encodeURIComponent(lateEffectiveDate)}`, {
     data: {
       effective_date: lateEffectiveDate,
       position_uuid: managerPositionID,
@@ -336,7 +273,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   expect(reportsToCycleResp.status()).toBe(422);
   expect((await reportsToCycleResp.json()).code).toBe("STAFFING_POSITION_REPORTS_TO_CYCLE");
 
-  const reportsToSelfResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
+  const reportsToSelfResp = await appContext.request.post(`/org/api/positions?as_of=${encodeURIComponent(lateEffectiveDate)}`, {
     data: {
       effective_date: lateEffectiveDate,
       position_uuid: managerPositionID,
@@ -346,7 +283,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   expect(reportsToSelfResp.status()).toBe(422);
   expect((await reportsToSelfResp.json()).code).toBe("STAFFING_POSITION_REPORTS_TO_SELF");
 
-  const reportsToRetroResp = await appContext.request.post(`/org/api/positions?as_of=${midEffectiveDate}`, {
+  const reportsToRetroResp = await appContext.request.post(`/org/api/positions?as_of=${encodeURIComponent(midEffectiveDate)}`, {
     data: {
       effective_date: midEffectiveDate,
       position_uuid: reporteePositionID,
@@ -356,10 +293,8 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   expect(reportsToRetroResp.status()).toBe(422);
   expect((await reportsToRetroResp.json()).code).toBe("STAFFING_INVALID_ARGUMENT");
 
-  const byPernr = async (pernr) => {
-    const resp = await appContext.request.get(`/person/api/persons:by-pernr?pernr=${encodeURIComponent(pernr)}`);
-    return resp;
-  };
+  // Person normalization: leading zeros should resolve to canonical pernr.
+  const byPernr = async (raw) => appContext.request.get(`/person/api/persons:by-pernr?pernr=${encodeURIComponent(raw)}`);
 
   const respLeadingZeros = await byPernr("00000103");
   expect(respLeadingZeros.status()).toBe(200);
@@ -379,56 +314,34 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   expect(respNotFound.status()).toBe(404);
   expect((await respNotFound.json()).code).toBe("PERSON_NOT_FOUND");
 
-  await page.screenshot({ path: `_artifacts/tp060-03-persons-${runID}.png`, fullPage: true });
-
-  const assignmentDisabledResp = await appContext.request.post(`/org/api/assignments?as_of=${lateEffectiveDate}`, {
-    data: {
-      effective_date: lateEffectiveDate,
-      person_uuid: personUUIDByPernr.get("101"),
-      position_uuid: disabledPositionID,
-      allocated_fte: "1.0"
-    }
-  });
-  expect(assignmentDisabledResp.status()).toBe(422);
-  expect((await assignmentDisabledResp.json()).code).toBe("STAFFING_POSITION_DISABLED_AS_OF");
-
-  await page.goto(`/org/assignments?as_of=${lateEffectiveDate}`);
-  await expect(page.locator("h1")).toHaveText("Staffing / Assignments");
-  await expect(page.locator(`select[name="position_uuid"] option[value="${disabledPositionID}"]`)).toHaveCount(0);
-
-  await page.goto(`/org/assignments?as_of=${asOf}`);
-  await expect(page.locator("h1")).toHaveText("Staffing / Assignments");
+  // Assignments: disabled position cannot be assigned.
+  {
+    const resp = await appContext.request.post(`/org/api/assignments?as_of=${encodeURIComponent(lateEffectiveDate)}`, {
+      data: {
+        effective_date: lateEffectiveDate,
+        person_uuid: personUUIDByPernr.get("101"),
+        position_uuid: disabledPositionID,
+        allocated_fte: "1.0"
+      }
+    });
+    expect(resp.status(), await resp.text()).toBe(422);
+    expect((await resp.json()).code).toBe("STAFFING_POSITION_DISABLED_AS_OF");
+  }
 
   const upsertAssignment = async ({ pernr, effectiveDate, allocatedFte }) => {
-    await page.goto(`/org/assignments?as_of=${asOf}`);
-    await expect(page.locator("h1")).toHaveText("Staffing / Assignments");
-
-    const loadForm = page
-      .locator('form[method="GET"][action="/org/assignments"]')
-      .filter({ has: page.getByRole("button", { name: "Load" }) })
-      .first();
-    const upsertForm = page
-      .locator('form[method="POST"]')
-      .filter({ has: page.getByRole("button", { name: "Submit" }) })
-      .first();
-
-    await loadForm.locator('input[name="pernr"][type="text"]').fill(pernr);
-    await loadForm.getByRole("button", { name: "Load" }).click();
-    await expect(page).toHaveURL(new RegExp(`/org/assignments\\?as_of=${asOf}&pernr=${pernr}$`));
-
-    const positionID = positionIDsByPernr.get(pernr);
-    expect(positionID).toBeTruthy();
-
-    await upsertForm.locator('input[name="effective_date"]').fill(effectiveDate);
-    await upsertForm.locator('select[name="position_uuid"]').selectOption(positionID);
-    await upsertForm.locator('input[name="allocated_fte"]').fill(allocatedFte);
-    await upsertForm.getByRole("button", { name: "Submit" }).click();
-    await expect(page).toHaveURL(new RegExp(`/org/assignments\\?as_of=${effectiveDate}&pernr=${pernr}$`));
-
-    await expect(page.locator("h2", { hasText: "Timeline" })).toBeVisible();
-    const table = page.locator("table").first();
-    await expect(table).toContainText(effectiveDate);
-    await expect(table).not.toContainText("end_date");
+    const personUUID = personUUIDByPernr.get(pernr);
+    const positionUUID = positionIDsByPernr.get(pernr);
+    expect(personUUID).toBeTruthy();
+    expect(positionUUID).toBeTruthy();
+    const resp = await appContext.request.post(`/org/api/assignments?as_of=${encodeURIComponent(effectiveDate)}`, {
+      data: {
+        effective_date: effectiveDate,
+        person_uuid: personUUID,
+        position_uuid: positionUUID,
+        allocated_fte: allocatedFte
+      }
+    });
+    expect(resp.status(), await resp.text()).toBe(200);
   };
 
   for (const pernr of pernrByIndex) {
@@ -442,17 +355,17 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   }
 
   const p101 = personUUIDByPernr.get("101");
-  expect(p101).toBeTruthy();
   const p102 = personUUIDByPernr.get("102");
-  expect(p102).toBeTruthy();
   const pos101 = positionIDsByPernr.get("101");
-  expect(pos101).toBeTruthy();
   const pos104 = positionIDsByPernr.get("104");
+  expect(p101).toBeTruthy();
+  expect(p102).toBeTruthy();
+  expect(pos101).toBeTruthy();
   expect(pos104).toBeTruthy();
 
   // Multi-slice Valid Time: update at midEffectiveDate, verify snapshot switches across as_of.
   {
-    const moveResp = await appContext.request.post(`/org/api/assignments?as_of=${midEffectiveDate}`, {
+    const moveResp = await appContext.request.post(`/org/api/assignments?as_of=${encodeURIComponent(midEffectiveDate)}`, {
       data: {
         effective_date: midEffectiveDate,
         person_uuid: p101,
@@ -462,14 +375,18 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     });
     expect(moveResp.status(), await moveResp.text()).toBe(200);
 
-    const beforeResp = await appContext.request.get(`/org/api/assignments?as_of=${asOfBeforeMid}&person_uuid=${encodeURIComponent(p101)}`);
+    const beforeResp = await appContext.request.get(
+      `/org/api/assignments?as_of=${encodeURIComponent(asOfBeforeMid)}&person_uuid=${encodeURIComponent(p101)}`
+    );
     expect(beforeResp.status(), await beforeResp.text()).toBe(200);
     const beforeJSON = await beforeResp.json();
     expect(beforeJSON.assignments).toHaveLength(1);
     expect(beforeJSON.assignments[0].effective_date).toBe(asOf);
     expect(beforeJSON.assignments[0].position_uuid).toBe(pos101);
 
-    const afterResp = await appContext.request.get(`/org/api/assignments?as_of=${midEffectiveDate}&person_uuid=${encodeURIComponent(p101)}`);
+    const afterResp = await appContext.request.get(
+      `/org/api/assignments?as_of=${encodeURIComponent(midEffectiveDate)}&person_uuid=${encodeURIComponent(p101)}`
+    );
     expect(afterResp.status(), await afterResp.text()).toBe(200);
     const afterJSON = await afterResp.json();
     expect(afterJSON.assignments).toHaveLength(1);
@@ -479,7 +396,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
 
   // Rerunnable upsert: same effective_date same payload => OK; different payload => 409 STAFFING_IDEMPOTENCY_REUSED.
   {
-    const okResp = await appContext.request.post(`/org/api/assignments?as_of=${midEffectiveDate}`, {
+    const okResp = await appContext.request.post(`/org/api/assignments?as_of=${encodeURIComponent(midEffectiveDate)}`, {
       data: {
         effective_date: midEffectiveDate,
         person_uuid: p101,
@@ -489,7 +406,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
     });
     expect(okResp.status(), await okResp.text()).toBe(200);
 
-    const conflictResp = await appContext.request.post(`/org/api/assignments?as_of=${midEffectiveDate}`, {
+    const conflictResp = await appContext.request.post(`/org/api/assignments?as_of=${encodeURIComponent(midEffectiveDate)}`, {
       data: {
         effective_date: midEffectiveDate,
         person_uuid: p101,
@@ -503,7 +420,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
 
   // Position exclusivity: occupied position cannot be assigned to another active assignment (fail-closed with stable code).
   {
-    const occupiedResp = await appContext.request.post(`/org/api/assignments?as_of=${midEffectiveDate}`, {
+    const occupiedResp = await appContext.request.post(`/org/api/assignments?as_of=${encodeURIComponent(midEffectiveDate)}`, {
       data: {
         effective_date: midEffectiveDate,
         person_uuid: p102,
@@ -516,11 +433,11 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   }
 
   const capacityPositionID = positionIDsByPernr.get("104");
-  expect(capacityPositionID).toBeTruthy();
   const capacityPersonUUID = personUUIDByPernr.get("104");
+  expect(capacityPositionID).toBeTruthy();
   expect(capacityPersonUUID).toBeTruthy();
 
-  const assignmentCapacityResp = await appContext.request.post(`/org/api/assignments?as_of=${lateEffectiveDate}`, {
+  const assignmentCapacityResp = await appContext.request.post(`/org/api/assignments?as_of=${encodeURIComponent(lateEffectiveDate)}`, {
     data: {
       effective_date: lateEffectiveDate,
       person_uuid: capacityPersonUUID,
@@ -531,7 +448,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   expect(assignmentCapacityResp.status(), await assignmentCapacityResp.text()).toBe(422);
   expect((await assignmentCapacityResp.json()).code).toBe("STAFFING_POSITION_CAPACITY_EXCEEDED");
 
-  const reduceCapacityResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
+  const reduceCapacityResp = await appContext.request.post(`/org/api/positions?as_of=${encodeURIComponent(lateEffectiveDate)}`, {
     data: {
       effective_date: lateEffectiveDate,
       position_uuid: capacityPositionID,
@@ -541,7 +458,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   expect(reduceCapacityResp.status(), await reduceCapacityResp.text()).toBe(422);
   expect((await reduceCapacityResp.json()).code).toBe("STAFFING_POSITION_CAPACITY_EXCEEDED");
 
-  const disableConflictResp = await appContext.request.post(`/org/api/positions?as_of=${lateEffectiveDate}`, {
+  const disableConflictResp = await appContext.request.post(`/org/api/positions?as_of=${encodeURIComponent(lateEffectiveDate)}`, {
     data: {
       effective_date: lateEffectiveDate,
       position_uuid: capacityPositionID,
@@ -551,18 +468,31 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   expect(disableConflictResp.status(), await disableConflictResp.text()).toBe(422);
   expect((await disableConflictResp.json()).code).toBe("STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF");
 
-  await page.screenshot({ path: `_artifacts/tp060-03-assignments-${runID}.png`, fullPage: true });
+  // Valid-time empty timeline: pernr=106 has assignment only at lateEffectiveDate.
+  {
+    const p106 = personUUIDByPernr.get("106");
+    expect(p106).toBeTruthy();
 
-  await page.goto(`/org/assignments?as_of=${asOf}&pernr=106`);
-  await expect(page.locator("h1")).toHaveText("Staffing / Assignments");
-  await expect(page.locator("h2", { hasText: "Timeline" })).toBeVisible();
-  const timelineEmpty = page.locator("h2", { hasText: "Timeline" }).locator("xpath=following-sibling::p[1]");
-  await expect(timelineEmpty).toHaveText("(empty)");
+    const beforeResp = await appContext.request.get(
+      `/org/api/assignments?as_of=${encodeURIComponent(asOf)}&person_uuid=${encodeURIComponent(p106)}`
+    );
+    expect(beforeResp.status(), await beforeResp.text()).toBe(200);
+    expect((await beforeResp.json()).assignments).toHaveLength(0);
 
-  await page.goto(`/org/assignments?as_of=${lateEffectiveDate}&pernr=106`);
-  await expect(page.locator("h1")).toHaveText("Staffing / Assignments");
-  await expect(page.locator("table").first()).toContainText(lateEffectiveDate);
-  await page.screenshot({ path: `_artifacts/tp060-03-valid-time-${runID}.png`, fullPage: true });
+    const afterResp = await appContext.request.get(
+      `/org/api/assignments?as_of=${encodeURIComponent(lateEffectiveDate)}&person_uuid=${encodeURIComponent(p106)}`
+    );
+    expect(afterResp.status(), await afterResp.text()).toBe(200);
+    const afterJSON = await afterResp.json();
+    expect(afterJSON.assignments.length).toBeGreaterThan(0);
+    expect(afterJSON.assignments[0].effective_date).toBe(lateEffectiveDate);
+  }
+
+  // UI sanity checks (MUI-only pages)
+  await page.goto(`/app/staffing/positions?as_of=${asOf}&org_code=${rootOrgCode}`);
+  await expect(page.getByRole("heading", { level: 2, name: "Staffing / Positions" })).toBeVisible();
+  await page.goto(`/app/staffing/assignments?as_of=${lateEffectiveDate}&pernr=106`);
+  await expect(page.getByRole("heading", { level: 2, name: "Staffing / Assignments" })).toBeVisible();
 
   await appContext.close();
 });

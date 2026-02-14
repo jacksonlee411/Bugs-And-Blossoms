@@ -139,6 +139,101 @@ func TestSIDCookieHelpers(t *testing.T) {
 	}
 }
 
+func TestPGSessionStore_Lookup_Branches(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("no rows", func(t *testing.T) {
+		s := &pgSessionStore{q: &stubQ{rowErr: pgx.ErrNoRows}}
+		if _, ok, err := s.Lookup(ctx, "sid1"); err != nil || ok {
+			t.Fatalf("ok=%v err=%v", ok, err)
+		}
+	})
+
+	t.Run("context canceled", func(t *testing.T) {
+		s := &pgSessionStore{q: &stubQ{rowErr: context.Canceled}}
+		if _, ok, err := s.Lookup(ctx, "sid1"); err == nil || ok {
+			t.Fatalf("ok=%v err=%v", ok, err)
+		}
+	})
+
+	t.Run("generic query error", func(t *testing.T) {
+		s := &pgSessionStore{q: &stubQ{rowErr: errors.New("boom")}}
+		if _, ok, err := s.Lookup(ctx, "sid1"); err == nil || ok {
+			t.Fatalf("ok=%v err=%v", ok, err)
+		}
+	})
+
+	t.Run("revoked", func(t *testing.T) {
+		revokedAt := time.Now().UTC()
+		s := &pgSessionStore{q: &stubQ{row: scanRow{scan: func(dest ...any) error {
+			*(dest[0].(*string)) = "t1"
+			*(dest[1].(*string)) = "p1"
+			*(dest[2].(*time.Time)) = time.Now().Add(time.Hour).UTC()
+			*(dest[3].(**time.Time)) = &revokedAt
+			return nil
+		}}}}
+		if _, ok, err := s.Lookup(ctx, "sid1"); err != nil || ok {
+			t.Fatalf("ok=%v err=%v", ok, err)
+		}
+	})
+
+	t.Run("expired", func(t *testing.T) {
+		s := &pgSessionStore{q: &stubQ{row: scanRow{scan: func(dest ...any) error {
+			*(dest[0].(*string)) = "t1"
+			*(dest[1].(*string)) = "p1"
+			*(dest[2].(*time.Time)) = time.Now().Add(-time.Hour).UTC()
+			*(dest[3].(**time.Time)) = nil
+			return nil
+		}}}}
+		if _, ok, err := s.Lookup(ctx, "sid1"); err != nil || ok {
+			t.Fatalf("ok=%v err=%v", ok, err)
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		expiresAt := time.Now().Add(time.Hour).UTC()
+		s := &pgSessionStore{q: &stubQ{row: scanRow{scan: func(dest ...any) error {
+			*(dest[0].(*string)) = "t1"
+			*(dest[1].(*string)) = "p1"
+			*(dest[2].(*time.Time)) = expiresAt
+			*(dest[3].(**time.Time)) = nil
+			return nil
+		}}}}
+		out, ok, err := s.Lookup(ctx, "sid1")
+		if err != nil || !ok {
+			t.Fatalf("ok=%v err=%v", ok, err)
+		}
+		if out.TenantID != "t1" || out.PrincipalID != "p1" || !out.ExpiresAt.Equal(expiresAt) || out.RevokedAt != nil {
+			t.Fatalf("unexpected session: %+v", out)
+		}
+	})
+}
+
+func TestPGSessionStore_Revoke_Branches(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("empty sid", func(t *testing.T) {
+		s := &pgSessionStore{q: &stubQ{}}
+		if err := s.Revoke(ctx, ""); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("exec error", func(t *testing.T) {
+		s := &pgSessionStore{q: &stubQ{execErr: errors.New("boom")}}
+		if err := s.Revoke(ctx, "sid1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		s := &pgSessionStore{q: &stubQ{}}
+		if err := s.Revoke(ctx, "sid1"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+	})
+}
+
 func TestMemoryPrincipalStore_ErrOnRand(t *testing.T) {
 	old := sidRandReader
 	t.Cleanup(func() { sidRandReader = old })
@@ -252,6 +347,13 @@ func TestMemorySessionStore_RevokedOrExpired(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if got, ok, err := s.Lookup(ctx, sid); err != nil || !ok || got.TenantID != "t1" {
+		t.Fatalf("active ok=%v err=%v session=%+v", ok, err, got)
+	}
+	if _, ok, err := s.Lookup(ctx, "missing"); err != nil || ok {
+		t.Fatalf("missing ok=%v err=%v", ok, err)
+	}
+
 	revokedAt := time.Now()
 	s.bySID[sid] = Session{
 		TenantID:    "t1",
@@ -270,6 +372,13 @@ func TestMemorySessionStore_RevokedOrExpired(t *testing.T) {
 	}
 	if _, ok, err := s.Lookup(ctx, sid); err != nil || ok {
 		t.Fatalf("expired ok=%v err=%v", ok, err)
+	}
+
+	if err := s.Revoke(ctx, sid); err != nil {
+		t.Fatalf("revoke err=%v", err)
+	}
+	if _, ok, err := s.Lookup(ctx, sid); err != nil || ok {
+		t.Fatalf("revoked ok=%v err=%v", ok, err)
 	}
 }
 

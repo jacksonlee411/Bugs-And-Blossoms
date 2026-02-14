@@ -10,7 +10,7 @@
 
 - Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
 - 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
-- `.templ`/Tailwind/Astro UI 相关：`make generate && make css`，然后 `git status --short` 必须为空
+- `.templ`/MUI Web UI/presentation assets 相关：`make generate && make css`，然后 `git status --short` 必须为空
 - 多语言 JSON：`make check tr`
 - 发 PR 前一键对齐 CI（推荐）：`make preflight`
 - 发 PR 规则（强制）：PR 源分支只能是 `wt-dev-main` / `wt-dev-a` / `wt-dev-b`（CI 门禁：`make check pr-branch`）
@@ -35,7 +35,7 @@
 | 你改了什么 | 本地必跑 | 备注 |
 | --- | --- | --- |
 | 任意 Go 代码 | `go fmt ./... && go vet ./... && make check lint && make test` | 不要仅跑 `gofmt`/`go test`，它们覆盖不到 CI lint |
-| `.templ` / Tailwind / Astro UI / presentation assets | `make generate && make css` + `git status --short` | 生成物必须提交，否则 CI 会失败 |
+| `.templ` / MUI Web UI / presentation assets | `make generate && make css` + `git status --short` | 生成物必须提交，否则 CI 会失败 |
 | 多语言 JSON | `make check tr` | |
 | DB Schema/迁移（Atlas+Goose，按模块） | `make <module> plan && make <module> lint && make <module> migrate up` | 模块级闭环见 `DEV-PLAN-024` |
 | sqlc（schema/queries/config） | `make sqlc-generate` + `git status --short` | 规范与 stopline 见 `DEV-PLAN-025` |
@@ -88,7 +88,7 @@
 - 路由治理：命名空间/route_class/全局 responder 契约统一，并由门禁阻断漂移（`DEV-PLAN-017/012`）。
 - 授权边界：RLS 圈地 ≠ Casbin 授权；subject/domain/object/action 命名冻结（`DEV-PLAN-021/022/019`）。
 - i18n：仅 `en/zh`，语言写入口唯一；不做业务数据多语言（`DEV-PLAN-020`）。
-- 模块边界：业务域 4 模块（orgunit/jobcatalog/staffing/person）+ 平台模块 iam；跨模块优先通过 `pkg/**` 与 HTTP/HTMX 组合，避免 Go 代码跨模块 import（`DEV-PLAN-015/016/019`）。
+- 模块边界：业务域 4 模块（orgunit/jobcatalog/staffing/person）+ 平台模块 iam；跨模块优先通过 `pkg/**` 与 HTTP/JSON API 组合，避免 Go 代码跨模块 import（`DEV-PLAN-015/016/019`）。
 - SetID：record group 为稳定枚举；映射无缺省洞；不得模块自造回退规则（`DEV-PLAN-028`）。
 - No Legacy：禁止引入“legacy 分支/回退通道/双链路”（包括 `read=legacy`、兼容别名窗口、旧实现兜底等）；回滚只能走“环境级保护 + 只读/停写/修复后重试”，并必须有门禁阻断（`DEV-PLAN-004M1`）。
 
@@ -132,7 +132,7 @@ modules/{module}/
 - RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - Authz（Casbin）：`docs/dev-plans/022-authz-casbin-toolchain.md`
 - Routing 策略与门禁：`docs/dev-plans/017-routing-strategy.md`
-- UI Shell（Astro AHA）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- UI Shell（历史，已被 DEV-PLAN-103 替代）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - i18n（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
 - Docs 治理：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
 - CI 质量门禁：`docs/dev-plans/012-ci-quality-gates.md`
@@ -223,6 +223,7 @@ modules/{module}/
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
 - DEV-PLAN-103：移除 Astro/HTMX，前端收敛为 MUI X（React SPA）：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- DEV-PLAN-103 执行日志：`docs/dev-records/dev-plan-103-execution-log.md`
 - DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
@@ -244,7 +245,7 @@ modules/{module}/
 - Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - Person 最小身份锚点（Pernr 1-8 位数字字符串）：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`
-- 引入 Astro（AHA Stack）到 HRMS UI：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- 引入 Astro（AHA Stack）到 HRMS UI（历史，已被 DEV-PLAN-103 替代）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - 技术栈与工具链版本冻结：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - 租户管理与登录认证：`docs/dev-plans/019-tenant-and-authn.md`
 - SuperAdmin 控制面认证与会话：`docs/dev-plans/023-superadmin-authn.md`
@@ -262,5 +263,5 @@ modules/{module}/
 - DEV-PLAN-009M3：Phase 5 下一大型里程碑执行计划（质量收口：E2E 真实化 + 可排障门禁）：`docs/dev-plans/009m3-phase5-quality-hardening-e2e-execution-plan.md`
 - DEV-PLAN-009M4：Phase 2 下一大型里程碑执行计划（SuperAdmin 控制面 + Tenant Console MVP）：`docs/dev-plans/009m4-phase2-superadmin-tenant-console-execution-plan.md`
 - DEV-PLAN-009M5：Phase 2 下一大型里程碑执行计划（AuthN 真实化：Kratos + 本地会话 sid/sa_sid）：`docs/dev-plans/009m5-phase2-authn-kratos-sessions-execution-plan.md`
-- DEV-PLAN-009M6：Phase 1 追加里程碑执行计划（补齐 DEV-PLAN-018 Phase 0：Astro build + go:embed Shell）：`docs/dev-plans/009m6-phase1-astro-build-phase0-execution-plan.md`
+- DEV-PLAN-009M6：Phase 1 追加里程碑执行计划（历史：补齐 DEV-PLAN-018 Phase 0，已由 DEV-PLAN-103 收口）：`docs/dev-plans/009m6-phase1-astro-build-phase0-execution-plan.md`
 - Greenfield 全新实施路线图（009-031）：`docs/dev-plans/009-implementation-roadmap.md`

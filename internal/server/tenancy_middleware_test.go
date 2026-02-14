@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
 
 type errorTenancyResolver struct{}
@@ -61,8 +63,27 @@ func (s *stubPrincipalStore) GetByID(context.Context, string, string) (Principal
 	return s.p, s.ok, s.err
 }
 
+func mustInternalAPIClassifier(t *testing.T) *routing.Classifier {
+	t.Helper()
+
+	c, err := routing.NewClassifier(routing.Allowlist{
+		Version: 1,
+		Entrypoints: map[string]routing.Entrypoint{
+			"server": {
+				Routes: []routing.Route{
+					{Path: "/org/api/org-units", Methods: []string{"GET"}, RouteClass: "internal_api"},
+				},
+			},
+		},
+	}, "server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
 func TestWithTenantAndSession_ResolveError(t *testing.T) {
-	h := withTenantAndSession(errorTenancyResolver{}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := withTenantAndSession(nil, errorTenancyResolver{}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("unexpected next")
 	}))
 
@@ -77,7 +98,7 @@ func TestWithTenantAndSession_ResolveError(t *testing.T) {
 
 func TestWithTenantAndSession_AssetsBypass(t *testing.T) {
 	nextCalled := false
-	h := withTenantAndSession(errorTenancyResolver{}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	h := withTenantAndSession(nil, errorTenancyResolver{}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		nextCalled = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -95,7 +116,7 @@ func TestWithTenantAndSession_AssetsBypass(t *testing.T) {
 
 func TestWithTenantAndSession_HealthBypass(t *testing.T) {
 	nextCalled := false
-	h := withTenantAndSession(errorTenancyResolver{}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	h := withTenantAndSession(nil, errorTenancyResolver{}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		nextCalled = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -112,7 +133,7 @@ func TestWithTenantAndSession_HealthBypass(t *testing.T) {
 }
 
 func TestWithTenantAndSession_TenantNotFound(t *testing.T) {
-	h := withTenantAndSession(stubTenancyResolver{ok: false}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := withTenantAndSession(nil, stubTenancyResolver{ok: false}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("unexpected next")
 	}))
 
@@ -125,10 +146,10 @@ func TestWithTenantAndSession_TenantNotFound(t *testing.T) {
 	}
 }
 
-func TestWithTenantAndSession_LoginBypassInjectsTenant(t *testing.T) {
+func TestWithTenantAndSession_SessionsBypassInjectsTenant(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	nextCalled := false
-	h := withTenantAndSession(stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		nextCalled = true
 		if got, ok := currentTenant(r.Context()); !ok || got.ID != tnt.ID {
 			t.Fatalf("tenant=%+v ok=%v", got, ok)
@@ -136,7 +157,7 @@ func TestWithTenantAndSession_LoginBypassInjectsTenant(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", nil)
 	req.Host = "localhost:8080"
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -150,7 +171,7 @@ func TestWithTenantAndSession_LoginBypassInjectsTenant(t *testing.T) {
 
 func TestWithTenantAndSession_MissingSIDRedirects(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
-	h := withTenantAndSession(stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("unexpected next")
 	}))
 
@@ -161,7 +182,7 @@ func TestWithTenantAndSession_MissingSIDRedirects(t *testing.T) {
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	if loc := rec.Result().Header.Get("Location"); loc != "/login" {
+	if loc := rec.Result().Header.Get("Location"); loc != "/app/login" {
 		t.Fatalf("location=%q", loc)
 	}
 }
@@ -169,7 +190,7 @@ func TestWithTenantAndSession_MissingSIDRedirects(t *testing.T) {
 func TestWithTenantAndSession_SessionLookupError(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	sessions := &stubSessionStore{err: errors.New("boom")}
-	h := withTenantAndSession(stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("unexpected next")
 	}))
 
@@ -186,7 +207,7 @@ func TestWithTenantAndSession_SessionLookupError(t *testing.T) {
 func TestWithTenantAndSession_SessionNotFoundClearsCookie(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	sessions := &stubSessionStore{ok: false}
-	h := withTenantAndSession(stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("unexpected next")
 	}))
 
@@ -216,7 +237,7 @@ func TestWithTenantAndSession_SessionTenantMismatchClearsCookie(t *testing.T) {
 		ok:   true,
 		sess: Session{TenantID: "t2", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)},
 	}
-	h := withTenantAndSession(stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("unexpected next")
 	}))
 
@@ -240,11 +261,42 @@ func TestWithTenantAndSession_SessionTenantMismatchClearsCookie(t *testing.T) {
 	}
 }
 
+func TestWithTenantAndSession_SessionTenantMismatchInternalAPI_Returns401(t *testing.T) {
+	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
+	classifier := mustInternalAPIClassifier(t)
+	sessions := &stubSessionStore{
+		ok:   true,
+		sess: Session{TenantID: "t2", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)},
+	}
+	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unexpected next")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
+	req.Host = "localhost:8080"
+	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	var cleared bool
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == sidCookieName && c.MaxAge < 0 {
+			cleared = true
+			break
+		}
+	}
+	if !cleared {
+		t.Fatalf("expected %s cookie cleared", sidCookieName)
+	}
+}
+
 func TestWithTenantAndSession_PrincipalLookupError(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "t1", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
 	principals := &stubPrincipalStore{err: errors.New("boom")}
-	h := withTenantAndSession(stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("unexpected next")
 	}))
 
@@ -267,7 +319,7 @@ func TestWithTenantAndSession_PrincipalNotFoundOrInactiveClearsCookie(t *testing
 		"inactive":  {ok: true, p: Principal{ID: "p1", TenantID: "t1", Status: "disabled", RoleSlug: "tenant-admin"}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			h := withTenantAndSession(stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 				t.Fatal("unexpected next")
 			}))
 
@@ -293,12 +345,42 @@ func TestWithTenantAndSession_PrincipalNotFoundOrInactiveClearsCookie(t *testing
 	}
 }
 
+func TestWithTenantAndSession_PrincipalNotFoundOrInactiveInternalAPI_Returns401(t *testing.T) {
+	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
+	classifier := mustInternalAPIClassifier(t)
+	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "t1", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
+
+	principals := &stubPrincipalStore{ok: true, p: Principal{ID: "p1", TenantID: "t1", Status: "disabled", RoleSlug: "tenant-admin"}}
+	h := withTenantAndSession(classifier, stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unexpected next")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
+	req.Host = "localhost:8080"
+	req.AddCookie(&http.Cookie{Name: sidCookieName, Value: "sid1"})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	var cleared bool
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == sidCookieName && c.MaxAge < 0 {
+			cleared = true
+			break
+		}
+	}
+	if !cleared {
+		t.Fatalf("expected %s cookie cleared", sidCookieName)
+	}
+}
+
 func TestWithTenantAndSession_SuccessInjectsPrincipal(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	sessions := &stubSessionStore{ok: true, sess: Session{TenantID: "t1", PrincipalID: "p1", ExpiresAt: time.Now().Add(time.Hour)}}
 	principals := &stubPrincipalStore{ok: true, p: Principal{ID: "p1", TenantID: "t1", Status: "active", RoleSlug: "tenant-admin"}}
 	nextCalled := false
-	h := withTenantAndSession(stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, principals, sessions, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		nextCalled = true
 		if p, ok := currentPrincipal(r.Context()); !ok || p.ID != "p1" {
 			t.Fatalf("principal=%+v ok=%v", p, ok)

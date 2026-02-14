@@ -66,7 +66,8 @@ function shouldRetry(error: unknown): boolean {
 export function createHttpClient(options: HttpClientOptions): HttpClient {
   const instance: AxiosInstance = axios.create({
     baseURL: options.baseURL,
-    timeout: options.timeoutMs ?? 10000
+    timeout: options.timeoutMs ?? 10000,
+    withCredentials: true
   })
 
   instance.interceptors.request.use((config) => {
@@ -95,7 +96,13 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
           continue
         }
 
-        throw normalizeApiError(error)
+        const normalized = normalizeApiError(error)
+        if (normalized.status === 401 && typeof window !== 'undefined') {
+          if (!window.location.pathname.startsWith('/app/login')) {
+            window.location.assign('/app/login')
+          }
+        }
+        throw normalized
       }
     }
   }

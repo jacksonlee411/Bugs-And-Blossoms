@@ -151,8 +151,8 @@ tr: ## i18n（en/zh）门禁（按项目能力渐进接入）
 generate: ## templ/生成物（按项目能力渐进接入）
 	@echo "[generate] no-op (placeholder)"
 
-css: ## Tailwind/Astro CSS（按项目能力渐进接入）
-	@./scripts/ui/build-astro.sh
+css: ## UI Build（MUI；产物入仓 + go:embed）
+	@./scripts/ui/build-web.sh
 
 sqlc-generate:
 	@./scripts/sqlc/generate.sh
