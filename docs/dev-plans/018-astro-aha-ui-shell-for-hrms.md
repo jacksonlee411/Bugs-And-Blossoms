@@ -122,12 +122,12 @@ flowchart LR
 - **Astro = 壳与组件编译层**：负责 layout/导航组件/页面框架/静态资源与 build pipeline；尽量不承载业务数据渲染。
 - **HTMX = 业务交互与数据驱动渲染**：业务页面内容以 server-rendered HTML partial 为主，依赖 `hx-get/hx-post/hx-target` 做局部刷新。
 - **Alpine = 局部状态与微交互**：导航折叠、快捷键、弹窗、表单局部校验提示等；不做跨页面状态管理。
- - **Web Components = 允许用于交互型 UI 组件**：可引入框架无关的 Web Component（如树组件），但必须保持“服务端权威数据 + HTMX 交互 + as_of 透传”，禁止引入 SPA/全局状态管理。
+- **Web Components = 允许用于交互型 UI 组件**：可引入框架无关的 Web Component（如树组件），但必须保持“服务端权威数据 + HTMX 交互”；时间上下文（`as_of/tree_as_of/effective_date`）按 `DEV-PLAN-102` 的 A/B/C 路由分类执行，**禁止壳层全局强灌**。
 
 ### 4.2 “壳（Shell）”与“内容（Content）”分离
 引入一个统一的 App Shell：
 - 左侧导航（与现有布局一致）
-- 顶部栏（As-of 日期、搜索入口、用户/租户/语言）
+- 顶部栏（语言；其余全局能力以最小集合为准）
 - 主内容区（由 HTMX 拉取模块内容并 swap）
 
 核心约束：**Shell 负责结构与导航，Content 负责业务**。Shell 允许是 Astro 产物；Content 仍可由 Go（Templ/handlers）渲染，逐步迁移不强制一次到位。
@@ -137,7 +137,7 @@ flowchart LR
 - 导航与页面标题的最终渲染仍由服务端输出 HTML（可复用现有本地化与权限判定），Astro 壳只提供容器与样式。
 - Astro 壳在加载时通过 HTMX 拉取：
   - `/ui/nav`：当前用户可见的导航 HTML（含二级菜单）
-  - `/ui/topbar`：包含 As-of 控件与用户信息
+  - `/ui/topbar`：包含语言等轻量全局控件
   - `/ui/flash`：统一错误/成功提示（统一出口，避免在 JS 分支里散落 toast/alert）
 
 > 这保持了“权威表达在服务端”的简单性：权限/语言不在前端复制一套判断逻辑。
@@ -145,9 +145,9 @@ flowchart LR
 ### 4.4 Shell/Partial 的最小契约（冻结）
 为降低“壳与内容互相猜测”的偶然复杂度，冻结如下最小契约：
 - Shell 必须包含固定 ID 的挂载点：`#nav`、`#topbar`、`#flash`、`#content`。
-- Shell 必须在用户已登录的上下文中触发加载：`hx-get="/ui/nav?as_of=__BB_AS_OF__"`、`hx-get="/ui/topbar?as_of=__BB_AS_OF__"`、`hx-get="/ui/flash"`（其中 `__BB_AS_OF__` 由 `/app` handler 在返回 Shell 时注入；契约 URL 路径不变；见 §4.5）。
+- Shell 必须在用户已登录的上下文中触发加载：`hx-get="/ui/nav"`、`hx-get="/ui/topbar"`、`hx-get="/ui/flash"`（壳层不再注入全局 `as_of`；时间上下文由页面自身管理，见 `DEV-PLAN-102`）。
 - 内容区页（任意模块页面）必须满足：同一 URL 同时支持 “全页访问” 与 “HTMX partial（`Hx-Request: true`）” 两种模式（路由/协商口径对齐 `DEV-PLAN-017`）。
-- `as_of` 作为 URL 状态：Shell 与 partial 的所有 HTMX 请求与链接必须保留 `as_of`（见 §3.3）。
+- 时间参数（`as_of/tree_as_of/effective_date`）不得由壳层统一透传；必须由页面按职责显式携带与校验（见 `DEV-PLAN-102`）。
 
 ### 4.5 Astro build 产物交付方式（冻结：go:embed）
 为保持发布物简单（Simple）并减少部署侧偶然复杂度，冻结如下交付方式：
@@ -163,11 +163,8 @@ flowchart LR
   - `apps/web/dist/**`（除 `index.html` 外）→ `internal/server/assets/astro/**`（保持相对路径）
 
 #### 4.5.2 占位符注入（冻结）
-- Shell 模板唯一占位符：`__BB_AS_OF__`（表示当前 URL 的 `as_of`）。
-- Go `/app` handler 只允许做“最小占位符注入”，不得在 handler 内重写页面结构：
-  - 先按 §3.3 执行 `as_of` 的缺省/校验口径（302 补齐；非法则 400）。
-  - 将 `internal/server/assets/astro/app.html` 中所有 `__BB_AS_OF__` 以 URL query 语义替换为当前 `as_of`（例如用于 `hx-get="/ui/nav?as_of=__BB_AS_OF__"`）。
-- 失败行为（fail-fast）：若模板缺失 `__BB_AS_OF__` 或替换后仍残留该 token，返回 500 并显式报错；禁止回退到 Go 拼接壳/双壳并存。
+- 说明：`DEV-PLAN-102` 已移除壳层 `as_of` 的占位符注入与全局日期选择器；Shell 模板不再依赖 `__BB_AS_OF__`。
+- Go server 仍保留“可选注入”的实现以兼容历史模板，但当前 Shell 产物不应再包含该 token。
 
 ## 5. 页面与组件规范（只覆盖 026-031 模块）
 
@@ -210,7 +207,7 @@ flowchart LR
 7. [ ] 导航 SSOT：二级菜单由服务端单点维护并渲染 `/ui/nav`（Astro 不维护第二份导航规则；避免出现“第二套权威表达”）。
 
 ### Phase 2：硬化与验收（对齐 026-031 契约）
-8. [ ] 全局 as-of 透传严格执行 Query 参数口径（见 §3.3）；`/ui/nav`、`/ui/topbar`、模块链接一律保留 `as_of`。
+8. [ ] 时间上下文按 `DEV-PLAN-102` 收敛：壳层不做全局 `as_of` 透传；页面按 A/B/C 路由分类显式携带与校验参数。
 9. [ ] 任职记录页严格执行：只展示 `effective_date`，不展示 `end_date`（对齐 031），但底层有效期仍为 `daterange [start,end)`。
 10. [ ] E2E：为“导航层级 + as-of 参数透传 + 任职仅展示 effective_date”补齐可视化验收用例（入口与门禁以 `DEV-PLAN-012` 为准）。
 

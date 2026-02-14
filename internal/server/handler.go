@@ -7,10 +7,8 @@ import (
 	"html"
 	"io/fs"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -160,18 +158,10 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/nav", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		asOf, ok := requireAsOf(w, r)
-		if !ok {
-			return
-		}
-		writeContent(w, r, renderNav(r, asOf))
+		writeContent(w, r, renderNav(r))
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/topbar", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		asOf, ok := requireAsOf(w, r)
-		if !ok {
-			return
-		}
-		writeContent(w, r, renderTopbar(r, asOf))
+		writeContent(w, r, renderTopbar(r))
 	}))
 	router.Handle(routing.RouteClassUI, http.MethodGet, "/ui/flash", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeContent(w, r, "")
@@ -245,7 +235,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			return
 		}
 		setSIDCookie(w, sid)
-		http.Redirect(w, r, "/app?as_of="+currentUTCDateString(), http.StatusFound)
+		http.Redirect(w, r, "/app", http.StatusFound)
 	}))
 	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if sid, ok := readSID(r); ok {
@@ -588,61 +578,22 @@ func pathHasPrefixSegment(path, prefix string) bool {
 	return len(path) > len(prefix) && path[:len(prefix)+1] == prefix+"/"
 }
 
-func renderNav(r *http.Request, asOf string) string {
+func renderNav(r *http.Request) string {
 	l := lang(r)
 	return `<nav><ul>` +
-		`<li><a href="/org/nodes?tree_as_of=` + asOf + `" hx-get="/org/nodes?tree_as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit") + `</a></li>` +
-		`<li><a href="/org/snapshot?as_of=` + asOf + `" hx-get="/org/snapshot?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit_snapshot") + `</a></li>` +
-		`<li><a href="/org/setid?as_of=` + asOf + `" hx-get="/org/setid?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_setid") + `</a></li>` +
-		`<li><a href="/org/job-catalog?as_of=` + asOf + `" hx-get="/org/job-catalog?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
-		`<li><a href="/org/positions?as_of=` + asOf + `" hx-get="/org/positions?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
-		`<li><a href="/person/persons?as_of=` + asOf + `" hx-get="/person/persons?as_of=` + asOf + `" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
+		`<li><a href="/org/nodes" hx-get="/org/nodes" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit") + `</a></li>` +
+		`<li><a href="/org/snapshot" hx-get="/org/snapshot" hx-target="#content" hx-push-url="true">` + tr(l, "nav_orgunit_snapshot") + `</a></li>` +
+		`<li><a href="/org/setid" hx-get="/org/setid" hx-target="#content" hx-push-url="true">` + tr(l, "nav_setid") + `</a></li>` +
+		`<li><a href="/org/job-catalog" hx-get="/org/job-catalog" hx-target="#content" hx-push-url="true">` + tr(l, "nav_jobcatalog") + `</a></li>` +
+		`<li><a href="/org/positions" hx-get="/org/positions" hx-target="#content" hx-push-url="true">` + tr(l, "nav_staffing") + `</a></li>` +
+		`<li><a href="/person/persons" hx-get="/person/persons" hx-target="#content" hx-push-url="true">` + tr(l, "nav_person") + `</a></li>` +
 		`</ul></nav>`
 }
 
-func renderTopbar(r *http.Request, asOf string) string {
-	l := lang(r)
-	currentURL := strings.TrimSpace(r.Header.Get("HX-Current-URL"))
-	if currentURL == "" {
-		currentURL = strings.TrimSpace(r.Header.Get("Referer"))
-	}
-
-	targetPath := "/app/home"
-	var q url.Values
-	if currentURL != "" {
-		if u, err := url.Parse(currentURL); err == nil {
-			if u.Path != "" {
-				targetPath = u.Path
-			}
-			q = u.Query()
-		}
-	}
-	if targetPath == "/" || targetPath == "/app" || targetPath == "/login" {
-		targetPath = "/app/home"
-	}
-
-	var keys []string
-	for k := range q {
-		if k == "as_of" {
-			continue
-		}
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
+func renderTopbar(r *http.Request) string {
 	var b strings.Builder
 	b.WriteString(`<div>`)
 	b.WriteString(`<a href="/lang/en">EN</a> | <a href="/lang/zh">中文</a>`)
-	b.WriteString(`<form method="GET" action="` + html.EscapeString(targetPath) + `" hx-get="` + html.EscapeString(targetPath) + `" hx-target="#content" hx-push-url="true" style="display:inline">`)
-	for _, k := range keys {
-		for _, v := range q[k] {
-			b.WriteString(`<input type="hidden" name="` + html.EscapeString(k) + `" value="` + html.EscapeString(v) + `" />`)
-		}
-	}
-	b.WriteString(`<span style="margin-left:12px">` + tr(l, "as_of") + `</span>`)
-	b.WriteString(`<input type="date" name="as_of" value="` + html.EscapeString(asOf) + `" />`)
-	b.WriteString(`<button type="submit">Go</button>`)
-	b.WriteString(`</form>`)
 	b.WriteString(`</div>`)
 
 	return b.String()
@@ -786,10 +737,6 @@ func renderAstroShellFromAssets(assets fs.FS, r *http.Request, asOf string, body
 }
 
 func renderAstroShellFromTemplate(shell string, r *http.Request, asOf string, bodyHTML string) (string, error) {
-	if !strings.Contains(shell, astroAsOfToken) {
-		return "", errors.New("shell missing as_of token")
-	}
-
 	if bodyHTML != "" {
 		var err error
 		shell, err = replaceMainContent(shell, bodyHTML)
@@ -802,9 +749,11 @@ func renderAstroShellFromTemplate(shell string, r *http.Request, asOf string, bo
 		shell = strings.ReplaceAll(shell, ` hx-trigger="load"`, "")
 	}
 
-	shell = strings.ReplaceAll(shell, astroAsOfToken, asOf)
 	if strings.Contains(shell, astroAsOfToken) {
-		return "", errors.New("shell still contains as_of token after injection")
+		shell = strings.ReplaceAll(shell, astroAsOfToken, asOf)
+		if strings.Contains(shell, astroAsOfToken) {
+			return "", errors.New("shell still contains as_of token after injection")
+		}
 	}
 
 	return shell, nil

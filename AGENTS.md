@@ -221,6 +221,7 @@ modules/{module}/
 - DEV-PLAN-100E：Org 模块宽表元数据落地 Phase 4A：OrgUnit 详情页扩展字段展示与 Capabilities 驱动编辑（MUI）：`docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
 - DEV-PLAN-101：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）：`docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
+- DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
 - DEV-PLAN-103：移除 Astro/HTMX，前端收敛为 MUI X（React SPA）：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
 - DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`

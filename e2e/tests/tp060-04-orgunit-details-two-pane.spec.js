@@ -93,7 +93,7 @@ test("tp060-04: orgunit details two-pane profile/audit URL restore", async ({ br
   await page.locator('input[name="email"]').fill(tenantAdminEmail);
   await page.locator('input[name="password"]').fill(tenantAdminPass);
   await page.getByRole("button", { name: "Login" }).click();
-  await expect(page).toHaveURL(/\/app\?as_of=\d{4}-\d{2}-\d{2}$/);
+  await expect(page).toHaveURL(/\/app$/);
 
   const createResp = await appContext.request.post("/org/api/org-units", {
     data: {

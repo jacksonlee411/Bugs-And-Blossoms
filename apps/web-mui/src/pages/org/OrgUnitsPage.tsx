@@ -19,11 +19,9 @@ import {
   TextField
 } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { GridColDef, GridPaginationModel, GridRowSelectionModel, GridSortModel } from '@mui/x-data-grid'
+import type { GridColDef, GridPaginationModel, GridSortModel } from '@mui/x-data-grid'
 import {
   createOrgUnit,
-  disableOrgUnit,
-  enableOrgUnit,
   listOrgUnits,
   listOrgUnitsPage,
   searchOrgUnit,
@@ -54,7 +52,6 @@ interface OrgUnitRow {
   name: string
   status: OrgStatus
   isBusinessUnit: boolean
-  effectiveDate: string
 }
 
 interface CreateOrgUnitForm {
@@ -107,14 +104,13 @@ function parseOrgStatus(raw: string): OrgStatus {
   return value === 'disabled' || value === 'inactive' ? 'inactive' : 'active'
 }
 
-function toOrgUnitRow(item: OrgUnitAPIItem, asOfDate: string): OrgUnitRow {
+function toOrgUnitRow(item: OrgUnitAPIItem): OrgUnitRow {
   return {
     id: item.org_code,
     code: item.org_code,
     name: item.name,
     status: parseOrgStatus(item.status),
-    isBusinessUnit: Boolean(item.is_business_unit),
-    effectiveDate: asOfDate
+    isBusinessUnit: Boolean(item.is_business_unit)
   }
 }
 
@@ -187,8 +183,6 @@ export function OrgUnitsPage() {
   const [includeDisabledInput, setIncludeDisabledInput] = useState(includeDisabled)
   const [treeSearchInput, setTreeSearchInput] = useState('')
 
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
-
   const [childrenByParent, setChildrenByParent] = useState<Record<string, OrgUnitAPIItem[]>>({})
   const [childrenLoading, setChildrenLoading] = useState(false)
   const [childrenErrorMessage, setChildrenErrorMessage] = useState('')
@@ -214,7 +208,6 @@ export function OrgUnitsPage() {
   useEffect(() => {
     setChildrenByParent({})
     setChildrenErrorMessage('')
-    setSelectedIds([])
   }, [asOf, includeDisabled])
 
   const rootOrgUnitsQuery = useQuery({
@@ -325,10 +318,9 @@ export function OrgUnitsPage() {
       })
   })
 
-  const gridRows = useMemo(
-    () => (orgUnitListQuery.data?.org_units ?? []).map((item) => toOrgUnitRow(item, asOf)),
-    [asOf, orgUnitListQuery.data]
-  )
+  const gridRows = useMemo(() => (orgUnitListQuery.data?.org_units ?? []).map((item) => toOrgUnitRow(item)), [
+    orgUnitListQuery.data
+  ])
   const gridRowCount = orgUnitListQuery.data?.total ?? gridRows.length
 
   const updateSearch = useCallback(
@@ -382,13 +374,6 @@ export function OrgUnitsPage() {
         flex: 0.9,
         sortable: false,
         renderCell: (params) => (params.row.isBusinessUnit ? t('common_yes') : t('common_no'))
-      },
-      {
-        field: 'effectiveDate',
-        headerName: t('org_column_effective_date'),
-        minWidth: 140,
-        flex: 0.9,
-        sortable: false
       },
       {
         field: 'status',
@@ -470,7 +455,6 @@ export function OrgUnitsPage() {
         selectedNodeCode: nextNodeCode
       }
     )
-    setSelectedIds([])
     void ensureChildrenLoaded(nextNodeCode)
   }
 
@@ -504,7 +488,6 @@ export function OrgUnitsPage() {
           selectedNodeCode: result.target_org_code
         }
       )
-      setSelectedIds([])
       trackUiEvent({
         eventName: 'filter_submit',
         tenant: tenantId,
@@ -523,39 +506,6 @@ export function OrgUnitsPage() {
     setCreateErrorMessage('')
     setCreateForm(() => emptyCreateForm(asOf, selectedNodeCode))
     setCreateOpen(true)
-  }
-
-  async function runBulkStatusAction(target: OrgStatus) {
-    if (selectedIds.length === 0) {
-      setToast({ message: t('common_select_rows'), severity: 'warning' })
-      return
-    }
-    if (!canWrite) {
-      setToast({ message: t('org_no_write_permission'), severity: 'error' })
-      return
-    }
-
-    let success = 0
-    let failed = 0
-    for (const orgCode of selectedIds) {
-      try {
-        if (target === 'active') {
-          await enableOrgUnit({ org_code: orgCode, effective_date: asOf })
-        } else {
-          await disableOrgUnit({ org_code: orgCode, effective_date: asOf })
-        }
-        success += 1
-      } catch {
-        failed += 1
-      }
-    }
-
-    await refreshAfterWrite()
-    if (failed === 0) {
-      setToast({ message: t('org_bulk_action_done', { count: success }), severity: 'success' })
-    } else {
-      setToast({ message: t('org_bulk_action_partial', { success, failed }), severity: 'warning' })
-    }
   }
 
   const requestErrorMessage = rootOrgUnitsQuery.error
@@ -635,20 +585,6 @@ export function OrgUnitsPage() {
         <Button onClick={() => void handleTreeSearch()} variant='outlined'>
           {t('org_search_action')}
         </Button>
-        <Button
-          disabled={!canWrite || selectedIds.length === 0}
-          onClick={() => void runBulkStatusAction('active')}
-          variant='outlined'
-        >
-          {t('org_bulk_enable')}
-        </Button>
-        <Button
-          disabled={!canWrite || selectedIds.length === 0}
-          onClick={() => void runBulkStatusAction('inactive')}
-          variant='outlined'
-        >
-          {t('org_bulk_disable')}
-        </Button>
       </FilterBar>
 
       {requestErrorMessage.length > 0 ? (
@@ -677,16 +613,10 @@ export function OrgUnitsPage() {
           <DataGridPage
             columns={columns}
             gridProps={{
-              checkboxSelection: true,
               onPaginationModelChange: (model: GridPaginationModel) => {
                 updateSearch({ page: model.page, pageSize: model.pageSize })
               },
-              onRowClick: (params, event) => {
-                const target = event.target as HTMLElement | null
-                if (target?.closest('.MuiDataGrid-cellCheckbox')) {
-                  return
-                }
-
+              onRowClick: (params) => {
                 const orgCode = String(params.id)
                 const nextParams = new URLSearchParams()
                 nextParams.set('as_of', asOf)
@@ -706,20 +636,12 @@ export function OrgUnitsPage() {
                   metadata: { row_id: orgCode }
                 })
               },
-              onRowSelectionModelChange: (model: GridRowSelectionModel) => {
-                const ids = [...model.ids].map((id) => String(id))
-                setSelectedIds(ids)
-              },
               onSortModelChange: handleSortChange,
               pageSizeOptions: [10, 20, 50],
               pagination: true,
               paginationMode: 'server',
               paginationModel: { page: query.page, pageSize: query.pageSize },
               rowCount: gridRowCount,
-              rowSelectionModel: {
-                type: 'include',
-                ids: new Set(selectedIds)
-              },
               showToolbar: true,
               sortModel,
               sortingMode: 'server',

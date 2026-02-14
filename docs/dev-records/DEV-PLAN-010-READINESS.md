@@ -32,7 +32,7 @@
 - PR-5：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/5
 - PR-80（Astro build + go:embed Phase 0 收口）：https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/80
 - 路由入口：`/app`（壳）+ 导航占位页（Org/JobCatalog/Staffing/Person）
-- 说明：`/app` 已收口为 Astro build 产物 + `go:embed`（`internal/server/assets/astro/app.html`），并按 `DEV-PLAN-018` 注入 `__BB_AS_OF__`；证据与闭环见 `docs/dev-plans/009m6-phase1-astro-build-phase0-execution-plan.md` 与本文件 §17。
+- 说明：`/app` 已收口为 Astro build 产物 + `go:embed`（`internal/server/assets/astro/app.html`）；后续 `DEV-PLAN-102` 已移除壳层全局 `as_of` 注入与 Topbar 日期控件，时间上下文改由页面按路由职责管理。
 
 ## 4. 最小登录链路
 
