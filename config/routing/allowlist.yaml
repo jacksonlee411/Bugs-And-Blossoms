@@ -119,6 +119,21 @@ entrypoints:
       - path: /org/api/org-units
         methods: [GET, POST]
         route_class: internal_api
+      - path: /org/api/org-units/field-definitions
+        methods: [GET]
+        route_class: internal_api
+      - path: /org/api/org-units/field-configs
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /org/api/org-units/field-configs:disable
+        methods: [POST]
+        route_class: internal_api
+      - path: /org/api/org-units/fields:options
+        methods: [GET]
+        route_class: internal_api
+      - path: /org/api/org-units/mutation-capabilities
+        methods: [GET]
+        route_class: internal_api
       - path: /org/api/org-units/details
         methods: [GET]
         route_class: internal_api

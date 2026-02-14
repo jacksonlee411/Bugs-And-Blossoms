@@ -127,9 +127,20 @@ type orgUnitDetailsAPIItem struct {
 	EventUUID      string    `json:"event_uuid"`
 }
 
+type orgUnitExtFieldAPIItem struct {
+	FieldKey           string  `json:"field_key"`
+	LabelI18nKey       string  `json:"label_i18n_key"`
+	ValueType          string  `json:"value_type"`
+	DataSourceType     string  `json:"data_source_type"`
+	Value              any     `json:"value"`
+	DisplayValue       *string `json:"display_value"`
+	DisplayValueSource string  `json:"display_value_source"`
+}
+
 type orgUnitDetailsAPIResponse struct {
-	AsOf    string                `json:"as_of"`
-	OrgUnit orgUnitDetailsAPIItem `json:"org_unit"`
+	AsOf      string                   `json:"as_of"`
+	OrgUnit   orgUnitDetailsAPIItem    `json:"org_unit"`
+	ExtFields []orgUnitExtFieldAPIItem `json:"ext_fields"`
 }
 
 type orgUnitVersionAPIItem struct {
@@ -241,6 +252,7 @@ var errOrgUnitBadJSON = errors.New("orgunit_bad_json")
 const (
 	orgUnitErrCodeInvalid                 = "ORG_CODE_INVALID"
 	orgUnitErrCodeNotFound                = "ORG_CODE_NOT_FOUND"
+	orgUnitErrInvalidArgument             = "ORG_INVALID_ARGUMENT"
 	orgUnitErrEffectiveDate               = "EFFECTIVE_DATE_INVALID"
 	orgUnitErrPatchFieldNotAllowed        = "PATCH_FIELD_NOT_ALLOWED"
 	orgUnitErrPatchRequired               = "PATCH_REQUIRED"
@@ -260,6 +272,16 @@ const (
 	orgUnitErrHasDependenciesCannotDelete = "ORG_HAS_DEPENDENCIES_CANNOT_DELETE"
 	orgUnitErrEventRescinded              = "ORG_EVENT_RESCINDED"
 	orgUnitErrHighRiskReorderForbidden    = "ORG_HIGH_RISK_REORDER_FORBIDDEN"
+
+	orgUnitErrFieldDefinitionNotFound            = "ORG_FIELD_DEFINITION_NOT_FOUND"
+	orgUnitErrFieldConfigInvalidDataSourceConfig = "ORG_FIELD_CONFIG_INVALID_DATA_SOURCE_CONFIG"
+	orgUnitErrFieldConfigAlreadyEnabled          = "ORG_FIELD_CONFIG_ALREADY_ENABLED"
+	orgUnitErrFieldConfigSlotExhausted           = "ORG_FIELD_CONFIG_SLOT_EXHAUSTED"
+	orgUnitErrFieldConfigNotFound                = "ORG_FIELD_CONFIG_NOT_FOUND"
+	orgUnitErrFieldConfigDisabledOnInvalid       = "ORG_FIELD_CONFIG_DISABLED_ON_INVALID"
+	orgUnitErrFieldOptionsFieldNotEnabled        = "ORG_FIELD_OPTIONS_FIELD_NOT_ENABLED_AS_OF"
+	orgUnitErrFieldOptionsNotSupported           = "ORG_FIELD_OPTIONS_NOT_SUPPORTED"
+	orgUnitErrExtQueryFieldNotAllowed            = "ORG_EXT_QUERY_FIELD_NOT_ALLOWED"
 )
 
 const (
@@ -279,25 +301,32 @@ const (
 )
 
 type orgUnitListQueryOptions struct {
-	Keyword   string
-	Status    string // "", "active", "disabled"
-	SortField string
-	SortOrder string
-	Paginate  bool
-	Page      int
-	PageSize  int
+	GridMode          bool
+	Keyword           string
+	Status            string // "", "active", "disabled"
+	SortField         string
+	ExtSortFieldKey   string
+	SortOrder         string
+	ExtFilterFieldKey string
+	ExtFilterValue    string
+	Paginate          bool
+	Page              int
+	PageSize          int
 }
 
 type orgUnitListPageRequest struct {
-	AsOf            string
-	IncludeDisabled bool
-	ParentID        *int
-	Keyword         string
-	Status          string // "", "active", "disabled"
-	SortField       string
-	SortOrder       string
-	Limit           int
-	Offset          int
+	AsOf              string
+	IncludeDisabled   bool
+	ParentID          *int
+	Keyword           string
+	Status            string // "", "active", "disabled"
+	SortField         string
+	ExtSortFieldKey   string
+	SortOrder         string
+	ExtFilterFieldKey string
+	ExtFilterValue    string
+	Limit             int
+	Offset            int
 }
 
 type orgUnitListPageReader interface {
@@ -318,6 +347,7 @@ func parseOrgUnitListQueryOptions(values url.Values) (orgUnitListQueryOptions, b
 	hasAny := false
 	if strings.EqualFold(strings.TrimSpace(values.Get("mode")), orgUnitListModeGrid) {
 		hasAny = true
+		opts.GridMode = true
 	}
 
 	if hasKey("q") {
@@ -346,10 +376,15 @@ func parseOrgUnitListQueryOptions(values url.Values) (orgUnitListQueryOptions, b
 	if sortPresent {
 		hasAny = true
 		raw := strings.ToLower(strings.TrimSpace(values.Get("sort")))
-		switch raw {
-		case orgUnitListSortCode, orgUnitListSortName, orgUnitListSortStatus:
+		switch {
+		case raw == orgUnitListSortCode || raw == orgUnitListSortName || raw == orgUnitListSortStatus:
 			opts.SortField = raw
-		case "":
+		case strings.HasPrefix(raw, "ext:"):
+			opts.ExtSortFieldKey = strings.TrimSpace(strings.TrimPrefix(raw, "ext:"))
+			if opts.ExtSortFieldKey == "" {
+				return orgUnitListQueryOptions{}, false, errors.New("sort invalid")
+			}
+		case raw == "":
 			return orgUnitListQueryOptions{}, false, errors.New("sort invalid")
 		default:
 			return orgUnitListQueryOptions{}, false, errors.New("sort invalid")
@@ -406,6 +441,24 @@ func parseOrgUnitListQueryOptions(values url.Values) (orgUnitListQueryOptions, b
 		} else {
 			opts.PageSize = orgUnitListDefaultPageSize
 		}
+	}
+
+	extFilterKeyPresent := hasKey("ext_filter_field_key")
+	extFilterValuePresent := hasKey("ext_filter_value")
+	if extFilterKeyPresent || extFilterValuePresent {
+		hasAny = true
+		if !extFilterKeyPresent || !extFilterValuePresent {
+			return orgUnitListQueryOptions{}, false, errors.New("ext_filter requires ext_filter_field_key and ext_filter_value")
+		}
+		opts.ExtFilterFieldKey = strings.TrimSpace(values.Get("ext_filter_field_key"))
+		opts.ExtFilterValue = strings.TrimSpace(values.Get("ext_filter_value"))
+		if opts.ExtFilterFieldKey == "" {
+			return orgUnitListQueryOptions{}, false, errors.New("ext_filter_field_key invalid")
+		}
+	}
+
+	if (opts.ExtFilterFieldKey != "" || opts.ExtSortFieldKey != "") && !opts.GridMode && !opts.Paginate {
+		return orgUnitListQueryOptions{}, false, errors.New("ext query requires mode=grid or pagination")
 	}
 
 	return opts, hasAny, nil
@@ -597,14 +650,29 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		}
 
 		if hasListOpts {
+			if (listOpts.ExtFilterFieldKey != "" || listOpts.ExtSortFieldKey != "") && parentID != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "ext query not allowed for parent_org_code")
+				return
+			}
+
+			if listOpts.ExtFilterFieldKey != "" || listOpts.ExtSortFieldKey != "" {
+				if _, ok := store.(orgUnitListPageReader); !ok {
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrExtQueryFieldNotAllowed, "ext query not allowed")
+					return
+				}
+			}
+
 			req := orgUnitListPageRequest{
-				AsOf:            asOf,
-				IncludeDisabled: includeDisabled,
-				ParentID:        parentID,
-				Keyword:         listOpts.Keyword,
-				Status:          listOpts.Status,
-				SortField:       listOpts.SortField,
-				SortOrder:       listOpts.SortOrder,
+				AsOf:              asOf,
+				IncludeDisabled:   includeDisabled,
+				ParentID:          parentID,
+				Keyword:           listOpts.Keyword,
+				Status:            listOpts.Status,
+				SortField:         listOpts.SortField,
+				ExtSortFieldKey:   listOpts.ExtSortFieldKey,
+				SortOrder:         listOpts.SortOrder,
+				ExtFilterFieldKey: listOpts.ExtFilterFieldKey,
+				ExtFilterValue:    listOpts.ExtFilterValue,
 			}
 
 			var pagePtr *int
@@ -621,6 +689,10 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			if err != nil {
 				if errors.Is(err, errOrgUnitNotFound) {
 					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+					return
+				}
+				if errors.Is(err, errOrgUnitExtQueryFieldNotAllowed) {
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrExtQueryFieldNotAllowed, "ext query not allowed")
 					return
 				}
 				writeInternalAPIError(w, r, err, "orgunit_list_failed")
@@ -796,7 +868,8 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 	}
 
 	resp := orgUnitDetailsAPIResponse{
-		AsOf: asOf,
+		AsOf:      asOf,
+		ExtFields: []orgUnitExtFieldAPIItem{},
 		OrgUnit: orgUnitDetailsAPIItem{
 			OrgID:          details.OrgID,
 			OrgCode:        details.OrgCode,
@@ -813,6 +886,22 @@ func handleOrgUnitsDetailsAPI(w http.ResponseWriter, r *http.Request, store OrgU
 			EventUUID:      details.EventUUID,
 		},
 	}
+
+	extStore, ok := store.(orgUnitDetailsExtFieldStore)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_store_missing", "orgunit store missing")
+		return
+	}
+	extFields, err := buildOrgUnitDetailsExtFields(r.Context(), extStore, tenant.ID, orgID, asOf)
+	if err != nil {
+		if errors.Is(err, errOrgUnitNotFound) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_unit_not_found", "org unit not found")
+			return
+		}
+		writeInternalAPIError(w, r, err, "orgunit_details_ext_fields_failed")
+		return
+	}
+	resp.ExtFields = extFields
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -1376,15 +1465,22 @@ func writeOrgUnitServiceError(w http.ResponseWriter, r *http.Request, err error,
 func orgUnitAPIStatusForCode(code string) (int, bool) {
 	switch code {
 	case orgUnitErrCodeInvalid,
+		orgUnitErrInvalidArgument,
 		orgUnitErrEffectiveDate,
 		orgUnitErrPatchFieldNotAllowed,
 		orgUnitErrPatchRequired,
-		orgUnitErrManagerInvalid:
+		orgUnitErrManagerInvalid,
+		orgUnitErrExtQueryFieldNotAllowed,
+		orgUnitErrFieldConfigInvalidDataSourceConfig:
 		return http.StatusBadRequest, true
 	case orgUnitErrCodeNotFound,
 		orgUnitErrParentNotFound,
 		orgUnitErrEventNotFound,
-		orgUnitErrManagerNotFound:
+		orgUnitErrManagerNotFound,
+		orgUnitErrFieldDefinitionNotFound,
+		orgUnitErrFieldConfigNotFound,
+		orgUnitErrFieldOptionsFieldNotEnabled,
+		orgUnitErrFieldOptionsNotSupported:
 		return http.StatusNotFound, true
 	case orgUnitErrManagerInactive,
 		orgUnitErrEffectiveOutOfRange,
@@ -1397,7 +1493,10 @@ func orgUnitAPIStatusForCode(code string) (int, bool) {
 		orgUnitErrHasChildrenCannotDelete,
 		orgUnitErrHasDependenciesCannotDelete,
 		orgUnitErrEventRescinded,
-		orgUnitErrHighRiskReorderForbidden:
+		orgUnitErrHighRiskReorderForbidden,
+		orgUnitErrFieldConfigAlreadyEnabled,
+		orgUnitErrFieldConfigSlotExhausted,
+		orgUnitErrFieldConfigDisabledOnInvalid:
 		return http.StatusConflict, true
 	default:
 		return 0, false

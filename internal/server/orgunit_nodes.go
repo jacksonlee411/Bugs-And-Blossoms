@@ -2334,6 +2334,20 @@ func (s *orgUnitMemoryStore) MinEffectiveDate(_ context.Context, tenantID string
 	return s.now().UTC().Format(asOfLayout), true, nil
 }
 
+func (s *orgUnitMemoryStore) ListEnabledTenantFieldConfigsAsOf(_ context.Context, _ string, _ string) ([]orgUnitTenantFieldConfig, error) {
+	return []orgUnitTenantFieldConfig{}, nil
+}
+
+func (s *orgUnitMemoryStore) GetOrgUnitVersionExtSnapshot(_ context.Context, _ string, _ int, _ string) (orgUnitVersionExtSnapshot, error) {
+	return orgUnitVersionExtSnapshot{
+		VersionValues:  map[string]any{},
+		VersionLabels:  map[string]string{},
+		EventLabels:    map[string]string{},
+		LastEventID:    0,
+		HasVersionData: true,
+	}, nil
+}
+
 func handleOrgNodes(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
 	handleOrgNodesWithWriteService(w, r, store, nil)
 }

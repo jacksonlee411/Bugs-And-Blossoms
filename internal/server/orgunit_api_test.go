@@ -225,6 +225,28 @@ func (s *orgUnitListPageReaderStore) ListOrgUnitsPage(_ context.Context, _ strin
 	return append([]orgUnitListItem(nil), s.items...), s.total, nil
 }
 
+type orgUnitDetailsExtStoreStub struct {
+	*resolveOrgCodeStore
+	cfgs        []orgUnitTenantFieldConfig
+	cfgErr      error
+	snapshot    orgUnitVersionExtSnapshot
+	snapshotErr error
+}
+
+func (s orgUnitDetailsExtStoreStub) ListEnabledTenantFieldConfigsAsOf(_ context.Context, _ string, _ string) ([]orgUnitTenantFieldConfig, error) {
+	if s.cfgErr != nil {
+		return nil, s.cfgErr
+	}
+	return append([]orgUnitTenantFieldConfig(nil), s.cfgs...), nil
+}
+
+func (s orgUnitDetailsExtStoreStub) GetOrgUnitVersionExtSnapshot(_ context.Context, _ string, _ int, _ string) (orgUnitVersionExtSnapshot, error) {
+	if s.snapshotErr != nil {
+		return orgUnitVersionExtSnapshot{}, s.snapshotErr
+	}
+	return s.snapshot, nil
+}
+
 func TestHandleOrgUnitsBusinessUnitAPI_OrgCodeInvalid(t *testing.T) {
 	store := &resolveOrgCodeStore{}
 	body := bytes.NewBufferString(`{"org_code":"bad\u007f","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r1"}`)
@@ -715,6 +737,10 @@ func TestParseOrgUnitListQueryOptions(t *testing.T) {
 		{name: "page invalid", rawURL: "/org/api/org-units?page=-1", wantErr: true},
 		{name: "size empty", rawURL: "/org/api/org-units?size=", wantErr: true},
 		{name: "size too large", rawURL: "/org/api/org-units?size=9999", wantErr: true},
+		{name: "ext sort missing key", rawURL: "/org/api/org-units?sort=ext:", wantErr: true},
+		{name: "ext filter missing key", rawURL: "/org/api/org-units?ext_filter_value=DEPARTMENT", wantErr: true},
+		{name: "ext filter missing value", rawURL: "/org/api/org-units?ext_filter_field_key=org_type", wantErr: true},
+		{name: "ext filter empty field key", rawURL: "/org/api/org-units?ext_filter_field_key=&ext_filter_value=DEPARTMENT", wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -1143,6 +1169,69 @@ func TestHandleOrgUnitsDetailsAPI_ErrorBranches(t *testing.T) {
 		})
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("ext store missing interface", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001&as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsDetailsAPI(rec, req, &resolveOrgCodeStore{
+			resolveID: 10000001,
+			getNodeDetails: OrgUnitNodeDetails{
+				OrgID:   10000001,
+				OrgCode: "A001",
+				Name:    "Root",
+				Status:  "active",
+			},
+		})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("ext fields not found", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001&as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		store := &orgUnitDetailsExtStoreStub{
+			resolveOrgCodeStore: &resolveOrgCodeStore{
+				resolveID: 10000001,
+				getNodeDetails: OrgUnitNodeDetails{
+					OrgID:   10000001,
+					OrgCode: "A001",
+					Name:    "Root",
+					Status:  "active",
+				},
+			},
+			cfgs:        []orgUnitTenantFieldConfig{{FieldKey: "org_type", PhysicalCol: "ext_str_01"}},
+			snapshotErr: errOrgUnitNotFound,
+		}
+		handleOrgUnitsDetailsAPI(rec, req, store)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("ext fields internal error", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/details?org_code=A001&as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		store := &orgUnitDetailsExtStoreStub{
+			resolveOrgCodeStore: &resolveOrgCodeStore{
+				resolveID: 10000001,
+				getNodeDetails: OrgUnitNodeDetails{
+					OrgID:   10000001,
+					OrgCode: "A001",
+					Name:    "Root",
+					Status:  "active",
+				},
+			},
+			cfgErr: errors.New("cfg"),
+		}
+		handleOrgUnitsDetailsAPI(rec, req, store)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
 }

@@ -1,6 +1,6 @@
 # DEV-PLAN-100A：Org 模块宽表元数据落地 Phase 0：契约冻结与就绪检查（先文档后代码）
 
-**状态**: 冻结（2026-02-13 09:44 UTC）
+**状态**: 冻结（2026-02-14 01:51 UTC）
 
 > 本文从 `DEV-PLAN-100` 的 Phase 0 拆分而来，作为 Phase 0 的 SSOT；`DEV-PLAN-100` 保持为整体路线图。
 
@@ -119,7 +119,7 @@ graph TD
 
 - **有效期语义（必须冻结，避免同日歧义）**：
   - 采用 day 粒度半开区间模型：字段在某日 `d` 生效当且仅当：`enabled_on <= d AND (disabled_on IS NULL OR d < disabled_on)`。  
-  - 说明：这是 `[enabled_on, disabled_on)` 模型，与仓库 day 粒度 Valid Time 约定一致（SSOT：`DEV-PLAN-032`）；并与 UI 口径对齐：当 `as_of >= disabled_on` 时该字段不可写/不可见。
+  - 说明：这是 `[enabled_on, disabled_on)` 模型，与仓库 day 粒度 Valid Time 约定一致（SSOT：`DEV-PLAN-032`）；并与 UI 口径对齐：当 `as_of >= disabled_on` 时该字段不可写/不可见，且 details 的 `ext_fields[]` 不再返回/不再展示该字段；若需查看历史值，应切换 `as_of` 或查看 Audit（变更日志）。
 
 - **RLS（必须）**：
   - `ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`；
@@ -188,7 +188,8 @@ graph TD
     - `field_key`（稳定键）
     - `value_type`
     - `data_source_type`
-    - `data_source_config`（若可配置则返回 allowed options；若固定则返回 fixed config）
+    - `data_source_config`（默认/固定配置；形状见 §4.3）
+    - `data_source_config_options`（仅 DICT/ENTITY；非空数组；若固定则为单元素数组，若可选则包含多个候选；启用字段时必须从中选择并提交）
     - `label_i18n_key`（或直接返回 `label`；但需对齐 `DEV-PLAN-020`）
 
 > 约束：当 `data_source_type=PLAIN` 时，该字段无 options，`data_source_config` 必须为 `{}`。
@@ -200,6 +201,11 @@ graph TD
 - `POST /org/api/org-units/field-configs:disable`（停用字段，设置 `disabled_on`；路径形态在 Phase 0 评审中冻结，并需通过 `make check routing`）
 
 > 约束：启用/停用写请求必须携带 `request_code`；`initiator_uuid` 由服务端会话上下文注入并传递给 Kernel（不得由 UI 提交/伪造）。
+>
+> 启用字段时的数据来源配置（冻结）：
+>
+> - `PLAIN`：无 options，`data_source_config` 必须为 `{}`（可缺省，由服务端补齐为空对象）。  
+> - `DICT/ENTITY`：`data_source_config` 由租户管理员在启用字段时选择并提交，且必须命中 `field-definitions.data_source_config_options`；禁止任意输入/透传。
 
 ### 5.4 Mutation capabilities 扩展字段口径（承接 DEV-PLAN-083）
 
@@ -214,11 +220,14 @@ graph TD
 ### 6.1 字段启用（物理槽位分配）——伪代码
 
 1. 开启事务（显式 tx + tenant 注入；fail-closed）。
-2. 校验 `field_key` 在 `field-definitions` 列表中，且该租户未存在同 `field_key` 配置。
-3. 根据 `value_type/data_source_type` 选择槽位分组（例如 `PLAIN(text)/DICT(text) -> ext_str_*`；`ENTITY(uuid) -> ext_uuid_*`）。
-4. 分配第一个空闲 `physical_col`（同租户下未占用）。
-5. 写入 `tenant_field_configs`（由 Kernel 函数执行；应用层禁止直写）。
-6. 提交事务。
+2. 校验 `field_key` 在 `field-definitions` 列表中，且该租户未存在同 `field_key` 配置。  
+3. 校验 `data_source_config`：  
+   - `PLAIN`：必须为 `{}`；  
+   - `DICT/ENTITY`：必须命中该 `field_key` 在 `field-definitions` 返回的 `data_source_config_options`。  
+4. 根据 `value_type/data_source_type` 选择槽位分组（例如 `PLAIN(text)/DICT(text) -> ext_str_*`；`ENTITY(uuid) -> ext_uuid_*`）。
+5. 分配第一个空闲 `physical_col`（同租户下未占用）。
+6. 写入 `tenant_field_configs`（由 Kernel 函数执行；应用层禁止直写）。
+7. 提交事务。
 
 ### 6.2 扩展字段写入校验（服务层 + Kernel）
 
@@ -256,7 +265,7 @@ graph TD
   5. [X] 冻结字段配置生命周期（启用/停用/只读/不可复用/槽位耗尽）。  
   6. [X] 冻结 capabilities 扩展字段口径（`allowed_fields/field_payload_keys/deny_reasons`）。  
   7. [X] 冻结“按阶段命中门禁清单”（routing/authz/sqlc/doc）并对齐 SSOT 引用入口。  
-  8. [X] 通过文档门禁：`make check doc`（2026-02-13 09:44 UTC；`[doc] OK`）。
+  8. [X] 通过文档门禁：`make check doc`（2026-02-14 01:51 UTC；`[doc] OK`）。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
@@ -270,6 +279,8 @@ graph TD
 | `location_code` | `text` | `PLAIN` | `{}` | `filter: no; sort: no; options: n/a` | `CREATE + CORRECT_EVENT(target=CREATE)` |
 | `cost_center` | `text` | `PLAIN` | `{}` | `filter: no; sort: no; options: n/a` | `CREATE + CORRECT_EVENT(target=CREATE)` |
 
+> `data_source_config` 口径说明（冻结）：表中 `data_source_config` 表示该字段的默认配置；当 `data_source_type IN (DICT, ENTITY)` 且该字段允许多种来源配置时，`field-definitions` 必须返回 `data_source_config_options[]`，租户管理员在“启用字段”时从中选择并提交（否则启用应失败）。
+
 > MVP 约定：列表筛选/排序命中扩展字段的最小闭环字段为 `org_type`（DICT，含 options + label snapshot），其余字段先走“详情可见/可写”闭环，避免一次性扩大动态 SQL/索引面。
 
 > 注：字段候选来源可参考 `DEV-PLAN-073` “组织单元属性扩展候选集合”；最终以 Phase 0 评审冻结为准。
@@ -279,7 +290,7 @@ graph TD
 - [X] `DEV-PLAN-100A` 完成评审：字段清单、payload 契约、能力模型口径、生命周期契约全部冻结。  
 - [X] `DEV-PLAN-100` 的 Phase 0 已指向本文，且不再重复维护 Phase 0 细节。  
 - [X] `AGENTS.md` Doc Map 已收录本文链接（可发现性）。  
-- [X] `make check doc` 通过（2026-02-13 09:44 UTC；`[doc] OK`；建议在 PR 描述或 `docs/dev-records/` 留证）。
+- [X] `make check doc` 通过（2026-02-14 01:51 UTC；`[doc] OK`；建议在 PR 描述或 `docs/dev-records/` 留证）。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 
