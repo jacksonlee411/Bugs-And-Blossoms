@@ -44,7 +44,7 @@
   - [X] 文档新增/调整（本计划交付物为文档）。
 - **implementation repo（预计命中）**：
   - [ ] Go 代码（lint/test/coverage）
-  - [ ] `.templ` / Tailwind / Astro UI（生成物一致性）
+  - [ ] `.templ` / MUI UI（生成物一致性）
   - [ ] 多语言 JSON（仅 `en/zh`）
   - [ ] 路由治理（allowlist + routing gates）
   - [ ] Authz（Casbin：pack/lint/test）
@@ -58,7 +58,8 @@
   - 版本基线：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
   - 路由契约：`docs/dev-plans/017-routing-strategy.md`
   - CI 门禁：`docs/dev-plans/012-ci-quality-gates.md`
-  - UI 壳：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+  - UI 壳（MUI-only）：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+  - UI 壳（历史记录）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
   - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
   - RLS：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
   - Atlas+Goose：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
@@ -125,7 +126,7 @@ flowchart TD
 │   ├── jobcatalog/
 │   ├── staffing/
 │   └── person/
-├── apps/web/                 # Astro UI（若按 018）
+├── apps/web-mui/             # MUI React SPA（DEV-PLAN-103）
 └── scripts/                  # db/routing/authz/sqlc 等脚本入口（由 Makefile 调用）
 ```
 
@@ -167,7 +168,7 @@ flowchart TD
 
 ### 4.4 UI 最小接口（用户可见性）
 
-- UI 壳必须可运行并包含 4 模块入口（`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md` 的 IA）。
+- UI 壳必须可运行并包含 4 模块入口（对齐 `DEV-PLAN-103` 的 MUI-only IA）。
 - 未交付模块必须以占位页承载，并明确“未来将交付的能力范围/验收方式”，作为后续唯一挂载点。
 
 ## 5. 接口契约 (API Contracts)
@@ -210,16 +211,16 @@ job(required_check):
 
 ### 8.1 串行关键路径（优先保证不阻塞）
 
-`ADR-010-01(SSOT 落点明确) => 011(版本基线) => 012(CI 门禁骨架) => 017(routing SSOT+gates) => 018(UI 壳) => 019(最小登录) => 进入 P0 垂直切片`
+`ADR-010-01(SSOT 落点明确) => 011(版本基线) => 012(CI 门禁骨架) => 017(routing SSOT+gates) => 103(UI 收敛：MUI-only) => 019(最小登录) => 进入 P0 垂直切片`
 
 ### 8.2 推荐 PR 拆分（可并行，但需按关键路径收口）
 
-1. [ ] PR-0：仓库 bootstrap（mono-repo + `apps/web`；README/AGENTS/Doc Map/目录骨架）+ 固化 `docs/dev-plans/` 为 SSOT（ADR-010-01）。
+1. [ ] PR-0：仓库 bootstrap（mono-repo + `apps/web-mui`；README/AGENTS/Doc Map/目录骨架）+ 固化 `docs/dev-plans/` 为 SSOT（ADR-010-01）。
 2. [ ] PR-1：对齐 `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`（版本 pin、依赖锁定、基础 Makefile 入口）。
 3. [ ] PR-2：对齐 `docs/dev-plans/012-ci-quality-gates.md`（CI required checks 骨架；job 名称冻结；job 不跳过）。
 4. [ ] PR-3：对齐 `docs/dev-plans/017-routing-strategy.md`（allowlist SSOT + 最小 routing gates + 本地入口）。
 5. [ ] PR-4：对齐 `docs/dev-plans/015-ddd-layering-framework.md`/`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`（`modules/*` 骨架 + 依赖门禁配置）。
-6. [ ] PR-5：对齐 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`/`docs/dev-plans/020-i18n-en-zh-only.md`（UI 壳 + i18n + 占位页；为 P0 的 `orgunit` 预留入口）。
+6. [ ] PR-5：对齐 `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`/`docs/dev-plans/020-i18n-en-zh-only.md`（MUI 壳 + i18n + 占位页；为 P0 的 `orgunit` 预留入口）。
 7. [ ] PR-6：对齐 `docs/dev-plans/019-tenant-and-authn.md`（tenant 解析 + 登录最小闭环，进入壳即可）。
 8. [ ] PR-7：对齐 `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`/`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（`iam` Atlas+Goose 闭环 + RLS fail-closed 最小测试）。
 9. [ ] PR-8：对齐 `docs/dev-plans/025-sqlc-guidelines.md`/`docs/dev-plans/022-authz-casbin-toolchain.md`（sqlc 与 Authz 工具链收口；可与 P0 并行，但必须在首批 schema/策略合入前完成）。
@@ -243,7 +244,7 @@ job(required_check):
 
 - [ ] 运行一次 `make preflight`，四大 required checks 在本地均有可复现入口（对齐 012）。
 - [ ] 打开 UI 壳：能看到 4 模块入口与占位页（对齐用户可见性原则）。
-- [ ] 走一遍最小链路：确定租户 → `/login` → 登录成功 → 进入壳（对齐 019，tenant 解析 fail-closed）。
+- [ ] 走一遍最小链路：确定租户 → `/app/login`（或 `POST /iam/api/sessions`）→ 登录成功 → 进入壳（对齐 019，tenant 解析 fail-closed）。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 
@@ -253,7 +254,7 @@ job(required_check):
 
 ### 11.1 回滚（Greenfield 口径）
 
-- 回滚以“回退 PR/回退发布版本”为主；禁止引入并存双实现作为回滚手段（对齐 018 的回退策略）。
+- 回滚以“回退 PR/回退发布版本”为主；禁止引入并存双实现作为回滚手段（对齐 103 的 No-Legacy 策略）。
 
 ### 11.2 停止线（命中即打回）
 
@@ -266,7 +267,7 @@ job(required_check):
 ## 12. 未决问题（需要在 PR-0 明确）
 
 1. [X] ADR-010-01：dev-plan SSOT 放置策略选 A（同仓）—— 已批准。
-2. [X] 仓库形态：mono-repo + `apps/web`（对齐 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`）—— 已批准。
+2. [X] 仓库形态：mono-repo + `apps/web-mui`（对齐 `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`）—— 已批准。
 3. [X] P0 第一条业务垂直切片：`orgunit` —— 已批准。
 4. [X] implementation repo 命名/权限/分支保护：`jacksonlee411/Bugs-And-Blossoms`（public），`main` 禁止直推/禁止 force-push/必须 PR，并冻结 required checks：`Code Quality & Formatting` / `Unit & Integration Tests` / `Routing Gates` / `E2E Tests`。
 
@@ -278,6 +279,7 @@ job(required_check):
 - `docs/dev-plans/015-ddd-layering-framework.md`
 - `docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - `docs/dev-plans/017-routing-strategy.md`
+- `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
 - `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - `docs/dev-plans/019-tenant-and-authn.md`
 - `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`

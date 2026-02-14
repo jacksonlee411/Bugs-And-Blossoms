@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -131,13 +130,23 @@ func TestLogin_UsesDefaultKratosIdentityProviderWhenNil(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
 	req.Host = "localhost:8080"
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusFound {
-		t.Fatalf("status=%d", rec.Code)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var sidCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == sidCookieName && c.Value != "" {
+			sidCookie = c
+			break
+		}
+	}
+	if sidCookie == nil {
+		t.Fatalf("missing %s cookie", sidCookieName)
 	}
 }
 
@@ -158,12 +167,12 @@ func TestAppHome_ServesWebMUIIndexWithoutAsOf(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loginReq := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	loginReq := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
 	loginReq.Host = "localhost:8080"
-	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginReq.Header.Set("Content-Type", "application/json")
 	loginRec := httptest.NewRecorder()
 	h.ServeHTTP(loginRec, loginReq)
-	if loginRec.Code != http.StatusFound {
+	if loginRec.Code != http.StatusNoContent {
 		t.Fatalf("login status=%d", loginRec.Code)
 	}
 
@@ -206,6 +215,111 @@ func TestNewHandler_DefaultPath(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestNewHandler_RouteEntrypointsAndLogout(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver:  localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{Email: "tenant-admin@example.invalid", KratosIdentityID: "kid1", RoleSlug: "tenant-admin"}},
+		OrgUnitStore:     newOrgUnitMemoryStore(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
+	loginReq.Host = "localhost:8080"
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginRec := httptest.NewRecorder()
+	h.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusNoContent {
+		t.Fatalf("login status=%d body=%q", loginRec.Code, loginRec.Body.String())
+	}
+
+	var sidCookie *http.Cookie
+	for _, c := range loginRec.Result().Cookies() {
+		if c.Name == sidCookieName && c.Value != "" {
+			sidCookie = c
+			break
+		}
+	}
+	if sidCookie == nil {
+		t.Fatal("missing sid cookie")
+	}
+
+	rootReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	rootReq.Host = "localhost:8080"
+	rootReq.AddCookie(sidCookie)
+	rootRec := httptest.NewRecorder()
+	h.ServeHTTP(rootRec, rootReq)
+	if rootRec.Code != http.StatusFound {
+		t.Fatalf("root status=%d", rootRec.Code)
+	}
+	if got := rootRec.Result().Header.Get("Location"); got != "/app" {
+		t.Fatalf("root location=%q", got)
+	}
+
+	appReq := httptest.NewRequest(http.MethodGet, "/app", nil)
+	appReq.Host = "localhost:8080"
+	appReq.AddCookie(sidCookie)
+	appRec := httptest.NewRecorder()
+	h.ServeHTTP(appRec, appReq)
+	if appRec.Code != http.StatusOK {
+		t.Fatalf("app status=%d body=%q", appRec.Code, appRec.Body.String())
+	}
+
+	for _, tc := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/org/api/positions", body: ""},
+		{method: http.MethodPost, path: "/org/api/positions", body: "{}"},
+		{method: http.MethodGet, path: "/org/api/positions:options", body: ""},
+		{method: http.MethodGet, path: "/org/api/assignments", body: ""},
+		{method: http.MethodPost, path: "/org/api/assignments", body: "{}"},
+		{method: http.MethodGet, path: "/org/api/setids", body: ""},
+		{method: http.MethodGet, path: "/org/api/setid-bindings", body: ""},
+		{method: http.MethodGet, path: "/person/api/persons", body: ""},
+		{method: http.MethodPost, path: "/person/api/persons", body: "{}"},
+		{method: http.MethodGet, path: "/person/api/persons:options", body: ""},
+		{method: http.MethodGet, path: "/person/api/persons:by-pernr", body: ""},
+		{method: http.MethodGet, path: "/jobcatalog/api/catalog", body: ""},
+		{method: http.MethodPost, path: "/jobcatalog/api/catalog/actions", body: "{}"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Host = "localhost:8080"
+		req.AddCookie(sidCookie)
+		if tc.method == http.MethodPost {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code == http.StatusNotFound || rec.Code == http.StatusMethodNotAllowed {
+			t.Fatalf("%s %s status=%d body=%q", tc.method, tc.path, rec.Code, rec.Body.String())
+		}
+	}
+
+	logoutReq := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	logoutReq.Host = "localhost:8080"
+	logoutReq.AddCookie(sidCookie)
+	logoutRec := httptest.NewRecorder()
+	h.ServeHTTP(logoutRec, logoutReq)
+	if logoutRec.Code != http.StatusFound {
+		t.Fatalf("logout status=%d body=%q", logoutRec.Code, logoutRec.Body.String())
+	}
+	if got := logoutRec.Result().Header.Get("Location"); got != "/app/login" {
+		t.Fatalf("logout location=%q", got)
 	}
 }
 
@@ -305,7 +419,7 @@ func TestNewHandlerWithOptions_OrgUnitWriteServiceDefault(t *testing.T) {
 	}
 }
 
-func TestUI_ShellAndPartials(t *testing.T) {
+func TestUI_MUIOnly(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -331,11 +445,11 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	reqAsset := httptest.NewRequest(http.MethodGet, "/assets/app.css", nil)
 	recAsset := httptest.NewRecorder()
 	h.ServeHTTP(recAsset, reqAsset)
-	if recAsset.Code != http.StatusOK {
-		t.Fatalf("asset status=%d", recAsset.Code)
+	if recAsset.Code != http.StatusNotFound {
+		t.Fatalf("asset status=%d body=%s", recAsset.Code, recAsset.Body.String())
 	}
 
-	reqNoTenant := httptest.NewRequest(http.MethodGet, "/login", nil)
+	reqNoTenant := httptest.NewRequest(http.MethodGet, "/app/login", nil)
 	reqNoTenant.Host = ""
 	recNoTenant := httptest.NewRecorder()
 	h.ServeHTTP(recNoTenant, reqNoTenant)
@@ -343,7 +457,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("no-tenant status=%d", recNoTenant.Code)
 	}
 
-	reqBadTenant := httptest.NewRequest(http.MethodGet, "/login", nil)
+	reqBadTenant := httptest.NewRequest(http.MethodGet, "/app/login", nil)
 	reqBadTenant.Host = "nope:8080"
 	recBadTenant := httptest.NewRecorder()
 	h.ServeHTTP(recBadTenant, reqBadTenant)
@@ -355,14 +469,8 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	reqLogin.Host = "localhost:8080"
 	recLogin := httptest.NewRecorder()
 	h.ServeHTTP(recLogin, reqLogin)
-	if recLogin.Code != http.StatusOK {
-		t.Fatalf("login status=%d", recLogin.Code)
-	}
-	if body := recLogin.Body.String(); !strings.Contains(body, `<form method="POST" action="/login">`) {
-		t.Fatalf("unexpected login body: %q", body)
-	}
-	if body := recLogin.Body.String(); strings.Contains(body, `hx-trigger="load"`) {
-		t.Fatalf("expected hx-trigger removed in login body: %q", body)
+	if recLogin.Code != http.StatusNotFound {
+		t.Fatalf("login status=%d body=%s", recLogin.Code, recLogin.Body.String())
 	}
 
 	reqAppNoSession := httptest.NewRequest(http.MethodGet, "/app", nil)
@@ -372,366 +480,31 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	if recAppNoSession.Code != http.StatusFound {
 		t.Fatalf("app (no session) status=%d", recAppNoSession.Code)
 	}
-
-	reqLoginPost := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
-	reqLoginPost.Host = "localhost:8080"
-	reqLoginPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	recLoginPost := httptest.NewRecorder()
-	h.ServeHTTP(recLoginPost, reqLoginPost)
-	if recLoginPost.Code != http.StatusFound {
-		t.Fatalf("login post status=%d", recLoginPost.Code)
-	}
-	var session *http.Cookie
-	for _, c := range recLoginPost.Result().Cookies() {
-		if c.Name == sidCookieName {
-			session = c
-			break
-		}
-	}
-	if session == nil || session.Value == "" {
-		t.Fatalf("missing %s cookie", sidCookieName)
+	if loc := recAppNoSession.Result().Header.Get("Location"); loc != "/app/login" {
+		t.Fatalf("unexpected redirect location=%q", loc)
 	}
 
-	reqRoot := httptest.NewRequest(http.MethodGet, "/", nil)
-	reqRoot.Host = "localhost:8080"
-	reqRoot.AddCookie(session)
-	recRoot := httptest.NewRecorder()
-	h.ServeHTTP(recRoot, reqRoot)
-	if recRoot.Code != http.StatusFound {
-		t.Fatalf("root status=%d", recRoot.Code)
+	reqAppLogin := httptest.NewRequest(http.MethodGet, "/app/login", nil)
+	reqAppLogin.Host = "localhost:8080"
+	recAppLogin := httptest.NewRecorder()
+	h.ServeHTTP(recAppLogin, reqAppLogin)
+	if recAppLogin.Code != http.StatusOK {
+		t.Fatalf("app login status=%d", recAppLogin.Code)
+	}
+	if body := recAppLogin.Body.String(); !strings.Contains(body, `<div id="root"></div>`) {
+		t.Fatalf("unexpected body=%q", body)
 	}
 
-	protected := []string{
-		"/app?as_of=2026-01-01",
-		"/app/home?as_of=2026-01-01",
-		"/ui/flash",
-		"/ui/nav",
-		"/ui/topbar",
-		"/org/nodes?tree_as_of=2026-01-01",
-		"/org/snapshot?as_of=2026-01-01",
-		"/org/setid?as_of=2026-01-01",
-		"/org/job-catalog?as_of=2026-01-01",
-		"/org/positions?as_of=2026-01-01",
-		"/org/assignments?as_of=2026-01-01",
-		"/person/persons?as_of=2026-01-01",
+	reqAPI := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01", nil)
+	reqAPI.Host = "localhost:8080"
+	recAPI := httptest.NewRecorder()
+	h.ServeHTTP(recAPI, reqAPI)
+	if recAPI.Code != http.StatusUnauthorized {
+		t.Fatalf("api status=%d body=%s", recAPI.Code, recAPI.Body.String())
 	}
-	for _, p := range protected {
-		req := httptest.NewRequest(http.MethodGet, p, nil)
-		req.Host = "localhost:8080"
-		req.AddCookie(session)
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("path=%s status=%d", p, rec.Code)
-		}
+	if ct := recAPI.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Fatalf("api content-type=%q", ct)
 	}
-
-	reqAppMissingAsOf := httptest.NewRequest(http.MethodGet, "/app", nil)
-	reqAppMissingAsOf.Host = "localhost:8080"
-	reqAppMissingAsOf.AddCookie(session)
-	recAppMissingAsOf := httptest.NewRecorder()
-	h.ServeHTTP(recAppMissingAsOf, reqAppMissingAsOf)
-	if recAppMissingAsOf.Code != http.StatusOK {
-		t.Fatalf("app (missing as_of) status=%d", recAppMissingAsOf.Code)
-	}
-
-	reqNavMissingAsOf := httptest.NewRequest(http.MethodGet, "/ui/nav", nil)
-	reqNavMissingAsOf.Host = "localhost:8080"
-	reqNavMissingAsOf.AddCookie(session)
-	recNavMissingAsOf := httptest.NewRecorder()
-	h.ServeHTTP(recNavMissingAsOf, reqNavMissingAsOf)
-	if recNavMissingAsOf.Code != http.StatusOK {
-		t.Fatalf("nav (missing as_of) status=%d", recNavMissingAsOf.Code)
-	}
-
-	reqTopbarMissingAsOf := httptest.NewRequest(http.MethodGet, "/ui/topbar", nil)
-	reqTopbarMissingAsOf.Host = "localhost:8080"
-	reqTopbarMissingAsOf.AddCookie(session)
-	recTopbarMissingAsOf := httptest.NewRecorder()
-	h.ServeHTTP(recTopbarMissingAsOf, reqTopbarMissingAsOf)
-	if recTopbarMissingAsOf.Code != http.StatusOK {
-		t.Fatalf("topbar (missing as_of) status=%d", recTopbarMissingAsOf.Code)
-	}
-
-	reqSetIDPost := httptest.NewRequest(http.MethodPost, "/org/setid?as_of=2026-01-01", strings.NewReader("action=create_setid&setid=A0001&name=Default+A"))
-	reqSetIDPost.Host = "localhost:8080"
-	reqSetIDPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqSetIDPost.AddCookie(session)
-	recSetIDPost := httptest.NewRecorder()
-	h.ServeHTTP(recSetIDPost, reqSetIDPost)
-	if recSetIDPost.Code != http.StatusSeeOther {
-		t.Fatalf("setid post status=%d", recSetIDPost.Code)
-	}
-
-	reqJobCatalogPost := httptest.NewRequest(http.MethodPost, "/org/job-catalog?as_of=2026-01-01&package_code=DEFLT", strings.NewReader("action=create_job_family_group&effective_date=2026-01-01&package_code=DEFLT&job_family_group_code=JC1&job_family_group_name=Group1"))
-	reqJobCatalogPost.Host = "localhost:8080"
-	reqJobCatalogPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqJobCatalogPost.AddCookie(session)
-	recJobCatalogPost := httptest.NewRecorder()
-	h.ServeHTTP(recJobCatalogPost, reqJobCatalogPost)
-	if recJobCatalogPost.Code != http.StatusSeeOther {
-		t.Fatalf("jobcatalog post status=%d", recJobCatalogPost.Code)
-	}
-
-	reqOrgSnapshotPost := httptest.NewRequest(http.MethodPost, "/org/snapshot?as_of=2026-01-01", strings.NewReader("name=A"))
-	reqOrgSnapshotPost.Host = "localhost:8080"
-	reqOrgSnapshotPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqOrgSnapshotPost.AddCookie(session)
-	recOrgSnapshotPost := httptest.NewRecorder()
-	h.ServeHTTP(recOrgSnapshotPost, reqOrgSnapshotPost)
-	if recOrgSnapshotPost.Code != http.StatusOK {
-		t.Fatalf("org snapshot post status=%d", recOrgSnapshotPost.Code)
-	}
-
-	reqCreate := httptest.NewRequest(http.MethodPost, "/org/nodes?tree_as_of=2026-01-01", strings.NewReader("org_code=ORG-1&name=NodeA"))
-	reqCreate.Host = "localhost:8080"
-	reqCreate.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqCreate.AddCookie(session)
-	recCreate := httptest.NewRecorder()
-	h.ServeHTTP(recCreate, reqCreate)
-	if recCreate.Code != http.StatusSeeOther {
-		t.Fatalf("org create status=%d", recCreate.Code)
-	}
-
-	reqChildren := httptest.NewRequest(http.MethodGet, "/org/nodes/children?tree_as_of=2026-01-01&parent_id=10000000", nil)
-	reqChildren.Host = "localhost:8080"
-	reqChildren.AddCookie(session)
-	recChildren := httptest.NewRecorder()
-	h.ServeHTTP(recChildren, reqChildren)
-	if recChildren.Code != http.StatusOK {
-		t.Fatalf("org children status=%d", recChildren.Code)
-	}
-
-	reqDetails := httptest.NewRequest(http.MethodGet, "/org/nodes/details?effective_date=2026-01-01&org_id=10000000", nil)
-	reqDetails.Host = "localhost:8080"
-	reqDetails.AddCookie(session)
-	recDetails := httptest.NewRecorder()
-	h.ServeHTTP(recDetails, reqDetails)
-	if recDetails.Code != http.StatusOK {
-		t.Fatalf("org details status=%d", recDetails.Code)
-	}
-
-	reqSearch := httptest.NewRequest(http.MethodGet, "/org/nodes/search?tree_as_of=2026-01-01&query=ORG-1", nil)
-	reqSearch.Host = "localhost:8080"
-	reqSearch.AddCookie(session)
-	recSearch := httptest.NewRecorder()
-	h.ServeHTTP(recSearch, reqSearch)
-	if recSearch.Code != http.StatusOK {
-		t.Fatalf("org search status=%d", recSearch.Code)
-	}
-
-	reqNavZH := httptest.NewRequest(http.MethodGet, "/ui/nav", nil)
-	reqNavZH.Host = "localhost:8080"
-	reqNavZH.AddCookie(session)
-	reqNavZH.AddCookie(&http.Cookie{Name: "lang", Value: "zh"})
-	recNavZH := httptest.NewRecorder()
-	h.ServeHTTP(recNavZH, reqNavZH)
-	if recNavZH.Code != http.StatusOK {
-		t.Fatalf("nav zh status=%d", recNavZH.Code)
-	}
-
-	reqTopbarZH := httptest.NewRequest(http.MethodGet, "/ui/topbar", nil)
-	reqTopbarZH.Host = "localhost:8080"
-	reqTopbarZH.AddCookie(session)
-	reqTopbarZH.AddCookie(&http.Cookie{Name: "lang", Value: "zh"})
-	recTopbarZH := httptest.NewRecorder()
-	h.ServeHTTP(recTopbarZH, reqTopbarZH)
-	if recTopbarZH.Code != http.StatusOK {
-		t.Fatalf("topbar zh status=%d", recTopbarZH.Code)
-	}
-
-	reqLangNoRef := httptest.NewRequest(http.MethodGet, "/lang/en", nil)
-	reqLangNoRef.Host = "localhost:8080"
-	recLangNoRef := httptest.NewRecorder()
-	h.ServeHTTP(recLangNoRef, reqLangNoRef)
-	if recLangNoRef.Code != http.StatusFound {
-		t.Fatalf("lang status=%d", recLangNoRef.Code)
-	}
-
-	reqLangWithRef := httptest.NewRequest(http.MethodGet, "/lang/zh", nil)
-	reqLangWithRef.Host = "localhost:8080"
-	reqLangWithRef.Header.Set("Referer", "/app")
-	recLangWithRef := httptest.NewRecorder()
-	h.ServeHTTP(recLangWithRef, reqLangWithRef)
-	if recLangWithRef.Code != http.StatusFound {
-		t.Fatalf("lang status=%d", recLangWithRef.Code)
-	}
-
-	oldSession := session
-	reqLogout := httptest.NewRequest(http.MethodPost, "/logout", nil)
-	reqLogout.Host = "localhost:8080"
-	reqLogout.AddCookie(oldSession)
-	recLogout := httptest.NewRecorder()
-	h.ServeHTTP(recLogout, reqLogout)
-	if recLogout.Code != http.StatusFound {
-		t.Fatalf("logout status=%d", recLogout.Code)
-	}
-	var cleared bool
-	for _, c := range recLogout.Result().Cookies() {
-		if c.Name == sidCookieName && c.MaxAge < 0 {
-			cleared = true
-			break
-		}
-	}
-	if !cleared {
-		t.Fatalf("expected %s cookie cleared", sidCookieName)
-	}
-
-	reqAppOldSession := httptest.NewRequest(http.MethodGet, "/app", nil)
-	reqAppOldSession.Host = "localhost:8080"
-	reqAppOldSession.AddCookie(oldSession)
-	recAppOldSession := httptest.NewRecorder()
-	h.ServeHTTP(recAppOldSession, reqAppOldSession)
-	if recAppOldSession.Code != http.StatusFound {
-		t.Fatalf("app (old session) status=%d", recAppOldSession.Code)
-	}
-
-	reqLoginPost2 := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
-	reqLoginPost2.Host = "localhost:8080"
-	reqLoginPost2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	recLoginPost2 := httptest.NewRecorder()
-	h.ServeHTTP(recLoginPost2, reqLoginPost2)
-	if recLoginPost2.Code != http.StatusFound {
-		t.Fatalf("login post (2) status=%d", recLoginPost2.Code)
-	}
-	session = nil
-	for _, c := range recLoginPost2.Result().Cookies() {
-		if c.Name == sidCookieName {
-			session = c
-			break
-		}
-	}
-	if session == nil || session.Value == "" {
-		t.Fatalf("missing %s cookie (2)", sidCookieName)
-	}
-
-	reqPersonPost := httptest.NewRequest(http.MethodPost, "/person/persons?as_of=2026-01-01", strings.NewReader("pernr=1&display_name=A"))
-	reqPersonPost.Host = "localhost:8080"
-	reqPersonPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqPersonPost.AddCookie(session)
-	recPersonPost := httptest.NewRecorder()
-	h.ServeHTTP(recPersonPost, reqPersonPost)
-	if recPersonPost.Code != http.StatusSeeOther {
-		t.Fatalf("person post status=%d", recPersonPost.Code)
-	}
-
-	reqPersonByPernr := httptest.NewRequest(http.MethodGet, "/person/api/persons:by-pernr?pernr=1", nil)
-	reqPersonByPernr.Host = "localhost:8080"
-	reqPersonByPernr.AddCookie(session)
-	recPersonByPernr := httptest.NewRecorder()
-	h.ServeHTTP(recPersonByPernr, reqPersonByPernr)
-	if recPersonByPernr.Code != http.StatusOK {
-		t.Fatalf("person by pernr status=%d", recPersonByPernr.Code)
-	}
-	var pResp struct {
-		PersonUUID string `json:"person_uuid"`
-	}
-	if err := json.NewDecoder(recPersonByPernr.Body).Decode(&pResp); err != nil {
-		t.Fatal(err)
-	}
-	if pResp.PersonUUID == "" {
-		t.Fatal("missing person_uuid")
-	}
-
-	reqPersonOptions := httptest.NewRequest(http.MethodGet, "/person/api/persons:options?q=1&limit=10", nil)
-	reqPersonOptions.Host = "localhost:8080"
-	reqPersonOptions.AddCookie(session)
-	recPersonOptions := httptest.NewRecorder()
-	h.ServeHTTP(recPersonOptions, reqPersonOptions)
-	if recPersonOptions.Code != http.StatusOK {
-		t.Fatalf("person options status=%d", recPersonOptions.Code)
-	}
-
-	reqPosCreate := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_code":"ORG-1","job_profile_uuid":"jp1","name":"A"}`))
-	reqPosCreate.Host = "localhost:8080"
-	reqPosCreate.Header.Set("Content-Type", "application/json")
-	reqPosCreate.AddCookie(session)
-	recPosCreate := httptest.NewRecorder()
-	h.ServeHTTP(recPosCreate, reqPosCreate)
-	if recPosCreate.Code != http.StatusOK {
-		t.Fatalf("positions api post status=%d", recPosCreate.Code)
-	}
-	var posResp struct {
-		PositionUUID string `json:"position_uuid"`
-	}
-	if err := json.NewDecoder(recPosCreate.Body).Decode(&posResp); err != nil {
-		t.Fatal(err)
-	}
-	if posResp.PositionUUID == "" {
-		t.Fatal("missing position id")
-	}
-
-	reqPosList := httptest.NewRequest(http.MethodGet, "/org/api/positions?as_of=2026-01-01", nil)
-	reqPosList.Host = "localhost:8080"
-	reqPosList.AddCookie(session)
-	recPosList := httptest.NewRecorder()
-	h.ServeHTTP(recPosList, reqPosList)
-	if recPosList.Code != http.StatusOK {
-		t.Fatalf("positions api get status=%d", recPosList.Code)
-	}
-
-	reqAssignCreate := httptest.NewRequest(http.MethodPost, "/org/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"`+pResp.PersonUUID+`","position_uuid":"`+posResp.PositionUUID+`"}`))
-	reqAssignCreate.Host = "localhost:8080"
-	reqAssignCreate.Header.Set("Content-Type", "application/json")
-	reqAssignCreate.AddCookie(session)
-	recAssignCreate := httptest.NewRecorder()
-	h.ServeHTTP(recAssignCreate, reqAssignCreate)
-	if recAssignCreate.Code != http.StatusOK {
-		t.Fatalf("assignments api post status=%d", recAssignCreate.Code)
-	}
-
-	reqAssignList := httptest.NewRequest(http.MethodGet, "/org/api/assignments?as_of=2026-01-01&person_uuid="+pResp.PersonUUID, nil)
-	reqAssignList.Host = "localhost:8080"
-	reqAssignList.AddCookie(session)
-	recAssignList := httptest.NewRecorder()
-	h.ServeHTTP(recAssignList, reqAssignList)
-	if recAssignList.Code != http.StatusOK {
-		t.Fatalf("assignments api get status=%d", recAssignList.Code)
-	}
-
-	reqPosUIPost := httptest.NewRequest(http.MethodPost, "/org/positions?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&org_code=ORG-1&job_profile_uuid=jp1&name=A"))
-	reqPosUIPost.Host = "localhost:8080"
-	reqPosUIPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqPosUIPost.AddCookie(session)
-	recPosUIPost := httptest.NewRecorder()
-	h.ServeHTTP(recPosUIPost, reqPosUIPost)
-	if recPosUIPost.Code != http.StatusSeeOther {
-		t.Fatalf("positions ui post status=%d", recPosUIPost.Code)
-	}
-
-	reqPosUIGet := httptest.NewRequest(http.MethodGet, "/org/positions?as_of=2026-01-01", nil)
-	reqPosUIGet.Host = "localhost:8080"
-	reqPosUIGet.AddCookie(session)
-	recPosUIGet := httptest.NewRecorder()
-	h.ServeHTTP(recPosUIGet, reqPosUIGet)
-	if recPosUIGet.Code != http.StatusOK {
-		t.Fatalf("positions ui get status=%d", recPosUIGet.Code)
-	}
-
-	reqAssignUIPost := httptest.NewRequest(http.MethodPost, "/org/assignments?as_of=2026-01-01", strings.NewReader("effective_date=2026-01-02&pernr=1&position_uuid="+posResp.PositionUUID))
-	reqAssignUIPost.Host = "localhost:8080"
-	reqAssignUIPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqAssignUIPost.AddCookie(session)
-	recAssignUIPost := httptest.NewRecorder()
-	h.ServeHTTP(recAssignUIPost, reqAssignUIPost)
-	if recAssignUIPost.Code != http.StatusSeeOther {
-		t.Fatalf("assignments ui post status=%d", recAssignUIPost.Code)
-	}
-
-	_ = tr("en", "unknown")
-	_ = tr("zh", "unknown")
-	if got := tr("zh", "shared_readonly"); got != "共享/只读" {
-		t.Fatalf("shared_readonly zh=%q", got)
-	}
-	if got := tr("zh", "tenant_owned"); got != "租户" {
-		t.Fatalf("tenant_owned zh=%q", got)
-	}
-
-	rNoCookie := &http.Request{Header: http.Header{}}
-	_ = lang(rNoCookie)
-	rOther := &http.Request{Header: http.Header{}}
-	rOther.AddCookie(&http.Cookie{Name: "lang", Value: "fr"})
-	_ = lang(rOther)
 }
 
 func TestNewHandler_InternalAPIRoutes(t *testing.T) {
@@ -774,12 +547,12 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loginReq := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	loginReq := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
 	loginReq.Host = "localhost:8080"
-	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginReq.Header.Set("Content-Type", "application/json")
 	loginRec := httptest.NewRecorder()
 	h.ServeHTTP(loginRec, loginReq)
-	if loginRec.Code != http.StatusFound {
+	if loginRec.Code != http.StatusNoContent {
 		t.Fatalf("login status=%d", loginRec.Code)
 	}
 	var session *http.Cookie
@@ -942,44 +715,6 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("org units rescinds org status=%d", recOrgRescindOrg.Code)
 	}
 
-	reqView := httptest.NewRequest(http.MethodGet, "/org/nodes/view?effective_date=2026-01-01&org_id="+node.ID, nil)
-	reqView.Host = "localhost:8080"
-	reqView.Header.Set("HX-Request", "true")
-	reqView.AddCookie(session)
-	recView := httptest.NewRecorder()
-	h.ServeHTTP(recView, reqView)
-	if recView.Code != http.StatusOK {
-		t.Fatalf("org nodes view status=%d", recView.Code)
-	}
-}
-
-func TestNewHandlerWithOptions_DefaultOrgUnitSnapshotStoreFromPGStore(t *testing.T) {
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	allowlistPath := filepath.Clean(filepath.Join(wd, "..", "..", "config", "routing", "allowlist.yaml"))
-	if err := os.Setenv("ALLOWLIST_PATH", allowlistPath); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Unsetenv("ALLOWLIST_PATH") })
-
-	h, err := NewHandlerWithOptions(HandlerOptions{
-		TenancyResolver: localTenancyResolver(),
-		OrgUnitStore:    newOrgUnitPGStore(&fakeBeginner{}),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/login", nil)
-	req.Host = "localhost:8080"
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d", rec.Code)
-	}
 }
 
 func TestNewHandlerWithOptions_DefaultPaths(t *testing.T) {
@@ -1320,9 +1055,9 @@ func TestLoginPost_PrincipalError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
 	req.Host = "localhost:8080"
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
@@ -1357,9 +1092,9 @@ func TestLoginPost_SessionError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
 	req.Host = "localhost:8080"
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
@@ -1389,9 +1124,9 @@ func TestLoginPost_InvalidCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=bad"))
+	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"bad"}`))
 	req.Host = "localhost:8080"
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity {
@@ -1421,9 +1156,9 @@ func TestLoginPost_IdentityError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
 	req.Host = "localhost:8080"
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
@@ -1454,9 +1189,9 @@ func TestLoginPost_MissingFields(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid"))
+	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid"}`))
 	req.Host = "localhost:8080"
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity {
@@ -1487,9 +1222,9 @@ func TestLoginPost_BadForm(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=%zz&password=pw"))
+	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader("email=%zz&password=pw"))
 	req.Host = "localhost:8080"
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity {
@@ -1518,9 +1253,9 @@ func TestLoginPost_DefaultProviderConfigError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
 	req.Host = "localhost:8080"
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {

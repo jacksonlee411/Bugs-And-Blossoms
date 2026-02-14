@@ -11,77 +11,41 @@ entrypoints:
       - path: /app/home
         methods: [GET]
         route_class: ui
+      - path: /app/login
+        methods: [GET]
+        route_class: ui
       - path: /health
         methods: [GET]
         route_class: ops
       - path: /healthz
         methods: [GET]
         route_class: ops
-      - path: /login
-        methods: [GET, POST]
-        route_class: authn
+      - path: /iam/api/sessions
+        methods: [POST]
+        route_class: internal_api
       - path: /logout
         methods: [POST]
         route_class: authn
-      - path: /lang/en
-        methods: [GET]
-        route_class: ui
-      - path: /lang/zh
-        methods: [GET]
-        route_class: ui
-      - path: /ui/nav
-        methods: [GET]
-        route_class: ui
-      - path: /ui/topbar
-        methods: [GET]
-        route_class: ui
-      - path: /ui/flash
-        methods: [GET]
-        route_class: ui
-      - path: /org/nodes
+      - path: /person/api/persons
         methods: [GET, POST]
-        route_class: ui
-      - path: /org/nodes/children
-        methods: [GET]
-        route_class: ui
-      - path: /org/nodes/details
-        methods: [GET]
-        route_class: ui
-      - path: /org/nodes/view
-        methods: [GET]
-        route_class: ui
-      - path: /org/nodes/search
-        methods: [GET]
-        route_class: ui
-      - path: /org/snapshot
-        methods: [GET, POST]
-        route_class: ui
-      - path: /org/setid
-        methods: [GET, POST]
-        route_class: ui
-      - path: /orgunit/setids/{setid}/scope-subscriptions
-        methods: [GET, POST]
-        route_class: ui
-      - path: /org/job-catalog
-        methods: [GET, POST]
-        route_class: ui
-      - path: /org/positions
-        methods: [GET, POST]
-        route_class: ui
-      - path: /org/assignments
-        methods: [GET, POST]
-        route_class: ui
-      - path: /person/persons
-        methods: [GET, POST]
-        route_class: ui
+        route_class: internal_api
       - path: /person/api/persons:options
         methods: [GET]
         route_class: internal_api
       - path: /person/api/persons:by-pernr
         methods: [GET]
         route_class: internal_api
+      - path: /jobcatalog/api/catalog
+        methods: [GET]
+        route_class: internal_api
+      - path: /jobcatalog/api/catalog/actions
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/positions
         methods: [GET, POST]
+        route_class: internal_api
+      - path: /org/api/positions:options
+        methods: [GET]
         route_class: internal_api
       - path: /org/api/assignments
         methods: [GET, POST]
@@ -93,10 +57,10 @@ entrypoints:
         methods: [POST]
         route_class: internal_api
       - path: /org/api/setids
-        methods: [POST]
+        methods: [GET, POST]
         route_class: internal_api
       - path: /org/api/setid-bindings
-        methods: [POST]
+        methods: [GET, POST]
         route_class: internal_api
       - path: /org/api/scope-packages
         methods: [GET, POST]

@@ -2,6 +2,9 @@
 
 **状态**: 已完成（Phase 0：Astro build + go:embed Shell，2026-01-08 12:24 UTC）
 
+> 注意：本计划的 Astro/HTMX UI 链路已在 `DEV-PLAN-103` 中被移除并收敛为 **MUI X（React SPA）**。  
+> 本文仅保留为历史记录，请勿作为当前实现/门禁/SSOT 的依据。
+
 ## 1. 背景与上下文 (Context)
 
 仓库当前 UI 技术栈为 **Templ + HTMX + Alpine.js + Tailwind CSS**（版本与 SSOT 见 `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`）。与此同时，`DEV-PLAN-026`～`DEV-PLAN-031` 定义了 HRMS（Greenfield）的核心模块与契约：

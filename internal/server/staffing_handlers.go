@@ -213,6 +213,107 @@ type staffingPositionAPIResponse struct {
 	EffectiveDate         string `json:"effective_date"`
 }
 
+type staffingJobProfileOptionAPIItem struct {
+	JobProfileUUID string `json:"job_profile_uuid"`
+	JobProfileCode string `json:"job_profile_code"`
+	Name           string `json:"name"`
+}
+
+type staffingPositionsOptionsAPIResponse struct {
+	AsOf            string                            `json:"as_of"`
+	OrgCode         string                            `json:"org_code"`
+	JobCatalogSetID string                            `json:"jobcatalog_setid"`
+	JobProfiles     []staffingJobProfileOptionAPIItem `json:"job_profiles"`
+}
+
+func handlePositionsOptionsAPI(w http.ResponseWriter, r *http.Request, orgStore OrgUnitStore, jobStore JobCatalogStore) {
+	tenant, ok := currentTenant(r.Context())
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
+		return
+	}
+	if r.Method != http.MethodGet {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+		return
+	}
+
+	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
+	if asOf == "" {
+		asOf = time.Now().UTC().Format("2006-01-02")
+	}
+	if _, err := time.Parse("2006-01-02", asOf); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
+		return
+	}
+
+	rawOrgCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
+	if rawOrgCode == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
+		return
+	}
+	orgCode, err := orgunitpkg.NormalizeOrgCode(rawOrgCode)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+		return
+	}
+
+	orgID, err := orgStore.ResolveOrgID(r.Context(), tenant.ID, orgCode)
+	if err != nil {
+		switch {
+		case errors.Is(err, orgunitpkg.ErrOrgCodeInvalid):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+		case errors.Is(err, orgunitpkg.ErrOrgCodeNotFound):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
+		default:
+			writeInternalAPIError(w, r, err, "orgunit_resolve_org_code_failed")
+		}
+		return
+	}
+
+	resolver, ok := any(orgStore).(orgUnitSetIDResolver)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
+		return
+	}
+	setID, err := resolver.ResolveSetID(r.Context(), tenant.ID, strconv.Itoa(orgID), asOf)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, stablePgMessage(err), "resolve setid failed")
+		return
+	}
+	if strings.TrimSpace(setID) == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "setid_missing", "setid missing")
+		return
+	}
+	if jobStore == nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "jobcatalog_store_missing", "jobcatalog store missing")
+		return
+	}
+
+	jobProfiles, err := jobStore.ListJobProfiles(r.Context(), tenant.ID, setID, asOf)
+	if err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, stablePgMessage(err), "list job profiles failed")
+		return
+	}
+
+	resp := staffingPositionsOptionsAPIResponse{
+		AsOf:            asOf,
+		OrgCode:         orgCode,
+		JobCatalogSetID: setID,
+		JobProfiles:     make([]staffingJobProfileOptionAPIItem, 0, len(jobProfiles)),
+	}
+	for _, p := range jobProfiles {
+		resp.JobProfiles = append(resp.JobProfiles, staffingJobProfileOptionAPIItem{
+			JobProfileUUID: p.JobProfileUUID,
+			JobProfileCode: p.JobProfileCode,
+			Name:           p.Name,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
 func handlePositionsAPI(w http.ResponseWriter, r *http.Request, orgResolver OrgUnitCodeResolver, store PositionStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 )
 
@@ -30,16 +31,20 @@ func TestLogin_RejectsInvalidIdentityRole(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	req := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
 	req.Host = "localhost:8080"
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "invalid identity role") {
-		t.Fatalf("unexpected body=%s", rec.Body.String())
+	var envelope routing.ErrorEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("bad json: %v body=%q", err, rec.Body.String())
+	}
+	if envelope.Code != "invalid_identity_role" {
+		t.Fatalf("code=%q body=%s", envelope.Code, rec.Body.String())
 	}
 }
 
@@ -76,15 +81,21 @@ func TestHandler_InternalAssignmentEventRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loginReq := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	loginReq := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
 	loginReq.Host = "localhost:8080"
-	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginReq.Header.Set("Content-Type", "application/json")
 	loginRec := httptest.NewRecorder()
 	h.ServeHTTP(loginRec, loginReq)
-	if loginRec.Code != http.StatusFound {
+	if loginRec.Code != http.StatusNoContent {
 		t.Fatalf("login status=%d", loginRec.Code)
 	}
-	sidCookie := loginRec.Result().Cookies()[0]
+	var sidCookie *http.Cookie
+	for _, c := range loginRec.Result().Cookies() {
+		if c.Name == "sid" && c.Value != "" {
+			sidCookie = c
+			break
+		}
+	}
 	if sidCookie == nil || sidCookie.Name != "sid" || sidCookie.Value == "" {
 		t.Fatalf("unexpected sid cookie: %#v", sidCookie)
 	}
@@ -128,15 +139,21 @@ func TestHandler_ScopePackageRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loginReq := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=tenant-admin%40example.invalid&password=pw"))
+	loginReq := httptest.NewRequest(http.MethodPost, "/iam/api/sessions", strings.NewReader(`{"email":"tenant-admin@example.invalid","password":"pw"}`))
 	loginReq.Host = "localhost:8080"
-	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginReq.Header.Set("Content-Type", "application/json")
 	loginRec := httptest.NewRecorder()
 	h.ServeHTTP(loginRec, loginReq)
-	if loginRec.Code != http.StatusFound {
+	if loginRec.Code != http.StatusNoContent {
 		t.Fatalf("login status=%d", loginRec.Code)
 	}
-	sidCookie := loginRec.Result().Cookies()[0]
+	var sidCookie *http.Cookie
+	for _, c := range loginRec.Result().Cookies() {
+		if c.Name == "sid" && c.Value != "" {
+			sidCookie = c
+			break
+		}
+	}
 	if sidCookie == nil || sidCookie.Name != "sid" || sidCookie.Value == "" {
 		t.Fatalf("unexpected sid cookie: %#v", sidCookie)
 	}
@@ -151,15 +168,6 @@ func TestHandler_ScopePackageRoutes(t *testing.T) {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		return rec
-	}
-
-	if rec := doReq(http.MethodGet, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", "", nil); rec.Code != http.StatusOK {
-		t.Fatalf("scope subscriptions ui get status=%d body=%s", rec.Code, rec.Body.String())
-	}
-	if rec := doReq(http.MethodPost, "/orgunit/setids/S2601/scope-subscriptions?as_of=2026-01-01", "scope_code=jobcatalog&package_id=p1&request_code=r1", map[string]string{
-		"Content-Type": "application/x-www-form-urlencoded",
-	}); rec.Code != http.StatusOK {
-		t.Fatalf("scope subscriptions ui post status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
 	if rec := doReq(http.MethodGet, "/org/api/scope-packages?scope_code=jobcatalog", "", nil); rec.Code != http.StatusOK {

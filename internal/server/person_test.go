@@ -346,6 +346,119 @@ func TestPersonPGStore_FindPersonByPernr(t *testing.T) {
 	})
 }
 
+type personErrStore struct {
+	PersonStore
+	listErr   error
+	createErr error
+}
+
+func (s personErrStore) ListPersons(ctx context.Context, tenantID string) ([]Person, error) {
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	return s.PersonStore.ListPersons(ctx, tenantID)
+}
+
+func (s personErrStore) CreatePerson(ctx context.Context, tenantID string, pernr string, displayName string) (Person, error) {
+	if s.createErr != nil {
+		return Person{}, s.createErr
+	}
+	return s.PersonStore.CreatePerson(ctx, tenantID, pernr, displayName)
+}
+
+func TestHandlePersonsAPI_Branches(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/person/api/persons", nil)
+		rec := httptest.NewRecorder()
+		handlePersonsAPI(rec, req, newPersonMemoryStore())
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/person/api/persons", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handlePersonsAPI(rec, req, newPersonMemoryStore())
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get ok", func(t *testing.T) {
+		store := newPersonMemoryStore()
+		if _, err := store.CreatePerson(context.Background(), "t1", "0001", "A"); err != nil {
+			t.Fatal(err)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/person/api/persons", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handlePersonsAPI(rec, req, store)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		}
+		var out map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		if out["tenant_id"] != "t1" {
+			t.Fatalf("tenant_id=%v", out["tenant_id"])
+		}
+	})
+
+	t.Run("get store error", func(t *testing.T) {
+		store := personErrStore{PersonStore: newPersonMemoryStore(), listErr: errors.New("boom")}
+		req := httptest.NewRequest(http.MethodGet, "/person/api/persons", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handlePersonsAPI(rec, req, store)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post bad json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/person/api/persons", strings.NewReader("{"))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handlePersonsAPI(rec, req, newPersonMemoryStore())
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post create error", func(t *testing.T) {
+		store := personErrStore{PersonStore: newPersonMemoryStore(), createErr: errors.New("pernr already exists")}
+		req := httptest.NewRequest(http.MethodPost, "/person/api/persons", strings.NewReader(`{"pernr":"1","display_name":"A"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handlePersonsAPI(rec, req, store)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("post ok", func(t *testing.T) {
+		store := newPersonMemoryStore()
+		req := httptest.NewRequest(http.MethodPost, "/person/api/persons", strings.NewReader(`{"pernr":"0001","display_name":"A"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handlePersonsAPI(rec, req, store)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		}
+		var out map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		if out["pernr"] != "1" {
+			t.Fatalf("pernr=%v", out["pernr"])
+		}
+	})
+}
+
 func TestPersonPGStore_ListPersonOptions(t *testing.T) {
 	t.Run("begin error", func(t *testing.T) {
 		store := newPersonPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {

@@ -89,11 +89,14 @@ test("tp060-04: orgunit details two-pane profile/audit URL restore", async ({ br
   });
   const page = await appContext.newPage();
 
-  await page.goto("/login");
-  await page.locator('input[name="email"]').fill(tenantAdminEmail);
-  await page.locator('input[name="password"]').fill(tenantAdminPass);
-  await page.getByRole("button", { name: "Login" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  const loginResp = await appContext.request.post("/iam/api/sessions", {
+    data: { email: tenantAdminEmail, password: tenantAdminPass }
+  });
+  expect(loginResp.status(), await loginResp.text()).toBe(204);
+
+  // /app 现为 MUI SPA：只做最小可见性断言，避免依赖旧 HTML login UI。
+  await page.goto(`/app?as_of=${asOf}`);
+  await expect(page.locator("h1")).toContainText("Bugs & Blossoms");
 
   const createResp = await appContext.request.post("/org/api/org-units", {
     data: {

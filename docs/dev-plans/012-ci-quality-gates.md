@@ -21,7 +21,7 @@
   - Routing Gates
   - E2E Tests
 - [ ] **单一入口 + 可复现**：CI 只编排 `Makefile` 入口；工具链版本以 `DEV-PLAN-011` 的 SSOT 固定（`go.mod`/lockfile/CI workflow）。
-- [ ] **生成物一致性门禁**：`.templ`/Tailwind/sqlc/Authz pack/Atlas hash 等生成物必须可复现且必须提交；CI 必须能阻断“漏提交/漂移”。
+- [ ] **生成物一致性门禁**：`.templ`/MUI 静态产物/sqlc/Authz pack/Atlas hash 等生成物必须可复现且必须提交；CI 必须能阻断“漏提交/漂移”。
 - [ ] **100% 覆盖率门禁**：对齐 `DEV-PLAN-019/025/022` 的要求，新仓库按 100% 覆盖率门禁执行（口径/范围/排除项必须固化为 SSOT）。
 - [ ] **触发器可控（但 required checks 不跳过）**：通过 paths-filter 做“按需执行”，降低耗时；但 required checks 的 job 必须稳定产出可合并的结论（避免因 `skipped` 影响合并）。
 
@@ -39,7 +39,7 @@
 - 命令入口：`Makefile`
 - CI 门禁：`.github/workflows/quality-gates.yml`
 - 版本基线：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
-- Astro UI（必选）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- UI（MUI-only）：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
 - 多语言门禁（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
 - Atlas+Goose 闭环：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - sqlc 门禁：`docs/dev-plans/025-sqlc-guidelines.md`
@@ -52,7 +52,7 @@
 - [ ] DB schema / migrations（Atlas plan/lint + goose smoke）
 - [ ] sqlc 生成物（生成一致性门禁）
 - [ ] Authz policy 生成物（pack/diff/lint/test）
-- [ ] UI（Astro/pnpm）与 E2E（Playwright）
+- [ ] UI（MUI/pnpm）与 E2E（Playwright）
 - [X] 文档（本计划 → `make check doc`）
 
 ## 3. 总体方案：CI 质量门禁框架 (Quality Gates)
@@ -79,7 +79,7 @@
 - `make check lint` / `make check fmt`：质量与格式化门禁入口。
 - `make test`（或等价）：单测/集成测试入口（含覆盖率门禁）。
 - `make check routing`：路由门禁入口（对齐 `DEV-PLAN-017`）。
-- `make e2e`（或等价）：E2E 门禁入口（对齐 `DEV-PLAN-018/044` 的可视化验收口径）。
+- `make e2e`（或等价）：E2E 门禁入口（对齐 `DEV-PLAN-060` 的可视化验收口径）。
 
 ### 3.3 Paths-Filter：触发器分层（只做“是否需要跑”，不做“是否需要合并”）
 
@@ -102,7 +102,7 @@
 **变更类别（示例）**：
 - `docs`：文档与规范（Doc Map / dev-plans / runbooks）。
 - `go`：Go 源码与依赖（`*.go`/`go.mod`/`go.sum`/lint 配置）。
-- `ui`：Astro（`DEV-PLAN-018`）工程（`apps/web/`）与其 go:embed 产物（`internal/server/assets/astro/**`），以及服务端 UI 资源（`.templ`/Tailwind/assets）。
+- `ui`：MUI（React SPA）工程（`apps/web-mui/`）与其 go:embed 产物（`internal/server/assets/web/**`），以及 UI 相关静态资源/配置。
 - `i18n`：`en/zh` 翻译资源（`make check tr`）。
 - `db`：schema/migrations/atlas/goose（对齐 `DEV-PLAN-024`）。
 - `sqlc`：sqlc 配置/queries/schema export（对齐 `DEV-PLAN-025`）。
@@ -121,8 +121,8 @@
 
 **覆盖范围（聚合门禁）**：
 - Go：`gofmt`/`go vet`/`golangci-lint`/CleanArchGuard（对齐 `DEV-PLAN-015`）。
-- UI：`.templ`/Tailwind 生成物 + Astro（`DEV-PLAN-018`）工程的格式化/构建基线（Node/pnpm 版本对齐 `DEV-PLAN-011`）；命中 `ui` 触发器时必须通过 `Makefile` 单一入口执行 `make css`，并由 `assert-clean` 阻断 “改了源/改了产物但没跑 build 或漏提交” 的漂移。
-  - 触发器口径（强制闭合）：`ui` 至少覆盖 `apps/web/**` 与 `internal/server/assets/astro/**`，确保“改源/改产物”都会触发 UI build gate（对齐 `DEV-PLAN-009M6`）。
+- UI：MUI（`apps/web-mui/**`）构建基线 + go:embed 产物一致性（`internal/server/assets/web/**`）（Node/pnpm 版本对齐 `DEV-PLAN-011`）；命中 `ui` 触发器时必须通过 `Makefile` 单一入口执行 `make css`，并由 `assert-clean` 阻断 “改了源/改了产物但没跑 build 或漏提交” 的漂移。
+  - 触发器口径（强制闭合）：`ui` 至少覆盖 `apps/web-mui/**` 与 `internal/server/assets/web/**`，确保“改源/改产物”都会触发 UI build gate。
 - SQL：SQL 格式化门禁（pg_format，版本口径对齐 `DEV-PLAN-011`）。
 - Docs：`make check doc`（新文档门禁）。
 - No-Legacy：`make check no-legacy`（禁止 legacy 分支/回退通道，对齐 `DEV-PLAN-004M1`）。
@@ -183,7 +183,7 @@
 
 **实施现状（DEV-PLAN-009M3 已落地）**：
 - 入口（SSOT）：`make e2e` → `scripts/e2e/run.sh`（不再 placeholder/no-op）。
-- 用例（最小稳定集）：`e2e/tests/m3-smoke.spec.js`（/login → /app → Org/Person/Staffing 纵切片）。
+- 用例（最小稳定集）：`e2e/tests/m3-smoke.spec.js`（superadmin → create tenant → `/app`（MUI SPA）→ Org/Person/Staffing 纵切片；`GET /login` 必须为 404）。
 - 停止线落地：0 tests / 缺依赖 / 运行态契约缺失 → fail-fast 退出非 0（required check 不允许“空跑仍成功”）。
 - 失败证据：默认产出 `e2e/test-results/**`、`e2e/playwright-report/**`；CI failure 时上传 artifact（见 `.github/workflows/quality-gates.yml`）。
 

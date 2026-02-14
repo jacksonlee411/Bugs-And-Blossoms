@@ -14,11 +14,11 @@
 ### 2.1 范围
 
 - 运行时与基础设施：Go、PostgreSQL、Redis、容器基底镜像。
-- UI 技术栈：Astro（AHA UI Shell；见 `DEV-PLAN-018`）、Templ、HTMX、Alpine.js、Tailwind、核心前端依赖（以 vendored 静态资产为准）。
+- UI 技术栈：React（Vite）+ MUI Core + MUI X（唯一用户 UI；见 `DEV-PLAN-090/091/092/103`），前端工程 SSOT 为 `apps/web-mui`。
 - 数据与迁移工具链：sqlc、Atlas、Goose、SQL 格式化门禁（pg_format）。
 - 授权/路由/事件：Casbin、Routing Gates、Transactional Outbox（能力复用口径）。
 - 质量门禁与测试：golangci-lint、go-cleanarch、Go test、Playwright E2E。
-- 开发体验：Air、DevHub、Node/pnpm（用于 Astro UI build 与 E2E）。
+- 开发体验：Air、DevHub、Node/pnpm（用于 MUI UI build 与 E2E）。
 - 部署形态：Docker 镜像与 compose 拓扑（含 superadmin）。
 
 ### 2.2 原则（SSOT 与可复现）
@@ -28,7 +28,7 @@
   - CI 门禁：`.github/workflows/quality-gates.yml`
   - 本地服务编排：`devhub.yml`、`compose*.yml`
   - 示例环境变量：`.env.example`
-  - 版本与依赖：`go.mod`、`e2e/pnpm-lock.yaml`、以及 Astro UI 工程的 `package.json` 与 lockfile（新仓库固定为 `apps/web/package.json` + `apps/web/pnpm-lock.yaml`；由 `DEV-PLAN-018` 引入并在本计划内冻结）。
+- 版本与依赖：`go.mod`、`e2e/pnpm-lock.yaml`、以及 MUI UI 工程的 `package.json` 与 lockfile（`apps/web-mui/package.json` + `apps/web-mui/pnpm-lock.yaml`；由 `DEV-PLAN-103` 收口）。
 - **版本冻结粒度**：
   - 开发/构建工具优先固定到**精确版本**（例如 `v0.3.857`）。
   - 容器镜像至少固定到**主版本 tag**（例如 `postgres:17`）；生产环境建议进一步固定 digest（由部署侧落地）。
@@ -57,31 +57,27 @@
 | `btree_gist` | enabled | `EXCLUDE USING gist` + `gist_uuid_ops`（no-overlap） | `migrations/org/00001_org_baseline.sql`；以及 `DEV-PLAN-026/030/029` |
 | `ltree` | enabled（OrgUnit） | 路径（子树/祖先链）查询 | `migrations/org/00001_org_baseline.sql`；以及 `DEV-PLAN-026` |
 
-### 3.2 UI 技术栈（AHA：Astro Shell + Server-side HTML）
+### 3.2 UI 技术栈（React SPA：MUI X）
 
-### 3.2.1 UI Build / App Shell（Astro，AHA Stack）
+> 说明：`DEV-PLAN-103` 已移除 Astro/HTMX/Alpine/Shoelace 的旧 UI 链路；仓库内唯一用户 UI 为 **React SPA（MUI X）**。  
+> UI 依赖版本以 `apps/web-mui/package.json` + `apps/web-mui/pnpm-lock.yaml` 为 SSOT，本节仅做“可读性摘要”。
 
-`DEV-PLAN-018` 已确定引入 Astro（AHA Stack：Astro + HTMX + Alpine）作为 UI 的“壳（Shell）与组件编译层”。其本质是 **UI build 工具链**，不属于“服务端渲染库”范畴，但必须纳入版本冻结与 SSOT。
-
-| 组件 | 基线版本 | 来源/说明 |
-| --- | --- | --- |
-| Astro | `5.16.7`（pin） | `DEV-PLAN-018`；以 `apps/web/package.json` + `apps/web/pnpm-lock.yaml` 为 SSOT（新仓库），本表仅用于“可读性摘要”。 |
-| pnpm | `10.24.0` | 统一用于 UI build 与 E2E；需在 `apps/web/package.json#packageManager` pin 并提交 `apps/web/pnpm-lock.yaml` |
-| Node.js | `20.x`（推荐） | UI build 与 E2E 共同依赖；建议在新仓库补齐可复现 pin（例如 `.tool-versions`/`.nvmrc`/CI） |
-
-### 3.2.2 Server-side HTML（Templ + HTMX + Alpine）
+#### 3.2.1 UI Build / 依赖版本（Vite）
 
 | 组件 | 基线版本 | 来源/说明 |
 | --- | --- | --- |
-| Templ | `v0.3.857` | `go.mod` + CI 安装步骤 |
-| HTMX | `2.0.2` | `modules/core/presentation/assets/js/lib/htmx.min.js` |
-| Alpine.js | `3.14.1` | `modules/core/presentation/assets/js/lib/alpine.lib.min.js`（内容内含版本号） |
-| Tailwind CLI | `v3.4.13` | CI 安装步骤（Tailwind 二进制下载） |
-| ApexCharts | `4.3.0` | `modules/core/presentation/assets/js/lib/apexcharts.min.js` |
-| Flatpickr | `4.6.13` | `modules/core/presentation/assets/js/lib/flatpickr/flatpickr.esm.mjs`（esm.sh 标注） |
-| SortableJS | `1.15.6` | `modules/core/presentation/assets/js/lib/sortable.min.js` 头部注释 |
+| pnpm | `10.24.0` | `apps/web-mui/package.json#packageManager`（同时用于 E2E） |
+| Node.js | `20.x`（推荐） | UI build 与 E2E 共同依赖；建议补齐可复现 pin（例如 `.tool-versions`/`.nvmrc`/CI） |
+| Vite | `7.3.1` | `apps/web-mui/package.json` |
+| React | `19.2.4` | `apps/web-mui/package.json` |
+| MUI Core | `7.3.7` | `apps/web-mui/package.json` |
+| MUI X（DataGrid/TreeView/DatePickers） | `8.27.0` | `apps/web-mui/package.json` |
 
-> 说明：除上述核心库外，其余前端第三方库同样以 `modules/core/presentation/assets/js/lib/*` 的 vendored 文件为准；若需要新增/升级前端库，必须在对应 dev-plan 中声明“文件来源、版本与验收方式”，避免静态资产漂移。
+#### 3.2.2 产物交付（go:embed）
+
+- 唯一 UI 静态产物目录（入仓 + go:embed）：`internal/server/assets/web/**`
+- 唯一 UI 静态资源 URL 前缀：`/assets/web/`
+- 构建入口（SSOT）：`make css` → `scripts/ui/build-web.sh`
 
 ### 3.3 数据访问 / Schema / 迁移 / 生成
 
@@ -131,7 +127,7 @@
 
 ### 4.2 生成物与门禁
 
-- `.templ` / Tailwind / sqlc 等生成物：**必须提交**，否则 CI 会失败。
+- `.templ` / UI（MUI 静态产物）/ sqlc 等生成物：**必须提交**，否则 CI 会失败。
 - UI/路由/Authz/DB 等“治理型契约”：新增例外属于契约变更，必须先更新对应 dev-plan SSOT 再落代码。
 
 ### 4.3 RLS 与 DB Role（运行态契约）
@@ -152,7 +148,7 @@
 4. 初始化数据库：执行迁移与 seed（入口见 `Makefile`；常用组合见 `AGENTS.md` TL;DR）。
 5. 启动开发服务：
    - 方式 A（推荐）：使用 DevHub（`make devtools`）按 `devhub.yml` 一键编排；
-   - 方式 B：分别启动 `templ generate --watch`、`make css watch` 与 `air -c .air.toml`（命令与端口以 SSOT 为准）。
+   - 方式 B：启动 `air -c .air.toml`；UI 变更后执行 `make css` 重新构建并同步 `internal/server/assets/web/**`（命令与端口以 SSOT 为准）。
 6. RLS（若命中 Greenfield 表）：设置 `RLS_ENFORCE=enforce`，并确保 `DB_USER` 为非 superuser（否则 Postgres 会绕过 RLS）。
 7. E2E（可选）：进入 `e2e/`，用 `pnpm` 安装依赖并运行 Playwright（要求本地 DB 与 Go server 已启动）。
 
@@ -170,12 +166,12 @@
 > 说明：本节用于把“当前仓库存在的版本漂移”显式化，并给出收敛动作；避免团队在实施过程中继续背负漂移成本。
 
 1. [ ] `golangci-lint`：CI 使用 `v2.7.2`，但本地文档/部分 Dockerfile 仍引用 `v1.64.8` —— 统一到 `v2.7.2` 并更新相关资产。
-2. [ ] Tailwind CLI：CI 使用 `v3.4.13`，但 `scripts/install.sh`/`.devcontainer` 使用 `v3.4.15` —— 选择其一作为唯一版本并全量对齐。
+2. [X] Tailwind CLI：已由 `DEV-PLAN-103` 收口（移除旧 UI 链路后不再作为 UI 工具链依赖）。
 3. [ ] sqlc：`go.mod` 为 `v1.30.0`，但 `make sqlc-generate` 固定 `v1.28.0` —— 统一版本并验证生成物无 diff。
 4. [ ] goimports：`make sqlc-generate` 固定 `v0.26.0`，但 devcontainer 里为 `v0.31.0` —— 统一版本并对齐格式化输出。
 5. [ ] Redis 镜像：当前为 `redis:latest`（浮动）—— 为生产/CI 口径增加 pin 策略（至少固定 major/minor，推荐 digest）。
 6. [ ] DevContainer：当前基底为 Go `1.23`（与 `go.mod` 不一致）—— 视团队是否继续使用 DevContainer，决定升级或移除（参考 `DEV-PLAN-002`）。
-7. [ ] Astro（AHA UI Shell，`DEV-PLAN-018`）：已确定为必选方案；必须在新仓库 pin `Astro/Node/pnpm`（含 `apps/web/pnpm-lock.yaml`），并明确静态资产构建与发布的 SSOT（`Makefile`/CI）。
+7. [X] Astro（AHA UI Shell，`DEV-PLAN-018`）：已被 `DEV-PLAN-103` 替代（前端收敛为 MUI X / React SPA），不再作为主 UI 方案。
 8. [X] ORY Kratos（`DEV-PLAN-019/009M5`）：已确认为 AuthN 方案；镜像选定 `oryd/kratos:v25.4.0`（后续在 `compose.dev.yml`/CI service 固定到 digest），配置格式以官方 `kratos.yml`（YAML）为准，并要求本地/CI 启动口径可复现。
 9. [ ] 100% 覆盖率门禁（`DEV-PLAN-019`）：新仓库需明确“覆盖率统计口径/排除项/生成物处理/CI 入口”，避免实现期临时拼装导致口径漂移。
 

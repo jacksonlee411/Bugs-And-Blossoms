@@ -35,7 +35,7 @@ jobs:
         run: make check no-legacy
       - name: Docs Gate (always)
         run: make check doc
-      - name: UI Build (Astro Shell)
+      - name: UI Build (MUI)
         if: steps.paths.outputs.ui == 'true'
         run: make css
       - name: Go Lint/Fmt Gate

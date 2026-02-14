@@ -3,6 +3,7 @@ import DarkModeIcon from '@mui/icons-material/DarkMode'
 import LanguageIcon from '@mui/icons-material/Language'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import LockIcon from '@mui/icons-material/Lock'
+import LogoutIcon from '@mui/icons-material/Logout'
 import SearchIcon from '@mui/icons-material/Search'
 import { Link as RouterLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -127,6 +128,11 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
     [navigate, tenantId]
   )
 
+  async function handleLogout() {
+    await fetch('/logout', { credentials: 'include', method: 'POST' })
+    navigate('/login', { replace: true })
+  }
+
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <AppBar
@@ -181,6 +187,11 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
               <MenuItem value='en'>{t('language_en')}</MenuItem>
             </Select>
           </FormControl>
+          <Tooltip title={t('action_logout')}>
+            <IconButton color='inherit' onClick={() => void handleLogout()}>
+              <LogoutIcon />
+            </IconButton>
+          </Tooltip>
         </Toolbar>
       </AppBar>
       <Drawer
