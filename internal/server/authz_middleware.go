@@ -295,6 +295,26 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/org/api/org-units/field-definitions":
+		if method == http.MethodGet {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/org-units/field-configs":
+		if method == http.MethodGet || method == http.MethodPost {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/org-units/field-configs:disable":
+		if method == http.MethodPost {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/org/api/org-units/fields:options", "/org/api/org-units/mutation-capabilities":
+		if method == http.MethodGet {
+			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true
+		}
+		return "", "", false
 	case "/org/api/org-units/details", "/org/api/org-units/versions", "/org/api/org-units/audit", "/org/api/org-units/search":
 		if method == http.MethodGet {
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true

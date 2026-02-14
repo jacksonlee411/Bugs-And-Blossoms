@@ -851,6 +851,37 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("org units details status=%d body=%s", recOrgDetails.Code, recOrgDetails.Body.String())
 	}
 
+	recOrgFieldDefs := getJSON("/org/api/org-units/field-definitions", nil)
+	if recOrgFieldDefs.Code != http.StatusOK {
+		t.Fatalf("org units field-definitions status=%d body=%s", recOrgFieldDefs.Code, recOrgFieldDefs.Body.String())
+	}
+
+	// Memory store does not implement the configs/options/capabilities interfaces; the routes should exist and fail-closed.
+	recOrgFieldConfigs := getJSON("/org/api/org-units/field-configs?as_of=2026-01-01", nil)
+	if recOrgFieldConfigs.Code != http.StatusInternalServerError {
+		t.Fatalf("org units field-configs status=%d body=%s", recOrgFieldConfigs.Code, recOrgFieldConfigs.Body.String())
+	}
+
+	recOrgFieldEnable := postJSON("/org/api/org-units/field-configs", `{"field_key":"org_type","enabled_on":"2026-01-01","request_code":"rfc1"}`, nil)
+	if recOrgFieldEnable.Code != http.StatusInternalServerError {
+		t.Fatalf("org units field-configs enable status=%d body=%s", recOrgFieldEnable.Code, recOrgFieldEnable.Body.String())
+	}
+
+	recOrgFieldDisable := postJSON("/org/api/org-units/field-configs:disable", `{"field_key":"org_type","disabled_on":"2026-02-01","request_code":"rfc2"}`, nil)
+	if recOrgFieldDisable.Code != http.StatusInternalServerError {
+		t.Fatalf("org units field-configs disable status=%d body=%s", recOrgFieldDisable.Code, recOrgFieldDisable.Body.String())
+	}
+
+	recOrgFieldOptions := getJSON("/org/api/org-units/fields:options?as_of=2026-01-01&field_key=org_type", nil)
+	if recOrgFieldOptions.Code != http.StatusInternalServerError {
+		t.Fatalf("org units fields options status=%d body=%s", recOrgFieldOptions.Code, recOrgFieldOptions.Body.String())
+	}
+
+	recOrgMutationCaps := getJSON("/org/api/org-units/mutation-capabilities?org_code="+node.OrgCode+"&effective_date=2026-01-01", nil)
+	if recOrgMutationCaps.Code != http.StatusInternalServerError {
+		t.Fatalf("org units mutation capabilities status=%d body=%s", recOrgMutationCaps.Code, recOrgMutationCaps.Body.String())
+	}
+
 	recOrgVersions := getJSON("/org/api/org-units/versions?org_code="+node.OrgCode, nil)
 	if recOrgVersions.Code != http.StatusOK {
 		t.Fatalf("org units versions status=%d body=%s", recOrgVersions.Code, recOrgVersions.Body.String())

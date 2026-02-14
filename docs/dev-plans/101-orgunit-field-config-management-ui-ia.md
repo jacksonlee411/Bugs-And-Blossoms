@@ -21,7 +21,7 @@
 2. [ ] 仅 `orgunit.admin` 可访问；无权限时统一 `NoAccessPage`（fail-closed）。
 3. [ ] 页面可完成最小管理闭环：
    - 查看当前租户已配置字段（含有效期与映射槽位只读）。
-   - 启用（新增）一个字段配置（由后端分配 `physical_col`，前端不可选）。
+   - 启用（新增）一个字段配置（由后端分配 `physical_col`，前端不可选；DICT/ENTITY 需从 `field-definitions.data_source_config_options` 选择 `data_source_config`）。
    - 停用一个字段配置（按 day 粒度选择 `disabled_on`）。
 4. [ ] 页面加载/空态/错误态可解释；不出现“静默失败/看起来成功但实际未生效”。
 
@@ -48,7 +48,7 @@
 
 在以下位置提供“字段配置”快捷入口（仅 `orgunit.admin` 可见）：
 
-1. OrgUnits 列表页 `PageHeader` actions 增加按钮：`字段配置` -> 跳转到 `/org/units/field-configs` 并携带 `as_of/include_disabled`（若存在）。  
+1. OrgUnits 列表页 `PageHeader` actions 增加按钮：`字段配置` -> 跳转到 `/org/units/field-configs` 并携带 `as_of`（若存在）。  
 2. OrgUnit 详情页 `PageHeader` actions 增加按钮：`字段配置` -> 同上（便于从详情直接进入管理）。
 
 ## 5. 路由与 URL 协议（冻结）
@@ -68,7 +68,7 @@
 ### 6.1 顶部结构
 
 - `Breadcrumbs`
-  - `组织架构`（链接 `/org/units`，携带 `as_of/include_disabled`）
+  - `组织架构`（链接 `/org/units`，携带 `as_of`）
   - `字段配置`（当前页）
 - `PageHeader`
   - title：`字段配置`
@@ -95,6 +95,7 @@
 - `field_key`：稳定键（只读）
 - `value_type`：`text/int/uuid/bool/date`（只读）
 - `data_source_type`：`PLAIN/DICT/ENTITY`（只读）
+- `data_source_config`：只读（展示 `dict_code` 或 `entity/id_kind`，便于排障）
 - `status`：`enabled/disabled`（Chip）
 - `enabled_on`：date
 - `disabled_on`：date（为空表示未计划停用）
@@ -115,22 +116,29 @@
 - `DialogContent` 表单（`Stack spacing={2}`）：
   1) `field_key` 选择：
      - 控件：`Select` 或 `Autocomplete`
-     - 数据：后端返回“可启用字段定义列表”（MVP：2~5 个；对齐 `DEV-PLAN-100` Phase 0 字段清单）
+     - 数据：`GET /org/api/org-units/field-definitions` 返回“可启用字段定义列表”（MVP：2~5 个；对齐 `DEV-PLAN-100A` Phase 0 字段清单）
   2) `enabled_on`：
      - `TextField type="date"`，默认等于当前 `as_of`
-  3) `data_source_config`：
-     - PLAIN：不展示（或只读展示为 `{}`），因为该类型无 options/无外部数据源。
-     - DICT：显示 `dict_code`（若该字段允许配置则为 Select；若字段定义固定 dict 则只读展示）
-     - ENTITY：显示 `entity`（枚举化标识，只读或 Select；不得允许输入任意表/列名，对齐 `DEV-PLAN-100` D7）
+  3) `data_source_config`（仅 DICT/ENTITY）：
+     - PLAIN：不展示（或只读展示为 `{}`），因为该类型无 options。  
+     - DICT：显示 `dict_code` 选择器：
+       - 选项来源：所选 `field_key` 在 `field-definitions` 中返回的 `data_source_config_options`（必须为枚举；禁止任意输入）。  
+       - 若候选仅 1 个：只读展示（不必让用户做无意义选择）。  
+     - ENTITY：显示 `entity/id_kind` 选择器：
+       - 选项来源：同上（枚举化标识；禁止输入任意表/列名，对齐 `DEV-PLAN-100` D7）。  
+       - 若候选仅 1 个：只读展示。
 - `DialogActions`：
   - `取消`
   - `确认启用`（primary；提交中 disable）
+- 请求幂等（必须）：
+  - 每次提交必须携带 `request_code`（例如 UUID）；失败重试/重复点击时需复用同一个 `request_code`，以便后端按幂等语义返回同一配置行（避免重复占用槽位）。
 - 成功行为：
   - toast：`启用成功`
   - 关闭对话框
   - 刷新列表；新行应展示由后端分配的 `physical_col`
 - 失败行为（至少覆盖）：
   - 槽位耗尽：展示稳定错误文案（例如“槽位已耗尽，请联系管理员扩容”）
+  - data_source_config 不合法：展示可解释错误（例如“数据来源配置无效/不被允许，请刷新后重试”）
   - 权限不足：展示统一无权限提示（不在对话框内做“假成功”）
 
 ### 6.5 停用字段对话框（Dialog，组件级）
@@ -142,8 +150,11 @@
   - 只读摘要：`field_label(field_key)` + `physical_col`
   - `disabled_on`：`TextField type="date"`，默认等于当前 `as_of`
   - 风险提示（Alert warning）：
-    - “停用后该字段在对应 as_of 下将不可写/不可见；映射槽位不可复用”（对齐 `DEV-PLAN-100`）
+    - “从 disabled_on 起，该字段在对应 as_of 下将不可写/不可见（details 的 ext_fields 将不再返回/不再展示）；映射槽位不可复用。若需查看历史，请切换 as_of 或查看 Audit（变更日志）。”（对齐 `DEV-PLAN-100D/100E`）
+    - 备注：若未来需要“字段仍显示但禁用 + 给出禁用原因”，必须扩展 details 契约（例如返回 disabled 字段列表 + 禁用原因/日期）；本计划不做。
 - `DialogActions`：取消/确认停用
+- 请求幂等（必须）：
+  - 每次提交必须携带 `request_code`；失败重试/重复点击时需复用同一个 `request_code`，避免重复写入审计事件或产生不可解释的冲突。
 - 成功：toast + 刷新列表
 
 ## 7. 权限与失败模式（fail-closed）
@@ -160,7 +171,7 @@
 
 - 页面静态文案使用 `apps/web-mui/src/i18n/messages.ts` 增加 key（en/zh 同步）。
 - 字段名称（field_label）口径（MVP 冻结）：
-  - 字段定义由后端返回 `label_key`（或前端内置映射），前端通过 `t(label_key)` 渲染；
+  - 字段定义由后端返回 `label_i18n_key`，前端通过 `t(label_i18n_key)` 渲染（禁止前端再建一套字段 label 映射）；
   - 禁止在本计划引入“租户可编辑 label_zh/label_en 并持久化”的多语言业务数据形态（如需，另立 dev-plan）。
 
 ## 9. 验收标准（最小可交付）
@@ -169,10 +180,10 @@
 2. [ ] `tenant_viewer`（仅 `orgunit.read`）看不到导航项，直接访问 URL 返回 `NoAccessPage`。
 3. [ ] 启用字段成功后：
    - 列表出现新配置行（含 `physical_col`）。
-   - 回到 OrgUnit 详情页，在 `as_of >= enabled_on` 时可看到该扩展字段（细节由 `DEV-PLAN-100` Phase 4 承接）。
+   - 回到 OrgUnit 详情页，在该字段的 enabled 区间内（`enabled_on <= as_of` 且 `disabled_on IS NULL OR as_of < disabled_on`）可看到该扩展字段（细节由 `DEV-PLAN-100` Phase 4 承接）。
 4. [ ] 停用字段成功后：
    - 在字段配置页可看到 `disabled_on` 生效；
-   - 在 OrgUnit 详情页，当 `as_of >= disabled_on` 时该字段不可编辑且有明确禁用原因（对齐 `DEV-PLAN-100`）。
+   - 在 OrgUnit 详情页，当 `as_of >= disabled_on` 时该字段不再展示（不在 details 的 `ext_fields[]` 中出现）；若需查看历史，请切换 `as_of` 或查看 Audit（对齐 `DEV-PLAN-100D/100E`）。
 5. [ ] 失败路径可解释：槽位耗尽/权限不足/网络错误不会静默。
 
 ## 10. 代码落点（建议）

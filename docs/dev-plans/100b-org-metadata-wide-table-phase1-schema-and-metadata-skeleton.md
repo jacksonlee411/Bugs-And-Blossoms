@@ -281,6 +281,7 @@ CREATE TABLE orgunit.tenant_field_config_events (
    - `value_type` 必须在 `text|int|uuid|bool|date`；`data_source_type` 必须在 `PLAIN|DICT|ENTITY`；  
    - `data_source_config` 形状必须满足 §4.1（否则 `ORG_FIELD_CONFIG_INVALID_DATA_SOURCE_CONFIG`）。  
    - `field_key` 是否在“字段定义列表”由服务层保证；Kernel 只做最小防线与不变量保护（避免引入第二套字段定义 SSOT）。  
+   - 对 `DICT/ENTITY`：`data_source_config` 是否命中 `field-definitions.data_source_config_options` 由服务层保证；Kernel/DB 仅校验形状与不变量（避免引入第二套来源配置 SSOT）。  
 5. 冲突检查：若 `(tenant_uuid, field_key)` 已存在，抛 `ORG_FIELD_CONFIG_ALREADY_ENABLED`（不允许“删除后复用”）。  
 6. 槽位分配（确定性 + 并发安全）：  
    - 依据 `value_type` 决定槽位分组：`text->ext_str_*`、`int->ext_int_*`、`uuid->ext_uuid_*`、`bool->ext_bool_*`、`date->ext_date_*`；  
