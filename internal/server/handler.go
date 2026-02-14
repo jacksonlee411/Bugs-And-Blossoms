@@ -378,6 +378,24 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/field-definitions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitFieldDefinitionsAPI(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/field-configs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitFieldConfigsAPI(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/field-configs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitFieldConfigsAPI(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/field-configs:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitFieldConfigsDisableAPI(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/fields:options", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitFieldOptionsAPI(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/mutation-capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitMutationCapabilitiesAPI(w, r, orgStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/details", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsDetailsAPI(w, r, orgStore)
 	}))

@@ -1,6 +1,16 @@
 # DEV-PLAN-083：Org 变更能力模型重构（抽象统一 + 策略单点 + 能力外显）
 
-**状态**: 规划中（2026-02-11 10:42 UTC）
+**状态**: 草拟中（2026-02-13 15:41 UTC — 冻结 mutation-capabilities 契约，供 DEV-PLAN-100D/100E 实施）
+
+## 0. 本次冻结范围（Stopline）
+
+> 目标：把 `mutation-capabilities` 的**返回结构 + 字段/路径映射 + 组合约束**冻结到“可直接实现”的状态；其余实现步骤（代码落地/测试补齐）仍保持待办。
+
+- [X] 冻结 `action_kind/emitted_event_type/target_effective_event_type` 合法组合约束（见 §4.2）。
+- [X] 冻结 `field_key/field_payload_keys/deny_reasons` 的对外语义（见 §4.3、§5.2、§5.6）。
+- [X] 冻结 `GET /org/api/org-units/mutation-capabilities` 的 Response 200 字段结构（见 §5.2）。
+- [X] 冻结 `correct_event/correct_status/rescind_event/rescind_org` 的最小能力字段（见 §5.3~§5.5）。
+- [ ] 服务层策略模块与 API 落地（本计划后续步骤，见 §6.2/§6.3）。
 
 ## 1. 背景
 
@@ -22,7 +32,7 @@ OrgUnit 写入不是“改字段”，而是“对历史事实做受限变换”
 
 - `action_kind`（意图层，Intent）：用户在做什么动作。
 - `emitted_event_type`（执行层，Opcode）：系统实际写入哪种事件。
-- `field_key/payload_key`（参数层，Operands）：可变更字段与落库 payload 键位映射。
+- `field_key/db_payload_key`（参数层，Operands）：对外字段键与写入 Kernel 的 payload 键映射（见 §4.3）。
 - `preconditions`（约束层，Guards）：字段白名单之外的前置业务约束。
 
 ## 2.2 三类原子变换（最小完备基）
@@ -79,10 +89,49 @@ OrgUnit 写入不是“改字段”，而是“对历史事实做受限变换”
 - `rescind_event -> emitted_event_type=RESCIND_EVENT + target_effective_event_type required`
 - `rescind_org -> emitted_event_type=RESCIND_ORG + target_effective_event_type must be null`
 
-## 4.3 字段与 payload 映射规则
+## 4.3 字段与 payload 映射规则（冻结）
 
-策略输出不仅有允许字段，还包含 `field_key -> payload_key` 映射：
+本计划定义两层映射，避免 UI/Service/Kernel 出现“双词表”：
 
+1. **field_key（对外稳定键）**：capabilities/API/UI 统一使用的字段标识（扩展字段也使用该口径）。  
+2. **db_payload_key（服务层内部映射）**：写入 Kernel 时实际落入 event payload 的 key（客户端不得使用）。
+
+### 4.3.1 field_key（冻结集合）
+
+- Core（OrgUnit 业务字段，固定集合）：
+  - `effective_date`
+  - `name`
+  - `parent_org_code`
+  - `is_business_unit`
+  - `manager_pernr`
+- Ext（扩展字段，动态集合）：
+  - 来自 `orgunit.tenant_field_configs.field_key`（SSOT：`DEV-PLAN-100A/100B/100C/100D`）
+  - 在 capabilities 的 `allowed_fields` 中以**裸 `field_key`**出现（例如 `org_type`），不加 `ext.` 前缀。
+
+### 4.3.2 field_payload_keys（capabilities 输出；写入 corrections patch 的路径）
+
+`field_payload_keys[field_key]` 的值是 **dot-path 字符串**，用于指示“UI/调用方应把值写到 corrections 请求的 `patch` 的哪个路径”：
+
+- Core：
+  - `effective_date -> effective_date`
+  - `name -> name`
+  - `parent_org_code -> parent_org_code`
+  - `is_business_unit -> is_business_unit`
+  - `manager_pernr -> manager_pernr`
+- Ext：
+  - `<field_key> -> ext.<field_key>`（表示 `patch.ext[<field_key>]`）
+
+约束（冻结）：
+
+- 客户端**不得**提交 `new_name/new_parent_id/parent_id/manager_uuid` 等内部字段；这些属于 `db_payload_key`，由服务层根据目标事件类型映射生成。
+- `allowed_fields` 的字段集合与 `field_payload_keys` 必须一致：`allowed_fields` 中出现的每个 `field_key`，在 `field_payload_keys` 中必须存在键；反之 `field_payload_keys` 不得出现 `allowed_fields` 之外的键。
+
+### 4.3.3 db_payload_key（服务层内部映射；写入 Kernel 的 payload key）
+
+> 说明：本节是服务层策略模块与 `buildCorrectionPatch(...)` 的实现依据；**不对 UI 暴露**。
+
+- `effective_date`：
+  - target=任意 -> `effective_date`
 - `name`：
   - target=`CREATE` -> `name`
   - target=`RENAME` -> `new_name`
@@ -93,8 +142,10 @@ OrgUnit 写入不是“改字段”，而是“对历史事实做受限变换”
   - target=`CREATE|SET_BUSINESS_UNIT` -> `is_business_unit`
 - `manager_pernr`：
   - target=`CREATE` -> `manager_uuid + manager_pernr`（含人员解析）
+- Ext（扩展字段）：
+  - target=允许携带 ext 的动作/事件组合 -> `payload.ext[<field_key>]`（DICT 额外写 `payload.ext_labels_snapshot[<field_key>]`；由服务层生成，UI 不提交）
 
-默认规则：
+默认规则（冻结）：
 
 - 未显式声明的字段一律拒绝（fail-closed）。
 
@@ -137,26 +188,158 @@ OrgUnit 写入不是“改字段”，而是“对历史事实做受限变换”
 
 - `GET /org/api/org-units/mutation-capabilities?org_code=<...>&effective_date=<...>`
 
-返回契约（抽象）：
+### 5.1 Authz 与失败策略（冻结）
 
-- `effective_target_event_type`：effective 视图下的目标事件类型
-- `raw_target_event_type`：原始事件类型（审计对照）
-- `capabilities`：
-  - `correct_event`：`enabled` + `allowed_fields` + `field_payload_keys` + `deny_reasons`
-  - `correct_status`：`enabled` + `allowed_target_statuses` + `deny_reasons`
-  - `rescind_event`：`enabled` + `deny_reasons`
-  - `rescind_org`：`enabled` + `deny_reasons`
+- RouteClass：Internal API（对齐 `DEV-PLAN-017`）。
+- Authz：
+  - 无 `orgunit.read`：由全局 authz 中间件统一返回 403（SSOT：`DEV-PLAN-022`），不返回本接口 payload。
+  - 有 `orgunit.read` 但无 `orgunit.admin`：接口仍返回 200，但所有“写动作”（`correct_*` / `rescind_*`）必须 `enabled=false`，并在 `deny_reasons` 中包含 `FORBIDDEN`（见 §5.6）。
+- API 不可用/返回错误：UI 必须 fail-closed（只读/禁用），不做乐观放行（SSOT：`DEV-PLAN-100` D8、`DEV-PLAN-100E`）。
 
-契约约束：
+### 5.2 Response 200（冻结字段结构）
 
-- 不需要目标事件的动作不得返回伪 `target_effective_event_type`。
-- API 不可用时，UI 进入只读或保守禁用，不允许乐观放行。
+```json
+{
+  "org_code": "A001",
+  "effective_date": "2026-02-13",
+  "effective_target_event_type": "RENAME",
+  "raw_target_event_type": "RENAME",
+  "capabilities": {
+    "correct_event": {
+      "enabled": true,
+      "allowed_fields": ["effective_date", "name", "org_type"],
+      "field_payload_keys": {
+        "effective_date": "effective_date",
+        "name": "name",
+        "org_type": "ext.org_type"
+      },
+      "deny_reasons": []
+    },
+    "correct_status": {
+      "enabled": false,
+      "allowed_target_statuses": [],
+      "deny_reasons": ["ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET"]
+    },
+    "rescind_event": {
+      "enabled": true,
+      "deny_reasons": []
+    },
+    "rescind_org": {
+      "enabled": false,
+      "deny_reasons": ["ORG_ROOT_DELETE_FORBIDDEN"]
+    }
+  }
+}
+```
+
+字段语义（冻结）：
+
+- `org_code`：规范化后的 org_code（与现有 API 口径一致）。
+- `effective_date`：调用方请求的目标生效日（`YYYY-MM-DD`）。
+- `effective_target_event_type`：
+  - 用于策略判定的目标事件类型；
+  - 取值来自 `orgunit.org_events_effective` 视图中“该 `effective_date` 对应的有效事件类型”（例如 status correction 可能把 raw DISABLE 映射为 ENABLE）。
+- `raw_target_event_type`：
+  - 用于审计对照；
+  - 取值来自原始事件（未被 `org_events_effective` 改写前）的事件类型。
+- `capabilities`：见 §5.3~§5.5。
+
+排序约束（冻结）：
+
+- `allowed_fields` 必须按 `field_key` 升序排序（稳定输出，避免 UI 抖动/测试不稳定）。
+- `deny_reasons` 必须按 §5.6 的优先级顺序输出（稳定输出）。
+
+### 5.3 `capabilities.correct_event`（冻结）
+
+用途：驱动 “更正（CORRECT_EVENT）” UI 的字段可编辑性与 payload 路径映射。
+
+字段（冻结）：
+
+- `enabled: boolean`
+- `allowed_fields: string[]`（field_key）
+- `field_payload_keys: object`（`field_key -> dot-path`；见 §4.3.2）
+- `deny_reasons: string[]`（见 §5.6）
+
+Core 字段允许矩阵（冻结；承接并收敛 `DEV-PLAN-082`，以本文为 SSOT）：
+
+| effective_target_event_type | allowed_fields（core 子集） |
+| --- | --- |
+| `CREATE` | `effective_date`, `name`, `parent_org_code`, `is_business_unit`, `manager_pernr` |
+| `RENAME` | `effective_date`, `name` |
+| `MOVE` | `effective_date`, `parent_org_code` |
+| `SET_BUSINESS_UNIT` | `effective_date`, `is_business_unit` |
+| `DISABLE` / `ENABLE` | `effective_date` |
+
+扩展字段（Ext）合并规则（冻结）：
+
+- 对于当前租户在 `effective_date` 下 enabled 的扩展字段集合 `E`（SSOT：`DEV-PLAN-100D` 元数据解析），将 `E` **并入** `allowed_fields`（与 core 字段同一数组、统一排序）。  
+- `field_payload_keys` 对扩展字段必须返回 `ext.<field_key>`（见 §4.3.2）。
+
+> 说明：是否“enabled 的扩展字段一律可更正”是本计划冻结的策略选择；若未来需按动作/事件进一步收紧（例如仅允许 target=CREATE），必须先更新本文并同步更新 Kernel allow-matrix/服务层策略与测试。
+
+### 5.4 `capabilities.correct_status`（冻结）
+
+用途：驱动 “同日状态纠错（CORRECT_STATUS）” UI 的可用性与可选状态列表。
+
+字段（冻结）：
+
+- `enabled: boolean`
+- `allowed_target_statuses: string[]`（规范化值，仅允许 `active|disabled`）
+- `deny_reasons: string[]`（见 §5.6）
+
+规则（冻结）：
+
+- 当且仅当 `effective_target_event_type in {ENABLE, DISABLE}` 时，`enabled=true` 且 `allowed_target_statuses=["active","disabled"]`。
+- 否则 `enabled=false` 且 `deny_reasons` 必须包含 `ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET`。
+
+### 5.5 `capabilities.rescind_event` / `capabilities.rescind_org`（冻结）
+
+字段（冻结）：
+
+- `enabled: boolean`
+- `deny_reasons: string[]`（见 §5.6）
+
+说明（冻结）：
+
+- `rescind_event` 表示“撤销单条记录”（`RESCIND_EVENT`）；`rescind_org` 表示“撤销整个组织”（`RESCIND_ORG`）。
+- `enabled=false` 时，`deny_reasons` 必须可解释且稳定（例如根组织删除保护、存在子组织、存在下游依赖等；错误码以现有 Kernel/服务层稳定码为准，见 §5.6）。
+
+### 5.6 `deny_reasons`（冻结闭集 + 顺序）
+
+`deny_reasons[]` 是**稳定错误码/原因码**列表（仅 code，不返回自由文本），用于 UI 解释“为何不可用”：
+
+- 取值闭集（冻结；新增 reason code 必须先更新本文）：
+  - `FORBIDDEN`（缺少 `orgunit.admin` 等写权限；capabilities API 本身仍需 `orgunit.read`）
+  - `ORG_EVENT_NOT_FOUND`
+  - `ORG_EVENT_RESCINDED`
+  - `ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET`
+  - `ORG_ROOT_DELETE_FORBIDDEN`
+  - `ORG_HAS_CHILDREN_CANNOT_DELETE`
+  - `ORG_HAS_DEPENDENCIES_CANNOT_DELETE`
+
+顺序规则（冻结）：
+
+- `deny_reasons` 必须去重；
+- 按以下优先级顺序输出（存在则前置）：  
+  1) `FORBIDDEN`  
+  2) `ORG_EVENT_NOT_FOUND`  
+  3) `ORG_EVENT_RESCINDED`  
+  4) `ORG_ROOT_DELETE_FORBIDDEN`  
+  5) `ORG_HAS_CHILDREN_CANNOT_DELETE`  
+  6) `ORG_HAS_DEPENDENCIES_CANNOT_DELETE`  
+  7) `ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET`
+
+### 5.7 错误响应（最小冻结）
+
+- `ORG_INVALID_ARGUMENT` / `invalid_request`：400（`org_code/effective_date` 缺失或格式非法）
+- `ORG_EVENT_NOT_FOUND`：404（目标生效日不存在或对调用方不可见）
+- `ORG_EVENT_RESCINDED`：409（目标已撤销；仅当实现侧可区分于 NOT_FOUND 时返回）
 
 ## 6. 实施步骤
 
 ## 6.1 文档与契约先行
-1. [ ] 固化本文件为策略模型 SSOT（四层模型 + 三类原子变换 + 合法组合约束）。
-2. [ ] 在 `internal/server/orgunit_api.go` 明确 capabilities 响应字段与错误码约束。
+1. [X] 固化本文件为策略模型 SSOT（四层模型 + 三类原子变换 + 合法组合约束；并冻结 §5 契约）。
+2. [X] 明确 capabilities 响应字段与最小 deny_reasons 闭集（供 `DEV-PLAN-100D/100E` 消费）。
 
 ## 6.2 服务层改造
 3. [ ] 新增 `orgunit_mutation_policy.go`，实现 `ResolvePolicy/AllowedFields/ValidatePatch`。
@@ -192,7 +375,7 @@ OrgUnit 写入不是“改字段”，而是“对历史事实做受限变换”
 - `modules/orgunit/services/orgunit_mutation_policy_test.go`
   - 合法组合覆盖
   - 无效组合拒绝（table-driven）
-  - `field_key -> payload_key` 映射覆盖
+  - `field_key -> db_payload_key` / `field_payload_keys` 映射覆盖
 - `modules/orgunit/services/orgunit_write_service_test.go`
   - `buildCorrectionPatch` 与策略集成回归
 - `internal/server/orgunit_api_test.go`
@@ -225,4 +408,6 @@ OrgUnit 写入不是“改字段”，而是“对历史事实做受限变换”
 
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
 - `docs/dev-plans/017-routing-strategy.md`
+- `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
+- `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
 - `AGENTS.md`

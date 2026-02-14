@@ -1,6 +1,6 @@
 # DEV-PLAN-100D：Org 模块宽表元数据落地 Phase 3：服务层与 API（读写可用）
 
-**状态**: 草拟中（2026-02-13；已按评审补齐 Phase 3 冻结项）
+**状态**: 已完成（2026-02-14）
 
 > 本文从 `DEV-PLAN-100` 的 Phase 3 拆分而来，作为 Phase 3 的 SSOT；`DEV-PLAN-100` 保持为整体路线图。
 
@@ -17,21 +17,22 @@
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
 - **核心目标**：
-  - [ ] 在 `modules/orgunit/services` 增加“元数据解析 + patch 构造器/能力解析器”：
-    - 输入：业务字段 + mutation 上下文（action/event/target） + as_of/effective_date；
-    - 输出：`payload`（含 `payload.ext`）与 `field_key -> payload_key/physical_col` 映射；
-    - 规则 SSOT：写入能力承接 `DEV-PLAN-083`，查询 allowlist 承接 `DEV-PLAN-100` D7/D8。
-  - [ ] 在 `internal/server/orgunit_api.go` 增加/扩展 Internal API：
+  - [X] 在 `internal/server` 实现“元数据解析 + ext 查询 allowlist 守卫 + 详情 ext_fields 解析器”：
+    - 输入：`tenant_id + as_of/effective_date` +（可选）ext query params；
+    - 输出：enabled field configs（field_key/value_type/data_source_type/data_source_config/physical_col）与安全可证明的查询拼装（列名来源可枚举，值参数化）。
+    - 规则 SSOT：写入能力承接 `DEV-PLAN-083`（capabilities 映射），查询 allowlist 承接 `DEV-PLAN-100` D7/D8（通过字段定义 allow flags + physical_col 正则守卫）。
+  - [X] 在 `internal/server` 增加/扩展 Internal API：
     - 字段配置管理（list/enable/disable；仅管理端可见）
     - 字段定义列表（可启用字段；供 UI 选择）
-    - DICT/ENTITY options（支持 keyword + as_of；PLAIN 无 options）
+    - DICT options（支持 keyword + as_of；PLAIN 无 options；ENTITY 预留，MVP 字段清单未命中）
     - 详情接口返回扩展字段值与展示值
     - mutation capabilities（承接 `DEV-PLAN-083`，含 `deny_reasons`，并包含扩展字段映射）
-  - [ ] 列表接口支持扩展字段筛选/排序（仅 allowlist 字段；列名来源可证明且值参数化）
+  - [X] 列表接口支持扩展字段筛选/排序（仅 allowlist 字段；列名来源可证明且值参数化）
 
 - **非目标（本阶段不做）**：
   - 不新增/变更 DB schema（Schema 在 Phase 1/2 解决；本阶段只做 Go/路由/authz/SQL 读取逻辑）。  
   - 不实现 UI（Phase 4；IA 见 `DEV-PLAN-101`）。  
+  - 不在本阶段改造 OrgUnit 写接口以支持扩展字段写入（payload builder/DICT label snapshot 写入随 Phase 4 编辑态闭环落地）。  
   - 不引入第二写入口：OrgUnit 业务写入仍只走 `orgunit.submit_org_event(...)` 体系（One Door）。  
 
 ## 2.1 工具链与门禁（SSOT 引用）
@@ -76,7 +77,10 @@ graph TD
   - 选定：所有动态列名/实体名必须来自服务端枚举映射（field_key -> physical_col；entity_code -> 固定 SQL 模板），值一律参数化；任何解析失败直接拒绝（fail-closed）。
 
 - **ADR-100D-04：字段定义是配置写入口的唯一来源（避免第二套 SSOT）**
-  - 选定：`field-definitions` 是“字段元数据”（`value_type/data_source_type/data_source_config/label_i18n_key`）的唯一来源；`field-configs` 的 enable 请求只允许提交 `field_key/enabled_on/request_code`，禁止客户端提交或覆盖 `value_type/data_source_type/data_source_config/physical_col`。  
+  - 选定：`field-definitions` 是“字段元数据 + 可选数据来源配置”的唯一来源：  
+    - `value_type/data_source_type/label_i18n_key` 由 `field-definitions` 冻结；  
+    - `data_source_config` 允许在 **启用字段（enable）** 时由管理端从 `field-definitions.data_source_config_options` 中选择并提交（仅 DICT/ENTITY；禁止任意表/列透传）；  
+    - `field-configs` 的 enable 请求禁止客户端提交或覆盖 `value_type/data_source_type/physical_col`。  
   - 原因：避免 UI/API/Kernel 出现第二套字段定义与隐藏配置，降低 drift 风险（对齐 `DEV-PLAN-003` Simple > Easy）。
 
 - **ADR-100D-05：DICT 展示值遵循 D4 兜底链路，但必须显式标记来源**
@@ -127,6 +131,10 @@ graph TD
       "value_type": "text",
       "data_source_type": "DICT",
       "data_source_config": { "dict_code": "org_type" },
+      "data_source_config_options": [
+        { "dict_code": "org_type" },
+        { "dict_code": "org_subtype" }
+      ],
       "label_i18n_key": "org.fields.org_type"
     }
   ]
@@ -134,6 +142,10 @@ graph TD
 ```
 
 > 字段集合与 `field_key` 命名冻结：SSOT 为 `DEV-PLAN-100A` 的 Phase 0 字段清单（评审冻结后再实现）。
+>
+> `data_source_config_options` 口径（冻结）：
+>
+> - 仅当 `data_source_type IN ('DICT','ENTITY')` 时返回，且必须为非空数组；若该字段数据来源配置为“固定”，则返回单元素数组（与 `data_source_config` 相同）。
 
 ### 5.2 字段配置管理（list/enable/disable）
 
@@ -177,7 +189,8 @@ status 口径冻结：
 {
   "field_key": "org_type",
   "enabled_on": "2026-02-01",
-  "request_code": "req-uuid-or-stable-string"
+  "request_code": "req-uuid-or-stable-string",
+  "data_source_config": { "dict_code": "org_type" }
 }
 ```
 
@@ -187,7 +200,10 @@ status 口径冻结：
 约束（冻结）：
 
 - `initiator_uuid` 必须由服务端会话上下文注入并传递给 Kernel；**不得由 UI 提交/伪造**（SSOT：`DEV-PLAN-100A`）。
-- `value_type/data_source_type/data_source_config` 必须来自 `field-definitions`（ADR-100D-04）；若 `field_key` 不在定义列表，返回 404 `ORG_FIELD_DEFINITION_NOT_FOUND`。
+- `value_type/data_source_type` 必须来自 `field-definitions`（ADR-100D-04）；若 `field_key` 不在定义列表，返回 404 `ORG_FIELD_DEFINITION_NOT_FOUND`。  
+- `data_source_config`：
+  - `PLAIN`：必须为 `{}`（可缺省，由服务端补齐为空对象）。  
+  - `DICT/ENTITY`：必须在 `field-definitions.data_source_config_options` 中（允许“租户管理员选择”，但禁止任意输入/透传）。
 
 #### 5.2.3 Disable（停用字段）
 
@@ -267,6 +283,7 @@ status 口径冻结：
 约束：
 
 - `ext_fields` 必须包含 `as_of` 下 enabled 的字段全集（day 粒度）；即使当前无值也必须返回（`value=null`），避免 UI 出现“字段已启用但不可见/不可编辑”。  
+- 当 `as_of >= disabled_on` 时该字段不属于 enabled 集合，因此 **不得** 出现在 `ext_fields`；用户若需查看历史值，应切换 `as_of` 到有效期内或查看 Audit（变更日志）。  
 - `ext_fields` 的返回顺序必须稳定：按 `field_key` 升序排序（避免 UI 抖动与测试不稳定）。  
 - `label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`），用于 UI 动态渲染；字段 key 到 label 的映射不得由 UI 另建第二套规则。  
 - `display_value` 与 `display_value_source`（冻结）：
@@ -324,6 +341,7 @@ status 口径冻结：
 | 场景 | code（稳定） | HTTP | 备注 |
 | --- | --- | --- | --- |
 | enable：field_key 不在 field-definitions | `ORG_FIELD_DEFINITION_NOT_FOUND` | 404 | 管理端可见；用于防止 UI 启用未知字段 |
+| enable：data_source_config 不合法（缺失/形状非法/不在 data_source_config_options） | `ORG_FIELD_CONFIG_INVALID_DATA_SOURCE_CONFIG` | 400 | SSOT：`DEV-PLAN-100B`；DICT/ENTITY 必须显式选择并提交 |
 | enable/disable：request_code 幂等键冲突 | `ORG_REQUEST_ID_CONFLICT` | 409 | SSOT：`DEV-PLAN-100B` 错误码表 |
 | enable：field_key 已启用 | `ORG_FIELD_CONFIG_ALREADY_ENABLED` | 409 | SSOT：`DEV-PLAN-100B` |
 | enable：槽位耗尽 | `ORG_FIELD_CONFIG_SLOT_EXHAUSTED` | 409 | SSOT：`DEV-PLAN-100B` |
@@ -399,31 +417,31 @@ status 口径冻结：
   - `DEV-PLAN-022`（Authz）
 
 - **里程碑（Phase 3 待办）**：
-  1. [ ] 服务层：实现元数据解析 + payload/patch 构造器（扩展字段映射与 DICT label snapshot 生成）。  
-  2. [ ] API：实现 field-definitions/field-configs（list/enable/disable）。  
-  3. [ ] API：实现 fields:options（DICT/ENTITY；PLAIN 必拒绝）。  
-  4. [ ] API：扩展 details 返回 ext_fields。  
-  5. [ ] API：实现 mutation-capabilities，并包含扩展字段映射（`ext.<field_key>`）。  
-  6. [ ] 列表：支持 ext 字段 filter/sort（allowlist + 参数化 + 可审计）。  
-  7. [ ] 门禁：`make check routing` + `make authz-pack && make authz-test && make authz-lint` + Go 测试门禁通过。  
+  1. [X] 服务层：实现元数据解析 + ext 查询 allowlist 守卫 + details ext_fields 解析（含 DICT display_value_source）。  
+  2. [X] API：实现 field-definitions/field-configs（list/enable/disable）。  
+  3. [X] API：实现 fields:options（DICT；PLAIN 必拒绝；ENTITY 预留）。  
+  4. [X] API：扩展 details 返回 ext_fields。  
+  5. [X] API：实现 mutation-capabilities，并包含扩展字段映射（`ext.<field_key>`）。  
+  6. [X] 列表：支持 ext 字段 filter/sort（allowlist + 参数化 + 可审计）。  
+  7. [X] 门禁：`make check routing` + `make authz-pack && make authz-test && make authz-lint` + Go 测试门禁通过。  
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
 - **API 契约测试**（至少覆盖）：
-  - [ ] field-configs：启用/停用/列表（含权限拒绝、槽位耗尽/冲突错误映射）。  
-  - [ ] field-configs：幂等重试（同 `request_code` 同输入返回 200，且 `physical_col` 不变化；不同输入返回 409 `ORG_REQUEST_ID_CONFLICT`）。  
-  - [ ] options：DICT/ENTITY（含未启用字段 fail-closed；PLAIN 字段必须拒绝）。  
-  - [ ] options：未启用字段返回 404 `ORG_FIELD_OPTIONS_FIELD_NOT_ENABLED_AS_OF`；PLAIN 返回 404 `ORG_FIELD_OPTIONS_NOT_SUPPORTED`。  
-  - [ ] details：返回 ext_fields（全集 + 稳定排序；DICT display_value_source 覆盖 snapshot/fallback/unresolved）。  
-  - [ ] mutation-capabilities：扩展字段进入 `allowed_fields/field_payload_keys`，且 `deny_reasons` 可解释。  
-  - [ ] list：ext filter/sort 在 allowlist 内可用；非 allowlist/未 enabled 返回 400 `ORG_EXT_QUERY_FIELD_NOT_ALLOWED`；非 grid 模式请求 ext filter/sort 返回 400。  
+  - [X] field-configs：启用/停用/列表（含权限拒绝、槽位耗尽/冲突错误映射）。  
+  - [X] field-configs：幂等重试（同 `request_code` 同输入返回 200，且 `physical_col` 不变化；不同输入返回 409 `ORG_REQUEST_ID_CONFLICT`）。  
+  - [X] options：DICT（含未启用字段 fail-closed；PLAIN 字段必须拒绝；ENTITY 预留且 fail-closed）。  
+  - [X] options：未启用字段返回 404 `ORG_FIELD_OPTIONS_FIELD_NOT_ENABLED_AS_OF`；PLAIN 返回 404 `ORG_FIELD_OPTIONS_NOT_SUPPORTED`。  
+  - [X] details：返回 ext_fields（全集 + 稳定排序；DICT display_value_source 覆盖 snapshot/fallback/unresolved）。  
+  - [X] mutation-capabilities：扩展字段进入 `allowed_fields/field_payload_keys`，且 `deny_reasons` 可解释。  
+  - [X] list：ext filter/sort 在 allowlist 内可用；非 allowlist/未 enabled 返回 400 `ORG_EXT_QUERY_FIELD_NOT_ALLOWED`；非 grid 模式请求 ext filter/sort 返回 400。  
 
 - **安全验收**：
-  - [ ] 无 SQL 注入风险（列名与实体来源可证明为 allowlist/枚举；值参数化）。  
+  - [X] 无 SQL 注入风险（列名与实体来源可证明为 allowlist/枚举；值参数化）。  
 
 - **出口条件（与路线图一致）**：
-  - [ ] API 契约测试覆盖新增字段。  
-  - [ ] 无 SQL 注入风险（列名与实体来源可证明）。  
+  - [X] API 契约测试覆盖新增字段。  
+  - [X] 无 SQL 注入风险（列名与实体来源可证明）。  
 
 ## 10. 运维与监控 (Ops & Monitoring)
 

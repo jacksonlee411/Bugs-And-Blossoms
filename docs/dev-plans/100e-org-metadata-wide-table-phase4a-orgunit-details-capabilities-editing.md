@@ -116,6 +116,7 @@ export interface OrgUnitExtField {
   - `bool`：`boolean | null`
 - 当 `data_source_type=PLAIN`：UI 禁止调用 options endpoint。
 - `ext_fields` 必须包含 `as_of` 下 **enabled 的字段全集**（即使该字段当前无值，`value=null` 也必须返回），避免出现“字段已启用但页面不可见/不可编辑”的僵尸体验。
+- 当 `as_of >= disabled_on` 时该字段不属于 enabled 集合，因此不应出现在 `ext_fields`；若需查看历史值，请切换 `as_of` 或查看 Audit（变更日志）。
 - `field_key` 由服务端保证稳定与可校验（field-definitions SSOT）；UI 将其视为不透明标识，**不得**在前端维护“保留字列表”或二次推导 payload 路径，路径一律以 `field_payload_keys` 为准。
 
 ### 4.2 Capabilities（编辑态能力外显）

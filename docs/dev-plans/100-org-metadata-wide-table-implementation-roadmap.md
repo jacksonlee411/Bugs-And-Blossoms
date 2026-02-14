@@ -73,8 +73,10 @@
 
 - `PLAIN`：无 options；versions 直接存值；事件 payload 不需要也不接受该字段的 label 快照（如出现则视为非法输入）。  
 - `DICT`：versions 存 `code`（通常进入 `ext_str_xx`），事件 payload 同时写 `ext_labels_snapshot`（按字段 key 存 label）。  
+  - `dict_code`（`data_source_config`）由 `field-definitions` 提供候选，启用字段时由租户管理员选择并写入 `tenant_field_configs`；启用后不可修改。  
   - `label` 口径冻结为 **canonical label（非本地化展示名）**：用于 `ext_labels_snapshot` 与 options 返回值；不随 UI locale 变化（避免引入“业务数据多语言”，边界见 `DEV-PLAN-020`）。  
 - `ENTITY`：versions 存主键 ID（`ext_int_xx` 或 `ext_uuid_xx`），展示时按 `as_of` join 实体表拿 label。
+  - `entity/id_kind`（`data_source_config`）由 `field-definitions` 提供候选，启用字段时由租户管理员选择并写入 `tenant_field_configs`；启用后不可修改。
 
 ### D4. 历史一致性策略
 
@@ -90,7 +92,7 @@
 ### D6. 字段配置生命周期与时间语义
 
 - 字段配置的业务生效时间使用 **day 粒度**（`enabled_on/disabled_on` 为 `date`）；`created_at/updated_at/disabled_at` 仅用于审计时间（`timestamptz`）。
-- 写入校验按 `effective_date` 解释字段配置是否生效；读取（详情/列表/options）按 `as_of` 解释字段可见性。
+- 写入校验按 `effective_date` 解释字段配置是否生效；读取（详情/列表/options）按 `as_of` 解释字段可见性：当 `as_of >= disabled_on` 时该字段不属于 enabled 集合，因此 details 的 `ext_fields[]` 不返回/不展示该字段；若需查看历史值，应切换 `as_of` 或查看 Audit（变更日志）。
 
 ### D7. allowlist 单一事实源（SSOT）
 
