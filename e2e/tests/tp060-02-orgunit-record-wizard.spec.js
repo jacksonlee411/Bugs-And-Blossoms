@@ -86,7 +86,7 @@ test("tp060-02: orgunit record wizard (4-step add/delete flow)", async ({ browse
   await page.locator('input[name="email"]').fill(tenantAdminEmail);
   await page.locator('input[name="password"]').fill(tenantAdminPass);
   await page.getByRole("button", { name: "Login" }).click();
-  await expect(page).toHaveURL(/\/app\?as_of=\d{4}-\d{2}-\d{2}$/);
+  await expect(page).toHaveURL(/\/app$/);
 
   await page.goto(`/org/nodes?tree_as_of=${asOf}`);
   await expect(page.locator("h1")).toHaveText("OrgUnit Details");

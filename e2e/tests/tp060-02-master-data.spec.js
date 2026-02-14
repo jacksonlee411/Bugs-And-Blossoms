@@ -82,7 +82,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await page.locator('input[name="email"]').fill(tenantAdminEmail);
   await page.locator('input[name="password"]').fill(tenantAdminPass);
   await page.getByRole("button", { name: "Login" }).click();
-  await expect(page).toHaveURL(/\/app\?as_of=\d{4}-\d{2}-\d{2}$/);
+  await expect(page).toHaveURL(/\/app$/);
 
   const orgCodeByName = (name) => {
     const map = {
