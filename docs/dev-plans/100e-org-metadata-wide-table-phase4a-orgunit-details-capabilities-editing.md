@@ -27,6 +27,7 @@
   - 动作是否可用由 `capabilities.*.enabled` 决定，并展示 `deny_reasons`（可解释）。
   - capabilities API 不可用/解析失败时：UI **fail-closed**（只读/禁用，不做乐观放行）。
 - [ ] Select 字段（`DICT/ENTITY`）在编辑态接入 options endpoint（支持 `q` 搜索 + `as_of`）。
+- [ ] 更正支持修改“更正后生效日”（`patch.effective_date`），且写入成功后 UI 自动切换到新版本（URL `effective_date` 更新），避免“成功了但仍停留在旧版本”的错觉。
 
 ### 2.2 非目标 (Out of Scope)
 
@@ -34,6 +35,7 @@
 - 不实现 OrgUnit 列表页扩展字段筛选/排序入口（Phase 4C）。
 - 不在本计划内设计/变更 DB schema、Kernel 函数或元数据表结构（其契约归 `DEV-PLAN-100` Phase 1/2/3）。
 - 不实现“任意租户自定义 label 的业务数据多语言存储结构”（对齐 `DEV-PLAN-020` 边界）。
+- MVP 不启用 `data_source_type=PLAIN` 的扩展字段；本计划仅要求实现 `DICT/ENTITY` 扩展字段的编辑控件。若 details 仍返回 `PLAIN`，UI 必须 fail-closed：只读展示 + 明确 warning，不允许提交该字段的更正。
 
 ### 2.3 工具链与门禁（SSOT 引用）
 
@@ -114,7 +116,8 @@ export interface OrgUnitExtField {
   - `text/uuid/date`：`string | null`
   - `int`：`number | null`
   - `bool`：`boolean | null`
-- 当 `data_source_type=PLAIN`：UI 禁止调用 options endpoint。
+- MVP 约束：不启用 `data_source_type=PLAIN` 的字段；若出现，UI 只读展示并给出 warning（不提供输入控件，不允许提交更正）。
+- 当 `data_source_type=PLAIN`：options 不适用，UI 禁止调用 options endpoint（fail-closed）。
 - `ext_fields` 必须包含 `as_of` 下 **enabled 的字段全集**（即使该字段当前无值，`value=null` 也必须返回），避免出现“字段已启用但页面不可见/不可编辑”的僵尸体验。
 - 当 `as_of >= disabled_on` 时该字段不属于 enabled 集合，因此不应出现在 `ext_fields`；若需查看历史值，请切换 `as_of` 或查看 Audit（变更日志）。
 - `field_key` 由服务端保证稳定与可校验（field-definitions SSOT）；UI 将其视为不透明标识，**不得**在前端维护“保留字列表”或二次推导 payload 路径，路径一律以 `field_payload_keys` 为准。
@@ -199,8 +202,9 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
   "capabilities": {
     "correct_event": {
       "enabled": true,
-      "allowed_fields": ["name", "org_type"],
+      "allowed_fields": ["effective_date", "name", "org_type"],
       "field_payload_keys": {
+        "effective_date": "effective_date",
         "name": "name",
         "org_type": "ext.org_type"
       },
@@ -227,6 +231,7 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 
 - `allowed_fields` 必须包含扩展字段的 `field_key`（当该动作允许写入时）。
 - `field_payload_keys[field_key]` 对扩展字段必须为 `ext.<field_key>`。
+- `allowed_fields` 与 `field_payload_keys` 必须一致（双向包含），且输出顺序稳定（避免 UI 抖动/测试不稳定）。
 - `enabled` 必须已纳入 Authz 结果（例如调用方缺少 `orgunit.admin` 时，`correct_event.enabled=false`，并返回稳定 `deny_reasons`；避免 UI “按钮禁用但无解释”或“可输必败”）。
 - capabilities API 不可用/返回错误时，UI 必须 fail-closed（只读/禁用）。
 
@@ -263,6 +268,8 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 
 为支持扩展字段写入，patch 需要支持 `ext` 子对象（字段集合与校验以服务端为准）：
 
+示例 A：更正扩展字段（不改生效日）：
+
 ```json
 {
   "org_code": "R&D",
@@ -271,9 +278,21 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
   "patch": {
     "name": "R&D - Updated",
     "ext": {
-      "org_type": "DEPARTMENT",
-      "short_name": "R&D"
+      "org_type": "DEPARTMENT"
     }
+  }
+}
+```
+
+示例 B：仅更正“更正后生效日”（不携带其它字段）：
+
+```json
+{
+  "org_code": "R&D",
+  "effective_date": "2026-02-13",
+  "request_id": "req-...",
+  "patch": {
+    "effective_date": "2026-02-15"
   }
 }
 ```
@@ -295,7 +314,8 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 2. 渲染基础字段（既有）。
 3. 渲染 `ext_fields[]`：
    - label：`t(label_i18n_key)`；若缺失，回退展示 `field_key`（并显示 warning badge，避免静默漂移）。
-   - value：优先展示 `display_value`；为空时展示 `-`。
+   - value：优先展示 `display_value`；若 `display_value=null` 且 `value!=null`，则展示 `value` 的字符串形式（便于排障；禁止静默丢失 code/id）。
+   - value：当 `display_value=null` 且 `value=null`，展示 `-`。
    - source（`display_value_source`）：
      - `dict_fallback`：展示“历史标签兜底”warning（非阻断）；
      - `unresolved`：展示“展示值不可解析”warning（可排障，禁止静默）。
@@ -312,25 +332,67 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 
 弹窗字段渲染规则：
 
-1. 基础字段集合：`name/parent_org_code/manager_pernr/is_business_unit/effective_date(corrected?)`（既有表单字段）。
+1. 基础字段集合：`name/parent_org_code/manager_pernr/is_business_unit/target_effective_date(corrected_effective_date)`（既有表单字段；其中 target_effective_date 为只读展示，corrected_effective_date 写入 `patch.effective_date`）。
 2. 扩展字段集合：以 details 的 `ext_fields[]` 为准（动态）。
 3. 对每个字段：
-   - 若 `field_key` 不在 `allowed_fields`：字段置灰（或隐藏）；并展示统一 helperText：`不允许更正该字段（PATCH_FIELD_NOT_ALLOWED）`。
+   - 若 `field_key` 不在 `allowed_fields`：字段**禁用但仍可见**（不隐藏，避免“字段消失/不可解释”）；并展示统一 helperText：`不允许更正该字段（PATCH_FIELD_NOT_ALLOWED）`。
 4. 若 `capabilities.correct_event.enabled=false`：
    - 禁用“确认”按钮；
    - 弹窗顶部展示 `deny_reasons`（按列表展示，或映射为 i18n 文案）。
 5. 若 capabilities 请求失败：
    - 弹窗顶部展示错误；
    - 全部输入禁用 + 禁用确认按钮（fail-closed，不做本地乐观放行）。
+6. 当用户填写了 `corrected_effective_date` 且其值与 target_effective_date 不同：
+   - 弹窗进入“生效日更正”模式：仅允许修改 `corrected_effective_date`，其余基础字段与全部扩展字段一律禁用；
+   - 弹窗顶部展示明确提示：更正生效日需单独提交（避免与扩展字段 enabled 集合随 day 变化产生漂移与“写了但回显消失”风险）。
 
 提交（构造 patch）规则（关键：避免“禁用但仍提交”）：
 
-1. 以 details 中当前值作为“原值快照”（含 ext_fields）。
-2. 对每个表单项：
-   - 若该字段不在 `allowed_fields`：**不进入 patch**（无论 UI 是否有值）。
-   - 若字段值与原值一致：**不进入 patch**（最小变更）。
-3. 基础字段进入 `patch.<field_payload_keys[field_key]>`（例如 `name`），扩展字段进入 `patch.ext[<field_key>]`（或通过 `field_payload_keys` 解析为 `ext.<field_key>` 路径）。
-4. `is_business_unit` 等布尔字段必须采用“可判定是否变更”的策略（例如对比原值；未变更则不提交），避免当前实现那种“总是提交”导致策略收紧后必失败。
+1. 以 details 中当前值作为“原值快照”（含 ext_fields），并以 capabilities 的 `allowed_fields/field_payload_keys` 作为“唯一可写集合”。
+2. **生效日更正模式**（`corrected_effective_date != ""` 且 `!= target_effective_date`）：
+   - patch 只允许包含 `effective_date` 一个字段（对应 `field_payload_keys["effective_date"]="effective_date"`）；
+   - 其它字段（含 ext）即使被编辑也不得进入 patch（fail-closed）。
+3. **普通更正模式**（未进入生效日更正模式）：
+   - 对每个表单项：
+     - 若该字段不在 `allowed_fields`：**不进入 patch**（无论 UI 是否有值）。
+     - 若字段值与原值一致：**不进入 patch**（最小变更）。
+   - 写入位置必须由 `field_payload_keys[field_key]` 决定（禁止 UI 自行拼路径）：
+     - 若 `field_payload_keys[field_key]` 以 `ext.` 开头：写入 `patch.ext[field_key]=value`；
+     - 否则：写入 `patch[ field_payload_keys[field_key] ]=value`（例如 `name`、`parent_org_code`、`effective_date`）。
+4. `is_business_unit` 等布尔字段必须采用“可判定是否变更”的策略（对比原值；未变更则不提交），避免当前实现那种“总是提交”导致策略收紧后必失败。
+5. 伪代码（用于实现与单测对齐；非运行时 contract）：
+
+```ts
+type Patch = Record<string, unknown> & { ext?: Record<string, unknown> }
+
+function buildPatch(input: {
+  allowedFields: string[]
+  fieldPayloadKeys: Record<string, string>
+  original: Record<string, unknown> & { ext?: Record<string, unknown> }
+  next: Record<string, unknown> & { ext?: Record<string, unknown> }
+}): Patch {
+  const patch: Patch = {}
+  for (const fieldKey of input.allowedFields) {
+    const payloadKey = input.fieldPayloadKeys[fieldKey]
+    if (!payloadKey) continue
+
+    const prevValue = payloadKey.startsWith('ext.') ? input.original.ext?.[fieldKey] : input.original[fieldKey]
+    const nextValue = payloadKey.startsWith('ext.') ? input.next.ext?.[fieldKey] : input.next[fieldKey]
+
+    if (prevValue === nextValue) continue
+
+    if (payloadKey.startsWith('ext.')) {
+      patch.ext ??= {}
+      patch.ext[fieldKey] = nextValue
+      continue
+    }
+
+    patch[payloadKey] = nextValue
+  }
+  if (patch.ext && Object.keys(patch.ext).length === 0) delete patch.ext
+  return patch
+}
+```
 
 Select 字段（DICT/ENTITY）控件策略：
 
@@ -340,6 +402,7 @@ Select 字段（DICT/ENTITY）控件策略：
   - 选中后在 form state 保存 `option.value`（DICT 为 code；ENTITY 为 id）。
 - 清空选择（clear）时：必须将对应字段写为 `null`（进入 patch，表示显式清空），不得“忽略不提交”。
 - 任何 options 请求失败：该字段进入只读并提示错误（避免提交无效值）。
+- options 调用需做最小抖动控制：建议 debounce（200~300ms）+ 按 `(field_key, as_of, q)` 作为缓存 key（至少在弹窗生命周期内缓存），避免每次按键都打满请求。
 
 ## 7. 安全与鉴权 (Security & Authz)
 
@@ -390,6 +453,8 @@ Select 字段（DICT/ENTITY）控件策略：
   - [ ] capabilities 返回 enabled 时：allowed_fields 内字段可编辑；非 allowed 字段禁用且原因可解释。
   - [ ] capabilities 返回 disabled 时：确认按钮禁用，且 deny_reasons 可见。
   - [ ] capabilities API 失败时：全表单只读/禁用（fail-closed），不允许提交。
+- [ ] 更正支持修改“更正后生效日”：提交 `patch.effective_date` 成功后，UI 自动切换到新 `effective_date` 版本并刷新 details。
+- [ ] 当进入“生效日更正模式”时：除 `patch.effective_date` 外，任何字段均不可编辑且不会进入 patch（避免隐式联动与 drift）。
 - [ ] 非 `orgunit.admin` 用户可见“更正”入口但默认不可用，并能看到稳定 deny_reasons（避免“为什么不能改”不可解释）。
 - [ ] DICT/ENTITY 字段 options 可搜索；options 失败时该字段不可编辑且有明确错误提示。
 - [ ] 写入后刷新：成功后 details 的 ext_fields 回显新值（且不出现“看似成功但实际未生效”）。
