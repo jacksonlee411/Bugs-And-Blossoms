@@ -8,62 +8,15 @@ import (
 	"testing/fstest"
 )
 
-func TestRenderTopbar_UsesHXCurrentURLAndPreservesQueryExceptAsOf(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/ui/topbar?as_of=2026-01-01", nil)
-	req.Header.Set("HX-Current-URL", "http://localhost/org/assignments?as_of=2026-01-01&pernr=123&pernr=456&q=abc")
+func TestRenderTopbar_RendersLanguageLinksAndNoAsOfSelector(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/ui/topbar", nil)
 
-	out := renderTopbar(req, "2026-01-01")
-
-	if !strings.Contains(out, `action="/org/assignments"`) {
-		t.Fatalf("unexpected target: %q", out)
+	out := renderTopbar(req)
+	if !strings.Contains(out, `/lang/en`) || !strings.Contains(out, `/lang/zh`) {
+		t.Fatalf("missing language links: %q", out)
 	}
-	if strings.Contains(out, `type="hidden" name="as_of"`) {
-		t.Fatalf("unexpected as_of hidden input: %q", out)
-	}
-	if !strings.Contains(out, `type="hidden" name="pernr" value="123"`) || !strings.Contains(out, `type="hidden" name="pernr" value="456"`) {
-		t.Fatalf("missing pernr inputs: %q", out)
-	}
-	if !strings.Contains(out, `type="hidden" name="q" value="abc"`) {
-		t.Fatalf("missing q input: %q", out)
-	}
-	if !strings.Contains(out, `hx-target="#content"`) || !strings.Contains(out, `hx-push-url="true"`) {
-		t.Fatalf("missing htmx attrs: %q", out)
-	}
-}
-
-func TestRenderTopbar_FallsBackToRefererAndHandlesBadURL(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/ui/topbar?as_of=2026-01-01", nil)
-	req.Header.Set("Referer", "http://localhost/%zz")
-
-	out := renderTopbar(req, "2026-01-01")
-	if !strings.Contains(out, `action="/app/home"`) {
-		t.Fatalf("unexpected target: %q", out)
-	}
-}
-
-func TestRenderTopbar_RewritesAppToAppHome(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/ui/topbar?as_of=2026-01-01", nil)
-	req.Header.Set("HX-Current-URL", "http://localhost/app?as_of=2026-01-01&q=abc")
-
-	out := renderTopbar(req, "2026-01-01")
-	if !strings.Contains(out, `action="/app/home"`) {
-		t.Fatalf("unexpected target: %q", out)
-	}
-	if !strings.Contains(out, `type="hidden" name="q" value="abc"`) {
-		t.Fatalf("missing q input: %q", out)
-	}
-}
-
-func TestRenderTopbar_ParsesURLWithEmptyPath(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/ui/topbar?as_of=2026-01-01", nil)
-	req.Header.Set("HX-Current-URL", "http://localhost?x=1")
-
-	out := renderTopbar(req, "2026-01-01")
-	if !strings.Contains(out, `action="/app/home"`) {
-		t.Fatalf("unexpected target: %q", out)
-	}
-	if !strings.Contains(out, `type="hidden" name="x" value="1"`) {
-		t.Fatalf("missing x input: %q", out)
+	if strings.Contains(out, `name="as_of"`) {
+		t.Fatalf("unexpected as_of selector: %q", out)
 	}
 }
 
@@ -109,7 +62,7 @@ func TestReplaceMainContent(t *testing.T) {
 
 func TestRenderAstroShellFromTemplate(t *testing.T) {
 	const tmpl = `<html><body>` +
-		`<aside id="nav" hx-get="/ui/nav?as_of=__BB_AS_OF__" hx-trigger="load"></aside>` +
+		`<aside id="nav" hx-get="/ui/nav" hx-trigger="load"></aside>` +
 		`<main id="content"></main>` +
 		`</body></html>`
 
@@ -118,9 +71,6 @@ func TestRenderAstroShellFromTemplate(t *testing.T) {
 		out, err := renderAstroShellFromTemplate(tmpl, req, "2026-01-01", "")
 		if err != nil {
 			t.Fatal(err)
-		}
-		if strings.Contains(out, astroAsOfToken) {
-			t.Fatalf("token not injected: %q", out)
 		}
 		if strings.Contains(out, `hx-trigger="load"`) {
 			t.Fatalf("expected hx-trigger removed: %q", out)
@@ -142,22 +92,16 @@ func TestRenderAstroShellFromTemplate(t *testing.T) {
 		}
 	})
 
-	t.Run("missing token", func(t *testing.T) {
-		_, err := renderAstroShellFromTemplate(`<main id="content"></main>`, httptest.NewRequest(http.MethodGet, "/app", nil), "2026-01-01", "")
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
 	t.Run("body injection error", func(t *testing.T) {
-		_, err := renderAstroShellFromTemplate(`__BB_AS_OF__`, httptest.NewRequest(http.MethodGet, "/app", nil), "2026-01-01", "<h1>Y</h1>")
+		_, err := renderAstroShellFromTemplate(`<div>no main</div>`, httptest.NewRequest(http.MethodGet, "/app", nil), "2026-01-01", "<h1>Y</h1>")
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("token still present after injection", func(t *testing.T) {
-		_, err := renderAstroShellFromTemplate(tmpl, httptest.NewRequest(http.MethodGet, "/app", nil), astroAsOfToken, "")
+		tokenTmpl := `<main id="content"></main><aside id="nav" hx-get="/ui/nav?as_of=__BB_AS_OF__" hx-trigger="load"></aside>`
+		_, err := renderAstroShellFromTemplate(tokenTmpl, httptest.NewRequest(http.MethodGet, "/app", nil), astroAsOfToken, "")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -172,7 +116,7 @@ func TestRenderAstroShellFromAssets_ReadFileError(t *testing.T) {
 }
 
 func TestWriteShellWithStatusFromAssets(t *testing.T) {
-	const tmpl = `<main id="content"></main><aside id="nav" hx-get="/ui/nav?as_of=__BB_AS_OF__" hx-trigger="load"></aside>`
+	const tmpl = `<main id="content"></main><aside id="nav" hx-get="/ui/nav" hx-trigger="load"></aside>`
 	okFS := fstest.MapFS{
 		"assets/astro/app.html": &fstest.MapFile{Data: []byte(tmpl)},
 	}

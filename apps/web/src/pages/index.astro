@@ -1,7 +1,3 @@
----
-const asOfToken = '__BB_AS_OF__';
----
-
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
@@ -50,8 +46,8 @@ const asOfToken = '__BB_AS_OF__';
 		<script is:inline defer src="/assets/js/lib/alpine.min.js"></script>
 	</head>
 	<body>
-		<aside id="nav" hx-get={`/ui/nav?as_of=${asOfToken}`} hx-trigger="load"></aside>
-		<header id="topbar" hx-get={`/ui/topbar?as_of=${asOfToken}`} hx-trigger="load"></header>
+		<aside id="nav" hx-get="/ui/nav" hx-trigger="load"></aside>
+		<header id="topbar" hx-get="/ui/topbar" hx-trigger="load"></header>
 		<div id="flash" hx-get="/ui/flash" hx-trigger="load"></div>
 		<main id="content">
 			<h1>Home</h1>

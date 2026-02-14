@@ -1,6 +1,6 @@
 # DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）
 
-**状态**: 规划中（2026-02-14 02:21 UTC — 补充“去壳层全局日期”落地口径与 MUI X Org 整改清单）
+**状态**: 已完成（2026-02-14 — 路由矩阵冻结 + 去壳层全局 as_of + MUI Org 整改 + 测试/证据）
 
 ## 1. 背景与问题陈述
 - 本计划承接 `DEV-PLAN-076` 对 OrgUnit 的问题识别：当“树日期”“详情版本”“全局页面日期”混用时，会出现丢焦、全页刷新、版本列表跳变等稳定性问题。
@@ -89,31 +89,62 @@
 3) **视图页自带视图日期**：对“按时点浏览”的列表/树视图，在页面内提供“视图日期”控件（Org MUI 列表页已具备）。  
 4) **配置页不强制视图日期**：SetID/职位分类等配置型页面，优先通过“版本/生效日期（effective_date）”浏览历史与未生效记录；如确需 `as_of` 切片语义，必须显式定义（不能依赖壳层全局 as_of）。  
 
+### 4.5 路由-时间参数矩阵（冻结）
+> 目标：把“缺省行为/错误码/重定向”固化为可测试的基线，阻断语义回漂。
+
+| 路由 | 分类 | 时间参数 | 缺省行为 | 非法/冲突行为 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| `/ui/nav` | C（无时间上下文） | 无 | 200 | 忽略 `as_of` | 壳层不再注入日期 |
+| `/ui/topbar` | C | 无 | 200 | 忽略 `as_of` | Topbar 不再提供全局日期选择器 |
+| `/ui/flash` | C | 无 | 200 | - | |
+| `/app`、`/app/*` | C | 无 | 200（SPA index） | - | MUI SPA 自管理 URL |
+| `/login`、`/logout`、`/lang/*` | C | 无 | 200/302 | - | |
+| `/org/nodes` (GET) | B（双上下文） | `tree_as_of`（树） | 缺省/非法：**302** 补齐 `tree_as_of=<resolved>` | `as_of`：400 `deprecated_as_of` | `resolved` 算法见 `resolveTreeAsOfForPage` |
+| `/org/nodes` (POST) | B | `tree_as_of`（树） | 缺省：400 `invalid_tree_as_of` | `as_of`：400 `deprecated_as_of` | 写入回跳仍带 `tree_as_of` |
+| `/org/nodes/children` | B | `tree_as_of`（必填） | 缺省：400 `invalid_tree_as_of` | 非法：400 `invalid_tree_as_of` | |
+| `/org/nodes/search` | B | `tree_as_of`（必填） | 缺省：400 `invalid_tree_as_of` | 非法：400 `invalid_tree_as_of` | `format=panel` 仍遵循同口径 |
+| `/org/nodes/details`、`/org/nodes/view` | B | `effective_date`（可缺省）、`tree_as_of`（可缺省） | 缺省：回退 `currentUTCDateString()`（不重定向） | `as_of`：400 `deprecated_as_of`；`effective_date` 非法：400 `invalid_effective_date` | 详情版本与树日期解耦 |
+| `/org/snapshot`、`/org/setid`、`/org/job-catalog`、`/org/positions`、`/org/assignments`、`/person/persons` | A（单上下文） | `as_of` | GET/HEAD 缺省：**302** 补齐 `as_of=<currentUTCDateString()>` | 非法：400 `invalid_as_of` | 统一走 `requireAsOf` |
+| `/org/api/org-units`、`/org/api/org-units/search` | A | `as_of` | 缺省：回退为 UTC 今日（不重定向） | 非法：400 `invalid_as_of` | 内部 API：A 类切片语义 |
+| `/org/api/org-units/versions`、`/org/api/org-units/audit` | C | 无 | 200 | - | 版本列表只来源真实版本集合 |
+
+### 4.6 跨层语义映射（UI ↔ 服务 ↔ SQL）
+| 词汇 | UI/URL 语义 | 服务层入口（示例） | SQL/Kernel 语义（示例） | 备注 |
+| --- | --- | --- | --- | --- |
+| `as_of` | 查询时点（读模型切片） | `requireAsOf(...)`；`/org/api/org-units?as_of=...` | `validity @> as_of_date` / `p_as_of(_date)` | 仅用于 A 类 |
+| `tree_as_of` | 树/层级视图时点 | `resolveTreeAsOfForPage(...)`、`requireTreeAsOf(...)` | 同为 `validity @> tree_as_of` | 仅用于 B 类的树/搜索 |
+| `effective_date` | 记录版本生效日（版本选择/写入） | `/org/nodes/details?effective_date=...`；写入 event `effective_date` | event 生效日、版本集合主键之一 | 禁止用 `as_of` 冒充 |
+
+### 4.7 Stopline（禁止新增）
+- 禁止在 Shell/Topbar 恢复“全局 `as_of` 选择器/透传/强灌”实现；`/ui/nav`、`/ui/topbar` 不得再要求 `as_of`。
+- 禁止在双上下文页面把 `as_of` 当 `effective_date` 使用（包括“伪版本”注入列表）。
+- 禁止新增“缺省回退规则”分叉：缺省/重定向/错误码必须回到本矩阵更新后再落码。
+
 ## 5. 实施路线（文档先行）
 
 ### M0：契约冻结与基线清单
-- [ ] 输出《路由-时间参数矩阵》：逐条标注 A/B/C 类、默认值、错误码、重定向规则。
-- [ ] 输出《跨层语义映射》：UI 参数 ↔ 服务参数 ↔ SQL 参数映射表。
-- [ ] 为已有实现标注“兼容债”与“禁止新增”的 stopline 规则。
+- [X] 输出《路由-时间参数矩阵》：逐条标注 A/B/C 类、默认值、错误码、重定向规则（见 §4.5）。
+- [X] 输出《跨层语义映射》：UI 参数 ↔ 服务参数 ↔ SQL 参数映射表（见 §4.6）。
+- [X] 为已有实现标注 stopline 规则（见 §4.7）。
 
 ### M1：去壳层全局日期（过渡策略）
-- [ ] Topbar 移除“有效日期（as_of）”选择器：不再提交/改写 `as_of`。
-- [ ] 保留 URL 可带 `as_of` 的可分享性；缺省回退到当天（UTC）（行为在矩阵中冻结）。
-- [ ] 对仍存在的旧壳层路径，禁止“强灌 as_of 到所有页面”的行为；最终随 `DEV-PLAN-103` 删除旧壳层。
+- [X] Topbar 移除“有效日期（as_of）”选择器：不再提交/改写 `as_of`。
+- [X] 保留 URL 可带 `as_of` 的可分享性；缺省回退到当天（UTC）（行为在矩阵中冻结）。
+- [X] 禁止旧壳层“强灌 as_of 到所有页面”的行为：Shell 改为仅加载 `/ui/nav`、`/ui/topbar`（无 `as_of`）；导航不再拼接时间参数。
 
 ### M2：MUI X Org 模块整改（优先）
-- [ ] 固化 Org MUI 的“双上下文口径”：`as_of`=视图日期、`effective_date`=详情版本；`effective_date` query param 可缺省，但默认选中算法必须稳定且可测试。
-- [ ] 移除越权/未交付能力：删除 OrgUnits 列表页的“批量启用/停用”相关 UI 与逻辑（checkbox selection、bulk buttons、前端批量调用循环），避免出现用户可见但契约未冻结的“僵尸功能”入口。
-- [ ] 修正文案/字段语义：OrgUnits 列表 DataGrid 列 `effectiveDate` 当前实际展示的是“视图日期（as_of）”而非“记录版本生效日（effective_date）”；应删除该列，或至少更名为 `As of/View date` 并与 `effective_date` 严格区分。
-- [ ] 固化“版本列表稳定性”断言：禁止伪版本注入、首次进入与点击切换条目数一致（承接 `DEV-PLAN-076` 的跳变问题）。
+- [X] 固化 Org MUI 的“双上下文口径”：`as_of`=视图日期、`effective_date`=详情版本；`effective_date` 可缺省且默认选中算法有单测（承接 `DEV-PLAN-076`）。
+- [X] 移除越权/未交付能力：删除 OrgUnits 列表页“批量启用/停用”相关 UI 与逻辑（checkbox selection、bulk buttons、前端批量调用循环）。
+- [X] 修正文案/字段语义：移除 OrgUnits 列表中误导性的 `effectiveDate` 列（此前实际展示的是 `as_of`）。
+- [X] 固化“版本列表稳定性”断言：仅展示真实版本集合；默认选中算法覆盖缺省与 miss（见 `orgUnitVersionSelection.test.ts`）。
 
 ### M3：跨模块治理
-- [ ] 逐个评估 SetID/JobCatalog/Staffing/Person 是否保留单上下文 `as_of`。
-- [ ] 对“不需要时间上下文”的页面移除强制 as_of 依赖。
+- [X] 逐个评估 SetID/JobCatalog/Staffing/Person：当前均为 A 类（单上下文 `as_of`），继续保留；不再依赖壳层注入，由各自 handler 负责缺省/校验。
+- [X] 对 C 类页面（Shell/Topbar/Nav 等）移除 `as_of` 依赖（见 §4.5）。
 
 ### M4：门禁与证据
-- [ ] 新增/强化测试：参数校验、默认日期、重定向、列表稳定性。
-- [ ] 在 `docs/dev-records/` 记录执行日志、截图与回归结果。
+- [X] 新增/强化测试：参数校验、默认日期、重定向、列表稳定性（Go handler/shell tests + MUI unit tests）。
+- [X] 在 `docs/dev-records/` 记录执行日志与回归结果：`docs/dev-records/dev-plan-102-execution-log.md`。
 
 ## 6. 影响范围（草案）
 - 文档：`docs/dev-plans/073`、`docs/dev-plans/076`、本计划（102）及后续执行日志。

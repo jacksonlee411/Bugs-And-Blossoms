@@ -361,8 +361,8 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	if body := recLogin.Body.String(); !strings.Contains(body, `<form method="POST" action="/login">`) {
 		t.Fatalf("unexpected login body: %q", body)
 	}
-	if body := recLogin.Body.String(); strings.Contains(body, `hx-get="/ui/nav"`) || strings.Contains(body, `hx-get="/ui/topbar"`) {
-		t.Fatalf("unexpected hx-get in login body: %q", body)
+	if body := recLogin.Body.String(); strings.Contains(body, `hx-trigger="load"`) {
+		t.Fatalf("expected hx-trigger removed in login body: %q", body)
 	}
 
 	reqAppNoSession := httptest.NewRequest(http.MethodGet, "/app", nil)
@@ -404,9 +404,9 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	protected := []string{
 		"/app?as_of=2026-01-01",
 		"/app/home?as_of=2026-01-01",
-		"/ui/flash?as_of=2026-01-01",
-		"/ui/nav?as_of=2026-01-01",
-		"/ui/topbar?as_of=2026-01-01",
+		"/ui/flash",
+		"/ui/nav",
+		"/ui/topbar",
 		"/org/nodes?tree_as_of=2026-01-01",
 		"/org/snapshot?as_of=2026-01-01",
 		"/org/setid?as_of=2026-01-01",
@@ -440,7 +440,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	reqNavMissingAsOf.AddCookie(session)
 	recNavMissingAsOf := httptest.NewRecorder()
 	h.ServeHTTP(recNavMissingAsOf, reqNavMissingAsOf)
-	if recNavMissingAsOf.Code != http.StatusFound {
+	if recNavMissingAsOf.Code != http.StatusOK {
 		t.Fatalf("nav (missing as_of) status=%d", recNavMissingAsOf.Code)
 	}
 
@@ -449,7 +449,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 	reqTopbarMissingAsOf.AddCookie(session)
 	recTopbarMissingAsOf := httptest.NewRecorder()
 	h.ServeHTTP(recTopbarMissingAsOf, reqTopbarMissingAsOf)
-	if recTopbarMissingAsOf.Code != http.StatusFound {
+	if recTopbarMissingAsOf.Code != http.StatusOK {
 		t.Fatalf("topbar (missing as_of) status=%d", recTopbarMissingAsOf.Code)
 	}
 
@@ -520,7 +520,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("org search status=%d", recSearch.Code)
 	}
 
-	reqNavZH := httptest.NewRequest(http.MethodGet, "/ui/nav?as_of=2026-01-01", nil)
+	reqNavZH := httptest.NewRequest(http.MethodGet, "/ui/nav", nil)
 	reqNavZH.Host = "localhost:8080"
 	reqNavZH.AddCookie(session)
 	reqNavZH.AddCookie(&http.Cookie{Name: "lang", Value: "zh"})
@@ -530,7 +530,7 @@ func TestUI_ShellAndPartials(t *testing.T) {
 		t.Fatalf("nav zh status=%d", recNavZH.Code)
 	}
 
-	reqTopbarZH := httptest.NewRequest(http.MethodGet, "/ui/topbar?as_of=2026-01-01", nil)
+	reqTopbarZH := httptest.NewRequest(http.MethodGet, "/ui/topbar", nil)
 	reqTopbarZH.Host = "localhost:8080"
 	reqTopbarZH.AddCookie(session)
 	reqTopbarZH.AddCookie(&http.Cookie{Name: "lang", Value: "zh"})
