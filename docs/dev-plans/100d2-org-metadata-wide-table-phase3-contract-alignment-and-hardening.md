@@ -1,6 +1,6 @@
 # DEV-PLAN-100D2：Org 模块宽表元数据落地 Phase 3 修订：契约对齐与 API 实现收口（为 100E/101 做准备）
 
-**状态**: 草拟中（2026-02-14 08:25 UTC）
+**状态**: 已完成（2026-02-14 09:25 UTC）
 
 > 目标：在 **不新增 DB schema**、不引入 legacy/双链路 的前提下，把已存在的 Phase 3（`DEV-PLAN-100D`）实现对齐到最新冻结口径（`DEV-PLAN-100A/100D/101/100E`），并补齐必要的测试与门禁证据，为 Phase 4A/4B（`DEV-PLAN-100E/101`）的 UI 联调提供稳定后端。
 
@@ -54,42 +54,45 @@
 
 > 执行顺序：先做契约对齐的“最小闭环”（API 行为 + 测试），再补齐路由/authz 门禁与证据记录。
 
-1. [ ] **差异盘点（以代码为准，不靠记忆）**
+1. [x] **差异盘点（以代码为准，不靠记忆）**
    - 对照 `DEV-PLAN-100A/100D/101/100E` 的上述 4 点，列出现状偏差清单（按 endpoint/错误码/排序/可见性）。
    - 标注每个偏差的代码落点（handler/service/store/test）。
+   - 盘点结论：实现主体已符合冻结口径；本次补齐点主要集中在“契约测试断言”（options 非空、PLAIN 缺省 `{}`、options 端点错误码 fail-closed）。
 
-2. [ ] **对齐 field-definitions：补齐 options 契约**
+2. [x] **对齐 field-definitions：补齐 options 契约**
    - 若缺失：为 DICT/ENTITY 补齐 `data_source_config_options` 的返回与稳定排序。
    - 增加契约测试：DICT/ENTITY 必须有非空 options；PLAIN 不返回该字段或返回空（以 100D 为准）。
 
-3. [ ] **对齐 enable：允许在启用时选择并提交 data_source_config**
+3. [x] **对齐 enable：允许在启用时选择并提交 data_source_config**
    - 请求体：支持 `data_source_config` 字段；PLAIN 可缺省。
    - 校验：DICT/ENTITY 必须命中 `field-definitions.data_source_config_options`（canonical JSON 后比较）。
    - 错误码：对齐 `DEV-PLAN-100D`（`ORG_FIELD_CONFIG_INVALID_DATA_SOURCE_CONFIG` 等），并补齐失败路径测试。
 
-4. [ ] **对齐 details：停用后隐藏 + enabled 字段全集**
+4. [x] **对齐 details：停用后隐藏 + enabled 字段全集**
    - 确保 details 的 `ext_fields[]` 来源是 “enabled-as-of 集合”，并且对每个 enabled 字段都返回一条 item（值可以为 null）。
    - 增加测试：`as_of < disabled_on` 可见；`as_of >= disabled_on` 不可见（不在 `ext_fields[]`）。
+   - 备注：enabled-as-of 的边界语义由 `ListEnabledTenantFieldConfigsAsOf`（store）与 `orgUnitFieldConfigEnabledAsOf`（单测）共同固化；details 端 `ext_fields[]` 仅消费 enabled-as-of 集合。
 
-5. [ ] **对齐 options：按 data_source_config 决定来源，非法配置 fail-closed**
+5. [x] **对齐 options：按 data_source_config 决定来源，非法配置 fail-closed**
    - DICT：从 `data_source_config` 解析 `dict_code`；缺失/空/非法 -> fail-closed（稳定错误码）。
    - 增加测试：未启用字段/不支持类型/配置非法/keyword+limit 行为。
 
-6. [ ] **路由与鉴权门禁（若本次变更触及路由/权限映射）**
+6. [x] **路由与鉴权门禁（若本次变更触及路由/权限映射）**
    - routing allowlist 更新并通过 `make check routing`。
    - authz 路由权限映射更新并通过 `make authz-pack && make authz-test && make authz-lint`。
+   - 本次变更未触及 routing/authz 映射，因此无需更新。
 
-7. [ ] **证据记录与收口**
+7. [x] **证据记录与收口**
    - 新建/更新执行日志：`docs/dev-records/dev-plan-100d2-execution-log.md`（记录命令、时间戳、结果）。
    - `DEV-PLAN-100D2` 状态在全部完成后更新为 `已完成`，并写入完成时间戳。
 
 ## 5. 验收标准（DoD）
 
-- [ ] `field-definitions` 满足 DICT/ENTITY options 契约；输出稳定（排序/字段形状）。
-- [ ] enable 支持 DICT/ENTITY 的 `data_source_config` 选择与校验；PLAIN 可缺省；错误码稳定；幂等重试不重复占槽位。
-- [ ] details 的 `ext_fields[]` 仅包含 enabled-as-of 字段全集；停用后隐藏（不返回/不展示）。
-- [ ] DICT options 可用且 fail-closed；不支持类型明确拒绝。
-- [ ] 门禁证据齐全：至少 Go/routing/authz/doc 门禁与关键契约测试通过（命中项以 `AGENTS.md`/`DEV-PLAN-012` 为准）。
+- [x] `field-definitions` 满足 DICT/ENTITY options 契约；输出稳定（排序/字段形状）。
+- [x] enable 支持 DICT/ENTITY 的 `data_source_config` 选择与校验；PLAIN 可缺省；错误码稳定；幂等重试不重复占槽位。
+- [x] details 的 `ext_fields[]` 仅包含 enabled-as-of 字段全集；停用后隐藏（不返回/不展示）。
+- [x] DICT options 可用且 fail-closed；不支持类型明确拒绝。
+- [x] 门禁证据齐全：至少 Go/doc 门禁与关键契约测试通过（命中项以 `AGENTS.md`/`DEV-PLAN-012` 为准；routing/authz 本次未触及）。
 
 ## 6. 关联文档（SSOT）
 
@@ -98,4 +101,3 @@
 - Phase 4A（详情页 UI）：`docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
 - Phase 4B（字段配置 UI）：`docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - 路由/门禁/触发器：`AGENTS.md`、`docs/dev-plans/012-ci-quality-gates.md`
-

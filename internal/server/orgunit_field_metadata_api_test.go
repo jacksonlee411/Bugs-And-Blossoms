@@ -87,6 +87,36 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 		if len(body.Fields) == 0 {
 			t.Fatalf("expected fields")
 		}
+
+		// Contract (DEV-PLAN-100D2): DICT/ENTITY must include non-empty data_source_config_options.
+		prevKey := ""
+		for _, f := range body.Fields {
+			if strings.TrimSpace(f.FieldKey) == "" {
+				t.Fatalf("field_key blank")
+			}
+			// Ensure stable ordering.
+			if prevKey != "" && f.FieldKey < prevKey {
+				t.Fatalf("fields not sorted: %q before %q", prevKey, f.FieldKey)
+			}
+			prevKey = f.FieldKey
+
+			switch strings.ToUpper(strings.TrimSpace(f.DataSourceType)) {
+			case "DICT", "ENTITY":
+				if len(f.DataSourceConfigOptions) == 0 {
+					t.Fatalf("field %q expected non-empty data_source_config_options", f.FieldKey)
+				}
+				for _, raw := range f.DataSourceConfigOptions {
+					var tmp map[string]any
+					if err := json.Unmarshal(raw, &tmp); err != nil || tmp == nil || len(tmp) == 0 {
+						t.Fatalf("field %q has invalid option=%s err=%v", f.FieldKey, string(raw), err)
+					}
+				}
+			default:
+				if f.DataSourceConfigOptions != nil {
+					t.Fatalf("field %q expected data_source_config_options omitted", f.FieldKey)
+				}
+			}
+		}
 	})
 }
 
@@ -272,6 +302,44 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		}
 		if payload["code"] != orgUnitErrFieldConfigInvalidDataSourceConfig {
 			t.Fatalf("code=%v", payload["code"])
+		}
+	})
+
+	t.Run("post plain missing data_source_config defaults to {}", func(t *testing.T) {
+		now := time.Unix(456, 0).UTC()
+		var gotCfg json.RawMessage
+		store := orgUnitStoreWithFieldConfigs{
+			OrgUnitStore: base,
+			enableFn: func(_ context.Context, _ string, _ string, _ string, _ string, dataSourceConfig json.RawMessage, _ string, _ string, _ string) (orgUnitTenantFieldConfig, bool, error) {
+				gotCfg = append([]byte(nil), dataSourceConfig...)
+				return orgUnitTenantFieldConfig{
+					FieldKey:         "short_name",
+					ValueType:        "text",
+					DataSourceType:   "PLAIN",
+					DataSourceConfig: dataSourceConfig,
+					PhysicalCol:      "ext_str_01",
+					EnabledOn:        "2026-01-01",
+					UpdatedAt:        now,
+				}, false, nil
+			},
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"short_name","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if strings.TrimSpace(string(gotCfg)) != "{}" {
+			t.Fatalf("got data_source_config=%s", string(gotCfg))
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if raw, ok := payload["data_source_config"]; !ok || raw == nil {
+			t.Fatalf("missing data_source_config in response: %v", payload)
 		}
 	})
 
@@ -535,6 +603,13 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["code"] != orgUnitErrFieldOptionsFieldNotEnabled {
+			t.Fatalf("code=%v", payload["code"])
+		}
 	})
 
 	t.Run("plain not supported", func(t *testing.T) {
@@ -549,6 +624,13 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		handleOrgUnitFieldOptionsAPI(rec, req, store)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["code"] != orgUnitErrFieldOptionsNotSupported {
+			t.Fatalf("code=%v", payload["code"])
 		}
 	})
 
@@ -580,6 +662,13 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["code"] != orgUnitErrFieldOptionsNotSupported {
+			t.Fatalf("code=%v", payload["code"])
+		}
 	})
 
 	t.Run("dict_code empty treated as not supported", func(t *testing.T) {
@@ -594,6 +683,13 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		handleOrgUnitFieldOptionsAPI(rec, req, store)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["code"] != orgUnitErrFieldOptionsNotSupported {
+			t.Fatalf("code=%v", payload["code"])
 		}
 	})
 
@@ -636,6 +732,13 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		handleOrgUnitFieldOptionsAPI(rec, req, store)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status=%d", rec.Code)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["code"] != orgUnitErrFieldOptionsNotSupported {
+			t.Fatalf("code=%v", payload["code"])
 		}
 	})
 }
