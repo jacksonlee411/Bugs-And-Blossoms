@@ -1,4 +1,4 @@
-# apps/web-mui
+# apps/web
 
 `DEV-PLAN-091` 的前端基座工程（React + MUI Core + MUI X）。
 

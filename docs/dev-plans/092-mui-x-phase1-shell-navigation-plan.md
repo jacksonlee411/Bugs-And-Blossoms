@@ -60,11 +60,11 @@
 ## 7. 执行记录（2026-02-12）
 
 - 已执行并通过：
-  - `pnpm -C apps/web-mui lint`
-  - `pnpm -C apps/web-mui typecheck`
-  - `pnpm -C apps/web-mui test`
-  - `pnpm -C apps/web-mui build`
-  - `pnpm -C apps/web-mui check`
+  - `pnpm -C apps/web lint`
+  - `pnpm -C apps/web typecheck`
+  - `pnpm -C apps/web test`
+  - `pnpm -C apps/web build`
+  - `pnpm -C apps/web check`
 
 ## 8. 关联计划
 

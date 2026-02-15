@@ -46,7 +46,7 @@
 
 > 说明：
 >
-> - 当前 `apps/web-mui` 导航为扁平结构（无二级菜单）。本方案不引入新的导航层级，只新增一项，保持简单。
+> - 当前 `apps/web` 导航为扁平结构（无二级菜单）。本方案不引入新的导航层级，只新增一项，保持简单。
 > - 旧链路的服务端渲染导航（例如 `renderNav`/HTMX）不在本计划范围；本计划交付物以 `/app/**` 内可发现为准（对齐 `DEV-PLAN-103` 方向）。
 
 ### 4.2 模块内入口（增强可发现性）
@@ -59,7 +59,7 @@
 ## 5. 路由与 URL 协议（冻结）
 
 - UI 页面路由：`/app/org/units/field-configs`
-  - 说明：`apps/web-mui` router `basename='/app'`；本文档中的 `path: /org/...` 指“App 内路由 path（不含 basename）”，实际浏览器 URL 为 `/app` + `path`。
+  - 说明：`apps/web` router `basename='/app'`；本文档中的 `path: /org/...` 指“App 内路由 path（不含 basename）”，实际浏览器 URL 为 `/app` + `path`。
 - Query：
   - `as_of=YYYY-MM-DD`：用于“查看/预览”某日生效的字段配置集合；缺省为当天 UTC（对齐 Org 页 `as_of` 习惯）。
     - `as_of` 仅影响列表/详情的“预览口径”，不应被理解为写入意图。
@@ -218,7 +218,7 @@
 
 ## 8. i18n 与文案（仅 en/zh）
 
-- 页面静态文案使用 `apps/web-mui/src/i18n/messages.ts` 增加 key（en/zh 同步）。
+- 页面静态文案使用 `apps/web/src/i18n/messages.ts` 增加 key（en/zh 同步）。
 - 导航项使用 i18n key：`nav_org_field_configs`（en/zh 同步）。
 - 字段名称（field_label）口径（MVP 冻结）：
   - 字段定义由后端返回 `label_i18n_key`，前端通过 `t(label_i18n_key)` 渲染（禁止前端再建一套字段 label 映射）；
@@ -245,13 +245,13 @@
 
 ## 10. 代码落点（建议）
 
-- 页面：`apps/web-mui/src/pages/org/OrgUnitFieldConfigsPage.tsx`（新建）
-- 路由：`apps/web-mui/src/router/index.tsx` 注册 `path: 'org/units/field-configs'`
-- 导航：`apps/web-mui/src/navigation/config.tsx` 增加 nav item（permissionKey=`orgunit.admin`）
-- i18n：`apps/web-mui/src/i18n/messages.ts` 增加页面/按钮文案 key（en/zh）
-- API client（如需）：`apps/web-mui/src/api/orgUnits.ts` 或拆分新文件 `apps/web-mui/src/api/orgUnitFieldConfigs.ts`
+- 页面：`apps/web/src/pages/org/OrgUnitFieldConfigsPage.tsx`（新建）
+- 路由：`apps/web/src/router/index.tsx` 注册 `path: 'org/units/field-configs'`
+- 导航：`apps/web/src/navigation/config.tsx` 增加 nav item（permissionKey=`orgunit.admin`）
+- i18n：`apps/web/src/i18n/messages.ts` 增加页面/按钮文案 key（en/zh）
+- API client（如需）：`apps/web/src/api/orgUnits.ts` 或拆分新文件 `apps/web/src/api/orgUnitFieldConfigs.ts`
 
-> 说明：若按 `DEV-PLAN-103` 的“工程命名去技术后缀”执行机械改名（例如 `apps/web-mui` → `apps/web`），本节路径需同步更新；不影响本计划冻结的 IA/契约。
+> 说明：若按 `DEV-PLAN-103` 的“工程命名去技术后缀”执行机械改名（例如 `apps/web` → `apps/web`），本节路径需同步更新；不影响本计划冻结的 IA/契约。
 
 ## 11. 门禁与验证（SSOT 引用）
 

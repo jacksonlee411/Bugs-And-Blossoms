@@ -25,7 +25,7 @@
 ## 4. 实施步骤
 
 1. [x] 长尾页面盘点
-   - 输出《页面迁移清单》（当前 `apps/web-mui` 范围）：
+   - 输出《页面迁移清单》（当前 `apps/web` 范围）：
 
 | Route | 页面 | 当前实现 | 目标基线 | 风险 |
 | --- | --- | --- | --- | --- |
@@ -53,29 +53,29 @@
 
 - `/app` 入口已切换为 MUI SPA（不保留旧 HTMX 壳兼容）：
   - 服务端改造：`internal/server/handler.go`
-  - 前端路由基线：`apps/web-mui/src/router/index.tsx`（`basename=/app`）
-  - 构建产物入仓：`scripts/ui/build-astro.sh`（新增 `apps/web-mui -> internal/server/assets/web-mui`）
+  - 前端路由基线：`apps/web/src/router/index.tsx`（`basename=/app`）
+  - 构建产物入仓：`scripts/ui/build-astro.sh`（新增 `apps/web -> internal/server/assets/web-mui`）
 - OrgUnits 页面完成首批真实数据接入（替换 mock）：
-  - API：`apps/web-mui/src/api/orgUnits.ts`（`/org/api/org-units`）
-  - 页面：`apps/web-mui/src/pages/org/OrgUnitsPage.tsx`（根节点 + 子节点查询、真实加载/空态/错误态）
+  - API：`apps/web/src/api/orgUnits.ts`（`/org/api/org-units`）
+  - 页面：`apps/web/src/pages/org/OrgUnitsPage.tsx`（根节点 + 子节点查询、真实加载/空态/错误态）
 - MUI 静态资源统一挂载为 `/assets/web-mui/**`：
-  - `apps/web-mui/vite.config.ts`（`base=/assets/web-mui/`）
-- 新增统一树面板组件：`apps/web-mui/src/components/TreePanel.tsx`
+  - `apps/web/vite.config.ts`（`base=/assets/web-mui/`）
+- 新增统一树面板组件：`apps/web/src/components/TreePanel.tsx`
 - 基座示例页与组织架构页改为复用 `TreePanel`：
-  - `apps/web-mui/src/pages/FoundationDemoPage.tsx`
-  - `apps/web-mui/src/pages/org/OrgUnitsPage.tsx`
-- 列表页参数协议工具化与落地：`apps/web-mui/src/utils/gridQueryState.ts`
+  - `apps/web/src/pages/FoundationDemoPage.tsx`
+  - `apps/web/src/pages/org/OrgUnitsPage.tsx`
+- 列表页参数协议工具化与落地：`apps/web/src/utils/gridQueryState.ts`
 - 列表页统一支持 URL 可复现的分页/排序（Org 页为 server-mode 模拟）：
-  - `apps/web-mui/src/pages/FoundationDemoPage.tsx`
-  - `apps/web-mui/src/pages/org/OrgUnitsPage.tsx`
-  - `apps/web-mui/src/pages/people/PeopleAssignmentsPage.tsx`
-  - `apps/web-mui/src/pages/approvals/ApprovalsInboxPage.tsx`
-- 移除不可达占位页：`apps/web-mui/src/pages/ComingSoonPage.tsx`
-- i18n 清理：移除无引用 key（coming-soon / select-department 等），保持 MessageKey 收敛：`apps/web-mui/src/i18n/messages.ts`
-- i18n 支持简单变量插值，并收敛通用反馈文案 key：`apps/web-mui/src/i18n/messages.ts`
-- DataGrid 容器样式收口到主题色板（修复暗色模式背景不一致）：`apps/web-mui/src/components/DataGridPage.tsx`
-- DataGrid 空态/加载态 Overlay 统一，并由页面注入 `text_no_data / text_loading`：`apps/web-mui/src/components/DataGridPage.tsx`
-- People 页面头部动作区收口，删除重复标题区：`apps/web-mui/src/pages/people/PeopleAssignmentsPage.tsx`
+  - `apps/web/src/pages/FoundationDemoPage.tsx`
+  - `apps/web/src/pages/org/OrgUnitsPage.tsx`
+  - `apps/web/src/pages/people/PeopleAssignmentsPage.tsx`
+  - `apps/web/src/pages/approvals/ApprovalsInboxPage.tsx`
+- 移除不可达占位页：`apps/web/src/pages/ComingSoonPage.tsx`
+- i18n 清理：移除无引用 key（coming-soon / select-department 等），保持 MessageKey 收敛：`apps/web/src/i18n/messages.ts`
+- i18n 支持简单变量插值，并收敛通用反馈文案 key：`apps/web/src/i18n/messages.ts`
+- DataGrid 容器样式收口到主题色板（修复暗色模式背景不一致）：`apps/web/src/components/DataGridPage.tsx`
+- DataGrid 空态/加载态 Overlay 统一，并由页面注入 `text_no_data / text_loading`：`apps/web/src/components/DataGridPage.tsx`
+- People 页面头部动作区收口，删除重复标题区：`apps/web/src/pages/people/PeopleAssignmentsPage.tsx`
 
 ## 6. 验收标准
 
@@ -95,11 +95,11 @@
 - 已执行并通过：
   - `go test ./internal/server/... ./internal/routing/...`
   - `go test ./...`
-  - `pnpm -C apps/web-mui lint`
-  - `pnpm -C apps/web-mui typecheck`
-  - `pnpm -C apps/web-mui test`
-  - `pnpm -C apps/web-mui build`
-  - `pnpm -C apps/web-mui check`
+  - `pnpm -C apps/web lint`
+  - `pnpm -C apps/web typecheck`
+  - `pnpm -C apps/web test`
+  - `pnpm -C apps/web build`
+  - `pnpm -C apps/web check`
   - `make css`
   - `make check doc`
 
@@ -110,10 +110,10 @@
 - 增补（2026-02-12）
   - `OrgUnitsPage` 已不再使用页面内置组织 mock 列表，改为调用 `/org/api/org-units` 获取真实数据。
   - 已执行并通过：
-    - `pnpm -C apps/web-mui lint`
-    - `pnpm -C apps/web-mui typecheck`
-    - `pnpm -C apps/web-mui test`
-    - `pnpm -C apps/web-mui build`
+    - `pnpm -C apps/web lint`
+    - `pnpm -C apps/web typecheck`
+    - `pnpm -C apps/web test`
+    - `pnpm -C apps/web build`
     - `make css`
 
 ## 9. 关联计划

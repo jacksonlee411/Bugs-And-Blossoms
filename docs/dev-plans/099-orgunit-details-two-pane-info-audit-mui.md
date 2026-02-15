@@ -9,7 +9,7 @@
   - 基本信息：左侧按 **生效日期（effective_date）** 浏览版本，右侧展示该版本的字段详情。
   - 变更日志：左侧按 **修改时间（tx_time）** 浏览事件，右侧展示事件详情与字段差异。
 
-> 说明：当前仓库内 Go/HTMX 版 OrgUnit 页面已在 `DEV-PLAN-081` 落地双栏结构；本计划聚焦于 `apps/web-mui` 的实现对齐与口径一致。
+> 说明：当前仓库内 Go/HTMX 版 OrgUnit 页面已在 `DEV-PLAN-081` 落地双栏结构；本计划聚焦于 `apps/web` 的实现对齐与口径一致。
 
 ## 目标（DoD）
 
@@ -62,12 +62,12 @@
 
 ## 代码落点
 
-- `apps/web-mui/src/pages/org/OrgUnitDetailsPage.tsx`
+- `apps/web/src/pages/org/OrgUnitDetailsPage.tsx`
   - Tabs 收敛与双栏布局实现。
   - 新增 `audit_event_uuid` query 参数解析与写回。
-- `apps/web-mui/src/i18n/messages.ts`
+- `apps/web/src/i18n/messages.ts`
   - 新增/调整本计划涉及的文案 key（en/zh 同步）。
-- （可选）`apps/web-mui/src/pages/org/OrgUnitsPage.tsx`
+- （可选）`apps/web/src/pages/org/OrgUnitsPage.tsx`
   - Org 状态显示改用 org 专用 status key，保证列表/详情一致。
 
 ## 验收标准
@@ -79,7 +79,7 @@
 
 ## 验证记录（本地）
 
-- `pnpm --dir apps/web-mui typecheck lint test build`
+- `pnpm --dir apps/web typecheck lint test build`
 - `make css`
 - `make check doc`
 - `cd e2e && pnpm exec playwright test --list`

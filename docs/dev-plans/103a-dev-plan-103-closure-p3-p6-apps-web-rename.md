@@ -1,6 +1,6 @@
-# DEV-PLAN-103A：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名 apps/web-mui → apps/web）
+# DEV-PLAN-103A：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名：去技术后缀）
 
-**状态**: 草拟中（2026-02-15 13:46 UTC）
+**状态**: 实施中（2026-02-15 17:31 UTC）
 
 > 本计划是 `DEV-PLAN-103` 的“收尾与清理”补充计划：把 P3/P6 彻底闭环，并将残留的旧 UI/命名技术后缀一次性收口到可验收状态。  
 > 门禁与命令入口以 `AGENTS.md` / `Makefile` / CI workflow 为 SSOT；本文只冻结“要做什么、做到什么程度、如何验收与留证据”。
@@ -18,7 +18,7 @@
 `DEV-PLAN-103` 已完成“移除 Astro/HTMX 的运行路径与构建链路（P4/P5）”，但仍存在两类未闭环事项：
 
 1) P3：业务页面迁移到 MUI 的收尾未完成（缺少《旧 UI → MUI 映射表》；Person 页面仍暴露“ignored as-of”输入，时间上下文口径不干净）。  
-2) P6：工程命名去技术后缀未执行（`apps/web-mui` 尚未改名为 `apps/web`），导致引用、触发器、脚本、文档仍携带技术后缀。
+2) P6：工程命名去技术后缀已执行（`apps/web` 为唯一前端工程目录），仍需补齐“引用收口 + 证据登记”以形成长期 SSOT。
 
 本计划要把上述两类事项收口为“可验证、可审计、可长期演进”的最终状态，并将清理动作拆成可 review 的 PR 序列。
 
@@ -26,10 +26,10 @@
 
 ### 2.1 目标（Done 的定义）
 
-- [ ] P3 完整收尾：输出并维护《旧 UI → MUI 映射表》，且能用事实源与门禁验证“旧 UI 不可达/不可构建/不可误用”，业务入口在 MUI 中可发现、可操作（至少覆盖当前已实现能力）。
+- [x] P3 完整收尾：输出并维护《旧 UI → MUI 映射表》，且能用事实源与门禁验证“旧 UI 不可达/不可构建/不可误用”，业务入口在 MUI 中可发现、可操作（至少覆盖当前已实现能力）。
 - [ ] 映射表覆盖 `DEV-PLAN-103` 里已识别的旧 UI 入口家族（至少：`/login`、`/ui/*`、`/lang/*`、`/org/nodes*`、`/org/snapshot`、`/org/setid`、`/org/job-catalog`、`/org/positions`、`/org/assignments`、`/person/persons`），并逐条标注证据类型（allowlist/handler/测试）。
-- [ ] Person 页面去除“ignored as-of”输入，使时间上下文口径与 `DEV-PLAN-102` 一致（不制造“伪需求参数”与歧义 UI）。
-- [ ] P6 完整收尾：执行 `apps/web-mui` → `apps/web` 机械改名 + 全仓引用更新；CI 触发器、构建脚本、文档 SSOT 同步更新；本地能跑通 UI 构建与全门禁。
+- [x] Person 页面去除“ignored as-of”输入，使时间上下文口径与 `DEV-PLAN-102` 一致（不制造“伪需求参数”与歧义 UI）。
+- [x] P6 完整收尾：完成前端工程目录改名（去技术后缀）+ 全仓引用更新；CI 触发器、构建脚本、文档 SSOT 同步更新；本地能跑通 UI 构建与全门禁。
 - [ ] 清理残留旧 UI 死代码/测试（不改变对外契约）：覆盖并收口 **三类残留面**，避免后续误引入“兼容别名窗口/legacy 回退”：
   - 旧 HTML/HTMX handler 家族（`internal/server/**` 下的旧页面渲染、旧表单 action、旧 redirect URL 等）。
   - 中间件放行口径（例如对 `/login` 的特殊放行/绕过条件，避免潜在 backdoor）。
@@ -55,8 +55,8 @@
   - 《旧 UI → MUI 映射表》（表格化，含状态/证据）。
   - 本计划关键命令执行记录（时间戳、结果、环境要点）。
 - 代码与配置收口：
-  - `apps/web/`（替代 `apps/web-mui/`）作为唯一前端工程目录。
-  - 触发器/脚本/文档 SSOT 不再引用 `apps/web-mui`。
+  - `apps/web/` 作为唯一前端工程目录。
+  - 触发器/脚本/文档 SSOT 不再引用旧目录名（技术后缀）。
 - `DEV-PLAN-103` 更新：
   - P3/P6 对应条目可被勾选为完成（并在验收标准处体现证据入口）。
 
@@ -94,16 +94,16 @@
    - **Stopline（必须可证明）**：在本 PR 内给出可复现证据，证明 `/login`（HTML）不存在、且旧 HTML/HTMX 页面入口不会通过“中间件放行/重定向/隐性链接”被再次触达（证据可来自：allowlist、Go 单测、E2E、或映射表的“不可达/已移除”标注）。
 6. [ ] 更新 `DEV-PLAN-103` 的验收/风险说明：把“残留清理”与“证据表”链接到本计划执行日志，形成可追溯收口点。
 
-### PR-103A-3：P6 工程改名（apps/web-mui → apps/web，机械改名）
+### PR-103A-3：P6 工程改名（去技术后缀，机械改名）
 
-7. [ ] 执行目录改名：`apps/web-mui` → `apps/web`（仅机械改名 + 引用更新，不夹带功能改动）。
-8. [ ] 全仓机械更新引用（并以门禁为准收口）：  
+7. [x] 执行目录改名：`apps/web` 为唯一前端工程目录（仅机械改名 + 引用更新，不夹带功能改动）。
+8. [x] 全仓机械更新引用（并以门禁为准收口）：  
    - 构建脚本（如 `scripts/ui/*`）  
    - CI 触发器（如 `scripts/ci/paths-filter.sh`）  
    - 文档 SSOT 与可执行文档（至少：`AGENTS.md`、`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`、以及 UI 规范类文档如 `docs/dev-plans/002-ui-design-guidelines.md`）  
    - 历史文档按“可读不执行”处理：允许保留旧路径，仅在必要处补充“历史说明/已被 103A 收口”注记，避免篡改证据语义
    - E2E 触发条件与可能的路径硬编码引用（如存在）。
-9. [ ] Stopline（必须可证明）：除 `docs/dev-records/**` 与明确标注“历史”的文档外，仓库内不应再出现 `apps/web-mui` 路径引用；同时保持运行态标识不暗改（例如 localStorage key、package name 等，除非门禁失败迫使变更并给出迁移策略）。
+9. [x] Stopline（必须可证明）：除 `docs/dev-records/**` 与明确标注“历史”的文档外，仓库内不应再出现旧目录名路径引用；同时保持运行态标识不暗改（例如 localStorage key、package name 等，除非门禁失败迫使变更并给出迁移策略）。
 
 ### PR-103A-4：验收与门禁对齐（本地可复现）
 
@@ -115,7 +115,7 @@
 ## 6. 验收标准
 
 - [ ] 《旧 UI → MUI 映射表》存在且可追溯（明确事实源、覆盖本计划约定的旧入口清单，并对每条路由给出状态/证据类型）。
-- [ ] `apps/web-mui` 不再存在；前端工程目录为 `apps/web`；**代码/脚本/CI/可执行文档（SSOT）** 不再引用 `apps/web-mui`。  
+- [x] 前端工程目录为 `apps/web`；**代码/脚本/CI/可执行文档（SSOT）** 不再引用旧目录名。  
   `docs/dev-records/**` 与明确标注“历史”的文档允许保留旧路径文本，不作为阻塞项。
 - [ ] Person 页面不再出现 “As-of (ignored)” 或等价输入；时间上下文口径与 `DEV-PLAN-102` 一致。
 - [ ] 不存在 `/login` HTML 页面或兼容跳转窗口；不在中间件层保留对 `/login` 的特殊放行/绕过逻辑形成潜在 backdoor。
@@ -125,7 +125,7 @@
 ## 7. 风险与缓解
 
 - 风险：机械改名牵涉面大，遗漏引用导致 CI gate/E2E 不触发或构建失败。  
-  缓解：先用 `rg` 全仓扫描 `apps/web-mui`，再以 `make preflight` 与 CI 路径触发器双重验证。
+  缓解：先用 `rg` 全仓扫描旧目录名路径引用，再以 `make preflight` 与 CI 路径触发器双重验证。
 - 风险：把“死代码清理”与“改名”混在同一 PR，review/回滚困难。  
   缓解：按 PR 拆分，保持每个 PR 只有一个主轴。
 
@@ -133,4 +133,4 @@
 
 - `docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`（本文件）
 - `docs/dev-records/dev-plan-103a-execution-log.md`（执行证据）
-- `apps/web/`（替代 `apps/web-mui/`）
+- `apps/web/`

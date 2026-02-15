@@ -24,7 +24,7 @@
 - 前端主框架：React。
 - UI 组件：MUI Core（@mui/material）。
 - 高级组件：MUI X（例如 Data Grid、Date Pickers 等）。
-- Theme 入口（实现参考，非唯一）：`apps/web-mui/src/theme/theme.ts`。
+- Theme 入口（实现参考，非唯一）：`apps/web/src/theme/theme.ts`。
 
 ## 设计 Token（全局）
 > 目标：Token 先于页面样式。页面不直接写“魔法值”，优先从 Theme / CSS 变量取值。

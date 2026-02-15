@@ -64,9 +64,9 @@
 
 ### 4) 代码落点（建议）
 
-- 新增页面组件：`apps/web-mui/src/pages/org/OrgUnitDetailsPage.tsx`
-- 路由注册：`apps/web-mui/src/router/index.tsx` 新增 `path: 'org/units/:orgCode'`
-- 列表页改造：`apps/web-mui/src/pages/org/OrgUnitsPage.tsx`
+- 新增页面组件：`apps/web/src/pages/org/OrgUnitDetailsPage.tsx`
+- 路由注册：`apps/web/src/router/index.tsx` 新增 `path: 'org/units/:orgCode'`
+- 列表页改造：`apps/web/src/pages/org/OrgUnitsPage.tsx`
   - 移除 `DetailPanel` 抽屉使用
   - 行点击由“写 query 打开抽屉”改为“navigate 到详情页”
 - i18n：补齐面包屑/返回按钮相关 key（中英一致），并复用既有 org 详情文案 key
