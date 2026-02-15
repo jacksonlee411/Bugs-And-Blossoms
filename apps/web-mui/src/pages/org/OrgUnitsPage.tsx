@@ -204,6 +204,7 @@ function ExtFilterValueInput(props: {
         onChange={(event) => props.onChange(event.target.value)}
         value={props.value}
         helperText={props.helperText}
+        inputProps={{ 'data-testid': 'org-ext-filter-value' }}
       />
     )
   }
@@ -276,6 +277,7 @@ function ExtFilterValueInput(props: {
           error={queryErrorMessage.length > 0}
           helperText={helperText}
           label={props.label}
+          inputProps={{ ...params.inputProps, 'data-testid': 'org-ext-filter-value' }}
           InputProps={{
             ...params.InputProps,
             endAdornment: (
