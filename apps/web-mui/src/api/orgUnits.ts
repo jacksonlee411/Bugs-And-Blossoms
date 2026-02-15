@@ -286,6 +286,7 @@ export async function correctOrgUnit(request: {
     parent_org_code?: string
     is_business_unit?: boolean
     manager_pernr?: string
+    ext?: Record<string, unknown>
   }
 }): Promise<OrgUnitWriteResult> {
   return httpClient.post<OrgUnitWriteResult>('/org/api/org-units/corrections', request)
@@ -321,4 +322,82 @@ export async function rescindOrgUnit(request: {
     '/org/api/org-units/rescinds/org',
     request
   )
+}
+
+export interface OrgUnitCorrectEventCapability {
+  enabled: boolean
+  allowed_fields: string[]
+  field_payload_keys: Record<string, string>
+  deny_reasons: string[]
+}
+
+export interface OrgUnitCorrectStatusCapability {
+  enabled: boolean
+  allowed_target_statuses: string[]
+  deny_reasons: string[]
+}
+
+export interface OrgUnitBasicCapability {
+  enabled: boolean
+  deny_reasons: string[]
+}
+
+export interface OrgUnitMutationCapabilitiesEnvelope {
+  correct_event: OrgUnitCorrectEventCapability
+  correct_status: OrgUnitCorrectStatusCapability
+  rescind_event: OrgUnitBasicCapability
+  rescind_org: OrgUnitBasicCapability
+}
+
+export interface OrgUnitMutationCapabilitiesResponse {
+  org_code: string
+  effective_date: string
+  effective_target_event_type: string
+  raw_target_event_type: string
+  capabilities: OrgUnitMutationCapabilitiesEnvelope
+}
+
+export async function getOrgUnitMutationCapabilities(options: {
+  orgCode: string
+  effectiveDate: string
+}): Promise<OrgUnitMutationCapabilitiesResponse> {
+  const query = new URLSearchParams({
+    org_code: options.orgCode,
+    effective_date: options.effectiveDate
+  })
+  return httpClient.get<OrgUnitMutationCapabilitiesResponse>(`/org/api/org-units/mutation-capabilities?${query.toString()}`)
+}
+
+export interface OrgUnitFieldOption {
+  value: string
+  label: string
+}
+
+export interface OrgUnitFieldOptionsResponse {
+  field_key: string
+  as_of: string
+  options: OrgUnitFieldOption[]
+}
+
+export async function getOrgUnitFieldOptions(options: {
+  fieldKey: string
+  asOf: string
+  keyword?: string
+  limit?: number
+}): Promise<OrgUnitFieldOptionsResponse> {
+  const query = new URLSearchParams({
+    field_key: options.fieldKey,
+    as_of: options.asOf
+  })
+
+  const keyword = options.keyword?.trim() ?? ''
+  if (keyword.length > 0) {
+    query.set('q', keyword)
+  }
+
+  if (typeof options.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+    query.set('limit', String(options.limit))
+  }
+
+  return httpClient.get<OrgUnitFieldOptionsResponse>(`/org/api/org-units/fields:options?${query.toString()}`)
 }

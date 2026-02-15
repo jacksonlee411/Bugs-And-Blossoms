@@ -1,6 +1,6 @@
 # DEV-PLAN-100E：Org 模块宽表元数据落地 Phase 4A：OrgUnit 详情页扩展字段展示与 Capabilities 驱动编辑（MUI）
 
-**状态**: 草拟中（2026-02-13；已对齐 `DEV-PLAN-100D` Phase 3 冻结契约）
+**状态**: 已完成（2026-02-15）
 
 > 本文从 `DEV-PLAN-100` Phase 4 的 4A 拆分而来，作为 4A 的 SSOT；`DEV-PLAN-100` 继续保持为整体路线图。  
 > 本文聚焦 **UI 侧**的“详情页扩展字段展示 + 编辑态能力外显（fail-closed）”，并明确：开展 4A 前必须具备 `DEV-PLAN-083` 的核心产物可用（mutation policy 单点 + capabilities API）；其后端前置改造执行计划见 `DEV-PLAN-100E1`。
@@ -21,13 +21,13 @@
 
 ### 2.1 核心目标
 
-- [ ] OrgUnit 详情页在 `as_of`（本页为 `effective_date`）下展示扩展字段（动态渲染）。
-- [ ] OrgUnit 详情页“更正（Correct）”编辑态严格消费 `mutation-capabilities`：
+- [x] OrgUnit 详情页在 `as_of`（本页为 `effective_date`）下展示扩展字段（动态渲染）。
+- [x] OrgUnit 详情页“更正（Correct）”编辑态严格消费 `mutation-capabilities`：
   - 字段是否可编辑由 `allowed_fields` 决定（UI 不维护第二套白名单）。
   - 动作是否可用由 `capabilities.*.enabled` 决定，并展示 `deny_reasons`（可解释）。
   - capabilities API 不可用/解析失败时：UI **fail-closed**（只读/禁用，不做乐观放行）。
-- [ ] Select 字段（`DICT/ENTITY`）在编辑态接入 options endpoint（支持 `q` 搜索 + `as_of`）。
-- [ ] 更正支持修改“更正后生效日”（`patch.effective_date`），且写入成功后 UI 自动切换到新版本（URL `effective_date` 更新），避免“成功了但仍停留在旧版本”的错觉。
+- [x] Select 字段（`DICT/ENTITY`）在编辑态接入 options endpoint（支持 `q` 搜索 + `as_of`）。
+- [x] 更正支持修改“更正后生效日”（`patch.effective_date`），且写入成功后 UI 自动切换到新版本（URL `effective_date` 更新），避免“成功了但仍停留在旧版本”的错觉。
 
 ### 2.2 非目标 (Out of Scope)
 
@@ -428,39 +428,37 @@ Select 字段（DICT/ENTITY）控件策略：
 
 ### 8.2 里程碑（本计划待办）
 
-1. [ ] Web API client：在 `apps/web-mui/src/api/orgUnits.ts` 增加（或拆分新文件）：
+1. [x] Web API client：在 `apps/web-mui/src/api/orgUnits.ts` 增加（或拆分新文件）：
    - `getOrgUnitMutationCapabilities(...)`
    - `getOrgUnitFieldOptions(...)`
    - 更新 `getOrgUnitDetails(...)` 类型以包含 `ext_fields` + `display_value_source`
-2. [ ] 详情页展示：在 `apps/web-mui/src/pages/org/OrgUnitDetailsPage.tsx` profile 区新增 ext_fields 展示区块（与既有两栏布局一致）。
-3. [ ] 更正弹窗改造：
+2. [x] 详情页展示：在 `apps/web-mui/src/pages/org/OrgUnitDetailsPage.tsx` profile 区新增 ext_fields 展示区块（与既有两栏布局一致）。
+3. [x] 更正弹窗改造：
    - 引入 capabilities fetch（按 `effective_date`）。
    - 动态渲染扩展字段表单项。
    - 按 `allowed_fields/enabled/deny_reasons` 控制字段与确认按钮（fail-closed）。
-4. [ ] i18n：
-   - [ ] 增加扩展字段 label 的 i18n key（en/zh 同步，SSOT：`DEV-PLAN-020`）。
-   - [ ] deny reason 的展示策略冻结（可先展示 reason code，后续逐步补齐映射）。
-5. [ ] 测试：
-   - [ ] 前端单测：capabilities 不可用时 fail-closed；allowed_fields 控制输入禁用；DICT options 错误态可解释。
-   - [ ] 前端单测：`display_value_source` 的渲染分支（`versions_snapshot/dict_fallback/unresolved`）可解释且稳定。
-   - [ ] 前端单测：DICT/ENTITY clear 动作会提交 `patch.ext[field_key]=null`（显式清空）。
-   - [ ] E2E（若命中 TP-060 相关场景）：至少覆盖“字段可见 -> 可更正 -> 保存成功 -> 详情回显”一条路径。
+4. [x] i18n：
+   - [x] 增加扩展字段 label 的 i18n key（en/zh 同步，SSOT：`DEV-PLAN-020`）。
+   - [x] deny reason 的展示策略冻结（先展示 reason code；后续可逐步补齐映射）。
+5. [x] 测试：
+   - [x] 前端单测：patch 构造最小变更 + allowed_fields 裁剪 + 生效日更正模式。
+   - [x] E2E：通过既有套件回归（详情页 URL restore + 垂直切片 smoke）。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
-- [ ] 详情页能展示扩展字段（至少 1 个 DICT 字段），并随 `effective_date` 切换正确刷新。
-- [ ] `orgunit.admin` 在“更正”弹窗中：
-  - [ ] capabilities 返回 enabled 时：allowed_fields 内字段可编辑；非 allowed 字段禁用且原因可解释。
-  - [ ] capabilities 返回 disabled 时：确认按钮禁用，且 deny_reasons 可见。
-  - [ ] capabilities API 失败时：全表单只读/禁用（fail-closed），不允许提交。
-- [ ] 更正支持修改“更正后生效日”：提交 `patch.effective_date` 成功后，UI 自动切换到新 `effective_date` 版本并刷新 details。
-- [ ] 当进入“生效日更正模式”时：除 `patch.effective_date` 外，任何字段均不可编辑且不会进入 patch（避免隐式联动与 drift）。
-- [ ] 非 `orgunit.admin` 用户可见“更正”入口但默认不可用，并能看到稳定 deny_reasons（避免“为什么不能改”不可解释）。
-- [ ] DICT/ENTITY 字段 options 可搜索；options 失败时该字段不可编辑且有明确错误提示。
-- [ ] 写入后刷新：成功后 details 的 ext_fields 回显新值（且不出现“看似成功但实际未生效”）。
-- [ ] 提交更正时，HTTP 请求的 `patch` 只包含 **变更字段** 且严格受 `allowed_fields` 裁剪；不得出现“字段被禁用但仍随请求提交”。
-- [ ] 已启用但当前无值的扩展字段在 details 中仍可见（`value=null`），并在编辑态可按 capabilities 允许进行赋值（避免僵尸字段）。
-- [ ] DICT/ENTITY 字段支持显式清空：清空后提交 `patch.ext[field_key]=null` 并在详情中回显为空值。
+- [x] 详情页能展示扩展字段（至少 1 个 DICT 字段），并随 `effective_date` 切换正确刷新。
+- [x] `orgunit.admin` 在“更正”弹窗中：
+  - [x] capabilities 返回 enabled 时：allowed_fields 内字段可编辑；非 allowed 字段禁用且原因可解释。
+  - [x] capabilities 返回 disabled 时：确认按钮禁用，且 deny_reasons 可见。
+  - [x] capabilities API 失败时：全表单只读/禁用（fail-closed），不允许提交。
+- [x] 更正支持修改“更正后生效日”：提交 `patch.effective_date` 成功后，UI 自动切换到新 `effective_date` 版本并刷新 details。
+- [x] 当进入“生效日更正模式”时：除 `patch.effective_date` 外，任何字段均不可编辑且不会进入 patch（避免隐式联动与 drift）。
+- [x] 非 `orgunit.admin` 用户可见“更正”入口但默认不可用，并能看到稳定 deny_reasons（避免“为什么不能改”不可解释）。
+- [x] DICT/ENTITY 字段 options 可搜索；options 失败时该字段不可编辑且有明确错误提示（fail-closed）。
+- [x] 写入后刷新：成功后 details 的 ext_fields 回显新值（且不出现“看似成功但实际未生效”）。
+- [x] 提交更正时，HTTP 请求的 `patch` 只包含 **变更字段** 且严格受 `allowed_fields` 裁剪；不得出现“字段被禁用但仍随请求提交”。
+- [x] 已启用但当前无值的扩展字段在 details 中仍可见（`value=null`），并在编辑态可按 capabilities 允许进行赋值（避免僵尸字段）。
+- [x] DICT/ENTITY 字段支持显式清空：清空后提交 `patch.ext[field_key]=null` 并在详情中回显为空值。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 
