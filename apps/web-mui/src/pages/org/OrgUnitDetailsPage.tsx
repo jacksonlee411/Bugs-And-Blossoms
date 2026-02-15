@@ -52,7 +52,7 @@ import {
 } from '../../api/orgUnits'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { PageHeader } from '../../components/PageHeader'
-import type { MessageKey } from '../../i18n/messages'
+import { isMessageKey, type MessageKey } from '../../i18n/messages'
 import { resolveOrgUnitEffectiveDate } from './orgUnitVersionSelection'
 
 type DetailTab = 'profile' | 'audit'
@@ -706,6 +706,59 @@ export function OrgUnitDetailsPage() {
                       {t('org_column_is_business_unit')}：{detailQuery.data.org_unit.is_business_unit ? t('common_yes') : t('common_no')}
                     </Typography>
                   </Stack>
+
+                  {detailQuery.data.ext_fields && detailQuery.data.ext_fields.length > 0 ? (
+                    <>
+                      <Divider sx={{ my: 1.2 }} />
+                      <Typography variant='subtitle2'>{t('org_section_ext_fields')}</Typography>
+
+                      {detailQuery.data.ext_fields.some((field) => field.data_source_type === 'PLAIN') ? (
+                        <Alert severity='warning' sx={{ mt: 1 }}>
+                          {t('org_ext_field_plain_readonly_warning')}
+                        </Alert>
+                      ) : null}
+
+                      {detailQuery.data.ext_fields.some((field) => {
+                        const labelKey = field.label_i18n_key?.trim()
+                        return !labelKey || !isMessageKey(labelKey)
+                      }) ? (
+                        <Alert severity='warning' sx={{ mt: 1 }}>
+                          {t('org_ext_field_i18n_missing_warning')}
+                        </Alert>
+                      ) : null}
+
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        {detailQuery.data.ext_fields.map((field) => {
+                          const labelKey = field.label_i18n_key?.trim()
+                          const label =
+                            labelKey && isMessageKey(labelKey)
+                              ? t(labelKey)
+                              : field.field_key
+                          const displayValue = field.display_value?.trim()
+                          const valueText = displayValue && displayValue.length > 0 ? displayValue : toDisplayText(field.value)
+
+                          return (
+                            <Box
+                              key={field.field_key}
+                              sx={{
+                                display: 'grid',
+                                gap: 0.5,
+                                gridTemplateColumns: { xs: '1fr', sm: '220px minmax(0, 1fr)' }
+                              }}
+                            >
+                              <Typography color='text.secondary' variant='body2'>
+                                {label}
+                              </Typography>
+                              <Typography sx={{ wordBreak: 'break-word' }} variant='body2'>
+                                {valueText}
+                              </Typography>
+                            </Box>
+                          )
+                        })}
+                      </Stack>
+                    </>
+                  ) : null}
+
                   <Stack direction='row' flexWrap='wrap' spacing={1} sx={{ mt: 1.5 }}>
                     <Button disabled={!canWrite} onClick={() => openAction('enable')} size='small' variant='outlined'>
                       {t('org_action_enable')}

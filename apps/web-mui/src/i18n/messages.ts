@@ -97,6 +97,9 @@ const messages = {
     org_detail_selected_version: 'Version Details (Selected)',
     org_detail_selected_event: 'Event Details (Selected)',
     org_version_event_type: 'Event Type',
+    org_section_ext_fields: 'Extension Fields',
+    org_ext_field_plain_readonly_warning: 'PLAIN extension fields are read-only in MVP.',
+    org_ext_field_i18n_missing_warning: 'Missing i18n key; showing field key.',
 	    org_audit_load_more: 'Load More',
 	    org_audit_timeline_time: 'Modified Time',
 	    org_audit_operator: 'Operator',
@@ -249,6 +252,9 @@ const messages = {
     org_detail_selected_version: '版本详情（当前选中）',
     org_detail_selected_event: '事件详情（当前选中）',
     org_version_event_type: '事件类型',
+    org_section_ext_fields: '扩展字段',
+    org_ext_field_plain_readonly_warning: 'MVP 阶段 PLAIN 扩展字段只读展示，禁止编辑。',
+    org_ext_field_i18n_missing_warning: '缺少 i18n key，已回退显示 field_key。',
 	    org_audit_load_more: '加载更多',
 	    org_audit_timeline_time: '修改时间',
 	    org_audit_operator: '操作人',
@@ -321,4 +327,8 @@ export function getMessage(locale: Locale, key: MessageKey, vars?: MessageVars):
   }
 
   return message
+}
+
+export function isMessageKey(key: string): key is MessageKey {
+  return Object.prototype.hasOwnProperty.call(messages.en, key)
 }
