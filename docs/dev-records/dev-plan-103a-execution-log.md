@@ -20,12 +20,18 @@
 | 旧 UI 路由（或能力入口） | 旧状态 | 时间上下文（A/B/C） | 新 MUI path（/app 内） | 新 API（如有） | permissionKey | 备注/证据 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `/login`（HTML 登录页） |  |  | `/login`（SPA，浏览器 URL `/app/login`） | `POST /iam/api/sessions` | n/a |  |
+| `/ui/nav` |  | C | n/a | n/a | n/a |  |
+| `/ui/topbar` |  | C | n/a | n/a | n/a |  |
+| `/ui/flash` |  | C | n/a | n/a | n/a |  |
+| `/lang/en` |  | C | n/a | n/a | n/a |  |
+| `/lang/zh` |  | C | n/a | n/a | n/a |  |
+| `/org/nodes*`（树/详情/搜索） |  | B | `/org/units`、`/org/units/:orgCode` | `/org/api/org-units*` | `orgunit.read` |  |
+| `/org/snapshot` |  | A | （按实际填写：若无对应入口填 n/a） | （按实际填写） | （按实际填写） |  |
 | `/org/setid`（旧 HTML） |  |  | `/org/setid` | `/org/api/setids`、`/org/api/setid-bindings` | `orgunit.read` |  |
 | `/org/job-catalog`（旧 HTML） |  |  | `/jobcatalog` | `/jobcatalog/api/catalog`、`/jobcatalog/api/catalog/actions`、`/org/api/owned-scope-packages` | `jobcatalog.read` |  |
 | `/org/positions`（旧 HTML） |  |  | `/staffing/positions` | `/org/api/positions`、`/org/api/positions:options` | `staffing.positions.read` |  |
 | `/org/assignments`（旧 HTML） |  |  | `/staffing/assignments` | `/org/api/assignments` | `staffing.assignments.read` |  |
 | `/person/persons`（旧 HTML） |  |  | `/person/persons` | `/person/api/persons` | `person.read` |  |
-| `/ui/*`、`/lang/*`（HTMX/i18n cookie） |  | C | n/a | n/a | n/a |  |
 
 ## 2) 关键命令执行记录（以 SSOT 入口为准）
 
@@ -49,4 +55,3 @@
 ### PR-103A-3（P6 改名 apps/web-mui → apps/web）
 - 变更点：
 - 验证点：
-
