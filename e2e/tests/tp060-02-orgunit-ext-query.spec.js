@@ -131,6 +131,9 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
     baseURL: appBaseURL,
     extraHTTPHeaders: { "X-Forwarded-Host": tenantHost }
   });
+  await appContext.addInitScript(() => {
+    window.localStorage.setItem("web-mui-locale", "en");
+  });
   const page = await appContext.newPage();
 
   const loginResp = await appContext.request.post("/iam/api/sessions", {
