@@ -652,11 +652,6 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		}
 
 		if hasListOpts {
-			if (listOpts.ExtFilterFieldKey != "" || listOpts.ExtSortFieldKey != "") && parentID != nil {
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "ext query not allowed for parent_org_code")
-				return
-			}
-
 			if listOpts.ExtFilterFieldKey != "" || listOpts.ExtSortFieldKey != "" {
 				if _, ok := store.(orgUnitListPageReader); !ok {
 					routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrExtQueryFieldNotAllowed, "ext query not allowed")

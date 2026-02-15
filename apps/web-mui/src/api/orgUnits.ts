@@ -34,7 +34,7 @@ export async function listOrgUnits(options: {
 }
 
 export type OrgUnitListStatusFilter = 'all' | 'active' | 'inactive'
-export type OrgUnitListSortField = 'code' | 'name' | 'status'
+export type OrgUnitListSortField = 'code' | 'name' | 'status' | `ext:${string}`
 export type OrgUnitListSortOrder = 'asc' | 'desc'
 
 export async function listOrgUnitsPage(options: {
@@ -47,6 +47,8 @@ export async function listOrgUnitsPage(options: {
   pageSize: number
   sortField?: OrgUnitListSortField | null
   sortOrder?: OrgUnitListSortOrder | null
+  extFilterFieldKey?: string
+  extFilterValue?: string
 }): Promise<OrgUnitListResponse> {
   const query = new URLSearchParams({
     as_of: options.asOf,
@@ -73,6 +75,10 @@ export async function listOrgUnitsPage(options: {
   if (options.sortField && options.sortOrder) {
     query.set('sort', options.sortField)
     query.set('order', options.sortOrder)
+  }
+  if (options.extFilterFieldKey && options.extFilterValue) {
+    query.set('ext_filter_field_key', options.extFilterFieldKey)
+    query.set('ext_filter_value', options.extFilterValue)
   }
 
   return httpClient.get<OrgUnitListResponse>(`/org/api/org-units?${query.toString()}`)
@@ -411,6 +417,8 @@ export interface OrgUnitFieldDefinition {
   data_source_config: Record<string, unknown>
   data_source_config_options?: Record<string, unknown>[]
   label_i18n_key: string
+  allow_filter?: boolean
+  allow_sort?: boolean
 }
 
 export interface OrgUnitFieldDefinitionsResponse {

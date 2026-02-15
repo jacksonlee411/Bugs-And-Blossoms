@@ -39,27 +39,35 @@ func TestHandleOrgUnitsAPI_ExtQueryRequiresGridOrPagination(t *testing.T) {
 	}
 }
 
-func TestHandleOrgUnitsAPI_ExtQueryNotAllowedForParentOrgCode(t *testing.T) {
-	store := newOrgUnitMemoryStore()
-	_, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "A001", "Root", "", true)
-	if err != nil {
-		t.Fatal(err)
+func TestHandleOrgUnitsAPI_ExtQueryAllowedWithParentOrgCode(t *testing.T) {
+	store := &orgUnitListPageReaderStore{
+		resolveOrgCodeStore: &resolveOrgCodeStore{resolveID: 42},
+		items:               []orgUnitListItem{{OrgCode: "A001", Name: "Root", Status: "active"}},
+		total:               1,
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&mode=grid&parent_org_code=A001&sort=ext:org_type", nil)
+	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units?as_of=2026-01-01&mode=grid&parent_org_code=A001&sort=ext:org_type&order=desc&ext_filter_field_key=org_type&ext_filter_value=DEPARTMENT&page=0&size=10", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitsAPI(rec, req, store, nil)
-	if rec.Code != http.StatusBadRequest {
+	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	var payload map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatal(err)
+	if store.capturedReq.ParentID == nil || *store.capturedReq.ParentID != 42 {
+		t.Fatalf("parentID=%v", store.capturedReq.ParentID)
 	}
-	if got := payload["code"]; got != "invalid_request" {
-		t.Fatalf("code=%v", got)
+	if store.capturedReq.ExtSortFieldKey != "org_type" {
+		t.Fatalf("ExtSortFieldKey=%q", store.capturedReq.ExtSortFieldKey)
+	}
+	if store.capturedReq.SortOrder != "desc" {
+		t.Fatalf("SortOrder=%q", store.capturedReq.SortOrder)
+	}
+	if store.capturedReq.ExtFilterFieldKey != "org_type" || store.capturedReq.ExtFilterValue != "DEPARTMENT" {
+		t.Fatalf("filter=%q value=%q", store.capturedReq.ExtFilterFieldKey, store.capturedReq.ExtFilterValue)
+	}
+	if store.capturedReq.Limit != 10 || store.capturedReq.Offset != 0 {
+		t.Fatalf("limit=%d offset=%d", store.capturedReq.Limit, store.capturedReq.Offset)
 	}
 }
 

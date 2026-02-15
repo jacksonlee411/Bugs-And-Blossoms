@@ -143,6 +143,8 @@
 
 ### 4C：列表能力与 i18n（闭环收口）
 
+已拆分为独立实施计划（SSOT）：`docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`。
+
 5. [ ] OrgUnit 列表页开放 1~2 个扩展字段筛选/排序入口。
 6. [ ] i18n（en/zh）补齐扩展字段标签与错误提示。
 
@@ -231,6 +233,7 @@
 - `docs/dev-plans/100c-org-metadata-wide-table-phase2-kernel-projection-extension-one-door.md`
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
+- `docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
 - `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
 - `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`

@@ -24,6 +24,8 @@ type orgUnitFieldDefinitionAPIItem struct {
 	DataSourceConfig        json.RawMessage   `json:"data_source_config"`
 	DataSourceConfigOptions []json.RawMessage `json:"data_source_config_options,omitempty"`
 	LabelI18nKey            string            `json:"label_i18n_key"`
+	AllowFilter             bool              `json:"allow_filter"`
+	AllowSort               bool              `json:"allow_sort"`
 }
 
 func handleOrgUnitFieldDefinitionsAPI(w http.ResponseWriter, r *http.Request) {
@@ -46,6 +48,8 @@ func handleOrgUnitFieldDefinitionsAPI(w http.ResponseWriter, r *http.Request) {
 			DataSourceType:   def.DataSourceType,
 			DataSourceConfig: orgUnitFieldDataSourceConfigJSON(def),
 			LabelI18nKey:     def.LabelI18nKey,
+			AllowFilter:      def.AllowFilter,
+			AllowSort:        def.AllowSort,
 		}
 		if opts := orgUnitFieldDataSourceConfigOptionsJSON(def); len(opts) > 0 {
 			item.DataSourceConfigOptions = opts

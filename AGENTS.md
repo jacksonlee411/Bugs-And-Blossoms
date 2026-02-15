@@ -222,6 +222,8 @@ modules/{module}/
 - DEV-PLAN-100E 执行日志：`docs/dev-records/dev-plan-100e-execution-log.md`
 - DEV-PLAN-100E1：OrgUnit Mutation Policy 单点化 + 更正链路支持 `patch.ext`（作为 DEV-PLAN-100E 前置）：`docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`
 - DEV-PLAN-100E1 执行日志：`docs/dev-records/dev-plan-100e1-execution-log.md`
+- DEV-PLAN-100G：Org 模块宽表元数据落地 Phase 4C：OrgUnit 列表扩展字段筛选/排序 + i18n 收口（闭环收口，MUI）：`docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
+- DEV-PLAN-100G 执行日志：`docs/dev-records/dev-plan-100g-execution-log.md`
 - DEV-PLAN-101：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）：`docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
