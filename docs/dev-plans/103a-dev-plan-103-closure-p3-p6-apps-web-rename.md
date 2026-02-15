@@ -30,7 +30,10 @@
 - [ ] 映射表覆盖 `DEV-PLAN-103` 里已识别的旧 UI 入口家族（至少：`/login`、`/ui/*`、`/lang/*`、`/org/nodes*`、`/org/snapshot`、`/org/setid`、`/org/job-catalog`、`/org/positions`、`/org/assignments`、`/person/persons`），并逐条标注证据类型（allowlist/handler/测试）。
 - [ ] Person 页面去除“ignored as-of”输入，使时间上下文口径与 `DEV-PLAN-102` 一致（不制造“伪需求参数”与歧义 UI）。
 - [ ] P6 完整收尾：执行 `apps/web-mui` → `apps/web` 机械改名 + 全仓引用更新；CI 触发器、构建脚本、文档 SSOT 同步更新；本地能跑通 UI 构建与全门禁。
-- [ ] 清理残留旧 UI 死代码/测试（不改变对外契约）：移除或隔离不可达的 HTMX/Nav/Topbar/旧登录表单渲染逻辑与其测试，避免后续误引入“兼容别名窗口/legacy 回退”。
+- [ ] 清理残留旧 UI 死代码/测试（不改变对外契约）：覆盖并收口 **三类残留面**，避免后续误引入“兼容别名窗口/legacy 回退”：
+  - 旧 HTML/HTMX handler 家族（`internal/server/**` 下的旧页面渲染、旧表单 action、旧 redirect URL 等）。
+  - 中间件放行口径（例如对 `/login` 的特殊放行/绕过条件，避免潜在 backdoor）。
+  - Authz 路由判定残留（旧 UI 路由对应的授权分支与其测试，避免“路由虽不可达但代码仍保活”）。
 
 ### 2.2 非目标（本计划不做）
 
@@ -43,6 +46,7 @@
 
 - **No Legacy**：不引入 `/login` 兼容窗口、旧路由 alias、read=legacy 等回退通道（见 `DEV-PLAN-004M1`）。
 - **以 allowlist/route_class 为准**：UI vs API 的未登录行为以 `route_class` 判定；内部 API 必须 JSON 401，不得 302（见 `DEV-PLAN-103` 与 `DEV-PLAN-102`）。
+- **SuperAdmin 控制面不在本计划收尾范围**：`/superadmin/*` 属于独立 entrypoint，其登录页 `/superadmin/login` 的存在不等价于“legacy 回退通道”；本计划的 No Legacy 约束聚焦于租户应用侧的旧 UI 入口（尤其 `/login` HTML）。
 - **机械改名不夹带功能改动**：P6 的目录改名必须是“机械改名 + 引用更新”，不混入功能变更；功能变更必须在独立 PR、独立勾选项里执行。
 
 ## 4. 交付物
@@ -61,7 +65,14 @@
 ### PR-103A-0：收尾准备与证据骨架
 
 1. [ ] 建立本计划执行日志：`docs/dev-records/dev-plan-103a-execution-log.md`（落盘后再开始收尾实施）。
-2. [ ] 在执行日志中生成《旧 UI → MUI 映射表》的初版（以 `internal/server/handler.go` + `config/routing/allowlist.yaml` + `apps/*/src/router/index.tsx` 为事实源），并标注迁移/删除状态。
+2. [ ] 在执行日志中生成《旧 UI → MUI 映射表》的初版（以事实源为准），并标注迁移/删除状态。
+   - 事实源（建议顺序，可按实际补齐）：
+     - `config/routing/allowlist.yaml`（route_class / 可达性门禁）
+     - `internal/server/**`（旧 HTML/HTMX handler 与 redirect/表单 action 的实际残留面；避免仅盯 `handler.go`）
+     - `internal/server/authz_middleware.go`（路由 → 权限判定；用于识别“路由已删但授权分支仍保活”）
+     - `apps/*/src/router/index.tsx`（MUI SPA 路由）
+     - `apps/*/src/navigation/config.tsx`（导航入口 + permissionKey）
+     - `e2e/tests/**`（外部可见链路证据）
    - 至少覆盖：`/login`、`/ui/nav`、`/ui/topbar`、`/ui/flash`、`/lang/en`、`/lang/zh`、`/org/nodes*`、`/org/snapshot`、`/org/setid`、`/org/job-catalog`、`/org/positions`、`/org/assignments`、`/person/persons`。
 
 > 映射表建议字段（可按实际调整）：旧路径/模式、旧 route_class、旧时间上下文(A/B/C)、旧状态(已移除/不可达/仍有死代码)、新 MUI path（`/app` 内路由）、新 API（如有）、permissionKey、备注（证据与清理点）。
@@ -74,9 +85,13 @@
 
 ### PR-103A-2：旧 UI 残留清理（死代码/测试/绕过口径）
 
-5. [ ] 清理不可达的旧 UI 渲染辅助函数与测试（例如 HTMX Nav/Topbar/旧登录表单渲染），避免后续误用：  
-   - 重点检查：是否仍存在“绕过/放行 `/login`”之类的兼容口径；若存在则移除，并用测试锁定“不提供兼容窗口”。
-   - 最小检查清单：`internal/server/handler.go` 中旧 UI 辅助渲染函数及其测试、旧 HTML 片段构造与旧链接残留（如 `/org/job-catalog` 等）。
+5. [ ] 以“覆盖残留面”为原则清理旧 UI（死代码/测试/绕过口径），避免后续误用或被再次挂回路由形成 backdoor：  
+   - **中间件口径收口**：移除对 `/login` 的特殊放行/绕过条件（当前代码中如存在该口径，应视为必须清理项），并用测试锁定“tenant app 不提供 `/login` HTML”。
+   - **旧渲染辅助函数收口**：移除或隔离旧 UI 的渲染/壳层/HTMX 协商函数（Nav/Topbar/Flash、最小 Shell、`HX-Request` 分支、旧 login form、`/lang/*` 链接等）及其测试，避免形成“看似死代码但可复活”的隐性入口。
+   - **旧 HTML handler 家族清理**：以 `internal/server/**` 为范围，清理仍存活的旧页面渲染、表单 action、redirect URL 与其测试（例如 Org Nodes/Snapshot、JobCatalog、Staffing、Person、SetID 中残留的旧 HTML 交互链路）。
+   - **Authz 路由判定清理**：同步清理旧 UI 路由相关的 authz requirement 分支与单测，避免“路由删了但授权映射仍保活”。
+   - **不改变对外契约边界**：仅移除旧 UI（HTML/HTMX）相关分支；JSON API 与 `/app/**`（SPA）入口保持既有契约。
+   - **Stopline（必须可证明）**：在本 PR 内给出可复现证据，证明 `/login`（HTML）不存在、且旧 HTML/HTMX 页面入口不会通过“中间件放行/重定向/隐性链接”被再次触达（证据可来自：allowlist、Go 单测、E2E、或映射表的“不可达/已移除”标注）。
 6. [ ] 更新 `DEV-PLAN-103` 的验收/风险说明：把“残留清理”与“证据表”链接到本计划执行日志，形成可追溯收口点。
 
 ### PR-103A-3：P6 工程改名（apps/web-mui → apps/web，机械改名）
@@ -85,16 +100,17 @@
 8. [ ] 全仓机械更新引用（并以门禁为准收口）：  
    - 构建脚本（如 `scripts/ui/*`）  
    - CI 触发器（如 `scripts/ci/paths-filter.sh`）  
-   - 文档 SSOT 与可执行文档（如 `DEV-PLAN-011`、`DEV-PLAN-010`、`DEV-PLAN-103`、`AGENTS.md` 等）  
+   - 文档 SSOT 与可执行文档（至少：`AGENTS.md`、`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`、以及 UI 规范类文档如 `docs/dev-plans/002-ui-design-guidelines.md`）  
    - 历史文档按“可读不执行”处理：允许保留旧路径，仅在必要处补充“历史说明/已被 103A 收口”注记，避免篡改证据语义
    - E2E 触发条件与可能的路径硬编码引用（如存在）。
+9. [ ] Stopline（必须可证明）：除 `docs/dev-records/**` 与明确标注“历史”的文档外，仓库内不应再出现 `apps/web-mui` 路径引用；同时保持运行态标识不暗改（例如 localStorage key、package name 等，除非门禁失败迫使变更并给出迁移策略）。
 
 ### PR-103A-4：验收与门禁对齐（本地可复现）
 
-9. [ ] 跑 UI 构建门禁并提交生成物（如有）：`make css`，然后 `git status --short` 必须为空。
-10. [ ] 跑全门禁对齐 CI：`make preflight`。
-11. [ ] 将关键命令与结果登记到 `docs/dev-records/dev-plan-103a-execution-log.md`（时间戳、结果；不在 dev-plan 内复制命令矩阵）。
-12. [ ] 回写 `DEV-PLAN-103`：将 P3/P6 条目更新为 `[x]`，并在验收标准中引用本计划的执行日志作为证据入口。
+10. [ ] 跑 UI 构建门禁并提交生成物（如有）：`make css`，然后 `git status --short` 必须为空。
+11. [ ] 跑全门禁对齐 CI：`make preflight`。
+12. [ ] 将关键命令与结果登记到 `docs/dev-records/dev-plan-103a-execution-log.md`（时间戳、结果；不在 dev-plan 内复制命令矩阵）。
+13. [ ] 回写 `DEV-PLAN-103`：将 P3/P6 条目更新为 `[x]`，并在验收标准中引用本计划的执行日志作为证据入口。
 
 ## 6. 验收标准
 
@@ -102,7 +118,8 @@
 - [ ] `apps/web-mui` 不再存在；前端工程目录为 `apps/web`；**代码/脚本/CI/可执行文档（SSOT）** 不再引用 `apps/web-mui`。  
   `docs/dev-records/**` 与明确标注“历史”的文档允许保留旧路径文本，不作为阻塞项。
 - [ ] Person 页面不再出现 “As-of (ignored)” 或等价输入；时间上下文口径与 `DEV-PLAN-102` 一致。
-- [ ] 不存在 `/login` HTML 页面或兼容跳转窗口；不在中间件层放行旧路径形成潜在 backdoor。
+- [ ] 不存在 `/login` HTML 页面或兼容跳转窗口；不在中间件层保留对 `/login` 的特殊放行/绕过逻辑形成潜在 backdoor。
+- [ ] `internal/server/**` 中不再残留旧 UI 交互链路（旧 HTML 页面渲染、旧表单 action/redirect 指向旧路由、以及 HTMX/hx-* 标记相关输出），且对应旧 UI 单测已清理或迁移到与 MUI-only 方向一致的断言。
 - [ ] 本地 `make css` 与 `make preflight` 可通过，且证据记录已落盘。
 
 ## 7. 风险与缓解
