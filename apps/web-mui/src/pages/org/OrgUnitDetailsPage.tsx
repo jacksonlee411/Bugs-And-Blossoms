@@ -900,6 +900,19 @@ export function OrgUnitDetailsPage() {
         title={titleLabel}
         actions={
           <>
+            {canWrite ? (
+              <Button
+                onClick={() => {
+                  const params = new URLSearchParams()
+                  params.set('as_of', asOf)
+                  navigate({ pathname: '/org/units/field-configs', search: `?${params.toString()}` })
+                }}
+                size='small'
+                variant='outlined'
+              >
+                {t('nav_org_field_configs')}
+              </Button>
+            ) : null}
             <Button disabled={!canWrite} onClick={() => openAction('rename')} size='small' variant='outlined'>
               {t('org_action_rename')}
             </Button>

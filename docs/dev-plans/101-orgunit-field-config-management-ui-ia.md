@@ -1,6 +1,6 @@
 # DEV-PLAN-101：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）
 
-**状态**: 草拟中（2026-02-13 05:00 UTC）
+**状态**: 已完成（2026-02-15 08:41 UTC）
 
 ## 1. 背景
 
@@ -23,7 +23,8 @@
 3. [ ] 页面可完成最小管理闭环：
    - 查看当前租户已配置字段（含有效期与映射槽位只读）。
    - 启用（新增）一个字段配置（由后端分配 `physical_col`，前端不可选；DICT/ENTITY 需从 `field-definitions.data_source_config_options` 选择 `data_source_config`）。
-   - 停用一个字段配置（按 day 粒度选择 `disabled_on`）。
+   - 停用一个字段配置（按 day 粒度选择 `disabled_on`）；若停用尚未生效，支持“延期停用”（仅向后延迟）。
+   - “禁用”状态可解释：在 `status=disabled` 下区分 `未生效/已停用`（展示与二级筛选）。
 4. [ ] 页面加载/空态/错误态可解释；不出现“静默失败/看起来成功但实际未生效”。
 
 ## 3. 非目标（明确不做）
@@ -66,6 +67,11 @@
     - 启用/停用对话框中日期默认值：`max(today_utc, as_of)`（避免 `as_of` 为过去日期时误回溯或触发后端拒绝；SSOT：`DEV-PLAN-100B`）。
   - `status=all|enabled|disabled`（可选）：列表筛选；缺省 `all`。
     - status 口径 SSOT：`DEV-PLAN-100D` §5.2.1（半开区间 `[enabled_on, disabled_on)`；`disabled` 包含“未来生效（as_of < enabled_on）”与“已停用（disabled_on <= as_of）”，UI 不得另起一套判定）。
+    - **用户显示口径（本计划冻结）**：
+      - `enabled`：`enabled_on <= as_of` 且（`disabled_on IS NULL OR as_of < disabled_on`）
+      - `pending`（未生效）：`as_of < enabled_on`（属于 `status=disabled` 的子集；用于 UI Chip/二级筛选）
+      - `disabled`（已停用）：`disabled_on IS NOT NULL AND disabled_on <= as_of`（属于 `status=disabled` 的子集；用于 UI Chip/二级筛选）
+  - `disabled_state=all|pending|disabled`（可选，**纯 UI 过滤**）：仅当 `status=disabled` 时启用；用于把“未生效/已停用”分开展示与分享链接，**不影响后端 API 查询**（API 仍仅接受 `status`）。
 
 权限：
 - Route 级别：`RequirePermission permissionKey='orgunit.admin'`（直接拒绝，不做 UI 内部 soft fallback）。
@@ -95,6 +101,7 @@
 
 - `as_of`：`TextField type="date"`（InputLabel shrink），默认当天 UTC。
 - `status`：`Select`（all/enabled/disabled）。
+- `disabled_state`：`Select`（all/pending/disabled；仅当 `status=disabled` 时展示/生效；纯客户端过滤）。
 - `keyword`（可选增强）：`TextField`，用于在列表中按 `field_key/label` 客户端过滤（不要求后端支持）。
 - `应用筛选`：`Button variant="contained"`，写回 query params，触发重新加载。
 
@@ -110,13 +117,18 @@
 - `data_source_type`：`PLAIN/DICT/ENTITY`（只读）
 - `data_source_config`：只读（展示 `dict_code` 或 `entity/id_kind`，便于排障）
 - `status`：`enabled/disabled`（Chip）
+  - **冻结为三态 Chip**：`enabled/未生效/已停用`
+    - enabled：`enabled`
+    - as_of < enabled_on：`未生效`
+    - disabled_on != null && disabled_on <= as_of：`已停用`
 - `enabled_on`：date
 - `disabled_on`：date（为空表示未计划停用）
 - `physical_col`：只读（映射槽位，便于排障；对齐 `DEV-PLAN-100` “映射不可变”）
 - `updated_at`：审计时间（可选）
 - `actions`：行内操作（按钮组）
   - `查看`（打开“详情对话框”，只读）
-  - `停用`（打开停用对话框；仅当 `disabled_on` 为空时可用；若 `disabled_on` 非空则置灰并提示“MVP 不支持调整停用日期；disabled_on 不允许回滚为 NULL（SSOT：DEV-PLAN-100B）”）
+  - `停用`（打开停用对话框；仅当 `disabled_on` 为空时可用）
+  - `延期停用`（打开“延期停用”对话框；仅当 `disabled_on` 非空且 **未生效**（`today_utc < disabled_on`）时可用；只允许把日期**往后推**；对齐 DB 规则：仅向后延迟 + 原 disabled_on 尚未生效（SSOT：`DEV-PLAN-100B`））
 
 空态：
 - 列表为空时显示 `NoRowsOverlay` + CTA：`启用字段`。
@@ -146,7 +158,11 @@
   - `取消`
   - `确认启用`（primary；提交中 disable）
 - 请求幂等（必须）：
-  - 每次提交必须携带 `request_code`（例如 UUID）；失败重试/重复点击时需复用同一个 `request_code`，以便后端按幂等语义返回同一配置行（避免重复占用槽位）。
+  - `request_code` 为 UI 内部幂等键（用户无感知；例如 UUID）。
+  - **复用规则（本计划冻结）**：
+    - 对话框打开时生成一次 `request_code`。
+    - 用户修改任一关键输入（`field_key/enabled_on/data_source_config`）时，必须生成新的 `request_code`（避免把“不同意图”误当成同一次重试，触发 `ORG_REQUEST_ID_CONFLICT`）。
+    - 仅当输入未变化时：失败重试/重复点击需复用同一个 `request_code`，以便后端按幂等语义返回同一配置行（避免重复占用槽位）。
 - 成功行为：
   - toast：`启用成功`
   - 关闭对话框
@@ -156,22 +172,38 @@
   - data_source_config 不合法：展示可解释错误（例如“数据来源配置无效/不被允许，请刷新后重试”）
   - 权限不足：展示统一无权限提示（不在对话框内做“假成功”）
 
-### 6.5 停用字段对话框（Dialog，组件级）
+### 6.5 停用/延期停用字段对话框（Dialog，组件级）
 
-目的：为已有字段配置设置 `disabled_on`（day 粒度）。
+目的：为已有字段配置设置 `disabled_on`（day 粒度）；若已存在且未生效，则支持“延期停用”（仅向后延迟）。
 
-- `DialogTitle`：`停用字段`
+- `DialogTitle`：
+  - 新增停用：`停用字段`
+  - 延期停用：`延期停用字段`
 - `DialogContent`：
   - 只读摘要：`field_label(field_key)` + `physical_col`
-  - `disabled_on`：`TextField type="date"`，默认 `max(today_utc, as_of)`
-    - 校验（前端先行拦截，后端为准）：`disabled_on >= today_utc` 且 `disabled_on >= enabled_on`（SSOT：`DEV-PLAN-100B`）。
-    - 约束提示：`disabled_on` 一旦设置不允许回滚为 `null`（SSOT：`DEV-PLAN-100B`）。MVP 不支持调整已设置的 `disabled_on`（若未来启用“未生效 + 向后延迟”，按 `DEV-PLAN-100A/100B` 另立变更）。
+  - `disabled_on`：`TextField type="date"`
+    - 新增停用（原 `disabled_on` 为空）：
+      - 默认：`max(today_utc, as_of)`
+      - 校验（前端先行拦截，后端为准）：`disabled_on >= today_utc` 且 `disabled_on >= enabled_on`（SSOT：`DEV-PLAN-100B`）。
+    - 延期停用（原 `disabled_on` 非空且 `today_utc < old_disabled_on`）：
+      - 入口：列表行内按钮 `延期停用`
+      - 默认：`max(old_disabled_on + 1 day, today_utc, as_of)`（提示用户“当前计划停用日”为 old_disabled_on）
+      - 校验（前端先行拦截，后端为准）：
+        - `disabled_on > old_disabled_on`（只允许向后延迟）
+        - `today_utc < old_disabled_on`（仅当原计划尚未生效）
+        - 且仍需满足 `disabled_on >= enabled_on` 与 `disabled_on >= today_utc`
+      - 备注：该能力与 DB trigger 规则一致（仅向后延迟 + 原 disabled_on 尚未生效；SSOT：`DEV-PLAN-100B`）。
+    - 约束提示（冻结）：
+      - `disabled_on` 一旦设置不允许回滚为 `null`（SSOT：`DEV-PLAN-100B`）。
   - 风险提示（Alert warning）：
     - “从 disabled_on 起，该字段在对应 as_of 下将不可写/不可见（details 的 ext_fields 将不再返回/不再展示）；映射槽位不可复用。若需查看历史，请切换 as_of 或查看 Audit（变更日志）。”（对齐 `DEV-PLAN-100D/100E`）
     - 备注：若未来需要“字段仍显示但禁用 + 给出禁用原因”，必须扩展 details 契约（例如返回 disabled 字段列表 + 禁用原因/日期）；本计划不做。
-- `DialogActions`：取消/确认停用
+- `DialogActions`：
+  - 新增停用：取消/确认停用
+  - 延期停用：取消/确认延期
 - 请求幂等（必须）：
-  - 每次提交必须携带 `request_code`；失败重试/重复点击时需复用同一个 `request_code`，避免重复写入审计事件或产生不可解释的冲突。
+  - `request_code` 为 UI 内部幂等键（用户无感知；例如 UUID）。
+  - 复用规则同启用对话框：用户修改 `disabled_on` 时必须生成新的 `request_code`；仅当输入未变化时重试复用同一个 `request_code`。
 - 成功：toast + 刷新列表
 
 ## 7. 权限与失败模式（fail-closed）
@@ -202,7 +234,14 @@
 4. [ ] 停用字段成功后：
    - 在字段配置页可看到 `disabled_on` 生效；
    - 在 OrgUnit 详情页，当 `as_of >= disabled_on` 时该字段不再展示（不在 details 的 `ext_fields[]` 中出现）；若需查看历史，请切换 `as_of` 或查看 Audit（对齐 `DEV-PLAN-100D/100E`）。
-5. [ ] 失败路径可解释：槽位耗尽/权限不足/网络错误不会静默。
+5. [ ] “禁用”展示可解释：
+   - `as_of < enabled_on` 的行在列表中标识为 `未生效`；
+   - `disabled_on <= as_of` 的行在列表中标识为 `已停用`；
+   - 当 `status=disabled` 时，用户可通过 `disabled_state` 二级筛选快速分流两类。
+6. [ ] 延期停用可用且符合约束：
+   - 若 `disabled_on` 已设置且 `today_utc < disabled_on`，可把 `disabled_on` 往后改（只能延期，不能提前/不能回滚为 null）；
+   - 若 `today_utc >= disabled_on`，禁止延期（按钮不可用且提示原因）。
+7. [ ] 失败路径可解释：槽位耗尽/权限不足/网络错误不会静默。
 
 ## 10. 代码落点（建议）
 
