@@ -35,7 +35,7 @@ async function enableOrgTypeFieldConfig(page, asOf) {
   await page.goto(`/app/org/units/field-configs?as_of=${asOf}`);
   await expect(page.getByRole("heading", { name: /Field Configs/ })).toBeVisible({ timeout: 60_000 });
 
-  await page.getByRole("button", { name: /Enable Field/ }).click();
+  await page.getByRole("button", { name: /Enable Field/ }).first().click();
   const dialog = page.getByRole("dialog", { name: /Enable Field/ });
   await expect(dialog).toBeVisible();
 
