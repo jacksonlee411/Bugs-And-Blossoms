@@ -236,7 +236,7 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   await page.getByRole("row", { name: new RegExp(org.company) }).click();
   await expect(page).toHaveURL(new RegExp(`/app/org/units/${org.company}`));
   await expect(page.getByText(/Org Type/)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("Company")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Company", { exact: true })).toBeVisible({ timeout: 30_000 });
 
   await appContext.close();
 });

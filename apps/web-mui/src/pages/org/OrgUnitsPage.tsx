@@ -195,35 +195,30 @@ function ExtFilterValueInput(props: {
 }) {
   const [inputValue, setInputValue] = useState('')
   const debouncedKeyword = useDebouncedValue(inputValue, 250)
-
-  if (!props.field || props.field.data_source_type !== 'DICT') {
-    return (
-      <TextField
-        disabled={props.disabled || !props.field}
-        label={props.label}
-        onChange={(event) => props.onChange(event.target.value)}
-        value={props.value}
-        helperText={props.helperText}
-        inputProps={{ 'data-testid': 'org-ext-filter-value' }}
-      />
-    )
-  }
-
   const field = props.field
+  const isDictField = Boolean(field && field.data_source_type === 'DICT')
+
   const optionsQuery = useQuery({
-    enabled: !props.disabled,
-    queryKey: ['org-units', 'field-options', field.field_key, props.asOf, debouncedKeyword],
-    queryFn: () =>
-      getOrgUnitFieldOptions({
+    enabled: isDictField && !props.disabled,
+    queryKey: ['org-units', 'field-options', field?.field_key ?? '', props.asOf, debouncedKeyword],
+    queryFn: () => {
+      if (!field) {
+        throw new Error('org ext filter field is required')
+      }
+      return getOrgUnitFieldOptions({
         fieldKey: field.field_key,
         asOf: props.asOf,
         keyword: debouncedKeyword,
         limit: 20
-      }),
+      })
+    },
     staleTime: 30_000
   })
 
   const options = useMemo<FieldOption[]>(() => {
+    if (!isDictField) {
+      return []
+    }
     const fetched = optionsQuery.data?.options ?? []
     const selectedValue = props.value.trim()
     if (selectedValue.length === 0) {
@@ -237,23 +232,40 @@ function ExtFilterValueInput(props: {
 
     const fallbackOption = { value: selectedValue, label: selectedValue }
     return uniqueOptionsByValue([fallbackOption, ...fetched])
-  }, [optionsQuery.data?.options, props.value])
+  }, [isDictField, optionsQuery.data?.options, props.value])
 
   const selected = useMemo<FieldOption | null>(() => {
+    if (!isDictField) {
+      return null
+    }
     const currentValue = props.value.trim()
     if (currentValue.length === 0) {
       return null
     }
     return options.find((option) => option.value === currentValue) ?? { value: currentValue, label: currentValue }
-  }, [options, props.value])
+  }, [isDictField, options, props.value])
 
-  const queryErrorMessage = optionsQuery.error
-    ? props.formatError
-      ? props.formatError(optionsQuery.error)
-      : getErrorMessage(optionsQuery.error)
-    : ''
-  const effectiveDisabled = props.disabled || optionsQuery.isError
+  const queryErrorMessage =
+    isDictField && optionsQuery.error
+      ? props.formatError
+        ? props.formatError(optionsQuery.error)
+        : getErrorMessage(optionsQuery.error)
+      : ''
+  const effectiveDisabled = props.disabled || (isDictField && optionsQuery.isError)
   const helperText = queryErrorMessage.length > 0 ? queryErrorMessage : props.helperText
+
+  if (!isDictField) {
+    return (
+      <TextField
+        disabled={props.disabled || !field}
+        label={props.label}
+        onChange={(event) => props.onChange(event.target.value)}
+        value={props.value}
+        helperText={helperText}
+        inputProps={{ 'data-testid': 'org-ext-filter-value' }}
+      />
+    )
+  }
 
   return (
     <Autocomplete
