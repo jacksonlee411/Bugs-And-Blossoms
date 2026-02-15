@@ -12,6 +12,7 @@
 - One Door / No Legacy / No Tx, No RLS（对齐 `DEV-PLAN-100`）
 - 权限边界（read/admin，统一 403）（对齐 `DEV-PLAN-022`）
 - 路由治理（命名空间与门禁）（对齐 `DEV-PLAN-017`）
+- 时间上下文（`as_of` 语义与来源收敛）（对齐 `DEV-PLAN-102`）
 - Org 详情页形态：独立页面 + 双栏布局基线（对齐 `DEV-PLAN-097/099`）
 - i18n：仅 en/zh；不做业务数据多语言（对齐 `DEV-PLAN-020`）
 
@@ -33,33 +34,45 @@
 
 ## 4. IA：入口与导航（冻结）
 
-### 4.1 导航栏（左侧主导航）
+### 4.1 导航栏（MUI AppShell 左侧主导航）
 
 新增一个仅管理员可见的导航项：
 
-- label：`字段配置`
+- label：`字段配置`（i18n：`nav_org_field_configs`）
 - path：`/org/units/field-configs`
 - permission：`orgunit.admin`
 - 位置：紧随 `组织架构`（`/org/units`）之后（order=21），避免用户在“Org 模块上下文”之外寻找。
 
-> 说明：当前 `apps/web-mui` 导航为扁平结构（无二级菜单）。本方案不引入新的导航层级，只新增一项，保持简单。
+> 说明：
+>
+> - 当前 `apps/web-mui` 导航为扁平结构（无二级菜单）。本方案不引入新的导航层级，只新增一项，保持简单。
+> - 旧链路的服务端渲染导航（例如 `renderNav`/HTMX）不在本计划范围；本计划交付物以 `/app/**` 内可发现为准（对齐 `DEV-PLAN-103` 方向）。
 
 ### 4.2 模块内入口（增强可发现性）
 
 在以下位置提供“字段配置”快捷入口（仅 `orgunit.admin` 可见）：
 
-1. OrgUnits 列表页 `PageHeader` actions 增加按钮：`字段配置` -> 跳转到 `/org/units/field-configs` 并携带 `as_of`（若存在）。  
+1. OrgUnits 列表页 `PageHeader` actions 增加按钮：`字段配置` -> 跳转到 `/org/units/field-configs` 并携带 `as_of`（若存在；仅用于预览上下文，不作为写操作默认生效日）。  
 2. OrgUnit 详情页 `PageHeader` actions 增加按钮：`字段配置` -> 同上（便于从详情直接进入管理）。
 
 ## 5. 路由与 URL 协议（冻结）
 
 - UI 页面路由：`/app/org/units/field-configs`
+  - 说明：`apps/web-mui` router `basename='/app'`；本文档中的 `path: /org/...` 指“App 内路由 path（不含 basename）”，实际浏览器 URL 为 `/app` + `path`。
 - Query：
   - `as_of=YYYY-MM-DD`：用于“查看/预览”某日生效的字段配置集合；缺省为当天 UTC（对齐 Org 页 `as_of` 习惯）。
+    - `as_of` 仅影响列表/详情的“预览口径”，不应被理解为写入意图。
+    - 本页不依赖 Shell/Topbar 注入/拼接 `as_of`；`as_of` 的缺省、校验与写回由本页 query params 自管理（对齐 `DEV-PLAN-102`）。
+    - 启用/停用对话框中日期默认值：`max(today_utc, as_of)`（避免 `as_of` 为过去日期时误回溯或触发后端拒绝；SSOT：`DEV-PLAN-100B`）。
   - `status=all|enabled|disabled`（可选）：列表筛选；缺省 `all`。
+    - status 口径 SSOT：`DEV-PLAN-100D` §5.2.1（半开区间 `[enabled_on, disabled_on)`；`disabled` 包含“未来生效（as_of < enabled_on）”与“已停用（disabled_on <= as_of）”，UI 不得另起一套判定）。
 
 权限：
 - Route 级别：`RequirePermission permissionKey='orgunit.admin'`（直接拒绝，不做 UI 内部 soft fallback）。
+
+> API 契约 SSOT：`DEV-PLAN-100D`（field-definitions + field-configs list/enable/disable）与 `DEV-PLAN-100D2`（契约收口修订）；本计划仅冻结 UI IA/组件结构。
+>
+> 约定：`today_utc` 为当天 UTC day（`YYYY-MM-DD`；实现可用 `new Date().toISOString().slice(0, 10)`）。
 
 ## 6. 页面信息架构与组件级布局（MUI）
 
@@ -91,7 +104,7 @@
 
 建议列：
 
-- `field_label`：字段名称（来自“字段定义”，只读）
+- `field_label`：字段名称（来自 `field-definitions.label_i18n_key`，前端 `t(...)` 渲染；列表需将 `field-configs` 与 `field-definitions` 按 `field_key` join，禁止前端维护第二套映射）
 - `field_key`：稳定键（只读）
 - `value_type`：`text/int/uuid/bool/date`（只读）
 - `data_source_type`：`PLAIN/DICT/ENTITY`（只读）
@@ -103,7 +116,7 @@
 - `updated_at`：审计时间（可选）
 - `actions`：行内操作（按钮组）
   - `查看`（打开“详情对话框”，只读）
-  - `停用`（打开停用对话框；disabled 状态时置灰）
+  - `停用`（打开停用对话框；仅当 `disabled_on` 为空时可用；若 `disabled_on` 非空则置灰并提示“MVP 不支持调整停用日期；disabled_on 不允许回滚为 NULL（SSOT：DEV-PLAN-100B）”）
 
 空态：
 - 列表为空时显示 `NoRowsOverlay` + CTA：`启用字段`。
@@ -116,9 +129,11 @@
 - `DialogContent` 表单（`Stack spacing={2}`）：
   1) `field_key` 选择：
      - 控件：`Select` 或 `Autocomplete`
-     - 数据：`GET /org/api/org-units/field-definitions` 返回“可启用字段定义列表”（MVP：2~5 个；对齐 `DEV-PLAN-100A` Phase 0 字段清单）
+     - 数据：`GET /org/api/org-units/field-definitions` 返回字段定义列表（MVP：2~5 个；对齐 `DEV-PLAN-100A` Phase 0 字段清单）
+     - 约束：候选应排除已存在于 `field-configs(status=all)` 的 `field_key`（无论当前 `as_of` 下状态如何），避免触发后端 “已存在/不可重复启用” 冲突。
   2) `enabled_on`：
-     - `TextField type="date"`，默认等于当前 `as_of`
+     - `TextField type="date"`，默认 `max(today_utc, as_of)`
+     - 提示：`enabled_on` 启用后不可修改（SSOT：`DEV-PLAN-100B`），请谨慎选择。
   3) `data_source_config`（仅 DICT/ENTITY）：
      - PLAIN：不展示（或只读展示为 `{}`），因为该类型无 options。  
      - DICT：显示 `dict_code` 选择器：
@@ -148,7 +163,9 @@
 - `DialogTitle`：`停用字段`
 - `DialogContent`：
   - 只读摘要：`field_label(field_key)` + `physical_col`
-  - `disabled_on`：`TextField type="date"`，默认等于当前 `as_of`
+  - `disabled_on`：`TextField type="date"`，默认 `max(today_utc, as_of)`
+    - 校验（前端先行拦截，后端为准）：`disabled_on >= today_utc` 且 `disabled_on >= enabled_on`（SSOT：`DEV-PLAN-100B`）。
+    - 约束提示：`disabled_on` 一旦设置不允许回滚为 `null`（SSOT：`DEV-PLAN-100B`）。MVP 不支持调整已设置的 `disabled_on`（若未来启用“未生效 + 向后延迟”，按 `DEV-PLAN-100A/100B` 另立变更）。
   - 风险提示（Alert warning）：
     - “从 disabled_on 起，该字段在对应 as_of 下将不可写/不可见（details 的 ext_fields 将不再返回/不再展示）；映射槽位不可复用。若需查看历史，请切换 as_of 或查看 Audit（变更日志）。”（对齐 `DEV-PLAN-100D/100E`）
     - 备注：若未来需要“字段仍显示但禁用 + 给出禁用原因”，必须扩展 details 契约（例如返回 disabled 字段列表 + 禁用原因/日期）；本计划不做。
@@ -170,6 +187,7 @@
 ## 8. i18n 与文案（仅 en/zh）
 
 - 页面静态文案使用 `apps/web-mui/src/i18n/messages.ts` 增加 key（en/zh 同步）。
+- 导航项使用 i18n key：`nav_org_field_configs`（en/zh 同步）。
 - 字段名称（field_label）口径（MVP 冻结）：
   - 字段定义由后端返回 `label_i18n_key`，前端通过 `t(label_i18n_key)` 渲染（禁止前端再建一套字段 label 映射）；
   - 禁止在本计划引入“租户可编辑 label_zh/label_en 并持久化”的多语言业务数据形态（如需，另立 dev-plan）。
@@ -194,6 +212,8 @@
 - i18n：`apps/web-mui/src/i18n/messages.ts` 增加页面/按钮文案 key（en/zh）
 - API client（如需）：`apps/web-mui/src/api/orgUnits.ts` 或拆分新文件 `apps/web-mui/src/api/orgUnitFieldConfigs.ts`
 
+> 说明：若按 `DEV-PLAN-103` 的“工程命名去技术后缀”执行机械改名（例如 `apps/web-mui` → `apps/web`），本节路径需同步更新；不影响本计划冻结的 IA/契约。
+
 ## 11. 门禁与验证（SSOT 引用）
 
 - 触发器与命令入口以 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 为准。
@@ -202,6 +222,12 @@
 ## 12. 关联文档
 
 - `docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
+- `docs/dev-plans/100a-org-metadata-wide-table-phase0-contract-freeze-readiness.md`
+- `docs/dev-plans/100b-org-metadata-wide-table-phase1-schema-and-metadata-skeleton.md`
+- `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
+- `docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md`
+- `docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
+- `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
 - `docs/dev-plans/097-orgunit-details-drawer-to-page-migration.md`
 - `docs/dev-plans/099-orgunit-details-two-pane-info-audit-mui.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
