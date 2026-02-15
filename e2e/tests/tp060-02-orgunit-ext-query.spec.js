@@ -39,13 +39,13 @@ async function enableOrgTypeFieldConfig(page, asOf) {
   const dialog = page.getByRole("dialog", { name: /Enable Field/ });
   await expect(dialog).toBeVisible();
 
-  await dialog.getByRole("button", { name: /Field Key/ }).click();
+  await dialog.getByLabel(/Field Key/).click();
   await page.getByRole("option", { name: /Org Type/ }).click();
 
   const enabledOnInput = dialog.getByLabel(/Enabled On/);
   await enabledOnInput.fill(asOf);
 
-  await dialog.getByRole("button", { name: /Data Source Config/ }).click();
+  await dialog.getByLabel(/Data Source Config/).click();
   await page.getByRole("option", { name: /dict_code/ }).click();
 
   await dialog.getByRole("button", { name: /Confirm/ }).click();
@@ -179,9 +179,9 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
 
   await page.goto(`/app/org/units?as_of=${asOf}&node=${org.root}`);
 
-  await page.getByRole("button", { name: /Sort by/ }).click();
+  await page.getByLabel(/Sort by/).click();
   await page.getByRole("option", { name: /Org Type/ }).click();
-  await page.getByRole("button", { name: /Sort order/ }).click();
+  await page.getByLabel(/Sort order/).click();
   await page.getByRole("option", { name: /Ascending/ }).click();
 
   const applyButtons = page.getByRole("button", { name: /Apply Filters/ });
@@ -199,7 +199,7 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   }
   expect(companyBox.y).toBeLessThan(deptBox.y);
 
-  await page.getByRole("button", { name: /Ext Filter Field/ }).click();
+  await page.getByLabel(/Ext Filter Field/).click();
   await page.getByRole("option", { name: /Org Type/ }).click();
 
   const extValueInput = page.getByLabel(/Ext Filter Value/);
