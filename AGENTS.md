@@ -155,6 +155,7 @@ modules/{module}/
 
 - 文档规范：`docs/dev-plans/000-docs-format.md`
 - 技术设计模板：`docs/dev-plans/001-technical-design-template.md`
+- DEV-PLAN-002：UI 设计规范（React + MUI Core + MUI X / Material Design Web）：`docs/dev-plans/002-ui-design-guidelines.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
 - DEV-PLAN-004：全仓去除版本标记（命名降噪 + 避免对外契约污染）：`docs/dev-plans/004-remove-version-marker-repo-wide.md`
 - DEV-PLAN-004M1：禁止 legacy（单链路原则）——清理、门禁与迁移策略：`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
