@@ -72,7 +72,7 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 		}
 	})
 
-		t.Run("success", func(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-definitions", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -89,26 +89,26 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 		}
 
 		// Contract (DEV-PLAN-100D2): DICT/ENTITY must include non-empty data_source_config_options.
-			prevKey := ""
-			foundOrgType := false
-			for _, f := range body.Fields {
-				if strings.TrimSpace(f.FieldKey) == "" {
-					t.Fatalf("field_key blank")
+		prevKey := ""
+		foundOrgType := false
+		for _, f := range body.Fields {
+			if strings.TrimSpace(f.FieldKey) == "" {
+				t.Fatalf("field_key blank")
+			}
+			// Ensure stable ordering.
+			if prevKey != "" && f.FieldKey < prevKey {
+				t.Fatalf("fields not sorted: %q before %q", prevKey, f.FieldKey)
+			}
+			prevKey = f.FieldKey
+			if f.FieldKey == "org_type" {
+				foundOrgType = true
+				if !f.AllowFilter || !f.AllowSort {
+					t.Fatalf("org_type allow_filter=%v allow_sort=%v", f.AllowFilter, f.AllowSort)
 				}
-				// Ensure stable ordering.
-				if prevKey != "" && f.FieldKey < prevKey {
-					t.Fatalf("fields not sorted: %q before %q", prevKey, f.FieldKey)
-				}
-				prevKey = f.FieldKey
-				if f.FieldKey == "org_type" {
-					foundOrgType = true
-					if !f.AllowFilter || !f.AllowSort {
-						t.Fatalf("org_type allow_filter=%v allow_sort=%v", f.AllowFilter, f.AllowSort)
-					}
-				}
+			}
 
-				switch strings.ToUpper(strings.TrimSpace(f.DataSourceType)) {
-				case "DICT", "ENTITY":
+			switch strings.ToUpper(strings.TrimSpace(f.DataSourceType)) {
+			case "DICT", "ENTITY":
 				if len(f.DataSourceConfigOptions) == 0 {
 					t.Fatalf("field %q expected non-empty data_source_config_options", f.FieldKey)
 				}
@@ -122,13 +122,13 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 				if f.DataSourceConfigOptions != nil {
 					t.Fatalf("field %q expected data_source_config_options omitted", f.FieldKey)
 				}
-				}
 			}
-			if !foundOrgType {
-				t.Fatalf("org_type not found")
-			}
-		})
-	}
+		}
+		if !foundOrgType {
+			t.Fatalf("org_type not found")
+		}
+	})
+}
 
 func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 	base := newOrgUnitMemoryStore()
