@@ -52,6 +52,25 @@ async function enableOrgTypeFieldConfig(page, asOf) {
   await expect(page.getByText(/Enabled successfully/)).toBeVisible({ timeout: 30_000 });
 }
 
+async function waitForEnabledFieldConfig(ctx, { asOf, fieldKey }) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const resp = await ctx.request.get(
+      `/org/api/org-units/field-configs?as_of=${encodeURIComponent(asOf)}&status=enabled`
+    );
+    if (!resp.ok()) {
+      throw new Error(`field configs load failed: ${resp.status()} ${await resp.text()}`);
+    }
+    const payload = await resp.json();
+    const configs = Array.isArray(payload.field_configs) ? payload.field_configs : [];
+    if (configs.some((cfg) => cfg.field_key === fieldKey)) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`field config not enabled in time: ${fieldKey}`);
+}
+
 async function setOrgTypeViaAPI(ctx, { asOf, orgCode, value }) {
   const resp = await ctx.request.post("/org/api/org-units/corrections", {
     data: {
@@ -171,6 +190,7 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   });
 
   await enableOrgTypeFieldConfig(page, asOf);
+  await waitForEnabledFieldConfig(appContext, { asOf, fieldKey: "org_type" });
 
   await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.company, value: "COMPANY" });
   await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.dept, value: "DEPARTMENT" });
@@ -197,10 +217,13 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   }
   expect(companyBox.y).toBeLessThan(deptBox.y);
 
-  await page.getByLabel(/Ext Filter Field/).click();
+  const extFilterField = page.getByLabel(/Ext Filter Field|扩展筛选字段/);
+  await expect(extFilterField).toBeEnabled({ timeout: 30_000 });
+  await extFilterField.click();
   await page.getByRole("option", { name: /Org Type/ }).click();
 
-  const extValueInput = page.getByLabel(/Ext Filter Value/);
+  const extValueInput = page.getByLabel(/Ext Filter Value|扩展筛选值/);
+  await expect(extValueInput).toBeEnabled({ timeout: 30_000 });
   await extValueInput.click();
   await extValueInput.fill("Company");
   await page.getByRole("option", { name: "Company" }).click();
