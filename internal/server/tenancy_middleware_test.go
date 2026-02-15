@@ -187,7 +187,7 @@ func TestWithTenantAndSession_MissingSIDRedirects(t *testing.T) {
 	}
 }
 
-func TestWithTenantAndSession_LegacyUIPathPassthrough_NoLoginAlias(t *testing.T) {
+func TestWithTenantAndSession_OldUIPathPassthrough_NoLoginAlias(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	nextCalled := false
 	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
