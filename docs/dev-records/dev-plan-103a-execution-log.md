@@ -1,6 +1,6 @@
 # DEV-PLAN-103A 执行日志
 
-**状态**: 进行中（2026-02-15 17:31 UTC）
+**状态**: 已完成（2026-02-15 20:49 UTC）
 
 **关联文档**:
 - `docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
@@ -20,18 +20,18 @@
 
 | 旧 UI 路由（或能力入口） | 旧状态 | 时间上下文（A/B/C） | 新 MUI path（/app 内） | 新 API（如有） | permissionKey | 备注/证据 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `/login`（HTML 登录页） | 不可达（allowlist 不含；路由未注册），且无“兼容别名窗口”（中间件不做 `/login` → `/app/login` 重定向） | C | `/login`（SPA，浏览器 URL `/app/login`） | `POST /iam/api/sessions` | n/a | allowlist：`config/routing/allowlist.yaml` 未列 `GET /login`；中间件：`internal/server/handler.go`（对非 `/app/**` UI path passthrough）；旧表单渲染辅助：`internal/server/legacy_ui_helpers.go`（不可达） |
+| `/login`（HTML 登录页） | 不可达（allowlist 不含；路由未注册），且无“兼容别名窗口”（tenant app 不提供 `/login` HTML） | C | `/login`（SPA，浏览器 URL `/app/login`） | `POST /iam/api/sessions` | n/a | allowlist：`config/routing/allowlist.yaml` 未列 `GET /login`；中间件：`internal/server/handler.go`（对非 `/app/**` UI path passthrough，不做 `/login` alias）；单测：`internal/server/tenancy_middleware_test.go` |
 | `/ui/nav` | 已移除（无路由注册/无实现；allowlist 不含） | C | n/a | n/a | n/a | `internal/server/**` 未发现 `/ui/nav` 引用 |
 | `/ui/topbar` | 已移除（无路由注册/无实现；allowlist 不含） | C | n/a | n/a | n/a | `internal/server/**` 未发现 `/ui/topbar` 引用 |
 | `/ui/flash` | 已移除（无路由注册/无实现；allowlist 不含） | C | n/a | n/a | n/a | `internal/server/**` 未发现 `/ui/flash` 引用 |
-| `/lang/en` | 不可达（allowlist 不含；路由未注册）；仍有死代码（Topbar 输出链接 + 单测保活） | C | n/a | n/a | n/a | `internal/server/legacy_ui_helpers.go`、`internal/server/handler_utils_test.go` |
-| `/lang/zh` | 不可达（allowlist 不含；路由未注册）；仍有死代码（Topbar 输出链接 + 单测保活） | C | n/a | n/a | n/a | `internal/server/legacy_ui_helpers.go`、`internal/server/handler_utils_test.go` |
-| `/org/nodes*`（树/详情/搜索） | 不可达（allowlist 不含；路由未注册），但旧 HTML/HTMX handler + 大量单测仍在 | B | `/org/units`、`/org/units/:orgCode` | `/org/api/org-units*` | `orgunit.read` | 旧实现：`internal/server/orgunit_nodes.go`、`internal/server/orgunit_nodes_test.go` |
-| `/org/snapshot` | 不可达（allowlist 不含；路由未注册），但旧 HTML handler + 单测仍在 | A | n/a（当前 MUI 未提供对应入口） | n/a | n/a | 旧实现：`internal/server/orgunit_snapshot.go`、`internal/server/orgunit_snapshot_test.go` |
-| `/org/setid`（旧 HTML） | 不可达（allowlist 不含；路由未注册），但旧 HTML/HTMX handler + 单测仍在（且存在指向旧路由的 hx-get/redirect） | A | `/org/setid` | `/org/api/setids`、`/org/api/setid-bindings` | `orgunit.read` | 旧实现：`internal/server/setid.go`、`internal/server/setid_test.go` |
-| `/org/job-catalog`（旧 HTML） | 不可达（allowlist 不含；路由未注册），但旧 HTML handler + 单测仍在（redirect/表单 action 指向旧路由） | A | `/jobcatalog` | `/jobcatalog/api/catalog`、`/jobcatalog/api/catalog/actions`、`/org/api/owned-scope-packages` | `jobcatalog.read` | 旧实现：`internal/server/jobcatalog.go`、`internal/server/jobcatalog_test.go` |
-| `/org/positions`（旧 HTML） | 不可达（allowlist 不含；路由未注册），但旧 HTML/HTMX handler + 单测仍在 | A | `/staffing/positions` | `/org/api/positions`、`/org/api/positions:options` | `staffing.positions.read` | 旧实现：`internal/server/staffing_handlers.go`、`internal/server/staffing_test.go` |
-| `/org/assignments`（旧 HTML） | 不可达（allowlist 不含；路由未注册），但旧 HTML handler + 单测仍在 | A | `/staffing/assignments` | `/org/api/assignments` | `staffing.assignments.read` | 旧实现：`internal/server/staffing_handlers.go`、`internal/server/staffing_test.go` |
+| `/lang/en` | 已移除（无路由注册；无残留死代码/测试） | C | n/a | n/a | n/a | 门禁：`make check no-legacy` + `make preflight`（见下表） |
+| `/lang/zh` | 已移除（无路由注册；无残留死代码/测试） | C | n/a | n/a | n/a | 门禁：`make check no-legacy` + `make preflight`（见下表） |
+| `/org/nodes*`（树/详情/搜索） | 不可达（allowlist 不含；路由未注册），且旧 HTML/HTMX 交互链路已清理（仅保留 JSON API + store） | B | `/org/units`、`/org/units/:orgCode` | `/org/api/org-units*` | `orgunit.read` | 事实源：`internal/server/orgunit_nodes.go`（JSON API + store）；门禁：`make preflight`（E2E 通过） |
+| `/org/snapshot` | 已移除（相关 store + option + 单测已删除） | A | n/a（当前 MUI 未提供对应入口） | n/a | n/a | 删除：`internal/server/orgunit_snapshot.go`、`internal/server/orgunit_snapshot_test.go` |
+| `/org/setid`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML/HTMX 交互链路已清理（仅保留 JSON API + MUI） | A | `/org/setid` | `/org/api/setids`、`/org/api/setid-bindings` | `orgunit.read` | 事实源：`apps/web/**`（MUI）；`internal/server/setid.go`（JSON API） |
+| `/org/job-catalog`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML 交互链路已清理（仅保留 JSON API + MUI） | A | `/jobcatalog` | `/jobcatalog/api/catalog`、`/jobcatalog/api/catalog/actions`、`/org/api/owned-scope-packages` | `jobcatalog.read` | 事实源：`apps/web/**`（MUI）；`internal/server/jobcatalog.go`（JSON API） |
+| `/org/positions`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML/HTMX 交互链路已清理（仅保留 JSON API + MUI） | A | `/staffing/positions` | `/org/api/positions`、`/org/api/positions:options` | `staffing.positions.read` | 事实源：`apps/web/**`（MUI）；`internal/server/staffing_handlers.go`（JSON API） |
+| `/org/assignments`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML 交互链路已清理（仅保留 JSON API + MUI） | A | `/staffing/assignments` | `/org/api/assignments` | `staffing.assignments.read` | 事实源：`apps/web/**`（MUI）；`internal/server/staffing_handlers.go`（JSON API） |
 | `/person/persons`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML handler 已移除 | A | `/person/persons` | `/person/api/persons` | `person.read` | `internal/server/person.go` 已移除旧 HTML handler；`internal/server/person_test.go` 同步收口 |
 
 ## 2) 关键命令执行记录（以 SSOT 入口为准）
@@ -42,6 +42,8 @@
 | --- | --- | --- | --- |
 | 2026-02-15 17:19 UTC | `make css` | ✅ | 产物同步到 `internal/server/assets/web/**` |
 | 2026-02-15 17:26 UTC | `make preflight` | ✅ | 含 E2E（Playwright 7 tests）通过 |
+| 2026-02-15 20:41 UTC | `make preflight` | ✅ | `make check no-legacy` ✅；`make test`（100% coverage）✅；E2E（Playwright 7 tests）✅ |
+| 2026-02-15 20:49 UTC | `make check doc` | ✅ | 文档门禁通过（回写 `DEV-PLAN-103/103A`） |
 
 ## 3) 变更清单（PR 维度）
 
@@ -56,9 +58,10 @@
 ### PR-103A-2（旧 UI 残留清理）
 - 变更点：
   - 中间件对非 `/app/**` UI path passthrough，避免 `/login` 等旧 URL 出现“兼容别名窗口”。
-  - 移除 Person 旧 HTML handler 与对应测试（保持 JSON API 不变）。
+  - 清理旧 UI 残留死代码/测试：移除旧 HTML/HTMX 渲染辅助、OrgUnit Snapshot 残留、以及若干旧 UI 相关测试（保持 JSON API 与 `/app/**` 入口不变）。
 - 验证点：
-  - `internal/server/tenancy_middleware_test.go`：新增断言 `/login` 不发生重定向。
+  - Go 单测覆盖 `/login` 不提供 HTML/不引入 alias：`internal/server/tenancy_middleware_test.go`、`internal/server/handler_test.go`
+  - `make preflight`：通过（见上表）
 
 ### PR-103A-3（P6 改名 apps/web-mui → apps/web）
 - 变更点：
