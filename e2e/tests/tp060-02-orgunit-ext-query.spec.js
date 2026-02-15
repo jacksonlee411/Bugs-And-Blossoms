@@ -222,7 +222,7 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   await extFilterField.click();
   await page.getByRole("option", { name: /Org Type/ }).click();
 
-  const extValueInput = page.getByLabel(/Ext Filter Value|扩展筛选值/);
+  const extValueInput = page.getByTestId("org-ext-filter-value");
   await expect(extValueInput).toBeEnabled({ timeout: 30_000 });
   await extValueInput.click();
   await extValueInput.fill("Company");
