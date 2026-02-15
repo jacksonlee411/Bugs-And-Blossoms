@@ -198,6 +198,24 @@ func TestValidatePatch_CoversBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("effective-date correction mode rejects other fields", func(t *testing.T) {
+		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{
+			EffectiveDate: stringPtr("2026-01-02"),
+			Name:          stringPtr("X"),
+		}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		}
+	})
+
+	t.Run("effective-date correction mode rejects ext payload", func(t *testing.T) {
+		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{
+			EffectiveDate: stringPtr("2026-01-02"),
+			Ext:           map[string]any{"org_type": "DEPARTMENT"},
+		}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		}
+	})
+
 	t.Run("disallowed core field", func(t *testing.T) {
 		limited := OrgUnitMutationPolicyDecision{AllowedFields: []string{"effective_date"}}
 		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{Name: stringPtr("X")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
@@ -226,6 +244,13 @@ func TestValidatePatch_CoversBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("disallowed effective_date field", func(t *testing.T) {
+		limited := OrgUnitMutationPolicyDecision{AllowedFields: []string{"name"}}
+		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{EffectiveDate: stringPtr("2026-01-01")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		}
+	})
+
 	t.Run("blank ext key", func(t *testing.T) {
 		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{Ext: map[string]any{" ": "x"}}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
@@ -235,6 +260,13 @@ func TestValidatePatch_CoversBranches(t *testing.T) {
 	t.Run("allowed ext key", func(t *testing.T) {
 		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{Ext: map[string]any{"org_type": "DEPARTMENT"}}); err != nil {
 			t.Fatalf("unexpected err=%v", err)
+		}
+	})
+
+	t.Run("disallowed ext key", func(t *testing.T) {
+		limited := OrgUnitMutationPolicyDecision{AllowedFields: []string{"effective_date"}}
+		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{Ext: map[string]any{"org_type": "DEPARTMENT"}}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
 		}
 	})
 }

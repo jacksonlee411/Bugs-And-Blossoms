@@ -31,7 +31,6 @@ type HandlerOptions struct {
 	IdentityProvider    identityProvider
 	OrgUnitStore        OrgUnitStore
 	OrgUnitWriteService orgunitservices.OrgUnitWriteService
-	OrgUnitSnapshot     OrgUnitSnapshotStore
 	SetIDStore          SetIDGovernanceStore
 	JobCatalogStore     JobCatalogStore
 	PersonStore         PersonStore

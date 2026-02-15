@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/services"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/httperr"
 )
 
 type assignmentsStoreStub struct {
@@ -66,6 +67,150 @@ func newAssignmentsController() AssignmentsController {
 	}
 }
 
+func controllerWithStore(store assignmentsStoreStub) AssignmentsController {
+	return AssignmentsController{
+		TenantID: func(context.Context) (string, bool) { return "t1", true },
+		NowUTC: func() time.Time {
+			return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		},
+		Facade: services.NewAssignmentsFacade(store),
+	}
+}
+
+func TestAssignmentsController_HandleAssignmentsAPI_TenantMissing(t *testing.T) {
+	c := newAssignmentsController()
+	c.TenantID = func(context.Context) (string, bool) { return "", false }
+	req := httptest.NewRequest(http.MethodGet, "/api/assignments?person_uuid=p1", nil)
+	rec := httptest.NewRecorder()
+	c.HandleAssignmentsAPI(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestAssignmentsController_HandleAssignmentsAPI_InvalidAsOf(t *testing.T) {
+	c := newAssignmentsController()
+	req := httptest.NewRequest(http.MethodGet, "/api/assignments?as_of=bad&person_uuid=p1", nil)
+	rec := httptest.NewRecorder()
+	c.HandleAssignmentsAPI(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestAssignmentsController_HandleAssignmentsAPI_MethodNotAllowed(t *testing.T) {
+	c := newAssignmentsController()
+	req := httptest.NewRequest(http.MethodPut, "/api/assignments?as_of=2026-01-01", nil)
+	rec := httptest.NewRecorder()
+	c.HandleAssignmentsAPI(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestAssignmentsController_HandleAssignmentsAPI_GetBranches(t *testing.T) {
+	t.Run("missing person_uuid", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodGet, "/api/assignments?as_of=2026-01-01", nil)
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("as_of defaults uses NowUTC when provided", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			listFn: func(_ context.Context, _ string, asOfDate string, _ string) ([]types.Assignment, error) {
+				if asOfDate != "2026-01-01" {
+					t.Fatalf("asOf=%q", asOfDate)
+				}
+				return []types.Assignment{}, nil
+			},
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/assignments?person_uuid=p1", nil)
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("as_of defaults uses time.Now when NowUTC nil", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			listFn: func(_ context.Context, _ string, asOfDate string, _ string) ([]types.Assignment, error) {
+				if _, err := time.Parse("2006-01-02", asOfDate); err != nil {
+					t.Fatal(err)
+				}
+				return []types.Assignment{}, nil
+			},
+		})
+		c.NowUTC = nil
+		req := httptest.NewRequest(http.MethodGet, "/api/assignments?person_uuid=p1", nil)
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("list error stable code => 422", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			listFn: func(context.Context, string, string, string) ([]types.Assignment, error) {
+				return nil, &pgconn.PgError{Message: "STAFFING_LIST_FAILED"}
+			},
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/assignments?as_of=2026-01-01&person_uuid=p1", nil)
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("list error bad request => 400", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			listFn: func(context.Context, string, string, string) ([]types.Assignment, error) {
+				return nil, httperr.NewBadRequest("bad")
+			},
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/assignments?as_of=2026-01-01&person_uuid=p1", nil)
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("list error invalid input => 400", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			listFn: func(context.Context, string, string, string) ([]types.Assignment, error) {
+				return nil, &pgconn.PgError{Code: "22P02", Message: "invalid input syntax for type uuid"}
+			},
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/assignments?as_of=2026-01-01&person_uuid=p1", nil)
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("list ok assigns=nil => []", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			listFn: func(context.Context, string, string, string) ([]types.Assignment, error) {
+				return nil, nil
+			},
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/assignments?as_of=2026-01-01&person_uuid=p1", nil)
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+}
+
 func TestAssignmentsController_HandleAssignmentsAPI_ReadError(t *testing.T) {
 	c := newAssignmentsController()
 	req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", nil)
@@ -87,6 +232,149 @@ func TestAssignmentsController_HandleAssignmentsAPI_DecodeError(t *testing.T) {
 	}
 }
 
+func TestAssignmentsController_HandleAssignmentsAPI_PostBranches(t *testing.T) {
+	t.Run("bad json raw map", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader("{bad"))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("deprecated position_id rejected", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader(`{"position_id":"pos1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("invalid effective_date", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader(`{"effective_date":"bad","person_uuid":"p1","position_uuid":"pos1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("invalid status", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"p1","position_uuid":"pos1","status":"weird"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("upsert conflict", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			upsertFn: func(context.Context, string, string, string, string, string, string) (types.Assignment, error) {
+				return types.Assignment{}, &pgconn.PgError{Message: "STAFFING_IDEMPOTENCY_REUSED"}
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"p1","position_uuid":"pos1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("upsert invalid input => 400", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			upsertFn: func(context.Context, string, string, string, string, string, string) (types.Assignment, error) {
+				return types.Assignment{}, &pgconn.PgError{Code: "22P02", Message: "invalid input syntax for type uuid"}
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"p1","position_uuid":"pos1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("upsert bad request => 400", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			upsertFn: func(context.Context, string, string, string, string, string, string) (types.Assignment, error) {
+				return types.Assignment{}, httperr.NewBadRequest("bad")
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"p1","position_uuid":"pos1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("upsert unprocessable stable code", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			upsertFn: func(context.Context, string, string, string, string, string, string) (types.Assignment, error) {
+				return types.Assignment{}, &pgconn.PgError{Message: "STAFFING_UPSERT_FAILED"}
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"p1","position_uuid":"pos1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("upsert ok", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			upsertFn: func(context.Context, string, string, string, string, string, string) (types.Assignment, error) {
+				return types.Assignment{AssignmentUUID: "a1"}, nil
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"p1","position_uuid":"pos1","status":"active","allocated_fte":"1.0"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("upsert ok with inactive status", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			upsertFn: func(context.Context, string, string, string, string, string, string) (types.Assignment, error) {
+				return types.Assignment{AssignmentUUID: "a1", Status: "inactive"}, nil
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader(`{"person_uuid":"p1","position_uuid":"pos1","status":"inactive"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("POST without as_of defaults and sets effective_date", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			upsertFn: func(_ context.Context, _ string, effectiveDate string, _ string, _ string, _ string, _ string) (types.Assignment, error) {
+				if effectiveDate != "2026-01-01" {
+					t.Fatalf("effective=%q", effectiveDate)
+				}
+				return types.Assignment{AssignmentUUID: "a1"}, nil
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments", strings.NewReader(`{"person_uuid":"p1","position_uuid":"pos1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+}
+
 func TestAssignmentsController_HandleAssignmentEventsCorrectAPI_ReadError(t *testing.T) {
 	c := newAssignmentsController()
 	req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", nil)
@@ -106,6 +394,163 @@ func TestAssignmentsController_HandleAssignmentEventsCorrectAPI_DecodeError(t *t
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
+}
+
+func TestAssignmentsController_HandleAssignmentEventsCorrectAPI_Branches(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		c := newAssignmentsController()
+		c.TenantID = func(context.Context) (string, bool) { return "", false }
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodGet, "/api/assignments/events/correct", nil)
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("deprecated assignment_id rejected", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_id":"1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("missing assignment_uuid", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"target_effective_date":"2026-01-01"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("missing target_effective_date", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("invalid target_effective_date", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"bad"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("replacement_payload valid with new key", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			correctFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "e1", nil
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":{"position_uuid":"pos1"}}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("bad json raw map", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader("{bad"))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("replacement_payload invalid json is ignored", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			correctFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "e1", nil
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","replacement_payload":"bad"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("correct conflict", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			correctFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "", &pgconn.PgError{Message: "STAFFING_IDEMPOTENCY_REUSED"}
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("correct unprocessable stable code", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			correctFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "", &pgconn.PgError{Message: "STAFFING_CORRECT_FAILED"}
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("correct invalid input => 400", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			correctFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "", &pgconn.PgError{Code: "22P02", Message: "invalid input syntax for type uuid"}
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("correct bad request => 400", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			correctFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "", httperr.NewBadRequest("bad")
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/correct", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsCorrectAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
 }
 
 func TestAssignmentsController_HandleAssignmentEventsCorrectAPI_LegacyPayload(t *testing.T) {
@@ -137,6 +582,149 @@ func TestAssignmentsController_HandleAssignmentEventsRescindAPI_DecodeError(t *t
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
 	}
+}
+
+func TestAssignmentsController_HandleAssignmentEventsRescindAPI_Branches(t *testing.T) {
+	t.Run("tenant missing", func(t *testing.T) {
+		c := newAssignmentsController()
+		c.TenantID = func(context.Context) (string, bool) { return "", false }
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/rescind", strings.NewReader(`{}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodGet, "/api/assignments/events/rescind", nil)
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("deprecated assignment_id rejected", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/rescind", strings.NewReader(`{"assignment_id":"1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("missing target_effective_date", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/rescind", strings.NewReader(`{"assignment_uuid":"a1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("missing assignment_uuid", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/rescind", strings.NewReader(`{"target_effective_date":"2026-01-01"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("bad json raw map", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/rescind", strings.NewReader("{bad"))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("invalid target date", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/rescind", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"bad"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("rescind conflict", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			rescindFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "", &pgconn.PgError{Message: "STAFFING_IDEMPOTENCY_REUSED"}
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/rescind", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","payload":{}}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("rescind invalid input => 400", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			rescindFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "", &pgconn.PgError{Code: "22P02", Message: "invalid input syntax for type uuid"}
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/rescind", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","payload":{}}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("rescind bad request => 400", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			rescindFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "", httperr.NewBadRequest("bad")
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/rescind", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","payload":{}}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("rescind ok", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			rescindFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "e1", nil
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/rescind", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","payload":{"note":"x"}}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("rescind unprocessable stable code", func(t *testing.T) {
+		c := controllerWithStore(assignmentsStoreStub{
+			rescindFn: func(context.Context, string, string, string, json.RawMessage) (string, error) {
+				return "", &pgconn.PgError{Message: "STAFFING_RESCIND_FAILED"}
+			},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments/events/rescind", strings.NewReader(`{"assignment_uuid":"a1","target_effective_date":"2026-01-01","payload":{}}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentEventsRescindAPI(rec, req)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
 }
 
 func TestStablePgMessage(t *testing.T) {

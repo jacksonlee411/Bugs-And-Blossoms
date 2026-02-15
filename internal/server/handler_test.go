@@ -853,15 +853,6 @@ func TestNewHandlerWithOptions_DefaultStaffingStores(t *testing.T) {
 	}
 }
 
-type orgSnapshotStoreStub struct{}
-
-func (orgSnapshotStoreStub) GetSnapshot(context.Context, string, string) ([]OrgUnitSnapshotRow, error) {
-	return nil, nil
-}
-func (orgSnapshotStoreStub) CreateOrgUnit(context.Context, string, string, string, string) (string, error) {
-	return "10000001", nil
-}
-
 func TestNewHandlerWithOptions_UsesProvidedStores(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -879,7 +870,6 @@ func TestNewHandlerWithOptions_UsesProvidedStores(t *testing.T) {
 	h, err := NewHandlerWithOptions(HandlerOptions{
 		TenancyResolver: localTenancyResolver(),
 		OrgUnitStore:    newOrgUnitMemoryStore(),
-		OrgUnitSnapshot: orgSnapshotStoreStub{},
 		SetIDStore:      newSetIDMemoryStore(),
 		JobCatalogStore: newJobCatalogMemoryStore(),
 		PersonStore:     newPersonMemoryStore(),
@@ -909,7 +899,6 @@ func TestNewHandlerWithOptions_WithProvidedStores(t *testing.T) {
 	h, err := NewHandlerWithOptions(HandlerOptions{
 		TenancyResolver: localTenancyResolver(),
 		OrgUnitStore:    newOrgUnitMemoryStore(),
-		OrgUnitSnapshot: nil,
 		SetIDStore:      newSetIDMemoryStore(),
 		JobCatalogStore: newJobCatalogMemoryStore(),
 	})
