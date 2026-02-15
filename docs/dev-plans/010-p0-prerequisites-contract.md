@@ -126,7 +126,7 @@ flowchart TD
 │   ├── jobcatalog/
 │   ├── staffing/
 │   └── person/
-├── apps/web-mui/             # MUI React SPA（DEV-PLAN-103）
+├── apps/web/             # MUI React SPA（DEV-PLAN-103）
 └── scripts/                  # db/routing/authz/sqlc 等脚本入口（由 Makefile 调用）
 ```
 
@@ -215,7 +215,7 @@ job(required_check):
 
 ### 8.2 推荐 PR 拆分（可并行，但需按关键路径收口）
 
-1. [ ] PR-0：仓库 bootstrap（mono-repo + `apps/web-mui`；README/AGENTS/Doc Map/目录骨架）+ 固化 `docs/dev-plans/` 为 SSOT（ADR-010-01）。
+1. [ ] PR-0：仓库 bootstrap（mono-repo + `apps/web`；README/AGENTS/Doc Map/目录骨架）+ 固化 `docs/dev-plans/` 为 SSOT（ADR-010-01）。
 2. [ ] PR-1：对齐 `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`（版本 pin、依赖锁定、基础 Makefile 入口）。
 3. [ ] PR-2：对齐 `docs/dev-plans/012-ci-quality-gates.md`（CI required checks 骨架；job 名称冻结；job 不跳过）。
 4. [ ] PR-3：对齐 `docs/dev-plans/017-routing-strategy.md`（allowlist SSOT + 最小 routing gates + 本地入口）。
@@ -267,7 +267,7 @@ job(required_check):
 ## 12. 未决问题（需要在 PR-0 明确）
 
 1. [X] ADR-010-01：dev-plan SSOT 放置策略选 A（同仓）—— 已批准。
-2. [X] 仓库形态：mono-repo + `apps/web-mui`（对齐 `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`）—— 已批准。
+2. [X] 仓库形态：mono-repo + `apps/web`（对齐 `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`）—— 已批准。
 3. [X] P0 第一条业务垂直切片：`orgunit` —— 已批准。
 4. [X] implementation repo 命名/权限/分支保护：`jacksonlee411/Bugs-And-Blossoms`（public），`main` 禁止直推/禁止 force-push/必须 PR，并冻结 required checks：`Code Quality & Formatting` / `Unit & Integration Tests` / `Routing Gates` / `E2E Tests`。
 

@@ -102,7 +102,7 @@
 **变更类别（示例）**：
 - `docs`：文档与规范（Doc Map / dev-plans / runbooks）。
 - `go`：Go 源码与依赖（`*.go`/`go.mod`/`go.sum`/lint 配置）。
-- `ui`：MUI（React SPA）工程（`apps/web-mui/`）与其 go:embed 产物（`internal/server/assets/web/**`），以及 UI 相关静态资源/配置。
+- `ui`：MUI（React SPA）工程（`apps/web/`）与其 go:embed 产物（`internal/server/assets/web/**`），以及 UI 相关静态资源/配置。
 - `i18n`：`en/zh` 翻译资源（`make check tr`）。
 - `db`：schema/migrations/atlas/goose（对齐 `DEV-PLAN-024`）。
 - `sqlc`：sqlc 配置/queries/schema export（对齐 `DEV-PLAN-025`）。
@@ -121,8 +121,8 @@
 
 **覆盖范围（聚合门禁）**：
 - Go：`gofmt`/`go vet`/`golangci-lint`/CleanArchGuard（对齐 `DEV-PLAN-015`）。
-- UI：MUI（`apps/web-mui/**`）构建基线 + go:embed 产物一致性（`internal/server/assets/web/**`）（Node/pnpm 版本对齐 `DEV-PLAN-011`）；命中 `ui` 触发器时必须通过 `Makefile` 单一入口执行 `make css`，并由 `assert-clean` 阻断 “改了源/改了产物但没跑 build 或漏提交” 的漂移。
-  - 触发器口径（强制闭合）：`ui` 至少覆盖 `apps/web-mui/**` 与 `internal/server/assets/web/**`，确保“改源/改产物”都会触发 UI build gate。
+- UI：MUI（`apps/web/**`）构建基线 + go:embed 产物一致性（`internal/server/assets/web/**`）（Node/pnpm 版本对齐 `DEV-PLAN-011`）；命中 `ui` 触发器时必须通过 `Makefile` 单一入口执行 `make css`，并由 `assert-clean` 阻断 “改了源/改了产物但没跑 build 或漏提交” 的漂移。
+  - 触发器口径（强制闭合）：`ui` 至少覆盖 `apps/web/**` 与 `internal/server/assets/web/**`，确保“改源/改产物”都会触发 UI build gate。
 - SQL：SQL 格式化门禁（pg_format，版本口径对齐 `DEV-PLAN-011`）。
 - Docs：`make check doc`（新文档门禁）。
 - No-Legacy：`make check no-legacy`（禁止 legacy 分支/回退通道，对齐 `DEV-PLAN-004M1`）。

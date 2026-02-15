@@ -628,32 +628,29 @@ m = r.sub == p.sub && r.dom == p.dom && r.obj == p.obj && r.act == p.act
 }
 
 func TestAuthzRequirementForRoute_UnsupportedMethods(t *testing.T) {
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/setid"); ok {
-		t.Fatal("expected ok=false")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/job-catalog"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/setids"); ok {
 		t.Fatal("expected ok=false")
 	}
 }
 
 func TestPathMatchRouteTemplate(t *testing.T) {
-	if !pathMatchRouteTemplate("/org/positions/123", "/org/positions/{id}") {
+	if !pathMatchRouteTemplate("/org/api/scope-packages/123/disable", "/org/api/scope-packages/{package_id}/disable") {
 		t.Fatal("expected match")
 	}
-	if pathMatchRouteTemplate("/org/positions", "/org/positions/{id}") {
+	if pathMatchRouteTemplate("/org/api/scope-packages/123/disable", "/org/api/scope-packages/{package_id}") {
 		t.Fatal("expected length mismatch")
 	}
 	if pathMatchRouteTemplate("/org//positions", "/org/{id}/positions") {
 		t.Fatal("expected empty segment mismatch")
 	}
-	if pathMatchRouteTemplate("/org/positions/123", "/org/jobs/{id}") {
+	if pathMatchRouteTemplate("/org/api/scope-packages/123/disable", "/org/api/scope-packages/{package_id}/enable") {
 		t.Fatal("expected segment mismatch")
 	}
 }
 
 func TestSplitRouteSegments(t *testing.T) {
-	got := splitRouteSegments(" /org/nodes ")
-	if len(got) != 2 || got[0] != "org" || got[1] != "nodes" {
+	got := splitRouteSegments(" /org/api/positions ")
+	if len(got) != 3 || got[0] != "org" || got[1] != "api" || got[2] != "positions" {
 		t.Fatalf("segments=%v", got)
 	}
 	if splitRouteSegments("   ") != nil {

@@ -149,7 +149,7 @@
 ## 6. 影响范围（草案）
 - 文档：`docs/dev-plans/073`、`docs/dev-plans/076`、本计划（102）及后续执行日志。
 - 后端：`internal/server/as_of.go`、`internal/server/handler.go`、`internal/server/orgunit_nodes.go`、相关模块 handler。
-- 前端：`internal/server/assets/astro/app.html`、`apps/web-mui/src/pages/org/*`、相关 API 调用层。
+- 前端：`internal/server/assets/astro/app.html`、`apps/web/src/pages/org/*`、相关 API 调用层。
 - 测试：`internal/server/*_test.go`、MUI 页面与版本选择相关测试。
 
 ## 7. 验收标准

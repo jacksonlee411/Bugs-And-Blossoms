@@ -4,10 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createPerson, listPersons } from '../../api/persons'
 import { PageHeader } from '../../components/PageHeader'
 
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function newRequestCode(prefix: string): string {
   return `${prefix}:${Date.now()}`
 }
@@ -16,7 +12,6 @@ export function PersonsPage() {
   const queryClient = useQueryClient()
   const [pernr, setPernr] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [effectiveDate, setEffectiveDate] = useState(todayISO())
   const [error, setError] = useState<string | null>(null)
 
   const personsQuery = useQuery({
@@ -69,7 +64,6 @@ export function PersonsPage() {
             }}
             spacing={1.5}
           >
-            <TextField label='As-of (ignored)' name='as_of' type='date' value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} />
             <TextField label='Pernr' name='pernr' value={pernr} onChange={(e) => setPernr(e.target.value)} />
             <TextField
               label='Display Name'
@@ -118,4 +112,3 @@ export function PersonsPage() {
     </Box>
   )
 }
-

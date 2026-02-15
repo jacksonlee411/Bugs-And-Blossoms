@@ -229,7 +229,7 @@ graph TD
   - `loadDetails(org_id, effective_date)` 仅改变详情区，不更新 URL。
   - 版本切换按钮/下拉不再 `window.location.href`。
 - **MUI 详情页（新增，2026-02-13）**
-  - `apps/web-mui/src/pages/org/OrgUnitDetailsPage.tsx`：移除 `as_of` 伪版本注入逻辑。
+  - `apps/web/src/pages/org/OrgUnitDetailsPage.tsx`：移除 `as_of` 伪版本注入逻辑。
   - 当 URL 缺 `effective_date` 时，按“`<= as_of` 最近优先、否则最早版本”计算真实默认版本，并用于详情查询。
   - 回归用例需覆盖“初次 3 条、点击后仍 3 条”的稳定性断言。
 - **详情 API**

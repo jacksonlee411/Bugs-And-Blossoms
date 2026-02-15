@@ -20,7 +20,7 @@
 
 **当前缺口（对应 `DEV-PLAN-100` 4C）**：
 
-1) 列表页（`apps/web-mui` 的 OrgUnitsPage）尚未提供扩展字段的筛选/排序 UI 入口；  
+1) 列表页（`apps/web` 的 OrgUnitsPage）尚未提供扩展字段的筛选/排序 UI 入口；  
 2) 列表 ext query 的 URL 参数与前端 grid query state 解析存在“仅支持 core sort 字段”的约束，导致无法把 `sort=ext:<field_key>` 作为可分享状态稳定复现；  
 3) i18n 已覆盖详情页所需的字段 label key（如 `org.fields.org_type`），但列表侧仍缺少“扩展筛选/排序”相关控件文案与错误提示的 i18n 收口。
 
@@ -56,7 +56,7 @@
 
 - 触发器（本计划通常会命中）：
   - [ ] 文档：`make check doc`（本文件 + 引用更新）
-  - [ ] Web UI（`apps/web-mui/**`）：lint/typecheck/test/build + `make css`（产物入仓 + go:embed）
+  - [ ] Web UI（`apps/web/**`）：lint/typecheck/test/build + `make css`（产物入仓 + go:embed）
   - [ ] 路由治理：若新增/调整后端路由，需 `make check routing`（SSOT：`DEV-PLAN-017`）
   - [ ] Authz：若新增/调整权限映射，需 `make authz-pack && make authz-test && make authz-lint`（SSOT：`DEV-PLAN-022`）
 
@@ -220,10 +220,10 @@ UI 侧组合口径（冻结）：
   - `internal/server/orgunit_list_ext_query_test.go`（更新 parent+ext query 的契约测试）
   - `internal/server/orgunit_field_metadata_api_test.go`（field-definitions 契约测试补齐）
 - 前端（MUI）：
-  - `apps/web-mui/src/pages/org/OrgUnitsPage.tsx`（FilterBar 增加 ext filter/sort；URL 状态；admin gating；fail-closed 清理）
-  - `apps/web-mui/src/api/orgUnits.ts`（如需：list 接口 sort 参数类型放宽以支持 `ext:*`；复用 options/field-configs/field-definitions）
-  - `apps/web-mui/src/i18n/messages.ts`（新增列表 ext 控件与错误提示 key，en/zh 同步）
-  - （如需）`apps/web-mui/src/utils/gridQueryState.ts`（仅当决定让 parse 支持 ext sort；否则在 OrgUnitsPage 内独立解析）
+  - `apps/web/src/pages/org/OrgUnitsPage.tsx`（FilterBar 增加 ext filter/sort；URL 状态；admin gating；fail-closed 清理）
+  - `apps/web/src/api/orgUnits.ts`（如需：list 接口 sort 参数类型放宽以支持 `ext:*`；复用 options/field-configs/field-definitions）
+  - `apps/web/src/i18n/messages.ts`（新增列表 ext 控件与错误提示 key，en/zh 同步）
+  - （如需）`apps/web/src/utils/gridQueryState.ts`（仅当决定让 parse 支持 ext sort；否则在 OrgUnitsPage 内独立解析）
 - E2E：
   - `e2e/tests/`（新增或扩展 1 条覆盖“启用字段 -> 写值 -> 列表筛选/排序 -> 回显”的用例）
 

@@ -26,7 +26,7 @@
 ## 4. 实施步骤
 
 1. [x] 版本与许可冻结
-   - 输出《版本与许可决策表》，并写入 `apps/web-mui/README.md`。
+   - 输出《版本与许可决策表》，并写入 `apps/web/README.md`。
    - 许可边界冻结为：MUI X Pro/Premium 已完成采购与授权，本项目可按“最佳组件优先”直接启用高级能力，不再受许可限制。
 
    | 组件 | 版本 | 许可策略 |
@@ -38,7 +38,7 @@
    | MUI X Premium (`@mui/x-data-grid-premium`) | 8.27.0 | 商业授权（已采购） |
 
 2. [x] 工程骨架初始化
-   - 初始化目录：`apps/web-mui`。
+   - 初始化目录：`apps/web`。
    - 建立脚本：`dev/build/test/lint/typecheck/check`。
    - 建立 `README.md`、`.env.example`、Vite/TypeScript/ESLint/Vitest 基础配置。
 
@@ -62,7 +62,7 @@
    - 建立最小单元/组件测试：
      - `src/api/httpClient.test.ts`
      - `src/components/PageHeader.test.tsx`
-   - 完成 `pnpm -C apps/web-mui check` 全链路通过（lint/typecheck/test/build）。
+   - 完成 `pnpm -C apps/web check` 全链路通过（lint/typecheck/test/build）。
 
 ## 5. 验收标准
 
@@ -81,11 +81,11 @@
 ## 7. 执行记录（2026-02-12）
 
 - 已执行并通过：
-  - `pnpm -C apps/web-mui lint`
-  - `pnpm -C apps/web-mui typecheck`
-  - `pnpm -C apps/web-mui test`
-  - `pnpm -C apps/web-mui build`
-  - `pnpm -C apps/web-mui check`
+  - `pnpm -C apps/web lint`
+  - `pnpm -C apps/web typecheck`
+  - `pnpm -C apps/web test`
+  - `pnpm -C apps/web build`
+  - `pnpm -C apps/web check`
 
 ## 8. 关联计划
 

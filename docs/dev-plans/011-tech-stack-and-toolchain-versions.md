@@ -14,7 +14,7 @@
 ### 2.1 范围
 
 - 运行时与基础设施：Go、PostgreSQL、Redis、容器基底镜像。
-- UI 技术栈：React（Vite）+ MUI Core + MUI X（唯一用户 UI；见 `DEV-PLAN-090/091/092/103`），前端工程 SSOT 为 `apps/web-mui`。
+- UI 技术栈：React（Vite）+ MUI Core + MUI X（唯一用户 UI；见 `DEV-PLAN-090/091/092/103`），前端工程 SSOT 为 `apps/web`。
 - 数据与迁移工具链：sqlc、Atlas、Goose、SQL 格式化门禁（pg_format）。
 - 授权/路由/事件：Casbin、Routing Gates、Transactional Outbox（能力复用口径）。
 - 质量门禁与测试：golangci-lint、go-cleanarch、Go test、Playwright E2E。
@@ -28,7 +28,7 @@
   - CI 门禁：`.github/workflows/quality-gates.yml`
   - 本地服务编排：`devhub.yml`、`compose*.yml`
   - 示例环境变量：`.env.example`
-- 版本与依赖：`go.mod`、`e2e/pnpm-lock.yaml`、以及 MUI UI 工程的 `package.json` 与 lockfile（`apps/web-mui/package.json` + `apps/web-mui/pnpm-lock.yaml`；由 `DEV-PLAN-103` 收口）。
+- 版本与依赖：`go.mod`、`e2e/pnpm-lock.yaml`、以及 MUI UI 工程的 `package.json` 与 lockfile（`apps/web/package.json` + `apps/web/pnpm-lock.yaml`；由 `DEV-PLAN-103` 收口）。
 - **版本冻结粒度**：
   - 开发/构建工具优先固定到**精确版本**（例如 `v0.3.857`）。
   - 容器镜像至少固定到**主版本 tag**（例如 `postgres:17`）；生产环境建议进一步固定 digest（由部署侧落地）。
@@ -60,18 +60,18 @@
 ### 3.2 UI 技术栈（React SPA：MUI X）
 
 > 说明：`DEV-PLAN-103` 已移除 Astro/HTMX/Alpine/Shoelace 的旧 UI 链路；仓库内唯一用户 UI 为 **React SPA（MUI X）**。  
-> UI 依赖版本以 `apps/web-mui/package.json` + `apps/web-mui/pnpm-lock.yaml` 为 SSOT，本节仅做“可读性摘要”。
+> UI 依赖版本以 `apps/web/package.json` + `apps/web/pnpm-lock.yaml` 为 SSOT，本节仅做“可读性摘要”。
 
 #### 3.2.1 UI Build / 依赖版本（Vite）
 
 | 组件 | 基线版本 | 来源/说明 |
 | --- | --- | --- |
-| pnpm | `10.24.0` | `apps/web-mui/package.json#packageManager`（同时用于 E2E） |
+| pnpm | `10.24.0` | `apps/web/package.json#packageManager`（同时用于 E2E） |
 | Node.js | `20.x`（推荐） | UI build 与 E2E 共同依赖；建议补齐可复现 pin（例如 `.tool-versions`/`.nvmrc`/CI） |
-| Vite | `7.3.1` | `apps/web-mui/package.json` |
-| React | `19.2.4` | `apps/web-mui/package.json` |
-| MUI Core | `7.3.7` | `apps/web-mui/package.json` |
-| MUI X（DataGrid/TreeView/DatePickers） | `8.27.0` | `apps/web-mui/package.json` |
+| Vite | `7.3.1` | `apps/web/package.json` |
+| React | `19.2.4` | `apps/web/package.json` |
+| MUI Core | `7.3.7` | `apps/web/package.json` |
+| MUI X（DataGrid/TreeView/DatePickers） | `8.27.0` | `apps/web/package.json` |
 
 #### 3.2.2 产物交付（go:embed）
 

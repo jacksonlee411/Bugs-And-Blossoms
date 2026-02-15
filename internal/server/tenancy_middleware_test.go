@@ -187,6 +187,30 @@ func TestWithTenantAndSession_MissingSIDRedirects(t *testing.T) {
 	}
 }
 
+func TestWithTenantAndSession_OldUIPathPassthrough_NoLoginAlias(t *testing.T) {
+	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
+	nextCalled := false
+	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	req.Host = "localhost:8080"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if loc := rec.Result().Header.Get("Location"); loc != "" {
+		t.Fatalf("unexpected redirect location=%q", loc)
+	}
+	if !nextCalled {
+		t.Fatal("expected pass-through to next")
+	}
+}
+
 func TestWithTenantAndSession_SessionLookupError(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	sessions := &stubSessionStore{err: errors.New("boom")}

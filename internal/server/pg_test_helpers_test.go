@@ -288,6 +288,10 @@ func (r *fakeRows) Scan(dest ...any) error {
 			*v = false
 		case *time.Time:
 			*v = time.Unix(123, 0).UTC()
+		case *[]int:
+			*v = []int{1, 2}
+		case *[]byte:
+			*v = []byte(`{}`)
 		case *int:
 			*v = 0
 		case *int64:
@@ -314,6 +318,12 @@ func (r fakeRow) Scan(dest ...any) error {
 				*d = ""
 			case *time.Time:
 				*d = time.Time{}
+			case *[]int:
+				*d = nil
+			case *[]byte:
+				*d = nil
+			case **time.Time:
+				*d = nil
 			case *bool:
 				*d = false
 			case *int:
@@ -328,6 +338,31 @@ func (r fakeRow) Scan(dest ...any) error {
 			*d = r.vals[i].(string)
 		case *time.Time:
 			*d = r.vals[i].(time.Time)
+		case *[]int:
+			switch v := r.vals[i].(type) {
+			case []int:
+				*d = append([]int(nil), v...)
+			case []int32:
+				out := make([]int, 0, len(v))
+				for _, n := range v {
+					out = append(out, int(n))
+				}
+				*d = out
+			default:
+				*d = nil
+			}
+		case *[]byte:
+			switch v := r.vals[i].(type) {
+			case []byte:
+				*d = append([]byte(nil), v...)
+			case string:
+				*d = []byte(v)
+			default:
+				*d = nil
+			}
+		case **time.Time:
+			v := r.vals[i].(time.Time)
+			*d = &v
 		case *bool:
 			*d = r.vals[i].(bool)
 		case *int:

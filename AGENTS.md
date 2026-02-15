@@ -231,7 +231,7 @@ modules/{module}/
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
 - DEV-PLAN-103：移除 Astro/HTMX，前端收敛为 MUI X（React SPA）：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
 - DEV-PLAN-103 执行日志：`docs/dev-records/dev-plan-103-execution-log.md`
-- DEV-PLAN-103A：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名 apps/web-mui → apps/web）：`docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
+- DEV-PLAN-103A：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名：去技术后缀）：`docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
 - DEV-PLAN-103A 执行日志：`docs/dev-records/dev-plan-103a-execution-log.md`
 - DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`

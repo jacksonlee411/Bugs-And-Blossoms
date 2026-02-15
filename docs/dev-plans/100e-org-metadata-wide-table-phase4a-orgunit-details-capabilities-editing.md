@@ -43,7 +43,7 @@
 
 - 触发器（本计划实施通常会命中）：
   - [ ] 文档：`make check doc`（本文 + 引用更新）
-  - [ ] Web UI（`apps/web-mui`）：以 CI 前端门禁为准（Typecheck/Lint/Test/Build）
+  - [ ] Web UI（`apps/web`）：以 CI 前端门禁为准（Typecheck/Lint/Test/Build）
   - [ ] 多语言 JSON：`make check tr`（扩展字段 label i18n key 与 deny reason 文案）
   - [ ] （依赖项）路由治理：若实现中补齐 capabilities/options/details 等后端路由变更，需通过 `make check routing`（SSOT：`DEV-PLAN-017`）
   - [ ] （依赖项）Authz：若新增权限点/策略，需通过 `make authz-pack && make authz-test && make authz-lint`（SSOT：`DEV-PLAN-022`）
@@ -54,7 +54,7 @@
 
 ```mermaid
 graph TD
-  UI[apps/web-mui OrgUnitDetailsPage] -->|GET details(as_of)| Details[/org/api/org-units/details/]
+  UI[apps/web OrgUnitDetailsPage] -->|GET details(as_of)| Details[/org/api/org-units/details/]
   UI -->|GET mutation-capabilities(effective_date)| Caps[/org/api/org-units/mutation-capabilities/]
   UI -->|GET fields:options(field_key, as_of, q)| Opts[/org/api/org-units/fields:options/]
   UI -->|POST corrections| Correct[/org/api/org-units/corrections/]
@@ -428,11 +428,11 @@ Select 字段（DICT/ENTITY）控件策略：
 
 ### 8.2 里程碑（本计划待办）
 
-1. [x] Web API client：在 `apps/web-mui/src/api/orgUnits.ts` 增加（或拆分新文件）：
+1. [x] Web API client：在 `apps/web/src/api/orgUnits.ts` 增加（或拆分新文件）：
    - `getOrgUnitMutationCapabilities(...)`
    - `getOrgUnitFieldOptions(...)`
    - 更新 `getOrgUnitDetails(...)` 类型以包含 `ext_fields` + `display_value_source`
-2. [x] 详情页展示：在 `apps/web-mui/src/pages/org/OrgUnitDetailsPage.tsx` profile 区新增 ext_fields 展示区块（与既有两栏布局一致）。
+2. [x] 详情页展示：在 `apps/web/src/pages/org/OrgUnitDetailsPage.tsx` profile 区新增 ext_fields 展示区块（与既有两栏布局一致）。
 3. [x] 更正弹窗改造：
    - 引入 capabilities fetch（按 `effective_date`）。
    - 动态渲染扩展字段表单项。

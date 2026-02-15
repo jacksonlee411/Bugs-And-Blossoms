@@ -17,10 +17,10 @@ fi
 corepack enable >/dev/null 2>&1 || true
 corepack prepare pnpm@10.24.0 --activate >/dev/null
 
-pnpm -C apps/web-mui install --frozen-lockfile
-pnpm -C apps/web-mui build
+pnpm -C apps/web install --frozen-lockfile
+pnpm -C apps/web build
 
-mui_dist_dir="apps/web-mui/dist"
+mui_dist_dir="apps/web/dist"
 out_dir="internal/server/assets/web"
 
 if [[ ! -f "${mui_dist_dir}/index.html" ]]; then

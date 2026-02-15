@@ -252,7 +252,7 @@
 ### 13.2 质量验证（已执行）
 
 - 后端：`go fmt ./...`、`go vet ./...`、`make check lint`、`make test`（覆盖率门禁 100% 通过）。
-- 前端：`pnpm -C apps/web-mui check`（lint/typecheck/test/build 全通过）。
+- 前端：`pnpm -C apps/web check`（lint/typecheck/test/build 全通过）。
 - UI 构建：`make generate`、`make css` 通过。
 - 治理门禁：`make check routing`、`make check doc` 通过。
 - 权限门禁：`make authz-pack && make authz-test && make authz-lint` 通过。
