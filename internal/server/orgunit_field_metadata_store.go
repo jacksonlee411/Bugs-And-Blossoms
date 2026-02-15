@@ -379,7 +379,7 @@ func (s *orgUnitPGStore) GetOrgUnitVersionExtSnapshot(ctx context.Context, tenan
 	var labelsJSON []byte
 	var lastEventID int64
 	if err := tx.QueryRow(ctx, `
-SELECT to_jsonb(v), COALESCE(v.ext_labels_snapshot, {}::jsonb), v.last_event_id
+SELECT to_jsonb(v), COALESCE(v.ext_labels_snapshot, '{}'::jsonb), v.last_event_id
 FROM orgunit.org_unit_versions v
 WHERE v.tenant_uuid = $1::uuid
   AND v.org_id = $2::int

@@ -3,6 +3,10 @@
 **状态**: 已完成（2026-02-14）
 
 > 本文从 `DEV-PLAN-100` 的 Phase 3 拆分而来，作为 Phase 3 的 SSOT；`DEV-PLAN-100` 保持为整体路线图。
+>
+> 2026-02-15 补充（承接 `DEV-PLAN-100G`）：为支持列表页 4C 的 UI 收口，本 SSOT 追加冻结：
+> - `field-definitions` 返回 `allow_filter/allow_sort`；
+> - list 的 ext query 仅限制在 `mode=grid`/分页模式（不再因 `parent_org_code` 而拒绝）；TreePanel 懒加载仍不得携带 ext query 参数。
 
 ## 1. 背景与上下文 (Context)
 
@@ -124,7 +128,9 @@ graph TD
       "value_type": "text",
       "data_source_type": "PLAIN",
       "data_source_config": {},
-      "label_i18n_key": "org.fields.short_name"
+      "label_i18n_key": "org.fields.short_name",
+      "allow_filter": false,
+      "allow_sort": false
     },
     {
       "field_key": "org_type",
@@ -135,7 +141,9 @@ graph TD
         { "dict_code": "org_type" },
         { "dict_code": "org_subtype" }
       ],
-      "label_i18n_key": "org.fields.org_type"
+      "label_i18n_key": "org.fields.org_type",
+      "allow_filter": true,
+      "allow_sort": true
     }
   ]
 }
@@ -146,6 +154,12 @@ graph TD
 > `data_source_config_options` 口径（冻结）：
 >
 > - 仅当 `data_source_type IN ('DICT','ENTITY')` 时返回，且必须为非空数组；若该字段数据来源配置为“固定”，则返回单元素数组（与 `data_source_config` 相同）。
+
+新增字段（冻结）：
+
+- `allow_filter` / `allow_sort`：
+  - 事实源为服务端 fieldmeta（SSOT），用于驱动列表页展示“可筛选/可排序”的扩展字段入口；
+  - UI 不得维护第二套 allowlist（对齐 `DEV-PLAN-100` D7/D8）。
 
 ### 5.2 字段配置管理（list/enable/disable）
 
@@ -321,7 +335,7 @@ status 口径冻结：
 
 约束：
 
-- **适用模式冻结**：扩展字段 filter/sort 仅支持 “grid/list 查询”模式（例如 `mode=grid` 或显式分页参数）；对 roots/children 兼容路径（未进入 list 模式）与 `parent_org_code` 子树查询，必须返回 400（避免在树查询上引入动态 SQL 与额外索引面）。  
+- **适用模式冻结**：扩展字段 filter/sort 仅支持 “grid/list 查询”模式（例如 `mode=grid` 或显式分页参数）；对 roots/children 兼容路径（未进入 list 模式）必须返回 400（避免把动态 SQL 带入树懒加载链路）。  
 - `ext_filter_field_key` 与 `ext_filter_value` 必须成对出现；仅出现其一返回 400。  
 - 仅允许 filter/sort allowlist 字段（SSOT：`DEV-PLAN-100` D7/D8），且字段必须在 `as_of` 下 enabled；否则返回 400（fail-closed）。  
 - 列名只能来自 `field_key -> physical_col` 映射，且必须通过严格格式校验；值必须参数化。  

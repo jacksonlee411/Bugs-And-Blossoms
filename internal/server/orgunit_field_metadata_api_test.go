@@ -90,6 +90,7 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 
 		// Contract (DEV-PLAN-100D2): DICT/ENTITY must include non-empty data_source_config_options.
 		prevKey := ""
+		foundOrgType := false
 		for _, f := range body.Fields {
 			if strings.TrimSpace(f.FieldKey) == "" {
 				t.Fatalf("field_key blank")
@@ -99,6 +100,12 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 				t.Fatalf("fields not sorted: %q before %q", prevKey, f.FieldKey)
 			}
 			prevKey = f.FieldKey
+			if f.FieldKey == "org_type" {
+				foundOrgType = true
+				if !f.AllowFilter || !f.AllowSort {
+					t.Fatalf("org_type allow_filter=%v allow_sort=%v", f.AllowFilter, f.AllowSort)
+				}
+			}
 
 			switch strings.ToUpper(strings.TrimSpace(f.DataSourceType)) {
 			case "DICT", "ENTITY":
@@ -116,6 +123,9 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 					t.Fatalf("field %q expected data_source_config_options omitted", f.FieldKey)
 				}
 			}
+		}
+		if !foundOrgType {
+			t.Fatalf("org_type not found")
 		}
 	})
 }

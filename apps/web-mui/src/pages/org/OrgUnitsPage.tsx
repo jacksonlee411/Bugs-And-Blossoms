@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -22,20 +24,26 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { GridColDef, GridPaginationModel, GridSortModel } from '@mui/x-data-grid'
 import {
   createOrgUnit,
+  getOrgUnitFieldOptions,
   listOrgUnits,
   listOrgUnitsPage,
+  listOrgUnitFieldConfigs,
+  listOrgUnitFieldDefinitions,
   searchOrgUnit,
   type OrgUnitAPIItem,
+  type OrgUnitFieldDefinition,
   type OrgUnitListSortField,
   type OrgUnitListSortOrder,
   type OrgUnitListStatusFilter
 } from '../../api/orgUnits'
+import { ApiClientError } from '../../api/errors'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { DataGridPage } from '../../components/DataGridPage'
 import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
 import { StatusChip } from '../../components/StatusChip'
 import { type TreePanelNode, TreePanel } from '../../components/TreePanel'
+import { isMessageKey, type MessageKey } from '../../i18n/messages'
 import { trackUiEvent } from '../../observability/tracker'
 import {
   fromGridSortModel,
@@ -43,6 +51,7 @@ import {
   patchGridQueryState,
   toGridSortModel
 } from '../../utils/gridQueryState'
+import { clearExtQueryParams, parseExtSortField, parseSortOrder } from './orgUnitListExtQuery'
 
 type OrgStatus = 'active' | 'inactive'
 
@@ -147,6 +156,155 @@ function getErrorMessage(error: unknown): string {
   return String(error)
 }
 
+type FieldOption = { value: string; label: string }
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value)
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebounced(value), delayMs)
+    return () => clearTimeout(handle)
+  }, [delayMs, value])
+
+  return debounced
+}
+
+function uniqueOptionsByValue(options: FieldOption[]): FieldOption[] {
+  const seen = new Set<string>()
+  const out: FieldOption[] = []
+  for (const option of options) {
+    const key = option.value
+    if (!key || seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    out.push(option)
+  }
+  return out
+}
+
+function ExtFilterValueInput(props: {
+  field: OrgUnitFieldDefinition | null
+  asOf: string
+  label: string
+  value: string
+  disabled: boolean
+  helperText?: string
+  formatError?: (error: unknown) => string
+  onChange: (nextValue: string) => void
+}) {
+  const [inputValue, setInputValue] = useState('')
+  const debouncedKeyword = useDebouncedValue(inputValue, 250)
+  const field = props.field
+  const isDictField = Boolean(field && field.data_source_type === 'DICT')
+
+  const optionsQuery = useQuery({
+    enabled: isDictField && !props.disabled,
+    queryKey: ['org-units', 'field-options', field?.field_key ?? '', props.asOf, debouncedKeyword],
+    queryFn: () => {
+      if (!field) {
+        throw new Error('org ext filter field is required')
+      }
+      return getOrgUnitFieldOptions({
+        fieldKey: field.field_key,
+        asOf: props.asOf,
+        keyword: debouncedKeyword,
+        limit: 20
+      })
+    },
+    staleTime: 30_000
+  })
+
+  const options = useMemo<FieldOption[]>(() => {
+    if (!isDictField) {
+      return []
+    }
+    const fetched = optionsQuery.data?.options ?? []
+    const selectedValue = props.value.trim()
+    if (selectedValue.length === 0) {
+      return uniqueOptionsByValue(fetched)
+    }
+
+    const hasSelected = fetched.some((option) => option.value === selectedValue)
+    if (hasSelected) {
+      return uniqueOptionsByValue(fetched)
+    }
+
+    const fallbackOption = { value: selectedValue, label: selectedValue }
+    return uniqueOptionsByValue([fallbackOption, ...fetched])
+  }, [isDictField, optionsQuery.data?.options, props.value])
+
+  const selected = useMemo<FieldOption | null>(() => {
+    if (!isDictField) {
+      return null
+    }
+    const currentValue = props.value.trim()
+    if (currentValue.length === 0) {
+      return null
+    }
+    return options.find((option) => option.value === currentValue) ?? { value: currentValue, label: currentValue }
+  }, [isDictField, options, props.value])
+
+  const queryErrorMessage =
+    isDictField && optionsQuery.error
+      ? props.formatError
+        ? props.formatError(optionsQuery.error)
+        : getErrorMessage(optionsQuery.error)
+      : ''
+  const effectiveDisabled = props.disabled || (isDictField && optionsQuery.isError)
+  const helperText = queryErrorMessage.length > 0 ? queryErrorMessage : props.helperText
+
+  if (!isDictField) {
+    return (
+      <TextField
+        disabled={props.disabled || !field}
+        label={props.label}
+        onChange={(event) => props.onChange(event.target.value)}
+        value={props.value}
+        helperText={helperText}
+        inputProps={{ 'data-testid': 'org-ext-filter-value' }}
+      />
+    )
+  }
+
+  return (
+    <Autocomplete
+      clearOnEscape
+      disabled={effectiveDisabled}
+      getOptionLabel={(option) => option.label}
+      inputValue={inputValue}
+      isOptionEqualToValue={(option, value) => option.value === value.value}
+      loading={optionsQuery.isFetching}
+      onChange={(_, option) => props.onChange(option ? option.value : '')}
+      onInputChange={(_, nextValue, reason) => {
+        if (reason === 'input') {
+          setInputValue(nextValue)
+        }
+      }}
+      options={options}
+      value={selected}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          error={queryErrorMessage.length > 0}
+          helperText={helperText}
+          label={props.label}
+          inputProps={{ ...params.inputProps, 'data-testid': 'org-ext-filter-value' }}
+          InputProps={{
+            ...params.InputProps,
+            endAdornment: (
+              <>
+                {optionsQuery.isFetching ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                {params.InputProps.endAdornment}
+              </>
+            )
+          }}
+        />
+      )}
+    />
+  )
+}
+
 function emptyCreateForm(asOf: string, parentOrgCode: string | null): CreateOrgUnitForm {
   return {
     orgCode: '',
@@ -176,12 +334,24 @@ export function OrgUnitsPage() {
 
   const asOf = parseDateOrDefault(searchParams.get('as_of'), fallbackAsOf)
   const includeDisabled = parseBool(searchParams.get('include_disabled'))
+  const extFilterFieldKey = parseOptionalValue(searchParams.get('ext_filter_field_key'))
+  const extFilterValue = parseOptionalValue(searchParams.get('ext_filter_value'))
+  const extSortFieldKey = parseExtSortField(searchParams.get('sort'))
+  const extSortOrder = parseSortOrder(searchParams.get('order')) ?? 'asc'
 
   const [keywordInput, setKeywordInput] = useState(query.keyword)
   const [statusInput, setStatusInput] = useState<'all' | OrgStatus>(query.status)
   const [asOfInput, setAsOfInput] = useState(asOf)
   const [includeDisabledInput, setIncludeDisabledInput] = useState(includeDisabled)
   const [treeSearchInput, setTreeSearchInput] = useState('')
+  const [extFilterFieldInput, setExtFilterFieldInput] = useState(extFilterFieldKey ?? '')
+  const [extFilterValueInput, setExtFilterValueInput] = useState(extFilterValue ?? '')
+  const [sortFieldInput, setSortFieldInput] = useState<string>(
+    extSortFieldKey ? `ext:${extSortFieldKey}` : query.sortField ?? ''
+  )
+  const [sortOrderInput, setSortOrderInput] = useState<OrgUnitListSortOrder>(
+    extSortFieldKey ? extSortOrder : query.sortOrder ?? 'asc'
+  )
 
   const [childrenByParent, setChildrenByParent] = useState<Record<string, OrgUnitAPIItem[]>>({})
   const [childrenLoading, setChildrenLoading] = useState(false)
@@ -194,6 +364,26 @@ export function OrgUnitsPage() {
   const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'error' } | null>(null)
 
   const canWrite = hasPermission('orgunit.admin')
+  const canUseExt = canWrite
+
+  const formatApiErrorMessage = useCallback(
+    (error: unknown): string => {
+      if (error instanceof ApiClientError) {
+        const details = error.details as { code?: string } | undefined
+        const code = details?.code ?? ''
+        switch (code) {
+        case 'ORG_EXT_QUERY_FIELD_NOT_ALLOWED':
+          return t('org_ext_query_not_allowed')
+        case 'invalid_request':
+          return t('org_ext_query_invalid_request')
+        default:
+          break
+        }
+      }
+      return getErrorMessage(error)
+    },
+    [t]
+  )
 
   useEffect(() => {
     setKeywordInput(query.keyword)
@@ -204,6 +394,18 @@ export function OrgUnitsPage() {
     setAsOfInput(asOf)
     setIncludeDisabledInput(includeDisabled)
   }, [asOf, includeDisabled])
+
+  useEffect(() => {
+    setExtFilterFieldInput(extFilterFieldKey ?? '')
+    setExtFilterValueInput(extFilterValue ?? '')
+  }, [extFilterFieldKey, extFilterValue])
+
+  useEffect(() => {
+    const nextSortField = extSortFieldKey ? `ext:${extSortFieldKey}` : query.sortField ?? ''
+    const nextSortOrder = extSortFieldKey ? extSortOrder : query.sortOrder ?? 'asc'
+    setSortFieldInput(nextSortField)
+    setSortOrderInput(nextSortOrder)
+  }, [extSortFieldKey, extSortOrder, query.sortField, query.sortOrder])
 
   useEffect(() => {
     setChildrenByParent({})
@@ -217,7 +419,151 @@ export function OrgUnitsPage() {
   })
 
   const rootOrgUnits = useMemo(() => rootOrgUnitsQuery.data?.org_units ?? [], [rootOrgUnitsQuery.data])
+  const fieldDefinitionsQuery = useQuery({
+    enabled: canUseExt,
+    queryKey: ['org-units', 'field-definitions'],
+    queryFn: () => listOrgUnitFieldDefinitions(),
+    staleTime: 60_000
+  })
+  const fieldConfigsQuery = useQuery({
+    enabled: canUseExt,
+    queryKey: ['org-units', 'field-configs', asOf],
+    queryFn: () => listOrgUnitFieldConfigs({ asOf, status: 'enabled' }),
+    staleTime: 30_000
+  })
+
+  const fieldDefinitions = useMemo(() => fieldDefinitionsQuery.data?.fields ?? [], [fieldDefinitionsQuery.data])
+  const enabledFieldKeys = useMemo(() => {
+    const keys = new Set<string>()
+    fieldConfigsQuery.data?.field_configs.forEach((cfg) => keys.add(cfg.field_key))
+    return keys
+  }, [fieldConfigsQuery.data])
+  const normalizedFieldDefinitions = useMemo(() => {
+    return fieldDefinitions.map((def) => {
+      const labelKey = def.label_i18n_key?.trim() ?? ''
+      const label = labelKey && isMessageKey(labelKey) ? t(labelKey) : def.field_key
+      return {
+        ...def,
+        label,
+        allowFilter: Boolean(def.allow_filter),
+        allowSort: Boolean(def.allow_sort)
+      }
+    })
+  }, [fieldDefinitions, t])
+  const enabledFieldDefinitions = useMemo(
+    () => normalizedFieldDefinitions.filter((def) => enabledFieldKeys.has(def.field_key)),
+    [normalizedFieldDefinitions, enabledFieldKeys]
+  )
+  const extFilterFields = useMemo(
+    () => enabledFieldDefinitions.filter((def) => def.allowFilter),
+    [enabledFieldDefinitions]
+  )
+  const extSortFields = useMemo(
+    () => enabledFieldDefinitions.filter((def) => def.allowSort),
+    [enabledFieldDefinitions]
+  )
+  const extMetadataError = fieldDefinitionsQuery.error || fieldConfigsQuery.error
+  const extMetadataReady = canUseExt && fieldDefinitionsQuery.isSuccess && fieldConfigsQuery.isSuccess
+  const extFilterFieldKeys = useMemo(() => new Set(extFilterFields.map((def) => def.field_key)), [extFilterFields])
+  const extSortFieldKeys = useMemo(() => new Set(extSortFields.map((def) => def.field_key)), [extSortFields])
+  const selectedExtFilterField = useMemo(
+    () => extFilterFields.find((field) => field.field_key === extFilterFieldInput) ?? null,
+    [extFilterFieldInput, extFilterFields]
+  )
+  const sortFieldOptions = useMemo<FieldOption[]>(() => {
+    const options: FieldOption[] = [
+      { value: '', label: t('org_ext_sort_none') },
+      { value: 'code', label: t('org_column_code') },
+      { value: 'name', label: t('org_column_name') },
+      { value: 'status', label: t('text_status') }
+    ]
+    const prefix = t('org_ext_field_prefix')
+    extSortFields.forEach((field) => {
+      options.push({ value: `ext:${field.field_key}`, label: `${prefix}${field.label}` })
+    })
+    return options
+  }, [extSortFields, t])
+  const hasExtFilterParams = Boolean(extFilterFieldKey || extFilterValue)
+  const hasExtSortParams = Boolean(extSortFieldKey)
+  const hasAnyExtParams = hasExtFilterParams || hasExtSortParams
   const selectedNodeCode = parseOptionalValue(searchParams.get('node')) ?? rootOrgUnits[0]?.org_code ?? null
+
+  useEffect(() => {
+    if (canUseExt || !hasAnyExtParams) {
+      return
+    }
+    const nextParams = new URLSearchParams(searchParams)
+    clearExtQueryParams(nextParams)
+    if (nextParams.toString() === searchParams.toString()) {
+      return
+    }
+    setSearchParams(nextParams, { replace: true })
+    setToast({ message: t('org_ext_query_admin_only_cleared'), severity: 'warning' })
+  }, [canUseExt, hasAnyExtParams, searchParams, setSearchParams, t])
+
+  useEffect(() => {
+    if (!canUseExt || !hasAnyExtParams) {
+      return
+    }
+    if (extMetadataError) {
+      const nextParams = new URLSearchParams(searchParams)
+      clearExtQueryParams(nextParams)
+      if (nextParams.toString() === searchParams.toString()) {
+        return
+      }
+      setSearchParams(nextParams, { replace: true })
+      setToast({ message: t('org_ext_query_metadata_failed_cleared'), severity: 'warning' })
+      return
+    }
+    if (!extMetadataReady) {
+      return
+    }
+
+    let messageKey = ''
+    const nextParams = new URLSearchParams(searchParams)
+
+    if (hasExtFilterParams) {
+      if (!extFilterFieldKey || !extFilterValue) {
+        nextParams.delete('ext_filter_field_key')
+        nextParams.delete('ext_filter_value')
+        messageKey = 'org_ext_query_pair_missing_cleared'
+      } else if (!extFilterFieldKeys.has(extFilterFieldKey)) {
+        nextParams.delete('ext_filter_field_key')
+        nextParams.delete('ext_filter_value')
+        messageKey = 'org_ext_query_field_unavailable_cleared'
+      }
+    }
+
+    if (extSortFieldKey && !extSortFieldKeys.has(extSortFieldKey)) {
+      const sortValue = nextParams.get('sort')?.trim() ?? ''
+      if (sortValue.startsWith('ext:')) {
+        nextParams.delete('sort')
+        nextParams.delete('order')
+        if (!messageKey) {
+          messageKey = 'org_ext_query_sort_unavailable_cleared'
+        }
+      }
+    }
+
+    if (messageKey && nextParams.toString() !== searchParams.toString()) {
+      setSearchParams(nextParams, { replace: true })
+      setToast({ message: t(messageKey as MessageKey), severity: 'warning' })
+    }
+  }, [
+    canUseExt,
+    extFilterFieldKey,
+    extFilterFieldKeys,
+    extFilterValue,
+    extMetadataError,
+    extMetadataReady,
+    extSortFieldKey,
+    extSortFieldKeys,
+    hasAnyExtParams,
+    hasExtFilterParams,
+    searchParams,
+    setSearchParams,
+    t
+  ])
 
   const legacyDetailCode = parseOptionalValue(searchParams.get('detail'))
   useEffect(() => {
@@ -288,6 +634,33 @@ export function OrgUnitsPage() {
 
   const treeNodes = useMemo(() => buildTreeNodes(rootOrgUnits, childrenByParent), [childrenByParent, rootOrgUnits])
   const sortModel = useMemo(() => toGridSortModel(query.sortField, query.sortOrder), [query.sortField, query.sortOrder])
+  const extFilterForRequest = useMemo(() => {
+    if (!canUseExt || !extMetadataReady) {
+      return null
+    }
+    if (!extFilterFieldKey || !extFilterValue) {
+      return null
+    }
+    if (!extFilterFieldKeys.has(extFilterFieldKey)) {
+      return null
+    }
+    return { fieldKey: extFilterFieldKey, value: extFilterValue }
+  }, [canUseExt, extMetadataReady, extFilterFieldKey, extFilterFieldKeys, extFilterValue])
+  const extSortForRequest = useMemo(() => {
+    if (!canUseExt || !extMetadataReady) {
+      return null
+    }
+    if (!extSortFieldKey || !extSortFieldKeys.has(extSortFieldKey)) {
+      return null
+    }
+    return { fieldKey: extSortFieldKey, order: extSortOrder }
+  }, [canUseExt, extMetadataReady, extSortFieldKey, extSortFieldKeys, extSortOrder])
+  const effectiveSortField = (extSortForRequest ? `ext:${extSortForRequest.fieldKey}` : query.sortField ?? null) as
+    | OrgUnitListSortField
+    | null
+  const effectiveSortOrder = (extSortForRequest ? extSortForRequest.order : query.sortOrder ?? null) as
+    | OrgUnitListSortOrder
+    | null
 
   const orgUnitListQuery = useQuery({
     enabled: rootOrgUnitsQuery.isSuccess,
@@ -301,8 +674,10 @@ export function OrgUnitsPage() {
       query.status,
       query.page,
       query.pageSize,
-      query.sortField,
-      query.sortOrder
+      effectiveSortField,
+      effectiveSortOrder,
+      extFilterForRequest?.fieldKey ?? '',
+      extFilterForRequest?.value ?? ''
     ],
     queryFn: () =>
       listOrgUnitsPage({
@@ -313,8 +688,10 @@ export function OrgUnitsPage() {
         status: query.status as OrgUnitListStatusFilter,
         page: query.page,
         pageSize: query.pageSize,
-        sortField: (query.sortField as OrgUnitListSortField | null) ?? null,
-        sortOrder: (query.sortOrder as OrgUnitListSortOrder | null) ?? null
+        sortField: effectiveSortField,
+        sortOrder: effectiveSortOrder,
+        extFilterFieldKey: extFilterForRequest?.fieldKey,
+        extFilterValue: extFilterForRequest?.value
       })
   })
 
@@ -330,6 +707,14 @@ export function OrgUnitsPage() {
         asOf?: string | null
         includeDisabled?: boolean
         selectedNodeCode?: string | null
+        extFilter?: {
+          fieldKey: string | null
+          value: string | null
+        }
+        extSort?: {
+          fieldKey: string | null
+          order: OrgUnitListSortOrder | null
+        }
       }
     ) => {
       const nextParams = patchGridQueryState(searchParams, patch)
@@ -355,6 +740,33 @@ export function OrgUnitsPage() {
           nextParams.set('node', options.selectedNodeCode)
         } else {
           nextParams.delete('node')
+        }
+      }
+
+      if (options?.extFilter) {
+        const fieldKey = options.extFilter.fieldKey?.trim() ?? ''
+        const value = options.extFilter.value?.trim() ?? ''
+        if (fieldKey.length > 0 && value.length > 0) {
+          nextParams.set('ext_filter_field_key', fieldKey)
+          nextParams.set('ext_filter_value', value)
+        } else {
+          nextParams.delete('ext_filter_field_key')
+          nextParams.delete('ext_filter_value')
+        }
+      }
+
+      if (options?.extSort) {
+        const fieldKey = options.extSort.fieldKey?.trim() ?? ''
+        const order = options.extSort.order ?? null
+        if (fieldKey.length > 0 && order) {
+          nextParams.set('sort', `ext:${fieldKey}`)
+          nextParams.set('order', order)
+        } else {
+          const sortValue = nextParams.get('sort')?.trim() ?? ''
+          if (sortValue.startsWith('ext:')) {
+            nextParams.delete('sort')
+            nextParams.delete('order')
+          }
         }
       }
 
@@ -420,15 +832,29 @@ export function OrgUnitsPage() {
 
   function handleApplyFilters() {
     const startedAt = performance.now()
+    const nextSortField = sortFieldInput.trim()
+    const isExtSort = nextSortField.startsWith('ext:')
+    const extSortFieldKey = isExtSort ? nextSortField.slice(4).trim() : null
+    const coreSortField = !isExtSort && nextSortField.length > 0 ? nextSortField : null
     updateSearch(
       {
         keyword: keywordInput,
         page: 0,
-        status: statusInput
+        status: statusInput,
+        sortField: coreSortField,
+        sortOrder: coreSortField ? sortOrderInput : null
       },
       {
         asOf: asOfInput,
-        includeDisabled: includeDisabledInput
+        includeDisabled: includeDisabledInput,
+        extFilter: {
+          fieldKey: extFilterFieldInput,
+          value: extFilterValueInput
+        },
+        extSort: {
+          fieldKey: extSortFieldKey,
+          order: isExtSort ? sortOrderInput : null
+        }
       }
     )
     trackUiEvent({
@@ -443,7 +869,11 @@ export function OrgUnitsPage() {
         has_keyword: keywordInput.trim().length > 0,
         status: statusInput,
         as_of: asOfInput,
-        include_disabled: includeDisabledInput
+        include_disabled: includeDisabledInput,
+        ext_filter_field: extFilterFieldInput.trim(),
+        ext_filter_value: extFilterValueInput.trim(),
+        ext_sort_field: extSortFieldKey ?? '',
+        ext_sort_order: isExtSort ? sortOrderInput : ''
       }
     })
   }
@@ -509,9 +939,9 @@ export function OrgUnitsPage() {
   }
 
   const requestErrorMessage = rootOrgUnitsQuery.error
-    ? getErrorMessage(rootOrgUnitsQuery.error)
+    ? formatApiErrorMessage(rootOrgUnitsQuery.error)
     : orgUnitListQuery.error
-    ? getErrorMessage(orgUnitListQuery.error)
+    ? formatApiErrorMessage(orgUnitListQuery.error)
     : childrenErrorMessage
   const tableLoading = rootOrgUnitsQuery.isLoading || orgUnitListQuery.isFetching
 
@@ -583,6 +1013,75 @@ export function OrgUnitsPage() {
           {t('action_apply_filters')}
         </Button>
       </FilterBar>
+
+      {canUseExt ? (
+        <FilterBar>
+          <FormControl sx={{ minWidth: 220 }} disabled={!extMetadataReady}>
+            <InputLabel id='org-ext-filter-field'>{t('org_ext_filter_field')}</InputLabel>
+            <Select
+              id='org-ext-filter-field-select'
+              label={t('org_ext_filter_field')}
+              labelId='org-ext-filter-field'
+              onChange={(event) => {
+                const nextField = String(event.target.value)
+                setExtFilterFieldInput(nextField)
+                if (nextField !== extFilterFieldInput) {
+                  setExtFilterValueInput('')
+                }
+              }}
+              value={extFilterFieldInput}
+            >
+              <MenuItem value=''>{t('org_ext_filter_field_none')}</MenuItem>
+              {extFilterFields.map((field) => (
+                <MenuItem key={field.field_key} value={field.field_key}>
+                  {field.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <ExtFilterValueInput
+            asOf={asOfInput}
+            disabled={!extMetadataReady || !selectedExtFilterField}
+            field={selectedExtFilterField}
+            formatError={formatApiErrorMessage}
+            label={t('org_ext_filter_value')}
+            onChange={(nextValue) => setExtFilterValueInput(nextValue)}
+            value={extFilterValueInput}
+          />
+          <FormControl sx={{ minWidth: 200 }}>
+            <InputLabel id='org-ext-sort-field'>{t('org_ext_sort_field')}</InputLabel>
+            <Select
+              id='org-ext-sort-field-select'
+              label={t('org_ext_sort_field')}
+              labelId='org-ext-sort-field'
+              onChange={(event) => setSortFieldInput(String(event.target.value))}
+              value={sortFieldInput}
+            >
+              {sortFieldOptions.map((option) => (
+                <MenuItem key={option.value || 'none'} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl sx={{ minWidth: 140 }} disabled={sortFieldInput.trim().length === 0}>
+            <InputLabel id='org-ext-sort-order'>{t('org_ext_sort_order')}</InputLabel>
+            <Select
+              id='org-ext-sort-order-select'
+              label={t('org_ext_sort_order')}
+              labelId='org-ext-sort-order'
+              onChange={(event) => setSortOrderInput(String(event.target.value) as OrgUnitListSortOrder)}
+              value={sortOrderInput}
+            >
+              <MenuItem value='asc'>{t('org_ext_sort_order_asc')}</MenuItem>
+              <MenuItem value='desc'>{t('org_ext_sort_order_desc')}</MenuItem>
+            </Select>
+          </FormControl>
+          <Button onClick={handleApplyFilters} variant='contained'>
+            {t('action_apply_filters')}
+          </Button>
+        </FilterBar>
+      ) : null}
 
       <FilterBar>
         <TextField
