@@ -40,14 +40,18 @@
 
 | 时间（UTC） | 命令 | 结果 | 备注 |
 | --- | --- | --- | --- |
-|  | `make css` |  |  |
+| 2026-02-15 15:34 UTC | `make css` | ✅ | 产物同步到 `internal/server/assets/web/**`（`assert-clean` 预期可通过） |
 |  | `make preflight` |  |  |
 
 ## 3) 变更清单（PR 维度）
 
 ### PR-103A-1（P3 收尾）
 - 变更点：
+  - 移除 Person 页面“伪需求参数”输入（As-of ignored），避免与 `DEV-PLAN-102` 时间上下文口径冲突。
 - 验证点：
+  - Person 页面移除 “As-of (ignored)” 输入：`apps/web-mui/src/pages/person/PersonsPage.tsx`
+  - UI 产物更新：`internal/server/assets/web/**`
+  - `make css`：通过（见上表）
 
 ### PR-103A-2（旧 UI 残留清理）
 - 变更点：
