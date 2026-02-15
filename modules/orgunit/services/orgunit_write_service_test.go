@@ -20,6 +20,7 @@ type orgUnitWriteStoreStub struct {
 	submitRescindOrgFn       func(ctx context.Context, tenantID string, orgID int, reason string, requestID string, initiatorUUID string) (int, error)
 	findEventByUUIDFn        func(ctx context.Context, tenantID string, eventUUID string) (types.OrgUnitEvent, error)
 	findEventByEffectiveFn   func(ctx context.Context, tenantID string, orgID int, effectiveDate string) (types.OrgUnitEvent, error)
+	listEnabledFieldCfgsFn   func(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error)
 	resolveOrgIDFn           func(ctx context.Context, tenantID string, orgCode string) (int, error)
 	resolveOrgCodeFn         func(ctx context.Context, tenantID string, orgID int) (string, error)
 	findPersonByPernrFn      func(ctx context.Context, tenantID string, pernr string) (types.Person, error)
@@ -72,6 +73,13 @@ func (s orgUnitWriteStoreStub) FindEventByEffectiveDate(ctx context.Context, ten
 		return types.OrgUnitEvent{}, errors.New("FindEventByEffectiveDate not mocked")
 	}
 	return s.findEventByEffectiveFn(ctx, tenantID, orgID, effectiveDate)
+}
+
+func (s orgUnitWriteStoreStub) ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error) {
+	if s.listEnabledFieldCfgsFn != nil {
+		return s.listEnabledFieldCfgsFn(ctx, tenantID, asOf)
+	}
+	return []types.TenantFieldConfig{}, nil
 }
 
 func (s orgUnitWriteStoreStub) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
@@ -268,6 +276,379 @@ func TestCorrectRequiresPatch(t *testing.T) {
 	if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchRequired {
 		t.Fatalf("expected patch required, got %v", err)
 	}
+}
+
+func TestCorrectExtPatchDictAddsLabelSnapshot(t *testing.T) {
+	var captured map[string]any
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 10000001, nil
+		},
+		findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
+			return types.OrgUnitEvent{
+				EventType:     types.OrgUnitEventRename,
+				EffectiveDate: "2026-01-01",
+			}, nil
+		},
+		listEnabledFieldCfgsFn: func(_ context.Context, _ string, _ string) ([]types.TenantFieldConfig, error) {
+			return []types.TenantFieldConfig{
+				{FieldKey: "org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
+				{FieldKey: "short_name", ValueType: "text", DataSourceType: "PLAIN", DataSourceConfig: json.RawMessage(`{}`)},
+			}, nil
+		},
+		submitCorrectionFn: func(_ context.Context, _ string, _ int, _ string, patch json.RawMessage, _ string, _ string) (string, error) {
+			if err := json.Unmarshal(patch, &captured); err != nil {
+				return "", err
+			}
+			return "corr", nil
+		},
+	}
+
+	svc := NewOrgUnitWriteService(store)
+	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
+		OrgCode:             "ROOT",
+		TargetEffectiveDate: "2026-01-01",
+		RequestID:           "req1",
+		Patch: OrgUnitCorrectionPatch{
+			Name: stringPtr("New Name"),
+			Ext: map[string]any{
+				"org_type":   "DEPARTMENT",
+				"short_name": "R&D",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if captured["new_name"] != "New Name" {
+		t.Fatalf("patch=%v", captured)
+	}
+	ext, _ := captured["ext"].(map[string]any)
+	if ext["org_type"] != "DEPARTMENT" || ext["short_name"] != "R&D" {
+		t.Fatalf("ext=%v", ext)
+	}
+	labels, _ := captured["ext_labels_snapshot"].(map[string]any)
+	if labels["org_type"] != "Department" {
+		t.Fatalf("labels=%v", labels)
+	}
+	if _, ok := labels["short_name"]; ok {
+		t.Fatalf("plain field should not have label snapshot: %v", labels)
+	}
+}
+
+func TestCorrectExtPatchDictClearDoesNotGenerateLabelSnapshot(t *testing.T) {
+	var captured map[string]any
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+			return 10000001, nil
+		},
+		findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
+			return types.OrgUnitEvent{
+				EventType:     types.OrgUnitEventRename,
+				EffectiveDate: "2026-01-01",
+			}, nil
+		},
+		listEnabledFieldCfgsFn: func(_ context.Context, _ string, _ string) ([]types.TenantFieldConfig, error) {
+			return []types.TenantFieldConfig{
+				{FieldKey: "org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
+			}, nil
+		},
+		submitCorrectionFn: func(_ context.Context, _ string, _ int, _ string, patch json.RawMessage, _ string, _ string) (string, error) {
+			if err := json.Unmarshal(patch, &captured); err != nil {
+				return "", err
+			}
+			return "corr", nil
+		},
+	}
+
+	svc := NewOrgUnitWriteService(store)
+	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
+		OrgCode:             "ROOT",
+		TargetEffectiveDate: "2026-01-01",
+		RequestID:           "req1",
+		Patch: OrgUnitCorrectionPatch{
+			Ext: map[string]any{
+				"org_type": nil,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	ext, _ := captured["ext"].(map[string]any)
+	if value, ok := ext["org_type"]; !ok || value != nil {
+		t.Fatalf("ext=%v", ext)
+	}
+	if _, ok := captured["ext_labels_snapshot"]; ok {
+		t.Fatalf("expected no label snapshot when clearing dict field: %v", captured)
+	}
+}
+
+func TestCorrectExtPatchValidationFailClosed(t *testing.T) {
+	t.Run("effective_date correction mode rejects ext", func(t *testing.T) {
+		store := orgUnitWriteStoreStub{
+			resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+				return 10000001, nil
+			},
+			findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
+				return types.OrgUnitEvent{
+					EventType:     types.OrgUnitEventRename,
+					EffectiveDate: "2026-01-01",
+				}, nil
+			},
+			listEnabledFieldCfgsFn: func(_ context.Context, _ string, _ string) ([]types.TenantFieldConfig, error) {
+				return []types.TenantFieldConfig{
+					{FieldKey: "org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
+				}, nil
+			},
+		}
+		svc := NewOrgUnitWriteService(store)
+		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
+			OrgCode:             "ROOT",
+			TargetEffectiveDate: "2026-01-01",
+			RequestID:           "req1",
+			Patch: OrgUnitCorrectionPatch{
+				EffectiveDate: stringPtr("2026-01-02"),
+				Ext: map[string]any{
+					"org_type": "DEPARTMENT",
+				},
+			},
+		})
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		}
+	})
+
+	t.Run("ext field not enabled is rejected", func(t *testing.T) {
+		store := orgUnitWriteStoreStub{
+			resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+				return 10000001, nil
+			},
+			findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
+				return types.OrgUnitEvent{
+					EventType:     types.OrgUnitEventRename,
+					EffectiveDate: "2026-01-01",
+				}, nil
+			},
+			listEnabledFieldCfgsFn: func(_ context.Context, _ string, _ string) ([]types.TenantFieldConfig, error) {
+				return []types.TenantFieldConfig{}, nil
+			},
+		}
+		svc := NewOrgUnitWriteService(store)
+		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
+			OrgCode:             "ROOT",
+			TargetEffectiveDate: "2026-01-01",
+			RequestID:           "req1",
+			Patch: OrgUnitCorrectionPatch{
+				Ext: map[string]any{
+					"org_type": "DEPARTMENT",
+				},
+			},
+		})
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		}
+	})
+
+	t.Run("dict invalid option returns ORG_INVALID_ARGUMENT", func(t *testing.T) {
+		store := orgUnitWriteStoreStub{
+			resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
+				return 10000001, nil
+			},
+			findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
+				return types.OrgUnitEvent{
+					EventType:     types.OrgUnitEventRename,
+					EffectiveDate: "2026-01-01",
+				}, nil
+			},
+			listEnabledFieldCfgsFn: func(_ context.Context, _ string, _ string) ([]types.TenantFieldConfig, error) {
+				return []types.TenantFieldConfig{
+					{FieldKey: "org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
+				}, nil
+			},
+		}
+		svc := NewOrgUnitWriteService(store)
+		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
+			OrgCode:             "ROOT",
+			TargetEffectiveDate: "2026-01-01",
+			RequestID:           "req1",
+			Patch: OrgUnitCorrectionPatch{
+				Ext: map[string]any{
+					"org_type": "NO_SUCH_OPTION",
+				},
+			},
+		})
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgInvalidArgument {
+			t.Fatalf("expected ORG_INVALID_ARGUMENT, got %v", err)
+		}
+	})
+}
+
+func TestListEnabledExtFieldConfigs_Branches(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("store error", func(t *testing.T) {
+		svc := newWriteService(orgUnitWriteStoreStub{
+			listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
+				return nil, errors.New("boom")
+			},
+		})
+		if _, _, err := svc.listEnabledExtFieldConfigs(ctx, "t1", "2026-01-01"); err == nil {
+			t.Fatalf("expected error")
+		}
+	})
+
+	t.Run("skip blank and trim", func(t *testing.T) {
+		svc := newWriteService(orgUnitWriteStoreStub{
+			listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
+				return []types.TenantFieldConfig{
+					{FieldKey: " "},
+					{FieldKey: " org_type "},
+				}, nil
+			},
+		})
+		cfgs, keys, err := svc.listEnabledExtFieldConfigs(ctx, "t1", "2026-01-01")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if len(cfgs) != 1 || cfgs[0].FieldKey != "org_type" {
+			t.Fatalf("cfgs=%v", cfgs)
+		}
+		if joinStrings(keys) != "org_type" {
+			t.Fatalf("keys=%v", keys)
+		}
+	})
+}
+
+func TestCorrectExtPatch_AdditionalErrorBranches(t *testing.T) {
+	t.Run("list enabled field configs error", func(t *testing.T) {
+		store := orgUnitWriteStoreStub{
+			resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) { return 10000001, nil },
+			findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
+				return types.OrgUnitEvent{EventType: types.OrgUnitEventRename, EffectiveDate: "2026-01-01"}, nil
+			},
+			listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
+				return nil, errors.New("boom")
+			},
+		}
+		svc := NewOrgUnitWriteService(store)
+		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
+			OrgCode:             "ROOT",
+			TargetEffectiveDate: "2026-01-01",
+			RequestID:           "req1",
+			Patch:               OrgUnitCorrectionPatch{Name: stringPtr("New")},
+		})
+		if err == nil || err.Error() != "boom" {
+			t.Fatalf("expected boom, got %v", err)
+		}
+	})
+
+	t.Run("dict missing dict_code returns ORG_INVALID_ARGUMENT", func(t *testing.T) {
+		store := orgUnitWriteStoreStub{
+			resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) { return 10000001, nil },
+			findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
+				return types.OrgUnitEvent{EventType: types.OrgUnitEventRename, EffectiveDate: "2026-01-01"}, nil
+			},
+			listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
+				return []types.TenantFieldConfig{{FieldKey: "org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{}`)}}, nil
+			},
+		}
+		svc := NewOrgUnitWriteService(store)
+		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
+			OrgCode:             "ROOT",
+			TargetEffectiveDate: "2026-01-01",
+			RequestID:           "req1",
+			Patch: OrgUnitCorrectionPatch{
+				Ext: map[string]any{"org_type": "DEPARTMENT"},
+			},
+		})
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgInvalidArgument {
+			t.Fatalf("expected ORG_INVALID_ARGUMENT, got %v", err)
+		}
+	})
+
+	t.Run("dict value not string returns ORG_INVALID_ARGUMENT", func(t *testing.T) {
+		store := orgUnitWriteStoreStub{
+			resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) { return 10000001, nil },
+			findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
+				return types.OrgUnitEvent{EventType: types.OrgUnitEventRename, EffectiveDate: "2026-01-01"}, nil
+			},
+			listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
+				return []types.TenantFieldConfig{{FieldKey: "org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}}, nil
+			},
+		}
+		svc := NewOrgUnitWriteService(store)
+		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
+			OrgCode:             "ROOT",
+			TargetEffectiveDate: "2026-01-01",
+			RequestID:           "req1",
+			Patch: OrgUnitCorrectionPatch{
+				Ext: map[string]any{"org_type": 1},
+			},
+		})
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgInvalidArgument {
+			t.Fatalf("expected ORG_INVALID_ARGUMENT, got %v", err)
+		}
+	})
+
+	t.Run("dict value empty returns ORG_INVALID_ARGUMENT", func(t *testing.T) {
+		store := orgUnitWriteStoreStub{
+			resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) { return 10000001, nil },
+			findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
+				return types.OrgUnitEvent{EventType: types.OrgUnitEventRename, EffectiveDate: "2026-01-01"}, nil
+			},
+			listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
+				return []types.TenantFieldConfig{{FieldKey: "org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}}, nil
+			},
+		}
+		svc := NewOrgUnitWriteService(store)
+		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
+			OrgCode:             "ROOT",
+			TargetEffectiveDate: "2026-01-01",
+			RequestID:           "req1",
+			Patch: OrgUnitCorrectionPatch{
+				Ext: map[string]any{"org_type": " "},
+			},
+		})
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgInvalidArgument {
+			t.Fatalf("expected ORG_INVALID_ARGUMENT, got %v", err)
+		}
+	})
+
+	t.Run("unknown field definition is rejected", func(t *testing.T) {
+		store := orgUnitWriteStoreStub{
+			resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) { return 10000001, nil },
+			findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
+				return types.OrgUnitEvent{EventType: types.OrgUnitEventRename, EffectiveDate: "2026-01-01"}, nil
+			},
+			listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
+				return []types.TenantFieldConfig{{FieldKey: "unknown_field", ValueType: "text", DataSourceType: "PLAIN", DataSourceConfig: json.RawMessage(`{}`)}}, nil
+			},
+		}
+		svc := NewOrgUnitWriteService(store)
+		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
+			OrgCode:             "ROOT",
+			TargetEffectiveDate: "2026-01-01",
+			RequestID:           "req1",
+			Patch: OrgUnitCorrectionPatch{
+				Ext: map[string]any{"unknown_field": "x"},
+			},
+		})
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		}
+	})
+}
+
+func joinStrings(items []string) string {
+	out := ""
+	for i, item := range items {
+		if i > 0 {
+			out += ","
+		}
+		out += item
+	}
+	return out
 }
 
 func TestCorrectStatusSuccess(t *testing.T) {
@@ -1704,6 +2085,33 @@ func TestCorrectSubmitError(t *testing.T) {
 	}
 }
 
+func TestCorrectPolicyResolveError(t *testing.T) {
+	orig := resolveOrgUnitMutationPolicyInWrite
+	resolveOrgUnitMutationPolicyInWrite = func(OrgUnitMutationPolicyKey, OrgUnitMutationPolicyFacts) (OrgUnitMutationPolicyDecision, error) {
+		return OrgUnitMutationPolicyDecision{}, errors.New("boom")
+	}
+	t.Cleanup(func() { resolveOrgUnitMutationPolicyInWrite = orig })
+
+	store := orgUnitWriteStoreStub{
+		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) { return 10000001, nil },
+		findEventByEffectiveFn: func(_ context.Context, _ string, _ int, _ string) (types.OrgUnitEvent, error) {
+			return types.OrgUnitEvent{EventType: types.OrgUnitEventCreate, EffectiveDate: "2026-01-01"}, nil
+		},
+	}
+	svc := NewOrgUnitWriteService(store)
+	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
+		OrgCode:             "ROOT",
+		TargetEffectiveDate: "2026-01-01",
+		RequestID:           "req",
+		Patch: OrgUnitCorrectionPatch{
+			EffectiveDate: stringPtr("2026-01-01"),
+		},
+	})
+	if err == nil || err.Error() != "boom" {
+		t.Fatalf("expected boom, got %v", err)
+	}
+}
+
 func TestCorrectUsesPatchedEffectiveDate(t *testing.T) {
 	store := orgUnitWriteStoreStub{
 		resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
@@ -1735,12 +2143,13 @@ func TestCorrectUsesPatchedEffectiveDate(t *testing.T) {
 
 func TestBuildCorrectionPatch(t *testing.T) {
 	ctx := context.Background()
+	emptyCfgs := []types.TenantFieldConfig{}
 
 	t.Run("effective_date_invalid", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
 			EffectiveDate: stringPtr("2026-13-01"),
-		})
+		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errEffectiveDateInvalid {
 			t.Fatalf("expected effective date invalid, got %v", err)
 		}
@@ -1750,7 +2159,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
 			Name: stringPtr(" "),
-		})
+		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != "name is required" {
 			t.Fatalf("expected name required, got %v", err)
 		}
@@ -1760,7 +2169,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
 			Name: stringPtr("Name"),
-		})
+		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
 		}
@@ -1773,7 +2182,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		patchMap, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
 			Name: stringPtr("Name"),
-		})
+		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
 		}
@@ -1782,11 +2191,21 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		}
 	})
 
+	t.Run("name_not_allowed", func(t *testing.T) {
+		svc := newWriteService(orgUnitWriteStoreStub{})
+		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventMove}, OrgUnitCorrectionPatch{
+			Name: stringPtr("Name"),
+		}, emptyCfgs)
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected patch field not allowed, got %v", err)
+		}
+	})
+
 	t.Run("parent_empty_create", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
 			ParentOrgCode: stringPtr(" "),
-		})
+		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
 		}
@@ -1799,7 +2218,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventMove}, OrgUnitCorrectionPatch{
 			ParentOrgCode: stringPtr(" "),
-		})
+		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected patch field not allowed, got %v", err)
 		}
@@ -1809,7 +2228,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
 			ParentOrgCode: stringPtr("PARENT"),
-		})
+		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected patch field not allowed, got %v", err)
 		}
@@ -1819,7 +2238,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
 			ParentOrgCode: stringPtr("A\n1"),
-		})
+		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgCodeInvalid {
 			t.Fatalf("expected org code invalid, got %v", err)
 		}
@@ -1833,7 +2252,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
 			ParentOrgCode: stringPtr("PARENT"),
-		})
+		}, emptyCfgs)
 		if err == nil || err.Error() != errParentNotFoundAsOf {
 			t.Fatalf("expected parent not found, got %v", err)
 		}
@@ -1847,7 +2266,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
 			ParentOrgCode: stringPtr("PARENT"),
-		})
+		}, emptyCfgs)
 		if err == nil || err.Error() != "resolve" {
 			t.Fatalf("expected resolve error, got %v", err)
 		}
@@ -1861,7 +2280,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		})
 		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
 			ParentOrgCode: stringPtr("PARENT"),
-		})
+		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
 		}
@@ -1874,7 +2293,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
 			IsBusinessUnit: boolPtr(true),
-		})
+		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected patch field not allowed, got %v", err)
 		}
@@ -1884,7 +2303,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventSetBusinessUnit}, OrgUnitCorrectionPatch{
 			IsBusinessUnit: boolPtr(true),
-		})
+		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
 		}
@@ -1897,7 +2316,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
 			ManagerPernr: stringPtr("1001"),
-		})
+		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected patch field not allowed, got %v", err)
 		}
@@ -1911,7 +2330,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
 			ManagerPernr: stringPtr("1001"),
-		})
+		}, emptyCfgs)
 		if err == nil || err.Error() != "find" {
 			t.Fatalf("expected find error, got %v", err)
 		}
@@ -1925,7 +2344,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		})
 		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
 			ManagerPernr: stringPtr("1001"),
-		})
+		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
 		}
@@ -1934,6 +2353,36 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		}
 		if fields["manager_pernr"] != "1001" || fields["manager_name"] != "Manager" {
 			t.Fatalf("unexpected fields: %#v", fields)
+		}
+	})
+
+	t.Run("ext blank field key rejects", func(t *testing.T) {
+		svc := newWriteService(orgUnitWriteStoreStub{})
+		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
+			Ext: map[string]any{" ": "x"},
+		}, emptyCfgs)
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		}
+	})
+
+	t.Run("ext missing config rejects", func(t *testing.T) {
+		svc := newWriteService(orgUnitWriteStoreStub{})
+		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
+			Ext: map[string]any{"org_type": "DEPARTMENT"},
+		}, emptyCfgs)
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		}
+	})
+
+	t.Run("ext config blank key is skipped", func(t *testing.T) {
+		svc := newWriteService(orgUnitWriteStoreStub{})
+		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
+			Ext: map[string]any{"org_type": "DEPARTMENT"},
+		}, []types.TenantFieldConfig{{FieldKey: " "}})
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
 		}
 	})
 }

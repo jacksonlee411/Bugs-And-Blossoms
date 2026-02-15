@@ -1,11 +1,11 @@
 ---
 name: bugs-and-blossoms-dev-login
-description: Start the Bugs-And-Blossoms local dev stack and bring up the tenant login page at http://localhost:8080/login (Postgres+Redis via make dev-up, IAM migrations, KratosStub, and the Go server). Use when you need a repeatable workflow to get a working login on port 8080, seed a test identity, and verify /login redirecting to /app (cookie sid) locally. 适用于“启动8080登录页/本地联调登录/起dev-up+kratosstub+dev-server”的场景。
+description: Start the Bugs-And-Blossoms local dev stack and bring up the tenant login page at http://localhost:8080/app/login (Postgres+Redis via make dev-up, IAM migrations, KratosStub, and the Go server). Use when you need a repeatable workflow to get a working login on port 8080, seed a test identity, and verify creating a session (cookie sid) locally. 适用于“启动8080登录页/本地联调登录/起dev-up+kratosstub+dev-server”的场景。
 ---
 
 # Bugs-And-Blossoms：本地 8080 登录页启动（dev-up + kratosstub + server）
 
-目标：在本机把 `http://localhost:8080/login` 跑通（含 `POST /login` 成功设置 `sid` 并跳转 `/app?as_of=...`）。
+目标：在本机把 `http://localhost:8080/app/login` 跑通（含 `POST /iam/api/sessions` 成功设置 `sid` cookie，并进入 `/app`）。
 
 本技能默认只做“启动/迁移/seed/验证”，不会执行 `make dev-reset`，不会轻易清库删数据。
 
@@ -89,26 +89,28 @@ sleep 0.5
   --role-slug tenant-admin
 make dev-server &
 sleep 0.5
-curl -i -X POST -H 'Host: localhost:8080' \
-  -d 'email=admin@localhost&password=admin123' \
-  http://127.0.0.1:8080/login
+curl -i -X POST -H 'Host: localhost:8080' -H 'Content-Type: application/json' \
+  --data-binary '{"email":"admin@localhost","password":"admin123"}' \
+  http://127.0.0.1:8080/iam/api/sessions
 ```
 
 ## 验证（必须用 localhost）
 
-1) 打开登录页：`http://localhost:8080/login`
+1) 打开登录页：`http://localhost:8080/app/login`
 2) 用账号登录：`admin@localhost` / `admin123`
-3) 预期：302 到 `/app?as_of=...`，并设置 `sid` cookie。
-4) 登录后可直接访问：`http://localhost:8080/app/org/units`（未登录时访问 `/app/*` 会 302 到 `/login`，属正常行为）。
+3) 预期：前端调用 `POST /iam/api/sessions` 成功（204），并设置 `sid` cookie，然后进入 `/app`。
+4) 登录后可直接访问：`http://localhost:8080/app/org/units`（未登录时访问 `/app/*` 会 302 到 `/app/login`，属正常行为）。
 
-（注意）不要用 `http://127.0.0.1:8080/login`：租户解析基于 Host，IAM 默认只插入了 `localhost` 域名，`127.0.0.1` 会 404（tenant not found）。
+（注意）不要用 `http://127.0.0.1:8080/app/login`：租户解析基于 Host，IAM 默认只插入了 `localhost` 域名，`127.0.0.1` 会 404（tenant not found）。
 
 ## 常见排障
 
 - 浏览器提示“无法访问此网站 / 连接被拒绝”：先确认服务是否在监听 8080（`curl -fsS http://localhost:8080/healthz` 预期输出 `ok`）。若连接失败，重新执行 `make dev-server` 并查看其输出。
 - 404 tenant not found：确认用的是 `localhost`；并确认 `make iam migrate up` 已执行。
 - 登录一直 invalid credentials：确认 KratosStub 在跑；并确认已按 `tenant_id:email` seed 过同一密码。
+- seed 脚本提示 409 但你仍然 invalid credentials：说明 **KratosStub 当前进程**里该 identifier 已存在，seed 不会更新密码；处理方式是重启 KratosStub（它是内存存储）后重新 seed，或换一个新邮箱 seed。
 - 登录显示 identity error：确认 KratosStub 在跑（4433/4434）；未设置时默认 `KRATOS_PUBLIC_URL=http://127.0.0.1:4433`；并确认已执行 seed。
+- `POST /iam/api/sessions` 返回 `invalid_json`：确认 `Content-Type: application/json`，并传入合法 JSON（例如 `{"email":"admin@localhost","password":"admin123"}`）。
 - 登录显示 principal error：通常表示数据库里 `iam.principals(tenant_id,email)` 已绑定了**不同的** `kratos_identity_id`（历史数据与当前 KratosStub 的 identity id 算法不一致会触发该保护）。处理方式：
   - A) 清库重建（最省心，会丢 dev 数据）：执行一次 `make dev-reset`，然后从本技能第 1 步重新跑起。
   - B) 不清库：换一个新邮箱重新 seed；或手工把该 principal 的 `kratos_identity_id` 清空后再登录（这会改动数据库数据，需你自行确认风险）。

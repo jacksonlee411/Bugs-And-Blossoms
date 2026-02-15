@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/fieldmeta"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/httperr"
@@ -19,6 +20,7 @@ import (
 const (
 	errOrgCodeInvalid                 = "ORG_CODE_INVALID"
 	errOrgCodeNotFound                = "ORG_CODE_NOT_FOUND"
+	errOrgInvalidArgument             = "ORG_INVALID_ARGUMENT"
 	errEffectiveDateInvalid           = "EFFECTIVE_DATE_INVALID"
 	errPatchFieldNotAllowed           = "PATCH_FIELD_NOT_ALLOWED"
 	errPatchRequired                  = "PATCH_REQUIRED"
@@ -35,8 +37,9 @@ const (
 )
 
 var (
-	newUUID     = uuidv7.NewString
-	marshalJSON = json.Marshal
+	newUUID                             = uuidv7.NewString
+	marshalJSON                         = json.Marshal
+	resolveOrgUnitMutationPolicyInWrite = ResolvePolicy
 )
 
 type OrgUnitWriteService interface {
@@ -132,6 +135,7 @@ type OrgUnitCorrectionPatch struct {
 	ParentOrgCode  *string
 	IsBusinessUnit *bool
 	ManagerPernr   *string
+	Ext            map[string]any
 }
 
 type orgUnitWriteService struct {
@@ -449,7 +453,28 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 		return types.OrgUnitResult{}, err
 	}
 
-	patch, fields, correctedDate, err := s.buildCorrectionPatch(ctx, tenantID, event, req.Patch)
+	fieldConfigs, enabledExtFieldKeys, err := s.listEnabledExtFieldConfigs(ctx, tenantID, targetEffectiveDate)
+	if err != nil {
+		return types.OrgUnitResult{}, err
+	}
+
+	targetEventType := event.EventType
+	decision, err := resolveOrgUnitMutationPolicyInWrite(OrgUnitMutationPolicyKey{
+		ActionKind:               OrgUnitActionCorrectEvent,
+		EmittedEventType:         OrgUnitEmittedCorrectEvent,
+		TargetEffectiveEventType: &targetEventType,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:            true,
+		EnabledExtFieldKeys: enabledExtFieldKeys,
+	})
+	if err != nil {
+		return types.OrgUnitResult{}, err
+	}
+	if err := ValidatePatch(targetEffectiveDate, decision, req.Patch); err != nil {
+		return types.OrgUnitResult{}, err
+	}
+
+	patch, fields, correctedDate, err := s.buildCorrectionPatch(ctx, tenantID, event, req.Patch, fieldConfigs)
 	if err != nil {
 		return types.OrgUnitResult{}, err
 	}
@@ -607,7 +632,7 @@ func (s *orgUnitWriteService) RescindOrg(ctx context.Context, tenantID string, r
 	}, nil
 }
 
-func (s *orgUnitWriteService) buildCorrectionPatch(ctx context.Context, tenantID string, event types.OrgUnitEvent, patch OrgUnitCorrectionPatch) (map[string]any, map[string]any, string, error) {
+func (s *orgUnitWriteService) buildCorrectionPatch(ctx context.Context, tenantID string, event types.OrgUnitEvent, patch OrgUnitCorrectionPatch, fieldConfigs []types.TenantFieldConfig) (map[string]any, map[string]any, string, error) {
 	patchMap := make(map[string]any)
 	fields := make(map[string]any)
 	var correctedDate string
@@ -686,11 +711,90 @@ func (s *orgUnitWriteService) buildCorrectionPatch(ctx context.Context, tenantID
 		fields["manager_name"] = managerName
 	}
 
+	if len(patch.Ext) > 0 {
+		cfgByKey := make(map[string]types.TenantFieldConfig, len(fieldConfigs))
+		for _, cfg := range fieldConfigs {
+			key := strings.TrimSpace(cfg.FieldKey)
+			if key == "" {
+				continue
+			}
+			cfgByKey[key] = cfg
+		}
+
+		extPatch := make(map[string]any, len(patch.Ext))
+		extLabels := make(map[string]string)
+		for rawKey, rawValue := range patch.Ext {
+			fieldKey := strings.TrimSpace(rawKey)
+			if fieldKey == "" {
+				return nil, nil, "", httperr.NewBadRequest(errPatchFieldNotAllowed)
+			}
+			cfg, ok := cfgByKey[fieldKey]
+			if !ok {
+				return nil, nil, "", httperr.NewBadRequest(errPatchFieldNotAllowed)
+			}
+			if _, ok := fieldmeta.LookupFieldDefinition(fieldKey); !ok {
+				return nil, nil, "", httperr.NewBadRequest(errPatchFieldNotAllowed)
+			}
+
+			extPatch[fieldKey] = rawValue
+
+			if strings.EqualFold(strings.TrimSpace(cfg.DataSourceType), "DICT") {
+				if rawValue == nil {
+					continue
+				}
+				value, ok := rawValue.(string)
+				if !ok {
+					return nil, nil, "", httperr.NewBadRequest(errOrgInvalidArgument)
+				}
+				value = strings.TrimSpace(value)
+				if value == "" {
+					return nil, nil, "", httperr.NewBadRequest(errOrgInvalidArgument)
+				}
+				dictCode, ok := fieldmeta.DictCodeFromDataSourceConfig(cfg.DataSourceConfig)
+				if !ok {
+					return nil, nil, "", httperr.NewBadRequest(errOrgInvalidArgument)
+				}
+				label, ok := fieldmeta.LookupDictLabel(dictCode, value)
+				if !ok {
+					return nil, nil, "", httperr.NewBadRequest(errOrgInvalidArgument)
+				}
+				extLabels[fieldKey] = label
+			}
+		}
+
+		if len(extPatch) > 0 {
+			patchMap["ext"] = extPatch
+			fields["ext"] = extPatch
+		}
+		if len(extLabels) > 0 {
+			patchMap["ext_labels_snapshot"] = extLabels
+		}
+	}
+
 	if len(patchMap) == 0 {
 		return nil, nil, "", httperr.NewBadRequest(errPatchRequired)
 	}
 
 	return patchMap, fields, correctedDate, nil
+}
+
+func (s *orgUnitWriteService) listEnabledExtFieldConfigs(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, []string, error) {
+	cfgs, err := s.store.ListEnabledTenantFieldConfigsAsOf(ctx, tenantID, asOf)
+	if err != nil {
+		return nil, nil, err
+	}
+	outCfgs := make([]types.TenantFieldConfig, 0, len(cfgs))
+	keys := make([]string, 0, len(cfgs))
+	for _, cfg := range cfgs {
+		key := strings.TrimSpace(cfg.FieldKey)
+		if key == "" {
+			continue
+		}
+		cfg.FieldKey = key
+		outCfgs = append(outCfgs, cfg)
+		keys = append(keys, key)
+	}
+	return outCfgs, keys, nil
 }
 
 func namePatchKey(eventType types.OrgUnitEventType) (string, bool) {

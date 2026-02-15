@@ -20,6 +20,8 @@ type txStub struct {
 	execErr   error
 	row       pgx.Row
 	commitErr error
+	queryErr  error
+	rows      pgx.Rows
 }
 
 func (t *txStub) Begin(context.Context) (pgx.Tx, error) { return t, nil }
@@ -40,6 +42,12 @@ func (t *txStub) Exec(context.Context, string, ...any) (pgconn.CommandTag, error
 }
 
 func (t *txStub) Query(context.Context, string, ...any) (pgx.Rows, error) {
+	if t.queryErr != nil {
+		return nil, t.queryErr
+	}
+	if t.rows != nil {
+		return t.rows, nil
+	}
 	return &stubRows{}, nil
 }
 
@@ -63,6 +71,31 @@ func (r *stubRows) Scan(...any) error      { return nil }
 func (r *stubRows) Values() ([]any, error) { return nil, nil }
 func (r *stubRows) RawValues() [][]byte    { return nil }
 func (r *stubRows) Conn() *pgx.Conn        { return nil }
+
+type rowsWithData struct {
+	*stubRows
+	data    [][]any
+	idx     int
+	scanErr error
+	err     error
+}
+
+func (r *rowsWithData) Next() bool {
+	if r.idx >= len(r.data) {
+		return false
+	}
+	r.idx++
+	return true
+}
+
+func (r *rowsWithData) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	return stubRow{vals: r.data[r.idx-1]}.Scan(dest...)
+}
+
+func (r *rowsWithData) Err() error { return r.err }
 
 type stubRow struct {
 	vals []any
@@ -516,5 +549,71 @@ func TestOrgUnitPGStore_FindPersonByPernr(t *testing.T) {
 	}))
 	if _, err := store.FindPersonByPernr(ctx, "t1", "1001"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestOrgUnitPGStore_ListEnabledTenantFieldConfigsAsOf(t *testing.T) {
+	ctx := context.Background()
+
+	store := NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return nil, errors.New("begin")
+	}))
+	if _, err := store.ListEnabledTenantFieldConfigsAsOf(ctx, "t1", "2026-01-01"); err == nil {
+		t.Fatal("expected begin error")
+	}
+
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return &txStub{execErr: errors.New("exec")}, nil
+	}))
+	if _, err := store.ListEnabledTenantFieldConfigsAsOf(ctx, "t1", "2026-01-01"); err == nil {
+		t.Fatal("expected exec error")
+	}
+
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return &txStub{queryErr: errors.New("query")}, nil
+	}))
+	if _, err := store.ListEnabledTenantFieldConfigsAsOf(ctx, "t1", "2026-01-01"); err == nil {
+		t.Fatal("expected query error")
+	}
+
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return &txStub{rows: &rowsWithData{stubRows: &stubRows{}, data: [][]any{{"org_type", "text", "DICT", []byte(`{"dict_code":"org_type"}`)}}, scanErr: errors.New("scan")}}, nil
+	}))
+	if _, err := store.ListEnabledTenantFieldConfigsAsOf(ctx, "t1", "2026-01-01"); err == nil {
+		t.Fatal("expected scan error")
+	}
+
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return &txStub{rows: &rowsWithData{stubRows: &stubRows{}, err: errors.New("rows")}}, nil
+	}))
+	if _, err := store.ListEnabledTenantFieldConfigsAsOf(ctx, "t1", "2026-01-01"); err == nil {
+		t.Fatal("expected rows error")
+	}
+
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return &txStub{rows: &rowsWithData{stubRows: &stubRows{}}, commitErr: errors.New("commit")}, nil
+	}))
+	if _, err := store.ListEnabledTenantFieldConfigsAsOf(ctx, "t1", "2026-01-01"); err == nil {
+		t.Fatal("expected commit error")
+	}
+
+	store = NewOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+		return &txStub{rows: &rowsWithData{stubRows: &stubRows{}, data: [][]any{
+			{"org_type", "text", "DICT", []byte(`{"dict_code":"org_type"}`)},
+			{"short_name", "text", "PLAIN", nil},
+		}}}, nil
+	}))
+	cfgs, err := store.ListEnabledTenantFieldConfigsAsOf(ctx, "t1", "2026-01-01")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfgs) != 2 {
+		t.Fatalf("len=%d", len(cfgs))
+	}
+	if cfgs[0].FieldKey != "org_type" || string(cfgs[0].DataSourceConfig) != `{"dict_code":"org_type"}` {
+		t.Fatalf("cfg0=%+v", cfgs[0])
+	}
+	if cfgs[1].FieldKey != "short_name" || cfgs[1].DataSourceConfig != nil {
+		t.Fatalf("cfg1=%+v", cfgs[1])
 	}
 }

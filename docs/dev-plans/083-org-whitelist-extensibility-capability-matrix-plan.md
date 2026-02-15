@@ -1,6 +1,6 @@
 # DEV-PLAN-083：Org 变更能力模型重构（抽象统一 + 策略单点 + 能力外显）
 
-**状态**: 草拟中（2026-02-13 15:41 UTC — 冻结 mutation-capabilities 契约，供 DEV-PLAN-100D/100E 实施）
+**状态**: 草拟中（2026-02-15 01:34 UTC — 冻结 mutation-capabilities 契约；增补“彻底实现”建议与 100E1 前置引用）
 
 ## 0. 本次冻结范围（Stopline）
 
@@ -342,6 +342,9 @@ Core 字段允许矩阵（冻结；承接并收敛 `DEV-PLAN-082`，以本文为
 2. [X] 明确 capabilities 响应字段与最小 deny_reasons 闭集（供 `DEV-PLAN-100D/100E` 消费）。
 
 ## 6.2 服务层改造
+
+> 说明：`DEV-PLAN-100E1` 已作为 `DEV-PLAN-100E` 的前置改造计划拆出，用于落实“策略单点 + capabilities 对齐 + corrections 支持 `patch.ext`”；本文继续作为能力模型与 capabilities 契约 SSOT。
+
 3. [ ] 新增 `orgunit_mutation_policy.go`，实现 `ResolvePolicy/AllowedFields/ValidatePatch`。
 4. [ ] 重构 `buildCorrectionPatch(...)`，仅通过策略模块判定字段与 payload 映射。
 5. [ ] 将 `CorrectStatus(...)`、`RescindRecord(...)`、`RescindOrg(...)` 的可用性判断收敛到同一策略模块。
@@ -355,6 +358,41 @@ Core 字段允许矩阵（冻结；承接并收敛 `DEV-PLAN-082`，以本文为
 ## 6.4 Kernel 对齐与防回归
 10. [ ] 复核 `submit_org_event_correction/submit_org_status_correction/submit_org_event_rescind/submit_org_rescind` 与服务层规则对齐。
 11. [ ] 保留 Kernel 防守性校验，确保绕过服务层时仍 fail-closed。
+
+## 6.5 开放问题与建议（目标：彻底实现）
+
+> 说明：本节用于把“契约已冻结但实现易漂移”的点显式化；具体执行拆分与落地步骤以 `DEV-PLAN-100E1` 为实施 SSOT。
+
+### Q1：扩展字段集合 `E` 的合并规则要去漂移（禁止按 target=CREATE 特判）
+
+- 风险：capabilities 对 ext 的合并若依赖 `effective_target_event_type=CREATE` 等特判，会与 §5.3 冻结冲突，产生“可见不可写/可写不可见”与安全漂移。
+- 建议：
+  - `E` 的计算仅依赖 `(tenant_uuid, effective_date)` 的 enabled-as-of（`[enabled_on, disabled_on)` day 粒度，SSOT：`DEV-PLAN-100A`）。
+  - 在 policy 的 `AllowedFields(...)` 内把 `E` 并入 `correct_event.allowed_fields`（对所有 `effective_target_event_type` 生效），并生成 `field_payload_keys[field_key]="ext.<field_key>"`。
+- 验收/测试：对 `effective_target_event_type in {CREATE,RENAME,MOVE,DISABLE,ENABLE,SET_BUSINESS_UNIT}`，只要存在 enabled 的 ext 字段，该 field_key 必须出现在 `allowed_fields` 且 `field_payload_keys` 里（稳定排序）。
+
+### Q2：Policy 必须是“facts in / decision out”的纯模块，并被 capabilities 与写入双端复用
+
+- 风险：若 deny reasons/allowed fields/映射散落在 `internal/server` 与 `modules/orgunit/services` 两套实现中，必然漂移。
+- 建议：
+  - policy 只接收已解析的事实输入（例如：`can_admin/target_effective_event_type/root/has_children/has_dependencies/enabled_ext_keys`），输出 `enabled/allowed_fields/field_payload_keys/deny_reasons`；
+  - `deny_reasons` 严格限制在 §5.6 闭集，并按优先级稳定排序；实现层新增“闭集断言”测试（未知 code 直接 fail）。
+
+### Q3：`buildCorrectionPatch(...)` 不再硬编码矩阵；只做“值转换”，字段/路径由 policy 决定
+
+- 风险：服务层继续以 `if eventType==...` 的分支来决定“字段可改 + db_payload_key”，会再次与 capabilities 分叉。
+- 建议：
+  - policy 输出（或可推导）`field_key -> db_payload_key` 映射；`buildCorrectionPatch` 仅负责把 API patch 值转换为 Kernel patch（例如 `parent_org_code -> parent_id/new_parent_id`、`manager_pernr -> manager_uuid+manager_pernr`），并把“是否允许携带该字段”交给 `ValidatePatch(...)`。
+
+### Q4：更正链路的 fail-closed 必须覆盖“解析层”（未知字段/`ext_labels_snapshot`）
+
+- 风险：若 handler 允许未知字段被静默忽略，客户端可偷偷提交不被 policy 覆盖的字段，造成“表面通过、实际丢字段/绕过防线”的灰区。
+- 建议：更正请求 JSON 解码启用严格模式（`DisallowUnknownFields`）；并显式拒绝客户端提交 `patch.ext_labels_snapshot`（服务端生成 DICT label 快照，SSOT：`DEV-PLAN-100D`；落地：`DEV-PLAN-100E1`）。
+
+### Q5：Kernel/Service 的 ext 防线对齐要用“反向用例”锁住
+
+- 风险：capabilities 放行但 Kernel 因 `ORG_EXT_*` 错误拒绝，会导致 UI 进入“可编辑但必失败”。
+- 建议：以服务层集成测试覆盖典型负例（字段未配置/未启用/类型不匹配/DICT 缺 label snapshot/不允许的组合携带 ext），确保 policy 与服务端补齐逻辑能在进入 Kernel 前 fail-closed 并返回稳定错误码。
 
 ## 7. 验收标准
 
@@ -408,6 +446,7 @@ Core 字段允许矩阵（冻结；承接并收敛 `DEV-PLAN-082`，以本文为
 
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
 - `docs/dev-plans/017-routing-strategy.md`
+- `docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
 - `AGENTS.md`

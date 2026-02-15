@@ -3,7 +3,7 @@
 **状态**: 草拟中（2026-02-13；已对齐 `DEV-PLAN-100D` Phase 3 冻结契约）
 
 > 本文从 `DEV-PLAN-100` Phase 4 的 4A 拆分而来，作为 4A 的 SSOT；`DEV-PLAN-100` 继续保持为整体路线图。  
-> 本文聚焦 **UI 侧**的“详情页扩展字段展示 + 编辑态能力外显（fail-closed）”，并明确：开展 4A 前必须具备 `DEV-PLAN-083` 的核心产物可用（mutation policy 单点 + capabilities API）。
+> 本文聚焦 **UI 侧**的“详情页扩展字段展示 + 编辑态能力外显（fail-closed）”，并明确：开展 4A 前必须具备 `DEV-PLAN-083` 的核心产物可用（mutation policy 单点 + capabilities API）；其后端前置改造执行计划见 `DEV-PLAN-100E1`。
 
 ## 1. 背景与上下文 (Context)
 
@@ -470,6 +470,7 @@ Select 字段（DICT/ENTITY）控件策略：
 
 - `docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
+- `docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`
 - `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - `docs/dev-plans/097-orgunit-details-drawer-to-page-migration.md`

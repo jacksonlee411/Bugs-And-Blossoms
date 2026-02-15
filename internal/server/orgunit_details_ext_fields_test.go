@@ -222,22 +222,12 @@ func TestResolveOrgUnitExtDisplayValue_CustomDefinitions(t *testing.T) {
 	})
 
 	t.Run("dict non-string value uses fmt.Sprint", func(t *testing.T) {
-		orig := orgUnitDictOptionsRegistry["numbers"]
-		t.Cleanup(func() {
-			if orig == nil {
-				delete(orgUnitDictOptionsRegistry, "numbers")
-				return
-			}
-			orgUnitDictOptionsRegistry["numbers"] = orig
-		})
-		orgUnitDictOptionsRegistry["numbers"] = []orgUnitFieldOption{{Value: "123", Label: "OneTwoThree"}}
-
 		def := orgUnitFieldDefinition{
 			FieldKey: "x",
 		}
-		cfg := orgUnitTenantFieldConfig{DataSourceConfig: json.RawMessage(`{"dict_code":"numbers"}`)}
-		got, source := resolveOrgUnitExtDisplayValue(def, cfg, "text", "DICT", 123, orgUnitVersionExtSnapshot{})
-		if source != "dict_fallback" || got == nil || *got != "OneTwoThree" {
+		cfg := orgUnitTenantFieldConfig{DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}
+		got, source := resolveOrgUnitExtDisplayValue(def, cfg, "text", "DICT", json.Number("DEPARTMENT"), orgUnitVersionExtSnapshot{})
+		if source != "dict_fallback" || got == nil || *got != "Department" {
 			t.Fatalf("display=%v source=%q", got, source)
 		}
 	})

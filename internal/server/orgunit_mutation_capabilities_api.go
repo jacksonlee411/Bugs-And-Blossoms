@@ -5,14 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
+
+var resolveOrgUnitMutationPolicy = orgunitservices.ResolvePolicy
 
 type orgUnitMutationCapabilitiesAPIResponse struct {
 	OrgCode                  string                              `json:"org_code"`
@@ -124,98 +126,90 @@ func handleOrgUnitMutationCapabilitiesAPI(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 	canAdmin := canEditOrgNodes(ctx)
 
-	extFieldKeys := []string{}
-	if effectiveTarget == "CREATE" {
-		extConfigs, err := capStore.ListEnabledTenantFieldConfigsAsOf(r.Context(), tenant.ID, effectiveDate)
-		if err != nil {
-			writeInternalAPIError(w, r, err, "orgunit_mutation_ext_fields_failed")
-			return
-		}
-		extFieldKeys = make([]string, 0, len(extConfigs))
-		for _, cfg := range extConfigs {
-			key := strings.TrimSpace(cfg.FieldKey)
-			if key == "" {
-				continue
-			}
-			extFieldKeys = append(extFieldKeys, key)
-		}
-		sort.Strings(extFieldKeys)
+	extConfigs, err := capStore.ListEnabledTenantFieldConfigsAsOf(r.Context(), tenant.ID, effectiveDate)
+	if err != nil {
+		writeInternalAPIError(w, r, err, "orgunit_mutation_ext_fields_failed")
+		return
 	}
-
-	coreAllowed := allowedCoreFieldsForTargetEvent(effectiveTarget)
-	allowedFields := append([]string(nil), coreAllowed...)
-	allowedFields = append(allowedFields, extFieldKeys...)
-	sort.Strings(allowedFields)
-
-	fieldPayloadKeys := make(map[string]string, len(allowedFields))
-	isExt := make(map[string]struct{}, len(extFieldKeys))
-	for _, key := range extFieldKeys {
-		isExt[key] = struct{}{}
-	}
-	for _, field := range allowedFields {
-		if _, ok := isExt[field]; ok {
-			fieldPayloadKeys[field] = "ext." + field
+	extFieldKeys := make([]string, 0, len(extConfigs))
+	for _, cfg := range extConfigs {
+		key := strings.TrimSpace(cfg.FieldKey)
+		if key == "" {
 			continue
 		}
-		switch field {
-		case "effective_date":
-			fieldPayloadKeys[field] = "effective_date"
-		case "name":
-			fieldPayloadKeys[field] = "name"
-		case "parent_org_code":
-			fieldPayloadKeys[field] = "parent_org_code"
-		case "is_business_unit":
-			fieldPayloadKeys[field] = "is_business_unit"
-		case "manager_pernr":
-			fieldPayloadKeys[field] = "manager_pernr"
-		}
+		extFieldKeys = append(extFieldKeys, key)
 	}
 
-	correctEventDeny := []string{}
-	if !canAdmin {
-		correctEventDeny = append(correctEventDeny, "FORBIDDEN")
+	targetEventType := orgunittypes.OrgUnitEventType(effectiveTarget)
+
+	correctEventDecision, err := resolveOrgUnitMutationPolicy(orgunitservices.OrgUnitMutationPolicyKey{
+		ActionKind:               orgunitservices.OrgUnitActionCorrectEvent,
+		EmittedEventType:         orgunitservices.OrgUnitEmittedCorrectEvent,
+		TargetEffectiveEventType: &targetEventType,
+	}, orgunitservices.OrgUnitMutationPolicyFacts{
+		CanAdmin:            canAdmin,
+		EnabledExtFieldKeys: extFieldKeys,
+	})
+	if err != nil {
+		writeInternalAPIError(w, r, err, "orgunit_mutation_policy_failed")
+		return
 	}
+
 	correctEvent := orgUnitCorrectEventCapability{
-		Enabled:          canAdmin,
-		AllowedFields:    allowedFields,
-		FieldPayloadKeys: fieldPayloadKeys,
-		DenyReasons:      dedupDenyReasons(correctEventDeny),
+		Enabled:          correctEventDecision.Enabled,
+		AllowedFields:    correctEventDecision.AllowedFields,
+		FieldPayloadKeys: correctEventDecision.FieldPayloadKeys,
+		DenyReasons:      correctEventDecision.DenyReasons,
 	}
 
-	statusSupported := effectiveTarget == string(orgunittypes.OrgUnitEventEnable) || effectiveTarget == string(orgunittypes.OrgUnitEventDisable)
-	correctStatusDeny := []string{}
-	allowedTargetStatuses := []string{}
-	if statusSupported {
-		allowedTargetStatuses = []string{"active", "disabled"}
-	} else {
-		correctStatusDeny = append(correctStatusDeny, orgUnitErrStatusCorrectionUnsupported)
-	}
-	if !canAdmin {
-		correctStatusDeny = append(correctStatusDeny, "FORBIDDEN")
+	correctStatusDecision, err := resolveOrgUnitMutationPolicy(orgunitservices.OrgUnitMutationPolicyKey{
+		ActionKind:               orgunitservices.OrgUnitActionCorrectStatus,
+		EmittedEventType:         orgunitservices.OrgUnitEmittedCorrectStatus,
+		TargetEffectiveEventType: &targetEventType,
+	}, orgunitservices.OrgUnitMutationPolicyFacts{
+		CanAdmin: canAdmin,
+	})
+	if err != nil {
+		writeInternalAPIError(w, r, err, "orgunit_mutation_policy_failed")
+		return
 	}
 	correctStatus := orgUnitCorrectStatusCapability{
-		Enabled:               canAdmin && statusSupported,
-		AllowedTargetStatuses: allowedTargetStatuses,
-		DenyReasons:           dedupDenyReasons(correctStatusDeny),
+		Enabled:               correctStatusDecision.Enabled,
+		AllowedTargetStatuses: correctStatusDecision.AllowedTargetStatuses,
+		DenyReasons:           correctStatusDecision.DenyReasons,
 	}
 
-	rescindEventDeny := []string{}
-	if !canAdmin {
-		rescindEventDeny = append(rescindEventDeny, "FORBIDDEN")
+	rescindEventDecision, err := resolveOrgUnitMutationPolicy(orgunitservices.OrgUnitMutationPolicyKey{
+		ActionKind:               orgunitservices.OrgUnitActionRescindEvent,
+		EmittedEventType:         orgunitservices.OrgUnitEmittedRescindEvent,
+		TargetEffectiveEventType: &targetEventType,
+	}, orgunitservices.OrgUnitMutationPolicyFacts{
+		CanAdmin: canAdmin,
+	})
+	if err != nil {
+		writeInternalAPIError(w, r, err, "orgunit_mutation_policy_failed")
+		return
 	}
-	rescindEvent := orgUnitBasicCapability{Enabled: canAdmin, DenyReasons: dedupDenyReasons(rescindEventDeny)}
+	rescindEvent := orgUnitBasicCapability{Enabled: rescindEventDecision.Enabled, DenyReasons: rescindEventDecision.DenyReasons}
 
 	rescindOrgDeny, err := capStore.EvaluateRescindOrgDenyReasons(r.Context(), tenant.ID, orgID)
 	if err != nil {
 		writeInternalAPIError(w, r, err, "orgunit_mutation_rescind_org_failed")
 		return
 	}
-	if !canAdmin {
-		rescindOrgDeny = append(rescindOrgDeny, "FORBIDDEN")
+
+	rescindOrgDecision, err := resolveOrgUnitMutationPolicy(orgunitservices.OrgUnitMutationPolicyKey{
+		ActionKind:       orgunitservices.OrgUnitActionRescindOrg,
+		EmittedEventType: orgunitservices.OrgUnitEmittedRescindOrg,
+	}, orgunitservices.OrgUnitMutationPolicyFacts{
+		CanAdmin:              canAdmin,
+		RescindOrgDenyReasons: rescindOrgDeny,
+	})
+	if err != nil {
+		writeInternalAPIError(w, r, err, "orgunit_mutation_policy_failed")
+		return
 	}
-	rescindOrgDeny = dedupDenyReasons(rescindOrgDeny)
-	enabledRescindOrg := canAdmin && len(rescindOrgDeny) == 0
-	rescindOrg := orgUnitBasicCapability{Enabled: enabledRescindOrg, DenyReasons: rescindOrgDeny}
+	rescindOrg := orgUnitBasicCapability{Enabled: rescindOrgDecision.Enabled, DenyReasons: rescindOrgDecision.DenyReasons}
 
 	resp := orgUnitMutationCapabilitiesAPIResponse{
 		OrgCode:                  normalizedCode,
@@ -233,21 +227,4 @@ func handleOrgUnitMutationCapabilitiesAPI(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)
-}
-
-func allowedCoreFieldsForTargetEvent(eventType string) []string {
-	switch strings.TrimSpace(eventType) {
-	case "CREATE":
-		return []string{"effective_date", "is_business_unit", "manager_pernr", "name", "parent_org_code"}
-	case "RENAME":
-		return []string{"effective_date", "name"}
-	case "MOVE":
-		return []string{"effective_date", "parent_org_code"}
-	case "SET_BUSINESS_UNIT":
-		return []string{"effective_date", "is_business_unit"}
-	case "DISABLE", "ENABLE":
-		return []string{"effective_date"}
-	default:
-		return []string{"effective_date"}
-	}
 }

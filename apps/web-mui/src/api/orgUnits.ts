@@ -94,9 +94,31 @@ export interface OrgUnitDetailsAPIItem {
   event_uuid: string
 }
 
+export type OrgUnitExtValueType = 'text' | 'int' | 'uuid' | 'bool' | 'date'
+export type OrgUnitExtDataSourceType = 'PLAIN' | 'DICT' | 'ENTITY'
+export type OrgUnitExtDisplayValueSource =
+  | 'plain'
+  | 'versions_snapshot'
+  | 'events_snapshot'
+  | 'dict_fallback'
+  | 'entity_join'
+  | 'unresolved'
+export type OrgUnitExtScalarValue = string | number | boolean | null
+
+export interface OrgUnitExtField {
+  field_key: string
+  label_i18n_key: string
+  value_type: OrgUnitExtValueType
+  data_source_type: OrgUnitExtDataSourceType
+  value: OrgUnitExtScalarValue
+  display_value: string | null
+  display_value_source: OrgUnitExtDisplayValueSource
+}
+
 export interface OrgUnitDetailsResponse {
   as_of: string
   org_unit: OrgUnitDetailsAPIItem
+  ext_fields?: OrgUnitExtField[]
 }
 
 export async function getOrgUnitDetails(options: {

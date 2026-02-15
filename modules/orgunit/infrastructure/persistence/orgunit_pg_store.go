@@ -252,6 +252,52 @@ WHERE tenant_uuid = $1::uuid AND org_id = $2::int AND effective_date = $3::date
 	return event, nil
 }
 
+func (s *OrgUnitPGStore) ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	rows, err := tx.Query(ctx, `
+SELECT field_key, value_type, data_source_type, data_source_config
+FROM orgunit.tenant_field_configs
+WHERE tenant_uuid = $1::uuid
+  AND enabled_on <= $2::date
+  AND (disabled_on IS NULL OR $2::date < disabled_on)
+ORDER BY field_key ASC
+`, tenantID, asOf)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]types.TenantFieldConfig, 0)
+	for rows.Next() {
+		var cfg types.TenantFieldConfig
+		var raw []byte
+		if err := rows.Scan(&cfg.FieldKey, &cfg.ValueType, &cfg.DataSourceType, &raw); err != nil {
+			return nil, err
+		}
+		if raw != nil {
+			cfg.DataSourceConfig = json.RawMessage(raw)
+		}
+		out = append(out, cfg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (s *OrgUnitPGStore) ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
