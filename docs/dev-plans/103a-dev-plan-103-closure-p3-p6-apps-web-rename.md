@@ -27,7 +27,7 @@
 ### 2.1 目标（Done 的定义）
 
 - [x] P3 完整收尾：输出并维护《旧 UI → MUI 映射表》，且能用事实源与门禁验证“旧 UI 不可达/不可构建/不可误用”，业务入口在 MUI 中可发现、可操作（至少覆盖当前已实现能力）。
-- [ ] 映射表覆盖 `DEV-PLAN-103` 里已识别的旧 UI 入口家族（至少：`/login`、`/ui/*`、`/lang/*`、`/org/nodes*`、`/org/snapshot`、`/org/setid`、`/org/job-catalog`、`/org/positions`、`/org/assignments`、`/person/persons`），并逐条标注证据类型（allowlist/handler/测试）。
+- [x] 映射表覆盖 `DEV-PLAN-103` 里已识别的旧 UI 入口家族（至少：`/login`、`/ui/*`、`/lang/*`、`/org/nodes*`、`/org/snapshot`、`/org/setid`、`/org/job-catalog`、`/org/positions`、`/org/assignments`、`/person/persons`），并逐条标注证据类型（allowlist/handler/测试）。
 - [x] Person 页面去除“ignored as-of”输入，使时间上下文口径与 `DEV-PLAN-102` 一致（不制造“伪需求参数”与歧义 UI）。
 - [x] P6 完整收尾：完成前端工程目录改名（去技术后缀）+ 全仓引用更新；CI 触发器、构建脚本、文档 SSOT 同步更新；本地能跑通 UI 构建与全门禁。
 - [ ] 清理残留旧 UI 死代码/测试（不改变对外契约）：覆盖并收口 **三类残留面**，避免后续误引入“兼容别名窗口/legacy 回退”：
@@ -64,8 +64,8 @@
 
 ### PR-103A-0：收尾准备与证据骨架
 
-1. [ ] 建立本计划执行日志：`docs/dev-records/dev-plan-103a-execution-log.md`（落盘后再开始收尾实施）。
-2. [ ] 在执行日志中生成《旧 UI → MUI 映射表》的初版（以事实源为准），并标注迁移/删除状态。
+1. [x] 建立本计划执行日志：`docs/dev-records/dev-plan-103a-execution-log.md`。
+2. [x] 在执行日志中生成《旧 UI → MUI 映射表》的初版（以事实源为准），并标注迁移/删除状态。
    - 事实源（建议顺序，可按实际补齐）：
      - `config/routing/allowlist.yaml`（route_class / 可达性门禁）
      - `internal/server/**`（旧 HTML/HTMX handler 与 redirect/表单 action 的实际残留面；避免仅盯 `handler.go`）
@@ -79,9 +79,9 @@
 
 ### PR-103A-1：P3 收尾（Person 页面时间口径清理 + 映射表补齐）
 
-3. [ ] Person 页面去除“ignored as-of”输入与相关状态变量：  
+3. [x] Person 页面去除“ignored as-of”输入与相关状态变量：  
    - 原则：Person 页面若不需要时间上下文，应按 `DEV-PLAN-102` 归类为 C 类（无时间上下文），不暴露日期输入以避免歧义。
-4. [ ] 在映射表中补齐 Person/JobCatalog/Staffing/SetID 的“入口→页面→API→权限→时间口径”信息，并标注当前实现状态（已迁移/占位/未实现）。
+4. [x] 在映射表中补齐 Person/JobCatalog/Staffing/SetID 的“入口→页面→API→权限→时间口径”信息，并标注当前实现状态（已迁移/占位/未实现）。
 
 ### PR-103A-2：旧 UI 残留清理（死代码/测试/绕过口径）
 
@@ -107,20 +107,20 @@
 
 ### PR-103A-4：验收与门禁对齐（本地可复现）
 
-10. [ ] 跑 UI 构建门禁并提交生成物（如有）：`make css`，然后 `git status --short` 必须为空。
-11. [ ] 跑全门禁对齐 CI：`make preflight`。
-12. [ ] 将关键命令与结果登记到 `docs/dev-records/dev-plan-103a-execution-log.md`（时间戳、结果；不在 dev-plan 内复制命令矩阵）。
+10. [x] 跑 UI 构建门禁并提交生成物（如有）：`make css`，然后 `git status --short` 必须为空。
+11. [x] 跑全门禁对齐 CI：`make preflight`。
+12. [x] 将关键命令与结果登记到 `docs/dev-records/dev-plan-103a-execution-log.md`（时间戳、结果；不在 dev-plan 内复制命令矩阵）。
 13. [ ] 回写 `DEV-PLAN-103`：将 P3/P6 条目更新为 `[x]`，并在验收标准中引用本计划的执行日志作为证据入口。
 
 ## 6. 验收标准
 
-- [ ] 《旧 UI → MUI 映射表》存在且可追溯（明确事实源、覆盖本计划约定的旧入口清单，并对每条路由给出状态/证据类型）。
+- [x] 《旧 UI → MUI 映射表》存在且可追溯（明确事实源、覆盖本计划约定的旧入口清单，并对每条路由给出状态/证据类型）。
 - [x] 前端工程目录为 `apps/web`；**代码/脚本/CI/可执行文档（SSOT）** 不再引用旧目录名。  
   `docs/dev-records/**` 与明确标注“历史”的文档允许保留旧路径文本，不作为阻塞项。
-- [ ] Person 页面不再出现 “As-of (ignored)” 或等价输入；时间上下文口径与 `DEV-PLAN-102` 一致。
-- [ ] 不存在 `/login` HTML 页面或兼容跳转窗口；不在中间件层保留对 `/login` 的特殊放行/绕过逻辑形成潜在 backdoor。
+- [x] Person 页面不再出现 “As-of (ignored)” 或等价输入；时间上下文口径与 `DEV-PLAN-102` 一致。
+- [x] 不存在 `/login` HTML 页面或兼容跳转窗口；不在中间件层保留对 `/login` 的特殊放行/绕过逻辑形成潜在 backdoor。
 - [ ] `internal/server/**` 中不再残留旧 UI 交互链路（旧 HTML 页面渲染、旧表单 action/redirect 指向旧路由、以及 HTMX/hx-* 标记相关输出），且对应旧 UI 单测已清理或迁移到与 MUI-only 方向一致的断言。
-- [ ] 本地 `make css` 与 `make preflight` 可通过，且证据记录已落盘。
+- [x] 本地 `make css` 与 `make preflight` 可通过，且证据记录已落盘。
 
 ## 7. 风险与缓解
 
