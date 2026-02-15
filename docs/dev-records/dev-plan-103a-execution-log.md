@@ -1,6 +1,6 @@
 # DEV-PLAN-103A 执行日志
 
-**状态**: 已完成（2026-02-15 20:49 UTC）
+**状态**: 已完成（2026-02-15 20:52 UTC）
 
 **关联文档**:
 - `docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
@@ -44,6 +44,7 @@
 | 2026-02-15 17:26 UTC | `make preflight` | ✅ | 含 E2E（Playwright 7 tests）通过 |
 | 2026-02-15 20:41 UTC | `make preflight` | ✅ | `make check no-legacy` ✅；`make test`（100% coverage）✅；E2E（Playwright 7 tests）✅ |
 | 2026-02-15 20:49 UTC | `make check doc` | ✅ | 文档门禁通过（回写 `DEV-PLAN-103/103A`） |
+| 2026-02-15 20:52 UTC | `make preflight` | ✅ | 合并前再次对齐 CI（含 E2E 7 tests） |
 
 ## 3) 变更清单（PR 维度）
 
