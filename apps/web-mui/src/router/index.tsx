@@ -5,6 +5,7 @@ import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
 import { FoundationDemoPage } from '../pages/FoundationDemoPage'
 import { JobCatalogPage } from '../pages/jobcatalog/JobCatalogPage'
 import { LoginPage } from '../pages/LoginPage'
+import { OrgUnitFieldConfigsPage } from '../pages/org/OrgUnitFieldConfigsPage'
 import { SetIDGovernancePage } from '../pages/org/SetIDGovernancePage'
 import { OrgUnitDetailsPage } from '../pages/org/OrgUnitDetailsPage'
 import { OrgUnitsPage } from '../pages/org/OrgUnitsPage'
@@ -33,6 +34,14 @@ export const router = createBrowserRouter([
       {
         path: 'home',
         element: <Navigate replace to='/' />
+      },
+      {
+        path: 'org/units/field-configs',
+        element: (
+          <RequirePermission permissionKey='orgunit.admin'>
+            <OrgUnitFieldConfigsPage />
+          </RequirePermission>
+        )
       },
       {
         path: 'org/units/:orgCode',

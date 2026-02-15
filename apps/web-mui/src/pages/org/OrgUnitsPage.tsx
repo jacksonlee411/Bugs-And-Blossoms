@@ -521,9 +521,24 @@ export function OrgUnitsPage() {
         subtitle={t('page_org_subtitle')}
         title={t('page_org_title')}
         actions={
-          <Button disabled={!canWrite} onClick={openCreateDialog} size='small' variant='contained'>
-            {t('org_action_create')}
-          </Button>
+          <>
+            {canWrite ? (
+              <Button
+                onClick={() => {
+                  const params = new URLSearchParams()
+                  params.set('as_of', asOf)
+                  navigate({ pathname: '/org/units/field-configs', search: `?${params.toString()}` })
+                }}
+                size='small'
+                variant='outlined'
+              >
+                {t('nav_org_field_configs')}
+              </Button>
+            ) : null}
+            <Button disabled={!canWrite} onClick={openCreateDialog} size='small' variant='contained'>
+              {t('org_action_create')}
+            </Button>
+          </>
         }
       />
 

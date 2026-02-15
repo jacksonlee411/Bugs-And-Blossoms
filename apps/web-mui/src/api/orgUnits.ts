@@ -401,3 +401,66 @@ export async function getOrgUnitFieldOptions(options: {
 
   return httpClient.get<OrgUnitFieldOptionsResponse>(`/org/api/org-units/fields:options?${query.toString()}`)
 }
+
+export type OrgUnitTenantFieldConfigStatus = 'all' | 'enabled' | 'disabled'
+
+export interface OrgUnitFieldDefinition {
+  field_key: string
+  value_type: OrgUnitExtValueType
+  data_source_type: OrgUnitExtDataSourceType
+  data_source_config: Record<string, unknown>
+  data_source_config_options?: Record<string, unknown>[]
+  label_i18n_key: string
+}
+
+export interface OrgUnitFieldDefinitionsResponse {
+  fields: OrgUnitFieldDefinition[]
+}
+
+export async function listOrgUnitFieldDefinitions(): Promise<OrgUnitFieldDefinitionsResponse> {
+  return httpClient.get<OrgUnitFieldDefinitionsResponse>('/org/api/org-units/field-definitions')
+}
+
+export interface OrgUnitTenantFieldConfig {
+  field_key: string
+  value_type: OrgUnitExtValueType
+  data_source_type: OrgUnitExtDataSourceType
+  data_source_config: Record<string, unknown>
+  physical_col: string
+  enabled_on: string
+  disabled_on: string | null
+  updated_at: string
+}
+
+export interface OrgUnitFieldConfigsResponse {
+  as_of: string
+  field_configs: OrgUnitTenantFieldConfig[]
+}
+
+export async function listOrgUnitFieldConfigs(options: {
+  asOf: string
+  status?: OrgUnitTenantFieldConfigStatus
+}): Promise<OrgUnitFieldConfigsResponse> {
+  const query = new URLSearchParams({ as_of: options.asOf })
+  if (options.status && options.status !== 'all') {
+    query.set('status', options.status)
+  }
+  return httpClient.get<OrgUnitFieldConfigsResponse>(`/org/api/org-units/field-configs?${query.toString()}`)
+}
+
+export async function enableOrgUnitFieldConfig(request: {
+  field_key: string
+  enabled_on: string
+  request_code: string
+  data_source_config?: Record<string, unknown>
+}): Promise<OrgUnitTenantFieldConfig> {
+  return httpClient.post<OrgUnitTenantFieldConfig>('/org/api/org-units/field-configs', request)
+}
+
+export async function disableOrgUnitFieldConfig(request: {
+  field_key: string
+  disabled_on: string
+  request_code: string
+}): Promise<OrgUnitTenantFieldConfig> {
+  return httpClient.post<OrgUnitTenantFieldConfig>('/org/api/org-units/field-configs:disable', request)
+}

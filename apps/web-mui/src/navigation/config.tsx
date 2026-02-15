@@ -5,6 +5,7 @@ import GroupsIcon from '@mui/icons-material/Groups'
 import HubIcon from '@mui/icons-material/Hub'
 import HomeWorkIcon from '@mui/icons-material/HomeWork'
 import PendingActionsIcon from '@mui/icons-material/PendingActions'
+import TuneIcon from '@mui/icons-material/Tune'
 import WorkOutlineIcon from '@mui/icons-material/WorkOutline'
 import type { NavItem, SearchEntry } from '../types/navigation'
 
@@ -26,6 +27,15 @@ export const navItems: NavItem[] = [
     order: 20,
     permissionKey: 'orgunit.read',
     keywords: ['org', 'unit', 'department', '组织', '部门']
+  },
+  {
+    key: 'org-field-configs',
+    path: '/org/units/field-configs',
+    labelKey: 'nav_org_field_configs',
+    icon: <TuneIcon fontSize='small' />,
+    order: 21,
+    permissionKey: 'orgunit.admin',
+    keywords: ['field', 'config', 'metadata', 'orgunit', '字段', '配置', '元数据']
   },
   {
     key: 'org-setid',
