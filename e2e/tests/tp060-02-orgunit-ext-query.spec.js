@@ -52,22 +52,20 @@ async function enableOrgTypeFieldConfig(page, asOf) {
   await expect(page.getByText(/Enabled successfully/)).toBeVisible({ timeout: 30_000 });
 }
 
-async function setOrgTypeViaUI(page, { asOf, orgCode, valueLabel }) {
-  await page.goto(`/app/org/units/${orgCode}?as_of=${asOf}&effective_date=${asOf}`);
-  await expect(page.getByRole("button", { name: /Correct/ })).toBeVisible({ timeout: 30_000 });
-
-  await page.getByRole("button", { name: /Correct/ }).click();
-  const dialog = page.getByRole("dialog", { name: /Correct/ });
-  await expect(dialog).toBeVisible();
-
-  const orgTypeInput = dialog.getByLabel(/Org Type/);
-  await orgTypeInput.click();
-  await orgTypeInput.fill(valueLabel);
-  await page.getByRole("option", { name: valueLabel }).click();
-
-  await dialog.getByRole("button", { name: /Confirm/ }).click();
-  await expect(dialog).toBeHidden({ timeout: 30_000 });
-  await expect(page.getByText(valueLabel)).toBeVisible({ timeout: 30_000 });
+async function setOrgTypeViaAPI(ctx, { asOf, orgCode, value }) {
+  const resp = await ctx.request.post("/org/api/org-units/corrections", {
+    data: {
+      org_code: orgCode,
+      effective_date: asOf,
+      request_id: `req-${Date.now()}-${orgCode}`,
+      patch: {
+        ext: {
+          org_type: value
+        }
+      }
+    }
+  });
+  expect(resp.status(), await resp.text()).toBe(200);
 }
 
 test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
@@ -174,8 +172,8 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
 
   await enableOrgTypeFieldConfig(page, asOf);
 
-  await setOrgTypeViaUI(page, { asOf, orgCode: org.company, valueLabel: "Company" });
-  await setOrgTypeViaUI(page, { asOf, orgCode: org.dept, valueLabel: "Department" });
+  await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.company, value: "COMPANY" });
+  await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.dept, value: "DEPARTMENT" });
 
   await page.goto(`/app/org/units?as_of=${asOf}&node=${org.root}`);
 
