@@ -213,11 +213,13 @@ type orgUnitEnableAPIRequest struct {
 }
 
 type orgUnitCorrectionPatchRequest struct {
-	EffectiveDate  *string `json:"effective_date"`
-	Name           *string `json:"name"`
-	ParentOrgCode  *string `json:"parent_org_code"`
-	IsBusinessUnit *bool   `json:"is_business_unit"`
-	ManagerPernr   *string `json:"manager_pernr"`
+	EffectiveDate     *string         `json:"effective_date"`
+	Name              *string         `json:"name"`
+	ParentOrgCode     *string         `json:"parent_org_code"`
+	IsBusinessUnit    *bool           `json:"is_business_unit"`
+	ManagerPernr      *string         `json:"manager_pernr"`
+	Ext               map[string]any  `json:"ext"`
+	ExtLabelsSnapshot json.RawMessage `json:"ext_labels_snapshot"`
 }
 
 type orgUnitCorrectionAPIRequest struct {
@@ -1195,8 +1197,16 @@ func handleOrgUnitsCorrectionsAPI(w http.ResponseWriter, r *http.Request, writeS
 	}
 
 	var req orgUnitCorrectionAPIRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+		return
+	}
+
+	// Fail-closed: clients must not submit ext_labels_snapshot; server generates it.
+	if len(req.Patch.ExtLabelsSnapshot) > 0 {
+		writeOrgUnitServiceError(w, r, newBadRequestError(orgUnitErrPatchFieldNotAllowed), "orgunit_correct_failed")
 		return
 	}
 
@@ -1211,6 +1221,7 @@ func handleOrgUnitsCorrectionsAPI(w http.ResponseWriter, r *http.Request, writeS
 			ParentOrgCode:  req.Patch.ParentOrgCode,
 			IsBusinessUnit: req.Patch.IsBusinessUnit,
 			ManagerPernr:   req.Patch.ManagerPernr,
+			Ext:            req.Patch.Ext,
 		},
 	})
 	if err != nil {

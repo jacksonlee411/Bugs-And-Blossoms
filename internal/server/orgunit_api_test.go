@@ -1717,6 +1717,9 @@ func TestHandleOrgUnitsCorrectionsAPI_Success(t *testing.T) {
 			if req.Patch.Name == nil || *req.Patch.Name != "New Name" {
 				t.Fatalf("expected patch name")
 			}
+			if req.Patch.Ext["org_type"] != "DEPARTMENT" {
+				t.Fatalf("expected ext payload forwarded, got=%v", req.Patch.Ext)
+			}
 			return orgunittypes.OrgUnitResult{
 				OrgCode:       "A001",
 				EffectiveDate: "2026-01-01",
@@ -1724,7 +1727,7 @@ func TestHandleOrgUnitsCorrectionsAPI_Success(t *testing.T) {
 			}, nil
 		},
 	}
-	body := strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","patch":{"name":"New Name"},"request_id":"r1"}`)
+	body := strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","patch":{"name":"New Name","ext":{"org_type":"DEPARTMENT"}},"request_id":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -1737,6 +1740,26 @@ func TestHandleOrgUnitsCorrectionsAPI_Success(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "A001") {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsCorrectionsAPI_RejectClientExtLabelsSnapshot(t *testing.T) {
+	svc := orgUnitWriteServiceStub{
+		correctFn: func(context.Context, string, orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			t.Fatalf("service should not be called")
+			return orgunittypes.OrgUnitResult{}, nil
+		},
+	}
+	body := strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","patch":{"ext":{"org_type":"DEPARTMENT"},"ext_labels_snapshot":{"org_type":"Department"}},"request_id":"r1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/corrections", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsCorrectionsAPI(rec, req, svc)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), orgUnitErrPatchFieldNotAllowed) {
+		t.Fatalf("body=%q", rec.Body.String())
 	}
 }
 

@@ -144,11 +144,29 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 		}
 	})
 
+	t.Run("list groups stable error", func(t *testing.T) {
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		rec := httptest.NewRecorder()
+		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), groupsErr: errors.New("JOB_CATALOG_LIST_GROUPS_FAILED")})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("list families error", func(t *testing.T) {
 		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), familiesErr: errors.New("boom")})
 		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("list families stable error", func(t *testing.T) {
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		rec := httptest.NewRecorder()
+		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), familiesErr: errors.New("JOB_CATALOG_LIST_FAMILIES_FAILED")})
+		if rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	})
@@ -162,11 +180,29 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 		}
 	})
 
+	t.Run("list levels stable error", func(t *testing.T) {
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		rec := httptest.NewRecorder()
+		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), levelsErr: errors.New("JOB_CATALOG_LIST_LEVELS_FAILED")})
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("list profiles error", func(t *testing.T) {
 		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), profilesErr: errors.New("boom")})
 		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("list profiles stable error", func(t *testing.T) {
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		rec := httptest.NewRecorder()
+		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), profilesErr: errors.New("JOB_CATALOG_LIST_PROFILES_FAILED")})
+		if rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	})

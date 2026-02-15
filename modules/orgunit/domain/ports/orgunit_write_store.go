@@ -21,6 +21,7 @@ type OrgUnitWriteStore interface {
 	SubmitRescindOrg(ctx context.Context, tenantID string, orgID int, reason string, requestID string, initiatorUUID string) (int, error)
 	FindEventByUUID(ctx context.Context, tenantID string, eventUUID string) (types.OrgUnitEvent, error)
 	FindEventByEffectiveDate(ctx context.Context, tenantID string, orgID int, effectiveDate string) (types.OrgUnitEvent, error)
+	ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error)
 	ResolveOrgID(ctx context.Context, tenantID string, orgCode string) (int, error)
 	ResolveOrgCode(ctx context.Context, tenantID string, orgID int) (string, error)
 	FindPersonByPernr(ctx context.Context, tenantID string, pernr string) (types.Person, error)

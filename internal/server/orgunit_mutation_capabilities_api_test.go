@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
+	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
@@ -41,23 +43,30 @@ func (s mutationCapabilitiesStoreStub) EvaluateRescindOrgDenyReasons(ctx context
 	return []string{}, nil
 }
 
-func TestAllowedCoreFieldsForTargetEvent(t *testing.T) {
+func TestResolvePolicyCoreFieldsForTargetEvent(t *testing.T) {
 	tests := []struct {
-		event string
+		event orgunittypes.OrgUnitEventType
 		want  []string
 	}{
-		{event: "CREATE", want: []string{"effective_date", "is_business_unit", "manager_pernr", "name", "parent_org_code"}},
-		{event: "RENAME", want: []string{"effective_date", "name"}},
-		{event: "MOVE", want: []string{"effective_date", "parent_org_code"}},
-		{event: "SET_BUSINESS_UNIT", want: []string{"effective_date", "is_business_unit"}},
-		{event: "DISABLE", want: []string{"effective_date"}},
-		{event: "ENABLE", want: []string{"effective_date"}},
-		{event: "UNKNOWN", want: []string{"effective_date"}},
+		{event: orgunittypes.OrgUnitEventCreate, want: []string{"effective_date", "is_business_unit", "manager_pernr", "name", "parent_org_code"}},
+		{event: orgunittypes.OrgUnitEventRename, want: []string{"effective_date", "name"}},
+		{event: orgunittypes.OrgUnitEventMove, want: []string{"effective_date", "parent_org_code"}},
+		{event: orgunittypes.OrgUnitEventSetBusinessUnit, want: []string{"effective_date", "is_business_unit"}},
+		{event: orgunittypes.OrgUnitEventDisable, want: []string{"effective_date"}},
+		{event: orgunittypes.OrgUnitEventEnable, want: []string{"effective_date"}},
+		{event: orgunittypes.OrgUnitEventType("UNKNOWN"), want: []string{"effective_date"}},
 	}
 	for _, tt := range tests {
-		got := allowedCoreFieldsForTargetEvent(tt.event)
-		if strings.Join(got, ",") != strings.Join(tt.want, ",") {
-			t.Fatalf("event=%s got=%v want=%v", tt.event, got, tt.want)
+		decision, err := orgunitservices.ResolvePolicy(orgunitservices.OrgUnitMutationPolicyKey{
+			ActionKind:               orgunitservices.OrgUnitActionCorrectEvent,
+			EmittedEventType:         orgunitservices.OrgUnitEmittedCorrectEvent,
+			TargetEffectiveEventType: &tt.event,
+		}, orgunitservices.OrgUnitMutationPolicyFacts{CanAdmin: true})
+		if err != nil {
+			t.Fatalf("event=%s err=%v", tt.event, err)
+		}
+		if strings.Join(decision.AllowedFields, ",") != strings.Join(tt.want, ",") {
+			t.Fatalf("event=%s got=%v want=%v", tt.event, decision.AllowedFields, tt.want)
 		}
 	}
 }
@@ -166,6 +175,25 @@ func TestHandleOrgUnitMutationCapabilitiesAPI_ErrorBranches(t *testing.T) {
 			resolveOrgCodeStore: &resolveOrgCodeStore{resolveID: 10000001},
 			resolveTargetFn: func(context.Context, string, int, string) (orgUnitMutationTargetEvent, error) {
 				return orgUnitMutationTargetEvent{}, errors.New("boom")
+			},
+		}
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/mutation-capabilities?org_code=A001&effective_date=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitMutationCapabilitiesAPI(rec, req, store)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("list enabled ext fields error", func(t *testing.T) {
+		store := mutationCapabilitiesStoreStub{
+			resolveOrgCodeStore: &resolveOrgCodeStore{resolveID: 10000001},
+			resolveTargetFn: func(context.Context, string, int, string) (orgUnitMutationTargetEvent, error) {
+				return orgUnitMutationTargetEvent{HasEffective: true, EffectiveEventType: "CREATE", HasRaw: true, RawEventType: "CREATE"}, nil
+			},
+			listEnabledFn: func(context.Context, string, string) ([]orgUnitTenantFieldConfig, error) {
+				return nil, errors.New("boom")
 			},
 		}
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/mutation-capabilities?org_code=A001&effective_date=2026-01-01", nil)
@@ -344,4 +372,45 @@ func TestHandleOrgUnitMutationCapabilitiesAPI_Success(t *testing.T) {
 			t.Fatalf("expected rescind_org enabled")
 		}
 	})
+}
+
+func TestHandleOrgUnitMutationCapabilitiesAPI_PolicyResolveErrors(t *testing.T) {
+	baseStore := mutationCapabilitiesStoreStub{
+		resolveOrgCodeStore: &resolveOrgCodeStore{resolveID: 10000001},
+		resolveTargetFn: func(context.Context, string, int, string) (orgUnitMutationTargetEvent, error) {
+			return orgUnitMutationTargetEvent{HasEffective: true, EffectiveEventType: "CREATE", HasRaw: true, RawEventType: "CREATE"}, nil
+		},
+		listEnabledFn: func(context.Context, string, string) ([]orgUnitTenantFieldConfig, error) {
+			return []orgUnitTenantFieldConfig{}, nil
+		},
+		evalRescindFn: func(context.Context, string, int) ([]string, error) {
+			return []string{}, nil
+		},
+	}
+
+	orig := resolveOrgUnitMutationPolicy
+	t.Cleanup(func() { resolveOrgUnitMutationPolicy = orig })
+
+	for _, nth := range []int{1, 2, 3, 4} {
+		nth := nth
+		t.Run("error_on_call_"+string(rune('0'+nth)), func(t *testing.T) {
+			call := 0
+			resolveOrgUnitMutationPolicy = func(key orgunitservices.OrgUnitMutationPolicyKey, facts orgunitservices.OrgUnitMutationPolicyFacts) (orgunitservices.OrgUnitMutationPolicyDecision, error) {
+				call++
+				if call == nth {
+					return orgunitservices.OrgUnitMutationPolicyDecision{}, errors.New("boom")
+				}
+				return orig(key, facts)
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/mutation-capabilities?org_code=A001&effective_date=2026-01-01", nil)
+			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+			req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", RoleSlug: "tenant-admin"}))
+			rec := httptest.NewRecorder()
+			handleOrgUnitMutationCapabilitiesAPI(rec, req, baseStore)
+			if rec.Code != http.StatusInternalServerError {
+				t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+			}
+		})
+	}
 }

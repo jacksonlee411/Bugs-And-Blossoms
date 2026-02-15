@@ -1,6 +1,6 @@
 # DEV-PLAN-100E1：OrgUnit Mutation Policy 单点化 + 更正链路支持 `patch.ext`（作为 DEV-PLAN-100E 前置）
 
-**状态**: 草拟中（2026-02-15 00:16 UTC）
+**状态**: 已完成（2026-02-15 03:26 UTC）
 
 > 定位：本计划只补齐 **DEV-PLAN-100E（Phase 4A UI）** 所依赖的后端前置改造，确保“capabilities-driven 编辑 + 扩展字段写入”具备可实施的契约与实现基础。
 >
@@ -20,7 +20,7 @@
 2. `POST /org/api/org-units/corrections` 必须支持扩展字段 patch：`patch.ext`，并对其做 **fail-closed** 校验，且与 capabilities 一致。
 3. DICT 字段写入必须由服务端生成 `ext_labels_snapshot`（UI 不提交；对齐 `DEV-PLAN-100D`）。
 
-当前仓库状态（以代码为准）：
+本计划开始时仓库状态（以当时代码为准，作为问题陈述）：
 
 - capabilities API 已存在（`internal/server/orgunit_mutation_capabilities_api.go`），但其“扩展字段并入 allowed_fields”的规则与 `DEV-PLAN-083` 冻结选择存在漂移风险（`DEV-PLAN-083` 要求把 enabled ext 字段集合 `E` 并入 allowed_fields；现实现曾以 target=CREATE 作收紧）。
 - 更正写入链路（`internal/server/orgunit_api.go` → `modules/orgunit/services/orgunit_write_service.go`）尚未接收 `patch.ext`，因此 **100E 的编辑闭环无法成立**。
@@ -32,28 +32,28 @@
 
 ### 2.1 必达目标（完成后 100E 才能开工）
 
-1. [ ] 落地 `DEV-PLAN-083` 的策略单点（最小覆盖 `correct_event`）：
-   - [ ] 在 `modules/orgunit/services/` 增加 `orgunit_mutation_policy.go`（或等价命名），实现：
+1. [x] 落地 `DEV-PLAN-083` 的策略单点（最小覆盖 `correct_event`）：
+   - [x] 在 `modules/orgunit/services/` 增加 `orgunit_mutation_policy.go`（或等价命名），实现：
      - `ResolvePolicy(...)`
      - `AllowedFields(...)`
      - `ValidatePatch(...)`
-   - [ ] 单测覆盖（至少覆盖 `correct_event` 的 core 矩阵 + ext 合并规则 + deny_reasons 顺序）。
-2. [ ] capabilities API 对齐 `DEV-PLAN-083`（避免 UI 猜测）：
-   - [ ] `allowed_fields` 与 `field_payload_keys` 一致、稳定排序；
-   - [ ] `deny_reasons` 稳定排序（复用既有优先级规则即可）；
-   - [ ] **扩展字段合并规则**：对 `effective_date` 下 enabled 的 ext 字段集合 `E`，并入 `allowed_fields`（见 `DEV-PLAN-083` §5.3）。
-3. [ ] corrections 写入支持 `patch.ext`：
-   - [ ] `POST /org/api/org-units/corrections` 请求体支持 `patch.ext`（object；key 为 `field_key`）。
-   - [ ] 服务端必须按策略单点（AllowedFields/ValidatePatch）对 `patch` 做 fail-closed 校验（禁止“禁用但仍随请求提交”）。
-   - [ ] DICT：服务端基于 options resolver 生成 `patch.ext_labels_snapshot[field_key]=canonical_label`；UI 侧不得提交该字段（对齐 `DEV-PLAN-100D`）。
-   - [ ] 当 `patch.effective_date` 与 target 不一致时：进入“生效日更正模式”，除 `effective_date` 外其它字段（含 ext）一律拒绝（对齐 `DEV-PLAN-100E` 的风险控制）。
+   - [x] 单测覆盖（至少覆盖 `correct_event` 的 core 矩阵 + ext 合并规则 + deny_reasons 顺序）。
+2. [x] capabilities API 对齐 `DEV-PLAN-083`（避免 UI 猜测）：
+   - [x] `allowed_fields` 与 `field_payload_keys` 一致、稳定排序；
+   - [x] `deny_reasons` 稳定排序（复用既有优先级规则即可）；
+   - [x] **扩展字段合并规则**：对 `effective_date` 下 enabled 的 ext 字段集合 `E`，并入 `allowed_fields`（见 `DEV-PLAN-083` §5.3）。
+3. [x] corrections 写入支持 `patch.ext`：
+   - [x] `POST /org/api/org-units/corrections` 请求体支持 `patch.ext`（object；key 为 `field_key`）。
+   - [x] 服务端必须按策略单点（AllowedFields/ValidatePatch）对 `patch` 做 fail-closed 校验（禁止“禁用但仍随请求提交”）。
+   - [x] DICT：服务端基于 options resolver 生成 `patch.ext_labels_snapshot[field_key]=canonical_label`；UI 侧不得提交该字段（对齐 `DEV-PLAN-100D`）。
+   - [x] 当 `patch.effective_date` 与 target 不一致时：进入“生效日更正模式”，除 `effective_date` 外其它字段（含 ext）一律拒绝（对齐 `DEV-PLAN-100E` 的风险控制）。
 
 ### 2.2 交付物（Deliverables）
 
-- [ ] `modules/orgunit/services/orgunit_mutation_policy.go` + `modules/orgunit/services/orgunit_mutation_policy_test.go`
-- [ ] capabilities API 的契约测试/回归测试补齐（`internal/server/..._test.go`）
-- [ ] 更正链路（handler + service + store 适配）支持 `patch.ext` 的测试补齐
-- [ ] 执行日志：`docs/dev-records/dev-plan-100e1-execution-log.md`（按 `DEV-PLAN-010` 口径记录门禁证据）
+- [x] `modules/orgunit/services/orgunit_mutation_policy.go` + `modules/orgunit/services/orgunit_mutation_policy_test.go`
+- [x] capabilities API 的契约测试/回归测试补齐（`internal/server/..._test.go`）
+- [x] 更正链路（handler + service + store 适配）支持 `patch.ext` 的测试补齐
+- [x] 执行日志：`docs/dev-records/dev-plan-100e1-execution-log.md`（按 `DEV-PLAN-010` 口径记录门禁证据）
 
 ## 3. 非目标（Non-Goals）
 
@@ -115,49 +115,49 @@ services 侧要做到：
 
 > 顺序：先“可复用元数据”→ 再“策略单点”→ 再“capabilities 对齐”→ 最后“corrections 支持 ext patch”（闭环）。
 
-1. [ ] 共享元数据包落地（对齐 §4.2）
-   - [ ] 新增共享包（推荐：`modules/orgunit/domain/fieldmeta`），迁移/复用现有 field-definitions + DICT registry + helpers：
-     - [ ] field-definitions（field_key/value_type/data_source_type/label_i18n_key/allow_filter/allow_sort）
-     - [ ] `DictCodeFromDataSourceConfig(...)`
-     - [ ] `LookupDictLabel(...)`（canonical label）
-   - [ ] 调整 `internal/server` 的 field-definitions/options/details displayValue 引用到共享包，确保行为不变（仅“搬家”，不改语义）。
-2. [ ] 写入侧元数据读取能力（对齐 §4.3）
-   - [ ] 扩展 `modules/orgunit/domain/ports.OrgUnitWriteStore` 增加 `ListEnabledTenantFieldConfigsAsOf(...)`。
-   - [ ] 新增 `modules/orgunit/domain/types.TenantFieldConfig`（最小字段集：field_key/value_type/data_source_type/data_source_config）。
-   - [ ] `modules/orgunit/infrastructure/persistence/OrgUnitPGStore` 实现该读方法（事务 + tenant 注入；fail-closed）。
-   - [ ] 单测覆盖：enabled-as-of 边界（`enabled_on/disabled_on` day 粒度半开区间）。
-3. [ ] mutation policy 单点（最小覆盖 correct_event）
-   - [ ] `modules/orgunit/services/orgunit_mutation_policy.go`：实现 `ResolvePolicy/AllowedFields/ValidatePatch`（`DEV-PLAN-083` §5.3 core 矩阵 + ext 合并）。
-   - [ ] 单测覆盖：合法/非法组合、allowed_fields/field_payload_keys 稳定排序、deny_reasons 稳定顺序。
-4. [ ] capabilities API 复用 policy（消除漂移）
-   - [ ] `internal/server/orgunit_mutation_capabilities_api.go` 改为通过 policy 计算 `allowed_fields/field_payload_keys`。
-   - [ ] 行为对齐 `DEV-PLAN-083`：enabled ext 字段集合 `E` 并入 `allowed_fields`（不再按 target=CREATE 特判）。
-   - [ ] 回归测试：deny reasons 顺序稳定（仍按既有优先级闭集）。
-5. [ ] corrections 支持 `patch.ext`（服务层为主，presentation 仅做传参）
-   - [ ] 扩展 corrections 请求 patch 结构以接收 `ext`（object），并显式声明 `ext_labels_snapshot` 字段用于 fail-closed 拒绝（对齐 §4.4/§4.5）。
-   - [ ] `modules/orgunit/services/orgunit_write_service.go`：
-     - [ ] 将 ext patch 纳入 patch builder（生成 `patch.ext`；DICT 生成 `patch.ext_labels_snapshot`）。
-     - [ ] 通过 policy 的 `ValidatePatch` 做 fail-closed 校验（含“生效日更正模式”排他规则：除 effective_date 外一律拒绝）。
-     - [ ] 通过 store 读取 enabled ext configs 来解析 DICT 的 dict_code，并用共享包 `LookupDictLabel` 生成 canonical label。
-   - [ ] 测试：
-     - [ ] DICT：提交 `patch.ext.org_type="DEPARTMENT"` 时，写入 patch JSON 必含对应 label snapshot。
-     - [ ] clear：提交 `patch.ext.org_type=null` 时，服务端不得生成 label snapshot；Kernel deep-merge 后标签 key 被移除（`DEV-PLAN-100C`）。
-     - [ ] 客户端提交 `patch.ext_labels_snapshot`：返回 400 `PATCH_FIELD_NOT_ALLOWED`。
-     - [ ] 不允许：ext 字段不在 allowed_fields 时拒绝（稳定错误码）。
-6. [ ] 门禁与证据
-   - [ ] 本地门禁按 `AGENTS.md`（Go/doc/routing/authz 按触发器命中）。
-   - [ ] 记录到 `docs/dev-records/dev-plan-100e1-execution-log.md`。
+1. [x] 共享元数据包落地（对齐 §4.2）
+   - [x] 新增共享包（推荐：`modules/orgunit/domain/fieldmeta`），迁移/复用现有 field-definitions + DICT registry + helpers：
+     - [x] field-definitions（field_key/value_type/data_source_type/label_i18n_key/allow_filter/allow_sort）
+     - [x] `DictCodeFromDataSourceConfig(...)`
+     - [x] `LookupDictLabel(...)`（canonical label）
+   - [x] 调整 `internal/server` 的 field-definitions/options/details displayValue 引用到共享包，确保行为不变（仅“搬家”，不改语义）。
+2. [x] 写入侧元数据读取能力（对齐 §4.3）
+   - [x] 扩展 `modules/orgunit/domain/ports.OrgUnitWriteStore` 增加 `ListEnabledTenantFieldConfigsAsOf(...)`。
+   - [x] 新增 `modules/orgunit/domain/types.TenantFieldConfig`（最小字段集：field_key/value_type/data_source_type/data_source_config）。
+   - [x] `modules/orgunit/infrastructure/persistence/OrgUnitPGStore` 实现该读方法（事务 + tenant 注入；fail-closed）。
+   - [x] 单测覆盖：enabled-as-of 边界（`enabled_on/disabled_on` day 粒度半开区间）。
+3. [x] mutation policy 单点（最小覆盖 correct_event）
+   - [x] `modules/orgunit/services/orgunit_mutation_policy.go`：实现 `ResolvePolicy/AllowedFields/ValidatePatch`（`DEV-PLAN-083` §5.3 core 矩阵 + ext 合并）。
+   - [x] 单测覆盖：合法/非法组合、allowed_fields/field_payload_keys 稳定排序、deny_reasons 稳定顺序。
+4. [x] capabilities API 复用 policy（消除漂移）
+   - [x] `internal/server/orgunit_mutation_capabilities_api.go` 改为通过 policy 计算 `allowed_fields/field_payload_keys`。
+   - [x] 行为对齐 `DEV-PLAN-083`：enabled ext 字段集合 `E` 并入 `allowed_fields`（不再按 target=CREATE 特判）。
+   - [x] 回归测试：deny reasons 顺序稳定（仍按既有优先级闭集）。
+5. [x] corrections 支持 `patch.ext`（服务层为主，presentation 仅做传参）
+   - [x] 扩展 corrections 请求 patch 结构以接收 `ext`（object），并显式声明 `ext_labels_snapshot` 字段用于 fail-closed 拒绝（对齐 §4.4/§4.5）。
+   - [x] `modules/orgunit/services/orgunit_write_service.go`：
+     - [x] 将 ext patch 纳入 patch builder（生成 `patch.ext`；DICT 生成 `patch.ext_labels_snapshot`）。
+     - [x] 通过 policy 的 `ValidatePatch` 做 fail-closed 校验（含“生效日更正模式”排他规则：除 effective_date 外一律拒绝）。
+     - [x] 通过 store 读取 enabled ext configs 来解析 DICT 的 dict_code，并用共享包 `LookupDictLabel` 生成 canonical label。
+   - [x] 测试：
+     - [x] DICT：提交 `patch.ext.org_type="DEPARTMENT"` 时，写入 patch JSON 必含对应 label snapshot。
+     - [x] clear：提交 `patch.ext.org_type=null` 时，服务端不得生成 label snapshot；Kernel deep-merge 后标签 key 被移除（`DEV-PLAN-100C`）。
+     - [x] 客户端提交 `patch.ext_labels_snapshot`：返回 400 `PATCH_FIELD_NOT_ALLOWED`。
+     - [x] 不允许：ext 字段不在 allowed_fields 时拒绝（稳定错误码）。
+6. [x] 门禁与证据
+   - [x] 本地门禁按 `AGENTS.md`（Go/doc/routing/authz 按触发器命中）。
+   - [x] 记录到 `docs/dev-records/dev-plan-100e1-execution-log.md`。
 
 ## 6. 测试与验收标准（Acceptance Criteria）
 
-- [ ] `mutation-capabilities`：
-  - [ ] 输出结构/字段与 `DEV-PLAN-083` §5.2/§5.3 一致；排序稳定；
-  - [ ] enabled ext 字段集合 `E` 并入 `allowed_fields`（不再依赖 target=CREATE 的特殊分支）。
-- [ ] `corrections`：
-  - [ ] 支持 `patch.ext`（至少 1 个 DICT 字段 + 1 个 PLAIN 字段的正例闭环）；
-  - [ ] DICT label 快照由服务端生成；客户端提交 `ext_labels_snapshot` 必须被拒绝（fail-closed，稳定错误码）；
-  - [ ] capabilities 与写入校验一致：allowed_fields 外的字段必拒绝（fail-closed）。
-- [ ] 质量门禁通过（以 `AGENTS.md`/`DEV-PLAN-012` 为 SSOT；命中项必须有证据记录）。
+- [x] `mutation-capabilities`：
+  - [x] 输出结构/字段与 `DEV-PLAN-083` §5.2/§5.3 一致；排序稳定；
+  - [x] enabled ext 字段集合 `E` 并入 `allowed_fields`（不再依赖 target=CREATE 的特殊分支）。
+- [x] `corrections`：
+  - [x] 支持 `patch.ext`（至少 1 个 DICT 字段 + 1 个 PLAIN 字段的正例闭环）；
+  - [x] DICT label 快照由服务端生成；客户端提交 `ext_labels_snapshot` 必须被拒绝（fail-closed，稳定错误码）；
+  - [x] capabilities 与写入校验一致：allowed_fields 外的字段必拒绝（fail-closed）。
+- [x] 质量门禁通过（以 `AGENTS.md`/`DEV-PLAN-012` 为 SSOT；命中项必须有证据记录）。
 
 ## 7. 风险与缓解
 

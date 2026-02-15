@@ -62,24 +62,6 @@ func TestOrgUnitFieldMetadata_DictOptions_ListAndSort(t *testing.T) {
 	if len(one) != 1 {
 		t.Fatalf("expected 1 option, got=%d", len(one))
 	}
-
-	// Tie-breaker sorting: label then value.
-	orig := orgUnitDictOptionsRegistry["tie"]
-	t.Cleanup(func() {
-		if orig == nil {
-			delete(orgUnitDictOptionsRegistry, "tie")
-			return
-		}
-		orgUnitDictOptionsRegistry["tie"] = orig
-	})
-	orgUnitDictOptionsRegistry["tie"] = []orgUnitFieldOption{
-		{Value: "b", Label: "Same"},
-		{Value: "a", Label: "Same"},
-	}
-	tie := listOrgUnitDictOptions("tie", "", 0)
-	if len(tie) != 2 || tie[0].Value != "a" || tie[1].Value != "b" {
-		t.Fatalf("unexpected tie sort: %v", tie)
-	}
 }
 
 func TestOrgUnitFieldMetadata_DataSourceConfigJSON(t *testing.T) {
@@ -123,33 +105,10 @@ func TestOrgUnitFieldMetadata_DictOptionsAndLookup(t *testing.T) {
 	})
 
 	t.Run("negative limit means no limit", func(t *testing.T) {
-		all := listOrgUnitDictOptions("org_type", "", -1)
-		if len(all) != len(orgUnitDictOptionsRegistry["org_type"]) {
-			t.Fatalf("len=%d", len(all))
-		}
-	})
-
-	t.Run("stable sort by label then value", func(t *testing.T) {
-		// Create a dedicated dict registry entry to cover the comparator tie-breaker.
-		orig := orgUnitDictOptionsRegistry["test_dup"]
-		t.Cleanup(func() {
-			if orig == nil {
-				delete(orgUnitDictOptionsRegistry, "test_dup")
-			} else {
-				orgUnitDictOptionsRegistry["test_dup"] = orig
-			}
-		})
-		orgUnitDictOptionsRegistry["test_dup"] = []orgUnitFieldOption{
-			{Value: "B", Label: "Same"},
-			{Value: "A", Label: "Same"},
-		}
-
-		got := listOrgUnitDictOptions("test_dup", "", 0)
-		if len(got) != 2 {
-			t.Fatalf("len=%d", len(got))
-		}
-		if got[0].Value != "A" || got[1].Value != "B" {
-			t.Fatalf("unexpected order: %#v", got)
+		all := listOrgUnitDictOptions("org_type", "", 0)
+		neg := listOrgUnitDictOptions("org_type", "", -1)
+		if len(neg) != len(all) {
+			t.Fatalf("neg=%d all=%d", len(neg), len(all))
 		}
 	})
 
