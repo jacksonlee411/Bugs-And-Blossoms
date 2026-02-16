@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  Divider,
   Dialog,
   DialogActions,
   DialogContent,
@@ -18,7 +19,8 @@ import {
   Snackbar,
   Stack,
   Switch,
-  TextField
+  TextField,
+  Typography
 } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { GridColDef, GridPaginationModel, GridSortModel } from '@mui/x-data-grid'
@@ -52,6 +54,7 @@ import {
   patchGridQueryState,
   toGridSortModel
 } from '../../utils/gridQueryState'
+import { normalizePlainExtDraft } from './orgUnitPlainExtValidation'
 import { buildAppendPayload } from './orgUnitAppendIntent'
 import { clearExtQueryParams, parseExtSortField, parseSortOrder } from './orgUnitListExtQuery'
 
@@ -72,6 +75,8 @@ interface CreateOrgUnitForm {
   managerPernr: string
   effectiveDate: string
   isBusinessUnit: boolean
+  extValues: Record<string, unknown>
+  extDisplayValues: Record<string, string>
 }
 
 const sortableFields = ['code', 'name', 'status'] as const
@@ -319,7 +324,9 @@ function emptyCreateForm(asOf: string, parentOrgCode: string | null): CreateOrgU
     parentOrgCode: parentOrgCode ?? '',
     managerPernr: '',
     effectiveDate: asOf,
-    isBusinessUnit: false
+    isBusinessUnit: false,
+    extValues: {},
+    extDisplayValues: {}
   }
 }
 
@@ -831,6 +838,15 @@ export function OrgUnitsPage() {
   const createCapability = createCapabilitiesQuery.data?.capabilities.create
   const createAllowedFieldSet = useMemo(() => new Set(createCapability?.allowed_fields ?? []), [createCapability?.allowed_fields])
   const createDenyReasons = useMemo(() => createCapability?.deny_reasons ?? [], [createCapability?.deny_reasons])
+  const createPlainFieldDefinitions = useMemo(
+    () =>
+      normalizedFieldDefinitions.filter(
+        (def) =>
+          def.data_source_type === 'PLAIN' &&
+          createAllowedFieldSet.has(def.field_key)
+      ),
+    [createAllowedFieldSet, normalizedFieldDefinitions]
+  )
   const isCreateActionDisabled = useMemo(() => {
     if (!canWrite) {
       return true
@@ -884,11 +900,56 @@ export function OrgUnitsPage() {
     ]
   )
 
+  const createPlainExtErrors = useMemo(() => {
+    if (!createOpen) {
+      return {}
+    }
+    const errors: Record<string, string> = {}
+    for (const def of createPlainFieldDefinitions) {
+      if (def.value_type === 'bool') {
+        continue
+      }
+      const fieldKey = def.field_key
+      if (!isCreateFieldEditable(fieldKey)) {
+        continue
+      }
+      const draft = createForm.extDisplayValues[fieldKey] ?? ''
+      const result = normalizePlainExtDraft({ valueType: def.value_type, draft, mode: 'omit_empty' })
+      if (result.errorCode) {
+        errors[fieldKey] = result.errorCode
+      }
+    }
+    return errors
+  }, [createForm.extDisplayValues, createOpen, createPlainFieldDefinitions, isCreateFieldEditable])
+  const hasCreatePlainExtErrors = useMemo(
+    () => Object.keys(createPlainExtErrors).length > 0,
+    [createPlainExtErrors]
+  )
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const capability = createCapability
       if (!capability || !capability.enabled || createCapabilitiesQuery.isError) {
         throw new Error('append capabilities unavailable')
+      }
+
+      const normalizedPlainExtValues: Record<string, unknown> = {}
+      for (const def of createPlainFieldDefinitions) {
+        if (def.value_type === 'bool') {
+          continue
+        }
+        const fieldKey = def.field_key
+        if (!isCreateFieldEditable(fieldKey)) {
+          continue
+        }
+        const draft = createForm.extDisplayValues[fieldKey] ?? ''
+        const result = normalizePlainExtDraft({ valueType: def.value_type, draft, mode: 'omit_empty' })
+        if (result.errorCode) {
+          throw new Error(t(result.errorCode as MessageKey))
+        }
+        if (typeof result.normalized !== 'undefined') {
+          normalizedPlainExtValues[fieldKey] = result.normalized
+        }
       }
 
       const payload = buildAppendPayload({
@@ -899,7 +960,9 @@ export function OrgUnitsPage() {
           name: createForm.name.trim(),
           parent_org_code: trimToUndefined(createForm.parentOrgCode),
           is_business_unit: createForm.isBusinessUnit,
-          manager_pernr: trimToUndefined(createForm.managerPernr)
+          manager_pernr: trimToUndefined(createForm.managerPernr),
+          ...createForm.extValues,
+          ...normalizedPlainExtValues
         }
       })
       if (!payload) {
@@ -1329,6 +1392,130 @@ export function OrgUnitsPage() {
               }
               label={t('org_column_is_business_unit')}
             />
+
+            {createPlainFieldDefinitions.length > 0 ? (
+              <>
+                <Divider sx={{ my: 0.5 }} />
+                <Typography variant='subtitle2'>{t('org_section_ext_fields')}</Typography>
+                {createPlainFieldDefinitions.map((def) => {
+                  const fieldKey = def.field_key
+                  const rawValue = createForm.extValues[fieldKey]
+                  const valueType = def.value_type
+                  const isEditable = isCreateFieldEditable(fieldKey)
+                  const notAllowedHelper =
+                    !isEditable && createCapabilityOrgCode.length > 0
+                      ? t('org_append_field_not_allowed_helper')
+                      : undefined
+                  const draftValue = createForm.extDisplayValues[fieldKey] ?? ''
+                  const validationErrorKey = createPlainExtErrors[fieldKey]
+                  const validationErrorText = validationErrorKey ? t(validationErrorKey as MessageKey) : ''
+
+                  if (valueType === 'bool') {
+                    const value = rawValue === true ? 'true' : rawValue === false ? 'false' : ''
+                    return (
+                      <TextField
+                        key={fieldKey}
+                        select
+                        disabled={!isEditable}
+                        helperText={notAllowedHelper}
+                        label={def.label}
+                        onChange={(event) => {
+                          const nextValue = event.target.value
+                          const next =
+                            nextValue === 'true'
+                              ? true
+                              : nextValue === 'false'
+                              ? false
+                              : undefined
+                          setCreateForm((previous) => ({
+                            ...previous,
+                            extValues: {
+                              ...previous.extValues,
+                              [fieldKey]: next
+                            }
+                          }))
+                        }}
+                        value={value}
+                      >
+                        <MenuItem value=''>-</MenuItem>
+                        <MenuItem value='true'>{t('common_yes')}</MenuItem>
+                        <MenuItem value='false'>{t('common_no')}</MenuItem>
+                      </TextField>
+                    )
+                  }
+
+                  if (valueType === 'int') {
+                    return (
+                      <TextField
+                        key={fieldKey}
+                        disabled={!isEditable}
+                        helperText={notAllowedHelper ?? (validationErrorText.length > 0 ? validationErrorText : undefined)}
+                        error={!notAllowedHelper && validationErrorText.length > 0}
+                        label={def.label}
+                        type='number'
+                        onChange={(event) => {
+                          const nextValue = event.target.value
+                          setCreateForm((previous) => ({
+                            ...previous,
+                            extDisplayValues: {
+                              ...previous.extDisplayValues,
+                              [fieldKey]: nextValue
+                            }
+                          }))
+                        }}
+                        value={draftValue}
+                      />
+                    )
+                  }
+
+                  if (valueType === 'date') {
+                    return (
+                      <TextField
+                        key={fieldKey}
+                        disabled={!isEditable}
+                        helperText={notAllowedHelper ?? (validationErrorText.length > 0 ? validationErrorText : undefined)}
+                        error={!notAllowedHelper && validationErrorText.length > 0}
+                        InputLabelProps={{ shrink: true }}
+                        label={def.label}
+                        type='date'
+                        onChange={(event) => {
+                          const nextValue = event.target.value
+                          setCreateForm((previous) => ({
+                            ...previous,
+                            extDisplayValues: {
+                              ...previous.extDisplayValues,
+                              [fieldKey]: nextValue
+                            }
+                          }))
+                        }}
+                        value={draftValue}
+                      />
+                    )
+                  }
+
+                  return (
+                    <TextField
+                      key={fieldKey}
+                      disabled={!isEditable}
+                      helperText={notAllowedHelper ?? (validationErrorText.length > 0 ? validationErrorText : undefined)}
+                      error={!notAllowedHelper && validationErrorText.length > 0}
+                      label={def.label}
+                      onChange={(event) => {
+                        const nextValue = event.target.value
+                        setCreateForm((previous) => ({
+                          ...previous,
+                          extDisplayValues: {
+                            ...previous.extDisplayValues,
+                            [fieldKey]: nextValue
+                          }
+                        }))
+                      }}
+                      value={draftValue}
+                    />
+                  )
+                })}
+              </>
+            ) : null}
             {createCapabilityOrgCode.length === 0 ? (
               <Alert severity='info'>{t('org_append_create_org_code_required')}</Alert>
             ) : createCapabilitiesQuery.isLoading ? (
@@ -1347,7 +1534,7 @@ export function OrgUnitsPage() {
         <DialogActions>
           <Button onClick={() => setCreateOpen(false)}>{t('common_cancel')}</Button>
           <Button
-            disabled={createMutation.isPending || isCreateActionDisabled}
+            disabled={createMutation.isPending || isCreateActionDisabled || hasCreatePlainExtErrors}
             onClick={() => createMutation.mutate()}
             variant='contained'
           >

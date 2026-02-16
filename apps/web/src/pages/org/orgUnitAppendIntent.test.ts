@@ -86,4 +86,27 @@ describe('buildAppendPayload', () => {
       }
     })
   })
+
+  it('支持 PLAIN 扩展字段写入 ext.<field_key>', () => {
+    const payload = buildAppendPayload({
+      capability: {
+        allowed_fields: ['effective_date', 'description'],
+        field_payload_keys: {
+          effective_date: 'effective_date',
+          description: 'ext.description'
+        }
+      },
+      values: {
+        effective_date: '2026-02-16',
+        description: 'Root Unit A Description'
+      }
+    })
+
+    expect(payload).toEqual({
+      effective_date: '2026-02-16',
+      ext: {
+        description: 'Root Unit A Description'
+      }
+    })
+  })
 })
