@@ -629,7 +629,8 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("org units field-definitions status=%d body=%s", recOrgFieldDefs.Code, recOrgFieldDefs.Body.String())
 	}
 
-	// Memory store does not implement the configs/options/capabilities interfaces; the routes should exist and fail-closed.
+	// Memory store does not implement field configs/options and mutation-capabilities interfaces;
+	// append-capabilities is supported and should return OK.
 	recOrgFieldConfigs := getJSON("/org/api/org-units/field-configs?as_of=2026-01-01", nil)
 	if recOrgFieldConfigs.Code != http.StatusInternalServerError {
 		t.Fatalf("org units field-configs status=%d body=%s", recOrgFieldConfigs.Code, recOrgFieldConfigs.Body.String())
@@ -653,6 +654,10 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 	recOrgMutationCaps := getJSON("/org/api/org-units/mutation-capabilities?org_code="+node.OrgCode+"&effective_date=2026-01-01", nil)
 	if recOrgMutationCaps.Code != http.StatusInternalServerError {
 		t.Fatalf("org units mutation capabilities status=%d body=%s", recOrgMutationCaps.Code, recOrgMutationCaps.Body.String())
+	}
+	recOrgAppendCaps := getJSON("/org/api/org-units/append-capabilities?org_code="+node.OrgCode+"&effective_date=2026-01-01", nil)
+	if recOrgAppendCaps.Code != http.StatusOK {
+		t.Fatalf("org units append capabilities status=%d body=%s", recOrgAppendCaps.Code, recOrgAppendCaps.Body.String())
 	}
 
 	recOrgVersions := getJSON("/org/api/org-units/versions?org_code="+node.OrgCode, nil)

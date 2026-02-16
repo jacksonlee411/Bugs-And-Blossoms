@@ -62,6 +62,7 @@ type CreateOrgUnitRequest struct {
 	ParentOrgCode  string
 	IsBusinessUnit bool
 	ManagerPernr   string
+	Ext            map[string]any
 	InitiatorUUID  string
 }
 
@@ -69,6 +70,7 @@ type RenameOrgUnitRequest struct {
 	EffectiveDate string
 	OrgCode       string
 	NewName       string
+	Ext           map[string]any
 	InitiatorUUID string
 }
 
@@ -76,18 +78,21 @@ type MoveOrgUnitRequest struct {
 	EffectiveDate    string
 	OrgCode          string
 	NewParentOrgCode string
+	Ext              map[string]any
 	InitiatorUUID    string
 }
 
 type DisableOrgUnitRequest struct {
 	EffectiveDate string
 	OrgCode       string
+	Ext           map[string]any
 	InitiatorUUID string
 }
 
 type EnableOrgUnitRequest struct {
 	EffectiveDate string
 	OrgCode       string
+	Ext           map[string]any
 	InitiatorUUID string
 }
 
@@ -95,6 +100,7 @@ type SetBusinessUnitRequest struct {
 	EffectiveDate  string
 	OrgCode        string
 	IsBusinessUnit bool
+	Ext            map[string]any
 	InitiatorUUID  string
 }
 
@@ -162,6 +168,13 @@ func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req C
 		return types.OrgUnitResult{}, httperr.NewBadRequest("name is required")
 	}
 
+	// Fail-closed: creating an existing org_code should be rejected early.
+	if _, err := s.store.ResolveOrgID(ctx, tenantID, orgCode); err == nil {
+		return types.OrgUnitResult{}, errors.New("ORG_ALREADY_EXISTS")
+	} else if !errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
+		return types.OrgUnitResult{}, err
+	}
+
 	var parentID *int
 	var parentCode string
 	if strings.TrimSpace(req.ParentOrgCode) != "" {
@@ -189,6 +202,26 @@ func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req C
 		}
 	}
 
+	fieldConfigs, enabledExtFieldKeys, err := s.listEnabledExtFieldConfigs(ctx, tenantID, effectiveDate)
+	if err != nil {
+		return types.OrgUnitResult{}, err
+	}
+	decision, err := resolveOrgUnitMutationPolicyInWrite(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionCreate,
+		EmittedEventType: OrgUnitEmittedCreate,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:            true,
+		TreeInitialized:     true,
+		TargetExistsAsOf:    true,
+		EnabledExtFieldKeys: enabledExtFieldKeys,
+	})
+	if err != nil {
+		return types.OrgUnitResult{}, err
+	}
+	if !decision.Enabled {
+		return types.OrgUnitResult{}, httperr.NewBadRequest(errOrgInvalidArgument)
+	}
+
 	payload := map[string]any{
 		"org_code":         orgCode,
 		"name":             name,
@@ -200,6 +233,19 @@ func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req C
 	if managerUUID != "" {
 		payload["manager_uuid"] = managerUUID
 		payload["manager_pernr"] = managerPernr
+	}
+
+	if len(req.Ext) > 0 {
+		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		if err != nil {
+			return types.OrgUnitResult{}, err
+		}
+		if len(extPayload) > 0 {
+			payload["ext"] = extPayload
+		}
+		if len(extLabels) > 0 {
+			payload["ext_labels_snapshot"] = extLabels
+		}
 	}
 
 	payloadJSON, err := marshalJSON(payload)
@@ -265,7 +311,39 @@ func (s *orgUnitWriteService) Rename(ctx context.Context, tenantID string, req R
 		return err
 	}
 
+	fieldConfigs, enabledExtFieldKeys, err := s.listEnabledExtFieldConfigs(ctx, tenantID, effectiveDate)
+	if err != nil {
+		return err
+	}
+	decision, err := resolveOrgUnitMutationPolicyInWrite(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedRename,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:            true,
+		TreeInitialized:     true,
+		TargetExistsAsOf:    true,
+		EnabledExtFieldKeys: enabledExtFieldKeys,
+	})
+	if err != nil {
+		return err
+	}
+	if !decision.Enabled {
+		return httperr.NewBadRequest(errOrgInvalidArgument)
+	}
+
 	payload := map[string]any{"new_name": newName}
+	if len(req.Ext) > 0 {
+		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		if err != nil {
+			return err
+		}
+		if len(extPayload) > 0 {
+			payload["ext"] = extPayload
+		}
+		if len(extLabels) > 0 {
+			payload["ext_labels_snapshot"] = extLabels
+		}
+	}
 	payloadJSON, err := marshalJSON(payload)
 	if err != nil {
 		return err
@@ -316,7 +394,43 @@ func (s *orgUnitWriteService) Move(ctx context.Context, tenantID string, req Mov
 		return err
 	}
 
+	fieldConfigs, enabledExtFieldKeys, err := s.listEnabledExtFieldConfigs(ctx, tenantID, effectiveDate)
+	if err != nil {
+		return err
+	}
+	decision, err := resolveOrgUnitMutationPolicyInWrite(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedMove,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:            true,
+		TreeInitialized:     true,
+		TargetExistsAsOf:    true,
+		IsRoot:              strings.EqualFold(orgCode, "ROOT"),
+		EnabledExtFieldKeys: enabledExtFieldKeys,
+	})
+	if err != nil {
+		return err
+	}
+	if !decision.Enabled {
+		if len(decision.DenyReasons) > 0 {
+			return errors.New(decision.DenyReasons[0])
+		}
+		return httperr.NewBadRequest(errOrgInvalidArgument)
+	}
+
 	payload := map[string]any{"new_parent_id": parentID}
+	if len(req.Ext) > 0 {
+		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		if err != nil {
+			return err
+		}
+		if len(extPayload) > 0 {
+			payload["ext"] = extPayload
+		}
+		if len(extLabels) > 0 {
+			payload["ext_labels_snapshot"] = extLabels
+		}
+	}
 	payloadJSON, err := marshalJSON(payload)
 	if err != nil {
 		return err
@@ -350,12 +464,54 @@ func (s *orgUnitWriteService) Disable(ctx context.Context, tenantID string, req 
 		return err
 	}
 
+	fieldConfigs, enabledExtFieldKeys, err := s.listEnabledExtFieldConfigs(ctx, tenantID, effectiveDate)
+	if err != nil {
+		return err
+	}
+	decision, err := resolveOrgUnitMutationPolicyInWrite(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedDisable,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:            true,
+		TreeInitialized:     true,
+		TargetExistsAsOf:    true,
+		EnabledExtFieldKeys: enabledExtFieldKeys,
+	})
+	if err != nil {
+		return err
+	}
+	if !decision.Enabled {
+		return httperr.NewBadRequest(errOrgInvalidArgument)
+	}
+
+	payload := json.RawMessage(`{}`)
+	if len(req.Ext) > 0 {
+		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		if err != nil {
+			return err
+		}
+		payloadMap := map[string]any{}
+		if len(extPayload) > 0 {
+			payloadMap["ext"] = extPayload
+		}
+		if len(extLabels) > 0 {
+			payloadMap["ext_labels_snapshot"] = extLabels
+		}
+		if len(payloadMap) > 0 {
+			b, err := marshalJSON(payloadMap)
+			if err != nil {
+				return err
+			}
+			payload = b
+		}
+	}
+
 	eventUUID, err := newUUID()
 	if err != nil {
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventDisable), effectiveDate, json.RawMessage(`{}`), eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventDisable), effectiveDate, payload, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -378,12 +534,54 @@ func (s *orgUnitWriteService) Enable(ctx context.Context, tenantID string, req E
 		return err
 	}
 
+	fieldConfigs, enabledExtFieldKeys, err := s.listEnabledExtFieldConfigs(ctx, tenantID, effectiveDate)
+	if err != nil {
+		return err
+	}
+	decision, err := resolveOrgUnitMutationPolicyInWrite(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedEnable,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:            true,
+		TreeInitialized:     true,
+		TargetExistsAsOf:    true,
+		EnabledExtFieldKeys: enabledExtFieldKeys,
+	})
+	if err != nil {
+		return err
+	}
+	if !decision.Enabled {
+		return httperr.NewBadRequest(errOrgInvalidArgument)
+	}
+
+	payload := json.RawMessage(`{}`)
+	if len(req.Ext) > 0 {
+		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		if err != nil {
+			return err
+		}
+		payloadMap := map[string]any{}
+		if len(extPayload) > 0 {
+			payloadMap["ext"] = extPayload
+		}
+		if len(extLabels) > 0 {
+			payloadMap["ext_labels_snapshot"] = extLabels
+		}
+		if len(payloadMap) > 0 {
+			b, err := marshalJSON(payloadMap)
+			if err != nil {
+				return err
+			}
+			payload = b
+		}
+	}
+
 	eventUUID, err := newUUID()
 	if err != nil {
 		return err
 	}
 
-	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventEnable), effectiveDate, json.RawMessage(`{}`), eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
+	_, err = s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventEnable), effectiveDate, payload, eventUUID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	return err
 }
 
@@ -406,7 +604,39 @@ func (s *orgUnitWriteService) SetBusinessUnit(ctx context.Context, tenantID stri
 		return err
 	}
 
+	fieldConfigs, enabledExtFieldKeys, err := s.listEnabledExtFieldConfigs(ctx, tenantID, effectiveDate)
+	if err != nil {
+		return err
+	}
+	decision, err := resolveOrgUnitMutationPolicyInWrite(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedSetBusinessUnit,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:            true,
+		TreeInitialized:     true,
+		TargetExistsAsOf:    true,
+		EnabledExtFieldKeys: enabledExtFieldKeys,
+	})
+	if err != nil {
+		return err
+	}
+	if !decision.Enabled {
+		return httperr.NewBadRequest(errOrgInvalidArgument)
+	}
+
 	payload := map[string]any{"is_business_unit": req.IsBusinessUnit}
+	if len(req.Ext) > 0 {
+		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		if err != nil {
+			return err
+		}
+		if len(extPayload) > 0 {
+			payload["ext"] = extPayload
+		}
+		if len(extLabels) > 0 {
+			payload["ext_labels_snapshot"] = extLabels
+		}
+	}
 	payloadJSON, err := marshalJSON(payload)
 	if err != nil {
 		return err
@@ -790,11 +1020,71 @@ func (s *orgUnitWriteService) listEnabledExtFieldConfigs(ctx context.Context, te
 		if key == "" {
 			continue
 		}
+		if isReservedExtFieldKey(key) {
+			continue
+		}
 		cfg.FieldKey = key
 		outCfgs = append(outCfgs, cfg)
 		keys = append(keys, key)
 	}
 	return outCfgs, keys, nil
+}
+
+func buildExtPayload(ext map[string]any, fieldConfigs []types.TenantFieldConfig) (map[string]any, map[string]string, error) {
+	cfgByKey := make(map[string]types.TenantFieldConfig, len(fieldConfigs))
+	for _, cfg := range fieldConfigs {
+		key := strings.TrimSpace(cfg.FieldKey)
+		if key == "" {
+			continue
+		}
+		cfgByKey[key] = cfg
+	}
+
+	extPatch := make(map[string]any, len(ext))
+	extLabels := make(map[string]string)
+	for rawKey, rawValue := range ext {
+		fieldKey := strings.TrimSpace(rawKey)
+		if fieldKey == "" {
+			return nil, nil, httperr.NewBadRequest(errPatchFieldNotAllowed)
+		}
+		if isReservedExtFieldKey(fieldKey) {
+			return nil, nil, httperr.NewBadRequest(errPatchFieldNotAllowed)
+		}
+		cfg, ok := cfgByKey[fieldKey]
+		if !ok {
+			return nil, nil, httperr.NewBadRequest(errPatchFieldNotAllowed)
+		}
+		if _, ok := fieldmeta.LookupFieldDefinition(fieldKey); !ok {
+			return nil, nil, httperr.NewBadRequest(errPatchFieldNotAllowed)
+		}
+
+		extPatch[fieldKey] = rawValue
+
+		if strings.EqualFold(strings.TrimSpace(cfg.DataSourceType), "DICT") {
+			if rawValue == nil {
+				continue
+			}
+			value, ok := rawValue.(string)
+			if !ok {
+				return nil, nil, httperr.NewBadRequest(errOrgInvalidArgument)
+			}
+			value = strings.TrimSpace(value)
+			if value == "" {
+				return nil, nil, httperr.NewBadRequest(errOrgInvalidArgument)
+			}
+			dictCode, ok := fieldmeta.DictCodeFromDataSourceConfig(cfg.DataSourceConfig)
+			if !ok {
+				return nil, nil, httperr.NewBadRequest(errOrgInvalidArgument)
+			}
+			label, ok := fieldmeta.LookupDictLabel(dictCode, value)
+			if !ok {
+				return nil, nil, httperr.NewBadRequest(errOrgInvalidArgument)
+			}
+			extLabels[fieldKey] = label
+		}
+	}
+
+	return extPatch, extLabels, nil
 }
 
 func namePatchKey(eventType types.OrgUnitEventType) (string, bool) {

@@ -315,6 +315,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/mutation-capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitMutationCapabilitiesAPI(w, r, orgStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/append-capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitAppendCapabilitiesAPI(w, r, orgStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/details", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsDetailsAPI(w, r, orgStore)
 	}))
@@ -352,7 +355,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleOrgUnitsRescindsOrgAPI(w, r, orgUnitWriteService)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/set-business-unit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOrgUnitsBusinessUnitAPI(w, r, orgStore)
+		handleOrgUnitsBusinessUnitAPI(w, r, orgUnitWriteService)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/person/api/persons", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlePersonsAPI(w, r, personStore)

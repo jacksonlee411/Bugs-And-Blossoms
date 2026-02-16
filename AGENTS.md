@@ -201,6 +201,7 @@ modules/{module}/
 - DEV-PLAN-081：OrgUnit Details 记录版本选择器双栏化（左生效日期 / 右详情）：`docs/dev-plans/081-orgunit-records-version-selector-two-pane-alignment.md`
 - DEV-PLAN-082：Org 模块业务字段修改规则全量调查（排除元数据）：`docs/dev-plans/082-org-module-field-mutation-rules-investigation.md`
 - DEV-PLAN-083：Org 白名单模型扩展性改造（规则单点化 + 能力矩阵外显）：`docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- DEV-PLAN-083A：OrgUnit Append 写入动作能力外显与策略单点扩展（create / event_update）：`docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
 - DEV-PLAN-090：前端框架升级为 MUI X（对标 Workday UX）方案：`docs/dev-plans/090-mui-x-frontend-upgrade-plan.md`
 - DEV-PLAN-091：MUI X 升级子计划 P0（基座准备与许可落地）：`docs/dev-plans/091-mui-x-phase0-foundation-and-license-plan.md`
 - DEV-PLAN-092：MUI X 升级子计划 P1（壳与导航迁移）：`docs/dev-plans/092-mui-x-phase1-shell-navigation-plan.md`

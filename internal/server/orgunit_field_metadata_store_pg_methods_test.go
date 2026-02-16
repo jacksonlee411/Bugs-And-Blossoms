@@ -420,6 +420,151 @@ func TestOrgUnitPGStore_EvaluateRescindOrgDenyReasons(t *testing.T) {
 	})
 }
 
+func TestOrgUnitPGStore_IsOrgTreeInitialized(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("begin error", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return nil, errors.New("begin") })}
+		if _, err := store.IsOrgTreeInitialized(ctx, "t1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("exec error", func(t *testing.T) {
+		tx := &stubTx{execErr: errors.New("exec")}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, err := store.IsOrgTreeInitialized(ctx, "t1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		tx := &stubTx{row: ptrScanRow{err: errors.New("boom")}}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, err := store.IsOrgTreeInitialized(ctx, "t1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("no rows means not initialized", func(t *testing.T) {
+		tx := &stubTx{row: ptrScanRow{err: pgx.ErrNoRows}}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		initialized, err := store.IsOrgTreeInitialized(ctx, "t1")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if initialized {
+			t.Fatalf("expected false")
+		}
+	})
+
+	t.Run("root exists means initialized", func(t *testing.T) {
+		tx := &stubTx{row: ptrScanRow{vals: []any{10000001}}}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		initialized, err := store.IsOrgTreeInitialized(ctx, "t1")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if !initialized {
+			t.Fatalf("expected true")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		tx := &stubTx{
+			row:       ptrScanRow{err: pgx.ErrNoRows},
+			commitErr: errors.New("commit"),
+		}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, err := store.IsOrgTreeInitialized(ctx, "t1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestOrgUnitPGStore_ResolveAppendFacts(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("begin error", func(t *testing.T) {
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return nil, errors.New("begin") })}
+		if _, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("exec error", func(t *testing.T) {
+		tx := &stubTx{execErr: errors.New("exec")}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("root query error", func(t *testing.T) {
+		tx := &stubTx{row: ptrScanRow{err: errors.New("boom")}}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("status query error", func(t *testing.T) {
+		tx := &stubTx{
+			row:  ptrScanRow{vals: []any{10000001}},
+			row2: metadataScanRow{err: errors.New("boom")},
+		}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("target missing as of", func(t *testing.T) {
+		tx := &stubTx{
+			row:  ptrScanRow{vals: []any{10000001}},
+			row2: metadataScanRow{err: pgx.ErrNoRows},
+		}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		facts, err := store.ResolveAppendFacts(ctx, "t1", 10000002, "2026-01-01")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if !facts.TreeInitialized || facts.IsRoot || facts.TargetExistsAsOf {
+			t.Fatalf("facts=%+v", facts)
+		}
+	})
+
+	t.Run("target exists and root", func(t *testing.T) {
+		tx := &stubTx{
+			row:  ptrScanRow{vals: []any{10000001}},
+			row2: metadataScanRow{vals: []any{" disabled "}},
+		}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		facts, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if !facts.TreeInitialized || !facts.IsRoot || !facts.TargetExistsAsOf {
+			t.Fatalf("facts=%+v", facts)
+		}
+		if facts.TargetStatusAsOf != "disabled" {
+			t.Fatalf("status=%q", facts.TargetStatusAsOf)
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		tx := &stubTx{
+			row:       ptrScanRow{err: pgx.ErrNoRows},
+			row2:      metadataScanRow{err: pgx.ErrNoRows},
+			commitErr: errors.New("commit"),
+		}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, err := store.ResolveAppendFacts(ctx, "t1", 10000001, "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
 func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(123, 0).UTC()
