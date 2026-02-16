@@ -234,6 +234,8 @@ modules/{module}/
 - DEV-PLAN-103 执行日志：`docs/dev-records/dev-plan-103-execution-log.md`
 - DEV-PLAN-103A：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名：去技术后缀）：`docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
 - DEV-PLAN-103A 执行日志：`docs/dev-records/dev-plan-103a-execution-log.md`
+- DEV-PLAN-104：Job Catalog（职位分类）页面 UI 优化方案（信息架构收敛：上下文工具条 + Tabs + DataGrid + Dialog）：`docs/dev-plans/104-jobcatalog-ui-optimization.md`
+- DEV-PLAN-104A：Job Catalog UI 优化补充修订（对齐 DEV-PLAN-002）：`docs/dev-plans/104a-jobcatalog-ui-optimization-alignment-with-dev-plan-002.md`
 - DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
