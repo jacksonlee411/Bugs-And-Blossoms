@@ -41,13 +41,14 @@ help:
 		"  make iam plan" \
 		"  make iam migrate up"
 
-preflight: ## 本地一键对齐CI
+preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check pr-branch
 	@$(MAKE) check naming
 	@$(MAKE) check no-legacy
 	@$(MAKE) check doc
 	@$(MAKE) check fmt
 	@$(MAKE) check lint
+	@$(MAKE) css
 	@$(MAKE) test
 	@$(MAKE) check routing
 	@$(MAKE) e2e
