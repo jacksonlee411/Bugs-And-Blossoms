@@ -1,6 +1,6 @@
 # DEV-PLAN-100G：Org 模块宽表元数据落地 Phase 4C：OrgUnit 列表扩展字段筛选/排序 + i18n 收口（闭环收口，MUI）
 
-**状态**: 实施中（2026-02-15）
+**状态**: 已完成（2026-02-16 06:17 UTC — E2E 闭环通过并完成 083B 同步收口）
 
 **执行记录**:
 - `docs/dev-records/dev-plan-100g-execution-log.md`
@@ -18,30 +18,30 @@
 - 时间上下文（`as_of/tree_as_of/effective_date`）收敛：`DEV-PLAN-102` 已完成（避免列表把视图日期伪装为版本生效日）。
 - 前端收敛为 MUI-only：`DEV-PLAN-103` 已完成（唯一 UI 入口 `/app/**`）。
 
-**当前缺口（对应 `DEV-PLAN-100` 4C）**：
+**历史缺口（对应 `DEV-PLAN-100` 4C，现已收口）**：
 
 1) 列表页（`apps/web` 的 OrgUnitsPage）尚未提供扩展字段的筛选/排序 UI 入口；  
 2) 列表 ext query 的 URL 参数与前端 grid query state 解析存在“仅支持 core sort 字段”的约束，导致无法把 `sort=ext:<field_key>` 作为可分享状态稳定复现；  
 3) i18n 已覆盖详情页所需的字段 label key（如 `org.fields.org_type`），但列表侧仍缺少“扩展筛选/排序”相关控件文案与错误提示的 i18n 收口。
 
-此外，后端列表接口已具备 ext filter/sort 能力（SSOT：`DEV-PLAN-100D` §5.6），但当前 handler 仍存在一个与“树-列表联动”相冲突的限制点：当请求携带 `parent_org_code` 时会拒绝 ext query（需要在本计划中对齐，否则列表页无法在“选中树节点”的常态路径下使用 ext filter/sort）。
+此外，后端列表接口已具备 ext filter/sort 能力（SSOT：`DEV-PLAN-100D` §5.6）；本计划已完成与“树-列表联动”冲突点的收敛（`parent_org_code` 场景允许 ext query）。
 
 ## 2. 目标与非目标
 
 ### 2.1 核心目标（DoD）
 
-1. [ ] OrgUnit 列表页开放 **1~2 个扩展字段**的筛选入口（MVP 至少覆盖 `org_type`）。  
-2. [ ] OrgUnit 列表页开放 **1~2 个扩展字段**的排序入口（MVP 至少覆盖 `org_type`）。  
-3. [ ] 扩展筛选/排序入口必须由服务端元数据驱动（field_key/label_i18n_key/value_type/data_source_type + allow_filter/allow_sort），UI 不维护第二套白名单（对齐 `DEV-PLAN-100` D7/D8）。  
-4. [ ] i18n（en/zh）补齐：
-   - [ ] 列表扩展筛选/排序相关控件文案；
-   - [ ] 列表 ext query 失败路径的可解释错误提示（避免仅展示 raw message）。
-5. [ ] fail-closed：当字段在 `as_of` 下未启用/已停用/不允许筛选排序时，列表页必须给出明确禁用原因或错误提示，不允许静默吞掉或“看起来成功但无效果”。  
-6. [ ] 端到端证明：至少 1 条路径可在页面完成（管理员视角）：
+1. [x] OrgUnit 列表页开放 **1~2 个扩展字段**的筛选入口（MVP 至少覆盖 `org_type`）。  
+2. [x] OrgUnit 列表页开放 **1~2 个扩展字段**的排序入口（MVP 至少覆盖 `org_type`）。  
+3. [x] 扩展筛选/排序入口必须由服务端元数据驱动（field_key/label_i18n_key/value_type/data_source_type + allow_filter/allow_sort），UI 不维护第二套白名单（对齐 `DEV-PLAN-100` D7/D8）。  
+4. [x] i18n（en/zh）补齐：
+   - [x] 列表扩展筛选/排序相关控件文案；
+   - [x] 列表 ext query 失败路径的可解释错误提示（避免仅展示 raw message）。
+5. [x] fail-closed：当字段在 `as_of` 下未启用/已停用/不允许筛选排序时，列表页必须给出明确禁用原因或错误提示，不允许静默吞掉或“看起来成功但无效果”。  
+6. [x] 端到端证明：至少 1 条路径可在页面完成（管理员视角）：
    - 字段配置管理页启用字段（`DEV-PLAN-101`） -> 详情页写入扩展字段值（`DEV-PLAN-100E`） -> 列表页按该扩展字段筛选/排序 -> 打开详情页回显值。
-7. [ ] 权限边界冻结（admin-only MVP）：
-   - [ ] ext filter/sort 控件仅 `orgunit.admin` 可见；
-   - [ ] 非 admin 若访问带 ext query 的分享 URL：页面必须**清理 ext 参数**并给出可解释提示（i18n），避免出现“看不见筛选条件但结果被过滤”的隐形行为。
+7. [x] 权限边界冻结（admin-only MVP）：
+   - [x] ext filter/sort 控件仅 `orgunit.admin` 可见；
+   - [x] 非 admin 若访问带 ext query 的分享 URL：页面必须**清理 ext 参数**并给出可解释提示（i18n），避免出现“看不见筛选条件但结果被过滤”的隐形行为。
 
 ### 2.2 非目标（Stopline）
 
@@ -55,10 +55,10 @@
 > 本文不复制命令矩阵；触发器与门禁入口以 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 为准。
 
 - 触发器（本计划通常会命中）：
-  - [ ] 文档：`make check doc`（本文件 + 引用更新）
-  - [ ] Web UI（`apps/web/**`）：lint/typecheck/test/build + `make css`（产物入仓 + go:embed）
-  - [ ] 路由治理：若新增/调整后端路由，需 `make check routing`（SSOT：`DEV-PLAN-017`）
-  - [ ] Authz：若新增/调整权限映射，需 `make authz-pack && make authz-test && make authz-lint`（SSOT：`DEV-PLAN-022`）
+  - [x] 文档：`make check doc`（本文件 + 引用更新）
+  - [x] Web UI（`apps/web/**`）：lint/typecheck/test/build + `make css`（产物入仓 + go:embed）
+  - [x] 路由治理：若新增/调整后端路由，需 `make check routing`（SSOT：`DEV-PLAN-017`）
+  - [x] Authz：若新增/调整权限映射，需 `make authz-pack && make authz-test && make authz-lint`（SSOT：`DEV-PLAN-022`）
 
 ## 3. 关键设计决策（冻结）
 
@@ -209,7 +209,7 @@ UI 侧组合口径（冻结）：
    - [x] UI 禁用该字段或自动清理无效参数；
    - [x] 并展示可解释原因（i18n 文案，不是 raw error）。
 4. [x] i18n en/zh 完整：新增的列表控件文案与错误提示 key 在两种语言下均可渲染。
-5. [ ] E2E 证明闭环：字段配置 -> 写入 -> 列表筛选/排序 -> 详情回显，至少 1 条路径通过。
+5. [x] E2E 证明闭环：字段配置 -> 写入 -> 列表筛选/排序 -> 详情回显，至少 1 条路径通过。
 6. [x] 非 admin 行为冻结（KDD-100G-04）：URL 若带 ext 参数必须被清理并提示；不得出现“隐藏筛选/排序”。
 
 ## 7. 代码落点（建议）
