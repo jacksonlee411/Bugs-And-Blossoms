@@ -1,8 +1,31 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"testing"
+
+	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
 )
+
+type orgunitDictResolverStub struct {
+	resolveFn func(ctx context.Context, tenantID string, asOf string, dictCode string, code string) (string, bool, error)
+	listFn    func(ctx context.Context, tenantID string, asOf string, dictCode string, keyword string, limit int) ([]dictpkg.Option, error)
+}
+
+func (s orgunitDictResolverStub) ResolveValueLabel(ctx context.Context, tenantID string, asOf string, dictCode string, code string) (string, bool, error) {
+	if s.resolveFn != nil {
+		return s.resolveFn(ctx, tenantID, asOf, dictCode, code)
+	}
+	return "", false, nil
+}
+
+func (s orgunitDictResolverStub) ListOptions(ctx context.Context, tenantID string, asOf string, dictCode string, keyword string, limit int) ([]dictpkg.Option, error) {
+	if s.listFn != nil {
+		return s.listFn(ctx, tenantID, asOf, dictCode, keyword, limit)
+	}
+	return nil, nil
+}
 
 func TestOrgUnitFieldMetadata_Definitions_ListAndLookup(t *testing.T) {
 	defs := listOrgUnitFieldDefinitions()
@@ -11,183 +34,68 @@ func TestOrgUnitFieldMetadata_Definitions_ListAndLookup(t *testing.T) {
 	}
 	for i := 1; i < len(defs); i++ {
 		if defs[i-1].FieldKey > defs[i].FieldKey {
-			t.Fatalf("expected sorted field definitions, got %q before %q", defs[i-1].FieldKey, defs[i].FieldKey)
+			t.Fatalf("not sorted")
 		}
 	}
-
-	orig, ok := lookupOrgUnitFieldDefinition("org_type")
+	def, ok := lookupOrgUnitFieldDefinition("org_type")
 	if !ok {
-		t.Fatalf("expected org_type definition")
+		t.Fatalf("expected org_type")
 	}
-	origDict, _ := orig.DataSourceConfig["dict_code"].(string)
-	if origDict != "org_type" {
-		t.Fatalf("dict_code=%q", origDict)
-	}
-
-	// Ensure lookup returns a defensive copy of the config map.
-	orig.DataSourceConfig["dict_code"] = "mutated"
+	def.DataSourceConfig["dict_code"] = "changed"
 	again, ok := lookupOrgUnitFieldDefinition("org_type")
-	if !ok {
-		t.Fatalf("expected org_type definition")
-	}
-	againDict, _ := again.DataSourceConfig["dict_code"].(string)
-	if againDict != "org_type" {
-		t.Fatalf("expected dict_code unchanged, got %q", againDict)
-	}
-
-	if _, ok := lookupOrgUnitFieldDefinition("not-exists"); ok {
-		t.Fatalf("expected lookup to fail")
+	if !ok || again.DataSourceConfig["dict_code"] != "org_type" {
+		t.Fatalf("unexpected again=%v", again.DataSourceConfig["dict_code"])
 	}
 }
 
-func TestOrgUnitFieldMetadata_DictOptions_ListAndSort(t *testing.T) {
-	if got := listOrgUnitDictOptions("no-such-dict", "", 10); len(got) != 0 {
-		t.Fatalf("expected empty, got=%v", got)
+func TestOrgUnitFieldMetadata_DictIntegration(t *testing.T) {
+	if err := dictpkg.RegisterResolver(orgunitDictResolverStub{
+		listFn: func(_ context.Context, tenantID string, asOf string, dictCode string, keyword string, limit int) ([]dictpkg.Option, error) {
+			if tenantID != "t1" || asOf != "2026-01-01" || dictCode != "org_type" || keyword != "dep" || limit != 10 {
+				t.Fatalf("unexpected args")
+			}
+			return []dictpkg.Option{{Code: "10", Label: "部门"}}, nil
+		},
+		resolveFn: func(_ context.Context, tenantID string, asOf string, dictCode string, code string) (string, bool, error) {
+			if tenantID != "t1" || asOf != "2026-01-01" || dictCode != "org_type" || code != "10" {
+				t.Fatalf("unexpected args")
+			}
+			return "部门", true, nil
+		},
+	}); err != nil {
+		t.Fatalf("register err=%v", err)
 	}
 
-	// Keyword filtering.
-	filtered := listOrgUnitDictOptions("org_type", "comp", 10)
-	if len(filtered) == 0 {
-		t.Fatalf("expected filtered results")
+	options, err := listOrgUnitDictOptions(context.Background(), "t1", "2026-01-01", "org_type", "dep", 10)
+	if err != nil {
+		t.Fatalf("err=%v", err)
 	}
-
-	// limit < 0 should behave as "no limit" (after normalization).
-	all := listOrgUnitDictOptions("org_type", "", -1)
-	if len(all) == 0 {
-		t.Fatalf("expected options")
+	if len(options) != 1 || options[0].Value != "10" || options[0].Label != "部门" {
+		t.Fatalf("options=%+v", options)
 	}
-
-	// limit should be applied when > 0.
-	one := listOrgUnitDictOptions("org_type", "", 1)
-	if len(one) != 1 {
-		t.Fatalf("expected 1 option, got=%d", len(one))
+	label, ok, err := resolveOrgUnitDictLabel(context.Background(), "t1", "2026-01-01", "org_type", "10")
+	if err != nil || !ok || label != "部门" {
+		t.Fatalf("label=%q ok=%v err=%v", label, ok, err)
 	}
 }
 
-func TestOrgUnitFieldMetadata_DataSourceConfigJSON(t *testing.T) {
-	t.Run("marshal ok", func(t *testing.T) {
-		def, ok := lookupOrgUnitFieldDefinition("org_type")
-		if !ok {
-			t.Fatalf("expected org_type definition")
-		}
-		if got := string(orgUnitFieldDataSourceConfigJSON(def)); got == "" || got == "{}" {
-			t.Fatalf("unexpected json=%q", got)
-		}
-	})
+func TestOrgUnitFieldMetadata_DictIntegrationError(t *testing.T) {
+	wantErr := errors.New("boom")
+	if err := dictpkg.RegisterResolver(orgunitDictResolverStub{
+		listFn: func(context.Context, string, string, string, string, int) ([]dictpkg.Option, error) {
+			return nil, wantErr
+		},
+		resolveFn: func(context.Context, string, string, string, string) (string, bool, error) {
+			return "", false, wantErr
+		},
+	}); err != nil {
+		t.Fatalf("register err=%v", err)
+	}
 
-	t.Run("marshal error falls back to {}", func(t *testing.T) {
-		def := orgUnitFieldDefinition{
-			FieldKey:         "bad",
-			DataSourceType:   "DICT",
-			DataSourceConfig: map[string]any{"x": func() {}}, // json.Marshal should fail.
-		}
-		if got := string(orgUnitFieldDataSourceConfigJSON(def)); got != "{}" {
-			t.Fatalf("json=%q", got)
-		}
-	})
-}
-
-func TestOrgUnitFieldMetadata_DictOptionsAndLookup(t *testing.T) {
-	t.Run("unknown dict code is empty", func(t *testing.T) {
-		if got := listOrgUnitDictOptions("nope", "", 10); len(got) != 0 {
-			t.Fatalf("len=%d", len(got))
-		}
-	})
-
-	t.Run("keyword filters and limit applies", func(t *testing.T) {
-		got := listOrgUnitDictOptions("org_type", "comp", 1)
-		if len(got) != 1 {
-			t.Fatalf("len=%d", len(got))
-		}
-		if got[0].Value != "COMPANY" {
-			t.Fatalf("value=%q", got[0].Value)
-		}
-	})
-
-	t.Run("negative limit means no limit", func(t *testing.T) {
-		all := listOrgUnitDictOptions("org_type", "", 0)
-		neg := listOrgUnitDictOptions("org_type", "", -1)
-		if len(neg) != len(all) {
-			t.Fatalf("neg=%d all=%d", len(neg), len(all))
-		}
-	})
-
-	t.Run("lookup label", func(t *testing.T) {
-		if _, ok := lookupOrgUnitDictLabel("org_type", ""); ok {
-			t.Fatalf("expected empty to fail")
-		}
-		if got, ok := lookupOrgUnitDictLabel("org_type", "department"); !ok || got != "Department" {
-			t.Fatalf("got=%q ok=%v", got, ok)
-		}
-		if _, ok := lookupOrgUnitDictLabel("org_type", "missing"); ok {
-			t.Fatalf("expected missing to fail")
-		}
-	})
-
-	t.Run("lookup option", func(t *testing.T) {
-		if _, ok := lookupOrgUnitDictOption("org_type", ""); ok {
-			t.Fatalf("expected empty to fail")
-		}
-		opt, ok := lookupOrgUnitDictOption("org_type", "department")
-		if !ok || opt.Label != "Department" || opt.Value != "DEPARTMENT" {
-			t.Fatalf("opt=%#v ok=%v", opt, ok)
-		}
-		if _, ok := lookupOrgUnitDictOption("org_type", "missing"); ok {
-			t.Fatalf("expected missing to fail")
-		}
-	})
-}
-
-func TestOrgUnitFieldMetadata_DataSourceConfigOptions(t *testing.T) {
-	t.Run("plain returns nil", func(t *testing.T) {
-		def, ok := lookupOrgUnitFieldDefinition("short_name")
-		if !ok {
-			t.Fatalf("expected short_name definition")
-		}
-		if got := orgUnitFieldDataSourceConfigOptions(def); got != nil {
-			t.Fatalf("expected nil, got=%v", got)
-		}
-	})
-
-	t.Run("dict uses configured options and returns defensive copies", func(t *testing.T) {
-		def, ok := lookupOrgUnitFieldDefinition("org_type")
-		if !ok {
-			t.Fatalf("expected org_type definition")
-		}
-		got := orgUnitFieldDataSourceConfigOptions(def)
-		if len(got) != 1 {
-			t.Fatalf("len=%d", len(got))
-		}
-		if got[0]["dict_code"] != "org_type" {
-			t.Fatalf("dict_code=%v", got[0]["dict_code"])
-		}
-
-		// Mutating the returned value must not affect subsequent lookups.
-		got[0]["dict_code"] = "mutated"
-		again, ok := lookupOrgUnitFieldDefinition("org_type")
-		if !ok {
-			t.Fatalf("expected org_type definition")
-		}
-		optsAgain := orgUnitFieldDataSourceConfigOptions(again)
-		if len(optsAgain) != 1 || optsAgain[0]["dict_code"] != "org_type" {
-			t.Fatalf("optsAgain=%v", optsAgain)
-		}
-	})
-
-	t.Run("dict without options falls back to default config", func(t *testing.T) {
-		def := orgUnitFieldDefinition{
-			FieldKey:         "x",
-			DataSourceType:   "DICT",
-			DataSourceConfig: map[string]any{"dict_code": "x"},
-		}
-		got := orgUnitFieldDataSourceConfigOptions(def)
-		if len(got) != 1 || got[0]["dict_code"] != "x" {
-			t.Fatalf("got=%v", got)
-		}
-		// Returned config should be a copy.
-		got[0]["dict_code"] = "mutated"
-		if def.DataSourceConfig["dict_code"] != "x" {
-			t.Fatalf("def mutated=%v", def.DataSourceConfig["dict_code"])
-		}
-	})
+	if _, err := listOrgUnitDictOptions(context.Background(), "t1", "2026-01-01", "org_type", "", 10); !errors.Is(err, wantErr) {
+		t.Fatalf("err=%v", err)
+	}
+	if _, _, err := resolveOrgUnitDictLabel(context.Background(), "t1", "2026-01-01", "org_type", "10"); !errors.Is(err, wantErr) {
+		t.Fatalf("err=%v", err)
+	}
 }

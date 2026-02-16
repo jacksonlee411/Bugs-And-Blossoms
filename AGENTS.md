@@ -231,6 +231,8 @@ modules/{module}/
 - DEV-PLAN-100G 执行日志：`docs/dev-records/dev-plan-100g-execution-log.md`
 - DEV-PLAN-100H：Org 模块宽表元数据落地 Phase 5：稳定性/性能/异常与运维收口：`docs/dev-plans/100h-org-metadata-wide-table-phase5-stability-performance-ops-closure.md`
 - DEV-PLAN-101：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）：`docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- DEV-PLAN-105：全模块字典配置模块（DICT 值配置 + 生效日期 + 变更记录）：`docs/dev-plans/105-dict-config-platform-module.md`
+- DEV-PLAN-105 执行日志：`docs/dev-records/dev-plan-105-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`

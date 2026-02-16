@@ -3,6 +3,7 @@ import { AppShell } from '../layout/AppShell'
 import { navItems } from '../navigation/config'
 import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
 import { FoundationDemoPage } from '../pages/FoundationDemoPage'
+import { DictConfigsPage } from '../pages/dicts/DictConfigsPage'
 import { JobCatalogPage } from '../pages/jobcatalog/JobCatalogPage'
 import { LoginPage } from '../pages/LoginPage'
 import { OrgUnitFieldConfigsPage } from '../pages/org/OrgUnitFieldConfigsPage'
@@ -40,6 +41,14 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permissionKey='orgunit.admin'>
             <OrgUnitFieldConfigsPage />
+          </RequirePermission>
+        )
+      },
+      {
+        path: 'dicts',
+        element: (
+          <RequirePermission permissionKey='dict.admin'>
+            <DictConfigsPage />
           </RequirePermission>
         )
       },

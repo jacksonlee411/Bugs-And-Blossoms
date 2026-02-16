@@ -4,13 +4,61 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
+	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/httperr"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
+
+type orgUnitWriteDictResolverStub struct{}
+
+func (orgUnitWriteDictResolverStub) ResolveValueLabel(_ context.Context, _ string, _ string, dictCode string, code string) (string, bool, error) {
+	if strings.TrimSpace(dictCode) != "org_type" {
+		return "", false, nil
+	}
+	switch strings.TrimSpace(code) {
+	case "10":
+		return "Department", true, nil
+	case "20":
+		return "Company", true, nil
+	default:
+		return "", false, nil
+	}
+}
+
+func (orgUnitWriteDictResolverStub) ListOptions(_ context.Context, _ string, _ string, dictCode string, keyword string, limit int) ([]dictpkg.Option, error) {
+	if strings.TrimSpace(dictCode) != "org_type" {
+		return []dictpkg.Option{}, nil
+	}
+	options := []dictpkg.Option{
+		{Code: "10", Label: "Department", Status: "active", EnabledOn: "1970-01-01"},
+		{Code: "20", Label: "Company", Status: "active", EnabledOn: "1970-01-01"},
+	}
+	needle := strings.ToLower(strings.TrimSpace(keyword))
+	if needle != "" {
+		filtered := make([]dictpkg.Option, 0, len(options))
+		for _, option := range options {
+			if strings.Contains(strings.ToLower(option.Code), needle) || strings.Contains(strings.ToLower(option.Label), needle) {
+				filtered = append(filtered, option)
+			}
+		}
+		options = filtered
+	}
+	if limit > 0 && len(options) > limit {
+		options = options[:limit]
+	}
+	return options, nil
+}
+
+func TestMain(m *testing.M) {
+	_ = dictpkg.RegisterResolver(orgUnitWriteDictResolverStub{})
+	os.Exit(m.Run())
+}
 
 type orgUnitWriteStoreStub struct {
 	submitEventFn            func(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestCode string, initiatorUUID string) (int64, error)
@@ -312,7 +360,7 @@ func TestCorrectExtPatchDictAddsLabelSnapshot(t *testing.T) {
 		Patch: OrgUnitCorrectionPatch{
 			Name: stringPtr("New Name"),
 			Ext: map[string]any{
-				"org_type":   "DEPARTMENT",
+				"org_type":   "10",
 				"short_name": "R&D",
 			},
 		},
@@ -324,7 +372,7 @@ func TestCorrectExtPatchDictAddsLabelSnapshot(t *testing.T) {
 		t.Fatalf("patch=%v", captured)
 	}
 	ext, _ := captured["ext"].(map[string]any)
-	if ext["org_type"] != "DEPARTMENT" || ext["short_name"] != "R&D" {
+	if ext["org_type"] != "10" || ext["short_name"] != "R&D" {
 		t.Fatalf("ext=%v", ext)
 	}
 	labels, _ := captured["ext_labels_snapshot"].(map[string]any)
@@ -410,7 +458,7 @@ func TestCorrectExtPatchValidationFailClosed(t *testing.T) {
 			Patch: OrgUnitCorrectionPatch{
 				EffectiveDate: stringPtr("2026-01-02"),
 				Ext: map[string]any{
-					"org_type": "DEPARTMENT",
+					"org_type": "10",
 				},
 			},
 		})
@@ -441,7 +489,7 @@ func TestCorrectExtPatchValidationFailClosed(t *testing.T) {
 			RequestID:           "req1",
 			Patch: OrgUnitCorrectionPatch{
 				Ext: map[string]any{
-					"org_type": "DEPARTMENT",
+					"org_type": "10",
 				},
 			},
 		})
@@ -550,13 +598,13 @@ func TestBuildExtPayload_Branches(t *testing.T) {
 
 	t.Run("success with dict labels and plain field", func(t *testing.T) {
 		ext, labels, err := buildExtPayload(map[string]any{
-			"org_type":   "DEPARTMENT",
+			"org_type":   "10",
 			"short_name": "R&D",
 		}, fieldConfigs)
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
-		if ext["org_type"] != "DEPARTMENT" || ext["short_name"] != "R&D" {
+		if ext["org_type"] != "10" || ext["short_name"] != "R&D" {
 			t.Fatalf("ext=%v", ext)
 		}
 		if labels["org_type"] != "Department" {
@@ -614,7 +662,7 @@ func TestBuildExtPayload_Branches(t *testing.T) {
 		badCfg := []types.TenantFieldConfig{
 			{FieldKey: "org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{}`)},
 		}
-		if _, _, err := buildExtPayload(map[string]any{"org_type": "DEPARTMENT"}, badCfg); err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgInvalidArgument {
+		if _, _, err := buildExtPayload(map[string]any{"org_type": "10"}, badCfg); err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgInvalidArgument {
 			t.Fatalf("err=%v", err)
 		}
 	})
@@ -653,7 +701,7 @@ func TestAppendActions_ExtPayloadAndLabels(t *testing.T) {
 			EffectiveDate: "2026-01-01",
 			OrgCode:       "A001",
 			Name:          "Org A",
-			Ext:           map[string]any{"org_type": "DEPARTMENT"},
+			Ext:           map[string]any{"org_type": "10"},
 		})
 		if err != nil {
 			t.Fatalf("err=%v", err)
@@ -675,7 +723,7 @@ func TestAppendActions_ExtPayloadAndLabels(t *testing.T) {
 						EffectiveDate: "2026-01-01",
 						OrgCode:       "A001",
 						NewName:       "Org B",
-						Ext:           map[string]any{"org_type": "DEPARTMENT"},
+						Ext:           map[string]any{"org_type": "10"},
 					})
 				},
 			},
@@ -686,7 +734,7 @@ func TestAppendActions_ExtPayloadAndLabels(t *testing.T) {
 						EffectiveDate:    "2026-01-01",
 						OrgCode:          "A001",
 						NewParentOrgCode: "P001",
-						Ext:              map[string]any{"org_type": "DEPARTMENT"},
+						Ext:              map[string]any{"org_type": "10"},
 					})
 				},
 			},
@@ -696,7 +744,7 @@ func TestAppendActions_ExtPayloadAndLabels(t *testing.T) {
 					return svc.Disable(ctx, "t1", DisableOrgUnitRequest{
 						EffectiveDate: "2026-01-01",
 						OrgCode:       "A001",
-						Ext:           map[string]any{"org_type": "DEPARTMENT"},
+						Ext:           map[string]any{"org_type": "10"},
 					})
 				},
 			},
@@ -706,7 +754,7 @@ func TestAppendActions_ExtPayloadAndLabels(t *testing.T) {
 					return svc.Enable(ctx, "t1", EnableOrgUnitRequest{
 						EffectiveDate: "2026-01-01",
 						OrgCode:       "A001",
-						Ext:           map[string]any{"org_type": "DEPARTMENT"},
+						Ext:           map[string]any{"org_type": "10"},
 					})
 				},
 			},
@@ -717,7 +765,7 @@ func TestAppendActions_ExtPayloadAndLabels(t *testing.T) {
 						EffectiveDate:  "2026-01-01",
 						OrgCode:        "A001",
 						IsBusinessUnit: true,
-						Ext:            map[string]any{"org_type": "DEPARTMENT"},
+						Ext:            map[string]any{"org_type": "10"},
 					})
 				},
 			},
@@ -1053,14 +1101,14 @@ func TestAppendActions_ErrorBranches(t *testing.T) {
 		if err := svc.Disable(ctx, "t1", DisableOrgUnitRequest{
 			EffectiveDate: "2026-01-01",
 			OrgCode:       "A001",
-			Ext:           map[string]any{"org_type": "DEPARTMENT"},
+			Ext:           map[string]any{"org_type": "10"},
 		}); err == nil || err.Error() != "marshal" {
 			t.Fatalf("disable err=%v", err)
 		}
 		if err := svc.Enable(ctx, "t1", EnableOrgUnitRequest{
 			EffectiveDate: "2026-01-01",
 			OrgCode:       "A001",
-			Ext:           map[string]any{"org_type": "DEPARTMENT"},
+			Ext:           map[string]any{"org_type": "10"},
 		}); err == nil || err.Error() != "marshal" {
 			t.Fatalf("enable err=%v", err)
 		}
@@ -1106,7 +1154,7 @@ func TestCorrectExtPatch_AdditionalErrorBranches(t *testing.T) {
 			TargetEffectiveDate: "2026-01-01",
 			RequestID:           "req1",
 			Patch: OrgUnitCorrectionPatch{
-				Ext: map[string]any{"org_type": "DEPARTMENT"},
+				Ext: map[string]any{"org_type": "10"},
 			},
 		})
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgInvalidArgument {
@@ -2941,7 +2989,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("ext missing config rejects", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
-			Ext: map[string]any{"org_type": "DEPARTMENT"},
+			Ext: map[string]any{"org_type": "10"},
 		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
@@ -2951,7 +2999,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("ext config blank key is skipped", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
-			Ext: map[string]any{"org_type": "DEPARTMENT"},
+			Ext: map[string]any{"org_type": "10"},
 		}, []types.TenantFieldConfig{{FieldKey: " "}})
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)

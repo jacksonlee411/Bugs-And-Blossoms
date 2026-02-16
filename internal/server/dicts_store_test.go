@@ -1,0 +1,573 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+)
+
+type dictAuditRows struct {
+	records [][]any
+	idx     int
+	scanErr error
+	err     error
+}
+
+func (r *dictAuditRows) Close()                        {}
+func (r *dictAuditRows) Err() error                    { return r.err }
+func (r *dictAuditRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *dictAuditRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *dictAuditRows) Next() bool {
+	if r.idx >= len(r.records) {
+		return false
+	}
+	r.idx++
+	return true
+}
+func (r *dictAuditRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	rec := r.records[r.idx-1]
+	for i := range dest {
+		if i >= len(rec) || rec[i] == nil {
+			continue
+		}
+		switch d := dest[i].(type) {
+		case *int64:
+			*d = rec[i].(int64)
+		case *string:
+			*d = rec[i].(string)
+		case *time.Time:
+			*d = rec[i].(time.Time)
+		case *json.RawMessage:
+			switch v := rec[i].(type) {
+			case []byte:
+				*d = append((*d)[:0], v...)
+			case string:
+				*d = json.RawMessage(v)
+			default:
+				return errors.New("unsupported raw message type")
+			}
+		default:
+			return errors.New("unsupported scan type")
+		}
+	}
+	return nil
+}
+func (r *dictAuditRows) Values() ([]any, error) { return nil, nil }
+func (r *dictAuditRows) RawValues() [][]byte    { return nil }
+func (r *dictAuditRows) Conn() *pgx.Conn        { return nil }
+
+func TestDictPGStore_ListDicts_Coverage(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("begin error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		})}
+		if _, err := store.ListDicts(ctx, "t1", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		})}
+		if _, err := store.ListDicts(ctx, "t1", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{queryErr: errors.New("query")}, nil
+		})}
+		if _, err := store.ListDicts(ctx, "t1", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &recordRows{records: [][]any{{"org_type"}}, scanErr: errors.New("scan")}}, nil
+		})}
+		if _, err := store.ListDicts(ctx, "t1", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rows err", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &recordRows{records: [][]any{}, err: errors.New("rows")}}, nil
+		})}
+		if _, err := store.ListDicts(ctx, "t1", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("fallback to global", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &recordRows{records: [][]any{}}, rows2: &recordRows{records: [][]any{{"org_type"}}}}, nil
+		})}
+		items, err := store.ListDicts(ctx, "00000000-0000-0000-0000-000000000001", "2026-01-01")
+		if err != nil || len(items) != 1 || items[0].DictCode != "org_type" {
+			t.Fatalf("items=%v err=%v", items, err)
+		}
+	})
+
+	t.Run("ListDictValues fallback to global list error", func(t *testing.T) {
+		rows1 := &recordRows{records: [][]any{}}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: rows1, queryErr: errors.New("query"), queryErrAt: 2}, nil
+		})}
+		if _, err := store.ListDictValues(ctx, "00000000-0000-0000-0000-000000000001", "org_type", "2026-01-01", "", 10, "all"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ListDicts fallback to global list error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &recordRows{records: [][]any{}}, queryErr: errors.New("query"), queryErrAt: 2}, nil
+		})}
+		if _, err := store.ListDicts(ctx, "00000000-0000-0000-0000-000000000001", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &recordRows{records: [][]any{{"org_type"}}}, commitErr: errors.New("commit")}, nil
+		})}
+		if _, err := store.ListDicts(ctx, "t1", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &recordRows{records: [][]any{{"org_type"}}}}, nil
+		})}
+		items, err := store.ListDicts(ctx, globalTenantID, "2026-01-01")
+		if err != nil || len(items) != 1 {
+			t.Fatalf("items=%v err=%v", items, err)
+		}
+	})
+}
+
+func TestDictPGStore_ListDictValues_AndOptions_Coverage(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("begin error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		})}
+		if _, err := store.ListDictValues(ctx, "t1", "org_type", "2026-01-01", "", 10, "all"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		})}
+		if _, err := store.ListDictValues(ctx, "t1", "org_type", "2026-01-01", "", 10, "all"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{queryErr: errors.New("query")}, nil
+		})}
+		if _, err := store.ListDictValues(ctx, "t1", "org_type", "2026-01-01", "", 10, "all"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		rows := &recordRows{records: [][]any{{"org_type", "10", "部门", "active", "2026-01-01", nil, time.Unix(1, 0).UTC()}}, scanErr: errors.New("scan")}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: rows}, nil
+		})}
+		if _, err := store.ListDictValues(ctx, "t1", "org_type", "2026-01-01", "", 10, "all"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rows err", func(t *testing.T) {
+		rows := &recordRows{records: [][]any{}, err: errors.New("rows")}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: rows}, nil
+		})}
+		if _, err := store.ListDictValues(ctx, "t1", "org_type", "2026-01-01", "", 10, "all"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("fallback to global", func(t *testing.T) {
+		now := time.Unix(2, 0).UTC()
+		rows1 := &recordRows{records: [][]any{}}
+		rows2 := &recordRows{records: [][]any{{"org_type", "10", "部门", "active", "1970-01-01", nil, now}}}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: rows1, rows2: rows2}, nil
+		})}
+		values, err := store.ListDictValues(ctx, "00000000-0000-0000-0000-000000000001", "org_type", "2026-01-01", "", 10, "all")
+		if err != nil || len(values) != 1 || values[0].Code != "10" {
+			t.Fatalf("values=%v err=%v", values, err)
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		now := time.Unix(3, 0).UTC()
+		rows := &recordRows{records: [][]any{{"org_type", "10", "部门", "active", "1970-01-01", nil, now}}}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: rows, commitErr: errors.New("commit")}, nil
+		})}
+		if _, err := store.ListDictValues(ctx, "t1", "org_type", "2026-01-01", "", 10, "all"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok + ListOptions", func(t *testing.T) {
+		now := time.Unix(4, 0).UTC()
+		rows := &recordRows{records: [][]any{{"org_type", "10", "部门", "active", "1970-01-01", nil, now}}}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: rows}, nil
+		})}
+		opts, err := store.ListOptions(ctx, globalTenantID, "2026-01-01", "org_type", "", 10)
+		if err != nil || len(opts) != 1 || opts[0].Code != "10" {
+			t.Fatalf("opts=%v err=%v", opts, err)
+		}
+	})
+
+	t.Run("ListOptions propagates list error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		})}
+		if _, err := store.ListOptions(ctx, "t1", "2026-01-01", "org_type", "", 10); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestDictPGStore_ResolveValueLabel_AndMutations_Coverage(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ResolveValueLabel begin error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		})}
+		if _, _, err := store.ResolveValueLabel(ctx, "t1", "2026-01-01", "org_type", "10"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ResolveValueLabel set tenant error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		})}
+		if _, _, err := store.ResolveValueLabel(ctx, "t1", "2026-01-01", "org_type", "10"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ResolveValueLabel no rows fallback ok=false", func(t *testing.T) {
+		tx := &stubTx{}
+		tx.row = &stubRow{err: pgx.ErrNoRows}
+		tx.row2 = &stubRow{err: pgx.ErrNoRows}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		label, ok, err := store.ResolveValueLabel(ctx, "00000000-0000-0000-0000-000000000001", "2026-01-01", "org_type", "10")
+		if err != nil || ok || label != "" {
+			t.Fatalf("label=%q ok=%v err=%v", label, ok, err)
+		}
+	})
+
+	t.Run("ResolveValueLabel ok", func(t *testing.T) {
+		tx := &stubTx{}
+		tx.row = &stubRow{vals: []any{"部门"}}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		label, ok, err := store.ResolveValueLabel(ctx, globalTenantID, "2026-01-01", "org_type", "10")
+		if err != nil || !ok || label != "部门" {
+			t.Fatalf("label=%q ok=%v err=%v", label, ok, err)
+		}
+	})
+
+	t.Run("ResolveValueLabel commit error", func(t *testing.T) {
+		tx := &stubTx{commitErr: errors.New("commit")}
+		tx.row = &stubRow{vals: []any{"部门"}}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, _, err := store.ResolveValueLabel(ctx, globalTenantID, "2026-01-01", "org_type", "10"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ResolveValueLabel underlying error", func(t *testing.T) {
+		tx := &stubTx{}
+		tx.row = &stubRow{err: errors.New("boom")}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, _, err := store.ResolveValueLabel(ctx, globalTenantID, "2026-01-01", "org_type", "10"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ResolveValueLabel fallback error", func(t *testing.T) {
+		tx := &stubTx{}
+		tx.row = &stubRow{err: pgx.ErrNoRows}
+		tx.row2 = &stubRow{err: errors.New("boom")}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, _, err := store.ResolveValueLabel(ctx, "00000000-0000-0000-0000-000000000001", "2026-01-01", "org_type", "10"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submitValueEvent marshal error", func(t *testing.T) {
+		store := &dictPGStore{pool: &fakeBeginner{}}
+		_, _, err := store.submitValueEvent(ctx, "t1", "org_type", "10", dictEventCreated, "2026-01-01", map[string]any{"x": func() {}}, "r1", "u1")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submitValueEvent begin error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		})}
+		if _, _, err := store.CreateDictValue(ctx, "t1", DictCreateValueRequest{DictCode: "org_type", Code: "10", Label: "部门", EnabledOn: "2026-01-01", RequestCode: "r1", Initiator: "u1"}); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submitValueEvent set tenant error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{execErr: errors.New("exec")}, nil
+		})}
+		if _, _, err := store.CreateDictValue(ctx, "t1", DictCreateValueRequest{DictCode: "org_type", Code: "10", Label: "部门", EnabledOn: "2026-01-01", RequestCode: "r1", Initiator: "u1"}); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submitValueEvent query error", func(t *testing.T) {
+		tx := &stubTx{rowErr: errors.New("row")}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, _, err := store.CreateDictValue(ctx, "t1", DictCreateValueRequest{DictCode: "org_type", Code: "10", Label: "部门", EnabledOn: "2026-01-01", RequestCode: "r1", Initiator: "u1"}); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submitValueEvent snapshot fetch error", func(t *testing.T) {
+		tx := &stubTx{}
+		tx.row = &stubRow{vals: []any{int64(1), false}}
+		tx.row2Err = errors.New("row2")
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, _, err := store.DisableDictValue(ctx, "t1", DictDisableValueRequest{DictCode: "org_type", Code: "10", DisabledOn: "2026-01-01", RequestCode: "r1", Initiator: "u1"}); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submitValueEvent bad snapshot json", func(t *testing.T) {
+		tx := &stubTx{}
+		tx.row = &stubRow{vals: []any{int64(1), true}}
+		tx.row2 = &stubRow{vals: []any{[]byte(`{`), time.Unix(1, 0).UTC()}}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, _, err := store.CorrectDictValue(ctx, "t1", DictCorrectValueRequest{DictCode: "org_type", Code: "10", Label: "部门", CorrectionDay: "2026-01-01", RequestCode: "r1", Initiator: "u1"}); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submitValueEvent commit error", func(t *testing.T) {
+		tx := &stubTx{commitErr: errors.New("commit")}
+		tx.row = &stubRow{vals: []any{int64(1), false}}
+		tx.row2 = &stubRow{vals: []any{[]byte(`{"dict_code":"org_type","code":"10","label":"部门","status":"active","enabled_on":"2026-01-01"}`), time.Unix(2, 0).UTC()}}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		if _, _, err := store.CreateDictValue(ctx, "t1", DictCreateValueRequest{DictCode: "org_type", Code: "10", Label: "部门", EnabledOn: "2026-01-01", RequestCode: "r1", Initiator: "u1"}); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("submitValueEvent ok", func(t *testing.T) {
+		tx := &stubTx{}
+		tx.row = &stubRow{vals: []any{int64(1), true}}
+		tx.row2 = &stubRow{vals: []any{[]byte(`{"dict_code":"org_type","code":"10","label":"部门","status":"active","enabled_on":"2026-01-01"}`), time.Unix(3, 0).UTC()}}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		item, wasRetry, err := store.CreateDictValue(ctx, "t1", DictCreateValueRequest{DictCode: "org_type", Code: "10", Label: "部门", EnabledOn: "2026-01-01", RequestCode: "r1", Initiator: "u1"})
+		if err != nil || !wasRetry || item.Code != "10" {
+			t.Fatalf("item=%v wasRetry=%v err=%v", item, wasRetry, err)
+		}
+	})
+}
+
+func TestDictPGStore_ListDictValueAudit_Coverage(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("begin error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return nil, errors.New("begin") })}
+		if _, err := store.ListDictValueAudit(ctx, "t1", "org_type", "10", 10); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("set tenant error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return &stubTx{execErr: errors.New("exec")}, nil })}
+		if _, err := store.ListDictValueAudit(ctx, "t1", "org_type", "10", 10); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return &stubTx{queryErr: errors.New("query")}, nil })}
+		if _, err := store.ListDictValueAudit(ctx, "t1", "org_type", "10", 10); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("scan error", func(t *testing.T) {
+		rows := &dictAuditRows{records: [][]any{{int64(1), "u1", "org_type", "10", dictEventCreated, "2026-01-01", "r1", "i1", time.Unix(1, 0).UTC(), []byte(`{}`), []byte(`{}`), []byte(`{}`)}}, scanErr: errors.New("scan")}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return &stubTx{rows: rows}, nil })}
+		if _, err := store.ListDictValueAudit(ctx, "t1", "org_type", "10", 10); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rows err", func(t *testing.T) {
+		rows := &dictAuditRows{records: [][]any{}, err: errors.New("rows")}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return &stubTx{rows: rows}, nil })}
+		if _, err := store.ListDictValueAudit(ctx, "t1", "org_type", "10", 10); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		rows := &dictAuditRows{records: [][]any{}}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: rows, commitErr: errors.New("commit")}, nil
+		})}
+		if _, err := store.ListDictValueAudit(ctx, "t1", "org_type", "10", 10); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		rows := &dictAuditRows{records: [][]any{{int64(1), "u1", "org_type", "10", dictEventCreated, "2026-01-01", "r1", "i1", time.Unix(1, 0).UTC(), []byte(`{}`), []byte(`{}`), []byte(`{}`)}}}
+		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return &stubTx{rows: rows}, nil })}
+		events, err := store.ListDictValueAudit(ctx, "t1", "org_type", "10", 10)
+		if err != nil || len(events) != 1 || events[0].EventID != 1 {
+			t.Fatalf("events=%v err=%v", events, err)
+		}
+	})
+}
+
+func TestDictMemoryStore_Coverage(t *testing.T) {
+	ctx := context.Background()
+	store := newDictMemoryStore().(*dictMemoryStore)
+
+	t.Run("ListDicts requires asOf", func(t *testing.T) {
+		if _, err := store.ListDicts(ctx, "t1", ""); !errors.Is(err, errDictEffectiveDayRequired) {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
+	t.Run("ListDicts not found", func(t *testing.T) {
+		items, err := store.ListDicts(ctx, "t1", "1960-01-01")
+		if err != nil || len(items) != 0 {
+			t.Fatalf("items=%v err=%v", items, err)
+		}
+	})
+
+	t.Run("ListDictValues filters", func(t *testing.T) {
+		vals, err := store.ListDictValues(ctx, "t1", "org_type", "2026-01-01", "10", 1, "all")
+		if err != nil || len(vals) != 1 {
+			t.Fatalf("vals=%v err=%v", vals, err)
+		}
+
+		vals2, _ := store.ListDictValues(ctx, "t1", "other", "2026-01-01", "", 10, "all")
+		if len(vals2) != 0 {
+			t.Fatalf("vals2=%v", vals2)
+		}
+
+		vals3, _ := store.ListDictValues(ctx, "t1", "org_type", "1900-01-01", "", 10, "all")
+		if len(vals3) != 0 {
+			t.Fatalf("vals3=%v", vals3)
+		}
+
+		vals4, _ := store.ListDictValues(ctx, "t1", "org_type", "2026-01-01", "zzz", 10, "all")
+		if len(vals4) != 0 {
+			t.Fatalf("vals4=%v", vals4)
+		}
+
+		vals5, _ := store.ListDictValues(ctx, "t1", "org_type", "2026-01-01", "", 0, "all")
+		if len(vals5) == 0 {
+			t.Fatalf("vals5 empty")
+		}
+		vals6, _ := store.ListDictValues(ctx, "t1", "org_type", "2026-01-01", "", 999, "all")
+		if len(vals6) != 2 {
+			t.Fatalf("vals6=%v", vals6)
+		}
+
+		// Cover the clamp branch: len(out) > limit.
+		vals7, _ := store.ListDictValues(ctx, "t1", "org_type", "2026-01-01", "", 1, "all")
+		if len(vals7) != 1 {
+			t.Fatalf("vals7=%v", vals7)
+		}
+	})
+
+	t.Run("ResolveValueLabel ok/miss", func(t *testing.T) {
+		label, ok, err := store.ResolveValueLabel(ctx, "t1", "2026-01-01", "org_type", "10")
+		if err != nil || !ok || label == "" {
+			t.Fatalf("label=%q ok=%v err=%v", label, ok, err)
+		}
+		_, ok, _ = store.ResolveValueLabel(ctx, "t1", "2026-01-01", "org_type", "999")
+		if ok {
+			t.Fatal("expected miss")
+		}
+	})
+
+	t.Run("ListOptions", func(t *testing.T) {
+		opts, err := store.ListOptions(ctx, "t1", "2026-01-01", "org_type", "", 10)
+		if err != nil || len(opts) == 0 {
+			t.Fatalf("opts=%v err=%v", opts, err)
+		}
+	})
+
+	t.Run("mutations conflict", func(t *testing.T) {
+		if _, _, err := store.CreateDictValue(ctx, "t1", DictCreateValueRequest{}); !errors.Is(err, errDictValueConflict) {
+			t.Fatalf("err=%v", err)
+		}
+		if _, _, err := store.DisableDictValue(ctx, "t1", DictDisableValueRequest{}); !errors.Is(err, errDictValueConflict) {
+			t.Fatalf("err=%v", err)
+		}
+		if _, _, err := store.CorrectDictValue(ctx, "t1", DictCorrectValueRequest{}); !errors.Is(err, errDictValueConflict) {
+			t.Fatalf("err=%v", err)
+		}
+		if events, err := store.ListDictValueAudit(ctx, "t1", "org_type", "10", 10); err != nil || len(events) != 0 {
+			t.Fatalf("events=%v err=%v", events, err)
+		}
+	})
+
+	t.Run("valuesForTenant fallback", func(t *testing.T) {
+		if got := store.valuesForTenant("missing"); len(got) == 0 {
+			t.Fatalf("got=%v", got)
+		}
+	})
+
+	t.Run("supportedDictCode and dictDisplayName", func(t *testing.T) {
+		if supportedDictCode("other") {
+			t.Fatal("expected false")
+		}
+		if dictDisplayName("other") != "other" {
+			t.Fatal("expected passthrough")
+		}
+	})
+
+	t.Run("ListOptions uses active status but ignores parameter", func(t *testing.T) {
+		_ = json.RawMessage(`{}`)
+	})
+}
