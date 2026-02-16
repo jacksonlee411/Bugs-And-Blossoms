@@ -18,14 +18,60 @@ import (
 )
 
 type orgUnitBusinessUnitAPIRequest struct {
-	OrgUnitID      string `json:"org_unit_id"`
-	OrgCode        string `json:"org_code"`
-	EffectiveDate  string `json:"effective_date"`
-	IsBusinessUnit bool   `json:"is_business_unit"`
-	RequestCode    string `json:"request_code"`
+	OrgUnitID         string          `json:"org_unit_id"`
+	OrgCode           string          `json:"org_code"`
+	EffectiveDate     string          `json:"effective_date"`
+	IsBusinessUnit    bool            `json:"is_business_unit"`
+	RequestCode       string          `json:"request_code"`
+	Ext               map[string]any  `json:"ext"`
+	ExtLabelsSnapshot json.RawMessage `json:"ext_labels_snapshot"`
 }
 
-func handleOrgUnitsBusinessUnitAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
+func handleOrgUnitsBusinessUnitAPI(w http.ResponseWriter, r *http.Request, dep any) {
+	if writeSvc, ok := dep.(orgunitservices.OrgUnitWriteService); ok {
+		handleOrgUnitWriteAction(w, r, writeSvc, "orgunit_set_business_unit_failed", func(ctx context.Context, tenantID string) (string, string, error) {
+			var req orgUnitBusinessUnitAPIRequest
+			dec := json.NewDecoder(r.Body)
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(&req); err != nil {
+				return "", "", errOrgUnitBadJSON
+			}
+			if len(req.ExtLabelsSnapshot) > 0 {
+				return "", "", newBadRequestError(orgUnitErrPatchFieldNotAllowed)
+			}
+
+			req.OrgUnitID = strings.TrimSpace(req.OrgUnitID)
+			req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
+			req.RequestCode = strings.TrimSpace(req.RequestCode)
+			if req.EffectiveDate == "" {
+				return "", "", newBadRequestError("effective_date required")
+			}
+			if req.OrgUnitID != "" || strings.TrimSpace(req.OrgCode) == "" {
+				return "", "", newBadRequestError("org_code required")
+			}
+
+			initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
+			err := writeSvc.SetBusinessUnit(ctx, tenantID, orgunitservices.SetBusinessUnitRequest{
+				EffectiveDate:  req.EffectiveDate,
+				OrgCode:        req.OrgCode,
+				IsBusinessUnit: req.IsBusinessUnit,
+				Ext:            req.Ext,
+				InitiatorUUID:  initiatorUUID,
+			})
+			return req.OrgCode, req.EffectiveDate, err
+		})
+		return
+	}
+
+	store, ok := dep.(OrgUnitStore)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_service_missing", "orgunit service missing")
+		return
+	}
+	handleOrgUnitsBusinessUnitAPIStoreLegacy(w, r, store)
+}
+
+func handleOrgUnitsBusinessUnitAPIStoreLegacy(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -182,34 +228,44 @@ type orgUnitAuditAPIResponse struct {
 }
 
 type orgUnitCreateAPIRequest struct {
-	OrgCode        string `json:"org_code"`
-	Name           string `json:"name"`
-	EffectiveDate  string `json:"effective_date"`
-	ParentOrgCode  string `json:"parent_org_code"`
-	IsBusinessUnit bool   `json:"is_business_unit"`
-	ManagerPernr   string `json:"manager_pernr"`
+	OrgCode           string          `json:"org_code"`
+	Name              string          `json:"name"`
+	EffectiveDate     string          `json:"effective_date"`
+	ParentOrgCode     string          `json:"parent_org_code"`
+	IsBusinessUnit    bool            `json:"is_business_unit"`
+	ManagerPernr      string          `json:"manager_pernr"`
+	Ext               map[string]any  `json:"ext"`
+	ExtLabelsSnapshot json.RawMessage `json:"ext_labels_snapshot"`
 }
 
 type orgUnitRenameAPIRequest struct {
-	OrgCode       string `json:"org_code"`
-	NewName       string `json:"new_name"`
-	EffectiveDate string `json:"effective_date"`
+	OrgCode           string          `json:"org_code"`
+	NewName           string          `json:"new_name"`
+	EffectiveDate     string          `json:"effective_date"`
+	Ext               map[string]any  `json:"ext"`
+	ExtLabelsSnapshot json.RawMessage `json:"ext_labels_snapshot"`
 }
 
 type orgUnitMoveAPIRequest struct {
-	OrgCode          string `json:"org_code"`
-	NewParentOrgCode string `json:"new_parent_org_code"`
-	EffectiveDate    string `json:"effective_date"`
+	OrgCode           string          `json:"org_code"`
+	NewParentOrgCode  string          `json:"new_parent_org_code"`
+	EffectiveDate     string          `json:"effective_date"`
+	Ext               map[string]any  `json:"ext"`
+	ExtLabelsSnapshot json.RawMessage `json:"ext_labels_snapshot"`
 }
 
 type orgUnitDisableAPIRequest struct {
-	OrgCode       string `json:"org_code"`
-	EffectiveDate string `json:"effective_date"`
+	OrgCode           string          `json:"org_code"`
+	EffectiveDate     string          `json:"effective_date"`
+	Ext               map[string]any  `json:"ext"`
+	ExtLabelsSnapshot json.RawMessage `json:"ext_labels_snapshot"`
 }
 
 type orgUnitEnableAPIRequest struct {
-	OrgCode       string `json:"org_code"`
-	EffectiveDate string `json:"effective_date"`
+	OrgCode           string          `json:"org_code"`
+	EffectiveDate     string          `json:"effective_date"`
+	Ext               map[string]any  `json:"ext"`
+	ExtLabelsSnapshot json.RawMessage `json:"ext_labels_snapshot"`
 }
 
 type orgUnitCorrectionPatchRequest struct {
@@ -784,8 +840,14 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			return
 		}
 		var req orgUnitCreateAPIRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+			return
+		}
+		if len(req.ExtLabelsSnapshot) > 0 {
+			writeOrgUnitServiceError(w, r, newBadRequestError(orgUnitErrPatchFieldNotAllowed), "orgunit_create_failed")
 			return
 		}
 		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
@@ -797,6 +859,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 			ParentOrgCode:  req.ParentOrgCode,
 			IsBusinessUnit: req.IsBusinessUnit,
 			ManagerPernr:   req.ManagerPernr,
+			Ext:            req.Ext,
 			InitiatorUUID:  orgUnitInitiatorUUID(r.Context(), tenant.ID),
 		})
 		if err != nil {
@@ -1108,8 +1171,13 @@ func handleOrgUnitsSearchAPI(w http.ResponseWriter, r *http.Request, store OrgUn
 func handleOrgUnitsRenameAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {
 	handleOrgUnitWriteAction(w, r, writeSvc, "orgunit_rename_failed", func(ctx context.Context, tenantID string) (string, string, error) {
 		var req orgUnitRenameAPIRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
 			return "", "", errOrgUnitBadJSON
+		}
+		if len(req.ExtLabelsSnapshot) > 0 {
+			return "", "", newBadRequestError(orgUnitErrPatchFieldNotAllowed)
 		}
 		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
 		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
@@ -1117,6 +1185,7 @@ func handleOrgUnitsRenameAPI(w http.ResponseWriter, r *http.Request, writeSvc or
 			EffectiveDate: req.EffectiveDate,
 			OrgCode:       req.OrgCode,
 			NewName:       req.NewName,
+			Ext:           req.Ext,
 			InitiatorUUID: initiatorUUID,
 		})
 		return req.OrgCode, req.EffectiveDate, err
@@ -1126,8 +1195,13 @@ func handleOrgUnitsRenameAPI(w http.ResponseWriter, r *http.Request, writeSvc or
 func handleOrgUnitsMoveAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {
 	handleOrgUnitWriteAction(w, r, writeSvc, "orgunit_move_failed", func(ctx context.Context, tenantID string) (string, string, error) {
 		var req orgUnitMoveAPIRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
 			return "", "", errOrgUnitBadJSON
+		}
+		if len(req.ExtLabelsSnapshot) > 0 {
+			return "", "", newBadRequestError(orgUnitErrPatchFieldNotAllowed)
 		}
 		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
 		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
@@ -1135,6 +1209,7 @@ func handleOrgUnitsMoveAPI(w http.ResponseWriter, r *http.Request, writeSvc orgu
 			EffectiveDate:    req.EffectiveDate,
 			OrgCode:          req.OrgCode,
 			NewParentOrgCode: req.NewParentOrgCode,
+			Ext:              req.Ext,
 			InitiatorUUID:    initiatorUUID,
 		})
 		return req.OrgCode, req.EffectiveDate, err
@@ -1144,14 +1219,20 @@ func handleOrgUnitsMoveAPI(w http.ResponseWriter, r *http.Request, writeSvc orgu
 func handleOrgUnitsDisableAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {
 	handleOrgUnitWriteAction(w, r, writeSvc, "orgunit_disable_failed", func(ctx context.Context, tenantID string) (string, string, error) {
 		var req orgUnitDisableAPIRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
 			return "", "", errOrgUnitBadJSON
+		}
+		if len(req.ExtLabelsSnapshot) > 0 {
+			return "", "", newBadRequestError(orgUnitErrPatchFieldNotAllowed)
 		}
 		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
 		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 		err := writeSvc.Disable(ctx, tenantID, orgunitservices.DisableOrgUnitRequest{
 			EffectiveDate: req.EffectiveDate,
 			OrgCode:       req.OrgCode,
+			Ext:           req.Ext,
 			InitiatorUUID: initiatorUUID,
 		})
 		return req.OrgCode, req.EffectiveDate, err
@@ -1161,14 +1242,20 @@ func handleOrgUnitsDisableAPI(w http.ResponseWriter, r *http.Request, writeSvc o
 func handleOrgUnitsEnableAPI(w http.ResponseWriter, r *http.Request, writeSvc orgunitservices.OrgUnitWriteService) {
 	handleOrgUnitWriteAction(w, r, writeSvc, "orgunit_enable_failed", func(ctx context.Context, tenantID string) (string, string, error) {
 		var req orgUnitEnableAPIRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
 			return "", "", errOrgUnitBadJSON
+		}
+		if len(req.ExtLabelsSnapshot) > 0 {
+			return "", "", newBadRequestError(orgUnitErrPatchFieldNotAllowed)
 		}
 		req.EffectiveDate = orgUnitDefaultDate(req.EffectiveDate)
 		initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 		err := writeSvc.Enable(ctx, tenantID, orgunitservices.EnableOrgUnitRequest{
 			EffectiveDate: req.EffectiveDate,
 			OrgCode:       req.OrgCode,
+			Ext:           req.Ext,
 			InitiatorUUID: initiatorUUID,
 		})
 		return req.OrgCode, req.EffectiveDate, err

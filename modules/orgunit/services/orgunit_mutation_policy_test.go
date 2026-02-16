@@ -1,6 +1,7 @@
 package services
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
@@ -174,6 +175,210 @@ func TestResolvePolicy_InvalidKey(t *testing.T) {
 	}
 }
 
+func TestResolvePolicy_Append_Create(t *testing.T) {
+	decision, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionCreate,
+		EmittedEventType: OrgUnitEmittedCreate,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:            true,
+		TreeInitialized:     true,
+		OrgAlreadyExists:    false,
+		CreateAsRoot:        false,
+		EnabledExtFieldKeys: []string{"org_type"},
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if !decision.Enabled {
+		t.Fatalf("expected enabled")
+	}
+	if join(decision.AllowedFields) != "effective_date,is_business_unit,manager_pernr,name,org_code,org_type,parent_org_code" {
+		t.Fatalf("allowed=%v", decision.AllowedFields)
+	}
+	if join(keysOf(decision.FieldPayloadKeys)) != join(decision.AllowedFields) {
+		t.Fatalf("field_payload_keys keys mismatch")
+	}
+	if decision.FieldPayloadKeys["name"] != "name" {
+		t.Fatalf("name mapping=%q", decision.FieldPayloadKeys["name"])
+	}
+	if decision.FieldPayloadKeys["org_type"] != "ext.org_type" {
+		t.Fatalf("ext mapping=%q", decision.FieldPayloadKeys["org_type"])
+	}
+
+	disabled, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionCreate,
+		EmittedEventType: OrgUnitEmittedCreate,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:         true,
+		TreeInitialized:  true,
+		OrgAlreadyExists: true,
+		CreateAsRoot:     false,
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if disabled.Enabled {
+		t.Fatalf("expected disabled")
+	}
+	if join(disabled.DenyReasons) != "ORG_ALREADY_EXISTS" {
+		t.Fatalf("deny=%v", disabled.DenyReasons)
+	}
+	if len(disabled.AllowedFields) != 0 || len(disabled.FieldPayloadKeys) != 0 {
+		t.Fatalf("expected fail-closed fields")
+	}
+
+	treeNotInit, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionCreate,
+		EmittedEventType: OrgUnitEmittedCreate,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:        true,
+		TreeInitialized: false,
+		CreateAsRoot:    false,
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if join(treeNotInit.DenyReasons) != "ORG_TREE_NOT_INITIALIZED" {
+		t.Fatalf("deny=%v", treeNotInit.DenyReasons)
+	}
+
+	rootAlreadyExists, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionCreate,
+		EmittedEventType: OrgUnitEmittedCreate,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:        true,
+		TreeInitialized: true,
+		CreateAsRoot:    true,
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if join(rootAlreadyExists.DenyReasons) != "ORG_ROOT_ALREADY_EXISTS" {
+		t.Fatalf("deny=%v", rootAlreadyExists.DenyReasons)
+	}
+}
+
+func TestResolvePolicy_Append_EventUpdate(t *testing.T) {
+	rename, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedRename,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:            true,
+		TreeInitialized:     true,
+		TargetExistsAsOf:    true,
+		IsRoot:              false,
+		EnabledExtFieldKeys: []string{"org_type"},
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if !rename.Enabled {
+		t.Fatalf("expected enabled")
+	}
+	if join(rename.AllowedFields) != "effective_date,name,org_type" {
+		t.Fatalf("allowed=%v", rename.AllowedFields)
+	}
+	if rename.FieldPayloadKeys["name"] != "new_name" {
+		t.Fatalf("name mapping=%q", rename.FieldPayloadKeys["name"])
+	}
+
+	moveRoot, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedMove,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:         true,
+		TreeInitialized:  true,
+		TargetExistsAsOf: true,
+		IsRoot:           true,
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if moveRoot.Enabled {
+		t.Fatalf("expected disabled")
+	}
+	if join(moveRoot.DenyReasons) != "ORG_ROOT_CANNOT_BE_MOVED" {
+		t.Fatalf("deny=%v", moveRoot.DenyReasons)
+	}
+	if len(moveRoot.AllowedFields) != 0 || len(moveRoot.FieldPayloadKeys) != 0 {
+		t.Fatalf("expected fail-closed fields")
+	}
+
+	missing, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedDisable,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:         true,
+		TreeInitialized:  true,
+		TargetExistsAsOf: false,
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if join(missing.DenyReasons) != "ORG_NOT_FOUND_AS_OF" {
+		t.Fatalf("deny=%v", missing.DenyReasons)
+	}
+
+	treeNotInitialized, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedDisable,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:         true,
+		TreeInitialized:  false,
+		TargetExistsAsOf: true,
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if join(treeNotInitialized.DenyReasons) != "ORG_TREE_NOT_INITIALIZED" {
+		t.Fatalf("deny=%v", treeNotInitialized.DenyReasons)
+	}
+
+	forbidden, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedEnable,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:         false,
+		TreeInitialized:  true,
+		TargetExistsAsOf: true,
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if join(forbidden.DenyReasons) != "FORBIDDEN" {
+		t.Fatalf("deny=%v", forbidden.DenyReasons)
+	}
+
+	setBU, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedSetBusinessUnit,
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:         true,
+		TreeInitialized:  true,
+		TargetExistsAsOf: true,
+	})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if !setBU.Enabled {
+		t.Fatalf("expected enabled")
+	}
+	if join(setBU.AllowedFields) != "effective_date,is_business_unit" {
+		t.Fatalf("allowed=%v", setBU.AllowedFields)
+	}
+
+	if _, err := ResolvePolicy(OrgUnitMutationPolicyKey{
+		ActionKind:       OrgUnitActionEventUpdate,
+		EmittedEventType: OrgUnitEmittedEventType("NO_SUCH"),
+	}, OrgUnitMutationPolicyFacts{
+		CanAdmin:         true,
+		TreeInitialized:  true,
+		TargetExistsAsOf: true,
+	}); err == nil {
+		t.Fatalf("expected invalid key error")
+	}
+}
+
 func TestAllowedFields_ReturnsCopy(t *testing.T) {
 	decision := OrgUnitMutationPolicyDecision{AllowedFields: []string{"a"}}
 	got := AllowedFields(decision)
@@ -279,6 +484,25 @@ func TestPolicyHelpers_NormalizeMergeAndDenyReasonPriority(t *testing.T) {
 	if join(keys) != "a,b" {
 		t.Fatalf("keys=%v", keys)
 	}
+	keys = normalizeFieldKeys([]string{"name", "a"})
+	if join(keys) != "a" {
+		t.Fatalf("reserved keys should be filtered, got=%v", keys)
+	}
+	keys = normalizeFieldKeys([]string{"ext", "ext_labels_snapshot", "manager_pernr", "x"})
+	if join(keys) != "x" {
+		t.Fatalf("reserved keys should be filtered, got=%v", keys)
+	}
+
+	if !isReservedExtFieldKey("org_code") || !isReservedExtFieldKey("ext") || !isReservedExtFieldKey("ext_labels_snapshot") {
+		t.Fatalf("expected reserved keys")
+	}
+	if isReservedExtFieldKey("org_type") {
+		t.Fatalf("org_type should not be reserved")
+	}
+
+	if fields, ok := allowedAppendCoreFieldsForEmittedEvent(OrgUnitEmittedCreate); !ok || join(fields) != "effective_date,is_business_unit,manager_pernr,name,org_code,parent_org_code" {
+		t.Fatalf("create fields=%v ok=%v", fields, ok)
+	}
 
 	merged := mergeAndSortKeys([]string{"", "b", "a", "a"}, []string{"c", "b", ""})
 	if join(merged) != "a,b,c" {
@@ -296,12 +520,17 @@ func TestPolicyHelpers_NormalizeMergeAndDenyReasonPriority(t *testing.T) {
 	// Cover all priority switch branches.
 	want := map[string]int{
 		"FORBIDDEN":                                10,
-		"ORG_EVENT_NOT_FOUND":                      20,
-		"ORG_EVENT_RESCINDED":                      30,
-		"ORG_ROOT_DELETE_FORBIDDEN":                40,
-		"ORG_HAS_CHILDREN_CANNOT_DELETE":           50,
-		"ORG_HAS_DEPENDENCIES_CANNOT_DELETE":       60,
-		"ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET": 70,
+		"ORG_TREE_NOT_INITIALIZED":                 20,
+		"ORG_NOT_FOUND_AS_OF":                      30,
+		"ORG_ROOT_CANNOT_BE_MOVED":                 40,
+		"ORG_ALREADY_EXISTS":                       50,
+		"ORG_ROOT_ALREADY_EXISTS":                  60,
+		"ORG_EVENT_NOT_FOUND":                      70,
+		"ORG_EVENT_RESCINDED":                      80,
+		"ORG_ROOT_DELETE_FORBIDDEN":                90,
+		"ORG_HAS_CHILDREN_CANNOT_DELETE":           91,
+		"ORG_HAS_DEPENDENCIES_CANNOT_DELETE":       92,
+		"ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET": 93,
 		"UNKNOWN": 100,
 	}
 	for code, exp := range want {
@@ -348,5 +577,15 @@ func join(items []string) string {
 		}
 		out += item
 	}
+	return out
+}
+
+func keysOf(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	// Sort for stable comparison.
+	sort.Strings(out)
 	return out
 }

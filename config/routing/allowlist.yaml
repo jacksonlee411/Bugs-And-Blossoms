@@ -98,6 +98,9 @@ entrypoints:
       - path: /org/api/org-units/mutation-capabilities
         methods: [GET]
         route_class: internal_api
+      - path: /org/api/org-units/append-capabilities
+        methods: [GET]
+        route_class: internal_api
       - path: /org/api/org-units/details
         methods: [GET]
         route_class: internal_api

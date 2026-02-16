@@ -2019,6 +2019,30 @@ func (s *orgUnitMemoryStore) ResolveOrgCode(_ context.Context, tenantID string, 
 	return "", orgunitpkg.ErrOrgIDNotFound
 }
 
+func (s *orgUnitMemoryStore) IsOrgTreeInitialized(_ context.Context, tenantID string) (bool, error) {
+	return len(s.nodes[tenantID]) > 0, nil
+}
+
+func (s *orgUnitMemoryStore) ResolveAppendFacts(_ context.Context, tenantID string, orgID int, _ string) (orgUnitAppendFacts, error) {
+	facts := orgUnitAppendFacts{
+		TreeInitialized: len(s.nodes[tenantID]) > 0,
+	}
+	orgIDStr := strconv.Itoa(orgID)
+	for _, node := range s.nodes[tenantID] {
+		if node.ID != orgIDStr {
+			continue
+		}
+		facts.TargetExistsAsOf = true
+		facts.TargetStatusAsOf = strings.TrimSpace(node.Status)
+		if facts.TargetStatusAsOf == "" {
+			facts.TargetStatusAsOf = "active"
+		}
+		facts.IsRoot = strings.EqualFold(strings.TrimSpace(node.OrgCode), "ROOT")
+		break
+	}
+	return facts, nil
+}
+
 func (s *orgUnitMemoryStore) ResolveOrgCodes(_ context.Context, tenantID string, orgIDs []int) (map[int]string, error) {
 	out := make(map[int]string)
 	if len(orgIDs) == 0 {

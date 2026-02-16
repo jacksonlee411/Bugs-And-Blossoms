@@ -368,6 +368,12 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/mutation-capabilities"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/append-capabilities"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/append-capabilities"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/details"); !ok {
 		t.Fatal("expected ok=true")
 	}
