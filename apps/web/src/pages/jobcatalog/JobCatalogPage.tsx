@@ -1539,6 +1539,8 @@ export function JobCatalogPage() {
             />
             <Autocomplete
               multiple
+              getOptionLabel={(option) => `${option.code} · ${option.name}`}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
               onChange={(_, nextOptions) => {
                 const familyCodes = nextOptions.map((item) => item.code)
                 setCreateProfileDialog((previous) => {
