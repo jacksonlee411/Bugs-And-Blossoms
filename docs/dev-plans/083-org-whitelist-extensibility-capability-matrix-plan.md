@@ -1,6 +1,6 @@
 # DEV-PLAN-083：Org 变更能力模型重构（抽象统一 + 策略单点 + 能力外显）
 
-**状态**: 已完成（2026-02-15 23:02 UTC — 收口为 Rewrite/Invalidate（更正/撤销）capabilities + 策略单点；Append 扩展拆分为 DEV-PLAN-083A）
+**状态**: 已完成（2026-02-16 06:17 UTC — 083B 后置核验完成：Kernel/Service 对齐 + fail-closed 防回归 + 验收项收口）
 
 ## 0. Stopline（本计划 SSOT 收口范围）
 
@@ -356,8 +356,8 @@ Core 字段允许矩阵（冻结；承接并收敛 `DEV-PLAN-082`，以本文为
 9. [X] 错误提示升级为“不可用原因可解释”，减少提交后失败（落地：`DEV-PLAN-100E`）。
 
 ## 6.4 Kernel 对齐与防回归
-10. [ ] 复核 `submit_org_event_correction/submit_org_status_correction/submit_org_event_rescind/submit_org_rescind` 与服务层规则对齐。
-11. [ ] 保留 Kernel 防守性校验，确保绕过服务层时仍 fail-closed。
+10. [X] 复核 `submit_org_event_correction/submit_org_status_correction/submit_org_event_rescind/submit_org_rescind` 与服务层规则对齐（证据：`modules/orgunit/services/orgunit_write_service.go` + `modules/orgunit/services/orgunit_write_service_test.go` + `internal/server/orgunit_mutation_capabilities_api_test.go`）。
+11. [X] 保留 Kernel 防守性校验，确保绕过服务层时仍 fail-closed（证据：`RUN_083B_LATENCY=1 go test ./internal/server ./modules/orgunit/services -run "083BLatencyBaseline" -count=1 -v` + `make test`）。
 
 ## 6.5 开放问题与建议（目标：彻底实现）
 
@@ -396,12 +396,12 @@ Core 字段允许矩阵（冻结；承接并收敛 `DEV-PLAN-082`，以本文为
 
 ## 7. 验收标准
 
-- [ ] 规则判定从散落分支收敛为策略单点，可审计可测试。
-- [ ] capabilities API 能返回“目标事件类型 + 动作能力 + 字段映射 + 拒绝原因”。
-- [ ] UI 常见路径不再出现“可编辑但必然失败”的字段。
-- [ ] UI 对禁用动作给出稳定可解释原因。
-- [ ] `PATCH_FIELD_NOT_ALLOWED`、`ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET` 等稳定错误码不漂移。
-- [ ] 无 legacy 分支，无第二写入口（One Door 保持）。
+- [X] 规则判定从散落分支收敛为策略单点，可审计可测试。
+- [X] capabilities API 能返回“目标事件类型 + 动作能力 + 字段映射 + 拒绝原因”。
+- [X] UI 常见路径不再出现“可编辑但必然失败”的字段。
+- [X] UI 对禁用动作给出稳定可解释原因。
+- [X] `PATCH_FIELD_NOT_ALLOWED`、`ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET` 等稳定错误码不漂移。
+- [X] 无 legacy 分支，无第二写入口（One Door 保持）。
 
 ## 8. 测试与门禁
 
