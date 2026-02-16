@@ -1,9 +1,10 @@
 # DEV-PLAN-104：Job Catalog（职位分类）页面 UI 优化方案（信息架构收敛：上下文工具条 + Tabs + DataGrid + Dialog）
 
-**状态**: 草拟中（2026-02-16 02:53 UTC）
+**状态**: 已完成（2026-02-16 05:32 UTC）
 
 > 补充修订：与 `DEV-PLAN-002` 的规范对齐细则见 `docs/dev-plans/104a-jobcatalog-ui-optimization-alignment-with-dev-plan-002.md`。  
 > 若本文件与 `DEV-PLAN-104A` 存在冲突，以 `DEV-PLAN-104A` 为准（仅限 UI 规范对齐条款）。
+> 实施与验证证据见：`docs/dev-records/dev-plan-104-execution-log.md`。
 
 ## 1. 背景
 
@@ -21,14 +22,14 @@
 
 ## 2. 目标（DoD）
 
-1. [ ] 页面“全局上下文”稳定且始终可见：`as_of + package_code + owner_setid + read_only` 在滚动时不会丢失。
-2. [ ] 读视图与写入生效日的关系可解释且不易误用：
+1. [X] 页面“全局上下文”稳定且始终可见：`as_of + package_code + owner_setid + read_only` 在滚动时不会丢失。
+2. [X] 读视图与写入生效日的关系可解释且不易误用：
    - `as_of` 仅代表“查看口径”；
    - 每次写操作必须显式选择 `effective_date`（默认=当前 `as_of`），并在提交按钮附近再次展示“将对 YYYY-MM-DD 生效”。
-3. [ ] 任务域收敛：任一局部任务域（每个 Tab）最多 1 个 Primary action（对齐 `DEV-PLAN-002` 的意图）。
-4. [ ] 读写反馈距离缩短：提交成功后，用户无需滚动即可在当前 Tab 的列表中验证结果（新增/更新行可被定位或高亮）。
-5. [ ] 统一组件选型：移除裸 `<table>`，列表统一使用 `DataGridPage`（MUI X DataGrid），表单统一用 `Dialog`/`Drawer`（本计划默认 `Dialog`）。
-6. [ ] 响应式稳健：小屏不挤压/溢出，表单控件 `fullWidth`，布局在 `xs` 下自动换行。
+3. [X] 任务域收敛：任一局部任务域（每个 Tab）最多 1 个 Primary action（对齐 `DEV-PLAN-002` 的意图）。
+4. [X] 读写反馈距离缩短：提交成功后，用户无需滚动即可在当前 Tab 的列表中验证结果（新增/更新行可被定位或高亮）。
+5. [X] 统一组件选型：移除裸 `<table>`，列表统一使用 `DataGridPage`（MUI X DataGrid），表单统一用 `Dialog`/`Drawer`（本计划默认 `Dialog`）。
+6. [X] 响应式稳健：小屏不挤压/溢出，表单控件 `fullWidth`，布局在 `xs` 下自动换行。
 
 ## 3. 非目标（明确不做）
 
@@ -142,19 +143,19 @@
 
 ## 9. 验收标准（最小可交付）
 
-1. [ ] 滚动到任意位置时，仍能看见并修改 `as_of/package` 上下文；应用后刷新列表且上下文一致可解释。
-2. [ ] 页面不再出现 5 个并列 contained 主按钮；每个 Tab 仅 1 个 Primary action。
-3. [ ] 创建/移动等写操作完成后，用户无需滚动即可在当前 Tab 的 DataGrid 中验证结果。
-4. [ ] 页面不再使用裸 `<table>`；列表均为 `DataGridPage`，并具有一致的密度/边框/可访问性。
-5. [ ] 小屏（xs）下：ContextBar 与 TabToolbar 不溢出；输入框 `fullWidth`，按钮自动换行。
+1. [X] 滚动到任意位置时，仍能看见并修改 `as_of/package` 上下文；应用后刷新列表且上下文一致可解释。
+2. [X] 页面不再出现 5 个并列 contained 主按钮；每个 Tab 仅 1 个 Primary action。
+3. [X] 创建/移动等写操作完成后，用户无需滚动即可在当前 Tab 的 DataGrid 中验证结果。
+4. [X] 页面不再使用裸 `<table>`；列表均为 `DataGridPage`，并具有一致的密度/边框/可访问性。
+5. [X] 小屏（xs）下：ContextBar 与 TabToolbar 不溢出；输入框 `fullWidth`，按钮自动换行。
 
 ## 10. 实施步骤（建议拆 PR）
 
-1. [ ] P0：引入 `JobCatalogContextBar`（合并 Load + Selection + Owned Packages 选择入口），并把 `Action Effective Date` 从页面移除（后续迁入对话框）。
-2. [ ] P1：引入 Tabs + 将 4 张列表表格替换为 `DataGridPage`（先不做两栏也可，但需为两栏预留结构）。
-3. [ ] P2：把所有 Create/Update 表单迁移为 `Dialog`（每次写带 `effective_date`）。
-4. [ ] P3：实现 Groups/Families 两栏（选中 group 影响 families 列表；写回 query params）。
-5. [ ] P4：补齐 i18n keys 与基础可访问性（aria labels、helper text）。
+1. [X] P0：引入 `JobCatalogContextBar`（合并 Load + Selection + Owned Packages 选择入口），并把 `Action Effective Date` 从页面移除（后续迁入对话框）。
+2. [X] P1：引入 Tabs + 将 4 张列表表格替换为 `DataGridPage`（先不做两栏也可，但需为两栏预留结构）。
+3. [X] P2：把所有 Create/Update 表单迁移为 `Dialog`（每次写带 `effective_date`）。
+4. [X] P3：实现 Groups/Families 两栏（选中 group 影响 families 列表；写回 query params）。
+5. [X] P4：补齐 i18n keys 与基础可访问性（aria labels、helper text）。
 
 ## 11. 代码落点（建议）
 
