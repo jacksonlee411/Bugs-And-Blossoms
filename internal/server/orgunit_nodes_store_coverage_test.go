@@ -854,3 +854,43 @@ func (r *auditRows) Scan(dest ...any) error {
 func (r *auditRows) Values() ([]any, error) { return nil, nil }
 func (r *auditRows) RawValues() [][]byte    { return nil }
 func (r *auditRows) Conn() *pgx.Conn        { return nil }
+
+func TestOrgUnitMemoryStore_AppendFactsHelpers(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	initialized, err := store.IsOrgTreeInitialized(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if initialized {
+		t.Fatalf("expected empty tree not initialized")
+	}
+
+	node, err := store.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "ROOT", "Root", "", true)
+	if err != nil {
+		t.Fatalf("create err=%v", err)
+	}
+	store.nodes["t1"][0].Status = ""
+
+	orgID, err := store.ResolveOrgID(context.Background(), "t1", node.OrgCode)
+	if err != nil {
+		t.Fatalf("resolve id err=%v", err)
+	}
+	facts, err := store.ResolveAppendFacts(context.Background(), "t1", orgID, "2026-01-01")
+	if err != nil {
+		t.Fatalf("facts err=%v", err)
+	}
+	if !facts.TreeInitialized || !facts.TargetExistsAsOf || !facts.IsRoot {
+		t.Fatalf("facts=%+v", facts)
+	}
+	if facts.TargetStatusAsOf != "active" {
+		t.Fatalf("status=%q", facts.TargetStatusAsOf)
+	}
+
+	missing, err := store.ResolveAppendFacts(context.Background(), "t1", orgID+999, "2026-01-01")
+	if err != nil {
+		t.Fatalf("missing err=%v", err)
+	}
+	if !missing.TreeInitialized || missing.TargetExistsAsOf {
+		t.Fatalf("missing facts=%+v", missing)
+	}
+}

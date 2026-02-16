@@ -257,7 +257,7 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/org/api/org-units/fields:options", "/org/api/org-units/mutation-capabilities":
+	case "/org/api/org-units/fields:options", "/org/api/org-units/mutation-capabilities", "/org/api/org-units/append-capabilities":
 		if method == http.MethodGet {
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true
 		}

@@ -1,16 +1,17 @@
 # DEV-PLAN-083：Org 变更能力模型重构（抽象统一 + 策略单点 + 能力外显）
 
-**状态**: 草拟中（2026-02-15 01:34 UTC — 冻结 mutation-capabilities 契约；增补“彻底实现”建议与 100E1 前置引用）
+**状态**: 已完成（2026-02-15 23:02 UTC — 收口为 Rewrite/Invalidate（更正/撤销）capabilities + 策略单点；Append 扩展拆分为 DEV-PLAN-083A）
 
-## 0. 本次冻结范围（Stopline）
+## 0. Stopline（本计划 SSOT 收口范围）
 
-> 目标：把 `mutation-capabilities` 的**返回结构 + 字段/路径映射 + 组合约束**冻结到“可直接实现”的状态；其余实现步骤（代码落地/测试补齐）仍保持待办。
+> 目标：本文件作为 Rewrite/Invalidate（`correct_* / rescind_*`）的 SSOT，冻结并落地 `mutation-capabilities` 的**返回结构 + 字段/路径映射 + 组合约束 + deny_reasons 闭集**；Append（`create / event_update`）的扩展口径见 `DEV-PLAN-083A`。
 
-- [X] 冻结 `action_kind/emitted_event_type/target_effective_event_type` 合法组合约束（见 §4.2）。
-- [X] 冻结 `field_key/field_payload_keys/deny_reasons` 的对外语义（见 §4.3、§5.2、§5.6）。
-- [X] 冻结 `GET /org/api/org-units/mutation-capabilities` 的 Response 200 字段结构（见 §5.2）。
-- [X] 冻结 `correct_event/correct_status/rescind_event/rescind_org` 的最小能力字段（见 §5.3~§5.5）。
-- [ ] 服务层策略模块与 API 落地（本计划后续步骤，见 §6.2/§6.3）。
+- [X] 冻结并实现 `action_kind/emitted_event_type/target_effective_event_type` 合法组合约束（见 §4.2；落地：`modules/orgunit/services/orgunit_mutation_policy.go`）。
+- [X] 冻结并实现 `field_key/field_payload_keys/deny_reasons` 的对外语义（见 §4.3、§5.2、§5.6；落地：policy + API 合约测试）。
+- [X] 冻结并实现 `GET /org/api/org-units/mutation-capabilities` 的 Response 200 字段结构（见 §5.2；落地：`internal/server/orgunit_mutation_capabilities_api.go`）。
+- [X] 冻结并实现 `correct_event/correct_status/rescind_event/rescind_org` 的最小能力字段（见 §5.3~§5.5）。
+- [X] 更正写入链路按 policy 做 fail-closed 校验，并支持 `patch.ext`（承接：`DEV-PLAN-100E1/100E`）。
+- [X] Append（create/event_update）策略单点与能力外显扩展：见 `docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`。
 
 ## 1. 背景
 
@@ -40,6 +41,7 @@ OrgUnit 写入不是“改字段”，而是“对历史事实做受限变换”
 - `Append`（追加事实）
   - 对应动作：`create`、`event_update`
   - 对应事件：`CREATE/MOVE/RENAME/DISABLE/ENABLE/SET_BUSINESS_UNIT`
+- 本计划收口说明：Append 的策略单点与能力外显扩展在 `DEV-PLAN-083A`；本文仍保留“原子变换”框架作为全局语义背景，但不再在本文冻结/推进 Append 的实现细节。
 - `Rewrite`（改写解释）
   - 对应动作：`correct_event`、`correct_status`
   - 对应事件：`CORRECT_EVENT/CORRECT_STATUS`
@@ -56,8 +58,8 @@ OrgUnit 写入不是“改字段”，而是“对历史事实做受限变换”
 
 ## 3. 统一词表与命名冻结
 
-- `action_kind`：`create` / `event_update` / `correct_event` / `correct_status` / `rescind_event` / `rescind_org`
-- `emitted_event_type`：`CREATE/MOVE/RENAME/DISABLE/ENABLE/SET_BUSINESS_UNIT/CORRECT_EVENT/CORRECT_STATUS/RESCIND_EVENT/RESCIND_ORG`
+- `action_kind`（本计划范围）：`correct_event` / `correct_status` / `rescind_event` / `rescind_org`
+- `emitted_event_type`（本计划范围）：`CORRECT_EVENT/CORRECT_STATUS/RESCIND_EVENT/RESCIND_ORG`
 - `target_effective_event_type`：`CREATE/MOVE/RENAME/DISABLE/ENABLE/SET_BUSINESS_UNIT`（仅 `correct_*` / `rescind_*` 使用）
 
 命名冻结规则：
@@ -82,8 +84,6 @@ OrgUnit 写入不是“改字段”，而是“对历史事实做受限变换”
 
 ## 4.2 合法组合约束（无效组合 fail-closed）
 
-- `create -> emitted_event_type=CREATE`
-- `event_update -> emitted_event_type in {MOVE,RENAME,DISABLE,ENABLE,SET_BUSINESS_UNIT}`
 - `correct_event -> emitted_event_type=CORRECT_EVENT + target_effective_event_type required`
 - `correct_status -> emitted_event_type=CORRECT_STATUS + target_effective_event_type required`
 - `rescind_event -> emitted_event_type=RESCIND_EVENT + target_effective_event_type required`
@@ -345,15 +345,15 @@ Core 字段允许矩阵（冻结；承接并收敛 `DEV-PLAN-082`，以本文为
 
 > 说明：`DEV-PLAN-100E1` 已作为 `DEV-PLAN-100E` 的前置改造计划拆出，用于落实“策略单点 + capabilities 对齐 + corrections 支持 `patch.ext`”；本文继续作为能力模型与 capabilities 契约 SSOT。
 
-3. [ ] 新增 `orgunit_mutation_policy.go`，实现 `ResolvePolicy/AllowedFields/ValidatePatch`。
-4. [ ] 重构 `buildCorrectionPatch(...)`，仅通过策略模块判定字段与 payload 映射。
-5. [ ] 将 `CorrectStatus(...)`、`RescindRecord(...)`、`RescindOrg(...)` 的可用性判断收敛到同一策略模块。
-6. [ ] 保持行为等价，不在该步骤引入新业务语义。
+3. [X] 新增 `orgunit_mutation_policy.go`，实现 `ResolvePolicy/AllowedFields/ValidatePatch`（落地：`DEV-PLAN-100E1`）。
+4. [X] 更正写入链路按 policy 做 fail-closed 校验，并支持 `patch.ext`（落地：`DEV-PLAN-100E1`）。
+5. [X] capabilities API 复用 policy，输出稳定排序与 deny reasons 闭集（落地：`DEV-PLAN-100E1`）。
+6. [X] 保持行为等价或更严格 fail-closed；不引入新业务语义（落地：`DEV-PLAN-100E1/100E`）。
 
 ## 6.3 API 与 UI 联动
-7. [ ] 新增 mutation capabilities API（含 `deny_reasons`）。
-8. [ ] 详情页按 capabilities 执行字段禁用/隐藏与动作可用性控制。
-9. [ ] 错误提示升级为“不可用原因可解释”，减少提交后失败。
+7. [X] 新增 mutation capabilities API（含 `deny_reasons`）（落地：`internal/server/orgunit_mutation_capabilities_api.go`）。
+8. [X] 详情页按 capabilities 执行字段禁用/隐藏与动作可用性控制（落地：`DEV-PLAN-100E`）。
+9. [X] 错误提示升级为“不可用原因可解释”，减少提交后失败（落地：`DEV-PLAN-100E`）。
 
 ## 6.4 Kernel 对齐与防回归
 10. [ ] 复核 `submit_org_event_correction/submit_org_status_correction/submit_org_event_rescind/submit_org_rescind` 与服务层规则对齐。
@@ -446,6 +446,7 @@ Core 字段允许矩阵（冻结；承接并收敛 `DEV-PLAN-082`，以本文为
 
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
 - `docs/dev-plans/017-routing-strategy.md`
+- `docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
 - `docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`

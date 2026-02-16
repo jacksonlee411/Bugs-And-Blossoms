@@ -342,6 +342,106 @@ func TestHandleOrgUnitsBusinessUnitAPI_Success(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsBusinessUnitAPI_WriteServicePath(t *testing.T) {
+	var captured orgunitservices.SetBusinessUnitRequest
+	svc := orgUnitWriteServiceStub{
+		setBusinessUnitFn: func(_ context.Context, tenantID string, req orgunitservices.SetBusinessUnitRequest) error {
+			if tenantID != "t1" {
+				t.Fatalf("tenant=%s", tenantID)
+			}
+			captured = req
+			return nil
+		},
+	}
+
+	body := bytes.NewBufferString(`{"org_code":"A1","effective_date":"2026-01-01","is_business_unit":true,"ext":{"org_type":"DEPARTMENT"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsBusinessUnitAPI(rec, req, svc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if captured.OrgCode != "A1" || captured.EffectiveDate != "2026-01-01" || !captured.IsBusinessUnit {
+		t.Fatalf("captured=%+v", captured)
+	}
+	if captured.Ext["org_type"] != "DEPARTMENT" {
+		t.Fatalf("ext=%v", captured.Ext)
+	}
+}
+
+func TestHandleOrgUnitsBusinessUnitAPI_WriteServiceRejectsExtLabelsSnapshot(t *testing.T) {
+	svc := orgUnitWriteServiceStub{}
+	body := bytes.NewBufferString(`{"org_code":"A1","effective_date":"2026-01-01","is_business_unit":true,"ext_labels_snapshot":{"org_type":"Department"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsBusinessUnitAPI(rec, req, svc)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsBusinessUnitAPI_WriteServiceRejectsUnknownField(t *testing.T) {
+	svc := orgUnitWriteServiceStub{}
+	body := bytes.NewBufferString(`{"org_code":"A1","effective_date":"2026-01-01","is_business_unit":true,"request_code":"legacy","unknown":1}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsBusinessUnitAPI(rec, req, svc)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleOrgUnitsBusinessUnitAPI_WriteServiceValidationAndErrorMapping(t *testing.T) {
+	t.Run("effective date required", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", bytes.NewBufferString(`{"org_code":"A1","effective_date":"   ","is_business_unit":true}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsBusinessUnitAPI(rec, req, orgUnitWriteServiceStub{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("org code required", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", bytes.NewBufferString(`{"org_unit_id":"10000001","effective_date":"2026-01-01","is_business_unit":true}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsBusinessUnitAPI(rec, req, orgUnitWriteServiceStub{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("service error mapped", func(t *testing.T) {
+		svc := orgUnitWriteServiceStub{
+			setBusinessUnitFn: func(context.Context, string, orgunitservices.SetBusinessUnitRequest) error {
+				return errors.New("ORG_INVALID_ARGUMENT")
+			},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", bytes.NewBufferString(`{"org_code":"A1","effective_date":"2026-01-01","is_business_unit":true}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsBusinessUnitAPI(rec, req, svc)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestHandleOrgUnitsBusinessUnitAPI_DependencyMissing(t *testing.T) {
+	body := bytes.NewBufferString(`{"org_code":"A1","effective_date":"2026-01-01","is_business_unit":true}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/set-business-unit", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsBusinessUnitAPI(rec, req, struct{}{})
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandleOrgUnitsAPI_ListRoots(t *testing.T) {
 	store := &resolveOrgCodeStore{
 		listNodes: []OrgUnitNode{{ID: "10000001", OrgCode: "A001", Name: "Root", IsBusinessUnit: true}},
@@ -1559,6 +1659,22 @@ func TestHandleOrgUnitsAPI_BadJSON(t *testing.T) {
 	}
 }
 
+func TestHandleOrgUnitsAPI_CreateRejectsExtLabelsSnapshot(t *testing.T) {
+	svc := orgUnitWriteServiceStub{
+		createFn: func(context.Context, string, orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+			t.Fatalf("create should not be called when ext_labels_snapshot is provided")
+			return orgunittypes.OrgUnitResult{}, nil
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units", strings.NewReader(`{"org_code":"A001","name":"Root","effective_date":"2026-01-01","ext_labels_snapshot":{"org_type":"Department"}}`))
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleOrgUnitsAPI(rec, req, newOrgUnitMemoryStore(), svc)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandleOrgUnitsAPI_CreateError(t *testing.T) {
 	svc := orgUnitWriteServiceStub{
 		createFn: func(context.Context, string, orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
@@ -1582,10 +1698,13 @@ func TestHandleOrgUnitsRenameAPI_DefaultEffectiveDate(t *testing.T) {
 			if req.EffectiveDate == "" {
 				t.Fatalf("expected default effective_date")
 			}
+			if req.Ext["org_type"] != "DEPARTMENT" {
+				t.Fatalf("ext=%v", req.Ext)
+			}
 			return nil
 		},
 	}
-	body := strings.NewReader(`{"org_code":"A001","new_name":"New"}`)
+	body := strings.NewReader(`{"org_code":"A001","new_name":"New","ext":{"org_type":"DEPARTMENT"}}`)
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/rename", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -1606,10 +1725,13 @@ func TestHandleOrgUnitsMoveAPI_Success(t *testing.T) {
 			if req.NewParentOrgCode == "" {
 				t.Fatalf("expected parent org code")
 			}
+			if req.Ext["org_type"] != "DEPARTMENT" {
+				t.Fatalf("ext=%v", req.Ext)
+			}
 			return nil
 		},
 	}
-	body := strings.NewReader(`{"org_code":"A001","new_parent_org_code":"A0001","effective_date":"2026-01-01"}`)
+	body := strings.NewReader(`{"org_code":"A001","new_parent_org_code":"A0001","effective_date":"2026-01-01","ext":{"org_type":"DEPARTMENT"}}`)
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/move", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -1640,10 +1762,13 @@ func TestHandleOrgUnitsDisableAPI_Success(t *testing.T) {
 			if req.OrgCode == "" {
 				t.Fatalf("expected org code")
 			}
+			if req.Ext["org_type"] != "DEPARTMENT" {
+				t.Fatalf("ext=%v", req.Ext)
+			}
 			return nil
 		},
 	}
-	body := strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01"}`)
+	body := strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","ext":{"org_type":"DEPARTMENT"}}`)
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/disable", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -1674,10 +1799,13 @@ func TestHandleOrgUnitsEnableAPI_Success(t *testing.T) {
 			if req.OrgCode == "" {
 				t.Fatalf("expected org code")
 			}
+			if req.Ext["org_type"] != "DEPARTMENT" {
+				t.Fatalf("ext=%v", req.Ext)
+			}
 			return nil
 		},
 	}
-	body := strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01"}`)
+	body := strings.NewReader(`{"org_code":"A001","effective_date":"2026-01-01","ext":{"org_type":"DEPARTMENT"}}`)
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/enable", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -1697,6 +1825,52 @@ func TestHandleOrgUnitsEnableAPI_BadJSON(t *testing.T) {
 	handleOrgUnitsEnableAPI(rec, req, orgUnitWriteServiceStub{})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rec.Code)
+	}
+}
+
+func TestHandleOrgUnitsAppendActionAPIs_RejectExtLabelsSnapshot(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		body string
+		call func(http.ResponseWriter, *http.Request, orgunitservices.OrgUnitWriteService)
+	}{
+		{
+			name: "rename",
+			url:  "/org/api/org-units/rename",
+			body: `{"org_code":"A001","new_name":"New","effective_date":"2026-01-01","ext_labels_snapshot":{"org_type":"Department"}}`,
+			call: handleOrgUnitsRenameAPI,
+		},
+		{
+			name: "move",
+			url:  "/org/api/org-units/move",
+			body: `{"org_code":"A001","new_parent_org_code":"A0001","effective_date":"2026-01-01","ext_labels_snapshot":{"org_type":"Department"}}`,
+			call: handleOrgUnitsMoveAPI,
+		},
+		{
+			name: "disable",
+			url:  "/org/api/org-units/disable",
+			body: `{"org_code":"A001","effective_date":"2026-01-01","ext_labels_snapshot":{"org_type":"Department"}}`,
+			call: handleOrgUnitsDisableAPI,
+		},
+		{
+			name: "enable",
+			url:  "/org/api/org-units/enable",
+			body: `{"org_code":"A001","effective_date":"2026-01-01","ext_labels_snapshot":{"org_type":"Department"}}`,
+			call: handleOrgUnitsEnableAPI,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.url, strings.NewReader(tt.body))
+			req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+			rec := httptest.NewRecorder()
+			tt.call(rec, req, orgUnitWriteServiceStub{})
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+		})
 	}
 }
 
@@ -2234,15 +2408,16 @@ func TestWriteOrgUnitServiceError_BlankCodeFallsBackToDefault(t *testing.T) {
 }
 
 type orgUnitWriteServiceStub struct {
-	createFn        func(context.Context, string, orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
-	renameFn        func(context.Context, string, orgunitservices.RenameOrgUnitRequest) error
-	moveFn          func(context.Context, string, orgunitservices.MoveOrgUnitRequest) error
-	disableFn       func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error
-	enableFn        func(context.Context, string, orgunitservices.EnableOrgUnitRequest) error
-	correctFn       func(context.Context, string, orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
-	correctStatusFn func(context.Context, string, orgunitservices.CorrectStatusOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
-	rescindRecordFn func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
-	rescindOrgFn    func(context.Context, string, orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
+	createFn          func(context.Context, string, orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
+	renameFn          func(context.Context, string, orgunitservices.RenameOrgUnitRequest) error
+	moveFn            func(context.Context, string, orgunitservices.MoveOrgUnitRequest) error
+	disableFn         func(context.Context, string, orgunitservices.DisableOrgUnitRequest) error
+	enableFn          func(context.Context, string, orgunitservices.EnableOrgUnitRequest) error
+	setBusinessUnitFn func(context.Context, string, orgunitservices.SetBusinessUnitRequest) error
+	correctFn         func(context.Context, string, orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
+	correctStatusFn   func(context.Context, string, orgunitservices.CorrectStatusOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
+	rescindRecordFn   func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
+	rescindOrgFn      func(context.Context, string, orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 }
 
 func (s orgUnitWriteServiceStub) Create(ctx context.Context, tenantID string, req orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
@@ -2280,8 +2455,11 @@ func (s orgUnitWriteServiceStub) Enable(ctx context.Context, tenantID string, re
 	return s.enableFn(ctx, tenantID, req)
 }
 
-func (s orgUnitWriteServiceStub) SetBusinessUnit(context.Context, string, orgunitservices.SetBusinessUnitRequest) error {
-	return nil
+func (s orgUnitWriteServiceStub) SetBusinessUnit(ctx context.Context, tenantID string, req orgunitservices.SetBusinessUnitRequest) error {
+	if s.setBusinessUnitFn == nil {
+		return nil
+	}
+	return s.setBusinessUnitFn(ctx, tenantID, req)
 }
 
 func (s orgUnitWriteServiceStub) Correct(ctx context.Context, tenantID string, req orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {

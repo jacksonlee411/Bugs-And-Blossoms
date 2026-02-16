@@ -24,6 +24,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { GridColDef, GridPaginationModel, GridSortModel } from '@mui/x-data-grid'
 import {
   createOrgUnit,
+  getOrgUnitAppendCapabilities,
   getOrgUnitFieldOptions,
   listOrgUnits,
   listOrgUnitsPage,
@@ -51,6 +52,7 @@ import {
   patchGridQueryState,
   toGridSortModel
 } from '../../utils/gridQueryState'
+import { buildAppendPayload } from './orgUnitAppendIntent'
 import { clearExtQueryParams, parseExtSortField, parseSortOrder } from './orgUnitListExtQuery'
 
 type OrgStatus = 'active' | 'inactive'
@@ -111,6 +113,11 @@ function parseBool(raw: string | null): boolean {
 function parseOrgStatus(raw: string): OrgStatus {
   const value = raw.trim().toLowerCase()
   return value === 'disabled' || value === 'inactive' ? 'inactive' : 'active'
+}
+
+function trimToUndefined(value: string): string | undefined {
+  const normalized = value.trim()
+  return normalized.length > 0 ? normalized : undefined
 }
 
 function toOrgUnitRow(item: OrgUnitAPIItem): OrgUnitRow {
@@ -365,6 +372,8 @@ export function OrgUnitsPage() {
 
   const canWrite = hasPermission('orgunit.admin')
   const canUseExt = canWrite
+  const createCapabilityOrgCode = createForm.orgCode.trim()
+  const createCapabilityEffectiveDate = createForm.effectiveDate.trim() || asOf
 
   const formatApiErrorMessage = useCallback(
     (error: unknown): string => {
@@ -808,17 +817,96 @@ export function OrgUnitsPage() {
     await queryClient.invalidateQueries({ queryKey: ['org-units'] })
   }, [queryClient])
 
+  const createCapabilitiesQuery = useQuery({
+    enabled: canWrite && createOpen && createCapabilityOrgCode.length > 0 && createCapabilityEffectiveDate.length > 0,
+    queryKey: ['org-units', 'append-capabilities', 'create', createCapabilityOrgCode, createCapabilityEffectiveDate],
+    queryFn: () =>
+      getOrgUnitAppendCapabilities({
+        orgCode: createCapabilityOrgCode,
+        effectiveDate: createCapabilityEffectiveDate
+      }),
+    staleTime: 30_000
+  })
+
+  const createCapability = createCapabilitiesQuery.data?.capabilities.create
+  const createAllowedFieldSet = useMemo(() => new Set(createCapability?.allowed_fields ?? []), [createCapability?.allowed_fields])
+  const createDenyReasons = useMemo(() => createCapability?.deny_reasons ?? [], [createCapability?.deny_reasons])
+  const isCreateActionDisabled = useMemo(() => {
+    if (!canWrite) {
+      return true
+    }
+    if (createCapabilityOrgCode.length === 0 || createCapabilityEffectiveDate.length === 0) {
+      return true
+    }
+    if (createCapabilitiesQuery.isLoading || createCapabilitiesQuery.isError) {
+      return true
+    }
+    if (!createCapability?.enabled) {
+      return true
+    }
+    return false
+  }, [
+    canWrite,
+    createCapability?.enabled,
+    createCapabilityEffectiveDate.length,
+    createCapabilityOrgCode.length,
+    createCapabilitiesQuery.isError,
+    createCapabilitiesQuery.isLoading
+  ])
+
+  const isCreateFieldEditable = useCallback(
+    (fieldKey: string): boolean => {
+      if (!canWrite) {
+        return false
+      }
+      if (fieldKey === 'org_code' || fieldKey === 'effective_date') {
+        return true
+      }
+      if (createCapabilityOrgCode.length === 0 || createCapabilityEffectiveDate.length === 0) {
+        return false
+      }
+      if (createCapabilitiesQuery.isLoading || createCapabilitiesQuery.isError) {
+        return false
+      }
+      if (!createCapability?.enabled) {
+        return false
+      }
+      return createAllowedFieldSet.has(fieldKey)
+    },
+    [
+      canWrite,
+      createAllowedFieldSet,
+      createCapability?.enabled,
+      createCapabilityEffectiveDate.length,
+      createCapabilityOrgCode.length,
+      createCapabilitiesQuery.isError,
+      createCapabilitiesQuery.isLoading
+    ]
+  )
+
   const createMutation = useMutation({
     mutationFn: async () => {
-      const effectiveDate = createForm.effectiveDate.trim() || asOf
-      await createOrgUnit({
-        org_code: createForm.orgCode.trim(),
-        name: createForm.name.trim(),
-        effective_date: effectiveDate,
-        parent_org_code: createForm.parentOrgCode.trim() || undefined,
-        is_business_unit: createForm.isBusinessUnit,
-        manager_pernr: createForm.managerPernr.trim() || undefined
+      const capability = createCapability
+      if (!capability || !capability.enabled || createCapabilitiesQuery.isError) {
+        throw new Error('append capabilities unavailable')
+      }
+
+      const payload = buildAppendPayload({
+        capability,
+        values: {
+          org_code: createCapabilityOrgCode,
+          effective_date: createCapabilityEffectiveDate,
+          name: createForm.name.trim(),
+          parent_org_code: trimToUndefined(createForm.parentOrgCode),
+          is_business_unit: createForm.isBusinessUnit,
+          manager_pernr: trimToUndefined(createForm.managerPernr)
+        }
       })
+      if (!payload) {
+        throw new Error('append capability payload invalid')
+      }
+
+      await createOrgUnit(payload as Parameters<typeof createOrgUnit>[0])
     },
     onSuccess: async () => {
       await refreshAfterWrite()
@@ -1185,26 +1273,46 @@ export function OrgUnitsPage() {
           ) : null}
           <Stack spacing={2} sx={{ mt: 0.5 }}>
             <TextField
+              disabled={!isCreateFieldEditable('org_code')}
               label={t('org_column_code')}
               onChange={(event) => setCreateForm((previous) => ({ ...previous, orgCode: event.target.value }))}
               value={createForm.orgCode}
             />
             <TextField
+              disabled={!isCreateFieldEditable('name')}
+              helperText={
+                !isCreateFieldEditable('name') && createCapabilityOrgCode.length > 0
+                  ? t('org_append_field_not_allowed_helper')
+                  : undefined
+              }
               label={t('org_column_name')}
               onChange={(event) => setCreateForm((previous) => ({ ...previous, name: event.target.value }))}
               value={createForm.name}
             />
             <TextField
+              disabled={!isCreateFieldEditable('parent_org_code')}
+              helperText={
+                !isCreateFieldEditable('parent_org_code') && createCapabilityOrgCode.length > 0
+                  ? t('org_append_field_not_allowed_helper')
+                  : undefined
+              }
               label={t('org_column_parent')}
               onChange={(event) => setCreateForm((previous) => ({ ...previous, parentOrgCode: event.target.value }))}
               value={createForm.parentOrgCode}
             />
             <TextField
+              disabled={!isCreateFieldEditable('manager_pernr')}
+              helperText={
+                !isCreateFieldEditable('manager_pernr') && createCapabilityOrgCode.length > 0
+                  ? t('org_append_field_not_allowed_helper')
+                  : undefined
+              }
               label={t('org_column_manager')}
               onChange={(event) => setCreateForm((previous) => ({ ...previous, managerPernr: event.target.value }))}
               value={createForm.managerPernr}
             />
             <TextField
+              disabled={!isCreateFieldEditable('effective_date')}
               InputLabelProps={{ shrink: true }}
               label={t('org_column_effective_date')}
               onChange={(event) => setCreateForm((previous) => ({ ...previous, effectiveDate: event.target.value }))}
@@ -1215,17 +1323,31 @@ export function OrgUnitsPage() {
               control={
                 <Switch
                   checked={createForm.isBusinessUnit}
+                  disabled={!isCreateFieldEditable('is_business_unit')}
                   onChange={(event) => setCreateForm((previous) => ({ ...previous, isBusinessUnit: event.target.checked }))}
                 />
               }
               label={t('org_column_is_business_unit')}
             />
+            {createCapabilityOrgCode.length === 0 ? (
+              <Alert severity='info'>{t('org_append_create_org_code_required')}</Alert>
+            ) : createCapabilitiesQuery.isLoading ? (
+              <Alert severity='info'>{t('text_loading')}</Alert>
+            ) : createCapabilitiesQuery.isError ? (
+              <Alert severity='error'>
+                {t('org_append_capabilities_load_failed')}：{getErrorMessage(createCapabilitiesQuery.error)}
+              </Alert>
+            ) : createCapability && !createCapability.enabled && createDenyReasons.length > 0 ? (
+              <Alert severity='warning'>
+                {t('org_append_denied')}：{createDenyReasons.join(', ')}
+              </Alert>
+            ) : null}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateOpen(false)}>{t('common_cancel')}</Button>
           <Button
-            disabled={createMutation.isPending}
+            disabled={createMutation.isPending || isCreateActionDisabled}
             onClick={() => createMutation.mutate()}
             variant='contained'
           >

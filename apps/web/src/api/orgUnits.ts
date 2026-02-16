@@ -236,6 +236,7 @@ export async function createOrgUnit(request: {
   parent_org_code?: string
   is_business_unit?: boolean
   manager_pernr?: string
+  ext?: Record<string, unknown>
 }): Promise<OrgUnitWriteResult> {
   return httpClient.post<OrgUnitWriteResult>('/org/api/org-units', request)
 }
@@ -244,6 +245,7 @@ export async function renameOrgUnit(request: {
   org_code: string
   new_name: string
   effective_date?: string
+  ext?: Record<string, unknown>
 }): Promise<{ org_code: string; effective_date: string }> {
   return httpClient.post<{ org_code: string; effective_date: string }>('/org/api/org-units/rename', request)
 }
@@ -252,6 +254,7 @@ export async function moveOrgUnit(request: {
   org_code: string
   new_parent_org_code: string
   effective_date?: string
+  ext?: Record<string, unknown>
 }): Promise<{ org_code: string; effective_date: string }> {
   return httpClient.post<{ org_code: string; effective_date: string }>('/org/api/org-units/move', request)
 }
@@ -259,6 +262,7 @@ export async function moveOrgUnit(request: {
 export async function disableOrgUnit(request: {
   org_code: string
   effective_date?: string
+  ext?: Record<string, unknown>
 }): Promise<{ org_code: string; effective_date: string }> {
   return httpClient.post<{ org_code: string; effective_date: string }>('/org/api/org-units/disable', request)
 }
@@ -266,6 +270,7 @@ export async function disableOrgUnit(request: {
 export async function enableOrgUnit(request: {
   org_code: string
   effective_date?: string
+  ext?: Record<string, unknown>
 }): Promise<{ org_code: string; effective_date: string }> {
   return httpClient.post<{ org_code: string; effective_date: string }>('/org/api/org-units/enable', request)
 }
@@ -275,6 +280,7 @@ export async function setOrgUnitBusinessUnit(request: {
   effective_date: string
   is_business_unit: boolean
   request_code: string
+  ext?: Record<string, unknown>
 }): Promise<{ org_code: string; effective_date: string; is_business_unit: boolean }> {
   return httpClient.post<{ org_code: string; effective_date: string; is_business_unit: boolean }>(
     '/org/api/org-units/set-business-unit',
@@ -363,6 +369,22 @@ export interface OrgUnitMutationCapabilitiesResponse {
   capabilities: OrgUnitMutationCapabilitiesEnvelope
 }
 
+export interface OrgUnitAppendCapability {
+  enabled: boolean
+  allowed_fields: string[]
+  field_payload_keys: Record<string, string>
+  deny_reasons: string[]
+}
+
+export interface OrgUnitAppendCapabilitiesResponse {
+  org_code: string
+  effective_date: string
+  capabilities: {
+    create: OrgUnitAppendCapability
+    event_update: Record<string, OrgUnitAppendCapability>
+  }
+}
+
 export async function getOrgUnitMutationCapabilities(options: {
   orgCode: string
   effectiveDate: string
@@ -372,6 +394,17 @@ export async function getOrgUnitMutationCapabilities(options: {
     effective_date: options.effectiveDate
   })
   return httpClient.get<OrgUnitMutationCapabilitiesResponse>(`/org/api/org-units/mutation-capabilities?${query.toString()}`)
+}
+
+export async function getOrgUnitAppendCapabilities(options: {
+  orgCode: string
+  effectiveDate: string
+}): Promise<OrgUnitAppendCapabilitiesResponse> {
+  const query = new URLSearchParams({
+    org_code: options.orgCode,
+    effective_date: options.effectiveDate
+  })
+  return httpClient.get<OrgUnitAppendCapabilitiesResponse>(`/org/api/org-units/append-capabilities?${query.toString()}`)
 }
 
 export interface OrgUnitFieldOption {

@@ -596,6 +596,87 @@ SELECT EXISTS (
 	return dedupDenyReasons(deny), nil
 }
 
+func (s *orgUnitPGStore) IsOrgTreeInitialized(ctx context.Context, tenantID string) (bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return false, err
+	}
+
+	var rootOrgID *int
+	err = tx.QueryRow(ctx, `
+SELECT root_org_id
+FROM orgunit.org_trees
+WHERE tenant_uuid = $1::uuid
+LIMIT 1
+`, tenantID).Scan(&rootOrgID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return false, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return false, err
+	}
+	return rootOrgID != nil, nil
+}
+
+func (s *orgUnitPGStore) ResolveAppendFacts(ctx context.Context, tenantID string, orgID int, effectiveDate string) (orgUnitAppendFacts, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return orgUnitAppendFacts{}, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return orgUnitAppendFacts{}, err
+	}
+
+	facts := orgUnitAppendFacts{}
+	var rootOrgID *int
+	err = tx.QueryRow(ctx, `
+SELECT root_org_id
+FROM orgunit.org_trees
+WHERE tenant_uuid = $1::uuid
+LIMIT 1
+`, tenantID).Scan(&rootOrgID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return orgUnitAppendFacts{}, err
+	}
+	facts.TreeInitialized = rootOrgID != nil
+	if rootOrgID != nil && *rootOrgID == orgID {
+		facts.IsRoot = true
+	}
+
+	var status string
+	err = tx.QueryRow(ctx, `
+SELECT status
+FROM orgunit.org_unit_versions
+WHERE tenant_uuid = $1::uuid
+  AND org_id = $2::int
+  AND validity @> $3::date
+ORDER BY lower(validity) DESC
+LIMIT 1
+`, tenantID, orgID, effectiveDate).Scan(&status)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return orgUnitAppendFacts{}, err
+		}
+	} else {
+		facts.TargetExistsAsOf = true
+		facts.TargetStatusAsOf = strings.TrimSpace(status)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return orgUnitAppendFacts{}, err
+	}
+
+	return facts, nil
+}
+
 func (s *orgUnitPGStore) ListOrgUnitsPage(ctx context.Context, tenantID string, req orgUnitListPageRequest) ([]orgUnitListItem, int, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
