@@ -21,6 +21,7 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  MenuItem,
   Paper,
   Snackbar,
   Stack,
@@ -58,6 +59,7 @@ import {
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { PageHeader } from '../../components/PageHeader'
 import { isMessageKey, type MessageKey } from '../../i18n/messages'
+import { normalizePlainExtDraft } from './orgUnitPlainExtValidation'
 import { buildAppendPayload } from './orgUnitAppendIntent'
 import { resolveOrgUnitEffectiveDate } from './orgUnitVersionSelection'
 import { buildCorrectPatch } from './orgUnitCorrectionIntent'
@@ -654,6 +656,67 @@ export function OrgUnitDetailsPage() {
   }, [selectedAuditEvent])
 
   const actionExtFields = useMemo(() => detailQuery.data?.ext_fields ?? [], [detailQuery.data?.ext_fields])
+  const actionPlainExtErrors = useMemo(() => {
+    if (!actionState) {
+      return {}
+    }
+    const isCorrectAction = actionState.type === 'correct'
+    if (!isCorrectAction && !appendActionEventType) {
+      return {}
+    }
+    if (isCorrectAction) {
+      if (mutationCapabilitiesQuery.isLoading || mutationCapabilitiesQuery.isError || !correctEventCapability?.enabled) {
+        return {}
+      }
+      const correctedEffectiveDateInput = actionForm.correctedEffectiveDate.trim()
+      const inEffectiveDateCorrectionMode =
+        correctedEffectiveDateInput.length > 0 && correctedEffectiveDateInput !== actionForm.effectiveDate.trim()
+      if (inEffectiveDateCorrectionMode) {
+        return {}
+      }
+    } else if (isAppendActionDisabled) {
+      return {}
+    }
+    const mode = actionState.type === 'correct' ? 'null_empty' : 'null_empty'
+    const errors: Record<string, string> = {}
+    const correctAllowedFieldSet = new Set(correctEventCapability?.allowed_fields ?? [])
+    actionExtFields.forEach((field) => {
+      if (field.data_source_type !== 'PLAIN') {
+        return
+      }
+      if (field.value_type === 'bool') {
+        return
+      }
+      const fieldKey = field.field_key?.trim() ?? ''
+      if (fieldKey.length === 0) {
+        return
+      }
+      const editable = isCorrectAction ? correctAllowedFieldSet.has(fieldKey) : appendAllowedFieldSet.has(fieldKey)
+      if (!editable) {
+        return
+      }
+      const draft = actionForm.extDisplayValues[fieldKey] ?? ''
+      const result = normalizePlainExtDraft({ valueType: field.value_type, draft, mode })
+      if (result.errorCode) {
+        errors[fieldKey] = result.errorCode
+      }
+    })
+    return errors
+  }, [
+    actionExtFields,
+    actionForm.correctedEffectiveDate,
+    actionForm.effectiveDate,
+    actionForm.extDisplayValues,
+    actionState,
+    appendActionEventType,
+    appendAllowedFieldSet,
+    correctEventCapability?.allowed_fields,
+    correctEventCapability?.enabled,
+    isAppendActionDisabled,
+    mutationCapabilitiesQuery.isError,
+    mutationCapabilitiesQuery.isLoading
+  ])
+  const hasActionPlainExtErrors = useMemo(() => Object.keys(actionPlainExtErrors).length > 0, [actionPlainExtErrors])
 
   const correctPatchPreview = useMemo(() => {
     if (actionState?.type !== 'correct') {
@@ -663,7 +726,38 @@ export function OrgUnitDetailsPage() {
       return null
     }
 
+    const correctedEffectiveDateInput = actionForm.correctedEffectiveDate.trim()
+    const inEffectiveDateCorrectionMode =
+      correctedEffectiveDateInput.length > 0 && correctedEffectiveDateInput !== actionForm.effectiveDate.trim()
+    const correctAllowedFieldSet = new Set(correctEventCapability.allowed_fields ?? [])
     const effectiveDateValue = actionForm.effectiveDate.trim() || effectiveDate
+    const normalizedPlainExtValues: Record<string, unknown> = {}
+    if (!inEffectiveDateCorrectionMode) {
+      for (const field of actionExtFields) {
+        if (field.data_source_type !== 'PLAIN') {
+          continue
+        }
+        if (field.value_type === 'bool') {
+          continue
+        }
+        const fieldKey = field.field_key?.trim() ?? ''
+        if (fieldKey.length === 0) {
+          continue
+        }
+        if (!correctAllowedFieldSet.has(fieldKey)) {
+          continue
+        }
+        const draft = actionForm.extDisplayValues[fieldKey] ?? ''
+        const result = normalizePlainExtDraft({ valueType: field.value_type, draft, mode: 'null_empty' })
+        if (result.errorCode) {
+          return null
+        }
+        if (typeof result.normalized !== 'undefined') {
+          normalizedPlainExtValues[fieldKey] = result.normalized
+        }
+      }
+    }
+
     const original = {
       name: detailQuery.data?.org_unit.name?.trim() ?? '',
       parent_org_code: detailQuery.data?.org_unit.parent_org_code?.trim() ?? '',
@@ -678,7 +772,7 @@ export function OrgUnitDetailsPage() {
       manager_pernr: actionForm.managerPernr.trim(),
       is_business_unit: actionForm.isBusinessUnit,
       effective_date: effectiveDateValue,
-      ext: actionForm.extValues
+      ext: { ...actionForm.extValues, ...normalizedPlainExtValues }
     }
 
     return buildCorrectPatch({
@@ -697,10 +791,12 @@ export function OrgUnitDetailsPage() {
     actionForm.name,
     actionForm.originalExtValues,
     actionForm.parentOrgCode,
+    actionForm.extDisplayValues,
     actionState?.type,
     correctEventCapability,
     detailQuery.data,
     effectiveDate,
+    actionExtFields,
     mutationCapabilitiesQuery.isError
   ])
 
@@ -748,7 +844,12 @@ export function OrgUnitDetailsPage() {
         originalExtValues[key] = normalizedValue
 
         const displayValue = field.display_value?.trim()
-        extDisplayValues[key] = displayValue && displayValue.length > 0 ? displayValue : toDisplayText(field.value)
+        if (field.data_source_type === 'PLAIN') {
+          extDisplayValues[key] =
+            normalizedValue === null || normalizedValue === undefined ? '' : String(normalizedValue)
+        } else {
+          extDisplayValues[key] = displayValue && displayValue.length > 0 ? displayValue : toDisplayText(field.value)
+        }
       })
 
       form.extValues = extValues
@@ -778,8 +879,66 @@ export function OrgUnitDetailsPage() {
       const appendCapability = appendEventType
         ? appendCapabilitiesQuery.data?.capabilities.event_update?.[appendEventType]
         : null
+      const normalizedPlainExtValues: Record<string, unknown> = {}
+      if (type === 'correct') {
+        if (!mutationCapabilitiesQuery.isLoading && !mutationCapabilitiesQuery.isError && correctEventCapability?.enabled) {
+          const correctedEffectiveDateInput = actionForm.correctedEffectiveDate.trim()
+          const inEffectiveDateCorrectionMode =
+            correctedEffectiveDateInput.length > 0 && correctedEffectiveDateInput !== actionForm.effectiveDate.trim()
+          if (!inEffectiveDateCorrectionMode) {
+            const correctAllowedFieldSet = new Set(correctEventCapability.allowed_fields ?? [])
+            for (const field of actionExtFields) {
+              if (field.data_source_type !== 'PLAIN' || field.value_type === 'bool') {
+                continue
+              }
+              const fieldKey = field.field_key?.trim() ?? ''
+              if (fieldKey.length === 0) {
+                continue
+              }
+              if (!correctAllowedFieldSet.has(fieldKey)) {
+                continue
+              }
+              const draft = actionForm.extDisplayValues[fieldKey] ?? ''
+              const result = normalizePlainExtDraft({ valueType: field.value_type, draft, mode: 'null_empty' })
+              if (result.errorCode) {
+                throw new Error(t(result.errorCode as MessageKey))
+              }
+              if (typeof result.normalized !== 'undefined') {
+                normalizedPlainExtValues[fieldKey] = result.normalized
+              }
+            }
+          }
+        }
+      } else if (appendEventType !== null) {
+        if (!isAppendActionDisabled) {
+          for (const field of actionExtFields) {
+            if (field.data_source_type !== 'PLAIN' || field.value_type === 'bool') {
+              continue
+            }
+            const fieldKey = field.field_key?.trim() ?? ''
+            if (fieldKey.length === 0) {
+              continue
+            }
+            if (!appendAllowedFieldSet.has(fieldKey)) {
+              continue
+            }
+            const draft = actionForm.extDisplayValues[fieldKey] ?? ''
+            const result = normalizePlainExtDraft({ valueType: field.value_type, draft, mode: 'null_empty' })
+            if (result.errorCode) {
+              throw new Error(t(result.errorCode as MessageKey))
+            }
+            if (typeof result.normalized !== 'undefined') {
+              normalizedPlainExtValues[fieldKey] = result.normalized
+            }
+          }
+        }
+      }
+      const nextExtValues = {
+        ...actionForm.extValues,
+        ...normalizedPlainExtValues
+      }
       const appendExtValues: Record<string, unknown> = {}
-      for (const [fieldKey, nextValue] of Object.entries(actionForm.extValues)) {
+      for (const [fieldKey, nextValue] of Object.entries(nextExtValues)) {
         if (Object.is(actionForm.originalExtValues[fieldKey], nextValue)) {
           continue
         }
@@ -857,6 +1016,10 @@ export function OrgUnitDetailsPage() {
         case 'correct': {
           if (mutationCapabilitiesQuery.isError || !correctEventCapability) {
             throw new Error('mutation capabilities unavailable')
+          }
+          if (hasActionPlainExtErrors) {
+            const firstErrorKey = Object.values(actionPlainExtErrors)[0]
+            throw new Error(firstErrorKey ? t(firstErrorKey as MessageKey) : 'plain ext fields invalid')
           }
           const patch = correctPatchPreview
           if (!patch || Object.keys(patch).length === 0) {
@@ -1184,12 +1347,6 @@ export function OrgUnitDetailsPage() {
                     <>
                       <Divider sx={{ my: 1.2 }} />
                       <Typography variant='subtitle2'>{t('org_section_ext_fields')}</Typography>
-
-                      {detailQuery.data.ext_fields.some((field) => field.data_source_type === 'PLAIN') ? (
-                        <Alert severity='warning' sx={{ mt: 1 }}>
-                          {t('org_ext_field_plain_readonly_warning')}
-                        </Alert>
-                      ) : null}
 
                       {detailQuery.data.ext_fields.some((field) => {
                         const labelKey = field.label_i18n_key?.trim()
@@ -1662,7 +1819,7 @@ export function OrgUnitDetailsPage() {
                     const dataSourceType = field.data_source_type
                     const editableBase =
                       actionState.type === 'correct' ? isCorrectFieldEditable(fieldKey) : isAppendFieldEditable(fieldKey)
-                    const editable = editableBase && (dataSourceType === 'DICT' || dataSourceType === 'ENTITY')
+                    const editable = editableBase && (dataSourceType === 'PLAIN' || dataSourceType === 'DICT' || dataSourceType === 'ENTITY')
                     const notAllowedHelper =
                       actionState.type === 'correct'
                         ? !allowedFieldSet.has(fieldKey)
@@ -1674,15 +1831,134 @@ export function OrgUnitDetailsPage() {
 
                     const rawValue = actionForm.extValues[fieldKey]
                     const valueText = actionForm.extDisplayValues[fieldKey] ?? ''
+                    const validationErrorKey = actionPlainExtErrors[fieldKey]
+                    const validationErrorText = validationErrorKey ? t(validationErrorKey as MessageKey) : ''
 
                     if (dataSourceType === 'PLAIN') {
+                      const valueType = field.value_type
+                      if (valueType === 'bool') {
+                        const current =
+                          rawValue === true ? 'true' : rawValue === false ? 'false' : ''
+                        return (
+                          <TextField
+                            key={fieldKey}
+                            select
+                            disabled={!editable}
+                            helperText={notAllowedHelper ?? (validationErrorText.length > 0 ? validationErrorText : undefined)}
+                            error={!notAllowedHelper && validationErrorText.length > 0}
+                            label={label}
+                            value={current}
+                            onChange={(event) => {
+                              const nextValue = event.target.value
+                              const next =
+                                nextValue === 'true'
+                                  ? true
+                                  : nextValue === 'false'
+                                  ? false
+                                  : null
+                              setActionForm((previous) => ({
+                                ...previous,
+                                extValues: {
+                                  ...previous.extValues,
+                                  [fieldKey]: next
+                                },
+                                extDisplayValues: {
+                                  ...previous.extDisplayValues,
+                                  [fieldKey]: nextValue
+                                }
+                              }))
+                            }}
+                          >
+                            <MenuItem value=''>-</MenuItem>
+                            <MenuItem value='true'>{t('common_yes')}</MenuItem>
+                            <MenuItem value='false'>{t('common_no')}</MenuItem>
+                          </TextField>
+                        )
+                      }
+
+                      if (valueType === 'int') {
+                        const currentValue =
+                          rawValue === null || rawValue === undefined
+                            ? ''
+                            : typeof rawValue === 'number'
+                            ? rawValue
+                            : typeof rawValue === 'string'
+                            ? rawValue
+                            : String(rawValue)
+
+                        return (
+                          <TextField
+                            key={fieldKey}
+                            disabled={!editable}
+                            helperText={notAllowedHelper ?? (validationErrorText.length > 0 ? validationErrorText : undefined)}
+                            error={!notAllowedHelper && validationErrorText.length > 0}
+                            label={label}
+                            type='number'
+                            value={valueText.length > 0 ? valueText : String(currentValue)}
+                            onChange={(event) => {
+                              const nextValue = event.target.value
+                              setActionForm((previous) => ({
+                                ...previous,
+                                extDisplayValues: {
+                                  ...previous.extDisplayValues,
+                                  [fieldKey]: nextValue
+                                }
+                              }))
+                            }}
+                          />
+                        )
+                      }
+
+                      if (valueType === 'date') {
+                        return (
+                          <TextField
+                            key={fieldKey}
+                            disabled={!editable}
+                            helperText={notAllowedHelper ?? (validationErrorText.length > 0 ? validationErrorText : undefined)}
+                            error={!notAllowedHelper && validationErrorText.length > 0}
+                            InputLabelProps={{ shrink: true }}
+                            label={label}
+                            type='date'
+                            value={valueText}
+                            onChange={(event) => {
+                              const nextValue = event.target.value
+                              setActionForm((previous) => ({
+                                ...previous,
+                                extDisplayValues: {
+                                  ...previous.extDisplayValues,
+                                  [fieldKey]: nextValue
+                                }
+                              }))
+                            }}
+                          />
+                        )
+                      }
+
+                      const currentValue =
+                        rawValue === null || rawValue === undefined
+                          ? ''
+                          : typeof rawValue === 'string'
+                          ? rawValue
+                          : String(rawValue)
+
                       return (
                         <TextField
                           key={fieldKey}
-                          disabled
-                          helperText={notAllowedHelper ?? t('org_ext_field_plain_readonly_warning')}
+                          disabled={!editable}
+                          helperText={notAllowedHelper ?? (validationErrorText.length > 0 ? validationErrorText : undefined)}
+                          error={!notAllowedHelper && validationErrorText.length > 0}
                           label={label}
-                          value={valueText.length > 0 ? valueText : toDisplayText(rawValue)}
+                          value={valueText.length > 0 ? valueText : currentValue}
+                          onChange={(event) => {
+                            const nextValue = event.target.value
+                            setActionForm((previous) => ({
+                              ...previous,
+                              extDisplayValues: {
+                                ...previous.extDisplayValues,
+                                [fieldKey]: nextValue
+                              }
+                            }))
+                          }}
                         />
                       )
                     }
@@ -1776,8 +2052,10 @@ export function OrgUnitDetailsPage() {
           <Button
             disabled={
               actionMutation.isPending ||
-              (actionState?.type === 'correct' ? isCorrectActionDisabled || isCorrectPatchEmpty : false) ||
-              (actionState && appendEventTypeForAction(actionState.type) ? isAppendActionDisabled : false)
+              (actionState?.type === 'correct' ? isCorrectActionDisabled || isCorrectPatchEmpty || hasActionPlainExtErrors : false) ||
+              (actionState && appendEventTypeForAction(actionState.type)
+                ? isAppendActionDisabled || hasActionPlainExtErrors
+                : false)
             }
             onClick={() => actionMutation.mutate()}
             variant='contained'
