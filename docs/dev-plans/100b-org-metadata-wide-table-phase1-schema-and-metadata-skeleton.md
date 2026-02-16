@@ -1,6 +1,9 @@
 # DEV-PLAN-100B：Org 模块宽表元数据落地 Phase 1：Schema 与元数据骨架（最小数据库闭环）
 
-**状态**: 草拟中（2026-02-13 07:16 UTC）
+**状态**: 已完成（2026-02-13；2026-02-16 文档回填）
+
+**执行记录**：
+- `docs/dev-records/dev-plan-100b-execution-log.md`
 
 > 本文从 `DEV-PLAN-100` 的 Phase 1 拆分而来，作为 Phase 1 的 SSOT；`DEV-PLAN-100` 保持为整体路线图。
 
@@ -19,14 +22,14 @@
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
 - **核心目标**：
-  - [ ] 新增元数据表 `orgunit.tenant_field_configs`（按 `DEV-PLAN-100A`/`DEV-PLAN-100` 的契约），并完成 RLS、唯一约束、不可变映射约束等数据库级防线。  
-  - [ ] 新增审计/幂等事件表 `orgunit.tenant_field_config_events`（按 `DEV-PLAN-100A` §4.4 冻结口径），用于：
+  - [x] 新增元数据表 `orgunit.tenant_field_configs`（按 `DEV-PLAN-100A`/`DEV-PLAN-100` 的契约），并完成 RLS、唯一约束、不可变映射约束等数据库级防线。  
+  - [x] 新增审计/幂等事件表 `orgunit.tenant_field_config_events`（按 `DEV-PLAN-100A` §4.4 冻结口径），用于：
     - 通过 `(tenant_uuid, request_code)` 唯一约束实现幂等键占位与复用检测；
     - 提供 DB 内可追溯审计链（action/field_key/physical_col/生效日等）。  
-  - [ ] 在 `orgunit.org_unit_versions` 增加第一批扩展槽位列（仅覆盖 MVP 字段所需的类型与数量，遵循 `DEV-PLAN-100` D2 的命名规则）。  
-  - [ ] 在 `orgunit.org_unit_versions` 增加 `ext_labels_snapshot jsonb`（DICT label 快照；大小与键集合受控，口径见 `DEV-PLAN-100` D3/D4）。  
-  - [ ] 提供字段配置管理 Kernel 写入口（单写入口）：启用字段/停用字段（应用层必须调用函数，不允许直写表）。  
-  - [ ] 权限与隔离 fail-closed：新表强制 RLS；应用角色不允许通过直接 DML 绕过管理入口（对齐 `AGENTS.md` 与 `DEV-PLAN-021`）。
+  - [x] 在 `orgunit.org_unit_versions` 增加第一批扩展槽位列（仅覆盖 MVP 字段所需的类型与数量，遵循 `DEV-PLAN-100` D2 的命名规则）。  
+  - [x] 在 `orgunit.org_unit_versions` 增加 `ext_labels_snapshot jsonb`（DICT label 快照；大小与键集合受控，口径见 `DEV-PLAN-100` D3/D4）。  
+  - [x] 提供字段配置管理 Kernel 写入口（单写入口）：启用字段/停用字段（应用层必须调用函数，不允许直写表）。  
+  - [x] 权限与隔离 fail-closed：新表强制 RLS；应用角色不允许通过直接 DML 绕过管理入口（对齐 `AGENTS.md` 与 `DEV-PLAN-021`）。
 
 - **非目标（本阶段不做）**：
   - 不扩展 `orgunit.submit_org_event(...)` payload 校验与投射逻辑（Phase 2）。  
@@ -42,8 +45,8 @@
   - [X] 文档（`make check doc`）
   - [X] DB 迁移 / Schema（模块级闭环：`make orgunit plan && make orgunit lint && make orgunit migrate up`；SSOT：`DEV-PLAN-024`）
   - [X] sqlc（若 schema/queries/config 受影响：`make sqlc-generate`，并确保 `git status --short` 为空；SSOT：`DEV-PLAN-025`）
-  - [ ] 路由治理（本阶段不新增路由；如实现过程中引入管理 API，请按 `make check routing` 自检）
-  - [ ] Authz（本阶段不改策略；如新增权限点或策略需对齐 `make authz-pack && make authz-test && make authz-lint`）
+  - [x] 路由治理（本阶段不新增路由，未触发）
+  - [x] Authz（本阶段不改策略，未触发）
 
 - **SSOT 链接**：
   - 触发器矩阵与本地必跑：`AGENTS.md`
@@ -354,26 +357,26 @@ CREATE TABLE orgunit.tenant_field_config_events (
   - `DEV-PLAN-101`（字段配置 UI IA：字段定义列表/交互口径）
 
 - **实施步骤（Phase 1）**：
-  1. [ ] **Stopline：用户手工确认**  
+  1. [x] **Stopline：用户手工确认**  
      - 本阶段将新建表 `orgunit.tenant_field_config_events` 与 `orgunit.tenant_field_configs`，并对 `orgunit.org_unit_versions` 新增列；执行前必须获得用户手工确认（遵循 `AGENTS.md` 红线）。  
-  2. [ ] 新增 schema 迁移：创建 `tenant_field_config_events` 与 `tenant_field_configs`（含约束、索引、RLS）。
-  3. [ ] 新增 schema 迁移：为 `org_unit_versions` 增加第一批 `ext_*` 槽位列与 `ext_labels_snapshot jsonb`。
-  4. [ ] 按 MVP 热点预置少量索引（仅在 Phase 0 字段清单中明确需要 filter/sort 的列；默认 `(tenant_uuid, ext_col)`，必要时部分索引）。
-  5. [ ] 新增 triggers：不可变映射（拒绝修改映射字段）+ guard（禁止绕过 kernel 写入）。
-  6. [ ] 新增 Kernel 函数：启用字段/停用字段（写入口唯一），并补齐最小审计（时间戳/幂等键）。
-  7. [ ] 新增 kernel privileges 迁移：收口权限并对齐现有 `orgunit_kernel` 口径。
-  8. [ ] 本地闭环验证：
+  2. [x] 新增 schema 迁移：创建 `tenant_field_config_events` 与 `tenant_field_configs`（含约束、索引、RLS）。
+  3. [x] 新增 schema 迁移：为 `org_unit_versions` 增加第一批 `ext_*` 槽位列与 `ext_labels_snapshot jsonb`。
+  4. [x] 按 MVP 热点预置少量索引（仅在 Phase 0 字段清单中明确需要 filter/sort 的列；默认 `(tenant_uuid, ext_col)`，必要时部分索引）。
+  5. [x] 新增 triggers：不可变映射（拒绝修改映射字段）+ guard（禁止绕过 kernel 写入）。
+  6. [x] 新增 Kernel 函数：启用字段/停用字段（写入口唯一），并补齐最小审计（时间戳/幂等键）。
+  7. [x] 新增 kernel privileges 迁移：收口权限并对齐现有 `orgunit_kernel` 口径。
+  8. [x] 本地闭环验证：
      - `make orgunit plan && make orgunit lint && make orgunit migrate up`
      - 若触发 sqlc：`make sqlc-generate` 且 `git status --short` 为空
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
 - **出口条件（Phase 1）**：
-  - [ ] `make orgunit plan && make orgunit lint && make orgunit migrate up` 在本地通过。  
-  - [ ] 新表（`tenant_field_config_events/tenant_field_configs`）具备 RLS + FORCE RLS，且 policy 口径与 orgunit 既有表一致。  
-  - [ ] 事件表具备 `(tenant_uuid, request_code)` 唯一约束，且幂等复用检测口径不退化（冲突报 `ORG_REQUEST_ID_CONFLICT`）。  
-  - [ ] 不可变映射与“禁止绕过管理入口写入”具备数据库级防线（触发器/权限收口）。  
-  - [ ] 若触发 sqlc，`make sqlc-generate` 后 `git status --short` 为空。  
+  - [x] `make orgunit plan && make orgunit lint && make orgunit migrate up` 在本地通过。  
+  - [x] 新表（`tenant_field_config_events/tenant_field_configs`）具备 RLS + FORCE RLS，且 policy 口径与 orgunit 既有表一致。  
+  - [x] 事件表具备 `(tenant_uuid, request_code)` 唯一约束，且幂等复用检测口径不退化（冲突报 `ORG_REQUEST_ID_CONFLICT`）。  
+  - [x] 不可变映射与“禁止绕过管理入口写入”具备数据库级防线（触发器/权限收口）。  
+  - [x] 若触发 sqlc，`make sqlc-generate` 后 `git status --short` 为空。  
 
 ### 9.1 最小手工验证清单（建议写入 PR 证据块）
 

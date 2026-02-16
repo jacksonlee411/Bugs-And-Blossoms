@@ -217,6 +217,7 @@ modules/{module}/
 - DEV-PLAN-100：Org 模块宽表预留字段 + 元数据驱动落地实施计划与路线图（承接 DEV-PLAN-098）：`docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
 - DEV-PLAN-100A：Org 模块宽表元数据落地 Phase 0：契约冻结与就绪检查：`docs/dev-plans/100a-org-metadata-wide-table-phase0-contract-freeze-readiness.md`
 - DEV-PLAN-100B：Org 模块宽表元数据落地 Phase 1：Schema 与元数据骨架（最小数据库闭环）：`docs/dev-plans/100b-org-metadata-wide-table-phase1-schema-and-metadata-skeleton.md`
+- DEV-PLAN-100B 执行日志：`docs/dev-records/dev-plan-100b-execution-log.md`
 - DEV-PLAN-100C：Org 模块宽表元数据落地 Phase 2：Kernel/Projection 扩展（保持 One Door）：`docs/dev-plans/100c-org-metadata-wide-table-phase2-kernel-projection-extension-one-door.md`
 - DEV-PLAN-100C 执行日志：`docs/dev-records/dev-plan-100c-execution-log.md`
 - DEV-PLAN-100D：Org 模块宽表元数据落地 Phase 3：服务层与 API（读写可用）：`docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
@@ -228,6 +229,7 @@ modules/{module}/
 - DEV-PLAN-100E1 执行日志：`docs/dev-records/dev-plan-100e1-execution-log.md`
 - DEV-PLAN-100G：Org 模块宽表元数据落地 Phase 4C：OrgUnit 列表扩展字段筛选/排序 + i18n 收口（闭环收口，MUI）：`docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
 - DEV-PLAN-100G 执行日志：`docs/dev-records/dev-plan-100g-execution-log.md`
+- DEV-PLAN-100H：Org 模块宽表元数据落地 Phase 5：稳定性/性能/异常与运维收口：`docs/dev-plans/100h-org-metadata-wide-table-phase5-stability-performance-ops-closure.md`
 - DEV-PLAN-101：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）：`docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
