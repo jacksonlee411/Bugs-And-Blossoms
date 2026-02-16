@@ -1,6 +1,9 @@
 # DEV-PLAN-100C：Org 模块宽表元数据落地 Phase 2：Kernel/Projection 扩展（保持 One Door）
 
-**状态**: 评审修订版（2026-02-13 13:20 UTC）
+**状态**: 已完成（2026-02-13；2026-02-16 文档回填）
+
+**执行记录**：
+- `docs/dev-records/dev-plan-100c-execution-log.md`
 
 > 本文从 `DEV-PLAN-100` 的 Phase 2 拆分而来，作为 Phase 2 的 SSOT；`DEV-PLAN-100` 保持为整体路线图。
 
@@ -18,18 +21,18 @@ Phase 2 的交付物是：**Kernel 层对扩展字段的校验 + 投射 + 回放
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
 - **核心目标**：
-  - [ ] 扩展 `orgunit.submit_org_event(...)` 与更正链路（`submit_org_event_correction(...)`）的 payload 校验：
+  - [x] 扩展 `orgunit.submit_org_event(...)` 与更正链路（`submit_org_event_correction(...)`）的 payload 校验：
     - 仅允许元数据声明字段写入；
     - 字段值类型与槽位类型一致；
     - 字段在 `effective_date` 当天必须处于 enabled 状态（按 `enabled_on/disabled_on` 解释，day 粒度，SSOT：`DEV-PLAN-032`）；
     - 扩展字段 payload 仅允许出现在本计划支持的 mutation 组合中（SSOT：`DEV-PLAN-083`）；其余事件若出现扩展字段 payload 必须拒绝（fail-closed，错误码稳定）。
-  - [ ] 扩展投射与回放：
+  - [x] 扩展投射与回放：
     - 扩展 `orgunit.org_events_effective` / `orgunit.org_events_effective_for_replay` / `rebuild_*`，确保扩展值可投射到 `orgunit.org_unit_versions` 的对应 `ext_*` 槽位列；
     - correction/rescind 重放路径保持扩展字段一致性（不得出现“主字段回放、扩展字段丢失”）。
-  - [ ] DICT 快照投射规则固定：
+  - [x] DICT 快照投射规则固定：
     - 提交事件时写 `payload.ext_labels_snapshot`；
     - 投射时同步写 `orgunit.org_unit_versions.ext_labels_snapshot`（对齐 `DEV-PLAN-100` D3/D4）。
-  - [ ] 审计快照包含扩展字段变更：
+  - [x] 审计快照包含扩展字段变更：
     - 依赖 `extract_orgunit_snapshot(...)` 的行快照机制，确保扩展列在版本切分/回放中不丢失（对齐 080 系列快照约束）。
 
 - **非目标（本阶段不做）**：
@@ -247,33 +250,33 @@ Kernel 内对 `physical_col` 必须同时满足：
   - `DEV-PLAN-003`（Simple > Easy 评审约束）
 
 - **实施步骤（Phase 2）**：
-  1. [ ] 新增共享 helper：统一 ext payload 形状校验、enabled 判定、类型转换、DICT label 一致性与映射解析。
-  2. [ ] 扩展 `submit_org_event(...)` / `submit_org_event_correction(...)`：接入 helper，落地 §5.2 矩阵与稳定错误码。
-  3. [ ] 扩展 `orgunit.org_events_effective` / `orgunit.org_events_effective_for_replay`：对 `ext/ext_labels_snapshot` 做 deep-merge。
-  4. [ ] 扩展 replay：`rebuild_org_unit_versions_for_org_with_pending_event(...)` 使用与 submit 同口径 helper。
-  5. [ ] 修复 `split_org_unit_version_at(...)`：复制全部 ext 列与 `ext_labels_snapshot`。
-  6. [ ] 验证审计快照：`extract_orgunit_snapshot(...)` 在扩展列存在时可稳定产出并满足 080 系列约束。
+  1. [x] 新增共享 helper：统一 ext payload 形状校验、enabled 判定、类型转换、DICT label 一致性与映射解析。
+  2. [x] 扩展 `submit_org_event(...)` / `submit_org_event_correction(...)`：接入 helper，落地 §5.2 矩阵与稳定错误码。
+  3. [x] 扩展 `orgunit.org_events_effective` / `orgunit.org_events_effective_for_replay`：对 `ext/ext_labels_snapshot` 做 deep-merge。
+  4. [x] 扩展 replay：`rebuild_org_unit_versions_for_org_with_pending_event(...)` 使用与 submit 同口径 helper。
+  5. [x] 修复 `split_org_unit_version_at(...)`：复制全部 ext 列与 `ext_labels_snapshot`。
+  6. [x] 验证审计快照：`extract_orgunit_snapshot(...)` 在扩展列存在时可稳定产出并满足 080 系列约束。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 
 ### 9.1 必测用例（新增/回归）
 
-- [ ] 正例：CREATE 写入 1~2 个扩展字段（DICT/非 DICT）后，versions 与快照包含对应 `ext_*` 值及 `ext_labels_snapshot`。
-- [ ] 正例：`payload.ext.<field_key>=null` 时，目标 `ext_*` 列被清空，DICT label 快照同步清空。
-- [ ] 负例：`ext` 或 `ext_labels_snapshot` 非 object -> `ORG_EXT_PAYLOAD_INVALID_SHAPE`。
-- [ ] 负例：payload.ext 出现未配置 field_key -> `ORG_EXT_FIELD_NOT_CONFIGURED`。
-- [ ] 负例：field_key 在 `effective_date` 未 enabled -> `ORG_EXT_FIELD_NOT_ENABLED_AS_OF`。
-- [ ] 负例：value_type 与列类型不一致或无法转换 -> `ORG_EXT_FIELD_TYPE_MISMATCH`。
-- [ ] 负例：不允许的 action/event/target 组合携带 ext -> `ORG_EXT_PAYLOAD_NOT_ALLOWED_FOR_EVENT`。
-- [ ] 更正：CORRECT_EVENT 对 ext 做局部 patch 时，不覆盖未更正键（deep-merge 断言）。
-- [ ] 回放：replay/correction/rescind 后，扩展字段在 versions 中可复现且与预期一致。
-- [ ] 版本切分：RENAME/MOVE/DISABLE 等触发 split 时，ext 列值保持不变。
+- [x] 正例：CREATE 写入 1~2 个扩展字段（DICT/非 DICT）后，versions 与快照包含对应 `ext_*` 值及 `ext_labels_snapshot`。
+- [x] 正例：`payload.ext.<field_key>=null` 时，目标 `ext_*` 列被清空，DICT label 快照同步清空。
+- [x] 负例：`ext` 或 `ext_labels_snapshot` 非 object -> `ORG_EXT_PAYLOAD_INVALID_SHAPE`。
+- [x] 负例：payload.ext 出现未配置 field_key -> `ORG_EXT_FIELD_NOT_CONFIGURED`。
+- [x] 负例：field_key 在 `effective_date` 未 enabled -> `ORG_EXT_FIELD_NOT_ENABLED_AS_OF`。
+- [x] 负例：value_type 与列类型不一致或无法转换 -> `ORG_EXT_FIELD_TYPE_MISMATCH`。
+- [x] 负例：不允许的 action/event/target 组合携带 ext -> `ORG_EXT_PAYLOAD_NOT_ALLOWED_FOR_EVENT`。
+- [x] 更正：CORRECT_EVENT 对 ext 做局部 patch 时，不覆盖未更正键（deep-merge 断言）。
+- [x] 回放：replay/correction/rescind 后，扩展字段在 versions 中可复现且与预期一致。
+- [x] 版本切分：RENAME/MOVE/DISABLE 等触发 split 时，ext 列值保持不变。
 
 ### 9.2 出口条件（与路线图一致）
 
-- [ ] `internal/server/orgunit_audit_snapshot_schema_test.go` 保持通过。
-- [ ] 新增扩展字段重放回归测试通过（覆盖 correction/rescind + replay）。
-- [ ] 无第二写入口；所有扩展字段写入可追溯到 `submit_*` 内核函数。
+- [x] `internal/server/orgunit_audit_snapshot_schema_test.go` 保持通过。
+- [x] 新增扩展字段重放回归测试通过（覆盖 correction/rescind + replay）。
+- [x] 无第二写入口；所有扩展字段写入可追溯到 `submit_*` 内核函数。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 
