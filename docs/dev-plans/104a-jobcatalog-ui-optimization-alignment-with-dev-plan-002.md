@@ -1,8 +1,9 @@
 # DEV-PLAN-104A：Job Catalog UI 优化补充修订（对齐 DEV-PLAN-002）
 
-**状态**: 草拟中（2026-02-16 02:56 UTC）
+**状态**: 已完成（2026-02-16 05:32 UTC）
 
 > 本文件是 `DEV-PLAN-104` 的规范对齐补充；主方案与 IA 约束见 `docs/dev-plans/104-jobcatalog-ui-optimization.md`。
+> 实施与验证证据见：`docs/dev-records/dev-plan-104-execution-log.md`。
 
 ## 1. 背景
 
@@ -13,12 +14,12 @@
 
 ## 2. 目标（DoD）
 
-1. [ ] 筛选区满足 `Apply (Primary) + Reset/Clear (Secondary)` 双操作结构。
-2. [ ] 有效日期输入统一优先使用 MUI X DatePicker（day 粒度，`YYYY-MM-DD`）。
-3. [ ] 行级长尾操作统一收纳到“更多(⋯)”菜单，并满足 Tooltip/aria。
-4. [ ] 页面样式不落散乱 hex“魔法值”，全部通过 Theme/Token 分发。
-5. [ ] 交互状态矩阵完整：default/hover/focus/disabled/error/loading。
-6. [ ] Light/Dark 两套主题下语义一致（主按钮、边界、空错禁用态均可读）。
+1. [X] 筛选区满足 `Apply (Primary) + Reset/Clear (Secondary)` 双操作结构。
+2. [X] 有效日期输入统一优先使用 MUI X DatePicker（day 粒度，`YYYY-MM-DD`）。
+3. [X] 行级长尾操作统一收纳到“更多(⋯)”菜单，并满足 Tooltip/aria。
+4. [X] 页面样式不落散乱 hex“魔法值”，全部通过 Theme/Token 分发。
+5. [X] 交互状态矩阵完整：default/hover/focus/disabled/error/loading。
+6. [X] Light/Dark 两套主题下语义一致（主按钮、边界、空错禁用态均可读）。
 
 ## 3. 修订范围（仅补充，不改业务契约）
 
@@ -80,12 +81,12 @@
 
 ## 6. 验收清单（实施完成前必须全部勾选）
 
-1. [ ] ContextBar 同时存在 Apply（contained primary）与 Reset（outlined/text）。
-2. [ ] `as_of/effective_date` 均为 DatePicker（day 粒度），提交格式 `YYYY-MM-DD`。
-3. [ ] DataGrid 行操作采用“更多(⋯)”为默认收纳；显式图标均有 Tooltip/aria-label。
-4. [ ] 页面无新增散落 hex 魔法值（主色/语义色来自 Theme/Token）。
-5. [ ] 关键交互状态与键盘路径通过手测（含 focus 可见）。
-6. [ ] Light/Dark 双主题下视觉语义一致，无不可读文本。
+1. [X] ContextBar 同时存在 Apply（contained primary）与 Reset（outlined/text）。
+2. [X] `as_of/effective_date` 均为 DatePicker（day 粒度），提交格式 `YYYY-MM-DD`。
+3. [X] DataGrid 行操作采用“更多(⋯)”为默认收纳；显式图标均有 Tooltip/aria-label。
+4. [X] 页面无新增散落 hex 魔法值（主色/语义色来自 Theme/Token）。
+5. [X] 关键交互状态与键盘路径通过手测（含 focus 可见）。
+6. [X] Light/Dark 双主题下视觉语义一致，无不可读文本。
 
 ## 7. 门禁与验证（SSOT 引用）
 
