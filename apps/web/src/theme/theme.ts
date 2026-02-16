@@ -6,7 +6,8 @@ export function buildAppTheme(mode: PaletteMode) {
     palette: {
       mode,
       primary: {
-        main: '#09a7a3'
+        main: '#09a7a3',
+        contrastText: '#ffffff'
       },
       background: {
         default: mode === 'light' ? '#f7f9fb' : '#0f172a',

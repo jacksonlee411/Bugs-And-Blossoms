@@ -1,5 +1,5 @@
 {
-  "version": "2.7",
+  "version": "2.8",
   "children": [
     {
       "type": "frame",
@@ -12,6 +12,1204 @@
       "height": 600,
       "fill": "#FFFFFF",
       "layout": "none"
+    },
+    {
+      "type": "frame",
+      "id": "tUoOk",
+      "x": 920,
+      "y": 0,
+      "name": "Job Catalog - Revamp DEV-PLAN-104",
+      "width": 1440,
+      "height": 980,
+      "fill": "#F3F5F8",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "0qT2A",
+          "name": "Top Bar",
+          "width": "fill_container",
+          "height": 64,
+          "fill": "#09A7A3",
+          "padding": [
+            0,
+            20
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "cKKr2",
+              "name": "Brand",
+              "fill": "#FFFFFF",
+              "content": "Bugs & Blossoms HR",
+              "fontFamily": "Inter",
+              "fontSize": 18,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "XwORq",
+              "name": "Top Actions",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Du5G8",
+                  "name": "Lang",
+                  "fill": "#078A87",
+                  "cornerRadius": 999,
+                  "padding": [
+                    6,
+                    10
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "4FuBM",
+                      "name": "langTextA",
+                      "fill": "#FFFFFF",
+                      "content": "ZH",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "pMQRq",
+                  "name": "Tenant",
+                  "fill": "#078A87",
+                  "cornerRadius": 999,
+                  "padding": [
+                    6,
+                    10
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "V2BOI",
+                      "name": "userTextA",
+                      "fill": "#FFFFFF",
+                      "content": "tenant_admin",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "BgAQO",
+          "name": "Shell Body",
+          "width": "fill_container",
+          "height": "fill_container",
+          "children": [
+            {
+              "type": "frame",
+              "id": "bZ6n0",
+              "name": "Sidebar",
+              "width": 220,
+              "height": "fill_container",
+              "fill": "#FFFFFF",
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "SLrSv",
+                  "name": "sideTitleA",
+                  "fill": "#64748B",
+                  "content": "导航",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "jQ0Cq",
+                  "name": "Nav Org",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "6CI4b",
+                      "name": "navOrgTextA",
+                      "fill": "#0F172A",
+                      "content": "组织架构",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "xDT3c",
+                  "name": "Nav SetID",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Ut2nz",
+                      "name": "navSetidTextA",
+                      "fill": "#0F172A",
+                      "content": "SetID 治理",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "V5ZEd",
+                  "name": "Nav JobCatalog Active",
+                  "width": "fill_container",
+                  "fill": "#E6F7F6",
+                  "cornerRadius": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "LoAug",
+                      "name": "navJobTextA",
+                      "fill": "#0B6B68",
+                      "content": "职位分类",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "sfwxb",
+                  "name": "Nav Staffing",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "bIIlO",
+                      "name": "navStaffTextA",
+                      "fill": "#0F172A",
+                      "content": "岗位与任职",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "muB58",
+              "name": "Main Content",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 20,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "KzWOO",
+                  "name": "Page Header",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "sYrnx",
+                      "name": "Header Text",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "t3IEd",
+                          "name": "pageTitleA",
+                          "fill": "#0F172A",
+                          "content": "职位分类 / Job Catalog",
+                          "fontFamily": "Inter",
+                          "fontSize": 24,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Cs0lz",
+                          "name": "pageSubA",
+                          "fill": "#64748B",
+                          "content": "上下文固定 + Tab 工作区 + Dialog 写操作",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "JzihN",
+                      "name": "Header Action",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YKLoE",
+                          "name": "headerActionTextA",
+                          "fill": "#0F172A",
+                          "content": "说明：按 DEV-PLAN-104",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ycMwb",
+                  "name": "Context Bar (Sticky)",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 10,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Dz5r3",
+                      "name": "Context Controls",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "SK5kc",
+                          "name": "as_of Input",
+                          "width": 220,
+                          "fill": "#F8FAFC",
+                          "cornerRadius": 8,
+                          "padding": [
+                            10,
+                            12
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "OJmm0",
+                              "name": "asofTextA",
+                              "fill": "#0F172A",
+                              "content": "as_of: 2026-02-16",
+                              "fontFamily": "Inter",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "f6fR7",
+                          "name": "package Input",
+                          "width": 260,
+                          "fill": "#F8FAFC",
+                          "cornerRadius": 8,
+                          "padding": [
+                            10,
+                            12
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "mynpQ",
+                              "name": "packageTextA",
+                              "fill": "#0F172A",
+                              "content": "package_code: DEFLT",
+                              "fontFamily": "Inter",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "bJ8Iq",
+                          "name": "Load Button",
+                          "fill": "#09A7A3",
+                          "cornerRadius": 8,
+                          "padding": [
+                            10,
+                            16
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "myiKL",
+                              "name": "loadTextA",
+                              "fill": "#FFFFFF",
+                              "content": "Apply Context",
+                              "fontFamily": "Inter",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "284xc",
+                      "name": "Context Summary",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "DCWxl",
+                          "name": "chipPackageB",
+                          "fill": "#EEF2FF",
+                          "cornerRadius": 999,
+                          "padding": [
+                            6,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "6zXL3",
+                              "name": "chipPackageTextB",
+                              "fill": "#3730A3",
+                              "content": "Package: DEFLT",
+                              "fontFamily": "Inter",
+                              "fontSize": 11,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "1ogyL",
+                          "name": "chipAsOfB",
+                          "fill": "#ECFEFF",
+                          "cornerRadius": 999,
+                          "padding": [
+                            6,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "VT0vb",
+                              "name": "chipAsOfTextB",
+                              "fill": "#0F766E",
+                              "content": "As-of: 2026-02-16",
+                              "fontFamily": "Inter",
+                              "fontSize": 11,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "InYtI",
+                          "name": "chipOwnerB",
+                          "fill": "#F1F5F9",
+                          "cornerRadius": 999,
+                          "padding": [
+                            6,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "FKdbA",
+                              "name": "chipOwnerTextB",
+                              "fill": "#334155",
+                              "content": "Owner SetID: SHARE",
+                              "fontFamily": "Inter",
+                              "fontSize": 11,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "lTm6k",
+                          "name": "chipReadB",
+                          "fill": "#DCFCE7",
+                          "cornerRadius": 999,
+                          "padding": [
+                            6,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "u5JcY",
+                              "name": "chipReadTextB",
+                              "fill": "#166534",
+                              "content": "Read-only: false",
+                              "fontFamily": "Inter",
+                              "fontSize": 11,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "YSLAD",
+                      "name": "contextNoteD",
+                      "fill": "#64748B",
+                      "content": "规则：as_of 仅影响读取口径；写入 effective_date 在每个弹窗中单独确认。",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "APpaF",
+                  "name": "Entity Tabs",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 10,
+                  "gap": 8,
+                  "padding": 8,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "NV7Z3",
+                      "name": "tabGroupsB",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "IGpXa",
+                          "name": "tabGroupsTextB",
+                          "fill": "#475569",
+                          "content": "Groups",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "WvqLb",
+                      "name": "tabFamiliesB",
+                      "fill": "#E6F7F6",
+                      "cornerRadius": 8,
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "9JoHe",
+                          "name": "tabFamiliesTextB",
+                          "fill": "#0B6B68",
+                          "content": "Families",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qarCc",
+                      "name": "tabLevelsB",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "CqgwE",
+                          "name": "tabLevelsTextB",
+                          "fill": "#475569",
+                          "content": "Levels",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hiyNx",
+                      "name": "tabProfilesB",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 8,
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "E6XGl",
+                          "name": "tabProfilesTextB",
+                          "fill": "#475569",
+                          "content": "Profiles",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "lSdHZ",
+                  "name": "Families Workspace",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "gap": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Gcj8j",
+                      "name": "Groups Panel",
+                      "width": 280,
+                      "height": "fill_container",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 10,
+                      "layout": "vertical",
+                      "gap": 10,
+                      "padding": 12,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "XsZ4B",
+                          "name": "leftTitleB",
+                          "fill": "#0F172A",
+                          "content": "Job Family Groups",
+                          "fontFamily": "Inter",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "NATaB",
+                          "name": "leftSearchB",
+                          "width": "fill_container",
+                          "fill": "#F8FAFC",
+                          "cornerRadius": 8,
+                          "padding": [
+                            9,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "LpLJA",
+                              "name": "leftSearchTextB",
+                              "fill": "#94A3B8",
+                              "content": "筛选 Group...",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "MsJZB",
+                          "name": "Groups List",
+                          "width": "fill_container",
+                          "height": "fill_container",
+                          "fill": "#F8FAFC",
+                          "cornerRadius": 8,
+                          "layout": "vertical",
+                          "gap": 6,
+                          "padding": 8,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "6acB2",
+                              "name": "groupItem1C",
+                              "width": "fill_container",
+                              "fill": "#E6F7F6",
+                              "cornerRadius": 8,
+                              "padding": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "AgEvQ",
+                                  "name": "groupText1C",
+                                  "fill": "#0B6B68",
+                                  "content": "GRP-TECH · Technology",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "scZvO",
+                              "name": "groupItem2C",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "cornerRadius": 8,
+                              "padding": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "VdRWv",
+                                  "name": "groupText2C",
+                                  "fill": "#334155",
+                                  "content": "GRP-SALES · Sales",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "zsM20",
+                              "name": "groupItem3C",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "cornerRadius": 8,
+                              "padding": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "e98U1",
+                                  "name": "groupText3C",
+                                  "fill": "#334155",
+                                  "content": "GRP-HR · Human Resource",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "9VaBQ",
+                              "name": "groupItem4C",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "cornerRadius": 8,
+                              "padding": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "7uXiq",
+                                  "name": "groupText4C",
+                                  "fill": "#334155",
+                                  "content": "GRP-FIN · Finance",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "EUkbc",
+                      "name": "Families Main",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "layout": "vertical",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "yGRzE",
+                          "name": "Families Toolbar",
+                          "width": "fill_container",
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 10,
+                          "padding": 12,
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "FiARM",
+                              "name": "toolbarTitleWrapC",
+                              "layout": "vertical",
+                              "gap": 2,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "ssBis",
+                                  "name": "toolbarTitleC",
+                                  "fill": "#0F172A",
+                                  "content": "Families · Group = GRP-TECH",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "jzQAr",
+                                  "name": "toolbarSubC",
+                                  "fill": "#64748B",
+                                  "content": "共 4 条，单任务域仅 1 个 Primary Action",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "rTFKw",
+                              "name": "createBtnC",
+                              "fill": "#09A7A3",
+                              "cornerRadius": 8,
+                              "padding": [
+                                9,
+                                14
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "h8RF1",
+                                  "name": "createTextC",
+                                  "fill": "#FFFFFF",
+                                  "content": "Create Family",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "dmtPX",
+                          "name": "Families DataGrid",
+                          "width": "fill_container",
+                          "height": "fill_container",
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 10,
+                          "layout": "vertical",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "EP6FR",
+                              "name": "gridHeaderC",
+                              "width": "fill_container",
+                              "fill": "#F8FAFC",
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "f6WJM",
+                                  "name": "gridHeaderTextC",
+                                  "fill": "#475569",
+                                  "content": "Code          Name                          Group        Effective Day     Actions",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "yUax9",
+                              "name": "row1C",
+                              "width": "fill_container",
+                              "fill": "#F0FDFA",
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "go5hr",
+                                  "name": "row1TextC",
+                                  "fill": "#0F172A",
+                                  "content": "JF-BE       Backend Engineering            GRP-TECH     2026-02-16       ⋯",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "4aqSY",
+                              "name": "row2C",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "0Mb7G",
+                                  "name": "row2TextC",
+                                  "fill": "#0F172A",
+                                  "content": "JF-FE       Frontend Engineering           GRP-TECH     2026-02-16       ⋯",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ntgsz",
+                              "name": "row3C",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "qdr9h",
+                                  "name": "row3TextC",
+                                  "fill": "#0F172A",
+                                  "content": "JF-PLAT     Platform Engineering           GRP-TECH     2026-01-20       ⋯",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "lpfvA",
+                              "name": "row4C",
+                              "width": "fill_container",
+                              "fill": "#FFFFFF",
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "rhxVy",
+                                  "name": "row4TextC",
+                                  "fill": "#0F172A",
+                                  "content": "JF-QA       Quality Assurance              GRP-TECH     2026-01-10       ⋯",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ptagT",
+                          "name": "Create Family Dialog (Open)",
+                          "width": 460,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 12,
+                          "layout": "vertical",
+                          "gap": 10,
+                          "padding": 14,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "4jTAj",
+                              "name": "dialogTitleD",
+                              "fill": "#0F172A",
+                              "content": "Create Job Family",
+                              "fontFamily": "Inter",
+                              "fontSize": 16,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "foASD",
+                              "name": "dialogSubD",
+                              "fill": "#64748B",
+                              "content": "Package: DEFLT（只读）",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Z2HiY",
+                              "name": "fieldCodeD",
+                              "width": "fill_container",
+                              "fill": "#F8FAFC",
+                              "cornerRadius": 8,
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Ju6NI",
+                                  "name": "fieldCodeTextD",
+                                  "fill": "#0F172A",
+                                  "content": "code: JF-SEC",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Jvqx4",
+                              "name": "fieldNameD",
+                              "width": "fill_container",
+                              "fill": "#F8FAFC",
+                              "cornerRadius": 8,
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "hqPYU",
+                                  "name": "fieldNameTextD",
+                                  "fill": "#0F172A",
+                                  "content": "name: Security Engineering",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "64LIr",
+                              "name": "fieldGroupD",
+                              "width": "fill_container",
+                              "fill": "#F8FAFC",
+                              "cornerRadius": 8,
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "FKZ2w",
+                                  "name": "fieldGroupTextD",
+                                  "fill": "#0F172A",
+                                  "content": "group_code: GRP-TECH",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Ptpm7",
+                              "name": "fieldDateD",
+                              "width": "fill_container",
+                              "fill": "#F8FAFC",
+                              "cornerRadius": 8,
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "g2yXC",
+                                  "name": "fieldDateTextD",
+                                  "fill": "#0F172A",
+                                  "content": "effective_date: 2026-02-16",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "MjzM6",
+                              "name": "confirmHintD",
+                              "width": "fill_container",
+                              "fill": "#FFF7ED",
+                              "cornerRadius": 8,
+                              "padding": [
+                                10,
+                                12
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "i6QmB",
+                                  "name": "confirmHintTextD",
+                                  "fill": "#9A3412",
+                                  "content": "将对 2026-02-16 生效（提交前再次确认）",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "zaJcz",
+                              "name": "actionsD",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "justifyContent": "end",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "YsE5Z",
+                                  "name": "cancelBtnD",
+                                  "fill": "#FFFFFF",
+                                  "cornerRadius": 8,
+                                  "padding": [
+                                    9,
+                                    14
+                                  ],
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "JK4cK",
+                                      "name": "cancelTextD",
+                                      "fill": "#334155",
+                                      "content": "取消",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "600"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "kZd6q",
+                                  "name": "submitBtnD",
+                                  "fill": "#09A7A3",
+                                  "cornerRadius": 8,
+                                  "padding": [
+                                    9,
+                                    14
+                                  ],
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "0O84V",
+                                      "name": "submitTextD",
+                                      "fill": "#FFFFFF",
+                                      "content": "确认创建",
+                                      "fontFamily": "Inter",
+                                      "fontSize": 12,
+                                      "fontWeight": "600"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "pO7uk",
+                          "name": "resultToastD",
+                          "width": "fill_container",
+                          "fill": "#ECFDF5",
+                          "cornerRadius": 8,
+                          "padding": [
+                            8,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "gOkAU",
+                              "name": "resultToastTextD",
+                              "fill": "#166534",
+                              "content": "✓ 提交成功后无需滚动：当前 Tab 的列表就地反馈。",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }
