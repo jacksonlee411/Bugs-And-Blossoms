@@ -531,7 +531,7 @@ const messages = {
     approvals_action_approve: '同意',
     approvals_action_reject: '拒绝',
     approvals_action_forward: '转交',
-    jobcatalog_page_title: '职位分类',
+    jobcatalog_page_title: 'Job Catalog',
     jobcatalog_page_subtitle: '上下文稳定的页内工作区（Tabs + DataGrid + Dialog）',
     jobcatalog_filter_as_of: '查看日期',
     jobcatalog_filter_package_code: '包编码',
