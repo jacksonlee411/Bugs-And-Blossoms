@@ -241,6 +241,7 @@ modules/{module}/
 - DEV-PLAN-105B：Dict Code（字典本体）新增与治理方案（承接 DEV-PLAN-105/105A）：`docs/dev-plans/105b-dict-code-management-and-governance.md`
 - DEV-PLAN-105B 执行日志：`docs/dev-records/dev-plan-105b-execution-log.md`
 - DEV-PLAN-106：Org 模块扩展字段启用方式改造（DICT 全量引用 + 自定义 PLAIN 字段）：`docs/dev-plans/106-org-ext-fields-enable-dict-registry-and-custom-plain-fields.md`
+- DEV-PLAN-106A：Org 扩展字段启用增强（字典字段作为 Field Key + 启用时自定义描述）：`docs/dev-plans/106a-org-ext-fields-dict-as-field-key-and-custom-label.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
