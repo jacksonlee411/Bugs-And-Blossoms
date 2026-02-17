@@ -104,6 +104,9 @@ func TestOrgUnitFieldMetadata_ExtHelpers(t *testing.T) {
 	if !isAllowedOrgUnitExtFieldKey("org_type") {
 		t.Fatal("expected builtin key allowed")
 	}
+	if !isAllowedOrgUnitExtFieldKey("d_org_type") {
+		t.Fatal("expected dict field key allowed")
+	}
 	if !isAllowedOrgUnitExtFieldKey("x_cost_center") {
 		t.Fatal("expected custom x_ key allowed")
 	}

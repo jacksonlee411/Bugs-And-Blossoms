@@ -53,7 +53,7 @@ func buildOrgUnitDetailsExtFields(ctx context.Context, store orgUnitDetailsExtFi
 			dataSourceType = "PLAIN"
 		}
 
-		labelI18nKey, label := resolveOrgUnitExtFieldLabel(fieldKey)
+		labelI18nKey, label := resolveOrgUnitExtFieldLabel(cfg)
 
 		var value any
 		if snapshot.VersionValues != nil && strings.TrimSpace(cfg.PhysicalCol) != "" {
@@ -78,12 +78,19 @@ func buildOrgUnitDetailsExtFields(ctx context.Context, store orgUnitDetailsExtFi
 	return items, nil
 }
 
-func resolveOrgUnitExtFieldLabel(fieldKey string) (*string, *string) {
+func resolveOrgUnitExtFieldLabel(cfg orgUnitTenantFieldConfig) (*string, *string) {
+	fieldKey := strings.TrimSpace(cfg.FieldKey)
 	def, ok := lookupOrgUnitFieldDefinition(fieldKey)
 	if ok {
 		labelKey := strings.TrimSpace(def.LabelI18nKey)
 		if labelKey != "" {
 			return &labelKey, nil
+		}
+	}
+	if isCustomOrgUnitDictFieldKey(fieldKey) && cfg.DisplayLabel != nil {
+		label := strings.TrimSpace(*cfg.DisplayLabel)
+		if label != "" {
+			return nil, &label
 		}
 	}
 	label := fieldKey

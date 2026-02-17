@@ -113,6 +113,9 @@ entrypoints:
       - path: /org/api/org-units/field-configs
         methods: [GET, POST]
         route_class: internal_api
+      - path: /org/api/org-units/field-configs:enable-candidates
+        methods: [GET]
+        route_class: internal_api
       - path: /org/api/org-units/field-configs:disable
         methods: [POST]
         route_class: internal_api

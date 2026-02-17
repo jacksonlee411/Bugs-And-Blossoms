@@ -340,6 +340,7 @@ func TestScanOrgUnitTenantFieldConfig(t *testing.T) {
 		"text",
 		"DICT",
 		[]byte(`{"dict_code":"org_type"}`),
+		nil,
 		"ext_str_01",
 		"2026-01-01",
 		disabled,
@@ -408,6 +409,7 @@ func TestGetTenantFieldConfigByKeyTx(t *testing.T) {
 			"text",
 			"PLAIN",
 			[]byte{},
+			nil,
 			"ext_str_01",
 			"2026-01-01",
 			nil,
@@ -491,6 +493,7 @@ func TestOrgUnitPGStore_FieldConfigReadersAndWriters(t *testing.T) {
 			"text",
 			"DICT",
 			[]byte(`{"dict_code":"org_type"}`),
+			nil,
 			"ext_str_01",
 			"2026-01-01",
 			nil,
@@ -543,6 +546,7 @@ func TestOrgUnitPGStore_FieldConfigReadersAndWriters(t *testing.T) {
 			"text",
 			"DICT",
 			[]byte(`{"dict_code":"org_type"}`),
+			nil,
 			"ext_str_01",
 			"2026-01-01",
 			nil,
@@ -578,6 +582,7 @@ func TestOrgUnitPGStore_FieldConfigReadersAndWriters(t *testing.T) {
 			"text",
 			"DICT",
 			[]byte(`{"dict_code":"org_type"}`),
+			nil,
 			"ext_str_01",
 			"2026-01-01",
 			nil,
@@ -618,7 +623,7 @@ func TestOrgUnitPGStore_FieldConfigReadersAndWriters(t *testing.T) {
 		}
 
 		txCommitErr := &stubTx{
-			row:       metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), "ext_str_01", "2026-01-01", nil, now}},
+			row:       metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "ext_str_01", "2026-01-01", nil, now}},
 			commitErr: errors.New("commit"),
 		}
 		storeCommitErr := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txCommitErr, nil })}
@@ -627,7 +632,7 @@ func TestOrgUnitPGStore_FieldConfigReadersAndWriters(t *testing.T) {
 		}
 
 		txOK := &stubTx{
-			row: metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), "ext_str_01", "2026-01-01", nil, now}},
+			row: metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "ext_str_01", "2026-01-01", nil, now}},
 		}
 		storeOK := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txOK, nil })}
 		cfg, ok, err := storeOK.GetEnabledTenantFieldConfigAsOf(ctx, "t1", "org_type", "2026-01-01")
@@ -638,19 +643,19 @@ func TestOrgUnitPGStore_FieldConfigReadersAndWriters(t *testing.T) {
 
 	t.Run("EnableTenantFieldConfig error branches and success", func(t *testing.T) {
 		storeBeginErr := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return nil, errors.New("begin") })}
-		if _, _, err := storeBeginErr.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), "2026-01-01", "r1", uuid.NewString()); err == nil {
+		if _, _, err := storeBeginErr.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), nil, "2026-01-01", "r1", uuid.NewString()); err == nil {
 			t.Fatalf("expected error")
 		}
 
 		txExecErr := &stubTx{execErr: errors.New("exec")}
 		storeExecErr := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txExecErr, nil })}
-		if _, _, err := storeExecErr.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), "2026-01-01", "r1", uuid.NewString()); err == nil {
+		if _, _, err := storeExecErr.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), nil, "2026-01-01", "r1", uuid.NewString()); err == nil {
 			t.Fatalf("expected error")
 		}
 
 		txReqErr := &stubTx{row: metadataScanRow{err: errors.New("row")}}
 		storeReqErr := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txReqErr, nil })}
-		if _, _, err := storeReqErr.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), "2026-01-01", "r1", uuid.NewString()); err == nil {
+		if _, _, err := storeReqErr.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), nil, "2026-01-01", "r1", uuid.NewString()); err == nil {
 			t.Fatalf("expected error")
 		}
 
@@ -660,7 +665,7 @@ func TestOrgUnitPGStore_FieldConfigReadersAndWriters(t *testing.T) {
 			row:       metadataScanRow{err: pgx.ErrNoRows},
 		}
 		storeExec2Err := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txExec2Err, nil })}
-		if _, _, err := storeExec2Err.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), "2026-01-01", "r1", uuid.NewString()); err == nil {
+		if _, _, err := storeExec2Err.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), nil, "2026-01-01", "r1", uuid.NewString()); err == nil {
 			t.Fatalf("expected error")
 		}
 
@@ -669,26 +674,26 @@ func TestOrgUnitPGStore_FieldConfigReadersAndWriters(t *testing.T) {
 			row2: metadataScanRow{err: errors.New("get")},
 		}
 		storeGetErr := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txGetErr, nil })}
-		if _, _, err := storeGetErr.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), "2026-01-01", "r1", uuid.NewString()); err == nil {
+		if _, _, err := storeGetErr.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), nil, "2026-01-01", "r1", uuid.NewString()); err == nil {
 			t.Fatalf("expected error")
 		}
 
 		txCommitErr := &stubTx{
 			row:       metadataScanRow{vals: []any{"ENABLE"}},
-			row2:      metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), "ext_str_01", "2026-01-01", nil, now}},
+			row2:      metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "ext_str_01", "2026-01-01", nil, now}},
 			commitErr: errors.New("commit"),
 		}
 		storeCommitErr := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txCommitErr, nil })}
-		if _, _, err := storeCommitErr.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), "2026-01-01", "r1", uuid.NewString()); err == nil {
+		if _, _, err := storeCommitErr.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), nil, "2026-01-01", "r1", uuid.NewString()); err == nil {
 			t.Fatalf("expected error")
 		}
 
 		txOK := &stubTx{
 			row:  metadataScanRow{vals: []any{"ENABLE"}},
-			row2: metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), "ext_str_01", "2026-01-01", nil, now}},
+			row2: metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "ext_str_01", "2026-01-01", nil, now}},
 		}
 		storeOK := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txOK, nil })}
-		cfg, wasRetry, err := storeOK.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), "2026-01-01", "r1", uuid.NewString())
+		cfg, wasRetry, err := storeOK.EnableTenantFieldConfig(ctx, "t1", "org_type", "text", "DICT", json.RawMessage(`{}`), nil, "2026-01-01", "r1", uuid.NewString())
 		if err != nil || !wasRetry || cfg.FieldKey != "org_type" {
 			t.Fatalf("cfg=%#v retry=%v err=%v", cfg, wasRetry, err)
 		}
@@ -733,7 +738,7 @@ func TestOrgUnitPGStore_FieldConfigReadersAndWriters(t *testing.T) {
 
 		txCommitErr := &stubTx{
 			row:       metadataScanRow{vals: []any{"DISABLE"}},
-			row2:      metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), "ext_str_01", "2026-01-01", "2026-02-01", now}},
+			row2:      metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "ext_str_01", "2026-01-01", "2026-02-01", now}},
 			commitErr: errors.New("commit"),
 		}
 		storeCommitErr := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txCommitErr, nil })}
@@ -743,7 +748,7 @@ func TestOrgUnitPGStore_FieldConfigReadersAndWriters(t *testing.T) {
 
 		txOK := &stubTx{
 			row:  metadataScanRow{vals: []any{"DISABLE"}},
-			row2: metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), "ext_str_01", "2026-01-01", "2026-02-01", now}},
+			row2: metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "ext_str_01", "2026-01-01", "2026-02-01", now}},
 		}
 		storeOK := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txOK, nil })}
 		cfg, wasRetry, err := storeOK.DisableTenantFieldConfig(ctx, "t1", "org_type", "2026-02-01", "r1", uuid.NewString())
