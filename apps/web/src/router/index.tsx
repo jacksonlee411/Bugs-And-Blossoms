@@ -4,6 +4,7 @@ import { navItems } from '../navigation/config'
 import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
 import { FoundationDemoPage } from '../pages/FoundationDemoPage'
 import { DictConfigsPage } from '../pages/dicts/DictConfigsPage'
+import { DictValueDetailsPage } from '../pages/dicts/DictValueDetailsPage'
 import { JobCatalogPage } from '../pages/jobcatalog/JobCatalogPage'
 import { LoginPage } from '../pages/LoginPage'
 import { OrgUnitFieldConfigsPage } from '../pages/org/OrgUnitFieldConfigsPage'
@@ -51,6 +52,14 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permissionKey='dict.admin'>
             <DictConfigsPage />
+          </RequirePermission>
+        )
+      },
+      {
+        path: 'dicts/:dictCode/values/:code',
+        element: (
+          <RequirePermission permissionKey='dict.admin'>
+            <DictValueDetailsPage />
           </RequirePermission>
         )
       },
