@@ -237,6 +237,7 @@ modules/{module}/
 - DEV-PLAN-105A：字典配置模块验证问题调查与修复方案（承接 DEV-PLAN-105）：`docs/dev-plans/105a-dict-config-validation-issues-investigation.md`
 - DEV-PLAN-105A 执行日志：`docs/dev-records/dev-plan-105a-execution-log.md`
 - DEV-PLAN-105B：Dict Code（字典本体）新增与治理方案（承接 DEV-PLAN-105/105A）：`docs/dev-plans/105b-dict-code-management-and-governance.md`
+- DEV-PLAN-105B 执行日志：`docs/dev-records/dev-plan-105b-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`

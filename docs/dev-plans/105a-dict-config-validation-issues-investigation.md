@@ -1,6 +1,6 @@
 # DEV-PLAN-105A：字典配置模块验证问题调查与修复方案（承接 DEV-PLAN-105）
 
-**状态**: 草拟中（2026-02-17 02:07 UTC）
+**状态**: 已完成（2026-02-17）
 
 > 本计划用于记录 DEV-PLAN-105 已落地后，在字典模块验证中发现的偏差/缺陷，并冻结调查结论、修复路径与验收口径。  
 > 主方案与冻结条款见：`docs/dev-plans/105-dict-config-platform-module.md`；实施证据见：`docs/dev-records/dev-plan-105-execution-log.md`。
@@ -9,7 +9,7 @@
 
 在本地验证页面 `http://localhost:8080/app/dicts`（字典配置模块 UI）时，发现以下问题：
 
-1. 页面布局未按 DEV-PLAN-105 的 UI 冻结落地（应对齐 Org 模块：左侧字典列表，右侧为值列表 + 详情/变更日志）。
+1. 页面布局未按 DEV-PLAN-105 的 UI 冻结落地（应对齐 Org 模块：分屏 1 左侧字典列表 + 右侧值列表，分屏 2 为详情/变更日志）。
 2. 无法增加新的“字典字段”（用户已确认：这里指新增 `dict_code`）。
 3. 在 `Values (click a row to select)` 区域点击行会触发运行时错误：
    - `Cannot read properties of undefined (reading 'trim')`
@@ -27,7 +27,7 @@
 ### 3.1 问题 A：页面布局未对齐 DEV-PLAN-105 冻结 IA
 
 - **现象**：`/app/dicts` 当前为单列纵向堆叠（Context -> Values -> Create/Disable/Correct -> Audit），缺少左侧 Dict List 与右侧 Detail 区域组织。
-- **期望**（DEV-PLAN-105 5.2）：左侧字典列表；右侧上半为 Value Grid；右侧下半为 Detail（基本信息 + 生效窗口 + 变更记录）。
+- **期望**（DEV-PLAN-105 5.2）：分屏 1 为“左侧字典列表 + 右侧 Value Grid”；点击 value 后进入分屏 2，展示“基本信息 + 生效窗口 + 变更记录”。
 - **影响**：可发现性与可操作性下降；后续扩展到多 dict_code 时不可扩展；与“对齐 Org 模块”口径漂移。
 
 ### 3.2 问题 B：无法新增“字典字段”（需求/行为需确认）
@@ -62,29 +62,28 @@
 
 ### 5.1 P0：修复运行时崩溃（问题 C）
 
-1. [ ] 后端：为 `internal/server.DictItem` 与 `internal/server.DictValueItem` 补齐 json tag（snake_case），确保 API 输出字段与前端一致。
-2. [ ] 前端：将 `selectedValueCode` 的来源做最小防御性约束（例如仅在 `typeof v.code === 'string' && v.code.trim() !== ''` 时允许选中），并对 audit query 的 `enabled` 条件避免因异常值崩溃。
-3. [ ] UI：为 `/app/dicts` 路由补齐 `errorElement` 或全局 ErrorBoundary（对齐 React Router 提示），避免单点异常导致整页白屏。
+1. [X] 后端：为 `internal/server.DictItem` 与 `internal/server.DictValueItem` 补齐 json tag（snake_case），确保 API 输出字段与前端一致。
+2. [X] 前端：对“路由参数/查询参数/用户输入”的 string 做 `trim()` 前置保护，避免对 `undefined` 调用 `trim()`；同时把“点击行”交互收敛为跳转到值详情页，减少页面内状态机复杂度。
+3. [X] UI：沿用根路由 `errorElement`（`RouteErrorPage`）并消除触发崩溃的页面逻辑，避免用户进入 Unexpected Application Error。
 
 ### 5.2 P1：对齐页面 IA（问题 A）
 
-1. [ ] UI 结构改造为“左侧列表 + 右侧两段”（参考 Org 详情页的 audit 双栏组织方式）：
-   - 左：Dict List（Phase 0 仅 `org_type`，但结构必须可扩展）
-   - 右上：Value Grid（含 as_of/q/status/limit 语义）
-   - 右下：Detail + Audit（选中 value 时显示，否则空态）
-2. [ ] 交互收口：点击 value 行后，右下 detail 与 audit 与之联动；disable/correct 操作在 detail 区域完成，并可在 audit 中看到 tx_time 记录。
+1. [X] UI 结构改造为“分屏 1 + 分屏 2”（参考 Org 详情页双栏布局）：
+   - 分屏 1（`/app/dicts`）：左 Dict List + 右 Value Grid（含 as_of/q/status/limit 语义）
+   - 分屏 2（`/app/dicts/:dictCode/values/:code`）：Tabs `基本信息/变更日志`，并保持“左时间轴 + 右详情”
+2. [X] 交互收口：点击 value 行后进入分屏 2；disable/correct 在基本信息页签完成，并可在变更日志页签看到 tx_time 记录。
 
 ### 5.3 P1：澄清并收口“新增字典字段”的真实需求（问题 B）
 
 1. [X] 明确用户意图：本问题为 B2（新增 dict_code）。
 2. [X] 新增 `DEV-PLAN-105B` 冻结 dict_code 注册与治理策略，避免绕开 allowlist/权限/迁移规则。
-3. [ ] 对应补齐验收用例（手测步骤 + 最小自动化覆盖，如 handler/store 层测试或 e2e）。
+3. [X] 对应补齐验收用例（handler/store 覆盖补齐，`make test` 通过 100% coverage 门禁）。
 
 ## 6. 验收标准（DoD）
 
 1. 点击 `/app/dicts` 的任意 value 行不再崩溃；选中项高亮，Audit 区域可加载并展示事件（无事件则空态）。
 2. API `GET /iam/api/dicts/values` 返回的 values item 字段名与前端约定一致（snake_case），前端不依赖隐式字段映射。
-3. 页面布局对齐 DEV-PLAN-105 的 IA 冻结：左侧 dict 列表；右侧 value grid + detail/audit。
+3. 页面布局对齐 DEV-PLAN-105 的 IA 冻结：分屏 1（左侧 dict 列表 + 右侧 value grid）+ 分屏 2（detail/audit）。
 4. “新增字典字段”需求已明确收口为“新增 dict_code（B2）”，并在文档中冻结后续计划入口（`DEV-PLAN-105B`）。
 
 ## 7. 门禁与验证（SSOT 引用）
@@ -97,6 +96,8 @@
 ## 8. 关联文件（便于落点）
 
 - UI：`apps/web/src/pages/dicts/DictConfigsPage.tsx`
+- UI：`apps/web/src/pages/dicts/DictValueDetailsPage.tsx`
 - API client：`apps/web/src/api/dicts.ts`
+- 路由：`apps/web/src/router/index.tsx`
 - 后端 API：`internal/server/dicts_api.go`
 - 后端 store/model：`internal/server/dicts_store.go`

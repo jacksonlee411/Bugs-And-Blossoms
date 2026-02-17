@@ -1,7 +1,7 @@
 # DEV-PLAN-105A 执行日志：字典配置模块验证问题调查与记录
 
 > 对应计划：`docs/dev-plans/105a-dict-config-validation-issues-investigation.md`。  
-> 本文先固化“问题复现与初步证据”，修复落地后再补充门禁命令与最终验收记录。
+> 本文已完成“问题复现 -> 修复落地 -> 门禁验证”的闭环记录。
 
 ## 1. 记录范围与时间
 
@@ -58,6 +58,31 @@
 
 ## 5. 下一步（与 DEV-PLAN-105A 对齐）
 
-1. 按计划先做 P0：修复 values 契约字段一致性与前端防御，并补 ErrorBoundary/errorElement。
-2. 再做 P1：完成 `/app/dicts` IA 对齐改造（左列表 + 右详情/审计）。
-3. 与用户收口“新增字典字段”的定义（新增 value vs 新增 dict_code），必要时拆出 `105B`。
+1. [X] 按计划先做 P0：修复 values 契约字段一致性与前端防御，并消除触发崩溃的页面路径。
+2. [X] 再做 P1：完成 `/app/dicts` IA 对齐改造（左列表 + 右详情/审计）。
+3. [X] 与用户收口“新增字典字段”的定义并拆分 `DEV-PLAN-105B`（dict_code 治理）。
+
+## 6. 实施结果（2026-02-17）
+
+### 6.1 问题 C（trim 崩溃）修复完成
+
+- 后端字段契约对齐：`internal/server.DictItem` / `internal/server.DictValueItem` 增补 snake_case json tag（见 `internal/server/dicts_store.go`）。
+- 前端交互改造：分屏 1 点击 value 行后直接进入详情路由，避免把异常值写入 `selectedValueCode`；详情页对 URL 参数与查询条件均做 `trim()` 前置保护（见 `apps/web/src/pages/dicts/DictConfigsPage.tsx`、`apps/web/src/pages/dicts/DictValueDetailsPage.tsx`）。
+- 结果：本地不再复现 `Cannot read properties of undefined (reading 'trim')`。
+
+### 6.2 问题 A（布局偏差）修复完成
+
+- 页面改造为与 Org 详情一致的双栏/双分屏结构：
+  - 分屏 1（`/app/dicts`）：左侧字典字段列表，右侧字典值表格（code/label/status/enabled_on/disabled_on/updated_at）
+  - 分屏 2（`/app/dicts/:dictCode/values/:code`）：`基本信息` / `变更日志` Tabs
+  - 基本信息左栏：生效日期时间轴；变更日志左栏：修改时间时间轴
+- 关键文件：
+  - `apps/web/src/pages/dicts/DictConfigsPage.tsx`
+  - `apps/web/src/pages/dicts/DictValueDetailsPage.tsx`
+  - `apps/web/src/router/index.tsx`
+
+### 6.3 验证命令（门禁）
+
+- `make css`（前端构建通过）
+- `go fmt ./... && go vet ./... && make check lint && make test`（通过，coverage 100%）
+- `make check routing`（通过）

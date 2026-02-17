@@ -52,11 +52,16 @@
 
 ### 2.4 前端（MUI SPA）
 
-- 新增页面：`/app/dicts`（导航可见、可操作）。
-- 页面能力：左侧上下文（as_of/dict_code/q）+ 值列表 + create/disable/correct + audit 列表。
+- 新增页面：
+  - 分屏 1：`/app/dicts`（导航可见、可操作）
+  - 分屏 2：`/app/dicts/:dictCode/values/:code`（值详情）
+- 页面能力：
+  - 分屏 1：左侧字典字段列表 + 右侧值列表；支持新增/停用字典字段与新增字典值。
+  - 分屏 2：Tabs `基本信息/变更日志`；两页签均为“左时间轴 + 右详情”，对齐 Org 模块布局。
 
 对应文件：
 - `apps/web/src/pages/dicts/DictConfigsPage.tsx`
+- `apps/web/src/pages/dicts/DictValueDetailsPage.tsx`
 - `apps/web/src/api/dicts.ts`
 - `apps/web/src/router/index.tsx`
 - `apps/web/src/navigation/config.tsx`
@@ -82,6 +87,4 @@
 - `make authz-pack && make authz-test && make authz-lint`：通过。
 - `make check routing`：通过。
 - `make generate && make css`：通过（本仓库 generate 为 placeholder；css 会触发 web build 并同步 assets）。
-- `make e2e`：通过（Playwright 7 条用例全部通过）。
-- `make preflight`：通过（对齐 CI 一键门禁）。
-
+- `make e2e`：通过（2026-02-17；7 条用例全部通过）。若本地先前失败，常见原因是 `:8080` 已有旧 server 占用，导致 e2e 启动失败并把用例打到旧进程；清理占用后重试即可。

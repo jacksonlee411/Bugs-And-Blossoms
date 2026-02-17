@@ -1,6 +1,6 @@
 # DEV-PLAN-105B：Dict Code（字典本体）新增与治理方案（承接 DEV-PLAN-105/105A）
 
-**状态**: 草拟中（2026-02-17 02:15 UTC）
+**状态**: 已完成（2026-02-17）
 
 > 本计划承接 `DEV-PLAN-105`（字典值配置模块）与 `DEV-PLAN-105A`（验证问题调查）。  
 > 目标：补齐“新增 dict_code（字典本体）”的能力与治理口径，避免运行态任意注入 dict_code 导致不可控扩散与漂移。
@@ -97,9 +97,9 @@
 - `GET /iam/api/dicts?as_of=...`：返回 `as_of` 下可用的 dict_code 列表。
 - 可用性判定（冻结）：`enabled_on <= as_of < disabled_on(or +inf)` 且 `status=active`。
 
-## 5. 数据库契约（选项 A，草案）
+## 5. 数据库契约（选项 A，冻结并已落地）
 
-> 说明：以下涉及新增表/迁移；**落库前必须获得用户手工确认**（仓库红线）。
+> 用户已于 2026-02-17 确认按 105B 落库新增 `iam.dicts` / `iam.dict_events`。
 
 ### 5.1 表：`iam.dicts`（建议）
 
@@ -194,23 +194,23 @@
 > 说明：页面整体两栏布局与“点击 value 行崩溃”的修复仍由 `DEV-PLAN-105A` 承接；本计划只补齐“新增 dict_code”的 UI 能力与其治理口径。
 
 - 左侧 Dict List：
-  - 新增「Create Dict」入口（Dialog）
-  - Dict 行展示：`name + dict_code + status`
-  - 支持停用（在 Dict detail 中）
+   - 新增「Create Dict」入口（Dialog）
+   - Dict 行展示：`name + dict_code + status`
+   - 支持停用（分屏 1 左侧提供停用入口；不引入额外 Dict detail 子页面）
 - 右侧（选中 dict 时）：
-  - Value Grid（现有）
-  - Dict detail：展示 dict 元信息 + 停用操作 + dict audit（若 MVP 含 dict_events）
+   - Value Grid（现有）
+   - 点击 value 行进入分屏 2（值详情页），展示基本信息与变更日志（参考 Org 模块双栏布局）
 
 ## 8. 实施步骤（Checklist）
 
-1. [ ] （红线）新增表/迁移前：用户手工确认本计划引入 `iam.dicts/iam.dict_events`（或等价命名）。
-2. [ ] DB：新增迁移与 schema（Atlas+Goose 闭环），并补齐 RLS 与 Kernel（One Door）。
-3. [ ] DB：为 `dict_value_segments/events` 增加 `(tenant_uuid, dict_code)` -> `iam.dicts` 外键，并在 `submit_dict_value_event(...)` 中补齐 dict 可用性校验（DB+Kernel 双保险）。
-4. [ ] 后端：调整 `/iam/api/dicts` 读路径（registry SSOT + tenant 覆盖 global 的确定性合并规则）；新增 dict 写接口（create/disable）。
-5. [ ] 后端：移除/替换 `supportedDictCode(...)` 的硬编码限制：改为“dict_code 必须在 registry 存在且在 as_of 下可用”（fail-closed）。
-6. [ ] 后端：将 `status` 统一改为派生字段（由 `enabled_on/disabled_on + as_of` 计算），不再引入第二套存储事实。
-7. [ ] 前端：在 `/app/dicts` 增加 dict_code 创建/停用交互（对齐 `DEV-PLAN-105A` 的两栏 IA）。
-8. [ ] 测试：补齐 store/handler/e2e 覆盖，至少包含：
+1. [X] （红线）新增表/迁移前：用户手工确认本计划引入 `iam.dicts/iam.dict_events`（或等价命名）。
+2. [X] DB：新增迁移与 schema（Atlas+Goose 闭环），并补齐 RLS 与 Kernel（One Door）。
+3. [X] DB：为 `dict_value_segments/events` 增加 `(tenant_uuid, dict_code)` -> `iam.dicts` 外键，并在 `submit_dict_value_event(...)` 中补齐 dict 可用性校验（DB+Kernel 双保险）。
+4. [X] 后端：调整 `/iam/api/dicts` 读路径（registry SSOT + tenant 覆盖 global 的确定性合并规则）；新增 dict 写接口（create/disable）。
+5. [X] 后端：移除/替换 `supportedDictCode(...)` 的硬编码限制：改为“dict_code 必须在 registry 存在且在 as_of 下可用”（fail-closed）。
+6. [X] 后端：将 `status` 统一改为派生字段（由 `enabled_on/disabled_on + as_of` 计算），不再引入第二套存储事实。
+7. [X] 前端：在 `/app/dicts` 增加 dict_code 创建/停用交互（对齐 `DEV-PLAN-105A` 的两栏 IA）。
+8. [X] 测试：补齐 store/handler 覆盖，至少包含：
    - tenant/global 同 code 冲突时 tenant 覆盖；
    - tenant dict 存在但 values 为空时不回退 global；
    - disabled dict_code 的 value 写入 fail-closed。
