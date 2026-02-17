@@ -241,7 +241,10 @@ ALTER TABLE iam.dict_value_segments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE iam.dict_value_segments FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON iam.dict_value_segments;
 CREATE POLICY tenant_isolation ON iam.dict_value_segments
-USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+USING (
+  tenant_uuid = current_setting('app.current_tenant')::uuid
+  OR tenant_uuid = '00000000-0000-0000-0000-000000000000'::uuid
+)
 WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 CREATE TABLE IF NOT EXISTS iam.dict_value_events (
@@ -288,7 +291,10 @@ ALTER TABLE iam.dict_value_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE iam.dict_value_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON iam.dict_value_events;
 CREATE POLICY tenant_isolation ON iam.dict_value_events
-USING (tenant_uuid = current_setting('app.current_tenant')::uuid)
+USING (
+  tenant_uuid = current_setting('app.current_tenant')::uuid
+  OR tenant_uuid = '00000000-0000-0000-0000-000000000000'::uuid
+)
 WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 CREATE OR REPLACE FUNCTION iam.submit_dict_value_event(
