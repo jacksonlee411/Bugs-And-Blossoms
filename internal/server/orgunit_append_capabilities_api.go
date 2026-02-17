@@ -105,7 +105,7 @@ func handleOrgUnitAppendCapabilitiesAPI(w http.ResponseWriter, r *http.Request, 
 	extFieldKeys := make([]string, 0, len(extConfigs))
 	for _, cfg := range extConfigs {
 		key := strings.TrimSpace(cfg.FieldKey)
-		if key == "" {
+		if !isAllowedOrgUnitExtFieldKey(key) {
 			continue
 		}
 		extFieldKeys = append(extFieldKeys, key)

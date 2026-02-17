@@ -72,7 +72,8 @@ graph TD
   - 失败策略：capabilities 不可用时 fail-closed（只读/禁用）。
 
 - **ADR-100E-02：扩展字段 label 使用 i18n key，避免引入“业务数据多语言”**
-  - 选定：扩展字段展示使用 `label_i18n_key`（或可由 `field_key` 推导的稳定 key）；具体输出契约见 §5.1。
+  - 选定：**内置字段**展示使用 `label_i18n_key`（或可由 `field_key` 推导的稳定 key）；具体输出契约见 §5.1。
+  - 补充（对齐 `DEV-PLAN-106`）：自定义 PLAIN 字段（`x_` 命名空间）不提供 i18n key，允许返回 `label`（literal string；不随 locale 变化），UI 仅做展示，不引入持久化多语言结构。
   - 约束：不得引入 `label_zh/label_en` 的租户可编辑持久化结构（非本计划）。
 
 - **ADR-100E-03：编辑态不信任 UI 提交 label 快照**
@@ -100,7 +101,8 @@ export type ExtScalarValue = string | number | boolean | null
 
 export interface OrgUnitExtField {
   field_key: string
-  label_i18n_key: string
+  label_i18n_key: string | null
+  label?: string | null
   value_type: ExtValueType
   data_source_type: ExtDataSourceType
   value: ExtScalarValue
@@ -141,7 +143,7 @@ UI 最小需要：
 
 - `GET /org/api/org-units/details?org_code=<...>&as_of=YYYY-MM-DD&include_disabled=...`
 - Authz：`orgunit.read`
-- Response 200（`ext_fields` 必须包含 `label_i18n_key`）：
+- Response 200（内置字段必须包含 `label_i18n_key`；自定义字段可返回 `label`）：
 
 ```json
 {
@@ -178,7 +180,10 @@ UI 最小需要：
 约束：
 
 - `ext_fields` 必须包含 `as_of` 下 enabled 的字段全集（即使 `value=null`）；day 粒度口径见 `DEV-PLAN-100D`。
-- `label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`）；服务端必须返回该字段，UI 不维护第二套“字段 -> label”映射。
+- label（冻结）：
+  - 内置字段：`label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`）；服务端必须返回该字段；
+  - 自定义字段（`x_`）：允许 `label_i18n_key=null`，但必须返回 `label`（canonical string；不做 i18n）；
+  - UI 不维护第二套“字段 -> label”映射，只消费服务端返回的 `label_i18n_key/label`（对齐 `DEV-PLAN-100D/106`）。
 - `ext_fields` 排序必须稳定（按 `field_key` 升序；对齐 `DEV-PLAN-100D`），避免 UI 抖动与测试不稳定。
 - `display_value/display_value_source` 必须成对使用（对齐 `DEV-PLAN-100D`）：
   - DICT 允许：`versions_snapshot/events_snapshot/dict_fallback/unresolved`；
@@ -313,7 +318,7 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 1. 以 URL 的 `effective_date` 作为 details 的 `as_of`（既有页面行为保持）。
 2. 渲染基础字段（既有）。
 3. 渲染 `ext_fields[]`：
-   - label：`t(label_i18n_key)`；若缺失，回退展示 `field_key`（并显示 warning badge，避免静默漂移）。
+   - label：优先 `label_i18n_key`（`t(label_i18n_key)`），否则展示 `label`，再否则回退展示 `field_key`（并显示 warning badge，避免静默漂移）。
    - value：优先展示 `display_value`；若 `display_value=null` 且 `value!=null`，则展示 `value` 的字符串形式（便于排障；禁止静默丢失 code/id）。
    - value：当 `display_value=null` 且 `value=null`，展示 `-`。
    - source（`display_value_source`）：
