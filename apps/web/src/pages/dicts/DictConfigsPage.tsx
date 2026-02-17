@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Alert,
@@ -70,27 +70,23 @@ export function DictConfigsPage() {
 
   const dicts = useMemo(() => dictsQuery.data?.dicts ?? [], [dictsQuery.data])
 
-  useEffect(() => {
+  const effectiveSelectedDictCode = useMemo(() => {
     if (dicts.length === 0) {
-      setSelectedDictCode('')
-      return
+      return ''
     }
-    const first = dicts[0]
-    if (!first) {
-      setSelectedDictCode('')
-      return
+    const current = selectedDictCode.trim()
+    if (current.length > 0 && dicts.some((item) => item.dict_code === current)) {
+      return current
     }
-    if (!dicts.some((item) => item.dict_code === selectedDictCode)) {
-      setSelectedDictCode(first.dict_code)
-    }
+    return dicts[0]?.dict_code ?? ''
   }, [dicts, selectedDictCode])
 
   const valuesQuery = useQuery({
-    enabled: selectedDictCode.trim().length > 0,
-    queryKey: ['dict-values', selectedDictCode, asOf, keyword],
+    enabled: effectiveSelectedDictCode.trim().length > 0,
+    queryKey: ['dict-values', effectiveSelectedDictCode, asOf, keyword],
     queryFn: () =>
       listDictValues({
-        dictCode: selectedDictCode,
+        dictCode: effectiveSelectedDictCode,
         asOf,
         q: keyword,
         status: 'all',
@@ -117,7 +113,7 @@ export function DictConfigsPage() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['dicts', asOf] }),
-        queryClient.invalidateQueries({ queryKey: ['dict-values', selectedDictCode, asOf] })
+        queryClient.invalidateQueries({ queryKey: ['dict-values', effectiveSelectedDictCode, asOf] })
       ])
     }
   })
@@ -126,7 +122,7 @@ export function DictConfigsPage() {
     mutationFn: (request: { dict_code: string; code: string; label: string; enabled_on: string; request_code: string }) =>
       createDictValue(request),
     onSuccess: async (_, variables) => {
-      await queryClient.invalidateQueries({ queryKey: ['dict-values', selectedDictCode, asOf] })
+      await queryClient.invalidateQueries({ queryKey: ['dict-values', effectiveSelectedDictCode, asOf] })
       navigate({
         pathname: `/dicts/${variables.dict_code}/values/${encodeURIComponent(variables.code)}`,
         search: `?as_of=${asOf}`
@@ -156,13 +152,13 @@ export function DictConfigsPage() {
   async function onDisableDict(event: FormEvent) {
     event.preventDefault()
     setError(null)
-    if (selectedDictCode.trim().length === 0) {
+    if (effectiveSelectedDictCode.trim().length === 0) {
       setError('请先选择字典字段')
       return
     }
     try {
       await disableDictMutation.mutateAsync({
-        dict_code: selectedDictCode,
+        dict_code: effectiveSelectedDictCode,
         disabled_on: disableDictDay,
         request_code: newRequestCode('mui-dict-code-disable')
       })
@@ -174,13 +170,13 @@ export function DictConfigsPage() {
   async function onCreateValue(event: FormEvent) {
     event.preventDefault()
     setError(null)
-    if (selectedDictCode.trim().length === 0) {
+    if (effectiveSelectedDictCode.trim().length === 0) {
       setError('请先选择字典字段')
       return
     }
     try {
       await createValueMutation.mutateAsync({
-        dict_code: selectedDictCode,
+        dict_code: effectiveSelectedDictCode,
         code: createValueCode.trim(),
         label: createValueLabel.trim(),
         enabled_on: createValueEnabledOn,
@@ -205,7 +201,12 @@ export function DictConfigsPage() {
             <Button onClick={() => setCreateDictOpen(true)} size='small' variant='outlined'>
               新增字典字段
             </Button>
-            <Button disabled={selectedDictCode.trim().length === 0} onClick={() => setCreateValueOpen(true)} size='small' variant='outlined'>
+            <Button
+              disabled={effectiveSelectedDictCode.trim().length === 0}
+              onClick={() => setCreateValueOpen(true)}
+              size='small'
+              variant='outlined'
+            >
               新增字典值
             </Button>
           </>
@@ -248,7 +249,7 @@ export function DictConfigsPage() {
                   <ListItemButton
                     key={dictItem.dict_code}
                     onClick={() => setSelectedDictCode(dictItem.dict_code)}
-                    selected={dictItem.dict_code === selectedDictCode}
+                    selected={dictItem.dict_code === effectiveSelectedDictCode}
                     sx={{ borderRadius: 1, mb: 0.5 }}
                   >
                     <Box sx={{ alignItems: 'center', display: 'flex', gap: 1, justifyContent: 'space-between', width: '100%' }}>
@@ -274,9 +275,13 @@ export function DictConfigsPage() {
               停用字典字段
             </Typography>
             <Stack component='form' onSubmit={(event) => void onDisableDict(event)} spacing={1}>
-              <TextField disabled label='dict_code' value={selectedDictCode} />
+              <TextField disabled label='dict_code' value={effectiveSelectedDictCode} />
               <TextField label='disabled_on' type='date' value={disableDictDay} onChange={(event) => setDisableDictDay(event.target.value)} />
-              <Button disabled={disableDictMutation.isPending || selectedDictCode.trim().length === 0} type='submit' variant='outlined'>
+              <Button
+                disabled={disableDictMutation.isPending || effectiveSelectedDictCode.trim().length === 0}
+                type='submit'
+                variant='outlined'
+              >
                 停用字段
               </Button>
             </Stack>
@@ -365,7 +370,7 @@ export function DictConfigsPage() {
         <Box component='form' onSubmit={(event) => void onCreateValue(event)}>
           <DialogContent>
             <Stack spacing={1.5}>
-              <TextField disabled label='dict_code' value={selectedDictCode} />
+              <TextField disabled label='dict_code' value={effectiveSelectedDictCode} />
               <TextField label='code' required value={createValueCode} onChange={(event) => setCreateValueCode(event.target.value)} />
               <TextField label='label' required value={createValueLabel} onChange={(event) => setCreateValueLabel(event.target.value)} />
               <TextField

@@ -232,6 +232,8 @@ modules/{module}/
 - DEV-PLAN-100H：Org 模块宽表元数据落地 Phase 5：稳定性/性能/异常与运维收口：`docs/dev-plans/100h-org-metadata-wide-table-phase5-stability-performance-ops-closure.md`
 - DEV-PLAN-101：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）：`docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - DEV-PLAN-101B：OrgUnit PLAIN 扩展字段编辑能力收敛（新建/插入记录/修正）：`docs/dev-plans/101b-orgunit-plain-ext-fields-editability-convergence.md`
+- DEV-PLAN-101I：OrgUnit 生效日期记录新增/插入（MUI）操作口径与约束说明：`docs/dev-plans/101i-orgunit-effective-date-record-add-insert-ui-and-constraints.md`
+- DEV-PLAN-101I 执行日志：`docs/dev-records/dev-plan-101i-execution-log.md`
 - DEV-PLAN-105：全模块字典配置模块（DICT 值配置 + 生效日期 + 变更记录）：`docs/dev-plans/105-dict-config-platform-module.md`
 - DEV-PLAN-105 执行日志：`docs/dev-records/dev-plan-105-execution-log.md`
 - DEV-PLAN-105A：字典配置模块验证问题调查与修复方案（承接 DEV-PLAN-105）：`docs/dev-plans/105a-dict-config-validation-issues-investigation.md`
