@@ -1041,9 +1041,25 @@ func (s *orgUnitWriteService) listEnabledExtFieldConfigs(ctx context.Context, te
 		if isReservedExtFieldKey(key) {
 			continue
 		}
-		if _, ok := fieldmeta.LookupFieldDefinition(key); !ok && !fieldmeta.IsCustomPlainFieldKey(key) {
+		if _, ok := fieldmeta.LookupFieldDefinition(key); !ok && !fieldmeta.IsCustomPlainFieldKey(key) && !fieldmeta.IsCustomDictFieldKey(key) {
 			continue
 		}
+
+		// Defense-in-depth for dict namespace keys: ensure key <-> config consistency.
+		if fieldmeta.IsCustomDictFieldKey(key) {
+			if !strings.EqualFold(strings.TrimSpace(cfg.ValueType), "text") {
+				continue
+			}
+			if !strings.EqualFold(strings.TrimSpace(cfg.DataSourceType), "DICT") {
+				continue
+			}
+			wantDictCode, _ := fieldmeta.DictCodeFromDictFieldKey(key)
+			gotDictCode, ok := fieldmeta.DictCodeFromDataSourceConfig(cfg.DataSourceConfig)
+			if !ok || !strings.EqualFold(strings.TrimSpace(gotDictCode), strings.TrimSpace(wantDictCode)) {
+				continue
+			}
+		}
+
 		cfg.FieldKey = key
 		outCfgs = append(outCfgs, cfg)
 		keys = append(keys, key)
@@ -1057,6 +1073,20 @@ func buildExtPayload(ext map[string]any, fieldConfigs []types.TenantFieldConfig)
 
 func validateExtFieldKeyEnabled(fieldKey string, cfg types.TenantFieldConfig) error {
 	if _, ok := fieldmeta.LookupFieldDefinition(fieldKey); ok {
+		return nil
+	}
+	if fieldmeta.IsCustomDictFieldKey(fieldKey) {
+		if !strings.EqualFold(strings.TrimSpace(cfg.ValueType), "text") {
+			return httperr.NewBadRequest(errPatchFieldNotAllowed)
+		}
+		if !strings.EqualFold(strings.TrimSpace(cfg.DataSourceType), "DICT") {
+			return httperr.NewBadRequest(errPatchFieldNotAllowed)
+		}
+		wantDictCode, _ := fieldmeta.DictCodeFromDictFieldKey(fieldKey)
+		gotDictCode, ok := fieldmeta.DictCodeFromDataSourceConfig(cfg.DataSourceConfig)
+		if !ok || !strings.EqualFold(strings.TrimSpace(gotDictCode), strings.TrimSpace(wantDictCode)) {
+			return httperr.NewBadRequest(errPatchFieldNotAllowed)
+		}
 		return nil
 	}
 	if !fieldmeta.IsCustomPlainFieldKey(fieldKey) {

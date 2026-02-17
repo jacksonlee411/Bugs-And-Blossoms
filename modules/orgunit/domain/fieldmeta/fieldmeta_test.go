@@ -119,6 +119,29 @@ func TestFieldMetadata_IsCustomPlainFieldKey(t *testing.T) {
 	}
 }
 
+func TestFieldMetadata_IsCustomDictFieldKey(t *testing.T) {
+	if !IsCustomDictFieldKey("d_org_type") {
+		t.Fatal("expected d_org_type to be valid")
+	}
+	if IsCustomDictFieldKey("org_type") {
+		t.Fatal("expected org_type to be invalid as dict field key")
+	}
+	invalid := []string{"d_", "d-ORG", "D_org", "d_orgType"}
+	for _, key := range invalid {
+		if IsCustomDictFieldKey(key) {
+			t.Fatalf("expected %q invalid", key)
+		}
+	}
+
+	got, ok := DictCodeFromDictFieldKey("d_org_type")
+	if !ok || got != "org_type" {
+		t.Fatalf("got=%q ok=%v", got, ok)
+	}
+	if _, ok := DictCodeFromDictFieldKey("org_type"); ok {
+		t.Fatal("expected non-dict field key to fail")
+	}
+}
+
 func TestFieldMetadata_DictCodeFromDataSourceConfig(t *testing.T) {
 	raw, _ := json.Marshal(map[string]any{"dict_code": " org_type "})
 	got, ok := DictCodeFromDataSourceConfig(raw)

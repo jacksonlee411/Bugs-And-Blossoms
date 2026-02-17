@@ -596,6 +596,7 @@ type OrgunitTenantFieldConfig struct {
 	ValueType        string             `json:"value_type"`
 	DataSourceType   string             `json:"data_source_type"`
 	DataSourceConfig []byte             `json:"data_source_config"`
+	DisplayLabel     *string            `json:"display_label"`
 	EnabledOn        pgtype.Date        `json:"enabled_on"`
 	DisabledOn       pgtype.Date        `json:"disabled_on"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`

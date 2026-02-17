@@ -593,7 +593,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	})
 
 	t.Run("ext filter definition missing", func(t *testing.T) {
-		tx := &stubTx{row: metadataScanRow{vals: []any{"missing", "text", "PLAIN", []byte(`{}`), "ext_str_01", "2026-01-01", nil, now}}}
+		tx := &stubTx{row: metadataScanRow{vals: []any{"missing", "text", "PLAIN", []byte(`{}`), nil, "ext_str_01", "2026-01-01", nil, now}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, _, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ExtFilterFieldKey: "missing", ExtFilterValue: "x"}); err == nil || !errors.Is(err, errOrgUnitExtQueryFieldNotAllowed) {
 			t.Fatalf("err=%v", err)
@@ -601,7 +601,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	})
 
 	t.Run("ext filter allowlist rejects", func(t *testing.T) {
-		tx := &stubTx{row: metadataScanRow{vals: []any{"short_name", "text", "PLAIN", []byte(`{}`), "ext_str_01", "2026-01-01", nil, now}}}
+		tx := &stubTx{row: metadataScanRow{vals: []any{"short_name", "text", "PLAIN", []byte(`{}`), nil, "ext_str_01", "2026-01-01", nil, now}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, _, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ExtFilterFieldKey: "short_name", ExtFilterValue: "x"}); err == nil || !errors.Is(err, errOrgUnitExtQueryFieldNotAllowed) {
 			t.Fatalf("err=%v", err)
@@ -609,7 +609,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	})
 
 	t.Run("ext filter physical col invalid", func(t *testing.T) {
-		tx := &stubTx{row: metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), "bad_col", "2026-01-01", nil, now}}}
+		tx := &stubTx{row: metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "bad_col", "2026-01-01", nil, now}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, _, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ExtFilterFieldKey: "org_type", ExtFilterValue: "x"}); err == nil || !errors.Is(err, errOrgUnitExtQueryFieldNotAllowed) {
 			t.Fatalf("err=%v", err)
@@ -617,7 +617,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	})
 
 	t.Run("ext filter value parse error", func(t *testing.T) {
-		tx := &stubTx{row: metadataScanRow{vals: []any{"org_type", "bool", "DICT", []byte(`{}`), "ext_bool_01", "2026-01-01", nil, now}}}
+		tx := &stubTx{row: metadataScanRow{vals: []any{"org_type", "bool", "DICT", []byte(`{}`), nil, "ext_bool_01", "2026-01-01", nil, now}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, _, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ExtFilterFieldKey: "org_type", ExtFilterValue: "bad"}); err == nil || !errors.Is(err, errOrgUnitExtQueryFieldNotAllowed) {
 			t.Fatalf("err=%v", err)
@@ -641,7 +641,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	})
 
 	t.Run("ext sort allowlist rejects", func(t *testing.T) {
-		tx := &stubTx{row: metadataScanRow{vals: []any{"short_name", "text", "PLAIN", []byte(`{}`), "ext_str_01", "2026-01-01", nil, now}}}
+		tx := &stubTx{row: metadataScanRow{vals: []any{"short_name", "text", "PLAIN", []byte(`{}`), nil, "ext_str_01", "2026-01-01", nil, now}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, _, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ExtSortFieldKey: "short_name"}); err == nil || !errors.Is(err, errOrgUnitExtQueryFieldNotAllowed) {
 			t.Fatalf("err=%v", err)
@@ -649,7 +649,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 	})
 
 	t.Run("ext sort physical col invalid", func(t *testing.T) {
-		tx := &stubTx{row: metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), "bad_col", "2026-01-01", nil, now}}}
+		tx := &stubTx{row: metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "bad_col", "2026-01-01", nil, now}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, _, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{AsOf: "2026-01-01", ExtSortFieldKey: "org_type"}); err == nil || !errors.Is(err, errOrgUnitExtQueryFieldNotAllowed) {
 			t.Fatalf("err=%v", err)
@@ -778,7 +778,7 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 
 	t.Run("success with ext sort", func(t *testing.T) {
 		tx := &stubTx{
-			row:  metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), "ext_str_01", "2026-01-01", nil, now}},
+			row:  metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "ext_str_01", "2026-01-01", nil, now}},
 			row2: metadataScanRow{vals: []any{int(1)}},
 			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true}}},
 		}
@@ -797,9 +797,29 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 		}
 	})
 
+	t.Run("success with ext sort for d_ dict field_key", func(t *testing.T) {
+		tx := &stubTx{
+			row:  metadataScanRow{vals: []any{"d_org_type", "text", "DICT", []byte(`{"dict_code":"org_type"}`), nil, "ext_str_01", "2026-01-01", nil, now}},
+			row2: metadataScanRow{vals: []any{int(1)}},
+			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true}}},
+		}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{
+			AsOf:            "2026-01-01",
+			IncludeDisabled: false,
+			ExtSortFieldKey: "d_org_type",
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if total != 1 || len(items) != 1 {
+			t.Fatalf("total=%d items=%v", total, items)
+		}
+	})
+
 	t.Run("success with ext filter", func(t *testing.T) {
 		tx := &stubTx{
-			row:  metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), "ext_str_01", "2026-01-01", nil, now}},
+			row:  metadataScanRow{vals: []any{"org_type", "text", "DICT", []byte(`{}`), nil, "ext_str_01", "2026-01-01", nil, now}},
 			row2: metadataScanRow{vals: []any{int(1)}},
 			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true}}},
 		}
@@ -811,6 +831,27 @@ func TestOrgUnitPGStore_ListOrgUnitsPage(t *testing.T) {
 			ExtFilterValue:    "DEPARTMENT",
 			SortField:         orgUnitListSortStatus,
 			SortOrder:         "DESC",
+		})
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if total != 1 || len(items) != 1 {
+			t.Fatalf("total=%d items=%v", total, items)
+		}
+	})
+
+	t.Run("success with ext filter for d_ dict field_key", func(t *testing.T) {
+		tx := &stubTx{
+			row:  metadataScanRow{vals: []any{"d_org_type", "text", "DICT", []byte(`{"dict_code":"org_type"}`), nil, "ext_str_01", "2026-01-01", nil, now}},
+			row2: metadataScanRow{vals: []any{int(1)}},
+			rows: &metadataScanRows{records: [][]any{{"A001", "Root", "active", true}}},
+		}
+		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+		items, total, err := store.ListOrgUnitsPage(ctx, "t1", orgUnitListPageRequest{
+			AsOf:              "2026-01-01",
+			IncludeDisabled:   true,
+			ExtFilterFieldKey: "d_org_type",
+			ExtFilterValue:    "DEPARTMENT",
 		})
 		if err != nil {
 			t.Fatalf("err=%v", err)
