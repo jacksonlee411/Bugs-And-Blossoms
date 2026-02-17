@@ -465,6 +465,8 @@ export async function listOrgUnitFieldDefinitions(): Promise<OrgUnitFieldDefinit
 
 export interface OrgUnitTenantFieldConfig {
   field_key: string
+  label_i18n_key?: string | null
+  label?: string | null
   value_type: OrgUnitExtValueType
   data_source_type: OrgUnitExtDataSourceType
   data_source_config: Record<string, unknown>
@@ -472,11 +474,39 @@ export interface OrgUnitTenantFieldConfig {
   enabled_on: string
   disabled_on: string | null
   updated_at: string
+  allow_filter?: boolean
+  allow_sort?: boolean
 }
 
 export interface OrgUnitFieldConfigsResponse {
   as_of: string
   field_configs: OrgUnitTenantFieldConfig[]
+}
+
+export interface OrgUnitPlainCustomHint {
+  pattern: string
+  value_type: OrgUnitExtValueType
+}
+
+export interface OrgUnitFieldEnableCandidateField {
+  field_key: string
+  dict_code: string
+  name: string
+  value_type: OrgUnitExtValueType
+  data_source_type: OrgUnitExtDataSourceType
+}
+
+export interface OrgUnitFieldConfigsEnableCandidatesResponse {
+  enabled_on: string
+  dict_fields: OrgUnitFieldEnableCandidateField[]
+  plain_custom_hint: OrgUnitPlainCustomHint
+}
+
+export async function listOrgUnitFieldConfigEnableCandidates(options: {
+  enabledOn: string
+}): Promise<OrgUnitFieldConfigsEnableCandidatesResponse> {
+  const query = new URLSearchParams({ enabled_on: options.enabledOn })
+  return httpClient.get<OrgUnitFieldConfigsEnableCandidatesResponse>(`/org/api/org-units/field-configs:enable-candidates?${query.toString()}`)
 }
 
 export async function listOrgUnitFieldConfigs(options: {
@@ -495,6 +525,7 @@ export async function enableOrgUnitFieldConfig(request: {
   enabled_on: string
   request_code: string
   data_source_config?: Record<string, unknown>
+  label?: string
 }): Promise<OrgUnitTenantFieldConfig> {
   return httpClient.post<OrgUnitTenantFieldConfig>('/org/api/org-units/field-configs', request)
 }

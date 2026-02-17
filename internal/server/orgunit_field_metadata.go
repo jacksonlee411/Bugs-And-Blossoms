@@ -27,12 +27,23 @@ func isCustomOrgUnitPlainFieldKey(fieldKey string) bool {
 	return fieldmeta.IsCustomPlainFieldKey(fieldKey)
 }
 
+func isCustomOrgUnitDictFieldKey(fieldKey string) bool {
+	return fieldmeta.IsCustomDictFieldKey(fieldKey)
+}
+
+func dictCodeFromOrgUnitDictFieldKey(fieldKey string) (string, bool) {
+	return fieldmeta.DictCodeFromDictFieldKey(fieldKey)
+}
+
 func isAllowedOrgUnitExtFieldKey(fieldKey string) bool {
 	fieldKey = strings.TrimSpace(fieldKey)
 	if fieldKey == "" {
 		return false
 	}
 	if _, ok := lookupOrgUnitFieldDefinition(fieldKey); ok {
+		return true
+	}
+	if isCustomOrgUnitDictFieldKey(fieldKey) {
 		return true
 	}
 	return isCustomOrgUnitPlainFieldKey(fieldKey)

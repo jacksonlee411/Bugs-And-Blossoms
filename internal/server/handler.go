@@ -344,6 +344,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/field-configs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitFieldConfigsAPI(w, r, orgStore, dictStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/field-configs:enable-candidates", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(w, r, dictStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/field-configs:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitFieldConfigsDisableAPI(w, r, orgStore)
 	}))

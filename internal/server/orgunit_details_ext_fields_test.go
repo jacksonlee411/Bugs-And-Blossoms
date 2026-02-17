@@ -219,6 +219,22 @@ func TestBuildOrgUnitDetailsExtFields_ErrorAndEdgeBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("dict field uses display label", func(t *testing.T) {
+		display := "组织类型"
+		items, err := buildOrgUnitDetailsExtFields(context.Background(), detailsExtStoreStub{
+			cfgs: []orgUnitTenantFieldConfig{{FieldKey: "d_org_type", DisplayLabel: &display, PhysicalCol: "ext_str_01", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}},
+			snap: orgUnitVersionExtSnapshot{
+				VersionValues: map[string]any{"ext_str_01": "10"},
+			},
+		}, "t1", 10000001, "2026-01-01")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(items) != 1 || items[0].Label == nil || *items[0].Label != "组织类型" {
+			t.Fatalf("items=%v", items)
+		}
+	})
+
 	t.Run("nil VersionValues does not panic", func(t *testing.T) {
 		items, err := buildOrgUnitDetailsExtFields(context.Background(), detailsExtStoreStub{
 			cfgs: []orgUnitTenantFieldConfig{{FieldKey: "short_name", PhysicalCol: "ext_str_01"}},

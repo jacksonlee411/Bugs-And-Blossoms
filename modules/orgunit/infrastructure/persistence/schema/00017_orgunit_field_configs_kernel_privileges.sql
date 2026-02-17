@@ -30,11 +30,11 @@ ALTER FUNCTION orgunit.assert_tenant_field_configs_update_allowed()
 ALTER FUNCTION orgunit.assert_tenant_field_configs_update_allowed()
   SET search_path = pg_catalog, orgunit, public;
 
-ALTER FUNCTION orgunit.enable_tenant_field_config(uuid, text, text, date, text, jsonb, text, uuid)
+ALTER FUNCTION orgunit.enable_tenant_field_config(uuid, text, text, date, text, jsonb, text, text, uuid)
   OWNER TO orgunit_kernel;
-ALTER FUNCTION orgunit.enable_tenant_field_config(uuid, text, text, date, text, jsonb, text, uuid)
+ALTER FUNCTION orgunit.enable_tenant_field_config(uuid, text, text, date, text, jsonb, text, text, uuid)
   SECURITY DEFINER;
-ALTER FUNCTION orgunit.enable_tenant_field_config(uuid, text, text, date, text, jsonb, text, uuid)
+ALTER FUNCTION orgunit.enable_tenant_field_config(uuid, text, text, date, text, jsonb, text, text, uuid)
   SET search_path = pg_catalog, orgunit, public;
 
 ALTER FUNCTION orgunit.disable_tenant_field_config(uuid, text, date, text, uuid)
@@ -42,6 +42,20 @@ ALTER FUNCTION orgunit.disable_tenant_field_config(uuid, text, date, text, uuid)
 ALTER FUNCTION orgunit.disable_tenant_field_config(uuid, text, date, text, uuid)
   SECURITY DEFINER;
 ALTER FUNCTION orgunit.disable_tenant_field_config(uuid, text, date, text, uuid)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.rename_jsonb_object_key_strict(jsonb, text, text)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.rename_jsonb_object_key_strict(jsonb, text, text)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.rename_jsonb_object_key_strict(jsonb, text, text)
+  SET search_path = pg_catalog, orgunit, public;
+
+ALTER FUNCTION orgunit.rekey_tenant_field_config(uuid, text, text, text, uuid)
+  OWNER TO orgunit_kernel;
+ALTER FUNCTION orgunit.rekey_tenant_field_config(uuid, text, text, text, uuid)
+  SECURITY DEFINER;
+ALTER FUNCTION orgunit.rekey_tenant_field_config(uuid, text, text, text, uuid)
   SET search_path = pg_catalog, orgunit, public;
 
 DO $$
@@ -87,4 +101,3 @@ BEGIN
       'TO superadmin_runtime';
   END IF;
 END $$;
-

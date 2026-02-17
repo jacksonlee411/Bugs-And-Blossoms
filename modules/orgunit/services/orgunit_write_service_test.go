@@ -588,6 +588,30 @@ func TestListEnabledExtFieldConfigs_Branches(t *testing.T) {
 			t.Fatalf("keys=%v", keys)
 		}
 	})
+
+	t.Run("custom d_ field keeps only strict dict mapping", func(t *testing.T) {
+		svc := newWriteService(orgUnitWriteStoreStub{
+			listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
+				return []types.TenantFieldConfig{
+					{FieldKey: "d_org_type", ValueType: "int", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},   // bad value_type
+					{FieldKey: "d_org_type", ValueType: "text", DataSourceType: "PLAIN", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}, // bad data_source_type
+					{FieldKey: "d_org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"other"}`)},     // mismatch key/config
+					{FieldKey: "d_org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},  // keep
+					{FieldKey: "x_cost_center", ValueType: "text", DataSourceType: "PLAIN", DataSourceConfig: json.RawMessage(`{}`)},                    // keep
+				}, nil
+			},
+		})
+		cfgs, keys, err := svc.listEnabledExtFieldConfigs(ctx, "t1", "2026-01-01")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if len(cfgs) != 2 {
+			t.Fatalf("cfgs=%v", cfgs)
+		}
+		if joinStrings(keys) != "d_org_type,x_cost_center" {
+			t.Fatalf("keys=%v", keys)
+		}
+	})
 }
 
 func TestBuildExtPayload_Branches(t *testing.T) {
@@ -691,8 +715,20 @@ func TestValidateExtFieldKeyEnabled_Branches(t *testing.T) {
 	if err := validateExtFieldKeyEnabled("x_cost_center", types.TenantFieldConfig{FieldKey: "x_cost_center", ValueType: "text", DataSourceType: "PLAIN"}); err != nil {
 		t.Fatalf("custom key err=%v", err)
 	}
+	if err := validateExtFieldKeyEnabled("d_org_type", types.TenantFieldConfig{FieldKey: "d_org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}); err != nil {
+		t.Fatalf("dict key err=%v", err)
+	}
 	if err := validateExtFieldKeyEnabled("unknown_field", types.TenantFieldConfig{FieldKey: "unknown_field", ValueType: "text", DataSourceType: "PLAIN"}); err == nil {
 		t.Fatal("expected unknown field rejected")
+	}
+	if err := validateExtFieldKeyEnabled("d_org_type", types.TenantFieldConfig{FieldKey: "d_org_type", ValueType: "int", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}); err == nil {
+		t.Fatal("expected dict non-text rejected")
+	}
+	if err := validateExtFieldKeyEnabled("d_org_type", types.TenantFieldConfig{FieldKey: "d_org_type", ValueType: "text", DataSourceType: "PLAIN", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}); err == nil {
+		t.Fatal("expected dict non-dict type rejected")
+	}
+	if err := validateExtFieldKeyEnabled("d_org_type", types.TenantFieldConfig{FieldKey: "d_org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"other"}`)}); err == nil {
+		t.Fatal("expected dict key/config mismatch rejected")
 	}
 	if err := validateExtFieldKeyEnabled("x_cost_center", types.TenantFieldConfig{FieldKey: "x_cost_center", ValueType: "int", DataSourceType: "PLAIN"}); err == nil {
 		t.Fatal("expected custom non-text rejected")
