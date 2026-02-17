@@ -1553,6 +1553,13 @@ func writeOrgUnitServiceError(w http.ResponseWriter, r *http.Request, err error,
 		}
 	}
 
+	// Web 端目前优先展示 ErrorEnvelope.message；对已知稳定 code 提供可读提示，避免只看到 "orgunit_*_failed"。
+	if message == defaultCode && isStableDBCode(code) {
+		if mapped := orgNodeWriteErrorMessage(errors.New(code)); strings.TrimSpace(mapped) != "" && mapped != code {
+			message = mapped
+		}
+	}
+
 	routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, message)
 }
 

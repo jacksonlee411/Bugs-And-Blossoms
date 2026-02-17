@@ -104,7 +104,7 @@ func TestOrgUnitInitiatorUUID_FallsBackToTenantID(t *testing.T) {
 }
 
 func TestOrgNodeWriteErrorMessage(t *testing.T) {
-	if got := orgNodeWriteErrorMessage(errors.New("EVENT_DATE_CONFLICT")); got != "生效日期冲突，请勾选“同日状态纠错”后重试" {
+	if got := orgNodeWriteErrorMessage(errors.New("EVENT_DATE_CONFLICT")); got != "生效日期冲突：该生效日已存在记录。请修改“生效日期”（新增/插入记录）或使用“修正”修改该生效日记录后重试。" {
 		t.Fatalf("got=%q", got)
 	}
 	if got := orgNodeWriteErrorMessage(errors.New("ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET")); got != "该记录不支持同日状态纠错" {
