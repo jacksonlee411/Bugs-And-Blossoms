@@ -59,6 +59,31 @@ describe('buildPatch', () => {
     })
   })
 
+  it('支持 PLAIN 扩展字段最小变更写入', () => {
+    const patch = buildPatch({
+      allowedFields: ['description'],
+      fieldPayloadKeys: {
+        description: 'ext.description'
+      },
+      original: {
+        ext: {
+          description: 'Old Desc'
+        }
+      },
+      next: {
+        ext: {
+          description: 'New Desc'
+        }
+      }
+    })
+
+    expect(patch).toEqual({
+      ext: {
+        description: 'New Desc'
+      }
+    })
+  })
+
   it('非 allow 字段不会进入 patch', () => {
     const patch = buildPatch({
       allowedFields: ['name'],
@@ -82,4 +107,3 @@ describe('buildPatch', () => {
     expect(patch).toEqual({})
   })
 })
-

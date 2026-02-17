@@ -35,7 +35,7 @@
 - 不实现 OrgUnit 列表页扩展字段筛选/排序入口（Phase 4C）。
 - 不在本计划内设计/变更 DB schema、Kernel 函数或元数据表结构（其契约归 `DEV-PLAN-100` Phase 1/2/3）。
 - 不实现“任意租户自定义 label 的业务数据多语言存储结构”（对齐 `DEV-PLAN-020` 边界）。
-- MVP 不启用 `data_source_type=PLAIN` 的扩展字段；本计划仅要求实现 `DICT/ENTITY` 扩展字段的编辑控件。若 details 仍返回 `PLAIN`，UI 必须 fail-closed：只读展示 + 明确 warning，不允许提交该字段的更正。
+- （历史边界）本文最初冻结为“PLAIN 只读”。该限制已由 `DEV-PLAN-101B` 收敛：`PLAIN` 在 capabilities 允许时可编辑；`PLAIN` 仍无 options。
 
 ### 2.3 工具链与门禁（SSOT 引用）
 
@@ -116,7 +116,7 @@ export interface OrgUnitExtField {
   - `text/uuid/date`：`string | null`
   - `int`：`number | null`
   - `bool`：`boolean | null`
-- MVP 约束：不启用 `data_source_type=PLAIN` 的字段；若出现，UI 只读展示并给出 warning（不提供输入控件，不允许提交更正）。
+- 边界更新（`DEV-PLAN-101B`）：`data_source_type=PLAIN` 时，UI 按 `value_type` 提供对应输入控件；字段是否可编辑仍由 capabilities 决定并 fail-closed。
 - 当 `data_source_type=PLAIN`：options 不适用，UI 禁止调用 options endpoint（fail-closed）。
 - `ext_fields` 必须包含 `as_of` 下 **enabled 的字段全集**（即使该字段当前无值，`value=null` 也必须返回），避免出现“字段已启用但页面不可见/不可编辑”的僵尸体验。
 - 当 `as_of >= disabled_on` 时该字段不属于 enabled 集合，因此不应出现在 `ext_fields`；若需查看历史值，请切换 `as_of` 或查看 Audit（变更日志）。
