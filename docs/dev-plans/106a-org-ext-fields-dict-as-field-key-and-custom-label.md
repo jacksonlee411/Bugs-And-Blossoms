@@ -1,6 +1,6 @@
 # DEV-PLAN-106A：Org 扩展字段启用收敛（统一为字典字段方式 + 启用时自定义描述；保留 PLAIN）
 
-**状态**: 草拟中（2026-02-17 13:47 UTC）
+**状态**: 实施中（2026-02-17；最后更新：2026-02-18）
 
 ## 1. 背景
 
@@ -154,6 +154,32 @@
    - 并补齐 queryability 元数据（冻结）：
      - `allow_filter/allow_sort`：对 `d_...` 固定为 `true`；对 `x_...` 固定为 `false`；对 built-in 继承 `field-definitions`
 
+### 5.2 错误码与 HTTP 状态（冻结）
+
+> 说明：仓库内 Internal API 的错误返回由统一封装生成；本节只冻结“对外可观察的稳定 code 与语义”，避免 UI/调用方靠猜。  
+> 细节实现以 `internal/server/setid_api.go:298` 的 `writeInternalAPIError` 与 OrgUnit API 的错误映射为准。
+
+1. `GET /org/api/org-units/field-configs:enable-candidates`：
+   - `400 invalid_request`：`enabled_on` 缺失/非法；
+   - `500 tenant_missing`：租户上下文缺失（框架/中间件问题）；
+   - `500 dict_store_missing`：服务端未配置 dict registry 依赖；
+   - `500 orgunit_field_enable_candidates_failed`：调用 dict registry 失败（内部错误）。
+2. `POST /org/api/org-units/field-configs`（启用）：
+   - `400 invalid_request`：必填字段缺失/日期非法/自定义 key 不合法；
+   - `404 ORG_FIELD_DEFINITION_NOT_FOUND`：built-in 不存在且非合法 `x_.../d_...`；
+   - `400 ORG_FIELD_CONFIG_INVALID_DATA_SOURCE_CONFIG`：
+     - built-in DICT field_key（必须 fail-closed）；
+     - `d_...` 但提交的 `data_source_config` 与 suffix 不一致；
+     - built-in PLAIN/ENTITY 提交了不符合约束的 config；
+   - `422`（来自 DB Kernel 的稳定 code）：例如
+     - `ORG_FIELD_CONFIG_ALREADY_ENABLED`
+     - `ORG_FIELD_CONFIG_SLOT_EXHAUSTED`
+     - `ORG_REQUEST_ID_CONFLICT`
+3. `GET /org/api/org-units/fields:options`：
+   - `404 ORG_FIELD_OPTIONS_FIELD_NOT_ENABLED_AS_OF`：as_of 下该 field_key 未启用；
+   - `404 ORG_FIELD_OPTIONS_NOT_SUPPORTED`：非 DICT 或 key/config 不一致（fail-closed）；
+   - `500 orgunit_field_options_failed`：调用 dict resolver 失败（内部错误）。
+
 ### 5.1 主要下线能力与接口语义收敛（冻结）
 
 1. **删除内置 DICT 字段启用能力（冻结）**：`POST /org/api/org-units/field-configs`
@@ -161,7 +187,7 @@
 2. **收紧 options 解析口径（冻结）**：`GET /org/api/org-units/fields:options`
    - 保留接口用于字典字段值选项查询；
    - 统一按 `d_<dict_code>` 解析 dict_code；
-   - （迁移期）若系统仍存在存量内置 DICT field_key，则必须先完成 §4.4 迁移再移除兼容分支；禁止长期双链路。
+   - （迁移期）若系统仍存在存量内置 DICT field_key（`data_source_type=DICT` 且 `field_key` 非 `d_...`），允许 options 暂时保留“built-in DICT 定义校验”分支以避免断链；完成 §4.4 rekey 后必须移除该兼容分支，禁止长期双链路。
 
 ## 6. UI 交互（配置员视角）
 
@@ -245,6 +271,7 @@
    - 必须同步修正：
      - `orgunit.org_events.payload` 的 `ext/ext_labels_snapshot` 键（old -> new）；
      - `orgunit.org_unit_versions.ext_labels_snapshot` 键（old -> new）。
+   - 推荐执行入口（冻结）：通过 DB Kernel 的 `orgunit.rekey_tenant_field_config(...)` 逐条 rekey（其内部会：原地 rekey `tenant_field_configs`、改写 `org_events`、改写 `org_unit_versions`、写入 `tenant_field_config_events(REKEY)`）。
 3. [ ] 迁移完成后，打开门禁：任何 **内置 DICT field_key** 的 enable 请求均被拒绝（DICT 仅允许 `d_...`；对齐 §5.1）。
 
 ### 8.5 前端（MUI）收敛改造
