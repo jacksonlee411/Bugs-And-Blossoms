@@ -12,6 +12,7 @@ import (
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/fieldmeta"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
+	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/httperr"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
@@ -40,6 +41,9 @@ var (
 	newUUID                             = uuidv7.NewString
 	marshalJSON                         = json.Marshal
 	resolveOrgUnitMutationPolicyInWrite = ResolvePolicy
+	resolveDictLabelInWrite             = func(ctx context.Context, tenantID string, asOf string, dictCode string, code string) (string, bool, error) {
+		return globalDictResolver{}.ResolveValueLabel(ctx, tenantID, asOf, dictCode, code)
+	}
 )
 
 type OrgUnitWriteService interface {
@@ -148,6 +152,16 @@ type orgUnitWriteService struct {
 	store ports.OrgUnitWriteStore
 }
 
+type globalDictResolver struct{}
+
+func (globalDictResolver) ResolveValueLabel(ctx context.Context, tenantID string, asOf string, dictCode string, code string) (string, bool, error) {
+	return dictpkg.ResolveValueLabel(ctx, tenantID, asOf, dictCode, code)
+}
+
+func (globalDictResolver) ListOptions(ctx context.Context, tenantID string, asOf string, dictCode string, keyword string, limit int) ([]dictpkg.Option, error) {
+	return dictpkg.ListOptions(ctx, tenantID, asOf, dictCode, keyword, limit)
+}
+
 func NewOrgUnitWriteService(store ports.OrgUnitWriteStore) OrgUnitWriteService {
 	return &orgUnitWriteService{store: store}
 }
@@ -236,7 +250,7 @@ func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req C
 	}
 
 	if len(req.Ext) > 0 {
-		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		extPayload, extLabels, err := buildExtPayloadWithContext(ctx, tenantID, effectiveDate, req.Ext, fieldConfigs)
 		if err != nil {
 			return types.OrgUnitResult{}, err
 		}
@@ -333,7 +347,7 @@ func (s *orgUnitWriteService) Rename(ctx context.Context, tenantID string, req R
 
 	payload := map[string]any{"new_name": newName}
 	if len(req.Ext) > 0 {
-		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		extPayload, extLabels, err := buildExtPayloadWithContext(ctx, tenantID, effectiveDate, req.Ext, fieldConfigs)
 		if err != nil {
 			return err
 		}
@@ -420,7 +434,7 @@ func (s *orgUnitWriteService) Move(ctx context.Context, tenantID string, req Mov
 
 	payload := map[string]any{"new_parent_id": parentID}
 	if len(req.Ext) > 0 {
-		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		extPayload, extLabels, err := buildExtPayloadWithContext(ctx, tenantID, effectiveDate, req.Ext, fieldConfigs)
 		if err != nil {
 			return err
 		}
@@ -486,7 +500,7 @@ func (s *orgUnitWriteService) Disable(ctx context.Context, tenantID string, req 
 
 	payload := json.RawMessage(`{}`)
 	if len(req.Ext) > 0 {
-		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		extPayload, extLabels, err := buildExtPayloadWithContext(ctx, tenantID, effectiveDate, req.Ext, fieldConfigs)
 		if err != nil {
 			return err
 		}
@@ -556,7 +570,7 @@ func (s *orgUnitWriteService) Enable(ctx context.Context, tenantID string, req E
 
 	payload := json.RawMessage(`{}`)
 	if len(req.Ext) > 0 {
-		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		extPayload, extLabels, err := buildExtPayloadWithContext(ctx, tenantID, effectiveDate, req.Ext, fieldConfigs)
 		if err != nil {
 			return err
 		}
@@ -626,7 +640,7 @@ func (s *orgUnitWriteService) SetBusinessUnit(ctx context.Context, tenantID stri
 
 	payload := map[string]any{"is_business_unit": req.IsBusinessUnit}
 	if len(req.Ext) > 0 {
-		extPayload, extLabels, err := buildExtPayload(req.Ext, fieldConfigs)
+		extPayload, extLabels, err := buildExtPayloadWithContext(ctx, tenantID, effectiveDate, req.Ext, fieldConfigs)
 		if err != nil {
 			return err
 		}
@@ -953,6 +967,10 @@ func (s *orgUnitWriteService) buildCorrectionPatch(ctx context.Context, tenantID
 
 		extPatch := make(map[string]any, len(patch.Ext))
 		extLabels := make(map[string]string)
+		asOfForDict := strings.TrimSpace(event.EffectiveDate)
+		if strings.TrimSpace(correctedDate) != "" {
+			asOfForDict = strings.TrimSpace(correctedDate)
+		}
 		for rawKey, rawValue := range patch.Ext {
 			fieldKey := strings.TrimSpace(rawKey)
 			if fieldKey == "" {
@@ -984,8 +1002,8 @@ func (s *orgUnitWriteService) buildCorrectionPatch(ctx context.Context, tenantID
 				if !ok {
 					return nil, nil, "", httperr.NewBadRequest(errOrgInvalidArgument)
 				}
-				label, ok := fieldmeta.LookupDictLabel(dictCode, value)
-				if !ok {
+				label, ok, err := resolveDictLabelInWrite(ctx, tenantID, asOfForDict, dictCode, value)
+				if err != nil || !ok {
 					return nil, nil, "", httperr.NewBadRequest(errOrgInvalidArgument)
 				}
 				extLabels[fieldKey] = label
@@ -1031,6 +1049,10 @@ func (s *orgUnitWriteService) listEnabledExtFieldConfigs(ctx context.Context, te
 }
 
 func buildExtPayload(ext map[string]any, fieldConfigs []types.TenantFieldConfig) (map[string]any, map[string]string, error) {
+	return buildExtPayloadWithContext(context.Background(), "", "", ext, fieldConfigs)
+}
+
+func buildExtPayloadWithContext(ctx context.Context, tenantID string, asOf string, ext map[string]any, fieldConfigs []types.TenantFieldConfig) (map[string]any, map[string]string, error) {
 	cfgByKey := make(map[string]types.TenantFieldConfig, len(fieldConfigs))
 	for _, cfg := range fieldConfigs {
 		key := strings.TrimSpace(cfg.FieldKey)
@@ -1076,8 +1098,8 @@ func buildExtPayload(ext map[string]any, fieldConfigs []types.TenantFieldConfig)
 			if !ok {
 				return nil, nil, httperr.NewBadRequest(errOrgInvalidArgument)
 			}
-			label, ok := fieldmeta.LookupDictLabel(dictCode, value)
-			if !ok {
+			label, ok, err := resolveDictLabelInWrite(ctx, tenantID, asOf, dictCode, value)
+			if err != nil || !ok {
 				return nil, nil, httperr.NewBadRequest(errOrgInvalidArgument)
 			}
 			extLabels[fieldKey] = label

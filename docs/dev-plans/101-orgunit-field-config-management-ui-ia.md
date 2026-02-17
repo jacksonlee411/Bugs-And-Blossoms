@@ -18,14 +18,14 @@
 
 ## 2. 目标（DoD）
 
-1. [ ] 字段配置管理页在租户 App 内**可发现、可达**（导航入口 + Org 页面内入口）。
-2. [ ] 仅 `orgunit.admin` 可访问；无权限时统一 `NoAccessPage`（fail-closed）。
-3. [ ] 页面可完成最小管理闭环：
+1. [x] 字段配置管理页在租户 App 内**可发现、可达**（导航入口 + Org 页面内入口）。
+2. [x] 仅 `orgunit.admin` 可访问；无权限时统一 `NoAccessPage`（fail-closed）。
+3. [x] 页面可完成最小管理闭环：
    - 查看当前租户已配置字段（含有效期与映射槽位只读）。
    - 启用（新增）一个字段配置（由后端分配 `physical_col`，前端不可选；DICT/ENTITY 需从 `field-definitions.data_source_config_options` 选择 `data_source_config`）。
    - 停用一个字段配置（按 day 粒度选择 `disabled_on`）；若停用尚未生效，支持“延期停用”（仅向后延迟）。
    - “禁用”状态可解释：在 `status=disabled` 下区分 `未生效/已停用`（展示与二级筛选）。
-4. [ ] 页面加载/空态/错误态可解释；不出现“静默失败/看起来成功但实际未生效”。
+4. [x] 页面加载/空态/错误态可解释；不出现“静默失败/看起来成功但实际未生效”。
 
 ## 3. 非目标（明确不做）
 
@@ -226,22 +226,22 @@
 
 ## 9. 验收标准（最小可交付）
 
-1. [ ] `tenant_admin`（含 `orgunit.admin`）可在导航栏看到 `字段配置`，可进入页面并加载数据。
-2. [ ] `tenant_viewer`（仅 `orgunit.read`）看不到导航项，直接访问 URL 返回 `NoAccessPage`。
-3. [ ] 启用字段成功后：
+1. [x] `tenant_admin`（含 `orgunit.admin`）可在导航栏看到 `字段配置`，可进入页面并加载数据。
+2. [x] `tenant_viewer`（仅 `orgunit.read`）看不到导航项，直接访问 URL 返回 `NoAccessPage`。
+3. [x] 启用字段成功后：
    - 列表出现新配置行（含 `physical_col`）。
    - 回到 OrgUnit 详情页，在该字段的 enabled 区间内（`enabled_on <= as_of` 且 `disabled_on IS NULL OR as_of < disabled_on`）可看到该扩展字段（细节由 `DEV-PLAN-100` Phase 4 承接）。
-4. [ ] 停用字段成功后：
+4. [x] 停用字段成功后：
    - 在字段配置页可看到 `disabled_on` 生效；
    - 在 OrgUnit 详情页，当 `as_of >= disabled_on` 时该字段不再展示（不在 details 的 `ext_fields[]` 中出现）；若需查看历史，请切换 `as_of` 或查看 Audit（对齐 `DEV-PLAN-100D/100E`）。
-5. [ ] “禁用”展示可解释：
+5. [x] “禁用”展示可解释：
    - `as_of < enabled_on` 的行在列表中标识为 `未生效`；
    - `disabled_on <= as_of` 的行在列表中标识为 `已停用`；
    - 当 `status=disabled` 时，用户可通过 `disabled_state` 二级筛选快速分流两类。
-6. [ ] 延期停用可用且符合约束：
+6. [x] 延期停用可用且符合约束：
    - 若 `disabled_on` 已设置且 `today_utc < disabled_on`，可把 `disabled_on` 往后改（只能延期，不能提前/不能回滚为 null）；
    - 若 `today_utc >= disabled_on`，禁止延期（按钮不可用且提示原因）。
-7. [ ] 失败路径可解释：槽位耗尽/权限不足/网络错误不会静默。
+7. [x] 失败路径可解释：槽位耗尽/权限不足/网络错误不会静默。
 
 ## 10. 代码落点（建议）
 

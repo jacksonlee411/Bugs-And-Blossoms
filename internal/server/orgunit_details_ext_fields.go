@@ -54,7 +54,7 @@ func buildOrgUnitDetailsExtFields(ctx context.Context, store orgUnitDetailsExtFi
 			value = snapshot.VersionValues[cfg.PhysicalCol]
 		}
 
-		displayValue, source := resolveOrgUnitExtDisplayValue(def, cfg, valueType, dataSourceType, value, snapshot)
+		displayValue, source := resolveOrgUnitExtDisplayValue(ctx, tenantID, asOf, def, cfg, valueType, dataSourceType, value, snapshot)
 
 		items = append(items, orgUnitExtFieldAPIItem{
 			FieldKey:           fieldKey,
@@ -71,7 +71,7 @@ func buildOrgUnitDetailsExtFields(ctx context.Context, store orgUnitDetailsExtFi
 	return items, nil
 }
 
-func resolveOrgUnitExtDisplayValue(def orgUnitFieldDefinition, cfg orgUnitTenantFieldConfig, valueType string, dataSourceType string, value any, snapshot orgUnitVersionExtSnapshot) (*string, string) {
+func resolveOrgUnitExtDisplayValue(ctx context.Context, tenantID string, asOf string, def orgUnitFieldDefinition, cfg orgUnitTenantFieldConfig, valueType string, dataSourceType string, value any, snapshot orgUnitVersionExtSnapshot) (*string, string) {
 	dataSourceType = strings.ToUpper(strings.TrimSpace(dataSourceType))
 	switch dataSourceType {
 	case "PLAIN":
@@ -99,7 +99,8 @@ func resolveOrgUnitExtDisplayValue(def orgUnitFieldDefinition, cfg orgUnitTenant
 		} else {
 			code = fmt.Sprint(value)
 		}
-		if label, ok := lookupOrgUnitDictLabel(dictCode, code); ok {
+		label, ok, err := resolveOrgUnitDictLabel(ctx, tenantID, asOf, dictCode, code)
+		if err == nil && ok {
 			return &label, "dict_fallback"
 		}
 		return nil, "unresolved"

@@ -4,6 +4,7 @@ import CategoryIcon from '@mui/icons-material/Category'
 import GroupsIcon from '@mui/icons-material/Groups'
 import HubIcon from '@mui/icons-material/Hub'
 import HomeWorkIcon from '@mui/icons-material/HomeWork'
+import MenuBookIcon from '@mui/icons-material/MenuBook'
 import PendingActionsIcon from '@mui/icons-material/PendingActions'
 import TuneIcon from '@mui/icons-material/Tune'
 import WorkOutlineIcon from '@mui/icons-material/WorkOutline'
@@ -36,6 +37,15 @@ export const navItems: NavItem[] = [
     order: 21,
     permissionKey: 'orgunit.admin',
     keywords: ['field', 'config', 'metadata', 'orgunit', '字段', '配置', '元数据']
+  },
+  {
+    key: 'dict-configs',
+    path: '/dicts',
+    labelKey: 'nav_dicts',
+    icon: <MenuBookIcon fontSize='small' />,
+    order: 22,
+    permissionKey: 'dict.admin',
+    keywords: ['dict', 'dictionary', 'value', '配置', '字典', '编码']
   },
   {
     key: 'org-setid',

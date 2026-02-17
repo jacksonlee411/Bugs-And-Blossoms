@@ -1,6 +1,6 @@
 # DEV-PLAN-100：Org 模块宽表预留字段 + 元数据驱动落地实施计划与路线图（承接 DEV-PLAN-098）
 
-**状态**: 规划中（2026-02-13 07:37 UTC）
+**状态**: 部分完成（M0~M4 已完成，M5 待实施；2026-02-16 11:40 UTC）
 
 ## 1. 背景与目标
 
@@ -133,20 +133,20 @@
 
 已拆分为独立实施计划（SSOT）：`docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`。
 
-1. [ ] OrgUnit 详情页展示扩展字段（按字段配置动态渲染）。
-2. [ ] 详情页编辑态严格按 mutation capabilities 控制字段可编辑性、动作可用性与原因解释（`deny_reasons`）；接口不可用时 fail-closed（只读/禁用）。
-3. [ ] Select 字段接入 options endpoint（DICT/ENTITY 双通道）。
+1. [x] OrgUnit 详情页展示扩展字段（按字段配置动态渲染）。
+2. [x] 详情页编辑态严格按 mutation capabilities 控制字段可编辑性、动作可用性与原因解释（`deny_reasons`）；接口不可用时 fail-closed（只读/禁用）。
+3. [x] Select 字段接入 options endpoint（DICT/ENTITY 双通道）。
 
 ### 4B：字段配置管理页（由DEV-PLAN-101承接）
 
-4. [ ] 字段配置管理页（UI）可发现且可操作（仅管理员可见/可达；启用/停用；映射槽位只读），IA/页面结构以 `DEV-PLAN-101` 为准。
+4. [x] 字段配置管理页（UI）可发现且可操作（仅管理员可见/可达；启用/停用；映射槽位只读），IA/页面结构以 `DEV-PLAN-101` 为准。
 
 ### 4C：列表能力与 i18n（闭环收口）
 
 已拆分为独立实施计划（SSOT）：`docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`。
 
-5. [ ] OrgUnit 列表页开放 1~2 个扩展字段筛选/排序入口。
-6. [ ] i18n（en/zh）补齐扩展字段标签与错误提示。
+5. [x] OrgUnit 列表页开放 1~2 个扩展字段筛选/排序入口。
+6. [x] i18n（en/zh）补齐扩展字段标签与错误提示。
 
 **出口条件**：
 - 用户可在页面完成“字段配置管理（启用字段）-> 写入值 -> 列表筛选/排序 -> 详情回显”至少一条端到端路径。
@@ -154,6 +154,8 @@
 - 字段配置管理页在租户 App 内可发现（导航/页面入口）且权限 fail-closed（无权限统一拒绝）。
 
 ## Phase 5：稳定化与性能收口
+
+已拆分为独立实施计划（SSOT）：`docs/dev-plans/100h-org-metadata-wide-table-phase5-stability-performance-ops-closure.md`。
 
 1. [ ] 基于慢查询与真实访问证据补充索引，不做预防性全量索引。  
 2. [ ] 增加基准对比（至少：列表排序、筛选、详情读取）。  
@@ -164,25 +166,25 @@
 
 ## 6. 里程碑交付物（按阶段）
 
-- M0（Phase 0）：契约冻结版文档（SSOT：`DEV-PLAN-100A`）+ 字段清单。  
-- M1（Phase 1）：迁移脚本（SSOT：`DEV-PLAN-100B`）+ 元数据表 + 扩展列 + 基础约束。  
-- M2（Phase 2）：Kernel/Projection 支持扩展字段写入与回放（SSOT：`DEV-PLAN-100C`）。  
-- M3（Phase 3）：API 可读写 + options + mutation-capabilities + 列表筛选/排序（SSOT：`DEV-PLAN-100D`）。  
-- M4（Phase 4）：UI 可操作闭环（字段配置管理页 + 详情页 capabilities 驱动编辑 + 列表筛选/排序）。  
-- M5（Phase 5）：性能与稳定性报告。
+- M0（Phase 0）：契约冻结版文档（SSOT：`DEV-PLAN-100A`）+ 字段清单。✅  
+- M1（Phase 1）：迁移脚本（SSOT：`DEV-PLAN-100B`）+ 元数据表 + 扩展列 + 基础约束。✅  
+- M2（Phase 2）：Kernel/Projection 支持扩展字段写入与回放（SSOT：`DEV-PLAN-100C`）。✅  
+- M3（Phase 3）：API 可读写 + options + mutation-capabilities + 列表筛选/排序（SSOT：`DEV-PLAN-100D`）。✅  
+- M4（Phase 4）：UI 可操作闭环（字段配置管理页 + 详情页 capabilities 驱动编辑 + 列表筛选/排序）。✅  
+- M5（Phase 5）：性能与稳定性报告。🟡（待实施）
 
 ## 7. 验收标准（DoD）
 
-1. [ ] 不新增第二写入口，所有写操作可追溯到 `submit_*` 内核函数。  
-2. [ ] 扩展字段在有效期切换下读写一致，历史可复现。  
-3. [ ] DICT/ENTITY 语义不混用，存储策略与展示策略一致。  
+1. [x] 不新增第二写入口，所有写操作可追溯到 `submit_*` 内核函数。  
+2. [x] 扩展字段在有效期切换下读写一致，历史可复现。  
+3. [x] DICT/ENTITY 语义不混用，存储策略与展示策略一致。  
 4. [ ] 列表筛选/排序命中至少 1 个扩展字段，且性能可接受。  
-5. [ ] 字段配置写入可追溯到单一管理入口（无直写元数据表绕行）。  
-6. [ ] 门禁通过：`make check doc` + 命中的代码/迁移/测试门禁。
-7. [ ] 无效 action/event/target 组合必拒绝（fail-closed），且服务层策略与 Kernel 防守性校验口径一致。  
-8. [ ] mutation capabilities 可稳定返回“可用性 + 字段映射 + 拒绝原因”，扩展字段与核心字段同口径可解释。  
-9. [ ] `PATCH_FIELD_NOT_ALLOWED` 等稳定错误码不因 UI/Service/Kernel 漂移。
-10. [ ] 字段配置管理页可发现、可操作且权限正确：仅管理员可启用/停用字段；`physical_col` 等映射信息只读可审计；无权限访问 fail-closed。
+5. [x] 字段配置写入可追溯到单一管理入口（无直写元数据表绕行）。  
+6. [x] 门禁通过：`make check doc` + 命中的代码/迁移/测试门禁。
+7. [x] 无效 action/event/target 组合必拒绝（fail-closed），且服务层策略与 Kernel 防守性校验口径一致。  
+8. [x] mutation capabilities 可稳定返回“可用性 + 字段映射 + 拒绝原因”，扩展字段与核心字段同口径可解释。  
+9. [x] `PATCH_FIELD_NOT_ALLOWED` 等稳定错误码不因 UI/Service/Kernel 漂移。
+10. [x] 字段配置管理页可发现、可操作且权限正确：仅管理员可启用/停用字段；`physical_col` 等映射信息只读可审计；无权限访问 fail-closed。
 
 ## 8. 测试与门禁计划（引用 SSOT）
 
@@ -234,6 +236,7 @@
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
 - `docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
+- `docs/dev-plans/100h-org-metadata-wide-table-phase5-stability-performance-ops-closure.md`
 - `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
 - `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`

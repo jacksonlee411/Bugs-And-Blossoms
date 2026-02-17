@@ -1,5 +1,7 @@
-h1:cbQUKSClbf0l2ZHZkhFSU41DdtiRgvbuDh+4sc8wZeo=
+h1:7dwf8rAD9o1C3rZAmsRrfrSCIOoUBMJXXvJIA9p5CZo=
 20260106003000_iam_baseline.sql h1:4cRdz130X33pSQ0tm+LXZ1ptR+zChkscFHWrmYy/UgM=
 20260107120000_iam_tenancy_and_superadmin.sql h1:t/E4j/JJ8rIHiD67AD8qXM4RFDXaC6gIfd7RhgbfNEs=
 20260107130000_iam_principals_and_sessions.sql h1:kN2JI45SWk+KpQ5jy5YsVkqLuouJ2mCYaXxSBTOmB7s=
 20260124120000_iam_global_tenant.sql h1:NdpdoTKvm6t/0Fo9+x+PY4JYL8H+b7RpztLFjT89QLQ=
+20260216165000_iam_dict_config.sql h1:7BG2xW575VADieGxwsbHJNYfltF0s3ZxGUosLgdXdC0=
+20260217113000_iam_dict_registry.sql h1:YchEp52Xye9U9PyHpEX1jakpa1LhEPkhpwC4P5jaz34=

@@ -67,16 +67,6 @@ var fieldDefinitions = []FieldDefinition{
 	},
 }
 
-var dictOptionsRegistry = map[string][]FieldOption{
-	"org_type": {
-		{Value: "BUSINESS_UNIT", Label: "Business Unit"},
-		{Value: "COMPANY", Label: "Company"},
-		{Value: "COST_CENTER", Label: "Cost Center"},
-		{Value: "DEPARTMENT", Label: "Department"},
-		{Value: "LOCATION", Label: "Location"},
-	},
-}
-
 var fieldDefinitionByKey = func() map[string]FieldDefinition {
 	out := make(map[string]FieldDefinition, len(fieldDefinitions))
 	for _, def := range fieldDefinitions {
@@ -148,62 +138,6 @@ func DictCodeFromDataSourceConfig(raw json.RawMessage) (string, bool) {
 		return "", false
 	}
 	return value, true
-}
-
-func ListDictOptions(dictCode string, keyword string, limit int) []FieldOption {
-	items := append([]FieldOption(nil), dictOptionsRegistry[dictCode]...)
-	if len(items) == 0 {
-		return []FieldOption{}
-	}
-	needle := strings.ToLower(strings.TrimSpace(keyword))
-	if needle != "" {
-		filtered := make([]FieldOption, 0, len(items))
-		for _, item := range items {
-			if strings.Contains(strings.ToLower(item.Label), needle) || strings.Contains(strings.ToLower(item.Value), needle) {
-				filtered = append(filtered, item)
-			}
-		}
-		items = filtered
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].Label == items[j].Label {
-			return items[i].Value < items[j].Value
-		}
-		return items[i].Label < items[j].Label
-	})
-	if limit < 0 {
-		limit = 0
-	}
-	if limit > 0 && len(items) > limit {
-		items = items[:limit]
-	}
-	return items
-}
-
-func LookupDictLabel(dictCode string, value string) (string, bool) {
-	candidate := strings.TrimSpace(value)
-	if candidate == "" {
-		return "", false
-	}
-	for _, item := range dictOptionsRegistry[dictCode] {
-		if strings.EqualFold(item.Value, candidate) {
-			return item.Label, true
-		}
-	}
-	return "", false
-}
-
-func LookupDictOption(dictCode string, value string) (FieldOption, bool) {
-	candidate := strings.TrimSpace(value)
-	if candidate == "" {
-		return FieldOption{}, false
-	}
-	for _, item := range dictOptionsRegistry[dictCode] {
-		if strings.EqualFold(item.Value, candidate) {
-			return item, true
-		}
-	}
-	return FieldOption{}, false
 }
 
 func cloneFieldDefinition(def FieldDefinition) FieldDefinition {

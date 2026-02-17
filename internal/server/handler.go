@@ -17,6 +17,7 @@ import (
 	orgunitpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/infrastructure/persistence"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
+	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
 )
 
 //go:embed assets/*
@@ -36,6 +37,7 @@ type HandlerOptions struct {
 	PersonStore         PersonStore
 	PositionStore       PositionStore
 	AssignmentStore     AssignmentStore
+	DictStore           DictStore
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
@@ -65,6 +67,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	personStore := opts.PersonStore
 	positionStore := opts.PositionStore
 	assignmentStore := opts.AssignmentStore
+	dictStore := opts.DictStore
 	tenancyResolver := opts.TenancyResolver
 	identityProvider := opts.IdentityProvider
 
@@ -127,6 +130,17 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 				assignmentStore = s
 			}
 		}
+	}
+
+	if dictStore == nil {
+		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
+			dictStore = newDictPGStore(pgStore.pool)
+		} else {
+			dictStore = newDictMemoryStore()
+		}
+	}
+	if err := dictpkg.RegisterResolver(dictStore); err != nil {
+		return nil, err
 	}
 
 	router := routing.NewRouter(classifier)
@@ -220,6 +234,30 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		setSIDCookie(w, sid)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusNoContent)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/dicts", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleDictsAPI(w, r, dictStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/iam/api/dicts", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleDictsAPI(w, r, dictStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/iam/api/dicts:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleDictsDisableAPI(w, r, dictStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/dicts/values", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleDictValuesAPI(w, r, dictStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/iam/api/dicts/values", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleDictValuesAPI(w, r, dictStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/iam/api/dicts/values:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleDictValuesDisableAPI(w, r, dictStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/iam/api/dicts/values:correct", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleDictValuesCorrectAPI(w, r, dictStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/dicts/values/audit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleDictValuesAuditAPI(w, r, dictStore)
 	}))
 	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if sid, ok := readSID(r); ok {

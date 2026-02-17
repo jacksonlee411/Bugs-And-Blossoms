@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/fieldmeta"
+	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
 )
 
 // NOTE: This file intentionally keeps server-local helpers as thin wrappers.
@@ -28,14 +30,18 @@ func orgUnitFieldDataSourceConfigOptions(def orgUnitFieldDefinition) []map[strin
 	return fieldmeta.DataSourceConfigOptions(def)
 }
 
-func listOrgUnitDictOptions(dictCode string, keyword string, limit int) []orgUnitFieldOption {
-	return fieldmeta.ListDictOptions(dictCode, keyword, limit)
+func listOrgUnitDictOptions(ctx context.Context, tenantID string, asOf string, dictCode string, keyword string, limit int) ([]orgUnitFieldOption, error) {
+	options, err := dictpkg.ListOptions(ctx, tenantID, asOf, dictCode, keyword, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]orgUnitFieldOption, 0, len(options))
+	for _, option := range options {
+		out = append(out, orgUnitFieldOption{Value: option.Code, Label: option.Label})
+	}
+	return out, nil
 }
 
-func lookupOrgUnitDictLabel(dictCode string, value string) (string, bool) {
-	return fieldmeta.LookupDictLabel(dictCode, value)
-}
-
-func lookupOrgUnitDictOption(dictCode string, value string) (orgUnitFieldOption, bool) {
-	return fieldmeta.LookupDictOption(dictCode, value)
+func resolveOrgUnitDictLabel(ctx context.Context, tenantID string, asOf string, dictCode string, value string) (string, bool, error) {
+	return dictpkg.ResolveValueLabel(ctx, tenantID, asOf, dictCode, value)
 }

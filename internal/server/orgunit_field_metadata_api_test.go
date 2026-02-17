@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
 )
 
 type orgUnitStoreWithFieldConfigs struct {
@@ -704,6 +706,21 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 	})
 
 	t.Run("dict success with keyword and limit parsing", func(t *testing.T) {
+		if err := dictpkg.RegisterResolver(orgunitDictResolverStub{
+			listFn: func(_ context.Context, tenantID string, asOf string, dictCode string, keyword string, limit int) ([]dictpkg.Option, error) {
+				if tenantID != "t1" || asOf != "2026-01-01" || dictCode != "org_type" {
+					t.Fatalf("unexpected args tenant=%s as_of=%s dict=%s keyword=%s limit=%d", tenantID, asOf, dictCode, keyword, limit)
+				}
+				if (keyword == "comp" && limit == 10) || (keyword == "" && limit == 50) {
+					return []dictpkg.Option{{Code: "20", Label: "单位"}}, nil
+				}
+				t.Fatalf("unexpected keyword/limit keyword=%q limit=%d", keyword, limit)
+				return nil, nil
+			},
+		}); err != nil {
+			t.Fatalf("register resolver err=%v", err)
+		}
+
 		store := orgUnitStoreWithEnabledFieldConfig{
 			OrgUnitStore: base,
 			ok:           true,
@@ -717,7 +734,7 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
-		if !strings.Contains(rec.Body.String(), "COMPANY") {
+		if !strings.Contains(rec.Body.String(), "20") {
 			t.Fatalf("body=%s", rec.Body.String())
 		}
 
