@@ -209,7 +209,16 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/dicts"); !ok {
 		t.Fatal("expected ok=true")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/iam/api/dicts"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/iam/api/dicts"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/iam/api/dicts"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/iam/api/dicts:disable"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/dicts:disable"); ok {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/dicts/values"); !ok {

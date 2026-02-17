@@ -62,6 +62,12 @@ func TestNewHandlerWithOptions_DictRoutes_AreWired(t *testing.T) {
 	if rec := get("/iam/api/dicts?as_of=2026-01-01"); rec.Code != http.StatusOK {
 		t.Fatalf("dicts status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	if rec := post("/iam/api/dicts", `{"dict_code":"expense_type","name":"Expense Type","enabled_on":"2026-01-01","request_code":"r-dict-create"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("dict create status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post("/iam/api/dicts:disable", `{"dict_code":"expense_type","disabled_on":"2026-01-02","request_code":"r-dict-disable"}`); rec.Code != http.StatusOK {
+		t.Fatalf("dict disable status=%d body=%s", rec.Code, rec.Body.String())
+	}
 	if rec := get("/iam/api/dicts/values?dict_code=org_type&as_of=2026-01-01&status=all"); rec.Code != http.StatusOK {
 		t.Fatalf("dict values status=%d body=%s", rec.Code, rec.Body.String())
 	}
