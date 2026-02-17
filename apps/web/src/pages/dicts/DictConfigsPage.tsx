@@ -17,7 +17,7 @@ export function DictConfigsPage() {
 
   const [asOf, setAsOf] = useState(todayISO())
   const [selectedDictCode, setSelectedDictCode] = useState('org_type')
-  const [selectedValueCode, setSelectedValueCode] = useState('')
+  const [selectedValueCode, setSelectedValueCode] = useState<string>('')
   const [keyword, setKeyword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -40,10 +40,14 @@ export function DictConfigsPage() {
     staleTime: 5_000
   })
 
+  const normalizedSelectedValueCode = useMemo(() => {
+    return typeof selectedValueCode === 'string' ? selectedValueCode.trim() : ''
+  }, [selectedValueCode])
+
   const auditQuery = useQuery({
-    enabled: selectedValueCode.trim().length > 0,
+    enabled: normalizedSelectedValueCode.length > 0,
     queryKey: ['dict-audit', selectedDictCode, selectedValueCode],
-    queryFn: () => listDictAudit({ dictCode: selectedDictCode, code: selectedValueCode, limit: 50 }),
+    queryFn: () => listDictAudit({ dictCode: selectedDictCode, code: normalizedSelectedValueCode, limit: 50 }),
     staleTime: 5_000
   })
 
@@ -61,7 +65,7 @@ export function DictConfigsPage() {
     mutationFn: (req: { dict_code: string; code: string; disabled_on: string; request_code: string }) => disableDictValue(req),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['dict-values', selectedDictCode, asOf] })
-      if (selectedValueCode.trim().length > 0) {
+      if (normalizedSelectedValueCode.length > 0) {
         await queryClient.invalidateQueries({ queryKey: ['dict-audit', selectedDictCode, selectedValueCode] })
       }
     }
@@ -71,7 +75,7 @@ export function DictConfigsPage() {
     mutationFn: (req: { dict_code: string; code: string; label: string; correction_day: string; request_code: string }) => correctDictValue(req),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['dict-values', selectedDictCode, asOf] })
-      if (selectedValueCode.trim().length > 0) {
+      if (normalizedSelectedValueCode.length > 0) {
         await queryClient.invalidateQueries({ queryKey: ['dict-audit', selectedDictCode, selectedValueCode] })
       }
     }
@@ -110,14 +114,14 @@ export function DictConfigsPage() {
   async function onDisable(event: FormEvent) {
     event.preventDefault()
     setError(null)
-    if (selectedValueCode.trim().length === 0) {
+    if (normalizedSelectedValueCode.length === 0) {
       setError('Select a value first')
       return
     }
     try {
       await disableMutation.mutateAsync({
         dict_code: selectedDictCode,
-        code: selectedValueCode,
+        code: normalizedSelectedValueCode,
         disabled_on: disableDay,
         request_code: newRequestCode('mui-dict-disable')
       })
@@ -129,14 +133,14 @@ export function DictConfigsPage() {
   async function onCorrect(event: FormEvent) {
     event.preventDefault()
     setError(null)
-    if (selectedValueCode.trim().length === 0) {
+    if (normalizedSelectedValueCode.length === 0) {
       setError('Select a value first')
       return
     }
     try {
       await correctMutation.mutateAsync({
         dict_code: selectedDictCode,
-        code: selectedValueCode,
+        code: normalizedSelectedValueCode,
         label: correctLabel.trim(),
         correction_day: correctDay,
         request_code: newRequestCode('mui-dict-correct')
@@ -193,8 +197,9 @@ export function DictConfigsPage() {
                   key={`${v.dict_code}:${v.code}:${v.enabled_on}`}
                   style={{ background: v.code === selectedValueCode ? '#e6f5f5' : 'transparent', cursor: 'pointer' }}
                   onClick={() => {
-                    setSelectedValueCode(v.code)
-                    setCorrectLabel(v.label)
+                    const nextCode = typeof v.code === 'string' ? v.code.trim() : ''
+                    setSelectedValueCode(nextCode)
+                    setCorrectLabel(typeof v.label === 'string' ? v.label : '')
                   }}
                 >
                   <td>{v.code}</td>
@@ -298,4 +303,3 @@ export function DictConfigsPage() {
     </Box>
   )
 }
-

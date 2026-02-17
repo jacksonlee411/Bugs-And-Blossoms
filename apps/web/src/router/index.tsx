@@ -14,6 +14,7 @@ import { PersonsPage } from '../pages/person/PersonsPage'
 import { AssignmentsPage } from '../pages/staffing/AssignmentsPage'
 import { PositionsPage } from '../pages/staffing/PositionsPage'
 import { RequirePermission } from './RequirePermission'
+import { RouteErrorPage } from './RouteErrorPage'
 
 export const router = createBrowserRouter([
   {
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppShell navItems={navItems} />,
+    errorElement: <RouteErrorPage />,
     children: [
       {
         index: true,

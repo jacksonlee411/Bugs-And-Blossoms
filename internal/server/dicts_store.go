@@ -43,18 +43,18 @@ type DictStore interface {
 }
 
 type DictItem struct {
-	DictCode string
-	Name     string
+	DictCode string `json:"dict_code"`
+	Name     string `json:"name"`
 }
 
 type DictValueItem struct {
-	DictCode   string
-	Code       string
-	Label      string
-	Status     string
-	EnabledOn  string
-	DisabledOn *string
-	UpdatedAt  time.Time
+	DictCode   string    `json:"dict_code"`
+	Code       string    `json:"code"`
+	Label      string    `json:"label"`
+	Status     string    `json:"status"`
+	EnabledOn  string    `json:"enabled_on"`
+	DisabledOn *string   `json:"disabled_on"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type DictValueAuditItem struct {
