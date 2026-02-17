@@ -595,6 +595,19 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("setid status=%d", recSet.Code)
 	}
 
+	recDicts := getJSON("/iam/api/dicts?as_of=2026-01-01", nil)
+	if recDicts.Code != http.StatusOK {
+		t.Fatalf("dicts status=%d body=%s", recDicts.Code, recDicts.Body.String())
+	}
+	recDictValues := getJSON("/iam/api/dicts/values?dict_code=org_type&as_of=2026-01-01&status=all", nil)
+	if recDictValues.Code != http.StatusOK {
+		t.Fatalf("dict values status=%d body=%s", recDictValues.Code, recDictValues.Body.String())
+	}
+	recDictAudit := getJSON("/iam/api/dicts/values/audit?dict_code=org_type&code=10&limit=10", nil)
+	if recDictAudit.Code != http.StatusOK {
+		t.Fatalf("dict audit status=%d body=%s", recDictAudit.Code, recDictAudit.Body.String())
+	}
+
 	recBind := postJSON("/org/api/setid-bindings", `{"org_code":"`+node.OrgCode+`","setid":"A0001","effective_date":"2026-01-01","request_code":"r2"}`, nil)
 	if recBind.Code != http.StatusCreated {
 		t.Fatalf("binding status=%d", recBind.Code)

@@ -135,6 +135,29 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectIAMSession, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/iam/api/dicts":
+		if method == http.MethodGet {
+			return authz.ObjectIAMDicts, authz.ActionRead, true
+		}
+		return "", "", false
+	case "/iam/api/dicts/values":
+		if method == http.MethodGet {
+			return authz.ObjectIAMDicts, authz.ActionRead, true
+		}
+		if method == http.MethodPost {
+			return authz.ObjectIAMDicts, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/iam/api/dicts/values:disable", "/iam/api/dicts/values:correct":
+		if method == http.MethodPost {
+			return authz.ObjectIAMDicts, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/iam/api/dicts/values/audit":
+		if method == http.MethodGet {
+			return authz.ObjectIAMDicts, authz.ActionRead, true
+		}
+		return "", "", false
 	case "/logout":
 		if method == http.MethodPost {
 			return authz.ObjectIAMSession, authz.ActionAdmin, true

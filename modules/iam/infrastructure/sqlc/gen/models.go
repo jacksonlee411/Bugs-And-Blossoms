@@ -8,6 +8,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type IamDictValueEvent struct {
+	ID             int64              `json:"id"`
+	EventUuid      pgtype.UUID        `json:"event_uuid"`
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	DictCode       string             `json:"dict_code"`
+	Code           string             `json:"code"`
+	EventType      string             `json:"event_type"`
+	EffectiveDay   pgtype.Date        `json:"effective_day"`
+	Payload        []byte             `json:"payload"`
+	BeforeSnapshot []byte             `json:"before_snapshot"`
+	AfterSnapshot  []byte             `json:"after_snapshot"`
+	RequestCode    string             `json:"request_code"`
+	InitiatorUuid  pgtype.UUID        `json:"initiator_uuid"`
+	TxTime         pgtype.Timestamptz `json:"tx_time"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type IamDictValueSegment struct {
+	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
+	DictCode   string             `json:"dict_code"`
+	Code       string             `json:"code"`
+	Label      string             `json:"label"`
+	EnabledOn  pgtype.Date        `json:"enabled_on"`
+	DisabledOn pgtype.Date        `json:"disabled_on"`
+	Status     string             `json:"status"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type IamPrincipal struct {
 	ID               pgtype.UUID        `json:"id"`
 	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`

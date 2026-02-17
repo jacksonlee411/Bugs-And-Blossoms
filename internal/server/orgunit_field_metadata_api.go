@@ -375,7 +375,11 @@ func handleOrgUnitFieldOptionsAPI(w http.ResponseWriter, r *http.Request, store 
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, orgUnitErrFieldOptionsNotSupported, "options not supported")
 			return
 		}
-		options := listOrgUnitDictOptions(dictCode, keyword, limit)
+		options, err := listOrgUnitDictOptions(r.Context(), tenant.ID, asOf, dictCode, keyword, limit)
+		if err != nil {
+			writeInternalAPIError(w, r, err, "orgunit_field_options_failed")
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)

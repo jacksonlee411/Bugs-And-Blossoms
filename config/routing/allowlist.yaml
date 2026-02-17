@@ -11,6 +11,9 @@ entrypoints:
       - path: /app/home
         methods: [GET]
         route_class: ui
+      - path: /app/dicts
+        methods: [GET]
+        route_class: ui
       - path: /app/login
         methods: [GET]
         route_class: ui
@@ -22,6 +25,21 @@ entrypoints:
         route_class: ops
       - path: /iam/api/sessions
         methods: [POST]
+        route_class: internal_api
+      - path: /iam/api/dicts
+        methods: [GET]
+        route_class: internal_api
+      - path: /iam/api/dicts/values
+        methods: [GET, POST]
+        route_class: internal_api
+      - path: /iam/api/dicts/values:disable
+        methods: [POST]
+        route_class: internal_api
+      - path: /iam/api/dicts/values:correct
+        methods: [POST]
+        route_class: internal_api
+      - path: /iam/api/dicts/values/audit
+        methods: [GET]
         route_class: internal_api
       - path: /logout
         methods: [POST]

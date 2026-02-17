@@ -192,8 +192,8 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   await enableOrgTypeFieldConfig(page, asOf);
   await waitForEnabledFieldConfig(appContext, { asOf, fieldKey: "org_type" });
 
-  await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.company, value: "COMPANY" });
-  await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.dept, value: "DEPARTMENT" });
+  await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.company, value: "20" });
+  await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.dept, value: "10" });
 
   await page.goto(`/app/org/units?as_of=${asOf}&node=${org.root}`);
 
@@ -215,7 +215,7 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   if (!companyBox || !deptBox) {
     throw new Error("row bounding box missing");
   }
-  expect(companyBox.y).toBeLessThan(deptBox.y);
+  expect(deptBox.y).toBeLessThan(companyBox.y);
 
   const extFilterField = page.getByLabel(/Ext Filter Field|扩展筛选字段/);
   await expect(extFilterField).toBeEnabled({ timeout: 30_000 });
@@ -225,8 +225,8 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   const extValueInput = page.getByTestId("org-ext-filter-value");
   await expect(extValueInput).toBeEnabled({ timeout: 30_000 });
   await extValueInput.click();
-  await extValueInput.fill("Company");
-  await page.getByRole("option", { name: "Company" }).click();
+  await extValueInput.fill("单位");
+  await page.getByRole("option", { name: "单位" }).click();
 
   await applyButtons.last().click();
 
@@ -236,7 +236,7 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   await page.getByRole("row", { name: new RegExp(org.company) }).click();
   await expect(page).toHaveURL(new RegExp(`/app/org/units/${org.company}`));
   await expect(page.getByText(/Org Type/)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("Company", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("单位", { exact: true })).toBeVisible({ timeout: 30_000 });
 
   await appContext.close();
 });

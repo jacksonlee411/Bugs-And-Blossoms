@@ -18,6 +18,7 @@ const DomainGlobal = "global"
 const (
 	ObjectIAMPing              = "iam.ping"
 	ObjectIAMSession           = "iam.session"
+	ObjectIAMDicts             = "iam.dicts"
 	ObjectOrgUnitOrgUnits      = "orgunit.orgunits"
 	ObjectOrgUnitSetID         = "orgunit.setid"
 	ObjectOrgShareRead         = "org.share_read"

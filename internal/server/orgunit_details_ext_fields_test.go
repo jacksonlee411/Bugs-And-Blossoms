@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
 )
 
 type detailsExtStoreStub struct {
@@ -28,6 +30,11 @@ func (s detailsExtStoreStub) GetOrgUnitVersionExtSnapshot(_ context.Context, _ s
 }
 
 func TestBuildOrgUnitDetailsExtFields_EmptyConfigs(t *testing.T) {
+	_ = dictpkg.RegisterResolver(orgunitDictResolverStub{
+		resolveFn: func(_ context.Context, _ string, _ string, _ string, _ string) (string, bool, error) {
+			return "", false, nil
+		},
+	})
 	items, err := buildOrgUnitDetailsExtFields(context.Background(), detailsExtStoreStub{}, "t1", 10000001, "2026-01-01")
 	if err != nil {
 		t.Fatal(err)
@@ -38,6 +45,23 @@ func TestBuildOrgUnitDetailsExtFields_EmptyConfigs(t *testing.T) {
 }
 
 func TestBuildOrgUnitDetailsExtFields_PlainAndDict_DisplayValueSources(t *testing.T) {
+	if err := dictpkg.RegisterResolver(orgunitDictResolverStub{
+		resolveFn: func(_ context.Context, _ string, _ string, dictCode string, code string) (string, bool, error) {
+			if dictCode != "org_type" {
+				return "", false, nil
+			}
+			switch code {
+			case "10":
+				return "部门", true, nil
+			case "20":
+				return "单位", true, nil
+			default:
+				return "", false, nil
+			}
+		},
+	}); err != nil {
+		t.Fatalf("register err=%v", err)
+	}
 	baseCfgs := []orgUnitTenantFieldConfig{
 		{FieldKey: "short_name", ValueType: "text", DataSourceType: "PLAIN", PhysicalCol: "ext_str_02"},
 		{FieldKey: "org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`), PhysicalCol: "ext_str_01"},
@@ -48,7 +72,7 @@ func TestBuildOrgUnitDetailsExtFields_PlainAndDict_DisplayValueSources(t *testin
 			cfgs: baseCfgs,
 			snap: orgUnitVersionExtSnapshot{
 				VersionValues: map[string]any{
-					"ext_str_01": "DEPARTMENT",
+					"ext_str_01": "10",
 					"ext_str_02": "R&D",
 				},
 				VersionLabels: map[string]string{"org_type": "Department (v)"},
@@ -77,7 +101,7 @@ func TestBuildOrgUnitDetailsExtFields_PlainAndDict_DisplayValueSources(t *testin
 			cfgs: baseCfgs,
 			snap: orgUnitVersionExtSnapshot{
 				VersionValues: map[string]any{
-					"ext_str_01": "DEPARTMENT",
+					"ext_str_01": "10",
 					"ext_str_02": "R&D",
 				},
 				VersionLabels: map[string]string{},
@@ -97,7 +121,7 @@ func TestBuildOrgUnitDetailsExtFields_PlainAndDict_DisplayValueSources(t *testin
 			cfgs: baseCfgs,
 			snap: orgUnitVersionExtSnapshot{
 				VersionValues: map[string]any{
-					"ext_str_01": "DEPARTMENT",
+					"ext_str_01": "10",
 					"ext_str_02": nil,
 				},
 				VersionLabels: map[string]string{},
@@ -107,7 +131,7 @@ func TestBuildOrgUnitDetailsExtFields_PlainAndDict_DisplayValueSources(t *testin
 		if err != nil {
 			t.Fatal(err)
 		}
-		if items[0].DisplayValueSource != "dict_fallback" || items[0].DisplayValue == nil || *items[0].DisplayValue != "Department" {
+		if items[0].DisplayValueSource != "dict_fallback" || items[0].DisplayValue == nil || *items[0].DisplayValue != "部门" {
 			t.Fatalf("dict display=%v source=%q", items[0].DisplayValue, items[0].DisplayValueSource)
 		}
 		if items[1].DisplayValueSource != "plain" || items[1].DisplayValue != nil {
@@ -206,7 +230,7 @@ func TestResolveOrgUnitExtDisplayValue_CustomDefinitions(t *testing.T) {
 	t.Run("dict missing dict_code", func(t *testing.T) {
 		def := orgUnitFieldDefinition{FieldKey: "x"}
 		cfg := orgUnitTenantFieldConfig{DataSourceConfig: json.RawMessage(`{}`)}
-		_, source := resolveOrgUnitExtDisplayValue(def, cfg, "text", "DICT", "ANY", orgUnitVersionExtSnapshot{})
+		_, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", def, cfg, "text", "DICT", "ANY", orgUnitVersionExtSnapshot{})
 		if source != "unresolved" {
 			t.Fatalf("source=%q", source)
 		}
@@ -215,7 +239,7 @@ func TestResolveOrgUnitExtDisplayValue_CustomDefinitions(t *testing.T) {
 	t.Run("dict value nil", func(t *testing.T) {
 		def := orgUnitFieldDefinition{FieldKey: "x"}
 		cfg := orgUnitTenantFieldConfig{DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}
-		_, source := resolveOrgUnitExtDisplayValue(def, cfg, "text", "DICT", nil, orgUnitVersionExtSnapshot{})
+		_, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", def, cfg, "text", "DICT", nil, orgUnitVersionExtSnapshot{})
 		if source != "unresolved" {
 			t.Fatalf("source=%q", source)
 		}
@@ -226,15 +250,15 @@ func TestResolveOrgUnitExtDisplayValue_CustomDefinitions(t *testing.T) {
 			FieldKey: "x",
 		}
 		cfg := orgUnitTenantFieldConfig{DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}
-		got, source := resolveOrgUnitExtDisplayValue(def, cfg, "text", "DICT", json.Number("DEPARTMENT"), orgUnitVersionExtSnapshot{})
-		if source != "dict_fallback" || got == nil || *got != "Department" {
+		got, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", def, cfg, "text", "DICT", json.Number("10"), orgUnitVersionExtSnapshot{})
+		if source != "dict_fallback" || got == nil || *got != "部门" {
 			t.Fatalf("display=%v source=%q", got, source)
 		}
 	})
 
 	t.Run("entity is unresolved", func(t *testing.T) {
 		def := orgUnitFieldDefinition{FieldKey: "x"}
-		_, source := resolveOrgUnitExtDisplayValue(def, orgUnitTenantFieldConfig{}, "text", "ENTITY", "ANY", orgUnitVersionExtSnapshot{})
+		_, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", def, orgUnitTenantFieldConfig{}, "text", "ENTITY", "ANY", orgUnitVersionExtSnapshot{})
 		if source != "unresolved" {
 			t.Fatalf("source=%q", source)
 		}

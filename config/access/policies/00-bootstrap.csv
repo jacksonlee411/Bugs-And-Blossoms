@@ -2,6 +2,8 @@ p, role:anonymous, global, iam.ping, read
 p, role:anonymous, *, iam.session, read
 p, role:anonymous, *, iam.session, admin
 p, role:tenant-admin, *, iam.session, admin
+p, role:tenant-admin, *, iam.dicts, read
+p, role:tenant-admin, *, iam.dicts, admin
 p, role:tenant-admin, *, orgunit.orgunits, read
 p, role:tenant-admin, *, orgunit.orgunits, admin
 p, role:tenant-admin, *, orgunit.setid, read
@@ -20,6 +22,7 @@ p, role:tenant-admin, *, staffing.assignments, admin
 p, role:tenant-admin, *, person.persons, read
 p, role:tenant-admin, *, person.persons, admin
 p, role:tenant-viewer, *, iam.session, admin
+p, role:tenant-viewer, *, iam.dicts, read
 p, role:tenant-viewer, *, orgunit.orgunits, read
 p, role:tenant-viewer, *, orgunit.setid, read
 p, role:tenant-viewer, *, org.share_read, read
