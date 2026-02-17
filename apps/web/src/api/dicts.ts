@@ -3,6 +3,9 @@ import { httpClient } from './httpClient'
 export interface DictItem {
   dict_code: string
   name: string
+  status: string
+  enabled_on: string
+  disabled_on?: string | null
 }
 
 export interface DictListResponse {
@@ -27,6 +30,10 @@ export interface DictValuesResponse {
 }
 
 export interface DictMutationResponse extends DictValueItem {
+  was_retry: boolean
+}
+
+export interface DictCodeMutationResponse extends DictItem {
   was_retry: boolean
 }
 
@@ -78,6 +85,23 @@ export async function listDictValues(options: {
     query.set('status', options.status)
   }
   return httpClient.get<DictValuesResponse>(`/iam/api/dicts/values?${query.toString()}`)
+}
+
+export async function createDict(request: {
+  dict_code: string
+  name: string
+  enabled_on: string
+  request_code: string
+}): Promise<DictCodeMutationResponse> {
+  return httpClient.post<DictCodeMutationResponse>('/iam/api/dicts', request)
+}
+
+export async function disableDict(request: {
+  dict_code: string
+  disabled_on: string
+  request_code: string
+}): Promise<DictCodeMutationResponse> {
+  return httpClient.post<DictCodeMutationResponse>('/iam/api/dicts:disable', request)
 }
 
 export async function createDictValue(request: {

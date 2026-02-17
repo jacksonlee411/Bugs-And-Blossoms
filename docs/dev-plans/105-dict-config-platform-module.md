@@ -1,6 +1,6 @@
 # DEV-PLAN-105：全模块字典配置模块（DICT 值配置 + 生效日期 + 变更记录）
 
-**状态**: 已完成（2026-02-16）
+**状态**: 已完成（2026-02-17）
 
 > 本计划承接 `DEV-PLAN-100/100D/100D2/100E/101`，把各模块的 DICT 字段从“代码内静态字典”收敛为一个**平台级**“可配置字典值模块”，并提供用户可见的管理闭环（UI+API+存储）。
 
@@ -74,27 +74,32 @@
 ### 5.1 导航与路由
 
 - 新增导航：`字典配置`
-- 路由：`/app/dicts`（平台能力，不归属单一业务模块）
+- 路由：
+  - 列表页：`/app/dicts`（平台能力，不归属单一业务模块）
+  - 值详情页：`/app/dicts/:dictCode/values/:code`
 - 权限：`dict.admin`（独立权限；无权限 fail-closed）
 
 > 路由治理要求（对齐 `DEV-PLAN-017`）：
 > - `/app/dicts` 必须登记到 `config/routing/allowlist.yaml`，`route_class=ui`
+> - `/app/dicts/{dict_code}/values/{code}` 必须登记到 `config/routing/allowlist.yaml`，`route_class=ui`
 > - `/iam/api/dicts*` 必须登记到 allowlist，`route_class=internal_api`
 > - 新增/变更路由必须跑 `make check routing`
 
 ### 5.2 页面布局（与 Org 模块对齐）
 
-1. **左侧字典列表（Dict List）**
-   - 数据来源：字典模块内的 `dict_codes`（或等价概念）；展示 dict_code + 名称（名称仅为“字典本身的展示名”，可用 i18n key；不引入业务数据多语言）。
-   - 支持按“模块/关键字”过滤（便于规模扩展时定位）。
-   - Phase 0 最小集：仅 `org_type`。
-2. **右侧上半区：选中字典的字典值列表（Value Grid）**
-   - 列：`code`、`label`、`status`、`enabled_on`、`disabled_on`、`updated_at`（updated_at 为审计/排障辅助）
-   - 支持按 `as_of` 过滤。
-3. **右侧下半区：详情（Detail）**
-   - 基本信息：code、label、当前状态。
-   - 生效日期记录：版本时间线（按 enabled_on/disabled_on）。
-   - 变更记录：审计时间线（按 tx_time，展示 request_code/initiator/event_type）。
+1. **分屏 1：`/app/dicts`（字典总览）**
+   - 左侧字典列表（Dict List）：
+     - 数据来源：字典模块内的 `dict_codes`（或等价概念）；展示 dict_code + 名称（名称仅为“字典本身的展示名”，可用 i18n key；不引入业务数据多语言）。
+     - 支持按“模块/关键字”过滤（便于规模扩展时定位）。
+     - Phase 0 最小集：仅 `org_type`。
+   - 右侧值列表（Value Grid）：
+     - 列：`code`、`label`、`status`、`enabled_on`、`disabled_on`、`updated_at`（updated_at 为审计/排障辅助）。
+     - 支持按 `as_of` 过滤。
+     - 点击行进入分屏 2（值详情页）。
+2. **分屏 2：`/app/dicts/:dictCode/values/:code`（值详情）**
+   - Tabs：`基本信息` / `变更日志`。
+   - 基本信息：左侧生效日期时间轴（enabled_on/disabled_on），右侧展示当前版本详情与操作。
+   - 变更日志：左侧修改时间时间轴（tx_time），右侧展示事件详情（request_code/initiator/event_type）。
 
 ## 6. 数据与领域模型（冻结）
 
@@ -271,7 +276,7 @@
 ## 11. 验收标准（DoD）
 
 1. [x] `/app/dicts` 可见、可访问、可操作（`dict.admin`）。
-2. [x] 左字典列表/右值列表/详情（基本信息+生效日期+变更记录）完整可用。
+2. [x] 分屏 1（左字典列表/右值列表）与分屏 2（基本信息+生效日期+变更记录）完整可用。
 3. [x] `org_type` 默认值 `10/20` 可配置并生效。
 4. [x] 各模块写入时 DICT 校验来源可切换为模块化字典（至少先完成 Org 样板），静态 registry 不再作为运行态事实源。
 5. [x] details/options 无“静态字典漂移”导致的错误展示。
@@ -286,7 +291,7 @@
 
 1. [x] Phase A（契约冻结）：补齐本计划 API/错误码/状态机与权限矩阵。
 2. [x] Phase B（后端）：字典值存储 + API + options/read/write 接口接入。
-3. [x] Phase C（前端）：模块页面（左字段/右值/详情+变更记录）。
+3. [x] Phase C（前端）：模块页面（分屏 1：左字段/右值；分屏 2：详情+变更记录）。
 4. [x] Phase D（数据核验）：核验是否存在非 `10/20` 异常值；若存在则人工修复并生成执行记录。
 5. [x] Phase E（收口）：门禁/E2E/执行日志，更新路线图状态。
 
@@ -306,4 +311,8 @@
 - `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
 - `docs/dev-plans/100h-org-metadata-wide-table-phase5-stability-performance-ops-closure.md`
 - `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- `docs/dev-plans/105a-dict-config-validation-issues-investigation.md`
+- `docs/dev-plans/105b-dict-code-management-and-governance.md`
 - `docs/dev-records/dev-plan-105-execution-log.md`
+- `docs/dev-records/dev-plan-105a-execution-log.md`
+- `docs/dev-records/dev-plan-105b-execution-log.md`

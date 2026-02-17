@@ -139,6 +139,14 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		if method == http.MethodGet {
 			return authz.ObjectIAMDicts, authz.ActionRead, true
 		}
+		if method == http.MethodPost {
+			return authz.ObjectIAMDicts, authz.ActionAdmin, true
+		}
+		return "", "", false
+	case "/iam/api/dicts:disable":
+		if method == http.MethodPost {
+			return authz.ObjectIAMDicts, authz.ActionAdmin, true
+		}
 		return "", "", false
 	case "/iam/api/dicts/values":
 		if method == http.MethodGet {

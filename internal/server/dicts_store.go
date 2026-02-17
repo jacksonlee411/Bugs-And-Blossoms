@@ -19,22 +19,38 @@ const (
 	dictEventCreated        = "DICT_VALUE_CREATED"
 	dictEventLabelCorrected = "DICT_VALUE_LABEL_CORRECTED"
 	dictEventDisabled       = "DICT_VALUE_DISABLED"
+
+	dictValueEventCreated        = "DICT_VALUE_CREATED"
+	dictValueEventLabelCorrected = "DICT_VALUE_LABEL_CORRECTED"
+	dictValueEventDisabled       = "DICT_VALUE_DISABLED"
+
+	dictRegistryEventCreated  = "DICT_CREATED"
+	dictRegistryEventDisabled = "DICT_DISABLED"
 )
 
 var (
-	errDictCodeRequired         = errors.New("DICT_CODE_REQUIRED")
-	errDictNotFound             = errors.New("DICT_NOT_FOUND")
-	errDictValueCodeRequired    = errors.New("DICT_VALUE_CODE_REQUIRED")
-	errDictValueLabelRequired   = errors.New("DICT_VALUE_LABEL_REQUIRED")
-	errDictValueNotFoundAsOf    = errors.New("DICT_VALUE_NOT_FOUND_AS_OF")
-	errDictValueConflict        = errors.New("DICT_VALUE_CONFLICT")
-	errDictRequestCodeRequired  = errors.New("DICT_REQUEST_CODE_REQUIRED")
-	errDictEffectiveDayRequired = errors.New("DICT_EFFECTIVE_DAY_REQUIRED")
+	errDictCodeRequired          = errors.New("DICT_CODE_REQUIRED")
+	errDictCodeInvalid           = errors.New("DICT_CODE_INVALID")
+	errDictNotFound              = errors.New("DICT_NOT_FOUND")
+	errDictNameRequired          = errors.New("DICT_NAME_REQUIRED")
+	errDictCodeConflict          = errors.New("DICT_CODE_CONFLICT")
+	errDictDisabled              = errors.New("DICT_DISABLED")
+	errDictDisabledOnRequired    = errors.New("DICT_DISABLED_ON_REQUIRED")
+	errDictValueCodeRequired     = errors.New("DICT_VALUE_CODE_REQUIRED")
+	errDictValueLabelRequired    = errors.New("DICT_VALUE_LABEL_REQUIRED")
+	errDictValueNotFoundAsOf     = errors.New("DICT_VALUE_NOT_FOUND_AS_OF")
+	errDictValueConflict         = errors.New("DICT_VALUE_CONFLICT")
+	errDictValueDictDisabled     = errors.New("DICT_VALUE_DICT_DISABLED")
+	errDictRequestCodeRequired   = errors.New("DICT_REQUEST_CODE_REQUIRED")
+	errDictEffectiveDayRequired  = errors.New("DICT_EFFECTIVE_DAY_REQUIRED")
+	errDictDisabledOnInvalidDate = errors.New("DICT_DISABLED_ON_INVALID")
 )
 
 type DictStore interface {
 	dictpkg.Resolver
 	ListDicts(ctx context.Context, tenantID string, asOf string) ([]DictItem, error)
+	CreateDict(ctx context.Context, tenantID string, req DictCreateRequest) (DictItem, bool, error)
+	DisableDict(ctx context.Context, tenantID string, req DictDisableRequest) (DictItem, bool, error)
 	ListDictValues(ctx context.Context, tenantID string, dictCode string, asOf string, keyword string, limit int, status string) ([]DictValueItem, error)
 	CreateDictValue(ctx context.Context, tenantID string, req DictCreateValueRequest) (DictValueItem, bool, error)
 	DisableDictValue(ctx context.Context, tenantID string, req DictDisableValueRequest) (DictValueItem, bool, error)
@@ -43,18 +59,21 @@ type DictStore interface {
 }
 
 type DictItem struct {
-	DictCode string
-	Name     string
+	DictCode   string  `json:"dict_code"`
+	Name       string  `json:"name"`
+	Status     string  `json:"status"`
+	EnabledOn  string  `json:"enabled_on"`
+	DisabledOn *string `json:"disabled_on"`
 }
 
 type DictValueItem struct {
-	DictCode   string
-	Code       string
-	Label      string
-	Status     string
-	EnabledOn  string
-	DisabledOn *string
-	UpdatedAt  time.Time
+	DictCode   string    `json:"dict_code"`
+	Code       string    `json:"code"`
+	Label      string    `json:"label"`
+	Status     string    `json:"status"`
+	EnabledOn  string    `json:"enabled_on"`
+	DisabledOn *string   `json:"disabled_on"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type DictValueAuditItem struct {
@@ -70,6 +89,21 @@ type DictValueAuditItem struct {
 	Payload        json.RawMessage `json:"payload"`
 	BeforeSnapshot json.RawMessage `json:"before_snapshot"`
 	AfterSnapshot  json.RawMessage `json:"after_snapshot"`
+}
+
+type DictCreateRequest struct {
+	DictCode    string
+	Name        string
+	EnabledOn   string
+	RequestCode string
+	Initiator   string
+}
+
+type DictDisableRequest struct {
+	DictCode    string
+	DisabledOn  string
+	RequestCode string
+	Initiator   string
 }
 
 type DictCreateValueRequest struct {
@@ -116,15 +150,9 @@ func (s *dictPGStore) ListDicts(ctx context.Context, tenantID string, asOf strin
 		return nil, err
 	}
 
-	items, err := listDictsByTenant(ctx, tx, tenantID, asOf)
+	items, err := listMergedDictsByAsOfTx(ctx, tx, tenantID, asOf)
 	if err != nil {
 		return nil, err
-	}
-	if len(items) == 0 && tenantID != globalTenantID {
-		items, err = listDictsByTenant(ctx, tx, globalTenantID, asOf)
-		if err != nil {
-			return nil, err
-		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
@@ -132,15 +160,31 @@ func (s *dictPGStore) ListDicts(ctx context.Context, tenantID string, asOf strin
 	return items, nil
 }
 
-func listDictsByTenant(ctx context.Context, tx pgx.Tx, tenantID string, asOf string) ([]DictItem, error) {
+func listMergedDictsByAsOfTx(ctx context.Context, tx pgx.Tx, tenantID string, asOf string) ([]DictItem, error) {
 	rows, err := tx.Query(ctx, `
-SELECT DISTINCT dict_code
-FROM iam.dict_value_segments
-WHERE tenant_uuid = $1::uuid
-  AND enabled_on <= $2::date
-  AND (disabled_on IS NULL OR $2::date < disabled_on)
+SELECT dict_code, name, status, enabled_on::text, CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on
+FROM (
+  SELECT
+    d.dict_code,
+    d.name,
+    d.enabled_on,
+    d.disabled_on,
+    CASE
+      WHEN d.enabled_on <= $2::date AND (d.disabled_on IS NULL OR $2::date < d.disabled_on) THEN 'active'
+      ELSE 'inactive'
+    END AS status,
+    row_number() OVER (
+      PARTITION BY d.dict_code
+      ORDER BY CASE WHEN d.tenant_uuid = $1::uuid THEN 0 ELSE 1 END, d.enabled_on DESC
+    ) AS rn
+  FROM iam.dicts d
+  WHERE d.tenant_uuid IN ($1::uuid, $3::uuid)
+    AND d.enabled_on <= $2::date
+    AND (d.disabled_on IS NULL OR $2::date < d.disabled_on)
+) merged
+WHERE rn = 1
 ORDER BY dict_code ASC
-`, tenantID, asOf)
+`, tenantID, asOf, globalTenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -148,16 +192,102 @@ ORDER BY dict_code ASC
 
 	items := make([]DictItem, 0)
 	for rows.Next() {
-		var code string
-		if err := rows.Scan(&code); err != nil {
+		var item DictItem
+		var disabledOn *string
+		if err := rows.Scan(&item.DictCode, &item.Name, &item.Status, &item.EnabledOn, &disabledOn); err != nil {
 			return nil, err
 		}
-		items = append(items, DictItem{DictCode: code, Name: dictDisplayName(code)})
+		item.DisabledOn = cloneOptionalString(disabledOn)
+		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	return items, nil
+}
+
+func (s *dictPGStore) CreateDict(ctx context.Context, tenantID string, req DictCreateRequest) (DictItem, bool, error) {
+	return s.submitDictEvent(ctx, tenantID, req.DictCode, dictRegistryEventCreated, req.EnabledOn, map[string]any{"name": req.Name}, req.RequestCode, req.Initiator)
+}
+
+func (s *dictPGStore) DisableDict(ctx context.Context, tenantID string, req DictDisableRequest) (DictItem, bool, error) {
+	return s.submitDictEvent(ctx, tenantID, req.DictCode, dictRegistryEventDisabled, req.DisabledOn, map[string]any{}, req.RequestCode, req.Initiator)
+}
+
+func (s *dictPGStore) submitDictEvent(
+	ctx context.Context,
+	tenantID string,
+	dictCode string,
+	eventType string,
+	day string,
+	payload map[string]any,
+	requestCode string,
+	initiator string,
+) (DictItem, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return DictItem{}, false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return DictItem{}, false, err
+	}
+
+	rawPayload, err := json.Marshal(payload)
+	if err != nil {
+		return DictItem{}, false, err
+	}
+
+	var eventID int64
+	var wasRetry bool
+	err = tx.QueryRow(ctx, `
+SELECT event_id, was_retry
+FROM iam.submit_dict_event($1::uuid, $2::text, $3::text, $4::date, $5::jsonb, $6::text, $7::uuid)
+`, tenantID, dictCode, eventType, day, rawPayload, requestCode, initiator).Scan(&eventID, &wasRetry)
+	if err != nil {
+		return DictItem{}, false, err
+	}
+
+	item, err := getDictFromEventTx(ctx, tx, tenantID, eventID)
+	if err != nil {
+		return DictItem{}, false, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return DictItem{}, false, err
+	}
+	return item, wasRetry, nil
+}
+
+func getDictFromEventTx(ctx context.Context, tx pgx.Tx, tenantID string, eventID int64) (DictItem, error) {
+	var snapshot []byte
+	err := tx.QueryRow(ctx, `
+SELECT after_snapshot
+FROM iam.dict_events
+WHERE tenant_uuid = $1::uuid
+  AND id = $2::bigint
+`, tenantID, eventID).Scan(&snapshot)
+	if err != nil {
+		return DictItem{}, err
+	}
+
+	var payload struct {
+		DictCode   string  `json:"dict_code"`
+		Name       string  `json:"name"`
+		Status     string  `json:"status"`
+		EnabledOn  string  `json:"enabled_on"`
+		DisabledOn *string `json:"disabled_on"`
+	}
+	if err := json.Unmarshal(snapshot, &payload); err != nil {
+		return DictItem{}, err
+	}
+	return DictItem{
+		DictCode:   payload.DictCode,
+		Name:       payload.Name,
+		Status:     payload.Status,
+		EnabledOn:  payload.EnabledOn,
+		DisabledOn: cloneOptionalString(payload.DisabledOn),
+	}, nil
 }
 
 func (s *dictPGStore) ListDictValues(ctx context.Context, tenantID string, dictCode string, asOf string, keyword string, limit int, status string) ([]DictValueItem, error) {
@@ -170,20 +300,60 @@ func (s *dictPGStore) ListDictValues(ctx context.Context, tenantID string, dictC
 		return nil, err
 	}
 
-	values, err := listDictValuesByTenant(ctx, tx, tenantID, dictCode, asOf, keyword, limit, status)
+	sourceTenantID, err := resolveDictSourceTenantAsOfTx(ctx, tx, tenantID, dictCode, asOf)
 	if err != nil {
 		return nil, err
 	}
-	if len(values) == 0 && tenantID != globalTenantID {
-		values, err = listDictValuesByTenant(ctx, tx, globalTenantID, dictCode, asOf, keyword, limit, status)
-		if err != nil {
-			return nil, err
-		}
+
+	values, err := listDictValuesByTenant(ctx, tx, sourceTenantID, dictCode, asOf, keyword, limit, status)
+	if err != nil {
+		return nil, err
 	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 	return values, nil
+}
+
+func resolveDictSourceTenantAsOfTx(ctx context.Context, tx pgx.Tx, tenantID string, dictCode string, asOf string) (string, error) {
+	var sourceTenant string
+	err := tx.QueryRow(ctx, `
+SELECT tenant_uuid::text
+FROM iam.dicts
+WHERE dict_code = $2::text
+  AND tenant_uuid IN ($1::uuid, $3::uuid)
+  AND enabled_on <= $4::date
+  AND (disabled_on IS NULL OR $4::date < disabled_on)
+ORDER BY CASE WHEN tenant_uuid = $1::uuid THEN 0 ELSE 1 END
+LIMIT 1
+`, tenantID, dictCode, globalTenantID, asOf).Scan(&sourceTenant)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", errDictNotFound
+		}
+		return "", err
+	}
+	return sourceTenant, nil
+}
+
+func resolveDictSourceTenantTx(ctx context.Context, tx pgx.Tx, tenantID string, dictCode string) (string, error) {
+	var sourceTenant string
+	err := tx.QueryRow(ctx, `
+SELECT tenant_uuid::text
+FROM iam.dicts
+WHERE dict_code = $2::text
+  AND tenant_uuid IN ($1::uuid, $3::uuid)
+ORDER BY CASE WHEN tenant_uuid = $1::uuid THEN 0 ELSE 1 END
+LIMIT 1
+`, tenantID, dictCode, globalTenantID).Scan(&sourceTenant)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", errDictNotFound
+		}
+		return "", err
+	}
+	return sourceTenant, nil
 }
 
 func listDictValuesByTenant(ctx context.Context, tx pgx.Tx, tenantID string, dictCode string, asOf string, keyword string, limit int, status string) ([]DictValueItem, error) {
@@ -242,16 +412,17 @@ func (s *dictPGStore) ResolveValueLabel(ctx context.Context, tenantID string, as
 		return "", false, err
 	}
 
-	var label string
-	label, ok, err := resolveValueLabelByTenant(ctx, tx, tenantID, asOf, dictCode, code)
+	sourceTenantID, err := resolveDictSourceTenantAsOfTx(ctx, tx, tenantID, dictCode, asOf)
 	if err != nil {
+		if errors.Is(err, errDictNotFound) {
+			return "", false, nil
+		}
 		return "", false, err
 	}
-	if !ok && tenantID != globalTenantID {
-		label, ok, err = resolveValueLabelByTenant(ctx, tx, globalTenantID, asOf, dictCode, code)
-		if err != nil {
-			return "", false, err
-		}
+
+	label, ok, err := resolveValueLabelByTenant(ctx, tx, sourceTenantID, asOf, dictCode, code)
+	if err != nil {
+		return "", false, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return "", false, err
@@ -301,15 +472,15 @@ func (s *dictPGStore) ListOptions(ctx context.Context, tenantID string, asOf str
 }
 
 func (s *dictPGStore) CreateDictValue(ctx context.Context, tenantID string, req DictCreateValueRequest) (DictValueItem, bool, error) {
-	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictEventCreated, req.EnabledOn, map[string]any{"label": req.Label}, req.RequestCode, req.Initiator)
+	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictValueEventCreated, req.EnabledOn, map[string]any{"label": req.Label}, req.RequestCode, req.Initiator)
 }
 
 func (s *dictPGStore) DisableDictValue(ctx context.Context, tenantID string, req DictDisableValueRequest) (DictValueItem, bool, error) {
-	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictEventDisabled, req.DisabledOn, map[string]any{}, req.RequestCode, req.Initiator)
+	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictValueEventDisabled, req.DisabledOn, map[string]any{}, req.RequestCode, req.Initiator)
 }
 
 func (s *dictPGStore) CorrectDictValue(ctx context.Context, tenantID string, req DictCorrectValueRequest) (DictValueItem, bool, error) {
-	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictEventLabelCorrected, req.CorrectionDay, map[string]any{"label": req.Label}, req.RequestCode, req.Initiator)
+	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictValueEventLabelCorrected, req.CorrectionDay, map[string]any{"label": req.Label}, req.RequestCode, req.Initiator)
 }
 
 func (s *dictPGStore) submitValueEvent(ctx context.Context, tenantID string, dictCode string, code string, eventType string, day string, payload map[string]any, requestCode string, initiator string) (DictValueItem, bool, error) {
@@ -321,6 +492,11 @@ func (s *dictPGStore) submitValueEvent(ctx context.Context, tenantID string, dic
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
 		return DictValueItem{}, false, err
 	}
+
+	if err := assertTenantDictActiveAsOfTx(ctx, tx, tenantID, dictCode, day); err != nil {
+		return DictValueItem{}, false, err
+	}
+
 	rawPayload, err := json.Marshal(payload)
 	if err != nil {
 		return DictValueItem{}, false, err
@@ -344,6 +520,43 @@ FROM iam.submit_dict_value_event($1::uuid, $2::text, $3::text, $4::text, $5::dat
 		return DictValueItem{}, false, err
 	}
 	return item, wasRetry, nil
+}
+
+func assertTenantDictActiveAsOfTx(ctx context.Context, tx pgx.Tx, tenantID string, dictCode string, asOf string) error {
+	var active bool
+	err := tx.QueryRow(ctx, `
+SELECT EXISTS (
+  SELECT 1
+  FROM iam.dicts
+  WHERE tenant_uuid = $1::uuid
+    AND dict_code = $2::text
+    AND enabled_on <= $3::date
+    AND (disabled_on IS NULL OR $3::date < disabled_on)
+)
+`, tenantID, dictCode, asOf).Scan(&active)
+	if err != nil {
+		return err
+	}
+	if active {
+		return nil
+	}
+
+	var existsAny bool
+	err = tx.QueryRow(ctx, `
+SELECT EXISTS (
+  SELECT 1
+  FROM iam.dicts
+  WHERE tenant_uuid = $1::uuid
+    AND dict_code = $2::text
+)
+`, tenantID, dictCode).Scan(&existsAny)
+	if err != nil {
+		return err
+	}
+	if existsAny {
+		return errDictValueDictDisabled
+	}
+	return errDictNotFound
 }
 
 func getDictValueFromEventTx(ctx context.Context, tx pgx.Tx, tenantID string, eventID int64) (DictValueItem, error) {
@@ -390,6 +603,11 @@ func (s *dictPGStore) ListDictValueAudit(ctx context.Context, tenantID string, d
 		return nil, err
 	}
 
+	sourceTenantID, err := resolveDictSourceTenantTx(ctx, tx, tenantID, dictCode)
+	if err != nil {
+		return nil, err
+	}
+
 	rows, err := tx.Query(ctx, `
 SELECT id, event_uuid::text, dict_code, code, event_type, effective_day::text, request_code, COALESCE(initiator_uuid::text, ''), tx_time, payload, before_snapshot, after_snapshot
 FROM iam.dict_value_events
@@ -398,7 +616,7 @@ WHERE tenant_uuid = $1::uuid
   AND code = $3::text
 ORDER BY id DESC
 LIMIT $4::int
-`, tenantID, dictCode, code, limit)
+`, sourceTenantID, dictCode, code, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -425,16 +643,22 @@ LIMIT $4::int
 }
 
 type dictMemoryStore struct {
+	dicts  map[string]map[string]DictItem
 	values map[string][]DictValueItem
 }
 
 func newDictMemoryStore() DictStore {
 	now := time.Unix(0, 0).UTC()
+	defaultDict := DictItem{DictCode: dictCodeOrgType, Name: "Org Type", Status: "active", EnabledOn: "1970-01-01"}
 	defaultValues := []DictValueItem{
 		{DictCode: dictCodeOrgType, Code: "10", Label: "部门", Status: "active", EnabledOn: "1970-01-01", UpdatedAt: now},
 		{DictCode: dictCodeOrgType, Code: "20", Label: "单位", Status: "active", EnabledOn: "1970-01-01", UpdatedAt: now},
 	}
 	return &dictMemoryStore{
+		dicts: map[string]map[string]DictItem{
+			globalTenantID:                         {dictCodeOrgType: defaultDict},
+			"00000000-0000-0000-0000-000000000001": {dictCodeOrgType: defaultDict},
+		},
 		values: map[string][]DictValueItem{
 			globalTenantID:                         append([]DictValueItem(nil), defaultValues...),
 			"00000000-0000-0000-0000-000000000001": append([]DictValueItem(nil), defaultValues...),
@@ -446,31 +670,120 @@ func (s *dictMemoryStore) ListDicts(_ context.Context, tenantID string, asOf str
 	if strings.TrimSpace(asOf) == "" {
 		return nil, errDictEffectiveDayRequired
 	}
-	for _, item := range s.valuesForTenant(tenantID) {
-		if item.DictCode == dictCodeOrgType && item.EnabledOn <= asOf {
-			return []DictItem{{DictCode: dictCodeOrgType, Name: dictDisplayName(dictCodeOrgType)}}, nil
+	tenantDicts := s.dictsByTenant(tenantID)
+	globalDicts := s.dictsByTenant(globalTenantID)
+
+	out := make([]DictItem, 0)
+	for code, item := range tenantDicts {
+		if !dictActiveAsOf(item, asOf) {
+			continue
 		}
+		cloned := cloneDictItem(item)
+		cloned.Status = dictStatusAsOf(item, asOf)
+		out = append(out, cloned)
+		delete(globalDicts, code)
 	}
-	return []DictItem{}, nil
+	for _, item := range globalDicts {
+		if !dictActiveAsOf(item, asOf) {
+			continue
+		}
+		cloned := cloneDictItem(item)
+		cloned.Status = dictStatusAsOf(item, asOf)
+		out = append(out, cloned)
+	}
+
+	sort.SliceStable(out, func(i, j int) bool { return out[i].DictCode < out[j].DictCode })
+	return out, nil
+}
+
+func (s *dictMemoryStore) CreateDict(_ context.Context, tenantID string, req DictCreateRequest) (DictItem, bool, error) {
+	code := strings.TrimSpace(strings.ToLower(req.DictCode))
+	if code == "" {
+		return DictItem{}, false, errDictCodeRequired
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return DictItem{}, false, errDictNameRequired
+	}
+	enabledOn := strings.TrimSpace(req.EnabledOn)
+	if enabledOn == "" {
+		return DictItem{}, false, errDictEffectiveDayRequired
+	}
+	if _, ok := s.dicts[tenantID]; !ok {
+		s.dicts[tenantID] = map[string]DictItem{}
+	}
+	if _, exists := s.dicts[tenantID][code]; exists {
+		return DictItem{}, false, errDictCodeConflict
+	}
+	item := DictItem{DictCode: code, Name: name, Status: "active", EnabledOn: enabledOn}
+	s.dicts[tenantID][code] = item
+	return item, false, nil
+}
+
+func (s *dictMemoryStore) DisableDict(_ context.Context, tenantID string, req DictDisableRequest) (DictItem, bool, error) {
+	code := strings.TrimSpace(strings.ToLower(req.DictCode))
+	if code == "" {
+		return DictItem{}, false, errDictCodeRequired
+	}
+	disabledOn := strings.TrimSpace(req.DisabledOn)
+	if disabledOn == "" {
+		return DictItem{}, false, errDictDisabledOnRequired
+	}
+	items, ok := s.dicts[tenantID]
+	if !ok {
+		return DictItem{}, false, errDictNotFound
+	}
+	item, ok := items[code]
+	if !ok {
+		return DictItem{}, false, errDictNotFound
+	}
+	if disabledOn <= item.EnabledOn {
+		return DictItem{}, false, errDictCodeConflict
+	}
+	if item.DisabledOn != nil && disabledOn >= *item.DisabledOn {
+		return DictItem{}, false, errDictCodeConflict
+	}
+	item.DisabledOn = cloneOptionalString(&disabledOn)
+	item.Status = "inactive"
+	items[code] = item
+	return cloneDictItem(item), false, nil
 }
 
 func (s *dictMemoryStore) ListDictValues(_ context.Context, tenantID string, dictCode string, asOf string, keyword string, limit int, status string) ([]DictValueItem, error) {
-	_ = status
+	sourceTenantID, ok := s.resolveSourceTenantAsOf(tenantID, dictCode, asOf)
+	if !ok {
+		return nil, errDictNotFound
+	}
+
 	keyword = strings.ToLower(strings.TrimSpace(keyword))
+	status = strings.TrimSpace(strings.ToLower(status))
+	if status == "" {
+		status = "all"
+	}
+
 	out := make([]DictValueItem, 0)
-	for _, item := range s.valuesForTenant(tenantID) {
+	for _, item := range s.valuesForTenant(sourceTenantID) {
 		if item.DictCode != dictCode {
 			continue
 		}
-		if item.EnabledOn > asOf {
+		currentStatus := valueStatusAsOf(item, asOf)
+		if status != "all" && currentStatus != status {
 			continue
 		}
 		if keyword != "" && !strings.Contains(strings.ToLower(item.Code), keyword) && !strings.Contains(strings.ToLower(item.Label), keyword) {
 			continue
 		}
-		out = append(out, item)
+		cloned := item
+		cloned.Status = currentStatus
+		out = append(out, cloned)
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Code < out[j].Code })
+
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Code == out[j].Code {
+			return out[i].EnabledOn > out[j].EnabledOn
+		}
+		return out[i].Code < out[j].Code
+	})
 	if limit <= 0 {
 		limit = 10
 	}
@@ -484,8 +797,12 @@ func (s *dictMemoryStore) ListDictValues(_ context.Context, tenantID string, dic
 }
 
 func (s *dictMemoryStore) ResolveValueLabel(_ context.Context, tenantID string, asOf string, dictCode string, code string) (string, bool, error) {
-	for _, item := range s.valuesForTenant(tenantID) {
-		if item.DictCode == dictCode && item.Code == code && item.EnabledOn <= asOf {
+	sourceTenantID, ok := s.resolveSourceTenantAsOf(tenantID, dictCode, asOf)
+	if !ok {
+		return "", false, nil
+	}
+	for _, item := range s.valuesForTenant(sourceTenantID) {
+		if item.DictCode == dictCode && item.Code == code && valueStatusAsOf(item, asOf) == "active" {
 			return item.Label, true, nil
 		}
 	}
@@ -493,7 +810,10 @@ func (s *dictMemoryStore) ResolveValueLabel(_ context.Context, tenantID string, 
 }
 
 func (s *dictMemoryStore) ListOptions(ctx context.Context, tenantID string, asOf string, dictCode string, keyword string, limit int) ([]dictpkg.Option, error) {
-	values, _ := s.ListDictValues(ctx, tenantID, dictCode, asOf, keyword, limit, "active")
+	values, err := s.ListDictValues(ctx, tenantID, dictCode, asOf, keyword, limit, "active")
+	if err != nil {
+		return nil, err
+	}
 	out := make([]dictpkg.Option, 0, len(values))
 	for _, item := range values {
 		out = append(out, dictpkg.Option{Code: item.Code, Label: item.Label, Status: item.Status, EnabledOn: item.EnabledOn, DisabledOn: item.DisabledOn, UpdatedAt: item.UpdatedAt})
@@ -513,19 +833,79 @@ func (s *dictMemoryStore) CorrectDictValue(context.Context, string, DictCorrectV
 	return DictValueItem{}, false, errDictValueConflict
 }
 
-func (s *dictMemoryStore) ListDictValueAudit(context.Context, string, string, string, int) ([]DictValueAuditItem, error) {
+func (s *dictMemoryStore) ListDictValueAudit(_ context.Context, tenantID string, dictCode string, code string, _ int) ([]DictValueAuditItem, error) {
+	sourceTenantID, ok := s.resolveSourceTenant(tenantID, dictCode)
+	if !ok {
+		return nil, errDictNotFound
+	}
+	if sourceTenantID == "" || code == "" {
+		return []DictValueAuditItem{}, nil
+	}
 	return []DictValueAuditItem{}, nil
 }
 
+func (s *dictMemoryStore) resolveSourceTenantAsOf(tenantID string, dictCode string, asOf string) (string, bool) {
+	if item, ok := s.dicts[tenantID][dictCode]; ok && dictActiveAsOf(item, asOf) {
+		return tenantID, true
+	}
+	if item, ok := s.dicts[globalTenantID][dictCode]; ok && dictActiveAsOf(item, asOf) {
+		return globalTenantID, true
+	}
+	return "", false
+}
+
+func (s *dictMemoryStore) resolveSourceTenant(tenantID string, dictCode string) (string, bool) {
+	if _, ok := s.dicts[tenantID][dictCode]; ok {
+		return tenantID, true
+	}
+	if _, ok := s.dicts[globalTenantID][dictCode]; ok {
+		return globalTenantID, true
+	}
+	return "", false
+}
+
 func (s *dictMemoryStore) valuesForTenant(tenantID string) []DictValueItem {
-	if items, ok := s.values[tenantID]; ok && len(items) > 0 {
+	if items, ok := s.values[tenantID]; ok {
 		return items
 	}
 	return s.values[globalTenantID]
 }
 
-func supportedDictCode(dictCode string) bool {
-	return strings.EqualFold(strings.TrimSpace(dictCode), dictCodeOrgType)
+func (s *dictMemoryStore) dictsByTenant(tenantID string) map[string]DictItem {
+	items := map[string]DictItem{}
+	for code, item := range s.dicts[tenantID] {
+		items[code] = cloneDictItem(item)
+	}
+	return items
+}
+
+func cloneDictItem(item DictItem) DictItem {
+	item.DisabledOn = cloneOptionalString(item.DisabledOn)
+	return item
+}
+
+func dictActiveAsOf(item DictItem, asOf string) bool {
+	if item.EnabledOn > asOf {
+		return false
+	}
+	if item.DisabledOn != nil && asOf >= *item.DisabledOn {
+		return false
+	}
+	return true
+}
+
+func dictStatusAsOf(item DictItem, asOf string) string {
+	if dictActiveAsOf(item, asOf) {
+		return "active"
+	}
+	return "inactive"
+}
+
+func valueStatusAsOf(item DictValueItem, asOf string) string {
+	if item.EnabledOn <= asOf && (item.DisabledOn == nil || asOf < *item.DisabledOn) {
+		return "active"
+	}
+	return "inactive"
 }
 
 func dictDisplayName(dictCode string) string {

@@ -4,6 +4,7 @@ import { navItems } from '../navigation/config'
 import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
 import { FoundationDemoPage } from '../pages/FoundationDemoPage'
 import { DictConfigsPage } from '../pages/dicts/DictConfigsPage'
+import { DictValueDetailsPage } from '../pages/dicts/DictValueDetailsPage'
 import { JobCatalogPage } from '../pages/jobcatalog/JobCatalogPage'
 import { LoginPage } from '../pages/LoginPage'
 import { OrgUnitFieldConfigsPage } from '../pages/org/OrgUnitFieldConfigsPage'
@@ -14,6 +15,7 @@ import { PersonsPage } from '../pages/person/PersonsPage'
 import { AssignmentsPage } from '../pages/staffing/AssignmentsPage'
 import { PositionsPage } from '../pages/staffing/PositionsPage'
 import { RequirePermission } from './RequirePermission'
+import { RouteErrorPage } from './RouteErrorPage'
 
 export const router = createBrowserRouter([
   {
@@ -23,6 +25,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppShell navItems={navItems} />,
+    errorElement: <RouteErrorPage />,
     children: [
       {
         index: true,
@@ -49,6 +52,14 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permissionKey='dict.admin'>
             <DictConfigsPage />
+          </RequirePermission>
+        )
+      },
+      {
+        path: 'dicts/:dictCode/values/:code',
+        element: (
+          <RequirePermission permissionKey='dict.admin'>
+            <DictValueDetailsPage />
           </RequirePermission>
         )
       },

@@ -238,6 +238,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/dicts", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleDictsAPI(w, r, dictStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/iam/api/dicts", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleDictsAPI(w, r, dictStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/iam/api/dicts:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleDictsDisableAPI(w, r, dictStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/dicts/values", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleDictValuesAPI(w, r, dictStore)
 	}))
