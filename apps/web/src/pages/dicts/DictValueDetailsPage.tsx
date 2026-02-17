@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useMemo, useState } from 'react'
 import { Link as RouterLink, useParams, useSearchParams } from 'react-router-dom'
 import {
   Alert,
@@ -66,7 +66,7 @@ export function DictValueDetailsPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [disableValueDay, setDisableValueDay] = useState(todayISO())
-  const [correctLabel, setCorrectLabel] = useState('')
+  const [correctLabelDraft, setCorrectLabelDraft] = useState<string | null>(null)
   const [correctDay, setCorrectDay] = useState(todayISO())
 
   const versionsQuery = useQuery({
@@ -85,32 +85,28 @@ export function DictValueDetailsPage() {
 
   const versions = useMemo(() => selectCodeVersions(versionsQuery.data?.values ?? [], code), [code, versionsQuery.data])
 
-  useEffect(() => {
+  const effectiveSelectedVersionEnabledOn = useMemo(() => {
     if (versions.length === 0) {
-      setSelectedVersionEnabledOn('')
-      return
+      return ''
     }
-    const first = versions[0]
-    if (!first) {
-      setSelectedVersionEnabledOn('')
-      return
+    const selected = selectedVersionEnabledOn.trim()
+    if (selected.length > 0 && versions.some((item) => item.enabled_on === selected)) {
+      return selected
     }
-    if (!versions.some((item) => item.enabled_on === selectedVersionEnabledOn)) {
-      setSelectedVersionEnabledOn(first.enabled_on)
-    }
+    return versions[0]?.enabled_on ?? ''
   }, [selectedVersionEnabledOn, versions])
 
   const selectedVersion = useMemo(
-    () => versions.find((item) => item.enabled_on === selectedVersionEnabledOn) ?? versions[0] ?? null,
-    [selectedVersionEnabledOn, versions]
+    () => versions.find((item) => item.enabled_on === effectiveSelectedVersionEnabledOn) ?? versions[0] ?? null,
+    [effectiveSelectedVersionEnabledOn, versions]
   )
 
-  useEffect(() => {
-    if (!selectedVersion) {
-      return
+  const correctLabel = useMemo(() => {
+    if (typeof correctLabelDraft === 'string') {
+      return correctLabelDraft
     }
-    setCorrectLabel(selectedVersion.label)
-  }, [selectedVersion])
+    return selectedVersion?.label ?? ''
+  }, [correctLabelDraft, selectedVersion?.label])
 
   const auditQuery = useQuery({
     enabled: dictCode.length > 0 && code.length > 0,
@@ -121,24 +117,20 @@ export function DictValueDetailsPage() {
 
   const auditEvents = useMemo(() => auditQuery.data?.events ?? [], [auditQuery.data])
 
-  useEffect(() => {
+  const effectiveSelectedAuditEventUUID = useMemo(() => {
     if (auditEvents.length === 0) {
-      setSelectedAuditEventUUID('')
-      return
+      return ''
     }
-    const first = auditEvents[0]
-    if (!first) {
-      setSelectedAuditEventUUID('')
-      return
+    const selected = selectedAuditEventUUID.trim()
+    if (selected.length > 0 && auditEvents.some((event) => event.event_uuid === selected)) {
+      return selected
     }
-    if (!auditEvents.some((event) => event.event_uuid === selectedAuditEventUUID)) {
-      setSelectedAuditEventUUID(first.event_uuid)
-    }
+    return auditEvents[0]?.event_uuid ?? ''
   }, [auditEvents, selectedAuditEventUUID])
 
   const selectedAuditEvent = useMemo(
-    () => auditEvents.find((event) => event.event_uuid === selectedAuditEventUUID) ?? auditEvents[0] ?? null,
-    [auditEvents, selectedAuditEventUUID]
+    () => auditEvents.find((event) => event.event_uuid === effectiveSelectedAuditEventUUID) ?? auditEvents[0] ?? null,
+    [auditEvents, effectiveSelectedAuditEventUUID]
   )
 
   const disableValueMutation = useMutation({
@@ -244,8 +236,11 @@ export function DictValueDetailsPage() {
                     {versions.map((version) => (
                       <ListItemButton
                         key={`${version.code}:${version.enabled_on}`}
-                        onClick={() => setSelectedVersionEnabledOn(version.enabled_on)}
-                        selected={version.enabled_on === selectedVersionEnabledOn}
+                        onClick={() => {
+                          setSelectedVersionEnabledOn(version.enabled_on)
+                          setCorrectLabelDraft(null)
+                        }}
+                        selected={version.enabled_on === effectiveSelectedVersionEnabledOn}
                         sx={{ borderRadius: 1, mb: 0.5 }}
                       >
                         <ListItemText
@@ -291,7 +286,7 @@ export function DictValueDetailsPage() {
                     <Divider sx={{ my: 1.2 }} />
                     <Stack component='form' onSubmit={(event) => void onCorrectValue(event)} spacing={1.2}>
                       <Typography variant='subtitle2'>修正标签</Typography>
-                      <TextField label='label' value={correctLabel} onChange={(event) => setCorrectLabel(event.target.value)} />
+                      <TextField label='label' value={correctLabel} onChange={(event) => setCorrectLabelDraft(event.target.value)} />
                       <TextField label='correction_day' type='date' value={correctDay} onChange={(event) => setCorrectDay(event.target.value)} />
                       <Button disabled={correctValueMutation.isPending} type='submit' variant='outlined'>
                         修正值
