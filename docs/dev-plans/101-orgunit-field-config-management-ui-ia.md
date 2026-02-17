@@ -22,7 +22,11 @@
 2. [x] 仅 `orgunit.admin` 可访问；无权限时统一 `NoAccessPage`（fail-closed）。
 3. [x] 页面可完成最小管理闭环：
    - 查看当前租户已配置字段（含有效期与映射槽位只读）。
-   - 启用（新增）一个字段配置（由后端分配 `physical_col`，前端不可选；DICT/ENTITY 需从 `field-definitions.data_source_config_options` 选择 `data_source_config`）。
+   - 启用（新增）一个字段配置（由后端分配 `physical_col`，前端不可选）：
+     - 内置字段：从 `field-definitions` 选择 `field_key`；
+     - 自定义字段：输入自定义 `field_key`（`x_` 命名空间；仅 PLAIN(text)；对齐 `DEV-PLAN-106`）；
+     - DICT：`dict_code` 选择来源为字典模块 dict list（`GET /iam/api/dicts?as_of=enabled_on`；对齐 `DEV-PLAN-105B/106`），不再依赖 Org 的 `data_source_config_options` 枚举；
+     - ENTITY：仍需从 `field-definitions.data_source_config_options` 选择 `data_source_config`（枚举化候选）。
    - 停用一个字段配置（按 day 粒度选择 `disabled_on`）；若停用尚未生效，支持“延期停用”（仅向后延迟）。
    - “禁用”状态可解释：在 `status=disabled` 下区分 `未生效/已停用`（展示与二级筛选）。
 4. [x] 页面加载/空态/错误态可解释；不出现“静默失败/看起来成功但实际未生效”。
@@ -111,7 +115,9 @@
 
 建议列：
 
-- `field_label`：字段名称（来自 `field-definitions.label_i18n_key`，前端 `t(...)` 渲染；列表需将 `field-configs` 与 `field-definitions` 按 `field_key` join，禁止前端维护第二套映射）
+- `field_label`：字段名称：
+  - 内置字段：来自 `field-definitions.label_i18n_key`，前端 `t(...)` 渲染（列表需将 `field-configs` 与 `field-definitions` 按 `field_key` join，禁止前端维护第二套映射）；
+  - 自定义字段（`x_`）：直接展示 `field_key`（或按固定规则由 `field_key` 推导展示名；但不得引入第二套持久化 label SSOT；对齐 `DEV-PLAN-106`）。
 - `field_key`：稳定键（只读）
 - `value_type`：`text/int/uuid/bool/date`（只读）
 - `data_source_type`：`PLAIN/DICT/ENTITY`（只读）
@@ -140,17 +146,18 @@
 - `DialogTitle`：`启用字段`
 - `DialogContent` 表单（`Stack spacing={2}`）：
   1) `field_key` 选择：
-     - 控件：`Select` 或 `Autocomplete`
-     - 数据：`GET /org/api/org-units/field-definitions` 返回字段定义列表（MVP：2~5 个；对齐 `DEV-PLAN-100A` Phase 0 字段清单）
-     - 约束：候选应排除已存在于 `field-configs(status=all)` 的 `field_key`（无论当前 `as_of` 下状态如何），避免触发后端 “已存在/不可重复启用” 冲突。
+     - 控件（冻结）：提供两种模式（二选一）：
+       - **内置字段**：`Select/Autocomplete`（数据源：`GET /org/api/org-units/field-definitions`）
+       - **自定义字段（PLAIN）**：`TextField` 输入 `field_key`（必须满足 `x_[a-z0-9_]{1,60}`；仅允许 PLAIN(text)；对齐 `DEV-PLAN-106`）
+     - 约束：候选/输入都应排除已存在于 `field-configs(status=all)` 的 `field_key`（无论当前 `as_of` 下状态如何），避免触发后端 “已存在/不可重复启用” 冲突。
   2) `enabled_on`：
      - `TextField type="date"`，默认 `max(today_utc, as_of)`
      - 提示：`enabled_on` 启用后不可修改（SSOT：`DEV-PLAN-100B`），请谨慎选择。
   3) `data_source_config`（仅 DICT/ENTITY）：
      - PLAIN：不展示（或只读展示为 `{}`），因为该类型无 options。  
      - DICT：显示 `dict_code` 选择器：
-       - 选项来源：所选 `field_key` 在 `field-definitions` 中返回的 `data_source_config_options`（必须为枚举；禁止任意输入）。  
-       - 若候选仅 1 个：只读展示（不必让用户做无意义选择）。  
+       - 选项来源：字典模块 dict list：`GET /iam/api/dicts?as_of=<enabled_on>`（`as_of` 必填；对齐 `DEV-PLAN-105B`）。  
+       - 行为：用户选择 `dict_code` 后提交 `data_source_config={dict_code: ...}`；服务端以 dict registry 校验其在 `enabled_on` 下可用（fail-closed；对齐 `DEV-PLAN-106`）。  
      - ENTITY：显示 `entity/id_kind` 选择器：
        - 选项来源：同上（枚举化标识；禁止输入任意表/列名，对齐 `DEV-PLAN-100` D7）。  
        - 若候选仅 1 个：只读展示。
@@ -222,6 +229,7 @@
 - 导航项使用 i18n key：`nav_org_field_configs`（en/zh 同步）。
 - 字段名称（field_label）口径（MVP 冻结）：
   - 字段定义由后端返回 `label_i18n_key`，前端通过 `t(label_i18n_key)` 渲染（禁止前端再建一套字段 label 映射）；
+  - 自定义字段（`x_`）无 `label_i18n_key`，UI 直接展示 `field_key`（或按固定规则推导；不得引入租户可编辑的多语言持久化结构）；
   - 禁止在本计划引入“租户可编辑 label_zh/label_en 并持久化”的多语言业务数据形态（如需，另立 dev-plan）。
 
 ## 9. 验收标准（最小可交付）

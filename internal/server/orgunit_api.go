@@ -175,7 +175,8 @@ type orgUnitDetailsAPIItem struct {
 
 type orgUnitExtFieldAPIItem struct {
 	FieldKey           string  `json:"field_key"`
-	LabelI18nKey       string  `json:"label_i18n_key"`
+	LabelI18nKey       *string `json:"label_i18n_key"`
+	Label              *string `json:"label,omitempty"`
 	ValueType          string  `json:"value_type"`
 	DataSourceType     string  `json:"data_source_type"`
 	Value              any     `json:"value"`

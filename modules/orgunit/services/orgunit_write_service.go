@@ -980,8 +980,8 @@ func (s *orgUnitWriteService) buildCorrectionPatch(ctx context.Context, tenantID
 			if !ok {
 				return nil, nil, "", httperr.NewBadRequest(errPatchFieldNotAllowed)
 			}
-			if _, ok := fieldmeta.LookupFieldDefinition(fieldKey); !ok {
-				return nil, nil, "", httperr.NewBadRequest(errPatchFieldNotAllowed)
+			if err := validateExtFieldKeyEnabled(fieldKey, cfg); err != nil {
+				return nil, nil, "", err
 			}
 
 			extPatch[fieldKey] = rawValue
@@ -1041,6 +1041,9 @@ func (s *orgUnitWriteService) listEnabledExtFieldConfigs(ctx context.Context, te
 		if isReservedExtFieldKey(key) {
 			continue
 		}
+		if _, ok := fieldmeta.LookupFieldDefinition(key); !ok && !fieldmeta.IsCustomPlainFieldKey(key) {
+			continue
+		}
 		cfg.FieldKey = key
 		outCfgs = append(outCfgs, cfg)
 		keys = append(keys, key)
@@ -1050,6 +1053,22 @@ func (s *orgUnitWriteService) listEnabledExtFieldConfigs(ctx context.Context, te
 
 func buildExtPayload(ext map[string]any, fieldConfigs []types.TenantFieldConfig) (map[string]any, map[string]string, error) {
 	return buildExtPayloadWithContext(context.Background(), "", "", ext, fieldConfigs)
+}
+
+func validateExtFieldKeyEnabled(fieldKey string, cfg types.TenantFieldConfig) error {
+	if _, ok := fieldmeta.LookupFieldDefinition(fieldKey); ok {
+		return nil
+	}
+	if !fieldmeta.IsCustomPlainFieldKey(fieldKey) {
+		return httperr.NewBadRequest(errPatchFieldNotAllowed)
+	}
+	if !strings.EqualFold(strings.TrimSpace(cfg.ValueType), "text") {
+		return httperr.NewBadRequest(errPatchFieldNotAllowed)
+	}
+	if !strings.EqualFold(strings.TrimSpace(cfg.DataSourceType), "PLAIN") {
+		return httperr.NewBadRequest(errPatchFieldNotAllowed)
+	}
+	return nil
 }
 
 func buildExtPayloadWithContext(ctx context.Context, tenantID string, asOf string, ext map[string]any, fieldConfigs []types.TenantFieldConfig) (map[string]any, map[string]string, error) {
@@ -1076,8 +1095,8 @@ func buildExtPayloadWithContext(ctx context.Context, tenantID string, asOf strin
 		if !ok {
 			return nil, nil, httperr.NewBadRequest(errPatchFieldNotAllowed)
 		}
-		if _, ok := fieldmeta.LookupFieldDefinition(fieldKey); !ok {
-			return nil, nil, httperr.NewBadRequest(errPatchFieldNotAllowed)
+		if err := validateExtFieldKeyEnabled(fieldKey, cfg); err != nil {
+			return nil, nil, err
 		}
 
 		extPatch[fieldKey] = rawValue

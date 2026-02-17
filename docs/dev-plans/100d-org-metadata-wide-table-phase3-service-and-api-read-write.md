@@ -80,12 +80,15 @@ graph TD
 - **ADR-100D-03：动态 SQL 仅允许“枚举化实体 + allowlist 列名 + 参数化值”**
   - 选定：所有动态列名/实体名必须来自服务端枚举映射（field_key -> physical_col；entity_code -> 固定 SQL 模板），值一律参数化；任何解析失败直接拒绝（fail-closed）。
 
-- **ADR-100D-04：字段定义是配置写入口的唯一来源（避免第二套 SSOT）**
-  - 选定：`field-definitions` 是“字段元数据 + 可选数据来源配置”的唯一来源：  
-    - `value_type/data_source_type/label_i18n_key` 由 `field-definitions` 冻结；  
-    - `data_source_config` 允许在 **启用字段（enable）** 时由管理端从 `field-definitions.data_source_config_options` 中选择并提交（仅 DICT/ENTITY；禁止任意表/列透传）；  
-    - `field-configs` 的 enable 请求禁止客户端提交或覆盖 `value_type/data_source_type/physical_col`。  
-  - 原因：避免 UI/API/Kernel 出现第二套字段定义与隐藏配置，降低 drift 风险（对齐 `DEV-PLAN-003` Simple > Easy）。
+- **ADR-100D-04：字段定义与数据源的权威边界（避免第二套 SSOT）**
+  - 选定：`field-definitions` 是**内置字段**的权威来源（metadata SSOT）：
+    - `value_type/data_source_type/label_i18n_key/allow_filter/allow_sort` 由 `field-definitions` 冻结；
+    - **DICT**：`dict_code` 的“可选全集/可用性”以字典模块 registry 为 SSOT（`DEV-PLAN-105/105B`），`field-definitions` 不再枚举可选 dict_code（避免把 dict_code 复制进 Org 形成第二套 SSOT）；
+    - **ENTITY**：`data_source_config` 仍要求命中 `field-definitions.data_source_config_options`（枚举化候选；禁止任意表/列透传）。
+  - 约束：
+    - `field-configs` 的 enable 请求禁止客户端提交或覆盖 `physical_col`；
+    - 允许一个受控例外：自定义 PLAIN 字段走 `x_` 命名空间（见 §5.2.2），其 metadata 由 enable 行为隐式承载（仅 PLAIN(text)，不新增表）。
+  - 原因：让“字段元数据/数据源/可用性”各自只有一种权威表达，避免 drift（对齐 `DEV-PLAN-003` Simple > Easy）。
 
 - **ADR-100D-05：DICT 展示值遵循 D4 兜底链路，但必须显式标记来源**
   - 选定：DICT 的 `display_value` 读取遵循 `DEV-PLAN-100` D4：`versions 快照 -> events 快照 -> 当前字典 label`；但必须通过 `display_value_source`（与可选 warning code）显式标记兜底路径，禁止静默“当前名称覆盖历史”。
@@ -137,10 +140,6 @@ graph TD
       "value_type": "text",
       "data_source_type": "DICT",
       "data_source_config": { "dict_code": "org_type" },
-      "data_source_config_options": [
-        { "dict_code": "org_type" },
-        { "dict_code": "org_subtype" }
-      ],
       "label_i18n_key": "org.fields.org_type",
       "allow_filter": true,
       "allow_sort": true
@@ -153,7 +152,8 @@ graph TD
 >
 > `data_source_config_options` 口径（冻结）：
 >
-> - 仅当 `data_source_type IN ('DICT','ENTITY')` 时返回，且必须为非空数组；若该字段数据来源配置为“固定”，则返回单元素数组（与 `data_source_config` 相同）。
+> - 仅当 `data_source_type='ENTITY'` 时返回，且必须为非空数组（枚举化候选，禁止任意透传）。
+> - `data_source_type='DICT'` **不返回** `data_source_config_options`：DICT 的 `dict_code` 选择来源为字典模块 dict list（SSOT：`DEV-PLAN-105B`）。
 
 新增字段（冻结）：
 
@@ -214,10 +214,13 @@ status 口径冻结：
 约束（冻结）：
 
 - `initiator_uuid` 必须由服务端会话上下文注入并传递给 Kernel；**不得由 UI 提交/伪造**（SSOT：`DEV-PLAN-100A`）。
-- `value_type/data_source_type` 必须来自 `field-definitions`（ADR-100D-04）；若 `field_key` 不在定义列表，返回 404 `ORG_FIELD_DEFINITION_NOT_FOUND`。  
+- `field_key` 分类（冻结）：
+  - **内置字段**：必须来自 `field-definitions`（ADR-100D-04）；若 `field_key` 不在定义列表，返回 404 `ORG_FIELD_DEFINITION_NOT_FOUND`。
+  - **自定义 PLAIN 字段**：当 `field_key` 满足 `x_[a-z0-9_]{1,60}` 时，允许 **不在** `field-definitions` 中；该路径下 `value_type='text'`、`data_source_type='PLAIN'`（固定），且 `data_source_config` 必须为 `{}`（缺失由服务端补齐为 `{}`）。
 - `data_source_config`：
   - `PLAIN`：必须为 `{}`（可缺省，由服务端补齐为空对象）。  
-  - `DICT/ENTITY`：必须在 `field-definitions.data_source_config_options` 中（允许“租户管理员选择”，但禁止任意输入/透传）。
+  - `DICT`：必须为 `{ "dict_code": "<...>" }`，且 `dict_code` 必须在字典模块 registry 中存在并在 `enabled_on` 下可用（fail-closed；SSOT：`DEV-PLAN-105B`）。
+  - `ENTITY`：必须命中 `field-definitions.data_source_config_options`（枚举化候选；禁止任意透传）。
 
 #### 5.2.3 Disable（停用字段）
 
@@ -289,6 +292,16 @@ status 口径冻结：
       "value": "DEPARTMENT",
       "display_value": "Department",
       "display_value_source": "versions_snapshot"
+    },
+    {
+      "field_key": "x_cost_center",
+      "label_i18n_key": null,
+      "label": "x_cost_center",
+      "value_type": "text",
+      "data_source_type": "PLAIN",
+      "value": "CC-001",
+      "display_value": "CC-001",
+      "display_value_source": "plain"
     }
   ]
 }
@@ -299,7 +312,10 @@ status 口径冻结：
 - `ext_fields` 必须包含 `as_of` 下 enabled 的字段全集（day 粒度）；即使当前无值也必须返回（`value=null`），避免 UI 出现“字段已启用但不可见/不可编辑”。  
 - 当 `as_of >= disabled_on` 时该字段不属于 enabled 集合，因此 **不得** 出现在 `ext_fields`；用户若需查看历史值，应切换 `as_of` 到有效期内或查看 Audit（变更日志）。  
 - `ext_fields` 的返回顺序必须稳定：按 `field_key` 升序排序（避免 UI 抖动与测试不稳定）。  
-- `label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`），用于 UI 动态渲染；字段 key 到 label 的映射不得由 UI 另建第二套规则。  
+- label（冻结）：
+  - 内置字段：`label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`），用于 UI 动态渲染；
+  - 自定义字段（`x_` 命名空间）：允许 `label_i18n_key=null`，但必须提供 `label`（canonical string；UI 不做 i18n）。
+  - 字段 key 到 label 的映射不得由 UI 另建第二套规则（UI 仅消费服务端返回的 `label_i18n_key/label`）。
 - `display_value` 与 `display_value_source`（冻结）：
   - PLAIN：`display_value` 为 `value` 的规范化字符串表示；`display_value_source="plain"`。  
   - DICT：遵循 `DEV-PLAN-100` D4（ADR-100D-05）：
@@ -354,8 +370,9 @@ status 口径冻结：
 
 | 场景 | code（稳定） | HTTP | 备注 |
 | --- | --- | --- | --- |
-| enable：field_key 不在 field-definitions | `ORG_FIELD_DEFINITION_NOT_FOUND` | 404 | 管理端可见；用于防止 UI 启用未知字段 |
-| enable：data_source_config 不合法（缺失/形状非法/不在 data_source_config_options） | `ORG_FIELD_CONFIG_INVALID_DATA_SOURCE_CONFIG` | 400 | SSOT：`DEV-PLAN-100B`；DICT/ENTITY 必须显式选择并提交 |
+| enable：field_key 不在 field-definitions（且不符合自定义 `x_` 规则） | `ORG_FIELD_DEFINITION_NOT_FOUND` | 404 | 管理端可见；用于防止 UI 启用未知字段 |
+| enable：自定义 field_key 规则不满足（非 `x_...` / 超长 / 非法字符） | `ORG_INVALID_ARGUMENT` / `invalid_request` | 400 | 仅允许 `x_[a-z0-9_]{1,60}`（且满足 field_key 格式 check） |
+| enable：data_source_config 不合法（缺失/形状非法/DICT dict_code 不可用/ENTITY 不命中 options） | `ORG_FIELD_CONFIG_INVALID_DATA_SOURCE_CONFIG` | 400 | SSOT：`DEV-PLAN-100B`；DICT 的 dict_code 可用性以字典模块 registry 为准（`enabled_on` 视图，fail-closed） |
 | enable/disable：request_code 幂等键冲突 | `ORG_REQUEST_ID_CONFLICT` | 409 | SSOT：`DEV-PLAN-100B` 错误码表 |
 | enable：field_key 已启用 | `ORG_FIELD_CONFIG_ALREADY_ENABLED` | 409 | SSOT：`DEV-PLAN-100B` |
 | enable：槽位耗尽 | `ORG_FIELD_CONFIG_SLOT_EXHAUSTED` | 409 | SSOT：`DEV-PLAN-100B` |
@@ -395,7 +412,7 @@ status 口径冻结：
 
 - DICT：
   - 以 `dict_code` 为枚举键；
-  - options 来源必须可审计（MVP 可先用代码内 registry；后续如落库需另立 dev-plan）。  
+  - options/label 来源以字典模块为 SSOT（`DEV-PLAN-105/105B`），业务模块通过 `pkg/dict` 门面访问；禁止静默降级到代码内静态 registry（对齐 No Legacy）。
 - ENTITY：
   - 以 `entity_code` 为枚举键，映射到固定 SQL 模板；
   - `as_of` 必须进入查询条件（严格 as_of 语义，禁止“当前名称覆盖历史”）。

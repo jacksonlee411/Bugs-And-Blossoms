@@ -45,8 +45,11 @@ async function enableOrgTypeFieldConfig(page, asOf) {
   const enabledOnInput = dialog.getByLabel(/Enabled On/);
   await enabledOnInput.fill(asOf);
 
-  await dialog.getByLabel(/Data Source Config/).click();
-  await page.getByRole("option", { name: /dict_code/ }).click();
+  // DEV-PLAN-106: DICT uses dict registry as SSOT; UI selects dict_code directly.
+  const dictCodeSelect = dialog.getByLabel(/dict_code/i);
+  await expect(dictCodeSelect).toBeVisible({ timeout: 30_000 });
+  await dictCodeSelect.click();
+  await page.getByRole("option", { name: /org_type/i }).first().click();
 
   await dialog.getByRole("button", { name: /Confirm/ }).click();
   await expect(page.getByText(/Enabled successfully/)).toBeVisible({ timeout: 30_000 });

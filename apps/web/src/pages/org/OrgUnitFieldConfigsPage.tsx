@@ -29,6 +29,7 @@ import {
   type OrgUnitFieldDefinition,
   type OrgUnitTenantFieldConfig
 } from '../../api/orgUnits'
+import { listDicts } from '../../api/dicts'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { DataGridPage } from '../../components/DataGridPage'
 import { FilterBar } from '../../components/FilterBar'
@@ -55,9 +56,11 @@ interface FieldConfigRow {
 }
 
 interface EnableFormState {
+  mode: 'builtin' | 'custom'
   fieldKey: string
   enabledOn: string
   dataSourceConfigOption: string
+  dictCode: string
 }
 
 interface DisableFormState {
@@ -265,9 +268,11 @@ export function OrgUnitFieldConfigsPage() {
 
   const [enableOpen, setEnableOpen] = useState(false)
   const [enableForm, setEnableForm] = useState<EnableFormState>(() => ({
+    mode: 'builtin',
     fieldKey: '',
     enabledOn: todayUtc,
-    dataSourceConfigOption: ''
+    dataSourceConfigOption: '',
+    dictCode: ''
   }))
   const [enableError, setEnableError] = useState('')
   const [enableRequestCode, setEnableRequestCode] = useState(() => newRequestCode())
@@ -572,9 +577,11 @@ export function OrgUnitFieldConfigsPage() {
     setEnableError('')
     setEnableOpen(true)
     setEnableForm({
+      mode: 'builtin',
       fieldKey: '',
       enabledOn: maxDay(todayUtc, asOf),
-      dataSourceConfigOption: ''
+      dataSourceConfigOption: '',
+      dictCode: ''
     })
     setEnableRequestCode(newRequestCode())
   }
@@ -592,6 +599,14 @@ export function OrgUnitFieldConfigsPage() {
     return fieldDefinitionByKey.get(key) ?? null
   }, [enableForm.fieldKey, fieldDefinitionByKey])
 
+  const dictsQuery = useQuery({
+    enabled: enableOpen && enableForm.mode === 'builtin' && String(selectedDefinition?.data_source_type ?? '').toUpperCase() === 'DICT',
+    queryKey: ['dicts', enableForm.enabledOn],
+    queryFn: () => listDicts(enableForm.enabledOn),
+    staleTime: 10_000
+  })
+  const dictItems = useMemo(() => dictsQuery.data?.dicts ?? [], [dictsQuery.data])
+
   async function submitEnable() {
     setEnableError('')
     const fieldKey = enableForm.fieldKey.trim()
@@ -604,19 +619,34 @@ export function OrgUnitFieldConfigsPage() {
       setEnableError(t('org_field_configs_error_invalid_date'))
       return
     }
-    const def = fieldDefinitionByKey.get(fieldKey)
-    if (!def) {
-      setEnableError(t('org_field_configs_error_definition_missing'))
-      return
-    }
     if (existingFieldKeys.has(fieldKey)) {
       setEnableError(t('org_field_configs_error_already_exists'))
       return
     }
 
-    const dataSourceType = String(def.data_source_type ?? '').toUpperCase()
+    if (enableForm.mode === 'custom') {
+      if (!/^x_[a-z0-9_]{1,60}$/.test(fieldKey)) {
+        setEnableError(t('org_field_configs_error_custom_field_key_invalid'))
+        return
+      }
+    }
+
+    const def = enableForm.mode === 'builtin' ? fieldDefinitionByKey.get(fieldKey) ?? null : null
+    if (enableForm.mode === 'builtin' && !def) {
+      setEnableError(t('org_field_configs_error_definition_missing'))
+      return
+    }
+
+    const dataSourceType = String(def?.data_source_type ?? 'PLAIN').toUpperCase()
     let dataSourceConfig: Record<string, unknown> | undefined
-    if (dataSourceType === 'DICT' || dataSourceType === 'ENTITY') {
+    if (enableForm.mode === 'builtin' && dataSourceType === 'DICT') {
+      const dictCode = enableForm.dictCode.trim()
+      if (dictCode.length === 0) {
+        setEnableError(t('org_field_configs_error_data_source_config_required'))
+        return
+      }
+      dataSourceConfig = { dict_code: dictCode }
+    } else if (enableForm.mode === 'builtin' && dataSourceType === 'ENTITY') {
       const raw = enableForm.dataSourceConfigOption.trim()
       if (raw.length === 0) {
         setEnableError(t('org_field_configs_error_data_source_config_required'))
@@ -783,35 +813,80 @@ export function OrgUnitFieldConfigsPage() {
           ) : null}
           <Stack spacing={2} sx={{ mt: 0.5 }}>
             <FormControl>
-              <InputLabel id='org-field-key-select-label'>{t('org_field_configs_form_field_key')}</InputLabel>
+              <InputLabel id='org-field-key-mode-select-label'>{t('org_field_configs_form_field_key_mode')}</InputLabel>
               <Select
-                label={t('org_field_configs_form_field_key')}
-                labelId='org-field-key-select-label'
+                label={t('org_field_configs_form_field_key_mode')}
+                labelId='org-field-key-mode-select-label'
                 onChange={(event) => {
-                  const nextFieldKey = String(event.target.value)
+                  const nextMode = String(event.target.value) as EnableFormState['mode']
                   setEnableRequestCode(newRequestCode())
-                  const def = fieldDefinitionByKey.get(nextFieldKey)
-                  const dataSourceType = String(def?.data_source_type ?? '').toUpperCase()
-                  let nextOption = ''
-                  const options = def?.data_source_config_options ?? []
-                  if ((dataSourceType === 'DICT' || dataSourceType === 'ENTITY') && options.length === 1) {
-                    nextOption = JSON.stringify(options[0] ?? {})
-                  }
                   setEnableForm((previous) => ({
                     ...previous,
-                    fieldKey: nextFieldKey,
-                    dataSourceConfigOption: nextOption
+                    mode: nextMode,
+                    fieldKey: '',
+                    dataSourceConfigOption: '',
+                    dictCode: ''
+                  }))
+                }}
+                value={enableForm.mode}
+              >
+                <MenuItem value='builtin'>{t('org_field_configs_form_field_key_mode_builtin')}</MenuItem>
+                <MenuItem value='custom'>{t('org_field_configs_form_field_key_mode_custom')}</MenuItem>
+              </Select>
+            </FormControl>
+            {enableForm.mode === 'builtin' ? (
+              <FormControl>
+                <InputLabel id='org-field-key-select-label'>{t('org_field_configs_form_field_key')}</InputLabel>
+                <Select
+                  label={t('org_field_configs_form_field_key')}
+                  labelId='org-field-key-select-label'
+                  onChange={(event) => {
+                    const nextFieldKey = String(event.target.value)
+                    setEnableRequestCode(newRequestCode())
+                    const def = fieldDefinitionByKey.get(nextFieldKey)
+                    const dataSourceType = String(def?.data_source_type ?? '').toUpperCase()
+                    let nextOption = ''
+                    let nextDictCode = ''
+                    const options = def?.data_source_config_options ?? []
+                    if (dataSourceType === 'ENTITY' && options.length === 1) {
+                      nextOption = JSON.stringify(options[0] ?? {})
+                    }
+                    if (dataSourceType === 'DICT') {
+                      const raw = def?.data_source_config ?? {}
+                      nextDictCode = typeof raw.dict_code === 'string' ? raw.dict_code : ''
+                    }
+                    setEnableForm((previous) => ({
+                      ...previous,
+                      fieldKey: nextFieldKey,
+                      dataSourceConfigOption: nextOption,
+                      dictCode: nextDictCode
+                    }))
+                  }}
+                  value={enableForm.fieldKey}
+                >
+                  {availableDefinitions.map((def) => (
+                    <MenuItem key={def.field_key} value={def.field_key}>
+                      {resolveFieldLabel(t, fieldDefinitionByKey, def.field_key)} ({def.field_key})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <TextField
+                label={t('org_field_configs_form_field_key')}
+                onChange={(event) => {
+                  setEnableRequestCode(newRequestCode())
+                  setEnableForm((previous) => ({
+                    ...previous,
+                    fieldKey: event.target.value,
+                    dataSourceConfigOption: '',
+                    dictCode: ''
                   }))
                 }}
                 value={enableForm.fieldKey}
-              >
-                {availableDefinitions.map((def) => (
-                  <MenuItem key={def.field_key} value={def.field_key}>
-                    {resolveFieldLabel(t, fieldDefinitionByKey, def.field_key)} ({def.field_key})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                helperText={t('org_field_configs_form_custom_field_key_helper')}
+              />
+            )}
             <TextField
               InputLabelProps={{ shrink: true }}
               label={t('org_field_configs_form_enabled_on')}
@@ -822,7 +897,32 @@ export function OrgUnitFieldConfigsPage() {
               type='date'
               value={enableForm.enabledOn}
             />
-            {selectedDefinition && (String(selectedDefinition.data_source_type ?? '').toUpperCase() === 'DICT' || String(selectedDefinition.data_source_type ?? '').toUpperCase() === 'ENTITY') ? (
+            {enableForm.mode === 'builtin' && selectedDefinition && String(selectedDefinition.data_source_type ?? '').toUpperCase() === 'DICT' ? (
+              <FormControl>
+                <InputLabel id='org-field-configs-dict-code-label'>{t('org_field_configs_form_dict_code')}</InputLabel>
+                <Select
+                  label={t('org_field_configs_form_dict_code')}
+                  labelId='org-field-configs-dict-code-label'
+                  onChange={(event) => {
+                    setEnableRequestCode(newRequestCode())
+                    setEnableForm((previous) => ({ ...previous, dictCode: String(event.target.value) }))
+                  }}
+                  value={enableForm.dictCode}
+                >
+                  {dictItems.map((item) => (
+                    <MenuItem key={item.dict_code} value={item.dict_code}>
+                      {item.name} ({item.dict_code})
+                    </MenuItem>
+                  ))}
+                </Select>
+                {dictsQuery.isError ? (
+                  <Typography color='error' variant='caption' sx={{ mt: 0.5 }}>
+                    {getErrorMessage(dictsQuery.error)}
+                  </Typography>
+                ) : null}
+              </FormControl>
+            ) : null}
+            {enableForm.mode === 'builtin' && selectedDefinition && String(selectedDefinition.data_source_type ?? '').toUpperCase() === 'ENTITY' ? (
               <FormControl>
                 <InputLabel id='org-field-configs-data-source-config-label'>{t('org_field_configs_form_data_source_config')}</InputLabel>
                 <Select

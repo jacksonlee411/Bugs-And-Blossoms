@@ -44,9 +44,6 @@ var fieldDefinitions = []FieldDefinition{
 		DataSourceConfig: map[string]any{
 			"dict_code": "org_type",
 		},
-		DataSourceConfigOptions: []map[string]any{
-			{"dict_code": "org_type"},
-		},
 		LabelI18nKey: "org.fields.org_type",
 		AllowFilter:  true,
 		AllowSort:    true,
@@ -105,7 +102,7 @@ func DataSourceConfigJSON(def FieldDefinition) json.RawMessage {
 func DataSourceConfigOptions(def FieldDefinition) []map[string]any {
 	dataSourceType := strings.ToUpper(strings.TrimSpace(def.DataSourceType))
 	switch dataSourceType {
-	case "DICT", "ENTITY":
+	case "ENTITY":
 		if len(def.DataSourceConfigOptions) > 0 {
 			out := make([]map[string]any, 0, len(def.DataSourceConfigOptions))
 			for _, opt := range def.DataSourceConfigOptions {
