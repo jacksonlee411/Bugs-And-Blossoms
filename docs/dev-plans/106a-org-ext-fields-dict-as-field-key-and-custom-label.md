@@ -1,6 +1,6 @@
 # DEV-PLAN-106A：Org 扩展字段启用收敛（统一为字典字段方式 + 启用时自定义描述；保留 PLAIN）
 
-**状态**: 实施中（2026-02-17；最后更新：2026-02-18）
+**状态**: 已完成（2026-02-18；最后更新：2026-02-18）
 
 ## 1. 背景
 
@@ -206,14 +206,16 @@
 
 | 状态 | 文档 | 需登记的变更点（摘要） |
 | --- | --- | --- |
-| 待更新 | `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md` | 增补 enable-candidates 契约；明确 DICT 字段候选只来自 dict registry（`d_<dict_code>`），不再提供内置 DICT field_key 启用路径；保留自定义 PLAIN（`x_...`）。 |
-| 待更新 | `docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md` | 冻结 `d_<dict_code>` 命名空间、冲突规则、`label`（启用时描述）与返回口径；登记“取消内置 DICT 字段”的收敛与迁移要求。 |
-| 待更新 | `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md` | 更新启用对话框 IA：第三步分组展示（内置非 DICT + 字典字段 + 自定义 PLAIN）；字典字段可填写描述；内置 DICT 必须迁移下线。 |
-| 待更新 | `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md` | 补充详情页展示契约：`d_...` 字段 `label_i18n_key=null` + `label` 展示规则。 |
-| 待更新 | `docs/dev-plans/105-dict-config-platform-module.md` | 补充 dict registry 对上游“字典字段候选”能力约束（as_of、可用性、fail-closed）。 |
-| 待更新 | `docs/dev-plans/105b-dict-code-management-and-governance.md` | 明确 `GET /iam/api/dicts?as_of=...` 作为 106A 第三步候选字典字段的唯一来源。 |
-| 待更新 | `docs/dev-plans/106-org-ext-fields-enable-dict-registry-and-custom-plain-fields.md` | 增补“被 106A 收敛替代”的说明：取消内置 DICT 字段启用路径，统一为 `d_<dict_code>`；PLAIN 自定义（`x_...`）保留。 |
-| 待更新 | `docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md` | 更新“列表页 ext filter/sort 元数据来源”：启用字段的 queryability 元数据必须能覆盖 `d_...`，避免 UI 依赖 field-definitions join 丢失字典字段。 |
+| 已完成 | `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md` | 增补 enable-candidates 契约；明确 DICT 字段候选只来自 dict registry（`d_<dict_code>`），不再提供内置 DICT field_key 启用路径；保留自定义 PLAIN（`x_...`）。 |
+| 已完成 | `docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md` | 冻结 `d_<dict_code>` 命名空间、冲突规则、`label`（启用时描述）与返回口径；登记“取消内置 DICT 字段”的收敛与迁移要求。 |
+| 已完成 | `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md` | 更新启用对话框 IA：第三步分组展示（内置非 DICT + 字典字段 + 自定义 PLAIN）；字典字段可填写描述；内置 DICT 必须迁移下线。 |
+| 已完成 | `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md` | 补充详情页展示契约：`d_...` 字段 `label_i18n_key=null` + `label` 展示规则。 |
+| 已完成 | `docs/dev-plans/105-dict-config-platform-module.md` | 补充 dict registry 对上游“字典字段候选”能力约束（as_of、可用性、fail-closed）。 |
+| 已完成 | `docs/dev-plans/105b-dict-code-management-and-governance.md` | 明确 `GET /iam/api/dicts?as_of=...` 作为 106A 第三步候选字典字段的唯一来源。 |
+| 已完成 | `docs/dev-plans/106-org-ext-fields-enable-dict-registry-and-custom-plain-fields.md` | 增补“被 106A 收敛替代”的说明：取消内置 DICT 字段启用路径，统一为 `d_<dict_code>`；PLAIN 自定义（`x_...`）保留。 |
+| 已完成 | `docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md` | 更新“列表页 ext filter/sort 元数据来源”：启用字段的 queryability 元数据必须能覆盖 `d_...`，避免 UI 依赖 field-definitions join 丢失字典字段。 |
+
+> 落地记录：契约对齐（PR #374），实现落地（PR #375）。
 
 ## 8. 实施步骤（草案）
 
@@ -221,38 +223,38 @@
 
 ### 8.1 契约先行（Contract First）
 
-1. [ ] 更新第 7 节登记清单中的 SSOT 文档（逐条落地，不合并“口头共识”）。
-2. [ ] 在契约中明确并冻结以下关键点（避免实现阶段漂移）：
+1. [x] 更新第 7 节登记清单中的 SSOT 文档（逐条落地，不合并“口头共识”）。
+2. [x] 在契约中明确并冻结以下关键点（避免实现阶段漂移）：
    - DICT 启用候选只来自 dict registry，并推导为 `d_<dict_code>`（DICT 候选不再来自 field-definitions）。
    - enable/disable 的参数与错误码（尤其是“DICT 仅允许 d_...，内置 DICT 一律拒绝”的 fail-closed）。
    - `label`（启用时描述）的来源、存储与返回优先级。
 
 ### 8.2 后端 API 与路由改造
 
-1. [ ] 新增（或扩展）启用候选 API：
+1. [x] 新增（或扩展）启用候选 API：
    - `GET /org/api/org-units/field-configs:enable-candidates?enabled_on=YYYY-MM-DD`
    - 数据源：`GET /iam/api/dicts?as_of=enabled_on`（dict registry SSOT；fail-closed）。
-2. [ ] 保留 `GET /org/api/org-units/field-definitions` 作为 built-in 字段元数据 SSOT，但收敛 DICT 语义：
+2. [x] 保留 `GET /org/api/org-units/field-definitions` 作为 built-in 字段元数据 SSOT，但收敛 DICT 语义：
    - 启用阶段不得通过内置 DICT field_key 启用（统一走 `d_...`）；
    - （迁移完成后）可将内置 DICT 字段从返回中移除或标记为 deprecated（具体字段形态在 SSOT 文档中冻结）。
-3. [ ] 收紧 enable API（接口保留、语义收敛）：
+3. [x] 收紧 enable API（接口保留、语义收敛）：
    - `POST /org/api/org-units/field-configs` 对 DICT 的新口径：
      - `field_key=d_<dict_code>`：服务端解析 suffix 作为 dict_code，并强制 `value_type=text`、`data_source_type=DICT`、`data_source_config={"dict_code":"<dict_code>"}`（客户端若显式传入不一致则拒绝）；
      - 任何内置 DICT field_key 一律拒绝（fail-closed）。
    - `x_...`：延续 `DEV-PLAN-106`（固定 `value_type=text`、`data_source_type=PLAIN`、`data_source_config={}`）。
    - 其他 built-in：仍由 `field-definitions` SSOT 管理（不在本计划改变其语义）。
-4. [ ] 收紧 options API：
+4. [x] 收紧 options API：
    - `GET /org/api/org-units/fields:options`：仅支持 `d_...`（解析出 dict_code 后调用 `pkg/dict`），不再支持“内置 DICT field_key”分支。
 
 ### 8.3 数据库与 Kernel/Projection（不新增表）
 
-1. [ ] 为 `orgunit.tenant_field_configs` 增加可空 display label 列（例如 `display_label`）（不新增表）。
-2. [ ] 更新 enable/disable 的 kernel 写入路径：
+1. [x] 为 `orgunit.tenant_field_configs` 增加可空 display label 列（例如 `display_label`）（不新增表）。
+2. [x] 更新 enable/disable 的 kernel 写入路径：
    - enable `d_...` 时：写入/更新 display label（若提供），并把该值写入事件 payload 以便审计。
    - enable `x_...` 时：display label 允许为空（由 UI 直接展示 field_key 或固定推导）。
-3. [ ] 更新读模型返回：
+3. [x] 更新读模型返回：
    - `GET /org/api/org-units/field-configs` 与 `GET /org/api/org-units/details` 对 `d_...` 返回 `label_i18n_key=null` + `label=<display_label or default>`。
-4. [ ] 更新 list/详情返回 queryability 元数据（对齐 §5 第 3 条）：
+4. [x] 更新 list/详情返回 queryability 元数据（对齐 §5 第 3 条）：
    - 对 `d_...` 固定 `allow_filter=true`、`allow_sort=true`；
    - 对 `x_...` 固定 `allow_filter=false`、`allow_sort=false`；
    - 对 built-in：沿用 `field-definitions`。
@@ -261,46 +263,46 @@
 
 > 目标：最终租户侧 **DICT 扩展字段** 启用配置只允许 `d_...`（字典字段），并消除内置 DICT field_key；`x_...`（自定义 PLAIN）保留。迁移需可审计、可回放、无长期双链路。
 
-1. [ ] 设计并冻结迁移映射表（写在文档或 migration 注释中）：
+1. [x] 设计并冻结迁移映射表（写在文档或 migration 注释中）：
    - 既有 DICT field-config：从“内置 DICT field_key + data_source_config.dict_code”迁移为 `field_key=d_<dict_code>`；
    - 不迁移 built-in PLAIN/ENTITY（本计划非目标）；
    - 冲突处理（例如目标 field_key 已存在）必须 fail-closed，并输出可排障信息。
-2. [ ] 实现一次性迁移（module=orgunit）：
+2. [x] 实现一次性迁移（module=orgunit）：
    - 必须保证幂等（可重复执行不产生副作用）。
    - 必须保留审计证据（field-config rekey 事件）并在迁移脚本中产出可追溯日志。
    - 必须同步修正：
      - `orgunit.org_events.payload` 的 `ext/ext_labels_snapshot` 键（old -> new）；
      - `orgunit.org_unit_versions.ext_labels_snapshot` 键（old -> new）。
    - 推荐执行入口（冻结）：通过 DB Kernel 的 `orgunit.rekey_tenant_field_config(...)` 逐条 rekey（其内部会：原地 rekey `tenant_field_configs`、改写 `org_events`、改写 `org_unit_versions`、写入 `tenant_field_config_events(REKEY)`）。
-3. [ ] 迁移完成后，打开门禁：任何 **内置 DICT field_key** 的 enable 请求均被拒绝（DICT 仅允许 `d_...`；对齐 §5.1）。
+3. [x] 迁移完成后，打开门禁：任何 **内置 DICT field_key** 的 enable 请求均被拒绝（DICT 仅允许 `d_...`；对齐 §5.1）。
 
 ### 8.5 前端（MUI）收敛改造
 
-1. [ ] 字段配置页：
+1. [x] 字段配置页：
    - 启用对话框第三步分组展示：
      - 内置字段（来自 `field-definitions`，仅展示非 DICT）；
      - 字典字段（来自 enable-candidates 的 dict_fields）；
      - 自定义 PLAIN（输入 `x_...`）。
    - 选择字典字段时显示“描述/展示名”输入框（可选），并随 enable 请求提交。
-2. [ ] 移除“内置 DICT field_key + 绑定 dict_code”的 UI 路径与相关依赖：
+2. [x] 移除“内置 DICT field_key + 绑定 dict_code”的 UI 路径与相关依赖：
    - 启用 DICT 时不再展示“先选内置字段再选 dict_code”的交互；
    - 列表页/筛选排序（ext query）元数据需覆盖 `d_...`，避免依赖 `field-definitions` join 导致缺字段（对齐 §5 第 3 条）。
-3. [ ] 详情页：
+3. [x] 详情页：
    - 渲染 ext_fields 时按新口径展示 label（优先 i18n key；否则展示 label；再 fallback field_key）。
    - 字典字段的值编辑：使用 `fields:options`（由 `d_...` 解析 dict_code）。
 
 ### 8.6 测试与门禁对齐
 
-1. [ ] 单测/契约测试：覆盖
+1. [x] 单测/契约测试：覆盖
    - enable-candidates 返回 dict_fields；
    - enable：DICT 仅允许 `d_...`；内置 DICT field_key 一律 fail-closed；
    - `fields:options` 仅支持 d_...；
    - display label 的存储与返回。
    - 迁移：old->new rekey 后，engine 校验与 replay/回放路径不失败（重点覆盖 `org_events.payload.ext/ext_labels_snapshot` 的 key 一致性）。
-2. [ ] E2E：至少覆盖
+2. [x] E2E：至少覆盖
    - 启用 `d_test01` + 填写描述 -> 列表可见；
    - OrgUnit 详情页写入该字段值 -> 回显 + label 解析。
-3. [ ] 本地门禁：按 `AGENTS.md` 触发器矩阵跑到与 CI 对齐（推荐 `make preflight`）。
+3. [x] 本地门禁：按 `AGENTS.md` 触发器矩阵跑到与 CI 对齐（推荐 `make preflight`）。
 
 ## 9. 验收标准（DoD）
 
