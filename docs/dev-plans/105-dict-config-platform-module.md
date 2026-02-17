@@ -212,9 +212,10 @@
 2. 不存在/无效则拒绝（例如：`DICT_VALUE_NOT_FOUND_AS_OF`；错误码以实现阶段收敛为准，但必须稳定且可解释）。
 3. 存在则写入 `payload.ext` 的 code，并写 `payload.ext_labels_snapshot` 的 canonical label（label 快照是对外可解释的“写入时事实”，用于避免运行期漂移）。
 
-补充（对齐 `DEV-PLAN-106`）：当业务模块在“启用字段配置（enable field-config）”阶段需要选择/校验 `dict_code` 时：
+补充（对齐 `DEV-PLAN-106/106A`）：当业务模块在“启用字段配置（enable field-config）”阶段需要选择/校验字典字段候选时：
 - dict_code 的存在性/可用性以 dict registry 为 SSOT（`DEV-PLAN-105B`）；
-- 校验口径以 `enabled_on`（date）作为 `as_of`，对 `GET /iam/api/dicts?as_of=...` 做 fail-closed 校验；UI 的 dict_code 选择器同样以该接口作为数据源（避免把 dict_code 枚举复制进业务模块）。
+- 校验口径以 `enabled_on`（date）作为 `as_of`，对 `GET /iam/api/dicts?as_of=...` 做 fail-closed 校验；
+- 对齐 `DEV-PLAN-106A`：字典字段以 `field_key=d_<dict_code>` 推导，候选集合由上游 dict list 推导（避免“先选内置字段再绑定 dict_code”的双概念 UI）。
 
 ### 8.2 读取链路（详情展示/排障）
 

@@ -4,7 +4,7 @@
 
 > 目标：在 **不新增 DB schema**、不引入 legacy/双链路 的前提下，把已存在的 Phase 3（`DEV-PLAN-100D`）实现对齐到最新冻结口径（`DEV-PLAN-100A/100D/101/100E`），并补齐必要的测试与门禁证据，为 Phase 4A/4B（`DEV-PLAN-100E/101`）的 UI 联调提供稳定后端。
 
-> 2026-02-17 补充：为对齐 `DEV-PLAN-106`，Phase 3 的“DICT 数据源选择/校验”口径已更新为 **dict registry SSOT**（`DEV-PLAN-105/105B`），并新增“自定义 PLAIN（`x_` 命名空间）”的 enable 口径；本文件中与之冲突的历史描述以 §3 的补充条款为准，避免继续把 dict_code 枚举复制进 Org。
+> 2026-02-17 补充：为对齐 `DEV-PLAN-106/106A`，Phase 3 的“DICT 数据源选择/校验”口径已更新为 **dict registry SSOT**（`DEV-PLAN-105/105B`），并进一步收敛为“字典字段方式”：`field_key=d_<dict_code>`，dict_code 由 field_key 推导（禁止 built-in DICT field_key 启用）。同时保留“自定义 PLAIN（`x_` 命名空间）”的 enable 口径。本文件中与之冲突的历史描述以 §3 的补充条款为准，避免继续把 dict_code 枚举复制进 Org 或形成双链路。
 
 ## 1. 背景
 
@@ -45,7 +45,7 @@
    - DICT 不返回 `data_source_config_options`：dict_code 选择来源为字典模块 dict list（SSOT：`DEV-PLAN-105B`；对齐 `DEV-PLAN-106`）。
 2. **enable field-config**
    - 请求体允许提交 `data_source_config`（DICT/ENTITY）：
-     - DICT：`{dict_code}` 必须在 dict registry 中存在且在 `enabled_on` 下可用（fail-closed）。
+     - DICT（对齐 `DEV-PLAN-106A`）：必须使用 `field_key=d_<dict_code>`；服务端从 field_key 推导 `dict_code`，并按 dict registry 校验其在 `enabled_on` 下可用（fail-closed）。客户端若显式提交 `data_source_config`，也必须与推导结果一致（不一致即拒绝），避免“双写同一事实”漂移。
      - ENTITY：必须命中 `field-definitions.data_source_config_options`（枚举化候选）。
    - `PLAIN` 允许缺省 `data_source_config`，由服务端补齐为 `{}`。
    - 自定义 PLAIN：当 `field_key` 满足 `x_[a-z0-9_]{1,60}` 时，允许不在 `field-definitions` 中；该路径下 `value_type='text'`、`data_source_type='PLAIN'`（固定）。

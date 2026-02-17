@@ -165,8 +165,9 @@ UI 最小需要：
   },
   "ext_fields": [
     {
-      "field_key": "org_type",
-      "label_i18n_key": "org.fields.org_type",
+      "field_key": "d_org_type",
+      "label_i18n_key": null,
+      "label": "组织类型（示例）",
       "value_type": "text",
       "data_source_type": "DICT",
       "value": "DEPARTMENT",
@@ -182,6 +183,7 @@ UI 最小需要：
 - `ext_fields` 必须包含 `as_of` 下 enabled 的字段全集（即使 `value=null`）；day 粒度口径见 `DEV-PLAN-100D`。
 - label（冻结）：
   - 内置字段：`label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`）；服务端必须返回该字段；
+  - 字典字段（`d_`）：允许 `label_i18n_key=null`，但必须返回 `label`（优先启用时自定义 label，否则为 dict name / dict_code；SSOT：`DEV-PLAN-106A`）；
   - 自定义字段（`x_`）：允许 `label_i18n_key=null`，但必须返回 `label`（canonical string；不做 i18n）；
   - UI 不维护第二套“字段 -> label”映射，只消费服务端返回的 `label_i18n_key/label`（对齐 `DEV-PLAN-100D/106`）。
 - `ext_fields` 排序必须稳定（按 `field_key` 升序；对齐 `DEV-PLAN-100D`），避免 UI 抖动与测试不稳定。
@@ -207,11 +209,11 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
   "capabilities": {
     "correct_event": {
       "enabled": true,
-      "allowed_fields": ["effective_date", "name", "org_type"],
+      "allowed_fields": ["effective_date", "name", "d_org_type"],
       "field_payload_keys": {
         "effective_date": "effective_date",
         "name": "name",
-        "org_type": "ext.org_type"
+        "d_org_type": "ext.d_org_type"
       },
       "deny_reasons": []
     },
@@ -248,7 +250,7 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 
 ```json
 {
-  "field_key": "org_type",
+  "field_key": "d_org_type",
   "as_of": "2026-02-13",
   "options": [
     { "value": "DEPARTMENT", "label": "Department" }
@@ -263,7 +265,7 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 - `q` 可选，服务端对输入做 trim；为空时返回“前 N 个”。
 - `limit` 可选：缺失/非法默认 `10`，上限 `50`。
 - 返回顺序稳定：按 `label` 升序，其次 `value` 升序。
-- `label` 为 canonical label（非本地化展示名），UI 不对其做 i18n 替换；字段标题仍使用 `label_i18n_key`。
+- `label` 为 canonical label（非本地化展示名），UI 不对其做 i18n 替换；字段标题按 details 返回规则：优先 `label_i18n_key`，否则使用 `label`。
 
 ### 5.4 写入：更正接口扩展字段 patch（依赖项，SSOT：DEV-PLAN-083/100D）
 
@@ -283,7 +285,7 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
   "patch": {
     "name": "R&D - Updated",
     "ext": {
-      "org_type": "DEPARTMENT"
+      "d_org_type": "DEPARTMENT"
     }
   }
 }
