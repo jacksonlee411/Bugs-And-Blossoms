@@ -54,6 +54,12 @@ func (s orgUnitStoreWithEnabledFieldConfig) GetEnabledTenantFieldConfigAsOf(ctx 
 	return s.cfg, s.ok, s.err
 }
 
+type dictListErrStore struct{}
+
+func (dictListErrStore) ListDicts(context.Context, string, string) ([]DictItem, error) {
+	return nil, errors.New("boom")
+}
+
 func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 	t.Run("method not allowed", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-definitions", nil)
@@ -90,7 +96,7 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 			t.Fatalf("expected fields")
 		}
 
-		// Contract (DEV-PLAN-100D2): DICT/ENTITY must include non-empty data_source_config_options.
+		// Contract (DEV-PLAN-106): only ENTITY includes non-empty data_source_config_options.
 		prevKey := ""
 		foundOrgType := false
 		for _, f := range body.Fields {
@@ -110,7 +116,7 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 			}
 
 			switch strings.ToUpper(strings.TrimSpace(f.DataSourceType)) {
-			case "DICT", "ENTITY":
+			case "ENTITY":
 				if len(f.DataSourceConfigOptions) == 0 {
 					t.Fatalf("field %q expected non-empty data_source_config_options", f.FieldKey)
 				}
@@ -119,6 +125,10 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 					if err := json.Unmarshal(raw, &tmp); err != nil || tmp == nil || len(tmp) == 0 {
 						t.Fatalf("field %q has invalid option=%s err=%v", f.FieldKey, string(raw), err)
 					}
+				}
+			case "DICT":
+				if f.DataSourceConfigOptions != nil {
+					t.Fatalf("field %q expected data_source_config_options omitted", f.FieldKey)
 				}
 			default:
 				if f.DataSourceConfigOptions != nil {
@@ -134,11 +144,12 @@ func TestHandleOrgUnitFieldDefinitionsAPI(t *testing.T) {
 
 func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 	base := newOrgUnitMemoryStore()
+	dictStore := newDictMemoryStore()
 
 	t.Run("tenant missing", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-01", nil)
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, base)
+		handleOrgUnitFieldConfigsAPI(rec, req, base, dictStore)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -148,7 +159,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, base)
+		handleOrgUnitFieldConfigsAPI(rec, req, base, dictStore)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -159,7 +170,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=bad", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -170,7 +181,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-01&status=bad", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -186,7 +197,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -208,7 +219,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-10&status=enabled", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -224,7 +235,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req2 := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-03-01&status=enabled", nil)
 		req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1"}))
 		rec2 := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec2, req2, store)
+		handleOrgUnitFieldConfigsAPI(rec2, req2, store, dictStore)
 		if rec2.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec2.Code, rec2.Body.String())
 		}
@@ -253,7 +264,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-03-01&status=disabled", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -271,7 +282,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", strings.NewReader("{"))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -282,7 +293,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"","enabled_on":"","request_code":""}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -293,9 +304,20 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"org_type","enabled_on":"bad","request_code":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post custom field_key invalid returns bad request", func(t *testing.T) {
+		store := orgUnitStoreWithFieldConfigs{OrgUnitStore: base}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
 
@@ -304,7 +326,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"org_type","enabled_on":"2026-01-01","request_code":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -314,6 +336,47 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		}
 		if payload["code"] != orgUnitErrFieldConfigInvalidDataSourceConfig {
 			t.Fatalf("code=%v", payload["code"])
+		}
+	})
+
+	t.Run("post dict invalid dict_code maps to bad request", func(t *testing.T) {
+		store := orgUnitStoreWithFieldConfigs{
+			OrgUnitStore: base,
+			enableFn: func(context.Context, string, string, string, string, json.RawMessage, string, string, string) (orgUnitTenantFieldConfig, bool, error) {
+				t.Fatal("should not call store")
+				return orgUnitTenantFieldConfig{}, false, nil
+			},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"org_type","enabled_on":"2026-01-01","request_code":"r1","data_source_config":{"dict_code":"no_such"}}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["code"] != orgUnitErrFieldConfigInvalidDataSourceConfig {
+			t.Fatalf("code=%v", payload["code"])
+		}
+	})
+
+	t.Run("post dict list error maps to internal server error", func(t *testing.T) {
+		store := orgUnitStoreWithFieldConfigs{
+			OrgUnitStore: base,
+			enableFn: func(context.Context, string, string, string, string, json.RawMessage, string, string, string) (orgUnitTenantFieldConfig, bool, error) {
+				t.Fatal("should not call store")
+				return orgUnitTenantFieldConfig{}, false, nil
+			},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"org_type","enabled_on":"2026-01-01","request_code":"r1","data_source_config":{"dict_code":"org_type"}}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictListErrStore{})
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
 
@@ -339,7 +402,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"short_name","enabled_on":"2026-01-01","request_code":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -355,12 +418,50 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		}
 	})
 
+	t.Run("post custom plain missing data_source_config defaults to {}", func(t *testing.T) {
+		now := time.Unix(456, 0).UTC()
+		var gotValueType string
+		var gotDataSourceType string
+		var gotCfg json.RawMessage
+		store := orgUnitStoreWithFieldConfigs{
+			OrgUnitStore: base,
+			enableFn: func(_ context.Context, _ string, _ string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, _ string, _ string, _ string) (orgUnitTenantFieldConfig, bool, error) {
+				gotValueType = valueType
+				gotDataSourceType = dataSourceType
+				gotCfg = append([]byte(nil), dataSourceConfig...)
+				return orgUnitTenantFieldConfig{
+					FieldKey:         "x_cost_center",
+					ValueType:        valueType,
+					DataSourceType:   dataSourceType,
+					DataSourceConfig: dataSourceConfig,
+					PhysicalCol:      "ext_str_01",
+					EnabledOn:        "2026-01-01",
+					UpdatedAt:        now,
+				}, false, nil
+			},
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if gotValueType != "text" || gotDataSourceType != "PLAIN" {
+			t.Fatalf("value_type=%q data_source_type=%q", gotValueType, gotDataSourceType)
+		}
+		if strings.TrimSpace(string(gotCfg)) != "{}" {
+			t.Fatalf("got data_source_config=%s", string(gotCfg))
+		}
+	})
+
 	t.Run("post field definition not found", func(t *testing.T) {
 		store := orgUnitStoreWithFieldConfigs{OrgUnitStore: base}
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"nope","enabled_on":"2026-01-01","request_code":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -376,7 +477,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"org_type","enabled_on":"2026-01-01","request_code":"r1","data_source_config":{"dict_code":"org_type"}}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusConflict {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -404,7 +505,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"org_type","enabled_on":"2026-01-01","request_code":"r1","data_source_config":{"dict_code":"org_type"}}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -413,7 +514,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req2 := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"org_type","enabled_on":"2026-01-01","request_code":"r1","data_source_config":{"dict_code":"org_type"}}`)))
 		req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1"}))
 		rec2 := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec2, req2, store)
+		handleOrgUnitFieldConfigsAPI(rec2, req2, store, dictStore)
 		if rec2.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec2.Code, rec2.Body.String())
 		}
@@ -424,7 +525,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPut, "/org/api/org-units/field-configs", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsAPI(rec, req, store)
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -784,7 +885,7 @@ func TestOrgUnitFieldMetadataAPI_HelperCoverage(t *testing.T) {
 	t.Run("orgUnitFieldDataSourceConfigOptionsJSON sorts and skips marshal errors", func(t *testing.T) {
 		def := orgUnitFieldDefinition{
 			FieldKey:       "x",
-			DataSourceType: "DICT",
+			DataSourceType: "ENTITY",
 			DataSourceConfigOptions: []map[string]any{
 				{"dict_code": "b"},
 				{"bad": func() {}}, // json.Marshal should fail.
@@ -802,57 +903,107 @@ func TestOrgUnitFieldMetadataAPI_HelperCoverage(t *testing.T) {
 
 	t.Run("normalizeOrgUnitEnableDataSourceConfig plain", func(t *testing.T) {
 		def := orgUnitFieldDefinition{DataSourceType: "PLAIN"}
-		if cfg, ok := normalizeOrgUnitEnableDataSourceConfig(def, nil); !ok || string(cfg) != "{}" {
-			t.Fatalf("cfg=%s ok=%v", string(cfg), ok)
+		if cfg, ok, err := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), def, nil); err != nil || !ok || string(cfg) != "{}" {
+			t.Fatalf("cfg=%s ok=%v err=%v", string(cfg), ok, err)
 		}
-		if cfg, ok := normalizeOrgUnitEnableDataSourceConfig(def, json.RawMessage(`{}`)); !ok || string(cfg) != "{}" {
-			t.Fatalf("cfg=%s ok=%v", string(cfg), ok)
+		if cfg, ok, err := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), def, json.RawMessage(`{}`)); err != nil || !ok || string(cfg) != "{}" {
+			t.Fatalf("cfg=%s ok=%v err=%v", string(cfg), ok, err)
 		}
-		if _, ok := normalizeOrgUnitEnableDataSourceConfig(def, json.RawMessage(`{"x":1}`)); ok {
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), def, json.RawMessage(`{"x":1}`)); ok {
 			t.Fatalf("expected non-empty object to be rejected")
 		}
-		if _, ok := normalizeOrgUnitEnableDataSourceConfig(def, json.RawMessage(`[]`)); ok {
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), def, json.RawMessage(`[]`)); ok {
 			t.Fatalf("expected non-object to be rejected")
 		}
-		if _, ok := normalizeOrgUnitEnableDataSourceConfig(def, json.RawMessage(`null`)); ok {
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), def, json.RawMessage(`null`)); ok {
 			t.Fatalf("expected null to be rejected")
 		}
 	})
 
 	t.Run("normalizeOrgUnitEnableDataSourceConfig dict", func(t *testing.T) {
-		def := orgUnitFieldDefinition{
-			DataSourceType: "DICT",
-			DataSourceConfigOptions: []map[string]any{
-				{"bad": func() {}}, // should be skipped
-				{"dict_code": "org_type"},
-			},
-		}
+		def := orgUnitFieldDefinition{DataSourceType: "DICT"}
+		dictStore := newDictMemoryStore()
 
-		if _, ok := normalizeOrgUnitEnableDataSourceConfig(def, nil); ok {
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", dictStore, def, nil); ok {
 			t.Fatalf("expected missing config to fail")
 		}
-		if _, ok := normalizeOrgUnitEnableDataSourceConfig(def, json.RawMessage(`null`)); ok {
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", dictStore, def, json.RawMessage(`null`)); ok {
 			t.Fatalf("expected null config to fail")
 		}
-		if _, ok := normalizeOrgUnitEnableDataSourceConfig(def, json.RawMessage(`{`)); ok {
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", dictStore, def, json.RawMessage(`{`)); ok {
 			t.Fatalf("expected invalid json to fail")
 		}
-		if _, ok := normalizeOrgUnitEnableDataSourceConfig(def, json.RawMessage(`[]`)); ok {
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", dictStore, def, json.RawMessage(`[]`)); ok {
 			t.Fatalf("expected non-object to fail")
 		}
-		if _, ok := normalizeOrgUnitEnableDataSourceConfig(def, json.RawMessage(`{"dict_code":"missing"}`)); ok {
-			t.Fatalf("expected option mismatch to fail")
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", dictStore, def, json.RawMessage(`{"dict_code":"missing"}`)); ok {
+			t.Fatalf("expected dict code mismatch to fail")
+		}
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", dictStore, def, json.RawMessage(`{"id_kind":"uuid"}`)); ok {
+			t.Fatalf("expected missing dict_code to fail")
+		}
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", dictStore, def, json.RawMessage(`{"dict_code":" "}`)); ok {
+			t.Fatalf("expected blank dict_code to fail")
+		}
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", dictStore, def, json.RawMessage(`{"dict_code":"org_type","extra":"x"}`)); ok {
+			t.Fatalf("expected extra key to fail")
+		}
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", dictStore, def, json.RawMessage(`{"dict_code":1}`)); ok {
+			t.Fatalf("expected non-string dict_code to fail")
+		}
+		if _, _, err := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", dictListErrStore{}, def, json.RawMessage(`{"dict_code":"org_type"}`)); err == nil {
+			t.Fatalf("expected list dicts error")
 		}
 
-		cfg, ok := normalizeOrgUnitEnableDataSourceConfig(def, json.RawMessage(`{"dict_code":"org_type"}`))
-		if !ok || string(cfg) != `{"dict_code":"org_type"}` {
-			t.Fatalf("cfg=%s ok=%v", string(cfg), ok)
+		cfg, ok, err := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", dictStore, def, json.RawMessage(`{"dict_code":"org_type"}`))
+		if err != nil || !ok || string(cfg) != `{"dict_code":"org_type"}` {
+			t.Fatalf("cfg=%s ok=%v err=%v", string(cfg), ok, err)
+		}
+		if _, _, err := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", nil, def, json.RawMessage(`{"dict_code":"org_type"}`)); err == nil {
+			t.Fatalf("expected nil dict store to fail")
+		}
+	})
+
+	t.Run("normalizeOrgUnitEnableDataSourceConfig entity", func(t *testing.T) {
+		def := orgUnitFieldDefinition{
+			DataSourceType: "ENTITY",
+			DataSourceConfigOptions: []map[string]any{
+				{"entity": "person", "id_kind": "uuid"},
+			},
+		}
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), def, json.RawMessage(`{"entity":"nope","id_kind":"uuid"}`)); ok {
+			t.Fatalf("expected option mismatch")
+		}
+		cfg, ok, err := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), def, json.RawMessage(`{"entity":"person","id_kind":"uuid"}`))
+		if err != nil || !ok || string(cfg) != `{"entity":"person","id_kind":"uuid"}` {
+			t.Fatalf("cfg=%s ok=%v err=%v", string(cfg), ok, err)
+		}
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), def, nil); ok {
+			t.Fatalf("expected nil entity config to fail")
+		}
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), def, json.RawMessage(`null`)); ok {
+			t.Fatalf("expected null entity config to fail")
 		}
 	})
 
 	t.Run("normalizeOrgUnitEnableDataSourceConfig default rejects", func(t *testing.T) {
-		if _, ok := normalizeOrgUnitEnableDataSourceConfig(orgUnitFieldDefinition{DataSourceType: "NOPE"}, json.RawMessage(`{}`)); ok {
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), orgUnitFieldDefinition{DataSourceType: "NOPE"}, json.RawMessage(`{}`)); ok {
 			t.Fatalf("expected unknown type to be rejected")
+		}
+	})
+
+	t.Run("resolveOrgUnitEnableDefinition", func(t *testing.T) {
+		if _, ok := resolveOrgUnitEnableDefinition("short_name"); !ok {
+			t.Fatal("expected builtin")
+		}
+		if _, ok := resolveOrgUnitEnableDefinition("x_cost_center"); !ok {
+			t.Fatal("expected custom")
+		}
+		if _, ok := resolveOrgUnitEnableDefinition("unknown_field"); ok {
+			t.Fatal("expected unknown to fail")
+		}
+		if _, ok := resolveOrgUnitEnableDefinition(" "); ok {
+			t.Fatal("expected blank field_key to fail")
 		}
 	})
 

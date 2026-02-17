@@ -649,6 +649,22 @@ func TestBuildExtPayload_Branches(t *testing.T) {
 		}
 	})
 
+	t.Run("custom plain field in x_ namespace is accepted", func(t *testing.T) {
+		cfgs := []types.TenantFieldConfig{
+			{FieldKey: "x_cost_center", ValueType: "text", DataSourceType: "PLAIN", DataSourceConfig: json.RawMessage(`{}`)},
+		}
+		ext, labels, err := buildExtPayload(map[string]any{"x_cost_center": "CC-001"}, cfgs)
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if ext["x_cost_center"] != "CC-001" {
+			t.Fatalf("ext=%v", ext)
+		}
+		if len(labels) != 0 {
+			t.Fatalf("labels=%v", labels)
+		}
+	})
+
 	t.Run("dict validation branches", func(t *testing.T) {
 		if _, _, err := buildExtPayload(map[string]any{"org_type": 1}, fieldConfigs); err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgInvalidArgument {
 			t.Fatalf("err=%v", err)
@@ -666,6 +682,24 @@ func TestBuildExtPayload_Branches(t *testing.T) {
 			t.Fatalf("err=%v", err)
 		}
 	})
+}
+
+func TestValidateExtFieldKeyEnabled_Branches(t *testing.T) {
+	if err := validateExtFieldKeyEnabled("short_name", types.TenantFieldConfig{FieldKey: "short_name", ValueType: "text", DataSourceType: "PLAIN"}); err != nil {
+		t.Fatalf("builtin key err=%v", err)
+	}
+	if err := validateExtFieldKeyEnabled("x_cost_center", types.TenantFieldConfig{FieldKey: "x_cost_center", ValueType: "text", DataSourceType: "PLAIN"}); err != nil {
+		t.Fatalf("custom key err=%v", err)
+	}
+	if err := validateExtFieldKeyEnabled("unknown_field", types.TenantFieldConfig{FieldKey: "unknown_field", ValueType: "text", DataSourceType: "PLAIN"}); err == nil {
+		t.Fatal("expected unknown field rejected")
+	}
+	if err := validateExtFieldKeyEnabled("x_cost_center", types.TenantFieldConfig{FieldKey: "x_cost_center", ValueType: "int", DataSourceType: "PLAIN"}); err == nil {
+		t.Fatal("expected custom non-text rejected")
+	}
+	if err := validateExtFieldKeyEnabled("x_cost_center", types.TenantFieldConfig{FieldKey: "x_cost_center", ValueType: "text", DataSourceType: "DICT"}); err == nil {
+		t.Fatal("expected custom non-plain rejected")
+	}
 }
 
 func TestAppendActions_ExtPayloadAndLabels(t *testing.T) {
@@ -3001,6 +3035,34 @@ func TestBuildCorrectionPatch(t *testing.T) {
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
 			Ext: map[string]any{"org_type": "10"},
 		}, []types.TenantFieldConfig{{FieldKey: " "}})
+		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		}
+	})
+
+	t.Run("ext custom plain field is accepted", func(t *testing.T) {
+		svc := newWriteService(orgUnitWriteStoreStub{})
+		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
+			Ext: map[string]any{"x_cost_center": "CC-001"},
+		}, []types.TenantFieldConfig{{FieldKey: "x_cost_center", ValueType: "text", DataSourceType: "PLAIN", DataSourceConfig: json.RawMessage(`{}`)}})
+		if err != nil {
+			t.Fatalf("expected ok, got %v", err)
+		}
+		gotExt, ok := patchMap["ext"].(map[string]any)
+		if !ok || gotExt["x_cost_center"] != "CC-001" {
+			t.Fatalf("patchMap ext=%v", patchMap["ext"])
+		}
+		gotFields, ok := fields["ext"].(map[string]any)
+		if !ok || gotFields["x_cost_center"] != "CC-001" {
+			t.Fatalf("fields ext=%v", fields["ext"])
+		}
+	})
+
+	t.Run("ext config exists but invalid field_key rejects", func(t *testing.T) {
+		svc := newWriteService(orgUnitWriteStoreStub{})
+		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
+			Ext: map[string]any{"unknown_field": "x"},
+		}, []types.TenantFieldConfig{{FieldKey: "unknown_field", ValueType: "text", DataSourceType: "PLAIN", DataSourceConfig: json.RawMessage(`{}`)}})
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
 		}

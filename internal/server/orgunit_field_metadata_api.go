@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strconv"
@@ -51,9 +52,7 @@ func handleOrgUnitFieldDefinitionsAPI(w http.ResponseWriter, r *http.Request) {
 			AllowFilter:      def.AllowFilter,
 			AllowSort:        def.AllowSort,
 		}
-		if opts := orgUnitFieldDataSourceConfigOptionsJSON(def); len(opts) > 0 {
-			item.DataSourceConfigOptions = opts
-		}
+		item.DataSourceConfigOptions = orgUnitFieldDataSourceConfigOptionsJSON(def)
 		items = append(items, item)
 	}
 	// Ensure stable output even if listOrgUnitFieldDefinitions changes.
@@ -99,8 +98,12 @@ type orgUnitFieldConfigStore interface {
 	DisableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
 }
 
+type orgUnitDictRegistryStore interface {
+	ListDicts(ctx context.Context, tenantID string, asOf string) ([]DictItem, error)
+}
+
 // handleOrgUnitFieldConfigsAPI handles list/enable.
-func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
+func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore, dictStore orgUnitDictRegistryStore) {
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -179,13 +182,22 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 			return
 		}
 
-		def, ok := lookupOrgUnitFieldDefinition(req.FieldKey)
+		if strings.HasPrefix(strings.ToLower(req.FieldKey), "x_") && !isCustomOrgUnitPlainFieldKey(req.FieldKey) {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "custom field_key invalid")
+			return
+		}
+
+		def, ok := resolveOrgUnitEnableDefinition(req.FieldKey)
 		if !ok {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, orgUnitErrFieldDefinitionNotFound, "field definition not found")
 			return
 		}
 
-		dataSourceConfig, ok := normalizeOrgUnitEnableDataSourceConfig(def, req.DataSourceConfig)
+		dataSourceConfig, ok, err := normalizeOrgUnitEnableDataSourceConfig(r.Context(), tenant.ID, req.EnabledOn, dictStore, def, req.DataSourceConfig)
+		if err != nil {
+			writeInternalAPIError(w, r, err, "orgunit_field_config_enable_failed")
+			return
+		}
 		if !ok {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrFieldConfigInvalidDataSourceConfig, "data_source_config invalid")
 			return
@@ -410,31 +422,90 @@ func orgUnitFieldDataSourceConfigOptionsJSON(def orgUnitFieldDefinition) []json.
 	return raws
 }
 
-func normalizeOrgUnitEnableDataSourceConfig(def orgUnitFieldDefinition, raw json.RawMessage) (json.RawMessage, bool) {
+func resolveOrgUnitEnableDefinition(fieldKey string) (orgUnitFieldDefinition, bool) {
+	fieldKey = strings.TrimSpace(fieldKey)
+	if fieldKey == "" {
+		return orgUnitFieldDefinition{}, false
+	}
+	if def, ok := lookupOrgUnitFieldDefinition(fieldKey); ok {
+		return def, true
+	}
+	return buildCustomOrgUnitPlainFieldDefinition(fieldKey)
+}
+
+func normalizeOrgUnitEnableDataSourceConfig(
+	ctx context.Context,
+	tenantID string,
+	enabledOn string,
+	dictStore orgUnitDictRegistryStore,
+	def orgUnitFieldDefinition,
+	raw json.RawMessage,
+) (json.RawMessage, bool, error) {
 	dataSourceType := strings.ToUpper(strings.TrimSpace(def.DataSourceType))
 	switch dataSourceType {
 	case "PLAIN":
 		if len(bytes.TrimSpace(raw)) == 0 {
-			return json.RawMessage(`{}`), true
+			return json.RawMessage(`{}`), true, nil
 		}
 		var tmp map[string]any
 		if err := json.Unmarshal(raw, &tmp); err != nil || tmp == nil {
-			return nil, false
+			return nil, false, nil
 		}
 		if len(tmp) != 0 {
-			return nil, false
+			return nil, false, nil
 		}
-		return json.RawMessage(`{}`), true
-	case "DICT", "ENTITY":
+		return json.RawMessage(`{}`), true, nil
+	case "DICT":
 		if len(bytes.TrimSpace(raw)) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return nil, false
+			return nil, false, nil
 		}
 		var tmp map[string]any
 		if err := json.Unmarshal(raw, &tmp); err != nil || tmp == nil {
-			return nil, false
+			return nil, false, nil
 		}
-		// encoding/json sorts map keys; use it as canonical form.
-		// It can't fail here because tmp comes from json.Unmarshal.
+		if len(tmp) != 1 {
+			return nil, false, nil
+		}
+		codeRaw, ok := tmp["dict_code"]
+		if !ok {
+			return nil, false, nil
+		}
+		code, ok := codeRaw.(string)
+		if !ok {
+			return nil, false, nil
+		}
+		code = strings.TrimSpace(code)
+		if code == "" {
+			return nil, false, nil
+		}
+
+		if dictStore == nil {
+			return nil, false, errors.New("dict store missing")
+		}
+		dicts, err := listOrgUnitDicts(ctx, dictStore, tenantID, enabledOn)
+		if err != nil {
+			return nil, false, err
+		}
+		found := false
+		for _, item := range dicts {
+			if strings.EqualFold(strings.TrimSpace(item.DictCode), code) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, false, nil
+		}
+		canonical, _ := json.Marshal(map[string]any{"dict_code": code})
+		return json.RawMessage(canonical), true, nil
+	case "ENTITY":
+		if len(bytes.TrimSpace(raw)) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			return nil, false, nil
+		}
+		var tmp map[string]any
+		if err := json.Unmarshal(raw, &tmp); err != nil || tmp == nil {
+			return nil, false, nil
+		}
 		canonical, _ := json.Marshal(tmp)
 		options := orgUnitFieldDataSourceConfigOptions(def)
 		for _, opt := range options {
@@ -443,12 +514,12 @@ func normalizeOrgUnitEnableDataSourceConfig(def orgUnitFieldDefinition, raw json
 				continue
 			}
 			if bytes.Equal(want, canonical) {
-				return json.RawMessage(canonical), true
+				return json.RawMessage(canonical), true, nil
 			}
 		}
-		return nil, false
+		return nil, false, nil
 	default:
-		return nil, false
+		return nil, false, nil
 	}
 }
 

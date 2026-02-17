@@ -99,3 +99,25 @@ func TestOrgUnitFieldMetadata_DictIntegrationError(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestOrgUnitFieldMetadata_ExtHelpers(t *testing.T) {
+	if !isAllowedOrgUnitExtFieldKey("org_type") {
+		t.Fatal("expected builtin key allowed")
+	}
+	if !isAllowedOrgUnitExtFieldKey("x_cost_center") {
+		t.Fatal("expected custom x_ key allowed")
+	}
+	if isAllowedOrgUnitExtFieldKey("unknown_field") {
+		t.Fatal("expected unknown key rejected")
+	}
+
+	if _, ok := resolveOrgUnitEnableDefinition("x_cost_center"); !ok {
+		t.Fatal("expected custom definition to resolve")
+	}
+	if _, ok := resolveOrgUnitEnableDefinition("short_name"); !ok {
+		t.Fatal("expected builtin definition to resolve")
+	}
+	if _, ok := resolveOrgUnitEnableDefinition("unknown_field"); ok {
+		t.Fatal("expected unknown definition to fail")
+	}
+}

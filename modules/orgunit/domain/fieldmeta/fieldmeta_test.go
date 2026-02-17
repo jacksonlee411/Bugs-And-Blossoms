@@ -62,19 +62,60 @@ func TestFieldMetadata_DataSourceConfigOptions(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected org_type")
 	}
-	opts := DataSourceConfigOptions(dict)
-	if len(opts) != 1 || opts[0]["dict_code"] != "org_type" {
-		t.Fatalf("opts=%v", opts)
+	if opts := DataSourceConfigOptions(dict); opts != nil {
+		t.Fatalf("expected nil for dict, got=%v", opts)
 	}
 
 	fallback := FieldDefinition{
 		FieldKey:         "x",
-		DataSourceType:   "DICT",
-		DataSourceConfig: map[string]any{"dict_code": "x"},
+		DataSourceType:   "ENTITY",
+		DataSourceConfig: map[string]any{"entity": "person", "id_kind": "uuid"},
 	}
 	fallbackOpts := DataSourceConfigOptions(fallback)
-	if len(fallbackOpts) != 1 || fallbackOpts[0]["dict_code"] != "x" {
+	if len(fallbackOpts) != 1 || fallbackOpts[0]["entity"] != "person" {
 		t.Fatalf("fallback=%v", fallbackOpts)
+	}
+}
+
+func TestFieldMetadata_cloneFieldDefinition_DeepCopyOptions(t *testing.T) {
+	def := FieldDefinition{
+		FieldKey:       "x",
+		DataSourceType: "ENTITY",
+		DataSourceConfig: map[string]any{
+			"entity":  "person",
+			"id_kind": "uuid",
+		},
+		DataSourceConfigOptions: []map[string]any{
+			{"entity": "person", "id_kind": "uuid"},
+		},
+	}
+
+	cloned := cloneFieldDefinition(def)
+	def.DataSourceConfig["entity"] = "mutated"
+	def.DataSourceConfigOptions[0]["entity"] = "mutated"
+
+	if got, _ := cloned.DataSourceConfig["entity"].(string); got != "person" {
+		t.Fatalf("config entity=%q", got)
+	}
+	if got, _ := cloned.DataSourceConfigOptions[0]["entity"].(string); got != "person" {
+		t.Fatalf("option entity=%q", got)
+	}
+
+	empty := cloneFieldDefinition(FieldDefinition{DataSourceConfig: map[string]any{}, DataSourceConfigOptions: nil})
+	if empty.DataSourceConfigOptions != nil {
+		t.Fatalf("expected nil options, got=%v", empty.DataSourceConfigOptions)
+	}
+}
+
+func TestFieldMetadata_IsCustomPlainFieldKey(t *testing.T) {
+	if !IsCustomPlainFieldKey("x_cost_center") {
+		t.Fatal("expected x_cost_center to be valid")
+	}
+	invalid := []string{"x_", "x-COST", "X_cost", "short_name"}
+	for _, key := range invalid {
+		if IsCustomPlainFieldKey(key) {
+			t.Fatalf("expected %q invalid", key)
+		}
 	}
 }
 

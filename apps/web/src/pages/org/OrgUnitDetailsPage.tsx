@@ -1569,6 +1569,11 @@ export function OrgUnitDetailsPage() {
 
                       {detailQuery.data.ext_fields.some((field) => {
                         const labelKey = field.label_i18n_key?.trim()
+                        const literalLabel = field.label?.trim() ?? ''
+                        const isCustom = field.field_key?.trim().toLowerCase().startsWith('x_')
+                        if (literalLabel.length > 0 || isCustom) {
+                          return false
+                        }
                         return !labelKey || !isMessageKey(labelKey)
                       }) ? (
                         <Alert severity='warning' sx={{ mt: 1 }}>
@@ -1579,9 +1584,12 @@ export function OrgUnitDetailsPage() {
                       <Stack spacing={1} sx={{ mt: 1 }}>
                         {detailQuery.data.ext_fields.map((field) => {
                           const labelKey = field.label_i18n_key?.trim()
+                          const literalLabel = field.label?.trim() ?? ''
                           const label =
                             labelKey && isMessageKey(labelKey)
                               ? t(labelKey)
+                              : literalLabel.length > 0
+                              ? literalLabel
                               : field.field_key
                           const displayValue = field.display_value?.trim()
                           const valueText = displayValue && displayValue.length > 0 ? displayValue : toDisplayText(field.value)
@@ -2072,9 +2080,12 @@ export function OrgUnitDetailsPage() {
                       return null
                     }
                     const labelKey = field.label_i18n_key?.trim()
+                    const literalLabel = field.label?.trim() ?? ''
                     const label =
                       labelKey && isMessageKey(labelKey)
                         ? t(labelKey)
+                        : literalLabel.length > 0
+                        ? literalLabel
                         : fieldKey
 
                     const dataSourceType = field.data_source_type

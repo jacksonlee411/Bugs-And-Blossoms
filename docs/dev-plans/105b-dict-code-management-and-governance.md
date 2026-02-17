@@ -97,6 +97,9 @@
 - `GET /iam/api/dicts?as_of=...`：返回 `as_of` 下可用的 dict_code 列表。
 - 可用性判定（冻结）：`enabled_on <= as_of < disabled_on(or +inf)` 且 `status=active`。
 
+补充（接入方口径冻结）：
+- 当业务模块需要在“启用字段配置（enable field-config）”阶段选择/校验 `dict_code` 时，统一以该字段的 `enabled_on`（date）作为 `as_of` 调用 `GET /iam/api/dicts?as_of=...`（fail-closed；对齐 `DEV-PLAN-106`）。
+
 ## 5. 数据库契约（选项 A，冻结并已落地）
 
 > 用户已于 2026-02-17 确认按 105B 落库新增 `iam.dicts` / `iam.dict_events`。

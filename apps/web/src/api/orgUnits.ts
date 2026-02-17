@@ -113,7 +113,8 @@ export type OrgUnitExtScalarValue = string | number | boolean | null
 
 export interface OrgUnitExtField {
   field_key: string
-  label_i18n_key: string
+  label_i18n_key: string | null
+  label?: string | null
   value_type: OrgUnitExtValueType
   data_source_type: OrgUnitExtDataSourceType
   value: OrgUnitExtScalarValue

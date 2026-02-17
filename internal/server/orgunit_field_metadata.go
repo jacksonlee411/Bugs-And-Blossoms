@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/fieldmeta"
 	dictpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/dict"
@@ -20,6 +21,34 @@ func listOrgUnitFieldDefinitions() []orgUnitFieldDefinition {
 
 func lookupOrgUnitFieldDefinition(fieldKey string) (orgUnitFieldDefinition, bool) {
 	return fieldmeta.LookupFieldDefinition(fieldKey)
+}
+
+func isCustomOrgUnitPlainFieldKey(fieldKey string) bool {
+	return fieldmeta.IsCustomPlainFieldKey(fieldKey)
+}
+
+func isAllowedOrgUnitExtFieldKey(fieldKey string) bool {
+	fieldKey = strings.TrimSpace(fieldKey)
+	if fieldKey == "" {
+		return false
+	}
+	if _, ok := lookupOrgUnitFieldDefinition(fieldKey); ok {
+		return true
+	}
+	return isCustomOrgUnitPlainFieldKey(fieldKey)
+}
+
+func buildCustomOrgUnitPlainFieldDefinition(fieldKey string) (orgUnitFieldDefinition, bool) {
+	fieldKey = strings.TrimSpace(fieldKey)
+	if !isCustomOrgUnitPlainFieldKey(fieldKey) {
+		return orgUnitFieldDefinition{}, false
+	}
+	return orgUnitFieldDefinition{
+		FieldKey:         fieldKey,
+		ValueType:        "text",
+		DataSourceType:   "PLAIN",
+		DataSourceConfig: map[string]any{},
+	}, true
 }
 
 func orgUnitFieldDataSourceConfigJSON(def orgUnitFieldDefinition) json.RawMessage {
@@ -44,4 +73,8 @@ func listOrgUnitDictOptions(ctx context.Context, tenantID string, asOf string, d
 
 func resolveOrgUnitDictLabel(ctx context.Context, tenantID string, asOf string, dictCode string, value string) (string, bool, error) {
 	return dictpkg.ResolveValueLabel(ctx, tenantID, asOf, dictCode, value)
+}
+
+func listOrgUnitDicts(ctx context.Context, store orgUnitDictRegistryStore, tenantID string, asOf string) ([]DictItem, error) {
+	return store.ListDicts(ctx, tenantID, asOf)
 }
