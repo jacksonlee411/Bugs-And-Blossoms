@@ -174,10 +174,14 @@ graph TD
   "as_of": "2026-02-13",
   "field_configs": [
     {
-      "field_key": "org_type",
+      "field_key": "d_org_type",
       "value_type": "text",
       "data_source_type": "DICT",
       "data_source_config": { "dict_code": "org_type" },
+      "label_i18n_key": null,
+      "label": "组织类型（示例）",
+      "allow_filter": true,
+      "allow_sort": true,
       "physical_col": "ext_str_01",
       "enabled_on": "2026-02-01",
       "disabled_on": null,
@@ -193,7 +197,34 @@ status 口径冻结：
 - `disabled`：不满足 `enabled` 条件但行存在（包括“未来生效（as_of < enabled_on）”与“已停用（disabled_on <= as_of）”）
 - `all`：返回全部行
 
-#### 5.2.2 Enable（启用字段）
+#### 5.2.2 Enable Candidates（启用候选；106A 新增）
+
+- `GET /org/api/org-units/field-configs:enable-candidates?enabled_on=YYYY-MM-DD`
+- **Authz**：`orgunit.admin`
+- **Response 200（草案；冻结为“最小够用”）**：
+
+```json
+{
+  "enabled_on": "2026-02-01",
+  "dict_fields": [
+    {
+      "field_key": "d_org_type",
+      "dict_code": "org_type",
+      "name": "Org Type",
+      "value_type": "text",
+      "data_source_type": "DICT"
+    }
+  ],
+  "plain_custom_hint": { "pattern": "^x_[a-z0-9_]{1,60}$", "value_type": "text" }
+}
+```
+
+约束（冻结）：
+
+- `dict_fields` 的事实源为字典模块 dict registry：`GET /iam/api/dicts?as_of=enabled_on`（SSOT：`DEV-PLAN-105B`；对齐 `DEV-PLAN-106A`）。
+- 仅返回可推导为 `d_<dict_code>` 且满足 `tenant_field_configs.field_key` DB check 的候选；不可推导项必须排除并输出可排障日志（对齐 `DEV-PLAN-106A`）。
+
+#### 5.2.3 Enable（启用字段）
 
 - `POST /org/api/org-units/field-configs`
 - **Authz**：`orgunit.admin`
@@ -201,10 +232,10 @@ status 口径冻结：
 
 ```json
 {
-  "field_key": "org_type",
+  "field_key": "d_org_type",
   "enabled_on": "2026-02-01",
   "request_code": "req-uuid-or-stable-string",
-  "data_source_config": { "dict_code": "org_type" }
+  "label": "组织类型（示例）"
 }
 ```
 
@@ -216,13 +247,18 @@ status 口径冻结：
 - `initiator_uuid` 必须由服务端会话上下文注入并传递给 Kernel；**不得由 UI 提交/伪造**（SSOT：`DEV-PLAN-100A`）。
 - `field_key` 分类（冻结）：
   - **内置字段**：必须来自 `field-definitions`（ADR-100D-04）；若 `field_key` 不在定义列表，返回 404 `ORG_FIELD_DEFINITION_NOT_FOUND`。
+  - **字典字段（DICT）**：当 `field_key` 为 `d_<dict_code>` 时，视为“字典字段”，允许 **不在** `field-definitions` 中；该路径下由服务端强制：
+    - `value_type='text'`、`data_source_type='DICT'`；
+    - `data_source_config={"dict_code":"<dict_code>"}`，且 `<dict_code>` 必须在字典模块 registry 中存在并在 `enabled_on` 下可用（fail-closed；SSOT：`DEV-PLAN-105B`；收敛目标见 `DEV-PLAN-106A`）。
   - **自定义 PLAIN 字段**：当 `field_key` 满足 `x_[a-z0-9_]{1,60}` 时，允许 **不在** `field-definitions` 中；该路径下 `value_type='text'`、`data_source_type='PLAIN'`（固定），且 `data_source_config` 必须为 `{}`（缺失由服务端补齐为 `{}`）。
 - `data_source_config`：
   - `PLAIN`：必须为 `{}`（可缺省，由服务端补齐为空对象）。  
-  - `DICT`：必须为 `{ "dict_code": "<...>" }`，且 `dict_code` 必须在字典模块 registry 中存在并在 `enabled_on` 下可用（fail-closed；SSOT：`DEV-PLAN-105B`）。
+  - `DICT（字典字段）`：服务端从 `field_key=d_<dict_code>` 推导 `dict_code`，并按 dict registry 校验（fail-closed）；客户端若显式提交 `data_source_config`，也必须与推导结果一致（不一致即拒绝），避免“双写同一事实”漂移。
   - `ENTITY`：必须命中 `field-definitions.data_source_config_options`（枚举化候选；禁止任意透传）。
+- `label`（display label）：
+  - 仅当 `field_key` 为 `d_...` 时允许提交；用于字段配置列表与详情页字段标题展示，不参与 DICT 校验逻辑（SSOT：`DEV-PLAN-106A`）。
 
-#### 5.2.3 Disable（停用字段）
+#### 5.2.4 Disable（停用字段）
 
 - `POST /org/api/org-units/field-configs:disable`
 - **Authz**：`orgunit.admin`
@@ -249,7 +285,7 @@ status 口径冻结：
 
 ```json
 {
-  "field_key": "org_type",
+  "field_key": "d_org_type",
   "as_of": "2026-02-13",
   "options": [
     { "value": "DEPARTMENT", "label": "Department" }
@@ -285,8 +321,9 @@ status 口径冻结：
   },
   "ext_fields": [
     {
-      "field_key": "org_type",
-      "label_i18n_key": "org.fields.org_type",
+      "field_key": "d_org_type",
+      "label_i18n_key": null,
+      "label": "组织类型（示例）",
       "value_type": "text",
       "data_source_type": "DICT",
       "value": "DEPARTMENT",
@@ -315,6 +352,7 @@ status 口径冻结：
 - label（冻结）：
   - 内置字段：`label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`），用于 UI 动态渲染；
   - 自定义字段（`x_` 命名空间）：允许 `label_i18n_key=null`，但必须提供 `label`（canonical string；UI 不做 i18n）。
+  - 字典字段（`d_` 命名空间）：允许 `label_i18n_key=null`，且必须提供 `label`（优先启用时 `label`，否则使用 dict name 或 fallback 到 dict_code；SSOT：`DEV-PLAN-106A`）。
   - 字段 key 到 label 的映射不得由 UI 另建第二套规则（UI 仅消费服务端返回的 `label_i18n_key/label`）。
 - `display_value` 与 `display_value_source`（冻结）：
   - PLAIN：`display_value` 为 `value` 的规范化字符串表示；`display_value_source="plain"`。  
