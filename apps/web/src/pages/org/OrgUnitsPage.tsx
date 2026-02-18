@@ -211,8 +211,11 @@ function ExtFilterValueInput(props: {
   formatError?: (error: unknown) => string
   onChange: (nextValue: string) => void
 }) {
-  const [inputValue, setInputValue] = useState('')
-  const debouncedKeyword = useDebouncedValue(inputValue, 250)
+  // 不把 Autocomplete 的 inputValue 作为受控值，否则选择 option 时（reason='reset'）
+  // 若不同步更新会出现“已选中但输入框显示为空”的现象。
+  // 这里仅用 keyword 驱动 options 查询，让 Autocomplete 自己管理输入框显示值。
+  const [keyword, setKeyword] = useState('')
+  const debouncedKeyword = useDebouncedValue(keyword, 250)
   const field = props.field
   const isDictField = Boolean(field && field.data_source_type === 'DICT')
 
@@ -290,13 +293,19 @@ function ExtFilterValueInput(props: {
       clearOnEscape
       disabled={effectiveDisabled}
       getOptionLabel={(option) => option.label}
-      inputValue={inputValue}
       isOptionEqualToValue={(option, value) => option.value === value.value}
       loading={optionsQuery.isFetching}
-      onChange={(_, option) => props.onChange(option ? option.value : '')}
+      onChange={(_, option) => {
+        props.onChange(option ? option.value : '')
+        setKeyword('')
+      }}
       onInputChange={(_, nextValue, reason) => {
         if (reason === 'input') {
-          setInputValue(nextValue)
+          setKeyword(nextValue)
+          return
+        }
+        if (reason === 'clear') {
+          setKeyword('')
         }
       }}
       options={options}
