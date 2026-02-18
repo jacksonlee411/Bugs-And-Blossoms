@@ -246,6 +246,9 @@ modules/{module}/
 - DEV-PLAN-106A：Org 扩展字段启用增强（字典字段作为 Field Key + 启用时自定义描述）：`docs/dev-plans/106a-org-ext-fields-dict-as-field-key-and-custom-label.md`
 - DEV-PLAN-108：Org 模块 CRUD UI 按钮整合与统一字段变更规则（用户操作视角）：`docs/dev-plans/108-org-crud-ui-actions-consolidation-and-unified-field-mutation-rules.md`
 - DEV-PLAN-109：Org 模块 `request_id` → `request_code` 统一改造与门禁：`docs/dev-plans/109-request-code-unification-and-gate.md`
+- DEV-PLAN-107：OrgUnit 扩展字段槽位扩容（总计 135 槽；按类型合理分布；新增 numeric）：`docs/dev-plans/107-orgunit-ext-field-slots-expand-to-100.md`
+- DEV-PLAN-108：Org 模块 CRUD UI 按钮整合与统一字段变更规则（用户操作视角）：`docs/dev-plans/108-org-crud-ui-actions-consolidation-and-unified-field-mutation-rules.md`
+- DEV-PLAN-109：Org 模块 `request_id` → `request_code` 统一改造与门禁：`docs/dev-plans/109-request-code-unification-and-gate.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
