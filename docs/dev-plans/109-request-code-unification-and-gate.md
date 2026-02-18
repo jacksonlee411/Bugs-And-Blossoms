@@ -7,6 +7,8 @@
 `DEV-PLAN-108` 已冻结：Org CRUD 统一写入应以“字段变化”驱动，业务幂等键统一为 `request_code`。  
 当前仓库仍存在 `request_id`（JSON 字段、Go 字段、错误文案、测试数据等），造成命名双轨，不利于实现和验收一致性。
 
+同时，命名口径并非本计划临时约定，而是承接仓库级 SSOT：`DEV-PLAN-026A` 与 `DEV-PLAN-072` 已冻结 `request_id -> request_code` 的命名收敛方向。
+
 本计划作为专门收口文档，目标是把 Org 业务写入链路中的幂等字段统一为 `request_code`，并加入 CI 门禁防止回流。
 
 ## 2. 目标与非目标
@@ -28,10 +30,12 @@
 
 ## 3. 统一口径（冻结）
 
-1. **业务幂等键唯一命名**：`request_code`。
-2. **禁止双字段并存**：同一业务请求体不得同时出现 `request_id` 与 `request_code`。
-3. **错误语义统一**：参数缺失文案统一为 `request_code is required`。
-4. **历史错误码保留**：`ORG_REQUEST_ID_CONFLICT` 暂不改码名，仅在文档/UI 文案解释为“request_code 冲突”。
+1. **命名来源（SSOT）**：遵循 `DEV-PLAN-026A`/`DEV-PLAN-072`，`request_code` 是业务幂等字段唯一命名。
+2. **业务幂等键唯一命名**：`request_code`。
+3. **禁止双字段并存**：同一业务请求体不得同时出现 `request_id` 与 `request_code`。
+4. **错误语义统一**：参数缺失文案统一为 `request_code is required`。
+5. **历史错误码保留**：`ORG_REQUEST_ID_CONFLICT` 暂不改码名，仅在文档/UI 文案解释为“request_code 冲突”。
+6. **语义隔离（Tracing vs 业务幂等）**：`X-Request-ID` 与通用错误 envelope 的 `request_id` 保持 tracing 语义，不作为业务幂等键。
 
 ## 4. 改造范围（实现清单）
 
@@ -47,6 +51,14 @@
    - 表单输入与提交参数统一 `request_code`。
 4. 文档与契约：
    - 108/109/012 与 AGENTS Doc Map 对齐，避免命名漂移。
+
+### 4.1 本计划覆盖的写入接口（冻结）
+
+1. `POST /org/api/org-units/write`
+2. `POST /org/api/org-units/rescinds`
+3. `POST /org/api/org-units/rescinds/org`
+
+以上接口的业务幂等入参统一为 `request_code`；不得新增 `request_id` 业务字段。
 
 ## 5. 门禁设计（冻结）
 
@@ -64,7 +76,20 @@
 
 ### 5.3 Gate-B（本计划后续收口）
 
-- 在业务链路完成迁移后，把 Gate 升级为“全量扫描零容忍”（不再仅限新增行），实现仓库内 Org 写入链路 `request_id` 清零。
+- 在业务链路完成迁移后，把 Gate 升级为“全量扫描零容忍”（不再仅限新增行）。
+- **扫描范围（冻结）**：仅扫描业务实现路径
+  - `internal/server/**/*.go`
+  - `modules/orgunit/**/*.{go,sql}`
+  - `apps/web/src/**/*.{ts,tsx}`
+- **排除项（冻结）**：
+  - 构建产物：`internal/server/assets/web/**`
+  - API 错误适配层：`apps/web/src/api/errors.ts`（保留 envelope `request_id` tracing 语义）
+- **允许语义（冻结）**：`X-Request-ID` header 与通用错误 envelope `request_id`（tracing）不属于业务幂等字段改造对象。
+- **目标对象（冻结）**：阻断“业务幂等字段命名漂移”（JSON 字段、Go struct 字段、TS/TSX 请求与响应类型字段）；历史迁移文件/历史审计文案不作为 Gate-B 阻断对象。
+- **落地顺序（冻结）**：
+  1. dry-run 全量报告（只出清单不阻断）；
+  2. 清零后切换为 blocking；
+  3. 纳入 `make check request-code` 与 CI `Request-Code Gate (always)`。
 
 ## 6. 实施步骤（Checklist）
 
@@ -88,4 +113,6 @@
 - `docs/dev-plans/108-org-crud-ui-actions-consolidation-and-unified-field-mutation-rules.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
+- `docs/dev-plans/026a-orgunit-id-uuid-code-naming.md`
+- `docs/dev-plans/072-repo-wide-id-code-naming-convergence.md`
 - `AGENTS.md`
