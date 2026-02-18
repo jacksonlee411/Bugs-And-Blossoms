@@ -2483,7 +2483,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_id=%s', p_request_id);
+        DETAIL = format('request_code=%s', p_request_id);
     END IF;
 
     RETURN v_existing_request.event_uuid;
@@ -2647,7 +2647,7 @@ BEGIN
   IF FOUND THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-      DETAIL = format('request_id=%s', p_request_id);
+      DETAIL = format('request_code=%s', p_request_id);
   END IF;
 
   SELECT t.root_org_id INTO v_root_org_id
@@ -2712,7 +2712,7 @@ BEGIN
   IF v_existing_batch_count > 0 AND v_existing_batch_count <> v_event_count THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-      DETAIL = format('request_id=%s', p_request_id);
+      DETAIL = format('request_code=%s', p_request_id);
   END IF;
 
   v_need_apply := false;
@@ -2745,7 +2745,7 @@ BEGIN
       THEN
         RAISE EXCEPTION USING
           MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-          DETAIL = format('request_id=%s', p_request_id);
+          DETAIL = format('request_code=%s', p_request_id);
       END IF;
       CONTINUE;
     END IF;
@@ -3171,7 +3171,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_id=%s', p_request_id);
+        DETAIL = format('request_code=%s', p_request_id);
     END IF;
 
     RETURN v_existing_request.event_uuid;
@@ -3360,7 +3360,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_id=%s', p_request_id);
+        DETAIL = format('request_code=%s', p_request_id);
     END IF;
 
     RETURN v_existing_request.event_uuid;

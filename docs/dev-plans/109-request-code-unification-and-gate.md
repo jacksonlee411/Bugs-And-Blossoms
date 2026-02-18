@@ -1,6 +1,6 @@
 # DEV-PLAN-109：Org 模块 `request_id` → `request_code` 统一改造与门禁
 
-**状态**: 进行中（2026-02-18 01:42 UTC）
+**状态**: 已完成（2026-02-18 03:21 UTC）
 
 ## 1. 背景
 
@@ -74,9 +74,9 @@
 2. `make preflight` 纳入 `request-code` 检查。
 3. CI `Quality Gates` 的 Code Quality job 新增 `Request-Code Gate (always)`。
 
-### 5.3 Gate-B（本计划后续收口）
+### 5.3 Gate-B（已落地）：全量零容忍
 
-- 在业务链路完成迁移后，把 Gate 升级为“全量扫描零容忍”（不再仅限新增行）。
+- 已完成业务链路迁移后，把 Gate 升级为“全量扫描零容忍”（不再仅限新增行）。
 - **实现方式（冻结）**：在现有 `scripts/ci/check-request-code.sh` 基础上增加 full 模式（如 `--full`），避免并行维护两套规则脚本。
 - **扫描范围（冻结）**：仅扫描业务实现路径
   - `internal/server/**/*.go`
@@ -94,6 +94,7 @@
 - **dry-run / blocking 返回口径（冻结）**：
   - dry-run：打印违规文件与行号清单，退出 0；
   - blocking：打印违规文件与行号清单，退出非 0。
+  - 脚本用法：`./scripts/ci/check-request-code.sh --full [--dry-run]`；保留 `--incremental` 兼容增量模式（Gate-A）。
 
 ### 5.4 失败路径（Failure Modes，冻结）
 
@@ -109,7 +110,7 @@
    - `make check request-code`（通过）
    - `make check doc`（通过）
 4. [X] 在 `docs/dev-records/` 新增 109 执行日志并登记关键命令结果：`docs/dev-records/dev-plan-109-execution-log.md`。
-5. [ ] 迁移完成后升级 Gate-B（全量零容忍）。
+5. [X] 升级 Gate-B（全量零容忍）（2026-02-18 03:21 UTC）。
 
 ## 7. 验收标准（DoD）
 
