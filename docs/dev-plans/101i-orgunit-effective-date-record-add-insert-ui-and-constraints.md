@@ -1,6 +1,23 @@
 # DEV-PLAN-101I：OrgUnit 生效日期记录新增/插入（MUI）可实施方案
 
-**状态**: 已实施（2026-02-17）
+**状态**: 已实施（2026-02-17）；2026-02-18 起写入口径由 `DEV-PLAN-108` 进一步收敛
+
+## 0. 与 DEV-PLAN-108 的对齐补充（2026-02-18）
+
+本计划完成时，add/insert 仍基于 append 原子事件（`RENAME/MOVE/SET_BUSINESS_UNIT/ENABLE/DISABLE`）与 `record_change_type`。
+该口径在 108 生效后调整为“字段编辑 + intent 自动判定”。
+
+108 对本计划的覆盖与替代关系：
+
+1. 本计划 §5.1 的步骤 1（选择 `record_change_type`）被 108 取消；
+2. 本计划 §3.2 的“不新增 UPDATE”不再成立：108 明确引入 `UPDATE` 以承载 add/insert 多字段单事件；
+3. capabilities 主口径从 append/mutation 分裂，迁移到 `write-capabilities(intent=...)`；
+4. 本计划的日期约束（add/insert 的区间规则）继续保留并复用，属于仍有效的约束资产。
+
+执行口径：
+
+- 日期规则（add/insert 上下界）仍以本计划和 `DEV-PLAN-075` 为约束来源；
+- 写入交互与接口契约以 `DEV-PLAN-108` 为准。
 
 ## 1. 背景
 

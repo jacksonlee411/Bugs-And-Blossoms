@@ -283,27 +283,27 @@ type orgUnitCorrectionAPIRequest struct {
 	OrgCode       string                        `json:"org_code"`
 	EffectiveDate string                        `json:"effective_date"`
 	Patch         orgUnitCorrectionPatchRequest `json:"patch"`
-	RequestID     string                        `json:"request_id"`
+	RequestCode   string                        `json:"request_code"`
 }
 
 type orgUnitStatusCorrectionAPIRequest struct {
 	OrgCode       string `json:"org_code"`
 	EffectiveDate string `json:"effective_date"`
 	TargetStatus  string `json:"target_status"`
-	RequestID     string `json:"request_id"`
+	RequestCode   string `json:"request_code"`
 }
 
 type orgUnitRescindRecordAPIRequest struct {
 	OrgCode       string `json:"org_code"`
 	EffectiveDate string `json:"effective_date"`
-	RequestID     string `json:"request_id"`
+	RequestCode   string `json:"request_code"`
 	Reason        string `json:"reason"`
 }
 
 type orgUnitRescindOrgAPIRequest struct {
-	OrgCode   string `json:"org_code"`
-	RequestID string `json:"request_id"`
-	Reason    string `json:"reason"`
+	OrgCode     string `json:"org_code"`
+	RequestCode string `json:"request_code"`
+	Reason      string `json:"reason"`
 }
 
 var errOrgUnitBadJSON = errors.New("orgunit_bad_json")
@@ -1296,7 +1296,7 @@ func handleOrgUnitsCorrectionsAPI(w http.ResponseWriter, r *http.Request, writeS
 	result, err := writeSvc.Correct(r.Context(), tenant.ID, orgunitservices.CorrectOrgUnitRequest{
 		OrgCode:             req.OrgCode,
 		TargetEffectiveDate: req.EffectiveDate,
-		RequestID:           req.RequestID,
+		RequestCode:         req.RequestCode,
 		InitiatorUUID:       orgUnitInitiatorUUID(r.Context(), tenant.ID),
 		Patch: orgunitservices.OrgUnitCorrectionPatch{
 			EffectiveDate:  req.Patch.EffectiveDate,
@@ -1341,7 +1341,7 @@ func handleOrgUnitsStatusCorrectionsAPI(w http.ResponseWriter, r *http.Request, 
 		OrgCode:             req.OrgCode,
 		TargetEffectiveDate: req.EffectiveDate,
 		TargetStatus:        req.TargetStatus,
-		RequestID:           req.RequestID,
+		RequestCode:         req.RequestCode,
 		InitiatorUUID:       orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	})
 	if err != nil {
@@ -1377,7 +1377,7 @@ func handleOrgUnitsRescindsAPI(w http.ResponseWriter, r *http.Request, writeSvc 
 	result, err := writeSvc.RescindRecord(r.Context(), tenant.ID, orgunitservices.RescindRecordOrgUnitRequest{
 		OrgCode:             req.OrgCode,
 		TargetEffectiveDate: req.EffectiveDate,
-		RequestID:           req.RequestID,
+		RequestCode:         req.RequestCode,
 		Reason:              req.Reason,
 		InitiatorUUID:       orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	})
@@ -1392,7 +1392,7 @@ func handleOrgUnitsRescindsAPI(w http.ResponseWriter, r *http.Request, writeSvc 
 		"org_code":       result.OrgCode,
 		"effective_date": result.EffectiveDate,
 		"operation":      "RESCIND_EVENT",
-		"request_id":     req.RequestID,
+		"request_code":   req.RequestCode,
 	})
 }
 
@@ -1420,7 +1420,7 @@ func handleOrgUnitsRescindsOrgAPI(w http.ResponseWriter, r *http.Request, writeS
 
 	result, err := writeSvc.RescindOrg(r.Context(), tenant.ID, orgunitservices.RescindOrgUnitRequest{
 		OrgCode:       req.OrgCode,
-		RequestID:     req.RequestID,
+		RequestCode:   req.RequestCode,
 		Reason:        req.Reason,
 		InitiatorUUID: orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	})
@@ -1447,7 +1447,7 @@ func handleOrgUnitsRescindsOrgAPI(w http.ResponseWriter, r *http.Request, writeS
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"org_code":         result.OrgCode,
 		"operation":        "RESCIND_ORG",
-		"request_id":       req.RequestID,
+		"request_code":     req.RequestCode,
 		"rescinded_events": rescindedEvents,
 	})
 }

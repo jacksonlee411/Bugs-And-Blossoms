@@ -42,11 +42,12 @@
    - [x] `allowed_fields` 与 `field_payload_keys` 一致、稳定排序；
    - [x] `deny_reasons` 稳定排序（复用既有优先级规则即可）；
    - [x] **扩展字段合并规则**：对 `effective_date` 下 enabled 的 ext 字段集合 `E`，并入 `allowed_fields`（见 `DEV-PLAN-083` §5.3）。
-3. [x] corrections 写入支持 `patch.ext`：
+3. [x] corrections 写入支持 `patch.ext`（108 前口径）：
    - [x] `POST /org/api/org-units/corrections` 请求体支持 `patch.ext`（object；key 为 `field_key`）。
    - [x] 服务端必须按策略单点（AllowedFields/ValidatePatch）对 `patch` 做 fail-closed 校验（禁止“禁用但仍随请求提交”）。
    - [x] DICT：服务端基于 options resolver 生成 `patch.ext_labels_snapshot[field_key]=canonical_label`；UI 侧不得提交该字段（对齐 `DEV-PLAN-100D`）。
-   - [x] 当 `patch.effective_date` 与 target 不一致时：进入“生效日更正模式”，除 `effective_date` 外其它字段（含 ext）一律拒绝（对齐 `DEV-PLAN-100E` 的风险控制）。
+   - [x]（已被 108 取代）当 `patch.effective_date` 与 target 不一致时：进入“生效日更正模式”，除 `effective_date` 外其它字段（含 ext）一律拒绝（对齐 `DEV-PLAN-100E` 的风险控制）。
+   - 108 新口径：允许“改生效日 + 改其它字段”同次提交（校验/label snapshot as-of 以更正后 effective_date 为准；SSOT：`DEV-PLAN-108`）。
 
 ### 2.2 交付物（Deliverables）
 
@@ -137,7 +138,8 @@ services 侧要做到：
    - [x] 扩展 corrections 请求 patch 结构以接收 `ext`（object），并显式声明 `ext_labels_snapshot` 字段用于 fail-closed 拒绝（对齐 §4.4/§4.5）。
    - [x] `modules/orgunit/services/orgunit_write_service.go`：
      - [x] 将 ext patch 纳入 patch builder（生成 `patch.ext`；DICT 生成 `patch.ext_labels_snapshot`）。
-     - [x] 通过 policy 的 `ValidatePatch` 做 fail-closed 校验（含“生效日更正模式”排他规则：除 effective_date 外一律拒绝）。
+     - [x]（已被 108 取代）通过 policy 的 `ValidatePatch` 做 fail-closed 校验（含“生效日更正模式”排他规则：除 effective_date 外一律拒绝）。
+     - 108 新口径：需移除此排他规则，改为以更正后 effective_date 做统一校验。
      - [x] 通过 store 读取 enabled ext configs 来解析 DICT 的 dict_code，并用共享包 `LookupDictLabel` 生成 canonical label。
    - [x] 测试：
      - [x] DICT：提交 `patch.ext.org_type="DEPARTMENT"` 时，写入 patch JSON 必含对应 label snapshot。

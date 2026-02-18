@@ -2,6 +2,16 @@
 
 **状态**: 进行中（2026-02-04 13:02 UTC）
 
+## 0.1 与 DEV-PLAN-108 的关系（2026-02-18 补充）
+
+本清单以“动作型写入口（rename/move/enable/disable/set BU/corrections/status-corrections 等）”为交付粒度进行盘点与验收。
+自 `DEV-PLAN-108` 起，写入将收敛为“5 按钮 + 字段编辑表单 + 统一 write API（intent 自动判定）”，并引入 `UPDATE` 事件。
+
+因此：
+
+1. 本文件中的动作型 endpoint 清单仍可作为“兼容层存在性”参考，但不再作为 UI/契约的推荐形态；
+2. 后续实现应以 108 的 `/org/api/org-units/write` 为主写入口，旧 endpoint 逐步改为薄包装（同一策略单点、避免双规则）。
+
 ## 背景
 - 需要基于当前代码，列出 OrgUnit CRUD 在页面与 API 的实现情况，作为后续补齐的入口。
 

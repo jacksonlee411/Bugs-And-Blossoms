@@ -1,6 +1,15 @@
 # DEV-PLAN-083A：OrgUnit Append 写入动作能力外显与策略单点扩展（create / event_update）
 
-**状态**: 已完成（2026-02-16 03:44 UTC — 后端策略/API/写入收敛 + 前端 create/append capabilities 全接入 + 测试与门禁通过）
+**状态**: 已完成（2026-02-16 03:44 UTC — 后端策略/API/写入收敛 + 前端 create/append capabilities 全接入 + 测试与门禁通过）；2026-02-18 起由 `DEV-PLAN-108` 统一写入口取代为主口径
+
+## 0.3 与 DEV-PLAN-108 的关系（2026-02-18 补充）
+
+本计划冻结的 append 形态是“动作型 endpoint + append-capabilities”，且明确“不引入 UPDATE”。
+该口径在 108 生效后变为历史实现（仍可兼容保留），新的主口径为：
+
+- append intent（add_version/insert_version）统一走 `POST /org/api/org-units/write` 并落 `UPDATE` 单事件多字段；
+- capabilities 迁移到 `GET /org/api/org-units/write-capabilities?intent=...`；
+- `append-capabilities` 若保留，应改为 `write-capabilities` 的薄包装，避免双规则漂移。
 
 > 本计划是 `DEV-PLAN-083` 的扩展篇：在 `083/100E1/100E` 已完成“Rewrite/Invalidate（更正/撤销）capabilities + 策略单点 + patch.ext”之后，继续把 **Append（create / event_update）** 纳入同一套能力模型与策略单点，避免 UI/Service/Kernel 继续出现“散落规则 + 漂移”。
 
