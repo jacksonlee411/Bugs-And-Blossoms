@@ -98,7 +98,7 @@ func TestOrgunitSchema_PresencePredicateStrictRescindOutcome(t *testing.T) {
 
 	for _, required := range []string{
 		"WHEN p_event_type = 'CREATE'",
-		"WHEN p_event_type IN ('MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS')",
+		"WHEN p_event_type IN ('UPDATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS')",
 		"(p_rescind_outcome = 'ABSENT' AND p_after_snapshot IS NULL)",
 		"(p_rescind_outcome = 'PRESENT' AND p_after_snapshot IS NOT NULL)",
 		"AND rescind_outcome IN ('PRESENT','ABSENT')",

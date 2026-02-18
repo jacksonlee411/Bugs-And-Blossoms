@@ -82,6 +82,7 @@ DECLARE
   v_new_parent_id int;
   v_name text;
   v_new_name text;
+  v_status text;
   v_manager_uuid uuid;
   v_is_business_unit boolean;
   v_org_code text;
@@ -105,7 +106,7 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
   END IF;
 
-  IF p_event_type NOT IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT') THEN
+  IF p_event_type NOT IN ('CREATE','UPDATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT') THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_INVALID_ARGUMENT',
       DETAIL = format('unsupported event_type: %s', p_event_type);
@@ -167,8 +168,8 @@ BEGIN
   LIMIT 1;
 
   IF FOUND THEN
-    IF v_existing_request.event_uuid <> p_event_uuid
-      OR v_existing_request.org_id <> v_org_id
+    -- Idempotency key is request_code: allow server-generated event_uuid to differ across retries.
+    IF v_existing_request.org_id <> v_org_id
       OR v_existing_request.event_type <> p_event_type
       OR v_existing_request.effective_date <> p_effective_date
       OR v_existing_request.payload <> v_payload
@@ -212,6 +213,7 @@ BEGIN
     v_name := NULLIF(btrim(v_payload->>'name'), '');
     v_manager_uuid := NULLIF(v_payload->>'manager_uuid', '')::uuid;
     v_org_code := NULLIF(v_payload->>'org_code', '');
+    v_status := NULLIF(btrim(v_payload->>'status'), '');
     v_is_business_unit := NULL;
     IF v_payload ? 'is_business_unit' THEN
       BEGIN
@@ -223,7 +225,7 @@ BEGIN
             DETAIL = format('is_business_unit=%s', v_payload->>'is_business_unit');
       END;
     END IF;
-    PERFORM orgunit.apply_create_logic(p_tenant_uuid, v_org_id, v_org_code, v_parent_id, p_effective_date, v_name, v_manager_uuid, v_is_business_unit, v_event_db_id);
+    PERFORM orgunit.apply_create_logic(p_tenant_uuid, v_org_id, v_org_code, v_parent_id, p_effective_date, v_name, v_manager_uuid, v_is_business_unit, v_event_db_id, v_status);
     SELECT v.node_path INTO v_root_path
     FROM orgunit.org_unit_versions v
     WHERE v.tenant_uuid = p_tenant_uuid
@@ -233,6 +235,43 @@ BEGIN
     LIMIT 1;
     PERFORM orgunit.rebuild_full_name_path_subtree(p_tenant_uuid, v_root_path, p_effective_date);
     v_org_ids := ARRAY[v_org_id];
+  ELSIF p_event_type = 'UPDATE' THEN
+    PERFORM orgunit.apply_update_logic(p_tenant_uuid, v_org_id, p_effective_date, v_payload, v_event_db_id);
+
+    IF (v_payload ? 'parent_id')
+      OR (v_payload ? 'new_parent_id')
+      OR (v_payload ? 'name')
+      OR (v_payload ? 'new_name')
+    THEN
+      SELECT v.node_path INTO v_root_path
+      FROM orgunit.org_unit_versions v
+      WHERE v.tenant_uuid = p_tenant_uuid
+        AND v.org_id = v_org_id
+        AND v.validity @> p_effective_date
+      ORDER BY lower(v.validity) DESC
+      LIMIT 1;
+
+      IF v_root_path IS NOT NULL THEN
+        PERFORM orgunit.rebuild_full_name_path_subtree(p_tenant_uuid, v_root_path, p_effective_date);
+      END IF;
+    END IF;
+
+    IF (v_payload ? 'parent_id') OR (v_payload ? 'new_parent_id') THEN
+      SELECT v.node_path INTO v_root_path
+      FROM orgunit.org_unit_versions v
+      WHERE v.tenant_uuid = p_tenant_uuid
+        AND v.org_id = v_org_id
+        AND v.validity @> p_effective_date
+      ORDER BY lower(v.validity) DESC
+      LIMIT 1;
+
+      SELECT array_agg(DISTINCT v.org_id) INTO v_org_ids
+      FROM orgunit.org_unit_versions v
+      WHERE v.tenant_uuid = p_tenant_uuid
+        AND v.node_path <@ v_root_path;
+    ELSE
+      v_org_ids := ARRAY[v_org_id];
+    END IF;
   ELSIF p_event_type = 'MOVE' THEN
     v_new_parent_id := NULLIF(v_payload->>'new_parent_id', '')::int;
     PERFORM orgunit.apply_move_logic(p_tenant_uuid, v_org_id, v_new_parent_id, p_effective_date, v_event_db_id);

@@ -9,6 +9,7 @@ type OrgUnitEventType string
 
 const (
 	OrgUnitEventCreate          OrgUnitEventType = "CREATE"
+	OrgUnitEventUpdate          OrgUnitEventType = "UPDATE"
 	OrgUnitEventMove            OrgUnitEventType = "MOVE"
 	OrgUnitEventRename          OrgUnitEventType = "RENAME"
 	OrgUnitEventDisable         OrgUnitEventType = "DISABLE"
