@@ -10,6 +10,7 @@
 
 - Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
 - 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
+- 业务幂等字段命名收敛：`make check request-code`
 - `.templ`/MUI Web UI/presentation assets 相关：`make generate && make css`，然后 `git status --short` 必须为空
 - 多语言 JSON：`make check tr`
 - 发 PR 前一键对齐 CI（推荐）：`make preflight`
@@ -44,6 +45,7 @@
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012` |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
+| 幂等字段命名（request_code） | `make check request-code` | 规则见 `DEV-PLAN-109` |
 
 ## 3. 开发与编码规则（仓库级合约）
 
@@ -242,7 +244,11 @@ modules/{module}/
 - DEV-PLAN-105B 执行日志：`docs/dev-records/dev-plan-105b-execution-log.md`
 - DEV-PLAN-106：Org 模块扩展字段启用方式改造（DICT 全量引用 + 自定义 PLAIN 字段）：`docs/dev-plans/106-org-ext-fields-enable-dict-registry-and-custom-plain-fields.md`
 - DEV-PLAN-106A：Org 扩展字段启用增强（字典字段作为 Field Key + 启用时自定义描述）：`docs/dev-plans/106a-org-ext-fields-dict-as-field-key-and-custom-label.md`
+- DEV-PLAN-108：Org 模块 CRUD UI 按钮整合与统一字段变更规则（用户操作视角）：`docs/dev-plans/108-org-crud-ui-actions-consolidation-and-unified-field-mutation-rules.md`
+- DEV-PLAN-109：Org 模块 `request_id` → `request_code` 统一改造与门禁：`docs/dev-plans/109-request-code-unification-and-gate.md`
 - DEV-PLAN-107：OrgUnit 扩展字段槽位扩容（总计 135 槽；按类型合理分布；新增 numeric）：`docs/dev-plans/107-orgunit-ext-field-slots-expand-to-100.md`
+- DEV-PLAN-108：Org 模块 CRUD UI 按钮整合与统一字段变更规则（用户操作视角）：`docs/dev-plans/108-org-crud-ui-actions-consolidation-and-unified-field-mutation-rules.md`
+- DEV-PLAN-109：Org 模块 `request_id` → `request_code` 统一改造与门禁：`docs/dev-plans/109-request-code-unification-and-gate.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`

@@ -96,7 +96,6 @@ interface OrgActionForm {
   extValues: Record<string, unknown>
   originalExtValues: Record<string, unknown>
   extDisplayValues: Record<string, string>
-  requestId: string
   requestCode: string
   reason: string
 }
@@ -184,7 +183,7 @@ function getErrorMessage(error: unknown): string {
   return String(error)
 }
 
-function newRequestID(): string {
+function newRequestCode(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
   }
@@ -203,8 +202,7 @@ function emptyActionForm(effectiveDate: string): OrgActionForm {
     extValues: {},
     originalExtValues: {},
     extDisplayValues: {},
-    requestId: newRequestID(),
-    requestCode: `req-${Date.now()}`,
+    requestCode: newRequestCode(),
     reason: ''
   }
 }
@@ -1216,7 +1214,7 @@ export function OrgUnitDetailsPage() {
           await correctOrgUnit({
             org_code: targetCode,
             effective_date: effectiveDateValue,
-            request_id: actionForm.requestId.trim(),
+            request_code: actionForm.requestCode.trim(),
             patch
           })
           return
@@ -1225,14 +1223,14 @@ export function OrgUnitDetailsPage() {
           await rescindOrgUnitRecord({
             org_code: targetCode,
             effective_date: effectiveDateValue,
-            request_id: actionForm.requestId.trim(),
+            request_code: actionForm.requestCode.trim(),
             reason: actionForm.reason.trim()
           })
           return
         case 'rescind_org':
           await rescindOrgUnit({
             org_code: targetCode,
-            request_id: actionForm.requestId.trim(),
+            request_code: actionForm.requestCode.trim(),
             reason: actionForm.reason.trim()
           })
           return
@@ -2299,9 +2297,9 @@ export function OrgUnitDetailsPage() {
 
               {isCorrectAction || isRescindRecordAction || isRescindOrgAction ? (
                 <TextField
-                  label={t('org_request_id')}
-                  onChange={(event) => setActionForm((previous) => ({ ...previous, requestId: event.target.value }))}
-                  value={actionForm.requestId}
+                  label={t('org_request_code')}
+                  onChange={(event) => setActionForm((previous) => ({ ...previous, requestCode: event.target.value }))}
+                  value={actionForm.requestCode}
                 />
               ) : null}
 

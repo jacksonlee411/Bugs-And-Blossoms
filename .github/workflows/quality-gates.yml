@@ -33,6 +33,8 @@ jobs:
         run: make check naming
       - name: No-Legacy Gate (always)
         run: make check no-legacy
+      - name: Request-Code Gate (always)
+        run: make check request-code
       - name: Docs Gate (always)
         run: make check doc
       - name: UI Build (MUI)
