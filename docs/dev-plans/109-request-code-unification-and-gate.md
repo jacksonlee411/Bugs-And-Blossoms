@@ -77,6 +77,7 @@
 ### 5.3 Gate-B（本计划后续收口）
 
 - 在业务链路完成迁移后，把 Gate 升级为“全量扫描零容忍”（不再仅限新增行）。
+- **实现方式（冻结）**：在现有 `scripts/ci/check-request-code.sh` 基础上增加 full 模式（如 `--full`），避免并行维护两套规则脚本。
 - **扫描范围（冻结）**：仅扫描业务实现路径
   - `internal/server/**/*.go`
   - `modules/orgunit/**/*.{go,sql}`
@@ -90,6 +91,15 @@
   1. dry-run 全量报告（只出清单不阻断）；
   2. 清零后切换为 blocking；
   3. 纳入 `make check request-code` 与 CI `Request-Code Gate (always)`。
+- **dry-run / blocking 返回口径（冻结）**：
+  - dry-run：打印违规文件与行号清单，退出 0；
+  - blocking：打印违规文件与行号清单，退出非 0。
+
+### 5.4 失败路径（Failure Modes，冻结）
+
+1. 请求缺少业务幂等键 `request_code`：返回 400，文案 `request_code is required`。
+2. 同一请求体同时包含 `request_id` 与 `request_code`：返回 400（禁止双字段并存）。
+3. 同一 `request_code` 对应不同业务 payload：返回冲突错误（错误码常量保持 `ORG_REQUEST_ID_CONFLICT`，对外语义解释为 `request_code conflict`）。
 
 ## 6. 实施步骤（Checklist）
 
