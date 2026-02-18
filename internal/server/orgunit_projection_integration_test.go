@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
 )
 
 func TestOrgunitProjection_IncrementalMatchesRebuild(t *testing.T) {
@@ -60,14 +61,22 @@ func TestOrgunitProjection_IncrementalMatchesRebuild(t *testing.T) {
 		}
 	}
 
-	submit("00000000-0000-0000-0000-000000000101", 10000001, "CREATE", "2026-01-01", `{"name":"Root","org_code":"R1","is_business_unit":true}`, "r1")
-	submit("00000000-0000-0000-0000-000000000102", 10000002, "CREATE", "2026-01-01", `{"parent_id":10000001,"name":"ChildA","org_code":"C1"}`, "r2")
-	submit("00000000-0000-0000-0000-000000000103", 10000003, "CREATE", "2026-01-01", `{"parent_id":10000002,"name":"Grand","org_code":"G1"}`, "r3")
-	submit("00000000-0000-0000-0000-000000000104", 10000004, "CREATE", "2026-01-01", `{"parent_id":10000001,"name":"Branch","org_code":"B1"}`, "r4")
-	submit("00000000-0000-0000-0000-000000000105", 10000002, "RENAME", "2026-02-01", `{"new_name":"ChildA2"}`, "r5")
-	submit("00000000-0000-0000-0000-000000000106", 10000004, "SET_BUSINESS_UNIT", "2026-02-10", `{"is_business_unit":true}`, "r6")
-	submit("00000000-0000-0000-0000-000000000107", 10000002, "MOVE", "2026-03-01", `{"new_parent_id":10000004}`, "r7")
-	submit("00000000-0000-0000-0000-000000000108", 10000003, "DISABLE", "2026-04-01", `{}`, "r8")
+	mustUUID := func() string {
+		u, err := uuidv7.NewString()
+		if err != nil {
+			t.Fatalf("uuid: %v", err)
+		}
+		return u
+	}
+
+	submit(mustUUID(), 10000001, "CREATE", "2026-01-01", `{"name":"Root","org_code":"R1","is_business_unit":true}`, "r1")
+	submit(mustUUID(), 10000002, "CREATE", "2026-01-01", `{"parent_id":10000001,"name":"ChildA","org_code":"C1"}`, "r2")
+	submit(mustUUID(), 10000003, "CREATE", "2026-01-01", `{"parent_id":10000002,"name":"Grand","org_code":"G1"}`, "r3")
+	submit(mustUUID(), 10000004, "CREATE", "2026-01-01", `{"parent_id":10000001,"name":"Branch","org_code":"B1"}`, "r4")
+	submit(mustUUID(), 10000002, "RENAME", "2026-02-01", `{"new_name":"ChildA2"}`, "r5")
+	submit(mustUUID(), 10000004, "SET_BUSINESS_UNIT", "2026-02-10", `{"is_business_unit":true}`, "r6")
+	submit(mustUUID(), 10000002, "MOVE", "2026-03-01", `{"new_parent_id":10000004}`, "r7")
+	submit(mustUUID(), 10000003, "DISABLE", "2026-04-01", `{}`, "r8")
 
 	if _, err := tx.Exec(ctx, `
 CREATE TEMP TABLE inc_versions AS
