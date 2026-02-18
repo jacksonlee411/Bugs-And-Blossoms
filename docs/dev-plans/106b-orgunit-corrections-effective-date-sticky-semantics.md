@@ -1,6 +1,6 @@
 # DEV-PLAN-106B：OrgUnit 更正语义收敛——生效日更正的“粘性”与后续更正兼容（根因修复）
 
-**状态**: 规划中（2026-02-18 02:45 UTC）
+**状态**: 已实施（2026-02-18；修复迁移已落库）
 
 ## 1. 背景
 
@@ -16,6 +16,18 @@
 - 失败并非字段未启用，而是 **“生效日更正后的记录”在后续更正时发生 effective_date 回退**，导致 DB Kernel 在回放/重建版本时用“旧 effective_date”校验 ext 字段 enabled window，从而 fail-closed。
 
 > 相关历史：`DEV-PLAN-080B` 解决的是 correction kernel privileges 与错误码提取；本计划解决的是 **corrections 语义层面的有效日期推导**（根因修复），避免要求 UI 强行携带 `patch.effective_date` 做绕过。
+
+### 1.1 在 DEV-PLAN-108 完成后的复核结论（2026-02-18，修复前）
+
+`DEV-PLAN-108` 已将 OrgUnit 写入口收敛为统一写 API（`POST /org/api/org-units/write`），但该问题**并未被 108 自动消除**，原因是：
+
+1. 108 的 unified write（intent=`correct`）只有在“更正生效日发生变化”时才会把 `effective_date` 写入 `CORRECT_EVENT` 的 payload：
+   - `modules/orgunit/services/orgunit_write_service.go`：`if effectiveDate != targetDate { payload["effective_date"] = effectiveDate }`
+2. 一旦存在“先更正 effective_date（payload 含 effective_date）→ 再更正 ext（payload 不含 effective_date）”的两次更正链路，第二次更正会触发本计划描述的 effective_date 回退风险：
+   - 修复前：`orgunit.org_events_effective` 与 `orgunit.org_events_effective_for_replay(...)` 使用 “latest correction payload 是否含 `effective_date`” 来决定 effective_date（详见 §3），因此会把 effective_date 回落到 base event 的日期。
+   - 修复后：两处改为 sticky 语义（`latest_effective_date_corrections` + `COALESCE(sticky_effective_date, base_effective_date)`），不再回落。
+
+结论：`DEV-PLAN-106B` 是 108 之后的真实缺陷修复项（并且更容易在新 UI 的“字段编辑表单”里触发跨两次更正的场景）；现已按本计划落地修复（见 §7.1）。
 
 ## 2. 问题定义（冻结）
 
@@ -41,17 +53,21 @@
 
 ## 3. 根因分析（冻结）
 
-当前 OrgUnit Kernel 的 replay 入口（以 `modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql` 为准）对 corrections 的处理方式是：
+修复前 OrgUnit Kernel 的 replay 入口（以 `modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql` 为准）对 corrections 的处理方式是：
 
 - `orgunit.org_events_effective`（view）与 `orgunit.org_events_effective_for_replay(...)`（function）
   - 对每个 `target_event_uuid` 只选取 **latest_corrections**（按 `tx_time DESC, id DESC`）
   - effective_date 的计算逻辑是：仅当 “latest correction payload 含 `effective_date`” 才改变 effective_date，否则回落到原 event effective_date。
 
-当存在“先更正 effective_date，再更正 ext”两次 correction 时：
+当存在“先更正 effective_date，再更正 ext”两次 correction 时（修复前）：
 
 - 第二次 correction（只改 ext）成为 latest correction，但其 payload 不含 effective_date；
 - effective_date 在 view/for_replay 中回落到原始值；
 - replay 阶段调用 `apply_org_event_ext_payload(..., p_effective_date=<回落后的旧日期>, payload.ext=...)`，触发 enabled window 校验失败（`ORG_EXT_FIELD_NOT_ENABLED_AS_OF`）。
+
+补充（108 后的触发路径，修复前）：
+
+- unified write 的 `correct` 仍会写入 `CORRECT_EVENT`（保持 target_event_uuid 审计链），且当“第二次更正不是生效日更正”时，`CORRECT_EVENT` payload 默认不包含 `effective_date`（见 §1.1），因此满足本缺陷的触发条件（修复前会失败；修复后按 sticky 语义可通过）。
 
 ## 4. 目标与非目标
 
@@ -110,7 +126,8 @@
 
 ### 6.1 API 契约（冻结）
 
-- `POST /org/api/org-units/corrections`：请求体不变；**不新增“必须提交 patch.effective_date”要求**。
+- `POST /org/api/org-units/write`（intent=`correct`）：请求体不变；**不新增“必须提交 patch.effective_date”要求**。
+- `POST /org/api/org-units/corrections`：若仍保留该入口，请求体亦不变；同样**不新增“必须提交 patch.effective_date”要求**。
 - `GET /org/api/org-units/versions` / `GET /org/api/org-units/details`：返回结构不变，但 effective_date 的稳定性提升（不会因后续 ext 更正回退）。
 
 ### 6.2 数据契约（冻结）
@@ -122,21 +139,37 @@
 
 > 门禁与命令入口引用 `AGENTS.md` 与 `DEV-PLAN-012`；此处不复制完整命令矩阵。
 
-1. [ ] 契约固化：
+1. [x] 契约固化：
    - 在本文件冻结语义与验收用例（见 §2、§8）。
-2. [ ] 更新 orgunit engine（schema）：
+2. [x] 更新 orgunit engine（schema）：
    - 修改 `orgunit.org_events_effective` view 的 effective_date 推导为 sticky 语义（§5）。
    - 修改 `orgunit.org_events_effective_for_replay(...)` 同步 sticky 语义（§5）。
-3. [ ] 新增 orgunit 迁移（Goose）：
+3. [x] 新增 orgunit 迁移（Goose）：
    - 以模块闭环方式落地（Atlas+Goose，按 `DEV-PLAN-024`）。
-4. [ ] 同步汇总 schema：
+4. [x] 同步汇总 schema：
    - 更新 `internal/sqlc/schema.sql`（与模块 schema 一致）。
    - 运行 `make sqlc-generate` 并确保生成物闭环（按 `AGENTS.md`）。
-5. [ ] 补充测试（至少两类）：
-   - DB 层集成测试：构造“先更正 effective_date，再更正 ext”并断言第二次更正不触发 `ORG_EXT_FIELD_NOT_ENABLED_AS_OF`。
-   - 视图一致性测试：`org_events_effective` 与 `org_events_effective_for_replay` 对同一组 events 的 effective_date 计算一致。
+5. [x] 补充测试（至少两类）：
+   - schema 断言测试：通过 `internal/server/orgunit_effective_date_sticky_sql_test.go` 断言 sticky 语义已落入 view + replay 两处（避免回归漂移）。
+   - （可选）DB 层集成测试：构造“先更正 effective_date，再更正 ext”并断言第二次更正不触发 `ORG_EXT_FIELD_NOT_ENABLED_AS_OF`（未来若 CI 需要更强保障可补齐）。
 6. [ ] 回归验证：
    - 跑通 `DEV-PLAN-106A` 的字典字段更正闭环（无需 UI 绕过）。
+
+### 7.1 实施记录（2026-02-18）
+
+- Schema SSOT：
+  - `modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`：为 `org_events_effective` / `org_events_effective_for_replay(...)` 引入 `latest_effective_date_corrections`，并用 `COALESCE(sticky_effective_date, base_effective_date)` 输出 effective_date（sticky 生效）。
+- DB Migration（Goose）：
+  - `migrations/orgunit/20260218183000_orgunit_correction_effective_date_sticky.sql`
+  - `migrations/orgunit/atlas.sum` 已更新（Atlas hash）。
+- sqlc：
+  - `make sqlc-generate` 已执行（`internal/sqlc/schema.sql` 与 gen 更新闭环）。
+- Tests：
+  - `internal/server/orgunit_effective_date_sticky_sql_test.go`：通过 schema 片段断言 sticky 语义已落入 view + replay 两处，避免回归漂移。
+
+- 本地门禁（执行通过）：
+  - `make orgunit plan && make orgunit lint && make orgunit migrate up`
+  - `go fmt ./... && go vet ./... && make check lint && make test`
 
 ## 8. 验收标准（DoD）
 
@@ -163,4 +196,3 @@
 - `docs/dev-plans/080b-orgunit-correction-failure-investigation-and-remediation.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
 - `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
-

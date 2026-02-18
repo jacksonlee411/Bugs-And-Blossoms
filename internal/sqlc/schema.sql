@@ -1343,6 +1343,20 @@ latest_corrections AS (
     id
   FROM correction_events
   ORDER BY tenant_uuid, target_event_uuid, tx_time DESC, id DESC
+),
+latest_effective_date_corrections AS (
+  -- Sticky effective_date: take the latest CORRECT_EVENT that explicitly carries effective_date,
+  -- regardless of later corrections that don't include effective_date.
+  SELECT DISTINCT ON (tenant_uuid, target_event_uuid)
+    tenant_uuid,
+    target_event_uuid,
+    NULLIF(btrim(payload->>'effective_date'), '')::date AS sticky_effective_date,
+    tx_time,
+    id
+  FROM correction_events
+  WHERE event_type = 'CORRECT_EVENT'
+    AND payload ? 'effective_date'
+  ORDER BY tenant_uuid, target_event_uuid, tx_time DESC, id DESC
 )
 SELECT
   e.id,
@@ -1358,12 +1372,7 @@ SELECT
       THEN 'DISABLE'
     ELSE e.event_type
   END AS event_type,
-  CASE
-    WHEN lc.correction_type = 'CORRECT_EVENT'
-      AND lc.correction_payload ? 'effective_date'
-      THEN NULLIF(btrim(lc.correction_payload->>'effective_date'), '')::date
-    ELSE e.effective_date
-  END AS effective_date,
+  COALESCE(lec.sticky_effective_date, e.effective_date) AS effective_date,
   CASE
     WHEN lc.correction_type = 'CORRECT_EVENT'
       THEN orgunit.merge_org_event_payload_with_correction(e.payload, lc.correction_payload)
@@ -1377,6 +1386,9 @@ FROM orgunit.org_events e
 LEFT JOIN latest_corrections lc
   ON lc.tenant_uuid = e.tenant_uuid
  AND lc.target_event_uuid = e.event_uuid
+LEFT JOIN latest_effective_date_corrections lec
+  ON lec.tenant_uuid = e.tenant_uuid
+ AND lec.target_event_uuid = e.event_uuid
 WHERE e.event_type IN ('CREATE','UPDATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')
   AND COALESCE(lc.correction_type, '') NOT IN ('RESCIND_EVENT', 'RESCIND_ORG');
 
@@ -3083,6 +3095,20 @@ AS $$
       id
     FROM correction_events
     ORDER BY tenant_uuid, target_event_uuid, tx_time DESC, id DESC
+  ),
+  latest_effective_date_corrections AS (
+    -- Sticky effective_date: take the latest CORRECT_EVENT that explicitly carries effective_date,
+    -- regardless of later corrections that don't include effective_date.
+    SELECT DISTINCT ON (tenant_uuid, target_event_uuid)
+      tenant_uuid,
+      target_event_uuid,
+      NULLIF(btrim(payload->>'effective_date'), '')::date AS sticky_effective_date,
+      tx_time,
+      id
+    FROM correction_events
+    WHERE event_type = 'CORRECT_EVENT'
+      AND payload ? 'effective_date'
+    ORDER BY tenant_uuid, target_event_uuid, tx_time DESC, id DESC
   )
   SELECT
     se.id,
@@ -3114,12 +3140,7 @@ AS $$
         THEN 'UPDATE'
       ELSE se.event_type
     END AS event_type,
-    CASE
-      WHEN lc.correction_type = 'CORRECT_EVENT'
-        AND lc.correction_payload ? 'effective_date'
-        THEN NULLIF(btrim(lc.correction_payload->>'effective_date'), '')::date
-      ELSE se.effective_date
-    END AS effective_date,
+    COALESCE(lec.sticky_effective_date, se.effective_date) AS effective_date,
     CASE
       WHEN lc.correction_type = 'CORRECT_EVENT'
         THEN orgunit.merge_org_event_payload_with_correction(se.payload, lc.correction_payload)
@@ -3133,6 +3154,9 @@ AS $$
   LEFT JOIN latest_corrections lc
     ON lc.tenant_uuid = se.tenant_uuid
    AND lc.target_event_uuid = se.event_uuid
+  LEFT JOIN latest_effective_date_corrections lec
+    ON lec.tenant_uuid = se.tenant_uuid
+   AND lec.target_event_uuid = se.event_uuid
   WHERE se.event_type IN ('CREATE','UPDATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')
     AND COALESCE(lc.correction_type, '') NOT IN ('RESCIND_EVENT', 'RESCIND_ORG')
   ORDER BY effective_date, id;
