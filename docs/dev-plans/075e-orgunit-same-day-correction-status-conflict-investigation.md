@@ -1,5 +1,9 @@
 # DEV-PLAN-075E：OrgUnit 同日状态修正（生效日不变）方案
 
+> 2026-02-18 补充：自 `DEV-PLAN-108` 起，状态更正不再要求独立 `CORRECT_STATUS` 主路径；
+> 更正链路允许 `status + 其他字段` 同次提交（仍为单 `CORRECT_EVENT` 审计链，replay 视角解释为 `UPDATE`）。
+> 因此本文件作为“108 前的专项纠错方案与实现记录”保留，但 UI/契约应以 108 为准。
+
 **状态**: 已完成（2026-02-08 15:20 UTC）
 
 > 实施与修复已合并：PR #307（功能落地）+ PR #308（补齐迁移闭环，修复 `submit_org_status_correction` 缺失）。

@@ -1760,7 +1760,7 @@ SELECT orgunit.submit_org_event(
 	return nil
 }
 
-func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, newEffectiveDate string, requestID string) error {
+func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, newEffectiveDate string, requestCode string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -1777,8 +1777,8 @@ func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID 
 	if strings.TrimSpace(newEffectiveDate) == "" {
 		return errors.New("effective_date is required")
 	}
-	if strings.TrimSpace(requestID) == "" {
-		return errors.New("request_id is required")
+	if strings.TrimSpace(requestCode) == "" {
+		return errors.New("request_code is required")
 	}
 	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 
@@ -1793,7 +1793,7 @@ SELECT orgunit.submit_org_event_correction(
   $5::text,
   $6::uuid
 )
-	`, tenantID, orgID, targetEffectiveDate, []byte(patch), requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
+	`, tenantID, orgID, targetEffectiveDate, []byte(patch), requestCode, initiatorUUID).Scan(&correctionUUID); err != nil {
 		return err
 	}
 

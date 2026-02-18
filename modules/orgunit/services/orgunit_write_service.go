@@ -112,7 +112,7 @@ type CorrectOrgUnitRequest struct {
 	OrgCode             string
 	TargetEffectiveDate string
 	Patch               OrgUnitCorrectionPatch
-	RequestID           string
+	RequestCode         string
 	InitiatorUUID       string
 }
 
@@ -120,21 +120,21 @@ type CorrectStatusOrgUnitRequest struct {
 	OrgCode             string
 	TargetEffectiveDate string
 	TargetStatus        string
-	RequestID           string
+	RequestCode         string
 	InitiatorUUID       string
 }
 
 type RescindRecordOrgUnitRequest struct {
 	OrgCode             string
 	TargetEffectiveDate string
-	RequestID           string
+	RequestCode         string
 	Reason              string
 	InitiatorUUID       string
 }
 
 type RescindOrgUnitRequest struct {
 	OrgCode       string
-	RequestID     string
+	RequestCode   string
 	Reason        string
 	InitiatorUUID string
 }
@@ -676,9 +676,9 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 		return types.OrgUnitResult{}, err
 	}
 
-	requestID := strings.TrimSpace(req.RequestID)
-	if requestID == "" {
-		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
+	requestCode := strings.TrimSpace(req.RequestCode)
+	if requestCode == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("request_code is required")
 	}
 
 	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
@@ -728,7 +728,7 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitCorrection(ctx, tenantID, orgID, targetEffectiveDate, patchJSON, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
+	if _, err := s.store.SubmitCorrection(ctx, tenantID, orgID, targetEffectiveDate, patchJSON, requestCode, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
@@ -760,9 +760,9 @@ func (s *orgUnitWriteService) CorrectStatus(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	requestID := strings.TrimSpace(req.RequestID)
-	if requestID == "" {
-		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
+	requestCode := strings.TrimSpace(req.RequestCode)
+	if requestCode == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("request_code is required")
 	}
 
 	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
@@ -773,14 +773,14 @@ func (s *orgUnitWriteService) CorrectStatus(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitStatusCorrection(ctx, tenantID, orgID, targetEffectiveDate, targetStatus, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
+	if _, err := s.store.SubmitStatusCorrection(ctx, tenantID, orgID, targetEffectiveDate, targetStatus, requestCode, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
 	fields := map[string]any{
 		"operation":     "CORRECT_STATUS",
 		"target_status": targetStatus,
-		"request_id":    requestID,
+		"request_code":  requestCode,
 	}
 
 	return types.OrgUnitResult{
@@ -802,9 +802,9 @@ func (s *orgUnitWriteService) RescindRecord(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	requestID := strings.TrimSpace(req.RequestID)
-	if requestID == "" {
-		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
+	requestCode := strings.TrimSpace(req.RequestCode)
+	if requestCode == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("request_code is required")
 	}
 
 	reason := strings.TrimSpace(req.Reason)
@@ -820,7 +820,7 @@ func (s *orgUnitWriteService) RescindRecord(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitRescindEvent(ctx, tenantID, orgID, targetEffectiveDate, reason, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
+	if _, err := s.store.SubmitRescindEvent(ctx, tenantID, orgID, targetEffectiveDate, reason, requestCode, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
@@ -829,8 +829,8 @@ func (s *orgUnitWriteService) RescindRecord(ctx context.Context, tenantID string
 		OrgCode:       orgCode,
 		EffectiveDate: targetEffectiveDate,
 		Fields: map[string]any{
-			"operation":  "RESCIND_EVENT",
-			"request_id": requestID,
+			"operation":    "RESCIND_EVENT",
+			"request_code": requestCode,
 		},
 	}, nil
 }
@@ -841,9 +841,9 @@ func (s *orgUnitWriteService) RescindOrg(ctx context.Context, tenantID string, r
 		return types.OrgUnitResult{}, err
 	}
 
-	requestID := strings.TrimSpace(req.RequestID)
-	if requestID == "" {
-		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
+	requestCode := strings.TrimSpace(req.RequestCode)
+	if requestCode == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("request_code is required")
 	}
 
 	reason := strings.TrimSpace(req.Reason)
@@ -859,7 +859,7 @@ func (s *orgUnitWriteService) RescindOrg(ctx context.Context, tenantID string, r
 		return types.OrgUnitResult{}, err
 	}
 
-	rescindedEvents, err := s.store.SubmitRescindOrg(ctx, tenantID, orgID, reason, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
+	rescindedEvents, err := s.store.SubmitRescindOrg(ctx, tenantID, orgID, reason, requestCode, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	if err != nil {
 		return types.OrgUnitResult{}, err
 	}
@@ -870,7 +870,7 @@ func (s *orgUnitWriteService) RescindOrg(ctx context.Context, tenantID string, r
 		EffectiveDate: "",
 		Fields: map[string]any{
 			"operation":        "RESCIND_ORG",
-			"request_id":       requestID,
+			"request_code":     requestCode,
 			"rescinded_events": rescindedEvents,
 		},
 	}, nil

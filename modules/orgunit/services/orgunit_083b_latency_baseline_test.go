@@ -51,7 +51,7 @@ func Test083BLatencyBaselineWriteFailClosed(t *testing.T) {
 		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
-			RequestID:           "083b-latency",
+			RequestCode:         "083b-latency",
 			Patch: OrgUnitCorrectionPatch{
 				Name: stringPtr("Rename-on-move-must-fail"),
 			},

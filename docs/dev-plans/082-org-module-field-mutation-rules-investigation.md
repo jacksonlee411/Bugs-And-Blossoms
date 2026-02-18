@@ -1,6 +1,26 @@
 # DEV-PLAN-082：Org 模块业务字段修改规则全量调查（排除元数据）
 
-**状态**: 已完成（2026-02-11 04:00 UTC）
+**状态**: 已完成（2026-02-11 04:00 UTC）；2026-02-18 起部分写入口径被 `DEV-PLAN-108` 取代
+
+## 0. 与 DEV-PLAN-108 的对齐补充（2026-02-18）
+
+> 本文件最初用于“盘点当时实现”的字段可改范围（以 target_event_type 白名单为核心）。
+> 自 `DEV-PLAN-108` 起，OrgUnit 写入将从“动作/事件驱动（rename/move/enable/disable/set BU）”收敛为“字段编辑 + intent 自动判定 + 单事件多字段”。
+> 因此，本文件 §4~§7 中关于“更正字段白名单/状态必须 CORRECT_STATUS”的描述将变为**历史实现口径**，不再作为新能力的 SSOT。
+
+108 生效后的关键口径（以 108 为准）：
+
+1. UI/调用方不再选择 `record_change_type`；只提交字段 patch。
+2. 更正必须支持 `status + 其他字段` 同次提交（仍保持单 `CORRECT_EVENT` 审计链；replay 视角解释为 `UPDATE` 应用）。
+3. append（新建版本/插入版本）允许一次提交多字段，落一个 `UPDATE` 事件（占 day-slot）。
+4. 允许 disabled 记录 move；允许同次提交 `status + is_business_unit`（不再因顺序触发 `ORG_INACTIVE_AS_OF`）。
+
+对照关系：
+
+- 旧：`POST /org/api/org-units/{rename|move|enable|disable|business-unit}` + `append-capabilities` / `mutation-capabilities`
+- 新：`POST /org/api/org-units/write` + `GET /org/api/org-units/write-capabilities`（intent 维度）
+
+> 注：本文件仍保留其“当时实现盘点”的价值（用于回归/迁移对照），但任何新实现/评审应优先参考 108。
 
 ## 1. 背景
 

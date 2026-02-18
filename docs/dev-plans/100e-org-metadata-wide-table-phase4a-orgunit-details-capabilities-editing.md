@@ -2,6 +2,20 @@
 
 **状态**: 已完成（2026-02-15）
 
+## 0.1 与 DEV-PLAN-108 的对齐补充（2026-02-18）
+
+本计划（100E）冻结并落地了“更正 UI 严格消费 `mutation-capabilities`（allowed_fields/field_payload_keys/deny_reasons）+ `POST /corrections`”的闭环。
+
+自 `DEV-PLAN-108` 起，写入口与 capabilities 将进一步收敛为：
+
+- `GET /org/api/org-units/write-capabilities?intent=...`（intent 维度能力外显，作为新 SSOT）
+- `POST /org/api/org-units/write`（统一写入口）
+
+迁移口径：
+
+1. `ext_fields` / `patch.ext` / `ext_labels_snapshot` 的元数据与 fail-closed 规则仍以 100E/100E1/100C/100D 为 SSOT（不推翻）。
+2. capabilities 的“字段可编辑/动作可用性”未来以 `write-capabilities` 为主输出；`mutation-capabilities` 可保留兼容，但应逐步改为薄包装，避免双规则漂移。
+
 > 本文从 `DEV-PLAN-100` Phase 4 的 4A 拆分而来，作为 4A 的 SSOT；`DEV-PLAN-100` 继续保持为整体路线图。  
 > 本文聚焦 **UI 侧**的“详情页扩展字段展示 + 编辑态能力外显（fail-closed）”，并明确：开展 4A 前必须具备 `DEV-PLAN-083` 的核心产物可用（mutation policy 单点 + capabilities API）；其后端前置改造执行计划见 `DEV-PLAN-100E1`。
 
@@ -350,16 +364,16 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
    - 弹窗顶部展示错误；
    - 全部输入禁用 + 禁用确认按钮（fail-closed，不做本地乐观放行）。
 6. 当用户填写了 `corrected_effective_date` 且其值与 target_effective_date 不同：
-   - 弹窗进入“生效日更正”模式：仅允许修改 `corrected_effective_date`，其余基础字段与全部扩展字段一律禁用；
-   - 弹窗顶部展示明确提示：更正生效日需单独提交（避免与扩展字段 enabled 集合随 day 变化产生漂移与“写了但回显消失”风险）。
+   - **108 前历史口径**：进入“生效日更正”模式并仅允许提交 `effective_date`；
+   - **108 后口径**：允许“改生效日 + 改其它字段”同次提交，且 ext enabled-as-of/DICT label snapshot 解析以更正后 effective_date 为准（SSOT：`DEV-PLAN-108`）。
 
 提交（构造 patch）规则（关键：避免“禁用但仍提交”）：
 
 1. 以 details 中当前值作为“原值快照”（含 ext_fields），并以 capabilities 的 `allowed_fields/field_payload_keys` 作为“唯一可写集合”。
 2. **生效日更正模式**（`corrected_effective_date != ""` 且 `!= target_effective_date`）：
-   - patch 只允许包含 `effective_date` 一个字段（对应 `field_payload_keys["effective_date"]="effective_date"`）；
-   - 其它字段（含 ext）即使被编辑也不得进入 patch（fail-closed）。
-3. **普通更正模式**（未进入生效日更正模式）：
+   - **108 前历史口径**：patch 只允许 `effective_date`；
+   - **108 后口径**：允许与其它字段同次进入 patch（最终校验时一律按“更正后 effective_date”计算）。
+3. **普通更正模式**（未变更生效日）：
    - 对每个表单项：
      - 若该字段不在 `allowed_fields`：**不进入 patch**（无论 UI 是否有值）。
      - 若字段值与原值一致：**不进入 patch**（最小变更）。

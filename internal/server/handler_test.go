@@ -713,22 +713,22 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("org units enable status=%d", recOrgEnable.Code)
 	}
 
-	recOrgCorrect := postJSON("/org/api/org-units/corrections", `{"org_code":"ORG2","effective_date":"2026-01-01","request_id":"r9","patch":{}}`, nil)
+	recOrgCorrect := postJSON("/org/api/org-units/corrections", `{"org_code":"ORG2","effective_date":"2026-01-01","request_code":"r9","patch":{}}`, nil)
 	if recOrgCorrect.Code != http.StatusOK {
 		t.Fatalf("org units corrections status=%d", recOrgCorrect.Code)
 	}
 
-	recOrgStatusCorrect := postJSON("/org/api/org-units/status-corrections", `{"org_code":"ORG2","effective_date":"2026-01-01","target_status":"disabled","request_id":"r9s"}`, nil)
+	recOrgStatusCorrect := postJSON("/org/api/org-units/status-corrections", `{"org_code":"ORG2","effective_date":"2026-01-01","target_status":"disabled","request_code":"r9s"}`, nil)
 	if recOrgStatusCorrect.Code != http.StatusOK {
 		t.Fatalf("org units status corrections status=%d", recOrgStatusCorrect.Code)
 	}
 
-	recOrgRescind := postJSON("/org/api/org-units/rescinds", `{"org_code":"ORG2","effective_date":"2026-01-01","request_id":"r10","reason":"bad-data"}`, nil)
+	recOrgRescind := postJSON("/org/api/org-units/rescinds", `{"org_code":"ORG2","effective_date":"2026-01-01","request_code":"r10","reason":"bad-data"}`, nil)
 	if recOrgRescind.Code != http.StatusOK {
 		t.Fatalf("org units rescinds status=%d", recOrgRescind.Code)
 	}
 
-	recOrgRescindOrg := postJSON("/org/api/org-units/rescinds/org", `{"org_code":"ORG2","request_id":"r11","reason":"bad-org"}`, nil)
+	recOrgRescindOrg := postJSON("/org/api/org-units/rescinds/org", `{"org_code":"ORG2","request_code":"r11","reason":"bad-org"}`, nil)
 	if recOrgRescindOrg.Code != http.StatusOK {
 		t.Fatalf("org units rescinds org status=%d", recOrgRescindOrg.Code)
 	}

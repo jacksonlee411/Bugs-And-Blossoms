@@ -1,6 +1,20 @@
 # DEV-PLAN-083：Org 变更能力模型重构（抽象统一 + 策略单点 + 能力外显）
 
-**状态**: 已完成（2026-02-16 06:17 UTC — 083B 后置核验完成：Kernel/Service 对齐 + fail-closed 防回归 + 验收项收口）
+**状态**: 已完成（2026-02-16 06:17 UTC — 083B 后置核验完成：Kernel/Service 对齐 + fail-closed 防回归 + 验收项收口）；2026-02-18 起能力外显 SSOT 迁移到 `DEV-PLAN-108`
+
+## 0.1 与 DEV-PLAN-108 的关系（2026-02-18 补充）
+
+本计划（083）完成时，将能力模型外显为 `mutation-capabilities`（Rewrite/Invalidate）并以 target_event_type 驱动 allowed_fields。
+自 `DEV-PLAN-108` 起，OrgUnit 写入收敛为“字段编辑 + intent 自动判定 + 单事件多字段”，并引入：
+
+- `GET /org/api/org-units/write-capabilities?intent=...`（intent 维度能力外显）
+- `POST /org/api/org-units/write`（统一写入口）
+
+迁移规则（冻结，避免双规则漂移）：
+
+1. `write-capabilities` 成为新的能力外显 SSOT；
+2. 既有 `mutation-capabilities` / `append-capabilities` 允许保留兼容，但必须逐步改为 `write-capabilities` 的薄包装输出；
+3. 策略单点（policy）仍需存在，但其对外输出应以 intent 维度组织（避免 UI 继续围绕 `correct_status`/动作型 endpoint 形成第二套心智）。
 
 ## 0. Stopline（本计划 SSOT 收口范围）
 

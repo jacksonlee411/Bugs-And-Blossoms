@@ -10,7 +10,7 @@ export GOIMPORTS_VERSION ?= v0.26.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
-.PHONY: help preflight check pr-branch naming no-legacy fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch naming no-legacy request-code fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
@@ -23,6 +23,7 @@ help:
 		"  make preflight" \
 		"  make check naming" \
 		"  make check no-legacy" \
+		"  make check request-code" \
 		"  make check fmt" \
 		"  make check lint" \
 		"  make test" \
@@ -45,6 +46,7 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check pr-branch
 	@$(MAKE) check naming
 	@$(MAKE) check no-legacy
+	@$(MAKE) check request-code
 	@$(MAKE) check doc
 	@$(MAKE) check fmt
 	@$(MAKE) check lint
@@ -64,6 +66,9 @@ naming: ## 命名去噪门禁（已取消：no-op）
 
 no-legacy: ## 禁止 legacy 分支/回退通道（单链路原则）
 	@./scripts/ci/check-no-legacy.sh
+
+request-code: ## 业务幂等字段命名收敛（统一为 request_code；禁止 request_id 漂移）
+	@./scripts/ci/check-request-code.sh
 
 fmt: ## 格式化/格式检查（按项目能力渐进接入）
 	@if [[ -f go.mod ]]; then \
@@ -178,7 +183,7 @@ staffing:
 person:
 	@:
 
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint request-code plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

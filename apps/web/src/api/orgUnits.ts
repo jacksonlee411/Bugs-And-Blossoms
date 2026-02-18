@@ -292,7 +292,7 @@ export async function setOrgUnitBusinessUnit(request: {
 export async function correctOrgUnit(request: {
   org_code: string
   effective_date: string
-  request_id: string
+  request_code: string
   patch: {
     effective_date?: string
     name?: string
@@ -309,7 +309,7 @@ export async function correctOrgUnitStatus(request: {
   org_code: string
   effective_date: string
   target_status: string
-  request_id: string
+  request_code: string
 }): Promise<OrgUnitWriteResult> {
   return httpClient.post<OrgUnitWriteResult>('/org/api/org-units/status-corrections', request)
 }
@@ -317,10 +317,10 @@ export async function correctOrgUnitStatus(request: {
 export async function rescindOrgUnitRecord(request: {
   org_code: string
   effective_date: string
-  request_id: string
+  request_code: string
   reason: string
-}): Promise<{ org_code: string; effective_date: string; operation: string; request_id: string }> {
-  return httpClient.post<{ org_code: string; effective_date: string; operation: string; request_id: string }>(
+}): Promise<{ org_code: string; effective_date: string; operation: string; request_code: string }> {
+  return httpClient.post<{ org_code: string; effective_date: string; operation: string; request_code: string }>(
     '/org/api/org-units/rescinds',
     request
   )
@@ -328,10 +328,10 @@ export async function rescindOrgUnitRecord(request: {
 
 export async function rescindOrgUnit(request: {
   org_code: string
-  request_id: string
+  request_code: string
   reason: string
-}): Promise<{ org_code: string; operation: string; request_id: string; rescinded_events: number }> {
-  return httpClient.post<{ org_code: string; operation: string; request_id: string; rescinded_events: number }>(
+}): Promise<{ org_code: string; operation: string; request_code: string; rescinded_events: number }> {
+  return httpClient.post<{ org_code: string; operation: string; request_code: string; rescinded_events: number }>(
     '/org/api/org-units/rescinds/org',
     request
   )
