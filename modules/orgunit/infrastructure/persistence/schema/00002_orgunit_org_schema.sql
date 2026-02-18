@@ -35,7 +35,7 @@ AS $$
     WHEN p_event_type = 'CREATE'
       THEN p_after_snapshot IS NOT NULL
 
-    WHEN p_event_type IN ('MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS')
+    WHEN p_event_type IN ('UPDATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS')
       THEN p_before_snapshot IS NOT NULL AND p_after_snapshot IS NOT NULL
 
     WHEN p_event_type IN ('RESCIND_EVENT','RESCIND_ORG')
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   tx_time timestamptz NOT NULL DEFAULT now(),
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')),
+  CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT','CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')),
   CONSTRAINT org_events_target_event_uuid_required CHECK (
     event_type NOT IN ('CORRECT_EVENT','CORRECT_STATUS','RESCIND_EVENT','RESCIND_ORG')
     OR (

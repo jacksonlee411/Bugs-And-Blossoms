@@ -2408,6 +2408,7 @@ func TestWriteOrgUnitServiceError_BlankCodeFallsBackToDefault(t *testing.T) {
 }
 
 type orgUnitWriteServiceStub struct {
+	writeFn           func(context.Context, string, orgunitservices.WriteOrgUnitRequest) (orgunitservices.OrgUnitWriteResult, error)
 	createFn          func(context.Context, string, orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 	renameFn          func(context.Context, string, orgunitservices.RenameOrgUnitRequest) error
 	moveFn            func(context.Context, string, orgunitservices.MoveOrgUnitRequest) error
@@ -2418,6 +2419,13 @@ type orgUnitWriteServiceStub struct {
 	correctStatusFn   func(context.Context, string, orgunitservices.CorrectStatusOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 	rescindRecordFn   func(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
 	rescindOrgFn      func(context.Context, string, orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error)
+}
+
+func (s orgUnitWriteServiceStub) Write(ctx context.Context, tenantID string, req orgunitservices.WriteOrgUnitRequest) (orgunitservices.OrgUnitWriteResult, error) {
+	if s.writeFn == nil {
+		return orgunitservices.OrgUnitWriteResult{}, nil
+	}
+	return s.writeFn(ctx, tenantID, req)
 }
 
 func (s orgUnitWriteServiceStub) Create(ctx context.Context, tenantID string, req orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {

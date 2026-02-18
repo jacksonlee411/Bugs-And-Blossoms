@@ -433,7 +433,20 @@ func TestCorrectExtPatchDictClearDoesNotGenerateLabelSnapshot(t *testing.T) {
 }
 
 func TestCorrectExtPatchValidationFailClosed(t *testing.T) {
-	t.Run("effective_date correction mode rejects ext", func(t *testing.T) {
+	t.Run("effective_date correction can include ext (DEV-PLAN-108)", func(t *testing.T) {
+		origResolve := resolveDictLabelInWrite
+		resolveDictLabelInWrite = func(_ context.Context, _ string, asOf string, _ string, code string) (string, bool, error) {
+			if strings.TrimSpace(asOf) != "2026-01-02" {
+				return "", false, errors.New("as_of mismatch")
+			}
+			if strings.TrimSpace(code) != "10" {
+				return "", false, errors.New("code mismatch")
+			}
+			return "Org Type 10", true, nil
+		}
+		t.Cleanup(func() { resolveDictLabelInWrite = origResolve })
+
+		var captured map[string]any
 		store := orgUnitWriteStoreStub{
 			resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) {
 				return 10000001, nil
@@ -449,6 +462,12 @@ func TestCorrectExtPatchValidationFailClosed(t *testing.T) {
 					{FieldKey: "org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)},
 				}, nil
 			},
+			submitCorrectionFn: func(_ context.Context, _ string, _ int, _ string, patch json.RawMessage, _ string, _ string) (string, error) {
+				if err := json.Unmarshal(patch, &captured); err != nil {
+					return "", err
+				}
+				return "c1", nil
+			},
 		}
 		svc := NewOrgUnitWriteService(store)
 		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
@@ -462,8 +481,22 @@ func TestCorrectExtPatchValidationFailClosed(t *testing.T) {
 				},
 			},
 		})
-		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
-			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		if err != nil {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if captured == nil {
+			t.Fatalf("expected patch captured")
+		}
+		if captured["effective_date"] != "2026-01-02" {
+			t.Fatalf("patch=%v", captured)
+		}
+		ext, _ := captured["ext"].(map[string]any)
+		if ext == nil || ext["org_type"] != "10" {
+			t.Fatalf("patch=%v", captured)
+		}
+		labels, _ := captured["ext_labels_snapshot"].(map[string]any)
+		if labels == nil || labels["org_type"] != "Org Type 10" {
+			t.Fatalf("patch=%v", captured)
 		}
 	})
 

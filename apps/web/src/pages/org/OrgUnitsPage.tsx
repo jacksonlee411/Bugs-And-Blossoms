@@ -25,14 +25,14 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { GridColDef, GridPaginationModel, GridSortModel } from '@mui/x-data-grid'
 import {
-  createOrgUnit,
-  getOrgUnitAppendCapabilities,
+  getOrgUnitWriteCapabilities,
   getOrgUnitFieldOptions,
   listOrgUnits,
   listOrgUnitsPage,
   listOrgUnitFieldConfigs,
   listOrgUnitFieldDefinitions,
   searchOrgUnit,
+  writeOrgUnit,
   type OrgUnitAPIItem,
   type OrgUnitListSortField,
   type OrgUnitListSortOrder,
@@ -54,7 +54,6 @@ import {
   toGridSortModel
 } from '../../utils/gridQueryState'
 import { normalizePlainExtDraft } from './orgUnitPlainExtValidation'
-import { buildAppendPayload } from './orgUnitAppendIntent'
 import { clearExtQueryParams, parseExtSortField, parseSortOrder } from './orgUnitListExtQuery'
 
 type OrgStatus = 'active' | 'inactive'
@@ -71,9 +70,11 @@ interface CreateOrgUnitForm {
   orgCode: string
   name: string
   parentOrgCode: string
+  status: OrgStatus
   managerPernr: string
   effectiveDate: string
   isBusinessUnit: boolean
+  requestCode: string
   extValues: Record<string, unknown>
   extDisplayValues: Record<string, string>
 }
@@ -327,9 +328,11 @@ function emptyCreateForm(asOf: string, parentOrgCode: string | null): CreateOrgU
     orgCode: '',
     name: '',
     parentOrgCode: parentOrgCode ?? '',
+    status: 'active',
     managerPernr: '',
     effectiveDate: asOf,
     isBusinessUnit: false,
+    requestCode: `org-create:${Date.now()}`,
     extValues: {},
     extDisplayValues: {}
   }
@@ -827,16 +830,17 @@ export function OrgUnitsPage() {
 
   const createCapabilitiesQuery = useQuery({
     enabled: canWrite && createOpen && createCapabilityOrgCode.length > 0 && createCapabilityEffectiveDate.length > 0,
-    queryKey: ['org-units', 'append-capabilities', 'create', createCapabilityOrgCode, createCapabilityEffectiveDate],
+    queryKey: ['org-units', 'write-capabilities', 'create_org', createCapabilityOrgCode, createCapabilityEffectiveDate],
     queryFn: () =>
-      getOrgUnitAppendCapabilities({
+      getOrgUnitWriteCapabilities({
+        intent: 'create_org',
         orgCode: createCapabilityOrgCode,
         effectiveDate: createCapabilityEffectiveDate
       }),
     staleTime: 30_000
   })
 
-  const createCapability = createCapabilitiesQuery.data?.capabilities.create
+  const createCapability = createCapabilitiesQuery.data
   const createAllowedFieldSet = useMemo(() => new Set(createCapability?.allowed_fields ?? []), [createCapability?.allowed_fields])
   const createDenyReasons = useMemo(() => createCapability?.deny_reasons ?? [], [createCapability?.deny_reasons])
   const createPlainFieldDefinitions = useMemo(
@@ -931,7 +935,20 @@ export function OrgUnitsPage() {
     mutationFn: async () => {
       const capability = createCapability
       if (!capability || !capability.enabled || createCapabilitiesQuery.isError) {
-        throw new Error('append capabilities unavailable')
+        throw new Error('write capabilities unavailable')
+      }
+      // Fail-closed: capabilities payload mapping must be a bijection.
+      const allowedFields = capability.allowed_fields ?? []
+      const payloadKeys = capability.field_payload_keys ?? {}
+      for (const fieldKey of allowedFields) {
+        if (!(fieldKey in payloadKeys)) {
+          throw new Error('write capability payload invalid')
+        }
+      }
+      for (const fieldKey of Object.keys(payloadKeys)) {
+        if (!allowedFields.includes(fieldKey)) {
+          throw new Error('write capability payload invalid')
+        }
       }
 
       const normalizedPlainExtValues: Record<string, unknown> = {}
@@ -953,24 +970,45 @@ export function OrgUnitsPage() {
         }
       }
 
-      const payload = buildAppendPayload({
-        capability,
-        values: {
-          org_code: createCapabilityOrgCode,
-          effective_date: createCapabilityEffectiveDate,
-          name: createForm.name.trim(),
-          parent_org_code: trimToUndefined(createForm.parentOrgCode),
-          is_business_unit: createForm.isBusinessUnit,
-          manager_pernr: trimToUndefined(createForm.managerPernr),
-          ...createForm.extValues,
-          ...normalizedPlainExtValues
+      const extPatch: Record<string, unknown> = {}
+      for (const fieldKey of allowedFields) {
+        if (!(fieldKey in createForm.extValues) && !(fieldKey in normalizedPlainExtValues)) {
+          continue
         }
-      })
-      if (!payload) {
-        throw new Error('append capability payload invalid')
+        const normalized = fieldKey in normalizedPlainExtValues ? normalizedPlainExtValues[fieldKey] : createForm.extValues[fieldKey]
+        if (typeof normalized === 'undefined') {
+          continue
+        }
+        extPatch[fieldKey] = normalized
       }
 
-      await createOrgUnit(payload as Parameters<typeof createOrgUnit>[0])
+      const patch: Record<string, unknown> = {}
+      if (allowedFields.includes('name')) {
+        patch.name = createForm.name.trim()
+      }
+      if (allowedFields.includes('parent_org_code')) {
+        patch.parent_org_code = trimToUndefined(createForm.parentOrgCode)
+      }
+      if (allowedFields.includes('status')) {
+        patch.status = createForm.status === 'active' ? 'active' : 'disabled'
+      }
+      if (allowedFields.includes('is_business_unit')) {
+        patch.is_business_unit = createForm.isBusinessUnit
+      }
+      if (allowedFields.includes('manager_pernr')) {
+        patch.manager_pernr = trimToUndefined(createForm.managerPernr)
+      }
+      if (Object.keys(extPatch).length > 0) {
+        patch.ext = extPatch
+      }
+
+      await writeOrgUnit({
+        intent: 'create_org',
+        org_code: createCapabilityOrgCode,
+        effective_date: createCapabilityEffectiveDate,
+        request_code: createForm.requestCode.trim() || `org-create:${Date.now()}`,
+        patch
+      })
     },
     onSuccess: async () => {
       await refreshAfterWrite()
@@ -1364,6 +1402,26 @@ export function OrgUnitsPage() {
               onChange={(event) => setCreateForm((previous) => ({ ...previous, parentOrgCode: event.target.value }))}
               value={createForm.parentOrgCode}
             />
+            <TextField
+              select
+              disabled={!isCreateFieldEditable('status')}
+              helperText={
+                !isCreateFieldEditable('status') && createCapabilityOrgCode.length > 0
+                  ? t('org_append_field_not_allowed_helper')
+                  : undefined
+              }
+              label={t('org_column_status')}
+              onChange={(event) =>
+                setCreateForm((previous) => ({
+                  ...previous,
+                  status: event.target.value === 'inactive' ? 'inactive' : 'active'
+                }))
+              }
+              value={createForm.status}
+            >
+              <MenuItem value='active'>{t('org_status_active_short')}</MenuItem>
+              <MenuItem value='inactive'>{t('org_status_inactive_short')}</MenuItem>
+            </TextField>
             <TextField
               disabled={!isCreateFieldEditable('manager_pernr')}
               helperText={

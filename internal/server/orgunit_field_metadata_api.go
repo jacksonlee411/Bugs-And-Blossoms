@@ -701,10 +701,7 @@ func normalizeOrgUnitEnableDataSourceConfig(
 		canonical, _ := json.Marshal(tmp)
 		options := orgUnitFieldDataSourceConfigOptions(def)
 		for _, opt := range options {
-			want, err := json.Marshal(opt)
-			if err != nil {
-				continue
-			}
+			want, _ := json.Marshal(opt)
 			if bytes.Equal(want, canonical) {
 				return json.RawMessage(canonical), true, nil
 			}
