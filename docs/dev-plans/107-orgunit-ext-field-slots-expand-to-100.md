@@ -2,6 +2,8 @@
 
 **状态**: 规划中（2026-02-17 22:20 UTC）
 
+> 2026-02-18 补充：`DEV-PLAN-110` 将直接消费本计划的六类槽位能力（`text/int/uuid/bool/date/numeric`），用于 `x_...` 自定义字段启用时的值类型选择；类型与容量口径以本计划 §3 为 SSOT。
+
 ## 1. 背景
 
 当前 OrgUnit 扩展字段的物理槽位（`orgunit.org_unit_versions.ext_*`）数量过少，已在本地验证 `DEV-PLAN-106A` 时触发 `ORG_FIELD_CONFIG_SLOT_EXHAUSTED`，导致无法继续启用新的 `d_<dict_code>` 字典字段并验证“启用时自定义描述（label/display_label）”闭环。

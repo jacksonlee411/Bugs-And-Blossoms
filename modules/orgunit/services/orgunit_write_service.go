@@ -1355,13 +1355,22 @@ func validateExtFieldKeyEnabled(fieldKey string, cfg types.TenantFieldConfig) er
 	if !fieldmeta.IsCustomPlainFieldKey(fieldKey) {
 		return httperr.NewBadRequest(errPatchFieldNotAllowed)
 	}
-	if !strings.EqualFold(strings.TrimSpace(cfg.ValueType), "text") {
+	if !isAllowedExtValueType(cfg.ValueType) {
 		return httperr.NewBadRequest(errPatchFieldNotAllowed)
 	}
 	if !strings.EqualFold(strings.TrimSpace(cfg.DataSourceType), "PLAIN") {
 		return httperr.NewBadRequest(errPatchFieldNotAllowed)
 	}
 	return nil
+}
+
+func isAllowedExtValueType(valueType string) bool {
+	switch strings.ToLower(strings.TrimSpace(valueType)) {
+	case "text", "int", "uuid", "bool", "date", "numeric":
+		return true
+	default:
+		return false
+	}
 }
 
 func buildExtPayloadWithContext(ctx context.Context, tenantID string, asOf string, ext map[string]any, fieldConfigs []types.TenantFieldConfig) (map[string]any, map[string]string, error) {

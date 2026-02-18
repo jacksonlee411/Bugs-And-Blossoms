@@ -4,6 +4,8 @@
 
 > 2026-02-17 补充：本计划已完成“DICT 全量引用（dict registry SSOT）+ 自定义 PLAIN（x_ 命名空间）”的最小闭环。  
 > 为进一步降低“field_key（字段） vs dict_code（字典）”双概念成本，DICT 启用方式后续由 `DEV-PLAN-106A` 收敛为“字典字段方式”：`field_key=d_<dict_code>`（并支持启用时自定义展示名）。本文件中与 106A 冲突的 UI/契约描述，以 106A 为准。
+>
+> 2026-02-18 补充：`DEV-PLAN-110` 已将“自定义 PLAIN（x_）”从“固定 text”扩展为“值类型可选（`text/int/uuid/bool/date/numeric`）+ 可选 display label”。本文件中与 110 冲突处，以 110 为准。
 
 > 目标：把 Org 模块“启用扩展字段”的两类配置能力补齐为可治理、可审计、可验证的契约：  
 > 1) **DICT 全量引用**：字典模块中已配置/治理的全部 `dict_code` 都可以被 Org 的 DICT 扩展字段引用（不再被 Org 代码内枚举/预设卡死）。  
@@ -25,10 +27,10 @@
 ### 2.1 目标（冻结）
 
 1. **DICT 全量引用**：Org 的 DICT 扩展字段在启用时可以引用任意 `dict_code`（来源为字典模块 registry；`as_of` 语义与 `DEV-PLAN-105B` 对齐），并在启用/写入/查询三个环节保持一致的 fail-closed 校验。
-2. **自定义 PLAIN 字段（不新增表）**：租户管理员可通过“启用字段配置（field-config）”直接引入自定义 PLAIN 字段（最小闭环：`value_type=text`），复用既有预配置槽位（`ext_str_XX`），不新增 DB 表；最终在详情页可见、可写（按 capabilities 决定）。
+2. **自定义 PLAIN 字段（不新增表）**：租户管理员可通过“启用字段配置（field-config）”直接引入自定义 PLAIN 字段（后续由 `DEV-PLAN-110` 扩展为 `value_type=text/int/uuid/bool/date/numeric` 可选），复用既有预配置槽位，不新增 DB 表；最终在详情页可见、可写（按 capabilities 决定）。
 3. **契约单点**：
    - dict_code 的“存在性/可用性”以字典模块 registry 为唯一事实源（SSOT：`DEV-PLAN-105B`），Org 不再复制 dict_code 枚举。
-   - 扩展字段的“字段定义（field_key/value_type/data_source_type/label）”对**内置字段**仍以 `field-definitions` 为 SSOT；对**自定义 PLAIN 字段**，定义由“field-config 行本身”隐式承载（仅 PLAIN(text)，并受严格命名/冲突约束）。
+   - 扩展字段的“字段定义（field_key/value_type/data_source_type/label）”对**内置字段**仍以 `field-definitions` 为 SSOT；对**自定义 PLAIN 字段**，定义由“field-config 行本身”隐式承载（数据源固定 PLAIN，value_type 由 110 扩展为可选枚举，并受严格命名/冲突约束）。
 4. **No Legacy**：不保留“旧的静态枚举/registry”作为长期兜底；迁移与回滚只允许走环境级保护（对齐 `DEV-PLAN-004M1`）。
 
 ### 2.2 非目标（Stopline）
@@ -81,7 +83,7 @@
    - `x_` 前缀为自定义字段保留命名空间；系统内置字段 **不得** 使用 `x_` 前缀。
 3. **enable field-config 对自定义字段的特殊口径（冻结）**：
    - 当 `field_key` 以 `x_` 前缀开头时，视为“自定义 PLAIN 字段”，允许 **不出现在** `field-definitions` 列表中；
-   - 该路径下 `data_source_type` 固定为 `PLAIN`、`value_type` 固定为 `text`、`data_source_config` 必须为 `{}`（缺失由服务端补齐为 `{}`）。
+   - 该路径下 `data_source_type` 固定为 `PLAIN`、`data_source_config` 必须为 `{}`（缺失由服务端补齐为 `{}`）；`value_type` 在本计划最初冻结为 `text`，后续由 `DEV-PLAN-110` 扩展为 `text/int/uuid/bool/date/numeric`。
 4. **label 策略（冻结）**：
    - 内置字段继续返回 `label_i18n_key`；
    - 自定义字段不提供 i18n key：服务端在 `details.ext_fields[]` 中返回 `label`（推荐直接使用 `field_key` 作为 label，或按固定规则从 `field_key` 推导），并将 `label_i18n_key` 置空；
@@ -89,7 +91,7 @@
 
 ### 6.2 约束与 fail-closed
 
-1. 槽位限制：自定义 PLAIN 字段启用后仍占用既有 `ext_str_XX` 槽位；槽位耗尽返回既有稳定错误码（SSOT：`DEV-PLAN-100B/100D`）。
+1. 槽位限制：自定义 PLAIN 字段启用后占用与 `value_type` 对应的既有 `ext_*` 槽位（本计划初期为 `ext_str_XX`；110 扩展到多类型）；槽位耗尽返回既有稳定错误码（SSOT：`DEV-PLAN-100B/100D/107`）。
 2. 字段 key 治理：禁止任意注入“看似字段但不可写/不可查”的僵尸定义；自定义字段必须能在 UI 中被发现、被启用/停用并完成至少一次端到端写入与回显（对齐 `AGENTS.md` §3.8）。
 
 ## 7. 需要变更的历史契约文档（清单）
@@ -128,6 +130,6 @@
    - 写入 DICT 值时，dict_code 不存在/已停用/`as_of` 不可用一律 fail-closed，错误码稳定；
    - options/label 快照生成不依赖代码内静态 registry（对齐 No Legacy）。
 2. 自定义 PLAIN 字段：
-   - 管理员可创建自定义 PLAIN(text) 字段定义，并在字段配置页启用；
+   - 管理员可创建自定义 PLAIN 字段定义（`value_type` 口径对齐 `DEV-PLAN-110`），并在字段配置页启用；
    - 详情页在 enabled window 内可见该字段，且在 capabilities 允许时可写入并回显；
    - 槽位耗尽/字段 key 冲突/非法输入均有稳定错误码且可排障。
