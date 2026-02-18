@@ -209,7 +209,7 @@ graph TD
 > - `PLAIN`：无 options，`data_source_config` 必须为 `{}`（可缺省，由服务端补齐为空对象）。  
 > - `DICT`：`data_source_config={dict_code}` 由租户管理员在启用字段时选择并提交；dict_code 的存在性/可用性以字典模块 dict registry 为 SSOT，且以 `enabled_on` 作为 `as_of` 校验（fail-closed；对齐 `DEV-PLAN-105B/106`）。
 > - `ENTITY`：`data_source_config` 由租户管理员在启用字段时选择并提交，且必须命中 `field-definitions.data_source_config_options`；禁止任意输入/透传。
-> - 自定义 PLAIN（`x_`）：允许 `field_key` 不在 `field-definitions` 中；该路径下 `value_type='text'`、`data_source_type='PLAIN'`（固定），且 `data_source_config` 必须为 `{}`。
+> - 自定义 PLAIN（`x_`）：允许 `field_key` 不在 `field-definitions` 中；该路径下 `data_source_type='PLAIN'`（固定），`value_type` 口径已由 `DEV-PLAN-110` 扩展为可选 `text/int/uuid/bool/date/numeric`，且 `data_source_config` 必须为 `{}`。
 
 ### 5.4 Mutation capabilities 扩展字段口径（承接 DEV-PLAN-083）
 

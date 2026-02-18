@@ -27,6 +27,7 @@ import {
   listOrgUnitFieldConfigEnableCandidates,
   listOrgUnitFieldConfigs,
   listOrgUnitFieldDefinitions,
+  type OrgUnitExtValueType,
   type OrgUnitFieldDefinition,
   type OrgUnitFieldEnableCandidateField,
   type OrgUnitTenantFieldConfig
@@ -59,6 +60,8 @@ interface FieldConfigRow {
 interface EnableFormState {
   mode: 'builtin' | 'dict' | 'custom'
   fieldKey: string
+  customValueType: OrgUnitExtValueType
+  customDisplayLabel: string
   enabledOn: string
   dataSourceConfigOption: string
   dictDisplayLabel: string
@@ -262,6 +265,8 @@ function resolveDefinitionLabel(t: ReturnType<typeof useAppPreferences>['t'], de
   return def.field_key
 }
 
+const customPlainValueTypeFallback: OrgUnitExtValueType[] = ['text', 'int', 'uuid', 'bool', 'date', 'numeric']
+
 export function OrgUnitFieldConfigsPage() {
   const queryClient = useQueryClient()
   const { t, tenantId } = useAppPreferences()
@@ -280,6 +285,8 @@ export function OrgUnitFieldConfigsPage() {
   const [enableForm, setEnableForm] = useState<EnableFormState>(() => ({
     mode: 'builtin',
     fieldKey: '',
+    customValueType: 'text',
+    customDisplayLabel: '',
     enabledOn: todayUtc,
     dataSourceConfigOption: '',
     dictDisplayLabel: ''
@@ -426,6 +433,7 @@ export function OrgUnitFieldConfigsPage() {
       field_key: string
       enabled_on: string
       request_code: string
+      value_type?: OrgUnitExtValueType
       data_source_config?: Record<string, unknown>
       label?: string
     }) => enableOrgUnitFieldConfig(req),
@@ -595,6 +603,8 @@ export function OrgUnitFieldConfigsPage() {
     setEnableForm({
       mode: 'builtin',
       fieldKey: '',
+      customValueType: 'text',
+      customDisplayLabel: '',
       enabledOn: maxDay(todayUtc, asOf),
       dataSourceConfigOption: '',
       dictDisplayLabel: ''
@@ -616,7 +626,7 @@ export function OrgUnitFieldConfigsPage() {
   }, [enableForm.fieldKey, fieldDefinitionByKey])
 
   const enableCandidatesQuery = useQuery({
-    enabled: enableOpen && enableForm.mode === 'dict',
+    enabled: enableOpen && (enableForm.mode === 'dict' || enableForm.mode === 'custom'),
     queryKey: ['org-field-configs', 'enable-candidates', enableForm.enabledOn],
     queryFn: () => listOrgUnitFieldConfigEnableCandidates({ enabledOn: enableForm.enabledOn }),
     staleTime: 10_000
@@ -625,6 +635,21 @@ export function OrgUnitFieldConfigsPage() {
   const dictFieldCandidatesFiltered = useMemo(() => {
     return dictFieldCandidates.filter((f) => !existingFieldKeys.has(f.field_key))
   }, [dictFieldCandidates, existingFieldKeys])
+  const customValueTypeOptions = useMemo<OrgUnitExtValueType[]>(() => {
+    const hinted = enableCandidatesQuery.data?.plain_custom_hint?.value_types ?? []
+    const normalized = hinted.map((item) => String(item).trim().toLowerCase()).filter((item): item is OrgUnitExtValueType => customPlainValueTypeFallback.includes(item as OrgUnitExtValueType))
+    if (normalized.length === 0) {
+      return customPlainValueTypeFallback
+    }
+    return Array.from(new Set(normalized))
+  }, [enableCandidatesQuery.data])
+  const customValueTypeDefault = useMemo<OrgUnitExtValueType>(() => {
+    const hintedDefault = String(enableCandidatesQuery.data?.plain_custom_hint?.default_value_type ?? '').trim().toLowerCase()
+    if (customValueTypeOptions.includes(hintedDefault as OrgUnitExtValueType)) {
+      return hintedDefault as OrgUnitExtValueType
+    }
+    return customValueTypeOptions[0] ?? 'text'
+  }, [customValueTypeOptions, enableCandidatesQuery.data])
 
   async function submitEnable() {
     setEnableError('')
@@ -646,6 +671,10 @@ export function OrgUnitFieldConfigsPage() {
     if (enableForm.mode === 'custom') {
       if (!/^x_[a-z0-9_]{1,60}$/.test(fieldKey)) {
         setEnableError(t('org_field_configs_error_custom_field_key_invalid'))
+        return
+      }
+      if (!customValueTypeOptions.includes(enableForm.customValueType)) {
+        setEnableError(t('org_field_configs_error_required'))
         return
       }
     }
@@ -681,11 +710,17 @@ export function OrgUnitFieldConfigsPage() {
     }
 
     try {
-      const label = enableForm.mode === 'dict' ? enableForm.dictDisplayLabel.trim() : ''
+      const label =
+        enableForm.mode === 'dict'
+          ? enableForm.dictDisplayLabel.trim()
+          : enableForm.mode === 'custom'
+          ? enableForm.customDisplayLabel.trim()
+          : ''
       await enableMutation.mutateAsync({
         field_key: fieldKey,
         enabled_on: enabledOn,
         request_code: enableRequestCode,
+        value_type: enableForm.mode === 'custom' ? enableForm.customValueType : undefined,
         data_source_config: dataSourceConfig,
         label: label.length > 0 ? label : undefined
       })
@@ -846,6 +881,8 @@ export function OrgUnitFieldConfigsPage() {
                     ...previous,
                     mode: nextMode,
                     fieldKey: '',
+                    customValueType: customValueTypeDefault,
+                    customDisplayLabel: '',
                     dataSourceConfigOption: '',
                     dictDisplayLabel: ''
                   }))
@@ -876,6 +913,7 @@ export function OrgUnitFieldConfigsPage() {
                     setEnableForm((previous) => ({
                       ...previous,
                       fieldKey: nextFieldKey,
+                      customDisplayLabel: '',
                       dataSourceConfigOption: nextOption,
                       dictDisplayLabel: ''
                     }))
@@ -901,6 +939,7 @@ export function OrgUnitFieldConfigsPage() {
                     setEnableForm((previous) => ({
                       ...previous,
                       fieldKey: nextFieldKey,
+                      customDisplayLabel: '',
                       dataSourceConfigOption: '',
                       dictDisplayLabel: ''
                     }))
@@ -935,6 +974,37 @@ export function OrgUnitFieldConfigsPage() {
                 helperText={t('org_field_configs_form_custom_field_key_helper')}
               />
             )}
+            {enableForm.mode === 'custom' ? (
+              <FormControl>
+                <InputLabel id='org-custom-value-type-select-label'>{t('org_field_configs_form_custom_value_type')}</InputLabel>
+                <Select
+                  label={t('org_field_configs_form_custom_value_type')}
+                  labelId='org-custom-value-type-select-label'
+                  onChange={(event) => {
+                    setEnableRequestCode(newRequestCode())
+                    setEnableForm((previous) => ({ ...previous, customValueType: String(event.target.value) as OrgUnitExtValueType }))
+                  }}
+                  value={enableForm.customValueType}
+                >
+                  {customValueTypeOptions.map((valueType) => (
+                    <MenuItem key={valueType} value={valueType}>
+                      {valueType}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : null}
+            {enableForm.mode === 'custom' ? (
+              <TextField
+                label={t('org_field_configs_form_custom_field_label')}
+                onChange={(event) => {
+                  setEnableRequestCode(newRequestCode())
+                  setEnableForm((previous) => ({ ...previous, customDisplayLabel: event.target.value }))
+                }}
+                value={enableForm.customDisplayLabel}
+                helperText={t('org_field_configs_form_custom_field_label_helper')}
+              />
+            ) : null}
             <TextField
               InputLabelProps={{ shrink: true }}
               label={t('org_field_configs_form_enabled_on')}

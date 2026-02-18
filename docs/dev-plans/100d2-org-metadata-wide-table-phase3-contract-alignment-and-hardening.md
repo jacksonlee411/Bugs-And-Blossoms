@@ -48,7 +48,7 @@
      - DICT（对齐 `DEV-PLAN-106A`）：必须使用 `field_key=d_<dict_code>`；服务端从 field_key 推导 `dict_code`，并按 dict registry 校验其在 `enabled_on` 下可用（fail-closed）。客户端若显式提交 `data_source_config`，也必须与推导结果一致（不一致即拒绝），避免“双写同一事实”漂移。
      - ENTITY：必须命中 `field-definitions.data_source_config_options`（枚举化候选）。
    - `PLAIN` 允许缺省 `data_source_config`，由服务端补齐为 `{}`。
-   - 自定义 PLAIN：当 `field_key` 满足 `x_[a-z0-9_]{1,60}` 时，允许不在 `field-definitions` 中；该路径下 `value_type='text'`、`data_source_type='PLAIN'`（固定）。
+   - 自定义 PLAIN：当 `field_key` 满足 `x_[a-z0-9_]{1,60}` 时，允许不在 `field-definitions` 中；该路径下 `data_source_type='PLAIN'`（固定），`value_type` 由请求显式指定，允许 `text/int/uuid/bool/date/numeric`。
    - 启用后映射不可变（包含 `data_source_config`），冲突/重试遵循 `request_code` 幂等语义（SSOT：`DEV-PLAN-100A/100D`）。
 3. **details ext_fields**
    - `ext_fields[]` 必须等于 `as_of` 下 enabled 字段全集（即使值为空也要返回该字段；稳定排序）。
@@ -74,7 +74,7 @@
 3. [x] **对齐 enable：允许在启用时选择并提交 data_source_config**
    - 请求体：支持 `data_source_config` 字段；PLAIN 可缺省。
    - 校验：DICT 走 dict registry（`enabled_on` 视图）校验；ENTITY 必须命中 `field-definitions.data_source_config_options`（canonical JSON 后比较）。
-   - 补充：支持自定义 `x_` 字段启用（仅 PLAIN(text)），且禁止与内置字段同名。
+   - 补充：支持自定义 `x_` 字段启用（PLAIN 直值；`value_type` 可选 `text/int/uuid/bool/date/numeric`），且禁止与内置字段同名。
    - 错误码：对齐 `DEV-PLAN-100D`（`ORG_FIELD_CONFIG_INVALID_DATA_SOURCE_CONFIG` 等），并补齐失败路径测试。
 
 4. [x] **对齐 details：停用后隐藏 + enabled 字段全集**

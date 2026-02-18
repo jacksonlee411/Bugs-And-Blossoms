@@ -31,5 +31,14 @@ describe('normalizePlainExtDraft', () => {
     const result = normalizePlainExtDraft({ valueType: 'date', draft: '2026-2-1', mode: 'omit_empty' })
     expect(result).toEqual({ normalized: null, errorCode: 'org_ext_plain_date_invalid' })
   })
-})
 
+  it('numeric: valid decimal', () => {
+    const result = normalizePlainExtDraft({ valueType: 'numeric', draft: ' -12.50 ', mode: 'omit_empty' })
+    expect(result).toEqual({ normalized: -12.5, errorCode: null })
+  })
+
+  it('numeric: invalid -> error', () => {
+    const result = normalizePlainExtDraft({ valueType: 'numeric', draft: '1.2.3', mode: 'omit_empty' })
+    expect(result).toEqual({ normalized: null, errorCode: 'org_ext_plain_numeric_invalid' })
+  })
+})
