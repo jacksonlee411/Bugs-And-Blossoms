@@ -41,28 +41,22 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format as formatDate } from 'date-fns'
 import {
-  correctOrgUnit,
-  disableOrgUnit,
-  enableOrgUnit,
-  getOrgUnitAppendCapabilities,
   getOrgUnitFieldOptions,
   getOrgUnitDetails,
-  getOrgUnitMutationCapabilities,
+  getOrgUnitWriteCapabilities,
   listOrgUnitAudit,
   listOrgUnitVersions,
-  moveOrgUnit,
-  renameOrgUnit,
   rescindOrgUnit,
   rescindOrgUnitRecord,
-  setOrgUnitBusinessUnit
+  writeOrgUnit,
+  type OrgUnitWriteIntent
 } from '../../api/orgUnits'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { PageHeader } from '../../components/PageHeader'
 import { isMessageKey, type MessageKey } from '../../i18n/messages'
 import { normalizePlainExtDraft } from './orgUnitPlainExtValidation'
-import { buildAppendPayload } from './orgUnitAppendIntent'
 import { resolveOrgUnitEffectiveDate } from './orgUnitVersionSelection'
-import { buildCorrectPatch } from './orgUnitCorrectionIntent'
+import { buildOrgUnitWritePatch } from './orgUnitWritePatch'
 import {
   planRecordEffectiveDate,
   validatePlannedEffectiveDate,
@@ -72,29 +66,32 @@ import {
 
 type DetailTab = 'profile' | 'audit'
 type OrgStatus = 'active' | 'inactive'
-type OrgAppendActionType = 'rename' | 'move' | 'set_business_unit' | 'enable' | 'disable'
-type OrgActionType = OrgAppendActionType | 'correct' | 'rescind_record' | 'rescind_org'
-
-type OrgUnitAppendEventType = 'RENAME' | 'MOVE' | 'SET_BUSINESS_UNIT' | 'ENABLE' | 'DISABLE'
+type OrgUnitWriteActionIntent = Exclude<OrgUnitWriteIntent, 'create_org'>
+type OrgActionType = OrgUnitWriteActionIntent | 'delete'
 
 const detailTabs: readonly DetailTab[] = ['profile', 'audit']
 
 interface OrgActionState {
   type: OrgActionType
   targetCode: string | null
-  recordWizardMode?: RecordWizardMode | null
 }
 
 interface OrgActionForm {
   orgCode: string
   name: string
   parentOrgCode: string
+  status: OrgStatus
   managerPernr: string
   effectiveDate: string
   correctedEffectiveDate: string
   isBusinessUnit: boolean
   extValues: Record<string, unknown>
   originalExtValues: Record<string, unknown>
+  originalName: string
+  originalParentOrgCode: string
+  originalStatus: string
+  originalIsBusinessUnit: boolean
+  originalManagerPernr: string
   extDisplayValues: Record<string, string>
   requestCode: string
   reason: string
@@ -155,27 +152,6 @@ function trimToUndefined(value: string): string | undefined {
   return normalized.length > 0 ? normalized : undefined
 }
 
-function appendEventTypeForAction(type: OrgActionType): OrgUnitAppendEventType | null {
-  switch (type) {
-    case 'rename':
-      return 'RENAME'
-    case 'move':
-      return 'MOVE'
-    case 'set_business_unit':
-      return 'SET_BUSINESS_UNIT'
-    case 'enable':
-      return 'ENABLE'
-    case 'disable':
-      return 'DISABLE'
-    default:
-      return null
-  }
-}
-
-function isAppendActionType(type: OrgActionType): type is OrgAppendActionType {
-  return appendEventTypeForAction(type) !== null
-}
-
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message
@@ -195,12 +171,18 @@ function emptyActionForm(effectiveDate: string): OrgActionForm {
     orgCode: '',
     name: '',
     parentOrgCode: '',
+    status: 'active',
     managerPernr: '',
     effectiveDate,
     correctedEffectiveDate: '',
     isBusinessUnit: false,
     extValues: {},
     originalExtValues: {},
+    originalName: '',
+    originalParentOrgCode: '',
+    originalStatus: '',
+    originalIsBusinessUnit: false,
+    originalManagerPernr: '',
     extDisplayValues: {},
     requestCode: newRequestCode(),
     reason: ''
@@ -209,25 +191,40 @@ function emptyActionForm(effectiveDate: string): OrgActionForm {
 
 function actionLabel(type: OrgActionType, t: (key: MessageKey) => string): string {
   switch (type) {
-    case 'rename':
-      return t('org_action_rename')
-    case 'move':
-      return t('org_action_move')
-    case 'set_business_unit':
-      return t('org_action_set_business_unit')
-    case 'enable':
-      return t('org_action_enable')
-    case 'disable':
-      return t('org_action_disable')
+    case 'add_version':
+      return t('org_action_add_version')
+    case 'insert_version':
+      return t('org_action_insert_version')
     case 'correct':
       return t('org_action_correct')
-    case 'rescind_record':
-      return t('org_action_rescind_record')
-    case 'rescind_org':
-      return t('org_action_rescind_org')
+    case 'delete':
+      return t('org_action_delete')
     default:
       return ''
   }
+}
+
+function isWriteActionType(type: OrgActionType): type is OrgUnitWriteActionIntent {
+  switch (type) {
+    case 'add_version':
+    case 'insert_version':
+    case 'correct':
+      return true
+    case 'delete':
+    default:
+      return false
+  }
+}
+
+function buildDeleteActionLabel(isDeleteOrg: boolean, t: (key: MessageKey) => string): string {
+  if (isDeleteOrg) {
+    return t('org_action_rescind_org')
+  }
+  return t('org_action_rescind_record')
+}
+
+function toKernelStatus(status: OrgStatus): 'active' | 'disabled' {
+  return status === 'active' ? 'active' : 'disabled'
 }
 
 interface DiffRow {
@@ -487,25 +484,12 @@ export function OrgUnitDetailsPage() {
 
   const [actionState, setActionState] = useState<OrgActionState | null>(null)
   const [actionForm, setActionForm] = useState<OrgActionForm>(() => emptyActionForm(asOf))
-  const [actionAppendType, setActionAppendType] = useState<OrgAppendActionType>('rename')
   const [recordDatePlan, setRecordDatePlan] = useState<RecordDatePlan | null>(null)
   const [actionErrorMessage, setActionErrorMessage] = useState('')
   const [toast, setToast] = useState<{ message: string; severity: 'success' | 'warning' | 'error' } | null>(null)
   const [auditLimitByOrg, setAuditLimitByOrg] = useState<Record<string, number>>({})
   const auditLimit = auditLimitByOrg[orgCodeValue] ?? 20
   const actionType = actionState?.type ?? null
-  const activeAppendType = useMemo<OrgAppendActionType | null>(() => {
-    if (!actionType) {
-      return null
-    }
-    if (actionType === 'correct' || actionType === 'rescind_record' || actionType === 'rescind_org') {
-      return null
-    }
-    if (actionState?.recordWizardMode) {
-      return actionAppendType
-    }
-    return actionType
-  }, [actionAppendType, actionState?.recordWizardMode, actionType])
 
   const updateSearch = useCallback(
     (options: {
@@ -584,36 +568,49 @@ export function OrgUnitDetailsPage() {
     queryFn: () => getOrgUnitDetails({ orgCode: orgCodeValue, asOf: effectiveDate, includeDisabled })
   })
 
-  const mutationCapabilitiesQuery = useQuery({
-    enabled: orgCodeValue.length > 0,
-    queryKey: ['org-units', 'mutation-capabilities', orgCodeValue, effectiveDate],
-    queryFn: () => getOrgUnitMutationCapabilities({ orgCode: orgCodeValue, effectiveDate }),
-    staleTime: 30_000
-  })
+  const activeWriteIntent = useMemo<OrgUnitWriteActionIntent | null>(() => {
+    if (!actionType) {
+      return null
+    }
+    return isWriteActionType(actionType) ? actionType : null
+  }, [actionType])
 
-  const appendCapabilitiesForSelectedQuery = useQuery({
-    enabled: orgCodeValue.length > 0,
-    queryKey: ['org-units', 'append-capabilities', orgCodeValue, effectiveDate],
-    queryFn: () => getOrgUnitAppendCapabilities({ orgCode: orgCodeValue, effectiveDate }),
-    staleTime: 30_000
-  })
-
-  const actionAppendEffectiveDate = useMemo(() => {
-    if (!activeAppendType) {
+  const actionWriteEffectiveDate = useMemo(() => {
+    if (!activeWriteIntent) {
       return effectiveDate
+    }
+    if (activeWriteIntent === 'correct') {
+      const corrected = actionForm.correctedEffectiveDate.trim()
+      if (isISODate(corrected)) {
+        return corrected
+      }
     }
     const input = actionForm.effectiveDate.trim()
     return input.length > 0 ? input : effectiveDate
-  }, [actionForm.effectiveDate, activeAppendType, effectiveDate])
+  }, [actionForm.correctedEffectiveDate, actionForm.effectiveDate, activeWriteIntent, effectiveDate])
 
-  const appendCapabilitiesForActionQuery = useQuery({
+  const writeCapabilitiesQuery = useQuery({
     enabled:
       orgCodeValue.length > 0 &&
       canWrite &&
-      activeAppendType !== null &&
-      isISODate(actionAppendEffectiveDate),
-    queryKey: ['org-units', 'append-capabilities', orgCodeValue, actionAppendEffectiveDate],
-    queryFn: () => getOrgUnitAppendCapabilities({ orgCode: orgCodeValue, effectiveDate: actionAppendEffectiveDate }),
+      activeWriteIntent !== null &&
+      isISODate(actionWriteEffectiveDate) &&
+      (activeWriteIntent !== 'correct' || isISODate(actionForm.effectiveDate)),
+    queryKey: [
+      'org-units',
+      'write-capabilities',
+      activeWriteIntent,
+      orgCodeValue,
+      actionWriteEffectiveDate,
+      activeWriteIntent === 'correct' ? actionForm.effectiveDate : ''
+    ],
+    queryFn: () =>
+      getOrgUnitWriteCapabilities({
+        intent: activeWriteIntent ?? 'correct',
+        orgCode: orgCodeValue,
+        effectiveDate: actionWriteEffectiveDate,
+        targetEffectiveDate: activeWriteIntent === 'correct' ? actionForm.effectiveDate : undefined
+      }),
     staleTime: 30_000
   })
 
@@ -626,40 +623,6 @@ export function OrgUnitDetailsPage() {
   const selectedVersionEventType = useMemo(() => {
     return versionItems.find((version) => version.effective_date === effectiveDate)?.event_type?.trim() || '-'
   }, [effectiveDate, versionItems])
-
-  const correctEventCapability = mutationCapabilitiesQuery.data?.capabilities.correct_event
-  const appendActionEventType = useMemo(
-    () => (activeAppendType ? appendEventTypeForAction(activeAppendType) : null),
-    [activeAppendType]
-  )
-  const appendEventCapability = useMemo(() => {
-    if (!appendActionEventType) {
-      return null
-    }
-    return appendCapabilitiesForActionQuery.data?.capabilities.event_update?.[appendActionEventType] ?? null
-  }, [appendActionEventType, appendCapabilitiesForActionQuery.data?.capabilities.event_update])
-  const appendAllowedFieldSet = useMemo(
-    () => new Set(appendEventCapability?.allowed_fields ?? []),
-    [appendEventCapability?.allowed_fields]
-  )
-  const appendDenyReasons = useMemo(() => appendEventCapability?.deny_reasons ?? [], [appendEventCapability?.deny_reasons])
-  const isAppendActionDisabled = useMemo(() => {
-    if (!appendActionEventType) {
-      return false
-    }
-    if (appendCapabilitiesForActionQuery.isLoading || appendCapabilitiesForActionQuery.isError) {
-      return true
-    }
-    if (!appendEventCapability?.enabled) {
-      return true
-    }
-    return false
-  }, [
-    appendActionEventType,
-    appendCapabilitiesForActionQuery.isError,
-    appendCapabilitiesForActionQuery.isLoading,
-    appendEventCapability?.enabled
-  ])
 
   const selectedAuditEvent = useMemo(() => {
     const events = auditQuery.data?.events ?? []
@@ -701,30 +664,44 @@ export function OrgUnitDetailsPage() {
   }, [selectedAuditEvent])
 
   const actionExtFields = useMemo(() => detailQuery.data?.ext_fields ?? [], [detailQuery.data?.ext_fields])
+  const writeCapability = writeCapabilitiesQuery.data
+  const writeAllowedFieldSet = useMemo(() => new Set(writeCapability?.allowed_fields ?? []), [writeCapability?.allowed_fields])
+  const writeDenyReasons = useMemo(() => writeCapability?.deny_reasons ?? [], [writeCapability?.deny_reasons])
+  const isWriteAction = activeWriteIntent !== null
+  const isWriteActionDisabled = useMemo(() => {
+    if (!isWriteAction) {
+      return false
+    }
+    if (writeCapabilitiesQuery.isLoading || writeCapabilitiesQuery.isError) {
+      return true
+    }
+    if (!writeCapability?.enabled) {
+      return true
+    }
+    return false
+  }, [isWriteAction, writeCapabilitiesQuery.isError, writeCapabilitiesQuery.isLoading, writeCapability?.enabled])
+
+  const isWriteFieldEditable = useCallback(
+    (fieldKey: string): boolean => {
+      if (!isWriteAction) {
+        return true
+      }
+      if (isWriteActionDisabled) {
+        return false
+      }
+      return writeAllowedFieldSet.has(fieldKey)
+    },
+    [isWriteAction, isWriteActionDisabled, writeAllowedFieldSet]
+  )
+
   const actionPlainExtErrors = useMemo(() => {
-    if (!actionType) {
+    if (!isWriteAction) {
       return {}
     }
-    const isCorrectAction = actionType === 'correct'
-    if (!isCorrectAction && !appendActionEventType) {
+    if (isWriteActionDisabled) {
       return {}
     }
-    if (isCorrectAction) {
-      if (mutationCapabilitiesQuery.isLoading || mutationCapabilitiesQuery.isError || !correctEventCapability?.enabled) {
-        return {}
-      }
-      const correctedEffectiveDateInput = actionForm.correctedEffectiveDate.trim()
-      const inEffectiveDateCorrectionMode =
-        correctedEffectiveDateInput.length > 0 && correctedEffectiveDateInput !== actionForm.effectiveDate.trim()
-      if (inEffectiveDateCorrectionMode) {
-        return {}
-      }
-    } else if (isAppendActionDisabled) {
-      return {}
-    }
-    const mode = actionType === 'correct' ? 'null_empty' : 'null_empty'
     const errors: Record<string, string> = {}
-    const correctAllowedFieldSet = new Set(correctEventCapability?.allowed_fields ?? [])
     actionExtFields.forEach((field) => {
       if (field.data_source_type !== 'PLAIN') {
         return
@@ -736,12 +713,11 @@ export function OrgUnitDetailsPage() {
       if (fieldKey.length === 0) {
         return
       }
-      const editable = isCorrectAction ? correctAllowedFieldSet.has(fieldKey) : appendAllowedFieldSet.has(fieldKey)
-      if (!editable) {
+      if (!writeAllowedFieldSet.has(fieldKey)) {
         return
       }
       const draft = actionForm.extDisplayValues[fieldKey] ?? ''
-      const result = normalizePlainExtDraft({ valueType: field.value_type, draft, mode })
+      const result = normalizePlainExtDraft({ valueType: field.value_type, draft, mode: 'null_empty' })
       if (result.errorCode) {
         errors[fieldKey] = result.errorCode
       }
@@ -749,120 +725,104 @@ export function OrgUnitDetailsPage() {
     return errors
   }, [
     actionExtFields,
-    actionForm.correctedEffectiveDate,
-    actionForm.effectiveDate,
     actionForm.extDisplayValues,
-    actionType,
-    appendActionEventType,
-    appendAllowedFieldSet,
-    correctEventCapability?.allowed_fields,
-    correctEventCapability?.enabled,
-    isAppendActionDisabled,
-    mutationCapabilitiesQuery.isError,
-    mutationCapabilitiesQuery.isLoading
+    isWriteAction,
+    isWriteActionDisabled,
+    writeAllowedFieldSet
   ])
   const hasActionPlainExtErrors = useMemo(() => Object.keys(actionPlainExtErrors).length > 0, [actionPlainExtErrors])
 
-  const correctPatchPreview = useMemo(() => {
-    if (actionType !== 'correct') {
+  const writePatchPreview = useMemo(() => {
+    if (!isWriteAction) {
       return null
     }
-    if (mutationCapabilitiesQuery.isError || !correctEventCapability) {
+    if (writeCapabilitiesQuery.isError || !writeCapability) {
       return null
     }
 
-    const correctedEffectiveDateInput = actionForm.correctedEffectiveDate.trim()
-    const inEffectiveDateCorrectionMode =
-      correctedEffectiveDateInput.length > 0 && correctedEffectiveDateInput !== actionForm.effectiveDate.trim()
-    const correctAllowedFieldSet = new Set(correctEventCapability.allowed_fields ?? [])
-    const effectiveDateValue = actionForm.effectiveDate.trim() || effectiveDate
     const normalizedPlainExtValues: Record<string, unknown> = {}
-    if (!inEffectiveDateCorrectionMode) {
-      for (const field of actionExtFields) {
-        if (field.data_source_type !== 'PLAIN') {
-          continue
-        }
-        if (field.value_type === 'bool') {
-          continue
-        }
-        const fieldKey = field.field_key?.trim() ?? ''
-        if (fieldKey.length === 0) {
-          continue
-        }
-        if (!correctAllowedFieldSet.has(fieldKey)) {
-          continue
-        }
-        const draft = actionForm.extDisplayValues[fieldKey] ?? ''
-        const result = normalizePlainExtDraft({ valueType: field.value_type, draft, mode: 'null_empty' })
-        if (result.errorCode) {
-          return null
-        }
-        if (typeof result.normalized !== 'undefined') {
-          normalizedPlainExtValues[fieldKey] = result.normalized
-        }
+    for (const field of actionExtFields) {
+      if (field.data_source_type !== 'PLAIN') {
+        continue
+      }
+      if (field.value_type === 'bool') {
+        continue
+      }
+      const fieldKey = field.field_key?.trim() ?? ''
+      if (fieldKey.length === 0) {
+        continue
+      }
+      if (!writeAllowedFieldSet.has(fieldKey)) {
+        continue
+      }
+      const draft = actionForm.extDisplayValues[fieldKey] ?? ''
+      const result = normalizePlainExtDraft({ valueType: field.value_type, draft, mode: 'null_empty' })
+      if (result.errorCode) {
+        return null
+      }
+      if (typeof result.normalized !== 'undefined') {
+        normalizedPlainExtValues[fieldKey] = result.normalized
       }
     }
 
     const original = {
-      name: detailQuery.data?.org_unit.name?.trim() ?? '',
-      parent_org_code: detailQuery.data?.org_unit.parent_org_code?.trim() ?? '',
-      manager_pernr: detailQuery.data?.org_unit.manager_pernr?.trim() ?? '',
-      is_business_unit: detailQuery.data?.org_unit.is_business_unit ?? false,
-      effective_date: effectiveDateValue,
+      name: actionForm.originalName,
+      parent_org_code: actionForm.originalParentOrgCode,
+      status: actionForm.originalStatus,
+      manager_pernr: actionForm.originalManagerPernr,
+      is_business_unit: actionForm.originalIsBusinessUnit,
       ext: actionForm.originalExtValues
     }
     const next = {
-      name: actionForm.name.trim(),
-      parent_org_code: actionForm.parentOrgCode.trim(),
+      name: actionForm.name.trim() || undefined,
+      parent_org_code: trimToUndefined(actionForm.parentOrgCode),
+      status: toKernelStatus(actionForm.status),
       manager_pernr: actionForm.managerPernr.trim(),
       is_business_unit: actionForm.isBusinessUnit,
-      effective_date: effectiveDateValue,
       ext: { ...actionForm.extValues, ...normalizedPlainExtValues }
     }
 
-    return buildCorrectPatch({
-      capability: correctEventCapability,
-      effectiveDate: effectiveDateValue,
-      correctedEffectiveDate: actionForm.correctedEffectiveDate,
+    return buildOrgUnitWritePatch({
+      capability: writeCapability,
       original,
       next
     })
   }, [
-    actionForm.correctedEffectiveDate,
-    actionForm.effectiveDate,
     actionForm.extValues,
     actionForm.isBusinessUnit,
     actionForm.managerPernr,
     actionForm.name,
     actionForm.originalExtValues,
+    actionForm.originalIsBusinessUnit,
+    actionForm.originalManagerPernr,
+    actionForm.originalName,
+    actionForm.originalParentOrgCode,
+    actionForm.originalStatus,
     actionForm.parentOrgCode,
+    actionForm.status,
     actionForm.extDisplayValues,
-    actionType,
-    correctEventCapability,
-    detailQuery.data,
-    effectiveDate,
     actionExtFields,
-    mutationCapabilitiesQuery.isError
+    isWriteAction,
+    writeAllowedFieldSet,
+    writeCapability,
+    writeCapabilitiesQuery.isError
   ])
 
-  const isCorrectPatchEmpty = useMemo(() => {
-    if (actionType !== 'correct') {
+  const isWritePatchEmpty = useMemo(() => {
+    if (!isWriteAction) {
       return false
     }
-    if (!correctPatchPreview) {
+    if (!writePatchPreview) {
       return true
     }
-    return Object.keys(correctPatchPreview).length === 0
-  }, [actionType, correctPatchPreview])
+    return Object.keys(writePatchPreview).length === 0
+  }, [isWriteAction, writePatchPreview])
 
-  const recordWizardMode = actionState?.recordWizardMode ?? null
+  const recordWizardMode: RecordWizardMode | null = actionType === 'add_version' ? 'add' : actionType === 'insert_version' ? 'insert' : null
   const isRecordWizard = recordWizardMode === 'add' || recordWizardMode === 'insert'
   const isCorrectAction = actionType === 'correct'
-  const isRescindOrgAction = actionType === 'rescind_org'
-  const isRescindRecordAction = actionType === 'rescind_record'
-  const isSetBusinessUnitAction = activeAppendType === 'set_business_unit'
-  const isRenameAction = activeAppendType === 'rename'
-  const isMoveAction = activeAppendType === 'move'
+  const isDeleteAction = actionType === 'delete'
+  const shouldDeleteOrg = versionItems.length <= 1
   const recordWizardValidation = useMemo(() => {
     if (!isRecordWizard) {
       return { ok: true } as const
@@ -934,8 +894,14 @@ export function OrgUnitDetailsPage() {
     form.orgCode = orgCodeValue
     form.name = details?.name ?? ''
     form.parentOrgCode = details?.parent_org_code ?? ''
+    form.status = parseOrgStatus(details?.status ?? '')
     form.managerPernr = details?.manager_pernr ?? ''
     form.isBusinessUnit = details?.is_business_unit ?? false
+    form.originalName = details?.name?.trim() ?? ''
+    form.originalParentOrgCode = details?.parent_org_code?.trim() ?? ''
+    form.originalStatus = toKernelStatus(parseOrgStatus(details?.status ?? ''))
+    form.originalIsBusinessUnit = details?.is_business_unit ?? false
+    form.originalManagerPernr = details?.manager_pernr?.trim() ?? ''
 
     const extValues: Record<string, unknown> = {}
     const originalExtValues: Record<string, unknown> = {}
@@ -965,81 +931,93 @@ export function OrgUnitDetailsPage() {
     form.extDisplayValues = extDisplayValues
 
     setActionErrorMessage('')
-    setActionAppendType('rename')
     setRecordDatePlan(plan)
     setActionForm(form)
     setActionState({
-      type: 'rename',
-      targetCode: orgCodeValue.length > 0 ? orgCodeValue : null,
-      recordWizardMode: mode
+      type: mode === 'add' ? 'add_version' : 'insert_version',
+      targetCode: orgCodeValue.length > 0 ? orgCodeValue : null
     })
   }
 
-  function openAction(type: OrgActionType) {
+  function openCorrectAction() {
     const details = detailQuery.data?.org_unit
     const extFields = detailQuery.data?.ext_fields ?? []
     const form = emptyActionForm(effectiveDate)
     form.orgCode = orgCodeValue
     form.name = details?.name ?? ''
     form.parentOrgCode = details?.parent_org_code ?? ''
+    form.status = parseOrgStatus(details?.status ?? '')
     form.managerPernr = details?.manager_pernr ?? ''
     form.isBusinessUnit = details?.is_business_unit ?? false
+    form.originalName = details?.name?.trim() ?? ''
+    form.originalParentOrgCode = details?.parent_org_code?.trim() ?? ''
+    form.originalStatus = toKernelStatus(parseOrgStatus(details?.status ?? ''))
+    form.originalIsBusinessUnit = details?.is_business_unit ?? false
+    form.originalManagerPernr = details?.manager_pernr?.trim() ?? ''
 
-    if (type === 'rescind_record') {
-      form.effectiveDate = effectiveDate
-    }
+    const extValues: Record<string, unknown> = {}
+    const originalExtValues: Record<string, unknown> = {}
+    const extDisplayValues: Record<string, string> = {}
 
-    if (type === 'correct' || appendEventTypeForAction(type) !== null) {
-      const extValues: Record<string, unknown> = {}
-      const originalExtValues: Record<string, unknown> = {}
-      const extDisplayValues: Record<string, string> = {}
+    extFields.forEach((field) => {
+      const key = field.field_key?.trim()
+      if (!key) {
+        return
+      }
+      const valueType = field.value_type
+      const normalizedValue = normalizeExtValueByType(valueType, field.value)
+      extValues[key] = normalizedValue
+      originalExtValues[key] = normalizedValue
 
-      extFields.forEach((field) => {
-        const key = field.field_key?.trim()
-        if (!key) {
-          return
-        }
-        const valueType = field.value_type
-        const normalizedValue = normalizeExtValueByType(valueType, field.value)
-        extValues[key] = normalizedValue
-        originalExtValues[key] = normalizedValue
+      const displayValue = field.display_value?.trim()
+      if (field.data_source_type === 'PLAIN') {
+        extDisplayValues[key] =
+          normalizedValue === null || normalizedValue === undefined ? '' : String(normalizedValue)
+      } else {
+        extDisplayValues[key] = displayValue && displayValue.length > 0 ? displayValue : toDisplayText(field.value)
+      }
+    })
 
-        const displayValue = field.display_value?.trim()
-        if (field.data_source_type === 'PLAIN') {
-          extDisplayValues[key] =
-            normalizedValue === null || normalizedValue === undefined ? '' : String(normalizedValue)
-        } else {
-          extDisplayValues[key] = displayValue && displayValue.length > 0 ? displayValue : toDisplayText(field.value)
-        }
-      })
-
-      form.extValues = extValues
-      form.originalExtValues = originalExtValues
-      form.extDisplayValues = extDisplayValues
-    }
+    form.extValues = extValues
+    form.originalExtValues = originalExtValues
+    form.extDisplayValues = extDisplayValues
 
     setActionErrorMessage('')
-    if (isAppendActionType(type)) {
-      setActionAppendType(type)
-    }
     setRecordDatePlan(null)
     setActionForm(form)
-    setActionState({ type, targetCode: orgCodeValue.length > 0 ? orgCodeValue : null })
+    setActionState({ type: 'correct', targetCode: orgCodeValue.length > 0 ? orgCodeValue : null })
+  }
+
+  function openDeleteAction() {
+    const details = detailQuery.data?.org_unit
+    const form = emptyActionForm(effectiveDate)
+    form.orgCode = orgCodeValue
+    form.name = details?.name ?? ''
+    form.parentOrgCode = details?.parent_org_code ?? ''
+    form.status = parseOrgStatus(details?.status ?? '')
+    form.managerPernr = details?.manager_pernr ?? ''
+    form.isBusinessUnit = details?.is_business_unit ?? false
+    form.reason = ''
+
+    setActionErrorMessage('')
+    setRecordDatePlan(null)
+    setActionForm(form)
+    setActionState({ type: 'delete', targetCode: orgCodeValue.length > 0 ? orgCodeValue : null })
   }
 
   const actionMutation = useMutation({
     mutationFn: async () => {
       if (!actionState) {
-        return
+        throw new Error('action state missing')
       }
 
-      const type: OrgActionType = actionState.recordWizardMode ? actionAppendType : actionState.type
+      const type: OrgActionType = actionState.type
       const targetCode = actionForm.orgCode.trim()
       if (!targetCode) {
         throw new Error(t('org_action_target_required'))
       }
 
-      if (actionState.recordWizardMode) {
+      if (type === 'add_version' || type === 'insert_version') {
         if (!recordDatePlan) {
           throw new Error(t('org_record_wizard_effective_date_out_of_range'))
         }
@@ -1059,195 +1037,79 @@ export function OrgUnitDetailsPage() {
         }
       }
 
-      const effectiveDateValue = actionState.recordWizardMode ? actionForm.effectiveDate.trim() : actionForm.effectiveDate.trim() || effectiveDate
-      const appendEventType = appendEventTypeForAction(type)
-      const appendCapability = appendEventType
-        ? appendCapabilitiesForActionQuery.data?.capabilities.event_update?.[appendEventType]
-        : null
-      const normalizedPlainExtValues: Record<string, unknown> = {}
-      if (type === 'correct') {
-        if (!mutationCapabilitiesQuery.isLoading && !mutationCapabilitiesQuery.isError && correctEventCapability?.enabled) {
-          const correctedEffectiveDateInput = actionForm.correctedEffectiveDate.trim()
-          const inEffectiveDateCorrectionMode =
-            correctedEffectiveDateInput.length > 0 && correctedEffectiveDateInput !== actionForm.effectiveDate.trim()
-          if (!inEffectiveDateCorrectionMode) {
-            const correctAllowedFieldSet = new Set(correctEventCapability.allowed_fields ?? [])
-            for (const field of actionExtFields) {
-              if (field.data_source_type !== 'PLAIN' || field.value_type === 'bool') {
-                continue
-              }
-              const fieldKey = field.field_key?.trim() ?? ''
-              if (fieldKey.length === 0) {
-                continue
-              }
-              if (!correctAllowedFieldSet.has(fieldKey)) {
-                continue
-              }
-              const draft = actionForm.extDisplayValues[fieldKey] ?? ''
-              const result = normalizePlainExtDraft({ valueType: field.value_type, draft, mode: 'null_empty' })
-              if (result.errorCode) {
-                throw new Error(t(result.errorCode as MessageKey))
-              }
-              if (typeof result.normalized !== 'undefined') {
-                normalizedPlainExtValues[fieldKey] = result.normalized
-              }
-            }
-          }
+      if (type === 'delete') {
+        const reason = actionForm.reason.trim()
+        if (reason.length === 0) {
+          throw new Error(t('org_delete_reason_required'))
         }
-      } else if (appendEventType !== null) {
-        if (!isAppendActionDisabled) {
-          for (const field of actionExtFields) {
-            if (field.data_source_type !== 'PLAIN' || field.value_type === 'bool') {
-              continue
-            }
-            const fieldKey = field.field_key?.trim() ?? ''
-            if (fieldKey.length === 0) {
-              continue
-            }
-            if (!appendAllowedFieldSet.has(fieldKey)) {
-              continue
-            }
-            const draft = actionForm.extDisplayValues[fieldKey] ?? ''
-            const result = normalizePlainExtDraft({ valueType: field.value_type, draft, mode: 'null_empty' })
-            if (result.errorCode) {
-              throw new Error(t(result.errorCode as MessageKey))
-            }
-            if (typeof result.normalized !== 'undefined') {
-              normalizedPlainExtValues[fieldKey] = result.normalized
-            }
-          }
-        }
-      }
-      const nextExtValues = {
-        ...actionForm.extValues,
-        ...normalizedPlainExtValues
-      }
-      const appendExtValues: Record<string, unknown> = {}
-      for (const [fieldKey, nextValue] of Object.entries(nextExtValues)) {
-        if (Object.is(actionForm.originalExtValues[fieldKey], nextValue)) {
-          continue
-        }
-        appendExtValues[fieldKey] = nextValue
-      }
-      const appendPayloadValues: Record<string, unknown> = {
-        org_code: targetCode,
-        effective_date: effectiveDateValue,
-        name: actionForm.name.trim(),
-        parent_org_code: trimToUndefined(actionForm.parentOrgCode),
-        is_business_unit: actionForm.isBusinessUnit,
-        manager_pernr: trimToUndefined(actionForm.managerPernr),
-        ...appendExtValues
-      }
+        const requestCode = actionForm.requestCode.trim() || newRequestCode()
 
-      switch (type) {
-        case 'rename': {
-          if (!appendCapability?.enabled || appendCapabilitiesForActionQuery.isError) {
-            throw new Error('append capabilities unavailable')
-          }
-          const payload = buildAppendPayload({ capability: appendCapability, values: appendPayloadValues })
-          if (!payload) {
-            throw new Error('append capability payload invalid')
-          }
-          await renameOrgUnit(payload as Parameters<typeof renameOrgUnit>[0])
-          return
-        }
-        case 'move': {
-          if (!appendCapability?.enabled || appendCapabilitiesForActionQuery.isError) {
-            throw new Error('append capabilities unavailable')
-          }
-          const payload = buildAppendPayload({ capability: appendCapability, values: appendPayloadValues })
-          if (!payload) {
-            throw new Error('append capability payload invalid')
-          }
-          await moveOrgUnit(payload as Parameters<typeof moveOrgUnit>[0])
-          return
-        }
-        case 'set_business_unit': {
-          if (!appendCapability?.enabled || appendCapabilitiesForActionQuery.isError) {
-            throw new Error('append capabilities unavailable')
-          }
-          const payload = buildAppendPayload({ capability: appendCapability, values: appendPayloadValues })
-          if (!payload) {
-            throw new Error('append capability payload invalid')
-          }
-          await setOrgUnitBusinessUnit({
-            ...(payload as Omit<Parameters<typeof setOrgUnitBusinessUnit>[0], 'request_code'>),
-            request_code: actionForm.requestCode.trim()
-          })
-          return
-        }
-        case 'enable': {
-          if (!appendCapability?.enabled || appendCapabilitiesForActionQuery.isError) {
-            throw new Error('append capabilities unavailable')
-          }
-          const payload = buildAppendPayload({ capability: appendCapability, values: appendPayloadValues })
-          if (!payload) {
-            throw new Error('append capability payload invalid')
-          }
-          await enableOrgUnit(payload as Parameters<typeof enableOrgUnit>[0])
-          return
-        }
-        case 'disable': {
-          if (!appendCapability?.enabled || appendCapabilitiesForActionQuery.isError) {
-            throw new Error('append capabilities unavailable')
-          }
-          const payload = buildAppendPayload({ capability: appendCapability, values: appendPayloadValues })
-          if (!payload) {
-            throw new Error('append capability payload invalid')
-          }
-          await disableOrgUnit(payload as Parameters<typeof disableOrgUnit>[0])
-          return
-        }
-        case 'correct': {
-          if (mutationCapabilitiesQuery.isError || !correctEventCapability) {
-            throw new Error('mutation capabilities unavailable')
-          }
-          if (hasActionPlainExtErrors) {
-            const firstErrorKey = Object.values(actionPlainExtErrors)[0]
-            throw new Error(firstErrorKey ? t(firstErrorKey as MessageKey) : 'plain ext fields invalid')
-          }
-          const patch = correctPatchPreview
-          if (!patch || Object.keys(patch).length === 0) {
-            throw new Error('PATCH_REQUIRED')
-          }
-
-          await correctOrgUnit({
-            org_code: targetCode,
-            effective_date: effectiveDateValue,
-            request_code: actionForm.requestCode.trim(),
-            patch
-          })
-          return
-        }
-        case 'rescind_record':
-          await rescindOrgUnitRecord({
-            org_code: targetCode,
-            effective_date: effectiveDateValue,
-            request_code: actionForm.requestCode.trim(),
-            reason: actionForm.reason.trim()
-          })
-          return
-        case 'rescind_org':
+        if (shouldDeleteOrg) {
           await rescindOrgUnit({
             org_code: targetCode,
-            request_code: actionForm.requestCode.trim(),
-            reason: actionForm.reason.trim()
+            request_code: requestCode,
+            reason
           })
-          return
+          return { deletedOrg: true }
+        }
+
+        await rescindOrgUnitRecord({
+          org_code: targetCode,
+          effective_date: effectiveDate,
+          request_code: requestCode,
+          reason
+        })
+        return { deletedOrg: false }
       }
+
+      if (!activeWriteIntent || activeWriteIntent !== type) {
+        throw new Error('write intent mismatch')
+      }
+      if (!writeCapability?.enabled || writeCapabilitiesQuery.isError) {
+        throw new Error('write capabilities unavailable')
+      }
+      if (hasActionPlainExtErrors) {
+        const firstErrorKey = Object.values(actionPlainExtErrors)[0]
+        throw new Error(firstErrorKey ? t(firstErrorKey as MessageKey) : 'plain ext fields invalid')
+      }
+      const patch = writePatchPreview
+      if (!patch) {
+        throw new Error('write patch unavailable')
+      }
+      if (Object.keys(patch).length === 0) {
+        throw new Error('ORG_UPDATE_PATCH_EMPTY')
+      }
+
+      const requestCode = actionForm.requestCode.trim() || newRequestCode()
+      const effectiveDateValue = activeWriteIntent === 'correct' ? actionWriteEffectiveDate : actionForm.effectiveDate.trim()
+
+      await writeOrgUnit({
+        intent: activeWriteIntent,
+        org_code: targetCode,
+        effective_date: effectiveDateValue,
+        target_effective_date: activeWriteIntent === 'correct' ? actionForm.effectiveDate.trim() : undefined,
+        request_code: requestCode,
+        patch: patch as Parameters<typeof writeOrgUnit>[0]['patch']
+      })
+      return { deletedOrg: false }
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       await refreshAfterWrite()
-      if (actionType === 'correct') {
-        const nextEffectiveDate = actionForm.correctedEffectiveDate.trim()
+      if (actionState?.type === 'correct') {
+        const nextEffectiveDate = actionWriteEffectiveDate
         if (nextEffectiveDate.length > 0 && nextEffectiveDate !== effectiveDate) {
           updateSearch({ effectiveDate: nextEffectiveDate, tab: 'profile' })
         }
-      }
-      if (actionState?.recordWizardMode) {
+      } else if (actionState?.type === 'add_version' || actionState?.type === 'insert_version') {
         const nextEffectiveDate = actionForm.effectiveDate.trim()
         if (nextEffectiveDate.length > 0 && nextEffectiveDate !== effectiveDate) {
           updateSearch({ effectiveDate: nextEffectiveDate, tab: 'profile' })
+        }
+      } else if (actionState?.type === 'delete') {
+        if (result.deletedOrg) {
+          navigate({ pathname: '/org/units', search: listLinkSearchValue })
+        } else {
+          updateSearch({ effectiveDate: null, tab: 'profile' })
         }
       }
       setRecordDatePlan(null)
@@ -1275,113 +1137,27 @@ export function OrgUnitDetailsPage() {
     return orgCodeValue.length > 0 ? orgCodeValue : t('common_detail')
   }, [detailQuery.data, orgCodeValue, t])
 
-  const listLinkSearch = useMemo(() => {
-    const params = new URLSearchParams()
-    params.set('as_of', asOf)
-    if (includeDisabled) {
-      params.set('include_disabled', '1')
-    }
-    const value = params.toString()
-    return value.length > 0 ? `?${value}` : ''
-  }, [asOf, includeDisabled])
+  const listLinkParams = new URLSearchParams()
+  listLinkParams.set('as_of', asOf)
+  if (includeDisabled) {
+    listLinkParams.set('include_disabled', '1')
+  }
+  const listLinkSearch = listLinkParams.toString()
+  const listLinkSearchValue = listLinkSearch.length > 0 ? `?${listLinkSearch}` : ''
 
   const handleBack = useCallback(() => {
     if (window.history.length <= 1) {
-      navigate({ pathname: '/org/units', search: listLinkSearch })
+      navigate({ pathname: '/org/units', search: listLinkSearchValue })
       return
     }
     navigate(-1)
-  }, [listLinkSearch, navigate])
+  }, [listLinkSearchValue, navigate])
 
   const statusLabel = useMemo(() => {
     const raw = detailQuery.data?.org_unit?.status ?? ''
     return parseOrgStatus(raw) === 'active' ? t('org_status_active_short') : t('org_status_inactive_short')
   }, [detailQuery.data, t])
-
-  const correctedEffectiveDateInput = actionForm.correctedEffectiveDate.trim()
-  const inEffectiveDateCorrectionMode =
-    actionType === 'correct' &&
-    correctedEffectiveDateInput.length > 0 &&
-    correctedEffectiveDateInput !== actionForm.effectiveDate.trim()
-
-  const allowedFieldSet = useMemo(() => {
-    return new Set(correctEventCapability?.allowed_fields ?? [])
-  }, [correctEventCapability?.allowed_fields])
-
-  const correctDenyReasons = useMemo(() => {
-    return correctEventCapability?.deny_reasons ?? []
-  }, [correctEventCapability?.deny_reasons])
-
-  const isCorrectActionDisabled = useMemo(() => {
-    if (actionType !== 'correct') {
-      return false
-    }
-    if (mutationCapabilitiesQuery.isLoading) {
-      return true
-    }
-    if (mutationCapabilitiesQuery.isError) {
-      return true
-    }
-    if (!correctEventCapability?.enabled) {
-      return true
-    }
-    return false
-  }, [actionType, correctEventCapability?.enabled, mutationCapabilitiesQuery.isError, mutationCapabilitiesQuery.isLoading])
-
-  const isCorrectFieldEditable = useCallback(
-    (fieldKey: string): boolean => {
-      if (actionType !== 'correct') {
-        return true
-      }
-      if (isCorrectActionDisabled) {
-        return false
-      }
-      if (inEffectiveDateCorrectionMode) {
-        return fieldKey === 'effective_date'
-      }
-      return allowedFieldSet.has(fieldKey)
-    },
-    [actionType, allowedFieldSet, inEffectiveDateCorrectionMode, isCorrectActionDisabled]
-  )
-
-  const isAppendFieldEditable = useCallback(
-    (fieldKey: string): boolean => {
-      if (!appendActionEventType) {
-        return true
-      }
-      if (isAppendActionDisabled) {
-        return false
-      }
-      return appendAllowedFieldSet.has(fieldKey)
-    },
-    [appendActionEventType, appendAllowedFieldSet, isAppendActionDisabled]
-  )
-
-  const isAppendActionButtonDisabled = useCallback(
-    (type: OrgActionType): boolean => {
-      if (!canWrite) {
-        return true
-      }
-      const eventType = appendEventTypeForAction(type)
-      if (!eventType) {
-        return false
-      }
-      if (appendCapabilitiesForSelectedQuery.isLoading || appendCapabilitiesForSelectedQuery.isError) {
-        return true
-      }
-      const capability = appendCapabilitiesForSelectedQuery.data?.capabilities.event_update?.[eventType]
-      if (!capability?.enabled) {
-        return true
-      }
-      return false
-    },
-    [
-      appendCapabilitiesForSelectedQuery.data?.capabilities.event_update,
-      appendCapabilitiesForSelectedQuery.isError,
-      appendCapabilitiesForSelectedQuery.isLoading,
-      canWrite
-    ]
-  )
+  const deleteActionLabel = useMemo(() => buildDeleteActionLabel(shouldDeleteOrg, t), [shouldDeleteOrg, t])
 
   if (orgCodeValue.length === 0) {
     return (
@@ -1394,7 +1170,7 @@ export function OrgUnitDetailsPage() {
   return (
     <>
       <Breadcrumbs sx={{ mb: 1 }}>
-        <Link component={RouterLink} to={{ pathname: '/org/units', search: listLinkSearch }} underline='hover' color='inherit'>
+        <Link component={RouterLink} to={{ pathname: '/org/units', search: listLinkSearchValue }} underline='hover' color='inherit'>
           {t('nav_org_units')}
         </Link>
         <Typography color='text.primary'>{breadcrumbCurrentLabel}</Typography>
@@ -1403,35 +1179,45 @@ export function OrgUnitDetailsPage() {
       <PageHeader
         title={titleLabel}
         actions={
-          <>
-            {canWrite ? (
-              <Button
-                onClick={() => {
-                  const params = new URLSearchParams()
-                  params.set('as_of', asOf)
-                  navigate({ pathname: '/org/units/field-configs', search: `?${params.toString()}` })
-                }}
-                size='small'
-                variant='outlined'
-              >
-                {t('nav_org_field_configs')}
-              </Button>
-            ) : null}
-            <Button disabled={isAppendActionButtonDisabled('rename')} onClick={() => openAction('rename')} size='small' variant='outlined'>
-              {t('org_action_rename')}
-            </Button>
-            <Button disabled={isAppendActionButtonDisabled('move')} onClick={() => openAction('move')} size='small' variant='outlined'>
-              {t('org_action_move')}
+          <Stack direction='row' flexWrap='wrap' spacing={1}>
+            <Button
+              component={RouterLink}
+              disabled={!canWrite}
+              size='small'
+              to={{ pathname: '/org/units', search: listLinkSearchValue }}
+              variant='outlined'
+            >
+              {t('org_action_create')}
             </Button>
             <Button
-              disabled={isAppendActionButtonDisabled('set_business_unit')}
-              onClick={() => openAction('set_business_unit')}
+              disabled={!canWrite || versionsQuery.isLoading || versionItems.length === 0}
+              onClick={() => openRecordWizard('add')}
               size='small'
               variant='outlined'
             >
-              {t('org_action_set_business_unit')}
+              {t('org_action_add_version')}
             </Button>
-          </>
+            <Button
+              disabled={!canWrite || versionsQuery.isLoading || versionItems.length === 0}
+              onClick={() => openRecordWizard('insert')}
+              size='small'
+              variant='outlined'
+            >
+              {t('org_action_insert_version')}
+            </Button>
+            <Button disabled={!canWrite || !detailQuery.data} onClick={() => openCorrectAction()} size='small' variant='outlined'>
+              {t('org_action_correct')}
+            </Button>
+            <Button
+              color='error'
+              disabled={!canWrite || versionsQuery.isLoading || versionItems.length === 0}
+              onClick={() => openDeleteAction()}
+              size='small'
+              variant='outlined'
+            >
+              {t('org_action_delete')}
+            </Button>
+          </Stack>
         }
       />
 
@@ -1452,11 +1238,6 @@ export function OrgUnitDetailsPage() {
 
       {detailQuery.isLoading ? <Typography>{t('text_loading')}</Typography> : null}
       {detailQuery.error ? <Alert severity='error'>{getErrorMessage(detailQuery.error)}</Alert> : null}
-      {canWrite && appendCapabilitiesForSelectedQuery.isError ? (
-        <Alert severity='warning' sx={{ mb: 1 }}>
-          {t('org_append_capabilities_load_failed')}：{getErrorMessage(appendCapabilitiesForSelectedQuery.error)}
-        </Alert>
-      ) : null}
 
       {detailTab === 'profile' ? (
         <Paper sx={{ p: 1.5 }} variant='outlined'>
@@ -1475,24 +1256,6 @@ export function OrgUnitDetailsPage() {
                 <Typography variant='subtitle2'>
                   {t('org_column_effective_date')}
                 </Typography>
-                <Stack direction='row' spacing={1}>
-                  <Button
-                    disabled={!canWrite || versionsQuery.isLoading || versionItems.length === 0}
-                    onClick={() => openRecordWizard('add')}
-                    size='small'
-                    variant='outlined'
-                  >
-                    {t('org_action_add_version')}
-                  </Button>
-                  <Button
-                    disabled={!canWrite || versionsQuery.isLoading || versionItems.length === 0}
-                    onClick={() => openRecordWizard('insert')}
-                    size='small'
-                    variant='outlined'
-                  >
-                    {t('org_action_insert_version')}
-                  </Button>
-                </Stack>
               </Stack>
               {versionsQuery.isLoading ? <Typography variant='body2'>{t('text_loading')}</Typography> : null}
               {versionsQuery.error ? <Alert severity='error'>{getErrorMessage(versionsQuery.error)}</Alert> : null}
@@ -1538,6 +1301,20 @@ export function OrgUnitDetailsPage() {
                       variant='outlined'
                     />
                   </Stack>
+                  {canWrite ? (
+                    <Button
+                      onClick={() => {
+                        const params = new URLSearchParams()
+                        params.set('as_of', asOf)
+                        navigate({ pathname: '/org/units/field-configs', search: `?${params.toString()}` })
+                      }}
+                      size='small'
+                      sx={{ mt: 0.5 }}
+                      variant='text'
+                    >
+                      {t('nav_org_field_configs')}
+                    </Button>
+                  ) : null}
                   <Divider sx={{ my: 1.2 }} />
                   <Stack spacing={1}>
                     <Typography variant='body2'>{t('org_version_event_type')}：{selectedVersionEventType}</Typography>
@@ -1627,23 +1404,6 @@ export function OrgUnitDetailsPage() {
                     </>
                   ) : null}
 
-                  <Stack direction='row' flexWrap='wrap' spacing={1} sx={{ mt: 1.5 }}>
-                    <Button disabled={isAppendActionButtonDisabled('enable')} onClick={() => openAction('enable')} size='small' variant='outlined'>
-                      {t('org_action_enable')}
-                    </Button>
-                    <Button disabled={isAppendActionButtonDisabled('disable')} onClick={() => openAction('disable')} size='small' variant='outlined'>
-                      {t('org_action_disable')}
-                    </Button>
-                    <Button disabled={!detailQuery.data} onClick={() => openAction('correct')} size='small' variant='outlined'>
-                      {t('org_action_correct')}
-                    </Button>
-                    <Button disabled={!canWrite} onClick={() => openAction('rescind_record')} size='small' variant='outlined'>
-                      {t('org_action_rescind_record')}
-                    </Button>
-                    <Button color='error' disabled={!canWrite} onClick={() => openAction('rescind_org')} size='small' variant='outlined'>
-                      {t('org_action_rescind_org')}
-                    </Button>
-                  </Stack>
                 </>
               ) : (
                 <Typography color='text.secondary' variant='body2'>
@@ -1852,15 +1612,7 @@ export function OrgUnitDetailsPage() {
         fullWidth
         maxWidth='sm'
       >
-        <DialogTitle>
-          {actionState
-            ? actionState.recordWizardMode === 'add'
-              ? t('org_action_add_version')
-              : actionState.recordWizardMode === 'insert'
-              ? t('org_action_insert_version')
-              : actionLabel(actionState.type, t)
-            : ''}
-        </DialogTitle>
+        <DialogTitle>{actionState ? actionLabel(actionState.type, t) : ''}</DialogTitle>
         <DialogContent>
           {actionErrorMessage.length > 0 ? (
             <Alert severity='error' sx={{ mb: 2 }}>
@@ -1871,182 +1623,112 @@ export function OrgUnitDetailsPage() {
             <Stack spacing={2} sx={{ mt: 0.5 }}>
               <TextField disabled label={t('org_column_code')} value={actionForm.orgCode} />
 
-              {isCorrectAction ? (
+              {isDeleteAction ? (
+                <Alert severity='warning'>
+                  {t('org_action_delete')}：{deleteActionLabel}
+                </Alert>
+              ) : null}
+
+              {isWriteAction ? (
                 <>
-                  {mutationCapabilitiesQuery.isLoading ? (
-                    <Alert severity='info'>{t('text_loading')}</Alert>
+                  {writeCapabilitiesQuery.isLoading ? <Alert severity='info'>{t('text_loading')}</Alert> : null}
+                  {writeCapabilitiesQuery.isError ? (
+                    <Alert severity='error'>{getErrorMessage(writeCapabilitiesQuery.error)}</Alert>
                   ) : null}
-                  {mutationCapabilitiesQuery.isError ? (
-                    <Alert severity='error'>
-                      {t('org_correct_capabilities_load_failed')}：{getErrorMessage(mutationCapabilitiesQuery.error)}
-                    </Alert>
+                  {!writeCapability?.enabled && writeDenyReasons.length > 0 ? (
+                    <Alert severity='warning'>{writeDenyReasons.join(', ')}</Alert>
                   ) : null}
-                  {!correctEventCapability?.enabled && correctDenyReasons.length > 0 ? (
-                    <Alert severity='warning'>
-                      {t('org_correct_denied')}：{correctDenyReasons.join(', ')}
-                    </Alert>
-                  ) : null}
-                  {inEffectiveDateCorrectionMode ? (
-                    <Alert severity='warning'>
-                      {t('org_correct_effective_date_only_mode')}
-                    </Alert>
-                  ) : null}
-                  {correctEventCapability?.enabled && isCorrectPatchEmpty ? (
-                    <Alert severity='info'>{t('org_correct_no_changes')}</Alert>
-                  ) : null}
+                  {writeCapability?.enabled && isWritePatchEmpty ? <Alert severity='info'>{t('org_write_no_changes')}</Alert> : null}
                 </>
               ) : null}
 
-              {isRecordWizard ? (
+              {!isDeleteAction ? (
                 <TextField
-                  select
-                  label={t('org_record_wizard_change_type')}
-                  onChange={(event) => {
-                    const nextValue = event.target.value as OrgAppendActionType
-                    setActionErrorMessage('')
-                    setActionAppendType(nextValue)
-                  }}
-                  value={actionAppendType}
-                >
-                  <MenuItem value='rename'>{t('org_action_rename')}</MenuItem>
-                  <MenuItem value='move'>{t('org_action_move')}</MenuItem>
-                  <MenuItem value='set_business_unit'>{t('org_action_set_business_unit')}</MenuItem>
-                  <MenuItem value='enable'>{t('org_action_enable')}</MenuItem>
-                  <MenuItem value='disable'>{t('org_action_disable')}</MenuItem>
-                </TextField>
-              ) : null}
-
-              {isRecordWizard && recordWizardPlanHint && recordDatePlan && ['insert_as_add', 'insert_no_slot'].includes(recordDatePlan.kind) ? (
-                <Alert severity={recordWizardPlanHint.severity}>{recordWizardPlanHint.text}</Alert>
-              ) : null}
-
-              {appendActionEventType ? (
-                <>
-                  {appendCapabilitiesForActionQuery.isLoading ? (
-                    <Alert severity='info'>{t('text_loading')}</Alert>
-                  ) : null}
-                  {appendCapabilitiesForActionQuery.isError ? (
-                    <Alert severity='error'>
-                      {t('org_append_capabilities_load_failed')}：{getErrorMessage(appendCapabilitiesForActionQuery.error)}
-                    </Alert>
-                  ) : null}
-                  {!appendEventCapability?.enabled && appendDenyReasons.length > 0 ? (
-                    <Alert severity='warning'>
-                      {t('org_append_denied')}：{appendDenyReasons.join(', ')}
-                    </Alert>
-                  ) : null}
-                </>
-              ) : null}
-
-              {isRenameAction || isCorrectAction ? (
-                <TextField
-                  disabled={
-                    isCorrectAction
-                      ? !isCorrectFieldEditable('name')
-                      : isRenameAction
-                      ? !isAppendFieldEditable('name')
-                      : false
-                  }
-                  helperText={
-                    isCorrectAction
-                      ? !allowedFieldSet.has('name')
-                        ? t('org_correct_field_not_allowed_helper')
-                        : undefined
-                      : isRenameAction && !appendAllowedFieldSet.has('name')
-                      ? t('org_append_field_not_allowed_helper')
-                      : undefined
-                  }
+                  disabled={!isWriteFieldEditable('name')}
                   label={t('org_column_name')}
                   onChange={(event) => setActionForm((previous) => ({ ...previous, name: event.target.value }))}
                   value={actionForm.name}
                 />
               ) : null}
 
-              {isMoveAction || isCorrectAction ? (
+              {!isDeleteAction ? (
                 <TextField
-                  disabled={
-                    isCorrectAction
-                      ? !isCorrectFieldEditable('parent_org_code')
-                      : isMoveAction
-                      ? !isAppendFieldEditable('parent_org_code')
-                      : false
-                  }
-                  helperText={
-                    isCorrectAction
-                      ? !allowedFieldSet.has('parent_org_code')
-                        ? t('org_correct_field_not_allowed_helper')
-                        : undefined
-                      : isMoveAction && !appendAllowedFieldSet.has('parent_org_code')
-                      ? t('org_append_field_not_allowed_helper')
-                      : undefined
-                  }
+                  disabled={!isWriteFieldEditable('parent_org_code')}
                   label={t('org_column_parent')}
                   onChange={(event) => setActionForm((previous) => ({ ...previous, parentOrgCode: event.target.value }))}
                   value={actionForm.parentOrgCode}
                 />
               ) : null}
 
-              {isCorrectAction ? (
+              {!isDeleteAction ? (
                 <TextField
-                  disabled={!isCorrectFieldEditable('manager_pernr')}
-                  helperText={!allowedFieldSet.has('manager_pernr') ? t('org_correct_field_not_allowed_helper') : undefined}
+                  disabled={!isWriteFieldEditable('manager_pernr')}
                   label={t('org_column_manager')}
                   onChange={(event) => setActionForm((previous) => ({ ...previous, managerPernr: event.target.value }))}
                   value={actionForm.managerPernr}
                 />
               ) : null}
 
-              {isSetBusinessUnitAction || isCorrectAction ? (
+              {!isDeleteAction ? (
+                <TextField
+                  select
+                  disabled={!isWriteFieldEditable('status')}
+                  label={t('org_column_status')}
+                  onChange={(event) =>
+                    setActionForm((previous) => ({
+                      ...previous,
+                      status: event.target.value === 'inactive' ? 'inactive' : 'active'
+                    }))
+                  }
+                  value={actionForm.status}
+                >
+                  <MenuItem value='active'>{t('org_status_active_short')}</MenuItem>
+                  <MenuItem value='inactive'>{t('org_status_inactive_short')}</MenuItem>
+                </TextField>
+              ) : null}
+
+              {!isDeleteAction ? (
                 <Box>
                   <FormControlLabel
                     control={
                       <Switch
                         checked={actionForm.isBusinessUnit}
-                        disabled={
-                          isCorrectAction
-                            ? !isCorrectFieldEditable('is_business_unit')
-                            : isSetBusinessUnitAction
-                            ? !isAppendFieldEditable('is_business_unit')
-                            : false
-                        }
+                        disabled={!isWriteFieldEditable('is_business_unit')}
                         onChange={(event) => setActionForm((previous) => ({ ...previous, isBusinessUnit: event.target.checked }))}
                       />
                     }
                     label={t('org_column_is_business_unit')}
                   />
-                  {isCorrectAction && !allowedFieldSet.has('is_business_unit') ? (
-                    <Typography color='text.secondary' variant='caption'>
-                      {t('org_correct_field_not_allowed_helper')}
-                    </Typography>
-                  ) : isSetBusinessUnitAction && !appendAllowedFieldSet.has('is_business_unit') ? (
-                    <Typography color='text.secondary' variant='caption'>
-                      {t('org_append_field_not_allowed_helper')}
-                    </Typography>
-                  ) : null}
                 </Box>
               ) : null}
 
               {isCorrectAction ? (
+                <>
+                  <TextField
+                    disabled
+                    InputLabelProps={{ shrink: true }}
+                    label={t('org_column_effective_date')}
+                    type='date'
+                    value={actionForm.effectiveDate}
+                  />
+                  <TextField
+                    InputLabelProps={{ shrink: true }}
+                    label={t('org_corrected_effective_date')}
+                    onChange={(event) => setActionForm((previous) => ({ ...previous, correctedEffectiveDate: event.target.value }))}
+                    type='date'
+                    value={actionForm.correctedEffectiveDate}
+                  />
+                </>
+              ) : isWriteAction ? (
                 <TextField
-                  disabled
-                  InputLabelProps={{ shrink: true }}
-                  label={t('org_column_effective_date')}
-                  type='date'
-                  value={actionForm.effectiveDate}
-                />
-              ) : !isRescindOrgAction ? (
-                <TextField
-                  disabled={appendActionEventType ? !isAppendFieldEditable('effective_date') : false}
                   helperText={
-                    appendActionEventType && !appendAllowedFieldSet.has('effective_date')
-                      ? t('org_append_field_not_allowed_helper')
-                      : isRecordWizard && recordWizardValidationMessageKey
+                    isRecordWizard && recordWizardValidationMessageKey
                       ? t(recordWizardValidationMessageKey)
                       : isRecordWizard && recordWizardPlanHint
                       ? recordWizardPlanHint.text
                       : undefined
                   }
-                  error={isRecordWizard && recordWizardValidationMessageKey !== null && !(appendActionEventType && !appendAllowedFieldSet.has('effective_date'))}
+                  error={isRecordWizard && recordWizardValidationMessageKey !== null}
                   InputLabelProps={{ shrink: true }}
                   label={t('org_column_effective_date')}
                   onChange={(event) => setActionForm((previous) => ({ ...previous, effectiveDate: event.target.value }))}
@@ -2055,19 +1737,7 @@ export function OrgUnitDetailsPage() {
                 />
               ) : null}
 
-              {isCorrectAction ? (
-                <TextField
-                  disabled={!isCorrectFieldEditable('effective_date')}
-                  helperText={!allowedFieldSet.has('effective_date') ? t('org_correct_field_not_allowed_helper') : undefined}
-                  InputLabelProps={{ shrink: true }}
-                  label={t('org_corrected_effective_date')}
-                  onChange={(event) => setActionForm((previous) => ({ ...previous, correctedEffectiveDate: event.target.value }))}
-                  type='date'
-                  value={actionForm.correctedEffectiveDate}
-                />
-              ) : null}
-
-              {(isCorrectAction || appendActionEventType) && actionExtFields.length > 0 ? (
+              {isWriteAction && actionExtFields.length > 0 ? (
                 <>
                   <Divider sx={{ my: 0.5 }} />
                   <Typography variant='subtitle2'>{t('org_section_ext_fields')}</Typography>
@@ -2087,17 +1757,9 @@ export function OrgUnitDetailsPage() {
                         : fieldKey
 
                     const dataSourceType = field.data_source_type
-                    const editableBase =
-                      isCorrectAction ? isCorrectFieldEditable(fieldKey) : isAppendFieldEditable(fieldKey)
+                    const editableBase = isWriteFieldEditable(fieldKey)
                     const editable = editableBase && (dataSourceType === 'PLAIN' || dataSourceType === 'DICT' || dataSourceType === 'ENTITY')
-                    const notAllowedHelper =
-                      isCorrectAction
-                        ? !allowedFieldSet.has(fieldKey)
-                          ? t('org_correct_field_not_allowed_helper')
-                          : undefined
-                        : !appendAllowedFieldSet.has(fieldKey)
-                        ? t('org_append_field_not_allowed_helper')
-                        : undefined
+                    const notAllowedHelper = undefined
 
                     const rawValue = actionForm.extValues[fieldKey]
                     const valueText = actionForm.extDisplayValues[fieldKey] ?? ''
@@ -2114,7 +1776,7 @@ export function OrgUnitDetailsPage() {
                             key={fieldKey}
                             select
                             disabled={!editable}
-                            helperText={notAllowedHelper ?? (validationErrorText.length > 0 ? validationErrorText : undefined)}
+                            helperText={validationErrorText.length > 0 ? validationErrorText : undefined}
                             error={!notAllowedHelper && validationErrorText.length > 0}
                             label={label}
                             value={current}
@@ -2160,7 +1822,7 @@ export function OrgUnitDetailsPage() {
                           <TextField
                             key={fieldKey}
                             disabled={!editable}
-                            helperText={notAllowedHelper ?? (validationErrorText.length > 0 ? validationErrorText : undefined)}
+                            helperText={validationErrorText.length > 0 ? validationErrorText : undefined}
                             error={!notAllowedHelper && validationErrorText.length > 0}
                             label={label}
                             type='number'
@@ -2184,7 +1846,7 @@ export function OrgUnitDetailsPage() {
                           <TextField
                             key={fieldKey}
                             disabled={!editable}
-                            helperText={notAllowedHelper ?? (validationErrorText.length > 0 ? validationErrorText : undefined)}
+                            helperText={validationErrorText.length > 0 ? validationErrorText : undefined}
                             error={!notAllowedHelper && validationErrorText.length > 0}
                             InputLabelProps={{ shrink: true }}
                             label={label}
@@ -2215,7 +1877,7 @@ export function OrgUnitDetailsPage() {
                         <TextField
                           key={fieldKey}
                           disabled={!editable}
-                          helperText={notAllowedHelper ?? (validationErrorText.length > 0 ? validationErrorText : undefined)}
+                          helperText={validationErrorText.length > 0 ? validationErrorText : undefined}
                           error={!notAllowedHelper && validationErrorText.length > 0}
                           label={label}
                           value={valueText.length > 0 ? valueText : currentValue}
@@ -2238,7 +1900,6 @@ export function OrgUnitDetailsPage() {
                         <TextField
                           key={fieldKey}
                           disabled
-                          helperText={notAllowedHelper}
                           label={label}
                           value={valueText.length > 0 ? valueText : toDisplayText(rawValue)}
                         />
@@ -2255,10 +1916,9 @@ export function OrgUnitDetailsPage() {
                     return (
                       <OrgUnitExtFieldSelect
                         key={fieldKey}
-                        asOf={actionForm.effectiveDate}
+                        asOf={actionWriteEffectiveDate}
                         disabled={!editable}
                         fieldKey={fieldKey}
-                        helperText={notAllowedHelper}
                         label={label}
                         value={currentValue}
                         valueLabel={actionForm.extDisplayValues[fieldKey] ?? null}
@@ -2287,23 +1947,13 @@ export function OrgUnitDetailsPage() {
                 </>
               ) : null}
 
-              {isSetBusinessUnitAction ? (
-                <TextField
-                  label={t('org_request_code')}
-                  onChange={(event) => setActionForm((previous) => ({ ...previous, requestCode: event.target.value }))}
-                  value={actionForm.requestCode}
-                />
-              ) : null}
+              <TextField
+                label={t('org_request_code')}
+                onChange={(event) => setActionForm((previous) => ({ ...previous, requestCode: event.target.value }))}
+                value={actionForm.requestCode}
+              />
 
-              {isCorrectAction || isRescindRecordAction || isRescindOrgAction ? (
-                <TextField
-                  label={t('org_request_code')}
-                  onChange={(event) => setActionForm((previous) => ({ ...previous, requestCode: event.target.value }))}
-                  value={actionForm.requestCode}
-                />
-              ) : null}
-
-              {isRescindRecordAction || isRescindOrgAction ? (
+              {isDeleteAction ? (
                 <TextField
                   label={t('org_reason')}
                   multiline
@@ -2328,8 +1978,9 @@ export function OrgUnitDetailsPage() {
           <Button
             disabled={
               actionMutation.isPending ||
-              (isCorrectAction ? isCorrectActionDisabled || isCorrectPatchEmpty || hasActionPlainExtErrors : false) ||
-              (appendActionEventType ? isAppendActionDisabled || hasActionPlainExtErrors : false) ||
+              (isDeleteAction ? actionForm.reason.trim().length === 0 : false) ||
+              (isWriteAction ? isWriteActionDisabled || isWritePatchEmpty || hasActionPlainExtErrors : false) ||
+              (isWriteAction ? (isWriteFieldEditable('name') && actionForm.name.trim().length === 0) : false) ||
               (isRecordWizard ? !recordDatePlan || !recordWizardValidation.ok : false)
             }
             onClick={() => actionMutation.mutate()}

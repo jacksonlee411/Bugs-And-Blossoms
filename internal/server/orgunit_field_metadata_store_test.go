@@ -257,6 +257,12 @@ func TestOrgUnitFieldMetadataStore_PureHelpers(t *testing.T) {
 		if _, err := parseOrgUnitExtQueryValue("date", "bad"); err == nil {
 			t.Fatalf("expected date error")
 		}
+		if got, err := parseOrgUnitExtQueryValue("numeric", "12.34"); err != nil || got.(string) != "12.34" {
+			t.Fatalf("got=%v err=%v", got, err)
+		}
+		if _, err := parseOrgUnitExtQueryValue("numeric", "bad"); err == nil {
+			t.Fatalf("expected numeric error")
+		}
 		if _, err := parseOrgUnitExtQueryValue("unknown", "x"); err == nil {
 			t.Fatalf("expected unsupported error")
 		}

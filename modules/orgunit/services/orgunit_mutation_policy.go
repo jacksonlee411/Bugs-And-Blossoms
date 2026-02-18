@@ -199,19 +199,9 @@ func AllowedFields(decision OrgUnitMutationPolicyDecision) []string {
 }
 
 func ValidatePatch(targetEffectiveDate string, decision OrgUnitMutationPolicyDecision, patch OrgUnitCorrectionPatch) error {
-	// "Effective-date correction mode": if corrected effective_date changes, only allow effective_date.
 	if patch.EffectiveDate != nil {
-		corrected, err := validateDate(*patch.EffectiveDate)
-		if err != nil {
+		if _, err := validateDate(*patch.EffectiveDate); err != nil {
 			return err
-		}
-		if corrected != "" && strings.TrimSpace(targetEffectiveDate) != "" && corrected != strings.TrimSpace(targetEffectiveDate) {
-			if patch.Name != nil || patch.ParentOrgCode != nil || patch.IsBusinessUnit != nil || patch.ManagerPernr != nil {
-				return httperr.NewBadRequest(errPatchFieldNotAllowed)
-			}
-			if len(patch.Ext) > 0 {
-				return httperr.NewBadRequest(errPatchFieldNotAllowed)
-			}
 		}
 	}
 

@@ -1156,6 +1156,9 @@ func TestOrgUnitFieldMetadataAPI_HelperCoverage(t *testing.T) {
 		if err != nil || !ok || string(cfg) != `{"entity":"person","id_kind":"uuid"}` {
 			t.Fatalf("cfg=%s ok=%v err=%v", string(cfg), ok, err)
 		}
+		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), def, json.RawMessage(`{`)); ok {
+			t.Fatalf("expected invalid json to fail")
+		}
 		if _, ok, _ := normalizeOrgUnitEnableDataSourceConfig(context.Background(), "t1", "2026-01-01", newDictMemoryStore(), def, nil); ok {
 			t.Fatalf("expected nil entity config to fail")
 		}

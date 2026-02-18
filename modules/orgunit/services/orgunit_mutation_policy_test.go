@@ -403,21 +403,21 @@ func TestValidatePatch_CoversBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("effective-date correction mode rejects other fields", func(t *testing.T) {
+	t.Run("effective-date correction mode allows other fields", func(t *testing.T) {
 		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{
 			EffectiveDate: stringPtr("2026-01-02"),
 			Name:          stringPtr("X"),
-		}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
-			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		}); err != nil {
+			t.Fatalf("unexpected err=%v", err)
 		}
 	})
 
-	t.Run("effective-date correction mode rejects ext payload", func(t *testing.T) {
+	t.Run("effective-date correction mode allows ext payload", func(t *testing.T) {
 		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{
 			EffectiveDate: stringPtr("2026-01-02"),
 			Ext:           map[string]any{"org_type": "DEPARTMENT"},
-		}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
-			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+		}); err != nil {
+			t.Fatalf("unexpected err=%v", err)
 		}
 	})
 
@@ -545,12 +545,12 @@ func TestValidatePatch_EffectiveDateCorrectionModeAndAllowedFields(t *testing.T)
 		AllowedFields: []string{"effective_date", "name", "org_type"},
 	}
 
-	// Changing effective_date must be exclusive.
+	// Changing effective_date can be submitted together with other fields (DEV-PLAN-108).
 	if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{
 		EffectiveDate: stringPtr("2026-01-02"),
 		Name:          stringPtr("New"),
-	}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
-		t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
+	}); err != nil {
+		t.Fatalf("unexpected err=%v", err)
 	}
 
 	// Allowed in normal mode.

@@ -230,6 +230,61 @@ export interface OrgUnitWriteResult {
   fields?: Record<string, unknown>
 }
 
+export type OrgUnitWriteIntent = 'create_org' | 'add_version' | 'insert_version' | 'correct'
+
+export interface OrgUnitWriteAPIRequest {
+  intent: OrgUnitWriteIntent
+  org_code: string
+  effective_date: string
+  target_effective_date?: string
+  request_code: string
+  patch: {
+    name?: string
+    parent_org_code?: string
+    status?: string
+    is_business_unit?: boolean
+    manager_pernr?: string
+    ext?: Record<string, unknown>
+  }
+}
+
+export interface OrgUnitWriteAPIResponse {
+  org_code: string
+  effective_date: string
+  event_type: string
+  event_uuid: string
+  fields?: Record<string, unknown>
+}
+
+export async function writeOrgUnit(request: OrgUnitWriteAPIRequest): Promise<OrgUnitWriteAPIResponse> {
+  return httpClient.post<OrgUnitWriteAPIResponse>('/org/api/org-units/write', request)
+}
+
+export interface OrgUnitWriteCapabilitiesResponse {
+  intent: OrgUnitWriteIntent
+  enabled: boolean
+  deny_reasons: string[]
+  allowed_fields: string[]
+  field_payload_keys: Record<string, string>
+}
+
+export async function getOrgUnitWriteCapabilities(options: {
+  intent: OrgUnitWriteIntent
+  orgCode: string
+  effectiveDate: string
+  targetEffectiveDate?: string
+}): Promise<OrgUnitWriteCapabilitiesResponse> {
+  const query = new URLSearchParams({
+    intent: options.intent,
+    org_code: options.orgCode,
+    effective_date: options.effectiveDate
+  })
+  if (options.targetEffectiveDate) {
+    query.set('target_effective_date', options.targetEffectiveDate)
+  }
+  return httpClient.get<OrgUnitWriteCapabilitiesResponse>(`/org/api/org-units/write-capabilities?${query.toString()}`)
+}
+
 export async function createOrgUnit(request: {
   org_code: string
   name: string

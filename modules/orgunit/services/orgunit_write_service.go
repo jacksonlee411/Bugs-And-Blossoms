@@ -47,6 +47,12 @@ var (
 )
 
 type OrgUnitWriteService interface {
+	// Write is the DEV-PLAN-108 unified write entrypoint:
+	// - create_org -> CREATE
+	// - add_version/insert_version -> UPDATE
+	// - correct -> CORRECT_EVENT (keeps target_event_uuid audit chain; replay may interpret as UPDATE)
+	Write(ctx context.Context, tenantID string, req WriteOrgUnitRequest) (OrgUnitWriteResult, error)
+
 	Create(ctx context.Context, tenantID string, req CreateOrgUnitRequest) (types.OrgUnitResult, error)
 	Rename(ctx context.Context, tenantID string, req RenameOrgUnitRequest) error
 	Move(ctx context.Context, tenantID string, req MoveOrgUnitRequest) error
@@ -57,6 +63,42 @@ type OrgUnitWriteService interface {
 	CorrectStatus(ctx context.Context, tenantID string, req CorrectStatusOrgUnitRequest) (types.OrgUnitResult, error)
 	RescindRecord(ctx context.Context, tenantID string, req RescindRecordOrgUnitRequest) (types.OrgUnitResult, error)
 	RescindOrg(ctx context.Context, tenantID string, req RescindOrgUnitRequest) (types.OrgUnitResult, error)
+}
+
+type OrgUnitWriteIntent string
+
+const (
+	OrgUnitWriteIntentCreateOrg     OrgUnitWriteIntent = "create_org"
+	OrgUnitWriteIntentAddVersion    OrgUnitWriteIntent = "add_version"
+	OrgUnitWriteIntentInsertVersion OrgUnitWriteIntent = "insert_version"
+	OrgUnitWriteIntentCorrect       OrgUnitWriteIntent = "correct"
+)
+
+type OrgUnitWritePatch struct {
+	Name           *string
+	ParentOrgCode  *string
+	Status         *string
+	IsBusinessUnit *bool
+	ManagerPernr   *string
+	Ext            map[string]any
+}
+
+type WriteOrgUnitRequest struct {
+	Intent              string
+	OrgCode             string
+	EffectiveDate       string
+	TargetEffectiveDate string
+	RequestCode         string
+	Patch               OrgUnitWritePatch
+	InitiatorUUID       string
+}
+
+type OrgUnitWriteResult struct {
+	OrgCode       string         `json:"org_code"`
+	EffectiveDate string         `json:"effective_date"`
+	EventType     string         `json:"event_type"`
+	EventUUID     string         `json:"event_uuid"`
+	Fields        map[string]any `json:"fields,omitempty"`
 }
 
 type CreateOrgUnitRequest struct {
@@ -164,6 +206,227 @@ func (globalDictResolver) ListOptions(ctx context.Context, tenantID string, asOf
 
 func NewOrgUnitWriteService(store ports.OrgUnitWriteStore) OrgUnitWriteService {
 	return &orgUnitWriteService{store: store}
+}
+
+func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req WriteOrgUnitRequest) (OrgUnitWriteResult, error) {
+	intent := strings.TrimSpace(req.Intent)
+	if intent == "" {
+		return OrgUnitWriteResult{}, httperr.NewBadRequest("intent is required")
+	}
+
+	effectiveDate, err := validateDate(req.EffectiveDate)
+	if err != nil {
+		return OrgUnitWriteResult{}, err
+	}
+
+	orgCode, err := normalizeOrgCode(req.OrgCode)
+	if err != nil {
+		return OrgUnitWriteResult{}, err
+	}
+
+	requestCode := strings.TrimSpace(req.RequestCode)
+	if requestCode == "" {
+		return OrgUnitWriteResult{}, httperr.NewBadRequest("request_code is required")
+	}
+
+	// Resolve ext configs as-of the final effective date (DEV-PLAN-108 §16.3).
+	fieldConfigs, enabledExtFieldKeys, err := s.listEnabledExtFieldConfigs(ctx, tenantID, effectiveDate)
+	if err != nil {
+		return OrgUnitWriteResult{}, err
+	}
+	_ = enabledExtFieldKeys // reserved for future policy checks (capabilities is the UI SSOT).
+
+	payload := make(map[string]any)
+	fields := make(map[string]any)
+
+	// parent_org_code -> parent_id (kernel payload)
+	if req.Patch.ParentOrgCode != nil {
+		parentCodeRaw := strings.TrimSpace(*req.Patch.ParentOrgCode)
+		if parentCodeRaw == "" {
+			return OrgUnitWriteResult{}, httperr.NewBadRequest("parent_org_code is required")
+		}
+		parentCode, err := normalizeOrgCode(parentCodeRaw)
+		if err != nil {
+			return OrgUnitWriteResult{}, err
+		}
+		parentID, err := s.store.ResolveOrgID(ctx, tenantID, parentCode)
+		if err != nil {
+			if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
+				return OrgUnitWriteResult{}, errors.New(errParentNotFoundAsOf)
+			}
+			return OrgUnitWriteResult{}, err
+		}
+		payload["parent_id"] = parentID
+		fields["parent_org_code"] = parentCode
+	}
+
+	// name
+	if req.Patch.Name != nil {
+		name := strings.TrimSpace(*req.Patch.Name)
+		if name == "" {
+			return OrgUnitWriteResult{}, httperr.NewBadRequest("name is required")
+		}
+		payload["name"] = name
+		fields["name"] = name
+	}
+
+	// status
+	if req.Patch.Status != nil {
+		status := strings.TrimSpace(*req.Patch.Status)
+		if status == "" {
+			return OrgUnitWriteResult{}, httperr.NewBadRequest("status is required")
+		}
+		payload["status"] = status
+		fields["status"] = status
+	}
+
+	// is_business_unit
+	if req.Patch.IsBusinessUnit != nil {
+		payload["is_business_unit"] = *req.Patch.IsBusinessUnit
+		fields["is_business_unit"] = *req.Patch.IsBusinessUnit
+	}
+
+	// manager_pernr -> manager_uuid
+	if req.Patch.ManagerPernr != nil {
+		pernrInput := strings.TrimSpace(*req.Patch.ManagerPernr)
+		if pernrInput == "" {
+			// Allow explicit clear.
+			payload["manager_uuid"] = ""
+			payload["manager_pernr"] = ""
+			fields["manager_pernr"] = ""
+			fields["manager_name"] = ""
+		} else {
+			pernr, managerUUID, managerName, err := s.resolveManager(ctx, tenantID, pernrInput)
+			if err != nil {
+				return OrgUnitWriteResult{}, err
+			}
+			payload["manager_uuid"] = managerUUID
+			payload["manager_pernr"] = pernr
+			fields["manager_pernr"] = pernr
+			fields["manager_name"] = managerName
+		}
+	}
+
+	// ext payload + dict labels snapshot
+	if len(req.Patch.Ext) > 0 {
+		extPayload, extLabels, err := buildExtPayloadWithContext(ctx, tenantID, effectiveDate, req.Patch.Ext, fieldConfigs)
+		if err != nil {
+			return OrgUnitWriteResult{}, err
+		}
+		if len(extPayload) > 0 {
+			payload["ext"] = extPayload
+			fields["ext"] = extPayload
+		}
+		if len(extLabels) > 0 {
+			payload["ext_labels_snapshot"] = extLabels
+		}
+	}
+
+	eventUUID, err := newUUID()
+	if err != nil {
+		return OrgUnitWriteResult{}, err
+	}
+
+	initiatorUUID := resolveInitiatorUUID(req.InitiatorUUID, tenantID)
+
+	switch OrgUnitWriteIntent(intent) {
+	case OrgUnitWriteIntentCreateOrg:
+		// Create supports setting status in the same CREATE payload (DEV-PLAN-108 §6.4).
+		payload["org_code"] = orgCode
+		if _, ok := payload["name"]; !ok {
+			return OrgUnitWriteResult{}, httperr.NewBadRequest("name is required")
+		}
+
+		payloadJSON, err := marshalJSON(payload)
+		if err != nil {
+			return OrgUnitWriteResult{}, err
+		}
+
+		if _, err := s.store.SubmitEvent(ctx, tenantID, eventUUID, nil, string(types.OrgUnitEventCreate), effectiveDate, payloadJSON, requestCode, initiatorUUID); err != nil {
+			return OrgUnitWriteResult{}, err
+		}
+
+		return OrgUnitWriteResult{
+			OrgCode:       orgCode,
+			EffectiveDate: effectiveDate,
+			EventType:     string(types.OrgUnitEventCreate),
+			EventUUID:     eventUUID,
+			Fields:        fields,
+		}, nil
+
+	case OrgUnitWriteIntentAddVersion, OrgUnitWriteIntentInsertVersion:
+		if len(payload) == 0 {
+			return OrgUnitWriteResult{}, httperr.NewBadRequest(errPatchRequired)
+		}
+
+		orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+		if err != nil {
+			if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
+				return OrgUnitWriteResult{}, errors.New(errOrgCodeNotFound)
+			}
+			return OrgUnitWriteResult{}, err
+		}
+
+		payloadJSON, err := marshalJSON(payload)
+		if err != nil {
+			return OrgUnitWriteResult{}, err
+		}
+
+		if _, err := s.store.SubmitEvent(ctx, tenantID, eventUUID, &orgID, string(types.OrgUnitEventUpdate), effectiveDate, payloadJSON, requestCode, initiatorUUID); err != nil {
+			return OrgUnitWriteResult{}, err
+		}
+
+		return OrgUnitWriteResult{
+			OrgCode:       orgCode,
+			EffectiveDate: effectiveDate,
+			EventType:     string(types.OrgUnitEventUpdate),
+			EventUUID:     eventUUID,
+			Fields:        fields,
+		}, nil
+
+	case OrgUnitWriteIntentCorrect:
+		targetDate, err := validateDate(req.TargetEffectiveDate)
+		if err != nil {
+			return OrgUnitWriteResult{}, err
+		}
+		orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
+		if err != nil {
+			if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
+				return OrgUnitWriteResult{}, errors.New(errOrgCodeNotFound)
+			}
+			return OrgUnitWriteResult{}, err
+		}
+
+		// DEV-PLAN-108: correct uses CORRECT_EVENT; effective-date correction is represented as patch.effective_date.
+		if effectiveDate != targetDate {
+			payload["effective_date"] = effectiveDate
+		}
+
+		if len(payload) == 0 {
+			return OrgUnitWriteResult{}, httperr.NewBadRequest(errPatchRequired)
+		}
+
+		patchJSON, err := marshalJSON(payload)
+		if err != nil {
+			return OrgUnitWriteResult{}, err
+		}
+
+		correctionUUID, err := s.store.SubmitCorrection(ctx, tenantID, orgID, targetDate, patchJSON, requestCode, initiatorUUID)
+		if err != nil {
+			return OrgUnitWriteResult{}, err
+		}
+
+		return OrgUnitWriteResult{
+			OrgCode:       orgCode,
+			EffectiveDate: effectiveDate,
+			EventType:     "CORRECT_EVENT",
+			EventUUID:     correctionUUID,
+			Fields:        fields,
+		}, nil
+
+	default:
+		return OrgUnitWriteResult{}, httperr.NewBadRequest("intent not supported")
+	}
 }
 
 func (s *orgUnitWriteService) Create(ctx context.Context, tenantID string, req CreateOrgUnitRequest) (types.OrgUnitResult, error) {

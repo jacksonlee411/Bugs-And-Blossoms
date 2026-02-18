@@ -359,6 +359,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/append-capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitAppendCapabilitiesAPI(w, r, orgStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/write-capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitWriteCapabilitiesAPI(w, r, orgStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/details", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsDetailsAPI(w, r, orgStore)
 	}))
@@ -382,6 +385,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/enable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsEnableAPI(w, r, orgUnitWriteService)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/write", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitsWriteAPI(w, r, orgUnitWriteService)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/corrections", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsCorrectionsAPI(w, r, orgUnitWriteService)
