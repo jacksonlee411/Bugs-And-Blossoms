@@ -389,8 +389,11 @@ function OrgUnitExtFieldSelect(props: {
   helperText?: string
   onChange: (nextValue: string | null, nextLabel: string | null) => void
 }) {
-  const [inputValue, setInputValue] = useState('')
-  const debouncedKeyword = useDebouncedValue(inputValue, 250)
+  // 注意：不要把 Autocomplete 的 inputValue 作为受控值传进去，否则在选择 option 时
+  // MUI 会用 reason='reset' 更新输入框文本，但我们若只处理 reason='input' 会导致输入框显示为空。
+  // 这里仅用 keyword 驱动 options 查询，让 Autocomplete 自己管理输入框的显示值。
+  const [keyword, setKeyword] = useState('')
+  const debouncedKeyword = useDebouncedValue(keyword, 250)
 
   const optionsQuery = useQuery({
     enabled: !props.disabled,
@@ -433,13 +436,20 @@ function OrgUnitExtFieldSelect(props: {
       clearOnEscape
       disabled={effectiveDisabled}
       getOptionLabel={(option) => option.label}
-      inputValue={inputValue}
       isOptionEqualToValue={(option, value) => option.value === value.value}
       loading={optionsQuery.isFetching}
-      onChange={(_, option) => props.onChange(option ? option.value : null, option ? option.label : null)}
+      onChange={(_, option) => {
+        props.onChange(option ? option.value : null, option ? option.label : null)
+        // 选择后清空 keyword，避免把选中 label 当作下一次 options 查询关键词。
+        setKeyword('')
+      }}
       onInputChange={(_, nextValue, reason) => {
         if (reason === 'input') {
-          setInputValue(nextValue)
+          setKeyword(nextValue)
+          return
+        }
+        if (reason === 'clear') {
+          setKeyword('')
         }
       }}
       options={options}
