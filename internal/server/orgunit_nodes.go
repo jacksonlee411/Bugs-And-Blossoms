@@ -113,10 +113,12 @@ const (
 func orgNodeWriteErrorMessage(err error) string {
 	code := strings.TrimSpace(err.Error())
 	messages := map[string]string{
-		"ORG_CODE_INVALID":                         "组织编码无效",
-		"ORG_CODE_NOT_FOUND":                       "组织编码不存在",
-		"ORG_EVENT_NOT_FOUND":                      "未找到该生效日记录",
-		"EVENT_DATE_CONFLICT":                      "生效日期冲突，请勾选“同日状态纠错”后重试",
+		"ORG_CODE_INVALID":    "组织编码无效",
+		"ORG_CODE_NOT_FOUND":  "组织编码不存在",
+		"ORG_EVENT_NOT_FOUND": "未找到该生效日记录",
+		// One-day-slot-per-effective-date: writes that target an already-occupied effective_date are rejected.
+		// UI should guide users to either pick another effective_date (add/insert) or use correction to change the existing record.
+		"EVENT_DATE_CONFLICT":                      "生效日期冲突：该生效日已存在记录。请修改“生效日期”（新增/插入记录）或使用“修正”修改该生效日记录后重试。",
 		"ORG_REQUEST_ID_CONFLICT":                  "请求编号冲突，请刷新后重试",
 		"ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET": "该记录不支持同日状态纠错",
 		"ORG_ROOT_DELETE_FORBIDDEN":                "根组织不允许删除",
@@ -1758,7 +1760,7 @@ SELECT orgunit.submit_org_event(
 	return nil
 }
 
-func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, newEffectiveDate string, requestID string) error {
+func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, newEffectiveDate string, requestCode string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -1775,8 +1777,8 @@ func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID 
 	if strings.TrimSpace(newEffectiveDate) == "" {
 		return errors.New("effective_date is required")
 	}
-	if strings.TrimSpace(requestID) == "" {
-		return errors.New("request_id is required")
+	if strings.TrimSpace(requestCode) == "" {
+		return errors.New("request_code is required")
 	}
 	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 
@@ -1791,7 +1793,7 @@ SELECT orgunit.submit_org_event_correction(
   $5::text,
   $6::uuid
 )
-	`, tenantID, orgID, targetEffectiveDate, []byte(patch), requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
+	`, tenantID, orgID, targetEffectiveDate, []byte(patch), requestCode, initiatorUUID).Scan(&correctionUUID); err != nil {
 		return err
 	}
 

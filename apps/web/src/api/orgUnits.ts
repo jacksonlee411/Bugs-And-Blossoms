@@ -113,7 +113,8 @@ export type OrgUnitExtScalarValue = string | number | boolean | null
 
 export interface OrgUnitExtField {
   field_key: string
-  label_i18n_key: string
+  label_i18n_key: string | null
+  label?: string | null
   value_type: OrgUnitExtValueType
   data_source_type: OrgUnitExtDataSourceType
   value: OrgUnitExtScalarValue
@@ -291,7 +292,7 @@ export async function setOrgUnitBusinessUnit(request: {
 export async function correctOrgUnit(request: {
   org_code: string
   effective_date: string
-  request_id: string
+  request_code: string
   patch: {
     effective_date?: string
     name?: string
@@ -308,7 +309,7 @@ export async function correctOrgUnitStatus(request: {
   org_code: string
   effective_date: string
   target_status: string
-  request_id: string
+  request_code: string
 }): Promise<OrgUnitWriteResult> {
   return httpClient.post<OrgUnitWriteResult>('/org/api/org-units/status-corrections', request)
 }
@@ -316,10 +317,10 @@ export async function correctOrgUnitStatus(request: {
 export async function rescindOrgUnitRecord(request: {
   org_code: string
   effective_date: string
-  request_id: string
+  request_code: string
   reason: string
-}): Promise<{ org_code: string; effective_date: string; operation: string; request_id: string }> {
-  return httpClient.post<{ org_code: string; effective_date: string; operation: string; request_id: string }>(
+}): Promise<{ org_code: string; effective_date: string; operation: string; request_code: string }> {
+  return httpClient.post<{ org_code: string; effective_date: string; operation: string; request_code: string }>(
     '/org/api/org-units/rescinds',
     request
   )
@@ -327,10 +328,10 @@ export async function rescindOrgUnitRecord(request: {
 
 export async function rescindOrgUnit(request: {
   org_code: string
-  request_id: string
+  request_code: string
   reason: string
-}): Promise<{ org_code: string; operation: string; request_id: string; rescinded_events: number }> {
-  return httpClient.post<{ org_code: string; operation: string; request_id: string; rescinded_events: number }>(
+}): Promise<{ org_code: string; operation: string; request_code: string; rescinded_events: number }> {
+  return httpClient.post<{ org_code: string; operation: string; request_code: string; rescinded_events: number }>(
     '/org/api/org-units/rescinds/org',
     request
   )
@@ -464,6 +465,8 @@ export async function listOrgUnitFieldDefinitions(): Promise<OrgUnitFieldDefinit
 
 export interface OrgUnitTenantFieldConfig {
   field_key: string
+  label_i18n_key?: string | null
+  label?: string | null
   value_type: OrgUnitExtValueType
   data_source_type: OrgUnitExtDataSourceType
   data_source_config: Record<string, unknown>
@@ -471,11 +474,39 @@ export interface OrgUnitTenantFieldConfig {
   enabled_on: string
   disabled_on: string | null
   updated_at: string
+  allow_filter?: boolean
+  allow_sort?: boolean
 }
 
 export interface OrgUnitFieldConfigsResponse {
   as_of: string
   field_configs: OrgUnitTenantFieldConfig[]
+}
+
+export interface OrgUnitPlainCustomHint {
+  pattern: string
+  value_type: OrgUnitExtValueType
+}
+
+export interface OrgUnitFieldEnableCandidateField {
+  field_key: string
+  dict_code: string
+  name: string
+  value_type: OrgUnitExtValueType
+  data_source_type: OrgUnitExtDataSourceType
+}
+
+export interface OrgUnitFieldConfigsEnableCandidatesResponse {
+  enabled_on: string
+  dict_fields: OrgUnitFieldEnableCandidateField[]
+  plain_custom_hint: OrgUnitPlainCustomHint
+}
+
+export async function listOrgUnitFieldConfigEnableCandidates(options: {
+  enabledOn: string
+}): Promise<OrgUnitFieldConfigsEnableCandidatesResponse> {
+  const query = new URLSearchParams({ enabled_on: options.enabledOn })
+  return httpClient.get<OrgUnitFieldConfigsEnableCandidatesResponse>(`/org/api/org-units/field-configs:enable-candidates?${query.toString()}`)
 }
 
 export async function listOrgUnitFieldConfigs(options: {
@@ -494,6 +525,7 @@ export async function enableOrgUnitFieldConfig(request: {
   enabled_on: string
   request_code: string
   data_source_config?: Record<string, unknown>
+  label?: string
 }): Promise<OrgUnitTenantFieldConfig> {
   return httpClient.post<OrgUnitTenantFieldConfig>('/org/api/org-units/field-configs', request)
 }

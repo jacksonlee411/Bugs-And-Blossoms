@@ -75,13 +75,14 @@ graph TD
   - 说明：该边界与现有“按目标事件类型白名单”的写入模型一致（参考 `DEV-PLAN-082`/`DEV-PLAN-083`），避免为扩展字段引入新的事件语义。
 
 - **ADR-100A-04：字段定义来源（避免变成全量动态平台）**
-  - 选定（MVP）：后端提供“可启用字段定义列表”（2~5 个），UI 只能从该列表选择 `field_key`（对齐 `DEV-PLAN-101`）。  
-  - 非目标：本期不支持租户自由创建任意 `field_key`。
+  - 选定（MVP）：后端提供“可启用字段定义列表”（2~5 个），UI 默认从该列表选择内置 `field_key`（对齐 `DEV-PLAN-101`）。  
+  - 补充（对齐 `DEV-PLAN-106`）：允许一个受控例外——**自定义 PLAIN 字段**使用 `x_` 命名空间，通过 enable `field-configs` 时输入 `field_key` 引入（仅 PLAIN(text)，不新增表）。
+  - 非目标：除上述 `x_` 例外外，本期不支持租户自由创建任意 `field_key`。
 
 - **ADR-100A-05：options 数据源类型（补齐 PLAIN，避免把“无 options 字段”误塞进 DICT/ENTITY）**
   - 选定：`data_source_type` 枚举冻结为：`PLAIN|DICT|ENTITY`。  
     - `PLAIN`：自由输入字段（无 options）；`data_source_config` 必须为 `{}`。  
-    - `DICT`：值为 code（通常 `text`），options 来自 `dict_code` 枚举；DICT label 快照写入 `payload.ext_labels_snapshot`（见 `DEV-PLAN-100` D3/D4）。  
+    - `DICT`：值为 code（通常 `text`），options 来自字典模块（dict registry + values；SSOT：`DEV-PLAN-105/105B`）；DICT label 快照写入 `payload.ext_labels_snapshot`（见 `DEV-PLAN-100` D3/D4）。  
     - `ENTITY`：值为实体主键（`uuid|int`），options 来自 `entity` 枚举 + 固定 SQL 模板（`DEV-PLAN-100` D7）。  
   - 目的：让“是否有 options/如何取 options”成为显式契约，避免后续 UI/API/Kernel 各自发明隐式规则。
 
@@ -94,6 +95,7 @@ graph TD
 - **字段（建议）**：
   - `tenant_uuid uuid not null`
   - `field_key text not null`（稳定业务键；MVP 仅来自“字段定义列表”）
+    - 补充（对齐 `DEV-PLAN-106`）：允许 `x_` 命名空间的自定义 PLAIN 字段（仅 PLAIN(text)）。
   - `physical_col text not null`（例如 `ext_str_01`；由后端分配）
   - `value_type text not null`（`text|int|uuid|bool|date`）
   - `data_source_type text not null`（`PLAIN|DICT|ENTITY`；见 §4.3）
@@ -189,7 +191,7 @@ graph TD
     - `value_type`
     - `data_source_type`
     - `data_source_config`（默认/固定配置；形状见 §4.3）
-    - `data_source_config_options`（仅 DICT/ENTITY；非空数组；若固定则为单元素数组，若可选则包含多个候选；启用字段时必须从中选择并提交）
+    - `data_source_config_options`（仅 ENTITY；非空数组；启用字段时必须从中选择并提交；DICT 的 dict_code 选择来源为字典模块 dict list，见 §5.3）
     - `label_i18n_key`（或直接返回 `label`；但需对齐 `DEV-PLAN-020`）
 
 > 约束：当 `data_source_type=PLAIN` 时，该字段无 options，`data_source_config` 必须为 `{}`。
@@ -205,7 +207,9 @@ graph TD
 > 启用字段时的数据来源配置（冻结）：
 >
 > - `PLAIN`：无 options，`data_source_config` 必须为 `{}`（可缺省，由服务端补齐为空对象）。  
-> - `DICT/ENTITY`：`data_source_config` 由租户管理员在启用字段时选择并提交，且必须命中 `field-definitions.data_source_config_options`；禁止任意输入/透传。
+> - `DICT`：`data_source_config={dict_code}` 由租户管理员在启用字段时选择并提交；dict_code 的存在性/可用性以字典模块 dict registry 为 SSOT，且以 `enabled_on` 作为 `as_of` 校验（fail-closed；对齐 `DEV-PLAN-105B/106`）。
+> - `ENTITY`：`data_source_config` 由租户管理员在启用字段时选择并提交，且必须命中 `field-definitions.data_source_config_options`；禁止任意输入/透传。
+> - 自定义 PLAIN（`x_`）：允许 `field_key` 不在 `field-definitions` 中；该路径下 `value_type='text'`、`data_source_type='PLAIN'`（固定），且 `data_source_config` 必须为 `{}`。
 
 ### 5.4 Mutation capabilities 扩展字段口径（承接 DEV-PLAN-083）
 
@@ -220,10 +224,14 @@ graph TD
 ### 6.1 字段启用（物理槽位分配）——伪代码
 
 1. 开启事务（显式 tx + tenant 注入；fail-closed）。
-2. 校验 `field_key` 在 `field-definitions` 列表中，且该租户未存在同 `field_key` 配置。  
+2. 校验 `field_key` 与唯一性：  
+   - 内置字段：`field_key` 必须在 `field-definitions` 列表中；  
+   - 自定义字段：允许 `x_[a-z0-9_]{1,60}`（仅 PLAIN(text)），且不得与内置字段同名；  
+   - 两类都必须保证该租户未存在同 `field_key` 配置。  
 3. 校验 `data_source_config`：  
    - `PLAIN`：必须为 `{}`；  
-   - `DICT/ENTITY`：必须命中该 `field_key` 在 `field-definitions` 返回的 `data_source_config_options`。  
+   - `DICT`：`dict_code` 必须在 dict registry 中存在且在 `enabled_on` 下可用（fail-closed）。  
+   - `ENTITY`：必须命中该 `field_key` 在 `field-definitions` 返回的 `data_source_config_options`。  
 4. 根据 `value_type/data_source_type` 选择槽位分组（例如 `PLAIN(text)/DICT(text) -> ext_str_*`；`ENTITY(uuid) -> ext_uuid_*`）。
 5. 分配第一个空闲 `physical_col`（同租户下未占用）。
 6. 写入 `tenant_field_configs`（由 Kernel 函数执行；应用层禁止直写）。
@@ -279,7 +287,9 @@ graph TD
 | `location_code` | `text` | `PLAIN` | `{}` | `filter: no; sort: no; options: n/a` | `CREATE + CORRECT_EVENT(target=CREATE)` |
 | `cost_center` | `text` | `PLAIN` | `{}` | `filter: no; sort: no; options: n/a` | `CREATE + CORRECT_EVENT(target=CREATE)` |
 
-> `data_source_config` 口径说明（冻结）：表中 `data_source_config` 表示该字段的默认配置；当 `data_source_type IN (DICT, ENTITY)` 且该字段允许多种来源配置时，`field-definitions` 必须返回 `data_source_config_options[]`，租户管理员在“启用字段”时从中选择并提交（否则启用应失败）。
+> `data_source_config` 口径说明（冻结）：表中 `data_source_config` 表示该字段的默认配置；当字段需要在启用时选择来源配置时：
+> - DICT：dict_code 选择来源为字典模块 dict list（`DEV-PLAN-105B`），并以 `enabled_on` 作为 `as_of` 校验（对齐 `DEV-PLAN-106`）；`field-definitions` 不再枚举 dict_code。
+> - ENTITY：`field-definitions` 必须返回 `data_source_config_options[]`（非空数组；枚举化候选），租户管理员在“启用字段”时从中选择并提交（否则启用应失败）。
 
 > MVP 约定：列表筛选/排序命中扩展字段的最小闭环字段为 `org_type`（DICT，含 options + label snapshot），其余字段先走“详情可见/可写”闭环，避免一次性扩大动态 SQL/索引面。
 

@@ -34,7 +34,6 @@ import {
   listOrgUnitFieldDefinitions,
   searchOrgUnit,
   type OrgUnitAPIItem,
-  type OrgUnitFieldDefinition,
   type OrgUnitListSortField,
   type OrgUnitListSortOrder,
   type OrgUnitListStatusFilter
@@ -170,6 +169,12 @@ function getErrorMessage(error: unknown): string {
 
 type FieldOption = { value: string; label: string }
 
+type OrgUnitExtQueryField = Pick<import('../../api/orgUnits').OrgUnitTenantFieldConfig, 'field_key' | 'value_type' | 'data_source_type'> & {
+  label: string
+  allowFilter: boolean
+  allowSort: boolean
+}
+
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value)
 
@@ -196,7 +201,7 @@ function uniqueOptionsByValue(options: FieldOption[]): FieldOption[] {
 }
 
 function ExtFilterValueInput(props: {
-  field: OrgUnitFieldDefinition | null
+  field: OrgUnitExtQueryField | null
   asOf: string
   label: string
   value: string
@@ -447,45 +452,41 @@ export function OrgUnitsPage() {
     queryFn: () => listOrgUnitFieldConfigs({ asOf, status: 'enabled' }),
     staleTime: 30_000
   })
-
   const fieldDefinitions = useMemo(() => fieldDefinitionsQuery.data?.fields ?? [], [fieldDefinitionsQuery.data])
-  const enabledFieldKeys = useMemo(() => {
-    const keys = new Set<string>()
-    fieldConfigsQuery.data?.field_configs.forEach((cfg) => keys.add(cfg.field_key))
-    return keys
-  }, [fieldConfigsQuery.data])
   const normalizedFieldDefinitions = useMemo(() => {
     return fieldDefinitions.map((def) => {
-      const labelKey = def.label_i18n_key?.trim() ?? ''
-      const label = labelKey && isMessageKey(labelKey) ? t(labelKey) : def.field_key
+      const key = def.label_i18n_key?.trim() ?? ''
+      const label = key && isMessageKey(key) ? t(key) : def.field_key
       return {
         ...def,
-        label,
-        allowFilter: Boolean(def.allow_filter),
-        allowSort: Boolean(def.allow_sort)
+        label
       }
     })
   }, [fieldDefinitions, t])
-  const enabledFieldDefinitions = useMemo(
-    () => normalizedFieldDefinitions.filter((def) => enabledFieldKeys.has(def.field_key)),
-    [normalizedFieldDefinitions, enabledFieldKeys]
-  )
-  const extFilterFields = useMemo(
-    () => enabledFieldDefinitions.filter((def) => def.allowFilter),
-    [enabledFieldDefinitions]
-  )
-  const extSortFields = useMemo(
-    () => enabledFieldDefinitions.filter((def) => def.allowSort),
-    [enabledFieldDefinitions]
-  )
-  const extMetadataError = fieldDefinitionsQuery.error || fieldConfigsQuery.error
-  const extMetadataReady = canUseExt && fieldDefinitionsQuery.isSuccess && fieldConfigsQuery.isSuccess
-  const extFilterFieldKeys = useMemo(() => new Set(extFilterFields.map((def) => def.field_key)), [extFilterFields])
-  const extSortFieldKeys = useMemo(() => new Set(extSortFields.map((def) => def.field_key)), [extSortFields])
-  const selectedExtFilterField = useMemo(
-    () => extFilterFields.find((field) => field.field_key === extFilterFieldInput) ?? null,
-    [extFilterFieldInput, extFilterFields]
-  )
+
+  const enabledExtFields = useMemo<OrgUnitExtQueryField[]>(() => {
+    const cfgs = fieldConfigsQuery.data?.field_configs ?? []
+    return cfgs.map((cfg) => {
+      const key = cfg.label_i18n_key?.trim() ?? ''
+      const literal = cfg.label?.trim() ?? ''
+      const label = key && isMessageKey(key) ? t(key) : literal.length > 0 ? literal : cfg.field_key
+      return {
+        field_key: cfg.field_key,
+        value_type: cfg.value_type,
+        data_source_type: cfg.data_source_type,
+        label,
+        allowFilter: Boolean(cfg.allow_filter),
+        allowSort: Boolean(cfg.allow_sort)
+      }
+    })
+  }, [fieldConfigsQuery.data, t])
+  const extFilterFields = useMemo(() => enabledExtFields.filter((field) => field.allowFilter), [enabledExtFields])
+  const extSortFields = useMemo(() => enabledExtFields.filter((field) => field.allowSort), [enabledExtFields])
+  const extMetadataError = fieldConfigsQuery.error
+  const extMetadataReady = canUseExt && fieldConfigsQuery.isSuccess
+  const extFilterFieldKeys = useMemo(() => new Set(extFilterFields.map((field) => field.field_key)), [extFilterFields])
+  const extSortFieldKeys = useMemo(() => new Set(extSortFields.map((field) => field.field_key)), [extSortFields])
+  const selectedExtFilterField = useMemo(() => extFilterFields.find((field) => field.field_key === extFilterFieldInput) ?? null, [extFilterFieldInput, extFilterFields])
   const sortFieldOptions = useMemo<FieldOption[]>(() => {
     const options: FieldOption[] = [
       { value: '', label: t('org_ext_sort_none') },

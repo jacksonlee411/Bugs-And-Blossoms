@@ -198,13 +198,40 @@ func TestBuildOrgUnitDetailsExtFields_ErrorAndEdgeBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("unknown definition fails closed", func(t *testing.T) {
-		_, err := buildOrgUnitDetailsExtFields(context.Background(), detailsExtStoreStub{
+	t.Run("unknown definition uses literal label", func(t *testing.T) {
+		items, err := buildOrgUnitDetailsExtFields(context.Background(), detailsExtStoreStub{
 			cfgs: []orgUnitTenantFieldConfig{{FieldKey: "missing", PhysicalCol: "ext_str_01"}},
-			snap: orgUnitVersionExtSnapshot{},
+			snap: orgUnitVersionExtSnapshot{
+				VersionValues: map[string]any{"ext_str_01": "V"},
+			},
 		}, "t1", 10000001, "2026-01-01")
-		if err == nil {
-			t.Fatal("expected error")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(items) != 1 {
+			t.Fatalf("items=%v", items)
+		}
+		if items[0].LabelI18nKey != nil {
+			t.Fatalf("label_i18n_key=%v", *items[0].LabelI18nKey)
+		}
+		if items[0].Label == nil || *items[0].Label != "missing" {
+			t.Fatalf("label=%v", items[0].Label)
+		}
+	})
+
+	t.Run("dict field uses display label", func(t *testing.T) {
+		display := "组织类型"
+		items, err := buildOrgUnitDetailsExtFields(context.Background(), detailsExtStoreStub{
+			cfgs: []orgUnitTenantFieldConfig{{FieldKey: "d_org_type", DisplayLabel: &display, PhysicalCol: "ext_str_01", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}},
+			snap: orgUnitVersionExtSnapshot{
+				VersionValues: map[string]any{"ext_str_01": "10"},
+			},
+		}, "t1", 10000001, "2026-01-01")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(items) != 1 || items[0].Label == nil || *items[0].Label != "组织类型" {
+			t.Fatalf("items=%v", items)
 		}
 	})
 
@@ -228,37 +255,31 @@ func TestBuildOrgUnitDetailsExtFields_ErrorAndEdgeBranches(t *testing.T) {
 
 func TestResolveOrgUnitExtDisplayValue_CustomDefinitions(t *testing.T) {
 	t.Run("dict missing dict_code", func(t *testing.T) {
-		def := orgUnitFieldDefinition{FieldKey: "x"}
 		cfg := orgUnitTenantFieldConfig{DataSourceConfig: json.RawMessage(`{}`)}
-		_, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", def, cfg, "text", "DICT", "ANY", orgUnitVersionExtSnapshot{})
+		_, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", "x", cfg, "text", "DICT", "ANY", orgUnitVersionExtSnapshot{})
 		if source != "unresolved" {
 			t.Fatalf("source=%q", source)
 		}
 	})
 
 	t.Run("dict value nil", func(t *testing.T) {
-		def := orgUnitFieldDefinition{FieldKey: "x"}
 		cfg := orgUnitTenantFieldConfig{DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}
-		_, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", def, cfg, "text", "DICT", nil, orgUnitVersionExtSnapshot{})
+		_, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", "x", cfg, "text", "DICT", nil, orgUnitVersionExtSnapshot{})
 		if source != "unresolved" {
 			t.Fatalf("source=%q", source)
 		}
 	})
 
 	t.Run("dict non-string value uses fmt.Sprint", func(t *testing.T) {
-		def := orgUnitFieldDefinition{
-			FieldKey: "x",
-		}
 		cfg := orgUnitTenantFieldConfig{DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`)}
-		got, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", def, cfg, "text", "DICT", json.Number("10"), orgUnitVersionExtSnapshot{})
+		got, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", "x", cfg, "text", "DICT", json.Number("10"), orgUnitVersionExtSnapshot{})
 		if source != "dict_fallback" || got == nil || *got != "部门" {
 			t.Fatalf("display=%v source=%q", got, source)
 		}
 	})
 
 	t.Run("entity is unresolved", func(t *testing.T) {
-		def := orgUnitFieldDefinition{FieldKey: "x"}
-		_, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", def, orgUnitTenantFieldConfig{}, "text", "ENTITY", "ANY", orgUnitVersionExtSnapshot{})
+		_, source := resolveOrgUnitExtDisplayValue(context.Background(), "t1", "2026-01-01", "x", orgUnitTenantFieldConfig{}, "text", "ENTITY", "ANY", orgUnitVersionExtSnapshot{})
 		if source != "unresolved" {
 			t.Fatalf("source=%q", source)
 		}

@@ -22,7 +22,7 @@
 
 1) 列表页（`apps/web` 的 OrgUnitsPage）尚未提供扩展字段的筛选/排序 UI 入口；  
 2) 列表 ext query 的 URL 参数与前端 grid query state 解析存在“仅支持 core sort 字段”的约束，导致无法把 `sort=ext:<field_key>` 作为可分享状态稳定复现；  
-3) i18n 已覆盖详情页所需的字段 label key（如 `org.fields.org_type`），但列表侧仍缺少“扩展筛选/排序”相关控件文案与错误提示的 i18n 收口。
+3) i18n 已覆盖详情页所需的内置字段 label key（如 `org.fields.short_name`），但列表侧仍缺少“扩展筛选/排序”相关控件文案与错误提示的 i18n 收口。
 
 此外，后端列表接口已具备 ext filter/sort 能力（SSOT：`DEV-PLAN-100D` §5.6）；本计划已完成与“树-列表联动”冲突点的收敛（`parent_org_code` 场景允许 ext query）。
 
@@ -30,8 +30,8 @@
 
 ### 2.1 核心目标（DoD）
 
-1. [x] OrgUnit 列表页开放 **1~2 个扩展字段**的筛选入口（MVP 至少覆盖 `org_type`）。  
-2. [x] OrgUnit 列表页开放 **1~2 个扩展字段**的排序入口（MVP 至少覆盖 `org_type`）。  
+1. [x] OrgUnit 列表页开放 **1~2 个扩展字段**的筛选入口（MVP 至少覆盖 `d_org_type`）。  
+2. [x] OrgUnit 列表页开放 **1~2 个扩展字段**的排序入口（MVP 至少覆盖 `d_org_type`）。  
 3. [x] 扩展筛选/排序入口必须由服务端元数据驱动（field_key/label_i18n_key/value_type/data_source_type + allow_filter/allow_sort），UI 不维护第二套白名单（对齐 `DEV-PLAN-100` D7/D8）。  
 4. [x] i18n（en/zh）补齐：
    - [x] 列表扩展筛选/排序相关控件文案；
@@ -91,7 +91,9 @@
 UI 侧组合口径（冻结）：
 
 - enabled 集合来自：`GET /org/api/org-units/field-configs?as_of=...&status=enabled`
-- queryable 集合来自：`field-definitions` 中 `allow_filter/allow_sort=true` 的字段
+- queryable 集合来源（对齐 `DEV-PLAN-106A`）：
+  - built-in 字段：来自 `field-definitions`（`allow_filter/allow_sort`）
+  - 字典字段（`d_...`）与自定义字段（`x_...`）：来自 `field-configs` 行级元数据（`allow_filter/allow_sort`）
 - 列表页实际可选字段 = enabled ∩ queryable（并按 `field_key` 升序稳定排序）
 
 > 后续若需要把列表 ext filter/sort 开放给 read 用户（不要求 admin），另起 dev-plan 新增 read-only endpoint（例如 `fields:queryable`），避免在本计划扩大范围。
@@ -203,7 +205,7 @@ UI 侧组合口径（冻结）：
 
 ## 6. 验收标准（最小可交付）
 
-1. [x] 列表页至少支持 1 个扩展字段（`org_type`）的筛选与排序，并能通过 URL 分享复现（admin-only MVP）。
+1. [x] 列表页至少支持 1 个扩展字段（`d_org_type`）的筛选与排序，并能通过 URL 分享复现（admin-only MVP）。
 2. [x] 选择 ext filter/sort 时，请求严格走 `mode=grid` 分页路径；TreePanel roots/children 请求不携带 ext query 参数。
 3. [x] 当字段在 `as_of` 下未启用/已停用/不允许筛选排序时：
    - [x] UI 禁用该字段或自动清理无效参数；

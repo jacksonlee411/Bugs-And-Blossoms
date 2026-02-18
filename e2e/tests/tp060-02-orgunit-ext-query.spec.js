@@ -39,14 +39,15 @@ async function enableOrgTypeFieldConfig(page, asOf) {
   const dialog = page.getByRole("dialog", { name: /Enable Field/ });
   await expect(dialog).toBeVisible();
 
+  // DEV-PLAN-106A: DICT fields are enabled via "Dict Field" mode and d_<dict_code>.
+  await dialog.getByLabel(/Field Source/).click();
+  await page.getByRole("option", { name: /Dict Field/ }).click();
+
   await dialog.getByLabel(/Field Key/).click();
   await page.getByRole("option", { name: /Org Type/ }).click();
 
   const enabledOnInput = dialog.getByLabel(/Enabled On/);
   await enabledOnInput.fill(asOf);
-
-  await dialog.getByLabel(/Data Source Config/).click();
-  await page.getByRole("option", { name: /dict_code/ }).click();
 
   await dialog.getByRole("button", { name: /Confirm/ }).click();
   await expect(page.getByText(/Enabled successfully/)).toBeVisible({ timeout: 30_000 });
@@ -76,10 +77,10 @@ async function setOrgTypeViaAPI(ctx, { asOf, orgCode, value }) {
     data: {
       org_code: orgCode,
       effective_date: asOf,
-      request_id: `req-${Date.now()}-${orgCode}`,
+      request_code: `req-${Date.now()}-${orgCode}`,
       patch: {
         ext: {
-          org_type: value
+          d_org_type: value
         }
       }
     }
@@ -190,7 +191,7 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   });
 
   await enableOrgTypeFieldConfig(page, asOf);
-  await waitForEnabledFieldConfig(appContext, { asOf, fieldKey: "org_type" });
+  await waitForEnabledFieldConfig(appContext, { asOf, fieldKey: "d_org_type" });
 
   await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.company, value: "20" });
   await setOrgTypeViaAPI(appContext, { asOf, orgCode: org.dept, value: "10" });

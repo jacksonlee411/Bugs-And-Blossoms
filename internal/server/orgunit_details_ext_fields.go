@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -35,30 +34,38 @@ func buildOrgUnitDetailsExtFields(ctx context.Context, store orgUnitDetailsExtFi
 			continue
 		}
 
-		def, ok := lookupOrgUnitFieldDefinition(fieldKey)
-		if !ok {
-			return nil, errors.New("orgunit field definition not found")
+		valueType := strings.TrimSpace(cfg.ValueType)
+		dataSourceType := strings.TrimSpace(cfg.DataSourceType)
+		if valueType == "" || dataSourceType == "" {
+			if def, ok := lookupOrgUnitFieldDefinition(fieldKey); ok {
+				if valueType == "" {
+					valueType = def.ValueType
+				}
+				if dataSourceType == "" {
+					dataSourceType = def.DataSourceType
+				}
+			}
+		}
+		if valueType == "" {
+			valueType = "text"
+		}
+		if dataSourceType == "" {
+			dataSourceType = "PLAIN"
 		}
 
-		valueType := strings.TrimSpace(cfg.ValueType)
-		if valueType == "" {
-			valueType = def.ValueType
-		}
-		dataSourceType := strings.TrimSpace(cfg.DataSourceType)
-		if dataSourceType == "" {
-			dataSourceType = def.DataSourceType
-		}
+		labelI18nKey, label := resolveOrgUnitExtFieldLabel(cfg)
 
 		var value any
 		if snapshot.VersionValues != nil && strings.TrimSpace(cfg.PhysicalCol) != "" {
 			value = snapshot.VersionValues[cfg.PhysicalCol]
 		}
 
-		displayValue, source := resolveOrgUnitExtDisplayValue(ctx, tenantID, asOf, def, cfg, valueType, dataSourceType, value, snapshot)
+		displayValue, source := resolveOrgUnitExtDisplayValue(ctx, tenantID, asOf, fieldKey, cfg, valueType, dataSourceType, value, snapshot)
 
 		items = append(items, orgUnitExtFieldAPIItem{
 			FieldKey:           fieldKey,
-			LabelI18nKey:       def.LabelI18nKey,
+			LabelI18nKey:       labelI18nKey,
+			Label:              label,
 			ValueType:          valueType,
 			DataSourceType:     dataSourceType,
 			Value:              value,
@@ -71,7 +78,26 @@ func buildOrgUnitDetailsExtFields(ctx context.Context, store orgUnitDetailsExtFi
 	return items, nil
 }
 
-func resolveOrgUnitExtDisplayValue(ctx context.Context, tenantID string, asOf string, def orgUnitFieldDefinition, cfg orgUnitTenantFieldConfig, valueType string, dataSourceType string, value any, snapshot orgUnitVersionExtSnapshot) (*string, string) {
+func resolveOrgUnitExtFieldLabel(cfg orgUnitTenantFieldConfig) (*string, *string) {
+	fieldKey := strings.TrimSpace(cfg.FieldKey)
+	def, ok := lookupOrgUnitFieldDefinition(fieldKey)
+	if ok {
+		labelKey := strings.TrimSpace(def.LabelI18nKey)
+		if labelKey != "" {
+			return &labelKey, nil
+		}
+	}
+	if isCustomOrgUnitDictFieldKey(fieldKey) && cfg.DisplayLabel != nil {
+		label := strings.TrimSpace(*cfg.DisplayLabel)
+		if label != "" {
+			return nil, &label
+		}
+	}
+	label := fieldKey
+	return nil, &label
+}
+
+func resolveOrgUnitExtDisplayValue(ctx context.Context, tenantID string, asOf string, fieldKey string, cfg orgUnitTenantFieldConfig, valueType string, dataSourceType string, value any, snapshot orgUnitVersionExtSnapshot) (*string, string) {
 	dataSourceType = strings.ToUpper(strings.TrimSpace(dataSourceType))
 	switch dataSourceType {
 	case "PLAIN":
@@ -81,10 +107,10 @@ func resolveOrgUnitExtDisplayValue(ctx context.Context, tenantID string, asOf st
 		text := formatOrgUnitPlainDisplayValue(valueType, value)
 		return &text, "plain"
 	case "DICT":
-		if label := strings.TrimSpace(snapshot.VersionLabels[def.FieldKey]); label != "" {
+		if label := strings.TrimSpace(snapshot.VersionLabels[fieldKey]); label != "" {
 			return &label, "versions_snapshot"
 		}
-		if label := strings.TrimSpace(snapshot.EventLabels[def.FieldKey]); label != "" {
+		if label := strings.TrimSpace(snapshot.EventLabels[fieldKey]); label != "" {
 			return &label, "events_snapshot"
 		}
 
@@ -114,7 +140,7 @@ func resolveOrgUnitExtDisplayValue(ctx context.Context, tenantID string, asOf st
 func formatOrgUnitPlainDisplayValue(valueType string, value any) string {
 	valueType = strings.ToLower(strings.TrimSpace(valueType))
 	switch valueType {
-	case "text", "uuid", "date":
+	case "text", "uuid", "date", "numeric":
 		if s, ok := value.(string); ok {
 			return s
 		}

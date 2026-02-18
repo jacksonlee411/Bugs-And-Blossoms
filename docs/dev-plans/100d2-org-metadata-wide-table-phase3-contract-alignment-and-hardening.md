@@ -4,12 +4,16 @@
 
 > 目标：在 **不新增 DB schema**、不引入 legacy/双链路 的前提下，把已存在的 Phase 3（`DEV-PLAN-100D`）实现对齐到最新冻结口径（`DEV-PLAN-100A/100D/101/100E`），并补齐必要的测试与门禁证据，为 Phase 4A/4B（`DEV-PLAN-100E/101`）的 UI 联调提供稳定后端。
 
+> 2026-02-17 补充：为对齐 `DEV-PLAN-106/106A`，Phase 3 的“DICT 数据源选择/校验”口径已更新为 **dict registry SSOT**（`DEV-PLAN-105/105B`），并进一步收敛为“字典字段方式”：`field_key=d_<dict_code>`，dict_code 由 field_key 推导（禁止 built-in DICT field_key 启用）。同时保留“自定义 PLAIN（`x_` 命名空间）”的 enable 口径。本文件中与之冲突的历史描述以 §3 的补充条款为准，避免继续把 dict_code 枚举复制进 Org 或形成双链路。
+
 ## 1. 背景
 
 `DEV-PLAN-100D` 已定义 Phase 3 的 SSOT（Internal API + allowlist + fail-closed）。但在 100D 落地之后，我们补齐/澄清了两个会直接影响 UI 与测试稳定性的口径：
 
 1. **停用字段后“隐藏”**：当 `as_of >= disabled_on` 时，该字段不属于 enabled 集合，因此 **details 的 `ext_fields[]` 不返回/不展示**；看历史要切换 `as_of` 或看 Audit（对齐 `DEV-PLAN-100E` 的“ext_fields = enabled 字段全集”）。
-2. **启用字段时 DICT/ENTITY 的 data_source_config 可由租户管理员选择**：但必须从 `field-definitions.data_source_config_options` 的枚举候选中选择并提交；启用后映射不可变（`data_source_config` 也不可修改）（对齐 `DEV-PLAN-100A` 的“映射不可变”）。
+2. **启用字段时 data_source_config 的可选性与校验必须可解释**：
+   - ENTITY：仍必须从 `field-definitions.data_source_config_options` 的枚举候选中选择并提交（禁止任意透传）；
+   - DICT：dict_code 的“可选全集/可用性”以字典模块 dict registry 为 SSOT（`DEV-PLAN-105/105B`；对齐 `DEV-PLAN-106`），不再要求命中 Org 的 `data_source_config_options`。
 
 当前代码尚未完全按以上口径调整时，Phase 4 的典型问题是：
 
@@ -37,10 +41,14 @@
 > 下面每条都必须能在代码 + 测试中证明；细节契约以原 SSOT 为准，避免在本文件复制导致漂移。
 
 1. **field-definitions**
-   - 必须返回 `data_source_config_options`（仅 DICT/ENTITY；且为非空数组；固定来源返回单元素数组）。
+   - `data_source_config_options` 仅对 ENTITY 返回（非空数组；枚举化候选，禁止任意透传）。
+   - DICT 不返回 `data_source_config_options`：dict_code 选择来源为字典模块 dict list（SSOT：`DEV-PLAN-105B`；对齐 `DEV-PLAN-106`）。
 2. **enable field-config**
-   - 请求体允许提交 `data_source_config`（仅 DICT/ENTITY；必须命中 options；禁止任意透传）。
+   - 请求体允许提交 `data_source_config`（DICT/ENTITY）：
+     - DICT（对齐 `DEV-PLAN-106A`）：必须使用 `field_key=d_<dict_code>`；服务端从 field_key 推导 `dict_code`，并按 dict registry 校验其在 `enabled_on` 下可用（fail-closed）。客户端若显式提交 `data_source_config`，也必须与推导结果一致（不一致即拒绝），避免“双写同一事实”漂移。
+     - ENTITY：必须命中 `field-definitions.data_source_config_options`（枚举化候选）。
    - `PLAIN` 允许缺省 `data_source_config`，由服务端补齐为 `{}`。
+   - 自定义 PLAIN：当 `field_key` 满足 `x_[a-z0-9_]{1,60}` 时，允许不在 `field-definitions` 中；该路径下 `value_type='text'`、`data_source_type='PLAIN'`（固定）。
    - 启用后映射不可变（包含 `data_source_config`），冲突/重试遵循 `request_code` 幂等语义（SSOT：`DEV-PLAN-100A/100D`）。
 3. **details ext_fields**
    - `ext_fields[]` 必须等于 `as_of` 下 enabled 字段全集（即使值为空也要返回该字段；稳定排序）。
@@ -57,15 +65,16 @@
 1. [x] **差异盘点（以代码为准，不靠记忆）**
    - 对照 `DEV-PLAN-100A/100D/101/100E` 的上述 4 点，列出现状偏差清单（按 endpoint/错误码/排序/可见性）。
    - 标注每个偏差的代码落点（handler/service/store/test）。
-   - 盘点结论：实现主体已符合冻结口径；本次补齐点主要集中在“契约测试断言”（options 非空、PLAIN 缺省 `{}`、options 端点错误码 fail-closed）。
+   - 盘点结论：实现主体已符合冻结口径；本次补齐点主要集中在“契约测试断言”（ENTITY options 非空、PLAIN 缺省 `{}`、DICT 走 registry 校验、options 端点错误码 fail-closed）。
 
 2. [x] **对齐 field-definitions：补齐 options 契约**
-   - 若缺失：为 DICT/ENTITY 补齐 `data_source_config_options` 的返回与稳定排序。
-   - 增加契约测试：DICT/ENTITY 必须有非空 options；PLAIN 不返回该字段或返回空（以 100D 为准）。
+   - 若缺失：为 ENTITY 补齐 `data_source_config_options` 的返回与稳定排序；DICT 不再返回该字段（对齐 106）。
+   - 增加契约测试：ENTITY 必须有非空 options；DICT 不返回 options；PLAIN 不返回该字段或返回空（以 100D 为准）。
 
 3. [x] **对齐 enable：允许在启用时选择并提交 data_source_config**
    - 请求体：支持 `data_source_config` 字段；PLAIN 可缺省。
-   - 校验：DICT/ENTITY 必须命中 `field-definitions.data_source_config_options`（canonical JSON 后比较）。
+   - 校验：DICT 走 dict registry（`enabled_on` 视图）校验；ENTITY 必须命中 `field-definitions.data_source_config_options`（canonical JSON 后比较）。
+   - 补充：支持自定义 `x_` 字段启用（仅 PLAIN(text)），且禁止与内置字段同名。
    - 错误码：对齐 `DEV-PLAN-100D`（`ORG_FIELD_CONFIG_INVALID_DATA_SOURCE_CONFIG` 等），并补齐失败路径测试。
 
 4. [x] **对齐 details：停用后隐藏 + enabled 字段全集**
@@ -88,8 +97,8 @@
 
 ## 5. 验收标准（DoD）
 
-- [x] `field-definitions` 满足 DICT/ENTITY options 契约；输出稳定（排序/字段形状）。
-- [x] enable 支持 DICT/ENTITY 的 `data_source_config` 选择与校验；PLAIN 可缺省；错误码稳定；幂等重试不重复占槽位。
+- [x] `field-definitions` 满足契约：ENTITY 返回非空 options、DICT 不返回 options；输出稳定（排序/字段形状）。
+- [x] enable 支持 DICT（registry 校验）/ENTITY（options 校验）的 `data_source_config` 选择与校验；PLAIN 可缺省；并支持 `x_` 自定义 PLAIN 字段；错误码稳定；幂等重试不重复占槽位。
 - [x] details 的 `ext_fields[]` 仅包含 enabled-as-of 字段全集；停用后隐藏（不返回/不展示）。
 - [x] DICT options 可用且 fail-closed；不支持类型明确拒绝。
 - [x] 门禁证据齐全：至少 Go/doc 门禁与关键契约测试通过（命中项以 `AGENTS.md`/`DEV-PLAN-012` 为准；routing/authz 本次未触及）。

@@ -112,7 +112,7 @@ type CorrectOrgUnitRequest struct {
 	OrgCode             string
 	TargetEffectiveDate string
 	Patch               OrgUnitCorrectionPatch
-	RequestID           string
+	RequestCode         string
 	InitiatorUUID       string
 }
 
@@ -120,21 +120,21 @@ type CorrectStatusOrgUnitRequest struct {
 	OrgCode             string
 	TargetEffectiveDate string
 	TargetStatus        string
-	RequestID           string
+	RequestCode         string
 	InitiatorUUID       string
 }
 
 type RescindRecordOrgUnitRequest struct {
 	OrgCode             string
 	TargetEffectiveDate string
-	RequestID           string
+	RequestCode         string
 	Reason              string
 	InitiatorUUID       string
 }
 
 type RescindOrgUnitRequest struct {
 	OrgCode       string
-	RequestID     string
+	RequestCode   string
 	Reason        string
 	InitiatorUUID string
 }
@@ -676,9 +676,9 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 		return types.OrgUnitResult{}, err
 	}
 
-	requestID := strings.TrimSpace(req.RequestID)
-	if requestID == "" {
-		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
+	requestCode := strings.TrimSpace(req.RequestCode)
+	if requestCode == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("request_code is required")
 	}
 
 	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
@@ -728,7 +728,7 @@ func (s *orgUnitWriteService) Correct(ctx context.Context, tenantID string, req 
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitCorrection(ctx, tenantID, orgID, targetEffectiveDate, patchJSON, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
+	if _, err := s.store.SubmitCorrection(ctx, tenantID, orgID, targetEffectiveDate, patchJSON, requestCode, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
@@ -760,9 +760,9 @@ func (s *orgUnitWriteService) CorrectStatus(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	requestID := strings.TrimSpace(req.RequestID)
-	if requestID == "" {
-		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
+	requestCode := strings.TrimSpace(req.RequestCode)
+	if requestCode == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("request_code is required")
 	}
 
 	orgID, err := s.store.ResolveOrgID(ctx, tenantID, orgCode)
@@ -773,14 +773,14 @@ func (s *orgUnitWriteService) CorrectStatus(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitStatusCorrection(ctx, tenantID, orgID, targetEffectiveDate, targetStatus, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
+	if _, err := s.store.SubmitStatusCorrection(ctx, tenantID, orgID, targetEffectiveDate, targetStatus, requestCode, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
 	fields := map[string]any{
 		"operation":     "CORRECT_STATUS",
 		"target_status": targetStatus,
-		"request_id":    requestID,
+		"request_code":  requestCode,
 	}
 
 	return types.OrgUnitResult{
@@ -802,9 +802,9 @@ func (s *orgUnitWriteService) RescindRecord(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	requestID := strings.TrimSpace(req.RequestID)
-	if requestID == "" {
-		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
+	requestCode := strings.TrimSpace(req.RequestCode)
+	if requestCode == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("request_code is required")
 	}
 
 	reason := strings.TrimSpace(req.Reason)
@@ -820,7 +820,7 @@ func (s *orgUnitWriteService) RescindRecord(ctx context.Context, tenantID string
 		return types.OrgUnitResult{}, err
 	}
 
-	if _, err := s.store.SubmitRescindEvent(ctx, tenantID, orgID, targetEffectiveDate, reason, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
+	if _, err := s.store.SubmitRescindEvent(ctx, tenantID, orgID, targetEffectiveDate, reason, requestCode, resolveInitiatorUUID(req.InitiatorUUID, tenantID)); err != nil {
 		return types.OrgUnitResult{}, err
 	}
 
@@ -829,8 +829,8 @@ func (s *orgUnitWriteService) RescindRecord(ctx context.Context, tenantID string
 		OrgCode:       orgCode,
 		EffectiveDate: targetEffectiveDate,
 		Fields: map[string]any{
-			"operation":  "RESCIND_EVENT",
-			"request_id": requestID,
+			"operation":    "RESCIND_EVENT",
+			"request_code": requestCode,
 		},
 	}, nil
 }
@@ -841,9 +841,9 @@ func (s *orgUnitWriteService) RescindOrg(ctx context.Context, tenantID string, r
 		return types.OrgUnitResult{}, err
 	}
 
-	requestID := strings.TrimSpace(req.RequestID)
-	if requestID == "" {
-		return types.OrgUnitResult{}, httperr.NewBadRequest("request_id is required")
+	requestCode := strings.TrimSpace(req.RequestCode)
+	if requestCode == "" {
+		return types.OrgUnitResult{}, httperr.NewBadRequest("request_code is required")
 	}
 
 	reason := strings.TrimSpace(req.Reason)
@@ -859,7 +859,7 @@ func (s *orgUnitWriteService) RescindOrg(ctx context.Context, tenantID string, r
 		return types.OrgUnitResult{}, err
 	}
 
-	rescindedEvents, err := s.store.SubmitRescindOrg(ctx, tenantID, orgID, reason, requestID, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
+	rescindedEvents, err := s.store.SubmitRescindOrg(ctx, tenantID, orgID, reason, requestCode, resolveInitiatorUUID(req.InitiatorUUID, tenantID))
 	if err != nil {
 		return types.OrgUnitResult{}, err
 	}
@@ -870,7 +870,7 @@ func (s *orgUnitWriteService) RescindOrg(ctx context.Context, tenantID string, r
 		EffectiveDate: "",
 		Fields: map[string]any{
 			"operation":        "RESCIND_ORG",
-			"request_id":       requestID,
+			"request_code":     requestCode,
 			"rescinded_events": rescindedEvents,
 		},
 	}, nil
@@ -980,8 +980,8 @@ func (s *orgUnitWriteService) buildCorrectionPatch(ctx context.Context, tenantID
 			if !ok {
 				return nil, nil, "", httperr.NewBadRequest(errPatchFieldNotAllowed)
 			}
-			if _, ok := fieldmeta.LookupFieldDefinition(fieldKey); !ok {
-				return nil, nil, "", httperr.NewBadRequest(errPatchFieldNotAllowed)
+			if err := validateExtFieldKeyEnabled(fieldKey, cfg); err != nil {
+				return nil, nil, "", err
 			}
 
 			extPatch[fieldKey] = rawValue
@@ -1041,6 +1041,25 @@ func (s *orgUnitWriteService) listEnabledExtFieldConfigs(ctx context.Context, te
 		if isReservedExtFieldKey(key) {
 			continue
 		}
+		if _, ok := fieldmeta.LookupFieldDefinition(key); !ok && !fieldmeta.IsCustomPlainFieldKey(key) && !fieldmeta.IsCustomDictFieldKey(key) {
+			continue
+		}
+
+		// Defense-in-depth for dict namespace keys: ensure key <-> config consistency.
+		if fieldmeta.IsCustomDictFieldKey(key) {
+			if !strings.EqualFold(strings.TrimSpace(cfg.ValueType), "text") {
+				continue
+			}
+			if !strings.EqualFold(strings.TrimSpace(cfg.DataSourceType), "DICT") {
+				continue
+			}
+			wantDictCode, _ := fieldmeta.DictCodeFromDictFieldKey(key)
+			gotDictCode, ok := fieldmeta.DictCodeFromDataSourceConfig(cfg.DataSourceConfig)
+			if !ok || !strings.EqualFold(strings.TrimSpace(gotDictCode), strings.TrimSpace(wantDictCode)) {
+				continue
+			}
+		}
+
 		cfg.FieldKey = key
 		outCfgs = append(outCfgs, cfg)
 		keys = append(keys, key)
@@ -1050,6 +1069,36 @@ func (s *orgUnitWriteService) listEnabledExtFieldConfigs(ctx context.Context, te
 
 func buildExtPayload(ext map[string]any, fieldConfigs []types.TenantFieldConfig) (map[string]any, map[string]string, error) {
 	return buildExtPayloadWithContext(context.Background(), "", "", ext, fieldConfigs)
+}
+
+func validateExtFieldKeyEnabled(fieldKey string, cfg types.TenantFieldConfig) error {
+	if _, ok := fieldmeta.LookupFieldDefinition(fieldKey); ok {
+		return nil
+	}
+	if fieldmeta.IsCustomDictFieldKey(fieldKey) {
+		if !strings.EqualFold(strings.TrimSpace(cfg.ValueType), "text") {
+			return httperr.NewBadRequest(errPatchFieldNotAllowed)
+		}
+		if !strings.EqualFold(strings.TrimSpace(cfg.DataSourceType), "DICT") {
+			return httperr.NewBadRequest(errPatchFieldNotAllowed)
+		}
+		wantDictCode, _ := fieldmeta.DictCodeFromDictFieldKey(fieldKey)
+		gotDictCode, ok := fieldmeta.DictCodeFromDataSourceConfig(cfg.DataSourceConfig)
+		if !ok || !strings.EqualFold(strings.TrimSpace(gotDictCode), strings.TrimSpace(wantDictCode)) {
+			return httperr.NewBadRequest(errPatchFieldNotAllowed)
+		}
+		return nil
+	}
+	if !fieldmeta.IsCustomPlainFieldKey(fieldKey) {
+		return httperr.NewBadRequest(errPatchFieldNotAllowed)
+	}
+	if !strings.EqualFold(strings.TrimSpace(cfg.ValueType), "text") {
+		return httperr.NewBadRequest(errPatchFieldNotAllowed)
+	}
+	if !strings.EqualFold(strings.TrimSpace(cfg.DataSourceType), "PLAIN") {
+		return httperr.NewBadRequest(errPatchFieldNotAllowed)
+	}
+	return nil
 }
 
 func buildExtPayloadWithContext(ctx context.Context, tenantID string, asOf string, ext map[string]any, fieldConfigs []types.TenantFieldConfig) (map[string]any, map[string]string, error) {
@@ -1076,8 +1125,8 @@ func buildExtPayloadWithContext(ctx context.Context, tenantID string, asOf strin
 		if !ok {
 			return nil, nil, httperr.NewBadRequest(errPatchFieldNotAllowed)
 		}
-		if _, ok := fieldmeta.LookupFieldDefinition(fieldKey); !ok {
-			return nil, nil, httperr.NewBadRequest(errPatchFieldNotAllowed)
+		if err := validateExtFieldKeyEnabled(fieldKey, cfg); err != nil {
+			return nil, nil, err
 		}
 
 		extPatch[fieldKey] = rawValue

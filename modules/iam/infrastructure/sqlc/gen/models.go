@@ -465,9 +465,135 @@ type OrgunitOrgUnitVersion struct {
 	ExtStr04          *string                   `json:"ext_str_04"`
 	ExtStr05          *string                   `json:"ext_str_05"`
 	ExtInt01          *int32                    `json:"ext_int_01"`
+	ExtInt02          *int32                    `json:"ext_int_02"`
+	ExtInt03          *int32                    `json:"ext_int_03"`
+	ExtInt04          *int32                    `json:"ext_int_04"`
+	ExtInt05          *int32                    `json:"ext_int_05"`
+	ExtInt06          *int32                    `json:"ext_int_06"`
+	ExtInt07          *int32                    `json:"ext_int_07"`
+	ExtInt08          *int32                    `json:"ext_int_08"`
+	ExtInt09          *int32                    `json:"ext_int_09"`
+	ExtInt10          *int32                    `json:"ext_int_10"`
+	ExtInt11          *int32                    `json:"ext_int_11"`
+	ExtInt12          *int32                    `json:"ext_int_12"`
+	ExtInt13          *int32                    `json:"ext_int_13"`
+	ExtInt14          *int32                    `json:"ext_int_14"`
+	ExtInt15          *int32                    `json:"ext_int_15"`
 	ExtUuid01         pgtype.UUID               `json:"ext_uuid_01"`
+	ExtUuid02         pgtype.UUID               `json:"ext_uuid_02"`
+	ExtUuid03         pgtype.UUID               `json:"ext_uuid_03"`
+	ExtUuid04         pgtype.UUID               `json:"ext_uuid_04"`
+	ExtUuid05         pgtype.UUID               `json:"ext_uuid_05"`
+	ExtUuid06         pgtype.UUID               `json:"ext_uuid_06"`
+	ExtUuid07         pgtype.UUID               `json:"ext_uuid_07"`
+	ExtUuid08         pgtype.UUID               `json:"ext_uuid_08"`
+	ExtUuid09         pgtype.UUID               `json:"ext_uuid_09"`
+	ExtUuid10         pgtype.UUID               `json:"ext_uuid_10"`
 	ExtBool01         *bool                     `json:"ext_bool_01"`
 	ExtDate01         pgtype.Date               `json:"ext_date_01"`
+	ExtBool02         *bool                     `json:"ext_bool_02"`
+	ExtBool03         *bool                     `json:"ext_bool_03"`
+	ExtBool04         *bool                     `json:"ext_bool_04"`
+	ExtBool05         *bool                     `json:"ext_bool_05"`
+	ExtBool06         *bool                     `json:"ext_bool_06"`
+	ExtBool07         *bool                     `json:"ext_bool_07"`
+	ExtBool08         *bool                     `json:"ext_bool_08"`
+	ExtBool09         *bool                     `json:"ext_bool_09"`
+	ExtBool10         *bool                     `json:"ext_bool_10"`
+	ExtBool11         *bool                     `json:"ext_bool_11"`
+	ExtBool12         *bool                     `json:"ext_bool_12"`
+	ExtBool13         *bool                     `json:"ext_bool_13"`
+	ExtBool14         *bool                     `json:"ext_bool_14"`
+	ExtBool15         *bool                     `json:"ext_bool_15"`
+	ExtDate02         pgtype.Date               `json:"ext_date_02"`
+	ExtDate03         pgtype.Date               `json:"ext_date_03"`
+	ExtDate04         pgtype.Date               `json:"ext_date_04"`
+	ExtDate05         pgtype.Date               `json:"ext_date_05"`
+	ExtDate06         pgtype.Date               `json:"ext_date_06"`
+	ExtDate07         pgtype.Date               `json:"ext_date_07"`
+	ExtDate08         pgtype.Date               `json:"ext_date_08"`
+	ExtDate09         pgtype.Date               `json:"ext_date_09"`
+	ExtDate10         pgtype.Date               `json:"ext_date_10"`
+	ExtDate11         pgtype.Date               `json:"ext_date_11"`
+	ExtDate12         pgtype.Date               `json:"ext_date_12"`
+	ExtDate13         pgtype.Date               `json:"ext_date_13"`
+	ExtDate14         pgtype.Date               `json:"ext_date_14"`
+	ExtDate15         pgtype.Date               `json:"ext_date_15"`
+	ExtNum01          pgtype.Numeric            `json:"ext_num_01"`
+	ExtNum02          pgtype.Numeric            `json:"ext_num_02"`
+	ExtNum03          pgtype.Numeric            `json:"ext_num_03"`
+	ExtNum04          pgtype.Numeric            `json:"ext_num_04"`
+	ExtNum05          pgtype.Numeric            `json:"ext_num_05"`
+	ExtNum06          pgtype.Numeric            `json:"ext_num_06"`
+	ExtNum07          pgtype.Numeric            `json:"ext_num_07"`
+	ExtNum08          pgtype.Numeric            `json:"ext_num_08"`
+	ExtNum09          pgtype.Numeric            `json:"ext_num_09"`
+	ExtNum10          pgtype.Numeric            `json:"ext_num_10"`
+	ExtStr06          *string                   `json:"ext_str_06"`
+	ExtStr07          *string                   `json:"ext_str_07"`
+	ExtStr08          *string                   `json:"ext_str_08"`
+	ExtStr09          *string                   `json:"ext_str_09"`
+	ExtStr10          *string                   `json:"ext_str_10"`
+	ExtStr11          *string                   `json:"ext_str_11"`
+	ExtStr12          *string                   `json:"ext_str_12"`
+	ExtStr13          *string                   `json:"ext_str_13"`
+	ExtStr14          *string                   `json:"ext_str_14"`
+	ExtStr15          *string                   `json:"ext_str_15"`
+	ExtStr16          *string                   `json:"ext_str_16"`
+	ExtStr17          *string                   `json:"ext_str_17"`
+	ExtStr18          *string                   `json:"ext_str_18"`
+	ExtStr19          *string                   `json:"ext_str_19"`
+	ExtStr20          *string                   `json:"ext_str_20"`
+	ExtStr21          *string                   `json:"ext_str_21"`
+	ExtStr22          *string                   `json:"ext_str_22"`
+	ExtStr23          *string                   `json:"ext_str_23"`
+	ExtStr24          *string                   `json:"ext_str_24"`
+	ExtStr25          *string                   `json:"ext_str_25"`
+	ExtStr26          *string                   `json:"ext_str_26"`
+	ExtStr27          *string                   `json:"ext_str_27"`
+	ExtStr28          *string                   `json:"ext_str_28"`
+	ExtStr29          *string                   `json:"ext_str_29"`
+	ExtStr30          *string                   `json:"ext_str_30"`
+	ExtStr31          *string                   `json:"ext_str_31"`
+	ExtStr32          *string                   `json:"ext_str_32"`
+	ExtStr33          *string                   `json:"ext_str_33"`
+	ExtStr34          *string                   `json:"ext_str_34"`
+	ExtStr35          *string                   `json:"ext_str_35"`
+	ExtStr36          *string                   `json:"ext_str_36"`
+	ExtStr37          *string                   `json:"ext_str_37"`
+	ExtStr38          *string                   `json:"ext_str_38"`
+	ExtStr39          *string                   `json:"ext_str_39"`
+	ExtStr40          *string                   `json:"ext_str_40"`
+	ExtStr41          *string                   `json:"ext_str_41"`
+	ExtStr42          *string                   `json:"ext_str_42"`
+	ExtStr43          *string                   `json:"ext_str_43"`
+	ExtStr44          *string                   `json:"ext_str_44"`
+	ExtStr45          *string                   `json:"ext_str_45"`
+	ExtStr46          *string                   `json:"ext_str_46"`
+	ExtStr47          *string                   `json:"ext_str_47"`
+	ExtStr48          *string                   `json:"ext_str_48"`
+	ExtStr49          *string                   `json:"ext_str_49"`
+	ExtStr50          *string                   `json:"ext_str_50"`
+	ExtStr51          *string                   `json:"ext_str_51"`
+	ExtStr52          *string                   `json:"ext_str_52"`
+	ExtStr53          *string                   `json:"ext_str_53"`
+	ExtStr54          *string                   `json:"ext_str_54"`
+	ExtStr55          *string                   `json:"ext_str_55"`
+	ExtStr56          *string                   `json:"ext_str_56"`
+	ExtStr57          *string                   `json:"ext_str_57"`
+	ExtStr58          *string                   `json:"ext_str_58"`
+	ExtStr59          *string                   `json:"ext_str_59"`
+	ExtStr60          *string                   `json:"ext_str_60"`
+	ExtStr61          *string                   `json:"ext_str_61"`
+	ExtStr62          *string                   `json:"ext_str_62"`
+	ExtStr63          *string                   `json:"ext_str_63"`
+	ExtStr64          *string                   `json:"ext_str_64"`
+	ExtStr65          *string                   `json:"ext_str_65"`
+	ExtStr66          *string                   `json:"ext_str_66"`
+	ExtStr67          *string                   `json:"ext_str_67"`
+	ExtStr68          *string                   `json:"ext_str_68"`
+	ExtStr69          *string                   `json:"ext_str_69"`
+	ExtStr70          *string                   `json:"ext_str_70"`
 	ExtLabelsSnapshot []byte                    `json:"ext_labels_snapshot"`
 }
 
@@ -596,6 +722,7 @@ type OrgunitTenantFieldConfig struct {
 	ValueType        string             `json:"value_type"`
 	DataSourceType   string             `json:"data_source_type"`
 	DataSourceConfig []byte             `json:"data_source_config"`
+	DisplayLabel     *string            `json:"display_label"`
 	EnabledOn        pgtype.Date        `json:"enabled_on"`
 	DisabledOn       pgtype.Date        `json:"disabled_on"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`

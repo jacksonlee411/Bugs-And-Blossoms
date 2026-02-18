@@ -2,6 +2,20 @@
 
 **状态**: 已完成（2026-02-15）
 
+## 0.1 与 DEV-PLAN-108 的对齐补充（2026-02-18）
+
+本计划（100E）冻结并落地了“更正 UI 严格消费 `mutation-capabilities`（allowed_fields/field_payload_keys/deny_reasons）+ `POST /corrections`”的闭环。
+
+自 `DEV-PLAN-108` 起，写入口与 capabilities 将进一步收敛为：
+
+- `GET /org/api/org-units/write-capabilities?intent=...`（intent 维度能力外显，作为新 SSOT）
+- `POST /org/api/org-units/write`（统一写入口）
+
+迁移口径：
+
+1. `ext_fields` / `patch.ext` / `ext_labels_snapshot` 的元数据与 fail-closed 规则仍以 100E/100E1/100C/100D 为 SSOT（不推翻）。
+2. capabilities 的“字段可编辑/动作可用性”未来以 `write-capabilities` 为主输出；`mutation-capabilities` 可保留兼容，但应逐步改为薄包装，避免双规则漂移。
+
 > 本文从 `DEV-PLAN-100` Phase 4 的 4A 拆分而来，作为 4A 的 SSOT；`DEV-PLAN-100` 继续保持为整体路线图。  
 > 本文聚焦 **UI 侧**的“详情页扩展字段展示 + 编辑态能力外显（fail-closed）”，并明确：开展 4A 前必须具备 `DEV-PLAN-083` 的核心产物可用（mutation policy 单点 + capabilities API）；其后端前置改造执行计划见 `DEV-PLAN-100E1`。
 
@@ -72,7 +86,8 @@ graph TD
   - 失败策略：capabilities 不可用时 fail-closed（只读/禁用）。
 
 - **ADR-100E-02：扩展字段 label 使用 i18n key，避免引入“业务数据多语言”**
-  - 选定：扩展字段展示使用 `label_i18n_key`（或可由 `field_key` 推导的稳定 key）；具体输出契约见 §5.1。
+  - 选定：**内置字段**展示使用 `label_i18n_key`（或可由 `field_key` 推导的稳定 key）；具体输出契约见 §5.1。
+  - 补充（对齐 `DEV-PLAN-106`）：自定义 PLAIN 字段（`x_` 命名空间）不提供 i18n key，允许返回 `label`（literal string；不随 locale 变化），UI 仅做展示，不引入持久化多语言结构。
   - 约束：不得引入 `label_zh/label_en` 的租户可编辑持久化结构（非本计划）。
 
 - **ADR-100E-03：编辑态不信任 UI 提交 label 快照**
@@ -100,7 +115,8 @@ export type ExtScalarValue = string | number | boolean | null
 
 export interface OrgUnitExtField {
   field_key: string
-  label_i18n_key: string
+  label_i18n_key: string | null
+  label?: string | null
   value_type: ExtValueType
   data_source_type: ExtDataSourceType
   value: ExtScalarValue
@@ -141,7 +157,7 @@ UI 最小需要：
 
 - `GET /org/api/org-units/details?org_code=<...>&as_of=YYYY-MM-DD&include_disabled=...`
 - Authz：`orgunit.read`
-- Response 200（`ext_fields` 必须包含 `label_i18n_key`）：
+- Response 200（内置字段必须包含 `label_i18n_key`；自定义字段可返回 `label`）：
 
 ```json
 {
@@ -163,8 +179,9 @@ UI 最小需要：
   },
   "ext_fields": [
     {
-      "field_key": "org_type",
-      "label_i18n_key": "org.fields.org_type",
+      "field_key": "d_org_type",
+      "label_i18n_key": null,
+      "label": "组织类型（示例）",
       "value_type": "text",
       "data_source_type": "DICT",
       "value": "DEPARTMENT",
@@ -178,7 +195,11 @@ UI 最小需要：
 约束：
 
 - `ext_fields` 必须包含 `as_of` 下 enabled 的字段全集（即使 `value=null`）；day 粒度口径见 `DEV-PLAN-100D`。
-- `label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`）；服务端必须返回该字段，UI 不维护第二套“字段 -> label”映射。
+- label（冻结）：
+  - 内置字段：`label_i18n_key` 必须稳定（i18n SSOT：`DEV-PLAN-020`）；服务端必须返回该字段；
+  - 字典字段（`d_`）：允许 `label_i18n_key=null`，但必须返回 `label`（优先启用时自定义 label，否则为 dict name / dict_code；SSOT：`DEV-PLAN-106A`）；
+  - 自定义字段（`x_`）：允许 `label_i18n_key=null`，但必须返回 `label`（canonical string；不做 i18n）；
+  - UI 不维护第二套“字段 -> label”映射，只消费服务端返回的 `label_i18n_key/label`（对齐 `DEV-PLAN-100D/106`）。
 - `ext_fields` 排序必须稳定（按 `field_key` 升序；对齐 `DEV-PLAN-100D`），避免 UI 抖动与测试不稳定。
 - `display_value/display_value_source` 必须成对使用（对齐 `DEV-PLAN-100D`）：
   - DICT 允许：`versions_snapshot/events_snapshot/dict_fallback/unresolved`；
@@ -202,11 +223,11 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
   "capabilities": {
     "correct_event": {
       "enabled": true,
-      "allowed_fields": ["effective_date", "name", "org_type"],
+      "allowed_fields": ["effective_date", "name", "d_org_type"],
       "field_payload_keys": {
         "effective_date": "effective_date",
         "name": "name",
-        "org_type": "ext.org_type"
+        "d_org_type": "ext.d_org_type"
       },
       "deny_reasons": []
     },
@@ -243,7 +264,7 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 
 ```json
 {
-  "field_key": "org_type",
+  "field_key": "d_org_type",
   "as_of": "2026-02-13",
   "options": [
     { "value": "DEPARTMENT", "label": "Department" }
@@ -258,7 +279,7 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 - `q` 可选，服务端对输入做 trim；为空时返回“前 N 个”。
 - `limit` 可选：缺失/非法默认 `10`，上限 `50`。
 - 返回顺序稳定：按 `label` 升序，其次 `value` 升序。
-- `label` 为 canonical label（非本地化展示名），UI 不对其做 i18n 替换；字段标题仍使用 `label_i18n_key`。
+- `label` 为 canonical label（非本地化展示名），UI 不对其做 i18n 替换；字段标题按 details 返回规则：优先 `label_i18n_key`，否则使用 `label`。
 
 ### 5.4 写入：更正接口扩展字段 patch（依赖项，SSOT：DEV-PLAN-083/100D）
 
@@ -278,7 +299,7 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
   "patch": {
     "name": "R&D - Updated",
     "ext": {
-      "org_type": "DEPARTMENT"
+      "d_org_type": "DEPARTMENT"
     }
   }
 }
@@ -313,7 +334,7 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
 1. 以 URL 的 `effective_date` 作为 details 的 `as_of`（既有页面行为保持）。
 2. 渲染基础字段（既有）。
 3. 渲染 `ext_fields[]`：
-   - label：`t(label_i18n_key)`；若缺失，回退展示 `field_key`（并显示 warning badge，避免静默漂移）。
+   - label：优先 `label_i18n_key`（`t(label_i18n_key)`），否则展示 `label`，再否则回退展示 `field_key`（并显示 warning badge，避免静默漂移）。
    - value：优先展示 `display_value`；若 `display_value=null` 且 `value!=null`，则展示 `value` 的字符串形式（便于排障；禁止静默丢失 code/id）。
    - value：当 `display_value=null` 且 `value=null`，展示 `-`。
    - source（`display_value_source`）：
@@ -343,16 +364,16 @@ UI 期望最小响应（示例；字段名最终以 `DEV-PLAN-083` 为 SSOT）�
    - 弹窗顶部展示错误；
    - 全部输入禁用 + 禁用确认按钮（fail-closed，不做本地乐观放行）。
 6. 当用户填写了 `corrected_effective_date` 且其值与 target_effective_date 不同：
-   - 弹窗进入“生效日更正”模式：仅允许修改 `corrected_effective_date`，其余基础字段与全部扩展字段一律禁用；
-   - 弹窗顶部展示明确提示：更正生效日需单独提交（避免与扩展字段 enabled 集合随 day 变化产生漂移与“写了但回显消失”风险）。
+   - **108 前历史口径**：进入“生效日更正”模式并仅允许提交 `effective_date`；
+   - **108 后口径**：允许“改生效日 + 改其它字段”同次提交，且 ext enabled-as-of/DICT label snapshot 解析以更正后 effective_date 为准（SSOT：`DEV-PLAN-108`）。
 
 提交（构造 patch）规则（关键：避免“禁用但仍提交”）：
 
 1. 以 details 中当前值作为“原值快照”（含 ext_fields），并以 capabilities 的 `allowed_fields/field_payload_keys` 作为“唯一可写集合”。
 2. **生效日更正模式**（`corrected_effective_date != ""` 且 `!= target_effective_date`）：
-   - patch 只允许包含 `effective_date` 一个字段（对应 `field_payload_keys["effective_date"]="effective_date"`）；
-   - 其它字段（含 ext）即使被编辑也不得进入 patch（fail-closed）。
-3. **普通更正模式**（未进入生效日更正模式）：
+   - **108 前历史口径**：patch 只允许 `effective_date`；
+   - **108 后口径**：允许与其它字段同次进入 patch（最终校验时一律按“更正后 effective_date”计算）。
+3. **普通更正模式**（未变更生效日）：
    - 对每个表单项：
      - 若该字段不在 `allowed_fields`：**不进入 patch**（无论 UI 是否有值）。
      - 若字段值与原值一致：**不进入 patch**（最小变更）。

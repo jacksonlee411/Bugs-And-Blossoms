@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"regexp"
 	"sort"
 	"strconv"
@@ -20,6 +21,7 @@ type orgUnitTenantFieldConfig struct {
 	ValueType        string
 	DataSourceType   string
 	DataSourceConfig json.RawMessage
+	DisplayLabel     *string
 	PhysicalCol      string
 	EnabledOn        string
 	DisabledOn       *string
@@ -41,7 +43,7 @@ type orgUnitMutationTargetEvent struct {
 	HasRaw             bool
 }
 
-var orgUnitExtPhysicalColRe = regexp.MustCompile(`^ext_(str|int|uuid|bool|date)_[0-9]{2}$`)
+var orgUnitExtPhysicalColRe = regexp.MustCompile(`^ext_(str|int|uuid|bool|date|num)_[0-9]{2}$`)
 
 var errOrgUnitExtQueryFieldNotAllowed = errors.New("org_ext_query_field_not_allowed")
 
@@ -62,6 +64,7 @@ SELECT
   value_type,
   data_source_type,
   data_source_config,
+  display_label,
   physical_col,
   enabled_on::text,
   CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on,
@@ -121,6 +124,7 @@ SELECT
   value_type,
   data_source_type,
   data_source_config,
+  display_label,
   physical_col,
   enabled_on::text,
   CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on,
@@ -174,6 +178,7 @@ func (s *orgUnitPGStore) GetEnabledTenantFieldConfigAsOf(ctx context.Context, te
 func getEnabledTenantFieldConfigAsOfTx(ctx context.Context, tx pgx.Tx, tenantID string, fieldKey string, asOf string) (orgUnitTenantFieldConfig, bool, error) {
 	var cfg orgUnitTenantFieldConfig
 	var rawConfig []byte
+	var displayLabel *string
 	var disabledOn *string
 	err := tx.QueryRow(ctx, `
 SELECT
@@ -181,6 +186,7 @@ SELECT
   value_type,
   data_source_type,
   data_source_config,
+  display_label,
   physical_col,
   enabled_on::text,
   CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on,
@@ -196,6 +202,7 @@ LIMIT 1
 		&cfg.ValueType,
 		&cfg.DataSourceType,
 		&rawConfig,
+		&displayLabel,
 		&cfg.PhysicalCol,
 		&cfg.EnabledOn,
 		&disabledOn,
@@ -208,6 +215,7 @@ LIMIT 1
 		return orgUnitTenantFieldConfig{}, false, err
 	}
 	cfg.DataSourceConfig = cloneRawJSON(rawConfig)
+	cfg.DisplayLabel = cloneOptionalString(displayLabel)
 	cfg.DisabledOn = cloneOptionalString(disabledOn)
 	return cfg, true, nil
 }
@@ -219,6 +227,7 @@ func (s *orgUnitPGStore) EnableTenantFieldConfig(
 	valueType string,
 	dataSourceType string,
 	dataSourceConfig json.RawMessage,
+	displayLabel *string,
 	enabledOn string,
 	requestCode string,
 	initiatorUUID string,
@@ -247,9 +256,10 @@ SELECT orgunit.enable_tenant_field_config(
   $5::text,
   $6::jsonb,
   $7::text,
-  $8::uuid
+  $8::text,
+  $9::uuid
 )
-`, tenantID, fieldKey, valueType, enabledOn, dataSourceType, dataSourceConfig, requestCode, initiatorUUID); err != nil {
+`, tenantID, fieldKey, valueType, enabledOn, dataSourceType, dataSourceConfig, displayLabel, requestCode, initiatorUUID); err != nil {
 		return orgUnitTenantFieldConfig{}, false, err
 	}
 
@@ -331,6 +341,7 @@ LIMIT 1
 func getTenantFieldConfigByKeyTx(ctx context.Context, tx pgx.Tx, tenantID string, fieldKey string) (orgUnitTenantFieldConfig, error) {
 	var cfg orgUnitTenantFieldConfig
 	var rawConfig []byte
+	var displayLabel *string
 	var disabledOn *string
 	err := tx.QueryRow(ctx, `
 SELECT
@@ -338,6 +349,7 @@ SELECT
   value_type,
   data_source_type,
   data_source_config,
+  display_label,
   physical_col,
   enabled_on::text,
   CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on,
@@ -351,6 +363,7 @@ LIMIT 1
 		&cfg.ValueType,
 		&cfg.DataSourceType,
 		&rawConfig,
+		&displayLabel,
 		&cfg.PhysicalCol,
 		&cfg.EnabledOn,
 		&disabledOn,
@@ -360,6 +373,7 @@ LIMIT 1
 		return orgUnitTenantFieldConfig{}, err
 	}
 	cfg.DataSourceConfig = cloneRawJSON(rawConfig)
+	cfg.DisplayLabel = cloneOptionalString(displayLabel)
 	cfg.DisabledOn = cloneOptionalString(disabledOn)
 	return cfg, nil
 }
@@ -727,8 +741,13 @@ func (s *orgUnitPGStore) ListOrgUnitsPage(ctx context.Context, tenantID string, 
 		if !ok {
 			return nil, 0, errOrgUnitExtQueryFieldNotAllowed
 		}
-		def, ok := lookupOrgUnitFieldDefinition(req.ExtFilterFieldKey)
-		if !ok || !def.AllowFilter || !orgUnitExtPhysicalColRe.MatchString(cfg.PhysicalCol) {
+		allowFilter := false
+		if def, ok := lookupOrgUnitFieldDefinition(req.ExtFilterFieldKey); ok {
+			allowFilter = def.AllowFilter
+		} else if isCustomOrgUnitDictFieldKey(req.ExtFilterFieldKey) {
+			allowFilter = true
+		}
+		if !allowFilter || !orgUnitExtPhysicalColRe.MatchString(cfg.PhysicalCol) {
 			return nil, 0, errOrgUnitExtQueryFieldNotAllowed
 		}
 		parsedValue, parseErr := parseOrgUnitExtQueryValue(cfg.ValueType, req.ExtFilterValue)
@@ -749,8 +768,13 @@ func (s *orgUnitPGStore) ListOrgUnitsPage(ctx context.Context, tenantID string, 
 		if !ok {
 			return nil, 0, errOrgUnitExtQueryFieldNotAllowed
 		}
-		def, ok := lookupOrgUnitFieldDefinition(req.ExtSortFieldKey)
-		if !ok || !def.AllowSort || !orgUnitExtPhysicalColRe.MatchString(cfg.PhysicalCol) {
+		allowSort := false
+		if def, ok := lookupOrgUnitFieldDefinition(req.ExtSortFieldKey); ok {
+			allowSort = def.AllowSort
+		} else if isCustomOrgUnitDictFieldKey(req.ExtSortFieldKey) {
+			allowSort = true
+		}
+		if !allowSort || !orgUnitExtPhysicalColRe.MatchString(cfg.PhysicalCol) {
 			return nil, 0, errOrgUnitExtQueryFieldNotAllowed
 		}
 		extSortConfig = &cfg
@@ -866,12 +890,14 @@ func scanOrgUnitTenantFieldConfig(row interface {
 }) (orgUnitTenantFieldConfig, error) {
 	var item orgUnitTenantFieldConfig
 	var rawConfig []byte
+	var displayLabel *string
 	var disabledOn *string
 	if err := row.Scan(
 		&item.FieldKey,
 		&item.ValueType,
 		&item.DataSourceType,
 		&rawConfig,
+		&displayLabel,
 		&item.PhysicalCol,
 		&item.EnabledOn,
 		&disabledOn,
@@ -880,6 +906,7 @@ func scanOrgUnitTenantFieldConfig(row interface {
 		return orgUnitTenantFieldConfig{}, err
 	}
 	item.DataSourceConfig = cloneRawJSON(rawConfig)
+	item.DisplayLabel = cloneOptionalString(displayLabel)
 	item.DisabledOn = cloneOptionalString(disabledOn)
 	return item, nil
 }
@@ -974,6 +1001,12 @@ func parseOrgUnitExtQueryValue(valueType string, raw string) (any, error) {
 	case "date":
 		if _, err := time.Parse("2006-01-02", input); err != nil {
 			return nil, err
+		}
+		return input, nil
+	case "numeric":
+		// Validate input early so invalid numeric doesn't reach dynamic SQL paths.
+		if _, ok := new(big.Rat).SetString(input); !ok {
+			return nil, errors.New("numeric invalid")
 		}
 		return input, nil
 	default:
