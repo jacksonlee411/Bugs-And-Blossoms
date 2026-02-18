@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"regexp"
 	"sort"
 	"strconv"
@@ -42,7 +43,7 @@ type orgUnitMutationTargetEvent struct {
 	HasRaw             bool
 }
 
-var orgUnitExtPhysicalColRe = regexp.MustCompile(`^ext_(str|int|uuid|bool|date)_[0-9]{2}$`)
+var orgUnitExtPhysicalColRe = regexp.MustCompile(`^ext_(str|int|uuid|bool|date|num)_[0-9]{2}$`)
 
 var errOrgUnitExtQueryFieldNotAllowed = errors.New("org_ext_query_field_not_allowed")
 
@@ -1000,6 +1001,12 @@ func parseOrgUnitExtQueryValue(valueType string, raw string) (any, error) {
 	case "date":
 		if _, err := time.Parse("2006-01-02", input); err != nil {
 			return nil, err
+		}
+		return input, nil
+	case "numeric":
+		// Validate input early so invalid numeric doesn't reach dynamic SQL paths.
+		if _, ok := new(big.Rat).SetString(input); !ok {
+			return nil, errors.New("numeric invalid")
 		}
 		return input, nil
 	default:

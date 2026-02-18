@@ -18,10 +18,12 @@ func TestOrgunitFieldConfigSchema_UsesFrozenDataSourceConfigShape(t *testing.T) 
 
 	for _, token := range []string{
 		"CONSTRAINT tenant_field_configs_data_source_type_check CHECK (data_source_type IN ('PLAIN','DICT','ENTITY'))",
+		"CONSTRAINT tenant_field_configs_value_type_check CHECK (value_type IN ('text','int','uuid','bool','date','numeric'))",
 		"display_label text NULL",
 		"CONSTRAINT tenant_field_configs_plain_config_check CHECK",
 		"data_source_config = jsonb_build_object('dict_code', data_source_config->'dict_code')",
 		"data_source_config = jsonb_build_object(",
+		"physical_col ~ '^ext_(str|int|uuid|bool|date|num)_[0-9]{2}$'",
 	} {
 		if !strings.Contains(s, token) {
 			t.Fatalf("missing %q in %s", token, p)

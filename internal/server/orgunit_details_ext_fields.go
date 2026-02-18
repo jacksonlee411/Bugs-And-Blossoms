@@ -140,7 +140,7 @@ func resolveOrgUnitExtDisplayValue(ctx context.Context, tenantID string, asOf st
 func formatOrgUnitPlainDisplayValue(valueType string, value any) string {
 	valueType = strings.ToLower(strings.TrimSpace(valueType))
 	switch valueType {
-	case "text", "uuid", "date":
+	case "text", "uuid", "date", "numeric":
 		if s, ok := value.(string); ok {
 			return s
 		}
