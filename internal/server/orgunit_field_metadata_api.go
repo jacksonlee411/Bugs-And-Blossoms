@@ -807,6 +807,10 @@ func handleOrgUnitFieldPoliciesAPI(w http.ResponseWriter, r *http.Request, store
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "default_mode invalid")
 		return
 	}
+	if !maintainable && defaultMode != "CEL" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrDefaultRuleRequired, "default_rule_expr required when maintainable=false")
+		return
+	}
 
 	result, wasRetry, err := policyStore.UpsertTenantFieldPolicy(
 		r.Context(),
