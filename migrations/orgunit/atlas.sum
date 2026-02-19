@@ -1,4 +1,4 @@
-h1:q7UsR2eP+9C7zYPDtnq9PXwIOTmUiIuOwrVcgxTJypE=
+h1:pHlfP3yVfhQiovsb3tk3V9N7oJ5nK3riNUIDw+iSZ+I=
 20260106080000_orgunit_schema.sql h1:HFHg7VD/+mXhD0M38Bc7Q1oH7REn9g85BtxYfpRrmkU=
 20260106083000_orgunit_engine.sql h1:fbvwyooh8vn2dv//BfuvTJR8X78l5Jv3hzA/Ltk4o7M=
 20260106090000_orgunit_read.sql h1:Bpp/OMYtGbOo4t7+sQe58ieiD6sY06ifXEMlVhgjMeM=
@@ -62,3 +62,5 @@ h1:q7UsR2eP+9C7zYPDtnq9PXwIOTmUiIuOwrVcgxTJypE=
 20260218161000_orgunit_update_event_108_kernel_privileges_reapply.sql h1:9UtixzLKjSXpLQnJ4FI9kjE/pycA/bcSWZhRCx3TtBU=
 20260218172000_orgunit_correction_create_event_replay_fix.sql h1:c7nYg98c6yUtVgA5s3IXIdJ5SF+KmWhEhhDyMXXNSlw=
 20260218183000_orgunit_correction_effective_date_sticky.sql h1:VxRvEc39nVUTclv/Tx5uSaXx+PyRqxu1xJzGp30ralw=
+20260219100000_orgunit_field_policies_schema.sql h1:MTvhhtpdsxR0Zh2RZEghSF1vgUi4kK9PJiJwtORrb5M=
+20260219101000_orgunit_field_policies_kernel_privileges.sql h1:XWyvb6JOOVnhBIGUFWI8hRDLi317/vnIXNaKuvXkeV0=

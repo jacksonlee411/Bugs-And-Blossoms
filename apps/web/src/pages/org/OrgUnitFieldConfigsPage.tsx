@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   InputLabel,
   Link,
   MenuItem,
@@ -16,6 +17,7 @@ import {
   Select,
   Snackbar,
   Stack,
+  Switch,
   TextField,
   Typography
 } from '@mui/material'
@@ -27,16 +29,20 @@ import {
   listOrgUnitFieldConfigEnableCandidates,
   listOrgUnitFieldConfigs,
   listOrgUnitFieldDefinitions,
+  upsertOrgUnitFieldPolicy,
   type OrgUnitFieldDefinition,
   type OrgUnitFieldEnableCandidateField,
+  type OrgUnitFieldPolicyDefaultMode,
+  type OrgUnitFieldPolicyScopeType,
   type OrgUnitTenantFieldConfig
 } from '../../api/orgUnits'
+import { ApiClientError } from '../../api/errors'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { DataGridPage } from '../../components/DataGridPage'
 import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
 import { StatusChip } from '../../components/StatusChip'
-import { isMessageKey } from '../../i18n/messages'
+import { isMessageKey, type MessageKey } from '../../i18n/messages'
 
 type FieldConfigListStatus = 'all' | 'enabled' | 'disabled'
 type DisabledState = 'all' | 'pending' | 'disabled'
@@ -45,6 +51,7 @@ type RowState = 'enabled' | 'pending' | 'disabled'
 interface FieldConfigRow {
   id: string
   fieldKey: string
+  fieldClass: 'CORE' | 'EXT'
   fieldLabel: string
   valueType: string
   dataSourceType: string
@@ -53,6 +60,11 @@ interface FieldConfigRow {
   enabledOn: string
   disabledOn: string | null
   updatedAt: string
+  maintainable: boolean
+  defaultMode: 'NONE' | 'CEL'
+  defaultRuleExpr: string
+  policyScopeType: string
+  policyScopeKey: string
   state: RowState
 }
 
@@ -71,6 +83,16 @@ interface DisableFormState {
 interface SelectedConfigState {
   mode: 'disable' | 'postpone'
   row: FieldConfigRow
+}
+
+interface PolicyFormState {
+  fieldKey: string
+  scopeType: OrgUnitFieldPolicyScopeType
+  scopeKey: string
+  maintainable: boolean
+  defaultMode: OrgUnitFieldPolicyDefaultMode
+  defaultRuleExpr: string
+  enabledOn: string
 }
 
 function FieldConfigsFilterBar(props: {
@@ -191,6 +213,27 @@ function getErrorMessage(error: unknown): string {
   return String(error)
 }
 
+function mapFieldPolicyErrorKey(code: string): MessageKey | null {
+  switch (code) {
+  case 'FIELD_NOT_MAINTAINABLE':
+    return 'org_field_policy_error_FIELD_NOT_MAINTAINABLE'
+  case 'DEFAULT_RULE_REQUIRED':
+    return 'org_field_policy_error_DEFAULT_RULE_REQUIRED'
+  case 'DEFAULT_RULE_EVAL_FAILED':
+    return 'org_field_policy_error_DEFAULT_RULE_EVAL_FAILED'
+  case 'FIELD_POLICY_EXPR_INVALID':
+    return 'org_field_policy_error_FIELD_POLICY_EXPR_INVALID'
+  case 'ORG_CODE_EXHAUSTED':
+    return 'org_field_policy_error_ORG_CODE_EXHAUSTED'
+  case 'ORG_CODE_CONFLICT':
+    return 'org_field_policy_error_ORG_CODE_CONFLICT'
+  case 'FIELD_POLICY_SCOPE_OVERLAP':
+    return 'org_field_policy_error_FIELD_POLICY_SCOPE_OVERLAP'
+  default:
+    return null
+  }
+}
+
 function maxDay(a: string, b: string): string {
   return a > b ? a : b
 }
@@ -262,6 +305,36 @@ function resolveDefinitionLabel(t: ReturnType<typeof useAppPreferences>['t'], de
   return def.field_key
 }
 
+const fieldPolicyFormScopes = [
+  'orgunit.create_dialog',
+  'orgunit.details.add_version_dialog',
+  'orgunit.details.insert_version_dialog',
+  'orgunit.details.correct_dialog'
+] as const
+
+function normalizeFieldClass(value: string | undefined): 'CORE' | 'EXT' {
+  const normalized = (value ?? '').trim().toUpperCase()
+  return normalized === 'CORE' ? 'CORE' : 'EXT'
+}
+
+function normalizeFieldPolicyScopeType(value: string | undefined): string {
+  const normalized = (value ?? '').trim().toUpperCase()
+  if (normalized === 'FORM' || normalized === 'GLOBAL') {
+    return normalized
+  }
+  return 'SYSTEM_DEFAULT'
+}
+
+function formatDefaultPolicySummary(row: FieldConfigRow): string {
+  if (row.defaultMode === 'CEL') {
+    if (row.defaultRuleExpr.length > 0) {
+      return `CEL: ${row.defaultRuleExpr}`
+    }
+    return 'CEL'
+  }
+  return '-'
+}
+
 export function OrgUnitFieldConfigsPage() {
   const queryClient = useQueryClient()
   const { t, tenantId } = useAppPreferences()
@@ -293,6 +366,33 @@ export function OrgUnitFieldConfigsPage() {
   const [disableRequestCode, setDisableRequestCode] = useState(() => newRequestCode())
 
   const [viewRow, setViewRow] = useState<FieldConfigRow | null>(null)
+  const [policyRow, setPolicyRow] = useState<FieldConfigRow | null>(null)
+  const [policyForm, setPolicyForm] = useState<PolicyFormState>({
+    fieldKey: '',
+    scopeType: 'FORM',
+    scopeKey: fieldPolicyFormScopes[0],
+    maintainable: true,
+    defaultMode: 'NONE',
+    defaultRuleExpr: '',
+    enabledOn: todayUtc
+  })
+  const [policyError, setPolicyError] = useState('')
+  const [policyRequestCode, setPolicyRequestCode] = useState(() => newRequestCode())
+
+  const formatApiErrorMessage = useCallback(
+    (error: unknown): string => {
+      if (error instanceof ApiClientError) {
+        const details = error.details as { code?: string } | undefined
+        const code = details?.code ?? ''
+        const key = mapFieldPolicyErrorKey(code)
+        if (key) {
+          return t(key)
+        }
+      }
+      return getErrorMessage(error)
+    },
+    [t]
+  )
 
   const updateSearch = useCallback(
     (options: {
@@ -373,6 +473,7 @@ export function OrgUnitFieldConfigsPage() {
       return {
         id: cfg.field_key,
         fieldKey: cfg.field_key,
+        fieldClass: normalizeFieldClass(cfg.field_class),
         fieldLabel: label,
         valueType: cfg.value_type,
         dataSourceType: cfg.data_source_type,
@@ -381,6 +482,11 @@ export function OrgUnitFieldConfigsPage() {
         enabledOn: cfg.enabled_on,
         disabledOn: cfg.disabled_on,
         updatedAt: cfg.updated_at,
+        maintainable: cfg.maintainable !== false,
+        defaultMode: String(cfg.default_mode ?? 'NONE').toUpperCase() === 'CEL' ? 'CEL' : 'NONE',
+        defaultRuleExpr: (cfg.default_rule_expr ?? '').trim(),
+        policyScopeType: normalizeFieldPolicyScopeType(cfg.policy_scope_type),
+        policyScopeKey: (cfg.policy_scope_key ?? '').trim(),
         state: toRowState(cfg, asOf)
       }
     })
@@ -441,10 +547,27 @@ export function OrgUnitFieldConfigsPage() {
     }
   })
 
+  const policyMutation = useMutation({
+    mutationFn: (req: {
+      field_key: string
+      scope_type: OrgUnitFieldPolicyScopeType
+      scope_key: string
+      maintainable: boolean
+      default_mode: OrgUnitFieldPolicyDefaultMode
+      default_rule_expr?: string
+      enabled_on: string
+      request_code: string
+    }) => upsertOrgUnitFieldPolicy(req),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['org-field-configs'] })
+      await queryClient.invalidateQueries({ queryKey: ['org-units', 'field-configs'] })
+    }
+  })
+
   const requestErrorMessage = fieldDefinitionsQuery.error
-    ? getErrorMessage(fieldDefinitionsQuery.error)
+    ? formatApiErrorMessage(fieldDefinitionsQuery.error)
     : fieldConfigsQuery.error
-    ? getErrorMessage(fieldConfigsQuery.error)
+    ? formatApiErrorMessage(fieldConfigsQuery.error)
     : ''
 
   const tableLoading = fieldDefinitionsQuery.isLoading || fieldConfigsQuery.isFetching
@@ -466,6 +589,79 @@ export function OrgUnitFieldConfigsPage() {
     [asOf, todayUtc]
   )
 
+  const openPolicyDialog = useCallback(
+    (row: FieldConfigRow) => {
+      const scopeType = row.policyScopeType === 'GLOBAL' ? 'GLOBAL' : 'FORM'
+      const scopeKey =
+        scopeType === 'GLOBAL'
+          ? 'global'
+          : fieldPolicyFormScopes.includes(row.policyScopeKey as (typeof fieldPolicyFormScopes)[number])
+          ? row.policyScopeKey
+          : fieldPolicyFormScopes[0]
+      setPolicyRow(row)
+      setPolicyError('')
+      setPolicyForm({
+        fieldKey: row.fieldKey,
+        scopeType,
+        scopeKey,
+        maintainable: row.maintainable,
+        defaultMode: row.defaultMode,
+        defaultRuleExpr: row.defaultRuleExpr,
+        enabledOn: maxDay(todayUtc, asOf)
+      })
+      setPolicyRequestCode(newRequestCode())
+    },
+    [asOf, todayUtc]
+  )
+
+  function closePolicyDialog() {
+    setPolicyRow(null)
+    setPolicyError('')
+  }
+
+  async function submitPolicy() {
+    if (!policyRow) {
+      return
+    }
+    setPolicyError('')
+    const enabledOn = policyForm.enabledOn.trim()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(enabledOn)) {
+      setPolicyError(t('org_field_configs_error_invalid_date'))
+      return
+    }
+
+    const scopeType: OrgUnitFieldPolicyScopeType = policyForm.scopeType === 'GLOBAL' ? 'GLOBAL' : 'FORM'
+    const scopeKey = scopeType === 'GLOBAL' ? 'global' : policyForm.scopeKey.trim()
+    if (scopeType === 'FORM' && !fieldPolicyFormScopes.includes(scopeKey as (typeof fieldPolicyFormScopes)[number])) {
+      setPolicyError(t('org_field_configs_policy_error_scope_key_invalid'))
+      return
+    }
+
+    const defaultMode: OrgUnitFieldPolicyDefaultMode = policyForm.defaultMode === 'CEL' ? 'CEL' : 'NONE'
+    const defaultRuleExpr = policyForm.defaultRuleExpr.trim()
+    if (defaultMode === 'CEL' && defaultRuleExpr.length === 0) {
+      setPolicyError(t('org_field_configs_policy_error_expr_required'))
+      return
+    }
+
+    try {
+      await policyMutation.mutateAsync({
+        field_key: policyRow.fieldKey,
+        scope_type: scopeType,
+        scope_key: scopeKey,
+        maintainable: policyForm.maintainable,
+        default_mode: defaultMode,
+        default_rule_expr: defaultMode === 'CEL' ? defaultRuleExpr : undefined,
+        enabled_on: enabledOn,
+        request_code: policyRequestCode
+      })
+      setToast({ message: t('org_field_configs_toast_policy_saved'), severity: 'success' })
+      closePolicyDialog()
+    } catch (error) {
+      setPolicyError(formatApiErrorMessage(error))
+    }
+  }
+
   const columns = useMemo<GridColDef<FieldConfigRow>[]>(() => {
     return [
       {
@@ -479,6 +675,12 @@ export function OrgUnitFieldConfigsPage() {
         headerName: t('org_field_configs_column_key'),
         minWidth: 160,
         flex: 1
+      },
+      {
+        field: 'fieldClass',
+        headerName: t('org_field_configs_column_field_class'),
+        minWidth: 110,
+        flex: 0.6
       },
       {
         field: 'valueType',
@@ -505,6 +707,35 @@ export function OrgUnitFieldConfigsPage() {
             </Typography>
           )
         }
+      },
+      {
+        field: 'maintainable',
+        headerName: t('org_field_configs_column_maintainable'),
+        minWidth: 120,
+        flex: 0.7,
+        renderCell: (params) => (params.row.maintainable ? t('common_yes') : t('common_no'))
+      },
+      {
+        field: 'defaultMode',
+        headerName: t('org_field_configs_column_default_value'),
+        minWidth: 260,
+        flex: 1.2,
+        sortable: false,
+        renderCell: (params) => {
+          return (
+            <Typography component='span' sx={{ fontFamily: 'monospace', fontSize: 12 }}>
+              {formatDefaultPolicySummary(params.row)}
+            </Typography>
+          )
+        }
+      },
+      {
+        field: 'policyScope',
+        headerName: t('org_field_configs_column_policy_scope'),
+        minWidth: 210,
+        flex: 1,
+        sortable: false,
+        renderCell: (params) => `${params.row.policyScopeType}:${params.row.policyScopeKey || '-'}`
       },
       {
         field: 'state',
@@ -540,7 +771,8 @@ export function OrgUnitFieldConfigsPage() {
         field: 'physicalCol',
         headerName: t('org_field_configs_column_physical_col'),
         minWidth: 140,
-        flex: 0.9
+        flex: 0.9,
+        renderCell: (params) => params.row.physicalCol || '-'
       },
       {
         field: 'updatedAt',
@@ -559,12 +791,15 @@ export function OrgUnitFieldConfigsPage() {
         disableColumnMenu: true,
         renderCell: (params) => {
           const row = params.row
-          const canDisable = row.disabledOn == null
-          const canPostpone = row.disabledOn != null && todayUtc < row.disabledOn
+          const canDisable = row.fieldClass === 'EXT' && row.disabledOn == null
+          const canPostpone = row.fieldClass === 'EXT' && row.disabledOn != null && todayUtc < row.disabledOn
           return (
             <Stack direction='row' spacing={1}>
               <Button onClick={() => setViewRow(row)} size='small' variant='text'>
                 {t('common_detail')}
+              </Button>
+              <Button onClick={() => openPolicyDialog(row)} size='small' variant='text'>
+                {t('org_field_configs_action_edit_policy')}
               </Button>
               <Button
                 disabled={!canDisable}
@@ -587,7 +822,7 @@ export function OrgUnitFieldConfigsPage() {
         }
       }
     ]
-  }, [openDisableDialog, t, todayUtc])
+  }, [openDisableDialog, openPolicyDialog, t, todayUtc])
 
   function openEnableDialog() {
     setEnableError('')
@@ -692,7 +927,7 @@ export function OrgUnitFieldConfigsPage() {
       setToast({ message: t('org_field_configs_toast_enable_success'), severity: 'success' })
       closeEnableDialog()
     } catch (error) {
-      setEnableError(getErrorMessage(error))
+      setEnableError(formatApiErrorMessage(error))
     }
   }
 
@@ -747,7 +982,7 @@ export function OrgUnitFieldConfigsPage() {
       setToast({ message: t('org_field_configs_toast_disable_success'), severity: 'success' })
       closeDisableDialog()
     } catch (error) {
-      setDisableError(getErrorMessage(error))
+      setDisableError(formatApiErrorMessage(error))
     }
   }
 
@@ -1035,6 +1270,123 @@ export function OrgUnitFieldConfigsPage() {
         </DialogActions>
       </Dialog>
 
+      <Dialog onClose={closePolicyDialog} open={policyRow != null} fullWidth maxWidth='sm'>
+        <DialogTitle>{t('org_field_configs_action_edit_policy')}</DialogTitle>
+        <DialogContent>
+          {policyError.length > 0 ? (
+            <Alert severity='error' sx={{ mb: 2 }}>
+              {policyError}
+            </Alert>
+          ) : null}
+          {policyRow ? (
+            <Stack spacing={2} sx={{ mt: 0.5 }}>
+              <Typography variant='body2'>
+                <strong>{policyRow.fieldLabel}</strong> ({policyRow.fieldKey})
+              </Typography>
+              <FormControl>
+                <InputLabel id='org-field-policy-scope-type-label'>{t('org_field_configs_policy_scope_type')}</InputLabel>
+                <Select
+                  label={t('org_field_configs_policy_scope_type')}
+                  labelId='org-field-policy-scope-type-label'
+                  onChange={(event) => {
+                    const nextScopeType: OrgUnitFieldPolicyScopeType = event.target.value === 'GLOBAL' ? 'GLOBAL' : 'FORM'
+                    setPolicyRequestCode(newRequestCode())
+                    setPolicyForm((previous) => ({
+                      ...previous,
+                      scopeType: nextScopeType,
+                      scopeKey: nextScopeType === 'GLOBAL' ? 'global' : fieldPolicyFormScopes[0]
+                    }))
+                  }}
+                  value={policyForm.scopeType}
+                >
+                  <MenuItem value='FORM'>FORM</MenuItem>
+                  <MenuItem value='GLOBAL'>GLOBAL</MenuItem>
+                </Select>
+              </FormControl>
+              {policyForm.scopeType === 'FORM' ? (
+                <FormControl>
+                  <InputLabel id='org-field-policy-scope-key-label'>{t('org_field_configs_policy_scope_key')}</InputLabel>
+                  <Select
+                    label={t('org_field_configs_policy_scope_key')}
+                    labelId='org-field-policy-scope-key-label'
+                    onChange={(event) => {
+                      setPolicyRequestCode(newRequestCode())
+                      setPolicyForm((previous) => ({ ...previous, scopeKey: String(event.target.value) }))
+                    }}
+                    value={policyForm.scopeKey}
+                  >
+                    {fieldPolicyFormScopes.map((scopeKey) => (
+                      <MenuItem key={scopeKey} value={scopeKey}>
+                        {scopeKey}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              ) : null}
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={policyForm.maintainable}
+                    onChange={(event) => {
+                      setPolicyRequestCode(newRequestCode())
+                      setPolicyForm((previous) => ({ ...previous, maintainable: event.target.checked }))
+                    }}
+                  />
+                }
+                label={t('org_field_configs_column_maintainable')}
+              />
+              <FormControl>
+                <InputLabel id='org-field-policy-default-mode-label'>{t('org_field_configs_policy_default_mode')}</InputLabel>
+                <Select
+                  label={t('org_field_configs_policy_default_mode')}
+                  labelId='org-field-policy-default-mode-label'
+                  onChange={(event) => {
+                    const nextMode: OrgUnitFieldPolicyDefaultMode = event.target.value === 'CEL' ? 'CEL' : 'NONE'
+                    setPolicyRequestCode(newRequestCode())
+                    setPolicyForm((previous) => ({
+                      ...previous,
+                      defaultMode: nextMode,
+                      defaultRuleExpr: nextMode === 'CEL' ? previous.defaultRuleExpr : ''
+                    }))
+                  }}
+                  value={policyForm.defaultMode}
+                >
+                  <MenuItem value='NONE'>NONE</MenuItem>
+                  <MenuItem value='CEL'>CEL</MenuItem>
+                </Select>
+              </FormControl>
+              {policyForm.defaultMode === 'CEL' ? (
+                <TextField
+                  label={t('org_field_configs_policy_default_rule_expr')}
+                  onChange={(event) => {
+                    setPolicyRequestCode(newRequestCode())
+                    setPolicyForm((previous) => ({ ...previous, defaultRuleExpr: event.target.value }))
+                  }}
+                  placeholder='next_org_code("O", 6)'
+                  value={policyForm.defaultRuleExpr}
+                />
+              ) : null}
+              <TextField
+                InputLabelProps={{ shrink: true }}
+                label={t('org_field_configs_form_enabled_on')}
+                onChange={(event) => {
+                  setPolicyRequestCode(newRequestCode())
+                  setPolicyForm((previous) => ({ ...previous, enabledOn: event.target.value }))
+                }}
+                type='date'
+                value={policyForm.enabledOn}
+              />
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closePolicyDialog}>{t('common_cancel')}</Button>
+          <Button disabled={policyMutation.isPending} onClick={() => void submitPolicy()} variant='contained'>
+            {t('common_confirm')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog onClose={() => setViewRow(null)} open={viewRow != null} fullWidth maxWidth='md'>
         <DialogTitle>{t('common_detail')}</DialogTitle>
         <DialogContent>
@@ -1044,13 +1396,23 @@ export function OrgUnitFieldConfigsPage() {
                 <strong>{viewRow.fieldLabel}</strong> ({viewRow.fieldKey})
               </Typography>
               <Typography variant='body2'>
+                {t('org_field_configs_column_field_class')}: <code>{viewRow.fieldClass}</code>
+              </Typography>
+              <Typography variant='body2'>
                 {t('org_field_configs_column_value_type')}: <code>{viewRow.valueType}</code> · {t('org_field_configs_column_data_source_type')}: <code>{viewRow.dataSourceType}</code>
               </Typography>
               <Typography variant='body2'>
-                {t('org_field_configs_column_physical_col')}: <code>{viewRow.physicalCol}</code>
+                {t('org_field_configs_column_physical_col')}: <code>{viewRow.physicalCol || '-'}</code>
               </Typography>
               <Typography variant='body2'>
                 {t('org_field_configs_column_enabled_on')}: <code>{viewRow.enabledOn}</code> · {t('org_field_configs_column_disabled_on')}: <code>{viewRow.disabledOn ?? '-'}</code>
+              </Typography>
+              <Typography variant='body2'>
+                {t('org_field_configs_column_maintainable')}: <code>{viewRow.maintainable ? 'true' : 'false'}</code> · {t('org_field_configs_column_default_value')}:{' '}
+                <code>{formatDefaultPolicySummary(viewRow)}</code>
+              </Typography>
+              <Typography variant='body2'>
+                {t('org_field_configs_column_policy_scope')}: <code>{viewRow.policyScopeType}:{viewRow.policyScopeKey || '-'}</code>
               </Typography>
               <Typography variant='body2'>
                 {t('org_field_configs_column_data_source_config')}:

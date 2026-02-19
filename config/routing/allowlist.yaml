@@ -119,6 +119,15 @@ entrypoints:
       - path: /org/api/org-units/field-configs:disable
         methods: [POST]
         route_class: internal_api
+      - path: /org/api/org-units/field-policies
+        methods: [POST]
+        route_class: internal_api
+      - path: /org/api/org-units/field-policies:disable
+        methods: [POST]
+        route_class: internal_api
+      - path: /org/api/org-units/field-policies:resolve-preview
+        methods: [GET]
+        route_class: internal_api
       - path: /org/api/org-units/fields:options
         methods: [GET]
         route_class: internal_api
