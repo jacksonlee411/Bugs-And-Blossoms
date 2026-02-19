@@ -30,7 +30,6 @@ import {
   listOrgUnits,
   listOrgUnitsPage,
   listOrgUnitFieldConfigs,
-  listOrgUnitFieldDefinitions,
   searchOrgUnit,
   writeOrgUnit,
   type OrgUnitAPIItem,
@@ -466,29 +465,12 @@ export function OrgUnitsPage() {
   })
 
   const rootOrgUnits = useMemo(() => rootOrgUnitsQuery.data?.org_units ?? [], [rootOrgUnitsQuery.data])
-  const fieldDefinitionsQuery = useQuery({
-    enabled: canUseExt,
-    queryKey: ['org-units', 'field-definitions'],
-    queryFn: () => listOrgUnitFieldDefinitions(),
-    staleTime: 60_000
-  })
   const fieldConfigsQuery = useQuery({
     enabled: canUseExt,
     queryKey: ['org-units', 'field-configs', asOf],
     queryFn: () => listOrgUnitFieldConfigs({ asOf, status: 'enabled' }),
     staleTime: 30_000
   })
-  const fieldDefinitions = useMemo(() => fieldDefinitionsQuery.data?.fields ?? [], [fieldDefinitionsQuery.data])
-  const normalizedFieldDefinitions = useMemo(() => {
-    return fieldDefinitions.map((def) => {
-      const key = def.label_i18n_key?.trim() ?? ''
-      const label = key && isMessageKey(key) ? t(key) : def.field_key
-      return {
-        ...def,
-        label
-      }
-    })
-  }, [fieldDefinitions, t])
 
   const enabledExtFields = useMemo<OrgUnitExtQueryField[]>(() => {
     const cfgs = fieldConfigsQuery.data?.field_configs ?? []
@@ -899,14 +881,21 @@ export function OrgUnitsPage() {
   const createCapability = createCapabilitiesQuery.data
   const createAllowedFieldSet = useMemo(() => new Set(createCapability?.allowed_fields ?? []), [createCapability?.allowed_fields])
   const createDenyReasons = useMemo(() => createCapability?.deny_reasons ?? [], [createCapability?.deny_reasons])
+  const createExtFields = useMemo(
+    () => enabledExtFields.filter((field) => createAllowedFieldSet.has(field.field_key)),
+    [createAllowedFieldSet, enabledExtFields]
+  )
   const createPlainFieldDefinitions = useMemo(
-    () =>
-      normalizedFieldDefinitions.filter(
-        (def) =>
-          def.data_source_type === 'PLAIN' &&
-          createAllowedFieldSet.has(def.field_key)
-      ),
-    [createAllowedFieldSet, normalizedFieldDefinitions]
+    () => createExtFields.filter((field) => field.data_source_type === 'PLAIN'),
+    [createExtFields]
+  )
+  const createDictFieldDefinitions = useMemo(
+    () => createExtFields.filter((field) => field.data_source_type === 'DICT'),
+    [createExtFields]
+  )
+  const hasCreateUnsupportedExtFieldDefinitions = useMemo(
+    () => createExtFields.some((field) => field.data_source_type !== 'PLAIN' && field.data_source_type !== 'DICT'),
+    [createExtFields]
   )
   const isCreateActionDisabled = useMemo(() => {
     if (!canWrite) {
@@ -1525,7 +1514,7 @@ export function OrgUnitsPage() {
               label={t('org_column_is_business_unit')}
             />
 
-            {createPlainFieldDefinitions.length > 0 ? (
+            {createPlainFieldDefinitions.length > 0 || createDictFieldDefinitions.length > 0 || hasCreateUnsupportedExtFieldDefinitions ? (
               <>
                 <Divider sx={{ my: 0.5 }} />
                 <Typography variant='subtitle2'>{t('org_section_ext_fields')}</Typography>
@@ -1646,6 +1635,45 @@ export function OrgUnitsPage() {
                     />
                   )
                 })}
+                {createDictFieldDefinitions.map((def) => {
+                  const fieldKey = def.field_key
+                  const isEditable = isCreateFieldEditable(fieldKey)
+                  const notAllowedHelper =
+                    !isEditable && createCapabilityOrgCodeReady
+                      ? t('org_append_field_not_allowed_helper')
+                      : undefined
+                  const currentValue = createForm.extValues[fieldKey]
+                  const value =
+                    typeof currentValue === 'string'
+                      ? currentValue
+                      : currentValue === null || typeof currentValue === 'undefined'
+                      ? ''
+                      : String(currentValue)
+
+                  return (
+                    <ExtFilterValueInput
+                      key={fieldKey}
+                      asOf={createCapabilityEffectiveDate}
+                      disabled={!isEditable}
+                      field={def}
+                      helperText={notAllowedHelper}
+                      label={def.label}
+                      onChange={(nextValue) => {
+                        setCreateForm((previous) => ({
+                          ...previous,
+                          extValues: {
+                            ...previous.extValues,
+                            [fieldKey]: nextValue.trim().length > 0 ? nextValue.trim() : undefined
+                          }
+                        }))
+                      }}
+                      value={value}
+                    />
+                  )
+                })}
+                {hasCreateUnsupportedExtFieldDefinitions ? (
+                  <Alert severity='warning'>{t('org_ext_field_unknown_type_warning')}</Alert>
+                ) : null}
               </>
             ) : null}
             {!createCapabilityOrgCodeReady ? (
