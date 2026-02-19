@@ -253,6 +253,7 @@ modules/{module}/
 - DEV-PLAN-109：Org 模块 `request_id` → `request_code` 统一改造与门禁：`docs/dev-plans/109-request-code-unification-and-gate.md`
 - DEV-PLAN-110：启用字段表单增强：自定义（直接值）+ 值类型选择 + 自定义字段名称：`docs/dev-plans/110-orgunit-field-configs-custom-direct-value-form.md`
 - DEV-PLAN-110 执行日志：`docs/dev-records/dev-plan-110-execution-log.md`
+- DEV-PLAN-111：前端错误信息准确化与字段级提示收敛方案：`docs/dev-plans/111-frontend-error-message-accuracy-and-field-level-hints.md`
 - DEV-PLAN-120：Org 字段默认值（Go+PG+CEL）规则引擎落地路线图：`docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
