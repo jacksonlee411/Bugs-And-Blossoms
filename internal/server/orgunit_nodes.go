@@ -129,6 +129,14 @@ func orgNodeWriteErrorMessage(err error) string {
 		"ORGUNIT_CODES_WRITE_FORBIDDEN":            "系统写入权限异常（ORGUNIT_CODES_WRITE_FORBIDDEN），请联系管理员",
 		"EFFECTIVE_DATE_INVALID":                   "生效日期无效",
 		"ORG_INVALID_ARGUMENT":                     "请求参数不完整",
+		"FIELD_NOT_MAINTAINABLE":                   "字段为系统维护，不允许手动输入",
+		"DEFAULT_RULE_REQUIRED":                    "字段被设为系统维护，但未配置默认规则",
+		"DEFAULT_RULE_EVAL_FAILED":                 "默认规则执行失败，请检查规则配置",
+		"FIELD_POLICY_EXPR_INVALID":                "默认规则表达式不合法",
+		"ORG_CODE_EXHAUSTED":                       "组织编码已耗尽，请调整编码规则后重试",
+		"ORG_CODE_CONFLICT":                        "组织编码冲突，请重试",
+		"FIELD_POLICY_SCOPE_OVERLAP":               "同一字段作用域的策略生效区间重叠",
+		"ORG_FIELD_POLICY_NOT_FOUND":               "未找到匹配的字段策略",
 	}
 	if msg, ok := messages[code]; ok {
 		return msg

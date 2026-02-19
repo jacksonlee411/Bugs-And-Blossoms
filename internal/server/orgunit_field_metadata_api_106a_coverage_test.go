@@ -396,4 +396,8 @@ func TestOrgUnitFieldConfigPresentation_Branches(t *testing.T) {
 	if key, label, allowFilter, allowSort := orgUnitFieldConfigPresentation(orgUnitTenantFieldConfig{FieldKey: "x_cost_center"}); key != nil || label == nil || *label != "x_cost_center" || allowFilter || allowSort {
 		t.Fatalf("got key=%v label=%v filter=%v sort=%v", key, label, allowFilter, allowSort)
 	}
+	customLabel := "成本中心"
+	if key, label, allowFilter, allowSort := orgUnitFieldConfigPresentation(orgUnitTenantFieldConfig{FieldKey: "x_cost_center", DisplayLabel: &customLabel}); key != nil || label == nil || *label != customLabel || allowFilter || allowSort {
+		t.Fatalf("got key=%v label=%v filter=%v sort=%v", key, label, allowFilter, allowSort)
+	}
 }

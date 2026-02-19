@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -228,7 +229,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if len(body.FieldConfigs) != 2 {
+		if len(body.FieldConfigs) != len(orgUnitCoreFieldCatalog)+2 {
 			t.Fatalf("len=%d", len(body.FieldConfigs))
 		}
 
@@ -243,7 +244,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		if err := json.Unmarshal(rec2.Body.Bytes(), &body2); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if len(body2.FieldConfigs) != 1 {
+		if len(body2.FieldConfigs) != len(orgUnitCoreFieldCatalog)+1 {
 			t.Fatalf("len=%d", len(body2.FieldConfigs))
 		}
 	})
@@ -498,12 +499,14 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		var gotValueType string
 		var gotDataSourceType string
 		var gotCfg json.RawMessage
+		var gotDisplayLabel *string
 		store := orgUnitStoreWithFieldConfigs{
 			OrgUnitStore: base,
-			enableFn: func(_ context.Context, _ string, _ string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, _ *string, _ string, _ string, _ string) (orgUnitTenantFieldConfig, bool, error) {
+			enableFn: func(_ context.Context, _ string, _ string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, _ string, _ string, _ string) (orgUnitTenantFieldConfig, bool, error) {
 				gotValueType = valueType
 				gotDataSourceType = dataSourceType
 				gotCfg = append([]byte(nil), dataSourceConfig...)
+				gotDisplayLabel = cloneOptionalString(displayLabel)
 				return orgUnitTenantFieldConfig{
 					FieldKey:         "x_cost_center",
 					ValueType:        valueType,
@@ -512,22 +515,137 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 					PhysicalCol:      "ext_str_01",
 					EnabledOn:        "2026-01-01",
 					UpdatedAt:        now,
+					DisplayLabel:     cloneOptionalString(displayLabel),
 				}, false, nil
 			},
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1","value_type":"int","label":"成本中心"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
-		if gotValueType != "text" || gotDataSourceType != "PLAIN" {
+		if gotValueType != "int" || gotDataSourceType != "PLAIN" {
 			t.Fatalf("value_type=%q data_source_type=%q", gotValueType, gotDataSourceType)
 		}
 		if strings.TrimSpace(string(gotCfg)) != "{}" {
 			t.Fatalf("got data_source_config=%s", string(gotCfg))
+		}
+		if gotDisplayLabel == nil || *gotDisplayLabel != "成本中心" {
+			t.Fatalf("display_label=%v", gotDisplayLabel)
+		}
+	})
+
+	t.Run("post custom plain requires value_type", func(t *testing.T) {
+		store := orgUnitStoreWithFieldConfigs{
+			OrgUnitStore: base,
+			enableFn: func(context.Context, string, string, string, string, json.RawMessage, *string, string, string, string) (orgUnitTenantFieldConfig, bool, error) {
+				t.Fatal("should not call store")
+				return orgUnitTenantFieldConfig{}, false, nil
+			},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("post custom plain rejects invalid value_type", func(t *testing.T) {
+		store := orgUnitStoreWithFieldConfigs{
+			OrgUnitStore: base,
+			enableFn: func(context.Context, string, string, string, string, json.RawMessage, *string, string, string, string) (orgUnitTenantFieldConfig, bool, error) {
+				t.Fatal("should not call store")
+				return orgUnitTenantFieldConfig{}, false, nil
+			},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1","value_type":"json"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("post custom plain rejects invalid data_source_config", func(t *testing.T) {
+		store := orgUnitStoreWithFieldConfigs{
+			OrgUnitStore: base,
+			enableFn: func(context.Context, string, string, string, string, json.RawMessage, *string, string, string, string) (orgUnitTenantFieldConfig, bool, error) {
+				t.Fatal("should not call store")
+				return orgUnitTenantFieldConfig{}, false, nil
+			},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1","value_type":"text","data_source_config":{"x":1}}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["code"] != orgUnitErrFieldConfigInvalidDataSourceConfig {
+			t.Fatalf("code=%v", payload["code"])
+		}
+	})
+
+	t.Run("post custom plain store error is mapped", func(t *testing.T) {
+		store := orgUnitStoreWithFieldConfigs{
+			OrgUnitStore: base,
+			enableFn: func(context.Context, string, string, string, string, json.RawMessage, *string, string, string, string) (orgUnitTenantFieldConfig, bool, error) {
+				return orgUnitTenantFieldConfig{}, false, errors.New("boom")
+			},
+		}
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1","value_type":"text"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("post custom plain returns 200 on request retry", func(t *testing.T) {
+		now := time.Unix(123, 0).UTC()
+		store := orgUnitStoreWithFieldConfigs{
+			OrgUnitStore: base,
+			enableFn: func(_ context.Context, _ string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestCode string, _ string) (orgUnitTenantFieldConfig, bool, error) {
+				if fieldKey != "x_cost_center" || valueType != "text" || dataSourceType != "PLAIN" || enabledOn != "2026-01-01" || requestCode != "r1" {
+					t.Fatalf("unexpected args field=%s vt=%s dst=%s enabled_on=%s request=%s", fieldKey, valueType, dataSourceType, enabledOn, requestCode)
+				}
+				if strings.TrimSpace(string(dataSourceConfig)) != "{}" {
+					t.Fatalf("cfg=%s", string(dataSourceConfig))
+				}
+				if displayLabel == nil || *displayLabel != "成本中心" {
+					t.Fatalf("display_label=%v", displayLabel)
+				}
+				return orgUnitTenantFieldConfig{
+					FieldKey:         fieldKey,
+					ValueType:        valueType,
+					DataSourceType:   dataSourceType,
+					DataSourceConfig: dataSourceConfig,
+					PhysicalCol:      "ext_str_01",
+					EnabledOn:        enabledOn,
+					UpdatedAt:        now,
+					DisplayLabel:     cloneOptionalString(displayLabel),
+				}, true, nil
+			},
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1","value_type":"text","label":"成本中心"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
 
@@ -1029,7 +1147,16 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		if !found {
 			t.Fatalf("expected d_org_type in dict_fields: %+v", body.DictFields)
 		}
-		if body.PlainCustomHint.Pattern == "" || body.PlainCustomHint.ValueType != "text" {
+		if body.PlainCustomHint.Pattern == "" {
+			t.Fatalf("plain_custom_hint=%+v", body.PlainCustomHint)
+		}
+		if body.PlainCustomHint.DefaultValueType != "text" {
+			t.Fatalf("plain_custom_hint=%+v", body.PlainCustomHint)
+		}
+		if len(body.PlainCustomHint.ValueTypes) == 0 {
+			t.Fatalf("plain_custom_hint=%+v", body.PlainCustomHint)
+		}
+		if !slices.Equal(body.PlainCustomHint.ValueTypes, orgUnitCustomPlainValueTypes()) {
 			t.Fatalf("plain_custom_hint=%+v", body.PlainCustomHint)
 		}
 	})
@@ -1185,6 +1312,21 @@ func TestOrgUnitFieldMetadataAPI_HelperCoverage(t *testing.T) {
 		}
 		if _, ok := resolveOrgUnitEnableDefinition(" "); ok {
 			t.Fatal("expected blank field_key to fail")
+		}
+	})
+
+	t.Run("normalizeOrgUnitCustomPlainValueType", func(t *testing.T) {
+		if got, ok := normalizeOrgUnitCustomPlainValueType(" int "); !ok || got != "int" {
+			t.Fatalf("got=%q ok=%v", got, ok)
+		}
+		if got, ok := normalizeOrgUnitCustomPlainValueType("numeric"); !ok || got != "numeric" {
+			t.Fatalf("got=%q ok=%v", got, ok)
+		}
+		if _, ok := normalizeOrgUnitCustomPlainValueType("json"); ok {
+			t.Fatal("expected invalid value_type rejected")
+		}
+		if !slices.Equal(orgUnitCustomPlainValueTypes(), []string{"text", "int", "uuid", "bool", "date", "numeric"}) {
+			t.Fatalf("value_types=%v", orgUnitCustomPlainValueTypes())
 		}
 	})
 

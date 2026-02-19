@@ -350,6 +350,15 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/field-configs:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitFieldConfigsDisableAPI(w, r, orgStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/field-policies", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitFieldPoliciesAPI(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/org-units/field-policies:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitFieldPoliciesDisableAPI(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/field-policies:resolve-preview", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitFieldPoliciesResolvePreviewAPI(w, r, orgStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/fields:options", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitFieldOptionsAPI(w, r, orgStore)
 	}))

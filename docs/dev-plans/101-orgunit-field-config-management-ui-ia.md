@@ -24,7 +24,7 @@
    - 查看当前租户已配置字段（含有效期与映射槽位只读）。
    - 启用（新增）一个字段配置（由后端分配 `physical_col`，前端不可选）：
      - 内置字段：从 `field-definitions` 选择 `field_key`；
-     - 自定义字段：输入自定义 `field_key`（`x_` 命名空间；仅 PLAIN(text)；对齐 `DEV-PLAN-106`）；
+    - 自定义字段：输入自定义 `field_key`（`x_` 命名空间；PLAIN 直接值；启用时可选 `value_type=text/int/uuid/bool/date/numeric`；对齐 `DEV-PLAN-110`）；
      - DICT（对齐 `DEV-PLAN-106A`）：在“字段”选择阶段直接选择字典字段（`field_key=d_<dict_code>`），候选来源为字典模块 dict registry（`GET /iam/api/dicts?as_of=enabled_on`）；启用时允许填写可选展示名（label）；
      - ENTITY：仍需从 `field-definitions.data_source_config_options` 选择 `data_source_config`（枚举化候选）。
    - 停用一个字段配置（按 day 粒度选择 `disabled_on`）；若停用尚未生效，支持“延期停用”（仅向后延迟）。
@@ -120,7 +120,7 @@
   - 字典字段（`d_`）：优先展示服务端返回的 `label`（启用时自定义 label 优先，否则为 dict name / dict_code；SSOT：`DEV-PLAN-106A`）；
   - 自定义字段（`x_`）：展示服务端返回的 `label`（MVP 可等于 field_key；不得引入租户可编辑多语言持久化结构；对齐 `DEV-PLAN-106`）。
 - `field_key`：稳定键（只读）
-- `value_type`：`text/int/uuid/bool/date`（只读）
+- `value_type`：`text/int/uuid/bool/date/numeric`（只读）
 - `data_source_type`：`PLAIN/DICT/ENTITY`（只读）
 - `data_source_config`：只读（展示 `dict_code` 或 `entity/id_kind`，便于排障）
 - `status`：`enabled/disabled`（Chip）
@@ -150,7 +150,7 @@
      - 控件（冻结）：第三步“字段”分三类来源（同一选择器内分组展示，或显式三选一模式）：
        - **内置字段（非 DICT）**：`Select/Autocomplete`（数据源：`GET /org/api/org-units/field-definitions`；UI 必须排除/禁用其中 `data_source_type=DICT` 的 built-in 字段，避免走旧路径）
        - **字典字段（DICT；106A）**：`Select/Autocomplete`（数据源：`GET /org/api/org-units/field-configs:enable-candidates?enabled_on=<enabled_on>`，展示为 `name + dict_code`，提交 `field_key=d_<dict_code>`）
-       - **自定义字段（PLAIN）**：`TextField` 输入 `field_key`（必须满足 `x_[a-z0-9_]{1,60}`；仅允许 PLAIN(text)；对齐 `DEV-PLAN-106`）
+      - **自定义字段（直接值）**：`TextField` 输入 `field_key`（必须满足 `x_[a-z0-9_]{1,60}`）；并可选择 `value_type=text/int/uuid/bool/date/numeric`（对齐 `DEV-PLAN-110`）
      - 约束：候选/输入都应排除已存在于 `field-configs(status=all)` 的 `field_key`（无论当前 `as_of` 下状态如何），避免触发后端 “已存在/不可重复启用” 冲突。
   2) `enabled_on`：
      - `TextField type="date"`，默认 `max(today_utc, as_of)`
@@ -232,7 +232,7 @@
 - 导航项使用 i18n key：`nav_org_field_configs`（en/zh 同步）。
 - 字段名称（field_label）口径（MVP 冻结）：
   - 字段定义由后端返回 `label_i18n_key`，前端通过 `t(label_i18n_key)` 渲染（禁止前端再建一套字段 label 映射）；
-  - 自定义字段（`x_`）无 `label_i18n_key`，UI 直接展示 `field_key`（或按固定规则推导；不得引入租户可编辑的多语言持久化结构）；
+  - 自定义字段（`x_`）无 `label_i18n_key`，UI 展示优先级：`label(display_label)` -> `field_key`（不得引入租户可编辑的多语言持久化结构）；
   - 禁止在本计划引入“租户可编辑 label_zh/label_en 并持久化”的多语言业务数据形态（如需，另立 dev-plan）。
 
 ## 9. 验收标准（最小可交付）

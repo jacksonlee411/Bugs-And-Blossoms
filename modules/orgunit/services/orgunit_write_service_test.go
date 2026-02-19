@@ -165,7 +165,7 @@ func withMarshalJSON(t *testing.T, fn func(any) ([]byte, error)) {
 	t.Cleanup(func() { marshalJSON = orig })
 }
 
-func newWriteService(store orgUnitWriteStoreStub) *orgUnitWriteService {
+func newWriteService(store ports.OrgUnitWriteStore) *orgUnitWriteService {
 	return &orgUnitWriteService{store: store}
 }
 
@@ -763,8 +763,14 @@ func TestValidateExtFieldKeyEnabled_Branches(t *testing.T) {
 	if err := validateExtFieldKeyEnabled("d_org_type", types.TenantFieldConfig{FieldKey: "d_org_type", ValueType: "text", DataSourceType: "DICT", DataSourceConfig: json.RawMessage(`{"dict_code":"other"}`)}); err == nil {
 		t.Fatal("expected dict key/config mismatch rejected")
 	}
-	if err := validateExtFieldKeyEnabled("x_cost_center", types.TenantFieldConfig{FieldKey: "x_cost_center", ValueType: "int", DataSourceType: "PLAIN"}); err == nil {
-		t.Fatal("expected custom non-text rejected")
+	if err := validateExtFieldKeyEnabled("x_cost_center", types.TenantFieldConfig{FieldKey: "x_cost_center", ValueType: "int", DataSourceType: "PLAIN"}); err != nil {
+		t.Fatalf("custom int key err=%v", err)
+	}
+	if err := validateExtFieldKeyEnabled("x_cost_center", types.TenantFieldConfig{FieldKey: "x_cost_center", ValueType: "numeric", DataSourceType: "PLAIN"}); err != nil {
+		t.Fatalf("custom numeric key err=%v", err)
+	}
+	if err := validateExtFieldKeyEnabled("x_cost_center", types.TenantFieldConfig{FieldKey: "x_cost_center", ValueType: "json", DataSourceType: "PLAIN"}); err == nil {
+		t.Fatal("expected custom invalid value_type rejected")
 	}
 	if err := validateExtFieldKeyEnabled("x_cost_center", types.TenantFieldConfig{FieldKey: "x_cost_center", ValueType: "text", DataSourceType: "DICT"}); err == nil {
 		t.Fatal("expected custom non-plain rejected")

@@ -87,7 +87,7 @@ graph TD
     - **ENTITY**：`data_source_config` 仍要求命中 `field-definitions.data_source_config_options`（枚举化候选；禁止任意表/列透传）。
   - 约束：
     - `field-configs` 的 enable 请求禁止客户端提交或覆盖 `physical_col`；
-    - 允许一个受控例外：自定义 PLAIN 字段走 `x_` 命名空间（见 §5.2.2），其 metadata 由 enable 行为隐式承载（仅 PLAIN(text)，不新增表）。
+    - 允许一个受控例外：自定义 PLAIN 字段走 `x_` 命名空间（见 §5.2.2），其 metadata 由 enable 行为隐式承载（`data_source_type=PLAIN` 固定；`value_type` 扩展由 `DEV-PLAN-110` 冻结）。
   - 原因：让“字段元数据/数据源/可用性”各自只有一种权威表达，避免 drift（对齐 `DEV-PLAN-003` Simple > Easy）。
 
 - **ADR-100D-05：DICT 展示值遵循 D4 兜底链路，但必须显式标记来源**
@@ -215,7 +215,11 @@ status 口径冻结：
       "data_source_type": "DICT"
     }
   ],
-  "plain_custom_hint": { "pattern": "^x_[a-z0-9_]{1,60}$", "value_type": "text" }
+  "plain_custom_hint": {
+    "pattern": "^x_[a-z0-9_]{1,60}$",
+    "value_types": ["text", "int", "uuid", "bool", "date", "numeric"],
+    "default_value_type": "text"
+  }
 }
 ```
 
@@ -250,7 +254,7 @@ status 口径冻结：
   - **字典字段（DICT）**：当 `field_key` 为 `d_<dict_code>` 时，视为“字典字段”，允许 **不在** `field-definitions` 中；该路径下由服务端强制：
     - `value_type='text'`、`data_source_type='DICT'`；
     - `data_source_config={"dict_code":"<dict_code>"}`，且 `<dict_code>` 必须在字典模块 registry 中存在并在 `enabled_on` 下可用（fail-closed；SSOT：`DEV-PLAN-105B`；收敛目标见 `DEV-PLAN-106A`）。
-  - **自定义 PLAIN 字段**：当 `field_key` 满足 `x_[a-z0-9_]{1,60}` 时，允许 **不在** `field-definitions` 中；该路径下 `value_type='text'`、`data_source_type='PLAIN'`（固定），且 `data_source_config` 必须为 `{}`（缺失由服务端补齐为 `{}`）。
+  - **自定义 PLAIN 字段**：当 `field_key` 满足 `x_[a-z0-9_]{1,60}` 时，允许 **不在** `field-definitions` 中；该路径下 `data_source_type='PLAIN'`（固定），`value_type` 由请求显式给定（`text/int/uuid/bool/date/numeric`），且 `data_source_config` 必须为 `{}`（缺失由服务端补齐为 `{}`）。
 - `data_source_config`：
   - `PLAIN`：必须为 `{}`（可缺省，由服务端补齐为空对象）。  
   - `DICT（字典字段）`：服务端从 `field_key=d_<dict_code>` 推导 `dict_code`，并按 dict registry 校验（fail-closed）；客户端若显式提交 `data_source_config`，也必须与推导结果一致（不一致即拒绝），避免“双写同一事实”漂移。

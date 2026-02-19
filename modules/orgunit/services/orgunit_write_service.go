@@ -7,8 +7,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/google/cel-go/cel"
+	celtypes "github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/fieldmeta"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
@@ -35,6 +39,12 @@ const (
 	errOrgHasChildrenCannotDelete     = "ORG_HAS_CHILDREN_CANNOT_DELETE"
 	errOrgHasDependenciesCannotDelete = "ORG_HAS_DEPENDENCIES_CANNOT_DELETE"
 	errOrgEventRescinded              = "ORG_EVENT_RESCINDED"
+	errFieldNotMaintainable           = "FIELD_NOT_MAINTAINABLE"
+	errDefaultRuleRequired            = "DEFAULT_RULE_REQUIRED"
+	errDefaultRuleEvalFailed          = "DEFAULT_RULE_EVAL_FAILED"
+	errFieldPolicyExprInvalid         = "FIELD_POLICY_EXPR_INVALID"
+	errOrgCodeExhausted               = "ORG_CODE_EXHAUSTED"
+	errOrgCodeConflict                = "ORG_CODE_CONFLICT"
 )
 
 var (
@@ -44,6 +54,8 @@ var (
 	resolveDictLabelInWrite             = func(ctx context.Context, tenantID string, asOf string, dictCode string, code string) (string, bool, error) {
 		return globalDictResolver{}.ResolveValueLabel(ctx, tenantID, asOf, dictCode, code)
 	}
+	celCompileCache   sync.Map
+	nextOrgCodeRuleRe = regexp.MustCompile(`^next_org_code\(\s*"([^"]*)"\s*,\s*([0-9]+)\s*\)$`)
 )
 
 type OrgUnitWriteService interface {
@@ -194,6 +206,59 @@ type orgUnitWriteService struct {
 	store ports.OrgUnitWriteStore
 }
 
+type orgUnitRequestCodeEventReader interface {
+	FindEventByRequestCode(ctx context.Context, tenantID string, requestCode string) (types.OrgUnitEvent, bool, error)
+}
+
+type orgUnitFieldPolicyResolver interface {
+	ResolveTenantFieldPolicy(
+		ctx context.Context,
+		tenantID string,
+		fieldKey string,
+		scopeType string,
+		scopeKey string,
+		asOf string,
+	) (types.TenantFieldPolicy, bool, error)
+}
+
+type orgUnitCreateAutoCodeSubmitter interface {
+	SubmitCreateEventWithGeneratedCode(
+		ctx context.Context,
+		tenantID string,
+		eventUUID string,
+		effectiveDate string,
+		payload json.RawMessage,
+		requestCode string,
+		initiatorUUID string,
+		prefix string,
+		width int,
+	) (int64, string, error)
+}
+
+type orgUnitRuleRuntimeContext struct {
+	tenantID      string
+	effectiveDate string
+}
+
+type orgUnitAutoCodeSpec struct {
+	Prefix string
+	Width  int
+}
+
+const (
+	orgUnitPolicyScopeGlobal    = "GLOBAL"
+	orgUnitPolicyScopeForm      = "FORM"
+	orgUnitPolicyScopeGlobalKey = "global"
+	orgUnitCreateDialogScopeKey = "orgunit.create_dialog"
+	orgUnitDefaultModeNone      = "NONE"
+	orgUnitDefaultModeCEL       = "CEL"
+	orgUnitNextOrgCodeFuncName  = "next_org_code"
+	orgUnitDefaultOrgCodePrefix = "O"
+	orgUnitDefaultOrgCodeWidth  = 6
+	orgUnitPolicyDisabledStatus = "disabled"
+	orgUnitPolicyEnabledStatus  = "active"
+)
+
 type globalDictResolver struct{}
 
 func (globalDictResolver) ResolveValueLabel(ctx context.Context, tenantID string, asOf string, dictCode string, code string) (string, bool, error) {
@@ -213,13 +278,9 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 	if intent == "" {
 		return OrgUnitWriteResult{}, httperr.NewBadRequest("intent is required")
 	}
+	writeIntent := OrgUnitWriteIntent(intent)
 
 	effectiveDate, err := validateDate(req.EffectiveDate)
-	if err != nil {
-		return OrgUnitWriteResult{}, err
-	}
-
-	orgCode, err := normalizeOrgCode(req.OrgCode)
 	if err != nil {
 		return OrgUnitWriteResult{}, err
 	}
@@ -229,12 +290,39 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 		return OrgUnitWriteResult{}, httperr.NewBadRequest("request_code is required")
 	}
 
+	if writeIntent == OrgUnitWriteIntentCreateOrg {
+		if result, ok, err := s.resolveCreateByRequestCode(ctx, tenantID, requestCode); err != nil {
+			return OrgUnitWriteResult{}, err
+		} else if ok {
+			return result, nil
+		}
+	}
+
 	// Resolve ext configs as-of the final effective date (DEV-PLAN-108 §16.3).
 	fieldConfigs, enabledExtFieldKeys, err := s.listEnabledExtFieldConfigs(ctx, tenantID, effectiveDate)
 	if err != nil {
 		return OrgUnitWriteResult{}, err
 	}
 	_ = enabledExtFieldKeys // reserved for future policy checks (capabilities is the UI SSOT).
+	var autoCodeSpec *orgUnitAutoCodeSpec
+
+	if writeIntent == OrgUnitWriteIntentCreateOrg {
+		autoCodeSpec, err = s.applyCreatePolicyDefaults(ctx, tenantID, effectiveDate, fieldConfigs, &req)
+		if err != nil {
+			return OrgUnitWriteResult{}, err
+		}
+	}
+
+	orgCodeRaw := strings.TrimSpace(req.OrgCode)
+	orgCode := ""
+	if orgCodeRaw != "" {
+		orgCode, err = normalizeOrgCode(orgCodeRaw)
+		if err != nil {
+			return OrgUnitWriteResult{}, err
+		}
+	} else if writeIntent != OrgUnitWriteIntentCreateOrg {
+		return OrgUnitWriteResult{}, httperr.NewBadRequest(errOrgCodeInvalid)
+	}
 
 	payload := make(map[string]any)
 	fields := make(map[string]any)
@@ -329,10 +417,13 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 
 	initiatorUUID := resolveInitiatorUUID(req.InitiatorUUID, tenantID)
 
-	switch OrgUnitWriteIntent(intent) {
+	switch writeIntent {
 	case OrgUnitWriteIntentCreateOrg:
 		// Create supports setting status in the same CREATE payload (DEV-PLAN-108 §6.4).
-		payload["org_code"] = orgCode
+		autoGenerateOrgCode := orgCode == ""
+		if !autoGenerateOrgCode {
+			payload["org_code"] = orgCode
+		}
 		if _, ok := payload["name"]; !ok {
 			return OrgUnitWriteResult{}, httperr.NewBadRequest("name is required")
 		}
@@ -342,8 +433,35 @@ func (s *orgUnitWriteService) Write(ctx context.Context, tenantID string, req Wr
 			return OrgUnitWriteResult{}, err
 		}
 
-		if _, err := s.store.SubmitEvent(ctx, tenantID, eventUUID, nil, string(types.OrgUnitEventCreate), effectiveDate, payloadJSON, requestCode, initiatorUUID); err != nil {
-			return OrgUnitWriteResult{}, err
+		if autoGenerateOrgCode {
+			if autoCodeSpec == nil {
+				return OrgUnitWriteResult{}, errors.New(errDefaultRuleRequired)
+			}
+			submitter, ok := s.store.(orgUnitCreateAutoCodeSubmitter)
+			if !ok {
+				return OrgUnitWriteResult{}, errors.New(errDefaultRuleEvalFailed)
+			}
+			eventID, generatedOrgCode, err := submitter.SubmitCreateEventWithGeneratedCode(
+				ctx,
+				tenantID,
+				eventUUID,
+				effectiveDate,
+				payloadJSON,
+				requestCode,
+				initiatorUUID,
+				autoCodeSpec.Prefix,
+				autoCodeSpec.Width,
+			)
+			if err != nil {
+				return OrgUnitWriteResult{}, mapCreateAutoCodeError(err)
+			}
+			_ = eventID // event_id is committed but not needed on API response.
+			orgCode = generatedOrgCode
+			fields["org_code"] = generatedOrgCode
+		} else {
+			if _, err := s.store.SubmitEvent(ctx, tenantID, eventUUID, nil, string(types.OrgUnitEventCreate), effectiveDate, payloadJSON, requestCode, initiatorUUID); err != nil {
+				return OrgUnitWriteResult{}, err
+			}
 		}
 
 		return OrgUnitWriteResult{
@@ -1355,13 +1473,22 @@ func validateExtFieldKeyEnabled(fieldKey string, cfg types.TenantFieldConfig) er
 	if !fieldmeta.IsCustomPlainFieldKey(fieldKey) {
 		return httperr.NewBadRequest(errPatchFieldNotAllowed)
 	}
-	if !strings.EqualFold(strings.TrimSpace(cfg.ValueType), "text") {
+	if !isAllowedExtValueType(cfg.ValueType) {
 		return httperr.NewBadRequest(errPatchFieldNotAllowed)
 	}
 	if !strings.EqualFold(strings.TrimSpace(cfg.DataSourceType), "PLAIN") {
 		return httperr.NewBadRequest(errPatchFieldNotAllowed)
 	}
 	return nil
+}
+
+func isAllowedExtValueType(valueType string) bool {
+	switch strings.ToLower(strings.TrimSpace(valueType)) {
+	case "text", "int", "uuid", "bool", "date", "numeric":
+		return true
+	default:
+		return false
+	}
 }
 
 func buildExtPayloadWithContext(ctx context.Context, tenantID string, asOf string, ext map[string]any, fieldConfigs []types.TenantFieldConfig) (map[string]any, map[string]string, error) {
@@ -1419,6 +1546,201 @@ func buildExtPayloadWithContext(ctx context.Context, tenantID string, asOf strin
 	}
 
 	return extPatch, extLabels, nil
+}
+
+func (s *orgUnitWriteService) resolveCreateByRequestCode(ctx context.Context, tenantID string, requestCode string) (OrgUnitWriteResult, bool, error) {
+	reader, ok := s.store.(orgUnitRequestCodeEventReader)
+	if !ok {
+		return OrgUnitWriteResult{}, false, nil
+	}
+	event, found, err := reader.FindEventByRequestCode(ctx, tenantID, requestCode)
+	if err != nil {
+		return OrgUnitWriteResult{}, false, err
+	}
+	if !found {
+		return OrgUnitWriteResult{}, false, nil
+	}
+	if string(event.EventType) != string(types.OrgUnitEventCreate) {
+		return OrgUnitWriteResult{}, false, errors.New(errOrgRequestIDConflict)
+	}
+
+	orgCode, err := orgCodeFromEventPayload(event.Payload)
+	if err != nil {
+		return OrgUnitWriteResult{}, false, err
+	}
+	if orgCode == "" {
+		resolved, resolveErr := s.store.ResolveOrgCode(ctx, tenantID, event.OrgID)
+		if resolveErr != nil {
+			return OrgUnitWriteResult{}, false, resolveErr
+		}
+		orgCode = resolved
+	}
+	return OrgUnitWriteResult{
+		OrgCode:       orgCode,
+		EffectiveDate: event.EffectiveDate,
+		EventType:     string(event.EventType),
+		EventUUID:     event.EventUUID,
+		Fields: map[string]any{
+			"org_code": orgCode,
+		},
+	}, true, nil
+}
+
+func orgCodeFromEventPayload(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 {
+		return "", nil
+	}
+	payload := map[string]any{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return "", err
+	}
+	value, _ := payload["org_code"].(string)
+	return strings.TrimSpace(value), nil
+}
+
+func (s *orgUnitWriteService) applyCreatePolicyDefaults(
+	ctx context.Context,
+	tenantID string,
+	effectiveDate string,
+	fieldConfigs []types.TenantFieldConfig,
+	req *WriteOrgUnitRequest,
+) (*orgUnitAutoCodeSpec, error) {
+	_ = fieldConfigs // M1 runtime scope: org_code only.
+
+	resolver, ok := s.store.(orgUnitFieldPolicyResolver)
+	if !ok {
+		return nil, nil
+	}
+	policy := types.TenantFieldPolicy{
+		FieldKey:     "org_code",
+		ScopeType:    orgUnitPolicyScopeGlobal,
+		ScopeKey:     orgUnitPolicyScopeGlobalKey,
+		Maintainable: true,
+		DefaultMode:  orgUnitDefaultModeNone,
+	}
+	resolved, found, err := resolver.ResolveTenantFieldPolicy(
+		ctx,
+		tenantID,
+		"org_code",
+		orgUnitPolicyScopeForm,
+		orgUnitCreateDialogScopeKey,
+		effectiveDate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		policy = resolved
+	}
+
+	provided := strings.TrimSpace(req.OrgCode) != ""
+	if !policy.Maintainable {
+		if provided {
+			return nil, errors.New(errFieldNotMaintainable)
+		}
+	}
+
+	mode := strings.ToUpper(strings.TrimSpace(policy.DefaultMode))
+	switch mode {
+	case "", orgUnitDefaultModeNone:
+		if !policy.Maintainable {
+			return nil, errors.New(errDefaultRuleRequired)
+		}
+		return nil, nil
+	case orgUnitDefaultModeCEL:
+		if provided {
+			return nil, nil
+		}
+		if policy.DefaultRuleExpr == nil || strings.TrimSpace(*policy.DefaultRuleExpr) == "" {
+			return nil, errors.New(errDefaultRuleRequired)
+		}
+		spec, err := parseNextOrgCodeRule(*policy.DefaultRuleExpr)
+		if err != nil {
+			return nil, err
+		}
+		req.OrgCode = ""
+		return spec, nil
+	default:
+		if !policy.Maintainable {
+			return nil, errors.New(errDefaultRuleRequired)
+		}
+		return nil, errors.New(errDefaultRuleEvalFailed)
+	}
+}
+
+func parseNextOrgCodeRule(expr string) (*orgUnitAutoCodeSpec, error) {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return nil, errors.New(errFieldPolicyExprInvalid)
+	}
+	if err := compileCELExpr(expr); err != nil {
+		return nil, errors.New(errFieldPolicyExprInvalid)
+	}
+
+	matches := nextOrgCodeRuleRe.FindStringSubmatch(expr)
+	if len(matches) != 3 {
+		return nil, errors.New(errDefaultRuleEvalFailed)
+	}
+	prefix := strings.TrimSpace(matches[1])
+	if prefix == "" {
+		return nil, errors.New(errDefaultRuleEvalFailed)
+	}
+	width, err := strconv.Atoi(strings.TrimSpace(matches[2]))
+	if err != nil || width <= 0 || width > 12 {
+		return nil, errors.New(errDefaultRuleEvalFailed)
+	}
+	return &orgUnitAutoCodeSpec{Prefix: prefix, Width: width}, nil
+}
+
+func orgUnitWriteCELNextOrgCode(_ ...ref.Val) ref.Val {
+	return celtypes.String("")
+}
+
+var newOrgUnitWriteCELEnv = func() (*cel.Env, error) {
+	return cel.NewEnv(
+		cel.Function(
+			orgUnitNextOrgCodeFuncName,
+			cel.Overload(
+				"next_org_code_string_int",
+				[]*cel.Type{cel.StringType, cel.IntType},
+				cel.StringType,
+				cel.FunctionBinding(orgUnitWriteCELNextOrgCode),
+			),
+		),
+	)
+}
+
+func compileCELExpr(expr string) error {
+	if _, ok := celCompileCache.Load(expr); ok {
+		return nil
+	}
+	env, err := newOrgUnitWriteCELEnv()
+	if err != nil {
+		return err
+	}
+	ast, iss := env.Compile(expr)
+	if iss != nil && iss.Err() != nil {
+		return iss.Err()
+	}
+	if ast.OutputType() != cel.StringType {
+		return errors.New("default expression must return string")
+	}
+	celCompileCache.Store(expr, struct{}{})
+	return nil
+}
+
+func mapCreateAutoCodeError(err error) error {
+	msg := strings.ToUpper(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.Contains(msg, errOrgCodeExhausted):
+		return errors.New(errOrgCodeExhausted)
+	case strings.Contains(msg, "ORG_REQUEST_ID_CONFLICT"):
+		return errors.New(errOrgRequestIDConflict)
+	case strings.Contains(msg, "DUPLICATE KEY VALUE") && strings.Contains(msg, "ORG_UNIT_CODES_ORG_CODE_UNIQUE"):
+		return errors.New(errOrgCodeConflict)
+	default:
+		return err
+	}
 }
 
 func namePatchKey(eventType types.OrgUnitEventType) (string, bool) {

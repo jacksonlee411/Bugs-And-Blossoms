@@ -26,10 +26,10 @@
 3. **启用时可自定义描述（display label）**：
    - 配置员在启用“字典字段”时可填写一个描述/展示名（单语言 canonical string），用于字段配置列表与 OrgUnit 详情页字段展示。
 4. **保留 PLAIN（自定义字段）**：
-   - 保留 `x_...` 自定义 PLAIN(text) 字段启用与写入闭环（对齐 `DEV-PLAN-106`）。
+   - 保留 `x_...` 自定义 PLAIN 字段启用与写入闭环（值类型扩展由 `DEV-PLAN-110` 负责）。
 5. **明确 SSOT 与关系**（本计划必须显式写清）：
    - 字典字段（`d_<dict_code>`）：其“可用全集/可用性（as_of）”以字典模块 registry 为唯一事实源（SSOT：`DEV-PLAN-105B`）；Org 不复制 dict_code 枚举（对齐 No Legacy）。
-   - 自定义 PLAIN 字段（`x_...`）：定义由“field-config 行本身”隐式承载（仅 PLAIN(text)，对齐 `DEV-PLAN-106`）。
+   - 自定义 PLAIN 字段（`x_...`）：定义由“field-config 行本身”隐式承载（`data_source_type=PLAIN` 固定；`value_type` 扩展以 `DEV-PLAN-110` 为准）。
    - 内置字段（built-in，来自 `field-definitions`）：仍作为内置字段元数据 SSOT（`DEV-PLAN-100D/100D2`），但 **内置 DICT field_key 必须被迁移并下线**（见 §4.4），启用入口需 fail-closed。
 6. **fail-closed 一致性**：
    - 启用时：dict_code 不存在/在 enabled_on 不可用 => 拒绝；
@@ -143,7 +143,7 @@
    - `GET /org/api/org-units/field-configs:enable-candidates?enabled_on=YYYY-MM-DD`
    - Response（草案）：
      - `dict_fields[]`：`{field_key:"d_<dict_code>", dict_code, name, value_type:"text", data_source_type:"DICT"}`
-     - （可选）`plain_custom_hint`：`{pattern:"^x_[a-z0-9_]{1,60}$", value_type:"text"}`
+     - （可选）`plain_custom_hint`：`{pattern:"^x_[a-z0-9_]{1,60}$", value_types:["text","int","uuid","bool","date","numeric"], default_value_type:"text"}`
 2. 扩展 enable field-config 请求（仅对 `d_...` 生效）：
    - `POST /org/api/org-units/field-configs`
    - 新增可选字段：`label`（canonical string；长度上限实现阶段冻结）
@@ -241,7 +241,7 @@
    - `POST /org/api/org-units/field-configs` 对 DICT 的新口径：
      - `field_key=d_<dict_code>`：服务端解析 suffix 作为 dict_code，并强制 `value_type=text`、`data_source_type=DICT`、`data_source_config={"dict_code":"<dict_code>"}`（客户端若显式传入不一致则拒绝）；
      - 任何内置 DICT field_key 一律拒绝（fail-closed）。
-   - `x_...`：延续 `DEV-PLAN-106`（固定 `value_type=text`、`data_source_type=PLAIN`、`data_source_config={}`）。
+  - `x_...`：延续 `DEV-PLAN-106`，并由 `DEV-PLAN-110` 扩展为“`data_source_type=PLAIN` + `value_type` 可选 `text/int/uuid/bool/date/numeric` + `data_source_config={}`”。
    - 其他 built-in：仍由 `field-definitions` SSOT 管理（不在本计划改变其语义）。
 4. [x] 收紧 options API：
    - `GET /org/api/org-units/fields:options`：仅支持 `d_...`（解析出 dict_code 后调用 `pkg/dict`），不再支持“内置 DICT field_key”分支。

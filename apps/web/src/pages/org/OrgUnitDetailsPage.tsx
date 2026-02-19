@@ -263,7 +263,7 @@ function formatTxTime(value: string): string {
 }
 
 function normalizeExtValueByType(
-  valueType: 'text' | 'int' | 'uuid' | 'bool' | 'date',
+  valueType: 'text' | 'int' | 'uuid' | 'bool' | 'date' | 'numeric',
   rawValue: unknown
 ): unknown {
   if (rawValue === null || rawValue === undefined) {
@@ -281,6 +281,19 @@ function normalizeExtValueByType(
           return null
         }
         const parsed = Number.parseInt(trimmed, 10)
+        return Number.isFinite(parsed) ? parsed : rawValue
+      }
+      return rawValue
+    case 'numeric':
+      if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+        return rawValue
+      }
+      if (typeof rawValue === 'string') {
+        const trimmed = rawValue.trim()
+        if (trimmed.length === 0) {
+          return null
+        }
+        const parsed = Number.parseFloat(trimmed)
         return Number.isFinite(parsed) ? parsed : rawValue
       }
       return rawValue

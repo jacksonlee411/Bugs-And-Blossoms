@@ -4,12 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
+
+var marshalCreatePayloadJSON = json.Marshal
 
 type pgBeginner interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
@@ -252,6 +257,257 @@ WHERE tenant_uuid = $1::uuid AND org_id = $2::int AND effective_date = $3::date
 	return event, nil
 }
 
+func (s *OrgUnitPGStore) FindEventByRequestCode(ctx context.Context, tenantID string, requestCode string) (types.OrgUnitEvent, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return types.OrgUnitEvent{}, false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return types.OrgUnitEvent{}, false, err
+	}
+
+	var event types.OrgUnitEvent
+	var payload []byte
+	if err := tx.QueryRow(ctx, `
+SELECT id, event_uuid::text, org_id, event_type, effective_date::text, payload, transaction_time
+FROM orgunit.org_events
+WHERE tenant_uuid = $1::uuid
+  AND request_code = $2::text
+ORDER BY id DESC
+LIMIT 1
+`, tenantID, requestCode).Scan(&event.ID, &event.EventUUID, &event.OrgID, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return types.OrgUnitEvent{}, false, nil
+		}
+		return types.OrgUnitEvent{}, false, err
+	}
+	if payload != nil {
+		event.Payload = json.RawMessage(payload)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return types.OrgUnitEvent{}, false, err
+	}
+	return event, true, nil
+}
+
+func (s *OrgUnitPGStore) ResolveTenantFieldPolicy(
+	ctx context.Context,
+	tenantID string,
+	fieldKey string,
+	scopeType string,
+	scopeKey string,
+	asOf string,
+) (types.TenantFieldPolicy, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return types.TenantFieldPolicy{}, false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return types.TenantFieldPolicy{}, false, err
+	}
+
+	scopeType = strings.ToUpper(strings.TrimSpace(scopeType))
+	scopeKey = strings.TrimSpace(scopeKey)
+	if scopeType != "FORM" && scopeType != "GLOBAL" {
+		return types.TenantFieldPolicy{}, false, nil
+	}
+	if scopeType == "GLOBAL" {
+		scopeKey = "global"
+	}
+
+	query := `
+SELECT
+  field_key,
+  scope_type,
+  scope_key,
+  maintainable,
+  default_mode,
+  default_rule_expr,
+  enabled_on::text,
+  CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on
+FROM orgunit.tenant_field_policies
+WHERE tenant_uuid = $1::uuid
+  AND field_key = $2::text
+  AND enabled_on <= $3::date
+  AND ($3::date < COALESCE(disabled_on, 'infinity'::date))
+  AND (
+    (scope_type = 'FORM' AND scope_key = $4::text)
+    OR
+    (scope_type = 'GLOBAL' AND scope_key = 'global')
+  )
+ORDER BY CASE
+  WHEN scope_type = 'FORM' AND scope_key = $4::text THEN 0
+  ELSE 1
+END ASC, enabled_on DESC
+LIMIT 1
+`
+	if scopeType == "GLOBAL" {
+		query = `
+SELECT
+  field_key,
+  scope_type,
+  scope_key,
+  maintainable,
+  default_mode,
+  default_rule_expr,
+  enabled_on::text,
+  CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on
+FROM orgunit.tenant_field_policies
+WHERE tenant_uuid = $1::uuid
+  AND field_key = $2::text
+  AND enabled_on <= $3::date
+  AND ($3::date < COALESCE(disabled_on, 'infinity'::date))
+  AND scope_type = 'GLOBAL'
+  AND scope_key = 'global'
+ORDER BY enabled_on DESC
+LIMIT 1
+`
+	}
+
+	var policy types.TenantFieldPolicy
+	var defaultRule *string
+	var disabledOn *string
+	if err := tx.QueryRow(ctx, query, tenantID, fieldKey, asOf, scopeKey).Scan(
+		&policy.FieldKey,
+		&policy.ScopeType,
+		&policy.ScopeKey,
+		&policy.Maintainable,
+		&policy.DefaultMode,
+		&defaultRule,
+		&policy.EnabledOn,
+		&disabledOn,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return types.TenantFieldPolicy{}, false, nil
+		}
+		return types.TenantFieldPolicy{}, false, err
+	}
+	policy.DefaultMode = strings.ToUpper(strings.TrimSpace(policy.DefaultMode))
+	policy.DefaultRuleExpr = cloneOptionalString(defaultRule)
+	policy.DisabledOn = cloneOptionalString(disabledOn)
+
+	if err := tx.Commit(ctx); err != nil {
+		return types.TenantFieldPolicy{}, false, err
+	}
+	return policy, true, nil
+}
+
+func (s *OrgUnitPGStore) SubmitCreateEventWithGeneratedCode(
+	ctx context.Context,
+	tenantID string,
+	eventUUID string,
+	effectiveDate string,
+	payload json.RawMessage,
+	requestCode string,
+	initiatorUUID string,
+	prefix string,
+	width int,
+) (int64, string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, "", err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return 0, "", err
+	}
+
+	lockKey := fmt.Sprintf("orgunit.next_org_code:%s:%s:%d", tenantID, prefix, width)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0));`, lockKey); err != nil {
+		return 0, "", err
+	}
+
+	codeLen := len(prefix) + width
+	rows, err := tx.Query(ctx, `
+SELECT org_code
+FROM orgunit.org_unit_codes
+WHERE tenant_uuid = $1::uuid
+  AND org_code LIKE ($2::text || '%')
+  AND length(org_code) = $3::int
+ORDER BY org_code ASC
+`, tenantID, prefix, codeLen)
+	if err != nil {
+		return 0, "", err
+	}
+	defer rows.Close()
+
+	next := 1
+	max := 1
+	for i := 0; i < width; i++ {
+		max *= 10
+	}
+	max -= 1
+
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return 0, "", err
+		}
+		if !strings.HasPrefix(code, prefix) || len(code) != codeLen {
+			continue
+		}
+		suffix := code[len(prefix):]
+		num, err := strconv.Atoi(suffix)
+		if err != nil || num <= 0 {
+			continue
+		}
+		if num == next {
+			next++
+			continue
+		}
+		if num > next {
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, "", err
+	}
+	if next > max {
+		return 0, "", errors.New("ORG_CODE_EXHAUSTED")
+	}
+
+	orgCode := fmt.Sprintf("%s%0*d", prefix, width, next)
+	payloadObj := map[string]any{}
+	if len(payload) > 0 {
+		if err := json.Unmarshal(payload, &payloadObj); err != nil {
+			return 0, "", err
+		}
+	}
+	payloadObj["org_code"] = orgCode
+	payloadWithCode, err := marshalCreatePayloadJSON(payloadObj)
+	if err != nil {
+		return 0, "", err
+	}
+	var orgIDValue any
+
+	var eventID int64
+	if err := tx.QueryRow(ctx, `
+SELECT orgunit.submit_org_event(
+  $1::uuid,
+  $2::uuid,
+  $3::int,
+  $4::text,
+  $5::date,
+  $6::jsonb,
+  $7::text,
+  $8::uuid
+)
+`, eventUUID, tenantID, orgIDValue, string(types.OrgUnitEventCreate), effectiveDate, payloadWithCode, requestCode, initiatorUUID).Scan(&eventID); err != nil {
+		return 0, "", err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, "", err
+	}
+	return eventID, orgCode, nil
+}
+
 func (s *OrgUnitPGStore) ListEnabledTenantFieldConfigsAsOf(ctx context.Context, tenantID string, asOf string) ([]types.TenantFieldConfig, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -369,4 +625,12 @@ WHERE tenant_uuid = $1::uuid AND pernr = $2::text
 		return types.Person{}, err
 	}
 	return p, nil
+}
+
+func cloneOptionalString(in *string) *string {
+	if in == nil {
+		return nil
+	}
+	value := strings.TrimSpace(*in)
+	return &value
 }

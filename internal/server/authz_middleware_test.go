@@ -404,6 +404,24 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/field-configs:disable"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/field-policies"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/field-policies"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/field-policies:disable"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/field-policies:disable"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/field-policies:resolve-preview"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/org-units/field-policies:resolve-preview"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units/fields:options"); !ok {
 		t.Fatal("expected ok=true")
 	}
