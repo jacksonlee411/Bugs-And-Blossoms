@@ -108,6 +108,7 @@ type orgUnitFieldConfigsEnableRequest struct {
 	FieldKey         string          `json:"field_key"`
 	EnabledOn        string          `json:"enabled_on"`
 	RequestCode      string          `json:"request_code"`
+	ValueType        string          `json:"value_type"`
 	Label            string          `json:"label"`
 	DataSourceConfig json.RawMessage `json:"data_source_config"`
 }
@@ -198,8 +199,9 @@ type orgUnitFieldEnableCandidateField struct {
 }
 
 type orgUnitPlainCustomHint struct {
-	Pattern   string `json:"pattern"`
-	ValueType string `json:"value_type"`
+	Pattern          string   `json:"pattern"`
+	ValueTypes       []string `json:"value_types"`
+	DefaultValueType string   `json:"default_value_type"`
 }
 
 func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http.Request, dictStore orgUnitDictRegistryStore) {
@@ -268,8 +270,9 @@ func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http
 		EnabledOn:  enabledOn,
 		DictFields: items,
 		PlainCustomHint: orgUnitPlainCustomHint{
-			Pattern:   "^x_[a-z0-9_]{1,60}$",
-			ValueType: "text",
+			Pattern:          "^x_[a-z0-9_]{1,60}$",
+			ValueTypes:       orgUnitCustomPlainValueTypes(),
+			DefaultValueType: "text",
 		},
 	}
 
@@ -454,6 +457,7 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 		req.FieldKey = strings.TrimSpace(req.FieldKey)
 		req.EnabledOn = strings.TrimSpace(req.EnabledOn)
 		req.RequestCode = strings.TrimSpace(req.RequestCode)
+		req.ValueType = strings.TrimSpace(req.ValueType)
 		req.Label = strings.TrimSpace(req.Label)
 		if req.FieldKey == "" || req.EnabledOn == "" || req.RequestCode == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key/enabled_on/request_code required")
@@ -466,6 +470,73 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 
 		if strings.HasPrefix(strings.ToLower(req.FieldKey), "x_") && !isCustomOrgUnitPlainFieldKey(req.FieldKey) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "custom field_key invalid")
+			return
+		}
+
+		if isCustomOrgUnitPlainFieldKey(req.FieldKey) {
+			valueType, ok := normalizeOrgUnitCustomPlainValueType(req.ValueType)
+			if !ok {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "custom value_type required")
+				return
+			}
+
+			dataSourceConfig, ok, _ := normalizeOrgUnitEnableDataSourceConfig(
+				r.Context(),
+				tenant.ID,
+				req.EnabledOn,
+				dictStore,
+				orgUnitFieldDefinition{DataSourceType: "PLAIN"},
+				req.DataSourceConfig,
+			)
+			if !ok {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrFieldConfigInvalidDataSourceConfig, "data_source_config invalid")
+				return
+			}
+
+			var displayLabel *string
+			if req.Label != "" {
+				displayLabel = &req.Label
+			}
+
+			cfg, wasRetry, err := cfgStore.EnableTenantFieldConfig(
+				r.Context(),
+				tenant.ID,
+				req.FieldKey,
+				valueType,
+				"PLAIN",
+				dataSourceConfig,
+				displayLabel,
+				req.EnabledOn,
+				req.RequestCode,
+				orgUnitInitiatorUUID(r.Context(), tenant.ID),
+			)
+			if err != nil {
+				writeOrgUnitServiceError(w, r, err, "orgunit_field_config_enable_failed")
+				return
+			}
+
+			status := http.StatusCreated
+			if wasRetry {
+				status = http.StatusOK
+			}
+
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(status)
+			labelI18nKey, label, allowFilter, allowSort := orgUnitFieldConfigPresentation(cfg)
+			_ = json.NewEncoder(w).Encode(orgUnitFieldConfigAPIItem{
+				FieldKey:         cfg.FieldKey,
+				LabelI18nKey:     labelI18nKey,
+				Label:            label,
+				ValueType:        cfg.ValueType,
+				DataSourceType:   cfg.DataSourceType,
+				DataSourceConfig: cfg.DataSourceConfig,
+				PhysicalCol:      cfg.PhysicalCol,
+				EnabledOn:        cfg.EnabledOn,
+				DisabledOn:       cfg.DisabledOn,
+				UpdatedAt:        cfg.UpdatedAt,
+				AllowFilter:      allowFilter,
+				AllowSort:        allowSort,
+			})
 			return
 		}
 
@@ -1116,6 +1187,20 @@ func resolveOrgUnitEnableDefinition(fieldKey string) (orgUnitFieldDefinition, bo
 	return buildCustomOrgUnitPlainFieldDefinition(fieldKey)
 }
 
+func orgUnitCustomPlainValueTypes() []string {
+	return []string{"text", "int", "uuid", "bool", "date", "numeric"}
+}
+
+func normalizeOrgUnitCustomPlainValueType(raw string) (string, bool) {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	for _, valueType := range orgUnitCustomPlainValueTypes() {
+		if raw == valueType {
+			return valueType, true
+		}
+	}
+	return "", false
+}
+
 func normalizeOrgUnitEnableDataSourceConfig(
 	ctx context.Context,
 	tenantID string,
@@ -1282,6 +1367,10 @@ func orgUnitFieldConfigPresentation(cfg orgUnitTenantFieldConfig) (*string, *str
 		dictCode, _ := dictCodeFromOrgUnitDictFieldKey(fieldKey)
 		label := dictCode
 		return nil, &label, true, true
+	}
+	if cfg.DisplayLabel != nil && strings.TrimSpace(*cfg.DisplayLabel) != "" {
+		label := strings.TrimSpace(*cfg.DisplayLabel)
+		return nil, &label, false, false
 	}
 	label := fieldKey
 	return nil, &label, false, false

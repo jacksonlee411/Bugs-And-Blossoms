@@ -100,7 +100,7 @@ export interface OrgUnitDetailsAPIItem {
   event_uuid: string
 }
 
-export type OrgUnitExtValueType = 'text' | 'int' | 'uuid' | 'bool' | 'date'
+export type OrgUnitExtValueType = 'text' | 'int' | 'uuid' | 'bool' | 'date' | 'numeric'
 export type OrgUnitExtDataSourceType = 'PLAIN' | 'DICT' | 'ENTITY'
 export type OrgUnitExtDisplayValueSource =
   | 'plain'
@@ -546,7 +546,8 @@ export interface OrgUnitFieldConfigsResponse {
 
 export interface OrgUnitPlainCustomHint {
   pattern: string
-  value_type: OrgUnitExtValueType
+  value_types: OrgUnitExtValueType[]
+  default_value_type: OrgUnitExtValueType
 }
 
 export interface OrgUnitFieldEnableCandidateField {
@@ -585,6 +586,7 @@ export async function enableOrgUnitFieldConfig(request: {
   field_key: string
   enabled_on: string
   request_code: string
+  value_type?: OrgUnitExtValueType
   data_source_config?: Record<string, unknown>
   label?: string
 }): Promise<OrgUnitTenantFieldConfig> {
