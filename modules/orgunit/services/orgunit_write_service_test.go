@@ -165,7 +165,7 @@ func withMarshalJSON(t *testing.T, fn func(any) ([]byte, error)) {
 	t.Cleanup(func() { marshalJSON = orig })
 }
 
-func newWriteService(store orgUnitWriteStoreStub) *orgUnitWriteService {
+func newWriteService(store ports.OrgUnitWriteStore) *orgUnitWriteService {
 	return &orgUnitWriteService{store: store}
 }
 

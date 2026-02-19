@@ -743,6 +743,37 @@ type OrgunitTenantFieldConfigEvent struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type OrgunitTenantFieldPolicy struct {
+	ID              int64              `json:"id"`
+	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
+	FieldKey        string             `json:"field_key"`
+	ScopeType       string             `json:"scope_type"`
+	ScopeKey        string             `json:"scope_key"`
+	Maintainable    bool               `json:"maintainable"`
+	DefaultMode     string             `json:"default_mode"`
+	DefaultRuleExpr *string            `json:"default_rule_expr"`
+	EnabledOn       pgtype.Date        `json:"enabled_on"`
+	DisabledOn      pgtype.Date        `json:"disabled_on"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DisabledAt      pgtype.Timestamptz `json:"disabled_at"`
+}
+
+type OrgunitTenantFieldPolicyEvent struct {
+	ID              int64              `json:"id"`
+	EventUuid       pgtype.UUID        `json:"event_uuid"`
+	TenantUuid      pgtype.UUID        `json:"tenant_uuid"`
+	EventType       string             `json:"event_type"`
+	FieldKey        string             `json:"field_key"`
+	ScopeType       string             `json:"scope_type"`
+	ScopeKey        string             `json:"scope_key"`
+	Payload         []byte             `json:"payload"`
+	RequestCode     string             `json:"request_code"`
+	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
+	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type PersonPerson struct {
 	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
 	PersonUuid  pgtype.UUID        `json:"person_uuid"`

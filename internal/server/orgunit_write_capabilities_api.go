@@ -54,15 +54,19 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 	rawCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
 	effectiveDate := strings.TrimSpace(r.URL.Query().Get("effective_date"))
 	targetEffectiveDate := strings.TrimSpace(r.URL.Query().Get("target_effective_date"))
-	if intent == "" || rawCode == "" || effectiveDate == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "intent/org_code/effective_date required")
+	if intent == "" || effectiveDate == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "intent/effective_date required")
 		return
 	}
 
-	normalizedCode, err := orgunitpkg.NormalizeOrgCode(rawCode)
-	if err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
-		return
+	normalizedCode := ""
+	if rawCode != "" {
+		var err error
+		normalizedCode, err = orgunitpkg.NormalizeOrgCode(rawCode)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+			return
+		}
 	}
 	if _, err := time.Parse("2006-01-02", effectiveDate); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "effective_date invalid")
@@ -106,16 +110,22 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 		TargetEffectiveDate: targetEffectiveDate,
 	}
 
-	switch strings.TrimSpace(intent) {
+	switch intent {
 	case string(orgunitservices.OrgUnitWriteIntentCreateOrg):
-		if _, err := capStore.ResolveOrgID(r.Context(), tenant.ID, normalizedCode); err == nil {
-			facts.OrgAlreadyExists = true
-		} else if !errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
-			writeInternalAPIError(w, r, err, "orgunit_write_capabilities_resolve_org_failed")
-			return
+		if normalizedCode != "" {
+			if _, err := capStore.ResolveOrgID(r.Context(), tenant.ID, normalizedCode); err == nil {
+				facts.OrgAlreadyExists = true
+			} else if !errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
+				writeInternalAPIError(w, r, err, "orgunit_write_capabilities_resolve_org_failed")
+				return
+			}
 		}
 
 	case string(orgunitservices.OrgUnitWriteIntentAddVersion), string(orgunitservices.OrgUnitWriteIntentInsertVersion):
+		if normalizedCode == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
+			return
+		}
 		orgID, err := capStore.ResolveOrgID(r.Context(), tenant.ID, normalizedCode)
 		if err != nil {
 			if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
@@ -133,6 +143,10 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 		facts.TargetExistsAsOf = appendFacts.TargetExistsAsOf
 
 	case string(orgunitservices.OrgUnitWriteIntentCorrect):
+		if normalizedCode == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code required")
+			return
+		}
 		if targetEffectiveDate == "" {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "target_effective_date required for correct")
 			return
@@ -146,9 +160,7 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 			writeInternalAPIError(w, r, err, "orgunit_write_capabilities_resolve_org_failed")
 			return
 		}
-		// For correct intent, the org exists once orgID is resolved; target event may still be missing/rescinded.
 		facts.TargetExistsAsOf = true
-
 		target, err := capStore.ResolveMutationTargetEvent(r.Context(), tenant.ID, orgID, targetEffectiveDate)
 		if err != nil {
 			writeInternalAPIError(w, r, err, "orgunit_write_capabilities_target_failed")
@@ -157,8 +169,6 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 		if !target.HasEffective {
 			facts.TargetEventNotFound = !target.HasRaw
 			facts.TargetEventRescinded = target.HasRaw
-		} else {
-			facts.TargetExistsAsOf = true
 		}
 
 	default:

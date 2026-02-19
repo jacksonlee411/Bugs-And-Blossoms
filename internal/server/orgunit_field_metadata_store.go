@@ -28,6 +28,18 @@ type orgUnitTenantFieldConfig struct {
 	UpdatedAt        time.Time
 }
 
+type orgUnitTenantFieldPolicy struct {
+	FieldKey        string
+	ScopeType       string
+	ScopeKey        string
+	Maintainable    bool
+	DefaultMode     string
+	DefaultRuleExpr *string
+	EnabledOn       string
+	DisabledOn      *string
+	UpdatedAt       time.Time
+}
+
 type orgUnitVersionExtSnapshot struct {
 	VersionValues  map[string]any
 	VersionLabels  map[string]string
@@ -320,11 +332,302 @@ SELECT orgunit.disable_tenant_field_config(
 	return cfg, wasRetry, nil
 }
 
+func (s *orgUnitPGStore) ListTenantFieldPolicies(ctx context.Context, tenantID string) ([]orgUnitTenantFieldPolicy, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return nil, err
+	}
+
+	rows, err := tx.Query(ctx, `
+SELECT
+  field_key,
+  scope_type,
+  scope_key,
+  maintainable,
+  default_mode,
+  default_rule_expr,
+  enabled_on::text,
+  CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on,
+  updated_at
+FROM orgunit.tenant_field_policies
+WHERE tenant_uuid = $1::uuid
+ORDER BY field_key ASC, scope_type ASC, scope_key ASC, enabled_on DESC
+`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]orgUnitTenantFieldPolicy, 0)
+	for rows.Next() {
+		item, scanErr := scanOrgUnitTenantFieldPolicy(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *orgUnitPGStore) ResolveTenantFieldPolicy(
+	ctx context.Context,
+	tenantID string,
+	fieldKey string,
+	scopeType string,
+	scopeKey string,
+	asOf string,
+) (orgUnitTenantFieldPolicy, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+
+	item, found, err := resolveTenantFieldPolicyTx(ctx, tx, tenantID, fieldKey, scopeType, scopeKey, asOf)
+	if err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+	return item, found, nil
+}
+
+func resolveTenantFieldPolicyTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	tenantID string,
+	fieldKey string,
+	scopeType string,
+	scopeKey string,
+	asOf string,
+) (orgUnitTenantFieldPolicy, bool, error) {
+	fieldKey = strings.TrimSpace(fieldKey)
+	scopeType = strings.ToUpper(strings.TrimSpace(scopeType))
+	scopeKey = strings.TrimSpace(scopeKey)
+	if fieldKey == "" {
+		return orgUnitTenantFieldPolicy{}, false, nil
+	}
+	if scopeType == "" {
+		scopeType = "FORM"
+	}
+	if scopeType != "FORM" && scopeType != "GLOBAL" {
+		return orgUnitTenantFieldPolicy{}, false, nil
+	}
+	if scopeType == "GLOBAL" {
+		scopeKey = "global"
+	}
+
+	const queryFormPrefer = `
+SELECT
+  field_key,
+  scope_type,
+  scope_key,
+  maintainable,
+  default_mode,
+  default_rule_expr,
+  enabled_on::text,
+  CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on,
+  updated_at
+FROM orgunit.tenant_field_policies
+WHERE tenant_uuid = $1::uuid
+  AND field_key = $2::text
+  AND enabled_on <= $3::date
+  AND ($3::date < COALESCE(disabled_on, 'infinity'::date))
+  AND (
+    (scope_type = 'FORM' AND scope_key = $4::text)
+    OR
+    (scope_type = 'GLOBAL' AND scope_key = 'global')
+  )
+ORDER BY CASE
+  WHEN scope_type = 'FORM' AND scope_key = $4::text THEN 0
+  ELSE 1
+END ASC, enabled_on DESC
+LIMIT 1
+`
+	const queryGlobalOnly = `
+SELECT
+  field_key,
+  scope_type,
+  scope_key,
+  maintainable,
+  default_mode,
+  default_rule_expr,
+  enabled_on::text,
+  CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on,
+  updated_at
+FROM orgunit.tenant_field_policies
+WHERE tenant_uuid = $1::uuid
+  AND field_key = $2::text
+  AND enabled_on <= $3::date
+  AND ($3::date < COALESCE(disabled_on, 'infinity'::date))
+  AND scope_type = 'GLOBAL'
+  AND scope_key = 'global'
+ORDER BY enabled_on DESC
+LIMIT 1
+`
+
+	row := tx.QueryRow(ctx, queryFormPrefer, tenantID, fieldKey, asOf, scopeKey)
+	if scopeType == "GLOBAL" {
+		row = tx.QueryRow(ctx, queryGlobalOnly, tenantID, fieldKey, asOf)
+	}
+	item, err := scanOrgUnitTenantFieldPolicy(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return orgUnitTenantFieldPolicy{}, false, nil
+		}
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+	return item, true, nil
+}
+
+func (s *orgUnitPGStore) UpsertTenantFieldPolicy(
+	ctx context.Context,
+	tenantID string,
+	fieldKey string,
+	scopeType string,
+	scopeKey string,
+	maintainable bool,
+	defaultMode string,
+	defaultRuleExpr *string,
+	enabledOn string,
+	requestCode string,
+	initiatorUUID string,
+) (orgUnitTenantFieldPolicy, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+
+	wasRetry, err := tenantFieldPolicyRequestExistsTx(ctx, tx, tenantID, requestCode, "UPSERT")
+	if err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+
+	var policyID int64
+	if err := tx.QueryRow(ctx, `
+SELECT orgunit.upsert_tenant_field_policy(
+  $1::uuid,
+  $2::text,
+  $3::text,
+  $4::text,
+  $5::boolean,
+  $6::text,
+  $7::text,
+  $8::date,
+  $9::text,
+  $10::uuid
+)
+`, tenantID, fieldKey, scopeType, scopeKey, maintainable, defaultMode, defaultRuleExpr, enabledOn, requestCode, initiatorUUID).Scan(&policyID); err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+
+	item, err := getTenantFieldPolicyByIDTx(ctx, tx, tenantID, policyID)
+	if err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+	return item, wasRetry, nil
+}
+
+func (s *orgUnitPGStore) DisableTenantFieldPolicy(
+	ctx context.Context,
+	tenantID string,
+	fieldKey string,
+	scopeType string,
+	scopeKey string,
+	disabledOn string,
+	requestCode string,
+	initiatorUUID string,
+) (orgUnitTenantFieldPolicy, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+
+	wasRetry, err := tenantFieldPolicyRequestExistsTx(ctx, tx, tenantID, requestCode, "DISABLE")
+	if err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+
+	var policyID int64
+	if err := tx.QueryRow(ctx, `
+SELECT orgunit.disable_tenant_field_policy(
+  $1::uuid,
+  $2::text,
+  $3::text,
+  $4::text,
+  $5::date,
+  $6::text,
+  $7::uuid
+)
+`, tenantID, fieldKey, scopeType, scopeKey, disabledOn, requestCode, initiatorUUID).Scan(&policyID); err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+
+	item, err := getTenantFieldPolicyByIDTx(ctx, tx, tenantID, policyID)
+	if err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return orgUnitTenantFieldPolicy{}, false, err
+	}
+	return item, wasRetry, nil
+}
+
 func tenantFieldConfigRequestExistsTx(ctx context.Context, tx pgx.Tx, tenantID string, requestCode string, expectedType string) (bool, error) {
 	var eventType string
 	err := tx.QueryRow(ctx, `
 SELECT event_type
 FROM orgunit.tenant_field_config_events
+WHERE tenant_uuid = $1::uuid
+  AND request_code = $2::text
+LIMIT 1
+`, tenantID, requestCode).Scan(&eventType)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return strings.EqualFold(strings.TrimSpace(eventType), expectedType), nil
+}
+
+func tenantFieldPolicyRequestExistsTx(ctx context.Context, tx pgx.Tx, tenantID string, requestCode string, expectedType string) (bool, error) {
+	var eventType string
+	err := tx.QueryRow(ctx, `
+SELECT event_type
+FROM orgunit.tenant_field_policy_events
 WHERE tenant_uuid = $1::uuid
   AND request_code = $2::text
 LIMIT 1
@@ -376,6 +679,30 @@ LIMIT 1
 	cfg.DisplayLabel = cloneOptionalString(displayLabel)
 	cfg.DisabledOn = cloneOptionalString(disabledOn)
 	return cfg, nil
+}
+
+func getTenantFieldPolicyByIDTx(ctx context.Context, tx pgx.Tx, tenantID string, policyID int64) (orgUnitTenantFieldPolicy, error) {
+	row := tx.QueryRow(ctx, `
+SELECT
+  field_key,
+  scope_type,
+  scope_key,
+  maintainable,
+  default_mode,
+  default_rule_expr,
+  enabled_on::text,
+  CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on,
+  updated_at
+FROM orgunit.tenant_field_policies
+WHERE tenant_uuid = $1::uuid
+  AND id = $2::bigint
+LIMIT 1
+`, tenantID, policyID)
+	item, err := scanOrgUnitTenantFieldPolicy(row)
+	if err != nil {
+		return orgUnitTenantFieldPolicy{}, err
+	}
+	return item, nil
 }
 
 func (s *orgUnitPGStore) GetOrgUnitVersionExtSnapshot(ctx context.Context, tenantID string, orgID int, asOf string) (orgUnitVersionExtSnapshot, error) {
@@ -907,6 +1234,31 @@ func scanOrgUnitTenantFieldConfig(row interface {
 	}
 	item.DataSourceConfig = cloneRawJSON(rawConfig)
 	item.DisplayLabel = cloneOptionalString(displayLabel)
+	item.DisabledOn = cloneOptionalString(disabledOn)
+	return item, nil
+}
+
+func scanOrgUnitTenantFieldPolicy(row interface {
+	Scan(dest ...any) error
+}) (orgUnitTenantFieldPolicy, error) {
+	var item orgUnitTenantFieldPolicy
+	var defaultRuleExpr *string
+	var disabledOn *string
+	if err := row.Scan(
+		&item.FieldKey,
+		&item.ScopeType,
+		&item.ScopeKey,
+		&item.Maintainable,
+		&item.DefaultMode,
+		&defaultRuleExpr,
+		&item.EnabledOn,
+		&disabledOn,
+		&item.UpdatedAt,
+	); err != nil {
+		return orgUnitTenantFieldPolicy{}, err
+	}
+	item.DefaultMode = strings.ToUpper(strings.TrimSpace(item.DefaultMode))
+	item.DefaultRuleExpr = cloneOptionalString(defaultRuleExpr)
 	item.DisabledOn = cloneOptionalString(disabledOn)
 	return item, nil
 }

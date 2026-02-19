@@ -341,6 +341,14 @@ const (
 	orgUnitErrFieldOptionsFieldNotEnabled        = "ORG_FIELD_OPTIONS_FIELD_NOT_ENABLED_AS_OF"
 	orgUnitErrFieldOptionsNotSupported           = "ORG_FIELD_OPTIONS_NOT_SUPPORTED"
 	orgUnitErrExtQueryFieldNotAllowed            = "ORG_EXT_QUERY_FIELD_NOT_ALLOWED"
+	orgUnitErrFieldNotMaintainable               = "FIELD_NOT_MAINTAINABLE"
+	orgUnitErrDefaultRuleRequired                = "DEFAULT_RULE_REQUIRED"
+	orgUnitErrDefaultRuleEvalFailed              = "DEFAULT_RULE_EVAL_FAILED"
+	orgUnitErrFieldPolicyExprInvalid             = "FIELD_POLICY_EXPR_INVALID"
+	orgUnitErrOrgCodeExhausted                   = "ORG_CODE_EXHAUSTED"
+	orgUnitErrOrgCodeConflict                    = "ORG_CODE_CONFLICT"
+	orgUnitErrFieldPolicyScopeOverlap            = "FIELD_POLICY_SCOPE_OVERLAP"
+	orgUnitErrFieldPolicyNotFound                = "ORG_FIELD_POLICY_NOT_FOUND"
 )
 
 const (
@@ -1572,7 +1580,11 @@ func orgUnitAPIStatusForCode(code string) (int, bool) {
 		orgUnitErrPatchRequired,
 		orgUnitErrManagerInvalid,
 		orgUnitErrExtQueryFieldNotAllowed,
-		orgUnitErrFieldConfigInvalidDataSourceConfig:
+		orgUnitErrFieldConfigInvalidDataSourceConfig,
+		orgUnitErrFieldNotMaintainable,
+		orgUnitErrDefaultRuleRequired,
+		orgUnitErrDefaultRuleEvalFailed,
+		orgUnitErrFieldPolicyExprInvalid:
 		return http.StatusBadRequest, true
 	case orgUnitErrCodeNotFound,
 		orgUnitErrParentNotFound,
@@ -1580,6 +1592,7 @@ func orgUnitAPIStatusForCode(code string) (int, bool) {
 		orgUnitErrManagerNotFound,
 		orgUnitErrFieldDefinitionNotFound,
 		orgUnitErrFieldConfigNotFound,
+		orgUnitErrFieldPolicyNotFound,
 		orgUnitErrFieldOptionsFieldNotEnabled,
 		orgUnitErrFieldOptionsNotSupported:
 		return http.StatusNotFound, true
@@ -1597,7 +1610,10 @@ func orgUnitAPIStatusForCode(code string) (int, bool) {
 		orgUnitErrHighRiskReorderForbidden,
 		orgUnitErrFieldConfigAlreadyEnabled,
 		orgUnitErrFieldConfigSlotExhausted,
-		orgUnitErrFieldConfigDisabledOnInvalid:
+		orgUnitErrFieldConfigDisabledOnInvalid,
+		orgUnitErrOrgCodeExhausted,
+		orgUnitErrOrgCodeConflict,
+		orgUnitErrFieldPolicyScopeOverlap:
 		return http.StatusConflict, true
 	default:
 		return 0, false

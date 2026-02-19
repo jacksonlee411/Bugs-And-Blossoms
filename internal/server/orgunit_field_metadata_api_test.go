@@ -229,7 +229,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if len(body.FieldConfigs) != 2 {
+		if len(body.FieldConfigs) != len(orgUnitCoreFieldCatalog)+2 {
 			t.Fatalf("len=%d", len(body.FieldConfigs))
 		}
 
@@ -244,7 +244,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		if err := json.Unmarshal(rec2.Body.Bytes(), &body2); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if len(body2.FieldConfigs) != 1 {
+		if len(body2.FieldConfigs) != len(orgUnitCoreFieldCatalog)+1 {
 			t.Fatalf("len=%d", len(body2.FieldConfigs))
 		}
 	})

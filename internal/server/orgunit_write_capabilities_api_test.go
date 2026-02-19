@@ -109,6 +109,16 @@ func TestHandleOrgUnitWriteCapabilitiesAPI_BasicValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("create_org allows empty org_code", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/write-capabilities?intent=create_org&effective_date=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitWriteCapabilitiesAPI(rec, req, base)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("store missing interface", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/write-capabilities?intent=create_org&org_code=A001&effective_date=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
@@ -151,6 +161,17 @@ func TestHandleOrgUnitWriteCapabilitiesAPI_SuccessEnvelope(t *testing.T) {
 }
 
 func TestHandleOrgUnitWriteCapabilitiesAPI_CoversBranches(t *testing.T) {
+	t.Run("correct missing org_code", func(t *testing.T) {
+		store := orgUnitStoreWithWriteCapabilities{OrgUnitStore: newOrgUnitMemoryStore()}
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/write-capabilities?intent=correct&effective_date=2026-01-01&target_effective_date=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitWriteCapabilitiesAPI(rec, req, store)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("correct requires target_effective_date", func(t *testing.T) {
 		store := orgUnitStoreWithWriteCapabilities{OrgUnitStore: newOrgUnitMemoryStore()}
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/write-capabilities?intent=correct&org_code=A001&effective_date=2026-01-01", nil)
@@ -265,6 +286,17 @@ func TestHandleOrgUnitWriteCapabilitiesAPI_CoversBranches(t *testing.T) {
 		rec := httptest.NewRecorder()
 		handleOrgUnitWriteCapabilitiesAPI(rec, req, store)
 		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("add_version missing org_code", func(t *testing.T) {
+		store := orgUnitStoreWithWriteCapabilities{OrgUnitStore: newOrgUnitMemoryStore()}
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/write-capabilities?intent=add_version&effective_date=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitWriteCapabilitiesAPI(rec, req, store)
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
