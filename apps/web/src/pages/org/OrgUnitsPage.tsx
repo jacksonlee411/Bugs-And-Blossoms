@@ -406,8 +406,6 @@ export function OrgUnitsPage() {
         switch (code) {
         case 'ORG_EXT_QUERY_FIELD_NOT_ALLOWED':
           return t('org_ext_query_not_allowed')
-        case 'invalid_request':
-          return t('org_ext_query_invalid_request')
         case 'FIELD_NOT_MAINTAINABLE':
           return t('org_field_policy_error_FIELD_NOT_MAINTAINABLE')
         case 'DEFAULT_RULE_REQUIRED':
