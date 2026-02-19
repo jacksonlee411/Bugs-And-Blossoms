@@ -1,0 +1,35 @@
+const { chromium } = require("@playwright/test");
+
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({ baseURL: "http://localhost:8080" });
+  const req = context.request;
+  const loginResp = await req.post("/iam/api/sessions", { data: { email: "admin@localhost", password: "admin123" } });
+  console.log("login status", loginResp.status());
+  const page = await context.newPage();
+  await page.goto("/app/org/units?page=0&node=1");
+  await page.waitForTimeout(2000);
+  console.log("url", page.url());
+  const title = await page.title();
+  console.log("title", title);
+  const h1 = await page.locator("h1").allTextContents();
+  console.log("h1", h1);
+  const btns = await page.getByRole("button").allTextContents();
+  console.log("buttons", btns.slice(0, 40));
+  await page.getByRole("button", { name: /新建|Create/i }).first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.waitFor({ state: "visible", timeout: 10000 });
+  await page.waitForTimeout(2000);
+  const labels = await dialog.locator("label").allTextContents();
+  const text = await dialog.innerText();
+  const html = await dialog.innerHTML();
+  const codeDisabled = await dialog.getByLabel(/编码|Code/i).first().isDisabled();
+  console.log("codeDisabled", codeDisabled);
+  console.log("dialog labels", labels.map((v) => v.trim()).filter(Boolean));
+  console.log("contains d_org_type", html.includes("d_org_type"));
+  console.log("contains 字典字段01", html.includes("字典字段01"));
+  console.log("contains 测试02", html.includes("测试02"));
+  console.log("contains org_type", html.includes("org_type"));
+  console.log("dialog text", text);
+  await browser.close();
+})();

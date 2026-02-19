@@ -354,6 +354,23 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("system managed policy requires cel default mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","maintainable":false,"default_mode":"NONE","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldPoliciesAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if payload["code"] != orgUnitErrDefaultRuleRequired {
+			t.Fatalf("code=%v", payload["code"])
+		}
+	})
+
 	t.Run("upsert error", func(t *testing.T) {
 		store := orgUnitStoreWithFieldPolicies{
 			OrgUnitStore: base,

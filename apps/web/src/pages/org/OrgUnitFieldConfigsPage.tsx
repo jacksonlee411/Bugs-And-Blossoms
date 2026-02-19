@@ -651,6 +651,10 @@ export function OrgUnitFieldConfigsPage() {
       setPolicyError(t('org_field_configs_policy_error_expr_required'))
       return
     }
+    if (!policyForm.maintainable && defaultMode !== 'CEL') {
+      setPolicyError(t('org_field_policy_error_DEFAULT_RULE_REQUIRED'))
+      return
+    }
 
     try {
       await policyMutation.mutateAsync({
