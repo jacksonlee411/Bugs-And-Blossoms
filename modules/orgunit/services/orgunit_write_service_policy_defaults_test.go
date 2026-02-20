@@ -402,6 +402,12 @@ func TestParseCompileAndMapCreateAutoCodeHelpers(t *testing.T) {
 		}
 	})
 
+	t.Run("parse single quotes rejected", func(t *testing.T) {
+		if _, err := parseNextOrgCodeRule(`next_org_code('ORG', 3)`); err == nil || err.Error() != errDefaultRuleEvalFailed {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
 	t.Run("compile syntax error", func(t *testing.T) {
 		if err := compileCELExpr(`next_org_code("O", )`); err == nil {
 			t.Fatal("expected error")
@@ -646,6 +652,7 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 			t.Fatalf("result=%+v", result)
 		}
 	})
+
 }
 
 func TestWriteCELHelpers(t *testing.T) {

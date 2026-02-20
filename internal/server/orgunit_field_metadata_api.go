@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1165,7 +1166,13 @@ var newOrgUnitFieldPolicyCELEnv = func() (*cel.Env, error) {
 	)
 }
 
+var nextOrgCodePolicyRuleRe = regexp.MustCompile(`^next_org_code\(\s*"([^"]*)"\s*,\s*([0-9]+)\s*\)$`)
+
 func validateFieldPolicyCELExpr(expr string) error {
+	expr = strings.TrimSpace(expr)
+	if strings.Contains(strings.ToLower(expr), "next_org_code(") && !nextOrgCodePolicyRuleRe.MatchString(expr) {
+		return errors.New("next_org_code must use double quotes")
+	}
 	env, err := newOrgUnitFieldPolicyCELEnv()
 	if err != nil {
 		return err

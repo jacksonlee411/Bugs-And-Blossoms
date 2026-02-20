@@ -257,6 +257,8 @@ modules/{module}/
 - DEV-PLAN-120：Org 字段默认值（Go+PG+CEL）规则引擎落地路线图：`docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
+- DEV-PLAN-102A：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案：`docs/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
+- DEV-PLAN-102A 执行日志：`docs/dev-records/dev-plan-102a-execution-log.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
 - DEV-PLAN-103：移除 Astro/HTMX，前端收敛为 MUI X（React SPA）：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
 - DEV-PLAN-103 执行日志：`docs/dev-records/dev-plan-103-execution-log.md`
