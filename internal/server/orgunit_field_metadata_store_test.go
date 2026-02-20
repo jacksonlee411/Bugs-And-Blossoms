@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -331,11 +332,12 @@ func stringsJoin(items []string) string {
 	if len(items) == 0 {
 		return ""
 	}
-	out := items[0]
+	var out strings.Builder
+	out.WriteString(items[0])
 	for i := 1; i < len(items); i++ {
-		out += "," + items[i]
+		out.WriteString("," + items[i])
 	}
-	return out
+	return out.String()
 }
 
 func TestScanOrgUnitTenantFieldConfig(t *testing.T) {

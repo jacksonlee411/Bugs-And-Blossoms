@@ -1858,9 +1858,8 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_set_business_unit;`); rbErr != nil {
 			return rbErr
 		}
-		var pgErr *pgconn.PgError
 		dayConflict := strings.Contains(err.Error(), "EVENT_DATE_CONFLICT")
-		if errors.As(err, &pgErr) && pgErr != nil && pgErr.Code == "23505" && pgErr.ConstraintName == "org_events_one_per_day_unique" {
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr != nil && pgErr.Code == "23505" && pgErr.ConstraintName == "org_events_one_per_day_unique" {
 			dayConflict = true
 		}
 		if dayConflict {

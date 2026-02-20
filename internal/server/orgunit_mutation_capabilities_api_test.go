@@ -392,7 +392,6 @@ func TestHandleOrgUnitMutationCapabilitiesAPI_PolicyResolveErrors(t *testing.T) 
 	t.Cleanup(func() { resolveOrgUnitMutationPolicy = orig })
 
 	for _, nth := range []int{1, 2, 3, 4} {
-		nth := nth
 		t.Run("error_on_call_"+string(rune('0'+nth)), func(t *testing.T) {
 			call := 0
 			resolveOrgUnitMutationPolicy = func(key orgunitservices.OrgUnitMutationPolicyKey, facts orgunitservices.OrgUnitMutationPolicyFacts) (orgunitservices.OrgUnitMutationPolicyDecision, error) {

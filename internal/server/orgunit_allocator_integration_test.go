@@ -40,7 +40,7 @@ func TestOrgunitAllocateOrgID_Concurrent(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(workers)
-	for i := 0; i < workers; i++ {
+	for range workers {
 		go func() {
 			defer wg.Done()
 			conn, err := pgx.Connect(ctx, adminDSN)

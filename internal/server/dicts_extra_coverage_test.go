@@ -305,14 +305,14 @@ func TestDictMemoryStore_ExtraCoverage(t *testing.T) {
 		}
 	})
 
-	inactive := DictItem{DictCode: "x", Name: "X", EnabledOn: "2026-01-01", DisabledOn: ptr("2026-01-02")}
+	inactive := DictItem{DictCode: "x", Name: "X", EnabledOn: "2026-01-01", DisabledOn: new("2026-01-02")}
 	if dictActiveAsOf(inactive, "2026-01-02") {
 		t.Fatal("expected inactive")
 	}
 	if dictStatusAsOf(inactive, "2026-01-02") != "inactive" {
 		t.Fatal("expected inactive status")
 	}
-	value := DictValueItem{DictCode: "x", Code: "1", EnabledOn: "2026-01-01", DisabledOn: ptr("2026-01-02")}
+	value := DictValueItem{DictCode: "x", Code: "1", EnabledOn: "2026-01-01", DisabledOn: new("2026-01-02")}
 	if valueStatusAsOf(value, "2026-01-02") != "inactive" {
 		t.Fatal("expected inactive value status")
 	}

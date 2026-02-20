@@ -11,14 +11,13 @@ fi
 echo "[sqlc] export schema"
 "$root/scripts/sqlc/export-schema.sh"
 
-echo "[sqlc] install sqlc/goimports"
-"$root/scripts/sqlc/install_sqlc.sh"
-"$root/scripts/sqlc/install_goimports.sh"
+echo "[sqlc] verify sqlc/goimports tools"
+"$root/scripts/go/verify-tools.sh" sqlc
+"$root/scripts/go/verify-tools.sh" goimports
 
 echo "[sqlc] generate"
-"$root/bin/sqlc" generate -f "$root/sqlc.yaml"
+go tool sqlc generate -f "$root/sqlc.yaml"
 
 echo "[sqlc] format gen"
 gofmt -w "$root/modules"/*/infrastructure/sqlc/gen 2>/dev/null || true
-"$root/bin/goimports" -w "$root/modules"/*/infrastructure/sqlc/gen 2>/dev/null || true
-
+go tool goimports -w "$root/modules"/*/infrastructure/sqlc/gen 2>/dev/null || true

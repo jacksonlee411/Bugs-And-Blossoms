@@ -2909,16 +2909,16 @@ LIMIT 1
 }
 
 func pgErrorMessage(err error) (string, bool) {
-	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) {
+	pgErr, ok := errors.AsType[*pgconn.PgError](err)
+	if !ok || pgErr == nil {
 		return "", false
 	}
 	return pgErr.Message, true
 }
 
 func pgErrorConstraintName(err error) (string, bool) {
-	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) {
+	pgErr, ok := errors.AsType[*pgconn.PgError](err)
+	if !ok || pgErr == nil {
 		return "", false
 	}
 	if pgErr.ConstraintName == "" {
@@ -3000,8 +3000,7 @@ func fatal(err error) {
 	if err == nil {
 		os.Exit(1)
 	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		if pgErr.Detail != "" {
 			_, _ = fmt.Fprintf(os.Stderr, "DETAIL: %s\n", pgErr.Detail)

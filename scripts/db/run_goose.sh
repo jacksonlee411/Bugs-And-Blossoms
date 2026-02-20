@@ -2,7 +2,6 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-"$root/scripts/db/install_goose.sh"
+"$root/scripts/go/verify-tools.sh" goose
 
-exec "$root/bin/goose" "$@"
-
+exec go tool goose "$@"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -745,13 +746,7 @@ func (s *jobcatalogPGStore) CreateJobProfile(ctx context.Context, tenantID strin
 
 		lookupCodes := append([]string(nil), familyCodes...)
 		if primaryFamilyCode != "" {
-			found := false
-			for _, c := range lookupCodes {
-				if c == primaryFamilyCode {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(lookupCodes, primaryFamilyCode)
 			if !found {
 				lookupCodes = append(lookupCodes, primaryFamilyCode)
 			}

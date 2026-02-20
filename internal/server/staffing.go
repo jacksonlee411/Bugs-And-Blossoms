@@ -72,7 +72,7 @@ func canonicalizeJSON(b *strings.Builder, v any) error {
 }
 
 func sortStrings(ss []string) {
-	for i := 0; i < len(ss); i++ {
+	for i := range ss {
 		for j := i + 1; j < len(ss); j++ {
 			if ss[j] < ss[i] {
 				ss[i], ss[j] = ss[j], ss[i]

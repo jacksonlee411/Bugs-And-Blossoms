@@ -41,10 +41,10 @@
 
 | 组件 | 基线版本 | 来源/说明 |
 | --- | --- | --- |
-| Go | `1.24.10` | `go.mod` + `.github/workflows/quality-gates.yml` |
+| Go | `1.26.0` | `go.mod` + `.github/workflows/quality-gates.yml` |
 | PostgreSQL | `17`（`postgres:17`） | `compose.dev.yml`/`compose.yml`/CI service |
 | Redis | `latest`（`redis:latest`，浮动） | `compose.dev.yml`/CI service |
-| Docker 基底（构建） | `golang:1.24.10-alpine` | `Dockerfile`/`Dockerfile.superadmin` |
+| Docker 基底（构建） | 暂未落地（仓库暂无 `Dockerfile`） | 待补齐容器化交付后冻结 |
 | Docker 基底（运行） | `alpine:3.21` | `Dockerfile`/`Dockerfile.superadmin` |
 
 ### 3.1.1 PostgreSQL 扩展（Kernel 依赖）
@@ -83,20 +83,20 @@
 
 | 组件 | 基线版本 | 来源/说明 |
 | --- | --- | --- |
-| sqlc（CLI） | `v1.28.0` | `Makefile` 的 `sqlc-generate`（CI 会执行该目标） |
+| sqlc（CLI） | `v1.30.0` | `go.mod` tool directives + `scripts/sqlc/generate.sh`（`go tool sqlc`） |
 | sqlc（Go module） | `v1.30.0` | `go.mod`（工具依赖） |
 | Atlas（CLI） | `v0.38.0` | `Makefile` 的 `ATLAS_VERSION`（源码构建安装） |
-| Goose（CLI） | `v3.26.0` | `Makefile` 的 `GOOSE_VERSION`（`go install`） |
-| pgx（PostgreSQL driver） | `v5.7.5` | `go.mod`（Kernel port/adapters 推荐使用 `pgx`；见 `DEV-PLAN-016/031`） |
-| goimports（用于生成物整理） | `v0.26.0` | `Makefile` 的 `sqlc-generate` |
+| Goose（CLI） | `v3.26.0` | `go.mod` tool directives + `scripts/db/run_goose.sh`（`go tool goose`） |
+| pgx（PostgreSQL driver） | `v5.8.0` | `go.mod`（Kernel port/adapters 推荐使用 `pgx`；见 `DEV-PLAN-016/031`） |
+| goimports（用于生成物整理） | `v0.38.0` | `go.mod` tool directives + `scripts/sqlc/generate.sh`（`go tool goimports`） |
 | SQL 格式化（pg_format） | OS 包（未 pin） | CI 安装 `pgformatter`（Ubuntu apt），本地用 `make check sqlfmt` 对齐 |
 
 ### 3.4 Authz / Routing / Outbox（能力复用）
 
 | 组件 | 基线版本 | 来源/说明 |
 | --- | --- | --- |
-| GraphQL（gqlgen） | `v0.17.57` | `go.mod` |
-| Casbin | `v2.88.0` | `go.mod` |
+| GraphQL（gqlgen） | 未引入 | 当前 `go.mod` 无该依赖（如启用需单独冻结版本） |
+| Casbin | `v2.98.0` | `go.mod` |
 | Routing Gates | 仓库内门禁（无外部版本） | `docs/dev-plans/018-routing-strategy.md` + `make check routing` |
 | Transactional Outbox | 仓库内实现（无外部版本） | `docs/dev-plans/017-transactional-outbox.md` + `pkg/outbox/**` |
 
@@ -142,7 +142,7 @@
 
 > 目的：新人按此文档能完成“启动 + smoke”，细节以 `docs/CONTRIBUTING.MD`/`devhub.yml`/`Makefile` 为准。
 
-1. 安装并确认版本：Go `1.24.10`、Node `20.x`（E2E/工具）、Docker/Compose（推荐 27.x）。
+1. 安装并确认版本：Go `1.26.0`、Node `20.x`（E2E/工具）、Docker/Compose（推荐 27.x）。
 2. 初始化环境变量：复制 `.env.example` 为 `.env`（必要时使用 `make dev-env` 生成 `.env.local`）。
 3. 启动依赖服务：使用 `compose.dev.yml` 启动 Postgres/Redis（端口默认 `5438/6379`，以 `devhub.yml` 为准）。
 4. 初始化数据库：执行迁移与 seed（入口见 `Makefile`；常用组合见 `AGENTS.md` TL;DR）。
@@ -167,8 +167,8 @@
 
 1. [ ] `golangci-lint`：CI 使用 `v2.7.2`，但本地文档/部分 Dockerfile 仍引用 `v1.64.8` —— 统一到 `v2.7.2` 并更新相关资产。
 2. [X] Tailwind CLI：已由 `DEV-PLAN-103` 收口（移除旧 UI 链路后不再作为 UI 工具链依赖）。
-3. [ ] sqlc：`go.mod` 为 `v1.30.0`，但 `make sqlc-generate` 固定 `v1.28.0` —— 统一版本并验证生成物无 diff。
-4. [ ] goimports：`make sqlc-generate` 固定 `v0.26.0`，但 devcontainer 里为 `v0.31.0` —— 统一版本并对齐格式化输出。
+3. [X] sqlc：已收敛到 `go.mod` tool directives（`v1.30.0`）+ `go tool sqlc` 单一路径（`DEV-PLAN-126`）。
+4. [X] goimports：已收敛到 `go.mod` tool directives（`v0.38.0`）+ `go tool goimports` 单一路径（`DEV-PLAN-126`）。
 5. [ ] Redis 镜像：当前为 `redis:latest`（浮动）—— 为生产/CI 口径增加 pin 策略（至少固定 major/minor，推荐 digest）。
 6. [ ] DevContainer：当前基底为 Go `1.23`（与 `go.mod` 不一致）—— 视团队是否继续使用 DevContainer，决定升级或移除（参考 `DEV-PLAN-002`）。
 7. [X] Astro（AHA UI Shell，`DEV-PLAN-018`）：已被 `DEV-PLAN-103` 替代（前端收敛为 MUI X / React SPA），不再作为主 UI 方案。

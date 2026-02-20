@@ -2,6 +2,7 @@ package fieldmeta
 
 import (
 	"encoding/json"
+	"maps"
 	"sort"
 	"strings"
 )
@@ -107,9 +108,7 @@ func DataSourceConfigOptions(def FieldDefinition) []map[string]any {
 			out := make([]map[string]any, 0, len(def.DataSourceConfigOptions))
 			for _, opt := range def.DataSourceConfigOptions {
 				copied := make(map[string]any, len(opt))
-				for key, value := range opt {
-					copied[key] = value
-				}
+				maps.Copy(copied, opt)
 				out = append(out, copied)
 			}
 			return out
@@ -139,18 +138,14 @@ func DictCodeFromDataSourceConfig(raw json.RawMessage) (string, bool) {
 
 func cloneFieldDefinition(def FieldDefinition) FieldDefinition {
 	copiedConfig := make(map[string]any, len(def.DataSourceConfig))
-	for key, value := range def.DataSourceConfig {
-		copiedConfig[key] = value
-	}
+	maps.Copy(copiedConfig, def.DataSourceConfig)
 	def.DataSourceConfig = copiedConfig
 
 	if len(def.DataSourceConfigOptions) > 0 {
 		copiedOptions := make([]map[string]any, 0, len(def.DataSourceConfigOptions))
 		for _, opt := range def.DataSourceConfigOptions {
 			copiedOpt := make(map[string]any, len(opt))
-			for key, value := range opt {
-				copiedOpt[key] = value
-			}
+			maps.Copy(copiedOpt, opt)
 			copiedOptions = append(copiedOptions, copiedOpt)
 		}
 		def.DataSourceConfigOptions = copiedOptions

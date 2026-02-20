@@ -212,7 +212,7 @@ func TestCorrectMapsParentForMove(t *testing.T) {
 		TargetEffectiveDate: "2026-01-01",
 		RequestCode:         "req1",
 		Patch: OrgUnitCorrectionPatch{
-			ParentOrgCode: stringPtr("parent"),
+			ParentOrgCode: new("parent"),
 		},
 	})
 	if err != nil {
@@ -242,7 +242,7 @@ func TestCorrectRejectsNameOnMove(t *testing.T) {
 		TargetEffectiveDate: "2026-01-01",
 		RequestCode:         "req1",
 		Patch: OrgUnitCorrectionPatch{
-			Name: stringPtr("Rename"),
+			Name: new("Rename"),
 		},
 	})
 	if err == nil || !httperr.IsBadRequest(err) {
@@ -269,7 +269,7 @@ func TestCorrectManagerPernrNotFound(t *testing.T) {
 		TargetEffectiveDate: "2026-01-01",
 		RequestCode:         "req1",
 		Patch: OrgUnitCorrectionPatch{
-			ManagerPernr: stringPtr("1001"),
+			ManagerPernr: new("1001"),
 		},
 	})
 	if err == nil || err.Error() != errManagerPernrNotFound {
@@ -358,7 +358,7 @@ func TestCorrectExtPatchDictAddsLabelSnapshot(t *testing.T) {
 		TargetEffectiveDate: "2026-01-01",
 		RequestCode:         "req1",
 		Patch: OrgUnitCorrectionPatch{
-			Name: stringPtr("New Name"),
+			Name: new("New Name"),
 			Ext: map[string]any{
 				"org_type":   "10",
 				"short_name": "R&D",
@@ -475,7 +475,7 @@ func TestCorrectExtPatchValidationFailClosed(t *testing.T) {
 			TargetEffectiveDate: "2026-01-01",
 			RequestCode:         "req1",
 			Patch: OrgUnitCorrectionPatch{
-				EffectiveDate: stringPtr("2026-01-02"),
+				EffectiveDate: new("2026-01-02"),
 				Ext: map[string]any{
 					"org_type": "10",
 				},
@@ -1240,7 +1240,7 @@ func TestCorrectExtPatch_AdditionalErrorBranches(t *testing.T) {
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
 			RequestCode:         "req1",
-			Patch:               OrgUnitCorrectionPatch{Name: stringPtr("New")},
+			Patch:               OrgUnitCorrectionPatch{Name: new("New")},
 		})
 		if err == nil || err.Error() != "boom" {
 			t.Fatalf("expected boom, got %v", err)
@@ -1345,14 +1345,14 @@ func TestCorrectExtPatch_AdditionalErrorBranches(t *testing.T) {
 }
 
 func joinStrings(items []string) string {
-	out := ""
+	var out strings.Builder
 	for i, item := range items {
 		if i > 0 {
-			out += ","
+			out.WriteString(",")
 		}
-		out += item
+		out.WriteString(item)
 	}
-	return out
+	return out.String()
 }
 
 func TestCorrectStatusSuccess(t *testing.T) {
@@ -2731,7 +2731,7 @@ func TestCorrectEventNotFound(t *testing.T) {
 		TargetEffectiveDate: "2026-01-01",
 		RequestCode:         "req",
 		Patch: OrgUnitCorrectionPatch{
-			Name: stringPtr("Name"),
+			Name: new("Name"),
 		},
 	})
 	if err == nil || err.Error() != errOrgEventNotFound {
@@ -2754,7 +2754,7 @@ func TestCorrectEventError(t *testing.T) {
 		TargetEffectiveDate: "2026-01-01",
 		RequestCode:         "req",
 		Patch: OrgUnitCorrectionPatch{
-			Name: stringPtr("Name"),
+			Name: new("Name"),
 		},
 	})
 	if err == nil || err.Error() != "find" {
@@ -2780,7 +2780,7 @@ func TestCorrectMarshalError(t *testing.T) {
 		TargetEffectiveDate: "2026-01-01",
 		RequestCode:         "req",
 		Patch: OrgUnitCorrectionPatch{
-			Name: stringPtr("Name"),
+			Name: new("Name"),
 		},
 	})
 	if err == nil || err.Error() != "marshal" {
@@ -2806,7 +2806,7 @@ func TestCorrectSubmitError(t *testing.T) {
 		TargetEffectiveDate: "2026-01-01",
 		RequestCode:         "req",
 		Patch: OrgUnitCorrectionPatch{
-			Name: stringPtr("Name"),
+			Name: new("Name"),
 		},
 	})
 	if err == nil || err.Error() != "submit" {
@@ -2833,7 +2833,7 @@ func TestCorrectPolicyResolveError(t *testing.T) {
 		TargetEffectiveDate: "2026-01-01",
 		RequestCode:         "req",
 		Patch: OrgUnitCorrectionPatch{
-			EffectiveDate: stringPtr("2026-01-01"),
+			EffectiveDate: new("2026-01-01"),
 		},
 	})
 	if err == nil || err.Error() != "boom" {
@@ -2859,7 +2859,7 @@ func TestCorrectUsesPatchedEffectiveDate(t *testing.T) {
 		TargetEffectiveDate: "2026-01-01",
 		RequestCode:         "req",
 		Patch: OrgUnitCorrectionPatch{
-			EffectiveDate: stringPtr("2026-02-01"),
+			EffectiveDate: new("2026-02-01"),
 		},
 	})
 	if err != nil {
@@ -2877,7 +2877,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("effective_date_invalid", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
-			EffectiveDate: stringPtr("2026-13-01"),
+			EffectiveDate: new("2026-13-01"),
 		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errEffectiveDateInvalid {
 			t.Fatalf("expected effective date invalid, got %v", err)
@@ -2887,7 +2887,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("name_empty", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
-			Name: stringPtr(" "),
+			Name: new(" "),
 		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != "name is required" {
 			t.Fatalf("expected name required, got %v", err)
@@ -2897,7 +2897,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("name_create", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
-			Name: stringPtr("Name"),
+			Name: new("Name"),
 		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
@@ -2910,7 +2910,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("name_rename", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		patchMap, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
-			Name: stringPtr("Name"),
+			Name: new("Name"),
 		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
@@ -2923,7 +2923,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("name_not_allowed", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventMove}, OrgUnitCorrectionPatch{
-			Name: stringPtr("Name"),
+			Name: new("Name"),
 		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected patch field not allowed, got %v", err)
@@ -2933,7 +2933,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("parent_empty_create", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
-			ParentOrgCode: stringPtr(" "),
+			ParentOrgCode: new(" "),
 		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
@@ -2946,7 +2946,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("parent_empty_move", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventMove}, OrgUnitCorrectionPatch{
-			ParentOrgCode: stringPtr(" "),
+			ParentOrgCode: new(" "),
 		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected patch field not allowed, got %v", err)
@@ -2956,7 +2956,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("parent_not_allowed", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
-			ParentOrgCode: stringPtr("PARENT"),
+			ParentOrgCode: new("PARENT"),
 		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected patch field not allowed, got %v", err)
@@ -2966,7 +2966,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("parent_invalid", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
-			ParentOrgCode: stringPtr("A\n1"),
+			ParentOrgCode: new("A\n1"),
 		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgCodeInvalid {
 			t.Fatalf("expected org code invalid, got %v", err)
@@ -2980,7 +2980,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 			},
 		})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
-			ParentOrgCode: stringPtr("PARENT"),
+			ParentOrgCode: new("PARENT"),
 		}, emptyCfgs)
 		if err == nil || err.Error() != errParentNotFoundAsOf {
 			t.Fatalf("expected parent not found, got %v", err)
@@ -2994,7 +2994,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 			},
 		})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
-			ParentOrgCode: stringPtr("PARENT"),
+			ParentOrgCode: new("PARENT"),
 		}, emptyCfgs)
 		if err == nil || err.Error() != "resolve" {
 			t.Fatalf("expected resolve error, got %v", err)
@@ -3008,7 +3008,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 			},
 		})
 		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
-			ParentOrgCode: stringPtr("PARENT"),
+			ParentOrgCode: new("PARENT"),
 		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
@@ -3021,7 +3021,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("is_business_unit_not_allowed", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
-			IsBusinessUnit: boolPtr(true),
+			IsBusinessUnit: new(true),
 		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected patch field not allowed, got %v", err)
@@ -3031,7 +3031,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("is_business_unit_allowed", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventSetBusinessUnit}, OrgUnitCorrectionPatch{
-			IsBusinessUnit: boolPtr(true),
+			IsBusinessUnit: new(true),
 		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
@@ -3044,7 +3044,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	t.Run("manager_not_allowed", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventRename}, OrgUnitCorrectionPatch{
-			ManagerPernr: stringPtr("1001"),
+			ManagerPernr: new("1001"),
 		}, emptyCfgs)
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected patch field not allowed, got %v", err)
@@ -3058,7 +3058,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 			},
 		})
 		_, _, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
-			ManagerPernr: stringPtr("1001"),
+			ManagerPernr: new("1001"),
 		}, emptyCfgs)
 		if err == nil || err.Error() != "find" {
 			t.Fatalf("expected find error, got %v", err)
@@ -3072,7 +3072,7 @@ func TestBuildCorrectionPatch(t *testing.T) {
 			},
 		})
 		patchMap, fields, _, err := svc.buildCorrectionPatch(ctx, "t1", types.OrgUnitEvent{EventType: types.OrgUnitEventCreate}, OrgUnitCorrectionPatch{
-			ManagerPernr: stringPtr("1001"),
+			ManagerPernr: new("1001"),
 		}, emptyCfgs)
 		if err != nil {
 			t.Fatalf("expected ok, got %v", err)
@@ -3144,12 +3144,14 @@ func TestBuildCorrectionPatch(t *testing.T) {
 	})
 }
 
+//go:fix inline
 func stringPtr(v string) *string {
-	return &v
+	return new(v)
 }
 
+//go:fix inline
 func boolPtr(v bool) *bool {
-	return &v
+	return new(v)
 }
 
 func TestCorrectStatusAdditionalBranches(t *testing.T) {

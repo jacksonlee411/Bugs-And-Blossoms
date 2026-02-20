@@ -439,7 +439,7 @@ ORDER BY org_code ASC
 
 	next := 1
 	max := 1
-	for i := 0; i < width; i++ {
+	for range width {
 		max *= 10
 	}
 	max -= 1

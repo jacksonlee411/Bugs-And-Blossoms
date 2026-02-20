@@ -4,7 +4,7 @@ import (
 	"context"
 	"math"
 	"os"
-	"sort"
+	"slices"
 	"testing"
 	"time"
 
@@ -46,14 +46,14 @@ func Test083BLatencyBaselineWriteFailClosed(t *testing.T) {
 	errCount := 0
 	stableCodeCount := 0
 
-	for i := 0; i < rounds*samplesPerRound; i++ {
+	for range rounds * samplesPerRound {
 		start := time.Now()
 		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
 			RequestCode:         "083b-latency",
 			Patch: OrgUnitCorrectionPatch{
-				Name: stringPtr("Rename-on-move-must-fail"),
+				Name: new("Rename-on-move-must-fail"),
 			},
 		})
 		durations = append(durations, time.Since(start))
@@ -99,11 +99,8 @@ func servicePercentileMS(items []time.Duration, q float64) float64 {
 		return 0
 	}
 	clone := append([]time.Duration(nil), items...)
-	sort.Slice(clone, func(i, j int) bool { return clone[i] < clone[j] })
-	idx := int(math.Ceil(float64(len(clone))*q)) - 1
-	if idx < 0 {
-		idx = 0
-	}
+	slices.Sort(clone)
+	idx := max(int(math.Ceil(float64(len(clone))*q))-1, 0)
 	if idx >= len(clone) {
 		idx = len(clone) - 1
 	}

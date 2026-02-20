@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
@@ -230,13 +231,7 @@ func TestHandleOrgUnitWriteCapabilitiesAPI_CoversBranches(t *testing.T) {
 		if resp.Enabled {
 			t.Fatalf("expected disabled")
 		}
-		found := false
-		for _, code := range resp.DenyReasons {
-			if code == "ORG_ALREADY_EXISTS" {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(resp.DenyReasons, "ORG_ALREADY_EXISTS")
 		if !found {
 			t.Fatalf("deny=%v", resp.DenyReasons)
 		}
@@ -376,13 +371,7 @@ func TestHandleOrgUnitWriteCapabilitiesAPI_CoversBranches(t *testing.T) {
 		if resp.Enabled {
 			t.Fatalf("expected disabled")
 		}
-		found := false
-		for _, item := range resp.DenyReasons {
-			if item == "ORG_NOT_FOUND_AS_OF" {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(resp.DenyReasons, "ORG_NOT_FOUND_AS_OF")
 		if !found {
 			t.Fatalf("deny=%v", resp.DenyReasons)
 		}
