@@ -675,6 +675,9 @@ func TestOrgUnitFieldPolicyHelpers(t *testing.T) {
 		if err := validateFieldPolicyCELExpr("next_org_code(\"O\", 6)"); err != nil {
 			t.Fatalf("expected valid expr, err=%v", err)
 		}
+		if err := validateFieldPolicyCELExpr("next_org_code('O', 6)"); err == nil {
+			t.Fatalf("expected single-quote style error")
+		}
 		if err := validateFieldPolicyCELExpr("next_org_code(\"O\", )"); err == nil {
 			t.Fatalf("expected syntax error")
 		}
