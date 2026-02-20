@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"sort"
+	"slices"
 	"testing"
 	"time"
 
@@ -135,11 +135,8 @@ func percentileMS(items []time.Duration, q float64) float64 {
 		return 0
 	}
 	clone := append([]time.Duration(nil), items...)
-	sort.Slice(clone, func(i, j int) bool { return clone[i] < clone[j] })
-	idx := int(math.Ceil(float64(len(clone))*q)) - 1
-	if idx < 0 {
-		idx = 0
-	}
+	slices.Sort(clone)
+	idx := max(int(math.Ceil(float64(len(clone))*q))-1, 0)
 	if idx >= len(clone) {
 		idx = len(clone) - 1
 	}

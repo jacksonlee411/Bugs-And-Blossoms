@@ -35,7 +35,7 @@ func RegisterResolver(r Resolver) error {
 		return errors.New("dict: resolver is nil")
 	}
 	v := reflect.ValueOf(r)
-	if (v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface || v.Kind() == reflect.Slice || v.Kind() == reflect.Map || v.Kind() == reflect.Func || v.Kind() == reflect.Chan) && v.IsNil() {
+	if (v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface || v.Kind() == reflect.Slice || v.Kind() == reflect.Map || v.Kind() == reflect.Func || v.Kind() == reflect.Chan) && v.IsNil() {
 		return errors.New("dict: resolver is nil")
 	}
 	registry.mu.Lock()

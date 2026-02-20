@@ -17,8 +17,7 @@ func isBadRequestError(err error) bool {
 }
 
 func pgErrorMessage(err error) string {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr != nil {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr != nil {
 		msg := strings.TrimSpace(pgErr.Message)
 		if msg != "" {
 			return msg
@@ -28,8 +27,7 @@ func pgErrorMessage(err error) string {
 }
 
 func pgErrorCode(err error) string {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr != nil {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr != nil {
 		return strings.TrimSpace(pgErr.Code)
 	}
 	return ""
@@ -50,8 +48,7 @@ func stablePgMessage(err error) string {
 		return msg
 	}
 
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr != nil {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr != nil {
 		switch strings.TrimSpace(pgErr.ConstraintName) {
 		case "assignment_versions_position_no_overlap":
 			return "STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF"

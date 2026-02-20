@@ -2,6 +2,7 @@ package services
 
 import (
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
@@ -392,21 +393,21 @@ func TestValidatePatch_CoversBranches(t *testing.T) {
 	decision := OrgUnitMutationPolicyDecision{AllowedFields: []string{"effective_date", "name", "parent_org_code", "is_business_unit", "manager_pernr", "org_type"}}
 
 	t.Run("invalid effective_date", func(t *testing.T) {
-		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{EffectiveDate: stringPtr("bad")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errEffectiveDateInvalid {
+		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{EffectiveDate: new("bad")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errEffectiveDateInvalid {
 			t.Fatalf("expected EFFECTIVE_DATE_INVALID, got %v", err)
 		}
 	})
 
 	t.Run("effective-date correction mode allows only effective_date", func(t *testing.T) {
-		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{EffectiveDate: stringPtr("2026-01-02")}); err != nil {
+		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{EffectiveDate: new("2026-01-02")}); err != nil {
 			t.Fatalf("unexpected err=%v", err)
 		}
 	})
 
 	t.Run("effective-date correction mode allows other fields", func(t *testing.T) {
 		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{
-			EffectiveDate: stringPtr("2026-01-02"),
-			Name:          stringPtr("X"),
+			EffectiveDate: new("2026-01-02"),
+			Name:          new("X"),
 		}); err != nil {
 			t.Fatalf("unexpected err=%v", err)
 		}
@@ -414,7 +415,7 @@ func TestValidatePatch_CoversBranches(t *testing.T) {
 
 	t.Run("effective-date correction mode allows ext payload", func(t *testing.T) {
 		if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{
-			EffectiveDate: stringPtr("2026-01-02"),
+			EffectiveDate: new("2026-01-02"),
 			Ext:           map[string]any{"org_type": "DEPARTMENT"},
 		}); err != nil {
 			t.Fatalf("unexpected err=%v", err)
@@ -423,35 +424,35 @@ func TestValidatePatch_CoversBranches(t *testing.T) {
 
 	t.Run("disallowed core field", func(t *testing.T) {
 		limited := OrgUnitMutationPolicyDecision{AllowedFields: []string{"effective_date"}}
-		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{Name: stringPtr("X")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{Name: new("X")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
 		}
 	})
 
 	t.Run("disallowed parent_org_code", func(t *testing.T) {
 		limited := OrgUnitMutationPolicyDecision{AllowedFields: []string{"effective_date"}}
-		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{ParentOrgCode: stringPtr("ROOT")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{ParentOrgCode: new("ROOT")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
 		}
 	})
 
 	t.Run("disallowed is_business_unit", func(t *testing.T) {
 		limited := OrgUnitMutationPolicyDecision{AllowedFields: []string{"effective_date"}}
-		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{IsBusinessUnit: boolPtr(true)}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{IsBusinessUnit: new(true)}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
 		}
 	})
 
 	t.Run("disallowed manager_pernr", func(t *testing.T) {
 		limited := OrgUnitMutationPolicyDecision{AllowedFields: []string{"effective_date"}}
-		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{ManagerPernr: stringPtr("1001")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{ManagerPernr: new("1001")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
 		}
 	})
 
 	t.Run("disallowed effective_date field", func(t *testing.T) {
 		limited := OrgUnitMutationPolicyDecision{AllowedFields: []string{"name"}}
-		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{EffectiveDate: stringPtr("2026-01-01")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
+		if err := ValidatePatch("2026-01-01", limited, OrgUnitCorrectionPatch{EffectiveDate: new("2026-01-01")}); err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchFieldNotAllowed {
 			t.Fatalf("expected PATCH_FIELD_NOT_ALLOWED, got %v", err)
 		}
 	})
@@ -547,16 +548,16 @@ func TestValidatePatch_EffectiveDateCorrectionModeAndAllowedFields(t *testing.T)
 
 	// Changing effective_date can be submitted together with other fields (DEV-PLAN-108).
 	if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{
-		EffectiveDate: stringPtr("2026-01-02"),
-		Name:          stringPtr("New"),
+		EffectiveDate: new("2026-01-02"),
+		Name:          new("New"),
 	}); err != nil {
 		t.Fatalf("unexpected err=%v", err)
 	}
 
 	// Allowed in normal mode.
 	if err := ValidatePatch("2026-01-01", decision, OrgUnitCorrectionPatch{
-		EffectiveDate: stringPtr("2026-01-01"),
-		Name:          stringPtr("New"),
+		EffectiveDate: new("2026-01-01"),
+		Name:          new("New"),
 	}); err != nil {
 		t.Fatalf("unexpected err=%v", err)
 	}
@@ -570,14 +571,14 @@ func TestValidatePatch_EffectiveDateCorrectionModeAndAllowedFields(t *testing.T)
 }
 
 func join(items []string) string {
-	out := ""
+	var out strings.Builder
 	for i, item := range items {
 		if i > 0 {
-			out += ","
+			out.WriteString(",")
 		}
-		out += item
+		out.WriteString(item)
 	}
-	return out
+	return out.String()
 }
 
 func keysOf(m map[string]string) []string {
