@@ -206,6 +206,8 @@ modules/{module}/
 - DEV-PLAN-083A：OrgUnit Append 写入动作能力外显与策略单点扩展（create / event_update）：`docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
 - DEV-PLAN-083B：Org 变更能力模型后置收口（承接 083/083A）：`docs/dev-plans/083b-org-mutation-capabilities-post-083a-closure-plan.md`
 - DEV-PLAN-083B 执行日志：`docs/dev-records/dev-plan-083b-execution-log.md`
+- DEV-PLAN-084：Org 模块组织树“下级可展开指示符”缺失问题分析与收敛方案：`docs/dev-plans/084-orgunit-tree-expand-indicator-visibility.md`
+- DEV-PLAN-084 执行日志：`docs/dev-records/dev-plan-084-execution-log.md`
 - DEV-PLAN-090：前端框架升级为 MUI X（对标 Workday UX）方案：`docs/dev-plans/090-mui-x-frontend-upgrade-plan.md`
 - DEV-PLAN-091：MUI X 升级子计划 P0（基座准备与许可落地）：`docs/dev-plans/091-mui-x-phase0-foundation-and-license-plan.md`
 - DEV-PLAN-092：MUI X 升级子计划 P1（壳与导航迁移）：`docs/dev-plans/092-mui-x-phase1-shell-navigation-plan.md`

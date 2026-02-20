@@ -5,6 +5,7 @@ import { TreeItem } from '@mui/x-tree-view/TreeItem'
 export interface TreePanelNode {
   id: string
   label: string
+  hasChildren: boolean
   children?: TreePanelNode[]
 }
 
@@ -12,12 +13,15 @@ interface TreePanelProps {
   title: string
   nodes: TreePanelNode[]
   onSelect: (nodeId: string) => void
+  onExpand?: (nodeId: string) => void
   selectedItemId?: string
   loading?: boolean
   loadingLabel: string
   emptyLabel: string
   minWidth?: number
 }
+
+const pendingChildPrefix = '__pending_child__'
 
 function renderNodes(nodes: TreePanelNode[], onSelect: (nodeId: string) => void) {
   return nodes.map((node) => (
@@ -33,7 +37,16 @@ function renderNodes(nodes: TreePanelNode[], onSelect: (nodeId: string) => void)
         </Box>
       }
     >
-      {node.children ? renderNodes(node.children, onSelect) : null}
+      {node.children && node.children.length > 0 ? (
+        renderNodes(node.children, onSelect)
+      ) : node.hasChildren ? (
+        <TreeItem
+          disabled
+          itemId={`${pendingChildPrefix}:${node.id}`}
+          label={<Box sx={{ display: 'none' }} />}
+          sx={{ display: 'none' }}
+        />
+      ) : null}
     </TreeItem>
   ))
 }
@@ -42,6 +55,7 @@ export function TreePanel({
   title,
   nodes,
   onSelect,
+  onExpand,
   selectedItemId,
   loading = false,
   loadingLabel,
@@ -58,7 +72,15 @@ export function TreePanel({
           {emptyLabel}
         </Typography>
       ) : (
-        <SimpleTreeView selectedItems={selectedItemId}>
+        <SimpleTreeView
+          onItemExpansionToggle={(_event, itemId, isExpanded) => {
+            if (!isExpanded || !onExpand) {
+              return
+            }
+            onExpand(itemId)
+          }}
+          selectedItems={selectedItemId}
+        >
           {renderNodes(nodes, onSelect)}
         </SimpleTreeView>
       )}
