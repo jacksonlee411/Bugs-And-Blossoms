@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -807,6 +808,10 @@ func handleOrgUnitFieldPoliciesAPI(w http.ResponseWriter, r *http.Request, store
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "default_mode invalid")
 		return
 	}
+	if !maintainable && defaultMode != "CEL" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrDefaultRuleRequired, "default_rule_expr required when maintainable=false")
+		return
+	}
 
 	result, wasRetry, err := policyStore.UpsertTenantFieldPolicy(
 		r.Context(),
@@ -1161,7 +1166,13 @@ var newOrgUnitFieldPolicyCELEnv = func() (*cel.Env, error) {
 	)
 }
 
+var nextOrgCodePolicyRuleRe = regexp.MustCompile(`^next_org_code\(\s*"([^"]*)"\s*,\s*([0-9]+)\s*\)$`)
+
 func validateFieldPolicyCELExpr(expr string) error {
+	expr = strings.TrimSpace(expr)
+	if strings.Contains(strings.ToLower(expr), "next_org_code(") && !nextOrgCodePolicyRuleRe.MatchString(expr) {
+		return errors.New("next_org_code must use double quotes")
+	}
 	env, err := newOrgUnitFieldPolicyCELEnv()
 	if err != nil {
 		return err

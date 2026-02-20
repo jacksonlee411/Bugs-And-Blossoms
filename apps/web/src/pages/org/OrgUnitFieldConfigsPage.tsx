@@ -44,6 +44,7 @@ import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
 import { StatusChip } from '../../components/StatusChip'
 import { isMessageKey, type MessageKey } from '../../i18n/messages'
+import { resolveAsOfAfterPolicySave, shouldShowFutureEffectiveHint } from './orgUnitFieldPolicyAsOf'
 
 type FieldConfigListStatus = 'all' | 'enabled' | 'disabled'
 type DisabledState = 'all' | 'pending' | 'disabled'
@@ -651,9 +652,13 @@ export function OrgUnitFieldConfigsPage() {
       setPolicyError(t('org_field_configs_policy_error_expr_required'))
       return
     }
+    if (!policyForm.maintainable && defaultMode !== 'CEL') {
+      setPolicyError(t('org_field_policy_error_DEFAULT_RULE_REQUIRED'))
+      return
+    }
 
     try {
-      await policyMutation.mutateAsync({
+      const savedPolicy = await policyMutation.mutateAsync({
         field_key: policyRow.fieldKey,
         scope_type: scopeType,
         scope_key: scopeKey,
@@ -663,7 +668,16 @@ export function OrgUnitFieldConfigsPage() {
         enabled_on: enabledOn,
         request_code: policyRequestCode
       })
-      setToast({ message: t('org_field_configs_toast_policy_saved'), severity: 'success' })
+      const nextAsOf = resolveAsOfAfterPolicySave(asOf, savedPolicy.enabled_on)
+      if (nextAsOf) {
+        updateSearch({ asOf: nextAsOf })
+        setToast({
+          message: t('org_field_configs_toast_policy_saved_as_of_switched', { date: nextAsOf }),
+          severity: 'success'
+        })
+      } else {
+        setToast({ message: t('org_field_configs_toast_policy_saved'), severity: 'success' })
+      }
       closePolicyDialog()
     } catch (error) {
       setPolicyError(formatApiErrorMessage(error))
@@ -1428,11 +1442,12 @@ export function OrgUnitFieldConfigsPage() {
               {policyForm.defaultMode === 'CEL' ? (
                 <TextField
                   label={t('org_field_configs_policy_default_rule_expr')}
+                  helperText={t('org_field_configs_policy_default_rule_expr_helper')}
                   onChange={(event) => {
                     setPolicyRequestCode(newRequestCode())
                     setPolicyForm((previous) => ({ ...previous, defaultRuleExpr: event.target.value }))
                   }}
-                  placeholder='next_org_code("O", 6)'
+                  placeholder='next_org_code("ORG", 6)'
                   value={policyForm.defaultRuleExpr}
                 />
               ) : null}
@@ -1446,6 +1461,11 @@ export function OrgUnitFieldConfigsPage() {
                 type='date'
                 value={policyForm.enabledOn}
               />
+              {shouldShowFutureEffectiveHint(asOf, policyForm.enabledOn) ? (
+                <Alert severity='info'>
+                  {t('org_field_configs_policy_future_effective_hint', { asOf, enabledOn: policyForm.enabledOn })}
+                </Alert>
+              ) : null}
             </Stack>
           ) : null}
         </DialogContent>
