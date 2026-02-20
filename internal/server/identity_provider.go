@@ -43,8 +43,7 @@ func (p *kratosIdentityProvider) AuthenticatePassword(ctx context.Context, tenan
 
 	ident, err := p.client.LoginPassword(ctx, identifier, password)
 	if err != nil {
-		var he *kratos.HTTPError
-		if errors.As(err, &he) {
+		if he, ok := errors.AsType[*kratos.HTTPError](err); ok {
 			switch he.StatusCode {
 			case 400, 401, 403:
 				return authenticatedIdentity{}, errInvalidCredentials

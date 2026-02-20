@@ -24,8 +24,16 @@ done
 coverpkg_csv="$(echo "$cover_pkgs" | paste -sd, -)"
 mkdir -p coverage
 
+# Go 1.26 `go test -coverprofile` may invoke `go tool covdata` for packages without tests.
+# Restrict test execution to packages that actually contain *_test.go files.
+mapfile -t test_pkgs < <(go list -buildvcs=false -f '{{if or (gt (len .TestGoFiles) 0) (gt (len .XTestGoFiles) 0)}}{{.ImportPath}}{{end}}' ./... | awk 'NF')
+if [[ ${#test_pkgs[@]} -eq 0 ]]; then
+  echo "[coverage] no test packages discovered" >&2
+  exit 1
+fi
+
 echo "[coverage] running go test with coverpkg policy"
-go test -count=1 -buildvcs=false -covermode=atomic -coverpkg="$coverpkg_csv" -coverprofile=coverage/coverage.out ./...
+go test -count=1 -buildvcs=false -covermode=atomic -coverpkg="$coverpkg_csv" -coverprofile=coverage/coverage.out "${test_pkgs[@]}"
 
 total="$(go tool cover -func=coverage/coverage.out | awk '/^total:/{gsub(/%/,"",$3);print $3}')"
 if [[ -z "${total:-}" ]]; then

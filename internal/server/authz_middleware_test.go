@@ -537,7 +537,7 @@ func TestDefaultAuthzPaths_NotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tmp := t.TempDir()
+	tmp := t.ArtifactDir()
 	if err := os.Chdir(tmp); err != nil {
 		t.Fatal(err)
 	}
@@ -552,7 +552,7 @@ func TestDefaultAuthzPaths_NotFound(t *testing.T) {
 }
 
 func TestLoadAuthorizer_WithEnvPaths(t *testing.T) {
-	dir := t.TempDir()
+	dir := t.ArtifactDir()
 	model := filepath.Join(dir, "model.conf")
 	policy := filepath.Join(dir, "policy.csv")
 
@@ -613,7 +613,7 @@ func TestLoadAuthorizer_DefaultPaths_NotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tmp := t.TempDir()
+	tmp := t.ArtifactDir()
 	if err := os.Chdir(tmp); err != nil {
 		t.Fatal(err)
 	}
@@ -647,7 +647,7 @@ func TestLoadAuthorizer_DefaultPaths_Success(t *testing.T) {
 }
 
 func TestLoadAuthorizer_NewAuthorizerError(t *testing.T) {
-	dir := t.TempDir()
+	dir := t.ArtifactDir()
 	model := filepath.Join(dir, "model.conf")
 	if err := os.WriteFile(model, []byte(`
 [request_definition]
@@ -679,7 +679,7 @@ func TestLoadAuthorizer_DefaultPolicyPath_Error(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tmp := t.TempDir()
+	tmp := t.ArtifactDir()
 	if err := os.Chdir(tmp); err != nil {
 		t.Fatal(err)
 	}

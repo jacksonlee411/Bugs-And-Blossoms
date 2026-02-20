@@ -4,9 +4,6 @@ SHELL := bash
 .DEFAULT_GOAL := help
 
 export ATLAS_VERSION ?= v0.38.0
-export GOOSE_VERSION ?= v3.26.0
-export SQLC_VERSION ?= v1.28.0
-export GOIMPORTS_VERSION ?= v0.26.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 

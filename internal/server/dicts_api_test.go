@@ -273,7 +273,7 @@ func TestHandleDictsCreateAndDisableAPI_Coverage(t *testing.T) {
 		reqOK := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"org_type","disabled_on":"2026-01-01","request_code":"r1"}`), true)
 		recOK := httptest.NewRecorder()
 		handleDictsDisableAPI(recOK, reqOK, dictStoreStub{disableDictFn: func(context.Context, string, DictDisableRequest) (DictItem, bool, error) {
-			return DictItem{DictCode: "org_type", Name: "Org Type", Status: "inactive", EnabledOn: "1970-01-01", DisabledOn: cloneOptionalString(ptr("2026-01-01"))}, false, nil
+			return DictItem{DictCode: "org_type", Name: "Org Type", Status: "inactive", EnabledOn: "1970-01-01", DisabledOn: cloneOptionalString(new("2026-01-01"))}, false, nil
 		}})
 		if recOK.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", recOK.Code, recOK.Body.String())
@@ -281,7 +281,8 @@ func TestHandleDictsCreateAndDisableAPI_Coverage(t *testing.T) {
 	})
 }
 
-func ptr(v string) *string { return &v }
+//go:fix inline
+func ptr(v string) *string { return new(v) }
 
 func TestHandleDictValuesAPI_Coverage(t *testing.T) {
 	t.Run("dispatch get", func(t *testing.T) {

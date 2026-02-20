@@ -589,18 +589,12 @@ func listOrgUnitListPage(ctx context.Context, store OrgUnitStore, tenantID strin
 		return items, total, nil
 	}
 
-	start := req.Offset
-	if start < 0 {
-		start = 0
-	}
+	start := max(req.Offset, 0)
 	if start >= total {
 		return []orgUnitListItem{}, total, nil
 	}
 
-	end := start + req.Limit
-	if end > total {
-		end = total
-	}
+	end := min(start+req.Limit, total)
 
 	return items[start:end], total, nil
 }
