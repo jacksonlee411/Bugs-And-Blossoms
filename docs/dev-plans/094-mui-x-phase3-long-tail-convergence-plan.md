@@ -51,7 +51,7 @@
 
 ## 5. 已落地变更（本轮）
 
-- `/app` 入口已切换为 MUI SPA（不保留旧 HTMX 壳兼容）：
+- `/app` 入口已切换为 MUI SPA（不保留旧服务端壳兼容）：
   - 服务端改造：`internal/server/handler.go`
   - 前端路由基线：`apps/web/src/router/index.tsx`（`basename=/app`）
   - 构建产物入仓：`scripts/ui/build-astro.sh`（新增 `apps/web -> internal/server/assets/web-mui`）

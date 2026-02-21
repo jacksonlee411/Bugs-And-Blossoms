@@ -45,7 +45,7 @@
 
 - `domain/`：Domain Layer（模型/不变量/领域事件/端口定义）
 - `services/`：Application Layer（用例编排，事务边界，调用端口，返回应用级结果）
-- `presentation/`：Interface / Delivery（HTTP/HTMX/templ/controller/viewmodel/mapper）
+- `presentation/`：Interface / Delivery（HTTP/JSON API/templ/controller/viewmodel/mapper）
 - `infrastructure/`：Infrastructure / Adapters（DB/外部系统/缓存/消息等技术实现）
 - `modules/{module}/module.go`、`modules/{module}/links.go` 等：Composition Root（组装与注册；允许依赖各层，但必须“薄”）
 
@@ -65,14 +65,14 @@
 
 **Domain（`domain/`）**
 - Do：表达业务概念（实体/值对象/聚合）、领域不变量、领域事件、以及端口（Repository/Gateway）接口。
-- Don’t：依赖 DB/HTTP/框架；不要出现 pgx/sqlc/htmx/templ 等技术细节；不要把“用例流程”放到 domain。
+- Don’t：依赖 DB/HTTP/框架；不要出现 pgx/sqlc/templ 等技术细节；不要把“用例流程”放到 domain。
 
 **Application（`services/`）**
 - Do：用例编排（权限/租户上下文、事务边界、调用端口、将错误映射为 `pkg/serrors` 等稳定错误语义）。
 - Don’t：不要承载 UI 细节（templ/viewmodel），不要直接写 SQL（除非被明确选定为“DB Kernel 调用”且通过端口抽象/集中封装）。
 
 **Presentation（`presentation/`）**
-- Do：协议适配（HTTP/HTMX）、输入校验与绑定、DTO/VM 映射、调用 services。
+- Do：协议适配（HTTP/JSON API）、输入校验与绑定、DTO/VM 映射、调用 services。
 - Don’t：不要包含业务规则；不要绕过 services 直接访问 infrastructure。
 
 **Infrastructure（`infrastructure/`）**
@@ -213,7 +213,7 @@ modules/<module>/presentation/controllers/  # Delivery
 2. [ ] 落模块最小骨架（§5），并确保 `make check lint` 通过（无新增 ignore/allowlist）。
 3. [ ] 若为形态 B：先落 DB Kernel 的 schema/函数/约束（SSOT），并完成“唯一入口 + 权限/组织约束”的设计验收（对齐 026-029 的 One Door Policy）。
 4. [ ] 落 services Facade（Tx + 调用 Kernel/Ports + `pkg/serrors` 错误映射），并确保调用链不绕过 Facade。
-5. [ ] 落 presentation（controllers/templ/htmx）作为纯协议适配；禁止把业务裁决写回 delivery。
+5. [ ] 落 presentation（controllers/templ/web-adapter）作为纯协议适配；禁止把业务裁决写回 delivery。
 6. [ ] 若出现跨模块共享诉求：先按 §7.1 判断是否进 `pkg/**`；若不满足则保持在模块边界内。
 
 ## 10. 验收标准（本计划完成的判定）

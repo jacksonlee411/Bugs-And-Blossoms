@@ -221,7 +221,7 @@ CREATE TABLE orgunit.setid_binding_versions (
   - 数据校验：存量 `setid` 格式（全大写 + 5 位）、根组织 `is_business_unit=true`、既有绑定有效期与缺失绑定清单。
   - 演练：在预发布环境跑完整门禁与 E2E，验证“配置主数据显式 setid + 业务数据 org_unit 解析 setid”全链路。
 - **切换窗口（停写）**：
-  - 环境级停写：关闭所有 `submit_*` 写入口（API/HTMX/UI），仅允许只读验证。
+  - 环境级停写：关闭所有 `submit_*` 写入口（API/前端 UI），仅允许只读验证。
   - 执行迁移：更新 schema/函数/迁移，部署新入口与解析链路。
   - Bootstrap：确保 `DEFLT` 存在且根组织绑定 `DEFLT`；共享层 `SHARE` 保持只读。
   - 回归验证：跑关键门禁与 E2E；确认无 `SETID_BINDING_MISSING`/RLS 误拒绝。
@@ -278,7 +278,7 @@ CREATE TABLE orgunit.setid_binding_versions (
   - Response（201）：`{ "org_unit_id": "...", "is_business_unit": true }`
   - Error Codes：`ORG_NOT_FOUND_AS_OF` / `ORG_INACTIVE_AS_OF` / `ORG_VALIDITY_OVERLAP` / `RLS_TENANT_CONTEXT_MISSING`
 
-### 5.5 HTMX / UI 交互（概要）
+### 5.5 UI / API 交互（概要）
 - `/org/setid`：
   - `GET /org/setid?as_of=YYYY-MM-DD`：展示 SetID 列表 + 组织树 + 绑定编辑。
   - `POST /org/setid?as_of=...`：

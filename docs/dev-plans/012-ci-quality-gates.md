@@ -39,7 +39,7 @@
 - 命令入口：`Makefile`
 - CI 门禁：`.github/workflows/quality-gates.yml`
 - 版本基线：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
-- UI（MUI-only）：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- UI（MUI-only）：`DEV-PLAN-103（MUI-only 前端收敛）`
 - 多语言门禁（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
 - Atlas+Goose 闭环：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - sqlc 门禁：`docs/dev-plans/025-sqlc-guidelines.md`

@@ -9,7 +9,7 @@
   - 基本信息：左侧按 **生效日期（effective_date）** 浏览版本，右侧展示该版本的字段详情。
   - 变更日志：左侧按 **修改时间（tx_time）** 浏览事件，右侧展示事件详情与字段差异。
 
-> 说明：当前仓库内 Go/HTMX 版 OrgUnit 页面已在 `DEV-PLAN-081` 落地双栏结构；本计划聚焦于 `apps/web` 的实现对齐与口径一致。
+> 说明：当前仓库内 Go 旧版 OrgUnit 页面已在 `DEV-PLAN-081` 落地双栏结构；本计划聚焦于 `apps/web` 的实现对齐与口径一致。
 
 ## 目标（DoD）
 
@@ -88,5 +88,5 @@
 ## 关联与 SSOT
 
 - `AGENTS.md`
-- `docs/dev-plans/081-orgunit-records-version-selector-two-pane-alignment.md`（HTMX 版双栏基线）
+- `docs/dev-plans/081-orgunit-records-version-selector-two-pane-alignment.md`（旧版双栏基线）
 - `docs/dev-plans/097-orgunit-details-drawer-to-page-migration.md`（详情页 page pattern）

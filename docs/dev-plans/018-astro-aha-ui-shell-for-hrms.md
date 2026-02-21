@@ -1,19 +1,19 @@
-# DEV-PLAN-018：引入 Astro（AHA Stack）到 HTMX + Alpine 的 HRMS UI 方案（026-031）
+# DEV-PLAN-018：引入 Astro（AHA Stack）到旧局部渲染链路 + Alpine 的 HRMS UI 方案（026-031）
 
 **状态**: 已完成（Phase 0：Astro build + go:embed Shell，2026-01-08 12:24 UTC）
 
-> 注意：本计划的 Astro/HTMX UI 链路已在 `DEV-PLAN-103` 中被移除并收敛为 **MUI X（React SPA）**。  
+> 注意：本计划的 Astro/旧局部渲染链路已在 `DEV-PLAN-103` 中被移除并收敛为 **MUI X（React SPA）**。  
 > 本文仅保留为历史记录，请勿作为当前实现/门禁/SSOT 的依据。
 
 ## 1. 背景与上下文 (Context)
 
-仓库当前 UI 技术栈为 **Templ + HTMX + Alpine.js + Tailwind CSS**（版本与 SSOT 见 `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`）。与此同时，`DEV-PLAN-026`～`DEV-PLAN-031` 定义了 HRMS（Greenfield）的核心模块与契约：
+仓库当前 UI 技术栈为 **Templ + 旧局部渲染链路 + Alpine.js + Tailwind CSS**（版本与 SSOT 见 `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`）。与此同时，`DEV-PLAN-026`～`DEV-PLAN-031` 定义了 HRMS（Greenfield）的核心模块与契约：
 - 内核边界：DB=Projection Kernel（权威），Go=Command Facade（编排），One Door Policy（唯一写入口）（见 026/030/029/031）。
 - Valid Time=DATE；时间戳仅用于 Audit/Tx Time。读模型使用 `daterange` 且统一 `[start,end)`（左闭右开）（口径见 `AGENTS.md` 与 `docs/dev-plans/032-effective-date-day-granularity.md`，并对齐 026/030/029/031）。
 - UI 合同：任职记录（Job Data / Assignments）**仅显示 `effective_date`**（不展示 `end_date`），但底层继续沿用 `daterange [start,end)`（见 031）。
 - Greenfield 模块划分（仅实现 026-031 所覆盖模块）：`orgunit/jobcatalog/staffing/person`（见 016）。
 
-本计划目标是在不改变“HTMX + Alpine 的交互范式”的前提下，引入 **Astro（AHA Stack：Astro + HTMX + Alpine）**，用于：
+本计划目标是在不改变“旧局部渲染链路 + Alpine 的交互范式”的前提下，引入 **Astro（AHA Stack：Astro + 旧局部渲染链路 + Alpine）**，用于：
 - 统一页面壳（shell）、导航与信息架构（IA）
 - 统一 UI 组件、视觉规范与布局系统（Design System）
 - 降低页面级模板复杂度与重复，提高可复用性
@@ -26,7 +26,7 @@
 ### 1.2 现状（可验证，2026-01-06）
 > 目的：满足 `DEV-PLAN-003` Stage 1 的“准确描述现状”最低要求，避免用“想象中的架构”驱动计划。
 
-- Go 侧已存在一个最小 Shell（SSR）与 HTMX 装配点：`/app` -> `<aside#nav hx-get="/ui/nav">`、`<header#topbar hx-get="/ui/topbar">`、`<div#flash hx-get="/ui/flash">`、`<main#content>`（见 `internal/server/handler.go`）。
+- Go 侧已存在一个最小 Shell（SSR）与旧局部渲染链路装配点：`/app` -> `<aside#nav hx-get="/ui/nav">`、`<header#topbar hx-get="/ui/topbar">`、`<div#flash hx-get="/ui/flash">`、`<main#content>`（见 `internal/server/handler.go`）。
 - `config/routing/allowlist.yaml` 已将 `/ui/nav`、`/ui/topbar`、`/ui/flash` 纳入 allowlist（对齐 `DEV-PLAN-017` 的路由治理）。
 - `apps/web` 当前为占位目录（`.gitkeep`），尚未落盘 Astro 工程与可复现的 `package.json`/lockfile（对齐 `DEV-PLAN-011` 的“落盘并冻结版本”要求）。
 - `make generate` / `make css` 当前为 placeholder（见 `Makefile`）；本计划会把 “Astro build + CSS 输出” 的入口收敛到 `Makefile`（不在本文复制命令细节）。
@@ -36,10 +36,10 @@
 flowchart LR
   B[Browser] -->|GET /app| S[Go Server]
   S -->|HTML Shell| B
-  B -->|HTMX GET /ui/nav| S
-  B -->|HTMX GET /ui/topbar| S
-  B -->|HTMX GET /ui/flash| S
-  B -->|click nav -> HTMX GET {page}| S
+  B -->|旧局部渲染链路 GET /ui/nav| S
+  B -->|旧局部渲染链路 GET /ui/topbar| S
+  B -->|旧局部渲染链路 GET /ui/flash| S
+  B -->|click nav -> 旧局部渲染链路 GET {page}| S
   S -->|HTML partial swap| B
 ```
 
@@ -53,14 +53,14 @@ flowchart LR
 ### 2.1 核心目标
 - [ ] 只实现 026-031 的 4 个模块的 UI：`OrgUnit`、`Job Catalog`、`Staffing`、`Person`；左侧导航栏布局与目前一致。
 - [ ] 模块为一级菜单；模块下子模块为二级菜单；不引入更多层级。
-- [ ] 在 HTMX + Alpine 的基础上引入 Astro：Astro 负责页面壳/组件编译与静态资源组织；交互仍以 HTMX 为主、Alpine 为辅。
+- [ ] 在旧局部渲染链路 + Alpine 的基础上引入 Astro：Astro 负责页面壳/组件编译与静态资源组织；交互仍以旧局部渲染链路为主、Alpine 为辅。
 - [ ] 明确 i18n、Authz、as-of（有效日期）等全局 UI 能力在新架构下的边界与集成方式。
 - [ ] 给出可执行的落地步骤与验收标准（避免 “Easy but not Simple”）。
 
 ### 2.2 非目标（明确不做）
 - 不在本计划内替换 DB Kernel/领域实现（026-031 的后端契约不在此计划内变更）。
 - 不在本计划内把系统改成 SPA；不引入前端状态管理框架（React/Vue/Redux 等）。
-- 不在本计划内把系统改造成“前端渲染为主”；业务 HTML 仍以服务端渲染 + HTMX swap 为主。
+- 不在本计划内把系统改造成“前端渲染为主”；业务 HTML 仍以服务端渲染 + 旧局部渲染链路 swap 为主。
 
 ### 2.3 工具链与门禁（SSOT 引用）
 - DDD 分层框架：`docs/dev-plans/015-ddd-layering-framework.md`
@@ -114,31 +114,31 @@ flowchart LR
 - 透传规则：`/ui/nav`、`/ui/topbar`、以及所有模块内链接都必须保留当前 `as_of`（使 URL 可分享/可复现）。
 - 对任职记录页面：仅展示 `effective_date`（即 `lower(validity)`）；as-of 用于筛选/定位快照，不引入 `end_date` 展示（对齐 031）。
 
-### 3.4 As-of 控件交互（HTMX，冻结口径）
+### 3.4 As-of 控件交互（旧局部渲染链路，冻结口径）
 - `/ui/topbar` 渲染一个 `method="GET"` 的日期表单（`name="as_of"`），提交后以 **GET + `hx-push-url=true`** 更新当前页面 URL，并刷新 `#content`（不需要引入 SPA 或前端状态管理）。
 - `q`（搜索）与其他筛选条件必须与 `as_of` 共存于 query string；任何刷新/分页/详情跳转都不得丢失 `as_of`。
 - Job Catalog 默认页：`/org/job-catalog` 必须保留 `as_of` 并重定向到 `/org/job-catalog/family-groups?as_of=...`（或等价的默认 section）。
 
-## 4. UI 技术架构：Astro + HTMX + Alpine（AHA）
+## 4. UI 技术架构：Astro + 旧局部渲染链路 + Alpine（AHA）
 
 ### 4.1 总体原则
 - **Astro = 壳与组件编译层**：负责 layout/导航组件/页面框架/静态资源与 build pipeline；尽量不承载业务数据渲染。
-- **HTMX = 业务交互与数据驱动渲染**：业务页面内容以 server-rendered HTML partial 为主，依赖 `hx-get/hx-post/hx-target` 做局部刷新。
+- **旧局部渲染链路 = 业务交互与数据驱动渲染**：业务页面内容以 server-rendered HTML partial 为主，依赖 `hx-get/hx-post/hx-target` 做局部刷新。
 - **Alpine = 局部状态与微交互**：导航折叠、快捷键、弹窗、表单局部校验提示等；不做跨页面状态管理。
-- **Web Components = 允许用于交互型 UI 组件**：可引入框架无关的 Web Component（如树组件），但必须保持“服务端权威数据 + HTMX 交互”；时间上下文（`as_of/tree_as_of/effective_date`）按 `DEV-PLAN-102` 的 A/B/C 路由分类执行，**禁止壳层全局强灌**。
+- **Web Components = 允许用于交互型 UI 组件**：可引入框架无关的 Web Component（如树组件），但必须保持“服务端权威数据 + 旧局部渲染链路交互”；时间上下文（`as_of/tree_as_of/effective_date`）按 `DEV-PLAN-102` 的 A/B/C 路由分类执行，**禁止壳层全局强灌**。
 
 ### 4.2 “壳（Shell）”与“内容（Content）”分离
 引入一个统一的 App Shell：
 - 左侧导航（与现有布局一致）
 - 顶部栏（语言；其余全局能力以最小集合为准）
-- 主内容区（由 HTMX 拉取模块内容并 swap）
+- 主内容区（由旧局部渲染链路拉取模块内容并 swap）
 
 核心约束：**Shell 负责结构与导航，Content 负责业务**。Shell 允许是 Astro 产物；Content 仍可由 Go（Templ/handlers）渲染，逐步迁移不强制一次到位。
 
 ### 4.3 Authz / i18n 集成方式（不把动态信息固化到 Astro）
 为避免“静态壳无法感知用户权限/语言”的矛盾：
 - 导航与页面标题的最终渲染仍由服务端输出 HTML（可复用现有本地化与权限判定），Astro 壳只提供容器与样式。
-- Astro 壳在加载时通过 HTMX 拉取：
+- Astro 壳在加载时通过旧局部渲染链路拉取：
   - `/ui/nav`：当前用户可见的导航 HTML（含二级菜单）
   - `/ui/topbar`：包含语言等轻量全局控件
   - `/ui/flash`：统一错误/成功提示（统一出口，避免在 JS 分支里散落 toast/alert）
@@ -149,7 +149,7 @@ flowchart LR
 为降低“壳与内容互相猜测”的偶然复杂度，冻结如下最小契约：
 - Shell 必须包含固定 ID 的挂载点：`#nav`、`#topbar`、`#flash`、`#content`。
 - Shell 必须在用户已登录的上下文中触发加载：`hx-get="/ui/nav"`、`hx-get="/ui/topbar"`、`hx-get="/ui/flash"`（壳层不再注入全局 `as_of`；时间上下文由页面自身管理，见 `DEV-PLAN-102`）。
-- 内容区页（任意模块页面）必须满足：同一 URL 同时支持 “全页访问” 与 “HTMX partial（`Hx-Request: true`）” 两种模式（路由/协商口径对齐 `DEV-PLAN-017`）。
+- 内容区页（任意模块页面）必须满足：同一 URL 同时支持 “全页访问” 与 “旧局部渲染链路 partial（`Hx-Request: true`）” 两种模式（路由/协商口径对齐 `DEV-PLAN-017`）。
 - 时间参数（`as_of/tree_as_of/effective_date`）不得由壳层统一透传；必须由页面按职责显式携带与校验（见 `DEV-PLAN-102`）。
 
 ### 4.5 Astro build 产物交付方式（冻结：go:embed）
@@ -175,7 +175,7 @@ flowchart LR
 - 主内容区统一：`PageHeader`（标题+说明+操作按钮） + `AsOfBar`（如该页需要） + `ContentPanel`（列表/表单/详情）。
 - 所有列表页：
   - 支持 `as_of`（必带；缺省会被重定向补齐）与 `q`（搜索，可选）
-  - 列表行点击打开右侧/下方详情面板（HTMX swap），减少全页跳转
+  - 列表行点击打开右侧/下方详情面板（旧局部渲染链路 swap），减少全页跳转
 
 ### 5.2 任职记录（Assignments）UI 合同落地
 对齐 031 的强约束：
@@ -186,19 +186,19 @@ flowchart LR
 ### 5.3 Job Catalog / Positions / OrgUnit 的一致性体验
 统一约定：
 - 所有有效期类对象：同样用 as-of 控制当前视图，不在 UI 混入 end_date。
-- 所有“选项下拉”（组织节点、职位、职位模板等）：统一使用 HTMX options endpoint + 输入搜索（避免把大字典塞到前端）。
+- 所有“选项下拉”（组织节点、职位、职位模板等）：统一使用旧局部渲染链路 options endpoint + 输入搜索（避免把大字典塞到前端）。
 
 ## 6. 落地步骤（可执行）
 
 ### Phase 0：先打通 AHA 基础链路（最小可运行）
 1. [X] 在 `apps/web` 初始化 Astro 工程，落盘 `package.json` 与 lockfile，并按 `DEV-PLAN-011` 冻结 Node/pnpm/Astro 版本口径。（009M6 PR-1）
-2. [X] 定义 App Shell（Astro）：包含 §4.4 的四个固定挂载点，并以 HTMX 拉取 nav/topbar/flash 的方式装配动态上下文。（009M6 PR-1）
+2. [X] 定义 App Shell（Astro）：包含 §4.4 的四个固定挂载点，并以旧局部渲染链路拉取 nav/topbar/flash 的方式装配动态上下文。（009M6 PR-1）
 3. [X] 按 §4.5 落地 Astro build 产物复制到 `internal/server/assets/astro/**` 的 pipeline，并由 Go server 在 `/assets/*` 下提供静态资源。（009M6 PR-2）
 4. [X] 将 `/app` 的 Shell 渲染切换为 Astro 产物（不在 Go handler 内拼接整页 HTML），但继续保留 `/ui/nav`、`/ui/topbar`、`/ui/flash` 的服务端权威渲染。（009M6 PR-4）
 5. [X] 后端提供最小 UI partial：`/ui/nav`、`/ui/topbar`、`/ui/flash` 与一个占位内容页（例如 `/app/home`），验证：（009M6 PR-4）
    - 静态资源可用（Astro build 产物）
-   - HTMX swap 正常
-   - Alpine 初始化不与 HTMX 冲突
+   - 旧局部渲染链路 swap 正常
+   - Alpine 初始化不与旧局部渲染链路冲突
 6. [ ] 更新路由 allowlist 以覆盖新增的 UI 路由（尤其 `/org/job-catalog/*`）并通过路由门禁（入口：`make check routing`）。
 
 ### Phase 1：按模块逐个接入内容（不改 Shell）
@@ -206,7 +206,7 @@ flowchart LR
    - OrgUnit（`/org/nodes`）
    - JobCatalog（`/org/job-catalog/*`，见 §3.2）
    - Staffing（`/org/positions`、`/org/assignments`）
-   - Person（`/person/persons`，并通过 HTMX 组合 Staffing 的任职时间线）
+   - Person（`/person/persons`，并通过旧局部渲染链路组合 Staffing 的任职时间线）
 7. [ ] 导航 SSOT：二级菜单由服务端单点维护并渲染 `/ui/nav`（Astro 不维护第二份导航规则；避免出现“第二套权威表达”）。
 
 ### Phase 2：硬化与验收（对齐 026-031 契约）
@@ -221,7 +221,7 @@ flowchart LR
 - [ ] 左侧导航布局与现有一致；一级仅 4 模块；二级菜单与 §3.2 完全一致。
 - [ ] 任职记录页面不展示 `end_date`，只展示 `effective_date`；且 `as_of` 作为 query 参数在页面间保持一致透传（URL 可分享可复现）。
 - [ ] `as_of` 缺省时会被 302 补齐（`/app` 与任意模块页面均满足），`as_of` 非法时返回 400 且可被 UI 展示。
-- [ ] 不引入 SPA；所有业务交互仍可用 HTMX 解释（5 分钟可复述：入口 → 请求 → swap → 失败提示）。
+- [ ] 不引入 SPA；所有业务交互仍可用旧局部渲染链路解释（5 分钟可复述：入口 → 请求 → swap → 失败提示）。
 - [ ] 权限与本地化不在前端复制实现：导航与操作按钮可随用户权限变化。
 - [ ] Astro build 产物被纳入 `go:embed`，发布产物中不依赖额外静态目录挂载即可访问 Shell 与静态资源。
 - [ ] 路由门禁通过：新增的 UI 路由已登记 allowlist 且 `make check routing` 通过。
@@ -236,5 +236,5 @@ flowchart LR
 - 有效期语义：Valid Time=DATE，`daterange [start,end)`；Assignments 仅显示 `effective_date`（不展示 end_date）。
 
 ### 8.3 可解释性
-- 主流程：加载 Shell → HTMX 拉取 nav/topbar → 用户点击二级菜单 → HTMX 拉取模块内容 → swap 更新。
+- 主流程：加载 Shell → 旧局部渲染链路拉取 nav/topbar → 用户点击二级菜单 → 旧局部渲染链路拉取模块内容 → swap 更新。
 - 失败路径：统一走 `/ui/flash` 或现有错误反馈组件，不散落在多处 JS 分支。

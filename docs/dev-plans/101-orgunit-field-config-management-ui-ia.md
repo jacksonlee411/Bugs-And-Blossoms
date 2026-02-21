@@ -51,7 +51,7 @@
 > 说明：
 >
 > - 当前 `apps/web` 导航为扁平结构（无二级菜单）。本方案不引入新的导航层级，只新增一项，保持简单。
-> - 旧链路的服务端渲染导航（例如 `renderNav`/HTMX）不在本计划范围；本计划交付物以 `/app/**` 内可发现为准（对齐 `DEV-PLAN-103` 方向）。
+> - 旧链路的服务端渲染导航（例如 `renderNav`/旧页面适配器）不在本计划范围；本计划交付物以 `/app/**` 内可发现为准（对齐 `DEV-PLAN-103` 方向）。
 
 ### 4.2 模块内入口（增强可发现性）
 
@@ -277,7 +277,7 @@
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - `docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md`
 - `docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
-- `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- `DEV-PLAN-103（MUI-only 前端收敛）`
 - `docs/dev-plans/097-orgunit-details-drawer-to-page-migration.md`
 - `docs/dev-plans/099-orgunit-details-two-pane-info-audit-mui.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`

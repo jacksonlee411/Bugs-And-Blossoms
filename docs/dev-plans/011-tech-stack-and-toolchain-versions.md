@@ -59,7 +59,7 @@
 
 ### 3.2 UI 技术栈（React SPA：MUI X）
 
-> 说明：`DEV-PLAN-103` 已移除 Astro/HTMX/Alpine/Shoelace 的旧 UI 链路；仓库内唯一用户 UI 为 **React SPA（MUI X）**。  
+> 说明：`DEV-PLAN-103` 已移除 Astro/旧局部渲染链路/Alpine/Shoelace 的旧 UI 链路；仓库内唯一用户 UI 为 **React SPA（MUI X）**。  
 > UI 依赖版本以 `apps/web/package.json` + `apps/web/pnpm-lock.yaml` 为 SSOT，本节仅做“可读性摘要”。
 
 #### 3.2.1 UI Build / 依赖版本（Vite）

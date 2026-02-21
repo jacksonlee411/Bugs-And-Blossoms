@@ -95,7 +95,7 @@ table "org_nodes" {
 - **Down**: 删除表（注意：生产环境通常禁止破坏性 Down，需说明数据备份策略）。
 
 ## 5. 接口契约 (API Contracts)
-> **标准**: 定义 URL、Method、Payload 字段（必填/选填/类型）、错误码。对于 UI 交互，需定义 HTMX 行为。
+> **标准**: 定义 URL、Method、Payload 字段（必填/选填/类型）、错误码。对于 UI 交互，需定义前端请求/响应行为（MUI 页面 + JSON API）。
 
 ### 5.1 JSON API: `POST /api/v1/resource`
 - **Request**:
@@ -114,7 +114,7 @@ table "org_nodes" {
   - `409 Conflict`: Code 已存在 (`ERR_CODE_DUPLICATE`).
   - `422 Unprocessable Entity`: 父节点不存在或形成环路.
 
-### 5.2 HTMX 交互 (UI Partials)
+### 5.2 UI 交互（MUI 页面 / JSON API）
 - **Action**: 用户点击“保存”按钮。
 - **Request**: `POST /resource/form` (Form Data)
 - **Response (200 OK)**:

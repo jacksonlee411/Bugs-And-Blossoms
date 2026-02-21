@@ -3,7 +3,7 @@
 **状态**: 实施中（2026-02-14）
 
 **关联文档**:
-- `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- `docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 
 ## 路由盘点（旧 UI → MUI / API）
 
@@ -11,7 +11,7 @@
 
 ### 旧 UI（计划删除）
 - `/login`（HTML 登录页）
-- `/ui/nav`、`/ui/topbar`、`/ui/flash`（HTMX 装配端点）
+- `/ui/nav`、`/ui/topbar`、`/ui/flash`（旧局部渲染链路装配端点）
 - `/lang/en`、`/lang/zh`（服务端语言 cookie）
 - `/org/nodes*`（OrgUnit 旧树 + 详情 + 搜索）
 - `/org/setid`（SetID 旧 HTML 页面）
@@ -28,5 +28,5 @@
 - 2026-02-14：建立执行日志；落地 UI build 门禁收敛（`make css` → `scripts/ui/build-web.sh`，Vite `base=/assets/web/`，服务端 `webMUIIndexPath=assets/web/index.html`）。
 
 ## 进行中事项
-- 2026-02-14：迁移 E2E 与后端路由/allowlist/authz，移除 Astro/HTMX 运行路径并用 MUI 页面替代旧 HTML 页面。
+- 2026-02-14：迁移 E2E 与后端路由/allowlist/authz，移除 Astro/旧局部渲染链路运行路径并用 MUI 页面替代旧 HTML 页面。
 
