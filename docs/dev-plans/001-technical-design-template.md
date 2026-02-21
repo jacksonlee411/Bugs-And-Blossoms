@@ -163,11 +163,13 @@ table "org_nodes" {
 - **Readiness**: 执行 `docs/dev-records/DEV-PLAN-XXX-READINESS.md` 记录命令与结果。
 
 ## 10. 运维与监控 (Ops & Monitoring)
-- **Feature Flag**:
-  - 开关名称: `ENABLE_XXX` (默认: false/shadow/enforce)。
-  - 灰度策略: 按租户 ID 逐步开启。
+- **运行保护（Greenfield）**:
+  - 不引入功能开关/双链路/legacy 入口。
+  - 故障处置仅允许环境级保护与“只读/停写”。
 - **关键日志**: 结构化日志需包含 `request_id`, `tenant_id`, `change_type`。
 - **指标**: 关键路径的 Latency 与 Error Rate。
-- **回滚方案**: 
-  - 代码回滚: `git revert`。
-  - 数据回滚: 使用 `scripts/rollback_xxx.sql` 或恢复快照（需提供具体命令）。
+- **故障处置与恢复（No-Legacy）**:
+  - 触发条件: 何时进入保护模式（需给出可观测信号/阈值）。
+  - 执行顺序: 环境级保护 → 只读/停写 → 修复（配置/数据/迁移）→ 重试/重放 → 恢复。
+  - 数据处置: 以前向修复（补偿/更正/重放）为主，禁止回退到旧事实源/旧实现。
+  - 恢复判定: 明确检查项与责任人（通过后才恢复写入）。
