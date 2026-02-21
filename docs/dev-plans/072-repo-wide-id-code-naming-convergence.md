@@ -47,13 +47,13 @@
 - [x] `DEV-PLAN-026D` 已完成实施并留证，OrgUnit 写路径稳定。
 - [ ] 新增数据库表/迁移必须取得用户确认（仓库红线）。
 - [ ] 涉及字段重命名/DDL 变更，按模块执行 Atlas+Goose 闭环（入口引用 `DEV-PLAN-024` 与 `AGENTS.md`）。
-- [x] 外部调用方范围确认为 UI/HTMX 与 Internal API。
+- [x] 外部调用方范围确认为 UI 与 Internal API。
 
 ## 4. 架构与关键决策 (Architecture & Decisions)
 ### 4.1 架构图（边界解析与命名收敛）
 ```mermaid
 graph TD
-  A[UI/HTMX] --> B[Handler]
+  A[UI] --> B[Handler]
   B --> C[Service]
   C --> D[OrgCode Resolver]
   C --> E[DB (org_id)]
@@ -107,7 +107,7 @@ graph TD
 - 冻结后如需调整，必须先更新映射表并在本计划记录变更原因与影响范围。
 - 冻结版需补充以下元数据（写入 dev-records 头部）：冻结时间、冻结提交号、覆盖模块范围、变更审批人。
 
-## 6. 接口契约 (API/HTMX Contracts)
+## 6. 接口契约 (API/UI Contracts)
 > 路由不变，仅字段命名与 payload 字段收敛。
 
 ### 6.1 Internal API（Staffing）
@@ -123,7 +123,7 @@ graph TD
   }
   ```
 
-### 6.2 UI/HTMX（Staffing 表单）
+### 6.2 UI（Staffing 表单）
 - **位置**：`/org/positions`、`/org/assignments`
 - **变更**：表单字段由 `org_unit_id` 改为 `org_code`；列表展示列名同步更新。
 - **响应**：HTML 片段结构不变，仅字段名与错误提示文案对齐 026B 语义。

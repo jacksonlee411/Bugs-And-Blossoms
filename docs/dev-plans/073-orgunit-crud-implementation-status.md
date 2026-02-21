@@ -231,7 +231,7 @@
 
 **集成方式（约束）**：
 - 组件资源由 Astro build 产物打包并通过 go:embed 分发（禁止运行时外链依赖）。
-- 业务数据仍由服务端渲染与 HTMX 拉取，组件只负责交互与展示。
+- 业务数据仍由 MUI 页面 + JSON API 拉取，组件只负责交互与展示。
 - `tree_as_of` 必须透传到树节点展开与搜索请求中；详情加载使用 `effective_date`。
 
 **搜索定位（必须）**：
@@ -674,7 +674,7 @@ type OrgUnitReadService interface {
 3) 路径全部展开后，选中 `target_org_id` 并刷新右侧详情。
 
 **事件/交互约束**：
-- 展开节点触发 `sl-lazy-load`（或等价事件），由轻量 JS/HTMX 拉取子节点并插入当前节点。
+- 展开节点触发 `sl-lazy-load`（或等价事件），由轻量 JS 请求拉取子节点并插入当前节点。
 - 选择节点触发详情面板加载；不得在前端缓存业务字段。
 
 **最小事件桥接（草案）**：
@@ -693,10 +693,14 @@ type OrgUnitReadService interface {
     if (!orgId || !treeAsOf) return;
 
     const url = `/org/nodes/children?parent_id=${encodeURIComponent(orgId)}&tree_as_of=${encodeURIComponent(treeAsOf)}`;
-    // 使用 HTMX 拉取子节点片段并插入当前节点
+    // 使用前端请求拉取子节点片段并插入当前节点
     // 注意：不能使用 innerHTML，否则会覆盖当前节点的 label
-    htmx.ajax('GET', url, { target: item, swap: 'beforeend' })
-      .then(() => { item.lazy = false; })
+    fetch(url, { headers: { Accept: 'text/html' } })
+      .then((res) => res.text())
+      .then((html) => {
+        item.insertAdjacentHTML('beforeend', html);
+        item.lazy = false;
+      })
       .catch(() => { /* 由统一错误出口处理 */ });
   });
 
@@ -706,7 +710,12 @@ type OrgUnitReadService interface {
     if (!orgId) return;
 
     const url = `/org/nodes/details?org_id=${encodeURIComponent(orgId)}`;
-    htmx.ajax('GET', url, { target: '#org-node-details', swap: 'innerHTML' });
+    fetch(url, { headers: { Accept: 'text/html' } })
+      .then((res) => res.text())
+      .then((html) => {
+        const details = document.querySelector('#org-node-details');
+        if (details) details.innerHTML = html;
+      });
   });
 </script>
 ```

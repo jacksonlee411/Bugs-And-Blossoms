@@ -237,6 +237,6 @@ UI 侧组合口径（冻结）：
 - Phase 4A（详情页）：`docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
 - Phase 4B（字段配置 UI IA）：`docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - 时间上下文收敛：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
-- MUI-only：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- MUI-only：`DEV-PLAN-103（MUI-only 前端收敛）`
 - i18n 边界：`docs/dev-plans/020-i18n-en-zh-only.md`
 - 门禁与触发器：`AGENTS.md`、`docs/dev-plans/012-ci-quality-gates.md`

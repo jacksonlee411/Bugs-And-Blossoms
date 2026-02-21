@@ -4,7 +4,7 @@
 
 ## 1. 背景与上下文 (Context)
 
-`DEV-PLAN-009` 已明确 HRMS（Greenfield）的路线：DB=Projection Kernel（权威）、Go=Command Facade（编排）、One Door Policy（唯一写入口），并采用 AHA UI Shell（`DEV-PLAN-018`：Astro + HTMX + Alpine）。
+`DEV-PLAN-009` 已明确 HRMS（Greenfield）的路线：DB=Projection Kernel（权威）、Go=Command Facade（编排）、One Door Policy（唯一写入口），并已收敛为 MUI X（React SPA）单一前端链路（见 `DEV-PLAN-103`）。
 
 为保证全局 UX 一致性与可维护性，需要将“界面语言（UI language）”作为系统级能力收敛并冻结契约：
 - 系统仅暴露并支持 `en` / `zh` 两种语言，不扩展更多语言。
@@ -15,7 +15,7 @@
 
 ### 2.1 核心目标
 - [ ] **语言白名单**：系统对外仅支持 `en`/`zh`；任何输入（用户资料 / `Accept-Language` / UI 选择）最终都必须落在该集合内。
-- [ ] **统一 locale 解析**：HTTP/HTMX/WS 等入口复用同一套“whitelist match + fallback”策略（避免因入口不同导致语言漂移）。
+- [ ] **统一 locale 解析**：HTTP/API/WS 等入口复用同一套“whitelist match + fallback”策略（避免因入口不同导致语言漂移）。
 - [ ] **UI 可选语言**：所有语言选择控件仅展示 `en`/`zh`（对齐 `DEV-PLAN-018`：Topbar 提供快速切换入口）。
 - [ ] **用户资料语言**：用户资料持久化字段只允许 `en`/`zh`；UI 切换后写回用户资料并立即生效。
 - [ ] **未登录可切换**：未登录页面也可切换语言；通过 cookie 记忆偏好（仍只允许 `en`/`zh`）。

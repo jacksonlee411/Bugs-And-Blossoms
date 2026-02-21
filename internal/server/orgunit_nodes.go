@@ -24,6 +24,7 @@ type OrgUnitNode struct {
 	Name           string
 	Status         string
 	IsBusinessUnit bool
+	HasChildren    bool
 	CreatedAt      time.Time
 }
 
@@ -513,6 +514,14 @@ SELECT
   c.org_code,
   s.name,
   s.is_business_unit,
+  EXISTS (
+    SELECT 1
+    FROM orgunit.org_unit_versions child
+    WHERE child.tenant_uuid = $1::uuid
+      AND child.parent_id = s.org_id
+      AND child.status = 'active'
+      AND child.validity @> $2::date
+  ) AS has_children,
   e.transaction_time
 FROM snapshot s
 JOIN orgunit.org_unit_codes c
@@ -536,7 +545,7 @@ ORDER BY v.node_path
 	var out []OrgUnitNode
 	for rows.Next() {
 		var n OrgUnitNode
-		if err := rows.Scan(&n.ID, &n.OrgCode, &n.Name, &n.IsBusinessUnit, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.OrgCode, &n.Name, &n.IsBusinessUnit, &n.HasChildren, &n.CreatedAt); err != nil {
 			return nil, err
 		}
 		n.Status = "active"
@@ -573,6 +582,13 @@ SELECT
   v.name,
   v.status,
   v.is_business_unit,
+  EXISTS (
+    SELECT 1
+    FROM orgunit.org_unit_versions child
+    WHERE child.tenant_uuid = $1::uuid
+      AND child.parent_id = v.org_id
+      AND child.validity @> $2::date
+  ) AS has_children,
   e.transaction_time
 FROM orgunit.org_unit_versions v
 JOIN orgunit.org_unit_codes c
@@ -593,7 +609,7 @@ ORDER BY v.node_path
 	var out []OrgUnitNode
 	for rows.Next() {
 		var n OrgUnitNode
-		if err := rows.Scan(&n.ID, &n.OrgCode, &n.Name, &n.Status, &n.IsBusinessUnit, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.OrgCode, &n.Name, &n.Status, &n.IsBusinessUnit, &n.HasChildren, &n.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, n)

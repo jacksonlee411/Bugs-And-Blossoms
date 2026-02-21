@@ -1,4 +1,4 @@
-# DEV-PLAN-017：全局路由策略统一（UI/HTMX/API/Webhooks）
+# DEV-PLAN-017：全局路由策略统一（UI/API/Webhooks）
 
 **状态**: 草拟中（2026-01-05 09:56 UTC）
 
@@ -8,7 +8,7 @@
 ## 1. 背景与上下文 (Context)
 
 - Greenfield 选择全新实施（路线图见 `DEV-PLAN-009`），不承担存量路由形态/legacy alias 的兼容包袱（对齐 `DEV-PLAN-004M1`），但仍需要“路由治理型 SSOT”来保证一致性与可验证性。
-- Greenfield 同时包含 UI（SSR/HTMX）、内部 JSON API（与 UI 同仓同发）、对外 API（如未来引入）、第三方回调（webhooks）、运维端点与测试/开发端点；若缺少统一规则，会直接放大鉴权、错误返回与安全暴露的漂移风险。
+- Greenfield 同时包含 UI（MUI SPA）、内部 JSON API（与 UI 同仓同发）、对外 API（如未来引入）、第三方回调（webhooks）、运维端点与测试/开发端点；若缺少统一规则，会直接放大鉴权、错误返回与安全暴露的漂移风险。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 
@@ -72,7 +72,7 @@ flowchart LR
 
 | 路由类别 | 前缀（规范） | 返回契约（默认） | 备注 |
 | --- | --- | --- | --- |
-| UI（模块 UI） | `/{module}/*` | HTML（HTMX 时 partial） | 避免新增根路径 UI 例外；确需例外必须登记 allowlist |
+| UI（模块 UI） | `/{module}/*` | HTML（SPA shell） | 避免新增根路径 UI 例外；确需例外必须登记 allowlist |
 | 内部 API | `/{module}/api/*` | JSON-only | Always Latest；与 UI 同仓同发，不做对外兼容承诺 |
 | 对外 API | `/api/v1/*` | JSON-only | 仅当需要对外兼容承诺时才引入；禁止新增非版本化 `/api/*` |
 | Webhooks | `/webhooks/{provider}/*` | JSON-only | 不依赖 UI session；安全中间件必须在前缀级强制绑定 |
@@ -87,9 +87,8 @@ flowchart LR
 
 - **选定**：对 UI 类路由（`route_class=ui`），协商顺序固定为：
   1. 显式 JSON：`Accept` 含 `application/json`（返回 JSON）
-  2. HTMX：`Hx-Request: true`（返回 HTML partial + HX-* headers）
-  3. 默认：HTML 全页
-- **选定**：对 API/Webhook 类路由（`internal_api/public_api/webhook`），无论 `Accept`/`Hx-Request` 如何，均 **JSON-only**（避免“API 请求拿到 HTML”）。
+  2. 默认：HTML 全页（SPA shell）
+- **选定**：对 API/Webhook 类路由（`internal_api/public_api/webhook`），无论 `Accept`/前端自定义请求头如何，均 **JSON-only**（避免“API 请求拿到 HTML”）。
 
 ### 4.4 全局错误返回契约（选定：按 route_class 决定）
 

@@ -69,7 +69,7 @@
 
 > 说明：路由命名空间与返回契约以 `DEV-PLAN-017` 为 SSOT；本节仅列出本里程碑最小“需要存在且可测”的路由集合（便于拆 PR 与做 routing gates 断言）。
 
-**UI（HTML/HTMX）**
+**UI（页面交互）**
 - [X] `GET /org/positions?as_of=YYYY-MM-DD`
 - [X] `GET /org/positions/form?as_of=YYYY-MM-DD`（实现说明：不单独提供 `/form`；同一路径根据 HX 请求返回 partial）
 - [X] `POST /org/positions?as_of=YYYY-MM-DD`（创建最小动作；同一路径支持 HX partial）

@@ -16,7 +16,7 @@
 ### 2.1 核心目标
 - [ ] 为组织架构、职位管理、职位分类、任职记录、人员管理给出清晰的 bounded context 与模块归属（“谁拥有数据与写入口”）。
 - [ ] 给出每个模块的最小目录骨架（对齐 `.gocleanarch.yml` 四层），并明确“DB Kernel + Go Facade”在模块内的落点。
-- [ ] 定义跨模块交互的最小契约：只依赖 `pkg/**` 共享类型；跨模块 UI 用 HTMX/HTTP 组合；避免 Go 代码跨模块 import。
+- [ ] 定义跨模块交互的最小契约：只依赖 `pkg/**` 共享类型；跨模块 UI 用 HTTP/JSON API 组合；避免 Go 代码跨模块 import。
 - [ ] 明确关键跨域不变量的归属与裁决策略（防止出现两套权威表达）。
 
 ### 2.2 非目标（明确不做）
@@ -58,12 +58,12 @@
 
 - **ID 类型**：跨模块只通过 `uuid`（或 `pkg/**` 的强类型别名）传递 ID，不跨模块 import 领域对象。
 - **存在性校验**：
-  - `staffing` 引用 `person`：写路径输入统一使用 `person_uuid`（而非 pernr）；pernr→uuid 的解析应由 `person` 模块提供 options/read API（UI 通过 HTMX/HTTP 获取），避免 `staffing` 直接查询 `persons` 表形成隐式耦合。
+  - `staffing` 引用 `person`：写路径输入统一使用 `person_uuid`（而非 pernr）；pernr→uuid 的解析应由 `person` 模块提供 options/read API（UI 通过 HTTP/JSON API 获取），避免 `staffing` 直接查询 `persons` 表形成隐式耦合。
   - Person Identity 最小合同与 pernr 约束（1-8 位数字字符串，前导 0 同值）见：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`
   - `staffing` 引用 `jobcatalog`：建议以 `job_profile_id/job_level_id/...` 作为输入，并在 write side 记录必要的 label 快照（避免“改字典=改历史”与跨域查询耦合；对齐 029 的动机）。
   - `staffing` 引用 `orgunit`：建议以 `org_unit_id` 作为输入；组织路径/长名等展示型数据通过 `pkg/orglabels` 或独立 read API 提供（不把投射逻辑复制到 staffing）。
 
-## 5. 路由与 UI 组合（跨模块以 HTMX/HTTP 拼装）
+## 5. 路由与 UI 组合（跨模块以 HTTP/JSON API 组合）
 
 ### 5.1 路由归属（建议保持人机入口稳定）
 - Org 相关 UI：
@@ -74,7 +74,7 @@
   - `person`：`/person/persons`
 
 ### 5.2 Person 详情页的任职时间线（组合方式）
-`person` 模块不应依赖 `staffing` 的 Go 包；通过 HTMX 请求 `staffing` 暴露的 partial（例如 `/org/assignments?...&include_summary=1`）实现 UI 组合（与当前模式一致，但模块边界更清晰）。
+`person` 模块不应依赖 `staffing` 的 Go 包；通过 HTTP 请求 `staffing` 暴露的 JSON/页面接口（例如 `/org/assignments?...&include_summary=1`）实现 UI 组合（与当前模式一致，但模块边界更清晰）。
 
 ## 6. `modules/*` 目录骨架（推荐模板）
 
@@ -125,7 +125,7 @@ modules/person/
 
 - `pkg/validtime`：Valid Time（date）相关工具与类型（对齐 032）
 - `pkg/hrids`（建议新增）：跨模块 ID 强类型（PersonID/OrgUnitID/PositionID/JobProfileID…）
-- `pkg/serrors`、`pkg/htmx`、`pkg/orglabels`：继续作为跨模块复用基础设施
+- `pkg/serrors`、`pkg/httperr`、`pkg/orglabels`：继续作为跨模块复用基础设施
 
 ## 8. 停止线（按 DEV-PLAN-003）
 - [ ] 任一模块出现第二写入口（绕过 `submit_*_event`/Kernel 入口直写 SoT/versions/identity）。
@@ -140,7 +140,7 @@ modules/person/
 
 ### 10.1 结构（解耦/边界）
 - 通过：bounded context 与模块数量收敛为 4（`orgunit/jobcatalog/staffing/person`），把 Position↔Assignment 强不变量收敛在 `staffing`，避免跨模块“双权威表达”。
-- 通过：跨模块交互口径收敛为 `pkg/**` 类型 + HTTP/HTMX 组合，避免 Go import 形成隐式耦合。
+- 通过：跨模块交互口径收敛为 `pkg/**` 类型 + HTTP/JSON API 组合，避免 Go import 形成隐式耦合。
 - 需警惕：`staffing` 容易演化为“万能模块”；必须通过 ports/目录与 One Door Policy 维持边界（本计划已给出停止线，实施时要严格执行）。
 
 ### 10.2 演化（规格驱动/确定性）

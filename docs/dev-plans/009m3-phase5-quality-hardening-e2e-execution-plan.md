@@ -9,7 +9,7 @@
 
 - 基于现状的关键结论（输入事实）：
   - `DEV-PLAN-009M1` 与 `DEV-PLAN-009M2` 已完成并在 `DEV-PLAN-010` 中固化了可复现脚本，因此 Phase 4 的“业务垂直切片”已具备可演示闭环；当前最大短板在 Phase 5：`E2E Tests` 仍为 placeholder，无法阻断回归。
-  - 当前 UI 为 server-rendered（Go + HTMX），`apps/web` 仅有 `.gitkeep`；但 `make e2e` 的实现会因为 `apps/web` 目录存在而直接 no-op，导致 CI 的 `E2E Tests` required check 失去实际约束力。
+  - 当前 UI 为 server-rendered（Go 旧页面链路），`apps/web` 仅有 `.gitkeep`；但 `make e2e` 的实现会因为 `apps/web` 目录存在而直接 no-op，导致 CI 的 `E2E Tests` required check 失去实际约束力。
 
 - 目标（对齐 `DEV-PLAN-009` Phase 5 出口条件）：
   - E2E Tests 从 placeholder 升级为 **真实的浏览器自动化 smoke**（面向现有 Go UI，而非依赖 `apps/web`），至少覆盖一条“`/login` → `/app` → 业务页面可见/可操作”的链路，并能在失败时产出可用的排障证据（trace/screenshot 等）。

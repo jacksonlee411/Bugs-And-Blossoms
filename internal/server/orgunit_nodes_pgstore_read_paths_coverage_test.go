@@ -103,7 +103,7 @@ func TestOrgUnitPGStore_ListNodesCurrentWithVisibility_Coverage(t *testing.T) {
 
 	t.Run("scan error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &stubTx{rows: &recordRows{records: [][]any{{"10000001", "A001", "Root", "active", true, time.Unix(1, 0).UTC()}}, scanErr: errors.New("scan")}}, nil
+			return &stubTx{rows: &recordRows{records: [][]any{{"10000001", "A001", "Root", "active", true, true, time.Unix(1, 0).UTC()}}, scanErr: errors.New("scan")}}, nil
 		})}
 		if _, err := store.ListNodesCurrentWithVisibility(ctx, "t1", "2026-01-01", true); err == nil {
 			t.Fatal("expected error")
@@ -122,7 +122,7 @@ func TestOrgUnitPGStore_ListNodesCurrentWithVisibility_Coverage(t *testing.T) {
 	t.Run("commit error", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{
-				rows:      &recordRows{records: [][]any{{"10000001", "A001", "Root", "active", true, time.Unix(1, 0).UTC()}}},
+				rows:      &recordRows{records: [][]any{{"10000001", "A001", "Root", "active", true, true, time.Unix(1, 0).UTC()}}},
 				commitErr: errors.New("commit"),
 			}, nil
 		})}
@@ -133,7 +133,7 @@ func TestOrgUnitPGStore_ListNodesCurrentWithVisibility_Coverage(t *testing.T) {
 
 	t.Run("ok", func(t *testing.T) {
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
-			return &stubTx{rows: &recordRows{records: [][]any{{"10000001", "A001", "Root", "disabled", false, time.Unix(1, 0).UTC()}}}}, nil
+			return &stubTx{rows: &recordRows{records: [][]any{{"10000001", "A001", "Root", "disabled", false, false, time.Unix(1, 0).UTC()}}}}, nil
 		})}
 		nodes, err := store.ListNodesCurrentWithVisibility(ctx, "t1", "2026-01-01", true)
 		if err != nil || len(nodes) != 1 || nodes[0].Status != "disabled" {

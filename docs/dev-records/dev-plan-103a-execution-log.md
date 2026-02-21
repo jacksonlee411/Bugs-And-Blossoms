@@ -4,13 +4,13 @@
 
 **关联文档**:
 - `docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
-- `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- `docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 
 ## 1) 旧 UI → MUI 映射表（事实源盘点 + 状态）
 
 > 事实源（按优先级；可按实际补齐）：  
 > 1) `config/routing/allowlist.yaml`（route_class / 可达性门禁）  
-> 2) `internal/server/**`（旧 HTML/HTMX handler 与 redirect/表单 action 的实际残留面）  
+> 2) `internal/server/**`（旧 HTML/旧局部渲染链路 handler 与 redirect/表单 action 的实际残留面）  
 > 3) `internal/server/authz_middleware.go`（路由 → 权限判定；用于识别“路由已删但授权分支仍保活”）  
 > 4) `apps/**/src/router/index.tsx`（MUI SPA 路由）  
 > 5) `apps/**/src/navigation/config.tsx`（导航入口 + permissionKey）  
@@ -26,11 +26,11 @@
 | `/ui/flash` | 已移除（无路由注册/无实现；allowlist 不含） | C | n/a | n/a | n/a | `internal/server/**` 未发现 `/ui/flash` 引用 |
 | `/lang/en` | 已移除（无路由注册；无残留死代码/测试） | C | n/a | n/a | n/a | 门禁：`make check no-legacy` + `make preflight`（见下表） |
 | `/lang/zh` | 已移除（无路由注册；无残留死代码/测试） | C | n/a | n/a | n/a | 门禁：`make check no-legacy` + `make preflight`（见下表） |
-| `/org/nodes*`（树/详情/搜索） | 不可达（allowlist 不含；路由未注册），且旧 HTML/HTMX 交互链路已清理（仅保留 JSON API + store） | B | `/org/units`、`/org/units/:orgCode` | `/org/api/org-units*` | `orgunit.read` | 事实源：`internal/server/orgunit_nodes.go`（JSON API + store）；门禁：`make preflight`（E2E 通过） |
+| `/org/nodes*`（树/详情/搜索） | 不可达（allowlist 不含；路由未注册），且旧 HTML/旧局部渲染链路已清理（仅保留 JSON API + store） | B | `/org/units`、`/org/units/:orgCode` | `/org/api/org-units*` | `orgunit.read` | 事实源：`internal/server/orgunit_nodes.go`（JSON API + store）；门禁：`make preflight`（E2E 通过） |
 | `/org/snapshot` | 已移除（相关 store + option + 单测已删除） | A | n/a（当前 MUI 未提供对应入口） | n/a | n/a | 删除：`internal/server/orgunit_snapshot.go`、`internal/server/orgunit_snapshot_test.go` |
-| `/org/setid`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML/HTMX 交互链路已清理（仅保留 JSON API + MUI） | A | `/org/setid` | `/org/api/setids`、`/org/api/setid-bindings` | `orgunit.read` | 事实源：`apps/web/**`（MUI）；`internal/server/setid.go`（JSON API） |
+| `/org/setid`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML/旧局部渲染链路已清理（仅保留 JSON API + MUI） | A | `/org/setid` | `/org/api/setids`、`/org/api/setid-bindings` | `orgunit.read` | 事实源：`apps/web/**`（MUI）；`internal/server/setid.go`（JSON API） |
 | `/org/job-catalog`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML 交互链路已清理（仅保留 JSON API + MUI） | A | `/jobcatalog` | `/jobcatalog/api/catalog`、`/jobcatalog/api/catalog/actions`、`/org/api/owned-scope-packages` | `jobcatalog.read` | 事实源：`apps/web/**`（MUI）；`internal/server/jobcatalog.go`（JSON API） |
-| `/org/positions`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML/HTMX 交互链路已清理（仅保留 JSON API + MUI） | A | `/staffing/positions` | `/org/api/positions`、`/org/api/positions:options` | `staffing.positions.read` | 事实源：`apps/web/**`（MUI）；`internal/server/staffing_handlers.go`（JSON API） |
+| `/org/positions`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML/旧局部渲染链路已清理（仅保留 JSON API + MUI） | A | `/staffing/positions` | `/org/api/positions`、`/org/api/positions:options` | `staffing.positions.read` | 事实源：`apps/web/**`（MUI）；`internal/server/staffing_handlers.go`（JSON API） |
 | `/org/assignments`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML 交互链路已清理（仅保留 JSON API + MUI） | A | `/staffing/assignments` | `/org/api/assignments` | `staffing.assignments.read` | 事实源：`apps/web/**`（MUI）；`internal/server/staffing_handlers.go`（JSON API） |
 | `/person/persons`（旧 HTML） | 不可达（allowlist 不含；路由未注册），且旧 HTML handler 已移除 | A | `/person/persons` | `/person/api/persons` | `person.read` | `internal/server/person.go` 已移除旧 HTML handler；`internal/server/person_test.go` 同步收口 |
 
@@ -59,7 +59,7 @@
 ### PR-103A-2（旧 UI 残留清理）
 - 变更点：
   - 中间件对非 `/app/**` UI path passthrough，避免 `/login` 等旧 URL 出现“兼容别名窗口”。
-  - 清理旧 UI 残留死代码/测试：移除旧 HTML/HTMX 渲染辅助、OrgUnit Snapshot 残留、以及若干旧 UI 相关测试（保持 JSON API 与 `/app/**` 入口不变）。
+  - 清理旧 UI 残留死代码/测试：移除旧 HTML/旧局部渲染链路渲染辅助、OrgUnit Snapshot 残留、以及若干旧 UI 相关测试（保持 JSON API 与 `/app/**` 入口不变）。
 - 验证点：
   - Go 单测覆盖 `/login` 不提供 HTML/不引入 alias：`internal/server/tenancy_middleware_test.go`、`internal/server/handler_test.go`
   - `make preflight`：通过（见上表）

@@ -31,7 +31,7 @@
   - [x] `.templ` / Tailwind（若变更日志 UI 结构改动）
   - [ ] 多语言 JSON（本计划默认不新增词条）
   - [x] Authz（若新增日志读取权限校验）
-  - [x] 路由治理（若新增 HTMX 局部接口）
+  - [x] 路由治理（若新增页面局部渲染接口）
   - [x] DB 迁移 / Schema（`org_events` 字段/约束/索引）
   - [x] sqlc（schema 变更后需 regenerate）
 - **SSOT 链接**:
@@ -46,7 +46,7 @@
 ### 3.1 架构图 (Mermaid)
 ```mermaid
 graph TD
-    A[OrgUnit UI: /org/nodes] --> B[OrgUnit Handler/HTMX]
+    A[OrgUnit UI: /org/nodes] --> B[OrgUnit Handler/UI Adapter]
     B --> C[OrgUnit Service]
     C --> D[DB Kernel submit_*_event]
     D --> E[(orgunit.org_events)]
@@ -139,7 +139,7 @@ CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx
 
 ## 5. 接口契约 (API Contracts)
 
-> 说明：本节定义“页面局部渲染”的 HTMX 契约与最小字段集合，避免实现阶段对字段/排序/分页产生二次设计。
+> 说明：本节定义“页面局部渲染”的 UI 契约与最小字段集合，避免实现阶段对字段/排序/分页产生二次设计。
 
 ### 5.0 字段字典（面向 UI）
 - `event_uuid`：事件唯一标识（uuid）。
@@ -155,7 +155,7 @@ CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx
 - `before_snapshot` / `after_snapshot`：变更前/后快照（jsonb object）。
 - `target_event_uuid` / `target_effective_date`：仅 CORRECT/RESCIND 事件必显（来自 payload）。
 
-### 5.1 HTMX：变更日志列表（建议新增或改造现有 partial）
+### 5.1 UI：变更日志列表（建议新增或改造现有 partial）
 - **Route**: `GET /org/nodes/change-log?org_id={id}&cursor={cursor}&limit={n}`
 - **行为**:
   - 默认 `limit=20`，`tx_time DESC, id DESC` 排序。
@@ -177,7 +177,7 @@ CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx
 
 > 注意：变更日志列表需要包含 CORRECT/RESCIND 事件本身；不得仅查询 `org_events_effective`。
 
-### 5.2 HTMX：变更日志详情
+### 5.2 UI：变更日志详情
 - **Route**: `GET /org/nodes/change-log/{event_uuid}`
 - **行为**:
   - 返回右栏详情 HTML 片段。

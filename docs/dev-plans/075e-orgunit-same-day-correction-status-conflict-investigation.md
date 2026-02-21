@@ -118,7 +118,7 @@
 | `EVENT_DATE_CONFLICT` | 409 | 普通 `change_status` 同日冲突（旧路径） |
 | `ORG_REQUEST_ID_CONFLICT` | 409 | 同 `request_id` 不同语义 |
 | `ORG_REPLAY_FAILED` | 409 | replay 失败，事务回滚 |
-| `forbidden` | 403 | Authz 拒绝（JSON/HTMX/HTML 语义一致） |
+| `forbidden` | 403 | Authz 拒绝（JSON/页面 语义一致） |
 
 ## 分阶段拆分（评审版）
 
@@ -157,7 +157,7 @@
 1. [x] UI：新增“修正同日状态”入口（与“状态变更”并列但语义区分）。
 2. [x] UI：状态冲突时给出可操作提示（引导用户走同日修正入口）。
 3. [x] UI：提交结果/失败提示与 API 稳定错误码一致。
-4. [x] 测试：补齐 UI/Handler/E2E 回归（含 JSON/HTMX/HTML 的 403/409 一致性）。
+4. [x] 测试：补齐 UI/Handler/E2E 回归（含 JSON/页面 的 403/409 一致性）。
 5. [x] 记录：在 `docs/dev-records/` 写入门禁与关键场景证据。
 **DoD**：
 - 用户无需改日期即可完成状态纠错；
@@ -207,7 +207,7 @@
 - T3：重复 `request_id` 但语义不同 -> `ORG_REQUEST_ID_CONFLICT`。
 - T4：目标日不存在 -> `ORG_EVENT_NOT_FOUND`。
 - T5：普通 `change_status` 同日冲突 -> 返回稳定 `EVENT_DATE_CONFLICT`（不透 SQLSTATE）。
-- T6：403 权限拒绝在 JSON/HTMX/HTML 三类请求语义一致。
+- T6：403 权限拒绝在 JSON/页面 两类入口语义一致。
 - T7：目标事件不是 `ENABLE/DISABLE` -> `ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET`。
 - T8：目标事件已 rescind -> `ORG_EVENT_RESCINDED`。
 
@@ -226,7 +226,7 @@
 - 在 PR 或执行记录中必须明确：
   1. 本次命中的触发器；
   2. 实际执行命令与结果；
-  3. 错误码矩阵回归结果（特别是 403/409 的 JSON/HTMX/HTML 一致性）；
+  3. 错误码矩阵回归结果（特别是 403/409 的 JSON/页面 一致性）；
   4. 兼容映射退出（若仍保留映射，说明原因与退场日期）。
 
 ## 关联文档

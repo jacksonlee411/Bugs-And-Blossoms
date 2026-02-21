@@ -191,7 +191,7 @@
 
 **推荐门面（供实现对齐；命名可调但语义必须一致）**
 - `Authorize(ctx, Request) (Decision, error)`：纯判定 + 缺口诊断（支持 `disabled|shadow|enforce` 三态）。
-- `Require(ctx, Request) error`：便于 handler 使用；在 `enforce` 且 deny 时返回一个可稳定映射为 HTTP 403 的错误（HTML/HTMX/JSON 的具体渲染由全局 responder 统一负责）。
+- `Require(ctx, Request) error`：便于 handler 使用；在 `enforce` 且 deny 时返回一个可稳定映射为 HTTP 403 的错误（页面/JSON 的具体渲染由全局 responder 统一负责）。
 
 **403 合同（对外）**
 - HTTP 状态码固定为 `403`；禁止在各模块自造“看起来不一样”的 forbidden payload（由全局 responder/组件统一渲染，对齐 `DEV-PLAN-017`）。
@@ -211,7 +211,7 @@
 
 - **权威来源（选定）**：object/action 的“命名与映射表”以 `pkg/authz` 的集中 registry/常量为权威（代码中集中定义、集中注册）。
 - **模块使用方式（选定）**：模块侧只能调用 helper（例如 `pkg/authz` 提供的 `RequireReadXxx/RequireAdminXxx` 或 `MapRouteToObjectAction`），禁止在模块内拼装 `module.resource` 或自造 action 字符串。
-- **变更规则（选定）**：新增受保护入口（页面/API/HTMX）必须同时更新：
+- **变更规则（选定）**：新增受保护入口（页面/API）必须同时更新：
   - object/action registry（代码）
   - 对应 policy（`config/access/policies/**` + pack 产物）
   - lint/test（确保不出现 `g,` 行与非 MVP action）

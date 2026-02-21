@@ -229,7 +229,7 @@ ALTER TABLE orgunit.setid_scope_package_versions
 ### 5.3 JSON API: `POST /orgunit/api/scope-subscriptions`
 保持 DEV-PLAN-071 现有契约，用于治理入口显式切换订阅。
 
-### 5.4 HTMX/UI：`/org/setid` 与 `/org/job-catalog`
+### 5.4 UI/API：`/org/setid` 与 `/org/job-catalog`
 - **SetID Governance**:
   - 在 `/org/setid` 页面新增 **“Scope Packages”** 区块（治理入口唯一）。
   - 包列表字段：`scope_code`、`package_code`、`name`、`owner_setid`、`status`、`effective_date`、`last_updated`、`actions`。
@@ -248,7 +248,7 @@ ALTER TABLE orgunit.setid_scope_package_versions
 ### 5.5 Job Catalog UI 错误码（本计划新增）
 - `PACKAGE_CODE_MISMATCH`：package_code 与 package_id 解析不一致（Fail-Closed）。
 
-### 5.6 Job Catalog 写入接口错误码（HTMX）
+### 5.6 Job Catalog 写入接口错误码（前端交互）
 - `POST /org/job-catalog`（各类 create/update）若 `PACKAGE_CODE_MISMATCH`，返回 422 并在表单区域显示错误（沿用现有错误渲染方式）。
 - `POST /org/job-catalog` 若 `DEFLT_EDIT_FORBIDDEN`，返回 403 或 422（以现有错误渲染约定为准），提示“DEFLT 包仅限根组织权限管理员修改”。
 

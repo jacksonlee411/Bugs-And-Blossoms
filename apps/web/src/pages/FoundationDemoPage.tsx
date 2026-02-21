@@ -66,6 +66,7 @@ function mapDepartmentNodes(nodes: DepartmentNode[]): TreePanelNode[] {
   return nodes.map((node) => ({
     id: String(node.id),
     label: node.name,
+    hasChildren: Boolean(node.children && node.children.length > 0),
     children: node.children ? mapDepartmentNodes(node.children) : undefined
   }))
 }

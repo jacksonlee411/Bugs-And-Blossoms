@@ -1,4 +1,4 @@
-# DEV-PLAN-103：移除 Astro/HTMX，前端收敛为 MUI X（React SPA）
+# DEV-PLAN-103：移除 Astro/旧局部渲染链路，前端收敛为 MUI X（React SPA）
 
 **状态**: 已完成（2026-02-14）
 
@@ -6,33 +6,33 @@
 
 当前仓库存在两套并行的 UI 形态与资产链路：
 
-- 旧链路：Astro Shell + HTMX/Alpine（已移除；历史工程名曾为 `apps/web`；对应 `internal/server/assets/astro/**` + `/ui/*`）
+- 旧链路：Astro Shell + 旧局部渲染链路/Alpine（已移除；历史工程名曾为 `apps/web`；对应 `internal/server/assets/astro/**` + `/ui/*`）
 - 新链路：React + MUI Core + MUI X（当前唯一 UI 工程：`apps/web` + `internal/server/assets/web/**`，入口 `/app`）
 
-随着 `DEV-PLAN-090/091/092/094/096` 已把 `/app` 切换为 MUI SPA，继续保留 Astro/HTMX 会带来：
+随着 `DEV-PLAN-090/091/092/094/096` 已把 `/app` 切换为 MUI SPA，继续保留 Astro/旧局部渲染链路会带来：
 
 - 认知负担：两套路由/渲染/状态模型并存（Shell 注入、partial swap vs SPA router）。
 - 契约漂移：时间上下文（`as_of/tree_as_of/effective_date`）跨层语义更容易回漂（承接 `DEV-PLAN-102`）。
 - 工具链复杂：构建脚本与 CI 触发器需要覆盖两套工程与生成物，且容易漏触发。
 - 资产膨胀：`shoelace/vendor` 等 vendored 资产进入 embed，增加体积与维护面。
 
-因此本计划明确：**仅保留 MUI X（React SPA）作为唯一用户 UI**，并在仓库内 **彻底移除 Astro/HTMX**，以获得更纯净、更可治理的架构边界。
+因此本计划明确：**仅保留 MUI X（React SPA）作为唯一用户 UI**，并在仓库内 **彻底移除 Astro/旧局部渲染链路**，以获得更纯净、更可治理的架构边界。
 
 ## 2. 目标与非目标
 
 ### 2.1 核心目标（DoD）
 
-- [x] UI 栈收敛：仓库内不再存在 Astro/HTMX/Alpine/Shoelace 的运行路径与构建链路；唯一 UI 工程为 `apps/web`。
+- [x] UI 栈收敛：仓库内不再存在 Astro/旧局部渲染链路/Alpine/Shoelace 的运行路径与构建链路；唯一 UI 工程为 `apps/web`。
 - [x] 入口收敛：`/app` 及其子路由是唯一应用入口；未登录时统一跳转到 MUI 登录页（`GET /app/login`）。
 - [x] 路由收敛：移除旧的 server-rendered UI 路由（例如 `/org/*`、`/person/*` 的 HTML 页面），并用 MUI 页面替代；保留（并强化）JSON API 作为前后端契约。
 - [x] 工具链/门禁收敛：CI 的 UI gate 与本地入口只围绕 `apps/web` 与 `internal/server/assets/web/**`（替代 `internal/server/assets/web-mui/**`）；不再构建/校验 Astro 产物。
-- [x] 质量证据：更新 E2E/门禁断言，使其不再依赖 `/login` HTML 或 `/org/nodes` 等 HTMX 页面；`make preflight` 可稳定通过（以 `AGENTS.md`/`Makefile`/CI workflow 为 SSOT）。
+- [x] 质量证据：更新 E2E/门禁断言，使其不再依赖 `/login` HTML 或 `/org/nodes` 等旧局部渲染链路页面；`make preflight` 可稳定通过（以 `AGENTS.md`/`Makefile`/CI workflow 为 SSOT）。
 
 ### 2.2 非目标
 
 - 不在本计划内重写后端领域/DB Kernel/事件模型（保持 One Door 不变量）。
 - 不在本计划内改动 RLS/Authz 的边界与对象命名（按既有契约执行）。
-- 不在本计划内迁移或重写 SuperAdmin 控制面（`cmd/superadmin`）UI（除非其依赖 Astro/HTMX；若有依赖需在实施盘点中明确）。
+- 不在本计划内迁移或重写 SuperAdmin 控制面（`cmd/superadmin`）UI（除非其依赖 Astro/旧局部渲染链路；若有依赖需在实施盘点中明确）。
 - 不引入 legacy 双链路回退（遵守 `DEV-PLAN-004M1` No Legacy）。
 
 ## 3. SSOT 引用（避免漂移）
@@ -132,15 +132,15 @@
 11. [x] 按 `DEV-PLAN-102` 收敛时间参数：在 MUI 页面中冻结 A/B/C 类路由的时间上下文职责，避免“壳层强灌 as_of”复活；并移除 Person 页面“ignored as-of”等伪需求输入（证据入口见 `docs/dev-records/dev-plan-103a-execution-log.md`）。
 12. [x] 补齐/调整 API 契约（如需）：本计划未触发新增/调整对外 API 契约；若后续确需调整，先更新对应 dev-plan（Contract First），再落代码。
 
-### P4：删除 Astro/HTMX（真正收口）
+### P4：删除 Astro/旧局部渲染链路（真正收口）
 
 13. [x] 删除旧 UI 运行路径：
-   - 删除 `/ui/nav` `/ui/topbar` `/ui/flash` 等 HTMX 装配端点
+   - 删除 `/ui/nav` `/ui/topbar` `/ui/flash` 等旧局部渲染链路装配端点
    - 删除旧 HTML 页面 handler（例如 `/org/nodes`、`/org/job-catalog`、`/org/positions`、`/org/assignments`、`/person/persons` 等）
 14. [x] 删除 Astro 资产与构建链路：
    - 删除 Astro 工程目录（历史名曾为 `apps/web`）
    - 删除 `internal/server/assets/astro/**`、`internal/server/assets/shoelace/**`（若不再被任何路径引用）
-   - 删除 `internal/server/assets/js/lib/htmx.min.js`、`internal/server/assets/js/lib/alpine.min.js`（若不再被任何路径引用）
+   - 删除旧局部渲染链路相关 JS 库文件（如历史 `internal/server/assets/js/lib/*`）以及 `internal/server/assets/js/lib/alpine.min.js`（若不再被任何路径引用）
    - 删除旧 CSS/样式产物（例如 `internal/server/assets/app.css`，若仅供旧 UI）
    - 移除服务端 Astro Shell 注入代码（`renderAstroShellFromAssets`、`writeShell*` 等）
 15. [x] 更新 allowlist/authz 路由映射：
@@ -151,7 +151,7 @@
 
 16. [x] 更新技术栈冻结文档：从 `DEV-PLAN-011` 中移除 Astro 作为 UI SSOT 的描述，改为以 `apps/web/package.json` + lockfile 为唯一事实源。
 17. [x] 更新仓库入口文档（`AGENTS.md`）：
-   - 移除 Astro/HTMX 相关触发器描述（例如 `make css` 的“Tailwind/Astro”叙述），改为 MUI-only 的触发器口径
+   - 移除 Astro/旧局部渲染链路相关触发器描述（例如 `make css` 的“Tailwind/Astro”叙述），改为 MUI-only 的触发器口径
    - Doc Map 保留 `DEV-PLAN-018` 但标注“已被 103 替代（历史记录）”
 18. [x] 为历史计划加“已被替代/不再适用”的显式说明（至少 `DEV-PLAN-018`），避免后续误用。
 
@@ -161,7 +161,7 @@
 
 ## 6. 验收标准
 
-- [x] 仓库内不存在 Astro/HTMX/Alpine/Shoelace 的运行路径与构建步骤；`internal/server/assets/astro/**` 已移除（证据入口见 `docs/dev-records/dev-plan-103a-execution-log.md`）。
+- [x] 仓库内不存在 Astro/旧局部渲染链路/Alpine/Shoelace 的运行路径与构建步骤；`internal/server/assets/astro/**` 已移除（证据入口见 `docs/dev-records/dev-plan-103a-execution-log.md`）。
 - [x] 未登录访问 `/app` 会跳转到 `/app/login`；`internal_api` 未登录返回 401 JSON（不 302）；登录后进入 MUI Shell；退出登录链路可用（证据入口见 `docs/dev-records/dev-plan-103a-execution-log.md`）。
 - [x] 不再提供 `GET /login` 的 HTML 页面；不会出现 `/login` → `/app/login` 的“兼容别名窗口”（证据入口见 `docs/dev-records/dev-plan-103a-execution-log.md`）。
 - [x] 旧的 server-rendered UI 路由不可达或已移除；业务能力在 MUI 页面可发现、可操作（至少覆盖现有已实现能力）（证据入口见 `docs/dev-records/dev-plan-103a-execution-log.md`）。
@@ -182,5 +182,5 @@
 
 ## 8. 交付物
 
-- `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`（本文件）
+- `docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`（本文件）
 - `docs/dev-records/dev-plan-103-execution-log.md`（实施时创建）

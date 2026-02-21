@@ -12,7 +12,7 @@
   - 同为 Org 模块，`/org/nodes` 走 `tree_as_of + effective_date`，而 MUI 页仍走 `as_of + effective_date`；
   - 壳层 Topbar 统一产出 `as_of`，与局部页面“拒绝/废弃 as_of”的策略冲突；
   - 默认值算法在不同路由存在差异（系统日、最近可用、最早回退等）。
-- 由于仓库正在推进“UI 收敛为 MUI X SPA、移除 Astro/HTMX”（见 `DEV-PLAN-103`），本计划需要同时给出：
+- 由于仓库正在推进“UI 收敛为 MUI X SPA、移除旧前端链路”（见 `DEV-PLAN-103`），本计划需要同时给出：
   - **过渡口径**：旧壳层仍存在时，禁止 Topbar 继续强灌/改写页面时间上下文；
   - **最终口径**：删除旧壳层后，时间上下文完全由页面（MUI 路由）自管理。
 
@@ -37,7 +37,7 @@
 - OrgUnit 现有契约：`docs/dev-plans/073-orgunit-crud-implementation-status.md`
 - Routing 与 CI 门禁：`docs/dev-plans/017-routing-strategy.md`、`docs/dev-plans/012-ci-quality-gates.md`
 - 仓库规则入口：`AGENTS.md`
-- UI 收敛为 MUI-only：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- UI 收敛为 MUI-only：`DEV-PLAN-103（MUI-only 前端收敛）`
 
 ## 3. 现状盘点（2026-02-14）
 
@@ -46,15 +46,15 @@
 | --- | --- | --- | --- | --- |
 | DB Kernel / SQL 函数 | `p_as_of` / `p_as_of_date` | 查询某日有效切片 | `validity @> as_of`、SetID/Scope/引用校验 | 语义相对清晰，但命名与 UI 语义重名 |
 | Astro Shell + Topbar | `as_of` | 全局页面上下文（导航/顶栏） | `/ui/nav` `/ui/topbar` `/app?as_of=...` | 对所有页面一刀切注入，和局部页面契约冲突；且与 MUI-only 方向不一致（见 `DEV-PLAN-103`） |
-| Org HTMX 页面 | `tree_as_of` + `effective_date` | 树时点 + 详情版本 | `/org/nodes*` | 已较清晰，但仍受壳层 `as_of` 外溢影响 |
-| Org MUI 页面 | `as_of` + `effective_date` | **视图日期**（`as_of`，等价于 tree_as_of 概念）+ **详情版本**（`effective_date`；URL query param 可缺省：例如从列表进入详情默认不带，详情页会根据 `as_of + versions` 算法选中默认版本） | `/app/org/units*` | 名称与 HTMX 不一致（tree_as_of vs as_of）；若把 as_of 误当成版本会引入“伪版本/跳变”风险 |
+| Org 旧页面 | `tree_as_of` + `effective_date` | 树时点 + 详情版本 | `/org/nodes*` | 已较清晰，但仍受壳层 `as_of` 外溢影响 |
+| Org MUI 页面 | `as_of` + `effective_date` | **视图日期**（`as_of`，等价于 tree_as_of 概念）+ **详情版本**（`effective_date`；URL query param 可缺省：例如从列表进入详情默认不带，详情页会根据 `as_of + versions` 算法选中默认版本） | `/app/org/units*` | 名称与旧页面参数不一致（tree_as_of vs as_of）；若把 as_of 误当成版本会引入“伪版本/跳变”风险 |
 | 其他 UI 页面（SetID/JobCatalog/Staffing/Person） | `as_of` | 单查询时点 | `/org/setid` `/org/job-catalog` `/org/positions` `/person/persons` | 部分页面业务上并不需要强制全局 as_of |
 
 ### 3.2 问题分型（批判）
 1. **语义过载**：`as_of` 同时扮演“查询时点 + UI全局状态 + 默认写入来源”。
 2. **分层泄漏**：壳层参数策略覆盖页面局部契约，导致路由间冲突。
 3. **默认值不统一**：不同 handler 对缺省日期采用不同算法，行为不可预测。
-4. **同域异构**：Org 在 HTMX 与 MUI 两套参数口径并存，增加维护和测试复杂度。
+4. **同域异构**：Org 在旧页面与 MUI 两套参数口径并存，增加维护和测试复杂度。
 5. **可观测性不足**：缺少统一的“时间参数契约基线”与自动化门禁，回漂风险高。
 
 ### 3.3 术语澄清（避免误读）

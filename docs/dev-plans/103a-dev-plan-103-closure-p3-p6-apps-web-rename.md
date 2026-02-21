@@ -7,7 +7,7 @@
 
 ## 0. 关联文档（SSOT 引用）
 
-- 主计划（目标与背景）：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- 主计划（目标与背景）：`docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 - 时间语义与路由时间上下文矩阵：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - CI/门禁结构（SSOT）：`docs/dev-plans/012-ci-quality-gates.md`
 - 本地必跑入口（SSOT）：`AGENTS.md`
@@ -15,7 +15,7 @@
 
 ## 1. 背景
 
-`DEV-PLAN-103` 已完成“移除 Astro/HTMX 的运行路径与构建链路（P4/P5）”，但仍存在两类未闭环事项：
+`DEV-PLAN-103` 已完成“移除 Astro/旧局部渲染链路的运行路径与构建链路（P4/P5）”，但仍存在两类未闭环事项：
 
 1) P3：业务页面迁移到 MUI 的收尾未完成（缺少《旧 UI → MUI 映射表》；Person 页面仍暴露“ignored as-of”输入，时间上下文口径不干净）。  
 2) P6：工程命名去技术后缀已执行（`apps/web` 为唯一前端工程目录），仍需补齐“引用收口 + 证据登记”以形成长期 SSOT。
@@ -31,7 +31,7 @@
 - [x] Person 页面去除“ignored as-of”输入，使时间上下文口径与 `DEV-PLAN-102` 一致（不制造“伪需求参数”与歧义 UI）。
 - [x] P6 完整收尾：完成前端工程目录改名（去技术后缀）+ 全仓引用更新；CI 触发器、构建脚本、文档 SSOT 同步更新；本地能跑通 UI 构建与全门禁。
 - [x] 清理残留旧 UI 死代码/测试（不改变对外契约）：覆盖并收口 **三类残留面**，避免后续误引入“兼容别名窗口/legacy 回退”：
-  - 旧 HTML/HTMX handler 家族（`internal/server/**` 下的旧页面渲染、旧表单 action、旧 redirect URL 等）。
+  - 旧 HTML/旧局部渲染链路 handler 家族（`internal/server/**` 下的旧页面渲染、旧表单 action、旧 redirect URL 等）。
   - 中间件放行口径（例如对 `/login` 的特殊放行/绕过条件，避免潜在 backdoor）。
   - Authz 路由判定残留（旧 UI 路由对应的授权分支与其测试，避免“路由虽不可达但代码仍保活”）。
 
@@ -68,7 +68,7 @@
 2. [x] 在执行日志中生成《旧 UI → MUI 映射表》的初版（以事实源为准），并标注迁移/删除状态。
    - 事实源（建议顺序，可按实际补齐）：
      - `config/routing/allowlist.yaml`（route_class / 可达性门禁）
-     - `internal/server/**`（旧 HTML/HTMX handler 与 redirect/表单 action 的实际残留面；避免仅盯 `handler.go`）
+     - `internal/server/**`（旧 HTML/旧局部渲染链路 handler 与 redirect/表单 action 的实际残留面；避免仅盯 `handler.go`）
      - `internal/server/authz_middleware.go`（路由 → 权限判定；用于识别“路由已删但授权分支仍保活”）
      - `apps/*/src/router/index.tsx`（MUI SPA 路由）
      - `apps/*/src/navigation/config.tsx`（导航入口 + permissionKey）
@@ -87,11 +87,11 @@
 
 5. [x] 以“覆盖残留面”为原则清理旧 UI（死代码/测试/绕过口径），避免后续误用或被再次挂回路由形成 backdoor：  
    - **中间件口径收口**：移除对 `/login` 的特殊放行/绕过条件（当前代码中如存在该口径，应视为必须清理项），并用测试锁定“tenant app 不提供 `/login` HTML”。
-   - **旧渲染辅助函数收口**：移除或隔离旧 UI 的渲染/壳层/HTMX 协商函数（Nav/Topbar/Flash、最小 Shell、`HX-Request` 分支、旧 login form、`/lang/*` 链接等）及其测试，避免形成“看似死代码但可复活”的隐性入口。
+   - **旧渲染辅助函数收口**：移除或隔离旧 UI 的渲染/壳层/旧局部渲染链路协商函数（Nav/Topbar/Flash、最小 Shell、`HX-Request` 分支、旧 login form、`/lang/*` 链接等）及其测试，避免形成“看似死代码但可复活”的隐性入口。
    - **旧 HTML handler 家族清理**：以 `internal/server/**` 为范围，清理仍存活的旧页面渲染、表单 action、redirect URL 与其测试（例如 Org Nodes/Snapshot、JobCatalog、Staffing、Person、SetID 中残留的旧 HTML 交互链路）。
    - **Authz 路由判定清理**：同步清理旧 UI 路由相关的 authz requirement 分支与单测，避免“路由删了但授权映射仍保活”。
-   - **不改变对外契约边界**：仅移除旧 UI（HTML/HTMX）相关分支；JSON API 与 `/app/**`（SPA）入口保持既有契约。
-   - **Stopline（必须可证明）**：在本 PR 内给出可复现证据，证明 `/login`（HTML）不存在、且旧 HTML/HTMX 页面入口不会通过“中间件放行/重定向/隐性链接”被再次触达（证据可来自：allowlist、Go 单测、E2E、或映射表的“不可达/已移除”标注）。
+   - **不改变对外契约边界**：仅移除旧 UI（HTML/旧局部渲染链路）相关分支；JSON API 与 `/app/**`（SPA）入口保持既有契约。
+   - **Stopline（必须可证明）**：在本 PR 内给出可复现证据，证明 `/login`（HTML）不存在、且旧 HTML/旧局部渲染链路页面入口不会通过“中间件放行/重定向/隐性链接”被再次触达（证据可来自：allowlist、Go 单测、E2E、或映射表的“不可达/已移除”标注）。
 6. [x] 更新 `DEV-PLAN-103` 的验收/风险说明：把“残留清理”与“证据表”链接到本计划执行日志，形成可追溯收口点。
 
 ### PR-103A-3：P6 工程改名（去技术后缀，机械改名）
@@ -100,7 +100,7 @@
 8. [x] 全仓机械更新引用（并以门禁为准收口）：  
    - 构建脚本（如 `scripts/ui/*`）  
    - CI 触发器（如 `scripts/ci/paths-filter.sh`）  
-   - 文档 SSOT 与可执行文档（至少：`AGENTS.md`、`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`、以及 UI 规范类文档如 `docs/dev-plans/002-ui-design-guidelines.md`）  
+   - 文档 SSOT 与可执行文档（至少：`AGENTS.md`、`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`、以及 UI 规范类文档如 `docs/dev-plans/002-ui-design-guidelines.md`）  
    - 历史文档按“可读不执行”处理：允许保留旧路径，仅在必要处补充“历史说明/已被 103A 收口”注记，避免篡改证据语义
    - E2E 触发条件与可能的路径硬编码引用（如存在）。
 9. [x] Stopline（必须可证明）：除 `docs/dev-records/**` 与明确标注“历史”的文档外，仓库内不应再出现旧目录名路径引用；同时保持运行态标识不暗改（例如 localStorage key、package name 等，除非门禁失败迫使变更并给出迁移策略）。
@@ -119,7 +119,7 @@
   `docs/dev-records/**` 与明确标注“历史”的文档允许保留旧路径文本，不作为阻塞项。
 - [x] Person 页面不再出现 “As-of (ignored)” 或等价输入；时间上下文口径与 `DEV-PLAN-102` 一致。
 - [x] 不存在 `/login` HTML 页面或兼容跳转窗口；不在中间件层保留对 `/login` 的特殊放行/绕过逻辑形成潜在 backdoor。
-- [x] `internal/server/**` 中不再残留旧 UI 交互链路（旧 HTML 页面渲染、旧表单 action/redirect 指向旧路由、以及 HTMX/hx-* 标记相关输出），且对应旧 UI 单测已清理或迁移到与 MUI-only 方向一致的断言。
+- [x] `internal/server/**` 中不再残留旧 UI 交互链路（旧 HTML 页面渲染、旧表单 action/redirect 指向旧路由、以及旧局部渲染链路/hx-* 标记相关输出），且对应旧 UI 单测已清理或迁移到与 MUI-only 方向一致的断言。
 - [x] 本地 `make css` 与 `make preflight` 可通过，且证据记录已落盘。
 
 ## 7. 风险与缓解

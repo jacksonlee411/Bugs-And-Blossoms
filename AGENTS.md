@@ -174,6 +174,7 @@ modules/{module}/
 - DEV-PLAN-070 执行日志：`docs/dev-records/dev-plan-070-execution-log.md`
 - DEV-PLAN-071：SetID Scope Package 订阅蓝图：`docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
 - DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化：`docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- DEV-PLAN-071B：字段配置/字典配置与 SetID 边界实施方案：`docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
 - DEV-PLAN-072：全仓 ID/Code 命名与对外标识收敛：`docs/dev-plans/072-repo-wide-id-code-naming-convergence.md`
 - DEV-PLAN-073：OrgUnit CRUD 实现清单（页面与 API）：`docs/dev-plans/073-orgunit-crud-implementation-status.md`
 - DEV-PLAN-073A：组织架构树运行态问题记录（Shoelace 资源加载失败）：`docs/dev-plans/073a-orgunit-tree-runtime-issue.md`
@@ -206,6 +207,8 @@ modules/{module}/
 - DEV-PLAN-083A：OrgUnit Append 写入动作能力外显与策略单点扩展（create / event_update）：`docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
 - DEV-PLAN-083B：Org 变更能力模型后置收口（承接 083/083A）：`docs/dev-plans/083b-org-mutation-capabilities-post-083a-closure-plan.md`
 - DEV-PLAN-083B 执行日志：`docs/dev-records/dev-plan-083b-execution-log.md`
+- DEV-PLAN-084：Org 模块组织树“下级可展开指示符”缺失问题分析与收敛方案：`docs/dev-plans/084-orgunit-tree-expand-indicator-visibility.md`
+- DEV-PLAN-084 执行日志：`docs/dev-records/dev-plan-084-execution-log.md`
 - DEV-PLAN-090：前端框架升级为 MUI X（对标 Workday UX）方案：`docs/dev-plans/090-mui-x-frontend-upgrade-plan.md`
 - DEV-PLAN-091：MUI X 升级子计划 P0（基座准备与许可落地）：`docs/dev-plans/091-mui-x-phase0-foundation-and-license-plan.md`
 - DEV-PLAN-092：MUI X 升级子计划 P1（壳与导航迁移）：`docs/dev-plans/092-mui-x-phase1-shell-navigation-plan.md`
@@ -262,7 +265,7 @@ modules/{module}/
 - DEV-PLAN-102A：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案：`docs/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
 - DEV-PLAN-102A 执行日志：`docs/dev-records/dev-plan-102a-execution-log.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
-- DEV-PLAN-103：移除 Astro/HTMX，前端收敛为 MUI X（React SPA）：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- DEV-PLAN-103：移除旧前端链路，前端收敛为 MUI X（React SPA）：`docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 - DEV-PLAN-103 执行日志：`docs/dev-records/dev-plan-103-execution-log.md`
 - DEV-PLAN-103A：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名：去技术后缀）：`docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
 - DEV-PLAN-103A 执行日志：`docs/dev-records/dev-plan-103a-execution-log.md`
@@ -299,7 +302,7 @@ modules/{module}/
 - sqlc 工具链使用指引与规范：`docs/dev-plans/025-sqlc-guidelines.md`
 - Authz（Casbin）工具链与实施方案：`docs/dev-plans/022-authz-casbin-toolchain.md`
 - 多工作区并行开发指引（3 worktree）：`docs/dev-plans/014-parallel-worktrees-local-dev-guide.md`
-- 全局路由策略统一（UI/HTMX/API/Webhooks）：`docs/dev-plans/017-routing-strategy.md`
+- 全局路由策略统一（UI/API/Webhooks）：`docs/dev-plans/017-routing-strategy.md`
 - 文档创建与过程治理规范：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
 - CI 质量门禁（Quality Gates）：`docs/dev-plans/012-ci-quality-gates.md`
 - SetID 管理（Greenfield）：`docs/dev-plans/028-setid-management.md`

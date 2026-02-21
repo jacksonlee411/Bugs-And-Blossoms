@@ -58,7 +58,7 @@
   - 版本基线：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
   - 路由契约：`docs/dev-plans/017-routing-strategy.md`
   - CI 门禁：`docs/dev-plans/012-ci-quality-gates.md`
-  - UI 壳（MUI-only）：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+  - UI 壳（MUI-only）：`DEV-PLAN-103（MUI-only 前端收敛）`
   - UI 壳（历史记录）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
   - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
   - RLS：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
@@ -220,7 +220,7 @@ job(required_check):
 3. [ ] PR-2：对齐 `docs/dev-plans/012-ci-quality-gates.md`（CI required checks 骨架；job 名称冻结；job 不跳过）。
 4. [ ] PR-3：对齐 `docs/dev-plans/017-routing-strategy.md`（allowlist SSOT + 最小 routing gates + 本地入口）。
 5. [ ] PR-4：对齐 `docs/dev-plans/015-ddd-layering-framework.md`/`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`（`modules/*` 骨架 + 依赖门禁配置）。
-6. [ ] PR-5：对齐 `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`/`docs/dev-plans/020-i18n-en-zh-only.md`（MUI 壳 + i18n + 占位页；为 P0 的 `orgunit` 预留入口）。
+6. [ ] PR-5：对齐 `DEV-PLAN-103（MUI-only 前端收敛）`/`docs/dev-plans/020-i18n-en-zh-only.md`（MUI 壳 + i18n + 占位页；为 P0 的 `orgunit` 预留入口）。
 7. [ ] PR-6：对齐 `docs/dev-plans/019-tenant-and-authn.md`（tenant 解析 + 登录最小闭环，进入壳即可）。
 8. [ ] PR-7：对齐 `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`/`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（`iam` Atlas+Goose 闭环 + RLS fail-closed 最小测试）。
 9. [ ] PR-8：对齐 `docs/dev-plans/025-sqlc-guidelines.md`/`docs/dev-plans/022-authz-casbin-toolchain.md`（sqlc 与 Authz 工具链收口；可与 P0 并行，但必须在首批 schema/策略合入前完成）。
@@ -267,7 +267,7 @@ job(required_check):
 ## 12. 未决问题（需要在 PR-0 明确）
 
 1. [X] ADR-010-01：dev-plan SSOT 放置策略选 A（同仓）—— 已批准。
-2. [X] 仓库形态：mono-repo + `apps/web`（对齐 `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`）—— 已批准。
+2. [X] 仓库形态：mono-repo + `apps/web`（对齐 `DEV-PLAN-103（MUI-only 前端收敛）`）—— 已批准。
 3. [X] P0 第一条业务垂直切片：`orgunit` —— 已批准。
 4. [X] implementation repo 命名/权限/分支保护：`jacksonlee411/Bugs-And-Blossoms`（public），`main` 禁止直推/禁止 force-push/必须 PR，并冻结 required checks：`Code Quality & Formatting` / `Unit & Integration Tests` / `Routing Gates` / `E2E Tests`。
 
@@ -279,7 +279,7 @@ job(required_check):
 - `docs/dev-plans/015-ddd-layering-framework.md`
 - `docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - `docs/dev-plans/017-routing-strategy.md`
-- `docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- `DEV-PLAN-103（MUI-only 前端收敛）`
 - `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - `docs/dev-plans/019-tenant-and-authn.md`
 - `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
