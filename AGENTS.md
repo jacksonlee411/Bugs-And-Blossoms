@@ -174,6 +174,7 @@ modules/{module}/
 - DEV-PLAN-070 执行日志：`docs/dev-records/dev-plan-070-execution-log.md`
 - DEV-PLAN-071：SetID Scope Package 订阅蓝图：`docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
 - DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化：`docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- DEV-PLAN-071B：字段配置/字典配置与 SetID 边界实施方案：`docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
 - DEV-PLAN-072：全仓 ID/Code 命名与对外标识收敛：`docs/dev-plans/072-repo-wide-id-code-naming-convergence.md`
 - DEV-PLAN-073：OrgUnit CRUD 实现清单（页面与 API）：`docs/dev-plans/073-orgunit-crud-implementation-status.md`
 - DEV-PLAN-073A：组织架构树运行态问题记录（Shoelace 资源加载失败）：`docs/dev-plans/073a-orgunit-tree-runtime-issue.md`
