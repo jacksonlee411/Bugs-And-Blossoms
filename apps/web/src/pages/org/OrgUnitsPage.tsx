@@ -881,6 +881,7 @@ export function OrgUnitsPage() {
   })
 
   const createCapability = createCapabilitiesQuery.data
+  const createTreeNotInitialized = createCapability?.tree_initialized === false
   const createAllowedFieldSet = useMemo(() => new Set(createCapability?.allowed_fields ?? []), [createCapability?.allowed_fields])
   const createDenyReasons = useMemo(() => createCapability?.deny_reasons ?? [], [createCapability?.deny_reasons])
   const createExtFields = useMemo(
@@ -981,6 +982,24 @@ export function OrgUnitsPage() {
     }
     return errors
   }, [createForm.extDisplayValues, createOpen, createPlainFieldDefinitions, isCreateFieldEditable])
+
+  useEffect(() => {
+    if (!createOpen || !createTreeNotInitialized) {
+      return
+    }
+    setCreateForm((previous) => {
+      const nextParentOrgCode = previous.parentOrgCode.trim().length > 0 ? '' : previous.parentOrgCode
+      const nextIsBusinessUnit = true
+      if (nextParentOrgCode === previous.parentOrgCode && nextIsBusinessUnit === previous.isBusinessUnit) {
+        return previous
+      }
+      return {
+        ...previous,
+        parentOrgCode: nextParentOrgCode,
+        isBusinessUnit: nextIsBusinessUnit
+      }
+    })
+  }, [createOpen, createTreeNotInitialized])
   const hasCreatePlainExtErrors = useMemo(
     () => Object.keys(createPlainExtErrors).length > 0,
     [createPlainExtErrors]
@@ -1458,9 +1477,11 @@ export function OrgUnitsPage() {
               value={createForm.name}
             />
             <TextField
-              disabled={!isCreateFieldEditable('parent_org_code')}
+              disabled={!isCreateFieldEditable('parent_org_code') || createTreeNotInitialized}
               helperText={
-                !isCreateFieldEditable('parent_org_code') && createCapabilityOrgCodeReady
+                createTreeNotInitialized
+                  ? t('org_tree_bootstrap_parent_locked')
+                  : !isCreateFieldEditable('parent_org_code') && createCapabilityOrgCodeReady
                   ? t('org_append_field_not_allowed_helper')
                   : undefined
               }
@@ -1511,7 +1532,7 @@ export function OrgUnitsPage() {
               control={
                 <Switch
                   checked={createForm.isBusinessUnit}
-                  disabled={!isCreateFieldEditable('is_business_unit')}
+                  disabled={!isCreateFieldEditable('is_business_unit') || createTreeNotInitialized}
                   onChange={(event) => setCreateForm((previous) => ({ ...previous, isBusinessUnit: event.target.checked }))}
                 />
               }
@@ -1695,6 +1716,9 @@ export function OrgUnitsPage() {
               <Alert severity='error'>
                 {t('org_append_capabilities_load_failed')}：{getErrorMessage(createCapabilitiesQuery.error)}
               </Alert>
+            ) : null}
+            {createCapabilityOrgCodeReady && createCapability && createTreeNotInitialized ? (
+              <Alert severity='info'>{t('org_tree_bootstrap_required_hint')}</Alert>
             ) : null}
             {createCapabilityOrgCodeReady && createCapability && !createCapability.enabled && createDenyReasons.length > 0 ? (
               <Alert severity='warning'>

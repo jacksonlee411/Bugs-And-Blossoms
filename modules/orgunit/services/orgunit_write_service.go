@@ -1682,9 +1682,6 @@ func parseNextOrgCodeRule(expr string) (*orgUnitAutoCodeSpec, error) {
 		return nil, errors.New(errDefaultRuleEvalFailed)
 	}
 	prefix := strings.TrimSpace(matches[1])
-	if prefix == "" {
-		return nil, errors.New(errDefaultRuleEvalFailed)
-	}
 	width, err := strconv.Atoi(strings.TrimSpace(matches[2]))
 	if err != nil || width <= 0 || width > 12 {
 		return nil, errors.New(errDefaultRuleEvalFailed)

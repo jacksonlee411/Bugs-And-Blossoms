@@ -16,6 +16,7 @@ import (
 
 type orgUnitWriteCapabilitiesAPIResponse struct {
 	Intent           string            `json:"intent"`
+	TreeInitialized  bool              `json:"tree_initialized"`
 	Enabled          bool              `json:"enabled"`
 	DenyReasons      []string          `json:"deny_reasons"`
 	AllowedFields    []string          `json:"allowed_fields"`
@@ -184,6 +185,7 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 
 	resp := orgUnitWriteCapabilitiesAPIResponse{
 		Intent:           intent,
+		TreeInitialized:  treeInitialized,
 		Enabled:          decision.Enabled,
 		DenyReasons:      decision.DenyReasons,
 		AllowedFields:    decision.AllowedFields,

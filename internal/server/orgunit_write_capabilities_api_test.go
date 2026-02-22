@@ -156,6 +156,9 @@ func TestHandleOrgUnitWriteCapabilitiesAPI_SuccessEnvelope(t *testing.T) {
 	if resp["intent"] != "create_org" {
 		t.Fatalf("intent=%v", resp["intent"])
 	}
+	if resp["tree_initialized"] != true {
+		t.Fatalf("tree_initialized=%v", resp["tree_initialized"])
+	}
 	if resp["enabled"] != true {
 		t.Fatalf("enabled=%v", resp["enabled"])
 	}

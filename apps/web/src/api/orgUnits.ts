@@ -262,6 +262,7 @@ export async function writeOrgUnit(request: OrgUnitWriteAPIRequest): Promise<Org
 
 export interface OrgUnitWriteCapabilitiesResponse {
   intent: OrgUnitWriteIntent
+  tree_initialized: boolean
   enabled: boolean
   deny_reasons: string[]
   allowed_fields: string[]
