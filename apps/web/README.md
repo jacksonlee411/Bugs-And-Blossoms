@@ -69,3 +69,9 @@ VITE_TENANT_ID=demo-tenant
 VITE_PERMISSIONS=*
 VITE_NAV_DEBUG=false
 ```
+
+## 权限键映射补充（070B1）
+
+- 字典页面访问：`dict.admin`（对应后端 `iam.dicts/admin`）。
+- 字典发布（预检/执行）：`dict.release.admin`（对应后端 `iam.dict_release/admin`）。
+- `/dicts` 路由继续用 `dict.admin` 控制页面可见性；页面内“预检发布/执行发布”按钮再做 `dict.release.admin` 细粒度控制。

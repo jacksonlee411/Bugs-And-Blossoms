@@ -75,3 +75,54 @@
   - 回填脚本：`scripts/db/dict-baseline-release.sh`
   - 对账脚本：`scripts/db/dict-baseline-reconcile.sh`
 - 生产窗口执行项（停写 -> 最终增量发布 -> 开写）保留为运维变更动作，不在开发仓库内直接执行。
+
+## 2026-02-22：PR-070B1 / DEV-PLAN-070B-T（UI 发布闭环 + 测试收敛）
+
+### 已完成
+
+- 文档收敛：
+  - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`：发布幂等命名统一为 `request_id`。
+  - `docs/dev-plans/070b-t-dict-tenant-release-test-plan.md`：`STD-001` 测试口径统一为“不得新增/外泄 `request_code`”。
+- 070B1 UI 闭环实现：
+  - `/dicts` 页面新增“字典基线发布”操作区（预检 -> 冲突/就绪 -> 发布 -> 结果）。
+  - 发布状态机（`idle/previewing/conflict/ready/releasing/success/fail`）与参数校验落地。
+  - 发布权限细粒度收敛：页面访问继续使用 `dict.admin`，发布动作使用 `dict.release.admin`。
+  - 关键文件：
+    - `apps/web/src/pages/dicts/DictConfigsPage.tsx`
+    - `apps/web/src/pages/dicts/dictReleaseFlow.ts`
+    - `apps/web/src/api/dicts.ts`
+    - `apps/web/src/i18n/messages.ts`
+    - `apps/web/README.md`
+- 测试补齐：
+  - 前端 API/状态机单测：
+    - `apps/web/src/api/dicts.test.ts`
+    - `apps/web/src/pages/dicts/dictReleaseFlow.test.ts`
+  - E2E 专项：`e2e/tests/tp070b-dict-release-ui.spec.js`（覆盖 UI 完整链路 + 无发布权限 403）。
+
+### 门禁与命令结果（2026-02-22）
+
+- `pnpm --dir apps/web lint && pnpm --dir apps/web typecheck && pnpm --dir apps/web test`：通过。
+- `make generate && make css`：通过（产物已同步到 `internal/server/assets/web/`）。
+- `make e2e`：通过（8/8，含 `tp070b-dict-release-ui.spec.js`）。
+- `make check doc`：通过。
+- `make preflight`：通过（含 `no-legacy/request-code/as-of-explicit/dict-tenant-only/go-version/doc/go test/routing/e2e`）。
+
+### 关键通过项（输入 / 期望 / 实际 / 证据）
+
+- 输入：`/dicts` 页面填写 `source_tenant_id/as_of/release_id/request_id`，先执行 preview。  
+  期望：冲突为 0 时进入可发布态。  
+  实际：进入 `ready` 态并显示“预检通过，可执行发布”。  
+  证据：`e2e/tests/tp070b-dict-release-ui.spec.js`。
+- 输入：点击“执行发布”。  
+  期望：返回发布结果并展示 `release_id/request_id/status/计数/started_at/finished_at`。  
+  实际：发布成功结果区完整展示并支持复制 ID。  
+  证据：`apps/web/src/pages/dicts/DictConfigsPage.tsx` + `e2e/tests/tp070b-dict-release-ui.spec.js`。
+- 输入：`tenant-viewer` 调用 preview/release API。  
+  期望：后端 403 fail-closed。  
+  实际：preview 与 release 均返回 403。  
+  证据：`e2e/tests/tp070b-dict-release-ui.spec.js`。
+
+### 缺陷分类与处置
+
+- 阻塞缺陷：无。
+- 分类汇总：`BUG=0`、`CONTRACT_DRIFT=0`、`CONTRACT_MISSING=0`、`ENV_DRIFT=0`。

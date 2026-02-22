@@ -15,7 +15,7 @@
 - 009M5 PR-0（#58）：冻结 `sid` 合同（§4.3/§4.5）与 Kratos 测试/拓扑口径（§9）。
 - 009M5 PR-1（#60）：新增 `iam.principals`/`iam.sessions` 数据模型与迁移闭环（token 存 `sha256(sid)`；`sessions` 不启用 RLS）。
 - 009M5 PR-2（#61）：tenant app `sid` 会话与中间件收口（以 DB session 为唯一登录态；跨租户绑定断言 fail-closed；移除占位 `session=ok`）。
-- 009M5 PR-3（#62）：tenant app `/login` 真实接入 Kratos（login flow + whoami）；E2E/CI 引入 `kratosstub` 保证可复现。
+- 009M5 PR-3（#62）：tenant app 登录链路接入 Kratos（login flow + whoami）；E2E/CI 引入 `kratosstub` 保证可复现（现行入口见 §6.1：`GET /app/login` + `POST /iam/api/sessions`）。
 - PR（#69）：对齐本文状态与实现引用（文档收敛，非代码变更）。
 
 ## 1. 现仓库实现总结（作为输入，不做兼容包袱）
@@ -27,8 +27,8 @@
 
 ### 1.2 认证与会话（AuthN + Session）
 - **现状**：应用侧会话 cookie 为 `sid`，并以 `iam.sessions` 为唯一会话事实源（DB 存 `sha256(sid)`，不存明文）。
-- **中间件链路**：`Host → tenant` → `sid` cookie → 查 session → 断言 tenant 一致 → 加载 principal → 注入运行态上下文；无效/过期/串租户统一清 cookie 并跳转 `/login`（fail-closed）。
-- **已评审演进方向**：采用 **ORY Kratos** 作为 Headless Identity，应用保留 `/login` UI；主链路选择 “Kratos 认人 → 本地 session（`sid`）桥接”（见本文 §4.2/§6.1）。
+- **中间件链路**：`Host → tenant` → `sid` cookie → 查 session → 断言 tenant 一致 → 加载 principal → 注入运行态上下文；无效/过期/串租户统一清 cookie 并跳转 `/app/login`（fail-closed）。
+- **已评审演进方向**：采用 **ORY Kratos** 作为 Headless Identity，应用保留 MUI 登录页（`/app/login`）；主链路选择 “Kratos 认人 → 本地 session（`sid`）桥接”（见本文 §4.2/§6.1）。
 
 ### 1.3 数据隔离（RLS）
 - **现状接口**：事务内设置 `app.current_tenant`（`SELECT set_config('app.current_tenant', $1, true)`），由 RLS policy 读取，实现 fail-closed（RLS 推进口径见 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`；DB smoke 见 `cmd/dbtool`）。
@@ -59,7 +59,7 @@
   - 选择：解析只读 `tenant_domains`（hostname 全局唯一），`tenants.primary_domain` 仅作展示/缓存字段。
   - 理由：避免未来“从 primary_domain 切到 domains”的迁移与回滚复杂度；并明确多域名场景的权威来源。
 - **决策 3：登录必须先确定 tenant（fail-closed）**
-  - 选择：`/login` 入口也必须先解析 tenant，否则 404；禁止跨租户 email 查询/兜底。
+  - 选择：`/app/login`（UI）与 `POST /iam/api/sessions`（登录 API）都必须先解析 tenant，否则 404；禁止跨租户 email 查询/兜底。
   - 理由：消灭“同一邮箱多租户”歧义，避免串租户与安全事故。
 - **决策 4：控制面与数据面隔离**
   - 选择：Tenant Console 在 superadmin server，数据面业务 server 永远不提供跨租户控制入口。
@@ -82,7 +82,7 @@
   - `TenantService`：创建租户、绑定/切换主域、启停租户。
   - `AuthService`：登录/登出（使用 `IdentityProvider`），创建/销毁本地 session。
 - `modules/iam/presentation/`：
-  - Tenant App：`/login`、`/logout`、（可选）`/settings/account`。
+  - Tenant App：`/app/login`、`/logout`、（可选）`/settings/account`。
   - SuperAdmin：`/superadmin/tenants/**`（Tenant Console MVP）。
 
 ### 3.2 `pkg/**` 下沉（跨模块共享）
@@ -123,9 +123,9 @@
   - logout = 失效化 session（删除行或标记 revoke）；`principal=disabled` / 重置凭据时必须回收该 principal 的全部 session。
 - **跨租户绑定（冻结，必须 fail-closed）**：
   - 请求链路必须先 `Host → tenant_id`（见 §4.1），再查 session（`sessions` 不启用 RLS）。
-  - 必须断言：`session.tenant_id == tenant_id`；不一致视为无效 session：清 cookie 并返回 `401`（或 302 到 `/login`）；不得“自动切租户/默认租户”。
+  - 必须断言：`session.tenant_id == tenant_id`；不一致视为无效 session：清 cookie 并返回 `401`（或 302 到 `/app/login`）；不得“自动切租户/默认租户”。
 - **失败口径（冻结）**：
-  - token 缺失/无效/过期 ⇒ 视为未登录；HTML：302 到 `/login`；API：401。
+  - token 缺失/无效/过期 ⇒ 视为未登录；UI：302 到 `/app/login`；API：401。
   - 禁止把密码、token、cookie、Kratos 凭据写入日志/审计（只记录 `principal_id/tenant_id/request_id` 等非敏感定位信息）。
 
 ### 4.4 授权（Casbin）与主体表达
@@ -195,8 +195,8 @@
 ## 6. 路由与 UI（最小集）
 
 ### 6.1 Tenant App
-- `GET /login`：渲染登录页（Host 解析 tenant；未解析返回 404）
-- `POST /login`：Kratos login flow（server-side）→ whoami → upsert principal → create session → set tenant session cookie（术语：`sid`）（错误返回 422 并渲染表单错误）
+- `GET /app/login`：渲染登录页（Host 解析 tenant；未解析返回 404）
+- `POST /iam/api/sessions`：Kratos login flow（server-side）→ whoami → upsert principal → create session → set tenant session cookie（术语：`sid`）（成功返回 204；失败返回 JSON 4xx/5xx）
 - `POST /logout`：删除 session（可选调用 Kratos logout；无论是否存在 session 都应幂等成功）
 
 ### 6.2 SuperAdmin（Tenant Console MVP）
@@ -213,7 +213,7 @@ SuperAdmin 认证（MVP 选定，见 `DEV-PLAN-009M4`）：
 - 最小要求：在没有任何 tenant/domain/principal 的情况下，能完成以下闭环：
   1) 创建第一个租户 + 主域名
   2) 创建/绑定第一个租户管理员（principal）
-  3) 使用该租户管理员通过 `/login` 登录成功
+  3) 使用该租户管理员通过 `/app/login` 登录成功
 - 建议方案（Greenfield）：提供一次性/幂等 CLI/脚本入口（例如扩展 `cmd/dbtool` 的 `tenancy-bootstrap` 子命令），用于生成初始租户与域名（以及后续的管理员/principal），并记录为可审计的“执行痕迹”（但不得输出明文密码/secret）。
 - CI/E2E 凭据注入（冻结）：凭据只允许通过环境变量/本机 `.env.local` 注入；不得把明文密码/token 写入迁移、seed 文件或仓库；任何“输出一次性凭据”必须显式 opt-in 且默认关闭，避免出现在 CI 日志中。
 

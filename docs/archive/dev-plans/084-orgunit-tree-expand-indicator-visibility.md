@@ -112,4 +112,4 @@
 ## 关联文档
 - `docs/dev-plans/017-routing-strategy.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
-- `docs/dev-plans/096-org-module-full-migration-and-ux-convergence-plan.md`
+- `docs/archive/dev-plans/096-org-module-full-migration-and-ux-convergence-plan.md`

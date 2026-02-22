@@ -1,9 +1,9 @@
 # DEV-PLAN-103 执行日志
 
-**状态**: 实施中（2026-02-14）
+**状态**: 已完成（2026-02-15 20:52 UTC）
 
 **关联文档**:
-- `docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
+- `docs/archive/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 
 ## 路由盘点（旧 UI → MUI / API）
 
@@ -27,6 +27,5 @@
 ## 已完成事项
 - 2026-02-14：建立执行日志；落地 UI build 门禁收敛（`make css` → `scripts/ui/build-web.sh`，Vite `base=/assets/web/`，服务端 `webMUIIndexPath=assets/web/index.html`）。
 
-## 进行中事项
-- 2026-02-14：迁移 E2E 与后端路由/allowlist/authz，移除 Astro/旧局部渲染链路运行路径并用 MUI 页面替代旧 HTML 页面。
-
+## 收尾记录
+- 2026-02-15：迁移 E2E 与后端路由/allowlist/authz 完成；Astro/旧局部渲染链路运行路径已移除并由 MUI 页面替代；收口证据见 `docs/dev-records/dev-plan-103a-execution-log.md`。

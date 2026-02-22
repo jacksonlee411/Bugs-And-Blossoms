@@ -43,8 +43,8 @@
 
 - Tenant App（业务端服务地址）：`http://localhost:8080`
   - 注意：tenant 解析依赖 **Host**（或 `X-Forwarded-Host`），因此手工浏览器测试建议直接使用 tenant hostname 访问：
-    - T060：`http://t-060.localhost:8080/login`
-    - T060B：`http://t-060b.localhost:8080/login`
+    - T060：`http://t-060.localhost:8080/app/login`
+    - T060B：`http://t-060b.localhost:8080/app/login`
   - Home：`http://<tenant-host>:8080/app?as_of=YYYY-MM-DD`
 - SuperAdmin（控制面）：`http://localhost:8081`
   - 登录：`http://localhost:8081/superadmin/login`
@@ -87,7 +87,7 @@
      - tenant app：`{ tenant_id, email }`
 
 3) **首次登录以生成/更新 principals**
-   - 使用 tenant hostname 访问 `/login`，用第 4.2 的账号登录至少一次，以确保系统侧已创建/更新 `iam.principals` 并建立 session。
+   - 使用 tenant hostname 访问 `/app/login`，并通过 `POST /iam/api/sessions` 完成一次登录，以确保系统侧已创建/更新 `iam.principals` 并建立 session。
 
 4) **角色准备（用于 403 验证）**
    - 若环境支持 tenant 角色区分：为 “Tenant Viewer” 账号分配 `role_slug=tenant-viewer`（对齐 `docs/dev-plans/022-authz-casbin-toolchain.md`）。

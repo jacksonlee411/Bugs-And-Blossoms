@@ -68,7 +68,7 @@
 ### 4.2 发布机制（新增能力）
 - 平台维护“标准字典基线（release）”，以发布任务向目标租户写入 dict/dict values。
 - 发布写入必须：
-  - 使用独立 `request_code` 幂等；
+  - 使用独立 `request_id` 幂等；
   - 按 `enabled_on/disabled_on` 保留 Valid Time 语义；
   - 记录发布来源（release_id / operator / tx_time）。
 - 新租户开通前置：必须完成字典基线导入，未导入则相关写请求 fail-closed。
@@ -101,7 +101,7 @@
 ### 5.2 一致性校验（最小集合）
 - [ ] 租户维度 `dict_code` 数量与基线预期一致。
 - [ ] 关键 dict_code（首批 `org_type`）按 `as_of` 抽样比对一致。
-- [ ] 发布日志可追溯到 request_code / release_id / operator。
+- [ ] 发布日志可追溯到 request_id / release_id / operator。
 - [ ] 切流后任何 API 不再访问 global 字典路径。
 
 ## 6. API/错误码/权限调整点
@@ -127,7 +127,7 @@
 - 覆盖率口径与阈值遵循仓库 SSOT（`Makefile` + CI workflow）；本计划不引入豁免。
 - 必须新增/更新测试：
   - [ ] tenant-only 读取测试（不存在 global fallback）。
-  - [ ] 发布幂等测试（同 request_code 同 payload 幂等、不同 payload 冲突）。
+  - [ ] 发布幂等测试（同 request_id 同 payload 幂等、不同 payload 冲突）。
   - [ ] 新租户未导入基线时 fail-closed 测试。
   - [ ] 历史回放测试（`as_of` 结果与发布后租户本地数据一致）。
 
@@ -164,7 +164,7 @@
 #### PR-070B-2：发布基座数据模型与 Kernel 写入口（DB + One Door）
 - [x] 设计并落地“发布元数据 + 发布任务状态”最小模型（采用“事件 payload + 任务响应模型”，未新增表）。
 - [x] 发布写入全部走 iam kernel 事件入口，禁止控制器直写字典表。
-- [x] 增加幂等/冲突约束：同 `(tenant, request_code)` 幂等，不同 payload 冲突拒绝。
+- [x] 增加幂等/冲突约束：同 `(tenant, request_id)` 幂等，不同 payload 冲突拒绝。
 - [x] 增加审计字段：`release_id`、`operator`、`tx_time`、`initiator`。
 - [x] 产出：Schema/迁移/函数变更与测试证据。
 
@@ -215,7 +215,7 @@
 ### 9.4 验证与证据模板（执行期必填）
 - [x] 命中触发器与门禁结果（按 `AGENTS.md` 触发器矩阵记录）。
 - [x] 关键 SQL/API 验证输出（tenant-only 命中、无 global fallback）。
-- [x] 发布任务审计证据（release_id/request_code/operator/tx_time）。
+- [x] 发布任务审计证据（release_id/request_id/operator/tx_time）。
 - [x] 异常与修复记录（失败原因、重试次数、最终结果）。
 - [x] 102B 对齐证据（`invalid_as_of` / `invalid_effective_date`、`as_of/effective_date` 显式必填、跨天回放一致）。
 

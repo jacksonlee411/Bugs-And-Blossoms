@@ -18,12 +18,12 @@
 
 - [X] 可通过 SuperAdmin 创建 2 个租户（T060/T060B）并记录 tenant_id。
 - [X] 固定测试日期（Valid Time）：`AS_OF_BASE=2026-01-01`（后续步骤统一使用该值，避免执行期漂移）。
-- [X] Tenant App 在**正确 tenant host**下可登录（`GET /login`=200，`POST /login`=302），并可访问 `GET /app?as_of=2026-01-01`。
+- [X] Tenant App 在**正确 tenant host**下可登录（`GET /app/login`=200，`POST /iam/api/sessions`=204），并可访问 `GET /app?as_of=2026-01-01`。
 - [X] Tenancy 必须 fail-closed：
-  - [X] 错误 Host（不存在的 tenant domain）访问 `GET /login` 必须 `404`（必要时用 `Accept: application/json` 获取稳定错误码 `tenant_not_found`）。
-  - [X] 未登录访问 `GET /app?as_of=...` 必须 `302 Location=/login`。
+  - [X] 错误 Host（不存在的 tenant domain）访问 `GET /app/login` 必须 `404`（必要时用 `Accept: application/json` 获取稳定错误码 `tenant_not_found`）。
+  - [X] 未登录访问 `GET /app?as_of=...` 必须 `302 Location=/app/login`。
 - [X] 跨租户隔离成立：
-  - [X] session 不可“带着 cookie 切租户”：携带 `T060` 的 `sid` 访问 `T060B` 必须清 cookie 并 `302 Location=/login`。
+  - [X] session 不可“带着 cookie 切租户”：携带 `T060` 的 `sid` 访问 `T060B` 必须清 cookie 并 `302 Location=/app/login`。
   - [X] 数据不可跨租户读取：在 `T060` 调用 `GET /person/api/persons:by-pernr?pernr=201` 必须 `404`（JSON 错误码 `PERSON_NOT_FOUND`）。
 - [X] Authz 可拒绝（对齐 `DEV-PLAN-022` 的“只读角色”契约）：只读角色对任一 POST/ADMIN 动作必须 403。
 - [X] UI Shell 最小可发现：导航入口可见，en/zh 切换可用（抽样 2 页）。
@@ -65,11 +65,11 @@
 
 | 场景 | Host | Method | Path | 期望（最小） | 证据口径 |
 | --- | --- | --- | --- | --- | --- |
-| tenant 正常解析 + 登录页可达 | `t-060.localhost:8080` | GET | `/login` | 200 | 浏览器 Network 状态码或 `curl -i` |
-| tenant 不存在必须 fail-closed | `t-060-nope.localhost:8080` | GET | `/login` | 404（可选：JSON `code=tenant_not_found`） | `curl -i -H 'Accept: application/json' ...` |
-| 未登录访问受保护页 | `t-060.localhost:8080` | GET | `/app?as_of=2026-01-01` | 302 `Location=/login` | Network/`curl -i` 记录 `Location` |
-| 登录成功建立 session | `t-060.localhost:8080` | POST | `/login` | 302 `Location=/app?as_of=...` + `Set-Cookie: sid=...` | Network/`curl -i` 记录 `Set-Cookie` |
-| 跨租户 Host/Session 隔离 | `t-060b.localhost:8080` | GET | `/app?as_of=2026-01-01` | 302 `Location=/login` + 清 `sid` cookie | 记录 `Location` + `Set-Cookie`（MaxAge<0） |
+| tenant 正常解析 + 登录页可达 | `t-060.localhost:8080` | GET | `/app/login` | 200 | 浏览器 Network 状态码或 `curl -i` |
+| tenant 不存在必须 fail-closed | `t-060-nope.localhost:8080` | GET | `/app/login` | 404（可选：JSON `code=tenant_not_found`） | `curl -i -H 'Accept: application/json' ...` |
+| 未登录访问受保护页 | `t-060.localhost:8080` | GET | `/app?as_of=2026-01-01` | 302 `Location=/app/login` | Network/`curl -i` 记录 `Location` |
+| 登录成功建立 session | `t-060.localhost:8080` | POST | `/iam/api/sessions` | 204 + `Set-Cookie: sid=...` | Network/`curl -i` 记录 `Set-Cookie` |
+| 跨租户 Host/Session 隔离 | `t-060b.localhost:8080` | GET | `/app?as_of=2026-01-01` | 302 `Location=/app/login` + 清 `sid` cookie | 记录 `Location` + `Set-Cookie`（MaxAge<0） |
 | 跨租户数据隔离（确定性断言） | `t-060.localhost:8080` | GET | `/person/api/persons:by-pernr?pernr=201` | 404 JSON `code=PERSON_NOT_FOUND` | 记录响应 JSON |
 | Authz 可拒绝（只读 403） | `t-060.localhost:8080` | POST | `/org/nodes?tree_as_of=2026-01-01` | 403（可选：JSON `code=forbidden`） | 浏览器提示/或 `Accept: application/json` |
 
@@ -123,14 +123,14 @@
      - superadmin：`identifier=sa:<email>`
      - tenant app：`identifier=<tenant_id>:<email>` 且 traits 含 `tenant_id`（只读账号额外要求：`role_slug=tenant-viewer`）
 4. [X] **Tenant App：登录与导航可发现**
-   - 访问 `http://t-060.localhost:8080/login` 登录成功（302）并记录 `Set-Cookie: sid=...`。
+   - 访问 `http://t-060.localhost:8080/app/login`，通过页面调用 `POST /iam/api/sessions` 登录成功（204）并记录 `Set-Cookie: sid=...`。
    - 访问 `http://t-060.localhost:8080/app?as_of=2026-01-01`，确保 UI 壳可见。
    - 抽样 2 页验证中英文切换与导航入口可见（建议：`/org/nodes?tree_as_of=2026-01-01` 与 `/person/persons?as_of=2026-01-01`）。
 5. [X] **Tenancy fail-closed（错误 Host）**
-   - 访问 `http://t-060-nope.localhost:8080/login` 必须 404（可选：用 `Accept: application/json` 断言 `code=tenant_not_found`）。
+   - 访问 `http://t-060-nope.localhost:8080/app/login` 必须 404（可选：用 `Accept: application/json` 断言 `code=tenant_not_found`）。
 6. [X] **跨租户隔离（Host/Session）**
    - 在同一浏览器会话内，从 `t-060.localhost` 切换到 `t-060b.localhost` 访问 `/app?as_of=2026-01-01`：
-     - 期望：302 `Location=/login`，并清 `sid` cookie（MaxAge<0）。
+     - 期望：302 `Location=/app/login`，并清 `sid` cookie（MaxAge<0）。
 7. [X] **跨租户隔离（数据）**
    - 在 `T060` 下调用：`GET /person/api/persons:by-pernr?pernr=201`
      - 期望：404 JSON `code=PERSON_NOT_FOUND`（确定性断言）。
@@ -148,7 +148,7 @@
 - SuperAdmin tenants 列表：两条租户的 `tenant_id/hostname` 截图或文本记录。
 - Tenant App 登录成功：`Set-Cookie: sid=...` + `GET /app?as_of=2026-01-01` 页面截图（或等效证据）。
 - Tenancy fail-closed：错误 Host 的 404 证据（可选：JSON `code=tenant_not_found`）。
-- 跨租户隔离（Host/Session）：`t-060b` 下的 302 `Location=/login` + 清 cookie（`Set-Cookie` MaxAge<0）证据。
+- 跨租户隔离（Host/Session）：`t-060b` 下的 302 `Location=/app/login` + 清 cookie（`Set-Cookie` MaxAge<0）证据。
 - 跨租户隔离（数据）：`GET /person/api/persons:by-pernr?pernr=201` 的 404 JSON `code=PERSON_NOT_FOUND` 证据。
 - Authz 403：只读角色一次 POST 被拒绝的证据（HTTP 403；可选：JSON `code=forbidden`）。
 

@@ -1,6 +1,6 @@
-# DEV-PLAN-096：Org 模块全量迁移至 MUI X 与统一体验收口方案
+# [Archived] DEV-PLAN-096：Org 模块全量迁移至 MUI X 与统一体验收口方案
 
-**状态**: 实施中（2026-02-12 20:35 UTC）
+**状态**: 已归档（2026-02-22，阶段收口完成且无进一步待实施事项）
 
 ## 0.1 与 DEV-PLAN-108 的关系（2026-02-18 补充）
 
@@ -13,6 +13,15 @@
 - 后端统一写入口 `POST /org/api/org-units/write`（intent 自动判定），append 多字段以 `UPDATE` 单事件承载。
 
 因此，本计划中“动作型 Dialog/endpoint 作为长期目标”的内容在 108 后转为历史形态或兼容层参考；后续 UX/契约验收应以 108 为准。
+
+## 0.2 与 DEV-PLAN-099 的关系（2026-02-22 收敛）
+
+`DEV-PLAN-099` 已完成并给出 OrgUnit 详情页的双栏形态（左版本/事件，右详情）与 URL 复现口径。  
+为避免并行 SSOT，本计划冻结以下“现行详情 IA/URL”：
+
+- 详情承载形态：独立页面 `org/units/:orgCode`（不回退抽屉并行形态）。
+- 详情页 Tab：`profile` / `audit`（不再使用 `records` 独立 Tab）。
+- URL 复现键：`effective_date`（版本定位）+ `audit_event_uuid`（审计事件定位）+ `tab`（详情区）。
 
 > 本计划承接 `DEV-PLAN-090/093/094/095`，面向 org 模块完成“读 + 写 + 版本 + 审计 + 体验”全链路迁移。当前已完成左侧组织树与右侧列表改造，本计划补齐剩余能力并做统一风格收口。
 
@@ -60,7 +69,7 @@
 | 树浏览 | 懒加载、选中/展开态保持、URL 可复现 | `TreePanel` + URL | `GET /org/api/org-units`（roots/children） | 刷新/回退不丢选中；大树不全量渲染 |
 | 树搜索定位 | 按编码/名称检索，多匹配可选，自动展开路径并聚焦 | Tree 搜索框 + 结果列表 | `GET /org/nodes/search` 或新增 `GET /org/api/org-units/search` | 可复现定位到目标节点，错误态明确 |
 | 列表（真 server-mode） | 服务端分页/排序/筛选；列配置持久化 | `DataGridPremium`（或基线 `DataGridPage`） | 需要支持分页/排序/筛选参数（必要时扩展 API） | 10k+ 数据仍流畅；URL 复制可重放 |
-| 详情读取 | 真实字段（含负责人/上级/BU/状态/审计摘要），错误码可理解 | `DetailPanel` | 建议新增 `GET /org/api/org-units/details` | 404/409/422 回显一致；加载/空态统一 |
+| 详情读取 | 真实字段（含负责人/上级/BU/状态/审计摘要），错误码可理解 | `OrgUnitDetailsPage`（双栏详情） | 建议新增 `GET /org/api/org-units/details` | 404/409/422 回显一致；加载/空态统一 |
 | 记录版本 | 按 `effective_date` 切换历史/未来记录；不丢上下文 | `DetailPanel` 的 Records 区 | 建议新增 `GET /org/api/org-units/versions` | 版本切换可复现；dirty 状态有保护 |
 | 创建 | 新建组织可发现、可操作、可回显 | Create Dialog/Drawer | `POST /org/api/org-units` | 成功后树/表/详情一致刷新 |
 | 重命名 | 可指定生效日；冲突/范围错误可解释 | Rename Dialog | `POST /org/api/org-units/rename` | 409/422 正确提示；成功后版本更新 |
@@ -119,8 +128,10 @@
   - `as_of=YYYY-MM-DD`：树/列表“查看日期”（Valid Time，日粒度）。
   - `node=<org_code>`：选中树节点（驱动列表过滤）。
   - `q/status/page/size/sort/order`：列表查询（沿用 `gridQueryState` 协议）。
-  - `detail=<org_code>&effective_date=YYYY-MM-DD`：详情打开与版本定位（可选）。
-  - `tab=profile|records|audit`：详情区 Tab（可选）。
+  - 详情页路径参数：`/app/org/units/:orgCode`（`orgCode` 为详情对象）。
+  - `effective_date=YYYY-MM-DD`：详情版本定位（可选）。
+  - `tab=profile|audit`：详情区 Tab（可选）。
+  - `audit_event_uuid=<uuid>`：审计事件定位（`tab=audit` 时用于刷新/分享复现， 可选）。
 
 ## 7. 页面与设计规范（统一风格）
 
@@ -279,9 +290,9 @@
 ## 13. 关联计划
 
 - 总方案：`docs/dev-plans/090-mui-x-frontend-upgrade-plan.md`
-- P2：`docs/dev-plans/093-mui-x-phase2-high-value-modules-plan.md`
-- P3：`docs/dev-plans/094-mui-x-phase3-long-tail-convergence-plan.md`
-- P4：`docs/dev-plans/095-mui-x-phase4-stability-performance-plan.md`
+- P2：`docs/archive/dev-plans/093-mui-x-phase2-high-value-modules-plan.md`
+- P3：`docs/archive/dev-plans/094-mui-x-phase3-long-tail-convergence-plan.md`
+- P4：`docs/archive/dev-plans/095-mui-x-phase4-stability-performance-plan.md`
 - Org CRUD：`docs/dev-plans/073-orgunit-crud-implementation-status.md`
 - Org Details：`docs/dev-plans/074-orgunit-details-update-ui-optimization.md`
 - 质量门禁：`docs/dev-plans/012-ci-quality-gates.md`
