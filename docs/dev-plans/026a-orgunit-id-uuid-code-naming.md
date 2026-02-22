@@ -1,6 +1,6 @@
 # DEV-PLAN-026A：OrgUnit 8位编号与 UUID/Code 命名规范
 
-**状态**: 已完成（2026-02-02 06:57 UTC — 对齐 026B 租户隔离 org_id 分配）
+**状态**: 已完成（2026-02-02 06:57 UTC — 对齐 026B 租户隔离 org_id 分配；2026-02-22 时间参数口径按 `STD-002`/`DEV-PLAN-102B` 勘误）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：DEV-PLAN-026（OrgUnit 事件溯源 + 同步投射）。
@@ -231,14 +231,16 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 - `request_id` 统一更名为 `request_code`；`event_uuid` 由服务端生成并作为内部幂等键保存。
 - 服务端校验：`^\d{8}$`，不合法返回 422；同日重复事件返回 409（对应唯一性约束）。
 
+> 勘误（2026-02-22）：本节后续若出现“`as_of/effective_date` 可选或缺省当日 UTC”描述，统一按 `STD-002` 修正为“显式必填 + fail-closed（`invalid_as_of` / `invalid_effective_date`）”；相关实施以 `DEV-PLAN-102B` 为准。
+
 #### 5.1.1 UI（RouteClassUI）
 **`GET /org/nodes?tree_as_of=YYYY-MM-DD`**
-- Query: `tree_as_of`（必填；缺失/非法时 302 重定向到当日 UTC 日期）。
+- Query: `tree_as_of`（必填；缺失/非法时 fail-closed）。
 - Response: HTML 页面（包含创建/操作表单与节点列表）。
 
 **`POST /org/nodes?tree_as_of=YYYY-MM-DD`**
 - Form:
-  - 通用：`action`（可选，默认 `create`），`effective_date`（可选，默认 `tree_as_of`），`tree_as_of`（隐藏字段，用于回跳上下文）。
+  - 通用：`action`（可选，默认 `create`），`effective_date`（必填），`tree_as_of`（隐藏字段，用于回跳上下文）。
   - `create`：`name`（必填），`parent_id`（可选，8 位数字），`is_business_unit`（可选，bool）。
   - `rename`：`org_id`（必填，8 位数字），`new_name`（必填）。
   - `move`：`org_id`（必填，8 位数字），`new_parent_id`（可选，8 位数字）。
@@ -247,32 +249,32 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 - Response: 303 重定向到 `/org/nodes?tree_as_of=<tree_as_of>`；校验失败返回 HTML 错误提示。
 
 **`GET /org/snapshot?as_of=YYYY-MM-DD[&created_id=...]`**
-- Query: `as_of`（必填；缺失时 302 重定向到当日 UTC 日期），`created_id`（可选）。
+- Query: `as_of`（必填；缺失/非法时 fail-closed），`created_id`（可选）。
 - Response: HTML 页面（快照表格）。
 
 **`POST /org/snapshot?as_of=YYYY-MM-DD`**
-- Form: `effective_date`（可选，默认 `as_of`），`name`（必填），`parent_id`（可选，8 位数字）。
+- Form: `effective_date`（必填），`name`（必填），`parent_id`（可选，8 位数字）。
 - Response: 303 重定向到 `/org/snapshot?as_of=<effective_date>&created_id=<org_id>`；校验失败返回 HTML 错误提示。
 
 **`GET /org/setid?as_of=YYYY-MM-DD[&setid=...]`**
-- Query: `as_of`（必填；缺失时 302 重定向到当日 UTC 日期），`setid`（可选）。
+- Query: `as_of`（必填；缺失/非法时 fail-closed），`setid`（可选）。
 - Response: HTML 页面（SetID 治理 UI）。
 
 **`POST /org/setid?as_of=YYYY-MM-DD`**
 - Form:
   - 通用：`action`（必填，`create_setid|bind_setid|create_scope_package|disable_scope_package`）。
   - `create_setid`：`setid`（必填），`name`（必填）。
-  - `bind_setid`：`org_unit_id`（必填，8 位数字），`setid`（必填），`effective_date`（可选，默认 `as_of`）。
-  - `create_scope_package`：`scope_code`（必填），`owner_setid`（必填），`name`（必填），`package_code`（可选），`effective_date`（可选，默认 `as_of`），`request_code`（隐藏字段）。
+  - `bind_setid`：`org_unit_id`（必填，8 位数字），`setid`（必填），`effective_date`（必填）。
+  - `create_scope_package`：`scope_code`（必填），`owner_setid`（必填），`name`（必填），`package_code`（可选），`effective_date`（必填），`request_code`（隐藏字段）。
   - `disable_scope_package`：`package_id`（必填），`request_code`（隐藏字段）。
 - Response: 303 重定向到 `/org/setid?as_of=<effective_date|as_of>`；校验失败返回 HTML 错误提示。
 
 **`GET /orgunit/setids/{setid}/scope-subscriptions?as_of=YYYY-MM-DD`**
-- Query: `as_of`（可选，缺省当日 UTC）。
+- Query: `as_of`（必填）。
 - Response: HTML 片段（页面局部渲染）。
 
 **`POST /orgunit/setids/{setid}/scope-subscriptions?as_of=YYYY-MM-DD`**
-- Form: `scope_code`（必填），`package_id`（必填），`effective_date`（可选，默认 `as_of`），`request_code`（必填）。
+- Form: `scope_code`（必填），`package_id`（必填），`effective_date`（必填），`request_code`（必填）。
 - Response: HTML 片段 + `HX-Trigger: scopeSubscriptionChanged`。
 
 #### 5.1.2 Internal API（RouteClassInternalAPI）
@@ -298,7 +300,7 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 - Request JSON:
   - `setid`（必填）
   - `name`（必填）
-  - `effective_date`（可选，缺省为当日 UTC 日期）
+  - `effective_date`（必填，`YYYY-MM-DD`）
   - `request_code`（必填）
 - Response 201: `setid`、`status`
 
@@ -312,12 +314,12 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
   - `package_code`（可选，缺省自动生成）
   - `owner_setid`（必填）
   - `name`（必填）
-  - `effective_date`（可选，缺省为当日 UTC 日期）
+  - `effective_date`（必填，`YYYY-MM-DD`）
   - `request_code`（必填）
 - Response 201: `package_id`、`scope_code`、`package_code`、`owner_setid`、`status`
 
 **`GET /orgunit/api/owned-scope-packages?scope_code=...&as_of=YYYY-MM-DD`**
-- Query: `scope_code`（必填），`as_of`（可选，缺省当日 UTC）
+- Query: `scope_code`（必填），`as_of`（必填）
 - Response 200: `[]OwnedScopePackage`
 
 **`POST /orgunit/api/scope-packages/{package_id}/disable`**
@@ -325,7 +327,7 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 - Response 200: `package_id`、`status`
 
 **`GET /orgunit/api/scope-subscriptions?setid=...&scope_code=...&as_of=YYYY-MM-DD`**
-- Query: `setid`（必填），`scope_code`（必填），`as_of`（可选，缺省当日 UTC）
+- Query: `setid`（必填），`scope_code`（必填），`as_of`（必填）
 - Response 200: `setid`、`scope_code`、`package_id`、`package_owner`、`effective_date`、`end_date`
 
 **`POST /orgunit/api/scope-subscriptions`**
@@ -357,7 +359,7 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
   - `scope_code`（必填）
   - `package_code`（可选，缺省自动生成）
   - `name`（必填）
-  - `effective_date`（可选，缺省当日 UTC 日期）
+  - `effective_date`（必填，`YYYY-MM-DD`）
   - `request_code`（必填）
 - Response 201: `package_id`、`scope_code`、`package_code`、`status`
 

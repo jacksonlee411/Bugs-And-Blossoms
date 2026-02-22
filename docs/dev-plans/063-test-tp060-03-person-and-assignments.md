@@ -104,11 +104,11 @@
   - 10 个 `position_id`（来自 TP-060-02；建议记录为 `P-ENG-01..` 等 10 个职位）
   - 10 个员工（E01~E10；基线表见 `docs/dev-plans/060-business-e2e-test-suite.md` §5.8）
 
-### 4.1 `as_of` 缺省行为（避免执行期漂移）
+### 4.1 `as_of` / `effective_date` 显式要求（避免执行期漂移）
 
-- UI 路由：若 `GET` 未提供 `as_of`，服务端会 `302` 重定向补上 `as_of=<当前UTC日期>`。
-- UI 路由：若 `POST` 未提供 `as_of`，服务端会使用 `as_of=<当前UTC日期>` 作为默认值。
-- Internal API：若未提供 `as_of`，服务端会使用 `as_of=<当前UTC日期>` 作为默认值。
+- UI 路由与 Internal API：`as_of` 缺失或非法必须 fail-closed（`invalid_as_of`）。
+- 写入口（Assignments/Positions）：`effective_date` 缺失或非法必须 fail-closed（`invalid_effective_date`）。
+- 禁止依赖“服务端自动补当天/回填 as_of”的隐式行为。
 - 结论：本子计划所有步骤必须显式使用固定 `as_of=2026-01-01`（或本文明确要求的其它日期，如 E06 的 `2026-01-15`）。
 
 ### 4.2 固定映射（建议作为默认；便于后续子计划复用）
@@ -210,7 +210,7 @@
   - 400：`code=missing_person_uuid`（缺少 `person_uuid`）、或 `code=invalid_as_of`
   - 500：`code=list_failed`（list 出错）、或 `code=tenant_missing`
 - `POST /org/api/assignments?as_of=YYYY-MM-DD`：
-  - body：`{"effective_date","person_uuid","position_id","allocated_fte"}`（`effective_date` 缺省时默认为 `as_of`；字段可选）
+  - body：`{"effective_date","person_uuid","position_id","allocated_fte"}`（`effective_date` 必填）
   - 400：`code=bad_json` / `code=invalid_effective_date` / `code=upsert_failed`
   - 500：`code=tenant_missing`
 

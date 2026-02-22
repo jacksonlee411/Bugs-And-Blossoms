@@ -1,6 +1,8 @@
 # DEV-PLAN-071：SetID Scope Package 订阅详细设计
 
-**状态**: 进行中（2026-01-30 00:13 UTC）
+**状态**: 进行中（2026-01-30 00:13 UTC；2026-02-22 起时间参数口径由 `DEV-PLAN-102B`/`STD-002` 约束）
+
+> 勘误（2026-02-22）：本文中凡出现“`as_of`/`effective_date` 为空默认 `current_date`”的描述，统一废止。现行口径：`as_of` 与 `effective_date` 必填，缺失即 fail-closed（`invalid_as_of` / `invalid_effective_date`）。
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`
@@ -454,11 +456,11 @@ CREATE TABLE orgunit.setid_scope_subscriptions (
   - 修改 setid-controlled 模块读写口径：使用 `package_id`。
   - 引导数据：
     - 为每个 `scope_code` 创建 `DEFLT` 包（shared-only 用 global 包，tenant-only 用租户包），请求号建议 `bootstrap:deflt:<scope_code>`。
-    - 为存量 SetID 写入默认订阅事件（`event_type=BOOTSTRAP`，`effective_date=current_date`），确保新路径可用且不回溯历史。
+    - 为存量 SetID 写入默认订阅事件（`event_type=BOOTSTRAP`，`effective_date=<bootstrap_anchor_date>`），`bootstrap_anchor_date` 必须显式提供且通过 root BU 有效性校验。
     - 通过包事件回放生成版本切片（或在 bootstrap 创建时同步投射）。
   - **新增 stable scope 的常规回填**：
-    - 创建 `DEFLT` 包并生成有效版本切片（`effective_date=current_date`）。
-    - 对所有存量 SetID 写入订阅事件（`BOOTSTRAP`，`effective_date=current_date`）。
+    - 创建 `DEFLT` 包并生成有效版本切片（`effective_date=<bootstrap_anchor_date>`，显式参数）。
+    - 对所有存量 SetID 写入订阅事件（`BOOTSTRAP`，`effective_date=<bootstrap_anchor_date>`，显式参数）。
     - 校验订阅数量与存量 SetID 数量一致，并记录证据到 `dev-records`。
 - **Down**：
   - 生产不做破坏性 Down；回滚走停写 + 修复后重试。
@@ -555,7 +557,7 @@ WITH CHECK (
     - `scope_code`：string，必填，需在 `scope_code_registry()` 中存在。
     - `package_code`：string，可选；空则服务端生成 `PKG_<8位A-Z0-9>`；`DEFLT` 为保留值，禁止通过该 API 创建。
     - `name`：string，必填，长度 1-64。
-    - `effective_date`：date，可选；空则默认 `current_date`（`YYYY-MM-DD`）。
+    - `effective_date`：date，必填（`YYYY-MM-DD`）。
     - `request_id`：string，必填，非空。
   - Example：
     ```json
@@ -584,7 +586,7 @@ WITH CHECK (
     - 422 `PACKAGE_CODE_RESERVED`
     - 422 `REQUEST_ID_REQUIRED`
 - `POST /orgunit/api/scope-packages/{package_id}/disable`
-  - Request（JSON）：`request_id`（必填）
+  - Request（JSON）：`effective_date`（必填，`YYYY-MM-DD`）、`request_id`（必填）
   - Response（200 OK）：`{ "package_id": "uuid", "status": "disabled" }`
   - Error Codes（HTTP）：
     - 404 `PACKAGE_NOT_FOUND`
@@ -637,7 +639,7 @@ WITH CHECK (
     - 409 `SUBSCRIPTION_OVERLAP`
     - 409 `SUBSCRIPTION_DEFLT_MISSING`
 - `GET /orgunit/api/scope-subscriptions?setid=...&scope_code=...&as_of=...`
-  - `as_of` 为空时默认 `current_date`。
+  - `as_of` 必填；缺失即 `invalid_as_of`。
   - Response（200 OK）：
     ```json
     {
@@ -652,7 +654,7 @@ WITH CHECK (
 
 ### 5.3 JSON API：共享包管理（SaaS only）
 - `POST /orgunit/api/global-scope-packages`
-  - Request（JSON）：`scope_code`、`package_code`、`name`、`effective_date`（可选，空则 `current_date`）、`request_id`
+  - Request（JSON）：`scope_code`、`package_code`、`name`、`effective_date`（必填，`YYYY-MM-DD`）、`request_id`
   - 幂等：同一 `tenant_id + request_id` 重复请求返回既有结果，不重复写事件。
   - Error Codes（HTTP）：
     - 403 `ACTOR_SCOPE_FORBIDDEN`
@@ -677,7 +679,7 @@ WITH CHECK (
 ### 6.1 `ResolveScopePackage`（fail-closed）
 **实现**：DB 函数 `orgunit.resolve_scope_package(p_tenant_id uuid, p_setid text, p_scope_code text, p_as_of_date date)`（`SECURITY DEFINER`）。
 返回：`(package_id uuid, package_owner_tenant_uuid uuid)`（供调用方决定租户/共享读上下文）。
-说明：`p_as_of_date` 为空时默认 `current_date`。
+说明：`p_as_of_date` 必填；为空即报错并 fail-closed。
 1. 开启事务并注入 `app.current_tenant`（租户上下文），函数内校验与 `p_tenant_id` 一致。
 2. 查询 `setid_scope_subscriptions`：`tenant_id + setid + scope_code + as_of_date` 命中有效 `validity`；无则返回 `SCOPE_SUBSCRIPTION_MISSING`。
 3. 若 `package_owner_tenant_uuid = tenant_id`：
@@ -696,10 +698,10 @@ WITH CHECK (
 5. 插入新订阅切片并写入事件（One Door），确保 exclusion 约束不重叠。
 
 ### 6.3 SetID 创建默认订阅
-1. 创建 SetID 成功后，默认订阅的 `effective_date` 优先取创建请求的有效日期（如 `as_of`/`effective_date`），未提供则使用 `current_date`。
+1. 创建 SetID 成功后，默认订阅的 `effective_date` 取创建请求显式传入的 `effective_date`（缺失即 fail-closed）。
 2. 遍历 `scope_code_registry()` 中 `is_stable = true` 的列表。
 3. 对每个 scope，选择其 `DEFLT` 包（shared-only 用 global 包，其余用租户包）。
-4. 若 `DEFLT` 包不存在或在 `current_date` 无有效版本，返回 `SUBSCRIPTION_DEFLT_MISSING` 并终止 SetID 创建。
+4. 若 `DEFLT` 包不存在或在该 `effective_date` 无有效版本，返回 `SUBSCRIPTION_DEFLT_MISSING` 并终止 SetID 创建。
 5. 写入订阅事件，生成 `[effective_date, infinity)` 订阅切片（或 `end_date + 1` 的半开区间表示）。
 
 ### 6.4 包创建/停用（One Door）

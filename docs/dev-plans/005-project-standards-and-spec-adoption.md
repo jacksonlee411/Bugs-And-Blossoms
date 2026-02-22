@@ -56,11 +56,53 @@
 - 本条标准生效后，涉及幂等命名的既有计划（含 `DEV-PLAN-109/109A`）需要按本标准修订为一致口径。
 - 本条标准仅冻结“目标口径”，不在本文件内展开迁移步骤与排期。
 
+### STD-002：`as_of` 与 `effective_date` 时间语义标准（冻结）
+
+**决策（Normative）**
+
+1. `as_of` 仅表示**读模型切片时点**，中文统一翻译为**“查询时点”**；必须显式提供；缺失/非法统一返回 `400 invalid_as_of`（message：`as_of required`）。
+2. `effective_date` 仅表示**写入生效日**，中文统一翻译为**“生效日期”**；必须显式提供；缺失/非法统一返回 `400 invalid_effective_date`（message：`effective_date required`）。
+3. 业务有效时间统一使用 `date`（`YYYY-MM-DD`，日粒度）；禁止用时分秒表达业务生效语义。
+4. 业务时间不得由服务端默认 today（`time.Now().UTC()` / `current_date`）推断；必须由请求显式传入并透传到 service/store/kernel。
+5. 审计/事务时间与业务有效时间严格分离：`created_at` / `updated_at` / `transaction_time` 可用 `timestamptz`，不得替代业务生效时间。
+6. bootstrap/backfill 必须显式提供 `effective_date`，且需通过 root BU 在该日期有效性校验；不允许固定常量日期兜底。
+7. 同一输入（`tenant + route + payload/query + as_of/effective_date`）在不同运行日必须可重放且结果一致（审计时间戳字段除外）。
+
+**适用范围**
+
+- API 契约（query/body 字段、错误码、返回语义）；
+- UI 路由与页面请求参数（URL/payload）；
+- 服务层与控制器参数校验；
+- SQL/Kernel 函数、迁移与回填脚本；
+- 自动化测试、静态门禁与文档契约。
+
+**禁止事项**
+
+1. 禁止 `if asOf == "" { asOf = time.Now().UTC().Format("2006-01-02") }` 这类隐式回填。
+2. 禁止 `if req.EffectiveDate == "" { req.EffectiveDate = ... }` 这类隐式回填。
+3. 禁止以 `as_of` 回填 `effective_date`（或反向混用）。
+4. 禁止在 070/071 业务有效期判断中引入 `current_date` 作为隐式输入。
+5. 禁止把业务有效期字段建模为 `timestamptz`。
+6. 禁止“缺失参数自动补齐后继续执行”的 fail-open 行为。
+
+**参考规范**
+
+- `AGENTS.md`（仓库级时间语义总则）
+- `docs/dev-plans/032-effective-date-day-granularity.md`
+- `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
+- `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
+
+**与现有计划关系**
+
+- 本条标准生效后，`DEV-PLAN-070/071/071A/071B/102/102B` 及其相关测试计划（如 `DEV-PLAN-063`）必须对齐统一口径。
+- 本条标准仅冻结“目标口径”，不在本文件内展开迁移步骤与排期（迁移执行由后续实施计划承接）。
+
 ## 后续扩展待办
 
 1. [ ] 新增“STD-001 落地执行计划”（门禁、接口、DB/代码命名、迁移窗口与回滚策略）。
-2. [ ] 建立“标准变更记录模板”（记录版本、影响面、验收证据）。
-3. [ ] 将标准检查接入 CI（新增或修订对应 `make check` 门禁）。
+2. [ ] 新增“STD-002 落地执行计划”（以 `DEV-PLAN-102B` 为主计划，覆盖文档/实现/测试/门禁收口）。
+3. [ ] 建立“标准变更记录模板”（记录版本、影响面、验收证据）。
+4. [ ] 将标准检查接入 CI（新增或修订对应 `make check` 门禁）。
 
 ## 交付物
 
