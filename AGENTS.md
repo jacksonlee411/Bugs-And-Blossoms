@@ -194,7 +194,7 @@ modules/{module}/
 - DEV-PLAN-075B 执行日志：`docs/dev-records/dev-plan-075b-execution-log.md`
 - DEV-PLAN-075C：OrgUnit 删除记录/停用语义混用调查与收敛方案：`docs/dev-plans/075c-orgunit-delete-disable-semantics-alignment.md`
 - DEV-PLAN-075D【归档】：OrgUnit 页面状态字段与有效/无效显式切换：`docs/archive/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
-- DEV-PLAN-075E：OrgUnit 同日状态修正（生效日不变）方案：`docs/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
+- DEV-PLAN-075E【归档】：OrgUnit 同日状态修正（生效日不变）方案（模块标准已并入 `DEV-PLAN-108`）：`docs/archive/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
 - DEV-PLAN-075D 执行日志：`docs/dev-records/dev-plan-075d-execution-log.md`
 - DEV-PLAN-075E 执行日志：`docs/dev-records/dev-plan-075e-execution-log.md`
 - DEV-PLAN-076：OrgUnit 版本切换导致选中组织丢失问题与修复方案：`docs/dev-plans/076-orgunit-version-switch-selection-retention.md`
@@ -204,16 +204,16 @@ modules/{module}/
 - DEV-PLAN-078：OrgUnit 写模型替代方案对比与决策建议：`docs/dev-plans/078-orgunit-write-model-alternatives-comparison-and-decision.md`
 - DEV-PLAN-080：OrgUnit 审计链收敛（方向 1：单一审计链）：`docs/dev-plans/080-orgunit-audit-chain-consolidation.md`
 - DEV-PLAN-080A：OrgUnit before_snapshot/after_snapshot 机制调查与收敛修复方案：`docs/dev-plans/080a-orgunit-audit-snapshot-mechanism-and-fix.md`
-- DEV-PLAN-080B：OrgUnit 生效日更正失败（orgunit_correct_failed）专项调查与修复方案：`docs/dev-plans/080b-orgunit-correction-failure-investigation-and-remediation.md`
+- DEV-PLAN-080B【归档】：OrgUnit 生效日更正失败（orgunit_correct_failed）专项调查与修复方案（错误码提取规范已并入 `DEV-PLAN-111`）：`docs/archive/dev-plans/080b-orgunit-correction-failure-investigation-and-remediation.md`
 - DEV-PLAN-080C：OrgUnit 审计快照 presence 表级强约束（INSERT 即写齐）方案：`docs/dev-plans/080c-orgunit-audit-snapshot-presence-table-constraint-plan.md`
-- DEV-PLAN-080D：OrgUnit 变更日志“已撤销事件未标识”专项调查与收敛方案：`docs/dev-plans/080d-orgunit-audit-rescinded-event-visibility-investigation.md`
+- DEV-PLAN-080D【归档】：OrgUnit 变更日志“已撤销事件未标识”专项调查与收敛方案（审计可读性契约已并入 `DEV-PLAN-080`）：`docs/archive/dev-plans/080d-orgunit-audit-rescinded-event-visibility-investigation.md`
 - DEV-PLAN-081：OrgUnit Details 记录版本选择器双栏化（左生效日期 / 右详情）：`docs/dev-plans/081-orgunit-records-version-selector-two-pane-alignment.md`
 - DEV-PLAN-082【归档】：Org 模块业务字段修改规则全量调查（排除元数据）：`docs/archive/dev-plans/082-org-module-field-mutation-rules-investigation.md`
 - DEV-PLAN-083【归档】：Org 白名单模型扩展性改造（规则单点化 + 能力矩阵外显）：`docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - DEV-PLAN-083A【归档】：OrgUnit Append 写入动作能力外显与策略单点扩展（create / event_update）：`docs/archive/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
 - DEV-PLAN-083B：Org 变更能力模型后置收口（承接 083/083A）：`docs/dev-plans/083b-org-mutation-capabilities-post-083a-closure-plan.md`
 - DEV-PLAN-083B 执行日志：`docs/dev-records/dev-plan-083b-execution-log.md`
-- DEV-PLAN-084：Org 模块组织树“下级可展开指示符”缺失问题分析与收敛方案：`docs/dev-plans/084-orgunit-tree-expand-indicator-visibility.md`
+- DEV-PLAN-084【归档】：Org 模块组织树“下级可展开指示符”缺失问题分析与收敛方案（树可展开契约已并入 `DEV-PLAN-073`）：`docs/archive/dev-plans/084-orgunit-tree-expand-indicator-visibility.md`
 - DEV-PLAN-084 执行日志：`docs/dev-records/dev-plan-084-execution-log.md`
 - DEV-PLAN-090：前端框架升级为 MUI X（对标 Workday UX）方案：`docs/dev-plans/090-mui-x-frontend-upgrade-plan.md`
 - DEV-PLAN-091：MUI X 升级子计划 P0（基座准备与许可落地）：`docs/dev-plans/091-mui-x-phase0-foundation-and-license-plan.md`
@@ -269,8 +269,8 @@ modules/{module}/
 - DEV-PLAN-126：Go 1.26 升级与现代化改造计划（No-Compat）：`docs/dev-plans/126-go-1-26-upgrade-and-modernization-plan.md`
 - DEV-PLAN-126 执行日志：`docs/dev-records/dev-plan-126-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
-- DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
-- DEV-PLAN-102A：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案：`docs/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
+- DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
+- DEV-PLAN-102A【归档】：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案（表达式口径一致性已并入 `DEV-PLAN-120`）：`docs/archive/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
 - DEV-PLAN-102B：070/071 时间口径强制显式化与历史回放稳定性收敛：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
 - DEV-PLAN-102B 执行日志：`docs/dev-records/dev-plan-102b-execution-log.md`
 - DEV-PLAN-102A 执行日志：`docs/dev-records/dev-plan-102a-execution-log.md`

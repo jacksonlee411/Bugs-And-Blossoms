@@ -77,6 +77,13 @@
 - capabilities 策略单点：`DEV-PLAN-083/083A/100E1`
 - ext 写入快照：`DEV-PLAN-100D/100E1`
 
+### 3.1 模块标准（承接 DEV-PLAN-075E，2026-02-22 冻结）
+
+1. **同日单槽位不变量**：同一 `tenant + org + effective_date` 只能存在一个有效事件；同日状态纠错不得通过“新增同日事件”绕过。
+2. **错误语义外显**：对外仅返回稳定业务错误码（如 `EVENT_DATE_CONFLICT`、`ORG_EVENT_NOT_FOUND`、`ORG_EVENT_RESCINDED`），禁止透出 SQLSTATE/约束名。
+3. **撤销优先级 fail-closed**：目标事件已处于 rescind 态时，纠错请求必须拒绝，不允许再对该事件做状态纠错覆盖。
+4. **现行入口收敛**：同日状态纠错以 108 的 `CORRECT_EVENT` 主路径为准；`status-corrections` 仅保留历史兼容说明，不作为推荐主链路。
+
 ---
 
 ## 4. UI 实施设计（实现级）
@@ -476,7 +483,7 @@
 - [x] `docs/archive/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
   - 冲突：冻结“状态变更必须独立动作、correct 不承载状态”，与 108“状态是字段，可同次提交”冲突。
   - 修订：保留 include_disabled/可达性 SSOT；调整写入口与交互矩阵到 108 的字段编辑模式；`status-corrections` 标注为兼容入口（UI 不再主路径依赖）。
-- [x] `docs/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
+- [x] `docs/archive/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
   - 冲突：依赖 `CORRECT_STATUS` 作为同日纠错主路径；108 改为 `CORRECT_EVENT` 支持 status 合并（replay 解释 UPDATE）。
   - 修订：新增“108 对齐补充”：同日纠错 UI 不再独立入口；接口保留兼容但不再作为推荐路径。
 - [x] `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`

@@ -1,7 +1,7 @@
 # DEV-PLAN-075E 执行日志
 
 ## 基本信息
-- 计划文档：`docs/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
+- 计划文档：`docs/archive/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
 - 完成日期：2026-02-08
 - 当前状态：已完成
 

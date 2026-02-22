@@ -1,6 +1,6 @@
-# DEV-PLAN-102A：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案
+# [Archived] DEV-PLAN-102A：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案
 
-**状态**: 已完成（2026-02-20 08:10 UTC）
+**状态**: 已归档（2026-02-22，表达式口径一致性已并入 `DEV-PLAN-120`；本文仅保留专项调查与修复记录）
 
 ## 1. 背景
 - 现象：在“字段配置”页面把 `org_code` 默认规则改为 `next_org_code('ORG',6)` 并保存后，页面看起来“没有变化”。
@@ -53,7 +53,7 @@
   - `internal/server/orgunit_field_metadata_api.go` / `internal/server/orgunit_field_policy_api_test.go`：保存校验阶段拒绝单引号写法，避免运行时口径漂移。
 
 ## 7. 关联 SSOT
-- `docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
+- `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - `docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md`
 - `AGENTS.md`
 - `docs/dev-records/dev-plan-102a-execution-log.md`

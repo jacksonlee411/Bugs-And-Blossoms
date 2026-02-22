@@ -41,7 +41,7 @@
 - 命令入口：`Makefile`
 - CI 质量门禁：`.github/workflows/quality-gates.yml`、`docs/dev-plans/012-ci-quality-gates.md`
 - MUI X 总方案与子计划：`docs/dev-plans/090-mui-x-frontend-upgrade-plan.md`、`DEV-PLAN-091/092/094/096`
-- 时间上下文收敛：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
+- 时间上下文收敛：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - 收尾与证据（承接本计划）：`docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`、`docs/dev-records/dev-plan-103a-execution-log.md`
 
 ## 4. 设计决策（本计划冻结）

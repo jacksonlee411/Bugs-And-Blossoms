@@ -130,6 +130,12 @@ CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx
 - 业务“生效记录”可继续使用 `org_events_effective`（折叠后视图）。
 - **变更日志**必须直接基于 `org_events`（或等价只读视图，且不能丢失 CORRECT/RESCIND 事实）。
 
+### 4.4.1 审计可读性契约（承接 DEV-PLAN-080D）
+1. 审计日志默认保留全量历史事实，不提供“仅生效事件”默认过滤开关。
+2. 对已被撤销的历史事件，UI 必须显式标识“已撤销”，禁止让用户自行推断是否仍生效。
+3. `RESCIND_EVENT/RESCIND_ORG` 写入必须携带完整快照与关键 payload（`op/reason/target_event_uuid/target_effective_date`），禁止简化 payload 写法。
+4. 与 4.4 的边界保持一致：展示层做“状态可读性增强”，不引入第二审计事实源或 legacy 双链路。
+
 ### 4.5 迁移策略
 1. [ ] 冻结变更窗口。
 2. [ ] 执行 schema 迁移：补齐 `org_events` 字段/约束/索引。
