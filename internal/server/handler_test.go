@@ -590,7 +590,7 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		return rec
 	}
 
-	recSet := postJSON("/org/api/setids", `{"setid":"A0001","name":"Default","request_id":"r1"}`, nil)
+	recSet := postJSON("/org/api/setids", `{"setid":"A0001","name":"Default","effective_date":"2026-01-01","request_id":"r1"}`, nil)
 	if recSet.Code != http.StatusCreated {
 		t.Fatalf("setid status=%d", recSet.Code)
 	}

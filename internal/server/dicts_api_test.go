@@ -742,6 +742,9 @@ func TestDictAPIHelpers_Coverage(t *testing.T) {
 		if got := dictErrorCode(errors.New("DICT_REQUEST_CODE_REQUIRED")); got != "invalid_request" {
 			t.Fatalf("got=%q", got)
 		}
+		if got := dictErrorCode(errors.New("DICT_REQUEST_ID_REQUIRED")); got != "invalid_request" {
+			t.Fatalf("got=%q", got)
+		}
 		if got := dictErrorCode(errors.New("DICT_NOT_FOUND")); got != "dict_not_found" {
 			t.Fatalf("got=%q", got)
 		}

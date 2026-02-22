@@ -73,7 +73,7 @@ type SetIDGovernanceStore interface {
 	CreateGlobalSetID(ctx context.Context, name string, requestID string, initiatorID string, actorScope string) error
 	ListScopeCodes(ctx context.Context, tenantID string) ([]ScopeCode, error)
 	CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error)
-	DisableScopePackage(ctx context.Context, tenantID string, packageID string, requestID string, initiatorID string) (ScopePackage, error)
+	DisableScopePackage(ctx context.Context, tenantID string, packageID string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error)
 	ListScopePackages(ctx context.Context, tenantID string, scopeCode string) ([]ScopePackage, error)
 	ListOwnedScopePackages(ctx context.Context, tenantID string, scopeCode string, asOfDate string) ([]OwnedScopePackage, error)
 	CreateScopeSubscription(ctx context.Context, tenantID string, setID string, scopeCode string, packageID string, packageOwner string, effectiveDate string, requestID string, initiatorID string) (ScopeSubscription, error)
@@ -472,14 +472,13 @@ LIMIT 1
 	return out, err
 }
 
-func (s *setidPGStore) DisableScopePackage(ctx context.Context, tenantID string, packageID string, requestID string, initiatorID string) (ScopePackage, error) {
+func (s *setidPGStore) DisableScopePackage(ctx context.Context, tenantID string, packageID string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error) {
 	var out ScopePackage
 	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		eventID, err := uuidv7.NewString()
 		if err != nil {
 			return err
 		}
-		effectiveDate := time.Now().UTC().Format("2006-01-02")
 		if _, err := tx.Exec(ctx, `
 SELECT orgunit.submit_scope_package_event(
   $1::uuid,
@@ -955,10 +954,11 @@ func (s *setidMemoryStore) CreateScopePackage(_ context.Context, tenantID string
 	return pkg, nil
 }
 
-func (s *setidMemoryStore) DisableScopePackage(_ context.Context, tenantID string, packageID string, _ string, _ string) (ScopePackage, error) {
+func (s *setidMemoryStore) DisableScopePackage(_ context.Context, tenantID string, packageID string, effectiveDate string, _ string, _ string) (ScopePackage, error) {
 	for scopeCode, pkgs := range s.scopePackages[tenantID] {
 		if pkg, ok := pkgs[packageID]; ok {
 			pkg.Status = "disabled"
+			pkg.EffectiveDate = effectiveDate
 			pkg.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 			s.scopePackages[tenantID][scopeCode][packageID] = pkg
 			return pkg, nil

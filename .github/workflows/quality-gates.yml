@@ -35,6 +35,8 @@ jobs:
         run: make check no-legacy
       - name: Request-Code Gate (always)
         run: make check request-code
+      - name: As-Of Explicit Gate (always)
+        run: make check as-of-explicit
       - name: Docs Gate (always)
         run: make check doc
       - name: UI Build (MUI)

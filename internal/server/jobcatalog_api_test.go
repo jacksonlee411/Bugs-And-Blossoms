@@ -97,8 +97,17 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 		}
 	})
 
-	t.Run("no selection returns empty arrays", func(t *testing.T) {
+	t.Run("as_of required", func(t *testing.T) {
 		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog", "")
+		rec := httptest.NewRecorder()
+		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("no selection returns empty arrays", func(t *testing.T) {
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusOK {
@@ -479,7 +488,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","code":"G1","name":"Group 1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
-		if rec.Code != http.StatusCreated {
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	})

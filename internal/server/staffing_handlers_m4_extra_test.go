@@ -7,42 +7,27 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestStaffingHandlers_M4_ExtraCoverage(t *testing.T) {
-	t.Run("handlePositionsAPI as_of defaults", func(t *testing.T) {
+	t.Run("handlePositionsAPI as_of required", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/positions", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
-			listFn: func(_ context.Context, _ string, asOfDate string) ([]Position, error) {
-				if _, err := time.Parse("2006-01-02", asOfDate); err != nil {
-					t.Fatal(err)
-				}
-				return nil, nil
-			},
-		})
-		if rec.Code != http.StatusOK {
+		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{})
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
 
-	t.Run("handleAssignmentsAPI as_of defaults", func(t *testing.T) {
+	t.Run("handleAssignmentsAPI as_of required", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/assignments?person_uuid=p1", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleAssignmentsAPI(rec, req, assignmentStoreStub{
-			listFn: func(_ context.Context, _ string, asOfDate string, _ string) ([]Assignment, error) {
-				if _, err := time.Parse("2006-01-02", asOfDate); err != nil {
-					t.Fatal(err)
-				}
-				return nil, nil
-			},
-		})
-		if rec.Code != http.StatusOK {
+		handleAssignmentsAPI(rec, req, assignmentStoreStub{})
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})

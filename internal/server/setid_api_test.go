@@ -103,8 +103,22 @@ func TestHandleSetIDsAPI_InvalidEffectiveDate(t *testing.T) {
 	}
 }
 
+func TestHandleSetIDsAPI_EffectiveDateRequired(t *testing.T) {
+	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","effective_date":"","request_id":"r1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/org/api/setids", body)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetIDsAPI(rec, req, newSetIDMemoryStore())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "effective_date required") {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
 func TestHandleSetIDsAPI_EnsureBootstrapError(t *testing.T) {
-	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","request_id":"r1"}`)
+	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","effective_date":"2026-01-01","request_id":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/org/api/setids", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -115,7 +129,7 @@ func TestHandleSetIDsAPI_EnsureBootstrapError(t *testing.T) {
 }
 
 func TestHandleSetIDsAPI_CreateSetIDError(t *testing.T) {
-	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","request_id":"r1"}`)
+	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","effective_date":"2026-01-01","request_id":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/org/api/setids", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -126,7 +140,7 @@ func TestHandleSetIDsAPI_CreateSetIDError(t *testing.T) {
 }
 
 func TestHandleSetIDsAPI_Success(t *testing.T) {
-	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","request_id":"r1"}`)
+	body := bytes.NewBufferString(`{"setid":"A0001","name":"A","effective_date":"2026-01-01","request_id":"r1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/org/api/setids", body)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
@@ -194,15 +208,15 @@ func (setidBindingsNilStore) ListSetIDBindings(context.Context, string, string) 
 	return nil, nil
 }
 
-func TestHandleSetIDBindingsAPI_Get_DefaultAsOf_Success(t *testing.T) {
+func TestHandleSetIDBindingsAPI_Get_AsOfRequired(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/org/api/setid-bindings", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 	rec := httptest.NewRecorder()
 	handleSetIDBindingsAPI(rec, req, partialSetIDStore{}, newOrgUnitMemoryStore())
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), `"tenant_id":"t1"`) {
+	if !strings.Contains(rec.Body.String(), "invalid_as_of") {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
 }
@@ -226,6 +240,19 @@ func TestHandleSetIDBindingsAPI_Get_NilRows(t *testing.T) {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), `"bindings":[]`) {
+		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestHandleSetIDBindingsAPI_Get_WithRows(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/org/api/setid-bindings?as_of=2026-01-01", nil)
+	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+	rec := httptest.NewRecorder()
+	handleSetIDBindingsAPI(rec, req, partialSetIDStore{}, newOrgUnitMemoryStore())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"org_unit_id":"10000001"`) || !strings.Contains(rec.Body.String(), `"setid":"DEFLT"`) {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
 	}
 }
