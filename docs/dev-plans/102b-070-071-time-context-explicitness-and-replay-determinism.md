@@ -12,6 +12,16 @@
   3) 测试层已固化默认行为：存在“default as_of/default effective_date”测试，放大了口径漂移风险。
 - **业务价值**：统一“显式时间上下文”后，保证同一输入（包含时间参数）在未来任意时点可重放、可审计、可解释，消除“今天看一个结果、回看历史又是另一个”的不确定性。
 
+### 1.1 调查结论（来源追溯，2026-02-22）
+- **结论 A（基线）**：`DEV-PLAN-070` 已明确“`as_of_date` 必填、禁止默认 `current_date`”，并非缺省 today 的来源（见 070 §6.1/§3.1）。
+- **结论 B（直接引入点）**：`DEV-PLAN-071` 在 API/算法/回填说明中多处引入“空值默认 `current_date`”，是 070/071 口径冲突的直接来源（如 071 §5.1、§5.2、§6.1、§6.3、迁移回填段）。
+- **结论 C（历史上游）**：`DEV-PLAN-026A` 更早出现“`as_of/effective_date` 可选且缺省当日 UTC”的合同描述，属于同类口径来源（需标注为历史文档口径，避免继续外溢）。
+- **结论 D（后续固化）**：`DEV-PLAN-102` 路由矩阵冻结了多处“缺省回退当天/302 补齐当天”的行为，放大了与 070 的冲突。
+- **时间线（精确日期）**：
+  - `2026-01-29`：070 文档冻结“禁止默认 today”；
+  - `2026-02-01`：071/026A 文档出现“缺省 current_date/当日 UTC”描述；
+  - `2026-02-14`：102 文档将“缺省回退当天”写入矩阵并标记完成。
+
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
 - [ ] 070/071 全链路收敛为**显式时间上下文**：读接口强制 `as_of`，写接口强制 `effective_date`（或等价业务生效日字段）。
@@ -25,6 +35,7 @@
 - 不重做 070/071 的业务边界（SetID/Scope Package/Subscription 语义不变）。
 - 不引入 Feature Flag、灰度双链路或 legacy fallback。
 - 不在本计划内扩展到与 070/071 无关的全部模块（仅处理被 070/071 直接约束和依赖的入口）。
+- 不重写 026A 的历史目标；仅修订其与 070/071 冲突的时间参数表述，避免继续被引用为“默认 today”依据。
 
 ## 2.3 工具链与门禁（SSOT 引用）
 - **触发器清单（勾选本计划命中的项）**：
@@ -128,9 +139,24 @@
 - `docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
 - `docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
 - `docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
+- `docs/dev-plans/026a-orgunit-id-uuid-code-naming.md`（历史合同中存在“缺省当日 UTC”表述，需要最小修订）
+- `docs/dev-plans/063-test-tp060-03-person-and-assignments.md`（测试合同中存在“`effective_date` 缺省默认为 `as_of`”）
 
-### 8.2 里程碑
-1. [ ] **M1 契约冻结**：修订 070/071/071A/071B/102 的时间参数规则，移除“默认 today”描述。
+### 8.2 对相关计划的影响评估（调查结论落表）
+1. **高影响（必须同版本收口）**
+   - `DEV-PLAN-071`：删除/替换“可选+默认 today”合同；同步 API、算法、回填说明。
+   - `DEV-PLAN-102`：更新路由矩阵中“缺省回退当天/302 补齐当天”条目，改为缺失即 fail-closed。
+2. **中高影响（承接计划需同步）**
+   - `DEV-PLAN-071A`：其“保持 071 现有契约”的引用需随 071 改写；治理页/业务页提交参数改为显式必填。
+3. **中影响（测试合同修订）**
+   - `DEV-PLAN-063`：去除“`effective_date` 缺省默认为 `as_of`”描述，改为“缺失即 `invalid_effective_date`”。
+4. **低影响（对齐/补充）**
+   - `DEV-PLAN-071B`：主方向已一致（禁止隐式当前日），补充错误码与验收措辞对齐即可。
+   - `DEV-PLAN-070`：无需改核心语义，仅补充“本计划已消除与 071/102 的冲突”引用证据。
+   - `DEV-PLAN-026A`：作为历史文档执行最小文字修订，避免继续传播“默认当日 UTC”。
+
+### 8.3 里程碑
+1. [ ] **M1 契约冻结**：修订 070/071/071A/071B/102/026A/063 的时间参数规则，移除“默认 today”描述并记录冲突消解表。
 2. [ ] **M2 API 收口**：移除 handler/controller 默认回填，统一 `invalid_* + required message`；含 `scope-packages/{package_id}/disable`。
 3. [ ] **M3 Kernel 收口**：移除 SQL 函数内 `current_date` 业务口径分支，改为显式日期。
 4. [ ] **M4 测试重构**：删除“default as_of/effective_date”用例，新增“missing required date -> fail”与“跨天重放一致性”用例。
@@ -159,6 +185,7 @@
 ### 9.4 完成判定
 - [ ] 文档契约与代码行为一致，不再存在“文档说必填、实现却默认 today”的冲突。
 - [ ] 用户复盘同一问题时，显式同一日期参数得到稳定一致结果。
+- [ ] 调查结论涉及的冲突文档（071/102/071A/026A/063）均完成改写，并在执行日志附“改写前后对照”。
 
 ## 10. 运维与发布策略 (Ops & Release)
 - 不引入功能开关，不保留 legacy 兼容分支。
