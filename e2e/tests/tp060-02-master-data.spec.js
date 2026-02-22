@@ -238,13 +238,23 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     expect(resp.status(), await resp.text()).toBe(201);
   }
 
-  const createScopePackage = async ({ ownerSetID, packageCode, name }) => {
+  const resolveOrgUnitID = async (orgCode) => {
+    const resp = await appContext.request.get(
+      `/org/api/org-units/details?as_of=${encodeURIComponent(asOf)}&org_code=${encodeURIComponent(orgCode)}`
+    );
+    expect(resp.status(), await resp.text()).toBe(200);
+    const payload = await resp.json();
+    return String(payload.org_unit.org_id).padStart(8, "0");
+  };
+
+  const createScopePackage = async ({ ownerSetID, businessUnitID, packageCode, name }) => {
     const resp = await appContext.request.post("/org/api/scope-packages", {
       data: {
         scope_code: "jobcatalog",
         package_code: packageCode,
         name,
         owner_setid: ownerSetID,
+        business_unit_id: businessUnitID,
         effective_date: asOf,
         request_id: `req:${runID}:scope-pkg:${packageCode}`
       }
@@ -253,11 +263,23 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     return resp.json();
   };
 
+  const rndOrgID = await resolveOrgUnitID(org.rnd);
+  const salesOrgID = await resolveOrgUnitID(org.sales);
   const s2601PkgCode = `S2601_${suffix}`.toUpperCase();
-  await createScopePackage({ ownerSetID: "S2601", packageCode: s2601PkgCode, name: `S2601 JobCatalog ${runID}` });
+  await createScopePackage({
+    ownerSetID: "S2601",
+    businessUnitID: rndOrgID,
+    packageCode: s2601PkgCode,
+    name: `S2601 JobCatalog ${runID}`
+  });
 
   const s2602PkgCode = `S2602_${suffix}`.toUpperCase();
-  await createScopePackage({ ownerSetID: "S2602", packageCode: s2602PkgCode, name: `S2602 JobCatalog ${runID}` });
+  await createScopePackage({
+    ownerSetID: "S2602",
+    businessUnitID: salesOrgID,
+    packageCode: s2602PkgCode,
+    name: `S2602 JobCatalog ${runID}`
+  });
 
   // JobCatalog (S2601): create groups/families/levels/profiles, then assert valid-time reparent.
   {
