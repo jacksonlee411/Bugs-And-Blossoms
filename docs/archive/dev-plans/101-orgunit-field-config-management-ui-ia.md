@@ -278,8 +278,8 @@
 - `docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md`
 - `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - `DEV-PLAN-103（MUI-only 前端收敛）`
-- `docs/dev-plans/097-orgunit-details-drawer-to-page-migration.md`
-- `docs/dev-plans/099-orgunit-details-two-pane-info-audit-mui.md`
+- `docs/archive/dev-plans/097-orgunit-details-drawer-to-page-migration.md`
+- `docs/archive/dev-plans/099-orgunit-details-two-pane-info-audit-mui.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
 - `docs/dev-plans/017-routing-strategy.md`
 - `docs/dev-plans/020-i18n-en-zh-only.md`

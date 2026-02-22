@@ -167,12 +167,119 @@
 - `DEV-PLAN-004` 自本标准生效后归档，规范性条款由 `STD-004` 接管；`DEV-PLAN-004` 仅保留历史实施与证据价值。
 - 若后续确需对外引入显式版本号，必须先在 dev-plan 中说明业务必要性与退场策略，并通过评审后实施。
 
+### STD-005：Tenant App 前端单链路与入口唯一性标准（冻结）
+
+**决策（Normative）**
+
+1. Tenant App 用户 UI 唯一入口冻结为 `/app/**`；唯一登录页面冻结为 `/app/login`。
+2. 租户应用侧不再提供 `GET /login` HTML 页面，且禁止 `/login -> /app/login` 的兼容别名窗口。
+3. 前端工程目录唯一冻结为 `apps/web`；go:embed 产物目录唯一冻结为 `internal/server/assets/web/**`；静态资源 URL 前缀冻结为 `/assets/web/`。
+4. UI 构建与产物一致性统一通过 `make css` + `assert-clean` 门禁收敛；触发器必须覆盖 `apps/web/**` 与 `internal/server/assets/web/**`。
+5. 删除后的旧 UI 家族（例如 `/ui/*`、`/lang/*`、旧 server-rendered HTML 路由）不得以任何 alias/rewrite/backdoor 方式复活。
+
+**适用范围**
+
+- 路由 allowlist、route_class 分类与中间件放行规则；
+- 前端 router/base path、静态资源路径与构建脚本；
+- CI path filters、`make` 门禁入口与 E2E 断言；
+- 文档中的示例 URL、登录入口描述与可执行操作说明。
+
+**禁止事项**
+
+1. 禁止新增或恢复 `GET /login`（tenant app）及其 302 兼容跳转窗口。
+2. 禁止重新引入 `apps/web-mui`、`/assets/web-mui/`、`internal/server/assets/web-mui/**` 等技术后缀双轨。
+3. 禁止为 tenant app 新增第二套 UI 运行链路（如旧局部渲染链路/旧 Shell 并行保活）。
+
+**参考规范**
+
+- `docs/archive/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
+- `docs/archive/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
+- `docs/dev-plans/012-ci-quality-gates.md`
+- `docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
+
+**与现有计划关系**
+
+- `DEV-PLAN-103/103A` 的规范性条款由本标准接管；两份文档保留为历史实施与证据上下文。
+- 后续涉及 tenant app 登录入口、UI 构建目录或静态资源前缀的改动，必须先对齐本标准，再进入实现评审。
+
+### STD-006：未登录/失效会话返回语义标准（按 route_class 冻结）
+
+**决策（Normative）**
+
+1. `route_class=ui` 在缺失/失效/跨租户会话时，统一返回 `302 Location=/app/login`（必要时清理 `sid`）。
+2. `route_class=internal_api/public_api/webhook` 在缺失/失效/跨租户会话时，统一返回 JSON `401 unauthorized`；禁止返回 `302` 与 HTML 页面。
+3. 返回语义以 allowlist/classifier 产生的 `route_class` 为主判定，不得依赖 `Accept` 头做反向兜底。
+4. 会话失效与租户不匹配必须 fail-closed：清理 `sid` 后按上述 route_class 语义返回，不得“自动切租户/默认租户继续执行”。
+5. 匿名可达的会话创建入口统一为 `POST /iam/api/sessions`（tenant app）；其放行应受 route_class 与显式路由注册约束。
+
+**适用范围**
+
+- tenancy/session middleware、global responder、authn 边界；
+- API client 对 `401` 的前端跳转策略与错误处理；
+- E2E 与集成测试中的未登录、跨租户、会话失效断言；
+- 文档中的登录流程、返回码与重定向语义描述。
+
+**禁止事项**
+
+1. 禁止 API 在未登录时返回 `302` 到登录页或返回 HTML 错误页。
+2. 禁止 UI 受保护路径在未登录时返回“静默 200/空页”而非明确跳转到 `/app/login`。
+3. 禁止在各模块自行定义与 route_class 冲突的未登录处理分支，造成语义漂移。
+
+**参考规范**
+
+- `docs/archive/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
+- `docs/dev-plans/017-routing-strategy.md`
+- `docs/dev-plans/012-ci-quality-gates.md`
+- `docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
+
+**与现有计划关系**
+
+- 既有 AuthN/路由/E2E 文档（含 `DEV-PLAN-019/061/022/060/017`）若仍使用 `/login` 或旧返回语义，需按本标准收敛并更新验收断言。
+- 本标准仅冻结口径；具体迁移步骤由后续实施计划承接。
+
+### STD-007：Valid Time 区间建模与更正边界标准（冻结）
+
+**决策（Normative）**
+
+1. 业务有效期的数据库区间表达统一采用半开区间 `[start, end)`；使用 `daterange` 时必须保持该语义一致。
+2. 同一业务键（至少含 `tenant_id`，以及必要的 `setid/business_key`）在 Valid Time 上必须满足 no-overlap（有效区间不可重叠）。
+3. 若实体使用 `effective_date + end_date`（闭区间）建模，做唯一性/冲突校验时必须转换为半开区间：`daterange(effective_date, end_date + 1, '[)')`。
+4. 有效期更正（effective_date correction）必须满足相邻边界约束：`prev < new < next`；缺失一侧边界时视为单侧无界。
+5. 同一业务键同日唯一必须成立：更正/插入后不得与既有记录发生“同键同日冲突”。
+6. `gapless` 与 `last infinite` 仅在实体契约显式要求时启用，不作为全仓默认强制项。
+
+**适用范围**
+
+- Effective-dated 的 schema 设计（`versions` 表、`daterange`/`effective_date,end_date`）；
+- 写入链路中的冲突校验、修正插入规则与回放一致性；
+- SQL 约束、迁移脚本、服务层校验与测试断言；
+- 文档中的有效期建模约定与示例。
+
+**禁止事项**
+
+1. 禁止同一语义在不同模块混用闭区间/半开区间且无显式转换规则。
+2. 禁止在 `effective_date + end_date` 模型里直接用闭区间做冲突校验而不执行 `end_date + 1` 转换。
+3. 禁止更正链路绕过相邻边界校验（例如允许 `new <= prev` 或 `new >= next`）。
+4. 禁止通过“默认 today/取最近一条”掩盖有效期冲突与缺失参数问题。
+
+**参考规范**
+
+- `docs/dev-plans/032-effective-date-day-granularity.md`
+- `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
+- `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
+
+**与现有计划关系**
+
+- `STD-002` 继续负责“as_of/effective_date 输入语义与显式化”；本标准负责“Valid Time 区间建模与更正边界”。
+- `DEV-PLAN-032` 保留为实现指南与示例来源；规范性口径以本标准为准。
+
 ## 后续扩展待办
 
 1. [ ] 新增“STD-001 落地执行计划”（门禁、接口、DB/代码命名、迁移窗口与回滚策略）。
 2. [ ] 新增“STD-002 落地执行计划”（以 `DEV-PLAN-102B` 为主计划，覆盖文档/实现/测试/门禁收口）。
 3. [ ] 建立“标准变更记录模板”（记录版本、影响面、验收证据）。
 4. [ ] 将标准检查接入 CI（新增或修订对应 `make check` 门禁）。
+5. [ ] 新增“STD-007 落地执行计划”（区间约束、修正边界校验、冲突门禁与回放一致性测试）。
 
 ## 交付物
 

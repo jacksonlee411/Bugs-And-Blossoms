@@ -162,8 +162,8 @@
 - 仅允许 `role:anonymous` 访问“明确列入 policy 的 object/action”，不得因为“没有登录”而在 handler 内做隐式放行。
 - MVP 默认允许：
   - `iam.ping/read`
-  - `iam.session/read`（GET `/login`）
-  - `iam.session/admin`（POST `/login`、POST `/logout`）
+  - `iam.session/read`（GET `/app/login`）
+  - `iam.session/admin`（POST `/iam/api/sessions`、POST `/logout`）
 - 当新增登录/会话创建等“必须匿名可达”的入口时：必须为其定义稳定 object（例如 `iam.session`/`iam.login` 等）并在 policy 中显式加入 `role:anonymous` 允许项；否则 `AUTHZ_MODE=enforce` 下应当拒绝（fail-closed）。
 
 ## 5. 本仓库落地形态（目录与产物）

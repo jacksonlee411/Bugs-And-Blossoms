@@ -1,6 +1,6 @@
-# DEV-PLAN-097：OrgUnit 详情从抽屉（Drawer）迁移为独立页面（对齐 MUI CRUD Dashboard）
+# [Archived] DEV-PLAN-097：OrgUnit 详情从抽屉（Drawer）迁移为独立页面（对齐 MUI CRUD Dashboard）
 
-**状态**: 草拟中（2026-02-12 23:26 UTC）
+**状态**: 已归档（2026-02-22，详情页形态已收口，不再继续单列实施）
 
 > 参考示例：MUI CRUD Dashboard 模板 `/employees/:id` 详情页交互（顶部面包屑 + 独立详情页 + 底部返回按钮）。
 >

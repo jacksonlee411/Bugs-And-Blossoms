@@ -238,7 +238,7 @@
 - `docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
 - `docs/dev-plans/100h-org-metadata-wide-table-phase5-stability-performance-ops-closure.md`
 - `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
-- `docs/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
+- `docs/archive/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
 - `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - `docs/dev-plans/080c-orgunit-audit-snapshot-presence-table-constraint-plan.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`

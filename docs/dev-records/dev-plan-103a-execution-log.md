@@ -3,8 +3,8 @@
 **状态**: 已完成（2026-02-15 20:52 UTC）
 
 **关联文档**:
-- `docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
-- `docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
+- `docs/archive/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
+- `docs/archive/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 
 ## 1) 旧 UI → MUI 映射表（事实源盘点 + 状态）
 
