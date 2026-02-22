@@ -1,6 +1,6 @@
 # DEV-PLAN-071B：字段配置/字典配置与 SetID 边界实施方案
 
-**状态**: 规划中（2026-02-20 14:20 UTC）
+**状态**: 规划中（2026-02-20 14:20 UTC；时间参数口径遵循 `STD-002`/`DEV-PLAN-102B`）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：基于 `DEV-PLAN-070` / `DEV-PLAN-071` 的现状评估，明确“字段配置模块、字典配置模块是否应引入集合 ID（SetID）管理”的落地路径。
@@ -35,7 +35,7 @@
   - [ ] DB 迁移 / Schema（按模块 `make <module> plan/lint/migrate up`）
   - [ ] sqlc（`make sqlc-generate`）
   - [x] 文档（`make check doc`）
-- **SSOT 链接**：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`。
+- **SSOT 链接**：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`、`docs/dev-plans/005-project-standards-and-spec-adoption.md`（`STD-002`）。
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 架构图 (Mermaid)

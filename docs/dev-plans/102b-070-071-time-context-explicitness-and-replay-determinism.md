@@ -1,6 +1,11 @@
 # DEV-PLAN-102B：070/071 时间口径强制显式化与历史回放稳定性收敛
 
-**状态**: 草拟中（2026-02-22 02:22 UTC）
+**状态**: 进行中（2026-02-22 11:10 UTC，作为 070/071 时间口径改造主实施计划）
+
+## 0. 主计划定位（Plan of Record）
+- 本计划是 070/071 时间参数收敛的 **Plan of Record（PoR）**，后续实现与验收以本计划为准。
+- 相关方案（070/071/071A/071B/102/026A/063）中的冲突口径按本计划与 `STD-002` 修订，不再并列解释。
+- 实施顺序：先完成文档契约收口（M1）→ 再执行 API/Kernel/测试与门禁改造（M2-M5）→ 最后归档证据（M6）。
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：针对 070/071 系列方案落地后的复盘反馈：部分接口仍会在缺省参数时默认“今天（`current_date` / `time.Now().UTC()`）”，导致同一问题在不同日期回看时结果漂移。
@@ -48,12 +53,13 @@
   - [ ] sqlc（如有 schema/query 变更则 `make sqlc-generate`）
   - [x] 文档（`make check doc`）
 - **SSOT 链接**：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`、`docs/dev-plans/012-ci-quality-gates.md`
+- **标准入口**：`docs/dev-plans/005-project-standards-and-spec-adoption.md`（`STD-002`）
 
 ## 3. 架构与关键决策 (Architecture & Decisions)
 ### 3.1 关键设计决策 (ADR 摘要)
 - **决策 1：时间参数从“可缺省”改为“显式必填”**
   - 选项 A：保留默认 today，仅补提示。缺点：历史回放仍不稳定。
-  - 选项 B（选定）：接口缺少时间参数即 400/422 fail-closed。优点：行为确定、可审计。
+  - 选项 B（选定）：接口缺少时间参数即 400 fail-closed。优点：行为确定、可审计。
 - **决策 2：禁止在服务端推断 today 作为业务时间**
   - 选项 A：由 handler/controller 自动回填。缺点：同请求跨天结果漂移。
   - 选项 B（选定）：仅允许客户端显式传参；服务端仅校验与透传。
@@ -72,6 +78,14 @@
 - `effective_date`：写入生效日期，**必须显式提供**。
 - 任何 `target_effective_date` / `enabled_on` / `disabled_on` / `correction_day` 等业务日字段继续保持必填，不得回退到 today。
 - 仅审计时间（`created_at/updated_at/transaction_time`）允许使用系统时钟；业务有效时间一律来自请求显式参数。
+
+### 3.3 错误响应冻结（避免 400/422 分叉）
+- HTTP 状态码统一使用 `400`，不在本计划范围内引入 `422`。
+- 错误码统一使用：
+  - 读接口缺失/非法：`invalid_as_of`
+  - 写接口缺失/非法：`invalid_effective_date`
+- 缺失参数通过 message 明确 `as_of required` / `effective_date required`。
+- `STD-002` 为唯一规范来源；出现历史文档差异时，以本节为准并在执行日志登记修订证据。
 
 ## 4. 数据模型与约束 (Data Model & Constraints)
 ### 4.1 SQL / Kernel 收敛点
@@ -145,7 +159,7 @@
 ### 8.2 对相关计划的影响评估（调查结论落表）
 1. **高影响（必须同版本收口）**
    - `DEV-PLAN-071`：删除/替换“可选+默认 today”合同；同步 API、算法、回填说明。
-   - `DEV-PLAN-102`：更新路由矩阵中“缺省回退当天/302 补齐当天”条目，改为缺失即 fail-closed。
+   - `DEV-PLAN-102`：将 §4.5 矩阵降级为“历史存档（非现行）”，并显式跳转到 `DEV-PLAN-102B`；避免形成双重权威。
 2. **中高影响（承接计划需同步）**
    - `DEV-PLAN-071A`：其“保持 071 现有契约”的引用需随 071 改写；治理页/业务页提交参数改为显式必填。
 3. **中影响（测试合同修订）**
@@ -156,12 +170,22 @@
    - `DEV-PLAN-026A`：作为历史文档执行最小文字修订，避免继续传播“默认当日 UTC”。
 
 ### 8.3 里程碑
-1. [ ] **M1 契约冻结**：修订 070/071/071A/071B/102/026A/063 的时间参数规则，移除“默认 today”描述并记录冲突消解表。
+1. [x] **M1 契约冻结**：修订 070/071/071A/071B/102/026A/063 的时间参数规则，移除“默认 today”描述并记录冲突消解表（2026-02-22 已完成文档收口）。
 2. [ ] **M2 API 收口**：移除 handler/controller 默认回填，统一 `invalid_* + required message`；含 `scope-packages/{package_id}/disable`。
 3. [ ] **M3 Kernel 收口**：移除 SQL 函数内 `current_date` 业务口径分支，改为显式日期。
 4. [ ] **M4 测试重构**：删除“default as_of/effective_date”用例，新增“missing required date -> fail”与“跨天重放一致性”用例。
 5. [ ] **M5 门禁落地**：新增 `make check as-of-explicit`（名称可调整）并接入 CI，阻断回漂。
 6. [ ] **M6 证据归档**：更新 `docs/dev-records/dev-plan-102b-execution-log.md`，记录命令、结果、风险、回滚说明。
+
+### 8.4 文档收口记录（2026-02-22）
+- [x] `DEV-PLAN-005`：新增 `STD-002`（`as_of`/`effective_date` 语义标准）。
+- [x] `DEV-PLAN-102B`：明确主实施计划（PoR）定位与 `STD-002` 绑定。
+- [x] `DEV-PLAN-071`：移除 `as_of/effective_date` 默认 `current_date` 合同，补齐 disable 的 `effective_date` 必填。
+- [x] `DEV-PLAN-071A`：订阅/包治理接口说明对齐 `DEV-PLAN-102B`（显式日期必填）。
+- [x] `DEV-PLAN-071B`：补充 `STD-002` 引用，明确时间参数口径来源。
+- [x] `DEV-PLAN-102`：将旧矩阵标注为历史附录（非现行），并增加“现行以 `DEV-PLAN-102B` 为准”的显式跳转说明。
+- [x] `DEV-PLAN-063`：移除“`effective_date` 缺省默认为 `as_of`”测试合同。
+- [x] `DEV-PLAN-026A`：增加历史合同勘误注记，冲突口径以 `STD-002`/`DEV-PLAN-102B` 为准。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 ### 9.1 单元/接口测试
@@ -174,21 +198,51 @@
 - [ ] 构造固定数据集，分别在两次不同执行日运行同一批请求（参数含显式日期），结果一致。
 - [ ] 订阅/包停用/历史切片场景：`as_of` 指定历史日能稳定回放，未来日 fail-closed 行为稳定。
 
+### 9.2.1 回放测试机制（可执行化）
+- [ ] 引入统一测试夹具：同一份数据库快照 + 同一批请求脚本 + 同一显式日期参数集。
+- [ ] CI 中串行执行两轮回放（示例运行日锚点：`2026-03-01`、`2026-03-20`），仅允许审计字段（`created_at/updated_at/transaction_time`）差异。
+- [ ] 输出结构化对比报告：请求键为 `(tenant, route, payload/query, as_of/effective_date)`；差异字段超出审计白名单即失败。
+- [ ] 对比报告作为 readiness 证据归档到 `docs/dev-records/dev-plan-102b-execution-log.md`。
+
 ### 9.3 门禁与静态检查
-- [ ] 新增检查脚本扫描 070/071 范围内禁止模式：
+- [ ] 新增分层门禁 `make check as-of-explicit`（名称可调整）：
+  - **L1（契约门禁）**：接口缺失日期参数时必须返回 `400 invalid_*`（契约测试，不依赖实现细节）。
+  - **L2（Go 实现门禁）**：在 070/071 相关目录做 AST/结构化检查，阻断“空值回填 today/互相回填”的代码路径。
+  - **L3（SQL 门禁）**：阻断 `current_date` 参与 070/071 业务有效期判断；仅允许审计时间与显式白名单。
+  - **L4（文档门禁）**：新增文档中若出现“as_of/effective_date 缺省 today”表述则失败。
+- [ ] 示例反例（用于规则单测）：
   - `if asOf == "" { asOf = time.Now().UTC().Format("2006-01-02") }`
   - `if req.EffectiveDate == "" { req.EffectiveDate = ... }`
   - `effectiveDate := time.Now().UTC().Format("2006-01-02")`（用于业务生效日）
-  - SQL 中以 `current_date` 参与 070/071 业务有效期判断（白名单除外）。
-- [ ] CI 门禁可阻断新增隐式默认逻辑。
+- [ ] CI 门禁可阻断新增隐式默认逻辑，且不依赖单纯字符串匹配。
 
 ### 9.4 完成判定
 - [ ] 文档契约与代码行为一致，不再存在“文档说必填、实现却默认 today”的冲突。
 - [ ] 用户复盘同一问题时，显式同一日期参数得到稳定一致结果。
 - [ ] 调查结论涉及的冲突文档（071/102/071A/026A/063）均完成改写，并在执行日志附“改写前后对照”。
+- [ ] `DEV-PLAN-102` 的旧矩阵已明确标注“历史存档（非现行）”，不存在与本计划并列生效的双重权威。
 
 ## 10. 运维与发布策略 (Ops & Release)
 - 不引入功能开关，不保留 legacy 兼容分支。
 - 采用前向修复：合同、实现、测试、门禁同版本收口。
 - 若发布后出现误用（调用方漏传日期）：按 fail-closed 返回明确错误码，调用方修复后重试。
 - 回滚策略：仅允许环境级保护（只读/停写）+ 前向补丁，不回退到“默认 today”旧行为。
+
+### 10.1 故障处置 Runbook（No-Legacy）
+1. **触发条件**（任一命中即进入处置）
+   - 发布后 `invalid_as_of` / `invalid_effective_date` 异常激增，影响关键业务流程；
+   - 回放一致性对比报告出现非审计字段差异；
+   - 门禁发现新增隐式日期默认逻辑已进入主分支。
+2. **责任分工**
+   - 值班 owner：Org 平台值班（主责执行只读/停写与恢复判定）。
+   - 修复 owner：对应模块开发 owner（主责补丁与回归）。
+3. **处置步骤**
+   - 先启用环境级保护：受影响写接口进入只读/停写；
+   - 保留失败请求样本并定位缺参来源（调用方/服务端）；
+   - 提交前向补丁，禁止引入 legacy fallback；
+   - 执行 M2-M5 对应回归与回放测试；
+   - 满足恢复判定后解除只读/停写。
+4. **恢复判定**
+   - 关键接口错误率恢复到基线；
+   - 回放一致性报告仅剩审计字段差异；
+   - `make check as-of-explicit`、`make check routing`、`make test` 通过并已留档。
