@@ -9,10 +9,12 @@
 ## 0. TL;DR（最常见变更要跑什么）
 
 - Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
+- 新建 Go 模块后（防止 `go mod init` 默认回退）：执行 `go get go@1.26.0`（或 `go mod edit -go=1.26.0`）
 - 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
 - 业务幂等字段命名收敛：`make check request-code`
 - `.templ`/MUI Web UI/presentation assets 相关：`make generate && make css`，然后 `git status --short` 必须为空
 - 多语言 JSON：`make check tr`
+- 提交前 Go 版本门禁：`make check go-version`（或直接跑 `make preflight`）
 - 发 PR 前一键对齐 CI（推荐）：`make preflight`
 - 发 PR 规则（强制）：PR 源分支只能是 `wt-dev-main` / `wt-dev-a` / `wt-dev-b`（CI 门禁：`make check pr-branch`）
 - DB Schema/迁移（Atlas+Goose，按模块）：`make <module> plan && make <module> lint && make <module> migrate up`
@@ -36,6 +38,7 @@
 | 你改了什么 | 本地必跑 | 备注 |
 | --- | --- | --- |
 | 任意 Go 代码 | `go fmt ./... && go vet ./... && make check lint && make test` | 不要仅跑 `gofmt`/`go test`，它们覆盖不到 CI lint |
+| `go.mod` / `.tool-versions`（Go 版本口径） | `make check go-version` | 防止 `go mod init` 默认回退，保持 `1.26.x` |
 | `.templ` / MUI Web UI / presentation assets | `make generate && make css` + `git status --short` | 生成物必须提交，否则 CI 会失败 |
 | 多语言 JSON | `make check tr` | |
 | DB Schema/迁移（Atlas+Goose，按模块） | `make <module> plan && make <module> lint && make <module> migrate up` | 模块级闭环见 `DEV-PLAN-024` |
@@ -269,6 +272,11 @@ modules/{module}/
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102A：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案：`docs/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
 - DEV-PLAN-102B：070/071 时间口径强制显式化与历史回放稳定性收敛：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
+- DEV-PLAN-102C：SetID 对标 Workday 的集团共享与业务单元个性化差距评估（承接 102/102B）：`docs/dev-plans/102c-setid-group-sharing-and-bu-personalization-gap-assessment.md`
+- DEV-PLAN-102C1：SetID 上下文化安全模型（承接 102C，避免与 070B 重复）：`docs/dev-plans/102c1-setid-contextual-security-model.md`
+- DEV-PLAN-102C2：BU 个性化策略注册表（承接 102C，避免与 070B/102C1 重复）：`docs/dev-plans/102c2-bu-personalization-strategy-registry.md`
+- DEV-PLAN-102C3：SetID 配置命中可解释性（Explainability）方案（承接 102C，避免与 070B/102C1/102C2 重复）：`docs/dev-plans/102c3-setid-configuration-hit-explainability.md`
+- DEV-PLAN-102C4：BU 流程个性化样板（承接 102C，避免与 070B/102C1/102C2/102C3 重复）：`docs/dev-plans/102c4-bu-process-personalization-pilot.md`
 - DEV-PLAN-102B 执行日志：`docs/dev-records/dev-plan-102b-execution-log.md`
 - DEV-PLAN-102A 执行日志：`docs/dev-records/dev-plan-102a-execution-log.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
