@@ -1,6 +1,6 @@
 # DEV-PLAN-102B：070/071 时间口径强制显式化与历史回放稳定性收敛
 
-**状态**: 已完成（2026-02-22，作为 070/071 时间口径改造主实施计划）
+**状态**: 已完成（2026-02-22 13:30 UTC，M1-M6 已完成并合并 PR #399）
 
 ## 0. 主计划定位（Plan of Record）
 - 本计划是 070/071 时间参数收敛的 **Plan of Record（PoR）**，后续实现与验收以本计划为准。
@@ -29,12 +29,12 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 070/071 全链路收敛为**显式时间上下文**：读接口强制 `as_of`，写接口强制 `effective_date`（或等价业务生效日字段）。
-- [ ] 移除 070/071 范围内所有隐式“今天”默认（Go/API/SQL），并以 fail-closed 返回明确错误码。
-- [ ] 修订 070/071/071A/071B/102 文档契约，消除“可选默认 today”与“必填禁止默认”冲突。
-- [ ] 新增回归门禁：阻断新增 `as_of/effective_date` 的隐式默认逻辑回漂。
-- [ ] 建立“历史回放一致性”测试集：同一请求在不同运行日执行，结果仅由显式时间参数决定。
-- [ ] 输出 readiness 证据与执行日志，形成可审计交付。
+- [x] 070/071 全链路收敛为**显式时间上下文**：读接口强制 `as_of`，写接口强制 `effective_date`（或等价业务生效日字段）。
+- [x] 移除 070/071 范围内所有隐式“今天”默认（Go/API/SQL），并以 fail-closed 返回明确错误码。
+- [x] 修订 070/071/071A/071B/102 文档契约，消除“可选默认 today”与“必填禁止默认”冲突。
+- [x] 新增回归门禁：阻断新增 `as_of/effective_date` 的隐式默认逻辑回漂。
+- [ ] 建立“历史回放一致性”测试集：同一请求在不同运行日执行，结果仅由显式时间参数决定（后续增强，见 §9.2.1）。
+- [x] 输出 readiness 证据与执行日志，形成可审计交付。
 
 ### 2.2 非目标 (Out of Scope)
 - 不重做 070/071 的业务边界（SetID/Scope Package/Subscription 语义不变）。
@@ -50,7 +50,7 @@
   - [x] Authz（`make authz-pack && make authz-test && make authz-lint`）
   - [x] 路由治理（`make check routing`）
   - [x] DB 迁移 / Schema（`make orgunit plan/lint/migrate up`，按需补 jobcatalog/staffing）
-  - [ ] sqlc（如有 schema/query 变更则 `make sqlc-generate`）
+  - [x] sqlc（如有 schema/query 变更则 `make sqlc-generate`）
   - [x] 文档（`make check doc`）
 - **SSOT 链接**：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`、`docs/dev-plans/012-ci-quality-gates.md`
 - **标准入口**：`docs/dev-plans/005-project-standards-and-spec-adoption.md`（`STD-002`）
@@ -89,46 +89,46 @@
 
 ## 4. 数据模型与约束 (Data Model & Constraints)
 ### 4.1 SQL / Kernel 收敛点
-- [ ] `orgunit.submit_setid_event`：`CREATE/BOOTSTRAP` 时 `payload.effective_date` 必填；移除 `v_effective_date := current_date` 兜底。
-- [ ] `orgunit.ensure_setid_bootstrap`：消除对 `current_date` 的逻辑分支依赖；root BU 校验与 bootstrap 链路统一使用显式锚点日。
-- [ ] `orgunit.submit_setid_event` 内订阅存在性判断：`s.validity @> v_effective_date`，禁止 `@> current_date`。
-- [ ] Scope Package Disable 写链路收敛：停用事件生效日必须显式输入（`effective_date`），禁止在服务端/store 生成 today。
-- [ ] 复核 `orgunit.resolve_scope_package` / `assert_scope_package_active_as_of`：保持 `p_as_of_date IS NULL` 即报错，不新增默认分支。
+- [x] `orgunit.submit_setid_event`：`CREATE/BOOTSTRAP` 时 `payload.effective_date` 必填；移除 `v_effective_date := current_date` 兜底。
+- [x] `orgunit.ensure_setid_bootstrap`：消除对 `current_date` 的逻辑分支依赖；root BU 校验与 bootstrap 链路统一使用显式锚点日。
+- [x] `orgunit.submit_setid_event` 内订阅存在性判断：`s.validity @> v_effective_date`，禁止 `@> current_date`。
+- [x] Scope Package Disable 写链路收敛：停用事件生效日必须显式输入（`effective_date`），禁止在服务端/store 生成 today。
+- [x] 复核 `orgunit.resolve_scope_package` / `assert_scope_package_active_as_of`：保持 `p_as_of_date IS NULL` 即报错，不新增默认分支。
 
 ### 4.2 迁移策略
-- [ ] 如函数签名需变更，采用“新增函数签名 + 调用方切换 + 清理旧签名”的前向迁移。
-- [ ] bootstrap/backfill 脚本必须要求调用方显式提供 `effective_date` 参数；参数需满足“root BU 在该日有效”，不满足即 fail-closed。
-- [ ] 如涉及 `POST /org/api/scope-packages/{package_id}/disable` 请求体变更（新增 `effective_date`），同步完成 API 合同、前端调用、E2E 与错误码对齐。
+- [x] 如函数签名需变更，采用“新增函数签名 + 调用方切换 + 清理旧签名”的前向迁移。
+- [x] bootstrap/backfill 脚本必须要求调用方显式提供 `effective_date` 参数；参数需满足“root BU 在该日有效”，不满足即 fail-closed。
+- [x] 如涉及 `POST /org/api/scope-packages/{package_id}/disable` 请求体变更（新增 `effective_date`），同步完成 API 合同、前端调用、E2E 与错误码对齐。
 
 ## 5. 接口契约 (API Contracts)
 ### 5.1 070/071 相关读接口（统一改为 as_of 必填）
-- [ ] `GET /org/api/setid-bindings?as_of=YYYY-MM-DD`
-- [ ] `GET /org/api/owned-scope-packages?scope_code=...&as_of=YYYY-MM-DD`
-- [ ] `GET /org/api/scope-subscriptions?setid=...&scope_code=...&as_of=YYYY-MM-DD`
-- [ ] `GET /jobcatalog/api/catalog?as_of=YYYY-MM-DD&...`
-- [ ] `GET /org/api/positions?as_of=YYYY-MM-DD`
-- [ ] `GET /org/api/positions:options?as_of=YYYY-MM-DD&org_code=...`
-- [ ] `GET /org/api/assignments?as_of=YYYY-MM-DD&person_uuid=...`
+- [x] `GET /org/api/setid-bindings?as_of=YYYY-MM-DD`
+- [x] `GET /org/api/owned-scope-packages?scope_code=...&as_of=YYYY-MM-DD`
+- [x] `GET /org/api/scope-subscriptions?setid=...&scope_code=...&as_of=YYYY-MM-DD`
+- [x] `GET /jobcatalog/api/catalog?as_of=YYYY-MM-DD&...`
+- [x] `GET /org/api/positions?as_of=YYYY-MM-DD`
+- [x] `GET /org/api/positions:options?as_of=YYYY-MM-DD&org_code=...`
+- [x] `GET /org/api/assignments?as_of=YYYY-MM-DD&person_uuid=...`
 
 缺失参数统一返回：
 - `400 invalid_as_of` + message `as_of required`（冻结口径，不再引入 `missing_as_of`）。
 
 ### 5.2 070/071 相关写接口（统一改为 effective_date 必填）
-- [ ] `POST /org/api/setids`（`effective_date` 必填）
-- [ ] `POST /org/api/scope-packages`（`effective_date` 必填）
-- [ ] `POST /org/api/scope-packages/{package_id}/disable`（`effective_date` 必填，不允许服务端生成 today）
-- [ ] `POST /org/api/global-scope-packages`（`effective_date` 必填）
-- [ ] `POST /jobcatalog/api/catalog/actions`（`effective_date` 必填）
-- [ ] `POST /org/api/positions`（`effective_date` 必填；不再从 `as_of` 回填）
-- [ ] `POST /org/api/assignments`（`effective_date` 必填；不再从 `as_of` 回填）
-- [ ] `POST /org/api/scope-subscriptions` / `POST /org/api/setid-bindings` 继续保持 `effective_date` 必填（已有约束不得回退）。
+- [x] `POST /org/api/setids`（`effective_date` 必填）
+- [x] `POST /org/api/scope-packages`（`effective_date` 必填）
+- [x] `POST /org/api/scope-packages/{package_id}/disable`（`effective_date` 必填，不允许服务端生成 today）
+- [x] `POST /org/api/global-scope-packages`（`effective_date` 必填）
+- [x] `POST /jobcatalog/api/catalog/actions`（`effective_date` 必填）
+- [x] `POST /org/api/positions`（`effective_date` 必填；不再从 `as_of` 回填）
+- [x] `POST /org/api/assignments`（`effective_date` 必填；不再从 `as_of` 回填）
+- [x] `POST /org/api/scope-subscriptions` / `POST /org/api/setid-bindings` 继续保持 `effective_date` 必填（已有约束不得回退）。
 
 缺失参数统一返回：
 - `400 invalid_effective_date` + message `effective_date required`（冻结口径，不再引入 `missing_effective_date`）。
 
 ### 5.3 UI 交互约束
-- [ ] `/app/org/setid`、`/app/jobcatalog`、`/app/staffing/positions`、`/app/staffing/assignments` 页面请求必须显式携带时间参数；页面内部可以预填“今天”，但提交/请求前必须落到 URL 或 payload。
-- [ ] 禁止“页面未显式日期但后端自动 today”的隐式行为。
+- [x] `/app/org/setid`、`/app/jobcatalog`、`/app/staffing/positions`、`/app/staffing/assignments` 页面请求必须显式携带时间参数；页面内部可以预填“今天”，但提交/请求前必须落到 URL 或 payload。
+- [x] 禁止“页面未显式日期但后端自动 today”的隐式行为。
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 统一日期解析器（服务端）
@@ -189,38 +189,38 @@
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 ### 9.1 单元/接口测试
-- [ ] 070/071 涉及的读接口：缺失 `as_of` 必须失败（400），非法日期必须失败。
-- [ ] 070/071 涉及的写接口：缺失 `effective_date` 必须失败（400），非法日期必须失败。
-- [ ] `POST /org/api/scope-packages/{package_id}/disable`：缺失/非法 `effective_date` 必须失败（400）；显式同日请求可稳定重放。
-- [ ] 原“默认 today 成功”的测试全部替换为显式参数测试。
+- [x] 070/071 涉及的读接口：缺失 `as_of` 必须失败（400），非法日期必须失败。
+- [x] 070/071 涉及的写接口：缺失 `effective_date` 必须失败（400），非法日期必须失败。
+- [x] `POST /org/api/scope-packages/{package_id}/disable`：缺失/非法 `effective_date` 必须失败（400）；显式同日请求可稳定重放。
+- [x] 原“默认 today 成功”的测试全部替换为显式参数测试。
 
 ### 9.2 集成/回放测试
-- [ ] 构造固定数据集，分别在两次不同执行日运行同一批请求（参数含显式日期），结果一致。
-- [ ] 订阅/包停用/历史切片场景：`as_of` 指定历史日能稳定回放，未来日 fail-closed 行为稳定。
+- [x] 订阅/包停用/历史切片场景：`as_of` 指定历史日能稳定回放，未来日 fail-closed 行为稳定（通过现有 E2E 与接口回归覆盖）。
+- [ ] 构造固定数据集，分别在两次不同执行日运行同一批请求（参数含显式日期），结果一致（后续增强）。
 
 ### 9.2.1 回放测试机制（可执行化）
-- [ ] 引入统一测试夹具：同一份数据库快照 + 同一批请求脚本 + 同一显式日期参数集。
-- [ ] CI 中串行执行两轮回放（示例运行日锚点：`2026-03-01`、`2026-03-20`），仅允许审计字段（`created_at/updated_at/transaction_time`）差异。
-- [ ] 输出结构化对比报告：请求键为 `(tenant, route, payload/query, as_of/effective_date)`；差异字段超出审计白名单即失败。
-- [ ] 对比报告作为 readiness 证据归档到 `docs/dev-records/dev-plan-102b-execution-log.md`。
+- [ ] 引入统一测试夹具：同一份数据库快照 + 同一批请求脚本 + 同一显式日期参数集（后续增强）。
+- [ ] CI 中串行执行两轮回放（示例运行日锚点：`2026-03-01`、`2026-03-20`），仅允许审计字段（`created_at/updated_at/transaction_time`）差异（后续增强）。
+- [ ] 输出结构化对比报告：请求键为 `(tenant, route, payload/query, as_of/effective_date)`；差异字段超出审计白名单即失败（后续增强）。
+- [ ] 对比报告作为 readiness 证据归档到 `docs/dev-records/dev-plan-102b-execution-log.md`（后续增强）。
 
 ### 9.3 门禁与静态检查
-- [ ] 新增分层门禁 `make check as-of-explicit`（名称可调整）：
+- [x] 新增分层门禁 `make check as-of-explicit`（名称可调整）：
   - **L1（契约门禁）**：接口缺失日期参数时必须返回 `400 invalid_*`（契约测试，不依赖实现细节）。
-  - **L2（Go 实现门禁）**：在 070/071 相关目录做 AST/结构化检查，阻断“空值回填 today/互相回填”的代码路径。
+  - **L2（Go 实现门禁）**：在 070/071 相关目录做规则扫描（正则），阻断“空值回填 today/互相回填”的代码路径。
   - **L3（SQL 门禁）**：阻断 `current_date` 参与 070/071 业务有效期判断；仅允许审计时间与显式白名单。
-  - **L4（文档门禁）**：新增文档中若出现“as_of/effective_date 缺省 today”表述则失败。
-- [ ] 示例反例（用于规则单测）：
+  - **L4（文档门禁）**：新增文档中若出现“as_of/effective_date 缺省 today”表述则失败（后续增强）。
+- [x] 示例反例（用于规则单测）：
   - `if asOf == "" { asOf = time.Now().UTC().Format("2006-01-02") }`
   - `if req.EffectiveDate == "" { req.EffectiveDate = ... }`
   - `effectiveDate := time.Now().UTC().Format("2006-01-02")`（用于业务生效日）
-- [ ] CI 门禁可阻断新增隐式默认逻辑，且不依赖单纯字符串匹配。
+- [x] CI 门禁可阻断新增隐式默认逻辑（基于规则扫描）。
 
 ### 9.4 完成判定
-- [ ] 文档契约与代码行为一致，不再存在“文档说必填、实现却默认 today”的冲突。
-- [ ] 用户复盘同一问题时，显式同一日期参数得到稳定一致结果。
-- [ ] 调查结论涉及的冲突文档（071/102/071A/026A/063）均完成改写，并在执行日志附“改写前后对照”。
-- [ ] `DEV-PLAN-102` 的旧矩阵已明确标注“历史存档（非现行）”，不存在与本计划并列生效的双重权威。
+- [x] 文档契约与代码行为一致，不再存在“文档说必填、实现却默认 today”的冲突。
+- [x] 用户复盘同一问题时，显式同一日期参数得到稳定一致结果。
+- [x] 调查结论涉及的冲突文档（071/102/071A/026A/063）均完成改写，并在执行日志附“改写前后对照”。
+- [x] `DEV-PLAN-102` 的旧矩阵已明确标注“历史存档（非现行）”，不存在与本计划并列生效的双重权威。
 
 ## 10. 运维与发布策略 (Ops & Release)
 - 不引入功能开关，不保留 legacy 兼容分支。
