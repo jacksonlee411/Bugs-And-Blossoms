@@ -280,6 +280,8 @@ modules/{module}/
 - DEV-PLAN-102C2：BU 个性化策略注册表（承接 102C，避免与 070B/102C1 重复）：`docs/dev-plans/102c2-bu-personalization-strategy-registry.md`
 - DEV-PLAN-102C3：SetID 配置命中可解释性（Explainability）方案（承接 102C，避免与 070B/102C1/102C2 重复）：`docs/dev-plans/102c3-setid-configuration-hit-explainability.md`
 - DEV-PLAN-102C4：BU 流程个性化样板（承接 102C，避免与 070B/102C1/102C2/102C3 重复）：`docs/dev-plans/102c4-bu-process-personalization-pilot.md`
+- DEV-PLAN-102C5：102C1-102C3 UI 专项方案（SetID 上下文化安全 + 策略注册表 + 命中解释）：`docs/dev-plans/102c5-ui-design-for-setid-context-security-registry-explainability.md`
+- DEV-PLAN-102C-T：102C1-102C3 测试方案（同租户跨 BU 字段差异）：`docs/dev-plans/102c-t-test-plan-for-c1-c3-bu-field-variance.md`
 - DEV-PLAN-102B 执行日志：`docs/dev-records/dev-plan-102b-execution-log.md`
 - DEV-PLAN-102A 执行日志：`docs/dev-records/dev-plan-102a-execution-log.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`

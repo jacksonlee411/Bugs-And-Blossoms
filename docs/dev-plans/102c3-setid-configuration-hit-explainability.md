@@ -1,6 +1,6 @@
 # DEV-PLAN-102C3：SetID 配置命中可解释性（Explainability）方案（承接 102C，避免与 070B/102C1/102C2 重复）
 
-**状态**: 草拟中（2026-02-22 23:47 UTC）
+**状态**: 草拟中（2026-02-23 02:35 UTC）
 
 ## 0. 主计划定位（Plan of Record）
 - 本计划是 `DEV-PLAN-102C` 的子计划，聚焦“**为何命中该配置**”的可解释输出与证据链。
@@ -21,6 +21,7 @@
 - [ ] 定义 explain 输出契约（API + 日志）并与错误码体系对齐。
 - [ ] 提供“成功命中”和“拒绝失败”两类解释模板。
 - [ ] 建立 explain 覆盖率验收口径：关键链路必须可解释。
+- [ ] 覆盖字段级差异解释：可解释同租户跨 BU 的 `required/visible/default_rule` 命中结果。
 
 ### 2.2 非目标（避免重叠）
 - 不设计 070B 的发布任务模型、迁移脚本、切流步骤。
@@ -39,26 +40,30 @@
 | `request_id` | 幂等/请求 ID | `req-...` |
 | `capability_key` | 业务能力键（引用 102C2） | `jobcatalog.profile_defaults` |
 | `tenant_id` | 当前租户 | `...uuid...` |
+| `business_unit_id` | BU 上下文 | `BU-A` |
 | `as_of` | 查询时点（读） | `2026-03-01` |
 | `effective_date` | 生效日（写，若适用） | `2026-03-01` |
-| `org_unit_id` | 组织上下文（若适用） | `10000001` |
+| `org_unit_id` | 资源定位上下文（可选，不参与层级策略） | `10000001` |
 | `resolved_setid` | 解析出的 SetID | `DEFLT` |
 | `scope_code` | 解析 scope | `jobcatalog` |
 | `resolved_package_id` | 命中 package | `...uuid...` |
 | `package_owner` | 包归属 | `tenant` |
 | `decision` | `allow`/`deny` | `allow` |
 | `reason_code` | 拒绝/说明码 | `OWNER_CONTEXT_FORBIDDEN` |
+| `field_decisions[]` | 字段级判定数组 | `[{field_key,visible,required,default_rule_ref,resolved_default_value,decision,reason_code}]` |
 
 ### 3.2 解释链路阶段（固定顺序）
-1. 输入上下文归一化（tenant / as_of / org_unit）。
-2. SetID 解析（org_unit -> setid）。
+1. 输入上下文归一化（tenant / as_of / business_unit）。
+2. SetID 解析（business_unit -> setid；org_unit 仅作可选定位）。
 3. Scope Package 解析（setid + scope + as_of -> package）。
 4. 授权与上下文约束判定（引用 102C1）。
-5. 结果落盘（日志）与可选 API 回显（按安全策略）。
+5. 字段策略判定（引用 102C2，产出 `field_decisions[]`）。
+6. 结果落盘（日志）与可选 API 回显（按安全策略）。
 
 ### 3.3 输出级别
 - `brief`：仅返回关键结论字段（面向 UI 普通展示）。
 - `full`：返回完整解释链（面向审计/排障；需权限控制）。
+- `brief` 至少包含字段差异摘要：字段是否必填/是否可见/默认值来源。
 
 ## 4. 接口与日志契约（草案）
 ### 4.1 API 回显约定
@@ -75,6 +80,8 @@
 - 时间参数错误继续沿用 102B：`invalid_as_of` / `invalid_effective_date`。
 - 授权上下文错误沿用 102C1：`OWNER_CONTEXT_FORBIDDEN` 等。
 - 缺解释覆盖时返回 `EXPLAINABILITY_MISSING`（内部告警码，不对外暴露细节）。
+- 字段策略错误沿用 102C1：`FIELD_REQUIRED_IN_CONTEXT` / `FIELD_HIDDEN_IN_CONTEXT` / `FIELD_DEFAULT_RULE_MISSING` / `FIELD_POLICY_CONFLICT`。
+- 缺字段级解释覆盖时返回 `FIELD_EXPLAIN_MISSING`（内部告警码）。
 
 ## 5. 与现有计划边界（No-Overlap）
 | 主题 | 070B | 102C1 | 102C2 | 102C3 |
@@ -87,14 +94,18 @@
 ## 6. 里程碑（文档到实施）
 1. [ ] **M1 合同冻结**：字段、阶段、输出级别评审通过。
 2. [ ] **M2 样板链路**：为 `scope-packages` 与 `jobcatalog` 各落 1 条 explain 样板。
-3. [ ] **M3 门禁接入**：关键链路缺 explain 字段时测试失败。
-4. [ ] **M4 验收留证**：产出 explain 对照样例（success/deny 各至少 3 例）。
+3. [ ] **M3 字段级扩展**：补齐 `field_decisions[]` 字段与三类差异（必填/可见/默认）样板。
+4. [ ] **M4 门禁接入**：关键链路缺 explain 字段时测试失败。
+5. [ ] **M5 验收留证**：产出 explain 对照样例（success/deny 各至少 3 例）。
 
 ## 7. 验收标准（Acceptance Criteria）
 - [ ] 关键链路可以回答“为何命中该 package/为何被拒绝”。
 - [ ] explain 字段在 API（brief）与日志（full）口径一致。
 - [ ] deny 路径均有稳定 reason_code，且与 102C1 对齐。
 - [ ] 与 070B/102C1/102C2 无重复实施任务。
+- [ ] 可回答“同租户不同 BU 下，该字段为何在 A 必填、在 B 非必填”。
+- [ ] 可回答“同租户不同 BU 下，该字段为何在 A 可见、在 B 不可见”。
+- [ ] 可回答“同租户不同 BU 下，该字段为何命中 A=`a1`、B=`b2` 默认值规则”。
 
 ## 8. 风险与缓解
 - **R1：解释信息泄露过多**
@@ -112,6 +123,8 @@
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
+- `docs/dev-plans/102c-t-test-plan-for-c1-c3-bu-field-variance.md`
+- `docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md`
 
 ## 10. 外部公开资料（原则级）
 - https://www.workday.com/en-ae/why-workday/trust/security.html
