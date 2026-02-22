@@ -36,10 +36,10 @@
   - 命令入口：`Makefile`
   - CI 门禁：`.github/workflows/quality-gates.yml`
   - Greenfield HR 模块骨架（Job Catalog 归属 jobcatalog）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
-  - OrgUnit：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+  - OrgUnit：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
   - Position：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
   - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（认证与租户上下文：`docs/dev-plans/019-tenant-and-authn.md`）
-  - 时间语义（Valid Time=DATE）：`AGENTS.md`（时间语义章节）、`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（Valid Time 口径）与 `docs/dev-plans/032-effective-date-day-granularity.md`
+  - 时间语义（Valid Time=DATE）：`AGENTS.md`（时间语义章节）、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（Valid Time 口径）与 `docs/dev-plans/032-effective-date-day-granularity.md`
 
 ## 2.5 合同更新（对齐 DEV-PLAN-071：Package 一等公民）
 

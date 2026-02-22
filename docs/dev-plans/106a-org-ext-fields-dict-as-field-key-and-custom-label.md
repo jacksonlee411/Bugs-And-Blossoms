@@ -208,7 +208,7 @@
 | --- | --- | --- |
 | 已完成 | `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md` | 增补 enable-candidates 契约；明确 DICT 字段候选只来自 dict registry（`d_<dict_code>`），不再提供内置 DICT field_key 启用路径；保留自定义 PLAIN（`x_...`）。 |
 | 已完成 | `docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md` | 冻结 `d_<dict_code>` 命名空间、冲突规则、`label`（启用时描述）与返回口径；登记“取消内置 DICT 字段”的收敛与迁移要求。 |
-| 已完成 | `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md` | 更新启用对话框 IA：第三步分组展示（内置非 DICT + 字典字段 + 自定义 PLAIN）；字典字段可填写描述；内置 DICT 必须迁移下线。 |
+| 已完成 | `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md` | 更新启用对话框 IA：第三步分组展示（内置非 DICT + 字典字段 + 自定义 PLAIN）；字典字段可填写描述；内置 DICT 必须迁移下线。 |
 | 已完成 | `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md` | 补充详情页展示契约：`d_...` 字段 `label_i18n_key=null` + `label` 展示规则。 |
 | 已完成 | `docs/dev-plans/105-dict-config-platform-module.md` | 补充 dict registry 对上游“字典字段候选”能力约束（as_of、可用性、fail-closed）。 |
 | 已完成 | `docs/dev-plans/105b-dict-code-management-and-governance.md` | 明确 `GET /iam/api/dicts?as_of=...` 作为 106A 第三步候选字典字段的唯一来源。 |

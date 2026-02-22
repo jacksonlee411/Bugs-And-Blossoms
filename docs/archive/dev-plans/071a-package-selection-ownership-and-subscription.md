@@ -1,9 +1,9 @@
-# DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化（TDD）
+# [Archived] DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化（TDD）
 
 **状态**: 草拟中（2026-01-30 12:07 UTC；2026-02-22 起时间参数口径对齐 `DEV-PLAN-102B`/`STD-002`）
 
 ## 1. 背景与上下文 (Context)
-- **需求来源**: `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md` + SetID/Job Catalog 实际使用反馈。
+- **需求来源**: `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md` + SetID/Job Catalog 实际使用反馈。
 - **当前痛点**:
   - 业务页面只暴露 SetID，无法直接选择/识别 `package_code`，用户创建的 package 无法被直观使用。
   - “订阅切换”与“配置编辑”混在同一路径，导致误解（以为业务页面会自动改订阅）。

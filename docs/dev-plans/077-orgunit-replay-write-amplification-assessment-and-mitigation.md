@@ -137,7 +137,7 @@
 - 本文档变更本地最小校验：`make check doc`。
 
 ## 关联文档
-- `docs/dev-plans/026d-orgunit-incremental-projection-plan.md`
+- `docs/archive/dev-plans/026d-orgunit-incremental-projection-plan.md`
 - `docs/dev-plans/075c-orgunit-delete-disable-semantics-alignment.md`
-- `docs/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
+- `docs/archive/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
 - `docs/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`

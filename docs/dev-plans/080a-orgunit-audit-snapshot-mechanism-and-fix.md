@@ -91,7 +91,7 @@ DEV-PLAN-080 以“快照字段”承载审计展示，但目前并没有把快�
 
 ## 证据索引（代码与文档）
 - `docs/dev-plans/080-orgunit-audit-chain-consolidation.md`：080 对 diff 的规则与目标。
-- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`：rename payload 使用 `new_name` 的历史约定。
+- `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`：rename payload 使用 `new_name` 的历史约定。
 - `internal/sqlc/schema.sql`：
   - `org_events` 字段与约束定义；
   - `submit_org_event`、`submit_org_event_correction`、`submit_org_event_rescind`、`submit_org_status_correction` 的 before/after 写入形态；
@@ -303,5 +303,5 @@ DEV-PLAN-080 以“快照字段”承载审计展示，但目前并没有把快�
 ## 关联文档
 - `docs/dev-plans/080-orgunit-audit-chain-consolidation.md`
 - `docs/dev-records/dev-plan-080-execution-log.md`
-- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+- `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
 - `AGENTS.md`

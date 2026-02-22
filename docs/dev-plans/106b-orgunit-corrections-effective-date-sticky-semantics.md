@@ -195,4 +195,4 @@
 - `docs/dev-plans/106-org-ext-fields-enable-dict-registry-and-custom-plain-fields.md`
 - `docs/dev-plans/080b-orgunit-correction-failure-investigation-and-remediation.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
-- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+- `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`

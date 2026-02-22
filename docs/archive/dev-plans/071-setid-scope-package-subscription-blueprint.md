@@ -1,11 +1,11 @@
-# DEV-PLAN-071：SetID Scope Package 订阅详细设计
+# [Archived] DEV-PLAN-071：SetID Scope Package 订阅详细设计
 
 **状态**: 进行中（2026-01-30 00:13 UTC；2026-02-22 起时间参数口径由 `DEV-PLAN-102B`/`STD-002` 约束）
 
 > 勘误（2026-02-22）：本文中凡出现“`as_of`/`effective_date` 为空默认 `current_date`”的描述，统一废止。现行口径：`as_of` 与 `effective_date` 必填，缺失即 fail-closed（`invalid_as_of` / `invalid_effective_date`）。
 
 ## 1. 背景与上下文 (Context)
-- **需求来源**：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`
+- **需求来源**：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - **当前痛点**：070 方案把 SetID 作为配置主数据的显式入口，但同一 SetID 只能指向一套“全域配置组合”，无法表达“同一 SetID 在不同配置域选择不同方案”，导致 SetID 膨胀与配置重复。
 - **业务价值**：通过 `scope_code + scope_package` 实现配置方案的复用与组合，降低重复配置并保持可审计与可回放。
 
@@ -755,7 +755,7 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
 
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
 - **依赖**：
-  - `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
+  - `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
   - `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
   - `docs/dev-plans/019-tenant-and-authn.md`
   - `docs/dev-plans/022-authz-casbin-toolchain.md`
@@ -819,7 +819,7 @@ ALTER FUNCTION orgunit.assert_scope_package_active_as_of(uuid, text, uuid, uuid,
   - 如必须回滚代码，需同时禁用新增写入口/路由，避免旧逻辑产生隐式回退分支。
 
 ## 11. 关联文档
-- `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
-- `docs/dev-plans/028-setid-management.md`
+- `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
+- `docs/archive/dev-plans/028-setid-management.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `AGENTS.md`

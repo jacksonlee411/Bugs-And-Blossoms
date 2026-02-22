@@ -1,4 +1,4 @@
-# DEV-PLAN-009M2：Phase 4 下一大型里程碑执行计划（Person Identity + Staffing 首个可见样板闭环）
+# [Archived] DEV-PLAN-009M2：Phase 4 下一大型里程碑执行计划（Person Identity + Staffing 首个可见样板闭环）
 
 **状态**: 已完成（2026-01-07 01:22 UTC）
 
@@ -28,12 +28,12 @@
   - Person Identity：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`
   - Position：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
   - Assignments：`docs/dev-plans/031-greenfield-assignment-job-data.md`
-  - OrgUnit / JobCatalog（业务组合前置）：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+  - OrgUnit / JobCatalog（业务组合前置）：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
   - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
   - RLS（No Tx, No RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
   - Authz（统一 403 + policy SSOT）：`docs/dev-plans/022-authz-casbin-toolchain.md`
   - Routing：`docs/dev-plans/017-routing-strategy.md`
-  - UI Shell/IA（导航入口与 as-of 约束）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+  - UI Shell/IA（导航入口与 as-of 约束）：`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
   - Atlas+Goose：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
   - sqlc：`docs/dev-plans/025-sqlc-guidelines.md`
   - 门禁入口与触发器：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`

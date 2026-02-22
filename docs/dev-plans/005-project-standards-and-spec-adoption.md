@@ -89,13 +89,52 @@
 
 - `AGENTS.md`（仓库级时间语义总则）
 - `docs/dev-plans/032-effective-date-day-granularity.md`
-- `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
+- `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
 
 **与现有计划关系**
 
 - 本条标准生效后，`DEV-PLAN-070/071/071A/071B/102/102B` 及其相关测试计划（如 `DEV-PLAN-063`）必须对齐统一口径。
 - 本条标准仅冻结“目标口径”，不在本文件内展开迁移步骤与排期（迁移执行由后续实施计划承接）。
+
+### STD-003：ID/UUID/Code 命名与内外标识边界标准（冻结）
+
+**决策（Normative）**
+
+1. 对于行业有明确标准或约定俗成的命名，优先遵循行业标准与社区共识，不另造别名（例如：`request_id`、`trace_id`）。
+2. 标识命名统一遵循后缀语义：UUID 使用 `_uuid`，结构性数字标识使用 `_id`，业务编码使用 `_code`；技术主键可保留 `id`。
+3. OrgUnit 领域标识边界冻结：对外契约仅使用 `org_code`，内部结构关系仅使用 `org_id`（8 位 `int4`，`10000000~99999999`）。
+4. 边界解析规则冻结：请求进入服务边界时必须先做 `org_code -> org_id` 解析；对外响应回写标识时必须使用 `org_code`。
+5. `org_code` 规则冻结：仅做 `upper` 归一化（不 trim）；长度 `1~64`；允许空格、`\t`、中文标点与全角字符；禁止全空白。
+6. 命名收敛遵循 No Legacy：禁止新旧字段双轨并存；旧字段与新字段同时出现时必须 `400 invalid_request` fail-closed。
+7. 幂等命名与追踪命名以 `STD-001` 为准：业务幂等统一 `request_id`，Tracing 统一 `trace_id`；历史 `request_code` 不再作为新增契约命名。
+
+**适用范围**
+
+- API 契约（JSON/query/form 字段命名与错误语义）；
+- UI 表单与展示字段命名；
+- DB Schema、SQL 函数、事件 payload、sqlc 模型；
+- 服务层/控制器/测试命名与门禁规则。
+
+**禁止事项**
+
+1. 禁止新增 `*_id`/`*_uuid`/`*_code` 语义错位字段（例如 UUID 字段继续命名为 `*_id`）。
+2. 禁止在外部接口暴露内部结构标识 `org_id`。
+3. 禁止继续引入或回填历史命名 `request_code` 作为幂等字段。
+4. 禁止通过兼容别名窗口保留旧字段（含 `org_unit_id` 对外兼容透传）。
+5. 禁止对行业标准命名再造同义字段（如同时引入 `traceId`/`trace_id`、`request_code`/`request_id`）。
+
+**参考规范**
+
+- `docs/archive/dev-plans/026a-orgunit-id-uuid-code-naming.md`
+- `docs/archive/dev-plans/026b-orgunit-external-id-code-mapping.md`
+- `docs/archive/dev-plans/072-repo-wide-id-code-naming-convergence.md`
+- `docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
+
+**与现有计划关系**
+
+- `DEV-PLAN-072` 自本标准生效后归档，规范性内容由 `STD-003` 接管；`DEV-PLAN-072` 仅作为历史过程记录保留。
+- 既有模块在命名收敛实施时，均以 `STD-003 + STD-001` 组合口径为准。
 
 ## 后续扩展待办
 

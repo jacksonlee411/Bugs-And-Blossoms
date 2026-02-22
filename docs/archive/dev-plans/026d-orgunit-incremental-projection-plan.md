@@ -1,4 +1,4 @@
-# DEV-PLAN-026D：OrgUnit 增量投射方案（减少全量回放写放大）
+# [Archived] DEV-PLAN-026D：OrgUnit 增量投射方案（减少全量回放写放大）
 
 **状态**: 已完成（2026-02-03 08:58 UTC）
 

@@ -15,7 +15,7 @@
 1. `action=delete_record` 当前落到停用逻辑。
    - 证据：`internal/server/orgunit_nodes.go:1822`、`internal/server/orgunit_nodes.go:2147`。
 2. OrgUnit 事件源是 append-only + One Door（`submit_org_event(...)`）。
-   - 证据：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md:35`、`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md:111`。
+   - 证据：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md:35`、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md:111`。
 3. `org_unit_versions.last_event_id` 引用 `org_events(id)`，直接物理删事件存在一致性风险。
    - 证据：`modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql:105`。
 4. `replay_org_unit_versions(...)` 依赖事件流重建 versions/tree/code。
@@ -152,10 +152,10 @@
 ## 关联文档
 - `AGENTS.md`
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
-- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+- `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/073-orgunit-crud-implementation-status.md`
 - `docs/dev-plans/074-orgunit-details-update-ui-optimization.md`
-- `docs/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
+- `docs/archive/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
 - `docs/dev-plans/076-orgunit-version-switch-selection-retention.md`
 
 ## P1/P2 任务拆解（可直接排期）

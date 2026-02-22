@@ -30,7 +30,7 @@
   - [ ] Go 代码（`AGENTS.md`）
 - **SSOT 链接**：
   - 多租户工具链与 RLS 契约：`docs/dev-plans/019-multi-tenant-toolchain.md`、`docs/dev-plans/019A-rls-tenant-isolation.md`
-  - Org/Position/Job Catalog（Kernel 计划）：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+  - Org/Position/Job Catalog（Kernel 计划）：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
   - Greenfield HR 模块骨架（schema SSOT 目录约定）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 
 ## 3. 架构与关键决策 (Architecture & Decisions)

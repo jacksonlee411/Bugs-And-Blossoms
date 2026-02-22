@@ -157,7 +157,7 @@ python3 scripts/perf/orgunit-ext/aggregate_results.py
 - Phase 3：`docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - Phase 4A：`docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
 - Phase 4C：`docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
-- 字段配置页：`docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- 字段配置页：`docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - 质量门禁：`docs/dev-plans/012-ci-quality-gates.md`
 - 文档治理：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
 - 仓库总规则：`AGENTS.md`

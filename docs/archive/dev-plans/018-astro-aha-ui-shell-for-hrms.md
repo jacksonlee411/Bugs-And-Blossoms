@@ -1,4 +1,4 @@
-# DEV-PLAN-018：引入 Astro（AHA Stack）到旧局部渲染链路 + Alpine 的 HRMS UI 方案（026-031）
+# [Archived] DEV-PLAN-018：引入 Astro（AHA Stack）到旧局部渲染链路 + Alpine 的 HRMS UI 方案（026-031）
 
 **状态**: 已完成（Phase 0：Astro build + go:embed Shell，2026-01-08 12:24 UTC）
 

@@ -1,6 +1,6 @@
 # DEV-PLAN-102B：070/071 时间口径强制显式化与历史回放稳定性收敛
 
-**状态**: 进行中（2026-02-22 11:10 UTC，作为 070/071 时间口径改造主实施计划）
+**状态**: 已完成（2026-02-22，作为 070/071 时间口径改造主实施计划）
 
 ## 0. 主计划定位（Plan of Record）
 - 本计划是 070/071 时间参数收敛的 **Plan of Record（PoR）**，后续实现与验收以本计划为准。
@@ -148,12 +148,12 @@
 
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
 ### 8.1 依赖
-- `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
-- `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
-- `docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
-- `docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
+- `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
+- `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
+- `docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- `docs/archive/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
 - `docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
-- `docs/dev-plans/026a-orgunit-id-uuid-code-naming.md`（历史合同中存在“缺省当日 UTC”表述，需要最小修订）
+- `docs/archive/dev-plans/026a-orgunit-id-uuid-code-naming.md`（历史合同中存在“缺省当日 UTC”表述，需要最小修订）
 - `docs/dev-plans/063-test-tp060-03-person-and-assignments.md`（测试合同中存在“`effective_date` 缺省默认为 `as_of`”）
 
 ### 8.2 对相关计划的影响评估（调查结论落表）

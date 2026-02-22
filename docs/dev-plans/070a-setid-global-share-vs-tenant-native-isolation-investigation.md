@@ -222,7 +222,7 @@ rg -n "/org/api/scope-packages|/org/api/owned-scope-packages|/org/api/scope-subs
 - **选项 C**：高（需同时维护两种模型，治理与测试复杂度最高）。
 
 ### 8.3 评分依据与证据链接（当前版）
-- 选项 A 评分依据：`global_tenant + allow_share_read` 仍依赖运行时共享读开关与上下文切换（`docs/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`）。
+- 选项 A 评分依据：`global_tenant + allow_share_read` 仍依赖运行时共享读开关与上下文切换（`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`）。
 - 选项 B 评分依据：运行时 tenant-only 边界清晰，但新增发布治理成本（`docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`）。
 - 选项 C 评分依据：混合策略导致模型复杂、易漂移（本计划 §7.3 风险描述）。
 - 字典模块侧证据：当前存在 tenant/global 语义与 fallback 条款，改造后可收敛为 tenant-only（`docs/dev-plans/105-dict-config-platform-module.md`、`docs/dev-plans/105b-dict-code-management-and-governance.md`）。
@@ -231,9 +231,9 @@ rg -n "/org/api/scope-packages|/org/api/owned-scope-packages|/org/api/scope-subs
 ## 9. 调查方法与证据来源
 ### 9.1 内部证据
 - 计划与执行记录：
-  - `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
-  - `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
-  - `docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
+  - `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
+  - `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
+  - `docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
   - `docs/dev-records/dev-plan-070-execution-log.md`
   - `docs/dev-records/dev-plan-071-execution-log.md`
 - 代码/Schema/权限核查（按需抽样）：`modules/orgunit/**`、`config/access/policy.csv`、`config/routing/allowlist.yaml`。
@@ -292,9 +292,9 @@ rg -n "/org/api/scope-packages|/org/api/owned-scope-packages|/org/api/scope-subs
 
 ## 13. 关联文档
 - `AGENTS.md`
-- `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
-- `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
-- `docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
+- `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
+- `docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `docs/dev-records/dev-plan-070-execution-log.md`
 - `docs/dev-records/dev-plan-071-execution-log.md`

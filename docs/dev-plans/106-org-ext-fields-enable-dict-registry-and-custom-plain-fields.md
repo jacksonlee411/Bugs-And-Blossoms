@@ -103,7 +103,7 @@
    - 更新 `field-definitions`/enable 契约：`data_source_config_options` 对 DICT 不再要求返回“可选 dict_code 枚举”（或调整为“来源声明”字段）。
 2. `docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md`
    - 100D2 当前冻结“DICT/ENTITY options 必为非空数组”的口径需要修订，以匹配“DICT 全量引用”的新契约。
-3. `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+3. `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
    - 更新 DICT 的 `dict_code` 选择器数据源：改为字典模块 dict list（`DEV-PLAN-105B`）。
    - 增加“自定义 PLAIN 字段（输入自定义 `field_key`）”的 UI 入口与 IA（最小可用：输入 -> 启用 -> 详情页可写可见）。
 4. `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`

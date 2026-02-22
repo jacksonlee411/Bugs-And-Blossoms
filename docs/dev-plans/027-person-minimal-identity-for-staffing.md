@@ -31,7 +31,7 @@
 - DDD 分层与共享策略：`docs/dev-plans/015-ddd-layering-framework.md`
 - 4 模块边界与跨模块契约：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - Staffing 方案（对 Person 的依赖点）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
-- Kernel 风格与 One Door Policy：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
+- Kernel 风格与 One Door Policy：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - RLS（本计划将 Person 纳入强租户隔离）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - 命令入口与触发器矩阵：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`
 
