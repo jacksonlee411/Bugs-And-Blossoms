@@ -43,6 +43,7 @@ import {
 import { DataGridPage } from '../../components/DataGridPage'
 import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
+import { SetIDExplainPanel } from '../../components/SetIDExplainPanel'
 import { StatusChip } from '../../components/StatusChip'
 
 type JobCatalogTab = 'groups' | 'families' | 'levels' | 'profiles'
@@ -1001,6 +1002,14 @@ export function JobCatalogPage() {
               />
             </Stack>
           </Paper>
+
+          <SetIDExplainPanel
+            initialAsOf={asOf}
+            initialScopeCode='jobcatalog'
+            initialSetID={ownerSetID === '-' ? '' : ownerSetID}
+            title='SetID Explain（JobCatalog）'
+            subtitle='用于查看当前 package 上下文的命中原因；可复制 trace_id / request_id 排障。'
+          />
         </Box>
 
         {packageCode.length === 0 ? (

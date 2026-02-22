@@ -1,6 +1,6 @@
 # DEV-PLAN-102C2：BU 个性化策略注册表（承接 102C，避免与 070B/102C1 重复）
 
-**状态**: 草拟中（2026-02-23 02:35 UTC）
+**状态**: 准备就绪（2026-02-22 09:44 UTC，已获用户批准进入实施）
 
 ## 0. 主计划定位（Plan of Record）
 - 本计划是 `DEV-PLAN-102C` 的子计划，聚焦“**哪些能力允许按 BU 个性化、在哪个组织层级生效、如何审计解释**”的注册表机制。
@@ -123,8 +123,8 @@
 - `docs/dev-plans/102c-setid-group-sharing-and-bu-personalization-gap-assessment.md`
 - `docs/dev-plans/102c1-setid-contextual-security-model.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
-- `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
-- `docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
+- `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
+- `docs/archive/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `docs/dev-plans/102c3-setid-configuration-hit-explainability.md`

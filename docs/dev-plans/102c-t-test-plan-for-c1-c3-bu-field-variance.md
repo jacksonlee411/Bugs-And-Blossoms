@@ -1,6 +1,6 @@
 # DEV-PLAN-102C-T：102C1-102C3 测试方案（同租户跨 BU 字段差异）
 
-**状态**: 草拟中（2026-02-23 02:50 UTC）
+**状态**: 实施中（2026-02-22 19:05 UTC，已完成首轮验收并给出支持性结论）
 
 ## 0. 主计划定位（Plan of Record）
 - 本计划是 `DEV-PLAN-102C` 的测试子计划，服务于 `102C1/102C2/102C3` 的验收闭环。
@@ -8,10 +8,10 @@
 - 本计划输出：测试分层、数据夹具、用例矩阵、支持性评估与阻塞项。
 
 ## 1. 测试目标（按用户要求冻结）
-1. [ ] 同一租户下，不同 BU：某字段对 BU-A 必填，对 BU-B 非必填。  
-2. [ ] 同一租户下，不同 BU：某字段对 BU-A 可见，对 BU-B 不可见。  
-3. [ ] 同一租户下，不同 BU：某字段默认值规则在 BU-A 为 `a1`，在 BU-B 为 `b2`。  
-4. [ ] 对以上 3 项给出“当前是否可支持”的明确结论；若不支持，给出阻塞原因与前置改造项。
+1. [x] 同一租户下，不同 BU：某字段对 BU-A 必填，对 BU-B 非必填。  
+2. [x] 同一租户下，不同 BU：某字段对 BU-A 可见，对 BU-B 不可见。  
+3. [x] 同一租户下，不同 BU：某字段默认值规则在 BU-A 为 `a1`，在 BU-B 为 `b2`。  
+4. [x] 对以上 3 项给出“当前是否可支持”的明确结论；若不支持，给出阻塞原因与前置改造项。
 
 ## 2. 测试范围与边界
 ### 2.0 术语对齐（与 102C1/102C2/102C3 一致）
@@ -71,23 +71,23 @@
   - 期望：新建时 `field_x` 自动带出 `b2`，并与 BU-A 明显不同。
 
 ## 6. 支持性评估（当前结论）
-| 测试目标 | 当前支持性 | 结论 | 原因 |
+| 测试目标 | 当前支持性 | 结论 | 证据 |
 | --- | --- | --- | --- |
-| 目标1（必填差异） | 部分支持 | **当前方案不足** | 102C1 提供上下文授权，但尚未冻结“字段级 required 策略执行合同”。 |
-| 目标2（可见性差异） | 部分支持 | **当前方案不足** | 102C2 有注册表治理，但未落字段级可见性渲染合同（UI schema/field policy）。 |
-| 目标3（默认值差异） | 弱支持 | **当前方案不足** | 102C3 可解释输出可承接结果，但默认值规则引擎与 BU 上下文联动尚未在 102C 系列完成。 |
+| 目标1（必填差异） | 部分支持 | **策略层已支持，业务写入层待接入** | `TestSetIDStrategyRegistryRuntime_BUFieldVarianceAcceptance` + `TestHandleSetIDExplainAPI_BUVarianceAcceptance` 已验证 BU-A required=true、BU-B required=false。 |
+| 目标2（可见性差异） | 部分支持 | **策略层已支持，业务字段渲染层待接入** | 同上测试已验证 BU-A visible=true、BU-B visible=false，且 explain 返回 deny + `FIELD_HIDDEN_IN_CONTEXT`。 |
+| 目标3（默认值差异） | 支持 | **已支持** | 同上测试已验证 BU-A 默认值 `a1`、BU-B 默认值 `b2`，并由 explain 输出 `resolved_default_value`。 |
 
-> 结论：你提出的 3 个目标在 **102C1-102C3 当前草拟状态下均不能完整闭环验收**；需先补齐字段策略执行层。
+> 结论：102C1-102C3 在 **策略登记 + 命中解释** 维度已完成同租户跨 BU 差异验收；“业务写入字段必填阻断/页面字段显隐”仍需业务表单执行器接入。
 
 ## 7. 阻塞项与前置改造（必须先做）
-1. [ ] **字段策略合同冻结（必填/可见/默认）**  
-   - 在 102C2 增补字段级策略模型：`field_key + required + visible + default_rule + business_unit_id`。
-2. [ ] **运行时执行器接入**  
-   - 在服务层/表单组装层实现 BU 上下文命中策略，而非仅文档登记。
-3. [ ] **默认值规则引擎对接**  
-   - 需要与默认值规则计划协同（见 `DEV-PLAN-120`），并纳入 BU 维度。
-4. [ ] **解释链路补全**  
-   - 102C3 需输出字段级 explain（至少包含 `field_key/rule_id/decision/reason_code`）。
+1. [x] **字段策略合同冻结（必填/可见/默认）**  
+   - 102C2 运行时已支持 `field_key + required + visible + default_rule + business_unit_id` 最小闭环。
+2. [ ] **运行时执行器接入（业务写入层）**  
+   - 业务表单提交链路仍需接入字段级 required/visible 阻断，当前仅在策略命中与 explain 层可验。
+3. [ ] **默认值规则引擎对接（业务赋值层）**  
+   - 当前默认值差异已可解释；自动回填到业务表单仍需与 `DEV-PLAN-120` 规则引擎收口。
+4. [x] **解释链路补全**  
+   - 102C3 已输出字段级 explain（`field_key/default_rule_ref/resolved_default_value/decision/reason_code`）。
 
 ## 8. 验收标准（本测试计划）
 - [ ] 3 类差异（必填/可见/默认）均有 API + E2E + 审计证据。
@@ -110,3 +110,8 @@
 - `docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md`
 - `docs/dev-plans/060-business-e2e-test-suite.md`
 - `docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
+
+## 11. 本次验收证据（2026-02-22）
+- `go test ./internal/server -run "BUVarianceAcceptance|SetIDExplain|SetIDStrategyRegistry" -count=1`
+- `make test`
+- `make preflight`（含前端构建、路由门禁、E2E）

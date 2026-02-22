@@ -23,6 +23,9 @@ func (s errSetIDStore) ListSetIDBindings(context.Context, string, string) ([]Set
 func (s errSetIDStore) BindSetID(context.Context, string, string, string, string, string, string) error {
 	return s.err
 }
+func (s errSetIDStore) ResolveSetID(context.Context, string, string, string) (string, error) {
+	return "", s.err
+}
 func (s errSetIDStore) CreateGlobalSetID(context.Context, string, string, string, string) error {
 	return s.err
 }
@@ -82,6 +85,9 @@ func (s partialSetIDStore) ListSetIDBindings(context.Context, string, string) ([
 }
 func (s partialSetIDStore) BindSetID(context.Context, string, string, string, string, string, string) error {
 	return s.bindErr
+}
+func (s partialSetIDStore) ResolveSetID(context.Context, string, string, string) (string, error) {
+	return "DEFLT", nil
 }
 func (s partialSetIDStore) ListScopeCodes(context.Context, string) ([]ScopeCode, error) {
 	return nil, nil
@@ -407,6 +413,31 @@ func TestSetIDMemoryStore_Errors(t *testing.T) {
 	}
 }
 
+func TestSetIDMemoryStore_ResolveSetID(t *testing.T) {
+	s := newSetIDMemoryStore().(*setidMemoryStore)
+	if err := s.EnsureBootstrap(context.Background(), "t1", "i1"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if err := s.CreateSetID(context.Background(), "t1", "A0001", "A", "2026-01-01", "r1", "i1"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if err := s.BindSetID(context.Background(), "t1", "10000001", "2026-01-01", "A0001", "r2", "i1"); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+
+	setID, err := s.ResolveSetID(context.Background(), "t1", "10000001", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if setID != "A0001" {
+		t.Fatalf("setid=%q", setID)
+	}
+
+	if _, err := s.ResolveSetID(context.Background(), "t1", "99999999", "2026-01-01"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestSetIDMemoryStore_ListSortsWithMultipleItems(t *testing.T) {
 	s := newSetIDMemoryStore().(*setidMemoryStore)
 	if err := s.EnsureBootstrap(context.Background(), "t1", "i1"); err != nil {
@@ -509,6 +540,24 @@ func TestSetIDPGStore_WithTx_Errors(t *testing.T) {
 	tx2 := &stubTx{commitErr: errors.New("commit fail")}
 	s3 := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx2, nil })}
 	if err := s3.EnsureBootstrap(context.Background(), "t1", "p1"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestSetIDPGStore_ResolveSetID(t *testing.T) {
+	tx := &stubTx{row: &stubRow{vals: []any{"a0001"}}}
+	s := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
+	setID, err := s.ResolveSetID(context.Background(), "t1", "10000001", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if setID != "A0001" {
+		t.Fatalf("setid=%q", setID)
+	}
+
+	txErr := &stubTx{rowErr: errors.New("row fail")}
+	sErr := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return txErr, nil })}
+	if _, err := sErr.ResolveSetID(context.Background(), "t1", "10000001", "2026-01-01"); err == nil {
 		t.Fatal("expected error")
 	}
 }
