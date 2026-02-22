@@ -9,7 +9,7 @@ SELECT
   e.event_type,
   COALESCE(c.corrected_effective_date, e.effective_date) AS effective_date,
   COALESCE(c.replacement_payload, e.payload) AS payload,
-  e.request_code,
+  e.request_id,
   e.initiator_uuid,
   e.transaction_time,
   e.created_at
@@ -269,7 +269,7 @@ SELECT
   e.event_type,
   COALESCE(c.corrected_effective_date, e.effective_date) AS effective_date,
   COALESCE(c.replacement_payload, e.payload) AS payload,
-  e.request_code,
+  e.request_id,
   e.initiator_uuid,
   e.transaction_time,
   e.created_at

@@ -775,3 +775,46 @@ func TestIsStableDBCode(t *testing.T) {
 		}
 	}
 }
+
+func TestTraceIDFromRequest(t *testing.T) {
+	cases := []struct {
+		name        string
+		traceparent string
+		want        string
+	}{
+		{name: "empty", traceparent: "", want: ""},
+		{name: "bad format", traceparent: "00-abc", want: ""},
+		{name: "bad chars", traceparent: "00-0123456789abcdef0123456789abcdeg-0123456789abcdef-01", want: ""},
+		{name: "zero trace", traceparent: "00-00000000000000000000000000000000-0123456789abcdef-01", want: ""},
+		{name: "ok", traceparent: "00-ABCDEFABCDEFABCDEFABCDEFABCDEFAB-0123456789abcdef-01", want: "abcdefabcdefabcdefabcdefabcdefab"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/x", nil)
+			if tc.traceparent != "" {
+				req.Header.Set("traceparent", tc.traceparent)
+			}
+			if got := traceIDFromRequest(req); got != tc.want {
+				t.Fatalf("traceIDFromRequest()=%q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestWriteError_TraceID(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("traceparent", "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01")
+	rec := httptest.NewRecorder()
+
+	writeError(rec, req, http.StatusBadRequest, "bad", "bad")
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got, _ := body["trace_id"].(string); got != "0123456789abcdef0123456789abcdef" {
+		t.Fatalf("trace_id=%q", got)
+	}
+}

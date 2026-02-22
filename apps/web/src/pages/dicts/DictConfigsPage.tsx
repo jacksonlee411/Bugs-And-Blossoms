@@ -26,7 +26,7 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function newRequestCode(prefix: string): string {
+function newRequestID(prefix: string): string {
   return `${prefix}:${Date.now()}`
 }
 
@@ -98,7 +98,7 @@ export function DictConfigsPage() {
   const values = useMemo(() => valuesQuery.data?.values ?? [], [valuesQuery.data])
 
   const createDictMutation = useMutation({
-    mutationFn: (request: { dict_code: string; name: string; enabled_on: string; request_code: string }) => createDict(request),
+    mutationFn: (request: { dict_code: string; name: string; enabled_on: string; request_id: string }) => createDict(request),
     onSuccess: async (result) => {
       setSelectedDictCode(result.dict_code)
       await Promise.all([
@@ -109,7 +109,7 @@ export function DictConfigsPage() {
   })
 
   const disableDictMutation = useMutation({
-    mutationFn: (request: { dict_code: string; disabled_on: string; request_code: string }) => disableDict(request),
+    mutationFn: (request: { dict_code: string; disabled_on: string; request_id: string }) => disableDict(request),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['dicts', asOf] }),
@@ -119,7 +119,7 @@ export function DictConfigsPage() {
   })
 
   const createValueMutation = useMutation({
-    mutationFn: (request: { dict_code: string; code: string; label: string; enabled_on: string; request_code: string }) =>
+    mutationFn: (request: { dict_code: string; code: string; label: string; enabled_on: string; request_id: string }) =>
       createDictValue(request),
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({ queryKey: ['dict-values', effectiveSelectedDictCode, asOf] })
@@ -138,7 +138,7 @@ export function DictConfigsPage() {
         dict_code: createDictCode.trim().toLowerCase(),
         name: createDictName.trim(),
         enabled_on: createDictEnabledOn,
-        request_code: newRequestCode('mui-dict-code-create')
+        request_id: newRequestID('mui-dict-code-create')
       })
       setCreateDictOpen(false)
       setCreateDictCode('')
@@ -160,7 +160,7 @@ export function DictConfigsPage() {
       await disableDictMutation.mutateAsync({
         dict_code: effectiveSelectedDictCode,
         disabled_on: disableDictDay,
-        request_code: newRequestCode('mui-dict-code-disable')
+        request_id: newRequestID('mui-dict-code-disable')
       })
     } catch (mutationError) {
       setError(parseApiError(mutationError))
@@ -180,7 +180,7 @@ export function DictConfigsPage() {
         code: createValueCode.trim(),
         label: createValueLabel.trim(),
         enabled_on: createValueEnabledOn,
-        request_code: newRequestCode('mui-dict-value-create')
+        request_id: newRequestID('mui-dict-value-create')
       })
       setCreateValueOpen(false)
       setCreateValueCode('')

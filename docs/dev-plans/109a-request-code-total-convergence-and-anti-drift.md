@@ -1,6 +1,6 @@
 # DEV-PLAN-109A：`request_id`（幂等）+ `trace_id`（Tracing）全仓收敛与防扩散
 
-**状态**: 规划中（2026-02-22 02:32 UTC）
+**状态**: 已完成（2026-02-22 09:35 UTC）
 
 ## 1. 背景与问题定义
 
@@ -24,11 +24,11 @@
 
 ### 2.1 目标（冻结）
 
-1. [ ] 业务幂等统一为 `request_id`（契约文档 + API + 服务 + schema 源 + 门禁）。
-2. [ ] Tracing 统一为 `trace_id`（错误 envelope、前端错误解析、日志字段、传播策略）。
-3. [ ] 阻断新增 `request_code` 业务语义与 `request_id` tracing 语义回潮。
-4. [ ] 历史资产可追溯迁移：不破坏历史迁移文件，但确保“新增不扩散”。
-5. [ ] 在 `docs/dev-records/` 固化执行证据与例外审批。
+1. [x] 业务幂等统一为 `request_id`（契约文档 + API + 服务 + schema 源 + 门禁）。
+2. [x] Tracing 统一为 `trace_id`（错误 envelope、前端错误解析、日志字段、传播策略）。
+3. [x] 阻断新增 `request_code` 业务语义与 `request_id` tracing 语义回潮。
+4. [x] 历史资产可追溯迁移：不破坏历史迁移文件，但确保“新增不扩散”。
+5. [x] 在 `docs/dev-records/` 固化执行证据与例外审批。
 
 ### 2.2 非目标（Stopline）
 
@@ -94,24 +94,24 @@
 
 ## 6. 实施步骤（Checklist）
 
-1. [ ] M1：完成 109/109A/070/071/071A 契约修订并评审通过。
-2. [ ] M2：服务端 API/服务层完成 `request_code -> request_id` 改造与测试对齐。
-3. [ ] M3：Tracing 链路完成 `request_id -> trace_id` 改造（envelope + 前端适配 + header 传播）。
-4. [ ] M4：Schema/SQL/sqlc 完成业务幂等语义收敛（前向迁移，不改历史迁移）。
-5. [ ] M5：Gate-C 升级完成并开启 blocking。
-6. [ ] M6：执行并登记证据：
+1. [x] M1：完成 109/109A/070/071/071A 契约修订并评审通过。
+2. [x] M2：服务端 API/服务层完成 `request_code -> request_id` 改造与测试对齐。
+3. [x] M3：Tracing 链路完成 `request_id -> trace_id` 改造（envelope + 前端适配 + header 传播）。
+4. [x] M4：Schema/SQL/sqlc 完成业务幂等语义收敛（前向迁移，不改历史迁移）。
+5. [x] M5：Gate-C 升级完成并开启 blocking。
+6. [x] M6：执行并登记证据：
    - `make check request-code`
    - `make check doc`
    - 涉及 Go 变更时：`go fmt ./... && go vet ./... && make check lint && make test`
-7. [ ] M7：新增执行日志：`docs/dev-records/dev-plan-109a-execution-log.md`。
+7. [x] M7：新增执行日志：`docs/dev-records/dev-plan-109a-execution-log.md`。
 
 ## 7. 验收标准（DoD）
 
-1. [ ] 新增业务写接口不再出现 `request_code`。
-2. [ ] 新增 tracing 字段不再出现 `request_id` / `X-Request-ID`。
-3. [ ] 业务幂等统一 `request_id`，Tracing 统一 `trace_id`，并在门禁可阻断。
-4. [ ] 070/071/071A 与实现口径一致，不再双轨。
-5. [ ] 109A 证据记录可追溯（命令、结果、白名单审批）。
+1. [x] 新增业务写接口不再出现 `request_code`。
+2. [x] 新增 tracing 字段不再出现 `request_id` / `X-Request-ID`。
+3. [x] 业务幂等统一 `request_id`，Tracing 统一 `trace_id`，并在门禁可阻断。
+4. [x] 070/071/071A 与实现口径一致，不再双轨。
+5. [x] 109A 证据记录可追溯（命令、结果、白名单审批）。
 
 ## 8. 风险与缓解
 

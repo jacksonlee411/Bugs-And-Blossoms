@@ -53,9 +53,9 @@ func TestOrgunitProjection_IncrementalMatchesRebuild(t *testing.T) {
 		}
 	}
 
-	submit := func(eventUUID string, orgID int, eventType, effectiveDate, payload, requestCode string) {
+	submit := func(eventUUID string, orgID int, eventType, effectiveDate, payload, requestID string) {
 		_, err := tx.Exec(ctx, `SELECT orgunit.submit_org_event($1::uuid, $2::uuid, $3::int, $4::text, $5::date, $6::jsonb, $7::text, $8::uuid);`,
-			eventUUID, tenant, orgID, eventType, effectiveDate, payload, requestCode, initiator)
+			eventUUID, tenant, orgID, eventType, effectiveDate, payload, requestID, initiator)
 		if err != nil {
 			t.Fatalf("submit %s: %v", eventType, err)
 		}
@@ -207,14 +207,37 @@ $$;`,
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT org_events_event_type_check CHECK (event_type IN ('CREATE','MOVE','RENAME','DISABLE','ENABLE','SET_BUSINESS_UNIT')),
   CONSTRAINT org_events_one_per_day_unique UNIQUE (tenant_uuid, org_id, effective_date)
 );`,
-		`CREATE OR REPLACE VIEW orgunit.org_events_effective AS
+		`DO $$
+DECLARE
+  previous_col text := 'request_' || 'code';
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'orgunit'
+      AND table_name = 'org_events'
+      AND column_name = previous_col
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'orgunit'
+      AND table_name = 'org_events'
+      AND column_name = 'request_id'
+  ) THEN
+    EXECUTE 'ALTER TABLE orgunit.org_events RENAME COLUMN '
+      || quote_ident(previous_col)
+      || ' TO request_id';
+  END IF;
+END $$;`,
+		`DROP VIEW IF EXISTS orgunit.org_events_effective;
+CREATE VIEW orgunit.org_events_effective AS
 SELECT
   e.id,
   e.event_uuid,
@@ -223,7 +246,7 @@ SELECT
   e.event_type,
   e.effective_date,
   e.payload,
-  e.request_code,
+  e.request_id,
   e.initiator_uuid,
   e.transaction_time,
   e.created_at
@@ -1069,6 +1092,7 @@ BEGIN
   PERFORM orgunit.assert_org_unit_validity(p_tenant_uuid, v_org_ids);
 END;
 $$;`,
+		`DROP FUNCTION IF EXISTS orgunit.submit_org_event(uuid, uuid, int, text, date, jsonb, text, uuid);`,
 		`CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
   p_event_uuid uuid,
   p_tenant_uuid uuid,
@@ -1076,7 +1100,7 @@ $$;`,
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -1106,8 +1130,8 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -1149,7 +1173,7 @@ BEGIN
         OR v_existing.event_type <> p_event_type
         OR v_existing.effective_date <> p_effective_date
         OR v_existing.payload <> v_payload
-        OR v_existing.request_code <> p_request_code
+        OR v_existing.request_id <> p_request_id
         OR v_existing.initiator_uuid <> p_initiator_uuid
       THEN
         RAISE EXCEPTION USING
@@ -1175,7 +1199,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -1185,7 +1209,7 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
@@ -1201,7 +1225,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING

@@ -95,25 +95,25 @@ END $$;
 DELETE FROM orgunit.setid_binding_versions v
 USING orgunit.setid_binding_events e
 WHERE v.last_event_id = e.id
-  AND e.request_code = 'bootstrap:binding:deflt';
+  AND e.request_id = 'bootstrap:binding:deflt';
 
 DELETE FROM orgunit.setid_binding_events
-WHERE request_code = 'bootstrap:binding:deflt';
+WHERE request_id = 'bootstrap:binding:deflt';
 
 DELETE FROM orgunit.setids s
 WHERE s.setid = 'DEFLT'
   AND s.last_event_id IN (
-    SELECT id FROM orgunit.setid_events WHERE request_code = 'bootstrap:deflt'
+    SELECT id FROM orgunit.setid_events WHERE request_id = 'bootstrap:deflt'
   )
   AND NOT EXISTS (
     SELECT 1 FROM orgunit.setid_events e
     WHERE e.tenant_uuid = s.tenant_uuid
       AND e.setid = s.setid
-      AND e.request_code <> 'bootstrap:deflt'
+      AND e.request_id <> 'bootstrap:deflt'
   );
 
 DELETE FROM orgunit.setid_events e
-WHERE e.request_code = 'bootstrap:deflt'
+WHERE e.request_id = 'bootstrap:deflt'
   AND NOT EXISTS (
     SELECT 1 FROM orgunit.setids s WHERE s.last_event_id = e.id
   );
@@ -121,9 +121,9 @@ WHERE e.request_code = 'bootstrap:deflt'
 DELETE FROM orgunit.global_setids s
 WHERE s.setid = 'SHARE'
   AND s.last_event_id IN (
-    SELECT id FROM orgunit.global_setid_events WHERE request_code = 'bootstrap:share'
+    SELECT id FROM orgunit.global_setid_events WHERE request_id = 'bootstrap:share'
   );
 
 DELETE FROM orgunit.global_setid_events
-WHERE request_code = 'bootstrap:share';
+WHERE request_id = 'bootstrap:share';
 -- +goose StatementEnd

@@ -241,7 +241,7 @@ func (s *orgUnitPGStore) EnableTenantFieldConfig(
 	dataSourceConfig json.RawMessage,
 	displayLabel *string,
 	enabledOn string,
-	requestCode string,
+	requestID string,
 	initiatorUUID string,
 ) (orgUnitTenantFieldConfig, bool, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -254,7 +254,7 @@ func (s *orgUnitPGStore) EnableTenantFieldConfig(
 		return orgUnitTenantFieldConfig{}, false, err
 	}
 
-	wasRetry, err := tenantFieldConfigRequestExistsTx(ctx, tx, tenantID, requestCode, "ENABLE")
+	wasRetry, err := tenantFieldConfigRequestExistsTx(ctx, tx, tenantID, requestID, "ENABLE")
 	if err != nil {
 		return orgUnitTenantFieldConfig{}, false, err
 	}
@@ -271,7 +271,7 @@ SELECT orgunit.enable_tenant_field_config(
   $8::text,
   $9::uuid
 )
-`, tenantID, fieldKey, valueType, enabledOn, dataSourceType, dataSourceConfig, displayLabel, requestCode, initiatorUUID); err != nil {
+`, tenantID, fieldKey, valueType, enabledOn, dataSourceType, dataSourceConfig, displayLabel, requestID, initiatorUUID); err != nil {
 		return orgUnitTenantFieldConfig{}, false, err
 	}
 
@@ -291,7 +291,7 @@ func (s *orgUnitPGStore) DisableTenantFieldConfig(
 	tenantID string,
 	fieldKey string,
 	disabledOn string,
-	requestCode string,
+	requestID string,
 	initiatorUUID string,
 ) (orgUnitTenantFieldConfig, bool, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -304,7 +304,7 @@ func (s *orgUnitPGStore) DisableTenantFieldConfig(
 		return orgUnitTenantFieldConfig{}, false, err
 	}
 
-	wasRetry, err := tenantFieldConfigRequestExistsTx(ctx, tx, tenantID, requestCode, "DISABLE")
+	wasRetry, err := tenantFieldConfigRequestExistsTx(ctx, tx, tenantID, requestID, "DISABLE")
 	if err != nil {
 		return orgUnitTenantFieldConfig{}, false, err
 	}
@@ -317,7 +317,7 @@ SELECT orgunit.disable_tenant_field_config(
   $4::text,
   $5::uuid
 )
-`, tenantID, fieldKey, disabledOn, requestCode, initiatorUUID); err != nil {
+`, tenantID, fieldKey, disabledOn, requestID, initiatorUUID); err != nil {
 		return orgUnitTenantFieldConfig{}, false, err
 	}
 
@@ -507,7 +507,7 @@ func (s *orgUnitPGStore) UpsertTenantFieldPolicy(
 	defaultMode string,
 	defaultRuleExpr *string,
 	enabledOn string,
-	requestCode string,
+	requestID string,
 	initiatorUUID string,
 ) (orgUnitTenantFieldPolicy, bool, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -520,7 +520,7 @@ func (s *orgUnitPGStore) UpsertTenantFieldPolicy(
 		return orgUnitTenantFieldPolicy{}, false, err
 	}
 
-	wasRetry, err := tenantFieldPolicyRequestExistsTx(ctx, tx, tenantID, requestCode, "UPSERT")
+	wasRetry, err := tenantFieldPolicyRequestExistsTx(ctx, tx, tenantID, requestID, "UPSERT")
 	if err != nil {
 		return orgUnitTenantFieldPolicy{}, false, err
 	}
@@ -539,7 +539,7 @@ SELECT orgunit.upsert_tenant_field_policy(
   $9::text,
   $10::uuid
 )
-`, tenantID, fieldKey, scopeType, scopeKey, maintainable, defaultMode, defaultRuleExpr, enabledOn, requestCode, initiatorUUID).Scan(&policyID); err != nil {
+`, tenantID, fieldKey, scopeType, scopeKey, maintainable, defaultMode, defaultRuleExpr, enabledOn, requestID, initiatorUUID).Scan(&policyID); err != nil {
 		return orgUnitTenantFieldPolicy{}, false, err
 	}
 
@@ -561,7 +561,7 @@ func (s *orgUnitPGStore) DisableTenantFieldPolicy(
 	scopeType string,
 	scopeKey string,
 	disabledOn string,
-	requestCode string,
+	requestID string,
 	initiatorUUID string,
 ) (orgUnitTenantFieldPolicy, bool, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -574,7 +574,7 @@ func (s *orgUnitPGStore) DisableTenantFieldPolicy(
 		return orgUnitTenantFieldPolicy{}, false, err
 	}
 
-	wasRetry, err := tenantFieldPolicyRequestExistsTx(ctx, tx, tenantID, requestCode, "DISABLE")
+	wasRetry, err := tenantFieldPolicyRequestExistsTx(ctx, tx, tenantID, requestID, "DISABLE")
 	if err != nil {
 		return orgUnitTenantFieldPolicy{}, false, err
 	}
@@ -590,7 +590,7 @@ SELECT orgunit.disable_tenant_field_policy(
   $6::text,
   $7::uuid
 )
-`, tenantID, fieldKey, scopeType, scopeKey, disabledOn, requestCode, initiatorUUID).Scan(&policyID); err != nil {
+`, tenantID, fieldKey, scopeType, scopeKey, disabledOn, requestID, initiatorUUID).Scan(&policyID); err != nil {
 		return orgUnitTenantFieldPolicy{}, false, err
 	}
 
@@ -605,15 +605,15 @@ SELECT orgunit.disable_tenant_field_policy(
 	return item, wasRetry, nil
 }
 
-func tenantFieldConfigRequestExistsTx(ctx context.Context, tx pgx.Tx, tenantID string, requestCode string, expectedType string) (bool, error) {
+func tenantFieldConfigRequestExistsTx(ctx context.Context, tx pgx.Tx, tenantID string, requestID string, expectedType string) (bool, error) {
 	var eventType string
 	err := tx.QueryRow(ctx, `
 SELECT event_type
 FROM orgunit.tenant_field_config_events
 WHERE tenant_uuid = $1::uuid
-  AND request_code = $2::text
+  AND request_id = $2::text
 LIMIT 1
-`, tenantID, requestCode).Scan(&eventType)
+`, tenantID, requestID).Scan(&eventType)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
@@ -623,15 +623,15 @@ LIMIT 1
 	return strings.EqualFold(strings.TrimSpace(eventType), expectedType), nil
 }
 
-func tenantFieldPolicyRequestExistsTx(ctx context.Context, tx pgx.Tx, tenantID string, requestCode string, expectedType string) (bool, error) {
+func tenantFieldPolicyRequestExistsTx(ctx context.Context, tx pgx.Tx, tenantID string, requestID string, expectedType string) (bool, error) {
 	var eventType string
 	err := tx.QueryRow(ctx, `
 SELECT event_type
 FROM orgunit.tenant_field_policy_events
 WHERE tenant_uuid = $1::uuid
-  AND request_code = $2::text
+  AND request_id = $2::text
 LIMIT 1
-`, tenantID, requestCode).Scan(&eventType)
+`, tenantID, requestID).Scan(&eventType)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil

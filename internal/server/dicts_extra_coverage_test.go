@@ -19,7 +19,7 @@ func TestDictPGStore_ExtraCoverage(t *testing.T) {
 		createTx.row = &stubRow{vals: []any{int64(1), false}}
 		createTx.row2 = &stubRow{vals: []any{[]byte(`{"dict_code":"expense_type","name":"Expense Type","status":"active","enabled_on":"2026-01-01"}`)}}
 		storeCreate := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return createTx, nil })}
-		item, wasRetry, err := storeCreate.CreateDict(ctx, "t1", DictCreateRequest{DictCode: "expense_type", Name: "Expense Type", EnabledOn: "2026-01-01", RequestCode: "r1", Initiator: "u1"})
+		item, wasRetry, err := storeCreate.CreateDict(ctx, "t1", DictCreateRequest{DictCode: "expense_type", Name: "Expense Type", EnabledOn: "2026-01-01", RequestID: "r1", Initiator: "u1"})
 		if err != nil || wasRetry || item.DictCode != "expense_type" {
 			t.Fatalf("item=%+v retry=%v err=%v", item, wasRetry, err)
 		}
@@ -28,7 +28,7 @@ func TestDictPGStore_ExtraCoverage(t *testing.T) {
 		disableTx.row = &stubRow{vals: []any{int64(2), true}}
 		disableTx.row2 = &stubRow{vals: []any{[]byte(`{"dict_code":"expense_type","name":"Expense Type","status":"inactive","enabled_on":"2026-01-01","disabled_on":"2026-01-02"}`)}}
 		storeDisable := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return disableTx, nil })}
-		disabled, disableRetry, err := storeDisable.DisableDict(ctx, "t1", DictDisableRequest{DictCode: "expense_type", DisabledOn: "2026-01-02", RequestCode: "r2", Initiator: "u1"})
+		disabled, disableRetry, err := storeDisable.DisableDict(ctx, "t1", DictDisableRequest{DictCode: "expense_type", DisabledOn: "2026-01-02", RequestID: "r2", Initiator: "u1"})
 		if err != nil || !disableRetry || disabled.Status != "inactive" || disabled.DisabledOn == nil {
 			t.Fatalf("disabled=%+v retry=%v err=%v", disabled, disableRetry, err)
 		}
@@ -326,7 +326,7 @@ func TestDictMemoryStore_ExtraCoverage(t *testing.T) {
 
 func TestDictAPI_ExtraCoverage(t *testing.T) {
 	t.Run("create dict created status", func(t *testing.T) {
-		req := dictAPIRequest(http.MethodPost, "/iam/api/dicts", []byte(`{"dict_code":"expense_type","name":"Expense Type","enabled_on":"2026-01-01","request_code":"r1"}`), true)
+		req := dictAPIRequest(http.MethodPost, "/iam/api/dicts", []byte(`{"dict_code":"expense_type","name":"Expense Type","enabled_on":"2026-01-01","request_id":"r1"}`), true)
 		rec := httptest.NewRecorder()
 		handleDictsAPI(rec, req, dictStoreStub{createDictFn: func(context.Context, string, DictCreateRequest) (DictItem, bool, error) {
 			return DictItem{DictCode: "expense_type", Name: "Expense Type", Status: "active", EnabledOn: "2026-01-01"}, false, nil
@@ -346,7 +346,7 @@ func TestDictAPI_ExtraCoverage(t *testing.T) {
 			{target: "/iam/api/dicts/values:correct", h: handleDictValuesCorrectAPI},
 		}
 		for _, tc := range cases {
-			req := dictAPIRequest(http.MethodPost, tc.target, []byte(`{"dict_code":"bad-code","code":"10","label":"X","disabled_on":"2026-01-01","correction_day":"2026-01-01","request_code":"r1"}`), true)
+			req := dictAPIRequest(http.MethodPost, tc.target, []byte(`{"dict_code":"bad-code","code":"10","label":"X","disabled_on":"2026-01-01","correction_day":"2026-01-01","request_id":"r1"}`), true)
 			rec := httptest.NewRecorder()
 			tc.h(rec, req, dictStoreStub{})
 			if rec.Code != http.StatusBadRequest {
@@ -354,7 +354,7 @@ func TestDictAPI_ExtraCoverage(t *testing.T) {
 			}
 		}
 
-		reqCreateInvalid := dictAPIRequest(http.MethodPost, "/iam/api/dicts", []byte(`{"dict_code":"bad-code","name":"X","enabled_on":"2026-01-01","request_code":"r1"}`), true)
+		reqCreateInvalid := dictAPIRequest(http.MethodPost, "/iam/api/dicts", []byte(`{"dict_code":"bad-code","name":"X","enabled_on":"2026-01-01","request_id":"r1"}`), true)
 		recCreateInvalid := httptest.NewRecorder()
 		handleDictsAPI(recCreateInvalid, reqCreateInvalid, dictStoreStub{})
 		if recCreateInvalid.Code != http.StatusBadRequest {

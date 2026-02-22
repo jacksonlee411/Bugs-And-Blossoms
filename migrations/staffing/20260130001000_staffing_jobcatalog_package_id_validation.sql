@@ -823,7 +823,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_assignment_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -856,8 +856,8 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -901,7 +901,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -913,7 +913,7 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
@@ -931,7 +931,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -954,7 +954,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_assignment_event_correction(
   p_assignment_uuid uuid,
   p_target_effective_date date,
   p_replacement_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -983,8 +983,8 @@ BEGIN
   IF p_replacement_payload IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'replacement_payload is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -1030,7 +1030,7 @@ BEGIN
     assignment_uuid,
     target_effective_date,
     replacement_payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -1039,7 +1039,7 @@ BEGIN
     p_assignment_uuid,
     p_target_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT DO NOTHING
@@ -1055,7 +1055,7 @@ BEGIN
         OR v_existing_by_event.assignment_uuid <> p_assignment_uuid
         OR v_existing_by_event.target_effective_date <> p_target_effective_date
         OR v_existing_by_event.replacement_payload <> v_payload
-        OR v_existing_by_event.request_code <> p_request_code
+        OR v_existing_by_event.request_id <> p_request_id
         OR v_existing_by_event.initiator_uuid <> p_initiator_uuid
       THEN
         RAISE EXCEPTION USING
@@ -1067,7 +1067,7 @@ BEGIN
       SELECT * INTO v_existing_by_request
       FROM staffing.assignment_event_corrections
       WHERE tenant_uuid = p_tenant_uuid
-        AND request_code = p_request_code
+        AND request_id = p_request_id
       LIMIT 1;
 
       IF FOUND THEN
@@ -1075,12 +1075,12 @@ BEGIN
           OR v_existing_by_request.assignment_uuid <> p_assignment_uuid
           OR v_existing_by_request.target_effective_date <> p_target_effective_date
           OR v_existing_by_request.replacement_payload <> v_payload
-          OR v_existing_by_request.request_code <> p_request_code
+          OR v_existing_by_request.request_id <> p_request_id
           OR v_existing_by_request.initiator_uuid <> p_initiator_uuid
         THEN
           RAISE EXCEPTION USING
             MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-            DETAIL = format('request_code=%s existing_id=%s', p_request_code, v_existing_by_request.id);
+            DETAIL = format('request_id=%s existing_id=%s', p_request_id, v_existing_by_request.id);
         END IF;
         v_correction_db_id := v_existing_by_request.id;
       ELSE
@@ -1118,7 +1118,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_assignment_event_rescind(
   p_assignment_uuid uuid,
   p_target_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -1144,8 +1144,8 @@ BEGIN
   IF p_target_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'target_effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -1184,7 +1184,7 @@ BEGIN
     assignment_uuid,
     target_effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -1193,7 +1193,7 @@ BEGIN
     p_assignment_uuid,
     p_target_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT DO NOTHING
@@ -1209,7 +1209,7 @@ BEGIN
         OR v_existing_by_event.assignment_uuid <> p_assignment_uuid
         OR v_existing_by_event.target_effective_date <> p_target_effective_date
         OR v_existing_by_event.payload <> v_payload
-        OR v_existing_by_event.request_code <> p_request_code
+        OR v_existing_by_event.request_id <> p_request_id
         OR v_existing_by_event.initiator_uuid <> p_initiator_uuid
       THEN
         RAISE EXCEPTION USING
@@ -1221,7 +1221,7 @@ BEGIN
       SELECT * INTO v_existing_by_request
       FROM staffing.assignment_event_rescinds
       WHERE tenant_uuid = p_tenant_uuid
-        AND request_code = p_request_code
+        AND request_id = p_request_id
       LIMIT 1;
 
       IF FOUND THEN
@@ -1229,12 +1229,12 @@ BEGIN
           OR v_existing_by_request.assignment_uuid <> p_assignment_uuid
           OR v_existing_by_request.target_effective_date <> p_target_effective_date
           OR v_existing_by_request.payload <> v_payload
-          OR v_existing_by_request.request_code <> p_request_code
+          OR v_existing_by_request.request_id <> p_request_id
           OR v_existing_by_request.initiator_uuid <> p_initiator_uuid
         THEN
           RAISE EXCEPTION USING
             MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-            DETAIL = format('request_code=%s existing_id=%s', p_request_code, v_existing_by_request.id);
+            DETAIL = format('request_id=%s existing_id=%s', p_request_id, v_existing_by_request.id);
         END IF;
         v_rescind_db_id := v_existing_by_request.id;
       ELSE

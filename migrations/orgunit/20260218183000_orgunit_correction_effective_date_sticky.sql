@@ -56,7 +56,7 @@ SELECT
       THEN orgunit.merge_org_event_payload_with_correction(e.payload, lc.correction_payload)
     ELSE e.payload
   END AS payload,
-  e.request_code,
+  e.request_id,
   e.initiator_uuid,
   e.transaction_time,
   e.created_at
@@ -78,7 +78,7 @@ CREATE OR REPLACE FUNCTION orgunit.org_events_effective_for_replay(
   p_pending_event_type text,
   p_pending_effective_date date,
   p_pending_payload jsonb,
-  p_pending_request_code text,
+  p_pending_request_id text,
   p_pending_initiator_uuid uuid,
   p_pending_tx_time timestamptz,
   p_pending_transaction_time timestamptz,
@@ -92,7 +92,7 @@ RETURNS TABLE (
   event_type text,
   effective_date date,
   payload jsonb,
-  request_code text,
+  request_id text,
   initiator_uuid uuid,
   transaction_time timestamptz,
   created_at timestamptz
@@ -109,7 +109,7 @@ AS $$
       e.event_type,
       e.effective_date,
       COALESCE(e.payload, '{}'::jsonb) AS payload,
-      e.request_code,
+      e.request_id,
       e.initiator_uuid,
       e.tx_time,
       e.transaction_time,
@@ -128,7 +128,7 @@ AS $$
       p_pending_event_type,
       p_pending_effective_date,
       COALESCE(p_pending_payload, '{}'::jsonb),
-      p_pending_request_code,
+      p_pending_request_id,
       p_pending_initiator_uuid,
       p_pending_tx_time,
       p_pending_transaction_time,
@@ -204,7 +204,7 @@ AS $$
         THEN orgunit.merge_org_event_payload_with_correction(se.payload, lc.correction_payload)
       ELSE se.payload
     END AS payload,
-    se.request_code,
+    se.request_id,
     se.initiator_uuid,
     se.transaction_time,
     se.created_at

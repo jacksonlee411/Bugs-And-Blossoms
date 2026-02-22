@@ -51,7 +51,7 @@ func TestNewHandlerWithOptions_OrgUnitWriteRoutes_AreWired(t *testing.T) {
 	})
 
 	t.Run("write", func(t *testing.T) {
-		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","request_code":"r1","patch":{"name":"Root A"}}`
+		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","request_id":"r1","patch":{"name":"Root A"}}`
 		req := httptest.NewRequest(http.MethodPost, "http://localhost/org/api/org-units/write", strings.NewReader(body))
 		req.Host = "localhost"
 		req.AddCookie(sidCookie)

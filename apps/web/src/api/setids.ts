@@ -38,7 +38,7 @@ export async function createSetID(request: {
   setid: string
   name: string
   effective_date: string
-  request_code: string
+  request_id: string
 }): Promise<{ setid: string; status: string }> {
   return httpClient.post<{ setid: string; status: string }>('/org/api/setids', request)
 }
@@ -47,7 +47,7 @@ export async function bindSetID(request: {
   org_code: string
   setid: string
   effective_date: string
-  request_code: string
+  request_id: string
 }): Promise<{ org_code: string; setid: string; effective_date: string }> {
   return httpClient.post<{ org_code: string; setid: string; effective_date: string }>('/org/api/setid-bindings', request)
 }

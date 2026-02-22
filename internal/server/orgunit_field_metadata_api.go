@@ -108,16 +108,16 @@ type orgUnitFieldConfigAPIItem struct {
 type orgUnitFieldConfigsEnableRequest struct {
 	FieldKey         string          `json:"field_key"`
 	EnabledOn        string          `json:"enabled_on"`
-	RequestCode      string          `json:"request_code"`
+	RequestID        string          `json:"request_id"`
 	ValueType        string          `json:"value_type"`
 	Label            string          `json:"label"`
 	DataSourceConfig json.RawMessage `json:"data_source_config"`
 }
 
 type orgUnitFieldConfigsDisableRequest struct {
-	FieldKey    string `json:"field_key"`
-	DisabledOn  string `json:"disabled_on"`
-	RequestCode string `json:"request_code"`
+	FieldKey   string `json:"field_key"`
+	DisabledOn string `json:"disabled_on"`
+	RequestID  string `json:"request_id"`
 }
 
 type orgUnitFieldPoliciesUpsertRequest struct {
@@ -128,15 +128,15 @@ type orgUnitFieldPoliciesUpsertRequest struct {
 	DefaultMode     string  `json:"default_mode"`
 	DefaultRuleExpr *string `json:"default_rule_expr"`
 	EnabledOn       string  `json:"enabled_on"`
-	RequestCode     string  `json:"request_code"`
+	RequestID       string  `json:"request_id"`
 }
 
 type orgUnitFieldPoliciesDisableRequest struct {
-	FieldKey    string `json:"field_key"`
-	ScopeType   string `json:"scope_type"`
-	ScopeKey    string `json:"scope_key"`
-	DisabledOn  string `json:"disabled_on"`
-	RequestCode string `json:"request_code"`
+	FieldKey   string `json:"field_key"`
+	ScopeType  string `json:"scope_type"`
+	ScopeKey   string `json:"scope_key"`
+	DisabledOn string `json:"disabled_on"`
+	RequestID  string `json:"request_id"`
 }
 
 type orgUnitFieldPoliciesResolvePreviewResponse struct {
@@ -149,8 +149,8 @@ type orgUnitFieldPoliciesResolvePreviewResponse struct {
 
 type orgUnitFieldConfigStore interface {
 	ListTenantFieldConfigs(ctx context.Context, tenantID string) ([]orgUnitTenantFieldConfig, error)
-	EnableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
-	DisableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
+	EnableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
+	DisableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
 }
 
 type orgUnitFieldPolicyStore interface {
@@ -166,7 +166,7 @@ type orgUnitFieldPolicyStore interface {
 		defaultMode string,
 		defaultRuleExpr *string,
 		enabledOn string,
-		requestCode string,
+		requestID string,
 		initiatorUUID string,
 	) (orgUnitTenantFieldPolicy, bool, error)
 	DisableTenantFieldPolicy(
@@ -176,7 +176,7 @@ type orgUnitFieldPolicyStore interface {
 		scopeType string,
 		scopeKey string,
 		disabledOn string,
-		requestCode string,
+		requestID string,
 		initiatorUUID string,
 	) (orgUnitTenantFieldPolicy, bool, error)
 }
@@ -457,11 +457,11 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 		}
 		req.FieldKey = strings.TrimSpace(req.FieldKey)
 		req.EnabledOn = strings.TrimSpace(req.EnabledOn)
-		req.RequestCode = strings.TrimSpace(req.RequestCode)
+		req.RequestID = strings.TrimSpace(req.RequestID)
 		req.ValueType = strings.TrimSpace(req.ValueType)
 		req.Label = strings.TrimSpace(req.Label)
-		if req.FieldKey == "" || req.EnabledOn == "" || req.RequestCode == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key/enabled_on/request_code required")
+		if req.FieldKey == "" || req.EnabledOn == "" || req.RequestID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key/enabled_on/request_id required")
 			return
 		}
 		if _, err := time.Parse("2006-01-02", req.EnabledOn); err != nil {
@@ -508,7 +508,7 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 				dataSourceConfig,
 				displayLabel,
 				req.EnabledOn,
-				req.RequestCode,
+				req.RequestID,
 				orgUnitInitiatorUUID(r.Context(), tenant.ID),
 			)
 			if err != nil {
@@ -572,7 +572,7 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 				dataSourceConfig,
 				displayLabelPtr,
 				req.EnabledOn,
-				req.RequestCode,
+				req.RequestID,
 				orgUnitInitiatorUUID(r.Context(), tenant.ID),
 			)
 			if err != nil {
@@ -633,7 +633,7 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 			dataSourceConfig,
 			nil,
 			req.EnabledOn,
-			req.RequestCode,
+			req.RequestID,
 			orgUnitInitiatorUUID(r.Context(), tenant.ID),
 		)
 		if err != nil {
@@ -695,9 +695,9 @@ func handleOrgUnitFieldConfigsDisableAPI(w http.ResponseWriter, r *http.Request,
 	}
 	req.FieldKey = strings.TrimSpace(req.FieldKey)
 	req.DisabledOn = strings.TrimSpace(req.DisabledOn)
-	req.RequestCode = strings.TrimSpace(req.RequestCode)
-	if req.FieldKey == "" || req.DisabledOn == "" || req.RequestCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key/disabled_on/request_code required")
+	req.RequestID = strings.TrimSpace(req.RequestID)
+	if req.FieldKey == "" || req.DisabledOn == "" || req.RequestID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key/disabled_on/request_id required")
 		return
 	}
 	if _, err := time.Parse("2006-01-02", req.DisabledOn); err != nil {
@@ -710,7 +710,7 @@ func handleOrgUnitFieldConfigsDisableAPI(w http.ResponseWriter, r *http.Request,
 		tenant.ID,
 		req.FieldKey,
 		req.DisabledOn,
-		req.RequestCode,
+		req.RequestID,
 		orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	)
 	if err != nil {
@@ -763,9 +763,9 @@ func handleOrgUnitFieldPoliciesAPI(w http.ResponseWriter, r *http.Request, store
 	req.ScopeKey = strings.TrimSpace(req.ScopeKey)
 	req.DefaultMode = strings.TrimSpace(req.DefaultMode)
 	req.EnabledOn = strings.TrimSpace(req.EnabledOn)
-	req.RequestCode = strings.TrimSpace(req.RequestCode)
-	if req.FieldKey == "" || req.EnabledOn == "" || req.RequestCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key/enabled_on/request_code required")
+	req.RequestID = strings.TrimSpace(req.RequestID)
+	if req.FieldKey == "" || req.EnabledOn == "" || req.RequestID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key/enabled_on/request_id required")
 		return
 	}
 	if _, err := time.Parse("2006-01-02", req.EnabledOn); err != nil {
@@ -823,7 +823,7 @@ func handleOrgUnitFieldPoliciesAPI(w http.ResponseWriter, r *http.Request, store
 		defaultMode,
 		defaultRuleExpr,
 		req.EnabledOn,
-		req.RequestCode,
+		req.RequestID,
 		orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	)
 	if err != nil {
@@ -863,9 +863,9 @@ func handleOrgUnitFieldPoliciesDisableAPI(w http.ResponseWriter, r *http.Request
 	req.ScopeType = strings.TrimSpace(req.ScopeType)
 	req.ScopeKey = strings.TrimSpace(req.ScopeKey)
 	req.DisabledOn = strings.TrimSpace(req.DisabledOn)
-	req.RequestCode = strings.TrimSpace(req.RequestCode)
-	if req.FieldKey == "" || req.DisabledOn == "" || req.RequestCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key/disabled_on/request_code required")
+	req.RequestID = strings.TrimSpace(req.RequestID)
+	if req.FieldKey == "" || req.DisabledOn == "" || req.RequestID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key/disabled_on/request_id required")
 		return
 	}
 	if _, err := time.Parse("2006-01-02", req.DisabledOn); err != nil {
@@ -884,7 +884,7 @@ func handleOrgUnitFieldPoliciesDisableAPI(w http.ResponseWriter, r *http.Request
 		scopeType,
 		scopeKey,
 		req.DisabledOn,
-		req.RequestCode,
+		req.RequestID,
 		orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	)
 	if err != nil {

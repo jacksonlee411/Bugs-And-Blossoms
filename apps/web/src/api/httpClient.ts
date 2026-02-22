@@ -7,7 +7,7 @@ export interface HttpClientOptions {
   maxRetries?: number
   getAccessToken?: () => string | undefined
   getTenantId?: () => string | undefined
-  getRequestId?: () => string
+  getTraceID?: () => string
 }
 
 export interface RequestConfig extends AxiosRequestConfig {
@@ -21,18 +21,41 @@ export interface HttpClient {
   delete: <T>(url: string, config?: RequestConfig) => Promise<T>
 }
 
-function defaultRequestId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
+function randomHex(length: number): string {
+  const bytes = new Uint8Array(Math.ceil(length / 2))
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes)
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256)
+    }
   }
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('').slice(0, length)
+}
 
-  return `rid-${Date.now()}`
+function normalizeTraceID(traceID?: string): string {
+  const normalized = (traceID ?? '').replace(/-/g, '').toLowerCase()
+  if (/^[0-9a-f]{32}$/.test(normalized) && normalized !== '00000000000000000000000000000000') {
+    return normalized
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '')
+  }
+  return randomHex(32)
+}
+
+function buildTraceparent(traceID?: string): string {
+  const version = '00'
+  const normalizedTraceID = normalizeTraceID(traceID)
+  const parentID = randomHex(16)
+  const traceFlags = '01'
+  return `${version}-${normalizedTraceID}-${parentID}-${traceFlags}`
 }
 
 export function buildRequestHeaders(options: {
   token?: string
   tenantId?: string
-  requestId?: string
+  traceID?: string
 }): Record<string, string> {
   const headers: Record<string, string> = {}
 
@@ -44,9 +67,7 @@ export function buildRequestHeaders(options: {
     headers['X-Tenant-ID'] = options.tenantId
   }
 
-  if (options.requestId) {
-    headers['X-Request-ID'] = options.requestId
-  }
+  headers.traceparent = buildTraceparent(options.traceID)
 
   return headers
 }
@@ -74,7 +95,7 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
     const headers = buildRequestHeaders({
       token: options.getAccessToken?.(),
       tenantId: options.getTenantId?.(),
-      requestId: options.getRequestId?.() ?? defaultRequestId()
+      traceID: options.getTraceID?.()
     })
 
     Object.entries(headers).forEach(([key, value]) => {

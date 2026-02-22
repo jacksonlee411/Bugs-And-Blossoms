@@ -16,7 +16,7 @@ type setidCreateAPIRequest struct {
 	SetID         string `json:"setid"`
 	Name          string `json:"name"`
 	EffectiveDate string `json:"effective_date"`
-	RequestCode   string `json:"request_code"`
+	RequestID     string `json:"request_id"`
 }
 
 func handleSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
@@ -73,9 +73,9 @@ func handleSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernan
 		req.SetID = strings.TrimSpace(req.SetID)
 		req.Name = strings.TrimSpace(req.Name)
 		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
-		req.RequestCode = strings.TrimSpace(req.RequestCode)
-		if req.SetID == "" || req.Name == "" || req.RequestCode == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid/name/request_code required")
+		req.RequestID = strings.TrimSpace(req.RequestID)
+		if req.SetID == "" || req.Name == "" || req.RequestID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid/name/request_id required")
 			return
 		}
 		if req.EffectiveDate == "" {
@@ -91,7 +91,7 @@ func handleSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernan
 			return
 		}
 
-		if err := store.CreateSetID(r.Context(), tenant.ID, req.SetID, req.Name, req.EffectiveDate, req.RequestCode, tenant.ID); err != nil {
+		if err := store.CreateSetID(r.Context(), tenant.ID, req.SetID, req.Name, req.EffectiveDate, req.RequestID, tenant.ID); err != nil {
 			writeInternalAPIError(w, r, err, "setid_create_failed")
 			return
 		}
@@ -115,7 +115,7 @@ type setidBindingAPIRequest struct {
 	OrgCode       string `json:"org_code"`
 	SetID         string `json:"setid"`
 	EffectiveDate string `json:"effective_date"`
-	RequestCode   string `json:"request_code"`
+	RequestID     string `json:"request_id"`
 }
 
 func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore, orgStore OrgUnitStore) {
@@ -180,9 +180,9 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 		req.OrgUnitID = strings.TrimSpace(req.OrgUnitID)
 		req.SetID = strings.TrimSpace(req.SetID)
 		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
-		req.RequestCode = strings.TrimSpace(req.RequestCode)
-		if req.OrgUnitID != "" || req.OrgCode == "" || req.SetID == "" || req.EffectiveDate == "" || req.RequestCode == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code/setid/effective_date/request_code required")
+		req.RequestID = strings.TrimSpace(req.RequestID)
+		if req.OrgUnitID != "" || req.OrgCode == "" || req.SetID == "" || req.EffectiveDate == "" || req.RequestID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "org_code/setid/effective_date/request_id required")
 			return
 		}
 		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
@@ -208,7 +208,7 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 			return
 		}
 
-		if err := store.BindSetID(r.Context(), tenant.ID, strconv.Itoa(orgID), req.EffectiveDate, req.SetID, req.RequestCode, tenant.ID); err != nil {
+		if err := store.BindSetID(r.Context(), tenant.ID, strconv.Itoa(orgID), req.EffectiveDate, req.SetID, req.RequestID, tenant.ID); err != nil {
 			writeInternalAPIError(w, r, err, "setid_binding_failed")
 			return
 		}
@@ -229,8 +229,8 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 }
 
 type globalSetIDAPIRequest struct {
-	Name        string `json:"name"`
-	RequestCode string `json:"request_code"`
+	Name      string `json:"name"`
+	RequestID string `json:"request_id"`
 }
 
 func handleGlobalSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
@@ -267,9 +267,9 @@ func handleGlobalSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	}
 
 	req.Name = strings.TrimSpace(req.Name)
-	req.RequestCode = strings.TrimSpace(req.RequestCode)
-	if req.Name == "" || req.RequestCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "name/request_code required")
+	req.RequestID = strings.TrimSpace(req.RequestID)
+	if req.Name == "" || req.RequestID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "name/request_id required")
 		return
 	}
 
@@ -282,7 +282,7 @@ func handleGlobalSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		return
 	}
 
-	if err := store.CreateGlobalSetID(r.Context(), req.Name, req.RequestCode, tenant.ID, actorScope); err != nil {
+	if err := store.CreateGlobalSetID(r.Context(), req.Name, req.RequestID, tenant.ID, actorScope); err != nil {
 		writeInternalAPIError(w, r, err, "global_setid_create_failed")
 		return
 	}

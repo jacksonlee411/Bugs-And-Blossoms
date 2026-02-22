@@ -30,13 +30,13 @@ BEGIN
     SELECT 1 FROM orgunit.setids WHERE tenant_uuid = p_tenant_uuid AND setid = 'DEFLT'
   ) THEN
     v_evt_id := gen_random_uuid();
-    INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
+    INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_id, initiator_uuid)
     VALUES (v_evt_id, p_tenant_uuid, 'BOOTSTRAP', 'DEFLT', jsonb_build_object('name', 'Default'), 'bootstrap:deflt', p_initiator_uuid)
-    ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+    ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
     SELECT id INTO v_evt_db_id
     FROM orgunit.setid_events
-    WHERE tenant_uuid = p_tenant_uuid AND request_code = 'bootstrap:deflt'
+    WHERE tenant_uuid = p_tenant_uuid AND request_id = 'bootstrap:deflt'
     ORDER BY id DESC
     LIMIT 1;
 

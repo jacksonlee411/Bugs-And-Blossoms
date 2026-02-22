@@ -34,19 +34,19 @@ func TestWriteUnified_CoversValidationAndErrorBranches(t *testing.T) {
 			Intent:        "",
 			OrgCode:       "A001",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 		})
 		if err == nil || !httperr.IsBadRequest(err) {
 			t.Fatalf("err=%v", err)
 		}
 	})
 
-	t.Run("missing request_code", func(t *testing.T) {
+	t.Run("missing request_id", func(t *testing.T) {
 		_, err := svc.Write(context.Background(), "t1", WriteOrgUnitRequest{
 			Intent:        "add_version",
 			OrgCode:       "A001",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   " ",
+			RequestID:     " ",
 		})
 		if err == nil || !httperr.IsBadRequest(err) {
 			t.Fatalf("err=%v", err)
@@ -59,7 +59,7 @@ func TestWriteUnified_CoversValidationAndErrorBranches(t *testing.T) {
 			Intent:        "nope",
 			OrgCode:       "A001",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
 		if err == nil || !httperr.IsBadRequest(err) {
@@ -86,7 +86,7 @@ func TestWriteUnified_CoversUUIDAndMarshalFailure(t *testing.T) {
 			Intent:        "create_org",
 			OrgCode:       "ROOT",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
 		if err == nil || !strings.Contains(err.Error(), "uuid fail") {
@@ -100,7 +100,7 @@ func TestWriteUnified_CoversUUIDAndMarshalFailure(t *testing.T) {
 			Intent:        "create_org",
 			OrgCode:       "ROOT",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
 		if err == nil || !strings.Contains(err.Error(), "marshal fail") {
@@ -147,7 +147,7 @@ func TestWriteUnified_CoversParentAndManagerBranches(t *testing.T) {
 			Intent:        "add_version",
 			OrgCode:       "A001",
 			EffectiveDate: "2026-01-02",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch: OrgUnitWritePatch{
 				Name:          &name,
 				ParentOrgCode: &parent,
@@ -165,7 +165,7 @@ func TestWriteUnified_CoversParentAndManagerBranches(t *testing.T) {
 			Intent:        "add_version",
 			OrgCode:       "A001",
 			EffectiveDate: "2026-01-02",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch: OrgUnitWritePatch{
 				Name:          &name,
 				ParentOrgCode: &parent,
@@ -187,7 +187,7 @@ func TestWriteUnified_CoversParentAndManagerBranches(t *testing.T) {
 			Intent:        "add_version",
 			OrgCode:       "A001",
 			EffectiveDate: "2026-01-02",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch: OrgUnitWritePatch{
 				Name:           &name,
 				Status:         &status,
@@ -225,7 +225,7 @@ func TestWriteUnified_CoversParentAndManagerBranches(t *testing.T) {
 			Intent:        "add_version",
 			OrgCode:       "A001",
 			EffectiveDate: "2026-01-02",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch: OrgUnitWritePatch{
 				Name:   &name,
 				Status: &emptyStatus,
@@ -242,7 +242,7 @@ func TestWriteUnified_CoversParentAndManagerBranches(t *testing.T) {
 			Intent:        "correct",
 			OrgCode:       "A001",
 			EffectiveDate: "2026-01-02",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Status: &status},
 		})
 		if err == nil || !httperr.IsBadRequest(err) {

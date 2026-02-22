@@ -590,7 +590,7 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		return rec
 	}
 
-	recSet := postJSON("/org/api/setids", `{"setid":"A0001","name":"Default","request_code":"r1"}`, nil)
+	recSet := postJSON("/org/api/setids", `{"setid":"A0001","name":"Default","request_id":"r1"}`, nil)
 	if recSet.Code != http.StatusCreated {
 		t.Fatalf("setid status=%d", recSet.Code)
 	}
@@ -608,12 +608,12 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("dict audit status=%d body=%s", recDictAudit.Code, recDictAudit.Body.String())
 	}
 
-	recBind := postJSON("/org/api/setid-bindings", `{"org_code":"`+node.OrgCode+`","setid":"A0001","effective_date":"2026-01-01","request_code":"r2"}`, nil)
+	recBind := postJSON("/org/api/setid-bindings", `{"org_code":"`+node.OrgCode+`","setid":"A0001","effective_date":"2026-01-01","request_id":"r2"}`, nil)
 	if recBind.Code != http.StatusCreated {
 		t.Fatalf("binding status=%d", recBind.Code)
 	}
 
-	recGlobal := postJSON("/org/api/global-setids", `{"name":"Shared","request_code":"r3"}`, map[string]string{"X-Actor-Scope": "saas"})
+	recGlobal := postJSON("/org/api/global-setids", `{"name":"Shared","request_id":"r3"}`, map[string]string{"X-Actor-Scope": "saas"})
 	if recGlobal.Code != http.StatusCreated {
 		t.Fatalf("global setid status=%d", recGlobal.Code)
 	}
@@ -622,7 +622,7 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("global setid list status=%d", recGlobalList.Code)
 	}
 
-	recBU := postJSON("/org/api/org-units/set-business-unit", `{"org_code":"`+node.OrgCode+`","effective_date":"2026-01-01","is_business_unit":true,"request_code":"r4"}`, nil)
+	recBU := postJSON("/org/api/org-units/set-business-unit", `{"org_code":"`+node.OrgCode+`","effective_date":"2026-01-01","is_business_unit":true,"request_id":"r4"}`, nil)
 	if recBU.Code != http.StatusOK {
 		t.Fatalf("set business unit status=%d", recBU.Code)
 	}
@@ -649,12 +649,12 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("org units field-configs status=%d body=%s", recOrgFieldConfigs.Code, recOrgFieldConfigs.Body.String())
 	}
 
-	recOrgFieldEnable := postJSON("/org/api/org-units/field-configs", `{"field_key":"org_type","enabled_on":"2026-01-01","request_code":"rfc1"}`, nil)
+	recOrgFieldEnable := postJSON("/org/api/org-units/field-configs", `{"field_key":"org_type","enabled_on":"2026-01-01","request_id":"rfc1"}`, nil)
 	if recOrgFieldEnable.Code != http.StatusInternalServerError {
 		t.Fatalf("org units field-configs enable status=%d body=%s", recOrgFieldEnable.Code, recOrgFieldEnable.Body.String())
 	}
 
-	recOrgFieldDisable := postJSON("/org/api/org-units/field-configs:disable", `{"field_key":"org_type","disabled_on":"2026-02-01","request_code":"rfc2"}`, nil)
+	recOrgFieldDisable := postJSON("/org/api/org-units/field-configs:disable", `{"field_key":"org_type","disabled_on":"2026-02-01","request_id":"rfc2"}`, nil)
 	if recOrgFieldDisable.Code != http.StatusInternalServerError {
 		t.Fatalf("org units field-configs disable status=%d body=%s", recOrgFieldDisable.Code, recOrgFieldDisable.Body.String())
 	}
@@ -713,22 +713,22 @@ func TestNewHandler_InternalAPIRoutes(t *testing.T) {
 		t.Fatalf("org units enable status=%d", recOrgEnable.Code)
 	}
 
-	recOrgCorrect := postJSON("/org/api/org-units/corrections", `{"org_code":"ORG2","effective_date":"2026-01-01","request_code":"r9","patch":{}}`, nil)
+	recOrgCorrect := postJSON("/org/api/org-units/corrections", `{"org_code":"ORG2","effective_date":"2026-01-01","request_id":"r9","patch":{}}`, nil)
 	if recOrgCorrect.Code != http.StatusOK {
 		t.Fatalf("org units corrections status=%d", recOrgCorrect.Code)
 	}
 
-	recOrgStatusCorrect := postJSON("/org/api/org-units/status-corrections", `{"org_code":"ORG2","effective_date":"2026-01-01","target_status":"disabled","request_code":"r9s"}`, nil)
+	recOrgStatusCorrect := postJSON("/org/api/org-units/status-corrections", `{"org_code":"ORG2","effective_date":"2026-01-01","target_status":"disabled","request_id":"r9s"}`, nil)
 	if recOrgStatusCorrect.Code != http.StatusOK {
 		t.Fatalf("org units status corrections status=%d", recOrgStatusCorrect.Code)
 	}
 
-	recOrgRescind := postJSON("/org/api/org-units/rescinds", `{"org_code":"ORG2","effective_date":"2026-01-01","request_code":"r10","reason":"bad-data"}`, nil)
+	recOrgRescind := postJSON("/org/api/org-units/rescinds", `{"org_code":"ORG2","effective_date":"2026-01-01","request_id":"r10","reason":"bad-data"}`, nil)
 	if recOrgRescind.Code != http.StatusOK {
 		t.Fatalf("org units rescinds status=%d", recOrgRescind.Code)
 	}
 
-	recOrgRescindOrg := postJSON("/org/api/org-units/rescinds/org", `{"org_code":"ORG2","request_code":"r11","reason":"bad-org"}`, nil)
+	recOrgRescindOrg := postJSON("/org/api/org-units/rescinds/org", `{"org_code":"ORG2","request_id":"r11","reason":"bad-org"}`, nil)
 	if recOrgRescindOrg.Code != http.StatusOK {
 		t.Fatalf("org units rescinds org status=%d", recOrgRescindOrg.Code)
 	}

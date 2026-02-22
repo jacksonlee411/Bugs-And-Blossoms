@@ -44,7 +44,7 @@ export interface DictAuditItem {
   code: string
   event_type: string
   effective_day: string
-  request_code: string
+  request_id: string
   initiator_uuid: string
   tx_time: string
   payload: unknown
@@ -91,7 +91,7 @@ export async function createDict(request: {
   dict_code: string
   name: string
   enabled_on: string
-  request_code: string
+  request_id: string
 }): Promise<DictCodeMutationResponse> {
   return httpClient.post<DictCodeMutationResponse>('/iam/api/dicts', request)
 }
@@ -99,7 +99,7 @@ export async function createDict(request: {
 export async function disableDict(request: {
   dict_code: string
   disabled_on: string
-  request_code: string
+  request_id: string
 }): Promise<DictCodeMutationResponse> {
   return httpClient.post<DictCodeMutationResponse>('/iam/api/dicts:disable', request)
 }
@@ -109,7 +109,7 @@ export async function createDictValue(request: {
   code: string
   label: string
   enabled_on: string
-  request_code: string
+  request_id: string
 }): Promise<DictMutationResponse> {
   return httpClient.post<DictMutationResponse>('/iam/api/dicts/values', request)
 }
@@ -118,7 +118,7 @@ export async function disableDictValue(request: {
   dict_code: string
   code: string
   disabled_on: string
-  request_code: string
+  request_id: string
 }): Promise<DictMutationResponse> {
   return httpClient.post<DictMutationResponse>('/iam/api/dicts/values:disable', request)
 }
@@ -128,7 +128,7 @@ export async function correctDictValue(request: {
   code: string
   label: string
   correction_day: string
-  request_code: string
+  request_id: string
 }): Promise<DictMutationResponse> {
   return httpClient.post<DictMutationResponse>('/iam/api/dicts/values:correct', request)
 }

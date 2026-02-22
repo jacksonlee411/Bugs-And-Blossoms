@@ -245,7 +245,7 @@ func (s *AssignmentPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context
 	initiatorID := tenantID
 
 	// Rerunnable upsert (DEV-PLAN-031 M3-A):
-	// - If the effective_date already exists, reuse existing (event_uuid, request_code, initiator_uuid, event_type)
+	// - If the effective_date already exists, reuse existing (event_uuid, request_id, initiator_uuid, event_type)
 	//   so the Kernel hits the idempotency path instead of violating (tenant_uuid, assignment_uuid, effective_date) unique.
 	{
 		var existingEventType string
@@ -255,7 +255,7 @@ func (s *AssignmentPGStore) UpsertPrimaryAssignmentForPerson(ctx context.Context
 	SELECT
 	  event_uuid::text,
 	  event_type,
-	  request_code,
+	  request_id,
 	  initiator_uuid::text
 	FROM staffing.assignment_events
 	WHERE tenant_uuid = $1::uuid

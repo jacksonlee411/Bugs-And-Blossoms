@@ -142,7 +142,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         setid,
         name,
         effective_date: asOf,
-        request_code: `tp060-02-setid-${setid}-${runID}`
+        request_id: `tp060-02-setid-${setid}-${runID}`
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
@@ -194,7 +194,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         org_code: org.root,
         setid: "DEFLT",
         effective_date: asOf,
-        request_code: `tp060-02-bind-root-${runID}`
+        request_id: `tp060-02-bind-root-${runID}`
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
@@ -207,7 +207,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         org_code: org.hq,
         setid: "S2601",
         effective_date: asOf,
-        request_code: `tp060-02-bind-hq-${runID}`
+        request_id: `tp060-02-bind-hq-${runID}`
       }
     });
     expect(resp.status(), await resp.text()).toBe(422);
@@ -221,7 +221,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         org_code: org.rnd,
         setid: "S2601",
         effective_date: asOf,
-        request_code: `tp060-02-bind-rnd-${runID}`
+        request_id: `tp060-02-bind-rnd-${runID}`
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
@@ -232,7 +232,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         org_code: org.sales,
         setid: "S2602",
         effective_date: asOf,
-        request_code: `tp060-02-bind-sales-${runID}`
+        request_id: `tp060-02-bind-sales-${runID}`
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);
@@ -246,7 +246,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         name,
         owner_setid: ownerSetID,
         effective_date: asOf,
-        request_code: `req:${runID}:scope-pkg:${packageCode}`
+        request_id: `req:${runID}:scope-pkg:${packageCode}`
       }
     });
     expect(resp.status(), await resp.text()).toBe(201);

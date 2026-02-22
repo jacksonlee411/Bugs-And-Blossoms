@@ -73,7 +73,7 @@ interface CreateOrgUnitForm {
   managerPernr: string
   effectiveDate: string
   isBusinessUnit: boolean
-  requestCode: string
+  requestID: string
   extValues: Record<string, unknown>
   extDisplayValues: Record<string, string>
 }
@@ -344,7 +344,7 @@ function emptyCreateForm(asOf: string, parentOrgCode: string | null): CreateOrgU
     managerPernr: '',
     effectiveDate: asOf,
     isBusinessUnit: false,
-    requestCode: `org-create:${Date.now()}`,
+    requestID: `org-create:${Date.now()}`,
     extValues: {},
     extDisplayValues: {}
   }
@@ -1061,7 +1061,7 @@ export function OrgUnitsPage() {
         intent: 'create_org',
         org_code: createCapabilityOrgCode,
         effective_date: createCapabilityEffectiveDate,
-        request_code: createForm.requestCode.trim() || `org-create:${Date.now()}`,
+        request_id: createForm.requestID.trim() || `org-create:${Date.now()}`,
         patch
       })
     },

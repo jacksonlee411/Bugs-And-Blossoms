@@ -8,7 +8,7 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function newRequestCode(prefix: string): string {
+function newRequestID(prefix: string): string {
   return `${prefix}:${Date.now()}`
 }
 
@@ -37,7 +37,7 @@ export function SetIDGovernancePage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (req: { setid: string; name: string; effective_date: string; request_code: string }) => createSetID(req),
+    mutationFn: (req: { setid: string; name: string; effective_date: string; request_id: string }) => createSetID(req),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['setids'] })
       setCreateSetIDValue('')
@@ -46,7 +46,7 @@ export function SetIDGovernancePage() {
   })
 
   const bindMutation = useMutation({
-    mutationFn: (req: { org_code: string; setid: string; effective_date: string; request_code: string }) => bindSetID(req),
+    mutationFn: (req: { org_code: string; setid: string; effective_date: string; request_id: string }) => bindSetID(req),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['setid-bindings', asOf] })
       setBindOrgCode('')
@@ -65,7 +65,7 @@ export function SetIDGovernancePage() {
         setid: createSetIDValue.trim(),
         name: createName.trim(),
         effective_date: asOf,
-        request_code: newRequestCode('mui-setid-create')
+        request_id: newRequestID('mui-setid-create')
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -80,7 +80,7 @@ export function SetIDGovernancePage() {
         org_code: bindOrgCode.trim(),
         setid: bindSetIDValue.trim(),
         effective_date: asOf,
-        request_code: newRequestCode('mui-setid-bind')
+        request_id: newRequestID('mui-setid-bind')
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

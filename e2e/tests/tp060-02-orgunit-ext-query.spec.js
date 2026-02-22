@@ -77,7 +77,7 @@ async function setOrgTypeViaAPI(ctx, { asOf, orgCode, value }) {
     data: {
       org_code: orgCode,
       effective_date: asOf,
-      request_code: `req-${Date.now()}-${orgCode}`,
+      request_id: `req-${Date.now()}-${orgCode}`,
       patch: {
         ext: {
           d_org_type: value

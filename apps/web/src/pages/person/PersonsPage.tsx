@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createPerson, listPersons } from '../../api/persons'
 import { PageHeader } from '../../components/PageHeader'
 
-function newRequestCode(prefix: string): string {
+function newRequestID(prefix: string): string {
   return `${prefix}:${Date.now()}`
 }
 
@@ -71,7 +71,7 @@ export function PersonsPage() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
             />
-            <input type='hidden' name='request_code' value={newRequestCode('mui-person')} />
+            <input type='hidden' name='request_id' value={newRequestID('mui-person')} />
             <Button disabled={createMutation.isPending} type='submit' variant='contained'>
               Create
             </Button>

@@ -61,7 +61,7 @@ func TestMain(m *testing.M) {
 }
 
 type orgUnitWriteStoreStub struct {
-	submitEventFn            func(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestCode string, initiatorUUID string) (int64, error)
+	submitEventFn            func(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestID string, initiatorUUID string) (int64, error)
 	submitCorrectionFn       func(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, patch json.RawMessage, requestID string, initiatorUUID string) (string, error)
 	submitStatusCorrectionFn func(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, targetStatus string, requestID string, initiatorUUID string) (string, error)
 	submitRescindEventFn     func(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, reason string, requestID string, initiatorUUID string) (string, error)
@@ -74,11 +74,11 @@ type orgUnitWriteStoreStub struct {
 	findPersonByPernrFn      func(ctx context.Context, tenantID string, pernr string) (types.Person, error)
 }
 
-func (s orgUnitWriteStoreStub) SubmitEvent(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestCode string, initiatorUUID string) (int64, error) {
+func (s orgUnitWriteStoreStub) SubmitEvent(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestID string, initiatorUUID string) (int64, error) {
 	if s.submitEventFn == nil {
 		return 0, errors.New("SubmitEvent not mocked")
 	}
-	return s.submitEventFn(ctx, tenantID, eventUUID, orgID, eventType, effectiveDate, payload, requestCode, initiatorUUID)
+	return s.submitEventFn(ctx, tenantID, eventUUID, orgID, eventType, effectiveDate, payload, requestID, initiatorUUID)
 }
 
 func (s orgUnitWriteStoreStub) SubmitCorrection(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, patch json.RawMessage, requestID string, initiatorUUID string) (string, error) {
@@ -210,7 +210,7 @@ func TestCorrectMapsParentForMove(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "root",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req1",
+		RequestID:           "req1",
 		Patch: OrgUnitCorrectionPatch{
 			ParentOrgCode: new("parent"),
 		},
@@ -240,7 +240,7 @@ func TestCorrectRejectsNameOnMove(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req1",
+		RequestID:           "req1",
 		Patch: OrgUnitCorrectionPatch{
 			Name: new("Rename"),
 		},
@@ -267,7 +267,7 @@ func TestCorrectManagerPernrNotFound(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req1",
+		RequestID:           "req1",
 		Patch: OrgUnitCorrectionPatch{
 			ManagerPernr: new("1001"),
 		},
@@ -319,7 +319,7 @@ func TestCorrectRequiresPatch(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req1",
+		RequestID:           "req1",
 	})
 	if err == nil || !httperr.IsBadRequest(err) || err.Error() != errPatchRequired {
 		t.Fatalf("expected patch required, got %v", err)
@@ -356,7 +356,7 @@ func TestCorrectExtPatchDictAddsLabelSnapshot(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req1",
+		RequestID:           "req1",
 		Patch: OrgUnitCorrectionPatch{
 			Name: new("New Name"),
 			Ext: map[string]any{
@@ -413,7 +413,7 @@ func TestCorrectExtPatchDictClearDoesNotGenerateLabelSnapshot(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req1",
+		RequestID:           "req1",
 		Patch: OrgUnitCorrectionPatch{
 			Ext: map[string]any{
 				"org_type": nil,
@@ -473,7 +473,7 @@ func TestCorrectExtPatchValidationFailClosed(t *testing.T) {
 		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
-			RequestCode:         "req1",
+			RequestID:           "req1",
 			Patch: OrgUnitCorrectionPatch{
 				EffectiveDate: new("2026-01-02"),
 				Ext: map[string]any{
@@ -519,7 +519,7 @@ func TestCorrectExtPatchValidationFailClosed(t *testing.T) {
 		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
-			RequestCode:         "req1",
+			RequestID:           "req1",
 			Patch: OrgUnitCorrectionPatch{
 				Ext: map[string]any{
 					"org_type": "10",
@@ -552,7 +552,7 @@ func TestCorrectExtPatchValidationFailClosed(t *testing.T) {
 		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
-			RequestCode:         "req1",
+			RequestID:           "req1",
 			Patch: OrgUnitCorrectionPatch{
 				Ext: map[string]any{
 					"org_type": "NO_SUCH_OPTION",
@@ -1239,7 +1239,7 @@ func TestCorrectExtPatch_AdditionalErrorBranches(t *testing.T) {
 		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
-			RequestCode:         "req1",
+			RequestID:           "req1",
 			Patch:               OrgUnitCorrectionPatch{Name: new("New")},
 		})
 		if err == nil || err.Error() != "boom" {
@@ -1261,7 +1261,7 @@ func TestCorrectExtPatch_AdditionalErrorBranches(t *testing.T) {
 		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
-			RequestCode:         "req1",
+			RequestID:           "req1",
 			Patch: OrgUnitCorrectionPatch{
 				Ext: map[string]any{"org_type": "10"},
 			},
@@ -1285,7 +1285,7 @@ func TestCorrectExtPatch_AdditionalErrorBranches(t *testing.T) {
 		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
-			RequestCode:         "req1",
+			RequestID:           "req1",
 			Patch: OrgUnitCorrectionPatch{
 				Ext: map[string]any{"org_type": 1},
 			},
@@ -1309,7 +1309,7 @@ func TestCorrectExtPatch_AdditionalErrorBranches(t *testing.T) {
 		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
-			RequestCode:         "req1",
+			RequestID:           "req1",
 			Patch: OrgUnitCorrectionPatch{
 				Ext: map[string]any{"org_type": " "},
 			},
@@ -1333,7 +1333,7 @@ func TestCorrectExtPatch_AdditionalErrorBranches(t *testing.T) {
 		_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
-			RequestCode:         "req1",
+			RequestID:           "req1",
 			Patch: OrgUnitCorrectionPatch{
 				Ext: map[string]any{"unknown_field": "x"},
 			},
@@ -1378,7 +1378,7 @@ func TestCorrectStatusSuccess(t *testing.T) {
 		OrgCode:             "root",
 		TargetEffectiveDate: "2026-01-01",
 		TargetStatus:        "inactive",
-		RequestCode:         "req-1",
+		RequestID:           "req-1",
 	})
 	if err != nil {
 		t.Fatalf("err=%v", err)
@@ -1396,14 +1396,14 @@ func TestCorrectStatusSuccess(t *testing.T) {
 
 func TestCorrectStatusValidationAndErrors(t *testing.T) {
 	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
-	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetStatus: "active", RequestCode: "r1"}); err == nil || !httperr.IsBadRequest(err) {
+	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetStatus: "active", RequestID: "r1"}); err == nil || !httperr.IsBadRequest(err) {
 		t.Fatalf("expected bad date, got %v", err)
 	}
-	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestCode: "r1"}); err == nil || !httperr.IsBadRequest(err) {
+	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestID: "r1"}); err == nil || !httperr.IsBadRequest(err) {
 		t.Fatalf("expected bad target status, got %v", err)
 	}
 	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", TargetStatus: "active"}); err == nil || !httperr.IsBadRequest(err) {
-		t.Fatalf("expected request_code bad request, got %v", err)
+		t.Fatalf("expected request_id bad request, got %v", err)
 	}
 
 	store := orgUnitWriteStoreStub{
@@ -1412,7 +1412,7 @@ func TestCorrectStatusValidationAndErrors(t *testing.T) {
 		},
 	}
 	svc = NewOrgUnitWriteService(store)
-	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", TargetStatus: "active", RequestCode: "r1"}); err == nil || err.Error() != errOrgCodeNotFound {
+	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", TargetStatus: "active", RequestID: "r1"}); err == nil || err.Error() != errOrgCodeNotFound {
 		t.Fatalf("expected org not found, got %v", err)
 	}
 
@@ -1425,7 +1425,7 @@ func TestCorrectStatusValidationAndErrors(t *testing.T) {
 		},
 	}
 	svc = NewOrgUnitWriteService(store)
-	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", TargetStatus: "active", RequestCode: "r1"}); err == nil || err.Error() != "submit" {
+	if _, err := svc.CorrectStatus(context.Background(), "t1", CorrectStatusOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", TargetStatus: "active", RequestID: "r1"}); err == nil || err.Error() != "submit" {
 		t.Fatalf("expected submit error, got %v", err)
 	}
 }
@@ -1452,7 +1452,7 @@ func TestRescindRecordSuccess(t *testing.T) {
 	got, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{
 		OrgCode:             "root",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req-1",
+		RequestID:           "req-1",
 		Reason:              "bad-data",
 	})
 	if err != nil {
@@ -1469,9 +1469,9 @@ func TestRescindRecordSuccess(t *testing.T) {
 func TestRescindRecordValidationAndNotFound(t *testing.T) {
 	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
 	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
-		t.Fatalf("expected request_code bad request, got %v", err)
+		t.Fatalf("expected request_id bad request, got %v", err)
 	}
-	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestCode: "r1"}); err == nil || !httperr.IsBadRequest(err) {
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestID: "r1"}); err == nil || !httperr.IsBadRequest(err) {
 		t.Fatalf("expected reason bad request, got %v", err)
 	}
 
@@ -1481,7 +1481,7 @@ func TestRescindRecordValidationAndNotFound(t *testing.T) {
 		},
 	}
 	svc = NewOrgUnitWriteService(store)
-	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestCode: "r1", Reason: "x"}); err == nil || err.Error() != errOrgCodeNotFound {
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != errOrgCodeNotFound {
 		t.Fatalf("expected org not found, got %v", err)
 	}
 }
@@ -1505,7 +1505,7 @@ func TestRescindOrgSuccessAndValidation(t *testing.T) {
 	}
 
 	svc := NewOrgUnitWriteService(store)
-	got, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "root", RequestCode: "req-2", Reason: "bad-org"})
+	got, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "root", RequestID: "req-2", Reason: "bad-org"})
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -1518,19 +1518,19 @@ func TestRescindOrgSuccessAndValidation(t *testing.T) {
 
 	svc = NewOrgUnitWriteService(orgUnitWriteStoreStub{})
 	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
-		t.Fatalf("expected request_code bad request, got %v", err)
+		t.Fatalf("expected request_id bad request, got %v", err)
 	}
-	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestCode: "r1"}); err == nil || !httperr.IsBadRequest(err) {
+	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestID: "r1"}); err == nil || !httperr.IsBadRequest(err) {
 		t.Fatalf("expected reason bad request, got %v", err)
 	}
 }
 
 func TestRescindRecordStoreErrorPaths(t *testing.T) {
 	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
-	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "bad", RequestCode: "r1", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "bad", RequestID: "r1", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
 		t.Fatalf("expected bad date, got %v", err)
 	}
-	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "bad\n", TargetEffectiveDate: "2026-01-01", RequestCode: "r1", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "bad\n", TargetEffectiveDate: "2026-01-01", RequestID: "r1", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
 		t.Fatalf("expected bad org code, got %v", err)
 	}
 
@@ -1540,7 +1540,7 @@ func TestRescindRecordStoreErrorPaths(t *testing.T) {
 		},
 	}
 	svc = NewOrgUnitWriteService(store)
-	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestCode: "r1", Reason: "x"}); err == nil || err.Error() != "resolve" {
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != "resolve" {
 		t.Fatalf("expected resolve error, got %v", err)
 	}
 
@@ -1553,14 +1553,14 @@ func TestRescindRecordStoreErrorPaths(t *testing.T) {
 		},
 	}
 	svc = NewOrgUnitWriteService(store)
-	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestCode: "r1", Reason: "x"}); err == nil || err.Error() != "submit" {
+	if _, err := svc.RescindRecord(context.Background(), "t1", RescindRecordOrgUnitRequest{OrgCode: "ROOT", TargetEffectiveDate: "2026-01-01", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != "submit" {
 		t.Fatalf("expected submit error, got %v", err)
 	}
 }
 
 func TestRescindOrgStoreErrorPaths(t *testing.T) {
 	svc := NewOrgUnitWriteService(orgUnitWriteStoreStub{})
-	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "bad\n", RequestCode: "r1", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
+	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "bad\n", RequestID: "r1", Reason: "x"}); err == nil || !httperr.IsBadRequest(err) {
 		t.Fatalf("expected bad org code, got %v", err)
 	}
 
@@ -1570,7 +1570,7 @@ func TestRescindOrgStoreErrorPaths(t *testing.T) {
 		},
 	}
 	svc = NewOrgUnitWriteService(store)
-	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestCode: "r1", Reason: "x"}); err == nil || err.Error() != "resolve" {
+	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != "resolve" {
 		t.Fatalf("expected resolve error, got %v", err)
 	}
 
@@ -1583,13 +1583,13 @@ func TestRescindOrgStoreErrorPaths(t *testing.T) {
 		},
 	}
 	svc = NewOrgUnitWriteService(store)
-	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestCode: "r1", Reason: "x"}); err == nil || err.Error() != "submit" {
+	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != "submit" {
 		t.Fatalf("expected submit error, got %v", err)
 	}
 
 	store = orgUnitWriteStoreStub{resolveOrgIDFn: func(_ context.Context, _ string, _ string) (int, error) { return 0, orgunitpkg.ErrOrgCodeNotFound }}
 	svc = NewOrgUnitWriteService(store)
-	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestCode: "r1", Reason: "x"}); err == nil || err.Error() != errOrgCodeNotFound {
+	if _, err := svc.RescindOrg(context.Background(), "t1", RescindOrgUnitRequest{OrgCode: "ROOT", RequestID: "r1", Reason: "x"}); err == nil || err.Error() != errOrgCodeNotFound {
 		t.Fatalf("expected org not found, got %v", err)
 	}
 }
@@ -2652,7 +2652,7 @@ func TestCorrectInvalidDate(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-13-01",
-		RequestCode:         "req",
+		RequestID:           "req",
 	})
 	if err == nil || !httperr.IsBadRequest(err) || err.Error() != errEffectiveDateInvalid {
 		t.Fatalf("expected effective date invalid, got %v", err)
@@ -2664,7 +2664,7 @@ func TestCorrectInvalidOrgCode(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             " \t ",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req",
+		RequestID:           "req",
 	})
 	if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgCodeInvalid {
 		t.Fatalf("expected org code invalid, got %v", err)
@@ -2677,8 +2677,8 @@ func TestCorrectRequestIDRequired(t *testing.T) {
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
 	})
-	if err == nil || !httperr.IsBadRequest(err) || err.Error() != "request_code is required" {
-		t.Fatalf("expected request_code required, got %v", err)
+	if err == nil || !httperr.IsBadRequest(err) || err.Error() != "request_id is required" {
+		t.Fatalf("expected request_id required, got %v", err)
 	}
 }
 
@@ -2692,7 +2692,7 @@ func TestCorrectOrgCodeNotFound(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req",
+		RequestID:           "req",
 	})
 	if err == nil || err.Error() != errOrgCodeNotFound {
 		t.Fatalf("expected org code not found, got %v", err)
@@ -2709,7 +2709,7 @@ func TestCorrectResolveError(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req",
+		RequestID:           "req",
 	})
 	if err == nil || err.Error() != "resolve" {
 		t.Fatalf("expected resolve error, got %v", err)
@@ -2729,7 +2729,7 @@ func TestCorrectEventNotFound(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req",
+		RequestID:           "req",
 		Patch: OrgUnitCorrectionPatch{
 			Name: new("Name"),
 		},
@@ -2752,7 +2752,7 @@ func TestCorrectEventError(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req",
+		RequestID:           "req",
 		Patch: OrgUnitCorrectionPatch{
 			Name: new("Name"),
 		},
@@ -2778,7 +2778,7 @@ func TestCorrectMarshalError(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req",
+		RequestID:           "req",
 		Patch: OrgUnitCorrectionPatch{
 			Name: new("Name"),
 		},
@@ -2804,7 +2804,7 @@ func TestCorrectSubmitError(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req",
+		RequestID:           "req",
 		Patch: OrgUnitCorrectionPatch{
 			Name: new("Name"),
 		},
@@ -2831,7 +2831,7 @@ func TestCorrectPolicyResolveError(t *testing.T) {
 	_, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req",
+		RequestID:           "req",
 		Patch: OrgUnitCorrectionPatch{
 			EffectiveDate: new("2026-01-01"),
 		},
@@ -2857,7 +2857,7 @@ func TestCorrectUsesPatchedEffectiveDate(t *testing.T) {
 	res, err := svc.Correct(context.Background(), "t1", CorrectOrgUnitRequest{
 		OrgCode:             "ROOT",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req",
+		RequestID:           "req",
 		Patch: OrgUnitCorrectionPatch{
 			EffectiveDate: new("2026-02-01"),
 		},
@@ -3161,7 +3161,7 @@ func TestCorrectStatusAdditionalBranches(t *testing.T) {
 			OrgCode:             " ",
 			TargetEffectiveDate: "2026-01-01",
 			TargetStatus:        "active",
-			RequestCode:         "r1",
+			RequestID:           "r1",
 		})
 		if err == nil || !httperr.IsBadRequest(err) || err.Error() != errOrgCodeInvalid {
 			t.Fatalf("expected org code invalid, got %v", err)
@@ -3179,7 +3179,7 @@ func TestCorrectStatusAdditionalBranches(t *testing.T) {
 			OrgCode:             "ROOT",
 			TargetEffectiveDate: "2026-01-01",
 			TargetStatus:        "active",
-			RequestCode:         "r1",
+			RequestID:           "r1",
 		})
 		if err == nil || err.Error() != "resolve" {
 			t.Fatalf("expected resolve error, got %v", err)
