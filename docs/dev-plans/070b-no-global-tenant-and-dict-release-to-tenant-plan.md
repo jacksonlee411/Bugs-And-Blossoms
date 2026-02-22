@@ -39,6 +39,11 @@
 - `070B` 负责“如何分阶段实施”的工程化落地与验收。
 - 若后续出现新证据导致 `070A` 结论变化，必须先更新 `070A` 再调整 `070B`（避免决策与实施倒挂）。
 
+### 2.5 与 102B 的前后关系（冻结）
+- `102B` 是 070/071 时间口径收敛 PoR；`070B` 必须继承其显式时间契约（`as_of/effective_date` 必填、禁止 default today）。
+- `070B` 的回填、对账、切流验收以 `102B` 的“跨天重放一致性”标准为准，不再定义并行口径。
+- `070B` 进入切流阶段（PR-070B-5/6）前，要求 `102B` 至少完成 M2（API 收口）+ M3（Kernel 收口）+ M5（门禁落地）。
+
 ## 3. 架构原则与关键决策 (Architecture & Decisions)
 ### 3.1 原则冻结
 1. **运行时 tenant-only**：业务读写链路只允许当前租户数据；不跨租户读取。
@@ -108,6 +113,8 @@
 ### 6.2 错误码（新增/收敛）
 - [ ] 新增：`dict_baseline_not_ready`（租户未完成基线导入）。
 - [ ] 收敛：`dict_not_found` 明确为“当前租户未命中”，不再隐含 global 查询。
+- [ ] 对齐 `STD-002`：读接口缺失/非法 `as_of` 统一 `400 invalid_as_of`（message：`as_of required`）。
+- [ ] 对齐 `STD-002`：写接口缺失/非法业务生效日统一 `400 invalid_effective_date`（message：`effective_date required`）。
 
 ### 6.3 权限模型
 - 业务面保持：`dict.read` / `dict.admin`。
@@ -192,8 +199,9 @@
 1. [ ] 完成 PR-070B-1（不通过不允许进入代码实施）。
 2. [ ] PR-070B-2 与 PR-070B-3 串行推进（先基座后服务）。
 3. [ ] PR-070B-4 在 PR-070B-3 可用后落地（确保基线导入能力先可用）。
-4. [ ] PR-070B-5 在切流前完成并输出冲突清单与对账报告。
-5. [ ] PR-070B-6 切流完成后，立即推进 PR-070B-7 收口，关闭迁移窗口。
+4. [ ] `DEV-PLAN-102B` 至少完成 M2+M3+M5，并在 `docs/dev-records/dev-plan-102b-execution-log.md` 留证。
+5. [ ] PR-070B-5 在切流前完成并输出冲突清单与对账报告。
+6. [ ] PR-070B-6 切流完成后，立即推进 PR-070B-7 收口，关闭迁移窗口。
 
 ### 9.3 切流 Runbook（最小步骤）
 - [ ] **T-7 ~ T-3**：完成预演、冻结发布脚本版本、确认回填与对账通过。
@@ -206,6 +214,7 @@
 - [ ] 关键 SQL/API 验证输出（tenant-only 命中、无 global fallback）。
 - [ ] 发布任务审计证据（release_id/request_code/operator/tx_time）。
 - [ ] 异常与修复记录（失败原因、重试次数、最终结果）。
+- [ ] 102B 对齐证据（`invalid_as_of` / `invalid_effective_date`、`as_of/effective_date` 显式必填、跨天回放一致）。
 
 ## 10. 验收标准 (Acceptance Criteria)
 - [ ] 运行时业务链路不再依赖 `global_tenant` 字典读取。
@@ -213,6 +222,7 @@
 - [ ] 新租户未导入基线时，相关写入口稳定 fail-closed。
 - [ ] 审计可回答“某租户某字典值来自哪个发布、何时落地、由谁触发”。
 - [ ] 与仓库不变量无冲突（One Door / No Tx, No RLS / No Legacy / Valid Time）。
+- [ ] 时间参数口径与 `STD-002`/`DEV-PLAN-102B` 一致（缺失/非法日期统一 `invalid_*`，无 default today）。
 
 ### 10.1 070A 评估维度到 070B 验收映射
 | 070A 评估维度 | 070B 对应验收项 | 关键证据 |
@@ -234,7 +244,7 @@
 | DEV-PLAN-071 | `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md` | 高 | scope package 的 shared-only 描述需从“运行时共享读”改为“发布后本地读”。 |
 | DEV-PLAN-071A | `docs/dev-plans/071a-package-selection-ownership-and-subscription.md` | 中 | package 编辑归属不变，但订阅消费路径需去除 global 运行时依赖。 |
 | DEV-PLAN-071B | `docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md` | 高 | `tenant_global` 需收敛为 `tenant_only`，并补发布治理与 fail-closed 口径。 |
-| DEV-PLAN-102B | `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md` | 中 | 回放稳定性证据需覆盖“发布到租户后 as_of 重放一致性”。 |
+| DEV-PLAN-102B | `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md` | 高 | 作为 070/071 时间契约 PoR：`as_of/effective_date` 显式必填、`invalid_*` 错误码冻结、跨天回放一致性门禁。 |
 | DEV-PLAN-105 | `docs/dev-plans/105-dict-config-platform-module.md` | 高 | 字典读取口径需移除 tenant/global fallback，改为 tenant-only。 |
 | DEV-PLAN-105A | `docs/dev-plans/105a-dict-config-validation-issues-investigation.md` | 中 | 校验问题需补“基线未导入”与“不回退 global”错误路径。 |
 | DEV-PLAN-105B | `docs/dev-plans/105b-dict-code-management-and-governance.md` | 高 | tenant/global 冲突与 fallback 条款需更新为“仅租户本地 + 发布同步”。 |
@@ -246,6 +256,7 @@
 - `DEV-PLAN-071`：共享包读取描述改为“发布到租户本地后解析”，弱化/移除运行时共享读。
 - `DEV-PLAN-071A/071B`：`tenant_global` 命名与语义收敛为 `tenant_only`，并补充发布治理条款。
 - `DEV-PLAN-105/105B`：补充“取消 global fallback”后的字典读取与迁移验收条目。
+- `DEV-PLAN-102B`：将 M2/M3/M5 明确为 070B 切流前置门；070B 不再定义独立时间错误码分支。
 
 ### 11.3 同步优先级分组（P0/P1）
 > 口径：P0=070B 进入“准备就绪”前必须完成同步；P1=可在 070B 实施期内后置同步，但不得晚于 070B 收口验收。
@@ -273,6 +284,8 @@
 - `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
 - `docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
 - `docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
+- `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
 - `docs/dev-plans/105-dict-config-platform-module.md`
 - `docs/dev-plans/105b-dict-code-management-and-governance.md`
+- `docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
