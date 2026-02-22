@@ -1,6 +1,6 @@
 # DEV-PLAN-070B1：字典基线发布 UI 可视化操作方案（承接 DEV-PLAN-070B）
 
-**状态**: 规划中（2026-02-22 21:05 UTC）
+**状态**: 已完成（2026-02-22 10:10 UTC）
 
 ## 1. 背景与问题 (Context)
 - `DEV-PLAN-070B` 已完成后端“发布到租户本地”能力（preview/release API、权限、tenant-only 运行时、门禁与脚本）。
@@ -10,10 +10,10 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 在现有字典配置页面提供“发布到当前租户”可视化入口（预检 + 执行）。
-- [ ] 用户可在页面完成完整链路：输入参数 -> 预检 -> 查看冲突 -> 执行发布 -> 查看结果。
-- [ ] 与 070B 后端契约严格对齐，不引入第二写入口，发布仍走 One Door。
-- [ ] 输出可审计信息：`release_id/request_id/as_of/计数结果/started_at/finished_at`。
+- [x] 在现有字典配置页面提供“发布到当前租户”可视化入口（预检 + 执行）。
+- [x] 用户可在页面完成完整链路：输入参数 -> 预检 -> 查看冲突 -> 执行发布 -> 查看结果。
+- [x] 与 070B 后端契约严格对齐，不引入第二写入口，发布仍走 One Door。
+- [x] 输出可审计信息：`release_id/request_id/as_of/计数结果/started_at/finished_at`。
 
 ### 2.2 非目标
 - 不在本计划新增数据库表或迁移。
@@ -23,11 +23,11 @@
 
 ### 2.3 工具链触发器（SSOT 引用）
 - [ ] Go 代码（若涉及后端 handler/契约调整）
-- [ ] Web UI（`make generate && make css`，如命中生成物）
+- [x] Web UI（`make generate && make css`，如命中生成物）
 - [ ] Routing（仅当新增路由；本计划默认不命中）
 - [ ] Authz（如新增 `permissionKey` 或策略映射）
-- [ ] E2E（补齐 UI 发布流用例）
-- [ ] 文档（`make check doc`）
+- [x] E2E（补齐 UI 发布流用例）
+- [x] 文档（`make check doc`）
 
 > 命令与门禁以 `AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml` 为 SSOT，本计划不复制脚本实现细节。
 
@@ -55,14 +55,14 @@
 
 ## 4. DEV-PLAN-005 标准对齐（冻结）
 ### 4.1 STD-001（`request_id` / `trace_id`）
-- [ ] 发布写入幂等字段统一为 `request_id`，UI 与 API 禁止出现 `request_code` 新增输入。
-- [ ] 追踪字段统一为 `trace_id`（若 UI 展示链路追踪信息，禁止复用 `request_id` 表达 tracing）。
-- [ ] 错误提示与日志文案明确区分“幂等冲突（request_id）”与“链路追踪（trace_id）”。
+- [x] 发布写入幂等字段统一为 `request_id`，UI 与 API 禁止出现 `request_code` 新增输入。
+- [x] 追踪字段统一为 `trace_id`（若 UI 展示链路追踪信息，禁止复用 `request_id` 表达 tracing）。
+- [x] 错误提示与日志文案明确区分“幂等冲突（request_id）”与“链路追踪（trace_id）”。
 
 ### 4.2 STD-002（`as_of` / `effective_date`）
-- [ ] 发布预检与执行中，`as_of` 仅表示查询时点，必须显式输入，禁止默认 today。
-- [ ] 本页面不引入 `effective_date` 输入；若后续扩展写入生效日能力，须单独立项并遵守 `invalid_effective_date` 契约。
-- [ ] 对非法 `as_of`，UI 需透传并展示后端稳定错误码 `invalid_as_of`。
+- [x] 发布预检与执行中，`as_of` 仅表示查询时点，必须显式输入，禁止默认 today。
+- [x] 本页面不引入 `effective_date` 输入；若后续扩展写入生效日能力，须单独立项并遵守 `invalid_effective_date` 契约。
+- [x] 对非法 `as_of`，UI 需透传并展示后端稳定错误码 `invalid_as_of`。
 
 ## 5. 权限模型与映射冻结 (Authz Contract)
 
@@ -115,15 +115,15 @@
 - `重置参数` / `复制 ID` 为 Secondary/Text，不得与 Primary 同强调。
 
 ### 7.2 A11y 验收条目
-- [ ] 键盘可达：可用 Tab 完成输入、预检、发布、复制结果。
-- [ ] 焦点可见：不移除 focus ring；错误输入跳转后焦点可见。
-- [ ] `IconButton` 均具备 `aria-label`（或 Tooltip + 可读名称）。
-- [ ] 错误信息可读（非仅颜色表达），冲突表格具备列头语义。
+- [x] 键盘可达：可用 Tab 完成输入、预检、发布、复制结果。
+- [x] 焦点可见：不移除 focus ring；错误输入跳转后焦点可见。
+- [x] `IconButton` 均具备 `aria-label`（或 Tooltip + 可读名称）。
+- [x] 错误信息可读（非仅颜色表达），冲突表格具备列头语义。
 
 ### 7.3 i18n 验收条目（仅 `en/zh`）
-- [ ] 新增文案全部走 i18n key，不得硬编码在组件中。
-- [ ] 必备 key：页面标题、字段 label、按钮文案、状态提示、错误码映射提示。
-- [ ] 同一错误码在 `en/zh` 文案语义一致（例如 `invalid_as_of`、`forbidden`、`dict_baseline_not_ready`）。
+- [x] 新增文案全部走 i18n key，不得硬编码在组件中。
+- [x] 必备 key：页面标题、字段 label、按钮文案、状态提示、错误码映射提示。
+- [x] 同一错误码在 `en/zh` 文案语义一致（例如 `invalid_as_of`、`forbidden`、`dict_baseline_not_ready`）。
 
 ## 8. API 对接与错误码映射
 ### 8.1 API
@@ -131,35 +131,35 @@
 - 执行：`POST /iam/api/dicts:release`
 
 ### 8.2 关键交互规则
-- [ ] 先预检后发布：仅 `ready` 态允许点击“执行发布”。
-- [ ] 预检冲突（HTTP 409）必须展示冲突明细并阻断发布。
-- [ ] 发布成功（HTTP 201）展示结果摘要并提示刷新列表。
-- [ ] 错误码统一映射可读提示，且保留原始 code 便于排障。
+- [x] 先预检后发布：仅 `ready` 态允许点击“执行发布”。
+- [x] 预检冲突（HTTP 409）必须展示冲突明细并阻断发布。
+- [x] 发布成功（HTTP 201）展示结果摘要并提示刷新列表。
+- [x] 错误码统一映射可读提示，且保留原始 code 便于排障。
 
 ## 9. 测试与验收 (Testing & Acceptance)
 ### 9.1 测试范围
-- [ ] 单元测试：参数校验、状态机转移、按钮禁用态、错误映射。
-- [ ] 集成测试：preview 成功/冲突、release 成功/失败、403 权限拒绝。
-- [ ] E2E：`/dicts` 页面完整链路（预检 -> 发布 -> 结果展示）。
+- [x] 单元测试：参数校验、状态机转移、按钮禁用态、错误映射。
+- [x] 集成测试：preview 成功/冲突、release 成功/失败、403 权限拒绝。
+- [x] E2E：`/dicts` 页面完整链路（预检 -> 发布 -> 结果展示）。
 
 ### 9.2 验收标准
-- [ ] `/dicts` 页面可直接发现并操作发布功能（满足用户可见性原则）。
-- [ ] 发布按钮权限与后端鉴权一致，不出现“UI 放行/后端拒绝”漂移。
-- [ ] 冲突场景不会误触发发布写入。
-- [ ] 发布成功后可见审计关键字段与结果计数。
-- [ ] 通过 `DEV-PLAN-002`（按钮层级/A11y/i18n）与 `DEV-PLAN-003`（边界/不变量/失败路径可解释）评审。
+- [x] `/dicts` 页面可直接发现并操作发布功能（满足用户可见性原则）。
+- [x] 发布按钮权限与后端鉴权一致，不出现“UI 放行/后端拒绝”漂移。
+- [x] 冲突场景不会误触发发布写入。
+- [x] 发布成功后可见审计关键字段与结果计数。
+- [x] 通过 `DEV-PLAN-002`（按钮层级/A11y/i18n）与 `DEV-PLAN-003`（边界/不变量/失败路径可解释）评审。
 
 ## 10. 实施拆解（建议 PR 轴）
-1. [ ] **PR-070B1-1（权限合同 + API Client）**：
+1. [x] **PR-070B1-1（权限合同 + API Client）**：
    - 新增 `dict.release.admin` 前端权限键与映射文档；
    - 扩展 `apps/web/src/api/dicts.ts` 的 preview/release client 与类型。
-2. [ ] **PR-070B1-2（页面可操作入口）**：
+2. [x] **PR-070B1-2（页面可操作入口）**：
    - 在 `DictConfigsPage` 增加“字典发布”操作区与结果区；
    - 落地按钮层级（预检 Secondary、执行发布 Primary）。
-3. [ ] **PR-070B1-3（状态机/错误/可访问性收口）**：
+3. [x] **PR-070B1-3（状态机/错误/可访问性收口）**：
    - 落地状态机与防重入；
    - 错误码映射、无权限提示、A11y/i18n key 完整收口。
-4. [ ] **PR-070B1-4（测试与证据）**：
+4. [x] **PR-070B1-4（测试与证据）**：
    - 补齐前端单测/集成/E2E；
    - 在 `docs/dev-records/` 记录门禁与执行证据。
 

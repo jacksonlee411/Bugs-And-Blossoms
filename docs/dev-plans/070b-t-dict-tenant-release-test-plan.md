@@ -1,6 +1,6 @@
 # DEV-PLAN-070B-T：070B 系列目标达成测试方案（字典租户本地发布）
 
-**状态**: 规划中（2026-02-22 08:52 UTC）
+**状态**: 开发验证完成（T1-T3，2026-02-22 10:10 UTC）
 
 ## 1. 背景与范围
 
@@ -10,12 +10,12 @@
 ## 2. 测试目标与非目标
 
 ### 2.1 测试目标（DoD）
-- [ ] 证明运行时字典读取链路已 tenant-only，不再触发 `global_tenant` fallback。
-- [ ] 证明“预检 -> 发布”链路可用且可审计（`release_id/request_id/operator/source_tenant_id/as_of`）。
-- [ ] 证明冲突与异常路径 fail-closed（不误发布、不旁路写）。
-- [ ] 证明权限边界一致（UI 权限态与后端鉴权一致）。
-- [ ] 证明 `STD-001` / `STD-002` 在 070B 场景落地。
-- [ ] 证明 070B1 页面满足“可发现、可操作、可解释”的用户可见性原则。
+- [x] 证明运行时字典读取链路已 tenant-only，不再触发 `global_tenant` fallback。
+- [x] 证明“预检 -> 发布”链路可用且可审计（`release_id/request_id/operator/source_tenant_id/as_of`）。
+- [x] 证明冲突与异常路径 fail-closed（不误发布、不旁路写）。
+- [x] 证明权限边界一致（UI 权限态与后端鉴权一致）。
+- [x] 证明 `STD-001` / `STD-002` 在 070B 场景落地。
+- [x] 证明 070B1 页面满足“可发现、可操作、可解释”的用户可见性原则。
 - [ ] 证明切流窗口（T-1/T0/T+1）可执行并可回溯。
 
 ### 2.2 非目标
@@ -50,38 +50,38 @@
 ## 5. 核心用例清单（围绕 070B 目标）
 
 ### 5.1 运行时 tenant-only（无 global fallback）
-- [ ] `GET /iam/api/dicts`：仅返回当前租户数据；空结果不回退 global。
-- [ ] `GET /iam/api/dicts/values`：tenant-only；无跨租户读。
-- [ ] `ResolveValueLabel/ListOptions`：tenant 无数据返回稳定错误，不隐式共享读。
-- [ ] grep/静态门禁确认无新增 `global_tenant` 读取分支。
+- [x] `GET /iam/api/dicts`：仅返回当前租户数据；空结果不回退 global。
+- [x] `GET /iam/api/dicts/values`：tenant-only；无跨租户读。
+- [x] `ResolveValueLabel/ListOptions`：tenant 无数据返回稳定错误，不隐式共享读。
+- [x] grep/静态门禁确认无新增 `global_tenant` 读取分支。
 
 ### 5.2 发布链路与幂等语义
-- [ ] preview 成功返回可发布结果（HTTP 200）。
-- [ ] preview 冲突返回 HTTP 409 + 冲突样例。
-- [ ] release 成功返回 HTTP 201 + 结果统计。
-- [ ] 同 `(tenant, request_id, payload)` 重试幂等成功（`was_retry` 可观测）。
-- [ ] 同 `(tenant, request_id)` 不同 payload 返回冲突（fail-closed）。
+- [x] preview 成功返回可发布结果（HTTP 200）。
+- [x] preview 冲突返回 HTTP 409 + 冲突样例。
+- [x] release 成功返回 HTTP 201 + 结果统计。
+- [x] 同 `(tenant, request_id, payload)` 重试幂等成功（`was_retry` 可观测）。
+- [x] 同 `(tenant, request_id)` 不同 payload 返回冲突（fail-closed）。
 
 ### 5.3 基线未就绪与失败路径
-- [ ] 新租户未导入基线时，写入口返回 `dict_baseline_not_ready`。
-- [ ] 读侧参数非法（如 `as_of`）返回 `invalid_as_of`。
-- [ ] 写侧 `effective_date` 缺失/非法时返回 `invalid_effective_date`（覆盖字典写 API）。
-- [ ] 任何失败场景不允许回退旧链路或旁路写入（No Legacy）。
+- [x] 新租户未导入基线时，写入口返回 `dict_baseline_not_ready`。
+- [x] 读侧参数非法（如 `as_of`）返回 `invalid_as_of`。
+- [x] 写侧 `effective_date` 缺失/非法时返回 `invalid_effective_date`（覆盖字典写 API）。
+- [x] 任何失败场景不允许回退旧链路或旁路写入（No Legacy）。
 
 ### 5.4 权限边界
-- [ ] 无 `iam.dict_release/admin` 时，release/preview API 必须 403。
-- [ ] 070B1 UI 中“执行发布”按发布权限控制（禁用或隐藏，并有说明）。
-- [ ] 业务读写权限回归：`dict.read` 可读、`dict.admin` 可写、无权限 fail-closed。
-- [ ] 不出现“UI 可点 -> 后端 403”长期漂移（需有联调用例）。
+- [x] 无 `iam.dict_release/admin` 时，release/preview API 必须 403。
+- [x] 070B1 UI 中“执行发布”按发布权限控制（禁用或隐藏，并有说明）。
+- [x] 业务读写权限回归：`dict.read` 可读、`dict.admin` 可写、无权限 fail-closed。
+- [x] 不出现“UI 可点 -> 后端 403”长期漂移（需有联调用例）。
 
 ### 5.5 审计可追溯
-- [ ] 发布结果可回溯：`release_id/request_id/operator/source_tenant_id/as_of`。
-- [ ] 事件链可解释“谁在何时向哪个租户发布了哪些字典值”。
+- [x] 发布结果可回溯：`release_id/request_id/operator/source_tenant_id/as_of`。
+- [x] 事件链可解释“谁在何时向哪个租户发布了哪些字典值”。
 
 ### 5.6 标准对齐（DEV-PLAN-005）
-- [ ] `STD-001`：对外契约统一 `request_id`；若内部仍保留 `request_code`，必须验证二者映射一致且不外泄旧命名。
-- [ ] `STD-001`：`trace_id` 与幂等语义分离。
-- [ ] `STD-002`：`as_of/effective_date` 显式输入且无 default today；错误码口径一致。
+- [x] `STD-001`：对外与内部统一使用 `request_id`，不得新增/外泄 `request_code` 命名。
+- [x] `STD-001`：`trace_id` 与幂等语义分离。
+- [x] `STD-002`：`as_of/effective_date` 显式输入且无 default today；错误码口径一致。
 
 ### 5.7 一致性校验（与 070B §5.2 对齐）
 - [ ] 回填后按租户校验 `dict_code` 数量与基线期望一致。
@@ -92,45 +92,45 @@
 ## 6. 070B1 UI 专项验收（对齐 002/003）
 
 ### 6.1 信息架构与页面关系
-- [ ] 不新增路由；在现有 `/dicts` 页面内可发现“字典发布”操作区。
-- [ ] 页面至少支持一次完整发布闭环，不是只读展示。
+- [x] 不新增路由；在现有 `/dicts` 页面内可发现“字典发布”操作区。
+- [x] 页面至少支持一次完整发布闭环，不是只读展示。
 
 ### 6.2 交互状态机
-- [ ] 覆盖 `idle/previewing/conflict/ready/releasing/success/fail` 七态。
-- [ ] `conflict` 态不可执行发布；`releasing` 态不可重复提交。
+- [x] 覆盖 `idle/previewing/conflict/ready/releasing/success/fail` 七态。
+- [x] `conflict` 态不可执行发布；`releasing` 态不可重复提交。
 
 ### 6.3 按钮层级/A11y/i18n
-- [ ] 同任务域只有一个 Primary（执行发布）；预检为 Secondary。
-- [ ] 键盘可达、焦点可见、`aria-label` 完整、错误可读。
-- [ ] 新增文案仅走 `en/zh` i18n key，无硬编码。
+- [x] 同任务域只有一个 Primary（执行发布）；预检为 Secondary。
+- [x] 键盘可达、焦点可见、`aria-label` 完整、错误可读。
+- [x] 新增文案仅走 `en/zh` i18n key，无硬编码。
 
 ## 7. 测试数据与环境
 
 ### 7.1 租户与角色
-- [ ] 准备 `global_tenant`（基线源）与至少 2 个业务租户（目标租户 + 对照租户）。
-- [ ] 准备 `tenant-admin`、`tenant-viewer`（无写权限）、`release-admin`（有发布权限）角色组合。
+- [x] 准备 `global_tenant`（基线源）与至少 2 个业务租户（目标租户 + 对照租户）。
+- [x] 准备 `tenant-admin`、`tenant-viewer`（无写权限）、`release-admin`（有发布权限）角色组合。
 
 ### 7.2 字典数据集
 - [ ] 基线源租户包含最小可验证字典集（建议包含 `org_type` 与至少 1 条停用记录）。
 - [ ] 目标租户准备三类初始态：空租户、已有一致数据、已有冲突覆盖数据。
 
 ### 7.3 时间切片
-- [ ] 固定至少两个 `as_of` 日期，验证跨日重放一致性。
-- [ ] 固定至少一个 `effective_date` 错误样本，用于 `invalid_effective_date` 用例。
+- [x] 固定至少两个 `as_of` 日期，验证跨日重放一致性。
+- [x] 固定至少一个 `effective_date` 错误样本，用于 `invalid_effective_date` 用例。
 
 ## 8. 分阶段执行与退出准则
 
 ### T1：契约与单元阶段
-- [ ] 完成 L1 用例并通过。
-- [ ] 退出准则：参数/状态机/错误映射无阻塞缺陷。
+- [x] 完成 L1 用例并通过。
+- [x] 退出准则：参数/状态机/错误映射无阻塞缺陷。
 
 ### T2：集成阶段
-- [ ] 完成 L2 用例并通过。
-- [ ] 退出准则：tenant-only、幂等、冲突、审计、一致性校验全部有证据。
+- [x] 完成 L2 用例并通过。
+- [x] 退出准则：tenant-only、幂等、冲突、审计核心链路均有证据；切流一致性对账留待 T4/T5。
 
 ### T3：UI/E2E 阶段
-- [ ] 完成 L3+L4 用例并通过。
-- [ ] 退出准则：070B1 用户可见性闭环成立，权限与按钮层级符合 002。
+- [x] 完成 L3+L4 用例并通过。
+- [x] 退出准则：070B1 用户可见性闭环成立，权限与按钮层级符合 002。
 
 ### T4：切流演练阶段
 - [ ] 完成 L5 脚本演练（回填、对账、runbook）。
@@ -146,16 +146,16 @@
 
 > 具体命令不在本计划复制，统一引用 SSOT；以下只声明命中项与证据类型。
 
-- [ ] Go 变更门禁：格式化、静态检查、单测通过。
-- [ ] Authz 门禁：策略打包/测试/lint 通过。
-- [ ] Routing 门禁：若路由/allowlist 变更则通过。
-- [ ] E2E 门禁：发布链路用例通过。
-- [ ] 文档门禁：`make check doc` 通过。
+- [x] Go 变更门禁：格式化、静态检查、单测通过。
+- [x] Authz 门禁：策略打包/测试/lint 通过。
+- [x] Routing 门禁：若路由/allowlist 变更则通过。
+- [x] E2E 门禁：发布链路用例通过。
+- [x] 文档门禁：`make check doc` 通过。
 
 证据归档：
-- [ ] 在 `docs/dev-records/dev-plan-070b-execution-log.md` 增补测试批次记录（时间、环境、命中门禁、结果、缺陷链接）。
-- [ ] 对每个阻塞缺陷给出分类：`BUG` / `CONTRACT_DRIFT` / `CONTRACT_MISSING` / `ENV_DRIFT`。
-- [ ] 对关键通过项记录“输入参数 + 期望 + 实际 + 证据链接”，保证可复查。
+- [x] 在 `docs/dev-records/dev-plan-070b-execution-log.md` 增补测试批次记录（时间、环境、命中门禁、结果、缺陷链接）。
+- [x] 对每个阻塞缺陷给出分类：`BUG` / `CONTRACT_DRIFT` / `CONTRACT_MISSING` / `ENV_DRIFT`。
+- [x] 对关键通过项记录“输入参数 + 期望 + 实际 + 证据链接”，保证可复查。
 
 ## 10. 070B 目标覆盖映射（评审用）
 
@@ -177,8 +177,8 @@
   缓解：先跑 preview 冲突分层样本，再扩到全量租户。
 - 风险：UI 按钮层级与后端契约不同步。  
   缓解：将 `permissionKey` 与 object/action 映射纳入必测断言。
-- 风险：`request_id/request_code` 历史口径并存导致验收歧义。  
-  缓解：按 §5.6 先做映射校验，再推动主契约统一修订。
+- 风险：历史遗留文档或提示语出现 `request_code` 命名，导致验收歧义。  
+  缓解：按 §5.6 做静态检索与提示语回归，统一收敛到 `request_id`。
 
 ## 12. 交付物
 
