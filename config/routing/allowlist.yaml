@@ -110,6 +110,9 @@ entrypoints:
       - path: /org/api/global-scope-packages
         methods: [GET, POST]
         route_class: internal_api
+      - path: /org/api/setid-strategy-registry
+        methods: [GET, POST]
+        route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]
         route_class: internal_api
