@@ -33,6 +33,8 @@ type stubTx struct {
 	rows  pgx.Rows
 	rows2 pgx.Rows
 	rows3 pgx.Rows
+	rows4 pgx.Rows
+	rows5 pgx.Rows
 	row   pgx.Row
 	row2  pgx.Row
 	row3  pgx.Row
@@ -88,6 +90,12 @@ func (t *stubTx) Query(context.Context, string, ...any) (pgx.Rows, error) {
 	}
 	if t.queryN == 3 && t.rows3 != nil {
 		return t.rows3, nil
+	}
+	if t.queryN == 4 && t.rows4 != nil {
+		return t.rows4, nil
+	}
+	if t.queryN == 5 && t.rows5 != nil {
+		return t.rows5, nil
 	}
 	if t.rows != nil {
 		return t.rows, nil

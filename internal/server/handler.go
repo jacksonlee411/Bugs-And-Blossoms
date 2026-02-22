@@ -259,6 +259,14 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/iam/api/dicts/values/audit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleDictValuesAuditAPI(w, r, dictStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/iam/api/dicts:release", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		releaseStore, _ := dictStore.(DictBaselineReleaseStore)
+		handleDictReleaseAPI(w, r, releaseStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/iam/api/dicts:release:preview", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		releaseStore, _ := dictStore.(DictBaselineReleaseStore)
+		handleDictReleasePreviewAPI(w, r, releaseStore)
+	}))
 	router.Handle(routing.RouteClassAuthn, http.MethodPost, "/logout", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if sid, ok := readSID(r); ok {
 			_ = sessions.Revoke(r.Context(), sid)

@@ -139,6 +139,7 @@ func TestDictPGStore_ExtraCoverage(t *testing.T) {
 	t.Run("submitValueEvent payload marshal error", func(t *testing.T) {
 		tx := &stubTx{}
 		tx.row = &stubRow{vals: []any{true}}
+		tx.row2 = &stubRow{vals: []any{true}}
 		store := &dictPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		if _, _, err := store.submitValueEvent(ctx, "t1", "org_type", "10", dictEventCreated, "2026-01-01", map[string]any{"x": func() {}}, "r1", "u1"); err == nil {
 			t.Fatal("expected marshal error")

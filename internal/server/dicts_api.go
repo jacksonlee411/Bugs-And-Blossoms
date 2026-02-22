@@ -574,11 +574,11 @@ func writeDictAPIError(w http.ResponseWriter, r *http.Request, err error, defaul
 	code := dictErrorCode(err)
 	status := http.StatusInternalServerError
 	switch code {
-	case "invalid_as_of", "dict_code_required", "dict_code_invalid", "dict_name_required", "dict_enabled_on_required", "dict_disabled_on_required", "dict_value_code_required", "dict_value_label_required", "invalid_request":
+	case "invalid_as_of", "dict_code_required", "dict_code_invalid", "dict_name_required", "dict_enabled_on_required", "dict_disabled_on_required", "dict_value_code_required", "dict_value_label_required", "invalid_request", "dict_release_id_required", "dict_release_source_invalid", "dict_release_target_required":
 		status = http.StatusBadRequest
 	case "dict_not_found", "dict_value_not_found_as_of":
 		status = http.StatusNotFound
-	case "dict_value_conflict", "dict_code_conflict", "dict_disabled", "dict_value_dict_disabled":
+	case "dict_value_conflict", "dict_code_conflict", "dict_disabled", "dict_value_dict_disabled", "dict_baseline_not_ready", "dict_release_payload_invalid":
 		status = http.StatusConflict
 	}
 	routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, defaultCode)
@@ -610,6 +610,16 @@ func dictErrorCode(err error) string {
 		return "dict_value_conflict"
 	case errors.Is(err, errDictValueDictDisabled):
 		return "dict_value_dict_disabled"
+	case errors.Is(err, errDictBaselineNotReady):
+		return "dict_baseline_not_ready"
+	case errors.Is(err, errDictReleaseIDRequired):
+		return "dict_release_id_required"
+	case errors.Is(err, errDictReleaseSourceInvalid):
+		return "dict_release_source_invalid"
+	case errors.Is(err, errDictReleaseTargetRequired):
+		return "dict_release_target_required"
+	case errors.Is(err, errDictReleasePayloadInvalid):
+		return "dict_release_payload_invalid"
 	case errors.Is(err, errDictRequestIDRequired):
 		return "invalid_request"
 	case errors.Is(err, errDictEffectiveDayRequired):
@@ -618,7 +628,7 @@ func dictErrorCode(err error) string {
 
 	code := strings.TrimSpace(strings.ToLower(stablePgMessage(err)))
 	switch code {
-	case "dict_code_required", "dict_code_invalid", "dict_name_required", "dict_not_found", "dict_disabled", "dict_code_conflict", "dict_value_code_required", "dict_value_label_required", "dict_value_not_found_as_of", "dict_value_conflict", "dict_value_dict_disabled":
+	case "dict_code_required", "dict_code_invalid", "dict_name_required", "dict_not_found", "dict_disabled", "dict_code_conflict", "dict_value_code_required", "dict_value_label_required", "dict_value_not_found_as_of", "dict_value_conflict", "dict_value_dict_disabled", "dict_baseline_not_ready", "dict_release_id_required", "dict_release_source_invalid", "dict_release_target_required", "dict_release_payload_invalid":
 		return code
 	case "dict_effective_day_required":
 		return "invalid_as_of"

@@ -166,6 +166,11 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectIAMDicts, authz.ActionRead, true
 		}
 		return "", "", false
+	case "/iam/api/dicts:release", "/iam/api/dicts:release:preview":
+		if method == http.MethodPost {
+			return authz.ObjectIAMDictRelease, authz.ActionAdmin, true
+		}
+		return "", "", false
 	case "/logout":
 		if method == http.MethodPost {
 			return authz.ObjectIAMSession, authz.ActionAdmin, true

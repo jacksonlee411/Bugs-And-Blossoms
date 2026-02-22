@@ -180,6 +180,8 @@ modules/{module}/
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
 - DEV-PLAN-070B：取消共享租户（global_tenant）并收敛为租户本地发布方案（以字典配置模块为样板）：`docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
+- DEV-PLAN-070B1：字典基线发布 UI 可视化操作方案（承接 DEV-PLAN-070B）：`docs/dev-plans/070b1-dict-release-ui-operations-plan.md`
+- DEV-PLAN-070B-T：070B 系列目标达成测试方案（字典租户本地发布）：`docs/dev-plans/070b-t-dict-tenant-release-test-plan.md`
 - DEV-PLAN-070 执行日志：`docs/dev-records/dev-plan-070-execution-log.md`
 - DEV-PLAN-071【归档】：SetID Scope Package 订阅蓝图（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
 - DEV-PLAN-071A【归档】：基于 Package 的配置编辑与订阅显式化：`docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
@@ -280,6 +282,8 @@ modules/{module}/
 - DEV-PLAN-102C2：BU 个性化策略注册表（承接 102C，避免与 070B/102C1 重复）：`docs/dev-plans/102c2-bu-personalization-strategy-registry.md`
 - DEV-PLAN-102C3：SetID 配置命中可解释性（Explainability）方案（承接 102C，避免与 070B/102C1/102C2 重复）：`docs/dev-plans/102c3-setid-configuration-hit-explainability.md`
 - DEV-PLAN-102C4：BU 流程个性化样板（承接 102C，避免与 070B/102C1/102C2/102C3 重复）：`docs/dev-plans/102c4-bu-process-personalization-pilot.md`
+- DEV-PLAN-102C5：102C1-102C3 UI 专项方案（SetID 上下文化安全 + 策略注册表 + 命中解释）：`docs/dev-plans/102c5-ui-design-for-setid-context-security-registry-explainability.md`
+- DEV-PLAN-102C-T：102C1-102C3 测试方案（同租户跨 BU 字段差异）：`docs/dev-plans/102c-t-test-plan-for-c1-c3-bu-field-variance.md`
 - DEV-PLAN-102B 执行日志：`docs/dev-records/dev-plan-102b-execution-log.md`
 - DEV-PLAN-102A 执行日志：`docs/dev-records/dev-plan-102a-execution-log.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
