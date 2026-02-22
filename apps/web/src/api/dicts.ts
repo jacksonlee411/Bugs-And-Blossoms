@@ -59,6 +59,48 @@ export interface DictAuditResponse {
   events: DictAuditItem[]
 }
 
+export interface DictReleaseConflict {
+  kind: string
+  dict_code: string
+  code?: string
+  source_value?: string
+  target_value?: string
+}
+
+export interface DictReleasePreviewResponse {
+  release_id: string
+  source_tenant_id: string
+  target_tenant_id: string
+  as_of: string
+  source_dict_count: number
+  source_value_count: number
+  target_dict_count: number
+  target_value_count: number
+  missing_dict_count: number
+  dict_name_mismatch_count: number
+  missing_value_count: number
+  value_label_mismatch_count: number
+  conflicts: DictReleaseConflict[]
+}
+
+export interface DictReleaseResultResponse {
+  task_id: string
+  release_id: string
+  request_id: string
+  source_tenant_id: string
+  target_tenant_id: string
+  as_of: string
+  status: string
+  dict_events_total: number
+  dict_events_applied: number
+  dict_events_retried: number
+  value_events_total: number
+  value_events_applied: number
+  value_events_retried: number
+  started_at: string
+  finished_at: string
+}
+
 export async function listDicts(asOf: string): Promise<DictListResponse> {
   const query = new URLSearchParams({ as_of: asOf })
   return httpClient.get<DictListResponse>(`/iam/api/dicts?${query.toString()}`)
@@ -146,4 +188,23 @@ export async function listDictAudit(options: {
     query.set('limit', String(options.limit))
   }
   return httpClient.get<DictAuditResponse>(`/iam/api/dicts/values/audit?${query.toString()}`)
+}
+
+export async function previewDictRelease(request: {
+  source_tenant_id: string
+  as_of: string
+  release_id: string
+  max_conflicts?: number
+}): Promise<DictReleasePreviewResponse> {
+  return httpClient.post<DictReleasePreviewResponse>('/iam/api/dicts:release:preview', request)
+}
+
+export async function executeDictRelease(request: {
+  source_tenant_id: string
+  as_of: string
+  release_id: string
+  request_id: string
+  max_conflicts?: number
+}): Promise<DictReleaseResultResponse> {
+  return httpClient.post<DictReleaseResultResponse>('/iam/api/dicts:release', request)
 }
