@@ -28,9 +28,30 @@
 
 - 已通过（2026-02-22）：
   - `go test ./internal/server ./modules/staffing/presentation/controllers`
+  - `make test`（覆盖率门禁 `100.00%`）
   - `make check as-of-explicit`
   - `make check routing`
   - `make check doc`
+  - `make sqlc-generate`（生成后工作区无漂移）
+  - `make e2e`
+  - `make preflight`
+
+## 冲突文档改写对照（M1）
+
+- `DEV-PLAN-071`：移除 `as_of/effective_date` 默认 `current_date` 描述，改为显式必填。
+- `DEV-PLAN-071A`：订阅/包治理调用口径对齐显式日期必填。
+- `DEV-PLAN-071B`：补齐 `STD-002` 引用，冻结口径来源。
+- `DEV-PLAN-102`：旧矩阵降级为历史附录（非现行），现行跳转到 `DEV-PLAN-102B`。
+- `DEV-PLAN-063`：移除“`effective_date` 缺省默认为 `as_of`”。
+- `DEV-PLAN-026A`：增加历史勘误，冲突口径以 `STD-002/DEV-PLAN-102B` 为准。
+
+## PR 与交付归档
+
+- 实施提交：`012a070 feat: implement dev-plan-102b explicit time semantics`
+- 覆盖率补测提交：`357d1ad test: close 102b coverage gaps for explicit date paths`
+- 合并 PR：`#399`（`https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/399`）
+- 合并时间：`2026-02-22`（UTC）
+- 合并提交：`00dac4c60c6b72e785b4dca9e39207a44c2c8c35`
 
 ## 约束符合性
 
