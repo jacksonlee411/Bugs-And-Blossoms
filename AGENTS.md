@@ -161,6 +161,7 @@ modules/{module}/
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
 - DEV-PLAN-004：全仓去除版本标记（命名降噪 + 避免对外契约污染）：`docs/dev-plans/004-remove-version-marker-repo-wide.md`
 - DEV-PLAN-004M1：禁止 legacy（单链路原则）——清理、门禁与迁移策略：`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
+- DEV-PLAN-005：项目标准与外部规范采纳清单（规范入口，持续扩展）：`docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - DEV-PLAN-004 记录：全仓去除版本标记——映射表（草案）：`docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`
 - DEV-PLAN-004 记录：全仓去除版本标记——执行日志：`docs/dev-records/dev-plan-004-execution-log.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
@@ -171,6 +172,7 @@ modules/{module}/
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-069 执行日志：`docs/dev-records/dev-plan-069-execution-log.md`
 - DEV-PLAN-070：SetID 绑定组织架构重构方案：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`
+- DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
 - DEV-PLAN-070 执行日志：`docs/dev-records/dev-plan-070-execution-log.md`
 - DEV-PLAN-071：SetID Scope Package 订阅蓝图：`docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
 - DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化：`docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
@@ -254,6 +256,7 @@ modules/{module}/
 - DEV-PLAN-108B：Org 新建组织弹窗 DICT 扩展字段实现（承接 108A）：`docs/dev-plans/108b-org-create-dialog-dict-ext-fields-implementation.md`
 - DEV-PLAN-108B 执行日志：`docs/dev-records/dev-plan-108b-execution-log.md`
 - DEV-PLAN-109：Org 模块 `request_id` → `request_code` 统一改造与门禁：`docs/dev-plans/109-request-code-unification-and-gate.md`
+- DEV-PLAN-109A：`request_code` 全面收敛与防扩散门禁：`docs/dev-plans/109a-request-code-total-convergence-and-anti-drift.md`
 - DEV-PLAN-110：启用字段表单增强：自定义（直接值）+ 值类型选择 + 自定义字段名称：`docs/dev-plans/110-orgunit-field-configs-custom-direct-value-form.md`
 - DEV-PLAN-110 执行日志：`docs/dev-records/dev-plan-110-execution-log.md`
 - DEV-PLAN-111：前端错误信息准确化与字段级提示收敛方案：`docs/dev-plans/111-frontend-error-message-accuracy-and-field-level-hints.md`
