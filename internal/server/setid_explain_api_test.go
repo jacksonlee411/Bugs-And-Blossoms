@@ -234,3 +234,95 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		t.Fatalf("unexpected body: %q", recDeny.Body.String())
 	}
 }
+
+func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
+	resetSetIDStrategyRegistryRuntimeForTest()
+	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
+
+	store := scopeAPIStore{
+		resolveSetIDFn: func(_ context.Context, _ string, orgUnitID string, _ string) (string, error) {
+			switch orgUnitID {
+			case "10000001":
+				return "A0001", nil
+			case "10000002":
+				return "B0001", nil
+			default:
+				return "", errors.New("SETID_NOT_FOUND")
+			}
+		},
+		getScopeSubscriptionFn: func(_ context.Context, _ string, setID string, scopeCode string, _ string) (ScopeSubscription, error) {
+			if scopeCode != "jobcatalog" {
+				return ScopeSubscription{}, errors.New("SCOPE_SUBSCRIPTION_MISSING")
+			}
+			if setID == "A0001" {
+				return ScopeSubscription{SetID: "A0001", ScopeCode: scopeCode, PackageID: "pkg-a", PackageOwner: "tenant"}, nil
+			}
+			if setID == "B0001" {
+				return ScopeSubscription{SetID: "B0001", ScopeCode: scopeCode, PackageID: "pkg-b", PackageOwner: "tenant"}, nil
+			}
+			return ScopeSubscription{}, errors.New("SCOPE_SUBSCRIPTION_MISSING")
+		},
+	}
+
+	_, _ = defaultSetIDStrategyRegistryRuntime.upsert("t1", setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_x",
+		PersonalizationMode: personalizationModeSetID,
+		OrgLevel:            orgLevelBusinessUnit,
+		BusinessUnitID:      "10000001",
+		Required:            true,
+		Visible:             true,
+		DefaultRuleRef:      "rule://a1",
+		DefaultValue:        "a1",
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+		Priority:            200,
+	})
+	_, _ = defaultSetIDStrategyRegistryRuntime.upsert("t1", setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_x",
+		PersonalizationMode: personalizationModeSetID,
+		OrgLevel:            orgLevelBusinessUnit,
+		BusinessUnitID:      "10000002",
+		Required:            false,
+		Visible:             false,
+		DefaultRuleRef:      "rule://b2",
+		DefaultValue:        "b2",
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+		Priority:            200,
+	})
+
+	makeReq := func(businessUnitID string) *http.Request {
+		req := httptest.NewRequest(
+			http.MethodGet,
+			"/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&scope_code=jobcatalog&as_of=2026-01-01&business_unit_id="+businessUnitID,
+			nil,
+		)
+		return req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+	}
+
+	recBUA := httptest.NewRecorder()
+	handleSetIDExplainAPI(recBUA, makeReq("10000001"), store)
+	if recBUA.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recBUA.Code, recBUA.Body.String())
+	}
+	if !strings.Contains(recBUA.Body.String(), `"required":true`) ||
+		!strings.Contains(recBUA.Body.String(), fieldRequiredInContextCode) ||
+		!strings.Contains(recBUA.Body.String(), `"resolved_default_value":"a1"`) {
+		t.Fatalf("unexpected body: %q", recBUA.Body.String())
+	}
+
+	recBUB := httptest.NewRecorder()
+	handleSetIDExplainAPI(recBUB, makeReq("10000002"), store)
+	if recBUB.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recBUB.Code, recBUB.Body.String())
+	}
+	if !strings.Contains(recBUB.Body.String(), `"decision":"deny"`) ||
+		!strings.Contains(recBUB.Body.String(), fieldHiddenInContextCode) ||
+		!strings.Contains(recBUB.Body.String(), `"resolved_default_value":"b2"`) {
+		t.Fatalf("unexpected body: %q", recBUB.Body.String())
+	}
+}

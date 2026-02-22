@@ -349,6 +349,57 @@ func TestSetIDStrategyRegistryRuntime_ResolveFieldDecisionBranches(t *testing.T)
 	}
 }
 
+func TestSetIDStrategyRegistryRuntime_BUFieldVarianceAcceptance(t *testing.T) {
+	runtime := newSetIDStrategyRegistryRuntime()
+
+	_, _ = runtime.upsert("t1", setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_x",
+		PersonalizationMode: personalizationModeSetID,
+		OrgLevel:            orgLevelBusinessUnit,
+		BusinessUnitID:      "10000001",
+		Required:            true,
+		Visible:             true,
+		DefaultRuleRef:      "rule://a1",
+		DefaultValue:        "a1",
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+		Priority:            200,
+	})
+	_, _ = runtime.upsert("t1", setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_x",
+		PersonalizationMode: personalizationModeSetID,
+		OrgLevel:            orgLevelBusinessUnit,
+		BusinessUnitID:      "10000002",
+		Required:            false,
+		Visible:             false,
+		DefaultRuleRef:      "rule://b2",
+		DefaultValue:        "b2",
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+		Priority:            200,
+	})
+
+	buA, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "10000001", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if !buA.Required || !buA.Visible || buA.ResolvedDefaultVal != "a1" {
+		t.Fatalf("unexpected buA decision: %+v", buA)
+	}
+
+	buB, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_x", "10000002", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if buB.Required || buB.Visible || buB.ResolvedDefaultVal != "b2" {
+		t.Fatalf("unexpected buB decision: %+v", buB)
+	}
+}
+
 func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 	resetSetIDStrategyRegistryRuntimeForTest()
 	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
