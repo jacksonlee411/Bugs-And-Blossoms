@@ -25,7 +25,7 @@ type orgUnitWriteAPIRequest struct {
 	OrgCode             string                      `json:"org_code"`
 	EffectiveDate       string                      `json:"effective_date"`
 	TargetEffectiveDate string                      `json:"target_effective_date"`
-	RequestCode         string                      `json:"request_code"`
+	RequestID           string                      `json:"request_id"`
 	Patch               orgUnitWritePatchAPIRequest `json:"patch"`
 }
 
@@ -70,7 +70,7 @@ func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc org
 		OrgCode:             strings.TrimSpace(req.OrgCode),
 		EffectiveDate:       strings.TrimSpace(req.EffectiveDate),
 		TargetEffectiveDate: strings.TrimSpace(req.TargetEffectiveDate),
-		RequestCode:         strings.TrimSpace(req.RequestCode),
+		RequestID:           strings.TrimSpace(req.RequestID),
 		Patch: orgunitservices.OrgUnitWritePatch{
 			Name:           req.Patch.Name,
 			ParentOrgCode:  req.Patch.ParentOrgCode,

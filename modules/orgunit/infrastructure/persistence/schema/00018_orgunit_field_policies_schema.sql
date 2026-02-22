@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS orgunit.tenant_field_policy_events (
   scope_type text NOT NULL,
   scope_key text NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS orgunit.tenant_field_policy_events (
   CONSTRAINT tenant_field_policy_events_field_key_format_check CHECK (field_key ~ '^[a-z][a-z0-9_]{0,62}$'),
   CONSTRAINT tenant_field_policy_events_scope_type_check CHECK (scope_type IN ('GLOBAL','FORM')),
   CONSTRAINT tenant_field_policy_events_scope_key_non_empty_check CHECK (btrim(scope_key) <> ''),
-  CONSTRAINT tenant_field_policy_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT tenant_field_policy_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT tenant_field_policy_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT tenant_field_policy_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
@@ -162,7 +162,7 @@ CREATE OR REPLACE FUNCTION orgunit.upsert_tenant_field_policy(
   p_default_mode text,
   p_default_rule_expr text,
   p_enabled_on date,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -207,12 +207,12 @@ BEGIN
   INTO v_event_type, v_policy_id
   FROM orgunit.tenant_field_policy_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
     IF v_event_type <> 'UPSERT' THEN
-      RAISE EXCEPTION USING MESSAGE = 'ORG_REQUEST_ID_CONFLICT', DETAIL = format('request_code=%s', p_request_code);
+      RAISE EXCEPTION USING MESSAGE = 'ORG_REQUEST_ID_CONFLICT', DETAIL = format('request_id=%s', p_request_id);
     END IF;
     RETURN v_policy_id;
   END IF;
@@ -289,7 +289,7 @@ BEGIN
     scope_type,
     scope_key,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   ) VALUES (
     gen_random_uuid(),
@@ -299,7 +299,7 @@ BEGIN
     v_scope_type,
     v_scope_key,
     jsonb_build_object('policy_id', v_policy_id),
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   );
 
@@ -313,7 +313,7 @@ CREATE OR REPLACE FUNCTION orgunit.disable_tenant_field_policy(
   p_scope_type text,
   p_scope_key text,
   p_disabled_on date,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -346,12 +346,12 @@ BEGIN
   INTO v_event_type, v_policy_id
   FROM orgunit.tenant_field_policy_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
     IF v_event_type <> 'DISABLE' THEN
-      RAISE EXCEPTION USING MESSAGE = 'ORG_REQUEST_ID_CONFLICT', DETAIL = format('request_code=%s', p_request_code);
+      RAISE EXCEPTION USING MESSAGE = 'ORG_REQUEST_ID_CONFLICT', DETAIL = format('request_id=%s', p_request_id);
     END IF;
     RETURN v_policy_id;
   END IF;
@@ -388,7 +388,7 @@ BEGIN
     scope_type,
     scope_key,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   ) VALUES (
     gen_random_uuid(),
@@ -398,7 +398,7 @@ BEGIN
     v_scope_type,
     v_scope_key,
     jsonb_build_object('policy_id', v_policy_id, 'disabled_on', p_disabled_on),
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   );
 

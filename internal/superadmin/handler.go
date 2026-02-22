@@ -638,7 +638,7 @@ func insertAudit(ctx context.Context, tx pgx.Tx, actor string, action string, te
 		payload = []byte(`{}`)
 	}
 	_, err := tx.Exec(ctx, `
-INSERT INTO iam.superadmin_audit_logs(actor, action, target_tenant_uuid, payload, request_code)
+INSERT INTO iam.superadmin_audit_logs(actor, action, target_tenant_uuid, payload, request_id)
 VALUES ($1, $2, $3::uuid, $4::jsonb, $5)
 `, actor, action, tenantID, payload, reqID)
 	return err

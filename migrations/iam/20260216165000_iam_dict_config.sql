@@ -70,12 +70,12 @@ CREATE TABLE IF NOT EXISTS iam.dict_value_events (
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   before_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
   after_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NULL,
   tx_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT dict_value_events_event_uuid_unique UNIQUE (event_uuid),
-  CONSTRAINT dict_value_events_request_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT dict_value_events_request_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT dict_value_events_dict_code_check CHECK (
     dict_code = lower(dict_code)
     AND dict_code = btrim(dict_code)
@@ -116,7 +116,7 @@ CREATE OR REPLACE FUNCTION iam.submit_dict_value_event(
   p_event_type text,
   p_effective_day date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS TABLE(event_id bigint, was_retry boolean)
@@ -126,7 +126,7 @@ DECLARE
   v_dict_code text := lower(btrim(COALESCE(p_dict_code, '')));
   v_code text := btrim(COALESCE(p_code, ''));
   v_event_type text := upper(btrim(COALESCE(p_event_type, '')));
-  v_request_code text := btrim(COALESCE(p_request_code, ''));
+  v_request_id text := btrim(COALESCE(p_request_id, ''));
   v_payload jsonb := COALESCE(p_payload, '{}'::jsonb);
   v_now timestamptz := now();
   v_label text := '';
@@ -146,7 +146,7 @@ BEGIN
   IF p_effective_day IS NULL THEN
     RAISE EXCEPTION 'DICT_EFFECTIVE_DAY_REQUIRED' USING ERRCODE = 'P0001';
   END IF;
-  IF v_request_code = '' THEN
+  IF v_request_id = '' THEN
     RAISE EXCEPTION 'DICT_REQUEST_CODE_REQUIRED' USING ERRCODE = 'P0001';
   END IF;
   IF jsonb_typeof(v_payload) <> 'object' THEN
@@ -166,7 +166,7 @@ BEGIN
   INTO v_existing
   FROM iam.dict_value_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = v_request_code
+    AND request_id = v_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -322,7 +322,7 @@ BEGIN
     payload,
     before_snapshot,
     after_snapshot,
-    request_code,
+    request_id,
     initiator_uuid,
     tx_time,
     created_at
@@ -336,7 +336,7 @@ BEGIN
     v_payload,
     v_before,
     v_after,
-    v_request_code,
+    v_request_id,
     p_initiator_uuid,
     v_now,
     v_now

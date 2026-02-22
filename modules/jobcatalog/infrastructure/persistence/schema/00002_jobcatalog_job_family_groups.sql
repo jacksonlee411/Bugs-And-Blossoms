@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_events (
   CONSTRAINT job_family_group_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
   CONSTRAINT job_family_group_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT job_family_group_events_one_per_day_unique UNIQUE (tenant_uuid, setid, job_family_group_uuid, effective_date),
-  CONSTRAINT job_family_group_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT job_family_group_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT job_family_group_events_group_fk
     FOREIGN KEY (tenant_uuid, setid, job_family_group_uuid) REFERENCES jobcatalog.job_family_groups(tenant_uuid, setid, job_family_group_uuid) ON DELETE RESTRICT
 );

@@ -19,11 +19,11 @@ type scopePackageCreateAPIRequest struct {
 	OwnerSetID    string `json:"owner_setid"`
 	Name          string `json:"name"`
 	EffectiveDate string `json:"effective_date"`
-	RequestCode   string `json:"request_code"`
+	RequestID     string `json:"request_id"`
 }
 
 type scopePackageDisableAPIRequest struct {
-	RequestCode string `json:"request_code"`
+	RequestID string `json:"request_id"`
 }
 
 type scopeSubscriptionAPIRequest struct {
@@ -32,7 +32,7 @@ type scopeSubscriptionAPIRequest struct {
 	PackageID     string `json:"package_id"`
 	PackageOwner  string `json:"package_owner"`
 	EffectiveDate string `json:"effective_date"`
-	RequestCode   string `json:"request_code"`
+	RequestID     string `json:"request_id"`
 }
 
 var packageCodePattern = regexp.MustCompile(`^[A-Z0-9_]{1,16}$`)
@@ -72,10 +72,10 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 		req.PackageCode = strings.ToUpper(strings.TrimSpace(req.PackageCode))
 		req.OwnerSetID = strings.ToUpper(strings.TrimSpace(req.OwnerSetID))
 		req.Name = strings.TrimSpace(req.Name)
-		req.RequestCode = strings.TrimSpace(req.RequestCode)
+		req.RequestID = strings.TrimSpace(req.RequestID)
 		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
-		if req.ScopeCode == "" || req.Name == "" || req.RequestCode == "" || req.OwnerSetID == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code/owner_setid/name/request_code required")
+		if req.ScopeCode == "" || req.Name == "" || req.RequestID == "" || req.OwnerSetID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code/owner_setid/name/request_id required")
 			return
 		}
 		if req.EffectiveDate == "" {
@@ -97,7 +97,7 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 			return
 		}
 
-		pkg, err := store.CreateScopePackage(r.Context(), tenant.ID, req.ScopeCode, req.PackageCode, req.OwnerSetID, req.Name, req.EffectiveDate, req.RequestCode, tenant.ID)
+		pkg, err := store.CreateScopePackage(r.Context(), tenant.ID, req.ScopeCode, req.PackageCode, req.OwnerSetID, req.Name, req.EffectiveDate, req.RequestID, tenant.ID)
 		if err != nil {
 			writeScopeAPIError(w, r, err, "scope_package_create_failed")
 			return
@@ -182,12 +182,12 @@ func handleScopePackageDisableAPI(w http.ResponseWriter, r *http.Request, store 
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
 		return
 	}
-	req.RequestCode = strings.TrimSpace(req.RequestCode)
-	if req.RequestCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_code required")
+	req.RequestID = strings.TrimSpace(req.RequestID)
+	if req.RequestID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 		return
 	}
-	pkg, err := store.DisableScopePackage(r.Context(), tenant.ID, packageID, req.RequestCode, tenant.ID)
+	pkg, err := store.DisableScopePackage(r.Context(), tenant.ID, packageID, req.RequestID, tenant.ID)
 	if err != nil {
 		writeScopeAPIError(w, r, err, "scope_package_disable_failed")
 		return
@@ -248,9 +248,9 @@ func handleScopeSubscriptionsAPI(w http.ResponseWriter, r *http.Request, store S
 		req.PackageID = strings.TrimSpace(req.PackageID)
 		req.PackageOwner = strings.TrimSpace(req.PackageOwner)
 		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
-		req.RequestCode = strings.TrimSpace(req.RequestCode)
-		if req.SetID == "" || req.ScopeCode == "" || req.PackageID == "" || req.PackageOwner == "" || req.EffectiveDate == "" || req.RequestCode == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid/scope_code/package_id/package_owner/effective_date/request_code required")
+		req.RequestID = strings.TrimSpace(req.RequestID)
+		if req.SetID == "" || req.ScopeCode == "" || req.PackageID == "" || req.PackageOwner == "" || req.EffectiveDate == "" || req.RequestID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid/scope_code/package_id/package_owner/effective_date/request_id required")
 			return
 		}
 		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
@@ -262,7 +262,7 @@ func handleScopeSubscriptionsAPI(w http.ResponseWriter, r *http.Request, store S
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "PACKAGE_OWNER_INVALID", "PACKAGE_OWNER_INVALID")
 			return
 		}
-		sub, err := store.CreateScopeSubscription(r.Context(), tenant.ID, req.SetID, req.ScopeCode, req.PackageID, owner, req.EffectiveDate, req.RequestCode, tenant.ID)
+		sub, err := store.CreateScopeSubscription(r.Context(), tenant.ID, req.SetID, req.ScopeCode, req.PackageID, owner, req.EffectiveDate, req.RequestID, tenant.ID)
 		if err != nil {
 			writeScopeAPIError(w, r, err, "scope_subscription_create_failed")
 			return
@@ -324,10 +324,10 @@ func handleGlobalScopePackagesAPI(w http.ResponseWriter, r *http.Request, store 
 		req.ScopeCode = strings.TrimSpace(req.ScopeCode)
 		req.PackageCode = strings.ToUpper(strings.TrimSpace(req.PackageCode))
 		req.Name = strings.TrimSpace(req.Name)
-		req.RequestCode = strings.TrimSpace(req.RequestCode)
+		req.RequestID = strings.TrimSpace(req.RequestID)
 		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
-		if req.ScopeCode == "" || req.Name == "" || req.RequestCode == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code/name/request_code required")
+		if req.ScopeCode == "" || req.Name == "" || req.RequestID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope_code/name/request_id required")
 			return
 		}
 		if req.EffectiveDate == "" {
@@ -356,7 +356,7 @@ func handleGlobalScopePackagesAPI(w http.ResponseWriter, r *http.Request, store 
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "actor_scope_forbidden", "actor scope forbidden")
 			return
 		}
-		pkg, err := store.CreateGlobalScopePackage(r.Context(), req.ScopeCode, req.PackageCode, req.Name, req.EffectiveDate, req.RequestCode, tenant.ID, actorScope)
+		pkg, err := store.CreateGlobalScopePackage(r.Context(), req.ScopeCode, req.PackageCode, req.Name, req.EffectiveDate, req.RequestID, tenant.ID, actorScope)
 		if err != nil {
 			writeScopeAPIError(w, r, err, "global_scope_package_create_failed")
 			return

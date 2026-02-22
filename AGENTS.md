@@ -257,6 +257,7 @@ modules/{module}/
 - DEV-PLAN-108B 执行日志：`docs/dev-records/dev-plan-108b-execution-log.md`
 - DEV-PLAN-109：Org 模块幂等命名收敛与门禁（历史阶段封板，按 STD-001 修订）：`docs/dev-plans/109-request-code-unification-and-gate.md`
 - DEV-PLAN-109A：`request_id`（幂等）+ `trace_id`（Tracing）全仓收敛与防扩散：`docs/dev-plans/109a-request-code-total-convergence-and-anti-drift.md`
+- DEV-PLAN-109A 执行日志：`docs/dev-records/dev-plan-109a-execution-log.md`
 - DEV-PLAN-110：启用字段表单增强：自定义（直接值）+ 值类型选择 + 自定义字段名称：`docs/dev-plans/110-orgunit-field-configs-custom-direct-value-form.md`
 - DEV-PLAN-110 执行日志：`docs/dev-records/dev-plan-110-execution-log.md`
 - DEV-PLAN-111：前端错误信息准确化与字段级提示收敛方案：`docs/dev-plans/111-frontend-error-message-accuracy-and-field-level-hints.md`

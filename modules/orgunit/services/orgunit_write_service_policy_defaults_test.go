@@ -15,13 +15,13 @@ import (
 
 type orgUnitWriteResolverStoreStub struct {
 	orgUnitWriteStoreStub
-	findByRequestFn func(ctx context.Context, tenantID string, requestCode string) (types.OrgUnitEvent, bool, error)
+	findByRequestFn func(ctx context.Context, tenantID string, requestID string) (types.OrgUnitEvent, bool, error)
 	resolvePolicyFn func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, asOf string) (types.TenantFieldPolicy, bool, error)
 }
 
-func (s orgUnitWriteResolverStoreStub) FindEventByRequestCode(ctx context.Context, tenantID string, requestCode string) (types.OrgUnitEvent, bool, error) {
+func (s orgUnitWriteResolverStoreStub) FindEventByRequestID(ctx context.Context, tenantID string, requestID string) (types.OrgUnitEvent, bool, error) {
 	if s.findByRequestFn != nil {
-		return s.findByRequestFn(ctx, tenantID, requestCode)
+		return s.findByRequestFn(ctx, tenantID, requestID)
 	}
 	return types.OrgUnitEvent{}, false, nil
 }
@@ -41,7 +41,7 @@ type orgUnitWriteAutoCodeStoreStub struct {
 		eventUUID string,
 		effectiveDate string,
 		payload json.RawMessage,
-		requestCode string,
+		requestID string,
 		initiatorUUID string,
 		prefix string,
 		width int,
@@ -54,23 +54,23 @@ func (s orgUnitWriteAutoCodeStoreStub) SubmitCreateEventWithGeneratedCode(
 	eventUUID string,
 	effectiveDate string,
 	payload json.RawMessage,
-	requestCode string,
+	requestID string,
 	initiatorUUID string,
 	prefix string,
 	width int,
 ) (int64, string, error) {
 	if s.submitCreateAutoFn != nil {
-		return s.submitCreateAutoFn(ctx, tenantID, eventUUID, effectiveDate, payload, requestCode, initiatorUUID, prefix, width)
+		return s.submitCreateAutoFn(ctx, tenantID, eventUUID, effectiveDate, payload, requestID, initiatorUUID, prefix, width)
 	}
 	return 0, "", errors.New("SubmitCreateEventWithGeneratedCode not mocked")
 }
 
-func TestResolveCreateByRequestCode_Branches(t *testing.T) {
+func TestResolveCreateByRequestID_Branches(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("store without request reader", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
-		_, found, err := svc.resolveCreateByRequestCode(ctx, "t1", "r1")
+		_, found, err := svc.resolveCreateByRequestID(ctx, "t1", "r1")
 		if err != nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
 		}
@@ -83,7 +83,7 @@ func TestResolveCreateByRequestCode_Branches(t *testing.T) {
 				return types.OrgUnitEvent{}, false, errors.New("boom")
 			},
 		})
-		if _, found, err := svc.resolveCreateByRequestCode(ctx, "t1", "r1"); err == nil || found {
+		if _, found, err := svc.resolveCreateByRequestID(ctx, "t1", "r1"); err == nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
 		}
 	})
@@ -95,7 +95,7 @@ func TestResolveCreateByRequestCode_Branches(t *testing.T) {
 				return types.OrgUnitEvent{}, false, nil
 			},
 		})
-		_, found, err := svc.resolveCreateByRequestCode(ctx, "t1", "r1")
+		_, found, err := svc.resolveCreateByRequestID(ctx, "t1", "r1")
 		if err != nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
 		}
@@ -108,7 +108,7 @@ func TestResolveCreateByRequestCode_Branches(t *testing.T) {
 				return types.OrgUnitEvent{EventType: types.OrgUnitEventUpdate}, true, nil
 			},
 		})
-		if _, found, err := svc.resolveCreateByRequestCode(ctx, "t1", "r1"); err == nil || found {
+		if _, found, err := svc.resolveCreateByRequestID(ctx, "t1", "r1"); err == nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
 		}
 	})
@@ -123,7 +123,7 @@ func TestResolveCreateByRequestCode_Branches(t *testing.T) {
 				}, true, nil
 			},
 		})
-		if _, found, err := svc.resolveCreateByRequestCode(ctx, "t1", "r1"); err == nil || found {
+		if _, found, err := svc.resolveCreateByRequestID(ctx, "t1", "r1"); err == nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
 		}
 	})
@@ -145,7 +145,7 @@ func TestResolveCreateByRequestCode_Branches(t *testing.T) {
 				}, true, nil
 			},
 		})
-		if _, found, err := svc.resolveCreateByRequestCode(ctx, "t1", "r1"); err == nil || found {
+		if _, found, err := svc.resolveCreateByRequestID(ctx, "t1", "r1"); err == nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
 		}
 	})
@@ -167,7 +167,7 @@ func TestResolveCreateByRequestCode_Branches(t *testing.T) {
 				}, true, nil
 			},
 		})
-		result, found, err := svc.resolveCreateByRequestCode(ctx, "t1", "r1")
+		result, found, err := svc.resolveCreateByRequestID(ctx, "t1", "r1")
 		if err != nil || !found {
 			t.Fatalf("result=%+v found=%v err=%v", result, found, err)
 		}
@@ -189,7 +189,7 @@ func TestResolveCreateByRequestCode_Branches(t *testing.T) {
 				}, true, nil
 			},
 		})
-		result, found, err := svc.resolveCreateByRequestCode(ctx, "t1", "r1")
+		result, found, err := svc.resolveCreateByRequestID(ctx, "t1", "r1")
 		if err != nil || !found {
 			t.Fatalf("result=%+v found=%v err=%v", result, found, err)
 		}
@@ -462,7 +462,7 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 		_, err := svc.Write(ctx, "t1", WriteOrgUnitRequest{
 			Intent:        "create_org",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
 		if err == nil || err.Error() != "boom" {
@@ -492,7 +492,7 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 		result, err := svc.Write(ctx, "t1", WriteOrgUnitRequest{
 			Intent:        "create_org",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
 		if err != nil {
@@ -514,7 +514,7 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 		_, err := svc.Write(ctx, "t1", WriteOrgUnitRequest{
 			Intent:        "create_org",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
 		if err == nil || err.Error() != errDefaultRuleRequired {
@@ -538,7 +538,7 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 		_, err := svc.Write(ctx, "t1", WriteOrgUnitRequest{
 			Intent:        "create_org",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
 		if err == nil || err.Error() != "policy" {
@@ -557,7 +557,7 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 		_, err := svc.Write(ctx, "t1", WriteOrgUnitRequest{
 			Intent:        "add_version",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
 		if err == nil || err.Error() != errOrgCodeInvalid {
@@ -582,7 +582,7 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 		_, err := svc.Write(ctx, "t1", WriteOrgUnitRequest{
 			Intent:        "create_org",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
 		if err == nil || err.Error() != errDefaultRuleEvalFailed {
@@ -612,7 +612,7 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 		_, err := svc.Write(ctx, "t1", WriteOrgUnitRequest{
 			Intent:        "create_org",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
 		if err == nil || err.Error() != errOrgCodeConflict {
@@ -642,7 +642,7 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 		result, err := svc.Write(ctx, "t1", WriteOrgUnitRequest{
 			Intent:        "create_org",
 			EffectiveDate: "2026-01-01",
-			RequestCode:   "r1",
+			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
 		if err != nil {

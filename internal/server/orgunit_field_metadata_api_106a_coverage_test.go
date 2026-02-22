@@ -143,10 +143,10 @@ func TestHandleOrgUnitFieldConfigsAPI_WasRetryAndMethodNotAllowed(t *testing.T) 
 		var gotDisplayLabel *string
 		store := orgUnitStoreWithFieldConfigs{
 			OrgUnitStore: base,
-			enableFn: func(_ context.Context, _ string, fieldKey string, valueType string, dataSourceType string, _ json.RawMessage, displayLabel *string, enabledOn string, requestCode string, _ string) (orgUnitTenantFieldConfig, bool, error) {
+			enableFn: func(_ context.Context, _ string, fieldKey string, valueType string, dataSourceType string, _ json.RawMessage, displayLabel *string, enabledOn string, requestID string, _ string) (orgUnitTenantFieldConfig, bool, error) {
 				gotDisplayLabel = cloneOptionalString(displayLabel)
-				if fieldKey != "d_org_type" || valueType != "text" || dataSourceType != "DICT" || enabledOn != "2026-01-01" || requestCode != "r1" {
-					t.Fatalf("unexpected args field=%s vt=%s dst=%s enabled_on=%s request=%s", fieldKey, valueType, dataSourceType, enabledOn, requestCode)
+				if fieldKey != "d_org_type" || valueType != "text" || dataSourceType != "DICT" || enabledOn != "2026-01-01" || requestID != "r1" {
+					t.Fatalf("unexpected args field=%s vt=%s dst=%s enabled_on=%s request=%s", fieldKey, valueType, dataSourceType, enabledOn, requestID)
 				}
 				return orgUnitTenantFieldConfig{
 					FieldKey:       fieldKey,
@@ -163,7 +163,7 @@ func TestHandleOrgUnitFieldConfigsAPI_WasRetryAndMethodNotAllowed(t *testing.T) 
 			},
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -180,7 +180,7 @@ func TestHandleOrgUnitFieldConfigsAPI_WasRetryAndMethodNotAllowed(t *testing.T) 
 		now := time.Unix(123, 0).UTC()
 		store := orgUnitStoreWithFieldConfigs{
 			OrgUnitStore: base,
-			enableFn: func(_ context.Context, _ string, fieldKey string, valueType string, dataSourceType string, _ json.RawMessage, displayLabel *string, enabledOn string, requestCode string, _ string) (orgUnitTenantFieldConfig, bool, error) {
+			enableFn: func(_ context.Context, _ string, fieldKey string, valueType string, dataSourceType string, _ json.RawMessage, displayLabel *string, enabledOn string, requestID string, _ string) (orgUnitTenantFieldConfig, bool, error) {
 				if displayLabel != nil {
 					t.Fatalf("display_label should be nil for builtin fields")
 				}
@@ -196,7 +196,7 @@ func TestHandleOrgUnitFieldConfigsAPI_WasRetryAndMethodNotAllowed(t *testing.T) 
 				}, true, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"short_name","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"short_name","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -214,7 +214,7 @@ func TestHandleOrgUnitFieldConfigsAPI_WasRetryAndMethodNotAllowed(t *testing.T) 
 				return orgUnitTenantFieldConfig{}, false, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"short_name","enabled_on":"2026-01-01","request_code":"r1","data_source_config":{"x":1}}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"short_name","enabled_on":"2026-01-01","request_id":"r1","data_source_config":{"x":1}}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -231,7 +231,7 @@ func TestHandleOrgUnitFieldConfigsAPI_WasRetryAndMethodNotAllowed(t *testing.T) 
 				return orgUnitTenantFieldConfig{}, false, errors.New("boom")
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"short_name","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"short_name","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()

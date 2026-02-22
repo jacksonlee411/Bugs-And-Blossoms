@@ -748,7 +748,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -771,8 +771,8 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -817,7 +817,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -828,7 +828,7 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
@@ -845,7 +845,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING

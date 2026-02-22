@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-token_pattern='(^|[^A-Za-z0-9_])(request_id|RequestID)([^A-Za-z0-9_]|$)'
+business_token_pattern='(^|[^A-Za-z0-9_])(request_code|RequestCode|requestCode)([^A-Za-z0-9_]|$)'
+tracing_token_pattern='(^|[^A-Za-z0-9_])(request_id|RequestID|requestId|X-Request-ID)([^A-Za-z0-9_]|$)'
 mode="incremental"
 dry_run=0
 
@@ -86,15 +87,25 @@ resolve_mode() {
 
 is_scoped_file() {
   local file="${1:?}"
-  [[ "$file" =~ ^internal/server/.*\.go$ ]] ||
-    [[ "$file" =~ ^modules/orgunit/.*\.(go|sql)$ ]] ||
-    [[ "$file" =~ ^apps/web/src/.*\.(ts|tsx)$ ]]
+  [[ "$file" =~ ^internal/.*\.go$ ]] ||
+    [[ "$file" =~ ^modules/.*\.(go|sql)$ ]] ||
+    [[ "$file" =~ ^apps/web/src/.*\.(ts|tsx)$ ]] ||
+    [[ "$file" =~ ^cmd/.*\.go$ ]] ||
+    [[ "$file" =~ ^e2e/tests/.*\.js$ ]]
+}
+
+is_tracing_file() {
+  local file="${1:?}"
+  [[ "$file" == "internal/routing/responder.go" ]] ||
+    [[ "$file" == "modules/staffing/presentation/controllers/assignments_api.go" ]] ||
+    [[ "$file" == "apps/web/src/api/errors.ts" ]] ||
+    [[ "$file" == "apps/web/src/api/httpClient.ts" ]] ||
+    [[ "$file" == "apps/web/src/api/httpClient.test.ts" ]]
 }
 
 is_excluded_file() {
   local file="${1:?}"
-  [[ "$file" =~ ^internal/server/assets/web/ ]] ||
-    [[ "$file" == "apps/web/src/api/errors.ts" ]]
+  [[ "$file" =~ ^internal/server/assets/web/ ]]
 }
 
 collect_changed_files() {
@@ -140,9 +151,11 @@ collect_patch_for_file() {
 
 collect_full_scan_files() {
   {
-    find internal/server -type f -name '*.go'
-    find modules/orgunit -type f \( -name '*.go' -o -name '*.sql' \)
+    find internal -type f -name '*.go' ! -path 'internal/server/assets/*'
+    find modules -type f \( -name '*.go' -o -name '*.sql' \)
     find apps/web/src -type f \( -name '*.ts' -o -name '*.tsx' \)
+    find cmd -type f -name '*.go'
+    find e2e/tests -type f -name '*.js'
   } | sort -u
 }
 
@@ -160,7 +173,7 @@ scan_incremental() {
 
   local violations=0
   for file in "${changed_files[@]}"; do
-    if ! is_scoped_file "$file"; then
+    if ! is_scoped_file "$file" && ! is_tracing_file "$file"; then
       continue
     fi
     if is_excluded_file "$file"; then
@@ -169,11 +182,23 @@ scan_incremental() {
 
     patch="$(collect_patch_for_file "$resolve_mode_value" "$ref_a" "$ref_b" "$file" || true)"
     added_lines="$(printf '%s\n' "$patch" | grep -E '^\+[^+]' || true)"
-    bad_lines="$(printf '%s\n' "$added_lines" | grep -E "$token_pattern" || true)"
-    if [[ -n "$bad_lines" ]]; then
-      violations=1
-      echo "[request-code] forbidden token detected in added lines: $file" >&2
-      printf '%s\n' "$bad_lines" >&2
+
+    if is_scoped_file "$file"; then
+      bad_business_lines="$(printf '%s\n' "$added_lines" | grep -E "$business_token_pattern" || true)"
+      if [[ -n "$bad_business_lines" ]]; then
+        violations=1
+        echo "[request-code] forbidden business token detected in added lines: $file" >&2
+        printf '%s\n' "$bad_business_lines" >&2
+      fi
+    fi
+
+    if is_tracing_file "$file"; then
+      bad_tracing_lines="$(printf '%s\n' "$added_lines" | grep -E "$tracing_token_pattern" || true)"
+      if [[ -n "$bad_tracing_lines" ]]; then
+        violations=1
+        echo "[request-code] forbidden tracing token detected in added lines: $file" >&2
+        printf '%s\n' "$bad_tracing_lines" >&2
+      fi
     fi
   done
 
@@ -182,7 +207,7 @@ scan_incremental() {
       echo "[request-code] dry-run mode: violations detected (non-blocking)" >&2
       return 0
     fi
-    echo "[request-code] fail: business idempotency field must use request_code; X-Request-ID can still be used for tracing only" >&2
+    echo "[request-code] fail: business idempotency must use request_id; tracing must use trace_id + traceparent (no request_id/X-Request-ID in tracing files)" >&2
     return 1
   fi
 
@@ -197,18 +222,29 @@ scan_full() {
   local violations=0
   local file=""
   while IFS= read -r file; do
-    if ! is_scoped_file "$file"; then
+    if ! is_scoped_file "$file" && ! is_tracing_file "$file"; then
       continue
     fi
     if is_excluded_file "$file"; then
       continue
     fi
 
-    bad_lines="$(grep -nE "$token_pattern" "$file" || true)"
-    if [[ -n "$bad_lines" ]]; then
-      violations=1
-      echo "[request-code] forbidden token detected: $file" >&2
-      printf '%s\n' "$bad_lines" >&2
+    if is_scoped_file "$file"; then
+      bad_business_lines="$(grep -nE "$business_token_pattern" "$file" || true)"
+      if [[ -n "$bad_business_lines" ]]; then
+        violations=1
+        echo "[request-code] forbidden business token detected: $file" >&2
+        printf '%s\n' "$bad_business_lines" >&2
+      fi
+    fi
+
+    if is_tracing_file "$file"; then
+      bad_tracing_lines="$(grep -nE "$tracing_token_pattern" "$file" || true)"
+      if [[ -n "$bad_tracing_lines" ]]; then
+        violations=1
+        echo "[request-code] forbidden tracing token detected: $file" >&2
+        printf '%s\n' "$bad_tracing_lines" >&2
+      fi
     fi
   done < <(collect_full_scan_files)
 
@@ -217,7 +253,7 @@ scan_full() {
       echo "[request-code] dry-run mode: violations detected (non-blocking)" >&2
       return 0
     fi
-    echo "[request-code] fail: business idempotency field must use request_code; X-Request-ID can still be used for tracing only" >&2
+    echo "[request-code] fail: business idempotency must use request_id; tracing must use trace_id + traceparent (no request_id/X-Request-ID in tracing files)" >&2
     return 1
   fi
 
