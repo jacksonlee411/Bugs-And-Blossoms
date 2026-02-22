@@ -45,7 +45,7 @@
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012` |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
-| 幂等字段命名（request_code） | `make check request-code` | 规则见 `DEV-PLAN-109` |
+| 幂等与追踪命名（request_id / trace_id） | `make check request-code` | 规则见 `DEV-PLAN-109A` |
 
 ## 3. 开发与编码规则（仓库级合约）
 
@@ -255,8 +255,8 @@ modules/{module}/
 - DEV-PLAN-108A：Org 新建组织弹窗支持 DICT 扩展字段（下拉选择）：`docs/dev-plans/108a-org-create-dialog-dict-ext-fields-support.md`
 - DEV-PLAN-108B：Org 新建组织弹窗 DICT 扩展字段实现（承接 108A）：`docs/dev-plans/108b-org-create-dialog-dict-ext-fields-implementation.md`
 - DEV-PLAN-108B 执行日志：`docs/dev-records/dev-plan-108b-execution-log.md`
-- DEV-PLAN-109：Org 模块 `request_id` → `request_code` 统一改造与门禁：`docs/dev-plans/109-request-code-unification-and-gate.md`
-- DEV-PLAN-109A：`request_code` 全面收敛与防扩散门禁：`docs/dev-plans/109a-request-code-total-convergence-and-anti-drift.md`
+- DEV-PLAN-109：Org 模块幂等命名收敛与门禁（历史阶段封板，按 STD-001 修订）：`docs/dev-plans/109-request-code-unification-and-gate.md`
+- DEV-PLAN-109A：`request_id`（幂等）+ `trace_id`（Tracing）全仓收敛与防扩散：`docs/dev-plans/109a-request-code-total-convergence-and-anti-drift.md`
 - DEV-PLAN-110：启用字段表单增强：自定义（直接值）+ 值类型选择 + 自定义字段名称：`docs/dev-plans/110-orgunit-field-configs-custom-direct-value-form.md`
 - DEV-PLAN-110 执行日志：`docs/dev-records/dev-plan-110-execution-log.md`
 - DEV-PLAN-111：前端错误信息准确化与字段级提示收敛方案：`docs/dev-plans/111-frontend-error-message-accuracy-and-field-level-hints.md`
