@@ -45,7 +45,7 @@
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012` |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
-| 幂等字段命名（request_code） | `make check request-code` | 规则见 `DEV-PLAN-109` |
+| 幂等与追踪命名（request_id / trace_id） | `make check request-code` | 规则见 `DEV-PLAN-109A` |
 
 ## 3. 开发与编码规则（仓库级合约）
 
@@ -161,6 +161,7 @@ modules/{module}/
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
 - DEV-PLAN-004：全仓去除版本标记（命名降噪 + 避免对外契约污染）：`docs/dev-plans/004-remove-version-marker-repo-wide.md`
 - DEV-PLAN-004M1：禁止 legacy（单链路原则）——清理、门禁与迁移策略：`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
+- DEV-PLAN-005：项目标准与外部规范采纳清单（规范入口，持续扩展）：`docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - DEV-PLAN-004 记录：全仓去除版本标记——映射表（草案）：`docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`
 - DEV-PLAN-004 记录：全仓去除版本标记——执行日志：`docs/dev-records/dev-plan-004-execution-log.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
@@ -171,9 +172,11 @@ modules/{module}/
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-069 执行日志：`docs/dev-records/dev-plan-069-execution-log.md`
 - DEV-PLAN-070：SetID 绑定组织架构重构方案：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`
+- DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
 - DEV-PLAN-070 执行日志：`docs/dev-records/dev-plan-070-execution-log.md`
 - DEV-PLAN-071：SetID Scope Package 订阅蓝图：`docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
 - DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化：`docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- DEV-PLAN-071B：字段配置/字典配置与 SetID 边界实施方案：`docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
 - DEV-PLAN-072：全仓 ID/Code 命名与对外标识收敛：`docs/dev-plans/072-repo-wide-id-code-naming-convergence.md`
 - DEV-PLAN-073：OrgUnit CRUD 实现清单（页面与 API）：`docs/dev-plans/073-orgunit-crud-implementation-status.md`
 - DEV-PLAN-073A：组织架构树运行态问题记录（Shoelace 资源加载失败）：`docs/dev-plans/073a-orgunit-tree-runtime-issue.md`
@@ -206,6 +209,8 @@ modules/{module}/
 - DEV-PLAN-083A：OrgUnit Append 写入动作能力外显与策略单点扩展（create / event_update）：`docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
 - DEV-PLAN-083B：Org 变更能力模型后置收口（承接 083/083A）：`docs/dev-plans/083b-org-mutation-capabilities-post-083a-closure-plan.md`
 - DEV-PLAN-083B 执行日志：`docs/dev-records/dev-plan-083b-execution-log.md`
+- DEV-PLAN-084：Org 模块组织树“下级可展开指示符”缺失问题分析与收敛方案：`docs/dev-plans/084-orgunit-tree-expand-indicator-visibility.md`
+- DEV-PLAN-084 执行日志：`docs/dev-records/dev-plan-084-execution-log.md`
 - DEV-PLAN-090：前端框架升级为 MUI X（对标 Workday UX）方案：`docs/dev-plans/090-mui-x-frontend-upgrade-plan.md`
 - DEV-PLAN-091：MUI X 升级子计划 P0（基座准备与许可落地）：`docs/dev-plans/091-mui-x-phase0-foundation-and-license-plan.md`
 - DEV-PLAN-092：MUI X 升级子计划 P1（壳与导航迁移）：`docs/dev-plans/092-mui-x-phase1-shell-navigation-plan.md`
@@ -250,7 +255,8 @@ modules/{module}/
 - DEV-PLAN-108A：Org 新建组织弹窗支持 DICT 扩展字段（下拉选择）：`docs/dev-plans/108a-org-create-dialog-dict-ext-fields-support.md`
 - DEV-PLAN-108B：Org 新建组织弹窗 DICT 扩展字段实现（承接 108A）：`docs/dev-plans/108b-org-create-dialog-dict-ext-fields-implementation.md`
 - DEV-PLAN-108B 执行日志：`docs/dev-records/dev-plan-108b-execution-log.md`
-- DEV-PLAN-109：Org 模块 `request_id` → `request_code` 统一改造与门禁：`docs/dev-plans/109-request-code-unification-and-gate.md`
+- DEV-PLAN-109：Org 模块幂等命名收敛与门禁（历史阶段封板，按 STD-001 修订）：`docs/dev-plans/109-request-code-unification-and-gate.md`
+- DEV-PLAN-109A：`request_id`（幂等）+ `trace_id`（Tracing）全仓收敛与防扩散：`docs/dev-plans/109a-request-code-total-convergence-and-anti-drift.md`
 - DEV-PLAN-110：启用字段表单增强：自定义（直接值）+ 值类型选择 + 自定义字段名称：`docs/dev-plans/110-orgunit-field-configs-custom-direct-value-form.md`
 - DEV-PLAN-110 执行日志：`docs/dev-records/dev-plan-110-execution-log.md`
 - DEV-PLAN-111：前端错误信息准确化与字段级提示收敛方案：`docs/dev-plans/111-frontend-error-message-accuracy-and-field-level-hints.md`
@@ -260,9 +266,10 @@ modules/{module}/
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102A：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案：`docs/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
+- DEV-PLAN-102B：070/071 时间口径强制显式化与历史回放稳定性收敛：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
 - DEV-PLAN-102A 执行日志：`docs/dev-records/dev-plan-102a-execution-log.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
-- DEV-PLAN-103：移除 Astro/HTMX，前端收敛为 MUI X（React SPA）：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- DEV-PLAN-103：移除旧前端链路，前端收敛为 MUI X（React SPA）：`docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 - DEV-PLAN-103 执行日志：`docs/dev-records/dev-plan-103-execution-log.md`
 - DEV-PLAN-103A：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名：去技术后缀）：`docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
 - DEV-PLAN-103A 执行日志：`docs/dev-records/dev-plan-103a-execution-log.md`
@@ -299,7 +306,7 @@ modules/{module}/
 - sqlc 工具链使用指引与规范：`docs/dev-plans/025-sqlc-guidelines.md`
 - Authz（Casbin）工具链与实施方案：`docs/dev-plans/022-authz-casbin-toolchain.md`
 - 多工作区并行开发指引（3 worktree）：`docs/dev-plans/014-parallel-worktrees-local-dev-guide.md`
-- 全局路由策略统一（UI/HTMX/API/Webhooks）：`docs/dev-plans/017-routing-strategy.md`
+- 全局路由策略统一（UI/API/Webhooks）：`docs/dev-plans/017-routing-strategy.md`
 - 文档创建与过程治理规范：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
 - CI 质量门禁（Quality Gates）：`docs/dev-plans/012-ci-quality-gates.md`
 - SetID 管理（Greenfield）：`docs/dev-plans/028-setid-management.md`

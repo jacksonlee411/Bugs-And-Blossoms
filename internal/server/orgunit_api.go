@@ -566,6 +566,7 @@ func listOrgUnitListPage(ctx context.Context, store OrgUnitStore, tenantID strin
 		items = make([]orgUnitListItem, 0, len(nodes))
 		for _, node := range nodes {
 			isBU := node.IsBusinessUnit
+			hasChildren := node.HasChildren
 			status := strings.TrimSpace(node.Status)
 			if status == "" {
 				status = orgUnitListStatusActive
@@ -575,6 +576,7 @@ func listOrgUnitListPage(ctx context.Context, store OrgUnitStore, tenantID strin
 				Name:           node.Name,
 				Status:         status,
 				IsBusinessUnit: &isBU,
+				HasChildren:    &hasChildren,
 			})
 		}
 	}
@@ -818,6 +820,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 		items := make([]orgUnitListItem, 0, len(nodes))
 		for _, node := range nodes {
 			isBU := node.IsBusinessUnit
+			hasChildren := node.HasChildren
 			status := strings.TrimSpace(node.Status)
 			if status == "" {
 				status = "active"
@@ -827,6 +830,7 @@ func handleOrgUnitsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStor
 				Name:           node.Name,
 				Status:         status,
 				IsBusinessUnit: &isBU,
+				HasChildren:    &hasChildren,
 			})
 		}
 

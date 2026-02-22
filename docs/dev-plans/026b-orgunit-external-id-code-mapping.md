@@ -147,7 +147,7 @@ $$;
 ### 5.2 对外契约示例（必须对齐既有路由体系）
 > 本节在不改变既有路由的前提下，**冻结字段名与参数名**；路径命名仍需遵循 `DEV-PLAN-017`。
 
-#### 5.2.1 UI/HTMX（RouteClassUI）
+#### 5.2.1 UI（RouteClassUI）
 **`GET /org/nodes?tree_as_of=YYYY-MM-DD`**
 - Query: `tree_as_of`（必填；缺失/非法时 302 重定向到当日 UTC 日期）。
 - Response: HTML 页面（列表与表单中仅展示/提交 `org_code`）。
@@ -387,7 +387,7 @@ Response 200：
 - **Go/服务层**
   - 移除所有基于序列的直接取号（`orgunit_nodes`/`orgunit_snapshot` 等）。
   - 新增 `org_code` 解析与归一化入口（resolver），所有外部输入统一走解析。
-  - OrgUnit UI/HTMX 与 Internal API 接受/返回 `org_code`（仅内部使用 `org_id`）。
+  - OrgUnit UI 与 Internal API 接受/返回 `org_code`（仅内部使用 `org_id`）。
 - **DB/函数/查询**
   - 清理 `submit_org_event/replay_org_unit_versions/apply_*` 的 `hierarchy_type` 参数与调用点。
   - 更新查询与锁粒度：`tenant_id` 维度锁；去除所有 `hierarchy_type` 过滤条件。

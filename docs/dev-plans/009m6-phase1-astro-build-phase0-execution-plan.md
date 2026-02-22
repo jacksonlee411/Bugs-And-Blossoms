@@ -2,7 +2,7 @@
 
 **状态**: 已完成（2026-01-08 12:24 UTC）
 
-> 本文是 `DEV-PLAN-009` 的执行计划补充（里程碑拆解）。由于当前仓库的 UI Shell 仍主要由 Go handler 拼接输出，而 `DEV-PLAN-018` 已冻结“Shell=Astro build 产物 + go:embed + HTMX 装配动态上下文”的合同，本里程碑用于**补齐/收敛**到 `DEV-PLAN-018` 的 Phase 0（最小可运行）要求，并同步把 `Makefile`/CI 门禁从 placeholder 收口为可阻断漂移的真实入口。
+> 本文是 `DEV-PLAN-009` 的执行计划补充（里程碑拆解）。由于当前仓库的 UI Shell 仍主要由 Go handler 拼接输出，而 `DEV-PLAN-018` 已冻结“Shell=Astro build 产物 + go:embed + 旧局部渲染链路装配动态上下文”的合同，本里程碑用于**补齐/收敛**到 `DEV-PLAN-018` 的 Phase 0（最小可运行）要求，并同步把 `Makefile`/CI 门禁从 placeholder 收口为可阻断漂移的真实入口。
 >
 > 本文不替代 `DEV-PLAN-018/011/012/017/020` 的合同；任何契约变更必须先更新对应 dev-plan 再写代码。
 
@@ -61,7 +61,7 @@
 
 ## 2. 非目标（本执行计划不做）
 
-- 不引入 SPA；仍以 “Astro Shell + HTMX partial + Alpine” 为主（对齐 `DEV-PLAN-018`）。
+- 不引入 SPA；仍以 “Astro Shell + 旧局部渲染链路 partial + Alpine” 为主（对齐 `DEV-PLAN-018`）。
 - 不在本里程碑内重写模块页面 UI（OrgUnit/JobCatalog/Staffing/Person 仍以现有服务端 HTML 输出为主）。
 - 不在本里程碑内引入 Tailwind 的完整接入与设计系统扩展（仅为 Shell 提供最小可用样式与资源管线；如需扩展另立 dev-plan）。
 - 不新增/升级 i18n 方案（仍只允许 `en/zh`）。
@@ -94,9 +94,9 @@
 
 ### 4.2 Server 行为
 
-- [ ] `/app` 返回的全页 HTML 由 Astro Shell 提供（不再由 Go 拼接生成），并且在登录态下会触发 HTMX 拉取 `/ui/nav?as_of=...`、`/ui/topbar?as_of=...`、`/ui/flash`（对齐 `DEV-PLAN-018` §4.4）。
+- [ ] `/app` 返回的全页 HTML 由 Astro Shell 提供（不再由 Go 拼接生成），并且在登录态下会触发旧局部渲染链路拉取 `/ui/nav?as_of=...`、`/ui/topbar?as_of=...`、`/ui/flash`（对齐 `DEV-PLAN-018` §4.4）。
 - [ ] `as_of` 口径对齐 `DEV-PLAN-018` §3.3：`/app`（以及最小占位内容页）缺省时 302 补齐 `?as_of=<CURRENT_DATE(UTC)>`；非法时 400 且可被 UI 展示（避免“猜测性纠正”）。
-- [ ] 任意模块页面在非 HTMX 访问模式下仍可返回全页（使用 Astro Shell 作为外壳），并保持与 HTMX partial 的协商口径一致（对齐 `DEV-PLAN-017/018`）。
+- [ ] 任意模块页面在非旧局部渲染链路访问模式下仍可返回全页（使用 Astro Shell 作为外壳），并保持与旧局部渲染链路 partial 的协商口径一致（对齐 `DEV-PLAN-017/018`）。
 
 ### 4.3 门禁与证据
 
@@ -142,13 +142,13 @@
 ### PR-4：Go Server 切换为 Astro Shell（移除 Go 拼接壳）
 
 - [X] `/app` 读取并输出 `assets/astro/app.html`，并进行最小占位符注入（替换 `__BB_AS_OF__`；对齐 `DEV-PLAN-018` §4.5.2；不在 handler 内重写结构）。
-- [X] `as_of` 缺省/校验行为对齐 `DEV-PLAN-018` §3.3（302 补齐；非法 400），并保证注入后的 HTMX 请求不会丢失 `as_of`。
-- [X] `writeShell*`/全页模式收口：将“非 HTMX”页面的外壳渲染统一切换到 Astro Shell，确保“同一 URL 支持全页与 partial”。
+- [X] `as_of` 缺省/校验行为对齐 `DEV-PLAN-018` §3.3（302 补齐；非法 400），并保证注入后的旧局部渲染链路请求不会丢失 `as_of`。
+- [X] `writeShell*`/全页模式收口：将“非旧局部渲染链路”页面的外壳渲染统一切换到 Astro Shell，确保“同一 URL 支持全页与 partial”。
 - [X] 静态资源分发确保覆盖 Astro build 产物路径（仍在 `/assets/*` 命名空间下）。
 
 ### PR-5：测试与验收脚本收口（最小可复现）
 
-- [X] 单测：覆盖 `/app` 全页响应中包含四个挂载点，并且在登录态会触发 `/ui/nav` 等 HTMX 拉取（只测“契约存在”，不测 Astro 内部实现）。
+- [X] 单测：覆盖 `/app` 全页响应中包含四个挂载点，并且在登录态会触发 `/ui/nav` 等旧局部渲染链路拉取（只测“契约存在”，不测 Astro 内部实现）。
 - [X] E2E（如需）：增加一个轻量断言（打开 `/app` 后壳加载成功，且能通过导航进入一个模块页）。
 
 ### PR-6：Readiness 证据登记与文档收口

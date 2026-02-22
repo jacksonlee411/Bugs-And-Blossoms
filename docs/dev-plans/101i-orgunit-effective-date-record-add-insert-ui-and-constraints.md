@@ -33,7 +33,7 @@
 
 ## 2. SSOT 与硬约束引用
 
-- MUI-only 前端唯一链路：`docs/dev-plans/103-remove-astro-htmx-and-converge-to-mui-x-only.md`
+- MUI-only 前端唯一链路：`DEV-PLAN-103（MUI-only 前端收敛）`
 - 有效期区间与插入语义口径：`docs/dev-plans/075-orgunit-effective-date-backdating-assessment.md`
 - 历史问题与后续能力诉求（含 `SET_MANAGER`/`UPDATE` 方向）：`docs/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
 - Append capabilities/policy 单点：`docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`

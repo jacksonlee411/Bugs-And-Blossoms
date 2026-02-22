@@ -95,7 +95,7 @@ table "org_nodes" {
 - **Down**: 删除表（注意：生产环境通常禁止破坏性 Down，需说明数据备份策略）。
 
 ## 5. 接口契约 (API Contracts)
-> **标准**: 定义 URL、Method、Payload 字段（必填/选填/类型）、错误码。对于 UI 交互，需定义 HTMX 行为。
+> **标准**: 定义 URL、Method、Payload 字段（必填/选填/类型）、错误码。对于 UI 交互，需定义前端请求/响应行为（MUI 页面 + JSON API）。
 
 ### 5.1 JSON API: `POST /api/v1/resource`
 - **Request**:
@@ -114,7 +114,7 @@ table "org_nodes" {
   - `409 Conflict`: Code 已存在 (`ERR_CODE_DUPLICATE`).
   - `422 Unprocessable Entity`: 父节点不存在或形成环路.
 
-### 5.2 HTMX 交互 (UI Partials)
+### 5.2 UI 交互（MUI 页面 / JSON API）
 - **Action**: 用户点击“保存”按钮。
 - **Request**: `POST /resource/form` (Form Data)
 - **Response (200 OK)**:
@@ -163,11 +163,13 @@ table "org_nodes" {
 - **Readiness**: 执行 `docs/dev-records/DEV-PLAN-XXX-READINESS.md` 记录命令与结果。
 
 ## 10. 运维与监控 (Ops & Monitoring)
-- **Feature Flag**:
-  - 开关名称: `ENABLE_XXX` (默认: false/shadow/enforce)。
-  - 灰度策略: 按租户 ID 逐步开启。
+- **运行保护（Greenfield）**:
+  - 不引入功能开关/双链路/legacy 入口。
+  - 故障处置仅允许环境级保护与“只读/停写”。
 - **关键日志**: 结构化日志需包含 `request_id`, `tenant_id`, `change_type`。
 - **指标**: 关键路径的 Latency 与 Error Rate。
-- **回滚方案**: 
-  - 代码回滚: `git revert`。
-  - 数据回滚: 使用 `scripts/rollback_xxx.sql` 或恢复快照（需提供具体命令）。
+- **故障处置与恢复（No-Legacy）**:
+  - 触发条件: 何时进入保护模式（需给出可观测信号/阈值）。
+  - 执行顺序: 环境级保护 → 只读/停写 → 修复（配置/数据/迁移）→ 重试/重放 → 恢复。
+  - 数据处置: 以前向修复（补偿/更正/重放）为主，禁止回退到旧事实源/旧实现。
+  - 恢复判定: 明确检查项与责任人（通过后才恢复写入）。

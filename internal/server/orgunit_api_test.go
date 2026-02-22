@@ -992,9 +992,9 @@ func TestListOrgUnitListPage(t *testing.T) {
 	t.Run("roots and errors", func(t *testing.T) {
 		store := &resolveOrgCodeStore{
 			listNodes: []OrgUnitNode{
-				{OrgCode: "Z009", Name: "Zero", Status: ""},
-				{OrgCode: "B002", Name: "Beta", Status: "disabled"},
-				{OrgCode: "A001", Name: "Alpha", Status: "active"},
+				{OrgCode: "Z009", Name: "Zero", Status: "", HasChildren: true},
+				{OrgCode: "B002", Name: "Beta", Status: "disabled", HasChildren: false},
+				{OrgCode: "A001", Name: "Alpha", Status: "active", HasChildren: false},
 			},
 		}
 		items, total, err := listOrgUnitListPage(context.Background(), store, "t1", orgUnitListPageRequest{
@@ -1016,6 +1016,9 @@ func TestListOrgUnitListPage(t *testing.T) {
 		}
 		if totalRoots != 3 || len(roots) != 3 || roots[0].Status != orgUnitListStatusActive {
 			t.Fatalf("roots=%+v total=%d", roots, totalRoots)
+		}
+		if roots[0].HasChildren == nil || !*roots[0].HasChildren {
+			t.Fatalf("root has_children missing: %+v", roots[0])
 		}
 
 		errStore := &resolveOrgCodeStore{listNodesErr: errBoom{}}
@@ -1063,7 +1066,7 @@ func TestHandleOrgUnitsAPI_TenantMissing(t *testing.T) {
 
 func TestHandleOrgUnitsAPI_DefaultAsOf(t *testing.T) {
 	store := &resolveOrgCodeStore{
-		listNodes: []OrgUnitNode{{ID: "10000001", OrgCode: "A001", Name: "Root"}},
+		listNodes: []OrgUnitNode{{ID: "10000001", OrgCode: "A001", Name: "Root", HasChildren: true}},
 	}
 	req := httptest.NewRequest(http.MethodGet, "/org/api/org-units", nil)
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
@@ -1071,6 +1074,16 @@ func TestHandleOrgUnitsAPI_DefaultAsOf(t *testing.T) {
 	handleOrgUnitsAPI(rec, req, store, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d", rec.Code)
+	}
+
+	var payload struct {
+		OrgUnits []orgUnitListItem `json:"org_units"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode err=%v", err)
+	}
+	if len(payload.OrgUnits) != 1 || payload.OrgUnits[0].HasChildren == nil || !*payload.OrgUnits[0].HasChildren {
+		t.Fatalf("unexpected roots payload: %+v", payload.OrgUnits)
 	}
 }
 

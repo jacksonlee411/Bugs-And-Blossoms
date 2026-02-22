@@ -231,7 +231,7 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 - `request_id` 统一更名为 `request_code`；`event_uuid` 由服务端生成并作为内部幂等键保存。
 - 服务端校验：`^\d{8}$`，不合法返回 422；同日重复事件返回 409（对应唯一性约束）。
 
-#### 5.1.1 UI/HTMX（RouteClassUI）
+#### 5.1.1 UI（RouteClassUI）
 **`GET /org/nodes?tree_as_of=YYYY-MM-DD`**
 - Query: `tree_as_of`（必填；缺失/非法时 302 重定向到当日 UTC 日期）。
 - Response: HTML 页面（包含创建/操作表单与节点列表）。
@@ -269,7 +269,7 @@ WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
 **`GET /orgunit/setids/{setid}/scope-subscriptions?as_of=YYYY-MM-DD`**
 - Query: `as_of`（可选，缺省当日 UTC）。
-- Response: HTML 片段（HTMX partial）。
+- Response: HTML 片段（页面局部渲染）。
 
 **`POST /orgunit/setids/{setid}/scope-subscriptions?as_of=YYYY-MM-DD`**
 - Form: `scope_code`（必填），`package_id`（必填），`effective_date`（可选，默认 `as_of`），`request_code`（必填）。

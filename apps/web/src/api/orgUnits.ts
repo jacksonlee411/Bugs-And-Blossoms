@@ -5,7 +5,7 @@ export interface OrgUnitAPIItem {
   name: string
   status: string
   is_business_unit?: boolean
-  has_children?: boolean
+  has_children: boolean
 }
 
 export interface OrgUnitListResponse {

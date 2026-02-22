@@ -143,17 +143,21 @@ function buildTreeNodes(
     const labelSuffix = status === 'inactive' ? ' · Inactive' : ''
 
     if (path.has(item.org_code)) {
-      return { id: item.org_code, label: `${item.name} (${item.org_code})${labelSuffix}` }
+      return { id: item.org_code, label: `${item.name} (${item.org_code})${labelSuffix}`, hasChildren: false }
     }
 
     const nextPath = new Set(path)
     nextPath.add(item.org_code)
+    const childrenLoaded = Object.hasOwn(childrenByParent, item.org_code)
     const children = childrenByParent[item.org_code] ?? []
+    const childNodes = children.map((child) => build(child, nextPath))
+    const hasChildren = childrenLoaded ? childNodes.length > 0 : item.has_children === true
 
     return {
       id: item.org_code,
       label: `${item.name} (${item.org_code})${labelSuffix}`,
-      children: children.length > 0 ? children.map((child) => build(child, nextPath)) : undefined
+      hasChildren,
+      children: childNodes.length > 0 ? childNodes : undefined
     }
   }
 
@@ -1126,7 +1130,6 @@ export function OrgUnitsPage() {
         selectedNodeCode: nextNodeCode
       }
     )
-    void ensureChildrenLoaded(nextNodeCode)
   }
 
   function handleSortChange(nextSortModel: GridSortModel) {
@@ -1360,6 +1363,9 @@ export function OrgUnitsPage() {
           loadingLabel={t('text_loading')}
           minWidth={300}
           nodes={treeNodes}
+          onExpand={(nodeId) => {
+            void ensureChildrenLoaded(nodeId)
+          }}
           onSelect={handleTreeSelect}
           selectedItemId={selectedNodeCode ?? undefined}
           title={t('org_tree_title')}

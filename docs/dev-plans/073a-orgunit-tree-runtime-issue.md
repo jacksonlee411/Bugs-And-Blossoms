@@ -12,7 +12,7 @@
 
 ## 补充问题（已确认）
 - Shoelace 资源加载修复后，点击“飞虫与鲜花”节点的展开按钮仍一直显示加载中。
-- 事件监听使用 `event.detail.item` 获取节点，但 `sl-lazy-load` 的 `detail.item` 在运行时为 `null`，导致 `loadChildren` 未执行，HTMX 未发出请求。
+- 事件监听使用 `event.detail.item` 获取节点，但 `sl-lazy-load` 的 `detail.item` 在运行时为 `null`，导致 `loadChildren` 未执行，前端请求未发出。
 
 
 ## 影响范围
@@ -30,7 +30,7 @@
 - 资源可达性：`GET /assets/shoelace/shoelace.js` 返回 200，但其依赖的 `lit/*` 模块在运行时解析失败。
 - 后端接口可用：`GET /org/nodes/children?...` 返回 `<sl-tree-item ...>` 片段，说明数据层正常。
 - 监听到 `sl-lazy-load` 事件时：`event.detail.item === null`，但 `event.target` 为对应的 `sl-tree-item`（org_id=10000000）。
-- 未修复时：HTMX 无 `/org/nodes/children` 请求发出，节点 `loading` 长期为 `true`。
+- 未修复时：前端无 `/org/nodes/children` 请求发出，节点 `loading` 长期为 `true`。
 
 ## 初步判断
 - Shoelace 资源包中存在裸模块引用（`lit/directives/*`），未被改写为可被浏览器直接解析的路径，也未提供 import map。
@@ -49,13 +49,13 @@
 - 子节点 HTML 增加 `slot="children"`，确保 Shoelace tree 识别子层级。
 
 ### 修复 3：展开后节点标题被覆盖
-- 原因：`htmx.ajax(..., { swap: 'innerHTML' })` 会覆盖当前 `sl-tree-item` 的 label，仅留下子节点，导致展开后父节点文本变为空。
+- 原因：`fetch` 后直接写入 `innerHTML` 会覆盖当前 `sl-tree-item` 的 label，仅留下子节点，导致展开后父节点文本变为空。
 - 修复：将 swap 改为 `beforeend`，仅追加子节点，保留父节点 label。
 
 ### 验证结果
 - 打开：`/org/nodes?tree_as_of=2026-02-05`。
 - 点击“飞虫与鲜花”（org_id=10000000）展开：
-  - `HTMX GET /org/nodes/children?parent_id=10000000&as_of=2026-02-05` 返回 200。
+  - `GET /org/nodes/children?parent_id=10000000&as_of=2026-02-05` 返回 200。
   - 2 秒内 `lazy=false`、`loading=false`，子节点渲染数量 `children=3`。
   - 展开/折叠可重复执行。
 

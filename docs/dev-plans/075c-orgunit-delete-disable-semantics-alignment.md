@@ -234,7 +234,7 @@
 | `EFFECTIVE_DATE_INVALID` | 400 | 日期格式错误 |
 | `reason_required`（或稳定 DB 码） | 400 | 缺少删除原因 |
 
-> 响应契约要求：JSON/HTMX/HTML 三类请求均需保持一致的错误语义（特别是 403/409）。
+> 响应契约要求：JSON/页面 两类入口均需保持一致的错误语义（特别是 403/409）。
 
 ## 测试用例清单（最小回归集）
 
@@ -250,11 +250,11 @@
 | T8 | 删除组织-根组织 | 目标为 root | 409 + `ORG_ROOT_DELETE_FORBIDDEN` |
 | T9 | 删除组织-有子组织 | 目标存在子节点 | 409 + `ORG_HAS_CHILDREN_CANNOT_DELETE` |
 | T10 | 删除组织-有下游依赖 | 存在 SetID 绑定等依赖 | 409 + `ORG_HAS_DEPENDENCIES_CANNOT_DELETE` |
-| T11 | 权限拒绝 | 无 orgunit admin 权限 | 403（JSON/HTMX/HTML 语义一致） |
+| T11 | 权限拒绝 | 无 orgunit admin 权限 | 403（JSON/页面 语义一致） |
 | T12 | UI 文案与行为一致 | 点击“删除记录（错误数据）” | 不再触发 disable；提示文案与行为一致 |
 
 ## 建议 PR 切分
 1. PR-A（P1-DB）：Kernel 函数 + replay 输入调整 + SQL 回归。
 2. PR-B（P1-Go）：write service + internal API + 节点页 `delete_record` 改线 + 单测。
 3. PR-C（P2-DB/Go）：删除组织能力 + 依赖校验 + 页面动作 + 回归测试。
-4. PR-D（收口）：错误码映射、文案收敛、JSON/HTMX/HTML 403/409 契约测试补齐。
+4. PR-D（收口）：错误码映射、文案收敛、JSON/页面 403/409 契约测试补齐。

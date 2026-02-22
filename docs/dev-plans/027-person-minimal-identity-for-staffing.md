@@ -92,7 +92,7 @@
 
 ### 4.3 对外接口契约（供 Staffing/前端复用）
 
-> 目标：让 `staffing` 的 UI/API 在不 import `modules/person/**` 的前提下完成 pernr→uuid 解析（对齐 016 的“跨模块以 HTTP/HTMX 组合”）。
+> 目标：让 `staffing` 的 UI/API 在不 import `modules/person/**` 的前提下完成 pernr→uuid 解析（对齐 016 的“跨模块以 HTTP/JSON API 组合”）。
 
 **必须提供（最小集）**
 - `GET /person/api/persons:options?q=<pernr_or_name>&limit=...`
