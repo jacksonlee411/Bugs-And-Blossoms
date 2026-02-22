@@ -13,12 +13,20 @@ if [[ ! -f "$resolver_file" ]]; then
   exit 1
 fi
 
-if ! rg -q "export function resolveApiErrorMessage" "$resolver_file"; then
+if command -v rg >/dev/null 2>&1; then
+  has_resolver() { rg -q "export function resolveApiErrorMessage" "$resolver_file"; }
+  has_empty_i18n() { rg -n "en: ''|zh: ''" "$resolver_file" >/dev/null; }
+else
+  has_resolver() { grep -q "export function resolveApiErrorMessage" "$resolver_file"; }
+  has_empty_i18n() { grep -nE "en: ''|zh: ''" "$resolver_file" >/dev/null; }
+fi
+
+if ! has_resolver; then
   echo "[error-message] resolveApiErrorMessage not found in $resolver_file" >&2
   exit 1
 fi
 
-if rg -n "en: ''|zh: ''" "$resolver_file" >/dev/null; then
+if has_empty_i18n; then
   echo "[error-message] localized message contains empty en/zh value" >&2
   exit 1
 fi
