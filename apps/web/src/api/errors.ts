@@ -1,4 +1,5 @@
 import axios, { type AxiosError } from 'axios'
+import { resolveApiErrorMessage } from '../errors/presentApiError'
 
 export type ApiErrorCode =
   | 'BAD_REQUEST'
@@ -49,7 +50,8 @@ export function normalizeApiError(error: unknown): ApiClientError {
 
     const status = axiosError.response.status
     const data = axiosError.response.data
-    const message = data?.message || axiosError.message || 'API request failed'
+    const fallbackMessage = data?.message || axiosError.message || 'API request failed'
+    const message = resolveApiErrorMessage(data?.code, fallbackMessage)
 
     return new ApiClientError(
       message,

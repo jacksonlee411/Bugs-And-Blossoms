@@ -15,6 +15,7 @@
 - `.templ`/MUI Web UI/presentation assets 相关：`make generate && make css`，然后 `git status --short` 必须为空
 - 多语言 JSON：`make check tr`
 - 提交前 Go 版本门禁：`make check go-version`（或直接跑 `make preflight`）
+- 错误提示收敛门禁（禁止泛化失败文案直出）：`make check error-message`
 - 发 PR 前一键对齐 CI（推荐）：`make preflight`
 - 发 PR 规则（强制）：PR 源分支只能是 `wt-dev-main` / `wt-dev-a` / `wt-dev-b`（CI 门禁：`make check pr-branch`）
 - DB Schema/迁移（Atlas+Goose，按模块）：`make <module> plan && make <module> lint && make <module> migrate up`
@@ -49,6 +50,7 @@
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
 | 幂等与追踪命名（request_id / trace_id） | `make check request-code` | 规则见 `DEV-PLAN-109A` |
+| 错误提示契约（错误码→明确提示） | `make check error-message` | 规则见 `DEV-PLAN-140` |
 
 ## 3. 开发与编码规则（仓库级合约）
 
@@ -275,6 +277,7 @@ modules/{module}/
 - DEV-PLAN-126 执行日志：`docs/dev-records/dev-plan-126-execution-log.md`
 - DEV-PLAN-130：Org 组织树初始化问题收敛与自举修复方案：`docs/dev-plans/130-orgunit-tree-initialization-recovery-and-bootstrap.md`
 - DEV-PLAN-130 执行日志：`docs/dev-records/dev-plan-130-execution-log.md`
+- DEV-PLAN-140：全仓错误提示明确化与质量门禁：`docs/dev-plans/140-error-message-clarity-and-gates.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102A【归档】：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案（表达式口径一致性已并入 `DEV-PLAN-120`）：`docs/archive/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
