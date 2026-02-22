@@ -198,6 +198,9 @@ const messages = {
     org_append_capabilities_load_failed: 'Failed to load append capabilities',
     org_append_denied: 'Append action disabled',
     org_append_field_not_allowed_helper: 'Field is not editable in this append action.',
+    org_tree_bootstrap_parent_locked: 'Tree not initialized: the first root org cannot set a parent.',
+    org_tree_bootstrap_required_hint:
+      'Organization tree is not initialized. Create the first root org (leave parent empty and keep business unit enabled).',
     org_record_wizard_change_type: 'Change Type',
     org_record_wizard_open_failed: 'Failed to open record wizard (invalid versions context).',
     org_record_wizard_effective_date_required: 'Effective date is required.',
@@ -634,6 +637,8 @@ const messages = {
     org_append_capabilities_load_failed: '加载追加能力失败',
     org_append_denied: '追加动作不可用',
     org_append_field_not_allowed_helper: '该字段在当前追加动作中不可编辑。',
+    org_tree_bootstrap_parent_locked: '组织树尚未初始化：首个根组织不允许设置上级组织。',
+    org_tree_bootstrap_required_hint: '组织树尚未初始化，请先创建首个根组织（上级组织留空，并保持“业务单元”开启）。',
     org_record_wizard_change_type: '变更类型',
     org_record_wizard_open_failed: '无法打开记录向导（版本上下文无效）。',
     org_record_wizard_effective_date_required: '生效日期必填。',

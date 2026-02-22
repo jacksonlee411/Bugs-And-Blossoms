@@ -53,10 +53,6 @@ func ResolveWriteCapabilities(intent OrgUnitWriteIntent, enabledExtFieldKeys []s
 			if facts.TreeInitialized {
 				deny = append(deny, "ORG_ROOT_ALREADY_EXISTS")
 			}
-		} else {
-			if !facts.TreeInitialized {
-				deny = append(deny, "ORG_TREE_NOT_INITIALIZED")
-			}
 		}
 
 	case OrgUnitWriteIntentAddVersion, OrgUnitWriteIntentInsertVersion:
