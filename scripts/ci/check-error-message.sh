@@ -31,12 +31,17 @@ if has_empty_i18n; then
   exit 1
 fi
 
-if ! command -v pnpm >/dev/null 2>&1; then
+pnpm_cmd=()
+if command -v pnpm >/dev/null 2>&1; then
+  pnpm_cmd=(pnpm)
+elif command -v corepack >/dev/null 2>&1; then
+  pnpm_cmd=(corepack pnpm)
+else
   echo "[error-message] pnpm is required (please enable corepack or install pnpm)." >&2
   exit 1
 fi
 
-echo "[error-message] pnpm -C apps/web test -- src/errors/presentApiError.test.ts"
-pnpm -C apps/web test -- src/errors/presentApiError.test.ts
+echo "[error-message] ${pnpm_cmd[*]} -C apps/web test -- src/errors/presentApiError.test.ts"
+"${pnpm_cmd[@]}" -C apps/web test -- src/errors/presentApiError.test.ts
 
 echo "[error-message] OK"
