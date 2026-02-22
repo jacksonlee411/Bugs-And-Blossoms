@@ -119,7 +119,7 @@ test("smoke: superadmin -> create tenant -> /app (MUI SPA) -> org/person/staffin
       org_code: orgCode,
       setid: "DEFLT",
       effective_date: asOf,
-      request_code: `smoke-bind-root-${runID}`
+      request_id: `smoke-bind-root-${runID}`
     }
   });
   expect(bindResp.status(), await bindResp.text()).toBe(201);

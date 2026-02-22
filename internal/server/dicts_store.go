@@ -41,7 +41,7 @@ var (
 	errDictValueNotFoundAsOf     = errors.New("DICT_VALUE_NOT_FOUND_AS_OF")
 	errDictValueConflict         = errors.New("DICT_VALUE_CONFLICT")
 	errDictValueDictDisabled     = errors.New("DICT_VALUE_DICT_DISABLED")
-	errDictRequestCodeRequired   = errors.New("DICT_REQUEST_CODE_REQUIRED")
+	errDictRequestIDRequired     = errors.New("DICT_REQUEST_CODE_REQUIRED")
 	errDictEffectiveDayRequired  = errors.New("DICT_EFFECTIVE_DAY_REQUIRED")
 	errDictDisabledOnInvalidDate = errors.New("DICT_DISABLED_ON_INVALID")
 )
@@ -83,7 +83,7 @@ type DictValueAuditItem struct {
 	Code           string          `json:"code"`
 	EventType      string          `json:"event_type"`
 	EffectiveDay   string          `json:"effective_day"`
-	RequestCode    string          `json:"request_code"`
+	RequestID      string          `json:"request_id"`
 	InitiatorUUID  string          `json:"initiator_uuid"`
 	TxTime         time.Time       `json:"tx_time"`
 	Payload        json.RawMessage `json:"payload"`
@@ -92,35 +92,35 @@ type DictValueAuditItem struct {
 }
 
 type DictCreateRequest struct {
-	DictCode    string
-	Name        string
-	EnabledOn   string
-	RequestCode string
-	Initiator   string
+	DictCode  string
+	Name      string
+	EnabledOn string
+	RequestID string
+	Initiator string
 }
 
 type DictDisableRequest struct {
-	DictCode    string
-	DisabledOn  string
-	RequestCode string
-	Initiator   string
+	DictCode   string
+	DisabledOn string
+	RequestID  string
+	Initiator  string
 }
 
 type DictCreateValueRequest struct {
-	DictCode    string
-	Code        string
-	Label       string
-	EnabledOn   string
-	RequestCode string
-	Initiator   string
+	DictCode  string
+	Code      string
+	Label     string
+	EnabledOn string
+	RequestID string
+	Initiator string
 }
 
 type DictDisableValueRequest struct {
-	DictCode    string
-	Code        string
-	DisabledOn  string
-	RequestCode string
-	Initiator   string
+	DictCode   string
+	Code       string
+	DisabledOn string
+	RequestID  string
+	Initiator  string
 }
 
 type DictCorrectValueRequest struct {
@@ -128,7 +128,7 @@ type DictCorrectValueRequest struct {
 	Code          string
 	Label         string
 	CorrectionDay string
-	RequestCode   string
+	RequestID     string
 	Initiator     string
 }
 
@@ -207,11 +207,11 @@ ORDER BY dict_code ASC
 }
 
 func (s *dictPGStore) CreateDict(ctx context.Context, tenantID string, req DictCreateRequest) (DictItem, bool, error) {
-	return s.submitDictEvent(ctx, tenantID, req.DictCode, dictRegistryEventCreated, req.EnabledOn, map[string]any{"name": req.Name}, req.RequestCode, req.Initiator)
+	return s.submitDictEvent(ctx, tenantID, req.DictCode, dictRegistryEventCreated, req.EnabledOn, map[string]any{"name": req.Name}, req.RequestID, req.Initiator)
 }
 
 func (s *dictPGStore) DisableDict(ctx context.Context, tenantID string, req DictDisableRequest) (DictItem, bool, error) {
-	return s.submitDictEvent(ctx, tenantID, req.DictCode, dictRegistryEventDisabled, req.DisabledOn, map[string]any{}, req.RequestCode, req.Initiator)
+	return s.submitDictEvent(ctx, tenantID, req.DictCode, dictRegistryEventDisabled, req.DisabledOn, map[string]any{}, req.RequestID, req.Initiator)
 }
 
 func (s *dictPGStore) submitDictEvent(
@@ -221,7 +221,7 @@ func (s *dictPGStore) submitDictEvent(
 	eventType string,
 	day string,
 	payload map[string]any,
-	requestCode string,
+	requestID string,
 	initiator string,
 ) (DictItem, bool, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -243,7 +243,7 @@ func (s *dictPGStore) submitDictEvent(
 	err = tx.QueryRow(ctx, `
 SELECT event_id, was_retry
 FROM iam.submit_dict_event($1::uuid, $2::text, $3::text, $4::date, $5::jsonb, $6::text, $7::uuid)
-`, tenantID, dictCode, eventType, day, rawPayload, requestCode, initiator).Scan(&eventID, &wasRetry)
+`, tenantID, dictCode, eventType, day, rawPayload, requestID, initiator).Scan(&eventID, &wasRetry)
 	if err != nil {
 		return DictItem{}, false, err
 	}
@@ -472,18 +472,18 @@ func (s *dictPGStore) ListOptions(ctx context.Context, tenantID string, asOf str
 }
 
 func (s *dictPGStore) CreateDictValue(ctx context.Context, tenantID string, req DictCreateValueRequest) (DictValueItem, bool, error) {
-	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictValueEventCreated, req.EnabledOn, map[string]any{"label": req.Label}, req.RequestCode, req.Initiator)
+	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictValueEventCreated, req.EnabledOn, map[string]any{"label": req.Label}, req.RequestID, req.Initiator)
 }
 
 func (s *dictPGStore) DisableDictValue(ctx context.Context, tenantID string, req DictDisableValueRequest) (DictValueItem, bool, error) {
-	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictValueEventDisabled, req.DisabledOn, map[string]any{}, req.RequestCode, req.Initiator)
+	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictValueEventDisabled, req.DisabledOn, map[string]any{}, req.RequestID, req.Initiator)
 }
 
 func (s *dictPGStore) CorrectDictValue(ctx context.Context, tenantID string, req DictCorrectValueRequest) (DictValueItem, bool, error) {
-	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictValueEventLabelCorrected, req.CorrectionDay, map[string]any{"label": req.Label}, req.RequestCode, req.Initiator)
+	return s.submitValueEvent(ctx, tenantID, req.DictCode, req.Code, dictValueEventLabelCorrected, req.CorrectionDay, map[string]any{"label": req.Label}, req.RequestID, req.Initiator)
 }
 
-func (s *dictPGStore) submitValueEvent(ctx context.Context, tenantID string, dictCode string, code string, eventType string, day string, payload map[string]any, requestCode string, initiator string) (DictValueItem, bool, error) {
+func (s *dictPGStore) submitValueEvent(ctx context.Context, tenantID string, dictCode string, code string, eventType string, day string, payload map[string]any, requestID string, initiator string) (DictValueItem, bool, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return DictValueItem{}, false, err
@@ -507,7 +507,7 @@ func (s *dictPGStore) submitValueEvent(ctx context.Context, tenantID string, dic
 	err = tx.QueryRow(ctx, `
 SELECT event_id, was_retry
 FROM iam.submit_dict_value_event($1::uuid, $2::text, $3::text, $4::text, $5::date, $6::jsonb, $7::text, $8::uuid)
-`, tenantID, dictCode, code, eventType, day, rawPayload, requestCode, initiator).Scan(&eventID, &wasRetry)
+`, tenantID, dictCode, code, eventType, day, rawPayload, requestID, initiator).Scan(&eventID, &wasRetry)
 	if err != nil {
 		return DictValueItem{}, false, err
 	}
@@ -609,7 +609,7 @@ func (s *dictPGStore) ListDictValueAudit(ctx context.Context, tenantID string, d
 	}
 
 	rows, err := tx.Query(ctx, `
-SELECT id, event_uuid::text, dict_code, code, event_type, effective_day::text, request_code, COALESCE(initiator_uuid::text, ''), tx_time, payload, before_snapshot, after_snapshot
+SELECT id, event_uuid::text, dict_code, code, event_type, effective_day::text, request_id, COALESCE(initiator_uuid::text, ''), tx_time, payload, before_snapshot, after_snapshot
 FROM iam.dict_value_events
 WHERE tenant_uuid = $1::uuid
   AND dict_code = $2::text
@@ -626,7 +626,7 @@ LIMIT $4::int
 	for rows.Next() {
 		var item DictValueAuditItem
 		if err := rows.Scan(
-			&item.EventID, &item.EventUUID, &item.DictCode, &item.Code, &item.EventType, &item.EffectiveDay, &item.RequestCode,
+			&item.EventID, &item.EventUUID, &item.DictCode, &item.Code, &item.EventType, &item.EffectiveDay, &item.RequestID,
 			&item.InitiatorUUID, &item.TxTime, &item.Payload, &item.BeforeSnapshot, &item.AfterSnapshot,
 		); err != nil {
 			return nil, err

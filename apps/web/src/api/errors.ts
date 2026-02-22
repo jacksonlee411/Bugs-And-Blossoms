@@ -15,7 +15,7 @@ export class ApiClientError extends Error {
     message: string,
     public readonly code: ApiErrorCode,
     public readonly status?: number,
-    public readonly requestId?: string,
+    public readonly traceId?: string,
     public readonly details?: unknown
   ) {
     super(message)
@@ -38,7 +38,7 @@ export function normalizeApiError(error: unknown): ApiClientError {
   }
 
   if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{ code?: string; message?: string; request_id?: string }>
+    const axiosError = error as AxiosError<{ code?: string; message?: string; trace_id?: string }>
     if (axiosError.code === 'ECONNABORTED') {
       return new ApiClientError('Request timeout', 'TIMEOUT')
     }
@@ -55,7 +55,7 @@ export function normalizeApiError(error: unknown): ApiClientError {
       message,
       statusToCode(status),
       status,
-      data?.request_id,
+      data?.trace_id,
       data
     )
   }

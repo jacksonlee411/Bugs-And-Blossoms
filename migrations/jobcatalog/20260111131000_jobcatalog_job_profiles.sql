@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_profile_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_profile_events (
   CONSTRAINT job_profile_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
   CONSTRAINT job_profile_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT job_profile_events_one_per_day_unique UNIQUE (tenant_uuid, setid, job_profile_uuid, effective_date),
-  CONSTRAINT job_profile_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT job_profile_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT job_profile_events_profile_fk
     FOREIGN KEY (tenant_uuid, setid, job_profile_uuid) REFERENCES jobcatalog.job_profiles(tenant_uuid, setid, job_profile_uuid) ON DELETE RESTRICT
 );

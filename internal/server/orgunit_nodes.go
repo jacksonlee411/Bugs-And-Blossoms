@@ -79,24 +79,24 @@ type OrgUnitNodeVersion struct {
 }
 
 type OrgUnitNodeAuditEvent struct {
-	EventID                int64
-	EventUUID              string
-	OrgID                  int
-	EventType              string
-	EffectiveDate          string
-	TxTime                 time.Time
-	InitiatorName          string
-	InitiatorEmployeeID    string
-	RequestCode            string
-	Reason                 string
-	Payload                json.RawMessage
-	BeforeSnapshot         json.RawMessage
-	AfterSnapshot          json.RawMessage
-	RescindOutcome         string
-	IsRescinded            bool
-	RescindedByEventUUID   string
-	RescindedByTxTime      time.Time
-	RescindedByRequestCode string
+	EventID              int64
+	EventUUID            string
+	OrgID                int
+	EventType            string
+	EffectiveDate        string
+	TxTime               time.Time
+	InitiatorName        string
+	InitiatorEmployeeID  string
+	RequestID            string
+	Reason               string
+	Payload              json.RawMessage
+	BeforeSnapshot       json.RawMessage
+	AfterSnapshot        json.RawMessage
+	RescindOutcome       string
+	IsRescinded          bool
+	RescindedByEventUUID string
+	RescindedByTxTime    time.Time
+	RescindedByRequestID string
 }
 
 type OrgUnitNodeEffectiveDateCorrector interface {
@@ -212,7 +212,7 @@ type OrgUnitNodesCurrentDisabler interface {
 }
 
 type OrgUnitNodesCurrentBusinessUnitSetter interface {
-	SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestCode string) error
+	SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestID string) error
 }
 
 type OrgUnitCodeResolver interface {
@@ -1393,7 +1393,7 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 	  e.tx_time,
 	  COALESCE(e.initiator_name, ''),
 	  COALESCE(e.initiator_employee_id, ''),
-	  COALESCE(e.request_code, ''),
+	  COALESCE(e.request_id, ''),
 	  COALESCE(e.reason, ''),
 	  COALESCE(e.payload, '{}'::jsonb),
 	  e.before_snapshot,
@@ -1402,10 +1402,10 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 	  (re.event_uuid IS NOT NULL) AS is_rescinded,
 	  COALESCE(re.event_uuid::text, ''),
 	  COALESCE(re.tx_time, 'epoch'::timestamptz),
-	  COALESCE(re.request_code, '')
+	  COALESCE(re.request_id, '')
 	FROM orgunit.org_events e
 	LEFT JOIN LATERAL (
-	  SELECT r.event_uuid, r.tx_time, r.request_code
+	  SELECT r.event_uuid, r.tx_time, r.request_id
 	  FROM orgunit.org_events r
 	  WHERE r.tenant_uuid = e.tenant_uuid
 	    AND r.org_id = e.org_id
@@ -1440,7 +1440,7 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 			&item.TxTime,
 			&item.InitiatorName,
 			&item.InitiatorEmployeeID,
-			&item.RequestCode,
+			&item.RequestID,
 			&item.Reason,
 			&payload,
 			&before,
@@ -1449,7 +1449,7 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 			&item.IsRescinded,
 			&item.RescindedByEventUUID,
 			&item.RescindedByTxTime,
-			&item.RescindedByRequestCode,
+			&item.RescindedByRequestID,
 		); err != nil {
 			return nil, err
 		}
@@ -1463,7 +1463,7 @@ func (s *orgUnitPGStore) ListNodeAuditEvents(ctx context.Context, tenantID strin
 		}
 		if !item.IsRescinded {
 			item.RescindedByEventUUID = ""
-			item.RescindedByRequestCode = ""
+			item.RescindedByRequestID = ""
 			item.RescindedByTxTime = time.Time{}
 		}
 		out = append(out, item)
@@ -1784,7 +1784,7 @@ SELECT orgunit.submit_org_event(
 	return nil
 }
 
-func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, newEffectiveDate string, requestCode string) error {
+func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID string, orgID int, targetEffectiveDate string, newEffectiveDate string, requestID string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -1801,8 +1801,8 @@ func (s *orgUnitPGStore) CorrectNodeEffectiveDate(ctx context.Context, tenantID 
 	if strings.TrimSpace(newEffectiveDate) == "" {
 		return errors.New("effective_date is required")
 	}
-	if strings.TrimSpace(requestCode) == "" {
-		return errors.New("request_code is required")
+	if strings.TrimSpace(requestID) == "" {
+		return errors.New("request_id is required")
 	}
 	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
 
@@ -1817,7 +1817,7 @@ SELECT orgunit.submit_org_event_correction(
   $5::text,
   $6::uuid
 )
-	`, tenantID, orgID, targetEffectiveDate, []byte(patch), requestCode, initiatorUUID).Scan(&correctionUUID); err != nil {
+	`, tenantID, orgID, targetEffectiveDate, []byte(patch), requestID, initiatorUUID).Scan(&correctionUUID); err != nil {
 		return err
 	}
 
@@ -1827,7 +1827,7 @@ SELECT orgunit.submit_org_event_correction(
 	return nil
 }
 
-func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestCode string) error {
+func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID string, effectiveDate string, orgID string, isBusinessUnit bool, requestID string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -1850,8 +1850,8 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 		return err
 	}
 	initiatorUUID := orgUnitInitiatorUUID(ctx, tenantID)
-	if strings.TrimSpace(requestCode) == "" {
-		requestCode = eventID
+	if strings.TrimSpace(requestID) == "" {
+		requestID = eventID
 	}
 
 	payload := `{"is_business_unit":` + strconv.FormatBool(isBusinessUnit) + `}`
@@ -1870,7 +1870,7 @@ func (s *orgUnitPGStore) SetBusinessUnitCurrent(ctx context.Context, tenantID st
 	  $6::text,
 	  $7::uuid
 	)
-		`, eventID, tenantID, orgID, effectiveDate, []byte(payload), requestCode, initiatorUUID); err != nil {
+		`, eventID, tenantID, orgID, effectiveDate, []byte(payload), requestID, initiatorUUID); err != nil {
 		if _, rbErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT sp_set_business_unit;`); rbErr != nil {
 			return rbErr
 		}
@@ -2255,7 +2255,7 @@ func (s *orgUnitMemoryStore) ListNodeAuditEvents(_ context.Context, tenantID str
 			TxTime:              s.now(),
 			InitiatorName:       "system",
 			InitiatorEmployeeID: "system",
-			RequestCode:         "memory",
+			RequestID:           "memory",
 			Payload:             json.RawMessage(`{"op":"RENAME"}`),
 		}}
 		return events, nil

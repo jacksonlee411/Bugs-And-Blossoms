@@ -32,7 +32,7 @@ func (s errSetIDStore) ListScopeCodes(context.Context, string) ([]ScopeCode, err
 func (s errSetIDStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error) {
 	return ScopePackage{}, s.err
 }
-func (s errSetIDStore) DisableScopePackage(context.Context, string, string, string, string) (ScopePackage, error) {
+func (s errSetIDStore) DisableScopePackage(context.Context, string, string, string, string, string) (ScopePackage, error) {
 	return ScopePackage{}, s.err
 }
 func (s errSetIDStore) ListScopePackages(context.Context, string, string) ([]ScopePackage, error) {
@@ -89,7 +89,7 @@ func (s partialSetIDStore) ListScopeCodes(context.Context, string) ([]ScopeCode,
 func (s partialSetIDStore) CreateScopePackage(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error) {
 	return ScopePackage{}, nil
 }
-func (s partialSetIDStore) DisableScopePackage(context.Context, string, string, string, string) (ScopePackage, error) {
+func (s partialSetIDStore) DisableScopePackage(context.Context, string, string, string, string, string) (ScopePackage, error) {
 	return ScopePackage{}, nil
 }
 func (s partialSetIDStore) ListScopePackages(context.Context, string, string) ([]ScopePackage, error) {
@@ -158,7 +158,7 @@ func (s scopeTestStore) CreateScopePackage(context.Context, string, string, stri
 	}, nil
 }
 
-func (s scopeTestStore) DisableScopePackage(context.Context, string, string, string, string) (ScopePackage, error) {
+func (s scopeTestStore) DisableScopePackage(context.Context, string, string, string, string, string) (ScopePackage, error) {
 	if s.disableScopePkgErr != nil {
 		return ScopePackage{}, s.disableScopePkgErr
 	}
@@ -460,7 +460,7 @@ func TestSetIDMemoryStore_ScopePackageLifecycle(t *testing.T) {
 		t.Fatalf("len=%d err=%v", len(pkgs), err)
 	}
 
-	disabled, err := store.DisableScopePackage(context.Background(), "t1", pkg.PackageID, "r2", "i1")
+	disabled, err := store.DisableScopePackage(context.Background(), "t1", pkg.PackageID, "2026-01-02", "r2", "i1")
 	if err != nil {
 		t.Fatalf("err=%v", err)
 	}
@@ -471,7 +471,7 @@ func TestSetIDMemoryStore_ScopePackageLifecycle(t *testing.T) {
 		t.Fatal("expected updated_at")
 	}
 
-	if _, err := store.DisableScopePackage(context.Background(), "t1", "missing", "r3", "i1"); err == nil {
+	if _, err := store.DisableScopePackage(context.Background(), "t1", "missing", "2026-01-03", "r3", "i1"); err == nil {
 		t.Fatal("expected error")
 	}
 }

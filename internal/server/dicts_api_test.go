@@ -180,15 +180,15 @@ func TestHandleDictsCreateAndDisableAPI_Coverage(t *testing.T) {
 			store  DictStore
 		}{
 			{name: "bad json", body: "{", status: http.StatusBadRequest},
-			{name: "dict required", body: `{"dict_code":"","name":"X","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusBadRequest},
-			{name: "dict invalid", body: `{"dict_code":"bad-code","name":"X","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusBadRequest},
-			{name: "name required", body: `{"dict_code":"org_type","name":"","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusBadRequest},
-			{name: "enabled_on required", body: `{"dict_code":"org_type","name":"X","enabled_on":"bad","request_code":"r1"}`, status: http.StatusBadRequest},
-			{name: "request required", body: `{"dict_code":"org_type","name":"X","enabled_on":"2026-01-01","request_code":""}`, status: http.StatusBadRequest},
-			{name: "store error", body: `{"dict_code":"org_type","name":"X","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusConflict, store: dictStoreStub{createDictFn: func(context.Context, string, DictCreateRequest) (DictItem, bool, error) {
+			{name: "dict required", body: `{"dict_code":"","name":"X","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusBadRequest},
+			{name: "dict invalid", body: `{"dict_code":"bad-code","name":"X","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusBadRequest},
+			{name: "name required", body: `{"dict_code":"org_type","name":"","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusBadRequest},
+			{name: "enabled_on required", body: `{"dict_code":"org_type","name":"X","enabled_on":"bad","request_id":"r1"}`, status: http.StatusBadRequest},
+			{name: "request required", body: `{"dict_code":"org_type","name":"X","enabled_on":"2026-01-01","request_id":""}`, status: http.StatusBadRequest},
+			{name: "store error", body: `{"dict_code":"org_type","name":"X","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusConflict, store: dictStoreStub{createDictFn: func(context.Context, string, DictCreateRequest) (DictItem, bool, error) {
 				return DictItem{}, false, errDictCodeConflict
 			}}},
-			{name: "ok retry", body: `{"dict_code":"org_type","name":"X","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusOK, store: dictStoreStub{createDictFn: func(context.Context, string, DictCreateRequest) (DictItem, bool, error) {
+			{name: "ok retry", body: `{"dict_code":"org_type","name":"X","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusOK, store: dictStoreStub{createDictFn: func(context.Context, string, DictCreateRequest) (DictItem, bool, error) {
 				return DictItem{DictCode: "org_type", Name: "X", Status: "active", EnabledOn: "2026-01-01"}, true, nil
 			}}},
 		}
@@ -210,7 +210,7 @@ func TestHandleDictsCreateAndDisableAPI_Coverage(t *testing.T) {
 	})
 
 	t.Run("create dict tenant missing", func(t *testing.T) {
-		req := dictAPIRequest(http.MethodPost, "/iam/api/dicts", []byte(`{"dict_code":"org_type","name":"X","enabled_on":"2026-01-01","request_code":"r1"}`), false)
+		req := dictAPIRequest(http.MethodPost, "/iam/api/dicts", []byte(`{"dict_code":"org_type","name":"X","enabled_on":"2026-01-01","request_id":"r1"}`), false)
 		rec := httptest.NewRecorder()
 		handleDictsCreateAPI(rec, req, dictStoreStub{})
 		if rec.Code != http.StatusInternalServerError {
@@ -233,35 +233,35 @@ func TestHandleDictsCreateAndDisableAPI_Coverage(t *testing.T) {
 			t.Fatalf("status=%d", recBadJSON.Code)
 		}
 
-		reqBad := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"","disabled_on":"bad","request_code":""}`), true)
+		reqBad := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"","disabled_on":"bad","request_id":""}`), true)
 		recBad := httptest.NewRecorder()
 		handleDictsDisableAPI(recBad, reqBad, dictStoreStub{})
 		if recBad.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recBad.Code)
 		}
 
-		reqInvalidDate := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"org_type","disabled_on":"bad","request_code":"r1"}`), true)
+		reqInvalidDate := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"org_type","disabled_on":"bad","request_id":"r1"}`), true)
 		recInvalidDate := httptest.NewRecorder()
 		handleDictsDisableAPI(recInvalidDate, reqInvalidDate, dictStoreStub{})
 		if recInvalidDate.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recInvalidDate.Code)
 		}
 
-		reqRequestRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"org_type","disabled_on":"2026-01-01","request_code":""}`), true)
+		reqRequestRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"org_type","disabled_on":"2026-01-01","request_id":""}`), true)
 		recRequestRequired := httptest.NewRecorder()
 		handleDictsDisableAPI(recRequestRequired, reqRequestRequired, dictStoreStub{})
 		if recRequestRequired.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recRequestRequired.Code)
 		}
 
-		reqNoTenant := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"org_type","disabled_on":"2026-01-01","request_code":"r1"}`), false)
+		reqNoTenant := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"org_type","disabled_on":"2026-01-01","request_id":"r1"}`), false)
 		recNoTenant := httptest.NewRecorder()
 		handleDictsDisableAPI(recNoTenant, reqNoTenant, dictStoreStub{})
 		if recNoTenant.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", recNoTenant.Code)
 		}
 
-		reqErr := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"org_type","disabled_on":"2026-01-01","request_code":"r1"}`), true)
+		reqErr := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"org_type","disabled_on":"2026-01-01","request_id":"r1"}`), true)
 		recErr := httptest.NewRecorder()
 		handleDictsDisableAPI(recErr, reqErr, dictStoreStub{disableDictFn: func(context.Context, string, DictDisableRequest) (DictItem, bool, error) {
 			return DictItem{}, false, errDictCodeConflict
@@ -270,7 +270,7 @@ func TestHandleDictsCreateAndDisableAPI_Coverage(t *testing.T) {
 			t.Fatalf("status=%d body=%s", recErr.Code, recErr.Body.String())
 		}
 
-		reqOK := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"org_type","disabled_on":"2026-01-01","request_code":"r1"}`), true)
+		reqOK := dictAPIRequest(http.MethodPost, "/iam/api/dicts:disable", []byte(`{"dict_code":"org_type","disabled_on":"2026-01-01","request_id":"r1"}`), true)
 		recOK := httptest.NewRecorder()
 		handleDictsDisableAPI(recOK, reqOK, dictStoreStub{disableDictFn: func(context.Context, string, DictDisableRequest) (DictItem, bool, error) {
 			return DictItem{DictCode: "org_type", Name: "Org Type", Status: "inactive", EnabledOn: "1970-01-01", DisabledOn: cloneOptionalString(new("2026-01-01"))}, false, nil
@@ -295,7 +295,7 @@ func TestHandleDictValuesAPI_Coverage(t *testing.T) {
 	})
 
 	t.Run("dispatch post", func(t *testing.T) {
-		body := []byte(`{"dict_code":"org_type","code":"30","label":"中心","enabled_on":"2026-01-01","request_code":"r1"}`)
+		body := []byte(`{"dict_code":"org_type","code":"30","label":"中心","enabled_on":"2026-01-01","request_id":"r1"}`)
 		req := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values", body, true)
 		rec := httptest.NewRecorder()
 		handleDictValuesAPI(rec, req, dictStoreStub{createFn: func(_ context.Context, _ string, req DictCreateValueRequest) (DictValueItem, bool, error) {
@@ -420,19 +420,19 @@ func TestHandleDictValuesMutationsAndAudit_Coverage(t *testing.T) {
 			store  DictStore
 		}{
 			{name: "bad json", body: "{", status: http.StatusBadRequest},
-			{name: "dict required", body: `{"dict_code":"","code":"10","label":"x","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusBadRequest},
-			{name: "dict invalid", body: `{"dict_code":"bad-code","code":"10","label":"x","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusBadRequest},
-			{name: "dict not found", body: `{"dict_code":"x","code":"10","label":"x","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusNotFound, store: dictStoreStub{createFn: func(context.Context, string, DictCreateValueRequest) (DictValueItem, bool, error) {
+			{name: "dict required", body: `{"dict_code":"","code":"10","label":"x","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusBadRequest},
+			{name: "dict invalid", body: `{"dict_code":"bad-code","code":"10","label":"x","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusBadRequest},
+			{name: "dict not found", body: `{"dict_code":"x","code":"10","label":"x","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusNotFound, store: dictStoreStub{createFn: func(context.Context, string, DictCreateValueRequest) (DictValueItem, bool, error) {
 				return DictValueItem{}, false, errDictNotFound
 			}}},
-			{name: "code required", body: `{"dict_code":"org_type","code":"","label":"x","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusBadRequest},
-			{name: "label required", body: `{"dict_code":"org_type","code":"10","label":"","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusBadRequest},
-			{name: "date invalid", body: `{"dict_code":"org_type","code":"10","label":"x","enabled_on":"bad","request_code":"r1"}`, status: http.StatusBadRequest},
-			{name: "request required", body: `{"dict_code":"org_type","code":"10","label":"x","enabled_on":"2026-01-01","request_code":""}`, status: http.StatusBadRequest},
-			{name: "store error", body: `{"dict_code":"org_type","code":"10","label":"x","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusBadRequest, store: dictStoreStub{createFn: func(context.Context, string, DictCreateValueRequest) (DictValueItem, bool, error) {
-				return DictValueItem{}, false, errDictRequestCodeRequired
+			{name: "code required", body: `{"dict_code":"org_type","code":"","label":"x","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusBadRequest},
+			{name: "label required", body: `{"dict_code":"org_type","code":"10","label":"","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusBadRequest},
+			{name: "date invalid", body: `{"dict_code":"org_type","code":"10","label":"x","enabled_on":"bad","request_id":"r1"}`, status: http.StatusBadRequest},
+			{name: "request required", body: `{"dict_code":"org_type","code":"10","label":"x","enabled_on":"2026-01-01","request_id":""}`, status: http.StatusBadRequest},
+			{name: "store error", body: `{"dict_code":"org_type","code":"10","label":"x","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusBadRequest, store: dictStoreStub{createFn: func(context.Context, string, DictCreateValueRequest) (DictValueItem, bool, error) {
+				return DictValueItem{}, false, errDictRequestIDRequired
 			}}},
-			{name: "ok retry", body: `{"dict_code":"org_type","code":"10","label":"x","enabled_on":"2026-01-01","request_code":"r1"}`, status: http.StatusOK, store: dictStoreStub{createFn: func(context.Context, string, DictCreateValueRequest) (DictValueItem, bool, error) {
+			{name: "ok retry", body: `{"dict_code":"org_type","code":"10","label":"x","enabled_on":"2026-01-01","request_id":"r1"}`, status: http.StatusOK, store: dictStoreStub{createFn: func(context.Context, string, DictCreateValueRequest) (DictValueItem, bool, error) {
 				return DictValueItem{DictCode: "org_type", Code: "10", Label: "x", Status: "active", EnabledOn: "2026-01-01", UpdatedAt: time.Unix(3, 0).UTC()}, true, nil
 			}}},
 		}
@@ -476,42 +476,42 @@ func TestHandleDictValuesMutationsAndAudit_Coverage(t *testing.T) {
 			t.Fatalf("status=%d", recBadJSON.Code)
 		}
 
-		reqBad := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"","disabled_on":"bad","request_code":""}`), true)
+		reqBad := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"","disabled_on":"bad","request_id":""}`), true)
 		recBad := httptest.NewRecorder()
 		handleDictValuesDisableAPI(recBad, reqBad, dictStoreStub{})
 		if recBad.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recBad.Code)
 		}
 
-		reqInvalidDate := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"10","disabled_on":"bad","request_code":"r1"}`), true)
+		reqInvalidDate := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"10","disabled_on":"bad","request_id":"r1"}`), true)
 		recInvalidDate := httptest.NewRecorder()
 		handleDictValuesDisableAPI(recInvalidDate, reqInvalidDate, dictStoreStub{})
 		if recInvalidDate.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recInvalidDate.Code)
 		}
 
-		reqRequestRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"10","disabled_on":"2026-01-01","request_code":""}`), true)
+		reqRequestRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"10","disabled_on":"2026-01-01","request_id":""}`), true)
 		recRequestRequired := httptest.NewRecorder()
 		handleDictValuesDisableAPI(recRequestRequired, reqRequestRequired, dictStoreStub{})
 		if recRequestRequired.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recRequestRequired.Code)
 		}
 
-		reqNoTenant := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"10","disabled_on":"2026-01-01","request_code":"r1"}`), false)
+		reqNoTenant := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"10","disabled_on":"2026-01-01","request_id":"r1"}`), false)
 		recNoTenant := httptest.NewRecorder()
 		handleDictValuesDisableAPI(recNoTenant, reqNoTenant, dictStoreStub{})
 		if recNoTenant.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", recNoTenant.Code)
 		}
 
-		reqDictRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"","code":"10","disabled_on":"2026-01-01","request_code":"r1"}`), true)
+		reqDictRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"","code":"10","disabled_on":"2026-01-01","request_id":"r1"}`), true)
 		recDictRequired := httptest.NewRecorder()
 		handleDictValuesDisableAPI(recDictRequired, reqDictRequired, dictStoreStub{})
 		if recDictRequired.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recDictRequired.Code)
 		}
 
-		reqDictNotFound := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"x","code":"10","disabled_on":"2026-01-01","request_code":"r1"}`), true)
+		reqDictNotFound := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"x","code":"10","disabled_on":"2026-01-01","request_id":"r1"}`), true)
 		recDictNotFound := httptest.NewRecorder()
 		handleDictValuesDisableAPI(recDictNotFound, reqDictNotFound, dictStoreStub{disableFn: func(context.Context, string, DictDisableValueRequest) (DictValueItem, bool, error) {
 			return DictValueItem{}, false, errDictNotFound
@@ -520,7 +520,7 @@ func TestHandleDictValuesMutationsAndAudit_Coverage(t *testing.T) {
 			t.Fatalf("status=%d", recDictNotFound.Code)
 		}
 
-		reqErr := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"10","disabled_on":"2026-01-01","request_code":"r1"}`), true)
+		reqErr := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"10","disabled_on":"2026-01-01","request_id":"r1"}`), true)
 		recErr := httptest.NewRecorder()
 		handleDictValuesDisableAPI(recErr, reqErr, dictStoreStub{disableFn: func(context.Context, string, DictDisableValueRequest) (DictValueItem, bool, error) {
 			return DictValueItem{}, false, errDictValueNotFoundAsOf
@@ -529,7 +529,7 @@ func TestHandleDictValuesMutationsAndAudit_Coverage(t *testing.T) {
 			t.Fatalf("status=%d body=%s", recErr.Code, recErr.Body.String())
 		}
 
-		reqOK := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"10","disabled_on":"2026-01-01","request_code":"r1"}`), true)
+		reqOK := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:disable", []byte(`{"dict_code":"org_type","code":"10","disabled_on":"2026-01-01","request_id":"r1"}`), true)
 		recOK := httptest.NewRecorder()
 		handleDictValuesDisableAPI(recOK, reqOK, dictStoreStub{disableFn: func(context.Context, string, DictDisableValueRequest) (DictValueItem, bool, error) {
 			return DictValueItem{DictCode: "org_type", Code: "10", Label: "部门", Status: "inactive", EnabledOn: "2026-01-01", UpdatedAt: time.Unix(4, 0).UTC()}, false, nil
@@ -554,42 +554,42 @@ func TestHandleDictValuesMutationsAndAudit_Coverage(t *testing.T) {
 			t.Fatalf("status=%d", recBadJSON.Code)
 		}
 
-		reqBad := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"","correction_day":"bad","request_code":""}`), true)
+		reqBad := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"","correction_day":"bad","request_id":""}`), true)
 		recBad := httptest.NewRecorder()
 		handleDictValuesCorrectAPI(recBad, reqBad, dictStoreStub{})
 		if recBad.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recBad.Code)
 		}
 
-		reqInvalidDate := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"X","correction_day":"bad","request_code":"r1"}`), true)
+		reqInvalidDate := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"X","correction_day":"bad","request_id":"r1"}`), true)
 		recInvalidDate := httptest.NewRecorder()
 		handleDictValuesCorrectAPI(recInvalidDate, reqInvalidDate, dictStoreStub{})
 		if recInvalidDate.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recInvalidDate.Code)
 		}
 
-		reqRequestRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"X","correction_day":"2026-01-01","request_code":""}`), true)
+		reqRequestRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"X","correction_day":"2026-01-01","request_id":""}`), true)
 		recRequestRequired := httptest.NewRecorder()
 		handleDictValuesCorrectAPI(recRequestRequired, reqRequestRequired, dictStoreStub{})
 		if recRequestRequired.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recRequestRequired.Code)
 		}
 
-		reqNoTenant := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"X","correction_day":"2026-01-01","request_code":"r1"}`), false)
+		reqNoTenant := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"X","correction_day":"2026-01-01","request_id":"r1"}`), false)
 		recNoTenant := httptest.NewRecorder()
 		handleDictValuesCorrectAPI(recNoTenant, reqNoTenant, dictStoreStub{})
 		if recNoTenant.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", recNoTenant.Code)
 		}
 
-		reqDictRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"","code":"10","label":"X","correction_day":"2026-01-01","request_code":"r1"}`), true)
+		reqDictRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"","code":"10","label":"X","correction_day":"2026-01-01","request_id":"r1"}`), true)
 		recDictRequired := httptest.NewRecorder()
 		handleDictValuesCorrectAPI(recDictRequired, reqDictRequired, dictStoreStub{})
 		if recDictRequired.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recDictRequired.Code)
 		}
 
-		reqDictNotFound := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"x","code":"10","label":"X","correction_day":"2026-01-01","request_code":"r1"}`), true)
+		reqDictNotFound := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"x","code":"10","label":"X","correction_day":"2026-01-01","request_id":"r1"}`), true)
 		recDictNotFound := httptest.NewRecorder()
 		handleDictValuesCorrectAPI(recDictNotFound, reqDictNotFound, dictStoreStub{correctFn: func(context.Context, string, DictCorrectValueRequest) (DictValueItem, bool, error) {
 			return DictValueItem{}, false, errDictNotFound
@@ -598,14 +598,14 @@ func TestHandleDictValuesMutationsAndAudit_Coverage(t *testing.T) {
 			t.Fatalf("status=%d", recDictNotFound.Code)
 		}
 
-		reqCodeRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"","label":"X","correction_day":"2026-01-01","request_code":"r1"}`), true)
+		reqCodeRequired := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"","label":"X","correction_day":"2026-01-01","request_id":"r1"}`), true)
 		recCodeRequired := httptest.NewRecorder()
 		handleDictValuesCorrectAPI(recCodeRequired, reqCodeRequired, dictStoreStub{})
 		if recCodeRequired.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", recCodeRequired.Code)
 		}
 
-		reqErr := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"X","correction_day":"2026-01-01","request_code":"r1"}`), true)
+		reqErr := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"X","correction_day":"2026-01-01","request_id":"r1"}`), true)
 		recErr := httptest.NewRecorder()
 		handleDictValuesCorrectAPI(recErr, reqErr, dictStoreStub{correctFn: func(context.Context, string, DictCorrectValueRequest) (DictValueItem, bool, error) {
 			return DictValueItem{}, false, errDictValueConflict
@@ -614,7 +614,7 @@ func TestHandleDictValuesMutationsAndAudit_Coverage(t *testing.T) {
 			t.Fatalf("status=%d body=%s", recErr.Code, recErr.Body.String())
 		}
 
-		reqOK := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"X","correction_day":"2026-01-01","request_code":"r1"}`), true)
+		reqOK := dictAPIRequest(http.MethodPost, "/iam/api/dicts/values:correct", []byte(`{"dict_code":"org_type","code":"10","label":"X","correction_day":"2026-01-01","request_id":"r1"}`), true)
 		recOK := httptest.NewRecorder()
 		handleDictValuesCorrectAPI(recOK, reqOK, dictStoreStub{correctFn: func(context.Context, string, DictCorrectValueRequest) (DictValueItem, bool, error) {
 			return DictValueItem{DictCode: "org_type", Code: "10", Label: "X", Status: "active", EnabledOn: "2026-01-01", UpdatedAt: time.Unix(5, 0).UTC()}, false, nil
@@ -684,7 +684,7 @@ func TestHandleDictValuesMutationsAndAudit_Coverage(t *testing.T) {
 			if dictCode != "org_type" || code != "10" || limit != 200 {
 				t.Fatalf("dictCode=%q code=%q limit=%d", dictCode, code, limit)
 			}
-			return []DictValueAuditItem{{EventID: 1, DictCode: "org_type", Code: "10", EventType: dictEventCreated, EffectiveDay: "2026-01-01", RequestCode: "r1", InitiatorUUID: "u1", TxTime: time.Unix(6, 0).UTC(), Payload: json.RawMessage(`{"label":"部门"}`)}}, nil
+			return []DictValueAuditItem{{EventID: 1, DictCode: "org_type", Code: "10", EventType: dictEventCreated, EffectiveDay: "2026-01-01", RequestID: "r1", InitiatorUUID: "u1", TxTime: time.Unix(6, 0).UTC(), Payload: json.RawMessage(`{"label":"部门"}`)}}, nil
 		}})
 		if recOK.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", recOK.Code, recOK.Body.String())
@@ -740,6 +740,9 @@ func TestDictAPIHelpers_Coverage(t *testing.T) {
 			t.Fatalf("got=%q", got)
 		}
 		if got := dictErrorCode(errors.New("DICT_REQUEST_CODE_REQUIRED")); got != "invalid_request" {
+			t.Fatalf("got=%q", got)
+		}
+		if got := dictErrorCode(errors.New("DICT_REQUEST_ID_REQUIRED")); got != "invalid_request" {
 			t.Fatalf("got=%q", got)
 		}
 		if got := dictErrorCode(errors.New("DICT_NOT_FOUND")); got != "dict_not_found" {

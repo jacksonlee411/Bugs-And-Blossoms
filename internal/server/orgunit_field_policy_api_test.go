@@ -17,8 +17,8 @@ type orgUnitStoreWithFieldPolicies struct {
 	OrgUnitStore
 	listFn    func(ctx context.Context, tenantID string) ([]orgUnitTenantFieldPolicy, error)
 	resolveFn func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, asOf string) (orgUnitTenantFieldPolicy, bool, error)
-	upsertFn  func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, maintainable bool, defaultMode string, defaultRuleExpr *string, enabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error)
-	disableFn func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, disabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error)
+	upsertFn  func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, maintainable bool, defaultMode string, defaultRuleExpr *string, enabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error)
+	disableFn func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, disabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error)
 }
 
 func (s orgUnitStoreWithFieldPolicies) ListTenantFieldPolicies(ctx context.Context, tenantID string) ([]orgUnitTenantFieldPolicy, error) {
@@ -35,16 +35,16 @@ func (s orgUnitStoreWithFieldPolicies) ResolveTenantFieldPolicy(ctx context.Cont
 	return orgUnitTenantFieldPolicy{}, false, nil
 }
 
-func (s orgUnitStoreWithFieldPolicies) UpsertTenantFieldPolicy(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, maintainable bool, defaultMode string, defaultRuleExpr *string, enabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error) {
+func (s orgUnitStoreWithFieldPolicies) UpsertTenantFieldPolicy(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, maintainable bool, defaultMode string, defaultRuleExpr *string, enabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error) {
 	if s.upsertFn != nil {
-		return s.upsertFn(ctx, tenantID, fieldKey, scopeType, scopeKey, maintainable, defaultMode, defaultRuleExpr, enabledOn, requestCode, initiatorUUID)
+		return s.upsertFn(ctx, tenantID, fieldKey, scopeType, scopeKey, maintainable, defaultMode, defaultRuleExpr, enabledOn, requestID, initiatorUUID)
 	}
 	return orgUnitTenantFieldPolicy{}, false, nil
 }
 
-func (s orgUnitStoreWithFieldPolicies) DisableTenantFieldPolicy(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, disabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error) {
+func (s orgUnitStoreWithFieldPolicies) DisableTenantFieldPolicy(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, disabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error) {
 	if s.disableFn != nil {
-		return s.disableFn(ctx, tenantID, fieldKey, scopeType, scopeKey, disabledOn, requestCode, initiatorUUID)
+		return s.disableFn(ctx, tenantID, fieldKey, scopeType, scopeKey, disabledOn, requestID, initiatorUUID)
 	}
 	return orgUnitTenantFieldPolicy{}, false, nil
 }
@@ -53,8 +53,8 @@ type orgUnitStoreWithFieldConfigsAndPolicies struct {
 	OrgUnitStore
 	listConfigsFn func(ctx context.Context, tenantID string) ([]orgUnitTenantFieldConfig, error)
 	resolveFn     func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, asOf string) (orgUnitTenantFieldPolicy, bool, error)
-	enableFn      func(ctx context.Context, tenantID string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
-	disableFn     func(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
+	enableFn      func(ctx context.Context, tenantID string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
+	disableFn     func(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
 }
 
 func (s orgUnitStoreWithFieldConfigsAndPolicies) ListTenantFieldConfigs(ctx context.Context, tenantID string) ([]orgUnitTenantFieldConfig, error) {
@@ -71,16 +71,16 @@ func (s orgUnitStoreWithFieldConfigsAndPolicies) ResolveTenantFieldPolicy(ctx co
 	return orgUnitTenantFieldPolicy{}, false, nil
 }
 
-func (s orgUnitStoreWithFieldConfigsAndPolicies) EnableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error) {
+func (s orgUnitStoreWithFieldConfigsAndPolicies) EnableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error) {
 	if s.enableFn != nil {
-		return s.enableFn(ctx, tenantID, fieldKey, valueType, dataSourceType, dataSourceConfig, displayLabel, enabledOn, requestCode, initiatorUUID)
+		return s.enableFn(ctx, tenantID, fieldKey, valueType, dataSourceType, dataSourceConfig, displayLabel, enabledOn, requestID, initiatorUUID)
 	}
 	return orgUnitTenantFieldConfig{}, false, nil
 }
 
-func (s orgUnitStoreWithFieldConfigsAndPolicies) DisableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error) {
+func (s orgUnitStoreWithFieldConfigsAndPolicies) DisableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error) {
 	if s.disableFn != nil {
-		return s.disableFn(ctx, tenantID, fieldKey, disabledOn, requestCode, initiatorUUID)
+		return s.disableFn(ctx, tenantID, fieldKey, disabledOn, requestID, initiatorUUID)
 	}
 	return orgUnitTenantFieldConfig{}, false, nil
 }
@@ -102,7 +102,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_Success(t *testing.T) {
 	base := newOrgUnitMemoryStore()
 	store := orgUnitStoreWithFieldPolicies{
 		OrgUnitStore: base,
-		upsertFn: func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, maintainable bool, defaultMode string, defaultRuleExpr *string, enabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error) {
+		upsertFn: func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, maintainable bool, defaultMode string, defaultRuleExpr *string, enabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error) {
 			if tenantID != "t1" || fieldKey != "org_code" {
 				t.Fatalf("tenant/field mismatch: %s %s", tenantID, fieldKey)
 			}
@@ -136,7 +136,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_Success(t *testing.T) {
 		"default_mode":"CEL",
 		"default_rule_expr":"next_org_code(\"O\", 6)",
 		"enabled_on":"2026-01-01",
-		"request_code":"fp1"
+		"request_id":"fp1"
 	}`)))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
@@ -163,7 +163,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_InvalidExpr(t *testing.T) {
 		"default_mode":"CEL",
 		"default_rule_expr":"1+1",
 		"enabled_on":"2026-01-01",
-		"request_code":"fp1"
+		"request_id":"fp1"
 	}`)))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
@@ -207,7 +207,7 @@ func TestHandleOrgUnitFieldPoliciesResolvePreviewAPI_DefaultFallback(t *testing.
 func TestHandleOrgUnitFieldPoliciesDisableAPI_NotFoundMappedTo404(t *testing.T) {
 	store := orgUnitStoreWithFieldPolicies{
 		OrgUnitStore: newOrgUnitMemoryStore(),
-		disableFn: func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, disabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error) {
+		disableFn: func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, disabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error) {
 			return orgUnitTenantFieldPolicy{}, false, errors.New(orgUnitErrFieldPolicyNotFound)
 		},
 	}
@@ -216,7 +216,7 @@ func TestHandleOrgUnitFieldPoliciesDisableAPI_NotFoundMappedTo404(t *testing.T) 
 		"scope_type":"FORM",
 		"scope_key":"orgunit.create_dialog",
 		"disabled_on":"2026-02-01",
-		"request_code":"fp-disable"
+		"request_id":"fp-disable"
 	}`)))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
@@ -269,7 +269,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 	})
 
 	t.Run("required fields missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"","enabled_on":"","request_code":""}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"","enabled_on":"","request_id":""}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
@@ -279,7 +279,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 	})
 
 	t.Run("enabled_on invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","enabled_on":"bad","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","enabled_on":"bad","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
@@ -289,7 +289,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 	})
 
 	t.Run("field key not allowed", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"bad_field","scope_type":"FORM","scope_key":"orgunit.create_dialog","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"bad_field","scope_type":"FORM","scope_key":"orgunit.create_dialog","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
@@ -299,7 +299,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 	})
 
 	t.Run("scope invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"bad.scope","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"bad.scope","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
@@ -309,7 +309,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 	})
 
 	t.Run("default mode invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","default_mode":"BAD","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","default_mode":"BAD","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
@@ -335,7 +335,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 				}, false, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, store)
@@ -345,7 +345,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 	})
 
 	t.Run("cel mode requires expression", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","default_mode":"CEL","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","default_mode":"CEL","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
@@ -355,7 +355,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 	})
 
 	t.Run("system managed policy requires cel default mode", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","maintainable":false,"default_mode":"NONE","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","maintainable":false,"default_mode":"NONE","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
@@ -378,7 +378,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 				return orgUnitTenantFieldPolicy{}, false, errors.New("boom")
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","default_mode":"NONE","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","default_mode":"NONE","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, store)
@@ -401,7 +401,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 				}, true, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"GLOBAL","scope_key":"ignored","default_mode":"NONE","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"GLOBAL","scope_key":"ignored","default_mode":"NONE","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, store)
@@ -454,7 +454,7 @@ func TestHandleOrgUnitFieldPoliciesDisableAPI_ErrorAndSuccessBranches(t *testing
 	})
 
 	t.Run("invalid required fields", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies:disable", bytes.NewReader([]byte(`{"field_key":"","disabled_on":"","request_code":""}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies:disable", bytes.NewReader([]byte(`{"field_key":"","disabled_on":"","request_id":""}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesDisableAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
@@ -464,7 +464,7 @@ func TestHandleOrgUnitFieldPoliciesDisableAPI_ErrorAndSuccessBranches(t *testing
 	})
 
 	t.Run("disabled_on invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies:disable", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","disabled_on":"bad","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies:disable", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","disabled_on":"bad","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesDisableAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
@@ -474,7 +474,7 @@ func TestHandleOrgUnitFieldPoliciesDisableAPI_ErrorAndSuccessBranches(t *testing
 	})
 
 	t.Run("scope invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies:disable", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"bad.scope","disabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies:disable", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"bad.scope","disabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesDisableAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
@@ -490,7 +490,7 @@ func TestHandleOrgUnitFieldPoliciesDisableAPI_ErrorAndSuccessBranches(t *testing
 				return orgUnitTenantFieldPolicy{}, false, errors.New("boom")
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies:disable", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","disabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies:disable", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","disabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesDisableAPI(rec, req, store)
@@ -513,7 +513,7 @@ func TestHandleOrgUnitFieldPoliciesDisableAPI_ErrorAndSuccessBranches(t *testing
 				}, false, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies:disable", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","disabled_on":"2026-02-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies:disable", bytes.NewReader([]byte(`{"field_key":"org_code","scope_type":"FORM","scope_key":"orgunit.create_dialog","disabled_on":"2026-02-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesDisableAPI(rec, req, store)

@@ -203,7 +203,7 @@ func staffingSmoke(args []string) {
 		fatal(err)
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO staffing.position_events (tenant_uuid, position_uuid, event_type, effective_date, payload, request_code, initiator_uuid)
+		INSERT INTO staffing.position_events (tenant_uuid, position_uuid, event_type, effective_date, payload, request_id, initiator_uuid)
 		VALUES ($1::uuid, $2::uuid, 'CREATE', '2026-01-01'::date, '{}'::jsonb, $3, $2::uuid);
 	`, tenantA, seedPositionID, "dbtool-seed-"+seedPositionID); err != nil {
 		fatal(err)

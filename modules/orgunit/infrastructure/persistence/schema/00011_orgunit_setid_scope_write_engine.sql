@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_scope_package_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -35,7 +35,7 @@ BEGIN
       MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
       DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'REQUEST_CODE_REQUIRED';
@@ -92,7 +92,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -103,14 +103,14 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_scope_package_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 
@@ -376,7 +376,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_global_scope_package_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -410,7 +410,7 @@ BEGIN
       MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
       DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'REQUEST_CODE_REQUIRED';
@@ -467,7 +467,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -478,14 +478,14 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.global_setid_scope_package_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 
@@ -713,7 +713,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_scope_subscription_event(
   p_package_owner_tenant_uuid uuid,
   p_event_type text,
   p_effective_date date,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -737,7 +737,7 @@ BEGIN
       MESSAGE = 'SCOPE_SUBSCRIPTION_INVALID_ARGUMENT',
       DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'REQUEST_CODE_REQUIRED';
@@ -831,7 +831,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -844,14 +844,14 @@ BEGIN
     p_event_type,
     p_effective_date,
     '{}'::jsonb,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_scope_subscription_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 

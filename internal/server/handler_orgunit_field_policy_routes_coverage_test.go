@@ -50,7 +50,7 @@ func TestNewHandlerWithOptions_OrgUnitFieldPolicyRoutes_AreWired(t *testing.T) {
 		}
 	}
 
-	check(http.MethodPost, "/org/api/org-units/field-policies", `{"field_key":"","enabled_on":"","request_code":""}`, http.StatusBadRequest)
-	check(http.MethodPost, "/org/api/org-units/field-policies:disable", `{"field_key":"","disabled_on":"","request_code":""}`, http.StatusBadRequest)
+	check(http.MethodPost, "/org/api/org-units/field-policies", `{"field_key":"","enabled_on":"","request_id":""}`, http.StatusBadRequest)
+	check(http.MethodPost, "/org/api/org-units/field-policies:disable", `{"field_key":"","disabled_on":"","request_id":""}`, http.StatusBadRequest)
 	check(http.MethodGet, "/org/api/org-units/field-policies:resolve-preview?as_of=2026-01-01", "", http.StatusBadRequest)
 }

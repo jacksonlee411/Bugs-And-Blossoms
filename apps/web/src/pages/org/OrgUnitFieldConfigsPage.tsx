@@ -248,7 +248,7 @@ function addUtcDays(date: string, days: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-function newRequestCode(): string {
+function newRequestID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
   }
@@ -366,12 +366,12 @@ export function OrgUnitFieldConfigsPage() {
     dictDisplayLabel: ''
   }))
   const [enableError, setEnableError] = useState('')
-  const [enableRequestCode, setEnableRequestCode] = useState(() => newRequestCode())
+  const [enableRequestID, setEnableRequestID] = useState(() => newRequestID())
 
   const [selectedConfig, setSelectedConfig] = useState<SelectedConfigState | null>(null)
   const [disableForm, setDisableForm] = useState<DisableFormState>({ disabledOn: todayUtc })
   const [disableError, setDisableError] = useState('')
-  const [disableRequestCode, setDisableRequestCode] = useState(() => newRequestCode())
+  const [disableRequestID, setDisableRequestID] = useState(() => newRequestID())
 
   const [viewRow, setViewRow] = useState<FieldConfigRow | null>(null)
   const [policyRow, setPolicyRow] = useState<FieldConfigRow | null>(null)
@@ -385,7 +385,7 @@ export function OrgUnitFieldConfigsPage() {
     enabledOn: todayUtc
   })
   const [policyError, setPolicyError] = useState('')
-  const [policyRequestCode, setPolicyRequestCode] = useState(() => newRequestCode())
+  const [policyRequestID, setPolicyRequestID] = useState(() => newRequestID())
 
   const formatApiErrorMessage = useCallback(
     (error: unknown): string => {
@@ -539,7 +539,7 @@ export function OrgUnitFieldConfigsPage() {
     mutationFn: (req: {
       field_key: string
       enabled_on: string
-      request_code: string
+      request_id: string
       value_type?: OrgUnitExtValueType
       data_source_config?: Record<string, unknown>
       label?: string
@@ -550,7 +550,7 @@ export function OrgUnitFieldConfigsPage() {
   })
 
   const disableMutation = useMutation({
-    mutationFn: (req: { field_key: string; disabled_on: string; request_code: string }) => disableOrgUnitFieldConfig(req),
+    mutationFn: (req: { field_key: string; disabled_on: string; request_id: string }) => disableOrgUnitFieldConfig(req),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['org-field-configs'] })
     }
@@ -565,7 +565,7 @@ export function OrgUnitFieldConfigsPage() {
       default_mode: OrgUnitFieldPolicyDefaultMode
       default_rule_expr?: string
       enabled_on: string
-      request_code: string
+      request_id: string
     }) => upsertOrgUnitFieldPolicy(req),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['org-field-configs'] })
@@ -593,7 +593,7 @@ export function OrgUnitFieldConfigsPage() {
         const next = maxDay(maxDay(addUtcDays(old, 1), base), row.enabledOn)
         setDisableForm({ disabledOn: next })
       }
-      setDisableRequestCode(newRequestCode())
+      setDisableRequestID(newRequestID())
     },
     [asOf, todayUtc]
   )
@@ -618,7 +618,7 @@ export function OrgUnitFieldConfigsPage() {
         defaultRuleExpr: row.defaultRuleExpr,
         enabledOn: maxDay(todayUtc, asOf)
       })
-      setPolicyRequestCode(newRequestCode())
+      setPolicyRequestID(newRequestID())
     },
     [asOf, todayUtc]
   )
@@ -666,7 +666,7 @@ export function OrgUnitFieldConfigsPage() {
         default_mode: defaultMode,
         default_rule_expr: defaultMode === 'CEL' ? defaultRuleExpr : undefined,
         enabled_on: enabledOn,
-        request_code: policyRequestCode
+        request_id: policyRequestID
       })
       const nextAsOf = resolveAsOfAfterPolicySave(asOf, savedPolicy.enabled_on)
       if (nextAsOf) {
@@ -858,7 +858,7 @@ export function OrgUnitFieldConfigsPage() {
       dataSourceConfigOption: '',
       dictDisplayLabel: ''
     })
-    setEnableRequestCode(newRequestCode())
+    setEnableRequestID(newRequestID())
   }
 
   function closeEnableDialog() {
@@ -968,7 +968,7 @@ export function OrgUnitFieldConfigsPage() {
       await enableMutation.mutateAsync({
         field_key: fieldKey,
         enabled_on: enabledOn,
-        request_code: enableRequestCode,
+        request_id: enableRequestID,
         value_type: enableForm.mode === 'custom' ? enableForm.customValueType : undefined,
         data_source_config: dataSourceConfig,
         label: label.length > 0 ? label : undefined
@@ -1026,7 +1026,7 @@ export function OrgUnitFieldConfigsPage() {
       await disableMutation.mutateAsync({
         field_key: row.fieldKey,
         disabled_on: disabledOn,
-        request_code: disableRequestCode
+        request_id: disableRequestID
       })
       setToast({ message: t('org_field_configs_toast_disable_success'), severity: 'success' })
       closeDisableDialog()
@@ -1125,7 +1125,7 @@ export function OrgUnitFieldConfigsPage() {
                 labelId='org-field-key-mode-select-label'
                 onChange={(event) => {
                   const nextMode = String(event.target.value) as EnableFormState['mode']
-                  setEnableRequestCode(newRequestCode())
+                  setEnableRequestID(newRequestID())
                   setEnableForm((previous) => ({
                     ...previous,
                     mode: nextMode,
@@ -1151,7 +1151,7 @@ export function OrgUnitFieldConfigsPage() {
                   labelId='org-field-key-select-label'
                   onChange={(event) => {
                     const nextFieldKey = String(event.target.value)
-                    setEnableRequestCode(newRequestCode())
+                    setEnableRequestID(newRequestID())
                     const def = fieldDefinitionByKey.get(nextFieldKey)
                     const dataSourceType = String(def?.data_source_type ?? '').toUpperCase()
                     let nextOption = ''
@@ -1184,7 +1184,7 @@ export function OrgUnitFieldConfigsPage() {
                   labelId='org-dict-field-key-select-label'
                   onChange={(event) => {
                     const nextFieldKey = String(event.target.value)
-                    setEnableRequestCode(newRequestCode())
+                    setEnableRequestID(newRequestID())
                     setEnableForm((previous) => ({
                       ...previous,
                       fieldKey: nextFieldKey,
@@ -1211,7 +1211,7 @@ export function OrgUnitFieldConfigsPage() {
               <TextField
                 label={t('org_field_configs_form_field_key')}
                 onChange={(event) => {
-                  setEnableRequestCode(newRequestCode())
+                  setEnableRequestID(newRequestID())
                   setEnableForm((previous) => ({
                     ...previous,
                     fieldKey: event.target.value,
@@ -1230,7 +1230,7 @@ export function OrgUnitFieldConfigsPage() {
                   label={t('org_field_configs_form_custom_value_type')}
                   labelId='org-custom-value-type-select-label'
                   onChange={(event) => {
-                    setEnableRequestCode(newRequestCode())
+                    setEnableRequestID(newRequestID())
                     setEnableForm((previous) => ({ ...previous, customValueType: String(event.target.value) as OrgUnitExtValueType }))
                   }}
                   value={enableForm.customValueType}
@@ -1247,7 +1247,7 @@ export function OrgUnitFieldConfigsPage() {
               <TextField
                 label={t('org_field_configs_form_custom_field_label')}
                 onChange={(event) => {
-                  setEnableRequestCode(newRequestCode())
+                  setEnableRequestID(newRequestID())
                   setEnableForm((previous) => ({ ...previous, customDisplayLabel: event.target.value }))
                 }}
                 value={enableForm.customDisplayLabel}
@@ -1258,7 +1258,7 @@ export function OrgUnitFieldConfigsPage() {
               InputLabelProps={{ shrink: true }}
               label={t('org_field_configs_form_enabled_on')}
               onChange={(event) => {
-                setEnableRequestCode(newRequestCode())
+                setEnableRequestID(newRequestID())
                 setEnableForm((previous) => ({ ...previous, enabledOn: event.target.value }))
               }}
               type='date'
@@ -1268,7 +1268,7 @@ export function OrgUnitFieldConfigsPage() {
               <TextField
                 label={t('org_field_configs_form_dict_field_label')}
                 onChange={(event) => {
-                  setEnableRequestCode(newRequestCode())
+                  setEnableRequestID(newRequestID())
                   setEnableForm((previous) => ({ ...previous, dictDisplayLabel: event.target.value }))
                 }}
                 value={enableForm.dictDisplayLabel}
@@ -1282,7 +1282,7 @@ export function OrgUnitFieldConfigsPage() {
                   label={t('org_field_configs_form_data_source_config')}
                   labelId='org-field-configs-data-source-config-label'
                   onChange={(event) => {
-                    setEnableRequestCode(newRequestCode())
+                    setEnableRequestID(newRequestID())
                     setEnableForm((previous) => ({ ...previous, dataSourceConfigOption: String(event.target.value) }))
                   }}
                   value={enableForm.dataSourceConfigOption}
@@ -1337,7 +1337,7 @@ export function OrgUnitFieldConfigsPage() {
                 InputLabelProps={{ shrink: true }}
                 label={t('org_field_configs_form_disabled_on')}
                 onChange={(event) => {
-                  setDisableRequestCode(newRequestCode())
+                  setDisableRequestID(newRequestID())
                   setDisableForm({ disabledOn: event.target.value })
                 }}
                 type='date'
@@ -1374,7 +1374,7 @@ export function OrgUnitFieldConfigsPage() {
                   labelId='org-field-policy-scope-type-label'
                   onChange={(event) => {
                     const nextScopeType: OrgUnitFieldPolicyScopeType = event.target.value === 'GLOBAL' ? 'GLOBAL' : 'FORM'
-                    setPolicyRequestCode(newRequestCode())
+                    setPolicyRequestID(newRequestID())
                     setPolicyForm((previous) => ({
                       ...previous,
                       scopeType: nextScopeType,
@@ -1394,7 +1394,7 @@ export function OrgUnitFieldConfigsPage() {
                     label={t('org_field_configs_policy_scope_key')}
                     labelId='org-field-policy-scope-key-label'
                     onChange={(event) => {
-                      setPolicyRequestCode(newRequestCode())
+                      setPolicyRequestID(newRequestID())
                       setPolicyForm((previous) => ({ ...previous, scopeKey: String(event.target.value) }))
                     }}
                     value={policyForm.scopeKey}
@@ -1412,7 +1412,7 @@ export function OrgUnitFieldConfigsPage() {
                   <Switch
                     checked={policyForm.maintainable}
                     onChange={(event) => {
-                      setPolicyRequestCode(newRequestCode())
+                      setPolicyRequestID(newRequestID())
                       setPolicyForm((previous) => ({ ...previous, maintainable: event.target.checked }))
                     }}
                   />
@@ -1426,7 +1426,7 @@ export function OrgUnitFieldConfigsPage() {
                   labelId='org-field-policy-default-mode-label'
                   onChange={(event) => {
                     const nextMode: OrgUnitFieldPolicyDefaultMode = event.target.value === 'CEL' ? 'CEL' : 'NONE'
-                    setPolicyRequestCode(newRequestCode())
+                    setPolicyRequestID(newRequestID())
                     setPolicyForm((previous) => ({
                       ...previous,
                       defaultMode: nextMode,
@@ -1444,7 +1444,7 @@ export function OrgUnitFieldConfigsPage() {
                   label={t('org_field_configs_policy_default_rule_expr')}
                   helperText={t('org_field_configs_policy_default_rule_expr_helper')}
                   onChange={(event) => {
-                    setPolicyRequestCode(newRequestCode())
+                    setPolicyRequestID(newRequestID())
                     setPolicyForm((previous) => ({ ...previous, defaultRuleExpr: event.target.value }))
                   }}
                   placeholder='next_org_code("ORG", 6)'
@@ -1455,7 +1455,7 @@ export function OrgUnitFieldConfigsPage() {
                 InputLabelProps={{ shrink: true }}
                 label={t('org_field_configs_form_enabled_on')}
                 onChange={(event) => {
-                  setPolicyRequestCode(newRequestCode())
+                  setPolicyRequestID(newRequestID())
                   setPolicyForm((previous) => ({ ...previous, enabledOn: event.target.value }))
                 }}
                 type='date'

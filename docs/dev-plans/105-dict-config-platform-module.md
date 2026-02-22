@@ -40,6 +40,12 @@
 3. 不改动 Org 主体事件模型（仍走 `submit_*_event` 写入口）。
 4. 不扩展 ENTITY 字段管理能力（仅 DICT）。
 
+### 2.3 后续收敛注记（2026-02-22）
+
+- 按 `DEV-PLAN-070B`，字典运行时读取口径收敛为 **tenant-only**：业务 API 与 `pkg/dict` 解析路径不再允许 `global_tenant` fallback。
+- 按 `STD-002` / `DEV-PLAN-102B`，`as_of` 必填且缺失/非法统一返回 `400 invalid_as_of`（message：`as_of required`）；禁止 default today。
+- 新租户未完成字典基线导入时按 fail-closed 返回 `dict_baseline_not_ready`（由 070B 发布链路保证基线先落地再开写）。
+
 ## 3. 需求初衷与“简单性”冻结点（对齐 DEV-PLAN-003）
 
 > 需求初衷（必须始终成立）：
@@ -63,6 +69,7 @@
    - DICT 值不存在/未生效/已停用 => 拒绝写入（稳定错误码）。
    - options 请求字段非 DICT/配置非法 => 拒绝。
 5. **No Legacy**：完成切换后，运行态不再依赖代码内静态 dict registry；不保留长期双链路。
+6. **Tenant-Only Runtime**：运行时读路径仅允许当前租户数据；共享基线通过发布任务写入租户本地，不在业务读路径做 global fallback。
 
 > 纠偏说明：本计划将统一采用“有效期窗口”术语，避免 `effective_date/enabled_on` 混用。
 > - `enabled_on`：生效日（date，含当天）
@@ -180,18 +187,19 @@
     - `code`（必填）
     - `limit`（可选，默认 50；最大 200）
 
-> 冻结结论：`GET /iam/api/dicts` 的 `as_of` **必须提供**；不提供视为 `invalid_request`，避免隐式“今天”带来的时区与版本歧义。
+> 冻结结论：`GET /iam/api/dicts` 的 `as_of` **必须提供**；缺失/非法统一 `400 invalid_as_of`（message：`as_of required`），避免隐式“今天”带来的时区与版本歧义。
 
 ### 7.2 稳定错误码（Phase A 必补齐）
 
 为保持 fail-closed 且可排障，本计划要求字典模块与接入方在关键失败路径上具备**稳定错误码**。Phase A 需冻结最小集合（建议）：
 
-- `invalid_as_of`：`as_of` 格式非法
+- `invalid_as_of`：`as_of` 缺失或格式非法（统一 `400`，message：`as_of required`）
 - `dict_code_required`：缺少 `dict_code`
 - `dict_not_found`：dict_code 不存在（Phase 0 仅 org_type）
 - `dict_value_code_required`：缺少/空白 code
 - `dict_value_label_required`：缺少/空白 label（写接口）
 - `dict_value_not_found_as_of`：指定 as_of 下无有效窗口
+- `dict_baseline_not_ready`：租户字典基线未导入完成
 - `dict_value_conflict`：窗口冲突/幂等冲突（同 request_code 不同 payload）
 - `forbidden`：权限不足（dict.read / dict.admin）
 
@@ -285,7 +293,9 @@
 3. [x] `org_type` 默认值 `10/20` 可配置并生效。
 4. [x] 各模块写入时 DICT 校验来源可切换为模块化字典（至少先完成 Org 样板），静态 registry 不再作为运行态事实源。
 5. [x] details/options 无“静态字典漂移”导致的错误展示。
-6. [x] 门禁证据齐全（对齐 `AGENTS.md` 触发器矩阵）：
+6. [ ] 运行时字典读取已收敛 tenant-only（无 `global_tenant` fallback），且切流证据可追溯。
+7. [ ] 时间参数口径与 `STD-002`/`DEV-PLAN-102B` 一致（`as_of` 缺失/非法统一 `invalid_as_of`，无 default today）。
+8. [x] 门禁证据齐全（对齐 `AGENTS.md` 触发器矩阵）：
    - 路由：`make check routing`
    - 权限：`make authz-pack && make authz-test && make authz-lint`
    - Go：`go fmt ./... && go vet ./... && make check lint && make test`
@@ -318,6 +328,9 @@
 - `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/105a-dict-config-validation-issues-investigation.md`
 - `docs/dev-plans/105b-dict-code-management-and-governance.md`
+- `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
+- `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
+- `docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - `docs/dev-records/dev-plan-105-execution-log.md`
 - `docs/dev-records/dev-plan-105a-execution-log.md`
 - `docs/dev-records/dev-plan-105b-execution-log.md`

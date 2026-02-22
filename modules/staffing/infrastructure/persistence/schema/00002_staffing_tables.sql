@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
   ),
   CONSTRAINT position_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT position_events_one_per_day_unique UNIQUE (tenant_uuid, position_uuid, effective_date),
-  CONSTRAINT position_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT position_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT position_events_position_fk FOREIGN KEY (tenant_uuid, position_uuid) REFERENCES staffing.positions(tenant_uuid, position_uuid) ON DELETE RESTRICT
 );
 
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   ),
   CONSTRAINT assignment_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT assignment_events_one_per_day_unique UNIQUE (tenant_uuid, assignment_uuid, effective_date),
-  CONSTRAINT assignment_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT assignment_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT assignment_events_assignment_fk FOREIGN KEY (tenant_uuid, assignment_uuid) REFERENCES staffing.assignments(tenant_uuid, assignment_uuid) ON DELETE RESTRICT
 );
 
@@ -140,14 +140,14 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_event_corrections (
   assignment_uuid uuid NOT NULL,
   target_effective_date date NOT NULL,
   replacement_payload jsonb NOT NULL,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT assignment_event_corrections_replacement_payload_obj_check CHECK (jsonb_typeof(replacement_payload) = 'object'),
   CONSTRAINT assignment_event_corrections_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT assignment_event_corrections_target_unique UNIQUE (tenant_uuid, assignment_uuid, target_effective_date),
-  CONSTRAINT assignment_event_corrections_request_code_unique UNIQUE (tenant_uuid, request_code)
+  CONSTRAINT assignment_event_corrections_request_id_unique UNIQUE (tenant_uuid, request_id)
 );
 
 CREATE TABLE IF NOT EXISTS staffing.assignment_event_rescinds (
@@ -157,14 +157,14 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_event_rescinds (
   assignment_uuid uuid NOT NULL,
   target_effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT assignment_event_rescinds_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
   CONSTRAINT assignment_event_rescinds_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT assignment_event_rescinds_target_unique UNIQUE (tenant_uuid, assignment_uuid, target_effective_date),
-  CONSTRAINT assignment_event_rescinds_request_code_unique UNIQUE (tenant_uuid, request_code)
+  CONSTRAINT assignment_event_rescinds_request_id_unique UNIQUE (tenant_uuid, request_id)
 );
 
 CREATE TABLE IF NOT EXISTS staffing.assignment_versions (

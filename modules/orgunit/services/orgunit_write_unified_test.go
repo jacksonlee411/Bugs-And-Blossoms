@@ -15,12 +15,12 @@ func TestWriteUnified_CreateOrg_SubmitCreate(t *testing.T) {
 		listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
 			return []types.TenantFieldConfig{}, nil
 		},
-		submitEventFn: func(_ context.Context, _ string, _ string, orgID *int, eventType string, _ string, payload json.RawMessage, requestCode string, _ string) (int64, error) {
+		submitEventFn: func(_ context.Context, _ string, _ string, orgID *int, eventType string, _ string, payload json.RawMessage, requestID string, _ string) (int64, error) {
 			if orgID != nil {
 				t.Fatalf("orgID should be nil for create")
 			}
-			if requestCode != "req-1" {
-				t.Fatalf("requestCode=%s", requestCode)
+			if requestID != "req-1" {
+				t.Fatalf("requestID=%s", requestID)
 			}
 			capturedType = eventType
 			if err := json.Unmarshal(payload, &capturedPayload); err != nil {
@@ -35,7 +35,7 @@ func TestWriteUnified_CreateOrg_SubmitCreate(t *testing.T) {
 		Intent:        "create_org",
 		OrgCode:       "ROOT",
 		EffectiveDate: "2026-01-01",
-		RequestCode:   "req-1",
+		RequestID:     "req-1",
 		Patch: OrgUnitWritePatch{
 			Name: &name,
 		},
@@ -79,7 +79,7 @@ func TestWriteUnified_AddVersion_SubmitUpdate(t *testing.T) {
 		Intent:        "add_version",
 		OrgCode:       "A001",
 		EffectiveDate: "2026-01-02",
-		RequestCode:   "req-2",
+		RequestID:     "req-2",
 		Patch: OrgUnitWritePatch{
 			Name: &name,
 		},
@@ -120,7 +120,7 @@ func TestWriteUnified_Correct_UsesTargetEffectiveDate(t *testing.T) {
 		OrgCode:             "A001",
 		EffectiveDate:       "2026-01-03",
 		TargetEffectiveDate: "2026-01-01",
-		RequestCode:         "req-3",
+		RequestID:           "req-3",
 		Patch: OrgUnitWritePatch{
 			Status: &status,
 		},

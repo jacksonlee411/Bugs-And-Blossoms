@@ -81,13 +81,13 @@ CREATE TABLE IF NOT EXISTS orgunit.tenant_field_config_events (
   event_type text NOT NULL,
   field_key text NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT tenant_field_config_events_event_type_check CHECK (event_type IN ('ENABLE','DISABLE','REKEY')),
   CONSTRAINT tenant_field_config_events_field_key_format_check CHECK (field_key ~ '^[a-z][a-z0-9_]{0,62}$'),
-  CONSTRAINT tenant_field_config_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT tenant_field_config_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT tenant_field_config_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT tenant_field_config_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
@@ -579,7 +579,7 @@ CREATE OR REPLACE FUNCTION orgunit.enable_tenant_field_config(
   p_data_source_type text,
   p_data_source_config jsonb,
   p_display_label text,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS void
@@ -615,8 +615,8 @@ BEGIN
   IF p_display_label IS NOT NULL AND btrim(p_display_label) = '' THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'display_label invalid';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -636,7 +636,7 @@ BEGIN
   SELECT * INTO v_existing
   FROM orgunit.tenant_field_config_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -652,7 +652,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_code);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
 
     RETURN;
@@ -800,7 +800,7 @@ BEGIN
     event_type,
     field_key,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -809,7 +809,7 @@ BEGIN
     'ENABLE',
     p_field_key,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   );
 
@@ -872,7 +872,7 @@ CREATE OR REPLACE FUNCTION orgunit.rekey_tenant_field_config(
   p_tenant_uuid uuid,
   p_old_field_key text,
   p_new_field_key text,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS void
@@ -898,8 +898,8 @@ BEGIN
   IF p_new_field_key IS NULL OR p_new_field_key = '' THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'new_field_key is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -917,7 +917,7 @@ BEGIN
   SELECT * INTO v_existing
   FROM orgunit.tenant_field_config_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -928,7 +928,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_code);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
     RETURN;
   END IF;
@@ -1069,7 +1069,7 @@ BEGIN
     event_type,
     field_key,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -1078,7 +1078,7 @@ BEGIN
     'REKEY',
     p_new_field_key,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   );
 END;
@@ -1088,7 +1088,7 @@ CREATE OR REPLACE FUNCTION orgunit.disable_tenant_field_config(
   p_tenant_uuid uuid,
   p_field_key text,
   p_disabled_on date,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS void
@@ -1111,8 +1111,8 @@ BEGIN
   IF p_disabled_on IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'disabled_on is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -1124,7 +1124,7 @@ BEGIN
   SELECT * INTO v_existing
   FROM orgunit.tenant_field_config_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -1135,7 +1135,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_code);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
 
     RETURN;
@@ -1186,7 +1186,7 @@ BEGIN
     event_type,
     field_key,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -1195,7 +1195,7 @@ BEGIN
     'DISABLE',
     p_field_key,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   );
 

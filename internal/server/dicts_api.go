@@ -36,31 +36,31 @@ type dictValueMutationResponse struct {
 }
 
 type dictCreatePayload struct {
-	DictCode    string `json:"dict_code"`
-	Name        string `json:"name"`
-	EnabledOn   string `json:"enabled_on"`
-	RequestCode string `json:"request_code"`
+	DictCode  string `json:"dict_code"`
+	Name      string `json:"name"`
+	EnabledOn string `json:"enabled_on"`
+	RequestID string `json:"request_id"`
 }
 
 type dictDisablePayload struct {
-	DictCode    string `json:"dict_code"`
-	DisabledOn  string `json:"disabled_on"`
-	RequestCode string `json:"request_code"`
+	DictCode   string `json:"dict_code"`
+	DisabledOn string `json:"disabled_on"`
+	RequestID  string `json:"request_id"`
 }
 
 type dictCreateValuePayload struct {
-	DictCode    string `json:"dict_code"`
-	Code        string `json:"code"`
-	Label       string `json:"label"`
-	EnabledOn   string `json:"enabled_on"`
-	RequestCode string `json:"request_code"`
+	DictCode  string `json:"dict_code"`
+	Code      string `json:"code"`
+	Label     string `json:"label"`
+	EnabledOn string `json:"enabled_on"`
+	RequestID string `json:"request_id"`
 }
 
 type dictDisableValuePayload struct {
-	DictCode    string `json:"dict_code"`
-	Code        string `json:"code"`
-	DisabledOn  string `json:"disabled_on"`
-	RequestCode string `json:"request_code"`
+	DictCode   string `json:"dict_code"`
+	Code       string `json:"code"`
+	DisabledOn string `json:"disabled_on"`
+	RequestID  string `json:"request_id"`
 }
 
 type dictCorrectValuePayload struct {
@@ -68,7 +68,7 @@ type dictCorrectValuePayload struct {
 	Code          string `json:"code"`
 	Label         string `json:"label"`
 	CorrectionDay string `json:"correction_day"`
-	RequestCode   string `json:"request_code"`
+	RequestID     string `json:"request_id"`
 }
 
 type dictAuditResponse struct {
@@ -129,7 +129,7 @@ func handleDictsCreateAPI(w http.ResponseWriter, r *http.Request, store DictStor
 	req.DictCode = normalizeDictCode(req.DictCode)
 	req.Name = strings.TrimSpace(req.Name)
 	req.EnabledOn = strings.TrimSpace(req.EnabledOn)
-	req.RequestCode = strings.TrimSpace(req.RequestCode)
+	req.RequestID = strings.TrimSpace(req.RequestID)
 
 	if req.DictCode == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "dict_code_required", "dict_code required")
@@ -147,17 +147,17 @@ func handleDictsCreateAPI(w http.ResponseWriter, r *http.Request, store DictStor
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "dict_enabled_on_required", "enabled_on invalid")
 		return
 	}
-	if req.RequestCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_code required")
+	if req.RequestID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 		return
 	}
 
 	item, wasRetry, err := store.CreateDict(r.Context(), tenant.ID, DictCreateRequest{
-		DictCode:    req.DictCode,
-		Name:        req.Name,
-		EnabledOn:   req.EnabledOn,
-		RequestCode: req.RequestCode,
-		Initiator:   orgUnitInitiatorUUID(r.Context(), tenant.ID),
+		DictCode:  req.DictCode,
+		Name:      req.Name,
+		EnabledOn: req.EnabledOn,
+		RequestID: req.RequestID,
+		Initiator: orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	})
 	if err != nil {
 		writeDictAPIError(w, r, err, "dict_create_failed")
@@ -193,7 +193,7 @@ func handleDictsDisableAPI(w http.ResponseWriter, r *http.Request, store DictSto
 
 	req.DictCode = normalizeDictCode(req.DictCode)
 	req.DisabledOn = strings.TrimSpace(req.DisabledOn)
-	req.RequestCode = strings.TrimSpace(req.RequestCode)
+	req.RequestID = strings.TrimSpace(req.RequestID)
 
 	if req.DictCode == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "dict_code_required", "dict_code required")
@@ -207,16 +207,16 @@ func handleDictsDisableAPI(w http.ResponseWriter, r *http.Request, store DictSto
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "dict_disabled_on_required", "disabled_on invalid")
 		return
 	}
-	if req.RequestCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_code required")
+	if req.RequestID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 		return
 	}
 
 	item, wasRetry, err := store.DisableDict(r.Context(), tenant.ID, DictDisableRequest{
-		DictCode:    req.DictCode,
-		DisabledOn:  req.DisabledOn,
-		RequestCode: req.RequestCode,
-		Initiator:   orgUnitInitiatorUUID(r.Context(), tenant.ID),
+		DictCode:   req.DictCode,
+		DisabledOn: req.DisabledOn,
+		RequestID:  req.RequestID,
+		Initiator:  orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	})
 	if err != nil {
 		writeDictAPIError(w, r, err, "dict_disable_failed")
@@ -321,7 +321,7 @@ func handleDictValuesCreateAPI(w http.ResponseWriter, r *http.Request, store Dic
 	req.Code = strings.TrimSpace(req.Code)
 	req.Label = strings.TrimSpace(req.Label)
 	req.EnabledOn = strings.TrimSpace(req.EnabledOn)
-	req.RequestCode = strings.TrimSpace(req.RequestCode)
+	req.RequestID = strings.TrimSpace(req.RequestID)
 	if req.DictCode == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "dict_code_required", "dict_code required")
 		return
@@ -342,18 +342,18 @@ func handleDictValuesCreateAPI(w http.ResponseWriter, r *http.Request, store Dic
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "enabled_on invalid")
 		return
 	}
-	if req.RequestCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_code required")
+	if req.RequestID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 		return
 	}
 
 	item, wasRetry, err := store.CreateDictValue(r.Context(), tenant.ID, DictCreateValueRequest{
-		DictCode:    req.DictCode,
-		Code:        req.Code,
-		Label:       req.Label,
-		EnabledOn:   req.EnabledOn,
-		RequestCode: req.RequestCode,
-		Initiator:   orgUnitInitiatorUUID(r.Context(), tenant.ID),
+		DictCode:  req.DictCode,
+		Code:      req.Code,
+		Label:     req.Label,
+		EnabledOn: req.EnabledOn,
+		RequestID: req.RequestID,
+		Initiator: orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	})
 	if err != nil {
 		writeDictAPIError(w, r, err, "dict_value_create_failed")
@@ -388,7 +388,7 @@ func handleDictValuesDisableAPI(w http.ResponseWriter, r *http.Request, store Di
 	req.DictCode = normalizeDictCode(req.DictCode)
 	req.Code = strings.TrimSpace(req.Code)
 	req.DisabledOn = strings.TrimSpace(req.DisabledOn)
-	req.RequestCode = strings.TrimSpace(req.RequestCode)
+	req.RequestID = strings.TrimSpace(req.RequestID)
 
 	if req.DictCode == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "dict_code_required", "dict_code required")
@@ -406,17 +406,17 @@ func handleDictValuesDisableAPI(w http.ResponseWriter, r *http.Request, store Di
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "disabled_on invalid")
 		return
 	}
-	if req.RequestCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_code required")
+	if req.RequestID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 		return
 	}
 
 	item, wasRetry, err := store.DisableDictValue(r.Context(), tenant.ID, DictDisableValueRequest{
-		DictCode:    req.DictCode,
-		Code:        req.Code,
-		DisabledOn:  req.DisabledOn,
-		RequestCode: req.RequestCode,
-		Initiator:   orgUnitInitiatorUUID(r.Context(), tenant.ID),
+		DictCode:   req.DictCode,
+		Code:       req.Code,
+		DisabledOn: req.DisabledOn,
+		RequestID:  req.RequestID,
+		Initiator:  orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	})
 	if err != nil {
 		writeDictAPIError(w, r, err, "dict_value_disable_failed")
@@ -448,7 +448,7 @@ func handleDictValuesCorrectAPI(w http.ResponseWriter, r *http.Request, store Di
 	req.Code = strings.TrimSpace(req.Code)
 	req.Label = strings.TrimSpace(req.Label)
 	req.CorrectionDay = strings.TrimSpace(req.CorrectionDay)
-	req.RequestCode = strings.TrimSpace(req.RequestCode)
+	req.RequestID = strings.TrimSpace(req.RequestID)
 
 	if req.DictCode == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "dict_code_required", "dict_code required")
@@ -470,8 +470,8 @@ func handleDictValuesCorrectAPI(w http.ResponseWriter, r *http.Request, store Di
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "correction_day invalid")
 		return
 	}
-	if req.RequestCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_code required")
+	if req.RequestID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 		return
 	}
 
@@ -480,7 +480,7 @@ func handleDictValuesCorrectAPI(w http.ResponseWriter, r *http.Request, store Di
 		Code:          req.Code,
 		Label:         req.Label,
 		CorrectionDay: req.CorrectionDay,
-		RequestCode:   req.RequestCode,
+		RequestID:     req.RequestID,
 		Initiator:     orgUnitInitiatorUUID(r.Context(), tenant.ID),
 	})
 	if err != nil {
@@ -610,7 +610,7 @@ func dictErrorCode(err error) string {
 		return "dict_value_conflict"
 	case errors.Is(err, errDictValueDictDisabled):
 		return "dict_value_dict_disabled"
-	case errors.Is(err, errDictRequestCodeRequired):
+	case errors.Is(err, errDictRequestIDRequired):
 		return "invalid_request"
 	case errors.Is(err, errDictEffectiveDayRequired):
 		return "invalid_as_of"
@@ -626,9 +626,12 @@ func dictErrorCode(err error) string {
 		return "dict_enabled_on_required"
 	case "dict_disabled_on_required":
 		return "dict_disabled_on_required"
-	case "dict_request_code_required":
+	case "dict_request_id_required":
 		return "invalid_request"
 	default:
+		if strings.HasPrefix(code, "dict_request_") && strings.HasSuffix(code, "_required") {
+			return "invalid_request"
+		}
 		return strings.TrimSpace(defaultStableCode(code, "internal_error"))
 	}
 }

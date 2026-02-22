@@ -28,7 +28,7 @@ type IamDictEvent struct {
 	Payload        []byte             `json:"payload"`
 	BeforeSnapshot []byte             `json:"before_snapshot"`
 	AfterSnapshot  []byte             `json:"after_snapshot"`
-	RequestCode    string             `json:"request_code"`
+	RequestID      string             `json:"request_id"`
 	InitiatorUuid  pgtype.UUID        `json:"initiator_uuid"`
 	TxTime         pgtype.Timestamptz `json:"tx_time"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
@@ -45,7 +45,7 @@ type IamDictValueEvent struct {
 	Payload        []byte             `json:"payload"`
 	BeforeSnapshot []byte             `json:"before_snapshot"`
 	AfterSnapshot  []byte             `json:"after_snapshot"`
-	RequestCode    string             `json:"request_code"`
+	RequestID      string             `json:"request_id"`
 	InitiatorUuid  pgtype.UUID        `json:"initiator_uuid"`
 	TxTime         pgtype.Timestamptz `json:"tx_time"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
@@ -93,7 +93,7 @@ type IamSuperadminAuditLog struct {
 	Action           string             `json:"action"`
 	TargetTenantUuid pgtype.UUID        `json:"target_tenant_uuid"`
 	Payload          []byte             `json:"payload"`
-	RequestCode      string             `json:"request_code"`
+	RequestID        string             `json:"request_id"`
 	TransactionTime  pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 }
@@ -155,7 +155,7 @@ type JobcatalogJobFamilyEvent struct {
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -183,7 +183,7 @@ type JobcatalogJobFamilyGroupEvent struct {
 	EventType          string             `json:"event_type"`
 	EffectiveDate      pgtype.Date        `json:"effective_date"`
 	Payload            []byte             `json:"payload"`
-	RequestCode        string             `json:"request_code"`
+	RequestID          string             `json:"request_id"`
 	InitiatorUuid      pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime    pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
@@ -246,7 +246,7 @@ type JobcatalogJobLevelEvent struct {
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -291,7 +291,7 @@ type JobcatalogJobProfileEvent struct {
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -345,7 +345,7 @@ type OrgunitGlobalSetidEvent struct {
 	EventType       string             `json:"event_type"`
 	Setid           string             `json:"setid"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -371,7 +371,7 @@ type OrgunitGlobalSetidScopePackageEvent struct {
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -397,7 +397,7 @@ type OrgunitOrgEvent struct {
 	EventType           string             `json:"event_type"`
 	EffectiveDate       pgtype.Date        `json:"effective_date"`
 	Payload             []byte             `json:"payload"`
-	RequestCode         string             `json:"request_code"`
+	RequestID           string             `json:"request_id"`
 	InitiatorUuid       pgtype.UUID        `json:"initiator_uuid"`
 	InitiatorName       *string            `json:"initiator_name"`
 	InitiatorEmployeeID *string            `json:"initiator_employee_id"`
@@ -418,7 +418,7 @@ type OrgunitOrgEventsEffective struct {
 	EventType       interface{}        `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         interface{}        `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -615,7 +615,7 @@ type OrgunitSetidBindingEvent struct {
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -639,7 +639,7 @@ type OrgunitSetidEvent struct {
 	EventType       string             `json:"event_type"`
 	Setid           string             `json:"setid"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -666,7 +666,7 @@ type OrgunitSetidScopePackageEvent struct {
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -709,7 +709,7 @@ type OrgunitSetidScopeSubscriptionEvent struct {
 	EventType              string             `json:"event_type"`
 	EffectiveDate          pgtype.Date        `json:"effective_date"`
 	Payload                []byte             `json:"payload"`
-	RequestCode            string             `json:"request_code"`
+	RequestID              string             `json:"request_id"`
 	InitiatorUuid          pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime        pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
@@ -737,7 +737,7 @@ type OrgunitTenantFieldConfigEvent struct {
 	EventType       string             `json:"event_type"`
 	FieldKey        string             `json:"field_key"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -768,7 +768,7 @@ type OrgunitTenantFieldPolicyEvent struct {
 	ScopeType       string             `json:"scope_type"`
 	ScopeKey        string             `json:"scope_key"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -803,7 +803,7 @@ type StaffingAssignmentEvent struct {
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
@@ -816,7 +816,7 @@ type StaffingAssignmentEventCorrection struct {
 	AssignmentUuid      pgtype.UUID        `json:"assignment_uuid"`
 	TargetEffectiveDate pgtype.Date        `json:"target_effective_date"`
 	ReplacementPayload  []byte             `json:"replacement_payload"`
-	RequestCode         string             `json:"request_code"`
+	RequestID           string             `json:"request_id"`
 	InitiatorUuid       pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime     pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
@@ -829,7 +829,7 @@ type StaffingAssignmentEventRescind struct {
 	AssignmentUuid      pgtype.UUID        `json:"assignment_uuid"`
 	TargetEffectiveDate pgtype.Date        `json:"target_effective_date"`
 	Payload             []byte             `json:"payload"`
-	RequestCode         string             `json:"request_code"`
+	RequestID           string             `json:"request_id"`
 	InitiatorUuid       pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime     pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
@@ -864,7 +864,7 @@ type StaffingPositionEvent struct {
 	EventType       string             `json:"event_type"`
 	EffectiveDate   pgtype.Date        `json:"effective_date"`
 	Payload         []byte             `json:"payload"`
-	RequestCode     string             `json:"request_code"`
+	RequestID       string             `json:"request_id"`
 	InitiatorUuid   pgtype.UUID        `json:"initiator_uuid"`
 	TransactionTime pgtype.Timestamptz `json:"transaction_time"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`

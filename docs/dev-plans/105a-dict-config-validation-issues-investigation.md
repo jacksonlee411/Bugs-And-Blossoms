@@ -5,6 +5,12 @@
 > 本计划用于记录 DEV-PLAN-105 已落地后，在字典模块验证中发现的偏差/缺陷，并冻结调查结论、修复路径与验收口径。  
 > 主方案与冻结条款见：`docs/dev-plans/105-dict-config-platform-module.md`；实施证据见：`docs/dev-records/dev-plan-105-execution-log.md`。
 
+## 0.1 后续口径收敛注记（2026-02-22）
+
+- 按 `DEV-PLAN-070B`，字典运行时读取口径收敛为 **tenant-only**；本计划中的验证与修复结果不再扩展为 `global_tenant` fallback 运行态能力。
+- 按 `STD-002` / `DEV-PLAN-102B`，时间参数口径统一为显式必填：`as_of` 缺失/非法返回 `400 invalid_as_of`（message：`as_of required`），禁止 default today。
+- 新租户字典基线未导入完成时，后续按 `dict_baseline_not_ready` fail-closed（由 070B 发布链路保障）。
+
 ## 1. 背景
 
 在本地验证页面 `http://localhost:8080/app/dicts`（字典配置模块 UI）时，发现以下问题：
@@ -85,6 +91,7 @@
 2. API `GET /iam/api/dicts/values` 返回的 values item 字段名与前端约定一致（snake_case），前端不依赖隐式字段映射。
 3. 页面布局对齐 DEV-PLAN-105 的 IA 冻结：分屏 1（左侧 dict 列表 + 右侧 value grid）+ 分屏 2（detail/audit）。
 4. “新增字典字段”需求已明确收口为“新增 dict_code（B2）”，并在文档中冻结后续计划入口（`DEV-PLAN-105B`）。
+5. 后续时间/租户口径以 `DEV-PLAN-070B` + `DEV-PLAN-102B` + `STD-002` 为准；本计划不再作为并行口径来源。
 
 ## 7. 门禁与验证（SSOT 引用）
 
@@ -101,3 +108,6 @@
 - 路由：`apps/web/src/router/index.tsx`
 - 后端 API：`internal/server/dicts_api.go`
 - 后端 store/model：`internal/server/dicts_store.go`
+- 口径收敛：`docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
+- 时间语义 PoR：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
+- 标准：`docs/dev-plans/005-project-standards-and-spec-adoption.md`

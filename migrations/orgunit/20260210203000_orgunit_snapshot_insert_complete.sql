@@ -67,7 +67,7 @@ CREATE OR REPLACE FUNCTION orgunit.org_events_effective_for_replay(
   p_pending_event_type text,
   p_pending_effective_date date,
   p_pending_payload jsonb,
-  p_pending_request_code text,
+  p_pending_request_id text,
   p_pending_initiator_uuid uuid,
   p_pending_tx_time timestamptz,
   p_pending_transaction_time timestamptz,
@@ -81,7 +81,7 @@ RETURNS TABLE (
   event_type text,
   effective_date date,
   payload jsonb,
-  request_code text,
+  request_id text,
   initiator_uuid uuid,
   transaction_time timestamptz,
   created_at timestamptz
@@ -98,7 +98,7 @@ AS $$
       e.event_type,
       e.effective_date,
       COALESCE(e.payload, '{}'::jsonb) AS payload,
-      e.request_code,
+      e.request_id,
       e.initiator_uuid,
       e.tx_time,
       e.transaction_time,
@@ -117,7 +117,7 @@ AS $$
       p_pending_event_type,
       p_pending_effective_date,
       COALESCE(p_pending_payload, '{}'::jsonb),
-      p_pending_request_code,
+      p_pending_request_id,
       p_pending_initiator_uuid,
       p_pending_tx_time,
       p_pending_transaction_time,
@@ -168,7 +168,7 @@ AS $$
         THEN se.payload || (lc.correction_payload - 'effective_date' - 'target_event_uuid' - 'op')
       ELSE se.payload
     END AS payload,
-    se.request_code,
+    se.request_id,
     se.initiator_uuid,
     se.transaction_time,
     se.created_at
@@ -189,7 +189,7 @@ CREATE OR REPLACE FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pendin
   p_pending_event_type text,
   p_pending_effective_date date,
   p_pending_payload jsonb,
-  p_pending_request_code text,
+  p_pending_request_id text,
   p_pending_initiator_uuid uuid,
   p_pending_tx_time timestamptz,
   p_pending_transaction_time timestamptz,
@@ -223,7 +223,7 @@ BEGIN
     IF p_pending_event_uuid IS NULL
       OR p_pending_event_type IS NULL
       OR p_pending_effective_date IS NULL
-      OR p_pending_request_code IS NULL
+      OR p_pending_request_id IS NULL
       OR p_pending_initiator_uuid IS NULL
       OR p_pending_tx_time IS NULL
       OR p_pending_transaction_time IS NULL
@@ -249,7 +249,7 @@ BEGIN
       p_pending_event_type,
       p_pending_effective_date,
       p_pending_payload,
-      p_pending_request_code,
+      p_pending_request_id,
       p_pending_initiator_uuid,
       p_pending_tx_time,
       p_pending_transaction_time,
@@ -285,7 +285,7 @@ BEGIN
       p_pending_event_type,
       p_pending_effective_date,
       p_pending_payload,
-      p_pending_request_code,
+      p_pending_request_id,
       p_pending_initiator_uuid,
       p_pending_tx_time,
       p_pending_transaction_time,
@@ -426,7 +426,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -459,8 +459,8 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -502,7 +502,7 @@ BEGIN
         OR v_existing.event_type <> p_event_type
         OR v_existing.effective_date <> p_effective_date
         OR v_existing.payload <> v_payload
-        OR v_existing.request_code <> p_request_code
+        OR v_existing.request_id <> p_request_id
         OR v_existing.initiator_uuid <> p_initiator_uuid
       THEN
         RAISE EXCEPTION USING
@@ -524,7 +524,7 @@ BEGIN
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -537,7 +537,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_code);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
 
     RETURN v_existing_request.id;
@@ -555,7 +555,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -646,7 +646,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid,
     before_snapshot,
     after_snapshot
@@ -659,7 +659,7 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid,
     v_before_snapshot,
     v_after_snapshot
@@ -719,7 +719,7 @@ BEGIN
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_id
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -802,7 +802,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid,
     reason,
     before_snapshot,
@@ -887,7 +887,7 @@ BEGIN
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_id
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -953,7 +953,7 @@ BEGIN
   SELECT COUNT(*) INTO v_existing_batch_count
   FROM orgunit.org_events e
   WHERE e.tenant_uuid = p_tenant_uuid
-    AND e.request_code LIKE p_request_id || '#%';
+    AND e.request_id LIKE p_request_id || '#%';
 
   IF v_existing_batch_count > 0 AND v_existing_batch_count <> v_event_count THEN
     RAISE EXCEPTION USING
@@ -981,7 +981,7 @@ BEGIN
     SELECT * INTO v_existing_request
     FROM orgunit.org_events e
     WHERE e.tenant_uuid = p_tenant_uuid
-      AND e.request_code = v_request_id_seq
+      AND e.request_id = v_request_id_seq
     LIMIT 1;
 
     IF FOUND THEN
@@ -1021,7 +1021,7 @@ BEGIN
     SELECT * INTO v_existing_request
     FROM orgunit.org_events e
     WHERE e.tenant_uuid = p_tenant_uuid
-      AND e.request_code = v_request_id_seq
+      AND e.request_id = v_request_id_seq
     LIMIT 1;
 
     IF FOUND THEN
@@ -1079,7 +1079,7 @@ BEGIN
       event_type,
       effective_date,
       payload,
-      request_code,
+      request_id,
       initiator_uuid,
       reason,
       before_snapshot,
@@ -1337,7 +1337,7 @@ BEGIN
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_id
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -1384,7 +1384,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid,
     before_snapshot,
     after_snapshot,
@@ -1526,7 +1526,7 @@ BEGIN
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_id
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -1573,7 +1573,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid,
     before_snapshot,
     after_snapshot,

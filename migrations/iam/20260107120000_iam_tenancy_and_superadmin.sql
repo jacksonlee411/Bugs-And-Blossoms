@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS iam.superadmin_audit_logs (
   action text NOT NULL,
   target_tenant_uuid uuid NULL REFERENCES iam.tenants(id) ON DELETE SET NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT superadmin_audit_logs_actor_nonempty_check CHECK (btrim(actor) <> ''),

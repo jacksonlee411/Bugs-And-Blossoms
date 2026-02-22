@@ -779,7 +779,7 @@ func TestOrgUnitPGStore_ListNodeAuditEvents(t *testing.T) {
 			when,                      // tx_time
 			"initiator",               // initiator_name
 			"emp",                     // initiator_employee_id
-			"req",                     // request_code
+			"req",                     // request_id
 			"reason",                  // reason
 			[]byte(`{"op":"RENAME"}`), // payload
 			[]byte(`{"before":1}`),    // before_snapshot
@@ -788,7 +788,7 @@ func TestOrgUnitPGStore_ListNodeAuditEvents(t *testing.T) {
 			false,                     // is_rescinded
 			"",                        // rescinded_by_event_uuid
 			when,                      // rescinded_by_tx_time
-			"",                        // rescinded_by_request_code
+			"",                        // rescinded_by_request_id
 		}}}
 		store := &orgUnitPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) {
 			return &stubTx{rows: rows}, nil

@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS iam.superadmin_audit_logs (
   action text NOT NULL,
   target_tenant_uuid uuid NULL REFERENCES iam.tenants(id) ON DELETE SET NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT superadmin_audit_logs_actor_nonempty_check CHECK (btrim(actor) <> ''),
@@ -258,12 +258,12 @@ CREATE TABLE IF NOT EXISTS iam.dict_value_events (
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   before_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
   after_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NULL,
   tx_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT dict_value_events_event_uuid_unique UNIQUE (event_uuid),
-  CONSTRAINT dict_value_events_request_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT dict_value_events_request_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT dict_value_events_dict_code_check CHECK (
     dict_code = lower(dict_code)
     AND dict_code = btrim(dict_code)
@@ -304,7 +304,7 @@ CREATE OR REPLACE FUNCTION iam.submit_dict_value_event(
   p_event_type text,
   p_effective_day date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS TABLE(event_id bigint, was_retry boolean)
@@ -314,7 +314,7 @@ DECLARE
   v_dict_code text := lower(btrim(COALESCE(p_dict_code, '')));
   v_code text := btrim(COALESCE(p_code, ''));
   v_event_type text := upper(btrim(COALESCE(p_event_type, '')));
-  v_request_code text := btrim(COALESCE(p_request_code, ''));
+  v_request_id text := btrim(COALESCE(p_request_id, ''));
   v_payload jsonb := COALESCE(p_payload, '{}'::jsonb);
   v_now timestamptz := now();
   v_label text := '';
@@ -334,7 +334,7 @@ BEGIN
   IF p_effective_day IS NULL THEN
     RAISE EXCEPTION 'DICT_EFFECTIVE_DAY_REQUIRED' USING ERRCODE = 'P0001';
   END IF;
-  IF v_request_code = '' THEN
+  IF v_request_id = '' THEN
     RAISE EXCEPTION 'DICT_REQUEST_CODE_REQUIRED' USING ERRCODE = 'P0001';
   END IF;
   IF jsonb_typeof(v_payload) <> 'object' THEN
@@ -354,7 +354,7 @@ BEGIN
   INTO v_existing
   FROM iam.dict_value_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = v_request_code
+    AND request_id = v_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -510,7 +510,7 @@ BEGIN
     payload,
     before_snapshot,
     after_snapshot,
-    request_code,
+    request_id,
     initiator_uuid,
     tx_time,
     created_at
@@ -524,7 +524,7 @@ BEGIN
     v_payload,
     v_before,
     v_after,
-    v_request_code,
+    v_request_id,
     p_initiator_uuid,
     v_now,
     v_now
@@ -629,12 +629,12 @@ CREATE TABLE IF NOT EXISTS iam.dict_events (
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   before_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
   after_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NULL,
   tx_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT dict_events_event_uuid_unique UNIQUE (event_uuid),
-  CONSTRAINT dict_events_request_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT dict_events_request_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT dict_events_dict_fk FOREIGN KEY (tenant_uuid, dict_code) REFERENCES iam.dicts (tenant_uuid, dict_code),
   CONSTRAINT dict_events_event_type_check CHECK (
     event_type IN (
@@ -703,7 +703,7 @@ CREATE OR REPLACE FUNCTION iam.submit_dict_event(
   p_event_type text,
   p_effective_day date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS TABLE(event_id bigint, was_retry boolean)
@@ -712,7 +712,7 @@ AS $$
 DECLARE
   v_dict_code text := lower(btrim(COALESCE(p_dict_code, '')));
   v_event_type text := upper(btrim(COALESCE(p_event_type, '')));
-  v_request_code text := btrim(COALESCE(p_request_code, ''));
+  v_request_id text := btrim(COALESCE(p_request_id, ''));
   v_payload jsonb := COALESCE(p_payload, '{}'::jsonb);
   v_now timestamptz := now();
   v_name text := '';
@@ -729,7 +729,7 @@ BEGIN
   IF p_effective_day IS NULL THEN
     RAISE EXCEPTION 'DICT_ENABLED_ON_REQUIRED' USING ERRCODE = 'P0001';
   END IF;
-  IF v_request_code = '' THEN
+  IF v_request_id = '' THEN
     RAISE EXCEPTION 'DICT_REQUEST_CODE_REQUIRED' USING ERRCODE = 'P0001';
   END IF;
   IF jsonb_typeof(v_payload) <> 'object' THEN
@@ -743,7 +743,7 @@ BEGIN
   INTO v_existing
   FROM iam.dict_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = v_request_code
+    AND request_id = v_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -854,7 +854,7 @@ BEGIN
     payload,
     before_snapshot,
     after_snapshot,
-    request_code,
+    request_id,
     initiator_uuid,
     tx_time,
     created_at
@@ -867,7 +867,7 @@ BEGIN
     v_payload,
     v_before,
     v_after,
-    v_request_code,
+    v_request_id,
     p_initiator_uuid,
     v_now,
     v_now
@@ -1025,7 +1025,7 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   initiator_name text NULL,
   initiator_employee_id text NULL,
@@ -1083,7 +1083,7 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
       rescind_outcome
     )
   ),
-  CONSTRAINT org_events_request_code_unique UNIQUE (tenant_uuid, request_code)
+  CONSTRAINT org_events_request_id_unique UNIQUE (tenant_uuid, request_id)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_events (event_uuid);
@@ -1378,7 +1378,7 @@ SELECT
       THEN orgunit.merge_org_event_payload_with_correction(e.payload, lc.correction_payload)
     ELSE e.payload
   END AS payload,
-  e.request_code,
+  e.request_id,
   e.initiator_uuid,
   e.transaction_time,
   e.created_at
@@ -3020,7 +3020,7 @@ CREATE OR REPLACE FUNCTION orgunit.org_events_effective_for_replay(
   p_pending_event_type text,
   p_pending_effective_date date,
   p_pending_payload jsonb,
-  p_pending_request_code text,
+  p_pending_request_id text,
   p_pending_initiator_uuid uuid,
   p_pending_tx_time timestamptz,
   p_pending_transaction_time timestamptz,
@@ -3034,7 +3034,7 @@ RETURNS TABLE (
   event_type text,
   effective_date date,
   payload jsonb,
-  request_code text,
+  request_id text,
   initiator_uuid uuid,
   transaction_time timestamptz,
   created_at timestamptz
@@ -3051,7 +3051,7 @@ AS $$
       e.event_type,
       e.effective_date,
       COALESCE(e.payload, '{}'::jsonb) AS payload,
-      e.request_code,
+      e.request_id,
       e.initiator_uuid,
       e.tx_time,
       e.transaction_time,
@@ -3070,7 +3070,7 @@ AS $$
       p_pending_event_type,
       p_pending_effective_date,
       COALESCE(p_pending_payload, '{}'::jsonb),
-      p_pending_request_code,
+      p_pending_request_id,
       p_pending_initiator_uuid,
       p_pending_tx_time,
       p_pending_transaction_time,
@@ -3146,7 +3146,7 @@ AS $$
         THEN orgunit.merge_org_event_payload_with_correction(se.payload, lc.correction_payload)
       ELSE se.payload
     END AS payload,
-    se.request_code,
+    se.request_id,
     se.initiator_uuid,
     se.transaction_time,
     se.created_at
@@ -3170,7 +3170,7 @@ CREATE OR REPLACE FUNCTION orgunit.rebuild_org_unit_versions_for_org_with_pendin
   p_pending_event_type text,
   p_pending_effective_date date,
   p_pending_payload jsonb,
-  p_pending_request_code text,
+  p_pending_request_id text,
   p_pending_initiator_uuid uuid,
   p_pending_tx_time timestamptz,
   p_pending_transaction_time timestamptz,
@@ -3205,7 +3205,7 @@ BEGIN
     IF p_pending_event_uuid IS NULL
       OR p_pending_event_type IS NULL
       OR p_pending_effective_date IS NULL
-      OR p_pending_request_code IS NULL
+      OR p_pending_request_id IS NULL
       OR p_pending_initiator_uuid IS NULL
       OR p_pending_tx_time IS NULL
       OR p_pending_transaction_time IS NULL
@@ -3231,7 +3231,7 @@ BEGIN
       p_pending_event_type,
       p_pending_effective_date,
       p_pending_payload,
-      p_pending_request_code,
+      p_pending_request_id,
       p_pending_initiator_uuid,
       p_pending_tx_time,
       p_pending_transaction_time,
@@ -3267,7 +3267,7 @@ BEGIN
       p_pending_event_type,
       p_pending_effective_date,
       p_pending_payload,
-      p_pending_request_code,
+      p_pending_request_id,
       p_pending_initiator_uuid,
       p_pending_tx_time,
       p_pending_transaction_time,
@@ -3565,7 +3565,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -3601,8 +3601,8 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -3637,7 +3637,7 @@ BEGIN
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -3650,7 +3650,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_code);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
 
     RETURN v_existing_request.id;
@@ -3668,7 +3668,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -3782,7 +3782,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid,
     before_snapshot,
     after_snapshot
@@ -3795,7 +3795,7 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid,
     v_before_snapshot,
     v_after_snapshot
@@ -3843,7 +3843,7 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'reason is required';
   END IF;
   IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -3855,7 +3855,7 @@ BEGIN
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_id
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -3865,7 +3865,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_id);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
 
     RETURN v_existing_request.event_uuid;
@@ -3938,7 +3938,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid,
     reason,
     before_snapshot,
@@ -4011,7 +4011,7 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'reason is required';
   END IF;
   IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -4023,13 +4023,13 @@ BEGIN
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_id
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-      DETAIL = format('request_code=%s', p_request_id);
+      DETAIL = format('request_id=%s', p_request_id);
   END IF;
 
   SELECT t.root_org_id INTO v_root_org_id
@@ -4089,12 +4089,12 @@ BEGIN
   SELECT COUNT(*) INTO v_existing_batch_count
   FROM orgunit.org_events e
   WHERE e.tenant_uuid = p_tenant_uuid
-    AND e.request_code LIKE p_request_id || '#%';
+    AND e.request_id LIKE p_request_id || '#%';
 
   IF v_existing_batch_count > 0 AND v_existing_batch_count <> v_event_count THEN
     RAISE EXCEPTION USING
       MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-      DETAIL = format('request_code=%s', p_request_id);
+      DETAIL = format('request_id=%s', p_request_id);
   END IF;
 
   v_need_apply := false;
@@ -4117,7 +4117,7 @@ BEGIN
     SELECT * INTO v_existing_request
     FROM orgunit.org_events e
     WHERE e.tenant_uuid = p_tenant_uuid
-      AND e.request_code = v_request_id_seq
+      AND e.request_id = v_request_id_seq
     LIMIT 1;
 
     IF FOUND THEN
@@ -4127,7 +4127,7 @@ BEGIN
       THEN
         RAISE EXCEPTION USING
           MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-          DETAIL = format('request_code=%s', p_request_id);
+          DETAIL = format('request_id=%s', p_request_id);
       END IF;
       CONTINUE;
     END IF;
@@ -4157,7 +4157,7 @@ BEGIN
     SELECT * INTO v_existing_request
     FROM orgunit.org_events e
     WHERE e.tenant_uuid = p_tenant_uuid
-      AND e.request_code = v_request_id_seq
+      AND e.request_id = v_request_id_seq
     LIMIT 1;
 
     IF FOUND THEN
@@ -4215,7 +4215,7 @@ BEGIN
       event_type,
       effective_date,
       payload,
-      request_code,
+      request_id,
       initiator_uuid,
       reason,
       before_snapshot,
@@ -4301,7 +4301,7 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'patch is required';
   END IF;
   IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -4542,7 +4542,7 @@ BEGIN
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_id
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -4552,7 +4552,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_id);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
 
     RETURN v_existing_request.event_uuid;
@@ -4589,7 +4589,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid,
     before_snapshot,
     after_snapshot,
@@ -4653,7 +4653,7 @@ BEGIN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'target_effective_date is required';
   END IF;
   IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -4731,7 +4731,7 @@ BEGIN
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_id
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -4741,7 +4741,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_id);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
 
     RETURN v_existing_request.event_uuid;
@@ -4778,7 +4778,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid,
     before_snapshot,
     after_snapshot,
@@ -4860,14 +4860,14 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_events (
   event_type text NOT NULL,
   setid text NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT setid_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','CREATE','RENAME','DISABLE')),
   CONSTRAINT setid_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT setid_events_share_forbidden CHECK (setid <> 'SHARE'),
-  CONSTRAINT setid_events_request_id_unique UNIQUE (tenant_uuid, request_code)
+  CONSTRAINT setid_events_request_id_unique UNIQUE (tenant_uuid, request_id)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS setid_events_event_id_unique ON orgunit.setid_events (event_uuid);
@@ -4895,14 +4895,14 @@ CREATE TABLE IF NOT EXISTS orgunit.global_setid_events (
   event_type text NOT NULL,
   setid text NOT NULL DEFAULT 'SHARE',
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT global_setid_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','CREATE','RENAME','DISABLE')),
   CONSTRAINT global_setid_events_setid_check CHECK (setid = 'SHARE'),
   CONSTRAINT global_setid_events_tenant_check CHECK (tenant_uuid = orgunit.global_tenant_id()),
-  CONSTRAINT global_setid_events_request_id_unique UNIQUE (tenant_uuid, request_code)
+  CONSTRAINT global_setid_events_request_id_unique UNIQUE (tenant_uuid, request_id)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS global_setid_events_event_id_unique ON orgunit.global_setid_events (event_uuid);
@@ -4930,13 +4930,13 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_binding_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT setid_binding_events_event_type_check CHECK (event_type IN ('BIND')),
   CONSTRAINT setid_binding_events_event_id_unique UNIQUE (event_uuid),
-  CONSTRAINT setid_binding_events_request_id_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT setid_binding_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT setid_binding_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
 
@@ -5116,13 +5116,13 @@ BEGIN
     SELECT 1 FROM orgunit.setids WHERE tenant_uuid = p_tenant_uuid AND setid = 'DEFLT'
   ) THEN
     v_evt_id := gen_random_uuid();
-    INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
+    INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_id, initiator_uuid)
     VALUES (v_evt_id, p_tenant_uuid, 'BOOTSTRAP', 'DEFLT', jsonb_build_object('name', 'Default'), 'bootstrap:deflt', p_initiator_uuid)
-    ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+    ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
     SELECT id INTO v_evt_db_id
     FROM orgunit.setid_events
-    WHERE tenant_uuid = p_tenant_uuid AND request_code = 'bootstrap:deflt'
+    WHERE tenant_uuid = p_tenant_uuid AND request_id = 'bootstrap:deflt'
     ORDER BY id DESC
     LIMIT 1;
 
@@ -5146,15 +5146,14 @@ BEGIN
     AND v.org_id = v_root_org_id
     AND v.status = 'active'
     AND v.is_business_unit = true
-    AND v.validity @> current_date
-  ORDER BY lower(v.validity) DESC
+  ORDER BY lower(v.validity) ASC
   LIMIT 1;
 
   IF v_root_valid_from IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'ORG_NOT_BUSINESS_UNIT_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', v_root_org_id, current_date);
+      DETAIL = format('org_id=%s', v_root_org_id);
   END IF;
 
   FOR v_scope_code, v_scope_share_mode IN
@@ -5360,7 +5359,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_setid_event(
   p_event_type text,
   p_setid text,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -5385,11 +5384,11 @@ BEGIN
   v_prev_actor := current_setting('app.current_actor_scope', true);
   v_prev_allow_share := current_setting('app.allow_share_read', true);
 
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_code is required';
+      DETAIL = 'request_id is required';
   END IF;
   IF p_event_type IS NULL OR btrim(p_event_type) = '' THEN
     RAISE EXCEPTION USING
@@ -5406,13 +5405,13 @@ BEGIN
       DETAIL = 'SHARE is reserved';
   END IF;
 
-  INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
-  VALUES (p_event_uuid, p_tenant_uuid, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_code, p_initiator_uuid)
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_id, initiator_uuid)
+  VALUES (p_event_uuid, p_tenant_uuid, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_id, p_initiator_uuid)
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 
@@ -5442,12 +5441,18 @@ BEGIN
         last_event_id = EXCLUDED.last_event_id,
         updated_at = now();
 
-    v_effective_date := current_date;
-    IF p_payload ? 'effective_date' THEN
-      v_effective_date := NULLIF(btrim(p_payload->>'effective_date'), '')::date;
+    IF NOT (p_payload ? 'effective_date') THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_INVALID_ARGUMENT',
+        DETAIL = 'effective_date is required';
     END IF;
+    v_effective_date := NULLIF(btrim(p_payload->>'effective_date'), '')::date;
     IF v_effective_date IS NULL THEN
-      v_effective_date := current_date;
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_INVALID_ARGUMENT',
+        DETAIL = 'effective_date is required';
     END IF;
 
     FOR v_scope_code, v_scope_share_mode IN
@@ -5562,7 +5567,7 @@ BEGIN
         WHERE s.tenant_uuid = p_tenant_uuid
           AND s.setid = v_setid
           AND s.scope_code = v_scope_code
-          AND s.validity @> current_date
+          AND s.validity @> v_effective_date
       ) THEN
         PERFORM orgunit.submit_scope_subscription_event(
           gen_random_uuid(),
@@ -5645,7 +5650,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_global_setid_event(
   p_event_type text,
   p_setid text,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -5666,11 +5671,11 @@ BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
   PERFORM orgunit.assert_actor_scope_saas();
 
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_code is required';
+      DETAIL = 'request_id is required';
   END IF;
   IF p_event_type IS NULL OR btrim(p_event_type) = '' THEN
     RAISE EXCEPTION USING
@@ -5687,13 +5692,13 @@ BEGIN
       DETAIL = 'only SHARE is allowed';
   END IF;
 
-  INSERT INTO orgunit.global_setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
-  VALUES (p_event_uuid, p_tenant_uuid, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_code, p_initiator_uuid)
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  INSERT INTO orgunit.global_setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_id, initiator_uuid)
+  VALUES (p_event_uuid, p_tenant_uuid, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_id, p_initiator_uuid)
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.global_setid_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 
@@ -5754,7 +5759,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_setid_binding_event(
   p_org_id int,
   p_effective_date date,
   p_setid text,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -5773,11 +5778,11 @@ BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
   PERFORM orgunit.lock_setid_governance(p_tenant_uuid);
 
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_code is required';
+      DETAIL = 'request_id is required';
   END IF;
   IF p_event_uuid IS NULL THEN
     RAISE EXCEPTION USING
@@ -5878,7 +5883,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -5888,14 +5893,14 @@ BEGIN
     'BIND',
     p_effective_date,
     jsonb_build_object('setid', v_setid),
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_binding_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 
@@ -6221,12 +6226,12 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_scope_package_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT setid_scope_package_events_event_id_unique UNIQUE (event_uuid),
-  CONSTRAINT setid_scope_package_events_request_id_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT setid_scope_package_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT setid_scope_package_events_event_type_check CHECK (event_type IN ('BOOTSTRAP', 'CREATE', 'RENAME', 'DISABLE')),
   CONSTRAINT setid_scope_package_events_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
   CONSTRAINT setid_scope_package_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
@@ -6244,12 +6249,12 @@ CREATE TABLE IF NOT EXISTS orgunit.global_setid_scope_package_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT global_scope_package_events_event_id_unique UNIQUE (event_uuid),
-  CONSTRAINT global_scope_package_events_request_id_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT global_scope_package_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT global_scope_package_events_event_type_check CHECK (event_type IN ('BOOTSTRAP', 'CREATE', 'RENAME', 'DISABLE')),
   CONSTRAINT global_scope_package_events_tenant_check CHECK (tenant_uuid = orgunit.global_tenant_id()),
   CONSTRAINT global_scope_package_events_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
@@ -6327,12 +6332,12 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_scope_subscription_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT setid_scope_subscription_events_event_id_unique UNIQUE (event_uuid),
-  CONSTRAINT setid_scope_subscription_events_request_id_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT setid_scope_subscription_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT setid_scope_subscription_events_event_type_check CHECK (event_type IN ('BOOTSTRAP', 'SUBSCRIBE')),
   CONSTRAINT setid_scope_subscription_events_scope_code_check CHECK (orgunit.scope_code_is_valid(scope_code)),
   CONSTRAINT setid_scope_subscription_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
@@ -6814,7 +6819,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_scope_package_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -6843,7 +6848,7 @@ BEGIN
       MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
       DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'REQUEST_CODE_REQUIRED';
@@ -6900,7 +6905,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -6911,14 +6916,14 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_scope_package_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 
@@ -7184,7 +7189,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_global_scope_package_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -7218,7 +7223,7 @@ BEGIN
       MESSAGE = 'SCOPE_PACKAGE_INVALID_ARGUMENT',
       DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'REQUEST_CODE_REQUIRED';
@@ -7275,7 +7280,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -7286,14 +7291,14 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.global_setid_scope_package_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 
@@ -7521,7 +7526,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_scope_subscription_event(
   p_package_owner_tenant_uuid uuid,
   p_event_type text,
   p_effective_date date,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -7545,7 +7550,7 @@ BEGIN
       MESSAGE = 'SCOPE_SUBSCRIPTION_INVALID_ARGUMENT',
       DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'REQUEST_CODE_REQUIRED';
@@ -7639,7 +7644,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -7652,14 +7657,14 @@ BEGIN
     p_event_type,
     p_effective_date,
     '{}'::jsonb,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_scope_subscription_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 
@@ -8182,7 +8187,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_org_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -8216,8 +8221,8 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -8259,7 +8264,7 @@ BEGIN
         OR v_existing.event_type <> p_event_type
         OR v_existing.effective_date <> p_effective_date
         OR v_existing.payload <> v_payload
-        OR v_existing.request_code <> p_request_code
+        OR v_existing.request_id <> p_request_id
         OR v_existing.initiator_uuid <> p_initiator_uuid
       THEN
         RAISE EXCEPTION USING
@@ -8281,11 +8286,11 @@ BEGIN
   SELECT * INTO v_existing_request
   FROM orgunit.org_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
-    -- Idempotency key is request_code: allow server-generated event_uuid to differ across retries.
+    -- Idempotency key is request_id: allow server-generated event_uuid to differ across retries.
     IF v_existing_request.org_id <> v_org_id
       OR v_existing_request.event_type <> p_event_type
       OR v_existing_request.effective_date <> p_effective_date
@@ -8294,7 +8299,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_code);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
 
     RETURN v_existing_request.id;
@@ -8312,7 +8317,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -8449,7 +8454,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid,
     before_snapshot,
     after_snapshot
@@ -8462,7 +8467,7 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid,
     v_before_snapshot,
     v_after_snapshot
@@ -8565,13 +8570,13 @@ CREATE TABLE IF NOT EXISTS orgunit.tenant_field_config_events (
   event_type text NOT NULL,
   field_key text NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT tenant_field_config_events_event_type_check CHECK (event_type IN ('ENABLE','DISABLE','REKEY')),
   CONSTRAINT tenant_field_config_events_field_key_format_check CHECK (field_key ~ '^[a-z][a-z0-9_]{0,62}$'),
-  CONSTRAINT tenant_field_config_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT tenant_field_config_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT tenant_field_config_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT tenant_field_config_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
@@ -9063,7 +9068,7 @@ CREATE OR REPLACE FUNCTION orgunit.enable_tenant_field_config(
   p_data_source_type text,
   p_data_source_config jsonb,
   p_display_label text,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS void
@@ -9099,8 +9104,8 @@ BEGIN
   IF p_display_label IS NOT NULL AND btrim(p_display_label) = '' THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'display_label invalid';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -9120,7 +9125,7 @@ BEGIN
   SELECT * INTO v_existing
   FROM orgunit.tenant_field_config_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -9136,7 +9141,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_code);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
 
     RETURN;
@@ -9284,7 +9289,7 @@ BEGIN
     event_type,
     field_key,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -9293,7 +9298,7 @@ BEGIN
     'ENABLE',
     p_field_key,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   );
 
@@ -9356,7 +9361,7 @@ CREATE OR REPLACE FUNCTION orgunit.rekey_tenant_field_config(
   p_tenant_uuid uuid,
   p_old_field_key text,
   p_new_field_key text,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS void
@@ -9382,8 +9387,8 @@ BEGIN
   IF p_new_field_key IS NULL OR p_new_field_key = '' THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'new_field_key is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -9401,7 +9406,7 @@ BEGIN
   SELECT * INTO v_existing
   FROM orgunit.tenant_field_config_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -9412,7 +9417,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_code);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
     RETURN;
   END IF;
@@ -9553,7 +9558,7 @@ BEGIN
     event_type,
     field_key,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -9562,7 +9567,7 @@ BEGIN
     'REKEY',
     p_new_field_key,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   );
 END;
@@ -9572,7 +9577,7 @@ CREATE OR REPLACE FUNCTION orgunit.disable_tenant_field_config(
   p_tenant_uuid uuid,
   p_field_key text,
   p_disabled_on date,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS void
@@ -9595,8 +9600,8 @@ BEGIN
   IF p_disabled_on IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'disabled_on is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -9608,7 +9613,7 @@ BEGIN
   SELECT * INTO v_existing
   FROM orgunit.tenant_field_config_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
@@ -9619,7 +9624,7 @@ BEGIN
     THEN
       RAISE EXCEPTION USING
         MESSAGE = 'ORG_REQUEST_ID_CONFLICT',
-        DETAIL = format('request_code=%s', p_request_code);
+        DETAIL = format('request_id=%s', p_request_id);
     END IF;
 
     RETURN;
@@ -9670,7 +9675,7 @@ BEGIN
     event_type,
     field_key,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -9679,7 +9684,7 @@ BEGIN
     'DISABLE',
     p_field_key,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   );
 
@@ -9852,7 +9857,7 @@ CREATE TABLE IF NOT EXISTS orgunit.tenant_field_policy_events (
   scope_type text NOT NULL,
   scope_key text NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -9860,7 +9865,7 @@ CREATE TABLE IF NOT EXISTS orgunit.tenant_field_policy_events (
   CONSTRAINT tenant_field_policy_events_field_key_format_check CHECK (field_key ~ '^[a-z][a-z0-9_]{0,62}$'),
   CONSTRAINT tenant_field_policy_events_scope_type_check CHECK (scope_type IN ('GLOBAL','FORM')),
   CONSTRAINT tenant_field_policy_events_scope_key_non_empty_check CHECK (btrim(scope_key) <> ''),
-  CONSTRAINT tenant_field_policy_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT tenant_field_policy_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT tenant_field_policy_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT tenant_field_policy_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
@@ -9966,7 +9971,7 @@ CREATE OR REPLACE FUNCTION orgunit.upsert_tenant_field_policy(
   p_default_mode text,
   p_default_rule_expr text,
   p_enabled_on date,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -10011,12 +10016,12 @@ BEGIN
   INTO v_event_type, v_policy_id
   FROM orgunit.tenant_field_policy_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
     IF v_event_type <> 'UPSERT' THEN
-      RAISE EXCEPTION USING MESSAGE = 'ORG_REQUEST_ID_CONFLICT', DETAIL = format('request_code=%s', p_request_code);
+      RAISE EXCEPTION USING MESSAGE = 'ORG_REQUEST_ID_CONFLICT', DETAIL = format('request_id=%s', p_request_id);
     END IF;
     RETURN v_policy_id;
   END IF;
@@ -10093,7 +10098,7 @@ BEGIN
     scope_type,
     scope_key,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   ) VALUES (
     gen_random_uuid(),
@@ -10103,7 +10108,7 @@ BEGIN
     v_scope_type,
     v_scope_key,
     jsonb_build_object('policy_id', v_policy_id),
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   );
 
@@ -10117,7 +10122,7 @@ CREATE OR REPLACE FUNCTION orgunit.disable_tenant_field_policy(
   p_scope_type text,
   p_scope_key text,
   p_disabled_on date,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -10150,12 +10155,12 @@ BEGIN
   INTO v_event_type, v_policy_id
   FROM orgunit.tenant_field_policy_events
   WHERE tenant_uuid = p_tenant_uuid
-    AND request_code = p_request_code
+    AND request_id = p_request_id
   LIMIT 1;
 
   IF FOUND THEN
     IF v_event_type <> 'DISABLE' THEN
-      RAISE EXCEPTION USING MESSAGE = 'ORG_REQUEST_ID_CONFLICT', DETAIL = format('request_code=%s', p_request_code);
+      RAISE EXCEPTION USING MESSAGE = 'ORG_REQUEST_ID_CONFLICT', DETAIL = format('request_id=%s', p_request_id);
     END IF;
     RETURN v_policy_id;
   END IF;
@@ -10192,7 +10197,7 @@ BEGIN
     scope_type,
     scope_key,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   ) VALUES (
     gen_random_uuid(),
@@ -10202,7 +10207,7 @@ BEGIN
     v_scope_type,
     v_scope_key,
     jsonb_build_object('policy_id', v_policy_id, 'disabled_on', p_disabled_on),
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   );
 
@@ -10336,7 +10341,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -10344,7 +10349,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_group_events (
   CONSTRAINT job_family_group_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
   CONSTRAINT job_family_group_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT job_family_group_events_one_per_day_unique UNIQUE (tenant_uuid, setid, job_family_group_uuid, effective_date),
-  CONSTRAINT job_family_group_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT job_family_group_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT job_family_group_events_group_fk
     FOREIGN KEY (tenant_uuid, setid, job_family_group_uuid) REFERENCES jobcatalog.job_family_groups(tenant_uuid, setid, job_family_group_uuid) ON DELETE RESTRICT
 );
@@ -10669,7 +10674,7 @@ CREATE OR REPLACE FUNCTION jobcatalog.submit_job_family_group_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -10692,11 +10697,11 @@ BEGIN
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
       DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'request_code is required';
+      DETAIL = 'request_id is required';
   END IF;
   IF p_job_family_group_uuid IS NULL THEN
     RAISE EXCEPTION USING
@@ -10857,10 +10862,10 @@ BEGIN
   END IF;
 
   INSERT INTO jobcatalog.job_family_group_events (
-    event_uuid, tenant_uuid, package_uuid, job_family_group_uuid, event_type, effective_date, payload, request_code, initiator_uuid
+    event_uuid, tenant_uuid, package_uuid, job_family_group_uuid, event_type, effective_date, payload, request_id, initiator_uuid
   )
   VALUES (
-    p_event_uuid, p_tenant_uuid, v_package_uuid, p_job_family_group_uuid, p_event_type, p_effective_date, v_payload, p_request_code, p_initiator_uuid
+    p_event_uuid, p_tenant_uuid, v_package_uuid, p_job_family_group_uuid, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_evt_db_id;
@@ -10876,7 +10881,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -10918,7 +10923,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -10926,7 +10931,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_family_events (
   CONSTRAINT job_family_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
   CONSTRAINT job_family_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT job_family_events_one_per_day_unique UNIQUE (tenant_uuid, setid, job_family_uuid, effective_date),
-  CONSTRAINT job_family_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT job_family_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT job_family_events_family_fk
     FOREIGN KEY (tenant_uuid, setid, job_family_uuid) REFERENCES jobcatalog.job_families(tenant_uuid, setid, job_family_uuid) ON DELETE RESTRICT
 );
@@ -11194,7 +11199,7 @@ CREATE OR REPLACE FUNCTION jobcatalog.submit_job_family_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -11218,11 +11223,11 @@ BEGIN
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
       DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'request_code is required';
+      DETAIL = 'request_id is required';
   END IF;
   IF p_job_family_uuid IS NULL THEN
     RAISE EXCEPTION USING
@@ -11447,10 +11452,10 @@ BEGIN
   END IF;
 
   INSERT INTO jobcatalog.job_family_events (
-    event_uuid, tenant_uuid, package_uuid, job_family_uuid, event_type, effective_date, payload, request_code, initiator_uuid
+    event_uuid, tenant_uuid, package_uuid, job_family_uuid, event_type, effective_date, payload, request_id, initiator_uuid
   )
   VALUES (
-    p_event_uuid, p_tenant_uuid, v_package_uuid, p_job_family_uuid, p_event_type, p_effective_date, v_payload, p_request_code, p_initiator_uuid
+    p_event_uuid, p_tenant_uuid, v_package_uuid, p_job_family_uuid, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_evt_db_id;
@@ -11466,7 +11471,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -11508,7 +11513,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_level_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -11516,7 +11521,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_level_events (
   CONSTRAINT job_level_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
   CONSTRAINT job_level_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT job_level_events_one_per_day_unique UNIQUE (tenant_uuid, setid, job_level_uuid, effective_date),
-  CONSTRAINT job_level_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT job_level_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT job_level_events_level_fk
     FOREIGN KEY (tenant_uuid, setid, job_level_uuid) REFERENCES jobcatalog.job_levels(tenant_uuid, setid, job_level_uuid) ON DELETE RESTRICT
 );
@@ -11772,7 +11777,7 @@ CREATE OR REPLACE FUNCTION jobcatalog.submit_job_level_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -11795,11 +11800,11 @@ BEGIN
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
       DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'request_code is required';
+      DETAIL = 'request_id is required';
   END IF;
   IF p_job_level_uuid IS NULL THEN
     RAISE EXCEPTION USING
@@ -11960,10 +11965,10 @@ BEGIN
   END IF;
 
   INSERT INTO jobcatalog.job_level_events (
-    event_uuid, tenant_uuid, package_uuid, job_level_uuid, event_type, effective_date, payload, request_code, initiator_uuid
+    event_uuid, tenant_uuid, package_uuid, job_level_uuid, event_type, effective_date, payload, request_id, initiator_uuid
   )
   VALUES (
-    p_event_uuid, p_tenant_uuid, v_package_uuid, p_job_level_uuid, p_event_type, p_effective_date, v_payload, p_request_code, p_initiator_uuid
+    p_event_uuid, p_tenant_uuid, v_package_uuid, p_job_level_uuid, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_evt_db_id;
@@ -11979,7 +11984,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -12021,7 +12026,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_profile_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -12029,7 +12034,7 @@ CREATE TABLE IF NOT EXISTS jobcatalog.job_profile_events (
   CONSTRAINT job_profile_events_event_type_check CHECK (event_type IN ('CREATE','UPDATE','DISABLE')),
   CONSTRAINT job_profile_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT job_profile_events_one_per_day_unique UNIQUE (tenant_uuid, setid, job_profile_uuid, effective_date),
-  CONSTRAINT job_profile_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT job_profile_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT job_profile_events_profile_fk
     FOREIGN KEY (tenant_uuid, setid, job_profile_uuid) REFERENCES jobcatalog.job_profiles(tenant_uuid, setid, job_profile_uuid) ON DELETE RESTRICT
 );
@@ -12402,7 +12407,7 @@ CREATE OR REPLACE FUNCTION jobcatalog.submit_job_profile_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -12428,11 +12433,11 @@ BEGIN
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
       DETAIL = 'event_uuid is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'JOBCATALOG_INVALID_ARGUMENT',
-      DETAIL = 'request_code is required';
+      DETAIL = 'request_id is required';
   END IF;
   IF p_job_profile_uuid IS NULL THEN
     RAISE EXCEPTION USING
@@ -12710,10 +12715,10 @@ BEGIN
   END IF;
 
   INSERT INTO jobcatalog.job_profile_events (
-    event_uuid, tenant_uuid, package_uuid, job_profile_uuid, event_type, effective_date, payload, request_code, initiator_uuid
+    event_uuid, tenant_uuid, package_uuid, job_profile_uuid, event_type, effective_date, payload, request_id, initiator_uuid
   )
   VALUES (
-    p_event_uuid, p_tenant_uuid, v_package_uuid, p_job_profile_uuid, p_event_type, p_effective_date, v_payload, p_request_code, p_initiator_uuid
+    p_event_uuid, p_tenant_uuid, v_package_uuid, p_job_profile_uuid, p_event_type, p_effective_date, v_payload, p_request_id, p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
   RETURNING id INTO v_evt_db_id;
@@ -12729,7 +12734,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -13279,7 +13284,7 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -13298,7 +13303,7 @@ CREATE TABLE IF NOT EXISTS staffing.position_events (
   ),
   CONSTRAINT position_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT position_events_one_per_day_unique UNIQUE (tenant_uuid, position_uuid, effective_date),
-  CONSTRAINT position_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT position_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT position_events_position_fk FOREIGN KEY (tenant_uuid, position_uuid) REFERENCES staffing.positions(tenant_uuid, position_uuid) ON DELETE RESTRICT
 );
 
@@ -13373,7 +13378,7 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -13391,7 +13396,7 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_events (
   ),
   CONSTRAINT assignment_events_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT assignment_events_one_per_day_unique UNIQUE (tenant_uuid, assignment_uuid, effective_date),
-  CONSTRAINT assignment_events_request_code_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT assignment_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT assignment_events_assignment_fk FOREIGN KEY (tenant_uuid, assignment_uuid) REFERENCES staffing.assignments(tenant_uuid, assignment_uuid) ON DELETE RESTRICT
 );
 
@@ -13405,14 +13410,14 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_event_corrections (
   assignment_uuid uuid NOT NULL,
   target_effective_date date NOT NULL,
   replacement_payload jsonb NOT NULL,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT assignment_event_corrections_replacement_payload_obj_check CHECK (jsonb_typeof(replacement_payload) = 'object'),
   CONSTRAINT assignment_event_corrections_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT assignment_event_corrections_target_unique UNIQUE (tenant_uuid, assignment_uuid, target_effective_date),
-  CONSTRAINT assignment_event_corrections_request_code_unique UNIQUE (tenant_uuid, request_code)
+  CONSTRAINT assignment_event_corrections_request_id_unique UNIQUE (tenant_uuid, request_id)
 );
 
 CREATE TABLE IF NOT EXISTS staffing.assignment_event_rescinds (
@@ -13422,14 +13427,14 @@ CREATE TABLE IF NOT EXISTS staffing.assignment_event_rescinds (
   assignment_uuid uuid NOT NULL,
   target_effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT assignment_event_rescinds_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object'),
   CONSTRAINT assignment_event_rescinds_event_uuid_unique UNIQUE (event_uuid),
   CONSTRAINT assignment_event_rescinds_target_unique UNIQUE (tenant_uuid, assignment_uuid, target_effective_date),
-  CONSTRAINT assignment_event_rescinds_request_code_unique UNIQUE (tenant_uuid, request_code)
+  CONSTRAINT assignment_event_rescinds_request_id_unique UNIQUE (tenant_uuid, request_id)
 );
 
 CREATE TABLE IF NOT EXISTS staffing.assignment_versions (
@@ -13585,7 +13590,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -13610,8 +13615,8 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -13643,7 +13648,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -13653,7 +13658,7 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
@@ -13669,7 +13674,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -14522,7 +14527,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_assignment_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -14555,8 +14560,8 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -14600,7 +14605,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -14612,7 +14617,7 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
@@ -14630,7 +14635,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -14653,7 +14658,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_assignment_event_correction(
   p_assignment_uuid uuid,
   p_target_effective_date date,
   p_replacement_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -14682,8 +14687,8 @@ BEGIN
   IF p_replacement_payload IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'replacement_payload is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -14729,7 +14734,7 @@ BEGIN
     assignment_uuid,
     target_effective_date,
     replacement_payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -14738,7 +14743,7 @@ BEGIN
     p_assignment_uuid,
     p_target_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT DO NOTHING
@@ -14754,7 +14759,7 @@ BEGIN
         OR v_existing_by_event.assignment_uuid <> p_assignment_uuid
         OR v_existing_by_event.target_effective_date <> p_target_effective_date
         OR v_existing_by_event.replacement_payload <> v_payload
-        OR v_existing_by_event.request_code <> p_request_code
+        OR v_existing_by_event.request_id <> p_request_id
         OR v_existing_by_event.initiator_uuid <> p_initiator_uuid
       THEN
         RAISE EXCEPTION USING
@@ -14766,7 +14771,7 @@ BEGIN
       SELECT * INTO v_existing_by_request
       FROM staffing.assignment_event_corrections
       WHERE tenant_uuid = p_tenant_uuid
-        AND request_code = p_request_code
+        AND request_id = p_request_id
       LIMIT 1;
 
       IF FOUND THEN
@@ -14774,12 +14779,12 @@ BEGIN
           OR v_existing_by_request.assignment_uuid <> p_assignment_uuid
           OR v_existing_by_request.target_effective_date <> p_target_effective_date
           OR v_existing_by_request.replacement_payload <> v_payload
-          OR v_existing_by_request.request_code <> p_request_code
+          OR v_existing_by_request.request_id <> p_request_id
           OR v_existing_by_request.initiator_uuid <> p_initiator_uuid
         THEN
           RAISE EXCEPTION USING
             MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-            DETAIL = format('request_code=%s existing_id=%s', p_request_code, v_existing_by_request.id);
+            DETAIL = format('request_id=%s existing_id=%s', p_request_id, v_existing_by_request.id);
         END IF;
         v_correction_db_id := v_existing_by_request.id;
       ELSE
@@ -14817,7 +14822,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_assignment_event_rescind(
   p_assignment_uuid uuid,
   p_target_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -14843,8 +14848,8 @@ BEGIN
   IF p_target_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'target_effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -14883,7 +14888,7 @@ BEGIN
     assignment_uuid,
     target_effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -14892,7 +14897,7 @@ BEGIN
     p_assignment_uuid,
     p_target_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT DO NOTHING
@@ -14908,7 +14913,7 @@ BEGIN
         OR v_existing_by_event.assignment_uuid <> p_assignment_uuid
         OR v_existing_by_event.target_effective_date <> p_target_effective_date
         OR v_existing_by_event.payload <> v_payload
-        OR v_existing_by_event.request_code <> p_request_code
+        OR v_existing_by_event.request_id <> p_request_id
         OR v_existing_by_event.initiator_uuid <> p_initiator_uuid
       THEN
         RAISE EXCEPTION USING
@@ -14920,7 +14925,7 @@ BEGIN
       SELECT * INTO v_existing_by_request
       FROM staffing.assignment_event_rescinds
       WHERE tenant_uuid = p_tenant_uuid
-        AND request_code = p_request_code
+        AND request_id = p_request_id
       LIMIT 1;
 
       IF FOUND THEN
@@ -14928,12 +14933,12 @@ BEGIN
           OR v_existing_by_request.assignment_uuid <> p_assignment_uuid
           OR v_existing_by_request.target_effective_date <> p_target_effective_date
           OR v_existing_by_request.payload <> v_payload
-          OR v_existing_by_request.request_code <> p_request_code
+          OR v_existing_by_request.request_id <> p_request_id
           OR v_existing_by_request.initiator_uuid <> p_initiator_uuid
         THEN
           RAISE EXCEPTION USING
             MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-            DETAIL = format('request_code=%s existing_id=%s', p_request_code, v_existing_by_request.id);
+            DETAIL = format('request_id=%s existing_id=%s', p_request_id, v_existing_by_request.id);
         END IF;
         v_rescind_db_id := v_existing_by_request.id;
       ELSE

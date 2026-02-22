@@ -91,13 +91,13 @@ BEGIN
     SELECT 1 FROM orgunit.setids WHERE tenant_uuid = p_tenant_uuid AND setid = 'DEFLT'
   ) THEN
     v_evt_id := gen_random_uuid();
-    INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
+    INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_id, initiator_uuid)
     VALUES (v_evt_id, p_tenant_uuid, 'BOOTSTRAP', 'DEFLT', jsonb_build_object('name', 'Default'), 'bootstrap:deflt', p_initiator_uuid)
-    ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+    ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
     SELECT id INTO v_evt_db_id
     FROM orgunit.setid_events
-    WHERE tenant_uuid = p_tenant_uuid AND request_code = 'bootstrap:deflt'
+    WHERE tenant_uuid = p_tenant_uuid AND request_id = 'bootstrap:deflt'
     ORDER BY id DESC
     LIMIT 1;
 
@@ -121,15 +121,14 @@ BEGIN
     AND v.org_id = v_root_org_id
     AND v.status = 'active'
     AND v.is_business_unit = true
-    AND v.validity @> current_date
-  ORDER BY lower(v.validity) DESC
+  ORDER BY lower(v.validity) ASC
   LIMIT 1;
 
   IF v_root_valid_from IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'ORG_NOT_BUSINESS_UNIT_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', v_root_org_id, current_date);
+      DETAIL = format('org_id=%s', v_root_org_id);
   END IF;
 
   FOR v_scope_code, v_scope_share_mode IN
@@ -335,7 +334,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_setid_event(
   p_event_type text,
   p_setid text,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -360,11 +359,11 @@ BEGIN
   v_prev_actor := current_setting('app.current_actor_scope', true);
   v_prev_allow_share := current_setting('app.allow_share_read', true);
 
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_code is required';
+      DETAIL = 'request_id is required';
   END IF;
   IF p_event_type IS NULL OR btrim(p_event_type) = '' THEN
     RAISE EXCEPTION USING
@@ -381,13 +380,13 @@ BEGIN
       DETAIL = 'SHARE is reserved';
   END IF;
 
-  INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
-  VALUES (p_event_uuid, p_tenant_uuid, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_code, p_initiator_uuid)
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  INSERT INTO orgunit.setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_id, initiator_uuid)
+  VALUES (p_event_uuid, p_tenant_uuid, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_id, p_initiator_uuid)
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 
@@ -417,12 +416,18 @@ BEGIN
         last_event_id = EXCLUDED.last_event_id,
         updated_at = now();
 
-    v_effective_date := current_date;
-    IF p_payload ? 'effective_date' THEN
-      v_effective_date := NULLIF(btrim(p_payload->>'effective_date'), '')::date;
+    IF NOT (p_payload ? 'effective_date') THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_INVALID_ARGUMENT',
+        DETAIL = 'effective_date is required';
     END IF;
+    v_effective_date := NULLIF(btrim(p_payload->>'effective_date'), '')::date;
     IF v_effective_date IS NULL THEN
-      v_effective_date := current_date;
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_INVALID_ARGUMENT',
+        DETAIL = 'effective_date is required';
     END IF;
 
     FOR v_scope_code, v_scope_share_mode IN
@@ -537,7 +542,7 @@ BEGIN
         WHERE s.tenant_uuid = p_tenant_uuid
           AND s.setid = v_setid
           AND s.scope_code = v_scope_code
-          AND s.validity @> current_date
+          AND s.validity @> v_effective_date
       ) THEN
         PERFORM orgunit.submit_scope_subscription_event(
           gen_random_uuid(),
@@ -620,7 +625,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_global_setid_event(
   p_event_type text,
   p_setid text,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -641,11 +646,11 @@ BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
   PERFORM orgunit.assert_actor_scope_saas();
 
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_code is required';
+      DETAIL = 'request_id is required';
   END IF;
   IF p_event_type IS NULL OR btrim(p_event_type) = '' THEN
     RAISE EXCEPTION USING
@@ -662,13 +667,13 @@ BEGIN
       DETAIL = 'only SHARE is allowed';
   END IF;
 
-  INSERT INTO orgunit.global_setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_code, initiator_uuid)
-  VALUES (p_event_uuid, p_tenant_uuid, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_code, p_initiator_uuid)
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  INSERT INTO orgunit.global_setid_events (event_uuid, tenant_uuid, event_type, setid, payload, request_id, initiator_uuid)
+  VALUES (p_event_uuid, p_tenant_uuid, p_event_type, v_setid, COALESCE(p_payload, '{}'::jsonb), p_request_id, p_initiator_uuid)
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.global_setid_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 
@@ -729,7 +734,7 @@ CREATE OR REPLACE FUNCTION orgunit.submit_setid_binding_event(
   p_org_id int,
   p_effective_date date,
   p_setid text,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -748,11 +753,11 @@ BEGIN
   PERFORM orgunit.assert_current_tenant(p_tenant_uuid);
   PERFORM orgunit.lock_setid_governance(p_tenant_uuid);
 
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'SETID_INVALID_ARGUMENT',
-      DETAIL = 'request_code is required';
+      DETAIL = 'request_id is required';
   END IF;
   IF p_event_uuid IS NULL THEN
     RAISE EXCEPTION USING
@@ -853,7 +858,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -863,14 +868,14 @@ BEGIN
     'BIND',
     p_effective_date,
     jsonb_build_object('setid', v_setid),
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
-  ON CONFLICT (tenant_uuid, request_code) DO NOTHING;
+  ON CONFLICT (tenant_uuid, request_id) DO NOTHING;
 
   SELECT id INTO v_evt_db_id
   FROM orgunit.setid_binding_events
-  WHERE tenant_uuid = p_tenant_uuid AND request_code = p_request_code
+  WHERE tenant_uuid = p_tenant_uuid AND request_id = p_request_id
   ORDER BY id DESC
   LIMIT 1;
 

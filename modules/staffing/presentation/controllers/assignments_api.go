@@ -52,11 +52,8 @@ func (c AssignmentsController) HandleAssignmentsAPI(w http.ResponseWriter, r *ht
 
 	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
 	if asOf == "" {
-		now := time.Now
-		if c.NowUTC != nil {
-			now = c.NowUTC
-		}
-		asOf = now().UTC().Format("2006-01-02")
+		writeError(w, r, http.StatusBadRequest, "invalid_as_of", "as_of required")
+		return
 	}
 	if _, err := time.Parse("2006-01-02", asOf); err != nil {
 		writeError(w, r, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
@@ -116,8 +113,10 @@ func (c AssignmentsController) HandleAssignmentsAPI(w http.ResponseWriter, r *ht
 			writeError(w, r, http.StatusBadRequest, "bad_json", "bad json")
 			return
 		}
+		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
 		if req.EffectiveDate == "" {
-			req.EffectiveDate = asOf
+			writeError(w, r, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
+			return
 		}
 		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
 			writeError(w, r, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
@@ -311,10 +310,10 @@ func (c AssignmentsController) HandleAssignmentEventsRescindAPI(w http.ResponseW
 }
 
 type errorEnvelope struct {
-	Code      string            `json:"code"`
-	Message   string            `json:"message"`
-	RequestID string            `json:"request_code"`
-	Meta      errorEnvelopeMeta `json:"meta"`
+	Code    string            `json:"code"`
+	Message string            `json:"message"`
+	TraceID string            `json:"trace_id"`
+	Meta    errorEnvelopeMeta `json:"meta"`
 }
 
 type errorEnvelopeMeta struct {
@@ -326,9 +325,9 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, code string,
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(errorEnvelope{
-		Code:      code,
-		Message:   message,
-		RequestID: "",
+		Code:    code,
+		Message: message,
+		TraceID: traceIDFromRequest(r),
 		Meta: errorEnvelopeMeta{
 			Path:   r.URL.Path,
 			Method: r.Method,
@@ -360,6 +359,27 @@ func isPgInvalidInput(err error) bool {
 	default:
 		return false
 	}
+}
+
+func traceIDFromRequest(r *http.Request) string {
+	traceparent := strings.TrimSpace(r.Header.Get("traceparent"))
+	if traceparent == "" {
+		return ""
+	}
+	parts := strings.Split(traceparent, "-")
+	if len(parts) != 4 {
+		return ""
+	}
+	traceID := strings.ToLower(parts[1])
+	if len(traceID) != 32 || traceID == "00000000000000000000000000000000" {
+		return ""
+	}
+	for _, ch := range traceID {
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
+			return ""
+		}
+	}
+	return traceID
 }
 
 func stablePgMessage(err error) string {
