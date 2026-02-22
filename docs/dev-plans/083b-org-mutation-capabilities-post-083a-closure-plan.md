@@ -130,8 +130,8 @@
 
 ## 9. 关联文档
 
-- `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
-- `docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
+- `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- `docs/archive/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
 - `docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
 - `docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
 - `docs/dev-records/dev-plan-083b-execution-log.md`

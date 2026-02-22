@@ -77,6 +77,13 @@
 - capabilities 策略单点：`DEV-PLAN-083/083A/100E1`
 - ext 写入快照：`DEV-PLAN-100D/100E1`
 
+### 3.1 模块标准（承接 DEV-PLAN-075E，2026-02-22 冻结）
+
+1. **同日单槽位不变量**：同一 `tenant + org + effective_date` 只能存在一个有效事件；同日状态纠错不得通过“新增同日事件”绕过。
+2. **错误语义外显**：对外仅返回稳定业务错误码（如 `EVENT_DATE_CONFLICT`、`ORG_EVENT_NOT_FOUND`、`ORG_EVENT_RESCINDED`），禁止透出 SQLSTATE/约束名。
+3. **撤销优先级 fail-closed**：目标事件已处于 rescind 态时，纠错请求必须拒绝，不允许再对该事件做状态纠错覆盖。
+4. **现行入口收敛**：同日状态纠错以 108 的 `CORRECT_EVENT` 主路径为准；`status-corrections` 仅保留历史兼容说明，不作为推荐主链路。
+
 ---
 
 ## 4. UI 实施设计（实现级）
@@ -464,25 +471,25 @@
 
 ### 14.1 登记清单（按冲突强度排序）
 
-- [x] `docs/dev-plans/082-org-module-field-mutation-rules-investigation.md`
+- [x] `docs/archive/dev-plans/082-org-module-field-mutation-rules-investigation.md`
   - 冲突：按 target_event_type 白名单限制更正字段（含 status 只能 CORRECT_STATUS），与 108“更正支持 status+其它字段同次提交”冲突。
   - 修订：新增“108 对齐补充”章节，更新字段矩阵为 intent/字段编辑视角，并标注旧矩阵为历史实现口径。
-- [x] `docs/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
+- [x] `docs/archive/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
   - 冲突：add/insert 强依赖 `record_change_type`；与 108“取消动作类型选择、统一字段编辑表单”冲突。
   - 修订：标注向导/变更类型部分为过渡形态；将目标口径迁移到 108。
-- [x] `docs/dev-plans/101i-orgunit-effective-date-record-add-insert-ui-and-constraints.md`
+- [x] `docs/archive/dev-plans/101i-orgunit-effective-date-record-add-insert-ui-and-constraints.md`
   - 冲突：明确“不引入 UPDATE/不支持全字段”，与 108 的 `UPDATE`/全字段表单冲突。
   - 修订：新增“108 生效后的新口径（取代 record_change_type）”章节，并把 101I 定位为 108 前过渡实现。
-- [x] `docs/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
+- [x] `docs/archive/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
   - 冲突：冻结“状态变更必须独立动作、correct 不承载状态”，与 108“状态是字段，可同次提交”冲突。
   - 修订：保留 include_disabled/可达性 SSOT；调整写入口与交互矩阵到 108 的字段编辑模式；`status-corrections` 标注为兼容入口（UI 不再主路径依赖）。
-- [x] `docs/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
+- [x] `docs/archive/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
   - 冲突：依赖 `CORRECT_STATUS` 作为同日纠错主路径；108 改为 `CORRECT_EVENT` 支持 status 合并（replay 解释 UPDATE）。
   - 修订：新增“108 对齐补充”：同日纠错 UI 不再独立入口；接口保留兼容但不再作为推荐路径。
-- [x] `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- [x] `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
   - 冲突：capabilities 以 `correct_event/correct_status/...` 结构为 SSOT；108 收敛为 `write-capabilities(intent=...)`。
   - 修订：新增“108 后 SSOT 迁移”章节：`mutation-capabilities/append-capabilities` 过渡为 `write-capabilities` 的薄包装，避免双规则。
-- [x] `docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
+- [x] `docs/archive/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
   - 冲突：冻结“不新增事件语义（不引入 UPDATE）”，与 108 引入 `UPDATE` 冲突。
   - 修订：标注为 108 前 append 阶段性收口；新增迁移策略：append-capabilities -> write-capabilities。
 - [x] `docs/dev-plans/073-orgunit-crud-implementation-status.md`
@@ -507,11 +514,11 @@
 - `AGENTS.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `docs/dev-plans/017-routing-strategy.md`
-- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+- `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/075c-orgunit-delete-disable-semantics-alignment.md`
-- `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - `docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`
-- `docs/dev-plans/109-request-code-unification-and-gate.md`
+- `docs/archive/dev-plans/109-request-code-unification-and-gate.md`
 
 ---
 

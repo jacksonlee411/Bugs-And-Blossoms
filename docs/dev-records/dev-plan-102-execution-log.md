@@ -10,7 +10,7 @@
 ## 2. 实施内容（按里程碑）
 
 ### M0：契约冻结与矩阵
-- 已在 `docs/dev-plans/102-as-of-time-context-convergence-and-critique.md` 补齐：
+- 已在 `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md` 补齐：
   - 路由-时间参数矩阵（A/B/C、缺省/错误码/重定向）
   - 跨层语义映射（UI ↔ 服务 ↔ SQL）
   - Stopline（禁止新增/回漂点）
@@ -32,8 +32,8 @@
 - `apps/web/src/pages/index.astro`：Shell hx-get 改为 `/ui/nav`、`/ui/topbar`（不再拼接 `as_of`）。
 - `internal/server/handler.go`：`/ui/nav`、`/ui/topbar` 不再 require `as_of`；Topbar 去日期选择器；Nav 不拼接时间参数；Astro shell token 注入改为可选（兼容历史模板）。
 - `apps/web-mui/src/pages/org/OrgUnitsPage.tsx`：去 bulk actions；移除误导列。
-- `docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`：补齐矩阵与 stopline，并标记里程碑完成。
-- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`：同步壳层不再全局注入 `as_of` 的最新口径（引用 `DEV-PLAN-102`）。
+- `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`：补齐矩阵与 stopline，并标记里程碑完成。
+- `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`：同步壳层不再全局注入 `as_of` 的最新口径（引用 `DEV-PLAN-102`）。
 - `docs/dev-records/DEV-PLAN-010-READINESS.md`：更新 Shell 描述，避免引用已移除的 token 注入机制。
 
 ## 4. 本地验证记录

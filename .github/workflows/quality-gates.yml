@@ -39,6 +39,8 @@ jobs:
         run: make check as-of-explicit
       - name: Dict Tenant-Only Gate (always)
         run: make check dict-tenant-only
+      - name: Go Version Gate (always)
+        run: make check go-version
       - name: Docs Gate (always)
         run: make check doc
       - name: UI Build (MUI)

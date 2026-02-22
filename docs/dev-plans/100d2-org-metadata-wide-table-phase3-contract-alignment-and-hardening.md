@@ -108,5 +108,5 @@
 - Phase 0 冻结契约：`docs/dev-plans/100a-org-metadata-wide-table-phase0-contract-freeze-readiness.md`
 - Phase 3 SSOT：`docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - Phase 4A（详情页 UI）：`docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
-- Phase 4B（字段配置 UI）：`docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- Phase 4B（字段配置 UI）：`docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - 路由/门禁/触发器：`AGENTS.md`、`docs/dev-plans/012-ci-quality-gates.md`

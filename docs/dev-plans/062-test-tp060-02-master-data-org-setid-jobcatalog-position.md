@@ -12,7 +12,7 @@
 - **业务价值**：为后续 TP-060-03（Person/Assignments）及考勤/薪酬子计划提供稳定的主数据底座，避免“不可见/不可操作”的僵尸交付（见 `AGENTS.md` 的用户可见性原则）。
 - **关键不变量（必须 fail-closed）**：
   - `as_of` 为日粒度（date），所有读取必须显式传入 `as_of=YYYY-MM-DD`（对齐 `docs/dev-plans/032-effective-date-day-granularity.md`）。
-- SetID 绑定必须显式存在：根组织绑定 `DEFLT`，业务单元节点允许绑定其他 SetID；绑定管理与审计解析仍沿 `is_business_unit=true` 的祖先链路，缺绑定或非法状态必须 fail-closed（对齐 `docs/dev-plans/070-setid-orgunit-binding-redesign.md`）。
+- SetID 绑定必须显式存在：根组织绑定 `DEFLT`，业务单元节点允许绑定其他 SetID；绑定管理与审计解析仍沿 `is_business_unit=true` 的祖先链路，缺绑定或非法状态必须 fail-closed（对齐 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`）。
 - 配置主数据入口必须显式携带 `setid`；Position 创建必须选择 Job Profile，且可选列表由 `org_code` 解析得到的 setid 提供（不要求手工选择 setid，缺绑定/非法必须 fail-closed）。
 
 ## 2. 目标与非目标
@@ -57,12 +57,12 @@
 
 ## 3. 契约引用（SSOT）
 
-- OrgUnit：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
-- SetID：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`
+- OrgUnit：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+- SetID：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - JobCatalog：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - Position：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
 - Valid Time（日粒度）：`docs/dev-plans/032-effective-date-day-granularity.md`
-- 路由/UI 可见性：`AGENTS.md`、`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- 路由/UI 可见性：`AGENTS.md`、`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - Authz（对象/动作冻结）：`docs/dev-plans/022-authz-casbin-toolchain.md`
 - 路由策略（route_class/allowlist）：`docs/dev-plans/017-routing-strategy.md`
 

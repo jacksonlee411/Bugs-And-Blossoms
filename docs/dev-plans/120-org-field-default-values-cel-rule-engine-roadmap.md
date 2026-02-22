@@ -83,6 +83,11 @@
 3. **安全限制**：白名单变量、白名单函数、成本上限、超时上限。
 4. **错误映射**：统一映射为业务可解释错误码（BadRequest/Conflict/Exhausted）。
 
+#### 4.2.1 表达式语法单一口径（承接 DEV-PLAN-102A）
+1. 默认规则表达式在“保存校验”与“运行解析”两条链路必须使用同一语法规范与同一解析器口径。
+2. 以 `next_org_code` 为例，示例与校验统一使用双引号写法：`next_org_code("O", 6)`。
+3. 语法不合法必须在保存阶段 fail-closed 返回 `FIELD_POLICY_EXPR_INVALID`，禁止把语法分歧留到运行时才暴露。
+
 ### 4.3 首个函数能力（为里程碑服务）
 
 首期冻结一个内置函数：
@@ -257,9 +262,9 @@ M1 完成判定（全部满足）：
 ## 8. 关联文档
 
 - `docs/dev-records/Go+PG+CEL 规则引擎架构升级.md`
-- `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/108-org-crud-ui-actions-consolidation-and-unified-field-mutation-rules.md`
-- `docs/dev-plans/109-request-code-unification-and-gate.md`
+- `docs/archive/dev-plans/109-request-code-unification-and-gate.md`
 - `docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `AGENTS.md`

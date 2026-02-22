@@ -18,6 +18,7 @@ Go 1.26 已于 **2026-02-10** 发布，且带来明确的语言、工具链、�
 3. [X] 开发工具链（sqlc/goimports/goose 等）与 Go 版本口径收敛，消除版本漂移。
 4. [X] 文档 SSOT（`AGENTS.md`、`DEV-PLAN-011`、相关执行记录）完成同步。
 5. [X] 全量门禁保持通过（`make preflight`）。
+6. [X] 建立 Go 版本防回退门禁：阻断 `go.mod`/`.tool-versions` 从 `1.26.x` 漂移到更低版本。
 
 ### 2.2 非目标（Stopline）
 
@@ -36,13 +37,19 @@ Go 1.26 已于 **2026-02-10** 发布，且带来明确的语言、工具链、�
 2. [X] `Makefile` 仅保留命令入口，不再重复声明上述 Go 工具版本常量。
 3. [X] 非 Go 工具（如 Atlas）版本仅保留一个权威入口（`Makefile`），脚本不得再声明第二套版本默认值。
 
+### 2.5 `go mod init` 默认回退风险应对（补充，2026-02-22）
+
+1. [X] 明确风险：在 Go 1.26 工具链下，新建模块执行 `go mod init` 可能默认写入更低 `go` 版本，导致版本口径漂移。
+2. [X] 固化新模块初始化动作：`go mod init` 后立即执行 `go get go@1.26.0`（或 `go mod edit -go=1.26.0`）。
+3. [X] 固化提交流程门禁：提交前必须通过 `make check go-version`（或直接 `make preflight`）。
+
 ## 3. 升级范围与影响面
 
 ### 3.1 影响范围
 
 1. **版本入口**：`go.mod`、`.tool-versions`。
 2. **CI**：`.github/workflows/quality-gates.yml`（当前由 `go-version-file: go.mod` 驱动，主要是验证而非结构改造）。
-3. **工具链脚本**：`scripts/sqlc/*.sh`、`scripts/db/run_goose.sh`、`scripts/go/verify-tools.sh`、`Makefile`。
+3. **工具链脚本**：`scripts/sqlc/*.sh`、`scripts/db/run_goose.sh`、`scripts/go/verify-tools.sh`、`scripts/ci/check-go-version.sh`、`Makefile`。
 4. **代码现代化**：`internal/**`、`modules/**`、`pkg/**`（尤其错误处理、测试与基准）。
 5. **文档**：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`、本计划执行记录（`docs/dev-records/`）。
 
@@ -116,11 +123,12 @@ Go 1.26 已于 **2026-02-10** 发布，且带来明确的语言、工具链、�
 1. [X] `go fmt ./...`
 2. [X] `go vet ./...`
 3. [X] `make check lint`
-4. [X] `make test`
-5. [X] `make preflight`
-6. [X] 覆盖门禁在 Go 1.26 下保持稳定（`scripts/ci/coverage.sh` 收敛为“仅执行有测试文件的包”，继续使用全量 `coverpkg` 口径）。
-7. [X] 生成并归档升级前后对比数据（测试耗时、关键基准、二进制体积可选）。
-8. [X] 性能证据口径固定：同机型/同负载下执行 `go test -run=^$ -bench . -benchmem -count=10`，并用 `benchstat` 对比基线与升级后结果。
+4. [X] `make check go-version`
+5. [X] `make test`
+6. [X] `make preflight`
+7. [X] 覆盖门禁在 Go 1.26 下保持稳定（`scripts/ci/coverage.sh` 收敛为“仅执行有测试文件的包”，继续使用全量 `coverpkg` 口径）。
+8. [X] 生成并归档升级前后对比数据（测试耗时、关键基准、二进制体积可选）。
+9. [X] 性能证据口径固定：同机型/同负载下执行 `go test -run=^$ -bench . -benchmem -count=10`，并用 `benchstat` 对比基线与升级后结果。
 
 ### Phase 5：文档收口
 
@@ -136,6 +144,7 @@ Go 1.26 已于 **2026-02-10** 发布，且带来明确的语言、工具链、�
 3. [X] 至少完成 3 项“Go 1.26 新范式”落地（`new(expr)` / `errors.AsType` / `ArtifactDir` / `B.Loop` / `go fix modernizers`）。
 4. [X] 工具链安装与执行口径单一、可复现，不再依赖“本机残留二进制”。
 5. [X] `DEV-PLAN-126` 执行记录完整可追溯（命令、时间、结果、结论）。
+6. [X] 版本门禁可阻断 `go.mod`/`.tool-versions` 回退，并将“新建模块后固定 Go 1.26”固化为团队默认流程。
 
 ## 7. 风险与应对
 

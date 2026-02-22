@@ -325,7 +325,7 @@
 - `docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md`
 - `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
 - `docs/dev-plans/100h-org-metadata-wide-table-phase5-stability-performance-ops-closure.md`
-- `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/105a-dict-config-validation-issues-investigation.md`
 - `docs/dev-plans/105b-dict-code-management-and-governance.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
