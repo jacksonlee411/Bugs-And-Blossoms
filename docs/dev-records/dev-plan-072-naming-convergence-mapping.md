@@ -9,7 +9,7 @@
 - 变更审批人：我
 - 迁移样本统计：豁免（无样本数据）
 
-> 本记录用于支撑 `docs/dev-plans/072-repo-wide-id-code-naming-convergence.md` 的步骤 1（差异清单与映射表）。
+> 本记录用于支撑 `docs/archive/dev-plans/072-repo-wide-id-code-naming-convergence.md` 的步骤 1（差异清单与映射表）。
 > 范围覆盖 Job Catalog、Staffing、IAM、Person；**OrgUnit 由 026B 承接**。
 
 ## 1. 扫描摘要（可复现）

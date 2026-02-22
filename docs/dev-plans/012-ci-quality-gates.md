@@ -238,7 +238,7 @@
 
 ## 8. 参考与链接 (Links)
 
-- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - `docs/dev-plans/019-tenant-and-authn.md`
 - `docs/dev-plans/020-i18n-en-zh-only.md`
@@ -246,5 +246,5 @@
 - `docs/dev-plans/025-sqlc-guidelines.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
 - `docs/dev-plans/017-routing-strategy.md`
-- `docs/dev-plans/109-request-code-unification-and-gate.md`
+- `docs/archive/dev-plans/109-request-code-unification-and-gate.md`
 - `.github/workflows/quality-gates.yml`

@@ -1,4 +1,4 @@
-# DEV-PLAN-026B：OrgUnit 外部ID兼容（org_code 映射）方案
+# [Archived] DEV-PLAN-026B：OrgUnit 外部ID兼容（org_code 映射）方案
 
 **状态**: 已完成（2026-02-02）
 

@@ -9,7 +9,7 @@
 - **状态**：已完成（2026-01-06 09:25 UTC）
 - **交付物**
   - 映射表草案：`docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`
-  - 计划文档进度更新：`docs/dev-plans/004-remove-version-marker-repo-wide.md`
+  - 计划文档进度更新：`docs/archive/dev-plans/004-remove-version-marker-repo-wide.md`
   - Doc Map 增补入口：`AGENTS.md`
 - **本地门禁**
   - `make check doc`：通过

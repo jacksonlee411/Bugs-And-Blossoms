@@ -1,4 +1,4 @@
-# DEV-PLAN-071B：字段配置/字典配置与 SetID 边界实施方案
+# [Archived] DEV-PLAN-071B：字段配置/字典配置与 SetID 边界实施方案
 
 **状态**: 规划中（2026-02-20 14:20 UTC；时间参数口径遵循 `STD-002`/`DEV-PLAN-102B`）
 
@@ -154,10 +154,10 @@ graph TD
 
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
 ### 8.1 依赖
-- `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
-- `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
-- `docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
-- `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
+- `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
+- `docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/105-dict-config-platform-module.md`
 - `docs/dev-plans/105b-dict-code-management-and-governance.md`
 - `docs/dev-plans/106a-org-ext-fields-dict-as-field-key-and-custom-label.md`
@@ -240,10 +240,10 @@ graph TD
 - 回滚策略：环境级停写 + 修复后重试；禁止“旧逻辑回退通道”。
 
 ## 11. 关联文档
-- `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
-- `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
-- `docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
-- `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
+- `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
+- `docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/105-dict-config-platform-module.md`
 - `docs/dev-plans/105b-dict-code-management-and-governance.md`
 - `docs/dev-plans/106a-org-ext-fields-dict-as-field-key-and-custom-label.md`

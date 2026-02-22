@@ -61,7 +61,8 @@
 - **SSOT 单一**：端口/命令/版本/编排等“可验证事实”必须有唯一事实源（例如 `Makefile`、`devhub.yml`、`.env.example`、CI workflow）；文档默认只引用，不复制。
 - **可发现性**：仓库级新增文档必须在 `AGENTS.md` 的 Doc Map 中可被发现；避免“孤儿文档”。
 - **类型边界清晰**：dev-plan 是契约（约束未来实现），dev-record 是证据（记录已执行），runbook 是可复现操作；不要混用导致读者误判可信度/适用期。
-- **活体 vs 归档明确**：过期或仅供历史参考的内容必须迁移到 `docs/Archived/` 并标注 `[Archived]`；归档不得作为活体 SSOT 被引用。
+- **活体 vs 归档明确**：过期或仅供历史参考的内容必须迁移到 `docs/archive/` 并标注 `[Archived]`；归档不得作为活体 SSOT 被引用。
+- **过程性计划退场明确**：已经作废、已被替代、已不具有参考意义的过程性开发计划文档，必须迁移到 `docs/archive/dev-plans/`（例如：`DEV-PLAN-018`、`DEV-PLAN-026` 系列）。
 - **新增文档可被门禁校验**：新增/移动文档必须通过 `make check doc`（命名、落点、入口链接与资源归口一致）。
 
 ## 5. 文档类型与落点（Routing & Ownership）
@@ -79,7 +80,7 @@
 | 计划/规格（Contract） | `docs/dev-plans/**` | 目标/非目标/契约/验收/依赖/步骤 | 复制易漂移事实（端口/命令/版本）或脚本实现细节（除非作为执行记录）；把临时 workaround 当契约 | 见 `docs/dev-plans/000-docs-format.md` |
 | 记录/Readiness | `docs/dev-records/**` | 时间戳 + 命令 + 结果 + 链接 | 重新定义计划契约 | 以现有模式为准（如 `DEV-PLAN-XXX-READINESS.md`） |
 | 仓库级文档资源 | `docs/assets/**` | 截图、图表等 | 代码/配置 | 目录与文件名全小写 `kebab-case` |
-| 归档快照（非活体） | `docs/Archived/**` | 历史快照，标题/头部标注 `[Archived]` | 作为活体 SSOT 引用 | `kebab-case.md`（建议） |
+| 归档快照（非活体） | `docs/archive/**` | 历史快照，标题/头部标注 `[Archived]` | 作为活体 SSOT 引用 | `kebab-case.md`（建议） |
 | 模块级文档（豁免） | `modules/{module}/README.md`、`modules/{module}/docs/**` | 模块内部实现与说明 | 仓库级规则/流程 | 目录与文件名建议 `kebab-case` |
 
 ## 6. 文档创建与更新流程（Process）
@@ -113,7 +114,7 @@
 ### 6.4 合并后的维护（Maintainer 流程）
 
 - [ ] 计划完成时更新状态（`草拟中/进行中/已完成`），并补齐验收证据或 readiness 记录入口。
-- [ ] 发现文档过期但仍被引用：优先修正文档或把其迁移到 `docs/Archived/` 并明确退场（同时更新入口链接）。
+- [ ] 发现文档过期但仍被引用：优先修正文档或把其迁移到 `docs/archive/` 并明确退场（同时更新入口链接）。
 
 ## 7. 变更触发器与同步义务（摘要）
 
@@ -154,5 +155,5 @@
 - `make check doc` 失败：优先检查是否新增文档未进入 `AGENTS.md` Doc Map、命名/落点不符合约定、或资源未归口到 `docs/assets/` / `modules/{module}/docs/`。
 - 出现孤儿文档：把入口补到 `AGENTS.md` Doc Map（仓库级），并视情况补充 `docs/guides/index.md` / `docs/assets/index.md` 的目录入口链接。
 - 文档复制了易漂移事实（端口/命令/版本）：改为引用 `devhub.yml`/`Makefile`/`.env.example`/CI workflow；仅在执行记录中写死命令并带时间戳。
-- 活体/归档混用：把过期内容迁移到 `docs/Archived/` 并标注 `[Archived]`；同时修正入口链接，避免归档被当作 SSOT。
+- 活体/归档混用：把过期内容迁移到 `docs/archive/` 并标注 `[Archived]`；同时修正入口链接，避免归档被当作 SSOT。
 - 文档类型放错目录：按第 5 节迁移到正确目录（guides/runbooks/docs/dev-plans/dev-records），并同步更新入口索引（Doc Map / index）。

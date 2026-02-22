@@ -288,5 +288,5 @@ Kernel 内对 `physical_col` 必须同时满足：
 - `docs/dev-plans/100a-org-metadata-wide-table-phase0-contract-freeze-readiness.md`
 - `docs/dev-plans/100b-org-metadata-wide-table-phase1-schema-and-metadata-skeleton.md`
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
-- `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`

@@ -137,11 +137,11 @@ modules/{module}/
 - RLS 强租户隔离：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - Authz（Casbin）：`docs/dev-plans/022-authz-casbin-toolchain.md`
 - Routing 策略与门禁：`docs/dev-plans/017-routing-strategy.md`
-- UI Shell（历史，已被 DEV-PLAN-103 替代）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- UI Shell（历史，已被 DEV-PLAN-103 替代，已归档）：`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - i18n（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
 - Docs 治理：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
 - CI 质量门禁：`docs/dev-plans/012-ci-quality-gates.md`
-- SetID：`docs/dev-plans/028-setid-management.md`
+- SetID/时间口径（现行）：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`（070/071 系列与 028 已归档）
 
 ## 6. 文档收敛与门禁（New Doc Gate）
 
@@ -151,6 +151,8 @@ modules/{module}/
 - 仓库级文档分类：
   - 计划/契约：`docs/dev-plans/`（遵循 `docs/dev-plans/000-docs-format.md`）
   - 证据/记录：`docs/dev-records/`（按 `DEV-PLAN-010` 的 readiness 要求固化证据）
+  - 历史归档：`docs/archive/`（已作废/已替代/仅过程性且不再具参考意义的文档）
+- 归档规则（强制）：已经作废、已被替代、已不具有参考意义的过程性开发计划文档，必须转入 `docs/archive/dev-plans/`（例如：`DEV-PLAN-018`、`DEV-PLAN-026` 系列）。
 - 命名（新增文件）：
   - 统一使用：`kebab-case.md`
 - 可发现性：新增仓库级文档必须在本文件的“文档地图（Doc Map）”中新增链接。
@@ -158,11 +160,12 @@ modules/{module}/
 
 ## 7. 文档地图（Doc Map）
 
+- 文档归档入口：`docs/archive/README.md`
 - 文档规范：`docs/dev-plans/000-docs-format.md`
 - 技术设计模板：`docs/dev-plans/001-technical-design-template.md`
 - DEV-PLAN-002：UI 设计规范（React + MUI Core + MUI X / Material Design Web）：`docs/dev-plans/002-ui-design-guidelines.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
-- DEV-PLAN-004：全仓去除版本标记（命名降噪 + 避免对外契约污染）：`docs/dev-plans/004-remove-version-marker-repo-wide.md`
+- DEV-PLAN-004【归档】：全仓去除版本标记（命名降噪 + 避免对外契约污染，规范已并入 `DEV-PLAN-005/STD-004`）：`docs/archive/dev-plans/004-remove-version-marker-repo-wide.md`
 - DEV-PLAN-004M1：禁止 legacy（单链路原则）——清理、门禁与迁移策略：`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
 - DEV-PLAN-005：项目标准与外部规范采纳清单（规范入口，持续扩展）：`docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - DEV-PLAN-004 记录：全仓去除版本标记——映射表（草案）：`docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`
@@ -174,26 +177,26 @@ modules/{module}/
 - DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-069 执行日志：`docs/dev-records/dev-plan-069-execution-log.md`
-- DEV-PLAN-070：SetID 绑定组织架构重构方案：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`
+- DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
 - DEV-PLAN-070B：取消共享租户（global_tenant）并收敛为租户本地发布方案（以字典配置模块为样板）：`docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - DEV-PLAN-070 执行日志：`docs/dev-records/dev-plan-070-execution-log.md`
-- DEV-PLAN-071：SetID Scope Package 订阅蓝图：`docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
-- DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化：`docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
-- DEV-PLAN-071B：字段配置/字典配置与 SetID 边界实施方案：`docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
-- DEV-PLAN-072：全仓 ID/Code 命名与对外标识收敛：`docs/dev-plans/072-repo-wide-id-code-naming-convergence.md`
+- DEV-PLAN-071【归档】：SetID Scope Package 订阅蓝图（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
+- DEV-PLAN-071A【归档】：基于 Package 的配置编辑与订阅显式化：`docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- DEV-PLAN-071B【归档】：字段配置/字典配置与 SetID 边界实施方案：`docs/archive/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
+- DEV-PLAN-072【归档】：全仓 ID/Code 命名与对外标识收敛（规范已并入 `DEV-PLAN-005/STD-003`）：`docs/archive/dev-plans/072-repo-wide-id-code-naming-convergence.md`
 - DEV-PLAN-073：OrgUnit CRUD 实现清单（页面与 API）：`docs/dev-plans/073-orgunit-crud-implementation-status.md`
 - DEV-PLAN-073A：组织架构树运行态问题记录（Shoelace 资源加载失败）：`docs/dev-plans/073a-orgunit-tree-runtime-issue.md`
 - DEV-PLAN-074：OrgUnit Details 集成更新能力与 UI 优化方案：`docs/dev-plans/074-orgunit-details-update-ui-optimization.md`
 - DEV-PLAN-074 执行日志：`docs/dev-records/dev-plan-074-execution-log.md`
 - DEV-PLAN-075：OrgUnit 生效日期不允许回溯的限制评估：`docs/dev-plans/075-orgunit-effective-date-backdating-assessment.md`
 - DEV-PLAN-075 执行日志：`docs/dev-records/dev-plan-075-execution-log.md`
-- DEV-PLAN-075A：OrgUnit 记录新增/插入 UI 与可编辑字段问题记录：`docs/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
+- DEV-PLAN-075A【归档】：OrgUnit 记录新增/插入 UI 与可编辑字段问题记录：`docs/archive/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
 - DEV-PLAN-075A 执行日志：`docs/dev-records/dev-plan-075a-execution-log.md`
 - DEV-PLAN-075B：Root Unit A 生效日回溯可行性调查与修复方案：`docs/dev-plans/075b-orgunit-root-backdating-feasibility-and-fix-plan.md`
 - DEV-PLAN-075B 执行日志：`docs/dev-records/dev-plan-075b-execution-log.md`
 - DEV-PLAN-075C：OrgUnit 删除记录/停用语义混用调查与收敛方案：`docs/dev-plans/075c-orgunit-delete-disable-semantics-alignment.md`
-- DEV-PLAN-075D：OrgUnit 页面状态字段与有效/无效显式切换：`docs/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
+- DEV-PLAN-075D【归档】：OrgUnit 页面状态字段与有效/无效显式切换：`docs/archive/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
 - DEV-PLAN-075E：OrgUnit 同日状态修正（生效日不变）方案：`docs/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
 - DEV-PLAN-075D 执行日志：`docs/dev-records/dev-plan-075d-execution-log.md`
 - DEV-PLAN-075E 执行日志：`docs/dev-records/dev-plan-075e-execution-log.md`
@@ -208,9 +211,9 @@ modules/{module}/
 - DEV-PLAN-080C：OrgUnit 审计快照 presence 表级强约束（INSERT 即写齐）方案：`docs/dev-plans/080c-orgunit-audit-snapshot-presence-table-constraint-plan.md`
 - DEV-PLAN-080D：OrgUnit 变更日志“已撤销事件未标识”专项调查与收敛方案：`docs/dev-plans/080d-orgunit-audit-rescinded-event-visibility-investigation.md`
 - DEV-PLAN-081：OrgUnit Details 记录版本选择器双栏化（左生效日期 / 右详情）：`docs/dev-plans/081-orgunit-records-version-selector-two-pane-alignment.md`
-- DEV-PLAN-082：Org 模块业务字段修改规则全量调查（排除元数据）：`docs/dev-plans/082-org-module-field-mutation-rules-investigation.md`
-- DEV-PLAN-083：Org 白名单模型扩展性改造（规则单点化 + 能力矩阵外显）：`docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
-- DEV-PLAN-083A：OrgUnit Append 写入动作能力外显与策略单点扩展（create / event_update）：`docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
+- DEV-PLAN-082【归档】：Org 模块业务字段修改规则全量调查（排除元数据）：`docs/archive/dev-plans/082-org-module-field-mutation-rules-investigation.md`
+- DEV-PLAN-083【归档】：Org 白名单模型扩展性改造（规则单点化 + 能力矩阵外显）：`docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- DEV-PLAN-083A【归档】：OrgUnit Append 写入动作能力外显与策略单点扩展（create / event_update）：`docs/archive/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
 - DEV-PLAN-083B：Org 变更能力模型后置收口（承接 083/083A）：`docs/dev-plans/083b-org-mutation-capabilities-post-083a-closure-plan.md`
 - DEV-PLAN-083B 执行日志：`docs/dev-records/dev-plan-083b-execution-log.md`
 - DEV-PLAN-084：Org 模块组织树“下级可展开指示符”缺失问题分析与收敛方案：`docs/dev-plans/084-orgunit-tree-expand-indicator-visibility.md`
@@ -241,9 +244,9 @@ modules/{module}/
 - DEV-PLAN-100G：Org 模块宽表元数据落地 Phase 4C：OrgUnit 列表扩展字段筛选/排序 + i18n 收口（闭环收口，MUI）：`docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
 - DEV-PLAN-100G 执行日志：`docs/dev-records/dev-plan-100g-execution-log.md`
 - DEV-PLAN-100H：Org 模块宽表元数据落地 Phase 5：稳定性/性能/异常与运维收口：`docs/dev-plans/100h-org-metadata-wide-table-phase5-stability-performance-ops-closure.md`
-- DEV-PLAN-101：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）：`docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
-- DEV-PLAN-101B：OrgUnit PLAIN 扩展字段编辑能力收敛（新建/插入记录/修正）：`docs/dev-plans/101b-orgunit-plain-ext-fields-editability-convergence.md`
-- DEV-PLAN-101I：OrgUnit 生效日期记录新增/插入（MUI）操作口径与约束说明：`docs/dev-plans/101i-orgunit-effective-date-record-add-insert-ui-and-constraints.md`
+- DEV-PLAN-101【归档】：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）：`docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- DEV-PLAN-101B【归档】：OrgUnit PLAIN 扩展字段编辑能力收敛（新建/插入记录/修正）：`docs/archive/dev-plans/101b-orgunit-plain-ext-fields-editability-convergence.md`
+- DEV-PLAN-101I【归档】：OrgUnit 生效日期记录新增/插入（MUI）操作口径与约束说明：`docs/archive/dev-plans/101i-orgunit-effective-date-record-add-insert-ui-and-constraints.md`
 - DEV-PLAN-101I 执行日志：`docs/dev-records/dev-plan-101i-execution-log.md`
 - DEV-PLAN-105：全模块字典配置模块（DICT 值配置 + 生效日期 + 变更记录）：`docs/dev-plans/105-dict-config-platform-module.md`
 - DEV-PLAN-105 执行日志：`docs/dev-records/dev-plan-105-execution-log.md`
@@ -259,7 +262,7 @@ modules/{module}/
 - DEV-PLAN-108A：Org 新建组织弹窗支持 DICT 扩展字段（下拉选择）：`docs/dev-plans/108a-org-create-dialog-dict-ext-fields-support.md`
 - DEV-PLAN-108B：Org 新建组织弹窗 DICT 扩展字段实现（承接 108A）：`docs/dev-plans/108b-org-create-dialog-dict-ext-fields-implementation.md`
 - DEV-PLAN-108B 执行日志：`docs/dev-records/dev-plan-108b-execution-log.md`
-- DEV-PLAN-109：Org 模块幂等命名收敛与门禁（历史阶段封板，按 STD-001 修订）：`docs/dev-plans/109-request-code-unification-and-gate.md`
+- DEV-PLAN-109【归档】：Org 模块幂等命名收敛与门禁（历史阶段封板，按 STD-001 修订）：`docs/archive/dev-plans/109-request-code-unification-and-gate.md`
 - DEV-PLAN-109A：`request_id`（幂等）+ `trace_id`（Tracing）全仓收敛与防扩散：`docs/dev-plans/109a-request-code-total-convergence-and-anti-drift.md`
 - DEV-PLAN-109A 执行日志：`docs/dev-records/dev-plan-109a-execution-log.md`
 - DEV-PLAN-110：启用字段表单增强：自定义（直接值）+ 值类型选择 + 自定义字段名称：`docs/dev-plans/110-orgunit-field-configs-custom-direct-value-form.md`
@@ -291,16 +294,16 @@ modules/{module}/
 - DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
 - DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
 - DEV-PLAN-072 记录：命名收敛差异清单与映射表：`docs/dev-records/dev-plan-072-naming-convergence-mapping.md`
-- DEV-PLAN-026A：OrgUnit 8位编号与 UUID/Code 命名规范：`docs/dev-plans/026a-orgunit-id-uuid-code-naming.md`
+- DEV-PLAN-026A【归档】：OrgUnit 8位编号与 UUID/Code 命名规范：`docs/archive/dev-plans/026a-orgunit-id-uuid-code-naming.md`
 - DEV-PLAN-026A 执行日志：`docs/dev-records/dev-plan-026a-execution-log.md`
-- DEV-PLAN-026B：OrgUnit 外部ID兼容（org_code 映射）方案：`docs/dev-plans/026b-orgunit-external-id-code-mapping.md`
-- DEV-PLAN-026C：OrgUnit 外部ID兼容（org_code 映射）评审与修订方案：`docs/dev-plans/026c-orgunit-external-id-code-mapping-review-and-revision.md`
+- DEV-PLAN-026B【归档】：OrgUnit 外部ID兼容（org_code 映射）方案：`docs/archive/dev-plans/026b-orgunit-external-id-code-mapping.md`
+- DEV-PLAN-026C【归档】：OrgUnit 外部ID兼容（org_code 映射）评审与修订方案：`docs/archive/dev-plans/026c-orgunit-external-id-code-mapping-review-and-revision.md`
 - DEV-PLAN-026C 执行日志：`docs/dev-records/dev-plan-026c-execution-log.md`
-- DEV-PLAN-026D：OrgUnit 增量投射方案（减少全量回放写放大）：`docs/dev-plans/026d-orgunit-incremental-projection-plan.md`
+- DEV-PLAN-026D【归档】：OrgUnit 增量投射方案（减少全量回放写放大）：`docs/archive/dev-plans/026d-orgunit-incremental-projection-plan.md`
 - DEV-PLAN-026D 执行日志：`docs/dev-records/dev-plan-026d-execution-log.md`
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
-- Org（事务性事件溯源 + 同步投射）：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+- Org（事务性事件溯源 + 同步投射，已归档）：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
 - Position（事务性事件溯源 + 同步投射）：`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
 - Job Catalog（事务性事件溯源 + 同步投射）：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - PostgreSQL RLS 强租户隔离（Org/Position/Job Catalog）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
@@ -308,7 +311,7 @@ modules/{module}/
 - Greenfield HR 模块骨架与契约（OrgUnit/JobCatalog/Staffing/Person）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - 任职记录（Job Data / Assignments）（事件 SoT + 同步投射）：`docs/dev-plans/031-greenfield-assignment-job-data.md`
 - Person 最小身份锚点（Pernr 1-8 位数字字符串）：`docs/dev-plans/027-person-minimal-identity-for-staffing.md`
-- 引入 Astro（AHA Stack）到 HRMS UI（历史，已被 DEV-PLAN-103 替代）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- 引入 Astro（AHA Stack）到 HRMS UI（历史，已被 DEV-PLAN-103 替代，已归档）：`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - 技术栈与工具链版本冻结：`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
 - 租户管理与登录认证：`docs/dev-plans/019-tenant-and-authn.md`
 - SuperAdmin 控制面认证与会话：`docs/dev-plans/023-superadmin-authn.md`
@@ -320,11 +323,11 @@ modules/{module}/
 - 全局路由策略统一（UI/API/Webhooks）：`docs/dev-plans/017-routing-strategy.md`
 - 文档创建与过程治理规范：`docs/dev-plans/013-docs-creation-and-governance-guide.md`
 - CI 质量门禁（Quality Gates）：`docs/dev-plans/012-ci-quality-gates.md`
-- SetID 管理（Greenfield）：`docs/dev-plans/028-setid-management.md`
-- DEV-PLAN-009M1：Phase 4 下一大型里程碑执行计划（SetID + JobCatalog 首个可见样板闭环）：`docs/dev-plans/009m1-phase4-setid-jobcatalog-vertical-slice-execution-plan.md`
-- DEV-PLAN-009M2：Phase 4 下一大型里程碑执行计划（Person Identity + Staffing 首个可见样板闭环）：`docs/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`
-- DEV-PLAN-009M3：Phase 5 下一大型里程碑执行计划（质量收口：E2E 真实化 + 可排障门禁）：`docs/dev-plans/009m3-phase5-quality-hardening-e2e-execution-plan.md`
-- DEV-PLAN-009M4：Phase 2 下一大型里程碑执行计划（SuperAdmin 控制面 + Tenant Console MVP）：`docs/dev-plans/009m4-phase2-superadmin-tenant-console-execution-plan.md`
-- DEV-PLAN-009M5：Phase 2 下一大型里程碑执行计划（AuthN 真实化：Kratos + 本地会话 sid/sa_sid）：`docs/dev-plans/009m5-phase2-authn-kratos-sessions-execution-plan.md`
-- DEV-PLAN-009M6：Phase 1 追加里程碑执行计划（历史：补齐 DEV-PLAN-018 Phase 0，已由 DEV-PLAN-103 收口）：`docs/dev-plans/009m6-phase1-astro-build-phase0-execution-plan.md`
+- SetID 管理（Greenfield，已归档）：`docs/archive/dev-plans/028-setid-management.md`
+- DEV-PLAN-009M1【归档】：Phase 4 下一大型里程碑执行计划（SetID + JobCatalog 首个可见样板闭环）：`docs/archive/dev-plans/009m1-phase4-setid-jobcatalog-vertical-slice-execution-plan.md`
+- DEV-PLAN-009M2【归档】：Phase 4 下一大型里程碑执行计划（Person Identity + Staffing 首个可见样板闭环）：`docs/archive/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`
+- DEV-PLAN-009M3【归档】：Phase 5 下一大型里程碑执行计划（质量收口：E2E 真实化 + 可排障门禁）：`docs/archive/dev-plans/009m3-phase5-quality-hardening-e2e-execution-plan.md`
+- DEV-PLAN-009M4【归档】：Phase 2 下一大型里程碑执行计划（SuperAdmin 控制面 + Tenant Console MVP）：`docs/archive/dev-plans/009m4-phase2-superadmin-tenant-console-execution-plan.md`
+- DEV-PLAN-009M5【归档】：Phase 2 下一大型里程碑执行计划（AuthN 真实化：Kratos + 本地会话 sid/sa_sid）：`docs/archive/dev-plans/009m5-phase2-authn-kratos-sessions-execution-plan.md`
+- DEV-PLAN-009M6【归档】：Phase 1 追加里程碑执行计划（历史：补齐 DEV-PLAN-018 Phase 0，已由 DEV-PLAN-103 收口）：`docs/archive/dev-plans/009m6-phase1-astro-build-phase0-execution-plan.md`
 - Greenfield 全新实施路线图（009-031）：`docs/dev-plans/009-implementation-roadmap.md`

@@ -1,4 +1,4 @@
-# DEV-PLAN-009M1：Phase 4 下一大型里程碑执行计划（SetID + JobCatalog 首个可见样板闭环）
+# [Archived] DEV-PLAN-009M1：Phase 4 下一大型里程碑执行计划（SetID + JobCatalog 首个可见样板闭环）
 
 **状态**: 已完成（2026-01-06 23:36 UTC）
 
@@ -9,7 +9,7 @@
 
 - 目标（对齐 `DEV-PLAN-009` Phase 4 出口条件 #3）：在 JobCatalog 至少一个实体上形成“**解析 → 写入 → 列表读取**”的 **UI 可见且可操作** 闭环。
 - 依赖（SSOT 引用）：
-  - SetID：`docs/dev-plans/028-setid-management.md`
+  - SetID：`docs/archive/dev-plans/028-setid-management.md`
   - JobCatalog：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
   - 门禁与触发器：`AGENTS.md`、`Makefile`、`.github/workflows/quality-gates.yml`
   - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`

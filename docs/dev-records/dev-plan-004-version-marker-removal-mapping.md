@@ -2,7 +2,7 @@
 
 **状态**: 已冻结（2026-01-06 11:32 UTC）
 
-> 本记录用于支撑 `docs/dev-plans/004-remove-version-marker-repo-wide.md` 的 PR-1（盘点与映射表冻结）。
+> 本记录用于支撑 `docs/archive/dev-plans/004-remove-version-marker-repo-wide.md` 的 PR-1（盘点与映射表冻结）。
 >
 > 重要：为满足“最终全仓扫描命中为 0”的验收口径，本文避免直接写出版本标记字面量；统一用占位符 `<ver>` 表示“`v`/`V` + `4` 的紧邻组合”。
 
@@ -37,15 +37,15 @@ rg --files --hidden --glob '!.git/**' | rg -S "(?i)(${PATTERN_LOWER}|${PATTERN_U
 | docs-file | `docs/dev-plans/012-<ver>-ci-quality-gates.md` | `docs/dev-plans/012-ci-quality-gates.md` | low | 同上 |
 | docs-file | `docs/dev-plans/014-<ver>-parallel-worktrees-local-dev-guide.md` | `docs/dev-plans/014-parallel-worktrees-local-dev-guide.md` | low | 同上 |
 | docs-file | `docs/dev-plans/017-<ver>-routing-strategy.md` | `docs/dev-plans/017-routing-strategy.md` | low | 同上 |
-| docs-file | `docs/dev-plans/018-astro-aha-ui-shell-for-hrms-<ver>.md` | `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md` | low | 同上 |
+| docs-file | `docs/dev-plans/018-astro-aha-ui-shell-for-hrms-<ver>.md` | `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md` | low | 同上 |
 | docs-file | `docs/dev-plans/019-tenant-and-authn-<ver>.md` | `docs/dev-plans/019-tenant-and-authn.md` | low | 同上 |
 | docs-file | `docs/dev-plans/021-pg-rls-for-org-position-job-catalog-<ver>.md` | `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md` | low | 同上 |
 | docs-file | `docs/dev-plans/022-<ver>-authz-casbin-toolchain.md` | `docs/dev-plans/022-authz-casbin-toolchain.md` | low | 同上 |
 | docs-file | `docs/dev-plans/023-superadmin-authn-<ver>.md` | `docs/dev-plans/023-superadmin-authn.md` | low | 同上 |
 | docs-file | `docs/dev-plans/024-<ver>-atlas-goose-closed-loop-guide.md` | `docs/dev-plans/024-atlas-goose-closed-loop-guide.md` | low | 同上 |
 | docs-file | `docs/dev-plans/025-sqlc-guidelines-for-<ver>.md` | `docs/dev-plans/025-sqlc-guidelines.md` | low | 同上 |
-| docs-file | `docs/dev-plans/026-org-<ver>-transactional-event-sourcing-synchronous-projection.md` | `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md` | low | 同上 |
-| docs-file | `docs/dev-plans/028-<ver>-setid-management.md` | `docs/dev-plans/028-setid-management.md` | low | 同上 |
+| docs-file | `docs/dev-plans/026-org-<ver>-transactional-event-sourcing-synchronous-projection.md` | `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md` | low | 同上 |
+| docs-file | `docs/dev-plans/028-<ver>-setid-management.md` | `docs/archive/dev-plans/028-setid-management.md` | low | 同上 |
 | docs-file | `docs/dev-plans/029-job-catalog-<ver>-transactional-event-sourcing-synchronous-projection.md` | `docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md` | low | 同上 |
 | docs-file | `docs/dev-plans/030-position-<ver>-transactional-event-sourcing-synchronous-projection.md` | `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md` | low | 同上 |
 | docs-file | `docs/dev-plans/031-greenfield-assignment-job-data-<ver>.md` | `docs/dev-plans/031-greenfield-assignment-job-data.md` | low | 同上 |

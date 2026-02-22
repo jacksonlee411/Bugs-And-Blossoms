@@ -1,4 +1,4 @@
-# DEV-PLAN-026：Org（事务性事件溯源 + 同步投射）完整方案（Greenfield）
+# [Archived] DEV-PLAN-026：Org（事务性事件溯源 + 同步投射）完整方案（Greenfield）
 
 **状态**: 已被 DEV-PLAN-078 替代（2026-02-09；保留为历史参考）
 

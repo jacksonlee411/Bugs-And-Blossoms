@@ -1,7 +1,7 @@
 # DEV-PLAN-075D 执行日志
 
 ## 基本信息
-- 计划文档：`docs/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
+- 计划文档：`docs/archive/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
 - 完成日期：2026-02-07
 - 当前状态：已完成
 

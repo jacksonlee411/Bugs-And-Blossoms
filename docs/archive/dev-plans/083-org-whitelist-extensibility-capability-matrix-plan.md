@@ -1,4 +1,4 @@
-# DEV-PLAN-083：Org 变更能力模型重构（抽象统一 + 策略单点 + 能力外显）
+# [Archived] DEV-PLAN-083：Org 变更能力模型重构（抽象统一 + 策略单点 + 能力外显）
 
 **状态**: 已完成（2026-02-16 06:17 UTC — 083B 后置核验完成：Kernel/Service 对齐 + fail-closed 防回归 + 验收项收口）；2026-02-18 起能力外显 SSOT 迁移到 `DEV-PLAN-108`
 
@@ -25,7 +25,7 @@
 - [X] 冻结并实现 `GET /org/api/org-units/mutation-capabilities` 的 Response 200 字段结构（见 §5.2；落地：`internal/server/orgunit_mutation_capabilities_api.go`）。
 - [X] 冻结并实现 `correct_event/correct_status/rescind_event/rescind_org` 的最小能力字段（见 §5.3~§5.5）。
 - [X] 更正写入链路按 policy 做 fail-closed 校验，并支持 `patch.ext`（承接：`DEV-PLAN-100E1/100E`）。
-- [X] Append（create/event_update）策略单点与能力外显扩展：见 `docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`。
+- [X] Append（create/event_update）策略单点与能力外显扩展：见 `docs/archive/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`。
 
 ## 1. 背景
 
@@ -451,7 +451,7 @@ Core 字段允许矩阵（冻结；承接并收敛 `DEV-PLAN-082`，以本文为
 
 ## 10. 与既有计划关系
 
-- 语义事实源：`docs/dev-plans/082-org-module-field-mutation-rules-investigation.md`
+- 语义事实源：`docs/archive/dev-plans/082-org-module-field-mutation-rules-investigation.md`
 - 状态纠错边界：`docs/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
 - correction 失败排障与错误码稳定化：`docs/dev-plans/080b-orgunit-correction-failure-investigation-and-remediation.md`
 - 审计快照约束：`docs/dev-plans/080c-orgunit-audit-snapshot-presence-table-constraint-plan.md`
@@ -460,7 +460,7 @@ Core 字段允许矩阵（冻结；承接并收敛 `DEV-PLAN-082`，以本文为
 
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
 - `docs/dev-plans/017-routing-strategy.md`
-- `docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
+- `docs/archive/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
 - `docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`

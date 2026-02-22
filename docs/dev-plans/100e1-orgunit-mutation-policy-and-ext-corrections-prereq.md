@@ -173,7 +173,7 @@ services 侧要做到：
 ## 8. 关联文档
 
 - `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
-- `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - `docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md`
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - `docs/dev-plans/100c-org-metadata-wide-table-phase2-kernel-projection-extension-one-door.md`

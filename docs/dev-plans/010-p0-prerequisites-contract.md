@@ -59,7 +59,7 @@
   - 路由契约：`docs/dev-plans/017-routing-strategy.md`
   - CI 门禁：`docs/dev-plans/012-ci-quality-gates.md`
   - UI 壳（MUI-only）：`DEV-PLAN-103（MUI-only 前端收敛）`
-  - UI 壳（历史记录）：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+  - UI 壳（历史记录）：`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
   - Tenancy/AuthN：`docs/dev-plans/019-tenant-and-authn.md`
   - RLS：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
   - Atlas+Goose：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
@@ -280,7 +280,7 @@ job(required_check):
 - `docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - `docs/dev-plans/017-routing-strategy.md`
 - `DEV-PLAN-103（MUI-only 前端收敛）`
-- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - `docs/dev-plans/019-tenant-and-authn.md`
 - `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`

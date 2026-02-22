@@ -6,7 +6,7 @@
 
 ## 1. 背景
 
-本仓库按 Greenfield 的“切片式交付 + 门禁阻断漂移”推进（见 `docs/dev-plans/009-implementation-roadmap.md`、`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。因此需要一套“全链路业务测试案例套件”，用于在 **不回退/不走双链路** 的前提下验证：
+本仓库按 Greenfield 的“切片式交付 + 门禁阻断漂移”推进（见 `docs/dev-plans/009-implementation-roadmap.md`、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。因此需要一套“全链路业务测试案例套件”，用于在 **不回退/不走双链路** 的前提下验证：
 - 系统功能是否覆盖完整业务域（组织/职位分类/SetID/职位/任职/人员）；
 - 每条能力是否 **用户可见、可操作**（避免僵尸功能）；
 - 行为是否与契约文档一致（Contract First：偏差必须先记录并回到契约处理）。
@@ -31,7 +31,7 @@
 测试侧关键信号：
 - **平台先行**：Tenancy/AuthN → RLS 圈地 → Casbin 授权边界，且 fail-closed（`docs/dev-plans/019-tenant-and-authn.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`）。
 - **用户可见性原则**：每个切片交付必须有页面入口与可操作链路（`AGENTS.md` §3.8）。
-- **主数据纵切片顺序**：`SetID => JobCatalog => Position => Assignments`（`docs/dev-plans/070-setid-orgunit-binding-redesign.md`～`docs/dev-plans/031-greenfield-assignment-job-data.md`）。
+- **主数据纵切片顺序**：`SetID => JobCatalog => Position => Assignments`（`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`～`docs/dev-plans/031-greenfield-assignment-job-data.md`）。
 
 因此：本套件以“租户与权限基线 → 主数据 → 人员任职”为主链路顺序。
 
@@ -147,7 +147,7 @@
 | Job Profile | `JP-SWE` | Software Engineer | families=`JF-BE,JF-FE`；primary=`JF-BE` |
 
 备注：
-- Job Catalog 的权威作用域为 `setid`；本套件使用显式 `setid=S2601` + `as_of=2026-01-01`（对齐 `docs/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。
+- Job Catalog 的权威作用域为 `setid`；本套件使用显式 `setid=S2601` + `as_of=2026-01-01`（对齐 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。
 - 必测：覆盖 `job_family_groups/job_families/job_levels/job_profiles` 的“写入→as_of 读取→UI 可见”闭环，并包含至少 1 个跨日期场景（例如 family reparenting 的 `as_of` 前后对比）。
 
 ### 5.5 职位（Positions，`as_of=2026-01-01`）
@@ -221,7 +221,7 @@
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
 - `docs/dev-plans/023-superadmin-authn.md`
 - `docs/dev-plans/017-routing-strategy.md`
-- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - `docs/dev-plans/020-i18n-en-zh-only.md`
 
 **数据准备**
@@ -244,8 +244,8 @@
 **子计划文档**：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 
 **契约引用**
-- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
-- `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
+- `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+- `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - `docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`
@@ -307,5 +307,5 @@
 ## 10. 参考（SSOT 链接）
 
 - 路线图：`docs/dev-plans/009-implementation-roadmap.md`
-- 主数据：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/031-greenfield-assignment-job-data.md`
-- 平台：`docs/dev-plans/019-tenant-and-authn.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`、`docs/dev-plans/020-i18n-en-zh-only.md`
+- 主数据：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/031-greenfield-assignment-job-data.md`
+- 平台：`docs/dev-plans/019-tenant-and-authn.md`、`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`、`docs/dev-plans/022-authz-casbin-toolchain.md`、`docs/dev-plans/017-routing-strategy.md`、`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`、`docs/dev-plans/020-i18n-en-zh-only.md`

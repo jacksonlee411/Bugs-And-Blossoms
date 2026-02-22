@@ -123,9 +123,9 @@
 ## 9. 关联文档
 
 - `docs/dev-plans/005-project-standards-and-spec-adoption.md`
-- `docs/dev-plans/109-request-code-unification-and-gate.md`
+- `docs/archive/dev-plans/109-request-code-unification-and-gate.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
-- `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
-- `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
-- `docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
+- `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
+- `docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
 - `AGENTS.md`

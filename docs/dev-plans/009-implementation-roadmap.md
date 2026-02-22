@@ -8,7 +8,7 @@
 
 ## 0. 进度速记
 1. [X] 新增 `DEV-PLAN-009` 并登记到 `AGENTS.md` Doc Map。
-2. [X] 将本文拆成可执行里程碑（009M1-009M5），并把每个里程碑映射到可交付的 PR 序列（新仓库执行）。证据：PR #68 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/68 、`docs/dev-plans/009m1-phase4-setid-jobcatalog-vertical-slice-execution-plan.md`、`docs/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`、`docs/dev-plans/009m3-phase5-quality-hardening-e2e-execution-plan.md`、`docs/dev-plans/009m4-phase2-superadmin-tenant-console-execution-plan.md`、`docs/dev-plans/009m5-phase2-authn-kratos-sessions-execution-plan.md`
+2. [X] 将本文拆成可执行里程碑（009M1-009M5），并把每个里程碑映射到可交付的 PR 序列（新仓库执行）。证据：PR #68 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/68 、`docs/archive/dev-plans/009m1-phase4-setid-jobcatalog-vertical-slice-execution-plan.md`、`docs/archive/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`、`docs/archive/dev-plans/009m3-phase5-quality-hardening-e2e-execution-plan.md`、`docs/archive/dev-plans/009m4-phase2-superadmin-tenant-console-execution-plan.md`、`docs/archive/dev-plans/009m5-phase2-authn-kratos-sessions-execution-plan.md`
 3. [X] P0 前置条件（仓库 bootstrap/门禁/壳/最小登录/迁移闭环）以 `DEV-PLAN-010` 为合同执行，避免实现期漂移。
    - 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`、#11 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/11
 4. [X] 将本文状态从“实施中”更新为“已完成”（与出口条件全绿一致）。证据：PR #70 https://github.com/jacksonlee411/Bugs-And-Blossoms/pull/70
@@ -204,7 +204,7 @@ flowchart TD
 - `docs/dev-plans/015-ddd-layering-framework.md`
 - `docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
 - `docs/dev-plans/017-routing-strategy.md`
-- `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
+- `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`
 - `docs/dev-plans/019-tenant-and-authn.md`
 - `docs/dev-plans/020-i18n-en-zh-only.md`
 - `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
@@ -212,10 +212,10 @@ flowchart TD
 - `docs/dev-plans/023-superadmin-authn.md`
 - `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - `docs/dev-plans/025-sqlc-guidelines.md`
-- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（已被 DEV-PLAN-078 替代，历史参考）
+- `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（已被 DEV-PLAN-078 替代，历史参考）
 - `docs/dev-plans/078-orgunit-write-model-alternatives-comparison-and-decision.md`
 - `docs/dev-plans/027-person-minimal-identity-for-staffing.md`
-- `docs/dev-plans/028-setid-management.md`
+- `docs/archive/dev-plans/028-setid-management.md`
 - `docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/031-greenfield-assignment-job-data.md`

@@ -2,7 +2,7 @@
 
 **状态**: 进行中（2026-01-11 20:55 UTC）— M3/M4a/M5/M6a/M7 已落地；M4b/M6b 作为可选里程碑见 §10
 
-> **更新说明（DEV-PLAN-070）**：本计划中涉及 `business_unit_id` / `record_group` 的 SetID 口径已被 `docs/dev-plans/070-setid-orgunit-binding-redesign.md` 取代；以下内容已按“配置主数据显式 `setid`、业务数据可由 `org_unit_id` 解析并落库”更新，Position 不再要求手工选择 SetID。历史实现细节仅供追溯，不再作为契约。
+> **更新说明（DEV-PLAN-070）**：本计划中涉及 `business_unit_id` / `record_group` 的 SetID 口径已被 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md` 取代；以下内容已按“配置主数据显式 `setid`、业务数据可由 `org_unit_id` 解析并落库”更新，Position 不再要求手工选择 SetID。历史实现细节仅供追溯，不再作为契约。
 
 > 本计划的定位：作为 Greenfield HR 的 Position/Assignment 子域，提供 **Position/Assignment 的权威契约**（DB Kernel + Go Facade + One Door），并与 `DEV-PLAN-026`（OrgUnit）对齐“事件 SoT + 同步投射 + 可重放”的范式。
 
@@ -55,7 +55,7 @@
   - 触发器矩阵与本地必跑：`AGENTS.md`
   - 命令入口：`Makefile`
   - CI 门禁：`.github/workflows/quality-gates.yml`
-  - OrgUnit：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+  - OrgUnit：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
   - Greenfield HR 模块骨架（Position/Assignment 归属 staffing）：`docs/dev-plans/016-greenfield-hr-modules-skeleton.md`
   - 多租户隔离（RLS）：`docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`（对齐 `docs/dev-plans/019-multi-tenant-toolchain.md` / `docs/dev-plans/019A-rls-tenant-isolation.md`）
   - Job Catalog：`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`
