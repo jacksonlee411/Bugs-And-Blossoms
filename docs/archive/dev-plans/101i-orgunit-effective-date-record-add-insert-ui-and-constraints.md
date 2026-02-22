@@ -1,4 +1,4 @@
-# DEV-PLAN-101I：OrgUnit 生效日期记录新增/插入（MUI）可实施方案
+# [Archived] DEV-PLAN-101I：OrgUnit 生效日期记录新增/插入（MUI）可实施方案
 
 **状态**: 已实施（2026-02-17）；2026-02-18 起写入口径由 `DEV-PLAN-108` 进一步收敛
 
@@ -35,9 +35,9 @@
 
 - MUI-only 前端唯一链路：`DEV-PLAN-103（MUI-only 前端收敛）`
 - 有效期区间与插入语义口径：`docs/dev-plans/075-orgunit-effective-date-backdating-assessment.md`
-- 历史问题与后续能力诉求（含 `SET_MANAGER`/`UPDATE` 方向）：`docs/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
-- Append capabilities/policy 单点：`docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
-- 扩展字段可编辑口径：`docs/dev-plans/101b-orgunit-plain-ext-fields-editability-convergence.md`
+- 历史问题与后续能力诉求（含 `SET_MANAGER`/`UPDATE` 方向）：`docs/archive/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
+- Append capabilities/policy 单点：`docs/archive/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
+- 扩展字段可编辑口径：`docs/archive/dev-plans/101b-orgunit-plain-ext-fields-editability-convergence.md`
 
 ## 3. 目标与非目标
 
@@ -123,7 +123,7 @@
 ## 6. 实施步骤（可执行清单）
 
 1. [x] 文档冻结与 i18n 文案补齐  
-   - `docs/dev-plans/101i-orgunit-effective-date-record-add-insert-ui-and-constraints.md`  
+   - `docs/archive/dev-plans/101i-orgunit-effective-date-record-add-insert-ui-and-constraints.md`  
    - `apps/web/src/i18n/messages.ts`（新增 add/insert/区间提示/无槽位提示）
 
 2. [x] 详情页增加 add/insert 显式入口与向导状态  

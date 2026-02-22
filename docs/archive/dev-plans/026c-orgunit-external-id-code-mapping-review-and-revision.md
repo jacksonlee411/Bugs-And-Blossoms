@@ -1,4 +1,4 @@
-# DEV-PLAN-026C：OrgUnit 外部ID兼容（org_code 映射）评审与修订方案
+# [Archived] DEV-PLAN-026C：OrgUnit 外部ID兼容（org_code 映射）评审与修订方案
 
 **状态**: 部分完成（2026-02-03，迁移样本统计豁免：无样本数据，审批人：我）
 
@@ -23,7 +23,7 @@
 ## 3. 需核实的前置事实（Facts to Verify）
 - [X] 现有投射重建是否有“清表重放/幂等 upsert”约定与实现（作为 026B 重放策略的前提）。
   - 结论：采用同事务 delete+replay（清表重放），非 upsert。
-  - 证据：`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`；`modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`。
+  - 证据：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`；`modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`。
 - [X] API 输入校验是否保留原始输入（用于空格/\\t/全角空白允许语义与“非全空白”判定）。
   - 结论：多数入口保留原始输入；SetID UI 路径在 Normalize 前先 Trim，导致语义不一致。
   - 证据：`pkg/orgunit/resolve.go`；`internal/server/orgunit_nodes.go`；`internal/server/staffing_handlers.go`；`internal/server/orgunit_api.go`；`internal/server/setid.go`。
@@ -31,7 +31,7 @@
   - 现状：未在 `docs/dev-plans/` 或 `docs/dev-records/` 找到迁移样本统计记录；本次按豁免处理。
 - [X] "ROOT" 是否为保留 org_code，若不是需修订示例。
   - 结论：未发现 “ROOT 为保留 org_code” 的规则或校验；root 语义由 parent_id 为空与 root_org_id 约束定义。
-  - 证据：`docs/dev-plans/026b-orgunit-external-id-code-mapping.md`；`modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`。
+  - 证据：`docs/archive/dev-plans/026b-orgunit-external-id-code-mapping.md`；`modules/orgunit/infrastructure/persistence/schema/00003_orgunit_engine.sql`。
 
 ## 4. 方案内可直接修订的问题
 ### 4.1 文档状态与完成记录混用
@@ -97,7 +97,7 @@
 ### 7.8 增量投射方案（已拆分为 026D）
 > 目标：在不破坏 One Door 与事务一致性的前提下，减少“每次写入全量回放”的写放大与锁时长。
 
-- 已拆分为独立计划：`DEV-PLAN-026D`（`docs/dev-plans/026d-orgunit-incremental-projection-plan.md`）。  
+- 已拆分为独立计划：`DEV-PLAN-026D`（`docs/archive/dev-plans/026d-orgunit-incremental-projection-plan.md`）。  
 - 026D 已补齐以下可执行内容（本计划仅引用，不重复细节）：  
   1) **前置依赖**：明确 026B/026C 对齐与 `hierarchy_type` 状态。  
   2) **full_name_path 增量算法草案**：CREATE/RENAME/MOVE 的最小可执行策略。  

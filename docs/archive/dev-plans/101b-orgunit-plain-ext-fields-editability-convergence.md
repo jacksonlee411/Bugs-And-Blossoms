@@ -1,4 +1,4 @@
-# DEV-PLAN-101B：OrgUnit PLAIN 扩展字段编辑能力收敛（新建/插入记录/修正）
+# [Archived] DEV-PLAN-101B：OrgUnit PLAIN 扩展字段编辑能力收敛（新建/插入记录/修正）
 
 **状态**: 已完成（2026-02-16 20:55 UTC）
 
@@ -65,7 +65,7 @@
 
 ## 6. 关联文档
 
-- `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - `docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`
 - `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`

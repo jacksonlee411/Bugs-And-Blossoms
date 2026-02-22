@@ -57,7 +57,7 @@
 - Authz（Casbin）：`docs/dev-plans/022-authz-casbin-toolchain.md`
 - SuperAdmin：`docs/dev-plans/023-superadmin-authn.md`
 - 路由治理：`docs/dev-plans/017-routing-strategy.md`
-- UI Shell/i18n：`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`、`docs/dev-plans/020-i18n-en-zh-only.md`
+- UI Shell/i18n：`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`、`docs/dev-plans/020-i18n-en-zh-only.md`
 
 ### 3.1 接口/路由清单（本子计划使用）
 

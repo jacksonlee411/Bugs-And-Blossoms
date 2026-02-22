@@ -1,4 +1,4 @@
-# DEV-PLAN-101：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）
+# [Archived] DEV-PLAN-101：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）
 
 **状态**: 已完成（2026-02-15 08:41 UTC）
 

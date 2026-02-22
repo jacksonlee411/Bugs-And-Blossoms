@@ -427,7 +427,7 @@
 
 ## 8. 关联文档
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
-- `docs/dev-plans/026d-orgunit-incremental-projection-plan.md`
+- `docs/archive/dev-plans/026d-orgunit-incremental-projection-plan.md`
 - `docs/dev-plans/075c-orgunit-delete-disable-semantics-alignment.md`
 - `docs/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
 - `docs/dev-plans/077-orgunit-replay-write-amplification-assessment-and-mitigation.md`

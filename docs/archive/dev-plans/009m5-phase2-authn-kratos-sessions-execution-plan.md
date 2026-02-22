@@ -1,4 +1,4 @@
-# DEV-PLAN-009M5：Phase 2 下一大型里程碑执行计划（AuthN 真实化：Kratos + 本地会话 sid/sa_sid）
+# [Archived] DEV-PLAN-009M5：Phase 2 下一大型里程碑执行计划（AuthN 真实化：Kratos + 本地会话 sid/sa_sid）
 
 **状态**: 已完成（2026-01-08 02:01 UTC）
 

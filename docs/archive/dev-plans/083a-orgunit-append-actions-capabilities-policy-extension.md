@@ -1,4 +1,4 @@
-# DEV-PLAN-083A：OrgUnit Append 写入动作能力外显与策略单点扩展（create / event_update）
+# [Archived] DEV-PLAN-083A：OrgUnit Append 写入动作能力外显与策略单点扩展（create / event_update）
 
 **状态**: 已完成（2026-02-16 03:44 UTC — 后端策略/API/写入收敛 + 前端 create/append capabilities 全接入 + 测试与门禁通过）；2026-02-18 起由 `DEV-PLAN-108` 统一写入口取代为主口径
 
@@ -338,7 +338,7 @@ Response 200（冻结最小字段结构）：
 
 建议 PR-0（仅文档/测试骨架，不改生产逻辑）：
 
-- `docs/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`：冻结本计划口径（本文件）。
+- `docs/archive/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`：冻结本计划口径（本文件）。
 - 新增测试用例占位（可以先只断言排序/闭集，不必一次性覆盖所有分支）：
   - `modules/orgunit/services/orgunit_mutation_policy_test.go`
   - `internal/server/orgunit_append_capabilities_api_test.go`（若 API 阶段暂未实现，可先写为 TODO/skipped）
@@ -452,7 +452,7 @@ Response 200（冻结最小字段结构）：
 
 ## 9. 关联文档
 
-- `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - `docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`
 - `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
 - `docs/dev-plans/017-routing-strategy.md`

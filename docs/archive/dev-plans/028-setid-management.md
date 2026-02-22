@@ -1,12 +1,12 @@
-# DEV-PLAN-028：SetID 管理（Greenfield）
+# [Archived] DEV-PLAN-028：SetID 管理（Greenfield）
 
 **状态**: 已废弃（2026-01-24 04:25 UTC）— 已被 DEV-PLAN-070 取代，后续以 070 为准
 
-> **重要**：本文件仅作为历史记录保留，不再作为实现/评审/验收契约。所有涉及 `business_unit_id` / `record_group` 的设计与口径均已废弃，必须以 `docs/dev-plans/070-setid-orgunit-binding-redesign.md` 为 SSOT。
+> **重要**：本文件仅作为历史记录保留，不再作为实现/评审/验收契约。所有涉及 `business_unit_id` / `record_group` 的设计与口径均已废弃，必须以 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md` 为 SSOT。
 > **补充（现行口径）**：配置主数据入口必须显式携带 `setid`；业务数据入口通过 `org_unit_id` + `as_of_date` 解析 `setid` 并落库审计；业务入口不再手工选择 `setid`；JobCatalog code 唯一性为 `(tenant_id, code)`，不允许跨 setid 同码。
 > **提醒**：本文以下内容仅供历史追溯，禁止在实现/测试/门禁中引用或执行。
 
-> 本计划作为历史记录保留，新的 SetID 方案以 `docs/dev-plans/070-setid-orgunit-binding-redesign.md` 为准。
+> 本计划作为历史记录保留，新的 SetID 方案以 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md` 为准。
 
 > 适用范围：**Greenfield 全新实现**（路线图见 `DEV-PLAN-009`）。  
 > 本文研究 PeopleSoft 的 SetID 机制，并提出引入 SetID 的最小可执行方案：在同一租户内实现“主数据按业务单元共享/隔离”的配置能力，且可被门禁验证，避免实现期各模块各写一套数据共享规则导致漂移。
@@ -17,7 +17,7 @@
 
 ### 0.1 新增功能（NEW）
 
-- [ ] **UI：显式 Business Unit（已废弃）**：任何 setid-controlled 的 UI 入口（例如 `/org/job-catalog`）若缺少 `business_unit_id`，必须 `302` 重定向补齐默认 `BU000`（最终请求必须显式携带 `business_unit_id`；禁止 silent default）。**现改为配置主数据显式 `setid`；业务数据由 `org_unit_id` 解析 `setid`**（见 `docs/dev-plans/070-setid-orgunit-binding-redesign.md`）。
+- [ ] **UI：显式 Business Unit（已废弃）**：任何 setid-controlled 的 UI 入口（例如 `/org/job-catalog`）若缺少 `business_unit_id`，必须 `302` 重定向补齐默认 `BU000`（最终请求必须显式携带 `business_unit_id`；禁止 silent default）。**现改为配置主数据显式 `setid`；业务数据由 `org_unit_id` 解析 `setid`**（见 `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`）。
 - [X] **Staffing：Position 必填 BU（已废弃）**：`position` 的创建事件必须携带 `business_unit_id`，并由 DB Kernel/UI/API 共同强制（保证“人员→任职→岗位→BU”的可推导链路；也避免后续接入 setid 解析时出现不可判定上下文）。**现改为 Position 创建不要求手工 `setid`；`job_profile_id` 必填，`setid` 由 `org_unit_id` 解析并落库**（见 `docs/dev-plans/030-position-transactional-event-sourcing-synchronous-projection.md`）。
 - [ ] **（可选，非 P0）Tree Controls**：当出现“某 BU 需要访问不属于其 record group 解析 setid 的树/层级配置”的需求时，引入 Tree Controls 映射（契约见 5.3.1）。
 

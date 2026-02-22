@@ -117,7 +117,7 @@
 | 状态 | 文档 | 需同步更新内容（冻结） |
 | --- | --- | --- |
 | 已完成 | `docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md` | 将 `x_...` 从“固定 text”更新为“可选 `text/int/uuid/bool/date/numeric`”；补充 enable 请求中的 `value_type` 与 `label(display_label)` 语义。 |
-| 已完成 | `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md` | 把“自定义（PLAIN 文本）”改为“自定义（直接值）”；新增 custom 分支的“值类型”与“字段名称（可选）”表单项。 |
+| 已完成 | `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md` | 把“自定义（PLAIN 文本）”改为“自定义（直接值）”；新增 custom 分支的“值类型”与“字段名称（可选）”表单项。 |
 | 已完成 | `docs/dev-plans/106-org-ext-fields-enable-dict-registry-and-custom-plain-fields.md` | 在 106 文档中补充“被 110 扩展”的说明：自定义 PLAIN 不再固定 text，而是按槽位类型可选。 |
 | 已完成 | `docs/dev-plans/106a-org-ext-fields-dict-as-field-key-and-custom-label.md` | 对齐 110：确认 106A 中关于 `x_...` 的描述不再暗含“仅 text”，并保持 DICT 路径不受 110 影响。 |
 | 已完成 | `docs/dev-plans/107-orgunit-ext-field-slots-expand-to-100.md` | 补充“110 直接消费 107 六种槽位能力”说明，作为容量与类型来源引用，避免两份枚举漂移。 |
@@ -168,7 +168,7 @@
 
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
 - `docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md`
-- `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/106-org-ext-fields-enable-dict-registry-and-custom-plain-fields.md`
 - `docs/dev-plans/106a-org-ext-fields-dict-as-field-key-and-custom-label.md`
 - `docs/dev-plans/107-orgunit-ext-field-slots-expand-to-100.md`

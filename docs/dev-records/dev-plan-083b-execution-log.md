@@ -4,7 +4,7 @@
 
 **关联文档**:
 - `docs/dev-plans/083b-org-mutation-capabilities-post-083a-closure-plan.md`
-- `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - `docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
 
 ## 0. 同步收口检查
@@ -26,7 +26,7 @@
 
 | 日期（UTC） | 操作 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| 2026-02-16 06:04 | 对齐矩阵（Service/API/Kernel）核验 | ✅ | `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md` §6.4 勾选、`modules/orgunit/services/orgunit_write_service.go`、`internal/server/orgunit_mutation_capabilities_api.go` |
+| 2026-02-16 06:04 | 对齐矩阵（Service/API/Kernel）核验 | ✅ | `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md` §6.4 勾选、`modules/orgunit/services/orgunit_write_service.go`、`internal/server/orgunit_mutation_capabilities_api.go` |
 | 2026-02-16 06:07 | 必测负例补齐与验证 | ✅ | 新增：`internal/server/orgunit_083b_latency_baseline_test.go`、`modules/orgunit/services/orgunit_083b_latency_baseline_test.go`；执行：`go test ./internal/server ./modules/orgunit/services -count=1` |
 
 ## 2. W2（100G 闭环）执行记录

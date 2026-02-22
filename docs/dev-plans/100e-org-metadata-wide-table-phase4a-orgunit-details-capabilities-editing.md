@@ -490,8 +490,8 @@ Select 字段（DICT/ENTITY）控件策略：
 - `docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
 - `docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - `docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`
-- `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
-- `docs/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
+- `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- `docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - `docs/dev-plans/097-orgunit-details-drawer-to-page-migration.md`
 - `docs/dev-plans/099-orgunit-details-two-pane-info-audit-mui.md`
 - `docs/dev-plans/020-i18n-en-zh-only.md`

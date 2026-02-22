@@ -147,7 +147,7 @@
 - 本计划实现过程中，如发生 org API/交互契约变化，先更新以下 SSOT 后落代码：
   - `docs/dev-plans/073-orgunit-crud-implementation-status.md`
   - `docs/dev-plans/074-orgunit-details-update-ui-optimization.md`
-  - `docs/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
+  - `docs/archive/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
 - 写入口保持唯一：沿用既有 org internal API 与 DB Kernel 事件提交约束，不新增并行写入口。
 
 ### 8.1 API 扩展点（如需）

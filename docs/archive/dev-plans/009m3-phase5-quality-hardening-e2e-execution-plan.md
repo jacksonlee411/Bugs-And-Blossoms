@@ -1,4 +1,4 @@
-# DEV-PLAN-009M3：Phase 5 下一大型里程碑执行计划（质量收口：E2E 真实化 + 可排障门禁）
+# [Archived] DEV-PLAN-009M3：Phase 5 下一大型里程碑执行计划（质量收口：E2E 真实化 + 可排障门禁）
 
 **状态**: 已完成（2026-01-07 12:50 UTC）
 
@@ -29,7 +29,7 @@
   - sqlc：`docs/dev-plans/025-sqlc-guidelines.md`
   - Authz：`docs/dev-plans/022-authz-casbin-toolchain.md`
   - E2E 业务断言口径（`effective_date`）：`docs/dev-plans/031-greenfield-assignment-job-data.md`、`docs/dev-plans/032-effective-date-day-granularity.md`
-  - Phase 4 复用输入（smoke 场景来源）：`docs/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`
+  - Phase 4 复用输入（smoke 场景来源）：`docs/archive/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md`
 
 ## 2. 非目标（本执行计划不做）
 
@@ -90,7 +90,7 @@
 ### PR-0：文档回填（对齐“009m2 已完成”的输入事实）
 - [X] 在 `docs/dev-records/DEV-PLAN-010-READINESS.md` 补齐 `DEV-PLAN-009M2` 的最小可复现证据入口（不要求复制全部细节，但必须能复跑）。
 - [X] 在 `docs/dev-plans/009-implementation-roadmap.md` Phase 4 出口条件中补齐对应勾选与证据链接（使路线图状态与实现事实一致）。
-- [X] 将 `docs/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md` 的状态更新为 `已完成` 并补时间戳（以 readiness 证据为前置）。
+- [X] 将 `docs/archive/dev-plans/009m2-phase4-person-identity-staffing-vertical-slice-execution-plan.md` 的状态更新为 `已完成` 并补时间戳（以 readiness 证据为前置）。
 
 ### PR-1：E2E 框架落地（Playwright/等价）与最小 smoke
 - [X] 调整 `make e2e`：移除 placeholder/no-op，入口收敛为 `scripts/e2e/run.sh`；无用例时 fail-fast（拒绝 “0 tests 退出 0”）。

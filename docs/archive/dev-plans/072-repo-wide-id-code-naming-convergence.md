@@ -1,6 +1,6 @@
-# DEV-PLAN-072：全仓 ID/Code 命名与对外标识收敛
+# [Archived] DEV-PLAN-072：全仓 ID/Code 命名与对外标识收敛
 
-**状态**: 草拟中（2026-02-02 14:34 UTC）；已复评（2026-02-03）
+**状态**: 已归档（2026-02-22，规范性条款并入 `DEV-PLAN-005/STD-003`；本文仅保留历史过程记录）
 
 ## 0. 复评结论（基于 DEV-PLAN-026B/026C/026D）
 - 026B 已完成并落地，对外契约以 `org_code` 为唯一事实源：**可作为 072 的边界基准**。
@@ -207,10 +207,10 @@ graph TD
 - 相关模块迁移/代码/测试/文档更新。
 
 ## 参考
-- `docs/dev-plans/026a-orgunit-id-uuid-code-naming.md`
-- `docs/dev-plans/026b-orgunit-external-id-code-mapping.md`
-- `docs/dev-plans/026c-orgunit-external-id-code-mapping-review-and-revision.md`
-- `docs/dev-plans/026d-orgunit-incremental-projection-plan.md`
+- `docs/archive/dev-plans/026a-orgunit-id-uuid-code-naming.md`
+- `docs/archive/dev-plans/026b-orgunit-external-id-code-mapping.md`
+- `docs/archive/dev-plans/026c-orgunit-external-id-code-mapping-review-and-revision.md`
+- `docs/archive/dev-plans/026d-orgunit-incremental-projection-plan.md`
 - `docs/dev-plans/017-routing-strategy.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `AGENTS.md`

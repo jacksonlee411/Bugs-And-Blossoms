@@ -257,9 +257,9 @@ M1 完成判定（全部满足）：
 ## 8. 关联文档
 
 - `docs/dev-records/Go+PG+CEL 规则引擎架构升级.md`
-- `docs/dev-plans/101-orgunit-field-config-management-ui-ia.md`
+- `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/108-org-crud-ui-actions-consolidation-and-unified-field-mutation-rules.md`
-- `docs/dev-plans/109-request-code-unification-and-gate.md`
+- `docs/archive/dev-plans/109-request-code-unification-and-gate.md`
 - `docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `AGENTS.md`

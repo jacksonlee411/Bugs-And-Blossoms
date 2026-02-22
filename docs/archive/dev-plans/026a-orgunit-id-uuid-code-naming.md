@@ -1,4 +1,4 @@
-# DEV-PLAN-026A：OrgUnit 8位编号与 UUID/Code 命名规范
+# [Archived] DEV-PLAN-026A：OrgUnit 8位编号与 UUID/Code 命名规范
 
 **状态**: 已完成（2026-02-02 06:57 UTC — 对齐 026B 租户隔离 org_id 分配；2026-02-22 时间参数口径按 `STD-002`/`DEV-PLAN-102B` 勘误）
 
@@ -564,6 +564,6 @@ SELECT orgunit.allocate_org_id(p_tenant_uuid)::int;
   - 数据回滚：新项目默认“重建库 + 重放”；生产环境不执行破坏性 Down。
 
 ## 参考
-- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+- `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
 - `AGENTS.md`

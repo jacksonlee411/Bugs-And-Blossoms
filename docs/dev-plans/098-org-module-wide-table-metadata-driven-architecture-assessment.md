@@ -264,7 +264,7 @@ CREATE TABLE tenant_ranks (
 
 - **树结构与查询基座已存在**：OrgUnit 已采用 `ltree`（路径列为 `node_path`）表达层级结构，并配套 GiST/Gin 索引支撑子树/路径查询（见 `modules/orgunit/infrastructure/persistence/schema/00002_orgunit_org_schema.sql:178`）。
 - **有效期/生效日口径已对齐**：仓库对“业务生效”统一使用 `date` 与 `daterange`（Valid Time day 粒度），非常适合“Entity 存 ID + as-of 查询拿 label”的方式（对齐 `docs/dev-plans/032-effective-date-day-granularity.md`）。
-- **UI Select 的交互约定已具备**：下拉类字段统一走 options endpoint + 输入搜索，天然适配 DICT/ENTITY 两类数据源的分流（见 `docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`）。
+- **UI Select 的交互约定已具备**：下拉类字段统一走 options endpoint + 输入搜索，天然适配 DICT/ENTITY 两类数据源的分流（见 `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`）。
 
 ### 10.2 关键缺口与高风险点（决定交付难度的部分）
 
@@ -304,7 +304,7 @@ CREATE TABLE tenant_ranks (
 ### 10.5 与仓库不变量/SSOT 的对齐点（实施前必须逐条确认）
 
 - **Valid Time**：业务生效一律 day 粒度（`docs/dev-plans/032-effective-date-day-granularity.md`）。  
-- **One Door**：写入必须走 Kernel `submit_*_event(...)`，同事务同步投射（对齐 `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`）。  
+- **One Door**：写入必须走 Kernel `submit_*_event(...)`，同事务同步投射（对齐 `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`）。  
 - **No Tx, No RLS**：访问 Greenfield 表必须显式事务 + 租户注入且 fail-closed（对齐 `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`）。  
-- **UI Select**：options endpoint + 搜索（`docs/dev-plans/018-astro-aha-ui-shell-for-hrms.md`）。  
+- **UI Select**：options endpoint + 搜索（`docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`）。  
 - **门禁入口**：触发器与命令以 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 为准（避免在本文件复制脚本细节）。

@@ -1,4 +1,4 @@
-# DEV-PLAN-009M4：Phase 2 下一大型里程碑执行计划（SuperAdmin 控制面 + Tenant Console MVP）
+# [Archived] DEV-PLAN-009M4：Phase 2 下一大型里程碑执行计划（SuperAdmin 控制面 + Tenant Console MVP）
 
 **状态**: 已完成（2026-01-07 18:31 UTC）
 

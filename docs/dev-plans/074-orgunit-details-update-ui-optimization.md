@@ -5,7 +5,7 @@
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
   - 现有 `/org/nodes` 详情区可读不可改，Nodes 列表仅根节点可见。
-  - 参考：`docs/dev-plans/073-orgunit-crud-implementation-status.md`（路由与详情片段契约）、`docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（UI 单链路）、`docs/dev-plans/032-effective-date-day-granularity.md`（日粒度有效期）。
+  - 参考：`docs/dev-plans/073-orgunit-crud-implementation-status.md`（路由与详情片段契约）、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（UI 单链路）、`docs/dev-plans/032-effective-date-day-granularity.md`（日粒度有效期）。
   - 设计对齐基准：`designs/orgunit/orgunit-details-ui.pen`。
 - **当前痛点**:
   - 无法在 Nodes 列表中定位目标组织、详情区仅只读，无法完成更新。

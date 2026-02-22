@@ -238,12 +238,12 @@
 ### 11.1 受影响文档清单（历史计划）
 | DEV-PLAN | 文档 | 影响级别 | 影响点摘要 |
 | --- | --- | --- | --- |
-| DEV-PLAN-028 | `docs/dev-plans/028-setid-management.md` | 高 | 历史口径仍含旧 SetID 语义；需补充“070B 后不再存在运行时共享租户读取”说明。 |
-| DEV-PLAN-070 | `docs/dev-plans/070-setid-orgunit-binding-redesign.md` | 高 | 共享层与租户层边界需更新为“运行时 tenant-only + 发布式共享”。 |
+| DEV-PLAN-028 | `docs/archive/dev-plans/028-setid-management.md` | 高 | 历史口径仍含旧 SetID 语义；需补充“070B 后不再存在运行时共享租户读取”说明。 |
+| DEV-PLAN-070 | `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md` | 高 | 共享层与租户层边界需更新为“运行时 tenant-only + 发布式共享”。 |
 | DEV-PLAN-070A | `docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md` | 高 | 候选路线应收敛为 070B 主路径，并补齐决策结论与取舍依据。 |
-| DEV-PLAN-071 | `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md` | 高 | scope package 的 shared-only 描述需从“运行时共享读”改为“发布后本地读”。 |
-| DEV-PLAN-071A | `docs/dev-plans/071a-package-selection-ownership-and-subscription.md` | 中 | package 编辑归属不变，但订阅消费路径需去除 global 运行时依赖。 |
-| DEV-PLAN-071B | `docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md` | 高 | `tenant_global` 需收敛为 `tenant_only`，并补发布治理与 fail-closed 口径。 |
+| DEV-PLAN-071 | `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md` | 高 | scope package 的 shared-only 描述需从“运行时共享读”改为“发布后本地读”。 |
+| DEV-PLAN-071A | `docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md` | 中 | package 编辑归属不变，但订阅消费路径需去除 global 运行时依赖。 |
+| DEV-PLAN-071B | `docs/archive/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md` | 高 | `tenant_global` 需收敛为 `tenant_only`，并补发布治理与 fail-closed 口径。 |
 | DEV-PLAN-102B | `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md` | 高 | 作为 070/071 时间契约 PoR：`as_of/effective_date` 显式必填、`invalid_*` 错误码冻结、跨天回放一致性门禁。 |
 | DEV-PLAN-105 | `docs/dev-plans/105-dict-config-platform-module.md` | 高 | 字典读取口径需移除 tenant/global fallback，改为 tenant-only。 |
 | DEV-PLAN-105A | `docs/dev-plans/105a-dict-config-validation-issues-investigation.md` | 中 | 校验问题需补“基线未导入”与“不回退 global”错误路径。 |
@@ -280,10 +280,10 @@
 ## 12. 关联文档
 - `AGENTS.md`
 - `docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
-- `docs/dev-plans/070-setid-orgunit-binding-redesign.md`
-- `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
-- `docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
-- `docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
+- `docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
+- `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
+- `docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- `docs/archive/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
 - `docs/dev-plans/105-dict-config-platform-module.md`
 - `docs/dev-plans/105b-dict-code-management-and-governance.md`

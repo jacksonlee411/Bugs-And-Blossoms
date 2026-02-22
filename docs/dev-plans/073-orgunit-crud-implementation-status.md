@@ -1039,5 +1039,5 @@ M9. [x] 独立详情页 / 组织单元详情视图（UI）
 - 范围（表名/用途）：`org_event_corrections_current/history`（OrgUnit 更正 current+history，支持幂等与重放）
 
 ## 关联文档
-- `docs/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
-- `docs/dev-plans/026a-orgunit-id-uuid-code-naming.md`
+- `docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
+- `docs/archive/dev-plans/026a-orgunit-id-uuid-code-naming.md`
