@@ -552,6 +552,19 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 		}
 	})
 
+	t.Run("owner context forbidden", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"B0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), scopeReasonOwnerContextForbidden) {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
 	t.Run("success", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))

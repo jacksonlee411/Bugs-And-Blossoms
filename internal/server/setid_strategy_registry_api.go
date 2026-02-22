@@ -22,6 +22,9 @@ const (
 	fieldPolicyConflictCode         = "FIELD_POLICY_CONFLICT"
 	fieldPolicyMissingCode          = "FIELD_POLICY_MISSING"
 	explainRequiredCode             = "EXPLAIN_REQUIRED"
+	fieldRequiredInContextCode      = "FIELD_REQUIRED_IN_CONTEXT"
+	fieldHiddenInContextCode        = "FIELD_HIDDEN_IN_CONTEXT"
+	fieldDefaultRuleMissingCode     = "FIELD_DEFAULT_RULE_MISSING"
 )
 
 var (
@@ -291,6 +294,9 @@ func (s *setIDStrategyRegistryRuntime) resolveFieldDecision(
 	}
 	if chosen.item.Required && !chosen.item.Visible {
 		return setIDFieldDecision{}, errors.New(fieldPolicyConflictCode)
+	}
+	if chosen.item.DefaultRuleRef == "" && chosen.item.DefaultValue == "" {
+		return setIDFieldDecision{}, errors.New(fieldDefaultRuleMissingCode)
 	}
 	return setIDFieldDecision{
 		CapabilityKey:      chosen.item.CapabilityKey,

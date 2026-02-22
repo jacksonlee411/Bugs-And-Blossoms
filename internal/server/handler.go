@@ -343,6 +343,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-strategy-registry", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetIDStrategyRegistryAPI(w, r)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-explain", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleSetIDExplainAPI(w, r, setidStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
 	}))

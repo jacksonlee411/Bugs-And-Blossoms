@@ -387,6 +387,12 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/setid-strategy-registry"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setid-explain"); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-explain"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units"); !ok {
 		t.Fatal("expected ok=true")
 	}

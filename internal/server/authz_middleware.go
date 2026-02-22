@@ -278,6 +278,11 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
 		}
 		return "", "", false
+	case "/org/api/setid-explain":
+		if method == http.MethodGet {
+			return authz.ObjectOrgUnitSetID, authz.ActionRead, true
+		}
+		return "", "", false
 	case "/org/api/org-units":
 		if method == http.MethodGet {
 			return authz.ObjectOrgUnitOrgUnits, authz.ActionRead, true

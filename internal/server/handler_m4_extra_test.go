@@ -216,4 +216,7 @@ func TestHandler_ScopePackageRoutes(t *testing.T) {
 	if rec := doReq(http.MethodGet, "/org/api/setid-strategy-registry?as_of=2026-01-01&capability_key=staffing.assignment_create.field_policy&field_key=field_x", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("setid strategy registry get status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	if rec := doReq(http.MethodGet, "/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&scope_code=jobcatalog&as_of=2026-01-01&setid=A0001&level=brief", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("setid explain get status=%d body=%s", rec.Code, rec.Body.String())
+	}
 }

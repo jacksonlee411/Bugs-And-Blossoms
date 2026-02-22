@@ -285,6 +285,70 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 	}
 }
 
+func TestSetIDStrategyRegistryRuntime_ResolveFieldDecisionBranches(t *testing.T) {
+	runtime := newSetIDStrategyRegistryRuntime()
+
+	_, _ = runtime.upsert("t1", setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_cap",
+		PersonalizationMode: personalizationModeSetID,
+		OrgLevel:            orgLevelTenant,
+		Required:            false,
+		Visible:             true,
+		DefaultValue:        "ok",
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+		Priority:            10,
+	})
+
+	rows, err := runtime.list("t1", "staffing.assignment_update.field_policy", "field_cap", "2026-01-01")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("expected empty rows, got=%d", len(rows))
+	}
+
+	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_cap", "10000001", "bad"); err == nil || err.Error() != "invalid as_of" {
+		t.Fatalf("err=%v", err)
+	}
+
+	runtime.byTenant["t1"] = append(runtime.byTenant["t1"], setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_unknown_org",
+		PersonalizationMode: personalizationModeSetID,
+		OrgLevel:            "unknown",
+		Required:            false,
+		Visible:             true,
+		DefaultValue:        "ok",
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+		Priority:            50,
+	})
+	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_unknown_org", "10000001", "2026-01-01"); err == nil || err.Error() != fieldPolicyMissingCode {
+		t.Fatalf("err=%v", err)
+	}
+
+	_, _ = runtime.upsert("t1", setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_missing_default",
+		PersonalizationMode: personalizationModeSetID,
+		OrgLevel:            orgLevelBusinessUnit,
+		BusinessUnitID:      "10000001",
+		Required:            false,
+		Visible:             true,
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+		Priority:            100,
+	})
+	if _, err := runtime.resolveFieldDecision("t1", "staffing.assignment_create.field_policy", "field_missing_default", "10000001", "2026-01-01"); err == nil || err.Error() != fieldDefaultRuleMissingCode {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 	resetSetIDStrategyRegistryRuntimeForTest()
 	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
