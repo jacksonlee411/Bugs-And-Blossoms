@@ -238,6 +238,16 @@ func TestAssignmentsController_HandleAssignmentsAPI_PostBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("effective_date required", func(t *testing.T) {
+		c := newAssignmentsController()
+		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader(`{"effective_date":"","person_uuid":"p1","position_uuid":"pos1"}`))
+		rec := httptest.NewRecorder()
+		c.HandleAssignmentsAPI(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
 	t.Run("invalid status", func(t *testing.T) {
 		c := newAssignmentsController()
 		req := httptest.NewRequest(http.MethodPost, "/api/assignments?as_of=2026-01-01", strings.NewReader(`{"effective_date":"2026-01-01","person_uuid":"p1","position_uuid":"pos1","status":"weird"}`))
@@ -723,6 +733,12 @@ func TestStablePgMessage(t *testing.T) {
 			t.Fatalf("got=%q", got)
 		}
 	})
+}
+
+func TestPgErrorCode_FallbackEmpty(t *testing.T) {
+	if got := pgErrorCode(errors.New("boom")); got != "" {
+		t.Fatalf("got=%q", got)
+	}
 }
 
 func TestIsStableDBCode(t *testing.T) {

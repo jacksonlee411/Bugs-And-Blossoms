@@ -413,6 +413,23 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 		}
 	})
 
+	t.Run("POST org_code required when effective_date present", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"effective_date":"2026-01-01"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
+			createFn: func(context.Context, string, string, string, string, string, string) (Position, error) {
+				return Position{}, nil
+			},
+			updateFn: func(context.Context, string, string, string, string, string, string, string, string, string) (Position, error) {
+				return Position{}, nil
+			},
+		})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
 	t.Run("POST create conflict", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"effective_date":"2026-01-01","org_code":"ORG-1","name":"A"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))

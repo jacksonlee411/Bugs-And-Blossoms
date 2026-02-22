@@ -370,6 +370,17 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 		}
 	})
 
+	t.Run("effective date required", func(t *testing.T) {
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","name":"Pkg","effective_date":"","request_id":"r1"}`)
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleScopePackagesAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
 	t.Run("reserved code", func(t *testing.T) {
 		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"DEFLT","owner_setid":"A0001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
@@ -478,6 +489,16 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 
 	t.Run("missing effective date", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"request_id":"r1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("invalid effective date", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"effective_date":"bad","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -751,6 +772,16 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 
 	t.Run("post invalid date", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","effective_date":"bad","request_id":"r1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("post effective date required", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/global-scope-packages", strings.NewReader(`{"scope_code":"jobcatalog","package_code":"PKG1","name":"Pkg","effective_date":"","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{})
