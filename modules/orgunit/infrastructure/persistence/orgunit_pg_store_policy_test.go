@@ -33,14 +33,14 @@ func (t *execAtTxStub) Exec(context.Context, string, ...any) (pgconn.CommandTag,
 	return pgconn.CommandTag{}, nil
 }
 
-func TestOrgUnitPGStore_FindEventByRequestCode(t *testing.T) {
+func TestOrgUnitPGStore_FindEventByRequestID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("begin error", func(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 			return nil, errors.New("begin")
 		}))
-		if _, found, err := store.FindEventByRequestCode(ctx, "t1", "r1"); err == nil || found {
+		if _, found, err := store.FindEventByRequestID(ctx, "t1", "r1"); err == nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
 		}
 	})
@@ -49,7 +49,7 @@ func TestOrgUnitPGStore_FindEventByRequestCode(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 			return &txStub{execErr: errors.New("exec")}, nil
 		}))
-		if _, found, err := store.FindEventByRequestCode(ctx, "t1", "r1"); err == nil || found {
+		if _, found, err := store.FindEventByRequestID(ctx, "t1", "r1"); err == nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
 		}
 	})
@@ -58,7 +58,7 @@ func TestOrgUnitPGStore_FindEventByRequestCode(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 			return &txStub{row: stubRow{err: pgx.ErrNoRows}}, nil
 		}))
-		_, found, err := store.FindEventByRequestCode(ctx, "t1", "r1")
+		_, found, err := store.FindEventByRequestID(ctx, "t1", "r1")
 		if err != nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
 		}
@@ -68,7 +68,7 @@ func TestOrgUnitPGStore_FindEventByRequestCode(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 			return &txStub{row: stubRow{err: errors.New("row")}}, nil
 		}))
-		if _, found, err := store.FindEventByRequestCode(ctx, "t1", "r1"); err == nil || found {
+		if _, found, err := store.FindEventByRequestID(ctx, "t1", "r1"); err == nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
 		}
 	})
@@ -80,7 +80,7 @@ func TestOrgUnitPGStore_FindEventByRequestCode(t *testing.T) {
 				commitErr: errors.New("commit"),
 			}, nil
 		}))
-		if _, found, err := store.FindEventByRequestCode(ctx, "t1", "r1"); err == nil || found {
+		if _, found, err := store.FindEventByRequestID(ctx, "t1", "r1"); err == nil || found {
 			t.Fatalf("found=%v err=%v", found, err)
 		}
 	})
@@ -89,7 +89,7 @@ func TestOrgUnitPGStore_FindEventByRequestCode(t *testing.T) {
 		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
 			return &txStub{row: stubRow{vals: []any{int64(1), "e1", 10000001, "CREATE", "2026-01-01", []byte(`{"org_code":"ROOT"}`), time.Unix(1, 0).UTC()}}}, nil
 		}))
-		event, found, err := store.FindEventByRequestCode(ctx, "t1", "r1")
+		event, found, err := store.FindEventByRequestID(ctx, "t1", "r1")
 		if err != nil || !found {
 			t.Fatalf("event=%+v found=%v err=%v", event, found, err)
 		}

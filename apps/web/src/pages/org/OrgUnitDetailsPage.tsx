@@ -93,7 +93,7 @@ interface OrgActionForm {
   originalIsBusinessUnit: boolean
   originalManagerPernr: string
   extDisplayValues: Record<string, string>
-  requestCode: string
+  requestID: string
   reason: string
 }
 
@@ -159,7 +159,7 @@ function getErrorMessage(error: unknown): string {
   return String(error)
 }
 
-function newRequestCode(): string {
+function newRequestID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
   }
@@ -184,7 +184,7 @@ function emptyActionForm(effectiveDate: string): OrgActionForm {
     originalIsBusinessUnit: false,
     originalManagerPernr: '',
     extDisplayValues: {},
-    requestCode: newRequestCode(),
+    requestID: newRequestID(),
     reason: ''
   }
 }
@@ -1065,12 +1065,12 @@ export function OrgUnitDetailsPage() {
         if (reason.length === 0) {
           throw new Error(t('org_delete_reason_required'))
         }
-        const requestCode = actionForm.requestCode.trim() || newRequestCode()
+        const requestID = actionForm.requestID.trim() || newRequestID()
 
         if (shouldDeleteOrg) {
           await rescindOrgUnit({
             org_code: targetCode,
-            request_code: requestCode,
+            request_id: requestID,
             reason
           })
           return { deletedOrg: true }
@@ -1079,7 +1079,7 @@ export function OrgUnitDetailsPage() {
         await rescindOrgUnitRecord({
           org_code: targetCode,
           effective_date: effectiveDate,
-          request_code: requestCode,
+          request_id: requestID,
           reason
         })
         return { deletedOrg: false }
@@ -1103,7 +1103,7 @@ export function OrgUnitDetailsPage() {
         throw new Error('ORG_UPDATE_PATCH_EMPTY')
       }
 
-      const requestCode = actionForm.requestCode.trim() || newRequestCode()
+      const requestID = actionForm.requestID.trim() || newRequestID()
       const effectiveDateValue = activeWriteIntent === 'correct' ? actionWriteEffectiveDate : actionForm.effectiveDate.trim()
 
       await writeOrgUnit({
@@ -1111,7 +1111,7 @@ export function OrgUnitDetailsPage() {
         org_code: targetCode,
         effective_date: effectiveDateValue,
         target_effective_date: activeWriteIntent === 'correct' ? actionForm.effectiveDate.trim() : undefined,
-        request_code: requestCode,
+        request_id: requestID,
         patch: patch as Parameters<typeof writeOrgUnit>[0]['patch']
       })
       return { deletedOrg: false }
@@ -1517,7 +1517,7 @@ export function OrgUnitDetailsPage() {
 	                      {t('org_version_event_type')}：{selectedAuditEvent.event_type}
 	                    </Typography>
 	                    <Typography variant='body2'>
-	                      {t('org_request_code')}：{toDisplayText(selectedAuditEvent.request_code)}
+	                      {t('org_request_id')}：{toDisplayText(selectedAuditEvent.request_id)}
 	                    </Typography>
 	                    <Typography variant='body2'>
 	                      {t('org_reason')}：{toDisplayText(selectedAuditEvent.reason)}
@@ -1528,7 +1528,7 @@ export function OrgUnitDetailsPage() {
 	                    {selectedAuditEvent.is_rescinded ? (
 	                      <>
 	                        <Typography variant='body2'>
-	                          {t('org_audit_rescinded_by_request_code')}：{toDisplayText(selectedAuditEvent.rescinded_by_request_code)}
+	                          {t('org_audit_rescinded_by_request_id')}：{toDisplayText(selectedAuditEvent.rescinded_by_request_id)}
 	                        </Typography>
 	                        <Typography variant='body2'>
 	                          {t('org_audit_rescinded_by_tx_time')}：
@@ -1971,9 +1971,9 @@ export function OrgUnitDetailsPage() {
               ) : null}
 
               <TextField
-                label={t('org_request_code')}
-                onChange={(event) => setActionForm((previous) => ({ ...previous, requestCode: event.target.value }))}
-                value={actionForm.requestCode}
+                label={t('org_request_id')}
+                onChange={(event) => setActionForm((previous) => ({ ...previous, requestID: event.target.value }))}
+                value={actionForm.requestID}
               />
 
               {isDeleteAction ? (

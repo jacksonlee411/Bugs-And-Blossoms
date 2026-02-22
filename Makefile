@@ -64,7 +64,7 @@ naming: ## 命名去噪门禁（已取消：no-op）
 no-legacy: ## 禁止 legacy 分支/回退通道（单链路原则）
 	@./scripts/ci/check-no-legacy.sh
 
-request-code: ## 业务幂等字段命名收敛（统一为 request_code；禁止 request_id 漂移）
+request-code: ## 业务幂等字段命名收敛（统一 request_id；阻断 request_code 与 tracing 场景 request_id/X-Request-ID）
 	@./scripts/ci/check-request-code.sh --full
 
 fmt: ## 格式化/格式检查（按项目能力渐进接入）

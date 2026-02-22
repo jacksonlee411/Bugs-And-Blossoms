@@ -19,8 +19,8 @@ type orgUnitStoreWithFieldConfigs struct {
 	OrgUnitStore
 
 	listFn    func(ctx context.Context, tenantID string) ([]orgUnitTenantFieldConfig, error)
-	enableFn  func(ctx context.Context, tenantID string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
-	disableFn func(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
+	enableFn  func(ctx context.Context, tenantID string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
+	disableFn func(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error)
 }
 
 func (s orgUnitStoreWithFieldConfigs) ListTenantFieldConfigs(ctx context.Context, tenantID string) ([]orgUnitTenantFieldConfig, error) {
@@ -30,16 +30,16 @@ func (s orgUnitStoreWithFieldConfigs) ListTenantFieldConfigs(ctx context.Context
 	return []orgUnitTenantFieldConfig{}, nil
 }
 
-func (s orgUnitStoreWithFieldConfigs) EnableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error) {
+func (s orgUnitStoreWithFieldConfigs) EnableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error) {
 	if s.enableFn != nil {
-		return s.enableFn(ctx, tenantID, fieldKey, valueType, dataSourceType, dataSourceConfig, displayLabel, enabledOn, requestCode, initiatorUUID)
+		return s.enableFn(ctx, tenantID, fieldKey, valueType, dataSourceType, dataSourceConfig, displayLabel, enabledOn, requestID, initiatorUUID)
 	}
 	return orgUnitTenantFieldConfig{}, false, nil
 }
 
-func (s orgUnitStoreWithFieldConfigs) DisableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestCode string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error) {
+func (s orgUnitStoreWithFieldConfigs) DisableTenantFieldConfig(ctx context.Context, tenantID string, fieldKey string, disabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldConfig, bool, error) {
 	if s.disableFn != nil {
-		return s.disableFn(ctx, tenantID, fieldKey, disabledOn, requestCode, initiatorUUID)
+		return s.disableFn(ctx, tenantID, fieldKey, disabledOn, requestID, initiatorUUID)
 	}
 	return orgUnitTenantFieldConfig{}, false, nil
 }
@@ -291,7 +291,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 
 	t.Run("post invalid request", func(t *testing.T) {
 		store := orgUnitStoreWithFieldConfigs{OrgUnitStore: base}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"","enabled_on":"","request_code":""}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"","enabled_on":"","request_id":""}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -302,7 +302,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 
 	t.Run("post enabled_on invalid", func(t *testing.T) {
 		store := orgUnitStoreWithFieldConfigs{OrgUnitStore: base}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"bad","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"bad","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -313,7 +313,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 
 	t.Run("post custom field_key invalid returns bad request", func(t *testing.T) {
 		store := orgUnitStoreWithFieldConfigs{OrgUnitStore: base}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -324,7 +324,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 
 	t.Run("post builtin dict field_key rejected (built-in DICT enable forbidden)", func(t *testing.T) {
 		store := orgUnitStoreWithFieldConfigs{OrgUnitStore: base}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"org_type","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"org_type","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -348,7 +348,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 				return orgUnitTenantFieldConfig{}, false, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_code":"r1","data_source_config":{"dict_code":"no_such"}}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_id":"r1","data_source_config":{"dict_code":"no_such"}}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -372,7 +372,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 				return orgUnitTenantFieldConfig{}, false, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictListErrStore{})
@@ -400,7 +400,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 			},
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"short_name","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"short_name","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -447,7 +447,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 			},
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -482,7 +482,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 			},
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_code":"r1","label":"组织类型"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_id":"r1","label":"组织类型"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -520,7 +520,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 			},
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1","value_type":"int","label":"成本中心"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_id":"r1","value_type":"int","label":"成本中心"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -546,7 +546,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 				return orgUnitTenantFieldConfig{}, false, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -563,7 +563,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 				return orgUnitTenantFieldConfig{}, false, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1","value_type":"json"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_id":"r1","value_type":"json"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -580,7 +580,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 				return orgUnitTenantFieldConfig{}, false, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1","value_type":"text","data_source_config":{"x":1}}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_id":"r1","value_type":"text","data_source_config":{"x":1}}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -603,7 +603,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 				return orgUnitTenantFieldConfig{}, false, errors.New("boom")
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1","value_type":"text"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_id":"r1","value_type":"text"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -616,9 +616,9 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		now := time.Unix(123, 0).UTC()
 		store := orgUnitStoreWithFieldConfigs{
 			OrgUnitStore: base,
-			enableFn: func(_ context.Context, _ string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestCode string, _ string) (orgUnitTenantFieldConfig, bool, error) {
-				if fieldKey != "x_cost_center" || valueType != "text" || dataSourceType != "PLAIN" || enabledOn != "2026-01-01" || requestCode != "r1" {
-					t.Fatalf("unexpected args field=%s vt=%s dst=%s enabled_on=%s request=%s", fieldKey, valueType, dataSourceType, enabledOn, requestCode)
+			enableFn: func(_ context.Context, _ string, fieldKey string, valueType string, dataSourceType string, dataSourceConfig json.RawMessage, displayLabel *string, enabledOn string, requestID string, _ string) (orgUnitTenantFieldConfig, bool, error) {
+				if fieldKey != "x_cost_center" || valueType != "text" || dataSourceType != "PLAIN" || enabledOn != "2026-01-01" || requestID != "r1" {
+					t.Fatalf("unexpected args field=%s vt=%s dst=%s enabled_on=%s request=%s", fieldKey, valueType, dataSourceType, enabledOn, requestID)
 				}
 				if strings.TrimSpace(string(dataSourceConfig)) != "{}" {
 					t.Fatalf("cfg=%s", string(dataSourceConfig))
@@ -639,7 +639,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 			},
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_code":"r1","value_type":"text","label":"成本中心"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"x_cost_center","enabled_on":"2026-01-01","request_id":"r1","value_type":"text","label":"成本中心"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -651,7 +651,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 
 	t.Run("post field definition not found", func(t *testing.T) {
 		store := orgUnitStoreWithFieldConfigs{OrgUnitStore: base}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"nope","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"nope","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -667,7 +667,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 				return orgUnitTenantFieldConfig{}, false, errors.New(orgUnitErrFieldConfigSlotExhausted)
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -695,7 +695,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 			},
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore)
@@ -704,7 +704,7 @@ func TestHandleOrgUnitFieldConfigsAPI(t *testing.T) {
 		}
 
 		wasRetry = true
-		req2 := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_code":"r1"}`)))
+		req2 := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs", bytes.NewReader([]byte(`{"field_key":"d_org_type","enabled_on":"2026-01-01","request_id":"r1"}`)))
 		req2 = req2.WithContext(withTenant(req2.Context(), Tenant{ID: "t1"}))
 		rec2 := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsAPI(rec2, req2, store, dictStore)
@@ -770,7 +770,7 @@ func TestHandleOrgUnitFieldConfigsDisableAPI(t *testing.T) {
 
 	t.Run("invalid request", func(t *testing.T) {
 		store := orgUnitStoreWithFieldConfigs{OrgUnitStore: base}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs:disable", bytes.NewReader([]byte(`{"field_key":"","disabled_on":"","request_code":""}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs:disable", bytes.NewReader([]byte(`{"field_key":"","disabled_on":"","request_id":""}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsDisableAPI(rec, req, store)
@@ -781,7 +781,7 @@ func TestHandleOrgUnitFieldConfigsDisableAPI(t *testing.T) {
 
 	t.Run("disabled_on invalid", func(t *testing.T) {
 		store := orgUnitStoreWithFieldConfigs{OrgUnitStore: base}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs:disable", bytes.NewReader([]byte(`{"field_key":"org_type","disabled_on":"bad","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs:disable", bytes.NewReader([]byte(`{"field_key":"org_type","disabled_on":"bad","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsDisableAPI(rec, req, store)
@@ -797,7 +797,7 @@ func TestHandleOrgUnitFieldConfigsDisableAPI(t *testing.T) {
 				return orgUnitTenantFieldConfig{}, false, errors.New(orgUnitErrFieldConfigDisabledOnInvalid)
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs:disable", bytes.NewReader([]byte(`{"field_key":"org_type","disabled_on":"2026-02-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs:disable", bytes.NewReader([]byte(`{"field_key":"org_type","disabled_on":"2026-02-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsDisableAPI(rec, req, store)
@@ -825,7 +825,7 @@ func TestHandleOrgUnitFieldConfigsDisableAPI(t *testing.T) {
 				return cfg, false, nil
 			},
 		}
-		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs:disable", bytes.NewReader([]byte(`{"field_key":"org_type","disabled_on":"2026-02-01","request_code":"r1"}`)))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs:disable", bytes.NewReader([]byte(`{"field_key":"org_type","disabled_on":"2026-02-01","request_id":"r1"}`)))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldConfigsDisableAPI(rec, req, store)

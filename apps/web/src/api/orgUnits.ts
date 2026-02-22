@@ -169,12 +169,12 @@ export interface OrgUnitAuditAPIItem {
   tx_time: string
   initiator_name: string
   initiator_employee_id: string
-  request_code: string
+  request_id: string
   reason: string
   is_rescinded: boolean
   rescinded_by_event_uuid: string
   rescinded_by_tx_time: string
-  rescinded_by_request_code: string
+  rescinded_by_request_id: string
   payload: unknown
   before_snapshot: unknown
   after_snapshot: unknown
@@ -237,7 +237,7 @@ export interface OrgUnitWriteAPIRequest {
   org_code: string
   effective_date: string
   target_effective_date?: string
-  request_code: string
+  request_id: string
   patch: {
     name?: string
     parent_org_code?: string
@@ -335,7 +335,7 @@ export async function setOrgUnitBusinessUnit(request: {
   org_code: string
   effective_date: string
   is_business_unit: boolean
-  request_code: string
+  request_id: string
   ext?: Record<string, unknown>
 }): Promise<{ org_code: string; effective_date: string; is_business_unit: boolean }> {
   return httpClient.post<{ org_code: string; effective_date: string; is_business_unit: boolean }>(
@@ -347,7 +347,7 @@ export async function setOrgUnitBusinessUnit(request: {
 export async function correctOrgUnit(request: {
   org_code: string
   effective_date: string
-  request_code: string
+  request_id: string
   patch: {
     effective_date?: string
     name?: string
@@ -364,7 +364,7 @@ export async function correctOrgUnitStatus(request: {
   org_code: string
   effective_date: string
   target_status: string
-  request_code: string
+  request_id: string
 }): Promise<OrgUnitWriteResult> {
   return httpClient.post<OrgUnitWriteResult>('/org/api/org-units/status-corrections', request)
 }
@@ -372,10 +372,10 @@ export async function correctOrgUnitStatus(request: {
 export async function rescindOrgUnitRecord(request: {
   org_code: string
   effective_date: string
-  request_code: string
+  request_id: string
   reason: string
-}): Promise<{ org_code: string; effective_date: string; operation: string; request_code: string }> {
-  return httpClient.post<{ org_code: string; effective_date: string; operation: string; request_code: string }>(
+}): Promise<{ org_code: string; effective_date: string; operation: string; request_id: string }> {
+  return httpClient.post<{ org_code: string; effective_date: string; operation: string; request_id: string }>(
     '/org/api/org-units/rescinds',
     request
   )
@@ -383,10 +383,10 @@ export async function rescindOrgUnitRecord(request: {
 
 export async function rescindOrgUnit(request: {
   org_code: string
-  request_code: string
+  request_id: string
   reason: string
-}): Promise<{ org_code: string; operation: string; request_code: string; rescinded_events: number }> {
-  return httpClient.post<{ org_code: string; operation: string; request_code: string; rescinded_events: number }>(
+}): Promise<{ org_code: string; operation: string; request_id: string; rescinded_events: number }> {
+  return httpClient.post<{ org_code: string; operation: string; request_id: string; rescinded_events: number }>(
     '/org/api/org-units/rescinds/org',
     request
   )
@@ -585,7 +585,7 @@ export async function listOrgUnitFieldConfigs(options: {
 export async function enableOrgUnitFieldConfig(request: {
   field_key: string
   enabled_on: string
-  request_code: string
+  request_id: string
   value_type?: OrgUnitExtValueType
   data_source_config?: Record<string, unknown>
   label?: string
@@ -596,7 +596,7 @@ export async function enableOrgUnitFieldConfig(request: {
 export async function disableOrgUnitFieldConfig(request: {
   field_key: string
   disabled_on: string
-  request_code: string
+  request_id: string
 }): Promise<OrgUnitTenantFieldConfig> {
   return httpClient.post<OrgUnitTenantFieldConfig>('/org/api/org-units/field-configs:disable', request)
 }
@@ -632,7 +632,7 @@ export async function upsertOrgUnitFieldPolicy(request: {
   default_mode: OrgUnitFieldPolicyDefaultMode
   default_rule_expr?: string
   enabled_on: string
-  request_code: string
+  request_id: string
 }): Promise<OrgUnitFieldPolicy> {
   return httpClient.post<OrgUnitFieldPolicy>('/org/api/org-units/field-policies', request)
 }
@@ -642,7 +642,7 @@ export async function disableOrgUnitFieldPolicy(request: {
   scope_type: OrgUnitFieldPolicyScopeType
   scope_key: string
   disabled_on: string
-  request_code: string
+  request_id: string
 }): Promise<OrgUnitFieldPolicy> {
   return httpClient.post<OrgUnitFieldPolicy>('/org/api/org-units/field-policies:disable', request)
 }

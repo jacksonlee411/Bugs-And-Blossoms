@@ -28,7 +28,7 @@ func NewOrgUnitPGStore(pool pgBeginner) ports.OrgUnitWriteStore {
 	return &OrgUnitPGStore{pool: pool}
 }
 
-func (s *OrgUnitPGStore) SubmitEvent(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestCode string, initiatorUUID string) (int64, error) {
+func (s *OrgUnitPGStore) SubmitEvent(ctx context.Context, tenantID string, eventUUID string, orgID *int, eventType string, effectiveDate string, payload json.RawMessage, requestID string, initiatorUUID string) (int64, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -56,7 +56,7 @@ SELECT orgunit.submit_org_event(
   $7::text,
   $8::uuid
 )
-`, eventUUID, tenantID, orgIDValue, eventType, effectiveDate, payload, requestCode, initiatorUUID).Scan(&eventID); err != nil {
+`, eventUUID, tenantID, orgIDValue, eventType, effectiveDate, payload, requestID, initiatorUUID).Scan(&eventID); err != nil {
 		return 0, err
 	}
 
@@ -257,7 +257,7 @@ WHERE tenant_uuid = $1::uuid AND org_id = $2::int AND effective_date = $3::date
 	return event, nil
 }
 
-func (s *OrgUnitPGStore) FindEventByRequestCode(ctx context.Context, tenantID string, requestCode string) (types.OrgUnitEvent, bool, error) {
+func (s *OrgUnitPGStore) FindEventByRequestID(ctx context.Context, tenantID string, requestID string) (types.OrgUnitEvent, bool, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return types.OrgUnitEvent{}, false, err
@@ -274,10 +274,10 @@ func (s *OrgUnitPGStore) FindEventByRequestCode(ctx context.Context, tenantID st
 SELECT id, event_uuid::text, org_id, event_type, effective_date::text, payload, transaction_time
 FROM orgunit.org_events
 WHERE tenant_uuid = $1::uuid
-  AND request_code = $2::text
+  AND request_id = $2::text
 ORDER BY id DESC
 LIMIT 1
-`, tenantID, requestCode).Scan(&event.ID, &event.EventUUID, &event.OrgID, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
+`, tenantID, requestID).Scan(&event.ID, &event.EventUUID, &event.OrgID, &event.EventType, &event.EffectiveDate, &payload, &event.TransactionTime); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.OrgUnitEvent{}, false, nil
 		}
@@ -403,7 +403,7 @@ func (s *OrgUnitPGStore) SubmitCreateEventWithGeneratedCode(
 	eventUUID string,
 	effectiveDate string,
 	payload json.RawMessage,
-	requestCode string,
+	requestID string,
 	initiatorUUID string,
 	prefix string,
 	width int,
@@ -498,7 +498,7 @@ SELECT orgunit.submit_org_event(
   $7::text,
   $8::uuid
 )
-`, eventUUID, tenantID, orgIDValue, string(types.OrgUnitEventCreate), effectiveDate, payloadWithCode, requestCode, initiatorUUID).Scan(&eventID); err != nil {
+`, eventUUID, tenantID, orgIDValue, string(types.OrgUnitEventCreate), effectiveDate, payloadWithCode, requestID, initiatorUUID).Scan(&eventID); err != nil {
 		return 0, "", err
 	}
 

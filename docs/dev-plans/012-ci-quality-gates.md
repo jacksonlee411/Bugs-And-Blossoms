@@ -126,7 +126,7 @@
 - SQL：SQL 格式化门禁（pg_format，版本口径对齐 `DEV-PLAN-011`）。
 - Docs：`make check doc`（新文档门禁）。
 - No-Legacy：`make check no-legacy`（禁止 legacy 分支/回退通道，对齐 `DEV-PLAN-004M1`）。
-- Request-Code：`make check request-code`（Gate-B：`--full` 全量扫描零容忍；业务幂等字段统一为 request_code；对齐 `DEV-PLAN-109`）。
+- Request-Code：`make check request-code`（Gate-C：`--full` 全量扫描零容忍；业务幂等字段统一为 `request_id`，Tracing 统一 `trace_id` + `traceparent`，并阻断 `request_code`/`X-Request-ID` 回流；对齐 `DEV-PLAN-109A`）。
 - i18n：`make check tr`（仅 en/zh，对齐 `DEV-PLAN-020`）。
 - sqlc：命中触发器时强制 `make sqlc-generate` 且 `git status --porcelain` 为空（对齐 `DEV-PLAN-025`）。
 - Authz：命中触发器时强制 policy pack/diff/lint/test（对齐 `DEV-PLAN-022`）。

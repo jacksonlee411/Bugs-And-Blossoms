@@ -25,7 +25,7 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function newRequestCode(prefix: string): string {
+function newRequestID(prefix: string): string {
   return `${prefix}:${Date.now()}`
 }
 
@@ -134,7 +134,7 @@ export function DictValueDetailsPage() {
   )
 
   const disableValueMutation = useMutation({
-    mutationFn: (request: { dict_code: string; code: string; disabled_on: string; request_code: string }) => disableDictValue(request),
+    mutationFn: (request: { dict_code: string; code: string; disabled_on: string; request_id: string }) => disableDictValue(request),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['dict-value-versions', dictCode, code, asOf] }),
@@ -145,7 +145,7 @@ export function DictValueDetailsPage() {
   })
 
   const correctValueMutation = useMutation({
-    mutationFn: (request: { dict_code: string; code: string; label: string; correction_day: string; request_code: string }) =>
+    mutationFn: (request: { dict_code: string; code: string; label: string; correction_day: string; request_id: string }) =>
       correctDictValue(request),
     onSuccess: async () => {
       await Promise.all([
@@ -168,7 +168,7 @@ export function DictValueDetailsPage() {
         dict_code: dictCode,
         code,
         disabled_on: disableValueDay,
-        request_code: newRequestCode('mui-dict-value-disable')
+        request_id: newRequestID('mui-dict-value-disable')
       })
     } catch (mutationError) {
       setError(parseApiError(mutationError))
@@ -188,7 +188,7 @@ export function DictValueDetailsPage() {
         code,
         label: correctLabel.trim(),
         correction_day: correctDay,
-        request_code: newRequestCode('mui-dict-value-correct')
+        request_id: newRequestID('mui-dict-value-correct')
       })
     } catch (mutationError) {
       setError(parseApiError(mutationError))
@@ -359,7 +359,7 @@ function AuditEventDetail({ event }: { event: DictAuditItem }) {
       <Stack spacing={1}>
         <Typography variant='body2'>tx_time：{event.tx_time}</Typography>
         <Typography variant='body2'>event_type：{event.event_type}</Typography>
-        <Typography variant='body2'>request_code：{event.request_code}</Typography>
+        <Typography variant='body2'>request_id：{event.request_id}</Typography>
         <Typography variant='body2'>initiator_uuid：{event.initiator_uuid || '-'}</Typography>
         <Typography variant='body2'>effective_day：{event.effective_day}</Typography>
         <Typography variant='body2'>event_uuid：{event.event_uuid}</Typography>

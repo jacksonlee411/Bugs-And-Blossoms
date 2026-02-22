@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   initiator_name text NULL,
   initiator_employee_id text NULL,
@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS orgunit.org_events (
       rescind_outcome
     )
   ),
-  CONSTRAINT org_events_request_code_unique UNIQUE (tenant_uuid, request_code)
+  CONSTRAINT org_events_request_id_unique UNIQUE (tenant_uuid, request_id)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS org_events_event_uuid_unique ON orgunit.org_events (event_uuid);

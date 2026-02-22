@@ -11,13 +11,13 @@ CREATE TABLE "staffing"."assignment_event_corrections" (
   "assignment_uuid" uuid NOT NULL,
   "target_effective_date" date NOT NULL,
   "replacement_payload" jsonb NOT NULL,
-  "request_code" text NOT NULL,
+  "request_id" text NOT NULL,
   "initiator_uuid" uuid NOT NULL,
   "transaction_time" timestamptz NOT NULL DEFAULT now(),
   "created_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
   CONSTRAINT "assignment_event_corrections_event_uuid_unique" UNIQUE ("event_uuid"),
-  CONSTRAINT "assignment_event_corrections_request_code_unique" UNIQUE ("tenant_uuid", "request_code"),
+  CONSTRAINT "assignment_event_corrections_request_id_unique" UNIQUE ("tenant_uuid", "request_id"),
   CONSTRAINT "assignment_event_corrections_target_unique" UNIQUE ("tenant_uuid", "assignment_uuid", "target_effective_date"),
   CONSTRAINT "assignment_event_corrections_replacement_payload_obj_check" CHECK (jsonb_typeof(replacement_payload) = 'object'::text)
 );
@@ -29,13 +29,13 @@ CREATE TABLE "staffing"."assignment_event_rescinds" (
   "assignment_uuid" uuid NOT NULL,
   "target_effective_date" date NOT NULL,
   "payload" jsonb NOT NULL DEFAULT '{}',
-  "request_code" text NOT NULL,
+  "request_id" text NOT NULL,
   "initiator_uuid" uuid NOT NULL,
   "transaction_time" timestamptz NOT NULL DEFAULT now(),
   "created_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
   CONSTRAINT "assignment_event_rescinds_event_uuid_unique" UNIQUE ("event_uuid"),
-  CONSTRAINT "assignment_event_rescinds_request_code_unique" UNIQUE ("tenant_uuid", "request_code"),
+  CONSTRAINT "assignment_event_rescinds_request_id_unique" UNIQUE ("tenant_uuid", "request_id"),
   CONSTRAINT "assignment_event_rescinds_target_unique" UNIQUE ("tenant_uuid", "assignment_uuid", "target_effective_date"),
   CONSTRAINT "assignment_event_rescinds_payload_is_object_check" CHECK (jsonb_typeof(payload) = 'object'::text)
 );
@@ -62,14 +62,14 @@ CREATE TABLE "staffing"."assignment_events" (
   "event_type" text NOT NULL,
   "effective_date" date NOT NULL,
   "payload" jsonb NOT NULL DEFAULT '{}',
-  "request_code" text NOT NULL,
+  "request_id" text NOT NULL,
   "initiator_uuid" uuid NOT NULL,
   "transaction_time" timestamptz NOT NULL DEFAULT now(),
   "created_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
   CONSTRAINT "assignment_events_event_uuid_unique" UNIQUE ("event_uuid"),
   CONSTRAINT "assignment_events_one_per_day_unique" UNIQUE ("tenant_uuid", "assignment_uuid", "effective_date"),
-  CONSTRAINT "assignment_events_request_code_unique" UNIQUE ("tenant_uuid", "request_code"),
+  CONSTRAINT "assignment_events_request_id_unique" UNIQUE ("tenant_uuid", "request_id"),
   CONSTRAINT "assignment_events_assignment_fk" FOREIGN KEY ("tenant_uuid", "assignment_uuid") REFERENCES "staffing"."assignments" ("tenant_uuid", "assignment_uuid") ON UPDATE NO ACTION ON DELETE RESTRICT,
   CONSTRAINT "assignment_events_assignment_type_check" CHECK (assignment_type = 'primary'::text),
   CONSTRAINT "assignment_events_event_type_check" CHECK (event_type = ANY (ARRAY['CREATE'::text, 'UPDATE'::text])),
@@ -123,14 +123,14 @@ CREATE TABLE "staffing"."position_events" (
   "event_type" text NOT NULL,
   "effective_date" date NOT NULL,
   "payload" jsonb NOT NULL DEFAULT '{}',
-  "request_code" text NOT NULL,
+  "request_id" text NOT NULL,
   "initiator_uuid" uuid NOT NULL,
   "transaction_time" timestamptz NOT NULL DEFAULT now(),
   "created_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
   CONSTRAINT "position_events_event_uuid_unique" UNIQUE ("event_uuid"),
   CONSTRAINT "position_events_one_per_day_unique" UNIQUE ("tenant_uuid", "position_uuid", "effective_date"),
-  CONSTRAINT "position_events_request_code_unique" UNIQUE ("tenant_uuid", "request_code"),
+  CONSTRAINT "position_events_request_id_unique" UNIQUE ("tenant_uuid", "request_id"),
   CONSTRAINT "position_events_position_fk" FOREIGN KEY ("tenant_uuid", "position_uuid") REFERENCES "staffing"."positions" ("tenant_uuid", "position_uuid") ON UPDATE NO ACTION ON DELETE RESTRICT,
   CONSTRAINT "position_events_event_type_check" CHECK (event_type = ANY (ARRAY['CREATE'::text, 'UPDATE'::text])),
   CONSTRAINT "position_events_payload_allowed_keys_check" CHECK (((((((payload - 'org_unit_id'::text) - 'name'::text) - 'reports_to_position_uuid'::text) - 'job_profile_uuid'::text) - 'lifecycle_status'::text) - 'capacity_fte'::text) = '{}'::jsonb),
@@ -276,7 +276,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_position_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -301,8 +301,8 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -334,7 +334,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -344,7 +344,7 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
@@ -360,7 +360,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -1210,7 +1210,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_assignment_event(
   p_event_type text,
   p_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -1243,8 +1243,8 @@ BEGIN
   IF p_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -1288,7 +1288,7 @@ BEGIN
     event_type,
     effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -1300,7 +1300,7 @@ BEGIN
     p_event_type,
     p_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT (event_uuid) DO NOTHING
@@ -1318,7 +1318,7 @@ BEGIN
       OR v_existing.event_type <> p_event_type
       OR v_existing.effective_date <> p_effective_date
       OR v_existing.payload <> v_payload
-      OR v_existing.request_code <> p_request_code
+      OR v_existing.request_id <> p_request_id
       OR v_existing.initiator_uuid <> p_initiator_uuid
     THEN
       RAISE EXCEPTION USING
@@ -1341,7 +1341,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_assignment_event_correction(
   p_assignment_uuid uuid,
   p_target_effective_date date,
   p_replacement_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -1370,8 +1370,8 @@ BEGIN
   IF p_replacement_payload IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'replacement_payload is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -1417,7 +1417,7 @@ BEGIN
     assignment_uuid,
     target_effective_date,
     replacement_payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -1426,7 +1426,7 @@ BEGIN
     p_assignment_uuid,
     p_target_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT DO NOTHING
@@ -1442,7 +1442,7 @@ BEGIN
         OR v_existing_by_event.assignment_uuid <> p_assignment_uuid
         OR v_existing_by_event.target_effective_date <> p_target_effective_date
         OR v_existing_by_event.replacement_payload <> v_payload
-        OR v_existing_by_event.request_code <> p_request_code
+        OR v_existing_by_event.request_id <> p_request_id
         OR v_existing_by_event.initiator_uuid <> p_initiator_uuid
       THEN
         RAISE EXCEPTION USING
@@ -1454,7 +1454,7 @@ BEGIN
       SELECT * INTO v_existing_by_request
       FROM staffing.assignment_event_corrections
       WHERE tenant_uuid = p_tenant_uuid
-        AND request_code = p_request_code
+        AND request_id = p_request_id
       LIMIT 1;
 
       IF FOUND THEN
@@ -1462,12 +1462,12 @@ BEGIN
           OR v_existing_by_request.assignment_uuid <> p_assignment_uuid
           OR v_existing_by_request.target_effective_date <> p_target_effective_date
           OR v_existing_by_request.replacement_payload <> v_payload
-          OR v_existing_by_request.request_code <> p_request_code
+          OR v_existing_by_request.request_id <> p_request_id
           OR v_existing_by_request.initiator_uuid <> p_initiator_uuid
         THEN
           RAISE EXCEPTION USING
             MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-            DETAIL = format('request_code=%s existing_id=%s', p_request_code, v_existing_by_request.id);
+            DETAIL = format('request_id=%s existing_id=%s', p_request_id, v_existing_by_request.id);
         END IF;
         v_correction_db_id := v_existing_by_request.id;
       ELSE
@@ -1505,7 +1505,7 @@ CREATE OR REPLACE FUNCTION staffing.submit_assignment_event_rescind(
   p_assignment_uuid uuid,
   p_target_effective_date date,
   p_payload jsonb,
-  p_request_code text,
+  p_request_id text,
   p_initiator_uuid uuid
 )
 RETURNS bigint
@@ -1531,8 +1531,8 @@ BEGIN
   IF p_target_effective_date IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'target_effective_date is required';
   END IF;
-  IF p_request_code IS NULL OR btrim(p_request_code) = '' THEN
-    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_code is required';
+  IF p_request_id IS NULL OR btrim(p_request_id) = '' THEN
+    RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'request_id is required';
   END IF;
   IF p_initiator_uuid IS NULL THEN
     RAISE EXCEPTION USING MESSAGE = 'STAFFING_INVALID_ARGUMENT', DETAIL = 'initiator_uuid is required';
@@ -1571,7 +1571,7 @@ BEGIN
     assignment_uuid,
     target_effective_date,
     payload,
-    request_code,
+    request_id,
     initiator_uuid
   )
   VALUES (
@@ -1580,7 +1580,7 @@ BEGIN
     p_assignment_uuid,
     p_target_effective_date,
     v_payload,
-    p_request_code,
+    p_request_id,
     p_initiator_uuid
   )
   ON CONFLICT DO NOTHING
@@ -1596,7 +1596,7 @@ BEGIN
         OR v_existing_by_event.assignment_uuid <> p_assignment_uuid
         OR v_existing_by_event.target_effective_date <> p_target_effective_date
         OR v_existing_by_event.payload <> v_payload
-        OR v_existing_by_event.request_code <> p_request_code
+        OR v_existing_by_event.request_id <> p_request_id
         OR v_existing_by_event.initiator_uuid <> p_initiator_uuid
       THEN
         RAISE EXCEPTION USING
@@ -1608,7 +1608,7 @@ BEGIN
       SELECT * INTO v_existing_by_request
       FROM staffing.assignment_event_rescinds
       WHERE tenant_uuid = p_tenant_uuid
-        AND request_code = p_request_code
+        AND request_id = p_request_id
       LIMIT 1;
 
       IF FOUND THEN
@@ -1616,12 +1616,12 @@ BEGIN
           OR v_existing_by_request.assignment_uuid <> p_assignment_uuid
           OR v_existing_by_request.target_effective_date <> p_target_effective_date
           OR v_existing_by_request.payload <> v_payload
-          OR v_existing_by_request.request_code <> p_request_code
+          OR v_existing_by_request.request_id <> p_request_id
           OR v_existing_by_request.initiator_uuid <> p_initiator_uuid
         THEN
           RAISE EXCEPTION USING
             MESSAGE = 'STAFFING_IDEMPOTENCY_REUSED',
-            DETAIL = format('request_code=%s existing_id=%s', p_request_code, v_existing_by_request.id);
+            DETAIL = format('request_id=%s existing_id=%s', p_request_id, v_existing_by_request.id);
         END IF;
         v_rescind_db_id := v_existing_by_request.id;
       ELSE

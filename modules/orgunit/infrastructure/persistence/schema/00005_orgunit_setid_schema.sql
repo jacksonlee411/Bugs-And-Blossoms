@@ -5,14 +5,14 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_events (
   event_type text NOT NULL,
   setid text NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT setid_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','CREATE','RENAME','DISABLE')),
   CONSTRAINT setid_events_setid_format_check CHECK (setid ~ '^[A-Z0-9]{5}$'),
   CONSTRAINT setid_events_share_forbidden CHECK (setid <> 'SHARE'),
-  CONSTRAINT setid_events_request_id_unique UNIQUE (tenant_uuid, request_code)
+  CONSTRAINT setid_events_request_id_unique UNIQUE (tenant_uuid, request_id)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS setid_events_event_id_unique ON orgunit.setid_events (event_uuid);
@@ -40,14 +40,14 @@ CREATE TABLE IF NOT EXISTS orgunit.global_setid_events (
   event_type text NOT NULL,
   setid text NOT NULL DEFAULT 'SHARE',
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT global_setid_events_event_type_check CHECK (event_type IN ('BOOTSTRAP','CREATE','RENAME','DISABLE')),
   CONSTRAINT global_setid_events_setid_check CHECK (setid = 'SHARE'),
   CONSTRAINT global_setid_events_tenant_check CHECK (tenant_uuid = orgunit.global_tenant_id()),
-  CONSTRAINT global_setid_events_request_id_unique UNIQUE (tenant_uuid, request_code)
+  CONSTRAINT global_setid_events_request_id_unique UNIQUE (tenant_uuid, request_id)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS global_setid_events_event_id_unique ON orgunit.global_setid_events (event_uuid);
@@ -75,13 +75,13 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_binding_events (
   event_type text NOT NULL,
   effective_date date NOT NULL,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  request_code text NOT NULL,
+  request_id text NOT NULL,
   initiator_uuid uuid NOT NULL,
   transaction_time timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT setid_binding_events_event_type_check CHECK (event_type IN ('BIND')),
   CONSTRAINT setid_binding_events_event_id_unique UNIQUE (event_uuid),
-  CONSTRAINT setid_binding_events_request_id_unique UNIQUE (tenant_uuid, request_code),
+  CONSTRAINT setid_binding_events_request_id_unique UNIQUE (tenant_uuid, request_id),
   CONSTRAINT setid_binding_events_payload_is_object_check CHECK (jsonb_typeof(payload) = 'object')
 );
 
