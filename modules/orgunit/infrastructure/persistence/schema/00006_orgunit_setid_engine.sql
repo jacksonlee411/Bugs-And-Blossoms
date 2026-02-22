@@ -121,15 +121,14 @@ BEGIN
     AND v.org_id = v_root_org_id
     AND v.status = 'active'
     AND v.is_business_unit = true
-    AND v.validity @> current_date
-  ORDER BY lower(v.validity) DESC
+  ORDER BY lower(v.validity) ASC
   LIMIT 1;
 
   IF v_root_valid_from IS NULL THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = 'ORG_NOT_BUSINESS_UNIT_AS_OF',
-      DETAIL = format('org_id=%s as_of=%s', v_root_org_id, current_date);
+      DETAIL = format('org_id=%s', v_root_org_id);
   END IF;
 
   FOR v_scope_code, v_scope_share_mode IN
@@ -417,12 +416,18 @@ BEGIN
         last_event_id = EXCLUDED.last_event_id,
         updated_at = now();
 
-    v_effective_date := current_date;
-    IF p_payload ? 'effective_date' THEN
-      v_effective_date := NULLIF(btrim(p_payload->>'effective_date'), '')::date;
+    IF NOT (p_payload ? 'effective_date') THEN
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_INVALID_ARGUMENT',
+        DETAIL = 'effective_date is required';
     END IF;
+    v_effective_date := NULLIF(btrim(p_payload->>'effective_date'), '')::date;
     IF v_effective_date IS NULL THEN
-      v_effective_date := current_date;
+      RAISE EXCEPTION USING
+        ERRCODE = 'P0001',
+        MESSAGE = 'SETID_INVALID_ARGUMENT',
+        DETAIL = 'effective_date is required';
     END IF;
 
     FOR v_scope_code, v_scope_share_mode IN
@@ -537,7 +542,7 @@ BEGIN
         WHERE s.tenant_uuid = p_tenant_uuid
           AND s.setid = v_setid
           AND s.scope_code = v_scope_code
-          AND s.validity @> current_date
+          AND s.validity @> v_effective_date
       ) THEN
         PERFORM orgunit.submit_scope_subscription_event(
           gen_random_uuid(),

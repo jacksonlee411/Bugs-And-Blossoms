@@ -204,7 +204,7 @@ func TestSetIDPGStore_DisableScopePackage(t *testing.T) {
 			row: scopePackageRow("p1", "jobcatalog", "PKG1", "A0001", "Pkg", "disabled"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		pkg, err := store.DisableScopePackage(context.Background(), "t1", "p1", "r1", "p1")
+		pkg, err := store.DisableScopePackage(context.Background(), "t1", "p1", "2026-01-01", "r1", "p1")
 		if err != nil || pkg.Status != "disabled" {
 			t.Fatalf("pkg=%+v err=%v", pkg, err)
 		}
@@ -214,7 +214,7 @@ func TestSetIDPGStore_DisableScopePackage(t *testing.T) {
 		tx := &stubTx{}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
 		withRandReader(t, randErrReader{}, func() {
-			if _, err := store.DisableScopePackage(context.Background(), "t1", "p1", "r1", "p1"); err == nil {
+			if _, err := store.DisableScopePackage(context.Background(), "t1", "p1", "2026-01-01", "r1", "p1"); err == nil {
 				t.Fatal("expected error")
 			}
 		})
@@ -226,7 +226,7 @@ func TestSetIDPGStore_DisableScopePackage(t *testing.T) {
 			execErrAt: 2,
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.DisableScopePackage(context.Background(), "t1", "p1", "r1", "p1"); err == nil {
+		if _, err := store.DisableScopePackage(context.Background(), "t1", "p1", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -236,7 +236,7 @@ func TestSetIDPGStore_DisableScopePackage(t *testing.T) {
 			rowErr: errors.New("row fail"),
 		}
 		store := &setidPGStore{pool: beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil })}
-		if _, err := store.DisableScopePackage(context.Background(), "t1", "p1", "r1", "p1"); err == nil {
+		if _, err := store.DisableScopePackage(context.Background(), "t1", "p1", "2026-01-01", "r1", "p1"); err == nil {
 			t.Fatal("expected error")
 		}
 	})
@@ -700,10 +700,10 @@ func TestSetIDMemoryStore_ScopePackages(t *testing.T) {
 		t.Fatalf("pkgs=%+v err=%v", pkgs, err)
 	}
 
-	if _, err := store.DisableScopePackage(context.Background(), "t1", p1.PackageID, "r3", "p1"); err != nil {
+	if _, err := store.DisableScopePackage(context.Background(), "t1", p1.PackageID, "2026-01-01", "r3", "p1"); err != nil {
 		t.Fatalf("err=%v", err)
 	}
-	if _, err := store.DisableScopePackage(context.Background(), "t1", "missing", "r3", "p1"); err == nil {
+	if _, err := store.DisableScopePackage(context.Background(), "t1", "missing", "2026-01-01", "r3", "p1"); err == nil {
 		t.Fatal("expected error")
 	}
 

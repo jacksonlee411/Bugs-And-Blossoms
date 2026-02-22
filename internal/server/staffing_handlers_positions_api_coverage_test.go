@@ -331,7 +331,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 	})
 
 	t.Run("POST invalid org_code", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader("{\"org_code\":\"bad\\u007f\"}"))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"effective_date":"2026-01-01","org_code":"bad\u007f"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
@@ -348,7 +348,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 	})
 
 	t.Run("POST resolver missing when org_code present", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_code":"ORG-1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"effective_date":"2026-01-01","org_code":"ORG-1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, nil, positionStoreStub{
@@ -376,7 +376,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_code":"ORG-1"}`))
+				req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"effective_date":"2026-01-01","org_code":"ORG-1"}`))
 				req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 				rec := httptest.NewRecorder()
 				handlePositionsAPI(rec, req, staffingOrgStoreStub{
@@ -414,7 +414,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 	})
 
 	t.Run("POST create conflict", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_code":"ORG-1","name":"A"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"effective_date":"2026-01-01","org_code":"ORG-1","name":"A"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
@@ -431,7 +431,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 	})
 
 	t.Run("POST create stable error => 422", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_code":"ORG-1","name":"A"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"effective_date":"2026-01-01","org_code":"ORG-1","name":"A"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
@@ -448,7 +448,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 	})
 
 	t.Run("POST create invalid input => 400", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_code":"ORG-1","name":"A"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"effective_date":"2026-01-01","org_code":"ORG-1","name":"A"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
@@ -552,7 +552,7 @@ func TestHandlePositionsAPI_Coverage(t *testing.T) {
 	})
 
 	t.Run("POST create ok and body returns json", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"org_code":"ORG-1","job_profile_uuid":"jp1","name":"A"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", strings.NewReader(`{"effective_date":"2026-01-01","org_code":"ORG-1","job_profile_uuid":"jp1","name":"A"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{

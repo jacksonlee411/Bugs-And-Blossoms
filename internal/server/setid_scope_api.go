@@ -23,7 +23,8 @@ type scopePackageCreateAPIRequest struct {
 }
 
 type scopePackageDisableAPIRequest struct {
-	RequestID string `json:"request_id"`
+	EffectiveDate string `json:"effective_date"`
+	RequestID     string `json:"request_id"`
 }
 
 type scopeSubscriptionAPIRequest struct {
@@ -79,7 +80,8 @@ func handleScopePackagesAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 			return
 		}
 		if req.EffectiveDate == "" {
-			req.EffectiveDate = time.Now().UTC().Format("2006-01-02")
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
+			return
 		}
 		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
@@ -137,7 +139,8 @@ func handleOwnedScopePackagesAPI(w http.ResponseWriter, r *http.Request, store S
 	}
 	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
 	if asOf == "" {
-		asOf = time.Now().UTC().Format("2006-01-02")
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "as_of required")
+		return
 	}
 	if _, err := time.Parse("2006-01-02", asOf); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
@@ -182,12 +185,21 @@ func handleScopePackageDisableAPI(w http.ResponseWriter, r *http.Request, store 
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
 		return
 	}
+	req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
 	req.RequestID = strings.TrimSpace(req.RequestID)
+	if req.EffectiveDate == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
+		return
+	}
+	if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
+		return
+	}
 	if req.RequestID == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "request_id required")
 		return
 	}
-	pkg, err := store.DisableScopePackage(r.Context(), tenant.ID, packageID, req.RequestID, tenant.ID)
+	pkg, err := store.DisableScopePackage(r.Context(), tenant.ID, packageID, req.EffectiveDate, req.RequestID, tenant.ID)
 	if err != nil {
 		writeScopeAPIError(w, r, err, "scope_package_disable_failed")
 		return
@@ -216,7 +228,8 @@ func handleScopeSubscriptionsAPI(w http.ResponseWriter, r *http.Request, store S
 			return
 		}
 		if asOf == "" {
-			asOf = time.Now().UTC().Format("2006-01-02")
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "as_of required")
+			return
 		}
 		if _, err := time.Parse("2006-01-02", asOf); err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
@@ -331,7 +344,8 @@ func handleGlobalScopePackagesAPI(w http.ResponseWriter, r *http.Request, store 
 			return
 		}
 		if req.EffectiveDate == "" {
-			req.EffectiveDate = time.Now().UTC().Format("2006-01-02")
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
+			return
 		}
 		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")

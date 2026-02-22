@@ -268,6 +268,7 @@ modules/{module}/
 - DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102A：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案：`docs/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
 - DEV-PLAN-102B：070/071 时间口径强制显式化与历史回放稳定性收敛：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
+- DEV-PLAN-102B 执行日志：`docs/dev-records/dev-plan-102b-execution-log.md`
 - DEV-PLAN-102A 执行日志：`docs/dev-records/dev-plan-102a-execution-log.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
 - DEV-PLAN-103：移除旧前端链路，前端收敛为 MUI X（React SPA）：`docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`

@@ -171,11 +171,11 @@
 
 ### 8.3 里程碑
 1. [x] **M1 契约冻结**：修订 070/071/071A/071B/102/026A/063 的时间参数规则，移除“默认 today”描述并记录冲突消解表（2026-02-22 已完成文档收口）。
-2. [ ] **M2 API 收口**：移除 handler/controller 默认回填，统一 `invalid_* + required message`；含 `scope-packages/{package_id}/disable`。
-3. [ ] **M3 Kernel 收口**：移除 SQL 函数内 `current_date` 业务口径分支，改为显式日期。
-4. [ ] **M4 测试重构**：删除“default as_of/effective_date”用例，新增“missing required date -> fail”与“跨天重放一致性”用例。
-5. [ ] **M5 门禁落地**：新增 `make check as-of-explicit`（名称可调整）并接入 CI，阻断回漂。
-6. [ ] **M6 证据归档**：更新 `docs/dev-records/dev-plan-102b-execution-log.md`，记录命令、结果、风险、回滚说明。
+2. [x] **M2 API 收口**：移除 handler/controller 默认回填，统一 `invalid_* + required message`；含 `scope-packages/{package_id}/disable`。
+3. [x] **M3 Kernel 收口**：移除 SQL 函数内 `current_date` 业务口径分支，改为显式日期。
+4. [x] **M4 测试重构**：删除“default as_of/effective_date”用例，新增“missing required date -> fail”并补齐显式日期成功路径覆盖。
+5. [x] **M5 门禁落地**：新增 `make check as-of-explicit`（名称可调整）并接入 CI，阻断回漂。
+6. [x] **M6 证据归档**：更新 `docs/dev-records/dev-plan-102b-execution-log.md`，记录命令、结果、风险、回滚说明。
 
 ### 8.4 文档收口记录（2026-02-22）
 - [x] `DEV-PLAN-005`：新增 `STD-002`（`as_of`/`effective_date` 语义标准）。

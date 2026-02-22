@@ -52,11 +52,8 @@ func (c AssignmentsController) HandleAssignmentsAPI(w http.ResponseWriter, r *ht
 
 	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
 	if asOf == "" {
-		now := time.Now
-		if c.NowUTC != nil {
-			now = c.NowUTC
-		}
-		asOf = now().UTC().Format("2006-01-02")
+		writeError(w, r, http.StatusBadRequest, "invalid_as_of", "as_of required")
+		return
 	}
 	if _, err := time.Parse("2006-01-02", asOf); err != nil {
 		writeError(w, r, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
@@ -116,8 +113,10 @@ func (c AssignmentsController) HandleAssignmentsAPI(w http.ResponseWriter, r *ht
 			writeError(w, r, http.StatusBadRequest, "bad_json", "bad json")
 			return
 		}
+		req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
 		if req.EffectiveDate == "" {
-			req.EffectiveDate = asOf
+			writeError(w, r, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
+			return
 		}
 		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
 			writeError(w, r, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")

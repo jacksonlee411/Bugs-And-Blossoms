@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
@@ -65,6 +64,16 @@ func TestHandlePositionsOptionsAPI_Branches(t *testing.T) {
 
 	t.Run("invalid as_of", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/positions:options?as_of=bad&org_code=A001", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
+		rec := httptest.NewRecorder()
+		handlePositionsOptionsAPI(rec, req, newOrgUnitMemoryStore(), newJobCatalogMemoryStore())
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("as_of required", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/positions:options?org_code=A001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositionsOptionsAPI(rec, req, newOrgUnitMemoryStore(), newJobCatalogMemoryStore())
@@ -195,7 +204,7 @@ func TestHandlePositionsOptionsAPI_Branches(t *testing.T) {
 		}
 	})
 
-	t.Run("ok (default as_of)", func(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
 		orgStore := orgUnitMemoryStoreWithSetID{orgUnitMemoryStore: newOrgUnitMemoryStore(), setID: "S1"}
 		if _, err := orgStore.CreateNodeCurrent(context.Background(), "t1", "2026-01-01", "a001", "Org", "", true); err != nil {
 			t.Fatal(err)
@@ -205,7 +214,7 @@ func TestHandlePositionsOptionsAPI_Branches(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		req := httptest.NewRequest(http.MethodGet, "/org/api/positions:options?org_code=a001", nil)
+		req := httptest.NewRequest(http.MethodGet, "/org/api/positions:options?as_of=2026-01-01&org_code=a001", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handlePositionsOptionsAPI(rec, req, orgStore, jobStore)
@@ -223,7 +232,7 @@ func TestHandlePositionsOptionsAPI_Branches(t *testing.T) {
 		if out.JobCatalogSetID != "S1" {
 			t.Fatalf("setid=%q", out.JobCatalogSetID)
 		}
-		if out.AsOf == "" || !strings.Contains(out.AsOf, "-") {
+		if out.AsOf != "2026-01-01" {
 			t.Fatalf("as_of=%q", out.AsOf)
 		}
 		if len(out.JobProfiles) != 1 {
