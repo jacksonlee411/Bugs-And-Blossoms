@@ -10,6 +10,11 @@
 - 本计划选择 **选项 A：引入 dict registry（字典本体表）作为 SSOT**。
 - 这更符合 `DEV-PLAN-003` 的 “Simple > Easy”：把“dict_code 是什么/是否存在/是否可用”变成一个**显式、可审计、可治理**的边界，而不是靠“创建第一条 value”隐式生成。
 
+### 0.1 后续收敛注记（2026-02-22）
+
+- 按 `DEV-PLAN-070B`，字典运行时读取口径已收敛为 **tenant-only**，本计划中涉及 `tenant/global fallback` 的描述均视为历史阶段口径。
+- 按 `STD-002` / `DEV-PLAN-102B`，`as_of` 缺失/非法统一 `400 invalid_as_of`（message：`as_of required`），禁止 default today。
+
 ## 1. 背景
 
 用户在 `http://localhost:8080/app/dicts` 验证字典模块时，明确提出并确认需求为：**新增新的 `dict_code`（字典本体）**，并在 UI 左侧列表可见（见 `DEV-PLAN-105A` 问题 B2）。
@@ -56,7 +61,7 @@
 
 代价/风险（接受）：
 - 需要新增表/迁移（触发仓库红线：**新增表前必须用户手工确认**）。
-- 需要把现有 `/iam/api/dicts` 的实现从“读 segments distinct”迁移为“读 registry + fallback”，并补齐测试与 UI 交互。
+- 需要把现有 `/iam/api/dicts` 的实现从“读 segments distinct”迁移为“读 registry（tenant-only 运行态）”，并补齐测试与 UI 交互。
 
 ### 3.2 选项 B（本计划拒绝）：通过“创建第一个 value”隐式生成 dict_code
 
@@ -121,7 +126,7 @@
   - 若存在 `disabled_on`：`enabled_on < disabled_on`（半开区间 `[enabled_on, disabled_on)`）
 - RLS：
   - `ENABLE/FORCE RLS`
-  - policy：允许读取 `current_tenant` 与 `globalTenant`；写入仅允许 `current_tenant`（对齐 `DEV-PLAN-105` 模式）
+  - policy：运行态业务读写仅允许 `current_tenant`；`globalTenant` 仅作为发布链路的控制面数据来源，不进入业务 API 读取路径。
 
 ### 5.1A 外键：values -> dicts（必须）
 
@@ -148,7 +153,7 @@
 ### 6.1 读接口（保持并调整语义）
 
 - `GET /iam/api/dicts?as_of=YYYY-MM-DD`
-  - 来源：`iam.dicts`（tenant 优先，global fallback）
+  - 来源：`iam.dicts`（tenant-only）
   - Response（冻结）：`{as_of, dicts:[{dict_code,name,enabled_on,disabled_on,status}]}`（`status` 为派生字段；字段名 snake_case）
 - `GET /iam/api/dicts/values?dict_code=...&as_of=...`（延续 `DEV-PLAN-105`）
 
@@ -163,22 +168,20 @@
   - 权限：`dict.admin`
   - 行为：停用 dict_code（停用后禁止新增 values；历史可读）
 
-## 6A. tenant/global 冲突与 fallback 规则（冻结，避免“空结果误回退”）
+## 6A. tenant-only 读取与发布迁移口径（冻结）
 
-> 背景：若用“values 查询结果为空就回退 global”的隐式规则，会在 `q/limit/as_of` 过滤条件下产生误回退（属于偶然复杂度）。  
-> 本计划冻结为：**先选 dict 来源（tenant 或 global），再查 values；一旦 tenant 声明了该 dict_code，就不再回退 global**。
+> 按 `DEV-PLAN-070B`，共享改发布：平台基线通过发布任务写入租户本地；业务运行时不再跨租户读取。
 
 1. `GET /iam/api/dicts?as_of=...`（dict list）：
-   - 返回“合并视图”：`tenant_dicts(as_of)` 与 `global_dicts(as_of)` 并集；
-   - 若 tenant 与 global 同时存在同 `dict_code`，以 tenant 为准（tenant 覆盖 global）。
+   - 仅返回当前租户在 `as_of` 下可见 dict。
+   - 不再合并 global 视图；租户无数据即按 fail-closed 处理。
 2. `GET /iam/api/dicts/values?dict_code=...&as_of=...`（values list）与 `ResolveValueLabel(...)`：
-   - 若 tenant 在 `as_of` 下存在该 dict_code（无论是否有 values），则 values 只在 tenant 范围查询（即使结果为空也不回退 global）。
-   - 仅当 tenant 在 `as_of` 下不存在该 dict_code 时，才回退 global 查询。
-   - 两边都不存在 => `dict_not_found`（fail-closed）。
+   - 只在当前租户范围查询；结果为空/未命中时不回退 global。
+   - 租户未完成基线导入时返回 `dict_baseline_not_ready`；其余未命中返回 `dict_not_found` 或 `dict_value_not_found_as_of`。
 
 ### 6.3 稳定错误码（最小集合）
 
-- `invalid_as_of`
+- `invalid_as_of`（缺失/非法统一 `400`，message：`as_of required`）
 - `dict_code_required`
 - `dict_code_invalid`
 - `dict_name_required`
@@ -188,6 +191,7 @@
 - `dict_disabled_on_invalid`
 - `dict_code_conflict`
 - `dict_not_found`
+- `dict_baseline_not_ready`
 - `dict_disabled`
 - `dict_value_dict_disabled`（当对停用 dict_code 写入 value 时）
 - `dict_request_code_required`
@@ -210,13 +214,13 @@
 1. [X] （红线）新增表/迁移前：用户手工确认本计划引入 `iam.dicts/iam.dict_events`（或等价命名）。
 2. [X] DB：新增迁移与 schema（Atlas+Goose 闭环），并补齐 RLS 与 Kernel（One Door）。
 3. [X] DB：为 `dict_value_segments/events` 增加 `(tenant_uuid, dict_code)` -> `iam.dicts` 外键，并在 `submit_dict_value_event(...)` 中补齐 dict 可用性校验（DB+Kernel 双保险）。
-4. [X] 后端：调整 `/iam/api/dicts` 读路径（registry SSOT + tenant 覆盖 global 的确定性合并规则）；新增 dict 写接口（create/disable）。
+4. [X] 后端：调整 `/iam/api/dicts` 读路径（registry SSOT + tenant-only 运行态）；新增 dict 写接口（create/disable）。
 5. [X] 后端：移除/替换 `supportedDictCode(...)` 的硬编码限制：改为“dict_code 必须在 registry 存在且在 as_of 下可用”（fail-closed）。
 6. [X] 后端：将 `status` 统一改为派生字段（由 `enabled_on/disabled_on + as_of` 计算），不再引入第二套存储事实。
 7. [X] 前端：在 `/app/dicts` 增加 dict_code 创建/停用交互（对齐 `DEV-PLAN-105A` 的两栏 IA）。
 8. [X] 测试：补齐 store/handler 覆盖，至少包含：
-   - tenant/global 同 code 冲突时 tenant 覆盖；
-   - tenant dict 存在但 values 为空时不回退 global；
+   - tenant-only 读取路径（无 global fallback）；
+   - tenant dict 存在但 values 为空时返回租户内空结果/未命中，不跨租户回退；
    - disabled dict_code 的 value 写入 fail-closed。
 
 ## 9. 验收标准（DoD）
@@ -227,7 +231,7 @@
    - 写接口 `POST /iam/api/dicts/values` 对该 dict_code 一律拒绝（稳定错误码，fail-closed）。
 3. `/iam/api/dicts` 的 dict list 来源单一且可解释（registry SSOT），不再依赖“segments distinct + supportedDictCode hardcode”。
 4. `status` 对外可见但仅为派生值；系统内部仅以 `enabled_on/disabled_on` 作为状态事实源。
-5. tenant/global 路径满足冻结规则：tenant 存在即不回退 global，避免“空结果误回退”。
+5. 运行时读取满足 tenant-only 冻结规则：无 `global_tenant` fallback，缺基线时 `dict_baseline_not_ready` fail-closed。
 
 ## 10. 门禁与验证（SSOT 引用）
 
