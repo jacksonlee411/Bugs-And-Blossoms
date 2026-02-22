@@ -2,7 +2,7 @@
 
 **状态**: 已冻结（2026-01-06 11:32 UTC）
 
-> 本记录用于支撑 `docs/dev-plans/004-remove-version-marker-repo-wide.md` 的 PR-1（盘点与映射表冻结）。
+> 本记录用于支撑 `docs/archive/dev-plans/004-remove-version-marker-repo-wide.md` 的 PR-1（盘点与映射表冻结）。
 >
 > 重要：为满足“最终全仓扫描命中为 0”的验收口径，本文避免直接写出版本标记字面量；统一用占位符 `<ver>` 表示“`v`/`V` + `4` 的紧邻组合”。
 
