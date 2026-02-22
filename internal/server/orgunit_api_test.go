@@ -2394,7 +2394,7 @@ func TestWriteOrgUnitServiceError_BadRequestStableUnknownCodePreserved(t *testin
 	if got := payload["code"]; got != "SOME_DB_CODE" {
 		t.Fatalf("code=%v", got)
 	}
-	if got := payload["message"]; got != "orgunit_correct_failed" {
+	if got := payload["message"]; got != "Some DB code." {
 		t.Fatalf("message=%v", got)
 	}
 }
@@ -2415,7 +2415,7 @@ func TestWriteOrgUnitServiceError_BlankCodeFallsBackToDefault(t *testing.T) {
 	if got := payload["code"]; got != "orgunit_correct_failed" {
 		t.Fatalf("code=%v", got)
 	}
-	if got := payload["message"]; got != "orgunit_correct_failed" {
+	if got := payload["message"]; got != "Orgunit correct failed." {
 		t.Fatalf("message=%v", got)
 	}
 }
