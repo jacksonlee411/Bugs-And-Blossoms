@@ -42,6 +42,11 @@ else
 fi
 
 echo "[error-message] ${pnpm_cmd[*]} -C apps/web test -- src/errors/presentApiError.test.ts"
+if [[ ! -x "apps/web/node_modules/.bin/vitest" ]]; then
+  echo "[error-message] ${pnpm_cmd[*]} -C apps/web install --frozen-lockfile"
+  "${pnpm_cmd[@]}" -C apps/web install --frozen-lockfile
+fi
+
 "${pnpm_cmd[@]}" -C apps/web test -- src/errors/presentApiError.test.ts
 
 echo "[error-message] OK"
