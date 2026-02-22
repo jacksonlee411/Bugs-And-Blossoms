@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -1106,7 +1105,7 @@ func (s assignmentStoreStub) RescindAssignmentEvent(ctx context.Context, tenantI
 }
 
 func TestStaffingHandlers_JSONRoundTrip(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"org_code":"ORG-1","job_profile_uuid":"jp1","name":"A"}`)))
+	req := httptest.NewRequest(http.MethodPost, "/org/api/positions?as_of=2026-01-01", bytes.NewReader([]byte(`{"effective_date":"2026-01-01","org_code":"ORG-1","job_profile_uuid":"jp1","name":"A"}`)))
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
 
@@ -1130,21 +1129,13 @@ func TestStaffingHandlers_JSONRoundTrip(t *testing.T) {
 	}
 }
 
-func TestStaffingHandlers_DefaultAsOf_InternalAPI(t *testing.T) {
+func TestStaffingHandlers_AsOfRequired_InternalAPI(t *testing.T) {
 	t.Run("positions", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/positions", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-
-		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{
-			listFn: func(_ context.Context, _ string, asOf string) ([]Position, error) {
-				if _, err := time.Parse("2006-01-02", asOf); err != nil {
-					return nil, err
-				}
-				return nil, nil
-			},
-		})
-		if rec.Code != http.StatusOK {
+		handlePositionsAPI(rec, req, staffingOrgStoreStub{}, positionStoreStub{})
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
@@ -1153,16 +1144,8 @@ func TestStaffingHandlers_DefaultAsOf_InternalAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/assignments?person_uuid=p1", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-
-		handleAssignmentsAPI(rec, req, assignmentStoreStub{
-			listFn: func(_ context.Context, _ string, asOf string, _ string) ([]Assignment, error) {
-				if _, err := time.Parse("2006-01-02", asOf); err != nil {
-					return nil, err
-				}
-				return nil, nil
-			},
-		})
-		if rec.Code != http.StatusOK {
+		handleAssignmentsAPI(rec, req, assignmentStoreStub{})
+		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})

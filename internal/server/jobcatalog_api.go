@@ -65,7 +65,8 @@ func handleJobCatalogAPI(w http.ResponseWriter, r *http.Request, setidStore jobC
 
 	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
 	if asOf == "" {
-		asOf = time.Now().UTC().Format("2006-01-02")
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "as_of required")
+		return
 	}
 	if _, err := time.Parse("2006-01-02", asOf); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")
@@ -244,7 +245,8 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 	req.PackageCode = normalizePackageCode(req.PackageCode)
 	req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
 	if req.EffectiveDate == "" {
-		req.EffectiveDate = time.Now().UTC().Format("2006-01-02")
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
+		return
 	}
 	if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")

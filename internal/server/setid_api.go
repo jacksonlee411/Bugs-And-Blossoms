@@ -79,7 +79,8 @@ func handleSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernan
 			return
 		}
 		if req.EffectiveDate == "" {
-			req.EffectiveDate = time.Now().UTC().Format("2006-01-02")
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
+			return
 		}
 		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "invalid effective_date")
@@ -129,7 +130,8 @@ func handleSetIDBindingsAPI(w http.ResponseWriter, r *http.Request, store SetIDG
 	case http.MethodGet:
 		asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
 		if asOf == "" {
-			asOf = time.Now().UTC().Format("2006-01-02")
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "as_of required")
+			return
 		}
 		if _, err := time.Parse("2006-01-02", asOf); err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_as_of", "invalid as_of")

@@ -21,6 +21,10 @@ func TestValidateFieldPolicyCELExpr(t *testing.T) {
 		t.Fatal("expected compile error")
 	}
 
+	if err := validateFieldPolicyCELExpr(`"x"+`); err == nil {
+		t.Fatal("expected compile error")
+	}
+
 	if err := validateFieldPolicyCELExpr(`1 + 1`); err == nil || err.Error() != "expression must return string" {
 		t.Fatalf("expected output type error, got %v", err)
 	}
