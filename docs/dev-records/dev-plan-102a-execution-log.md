@@ -1,6 +1,6 @@
 # DEV-PLAN-102A 执行日志：Org Code 默认规则生效日可见性修复
 
-> 对应计划：`docs/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
+> 对应计划：`docs/archive/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
 
 ## 1. 记录范围
 

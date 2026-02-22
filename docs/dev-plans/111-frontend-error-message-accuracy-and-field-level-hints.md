@@ -69,6 +69,12 @@
 - 在 `orgUnitAPIStatusForCode` 与 `orgNodeWriteErrorMessage` 补齐高频码（至少：`ORG_ROOT_ALREADY_EXISTS`、`ORG_TREE_NOT_INITIALIZED`、`ORG_NOT_FOUND_AS_OF`、`ORG_ALREADY_EXISTS`）。
 - 可选：在 ErrorEnvelope `meta` 中增加可选 `field`（不破坏现有字段，向后兼容）。
 
+承接 `DEV-PLAN-080B`，冻结以下错误提取口径：
+
+1. API 错误码映射必须优先提取 PG stable message（如 `stablePgMessage(err)`），禁止直接使用 `err.Error()` 进行业务码判定。
+2. 对外错误契约禁止透出 SQLSTATE/约束名原文；统一映射为稳定业务码后再由前端翻译。
+3. 若无法识别 stable message，按 fail-closed 回退通用错误码，并保留后端原始 `message` 供排障。
+
 ### 4.4 i18n 收口
 
 补充并冻结错误文案 key（`en/zh` 同步）：
@@ -113,4 +119,3 @@
 - 风险：字段定位误判造成错误高亮错位。
   - 对策：字段定位仅采用“显式字段/稳定码白名单/安全正则”，不做自由推断。
 - 回滚：前端保留旧展示路径的最小开关（代码级回退到后端 message），不引入双链路长期并存。
-

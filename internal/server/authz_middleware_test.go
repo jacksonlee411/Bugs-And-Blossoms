@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
 )
 
 type stubAuthorizer struct {
@@ -246,6 +247,15 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 		t.Fatal("expected ok=true")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/iam/api/dicts/values/audit"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/iam/api/dicts:release"); !ok || object != authz.ObjectIAMDictRelease || action != authz.ActionAdmin {
+		t.Fatalf("release requirement mismatch object=%q action=%q ok=%v", object, action, ok)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/iam/api/dicts:release:preview"); !ok || object != authz.ObjectIAMDictRelease || action != authz.ActionAdmin {
+		t.Fatalf("release preview requirement mismatch object=%q action=%q ok=%v", object, action, ok)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/iam/api/dicts:release"); ok {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/logout"); ok {

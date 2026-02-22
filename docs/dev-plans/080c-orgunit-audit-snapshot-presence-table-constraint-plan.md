@@ -304,7 +304,7 @@ $$;
 ## 12. 关联文档
 - `docs/dev-plans/080-orgunit-audit-chain-consolidation.md`
 - `docs/dev-plans/080a-orgunit-audit-snapshot-mechanism-and-fix.md`
-- `docs/dev-plans/080b-orgunit-correction-failure-investigation-and-remediation.md`
+- `docs/archive/dev-plans/080b-orgunit-correction-failure-investigation-and-remediation.md`
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
 - `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - `docs/dev-plans/025-sqlc-guidelines.md`

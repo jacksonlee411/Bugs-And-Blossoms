@@ -7,7 +7,7 @@ export ATLAS_VERSION ?= v0.38.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
-.PHONY: help preflight check pr-branch naming no-legacy request-code as-of-explicit go-version fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch naming no-legacy request-code as-of-explicit dict-tenant-only go-version fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
@@ -15,16 +15,17 @@ export DEV_INFRA_ENV_FILE ?= .env.example
 .PHONY: coverage
 
 help:
-		@printf "%s\n" \
-			"常用入口：" \
-			"  make preflight" \
-			"  make check naming" \
+	@printf "%s\n" \
+		"常用入口：" \
+		"  make preflight" \
+		"  make check naming" \
 			"  make check no-legacy" \
 			"  make check request-code" \
 			"  make check as-of-explicit" \
+			"  make check dict-tenant-only" \
 			"  make check go-version" \
 			"  make check fmt" \
-			"  make check lint" \
+		"  make check lint" \
 		"  make test" \
 		"  make check routing" \
 		"  make e2e" \
@@ -47,6 +48,7 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check no-legacy
 	@$(MAKE) check request-code
 	@$(MAKE) check as-of-explicit
+	@$(MAKE) check dict-tenant-only
 	@$(MAKE) check go-version
 	@$(MAKE) check doc
 	@$(MAKE) check fmt
@@ -73,6 +75,9 @@ request-code: ## 业务幂等字段命名收敛（统一 request_id；阻断 req
 
 as-of-explicit: ## 时间参数显式化门禁（禁止 as_of/effective_date 默认 today）
 	@./scripts/ci/check-as-of-explicit.sh
+
+dict-tenant-only: ## 字典链路租户本地化门禁（禁止 runtime global fallback）
+	@./scripts/ci/check-dict-tenant-only.sh
 
 go-version: ## Go 版本门禁（禁止 go.mod/.tool-versions 回退到非 1.26）
 	@./scripts/ci/check-go-version.sh
@@ -190,7 +195,7 @@ staffing:
 person:
 	@:
 
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint request-code as-of-explicit go-version plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint request-code as-of-explicit dict-tenant-only go-version plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

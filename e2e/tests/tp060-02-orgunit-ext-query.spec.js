@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { spawnSync } from "node:child_process";
 
 async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
   const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
@@ -88,6 +89,67 @@ async function setOrgTypeViaAPI(ctx, { asOf, orgCode, value }) {
   expect(resp.status(), await resp.text()).toBe(200);
 }
 
+function seedOrgTypeDictForTenant({ tenantID, asOf, runID }) {
+  const dbHost = process.env.DB_HOST || "127.0.0.1";
+  const dbPort = process.env.DB_PORT || "5438";
+  const dbName = process.env.DB_NAME || "bugs_and_blossoms";
+  const dbUser = process.env.DB_USER || "app";
+  const dbPassword = process.env.DB_PASSWORD || "app";
+  const dbSSLMode = process.env.DB_SSLMODE || "disable";
+  const dbURL = `postgres://${dbUser}:${dbPassword}@${dbHost}:${dbPort}/${dbName}?sslmode=${dbSSLMode}`;
+  const requestID = `e2e-seed-${runID}`;
+  const sql = `
+BEGIN;
+SELECT set_config('app.current_tenant', :'tenant_id', true);
+SELECT iam.submit_dict_event(
+  :'tenant_id'::uuid,
+  'org_type',
+  'DICT_CREATED',
+  :'as_of'::date,
+  jsonb_build_object('name', 'Org Type'),
+  :'request_id' || '#dict',
+  :'tenant_id'::uuid
+);
+SELECT iam.submit_dict_value_event(
+  :'tenant_id'::uuid,
+  'org_type',
+  '10',
+  'DICT_VALUE_CREATED',
+  :'as_of'::date,
+  jsonb_build_object('label', '部门'),
+  :'request_id' || '#value#10',
+  :'tenant_id'::uuid
+);
+SELECT iam.submit_dict_value_event(
+  :'tenant_id'::uuid,
+  'org_type',
+  '20',
+  'DICT_VALUE_CREATED',
+  :'as_of'::date,
+  jsonb_build_object('label', '单位'),
+  :'request_id' || '#value#20',
+  :'tenant_id'::uuid
+);
+COMMIT;
+`;
+  const res = spawnSync(
+    "psql",
+    [
+      dbURL,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-v",
+      `tenant_id=${tenantID}`,
+      "-v",
+      `as_of=${asOf}`,
+      "-v",
+      `request_id=${requestID}`
+    ],
+    { input: sql, encoding: "utf8" }
+  );
+  expect(res.status, `dict seed failed: ${res.stderr || res.stdout}`).toBe(0);
+}
+
 test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   test.setTimeout(240_000);
 
@@ -136,6 +198,7 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   const tenantRow = superadminPage.locator("tr", { hasText: tenantHost }).first();
   const tenantID = (await tenantRow.locator("code").first().innerText()).trim();
   expect(tenantID).not.toBe("");
+  seedOrgTypeDictForTenant({ tenantID, asOf, runID });
 
   await ensureKratosIdentity(superadminContext, kratosAdminURL, {
     traits: { tenant_uuid: tenantID, email: tenantAdminEmail, role_slug: "tenant-admin" },

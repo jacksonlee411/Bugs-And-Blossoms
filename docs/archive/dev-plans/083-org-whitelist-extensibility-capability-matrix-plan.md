@@ -452,8 +452,8 @@ Core 字段允许矩阵（冻结；承接并收敛 `DEV-PLAN-082`，以本文为
 ## 10. 与既有计划关系
 
 - 语义事实源：`docs/archive/dev-plans/082-org-module-field-mutation-rules-investigation.md`
-- 状态纠错边界：`docs/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
-- correction 失败排障与错误码稳定化：`docs/dev-plans/080b-orgunit-correction-failure-investigation-and-remediation.md`
+- 状态纠错边界：`docs/archive/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
+- correction 失败排障与错误码稳定化：`docs/archive/dev-plans/080b-orgunit-correction-failure-investigation-and-remediation.md`
 - 审计快照约束：`docs/dev-plans/080c-orgunit-audit-snapshot-presence-table-constraint-plan.md`
 
 ## 11. 关联文档

@@ -243,7 +243,6 @@ DROP POLICY IF EXISTS tenant_isolation ON iam.dict_value_segments;
 CREATE POLICY tenant_isolation ON iam.dict_value_segments
 USING (
   tenant_uuid = current_setting('app.current_tenant')::uuid
-  OR tenant_uuid = '00000000-0000-0000-0000-000000000000'::uuid
 )
 WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
@@ -293,7 +292,6 @@ DROP POLICY IF EXISTS tenant_isolation ON iam.dict_value_events;
 CREATE POLICY tenant_isolation ON iam.dict_value_events
 USING (
   tenant_uuid = current_setting('app.current_tenant')::uuid
-  OR tenant_uuid = '00000000-0000-0000-0000-000000000000'::uuid
 )
 WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
@@ -554,22 +552,8 @@ $$;
 
 DO $$
 DECLARE
-  v_global uuid := '00000000-0000-0000-0000-000000000000'::uuid;
   v_local uuid := '00000000-0000-0000-0000-000000000001'::uuid;
 BEGIN
-  PERFORM set_config('app.current_tenant', v_global::text, true);
-  IF EXISTS (SELECT 1 FROM iam.tenants WHERE id = v_global) THEN
-    INSERT INTO iam.dict_value_segments (tenant_uuid, dict_code, code, label, enabled_on, disabled_on, status)
-    VALUES
-      (v_global, 'org_type', '10', '部门', '1970-01-01', NULL, 'active'),
-      (v_global, 'org_type', '20', '单位', '1970-01-01', NULL, 'active')
-    ON CONFLICT (tenant_uuid, dict_code, code, enabled_on) DO UPDATE
-    SET label = EXCLUDED.label,
-        disabled_on = NULL,
-        status = 'active',
-        updated_at = now();
-  END IF;
-
   PERFORM set_config('app.current_tenant', v_local::text, true);
   IF EXISTS (SELECT 1 FROM iam.tenants WHERE id = v_local) THEN
     INSERT INTO iam.dict_value_segments (tenant_uuid, dict_code, code, label, enabled_on, disabled_on, status)
@@ -615,7 +599,6 @@ DROP POLICY IF EXISTS tenant_isolation ON iam.dicts;
 CREATE POLICY tenant_isolation ON iam.dicts
 USING (
   tenant_uuid = current_setting('app.current_tenant')::uuid
-  OR tenant_uuid = '00000000-0000-0000-0000-000000000000'::uuid
 )
 WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 
@@ -656,7 +639,6 @@ DROP POLICY IF EXISTS tenant_isolation ON iam.dict_events;
 CREATE POLICY tenant_isolation ON iam.dict_events
 USING (
   tenant_uuid = current_setting('app.current_tenant')::uuid
-  OR tenant_uuid = '00000000-0000-0000-0000-000000000000'::uuid
 )
 WITH CHECK (tenant_uuid = current_setting('app.current_tenant')::uuid);
 

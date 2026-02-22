@@ -14,7 +14,8 @@ import (
 
 const (
 	dictCodeOrgType = "org_type"
-	globalTenantID  = "00000000-0000-0000-0000-000000000000"
+	// 保留该常量用于历史测试数据与迁移工具识别；运行时读取已收敛为 tenant-only。
+	globalTenantID = "00000000-0000-0000-0000-000000000000"
 
 	dictEventCreated        = "DICT_VALUE_CREATED"
 	dictEventLabelCorrected = "DICT_VALUE_LABEL_CORRECTED"
@@ -41,6 +42,7 @@ var (
 	errDictValueNotFoundAsOf     = errors.New("DICT_VALUE_NOT_FOUND_AS_OF")
 	errDictValueConflict         = errors.New("DICT_VALUE_CONFLICT")
 	errDictValueDictDisabled     = errors.New("DICT_VALUE_DICT_DISABLED")
+	errDictBaselineNotReady      = errors.New("DICT_BASELINE_NOT_READY")
 	errDictRequestIDRequired     = errors.New("DICT_REQUEST_CODE_REQUIRED")
 	errDictEffectiveDayRequired  = errors.New("DICT_EFFECTIVE_DAY_REQUIRED")
 	errDictDisabledOnInvalidDate = errors.New("DICT_DISABLED_ON_INVALID")
@@ -150,7 +152,7 @@ func (s *dictPGStore) ListDicts(ctx context.Context, tenantID string, asOf strin
 		return nil, err
 	}
 
-	items, err := listMergedDictsByAsOfTx(ctx, tx, tenantID, asOf)
+	items, err := listTenantDictsByAsOfTx(ctx, tx, tenantID, asOf)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +162,7 @@ func (s *dictPGStore) ListDicts(ctx context.Context, tenantID string, asOf strin
 	return items, nil
 }
 
-func listMergedDictsByAsOfTx(ctx context.Context, tx pgx.Tx, tenantID string, asOf string) ([]DictItem, error) {
+func listTenantDictsByAsOfTx(ctx context.Context, tx pgx.Tx, tenantID string, asOf string) ([]DictItem, error) {
 	rows, err := tx.Query(ctx, `
 SELECT dict_code, name, status, enabled_on::text, CASE WHEN disabled_on IS NULL THEN NULL ELSE disabled_on::text END AS disabled_on
 FROM (
@@ -173,18 +175,15 @@ FROM (
       WHEN d.enabled_on <= $2::date AND (d.disabled_on IS NULL OR $2::date < d.disabled_on) THEN 'active'
       ELSE 'inactive'
     END AS status,
-    row_number() OVER (
-      PARTITION BY d.dict_code
-      ORDER BY CASE WHEN d.tenant_uuid = $1::uuid THEN 0 ELSE 1 END, d.enabled_on DESC
-    ) AS rn
+    row_number() OVER (PARTITION BY d.dict_code ORDER BY d.enabled_on DESC) AS rn
   FROM iam.dicts d
-  WHERE d.tenant_uuid IN ($1::uuid, $3::uuid)
+  WHERE d.tenant_uuid = $1::uuid
     AND d.enabled_on <= $2::date
     AND (d.disabled_on IS NULL OR $2::date < d.disabled_on)
 ) merged
 WHERE rn = 1
 ORDER BY dict_code ASC
-`, tenantID, asOf, globalTenantID)
+`, tenantID, asOf)
 	if err != nil {
 		return nil, err
 	}
@@ -316,18 +315,37 @@ func (s *dictPGStore) ListDictValues(ctx context.Context, tenantID string, dictC
 	return values, nil
 }
 
+func assertTenantBaselineReadyTx(ctx context.Context, tx pgx.Tx, tenantID string) error {
+	var ready bool
+	err := tx.QueryRow(ctx, `
+SELECT EXISTS(
+  SELECT 1
+  FROM iam.dicts
+  WHERE tenant_uuid = $1::uuid
+    AND dict_code = $2::text
+)
+`, tenantID, dictCodeOrgType).Scan(&ready)
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return errDictBaselineNotReady
+	}
+	return nil
+}
+
+// 兼容历史调用点：运行时 tenant-only，命中时始终返回当前租户。
 func resolveDictSourceTenantAsOfTx(ctx context.Context, tx pgx.Tx, tenantID string, dictCode string, asOf string) (string, error) {
 	var sourceTenant string
 	err := tx.QueryRow(ctx, `
 SELECT tenant_uuid::text
 FROM iam.dicts
-WHERE dict_code = $2::text
-  AND tenant_uuid IN ($1::uuid, $3::uuid)
-  AND enabled_on <= $4::date
-  AND (disabled_on IS NULL OR $4::date < disabled_on)
-ORDER BY CASE WHEN tenant_uuid = $1::uuid THEN 0 ELSE 1 END
+WHERE tenant_uuid = $1::uuid
+  AND dict_code = $2::text
+  AND enabled_on <= $3::date
+  AND (disabled_on IS NULL OR $3::date < disabled_on)
 LIMIT 1
-`, tenantID, dictCode, globalTenantID, asOf).Scan(&sourceTenant)
+`, tenantID, dictCode, asOf).Scan(&sourceTenant)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", errDictNotFound
@@ -337,16 +355,16 @@ LIMIT 1
 	return sourceTenant, nil
 }
 
+// 兼容历史调用点：运行时 tenant-only，命中时始终返回当前租户。
 func resolveDictSourceTenantTx(ctx context.Context, tx pgx.Tx, tenantID string, dictCode string) (string, error) {
 	var sourceTenant string
 	err := tx.QueryRow(ctx, `
 SELECT tenant_uuid::text
 FROM iam.dicts
-WHERE dict_code = $2::text
-  AND tenant_uuid IN ($1::uuid, $3::uuid)
-ORDER BY CASE WHEN tenant_uuid = $1::uuid THEN 0 ELSE 1 END
+WHERE tenant_uuid = $1::uuid
+  AND dict_code = $2::text
 LIMIT 1
-`, tenantID, dictCode, globalTenantID).Scan(&sourceTenant)
+`, tenantID, dictCode).Scan(&sourceTenant)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", errDictNotFound
@@ -492,6 +510,9 @@ func (s *dictPGStore) submitValueEvent(ctx context.Context, tenantID string, dic
 	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
 		return DictValueItem{}, false, err
 	}
+	if err := assertTenantBaselineReadyTx(ctx, tx, tenantID); err != nil {
+		return DictValueItem{}, false, err
+	}
 
 	if err := assertTenantDictActiveAsOfTx(ctx, tx, tenantID, dictCode, day); err != nil {
 		return DictValueItem{}, false, err
@@ -616,7 +637,7 @@ WHERE tenant_uuid = $1::uuid
   AND code = $3::text
 ORDER BY id DESC
 LIMIT $4::int
-`, sourceTenantID, dictCode, code, limit)
+	`, sourceTenantID, dictCode, code, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -658,10 +679,12 @@ func newDictMemoryStore() DictStore {
 		dicts: map[string]map[string]DictItem{
 			globalTenantID:                         {dictCodeOrgType: defaultDict},
 			"00000000-0000-0000-0000-000000000001": {dictCodeOrgType: defaultDict},
+			"t1":                                   {dictCodeOrgType: defaultDict},
 		},
 		values: map[string][]DictValueItem{
 			globalTenantID:                         append([]DictValueItem(nil), defaultValues...),
 			"00000000-0000-0000-0000-000000000001": append([]DictValueItem(nil), defaultValues...),
+			"t1":                                   append([]DictValueItem(nil), defaultValues...),
 		},
 	}
 }
@@ -671,19 +694,9 @@ func (s *dictMemoryStore) ListDicts(_ context.Context, tenantID string, asOf str
 		return nil, errDictEffectiveDayRequired
 	}
 	tenantDicts := s.dictsByTenant(tenantID)
-	globalDicts := s.dictsByTenant(globalTenantID)
 
 	out := make([]DictItem, 0)
-	for code, item := range tenantDicts {
-		if !dictActiveAsOf(item, asOf) {
-			continue
-		}
-		cloned := cloneDictItem(item)
-		cloned.Status = dictStatusAsOf(item, asOf)
-		out = append(out, cloned)
-		delete(globalDicts, code)
-	}
-	for _, item := range globalDicts {
+	for _, item := range tenantDicts {
 		if !dictActiveAsOf(item, asOf) {
 			continue
 		}
@@ -844,22 +857,32 @@ func (s *dictMemoryStore) ListDictValueAudit(_ context.Context, tenantID string,
 	return []DictValueAuditItem{}, nil
 }
 
-func (s *dictMemoryStore) resolveSourceTenantAsOf(tenantID string, dictCode string, asOf string) (string, bool) {
-	if item, ok := s.dicts[tenantID][dictCode]; ok && dictActiveAsOf(item, asOf) {
-		return tenantID, true
+func (s *dictMemoryStore) dictExists(tenantID string, dictCode string) bool {
+	if _, ok := s.dicts[tenantID][dictCode]; ok {
+		return true
 	}
-	if item, ok := s.dicts[globalTenantID][dictCode]; ok && dictActiveAsOf(item, asOf) {
-		return globalTenantID, true
+	return false
+}
+
+func (s *dictMemoryStore) dictExistsAsOf(tenantID string, dictCode string, asOf string) bool {
+	if item, ok := s.dicts[tenantID][dictCode]; ok {
+		return dictActiveAsOf(item, asOf)
+	}
+	return false
+}
+
+// 兼容历史测试：运行时 tenant-only，不再回退 global。
+func (s *dictMemoryStore) resolveSourceTenantAsOf(tenantID string, dictCode string, asOf string) (string, bool) {
+	if s.dictExistsAsOf(tenantID, dictCode, asOf) {
+		return tenantID, true
 	}
 	return "", false
 }
 
+// 兼容历史测试：运行时 tenant-only，不再回退 global。
 func (s *dictMemoryStore) resolveSourceTenant(tenantID string, dictCode string) (string, bool) {
-	if _, ok := s.dicts[tenantID][dictCode]; ok {
+	if s.dictExists(tenantID, dictCode) {
 		return tenantID, true
-	}
-	if _, ok := s.dicts[globalTenantID][dictCode]; ok {
-		return globalTenantID, true
 	}
 	return "", false
 }
@@ -868,7 +891,7 @@ func (s *dictMemoryStore) valuesForTenant(tenantID string) []DictValueItem {
 	if items, ok := s.values[tenantID]; ok {
 		return items
 	}
-	return s.values[globalTenantID]
+	return nil
 }
 
 func (s *dictMemoryStore) dictsByTenant(tenantID string) map[string]DictItem {

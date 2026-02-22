@@ -8,7 +8,7 @@
 ## 0. 关联文档（SSOT 引用）
 
 - 主计划（目标与背景）：`docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
-- 时间语义与路由时间上下文矩阵：`docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
+- 时间语义与路由时间上下文矩阵：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - CI/门禁结构（SSOT）：`docs/dev-plans/012-ci-quality-gates.md`
 - 本地必跑入口（SSOT）：`AGENTS.md`
 - 执行证据（本计划）：`docs/dev-records/dev-plan-103a-execution-log.md`
