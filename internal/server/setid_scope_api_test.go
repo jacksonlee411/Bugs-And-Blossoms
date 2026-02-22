@@ -17,6 +17,7 @@ import (
 type scopeAPIStore struct {
 	listScopePackagesFn        func(context.Context, string, string) ([]ScopePackage, error)
 	listOwnedScopePackagesFn   func(context.Context, string, string, string) ([]OwnedScopePackage, error)
+	resolveSetIDFn             func(context.Context, string, string, string) (string, error)
 	createScopePackageFn       func(context.Context, string, string, string, string, string, string, string, string) (ScopePackage, error)
 	disableScopePackageFn      func(context.Context, string, string, string, string, string) (ScopePackage, error)
 	createScopeSubscriptionFn  func(context.Context, string, string, string, string, string, string, string, string) (ScopeSubscription, error)
@@ -36,6 +37,12 @@ func (s scopeAPIStore) ListSetIDBindings(context.Context, string, string) ([]Set
 }
 func (s scopeAPIStore) BindSetID(context.Context, string, string, string, string, string, string) error {
 	return nil
+}
+func (s scopeAPIStore) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
+	if s.resolveSetIDFn != nil {
+		return s.resolveSetIDFn(ctx, tenantID, orgUnitID, asOfDate)
+	}
+	return "A0001", nil
 }
 func (s scopeAPIStore) CreateGlobalSetID(context.Context, string, string, string, string) error {
 	return nil
@@ -360,7 +367,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("invalid effective date", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","name":"Pkg","effective_date":"bad","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"bad","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -371,7 +378,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("effective date required", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","name":"Pkg","effective_date":"","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -382,7 +389,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("reserved code", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"DEFLT","owner_setid":"A0001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"DEFLT","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -393,7 +400,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("invalid code", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"bad-code","owner_setid":"A0001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"bad-code","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -404,7 +411,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 	})
 
 	t.Run("create error", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -418,8 +425,22 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 		}
 	})
 
+	t.Run("owner context forbidden", func(t *testing.T) {
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"B0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleScopePackagesAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), scopeReasonOwnerContextForbidden) {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
 	t.Run("success", func(t *testing.T) {
-		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"","owner_setid":"A0001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
+		body := bytes.NewBufferString(`{"scope_code":"jobcatalog","package_code":"","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`)
 		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", body)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -439,7 +460,7 @@ func TestHandleScopePackagesAPI_Post(t *testing.T) {
 
 func TestHandleScopePackageDisableAPI(t *testing.T) {
 	t.Run("tenant missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
 		if rec.Code != http.StatusInternalServerError {
@@ -477,8 +498,18 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 		}
 	})
 
+	t.Run("missing owner context", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"effective_date":"2026-01-01","request_id":"r1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
 	t.Run("missing request id", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"effective_date":"2026-01-01","request_id":""}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":""}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -488,7 +519,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("missing effective date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -498,7 +529,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("invalid effective date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"effective_date":"bad","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"bad","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{})
@@ -508,7 +539,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{
@@ -522,7 +553,7 @@ func TestHandleScopePackageDisableAPI(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages/p1/disable", strings.NewReader(`{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopePackageDisableAPI(rec, req, scopeAPIStore{
@@ -631,7 +662,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post invalid date", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"bad","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_id":"10000001","effective_date":"bad","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -641,7 +672,7 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post owner invalid", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"nope","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"nope","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
@@ -650,8 +681,21 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 		}
 	})
 
+	t.Run("post context forbidden", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"B0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{})
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), scopeReasonOwnerContextForbidden) {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
 	t.Run("post store error", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{
@@ -665,12 +709,12 @@ func TestHandleScopeSubscriptionsAPI(t *testing.T) {
 	})
 
 	t.Run("post success", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_id":"r1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-subscriptions", strings.NewReader(`{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleScopeSubscriptionsAPI(rec, req, scopeAPIStore{
 			createScopeSubscriptionFn: func(context.Context, string, string, string, string, string, string, string, string) (ScopeSubscription, error) {
-				return ScopeSubscription{SetID: "S2601", ScopeCode: "jobcatalog", PackageID: "p1", PackageOwner: "tenant", EffectiveDate: "2026-01-01"}, nil
+				return ScopeSubscription{SetID: "A0001", ScopeCode: "jobcatalog", PackageID: "p1", PackageOwner: "tenant", EffectiveDate: "2026-01-01"}, nil
 			},
 		})
 		if rec.Code != http.StatusCreated {
@@ -924,4 +968,114 @@ func TestScopeAPIHelpers(t *testing.T) {
 	if ok, _ := regexp.MatchString(`^PKG_[A-Z0-9]{1,8}$`, code); !ok {
 		t.Fatalf("unexpected code=%q", code)
 	}
+}
+
+func TestEnforceSetIDWriteContext(t *testing.T) {
+	newReq := func() *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "/org/api/scope-packages", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		return req
+	}
+
+	t.Run("business unit required", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "", "2026-01-01", "A0001", "")
+		if ok {
+			t.Fatalf("expected false")
+		}
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), scopeReasonOwnerContextRequired) {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
+	t.Run("business unit invalid", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "bad", "2026-01-01", "A0001", "")
+		if ok {
+			t.Fatalf("expected false")
+		}
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), scopeReasonOwnerContextRequired) {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
+	t.Run("resolve setid failed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		store := scopeAPIStore{
+			resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
+				return "", errors.New("SETID_NOT_FOUND")
+			},
+		}
+		ok := enforceSetIDWriteContext(rec, newReq(), store, "t1", "10000001", "2026-01-01", "A0001", "")
+		if ok {
+			t.Fatalf("expected false")
+		}
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), scopeReasonOwnerContextForbidden) {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
+	t.Run("resolved setid empty", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		store := scopeAPIStore{
+			resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
+				return "", nil
+			},
+		}
+		ok := enforceSetIDWriteContext(rec, newReq(), store, "t1", "10000001", "2026-01-01", "A0001", "")
+		if ok {
+			t.Fatalf("expected false")
+		}
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), scopeReasonOwnerContextForbidden) {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
+	t.Run("owner setid mismatch", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "10000001", "2026-01-01", "B0001", "")
+		if ok {
+			t.Fatalf("expected false")
+		}
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), scopeReasonOwnerContextForbidden) {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
+	t.Run("setid mismatch", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "10000001", "2026-01-01", "", "B0001")
+		if ok {
+			t.Fatalf("expected false")
+		}
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), scopeReasonOwnerContextForbidden) {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		ok := enforceSetIDWriteContext(rec, newReq(), scopeAPIStore{}, "t1", "10000001", "2026-01-01", "A0001", "")
+		if !ok {
+			t.Fatalf("expected true")
+		}
+	})
 }

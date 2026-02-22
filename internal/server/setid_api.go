@@ -280,7 +280,7 @@ func handleGlobalSetIDsAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		actorScope = strings.TrimSpace(r.Header.Get("x-actor-scope"))
 	}
 	if strings.ToLower(actorScope) != "saas" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "actor_scope_forbidden", "actor scope forbidden")
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, scopeReasonActorScopeForbidden, "actor scope forbidden")
 		return
 	}
 

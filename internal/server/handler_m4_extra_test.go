@@ -176,12 +176,12 @@ func TestHandler_ScopePackageRoutes(t *testing.T) {
 	if rec := doReq(http.MethodGet, "/org/api/owned-scope-packages?scope_code=jobcatalog&as_of=2026-01-01", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("owned scope packages get status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := doReq(http.MethodPost, "/org/api/scope-packages", `{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`, map[string]string{
+	if rec := doReq(http.MethodPost, "/org/api/scope-packages", `{"scope_code":"jobcatalog","package_code":"PKG1","owner_setid":"A0001","business_unit_id":"10000001","name":"Pkg","effective_date":"2026-01-01","request_id":"r1"}`, map[string]string{
 		"Content-Type": "application/json",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("scope packages post status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := doReq(http.MethodPost, "/org/api/scope-packages/p1/disable", `{"effective_date":"2026-01-01","request_id":"r1"}`, map[string]string{
+	if rec := doReq(http.MethodPost, "/org/api/scope-packages/p1/disable", `{"owner_setid":"A0001","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`, map[string]string{
 		"Content-Type": "application/json",
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("scope package disable status=%d body=%s", rec.Code, rec.Body.String())
@@ -190,7 +190,7 @@ func TestHandler_ScopePackageRoutes(t *testing.T) {
 	if rec := doReq(http.MethodGet, "/org/api/scope-subscriptions?setid=S2601&scope_code=jobcatalog&as_of=2026-01-01", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("scope subscriptions get status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := doReq(http.MethodPost, "/org/api/scope-subscriptions", `{"setid":"S2601","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","effective_date":"2026-01-01","request_id":"r1"}`, map[string]string{
+	if rec := doReq(http.MethodPost, "/org/api/scope-subscriptions", `{"setid":"A0001","scope_code":"jobcatalog","package_id":"p1","package_owner":"tenant","business_unit_id":"10000001","effective_date":"2026-01-01","request_id":"r1"}`, map[string]string{
 		"Content-Type": "application/json",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("scope subscriptions post status=%d body=%s", rec.Code, rec.Body.String())

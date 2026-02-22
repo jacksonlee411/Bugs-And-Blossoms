@@ -1,6 +1,6 @@
 # DEV-PLAN-102C：SetID 对标 Workday 的集团共享与业务单元个性化差距评估（承接 102/102B）
 
-**状态**: 草拟中（2026-02-22 23:05 UTC）
+**状态**: 准备就绪（2026-02-22 09:44 UTC，已获用户批准进入实施）
 
 ## 0. 主计划定位（Plan of Record）
 - 本计划是“**能力评估与验收口径**”PoR：用于回答“SetID 在集团共享与 BU 个性化上，与 Workday 原则级能力还有哪些差距”。
@@ -110,13 +110,13 @@
   - 缓解：将“流程个性化 + 命中解释”列为独立验收项。
 
 ## 10. 依赖与引用
-- `docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`
+- `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
 - `docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
-- `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md`
-- `docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
-- `docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
+- `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
+- `docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
+- `docs/archive/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
 - `docs/dev-plans/005-project-standards-and-spec-adoption.md`
 
 ## 11. 外部公开资料（原则级对标）

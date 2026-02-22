@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	setidresolver "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/setid"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/uuidv7"
 )
 
@@ -70,6 +71,7 @@ type SetIDGovernanceStore interface {
 	CreateSetID(ctx context.Context, tenantID string, setID string, name string, effectiveDate string, requestID string, initiatorID string) error
 	ListSetIDBindings(ctx context.Context, tenantID string, asOfDate string) ([]SetIDBindingRow, error)
 	BindSetID(ctx context.Context, tenantID string, orgUnitID string, effectiveDate string, setID string, requestID string, initiatorID string) error
+	ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error)
 	CreateGlobalSetID(ctx context.Context, name string, requestID string, initiatorID string, actorScope string) error
 	ListScopeCodes(ctx context.Context, tenantID string) ([]ScopeCode, error)
 	CreateScopePackage(ctx context.Context, tenantID string, scopeCode string, packageCode string, ownerSetID string, name string, effectiveDate string, requestID string, initiatorID string) (ScopePackage, error)
@@ -233,6 +235,19 @@ SELECT orgunit.submit_setid_binding_event(
 `, eventID, tenantID, orgUnitID, effectiveDate, setID, requestID, initiatorID)
 		return err
 	})
+}
+
+func (s *setidPGStore) ResolveSetID(ctx context.Context, tenantID string, orgUnitID string, asOfDate string) (string, error) {
+	var out string
+	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
+		resolved, err := setidresolver.Resolve(ctx, tx, tenantID, orgUnitID, asOfDate)
+		if err != nil {
+			return err
+		}
+		out = strings.ToUpper(strings.TrimSpace(resolved))
+		return nil
+	})
+	return out, err
 }
 
 func (s *setidPGStore) ensureGlobalShareSetID(ctx context.Context, initiatorID string) error {
@@ -907,6 +922,14 @@ func (s *setidMemoryStore) BindSetID(_ context.Context, tenantID string, orgUnit
 		ValidFrom: effectiveDate,
 	}
 	return nil
+}
+
+func (s *setidMemoryStore) ResolveSetID(_ context.Context, tenantID string, orgUnitID string, _ string) (string, error) {
+	binding, ok := s.bindings[tenantID][strings.TrimSpace(orgUnitID)]
+	if !ok {
+		return "", errors.New("SETID_NOT_FOUND")
+	}
+	return strings.ToUpper(strings.TrimSpace(binding.SetID)), nil
 }
 
 func (s *setidMemoryStore) CreateGlobalSetID(_ context.Context, name string, _ string, _ string, actorScope string) error {
