@@ -1,6 +1,6 @@
 # DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化（TDD）
 
-**状态**: 草拟中（2026-01-30 12:07 UTC）
+**状态**: 草拟中（2026-01-30 12:07 UTC；2026-02-22 起时间参数口径对齐 `DEV-PLAN-102B`/`STD-002`）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**: `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md` + SetID/Job Catalog 实际使用反馈。
@@ -205,7 +205,7 @@ ALTER TABLE orgunit.setid_scope_package_versions
 - 若生成值与现有重复：重试最多 3 次；仍冲突则返回 `PACKAGE_CODE_DUPLICATE`。
 
 ### 5.2 JSON API: `GET /orgunit/api/owned-scope-packages`
-**Query**: `scope_code=jobcatalog&as_of=YYYY-MM-DD`  
+**Query**: `scope_code=jobcatalog&as_of=YYYY-MM-DD`（`as_of` 必填）  
 **Response (200)**:
 ```json
 [
@@ -227,7 +227,7 @@ ALTER TABLE orgunit.setid_scope_package_versions
 - 共享/全局包不进入该列表（shared-only 保持只读）。
 
 ### 5.3 JSON API: `POST /orgunit/api/scope-subscriptions`
-保持 DEV-PLAN-071 现有契约，用于治理入口显式切换订阅。
+保持 DEV-PLAN-071 契约并按 `DEV-PLAN-102B` 收口：`effective_date` 必填，不允许默认 today。
 
 ### 5.4 UI/API：`/org/setid` 与 `/org/job-catalog`
 - **SetID Governance**:
@@ -235,7 +235,7 @@ ALTER TABLE orgunit.setid_scope_package_versions
   - 包列表字段：`scope_code`、`package_code`、`name`、`owner_setid`、`status`、`effective_date`、`last_updated`、`actions`。
   - 仅展示 **tenant 包**（不展示 global/shared-only 包）。
   - Create 表单字段：`scope_code`（下拉）、`owner_setid`（下拉）、`package_code`（可选，留空自动生成）、`name`、`effective_date`。
-  - 提交：`POST /orgunit/api/scope-packages`；Disable：`POST /orgunit/api/scope-packages/{package_id}/disable`。
+  - 提交：`POST /orgunit/api/scope-packages`（`effective_date` 必填）；Disable：`POST /orgunit/api/scope-packages/{package_id}/disable`（`effective_date` 必填）。
   - 权限：仅 `org.scope_package` + `orgunit.setid` admin 可见/可操作。
   - Scope Subscriptions 区域保留，用于订阅切换（下拉 + 保存，调用 `scope-subscriptions` API）。
 - **Job Catalog**:
