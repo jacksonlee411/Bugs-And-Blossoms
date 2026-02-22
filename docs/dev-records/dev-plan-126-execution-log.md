@@ -27,3 +27,9 @@
 - 2026-02-20 15:41 UTC：执行 `make test`（OK，覆盖门禁 100% 通过）。
 - 2026-02-20 15:44 UTC：执行 `make preflight`（OK，全量门禁通过，含 e2e 7/7）。
 - 2026-02-20 15:45 UTC：更新 DEV-PLAN-126 完成时间戳，记录上述收口修复。
+
+## 2026-02-22（UTC）
+
+- 2026-02-22 09:32 UTC：补充 Go 版本防回退门禁：新增 `scripts/ci/check-go-version.sh`，并接入 `make check go-version`（同时纳入 `make preflight`）。
+- 2026-02-22 09:35 UTC：CI `Quality Gates` 新增 `Go Version Gate (always)`，固定校验 `go.mod` / `.tool-versions` 为 `1.26.x`。
+- 2026-02-22 09:38 UTC：更新 `AGENTS.md` 与 `DEV-PLAN-012/126`：固化“新建模块后执行 `go get go@1.26.0`（或 `go mod edit -go=1.26.0`）+ 提交前执行 `make check go-version`”。
