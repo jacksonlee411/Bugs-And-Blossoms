@@ -3,6 +3,8 @@
 **状态**: 进行中（2026-01-30 00:13 UTC；2026-02-22 起时间参数口径由 `DEV-PLAN-102B`/`STD-002` 约束）
 
 > 勘误（2026-02-22）：本文中凡出现“`as_of`/`effective_date` 为空默认 `current_date`”的描述，统一废止。现行口径：`as_of` 与 `effective_date` 必填，缺失即 fail-closed（`invalid_as_of` / `invalid_effective_date`）。
+>
+> 勘误（2026-02-22）：本文中凡出现“运行时读取 global/shared 包”的描述，统一降级为历史阶段口径。现行目标口径以 `DEV-PLAN-070B` 为准：运行时只解析租户本地包，平台共享能力通过发布任务落地到目标租户后再读取。
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：`docs/dev-plans/070-setid-orgunit-binding-redesign.md`

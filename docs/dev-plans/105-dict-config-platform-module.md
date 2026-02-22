@@ -293,7 +293,7 @@
 3. [x] `org_type` 默认值 `10/20` 可配置并生效。
 4. [x] 各模块写入时 DICT 校验来源可切换为模块化字典（至少先完成 Org 样板），静态 registry 不再作为运行态事实源。
 5. [x] details/options 无“静态字典漂移”导致的错误展示。
-6. [ ] 运行时字典读取已收敛 tenant-only（无 `global_tenant` fallback），且切流证据可追溯。
+6. [x] 运行时字典读取已收敛 tenant-only（无 `global_tenant` fallback），且切流证据可追溯。
 7. [ ] 时间参数口径与 `STD-002`/`DEV-PLAN-102B` 一致（`as_of` 缺失/非法统一 `invalid_as_of`，无 default today）。
 8. [x] 门禁证据齐全（对齐 `AGENTS.md` 触发器矩阵）：
    - 路由：`make check routing`

@@ -19,6 +19,7 @@ const (
 	ObjectIAMPing              = "iam.ping"
 	ObjectIAMSession           = "iam.session"
 	ObjectIAMDicts             = "iam.dicts"
+	ObjectIAMDictRelease       = "iam.dict_release"
 	ObjectOrgUnitOrgUnits      = "orgunit.orgunits"
 	ObjectOrgUnitSetID         = "orgunit.setid"
 	ObjectOrgShareRead         = "org.share_read"

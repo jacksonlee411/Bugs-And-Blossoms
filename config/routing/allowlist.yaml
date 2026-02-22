@@ -47,6 +47,12 @@ entrypoints:
       - path: /iam/api/dicts/values/audit
         methods: [GET]
         route_class: internal_api
+      - path: /iam/api/dicts:release
+        methods: [POST]
+        route_class: internal_api
+      - path: /iam/api/dicts:release:preview
+        methods: [POST]
+        route_class: internal_api
       - path: /logout
         methods: [POST]
         route_class: authn

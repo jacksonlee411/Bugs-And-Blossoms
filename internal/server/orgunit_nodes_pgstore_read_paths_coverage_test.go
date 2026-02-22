@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -54,6 +55,15 @@ func (r *recordRows) Scan(dest ...any) error {
 			*d = append([]int(nil), rec[i].([]int)...)
 		case *[]byte:
 			*d = append([]byte(nil), rec[i].([]byte)...)
+		case *json.RawMessage:
+			switch v := rec[i].(type) {
+			case []byte:
+				*d = append((*d)[:0], v...)
+			case string:
+				*d = json.RawMessage(v)
+			default:
+				return errors.New("unsupported raw message type")
+			}
 		default:
 			return errors.New("unsupported scan type")
 		}

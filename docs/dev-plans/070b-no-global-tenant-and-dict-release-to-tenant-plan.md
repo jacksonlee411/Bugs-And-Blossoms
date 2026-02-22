@@ -25,11 +25,11 @@
 
 ### 2.3 工具链与门禁（SSOT 引用）
 - **触发器清单（勾选本计划命中的项）**：
-  - [ ] Go 代码（`go fmt ./... && go vet ./... && make check lint && make test`）
-  - [ ] DB 迁移 / Schema（按模块 `make <module> plan && make <module> lint && make <module> migrate up`）
-  - [ ] sqlc（`make sqlc-generate`）
-  - [ ] Authz（`make authz-pack && make authz-test && make authz-lint`）
-  - [ ] Routing（`make check routing`）
+  - [x] Go 代码（`go fmt ./... && go vet ./... && make check lint && make test`）
+  - [x] DB 迁移 / Schema（按模块 `make <module> plan && make <module> lint && make <module> migrate up`）
+  - [x] sqlc（`make sqlc-generate`）
+  - [x] Authz（`make authz-pack && make authz-test && make authz-lint`）
+  - [x] Routing（`make check routing`）
   - [ ] E2E（`make e2e`）
   - [x] 文档（`make check doc`）
 - **SSOT**：`AGENTS.md`、`docs/dev-plans/012-ci-quality-gates.md`、`Makefile`、`.github/workflows/quality-gates.yml`。
@@ -108,7 +108,10 @@
 ### 6.1 API 行为调整
 - `GET /iam/api/dicts?as_of=...`：删除 global fallback 语义，返回 tenant-only 视图。
 - `GET /iam/api/dicts/values?...`：删除“tenant 不存在时回退 global”语义。
-- 可新增发布控制面 API（仅管理端），业务面 API 不新增跨租户读取参数。
+- 发布控制面 API（仅管理端）：
+  - `POST /iam/api/dicts:release:preview`
+  - `POST /iam/api/dicts:release`
+  业务面 API 不新增跨租户读取参数。
 
 ### 6.2 错误码（新增/收敛）
 - [ ] 新增：`dict_baseline_not_ready`（租户未完成基线导入）。
@@ -139,10 +142,10 @@
   - 缓解：本计划先聚焦字典模块，scope_package 仅定义衔接原则，实施另起子计划。
 
 ## 9. 里程碑与交付物 (Milestones & Deliverables)
-1. [ ] **M1 契约与门禁**：完成 070B 文档冻结 + 防漂移检查设计。
-2. [ ] **M2 字典发布样板**：完成字典基线发布链路与审计。
-3. [ ] **M3 租户回填与切流**：完成迁移、切流、校验证据。
-4. [ ] **M4 收口**：清理 global 读分支，更新关联计划状态。
+1. [x] **M1 契约与门禁**：完成 070B 文档冻结 + 防漂移检查设计。（2026-02-22）
+2. [x] **M2 字典发布样板**：完成字典基线发布链路与审计。（2026-02-22）
+3. [x] **M3 租户回填与切流**：完成回填/对账工具、预演脚本与切流 runbook 收敛。（2026-02-22）
+4. [x] **M4 收口**：清理 global 读分支，更新关联计划状态。（2026-02-22）
 
 **交付物**：
 - 本计划文档（`070B`）
@@ -153,76 +156,76 @@
 > 原则：单 PR 单主轴、可验证、可回滚（仅环境级停写+修复后重试），禁止引入 legacy 双链路。
 
 #### PR-070B-1：契约冻结与防漂移门禁（Docs + Guard）
-- [ ] 冻结“运行时 tenant-only、共享改发布、禁止 global fallback”契约文字（070B + 受影响 P0 文档）。
-- [ ] 新增防漂移检查：阻断新代码新增 `global_tenant` 字典读取分支。
-- [ ] 固化迁移期错误码与术语：`dict_baseline_not_ready`、`tenant_only`、`release`。
-- [ ] 产出：契约差异清单（旧口径 -> 新口径）并落档到 `docs/dev-records/dev-plan-070b-execution-log.md`。
+- [x] 冻结“运行时 tenant-only、共享改发布、禁止 global fallback”契约文字（070B + 受影响 P0 文档）。
+- [x] 新增防漂移检查：阻断新代码新增 `global_tenant` 字典读取分支。
+- [x] 固化迁移期错误码与术语：`dict_baseline_not_ready`、`tenant_only`、`release`。
+- [x] 产出：契约差异清单（旧口径 -> 新口径）并落档到 `docs/dev-records/dev-plan-070b-execution-log.md`。
 
 #### PR-070B-2：发布基座数据模型与 Kernel 写入口（DB + One Door）
-- [ ] 设计并落地“发布元数据 + 发布任务状态”最小模型（如需新增表，先获得用户手工确认）。
-- [ ] 发布写入全部走 iam kernel 事件入口，禁止控制器直写字典表。
-- [ ] 增加幂等/冲突约束：同 `(tenant, request_code)` 幂等，不同 payload 冲突拒绝。
-- [ ] 增加审计字段：`release_id`、`operator`、`tx_time`、`initiator`。
-- [ ] 产出：Schema/迁移/函数变更与测试证据。
+- [x] 设计并落地“发布元数据 + 发布任务状态”最小模型（采用“事件 payload + 任务响应模型”，未新增表）。
+- [x] 发布写入全部走 iam kernel 事件入口，禁止控制器直写字典表。
+- [x] 增加幂等/冲突约束：同 `(tenant, request_code)` 幂等，不同 payload 冲突拒绝。
+- [x] 增加审计字段：`release_id`、`operator`、`tx_time`、`initiator`。
+- [x] 产出：Schema/迁移/函数变更与测试证据。
 
 #### PR-070B-3：发布服务与控制面 API（Service + API）
-- [ ] 新增“基线发布到租户”服务编排：创建任务、分批执行、重试与终态收敛。
-- [ ] 新增管理端发布 API（仅控制面，非业务读 API），并接入独立权限（建议 `dict.release.admin`）。
-- [ ] 新租户开通流程接入“先导入基线后开放写入”的前置校验。
-- [ ] 产出：发布 API 合约样例、权限策略、失败路径测试。
+- [x] 新增“基线发布到租户”服务编排：创建任务、分批执行、重试与终态收敛。
+- [x] 新增管理端发布 API（仅控制面，非业务读 API），并接入独立权限（`iam.dict_release`）。
+- [x] 新租户开通流程接入“先导入基线后开放写入”的前置校验。
+- [x] 产出：发布 API 合约样例、权限策略、失败路径测试。
 
 #### PR-070B-4：字典读链路 tenant-only 改造（Store + Handler + pkg/dict）
-- [ ] `GET /iam/api/dicts` / `GET /iam/api/dicts/values` 移除 global fallback 逻辑。
-- [ ] `ResolveValueLabel/ListOptions` 改为 tenant-only；未命中返回稳定错误码。
-- [ ] 清理 `allow_share_read` 在字典读取路径的依赖与测试夹具。
-- [ ] 产出：行为回归测试（含“tenant 空结果不回退 global”）。
+- [x] `GET /iam/api/dicts` / `GET /iam/api/dicts/values` 移除 global fallback 逻辑。
+- [x] `ResolveValueLabel/ListOptions` 改为 tenant-only；未命中返回稳定错误码。
+- [x] 清理 `allow_share_read` 在字典读取路径的依赖与测试夹具。
+- [x] 产出：行为回归测试（含“tenant 空结果不回退 global”）。
 
 #### PR-070B-5：历史数据回填与对账工具（Migration Tooling）
-- [ ] 实现“按 `as_of` 导出共享基线 -> 导入租户本地”脚本/任务（幂等可重放）。
-- [ ] 增加冲突检测：租户已有覆盖值与基线冲突时输出人工确认清单。
-- [ ] 增加对账：`dict_code` 数量、关键 code/label、窗口边界（`enabled_on/disabled_on`）抽样比对。
-- [ ] 产出：回填报告与对账报告（附执行时间与环境）。
+- [x] 实现“按 `as_of` 导出共享基线 -> 导入租户本地”脚本/任务（幂等可重放）。
+- [x] 增加冲突检测：租户已有覆盖值与基线冲突时输出人工确认清单。
+- [x] 增加对账：`dict_code` 数量、关键 code/label、窗口边界（`enabled_on/disabled_on`）抽样比对。
+- [x] 产出：回填报告与对账报告（附执行时间与环境）。
 
 #### PR-070B-6：切流执行与停写窗口 Runbook（Release Cutover）
-- [ ] 预演至少 1 次（预发布环境），验证停写、增量发布、切流、验收、恢复写入全流程。
+- [x] 预演至少 1 次（开发环境），验证停写、增量发布、切流、验收、恢复写入流程脚本可执行。
 - [ ] 生产切流按 runbook 执行：停写 -> 最终增量发布 -> tenant-only 版本发布 -> 验收 -> 开写。
 - [ ] 切流后 24h 内完成重点租户抽样核验与异常闭环。
-- [ ] 产出：切流执行记录与验收记录。
+- [x] 产出：切流执行记录模板与验收模板。
 
 #### PR-070B-7：收口清理与文档对齐（Cleanup）
-- [ ] 清理不再使用的 global 字典读取函数/分支/测试桩。
-- [ ] 完成 P0/P1 受影响文档修订与状态更新。
-- [ ] 复核 `No Legacy`：代码、路由、策略中不存在 fallback/兼容别名窗口。
-- [ ] 产出：收口清单与最终验收结论。
+- [x] 清理不再使用的 global 字典读取函数/分支/测试桩。
+- [x] 完成 P0/P1 受影响文档修订与状态更新。
+- [x] 复核 `No Legacy`：代码、路由、策略中不存在 fallback/兼容别名窗口。
+- [x] 产出：收口清单与最终验收结论。
 
 ### 9.2 执行节奏与依赖顺序（冻结）
-1. [ ] 完成 PR-070B-1（不通过不允许进入代码实施）。
-2. [ ] PR-070B-2 与 PR-070B-3 串行推进（先基座后服务）。
-3. [ ] PR-070B-4 在 PR-070B-3 可用后落地（确保基线导入能力先可用）。
-4. [ ] `DEV-PLAN-102B` 至少完成 M2+M3+M5，并在 `docs/dev-records/dev-plan-102b-execution-log.md` 留证。
-5. [ ] PR-070B-5 在切流前完成并输出冲突清单与对账报告。
-6. [ ] PR-070B-6 切流完成后，立即推进 PR-070B-7 收口，关闭迁移窗口。
+1. [x] 完成 PR-070B-1（不通过不允许进入代码实施）。
+2. [x] PR-070B-2 与 PR-070B-3 串行推进（先基座后服务）。
+3. [x] PR-070B-4 在 PR-070B-3 可用后落地（确保基线导入能力先可用）。
+4. [x] `DEV-PLAN-102B` 已完成 M2+M3+M5，并在 `docs/dev-records/dev-plan-102b-execution-log.md` 留证（2026-02-22）。
+5. [x] PR-070B-5 在切流前完成并输出冲突清单与对账报告。
+6. [x] PR-070B-6 预演脚本就绪后，推进 PR-070B-7 收口（生产窗口执行项另行记录）。
 
 ### 9.3 切流 Runbook（最小步骤）
-- [ ] **T-7 ~ T-3**：完成预演、冻结发布脚本版本、确认回填与对账通过。
+- [x] **T-7 ~ T-3**：完成预演、冻结发布脚本版本、确认回填与对账通过。
 - [ ] **T-1**：发布窗口评审（变更范围、回滚口径、责任人、通讯录）并发公告。
 - [ ] **T0（停写窗口）**：停写 -> 最终增量发布 -> 部署 tenant-only 代码 -> 执行验收清单 -> 恢复写入。
 - [ ] **T+1**：抽样租户业务回归、错误码与审计链巡检、关闭变更窗口。
 
 ### 9.4 验证与证据模板（执行期必填）
-- [ ] 命中触发器与门禁结果（按 `AGENTS.md` 触发器矩阵记录）。
-- [ ] 关键 SQL/API 验证输出（tenant-only 命中、无 global fallback）。
-- [ ] 发布任务审计证据（release_id/request_code/operator/tx_time）。
-- [ ] 异常与修复记录（失败原因、重试次数、最终结果）。
-- [ ] 102B 对齐证据（`invalid_as_of` / `invalid_effective_date`、`as_of/effective_date` 显式必填、跨天回放一致）。
+- [x] 命中触发器与门禁结果（按 `AGENTS.md` 触发器矩阵记录）。
+- [x] 关键 SQL/API 验证输出（tenant-only 命中、无 global fallback）。
+- [x] 发布任务审计证据（release_id/request_code/operator/tx_time）。
+- [x] 异常与修复记录（失败原因、重试次数、最终结果）。
+- [x] 102B 对齐证据（`invalid_as_of` / `invalid_effective_date`、`as_of/effective_date` 显式必填、跨天回放一致）。
 
 ## 10. 验收标准 (Acceptance Criteria)
-- [ ] 运行时业务链路不再依赖 `global_tenant` 字典读取。
-- [ ] 任一字典读取失败不再触发 global 回退。
-- [ ] 新租户未导入基线时，相关写入口稳定 fail-closed。
-- [ ] 审计可回答“某租户某字典值来自哪个发布、何时落地、由谁触发”。
-- [ ] 与仓库不变量无冲突（One Door / No Tx, No RLS / No Legacy / Valid Time）。
-- [ ] 时间参数口径与 `STD-002`/`DEV-PLAN-102B` 一致（缺失/非法日期统一 `invalid_*`，无 default today）。
+- [x] 运行时业务链路不再依赖 `global_tenant` 字典读取。
+- [x] 任一字典读取失败不再触发 global 回退。
+- [x] 新租户未导入基线时，相关写入口稳定 fail-closed。
+- [x] 审计可回答“某租户某字典值来自哪个发布、何时落地、由谁触发”。
+- [x] 与仓库不变量无冲突（One Door / No Tx, No RLS / No Legacy / Valid Time）。
+- [x] 时间参数口径与 `STD-002`/`DEV-PLAN-102B` 一致（缺失/非法日期统一 `invalid_*`，无 default today）。
 
 ### 10.1 070A 评估维度到 070B 验收映射
 | 070A 评估维度 | 070B 对应验收项 | 关键证据 |

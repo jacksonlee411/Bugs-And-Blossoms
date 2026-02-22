@@ -716,6 +716,9 @@ func TestDictAPIHelpers_Coverage(t *testing.T) {
 			{err: errDictCodeRequired, status: http.StatusBadRequest, code: "dict_code_required"},
 			{err: errDictNotFound, status: http.StatusNotFound, code: "dict_not_found"},
 			{err: errDictValueConflict, status: http.StatusConflict, code: "dict_value_conflict"},
+			{err: errDictBaselineNotReady, status: http.StatusConflict, code: "dict_baseline_not_ready"},
+			{err: errDictReleaseIDRequired, status: http.StatusBadRequest, code: "dict_release_id_required"},
+			{err: errDictReleasePayloadInvalid, status: http.StatusConflict, code: "dict_release_payload_invalid"},
 			{err: errors.New("DICT_REQUEST_CODE_REQUIRED"), status: http.StatusBadRequest, code: "invalid_request"},
 			{err: errors.New("totally bad-code"), status: http.StatusInternalServerError, code: "internal_error"},
 		}
@@ -746,6 +749,24 @@ func TestDictAPIHelpers_Coverage(t *testing.T) {
 			t.Fatalf("got=%q", got)
 		}
 		if got := dictErrorCode(errors.New("DICT_NOT_FOUND")); got != "dict_not_found" {
+			t.Fatalf("got=%q", got)
+		}
+		if got := dictErrorCode(errors.New("DICT_BASELINE_NOT_READY")); got != "dict_baseline_not_ready" {
+			t.Fatalf("got=%q", got)
+		}
+		if got := dictErrorCode(errDictReleaseIDRequired); got != "dict_release_id_required" {
+			t.Fatalf("got=%q", got)
+		}
+		if got := dictErrorCode(errDictReleaseSourceInvalid); got != "dict_release_source_invalid" {
+			t.Fatalf("got=%q", got)
+		}
+		if got := dictErrorCode(errDictReleaseTargetRequired); got != "dict_release_target_required" {
+			t.Fatalf("got=%q", got)
+		}
+		if got := dictErrorCode(errDictReleasePayloadInvalid); got != "dict_release_payload_invalid" {
+			t.Fatalf("got=%q", got)
+		}
+		if got := dictErrorCode(errors.New("DICT_RELEASE_SOURCE_INVALID")); got != "dict_release_source_invalid" {
 			t.Fatalf("got=%q", got)
 		}
 		if got := defaultStableCode("", "fb"); got != "fb" {

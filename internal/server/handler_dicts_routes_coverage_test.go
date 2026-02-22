@@ -83,6 +83,12 @@ func TestNewHandlerWithOptions_DictRoutes_AreWired(t *testing.T) {
 	if rec := get("/iam/api/dicts/values/audit?dict_code=org_type&code=10&limit=10"); rec.Code != http.StatusOK {
 		t.Fatalf("audit status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	if rec := post("/iam/api/dicts:release:preview", `{"release_id":"r1","as_of":"2026-01-01"}`); rec.Code != http.StatusInternalServerError {
+		t.Fatalf("release preview status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := post("/iam/api/dicts:release", `{"release_id":"r1","request_id":"req-1","as_of":"2026-01-01"}`); rec.Code != http.StatusInternalServerError {
+		t.Fatalf("release status=%d body=%s", rec.Code, rec.Body.String())
+	}
 }
 
 func stringsReader(s string) *strings.Reader { return strings.NewReader(s) }

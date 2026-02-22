@@ -1,6 +1,8 @@
 # DEV-PLAN-071A：基于 Package 的配置编辑与订阅显式化（TDD）
 
-**状态**: 草拟中（2026-01-30 12:07 UTC；2026-02-22 起时间参数口径对齐 `DEV-PLAN-102B`/`STD-002`）
+**状态**: 进行中（2026-01-30 12:07 UTC；2026-02-22 起时间参数口径对齐 `DEV-PLAN-102B`/`STD-002`）
+
+> 勘误（2026-02-22）：本文中涉及“global/shared 包在业务运行时直接消费”的描述，统一降级为历史阶段口径。现行目标口径以 `DEV-PLAN-070B` 为准：运行时 tenant-only，包共享通过发布链路完成后在租户本地消费。
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**: `docs/dev-plans/071-setid-scope-package-subscription-blueprint.md` + SetID/Job Catalog 实际使用反馈。
