@@ -221,15 +221,15 @@ modules/{module}/
 - DEV-PLAN-084【归档】：Org 模块组织树“下级可展开指示符”缺失问题分析与收敛方案（树可展开契约已并入 `DEV-PLAN-073`）：`docs/archive/dev-plans/084-orgunit-tree-expand-indicator-visibility.md`
 - DEV-PLAN-084 执行日志：`docs/dev-records/dev-plan-084-execution-log.md`
 - DEV-PLAN-090：前端框架升级为 MUI X（对标 Workday UX）方案：`docs/dev-plans/090-mui-x-frontend-upgrade-plan.md`
-- DEV-PLAN-091：MUI X 升级子计划 P0（基座准备与许可落地）：`docs/dev-plans/091-mui-x-phase0-foundation-and-license-plan.md`
-- DEV-PLAN-092：MUI X 升级子计划 P1（壳与导航迁移）：`docs/dev-plans/092-mui-x-phase1-shell-navigation-plan.md`
-- DEV-PLAN-093：MUI X 升级子计划 P2（高价值模块迁移）：`docs/dev-plans/093-mui-x-phase2-high-value-modules-plan.md`
-- DEV-PLAN-094：MUI X 升级子计划 P3（长尾迁移与收口）：`docs/dev-plans/094-mui-x-phase3-long-tail-convergence-plan.md`
-- DEV-PLAN-095：MUI X 升级子计划 P4（稳定化与性能压测）：`docs/dev-plans/095-mui-x-phase4-stability-performance-plan.md`
-- DEV-PLAN-096：Org 模块全量迁移至 MUI X 与统一体验收口方案：`docs/dev-plans/096-org-module-full-migration-and-ux-convergence-plan.md`
-- DEV-PLAN-097：OrgUnit 详情从抽屉（Drawer）迁移为独立页面（对齐 MUI CRUD Dashboard）：`docs/dev-plans/097-orgunit-details-drawer-to-page-migration.md`
-- DEV-PLAN-098：组织架构模块架构评估——多类型宽表预留字段 + 元数据驱动（V2.0）：`docs/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
-- DEV-PLAN-099：OrgUnit 信息页双栏化（左生效日期/修改时间，右侧详情）——对齐示例：`docs/dev-plans/099-orgunit-details-two-pane-info-audit-mui.md`
+- DEV-PLAN-091【归档】：MUI X 升级子计划 P0（基座准备与许可落地，阶段交付已完成）：`docs/archive/dev-plans/091-mui-x-phase0-foundation-and-license-plan.md`
+- DEV-PLAN-092【归档】：MUI X 升级子计划 P1（壳与导航迁移，阶段交付已完成）：`docs/archive/dev-plans/092-mui-x-phase1-shell-navigation-plan.md`
+- DEV-PLAN-093【归档】：MUI X 升级子计划 P2（高价值模块迁移；阶段交付完成并封板）：`docs/archive/dev-plans/093-mui-x-phase2-high-value-modules-plan.md`
+- DEV-PLAN-094【归档】：MUI X 升级子计划 P3（长尾迁移与收口；历史阶段文档含旧路径口径，现行规范以 `DEV-PLAN-005/STD-005` 为准）：`docs/archive/dev-plans/094-mui-x-phase3-long-tail-convergence-plan.md`
+- DEV-PLAN-095【归档】：MUI X 升级子计划 P4（稳定化与性能压测；阶段收尾后不再单列实施）：`docs/archive/dev-plans/095-mui-x-phase4-stability-performance-plan.md`
+- DEV-PLAN-096【归档】：Org 模块全量迁移至 MUI X 与统一体验收口方案（阶段收口并封板）：`docs/archive/dev-plans/096-org-module-full-migration-and-ux-convergence-plan.md`
+- DEV-PLAN-097【归档】：OrgUnit 详情从抽屉（Drawer）迁移为独立页面（page pattern 已沉淀为历史记录）：`docs/archive/dev-plans/097-orgunit-details-drawer-to-page-migration.md`
+- DEV-PLAN-098【归档】：组织架构模块架构评估——多类型宽表预留字段 + 元数据驱动（V2.0；实施已由 `DEV-PLAN-100` 承接）：`docs/archive/dev-plans/098-org-module-wide-table-metadata-driven-architecture-assessment.md`
+- DEV-PLAN-099【归档】：OrgUnit 信息页双栏化（左生效日期/修改时间，右侧详情；口径已并入 `DEV-PLAN-096`）：`docs/archive/dev-plans/099-orgunit-details-two-pane-info-audit-mui.md`
 - DEV-PLAN-100：Org 模块宽表预留字段 + 元数据驱动落地实施计划与路线图（承接 DEV-PLAN-098）：`docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
 - DEV-PLAN-100A：Org 模块宽表元数据落地 Phase 0：契约冻结与就绪检查：`docs/dev-plans/100a-org-metadata-wide-table-phase0-contract-freeze-readiness.md`
 - DEV-PLAN-100B：Org 模块宽表元数据落地 Phase 1：Schema 与元数据骨架（最小数据库闭环）：`docs/dev-plans/100b-org-metadata-wide-table-phase1-schema-and-metadata-skeleton.md`
@@ -287,9 +287,9 @@ modules/{module}/
 - DEV-PLAN-102B 执行日志：`docs/dev-records/dev-plan-102b-execution-log.md`
 - DEV-PLAN-102A 执行日志：`docs/dev-records/dev-plan-102a-execution-log.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
-- DEV-PLAN-103：移除旧前端链路，前端收敛为 MUI X（React SPA）：`docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
+- DEV-PLAN-103【归档】：移除旧前端链路，前端收敛为 MUI X（React SPA；规范已并入 `DEV-PLAN-005/STD-005/STD-006`）：`docs/archive/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 - DEV-PLAN-103 执行日志：`docs/dev-records/dev-plan-103-execution-log.md`
-- DEV-PLAN-103A：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名：去技术后缀）：`docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
+- DEV-PLAN-103A【归档】：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名：去技术后缀）：`docs/archive/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
 - DEV-PLAN-103A 执行日志：`docs/dev-records/dev-plan-103a-execution-log.md`
 - DEV-PLAN-104：Job Catalog（职位分类）页面 UI 优化方案（信息架构收敛：上下文工具条 + Tabs + DataGrid + Dialog）：`docs/dev-plans/104-jobcatalog-ui-optimization.md`
 - DEV-PLAN-104A：Job Catalog UI 优化补充修订（对齐 DEV-PLAN-002）：`docs/dev-plans/104a-jobcatalog-ui-optimization-alignment-with-dev-plan-002.md`

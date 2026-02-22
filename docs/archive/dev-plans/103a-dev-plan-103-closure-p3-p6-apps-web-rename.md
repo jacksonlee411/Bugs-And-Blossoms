@@ -1,13 +1,13 @@
 # DEV-PLAN-103A：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名：去技术后缀）
 
-**状态**: 实施中（2026-02-15 17:31 UTC）
+**状态**: 已完成（2026-02-15 20:52 UTC）
 
 > 本计划是 `DEV-PLAN-103` 的“收尾与清理”补充计划：把 P3/P6 彻底闭环，并将残留的旧 UI/命名技术后缀一次性收口到可验收状态。  
 > 门禁与命令入口以 `AGENTS.md` / `Makefile` / CI workflow 为 SSOT；本文只冻结“要做什么、做到什么程度、如何验收与留证据”。
 
 ## 0. 关联文档（SSOT 引用）
 
-- 主计划（目标与背景）：`docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
+- 主计划（目标与背景）：`docs/archive/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 - 时间语义与路由时间上下文矩阵：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - CI/门禁结构（SSOT）：`docs/dev-plans/012-ci-quality-gates.md`
 - 本地必跑入口（SSOT）：`AGENTS.md`
@@ -100,7 +100,7 @@
 8. [x] 全仓机械更新引用（并以门禁为准收口）：  
    - 构建脚本（如 `scripts/ui/*`）  
    - CI 触发器（如 `scripts/ci/paths-filter.sh`）  
-   - 文档 SSOT 与可执行文档（至少：`AGENTS.md`、`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`、以及 UI 规范类文档如 `docs/dev-plans/002-ui-design-guidelines.md`）  
+   - 文档 SSOT 与可执行文档（至少：`AGENTS.md`、`docs/dev-plans/011-tech-stack-and-toolchain-versions.md`、`docs/dev-plans/012-ci-quality-gates.md`、`docs/archive/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`、以及 UI 规范类文档如 `docs/dev-plans/002-ui-design-guidelines.md`）  
    - 历史文档按“可读不执行”处理：允许保留旧路径，仅在必要处补充“历史说明/已被 103A 收口”注记，避免篡改证据语义
    - E2E 触发条件与可能的路径硬编码引用（如存在）。
 9. [x] Stopline（必须可证明）：除 `docs/dev-records/**` 与明确标注“历史”的文档外，仓库内不应再出现旧目录名路径引用；同时保持运行态标识不暗改（例如 localStorage key、package name 等，除非门禁失败迫使变更并给出迁移策略）。
@@ -131,6 +131,6 @@
 
 ## 8. 交付物清单（最终应出现的文件/变化）
 
-- `docs/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`（本文件）
+- `docs/archive/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`（本文件）
 - `docs/dev-records/dev-plan-103a-execution-log.md`（执行证据）
 - `apps/web/`

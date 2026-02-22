@@ -1,6 +1,6 @@
-# DEV-PLAN-099：OrgUnit 信息页双栏化（左生效日期/修改时间，右侧详情）——对齐示例
+# [Archived] DEV-PLAN-099：OrgUnit 信息页双栏化（左生效日期/修改时间，右侧详情）——对齐示例
 
-**状态**: 已完成（2026-02-13 02:52 UTC）
+**状态**: 已归档（2026-02-22，口径已并入 `DEV-PLAN-096`，本文保留实现与验收记录）
 
 ## 背景
 
@@ -89,4 +89,4 @@
 
 - `AGENTS.md`
 - `docs/dev-plans/081-orgunit-records-version-selector-two-pane-alignment.md`（旧版双栏基线）
-- `docs/dev-plans/097-orgunit-details-drawer-to-page-migration.md`（详情页 page pattern）
+- `docs/archive/dev-plans/097-orgunit-details-drawer-to-page-migration.md`（详情页 page pattern）

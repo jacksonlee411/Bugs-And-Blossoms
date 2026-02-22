@@ -76,7 +76,7 @@ flowchart LR
 | 内部 API | `/{module}/api/*` | JSON-only | Always Latest；与 UI 同仓同发，不做对外兼容承诺 |
 | 对外 API | `/api/v1/*` | JSON-only | 仅当需要对外兼容承诺时才引入；禁止新增非版本化 `/api/*` |
 | Webhooks | `/webhooks/{provider}/*` | JSON-only | 不依赖 UI session；安全中间件必须在前缀级强制绑定 |
-| AuthN | `/login` `/logout` `/oauth/*`（或等价） | HTML/Redirect 为主 | 作为“认证边界”特殊入口，必须在 allowlist 明确分类 |
+| AuthN | `/app/login`、`/iam/api/sessions`、`/logout`、`/oauth/*`（或等价） | UI 与 JSON 分离（按 route_class） | 作为“认证边界”特殊入口，必须在 allowlist 明确分类，并对齐 `STD-006` |
 | Ops | `/health` `/debug/prometheus`（或等价） | JSON/文本（按实现） | 生产必须有最小保护基线（见 4.5） |
 | Dev-only | `/_dev/*` `/playground` | 任意（但仅 dev） | 生产默认不注册 |
 | Test-only | `/__test__/*` | JSON/文本（按实现） | 生产默认不注册 |

@@ -495,7 +495,7 @@
 - [x] `docs/dev-plans/073-orgunit-crud-implementation-status.md`
   - 冲突：以动作型 endpoint（rename/move/enable/disable/set BU）作为交付粒度；108 改为统一 write。
   - 修订：补“108 统一写入”章节与迁移路线（旧端点薄包装到 write，避免双规则）。
-- [x] `docs/dev-plans/096-org-module-full-migration-and-ux-convergence-plan.md`
+- [x] `docs/archive/dev-plans/096-org-module-full-migration-and-ux-convergence-plan.md`
   - 冲突：UI 以多个 Dialog（Rename/Move/Enable/Disable）为目标形态；108 收敛为 5 按钮 + 字段编辑表单。
   - 修订：新增“108 后 UX 收敛口径”章节，更新验收表的 UI 形态描述。
 - [x] `docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
