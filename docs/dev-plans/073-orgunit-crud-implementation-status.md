@@ -12,6 +12,13 @@
 1. 本文件中的动作型 endpoint 清单仍可作为“兼容层存在性”参考，但不再作为 UI/契约的推荐形态；
 2. 后续实现应以 108 的 `/org/api/org-units/write` 为主写入口，旧 endpoint 逐步改为薄包装（同一策略单点、避免双规则）。
 
+## 0.2 组织树可展开契约（承接 DEV-PLAN-084）
+
+1. 树节点“可展开性”以 `has_children` 为单一事实源，不能由 `children` 是否已加载推断。
+2. 根节点与子节点读取接口都必须返回显式布尔 `has_children`（`true/false`，不使用空值表示未知）。
+3. `OrgUnitAPIItem.has_children` 属于树渲染必需字段；缺失时 UI 侧按 fail-closed 处理为不可展开并记录错误。
+4. `has_children` 的计算必须与 `as_of`、`include_disabled` 口径一致，不允许跨日期/跨可见性混算。
+
 ## 背景
 - 需要基于当前代码，列出 OrgUnit CRUD 在页面与 API 的实现情况，作为后续补齐的入口。
 

@@ -1,6 +1,6 @@
-# DEV-PLAN-080B：OrgUnit 生效日更正失败（`orgunit_correct_failed`）专项调查与修复方案
+# [Archived] DEV-PLAN-080B：OrgUnit 生效日更正失败（`orgunit_correct_failed`）专项调查与修复方案
 
-**状态**: 已完成（2026-02-10 07:20 UTC，修复已落地）
+**状态**: 已归档（2026-02-22，错误码提取规范已并入 `DEV-PLAN-111`；本文仅保留专项调查与修复记录）
 
 ## 1. 背景
 - 触发场景：在页面 `http://localhost:8080/org/nodes?tree_as_of=2026-02-09`，将组织「飞虫与鲜花（org_code=1）」记录生效日期从 `2026-01-01` 更正为 `2025-01-01`，前端报错 `orgunit_correct_failed`。

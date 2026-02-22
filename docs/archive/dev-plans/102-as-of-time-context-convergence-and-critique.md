@@ -1,6 +1,6 @@
-# DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）
+# [Archived] DEV-PLAN-102：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076）
 
-**状态**: 已完成（2026-02-14 — 路由矩阵冻结 + 去壳层全局 as_of + MUI Org 整改 + 测试/证据；2026-02-22 起 070/071 时间参数口径由 `DEV-PLAN-102B`/`STD-002` 接管；本计划中的“缺省回退矩阵”仅作历史存档）
+**状态**: 已归档（2026-02-22，现行时间口径由 `DEV-PLAN-102B` + `DEV-PLAN-005/STD-002` 接管；本文仅保留历史方案与证据）
 
 > 口径说明（2026-02-22）：本计划中涉及“缺省回退当天 / 302 自动补齐当天”的条目已降级为历史记录，不再作为现行实现依据。现行口径统一以 `DEV-PLAN-102B` + `STD-002` 为准；`070/071` 相关链路执行“as_of/effective_date 显式必填 + fail-closed”。
 
@@ -170,5 +170,5 @@
 - 回滚策略仅允许环境级保护（只读/停写/修复后重试），不允许恢复旧契约并长期并存。
 
 ## 9. 交付物
-- `docs/dev-plans/102-as-of-time-context-convergence-and-critique.md`（本文件）。
+- `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`（本文件）。
 - 后续执行证据：`docs/dev-records/dev-plan-102-execution-log.md`（实施时创建）。
