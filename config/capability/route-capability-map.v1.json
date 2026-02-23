@@ -9,6 +9,15 @@
       "status": "active",
       "activation_state": "active",
       "current_policy_version": "2026-02-23"
+    },
+    {
+      "capability_key": "org.policy_activation.manage",
+      "functional_area_key": "org_foundation",
+      "capability_type": "process_capability",
+      "owner_module": "orgunit",
+      "status": "active",
+      "activation_state": "active",
+      "current_policy_version": "2026-02-23"
     }
   ],
   "routes": [
@@ -46,6 +55,42 @@
       "action": "admin",
       "capability_key": "staffing.assignment_create.field_policy",
       "owner_module": "staffing",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/policies/state",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/policies/draft",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/policies/activate",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/policies/rollback",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
       "status": "active"
     }
   ]

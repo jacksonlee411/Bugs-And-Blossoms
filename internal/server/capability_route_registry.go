@@ -38,6 +38,15 @@ var capabilityDefinitions = []capabilityDefinition{
 		ActivationState:   "active",
 		CurrentPolicy:     capabilityPolicyVersionBaseline,
 	},
+	{
+		CapabilityKey:     "org.policy_activation.manage",
+		FunctionalAreaKey: "org_foundation",
+		CapabilityType:    "process_capability",
+		OwnerModule:       "orgunit",
+		Status:            routeCapabilityStatusActive,
+		ActivationState:   "active",
+		CurrentPolicy:     capabilityPolicyVersionBaseline,
+	},
 }
 
 var capabilityDefinitionByKey = buildCapabilityDefinitionIndex(capabilityDefinitions)
@@ -77,6 +86,42 @@ var capabilityRouteBindings = []capabilityRouteBinding{
 		Action:        authz.ActionAdmin,
 		CapabilityKey: "staffing.assignment_create.field_policy",
 		OwnerModule:   "staffing",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "GET",
+		Path:          "/internal/policies/state",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionRead,
+		CapabilityKey: "org.policy_activation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "POST",
+		Path:          "/internal/policies/draft",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionAdmin,
+		CapabilityKey: "org.policy_activation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "POST",
+		Path:          "/internal/policies/activate",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionAdmin,
+		CapabilityKey: "org.policy_activation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "POST",
+		Path:          "/internal/policies/rollback",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionAdmin,
+		CapabilityKey: "org.policy_activation.manage",
+		OwnerModule:   "orgunit",
 		Status:        routeCapabilityStatusActive,
 	},
 }
