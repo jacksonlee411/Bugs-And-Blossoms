@@ -1,0 +1,50 @@
+{
+  "version": "2026-02-23",
+  "capabilities": [
+    {
+      "capability_key": "staffing.assignment_create.field_policy",
+      "functional_area_key": "staffing",
+      "capability_type": "process_capability",
+      "owner_module": "staffing",
+      "status": "active"
+    }
+  ],
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/org/api/setid-strategy-registry",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "staffing.assignment_create.field_policy",
+      "owner_module": "staffing",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/org/api/setid-strategy-registry",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "staffing.assignment_create.field_policy",
+      "owner_module": "staffing",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/org/api/setid-explain",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "staffing.assignment_create.field_policy",
+      "owner_module": "staffing",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/rules/evaluate",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "staffing.assignment_create.field_policy",
+      "owner_module": "staffing",
+      "status": "active"
+    }
+  ]
+}

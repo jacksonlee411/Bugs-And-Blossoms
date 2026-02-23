@@ -37,6 +37,8 @@ jobs:
         run: make check capability-key
       - name: Capability Contract Gate (always)
         run: make check capability-contract
+      - name: Capability Route Map Gate (always)
+        run: make check capability-route-map
       - name: Request-Code Gate (always)
         run: make check request-code
       - name: As-Of Explicit Gate (always)
