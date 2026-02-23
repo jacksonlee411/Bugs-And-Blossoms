@@ -2,7 +2,10 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -14,12 +17,27 @@ import (
 const (
 	explainLevelBrief = "brief"
 	explainLevelFull  = "full"
+
+	capabilityPolicyVersionBaseline = "2026-02-23"
 )
+
+var capabilityModuleFunctionalAreas = map[string]string{
+	"org":        "org_foundation",
+	"orgunit":    "org_foundation",
+	"setid":      "org_foundation",
+	"staffing":   "staffing",
+	"jobcatalog": "jobcatalog",
+	"person":     "person",
+	"iam":        "iam_platform",
+}
 
 type setIDExplainResponse struct {
 	TraceID               string               `json:"trace_id"`
 	RequestID             string               `json:"request_id"`
 	CapabilityKey         string               `json:"capability_key"`
+	SetID                 string               `json:"setid"`
+	FunctionalAreaKey     string               `json:"functional_area_key"`
+	PolicyVersion         string               `json:"policy_version"`
 	TenantID              string               `json:"tenant_id"`
 	BusinessUnitID        string               `json:"business_unit_id"`
 	AsOf                  string               `json:"as_of"`
@@ -27,7 +45,7 @@ type setIDExplainResponse struct {
 	ResolvedSetID         string               `json:"resolved_setid"`
 	ResolvedConfigVersion string               `json:"resolved_config_version,omitempty"`
 	Decision              string               `json:"decision"`
-	ReasonCode            string               `json:"reason_code,omitempty"`
+	ReasonCode            string               `json:"reason_code"`
 	Level                 string               `json:"level"`
 	FieldDecisions        []setIDFieldDecision `json:"field_decisions"`
 }
@@ -47,7 +65,7 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	fieldKey := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("field_key")))
 	businessUnitID := strings.TrimSpace(r.URL.Query().Get("business_unit_id"))
 	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	requestID := strings.TrimSpace(r.URL.Query().Get("request_id"))
+	requestID := normalizeSetIDExplainRequestID(r)
 	if capabilityKey == "" || fieldKey == "" || businessUnitID == "" || asOf == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_id/as_of required")
 		return
@@ -120,37 +138,48 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		return
 	}
 
-	fieldDecision.Decision = "allow"
-	if fieldDecision.Required {
-		fieldDecision.ReasonCode = fieldRequiredInContextCode
-	}
 	responseDecision := "allow"
-	responseReasonCode := ""
+	responseReasonCode := fieldVisibleInContextCode
+	if fieldDecision.Required {
+		responseReasonCode = fieldRequiredInContextCode
+	}
 	if !fieldDecision.Visible {
-		fieldDecision.Decision = "deny"
-		fieldDecision.ReasonCode = fieldHiddenInContextCode
 		responseDecision = "deny"
 		responseReasonCode = fieldHiddenInContextCode
 	}
+	fieldDecision.Decision = responseDecision
+	fieldDecision.ReasonCode = responseReasonCode
+
+	traceID := traceIDFromRequestHeader(r)
+	if traceID == "" {
+		traceID = fallbackSetIDExplainTraceID(requestID, capabilityKey, businessUnitID, asOf)
+	}
 
 	response := setIDExplainResponse{
-		TraceID:        traceIDFromRequestHeader(r),
-		RequestID:      requestID,
-		CapabilityKey:  capabilityKey,
-		TenantID:       tenant.ID,
-		BusinessUnitID: businessUnitID,
-		AsOf:           asOf,
-		OrgUnitID:      orgUnitID,
-		ResolvedSetID:  resolvedSetID,
-		Decision:       responseDecision,
-		ReasonCode:     responseReasonCode,
-		Level:          level,
-		FieldDecisions: []setIDFieldDecision{fieldDecision},
+		TraceID:               traceID,
+		RequestID:             requestID,
+		CapabilityKey:         capabilityKey,
+		SetID:                 resolvedSetID,
+		FunctionalAreaKey:     resolveFunctionalAreaKey(capabilityKey),
+		PolicyVersion:         capabilityPolicyVersionBaseline,
+		TenantID:              tenant.ID,
+		BusinessUnitID:        businessUnitID,
+		AsOf:                  asOf,
+		OrgUnitID:             orgUnitID,
+		ResolvedSetID:         resolvedSetID,
+		ResolvedConfigVersion: capabilityPolicyVersionBaseline,
+		Decision:              responseDecision,
+		ReasonCode:            responseReasonCode,
+		Level:                 level,
+		FieldDecisions:        []setIDFieldDecision{fieldDecision},
 	}
 	if level == explainLevelBrief {
 		response.TenantID = ""
 		response.OrgUnitID = ""
+		response.ResolvedConfigVersion = ""
 	}
+	logSetIDExplainAudit(response)
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(response)
 }
@@ -192,4 +221,55 @@ func traceIDFromRequestHeader(r *http.Request) string {
 		}
 	}
 	return traceID
+}
+
+func normalizeSetIDExplainRequestID(r *http.Request) string {
+	requestID := strings.TrimSpace(r.URL.Query().Get("request_id"))
+	if requestID == "" {
+		requestID = strings.TrimSpace(r.Header.Get("X-Request-Id"))
+	}
+	if requestID == "" {
+		requestID = strings.TrimSpace(r.Header.Get("x-request-id"))
+	}
+	if requestID != "" {
+		return requestID
+	}
+	if traceID := traceIDFromRequestHeader(r); traceID != "" {
+		return "trace-" + traceID
+	}
+	return "setid-explain-auto"
+}
+
+func fallbackSetIDExplainTraceID(requestID string, capabilityKey string, businessUnitID string, asOf string) string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		strings.TrimSpace(requestID),
+		strings.ToLower(strings.TrimSpace(capabilityKey)),
+		strings.TrimSpace(businessUnitID),
+		strings.TrimSpace(asOf),
+	}, "|")))
+	return hex.EncodeToString(sum[:16])
+}
+
+func resolveFunctionalAreaKey(capabilityKey string) string {
+	prefix := strings.ToLower(strings.TrimSpace(capabilityKey))
+	if dot := strings.Index(prefix, "."); dot > 0 {
+		prefix = prefix[:dot]
+	}
+	if area, ok := capabilityModuleFunctionalAreas[prefix]; ok {
+		return area
+	}
+	return "org_foundation"
+}
+
+func logSetIDExplainAudit(response setIDExplainResponse) {
+	log.Printf(
+		"setid_explain decision=%s reason_code=%s capability_key=%s setid=%s policy_version=%s functional_area_key=%s level=%s",
+		response.Decision,
+		response.ReasonCode,
+		response.CapabilityKey,
+		response.SetID,
+		response.PolicyVersion,
+		response.FunctionalAreaKey,
+		response.Level,
+	)
 }

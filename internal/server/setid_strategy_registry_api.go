@@ -23,6 +23,7 @@ const (
 	fieldPolicyConflictCode       = "FIELD_POLICY_CONFLICT"
 	fieldPolicyMissingCode        = "FIELD_POLICY_MISSING"
 	explainRequiredCode           = "EXPLAIN_REQUIRED"
+	fieldVisibleInContextCode     = "FIELD_VISIBLE_IN_CONTEXT"
 	fieldRequiredInContextCode    = "FIELD_REQUIRED_IN_CONTEXT"
 	fieldHiddenInContextCode      = "FIELD_HIDDEN_IN_CONTEXT"
 	fieldDefaultRuleMissingCode   = "FIELD_DEFAULT_RULE_MISSING"
