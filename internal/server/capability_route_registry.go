@@ -80,6 +80,15 @@ var capabilityRouteBindings = []capabilityRouteBinding{
 		Status:        routeCapabilityStatusActive,
 	},
 	{
+		Method:        "POST",
+		Path:          "/org/api/setid-strategy-registry:disable",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionAdmin,
+		CapabilityKey: "staffing.assignment_create.field_policy",
+		OwnerModule:   "staffing",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
 		Method:        "GET",
 		Path:          "/org/api/setid-explain",
 		RouteClass:    "internal_api",

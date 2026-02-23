@@ -61,8 +61,10 @@ export interface SetIDStrategyRegistryItem {
   business_unit_id?: string
   required: boolean
   visible: boolean
+  maintainable: boolean
   default_rule_ref?: string
   default_value?: string
+  allowed_value_codes?: string[]
   priority: number
   explain_required: boolean
   is_stable: boolean
@@ -87,8 +89,10 @@ export interface SetIDStrategyRegistryUpsertRequest {
   business_unit_id: string
   required: boolean
   visible: boolean
+  maintainable: boolean
   default_rule_ref: string
   default_value: string
+  allowed_value_codes: string[]
   priority: number
   explain_required: boolean
   is_stable: boolean
@@ -117,6 +121,22 @@ export async function upsertSetIDStrategyRegistry(
   request: SetIDStrategyRegistryUpsertRequest
 ): Promise<SetIDStrategyRegistryItem> {
   return httpClient.post<SetIDStrategyRegistryItem>('/org/api/setid-strategy-registry', request)
+}
+
+export interface SetIDStrategyRegistryDisableRequest {
+  capability_key: string
+  field_key: string
+  org_level: 'tenant' | 'business_unit'
+  business_unit_id: string
+  effective_date: string
+  disable_as_of: string
+  request_id: string
+}
+
+export async function disableSetIDStrategyRegistry(
+  request: SetIDStrategyRegistryDisableRequest
+): Promise<SetIDStrategyRegistryItem> {
+  return httpClient.post<SetIDStrategyRegistryItem>('/org/api/setid-strategy-registry:disable', request)
 }
 
 export interface SetIDExplainFieldDecision {

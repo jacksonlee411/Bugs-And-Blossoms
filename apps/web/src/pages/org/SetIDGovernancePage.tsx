@@ -1,10 +1,14 @@
-import { type FormEvent, useMemo, useState } from 'react'
+import { type FormEvent, useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Box,
   Button,
   Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   Paper,
   Stack,
@@ -13,7 +17,7 @@ import {
   TextField,
   Typography
 } from '@mui/material'
-import type { GridColDef } from '@mui/x-data-grid'
+import type { GridColDef, GridRenderCellParams } from '@mui/x-data-grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
 import { ApiClientError } from '../../api/errors'
@@ -21,6 +25,7 @@ import {
   activatePolicyVersion,
   bindSetID,
   createSetID,
+  disableSetIDStrategyRegistry,
   getPolicyActivationState,
   listSetIDBindings,
   listFunctionalAreaState,
@@ -50,8 +55,10 @@ interface RegistryFormState {
   businessUnitID: string
   required: boolean
   visible: boolean
+  maintainable: boolean
   defaultRuleRef: string
   defaultValue: string
+  allowedValueCodes: string
   priority: number
   explainRequired: boolean
   isStable: boolean
@@ -59,6 +66,12 @@ interface RegistryFormState {
   effectiveDate: string
   endDate: string
   requestID: string
+}
+
+interface RegistryDisableDialogState {
+  open: boolean
+  row: SetIDStrategyRegistryItem | null
+  disableAsOf: string
 }
 
 interface ActivationFormState {
@@ -122,8 +135,10 @@ function defaultRegistryForm(asOf: string): RegistryFormState {
     businessUnitID: '',
     required: true,
     visible: true,
+    maintainable: true,
     defaultRuleRef: '',
     defaultValue: '',
+    allowedValueCodes: '',
     priority: 100,
     explainRequired: true,
     isStable: false,
@@ -132,6 +147,50 @@ function defaultRegistryForm(asOf: string): RegistryFormState {
     endDate: '',
     requestID: newRequestID('mui-setid-strategy')
   }
+}
+
+function parseAllowedValueCodes(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+}
+
+function toAllowedValueCodesText(values: string[] | undefined): string {
+  return (values ?? []).map((item) => item.trim()).filter((item) => item.length > 0).join(', ')
+}
+
+function toRegistryFormFromRow(row: SetIDStrategyRegistryItem): RegistryFormState {
+  return {
+    capabilityKey: row.capability_key,
+    ownerModule: row.owner_module,
+    fieldKey: row.field_key,
+    personalizationMode: row.personalization_mode,
+    orgLevel: row.org_level,
+    businessUnitID: row.business_unit_id ?? '',
+    required: row.required,
+    visible: row.visible,
+    maintainable: row.maintainable,
+    defaultRuleRef: row.default_rule_ref ?? '',
+    defaultValue: row.default_value ?? '',
+    allowedValueCodes: toAllowedValueCodesText(row.allowed_value_codes),
+    priority: row.priority,
+    explainRequired: row.explain_required,
+    isStable: row.is_stable,
+    changePolicy: row.change_policy,
+    effectiveDate: row.effective_date,
+    endDate: row.end_date ?? '',
+    requestID: newRequestID('mui-setid-strategy')
+  }
+}
+
+function nextDayISO(baseDate: string): string {
+  const parsed = new Date(`${baseDate}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime())) {
+    return ''
+  }
+  parsed.setUTCDate(parsed.getUTCDate() + 1)
+  return parsed.toISOString().slice(0, 10)
 }
 
 function strategyRowID(item: SetIDStrategyRegistryItem): string {
@@ -169,6 +228,12 @@ export function SetIDGovernancePage() {
   const [registryCapabilityFilter, setRegistryCapabilityFilter] = useState('')
   const [registryFieldFilter, setRegistryFieldFilter] = useState('')
   const [registryForm, setRegistryForm] = useState<RegistryFormState>(() => defaultRegistryForm(asOf))
+  const [registryFormMode, setRegistryFormMode] = useState<'create' | 'edit' | 'fork'>('create')
+  const [registryDisableDialog, setRegistryDisableDialog] = useState<RegistryDisableDialogState>({
+    open: false,
+    row: null,
+    disableAsOf: ''
+  })
   const [activationForm, setActivationForm] = useState<ActivationFormState>(() => defaultActivationForm())
   const [functionalAreaOperator, setFunctionalAreaOperator] = useState('mui-operator')
 
@@ -238,13 +303,17 @@ export function SetIDGovernancePage() {
     onSuccess: async () => {
       setRegistryNotice('策略已保存')
       await queryClient.invalidateQueries({ queryKey: ['setid-strategy-registry', asOf] })
-      setRegistryForm((previous) => ({
-        ...defaultRegistryForm(asOf),
-        capabilityKey: previous.capabilityKey,
-        ownerModule: previous.ownerModule,
-        fieldKey: previous.fieldKey,
-        businessUnitID: previous.businessUnitID
-      }))
+      setRegistryForm(defaultRegistryForm(asOf))
+      setRegistryFormMode('create')
+    }
+  })
+
+  const strategyDisableMutation = useMutation({
+    mutationFn: disableSetIDStrategyRegistry,
+    onSuccess: async () => {
+      setRegistryNotice('策略已停用')
+      await queryClient.invalidateQueries({ queryKey: ['setid-strategy-registry', asOf] })
+      setRegistryDisableDialog({ open: false, row: null, disableAsOf: '' })
     }
   })
 
@@ -285,6 +354,44 @@ export function SetIDGovernancePage() {
   const strategyRows = useMemo(() => strategyQuery.data?.items ?? [], [strategyQuery.data])
   const functionalAreas = useMemo(() => functionalAreaQuery.data?.items ?? [], [functionalAreaQuery.data])
   const activationState = useMemo<CapabilityPolicyState | null>(() => activationStateQuery.data ?? null, [activationStateQuery.data])
+  const isRegistryEditing = registryFormMode === 'edit'
+  const isRegistryForking = registryFormMode === 'fork'
+  const hasRegistryKeyLock = registryFormMode !== 'create'
+
+  function resetRegistryFormState() {
+    setRegistryForm(defaultRegistryForm(asOf))
+    setRegistryFormMode('create')
+  }
+
+  const onEditStrategyRow = useCallback((row: SetIDStrategyRegistryItem) => {
+    setRegistryForm(toRegistryFormFromRow(row))
+    setRegistryFormMode('edit')
+    setRegistryNotice(null)
+  }, [])
+
+  function onForkStrategyFromCurrent() {
+    const nextEffectiveDate = registryForm.effectiveDate.trim().length > 0 ? nextDayISO(registryForm.effectiveDate) : asOf
+    setRegistryForm((previous) => ({
+      ...previous,
+      effectiveDate: nextEffectiveDate || asOf,
+      endDate: '',
+      requestID: newRequestID('mui-setid-strategy-fork')
+    }))
+    setRegistryFormMode('fork')
+    setRegistryNotice('已切换为“另存为新版本”模式，请确认新的 effective_date。')
+  }
+
+  const onOpenDisableDialog = useCallback((row: SetIDStrategyRegistryItem) => {
+    const fallbackDisableAsOf = nextDayISO(row.effective_date) || asOf
+    const disableAsOf = asOf > row.effective_date ? asOf : fallbackDisableAsOf
+    setRegistryDisableDialog({
+      open: true,
+      row,
+      disableAsOf
+    })
+    setError(null)
+    setRegistryNotice(null)
+  }, [asOf])
 
   const strategyColumns = useMemo<GridColDef[]>(
     () => [
@@ -296,18 +403,54 @@ export function SetIDGovernancePage() {
       {
         field: 'policy',
         headerName: 'required / visible / default',
-        minWidth: 260,
+        minWidth: 320,
         valueGetter: (_, row: SetIDStrategyRegistryItem) =>
           `${row.required ? 'required' : 'optional'} · ${row.visible ? 'visible' : 'hidden'} · ${
+            row.maintainable ? 'maintainable' : 'system-managed'
+          } · ${
             row.default_rule_ref || row.default_value || '-'
           }`
       },
       { field: 'priority', headerName: 'priority', minWidth: 100 },
       { field: 'effective_date', headerName: 'effective_date', minWidth: 130 },
       { field: 'end_date', headerName: 'end_date', minWidth: 120 },
-      { field: 'updated_at', headerName: 'updated_at', minWidth: 180 }
+      { field: 'updated_at', headerName: 'updated_at', minWidth: 180 },
+      {
+        field: 'actions',
+        headerName: 'actions',
+        minWidth: 180,
+        sortable: false,
+        filterable: false,
+        renderCell: (params: GridRenderCellParams<SetIDStrategyRegistryItem>) => (
+          <Stack direction='row' spacing={0.5}>
+            <Button
+              disabled={!canManageGovernance}
+              onClick={(event) => {
+                event.stopPropagation()
+                onEditStrategyRow(params.row)
+              }}
+              size='small'
+              variant='text'
+            >
+              编辑
+            </Button>
+            <Button
+              color='error'
+              disabled={!canManageGovernance}
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenDisableDialog(params.row)
+              }}
+              size='small'
+              variant='text'
+            >
+              删除
+            </Button>
+          </Stack>
+        )
+      }
     ],
-    []
+    [canManageGovernance, onEditStrategyRow, onOpenDisableDialog]
   )
 
   function updateURL(nextTab: SetIDPageTab, nextAsOf: string) {
@@ -361,8 +504,10 @@ export function SetIDGovernancePage() {
         business_unit_id: registryForm.businessUnitID.trim(),
         required: registryForm.required,
         visible: registryForm.visible,
+        maintainable: registryForm.maintainable,
         default_rule_ref: registryForm.defaultRuleRef.trim(),
         default_value: registryForm.defaultValue.trim(),
+        allowed_value_codes: parseAllowedValueCodes(registryForm.allowedValueCodes),
         priority: registryForm.priority,
         explain_required: registryForm.explainRequired,
         is_stable: registryForm.isStable,
@@ -370,6 +515,37 @@ export function SetIDGovernancePage() {
         effective_date: registryForm.effectiveDate.trim(),
         end_date: registryForm.endDate.trim(),
         request_id: registryForm.requestID.trim()
+      })
+    } catch (err) {
+      setError(parseApiError(err))
+    }
+  }
+
+  async function onDisableStrategy() {
+    const row = registryDisableDialog.row
+    if (!row) {
+      return
+    }
+    const disableAsOf = registryDisableDialog.disableAsOf.trim()
+    setError(null)
+    setRegistryNotice(null)
+    if (disableAsOf.length === 0) {
+      setError('disable_as_of 不能为空')
+      return
+    }
+    if (disableAsOf <= row.effective_date) {
+      setError('disable_as_of 必须晚于 effective_date')
+      return
+    }
+    try {
+      await strategyDisableMutation.mutateAsync({
+        capability_key: row.capability_key,
+        field_key: row.field_key,
+        org_level: row.org_level,
+        business_unit_id: row.business_unit_id ?? '',
+        effective_date: row.effective_date,
+        disable_as_of: disableAsOf,
+        request_id: newRequestID('mui-setid-strategy-disable')
       })
     } catch (err) {
       setError(parseApiError(err))
@@ -640,6 +816,16 @@ export function SetIDGovernancePage() {
               <Typography component='h3' variant='subtitle1' sx={{ mb: 1 }}>
                 Upsert Strategy
               </Typography>
+              {isRegistryEditing ? (
+                <Alert severity='info' sx={{ mb: 1.5 }}>
+                  当前为“编辑当前版本”模式：主键字段已锁定。你可以直接保存，或点击“另存为新版本”创建新生效日记录。
+                </Alert>
+              ) : null}
+              {isRegistryForking ? (
+                <Alert severity='info' sx={{ mb: 1.5 }}>
+                  当前为“另存为新版本”模式：仅 effective_date 可修改，请确认后保存。
+                </Alert>
+              ) : null}
               <Stack
                 component='form'
                 spacing={1.5}
@@ -662,6 +848,7 @@ export function SetIDGovernancePage() {
                     required
                     size='small'
                     value={registryForm.capabilityKey}
+                    disabled={hasRegistryKeyLock}
                     onChange={(event) => setRegistryForm((prev) => ({ ...prev, capabilityKey: event.target.value }))}
                   />
                   <TextField
@@ -676,6 +863,7 @@ export function SetIDGovernancePage() {
                     required
                     size='small'
                     value={registryForm.fieldKey}
+                    disabled={hasRegistryKeyLock}
                     onChange={(event) => setRegistryForm((prev) => ({ ...prev, fieldKey: event.target.value }))}
                   />
                   <TextField
@@ -695,6 +883,7 @@ export function SetIDGovernancePage() {
                     required
                     size='small'
                     value={registryForm.orgLevel}
+                    disabled={hasRegistryKeyLock}
                     onChange={(event) =>
                       setRegistryForm((prev) => ({
                         ...prev,
@@ -706,6 +895,7 @@ export function SetIDGovernancePage() {
                     label='business_unit_id'
                     size='small'
                     value={registryForm.businessUnitID}
+                    disabled={hasRegistryKeyLock}
                     onChange={(event) => setRegistryForm((prev) => ({ ...prev, businessUnitID: event.target.value }))}
                   />
                   <TextField
@@ -719,6 +909,12 @@ export function SetIDGovernancePage() {
                     size='small'
                     value={registryForm.defaultValue}
                     onChange={(event) => setRegistryForm((prev) => ({ ...prev, defaultValue: event.target.value }))}
+                  />
+                  <TextField
+                    label='allowed_value_codes (csv)'
+                    size='small'
+                    value={registryForm.allowedValueCodes}
+                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, allowedValueCodes: event.target.value }))}
                   />
                   <TextField
                     label='priority'
@@ -744,6 +940,7 @@ export function SetIDGovernancePage() {
                     size='small'
                     type='date'
                     value={registryForm.effectiveDate}
+                    disabled={isRegistryEditing}
                     onChange={(event) => setRegistryForm((prev) => ({ ...prev, effectiveDate: event.target.value }))}
                   />
                   <TextField
@@ -784,6 +981,15 @@ export function SetIDGovernancePage() {
                   <FormControlLabel
                     control={
                       <Checkbox
+                        checked={registryForm.maintainable}
+                        onChange={(event) => setRegistryForm((prev) => ({ ...prev, maintainable: event.target.checked }))}
+                      />
+                    }
+                    label='maintainable'
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
                         checked={registryForm.explainRequired}
                         onChange={(event) => setRegistryForm((prev) => ({ ...prev, explainRequired: event.target.checked }))}
                       />
@@ -803,13 +1009,34 @@ export function SetIDGovernancePage() {
 
                 <Stack direction='row' spacing={1}>
                   <Button disabled={!canManageGovernance || strategyMutation.isPending} type='submit' variant='contained'>
-                    保存策略
+                    {isRegistryEditing ? '保存当前版本' : isRegistryForking ? '保存为新版本' : '保存策略'}
                   </Button>
+                  {isRegistryEditing ? (
+                    <Button
+                      type='button'
+                      disabled={!canManageGovernance || strategyMutation.isPending}
+                      onClick={onForkStrategyFromCurrent}
+                      variant='outlined'
+                    >
+                      另存为新版本
+                    </Button>
+                  ) : null}
+                  {hasRegistryKeyLock ? (
+                    <Button
+                      type='button'
+                      disabled={strategyMutation.isPending}
+                      onClick={resetRegistryFormState}
+                      variant='outlined'
+                    >
+                      取消编辑
+                    </Button>
+                  ) : null}
                   <Button
-                    onClick={() => setRegistryForm(defaultRegistryForm(asOf))}
+                    type='button'
+                    onClick={resetRegistryFormState}
                     variant='outlined'
                   >
-                    重置表单
+                    {hasRegistryKeyLock ? '新建空白' : '重置表单'}
                   </Button>
                 </Stack>
               </Stack>
@@ -960,6 +1187,63 @@ export function SetIDGovernancePage() {
             </Stack>
           </Paper>
         ) : null}
+
+        <Dialog
+          open={registryDisableDialog.open}
+          onClose={() => {
+            if (strategyDisableMutation.isPending) {
+              return
+            }
+            setRegistryDisableDialog({ open: false, row: null, disableAsOf: '' })
+          }}
+          fullWidth
+          maxWidth='sm'
+        >
+          <DialogTitle>停用策略</DialogTitle>
+          <DialogContent>
+            <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+              <Typography color='text.secondary' variant='body2'>
+                capability_key={registryDisableDialog.row?.capability_key || '-'}
+              </Typography>
+              <Typography color='text.secondary' variant='body2'>
+                field_key={registryDisableDialog.row?.field_key || '-'} · org_level={registryDisableDialog.row?.org_level || '-'} ·
+                business_unit_id={registryDisableDialog.row?.business_unit_id || '-'}
+              </Typography>
+              <Typography color='text.secondary' variant='body2'>
+                effective_date={registryDisableDialog.row?.effective_date || '-'}
+              </Typography>
+              <TextField
+                label='disable_as_of'
+                type='date'
+                value={registryDisableDialog.disableAsOf}
+                onChange={(event) =>
+                  setRegistryDisableDialog((previous) => ({
+                    ...previous,
+                    disableAsOf: event.target.value
+                  }))
+                }
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              type='button'
+              onClick={() => setRegistryDisableDialog({ open: false, row: null, disableAsOf: '' })}
+              disabled={strategyDisableMutation.isPending}
+            >
+              取消
+            </Button>
+            <Button
+              type='button'
+              color='error'
+              variant='contained'
+              onClick={() => void onDisableStrategy()}
+              disabled={!canManageGovernance || strategyDisableMutation.isPending}
+            >
+              确认停用
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Stack>
     </Box>
   )

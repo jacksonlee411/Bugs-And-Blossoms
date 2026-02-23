@@ -1,6 +1,6 @@
 # DEV-PLAN-161A：SetID Capability Registry 可编辑与可维护化（承接 160/161）
 
-**状态**: 规划中（2026-02-23 13:15 UTC）
+**状态**: 已完成（2026-02-24 06:52 UTC）
 
 ## 1. 背景与问题陈述（Context）
 - 现网页面 `/app/org/setid` 的 Registry 区域可展示 `capability_key` 列表，但用户反馈“无法删除、编辑”。
@@ -23,10 +23,10 @@
 
 ## 3. 目标与非目标（Goals / Non-Goals）
 ### 3.1 核心目标
-- [ ] 在 Registry 列表提供可发现的行级“编辑/删除（停用）”操作。
-- [ ] 建立删除的正式 API 契约（优先逻辑删除，保留历史可追溯）。
-- [ ] 前后端统一 fail-closed 与错误码，删除/编辑均可追踪 `request_id/trace_id`。
-- [ ] 不引入 legacy 双链路；保持 capability_key 与路由映射门禁一致。
+- [x] 在 Registry 列表提供可发现的行级“编辑/删除（停用）”操作。
+- [x] 建立删除的正式 API 契约（优先逻辑删除，保留历史可追溯）。
+- [x] 前后端统一 fail-closed 与错误码，删除/编辑均可追踪 `request_id/trace_id`。
+- [x] 不引入 legacy 双链路；保持 capability_key 与路由映射门禁一致。
 
 ### 3.2 非目标
 - 不改动 Capability Key 命名规范与注册表主键模型。
@@ -48,16 +48,30 @@
     - `org_level`
     - `business_unit_id`
     - `effective_date`
-    - `end_date`（或 `disable_as_of`，由后端归一）
+    - `disable_as_of`（首个失效日；后端归一为 `end_date`）
     - `request_id`
   - 语义：逻辑删除（通过设置 `end_date` 使策略在目标日期后失效），不做物理删除。
+  - 时间规则冻结：
+    - `disable_as_of` 定义为“首个失效日”。
+    - 后端换算：`end_date = disable_as_of`。
+    - 强约束：`disable_as_of > effective_date`（禁止同日失效/零长度有效期）。
 - 保持：`POST /org/api/setid-strategy-registry` 用于新增/更新。
 
 ### 4.3 存储与约束
 - 复用 `orgunit.setid_strategy_registry`，不新增第二事实源。
 - 通过 `end_date` 实现可逆维护与历史追溯；必要时补充同日失效语义约束（避免“今日误配无法撤回”）。
+- 停用预检：
+  - 对目标上下文执行“停用后可解析性预检”；若停用会导致无可命中策略，拒绝停用（fail-closed，稳定错误码）。
+- 恢复语义：
+  - `disable_as_of` 尚未生效（未来）时，允许撤销停用（清空 `end_date`）。
+  - 已生效停用禁止回写历史；恢复必须新增一条新的 `effective_date` 版本记录。
 
-### 4.4 鉴权与路由治理
+### 4.4 编辑模型冻结（UI）
+- 行级维护拆分为两个动作，避免时间主键误改：
+  1. `编辑当前版本`：仅允许修改非主键字段（主键字段只读）。
+  2. `另存为新版本`：复制当前记录并指定新的 `effective_date`，生成新版本。
+
+### 4.5 鉴权与路由治理
 - 新增 disable 路由到 capability-route-map：
   - `POST /org/api/setid-strategy-registry:disable` -> `org.setid_capability_config` + `admin`
 - 同步更新：
@@ -66,25 +80,30 @@
   - capability-route-map 门禁测试
 
 ## 5. 实施拆分（Milestones）
-1. [ ] **M1 契约冻结**：冻结 disable API 请求/响应、错误码、权限语义。
-2. [ ] **M2 后端落地**：store 增加 disable 能力；handler/route/authz/capability-map 全链路补齐。
-3. [ ] **M3 前端落地**：DataGrid actions + 编辑回填 + 删除确认 + 成功/失败提示。
-4. [ ] **M4 测试补齐**：Go 单测（handler/store/authz/route-map）+ 前端交互测试 + E2E 用例。
-5. [ ] **M5 门禁与证据**：触发器命中项跑绿并沉淀 `docs/dev-records/`。
+1. [x] **M1 契约冻结**：冻结 disable API 请求/响应、错误码、权限语义、`disable_as_of` 时间语义、恢复语义、编辑模型（编辑当前/另存新版本）。
+2. [x] **M2 后端落地**：store 增加 disable 能力；handler/route/authz/capability-map 全链路补齐。
+3. [x] **M3 前端落地**：DataGrid actions + 编辑回填 + 删除确认 + 成功/失败提示。
+4. [x] **M4 测试补齐**：Go 单测（handler/store/authz/route-map）+ 前端交互测试 + E2E 用例。
+5. [x] **M5 门禁与证据**：触发器命中项跑绿并沉淀 `docs/dev-records/`。
 
 ## 6. 错误码与失败路径（Failure Paths）
 - `setid_strategy_registry_disable_failed`：停用失败。
 - `invalid_disable_date`：失效日期非法。
 - `FIELD_POLICY_CONFLICT`：失效日期与生效日期冲突。
 - `capability_context_mismatch`：上下文与 capability 不匹配。
+- `FIELD_POLICY_DISABLE_NOT_ALLOWED`：停用后将导致策略不可解析（禁止停用）。
 - 统一要求：错误提示映射 `error-message` 门禁，前端展示明确下一步。
 
 ## 7. 验收标准（Acceptance Criteria）
-- [ ] Registry 每行可见并可触发“编辑/删除”操作（有权限）。
-- [ ] 编辑支持“一键回填 + 保存 + 列表即时刷新”。
-- [ ] 删除后目标策略在指定 `as_of` 下不再出现，且历史可追溯。
-- [ ] 无权限用户仅可查看，不可执行编辑/删除，提示明确。
-- [ ] `make check capability-route-map`、`make check routing`、`make check error-message`、`make check no-legacy`、`make test` 通过。
+- [x] Registry 每行可见并可触发“编辑/删除”操作（有权限）。
+- [x] 编辑支持“一键回填 + 保存 + 列表即时刷新”。
+- [x] 编辑支持“编辑当前版本（主键只读）/另存为新版本（新 effective_date）”双动作。
+- [x] 删除后目标策略在指定 `as_of` 下不再出现，且历史可追溯。
+- [x] 同日失效请求被拒绝（`disable_as_of <= effective_date` 失败）。
+- [x] 停用导致“无可命中策略”时被拒绝并返回稳定错误码。
+- [x] 未来停用可撤销；已生效停用只能通过新增版本恢复。
+- [x] 无权限用户仅可查看，不可执行编辑/删除，提示明确。
+- [x] `make check capability-route-map`、`make check routing`、`make check error-message`、`make check no-legacy`、`make test` 通过。
 
 ## 8. 风险与缓解
 - **R1：删除语义与 Valid Time 冲突**  
