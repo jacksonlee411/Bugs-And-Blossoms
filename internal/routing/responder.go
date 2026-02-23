@@ -128,6 +128,8 @@ func knownErrorMessage(code string) string {
 		return "租户上下文缺失，请刷新后重试。"
 	case "tenant_resolve_error":
 		return "租户解析失败，请稍后重试。"
+	case "CAPABILITY_CONTEXT_MISMATCH":
+		return "上下文与服务端判定不一致，请检查业务单元与生效日期后重试。"
 	case "ORG_ROOT_ALREADY_EXISTS":
 		return "根组织已存在，请改为选择上级组织后新建。"
 	case "ORG_TREE_NOT_INITIALIZED":

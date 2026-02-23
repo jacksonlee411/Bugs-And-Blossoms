@@ -605,6 +605,16 @@ func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request) {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, message)
 			return
 		}
+		_, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
+			CapabilityKey:       item.CapabilityKey,
+			BusinessUnitID:      item.BusinessUnitID,
+			AsOf:                item.EffectiveDate,
+			RequireBusinessUnit: item.OrgLevel == orgLevelBusinessUnit,
+		})
+		if capErr != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, statusCodeForCapabilityContextError(capErr.Code), capErr.Code, capErr.Message)
+			return
+		}
 		saved, updated, err := defaultSetIDStrategyRegistryStore.upsert(r.Context(), tenant.ID, item)
 		if err != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_strategy_registry_upsert_failed", "setid strategy registry upsert failed")

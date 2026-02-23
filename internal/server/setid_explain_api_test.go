@@ -132,6 +132,17 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		t.Fatalf("status=%d", recBadOrg.Code)
 	}
 
+	recRelationMismatchReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&org_unit_id=10000002&as_of=2026-01-01")
+	recRelationMismatchReq = recRelationMismatchReq.WithContext(withPrincipal(recRelationMismatchReq.Context(), Principal{RoleSlug: "tenant-viewer"}))
+	recRelationMismatch := httptest.NewRecorder()
+	handleSetIDExplainAPI(recRelationMismatch, recRelationMismatchReq, store)
+	if recRelationMismatch.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", recRelationMismatch.Code, recRelationMismatch.Body.String())
+	}
+	if !strings.Contains(recRelationMismatch.Body.String(), capabilityReasonContextMismatch) {
+		t.Fatalf("unexpected body: %q", recRelationMismatch.Body.String())
+	}
+
 	resolveErrStore := store
 	resolveErrStore.resolveSetIDFn = func(context.Context, string, string, string) (string, error) {
 		return "", errors.New("SETID_NOT_FOUND")
@@ -141,11 +152,17 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	if recResolveErr.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", recResolveErr.Code)
 	}
+	if !strings.Contains(recResolveErr.Body.String(), capabilityReasonContextMismatch) {
+		t.Fatalf("unexpected body: %q", recResolveErr.Body.String())
+	}
 
 	recSetIDMismatch := httptest.NewRecorder()
 	handleSetIDExplainAPI(recSetIDMismatch, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&setid=B0001"), store)
 	if recSetIDMismatch.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", recSetIDMismatch.Code)
+	}
+	if !strings.Contains(recSetIDMismatch.Body.String(), capabilityReasonContextMismatch) {
+		t.Fatalf("unexpected body: %q", recSetIDMismatch.Body.String())
 	}
 
 	recMissingPolicy := httptest.NewRecorder()
@@ -220,6 +237,17 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	}
 	if !strings.Contains(recDeny.Body.String(), `"decision":"deny"`) || !strings.Contains(recDeny.Body.String(), fieldHiddenInContextCode) {
 		t.Fatalf("unexpected body: %q", recDeny.Body.String())
+	}
+
+	recActorScopeMismatchReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01")
+	recActorScopeMismatchReq.Header.Set("X-Actor-Scope", "saas")
+	recActorScopeMismatch := httptest.NewRecorder()
+	handleSetIDExplainAPI(recActorScopeMismatch, recActorScopeMismatchReq, store)
+	if recActorScopeMismatch.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", recActorScopeMismatch.Code, recActorScopeMismatch.Body.String())
+	}
+	if !strings.Contains(recActorScopeMismatch.Body.String(), capabilityReasonContextMismatch) {
+		t.Fatalf("unexpected body: %q", recActorScopeMismatch.Body.String())
 	}
 }
 
