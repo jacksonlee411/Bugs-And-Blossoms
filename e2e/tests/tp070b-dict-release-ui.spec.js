@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectExplicitError } from "./helpers/error-message-assert";
 
 async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
   const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
@@ -170,7 +171,7 @@ test("tp070b: dict release ui flow and release authz", async ({ browser }) => {
       max_conflicts: 10
     }
   });
-  expect(viewerPreviewResp.status(), await viewerPreviewResp.text()).toBe(403);
+  await expectExplicitError(viewerPreviewResp, { status: 403, code: "forbidden" });
 
   const viewerReleaseResp = await viewerContext.request.post("/iam/api/dicts:release", {
     data: {
@@ -181,7 +182,7 @@ test("tp070b: dict release ui flow and release authz", async ({ browser }) => {
       max_conflicts: 10
     }
   });
-  expect(viewerReleaseResp.status(), await viewerReleaseResp.text()).toBe(403);
+  await expectExplicitError(viewerReleaseResp, { status: 403, code: "forbidden" });
 
   await viewerContext.close();
   await adminContext.close();
