@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -312,6 +313,39 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	if !strings.Contains(recDeny.Body.String(), `"reason_code":"`+fieldHiddenInContextCode+`"`) {
 		t.Fatalf("unexpected body: %q", recDeny.Body.String())
 	}
+	if strings.Contains(recDeny.Body.String(), `"resolved_default_value":"b2"`) ||
+		!strings.Contains(recDeny.Body.String(), `"visibility":"hidden"`) ||
+		!strings.Contains(recDeny.Body.String(), `"masked_default_value":"***"`) {
+		t.Fatalf("unexpected body: %q", recDeny.Body.String())
+	}
+
+	_, _ = defaultSetIDStrategyRegistryRuntime.upsert("t1", setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_masked",
+		PersonalizationMode: personalizationModeSetID,
+		OrgLevel:            orgLevelBusinessUnit,
+		BusinessUnitID:      "10000001",
+		Required:            false,
+		Visible:             true,
+		DefaultRuleRef:      "mask://redact",
+		DefaultValue:        "secret-v1",
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+		Priority:            200,
+	})
+	recMasked := httptest.NewRecorder()
+	handleSetIDExplainAPI(recMasked, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_masked&business_unit_id=10000001&as_of=2026-01-01"), store)
+	if recMasked.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recMasked.Code, recMasked.Body.String())
+	}
+	if !strings.Contains(recMasked.Body.String(), `"reason_code":"`+fieldMaskedInContextCode+`"`) ||
+		!strings.Contains(recMasked.Body.String(), `"visibility":"masked"`) ||
+		!strings.Contains(recMasked.Body.String(), `"mask_strategy":"redact"`) ||
+		!strings.Contains(recMasked.Body.String(), `"masked_default_value":"***"`) ||
+		strings.Contains(recMasked.Body.String(), `"resolved_default_value":"secret-v1"`) {
+		t.Fatalf("unexpected body: %q", recMasked.Body.String())
+	}
 
 	recActorScopeMismatchReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01")
 	recActorScopeMismatchReq.Header.Set("X-Actor-Scope", "saas")
@@ -400,7 +434,107 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 	}
 	if !strings.Contains(recBUB.Body.String(), `"decision":"deny"`) ||
 		!strings.Contains(recBUB.Body.String(), fieldHiddenInContextCode) ||
-		!strings.Contains(recBUB.Body.String(), `"resolved_default_value":"b2"`) {
+		!strings.Contains(recBUB.Body.String(), `"masked_default_value":"***"`) ||
+		!strings.Contains(recBUB.Body.String(), `"visibility":"hidden"`) ||
+		strings.Contains(recBUB.Body.String(), `"resolved_default_value":"b2"`) {
 		t.Fatalf("unexpected body: %q", recBUB.Body.String())
+	}
+}
+
+func TestApplySetIDFieldVisibility(t *testing.T) {
+	visibleDecision, visibleResult, visibleReason := applySetIDFieldVisibility(setIDFieldDecision{
+		FieldKey:           "field_visible",
+		Visible:            true,
+		Required:           true,
+		ResolvedDefaultVal: "v1",
+	})
+	if visibleResult != internalRuleDecisionAllow || visibleReason != fieldRequiredInContextCode || visibleDecision.Visibility != fieldVisibilityVisible {
+		t.Fatalf("visible decision=%+v result=%q reason=%q", visibleDecision, visibleResult, visibleReason)
+	}
+	if visibleDecision.ResolvedDefaultVal != "v1" {
+		t.Fatalf("visible resolved_default_value=%q", visibleDecision.ResolvedDefaultVal)
+	}
+
+	hiddenDecision, hiddenResult, hiddenReason := applySetIDFieldVisibility(setIDFieldDecision{
+		FieldKey:           "field_hidden",
+		Visible:            false,
+		ResolvedDefaultVal: "secret",
+	})
+	if hiddenResult != internalRuleDecisionDeny || hiddenReason != fieldHiddenInContextCode || hiddenDecision.Visibility != fieldVisibilityHidden {
+		t.Fatalf("hidden decision=%+v result=%q reason=%q", hiddenDecision, hiddenResult, hiddenReason)
+	}
+	if hiddenDecision.ResolvedDefaultVal != "" || hiddenDecision.MaskedDefaultVal != "***" {
+		t.Fatalf("hidden decision=%+v", hiddenDecision)
+	}
+
+	maskedDecision, maskedResult, maskedReason := applySetIDFieldVisibility(setIDFieldDecision{
+		FieldKey:           "field_masked",
+		Visible:            true,
+		DefaultRuleRef:     "mask://redact",
+		ResolvedDefaultVal: "secret",
+	})
+	if maskedResult != internalRuleDecisionAllow || maskedReason != fieldMaskedInContextCode || maskedDecision.Visibility != fieldVisibilityMasked {
+		t.Fatalf("masked decision=%+v result=%q reason=%q", maskedDecision, maskedResult, maskedReason)
+	}
+	if maskedDecision.ResolvedDefaultVal != "" || maskedDecision.MaskedDefaultVal != "***" || maskedDecision.MaskStrategy != "redact" {
+		t.Fatalf("masked decision=%+v", maskedDecision)
+	}
+
+	if strategy, ok := setIDMaskStrategyForDecision(setIDFieldDecision{Visible: true, DefaultRuleRef: "rule://normal"}); ok || strategy != "" {
+		t.Fatalf("unexpected strategy=%q ok=%v", strategy, ok)
+	}
+	if strategy, ok := setIDMaskStrategyForDecision(setIDFieldDecision{Visible: true, DefaultRuleRef: "mask://"}); !ok || strategy != fieldMaskStrategyRedact {
+		t.Fatalf("unexpected strategy=%q ok=%v", strategy, ok)
+	}
+}
+
+func TestBriefSetIDFieldDecisions(t *testing.T) {
+	if got := briefSetIDFieldDecisions(nil); got != "-" {
+		t.Fatalf("brief=%q", got)
+	}
+
+	got := briefSetIDFieldDecisions([]setIDFieldDecision{
+		{FieldKey: "field_x", Decision: internalRuleDecisionAllow, ReasonCode: fieldVisibleInContextCode, Visibility: fieldVisibilityVisible},
+		{FieldKey: "field_y", Decision: internalRuleDecisionDeny, ReasonCode: fieldHiddenInContextCode, Visibility: fieldVisibilityHidden},
+	})
+	if !strings.Contains(got, "field_x:allow:FIELD_VISIBLE_IN_CONTEXT:visible") || !strings.Contains(got, "field_y:deny:FIELD_HIDDEN_IN_CONTEXT:hidden") {
+		t.Fatalf("brief=%q", got)
+	}
+}
+
+func TestLogSetIDExplainAuditRedactsValues(t *testing.T) {
+	var b strings.Builder
+	origin := log.Writer()
+	log.SetOutput(&b)
+	t.Cleanup(func() {
+		log.SetOutput(origin)
+	})
+
+	logSetIDExplainAudit(setIDExplainResponse{
+		Decision:          internalRuleDecisionDeny,
+		ReasonCode:        fieldHiddenInContextCode,
+		CapabilityKey:     "staffing.assignment_create.field_policy",
+		SetID:             "A0001",
+		PolicyVersion:     "2026-03-01",
+		FunctionalAreaKey: "staffing",
+		Level:             explainLevelBrief,
+		FieldDecisions: []setIDFieldDecision{
+			{
+				FieldKey:           "field_hidden",
+				Decision:           internalRuleDecisionDeny,
+				ReasonCode:         fieldHiddenInContextCode,
+				Visibility:         fieldVisibilityHidden,
+				ResolvedDefaultVal: "secret-v1",
+				MaskedDefaultVal:   "***",
+			},
+		},
+	})
+
+	got := b.String()
+	if strings.Contains(got, "secret-v1") {
+		t.Fatalf("unexpected raw value in audit log: %q", got)
+	}
+	if !strings.Contains(got, "field_hidden:deny:FIELD_HIDDEN_IN_CONTEXT:hidden") {
+		t.Fatalf("unexpected audit log: %q", got)
 	}
 }

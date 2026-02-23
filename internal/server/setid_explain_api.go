@@ -132,16 +132,7 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, code)
 		return
 	}
-
-	responseDecision := "allow"
-	responseReasonCode := fieldVisibleInContextCode
-	if fieldDecision.Required {
-		responseReasonCode = fieldRequiredInContextCode
-	}
-	if !fieldDecision.Visible {
-		responseDecision = "deny"
-		responseReasonCode = fieldHiddenInContextCode
-	}
+	fieldDecision, responseDecision, responseReasonCode := applySetIDFieldVisibility(fieldDecision)
 	fieldDecision.Decision = responseDecision
 	fieldDecision.ReasonCode = responseReasonCode
 
@@ -248,7 +239,7 @@ func fallbackSetIDExplainTraceID(requestID string, capabilityKey string, busines
 
 func logSetIDExplainAudit(response setIDExplainResponse) {
 	log.Printf(
-		"setid_explain decision=%s reason_code=%s capability_key=%s setid=%s policy_version=%s functional_area_key=%s level=%s",
+		"setid_explain decision=%s reason_code=%s capability_key=%s setid=%s policy_version=%s functional_area_key=%s level=%s field_decisions=%s",
 		response.Decision,
 		response.ReasonCode,
 		response.CapabilityKey,
@@ -256,5 +247,69 @@ func logSetIDExplainAudit(response setIDExplainResponse) {
 		response.PolicyVersion,
 		response.FunctionalAreaKey,
 		response.Level,
+		briefSetIDFieldDecisions(response.FieldDecisions),
 	)
+}
+
+func applySetIDFieldVisibility(fieldDecision setIDFieldDecision) (setIDFieldDecision, string, string) {
+	responseDecision := internalRuleDecisionAllow
+	responseReasonCode := fieldVisibleInContextCode
+	fieldDecision.Visibility = fieldVisibilityVisible
+	fieldDecision.MaskStrategy = ""
+	fieldDecision.MaskedDefaultVal = ""
+	if fieldDecision.Required {
+		responseReasonCode = fieldRequiredInContextCode
+	}
+
+	if !fieldDecision.Visible {
+		responseDecision = internalRuleDecisionDeny
+		responseReasonCode = fieldHiddenInContextCode
+		fieldDecision.Visibility = fieldVisibilityHidden
+		fieldDecision.MaskStrategy = fieldMaskStrategyRedact
+		fieldDecision.MaskedDefaultVal = fieldMaskedDefaultValueFallback
+		fieldDecision.ResolvedDefaultVal = ""
+	}
+
+	if maskStrategy, masked := setIDMaskStrategyForDecision(fieldDecision); masked {
+		fieldDecision.Visibility = fieldVisibilityMasked
+		fieldDecision.MaskStrategy = maskStrategy
+		fieldDecision.MaskedDefaultVal = fieldMaskedDefaultValueFallback
+		fieldDecision.ResolvedDefaultVal = ""
+		responseReasonCode = fieldMaskedInContextCode
+	}
+
+	fieldDecision.Decision = responseDecision
+	fieldDecision.ReasonCode = responseReasonCode
+	return fieldDecision, responseDecision, responseReasonCode
+}
+
+func setIDMaskStrategyForDecision(fieldDecision setIDFieldDecision) (string, bool) {
+	if !fieldDecision.Visible {
+		return "", false
+	}
+	defaultRuleRef := strings.ToLower(strings.TrimSpace(fieldDecision.DefaultRuleRef))
+	if !strings.HasPrefix(defaultRuleRef, "mask://") {
+		return "", false
+	}
+	maskStrategy := strings.TrimSpace(strings.TrimPrefix(defaultRuleRef, "mask://"))
+	if maskStrategy == "" {
+		maskStrategy = fieldMaskStrategyRedact
+	}
+	return maskStrategy, true
+}
+
+func briefSetIDFieldDecisions(fieldDecisions []setIDFieldDecision) string {
+	if len(fieldDecisions) == 0 {
+		return "-"
+	}
+	brief := make([]string, 0, len(fieldDecisions))
+	for _, item := range fieldDecisions {
+		brief = append(brief, strings.Join([]string{
+			strings.TrimSpace(item.FieldKey),
+			strings.TrimSpace(item.Decision),
+			strings.TrimSpace(item.ReasonCode),
+			strings.TrimSpace(item.Visibility),
+		}, ":"))
+	}
+	return strings.Join(brief, ",")
 }
