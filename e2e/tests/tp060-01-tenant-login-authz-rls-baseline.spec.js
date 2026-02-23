@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectExplicitError } from "./helpers/error-message-assert";
 
 function headerValues(resp, headerName) {
   const wanted = headerName.toLowerCase();
@@ -127,8 +128,7 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
     headers: { Accept: "application/json" },
     data: { email: "nope@example.invalid", password: "pw" }
   });
-  expect(badHostResp.status()).toBe(404);
-  expect((await badHostResp.json()).code).toBe("tenant_not_found");
+  await expectExplicitError(badHostResp, { status: 404, code: "tenant_not_found" });
   await badHostContext.close();
 
   const tenantAContext = await browser.newContext({
@@ -194,8 +194,7 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
   await tenantBAdminContext.close();
 
   const crossTenantDataResp = await tenantAContext.request.get("/person/api/persons:by-pernr?pernr=201");
-  expect(crossTenantDataResp.status()).toBe(404);
-  expect((await crossTenantDataResp.json()).code).toBe("PERSON_NOT_FOUND");
+  await expectExplicitError(crossTenantDataResp, { status: 404, code: "PERSON_NOT_FOUND" });
 
   const tenantAViewerContext = await browser.newContext({
     baseURL: appBaseURL,
@@ -218,8 +217,7 @@ test("tp060-01: tenant/login/authz/rls baseline", async ({ browser }) => {
       is_business_unit: true
     }
   });
-  expect(viewerOrgPost.status()).toBe(403);
-  expect((await viewerOrgPost.json()).code).toBe("forbidden");
+  await expectExplicitError(viewerOrgPost, { status: 403, code: "forbidden" });
 
   await tenantAViewerContext.close();
   await tenantAContext.close();

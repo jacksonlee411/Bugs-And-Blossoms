@@ -6,13 +6,20 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/domain/types"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/modules/staffing/services"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/httperr"
+)
+
+var (
+	genericSnakeFailedPattern = regexp.MustCompile(`^[a-z0-9_]+_failed$`)
+	genericShortFailedPattern = regexp.MustCompile(`^[a-z]+(?: [a-z]+){0,2} failed$`)
 )
 
 type TenantIDGetter func(ctx context.Context) (tenantID string, ok bool)
@@ -322,6 +329,7 @@ type errorEnvelopeMeta struct {
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, status int, code string, message string) {
+	message = normalizeErrorMessage(code, message)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(errorEnvelope{
@@ -333,6 +341,109 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, code string,
 			Method: r.Method,
 		},
 	})
+}
+
+func normalizeErrorMessage(code string, message string) string {
+	code = strings.TrimSpace(code)
+	message = strings.TrimSpace(message)
+	if !isGenericErrorMessage(code, message) {
+		return message
+	}
+	if code == "" {
+		return "Request failed."
+	}
+	return humanizeErrorCode(code)
+}
+
+func isGenericErrorMessage(code string, message string) bool {
+	if message == "" {
+		return true
+	}
+	if code != "" && strings.EqualFold(message, code) {
+		return true
+	}
+	lower := strings.ToLower(strings.TrimSpace(message))
+	switch {
+	case genericSnakeFailedPattern.MatchString(lower):
+		return true
+	case genericShortFailedPattern.MatchString(lower):
+		return true
+	case lower == "internal_error":
+		return true
+	default:
+		return false
+	}
+}
+
+func humanizeErrorCode(code string) string {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return "Request failed."
+	}
+
+	normalized := strings.ReplaceAll(code, "-", "_")
+	raw := strings.Split(normalized, "_")
+	words := make([]string, 0, len(raw))
+	for _, part := range raw {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		words = append(words, strings.ToLower(part))
+	}
+	if len(words) == 0 {
+		return "Request failed."
+	}
+
+	last := words[len(words)-1]
+	if last == "failed" {
+		words = words[:len(words)-1]
+		if len(words) == 0 {
+			return "Request failed."
+		}
+		return titleCaseWords(words) + " failed."
+	}
+	if last == "error" {
+		words = words[:len(words)-1]
+		if len(words) == 0 {
+			return "Request error."
+		}
+		return titleCaseWords(words) + " error."
+	}
+
+	return titleCaseWords(words) + "."
+}
+
+func titleCaseWords(words []string) string {
+	if len(words) == 0 {
+		return ""
+	}
+	out := make([]string, 0, len(words))
+	for i, word := range words {
+		if word == "" {
+			continue
+		}
+		if i == 0 {
+			out = append(out, capitalizeWord(word))
+			continue
+		}
+		switch word {
+		case "id", "uuid", "api", "db", "rls":
+			out = append(out, strings.ToUpper(word))
+		default:
+			out = append(out, word)
+		}
+	}
+	return strings.Join(out, " ")
+}
+
+func capitalizeWord(word string) string {
+	if word == "" {
+		return ""
+	}
+	runes := []rune(word)
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }
 
 func pgErrorMessage(err error) string {

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectExplicitError } from "./helpers/error-message-assert";
 
 async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
   const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
@@ -270,8 +271,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       reports_to_position_uuid: reporteePositionID
     }
   });
-  expect(reportsToCycleResp.status()).toBe(422);
-  expect((await reportsToCycleResp.json()).code).toBe("STAFFING_POSITION_REPORTS_TO_CYCLE");
+  await expectExplicitError(reportsToCycleResp, { status: 422, code: "STAFFING_POSITION_REPORTS_TO_CYCLE" });
 
   const reportsToSelfResp = await appContext.request.post(`/org/api/positions?as_of=${encodeURIComponent(lateEffectiveDate)}`, {
     data: {
@@ -280,8 +280,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       reports_to_position_uuid: managerPositionID
     }
   });
-  expect(reportsToSelfResp.status()).toBe(422);
-  expect((await reportsToSelfResp.json()).code).toBe("STAFFING_POSITION_REPORTS_TO_SELF");
+  await expectExplicitError(reportsToSelfResp, { status: 422, code: "STAFFING_POSITION_REPORTS_TO_SELF" });
 
   const reportsToRetroResp = await appContext.request.post(`/org/api/positions?as_of=${encodeURIComponent(midEffectiveDate)}`, {
     data: {
@@ -290,8 +289,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       reports_to_position_uuid: managerPositionID
     }
   });
-  expect(reportsToRetroResp.status()).toBe(422);
-  expect((await reportsToRetroResp.json()).code).toBe("STAFFING_INVALID_ARGUMENT");
+  await expectExplicitError(reportsToRetroResp, { status: 422, code: "STAFFING_INVALID_ARGUMENT" });
 
   // Person normalization: leading zeros should resolve to canonical pernr.
   const byPernr = async (raw) => appContext.request.get(`/person/api/persons:by-pernr?pernr=${encodeURIComponent(raw)}`);
@@ -307,12 +305,10 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   expect(canonicalJSON.person_uuid).toBe(leadingZerosJSON.person_uuid);
 
   const respBad = await byPernr("BAD");
-  expect(respBad.status()).toBe(400);
-  expect((await respBad.json()).code).toBe("PERSON_PERNR_INVALID");
+  await expectExplicitError(respBad, { status: 400, code: "PERSON_PERNR_INVALID" });
 
   const respNotFound = await byPernr("99999999");
-  expect(respNotFound.status()).toBe(404);
-  expect((await respNotFound.json()).code).toBe("PERSON_NOT_FOUND");
+  await expectExplicitError(respNotFound, { status: 404, code: "PERSON_NOT_FOUND" });
 
   // Assignments: disabled position cannot be assigned.
   {
@@ -324,8 +320,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
         allocated_fte: "1.0"
       }
     });
-    expect(resp.status(), await resp.text()).toBe(422);
-    expect((await resp.json()).code).toBe("STAFFING_POSITION_DISABLED_AS_OF");
+    await expectExplicitError(resp, { status: 422, code: "STAFFING_POSITION_DISABLED_AS_OF" });
   }
 
   const upsertAssignment = async ({ pernr, effectiveDate, allocatedFte }) => {
@@ -414,8 +409,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
         allocated_fte: "0.75"
       }
     });
-    expect(conflictResp.status(), await conflictResp.text()).toBe(409);
-    expect((await conflictResp.json()).code).toBe("STAFFING_IDEMPOTENCY_REUSED");
+    await expectExplicitError(conflictResp, { status: 409, code: "STAFFING_IDEMPOTENCY_REUSED" });
   }
 
   // Position exclusivity: occupied position cannot be assigned to another active assignment (fail-closed with stable code).
@@ -428,8 +422,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
         allocated_fte: "0.25"
       }
     });
-    expect(occupiedResp.status(), await occupiedResp.text()).toBe(422);
-    expect((await occupiedResp.json()).code).toBe("STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF");
+    await expectExplicitError(occupiedResp, { status: 422, code: "STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF" });
   }
 
   const capacityPositionID = positionIDsByPernr.get("104");
@@ -445,8 +438,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       allocated_fte: "1.0"
     }
   });
-  expect(assignmentCapacityResp.status(), await assignmentCapacityResp.text()).toBe(422);
-  expect((await assignmentCapacityResp.json()).code).toBe("STAFFING_POSITION_CAPACITY_EXCEEDED");
+  await expectExplicitError(assignmentCapacityResp, { status: 422, code: "STAFFING_POSITION_CAPACITY_EXCEEDED" });
 
   const reduceCapacityResp = await appContext.request.post(`/org/api/positions?as_of=${encodeURIComponent(lateEffectiveDate)}`, {
     data: {
@@ -455,8 +447,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       capacity_fte: "0.25"
     }
   });
-  expect(reduceCapacityResp.status(), await reduceCapacityResp.text()).toBe(422);
-  expect((await reduceCapacityResp.json()).code).toBe("STAFFING_POSITION_CAPACITY_EXCEEDED");
+  await expectExplicitError(reduceCapacityResp, { status: 422, code: "STAFFING_POSITION_CAPACITY_EXCEEDED" });
 
   const disableConflictResp = await appContext.request.post(`/org/api/positions?as_of=${encodeURIComponent(lateEffectiveDate)}`, {
     data: {
@@ -465,8 +456,7 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
       lifecycle_status: "disabled"
     }
   });
-  expect(disableConflictResp.status(), await disableConflictResp.text()).toBe(422);
-  expect((await disableConflictResp.json()).code).toBe("STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF");
+  await expectExplicitError(disableConflictResp, { status: 422, code: "STAFFING_POSITION_HAS_ACTIVE_ASSIGNMENT_AS_OF" });
 
   // Valid-time empty timeline: pernr=106 has assignment only at lateEffectiveDate.
   {
