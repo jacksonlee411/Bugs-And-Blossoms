@@ -26,7 +26,15 @@ const (
 	fieldVisibleInContextCode     = "FIELD_VISIBLE_IN_CONTEXT"
 	fieldRequiredInContextCode    = "FIELD_REQUIRED_IN_CONTEXT"
 	fieldHiddenInContextCode      = "FIELD_HIDDEN_IN_CONTEXT"
+	fieldMaskedInContextCode      = "FIELD_MASKED_IN_CONTEXT"
 	fieldDefaultRuleMissingCode   = "FIELD_DEFAULT_RULE_MISSING"
+
+	fieldVisibilityVisible = "visible"
+	fieldVisibilityHidden  = "hidden"
+	fieldVisibilityMasked  = "masked"
+
+	fieldMaskStrategyRedact         = "redact"
+	fieldMaskedDefaultValueFallback = "***"
 )
 
 var (
@@ -79,8 +87,11 @@ type setIDFieldDecision struct {
 	FieldKey           string `json:"field_key"`
 	Required           bool   `json:"required"`
 	Visible            bool   `json:"visible"`
+	Visibility         string `json:"visibility,omitempty"`
+	MaskStrategy       string `json:"mask_strategy,omitempty"`
 	DefaultRuleRef     string `json:"default_rule_ref,omitempty"`
 	ResolvedDefaultVal string `json:"resolved_default_value,omitempty"`
+	MaskedDefaultVal   string `json:"masked_default_value,omitempty"`
 	Decision           string `json:"decision"`
 	ReasonCode         string `json:"reason_code,omitempty"`
 }
