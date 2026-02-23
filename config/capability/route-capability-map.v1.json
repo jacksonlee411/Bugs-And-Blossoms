@@ -92,6 +92,24 @@
       "capability_key": "org.policy_activation.manage",
       "owner_module": "orgunit",
       "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/functional-areas/state",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/functional-areas/switch",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
     }
   ]
 }

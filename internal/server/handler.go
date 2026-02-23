@@ -342,6 +342,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/policies/rollback", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleInternalPolicyRollbackAPI(w, r)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/functional-areas/state", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleInternalFunctionalAreaStateAPI(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/functional-areas/switch", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleInternalFunctionalAreaSwitchAPI(w, r)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
 	}))

@@ -8,6 +8,8 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   CAPABILITY_CONTEXT_MISMATCH: { en: 'Capability context mismatch.', zh: '上下文与服务端判定不一致，请检查后重试。' },
   DEFAULT_RULE_REQUIRED: { en: 'This field is system-managed but no default rule is configured.', zh: '该字段为系统维护，但未配置默认规则。' },
   FIELD_POLICY_EXPR_INVALID: { en: 'Default rule expression is invalid.', zh: '默认规则表达式不合法。' },
+  FUNCTIONAL_AREA_MISSING: { en: 'Functional area is missing.', zh: '功能域不存在，请联系管理员确认配置。' },
+  FUNCTIONAL_AREA_NOT_ACTIVE: { en: 'Functional area is not active.', zh: '功能域尚未激活，请先完成激活再重试。' },
   ORG_ALREADY_EXISTS: { en: 'Org already exists.', zh: '请求失败（org already exists）。' },
   ORG_CODE_INVALID: { en: 'Org code is invalid.', zh: '请求失败（org code invalid）。' },
   ORG_CODE_NOT_FOUND: { en: 'Org code not found.', zh: '请求失败（org code not found）。' },
