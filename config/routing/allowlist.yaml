@@ -92,22 +92,7 @@ entrypoints:
       - path: /org/api/setid-bindings
         methods: [GET, POST]
         route_class: internal_api
-      - path: /org/api/scope-packages
-        methods: [GET, POST]
-        route_class: internal_api
-      - path: /org/api/owned-scope-packages
-        methods: [GET]
-        route_class: internal_api
-      - path: /org/api/scope-packages/{package_id}/disable
-        methods: [POST]
-        route_class: internal_api
-      - path: /org/api/scope-subscriptions
-        methods: [GET, POST]
-        route_class: internal_api
       - path: /org/api/global-setids
-        methods: [GET, POST]
-        route_class: internal_api
-      - path: /org/api/global-scope-packages
         methods: [GET, POST]
         route_class: internal_api
       - path: /org/api/setid-strategy-registry
