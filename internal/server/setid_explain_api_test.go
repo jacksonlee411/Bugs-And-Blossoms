@@ -66,6 +66,49 @@ func TestTraceIDFromRequestHeader(t *testing.T) {
 	}
 }
 
+func TestNormalizeSetIDExplainRequestID(t *testing.T) {
+	reqQuery := httptest.NewRequest(http.MethodGet, "/org/api/setid-explain?request_id=req-query", nil)
+	if got := normalizeSetIDExplainRequestID(reqQuery); got != "req-query" {
+		t.Fatalf("request_id=%q", got)
+	}
+
+	reqHeader := httptest.NewRequest(http.MethodGet, "/org/api/setid-explain", nil)
+	reqHeader.Header.Set("X-Request-Id", "req-header")
+	if got := normalizeSetIDExplainRequestID(reqHeader); got != "req-header" {
+		t.Fatalf("request_id=%q", got)
+	}
+
+	reqTrace := httptest.NewRequest(http.MethodGet, "/org/api/setid-explain", nil)
+	reqTrace.Header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01")
+	if got := normalizeSetIDExplainRequestID(reqTrace); got != "trace-4bf92f3577b34da6a3ce929d0e0e4736" {
+		t.Fatalf("request_id=%q", got)
+	}
+
+	reqFallback := httptest.NewRequest(http.MethodGet, "/org/api/setid-explain", nil)
+	if got := normalizeSetIDExplainRequestID(reqFallback); got != "setid-explain-auto" {
+		t.Fatalf("request_id=%q", got)
+	}
+}
+
+func TestFallbackSetIDExplainTraceID(t *testing.T) {
+	got := fallbackSetIDExplainTraceID("req-1", "staffing.assignment_create.field_policy", "10000001", "2026-01-01")
+	if len(got) != 32 {
+		t.Fatalf("trace_id=%q", got)
+	}
+	if got != fallbackSetIDExplainTraceID("req-1", "staffing.assignment_create.field_policy", "10000001", "2026-01-01") {
+		t.Fatalf("trace_id should be stable: %q", got)
+	}
+}
+
+func TestResolveFunctionalAreaKey(t *testing.T) {
+	if got := resolveFunctionalAreaKey("staffing.assignment_create.field_policy"); got != "staffing" {
+		t.Fatalf("functional_area=%q", got)
+	}
+	if got := resolveFunctionalAreaKey("unknown.key"); got != "org_foundation" {
+		t.Fatalf("functional_area=%q", got)
+	}
+}
+
 func TestHandleSetIDExplainAPI(t *testing.T) {
 	resetSetIDStrategyRegistryRuntimeForTest()
 	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
@@ -203,6 +246,15 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	if !strings.Contains(recBrief.Body.String(), `"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"`) {
 		t.Fatalf("unexpected body: %q", recBrief.Body.String())
 	}
+	if !strings.Contains(recBrief.Body.String(), `"setid":"A0001"`) ||
+		!strings.Contains(recBrief.Body.String(), `"functional_area_key":"staffing"`) ||
+		!strings.Contains(recBrief.Body.String(), `"policy_version":"2026-02-23"`) ||
+		!strings.Contains(recBrief.Body.String(), `"reason_code":"`+fieldRequiredInContextCode+`"`) {
+		t.Fatalf("unexpected body: %q", recBrief.Body.String())
+	}
+	if strings.Contains(recBrief.Body.String(), `"tenant_id":"t1"`) || strings.Contains(recBrief.Body.String(), `"org_unit_id":"10000001"`) {
+		t.Fatalf("unexpected brief fields: %q", recBrief.Body.String())
+	}
 
 	fullReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=full")
 	fullReq = fullReq.WithContext(withPrincipal(fullReq.Context(), Principal{RoleSlug: "tenant-admin"}))
@@ -212,6 +264,9 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		t.Fatalf("status=%d body=%s", recFull.Code, recFull.Body.String())
 	}
 	if !strings.Contains(recFull.Body.String(), `"tenant_id":"t1"`) || !strings.Contains(recFull.Body.String(), `"org_unit_id":"10000001"`) {
+		t.Fatalf("unexpected body: %q", recFull.Body.String())
+	}
+	if !strings.Contains(recFull.Body.String(), `"resolved_config_version":"2026-02-23"`) {
 		t.Fatalf("unexpected body: %q", recFull.Body.String())
 	}
 
@@ -236,6 +291,9 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		t.Fatalf("status=%d body=%s", recDeny.Code, recDeny.Body.String())
 	}
 	if !strings.Contains(recDeny.Body.String(), `"decision":"deny"`) || !strings.Contains(recDeny.Body.String(), fieldHiddenInContextCode) {
+		t.Fatalf("unexpected body: %q", recDeny.Body.String())
+	}
+	if !strings.Contains(recDeny.Body.String(), `"reason_code":"`+fieldHiddenInContextCode+`"`) {
 		t.Fatalf("unexpected body: %q", recDeny.Body.String())
 	}
 
