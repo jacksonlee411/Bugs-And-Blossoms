@@ -56,8 +56,8 @@ func (s jobCatalogListErrStore) ListJobProfiles(ctx context.Context, tenantID st
 
 type jobCatalogResolvePkgWhitespaceErrStore struct{ JobCatalogStore }
 
-func (jobCatalogResolvePkgWhitespaceErrStore) ResolveJobCatalogPackageByCode(context.Context, string, string, string) (JobCatalogPackage, error) {
-	return JobCatalogPackage{}, errors.New(" ")
+func (jobCatalogResolvePkgWhitespaceErrStore) ResolveJobCatalogPackageBySetID(context.Context, string, string, string) (string, error) {
+	return "", errors.New(" ")
 }
 
 func TestHandleJobCatalogAPI_Branches(t *testing.T) {
@@ -88,11 +88,11 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 		}
 	})
 
-	t.Run("setid and package mutually exclusive", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1&setid=S1", "")
+	t.Run("invalid setid returns forbidden", func(t *testing.T) {
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=UNKNOWN", "")
 		rec := httptest.NewRecorder()
-		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
-		if rec.Code != http.StatusBadRequest {
+		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), resolveJobCatalogStoreStub{setidErr: errors.New("JOBCATALOG_SETID_INVALID")})
+		if rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("status=%d", rec.Code)
 		}
 	})
@@ -122,21 +122,24 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 		}
 	})
 
-	t.Run("package selection forbidden without principal", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", nil)
+	t.Run("setid selection without principal is read-only", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=PKG1", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
-		if rec.Code != http.StatusForbidden {
+		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"read_only":true`) {
+			t.Fatalf("expected read_only=true body=%q", rec.Body.String())
 		}
 	})
 
 	t.Run("view error code fallback when errMsg trims empty", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=PKG1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogResolvePkgWhitespaceErrStore{JobCatalogStore: newJobCatalogMemoryStore()})
-		if rec.Code != http.StatusOK {
+		if rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		if !strings.Contains(rec.Body.String(), "jobcatalog_view_invalid") {
@@ -145,7 +148,7 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("list groups error", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=PKG1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), groupsErr: errors.New("boom")})
 		if rec.Code != http.StatusInternalServerError {
@@ -154,7 +157,7 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("list groups stable error", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=PKG1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), groupsErr: errors.New("JOB_CATALOG_LIST_GROUPS_FAILED")})
 		if rec.Code != http.StatusUnprocessableEntity {
@@ -163,7 +166,7 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("list families error", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=PKG1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), familiesErr: errors.New("boom")})
 		if rec.Code != http.StatusInternalServerError {
@@ -172,7 +175,7 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("list families stable error", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=PKG1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), familiesErr: errors.New("JOB_CATALOG_LIST_FAMILIES_FAILED")})
 		if rec.Code != http.StatusUnprocessableEntity {
@@ -181,7 +184,7 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("list levels error", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=PKG1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), levelsErr: errors.New("boom")})
 		if rec.Code != http.StatusInternalServerError {
@@ -190,7 +193,7 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("list levels stable error", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=PKG1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), levelsErr: errors.New("JOB_CATALOG_LIST_LEVELS_FAILED")})
 		if rec.Code != http.StatusUnprocessableEntity {
@@ -199,7 +202,7 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("list profiles error", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=PKG1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), profilesErr: errors.New("boom")})
 		if rec.Code != http.StatusInternalServerError {
@@ -208,7 +211,7 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("list profiles stable error", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=PKG1", "")
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=PKG1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogListErrStore{JobCatalogStore: newJobCatalogMemoryStore(), profilesErr: errors.New("JOB_CATALOG_LIST_PROFILES_FAILED")})
 		if rec.Code != http.StatusUnprocessableEntity {
@@ -216,7 +219,7 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 		}
 	})
 
-	t.Run("package selection success", func(t *testing.T) {
+	t.Run("setid selection success", func(t *testing.T) {
 		store := newJobCatalogMemoryStore().(*jobcatalogMemoryStore)
 		if err := store.CreateJobFamilyGroup(context.Background(), "t1", "PKG1", "2026-01-01", "G1", "Group 1", ""); err != nil {
 			t.Fatal(err)
@@ -231,13 +234,13 @@ func TestHandleJobCatalogAPI_Branches(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&package_code=pkg1", "")
+		req := tenantAdminAPIRequest(http.MethodGet, "/jobcatalog/api/catalog?as_of=2026-01-01&setid=pkg1", "")
 		rec := httptest.NewRecorder()
 		handleJobCatalogAPI(rec, req, defaultJobCatalogSetIDStore(), store)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 		}
-		if !strings.Contains(rec.Body.String(), `"package_code":"PKG1"`) || !strings.Contains(rec.Body.String(), `"job_family_group_code":"G1"`) {
+		if !strings.Contains(rec.Body.String(), `"setid":"PKG1"`) || !strings.Contains(rec.Body.String(), `"job_family_group_code":"G1"`) {
 			t.Fatalf("unexpected body: %q", rec.Body.String())
 		}
 	})
@@ -301,7 +304,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("invalid effective date", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"bad"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"bad"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusBadRequest {
@@ -309,7 +312,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 		}
 	})
 
-	t.Run("package required", func(t *testing.T) {
+	t.Run("setid required", func(t *testing.T) {
 		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"effective_date":"2026-01-01"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
@@ -319,7 +322,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("view forbidden without principal", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", bytes.NewBufferString(`{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_family_group","code":"G1","name":"Group 1"}`))
+		req := httptest.NewRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", bytes.NewBufferString(`{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_family_group","code":"G1","name":"Group 1"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1", Name: "T"}))
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
@@ -329,10 +332,10 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("view error code fallback when errMsg trims empty", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_family_group","code":"G1","name":"Group 1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_family_group","code":"G1","name":"Group 1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), jobCatalogResolvePkgWhitespaceErrStore{JobCatalogStore: newJobCatalogMemoryStore()})
-		if rec.Code != http.StatusOK {
+		if rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		if !strings.Contains(rec.Body.String(), "jobcatalog_view_invalid") {
@@ -341,7 +344,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("create group invalid request", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_family_group","code":"","name":""}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_family_group","code":"","name":""}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusBadRequest {
@@ -350,7 +353,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("create group ok (default action)", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","code":"G1","name":"Group 1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","code":"G1","name":"Group 1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusCreated {
@@ -360,7 +363,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 
 	t.Run("create group store error", func(t *testing.T) {
 		store := jobCatalogWriteErrStore{JobCatalogStore: newJobCatalogMemoryStore(), createGroupErr: errors.New("boom")}
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","code":"G1","name":"Group 1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","code":"G1","name":"Group 1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), store)
 		if rec.Code != http.StatusUnprocessableEntity {
@@ -369,7 +372,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("create family invalid request", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_family","code":"F1","name":"","group_code":""}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_family","code":"F1","name":"","group_code":""}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusBadRequest {
@@ -378,7 +381,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("create family ok", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_family","code":"F1","name":"Family 1","group_code":"G1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_family","code":"F1","name":"Family 1","group_code":"G1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusCreated {
@@ -388,7 +391,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 
 	t.Run("create family store error", func(t *testing.T) {
 		store := jobCatalogWriteErrStore{JobCatalogStore: newJobCatalogMemoryStore(), createFamilyErr: errors.New("boom")}
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_family","code":"F1","name":"Family 1","group_code":"G1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_family","code":"F1","name":"Family 1","group_code":"G1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), store)
 		if rec.Code != http.StatusUnprocessableEntity {
@@ -397,7 +400,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("update family group invalid request", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"update_job_family_group","code":"","group_code":""}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"update_job_family_group","code":"","group_code":""}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusBadRequest {
@@ -410,7 +413,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 		if err := store.CreateJobFamily(context.Background(), "t1", "PKG1", "2026-01-01", "F1", "Family 1", "", "G0"); err != nil {
 			t.Fatal(err)
 		}
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"update_job_family_group","code":"F1","group_code":"G1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"update_job_family_group","code":"F1","group_code":"G1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), store)
 		if rec.Code != http.StatusOK {
@@ -420,7 +423,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 
 	t.Run("update family group store error", func(t *testing.T) {
 		store := jobCatalogWriteErrStore{JobCatalogStore: newJobCatalogMemoryStore(), updateFamilyGroupErr: errors.New("boom")}
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"update_job_family_group","code":"F1","group_code":"G1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"update_job_family_group","code":"F1","group_code":"G1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), store)
 		if rec.Code != http.StatusUnprocessableEntity {
@@ -429,7 +432,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("create level invalid request", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_level","code":"","name":""}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_level","code":"","name":""}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusBadRequest {
@@ -438,7 +441,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("create level ok", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_level","code":"L1","name":"Level 1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_level","code":"L1","name":"Level 1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusCreated {
@@ -448,7 +451,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 
 	t.Run("create level store error", func(t *testing.T) {
 		store := jobCatalogWriteErrStore{JobCatalogStore: newJobCatalogMemoryStore(), createLevelErr: errors.New("boom")}
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_level","code":"L1","name":"Level 1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_level","code":"L1","name":"Level 1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), store)
 		if rec.Code != http.StatusUnprocessableEntity {
@@ -457,7 +460,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("create profile invalid request", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_profile","code":"P1","name":"Profile 1","family_codes_csv":"","primary_family_code":""}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_profile","code":"P1","name":"Profile 1","family_codes_csv":"","primary_family_code":""}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusBadRequest {
@@ -466,7 +469,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("create profile ok", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_profile","code":"P1","name":"Profile 1","family_codes_csv":"F1,F2","primary_family_code":"F1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_profile","code":"P1","name":"Profile 1","family_codes_csv":"F1,F2","primary_family_code":"F1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusCreated {
@@ -476,7 +479,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 
 	t.Run("create profile store error", func(t *testing.T) {
 		store := jobCatalogWriteErrStore{JobCatalogStore: newJobCatalogMemoryStore(), createProfileErr: errors.New("boom")}
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"create_job_profile","code":"P1","name":"Profile 1","family_codes_csv":"F1","primary_family_code":"F1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"create_job_profile","code":"P1","name":"Profile 1","family_codes_csv":"F1","primary_family_code":"F1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), store)
 		if rec.Code != http.StatusUnprocessableEntity {
@@ -485,7 +488,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("default effective_date", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","code":"G1","name":"Group 1"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","code":"G1","name":"Group 1"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusBadRequest {
@@ -494,7 +497,7 @@ func TestHandleJobCatalogWriteAPI_Branches(t *testing.T) {
 	})
 
 	t.Run("unknown action", func(t *testing.T) {
-		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"package_code":"PKG1","effective_date":"2026-01-01","action":"nope"}`)
+		req := tenantAdminAPIRequest(http.MethodPost, "/jobcatalog/api/catalog/actions", `{"setid":"PKG1","effective_date":"2026-01-01","action":"nope"}`)
 		rec := httptest.NewRecorder()
 		handleJobCatalogWriteAPI(rec, req, defaultJobCatalogSetIDStore(), newJobCatalogMemoryStore())
 		if rec.Code != http.StatusBadRequest {

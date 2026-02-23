@@ -35,11 +35,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, isValid, parseISO } from 'date-fns'
 import { useSearchParams } from 'react-router-dom'
 import { useAppPreferences } from '../../app/providers/AppPreferencesContext'
-import {
-  applyJobCatalogAction,
-  getJobCatalog,
-  listOwnedJobCatalogPackages
-} from '../../api/jobCatalog'
+import { applyJobCatalogAction, getJobCatalog } from '../../api/jobCatalog'
+import { listSetIDs } from '../../api/setids'
 import { DataGridPage } from '../../components/DataGridPage'
 import { FilterBar } from '../../components/FilterBar'
 import { PageHeader } from '../../components/PageHeader'
@@ -212,12 +209,12 @@ export function JobCatalogPage() {
   const fallbackAsOf = useMemo(() => todayISO(), [])
 
   const asOf = parseDateOrDefault(searchParams.get('as_of'), fallbackAsOf)
-  const packageCode = parseOptionalValue(searchParams.get('package_code'))
+  const setID = parseOptionalValue(searchParams.get('setid'))
   const selectedTab = parseTabOrDefault(searchParams.get('tab'))
   const selectedGroupCode = parseOptionalValue(searchParams.get('group_code'))
 
   const [asOfInput, setAsOfInput] = useState<Date | null>(toDateValue(asOf))
-  const [packageCodeInput, setPackageCodeInput] = useState(packageCode)
+  const [setIDInput, setSetIDInput] = useState(setID)
   const [groupKeywordInput, setGroupKeywordInput] = useState('')
   const [listKeywordInput, setListKeywordInput] = useState('')
   const [pageError, setPageError] = useState<string | null>(null)
@@ -264,21 +261,21 @@ export function JobCatalogPage() {
   }, [asOf])
 
   useEffect(() => {
-    setPackageCodeInput(packageCode)
-  }, [packageCode])
+    setSetIDInput(setID)
+  }, [setID])
 
   const updateQuery = useCallback(
-    (patch: { asOf?: string; packageCode?: string | null; tab?: JobCatalogTab; groupCode?: string | null }) => {
+    (patch: { asOf?: string; setID?: string | null; tab?: JobCatalogTab; groupCode?: string | null }) => {
       const nextParams = new URLSearchParams(searchParams)
 
       if (Object.hasOwn(patch, 'asOf') && patch.asOf) {
         nextParams.set('as_of', patch.asOf)
       }
-      if (Object.hasOwn(patch, 'packageCode')) {
-        if (patch.packageCode && patch.packageCode.trim().length > 0) {
-          nextParams.set('package_code', patch.packageCode.trim())
+      if (Object.hasOwn(patch, 'setID')) {
+        if (patch.setID && patch.setID.trim().length > 0) {
+          nextParams.set('setid', patch.setID.trim())
         } else {
-          nextParams.delete('package_code')
+          nextParams.delete('setid')
         }
       }
       if (Object.hasOwn(patch, 'tab') && patch.tab) {
@@ -297,15 +294,15 @@ export function JobCatalogPage() {
     [searchParams, setSearchParams]
   )
 
-  const packagesQuery = useQuery({
-    queryKey: ['jobcatalog', 'owned-packages', asOf],
-    queryFn: async () => listOwnedJobCatalogPackages({ asOf })
+  const setIDsQuery = useQuery({
+    queryKey: ['jobcatalog', 'setids'],
+    queryFn: listSetIDs
   })
 
   const catalogQuery = useQuery({
-    enabled: packageCode.length > 0,
-    queryKey: ['jobcatalog', 'catalog', asOf, packageCode],
-    queryFn: async () => getJobCatalog({ asOf, packageCode })
+    enabled: setID.length > 0,
+    queryKey: ['jobcatalog', 'catalog', asOf, setID],
+    queryFn: async () => getJobCatalog({ asOf, setid: setID })
   })
 
   const actionMutation = useMutation({
@@ -313,17 +310,16 @@ export function JobCatalogPage() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['jobcatalog', 'catalog'] }),
-        queryClient.invalidateQueries({ queryKey: ['jobcatalog', 'owned-packages'] })
+        queryClient.invalidateQueries({ queryKey: ['jobcatalog', 'setids'] })
       ])
     }
   })
 
-  const ownedPackages = packagesQuery.data ?? []
+  const setIDOptions = setIDsQuery.data?.setids.map((item) => item.setid) ?? []
   const catalog = catalogQuery.data ?? null
-  const selectedOwnedPackage = ownedPackages.find((item) => item.package_code === packageCode) ?? null
-  const ownerSetID = catalog?.view.owner_setid ?? selectedOwnedPackage?.owner_setid ?? '-'
+  const ownerSetID = (catalog?.view.owner_setid ?? setID) || '-'
   const isReadOnly = catalog?.view.read_only ?? false
-  const disableWriteActions = isReadOnly || packageCode.trim().length === 0
+  const disableWriteActions = isReadOnly || setID.trim().length === 0
 
   const groupRows = useMemo<GroupRow[]>(
     () =>
@@ -721,30 +717,30 @@ export function JobCatalogPage() {
     setPageError(null)
     updateQuery({
       asOf: nextAsOf,
-      packageCode: packageCodeInput,
+      setID: setIDInput,
       groupCode: selectedGroupCode.length > 0 ? selectedGroupCode : null
     })
-  }, [asOfInput, packageCodeInput, selectedGroupCode, t, updateQuery])
+  }, [asOfInput, setIDInput, selectedGroupCode, t, updateQuery])
 
   const resetContext = useCallback(() => {
     const defaultAsOf = todayISO()
     setAsOfInput(toDateValue(defaultAsOf))
-    setPackageCodeInput('')
+    setSetIDInput('')
     setGroupKeywordInput('')
     setListKeywordInput('')
     setPageError(null)
     updateQuery({
       asOf: defaultAsOf,
-      packageCode: null,
+      setID: null,
       groupCode: null
     })
   }, [updateQuery])
 
   async function submitAction(
-    payload: Omit<Parameters<typeof applyJobCatalogAction>[0], 'package_code'>,
+    payload: Omit<Parameters<typeof applyJobCatalogAction>[0], 'setid'>,
     successMessage: string
   ): Promise<{ ok: true } | { ok: false; message: string }> {
-    if (packageCode.trim().length === 0) {
+    if (setID.trim().length === 0) {
       const message = t('jobcatalog_error_package_required')
       setPageError(message)
       return { ok: false, message }
@@ -753,7 +749,7 @@ export function JobCatalogPage() {
     try {
       await actionMutation.mutateAsync({
         ...payload,
-        package_code: packageCode
+        setid: setID
       })
       setToastMessage(successMessage)
       return { ok: true }
@@ -934,7 +930,7 @@ export function JobCatalogPage() {
 
       <Stack spacing={2}>
         {pageError ? <Alert severity='error'>{pageError}</Alert> : null}
-        {packagesQuery.isError ? <Alert severity='error'>{t('jobcatalog_error_owned_packages_load')}</Alert> : null}
+        {setIDsQuery.isError ? <Alert severity='error'>{t('jobcatalog_error_owned_packages_load')}</Alert> : null}
         {catalogQuery.isError ? <Alert severity='error'>{t('jobcatalog_error_catalog_load')}</Alert> : null}
 
         <Box sx={{ position: 'sticky', top: 0, zIndex: 5 }}>
@@ -952,9 +948,9 @@ export function JobCatalogPage() {
             />
             <Autocomplete
               freeSolo
-              onChange={(_, value) => setPackageCodeInput(value ?? '')}
-              onInputChange={(_, value) => setPackageCodeInput(value)}
-              options={ownedPackages.map((item) => item.package_code)}
+              onChange={(_, value) => setSetIDInput(value ?? '')}
+              onInputChange={(_, value) => setSetIDInput(value)}
+              options={setIDOptions}
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -963,7 +959,7 @@ export function JobCatalogPage() {
                   size='small'
                 />
               )}
-              value={packageCodeInput}
+              value={setIDInput}
             />
             <Button onClick={applyContext} variant='contained'>
               {t('jobcatalog_filter_apply_context')}
@@ -983,7 +979,7 @@ export function JobCatalogPage() {
               />
               <Chip
                 color='primary'
-                label={`${t('jobcatalog_filter_package_code')}: ${packageCode || t('jobcatalog_context_no_package')}`}
+                label={`${t('jobcatalog_filter_package_code')}: ${setID || t('jobcatalog_context_no_package')}`}
                 size='small'
                 variant='outlined'
               />
@@ -1005,14 +1001,13 @@ export function JobCatalogPage() {
 
           <SetIDExplainPanel
             initialAsOf={asOf}
-            initialScopeCode='jobcatalog'
             initialSetID={ownerSetID === '-' ? '' : ownerSetID}
             title='SetID Explain（JobCatalog）'
-            subtitle='用于查看当前 package 上下文的命中原因；可复制 trace_id / request_id 排障。'
+            subtitle='用于查看当前 SetID 上下文的命中原因；可复制 trace_id / request_id 排障。'
           />
         </Box>
 
-        {packageCode.length === 0 ? (
+        {setID.length === 0 ? (
           <Alert severity='info'>{t('jobcatalog_info_select_package')}</Alert>
         ) : (
           <>
@@ -1228,7 +1223,7 @@ export function JobCatalogPage() {
           <Stack spacing={1.5} sx={{ mt: 0.5 }}>
             {dialogError ? <Alert severity='error'>{dialogError}</Alert> : null}
             <Typography color='text.secondary' variant='body2'>
-              {t('jobcatalog_dialog_package_readonly', { packageCode: packageCode || '-' })}
+              {t('jobcatalog_dialog_package_readonly', { packageCode: setID || '-' })}
             </Typography>
             <TextField
               fullWidth
@@ -1296,7 +1291,7 @@ export function JobCatalogPage() {
           <Stack spacing={1.5} sx={{ mt: 0.5 }}>
             {dialogError ? <Alert severity='error'>{dialogError}</Alert> : null}
             <Typography color='text.secondary' variant='body2'>
-              {t('jobcatalog_dialog_package_readonly', { packageCode: packageCode || '-' })}
+              {t('jobcatalog_dialog_package_readonly', { packageCode: setID || '-' })}
             </Typography>
             <TextField
               fullWidth
@@ -1383,7 +1378,7 @@ export function JobCatalogPage() {
           <Stack spacing={1.5} sx={{ mt: 0.5 }}>
             {dialogError ? <Alert severity='error'>{dialogError}</Alert> : null}
             <Typography color='text.secondary' variant='body2'>
-              {t('jobcatalog_dialog_package_readonly', { packageCode: packageCode || '-' })}
+              {t('jobcatalog_dialog_package_readonly', { packageCode: setID || '-' })}
             </Typography>
             <TextField
               fullWidth
@@ -1456,7 +1451,7 @@ export function JobCatalogPage() {
           <Stack spacing={1.5} sx={{ mt: 0.5 }}>
             {dialogError ? <Alert severity='error'>{dialogError}</Alert> : null}
             <Typography color='text.secondary' variant='body2'>
-              {t('jobcatalog_dialog_package_readonly', { packageCode: packageCode || '-' })}
+              {t('jobcatalog_dialog_package_readonly', { packageCode: setID || '-' })}
             </Typography>
             <TextField
               fullWidth
@@ -1524,7 +1519,7 @@ export function JobCatalogPage() {
           <Stack spacing={1.5} sx={{ mt: 0.5 }}>
             {dialogError ? <Alert severity='error'>{dialogError}</Alert> : null}
             <Typography color='text.secondary' variant='body2'>
-              {t('jobcatalog_dialog_package_readonly', { packageCode: packageCode || '-' })}
+              {t('jobcatalog_dialog_package_readonly', { packageCode: setID || '-' })}
             </Typography>
             <TextField
               fullWidth

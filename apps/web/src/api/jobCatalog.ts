@@ -1,24 +1,8 @@
 import { httpClient } from './httpClient'
 
-export interface OwnedScopePackage {
-  package_id: string
-  scope_code: string
-  package_code: string
-  owner_setid: string
-  name: string
-  status: string
-  effective_date: string
-}
-
-export async function listOwnedJobCatalogPackages(options: { asOf: string }): Promise<OwnedScopePackage[]> {
-  const query = new URLSearchParams({ scope_code: 'jobcatalog', as_of: options.asOf })
-  return httpClient.get<OwnedScopePackage[]>(`/org/api/owned-scope-packages?${query.toString()}`)
-}
-
 export interface JobCatalogView {
   has_selection: boolean
   read_only: boolean
-  package_code?: string
   setid?: string
   owner_setid?: string
 }
@@ -70,13 +54,9 @@ export interface JobCatalogResponse {
 
 export async function getJobCatalog(options: {
   asOf: string
-  packageCode?: string
   setid?: string
 }): Promise<JobCatalogResponse> {
   const query = new URLSearchParams({ as_of: options.asOf })
-  if (options.packageCode) {
-    query.set('package_code', options.packageCode)
-  }
   if (options.setid) {
     query.set('setid', options.setid)
   }
@@ -85,7 +65,7 @@ export async function getJobCatalog(options: {
 
 export async function applyJobCatalogAction(request: {
   action: string
-  package_code: string
+  setid: string
   effective_date: string
   code?: string
   name?: string
@@ -96,4 +76,3 @@ export async function applyJobCatalogAction(request: {
 }): Promise<unknown> {
   return httpClient.post('/jobcatalog/api/catalog/actions', request)
 }
-

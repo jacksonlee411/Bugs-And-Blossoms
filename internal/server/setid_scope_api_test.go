@@ -332,6 +332,24 @@ func TestHandleOwnedScopePackagesAPI_Get(t *testing.T) {
 			t.Fatalf("unexpected body: %q", rec.Body.String())
 		}
 	})
+
+	t.Run("nil rows normalized to empty", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/owned-scope-packages?scope"+"_code=jobcatalog&as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		req = req.WithContext(withPrincipal(req.Context(), Principal{ID: "p1", TenantID: "t1", RoleSlug: "tenant-admin", Status: "active"}))
+		rec := httptest.NewRecorder()
+		handleOwnedScopePackagesAPI(rec, req, scopeAPIStore{
+			listOwnedScopePackagesFn: func(context.Context, string, string, string) ([]OwnedScopePackage, error) {
+				return nil, nil
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		if strings.TrimSpace(rec.Body.String()) != "[]" {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
+		}
+	})
 }
 
 func TestHandleScopePackagesAPI_MethodNotAllowed(t *testing.T) {
@@ -795,6 +813,24 @@ func TestHandleGlobalScopePackagesAPI(t *testing.T) {
 		})
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
+		}
+	})
+
+	t.Run("get lowercase actor header and nil rows", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/org/api/global-scope-packages?scope"+"_code=jobcatalog", nil)
+		req.Header.Set("x-actor-scope", "saas")
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleGlobalScopePackagesAPI(rec, req, scopeAPIStore{
+			listGlobalScopePackagesFn: func(context.Context, string) ([]ScopePackage, error) {
+				return nil, nil
+			},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if strings.TrimSpace(rec.Body.String()) != "[]" {
+			t.Fatalf("unexpected body: %q", rec.Body.String())
 		}
 	})
 

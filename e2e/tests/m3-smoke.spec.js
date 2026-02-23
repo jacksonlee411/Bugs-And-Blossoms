@@ -132,7 +132,7 @@ test("smoke: superadmin -> create tenant -> /app (MUI SPA) -> org/person/staffin
   const createJobCatalogItem = async (action, body) => {
     const resp = await appContext.request.post("/jobcatalog/api/catalog/actions", {
       data: {
-        package_code: "DEFLT",
+        setid: "DEFLT",
         effective_date: asOf,
         action,
         ...body
@@ -209,7 +209,7 @@ test("smoke: superadmin -> create tenant -> /app (MUI SPA) -> org/person/staffin
   // UI sanity checks (MUI-only pages)
   await page.goto(`/app/org/setid`);
   await expect(page.getByRole("heading", { level: 2, name: "SetID Governance" })).toBeVisible();
-  await page.goto(`/app/jobcatalog?as_of=${asOf}&package_code=DEFLT`);
+  await page.goto(`/app/jobcatalog?as_of=${asOf}&setid=DEFLT`);
   await expect(page.getByRole("heading", { level: 2, name: "Job Catalog" })).toBeVisible();
   await page.goto(`/app/staffing/positions?as_of=${asOf}&org_code=${orgCode}`);
   await expect(page.getByRole("heading", { level: 2, name: "Staffing / Positions" })).toBeVisible();

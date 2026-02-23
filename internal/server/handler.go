@@ -95,6 +95,11 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 			setidStore = newSetIDMemoryStore()
 		}
 	}
+	if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
+		useSetIDStrategyRegistryStore(newSetIDStrategyRegistryPGStore(pgStore.pool))
+	} else {
+		useSetIDStrategyRegistryStore(nil)
+	}
 
 	if jobcatalogStore == nil {
 		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
@@ -307,35 +312,11 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-bindings", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetIDBindingsAPI(w, r, setidStore, orgStore)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleScopePackagesAPI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleScopePackagesAPI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/owned-scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleOwnedScopePackagesAPI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/scope-packages/{package_id}/disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleScopePackageDisableAPI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/scope-subscriptions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleScopeSubscriptionsAPI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/scope-subscriptions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleScopeSubscriptionsAPI(w, r, setidStore)
-	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/global-setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleGlobalSetIDsAPI(w, r, setidStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/global-setids", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleGlobalSetIDsAPI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/global-scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleGlobalScopePackagesAPI(w, r, setidStore)
-	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/global-scope-packages", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleGlobalScopePackagesAPI(w, r, setidStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-strategy-registry", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetIDStrategyRegistryAPI(w, r)
