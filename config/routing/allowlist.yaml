@@ -155,6 +155,9 @@ entrypoints:
       - path: /org/api/org-units/append-capabilities
         methods: [GET]
         route_class: internal_api
+      - path: /org/api/org-units/create-field-decisions
+        methods: [GET]
+        route_class: internal_api
       - path: /org/api/org-units/details
         methods: [GET]
         route_class: internal_api

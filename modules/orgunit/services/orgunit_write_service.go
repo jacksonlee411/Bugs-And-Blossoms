@@ -43,6 +43,10 @@ const (
 	errDefaultRuleRequired            = "DEFAULT_RULE_REQUIRED"
 	errDefaultRuleEvalFailed          = "DEFAULT_RULE_EVAL_FAILED"
 	errFieldPolicyExprInvalid         = "FIELD_POLICY_EXPR_INVALID"
+	errFieldOptionNotAllowed          = "FIELD_OPTION_NOT_ALLOWED"
+	errFieldRequiredValueMissing      = "FIELD_REQUIRED_VALUE_MISSING"
+	errFieldPolicyMissing             = "FIELD_POLICY_MISSING"
+	errFieldPolicyConflict            = "FIELD_POLICY_CONFLICT"
 	errOrgCodeExhausted               = "ORG_CODE_EXHAUSTED"
 	errOrgCodeConflict                = "ORG_CODE_CONFLICT"
 )
@@ -100,6 +104,7 @@ type WriteOrgUnitRequest struct {
 	OrgCode             string
 	EffectiveDate       string
 	TargetEffectiveDate string
+	PolicyVersion       string
 	RequestID           string
 	Patch               OrgUnitWritePatch
 	InitiatorUUID       string
@@ -221,6 +226,17 @@ type orgUnitFieldPolicyResolver interface {
 	) (types.TenantFieldPolicy, bool, error)
 }
 
+type orgUnitSetIDStrategyFieldDecisionResolver interface {
+	ResolveSetIDStrategyFieldDecision(
+		ctx context.Context,
+		tenantID string,
+		capabilityKey string,
+		fieldKey string,
+		businessUnitID string,
+		asOf string,
+	) (types.SetIDStrategyFieldDecision, bool, error)
+}
+
 type orgUnitCreateAutoCodeSubmitter interface {
 	SubmitCreateEventWithGeneratedCode(
 		ctx context.Context,
@@ -257,6 +273,10 @@ const (
 	orgUnitDefaultOrgCodeWidth  = 6
 	orgUnitPolicyDisabledStatus = "disabled"
 	orgUnitPolicyEnabledStatus  = "active"
+
+	orgUnitCreateFieldPolicyCapabilityKey = "org.orgunit_create.field_policy"
+	orgUnitCreateFieldOrgCode             = "org_code"
+	orgUnitCreateFieldOrgType             = "d_org_type"
 )
 
 type globalDictResolver struct{}
@@ -1605,14 +1625,27 @@ func (s *orgUnitWriteService) applyCreatePolicyDefaults(
 	fieldConfigs []types.TenantFieldConfig,
 	req *WriteOrgUnitRequest,
 ) (*orgUnitAutoCodeSpec, error) {
-	_ = fieldConfigs // M1 runtime scope: org_code only.
+	if resolver, ok := s.store.(orgUnitSetIDStrategyFieldDecisionResolver); ok {
+		return s.applyCreatePolicyDefaultsFromSetIDRegistry(ctx, tenantID, effectiveDate, req, resolver)
+	}
+	return s.applyCreatePolicyDefaultsFromTenantFieldPolicy(ctx, tenantID, effectiveDate, fieldConfigs, req)
+}
+
+func (s *orgUnitWriteService) applyCreatePolicyDefaultsFromTenantFieldPolicy(
+	ctx context.Context,
+	tenantID string,
+	effectiveDate string,
+	fieldConfigs []types.TenantFieldConfig,
+	req *WriteOrgUnitRequest,
+) (*orgUnitAutoCodeSpec, error) {
+	_ = fieldConfigs // fallback path for compatibility tests/stubs.
 
 	resolver, ok := s.store.(orgUnitFieldPolicyResolver)
 	if !ok {
 		return nil, nil
 	}
 	policy := types.TenantFieldPolicy{
-		FieldKey:     "org_code",
+		FieldKey:     orgUnitCreateFieldOrgCode,
 		ScopeType:    orgUnitPolicyScopeGlobal,
 		ScopeKey:     orgUnitPolicyScopeGlobalKey,
 		Maintainable: true,
@@ -1621,7 +1654,7 @@ func (s *orgUnitWriteService) applyCreatePolicyDefaults(
 	resolved, found, err := resolver.ResolveTenantFieldPolicy(
 		ctx,
 		tenantID,
-		"org_code",
+		orgUnitCreateFieldOrgCode,
 		orgUnitPolicyScopeForm,
 		orgUnitCreateDialogScopeKey,
 		effectiveDate,
@@ -1634,10 +1667,8 @@ func (s *orgUnitWriteService) applyCreatePolicyDefaults(
 	}
 
 	provided := strings.TrimSpace(req.OrgCode) != ""
-	if !policy.Maintainable {
-		if provided {
-			return nil, errors.New(errFieldNotMaintainable)
-		}
+	if !policy.Maintainable && provided {
+		return nil, errors.New(errFieldNotMaintainable)
 	}
 
 	mode := strings.ToUpper(strings.TrimSpace(policy.DefaultMode))
@@ -1666,6 +1697,228 @@ func (s *orgUnitWriteService) applyCreatePolicyDefaults(
 		}
 		return nil, errors.New(errDefaultRuleEvalFailed)
 	}
+}
+
+func (s *orgUnitWriteService) applyCreatePolicyDefaultsFromSetIDRegistry(
+	ctx context.Context,
+	tenantID string,
+	effectiveDate string,
+	req *WriteOrgUnitRequest,
+	resolver orgUnitSetIDStrategyFieldDecisionResolver,
+) (*orgUnitAutoCodeSpec, error) {
+	businessUnitID, err := s.resolveCreateBusinessUnitID(ctx, tenantID, req.Patch.ParentOrgCode)
+	if err != nil {
+		return nil, err
+	}
+
+	orgCodeDecision, found, err := resolver.ResolveSetIDStrategyFieldDecision(
+		ctx,
+		tenantID,
+		orgUnitCreateFieldPolicyCapabilityKey,
+		orgUnitCreateFieldOrgCode,
+		businessUnitID,
+		effectiveDate,
+	)
+	if err != nil {
+		return nil, mapSetIDFieldDecisionError(err)
+	}
+	if !found {
+		return nil, errors.New(errFieldPolicyMissing)
+	}
+	orgCodeInput := strings.TrimSpace(req.OrgCode)
+	orgCodeResult, err := resolveCreateFieldDecisionValue(orgUnitCreateFieldOrgCode, orgCodeInput, orgCodeInput != "", orgCodeDecision)
+	if err != nil {
+		return nil, err
+	}
+	if orgCodeDecision.Required && orgCodeResult.value == "" && orgCodeResult.autoCodeSpec == nil {
+		return nil, errors.New(errFieldRequiredValueMissing)
+	}
+	if err := validateFieldOptionAllowed(orgCodeResult.value, orgCodeDecision.AllowedValueCodes); err != nil {
+		return nil, err
+	}
+	req.OrgCode = orgCodeResult.value
+	if orgCodeResult.autoCodeSpec != nil {
+		req.OrgCode = ""
+	}
+
+	orgTypeDecision, found, err := resolver.ResolveSetIDStrategyFieldDecision(
+		ctx,
+		tenantID,
+		orgUnitCreateFieldPolicyCapabilityKey,
+		orgUnitCreateFieldOrgType,
+		businessUnitID,
+		effectiveDate,
+	)
+	if err != nil {
+		return nil, mapSetIDFieldDecisionError(err)
+	}
+	if !found {
+		return nil, errors.New(errFieldPolicyMissing)
+	}
+
+	providedOrgType, orgTypeProvided, err := readCreateExtFieldString(req.Patch.Ext, orgUnitCreateFieldOrgType)
+	if err != nil {
+		return nil, err
+	}
+	orgTypeResult, err := resolveCreateFieldDecisionValue(orgUnitCreateFieldOrgType, providedOrgType, orgTypeProvided, orgTypeDecision)
+	if err != nil {
+		return nil, err
+	}
+	if orgTypeDecision.Required && orgTypeResult.value == "" {
+		return nil, errors.New(errFieldRequiredValueMissing)
+	}
+	if err := validateFieldOptionAllowed(orgTypeResult.value, orgTypeDecision.AllowedValueCodes); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(orgTypeResult.value) == "" {
+		if len(req.Patch.Ext) > 0 {
+			delete(req.Patch.Ext, orgUnitCreateFieldOrgType)
+			if len(req.Patch.Ext) == 0 {
+				req.Patch.Ext = nil
+			}
+		}
+	} else {
+		if req.Patch.Ext == nil {
+			req.Patch.Ext = make(map[string]any, 1)
+		}
+		req.Patch.Ext[orgUnitCreateFieldOrgType] = orgTypeResult.value
+	}
+
+	return orgCodeResult.autoCodeSpec, nil
+}
+
+type createFieldDecisionValue struct {
+	value        string
+	autoCodeSpec *orgUnitAutoCodeSpec
+}
+
+func resolveCreateFieldDecisionValue(fieldKey string, provided string, providedByClient bool, decision types.SetIDStrategyFieldDecision) (createFieldDecisionValue, error) {
+	providedValue := strings.TrimSpace(provided)
+	if !decision.Maintainable && providedValue != "" {
+		return createFieldDecisionValue{}, errors.New(errFieldNotMaintainable)
+	}
+
+	if decision.Maintainable {
+		if providedByClient {
+			// Explicit clear on optional fields must persist as empty instead of refilling default values.
+			if providedValue == "" {
+				return createFieldDecisionValue{}, nil
+			}
+			return createFieldDecisionValue{value: providedValue}, nil
+		}
+	}
+
+	ruleExpr := strings.TrimSpace(decision.DefaultRuleRef)
+	defaultValue := strings.TrimSpace(decision.DefaultValue)
+	if ruleExpr != "" {
+		resolvedValue, spec, err := resolveCreateDefaultFromRule(fieldKey, ruleExpr)
+		if err != nil {
+			return createFieldDecisionValue{}, err
+		}
+		return createFieldDecisionValue{
+			value:        strings.TrimSpace(resolvedValue),
+			autoCodeSpec: spec,
+		}, nil
+	}
+	if defaultValue != "" {
+		return createFieldDecisionValue{value: defaultValue}, nil
+	}
+	if decision.Maintainable {
+		return createFieldDecisionValue{}, nil
+	}
+	return createFieldDecisionValue{}, errors.New(errDefaultRuleRequired)
+}
+
+func resolveCreateDefaultFromRule(fieldKey string, expr string) (string, *orgUnitAutoCodeSpec, error) {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return "", nil, errors.New(errDefaultRuleRequired)
+	}
+	if fieldKey == orgUnitCreateFieldOrgCode {
+		spec, err := parseNextOrgCodeRule(expr)
+		if err == nil {
+			return "", spec, nil
+		}
+		if err.Error() == errFieldPolicyExprInvalid {
+			return "", nil, err
+		}
+	}
+	value, err := evaluateCELExprToString(expr)
+	if err != nil {
+		return "", nil, errors.New(errDefaultRuleEvalFailed)
+	}
+	return value, nil, nil
+}
+
+func validateFieldOptionAllowed(value string, allowed []string) error {
+	value = strings.TrimSpace(value)
+	if value == "" || len(allowed) == 0 {
+		return nil
+	}
+	for _, option := range allowed {
+		if strings.TrimSpace(option) == value {
+			return nil
+		}
+	}
+	return errors.New(errFieldOptionNotAllowed)
+}
+
+func readCreateExtFieldString(ext map[string]any, fieldKey string) (string, bool, error) {
+	if len(ext) == 0 {
+		return "", false, nil
+	}
+	raw, ok := ext[fieldKey]
+	if !ok {
+		return "", false, nil
+	}
+	if raw == nil {
+		return "", true, nil
+	}
+	value, ok := raw.(string)
+	if !ok {
+		return "", true, httperr.NewBadRequest(errOrgInvalidArgument)
+	}
+	return strings.TrimSpace(value), true, nil
+}
+
+func mapSetIDFieldDecisionError(err error) error {
+	code := strings.TrimSpace(err.Error())
+	switch code {
+	case errFieldPolicyMissing:
+		return errors.New(errFieldPolicyMissing)
+	case errFieldPolicyConflict:
+		return errors.New(errFieldPolicyConflict)
+	case "FIELD_DEFAULT_RULE_MISSING":
+		return errors.New(errDefaultRuleRequired)
+	default:
+		return err
+	}
+}
+
+func (s *orgUnitWriteService) resolveCreateBusinessUnitID(ctx context.Context, tenantID string, parentOrgCode *string) (string, error) {
+	if parentOrgCode == nil {
+		return "", nil
+	}
+	parentCodeRaw := strings.TrimSpace(*parentOrgCode)
+	if parentCodeRaw == "" {
+		return "", nil
+	}
+	parentCode, err := normalizeOrgCode(parentCodeRaw)
+	if err != nil {
+		return "", err
+	}
+	parentID, err := s.store.ResolveOrgID(ctx, tenantID, parentCode)
+	if err != nil {
+		if errors.Is(err, orgunitpkg.ErrOrgCodeNotFound) {
+			return "", errors.New(errParentNotFoundAsOf)
+		}
+		return "", err
+	}
+	businessUnitID := strconv.Itoa(parentID)
+	if len(businessUnitID) != 8 {
+		return "", errors.New(errFieldPolicyConflict)
+	}
+	return businessUnitID, nil
 }
 
 func parseNextOrgCodeRule(expr string) (*orgUnitAutoCodeSpec, error) {
@@ -1707,6 +1960,10 @@ var newOrgUnitWriteCELEnv = func() (*cel.Env, error) {
 	)
 }
 
+var newOrgUnitWriteCELProgram = func(env *cel.Env, ast *cel.Ast) (cel.Program, error) {
+	return env.Program(ast)
+}
+
 func compileCELExpr(expr string) error {
 	if _, ok := celCompileCache.Load(expr); ok {
 		return nil
@@ -1724,6 +1981,33 @@ func compileCELExpr(expr string) error {
 	}
 	celCompileCache.Store(expr, struct{}{})
 	return nil
+}
+
+func evaluateCELExprToString(expr string) (string, error) {
+	env, err := newOrgUnitWriteCELEnv()
+	if err != nil {
+		return "", err
+	}
+	ast, iss := env.Compile(expr)
+	if iss != nil && iss.Err() != nil {
+		return "", iss.Err()
+	}
+	if ast.OutputType() != cel.StringType {
+		return "", errors.New("default expression must return string")
+	}
+	program, err := newOrgUnitWriteCELProgram(env, ast)
+	if err != nil {
+		return "", err
+	}
+	out, _, err := program.Eval(map[string]any{})
+	if err != nil {
+		return "", err
+	}
+	value, ok := out.Value().(string)
+	if !ok {
+		return "", errors.New("default expression must return string")
+	}
+	return value, nil
 }
 
 func mapCreateAutoCodeError(err error) error {

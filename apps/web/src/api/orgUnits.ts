@@ -237,6 +237,7 @@ export interface OrgUnitWriteAPIRequest {
   org_code: string
   effective_date: string
   target_effective_date?: string
+  policy_version?: string
   request_id: string
   patch: {
     name?: string
@@ -258,6 +259,39 @@ export interface OrgUnitWriteAPIResponse {
 
 export async function writeOrgUnit(request: OrgUnitWriteAPIRequest): Promise<OrgUnitWriteAPIResponse> {
   return httpClient.post<OrgUnitWriteAPIResponse>('/org/api/org-units/write', request)
+}
+
+export interface OrgUnitCreateFieldDecision {
+  capability_key: string
+  field_key: string
+  required: boolean
+  visible: boolean
+  maintainable: boolean
+  default_rule_ref?: string
+  resolved_default_value?: string
+  allowed_value_codes?: string[]
+}
+
+export interface OrgUnitCreateFieldDecisionsResponse {
+  capability_key: string
+  business_unit_id: string
+  as_of: string
+  policy_version: string
+  field_decisions: OrgUnitCreateFieldDecision[]
+}
+
+export async function getOrgUnitCreateFieldDecisions(options: {
+  effectiveDate: string
+  parentOrgCode?: string
+}): Promise<OrgUnitCreateFieldDecisionsResponse> {
+  const query = new URLSearchParams({
+    effective_date: options.effectiveDate
+  })
+  const parentOrgCode = options.parentOrgCode?.trim() ?? ''
+  if (parentOrgCode.length > 0) {
+    query.set('parent_org_code', parentOrgCode)
+  }
+  return httpClient.get<OrgUnitCreateFieldDecisionsResponse>(`/org/api/org-units/create-field-decisions?${query.toString()}`)
 }
 
 export interface OrgUnitWriteCapabilitiesResponse {

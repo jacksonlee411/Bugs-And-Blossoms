@@ -25,6 +25,7 @@ type orgUnitWriteAPIRequest struct {
 	OrgCode             string                      `json:"org_code"`
 	EffectiveDate       string                      `json:"effective_date"`
 	TargetEffectiveDate string                      `json:"target_effective_date"`
+	PolicyVersion       string                      `json:"policy_version"`
 	RequestID           string                      `json:"request_id"`
 	Patch               orgUnitWritePatchAPIRequest `json:"patch"`
 }
@@ -65,11 +66,41 @@ func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc org
 		return
 	}
 
+	intent := strings.TrimSpace(req.Intent)
+	effectiveDate := strings.TrimSpace(req.EffectiveDate)
+	policyVersion := strings.TrimSpace(req.PolicyVersion)
+	if intent == string(orgunitservices.OrgUnitWriteIntentCreateOrg) {
+		if policyVersion == "" {
+			routing.WriteError(
+				w,
+				r,
+				routing.RouteClassInternalAPI,
+				http.StatusBadRequest,
+				orgUnitErrFieldPolicyVersionRequired,
+				orgNodeWriteErrorMessage(errors.New(orgUnitErrFieldPolicyVersionRequired)),
+			)
+			return
+		}
+		activePolicyVersion := defaultPolicyActivationRuntime.activePolicyVersion(tenant.ID, orgUnitCreateFieldPolicyCapabilityKey)
+		if policyVersion != activePolicyVersion {
+			routing.WriteError(
+				w,
+				r,
+				routing.RouteClassInternalAPI,
+				http.StatusConflict,
+				orgUnitErrFieldPolicyVersionStale,
+				orgNodeWriteErrorMessage(errors.New(orgUnitErrFieldPolicyVersionStale)),
+			)
+			return
+		}
+	}
+
 	result, err := writeSvc.Write(r.Context(), tenant.ID, orgunitservices.WriteOrgUnitRequest{
-		Intent:              strings.TrimSpace(req.Intent),
+		Intent:              intent,
 		OrgCode:             strings.TrimSpace(req.OrgCode),
-		EffectiveDate:       strings.TrimSpace(req.EffectiveDate),
+		EffectiveDate:       effectiveDate,
 		TargetEffectiveDate: strings.TrimSpace(req.TargetEffectiveDate),
+		PolicyVersion:       policyVersion,
 		RequestID:           strings.TrimSpace(req.RequestID),
 		Patch: orgunitservices.OrgUnitWritePatch{
 			Name:           req.Patch.Name,

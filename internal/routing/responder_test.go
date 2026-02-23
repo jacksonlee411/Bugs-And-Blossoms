@@ -221,6 +221,12 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "ORG_NOT_FOUND_AS_OF", want: "在当前查询时点未找到目标组织。"},
 		{code: "ORG_CODE_NOT_FOUND", want: "组织编码不存在。"},
 		{code: "ORG_CODE_INVALID", want: "组织编码格式无效。"},
+		{code: "FIELD_OPTION_NOT_ALLOWED", want: "字段值不在允许范围内，请重新选择。"},
+		{code: "FIELD_REQUIRED_VALUE_MISSING", want: "必填字段缺少有效值，请补全后重试。"},
+		{code: "FIELD_POLICY_MISSING", want: "未找到匹配的字段策略，请刷新后重试。"},
+		{code: "FIELD_POLICY_CONFLICT", want: "字段策略存在冲突，请联系管理员。"},
+		{code: "FIELD_POLICY_VERSION_REQUIRED", want: "缺少策略版本，请刷新页面后重试。"},
+		{code: "FIELD_POLICY_VERSION_STALE", want: "策略版本已过期，请刷新页面后重试。"},
 		{code: "unknown", want: ""},
 	}
 

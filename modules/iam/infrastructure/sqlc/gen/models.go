@@ -736,6 +736,8 @@ type OrgunitSetidStrategyRegistry struct {
 	EndDate             pgtype.Date        `json:"end_date"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	Maintainable        bool               `json:"maintainable"`
+	AllowedValueCodes   []byte             `json:"allowed_value_codes"`
 }
 
 type OrgunitTenantFieldConfig struct {
