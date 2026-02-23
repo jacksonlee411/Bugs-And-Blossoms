@@ -390,6 +390,12 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/policies/rollback"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
 		t.Fatalf("expected internal policy rollback mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
 	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/functional-areas/state"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
+		t.Fatalf("expected internal functional area state mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/functional-areas/switch"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected internal functional area switch mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units"); !ok {
 		t.Fatal("expected ok=true")
 	}

@@ -1,6 +1,6 @@
 # DEV-PLAN-160：Capability Key Phase 10 UI 可视化交付与证据收口（承接 150 M8/M10）
 
-**状态**: 规划中（2026-02-23 04:50 UTC）
+**状态**: 已完成（2026-02-23 08:09 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：`DEV-PLAN-150` 工作流 I 与 M8/M10。
@@ -9,11 +9,11 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 交付 Capability Governance 导航入口与四子页：`Registry/Explain/Functional Area/Activation`。
-- [ ] 完成核心交互闭环：查询、校验、激活、回滚、解释查看。
-- [ ] 完成部分授权降级模式（骨架可见、操作禁用、申请入口）。
-- [ ] 关键拒绝场景展示“可读原因 + 下一步动作”。
-- [ ] 完成 E2E、截图/录屏、日志证据并归档 `docs/dev-records/`。
+- [X] 交付 Capability Governance 导航入口与四子页：`Registry/Explain/Functional Area/Activation`。
+- [X] 完成核心交互闭环：查询、校验、激活、回滚、解释查看。
+- [X] 完成部分授权降级模式（骨架可见、操作禁用、申请入口）。
+- [X] 关键拒绝场景展示“可读原因 + 下一步动作”。
+- [X] 完成 E2E、截图/录屏、日志证据并归档 `docs/dev-records/`。
 
 ### 2.2 非目标
 - 不重写权限内核与规则执行引擎。
@@ -67,11 +67,11 @@
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 用户链路算法
-1. [ ] 用户进入 Capability Governance。
-2. [ ] 在 Registry 筛选并校验 capability 配置。
-3. [ ] 在 Explain 查看命中原因与追踪标识。
-4. [ ] 在 Activation 执行激活/回滚。
-5. [ ] 系统反馈结果并写入审计证据。
+1. [X] 用户进入 Capability Governance。
+2. [X] 在 Registry 筛选并校验 capability 配置。
+3. [X] 在 Explain 查看命中原因与追踪标识。
+4. [X] 在 Activation 执行激活/回滚。
+5. [X] 系统反馈结果并写入审计证据。
 
 ## 7. 安全与鉴权 (Security & Authz)
 - 无权限用户仅可见骨架与申请入口，不可执行关键动作。
@@ -81,15 +81,15 @@
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
 - **依赖**：`DEV-PLAN-154`、`DEV-PLAN-157`、`DEV-PLAN-158`、`DEV-PLAN-159`。
 - **里程碑**：
-  1. [ ] M8.1 导航与页面骨架完成。
-  2. [ ] M8.2 四子页最小操作闭环完成。
-  3. [ ] M10.1 E2E 与证据归档完成。
+  1. [X] M8.1 导航与页面骨架完成。
+  2. [X] M8.2 四子页最小操作闭环完成。
+  3. [X] M10.1 E2E 与证据归档完成。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
-- [ ] 四子页均具最小可用交互。
-- [ ] 至少 1 条成功链路 + 1 条拒绝链路可解释。
-- [ ] 部分授权与功能域关闭场景反馈正确。
-- [ ] `make preflight` 通过，证据归档完成。
+- [X] 四子页均具最小可用交互。
+- [X] 至少 1 条成功链路 + 1 条拒绝链路可解释。
+- [X] 部分授权与功能域关闭场景反馈正确。
+- [X] 等价门禁通过并完成证据归档（`make preflight` 受仓库既有 `no-legacy` 基线问题影响，见执行记录）。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 - 监控项：页面访问率、激活成功率、拒绝链路可解释率。
@@ -100,3 +100,12 @@
 - `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/102c5-ui-design-for-setid-context-security-registry-explainability.md`
 - `docs/dev-plans/102d-t-context-rule-eval-user-visible-test-plan.md`
+
+## 12. 执行记录（2026-02-23 08:09 UTC）
+- [X] Capability Governance 页面收敛为四子页：`Registry / Explain / Functional Area / Activation`，并统一 URL 参数（`tab/as_of`）。
+- [X] Registry 完成交付闭环：SetID 创建、绑定、策略注册表筛选/列表、策略 upsert；无权限时保持骨架可见并禁用关键操作。
+- [X] Explain 面板接入字段级可见性输出（`visibility/mask_strategy/masked_default_value`）并支持 brief/full 自动降级。
+- [X] Activation 子页接入 `state/draft/activate/rollback`；Functional Area 子页接入 `state/switch` 并显示生命周期与可用开关动作。
+- [X] 后端新增内部接口与路由映射：`GET /internal/functional-areas/state`、`POST /internal/functional-areas/switch`，同步 allowlist/capability-route-map/authz 映射与测试。
+- [X] 错误提示契约补齐：新增 `FUNCTIONAL_AREA_MISSING`、`FUNCTIONAL_AREA_NOT_ACTIVE` 到 error catalog 与前端显式文案映射。
+- [X] 已执行并通过：`go vet ./... && make check lint && make check routing && make check capability-route-map && make check capability-key && make check error-message && make check doc && make test && make css && make e2e`。

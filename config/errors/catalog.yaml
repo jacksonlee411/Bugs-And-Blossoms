@@ -28,6 +28,20 @@ errors:
     user_message_key: errors.field_policy_expr_invalid
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: FUNCTIONAL_AREA_MISSING
+    module: setid
+    http_status: 404
+    severity: error
+    user_message_key: errors.functional_area_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: FUNCTIONAL_AREA_NOT_ACTIVE
+    module: setid
+    http_status: 409
+    severity: error
+    user_message_key: errors.functional_area_not_active
+    backend_policy: passthrough
+    frontend_policy: mapped
   - code: ORG_ALREADY_EXISTS
     module: orgunit
     http_status: 409
