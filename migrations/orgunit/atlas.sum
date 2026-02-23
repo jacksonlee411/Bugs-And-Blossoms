@@ -1,4 +1,4 @@
-h1:V3RhgpyL7U2BL2JPgfh+KPqDifuPsDAbwgeLGbIe/Jw=
+h1:NJC5ONB/WVxgI2p9i97Fj/BbDkrLGHgLN4rbcQ16E2k=
 20260106080000_orgunit_schema.sql h1:qAAHRC6Eu8yT3Gu6PIK0yIIsaHE0bngzKNXODMuBWO0=
 20260106083000_orgunit_engine.sql h1:vKwohblXGQ/cp8+m4n4UHeHQQ9Rnx1WXup+L3m27OFM=
 20260106090000_orgunit_read.sql h1:eDvlMZf7kR7QW4Us09fdPlWIOnnllWI8TZ2JE7xzejQ=
@@ -64,3 +64,4 @@ h1:V3RhgpyL7U2BL2JPgfh+KPqDifuPsDAbwgeLGbIe/Jw=
 20260218183000_orgunit_correction_effective_date_sticky.sql h1:m9PBiVcd5DlYZzKkGsZJsI8NYzGpTg0WE9GcLrvDnOA=
 20260219100000_orgunit_field_policies_schema.sql h1:owAIyFX/sP3dvPXS6iN94FDGtRMCBIVlvQulMJt5TI0=
 20260219101000_orgunit_field_policies_kernel_privileges.sql h1:aTY4QUMr8WAcCT6FSzIospBtU6LlPt05HtuaTw2mzr4=
+20260222193000_orgunit_setid_strategy_registry_schema.sql h1:fkIA5xE8CcIwQXY6VCxfG6JbgrMWjL6jgWorZIkGqp0=
