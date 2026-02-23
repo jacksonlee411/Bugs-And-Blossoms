@@ -1,6 +1,6 @@
 # DEV-PLAN-159：Capability Key Phase 9 字段级分段安全（承接 150 M7）
 
-**状态**: 规划中（2026-02-23 04:45 UTC）
+**状态**: 已完成（2026-02-23 15:58 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：`DEV-PLAN-150` 工作流 H（Segment-Based Security）。
@@ -9,11 +9,11 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 在序列化/BFF 层实现字段级可见/隐藏/脱敏策略。
-- [ ] 复用 `EvaluationContext + CEL` 产出字段决策。
-- [ ] 输出字段级 explain reason_code，支持审计追踪。
-- [ ] 冻结日志红线：禁止记录过滤前敏感原值。
-- [ ] 给出 P2 下推（SQL Projection / Field Mask）评估基线。
+- [X] 在序列化/BFF 层实现字段级可见/隐藏/脱敏策略。
+- [X] 复用 `EvaluationContext + CEL` 产出字段决策。
+- [X] 输出字段级 explain reason_code，支持审计追踪。
+- [X] 冻结日志红线：禁止记录过滤前敏感原值。
+- [X] 给出 P2 下推（SQL Projection / Field Mask）评估基线。
 
 ### 2.2 非目标
 - 不在本期强制数据层下推实现。
@@ -63,10 +63,10 @@
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 字段过滤算法
-1. [ ] 根据上下文计算字段决策。
-2. [ ] 对原始对象执行隐藏/脱敏转换。
-3. [ ] 生成字段级 explain 摘要。
-4. [ ] 输出安全响应并记录审计字段。
+1. [X] 根据上下文计算字段决策。
+2. [X] 对原始对象执行隐藏/脱敏转换。
+3. [X] 生成字段级 explain 摘要。
+4. [X] 输出安全响应并记录审计字段。
 
 ## 7. 安全与鉴权 (Security & Authz)
 - 字段级策略判定失败时 fail-closed。
@@ -76,15 +76,15 @@
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
 - **依赖**：`DEV-PLAN-154`、`DEV-PLAN-155`、`DEV-PLAN-157`、`DEV-PLAN-158`。
 - **里程碑**：
-  1. [ ] M7.1 字段策略执行器最小闭环。
-  2. [ ] M7.2 关键对象差异返回回归通过。
-  3. [ ] M7.3 日志红线门禁通过。
+  1. [X] M7.1 字段策略执行器最小闭环。
+  2. [X] M7.2 关键对象差异返回回归通过。
+  3. [X] M7.3 日志红线门禁通过。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
-- [ ] 至少 1 个关键对象实现字段差异返回。
-- [ ] 字段级 reason_code 可解释且可审计。
-- [ ] 日志中无过滤前敏感字段原值。
-- [ ] `make preflight` 通过。
+- [X] 至少 1 个关键对象实现字段差异返回。
+- [X] 字段级 reason_code 可解释且可审计。
+- [X] 日志中无过滤前敏感字段原值。
+- [X] `make preflight` 通过。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 - 监控项：字段隐藏命中率、脱敏命中率、日志违规告警。
@@ -95,3 +95,10 @@
 - `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/154-capability-key-m5-explain-and-audit-convergence.md`
 - `docs/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
+
+## 12. 执行记录（2026-02-23 15:58 UTC）
+- [X] `setid-explain` 接入字段级分段安全输出：新增 `visibility/mask_strategy/masked_default_value`，并引入 `FIELD_MASKED_IN_CONTEXT`。
+- [X] 字段隐藏与脱敏场景不再回传 `resolved_default_value` 原值（隐藏和 `mask://` 规则统一返回 `***` 占位）。
+- [X] 新增审计摘要函数 `briefSetIDFieldDecisions`，日志仅保留字段决策摘要，不记录敏感原值。
+- [X] 新增回归测试覆盖 visible/hidden/masked 三类决策与日志红线：`setid_explain_api_test.go`。
+- [X] 已执行：`go vet ./... && make check lint && make check routing && make check capability-key && make check doc && make test`。
