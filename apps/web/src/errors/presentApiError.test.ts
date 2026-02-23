@@ -14,6 +14,12 @@ describe('resolveApiErrorMessage', () => {
     expect(message).not.toBe('tenant_resolve_error')
   })
 
+  it('returns explicit mapped message for disable-not-allowed', () => {
+    const message = resolveApiErrorMessage('FIELD_POLICY_DISABLE_NOT_ALLOWED', 'FIELD_POLICY_DISABLE_NOT_ALLOWED')
+    expect(message.length).toBeGreaterThan(0)
+    expect(message).not.toBe('FIELD_POLICY_DISABLE_NOT_ALLOWED')
+  })
+
   it('keeps backend message when it is explicit', () => {
     const fallback = 'default rule evaluation failed. please check the rule.'
     expect(resolveApiErrorMessage('DEFAULT_RULE_EVAL_FAILED', fallback)).toBeTruthy()

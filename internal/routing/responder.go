@@ -150,6 +150,8 @@ func knownErrorMessage(code string) string {
 		return "未找到匹配的字段策略，请刷新后重试。"
 	case "FIELD_POLICY_CONFLICT":
 		return "字段策略存在冲突，请联系管理员。"
+	case "FIELD_POLICY_DISABLE_NOT_ALLOWED":
+		return "停用该策略会导致当前上下文无可用策略，请先补齐兜底策略后再重试。"
 	case "FIELD_POLICY_VERSION_REQUIRED":
 		return "缺少策略版本，请刷新页面后重试。"
 	case "FIELD_POLICY_VERSION_STALE":

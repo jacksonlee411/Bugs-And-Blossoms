@@ -49,6 +49,15 @@
       "status": "active"
     },
     {
+      "method": "POST",
+      "path": "/org/api/setid-strategy-registry:disable",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "staffing.assignment_create.field_policy",
+      "owner_module": "staffing",
+      "status": "active"
+    },
+    {
       "method": "GET",
       "path": "/org/api/setid-explain",
       "route_class": "internal_api",

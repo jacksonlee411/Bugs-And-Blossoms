@@ -41,6 +41,9 @@ func TestCapabilityRouteBindingForRoute(t *testing.T) {
 	if _, ok := capabilityRouteBindingForRoute("DELETE", "/org/api/setid-strategy-registry"); ok {
 		t.Fatal("expected mapping missing")
 	}
+	if binding, ok := capabilityRouteBindingForRoute("POST", "/org/api/setid-strategy-registry:disable"); !ok || binding.Action != authz.ActionAdmin {
+		t.Fatalf("expected disable mapping found, got=%+v ok=%v", binding, ok)
+	}
 }
 
 func TestCapabilityAuthzRequirementForBinding(t *testing.T) {
