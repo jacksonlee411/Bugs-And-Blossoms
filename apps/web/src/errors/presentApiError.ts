@@ -9,6 +9,7 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   invalid_request: { en: 'Request parameters are invalid. Please check and retry.', zh: '请求参数无效，请检查后重试。' },
   tenant_not_found: { en: 'Tenant is not found. Please check the current host.', zh: '未找到租户，请检查当前访问域名。' },
   tenant_missing: { en: 'Tenant context is missing. Please refresh and retry.', zh: '租户上下文缺失，请刷新后重试。' },
+  tenant_resolve_error: { en: 'Tenant resolution failed. Please retry later.', zh: '租户解析失败，请稍后重试。' },
   ORG_ROOT_ALREADY_EXISTS: { en: 'Root org already exists. Please choose a parent org to create.', zh: '根组织已存在，请选择上级组织后再创建。' },
   ORG_TREE_NOT_INITIALIZED: { en: 'Org tree is not initialized. Please create the first root org.', zh: '组织树尚未初始化，请先创建首个根组织。' },
   ORG_ALREADY_EXISTS: { en: 'Org code already exists. Please use another code.', zh: '组织编码已存在，请使用其他编码。' },

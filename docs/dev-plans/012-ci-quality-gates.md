@@ -122,6 +122,7 @@
 **覆盖范围（聚合门禁）**：
 - Go：`gofmt`/`go vet`/`golangci-lint`/CleanArchGuard（对齐 `DEV-PLAN-015`）。
 - Go 版本口径：`make check go-version`（强制 `go.mod` 与 `.tool-versions` 维持 `1.26.x`，阻断 `go mod init` 默认回退导致的漂移）。
+- 错误提示契约门禁：`make check error-message`（校验 error catalog 与后端/前端映射一致性，阻断泛化 `*_failed` 文案直出，对齐 `DEV-PLAN-140`）。
 - UI：MUI（`apps/web/**`）构建基线 + go:embed 产物一致性（`internal/server/assets/web/**`）（Node/pnpm 版本对齐 `DEV-PLAN-011`）；命中 `ui` 触发器时必须通过 `Makefile` 单一入口执行 `make css`，并由 `assert-clean` 阻断 “改了源/改了产物但没跑 build 或漏提交” 的漂移。
   - 触发器口径（强制闭合）：`ui` 至少覆盖 `apps/web/**` 与 `internal/server/assets/web/**`，确保“改源/改产物”都会触发 UI build gate。
 - SQL：SQL 格式化门禁（pg_format，版本口径对齐 `DEV-PLAN-011`）。
@@ -205,6 +206,7 @@
 12. [X] E2E smoke：固化 Playwright 入口与最小稳定集；failure 上传报告/trace artifact（最小稳定集作为 required check）。
 13. [ ] GitHub 保护规则：把四大 required checks 设置为合并前必须通过（repo settings 层面），并在文档中冻结其名称（避免后续改名）。
 14. [X] Go 版本门禁：在 Code Quality & Formatting 中接入 `make check go-version`，阻断 `go.mod` / `.tool-versions` 偏离 `1.26.x`。
+15. [X] 错误提示门禁：在 Code Quality & Formatting 中接入 `make check error-message`，并纳入 `make preflight` 与 required checks（对齐 `DEV-PLAN-140`）。
 
 ## 5. 失败路径与排障（Fail-Fast & Debuggability）
 
@@ -230,6 +232,7 @@
 - [ ] `Makefile` 提供本地一键入口（`preflight` 或等价），可复现 CI 的四大门禁。
 - [ ] 命中生成物触发器时，CI 能阻断“漏提交/漂移”（`git status --porcelain` 为空为硬约束）。
 - [X] CI 始终执行 Go 版本门禁（`make check go-version`），并对 `go.mod` / `.tool-versions` 的 `1.26.x` 口径漂移 fail-fast。
+- [X] CI 始终执行错误提示门禁（`make check error-message`），并对 error catalog / backend / frontend 映射漂移 fail-fast（对齐 `DEV-PLAN-140`）。
 - [ ] Unit & Integration Tests 在 CI 稳定可复现，并满足 100% 覆盖率门禁（按 §6 的口径）。
 - [ ] 覆盖率门禁的阈值/范围/排除项存在可审计的策略文件（例如 `config/coverage/policy.yaml`），且 CI workflow 不再隐式写入阈值/忽略规则。
 - [ ] Routing Gates 能阻断 allowlist/分类/返回契约漂移（对齐 `DEV-PLAN-017`）。
