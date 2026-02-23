@@ -282,6 +282,7 @@ modules/{module}/
 - DEV-PLAN-130：Org 组织树初始化问题收敛与自举修复方案：`docs/dev-plans/130-orgunit-tree-initialization-recovery-and-bootstrap.md`
 - DEV-PLAN-130 执行日志：`docs/dev-records/dev-plan-130-execution-log.md`
 - DEV-PLAN-140：全仓错误提示明确化与质量门禁：`docs/dev-plans/140-error-message-clarity-and-gates.md`
+- DEV-PLAN-140 执行日志：`docs/dev-records/dev-plan-140-execution-log.md`
 - DEV-PLAN-150：Capability Key 对标 Workday 核心差距收敛方案（P0/P1）：`docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - DEV-PLAN-151：Capability Key Phase 1 契约冻结与门禁基线（承接 150 M1）：`docs/dev-plans/151-capability-key-m1-contract-freeze-and-gates-baseline.md`
 - DEV-PLAN-152：Capability Key Phase 2 运行时语义切口（承接 150 M4）：`docs/dev-plans/152-capability-key-m4-runtime-semantic-cutover.md`

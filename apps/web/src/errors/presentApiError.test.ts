@@ -8,6 +8,12 @@ describe('resolveApiErrorMessage', () => {
     expect(message).not.toBe('orgunit_write_failed')
   })
 
+  it('returns explicit mapped message for tenant resolve error', () => {
+    const message = resolveApiErrorMessage('tenant_resolve_error', 'tenant_resolve_error')
+    expect(message.length).toBeGreaterThan(0)
+    expect(message).not.toBe('tenant_resolve_error')
+  })
+
   it('keeps backend message when it is explicit', () => {
     const fallback = 'default rule evaluation failed. please check the rule.'
     expect(resolveApiErrorMessage('DEFAULT_RULE_EVAL_FAILED', fallback)).toBeTruthy()

@@ -137,9 +137,11 @@ export function createHttpClient(options: HttpClientOptions): HttpClient {
 }
 
 const env = import.meta.env
+const runtimeOrigin = typeof window !== 'undefined' ? window.location.origin : undefined
+const defaultBaseURL = runtimeOrigin ?? 'http://localhost:8080'
 
 export const httpClient = createHttpClient({
-  baseURL: env.VITE_API_BASE_URL ?? 'http://localhost:8080',
+  baseURL: env.VITE_API_BASE_URL ?? defaultBaseURL,
   getTenantId: () => env.VITE_TENANT_ID,
   maxRetries: 1,
   timeoutMs: Number(env.VITE_API_TIMEOUT_MS || 10000)

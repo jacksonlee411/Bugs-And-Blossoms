@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectExplicitError } from "./helpers/error-message-assert";
 
 async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, password }) {
   const resp = await ctx.request.post(`${kratosAdminURL}/admin/identities`, {
@@ -210,8 +211,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         request_id: `tp060-02-bind-hq-${runID}`
       }
     });
-    expect(resp.status(), await resp.text()).toBe(422);
-    expect((await resp.json()).code).toBe("ORG_NOT_BUSINESS_UNIT_AS_OF");
+    await expectExplicitError(resp, { status: 422, code: "ORG_NOT_BUSINESS_UNIT_AS_OF" });
   }
 
   // Bind SetIDs for business units (R&D -> S2601, Sales -> S2602).
@@ -300,7 +300,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
         primary_family_code: "JF-FE"
       }
     });
-    expect(badProfileResp.status(), await badProfileResp.text()).toBe(422);
+    await expectExplicitError(badProfileResp, { status: 422 });
   }
 
   // JobCatalog (DEFLT): create a dedicated profile for default SetID branch.
@@ -330,9 +330,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   // JobCatalog invalid SetID selection must fail-closed (response is an error JSON).
   {
     const resp = await appContext.request.get(`/jobcatalog/api/catalog?as_of=${encodeURIComponent(asOf)}&setid=S9999`);
-    expect(resp.status(), await resp.text()).toBe(422);
-    const json = await resp.json();
-    expect(json.code).toBe("JOBCATALOG_SETID_INVALID");
+    await expectExplicitError(resp, { status: 422, code: "JOBCATALOG_SETID_INVALID" });
   }
 
   // JobCatalog (S2602): create a profile for cross-setid reference tests.

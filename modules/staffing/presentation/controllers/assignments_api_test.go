@@ -802,3 +802,130 @@ func TestWriteError_TraceID(t *testing.T) {
 		t.Fatalf("trace_id=%q", got)
 	}
 }
+
+func TestWriteError_NormalizesGenericMessage(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/test", nil)
+	rec := httptest.NewRecorder()
+
+	writeError(rec, req, http.StatusBadRequest, "forbidden_failed", "forbidden_failed")
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got, _ := body["message"].(string); got != "Forbidden failed." {
+		t.Fatalf("message=%q", got)
+	}
+}
+
+func TestNormalizeErrorMessage(t *testing.T) {
+	cases := []struct {
+		name    string
+		code    string
+		message string
+		want    string
+	}{
+		{name: "non generic keep original", code: "bad_json", message: "bad request body", want: "bad request body"},
+		{name: "empty message fallback to code", code: "forbidden_failed", message: "", want: "Forbidden failed."},
+		{name: "empty code generic fallback", code: "", message: "internal_error", want: "Request failed."},
+		{name: "generic short failed", code: "invalid_request_failed", message: "request failed", want: "Invalid request failed."},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if got := normalizeErrorMessage(tc.code, tc.message); got != tc.want {
+				t.Fatalf("normalizeErrorMessage()=%q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsGenericErrorMessage(t *testing.T) {
+	cases := []struct {
+		name    string
+		code    string
+		message string
+		want    bool
+	}{
+		{name: "empty message", code: "bad_json", message: "", want: true},
+		{name: "message equals code", code: "BAD_JSON", message: "bad_json", want: true},
+		{name: "snake failed", code: "x", message: "forbidden_failed", want: true},
+		{name: "short failed", code: "x", message: "request failed", want: true},
+		{name: "internal error", code: "x", message: "internal_error", want: true},
+		{name: "non generic", code: "x", message: "please retry later", want: false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isGenericErrorMessage(tc.code, tc.message); got != tc.want {
+				t.Fatalf("isGenericErrorMessage()=%v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestHumanizeErrorCode(t *testing.T) {
+	cases := []struct {
+		name string
+		code string
+		want string
+	}{
+		{name: "empty code", code: "", want: "Request failed."},
+		{name: "only separators", code: "___", want: "Request failed."},
+		{name: "failed suffix", code: "forbidden_failed", want: "Forbidden failed."},
+		{name: "failed only", code: "failed", want: "Request failed."},
+		{name: "error suffix", code: "internal_error", want: "Internal error."},
+		{name: "error only", code: "error", want: "Request error."},
+		{name: "normal sentence", code: "invalid_target_effective_date", want: "Invalid target effective date."},
+		{name: "special tokens upper", code: "invalid_uuid_db_rls", want: "Invalid UUID DB RLS."},
+		{name: "dash normalize", code: "method-not-allowed", want: "Method not allowed."},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if got := humanizeErrorCode(tc.code); got != tc.want {
+				t.Fatalf("humanizeErrorCode()=%q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTitleCaseWords(t *testing.T) {
+	cases := []struct {
+		name  string
+		words []string
+		want  string
+	}{
+		{name: "empty input", words: nil, want: ""},
+		{name: "skip empty word", words: []string{"invalid", "", "request"}, want: "Invalid request"},
+		{name: "special tokens upper", words: []string{"invalid", "uuid", "db", "id", "api", "rls"}, want: "Invalid UUID DB ID API RLS"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if got := titleCaseWords(tc.words); got != tc.want {
+				t.Fatalf("titleCaseWords()=%q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCapitalizeWord(t *testing.T) {
+	cases := []struct {
+		word string
+		want string
+	}{
+		{word: "", want: ""},
+		{word: "abc", want: "Abc"},
+		{word: "already", want: "Already"},
+	}
+	for _, tc := range cases {
+		if got := capitalizeWord(tc.word); got != tc.want {
+			t.Fatalf("capitalizeWord(%q)=%q want %q", tc.word, got, tc.want)
+		}
+	}
+}

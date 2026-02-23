@@ -1,0 +1,618 @@
+version: 1
+errors:
+  - code: ACTOR_SCOPE_FORBIDDEN
+    module: setid
+    http_status: 403
+    severity: error
+    user_message_key: errors.actor_scope_forbidden
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: DEFAULT_RULE_REQUIRED
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.default_rule_required
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: FIELD_POLICY_EXPR_INVALID
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.field_policy_expr_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_ALREADY_EXISTS
+    module: orgunit
+    http_status: 409
+    severity: error
+    user_message_key: errors.org_already_exists
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_CODE_INVALID
+    module: orgunit
+    http_status: 400
+    severity: error
+    user_message_key: errors.org_code_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_CODE_NOT_FOUND
+    module: orgunit
+    http_status: 404
+    severity: error
+    user_message_key: errors.org_code_not_found
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_EVENT_NOT_FOUND
+    module: orgunit
+    http_status: 404
+    severity: error
+    user_message_key: errors.org_event_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_EVENT_RESCINDED
+    module: orgunit
+    http_status: 409
+    severity: error
+    user_message_key: errors.org_event_rescinded
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_EXT_QUERY_FIELD_NOT_ALLOWED
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.org_ext_query_field_not_allowed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_FIELD_CONFIG_INVALID_DATA_SOURCE_CONFIG
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.org_field_config_invalid_data_source_config
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_FIELD_DEFINITION_NOT_FOUND
+    module: orgunit
+    http_status: 404
+    severity: error
+    user_message_key: errors.org_field_definition_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_FIELD_OPTIONS_FIELD_NOT_ENABLED_AS_OF
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.org_field_options_field_not_enabled_as_of
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_FIELD_OPTIONS_NOT_SUPPORTED
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.org_field_options_not_supported
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_INTENT_NOT_SUPPORTED
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.org_intent_not_supported
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_NOT_FOUND_AS_OF
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.org_not_found_as_of
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_ROOT_ALREADY_EXISTS
+    module: orgunit
+    http_status: 409
+    severity: error
+    user_message_key: errors.org_root_already_exists
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_TREE_NOT_INITIALIZED
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.org_tree_not_initialized
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: OWNER_CONTEXT_FORBIDDEN
+    module: setid
+    http_status: 403
+    severity: error
+    user_message_key: errors.owner_context_forbidden
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: OWNER_CONTEXT_REQUIRED
+    module: setid
+    http_status: 400
+    severity: error
+    user_message_key: errors.owner_context_required
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: OWNER_SETID_FORBIDDEN
+    module: jobcatalog
+    http_status: 403
+    severity: error
+    user_message_key: errors.owner_setid_forbidden
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: PACKAGE_CODE_INVALID
+    module: setid
+    http_status: 400
+    severity: error
+    user_message_key: errors.package_code_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: PACKAGE_CODE_RESERVED
+    module: setid
+    http_status: 422
+    severity: error
+    user_message_key: errors.package_code_reserved
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: PACKAGE_OWNER_INVALID
+    module: setid
+    http_status: 400
+    severity: error
+    user_message_key: errors.package_owner_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: PERSON_CREATE_FAILED
+    module: person
+    http_status: 422
+    severity: error
+    user_message_key: errors.person_create_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: PERSON_INTERNAL
+    module: person
+    http_status: 500
+    severity: error
+    user_message_key: errors.person_internal
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: PERSON_NOT_FOUND
+    module: person
+    http_status: 404
+    severity: error
+    user_message_key: errors.person_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: PERSON_PERNR_INVALID
+    module: person
+    http_status: 400
+    severity: error
+    user_message_key: errors.person_pernr_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: audit_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.audit_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: authz_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.authz_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: bad_json
+    module: dict
+    http_status: 400
+    severity: error
+    user_message_key: errors.bad_json
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: bad_request
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.bad_request
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: db_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.db_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: dict_code_invalid
+    module: dict
+    http_status: 400
+    severity: error
+    user_message_key: errors.dict_code_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: dict_code_required
+    module: dict
+    http_status: 400
+    severity: error
+    user_message_key: errors.dict_code_required
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: dict_disabled_on_required
+    module: dict
+    http_status: 400
+    severity: error
+    user_message_key: errors.dict_disabled_on_required
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: dict_enabled_on_required
+    module: dict
+    http_status: 400
+    severity: error
+    user_message_key: errors.dict_enabled_on_required
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: dict_name_required
+    module: dict
+    http_status: 400
+    severity: error
+    user_message_key: errors.dict_name_required
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: dict_release_store_missing
+    module: dict
+    http_status: 500
+    severity: error
+    user_message_key: errors.dict_release_store_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: dict_store_missing
+    module: orgunit
+    http_status: 500
+    severity: error
+    user_message_key: errors.dict_store_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: dict_value_code_required
+    module: dict
+    http_status: 400
+    severity: error
+    user_message_key: errors.dict_value_code_required
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: dict_value_label_required
+    module: dict
+    http_status: 400
+    severity: error
+    user_message_key: errors.dict_value_label_required
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: forbidden
+    module: iam
+    http_status: 403
+    severity: error
+    user_message_key: errors.forbidden
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: identity_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.identity_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: identity_provider_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.identity_provider_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: idp_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.idp_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: internal_error
+    module: platform
+    http_status: 500
+    severity: error
+    user_message_key: errors.internal_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_as_of
+    module: dict
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_as_of
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_business_unit_id
+    module: setid
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_business_unit_id
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_credentials
+    module: iam
+    http_status: 401
+    severity: error
+    user_message_key: errors.invalid_credentials
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_effective_date
+    module: jobcatalog
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_effective_date
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_explain_level
+    module: setid
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_explain_level
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_form
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_form
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_hostname
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_hostname
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_identity_role
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_identity_role
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_input
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_input
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_json
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_json
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_org_unit_id
+    module: setid
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_org_unit_id
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_request
+    module: platform
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_request
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: invalid_status
+    module: staffing
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_status
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: invalid_target_effective_date
+    module: staffing
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_target_effective_date
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: jobcatalog_store_missing
+    module: staffing
+    http_status: 500
+    severity: error
+    user_message_key: errors.jobcatalog_store_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: method_not_allowed
+    module: platform
+    http_status: 405
+    severity: error
+    user_message_key: errors.method_not_allowed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: missing_assignment_uuid
+    module: staffing
+    http_status: 422
+    severity: error
+    user_message_key: errors.missing_assignment_uuid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: missing_person_uuid
+    module: staffing
+    http_status: 422
+    severity: error
+    user_message_key: errors.missing_person_uuid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: missing_target_effective_date
+    module: staffing
+    http_status: 422
+    severity: error
+    user_message_key: errors.missing_target_effective_date
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: not_found
+    module: platform
+    http_status: 404
+    severity: error
+    user_message_key: errors.not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: org_code_invalid
+    module: orgunit
+    http_status: 400
+    severity: error
+    user_message_key: errors.org_code_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: org_code_not_found
+    module: orgunit
+    http_status: 404
+    severity: error
+    user_message_key: errors.org_code_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: org_unit_not_found
+    module: orgunit
+    http_status: 404
+    severity: error
+    user_message_key: errors.org_unit_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: orgunit_id_invalid
+    module: staffing
+    http_status: 400
+    severity: error
+    user_message_key: errors.orgunit_id_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: orgunit_resolve_org_code_failed
+    module: staffing
+    http_status: 422
+    severity: error
+    user_message_key: errors.orgunit_resolve_org_code_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: orgunit_resolver_missing
+    module: staffing
+    http_status: 500
+    severity: error
+    user_message_key: errors.orgunit_resolver_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: orgunit_service_missing
+    module: orgunit
+    http_status: 500
+    severity: error
+    user_message_key: errors.orgunit_service_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: orgunit_store_missing
+    module: orgunit
+    http_status: 500
+    severity: error
+    user_message_key: errors.orgunit_store_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: principal_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.principal_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: principal_lookup_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.principal_lookup_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: session_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.session_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: session_lookup_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.session_lookup_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: setid_missing
+    module: staffing
+    http_status: 400
+    severity: error
+    user_message_key: errors.setid_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: setid_resolver_missing
+    module: staffing
+    http_status: 500
+    severity: error
+    user_message_key: errors.setid_resolver_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: setid_strategy_registry_list_failed
+    module: setid
+    http_status: 422
+    severity: error
+    user_message_key: errors.setid_strategy_registry_list_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: setid_strategy_registry_upsert_failed
+    module: setid
+    http_status: 422
+    severity: error
+    user_message_key: errors.setid_strategy_registry_upsert_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: tenant_missing
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.tenant_missing
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: tenant_not_found
+    module: iam
+    http_status: 404
+    severity: error
+    user_message_key: errors.tenant_not_found
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: tenant_resolve_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.tenant_resolve_error
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: unauthorized
+    module: iam
+    http_status: 401
+    severity: error
+    user_message_key: errors.unauthorized
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: web_mui_index_missing
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.web_mui_index_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: write_disabled
+    module: iam
+    http_status: 422
+    severity: error
+    user_message_key: errors.write_disabled
+    backend_policy: passthrough
+    frontend_policy: mapped
