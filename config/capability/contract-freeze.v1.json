@@ -1,0 +1,116 @@
+{
+  "version": "2026-02-23",
+  "replacement_matrix": {
+    "scope_code": "capability_key",
+    "package_id": "setid"
+  },
+  "capability_types": [
+    "domain_capability",
+    "process_capability"
+  ],
+  "context_contract": {
+    "StaticContext": [
+      "tenant_id",
+      "capability_key",
+      "setid",
+      "business_unit",
+      "actor_scope",
+      "as_of"
+    ],
+    "ProcessContext": [
+      "request_id",
+      "trace_id",
+      "route_id",
+      "action",
+      "target_resource"
+    ]
+  },
+  "functional_areas": [
+    {
+      "functional_area_key": "org_foundation",
+      "display_name": "Org Foundation",
+      "owner_module": "orgunit",
+      "lifecycle_status": "active"
+    },
+    {
+      "functional_area_key": "staffing",
+      "display_name": "Staffing",
+      "owner_module": "staffing",
+      "lifecycle_status": "active"
+    },
+    {
+      "functional_area_key": "jobcatalog",
+      "display_name": "Job Catalog",
+      "owner_module": "jobcatalog",
+      "lifecycle_status": "active"
+    },
+    {
+      "functional_area_key": "person",
+      "display_name": "Person",
+      "owner_module": "person",
+      "lifecycle_status": "active"
+    },
+    {
+      "functional_area_key": "iam_platform",
+      "display_name": "IAM Platform",
+      "owner_module": "iam",
+      "lifecycle_status": "active"
+    },
+    {
+      "functional_area_key": "compensation",
+      "display_name": "Compensation",
+      "owner_module": "platform",
+      "lifecycle_status": "reserved"
+    },
+    {
+      "functional_area_key": "benefits",
+      "display_name": "Benefits",
+      "owner_module": "platform",
+      "lifecycle_status": "reserved"
+    }
+  ],
+  "lifecycle_statuses": [
+    "active",
+    "reserved",
+    "deprecated"
+  ],
+  "reason_codes": [
+    "CAPABILITY_CONTEXT_REQUIRED",
+    "CAPABILITY_CONTEXT_MISMATCH",
+    "FUNCTIONAL_AREA_MISSING",
+    "FUNCTIONAL_AREA_DISABLED",
+    "FUNCTIONAL_AREA_NOT_ACTIVE"
+  ],
+  "explain_min_fields": [
+    "trace_id",
+    "request_id",
+    "capability_key",
+    "setid",
+    "functional_area_key",
+    "policy_version",
+    "decision",
+    "reason_code"
+  ],
+  "gate_baseline": {
+    "make_checks": [
+      "check naming",
+      "check no-legacy",
+      "check no-scope-package",
+      "check capability-key",
+      "check capability-contract",
+      "check request-code",
+      "check as-of-explicit",
+      "check dict-tenant-only",
+      "check go-version",
+      "check error-message",
+      "check doc",
+      "check routing"
+    ],
+    "required_checks": [
+      "Code Quality & Formatting",
+      "Unit & Integration Tests",
+      "Routing Gates",
+      "E2E Tests"
+    ]
+  }
+}
