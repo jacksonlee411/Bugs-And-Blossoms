@@ -149,6 +149,7 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	if traceID == "" {
 		traceID = fallbackSetIDExplainTraceID(requestID, capabilityKey, businessUnitID, asOf)
 	}
+	policyVersion := defaultPolicyActivationRuntime.activePolicyVersion(tenant.ID, capabilityKey)
 
 	response := setIDExplainResponse{
 		TraceID:               traceID,
@@ -156,13 +157,13 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		CapabilityKey:         capabilityKey,
 		SetID:                 resolvedSetID,
 		FunctionalAreaKey:     functionalAreaKey,
-		PolicyVersion:         capabilityPolicyVersionBaseline,
+		PolicyVersion:         policyVersion,
 		TenantID:              tenant.ID,
 		BusinessUnitID:        businessUnitID,
 		AsOf:                  asOf,
 		OrgUnitID:             orgUnitID,
 		ResolvedSetID:         resolvedSetID,
-		ResolvedConfigVersion: capabilityPolicyVersionBaseline,
+		ResolvedConfigVersion: policyVersion,
 		Decision:              responseDecision,
 		ReasonCode:            responseReasonCode,
 		Level:                 level,

@@ -104,6 +104,18 @@ entrypoints:
       - path: /internal/rules/evaluate
         methods: [POST]
         route_class: internal_api
+      - path: /internal/policies/state
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/policies/draft
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/policies/activate
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/policies/rollback
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]
         route_class: internal_api
