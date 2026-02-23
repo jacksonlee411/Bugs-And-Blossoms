@@ -11,6 +11,8 @@
 - Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
 - 新建 Go 模块后（防止 `go mod init` 默认回退）：执行 `go get go@1.26.0`（或 `go mod edit -go=1.26.0`）
 - 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
+- 禁止新增 scope/package 漂移：`make check no-scope-package`
+- capability_key 防退化（禁上下文编码/禁拼接）：`make check capability-key`
 - 业务幂等字段命名收敛：`make check request-code`
 - `.templ`/MUI Web UI/presentation assets 相关：`make generate && make css`，然后 `git status --short` 必须为空
 - 多语言 JSON：`make check tr`
@@ -48,6 +50,8 @@
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012` |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
+| 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
+| capability_key 命名与生成方式 | `make check capability-key` | 禁止上下文编码与运行时拼接（承接 `DEV-PLAN-102C6/102D`） |
 | 幂等与追踪命名（request_id / trace_id） | `make check request-code` | 规则见 `DEV-PLAN-109A` |
 
 ## 3. 开发与编码规则（仓库级合约）
@@ -283,7 +287,12 @@ modules/{module}/
 - DEV-PLAN-102C3：SetID 配置命中可解释性（Explainability）方案（承接 102C，避免与 070B/102C1/102C2 重复）：`docs/dev-plans/102c3-setid-configuration-hit-explainability.md`
 - DEV-PLAN-102C4：BU 流程个性化样板（承接 102C，避免与 070B/102C1/102C2/102C3 重复）：`docs/dev-plans/102c4-bu-process-personalization-pilot.md`
 - DEV-PLAN-102C5：102C1-102C3 UI 专项方案（SetID 上下文化安全 + 策略注册表 + 命中解释）：`docs/dev-plans/102c5-ui-design-for-setid-context-security-registry-explainability.md`
+- DEV-PLAN-102C6：彻底删除 scope_code + package，收敛到 capability_key + setid（Simple First）：`docs/dev-plans/102c6-remove-scope-code-and-converge-to-capability-key-plan.md`
 - DEV-PLAN-102C-T：102C1-102C3 测试方案（同租户跨 BU 字段差异）：`docs/dev-plans/102c-t-test-plan-for-c1-c3-bu-field-variance.md`
+- DEV-PLAN-102D：基于 102 基线的 Context + Rule + Eval 动态隔离与配置安全实施方案：`docs/dev-plans/102d-context-rule-evaluation-engine-on-top-of-102-foundation.md`
+- DEV-PLAN-102D-T：102D 动态规则引擎测试方案（用户可见性 + 内部评估链路）：`docs/dev-plans/102d-t-context-rule-eval-user-visible-test-plan.md`
+- DEV-PLAN-102D 执行日志：`docs/dev-records/dev-plan-102d-execution-log.md`
+- DEV-PLAN-102D-T 执行日志：`docs/dev-records/dev-plan-102d-t-execution-log.md`
 - DEV-PLAN-102B 执行日志：`docs/dev-records/dev-plan-102b-execution-log.md`
 - DEV-PLAN-102A 执行日志：`docs/dev-records/dev-plan-102a-execution-log.md`
 - DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`

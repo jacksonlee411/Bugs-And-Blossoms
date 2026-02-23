@@ -675,8 +675,14 @@ func TestJobCatalogStatusForError(t *testing.T) {
 	if jobCatalogStatusForError("PACKAGE_CODE_MISMATCH") != http.StatusUnprocessableEntity {
 		t.Fatal("expected unprocessable")
 	}
-	if jobCatalogStatusForError("other") != http.StatusOK {
-		t.Fatal("expected ok")
+	if jobCatalogStatusForError("other") != http.StatusUnprocessableEntity {
+		t.Fatal("expected unprocessable")
+	}
+}
+
+func TestNormalizePackageCode(t *testing.T) {
+	if got := normalizePackageCode(" pkg1 "); got != "PKG1" {
+		t.Fatalf("normalizePackageCode=%q", got)
 	}
 }
 

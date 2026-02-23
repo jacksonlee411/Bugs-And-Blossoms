@@ -278,6 +278,58 @@ func normalizeSetID(input string) string {
 	return strings.ToUpper(strings.TrimSpace(input))
 }
 
+func stampJobProfileSetID(ctx context.Context, tx pgx.Tx, tenantID string, packageUUID string, profileUUID string, setID string) error {
+	setID = normalizeSetID(setID)
+	if setID == "" {
+		return errors.New("setid is required")
+	}
+	if _, err := tx.Exec(ctx, `
+UPDATE jobcatalog.job_profiles
+SET setid = $4::text
+WHERE tenant_uuid = $1::uuid
+  AND package_uuid = $2::uuid
+  AND job_profile_uuid = $3::uuid
+  AND COALESCE(setid, '') <> $4::text
+`, tenantID, packageUUID, profileUUID, setID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+UPDATE jobcatalog.job_profile_events
+SET setid = $4::text
+WHERE tenant_uuid = $1::uuid
+  AND package_uuid = $2::uuid
+  AND job_profile_uuid = $3::uuid
+  AND COALESCE(setid, '') <> $4::text
+`, tenantID, packageUUID, profileUUID, setID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+UPDATE jobcatalog.job_profile_versions
+SET setid = $4::text
+WHERE tenant_uuid = $1::uuid
+  AND package_uuid = $2::uuid
+  AND job_profile_uuid = $3::uuid
+  AND COALESCE(setid, '') <> $4::text
+`, tenantID, packageUUID, profileUUID, setID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+UPDATE jobcatalog.job_profile_version_job_families pf
+SET setid = $4::text
+FROM jobcatalog.job_profile_versions v
+WHERE pf.tenant_uuid = $1::uuid
+  AND pf.package_uuid = $2::uuid
+  AND v.tenant_uuid = $1::uuid
+  AND v.package_uuid = $2::uuid
+  AND v.job_profile_uuid = $3::uuid
+  AND pf.job_profile_version_id = v.id
+  AND COALESCE(pf.setid, '') <> $4::text
+`, tenantID, packageUUID, profileUUID, setID); err != nil {
+		return err
+	}
+	return nil
+}
+
 func ensureSetIDActive(ctx context.Context, tx pgx.Tx, tenantID string, setID string) (string, error) {
 	setID = normalizeSetID(setID)
 	if setID == "" {
@@ -312,7 +364,7 @@ func resolveJobCatalogPackage(ctx context.Context, tx pgx.Tx, tenantID string, s
 	if err := tx.QueryRow(ctx, `
 SELECT package_id::text, package_owner_tenant_uuid::text
 FROM orgunit.resolve_scope_package($1::uuid, $2::text, 'jobcatalog', $3::date)
-`, tenantID, resolvedSetID, asOfDate).Scan(&packageID, &ownerTenantID); err != nil {
+	`, tenantID, resolvedSetID, asOfDate).Scan(&packageID, &ownerTenantID); err != nil {
 		return "", err
 	}
 	if ownerTenantID != tenantID {
@@ -823,7 +875,10 @@ SELECT jobcatalog.submit_job_profile_event(
   $8::uuid
 );
 `, eventID, tenantID, resolved, profileID, effectiveDate, []byte(payload), "ui:"+eventID, tenantID)
-		return err
+		if err != nil {
+			return err
+		}
+		return stampJobProfileSetID(ctx, tx, tenantID, resolved, profileID, setID)
 	})
 }
 
@@ -976,9 +1031,13 @@ func resolveJobCatalogView(ctx context.Context, store JobCatalogStore, setidStor
 		return view, ""
 	}
 	if setID != "" {
-		view.SetID = setID
-		view.ReadOnly = true
+		view.SetID = normalizeSetID(setID)
+		view.OwnerSetID = view.SetID
 		view.HasSelection = true
+		if _, err := store.ResolveJobCatalogPackageBySetID(ctx, tenantID, view.SetID, asOf); err != nil {
+			return view, err.Error()
+		}
+		view.ReadOnly = !ownerSetIDEditable(ctx, setidStore, tenantID, view.SetID)
 		return view, ""
 	}
 
@@ -1015,7 +1074,10 @@ func jobCatalogStatusForError(errMsg string) int {
 	if strings.Contains(errMsg, "PACKAGE_CODE_MISMATCH") {
 		return http.StatusUnprocessableEntity
 	}
-	return http.StatusOK
+	if strings.Contains(errMsg, "JOBCATALOG_SETID_INVALID") || strings.Contains(errMsg, "PACKAGE_NOT_FOUND") || strings.Contains(errMsg, "PACKAGE_OWNER_INVALID") {
+		return http.StatusUnprocessableEntity
+	}
+	return http.StatusUnprocessableEntity
 }
 
 func splitCSV(s string) []string {

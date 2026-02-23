@@ -506,6 +506,46 @@ func staffingSmoke(args []string) {
 	if jobProfileEventDBID <= 0 {
 		fatalf("expected job profile event db id > 0, got %d", jobProfileEventDBID)
 	}
+	if _, err := tx.Exec(ctx, `
+			UPDATE jobcatalog.job_profiles
+			SET setid = $4::text
+			WHERE tenant_uuid = $1::uuid
+			  AND package_uuid = $2::uuid
+			  AND job_profile_uuid = $3::uuid;
+		`, tenantA, jobcatalogPackageID, jobProfileID, jobcatalogSetID); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `
+			UPDATE jobcatalog.job_profile_events
+			SET setid = $4::text
+			WHERE tenant_uuid = $1::uuid
+			  AND package_uuid = $2::uuid
+			  AND job_profile_uuid = $3::uuid;
+		`, tenantA, jobcatalogPackageID, jobProfileID, jobcatalogSetID); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `
+			UPDATE jobcatalog.job_profile_versions
+			SET setid = $4::text
+			WHERE tenant_uuid = $1::uuid
+			  AND package_uuid = $2::uuid
+			  AND job_profile_uuid = $3::uuid;
+		`, tenantA, jobcatalogPackageID, jobProfileID, jobcatalogSetID); err != nil {
+		fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `
+			UPDATE jobcatalog.job_profile_version_job_families pf
+			SET setid = $4::text
+			FROM jobcatalog.job_profile_versions v
+			WHERE pf.tenant_uuid = $1::uuid
+			  AND pf.package_uuid = $2::uuid
+			  AND v.tenant_uuid = $1::uuid
+			  AND v.package_uuid = $2::uuid
+			  AND v.job_profile_uuid = $3::uuid
+			  AND pf.job_profile_version_id = v.id;
+		`, tenantA, jobcatalogPackageID, jobProfileID, jobcatalogSetID); err != nil {
+		fatal(err)
+	}
 
 	if _, err := tx.Exec(ctx, `SAVEPOINT sp_missing_org;`); err != nil {
 		fatal(err)

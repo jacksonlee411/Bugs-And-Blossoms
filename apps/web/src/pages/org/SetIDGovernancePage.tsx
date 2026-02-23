@@ -35,8 +35,7 @@ interface RegistryFormState {
   capabilityKey: string
   ownerModule: string
   fieldKey: string
-  personalizationMode: 'tenant_only' | 'setid' | 'scope_package'
-  scopeCode: string
+  personalizationMode: 'tenant_only' | 'setid'
   orgLevel: 'tenant' | 'business_unit'
   businessUnitID: string
   required: boolean
@@ -101,7 +100,6 @@ function defaultRegistryForm(asOf: string): RegistryFormState {
     ownerModule: '',
     fieldKey: '',
     personalizationMode: 'setid',
-    scopeCode: '',
     orgLevel: 'business_unit',
     businessUnitID: '',
     required: true,
@@ -197,7 +195,6 @@ export function SetIDGovernancePage() {
         capabilityKey: previous.capabilityKey,
         ownerModule: previous.ownerModule,
         fieldKey: previous.fieldKey,
-        scopeCode: previous.scopeCode,
         businessUnitID: previous.businessUnitID
       }))
     }
@@ -278,7 +275,6 @@ export function SetIDGovernancePage() {
         owner_module: registryForm.ownerModule.trim(),
         field_key: registryForm.fieldKey.trim(),
         personalization_mode: registryForm.personalizationMode,
-        scope_code: registryForm.scopeCode.trim(),
         org_level: registryForm.orgLevel,
         business_unit_id: registryForm.businessUnitID.trim(),
         required: registryForm.required,
@@ -458,7 +454,6 @@ export function SetIDGovernancePage() {
             </Alert>
             <SetIDExplainPanel
               initialAsOf={asOf}
-              initialScopeCode='jobcatalog'
               title='Security Context Checker'
               subtitle='用于验证 OWNER_CONTEXT_REQUIRED / OWNER_CONTEXT_FORBIDDEN / ACTOR_SCOPE_FORBIDDEN 等上下文拒绝原因。'
             />
@@ -560,12 +555,6 @@ export function SetIDGovernancePage() {
                         orgLevel: event.target.value as RegistryFormState['orgLevel']
                       }))
                     }
-                  />
-                  <TextField
-                    label='scope_code'
-                    size='small'
-                    value={registryForm.scopeCode}
-                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, scopeCode: event.target.value }))}
                   />
                   <TextField
                     label='business_unit_id'
@@ -685,7 +674,6 @@ export function SetIDGovernancePage() {
         {tab === 'explainability' ? (
           <SetIDExplainPanel
             initialAsOf={asOf}
-            initialScopeCode='jobcatalog'
             title='Explainability'
             subtitle='支持 brief/full 分级展示；错误统一展示 reason_code + trace_id + request_id。'
           />

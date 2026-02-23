@@ -18,10 +18,10 @@ async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, p
   }
 }
 
-async function createJobCatalogAction(ctx, { packageCode, effectiveDate, action, body }) {
+async function createJobCatalogAction(ctx, { setID, effectiveDate, action, body }) {
   const resp = await ctx.request.post("/jobcatalog/api/catalog/actions", {
     data: {
-      package_code: packageCode,
+      setid: setID,
       effective_date: effectiveDate,
       action,
       ...body
@@ -30,9 +30,9 @@ async function createJobCatalogAction(ctx, { packageCode, effectiveDate, action,
   return resp;
 }
 
-async function getJobCatalog(ctx, { asOf, packageCode }) {
+async function getJobCatalog(ctx, { asOf, setID }) {
   const resp = await ctx.request.get(
-    `/jobcatalog/api/catalog?as_of=${encodeURIComponent(asOf)}&package_code=${encodeURIComponent(packageCode)}`
+    `/jobcatalog/api/catalog?as_of=${encodeURIComponent(asOf)}&setid=${encodeURIComponent(setID)}`
   );
   expect(resp.status(), await resp.text()).toBe(200);
   return resp.json();
@@ -238,48 +238,8 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     expect(resp.status(), await resp.text()).toBe(201);
   }
 
-  const resolveOrgUnitID = async (orgCode) => {
-    const resp = await appContext.request.get(
-      `/org/api/org-units/details?as_of=${encodeURIComponent(asOf)}&org_code=${encodeURIComponent(orgCode)}`
-    );
-    expect(resp.status(), await resp.text()).toBe(200);
-    const payload = await resp.json();
-    return String(payload.org_unit.org_id).padStart(8, "0");
-  };
-
-  const createScopePackage = async ({ ownerSetID, businessUnitID, packageCode, name }) => {
-    const resp = await appContext.request.post("/org/api/scope-packages", {
-      data: {
-        scope_code: "jobcatalog",
-        package_code: packageCode,
-        name,
-        owner_setid: ownerSetID,
-        business_unit_id: businessUnitID,
-        effective_date: asOf,
-        request_id: `req:${runID}:scope-pkg:${packageCode}`
-      }
-    });
-    expect(resp.status(), await resp.text()).toBe(201);
-    return resp.json();
-  };
-
-  const rndOrgID = await resolveOrgUnitID(org.rnd);
-  const salesOrgID = await resolveOrgUnitID(org.sales);
-  const s2601PkgCode = `S2601_${suffix}`.toUpperCase();
-  await createScopePackage({
-    ownerSetID: "S2601",
-    businessUnitID: rndOrgID,
-    packageCode: s2601PkgCode,
-    name: `S2601 JobCatalog ${runID}`
-  });
-
-  const s2602PkgCode = `S2602_${suffix}`.toUpperCase();
-  await createScopePackage({
-    ownerSetID: "S2602",
-    businessUnitID: salesOrgID,
-    packageCode: s2602PkgCode,
-    name: `S2602 JobCatalog ${runID}`
-  });
+  const s2601SetID = "S2601";
+  const s2602SetID = "S2602";
 
   // JobCatalog (S2601): create groups/families/levels/profiles, then assert valid-time reparent.
   {
@@ -287,11 +247,11 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
     const beforeReparent = "2026-01-15";
     const afterReparent = "2026-02-15";
     const reparentEffectiveDate = "2026-02-01";
-    const beforeJobCatalogExists = "2025-12-31";
+    const beforeLevelEffective = "2026-01-14";
 
     const mustAction = async (action, body, effectiveDate = base, expectedStatus = 201) => {
       const resp = await createJobCatalogAction(appContext, {
-        packageCode: s2601PkgCode,
+        setID: s2601SetID,
         effectiveDate,
         action,
         body
@@ -307,16 +267,16 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
 
     await mustAction("update_job_family_group", { code: "JF-BE", group_code: "JFG-SALES" }, reparentEffectiveDate, 200);
 
-    const beforeCatalog = await getJobCatalog(appContext, { asOf: beforeReparent, packageCode: s2601PkgCode });
+    const beforeCatalog = await getJobCatalog(appContext, { asOf: beforeReparent, setID: s2601SetID });
     const jfBeBefore = (beforeCatalog.job_families || []).find((f) => f.job_family_code === "JF-BE");
     expect(jfBeBefore && jfBeBefore.job_family_group_code).toBe("JFG-ENG");
 
-    const afterCatalog = await getJobCatalog(appContext, { asOf: afterReparent, packageCode: s2601PkgCode });
+    const afterCatalog = await getJobCatalog(appContext, { asOf: afterReparent, setID: s2601SetID });
     const jfBeAfter = (afterCatalog.job_families || []).find((f) => f.job_family_code === "JF-BE");
     expect(jfBeAfter && jfBeAfter.job_family_group_code).toBe("JFG-SALES");
 
-    await mustAction("create_job_level", { code: "JL-1", name: "Level 1" });
-    const catalogBeforeExists = await getJobCatalog(appContext, { asOf: beforeJobCatalogExists, packageCode: s2601PkgCode });
+    await mustAction("create_job_level", { code: "JL-1", name: "Level 1" }, m5EffectiveDate);
+    const catalogBeforeExists = await getJobCatalog(appContext, { asOf: beforeLevelEffective, setID: s2601SetID });
     expect((catalogBeforeExists.job_levels || []).some((l) => l.job_level_code === "JL-1")).toBeFalsy();
 
     await mustAction("create_job_profile", {
@@ -325,12 +285,12 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
       family_codes_csv: "JF-BE,JF-FE",
       primary_family_code: "JF-BE"
     });
-    const catalogWithProfile = await getJobCatalog(appContext, { asOf: base, packageCode: s2601PkgCode });
+    const catalogWithProfile = await getJobCatalog(appContext, { asOf: base, setID: s2601SetID });
     const jpSwe = (catalogWithProfile.job_profiles || []).find((p) => p.job_profile_code === "JP-SWE");
     expect(jpSwe && jpSwe.primary_family_code).toBe("JF-BE");
 
     const badProfileResp = await createJobCatalogAction(appContext, {
-      packageCode: s2601PkgCode,
+      setID: s2601SetID,
       effectiveDate: base,
       action: "create_job_profile",
       body: {
@@ -350,7 +310,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   {
     const mustCreate = async (action, body) => {
       const resp = await createJobCatalogAction(appContext, {
-        packageCode: "DEFLT",
+        setID: "DEFLT",
         effectiveDate: asOf,
         action,
         body
@@ -379,7 +339,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   {
     const mustCreate = async (action, body) => {
       const resp = await createJobCatalogAction(appContext, {
-        packageCode: s2602PkgCode,
+        setID: s2602SetID,
         effectiveDate: asOf,
         action,
         body
@@ -546,7 +506,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await expect(page.locator("h1")).toContainText("Bugs & Blossoms");
   await page.goto(`/app/org/setid`);
   await expect(page.getByRole("heading", { level: 2, name: "SetID Governance" })).toBeVisible();
-  await page.goto(`/app/jobcatalog?as_of=${asOf}&package_code=${s2601PkgCode}`);
+  await page.goto(`/app/jobcatalog?as_of=${asOf}&setid=${s2601SetID}`);
   await expect(page.getByRole("heading", { level: 2, name: "Job Catalog" })).toBeVisible();
   await page.goto(`/app/staffing/positions?as_of=${asOf}&org_code=${org.rnd}`);
   await expect(page.getByRole("heading", { level: 2, name: "Staffing / Positions" })).toBeVisible();

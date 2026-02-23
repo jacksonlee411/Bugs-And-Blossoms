@@ -18,10 +18,10 @@ async function ensureKratosIdentity(ctx, kratosAdminURL, { traits, identifier, p
   }
 }
 
-async function createJobCatalogAction(ctx, { packageCode, effectiveDate, action, body }) {
+async function createJobCatalogAction(ctx, { setID, effectiveDate, action, body }) {
   const resp = await ctx.request.post("/jobcatalog/api/catalog/actions", {
     data: {
-      package_code: packageCode,
+      setid: setID,
       effective_date: effectiveDate,
       action,
       ...body
@@ -152,19 +152,19 @@ test("tp060-03: person + assignments (with allocated_fte)", async ({ browser }) 
   const jobProfileCode = `JP_063_${suffix}`.toUpperCase();
 
   await createJobCatalogAction(appContext, {
-    packageCode: "DEFLT",
+    setID: "DEFLT",
     effectiveDate: asOf,
     action: "create_job_family_group",
     body: { code: jobFamilyGroupCode, name: `TP060-03 Group ${runID}` }
   });
   await createJobCatalogAction(appContext, {
-    packageCode: "DEFLT",
+    setID: "DEFLT",
     effectiveDate: asOf,
     action: "create_job_family",
     body: { code: jobFamilyCode, name: `TP060-03 Family ${runID}`, group_code: jobFamilyGroupCode }
   });
   await createJobCatalogAction(appContext, {
-    packageCode: "DEFLT",
+    setID: "DEFLT",
     effectiveDate: asOf,
     action: "create_job_profile",
     body: {

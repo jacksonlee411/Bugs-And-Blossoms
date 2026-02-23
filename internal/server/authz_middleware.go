@@ -122,13 +122,6 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 }
 
 func authzRequirementForRoute(method string, path string) (object string, action string, ok bool) {
-	if pathMatchRouteTemplate(path, "/org/api/scope-packages/{package_id}/disable") {
-		if method == http.MethodPost {
-			return authz.ObjectOrgScopePackage, authz.ActionAdmin, true
-		}
-		return "", "", false
-	}
-
 	switch path {
 	case "/iam/api/sessions":
 		if method == http.MethodPost {
@@ -233,27 +226,6 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/org/api/scope-packages":
-		if method == http.MethodGet {
-			return authz.ObjectOrgScopePackage, authz.ActionRead, true
-		}
-		if method == http.MethodPost {
-			return authz.ObjectOrgScopePackage, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/org/api/owned-scope-packages":
-		if method == http.MethodGet {
-			return authz.ObjectJobCatalogCatalog, authz.ActionRead, true
-		}
-		return "", "", false
-	case "/org/api/scope-subscriptions":
-		if method == http.MethodGet {
-			return authz.ObjectOrgScopeSubscription, authz.ActionRead, true
-		}
-		if method == http.MethodPost {
-			return authz.ObjectOrgScopeSubscription, authz.ActionAdmin, true
-		}
-		return "", "", false
 	case "/org/api/global-setids":
 		if method == http.MethodGet {
 			return authz.ObjectOrgShareRead, authz.ActionRead, true
@@ -262,25 +234,17 @@ func authzRequirementForRoute(method string, path string) (object string, action
 			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
 		}
 		return "", "", false
-	case "/org/api/global-scope-packages":
-		if method == http.MethodGet {
-			return authz.ObjectOrgScopePackage, authz.ActionRead, true
-		}
-		if method == http.MethodPost {
-			return authz.ObjectOrgScopePackage, authz.ActionAdmin, true
-		}
-		return "", "", false
 	case "/org/api/setid-strategy-registry":
 		if method == http.MethodGet {
-			return authz.ObjectOrgUnitSetID, authz.ActionRead, true
+			return authz.ObjectOrgSetIDCapability, authz.ActionRead, true
 		}
 		if method == http.MethodPost {
-			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
+			return authz.ObjectOrgSetIDCapability, authz.ActionAdmin, true
 		}
 		return "", "", false
 	case "/org/api/setid-explain":
 		if method == http.MethodGet {
-			return authz.ObjectOrgUnitSetID, authz.ActionRead, true
+			return authz.ObjectOrgSetIDCapability, authz.ActionRead, true
 		}
 		return "", "", false
 	case "/org/api/org-units":

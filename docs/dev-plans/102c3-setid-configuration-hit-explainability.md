@@ -1,6 +1,6 @@
 # DEV-PLAN-102C3：SetID 配置命中可解释性（Explainability）方案（承接 102C，避免与 070B/102C1/102C2 重复）
 
-**状态**: 准备就绪（2026-02-22 09:44 UTC，已获用户批准进入实施）
+**状态**: 草拟中（2026-02-22 17:15 UTC）
 
 ## 0. 主计划定位（Plan of Record）
 - 本计划是 `DEV-PLAN-102C` 的子计划，聚焦“**为何命中该配置**”的可解释输出与证据链。
@@ -8,9 +8,9 @@
 - 本计划输出：解释字段合同、解释输出接口约定、日志证据模型、验收标准。
 
 ## 1. 背景与问题陈述（Context）
-- 当前系统已有 SetID / Scope Package / as_of 链路，但“命中原因”主要散落在实现内部与数据库函数，UI 与 API 缺少统一 explain 输出。
+- 当前系统已有 SetID / as_of 链路，但“命中原因”主要散落在实现内部与数据库函数，UI 与 API 缺少统一 explain 输出。
 - 典型问题：
-  1. 故障排查时能看到结果，但难直接回答“为何是这个 package”；
+  1. 故障排查时能看到结果，但难直接回答“为何命中这个 SetID 配置版本”；
   2. 业务验收时缺少一致的解释字段，跨模块口径不统一；
   3. 审计记录有 who/when，缺少完整 how/why（决策链路）证据。
 - 与 102C 的关系：102C 定义差距，102C3 负责补齐“可解释性”高优先级缺口。
@@ -45,9 +45,7 @@
 | `effective_date` | 生效日（写，若适用） | `2026-03-01` |
 | `org_unit_id` | 资源定位上下文（可选，不参与层级策略） | `10000001` |
 | `resolved_setid` | 解析出的 SetID | `DEFLT` |
-| `scope_code` | 解析 scope | `jobcatalog` |
-| `resolved_package_id` | 命中 package | `...uuid...` |
-| `package_owner` | 包归属 | `tenant` |
+| `resolved_config_version` | 命中配置版本（可选） | `v2026-03-01-01` |
 | `decision` | `allow`/`deny` | `allow` |
 | `reason_code` | 拒绝/说明码 | `OWNER_CONTEXT_FORBIDDEN` |
 | `field_decisions[]` | 字段级判定数组 | `[{field_key,visible,required,default_rule_ref,resolved_default_value,decision,reason_code}]` |
@@ -55,7 +53,7 @@
 ### 3.2 解释链路阶段（固定顺序）
 1. 输入上下文归一化（tenant / as_of / business_unit）。
 2. SetID 解析（business_unit -> setid；org_unit 仅作可选定位）。
-3. Scope Package 解析（setid + scope + as_of -> package）。
+3. 配置解析（setid + capability_key + as_of -> config）。
 4. 授权与上下文约束判定（引用 102C1）。
 5. 字段策略判定（引用 102C2，产出 `field_decisions[]`）。
 6. 结果落盘（日志）与可选 API 回显（按安全策略）。
@@ -73,7 +71,7 @@
 
 ### 4.2 日志约定
 - 所有 SetID 关键链路统一记录 full explain（结构化日志）。
-- 日志必须包含：`trace_id/request_id/capability_key/decision/reason_code/resolved_setid/resolved_package_id`。
+- 日志必须包含：`trace_id/request_id/capability_key/decision/reason_code/resolved_setid`。
 - 禁止在日志中写入敏感原始 payload（仅保留必要键）。
 
 ### 4.3 错误码对齐
@@ -93,13 +91,13 @@
 
 ## 6. 里程碑（文档到实施）
 1. [ ] **M1 合同冻结**：字段、阶段、输出级别评审通过。
-2. [ ] **M2 样板链路**：为 `scope-packages` 与 `jobcatalog` 各落 1 条 explain 样板。
+2. [ ] **M2 样板链路**：为 `setid-capability-configs` 与 `jobcatalog` 各落 1 条 explain 样板。
 3. [ ] **M3 字段级扩展**：补齐 `field_decisions[]` 字段与三类差异（必填/可见/默认）样板。
 4. [ ] **M4 门禁接入**：关键链路缺 explain 字段时测试失败。
 5. [ ] **M5 验收留证**：产出 explain 对照样例（success/deny 各至少 3 例）。
 
 ## 7. 验收标准（Acceptance Criteria）
-- [ ] 关键链路可以回答“为何命中该 package/为何被拒绝”。
+- [ ] 关键链路可以回答“为何命中该 SetID 配置/为何被拒绝”。
 - [ ] explain 字段在 API（brief）与日志（full）口径一致。
 - [ ] deny 路径均有稳定 reason_code，且与 102C1 对齐。
 - [ ] 与 070B/102C1/102C2 无重复实施任务。
@@ -119,6 +117,7 @@
 - `docs/dev-plans/102c-setid-group-sharing-and-bu-personalization-gap-assessment.md`
 - `docs/dev-plans/102c1-setid-contextual-security-model.md`
 - `docs/dev-plans/102c2-bu-personalization-strategy-registry.md`
+- `docs/dev-plans/102c6-remove-scope-code-and-converge-to-capability-key-plan.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
