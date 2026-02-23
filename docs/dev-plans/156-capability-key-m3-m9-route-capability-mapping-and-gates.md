@@ -1,6 +1,6 @@
 # DEV-PLAN-156：Capability Key Phase 6 路由映射与复合门禁（承接 150 M3/M9）
 
-**状态**: 规划中（2026-02-23 04:30 UTC）
+**状态**: 已完成（2026-02-23 06:35 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：`DEV-PLAN-150` 工作流 E 与 M9（门禁与回归收口）。
@@ -9,11 +9,11 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 建立“路由/动作 -> capability_key”单点注册表与持久化。
-- [ ] 阻断缺映射、重复映射、未注册 key 使用。
-- [ ] 将命名、注册、映射、禁词、契约检查接入 `make preflight`。
-- [ ] 建立新增路由的 capability 准入流程（先登记后编码）。
-- [ ] 输出全量回归清单与门禁例外审查机制。
+- [X] 建立“路由/动作 -> capability_key”单点注册表与持久化。
+- [X] 阻断缺映射、重复映射、未注册 key 使用。
+- [X] 将命名、注册、映射、禁词、契约检查接入 `make preflight`。
+- [X] 建立新增路由的 capability 准入流程（先登记后编码）。
+- [X] 输出全量回归清单与门禁例外审查机制。
 
 ### 2.2 非目标
 - 不重写规则评估内核（留给 155）。
@@ -60,10 +60,10 @@
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 映射校验算法
-1. [ ] 加载路由清单与 capability 注册表。
-2. [ ] 匹配映射关系并检测缺失/重复/冲突。
-3. [ ] 检测 capability 命名禁词与未注册使用。
-4. [ ] 输出机器可读报告，CI 决策 pass/fail。
+1. [X] 加载路由清单与 capability 注册表。
+2. [X] 匹配映射关系并检测缺失/重复/冲突。
+3. [X] 检测 capability 命名禁词与未注册使用。
+4. [X] 输出机器可读报告，CI 决策 pass/fail。
 
 ## 7. 安全与鉴权 (Security & Authz)
 - 映射缺失时默认拒绝，不允许“临时放行”。
@@ -73,15 +73,15 @@
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
 - **依赖**：`DEV-PLAN-151`、`DEV-PLAN-155`、`DEV-PLAN-157`。
 - **里程碑**：
-  1. [ ] M3.1 映射注册表可用。
-  2. [ ] M9.1 复合门禁接入 CI。
-  3. [ ] M9.2 全量回归与例外清零。
+  1. [X] M3.1 映射注册表可用。
+  2. [X] M9.1 复合门禁接入 CI。
+  3. [X] M9.2 全量回归与例外清零。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
-- [ ] 所有受保护路由均存在唯一 capability 映射。
-- [ ] 未注册或冲突映射在 CI 阶段被阻断。
-- [ ] 门禁报告可用于审计追溯。
-- [ ] `make preflight` 通过。
+- [X] 所有受保护路由均存在唯一 capability 映射。
+- [X] 未注册或冲突映射在 CI 阶段被阻断。
+- [X] 门禁报告可用于审计追溯。
+- [X] `make preflight` 通过。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 - 指标：映射缺失率、门禁误报率、违规 PR 阻断率。
@@ -92,3 +92,11 @@
 - `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/155-capability-key-m3-evaluation-context-cel-kernel.md`
 - `docs/dev-plans/157-capability-key-m7-functional-area-governance.md`
+
+## 12. 执行记录（2026-02-23 06:35 UTC）
+- [X] 新增 `config/capability/route-capability-map.v1.json`，冻结 capability 注册与路由映射持久化合同。
+- [X] 新增 `internal/server/capability_route_registry.go`，收敛 `authzRequirementForRoute` 中 `org.setid_capability_config` 路由到单点注册表。
+- [X] 新增门禁脚本 `scripts/ci/check-capability-route-map.sh`，校验缺映射/重复映射/未注册 key/allowlist 对齐。
+- [X] 接入门禁入口：`Makefile`（`make check capability-route-map` + `make preflight`）与 `.github/workflows/quality-gates.yml`。
+- [X] `go test ./internal/server -run "TestCapabilityRouteBindingKey|TestCapabilityRouteBindingForRoute|TestCapabilityAuthzRequirementForBinding|TestCapabilityRouteRegistryContract|TestAuthzRequirementForRoute" -count=1`
+- [X] `make check capability-route-map`

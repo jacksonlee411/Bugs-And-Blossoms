@@ -111,6 +111,7 @@ require_subset(
         "check no-scope-package",
         "check capability-key",
         "check capability-contract",
+        "check capability-route-map",
         "check request-code",
         "check go-version",
         "check error-message",
@@ -136,6 +137,7 @@ required_workflow_cmds=(
   "make check no-scope-package"
   "make check capability-key"
   "make check capability-contract"
+  "make check capability-route-map"
 )
 
 for cmd in "${required_workflow_cmds[@]}"; do
