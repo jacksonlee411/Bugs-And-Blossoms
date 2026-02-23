@@ -6,6 +6,7 @@
 - 本计划是 `DEV-PLAN-102D` 的专用测试子计划，负责验证 Context + Rule + Eval 机制在“安全、可解释、可操作”三个维度的交付质量。
 - 本计划是测试 SSOT，不重写 `102C1/102C2/102C3` 契约细节；仅验证这些契约在 102D 编排中的一致落地。
 - 本计划明确覆盖“用户可见性原则”：新增能力必须有 UI 可见入口，并至少可完成 1 条端到端操作链路。
+- 若与 `DEV-PLAN-150` 或 `DEV-PLAN-102D` 存在口径冲突，以 `DEV-PLAN-150` 的里程碑与功能域生命周期约束为准。
 
 ## 1. 测试目标（冻结）
 1. [ ] 验证 102D 规则评估链路在显式时间参数下可稳定重放（遵循 102B）。
@@ -19,8 +20,8 @@
 ### 2.1 范围
 - 102D 核心执行链路：Context 构建、候选规则粗筛、CEL 执行、冲突决议、explain 输出。
 - 用户可见样板链路（至少 1 条）：
-  - `allowances` 页面规则过滤，或
-  - `comp-plans` 页面命中决策。
+  - `staffing/assignments` 页面规则过滤，或
+  - `jobcatalog` 页面命中决策。
 - 与 102C 子计划的联动验证：
   - 102C1：拒绝码/上下文授权；
   - 102C2：capability/策略键一致性；
@@ -53,8 +54,8 @@
   - `w-cn-dev`（CN/Dev）
   - `w-us-sales`（US/Sales）
 - 样板 capability：
-  - `comp.allowance_eligibility`
-  - `comp.plan_selection`
+  - `staffing.assignment_create`
+  - `jobcatalog.profile_defaults`
 - 样板规则：
   - `R1`：CN 命中，priority=20
   - `R2`：CN+Dev 命中，priority=10
@@ -76,7 +77,7 @@
 - `TC-RULE-003`：无可决规则时返回拒绝，并包含可解释 reason code。
 
 ### 5.4 用户可见性 E2E（至少一条）
-- `TC-UI-001`（推荐：allowances）：
+- `TC-UI-001`（推荐：staffing/assignments）：
   - 前置：用户从导航进入页面（可发现入口）。
   - 操作：选择目标员工，触发规则过滤。
   - 期望：只展示符合规则的选项；用户可完成提交（可操作）。

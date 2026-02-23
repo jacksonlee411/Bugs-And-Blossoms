@@ -6,9 +6,10 @@
 - 本计划是 `DEV-PLAN-102C` 的子计划，聚焦 **“角色 + BU 上下文 + 条件”** 的授权模型收敛。
 - 本计划不处理 070B 的迁移主轴（global_tenant 下线、发布基座、tenant-only 读链路）。
 - 本计划的输出是：授权契约、判定矩阵、门禁与验收标准；具体改码按后续实施 PR 执行。
+- 若与 `DEV-PLAN-150` 存在口径冲突，以 `DEV-PLAN-150` 作为 capability_key 收口与运行时分层的最终 PoR。
 
 ## 1. 背景与问题陈述（Context）
-- 当前 SetID/Scope Package 编辑能力仍以“租户角色”作为主要开关，BU 上下文（business_unit/owner_setid）约束不足。
+- 当前 SetID Capability Config 编辑能力仍以“租户角色”作为主要开关，BU 上下文（business_unit/owner_setid）约束不足。
 - 现状风险：
   1. 角色粒度足够粗，但“谁可在什么 BU 上下文做什么”不够显式；
   2. 容易出现“同租户管理员对非归属配置可改”的认知歧义；
@@ -17,7 +18,7 @@
 
 ## 2. 目标与非目标（Goals & Non-Goals）
 ### 2.1 核心目标
-- [ ] 冻结 SetID 相关操作的上下文化授权四元组：`subject/domain/object/action` + `context`（business_unit / owner_setid / scope_code）。
+- [ ] 冻结 SetID 相关操作的上下文化授权四元组：`subject/domain/object/action` + `context`（business_unit / setid / capability_key / actor_scope / as_of）。
 - [ ] 输出“角色权限 × 上下文条件”能力矩阵，明确 allow/deny/fail-closed 规则。
 - [ ] 建立统一拒绝码与解释口径（便于前端与审计使用）。
 - [ ] 新增防漂移门禁：阻断“仅角色判断、缺上下文校验”的新增路径。
@@ -26,7 +27,7 @@
 ### 2.2 非目标（与 070B 明确隔离）
 - 不重复定义 070B 的发布、回填、切流、下线任务。
 - 不引入新的共享读回退路径（禁止 legacy/双链路）。
-- 不扩展到全部业务模块；仅覆盖 SetID/Scope Package 相关对象与调用路径。
+- 不扩展到全部业务模块；仅覆盖 SetID Capability Config 相关对象与调用路径。
 
 ### 2.3 工具链与门禁（本计划阶段）
 - [x] 文档门禁：`make check doc`
@@ -44,8 +45,7 @@
 ### 4.1 判定输入（标准化）
 - 主输入：`subject/domain/object/action`（沿用 022 冻结口径）。
 - 上下文输入（新增冻结）：
-  - `owner_setid`
-  - `scope_code`
+  - `setid`（主归属上下文；实现上可由 `owner_setid` 承载）
   - `business_unit_id`（主上下文，必填）
   - `org_unit_id`（可选，仅用于资源定位，不参与层级策略）
   - `capability_key`
@@ -55,14 +55,14 @@
 
 ### 4.2 判定顺序（冻结）
 1. 基础授权（Casbin）先判断 object/action 是否可达；
-2. 上下文约束再判断 owner/scope/business_unit 是否满足；
+2. 上下文约束再判断 owner/setid/capability/business_unit 是否满足；
 3. 字段策略执行：按 BU 上下文判定 `required/visible/default`（承接 102C2 注册表）；
 4. 任一环失败即拒绝（fail-closed），并返回稳定 reason code。
 
 ### 4.3 拒绝原因码（建议）
 - `OWNER_CONTEXT_REQUIRED`：缺失 owner_setid/business_unit 上下文。
 - `OWNER_CONTEXT_FORBIDDEN`：存在上下文但不具备该上下文编辑权。
-- `SCOPE_CONTEXT_MISMATCH`：scope_code 与目标资源不匹配。
+- `CAPABILITY_CONTEXT_MISMATCH`：capability_key 与目标资源或路由映射不匹配。
 - `ACTOR_SCOPE_FORBIDDEN`：actor_scope 不满足目标操作要求。
 - `AUTHZ_CONTEXT_POLICY_MISSING`：策略未覆盖（用于 shadow/审计告警）。
 - `FIELD_REQUIRED_IN_CONTEXT`：当前 BU/上下文要求字段必填但缺失。
@@ -73,13 +73,13 @@
 ## 5. 能力矩阵（草案）
 | object | action | 角色 | 额外上下文条件 | 字段策略条件 | 结果 |
 | --- | --- | --- | --- | --- | --- |
-| `org.scope_package` | `read` | tenant-viewer/admin | `scope_code` 合法 | 无 | allow |
-| `org.scope_package` | `admin` | tenant-admin | `owner_setid` 可编辑且 active | `field.required=false` | allow |
-| `org.scope_package` | `admin` | tenant-admin | `owner_setid` 合法 | `field.required=true` 且缺失 | deny (`FIELD_REQUIRED_IN_CONTEXT`) |
-| `org.scope_package` | `admin` | tenant-admin | `owner_setid` 合法 | `field.visible=false` 但请求提交字段 | deny (`FIELD_HIDDEN_IN_CONTEXT`) |
-| `org.scope_subscription` | `admin` | tenant-admin | setid 与 scope_code 关系合法 | 默认值规则缺失 | deny (`FIELD_DEFAULT_RULE_MISSING`) |
-| `org.global_scope_package` | `admin` | superadmin/saas actor | `actor_scope=saas` | 无 | allow |
-| `org.global_scope_package` | `admin` | tenant-admin | 任意 | 无 | deny (`ACTOR_SCOPE_FORBIDDEN`) |
+| `org.setid_capability_config` | `read` | tenant-viewer/admin | `capability_key` 合法且归属于 `setid` | 无 | allow |
+| `org.setid_capability_config` | `admin` | tenant-admin | `owner_setid` 可编辑且 active | `field.required=false` | allow |
+| `org.setid_capability_config` | `admin` | tenant-admin | `owner_setid` 合法 | `field.required=true` 且缺失 | deny (`FIELD_REQUIRED_IN_CONTEXT`) |
+| `org.setid_capability_config` | `admin` | tenant-admin | `owner_setid` 合法 | `field.visible=false` 但请求提交字段 | deny (`FIELD_HIDDEN_IN_CONTEXT`) |
+| `org.setid_capability_config` | `admin` | tenant-admin | `setid` 与 `capability_key` 关系合法 | 默认值规则缺失 | deny (`FIELD_DEFAULT_RULE_MISSING`) |
+| `org.functional_area` | `admin` | superadmin/saas actor | `actor_scope=saas` | 无 | allow |
+| `org.functional_area` | `admin` | tenant-admin | 任意 | 无 | deny (`ACTOR_SCOPE_FORBIDDEN`) |
 
 > 说明：最终 object 命名以 `DEV-PLAN-022` 及代码 registry 为准；本表先冻结业务语义，不在此计划内改 object 命名体系。
 
@@ -103,7 +103,7 @@
 4. [ ] **M4 回归验收**：补齐接口测试、403 解释信息、字段级审计字段。
 
 ## 8. 验收标准（Acceptance Criteria）
-- [ ] SetID/Scope Package 相关 admin 操作均具备上下文校验，不再只依赖角色。
+- [ ] SetID Capability Config 相关 admin 操作均具备上下文校验，不再只依赖角色。
 - [ ] 上下文缺失/冲突统一 fail-closed，并输出稳定 reason code。
 - [ ] 关键拒绝路径有可回归测试（含 role 正确但 context 错误场景）。
 - [ ] 与 070B 无任务重复（评审清单通过）。
@@ -121,6 +121,7 @@
 
 ## 10. 关联文档
 - `docs/dev-plans/102c-setid-group-sharing-and-bu-personalization-gap-assessment.md`
+- `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
