@@ -282,6 +282,7 @@ modules/{module}/
 - DEV-PLAN-130：Org 组织树初始化问题收敛与自举修复方案：`docs/dev-plans/130-orgunit-tree-initialization-recovery-and-bootstrap.md`
 - DEV-PLAN-130 执行日志：`docs/dev-records/dev-plan-130-execution-log.md`
 - DEV-PLAN-140：全仓错误提示明确化与质量门禁：`docs/dev-plans/140-error-message-clarity-and-gates.md`
+- DEV-PLAN-140 执行日志：`docs/dev-records/dev-plan-140-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102A【归档】：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案（表达式口径一致性已并入 `DEV-PLAN-120`）：`docs/archive/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`

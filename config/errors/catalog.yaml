@@ -1,0 +1,163 @@
+version: 1
+errors:
+  - code: forbidden
+    module: iam
+    http_status: 403
+    severity: error
+    user_message_key: errors.forbidden
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: unauthorized
+    module: iam
+    http_status: 401
+    severity: error
+    user_message_key: errors.unauthorized
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: invalid_request
+    module: platform
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_request
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: tenant_not_found
+    module: iam
+    http_status: 404
+    severity: error
+    user_message_key: errors.tenant_not_found
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: tenant_missing
+    module: iam
+    http_status: 400
+    severity: error
+    user_message_key: errors.tenant_missing
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: tenant_resolve_error
+    module: iam
+    http_status: 500
+    severity: error
+    user_message_key: errors.tenant_resolve_error
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_ROOT_ALREADY_EXISTS
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.org_root_already_exists
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_TREE_NOT_INITIALIZED
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.org_tree_not_initialized
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_ALREADY_EXISTS
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.org_already_exists
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_CODE_INVALID
+    module: orgunit
+    http_status: 400
+    severity: error
+    user_message_key: errors.org_code_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_CODE_NOT_FOUND
+    module: orgunit
+    http_status: 404
+    severity: error
+    user_message_key: errors.org_code_not_found
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_NOT_FOUND_AS_OF
+    module: orgunit
+    http_status: 404
+    severity: error
+    user_message_key: errors.org_not_found_as_of
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ORG_EVENT_NOT_FOUND
+    module: orgunit
+    http_status: 404
+    severity: error
+    user_message_key: errors.org_event_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_EVENT_RESCINDED
+    module: orgunit
+    http_status: 409
+    severity: error
+    user_message_key: errors.org_event_rescinded
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: PARENT_NOT_FOUND_AS_OF
+    module: orgunit
+    http_status: 404
+    severity: error
+    user_message_key: errors.parent_not_found_as_of
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: PATCH_FIELD_NOT_ALLOWED
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.patch_field_not_allowed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: PATCH_REQUIRED
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.patch_required
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: DEFAULT_RULE_REQUIRED
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.default_rule_required
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: DEFAULT_RULE_EVAL_FAILED
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.default_rule_eval_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: FIELD_POLICY_EXPR_INVALID
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.field_policy_expr_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_CODE_EXHAUSTED
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.org_code_exhausted
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ORG_CODE_CONFLICT
+    module: orgunit
+    http_status: 409
+    severity: error
+    user_message_key: errors.org_code_conflict
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: FIELD_NOT_MAINTAINABLE
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.field_not_maintainable
+    backend_policy: passthrough
+    frontend_policy: mapped
