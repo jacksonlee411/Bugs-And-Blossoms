@@ -15,6 +15,7 @@ import { useMutation } from '@tanstack/react-query'
 import { ApiClientError } from '../api/errors'
 import { getSetIDExplain, type SetIDExplainResponse } from '../api/setids'
 import { useAppPreferences } from '../app/providers/AppPreferencesContext'
+import { resolveApiErrorMessage } from '../errors/presentApiError'
 
 type ExplainLevel = 'brief' | 'full'
 
@@ -50,7 +51,7 @@ function parseExplainError(error: unknown): ExplainErrorView {
     const details = error.details
     if (details && typeof details === 'object') {
       const code = String(Reflect.get(details, 'code') ?? '').trim()
-      const message = String(Reflect.get(details, 'message') ?? error.message).trim()
+      const message = resolveApiErrorMessage(code, error.message).trim()
       const traceID = String(Reflect.get(details, 'trace_id') ?? '').trim()
       return {
         code: code.length > 0 ? code : 'UNKNOWN_ERROR',

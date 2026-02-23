@@ -17,6 +17,7 @@
 - `.templ`/MUI Web UI/presentation assets 相关：`make generate && make css`，然后 `git status --short` 必须为空
 - 多语言 JSON：`make check tr`
 - 提交前 Go 版本门禁：`make check go-version`（或直接跑 `make preflight`）
+- 错误提示收敛门禁（禁止泛化失败文案直出）：`make check error-message`
 - 发 PR 前一键对齐 CI（推荐）：`make preflight`
 - 发 PR 规则（强制）：PR 源分支只能是 `wt-dev-main` / `wt-dev-a` / `wt-dev-b`（CI 门禁：`make check pr-branch`）
 - DB Schema/迁移（Atlas+Goose，按模块）：`make <module> plan && make <module> lint && make <module> migrate up`
@@ -53,6 +54,7 @@
 | 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
 | capability_key 命名与生成方式 | `make check capability-key` | 禁止上下文编码与运行时拼接（承接 `DEV-PLAN-102C6/102D`） |
 | 幂等与追踪命名（request_id / trace_id） | `make check request-code` | 规则见 `DEV-PLAN-109A` |
+| 错误提示契约（错误码→明确提示） | `make check error-message` | 规则见 `DEV-PLAN-140` |
 
 ## 3. 开发与编码规则（仓库级合约）
 
@@ -277,6 +279,9 @@ modules/{module}/
 - DEV-PLAN-120：Org 字段默认值（Go+PG+CEL）规则引擎落地路线图：`docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md`
 - DEV-PLAN-126：Go 1.26 升级与现代化改造计划（No-Compat）：`docs/dev-plans/126-go-1-26-upgrade-and-modernization-plan.md`
 - DEV-PLAN-126 执行日志：`docs/dev-records/dev-plan-126-execution-log.md`
+- DEV-PLAN-130：Org 组织树初始化问题收敛与自举修复方案：`docs/dev-plans/130-orgunit-tree-initialization-recovery-and-bootstrap.md`
+- DEV-PLAN-130 执行日志：`docs/dev-records/dev-plan-130-execution-log.md`
+- DEV-PLAN-140：全仓错误提示明确化与质量门禁：`docs/dev-plans/140-error-message-clarity-and-gates.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102A【归档】：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案（表达式口径一致性已并入 `DEV-PLAN-120`）：`docs/archive/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`

@@ -387,8 +387,12 @@ func TestParseCompileAndMapCreateAutoCodeHelpers(t *testing.T) {
 	})
 
 	t.Run("parse empty prefix", func(t *testing.T) {
-		if _, err := parseNextOrgCodeRule(`next_org_code("", 6)`); err == nil || err.Error() != errDefaultRuleEvalFailed {
+		spec, err := parseNextOrgCodeRule(`next_org_code("", 6)`)
+		if err != nil {
 			t.Fatalf("err=%v", err)
+		}
+		if spec.Prefix != "" || spec.Width != 6 {
+			t.Fatalf("spec=%+v", spec)
 		}
 	})
 

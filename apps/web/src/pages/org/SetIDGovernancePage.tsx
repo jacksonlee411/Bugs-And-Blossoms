@@ -28,6 +28,7 @@ import {
 import { DataGridPage } from '../../components/DataGridPage'
 import { PageHeader } from '../../components/PageHeader'
 import { SetIDExplainPanel } from '../../components/SetIDExplainPanel'
+import { resolveApiErrorMessage } from '../../errors/presentApiError'
 
 type SetIDPageTab = 'governance' | 'security-context' | 'strategy-registry' | 'explainability'
 
@@ -78,7 +79,7 @@ function parseApiError(error: unknown): string {
     if (details && typeof details === 'object') {
       const code = String(Reflect.get(details, 'code') ?? '').trim()
       const traceID = String(Reflect.get(details, 'trace_id') ?? '').trim()
-      const message = String(Reflect.get(details, 'message') ?? error.message).trim()
+      const message = resolveApiErrorMessage(code, error.message).trim()
       if (code.length > 0 && traceID.length > 0) {
         return `${message} (${code}, trace_id=${traceID})`
       }

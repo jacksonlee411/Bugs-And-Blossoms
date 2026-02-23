@@ -86,7 +86,7 @@ func TestResolveWriteCapabilities_EnabledPayloadKeys(t *testing.T) {
 }
 
 func TestResolveWriteCapabilities_CoversMoreDenyReasons(t *testing.T) {
-	t.Run("create non-root requires tree initialized", func(t *testing.T) {
+	t.Run("create non-root does not force tree initialized", func(t *testing.T) {
 		decision, err := ResolveWriteCapabilities(
 			OrgUnitWriteIntentCreateOrg,
 			nil,
@@ -99,10 +99,10 @@ func TestResolveWriteCapabilities_CoversMoreDenyReasons(t *testing.T) {
 		if err != nil {
 			t.Fatalf("err=%v", err)
 		}
-		if decision.Enabled {
-			t.Fatalf("expected disabled")
+		if !decision.Enabled {
+			t.Fatalf("expected enabled")
 		}
-		if !reflect.DeepEqual(decision.DenyReasons, []string{"ORG_TREE_NOT_INITIALIZED"}) {
+		if len(decision.DenyReasons) != 0 {
 			t.Fatalf("deny=%v", decision.DenyReasons)
 		}
 	})
