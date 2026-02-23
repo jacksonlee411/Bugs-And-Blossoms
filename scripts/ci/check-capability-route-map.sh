@@ -36,6 +36,7 @@ capability_pattern = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$")
 allowed_methods = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 allowed_actions = {"read", "admin"}
 allowed_status = {"active", "reserved", "deprecated"}
+allowed_activation_state = {"draft", "active"}
 
 areas = {}
 for area in contract.get("functional_areas", []):
@@ -52,6 +53,8 @@ for item in capabilities:
     area = item.get("functional_area_key", "")
     cap_type = item.get("capability_type", "")
     status = item.get("status", "")
+    activation_state = item.get("activation_state", "")
+    current_policy_version = item.get("current_policy_version", "")
     if not capability_pattern.match(key):
         fail(f"invalid capability_key: {key!r}")
     if key in capability_keys:
@@ -65,6 +68,12 @@ for item in capabilities:
         fail(f"invalid capability_type for {key}: {cap_type!r}")
     if status not in allowed_status:
         fail(f"invalid capability status for {key}: {status!r}")
+    if activation_state not in allowed_activation_state:
+        fail(f"invalid activation_state for {key}: {activation_state!r}")
+    if status == "active" and activation_state != "active":
+        fail(f"active capability must have activation_state=active for {key}")
+    if not current_policy_version:
+        fail(f"current_policy_version required for {key}")
 
 routes = route_map.get("routes", [])
 if not isinstance(routes, list) or len(routes) == 0:

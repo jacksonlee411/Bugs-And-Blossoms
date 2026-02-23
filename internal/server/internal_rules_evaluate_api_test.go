@@ -17,6 +17,8 @@ import (
 func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 	resetSetIDStrategyRegistryRuntimeForTest()
 	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
+	resetFunctionalAreaSwitchStoreForTest()
+	t.Cleanup(resetFunctionalAreaSwitchStoreForTest)
 	internalRuleEligibilityProgramCache = sync.Map{}
 	internalRuleDecisionProgramCache = sync.Map{}
 
@@ -163,6 +165,24 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 		t.Fatalf("status=%d body=%s", recInvalidBU.Code, recInvalidBU.Body.String())
 	}
 
+	recAreaMissing := httptest.NewRecorder()
+	reqAreaMissing := makeReq(`{"capability_key":"unknown.key","field_key":"field_x","business_unit_id":"10000001","as_of":"2026-01-01"}`)
+	reqAreaMissing = reqAreaMissing.WithContext(withPrincipal(reqAreaMissing.Context(), Principal{RoleSlug: "tenant-admin"}))
+	handleInternalRulesEvaluateAPI(recAreaMissing, reqAreaMissing, store)
+	if recAreaMissing.Code != http.StatusForbidden || !strings.Contains(recAreaMissing.Body.String(), functionalAreaMissingCode) {
+		t.Fatalf("status=%d body=%s", recAreaMissing.Code, recAreaMissing.Body.String())
+	}
+
+	defaultFunctionalAreaSwitchStore.setEnabled("t1", "staffing", false)
+	recAreaDisabled := httptest.NewRecorder()
+	reqAreaDisabled := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_id":"10000001","as_of":"2026-01-01"}`)
+	reqAreaDisabled = reqAreaDisabled.WithContext(withPrincipal(reqAreaDisabled.Context(), Principal{RoleSlug: "tenant-admin"}))
+	handleInternalRulesEvaluateAPI(recAreaDisabled, reqAreaDisabled, store)
+	if recAreaDisabled.Code != http.StatusForbidden || !strings.Contains(recAreaDisabled.Body.String(), functionalAreaDisabledCode) {
+		t.Fatalf("status=%d body=%s", recAreaDisabled.Code, recAreaDisabled.Body.String())
+	}
+	defaultFunctionalAreaSwitchStore.setEnabled("t1", "staffing", true)
+
 	recInvalidTarget := httptest.NewRecorder()
 	reqInvalidTarget := makeReq(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","business_unit_id":"10000001","target_org_unit_id":"bad","as_of":"2026-01-01"}`)
 	reqInvalidTarget = reqInvalidTarget.WithContext(withPrincipal(reqInvalidTarget.Context(), Principal{RoleSlug: "tenant-admin"}))
@@ -192,6 +212,7 @@ func TestHandleInternalRulesEvaluateAPI(t *testing.T) {
 	}
 	if !strings.Contains(recBUA.Body.String(), `"decision":"allow"`) ||
 		!strings.Contains(recBUA.Body.String(), `"reason_code":"`+fieldRequiredInContextCode+`"`) ||
+		!strings.Contains(recBUA.Body.String(), `"functional_area_key":"staffing"`) ||
 		!strings.Contains(recBUA.Body.String(), `"setid":"A0001"`) ||
 		!strings.Contains(recBUA.Body.String(), `"selected_rule_id":"staffing.assignment_create.field_policy|field_x|business_unit|10000001|2026-01-01"`) {
 		t.Fatalf("unexpected body: %q", recBUA.Body.String())

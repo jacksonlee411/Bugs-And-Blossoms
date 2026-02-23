@@ -6,7 +6,9 @@
       "functional_area_key": "staffing",
       "capability_type": "process_capability",
       "owner_module": "staffing",
-      "status": "active"
+      "status": "active",
+      "activation_state": "active",
+      "current_policy_version": "2026-02-23"
     }
   ],
   "routes": [

@@ -104,7 +104,7 @@ func TestResolveFunctionalAreaKey(t *testing.T) {
 	if got := resolveFunctionalAreaKey("staffing.assignment_create.field_policy"); got != "staffing" {
 		t.Fatalf("functional_area=%q", got)
 	}
-	if got := resolveFunctionalAreaKey("unknown.key"); got != "org_foundation" {
+	if got := resolveFunctionalAreaKey("unknown.key"); got != "" {
 		t.Fatalf("functional_area=%q", got)
 	}
 }
@@ -112,6 +112,8 @@ func TestResolveFunctionalAreaKey(t *testing.T) {
 func TestHandleSetIDExplainAPI(t *testing.T) {
 	resetSetIDStrategyRegistryRuntimeForTest()
 	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
+	resetFunctionalAreaSwitchStoreForTest()
+	t.Cleanup(resetFunctionalAreaSwitchStoreForTest)
 
 	makeReq := func(path string) *http.Request {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -156,6 +158,20 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	if recBadBU.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", recBadBU.Code)
 	}
+
+	recAreaMissing := httptest.NewRecorder()
+	handleSetIDExplainAPI(recAreaMissing, makeReq("/org/api/setid-explain?capability_key=unknown.key&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01"), store)
+	if recAreaMissing.Code != http.StatusForbidden || !strings.Contains(recAreaMissing.Body.String(), functionalAreaMissingCode) {
+		t.Fatalf("status=%d body=%s", recAreaMissing.Code, recAreaMissing.Body.String())
+	}
+
+	defaultFunctionalAreaSwitchStore.setEnabled("t1", "staffing", false)
+	recAreaDisabled := httptest.NewRecorder()
+	handleSetIDExplainAPI(recAreaDisabled, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01"), store)
+	if recAreaDisabled.Code != http.StatusForbidden || !strings.Contains(recAreaDisabled.Body.String(), functionalAreaDisabledCode) {
+		t.Fatalf("status=%d body=%s", recAreaDisabled.Code, recAreaDisabled.Body.String())
+	}
+	defaultFunctionalAreaSwitchStore.setEnabled("t1", "staffing", true)
 
 	recBadLevel := httptest.NewRecorder()
 	handleSetIDExplainAPI(recBadLevel, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=bad"), store)

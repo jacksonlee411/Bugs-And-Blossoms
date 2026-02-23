@@ -18,6 +18,30 @@ type capabilityRouteBinding struct {
 
 const routeCapabilityStatusActive = "active"
 
+type capabilityDefinition struct {
+	CapabilityKey     string `json:"capability_key"`
+	FunctionalAreaKey string `json:"functional_area_key"`
+	CapabilityType    string `json:"capability_type"`
+	OwnerModule       string `json:"owner_module"`
+	Status            string `json:"status"`
+	ActivationState   string `json:"activation_state"`
+	CurrentPolicy     string `json:"current_policy_version"`
+}
+
+var capabilityDefinitions = []capabilityDefinition{
+	{
+		CapabilityKey:     "staffing.assignment_create.field_policy",
+		FunctionalAreaKey: "staffing",
+		CapabilityType:    "process_capability",
+		OwnerModule:       "staffing",
+		Status:            routeCapabilityStatusActive,
+		ActivationState:   "active",
+		CurrentPolicy:     capabilityPolicyVersionBaseline,
+	},
+}
+
+var capabilityDefinitionByKey = buildCapabilityDefinitionIndex(capabilityDefinitions)
+
 var capabilityRouteBindings = []capabilityRouteBinding{
 	{
 		Method:        "GET",
@@ -58,6 +82,20 @@ var capabilityRouteBindings = []capabilityRouteBinding{
 }
 
 var capabilityRouteBindingByKey = buildCapabilityRouteBindingIndex(capabilityRouteBindings)
+
+func buildCapabilityDefinitionIndex(definitions []capabilityDefinition) map[string]capabilityDefinition {
+	index := make(map[string]capabilityDefinition, len(definitions))
+	for _, definition := range definitions {
+		key := strings.ToLower(strings.TrimSpace(definition.CapabilityKey))
+		index[key] = definition
+	}
+	return index
+}
+
+func capabilityDefinitionForKey(capabilityKey string) (capabilityDefinition, bool) {
+	definition, ok := capabilityDefinitionByKey[strings.ToLower(strings.TrimSpace(capabilityKey))]
+	return definition, ok
+}
 
 func buildCapabilityRouteBindingIndex(bindings []capabilityRouteBinding) map[string]capabilityRouteBinding {
 	index := make(map[string]capabilityRouteBinding, len(bindings))

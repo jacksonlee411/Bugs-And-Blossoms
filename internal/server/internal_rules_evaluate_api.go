@@ -55,6 +55,7 @@ type internalRulesEvaluateResponse struct {
 	TraceID             string                    `json:"trace_id"`
 	RequestID           string                    `json:"request_id"`
 	CapabilityKey       string                    `json:"capability_key"`
+	FunctionalAreaKey   string                    `json:"functional_area_key"`
 	FieldKey            string                    `json:"field_key"`
 	SetID               string                    `json:"setid"`
 	PolicyVersion       string                    `json:"policy_version"`
@@ -149,6 +150,11 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 	req.CapabilityKey = capCtx.CapabilityKey
 	req.BusinessUnitID = capCtx.BusinessUnitID
 	req.AsOf = capCtx.AsOf
+	functionalAreaKey, areaReasonCode, areaAllowed := evaluateFunctionalAreaGate(tenant.ID, req.CapabilityKey)
+	if !areaAllowed {
+		routingWriteErrorInternal(w, r, http.StatusForbidden, areaReasonCode, functionalAreaErrorMessage(areaReasonCode))
+		return
+	}
 
 	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), req.BusinessUnitID)
 	if !dynamicRelations.actorManages(req.TargetOrgUnitID, req.AsOf) {
@@ -200,6 +206,7 @@ func handleInternalRulesEvaluateAPI(w http.ResponseWriter, r *http.Request, seti
 		TraceID:             traceID,
 		RequestID:           requestID,
 		CapabilityKey:       req.CapabilityKey,
+		FunctionalAreaKey:   functionalAreaKey,
 		FieldKey:            req.FieldKey,
 		SetID:               resolvedSetID,
 		PolicyVersion:       capabilityPolicyVersionBaseline,
