@@ -7,6 +7,13 @@ errors:
     user_message_key: errors.actor_scope_forbidden
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: CAPABILITY_CONTEXT_MISMATCH
+    module: setid
+    http_status: 403
+    severity: error
+    user_message_key: errors.capability_context_mismatch
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: DEFAULT_RULE_REQUIRED
     module: orgunit
     http_status: 422

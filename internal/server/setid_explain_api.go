@@ -60,6 +60,19 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_business_unit_id", "invalid business_unit_id")
 		return
 	}
+	capCtx, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
+		CapabilityKey:       capabilityKey,
+		BusinessUnitID:      businessUnitID,
+		AsOf:                asOf,
+		RequireBusinessUnit: true,
+	})
+	if capErr != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, statusCodeForCapabilityContextError(capErr.Code), capErr.Code, capErr.Message)
+		return
+	}
+	capabilityKey = capCtx.CapabilityKey
+	businessUnitID = capCtx.BusinessUnitID
+	asOf = capCtx.AsOf
 
 	level := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("level")))
 	if level == "" {
@@ -82,16 +95,21 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_org_unit_id", "invalid org_unit_id")
 		return
 	}
+	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), businessUnitID)
+	if !dynamicRelations.actorManages(orgUnitID, asOf) {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
+		return
+	}
 
 	resolvedSetID, err := store.ResolveSetID(r.Context(), tenant.ID, orgUnitID, asOf)
 	if err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, scopeReasonOwnerContextForbidden, "business unit context forbidden")
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
 	}
 	targetSetID := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("setid")))
 	resolvedSetID = strings.ToUpper(strings.TrimSpace(resolvedSetID))
 	if targetSetID != "" && targetSetID != resolvedSetID {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, scopeReasonOwnerContextForbidden, "business unit context forbidden")
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
 	}
 

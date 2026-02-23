@@ -553,6 +553,18 @@ func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 		t.Fatalf("status=%d", invalidRec.Code)
 	}
 
+	contextMismatchReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-mismatch"}`))
+	contextMismatchReq.Header.Set("X-Actor-Scope", "saas")
+	contextMismatchReq = contextMismatchReq.WithContext(withTenant(contextMismatchReq.Context(), Tenant{ID: "t1"}))
+	contextMismatchRec := httptest.NewRecorder()
+	handleSetIDStrategyRegistryAPI(contextMismatchRec, contextMismatchReq)
+	if contextMismatchRec.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", contextMismatchRec.Code, contextMismatchRec.Body.String())
+	}
+	if !strings.Contains(contextMismatchRec.Body.String(), capabilityReasonContextMismatch) {
+		t.Fatalf("unexpected body=%q", contextMismatchRec.Body.String())
+	}
+
 	createBody := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r2"}`
 	createReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(createBody))
 	createReq = createReq.WithContext(withTenant(createReq.Context(), Tenant{ID: "t1"}))

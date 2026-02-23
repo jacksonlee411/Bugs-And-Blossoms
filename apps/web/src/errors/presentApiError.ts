@@ -5,6 +5,7 @@ type LocalizedErrorMessage = {
 
 const localizedMessages: Record<string, LocalizedErrorMessage> = {
   ACTOR_SCOPE_FORBIDDEN: { en: 'Actor scope forbidden.', zh: '请求失败（actor scope forbidden）。' },
+  CAPABILITY_CONTEXT_MISMATCH: { en: 'Capability context mismatch.', zh: '上下文与服务端判定不一致，请检查后重试。' },
   DEFAULT_RULE_REQUIRED: { en: 'This field is system-managed but no default rule is configured.', zh: '该字段为系统维护，但未配置默认规则。' },
   FIELD_POLICY_EXPR_INVALID: { en: 'Default rule expression is invalid.', zh: '默认规则表达式不合法。' },
   ORG_ALREADY_EXISTS: { en: 'Org already exists.', zh: '请求失败（org already exists）。' },

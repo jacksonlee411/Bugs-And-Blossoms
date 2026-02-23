@@ -214,6 +214,7 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "tenant_not_found", want: "未找到租户，请检查访问域名。"},
 		{code: "tenant_missing", want: "租户上下文缺失，请刷新后重试。"},
 		{code: "tenant_resolve_error", want: "租户解析失败，请稍后重试。"},
+		{code: "CAPABILITY_CONTEXT_MISMATCH", want: "上下文与服务端判定不一致，请检查业务单元与生效日期后重试。"},
 		{code: "ORG_ROOT_ALREADY_EXISTS", want: "根组织已存在，请改为选择上级组织后新建。"},
 		{code: "ORG_TREE_NOT_INITIALIZED", want: "组织树尚未初始化，请先创建根组织。"},
 		{code: "ORG_ALREADY_EXISTS", want: "组织编码已存在，请使用其他编码。"},
