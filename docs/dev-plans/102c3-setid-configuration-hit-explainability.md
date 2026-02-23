@@ -6,6 +6,7 @@
 - 本计划是 `DEV-PLAN-102C` 的子计划，聚焦“**为何命中该配置**”的可解释输出与证据链。
 - 本计划不承担 070B 的迁移/切流任务，不承担 102C1 的授权判定设计，不承担 102C2 的注册表治理设计。
 - 本计划输出：解释字段合同、解释输出接口约定、日志证据模型、验收标准。
+- 若与 `DEV-PLAN-150` 存在口径冲突，以 `DEV-PLAN-150` 作为 capability_key 收口与 explain 分层的最终 PoR。
 
 ## 1. 背景与问题陈述（Context）
 - 当前系统已有 SetID / as_of 链路，但“命中原因”主要散落在实现内部与数据库函数，UI 与 API 缺少统一 explain 输出。
@@ -39,6 +40,8 @@
 | `trace_id` | 请求追踪 ID（链路级） | `trc-...` |
 | `request_id` | 幂等/请求 ID | `req-...` |
 | `capability_key` | 业务能力键（引用 102C2） | `jobcatalog.profile_defaults` |
+| `functional_area_key` | 能力归属功能域 | `staffing` |
+| `capability_type` | 能力类型 | `domain_capability` |
 | `tenant_id` | 当前租户 | `...uuid...` |
 | `business_unit_id` | BU 上下文 | `BU-A` |
 | `as_of` | 查询时点（读） | `2026-03-01` |
@@ -46,6 +49,7 @@
 | `org_unit_id` | 资源定位上下文（可选，不参与层级策略） | `10000001` |
 | `resolved_setid` | 解析出的 SetID | `DEFLT` |
 | `resolved_config_version` | 命中配置版本（可选） | `v2026-03-01-01` |
+| `policy_version` | 命中时策略版本 | `2026.03.01.1` |
 | `decision` | `allow`/`deny` | `allow` |
 | `reason_code` | 拒绝/说明码 | `OWNER_CONTEXT_FORBIDDEN` |
 | `field_decisions[]` | 字段级判定数组 | `[{field_key,visible,required,default_rule_ref,resolved_default_value,decision,reason_code}]` |
@@ -53,10 +57,11 @@
 ### 3.2 解释链路阶段（固定顺序）
 1. 输入上下文归一化（tenant / as_of / business_unit）。
 2. SetID 解析（business_unit -> setid；org_unit 仅作可选定位）。
-3. 配置解析（setid + capability_key + as_of -> config）。
-4. 授权与上下文约束判定（引用 102C1）。
-5. 字段策略判定（引用 102C2，产出 `field_decisions[]`）。
-6. 结果落盘（日志）与可选 API 回显（按安全策略）。
+3. 配置解析（setid + capability_key + as_of -> config + functional_area/capability_type/policy_version）。
+4. 功能域与策略激活校验（`functional_area` 生命周期 + `policy_version` 是否 active）。
+5. 授权与上下文约束判定（引用 102C1）。
+6. 字段策略判定（引用 102C2，产出 `field_decisions[]`）。
+7. 结果落盘（日志）与可选 API 回显（按安全策略）。
 
 ### 3.3 输出级别
 - `brief`：仅返回关键结论字段（面向 UI 普通展示）。
@@ -71,7 +76,7 @@
 
 ### 4.2 日志约定
 - 所有 SetID 关键链路统一记录 full explain（结构化日志）。
-- 日志必须包含：`trace_id/request_id/capability_key/decision/reason_code/resolved_setid`。
+- 日志必须包含：`trace_id/request_id/capability_key/functional_area_key/policy_version/decision/reason_code/resolved_setid`。
 - 禁止在日志中写入敏感原始 payload（仅保留必要键）。
 
 ### 4.3 错误码对齐
@@ -117,6 +122,7 @@
 - `docs/dev-plans/102c-setid-group-sharing-and-bu-personalization-gap-assessment.md`
 - `docs/dev-plans/102c1-setid-contextual-security-model.md`
 - `docs/dev-plans/102c2-bu-personalization-strategy-registry.md`
+- `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/102c6-remove-scope-code-and-converge-to-capability-key-plan.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`

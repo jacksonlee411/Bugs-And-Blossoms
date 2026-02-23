@@ -6,9 +6,10 @@
 - 本计划是 `DEV-PLAN-102C` 的子计划，聚焦“**流程个性化**”最小可行样板（Pilot）。
 - 本计划不承担 070B 的共享迁移与切流，不承担 102C1 的授权模型收敛，不承担 102C2 的注册表治理，不承担 102C3 的 explain 合同定义。
 - 本计划输出：样板流程选择、变体模型、执行与回放验收标准。
+- 若与 `DEV-PLAN-150` 存在口径冲突，以 `DEV-PLAN-150` 作为 capability_key 收口与运行时约束的最终 PoR。
 
 ## 1. 背景与问题陈述（Context）
-- 现有 SetID/Scope Package 能力主要体现在“数据命中差异”，流程执行路径的 BU 差异化尚未形成稳定样板。
+- 现有 SetID Capability 能力主要体现在“数据命中差异”，流程执行路径的 BU 差异化尚未形成稳定样板。
 - 当前缺口：
   1. 能解释“命中哪个配置”，但不能稳定演示“同一业务流程在不同 BU 的执行变体”；
   2. 评审中难验证“个性化不是静态配置，而是可执行流程差异”；
@@ -50,7 +51,7 @@
 | --- | --- | --- |
 | `capability_key` | 对应 102C2 注册键 | `staffing.assignment_create` |
 | `variant_key` | 流程变体键 | `std_v1` / `approval_v1` |
-| `match_context` | 命中上下文（BU/setid/scope） | `business_unit=BU1001` |
+| `match_context` | 命中上下文（BU/setid/as_of） | `business_unit=BU1001` |
 | `step_chain` | 执行步骤链标识 | `validate->approve->commit` |
 | `fail_code_map` | 失败码映射 | `APPROVAL_REQUIRED` |
 | `audit_level` | 审计级别 | `full` |

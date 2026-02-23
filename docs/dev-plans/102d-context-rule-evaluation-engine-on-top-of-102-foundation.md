@@ -5,15 +5,16 @@
 ## 0. 主计划定位（Plan of Record）
 - 本计划是 `DEV-PLAN-102/102B/102C` 的延续方案，目标是在既有“显式时间上下文 + tenant-only 运行时 + 能力差距评估”基础上，落地 **Context + Rule + Eval** 规则执行内核。
 - 本计划聚焦“运行时机制与验收口径”，不替代 `070B` 的迁移责任，也不回退到 legacy 双链路。
-- **定位冻结**：102D 是“总装编排 PoR”，负责执行顺序、跨计划集成与统一验收；不覆盖 102C1/102C2/102C3 的细则 SSOT。
+- **定位冻结**：102D 是 `DEV-PLAN-150` 下的执行子计划，负责规则引擎编排落地；不覆盖 102C1/102C2/102C3 的细则 SSOT。
 - 冲突优先级：
-  1. 时间口径以 `DEV-PLAN-102B`/`STD-002` 为准；
-  2. tenant-only 与发布路径以 `DEV-PLAN-070B` 为准；
-  3. 能力目标与差距优先级以 `DEV-PLAN-102C` 为准；
-  4. 授权上下文与拒绝码以 `DEV-PLAN-102C1` 为准；
-  5. 个性化注册表字段以 `DEV-PLAN-102C2` 为准；
-  6. explain 字段与分级暴露以 `DEV-PLAN-102C3` 为准；
-  7. 本计划仅补充“如何把上述契约在 Go + PostgreSQL + CEL 中编排落地”。
+  1. capability_key 收口、实施顺序与里程碑以 `DEV-PLAN-150` 为准；
+  2. 时间口径以 `DEV-PLAN-102B`/`STD-002` 为准；
+  3. tenant-only 与发布路径以 `DEV-PLAN-070B` 为准；
+  4. 能力目标与差距优先级以 `DEV-PLAN-102C` 为准；
+  5. 授权上下文与拒绝码以 `DEV-PLAN-102C1` 为准；
+  6. 个性化注册表字段以 `DEV-PLAN-102C2` 为准；
+  7. explain 字段与分级暴露以 `DEV-PLAN-102C3` 为准；
+  8. 本计划仅补充“如何把上述契约在 Go + PostgreSQL + CEL 中编排落地”。
 
 ## 1. 背景与问题陈述
 - `102B` 已完成“`as_of/effective_date` 显式必填”收敛，回放稳定性有了统一时间语义。
@@ -93,8 +94,8 @@
 
 ### 4.8 capability_key 命名规范（冻结）
 - 语法：`<module>.<capability>[.<action>]`，全部小写字母/数字/下划线，段间用 `.`。
-- 合法示例：`staffing.assignment_create`、`comp.allowance_select`、`jobcatalog.profile_defaults`。
-- 非法示例：`staffing.assignment_create.bu_a`、`jobcatalog.setid_s2601`、`comp.allowance.cn`。
+- 合法示例：`staffing.assignment_create`、`jobcatalog.profile_defaults`、`orgunit.ext_fields_edit`。
+- 非法示例：`staffing.assignment_create.bu_a`、`jobcatalog.setid_s2601`、`orgunit.ext_fields.cn`。
 - 命名禁词（作为上下文变量，禁止出现在 key）：`setid`、`bu`、`scope`、`tenant`、地区/国家代码、组织编码。
 
 ## 5. API 与契约（首批样板）
@@ -102,12 +103,12 @@
 - [ ] `POST /internal/rules/evaluate`（**第一阶段仅内部/BFF 使用**）
   - 输入：`capability_key`, `module`, `target`, `as_of/effective_date`（上下文由服务端回填，不接受客户端直传完整 context）
   - 输出：`matched_rules[]`, `selected_rule`, `explain`
-- [ ] 对外优先采用业务专用接口（如 allowances/comp-plans），不直接暴露通用规则评估入口。
+- [ ] 对外优先采用业务专用接口（如 staffing/jobcatalog），不直接暴露通用规则评估入口。
 
 ### 5.2 业务资格过滤（示例）
-- [ ] `GET /api/allowances?target_worker_id=...&as_of=YYYY-MM-DD`
-  - 行为：后端推导 `capability_key` 后加载候选津贴规则，执行 CEL，返回可选项。
-- [ ] `GET /api/comp-plans?worker_id=...&as_of=YYYY-MM-DD`
+- [ ] `GET /api/staffing/assignment-options?target_worker_id=...&as_of=YYYY-MM-DD`
+  - 行为：后端推导 `capability_key` 后加载候选任职规则，执行 CEL，返回可选项。
+- [ ] `GET /api/jobcatalog/profile-defaults?worker_id=...&as_of=YYYY-MM-DD`
   - 行为：后端推导 `capability_key` 后按优先级返回首个命中或命中集合（按场景配置）。
 
 ### 5.3 错误码口径
@@ -130,9 +131,10 @@
 
 ### 5.6 用户可见性与可操作交付（冻结）
 - 本计划的用户可见性交付由业务专用页面承载，不新增“仅后端可用但无入口”的长期能力。
+- 第一阶段样板仅允许接入 `active` 的 functional_area；`reserved` 功能域（如 `compensation/benefits`）不得接入运行时样板。
 - 第一阶段必须至少提供 1 条可发现入口（导航/页面按钮）触发规则决策能力，候选：
-  - `allowances` 页面：在“津贴选择”下拉中应用规则过滤；
-  - `comp-plans` 页面：在“薪酬方案选择”中应用规则命中。
+  - `staffing/assignments` 页面：在“任职选项”下拉中应用规则过滤；
+  - `jobcatalog` 页面：在“配置默认值”选择中应用规则命中。
 - UI 入口需满足：
   - 可发现：页面路由可进入，入口文案与权限可见性明确；
   - 可操作：用户可实际提交并得到规则筛选结果；
@@ -195,6 +197,7 @@
 - `docs/dev-plans/102c1-setid-contextual-security-model.md`
 - `docs/dev-plans/102c2-bu-personalization-strategy-registry.md`
 - `docs/dev-plans/102c3-setid-configuration-hit-explainability.md`
+- `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - `docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - `AGENTS.md`

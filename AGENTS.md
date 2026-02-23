@@ -283,6 +283,17 @@ modules/{module}/
 - DEV-PLAN-130 执行日志：`docs/dev-records/dev-plan-130-execution-log.md`
 - DEV-PLAN-140：全仓错误提示明确化与质量门禁：`docs/dev-plans/140-error-message-clarity-and-gates.md`
 - DEV-PLAN-140 执行日志：`docs/dev-records/dev-plan-140-execution-log.md`
+- DEV-PLAN-150：Capability Key 对标 Workday 核心差距收敛方案（P0/P1）：`docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
+- DEV-PLAN-151：Capability Key Phase 1 契约冻结与门禁基线（承接 150 M1）：`docs/dev-plans/151-capability-key-m1-contract-freeze-and-gates-baseline.md`
+- DEV-PLAN-152：Capability Key Phase 2 运行时语义切口（承接 150 M4）：`docs/dev-plans/152-capability-key-m4-runtime-semantic-cutover.md`
+- DEV-PLAN-153：Capability Key Phase 3 上下文化授权与动态关系（承接 150 M2/M5）：`docs/dev-plans/153-capability-key-m2-m5-contextual-authz-and-dynamic-relations.md`
+- DEV-PLAN-154：Capability Key Phase 4 Explain 与审计收敛（承接 150 M5）：`docs/dev-plans/154-capability-key-m5-explain-and-audit-convergence.md`
+- DEV-PLAN-155：Capability Key Phase 5 EvaluationContext + CEL 内核基座（承接 150 M3）：`docs/dev-plans/155-capability-key-m3-evaluation-context-cel-kernel.md`
+- DEV-PLAN-156：Capability Key Phase 6 路由映射与复合门禁（承接 150 M3/M9）：`docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
+- DEV-PLAN-157：Capability Key Phase 7 Functional Area 治理落地（承接 150 M7）：`docs/dev-plans/157-capability-key-m7-functional-area-governance.md`
+- DEV-PLAN-158：Capability Key Phase 8 策略激活与版本一致性（承接 150 M6）：`docs/dev-plans/158-capability-key-m6-policy-activation-and-version-consistency.md`
+- DEV-PLAN-159：Capability Key Phase 9 字段级分段安全（承接 150 M7）：`docs/dev-plans/159-capability-key-m7-segment-security-field-level-visibility.md`
+- DEV-PLAN-160：Capability Key Phase 10 UI 可视化交付与证据收口（承接 150 M8/M10）：`docs/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102A【归档】：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案（表达式口径一致性已并入 `DEV-PLAN-120`）：`docs/archive/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`

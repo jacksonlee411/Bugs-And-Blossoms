@@ -5,6 +5,7 @@
 ## 0. 主计划定位（Plan of Record）
 - 本计划是“**能力评估与验收口径**”PoR：用于回答“SetID 在集团共享与 BU 个性化上，与 Workday 原则级能力还有哪些差距”。
 - 本计划**不是** 070B 的替代，也不重复其实施任务；`DEV-PLAN-070B` 仍是“共享改发布、运行时 tenant-only”的工程实施 PoR。
+- 若与 `DEV-PLAN-150` 存在口径冲突，以 `DEV-PLAN-150` 作为 capability_key 收口与实施顺序的最终 PoR。
 - 冲突处理顺序：
   1. 架构/迁移/接口改造细节以 `070B` 与 `102B` 为准；
   2. 业务能力目标、差距优先级、验收评分以 `102C` 为准。
@@ -75,7 +76,7 @@
 2. [ ] **102C2：BU 个性化策略注册表**
    - 目标：建立“哪些能力可个性化、在哪个组织层级生效”的统一注册表。
 3. [ ] **102C3：配置命中可解释性（Explainability）**
-   - 目标：提供“命中链路”可观测输出（setid/scope/package/as_of/规则来源）。
+   - 目标：提供“命中链路”可观测输出（setid/capability_key/business_unit/as_of/规则来源）。
 4. [ ] **102C4：流程个性化样板（暂缓）**
    - 目标：选 1 条关键流程验证“BU 变体 + 审计 + 回放”。
    - 暂缓原因：项目当前尚未建设流程模块，待流程域具备基础能力后重启。
@@ -83,7 +84,9 @@
    - 目标：将上下文化安全、策略注册表、命中解释收敛为“可发现、可操作、可验收”的前端交付。
 6. [ ] **102C-T：102C1-102C3 测试方案**
    - 目标：验证同租户跨 BU 的字段必填/可见/默认值差异，并输出支持性结论与阻塞项。
-7. [ ] **102C6：能力评分卡常态化**
+7. [ ] **102C6：删除 scope/package 并收敛 capability_key + setid**
+   - 目标：完成单语义键运行时收敛，作为 102C1/102C2/102C3/102D 的统一底座。
+8. [ ] **102C7：能力评分卡常态化**
    - 目标：建立季度评审机制，跟踪 L1→L2→L3 进展。
 
 ## 7. 验收标准（Capability Acceptance）
@@ -112,6 +115,7 @@
 ## 10. 依赖与引用
 - `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
+- `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`

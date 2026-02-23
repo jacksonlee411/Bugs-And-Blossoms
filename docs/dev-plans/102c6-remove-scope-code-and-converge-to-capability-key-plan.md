@@ -6,6 +6,7 @@
 - 本计划是 `DEV-PLAN-102C` 系列在“方案 A（硬取消 scope）”上的唯一实施方案。
 - 目标是在不引入 legacy 双链路的前提下，彻底删除 `scope_code / scope_package / scope_subscription / package_id` 概念，统一为 `capability_key + setid` 驱动。
 - 本计划优先级高于 102C1/102C2/102C3/102D 中与 scope 相关的历史约定；实施前必须先完成契约修订并冻结。
+- 若与 `DEV-PLAN-150` 存在口径冲突，以 `DEV-PLAN-150` 作为最终编排与验收基线。
 
 ## 1. 背景与问题陈述（Context）
 - 当前模型中 `capability_key`、`scope_code`、`package_id` 并存，造成认知负担和接口重复入参。
