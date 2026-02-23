@@ -17,6 +17,7 @@ exclude_globs=(
   --glob '!scripts/ci/**'
   --glob '!scripts/ci/check-no-legacy.sh'
   --glob '!internal/server/assets/shoelace/vendor/**'
+  --glob '!config/capability/contract-freeze*.json'
 )
 
 include_globs=(

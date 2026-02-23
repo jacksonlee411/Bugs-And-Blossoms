@@ -47,6 +47,15 @@ var capabilityDefinitions = []capabilityDefinition{
 		ActivationState:   "active",
 		CurrentPolicy:     capabilityPolicyVersionBaseline,
 	},
+	{
+		CapabilityKey:     "org.orgunit_create.field_policy",
+		FunctionalAreaKey: "org_foundation",
+		CapabilityType:    "process_capability",
+		OwnerModule:       "orgunit",
+		Status:            routeCapabilityStatusActive,
+		ActivationState:   "active",
+		CurrentPolicy:     capabilityPolicyVersionBaseline,
+	},
 }
 
 var capabilityDefinitionByKey = buildCapabilityDefinitionIndex(capabilityDefinitions)
@@ -77,6 +86,15 @@ var capabilityRouteBindings = []capabilityRouteBinding{
 		Action:        authz.ActionRead,
 		CapabilityKey: "staffing.assignment_create.field_policy",
 		OwnerModule:   "staffing",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "GET",
+		Path:          "/org/api/org-units/create-field-decisions",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionRead,
+		CapabilityKey: "org.orgunit_create.field_policy",
+		OwnerModule:   "orgunit",
 		Status:        routeCapabilityStatusActive,
 	},
 	{

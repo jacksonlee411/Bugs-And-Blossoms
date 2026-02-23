@@ -354,6 +354,99 @@ func TestOrgUnitPGStore_SubmitCreateEventWithGeneratedCode(t *testing.T) {
 	})
 }
 
+func TestOrgUnitPGStore_ResolveSetIDStrategyFieldDecision(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("begin error", func(t *testing.T) {
+		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin")
+		}))
+		if _, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "", "2026-01-01"); err == nil || found {
+			t.Fatalf("found=%v err=%v", found, err)
+		}
+	})
+
+	t.Run("set_config error", func(t *testing.T) {
+		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+			return &txStub{execErr: errors.New("exec")}, nil
+		}))
+		if _, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "", "2026-01-01"); err == nil || found {
+			t.Fatalf("found=%v err=%v", found, err)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+			return &txStub{row: stubRow{err: pgx.ErrNoRows}}, nil
+		}))
+		_, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "", "2026-01-01")
+		if err != nil || found {
+			t.Fatalf("found=%v err=%v", found, err)
+		}
+	})
+
+	t.Run("query row error", func(t *testing.T) {
+		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+			return &txStub{row: stubRow{err: errors.New("row")}}, nil
+		}))
+		if _, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "", "2026-01-01"); err == nil || found {
+			t.Fatalf("found=%v err=%v", found, err)
+		}
+	})
+
+	t.Run("allowed_value_codes json invalid", func(t *testing.T) {
+		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+			return &txStub{row: stubRow{vals: []any{"org.orgunit_create.field_policy", "org_code", true, true, true, "", "", "{"}}}, nil
+		}))
+		if _, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "", "2026-01-01"); err == nil || found {
+			t.Fatalf("found=%v err=%v", found, err)
+		}
+	})
+
+	t.Run("commit error", func(t *testing.T) {
+		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+			return &txStub{
+				row:       stubRow{vals: []any{"org.orgunit_create.field_policy", "org_code", true, true, false, `next_org_code("F", 8)`, "", `["11"]`}},
+				commitErr: errors.New("commit"),
+			}, nil
+		}))
+		if _, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", "org.orgunit_create.field_policy", "org_code", "", "2026-01-01"); err == nil || found {
+			t.Fatalf("found=%v err=%v", found, err)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		store := newConcreteOrgUnitPGStore(beginFunc(func(context.Context) (pgx.Tx, error) {
+			return &txStub{
+				row: stubRow{vals: []any{"org.orgunit_create.field_policy", "d_org_type", true, true, true, "", "11", `[" 11 ", "11", "12"]`}},
+			}, nil
+		}))
+		decision, found, err := store.ResolveSetIDStrategyFieldDecision(ctx, "t1", " Org.OrgUnit_Create.Field_Policy ", " D_Org_Type ", "", "2026-01-01")
+		if err != nil || !found {
+			t.Fatalf("decision=%+v found=%v err=%v", decision, found, err)
+		}
+		if decision.CapabilityKey != "org.orgunit_create.field_policy" || decision.FieldKey != "d_org_type" {
+			t.Fatalf("decision=%+v", decision)
+		}
+		if len(decision.AllowedValueCodes) != 2 || decision.AllowedValueCodes[0] != "11" || decision.AllowedValueCodes[1] != "12" {
+			t.Fatalf("allowed=%v", decision.AllowedValueCodes)
+		}
+	})
+}
+
+func TestNormalizeAllowedValueCodes(t *testing.T) {
+	if got := normalizeAllowedValueCodes(nil); got != nil {
+		t.Fatalf("got=%v", got)
+	}
+	if got := normalizeAllowedValueCodes([]string{" ", ""}); got != nil {
+		t.Fatalf("got=%v", got)
+	}
+	got := normalizeAllowedValueCodes([]string{" 11 ", "11", "", "12"})
+	if len(got) != 2 || got[0] != "11" || got[1] != "12" {
+		t.Fatalf("got=%v", got)
+	}
+}
+
 func TestCloneOptionalString(t *testing.T) {
 	if got := cloneOptionalString(nil); got != nil {
 		t.Fatalf("expected nil")

@@ -2342,6 +2342,8 @@ func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
 		{"request_id_conflict_pg_message", &pgconn.PgError{Message: "ORG_REQUEST_ID_CONFLICT"}, http.StatusConflict},
 		{"status_correction_unsupported", errors.New("ORG_STATUS_CORRECTION_UNSUPPORTED_TARGET"), http.StatusConflict},
 		{"orgunit_codes_write_forbidden_pg_message", &pgconn.PgError{Message: "ORGUNIT_CODES_WRITE_FORBIDDEN"}, http.StatusUnprocessableEntity},
+		{"field_policy_version_required", errors.New("FIELD_POLICY_VERSION_REQUIRED"), http.StatusBadRequest},
+		{"field_policy_version_stale", errors.New("FIELD_POLICY_VERSION_STALE"), http.StatusConflict},
 		{"high_risk_reorder", errors.New("ORG_HIGH_RISK_REORDER_FORBIDDEN"), http.StatusConflict},
 		{"root_delete_forbidden", errors.New("ORG_ROOT_DELETE_FORBIDDEN"), http.StatusConflict},
 		{"bad_request_msg", newBadRequestError("name is required"), http.StatusBadRequest},
@@ -2357,6 +2359,26 @@ func TestWriteOrgUnitServiceError_StatusMapping(t *testing.T) {
 				t.Fatalf("status=%d", rec.Code)
 			}
 		})
+	}
+}
+
+func TestOrgUnitAPIStatusForCode_Branches(t *testing.T) {
+	tests := []struct {
+		code   string
+		status int
+		ok     bool
+	}{
+		{code: orgUnitErrCodeInvalid, status: http.StatusBadRequest, ok: true},
+		{code: orgUnitErrCodeNotFound, status: http.StatusNotFound, ok: true},
+		{code: orgUnitErrRequestIDConflict, status: http.StatusConflict, ok: true},
+		{code: orgUnitErrFieldPolicyMissing, status: http.StatusUnprocessableEntity, ok: true},
+		{code: "UNKNOWN_CODE", status: 0, ok: false},
+	}
+	for _, tt := range tests {
+		status, ok := orgUnitAPIStatusForCode(tt.code)
+		if status != tt.status || ok != tt.ok {
+			t.Fatalf("code=%s status=%d ok=%v", tt.code, status, ok)
+		}
 	}
 }
 

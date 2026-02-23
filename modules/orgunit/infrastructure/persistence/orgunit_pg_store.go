@@ -397,6 +397,110 @@ LIMIT 1
 	return policy, true, nil
 }
 
+func (s *OrgUnitPGStore) ResolveSetIDStrategyFieldDecision(
+	ctx context.Context,
+	tenantID string,
+	capabilityKey string,
+	fieldKey string,
+	businessUnitID string,
+	asOf string,
+) (types.SetIDStrategyFieldDecision, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return types.SetIDStrategyFieldDecision{}, false, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
+		return types.SetIDStrategyFieldDecision{}, false, err
+	}
+
+	capabilityKey = strings.ToLower(strings.TrimSpace(capabilityKey))
+	fieldKey = strings.ToLower(strings.TrimSpace(fieldKey))
+	businessUnitID = strings.TrimSpace(businessUnitID)
+	asOf = strings.TrimSpace(asOf)
+
+	var decision types.SetIDStrategyFieldDecision
+	var allowedValueCodesRaw string
+	if err := tx.QueryRow(ctx, `
+SELECT
+  capability_key,
+  field_key,
+  required,
+  visible,
+  maintainable,
+  COALESCE(default_rule_ref, ''),
+  COALESCE(default_value, ''),
+  COALESCE(allowed_value_codes, '[]'::jsonb)::text
+FROM orgunit.setid_strategy_registry
+WHERE tenant_uuid = $1::uuid
+  AND capability_key = $2::text
+  AND field_key = $3::text
+  AND effective_date <= $4::date
+  AND (end_date IS NULL OR end_date > $4::date)
+  AND (
+    (org_level = 'business_unit' AND business_unit_id = $5::text)
+    OR (org_level = 'tenant' AND business_unit_id = '')
+  )
+ORDER BY
+  CASE
+    WHEN org_level = 'business_unit' AND business_unit_id = $5::text THEN 2
+    ELSE 1
+  END DESC,
+  priority DESC,
+  effective_date DESC
+LIMIT 1
+`, tenantID, capabilityKey, fieldKey, asOf, businessUnitID).Scan(
+		&decision.CapabilityKey,
+		&decision.FieldKey,
+		&decision.Required,
+		&decision.Visible,
+		&decision.Maintainable,
+		&decision.DefaultRuleRef,
+		&decision.DefaultValue,
+		&allowedValueCodesRaw,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return types.SetIDStrategyFieldDecision{}, false, nil
+		}
+		return types.SetIDStrategyFieldDecision{}, false, err
+	}
+	if strings.TrimSpace(allowedValueCodesRaw) != "" {
+		if err := json.Unmarshal([]byte(allowedValueCodesRaw), &decision.AllowedValueCodes); err != nil {
+			return types.SetIDStrategyFieldDecision{}, false, err
+		}
+	}
+	decision.AllowedValueCodes = normalizeAllowedValueCodes(decision.AllowedValueCodes)
+
+	if err := tx.Commit(ctx); err != nil {
+		return types.SetIDStrategyFieldDecision{}, false, err
+	}
+	return decision, true, nil
+}
+
+func normalizeAllowedValueCodes(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 func (s *OrgUnitPGStore) SubmitCreateEventWithGeneratedCode(
 	ctx context.Context,
 	tenantID string,

@@ -345,6 +345,12 @@ const (
 	orgUnitErrDefaultRuleRequired                = "DEFAULT_RULE_REQUIRED"
 	orgUnitErrDefaultRuleEvalFailed              = "DEFAULT_RULE_EVAL_FAILED"
 	orgUnitErrFieldPolicyExprInvalid             = "FIELD_POLICY_EXPR_INVALID"
+	orgUnitErrFieldOptionNotAllowed              = "FIELD_OPTION_NOT_ALLOWED"
+	orgUnitErrFieldRequiredValueMissing          = "FIELD_REQUIRED_VALUE_MISSING"
+	orgUnitErrFieldPolicyMissing                 = "FIELD_POLICY_MISSING"
+	orgUnitErrFieldPolicyConflict                = "FIELD_POLICY_CONFLICT"
+	orgUnitErrFieldPolicyVersionRequired         = "FIELD_POLICY_VERSION_REQUIRED"
+	orgUnitErrFieldPolicyVersionStale            = "FIELD_POLICY_VERSION_STALE"
 	orgUnitErrOrgCodeExhausted                   = "ORG_CODE_EXHAUSTED"
 	orgUnitErrOrgCodeConflict                    = "ORG_CODE_CONFLICT"
 	orgUnitErrFieldPolicyScopeOverlap            = "FIELD_POLICY_SCOPE_OVERLAP"
@@ -1582,7 +1588,10 @@ func orgUnitAPIStatusForCode(code string) (int, bool) {
 		orgUnitErrFieldNotMaintainable,
 		orgUnitErrDefaultRuleRequired,
 		orgUnitErrDefaultRuleEvalFailed,
-		orgUnitErrFieldPolicyExprInvalid:
+		orgUnitErrFieldPolicyExprInvalid,
+		orgUnitErrFieldOptionNotAllowed,
+		orgUnitErrFieldRequiredValueMissing,
+		orgUnitErrFieldPolicyVersionRequired:
 		return http.StatusBadRequest, true
 	case orgUnitErrCodeNotFound,
 		orgUnitErrParentNotFound,
@@ -1611,8 +1620,12 @@ func orgUnitAPIStatusForCode(code string) (int, bool) {
 		orgUnitErrFieldConfigDisabledOnInvalid,
 		orgUnitErrOrgCodeExhausted,
 		orgUnitErrOrgCodeConflict,
-		orgUnitErrFieldPolicyScopeOverlap:
+		orgUnitErrFieldPolicyScopeOverlap,
+		orgUnitErrFieldPolicyConflict,
+		orgUnitErrFieldPolicyVersionStale:
 		return http.StatusConflict, true
+	case orgUnitErrFieldPolicyMissing:
+		return http.StatusUnprocessableEntity, true
 	default:
 		return 0, false
 	}

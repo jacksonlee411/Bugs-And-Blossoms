@@ -43,57 +43,63 @@ var (
 )
 
 type setIDStrategyRegistryItem struct {
-	CapabilityKey       string `json:"capability_key"`
-	OwnerModule         string `json:"owner_module"`
-	FieldKey            string `json:"field_key"`
-	PersonalizationMode string `json:"personalization_mode"`
-	OrgLevel            string `json:"org_level"`
-	BusinessUnitID      string `json:"business_unit_id,omitempty"`
-	Required            bool   `json:"required"`
-	Visible             bool   `json:"visible"`
-	DefaultRuleRef      string `json:"default_rule_ref,omitempty"`
-	DefaultValue        string `json:"default_value,omitempty"`
-	Priority            int    `json:"priority"`
-	ExplainRequired     bool   `json:"explain_required"`
-	IsStable            bool   `json:"is_stable"`
-	ChangePolicy        string `json:"change_policy"`
-	EffectiveDate       string `json:"effective_date"`
-	EndDate             string `json:"end_date,omitempty"`
-	UpdatedAt           string `json:"updated_at"`
+	CapabilityKey       string   `json:"capability_key"`
+	OwnerModule         string   `json:"owner_module"`
+	FieldKey            string   `json:"field_key"`
+	PersonalizationMode string   `json:"personalization_mode"`
+	OrgLevel            string   `json:"org_level"`
+	BusinessUnitID      string   `json:"business_unit_id,omitempty"`
+	Required            bool     `json:"required"`
+	Visible             bool     `json:"visible"`
+	Maintainable        bool     `json:"maintainable"`
+	DefaultRuleRef      string   `json:"default_rule_ref,omitempty"`
+	DefaultValue        string   `json:"default_value,omitempty"`
+	AllowedValueCodes   []string `json:"allowed_value_codes,omitempty"`
+	Priority            int      `json:"priority"`
+	ExplainRequired     bool     `json:"explain_required"`
+	IsStable            bool     `json:"is_stable"`
+	ChangePolicy        string   `json:"change_policy"`
+	EffectiveDate       string   `json:"effective_date"`
+	EndDate             string   `json:"end_date,omitempty"`
+	UpdatedAt           string   `json:"updated_at"`
 }
 
 type setIDStrategyRegistryUpsertAPIRequest struct {
-	CapabilityKey       string `json:"capability_key"`
-	OwnerModule         string `json:"owner_module"`
-	FieldKey            string `json:"field_key"`
-	PersonalizationMode string `json:"personalization_mode"`
-	OrgLevel            string `json:"org_level"`
-	BusinessUnitID      string `json:"business_unit_id"`
-	Required            bool   `json:"required"`
-	Visible             bool   `json:"visible"`
-	DefaultRuleRef      string `json:"default_rule_ref"`
-	DefaultValue        string `json:"default_value"`
-	Priority            int    `json:"priority"`
-	ExplainRequired     bool   `json:"explain_required"`
-	IsStable            bool   `json:"is_stable"`
-	ChangePolicy        string `json:"change_policy"`
-	EffectiveDate       string `json:"effective_date"`
-	EndDate             string `json:"end_date"`
-	RequestID           string `json:"request_id"`
+	CapabilityKey       string   `json:"capability_key"`
+	OwnerModule         string   `json:"owner_module"`
+	FieldKey            string   `json:"field_key"`
+	PersonalizationMode string   `json:"personalization_mode"`
+	OrgLevel            string   `json:"org_level"`
+	BusinessUnitID      string   `json:"business_unit_id"`
+	Required            bool     `json:"required"`
+	Visible             bool     `json:"visible"`
+	Maintainable        *bool    `json:"maintainable"`
+	DefaultRuleRef      string   `json:"default_rule_ref"`
+	DefaultValue        string   `json:"default_value"`
+	AllowedValueCodes   []string `json:"allowed_value_codes"`
+	Priority            int      `json:"priority"`
+	ExplainRequired     bool     `json:"explain_required"`
+	IsStable            bool     `json:"is_stable"`
+	ChangePolicy        string   `json:"change_policy"`
+	EffectiveDate       string   `json:"effective_date"`
+	EndDate             string   `json:"end_date"`
+	RequestID           string   `json:"request_id"`
 }
 
 type setIDFieldDecision struct {
-	CapabilityKey      string `json:"capability_key"`
-	FieldKey           string `json:"field_key"`
-	Required           bool   `json:"required"`
-	Visible            bool   `json:"visible"`
-	Visibility         string `json:"visibility,omitempty"`
-	MaskStrategy       string `json:"mask_strategy,omitempty"`
-	DefaultRuleRef     string `json:"default_rule_ref,omitempty"`
-	ResolvedDefaultVal string `json:"resolved_default_value,omitempty"`
-	MaskedDefaultVal   string `json:"masked_default_value,omitempty"`
-	Decision           string `json:"decision"`
-	ReasonCode         string `json:"reason_code,omitempty"`
+	CapabilityKey      string   `json:"capability_key"`
+	FieldKey           string   `json:"field_key"`
+	Required           bool     `json:"required"`
+	Visible            bool     `json:"visible"`
+	Maintainable       bool     `json:"maintainable"`
+	Visibility         string   `json:"visibility,omitempty"`
+	MaskStrategy       string   `json:"mask_strategy,omitempty"`
+	DefaultRuleRef     string   `json:"default_rule_ref,omitempty"`
+	ResolvedDefaultVal string   `json:"resolved_default_value,omitempty"`
+	MaskedDefaultVal   string   `json:"masked_default_value,omitempty"`
+	AllowedValueCodes  []string `json:"allowed_value_codes,omitempty"`
+	Decision           string   `json:"decision"`
+	ReasonCode         string   `json:"reason_code,omitempty"`
 }
 
 type setIDStrategyRegistryRuntime struct {
@@ -186,11 +192,21 @@ func parseAsOfDate(asOf string) (string, error) {
 	return asOf, nil
 }
 
+var marshalStrategyRegistryAllowedValueCodes = json.Marshal
+
 func (s *setIDStrategyRegistryPGStore) upsert(ctx context.Context, tenantID string, item setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error) {
 	var updated bool
 	endDate := any(nil)
 	if strings.TrimSpace(item.EndDate) != "" {
 		endDate = strings.TrimSpace(item.EndDate)
+	}
+	allowedValueCodesJSON := any(nil)
+	if len(item.AllowedValueCodes) > 0 {
+		raw, err := marshalStrategyRegistryAllowedValueCodes(item.AllowedValueCodes)
+		if err != nil {
+			return setIDStrategyRegistryItem{}, false, err
+		}
+		allowedValueCodesJSON = string(raw)
 	}
 	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `
@@ -218,8 +234,10 @@ INSERT INTO orgunit.setid_strategy_registry (
   business_unit_id,
   required,
   visible,
+  maintainable,
   default_rule_ref,
   default_value,
+  allowed_value_codes,
   priority,
   explain_required,
   is_stable,
@@ -237,15 +255,17 @@ INSERT INTO orgunit.setid_strategy_registry (
   $7::text,
   $8::boolean,
   $9::boolean,
-  NULLIF($10::text, ''),
+  $10::boolean,
   NULLIF($11::text, ''),
-  $12::integer,
-  $13::boolean,
-  $14::boolean,
-  $15::text,
-  $16::date,
-  $17::date,
-  $18::timestamptz
+  NULLIF($12::text, ''),
+  $13::jsonb,
+  $14::integer,
+  $15::boolean,
+  $16::boolean,
+  $17::text,
+  $18::date,
+  $19::date,
+  $20::timestamptz
 )
 ON CONFLICT (tenant_uuid, capability_key, field_key, org_level, business_unit_id, effective_date)
 DO UPDATE SET
@@ -253,15 +273,17 @@ DO UPDATE SET
   personalization_mode = EXCLUDED.personalization_mode,
   required = EXCLUDED.required,
   visible = EXCLUDED.visible,
+  maintainable = EXCLUDED.maintainable,
   default_rule_ref = EXCLUDED.default_rule_ref,
   default_value = EXCLUDED.default_value,
+  allowed_value_codes = EXCLUDED.allowed_value_codes,
   priority = EXCLUDED.priority,
   explain_required = EXCLUDED.explain_required,
   is_stable = EXCLUDED.is_stable,
   change_policy = EXCLUDED.change_policy,
   end_date = EXCLUDED.end_date,
   updated_at = EXCLUDED.updated_at
-`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgLevel, item.BusinessUnitID, item.Required, item.Visible, item.DefaultRuleRef, item.DefaultValue, item.Priority, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
+`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgLevel, item.BusinessUnitID, item.Required, item.Visible, item.Maintainable, item.DefaultRuleRef, item.DefaultValue, allowedValueCodesJSON, item.Priority, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
 		return err
 	})
 	return item, updated, err
@@ -286,8 +308,10 @@ SELECT
   business_unit_id,
   required,
   visible,
+  maintainable,
   COALESCE(default_rule_ref, ''),
   COALESCE(default_value, ''),
+  COALESCE(allowed_value_codes, '[]'::jsonb)::text,
   priority,
   explain_required,
   is_stable,
@@ -309,6 +333,7 @@ ORDER BY capability_key ASC, field_key ASC, org_level ASC, business_unit_id ASC,
 		defer rows.Close()
 		for rows.Next() {
 			var item setIDStrategyRegistryItem
+			var allowedValueCodesRaw string
 			if err := rows.Scan(
 				&item.CapabilityKey,
 				&item.OwnerModule,
@@ -318,8 +343,10 @@ ORDER BY capability_key ASC, field_key ASC, org_level ASC, business_unit_id ASC,
 				&item.BusinessUnitID,
 				&item.Required,
 				&item.Visible,
+				&item.Maintainable,
 				&item.DefaultRuleRef,
 				&item.DefaultValue,
+				&allowedValueCodesRaw,
 				&item.Priority,
 				&item.ExplainRequired,
 				&item.IsStable,
@@ -330,6 +357,12 @@ ORDER BY capability_key ASC, field_key ASC, org_level ASC, business_unit_id ASC,
 			); err != nil {
 				return err
 			}
+			if strings.TrimSpace(allowedValueCodesRaw) != "" {
+				if err := json.Unmarshal([]byte(allowedValueCodesRaw), &item.AllowedValueCodes); err != nil {
+					return err
+				}
+			}
+			item.AllowedValueCodes = normalizeAllowedValueCodes(item.AllowedValueCodes)
 			out = append(out, item)
 		}
 		return rows.Err()
@@ -365,8 +398,10 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 		BusinessUnitID:      strings.TrimSpace(req.BusinessUnitID),
 		Required:            req.Required,
 		Visible:             req.Visible,
+		Maintainable:        true,
 		DefaultRuleRef:      strings.TrimSpace(req.DefaultRuleRef),
 		DefaultValue:        strings.TrimSpace(req.DefaultValue),
+		AllowedValueCodes:   normalizeAllowedValueCodes(req.AllowedValueCodes),
 		Priority:            req.Priority,
 		ExplainRequired:     req.ExplainRequired,
 		IsStable:            req.IsStable,
@@ -377,6 +412,9 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 	if item.Priority <= 0 {
 		item.Priority = 100
 	}
+	if req.Maintainable != nil {
+		item.Maintainable = *req.Maintainable
+	}
 	if item.ChangePolicy == "" {
 		item.ChangePolicy = "plan_required"
 	}
@@ -385,6 +423,29 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 	}
 	item.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	return item
+}
+
+func normalizeAllowedValueCodes(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, string) {
@@ -422,6 +483,12 @@ func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, 
 	}
 	if !item.Visible && item.Required {
 		return http.StatusUnprocessableEntity, fieldPolicyConflictCode, fieldPolicyConflictCode
+	}
+	if !item.Maintainable && strings.TrimSpace(item.DefaultRuleRef) == "" && strings.TrimSpace(item.DefaultValue) == "" {
+		return http.StatusUnprocessableEntity, fieldDefaultRuleMissingCode, fieldDefaultRuleMissingCode
+	}
+	if len(item.AllowedValueCodes) > 0 && strings.TrimSpace(item.DefaultValue) != "" && !slices.Contains(item.AllowedValueCodes, strings.TrimSpace(item.DefaultValue)) {
+		return http.StatusUnprocessableEntity, "default_value_not_allowed", "default_value must be included in allowed_value_codes"
 	}
 	effectiveDate, err := time.Parse("2006-01-02", item.EffectiveDate)
 	if err != nil {
@@ -558,7 +625,7 @@ func resolveFieldDecisionFromItems(items []setIDStrategyRegistryItem, businessUn
 	if chosen.item.Required && !chosen.item.Visible {
 		return setIDFieldDecision{}, errors.New(fieldPolicyConflictCode)
 	}
-	if chosen.item.DefaultRuleRef == "" && chosen.item.DefaultValue == "" {
+	if !chosen.item.Maintainable && chosen.item.DefaultRuleRef == "" && chosen.item.DefaultValue == "" {
 		return setIDFieldDecision{}, errors.New(fieldDefaultRuleMissingCode)
 	}
 	return setIDFieldDecision{
@@ -566,8 +633,10 @@ func resolveFieldDecisionFromItems(items []setIDStrategyRegistryItem, businessUn
 		FieldKey:           chosen.item.FieldKey,
 		Required:           chosen.item.Required,
 		Visible:            chosen.item.Visible,
+		Maintainable:       chosen.item.Maintainable,
 		DefaultRuleRef:     chosen.item.DefaultRuleRef,
 		ResolvedDefaultVal: chosen.item.DefaultValue,
+		AllowedValueCodes:  append([]string(nil), chosen.item.AllowedValueCodes...),
 		Decision:           "allow",
 	}, nil
 }

@@ -390,6 +390,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/write-capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitWriteCapabilitiesAPI(w, r, orgStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/create-field-decisions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitCreateFieldDecisionsAPI(w, r, orgStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/details", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsDetailsAPI(w, r, orgStore)
 	}))
