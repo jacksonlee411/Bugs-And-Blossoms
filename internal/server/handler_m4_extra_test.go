@@ -213,6 +213,19 @@ func TestHandler_SetIDGovernanceRoutes(t *testing.T) {
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("internal policy rollback status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	if rec := doReq(http.MethodGet, "/internal/functional-areas/state", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("internal functional area state status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(http.MethodPost, "/internal/functional-areas/switch", `{"functional_area_key":"staffing","enabled":false,"operator":"tester"}`, map[string]string{
+		"Content-Type": "application/json",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("internal functional area switch off status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(http.MethodPost, "/internal/functional-areas/switch", `{"functional_area_key":"staffing","enabled":true,"operator":"tester"}`, map[string]string{
+		"Content-Type": "application/json",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("internal functional area switch on status=%d body=%s", rec.Code, rec.Body.String())
+	}
 	if rec := doReq(http.MethodGet, "/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&setid=A0001&level=brief", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("setid explain get status=%d body=%s", rec.Code, rec.Body.String())
 	}

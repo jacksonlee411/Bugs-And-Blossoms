@@ -124,6 +124,24 @@ var capabilityRouteBindings = []capabilityRouteBinding{
 		OwnerModule:   "orgunit",
 		Status:        routeCapabilityStatusActive,
 	},
+	{
+		Method:        "GET",
+		Path:          "/internal/functional-areas/state",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionRead,
+		CapabilityKey: "org.policy_activation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "POST",
+		Path:          "/internal/functional-areas/switch",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionAdmin,
+		CapabilityKey: "org.policy_activation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
 }
 
 var capabilityRouteBindingByKey = buildCapabilityRouteBindingIndex(capabilityRouteBindings)

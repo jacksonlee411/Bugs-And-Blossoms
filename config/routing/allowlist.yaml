@@ -116,6 +116,12 @@ entrypoints:
       - path: /internal/policies/rollback
         methods: [POST]
         route_class: internal_api
+      - path: /internal/functional-areas/state
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/functional-areas/switch
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]
         route_class: internal_api

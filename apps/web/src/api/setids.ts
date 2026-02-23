@@ -124,8 +124,11 @@ export interface SetIDExplainFieldDecision {
   field_key: string
   required: boolean
   visible: boolean
+  visibility?: 'visible' | 'hidden' | 'masked'
+  mask_strategy?: string
   default_rule_ref?: string
   resolved_default_value?: string
+  masked_default_value?: string
   decision: string
   reason_code?: string
 }
@@ -175,4 +178,66 @@ export async function getSetIDExplain(request: {
     query.set('request_id', request.requestID.trim())
   }
   return httpClient.get<SetIDExplainResponse>(`/org/api/setid-explain?${query.toString()}`)
+}
+
+export interface CapabilityPolicyState {
+  capability_key: string
+  activation_state: 'active' | 'draft'
+  active_policy_version: string
+  draft_policy_version?: string
+  rollback_from_version?: string
+  activated_at?: string
+  activated_by?: string
+}
+
+export async function getPolicyActivationState(capabilityKey: string): Promise<CapabilityPolicyState> {
+  const query = new URLSearchParams({ capability_key: capabilityKey.trim() })
+  return httpClient.get<CapabilityPolicyState>(`/internal/policies/state?${query.toString()}`)
+}
+
+export async function setPolicyDraft(request: {
+  capability_key: string
+  draft_policy_version: string
+  operator: string
+}): Promise<CapabilityPolicyState> {
+  return httpClient.post<CapabilityPolicyState>('/internal/policies/draft', request)
+}
+
+export async function activatePolicyVersion(request: {
+  capability_key: string
+  target_policy_version: string
+  operator: string
+}): Promise<CapabilityPolicyState> {
+  return httpClient.post<CapabilityPolicyState>('/internal/policies/activate', request)
+}
+
+export async function rollbackPolicyVersion(request: {
+  capability_key: string
+  target_policy_version?: string
+  operator: string
+}): Promise<CapabilityPolicyState> {
+  return httpClient.post<CapabilityPolicyState>('/internal/policies/rollback', request)
+}
+
+export interface FunctionalAreaStateItem {
+  functional_area_key: string
+  lifecycle_status: string
+  enabled: boolean
+}
+
+export interface FunctionalAreaStateResponse {
+  tenant_id: string
+  items: FunctionalAreaStateItem[]
+}
+
+export async function listFunctionalAreaState(): Promise<FunctionalAreaStateResponse> {
+  return httpClient.get<FunctionalAreaStateResponse>('/internal/functional-areas/state')
+}
+
+export async function switchFunctionalAreaState(request: {
+  functional_area_key: string
+  enabled: boolean
+  operator: string
+}): Promise<FunctionalAreaStateItem> {
+  return httpClient.post<FunctionalAreaStateItem>('/internal/functional-areas/switch', request)
 }
