@@ -101,6 +101,9 @@ entrypoints:
       - path: /org/api/setid-explain
         methods: [GET]
         route_class: internal_api
+      - path: /internal/rules/evaluate
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]
         route_class: internal_api

@@ -372,6 +372,12 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-explain"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/rules/evaluate"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected internal rules evaluate mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/internal/rules/evaluate"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units"); !ok {
 		t.Fatal("expected ok=true")
 	}

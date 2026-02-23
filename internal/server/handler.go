@@ -327,6 +327,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-explain", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetIDExplainAPI(w, r, setidStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/rules/evaluate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleInternalRulesEvaluateAPI(w, r, setidStore)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
 	}))
