@@ -195,6 +195,24 @@ func TestHandler_SetIDGovernanceRoutes(t *testing.T) {
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("internal rules evaluate status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	if rec := doReq(http.MethodPost, "/internal/policies/draft", `{"capability_key":"org.policy_activation.manage","draft_policy_version":"2026-03-01","operator":"tester"}`, map[string]string{
+		"Content-Type": "application/json",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("internal policy draft status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(http.MethodPost, "/internal/policies/activate", `{"capability_key":"org.policy_activation.manage","target_policy_version":"2026-03-01","operator":"tester"}`, map[string]string{
+		"Content-Type": "application/json",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("internal policy activate status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(http.MethodGet, "/internal/policies/state?capability_key=org.policy_activation.manage", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("internal policy state status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := doReq(http.MethodPost, "/internal/policies/rollback", `{"capability_key":"org.policy_activation.manage","target_policy_version":"2026-02-23","operator":"tester"}`, map[string]string{
+		"Content-Type": "application/json",
+	}); rec.Code != http.StatusOK {
+		t.Fatalf("internal policy rollback status=%d body=%s", rec.Code, rec.Body.String())
+	}
 	if rec := doReq(http.MethodGet, "/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&setid=A0001&level=brief", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("setid explain get status=%d body=%s", rec.Code, rec.Body.String())
 	}

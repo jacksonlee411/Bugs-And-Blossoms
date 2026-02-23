@@ -1,6 +1,6 @@
 # DEV-PLAN-158：Capability Key Phase 8 策略激活与版本一致性（承接 150 M6）
 
-**状态**: 规划中（2026-02-23 04:40 UTC）
+**状态**: 已完成（2026-02-23 11:10 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：`DEV-PLAN-150` 工作流 G 与 M6。
@@ -9,11 +9,11 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 建立租户级 `draft/active + policy_version` 状态模型。
-- [ ] 实现激活事务：pending -> active 原子切换。
-- [ ] 建立缓存失效与刷新机制，以 `(tenant, policy_version)` 为一致性锚点。
-- [ ] 建立回滚协议与审计证据链。
-- [ ] 验证在途请求在切换窗口内不产生分裂结果。
+- [X] 建立租户级 `draft/active + policy_version` 状态模型。
+- [X] 实现激活事务：pending -> active 原子切换。
+- [X] 建立缓存失效与刷新机制，以 `(tenant, policy_version)` 为一致性锚点。
+- [X] 建立回滚协议与审计证据链。
+- [X] 验证在途请求在切换窗口内不产生分裂结果。
 
 ### 2.2 非目标
 - 不承担 capability 映射与门禁实现（留给 156）。
@@ -64,11 +64,11 @@
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 激活算法
-1. [ ] 校验目标版本处于 draft。
-2. [ ] 开启事务并写入激活记录。
-3. [ ] 原子切换 active 版本。
-4. [ ] 发布缓存失效信号并等待关键实例确认。
-5. [ ] 输出激活结果与审计索引。
+1. [X] 校验目标版本处于 draft。
+2. [X] 开启事务并写入激活记录。
+3. [X] 原子切换 active 版本。
+4. [X] 发布缓存失效信号并等待关键实例确认。
+5. [X] 输出激活结果与审计索引。
 
 ## 7. 安全与鉴权 (Security & Authz)
 - 激活/回滚仅授权管理员可执行。
@@ -78,15 +78,15 @@
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
 - **依赖**：`DEV-PLAN-151`、`DEV-PLAN-155`、`DEV-PLAN-157`。
 - **里程碑**：
-  1. [ ] M6.1 状态机与版本模型冻结。
-  2. [ ] M6.2 激活事务联调通过。
-  3. [ ] M6.3 缓存一致性与回滚回归通过。
+  1. [X] M6.1 状态机与版本模型冻结。
+  2. [X] M6.2 激活事务联调通过。
+  3. [X] M6.3 缓存一致性与回滚回归通过。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
-- [ ] 激活前后行为可预测且可追踪。
-- [ ] 多实例无版本分裂。
-- [ ] 回滚流程可执行且证据完整。
-- [ ] `make preflight` 通过。
+- [X] 激活前后行为可预测且可追踪。
+- [X] 多实例无版本分裂。
+- [X] 回滚流程可执行且证据完整。
+- [X] `make preflight` 通过。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 - 监控项：激活成功率、版本分裂告警、回滚次数。
@@ -97,3 +97,11 @@
 - `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/157-capability-key-m7-functional-area-governance.md`
 - `docs/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
+
+## 12. 执行记录（2026-02-23 11:10 UTC）
+- [X] 新增租户级策略激活运行时：`internal/server/policy_activation_runtime.go`，支持 `state/draft/activate/rollback` 与 `active_policy_version` 读取。
+- [X] 新增内部激活接口：`/internal/policies/state|draft|activate|rollback`，并接入 `handler`、`allowlist` 与 capability 路由注册表。
+- [X] `setid-explain` 切换为读取租户当前 active policy version，确保 explain 与激活态一致。
+- [X] 路由与 capability 契约同步：`config/capability/route-capability-map.v1.json` 与 `internal/server/capability_route_registry.go` 新增 `org.policy_activation.manage`。
+- [X] 新增与扩展测试：`policy_activation_runtime_test.go`、`policy_activation_api_test.go`、`handler_m4_extra_test.go`、`authz_middleware_test.go`。
+- [X] 已执行：`go fmt ./... && go vet ./... && make check lint && make check routing && make check capability-route-map && make check capability-key && make test`。
