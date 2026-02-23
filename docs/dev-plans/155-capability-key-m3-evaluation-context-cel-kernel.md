@@ -1,6 +1,6 @@
 # DEV-PLAN-155：Capability Key Phase 5 EvaluationContext + CEL 内核基座（承接 150 M3）
 
-**状态**: 规划中（2026-02-23 04:25 UTC）
+**状态**: 已完成（2026-02-23 06:11 UTC）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**：`DEV-PLAN-150` 工作流 D 与 M3。
@@ -9,11 +9,11 @@
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-- [ ] 冻结 `EvaluationContext` 合同与服务端回填边界。
-- [ ] 落地 CEL 编译缓存、执行器、冲突决议、解释器闭环。
-- [ ] 支持 `StaticContext/ProcessContext` 双上下文分层。
-- [ ] 第一阶段仅开放 `/internal` 评估入口，不对外暴露上下文伪造入口。
-- [ ] 至少完成 2 条样板链路（资格过滤 + 命中决策）。
+- [X] 冻结 `EvaluationContext` 合同与服务端回填边界。
+- [X] 落地 CEL 编译缓存、执行器、冲突决议、解释器闭环。
+- [X] 支持 `StaticContext/ProcessContext` 双上下文分层。
+- [X] 第一阶段仅开放 `/internal` 评估入口，不对外暴露上下文伪造入口。
+- [X] 至少完成 2 条样板链路（资格过滤 + 命中决策）。
 
 ### 2.2 非目标
 - 不承担功能域开关与激活状态机实现（留给 157/158）。
@@ -63,11 +63,11 @@
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 评估算法
-1. [ ] 校验并构建 `EvaluationContext`。
-2. [ ] 按 tenant/module/date 粗筛候选规则。
-3. [ ] 执行 CEL（编译缓存命中优先）。
-4. [ ] 进行冲突决议（priority + tie-break）。
-5. [ ] 生成 explain 并返回结果。
+1. [X] 校验并构建 `EvaluationContext`。
+2. [X] 按 tenant/module/date 粗筛候选规则。
+3. [X] 执行 CEL（编译缓存命中优先）。
+4. [X] 进行冲突决议（priority + tie-break）。
+5. [X] 生成 explain 并返回结果。
 
 ## 7. 安全与鉴权 (Security & Authz)
 - internal 入口限制在服务内网/内部路由。
@@ -77,15 +77,15 @@
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
 - **依赖**：`DEV-PLAN-151`、`DEV-PLAN-153`、`DEV-PLAN-102D`。
 - **里程碑**：
-  1. [ ] M3.1 内核合同冻结。
-  2. [ ] M3.2 两条样板链路联调完成。
-  3. [ ] M3.3 internal 边界与安全测试通过。
+  1. [X] M3.1 内核合同冻结。
+  2. [X] M3.2 两条样板链路联调完成。
+  3. [X] M3.3 internal 边界与安全测试通过。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
-- [ ] 同输入同日期结果稳定（可重放）。
-- [ ] 编译缓存命中/失效路径可测。
-- [ ] 冲突决议稳定且可解释。
-- [ ] 外部路由无法直接调用 internal 评估入口。
+- [X] 同输入同日期结果稳定（可重放）。
+- [X] 编译缓存命中/失效路径可测。
+- [X] 冲突决议稳定且可解释。
+- [X] 外部路由无法直接调用 internal 评估入口。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 - 指标：评估延迟、缓存命中率、规则执行失败率。
@@ -96,3 +96,17 @@
 - `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/102d-context-rule-evaluation-engine-on-top-of-102-foundation.md`
 - `docs/dev-plans/153-capability-key-m2-m5-contextual-authz-and-dynamic-relations.md`
+
+## 12. 执行记录（2026-02-23 06:11 UTC）
+- [X] `go test ./internal/server -run "TestHandler_SetIDGovernanceRoutes|TestHandleInternalRulesEvaluateAPI|TestEvaluateInternalRuleCandidates|TestEvalInternalExpressionsAndProgramCache|TestInternalRuleBriefExplain|TestAuthzRequirementForRoute" -count=1`
+- [X] `go fmt ./...`
+- [X] `go vet ./...`
+- [X] `make check lint`
+- [X] `make test`
+- [X] `make check routing`
+- [X] `make check capability-key`
+- [X] `make check no-scope-package`
+- [X] `make check doc`
+- [X] `make check error-message`
+- [X] `make authz-pack && make authz-test && make authz-lint`
+- [X] `make check pr-branch`
