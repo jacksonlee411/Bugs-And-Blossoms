@@ -79,14 +79,6 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		resolveSetIDFn: func(context.Context, string, string, string) (string, error) {
 			return "A0001", nil
 		},
-		getScopeSubscriptionFn: func(context.Context, string, string, string, string) (ScopeSubscription, error) {
-			return ScopeSubscription{
-				SetID:        "A0001",
-				ScopeCode:    "jobcatalog",
-				PackageID:    "pkg-1",
-				PackageOwner: "tenant",
-			}, nil
-		},
 	}
 
 	reqNoTenant := httptest.NewRequest(http.MethodGet, "/org/api/setid-explain", nil)
@@ -111,31 +103,31 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	}
 
 	recBadAsOf := httptest.NewRecorder()
-	handleSetIDExplainAPI(recBadAsOf, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&scope_code=jobcatalog&as_of=bad"), store)
+	handleSetIDExplainAPI(recBadAsOf, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=bad"), store)
 	if recBadAsOf.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", recBadAsOf.Code)
 	}
 
 	recBadBU := httptest.NewRecorder()
-	handleSetIDExplainAPI(recBadBU, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=bad&scope_code=jobcatalog&as_of=2026-01-01"), store)
+	handleSetIDExplainAPI(recBadBU, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=bad&as_of=2026-01-01"), store)
 	if recBadBU.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", recBadBU.Code)
 	}
 
 	recBadLevel := httptest.NewRecorder()
-	handleSetIDExplainAPI(recBadLevel, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&scope_code=jobcatalog&as_of=2026-01-01&level=bad"), store)
+	handleSetIDExplainAPI(recBadLevel, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=bad"), store)
 	if recBadLevel.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", recBadLevel.Code)
 	}
 
 	recFullForbidden := httptest.NewRecorder()
-	handleSetIDExplainAPI(recFullForbidden, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&scope_code=jobcatalog&as_of=2026-01-01&level=full"), store)
+	handleSetIDExplainAPI(recFullForbidden, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=full"), store)
 	if recFullForbidden.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", recFullForbidden.Code)
 	}
 
 	recBadOrg := httptest.NewRecorder()
-	handleSetIDExplainAPI(recBadOrg, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&org_unit_id=bad&scope_code=jobcatalog&as_of=2026-01-01"), store)
+	handleSetIDExplainAPI(recBadOrg, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&org_unit_id=bad&as_of=2026-01-01"), store)
 	if recBadOrg.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", recBadOrg.Code)
 	}
@@ -145,23 +137,19 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		return "", errors.New("SETID_NOT_FOUND")
 	}
 	recResolveErr := httptest.NewRecorder()
-	handleSetIDExplainAPI(recResolveErr, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&scope_code=jobcatalog&as_of=2026-01-01"), resolveErrStore)
+	handleSetIDExplainAPI(recResolveErr, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01"), resolveErrStore)
 	if recResolveErr.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", recResolveErr.Code)
 	}
 
-	subErrStore := store
-	subErrStore.getScopeSubscriptionFn = func(context.Context, string, string, string, string) (ScopeSubscription, error) {
-		return ScopeSubscription{}, errors.New("SCOPE_SUBSCRIPTION_MISSING")
-	}
-	recSubErr := httptest.NewRecorder()
-	handleSetIDExplainAPI(recSubErr, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&scope_code=jobcatalog&as_of=2026-01-01"), subErrStore)
-	if recSubErr.Code != http.StatusNotFound {
-		t.Fatalf("status=%d", recSubErr.Code)
+	recSetIDMismatch := httptest.NewRecorder()
+	handleSetIDExplainAPI(recSetIDMismatch, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&setid=B0001"), store)
+	if recSetIDMismatch.Code != http.StatusForbidden {
+		t.Fatalf("status=%d", recSetIDMismatch.Code)
 	}
 
 	recMissingPolicy := httptest.NewRecorder()
-	handleSetIDExplainAPI(recMissingPolicy, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&scope_code=jobcatalog&as_of=2026-01-01"), store)
+	handleSetIDExplainAPI(recMissingPolicy, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01"), store)
 	if recMissingPolicy.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status=%d", recMissingPolicy.Code)
 	}
@@ -185,7 +173,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		Priority:            200,
 	})
 
-	briefReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&scope_code=jobcatalog&as_of=2026-01-01&level=brief&request_id=req-1")
+	briefReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=brief&request_id=req-1")
 	briefReq.Header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01")
 	recBrief := httptest.NewRecorder()
 	handleSetIDExplainAPI(recBrief, briefReq, store)
@@ -199,7 +187,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		t.Fatalf("unexpected body: %q", recBrief.Body.String())
 	}
 
-	fullReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&scope_code=jobcatalog&as_of=2026-01-01&level=full")
+	fullReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=full")
 	fullReq = fullReq.WithContext(withPrincipal(fullReq.Context(), Principal{RoleSlug: "tenant-admin"}))
 	recFull := httptest.NewRecorder()
 	handleSetIDExplainAPI(recFull, fullReq, store)
@@ -226,7 +214,7 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		Priority:            200,
 	})
 	recDeny := httptest.NewRecorder()
-	handleSetIDExplainAPI(recDeny, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_hidden&business_unit_id=10000001&scope_code=jobcatalog&as_of=2026-01-01"), store)
+	handleSetIDExplainAPI(recDeny, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_hidden&business_unit_id=10000001&as_of=2026-01-01"), store)
 	if recDeny.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recDeny.Code, recDeny.Body.String())
 	}
@@ -249,18 +237,6 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 			default:
 				return "", errors.New("SETID_NOT_FOUND")
 			}
-		},
-		getScopeSubscriptionFn: func(_ context.Context, _ string, setID string, scopeCode string, _ string) (ScopeSubscription, error) {
-			if scopeCode != "jobcatalog" {
-				return ScopeSubscription{}, errors.New("SCOPE_SUBSCRIPTION_MISSING")
-			}
-			if setID == "A0001" {
-				return ScopeSubscription{SetID: "A0001", ScopeCode: scopeCode, PackageID: "pkg-a", PackageOwner: "tenant"}, nil
-			}
-			if setID == "B0001" {
-				return ScopeSubscription{SetID: "B0001", ScopeCode: scopeCode, PackageID: "pkg-b", PackageOwner: "tenant"}, nil
-			}
-			return ScopeSubscription{}, errors.New("SCOPE_SUBSCRIPTION_MISSING")
 		},
 	}
 
@@ -298,7 +274,7 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 	makeReq := func(businessUnitID string) *http.Request {
 		req := httptest.NewRequest(
 			http.MethodGet,
-			"/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&scope_code=jobcatalog&as_of=2026-01-01&business_unit_id="+businessUnitID,
+			"/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&as_of=2026-01-01&business_unit_id="+businessUnitID,
 			nil,
 		)
 		return req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))

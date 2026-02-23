@@ -330,34 +330,19 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/setid-bindings"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/scope-packages"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/scope-packages"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/scope-packages"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/scope-packages"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/scope-packages/p1/disable"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/scope-packages/p1/disable"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/scope-packages"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/owned-scope-packages"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/owned-scope-packages"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/scope-packages/p1/disable"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/scope-subscriptions"); !ok {
-		t.Fatal("expected ok=true")
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/owned-scope-packages"); ok {
+		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/scope-subscriptions"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/scope-subscriptions"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/scope-subscriptions"); ok {
 		t.Fatal("expected ok=false")
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/global-setids"); !ok {
@@ -369,26 +354,20 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodPut, "/org/api/global-setids"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/global-scope-packages"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/global-scope-packages"); !ok {
-		t.Fatal("expected ok=true")
-	}
-	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/global-scope-packages"); ok {
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/global-scope-packages"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setid-strategy-registry"); !ok {
-		t.Fatal("expected ok=true")
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setid-strategy-registry"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
+		t.Fatalf("expected setid strategy read mapped to org.setid_capability_config, got ok=%v object=%q action=%q", ok, object, action)
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-strategy-registry"); !ok {
-		t.Fatal("expected ok=true")
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-strategy-registry"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected setid strategy admin mapped to org.setid_capability_config, got ok=%v object=%q action=%q", ok, object, action)
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/setid-strategy-registry"); ok {
 		t.Fatal("expected ok=false")
 	}
-	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setid-explain"); !ok {
-		t.Fatal("expected ok=true")
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setid-explain"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
+		t.Fatalf("expected setid explain mapped to org.setid_capability_config, got ok=%v object=%q action=%q", ok, object, action)
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-explain"); ok {
 		t.Fatal("expected ok=false")
@@ -740,16 +719,16 @@ func TestAuthzRequirementForRoute_UnsupportedMethods(t *testing.T) {
 }
 
 func TestPathMatchRouteTemplate(t *testing.T) {
-	if !pathMatchRouteTemplate("/org/api/scope-packages/123/disable", "/org/api/scope-packages/{package_id}/disable") {
+	if !pathMatchRouteTemplate("/org/api/example/123/disable", "/org/api/example/{id}/disable") {
 		t.Fatal("expected match")
 	}
-	if pathMatchRouteTemplate("/org/api/scope-packages/123/disable", "/org/api/scope-packages/{package_id}") {
+	if pathMatchRouteTemplate("/org/api/example/123/disable", "/org/api/example/{id}") {
 		t.Fatal("expected length mismatch")
 	}
 	if pathMatchRouteTemplate("/org//positions", "/org/{id}/positions") {
 		t.Fatal("expected empty segment mismatch")
 	}
-	if pathMatchRouteTemplate("/org/api/scope-packages/123/disable", "/org/api/scope-packages/{package_id}/enable") {
+	if pathMatchRouteTemplate("/org/api/example/123/disable", "/org/api/example/{id}/enable") {
 		t.Fatal("expected segment mismatch")
 	}
 }

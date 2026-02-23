@@ -17,21 +17,19 @@ const (
 )
 
 type setIDExplainResponse struct {
-	TraceID           string               `json:"trace_id"`
-	RequestID         string               `json:"request_id"`
-	CapabilityKey     string               `json:"capability_key"`
-	TenantID          string               `json:"tenant_id"`
-	BusinessUnitID    string               `json:"business_unit_id"`
-	AsOf              string               `json:"as_of"`
-	OrgUnitID         string               `json:"org_unit_id,omitempty"`
-	ScopeCode         string               `json:"scope_code"`
-	ResolvedSetID     string               `json:"resolved_setid"`
-	ResolvedPackageID string               `json:"resolved_package_id"`
-	PackageOwner      string               `json:"package_owner"`
-	Decision          string               `json:"decision"`
-	ReasonCode        string               `json:"reason_code,omitempty"`
-	Level             string               `json:"level"`
-	FieldDecisions    []setIDFieldDecision `json:"field_decisions"`
+	TraceID               string               `json:"trace_id"`
+	RequestID             string               `json:"request_id"`
+	CapabilityKey         string               `json:"capability_key"`
+	TenantID              string               `json:"tenant_id"`
+	BusinessUnitID        string               `json:"business_unit_id"`
+	AsOf                  string               `json:"as_of"`
+	OrgUnitID             string               `json:"org_unit_id,omitempty"`
+	ResolvedSetID         string               `json:"resolved_setid"`
+	ResolvedConfigVersion string               `json:"resolved_config_version,omitempty"`
+	Decision              string               `json:"decision"`
+	ReasonCode            string               `json:"reason_code,omitempty"`
+	Level                 string               `json:"level"`
+	FieldDecisions        []setIDFieldDecision `json:"field_decisions"`
 }
 
 func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGovernanceStore) {
@@ -48,11 +46,10 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	capabilityKey := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("capability_key")))
 	fieldKey := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("field_key")))
 	businessUnitID := strings.TrimSpace(r.URL.Query().Get("business_unit_id"))
-	scopeCode := strings.TrimSpace(r.URL.Query().Get("scope_code"))
 	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
 	requestID := strings.TrimSpace(r.URL.Query().Get("request_id"))
-	if capabilityKey == "" || fieldKey == "" || businessUnitID == "" || scopeCode == "" || asOf == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_id/scope_code/as_of required")
+	if capabilityKey == "" || fieldKey == "" || businessUnitID == "" || asOf == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_id/as_of required")
 		return
 	}
 	if _, err := time.Parse("2006-01-02", asOf); err != nil {
@@ -91,17 +88,14 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, scopeReasonOwnerContextForbidden, "business unit context forbidden")
 		return
 	}
-	targetSetID := strings.TrimSpace(r.URL.Query().Get("setid"))
-	if targetSetID == "" {
-		targetSetID = resolvedSetID
-	}
-	sub, err := store.GetScopeSubscription(r.Context(), tenant.ID, targetSetID, scopeCode, asOf)
-	if err != nil {
-		writeScopeAPIError(w, r, err, "scope_subscription_get_failed")
+	targetSetID := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("setid")))
+	resolvedSetID = strings.ToUpper(strings.TrimSpace(resolvedSetID))
+	if targetSetID != "" && targetSetID != resolvedSetID {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, scopeReasonOwnerContextForbidden, "business unit context forbidden")
 		return
 	}
 
-	fieldDecision, err := defaultSetIDStrategyRegistryRuntime.resolveFieldDecision(tenant.ID, capabilityKey, fieldKey, businessUnitID, asOf)
+	fieldDecision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(r.Context(), tenant.ID, capabilityKey, fieldKey, businessUnitID, asOf)
 	if err != nil {
 		status, code := statusCodeForFieldDecisionError(err)
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, code)
@@ -122,21 +116,18 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	}
 
 	response := setIDExplainResponse{
-		TraceID:           traceIDFromRequestHeader(r),
-		RequestID:         requestID,
-		CapabilityKey:     capabilityKey,
-		TenantID:          tenant.ID,
-		BusinessUnitID:    businessUnitID,
-		AsOf:              asOf,
-		OrgUnitID:         orgUnitID,
-		ScopeCode:         scopeCode,
-		ResolvedSetID:     strings.ToUpper(strings.TrimSpace(resolvedSetID)),
-		ResolvedPackageID: sub.PackageID,
-		PackageOwner:      sub.PackageOwner,
-		Decision:          responseDecision,
-		ReasonCode:        responseReasonCode,
-		Level:             level,
-		FieldDecisions:    []setIDFieldDecision{fieldDecision},
+		TraceID:        traceIDFromRequestHeader(r),
+		RequestID:      requestID,
+		CapabilityKey:  capabilityKey,
+		TenantID:       tenant.ID,
+		BusinessUnitID: businessUnitID,
+		AsOf:           asOf,
+		OrgUnitID:      orgUnitID,
+		ResolvedSetID:  resolvedSetID,
+		Decision:       responseDecision,
+		ReasonCode:     responseReasonCode,
+		Level:          level,
+		FieldDecisions: []setIDFieldDecision{fieldDecision},
 	}
 	if level == explainLevelBrief {
 		response.TenantID = ""

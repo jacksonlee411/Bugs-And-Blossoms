@@ -1,6 +1,6 @@
 # DEV-PLAN-102C2：BU 个性化策略注册表（承接 102C，避免与 070B/102C1 重复）
 
-**状态**: 准备就绪（2026-02-22 09:44 UTC，已获用户批准进入实施）
+**状态**: 草拟中（2026-02-22 17:15 UTC）
 
 ## 0. 主计划定位（Plan of Record）
 - 本计划是 `DEV-PLAN-102C` 的子计划，聚焦“**哪些能力允许按 BU 个性化、在哪个组织层级生效、如何审计解释**”的注册表机制。
@@ -8,10 +8,10 @@
 - 本计划输出：注册表契约、优先级分层、评审门禁、验收口径；不在本计划直接落地大规模代码改造。
 
 ## 1. 背景与问题陈述（Context）
-- 当前系统已具备 SetID/Scope Package 的数据个性化能力，但缺少统一“可个性化能力目录”。
+- 当前系统已具备 SetID 差异化能力，但缺少统一“可个性化能力目录”。
 - 现状问题：
   1. 新能力是否允许 BU 级差异，常靠临时约定，缺少 SSOT；
-  2. 同类能力在不同模块可能出现不同口径（tenant-only / setid / scope-package）；
+  2. 同类能力在不同模块可能出现不同口径（tenant-only / setid）；
   3. 评审中难快速回答“该能力是否允许个性化、为何允许、生效边界是什么”。
 - 业务影响：没有注册表会导致个性化策略漂移，长期增加治理与审计成本。
 
@@ -39,8 +39,7 @@
 | `capability_key` | 能力唯一键（跨模块稳定） | `jobcatalog.profile_defaults` |
 | `owner_module` | 归属模块 | `jobcatalog` |
 | `field_key` | 字段键（字段级策略时必填） | `field_x` |
-| `personalization_mode` | 个性化模式 | `tenant_only` / `setid` / `scope_package` |
-| `scope_code` | 若为 scope_package，绑定 scope | `jobcatalog` |
+| `personalization_mode` | 个性化模式 | `tenant_only` / `setid` |
 | `org_level` | 生效组织层级 | `tenant` / `business_unit` |
 | `bu_selector` | BU 选择器 | `business_unit=BU-A` |
 | `required` | 该字段是否必填 | `true` |
@@ -54,8 +53,7 @@
 
 ### 3.2 个性化模式定义（冻结）
 - `tenant_only`：仅租户统一策略，不允许 BU 差异。
-- `setid`：允许按 SetID 差异，但不做跨 scope 组合。
-- `scope_package`：允许按 scope/package 组合差异（受 071/071B 约束）。
+- `setid`：允许按 SetID 差异（不再引入 scope/package 中间层，遵循 102C6）。
 
 ### 3.3 组织层级定义（冻结）
 - `tenant`：全租户统一。
@@ -66,10 +64,15 @@
 - 同级冲突按 `priority` 决策；若仍冲突则 fail-closed（`FIELD_POLICY_CONFLICT`）。
 - 不允许存在 `visible=false` 且 `required=true` 的策略组合。
 
-## 4. 能力分层（L0-L2）
+## 4. 能力分层（L0-L1）
 - **L0（不可个性化）**：基础安全/法务/核算不变量，只允许 tenant_only。
-- **L1（受限个性化）**：允许 setid 差异，禁止跨 scope 组合。
-- **L2（可组合个性化）**：允许 scope_package，需满足 explain_required + 审计链。
+- **L1（受限个性化）**：允许 setid 差异，必须满足 explain_required + 审计链。
+
+## 4.1 capability_key 命名与反退化（冻结）
+- `capability_key` 仅表达“能力动作”，不得编码上下文（setid/bu/tenant/region）。
+- 格式：`<module>.<capability>[.<action>]`，全小写，段间用 `.`。
+- 禁止示例：`jobcatalog.setid_s2601`、`staffing.assignment_create.bu_a`。
+- 禁止运行时拼接 key（例如 `capability_key + "_" + setid`）。
 
 ## 5. 与现有计划边界（No-Overlap）
 | 主题 | 070B | 102C1 | 102C2 |
@@ -82,8 +85,8 @@
 ## 6. 新能力准入流程（冻结）
 1. [ ] 新能力提出时先填写 `capability_key + personalization_mode + org_level`。
 2. [ ] 若 `personalization_mode != tenant_only`，必须提供 explain 方案与审计字段方案。
-3. [ ] 若选择 `scope_package`，必须关联已登记 `scope_code`，且给出 071/071B 承接路径。
-4. [ ] 字段级差异场景必须登记 `field_key + required + visible + default_rule_ref + bu_selector`。
+3. [ ] 字段级差异场景必须登记 `field_key + required + visible + default_rule_ref + bu_selector`。
+4. [ ] 路由/动作到 `capability_key` 的映射必须登记并评审，缺失时禁止上线。
 5. [ ] 通过评审后方可进入实施子计划；未登记不得编码。
 
 ## 7. 门禁建议（后续实施）
@@ -91,6 +94,7 @@
 - [ ] 代码门禁：新增个性化逻辑时必须引用注册表键，不允许临时硬编码模式。
 - [ ] 评审门禁：PR 模板增加“是否新增个性化能力、是否登记注册表”检查项。
 - [ ] 一致性门禁：阻断 `visible=false && required=true`、`default_rule_ref` 缺失、`priority` 冲突未解的策略落库。
+- [ ] 命名门禁：阻断 `capability_key` 含上下文禁词与动态拼接生成。
 
 ## 8. 里程碑（文档到实施）
 1. [ ] **M1 契约冻结**：注册表字段与模式定义评审通过。
@@ -117,14 +121,15 @@
 - **R2：键命名失控**
   - 缓解：`capability_key` 采用 `module.capability` 规则并集中审校。
 - **R3：分层定义过粗或过细**
-  - 缓解：先 L0-L2 三层，试点后再扩展。
+  - 缓解：先 L0-L1 两层，试点后再扩展。
+- **R4：capability_key 退化为“新 scope”**
+  - 缓解：执行命名禁词与映射门禁；上下文差异只允许走 `setid + business_unit + as_of`。
 
 ## 11. 关联文档
 - `docs/dev-plans/102c-setid-group-sharing-and-bu-personalization-gap-assessment.md`
 - `docs/dev-plans/102c1-setid-contextual-security-model.md`
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
-- `docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
-- `docs/archive/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
+- `docs/dev-plans/102c6-remove-scope-code-and-converge-to-capability-key-plan.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `docs/dev-plans/102c3-setid-configuration-hit-explainability.md`

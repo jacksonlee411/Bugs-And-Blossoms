@@ -12,7 +12,6 @@ import (
 type jobCatalogViewAPI struct {
 	HasSelection bool   `json:"has_selection"`
 	ReadOnly     bool   `json:"read_only"`
-	PackageCode  string `json:"package_code,omitempty"`
 	SetID        string `json:"setid,omitempty"`
 	OwnerSetID   string `json:"owner_setid,omitempty"`
 }
@@ -73,16 +72,11 @@ func handleJobCatalogAPI(w http.ResponseWriter, r *http.Request, setidStore jobC
 		return
 	}
 
-	packageCode := normalizePackageCode(r.URL.Query().Get("package_code"))
 	setID := normalizeSetID(r.URL.Query().Get("setid"))
-	if packageCode != "" && setID != "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "package_code and setid are mutually exclusive")
-		return
-	}
 
 	view := jobCatalogViewAPI{HasSelection: false}
-	if packageCode != "" || setID != "" {
-		v, errMsg := resolveJobCatalogView(r.Context(), store, setidStore, tenant.ID, asOf, packageCode, setID)
+	if setID != "" {
+		v, errMsg := resolveJobCatalogView(r.Context(), store, setidStore, tenant.ID, asOf, "", setID)
 		if errMsg != "" {
 			status := jobCatalogStatusForError(errMsg)
 			code := strings.TrimSpace(errMsg)
@@ -95,7 +89,6 @@ func handleJobCatalogAPI(w http.ResponseWriter, r *http.Request, setidStore jobC
 
 		view.HasSelection = v.HasSelection
 		view.ReadOnly = v.ReadOnly
-		view.PackageCode = v.PackageCode
 		view.SetID = v.SetID
 		view.OwnerSetID = v.OwnerSetID
 
@@ -214,7 +207,7 @@ func handleJobCatalogAPI(w http.ResponseWriter, r *http.Request, setidStore jobC
 }
 
 type jobCatalogWriteRequest struct {
-	PackageCode    string `json:"package_code"`
+	SetID          string `json:"setid"`
 	EffectiveDate  string `json:"effective_date"`
 	RequestAction  string `json:"action"`
 	Code           string `json:"code"`
@@ -242,7 +235,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		return
 	}
 
-	req.PackageCode = normalizePackageCode(req.PackageCode)
+	req.SetID = normalizeSetID(req.SetID)
 	req.EffectiveDate = strings.TrimSpace(req.EffectiveDate)
 	if req.EffectiveDate == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_effective_date", "effective_date required")
@@ -257,12 +250,12 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 	if action == "" {
 		action = "create_job_family_group"
 	}
-	if req.PackageCode == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "package_code required")
+	if req.SetID == "" {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "setid required")
 		return
 	}
 
-	view, errMsg := resolveJobCatalogView(r.Context(), store, setidStore, tenant.ID, req.EffectiveDate, req.PackageCode, "")
+	view, errMsg := resolveJobCatalogView(r.Context(), store, setidStore, tenant.ID, req.EffectiveDate, "", req.SetID)
 	if errMsg != "" {
 		status := jobCatalogStatusForError(errMsg)
 		code := strings.TrimSpace(errMsg)
@@ -272,7 +265,11 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, errMsg)
 		return
 	}
-	ownerSetID := view.OwnerSetID
+	if view.ReadOnly {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "OWNER_SETID_FORBIDDEN", "OWNER_SETID_FORBIDDEN")
+		return
+	}
+	ownerSetID := view.listSetID()
 
 	switch action {
 	case "create_job_family_group":
@@ -290,7 +287,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"package_code":          req.PackageCode,
+			"setid":                 req.SetID,
 			"owner_setid":           ownerSetID,
 			"effective_date":        req.EffectiveDate,
 			"job_family_group_code": strings.ToUpper(req.Code),
@@ -313,7 +310,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"package_code":    req.PackageCode,
+			"setid":           req.SetID,
 			"owner_setid":     ownerSetID,
 			"effective_date":  req.EffectiveDate,
 			"job_family_code": strings.ToUpper(req.Code),
@@ -334,7 +331,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"package_code":          req.PackageCode,
+			"setid":                 req.SetID,
 			"owner_setid":           ownerSetID,
 			"effective_date":        req.EffectiveDate,
 			"job_family_code":       strings.ToUpper(familyCode),
@@ -357,7 +354,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"package_code":   req.PackageCode,
+			"setid":          req.SetID,
 			"owner_setid":    ownerSetID,
 			"effective_date": req.EffectiveDate,
 			"job_level_code": strings.ToUpper(req.Code),
@@ -382,7 +379,7 @@ func handleJobCatalogWriteAPI(w http.ResponseWriter, r *http.Request, setidStore
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"package_code":     req.PackageCode,
+			"setid":            req.SetID,
 			"owner_setid":      ownerSetID,
 			"effective_date":   req.EffectiveDate,
 			"job_profile_code": strings.ToUpper(req.Code),

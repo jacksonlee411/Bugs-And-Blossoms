@@ -464,6 +464,7 @@ BEGIN
       FROM jobcatalog.job_profile_versions jpv
       WHERE jpv.tenant_uuid = p_tenant_uuid
         AND jpv.package_uuid = v_jobcatalog_package_uuid
+        AND COALESCE(jpv.setid, '') = v_jobcatalog_setid
         AND jpv.job_profile_uuid = v_job_profile_uuid
         AND jpv.is_active = true
         AND jpv.validity @> v_row.effective_date

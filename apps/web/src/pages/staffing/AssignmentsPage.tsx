@@ -169,7 +169,6 @@ export function AssignmentsPage() {
 
         <SetIDExplainPanel
           initialAsOf={asOf}
-          initialScopeCode='staffing'
           title='SetID Explain（Assignments）'
           subtitle='用于排查任职写入时的上下文拒绝与字段策略命中。'
         />

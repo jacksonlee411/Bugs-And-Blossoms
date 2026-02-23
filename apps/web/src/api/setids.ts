@@ -56,8 +56,7 @@ export interface SetIDStrategyRegistryItem {
   capability_key: string
   owner_module: string
   field_key: string
-  personalization_mode: 'tenant_only' | 'setid' | 'scope_package'
-  scope_code?: string
+  personalization_mode: 'tenant_only' | 'setid'
   org_level: 'tenant' | 'business_unit'
   business_unit_id?: string
   required: boolean
@@ -83,8 +82,7 @@ export interface SetIDStrategyRegistryUpsertRequest {
   capability_key: string
   owner_module: string
   field_key: string
-  personalization_mode: 'tenant_only' | 'setid' | 'scope_package'
-  scope_code: string
+  personalization_mode: 'tenant_only' | 'setid'
   org_level: 'tenant' | 'business_unit'
   business_unit_id: string
   required: boolean
@@ -140,10 +138,8 @@ export interface SetIDExplainResponse {
   business_unit_id: string
   as_of: string
   org_unit_id?: string
-  scope_code: string
   resolved_setid: string
-  resolved_package_id: string
-  package_owner: string
+  resolved_config_version?: string
   decision: string
   reason_code?: string
   level: 'brief' | 'full'
@@ -154,7 +150,6 @@ export async function getSetIDExplain(request: {
   capabilityKey: string
   fieldKey: string
   businessUnitID: string
-  scopeCode: string
   asOf: string
   level?: 'brief' | 'full'
   setID?: string
@@ -165,7 +160,6 @@ export async function getSetIDExplain(request: {
     capability_key: request.capabilityKey.trim(),
     field_key: request.fieldKey.trim(),
     business_unit_id: request.businessUnitID.trim(),
-    scope_code: request.scopeCode.trim(),
     as_of: request.asOf.trim()
   })
   if (request.level) {

@@ -23,7 +23,6 @@ interface SetIDExplainPanelProps {
   title: string
   subtitle?: string
   initialAsOf?: string
-  initialScopeCode?: string
   initialCapabilityKey?: string
   initialFieldKey?: string
   initialBusinessUnitID?: string
@@ -103,7 +102,6 @@ export function SetIDExplainPanel({
   title,
   subtitle,
   initialAsOf,
-  initialScopeCode,
   initialCapabilityKey,
   initialFieldKey,
   initialBusinessUnitID,
@@ -118,7 +116,6 @@ export function SetIDExplainPanel({
   const [capabilityKey, setCapabilityKey] = useState(initialCapabilityKey ?? '')
   const [fieldKey, setFieldKey] = useState(initialFieldKey ?? '')
   const [businessUnitID, setBusinessUnitID] = useState(initialBusinessUnitID ?? '')
-  const [scopeCode, setScopeCode] = useState(initialScopeCode ?? '')
   const [asOf, setAsOf] = useState(initialAsOf ?? todayISO())
   const [setID, setSetID] = useState(initialSetID ?? '')
   const [orgUnitID, setOrgUnitID] = useState(initialOrgUnitID ?? '')
@@ -170,7 +167,6 @@ export function SetIDExplainPanel({
         capabilityKey,
         fieldKey,
         businessUnitID,
-        scopeCode,
         asOf,
         level: effectiveLevel,
         setID,
@@ -218,7 +214,6 @@ export function SetIDExplainPanel({
             value={businessUnitID}
             onChange={(event) => setBusinessUnitID(event.target.value)}
           />
-          <TextField label='scope_code' required size='small' value={scopeCode} onChange={(event) => setScopeCode(event.target.value)} />
           <TextField label='as_of' required size='small' type='date' value={asOf} onChange={(event) => setAsOf(event.target.value)} />
           <TextField label='request_id' required size='small' value={requestID} onChange={(event) => setRequestID(event.target.value)} />
           <TextField label='setid（可选）' size='small' value={setID} onChange={(event) => setSetID(event.target.value)} />
@@ -287,7 +282,7 @@ export function SetIDExplainPanel({
               />
               <Chip label={`reason_code: ${result.reason_code || '-'}`} size='small' variant='outlined' />
               <Chip label={`resolved_setid: ${result.resolved_setid}`} size='small' variant='outlined' />
-              <Chip label={`resolved_package_id: ${result.resolved_package_id}`} size='small' variant='outlined' />
+              <Chip label={`resolved_config_version: ${result.resolved_config_version || '-'}`} size='small' variant='outlined' />
               <Chip label={`level: ${result.level}`} size='small' variant='outlined' />
             </Stack>
 

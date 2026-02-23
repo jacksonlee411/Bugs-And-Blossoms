@@ -715,6 +715,29 @@ type OrgunitSetidScopeSubscriptionEvent struct {
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 }
 
+type OrgunitSetidStrategyRegistry struct {
+	ID                  int64              `json:"id"`
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
+	CapabilityKey       string             `json:"capability_key"`
+	OwnerModule         string             `json:"owner_module"`
+	FieldKey            string             `json:"field_key"`
+	PersonalizationMode string             `json:"personalization_mode"`
+	OrgLevel            string             `json:"org_level"`
+	BusinessUnitID      string             `json:"business_unit_id"`
+	Required            bool               `json:"required"`
+	Visible             bool               `json:"visible"`
+	DefaultRuleRef      *string            `json:"default_rule_ref"`
+	DefaultValue        *string            `json:"default_value"`
+	Priority            int32              `json:"priority"`
+	ExplainRequired     bool               `json:"explain_required"`
+	IsStable            bool               `json:"is_stable"`
+	ChangePolicy        string             `json:"change_policy"`
+	EffectiveDate       pgtype.Date        `json:"effective_date"`
+	EndDate             pgtype.Date        `json:"end_date"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+}
+
 type OrgunitTenantFieldConfig struct {
 	TenantUuid       pgtype.UUID        `json:"tenant_uuid"`
 	FieldKey         string             `json:"field_key"`

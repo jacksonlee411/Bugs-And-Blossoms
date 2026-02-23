@@ -2,11 +2,86 @@ package server
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+type setIDStrategyRegistryRows struct {
+	idx     int
+	rows    [][]any
+	scanErr error
+	err     error
+}
+
+type setIDStrategyRegistryStoreStub struct {
+	upsertFn               func(context.Context, string, setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error)
+	listFn                 func(context.Context, string, string, string, string) ([]setIDStrategyRegistryItem, error)
+	resolveFieldDecisionFn func(context.Context, string, string, string, string, string) (setIDFieldDecision, error)
+}
+
+func (s setIDStrategyRegistryStoreStub) upsert(ctx context.Context, tenantID string, item setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error) {
+	if s.upsertFn == nil {
+		return item, false, nil
+	}
+	return s.upsertFn(ctx, tenantID, item)
+}
+
+func (s setIDStrategyRegistryStoreStub) list(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, asOf string) ([]setIDStrategyRegistryItem, error) {
+	if s.listFn == nil {
+		return nil, nil
+	}
+	return s.listFn(ctx, tenantID, capabilityKey, fieldKey, asOf)
+}
+
+func (s setIDStrategyRegistryStoreStub) resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitID string, asOf string) (setIDFieldDecision, error) {
+	if s.resolveFieldDecisionFn == nil {
+		return setIDFieldDecision{}, errors.New(fieldPolicyMissingCode)
+	}
+	return s.resolveFieldDecisionFn(ctx, tenantID, capabilityKey, fieldKey, businessUnitID, asOf)
+}
+
+func (r *setIDStrategyRegistryRows) Close()                        {}
+func (r *setIDStrategyRegistryRows) Err() error                    { return r.err }
+func (r *setIDStrategyRegistryRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
+func (r *setIDStrategyRegistryRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+func (r *setIDStrategyRegistryRows) Next() bool {
+	if r.idx >= len(r.rows) {
+		return false
+	}
+	r.idx++
+	return true
+}
+func (r *setIDStrategyRegistryRows) Scan(dest ...any) error {
+	if r.scanErr != nil {
+		return r.scanErr
+	}
+	row := r.rows[r.idx-1]
+	for i := range dest {
+		switch d := dest[i].(type) {
+		case *string:
+			*d = row[i].(string)
+		case *bool:
+			*d = row[i].(bool)
+		case *int:
+			*d = row[i].(int)
+		default:
+			return errors.New("unsupported scan type")
+		}
+	}
+	return nil
+}
+func (r *setIDStrategyRegistryRows) Values() ([]any, error) { return nil, nil }
+func (r *setIDStrategyRegistryRows) RawValues() [][]byte    { return nil }
+func (r *setIDStrategyRegistryRows) Conn() *pgx.Conn        { return nil }
 
 func TestNormalizeStrategyRegistryItem_Defaults(t *testing.T) {
 	item := normalizeStrategyRegistryItem(setIDStrategyRegistryUpsertAPIRequest{
@@ -89,12 +164,11 @@ func TestValidateStrategyRegistryItem(t *testing.T) {
 			it.BusinessUnitID = "bad"
 			return it
 		}(), status: http.StatusBadRequest, code: "invalid_business_unit_id"},
-		{name: "scope package scope required", item: func() setIDStrategyRegistryItem {
+		{name: "capability context token forbidden", item: func() setIDStrategyRegistryItem {
 			it := valid
-			it.PersonalizationMode = personalizationModeScopePackage
-			it.ScopeCode = ""
+			it.CapabilityKey = "staffing.assignment_create.bu_a"
 			return it
-		}(), status: http.StatusBadRequest, code: "invalid_scope_code"},
+		}(), status: http.StatusUnprocessableEntity, code: "invalid_capability_key_context"},
 		{name: "explain required", item: func() setIDStrategyRegistryItem {
 			it := valid
 			it.ExplainRequired = false
@@ -133,6 +207,26 @@ func TestValidateStrategyRegistryItem(t *testing.T) {
 			status, code, _ := validateStrategyRegistryItem(tc.item)
 			if status != tc.status || code != tc.code {
 				t.Fatalf("status=%d code=%q", status, code)
+			}
+		})
+	}
+}
+
+func TestContainsCapabilityContextToken(t *testing.T) {
+	cases := []struct {
+		name string
+		key  string
+		want bool
+	}{
+		{name: "no context token", key: "staffing.assignment_create.field_policy", want: false},
+		{name: "empty segment ignored", key: "staffing..assignment", want: false},
+		{name: "exact token", key: "staffing.tenant.field_policy", want: true},
+		{name: "prefixed token", key: "staffing.scope_cn.field_policy", want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := containsCapabilityContextToken(tc.key); got != tc.want {
+				t.Fatalf("got=%v want=%v", got, tc.want)
 			}
 		})
 	}
@@ -490,4 +584,242 @@ func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 	if !strings.Contains(listRec.Body.String(), `"items":[`) {
 		t.Fatalf("unexpected body: %q", listRec.Body.String())
 	}
+}
+
+func TestHandleSetIDStrategyRegistryAPI_StoreErrorBranches(t *testing.T) {
+	resetSetIDStrategyRegistryRuntimeForTest()
+	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
+
+	t.Run("list internal error", func(t *testing.T) {
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			listFn: func(context.Context, string, string, string, string) ([]setIDStrategyRegistryItem, error) {
+				return nil, errors.New("boom")
+			},
+		})
+		req := httptest.NewRequest(http.MethodGet, "/org/api/setid-strategy-registry?as_of=2026-01-01", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleSetIDStrategyRegistryAPI(rec, req)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "setid_strategy_registry_list_failed") {
+			t.Fatalf("unexpected body=%q", rec.Body.String())
+		}
+	})
+
+	t.Run("upsert internal error", func(t *testing.T) {
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			upsertFn: func(context.Context, string, setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error) {
+				return setIDStrategyRegistryItem{}, false, errors.New("boom")
+			},
+		})
+		body := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r2"}`
+		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(body))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleSetIDStrategyRegistryAPI(rec, req)
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "setid_strategy_registry_upsert_failed") {
+			t.Fatalf("unexpected body=%q", rec.Body.String())
+		}
+	})
+}
+
+func TestUseSetIDStrategyRegistryStore(t *testing.T) {
+	resetSetIDStrategyRegistryRuntimeForTest()
+	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
+
+	if defaultSetIDStrategyRegistryStore == nil {
+		t.Fatal("expected default store")
+	}
+	useSetIDStrategyRegistryStore(nil)
+	if defaultSetIDStrategyRegistryStore == nil {
+		t.Fatal("expected runtime store fallback")
+	}
+
+	custom := &setIDStrategyRegistryRuntimeStore{runtime: newSetIDStrategyRegistryRuntime()}
+	useSetIDStrategyRegistryStore(custom)
+	if defaultSetIDStrategyRegistryStore != custom {
+		t.Fatal("expected custom store")
+	}
+}
+
+func TestSetIDStrategyRegistryPGStore(t *testing.T) {
+	item := setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_x",
+		PersonalizationMode: personalizationModeSetID,
+		OrgLevel:            orgLevelBusinessUnit,
+		BusinessUnitID:      "10000001",
+		Required:            true,
+		Visible:             true,
+		DefaultRuleRef:      "rule://a1",
+		DefaultValue:        "a1",
+		Priority:            200,
+		ExplainRequired:     true,
+		IsStable:            true,
+		ChangePolicy:        "plan_required",
+		EffectiveDate:       "2026-01-01",
+		UpdatedAt:           "2026-01-01T00:00:00Z",
+	}
+	t.Run("new store nil", func(t *testing.T) {
+		if got := newSetIDStrategyRegistryPGStore(nil); got != nil {
+			t.Fatal("expected nil store")
+		}
+	})
+	t.Run("upsert begin error", func(t *testing.T) {
+		store := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin fail")
+		}))
+		if _, _, err := store.upsert(context.Background(), "t1", item); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("upsert set tenant error", func(t *testing.T) {
+		tx := &stubTx{execErr: errors.New("boom"), execErrAt: 1, row: &stubRow{vals: []any{false}}}
+		store := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
+		if _, _, err := store.upsert(context.Background(), "t1", item); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("upsert exists scan error", func(t *testing.T) {
+		tx := &stubTx{rowErr: errors.New("boom")}
+		store := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
+		if _, _, err := store.upsert(context.Background(), "t1", item); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("upsert exec error", func(t *testing.T) {
+		tx := &stubTx{row: &stubRow{vals: []any{false}}, execErr: errors.New("boom"), execErrAt: 2}
+		store := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
+		if _, _, err := store.upsert(context.Background(), "t1", item); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("upsert create and update", func(t *testing.T) {
+		txCreate := &stubTx{row: &stubRow{vals: []any{false}}}
+		storeCreate := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return txCreate, nil }))
+		saved, updated, err := storeCreate.upsert(context.Background(), "t1", item)
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if updated {
+			t.Fatal("expected create")
+		}
+		if saved.CapabilityKey != item.CapabilityKey {
+			t.Fatalf("saved=%+v", saved)
+		}
+
+		txUpdate := &stubTx{row: &stubRow{vals: []any{true}}}
+		storeUpdate := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return txUpdate, nil }))
+		_, updated, err = storeUpdate.upsert(context.Background(), "t1", item)
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if !updated {
+			t.Fatal("expected update")
+		}
+	})
+	t.Run("upsert with end_date", func(t *testing.T) {
+		itemWithEndDate := item
+		itemWithEndDate.EndDate = "2026-02-01"
+		tx := &stubTx{row: &stubRow{vals: []any{false}}}
+		store := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
+		if _, _, err := store.upsert(context.Background(), "t1", itemWithEndDate); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+	})
+	t.Run("list invalid as_of", func(t *testing.T) {
+		store := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		if _, err := store.list(context.Background(), "t1", "", "", "bad"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("list begin/query/scan/rows error", func(t *testing.T) {
+		storeBeginErr := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return nil, errors.New("begin fail")
+		}))
+		if _, err := storeBeginErr.list(context.Background(), "t1", "", "", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+
+		txQueryErr := &stubTx{queryErr: errors.New("boom"), queryErrAt: 1}
+		storeQueryErr := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return txQueryErr, nil }))
+		if _, err := storeQueryErr.list(context.Background(), "t1", "", "", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+
+		txScanErr := &stubTx{
+			rows: &setIDStrategyRegistryRows{
+				rows:    [][]any{{"staffing.assignment_create.field_policy", "staffing", "field_x", "setid", "business_unit", "10000001", true, true, "rule://a1", "a1", 200, true, true, "plan_required", "2026-01-01", "", "2026-01-01T00:00:00Z"}},
+				scanErr: errors.New("scan fail"),
+			},
+		}
+		storeScanErr := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return txScanErr, nil }))
+		if _, err := storeScanErr.list(context.Background(), "t1", "", "", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+
+		txRowsErr := &stubTx{
+			rows: &setIDStrategyRegistryRows{
+				rows: [][]any{},
+				err:  errors.New("rows fail"),
+			},
+		}
+		storeRowsErr := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return txRowsErr, nil }))
+		if _, err := storeRowsErr.list(context.Background(), "t1", "", "", "2026-01-01"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("list and resolve success/missing", func(t *testing.T) {
+		rows := &setIDStrategyRegistryRows{
+			rows: [][]any{
+				{"staffing.assignment_create.field_policy", "staffing", "field_x", "setid", "business_unit", "10000001", true, true, "rule://a1", "a1", 200, true, true, "plan_required", "2026-01-01", "", "2026-01-01T00:00:00Z"},
+			},
+		}
+		tx := &stubTx{rows: rows}
+		store := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return tx, nil }))
+		items, err := store.list(context.Background(), "t1", "staffing.assignment_create.field_policy", "field_x", "2026-01-01")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if len(items) != 1 || items[0].DefaultValue != "a1" {
+			t.Fatalf("items=%+v", items)
+		}
+
+		rowsForResolve := &setIDStrategyRegistryRows{
+			rows: [][]any{
+				{"staffing.assignment_create.field_policy", "staffing", "field_x", "setid", "business_unit", "10000001", true, true, "rule://a1", "a1", 200, true, true, "plan_required", "2026-01-01", "", "2026-01-01T00:00:00Z"},
+			},
+		}
+		resolveStore := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) { return &stubTx{rows: rowsForResolve}, nil }))
+		decision, err := resolveStore.resolveFieldDecision(context.Background(), "t1", "staffing.assignment_create.field_policy", "field_x", "10000001", "2026-01-01")
+		if err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if !decision.Required || decision.ResolvedDefaultVal != "a1" {
+			t.Fatalf("decision=%+v", decision)
+		}
+
+		emptyStore := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{rows: &setIDStrategyRegistryRows{rows: [][]any{}}}, nil
+		}))
+		if _, err := emptyStore.resolveFieldDecision(context.Background(), "t1", "staffing.assignment_create.field_policy", "field_x", "10000001", "2026-01-01"); err == nil || err.Error() != fieldPolicyMissingCode {
+			t.Fatalf("err=%v", err)
+		}
+	})
+	t.Run("resolve list error", func(t *testing.T) {
+		store := newSetIDStrategyRegistryPGStore(beginnerFunc(func(context.Context) (pgx.Tx, error) {
+			return &stubTx{}, nil
+		}))
+		if _, err := store.resolveFieldDecision(context.Background(), "t1", "staffing.assignment_create.field_policy", "field_x", "10000001", "bad"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
 }
