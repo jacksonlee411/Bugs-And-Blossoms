@@ -21,16 +21,6 @@ const (
 	capabilityPolicyVersionBaseline = "2026-02-23"
 )
 
-var capabilityModuleFunctionalAreas = map[string]string{
-	"org":        "org_foundation",
-	"orgunit":    "org_foundation",
-	"setid":      "org_foundation",
-	"staffing":   "staffing",
-	"jobcatalog": "jobcatalog",
-	"person":     "person",
-	"iam":        "iam_platform",
-}
-
 type setIDExplainResponse struct {
 	TraceID               string               `json:"trace_id"`
 	RequestID             string               `json:"request_id"`
@@ -91,6 +81,11 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	capabilityKey = capCtx.CapabilityKey
 	businessUnitID = capCtx.BusinessUnitID
 	asOf = capCtx.AsOf
+	functionalAreaKey, areaReasonCode, areaAllowed := evaluateFunctionalAreaGate(tenant.ID, capabilityKey)
+	if !areaAllowed {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, areaReasonCode, functionalAreaErrorMessage(areaReasonCode))
+		return
+	}
 
 	level := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("level")))
 	if level == "" {
@@ -160,7 +155,7 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		RequestID:             requestID,
 		CapabilityKey:         capabilityKey,
 		SetID:                 resolvedSetID,
-		FunctionalAreaKey:     resolveFunctionalAreaKey(capabilityKey),
+		FunctionalAreaKey:     functionalAreaKey,
 		PolicyVersion:         capabilityPolicyVersionBaseline,
 		TenantID:              tenant.ID,
 		BusinessUnitID:        businessUnitID,
@@ -248,17 +243,6 @@ func fallbackSetIDExplainTraceID(requestID string, capabilityKey string, busines
 		strings.TrimSpace(asOf),
 	}, "|")))
 	return hex.EncodeToString(sum[:16])
-}
-
-func resolveFunctionalAreaKey(capabilityKey string) string {
-	prefix := strings.ToLower(strings.TrimSpace(capabilityKey))
-	if dot := strings.Index(prefix, "."); dot > 0 {
-		prefix = prefix[:dot]
-	}
-	if area, ok := capabilityModuleFunctionalAreas[prefix]; ok {
-		return area
-	}
-	return "org_foundation"
 }
 
 func logSetIDExplainAudit(response setIDExplainResponse) {

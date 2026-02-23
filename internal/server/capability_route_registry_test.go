@@ -11,7 +11,8 @@ import (
 )
 
 type capabilityRouteContract struct {
-	Routes []capabilityRouteBinding `json:"routes"`
+	Capabilities []capabilityDefinition   `json:"capabilities"`
+	Routes       []capabilityRouteBinding `json:"routes"`
 }
 
 func TestCapabilityRouteBindingKey(t *testing.T) {
@@ -22,6 +23,13 @@ func TestCapabilityRouteBindingKey(t *testing.T) {
 }
 
 func TestCapabilityRouteBindingForRoute(t *testing.T) {
+	if definition, ok := capabilityDefinitionForKey(" staffing.assignment_create.field_policy "); !ok || definition.FunctionalAreaKey != "staffing" {
+		t.Fatalf("definition=%+v ok=%v", definition, ok)
+	}
+	if _, ok := capabilityDefinitionForKey("unknown.key"); ok {
+		t.Fatal("expected unknown capability missing")
+	}
+
 	binding, ok := capabilityRouteBindingForRoute("GET", "/org/api/setid-strategy-registry")
 	if !ok {
 		t.Fatal("expected mapping found")
@@ -64,6 +72,9 @@ func TestCapabilityRouteRegistryContract(t *testing.T) {
 	}
 	if len(contract.Routes) == 0 {
 		t.Fatal("expected contract routes")
+	}
+	if len(contract.Capabilities) == 0 {
+		t.Fatal("expected contract capabilities")
 	}
 
 	got := make([]capabilityRouteBinding, len(capabilityRouteBindings))
@@ -108,6 +119,37 @@ func TestCapabilityRouteRegistryContract(t *testing.T) {
 	for i := range got {
 		if got[i] != want[i] {
 			t.Fatalf("route mismatch index=%d got=%+v want=%+v", i, got[i], want[i])
+		}
+	}
+
+	gotCapabilities := make([]capabilityDefinition, len(capabilityDefinitions))
+	copy(gotCapabilities, capabilityDefinitions)
+	slices.SortFunc(gotCapabilities, func(a capabilityDefinition, b capabilityDefinition) int {
+		if a.CapabilityKey < b.CapabilityKey {
+			return -1
+		}
+		if a.CapabilityKey > b.CapabilityKey {
+			return 1
+		}
+		return 0
+	})
+	wantCapabilities := make([]capabilityDefinition, len(contract.Capabilities))
+	copy(wantCapabilities, contract.Capabilities)
+	slices.SortFunc(wantCapabilities, func(a capabilityDefinition, b capabilityDefinition) int {
+		if a.CapabilityKey < b.CapabilityKey {
+			return -1
+		}
+		if a.CapabilityKey > b.CapabilityKey {
+			return 1
+		}
+		return 0
+	})
+	if len(gotCapabilities) != len(wantCapabilities) {
+		t.Fatalf("capability count mismatch got=%d want=%d", len(gotCapabilities), len(wantCapabilities))
+	}
+	for i := range gotCapabilities {
+		if gotCapabilities[i] != wantCapabilities[i] {
+			t.Fatalf("capability mismatch index=%d got=%+v want=%+v", i, gotCapabilities[i], wantCapabilities[i])
 		}
 	}
 }
