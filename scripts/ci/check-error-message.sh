@@ -5,7 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$root"
 
 echo "[error-message] go test ./internal/routing"
-go test ./internal/routing -run "TestWriteError_(RewritesGenericMessageFromCode|HumanizesUnknownGenericCode|KeepExplicitMessage)" -count=1
+go test ./internal/routing -run "TestWriteError_(RewritesGenericMessageFromCode|HumanizesUnknownGenericCode|KeepExplicitMessage)|TestErrorCatalog_CoversWriteErrorCodes" -count=1
 
 resolver_file="apps/web/src/errors/presentApiError.ts"
 catalog_file="config/errors/catalog.yaml"
