@@ -230,6 +230,7 @@ CREATE OR REPLACE FUNCTION orgunit.apply_org_event_ext_payload(
   p_effective_date date,
   p_event_type text,
   p_payload jsonb,
+  p_event_db_id bigint,
   p_target_event_type text DEFAULT NULL
 )
 RETURNS void
@@ -240,6 +241,7 @@ DECLARE
   v_ext jsonb;
   v_labels jsonb;
   v_has_ext_payload boolean;
+  v_has_ext_fields boolean;
   v_field_key text;
   v_label_key text;
   v_field_value jsonb;
@@ -297,6 +299,21 @@ BEGIN
         DETAIL = format('field_key=%s', v_label_key);
     END IF;
   END LOOP;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM jsonb_object_keys(v_ext)
+  ) INTO v_has_ext_fields;
+
+  IF NOT v_has_ext_fields THEN
+    RETURN;
+  END IF;
+
+  IF p_event_db_id IS NULL THEN
+    RAISE EXCEPTION USING MESSAGE = 'ORG_INVALID_ARGUMENT', DETAIL = 'event_db_id is required';
+  END IF;
+
+  PERFORM orgunit.split_org_unit_version_at(p_tenant_uuid, p_org_id, p_effective_date, p_event_db_id);
 
   FOR v_field_key, v_field_value IN
     SELECT key, value
@@ -492,39 +509,42 @@ BEGIN
         v_sql := format(
           'UPDATE orgunit.org_unit_versions
              SET %1$I = $4::%2$s,
-                 ext_labels_snapshot = COALESCE(ext_labels_snapshot, ''{}''::jsonb) - $5::text
+                 ext_labels_snapshot = COALESCE(ext_labels_snapshot, ''{}''::jsonb) - $5::text,
+                 last_event_id = $6::bigint
            WHERE tenant_uuid = $1::uuid
              AND org_id = $2::int
              AND lower(validity) >= $3::date',
           v_physical_col,
           v_cast_type
         );
-        EXECUTE v_sql USING p_tenant_uuid, p_org_id, p_effective_date, v_value_text, v_field_key;
+        EXECUTE v_sql USING p_tenant_uuid, p_org_id, p_effective_date, v_value_text, v_field_key, p_event_db_id;
       ELSE
         v_sql := format(
           'UPDATE orgunit.org_unit_versions
              SET %1$I = $4::%2$s,
                  ext_labels_snapshot = COALESCE(ext_labels_snapshot, ''{}''::jsonb)
-                   || jsonb_build_object($5::text, to_jsonb($6::text))
+                   || jsonb_build_object($5::text, to_jsonb($6::text)),
+                 last_event_id = $7::bigint
            WHERE tenant_uuid = $1::uuid
              AND org_id = $2::int
              AND lower(validity) >= $3::date',
           v_physical_col,
           v_cast_type
         );
-        EXECUTE v_sql USING p_tenant_uuid, p_org_id, p_effective_date, v_value_text, v_field_key, v_label_text;
+        EXECUTE v_sql USING p_tenant_uuid, p_org_id, p_effective_date, v_value_text, v_field_key, v_label_text, p_event_db_id;
       END IF;
     ELSE
       v_sql := format(
         'UPDATE orgunit.org_unit_versions
-           SET %1$I = $4::%2$s
+           SET %1$I = $4::%2$s,
+               last_event_id = $5::bigint
          WHERE tenant_uuid = $1::uuid
            AND org_id = $2::int
            AND lower(validity) >= $3::date',
         v_physical_col,
         v_cast_type
       );
-      EXECUTE v_sql USING p_tenant_uuid, p_org_id, p_effective_date, v_value_text;
+      EXECUTE v_sql USING p_tenant_uuid, p_org_id, p_effective_date, v_value_text, p_event_db_id;
     END IF;
   END LOOP;
 END;
@@ -2195,7 +2215,8 @@ BEGIN
       v_event.org_id,
       v_event.effective_date,
       v_event.event_type,
-      v_payload
+      v_payload,
+      v_event.id
     );
   END LOOP;
 
