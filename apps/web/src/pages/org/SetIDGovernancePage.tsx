@@ -4,8 +4,7 @@ import {
   Alert,
   Box,
   Button,
-  Checkbox,
-  FormControlLabel,
+  MenuItem,
   Paper,
   Stack,
   Tab,
@@ -16,6 +15,7 @@ import {
 import type { GridColDef } from '@mui/x-data-grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiClientError } from '../../api/errors'
+import { listOrgUnits } from '../../api/orgUnits'
 import {
   bindSetID,
   createSetID,
@@ -26,6 +26,7 @@ import {
   type SetIDStrategyRegistryItem
 } from '../../api/setids'
 import { DataGridPage } from '../../components/DataGridPage'
+import { FreeSoloDropdownField, mergeFreeSoloOptions, uniqueNonEmptyStrings } from '../../components/FreeSoloDropdownField'
 import { PageHeader } from '../../components/PageHeader'
 import { SetIDExplainPanel } from '../../components/SetIDExplainPanel'
 import { resolveApiErrorMessage } from '../../errors/presentApiError'
@@ -51,6 +52,23 @@ interface RegistryFormState {
   endDate: string
   requestID: string
 }
+
+interface DropdownOption {
+  value: string
+  label: string
+}
+
+const ownerModulePresets = ['iam', 'orgunit', 'jobcatalog', 'staffing', 'person']
+const personalizationModeOptions: DropdownOption[] = [
+  { value: 'setid', label: 'setid' },
+  { value: 'tenant_only', label: 'tenant_only' }
+]
+const orgLevelOptions: DropdownOption[] = [
+  { value: 'business_unit', label: 'business_unit' },
+  { value: 'tenant', label: 'tenant' }
+]
+const changePolicyPresets = ['plan_required']
+const priorityPresets = [50, 100, 200, 500]
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10)
@@ -156,6 +174,11 @@ export function SetIDGovernancePage() {
     queryFn: () => listSetIDBindings({ asOf }),
     staleTime: 10_000
   })
+  const orgUnitsQuery = useQuery({
+    queryKey: ['setid-governance-org-units', asOf],
+    queryFn: () => listOrgUnits({ asOf }),
+    staleTime: 10_000
+  })
 
   const strategyQuery = useQuery({
     queryKey: ['setid-strategy-registry', asOf, registryCapabilityFilter, registryFieldFilter],
@@ -166,6 +189,11 @@ export function SetIDGovernancePage() {
         fieldKey: registryFieldFilter
       }),
     staleTime: 5_000
+  })
+  const strategyCatalogQuery = useQuery({
+    queryKey: ['setid-strategy-registry-options', asOf],
+    queryFn: () => listSetIDStrategyRegistry({ asOf }),
+    staleTime: 10_000
   })
 
   const createMutation = useMutation({
@@ -191,6 +219,7 @@ export function SetIDGovernancePage() {
     onSuccess: async () => {
       setRegistryNotice('策略已保存')
       await queryClient.invalidateQueries({ queryKey: ['setid-strategy-registry', asOf] })
+      await queryClient.invalidateQueries({ queryKey: ['setid-strategy-registry-options', asOf] })
       setRegistryForm((previous) => ({
         ...defaultRegistryForm(asOf),
         capabilityKey: previous.capabilityKey,
@@ -203,7 +232,69 @@ export function SetIDGovernancePage() {
 
   const setids = useMemo(() => setidsQuery.data?.setids ?? [], [setidsQuery.data])
   const bindings = useMemo(() => bindingsQuery.data?.bindings ?? [], [bindingsQuery.data])
+  const orgUnits = useMemo(() => orgUnitsQuery.data?.org_units ?? [], [orgUnitsQuery.data])
   const strategyRows = useMemo(() => strategyQuery.data?.items ?? [], [strategyQuery.data])
+  const strategyCatalogRows = useMemo(() => strategyCatalogQuery.data?.items ?? [], [strategyCatalogQuery.data])
+  const setIDOptions = useMemo(() => mergeFreeSoloOptions([], setids.map((item) => item.setid)), [setids])
+
+  const createSetIDOptions = useMemo(
+    () => mergeFreeSoloOptions(setIDOptions, [], createSetIDValue),
+    [createSetIDValue, setIDOptions]
+  )
+  const createNameOptions = useMemo(
+    () => mergeFreeSoloOptions([], setids.map((item) => item.name), createName),
+    [createName, setids]
+  )
+  const bindOrgCodeOptions = useMemo(
+    () => mergeFreeSoloOptions([], orgUnits.map((item) => item.org_code), bindOrgCode),
+    [bindOrgCode, orgUnits]
+  )
+  const bindSetIDOptions = useMemo(
+    () => mergeFreeSoloOptions(setIDOptions, [], bindSetIDValue),
+    [bindSetIDValue, setIDOptions]
+  )
+
+  const capabilityKeyOptions = useMemo(
+    () => mergeFreeSoloOptions([], strategyCatalogRows.map((item) => item.capability_key), registryForm.capabilityKey),
+    [registryForm.capabilityKey, strategyCatalogRows]
+  )
+  const fieldKeyOptions = useMemo(
+    () => mergeFreeSoloOptions([], strategyCatalogRows.map((item) => item.field_key), registryForm.fieldKey),
+    [registryForm.fieldKey, strategyCatalogRows]
+  )
+  const ownerModuleOptions = useMemo(
+    () => mergeFreeSoloOptions(ownerModulePresets, strategyCatalogRows.map((item) => item.owner_module), registryForm.ownerModule),
+    [registryForm.ownerModule, strategyCatalogRows]
+  )
+  const businessUnitOptions = useMemo(
+    () =>
+      mergeFreeSoloOptions(
+        [],
+        [...strategyCatalogRows.map((item) => item.business_unit_id ?? ''), ...bindings.map((item) => item.org_unit_id)],
+        registryForm.businessUnitID
+      ),
+    [bindings, registryForm.businessUnitID, strategyCatalogRows]
+  )
+  const defaultRuleOptions = useMemo(
+    () => mergeFreeSoloOptions([], strategyCatalogRows.map((item) => item.default_rule_ref ?? ''), registryForm.defaultRuleRef),
+    [registryForm.defaultRuleRef, strategyCatalogRows]
+  )
+  const defaultValueOptions = useMemo(
+    () => mergeFreeSoloOptions([], strategyCatalogRows.map((item) => item.default_value ?? ''), registryForm.defaultValue),
+    [registryForm.defaultValue, strategyCatalogRows]
+  )
+  const priorityOptions = useMemo(() => {
+    const values = uniqueNonEmptyStrings([
+      ...priorityPresets.map((value) => String(value)),
+      ...strategyCatalogRows.map((item) => String(item.priority)),
+      String(registryForm.priority)
+    ])
+    return values.map((value) => Number(value)).filter((value) => Number.isFinite(value))
+  }, [registryForm.priority, strategyCatalogRows])
+  const changePolicyOptions = useMemo(
+    () => mergeFreeSoloOptions(changePolicyPresets, strategyCatalogRows.map((item) => item.change_policy), registryForm.changePolicy),
+    [registryForm.changePolicy, strategyCatalogRows]
+  )
 
   const strategyColumns = useMemo<GridColDef[]>(
     () => [
@@ -349,8 +440,18 @@ export function SetIDGovernancePage() {
                   void onCreate(event)
                 }}
               >
-                <TextField label='setid' name='setid' value={createSetIDValue} onChange={(event) => setCreateSetIDValue(event.target.value)} />
-                <TextField label='name' name='name' value={createName} onChange={(event) => setCreateName(event.target.value)} />
+                <FreeSoloDropdownField
+                  label='setid'
+                  onChange={setCreateSetIDValue}
+                  options={createSetIDOptions}
+                  value={createSetIDValue}
+                />
+                <FreeSoloDropdownField
+                  label='name'
+                  onChange={setCreateName}
+                  options={createNameOptions}
+                  value={createName}
+                />
                 <Button disabled={createMutation.isPending} type='submit' variant='contained'>
                   Create
                 </Button>
@@ -368,8 +469,18 @@ export function SetIDGovernancePage() {
                   void onBind(event)
                 }}
               >
-                <TextField label='org_code' name='org_code' value={bindOrgCode} onChange={(event) => setBindOrgCode(event.target.value)} />
-                <TextField label='setid' name='setid' value={bindSetIDValue} onChange={(event) => setBindSetIDValue(event.target.value)} />
+                <FreeSoloDropdownField
+                  label='org_code'
+                  onChange={setBindOrgCode}
+                  options={bindOrgCodeOptions}
+                  value={bindOrgCode}
+                />
+                <FreeSoloDropdownField
+                  label='setid'
+                  onChange={setBindSetIDValue}
+                  options={bindSetIDOptions}
+                  value={bindSetIDValue}
+                />
                 <Button disabled={bindMutation.isPending} type='submit' variant='contained'>
                   Bind
                 </Button>
@@ -465,17 +576,17 @@ export function SetIDGovernancePage() {
           <>
             <Paper sx={{ p: 2 }} variant='outlined'>
               <Stack alignItems='center' direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                <TextField
+                <FreeSoloDropdownField
                   label='filter capability_key'
-                  size='small'
+                  onChange={setRegistryCapabilityFilter}
+                  options={capabilityKeyOptions}
                   value={registryCapabilityFilter}
-                  onChange={(event) => setRegistryCapabilityFilter(event.target.value)}
                 />
-                <TextField
+                <FreeSoloDropdownField
                   label='filter field_key'
-                  size='small'
+                  onChange={setRegistryFieldFilter}
+                  options={fieldKeyOptions}
                   value={registryFieldFilter}
-                  onChange={(event) => setRegistryFieldFilter(event.target.value)}
                 />
                 <Button onClick={() => setRegistryNotice(null)} size='small' variant='outlined'>
                   清除提示
@@ -512,86 +623,109 @@ export function SetIDGovernancePage() {
                     }
                   }}
                 >
-                  <TextField
+                  <FreeSoloDropdownField
                     label='capability_key'
+                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, capabilityKey: nextValue }))}
+                    options={capabilityKeyOptions}
                     required
-                    size='small'
                     value={registryForm.capabilityKey}
-                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, capabilityKey: event.target.value }))}
                   />
-                  <TextField
+                  <FreeSoloDropdownField
                     label='owner_module'
+                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, ownerModule: nextValue }))}
+                    options={ownerModuleOptions}
                     required
-                    size='small'
                     value={registryForm.ownerModule}
-                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, ownerModule: event.target.value }))}
                   />
-                  <TextField
+                  <FreeSoloDropdownField
                     label='field_key'
+                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, fieldKey: nextValue }))}
+                    options={fieldKeyOptions}
                     required
-                    size='small'
                     value={registryForm.fieldKey}
-                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, fieldKey: event.target.value }))}
                   />
                   <TextField
                     label='personalization_mode'
                     required
+                    select
                     size='small'
                     value={registryForm.personalizationMode}
                     onChange={(event) =>
                       setRegistryForm((prev) => ({
                         ...prev,
-                        personalizationMode: event.target.value as RegistryFormState['personalizationMode']
+                        personalizationMode: event.target.value as RegistryFormState['personalizationMode'],
+                        explainRequired: event.target.value === 'tenant_only' ? prev.explainRequired : true
                       }))
                     }
-                  />
+                  >
+                    {personalizationModeOptions.map((option) => (
+                      <MenuItem key={`form-personalization-${option.value}`} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
                   <TextField
                     label='org_level'
                     required
+                    select
                     size='small'
                     value={registryForm.orgLevel}
                     onChange={(event) =>
                       setRegistryForm((prev) => ({
                         ...prev,
-                        orgLevel: event.target.value as RegistryFormState['orgLevel']
+                        orgLevel: event.target.value as RegistryFormState['orgLevel'],
+                        businessUnitID: event.target.value === 'tenant' ? '' : prev.businessUnitID
                       }))
                     }
-                  />
-                  <TextField
+                  >
+                    {orgLevelOptions.map((option) => (
+                      <MenuItem key={`form-org-level-${option.value}`} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <FreeSoloDropdownField
                     label='business_unit_id'
-                    size='small'
+                    disabled={registryForm.orgLevel === 'tenant'}
+                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, businessUnitID: nextValue }))}
+                    options={businessUnitOptions}
                     value={registryForm.businessUnitID}
-                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, businessUnitID: event.target.value }))}
                   />
-                  <TextField
+                  <FreeSoloDropdownField
                     label='default_rule_ref'
-                    size='small'
+                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, defaultRuleRef: nextValue }))}
+                    options={defaultRuleOptions}
                     value={registryForm.defaultRuleRef}
-                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, defaultRuleRef: event.target.value }))}
                   />
-                  <TextField
+                  <FreeSoloDropdownField
                     label='default_value'
-                    size='small'
+                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, defaultValue: nextValue }))}
+                    options={defaultValueOptions}
                     value={registryForm.defaultValue}
-                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, defaultValue: event.target.value }))}
                   />
                   <TextField
                     label='priority'
+                    select
                     size='small'
-                    type='number'
-                    value={registryForm.priority}
+                    value={String(registryForm.priority)}
                     onChange={(event) =>
                       setRegistryForm((prev) => ({
                         ...prev,
                         priority: Number(event.target.value) || 0
                       }))
                     }
-                  />
-                  <TextField
+                  >
+                    {priorityOptions.map((option) => (
+                      <MenuItem key={`form-priority-${option}`} value={String(option)}>
+                        {option}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <FreeSoloDropdownField
                     label='change_policy'
-                    size='small'
+                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, changePolicy: nextValue }))}
+                    options={changePolicyOptions}
                     value={registryForm.changePolicy}
-                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, changePolicy: event.target.value }))}
                   />
                   <TextField
                     label='effective_date'
@@ -615,46 +749,54 @@ export function SetIDGovernancePage() {
                     value={registryForm.requestID}
                     onChange={(event) => setRegistryForm((prev) => ({ ...prev, requestID: event.target.value }))}
                   />
-                </Box>
-
-                <Stack direction='row' flexWrap='wrap' gap={1}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={registryForm.required}
-                        onChange={(event) => setRegistryForm((prev) => ({ ...prev, required: event.target.checked }))}
-                      />
-                    }
+                  <TextField
                     label='required'
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={registryForm.visible}
-                        onChange={(event) => setRegistryForm((prev) => ({ ...prev, visible: event.target.checked }))}
-                      />
-                    }
+                    select
+                    size='small'
+                    value={registryForm.required ? 'true' : 'false'}
+                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, required: event.target.value === 'true' }))}
+                  >
+                    <MenuItem value='true'>true</MenuItem>
+                    <MenuItem value='false'>false</MenuItem>
+                  </TextField>
+                  <TextField
                     label='visible'
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={registryForm.explainRequired}
-                        onChange={(event) => setRegistryForm((prev) => ({ ...prev, explainRequired: event.target.checked }))}
-                      />
-                    }
+                    select
+                    size='small'
+                    value={registryForm.visible ? 'true' : 'false'}
+                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, visible: event.target.value === 'true' }))}
+                  >
+                    <MenuItem value='true'>true</MenuItem>
+                    <MenuItem value='false'>false</MenuItem>
+                  </TextField>
+                  <TextField
                     label='explain_required'
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={registryForm.isStable}
-                        onChange={(event) => setRegistryForm((prev) => ({ ...prev, isStable: event.target.checked }))}
-                      />
+                    select
+                    size='small'
+                    value={registryForm.explainRequired ? 'true' : 'false'}
+                    onChange={(event) =>
+                      setRegistryForm((prev) => ({
+                        ...prev,
+                        explainRequired: event.target.value === 'true'
+                      }))
                     }
+                  >
+                    <MenuItem value='true'>true</MenuItem>
+                    <MenuItem disabled={registryForm.personalizationMode !== 'tenant_only'} value='false'>
+                      false
+                    </MenuItem>
+                  </TextField>
+                  <TextField
                     label='is_stable'
-                  />
-                </Stack>
+                    select
+                    size='small'
+                    value={registryForm.isStable ? 'true' : 'false'}
+                    onChange={(event) => setRegistryForm((prev) => ({ ...prev, isStable: event.target.value === 'true' }))}
+                  >
+                    <MenuItem value='true'>true</MenuItem>
+                    <MenuItem value='false'>false</MenuItem>
+                  </TextField>
+                </Box>
 
                 <Stack direction='row' spacing={1}>
                   <Button disabled={strategyMutation.isPending} type='submit' variant='contained'>

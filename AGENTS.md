@@ -294,6 +294,8 @@ modules/{module}/
 - DEV-PLAN-158：Capability Key Phase 8 策略激活与版本一致性（承接 150 M6）：`docs/dev-plans/158-capability-key-m6-policy-activation-and-version-consistency.md`
 - DEV-PLAN-159：Capability Key Phase 9 字段级分段安全（承接 150 M7）：`docs/dev-plans/159-capability-key-m7-segment-security-field-level-visibility.md`
 - DEV-PLAN-160：Capability Key Phase 10 UI 可视化交付与证据收口（承接 150 M8/M10）：`docs/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
+- DEV-PLAN-163：Capability Key 表单字段下拉化收敛方案（Strategy Registry）：`docs/dev-plans/163-capability-key-form-dropdown-convergence.md`
+- DEV-PLAN-163A：SetID Governance 其余三页签字段下拉化收敛方案：`docs/dev-plans/163a-setid-governance-other-tabs-dropdown-convergence.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102A【归档】：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案（表达式口径一致性已并入 `DEV-PLAN-120`）：`docs/archive/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`

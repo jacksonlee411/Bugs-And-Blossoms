@@ -11,10 +11,17 @@ import {
   TextField,
   Typography
 } from '@mui/material'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { ApiClientError } from '../api/errors'
-import { getSetIDExplain, type SetIDExplainResponse } from '../api/setids'
+import {
+  getSetIDExplain,
+  listSetIDBindings,
+  listSetIDStrategyRegistry,
+  listSetIDs,
+  type SetIDExplainResponse
+} from '../api/setids'
 import { useAppPreferences } from '../app/providers/AppPreferencesContext'
+import { FreeSoloDropdownField, mergeFreeSoloOptions } from './FreeSoloDropdownField'
 import { resolveApiErrorMessage } from '../errors/presentApiError'
 
 type ExplainLevel = 'brief' | 'full'
@@ -125,6 +132,51 @@ export function SetIDExplainPanel({
   const [errorView, setErrorView] = useState<ExplainErrorView | null>(null)
   const [copyNotice, setCopyNotice] = useState<string | null>(null)
 
+  const setIDsQuery = useQuery({
+    queryKey: ['setid-explain-options-setids'],
+    queryFn: () => listSetIDs(),
+    staleTime: 30_000
+  })
+  const bindingsQuery = useQuery({
+    queryKey: ['setid-explain-options-bindings', asOf],
+    queryFn: () => listSetIDBindings({ asOf }),
+    staleTime: 10_000
+  })
+  const strategyQuery = useQuery({
+    queryKey: ['setid-explain-options-strategy-registry', asOf],
+    queryFn: () => listSetIDStrategyRegistry({ asOf }),
+    staleTime: 10_000
+  })
+
+  const capabilityKeyOptions = useMemo(
+    () => mergeFreeSoloOptions([], strategyQuery.data?.items.map((item) => item.capability_key) ?? [], capabilityKey),
+    [capabilityKey, strategyQuery.data?.items]
+  )
+  const fieldKeyOptions = useMemo(
+    () => mergeFreeSoloOptions([], strategyQuery.data?.items.map((item) => item.field_key) ?? [], fieldKey),
+    [fieldKey, strategyQuery.data?.items]
+  )
+  const businessUnitIDOptions = useMemo(
+    () =>
+      mergeFreeSoloOptions(
+        [],
+        [
+          ...(strategyQuery.data?.items.map((item) => item.business_unit_id ?? '') ?? []),
+          ...(bindingsQuery.data?.bindings.map((item) => item.org_unit_id) ?? [])
+        ],
+        businessUnitID
+      ),
+    [bindingsQuery.data?.bindings, businessUnitID, strategyQuery.data?.items]
+  )
+  const setIDOptions = useMemo(
+    () => mergeFreeSoloOptions([], setIDsQuery.data?.setids.map((item) => item.setid) ?? [], setID),
+    [setID, setIDsQuery.data?.setids]
+  )
+  const orgUnitIDOptions = useMemo(
+    () => mergeFreeSoloOptions([], bindingsQuery.data?.bindings.map((item) => item.org_unit_id) ?? [], orgUnitID),
+    [bindingsQuery.data?.bindings, orgUnitID]
+  )
+
   const effectiveLevel: ExplainLevel = useMemo(() => {
     if (level === 'full' && !canViewFull) {
       return 'brief'
@@ -205,19 +257,41 @@ export function SetIDExplainPanel({
             }
           }}
         >
-          <TextField label='capability_key' required size='small' value={capabilityKey} onChange={(event) => setCapabilityKey(event.target.value)} />
-          <TextField label='field_key' required size='small' value={fieldKey} onChange={(event) => setFieldKey(event.target.value)} />
-          <TextField
-            label='business_unit_id'
+          <FreeSoloDropdownField
+            label='capability_key'
+            onChange={setCapabilityKey}
+            options={capabilityKeyOptions}
             required
-            size='small'
+            value={capabilityKey}
+          />
+          <FreeSoloDropdownField
+            label='field_key'
+            onChange={setFieldKey}
+            options={fieldKeyOptions}
+            required
+            value={fieldKey}
+          />
+          <FreeSoloDropdownField
+            label='business_unit_id'
+            onChange={setBusinessUnitID}
+            options={businessUnitIDOptions}
+            required
             value={businessUnitID}
-            onChange={(event) => setBusinessUnitID(event.target.value)}
           />
           <TextField label='as_of' required size='small' type='date' value={asOf} onChange={(event) => setAsOf(event.target.value)} />
           <TextField label='request_id' required size='small' value={requestID} onChange={(event) => setRequestID(event.target.value)} />
-          <TextField label='setid（可选）' size='small' value={setID} onChange={(event) => setSetID(event.target.value)} />
-          <TextField label='org_unit_id（可选）' size='small' value={orgUnitID} onChange={(event) => setOrgUnitID(event.target.value)} />
+          <FreeSoloDropdownField
+            label='setid（可选）'
+            onChange={setSetID}
+            options={setIDOptions}
+            value={setID}
+          />
+          <FreeSoloDropdownField
+            label='org_unit_id（可选）'
+            onChange={setOrgUnitID}
+            options={orgUnitIDOptions}
+            value={orgUnitID}
+          />
           <Stack spacing={0.5}>
             <Typography color='text.secondary' variant='caption'>
               explain level
