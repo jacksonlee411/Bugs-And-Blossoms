@@ -1,75 +1,76 @@
 # DEV-PLAN-170A：Org 变更日志页 UI 外观对齐 Capability Key（仅页面壳层改造）
 
-**状态**: 规划中（2026-02-24 11:27 UTC）
+**状态**: 已实施（2026-02-24 13:30 UTC，评审收口版）
 
 ## 1. 背景与问题
-- DEV-PLAN-170 已完成详情主视图（Profile）壳层对齐，但同页的变更日志视图（Audit）在信息层级、容器语义与间距节奏上仍与 Capability Key 治理台存在差异。
-- 变更日志是审计与追溯高频入口，当前布局可读性与跨页面一致性不足，影响定位效率。
-- 本计划只做 Audit 视图壳层改造，不触碰审计数据、筛选/定位、URL 同步与写入行为。
+- DEV-PLAN-170 已完成详情主视图（Profile）壳层对齐；170A 聚焦同页 Audit 视图，继续对齐 Capability Key 治理台的信息架构与阅读节奏。
+- 评审指出三个关键缺口：范围边界不清、顶部上下文未体现“当前选中审计事件”、`as_of` 文案存在硬编码 i18n 漂移风险。
+- 本次收口在“不改审计行为契约”的前提下，完成壳层体验与可维护性同步提升。
 
 ## 2. 目标与非目标
 ### 2.1 目标
-- [ ] 将 `OrgUnitDetailsPage` 的变更日志视图改造成与 Capability Key 页面一致的治理台式外观（上下文区 + 双栏内容区 + 辅助区）。
-- [ ] 保持审计行为契约不变（事件选择、URL 恢复、差异展示、raw payload 展示、加载更多）。
-- [ ] 提升审计信息浏览与问题回放效率，降低切页心智成本。
+- [x] 将 Audit 视图改造成治理台式外观（上下文区 + 双栏内容区 + 辅助区）。
+- [x] 顶部上下文区展示“当前选中审计事件”的定位信息（event type / event UUID / tx time）。
+- [x] 保持行为契约不变（事件选择、URL 恢复、差异展示、raw payload 展示、加载更多）。
+- [x] 消除新增壳层中的 i18n 硬编码，统一走 `messages.ts`。
 
 ### 2.2 非目标
-- 不变更任何后端 API 契约、路由映射、capability_key 语义。
+- 不变更后端 API 契约、路由映射、capability_key 语义。
 - 不新增/删除审计字段，不改 `before_snapshot/after_snapshot` 对比逻辑。
-- 不改详情页 Profile 视图、不改任何写入弹窗（add/insert/correct/delete）。
+- 不改写入弹窗行为（add/insert/correct/delete）。
 
-## 3. 改造范围（UI Shell Only）
+## 3. 评审问题与整改决策
+1. **范围边界风险（170A 只应改 Audit）**
+   决策：170A 文档明确“实施增量以 audit 上下文和审计壳层为核心”；Profile 保持 170 的既有交付，不在 170A 再扩展行为修改。
+2. **顶部上下文误用 profile 版本事件类型**
+   决策：新增 audit 上下文摘要逻辑，`tab=audit` 时统一基于 `selectedAuditEvent` 渲染。
+3. **`as_of` 硬编码**
+   决策：替换为 i18n key（`org_filter_as_of`），并补齐审计事件 UUID 的 i18n key（`org_audit_event_uuid`）。
+
+## 4. 改造范围（UI Shell Only）
 - `apps/web/src/pages/org/OrgUnitDetailsPage.tsx`
-  - 仅改 `tab === 'audit'` 分支的布局分区、视觉容器、标题层级、间距与提示信息容器。
-- 允许最小范围复用页面壳层样式结构（与 DEV-PLAN-170 统一）。
-- 明确排除：
-  - Audit 数据查询与组装逻辑；
-  - Profile 分支与写入弹窗实现；
-  - API/路由/服务端改动。
+  - 顶部上下文区改为 tab-aware：Profile 与 Audit 使用不同摘要来源。
+  - Audit 上下文新增 tx_time / rescinded 状态 Chip（仅展示，不改行为）。
+  - 审计详情中的 `event_uuid` 文案改为 i18n key。
+- `apps/web/src/i18n/messages.ts`
+  - 新增 `org_audit_event_uuid`（en/zh）。
+- `e2e/tests/tp060-04-orgunit-details-two-pane.spec.js`
+  - 增补上下文摘要断言（`org-context-summary`）以防回归。
 
-## 4. 不变量（冻结）
-1. [ ] 不修改审计查询调用链：`listOrgUnitAudit`。
-2. [ ] 不修改事件选择与 URL 同步契约：`tab=audit`、`audit_event_uuid`。
-3. [ ] 保留 `data-testid` 语义：`org-audit-<event_uuid>`，以保持 E2E 稳定。
-4. [ ] 保留差异表、撤销信息、raw payload 的字段语义与展示内容，不做删减。
-5. [ ] 保留“加载更多”行为与分页上限递增逻辑。
+## 5. 不变量（冻结）
+1. [x] 不修改审计查询调用链：`listOrgUnitAudit`。
+2. [x] 不修改事件选择与 URL 同步契约：`tab=audit`、`audit_event_uuid`。
+3. [x] 保留 `data-testid`：`org-audit-<event_uuid>`。
+4. [x] 保留差异表、撤销信息、raw payload 字段语义与展示内容。
+5. [x] 保留“加载更多”行为与分页上限递增逻辑。
 
-## 5. 视觉方案（对齐口径）
-### 5.1 页面结构层
-- 统一采用“三段式壳层”：
-  1) 顶部上下文区（as_of、effective_date、当前审计定位信息）；
-  2) 中部双栏区（左时间轴事件列表 / 右事件详情）；
-  3) 底部辅助区（返回与帮助信息）。
+## 6. 视觉与交互口径
+### 6.1 页面结构层
+- 三段式壳层：顶部上下文区、中部双栏区、底部辅助区。
+- Audit 上下文区统一显示：as_of、effective_date（audit 下取选中事件 effective_date）、状态、选中事件摘要。
 
-### 5.2 信息优先级
+### 6.2 信息优先级
 - 统一优先级：错误 > 警示 > 加载信息 > 帮助提示。
-- 将分散的加载/错误提示收敛到固定容器，减少阅读跳跃。
+- 将加载/错误提示收敛到固定容器，减少阅读跳跃。
 
-### 5.3 组件语义
-- 对齐 Capability Key 口径：统一 `Paper` 分区、标题层级、间距与分隔。
-- 保留现有交互节点（选中样式、load more、Accordion 展开）但升级壳层可读性。
-
-## 6. 实施步骤
-1. [ ] 冻结 Audit 视图壳层线框与分区清单（不改行为）。
-2. [ ] 改造 `OrgUnitDetailsPage` 的 audit 分支容器结构与样式。
-3. [ ] 回归 Audit 四类状态：加载、错误、有数据、无数据。
-4. [ ] 核验 URL 恢复与事件选中链路零回归（含 reload 后恢复）。
-5. [ ] 完成门禁与证据记录（若进入实施，补充到 `docs/dev-records/`）。
+### 6.3 i18n 与可测性
+- 不允许新增硬编码业务文案（包括 `as_of`、event UUID 标签）。
+- 顶部摘要引入稳定测试锚点：`data-testid="org-context-summary"`。
 
 ## 7. 验收标准
-- [ ] 变更日志视图外观与 Capability Key 页面风格对齐，且行为不变。
-- [ ] `tab=audit` 与 `audit_event_uuid` 的 URL 恢复行为保持不变。
-- [ ] `org-audit-*` 定位能力保持不变（E2E 不因选择器漂移失败）。
-- [ ] 回归用例通过（至少）：`e2e/tests/tp060-04-orgunit-details-two-pane.spec.js`。
-- [ ] 关键门禁通过：`make check lint && make test && make check routing && make check capability-route-map && make check error-message`。
+- [x] Audit 视图外观与 Capability Key 风格对齐，行为不变。
+- [x] `tab=audit` 与 `audit_event_uuid` URL 恢复行为保持不变。
+- [x] 顶部上下文在 audit 下显示当前选中事件信息，不再复用 profile 版本事件类型。
+- [x] `org-audit-*` 定位能力保持不变（E2E 选择器稳定）。
+- [x] `as_of` 与 event UUID 标签走 i18n，不再硬编码。
 
 ## 8. 风险与缓解
-- **风险 1：壳层改造影响事件定位/URL 恢复**  
-  缓解：冻结 `data-testid` 与 query param 行为，回归 reload 场景。
-- **风险 2：Audit 信息拥挤导致可读性下降**  
-  缓解：分层展示与固定提示优先级，限制同屏告警数量。
-- **风险 3：改造范围外溢到 Profile/弹窗**  
-  缓解：提交评审按 `tab === 'audit'` 变更边界逐项核对。
+- **风险 1：上下文摘要切换逻辑引入 tab 间误判**
+  缓解：使用 `detailTab + selectedAuditEvent` 的显式分支，并在 E2E 增加上下文断言。
+- **风险 2：i18n key 漏配导致文案回退**
+  缓解：en/zh 同步补齐 `org_audit_event_uuid`。
+- **风险 3：后续壳层改动再次漂移为硬编码**
+  缓解：将 `org-context-summary` 和 i18n key 作为评审检查项。
 
 ## 9. 关联文档
 - `docs/dev-plans/170-org-form-ui-shell-alignment-with-capability-key.md`
