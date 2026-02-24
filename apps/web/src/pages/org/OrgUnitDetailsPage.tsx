@@ -643,7 +643,7 @@ export function OrgUnitDetailsPage() {
     queryFn: () => listOrgUnitAudit({ orgCode: orgCodeValue, limit: auditLimit })
   })
 
-  const selectedVersionEventType = useMemo(() => {
+  const selectedProfileVersionEventType = useMemo(() => {
     return versionItems.find((version) => version.effective_date === effectiveDate)?.event_type?.trim() || '-'
   }, [effectiveDate, versionItems])
 
@@ -1181,7 +1181,24 @@ export function OrgUnitDetailsPage() {
     return parseOrgStatus(raw) === 'active' ? t('org_status_active_short') : t('org_status_inactive_short')
   }, [detailQuery.data, t])
   const deleteActionLabel = useMemo(() => buildDeleteActionLabel(shouldDeleteOrg, t), [shouldDeleteOrg, t])
+  const selectedAuditEventType = useMemo(() => {
+    return selectedAuditEvent?.event_type?.trim() || '-'
+  }, [selectedAuditEvent])
   const selectedOrgUnit = detailQuery.data?.org_unit ?? null
+  const contextEffectiveDate = detailTab === 'audit' && selectedAuditEvent ? selectedAuditEvent.effective_date : effectiveDate
+  const contextSummary = useMemo(() => {
+    if (!selectedOrgUnit) {
+      return t('text_loading')
+    }
+    const codeSummary = `${t('org_column_code')}：${selectedOrgUnit.org_code}`
+    if (detailTab !== 'audit') {
+      return `${codeSummary} · ${t('org_version_event_type')}：${selectedProfileVersionEventType}`
+    }
+    if (!selectedAuditEvent) {
+      return `${codeSummary} · ${t('org_tab_audit')}：${t('text_no_data')}`
+    }
+    return `${codeSummary} · ${t('org_version_event_type')}：${selectedAuditEventType} · ${t('org_audit_event_uuid')}：${selectedAuditEvent.event_uuid}`
+  }, [detailTab, selectedAuditEvent, selectedAuditEventType, selectedOrgUnit, selectedProfileVersionEventType, t])
   const profileExtFields = detailQuery.data?.ext_fields ?? []
   const hasProfileMissingI18nLabels = profileExtFields.some((field) => {
     const labelKey = field.label_i18n_key?.trim()
@@ -1273,8 +1290,8 @@ export function OrgUnitDetailsPage() {
       <Paper sx={{ mb: 1.5, p: 1.5 }} variant='outlined'>
         <Stack spacing={1}>
           <Stack direction='row' flexWrap='wrap' spacing={1}>
-            <Chip label={`as_of：${asOf}`} size='small' variant='outlined' />
-            <Chip label={`${t('org_column_effective_date')}：${effectiveDate}`} size='small' variant='outlined' />
+            <Chip label={`${t('org_filter_as_of')}：${asOf}`} size='small' variant='outlined' />
+            <Chip label={`${t('org_column_effective_date')}：${contextEffectiveDate}`} size='small' variant='outlined' />
             {selectedOrgUnit ? (
               <Chip
                 color={parseOrgStatus(selectedOrgUnit.status) === 'active' ? 'success' : 'default'}
@@ -1283,13 +1300,19 @@ export function OrgUnitDetailsPage() {
                 variant='outlined'
               />
             ) : null}
+            {detailTab === 'audit' && selectedAuditEvent ? (
+              <Chip
+                label={`${t('org_audit_timeline_time')}：${formatTxTime(selectedAuditEvent.tx_time)}`}
+                size='small'
+                variant='outlined'
+              />
+            ) : null}
+            {detailTab === 'audit' && selectedAuditEvent?.is_rescinded ? (
+              <Chip color='warning' label={t('org_audit_rescinded')} size='small' variant='outlined' />
+            ) : null}
             {includeDisabled ? <Chip color='warning' label={t('org_filter_include_disabled')} size='small' variant='outlined' /> : null}
           </Stack>
-          <Typography color='text.secondary' variant='body2'>
-            {selectedOrgUnit
-              ? `${t('org_column_code')}：${selectedOrgUnit.org_code} · ${t('org_version_event_type')}：${selectedVersionEventType}`
-              : t('text_loading')}
-          </Typography>
+          <Typography color='text.secondary' data-testid='org-context-summary' variant='body2'>{contextSummary}</Typography>
         </Stack>
       </Paper>
 
@@ -1380,7 +1403,7 @@ export function OrgUnitDetailsPage() {
                       }}
                     >
                       <Typography color='text.secondary' variant='body2'>{t('org_version_event_type')}</Typography>
-                      <Typography sx={{ wordBreak: 'break-word' }} variant='body2'>{selectedVersionEventType}</Typography>
+                      <Typography sx={{ wordBreak: 'break-word' }} variant='body2'>{selectedProfileVersionEventType}</Typography>
                       <Typography color='text.secondary' variant='body2'>{t('org_column_code')}</Typography>
                       <Typography sx={{ wordBreak: 'break-word' }} variant='body2'>{detailQuery.data.org_unit.org_code}</Typography>
                       <Typography color='text.secondary' variant='body2'>{t('org_column_name')}</Typography>
@@ -1537,7 +1560,7 @@ export function OrgUnitDetailsPage() {
                       {t('org_audit_operator')}：{formatAuditActor(selectedAuditEvent.initiator_name, selectedAuditEvent.initiator_employee_id)}
                     </Typography>
                     <Typography variant='body2'>
-                      event_uuid：{selectedAuditEvent.event_uuid}
+                      {t('org_audit_event_uuid')}：{selectedAuditEvent.event_uuid}
                     </Typography>
                     <Typography variant='body2'>
                       {t('org_version_event_type')}：{selectedAuditEvent.event_type}
