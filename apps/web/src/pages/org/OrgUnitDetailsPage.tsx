@@ -1181,6 +1181,17 @@ export function OrgUnitDetailsPage() {
     return parseOrgStatus(raw) === 'active' ? t('org_status_active_short') : t('org_status_inactive_short')
   }, [detailQuery.data, t])
   const deleteActionLabel = useMemo(() => buildDeleteActionLabel(shouldDeleteOrg, t), [shouldDeleteOrg, t])
+  const selectedOrgUnit = detailQuery.data?.org_unit ?? null
+  const profileExtFields = detailQuery.data?.ext_fields ?? []
+  const hasProfileMissingI18nLabels = profileExtFields.some((field) => {
+    const labelKey = field.label_i18n_key?.trim()
+    const literalLabel = field.label?.trim() ?? ''
+    const isCustom = field.field_key?.trim().toLowerCase().startsWith('x_')
+    if (literalLabel.length > 0 || isCustom) {
+      return false
+    }
+    return !labelKey || !isMessageKey(labelKey)
+  })
 
   if (orgCodeValue.length === 0) {
     return (
@@ -1259,39 +1270,60 @@ export function OrgUnitDetailsPage() {
         <Tab label={t('org_tab_audit')} value='audit' />
       </Tabs>
 
-      {detailQuery.isLoading ? <Typography>{t('text_loading')}</Typography> : null}
-      {detailQuery.error ? <Alert severity='error'>{getErrorMessage(detailQuery.error)}</Alert> : null}
+      <Paper sx={{ mb: 1.5, p: 1.5 }} variant='outlined'>
+        <Stack spacing={1}>
+          <Stack direction='row' flexWrap='wrap' spacing={1}>
+            <Chip label={`as_of：${asOf}`} size='small' variant='outlined' />
+            <Chip label={`${t('org_column_effective_date')}：${effectiveDate}`} size='small' variant='outlined' />
+            {selectedOrgUnit ? (
+              <Chip
+                color={parseOrgStatus(selectedOrgUnit.status) === 'active' ? 'success' : 'default'}
+                label={`${t('text_status')}：${statusLabel}`}
+                size='small'
+                variant='outlined'
+              />
+            ) : null}
+            {includeDisabled ? <Chip color='warning' label={t('org_filter_include_disabled')} size='small' variant='outlined' /> : null}
+          </Stack>
+          <Typography color='text.secondary' variant='body2'>
+            {selectedOrgUnit
+              ? `${t('org_column_code')}：${selectedOrgUnit.org_code} · ${t('org_version_event_type')}：${selectedVersionEventType}`
+              : t('text_loading')}
+          </Typography>
+        </Stack>
+      </Paper>
 
-      {detailTab === 'profile' ? (
-        <Paper sx={{ p: 1.5 }} variant='outlined'>
+      <Stack spacing={1.5}>
+        {detailQuery.isLoading ? <Alert severity='info'>{t('text_loading')}</Alert> : null}
+        {detailQuery.error ? <Alert severity='error'>{getErrorMessage(detailQuery.error)}</Alert> : null}
+
+        {detailTab === 'profile' ? (
           <Box
             sx={{
               display: 'grid',
               gap: 1.5,
               gridTemplateColumns: {
                 xs: '1fr',
-                md: '240px minmax(0, 1fr)'
+                md: '280px minmax(0, 1fr)'
               }
             }}
           >
-            <Box sx={{ minWidth: 0 }}>
-              <Stack alignItems='center' direction='row' flexWrap='wrap' justifyContent='space-between' spacing={1} sx={{ mb: 1 }}>
-                <Typography variant='subtitle2'>
-                  {t('org_column_effective_date')}
-                </Typography>
-              </Stack>
+            <Paper sx={{ p: 1.5 }} variant='outlined'>
+              <Typography sx={{ mb: 1 }} variant='subtitle2'>
+                {t('org_column_effective_date')}
+              </Typography>
               {versionsQuery.isLoading ? <Typography variant='body2'>{t('text_loading')}</Typography> : null}
               {versionsQuery.error ? <Alert severity='error'>{getErrorMessage(versionsQuery.error)}</Alert> : null}
               {versionItems.length > 0 ? (
                 <List dense sx={{ border: 1, borderColor: 'divider', borderRadius: 1, maxHeight: 420, overflow: 'auto', p: 0.5 }}>
-	                  {versionItems.map((version) => (
-	                    <ListItemButton
-	                      data-testid={`org-version-${version.effective_date}`}
-	                      key={`${version.event_id}-${version.effective_date}`}
-	                      onClick={() => updateSearch({ effectiveDate: version.effective_date, tab: 'profile' })}
-	                      selected={effectiveDate === version.effective_date}
-	                      sx={{ borderRadius: 1, mb: 0.5 }}
-	                    >
+                  {versionItems.map((version) => (
+                    <ListItemButton
+                      data-testid={`org-version-${version.effective_date}`}
+                      key={`${version.event_id}-${version.effective_date}`}
+                      onClick={() => updateSearch({ effectiveDate: version.effective_date, tab: 'profile' })}
+                      selected={effectiveDate === version.effective_date}
+                      sx={{ borderRadius: 1, mb: 0.5 }}
+                    >
                       <ListItemText
                         primary={version.effective_date}
                         primaryTypographyProps={{ fontWeight: 600, variant: 'body2' }}
@@ -1306,179 +1338,171 @@ export function OrgUnitDetailsPage() {
                   {t('text_no_data')}
                 </Typography>
               )}
-            </Box>
+            </Paper>
 
-            <Box sx={{ minWidth: 0 }}>
-              {detailQuery.data ? (
-                <>
-                  <Stack alignItems='center' direction='row' flexWrap='wrap' justifyContent='space-between' spacing={1}>
-                    <Typography variant='subtitle1'>
-                      {t('org_detail_selected_version')}
-                      {' '}
-                      {effectiveDate}
-                    </Typography>
-                    <Chip
-                      color={parseOrgStatus(detailQuery.data.org_unit.status) === 'active' ? 'success' : 'default'}
-                      label={`${t('text_status')}：${statusLabel}`}
-                      size='small'
-                      variant='outlined'
-                    />
-                  </Stack>
-                  {canWrite ? (
-                    <Button
-                      onClick={() => {
-                        const params = new URLSearchParams()
-                        params.set('as_of', asOf)
-                        navigate({ pathname: '/org/units/field-configs', search: `?${params.toString()}` })
+            <Stack spacing={1.5}>
+              <Paper sx={{ p: 1.5 }} variant='outlined'>
+                {detailQuery.data ? (
+                  <>
+                    <Stack alignItems='center' direction='row' flexWrap='wrap' justifyContent='space-between' spacing={1}>
+                      <Typography variant='subtitle1'>
+                        {t('org_detail_selected_version')}
+                        {' '}
+                        {effectiveDate}
+                      </Typography>
+                      <Chip
+                        color={parseOrgStatus(detailQuery.data.org_unit.status) === 'active' ? 'success' : 'default'}
+                        label={`${t('text_status')}：${statusLabel}`}
+                        size='small'
+                        variant='outlined'
+                      />
+                    </Stack>
+                    {canWrite ? (
+                      <Button
+                        onClick={() => {
+                          const params = new URLSearchParams()
+                          params.set('as_of', asOf)
+                          navigate({ pathname: '/org/units/field-configs', search: `?${params.toString()}` })
+                        }}
+                        size='small'
+                        sx={{ mt: 0.5 }}
+                        variant='text'
+                      >
+                        {t('nav_org_field_configs')}
+                      </Button>
+                    ) : null}
+                    <Divider sx={{ my: 1.2 }} />
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gap: 0.8,
+                        gridTemplateColumns: { xs: '1fr', sm: '220px minmax(0, 1fr)' }
                       }}
-                      size='small'
-                      sx={{ mt: 0.5 }}
-                      variant='text'
                     >
-                      {t('nav_org_field_configs')}
-                    </Button>
+                      <Typography color='text.secondary' variant='body2'>{t('org_version_event_type')}</Typography>
+                      <Typography sx={{ wordBreak: 'break-word' }} variant='body2'>{selectedVersionEventType}</Typography>
+                      <Typography color='text.secondary' variant='body2'>{t('org_column_code')}</Typography>
+                      <Typography sx={{ wordBreak: 'break-word' }} variant='body2'>{detailQuery.data.org_unit.org_code}</Typography>
+                      <Typography color='text.secondary' variant='body2'>{t('org_column_name')}</Typography>
+                      <Typography sx={{ wordBreak: 'break-word' }} variant='body2'>{detailQuery.data.org_unit.name}</Typography>
+                      <Typography color='text.secondary' variant='body2'>{t('org_column_parent')}</Typography>
+                      <Typography sx={{ wordBreak: 'break-word' }} variant='body2'>
+                        {detailQuery.data.org_unit.parent_name?.trim()
+                          ? `${detailQuery.data.org_unit.parent_name} (${detailQuery.data.org_unit.parent_org_code})`
+                          : detailQuery.data.org_unit.parent_org_code || '-'}
+                      </Typography>
+                      <Typography color='text.secondary' variant='body2'>{t('org_column_manager')}</Typography>
+                      <Typography sx={{ wordBreak: 'break-word' }} variant='body2'>
+                        {detailQuery.data.org_unit.manager_name?.trim()
+                          ? `${detailQuery.data.org_unit.manager_name} (${detailQuery.data.org_unit.manager_pernr})`
+                          : detailQuery.data.org_unit.manager_pernr || '-'}
+                      </Typography>
+                      <Typography color='text.secondary' variant='body2'>{t('org_column_is_business_unit')}</Typography>
+                      <Typography variant='body2'>{detailQuery.data.org_unit.is_business_unit ? t('common_yes') : t('common_no')}</Typography>
+                    </Box>
+                  </>
+                ) : (
+                  <Typography color='text.secondary' variant='body2'>
+                    {detailQuery.isLoading ? t('text_loading') : t('text_no_data')}
+                  </Typography>
+                )}
+              </Paper>
+
+              {profileExtFields.length > 0 ? (
+                <Paper sx={{ p: 1.5 }} variant='outlined'>
+                  <Typography variant='subtitle2'>{t('org_section_ext_fields')}</Typography>
+                  {hasProfileMissingI18nLabels ? (
+                    <Alert severity='warning' sx={{ mt: 1 }}>
+                      {t('org_ext_field_i18n_missing_warning')}
+                    </Alert>
                   ) : null}
-                  <Divider sx={{ my: 1.2 }} />
-                  <Stack spacing={1}>
-                    <Typography variant='body2'>{t('org_version_event_type')}：{selectedVersionEventType}</Typography>
-                    <Typography variant='body2'>{t('org_column_code')}：{detailQuery.data.org_unit.org_code}</Typography>
-                    <Typography variant='body2'>{t('org_column_name')}：{detailQuery.data.org_unit.name}</Typography>
-                    <Typography variant='body2'>
-                      {t('org_column_parent')}：
-                      {detailQuery.data.org_unit.parent_name?.trim()
-                        ? `${detailQuery.data.org_unit.parent_name} (${detailQuery.data.org_unit.parent_org_code})`
-                        : detailQuery.data.org_unit.parent_org_code || '-'}
-                    </Typography>
-                    <Typography variant='body2'>
-                      {t('org_column_manager')}：
-                      {detailQuery.data.org_unit.manager_name?.trim()
-                        ? `${detailQuery.data.org_unit.manager_name} (${detailQuery.data.org_unit.manager_pernr})`
-                        : detailQuery.data.org_unit.manager_pernr || '-'}
-                    </Typography>
-                    <Typography variant='body2'>
-                      {t('org_column_is_business_unit')}：{detailQuery.data.org_unit.is_business_unit ? t('common_yes') : t('common_no')}
-                    </Typography>
-                  </Stack>
+                  <Stack spacing={1} sx={{ mt: 1 }}>
+                    {profileExtFields.map((field) => {
+                      const labelKey = field.label_i18n_key?.trim()
+                      const literalLabel = field.label?.trim() ?? ''
+                      const label =
+                        labelKey && isMessageKey(labelKey) ? t(labelKey) : literalLabel.length > 0 ? literalLabel : field.field_key
+                      const displayValue = field.display_value?.trim()
+                      const valueText = displayValue && displayValue.length > 0 ? displayValue : toDisplayText(field.value)
+                      const sourceWarning =
+                        field.display_value_source === 'dict_fallback'
+                          ? t('org_ext_field_display_value_fallback_warning')
+                          : field.display_value_source === 'unresolved'
+                          ? t('org_ext_field_display_value_unresolved_warning')
+                          : ''
 
-                  {detailQuery.data.ext_fields && detailQuery.data.ext_fields.length > 0 ? (
-                    <>
-                      <Divider sx={{ my: 1.2 }} />
-                      <Typography variant='subtitle2'>{t('org_section_ext_fields')}</Typography>
-
-                      {detailQuery.data.ext_fields.some((field) => {
-                        const labelKey = field.label_i18n_key?.trim()
-                        const literalLabel = field.label?.trim() ?? ''
-                        const isCustom = field.field_key?.trim().toLowerCase().startsWith('x_')
-                        if (literalLabel.length > 0 || isCustom) {
-                          return false
-                        }
-                        return !labelKey || !isMessageKey(labelKey)
-                      }) ? (
-                        <Alert severity='warning' sx={{ mt: 1 }}>
-                          {t('org_ext_field_i18n_missing_warning')}
-                        </Alert>
-                      ) : null}
-
-                      <Stack spacing={1} sx={{ mt: 1 }}>
-                        {detailQuery.data.ext_fields.map((field) => {
-                          const labelKey = field.label_i18n_key?.trim()
-                          const literalLabel = field.label?.trim() ?? ''
-                          const label =
-                            labelKey && isMessageKey(labelKey)
-                              ? t(labelKey)
-                              : literalLabel.length > 0
-                              ? literalLabel
-                              : field.field_key
-                          const displayValue = field.display_value?.trim()
-                          const valueText = displayValue && displayValue.length > 0 ? displayValue : toDisplayText(field.value)
-                          const sourceWarning =
-                            field.display_value_source === 'dict_fallback'
-                              ? t('org_ext_field_display_value_fallback_warning')
-                              : field.display_value_source === 'unresolved'
-                              ? t('org_ext_field_display_value_unresolved_warning')
-                              : ''
-
-                          return (
-                            <Box
-                              key={field.field_key}
-                              sx={{
-                                display: 'grid',
-                                gap: 0.5,
-                                gridTemplateColumns: { xs: '1fr', sm: '220px minmax(0, 1fr)' }
-                              }}
-                            >
-                              <Typography color='text.secondary' variant='body2'>
-                                {label}
+                      return (
+                        <Box
+                          key={field.field_key}
+                          sx={{
+                            display: 'grid',
+                            gap: 0.5,
+                            gridTemplateColumns: { xs: '1fr', sm: '220px minmax(0, 1fr)' }
+                          }}
+                        >
+                          <Typography color='text.secondary' variant='body2'>
+                            {label}
+                          </Typography>
+                          <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                            <Typography sx={{ wordBreak: 'break-word' }} variant='body2'>
+                              {valueText}
+                            </Typography>
+                            {sourceWarning.length > 0 ? (
+                              <Typography color='warning.main' variant='caption'>
+                                {sourceWarning}
                               </Typography>
-                              <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-                                <Typography sx={{ wordBreak: 'break-word' }} variant='body2'>
-                                  {valueText}
-                                </Typography>
-                                {sourceWarning.length > 0 ? (
-                                  <Typography color='warning.main' variant='caption'>
-                                    {sourceWarning}
-                                  </Typography>
-                                ) : null}
-                              </Stack>
-                            </Box>
-                          )
-                        })}
-                      </Stack>
-                    </>
-                  ) : null}
-
-                </>
-              ) : (
-                <Typography color='text.secondary' variant='body2'>
-                  {detailQuery.isLoading ? t('text_loading') : t('text_no_data')}
-                </Typography>
-              )}
-            </Box>
+                            ) : null}
+                          </Stack>
+                        </Box>
+                      )
+                    })}
+                  </Stack>
+                </Paper>
+              ) : null}
+            </Stack>
           </Box>
-        </Paper>
-      ) : null}
+        ) : null}
 
-      {detailTab === 'audit' ? (
-        <Paper sx={{ p: 1.5 }} variant='outlined'>
+        {detailTab === 'audit' ? (
           <Box
             sx={{
               display: 'grid',
               gap: 1.5,
               gridTemplateColumns: {
                 xs: '1fr',
-                md: '240px minmax(0, 1fr)'
+                md: '280px minmax(0, 1fr)'
               }
             }}
           >
-            <Box sx={{ minWidth: 0 }}>
+            <Paper sx={{ p: 1.5 }} variant='outlined'>
               <Typography sx={{ mb: 1 }} variant='subtitle2'>
                 {t('org_audit_timeline_time')}
               </Typography>
-	              {auditQuery.data ? (
-	                <List dense sx={{ border: 1, borderColor: 'divider', borderRadius: 1, maxHeight: 420, overflow: 'auto', p: 0.5 }}>
-	                  {auditQuery.data.events.map((event) => (
-	                    <ListItemButton
-	                      data-testid={`org-audit-${event.event_uuid}`}
-	                      key={event.event_id}
-	                      onClick={() => updateSearch({ tab: 'audit', auditEventUUID: event.event_uuid })}
-	                      selected={selectedAuditEvent?.event_uuid === event.event_uuid}
-	                      sx={{ borderRadius: 1, mb: 0.5 }}
-	                    >
-	                      <Box sx={{ alignItems: 'flex-start', display: 'flex', gap: 1, justifyContent: 'space-between', width: '100%' }}>
-	                        <ListItemText
-	                          primary={formatTxTime(event.tx_time)}
-	                          primaryTypographyProps={{ fontWeight: 600, variant: 'body2' }}
-	                          secondary={formatAuditActor(event.initiator_name, event.initiator_employee_id)}
-	                          secondaryTypographyProps={{ variant: 'caption' }}
-	                        />
-	                        {event.is_rescinded ? (
-	                          <Chip color='warning' label={t('org_audit_rescinded')} size='small' sx={{ mt: 0.25 }} variant='outlined' />
-	                        ) : null}
-	                      </Box>
-	                    </ListItemButton>
-	                  ))}
-	                </List>
-	              ) : null}
+              {auditQuery.data ? (
+                <List dense sx={{ border: 1, borderColor: 'divider', borderRadius: 1, maxHeight: 420, overflow: 'auto', p: 0.5 }}>
+                  {auditQuery.data.events.map((event) => (
+                    <ListItemButton
+                      data-testid={`org-audit-${event.event_uuid}`}
+                      key={event.event_id}
+                      onClick={() => updateSearch({ tab: 'audit', auditEventUUID: event.event_uuid })}
+                      selected={selectedAuditEvent?.event_uuid === event.event_uuid}
+                      sx={{ borderRadius: 1, mb: 0.5 }}
+                    >
+                      <Box sx={{ alignItems: 'flex-start', display: 'flex', gap: 1, justifyContent: 'space-between', width: '100%' }}>
+                        <ListItemText
+                          primary={formatTxTime(event.tx_time)}
+                          primaryTypographyProps={{ fontWeight: 600, variant: 'body2' }}
+                          secondary={formatAuditActor(event.initiator_name, event.initiator_employee_id)}
+                          secondaryTypographyProps={{ variant: 'caption' }}
+                        />
+                        {event.is_rescinded ? (
+                          <Chip color='warning' label={t('org_audit_rescinded')} size='small' sx={{ mt: 0.25 }} variant='outlined' />
+                        ) : null}
+                      </Box>
+                    </ListItemButton>
+                  ))}
+                </List>
+              ) : null}
               {auditQuery.data?.has_more ? (
                 <Button
                   onClick={() =>
@@ -1494,58 +1518,58 @@ export function OrgUnitDetailsPage() {
                   {t('org_audit_load_more')}
                 </Button>
               ) : null}
-            </Box>
+              {auditQuery.isLoading ? <Typography sx={{ mt: 1 }} variant='body2'>{t('text_loading')}</Typography> : null}
+              {auditQuery.error ? <Alert severity='error' sx={{ mt: 1 }}>{getErrorMessage(auditQuery.error)}</Alert> : null}
+            </Paper>
 
-            <Box sx={{ minWidth: 0 }}>
+            <Paper sx={{ p: 1.5 }} variant='outlined'>
               {selectedAuditEvent ? (
                 <>
                   <Typography variant='subtitle1'>{t('org_detail_selected_event')}</Typography>
                   <Divider sx={{ my: 1.2 }} />
-	                  <Stack spacing={1}>
-	                    <Typography variant='body2'>
-	                      {t('org_column_effective_date')}：{selectedAuditEvent.effective_date}
-	                      {' · '}
-	                      {t('org_audit_timeline_time')}：{formatTxTime(selectedAuditEvent.tx_time)}
-	                    </Typography>
-	                    <Typography variant='body2'>
-	                      {t('org_audit_operator')}：{formatAuditActor(selectedAuditEvent.initiator_name, selectedAuditEvent.initiator_employee_id)}
-	                    </Typography>
-	                    <Typography variant='body2'>
-	                      event_uuid：{selectedAuditEvent.event_uuid}
-	                    </Typography>
-	                    <Typography variant='body2'>
-	                      {t('org_version_event_type')}：{selectedAuditEvent.event_type}
-	                    </Typography>
-	                    <Typography variant='body2'>
-	                      {t('org_request_id')}：{toDisplayText(selectedAuditEvent.request_id)}
-	                    </Typography>
-	                    <Typography variant='body2'>
-	                      {t('org_reason')}：{toDisplayText(selectedAuditEvent.reason)}
-	                    </Typography>
-	                    <Typography variant='body2'>
-	                      {t('org_audit_rescinded')}：{selectedAuditEvent.is_rescinded ? t('common_yes') : t('common_no')}
-	                    </Typography>
-	                    {selectedAuditEvent.is_rescinded ? (
-	                      <>
-	                        <Typography variant='body2'>
-	                          {t('org_audit_rescinded_by_request_id')}：{toDisplayText(selectedAuditEvent.rescinded_by_request_id)}
-	                        </Typography>
-	                        <Typography variant='body2'>
-	                          {t('org_audit_rescinded_by_tx_time')}：
-	                          {toDisplayText(
-	                            selectedAuditEvent.rescinded_by_tx_time ? formatTxTime(selectedAuditEvent.rescinded_by_tx_time) : ''
-	                          )}
-	                        </Typography>
-	                        <Typography variant='body2'>
-	                          {t('org_audit_rescinded_by_event_uuid')}：{toDisplayText(selectedAuditEvent.rescinded_by_event_uuid)}
-	                        </Typography>
-	                      </>
-	                    ) : null}
-	                  </Stack>
-	                  <Box sx={{ mt: 1.5 }}>
-	                    <Typography sx={{ mb: 0.8 }} variant='subtitle2'>
-	                      {t('org_audit_diff_title')}
-	                    </Typography>
+                  <Stack spacing={1}>
+                    <Typography variant='body2'>
+                      {t('org_column_effective_date')}：{selectedAuditEvent.effective_date}
+                      {' · '}
+                      {t('org_audit_timeline_time')}：{formatTxTime(selectedAuditEvent.tx_time)}
+                    </Typography>
+                    <Typography variant='body2'>
+                      {t('org_audit_operator')}：{formatAuditActor(selectedAuditEvent.initiator_name, selectedAuditEvent.initiator_employee_id)}
+                    </Typography>
+                    <Typography variant='body2'>
+                      event_uuid：{selectedAuditEvent.event_uuid}
+                    </Typography>
+                    <Typography variant='body2'>
+                      {t('org_version_event_type')}：{selectedAuditEvent.event_type}
+                    </Typography>
+                    <Typography variant='body2'>
+                      {t('org_request_id')}：{toDisplayText(selectedAuditEvent.request_id)}
+                    </Typography>
+                    <Typography variant='body2'>
+                      {t('org_reason')}：{toDisplayText(selectedAuditEvent.reason)}
+                    </Typography>
+                    <Typography variant='body2'>
+                      {t('org_audit_rescinded')}：{selectedAuditEvent.is_rescinded ? t('common_yes') : t('common_no')}
+                    </Typography>
+                    {selectedAuditEvent.is_rescinded ? (
+                      <>
+                        <Typography variant='body2'>
+                          {t('org_audit_rescinded_by_request_id')}：{toDisplayText(selectedAuditEvent.rescinded_by_request_id)}
+                        </Typography>
+                        <Typography variant='body2'>
+                          {t('org_audit_rescinded_by_tx_time')}：
+                          {toDisplayText(selectedAuditEvent.rescinded_by_tx_time ? formatTxTime(selectedAuditEvent.rescinded_by_tx_time) : '')}
+                        </Typography>
+                        <Typography variant='body2'>
+                          {t('org_audit_rescinded_by_event_uuid')}：{toDisplayText(selectedAuditEvent.rescinded_by_event_uuid)}
+                        </Typography>
+                      </>
+                    ) : null}
+                  </Stack>
+                  <Box sx={{ mt: 1.5 }}>
+                    <Typography sx={{ mb: 0.8 }} variant='subtitle2'>
+                      {t('org_audit_diff_title')}
+                    </Typography>
                     {auditDiffRows.length > 0 ? (
                       <TableContainer component={Paper} sx={{ border: 1, borderColor: 'divider' }} variant='outlined'>
                         <Table size='small'>
@@ -1612,19 +1636,16 @@ export function OrgUnitDetailsPage() {
                   {t('text_no_data')}
                 </Typography>
               )}
-            </Box>
+            </Paper>
           </Box>
+        ) : null}
+      </Stack>
 
-          {auditQuery.isLoading ? <Typography>{t('text_loading')}</Typography> : null}
-          {auditQuery.error ? <Alert severity='error'>{getErrorMessage(auditQuery.error)}</Alert> : null}
-        </Paper>
-      ) : null}
-
-      <Box sx={{ mt: 3 }}>
+      <Paper sx={{ mt: 3, p: 1.5 }} variant='outlined'>
         <Button onClick={handleBack} variant='outlined'>
           {t('common_back')}
         </Button>
-      </Box>
+      </Paper>
 
       <Dialog
         onClose={() => {
