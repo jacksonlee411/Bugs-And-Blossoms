@@ -7,6 +7,13 @@ errors:
     user_message_key: errors.actor_scope_forbidden
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: CAPABILITY_CONTEXT_MISMATCH
+    module: setid
+    http_status: 403
+    severity: error
+    user_message_key: errors.capability_context_mismatch
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: DEFAULT_RULE_REQUIRED
     module: orgunit
     http_status: 422
@@ -14,11 +21,74 @@ errors:
     user_message_key: errors.default_rule_required
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: FIELD_OPTION_NOT_ALLOWED
+    module: orgunit
+    http_status: 400
+    severity: error
+    user_message_key: errors.field_option_not_allowed
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: FIELD_POLICY_CONFLICT
+    module: orgunit
+    http_status: 409
+    severity: error
+    user_message_key: errors.field_policy_conflict
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: FIELD_POLICY_DISABLE_NOT_ALLOWED
+    module: setid
+    http_status: 422
+    severity: error
+    user_message_key: errors.field_policy_disable_not_allowed
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: FIELD_POLICY_EXPR_INVALID
     module: orgunit
     http_status: 422
     severity: error
     user_message_key: errors.field_policy_expr_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: FIELD_POLICY_MISSING
+    module: orgunit
+    http_status: 422
+    severity: error
+    user_message_key: errors.field_policy_missing
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: FIELD_POLICY_VERSION_REQUIRED
+    module: orgunit
+    http_status: 400
+    severity: error
+    user_message_key: errors.field_policy_version_required
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: FIELD_POLICY_VERSION_STALE
+    module: orgunit
+    http_status: 409
+    severity: error
+    user_message_key: errors.field_policy_version_stale
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: FIELD_REQUIRED_VALUE_MISSING
+    module: orgunit
+    http_status: 400
+    severity: error
+    user_message_key: errors.field_required_value_missing
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: FUNCTIONAL_AREA_MISSING
+    module: setid
+    http_status: 404
+    severity: error
+    user_message_key: errors.functional_area_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: FUNCTIONAL_AREA_NOT_ACTIVE
+    module: setid
+    http_status: 409
+    severity: error
+    user_message_key: errors.functional_area_not_active
     backend_policy: passthrough
     frontend_policy: mapped
   - code: ORG_ALREADY_EXISTS
@@ -336,6 +406,13 @@ errors:
     user_message_key: errors.invalid_business_unit_id
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: invalid_disable_date
+    module: setid
+    http_status: 400
+    severity: error
+    user_message_key: errors.invalid_disable_date
+    backend_policy: passthrough
+    frontend_policy: mapped
   - code: invalid_credentials
     module: iam
     http_status: 401
@@ -565,6 +642,20 @@ errors:
     http_status: 422
     severity: error
     user_message_key: errors.setid_strategy_registry_list_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: setid_strategy_registry_disable_failed
+    module: setid
+    http_status: 500
+    severity: error
+    user_message_key: errors.setid_strategy_registry_disable_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: setid_strategy_registry_not_found
+    module: setid
+    http_status: 404
+    severity: error
+    user_message_key: errors.setid_strategy_registry_not_found
     backend_policy: passthrough
     frontend_policy: mapped
   - code: setid_strategy_registry_upsert_failed

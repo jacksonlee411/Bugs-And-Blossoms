@@ -1,0 +1,142 @@
+{
+  "version": "2026-02-23",
+  "capabilities": [
+    {
+      "capability_key": "staffing.assignment_create.field_policy",
+      "functional_area_key": "staffing",
+      "capability_type": "process_capability",
+      "owner_module": "staffing",
+      "status": "active",
+      "activation_state": "active",
+      "current_policy_version": "2026-02-23"
+    },
+    {
+      "capability_key": "org.policy_activation.manage",
+      "functional_area_key": "org_foundation",
+      "capability_type": "process_capability",
+      "owner_module": "orgunit",
+      "status": "active",
+      "activation_state": "active",
+      "current_policy_version": "2026-02-23"
+    },
+    {
+      "capability_key": "org.orgunit_create.field_policy",
+      "functional_area_key": "org_foundation",
+      "capability_type": "process_capability",
+      "owner_module": "orgunit",
+      "status": "active",
+      "activation_state": "active",
+      "current_policy_version": "2026-02-23"
+    }
+  ],
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/org/api/setid-strategy-registry",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "staffing.assignment_create.field_policy",
+      "owner_module": "staffing",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/org/api/setid-strategy-registry",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "staffing.assignment_create.field_policy",
+      "owner_module": "staffing",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/org/api/setid-strategy-registry:disable",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "staffing.assignment_create.field_policy",
+      "owner_module": "staffing",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/org/api/setid-explain",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "staffing.assignment_create.field_policy",
+      "owner_module": "staffing",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/rules/evaluate",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "staffing.assignment_create.field_policy",
+      "owner_module": "staffing",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/policies/state",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/policies/draft",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/policies/activate",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/policies/rollback",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/functional-areas/state",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/functional-areas/switch",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/org/api/org-units/create-field-decisions",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.orgunit_create.field_policy",
+      "owner_module": "orgunit",
+      "status": "active"
+    }
+  ]
+}

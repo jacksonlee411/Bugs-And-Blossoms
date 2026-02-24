@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
@@ -56,6 +57,7 @@ func (s fakeOrgUnitWriteService) RescindOrg(context.Context, string, orgunitserv
 }
 
 func TestHandleOrgUnitsWriteAPI_BasicValidation(t *testing.T) {
+	resetPolicyActivationRuntimeForTest()
 	svc := fakeOrgUnitWriteService{}
 
 	t.Run("tenant missing", func(t *testing.T) {
@@ -87,8 +89,30 @@ func TestHandleOrgUnitsWriteAPI_BasicValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("create missing policy_version", func(t *testing.T) {
+		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","request_id":"r1","patch":{"name":"X"}}`
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsWriteAPI(rec, req, svc)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), orgUnitErrFieldPolicyVersionRequired) {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("create stale policy_version", func(t *testing.T) {
+		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"2025-01-01","request_id":"r1","patch":{"name":"X"}}`
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsWriteAPI(rec, req, svc)
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), orgUnitErrFieldPolicyVersionStale) {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("forbid ext_labels_snapshot in request", func(t *testing.T) {
-		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","request_id":"r1","patch":{"name":"X","ext_labels_snapshot":{"x":"y"}}}`
+		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"2026-02-23","request_id":"r1","patch":{"name":"X","ext_labels_snapshot":{"x":"y"}}}`
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -99,7 +123,7 @@ func TestHandleOrgUnitsWriteAPI_BasicValidation(t *testing.T) {
 	})
 
 	t.Run("unknown field rejected by DisallowUnknownFields", func(t *testing.T) {
-		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","request_id":"r1","patch":{"name":"X"},"x":1}`
+		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"2026-02-23","request_id":"r1","patch":{"name":"X"},"x":1}`
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -111,7 +135,8 @@ func TestHandleOrgUnitsWriteAPI_BasicValidation(t *testing.T) {
 }
 
 func TestHandleOrgUnitsWriteAPI_ResultAndErrorMapping(t *testing.T) {
-	body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","request_id":"r1","patch":{"name":"Root A"}}`
+	resetPolicyActivationRuntimeForTest()
+	body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"2026-02-23","request_id":"r1","patch":{"name":"Root A"}}`
 
 	t.Run("service nil", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
@@ -126,7 +151,7 @@ func TestHandleOrgUnitsWriteAPI_ResultAndErrorMapping(t *testing.T) {
 	t.Run("success envelope", func(t *testing.T) {
 		svc := fakeOrgUnitWriteService{
 			writeFn: func(_ context.Context, tenantID string, req orgunitservices.WriteOrgUnitRequest) (orgunitservices.OrgUnitWriteResult, error) {
-				if tenantID != "t1" || req.Intent != "create_org" || req.OrgCode != "ROOT" || req.RequestID != "r1" {
+				if tenantID != "t1" || req.Intent != "create_org" || req.OrgCode != "ROOT" || req.PolicyVersion != "2026-02-23" || req.RequestID != "r1" {
 					t.Fatalf("req=%+v tenant=%s", req, tenantID)
 				}
 				return orgunitservices.OrgUnitWriteResult{

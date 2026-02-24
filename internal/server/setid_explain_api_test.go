@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -66,9 +67,54 @@ func TestTraceIDFromRequestHeader(t *testing.T) {
 	}
 }
 
+func TestNormalizeSetIDExplainRequestID(t *testing.T) {
+	reqQuery := httptest.NewRequest(http.MethodGet, "/org/api/setid-explain?request_id=req-query", nil)
+	if got := normalizeSetIDExplainRequestID(reqQuery); got != "req-query" {
+		t.Fatalf("request_id=%q", got)
+	}
+
+	reqHeader := httptest.NewRequest(http.MethodGet, "/org/api/setid-explain", nil)
+	reqHeader.Header.Set("X-Request-Id", "req-header")
+	if got := normalizeSetIDExplainRequestID(reqHeader); got != "req-header" {
+		t.Fatalf("request_id=%q", got)
+	}
+
+	reqTrace := httptest.NewRequest(http.MethodGet, "/org/api/setid-explain", nil)
+	reqTrace.Header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01")
+	if got := normalizeSetIDExplainRequestID(reqTrace); got != "trace-4bf92f3577b34da6a3ce929d0e0e4736" {
+		t.Fatalf("request_id=%q", got)
+	}
+
+	reqFallback := httptest.NewRequest(http.MethodGet, "/org/api/setid-explain", nil)
+	if got := normalizeSetIDExplainRequestID(reqFallback); got != "setid-explain-auto" {
+		t.Fatalf("request_id=%q", got)
+	}
+}
+
+func TestFallbackSetIDExplainTraceID(t *testing.T) {
+	got := fallbackSetIDExplainTraceID("req-1", "staffing.assignment_create.field_policy", "10000001", "2026-01-01")
+	if len(got) != 32 {
+		t.Fatalf("trace_id=%q", got)
+	}
+	if got != fallbackSetIDExplainTraceID("req-1", "staffing.assignment_create.field_policy", "10000001", "2026-01-01") {
+		t.Fatalf("trace_id should be stable: %q", got)
+	}
+}
+
+func TestResolveFunctionalAreaKey(t *testing.T) {
+	if got := resolveFunctionalAreaKey("staffing.assignment_create.field_policy"); got != "staffing" {
+		t.Fatalf("functional_area=%q", got)
+	}
+	if got := resolveFunctionalAreaKey("unknown.key"); got != "" {
+		t.Fatalf("functional_area=%q", got)
+	}
+}
+
 func TestHandleSetIDExplainAPI(t *testing.T) {
 	resetSetIDStrategyRegistryRuntimeForTest()
 	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
+	resetFunctionalAreaSwitchStoreForTest()
+	t.Cleanup(resetFunctionalAreaSwitchStoreForTest)
 
 	makeReq := func(path string) *http.Request {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -114,6 +160,20 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		t.Fatalf("status=%d", recBadBU.Code)
 	}
 
+	recAreaMissing := httptest.NewRecorder()
+	handleSetIDExplainAPI(recAreaMissing, makeReq("/org/api/setid-explain?capability_key=unknown.key&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01"), store)
+	if recAreaMissing.Code != http.StatusForbidden || !strings.Contains(recAreaMissing.Body.String(), functionalAreaMissingCode) {
+		t.Fatalf("status=%d body=%s", recAreaMissing.Code, recAreaMissing.Body.String())
+	}
+
+	defaultFunctionalAreaSwitchStore.setEnabled("t1", "staffing", false)
+	recAreaDisabled := httptest.NewRecorder()
+	handleSetIDExplainAPI(recAreaDisabled, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01"), store)
+	if recAreaDisabled.Code != http.StatusForbidden || !strings.Contains(recAreaDisabled.Body.String(), functionalAreaDisabledCode) {
+		t.Fatalf("status=%d body=%s", recAreaDisabled.Code, recAreaDisabled.Body.String())
+	}
+	defaultFunctionalAreaSwitchStore.setEnabled("t1", "staffing", true)
+
 	recBadLevel := httptest.NewRecorder()
 	handleSetIDExplainAPI(recBadLevel, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=bad"), store)
 	if recBadLevel.Code != http.StatusBadRequest {
@@ -132,6 +192,17 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		t.Fatalf("status=%d", recBadOrg.Code)
 	}
 
+	recRelationMismatchReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&org_unit_id=10000002&as_of=2026-01-01")
+	recRelationMismatchReq = recRelationMismatchReq.WithContext(withPrincipal(recRelationMismatchReq.Context(), Principal{RoleSlug: "tenant-viewer"}))
+	recRelationMismatch := httptest.NewRecorder()
+	handleSetIDExplainAPI(recRelationMismatch, recRelationMismatchReq, store)
+	if recRelationMismatch.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", recRelationMismatch.Code, recRelationMismatch.Body.String())
+	}
+	if !strings.Contains(recRelationMismatch.Body.String(), capabilityReasonContextMismatch) {
+		t.Fatalf("unexpected body: %q", recRelationMismatch.Body.String())
+	}
+
 	resolveErrStore := store
 	resolveErrStore.resolveSetIDFn = func(context.Context, string, string, string) (string, error) {
 		return "", errors.New("SETID_NOT_FOUND")
@@ -141,11 +212,17 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	if recResolveErr.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", recResolveErr.Code)
 	}
+	if !strings.Contains(recResolveErr.Body.String(), capabilityReasonContextMismatch) {
+		t.Fatalf("unexpected body: %q", recResolveErr.Body.String())
+	}
 
 	recSetIDMismatch := httptest.NewRecorder()
 	handleSetIDExplainAPI(recSetIDMismatch, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&setid=B0001"), store)
 	if recSetIDMismatch.Code != http.StatusForbidden {
 		t.Fatalf("status=%d", recSetIDMismatch.Code)
+	}
+	if !strings.Contains(recSetIDMismatch.Body.String(), capabilityReasonContextMismatch) {
+		t.Fatalf("unexpected body: %q", recSetIDMismatch.Body.String())
 	}
 
 	recMissingPolicy := httptest.NewRecorder()
@@ -186,6 +263,15 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	if !strings.Contains(recBrief.Body.String(), `"trace_id":"4bf92f3577b34da6a3ce929d0e0e4736"`) {
 		t.Fatalf("unexpected body: %q", recBrief.Body.String())
 	}
+	if !strings.Contains(recBrief.Body.String(), `"setid":"A0001"`) ||
+		!strings.Contains(recBrief.Body.String(), `"functional_area_key":"staffing"`) ||
+		!strings.Contains(recBrief.Body.String(), `"policy_version":"2026-02-23"`) ||
+		!strings.Contains(recBrief.Body.String(), `"reason_code":"`+fieldRequiredInContextCode+`"`) {
+		t.Fatalf("unexpected body: %q", recBrief.Body.String())
+	}
+	if strings.Contains(recBrief.Body.String(), `"tenant_id":"t1"`) || strings.Contains(recBrief.Body.String(), `"org_unit_id":"10000001"`) {
+		t.Fatalf("unexpected brief fields: %q", recBrief.Body.String())
+	}
 
 	fullReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01&level=full")
 	fullReq = fullReq.WithContext(withPrincipal(fullReq.Context(), Principal{RoleSlug: "tenant-admin"}))
@@ -195,6 +281,9 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 		t.Fatalf("status=%d body=%s", recFull.Code, recFull.Body.String())
 	}
 	if !strings.Contains(recFull.Body.String(), `"tenant_id":"t1"`) || !strings.Contains(recFull.Body.String(), `"org_unit_id":"10000001"`) {
+		t.Fatalf("unexpected body: %q", recFull.Body.String())
+	}
+	if !strings.Contains(recFull.Body.String(), `"resolved_config_version":"2026-02-23"`) {
 		t.Fatalf("unexpected body: %q", recFull.Body.String())
 	}
 
@@ -220,6 +309,53 @@ func TestHandleSetIDExplainAPI(t *testing.T) {
 	}
 	if !strings.Contains(recDeny.Body.String(), `"decision":"deny"`) || !strings.Contains(recDeny.Body.String(), fieldHiddenInContextCode) {
 		t.Fatalf("unexpected body: %q", recDeny.Body.String())
+	}
+	if !strings.Contains(recDeny.Body.String(), `"reason_code":"`+fieldHiddenInContextCode+`"`) {
+		t.Fatalf("unexpected body: %q", recDeny.Body.String())
+	}
+	if strings.Contains(recDeny.Body.String(), `"resolved_default_value":"b2"`) ||
+		!strings.Contains(recDeny.Body.String(), `"visibility":"hidden"`) ||
+		!strings.Contains(recDeny.Body.String(), `"masked_default_value":"***"`) {
+		t.Fatalf("unexpected body: %q", recDeny.Body.String())
+	}
+
+	_, _ = defaultSetIDStrategyRegistryRuntime.upsert("t1", setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_masked",
+		PersonalizationMode: personalizationModeSetID,
+		OrgLevel:            orgLevelBusinessUnit,
+		BusinessUnitID:      "10000001",
+		Required:            false,
+		Visible:             true,
+		DefaultRuleRef:      "mask://redact",
+		DefaultValue:        "secret-v1",
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+		Priority:            200,
+	})
+	recMasked := httptest.NewRecorder()
+	handleSetIDExplainAPI(recMasked, makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_masked&business_unit_id=10000001&as_of=2026-01-01"), store)
+	if recMasked.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recMasked.Code, recMasked.Body.String())
+	}
+	if !strings.Contains(recMasked.Body.String(), `"reason_code":"`+fieldMaskedInContextCode+`"`) ||
+		!strings.Contains(recMasked.Body.String(), `"visibility":"masked"`) ||
+		!strings.Contains(recMasked.Body.String(), `"mask_strategy":"redact"`) ||
+		!strings.Contains(recMasked.Body.String(), `"masked_default_value":"***"`) ||
+		strings.Contains(recMasked.Body.String(), `"resolved_default_value":"secret-v1"`) {
+		t.Fatalf("unexpected body: %q", recMasked.Body.String())
+	}
+
+	recActorScopeMismatchReq := makeReq("/org/api/setid-explain?capability_key=staffing.assignment_create.field_policy&field_key=field_x&business_unit_id=10000001&as_of=2026-01-01")
+	recActorScopeMismatchReq.Header.Set("X-Actor-Scope", "saas")
+	recActorScopeMismatch := httptest.NewRecorder()
+	handleSetIDExplainAPI(recActorScopeMismatch, recActorScopeMismatchReq, store)
+	if recActorScopeMismatch.Code != http.StatusForbidden {
+		t.Fatalf("status=%d body=%s", recActorScopeMismatch.Code, recActorScopeMismatch.Body.String())
+	}
+	if !strings.Contains(recActorScopeMismatch.Body.String(), capabilityReasonContextMismatch) {
+		t.Fatalf("unexpected body: %q", recActorScopeMismatch.Body.String())
 	}
 }
 
@@ -298,7 +434,107 @@ func TestHandleSetIDExplainAPI_BUVarianceAcceptance(t *testing.T) {
 	}
 	if !strings.Contains(recBUB.Body.String(), `"decision":"deny"`) ||
 		!strings.Contains(recBUB.Body.String(), fieldHiddenInContextCode) ||
-		!strings.Contains(recBUB.Body.String(), `"resolved_default_value":"b2"`) {
+		!strings.Contains(recBUB.Body.String(), `"masked_default_value":"***"`) ||
+		!strings.Contains(recBUB.Body.String(), `"visibility":"hidden"`) ||
+		strings.Contains(recBUB.Body.String(), `"resolved_default_value":"b2"`) {
 		t.Fatalf("unexpected body: %q", recBUB.Body.String())
+	}
+}
+
+func TestApplySetIDFieldVisibility(t *testing.T) {
+	visibleDecision, visibleResult, visibleReason := applySetIDFieldVisibility(setIDFieldDecision{
+		FieldKey:           "field_visible",
+		Visible:            true,
+		Required:           true,
+		ResolvedDefaultVal: "v1",
+	})
+	if visibleResult != internalRuleDecisionAllow || visibleReason != fieldRequiredInContextCode || visibleDecision.Visibility != fieldVisibilityVisible {
+		t.Fatalf("visible decision=%+v result=%q reason=%q", visibleDecision, visibleResult, visibleReason)
+	}
+	if visibleDecision.ResolvedDefaultVal != "v1" {
+		t.Fatalf("visible resolved_default_value=%q", visibleDecision.ResolvedDefaultVal)
+	}
+
+	hiddenDecision, hiddenResult, hiddenReason := applySetIDFieldVisibility(setIDFieldDecision{
+		FieldKey:           "field_hidden",
+		Visible:            false,
+		ResolvedDefaultVal: "secret",
+	})
+	if hiddenResult != internalRuleDecisionDeny || hiddenReason != fieldHiddenInContextCode || hiddenDecision.Visibility != fieldVisibilityHidden {
+		t.Fatalf("hidden decision=%+v result=%q reason=%q", hiddenDecision, hiddenResult, hiddenReason)
+	}
+	if hiddenDecision.ResolvedDefaultVal != "" || hiddenDecision.MaskedDefaultVal != "***" {
+		t.Fatalf("hidden decision=%+v", hiddenDecision)
+	}
+
+	maskedDecision, maskedResult, maskedReason := applySetIDFieldVisibility(setIDFieldDecision{
+		FieldKey:           "field_masked",
+		Visible:            true,
+		DefaultRuleRef:     "mask://redact",
+		ResolvedDefaultVal: "secret",
+	})
+	if maskedResult != internalRuleDecisionAllow || maskedReason != fieldMaskedInContextCode || maskedDecision.Visibility != fieldVisibilityMasked {
+		t.Fatalf("masked decision=%+v result=%q reason=%q", maskedDecision, maskedResult, maskedReason)
+	}
+	if maskedDecision.ResolvedDefaultVal != "" || maskedDecision.MaskedDefaultVal != "***" || maskedDecision.MaskStrategy != "redact" {
+		t.Fatalf("masked decision=%+v", maskedDecision)
+	}
+
+	if strategy, ok := setIDMaskStrategyForDecision(setIDFieldDecision{Visible: true, DefaultRuleRef: "rule://normal"}); ok || strategy != "" {
+		t.Fatalf("unexpected strategy=%q ok=%v", strategy, ok)
+	}
+	if strategy, ok := setIDMaskStrategyForDecision(setIDFieldDecision{Visible: true, DefaultRuleRef: "mask://"}); !ok || strategy != fieldMaskStrategyRedact {
+		t.Fatalf("unexpected strategy=%q ok=%v", strategy, ok)
+	}
+}
+
+func TestBriefSetIDFieldDecisions(t *testing.T) {
+	if got := briefSetIDFieldDecisions(nil); got != "-" {
+		t.Fatalf("brief=%q", got)
+	}
+
+	got := briefSetIDFieldDecisions([]setIDFieldDecision{
+		{FieldKey: "field_x", Decision: internalRuleDecisionAllow, ReasonCode: fieldVisibleInContextCode, Visibility: fieldVisibilityVisible},
+		{FieldKey: "field_y", Decision: internalRuleDecisionDeny, ReasonCode: fieldHiddenInContextCode, Visibility: fieldVisibilityHidden},
+	})
+	if !strings.Contains(got, "field_x:allow:FIELD_VISIBLE_IN_CONTEXT:visible") || !strings.Contains(got, "field_y:deny:FIELD_HIDDEN_IN_CONTEXT:hidden") {
+		t.Fatalf("brief=%q", got)
+	}
+}
+
+func TestLogSetIDExplainAuditRedactsValues(t *testing.T) {
+	var b strings.Builder
+	origin := log.Writer()
+	log.SetOutput(&b)
+	t.Cleanup(func() {
+		log.SetOutput(origin)
+	})
+
+	logSetIDExplainAudit(setIDExplainResponse{
+		Decision:          internalRuleDecisionDeny,
+		ReasonCode:        fieldHiddenInContextCode,
+		CapabilityKey:     "staffing.assignment_create.field_policy",
+		SetID:             "A0001",
+		PolicyVersion:     "2026-03-01",
+		FunctionalAreaKey: "staffing",
+		Level:             explainLevelBrief,
+		FieldDecisions: []setIDFieldDecision{
+			{
+				FieldKey:           "field_hidden",
+				Decision:           internalRuleDecisionDeny,
+				ReasonCode:         fieldHiddenInContextCode,
+				Visibility:         fieldVisibilityHidden,
+				ResolvedDefaultVal: "secret-v1",
+				MaskedDefaultVal:   "***",
+			},
+		},
+	})
+
+	got := b.String()
+	if strings.Contains(got, "secret-v1") {
+		t.Fatalf("unexpected raw value in audit log: %q", got)
+	}
+	if !strings.Contains(got, "field_hidden:deny:FIELD_HIDDEN_IN_CONTEXT:hidden") {
+		t.Fatalf("unexpected audit log: %q", got)
 	}
 }

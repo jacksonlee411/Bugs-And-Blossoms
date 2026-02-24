@@ -366,11 +366,41 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/setid-strategy-registry"); ok {
 		t.Fatal("expected ok=false")
 	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-strategy-registry:disable"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected setid strategy disable mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodDelete, "/org/api/setid-strategy-registry:disable"); ok {
+		t.Fatal("expected ok=false")
+	}
 	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/org/api/setid-explain"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
 		t.Fatalf("expected setid explain mapped to org.setid_capability_config, got ok=%v object=%q action=%q", ok, object, action)
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/org/api/setid-explain"); ok {
 		t.Fatal("expected ok=false")
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/rules/evaluate"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected internal rules evaluate mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/internal/rules/evaluate"); ok {
+		t.Fatal("expected ok=false")
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/policies/state"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
+		t.Fatalf("expected internal policy state mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/policies/draft"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected internal policy draft mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/policies/activate"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected internal policy activate mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/policies/rollback"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected internal policy rollback mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/functional-areas/state"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
+		t.Fatalf("expected internal functional area state mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/functional-areas/switch"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected internal functional area switch mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
 	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units"); !ok {
 		t.Fatal("expected ok=true")

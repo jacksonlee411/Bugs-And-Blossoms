@@ -324,8 +324,32 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-strategy-registry", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetIDStrategyRegistryAPI(w, r)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/org/api/setid-strategy-registry:disable", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleSetIDStrategyRegistryDisableAPI(w, r)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/setid-explain", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSetIDExplainAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/rules/evaluate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleInternalRulesEvaluateAPI(w, r, setidStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/policies/state", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleInternalPolicyStateAPI(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/policies/draft", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleInternalPolicyDraftAPI(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/policies/activate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleInternalPolicyActivateAPI(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/policies/rollback", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleInternalPolicyRollbackAPI(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/functional-areas/state", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleInternalFunctionalAreaStateAPI(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/functional-areas/switch", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleInternalFunctionalAreaSwitchAPI(w, r)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsAPI(w, r, orgStore, orgUnitWriteService)
@@ -368,6 +392,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/write-capabilities", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitWriteCapabilitiesAPI(w, r, orgStore)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/create-field-decisions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleOrgUnitCreateFieldDecisionsAPI(w, r, orgStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/org/api/org-units/details", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleOrgUnitsDetailsAPI(w, r, orgStore)

@@ -13,6 +13,7 @@
 - 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
 - 禁止新增 scope/package 漂移：`make check no-scope-package`
 - capability_key 防退化（禁上下文编码/禁拼接）：`make check capability-key`
+- 路由 capability 映射防漂移（缺映射/重复/未注册阻断）：`make check capability-route-map`
 - 业务幂等字段命名收敛：`make check request-code`
 - `.templ`/MUI Web UI/presentation assets 相关：`make generate && make css`，然后 `git status --short` 必须为空
 - 多语言 JSON：`make check tr`
@@ -53,6 +54,7 @@
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
 | 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
 | capability_key 命名与生成方式 | `make check capability-key` | 禁止上下文编码与运行时拼接（承接 `DEV-PLAN-102C6/102D`） |
+| 路由/动作到 capability_key 映射 | `make check capability-route-map` | 阻断缺映射、重复映射、未注册 key（承接 `DEV-PLAN-156`） |
 | 幂等与追踪命名（request_id / trace_id） | `make check request-code` | 规则见 `DEV-PLAN-109A` |
 | 错误提示契约（错误码→明确提示） | `make check error-message` | 规则见 `DEV-PLAN-140` |
 
@@ -294,8 +296,13 @@ modules/{module}/
 - DEV-PLAN-158：Capability Key Phase 8 策略激活与版本一致性（承接 150 M6）：`docs/dev-plans/158-capability-key-m6-policy-activation-and-version-consistency.md`
 - DEV-PLAN-159：Capability Key Phase 9 字段级分段安全（承接 150 M7）：`docs/dev-plans/159-capability-key-m7-segment-security-field-level-visibility.md`
 - DEV-PLAN-160：Capability Key Phase 10 UI 可视化交付与证据收口（承接 150 M8/M10）：`docs/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
+- DEV-PLAN-161：Org 新建表单动态策略落地（org_code + d_org_type，承接 150）：`docs/dev-plans/161-org-create-dynamic-field-policy-on-capability-registry.md`
+- DEV-PLAN-161A：SetID Capability Registry 可编辑与可维护化（承接 160/161）：`docs/dev-plans/161a-setid-capability-registry-editable-and-maintainable.md`
 - DEV-PLAN-163：Capability Key 表单字段下拉化收敛方案（Strategy Registry）：`docs/dev-plans/163-capability-key-form-dropdown-convergence.md`
 - DEV-PLAN-163A：SetID Governance 其余三页签字段下拉化收敛方案：`docs/dev-plans/163a-setid-governance-other-tabs-dropdown-convergence.md`
+- DEV-PLAN-170：Org 详情页 UI 外观对齐 Capability Key（仅页面壳层改造；弹窗不改）：`docs/dev-plans/170-org-form-ui-shell-alignment-with-capability-key.md`
+- DEV-PLAN-170A：Org 变更日志页 UI 外观对齐 Capability Key（仅页面壳层改造）：`docs/dev-plans/170a-org-audit-log-ui-shell-alignment-with-capability-key.md`
+- DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102A【归档】：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案（表达式口径一致性已并入 `DEV-PLAN-120`）：`docs/archive/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`

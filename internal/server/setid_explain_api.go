@@ -2,7 +2,10 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -14,12 +17,17 @@ import (
 const (
 	explainLevelBrief = "brief"
 	explainLevelFull  = "full"
+
+	capabilityPolicyVersionBaseline = "2026-02-23"
 )
 
 type setIDExplainResponse struct {
 	TraceID               string               `json:"trace_id"`
 	RequestID             string               `json:"request_id"`
 	CapabilityKey         string               `json:"capability_key"`
+	SetID                 string               `json:"setid"`
+	FunctionalAreaKey     string               `json:"functional_area_key"`
+	PolicyVersion         string               `json:"policy_version"`
 	TenantID              string               `json:"tenant_id"`
 	BusinessUnitID        string               `json:"business_unit_id"`
 	AsOf                  string               `json:"as_of"`
@@ -27,7 +35,7 @@ type setIDExplainResponse struct {
 	ResolvedSetID         string               `json:"resolved_setid"`
 	ResolvedConfigVersion string               `json:"resolved_config_version,omitempty"`
 	Decision              string               `json:"decision"`
-	ReasonCode            string               `json:"reason_code,omitempty"`
+	ReasonCode            string               `json:"reason_code"`
 	Level                 string               `json:"level"`
 	FieldDecisions        []setIDFieldDecision `json:"field_decisions"`
 }
@@ -47,7 +55,7 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	fieldKey := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("field_key")))
 	businessUnitID := strings.TrimSpace(r.URL.Query().Get("business_unit_id"))
 	asOf := strings.TrimSpace(r.URL.Query().Get("as_of"))
-	requestID := strings.TrimSpace(r.URL.Query().Get("request_id"))
+	requestID := normalizeSetIDExplainRequestID(r)
 	if capabilityKey == "" || fieldKey == "" || businessUnitID == "" || asOf == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "capability_key/field_key/business_unit_id/as_of required")
 		return
@@ -58,6 +66,24 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 	}
 	if _, err := parseOrgID8(businessUnitID); err != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_business_unit_id", "invalid business_unit_id")
+		return
+	}
+	capCtx, capErr := resolveCapabilityContext(r.Context(), r, capabilityContextInput{
+		CapabilityKey:       capabilityKey,
+		BusinessUnitID:      businessUnitID,
+		AsOf:                asOf,
+		RequireBusinessUnit: true,
+	})
+	if capErr != nil {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, statusCodeForCapabilityContextError(capErr.Code), capErr.Code, capErr.Message)
+		return
+	}
+	capabilityKey = capCtx.CapabilityKey
+	businessUnitID = capCtx.BusinessUnitID
+	asOf = capCtx.AsOf
+	functionalAreaKey, areaReasonCode, areaAllowed := evaluateFunctionalAreaGate(tenant.ID, capabilityKey)
+	if !areaAllowed {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, areaReasonCode, functionalAreaErrorMessage(areaReasonCode))
 		return
 	}
 
@@ -82,16 +108,21 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_org_unit_id", "invalid org_unit_id")
 		return
 	}
+	dynamicRelations := preloadCapabilityDynamicRelations(r.Context(), businessUnitID)
+	if !dynamicRelations.actorManages(orgUnitID, asOf) {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
+		return
+	}
 
 	resolvedSetID, err := store.ResolveSetID(r.Context(), tenant.ID, orgUnitID, asOf)
 	if err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, scopeReasonOwnerContextForbidden, "business unit context forbidden")
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
 	}
 	targetSetID := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("setid")))
 	resolvedSetID = strings.ToUpper(strings.TrimSpace(resolvedSetID))
 	if targetSetID != "" && targetSetID != resolvedSetID {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, scopeReasonOwnerContextForbidden, "business unit context forbidden")
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, capabilityReasonContextMismatch, "capability context mismatch")
 		return
 	}
 
@@ -101,38 +132,41 @@ func handleSetIDExplainAPI(w http.ResponseWriter, r *http.Request, store SetIDGo
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, code)
 		return
 	}
+	fieldDecision, responseDecision, responseReasonCode := applySetIDFieldVisibility(fieldDecision)
+	fieldDecision.Decision = responseDecision
+	fieldDecision.ReasonCode = responseReasonCode
 
-	fieldDecision.Decision = "allow"
-	if fieldDecision.Required {
-		fieldDecision.ReasonCode = fieldRequiredInContextCode
+	traceID := traceIDFromRequestHeader(r)
+	if traceID == "" {
+		traceID = fallbackSetIDExplainTraceID(requestID, capabilityKey, businessUnitID, asOf)
 	}
-	responseDecision := "allow"
-	responseReasonCode := ""
-	if !fieldDecision.Visible {
-		fieldDecision.Decision = "deny"
-		fieldDecision.ReasonCode = fieldHiddenInContextCode
-		responseDecision = "deny"
-		responseReasonCode = fieldHiddenInContextCode
-	}
+	policyVersion := defaultPolicyActivationRuntime.activePolicyVersion(tenant.ID, capabilityKey)
 
 	response := setIDExplainResponse{
-		TraceID:        traceIDFromRequestHeader(r),
-		RequestID:      requestID,
-		CapabilityKey:  capabilityKey,
-		TenantID:       tenant.ID,
-		BusinessUnitID: businessUnitID,
-		AsOf:           asOf,
-		OrgUnitID:      orgUnitID,
-		ResolvedSetID:  resolvedSetID,
-		Decision:       responseDecision,
-		ReasonCode:     responseReasonCode,
-		Level:          level,
-		FieldDecisions: []setIDFieldDecision{fieldDecision},
+		TraceID:               traceID,
+		RequestID:             requestID,
+		CapabilityKey:         capabilityKey,
+		SetID:                 resolvedSetID,
+		FunctionalAreaKey:     functionalAreaKey,
+		PolicyVersion:         policyVersion,
+		TenantID:              tenant.ID,
+		BusinessUnitID:        businessUnitID,
+		AsOf:                  asOf,
+		OrgUnitID:             orgUnitID,
+		ResolvedSetID:         resolvedSetID,
+		ResolvedConfigVersion: policyVersion,
+		Decision:              responseDecision,
+		ReasonCode:            responseReasonCode,
+		Level:                 level,
+		FieldDecisions:        []setIDFieldDecision{fieldDecision},
 	}
 	if level == explainLevelBrief {
 		response.TenantID = ""
 		response.OrgUnitID = ""
+		response.ResolvedConfigVersion = ""
 	}
+	logSetIDExplainAudit(response)
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(response)
 }
@@ -174,4 +208,108 @@ func traceIDFromRequestHeader(r *http.Request) string {
 		}
 	}
 	return traceID
+}
+
+func normalizeSetIDExplainRequestID(r *http.Request) string {
+	requestID := strings.TrimSpace(r.URL.Query().Get("request_id"))
+	if requestID == "" {
+		requestID = strings.TrimSpace(r.Header.Get("X-Request-Id"))
+	}
+	if requestID == "" {
+		requestID = strings.TrimSpace(r.Header.Get("x-request-id"))
+	}
+	if requestID != "" {
+		return requestID
+	}
+	if traceID := traceIDFromRequestHeader(r); traceID != "" {
+		return "trace-" + traceID
+	}
+	return "setid-explain-auto"
+}
+
+func fallbackSetIDExplainTraceID(requestID string, capabilityKey string, businessUnitID string, asOf string) string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		strings.TrimSpace(requestID),
+		strings.ToLower(strings.TrimSpace(capabilityKey)),
+		strings.TrimSpace(businessUnitID),
+		strings.TrimSpace(asOf),
+	}, "|")))
+	return hex.EncodeToString(sum[:16])
+}
+
+func logSetIDExplainAudit(response setIDExplainResponse) {
+	log.Printf(
+		"setid_explain decision=%s reason_code=%s capability_key=%s setid=%s policy_version=%s functional_area_key=%s level=%s field_decisions=%s",
+		response.Decision,
+		response.ReasonCode,
+		response.CapabilityKey,
+		response.SetID,
+		response.PolicyVersion,
+		response.FunctionalAreaKey,
+		response.Level,
+		briefSetIDFieldDecisions(response.FieldDecisions),
+	)
+}
+
+func applySetIDFieldVisibility(fieldDecision setIDFieldDecision) (setIDFieldDecision, string, string) {
+	responseDecision := internalRuleDecisionAllow
+	responseReasonCode := fieldVisibleInContextCode
+	fieldDecision.Visibility = fieldVisibilityVisible
+	fieldDecision.MaskStrategy = ""
+	fieldDecision.MaskedDefaultVal = ""
+	if fieldDecision.Required {
+		responseReasonCode = fieldRequiredInContextCode
+	}
+
+	if !fieldDecision.Visible {
+		responseDecision = internalRuleDecisionDeny
+		responseReasonCode = fieldHiddenInContextCode
+		fieldDecision.Visibility = fieldVisibilityHidden
+		fieldDecision.MaskStrategy = fieldMaskStrategyRedact
+		fieldDecision.MaskedDefaultVal = fieldMaskedDefaultValueFallback
+		fieldDecision.ResolvedDefaultVal = ""
+	}
+
+	if maskStrategy, masked := setIDMaskStrategyForDecision(fieldDecision); masked {
+		fieldDecision.Visibility = fieldVisibilityMasked
+		fieldDecision.MaskStrategy = maskStrategy
+		fieldDecision.MaskedDefaultVal = fieldMaskedDefaultValueFallback
+		fieldDecision.ResolvedDefaultVal = ""
+		responseReasonCode = fieldMaskedInContextCode
+	}
+
+	fieldDecision.Decision = responseDecision
+	fieldDecision.ReasonCode = responseReasonCode
+	return fieldDecision, responseDecision, responseReasonCode
+}
+
+func setIDMaskStrategyForDecision(fieldDecision setIDFieldDecision) (string, bool) {
+	if !fieldDecision.Visible {
+		return "", false
+	}
+	defaultRuleRef := strings.ToLower(strings.TrimSpace(fieldDecision.DefaultRuleRef))
+	if !strings.HasPrefix(defaultRuleRef, "mask://") {
+		return "", false
+	}
+	maskStrategy := strings.TrimSpace(strings.TrimPrefix(defaultRuleRef, "mask://"))
+	if maskStrategy == "" {
+		maskStrategy = fieldMaskStrategyRedact
+	}
+	return maskStrategy, true
+}
+
+func briefSetIDFieldDecisions(fieldDecisions []setIDFieldDecision) string {
+	if len(fieldDecisions) == 0 {
+		return "-"
+	}
+	brief := make([]string, 0, len(fieldDecisions))
+	for _, item := range fieldDecisions {
+		brief = append(brief, strings.Join([]string{
+			strings.TrimSpace(item.FieldKey),
+			strings.TrimSpace(item.Decision),
+			strings.TrimSpace(item.ReasonCode),
+			strings.TrimSpace(item.Visibility),
+		}, ":"))
+	}
+	return strings.Join(brief, ",")
 }

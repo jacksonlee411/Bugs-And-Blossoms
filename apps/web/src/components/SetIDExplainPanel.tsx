@@ -379,8 +379,11 @@ export function SetIDExplainPanel({
                     <th align='left'>field_key</th>
                     <th align='left'>required</th>
                     <th align='left'>visible</th>
+                    <th align='left'>visibility</th>
+                    <th align='left'>mask_strategy</th>
                     <th align='left'>default_rule_ref</th>
                     <th align='left'>resolved_default_value</th>
+                    <th align='left'>masked_default_value</th>
                     <th align='left'>decision</th>
                     <th align='left'>reason_code</th>
                   </tr>
@@ -391,15 +394,18 @@ export function SetIDExplainPanel({
                       <td>{decision.field_key}</td>
                       <td>{decision.required ? 'true' : 'false'}</td>
                       <td>{decision.visible ? 'true' : 'false'}</td>
+                      <td>{decision.visibility || '-'}</td>
+                      <td>{decision.mask_strategy || '-'}</td>
                       <td>{decision.default_rule_ref || '-'}</td>
                       <td>{decision.resolved_default_value || '-'}</td>
+                      <td>{decision.masked_default_value || '-'}</td>
                       <td>{decision.decision}</td>
                       <td>{decision.reason_code || '-'}</td>
                     </tr>
                   ))}
                   {result.field_decisions.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ padding: 16, textAlign: 'center' }}>
+                      <td colSpan={10} style={{ padding: 16, textAlign: 'center' }}>
                         无字段判定结果
                       </td>
                     </tr>

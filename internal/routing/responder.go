@@ -128,6 +128,8 @@ func knownErrorMessage(code string) string {
 		return "租户上下文缺失，请刷新后重试。"
 	case "tenant_resolve_error":
 		return "租户解析失败，请稍后重试。"
+	case "CAPABILITY_CONTEXT_MISMATCH":
+		return "上下文与服务端判定不一致，请检查业务单元与生效日期后重试。"
 	case "ORG_ROOT_ALREADY_EXISTS":
 		return "根组织已存在，请改为选择上级组织后新建。"
 	case "ORG_TREE_NOT_INITIALIZED":
@@ -140,6 +142,20 @@ func knownErrorMessage(code string) string {
 		return "组织编码不存在。"
 	case "ORG_CODE_INVALID":
 		return "组织编码格式无效。"
+	case "FIELD_OPTION_NOT_ALLOWED":
+		return "字段值不在允许范围内，请重新选择。"
+	case "FIELD_REQUIRED_VALUE_MISSING":
+		return "必填字段缺少有效值，请补全后重试。"
+	case "FIELD_POLICY_MISSING":
+		return "未找到匹配的字段策略，请刷新后重试。"
+	case "FIELD_POLICY_CONFLICT":
+		return "字段策略存在冲突，请联系管理员。"
+	case "FIELD_POLICY_DISABLE_NOT_ALLOWED":
+		return "停用该策略会导致当前上下文无可用策略，请先补齐兜底策略后再重试。"
+	case "FIELD_POLICY_VERSION_REQUIRED":
+		return "缺少策略版本，请刷新页面后重试。"
+	case "FIELD_POLICY_VERSION_STALE":
+		return "策略版本已过期，请刷新页面后重试。"
 	default:
 		return ""
 	}

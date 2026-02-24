@@ -122,6 +122,10 @@ func withAuthz(classifier *routing.Classifier, a authorizer, next http.Handler) 
 }
 
 func authzRequirementForRoute(method string, path string) (object string, action string, ok bool) {
+	if object, action, ok := capabilityAuthzRequirementForRoute(method, path); ok {
+		return object, action, true
+	}
+
 	switch path {
 	case "/iam/api/sessions":
 		if method == http.MethodPost {
@@ -232,19 +236,6 @@ func authzRequirementForRoute(method string, path string) (object string, action
 		}
 		if method == http.MethodPost {
 			return authz.ObjectOrgUnitSetID, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/org/api/setid-strategy-registry":
-		if method == http.MethodGet {
-			return authz.ObjectOrgSetIDCapability, authz.ActionRead, true
-		}
-		if method == http.MethodPost {
-			return authz.ObjectOrgSetIDCapability, authz.ActionAdmin, true
-		}
-		return "", "", false
-	case "/org/api/setid-explain":
-		if method == http.MethodGet {
-			return authz.ObjectOrgSetIDCapability, authz.ActionRead, true
 		}
 		return "", "", false
 	case "/org/api/org-units":

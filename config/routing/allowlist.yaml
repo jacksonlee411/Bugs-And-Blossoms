@@ -92,29 +92,38 @@ entrypoints:
       - path: /org/api/setid-bindings
         methods: [GET, POST]
         route_class: internal_api
-      - path: /org/api/scope-packages
-        methods: [GET, POST]
-        route_class: internal_api
-      - path: /org/api/owned-scope-packages
-        methods: [GET]
-        route_class: internal_api
-      - path: /org/api/scope-packages/{package_id}/disable
-        methods: [POST]
-        route_class: internal_api
-      - path: /org/api/scope-subscriptions
-        methods: [GET, POST]
-        route_class: internal_api
       - path: /org/api/global-setids
-        methods: [GET, POST]
-        route_class: internal_api
-      - path: /org/api/global-scope-packages
         methods: [GET, POST]
         route_class: internal_api
       - path: /org/api/setid-strategy-registry
         methods: [GET, POST]
         route_class: internal_api
+      - path: /org/api/setid-strategy-registry:disable
+        methods: [POST]
+        route_class: internal_api
       - path: /org/api/setid-explain
         methods: [GET]
+        route_class: internal_api
+      - path: /internal/rules/evaluate
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/policies/state
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/policies/draft
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/policies/activate
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/policies/rollback
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/functional-areas/state
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/functional-areas/switch
+        methods: [POST]
         route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]
@@ -147,6 +156,9 @@ entrypoints:
         methods: [GET]
         route_class: internal_api
       - path: /org/api/org-units/append-capabilities
+        methods: [GET]
+        route_class: internal_api
+      - path: /org/api/org-units/create-field-decisions
         methods: [GET]
         route_class: internal_api
       - path: /org/api/org-units/details

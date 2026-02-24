@@ -1668,3 +1668,38 @@ func TestJobCatalogPGStore_Errors(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestStampJobProfileSetID(t *testing.T) {
+	ctx := context.Background()
+
+	if err := stampJobProfileSetID(ctx, &stubTx{}, "t1", "pkg-1", "profile-1", " "); err == nil {
+		t.Fatal("expected setid required error")
+	}
+
+	for _, tc := range []struct {
+		name      string
+		execErrAt int
+	}{
+		{name: "profiles update fails", execErrAt: 1},
+		{name: "events update fails", execErrAt: 2},
+		{name: "versions update fails", execErrAt: 3},
+		{name: "version family update fails", execErrAt: 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tx := &stubTx{execErr: errors.New("exec"), execErrAt: tc.execErrAt}
+			if err := stampJobProfileSetID(ctx, tx, "t1", "pkg-1", "profile-1", "s2601"); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+
+	t.Run("success", func(t *testing.T) {
+		tx := &stubTx{}
+		if err := stampJobProfileSetID(ctx, tx, "t1", "pkg-1", "profile-1", "s2601"); err != nil {
+			t.Fatalf("err=%v", err)
+		}
+		if tx.execN != 4 {
+			t.Fatalf("execN=%d", tx.execN)
+		}
+	})
+}
