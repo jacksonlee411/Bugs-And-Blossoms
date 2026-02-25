@@ -46,7 +46,7 @@
 ### 3.1 架构图 (Mermaid)
 ```mermaid
 graph TD
-    A[OrgUnit UI: /org/nodes] --> B[OrgUnit Handler/UI Adapter]
+    A[OrgUnit UI: /org/units] --> B[OrgUnit Handler/UI Adapter]
     B --> C[OrgUnit Service]
     C --> D[DB Kernel submit_*_event]
     D --> E[(orgunit.org_events)]
@@ -162,18 +162,16 @@ CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx
 - `target_event_uuid` / `target_effective_date`：仅 CORRECT/RESCIND 事件必显（来自 payload）。
 
 ### 5.1 UI：变更日志列表（建议新增或改造现有 partial）
-- **Route**: `GET /org/nodes/change-log?org_id={id}&cursor={cursor}&limit={n}`
+- **Route**: `GET /org/api/org-units/audit?org_code={code}&limit={n}`
 - **行为**:
   - 默认 `limit=20`，`tx_time DESC, id DESC` 排序。
-  - 返回左栏列表 HTML 片段（包含选中态）。
+  - 返回 JSON events 列表，由前端渲染左栏选中态。
 - **Query Params**:
-  - `org_id`（required, int）：目标组织。
-  - `cursor`（optional, string）：游标（建议为 `(tx_time,id)` 的编码串）。
+  - `org_code`（required, string）：目标组织编码。
   - `limit`（optional, int）：默认 20，最大 100。
 - **排序与分页口径（强制）**:
   - `ORDER BY tx_time DESC, id DESC`。
-  - 下一页游标取“本页最后一条”的 `(tx_time,id)`。
-  - “加载更多”必须可加载到末尾；不得做固定条数截断。
+  - 分页扩展（如需）应通过扩展 API 契约实现，当前最小口径先覆盖 limit 读取。
 - **列表项最小字段**:
   - `event_uuid`
   - `tx_time`（展示为 UTC+08:00）
@@ -184,9 +182,9 @@ CREATE INDEX IF NOT EXISTS org_events_tenant_tx_time_idx
 > 注意：变更日志列表需要包含 CORRECT/RESCIND 事件本身；不得仅查询 `org_events_effective`。
 
 ### 5.2 UI：变更日志详情
-- **Route**: `GET /org/nodes/change-log/{event_uuid}`
+- **Route**: 无独立详情路由；复用 `GET /org/api/org-units/audit` 的返回结果，在前端按 `event_uuid` 选择详情项
 - **行为**:
-  - 返回右栏详情 HTML 片段。
+  - 右栏详情由前端根据选中事件渲染。
   - 摘要区必显：`event_type/effective_date/tx_time/request_code/event_uuid/initiator_uuid/initiator_name/initiator_employee_id/tenant_uuid/org_id/reason`。
   - CORRECT/RESCIND 额外显示：`target_event_uuid/target_effective_date`。
   - 包含三段：摘要 + 变更表格（仅变化项）+ 原始数据（完整 JSON，默认折叠）。

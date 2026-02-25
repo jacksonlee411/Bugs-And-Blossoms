@@ -160,5 +160,5 @@
 - `docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
 - `docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - `docs/dev-plans/002-ui-design-guidelines.md`
-- `docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
+- `docs/archive/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 - `AGENTS.md`
