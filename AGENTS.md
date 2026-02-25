@@ -302,7 +302,8 @@ modules/{module}/
 - DEV-PLAN-163A：SetID Governance 其余三页签字段下拉化收敛方案：`docs/dev-plans/163a-setid-governance-other-tabs-dropdown-convergence.md`
 - DEV-PLAN-162：OrgUnit 新增版本后组织类型回退为“单位”问题调查：`docs/dev-plans/162-orgunit-add-version-dict-ext-not-applied-investigation.md`
 - DEV-PLAN-170：Org 详情页 UI 外观对齐 Capability Key（仅页面壳层改造；弹窗不改）：`docs/dev-plans/170-org-form-ui-shell-alignment-with-capability-key.md`
-- DEV-PLAN-170A：Org 变更日志页 UI 外观对齐 Capability Key（仅页面壳层改造）：`docs/dev-plans/170a-org-audit-log-ui-shell-alignment-with-capability-key.md`
+- DEV-PLAN-170A：Org 变更日志页 UI 外观对齐 Capability Key（仅页面壳层改造；其“顶部上下文定位实现”后续由 170B 纠偏）：`docs/dev-plans/170a-org-audit-log-ui-shell-alignment-with-capability-key.md`
+- DEV-PLAN-170B：Org 详情页移除顶部上下文区与 URL 恢复定位替代方案（170A 纠偏计划）：`docs/dev-plans/170b-org-details-remove-top-context-and-url-restore-positioning.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
