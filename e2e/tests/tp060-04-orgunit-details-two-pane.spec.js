@@ -145,17 +145,18 @@ test("tp060-04: orgunit details two-pane profile/audit URL restore", async ({ br
   await expect(page).toHaveURL(
     new RegExp(`/app/org/units/${orgCode}\\?(?=.*tab=audit)(?=.*audit_event_uuid=${targetAuditEvent.event_uuid}).*$`)
   );
-  const contextSummary = page.locator('[data-testid="org-context-summary"]');
-  await expect(contextSummary).toContainText(targetAuditEvent.event_uuid);
-  await expect(page.getByText(new RegExp(`^(Event UUID|事件 UUID)：${targetAuditEvent.event_uuid}$`))).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-testid="org-context-summary"]')).toHaveCount(0);
+  await expect(targetAuditItem).toHaveClass(/Mui-selected/);
+  await expect(page.locator('[data-testid="org-audit-selected-event"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-testid="org-audit-selected-event-uuid"]')).toHaveText(targetAuditEvent.event_uuid);
 
   await page.reload();
   await expect(page).toHaveURL(
     new RegExp(`/app/org/units/${orgCode}\\?(?=.*tab=audit)(?=.*audit_event_uuid=${targetAuditEvent.event_uuid}).*$`)
   );
   await expect(targetAuditItem).toHaveClass(/Mui-selected/);
-  await expect(contextSummary).toContainText(targetAuditEvent.event_uuid);
-  await expect(page.getByText(new RegExp(`^(Event UUID|事件 UUID)：${targetAuditEvent.event_uuid}$`))).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-testid="org-audit-selected-event"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-testid="org-audit-selected-event-uuid"]')).toHaveText(targetAuditEvent.event_uuid);
 
   await appContext.close();
 });

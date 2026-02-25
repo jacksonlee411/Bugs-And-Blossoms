@@ -316,7 +316,8 @@ BEGIN
     v_org_id,
     p_effective_date,
     p_event_type,
-    v_payload
+    v_payload,
+    v_event_db_id
   );
 
   PERFORM orgunit.assert_org_unit_validity(p_tenant_uuid, v_org_ids);

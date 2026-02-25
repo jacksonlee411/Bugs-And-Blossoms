@@ -178,5 +178,5 @@
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
 - `docs/dev-plans/002-ui-design-guidelines.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
-- `docs/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
+- `docs/archive/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
 - `AGENTS.md`

@@ -5,7 +5,7 @@
 ## 1. 背景与上下文 (Context)
 
 当前仓库的 HR 相关能力在结构上呈现“UI/Schema 集中、人员单独拆出”的形态：
-- `modules/org` 同时承载：组织架构（OrgUnit）、职位（Position）、职位分类（Job Catalog）、任职记录（Assignment/Job Data），并在同一个 UI controller 下注册路由（`/org/nodes`、`/org/positions`、`/org/job-catalog`、`/org/assignments`）。
+- `modules/org` 同时承载：组织架构（OrgUnit）、职位（Position）、职位分类（Job Catalog）、任职记录（Assignment/Job Data），并在同一个 UI controller 下注册路由（`/org/units`、`/org/positions`、`/org/job-catalog`、`/org/assignments`）。
 - `modules/person` 承载：人员管理（Person），但 UI 会链接/嵌入任职页面（跨模块 UI 组合）。
 - 持久化层存在跨域耦合点：Org 的 repo 会直接查询 `persons` 表做 pernr→person_uuid 解析。
 
@@ -67,7 +67,7 @@
 
 ### 5.1 路由归属（建议保持人机入口稳定）
 - Org 相关 UI：
-  - `orgunit`：`/org/nodes`（组织架构）
+  - `orgunit`：`/org/units`（组织架构）
   - `staffing`：`/org/positions`、`/org/assignments`（职位/任职）
   - `jobcatalog`：`/org/job-catalog`（职位分类）
 - Person UI：

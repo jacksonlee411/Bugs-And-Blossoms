@@ -204,16 +204,19 @@
 - 影响说明：本组原先直接/间接依赖 replay；本次改为增量区间运算实现，且需移除 `ORG_REPLAY_FAILED` 相关返回与前端提示映射。
 
 #### C 组：OrgUnit UI 写入口（高影响，用户可见）
-- `POST /org/nodes`（表单动作：`create`、`rename`、`move`、`change_status`、`add_record`、`insert_record`、`delete_record`、`delete_org`、`set_business_unit`）
+- `GET /org/units`（组织树 + 列表 + 操作入口）
+- `POST /org/api/org-units/write`（`intent=add_version|insert_version|correct`）
+- `POST /org/api/org-units/{rename|move|disable|enable|set-business-unit|rescinds|rescinds/org}`（现行写入入口）
 - 影响说明：入口不变，但所有修正/删除类动作需改走“无 replay”新路径；错误提示文案与前端错误码映射需同步。
 
 #### D 组：OrgUnit 读 API/读页面（低代码改动，高回归优先级）
 - `GET /org/api/org-units`
-- `GET /org/nodes`
-- `GET /org/nodes/children`
-- `GET /org/nodes/details`
-- `GET /org/nodes/view`
-- `GET /org/nodes/search`
+- `GET /org/units`
+- `GET /org/units/:org_code`
+- `GET /org/api/org-units/details`
+- `GET /org/api/org-units/versions`
+- `GET /org/api/org-units/search`
+- `GET /org/api/org-units/audit`
 - 影响说明：通常不改接口实现，但必须验证“写后即读”一致性，避免出现版本链断裂或状态回显错误。
 
 #### E 组：跨模块依赖 API（联调回归）

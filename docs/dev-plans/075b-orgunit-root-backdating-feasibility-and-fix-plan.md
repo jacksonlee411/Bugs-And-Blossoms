@@ -3,7 +3,7 @@
 **状态**: 已完成（2026-02-06 12:21 UTC）
 
 ## 1. 背景
-- 需求问题：调查是否可以在页面 `http://localhost:8080/org/nodes?tree_as_of=2026-02-06` 将 **Root Unit A** 的生效日期修改为 `2026-01-01`。
+- 需求问题：调查是否可以在页面 `http://localhost:8080/org/units?as_of=2026-02-06` 将 **Root Unit A** 的生效日期修改为 `2026-01-01`。
 - 关联上下文：`DEV-PLAN-075` 已明确目标口径为“支持受控回溯（区间内前后调整）”。
 
 ## 2. 调查范围与方法
@@ -64,7 +64,7 @@
   - `go test ./internal/server -run "TestHandleOrgNodes_RecordActions/insert_record_backdate_earliest_uses_correction" -count=1`
   - 补充 DB 层集成验证：构造“最早记录向前回溯”的 correction SQL，用例验证通过。
 - 页面回归（目标场景）：
-  1. 打开 `/org/nodes?tree_as_of=2026-02-06`。
+  1. 打开 `/org/units?as_of=2026-02-06`。
   2. 选中 Root Unit A。
   3. 在详情编辑里将生效日期改为 `2026-01-01` 并保存。
   4. 期望：成功并回显新版本；若越界/冲突，返回清晰错误码与文案。

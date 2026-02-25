@@ -251,8 +251,8 @@
 - `docs/dev-plans/032-effective-date-day-granularity.md`
 
 **数据准备**
-- 按 060-DS1 建立 OrgUnit 树（`/org/nodes?tree_as_of=2026-01-01`）。
-- 建立 SetID + 业务单元标记 + 组织绑定（`/org/setid` + `/org/nodes`）。
+- 按 060-DS1 建立 OrgUnit 树（`/org/units?as_of=2026-01-01`）。
+- 建立 SetID + 业务单元标记 + 组织绑定（`/org/setid` + `/org/units`）。
 - 建立 JobCatalog（`/org/job-catalog?as_of=2026-01-01&setid=S2601`）。
 - 建立 10 个职位（`/org/positions?as_of=2026-01-01&org_unit_id=<R&D>`；Job Profile 必选，列表由 org_unit 解析 setid 提供）。
 

@@ -4,7 +4,7 @@
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
-  - 现有 `/org/nodes` 详情区可读不可改，Nodes 列表仅根节点可见。
+  - 现有 `/org/units` 组织树/列表可浏览，但版本与编辑操作入口仍需进一步收敛。
   - 参考：`docs/dev-plans/073-orgunit-crud-implementation-status.md`（路由与详情片段契约）、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`（UI 单链路）、`docs/dev-plans/032-effective-date-day-granularity.md`（日粒度有效期）。
   - 设计对齐基准：`designs/orgunit/orgunit-details-ui.pen`。
 - **当前痛点**:
@@ -33,9 +33,9 @@
 
 - **触发器清单**:
   - [x] Go 代码（UI handler/片段渲染/校验逻辑）
-  - [x] `.templ` / Tailwind / Astro UI（视实现触发）
+  - [x] `.templ` / MUI Web UI / presentation assets（视实现触发）
   - [ ] Authz（复用现有策略；若新增需按 DEV-PLAN-022 补齐）
-  - [ ] 路由治理（复用现有 `/org/nodes/*`；若新增需 `make check routing`）
+  - [ ] 路由治理（复用现有 `/org/units` + `/org/api/org-units*`；若新增需 `make check routing`）
   - [ ] DB 迁移 / Schema（不涉及）
   - [ ] sqlc（不涉及）
   - [ ] Outbox（不涉及）
@@ -53,13 +53,13 @@
 ### 3.1 架构图 (Mermaid)
 ```mermaid
 graph TD
-  U[User Browser] --> P[GET /org/nodes?tree_as_of=...]
+  U[User Browser] --> P[GET /org/units?as_of=...]
   P --> N[Nodes Panel (Tree)]
   P --> D[Details Panel]
-  N --> C[GET /org/nodes/children]
-  D --> S[GET /org/nodes/search]
-  D --> T[GET /org/nodes/details]
-  D --> W[POST /org/nodes (write actions)]
+  N --> C[GET /org/api/org-units?parent_org_code=...]
+  D --> S[GET /org/api/org-units/search]
+  D --> T[GET /org/api/org-units/details]
+  D --> W[POST /org/api/org-units/write]
 ```
 
 ### 3.2 关键设计决策
@@ -105,8 +105,8 @@ graph TD
 - 组织长名称与组织ID链展示格式参考“组织架构快照”。
 
 ### 4.1 关键不变量（落地必须满足）
-- **单链路读取**：`/org/nodes` 仅走 current 读路径；不得引入 legacy/回退通道（对齐 DEV-PLAN-004M1/026）。
-- **写入口唯一**：所有写入必须走 `/org/nodes` 的既定 action 并由 DB Kernel `submit_*_event(...)` 承担（对齐 DEV-PLAN-026）。
+- **单链路读取**：`/org/units` 页面仅走现行 `/org/api/org-units*` 读路径；不得引入 legacy/回退通道（对齐 DEV-PLAN-004M1/026）。
+- **写入口唯一**：新增/插入/更正等版本写入统一走 `/org/api/org-units/write`，并由 DB Kernel `submit_*_event(...)` 承担（对齐 DEV-PLAN-026）。
 - **租户隔离 fail-closed**：缺失租户上下文或鉴权失败必须拒绝，不得放行（对齐 DEV-PLAN-021/022）。
 - **有效期日粒度**：仅使用 date 语义，UI 不展示结束日期与 9999-12-31（对齐 DEV-PLAN-032）。
 
@@ -114,49 +114,44 @@ graph TD
 > 现有路由与字段口径以 DEV-PLAN-073 为准；本计划在 UI 层新增/扩展交互时必须同步修订对应契约文档。
 
 ### 5.1 页面与树
-- **GET `/org/nodes?tree_as_of=YYYY-MM-DD`**
+- **GET `/org/units?as_of=YYYY-MM-DD`**
   - 渲染页面壳 + 初始根节点（或顶层节点）。
-- **GET `/org/nodes/children?parent_id=...&tree_as_of=YYYY-MM-DD`**
-  - 返回 HTML fragment（`sl-tree-item` 列表）。
-  - `sl-tree-item` 必须包含 `data-org-id`/`data-org-code`/`data-has-children`。
+- **GET `/org/api/org-units?as_of=YYYY-MM-DD&parent_org_code=...`**
+  - 返回树节点数据（JSON；最小字段：`org_code`/`name`/`has_children`）。
 
 ### 5.2 详情面板
-- **GET `/org/nodes/details?org_id=...&effective_date=YYYY-MM-DD`**
-  - 返回详情面板 HTML fragment（容器建议为 `#org-node-details`）。
+- **GET `/org/api/org-units/details?org_code=...&as_of=YYYY-MM-DD`**
+  - 返回详情 JSON（由 MUI 页面渲染详情区）。
   - 面板内容需包含：查找组织、版本选择器、Tab（基本信息/修改记录）、编辑表单与状态提示。
-  - **版本选择器最小数据**（建议内嵌在 fragment 中，避免额外 API）：
-    - 当前版本序号与总数（例如 `3/12`）。
-    - 版本列表（至少包含 `record_id`/`effective_date`/`label`）。
-    - 当前版本标记（用于下拉与上一条/下一条）。
+  - 版本列表由 `GET /org/api/org-units/versions?org_code=...` 提供（至少包含 `effective_date`/`event_type`）。
 
 ### 5.3 查找组织（多匹配）
 - **现有路径定位（保持兼容）**：
-  - `GET /org/nodes/search?query=...&tree_as_of=YYYY-MM-DD` 返回 JSON（含 `target_org_id` 与 `path_org_ids`）。
+  - `GET /org/api/org-units/search?query=...&as_of=YYYY-MM-DD` 返回 JSON（含 `target_org_code`、`path_org_codes`）。
 - **多匹配下拉列表（确定方案）**：
-  - 使用同一路由：`GET /org/nodes/search?query=...&tree_as_of=...&format=panel`。
-  - `format=panel` 返回 HTML 列表项（至少包含 `data-org-id`、`data-org-code`、`name`）。
-  - 点击列表项后触发 `/org/nodes/details` 回填详情与版本选择器。
-  - 该参数与返回格式需同步写入 DEV-PLAN-073 契约。
+  - 候选列表由前端基于 JSON 结果渲染，不依赖 HTML fragment 接口。
+  - 点击列表项后触发详情查询回填（`/org/api/org-units/details` + `/org/api/org-units/versions`）。
+  - 若后续需要 `format=panel`，需在 DEV-PLAN-073 先补契约再落地。
 
-### 5.4 写入操作（复用 `/org/nodes`）
-- **POST `/org/nodes?tree_as_of=YYYY-MM-DD`**
-  - 沿用现有 action/字段命名（SSOT：DEV-PLAN-073、DEV-PLAN-026a/026b）。
+### 5.4 写入操作（复用 internal API）
+- **POST `/org/api/org-units/write`**
+  - 沿用现有 `intent`/字段命名（SSOT：DEV-PLAN-073、DEV-PLAN-026a/026b）。
   - 本计划新增 UI 行为：新增记录 / 插入记录 / 删除记录（错误数据） / 删除组织（错误建档）。
-  - **action（确定命名）**：
-    - `action=add_record`：新增记录（追加为最新版本，`effective_date` 必填）。
-    - `action=insert_record`：插入记录（可在序列中间插入，`effective_date` 必填）。
-    - `action=delete_record`：删除记录（需指定 `effective_date`，语义为物理删除错误事件，非停用）。
-    - `action=delete_org`：删除组织（删除该组织全部历史事件；V1 仅无子组织且非根组织可删）。
+  - **intent（确定命名）**：
+    - `intent=add_version`：新增记录（追加为最新版本，`effective_date` 必填）。
+    - `intent=insert_version`：插入记录（可在序列中间插入，`effective_date` 必填）。
+    - `intent=correct`：更正记录（含生效日更正与字段更正）。
+  - 删除组织/停用沿用现有操作 API（如 `/org/api/org-units/disable`、`/org/api/org-units/rescinds/org`），不得新增第二写入口。
   - **冲突规则（UI 需按错误码回显）**：
     - 同一 `effective_date` 已存在：`409 Conflict`。
     - 删除最后一条记录：`409 Conflict`（禁止通过 `delete_record` 清空，需改用 `delete_org`）。
     - 删除组织受限（根组织/存在子组织）：`409 Conflict`。
     - 删除后重放失败：`409/422` 并整体回滚。
     - 无权限：`403 Forbidden`（按钮禁用且回显原因）。
-  - 上述 action/参数需同步写入 DEV-PLAN-073 契约后再实现 UI。
+  - 上述 `intent`/参数需同步写入 DEV-PLAN-073 契约后再实现 UI。
 
 ### 5.5 错误与回显规则（最小集合）
-- `400 Bad Request`：`as_of`/`org_id`/`query` 非法或缺失 → 顶部错误提示并阻止提交。
+- `400 Bad Request`：`as_of`/`org_code`/`query` 非法或缺失 → 顶部错误提示并阻止提交。
 - `403 Forbidden`：无权限 → 操作按钮禁用 + 原因提示。
 - `404 Not Found`：目标组织或记录不存在 → “未找到匹配组织/记录”提示。
 - `409 Conflict`：有效期冲突/删除受限（最后一条记录、根组织、有子组织） → 表单内联错误提示。
@@ -190,8 +185,8 @@ graph TD
 | 多条生效记录 | Records Version Selector | 显示版本选择器 |
 
 ## 7. 安全与鉴权 (Security & Authz)
-- 读权限：`GET /org/nodes`、`/org/nodes/children`、`/org/nodes/details`、`/org/nodes/search` 按 read 权限控制。
-- 写权限：`POST /org/nodes` 为 admin 权限；无权限时编辑与记录操作按钮禁用并提示原因。
+- 读权限：`GET /org/units`、`GET /org/api/org-units*` 按 read 权限控制。
+- 写权限：`POST /org/api/org-units*` 为 admin 权限；无权限时编辑与记录操作按钮禁用并提示原因。
 - 不新增新的 subject/domain/object/action 命名；沿用现有 Authz 约定。
 
 ## 8. 依赖与里程碑 (Dependencies & Milestones)

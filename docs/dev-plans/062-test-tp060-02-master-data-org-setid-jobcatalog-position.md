@@ -19,7 +19,7 @@
 
 ### 2.1 目标（Done 定义）
 
-- [X] **OrgUnit**：可在 `/org/nodes` 完成 Root + 5 个一级部门创建，刷新后列表可见；并记录每个 `org_code`。
+- [X] **OrgUnit**：可在 `/org/units` 完成 Root + 5 个一级部门创建，刷新后列表可见；并记录每个 `org_code`。
 - [X] **SetID**：可在 `/org/setid` 完成 SetID 创建与组织绑定；业务单元节点允许绑定 SetID；不存在/disabled 的 `org_code` 必须 fail-closed。
 - [X] **JobCatalog**：在 `/org/job-catalog` 能看到 `SetID: S2601`，并覆盖 groups/families/levels/profiles 的“写入→as_of 读取→UI 可见”闭环，且包含至少 1 个跨日期场景（Job Family reparenting 的前后对比）。
 - [X] **Position（基础）**：在 `/org/positions` 能创建 10 条职位，刷新后列表可见且包含 `position_id`；创建时 OrgUnit 下拉可用（不出现 `(no org units)`）。
@@ -130,15 +130,15 @@
 
 > 说明：本节用于把“测试动作”具体化到 UI 路由与关键表单字段，便于定位 drift。若实现已变更，请优先记录为 `CONTRACT_DRIFT` 并指向对应 SSOT。
 
-### 6.1 OrgUnit：`/org/nodes`（UI）
+### 6.1 OrgUnit：`/org/units`（UI）
 
-- `GET /org/nodes?tree_as_of=YYYY-MM-DD`：展示节点列表与创建表单。
-- `POST /org/nodes?tree_as_of=YYYY-MM-DD`：创建节点（成功后 `303` 跳回 `/org/nodes?tree_as_of=<tree_as_of>`）。
+- `GET /org/units?as_of=YYYY-MM-DD`：展示组织树、列表与创建入口。
+- `POST /org/api/org-units`：创建节点（成功后刷新 `/org/units?as_of=<as_of>` 可见）。
 - 关键字段：
   - `effective_date`（默认：`as_of`；必须是 `YYYY-MM-DD`）
-  - `parent_id`（可空）
+  - `parent_org_code`（可空；根节点为空）
   - `name`（必填；空值应提示 `name is required`）
-- Authz 口径：`GET=read`，`POST=admin`（对齐 `docs/dev-plans/022-authz-casbin-toolchain.md`）。
+- Authz 口径：`GET /org/units`、`GET /org/api/org-units*=read`，`POST /org/api/org-units*=admin`（对齐 `docs/dev-plans/022-authz-casbin-toolchain.md`）。
 
 ### 6.2 SetID：`/org/setid`（UI）
 
@@ -192,9 +192,9 @@
 
 ### 7.1 OrgUnit：创建与可见
 
-1. [ ] 打开：`/org/nodes?tree_as_of=2026-01-01`
+1. [ ] 打开：`/org/units?as_of=2026-01-01`
 2. [ ] 确认 Root（若不存在则创建；若已存在则记录并复用）
-   - 表单：`effective_date=2026-01-01`，`parent_id=`（空），`name=Bugs & Blossoms Co., Ltd.`
+   - 表单：`effective_date=2026-01-01`，`parent_org_code=`（空），`name=Bugs & Blossoms Co., Ltd.`
    - 断言：Root 在列表可见，并能看到其 `org_code`
    - 约束：若列表已存在大量节点且无法确认 Root（例如已有多个候选 Root），记录为 `ENV_DRIFT` 并停止 OrgUnit 步骤
 3. [ ] 确认 5 个 L1 节点（缺失则创建；已有则记录并复用）
@@ -314,7 +314,7 @@
 ## 8. 验收证据（最小）
 
 - OrgUnit：
-  - `/org/nodes?tree_as_of=2026-01-01` 页面证据（Root + 5 节点可见）
+  - `/org/units?as_of=2026-01-01` 页面证据（Root + 5 节点可见）
   - 记录表：`root_org_code` + 5 个 L1 `org_code`
 - SetID：
   - `/org/setid?as_of=2026-01-01` 页面证据（包含 `S2601`，以及绑定：Root→`DEFLT`、`R&D`→`S2601`、`Sales`→`S2602`）
