@@ -298,9 +298,11 @@ modules/{module}/
 - DEV-PLAN-160：Capability Key Phase 10 UI 可视化交付与证据收口（承接 150 M8/M10）：`docs/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
 - DEV-PLAN-161：Org 新建表单动态策略落地（org_code + d_org_type，承接 150）：`docs/dev-plans/161-org-create-dynamic-field-policy-on-capability-registry.md`
 - DEV-PLAN-161A：SetID Capability Registry 可编辑与可维护化（承接 160/161）：`docs/dev-plans/161a-setid-capability-registry-editable-and-maintainable.md`
+- DEV-PLAN-162：OrgUnit 新增版本后组织类型回退为“单位”问题调查：`docs/dev-plans/162-orgunit-add-version-dict-ext-not-applied-investigation.md`
 - DEV-PLAN-163：Capability Key 表单字段下拉化收敛方案（Strategy Registry）：`docs/dev-plans/163-capability-key-form-dropdown-convergence.md`
 - DEV-PLAN-163A：SetID Governance 其余三页签字段下拉化收敛方案：`docs/dev-plans/163a-setid-governance-other-tabs-dropdown-convergence.md`
-- DEV-PLAN-162：OrgUnit 新增版本后组织类型回退为“单位”问题调查：`docs/dev-plans/162-orgunit-add-version-dict-ext-not-applied-investigation.md`
+- DEV-PLAN-164：组织类型策略控制范围与继承缺口分析（OrgType）：`docs/dev-plans/164-org-type-policy-control-gap-analysis.md`
+- DEV-PLAN-165：字段配置页与 Strategy capability_key 的对应关系调查与页面定位重评：`docs/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
 - DEV-PLAN-170：Org 详情页 UI 外观对齐 Capability Key（仅页面壳层改造；弹窗不改）：`docs/dev-plans/170-org-form-ui-shell-alignment-with-capability-key.md`
 - DEV-PLAN-170A：Org 变更日志页 UI 外观对齐 Capability Key（仅页面壳层改造；其“顶部上下文定位实现”后续由 170B 纠偏）：`docs/dev-plans/170a-org-audit-log-ui-shell-alignment-with-capability-key.md`
 - DEV-PLAN-170B：Org 详情页移除顶部上下文区与 URL 恢复定位替代方案（170A 纠偏计划）：`docs/dev-plans/170b-org-details-remove-top-context-and-url-restore-positioning.md`
