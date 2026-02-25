@@ -1328,11 +1328,7 @@ export function OrgUnitDetailsPage() {
               <Paper sx={{ p: 1.5 }} variant='outlined'>
                 {detailQuery.data ? (
                   <>
-                    <Typography variant='subtitle1'>
-                      {t('org_detail_selected_version')}
-                      {' '}
-                      {effectiveDate}
-                    </Typography>
+                    <Typography variant='subtitle1'>{t('org_detail_selected_version')}</Typography>
                     {canWrite ? (
                       <Button
                         onClick={() => {
