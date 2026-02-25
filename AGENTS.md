@@ -196,7 +196,7 @@ modules/{module}/
 - DEV-PLAN-071B【归档】：字段配置/字典配置与 SetID 边界实施方案：`docs/archive/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
 - DEV-PLAN-072【归档】：全仓 ID/Code 命名与对外标识收敛（规范已并入 `DEV-PLAN-005/STD-003`）：`docs/archive/dev-plans/072-repo-wide-id-code-naming-convergence.md`
 - DEV-PLAN-073：OrgUnit CRUD 实现清单（页面与 API）：`docs/dev-plans/073-orgunit-crud-implementation-status.md`
-- DEV-PLAN-073A：组织架构树运行态问题记录（Shoelace 资源加载失败）：`docs/dev-plans/073a-orgunit-tree-runtime-issue.md`
+- DEV-PLAN-073A【归档】：组织架构树运行态问题记录（Shoelace 资源加载失败）：`docs/archive/dev-plans/073a-orgunit-tree-runtime-issue.md`
 - DEV-PLAN-074：OrgUnit Details 集成更新能力与 UI 优化方案：`docs/dev-plans/074-orgunit-details-update-ui-optimization.md`
 - DEV-PLAN-074 执行日志：`docs/dev-records/dev-plan-074-execution-log.md`
 - DEV-PLAN-075：OrgUnit 生效日期不允许回溯的限制评估：`docs/dev-plans/075-orgunit-effective-date-backdating-assessment.md`

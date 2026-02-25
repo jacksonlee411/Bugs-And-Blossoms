@@ -35,7 +35,7 @@
 
 ### 3.1 已发现的 legacy 形态（示例）
 
-- `/org/nodes` 提供 `read=legacy` 并在 `current` 失败/为空时回退到 legacy 读取路径。
+- OrgUnit 读取链路曾提供 `read=legacy` 并在 `current` 失败/为空时回退到 legacy 读取路径。
 - DB schema/迁移中存在用于 legacy 读写的 baseline 表/函数（与 current 的事件 SoT + 同步投射读模型并存）。
 
 ### 3.2 清理目标（Done 口径）
@@ -71,5 +71,5 @@
 ## 6. 实施结果（本次落地的最小证据）
 
 - 门禁入口：`make check no-legacy`（实现：`scripts/ci/check-no-legacy.sh`），已接入 `make preflight` 与 CI required checks。
-- OrgUnit `/org/nodes`：移除 legacy 读路径与回退行为；仅保留 current 主链路（`as_of` 仍作为快照时间点参数）。
+- OrgUnit（`/org/units` + `/org/api/org-units*`）：移除 legacy 读路径与回退行为；仅保留 current 主链路（`as_of` 仍作为快照时间点参数）。
 - DB：移除为 legacy 链路服务的 baseline schema/迁移与相关 sqlc 模型；保留 current 的事件 SoT + 同步投射读模型。
