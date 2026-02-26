@@ -1,6 +1,6 @@
 # DEV-PLAN-183：Capability Key 配置可发现性与对象/意图显式建模方案
 
-**状态**: 规划中（2026-02-26 12:45 UTC）
+**状态**: 执行中（2026-02-26 14:06 UTC，后端目录化与门禁已验收，UI 验收待补）
 
 ## 1. 背景与问题
 当前策略生效链路在运行时是可定位的，但在配置侧不可发现，导致用户“知道要配策略，却不知道该选哪个 capability_key”。
@@ -134,6 +134,14 @@ UI 目标流程：
 
 - **风险 3：高级模式绕过目录**  
   缓解：手工 capability_key 仍强制反查校验，失败即阻断写入。
+
+## 11A. 2026-02-26 验收记录（后端 + 门禁）
+- [x] `make check capability-catalog` 通过（目录唯一性/注册与路由契约一致性检查通过）。
+- [x] `GET /internal/capabilities/catalog`、`GET /internal/capabilities/catalog:by-intent` 运行态验证通过（`owner_module/target_object/surface/intent` 可反查 `capability_key`）。
+- [x] 目录包含 `org.orgunit_write.field_policy` 与四类 intent key，满足 182/183 协同输入要求。
+- [x] 策略写入校验已接 catalog：未注册或无法反查的 `capability_key` 会被拒绝（server test 通过）。
+- [ ] `/org/setid` “对象/意图模式默认可操作”与“高级模式受控”仍需 UI 专项验收。
+- [ ] `E2E-183-01`、`E2E-183-02` 尚未在 E2E 报告中以该编号显式沉淀（需补齐命名与证据链接）。
 
 ## 12. 与其他计划关系
 - DEV-PLAN-182 负责“基线 + 覆盖”的策略生效语义；
