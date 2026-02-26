@@ -60,7 +60,7 @@
 - 输入：`effective_date(as_of)` 必填；`parent_org_code` 可选。
 - 服务端权威解析（双分支，均 fail-closed）：
   - 有 `parent_org_code`：`parent_org_code -> org_id -> business_unit_id -> setid`。
-  - 无 `parent_org_code`（树初始化/根组织创建）：走租户级上下文（`org_level=tenant`，`business_unit_id=''`）解析策略。
+  - 无 `parent_org_code`（树初始化/根组织创建）：走租户级上下文（`org_applicability=tenant`，`business_unit_id=''`）解析策略。
 - 决策维度：`tenant + capability_key + field_key + business_unit_id + as_of`。
 
 ### 4.3 策略存储扩展（在现有 Registry 上增量扩展）
@@ -136,14 +136,14 @@
 ## 6. 配置样板（本计划样板数据）
 > capability_key 固定为稳定键：`org.orgunit_create.field_policy`
 
-| org_level | business_unit_id | field_key | required | maintainable | default_rule_ref | default_value | allowed_value_codes |
+| org_applicability | business_unit_id | field_key | required | maintainable | default_rule_ref | default_value | allowed_value_codes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `business_unit` | `10000001`（org_code=00000002） | `org_code` | true | false | `next_org_code("F", 8)` | - | - |
 | `business_unit` | `10000003`（org_code=00000004） | `org_code` | true | false | `next_org_code("X", 8)` | - | - |
 | `business_unit` | `10000001`（org_code=00000002） | `d_org_type` | true | true | - | `11` | `["11"]` |
 | `business_unit` | `10000003`（org_code=00000004） | `d_org_type` | false | true | - | `10` | `["10"]` |
 
-> 说明：为避免树初始化回归，必须同时提供租户级（`org_level=tenant`）基线策略用于 `parent_org_code` 为空场景；缺失则按 fail-closed 返回 `FIELD_POLICY_MISSING`。
+> 说明：为避免树初始化回归，必须同时提供租户级（`org_applicability=tenant`）基线策略用于 `parent_org_code` 为空场景；缺失则按 fail-closed 返回 `FIELD_POLICY_MISSING`。
 
 ## 7. 分阶段实施（可回归）
 1. [ ] **M1 契约冻结**：冻结 capability_key、字段决策 DTO、错误码、迁移约束。

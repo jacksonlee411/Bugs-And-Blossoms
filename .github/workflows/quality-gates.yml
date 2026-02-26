@@ -33,6 +33,8 @@ jobs:
         run: make check no-legacy
       - name: No-Scope-Package Gate (always)
         run: make check no-scope-package
+      - name: Granularity Gate (always)
+        run: make check granularity
       - name: Capability Key Gate (always)
         run: make check capability-key
       - name: Capability Contract Gate (always)

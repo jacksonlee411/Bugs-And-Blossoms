@@ -107,6 +107,12 @@ entrypoints:
       - path: /internal/rules/evaluate
         methods: [POST]
         route_class: internal_api
+      - path: /internal/capabilities/catalog
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/capabilities/catalog:by-intent
+        methods: [GET]
+        route_class: internal_api
       - path: /internal/policies/state
         methods: [GET]
         route_class: internal_api

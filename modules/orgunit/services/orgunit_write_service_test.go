@@ -165,6 +165,35 @@ func withMarshalJSON(t *testing.T, fn func(any) ([]byte, error)) {
 	t.Cleanup(func() { marshalJSON = orig })
 }
 
+func withDefaultCreateFieldDecisions(store orgUnitWriteStoreStub) orgUnitWriteSetIDResolverStoreStub {
+	return orgUnitWriteSetIDResolverStoreStub{
+		orgUnitWriteStoreStub: store,
+		resolveDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, _ string, _ string) (types.SetIDStrategyFieldDecision, bool, error) {
+			if strings.TrimSpace(capabilityKey) != orgUnitCreateFieldPolicyCapabilityKey {
+				return types.SetIDStrategyFieldDecision{}, false, nil
+			}
+			switch strings.TrimSpace(fieldKey) {
+			case orgUnitCreateFieldOrgCode:
+				return types.SetIDStrategyFieldDecision{
+					CapabilityKey: orgUnitCreateFieldPolicyCapabilityKey,
+					FieldKey:      orgUnitCreateFieldOrgCode,
+					Visible:       true,
+					Maintainable:  true,
+				}, true, nil
+			case orgUnitCreateFieldOrgType:
+				return types.SetIDStrategyFieldDecision{
+					CapabilityKey: orgUnitCreateFieldPolicyCapabilityKey,
+					FieldKey:      orgUnitCreateFieldOrgType,
+					Visible:       true,
+					Maintainable:  true,
+				}, true, nil
+			default:
+				return types.SetIDStrategyFieldDecision{}, false, nil
+			}
+		},
+	}
+}
+
 func newWriteService(store ports.OrgUnitWriteStore) *orgUnitWriteService {
 	return &orgUnitWriteService{store: store}
 }

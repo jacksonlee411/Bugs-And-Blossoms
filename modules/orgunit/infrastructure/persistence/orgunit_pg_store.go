@@ -439,12 +439,12 @@ WHERE tenant_uuid = $1::uuid
   AND effective_date <= $4::date
   AND (end_date IS NULL OR end_date > $4::date)
   AND (
-    (org_level = 'business_unit' AND business_unit_id = $5::text)
-    OR (org_level = 'tenant' AND business_unit_id = '')
+    (org_applicability = 'business_unit' AND business_unit_id = $5::text)
+    OR (org_applicability = 'tenant' AND business_unit_id = '')
   )
 ORDER BY
   CASE
-    WHEN org_level = 'business_unit' AND business_unit_id = $5::text THEN 2
+    WHEN org_applicability = 'business_unit' AND business_unit_id = $5::text THEN 2
     ELSE 1
   END DESC,
   priority DESC,

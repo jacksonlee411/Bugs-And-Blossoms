@@ -101,7 +101,7 @@ func TestNormalizeStrategyRegistryItem_Defaults(t *testing.T) {
 		OwnerModule:         " Staffing ",
 		FieldKey:            " Field_X ",
 		PersonalizationMode: " SETID ",
-		OrgLevel:            " TENANT ",
+		OrgApplicability:    " TENANT ",
 		Priority:            0,
 		ChangePolicy:        "",
 		EffectiveDate:       "2026-01-01",
@@ -133,7 +133,7 @@ func TestNormalizeStrategyRegistryItem_Overrides(t *testing.T) {
 		OwnerModule:         "org",
 		FieldKey:            "d_org_type",
 		PersonalizationMode: "tenant_only",
-		OrgLevel:            "business_unit",
+		OrgApplicability:    "business_unit",
 		BusinessUnitID:      "10000001",
 		Maintainable:        &maintainable,
 		AllowedValueCodes:   []string{" 11 ", "11", "", "12"},
@@ -174,7 +174,7 @@ func TestValidateStrategyRegistryItem(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelBusinessUnit,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
 		BusinessUnitID:      "10000001",
 		Required:            true,
 		Visible:             true,
@@ -206,9 +206,9 @@ func TestValidateStrategyRegistryItem(t *testing.T) {
 		}(), status: http.StatusUnprocessableEntity, code: "personalization_mode_invalid"},
 		{name: "org level invalid", item: func() setIDStrategyRegistryItem {
 			it := valid
-			it.OrgLevel = "bad"
+			it.OrgApplicability = "bad"
 			return it
-		}(), status: http.StatusUnprocessableEntity, code: "org_level_invalid"},
+		}(), status: http.StatusUnprocessableEntity, code: "org_applicability_invalid"},
 		{name: "business unit required", item: func() setIDStrategyRegistryItem {
 			it := valid
 			it.BusinessUnitID = ""
@@ -265,7 +265,7 @@ func TestValidateStrategyRegistryItem(t *testing.T) {
 		}(), status: http.StatusUnprocessableEntity, code: fieldPolicyConflictCode},
 		{name: "ok tenant", item: func() setIDStrategyRegistryItem {
 			it := valid
-			it.OrgLevel = orgLevelTenant
+			it.OrgApplicability = orgApplicabilityTenant
 			it.BusinessUnitID = ""
 			return it
 		}(), status: 0, code: ""},
@@ -280,14 +280,40 @@ func TestValidateStrategyRegistryItem(t *testing.T) {
 	}
 }
 
+func TestValidateStrategyRegistryItem_RequiresCatalogEntry(t *testing.T) {
+	originalCatalog := capabilityCatalogByCapabilityKey
+	capabilityCatalogByCapabilityKey = map[string]capabilityCatalogEntry{}
+	t.Cleanup(func() {
+		capabilityCatalogByCapabilityKey = originalCatalog
+	})
+
+	item := setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_x",
+		PersonalizationMode: personalizationModeSetID,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
+		BusinessUnitID:      "10000001",
+		Required:            true,
+		Visible:             true,
+		Maintainable:        true,
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+	}
+	status, code, _ := validateStrategyRegistryItem(item)
+	if status != http.StatusUnprocessableEntity || code != "invalid_request" {
+		t.Fatalf("status=%d code=%q", status, code)
+	}
+}
+
 func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 	req := normalizeStrategyRegistryDisableRequest(setIDStrategyRegistryDisableAPIRequest{
-		CapabilityKey:  " Staffing.Assignment_Create.Field_Policy ",
-		FieldKey:       " Field_X ",
-		OrgLevel:       " BUSINESS_UNIT ",
-		BusinessUnitID: " 10000001 ",
-		EffectiveDate:  "2026-01-01",
-		DisableAsOf:    "2026-01-02",
+		CapabilityKey:    " Staffing.Assignment_Create.Field_Policy ",
+		FieldKey:         " Field_X ",
+		OrgApplicability: " BUSINESS_UNIT ",
+		BusinessUnitID:   " 10000001 ",
+		EffectiveDate:    "2026-01-01",
+		DisableAsOf:      "2026-01-02",
 	})
 	if req.CapabilityKey != "staffing.assignment_create.field_policy" {
 		t.Fatalf("capability_key=%q", req.CapabilityKey)
@@ -295,8 +321,8 @@ func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 	if req.FieldKey != "field_x" {
 		t.Fatalf("field_key=%q", req.FieldKey)
 	}
-	if req.OrgLevel != orgLevelBusinessUnit {
-		t.Fatalf("org_level=%q", req.OrgLevel)
+	if req.OrgApplicability != orgApplicabilityBusinessUnit {
+		t.Fatalf("org_applicability=%q", req.OrgApplicability)
 	}
 	if req.BusinessUnitID != "10000001" {
 		t.Fatalf("business_unit_id=%q", req.BusinessUnitID)
@@ -305,12 +331,12 @@ func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 		t.Fatalf("status=%d code=%q", status, code)
 	}
 	tenantReq := normalizeStrategyRegistryDisableRequest(setIDStrategyRegistryDisableAPIRequest{
-		CapabilityKey:  "staffing.assignment_create.field_policy",
-		FieldKey:       "field_x",
-		OrgLevel:       "tenant",
-		BusinessUnitID: "10000001",
-		EffectiveDate:  "2026-01-01",
-		DisableAsOf:    "2026-01-02",
+		CapabilityKey:    "staffing.assignment_create.field_policy",
+		FieldKey:         "field_x",
+		OrgApplicability: "tenant",
+		BusinessUnitID:   "10000001",
+		EffectiveDate:    "2026-01-01",
+		DisableAsOf:      "2026-01-02",
 	})
 	if tenantReq.BusinessUnitID != "" {
 		t.Fatalf("tenant business_unit_id should be normalized to empty, got=%q", tenantReq.BusinessUnitID)
@@ -331,12 +357,12 @@ func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 		{
 			name: "invalid disable date",
 			req: setIDStrategyRegistryDisableRequest{
-				CapabilityKey:  "staffing.assignment_create.field_policy",
-				FieldKey:       "field_x",
-				OrgLevel:       orgLevelTenant,
-				BusinessUnitID: "10000001",
-				EffectiveDate:  "2026-01-01",
-				DisableAsOf:    "bad",
+				CapabilityKey:    "staffing.assignment_create.field_policy",
+				FieldKey:         "field_x",
+				OrgApplicability: orgApplicabilityTenant,
+				BusinessUnitID:   "10000001",
+				EffectiveDate:    "2026-01-01",
+				DisableAsOf:      "bad",
 			},
 			status: http.StatusBadRequest,
 			code:   "invalid_disable_date",
@@ -344,12 +370,12 @@ func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 		{
 			name: "disable date conflict",
 			req: setIDStrategyRegistryDisableRequest{
-				CapabilityKey:  "staffing.assignment_create.field_policy",
-				FieldKey:       "field_x",
-				OrgLevel:       orgLevelTenant,
-				BusinessUnitID: "10000001",
-				EffectiveDate:  "2026-01-01",
-				DisableAsOf:    "2026-01-01",
+				CapabilityKey:    "staffing.assignment_create.field_policy",
+				FieldKey:         "field_x",
+				OrgApplicability: orgApplicabilityTenant,
+				BusinessUnitID:   "10000001",
+				EffectiveDate:    "2026-01-01",
+				DisableAsOf:      "2026-01-01",
 			},
 			status: http.StatusUnprocessableEntity,
 			code:   fieldPolicyConflictCode,
@@ -357,12 +383,12 @@ func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 		{
 			name: "invalid capability key",
 			req: setIDStrategyRegistryDisableRequest{
-				CapabilityKey:  "bad",
-				FieldKey:       "field_x",
-				OrgLevel:       orgLevelBusinessUnit,
-				BusinessUnitID: "10000001",
-				EffectiveDate:  "2026-01-01",
-				DisableAsOf:    "2026-01-02",
+				CapabilityKey:    "bad",
+				FieldKey:         "field_x",
+				OrgApplicability: orgApplicabilityBusinessUnit,
+				BusinessUnitID:   "10000001",
+				EffectiveDate:    "2026-01-01",
+				DisableAsOf:      "2026-01-02",
 			},
 			status: http.StatusBadRequest,
 			code:   "invalid_capability_key",
@@ -370,12 +396,12 @@ func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 		{
 			name: "invalid capability key context",
 			req: setIDStrategyRegistryDisableRequest{
-				CapabilityKey:  "staffing.tenant.field_policy",
-				FieldKey:       "field_x",
-				OrgLevel:       orgLevelBusinessUnit,
-				BusinessUnitID: "10000001",
-				EffectiveDate:  "2026-01-01",
-				DisableAsOf:    "2026-01-02",
+				CapabilityKey:    "staffing.tenant.field_policy",
+				FieldKey:         "field_x",
+				OrgApplicability: orgApplicabilityBusinessUnit,
+				BusinessUnitID:   "10000001",
+				EffectiveDate:    "2026-01-01",
+				DisableAsOf:      "2026-01-02",
 			},
 			status: http.StatusUnprocessableEntity,
 			code:   "invalid_capability_key_context",
@@ -383,12 +409,12 @@ func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 		{
 			name: "invalid field key",
 			req: setIDStrategyRegistryDisableRequest{
-				CapabilityKey:  "staffing.assignment_create.field_policy",
-				FieldKey:       "Field-X",
-				OrgLevel:       orgLevelBusinessUnit,
-				BusinessUnitID: "10000001",
-				EffectiveDate:  "2026-01-01",
-				DisableAsOf:    "2026-01-02",
+				CapabilityKey:    "staffing.assignment_create.field_policy",
+				FieldKey:         "Field-X",
+				OrgApplicability: orgApplicabilityBusinessUnit,
+				BusinessUnitID:   "10000001",
+				EffectiveDate:    "2026-01-01",
+				DisableAsOf:      "2026-01-02",
 			},
 			status: http.StatusBadRequest,
 			code:   "invalid_field_key",
@@ -396,11 +422,11 @@ func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 		{
 			name: "business unit required",
 			req: setIDStrategyRegistryDisableRequest{
-				CapabilityKey: "staffing.assignment_create.field_policy",
-				FieldKey:      "field_x",
-				OrgLevel:      orgLevelBusinessUnit,
-				EffectiveDate: "2026-01-01",
-				DisableAsOf:   "2026-01-02",
+				CapabilityKey:    "staffing.assignment_create.field_policy",
+				FieldKey:         "field_x",
+				OrgApplicability: orgApplicabilityBusinessUnit,
+				EffectiveDate:    "2026-01-01",
+				DisableAsOf:      "2026-01-02",
 			},
 			status: http.StatusBadRequest,
 			code:   "invalid_business_unit_id",
@@ -408,12 +434,12 @@ func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 		{
 			name: "business unit invalid format",
 			req: setIDStrategyRegistryDisableRequest{
-				CapabilityKey:  "staffing.assignment_create.field_policy",
-				FieldKey:       "field_x",
-				OrgLevel:       orgLevelBusinessUnit,
-				BusinessUnitID: "abc",
-				EffectiveDate:  "2026-01-01",
-				DisableAsOf:    "2026-01-02",
+				CapabilityKey:    "staffing.assignment_create.field_policy",
+				FieldKey:         "field_x",
+				OrgApplicability: orgApplicabilityBusinessUnit,
+				BusinessUnitID:   "abc",
+				EffectiveDate:    "2026-01-01",
+				DisableAsOf:      "2026-01-02",
 			},
 			status: http.StatusBadRequest,
 			code:   "invalid_business_unit_id",
@@ -421,25 +447,25 @@ func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 		{
 			name: "invalid org level",
 			req: setIDStrategyRegistryDisableRequest{
-				CapabilityKey:  "staffing.assignment_create.field_policy",
-				FieldKey:       "field_x",
-				OrgLevel:       "team",
-				BusinessUnitID: "10000001",
-				EffectiveDate:  "2026-01-01",
-				DisableAsOf:    "2026-01-02",
+				CapabilityKey:    "staffing.assignment_create.field_policy",
+				FieldKey:         "field_x",
+				OrgApplicability: "team",
+				BusinessUnitID:   "10000001",
+				EffectiveDate:    "2026-01-01",
+				DisableAsOf:      "2026-01-02",
 			},
 			status: http.StatusUnprocessableEntity,
-			code:   "org_level_invalid",
+			code:   "org_applicability_invalid",
 		},
 		{
 			name: "invalid effective date",
 			req: setIDStrategyRegistryDisableRequest{
-				CapabilityKey:  "staffing.assignment_create.field_policy",
-				FieldKey:       "field_x",
-				OrgLevel:       orgLevelBusinessUnit,
-				BusinessUnitID: "10000001",
-				EffectiveDate:  "2026-13-01",
-				DisableAsOf:    "2026-01-02",
+				CapabilityKey:    "staffing.assignment_create.field_policy",
+				FieldKey:         "field_x",
+				OrgApplicability: orgApplicabilityBusinessUnit,
+				BusinessUnitID:   "10000001",
+				EffectiveDate:    "2026-13-01",
+				DisableAsOf:      "2026-01-02",
 			},
 			status: http.StatusBadRequest,
 			code:   "invalid_effective_date",
@@ -477,11 +503,11 @@ func TestContainsCapabilityContextToken(t *testing.T) {
 
 func TestEnsureStrategyResolvableAfterDisable(t *testing.T) {
 	req := setIDStrategyRegistryDisableRequest{
-		CapabilityKey:  "staffing.assignment_create.field_policy",
-		FieldKey:       "field_x",
-		OrgLevel:       orgLevelBusinessUnit,
-		BusinessUnitID: "10000001",
-		DisableAsOf:    "2026-01-02",
+		CapabilityKey:    "staffing.assignment_create.field_policy",
+		FieldKey:         "field_x",
+		OrgApplicability: orgApplicabilityBusinessUnit,
+		BusinessUnitID:   "10000001",
+		DisableAsOf:      "2026-01-02",
 	}
 	if err := ensureStrategyResolvableAfterDisable(nil, setIDStrategyRegistryDisableRequest{
 		CapabilityKey: req.CapabilityKey,
@@ -493,50 +519,50 @@ func TestEnsureStrategyResolvableAfterDisable(t *testing.T) {
 
 	items := []setIDStrategyRegistryItem{
 		{
-			CapabilityKey:  req.CapabilityKey,
-			FieldKey:       req.FieldKey,
-			OrgLevel:       orgLevelBusinessUnit,
-			BusinessUnitID: "10000001",
-			EffectiveDate:  "bad-date",
-			Required:       true,
-			Visible:        true,
+			CapabilityKey:    req.CapabilityKey,
+			FieldKey:         req.FieldKey,
+			OrgApplicability: orgApplicabilityBusinessUnit,
+			BusinessUnitID:   "10000001",
+			EffectiveDate:    "bad-date",
+			Required:         true,
+			Visible:          true,
 		},
 		{
-			CapabilityKey:  req.CapabilityKey,
-			FieldKey:       req.FieldKey,
-			OrgLevel:       orgLevelBusinessUnit,
-			BusinessUnitID: "10000001",
-			EffectiveDate:  "2026-02-01",
-			Required:       true,
-			Visible:        true,
+			CapabilityKey:    req.CapabilityKey,
+			FieldKey:         req.FieldKey,
+			OrgApplicability: orgApplicabilityBusinessUnit,
+			BusinessUnitID:   "10000001",
+			EffectiveDate:    "2026-02-01",
+			Required:         true,
+			Visible:          true,
 		},
 		{
-			CapabilityKey:  "staffing.assignment_update.field_policy",
-			FieldKey:       req.FieldKey,
-			OrgLevel:       orgLevelBusinessUnit,
-			BusinessUnitID: "10000001",
-			EffectiveDate:  "2026-01-01",
-			Required:       true,
-			Visible:        true,
+			CapabilityKey:    "staffing.assignment_update.field_policy",
+			FieldKey:         req.FieldKey,
+			OrgApplicability: orgApplicabilityBusinessUnit,
+			BusinessUnitID:   "10000001",
+			EffectiveDate:    "2026-01-01",
+			Required:         true,
+			Visible:          true,
 		},
 		{
-			CapabilityKey:  req.CapabilityKey,
-			FieldKey:       req.FieldKey,
-			OrgLevel:       orgLevelBusinessUnit,
-			BusinessUnitID: "10000001",
-			EffectiveDate:  "2026-01-01",
-			Required:       true,
-			Visible:        true,
-			EndDate:        "2026-01-02",
+			CapabilityKey:    req.CapabilityKey,
+			FieldKey:         req.FieldKey,
+			OrgApplicability: orgApplicabilityBusinessUnit,
+			BusinessUnitID:   "10000001",
+			EffectiveDate:    "2026-01-01",
+			Required:         true,
+			Visible:          true,
+			EndDate:          "2026-01-02",
 		},
 		{
-			CapabilityKey: req.CapabilityKey,
-			FieldKey:      req.FieldKey,
-			OrgLevel:      orgLevelTenant,
-			EffectiveDate: "2026-01-01",
-			Maintainable:  true,
-			Required:      false,
-			Visible:       true,
+			CapabilityKey:    req.CapabilityKey,
+			FieldKey:         req.FieldKey,
+			OrgApplicability: orgApplicabilityTenant,
+			EffectiveDate:    "2026-01-01",
+			Maintainable:     true,
+			Required:         false,
+			Visible:          true,
 		},
 	}
 	if err := ensureStrategyResolvableAfterDisable(items, req); err != nil {
@@ -549,11 +575,11 @@ func TestFindStrategyRegistryItemForUpsert(t *testing.T) {
 	t.Cleanup(resetSetIDStrategyRegistryRuntimeForTest)
 
 	item := setIDStrategyRegistryItem{
-		CapabilityKey:  "staffing.assignment_create.field_policy",
-		FieldKey:       "field_x",
-		OrgLevel:       orgLevelBusinessUnit,
-		BusinessUnitID: "10000001",
-		EffectiveDate:  "2026-01-01",
+		CapabilityKey:    "staffing.assignment_create.field_policy",
+		FieldKey:         "field_x",
+		OrgApplicability: orgApplicabilityBusinessUnit,
+		BusinessUnitID:   "10000001",
+		EffectiveDate:    "2026-01-01",
 	}
 
 	useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
@@ -568,9 +594,9 @@ func TestFindStrategyRegistryItemForUpsert(t *testing.T) {
 	useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
 		listFn: func(context.Context, string, string, string, string) ([]setIDStrategyRegistryItem, error) {
 			return []setIDStrategyRegistryItem{
-				{CapabilityKey: item.CapabilityKey, FieldKey: item.FieldKey, OrgLevel: orgLevelTenant, EffectiveDate: item.EffectiveDate},
-				{CapabilityKey: item.CapabilityKey, FieldKey: item.FieldKey, OrgLevel: item.OrgLevel, BusinessUnitID: "10000002", EffectiveDate: item.EffectiveDate},
-				{CapabilityKey: item.CapabilityKey, FieldKey: item.FieldKey, OrgLevel: item.OrgLevel, BusinessUnitID: item.BusinessUnitID, EffectiveDate: "2026-01-02"},
+				{CapabilityKey: item.CapabilityKey, FieldKey: item.FieldKey, OrgApplicability: orgApplicabilityTenant, EffectiveDate: item.EffectiveDate},
+				{CapabilityKey: item.CapabilityKey, FieldKey: item.FieldKey, OrgApplicability: item.OrgApplicability, BusinessUnitID: "10000002", EffectiveDate: item.EffectiveDate},
+				{CapabilityKey: item.CapabilityKey, FieldKey: item.FieldKey, OrgApplicability: item.OrgApplicability, BusinessUnitID: item.BusinessUnitID, EffectiveDate: "2026-01-02"},
 			}, nil
 		},
 	})
@@ -581,7 +607,7 @@ func TestFindStrategyRegistryItemForUpsert(t *testing.T) {
 	useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
 		listFn: func(context.Context, string, string, string, string) ([]setIDStrategyRegistryItem, error) {
 			return []setIDStrategyRegistryItem{
-				{CapabilityKey: item.CapabilityKey, FieldKey: item.FieldKey, OrgLevel: item.OrgLevel, BusinessUnitID: item.BusinessUnitID, EffectiveDate: item.EffectiveDate, EndDate: "2026-02-01"},
+				{CapabilityKey: item.CapabilityKey, FieldKey: item.FieldKey, OrgApplicability: item.OrgApplicability, BusinessUnitID: item.BusinessUnitID, EffectiveDate: item.EffectiveDate, EndDate: "2026-02-01"},
 			}, nil
 		},
 	})
@@ -602,7 +628,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelTenant,
+		OrgApplicability:    orgApplicabilityTenant,
 		Required:            false,
 		Visible:             true,
 		DefaultValue:        "b2",
@@ -615,7 +641,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelBusinessUnit,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
 		BusinessUnitID:      "10000001",
 		Required:            true,
 		Visible:             true,
@@ -682,7 +708,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_conflict",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelBusinessUnit,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
 		BusinessUnitID:      "10000001",
 		Required:            true,
 		Visible:             false,
@@ -699,7 +725,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelTenant,
+		OrgApplicability:    orgApplicabilityTenant,
 		Required:            false,
 		Visible:             true,
 		ExplainRequired:     true,
@@ -711,7 +737,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelTenant,
+		OrgApplicability:    orgApplicabilityTenant,
 		Required:            false,
 		Visible:             true,
 		ExplainRequired:     true,
@@ -724,7 +750,7 @@ func TestSetIDStrategyRegistryRuntime_UpsertListResolve(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelTenant,
+		OrgApplicability:    orgApplicabilityTenant,
 		Required:            false,
 		Visible:             true,
 		ExplainRequired:     true,
@@ -749,7 +775,7 @@ func TestSetIDStrategyRegistryRuntime_ResolveFieldDecisionBranches(t *testing.T)
 		OwnerModule:         "staffing",
 		FieldKey:            "field_cap",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelTenant,
+		OrgApplicability:    orgApplicabilityTenant,
 		Required:            false,
 		Visible:             true,
 		DefaultValue:        "ok",
@@ -775,7 +801,7 @@ func TestSetIDStrategyRegistryRuntime_ResolveFieldDecisionBranches(t *testing.T)
 		OwnerModule:         "staffing",
 		FieldKey:            "field_unknown_org",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            "unknown",
+		OrgApplicability:    "unknown",
 		Required:            false,
 		Visible:             true,
 		DefaultValue:        "ok",
@@ -792,7 +818,7 @@ func TestSetIDStrategyRegistryRuntime_ResolveFieldDecisionBranches(t *testing.T)
 		OwnerModule:         "staffing",
 		FieldKey:            "field_missing_default",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelBusinessUnit,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
 		BusinessUnitID:      "10000001",
 		Required:            false,
 		Visible:             true,
@@ -805,6 +831,48 @@ func TestSetIDStrategyRegistryRuntime_ResolveFieldDecisionBranches(t *testing.T)
 	}
 }
 
+func TestResolveFieldDecisionFromItems_IntentBucketPrecedence(t *testing.T) {
+	items := []setIDStrategyRegistryItem{
+		{
+			CapabilityKey:    orgUnitWriteFieldPolicyCapabilityKey,
+			FieldKey:         "d_org_type",
+			OrgApplicability: orgApplicabilityBusinessUnit,
+			BusinessUnitID:   "10000001",
+			Required:         true,
+			Visible:          true,
+			Maintainable:     true,
+			DefaultValue:     "11",
+			Priority:         500,
+			EffectiveDate:    "2026-01-01",
+		},
+		{
+			CapabilityKey:    orgUnitCreateFieldPolicyCapabilityKey,
+			FieldKey:         "d_org_type",
+			OrgApplicability: orgApplicabilityBusinessUnit,
+			BusinessUnitID:   "10000001",
+			Required:         true,
+			Visible:          true,
+			Maintainable:     true,
+			DefaultValue:     "12",
+			Priority:         100,
+			EffectiveDate:    "2026-01-01",
+		},
+	}
+	decision, err := resolveFieldDecisionFromItems(items, orgUnitCreateFieldPolicyCapabilityKey, "d_org_type", "10000001")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if decision.CapabilityKey != orgUnitCreateFieldPolicyCapabilityKey {
+		t.Fatalf("capability=%q", decision.CapabilityKey)
+	}
+	if decision.SourceType != strategySourceIntentOverride {
+		t.Fatalf("source_type=%q", decision.SourceType)
+	}
+	if decision.ResolvedDefaultVal != "12" {
+		t.Fatalf("default_value=%q", decision.ResolvedDefaultVal)
+	}
+}
+
 func TestSetIDStrategyRegistryRuntime_BUFieldVarianceAcceptance(t *testing.T) {
 	runtime := newSetIDStrategyRegistryRuntime()
 
@@ -813,7 +881,7 @@ func TestSetIDStrategyRegistryRuntime_BUFieldVarianceAcceptance(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelBusinessUnit,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
 		BusinessUnitID:      "10000001",
 		Required:            true,
 		Visible:             true,
@@ -828,7 +896,7 @@ func TestSetIDStrategyRegistryRuntime_BUFieldVarianceAcceptance(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelBusinessUnit,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
 		BusinessUnitID:      "10000002",
 		Required:            false,
 		Visible:             false,
@@ -863,7 +931,7 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelTenant,
+		OrgApplicability:    orgApplicabilityTenant,
 		Required:            false,
 		Visible:             true,
 		DefaultValue:        "fallback",
@@ -876,7 +944,7 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelBusinessUnit,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
 		BusinessUnitID:      "10000001",
 		Required:            true,
 		Visible:             true,
@@ -889,12 +957,12 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 	_, _ = runtime.upsert("t1", buItem)
 
 	disabled, changed, err := runtime.disable("t1", setIDStrategyRegistryDisableRequest{
-		CapabilityKey:  "staffing.assignment_create.field_policy",
-		FieldKey:       "field_x",
-		OrgLevel:       orgLevelBusinessUnit,
-		BusinessUnitID: "10000001",
-		EffectiveDate:  "2026-01-01",
-		DisableAsOf:    "2026-01-02",
+		CapabilityKey:    "staffing.assignment_create.field_policy",
+		FieldKey:         "field_x",
+		OrgApplicability: orgApplicabilityBusinessUnit,
+		BusinessUnitID:   "10000001",
+		EffectiveDate:    "2026-01-01",
+		DisableAsOf:      "2026-01-02",
 	})
 	if err != nil {
 		t.Fatalf("err=%v", err)
@@ -910,33 +978,33 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 	}
 
 	if _, changed, err := runtime.disable("t1", setIDStrategyRegistryDisableRequest{
-		CapabilityKey:  "staffing.assignment_create.field_policy",
-		FieldKey:       "field_x",
-		OrgLevel:       orgLevelBusinessUnit,
-		BusinessUnitID: "10000001",
-		EffectiveDate:  "2026-01-01",
-		DisableAsOf:    "2026-01-02",
+		CapabilityKey:    "staffing.assignment_create.field_policy",
+		FieldKey:         "field_x",
+		OrgApplicability: orgApplicabilityBusinessUnit,
+		BusinessUnitID:   "10000001",
+		EffectiveDate:    "2026-01-01",
+		DisableAsOf:      "2026-01-02",
 	}); err != nil || changed {
 		t.Fatalf("expected idempotent disable, changed=%v err=%v", changed, err)
 	}
 	if _, _, err := runtime.disable("t1", setIDStrategyRegistryDisableRequest{
-		CapabilityKey:  "staffing.assignment_create.field_policy",
-		FieldKey:       "field_x",
-		OrgLevel:       orgLevelBusinessUnit,
-		BusinessUnitID: "10000001",
-		EffectiveDate:  "2026-01-01",
-		DisableAsOf:    "2026-01-03",
+		CapabilityKey:    "staffing.assignment_create.field_policy",
+		FieldKey:         "field_x",
+		OrgApplicability: orgApplicabilityBusinessUnit,
+		BusinessUnitID:   "10000001",
+		EffectiveDate:    "2026-01-01",
+		DisableAsOf:      "2026-01-03",
 	}); err == nil || err.Error() != "invalid_disable_date" {
 		t.Fatalf("expected invalid_disable_date err, got=%v", err)
 	}
 
 	if _, _, err := runtime.disable("t1", setIDStrategyRegistryDisableRequest{
-		CapabilityKey:  "staffing.assignment_create.field_policy",
-		FieldKey:       "field_x",
-		OrgLevel:       orgLevelBusinessUnit,
-		BusinessUnitID: "10000002",
-		EffectiveDate:  "2026-01-01",
-		DisableAsOf:    "2026-01-02",
+		CapabilityKey:    "staffing.assignment_create.field_policy",
+		FieldKey:         "field_x",
+		OrgApplicability: orgApplicabilityBusinessUnit,
+		BusinessUnitID:   "10000002",
+		EffectiveDate:    "2026-01-01",
+		DisableAsOf:      "2026-01-02",
 	}); !errors.Is(err, errStrategyNotFound) {
 		t.Fatalf("expected not found err, got=%v", err)
 	}
@@ -947,7 +1015,7 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelBusinessUnit,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
 		BusinessUnitID:      "10000001",
 		Required:            true,
 		Visible:             true,
@@ -957,12 +1025,12 @@ func TestSetIDStrategyRegistryRuntime_Disable(t *testing.T) {
 		Priority:            200,
 	})
 	if _, _, err := runtimeNoFallback.disable("t2", setIDStrategyRegistryDisableRequest{
-		CapabilityKey:  "staffing.assignment_create.field_policy",
-		FieldKey:       "field_x",
-		OrgLevel:       orgLevelBusinessUnit,
-		BusinessUnitID: "10000001",
-		EffectiveDate:  "2026-01-01",
-		DisableAsOf:    "2026-01-02",
+		CapabilityKey:    "staffing.assignment_create.field_policy",
+		FieldKey:         "field_x",
+		OrgApplicability: orgApplicabilityBusinessUnit,
+		BusinessUnitID:   "10000001",
+		EffectiveDate:    "2026-01-01",
+		DisableAsOf:      "2026-01-02",
 	}); !errors.Is(err, errDisableNotAllowed) {
 		t.Fatalf("expected disable-not-allowed err, got=%v", err)
 	}
@@ -1011,7 +1079,7 @@ func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 		t.Fatalf("status=%d", badJSONRec.Code)
 	}
 
-	missingRequestIDReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(`{"capability_key":"a.b","owner_module":"a","field_key":"field_x","personalization_mode":"tenant_only","org_level":"tenant","effective_date":"2026-01-01","request_id":""}`))
+	missingRequestIDReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(`{"capability_key":"a.b","owner_module":"a","field_key":"field_x","personalization_mode":"tenant_only","org_applicability":"tenant","effective_date":"2026-01-01","request_id":""}`))
 	missingRequestIDReq = missingRequestIDReq.WithContext(withTenant(missingRequestIDReq.Context(), Tenant{ID: "t1"}))
 	missingRequestIDRec := httptest.NewRecorder()
 	handleSetIDStrategyRegistryAPI(missingRequestIDRec, missingRequestIDReq)
@@ -1019,7 +1087,7 @@ func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 		t.Fatalf("status=%d", missingRequestIDRec.Code)
 	}
 
-	invalidReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"bad","org_level":"tenant","effective_date":"2026-01-01","request_id":"r1"}`))
+	invalidReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"bad","org_applicability":"tenant","effective_date":"2026-01-01","request_id":"r1"}`))
 	invalidReq = invalidReq.WithContext(withTenant(invalidReq.Context(), Tenant{ID: "t1"}))
 	invalidRec := httptest.NewRecorder()
 	handleSetIDStrategyRegistryAPI(invalidRec, invalidReq)
@@ -1027,7 +1095,7 @@ func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 		t.Fatalf("status=%d", invalidRec.Code)
 	}
 
-	contextMismatchReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-mismatch"}`))
+	contextMismatchReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-mismatch"}`))
 	contextMismatchReq.Header.Set("X-Actor-Scope", "saas")
 	contextMismatchReq = contextMismatchReq.WithContext(withTenant(contextMismatchReq.Context(), Tenant{ID: "t1"}))
 	contextMismatchRec := httptest.NewRecorder()
@@ -1039,7 +1107,7 @@ func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 		t.Fatalf("unexpected body=%q", contextMismatchRec.Body.String())
 	}
 
-	createBody := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r2"}`
+	createBody := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r2"}`
 	createReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(createBody))
 	createReq = createReq.WithContext(withTenant(createReq.Context(), Tenant{ID: "t1"}))
 	createRec := httptest.NewRecorder()
@@ -1051,7 +1119,7 @@ func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 		t.Fatalf("unexpected body: %q", createRec.Body.String())
 	}
 
-	updateBody := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"business_unit","business_unit_id":"10000001","required":false,"visible":true,"default_value":"a2","priority":220,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r3"}`
+	updateBody := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":false,"visible":true,"default_value":"a2","priority":220,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r3"}`
 	updateReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(updateBody))
 	updateReq = updateReq.WithContext(withTenant(updateReq.Context(), Tenant{ID: "t1"}))
 	updateRec := httptest.NewRecorder()
@@ -1071,7 +1139,7 @@ func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 		t.Fatalf("unexpected body: %q", listRec.Body.String())
 	}
 
-	fallbackBody := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"tenant","required":false,"visible":true,"default_value":"fallback","priority":100,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r3-fallback"}`
+	fallbackBody := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_applicability":"tenant","required":false,"visible":true,"default_value":"fallback","priority":100,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r3-fallback"}`
 	fallbackReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(fallbackBody))
 	fallbackReq = fallbackReq.WithContext(withTenant(fallbackReq.Context(), Tenant{ID: "t1"}))
 	fallbackRec := httptest.NewRecorder()
@@ -1080,7 +1148,7 @@ func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 		t.Fatalf("status=%d body=%s", fallbackRec.Code, fallbackRec.Body.String())
 	}
 
-	disableReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_level":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r4"}`))
+	disableReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_applicability":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r4"}`))
 	disableReq = disableReq.WithContext(withTenant(disableReq.Context(), Tenant{ID: "t1"}))
 	disableRec := httptest.NewRecorder()
 	handleSetIDStrategyRegistryDisableAPI(disableRec, disableReq)
@@ -1097,6 +1165,87 @@ func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 	if strings.Contains(disabledListRec.Body.String(), `"business_unit_id":"10000001"`) {
 		t.Fatalf("unexpected disabled row still visible: %q", disabledListRec.Body.String())
 	}
+}
+
+func TestHandleSetIDStrategyRegistryAPI_RedundantIntentOverride(t *testing.T) {
+	resetSetIDStrategyRegistryRuntimeForTest()
+	previousStore := defaultSetIDStrategyRegistryStore
+	t.Cleanup(func() {
+		useSetIDStrategyRegistryStore(previousStore)
+	})
+
+	baselineItem := setIDStrategyRegistryItem{
+		CapabilityKey:       orgUnitWriteFieldPolicyCapabilityKey,
+		OwnerModule:         "orgunit",
+		FieldKey:            "d_org_type",
+		PersonalizationMode: personalizationModeSetID,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
+		BusinessUnitID:      "10000001",
+		Required:            true,
+		Visible:             true,
+		Maintainable:        true,
+		DefaultValue:        "11",
+		AllowedValueCodes:   []string{"11"},
+		Priority:            100,
+		ExplainRequired:     true,
+		IsStable:            true,
+		ChangePolicy:        "plan_required",
+		EffectiveDate:       "2026-01-01",
+	}
+
+	t.Run("deny redundant override", func(t *testing.T) {
+		calledUpsert := false
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			listFn: func(_ context.Context, _ string, capabilityKey string, _ string, _ string) ([]setIDStrategyRegistryItem, error) {
+				if capabilityKey == orgUnitWriteFieldPolicyCapabilityKey {
+					return []setIDStrategyRegistryItem{baselineItem}, nil
+				}
+				return nil, nil
+			},
+			upsertFn: func(context.Context, string, setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error) {
+				calledUpsert = true
+				return setIDStrategyRegistryItem{}, false, nil
+			},
+		})
+
+		body := `{"capability_key":"org.orgunit_create.field_policy","owner_module":"orgunit","field_key":"d_org_type","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"maintainable":true,"default_value":"11","allowed_value_codes":["11"],"priority":120,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-redundant"}`
+		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(body))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleSetIDStrategyRegistryAPI(rec, req)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), fieldPolicyRedundantOverride) {
+			t.Fatalf("unexpected body=%s", rec.Body.String())
+		}
+		if calledUpsert {
+			t.Fatal("upsert should not be called for redundant override")
+		}
+	})
+
+	t.Run("allow non-redundant override", func(t *testing.T) {
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			listFn: func(_ context.Context, _ string, capabilityKey string, _ string, _ string) ([]setIDStrategyRegistryItem, error) {
+				if capabilityKey == orgUnitWriteFieldPolicyCapabilityKey {
+					return []setIDStrategyRegistryItem{baselineItem}, nil
+				}
+				return nil, nil
+			},
+			upsertFn: func(_ context.Context, _ string, item setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error) {
+				return item, false, nil
+			},
+		})
+
+		body := `{"capability_key":"org.orgunit_create.field_policy","owner_module":"orgunit","field_key":"d_org_type","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"maintainable":true,"default_value":"12","allowed_value_codes":["11","12"],"priority":120,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-not-redundant"}`
+		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(body))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleSetIDStrategyRegistryAPI(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
 }
 
 func TestHandleSetIDStrategyRegistryAPI_StoreErrorBranches(t *testing.T) {
@@ -1127,7 +1276,7 @@ func TestHandleSetIDStrategyRegistryAPI_StoreErrorBranches(t *testing.T) {
 				return setIDStrategyRegistryItem{}, false, errors.New("boom")
 			},
 		})
-		body := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r2"}`
+		body := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r2"}`
 		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(body))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -1146,7 +1295,7 @@ func TestHandleSetIDStrategyRegistryAPI_StoreErrorBranches(t *testing.T) {
 				return setIDStrategyRegistryItem{}, false, errors.New("boom")
 			},
 		})
-		body := `{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_level":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-disable"}`
+		body := `{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_applicability":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-disable"}`
 		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(body))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -1165,7 +1314,7 @@ func TestHandleSetIDStrategyRegistryAPI_StoreErrorBranches(t *testing.T) {
 				return nil, errors.New("boom")
 			},
 		})
-		body := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-find-existing-error"}`
+		body := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-find-existing-error"}`
 		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(body))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -1183,17 +1332,17 @@ func TestHandleSetIDStrategyRegistryAPI_StoreErrorBranches(t *testing.T) {
 			listFn: func(context.Context, string, string, string, string) ([]setIDStrategyRegistryItem, error) {
 				return []setIDStrategyRegistryItem{
 					{
-						CapabilityKey:  "staffing.assignment_create.field_policy",
-						FieldKey:       "field_x",
-						OrgLevel:       orgLevelBusinessUnit,
-						BusinessUnitID: "10000001",
-						EffectiveDate:  "2026-01-01",
-						EndDate:        "2000-01-01",
+						CapabilityKey:    "staffing.assignment_create.field_policy",
+						FieldKey:         "field_x",
+						OrgApplicability: orgApplicabilityBusinessUnit,
+						BusinessUnitID:   "10000001",
+						EffectiveDate:    "2026-01-01",
+						EndDate:          "2000-01-01",
 					},
 				}, nil
 			},
 		})
-		body := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-restore-conflict"}`
+		body := `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-restore-conflict"}`
 		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(body))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
@@ -1234,7 +1383,7 @@ func TestHandleSetIDStrategyRegistryDisableAPI_ErrorBranches(t *testing.T) {
 		t.Fatalf("status=%d body=%s", badJSONRec.Code, badJSONRec.Body.String())
 	}
 
-	missingRequestIDReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_level":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":""}`))
+	missingRequestIDReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_applicability":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":""}`))
 	missingRequestIDReq = missingRequestIDReq.WithContext(withTenant(missingRequestIDReq.Context(), Tenant{ID: "t1"}))
 	missingRequestIDRec := httptest.NewRecorder()
 	handleSetIDStrategyRegistryDisableAPI(missingRequestIDRec, missingRequestIDReq)
@@ -1242,7 +1391,7 @@ func TestHandleSetIDStrategyRegistryDisableAPI_ErrorBranches(t *testing.T) {
 		t.Fatalf("status=%d body=%s", missingRequestIDRec.Code, missingRequestIDRec.Body.String())
 	}
 
-	invalidReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"bad","field_key":"field_x","org_level":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-invalid"}`))
+	invalidReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"bad","field_key":"field_x","org_applicability":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-invalid"}`))
 	invalidReq = invalidReq.WithContext(withTenant(invalidReq.Context(), Tenant{ID: "t1"}))
 	invalidRec := httptest.NewRecorder()
 	handleSetIDStrategyRegistryDisableAPI(invalidRec, invalidReq)
@@ -1250,7 +1399,7 @@ func TestHandleSetIDStrategyRegistryDisableAPI_ErrorBranches(t *testing.T) {
 		t.Fatalf("status=%d body=%s", invalidRec.Code, invalidRec.Body.String())
 	}
 
-	contextMismatchReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_level":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-mismatch"}`))
+	contextMismatchReq := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_applicability":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-mismatch"}`))
 	contextMismatchReq.Header.Set("X-Actor-Scope", "saas")
 	contextMismatchReq = contextMismatchReq.WithContext(withTenant(contextMismatchReq.Context(), Tenant{ID: "t1"}))
 	contextMismatchRec := httptest.NewRecorder()
@@ -1268,7 +1417,7 @@ func TestHandleSetIDStrategyRegistryDisableAPI_ErrorBranches(t *testing.T) {
 				return setIDStrategyRegistryItem{}, false, errStrategyNotFound
 			},
 		})
-		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_level":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-not-found"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_applicability":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-not-found"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleSetIDStrategyRegistryDisableAPI(rec, req)
@@ -1283,7 +1432,7 @@ func TestHandleSetIDStrategyRegistryDisableAPI_ErrorBranches(t *testing.T) {
 				return setIDStrategyRegistryItem{}, false, errors.New("invalid_disable_date")
 			},
 		})
-		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_level":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-invalid-date"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_applicability":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-invalid-date"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleSetIDStrategyRegistryDisableAPI(rec, req)
@@ -1298,7 +1447,7 @@ func TestHandleSetIDStrategyRegistryDisableAPI_ErrorBranches(t *testing.T) {
 				return setIDStrategyRegistryItem{}, false, errDisableNotAllowed
 			},
 		})
-		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_level":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-disable-deny"}`))
+		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry:disable", bytes.NewBufferString(`{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_applicability":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-disable-deny"}`))
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleSetIDStrategyRegistryDisableAPI(rec, req)
@@ -1333,7 +1482,7 @@ func TestSetIDStrategyRegistryPGStore(t *testing.T) {
 		OwnerModule:         "staffing",
 		FieldKey:            "field_x",
 		PersonalizationMode: personalizationModeSetID,
-		OrgLevel:            orgLevelBusinessUnit,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
 		BusinessUnitID:      "10000001",
 		Required:            true,
 		Visible:             true,
@@ -1347,12 +1496,12 @@ func TestSetIDStrategyRegistryPGStore(t *testing.T) {
 		UpdatedAt:           "2026-01-01T00:00:00Z",
 	}
 	disableReq := setIDStrategyRegistryDisableRequest{
-		CapabilityKey:  "staffing.assignment_create.field_policy",
-		FieldKey:       "field_x",
-		OrgLevel:       orgLevelBusinessUnit,
-		BusinessUnitID: "10000001",
-		EffectiveDate:  "2026-01-01",
-		DisableAsOf:    "2026-01-02",
+		CapabilityKey:    "staffing.assignment_create.field_policy",
+		FieldKey:         "field_x",
+		OrgApplicability: orgApplicabilityBusinessUnit,
+		BusinessUnitID:   "10000001",
+		EffectiveDate:    "2026-01-01",
+		DisableAsOf:      "2026-01-02",
 	}
 	targetRowVals := func(endDate string) []any {
 		return []any{

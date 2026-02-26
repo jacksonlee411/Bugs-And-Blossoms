@@ -20,7 +20,43 @@
       "current_policy_version": "2026-02-23"
     },
     {
+      "capability_key": "org.orgunit_write.field_policy",
+      "functional_area_key": "org_foundation",
+      "capability_type": "process_capability",
+      "owner_module": "orgunit",
+      "status": "active",
+      "activation_state": "active",
+      "current_policy_version": "2026-02-23"
+    },
+    {
       "capability_key": "org.orgunit_create.field_policy",
+      "functional_area_key": "org_foundation",
+      "capability_type": "process_capability",
+      "owner_module": "orgunit",
+      "status": "active",
+      "activation_state": "active",
+      "current_policy_version": "2026-02-23"
+    },
+    {
+      "capability_key": "org.orgunit_add_version.field_policy",
+      "functional_area_key": "org_foundation",
+      "capability_type": "process_capability",
+      "owner_module": "orgunit",
+      "status": "active",
+      "activation_state": "active",
+      "current_policy_version": "2026-02-23"
+    },
+    {
+      "capability_key": "org.orgunit_insert_version.field_policy",
+      "functional_area_key": "org_foundation",
+      "capability_type": "process_capability",
+      "owner_module": "orgunit",
+      "status": "active",
+      "activation_state": "active",
+      "current_policy_version": "2026-02-23"
+    },
+    {
+      "capability_key": "org.orgunit_correct.field_policy",
       "functional_area_key": "org_foundation",
       "capability_type": "process_capability",
       "owner_module": "orgunit",
@@ -73,6 +109,24 @@
       "action": "admin",
       "capability_key": "staffing.assignment_create.field_policy",
       "owner_module": "staffing",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/capabilities/catalog",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/capabilities/catalog:by-intent",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
       "status": "active"
     },
     {

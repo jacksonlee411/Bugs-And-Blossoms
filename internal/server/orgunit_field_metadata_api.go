@@ -742,101 +742,8 @@ func handleOrgUnitFieldPoliciesAPI(w http.ResponseWriter, r *http.Request, store
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
-	tenant, ok := currentTenant(r.Context())
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
-		return
-	}
-	policyStore, ok := store.(orgUnitFieldPolicyStore)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_store_missing", "orgunit store missing")
-		return
-	}
-
-	var req orgUnitFieldPoliciesUpsertRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
-		return
-	}
-	req.FieldKey = strings.TrimSpace(req.FieldKey)
-	req.ScopeType = strings.TrimSpace(req.ScopeType)
-	req.ScopeKey = strings.TrimSpace(req.ScopeKey)
-	req.DefaultMode = strings.TrimSpace(req.DefaultMode)
-	req.EnabledOn = strings.TrimSpace(req.EnabledOn)
-	req.RequestID = strings.TrimSpace(req.RequestID)
-	if req.FieldKey == "" || req.EnabledOn == "" || req.RequestID == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key/enabled_on/request_id required")
-		return
-	}
-	if _, err := time.Parse("2006-01-02", req.EnabledOn); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "enabled_on invalid")
-		return
-	}
-	if !isAllowedOrgUnitPolicyFieldKey(req.FieldKey) {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, orgUnitErrFieldDefinitionNotFound, "field definition not found")
-		return
-	}
-	scopeType, scopeKey, scopeOK := normalizeFieldPolicyScope(req.ScopeType, req.ScopeKey)
-	if !scopeOK {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope invalid")
-		return
-	}
-	maintainable := true
-	if req.Maintainable != nil {
-		maintainable = *req.Maintainable
-	}
-	defaultMode := strings.ToUpper(req.DefaultMode)
-	if defaultMode == "" {
-		defaultMode = "NONE"
-	}
-	var defaultRuleExpr *string
-	switch defaultMode {
-	case "NONE":
-		defaultRuleExpr = nil
-	case "CEL":
-		if req.DefaultRuleExpr == nil || strings.TrimSpace(*req.DefaultRuleExpr) == "" {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrFieldPolicyExprInvalid, "default_rule_expr required")
-			return
-		}
-		expr := strings.TrimSpace(*req.DefaultRuleExpr)
-		if err := validateFieldPolicyCELExpr(expr); err != nil {
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrFieldPolicyExprInvalid, "default_rule_expr invalid")
-			return
-		}
-		defaultRuleExpr = &expr
-	default:
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "default_mode invalid")
-		return
-	}
-	if !maintainable && defaultMode != "CEL" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, orgUnitErrDefaultRuleRequired, "default_rule_expr required when maintainable=false")
-		return
-	}
-
-	result, wasRetry, err := policyStore.UpsertTenantFieldPolicy(
-		r.Context(),
-		tenant.ID,
-		req.FieldKey,
-		scopeType,
-		scopeKey,
-		maintainable,
-		defaultMode,
-		defaultRuleExpr,
-		req.EnabledOn,
-		req.RequestID,
-		orgUnitInitiatorUUID(r.Context(), tenant.ID),
-	)
-	if err != nil {
-		writeOrgUnitServiceError(w, r, err, "orgunit_field_policy_upsert_failed")
-		return
-	}
-	status := http.StatusCreated
-	if wasRetry {
-		status = http.StatusOK
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(orgUnitFieldPolicyAPIItemFromStore(result))
+	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "write_disabled", "tenant_field_policies write disabled (read-only)")
+	_ = store
 }
 
 func handleOrgUnitFieldPoliciesDisableAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
@@ -844,56 +751,8 @@ func handleOrgUnitFieldPoliciesDisableAPI(w http.ResponseWriter, r *http.Request
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
-	tenant, ok := currentTenant(r.Context())
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
-		return
-	}
-	policyStore, ok := store.(orgUnitFieldPolicyStore)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_store_missing", "orgunit store missing")
-		return
-	}
-	var req orgUnitFieldPoliciesDisableRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
-		return
-	}
-	req.FieldKey = strings.TrimSpace(req.FieldKey)
-	req.ScopeType = strings.TrimSpace(req.ScopeType)
-	req.ScopeKey = strings.TrimSpace(req.ScopeKey)
-	req.DisabledOn = strings.TrimSpace(req.DisabledOn)
-	req.RequestID = strings.TrimSpace(req.RequestID)
-	if req.FieldKey == "" || req.DisabledOn == "" || req.RequestID == "" {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "field_key/disabled_on/request_id required")
-		return
-	}
-	if _, err := time.Parse("2006-01-02", req.DisabledOn); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "disabled_on invalid")
-		return
-	}
-	scopeType, scopeKey, scopeOK := normalizeFieldPolicyScope(req.ScopeType, req.ScopeKey)
-	if !scopeOK {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope invalid")
-		return
-	}
-	result, _, err := policyStore.DisableTenantFieldPolicy(
-		r.Context(),
-		tenant.ID,
-		req.FieldKey,
-		scopeType,
-		scopeKey,
-		req.DisabledOn,
-		req.RequestID,
-		orgUnitInitiatorUUID(r.Context(), tenant.ID),
-	)
-	if err != nil {
-		writeOrgUnitServiceError(w, r, err, "orgunit_field_policy_disable_failed")
-		return
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(orgUnitFieldPolicyAPIItemFromStore(result))
+	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "write_disabled", "tenant_field_policies write disabled (read-only)")
+	_ = store
 }
 
 func handleOrgUnitFieldPoliciesResolvePreviewAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
@@ -1137,12 +996,10 @@ func normalizeFieldPolicyScope(scopeType string, scopeKey string) (string, strin
 	case "GLOBAL":
 		return scopeType, "global", true
 	case "FORM":
-		switch scopeKey {
-		case "orgunit.create_dialog", "orgunit.details.add_version_dialog", "orgunit.details.insert_version_dialog", "orgunit.details.correct_dialog":
+		if _, ok := orgUnitFieldPolicyCapabilityKeyForScope(scopeType, scopeKey); ok {
 			return scopeType, scopeKey, true
-		default:
-			return "", "", false
 		}
+		return "", "", false
 	default:
 		return "", "", false
 	}

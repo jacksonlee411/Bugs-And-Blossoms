@@ -20,7 +20,7 @@
 **现状结论**：不是同一事实源，且当前运行时优先消费 Strategy Registry。  
 - 字段配置页的“默认值”来自 `tenant_field_policies`（`default_mode + default_rule_expr`），不支持独立 `default_value` 字段。  
 - Strategy Registry 使用 `default_rule_ref + default_value`。  
-- `create_org` 写入链路在 store 支持时优先走 `ResolveSetIDStrategyFieldDecision(...)`，仅在不支持时才回退 `ResolveTenantFieldPolicy(...)`。
+- `create_org` 写入链路已统一走 `ResolveSetIDStrategyFieldDecision(...)`，不再回退 `ResolveTenantFieldPolicy(...)`（旧链路停写/停用）。
 
 **影响**：在字段配置页改“默认值”，不等价于修改当前新建组织运行时默认值。
 
@@ -46,13 +46,13 @@
 ### 2.4 字段配置“策略作用域”与 Strategy capability_key 的对应关系
 **现状结论**：是“语义近似映射”，不是结构化同字段映射。  
 - 字段配置作用域：`scope_type + scope_key`（`GLOBAL/FORM` + 固定 form key）。
-- Strategy 作用域：`capability_key + org_level + business_unit_id + effective_date`。  
+- Strategy 作用域：`capability_key + org_applicability + business_unit_id + effective_date`。  
 - 当前仅 `orgunit.create_dialog` 有运行时 capability 对应（`org.orgunit_create.field_policy`）。
 - `add_version / insert_version / correct` 等 form scope 尚未形成对应 capability 的统一运行时消费闭环。
 
 **建议映射口径（冻结建议）**：
 - `FORM + orgunit.create_dialog` -> `capability_key=org.orgunit_create.field_policy`
-- `GLOBAL` -> 同 capability 下的 `org_level=tenant,business_unit_id=''` 兜底策略
+- `GLOBAL` -> 同 capability 下的 `org_applicability=tenant,business_unit_id=''` 兜底策略
 
 ### 2.5 其他对应关系（补充）
 1. **共同键**：两侧都以 `field_key` + 生效日（day 粒度）为核心维度。  
@@ -75,7 +75,7 @@
 
 **页面 B（SetID Strategy Registry）定位**：能力上下文策略治理页（Dynamic Policy）。  
 - 负责：`maintainable/default_rule_ref/default_value/allowed_value_codes/required/visible` 等运行时判定项。  
-- 负责：按 `capability_key + org_level + business_unit + effective_date` 管理生效版本。
+- 负责：按 `capability_key + org_applicability + business_unit_id + effective_date` 管理生效版本。
 
 **页面联动原则**：
 - 字段配置页展示“策略摘要”可保留，但应标注“来源：Strategy Registry（只读镜像）”。

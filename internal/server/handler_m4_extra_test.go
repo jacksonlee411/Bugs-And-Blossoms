@@ -182,7 +182,7 @@ func TestHandler_SetIDGovernanceRoutes(t *testing.T) {
 		t.Fatalf("scope subscriptions should be retired: status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	if rec := doReq(http.MethodPost, "/org/api/setid-strategy-registry", `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r1"}`, map[string]string{
+	if rec := doReq(http.MethodPost, "/org/api/setid-strategy-registry", `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"default_rule_ref":"rule://a1","default_value":"a1","priority":200,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r1"}`, map[string]string{
 		"Content-Type": "application/json",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("setid strategy registry post status=%d body=%s", rec.Code, rec.Body.String())
@@ -190,12 +190,12 @@ func TestHandler_SetIDGovernanceRoutes(t *testing.T) {
 	if rec := doReq(http.MethodGet, "/org/api/setid-strategy-registry?as_of=2026-01-01&capability_key=staffing.assignment_create.field_policy&field_key=field_x", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("setid strategy registry get status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := doReq(http.MethodPost, "/org/api/setid-strategy-registry", `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_level":"tenant","required":false,"visible":true,"default_value":"fallback","priority":100,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-fallback"}`, map[string]string{
+	if rec := doReq(http.MethodPost, "/org/api/setid-strategy-registry", `{"capability_key":"staffing.assignment_create.field_policy","owner_module":"staffing","field_key":"field_x","personalization_mode":"setid","org_applicability":"tenant","required":false,"visible":true,"default_value":"fallback","priority":100,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-fallback"}`, map[string]string{
 		"Content-Type": "application/json",
 	}); rec.Code != http.StatusCreated {
 		t.Fatalf("setid strategy registry fallback status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := doReq(http.MethodPost, "/org/api/setid-strategy-registry:disable", `{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_level":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-disable"}`, map[string]string{
+	if rec := doReq(http.MethodPost, "/org/api/setid-strategy-registry:disable", `{"capability_key":"staffing.assignment_create.field_policy","field_key":"field_x","org_applicability":"business_unit","business_unit_id":"10000001","effective_date":"2026-01-01","disable_as_of":"2026-01-02","request_id":"r-disable"}`, map[string]string{
 		"Content-Type": "application/json",
 	}); rec.Code != http.StatusOK {
 		t.Fatalf("setid strategy registry disable status=%d body=%s", rec.Code, rec.Body.String())

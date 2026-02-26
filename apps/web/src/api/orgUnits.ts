@@ -274,9 +274,13 @@ export interface OrgUnitCreateFieldDecision {
 
 export interface OrgUnitCreateFieldDecisionsResponse {
   capability_key: string
+  baseline_capability_key?: string
   business_unit_id: string
   as_of: string
   policy_version: string
+  policy_version_alg?: string
+  intent_policy_version?: string
+  baseline_policy_version?: string
   field_decisions: OrgUnitCreateFieldDecision[]
 }
 
@@ -296,6 +300,12 @@ export async function getOrgUnitCreateFieldDecisions(options: {
 
 export interface OrgUnitWriteCapabilitiesResponse {
   intent: OrgUnitWriteIntent
+  capability_key: string
+  baseline_capability_key?: string
+  policy_version: string
+  policy_version_alg?: string
+  intent_policy_version?: string
+  baseline_policy_version?: string
   tree_initialized: boolean
   enabled: boolean
   deny_reasons: string[]

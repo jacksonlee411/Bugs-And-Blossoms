@@ -56,6 +56,13 @@ errors:
     user_message_key: errors.field_policy_missing
     backend_policy: mapped
     frontend_policy: mapped
+  - code: FIELD_POLICY_REDUNDANT_OVERRIDE
+    module: setid
+    http_status: 422
+    severity: error
+    user_message_key: errors.field_policy_redundant_override
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: FIELD_POLICY_VERSION_REQUIRED
     module: orgunit
     http_status: 400

@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_strategy_registry (
   owner_module text NOT NULL,
   field_key text NOT NULL,
   personalization_mode text NOT NULL,
-  org_level text NOT NULL,
+  org_applicability text NOT NULL,
   business_unit_id text NOT NULL DEFAULT '',
   required boolean NOT NULL DEFAULT false,
   visible boolean NOT NULL DEFAULT true,
@@ -35,13 +35,13 @@ CREATE TABLE IF NOT EXISTS orgunit.setid_strategy_registry (
   CONSTRAINT setid_strategy_registry_personalization_mode_check CHECK (
     personalization_mode IN ('tenant_only', 'setid')
   ),
-  CONSTRAINT setid_strategy_registry_org_level_check CHECK (
-    org_level IN ('tenant', 'business_unit')
+  CONSTRAINT setid_strategy_registry_org_applicability_check CHECK (
+    org_applicability IN ('tenant', 'business_unit')
   ),
-  CONSTRAINT setid_strategy_registry_business_unit_check CHECK (
-    (org_level = 'tenant' AND business_unit_id = '')
+  CONSTRAINT setid_strategy_registry_business_unit_applicability_check CHECK (
+    (org_applicability = 'tenant' AND business_unit_id = '')
     OR
-    (org_level = 'business_unit' AND business_unit_id ~ '^[0-9]{8}$')
+    (org_applicability = 'business_unit' AND business_unit_id ~ '^[0-9]{8}$')
   ),
   CONSTRAINT setid_strategy_registry_priority_check CHECK (priority > 0),
   CONSTRAINT setid_strategy_registry_required_visible_check CHECK (
@@ -57,7 +57,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS setid_strategy_registry_key_unique_idx
     tenant_uuid,
     capability_key,
     field_key,
-    org_level,
+    org_applicability,
     business_unit_id,
     effective_date
   );

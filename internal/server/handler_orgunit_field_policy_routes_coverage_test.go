@@ -50,8 +50,10 @@ func TestNewHandlerWithOptions_OrgUnitFieldPolicyRoutes_AreWired(t *testing.T) {
 		}
 	}
 
-	check(http.MethodPost, "/org/api/org-units/field-policies", `{"field_key":"","enabled_on":"","request_id":""}`, http.StatusBadRequest)
-	check(http.MethodPost, "/org/api/org-units/field-policies:disable", `{"field_key":"","disabled_on":"","request_id":""}`, http.StatusBadRequest)
+	check(http.MethodPost, "/org/api/org-units/field-policies", `{"field_key":"","enabled_on":"","request_id":""}`, http.StatusUnprocessableEntity)
+	check(http.MethodPost, "/org/api/org-units/field-policies:disable", `{"field_key":"","disabled_on":"","request_id":""}`, http.StatusUnprocessableEntity)
 	check(http.MethodGet, "/org/api/org-units/field-policies:resolve-preview?as_of=2026-01-01", "", http.StatusBadRequest)
 	check(http.MethodGet, "/org/api/org-units/create-field-decisions?effective_date=2026-01-01", "", http.StatusUnprocessableEntity)
+	check(http.MethodGet, "/internal/capabilities/catalog", "", http.StatusOK)
+	check(http.MethodGet, "/internal/capabilities/catalog:by-intent", "", http.StatusOK)
 }

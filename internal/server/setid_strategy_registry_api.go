@@ -18,8 +18,8 @@ import (
 const (
 	personalizationModeTenantOnly = "tenant_only"
 	personalizationModeSetID      = "setid"
-	orgLevelTenant                = "tenant"
-	orgLevelBusinessUnit          = "business_unit"
+	orgApplicabilityTenant        = "tenant"
+	orgApplicabilityBusinessUnit  = "business_unit"
 	fieldPolicyConflictCode       = "FIELD_POLICY_CONFLICT"
 	fieldPolicyMissingCode        = "FIELD_POLICY_MISSING"
 	explainRequiredCode           = "EXPLAIN_REQUIRED"
@@ -29,6 +29,7 @@ const (
 	fieldMaskedInContextCode      = "FIELD_MASKED_IN_CONTEXT"
 	fieldDefaultRuleMissingCode   = "FIELD_DEFAULT_RULE_MISSING"
 	fieldPolicyDisableDeniedCode  = "FIELD_POLICY_DISABLE_NOT_ALLOWED"
+	fieldPolicyRedundantOverride  = "FIELD_POLICY_REDUNDANT_OVERRIDE"
 
 	fieldVisibilityVisible = "visible"
 	fieldVisibilityHidden  = "hidden"
@@ -36,6 +37,9 @@ const (
 
 	fieldMaskStrategyRedact         = "redact"
 	fieldMaskedDefaultValueFallback = "***"
+
+	strategySourceBaseline       = "baseline"
+	strategySourceIntentOverride = "intent_override"
 )
 
 var (
@@ -48,9 +52,10 @@ var (
 type setIDStrategyRegistryItem struct {
 	CapabilityKey       string   `json:"capability_key"`
 	OwnerModule         string   `json:"owner_module"`
+	SourceType          string   `json:"source_type,omitempty"`
 	FieldKey            string   `json:"field_key"`
 	PersonalizationMode string   `json:"personalization_mode"`
-	OrgLevel            string   `json:"org_level"`
+	OrgApplicability    string   `json:"org_applicability"`
 	BusinessUnitID      string   `json:"business_unit_id,omitempty"`
 	Required            bool     `json:"required"`
 	Visible             bool     `json:"visible"`
@@ -72,7 +77,7 @@ type setIDStrategyRegistryUpsertAPIRequest struct {
 	OwnerModule         string   `json:"owner_module"`
 	FieldKey            string   `json:"field_key"`
 	PersonalizationMode string   `json:"personalization_mode"`
-	OrgLevel            string   `json:"org_level"`
+	OrgApplicability    string   `json:"org_applicability"`
 	BusinessUnitID      string   `json:"business_unit_id"`
 	Required            bool     `json:"required"`
 	Visible             bool     `json:"visible"`
@@ -90,26 +95,27 @@ type setIDStrategyRegistryUpsertAPIRequest struct {
 }
 
 type setIDStrategyRegistryDisableAPIRequest struct {
-	CapabilityKey  string `json:"capability_key"`
-	FieldKey       string `json:"field_key"`
-	OrgLevel       string `json:"org_level"`
-	BusinessUnitID string `json:"business_unit_id"`
-	EffectiveDate  string `json:"effective_date"`
-	DisableAsOf    string `json:"disable_as_of"`
-	RequestID      string `json:"request_id"`
+	CapabilityKey    string `json:"capability_key"`
+	FieldKey         string `json:"field_key"`
+	OrgApplicability string `json:"org_applicability"`
+	BusinessUnitID   string `json:"business_unit_id"`
+	EffectiveDate    string `json:"effective_date"`
+	DisableAsOf      string `json:"disable_as_of"`
+	RequestID        string `json:"request_id"`
 }
 
 type setIDStrategyRegistryDisableRequest struct {
-	CapabilityKey  string
-	FieldKey       string
-	OrgLevel       string
-	BusinessUnitID string
-	EffectiveDate  string
-	DisableAsOf    string
+	CapabilityKey    string
+	FieldKey         string
+	OrgApplicability string
+	BusinessUnitID   string
+	EffectiveDate    string
+	DisableAsOf      string
 }
 
 type setIDFieldDecision struct {
 	CapabilityKey      string   `json:"capability_key"`
+	SourceType         string   `json:"source_type,omitempty"`
 	FieldKey           string   `json:"field_key"`
 	Required           bool     `json:"required"`
 	Visible            bool     `json:"visible"`
@@ -231,7 +237,7 @@ func scanSetIDStrategyRegistryRows(rows pgx.Rows) ([]setIDStrategyRegistryItem, 
 			&item.OwnerModule,
 			&item.FieldKey,
 			&item.PersonalizationMode,
-			&item.OrgLevel,
+			&item.OrgApplicability,
 			&item.BusinessUnitID,
 			&item.Required,
 			&item.Visible,
@@ -255,6 +261,7 @@ func scanSetIDStrategyRegistryRows(rows pgx.Rows) ([]setIDStrategyRegistryItem, 
 			}
 		}
 		item.AllowedValueCodes = normalizeAllowedValueCodes(item.AllowedValueCodes)
+		item.SourceType = strategySourceTypeForCapabilityKey(item.CapabilityKey)
 		out = append(out, item)
 	}
 	return out, rows.Err()
@@ -282,11 +289,11 @@ SELECT EXISTS (
   WHERE tenant_uuid = $1::uuid
     AND capability_key = $2::text
     AND field_key = $3::text
-    AND org_level = $4::text
+    AND org_applicability = $4::text
     AND business_unit_id = $5::text
     AND effective_date = $6::date
 )
-`, tenantID, item.CapabilityKey, item.FieldKey, item.OrgLevel, item.BusinessUnitID, item.EffectiveDate).Scan(&updated); err != nil {
+`, tenantID, item.CapabilityKey, item.FieldKey, item.OrgApplicability, item.BusinessUnitID, item.EffectiveDate).Scan(&updated); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `
@@ -296,7 +303,7 @@ INSERT INTO orgunit.setid_strategy_registry (
   owner_module,
   field_key,
   personalization_mode,
-  org_level,
+  org_applicability,
   business_unit_id,
   required,
   visible,
@@ -333,7 +340,7 @@ INSERT INTO orgunit.setid_strategy_registry (
   $19::date,
   $20::timestamptz
 )
-ON CONFLICT (tenant_uuid, capability_key, field_key, org_level, business_unit_id, effective_date)
+ON CONFLICT (tenant_uuid, capability_key, field_key, org_applicability, business_unit_id, effective_date)
 DO UPDATE SET
   owner_module = EXCLUDED.owner_module,
   personalization_mode = EXCLUDED.personalization_mode,
@@ -349,7 +356,7 @@ DO UPDATE SET
   change_policy = EXCLUDED.change_policy,
   end_date = EXCLUDED.end_date,
   updated_at = EXCLUDED.updated_at
-`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgLevel, item.BusinessUnitID, item.Required, item.Visible, item.Maintainable, item.DefaultRuleRef, item.DefaultValue, allowedValueCodesJSON, item.Priority, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
+`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgApplicability, item.BusinessUnitID, item.Required, item.Visible, item.Maintainable, item.DefaultRuleRef, item.DefaultValue, allowedValueCodesJSON, item.Priority, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
 		return err
 	})
 	return item, updated, err
@@ -360,9 +367,15 @@ func ensureStrategyResolvableAfterDisable(items []setIDStrategyRegistryItem, req
 	if err != nil {
 		return err
 	}
+	capabilityCandidates := map[string]struct{}{
+		req.CapabilityKey: {},
+	}
+	if baselineCapabilityKey, ok := orgUnitBaselineCapabilityKeyForIntentCapability(req.CapabilityKey); ok {
+		capabilityCandidates[baselineCapabilityKey] = struct{}{}
+	}
 	active := make([]setIDStrategyRegistryItem, 0, len(items))
 	for _, item := range items {
-		if item.CapabilityKey != req.CapabilityKey || item.FieldKey != req.FieldKey {
+		if _, ok := capabilityCandidates[item.CapabilityKey]; !ok || item.FieldKey != req.FieldKey {
 			continue
 		}
 		effectiveDate, effectiveErr := time.Parse("2006-01-02", item.EffectiveDate)
@@ -378,10 +391,10 @@ func ensureStrategyResolvableAfterDisable(items []setIDStrategyRegistryItem, req
 		active = append(active, item)
 	}
 	businessUnitID := ""
-	if req.OrgLevel == orgLevelBusinessUnit {
+	if req.OrgApplicability == orgApplicabilityBusinessUnit {
 		businessUnitID = req.BusinessUnitID
 	}
-	if _, err := resolveFieldDecisionFromItems(active, businessUnitID); err != nil {
+	if _, err := resolveFieldDecisionFromItems(active, req.CapabilityKey, req.FieldKey, businessUnitID); err != nil {
 		return errDisableNotAllowed
 	}
 	return nil
@@ -392,6 +405,10 @@ func (s *setIDStrategyRegistryPGStore) disable(ctx context.Context, tenantID str
 	updated := false
 	nowUTC := time.Now().UTC()
 	endDate := strings.TrimSpace(req.DisableAsOf)
+	capabilityCandidates := []string{req.CapabilityKey}
+	if baselineCapabilityKey, ok := orgUnitBaselineCapabilityKeyForIntentCapability(req.CapabilityKey); ok && baselineCapabilityKey != req.CapabilityKey {
+		capabilityCandidates = append(capabilityCandidates, baselineCapabilityKey)
+	}
 	err := s.withTx(ctx, tenantID, func(tx pgx.Tx) error {
 		row := tx.QueryRow(ctx, `
 SELECT
@@ -399,7 +416,7 @@ SELECT
   owner_module,
   field_key,
   personalization_mode,
-  org_level,
+  org_applicability,
   business_unit_id,
   required,
   visible,
@@ -418,18 +435,18 @@ FROM orgunit.setid_strategy_registry
 WHERE tenant_uuid = $1::uuid
   AND capability_key = $2::text
   AND field_key = $3::text
-  AND org_level = $4::text
+  AND org_applicability = $4::text
   AND business_unit_id = $5::text
   AND effective_date = $6::date
 FOR UPDATE
-`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgLevel, req.BusinessUnitID, req.EffectiveDate)
+`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitID, req.EffectiveDate)
 		var allowedValueCodesRaw string
 		if err := row.Scan(
 			&target.CapabilityKey,
 			&target.OwnerModule,
 			&target.FieldKey,
 			&target.PersonalizationMode,
-			&target.OrgLevel,
+			&target.OrgApplicability,
 			&target.BusinessUnitID,
 			&target.Required,
 			&target.Visible,
@@ -469,10 +486,10 @@ SET end_date = $7::date,
 WHERE tenant_uuid = $1::uuid
   AND capability_key = $2::text
   AND field_key = $3::text
-  AND org_level = $4::text
+  AND org_applicability = $4::text
   AND business_unit_id = $5::text
   AND effective_date = $6::date
-`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgLevel, req.BusinessUnitID, req.EffectiveDate, endDate, nowUTC); err != nil {
+`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitID, req.EffectiveDate, endDate, nowUTC); err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `
@@ -481,7 +498,7 @@ SELECT
   owner_module,
   field_key,
   personalization_mode,
-  org_level,
+  org_applicability,
   business_unit_id,
   required,
   visible,
@@ -498,12 +515,12 @@ SELECT
   to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
 FROM orgunit.setid_strategy_registry
 WHERE tenant_uuid = $1::uuid
-  AND capability_key = $2::text
+  AND capability_key = ANY($2::text[])
   AND field_key = $3::text
   AND effective_date <= $4::date
   AND (end_date IS NULL OR end_date > $4::date)
-ORDER BY capability_key ASC, field_key ASC, org_level ASC, business_unit_id ASC, effective_date ASC
-`, tenantID, req.CapabilityKey, req.FieldKey, endDate)
+ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, business_unit_id ASC, effective_date ASC
+`, tenantID, capabilityCandidates, req.FieldKey, endDate)
 		if err != nil {
 			return err
 		}
@@ -538,7 +555,7 @@ SELECT
   owner_module,
   field_key,
   personalization_mode,
-  org_level,
+  org_applicability,
   business_unit_id,
   required,
   visible,
@@ -559,7 +576,7 @@ WHERE tenant_uuid = $1::uuid
   AND ($3::text = '' OR field_key = $3::text)
   AND effective_date <= $4::date
   AND (end_date IS NULL OR end_date > $4::date)
-ORDER BY capability_key ASC, field_key ASC, org_level ASC, business_unit_id ASC, effective_date ASC
+ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, business_unit_id ASC, effective_date ASC
 	`, tenantID, capabilityKey, fieldKey, normalizedAsOf)
 		if err != nil {
 			return err
@@ -576,18 +593,45 @@ ORDER BY capability_key ASC, field_key ASC, org_level ASC, business_unit_id ASC,
 }
 
 func (s *setIDStrategyRegistryPGStore) resolveFieldDecision(ctx context.Context, tenantID string, capabilityKey string, fieldKey string, businessUnitID string, asOf string) (setIDFieldDecision, error) {
-	items, err := s.list(ctx, tenantID, capabilityKey, fieldKey, asOf)
+	items, err := collectCapabilityResolutionItems(
+		func(queryCapabilityKey string) ([]setIDStrategyRegistryItem, error) {
+			return s.list(ctx, tenantID, queryCapabilityKey, fieldKey, asOf)
+		},
+		capabilityKey,
+	)
 	if err != nil {
 		return setIDFieldDecision{}, err
 	}
-	return resolveFieldDecisionFromItems(items, businessUnitID)
+	return resolveFieldDecisionFromItems(items, capabilityKey, fieldKey, businessUnitID)
+}
+
+func collectCapabilityResolutionItems(
+	listByCapability func(queryCapabilityKey string) ([]setIDStrategyRegistryItem, error),
+	capabilityKey string,
+) ([]setIDStrategyRegistryItem, error) {
+	capabilityKey = strings.ToLower(strings.TrimSpace(capabilityKey))
+	items, err := listByCapability(capabilityKey)
+	if err != nil {
+		return nil, err
+	}
+	merged := append([]setIDStrategyRegistryItem(nil), items...)
+	baselineCapabilityKey, hasBaseline := orgUnitBaselineCapabilityKeyForIntentCapability(capabilityKey)
+	if !hasBaseline || baselineCapabilityKey == capabilityKey {
+		return merged, nil
+	}
+	baselineItems, baselineErr := listByCapability(baselineCapabilityKey)
+	if baselineErr != nil {
+		return nil, baselineErr
+	}
+	merged = append(merged, baselineItems...)
+	return merged, nil
 }
 
 func strategyRegistrySortKey(item setIDStrategyRegistryItem) string {
 	return strings.Join([]string{
 		item.CapabilityKey,
 		item.FieldKey,
-		item.OrgLevel,
+		item.OrgApplicability,
 		item.BusinessUnitID,
 		item.EffectiveDate,
 	}, "|")
@@ -597,9 +641,10 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 	item := setIDStrategyRegistryItem{
 		CapabilityKey:       strings.ToLower(strings.TrimSpace(req.CapabilityKey)),
 		OwnerModule:         strings.ToLower(strings.TrimSpace(req.OwnerModule)),
+		SourceType:          "",
 		FieldKey:            strings.ToLower(strings.TrimSpace(req.FieldKey)),
 		PersonalizationMode: strings.ToLower(strings.TrimSpace(req.PersonalizationMode)),
-		OrgLevel:            strings.ToLower(strings.TrimSpace(req.OrgLevel)),
+		OrgApplicability:    strings.ToLower(strings.TrimSpace(req.OrgApplicability)),
 		BusinessUnitID:      strings.TrimSpace(req.BusinessUnitID),
 		Required:            req.Required,
 		Visible:             req.Visible,
@@ -623,23 +668,24 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 	if item.ChangePolicy == "" {
 		item.ChangePolicy = "plan_required"
 	}
-	if item.OrgLevel == orgLevelTenant {
+	if item.OrgApplicability == orgApplicabilityTenant {
 		item.BusinessUnitID = ""
 	}
+	item.SourceType = strategySourceTypeForCapabilityKey(item.CapabilityKey)
 	item.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	return item
 }
 
 func normalizeStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableAPIRequest) setIDStrategyRegistryDisableRequest {
 	item := setIDStrategyRegistryDisableRequest{
-		CapabilityKey:  strings.ToLower(strings.TrimSpace(req.CapabilityKey)),
-		FieldKey:       strings.ToLower(strings.TrimSpace(req.FieldKey)),
-		OrgLevel:       strings.ToLower(strings.TrimSpace(req.OrgLevel)),
-		BusinessUnitID: strings.TrimSpace(req.BusinessUnitID),
-		EffectiveDate:  strings.TrimSpace(req.EffectiveDate),
-		DisableAsOf:    strings.TrimSpace(req.DisableAsOf),
+		CapabilityKey:    strings.ToLower(strings.TrimSpace(req.CapabilityKey)),
+		FieldKey:         strings.ToLower(strings.TrimSpace(req.FieldKey)),
+		OrgApplicability: strings.ToLower(strings.TrimSpace(req.OrgApplicability)),
+		BusinessUnitID:   strings.TrimSpace(req.BusinessUnitID),
+		EffectiveDate:    strings.TrimSpace(req.EffectiveDate),
+		DisableAsOf:      strings.TrimSpace(req.DisableAsOf),
 	}
-	if item.OrgLevel == orgLevelTenant {
+	if item.OrgApplicability == orgApplicabilityTenant {
 		item.BusinessUnitID = ""
 	}
 	return item
@@ -668,15 +714,44 @@ func normalizeAllowedValueCodes(values []string) []string {
 	return out
 }
 
+func strategySourceTypeForCapabilityKey(capabilityKey string) string {
+	capabilityKey = strings.ToLower(strings.TrimSpace(capabilityKey))
+	switch capabilityKey {
+	case orgUnitWriteFieldPolicyCapabilityKey:
+		return strategySourceBaseline
+	case orgUnitCreateFieldPolicyCapabilityKey,
+		orgUnitAddVersionFieldPolicyCapabilityKey,
+		orgUnitInsertVersionFieldPolicyCapabilityKey,
+		orgUnitCorrectFieldPolicyCapabilityKey:
+		return strategySourceIntentOverride
+	default:
+		return ""
+	}
+}
+
 func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, string) {
-	if item.CapabilityKey == "" || item.OwnerModule == "" || item.FieldKey == "" || item.PersonalizationMode == "" || item.OrgLevel == "" || item.EffectiveDate == "" {
-		return http.StatusBadRequest, "invalid_request", "capability_key/owner_module/field_key/personalization_mode/org_level/effective_date required"
+	if item.CapabilityKey == "" || item.OwnerModule == "" || item.FieldKey == "" || item.PersonalizationMode == "" || item.OrgApplicability == "" || item.EffectiveDate == "" {
+		return http.StatusBadRequest, "invalid_request", "capability_key/owner_module/field_key/personalization_mode/org_applicability/effective_date required"
 	}
 	if !capabilityKeyPattern.MatchString(item.CapabilityKey) {
 		return http.StatusBadRequest, "invalid_capability_key", "invalid capability_key"
 	}
 	if containsCapabilityContextToken(item.CapabilityKey) {
 		return http.StatusUnprocessableEntity, "invalid_capability_key_context", "capability_key must not include context tokens"
+	}
+	definition, ok := capabilityDefinitionForKey(item.CapabilityKey)
+	if !ok {
+		return http.StatusUnprocessableEntity, "invalid_request", "capability_key must be registered"
+	}
+	if definition.OwnerModule != "" && definition.OwnerModule != item.OwnerModule {
+		return http.StatusUnprocessableEntity, "invalid_request", "owner_module must match capability registry"
+	}
+	catalogEntry, ok := capabilityCatalogEntryForCapabilityKey(item.CapabilityKey)
+	if !ok {
+		return http.StatusUnprocessableEntity, "invalid_request", "capability_key must be discoverable in capability catalog"
+	}
+	if catalogEntry.OwnerModule != "" && catalogEntry.OwnerModule != item.OwnerModule {
+		return http.StatusUnprocessableEntity, "invalid_request", "owner_module must match capability catalog"
 	}
 	if !fieldKeyPattern.MatchString(item.FieldKey) {
 		return http.StatusBadRequest, "invalid_field_key", "invalid field_key"
@@ -686,9 +761,9 @@ func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, 
 	default:
 		return http.StatusUnprocessableEntity, "personalization_mode_invalid", "personalization_mode invalid"
 	}
-	switch item.OrgLevel {
-	case orgLevelTenant:
-	case orgLevelBusinessUnit:
+	switch item.OrgApplicability {
+	case orgApplicabilityTenant:
+	case orgApplicabilityBusinessUnit:
 		if item.BusinessUnitID == "" {
 			return http.StatusBadRequest, "invalid_business_unit_id", "business_unit_id required"
 		}
@@ -696,7 +771,7 @@ func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, 
 			return http.StatusBadRequest, "invalid_business_unit_id", "invalid business_unit_id"
 		}
 	default:
-		return http.StatusUnprocessableEntity, "org_level_invalid", "org_level invalid"
+		return http.StatusUnprocessableEntity, "org_applicability_invalid", "org_applicability invalid"
 	}
 	if item.PersonalizationMode != personalizationModeTenantOnly && !item.ExplainRequired {
 		return http.StatusUnprocessableEntity, explainRequiredCode, "explain_required must be true when personalization_mode is not tenant_only"
@@ -727,8 +802,8 @@ func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, 
 }
 
 func validateStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableRequest) (int, string, string) {
-	if req.CapabilityKey == "" || req.FieldKey == "" || req.OrgLevel == "" || req.EffectiveDate == "" || req.DisableAsOf == "" {
-		return http.StatusBadRequest, "invalid_request", "capability_key/field_key/org_level/effective_date/disable_as_of required"
+	if req.CapabilityKey == "" || req.FieldKey == "" || req.OrgApplicability == "" || req.EffectiveDate == "" || req.DisableAsOf == "" {
+		return http.StatusBadRequest, "invalid_request", "capability_key/field_key/org_applicability/effective_date/disable_as_of required"
 	}
 	if !capabilityKeyPattern.MatchString(req.CapabilityKey) {
 		return http.StatusBadRequest, "invalid_capability_key", "invalid capability_key"
@@ -736,12 +811,18 @@ func validateStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableRequ
 	if containsCapabilityContextToken(req.CapabilityKey) {
 		return http.StatusUnprocessableEntity, "invalid_capability_key_context", "capability_key must not include context tokens"
 	}
+	if _, ok := capabilityDefinitionForKey(req.CapabilityKey); !ok {
+		return http.StatusUnprocessableEntity, "invalid_request", "capability_key must be registered"
+	}
+	if _, ok := capabilityCatalogEntryForCapabilityKey(req.CapabilityKey); !ok {
+		return http.StatusUnprocessableEntity, "invalid_request", "capability_key must be discoverable in capability catalog"
+	}
 	if !fieldKeyPattern.MatchString(req.FieldKey) {
 		return http.StatusBadRequest, "invalid_field_key", "invalid field_key"
 	}
-	switch req.OrgLevel {
-	case orgLevelTenant:
-	case orgLevelBusinessUnit:
+	switch req.OrgApplicability {
+	case orgApplicabilityTenant:
+	case orgApplicabilityBusinessUnit:
 		if req.BusinessUnitID == "" {
 			return http.StatusBadRequest, "invalid_business_unit_id", "business_unit_id required"
 		}
@@ -749,7 +830,7 @@ func validateStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableRequ
 			return http.StatusBadRequest, "invalid_business_unit_id", "invalid business_unit_id"
 		}
 	default:
-		return http.StatusUnprocessableEntity, "org_level_invalid", "org_level invalid"
+		return http.StatusUnprocessableEntity, "org_applicability_invalid", "org_applicability invalid"
 	}
 	effectiveDate, err := time.Parse("2006-01-02", req.EffectiveDate)
 	if err != nil {
@@ -812,7 +893,7 @@ func (s *setIDStrategyRegistryRuntime) disable(tenantID string, req setIDStrateg
 	targetKey := strings.Join([]string{
 		req.CapabilityKey,
 		req.FieldKey,
-		req.OrgLevel,
+		req.OrgApplicability,
 		req.BusinessUnitID,
 		req.EffectiveDate,
 	}, "|")
@@ -821,7 +902,7 @@ func (s *setIDStrategyRegistryRuntime) disable(tenantID string, req setIDStrateg
 		candidateKey := strings.Join([]string{
 			items[i].CapabilityKey,
 			items[i].FieldKey,
-			items[i].OrgLevel,
+			items[i].OrgApplicability,
 			items[i].BusinessUnitID,
 			items[i].EffectiveDate,
 		}, "|")
@@ -882,6 +963,9 @@ func (s *setIDStrategyRegistryRuntime) list(tenantID string, capabilityKey strin
 				continue
 			}
 		}
+		if strings.TrimSpace(item.SourceType) == "" {
+			item.SourceType = strategySourceTypeForCapabilityKey(item.CapabilityKey)
+		}
 		out = append(out, item)
 	}
 	return out, nil
@@ -894,57 +978,201 @@ func (s *setIDStrategyRegistryRuntime) resolveFieldDecision(
 	businessUnitID string,
 	asOf string,
 ) (setIDFieldDecision, error) {
-	items, err := s.list(tenantID, capabilityKey, fieldKey, asOf)
+	items, err := collectCapabilityResolutionItems(
+		func(queryCapabilityKey string) ([]setIDStrategyRegistryItem, error) {
+			return s.list(tenantID, queryCapabilityKey, fieldKey, asOf)
+		},
+		capabilityKey,
+	)
 	if err != nil {
 		return setIDFieldDecision{}, err
 	}
-	return resolveFieldDecisionFromItems(items, businessUnitID)
+	return resolveFieldDecisionFromItems(items, capabilityKey, fieldKey, businessUnitID)
 }
 
-func resolveFieldDecisionFromItems(items []setIDStrategyRegistryItem, businessUnitID string) (setIDFieldDecision, error) {
+func resolveFieldDecisionFromItems(items []setIDStrategyRegistryItem, capabilityKey string, fieldKey string, businessUnitID string) (setIDFieldDecision, error) {
+	capabilityKey = strings.ToLower(strings.TrimSpace(capabilityKey))
+	fieldKey = strings.ToLower(strings.TrimSpace(fieldKey))
 	businessUnitID = strings.TrimSpace(businessUnitID)
-	type candidate struct {
-		item        setIDStrategyRegistryItem
-		specificity int
+
+	baselineCapabilityKey, hasBaseline := orgUnitBaselineCapabilityKeyForIntentCapability(capabilityKey)
+	if !hasBaseline {
+		baselineCapabilityKey = capabilityKey
 	}
-	var chosen *candidate
-	for _, item := range items {
-		current := candidate{item: item}
-		switch item.OrgLevel {
-		case orgLevelBusinessUnit:
-			if !strings.EqualFold(item.BusinessUnitID, businessUnitID) {
-				continue
-			}
-			current.specificity = 2
-		case orgLevelTenant:
-			current.specificity = 1
-		default:
+
+	lookupChain := []struct {
+		capabilityKey    string
+		orgApplicability string
+		sourceType       string
+	}{
+		{capabilityKey: capabilityKey, orgApplicability: orgApplicabilityBusinessUnit, sourceType: strategySourceIntentOverride},
+		{capabilityKey: baselineCapabilityKey, orgApplicability: orgApplicabilityBusinessUnit, sourceType: strategySourceBaseline},
+		{capabilityKey: capabilityKey, orgApplicability: orgApplicabilityTenant, sourceType: strategySourceIntentOverride},
+		{capabilityKey: baselineCapabilityKey, orgApplicability: orgApplicabilityTenant, sourceType: strategySourceBaseline},
+	}
+
+	for _, step := range lookupChain {
+		if step.capabilityKey == "" {
 			continue
 		}
-		if chosen == nil || current.specificity > chosen.specificity || (current.specificity == chosen.specificity && current.item.Priority > chosen.item.Priority) || (current.specificity == chosen.specificity && current.item.Priority == chosen.item.Priority && current.item.EffectiveDate > chosen.item.EffectiveDate) {
-			chosen = &current
+		if step.capabilityKey == capabilityKey && step.sourceType == strategySourceBaseline {
+			continue
+		}
+		if step.orgApplicability == orgApplicabilityBusinessUnit && businessUnitID == "" {
+			continue
+		}
+		decision, found, err := resolveCapabilityBucketDecision(items, step.capabilityKey, fieldKey, step.orgApplicability, businessUnitID, step.sourceType)
+		if err != nil {
+			return setIDFieldDecision{}, err
+		}
+		if found {
+			return decision, nil
+		}
+	}
+	return setIDFieldDecision{}, errors.New(fieldPolicyMissingCode)
+}
+
+func resolveCapabilityBucketDecision(
+	items []setIDStrategyRegistryItem,
+	capabilityKey string,
+	fieldKey string,
+	orgApplicability string,
+	businessUnitID string,
+	sourceType string,
+) (setIDFieldDecision, bool, error) {
+	capabilityKey = strings.ToLower(strings.TrimSpace(capabilityKey))
+	fieldKey = strings.ToLower(strings.TrimSpace(fieldKey))
+	businessUnitID = strings.TrimSpace(businessUnitID)
+
+	var chosen *setIDStrategyRegistryItem
+	for _, item := range items {
+		if strings.ToLower(strings.TrimSpace(item.CapabilityKey)) != capabilityKey {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(item.FieldKey)) != fieldKey {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(item.OrgApplicability)) != orgApplicability {
+			continue
+		}
+		if orgApplicability == orgApplicabilityBusinessUnit && !strings.EqualFold(strings.TrimSpace(item.BusinessUnitID), businessUnitID) {
+			continue
+		}
+		candidate := item
+		if chosen == nil ||
+			candidate.Priority > chosen.Priority ||
+			(candidate.Priority == chosen.Priority && candidate.EffectiveDate > chosen.EffectiveDate) ||
+			(candidate.Priority == chosen.Priority && candidate.EffectiveDate == chosen.EffectiveDate && strategyRegistrySortKey(candidate) > strategyRegistrySortKey(*chosen)) {
+			chosen = &candidate
 		}
 	}
 	if chosen == nil {
-		return setIDFieldDecision{}, errors.New(fieldPolicyMissingCode)
+		return setIDFieldDecision{}, false, nil
 	}
-	if chosen.item.Required && !chosen.item.Visible {
-		return setIDFieldDecision{}, errors.New(fieldPolicyConflictCode)
+	if chosen.Required && !chosen.Visible {
+		return setIDFieldDecision{}, false, errors.New(fieldPolicyConflictCode)
 	}
-	if !chosen.item.Maintainable && chosen.item.DefaultRuleRef == "" && chosen.item.DefaultValue == "" {
-		return setIDFieldDecision{}, errors.New(fieldDefaultRuleMissingCode)
+	if !chosen.Maintainable && strings.TrimSpace(chosen.DefaultRuleRef) == "" && strings.TrimSpace(chosen.DefaultValue) == "" {
+		return setIDFieldDecision{}, false, errors.New(fieldDefaultRuleMissingCode)
 	}
 	return setIDFieldDecision{
-		CapabilityKey:      chosen.item.CapabilityKey,
-		FieldKey:           chosen.item.FieldKey,
-		Required:           chosen.item.Required,
-		Visible:            chosen.item.Visible,
-		Maintainable:       chosen.item.Maintainable,
-		DefaultRuleRef:     chosen.item.DefaultRuleRef,
-		ResolvedDefaultVal: chosen.item.DefaultValue,
-		AllowedValueCodes:  append([]string(nil), chosen.item.AllowedValueCodes...),
+		CapabilityKey:      chosen.CapabilityKey,
+		SourceType:         sourceType,
+		FieldKey:           chosen.FieldKey,
+		Required:           chosen.Required,
+		Visible:            chosen.Visible,
+		Maintainable:       chosen.Maintainable,
+		DefaultRuleRef:     chosen.DefaultRuleRef,
+		ResolvedDefaultVal: chosen.DefaultValue,
+		AllowedValueCodes:  append([]string(nil), chosen.AllowedValueCodes...),
 		Decision:           "allow",
-	}, nil
+	}, true, nil
+}
+
+func fieldDecisionSemanticallyEqual(a setIDFieldDecision, b setIDFieldDecision) bool {
+	if a.Required != b.Required || a.Visible != b.Visible || a.Maintainable != b.Maintainable {
+		return false
+	}
+	if strings.TrimSpace(a.DefaultRuleRef) != strings.TrimSpace(b.DefaultRuleRef) {
+		return false
+	}
+	if strings.TrimSpace(a.ResolvedDefaultVal) != strings.TrimSpace(b.ResolvedDefaultVal) {
+		return false
+	}
+	left := normalizeAllowedValueCodes(a.AllowedValueCodes)
+	right := normalizeAllowedValueCodes(b.AllowedValueCodes)
+	if len(left) != len(right) {
+		return false
+	}
+	left = append([]string(nil), left...)
+	right = append([]string(nil), right...)
+	slices.Sort(left)
+	slices.Sort(right)
+	return slices.Equal(left, right)
+}
+
+func mergeStrategyItemsWithUpsert(items []setIDStrategyRegistryItem, upsertItem setIDStrategyRegistryItem) []setIDStrategyRegistryItem {
+	merged := append([]setIDStrategyRegistryItem(nil), items...)
+	upsertKey := strategyRegistrySortKey(upsertItem)
+	replaced := false
+	for i := range merged {
+		if strategyRegistrySortKey(merged[i]) == upsertKey {
+			merged[i] = upsertItem
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		merged = append(merged, upsertItem)
+	}
+	return merged
+}
+
+func isRedundantIntentOverride(ctx context.Context, tenantID string, item setIDStrategyRegistryItem) (bool, error) {
+	if strategySourceTypeForCapabilityKey(item.CapabilityKey) != strategySourceIntentOverride {
+		return false, nil
+	}
+	baselineCapabilityKey, _ := orgUnitBaselineCapabilityKeyForIntentCapability(item.CapabilityKey)
+	items, err := collectCapabilityResolutionItems(
+		func(queryCapabilityKey string) ([]setIDStrategyRegistryItem, error) {
+			return defaultSetIDStrategyRegistryStore.list(ctx, tenantID, queryCapabilityKey, item.FieldKey, item.EffectiveDate)
+		},
+		item.CapabilityKey,
+	)
+	if err != nil {
+		return false, err
+	}
+	merged := mergeStrategyItemsWithUpsert(items, item)
+	businessUnitID := ""
+	if item.OrgApplicability == orgApplicabilityBusinessUnit {
+		businessUnitID = item.BusinessUnitID
+	}
+	overrideDecision, _, err := resolveCapabilityBucketDecision(
+		merged,
+		item.CapabilityKey,
+		item.FieldKey,
+		item.OrgApplicability,
+		businessUnitID,
+		strategySourceIntentOverride,
+	)
+	if err != nil {
+		return false, err
+	}
+	baselineDecision, foundBaseline, err := resolveCapabilityBucketDecision(
+		merged,
+		baselineCapabilityKey,
+		item.FieldKey,
+		item.OrgApplicability,
+		businessUnitID,
+		strategySourceBaseline,
+	)
+	if err != nil {
+		return false, err
+	}
+	if !foundBaseline {
+		return false, nil
+	}
+	return fieldDecisionSemanticallyEqual(overrideDecision, baselineDecision), nil
 }
 
 func findStrategyRegistryItemForUpsert(ctx context.Context, tenantID string, item setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error) {
@@ -953,7 +1181,7 @@ func findStrategyRegistryItemForUpsert(ctx context.Context, tenantID string, ite
 		return setIDStrategyRegistryItem{}, false, err
 	}
 	for _, candidate := range items {
-		if candidate.OrgLevel != item.OrgLevel {
+		if candidate.OrgApplicability != item.OrgApplicability {
 			continue
 		}
 		if candidate.BusinessUnitID != item.BusinessUnitID {
@@ -1016,7 +1244,7 @@ func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request) {
 			CapabilityKey:       item.CapabilityKey,
 			BusinessUnitID:      item.BusinessUnitID,
 			AsOf:                item.EffectiveDate,
-			RequireBusinessUnit: item.OrgLevel == orgLevelBusinessUnit,
+			RequireBusinessUnit: item.OrgApplicability == orgApplicabilityBusinessUnit,
 		})
 		if capErr != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, statusCodeForCapabilityContextError(capErr.Code), capErr.Code, capErr.Message)
@@ -1032,6 +1260,15 @@ func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request) {
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, fieldPolicyConflictCode, "cannot restore an already effective disable")
 				return
 			}
+		}
+		redundantOverride, err := isRedundantIntentOverride(r.Context(), tenant.ID, item)
+		if err != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_strategy_registry_upsert_failed", "setid strategy registry upsert failed")
+			return
+		}
+		if redundantOverride {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, fieldPolicyRedundantOverride, fieldPolicyRedundantOverride)
+			return
 		}
 		saved, updated, err := defaultSetIDStrategyRegistryStore.upsert(r.Context(), tenant.ID, item)
 		if err != nil {
@@ -1080,7 +1317,7 @@ func handleSetIDStrategyRegistryDisableAPI(w http.ResponseWriter, r *http.Reques
 		CapabilityKey:       item.CapabilityKey,
 		BusinessUnitID:      item.BusinessUnitID,
 		AsOf:                item.DisableAsOf,
-		RequireBusinessUnit: item.OrgLevel == orgLevelBusinessUnit,
+		RequireBusinessUnit: item.OrgApplicability == orgApplicabilityBusinessUnit,
 	})
 	if capErr != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, statusCodeForCapabilityContextError(capErr.Code), capErr.Code, capErr.Message)

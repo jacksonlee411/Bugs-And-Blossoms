@@ -224,6 +224,7 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "FIELD_OPTION_NOT_ALLOWED", want: "字段值不在允许范围内，请重新选择。"},
 		{code: "FIELD_REQUIRED_VALUE_MISSING", want: "必填字段缺少有效值，请补全后重试。"},
 		{code: "FIELD_POLICY_MISSING", want: "未找到匹配的字段策略，请刷新后重试。"},
+		{code: "FIELD_POLICY_REDUNDANT_OVERRIDE", want: "该策略与基线配置一致，无需重复覆盖。"},
 		{code: "FIELD_POLICY_CONFLICT", want: "字段策略存在冲突，请联系管理员。"},
 		{code: "FIELD_POLICY_DISABLE_NOT_ALLOWED", want: "停用该策略会导致当前上下文无可用策略，请先补齐兜底策略后再重试。"},
 		{code: "FIELD_POLICY_VERSION_REQUIRED", want: "缺少策略版本，请刷新页面后重试。"},

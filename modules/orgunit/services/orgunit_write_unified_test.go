@@ -29,7 +29,7 @@ func TestWriteUnified_CreateOrg_SubmitCreate(t *testing.T) {
 			return 1, nil
 		},
 	}
-	svc := NewOrgUnitWriteService(store)
+	svc := NewOrgUnitWriteService(withDefaultCreateFieldDecisions(store))
 	name := "Root A"
 	_, err := svc.Write(context.Background(), "t1", WriteOrgUnitRequest{
 		Intent:        "create_org",

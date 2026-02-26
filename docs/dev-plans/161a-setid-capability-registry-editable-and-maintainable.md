@@ -37,7 +37,7 @@
 ### 4.1 交互层（MUI）
 1. Registry DataGrid 新增 `actions` 列：`编辑`、`删除`。
 2. `编辑`：将行数据回填到 Upsert 表单（含 key 字段锁定提示），保存后刷新当前 queryKey。
-3. `删除`：弹出确认框（显示 capability_key/field_key/org_level/business_unit_id/effective_date），提交后刷新列表。
+3. `删除`：弹出确认框（显示 capability_key/field_key/org_applicability/business_unit_id/effective_date），提交后刷新列表。
 4. 新增“只读原因提示”统一文案：无 `setid.governance.manage` 时明确说明仅可查看不可维护。
 
 ### 4.2 API 契约（新增）
@@ -45,7 +45,7 @@
   - 请求体（最小集）：
     - `capability_key`
     - `field_key`
-    - `org_level`
+    - `org_applicability`
     - `business_unit_id`
     - `effective_date`
     - `disable_as_of`（首个失效日；后端归一为 `end_date`）

@@ -77,13 +77,13 @@
 ### 5.1 页面模型
 - `Strategy Registry` 主视图采用 DataGrid，最小列：
   - `capability_key`、`functional_area_key`、`capability_type`、`owner_module`、
-    `personalization_mode`、`org_level`、`policy_version`、`activation_state`、
+    `personalization_mode`、`org_applicability`、`policy_version`、`activation_state`、
     `explain_required`、`is_stable`、`change_policy`。
 - 支持筛选维度：模块、个性化模式、BU 层级、稳定状态。
 - 支持排序、列显隐、分页与关键字检索；禁止以“纯文本块”替代表格主视图。
 
 ### 5.2 操作模型
-- 新增/编辑弹窗：强约束 `capability_key + functional_area_key + capability_type + personalization_mode + org_level` 必填（其中 `org_level` 仅允许 `tenant/business_unit`）。
+- 新增/编辑弹窗：强约束 `capability_key + functional_area_key + capability_type + personalization_mode + org_applicability` 必填（其中 `org_applicability` 仅允许 `tenant/business_unit`）。
 - 当 `personalization_mode != tenant_only` 时，前端强制填写 explain/audit 说明。
 - 详情面板展示“承接关系”：102C1（授权）/102C3（解释）/150（Functional Area + Activation）链接。
 

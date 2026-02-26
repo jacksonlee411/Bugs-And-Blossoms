@@ -281,7 +281,7 @@ func buildInternalRuleCandidates(items []setIDStrategyRegistryItem) []internalRu
 }
 
 func buildInternalEligibilityExpr(item setIDStrategyRegistryItem) string {
-	if item.OrgLevel == orgLevelBusinessUnit {
+	if item.OrgApplicability == orgApplicabilityBusinessUnit {
 		return fmt.Sprintf("ctx[\"business_unit_id\"] == %q", strings.TrimSpace(item.BusinessUnitID))
 	}
 	return "true"

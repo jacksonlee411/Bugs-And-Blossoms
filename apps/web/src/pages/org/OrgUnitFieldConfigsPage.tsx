@@ -384,6 +384,7 @@ export function OrgUnitFieldConfigsPage() {
     defaultRuleExpr: '',
     enabledOn: todayUtc
   })
+  const policyWriteDisabled = true
   const [policyError, setPolicyError] = useState('')
   const [policyRequestID, setPolicyRequestID] = useState(() => newRequestID())
 
@@ -600,6 +601,10 @@ export function OrgUnitFieldConfigsPage() {
 
   const openPolicyDialog = useCallback(
     (row: FieldConfigRow) => {
+      if (policyWriteDisabled) {
+        setPolicyError(t('org_field_configs_policy_write_disabled'))
+        return
+      }
       const scopeType = row.policyScopeType === 'GLOBAL' ? 'GLOBAL' : 'FORM'
       const scopeKey =
         scopeType === 'GLOBAL'
@@ -620,7 +625,7 @@ export function OrgUnitFieldConfigsPage() {
       })
       setPolicyRequestID(newRequestID())
     },
-    [asOf, todayUtc]
+    [asOf, policyWriteDisabled, t, todayUtc]
   )
 
   function closePolicyDialog() {
@@ -630,6 +635,10 @@ export function OrgUnitFieldConfigsPage() {
 
   async function submitPolicy() {
     if (!policyRow) {
+      return
+    }
+    if (policyWriteDisabled) {
+      setPolicyError(t('org_field_configs_policy_write_disabled'))
       return
     }
     setPolicyError('')
@@ -820,7 +829,7 @@ export function OrgUnitFieldConfigsPage() {
               <Button onClick={() => setViewRow(row)} size='small' variant='text'>
                 {t('common_detail')}
               </Button>
-              <Button onClick={() => openPolicyDialog(row)} size='small' variant='text'>
+              <Button disabled={policyWriteDisabled} onClick={() => openPolicyDialog(row)} size='small' variant='text'>
                 {t('org_field_configs_action_edit_policy')}
               </Button>
               <Button
@@ -1471,7 +1480,11 @@ export function OrgUnitFieldConfigsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={closePolicyDialog}>{t('common_cancel')}</Button>
-          <Button disabled={policyMutation.isPending} onClick={() => void submitPolicy()} variant='contained'>
+          <Button
+            disabled={policyWriteDisabled || policyMutation.isPending}
+            onClick={() => void submitPolicy()}
+            variant='contained'
+          >
             {t('common_confirm')}
           </Button>
         </DialogActions>

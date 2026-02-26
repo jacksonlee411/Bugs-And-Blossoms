@@ -333,6 +333,12 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/rules/evaluate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleInternalRulesEvaluateAPI(w, r, setidStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/capabilities/catalog", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCapabilityCatalogAPI(w, r)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/capabilities/catalog:by-intent", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleCapabilityCatalogByIntentAPI(w, r)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/policies/state", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleInternalPolicyStateAPI(w, r)
 	}))
