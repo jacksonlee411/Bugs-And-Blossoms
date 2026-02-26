@@ -1,6 +1,6 @@
 # DEV-PLAN-182：BU 策略“全 CRUD 默认生效”与场景覆盖收敛方案
 
-**状态**: 规划中（2026-02-26 12:20 UTC）
+**状态**: 执行中（2026-02-26 14:06 UTC，后端与门禁已验收，UI 验收待补）
 
 ## 1. 背景
 当前 OrgUnit 策略按意图拆分为多条 capability（`create/add/insert/correct`）。  
@@ -146,6 +146,14 @@
 
 - **风险 3：前后端混部窗口导致版本误判**  
   缓解：保持错误码不变，前端先兼容新字段，后端再切换严格校验。
+
+## 10A. 2026-02-26 验收记录（后端 + 门禁）
+- [x] `make check policy-baseline-dup` 通过；`make check capability-route-map` 通过。
+- [x] `write-capabilities` 返回 `baseline_capability_key=org.orgunit_write.field_policy`，`policy_version_alg=epv1`，`policy_version` 为 `epv1:*`。
+- [x] `setid-strategy-registry` 冗余 override 写入被 `422 FIELD_POLICY_REDUNDANT_OVERRIDE` 阻断；非冗余 override 可成功写入。
+- [x] E2E 回归通过：`make e2e`（8/8 passed，执行时间约 13.5s）。
+- [ ] `/org/setid` 页面“应用到全部写场景 / 仅当前场景覆盖 / source_type 可视化”仍需 UI 专项验收。
+- [ ] `E2E-182-01`、`E2E-182-02` 用例尚未在报告中以该编号显式沉淀（需补齐命名与证据链接）。
 
 ## 11. 关联文档
 - `docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md`
