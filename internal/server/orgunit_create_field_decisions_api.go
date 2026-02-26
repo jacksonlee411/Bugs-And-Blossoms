@@ -18,11 +18,15 @@ const (
 )
 
 type orgUnitCreateFieldDecisionsAPIResponse struct {
-	CapabilityKey  string               `json:"capability_key"`
-	BusinessUnitID string               `json:"business_unit_id"`
-	AsOf           string               `json:"as_of"`
-	PolicyVersion  string               `json:"policy_version"`
-	FieldDecisions []setIDFieldDecision `json:"field_decisions"`
+	CapabilityKey         string               `json:"capability_key"`
+	BaselineCapabilityKey string               `json:"baseline_capability_key,omitempty"`
+	BusinessUnitID        string               `json:"business_unit_id"`
+	AsOf                  string               `json:"as_of"`
+	PolicyVersion         string               `json:"policy_version"`
+	PolicyVersionAlg      string               `json:"policy_version_alg,omitempty"`
+	IntentPolicyVersion   string               `json:"intent_policy_version,omitempty"`
+	BaselinePolicyVersion string               `json:"baseline_policy_version,omitempty"`
+	FieldDecisions        []setIDFieldDecision `json:"field_decisions"`
 }
 
 func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request, store OrgUnitStore) {
@@ -100,12 +104,18 @@ func handleOrgUnitCreateFieldDecisionsAPI(w http.ResponseWriter, r *http.Request
 		decisions = append(decisions, decision)
 	}
 
+	effectivePolicyVersion, policyParts := resolveOrgUnitEffectivePolicyVersion(tenant.ID, capCtx.CapabilityKey)
+
 	response := orgUnitCreateFieldDecisionsAPIResponse{
-		CapabilityKey:  capCtx.CapabilityKey,
-		BusinessUnitID: capCtx.BusinessUnitID,
-		AsOf:           capCtx.AsOf,
-		PolicyVersion:  defaultPolicyActivationRuntime.activePolicyVersion(tenant.ID, capCtx.CapabilityKey),
-		FieldDecisions: decisions,
+		CapabilityKey:         capCtx.CapabilityKey,
+		BaselineCapabilityKey: policyParts.BaselineCapabilityKey,
+		BusinessUnitID:        capCtx.BusinessUnitID,
+		AsOf:                  capCtx.AsOf,
+		PolicyVersion:         effectivePolicyVersion,
+		PolicyVersionAlg:      orgUnitEffectivePolicyVersionAlgorithm,
+		IntentPolicyVersion:   policyParts.IntentPolicyVersion,
+		BaselinePolicyVersion: policyParts.BaselinePolicyVersion,
+		FieldDecisions:        decisions,
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

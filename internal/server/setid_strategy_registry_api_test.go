@@ -280,6 +280,32 @@ func TestValidateStrategyRegistryItem(t *testing.T) {
 	}
 }
 
+func TestValidateStrategyRegistryItem_RequiresCatalogEntry(t *testing.T) {
+	originalCatalog := capabilityCatalogByCapabilityKey
+	capabilityCatalogByCapabilityKey = map[string]capabilityCatalogEntry{}
+	t.Cleanup(func() {
+		capabilityCatalogByCapabilityKey = originalCatalog
+	})
+
+	item := setIDStrategyRegistryItem{
+		CapabilityKey:       "staffing.assignment_create.field_policy",
+		OwnerModule:         "staffing",
+		FieldKey:            "field_x",
+		PersonalizationMode: personalizationModeSetID,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
+		BusinessUnitID:      "10000001",
+		Required:            true,
+		Visible:             true,
+		Maintainable:        true,
+		ExplainRequired:     true,
+		EffectiveDate:       "2026-01-01",
+	}
+	status, code, _ := validateStrategyRegistryItem(item)
+	if status != http.StatusUnprocessableEntity || code != "invalid_request" {
+		t.Fatalf("status=%d code=%q", status, code)
+	}
+}
+
 func TestNormalizeAndValidateStrategyRegistryDisableRequest(t *testing.T) {
 	req := normalizeStrategyRegistryDisableRequest(setIDStrategyRegistryDisableAPIRequest{
 		CapabilityKey:    " Staffing.Assignment_Create.Field_Policy ",
@@ -805,6 +831,48 @@ func TestSetIDStrategyRegistryRuntime_ResolveFieldDecisionBranches(t *testing.T)
 	}
 }
 
+func TestResolveFieldDecisionFromItems_IntentBucketPrecedence(t *testing.T) {
+	items := []setIDStrategyRegistryItem{
+		{
+			CapabilityKey:    orgUnitWriteFieldPolicyCapabilityKey,
+			FieldKey:         "d_org_type",
+			OrgApplicability: orgApplicabilityBusinessUnit,
+			BusinessUnitID:   "10000001",
+			Required:         true,
+			Visible:          true,
+			Maintainable:     true,
+			DefaultValue:     "11",
+			Priority:         500,
+			EffectiveDate:    "2026-01-01",
+		},
+		{
+			CapabilityKey:    orgUnitCreateFieldPolicyCapabilityKey,
+			FieldKey:         "d_org_type",
+			OrgApplicability: orgApplicabilityBusinessUnit,
+			BusinessUnitID:   "10000001",
+			Required:         true,
+			Visible:          true,
+			Maintainable:     true,
+			DefaultValue:     "12",
+			Priority:         100,
+			EffectiveDate:    "2026-01-01",
+		},
+	}
+	decision, err := resolveFieldDecisionFromItems(items, orgUnitCreateFieldPolicyCapabilityKey, "d_org_type", "10000001")
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if decision.CapabilityKey != orgUnitCreateFieldPolicyCapabilityKey {
+		t.Fatalf("capability=%q", decision.CapabilityKey)
+	}
+	if decision.SourceType != strategySourceIntentOverride {
+		t.Fatalf("source_type=%q", decision.SourceType)
+	}
+	if decision.ResolvedDefaultVal != "12" {
+		t.Fatalf("default_value=%q", decision.ResolvedDefaultVal)
+	}
+}
+
 func TestSetIDStrategyRegistryRuntime_BUFieldVarianceAcceptance(t *testing.T) {
 	runtime := newSetIDStrategyRegistryRuntime()
 
@@ -1097,6 +1165,87 @@ func TestHandleSetIDStrategyRegistryAPI(t *testing.T) {
 	if strings.Contains(disabledListRec.Body.String(), `"business_unit_id":"10000001"`) {
 		t.Fatalf("unexpected disabled row still visible: %q", disabledListRec.Body.String())
 	}
+}
+
+func TestHandleSetIDStrategyRegistryAPI_RedundantIntentOverride(t *testing.T) {
+	resetSetIDStrategyRegistryRuntimeForTest()
+	previousStore := defaultSetIDStrategyRegistryStore
+	t.Cleanup(func() {
+		useSetIDStrategyRegistryStore(previousStore)
+	})
+
+	baselineItem := setIDStrategyRegistryItem{
+		CapabilityKey:       orgUnitWriteFieldPolicyCapabilityKey,
+		OwnerModule:         "orgunit",
+		FieldKey:            "d_org_type",
+		PersonalizationMode: personalizationModeSetID,
+		OrgApplicability:    orgApplicabilityBusinessUnit,
+		BusinessUnitID:      "10000001",
+		Required:            true,
+		Visible:             true,
+		Maintainable:        true,
+		DefaultValue:        "11",
+		AllowedValueCodes:   []string{"11"},
+		Priority:            100,
+		ExplainRequired:     true,
+		IsStable:            true,
+		ChangePolicy:        "plan_required",
+		EffectiveDate:       "2026-01-01",
+	}
+
+	t.Run("deny redundant override", func(t *testing.T) {
+		calledUpsert := false
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			listFn: func(_ context.Context, _ string, capabilityKey string, _ string, _ string) ([]setIDStrategyRegistryItem, error) {
+				if capabilityKey == orgUnitWriteFieldPolicyCapabilityKey {
+					return []setIDStrategyRegistryItem{baselineItem}, nil
+				}
+				return nil, nil
+			},
+			upsertFn: func(context.Context, string, setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error) {
+				calledUpsert = true
+				return setIDStrategyRegistryItem{}, false, nil
+			},
+		})
+
+		body := `{"capability_key":"org.orgunit_create.field_policy","owner_module":"orgunit","field_key":"d_org_type","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"maintainable":true,"default_value":"11","allowed_value_codes":["11"],"priority":120,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-redundant"}`
+		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(body))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleSetIDStrategyRegistryAPI(rec, req)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), fieldPolicyRedundantOverride) {
+			t.Fatalf("unexpected body=%s", rec.Body.String())
+		}
+		if calledUpsert {
+			t.Fatal("upsert should not be called for redundant override")
+		}
+	})
+
+	t.Run("allow non-redundant override", func(t *testing.T) {
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			listFn: func(_ context.Context, _ string, capabilityKey string, _ string, _ string) ([]setIDStrategyRegistryItem, error) {
+				if capabilityKey == orgUnitWriteFieldPolicyCapabilityKey {
+					return []setIDStrategyRegistryItem{baselineItem}, nil
+				}
+				return nil, nil
+			},
+			upsertFn: func(_ context.Context, _ string, item setIDStrategyRegistryItem) (setIDStrategyRegistryItem, bool, error) {
+				return item, false, nil
+			},
+		})
+
+		body := `{"capability_key":"org.orgunit_create.field_policy","owner_module":"orgunit","field_key":"d_org_type","personalization_mode":"setid","org_applicability":"business_unit","business_unit_id":"10000001","required":true,"visible":true,"maintainable":true,"default_value":"12","allowed_value_codes":["11","12"],"priority":120,"explain_required":true,"is_stable":true,"change_policy":"plan_required","effective_date":"2026-01-01","request_id":"r-not-redundant"}`
+		req := httptest.NewRequest(http.MethodPost, "/org/api/setid-strategy-registry", bytes.NewBufferString(body))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleSetIDStrategyRegistryAPI(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
 }
 
 func TestHandleSetIDStrategyRegistryAPI_StoreErrorBranches(t *testing.T) {

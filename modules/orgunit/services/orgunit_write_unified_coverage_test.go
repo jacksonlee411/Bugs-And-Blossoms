@@ -77,7 +77,7 @@ func TestWriteUnified_CoversUUIDAndMarshalFailure(t *testing.T) {
 			return 1, nil
 		},
 	}
-	svc := NewOrgUnitWriteService(store)
+	svc := NewOrgUnitWriteService(withDefaultCreateFieldDecisions(store))
 	name := "Root A"
 
 	t.Run("newUUID error", func(t *testing.T) {

@@ -1099,6 +1099,10 @@ export function OrgUnitDetailsPage() {
       if (!writeCapability?.enabled || writeCapabilitiesQuery.isError) {
         throw new Error('write capabilities unavailable')
       }
+      const policyVersion = writeCapability.policy_version.trim()
+      if (policyVersion.length === 0) {
+        throw new Error('write policy version missing')
+      }
       if (hasActionPlainExtErrors) {
         const firstErrorKey = Object.values(actionPlainExtErrors)[0]
         throw new Error(firstErrorKey ? t(firstErrorKey as MessageKey) : 'plain ext fields invalid')
@@ -1119,6 +1123,7 @@ export function OrgUnitDetailsPage() {
         org_code: targetCode,
         effective_date: effectiveDateValue,
         target_effective_date: activeWriteIntent === 'correct' ? actionForm.effectiveDate.trim() : undefined,
+        policy_version: policyVersion,
         request_id: requestID,
         patch: patch as Parameters<typeof writeOrgUnit>[0]['patch']
       })

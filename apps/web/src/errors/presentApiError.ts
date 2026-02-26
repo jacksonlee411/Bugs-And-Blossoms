@@ -12,6 +12,7 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   FIELD_POLICY_DISABLE_NOT_ALLOWED: { en: 'Disabling this policy would leave no resolvable policy for the context.', zh: '停用该策略会导致当前上下文无可用策略，请先补齐兜底策略后再重试。' },
   FIELD_POLICY_EXPR_INVALID: { en: 'Default rule expression is invalid.', zh: '默认规则表达式不合法。' },
   FIELD_POLICY_MISSING: { en: 'Field policy is missing for current context.', zh: '当前上下文缺少字段策略，请刷新后重试。' },
+  FIELD_POLICY_REDUNDANT_OVERRIDE: { en: 'Policy override is redundant because it matches baseline.', zh: '该策略与基线配置一致，无需重复覆盖。' },
   FIELD_POLICY_VERSION_REQUIRED: { en: 'Policy version is required.', zh: '缺少策略版本，请刷新页面后重试。' },
   FIELD_POLICY_VERSION_STALE: { en: 'Policy version is stale. Please refresh and retry.', zh: '策略版本已过期，请刷新页面后重试。' },
   FIELD_REQUIRED_VALUE_MISSING: { en: 'Required field value is missing.', zh: '策略决议后必填字段仍为空，请补全后重试。' },

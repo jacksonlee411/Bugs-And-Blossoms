@@ -7,7 +7,7 @@ export ATLAS_VERSION ?= v0.38.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
-.PHONY: help preflight check pr-branch naming no-legacy no-scope-package granularity capability-key capability-contract capability-route-map request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch naming no-legacy no-scope-package granularity capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
@@ -25,6 +25,8 @@ help:
 				"  make check capability-key" \
 				"  make check capability-contract" \
 				"  make check capability-route-map" \
+				"  make check capability-catalog" \
+				"  make check policy-baseline-dup" \
 			"  make check request-code" \
 				"  make check as-of-explicit" \
 				"  make check dict-tenant-only" \
@@ -57,6 +59,8 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check capability-key
 	@$(MAKE) check capability-contract
 	@$(MAKE) check capability-route-map
+	@$(MAKE) check capability-catalog
+	@$(MAKE) check policy-baseline-dup
 	@$(MAKE) check request-code
 	@$(MAKE) check as-of-explicit
 	@$(MAKE) check dict-tenant-only
@@ -96,6 +100,12 @@ capability-contract: ## capability_key 契约冻结门禁（151 基线）
 
 capability-route-map: ## 路由动作到 capability_key 映射门禁（156 基线）
 	@./scripts/ci/check-capability-route-map.sh
+
+capability-catalog: ## capability catalog 一致性门禁（对象/意图目录）
+	@./scripts/ci/check-capability-catalog.sh
+
+policy-baseline-dup: ## baseline + intent override 冗余覆盖门禁
+	@./scripts/ci/check-policy-baseline-dup.sh
 
 request-code: ## 业务幂等字段命名收敛（统一 request_id；阻断 request_code 与 tracing 场景 request_id/X-Request-ID）
 	@./scripts/ci/check-request-code.sh --full
@@ -225,7 +235,7 @@ staffing:
 person:
 	@:
 
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint no-legacy no-scope-package capability-key capability-contract capability-route-map request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint no-legacy no-scope-package capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

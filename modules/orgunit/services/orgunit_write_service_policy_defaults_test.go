@@ -957,6 +957,32 @@ func TestApplyCreatePolicyDefaults_FromSetIDRegistry(t *testing.T) {
 		}
 	})
 
+	t.Run("org_type decision value error", func(t *testing.T) {
+		svc := newWriteService(buildResolver(
+			types.SetIDStrategyFieldDecision{
+				FieldKey:       orgUnitCreateFieldOrgCode,
+				Required:       true,
+				Maintainable:   false,
+				DefaultRuleRef: `next_org_code("F", 8)`,
+			},
+			types.SetIDStrategyFieldDecision{
+				FieldKey:       orgUnitCreateFieldOrgType,
+				Maintainable:   false,
+				Required:       false,
+				DefaultRuleRef: "",
+				DefaultValue:   "",
+			},
+		))
+		req := &WriteOrgUnitRequest{
+			Patch: OrgUnitWritePatch{
+				ParentOrgCode: stringPtr("ROOT"),
+			},
+		}
+		if _, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", nil, req); err == nil || err.Error() != errDefaultRuleRequired {
+			t.Fatalf("err=%v", err)
+		}
+	})
+
 	t.Run("parent org code invalid", func(t *testing.T) {
 		svc := newWriteService(buildResolver(
 			types.SetIDStrategyFieldDecision{},
@@ -971,6 +997,54 @@ func TestApplyCreatePolicyDefaults_FromSetIDRegistry(t *testing.T) {
 			t.Fatal("expected error")
 		}
 	})
+}
+
+func TestWriteCreateOrg_AutoCodeSpecRequiredWhenOrgCodeEmpty(t *testing.T) {
+	ctx := context.Background()
+	store := orgUnitWriteSetIDResolverStoreStub{
+		orgUnitWriteStoreStub: orgUnitWriteStoreStub{
+			listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
+				return []types.TenantFieldConfig{}, nil
+			},
+		},
+		resolveDecisionFn: func(_ context.Context, _ string, capabilityKey string, fieldKey string, _ string, _ string) (types.SetIDStrategyFieldDecision, bool, error) {
+			if capabilityKey != orgUnitCreateFieldPolicyCapabilityKey {
+				return types.SetIDStrategyFieldDecision{}, false, nil
+			}
+			switch fieldKey {
+			case orgUnitCreateFieldOrgCode:
+				return types.SetIDStrategyFieldDecision{
+					FieldKey:       orgUnitCreateFieldOrgCode,
+					Maintainable:   true,
+					Required:       false,
+					DefaultRuleRef: "",
+					DefaultValue:   "",
+				}, true, nil
+			case orgUnitCreateFieldOrgType:
+				return types.SetIDStrategyFieldDecision{
+					FieldKey:       orgUnitCreateFieldOrgType,
+					Maintainable:   true,
+					Required:       false,
+					DefaultRuleRef: "",
+					DefaultValue:   "",
+				}, true, nil
+			default:
+				return types.SetIDStrategyFieldDecision{}, false, nil
+			}
+		},
+	}
+
+	svc := NewOrgUnitWriteService(store)
+	name := "Root"
+	_, err := svc.Write(ctx, "t1", WriteOrgUnitRequest{
+		Intent:        "create_org",
+		EffectiveDate: "2026-01-01",
+		RequestID:     "r-auto-spec-required",
+		Patch:         OrgUnitWritePatch{Name: &name},
+	})
+	if err == nil || err.Error() != errDefaultRuleRequired {
+		t.Fatalf("err=%v", err)
+	}
 }
 
 func TestCreateFieldDecisionHelperFunctions(t *testing.T) {

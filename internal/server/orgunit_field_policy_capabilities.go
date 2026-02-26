@@ -3,22 +3,62 @@ package server
 import "strings"
 
 const (
+	orgUnitWriteFieldPolicyCapabilityKey         = "org.orgunit_write.field_policy"
 	orgUnitCreateFieldPolicyCapabilityKey        = "org.orgunit_create.field_policy"
 	orgUnitAddVersionFieldPolicyCapabilityKey    = "org.orgunit_add_version.field_policy"
 	orgUnitInsertVersionFieldPolicyCapabilityKey = "org.orgunit_insert_version.field_policy"
 	orgUnitCorrectFieldPolicyCapabilityKey       = "org.orgunit_correct.field_policy"
 )
 
+type orgUnitWriteCapabilityBinding struct {
+	IntentCapabilityKey   string
+	BaselineCapabilityKey string
+}
+
 func orgUnitFieldPolicyCapabilityKeyForWriteIntent(intent string) (string, bool) {
+	binding, ok := orgUnitFieldPolicyCapabilityBindingForWriteIntent(intent)
+	if !ok {
+		return "", false
+	}
+	return binding.IntentCapabilityKey, true
+}
+
+func orgUnitFieldPolicyCapabilityBindingForWriteIntent(intent string) (orgUnitWriteCapabilityBinding, bool) {
 	switch strings.TrimSpace(intent) {
 	case "create_org":
-		return orgUnitCreateFieldPolicyCapabilityKey, true
+		return orgUnitWriteCapabilityBinding{
+			IntentCapabilityKey:   orgUnitCreateFieldPolicyCapabilityKey,
+			BaselineCapabilityKey: orgUnitWriteFieldPolicyCapabilityKey,
+		}, true
 	case "add_version":
-		return orgUnitAddVersionFieldPolicyCapabilityKey, true
+		return orgUnitWriteCapabilityBinding{
+			IntentCapabilityKey:   orgUnitAddVersionFieldPolicyCapabilityKey,
+			BaselineCapabilityKey: orgUnitWriteFieldPolicyCapabilityKey,
+		}, true
 	case "insert_version":
-		return orgUnitInsertVersionFieldPolicyCapabilityKey, true
+		return orgUnitWriteCapabilityBinding{
+			IntentCapabilityKey:   orgUnitInsertVersionFieldPolicyCapabilityKey,
+			BaselineCapabilityKey: orgUnitWriteFieldPolicyCapabilityKey,
+		}, true
 	case "correct":
-		return orgUnitCorrectFieldPolicyCapabilityKey, true
+		return orgUnitWriteCapabilityBinding{
+			IntentCapabilityKey:   orgUnitCorrectFieldPolicyCapabilityKey,
+			BaselineCapabilityKey: orgUnitWriteFieldPolicyCapabilityKey,
+		}, true
+	default:
+		return orgUnitWriteCapabilityBinding{}, false
+	}
+}
+
+func orgUnitBaselineCapabilityKeyForIntentCapability(capabilityKey string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(capabilityKey)) {
+	case orgUnitCreateFieldPolicyCapabilityKey,
+		orgUnitAddVersionFieldPolicyCapabilityKey,
+		orgUnitInsertVersionFieldPolicyCapabilityKey,
+		orgUnitCorrectFieldPolicyCapabilityKey:
+		return orgUnitWriteFieldPolicyCapabilityKey, true
+	case orgUnitWriteFieldPolicyCapabilityKey:
+		return orgUnitWriteFieldPolicyCapabilityKey, true
 	default:
 		return "", false
 	}

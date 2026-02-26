@@ -15,14 +15,18 @@ import (
 )
 
 type orgUnitWriteCapabilitiesAPIResponse struct {
-	Intent           string            `json:"intent"`
-	CapabilityKey    string            `json:"capability_key"`
-	PolicyVersion    string            `json:"policy_version"`
-	TreeInitialized  bool              `json:"tree_initialized"`
-	Enabled          bool              `json:"enabled"`
-	DenyReasons      []string          `json:"deny_reasons"`
-	AllowedFields    []string          `json:"allowed_fields"`
-	FieldPayloadKeys map[string]string `json:"field_payload_keys"`
+	Intent                string            `json:"intent"`
+	CapabilityKey         string            `json:"capability_key"`
+	BaselineCapabilityKey string            `json:"baseline_capability_key,omitempty"`
+	PolicyVersion         string            `json:"policy_version"`
+	PolicyVersionAlg      string            `json:"policy_version_alg,omitempty"`
+	IntentPolicyVersion   string            `json:"intent_policy_version,omitempty"`
+	BaselinePolicyVersion string            `json:"baseline_policy_version,omitempty"`
+	TreeInitialized       bool              `json:"tree_initialized"`
+	Enabled               bool              `json:"enabled"`
+	DenyReasons           []string          `json:"deny_reasons"`
+	AllowedFields         []string          `json:"allowed_fields"`
+	FieldPayloadKeys      map[string]string `json:"field_payload_keys"`
 }
 
 type orgUnitWriteCapabilitiesStore interface {
@@ -62,11 +66,12 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	capabilityKey, ok := orgUnitFieldPolicyCapabilityKeyForWriteIntent(intent)
+	capabilityBinding, ok := orgUnitFieldPolicyCapabilityBindingForWriteIntent(intent)
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "ORG_INTENT_NOT_SUPPORTED", "intent not supported")
 		return
 	}
+	capabilityKey := capabilityBinding.IntentCapabilityKey
 
 	normalizedCode := ""
 	if rawCode != "" {
@@ -188,15 +193,21 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
+	effectivePolicyVersion, policyParts := resolveOrgUnitEffectivePolicyVersion(tenant.ID, capabilityKey)
+
 	resp := orgUnitWriteCapabilitiesAPIResponse{
-		Intent:           intent,
-		CapabilityKey:    capabilityKey,
-		PolicyVersion:    defaultPolicyActivationRuntime.activePolicyVersion(tenant.ID, capabilityKey),
-		TreeInitialized:  treeInitialized,
-		Enabled:          decision.Enabled,
-		DenyReasons:      decision.DenyReasons,
-		AllowedFields:    decision.AllowedFields,
-		FieldPayloadKeys: decision.FieldPayloadKeys,
+		Intent:                intent,
+		CapabilityKey:         capabilityKey,
+		BaselineCapabilityKey: policyParts.BaselineCapabilityKey,
+		PolicyVersion:         effectivePolicyVersion,
+		PolicyVersionAlg:      orgUnitEffectivePolicyVersionAlgorithm,
+		IntentPolicyVersion:   policyParts.IntentPolicyVersion,
+		BaselinePolicyVersion: policyParts.BaselinePolicyVersion,
+		TreeInitialized:       treeInitialized,
+		Enabled:               decision.Enabled,
+		DenyReasons:           decision.DenyReasons,
+		AllowedFields:         decision.AllowedFields,
+		FieldPayloadKeys:      decision.FieldPayloadKeys,
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

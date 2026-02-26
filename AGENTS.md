@@ -310,6 +310,8 @@ modules/{module}/
 - DEV-PLAN-170B：Org 详情页移除顶部上下文区与 URL 恢复定位替代方案（170A 纠偏计划）：`docs/dev-plans/170b-org-details-remove-top-context-and-url-restore-positioning.md`
 - DEV-PLAN-180：项目颗粒度层次统一与治理（Field/Form/Module/SetID/Tenant/Server）：`docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md`
 - DEV-PLAN-181：OrgUnit Details 三类表单到 Capability Key 映射落地：`docs/dev-plans/181-orgunit-details-form-capability-mapping-implementation.md`
+- DEV-PLAN-182：BU 策略“全 CRUD 默认生效”与场景覆盖收敛方案：`docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
+- DEV-PLAN-183：Capability Key 配置可发现性与对象/意图显式建模方案：`docs/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`

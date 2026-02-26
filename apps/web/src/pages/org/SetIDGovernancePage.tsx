@@ -27,6 +27,7 @@ import {
   createSetID,
   disableSetIDStrategyRegistry,
   getPolicyActivationState,
+  listCapabilityCatalogByIntent,
   listSetIDBindings,
   listFunctionalAreaState,
   listSetIDStrategyRegistry,
@@ -35,6 +36,7 @@ import {
   setPolicyDraft,
   switchFunctionalAreaState,
   upsertSetIDStrategyRegistry,
+  type CapabilityCatalogEntry,
   type CapabilityPolicyState,
   type FunctionalAreaStateItem,
   type SetIDStrategyRegistryItem
@@ -98,6 +100,13 @@ interface ActivationFormState {
   activatePolicyVersion: string
   rollbackPolicyVersion: string
   operator: string
+}
+
+interface RegistryCatalogSelection {
+  ownerModule: string
+  targetObject: string
+  surface: string
+  intent: string
 }
 
 function todayISO(): string {
@@ -164,6 +173,15 @@ function defaultRegistryForm(asOf: string): RegistryFormState {
     effectiveDate: asOf,
     endDate: '',
     requestID: newRequestID('mui-setid-strategy')
+  }
+}
+
+function defaultRegistryCatalogSelection(): RegistryCatalogSelection {
+  return {
+    ownerModule: '',
+    targetObject: '',
+    surface: '',
+    intent: ''
   }
 }
 
@@ -245,6 +263,8 @@ export function SetIDGovernancePage() {
 
   const [registryCapabilityFilter, setRegistryCapabilityFilter] = useState('')
   const [registryFieldFilter, setRegistryFieldFilter] = useState('')
+  const [registryMode, setRegistryMode] = useState<'object_intent' | 'advanced'>('object_intent')
+  const [registryCatalog, setRegistryCatalog] = useState<RegistryCatalogSelection>(() => defaultRegistryCatalogSelection())
   const [registryForm, setRegistryForm] = useState<RegistryFormState>(() => defaultRegistryForm(asOf))
   const [registryFormMode, setRegistryFormMode] = useState<'create' | 'edit' | 'fork'>('create')
   const [registryDisableDialog, setRegistryDisableDialog] = useState<RegistryDisableDialogState>({
@@ -288,6 +308,11 @@ export function SetIDGovernancePage() {
         fieldKey: registryFieldFilter
       }),
     staleTime: 5_000
+  })
+  const capabilityCatalogQuery = useQuery({
+    queryKey: ['capability-catalog'],
+    queryFn: () => listCapabilityCatalogByIntent(),
+    staleTime: 10_000
   })
   const strategyCatalogQuery = useQuery({
     queryKey: ['setid-strategy-registry-options', asOf],
@@ -333,6 +358,8 @@ export function SetIDGovernancePage() {
       await queryClient.invalidateQueries({ queryKey: ['setid-strategy-registry', asOf] })
       await queryClient.invalidateQueries({ queryKey: ['setid-strategy-registry-options', asOf] })
       setRegistryForm(defaultRegistryForm(asOf))
+      setRegistryMode('object_intent')
+      setRegistryCatalog(defaultRegistryCatalogSelection())
       setRegistryFormMode('create')
     }
   })
@@ -383,6 +410,7 @@ export function SetIDGovernancePage() {
   const orgUnits = useMemo(() => orgUnitsQuery.data?.org_units ?? [], [orgUnitsQuery.data])
   const strategyRows = useMemo(() => strategyQuery.data?.items ?? [], [strategyQuery.data])
   const strategyCatalogRows = useMemo(() => strategyCatalogQuery.data?.items ?? [], [strategyCatalogQuery.data])
+  const capabilityCatalogRows = useMemo(() => capabilityCatalogQuery.data?.items ?? [], [capabilityCatalogQuery.data])
   const setIDOptions = useMemo(() => mergeFreeSoloOptions([], setids.map((item) => item.setid)), [setids])
 
   const createSetIDOptions = useMemo(
@@ -403,16 +431,118 @@ export function SetIDGovernancePage() {
   )
 
   const capabilityKeyOptions = useMemo(
-    () => mergeFreeSoloOptions([], strategyCatalogRows.map((item) => item.capability_key), registryForm.capabilityKey),
-    [registryForm.capabilityKey, strategyCatalogRows]
+    () =>
+      mergeFreeSoloOptions(
+        [],
+        [...strategyCatalogRows.map((item) => item.capability_key), ...capabilityCatalogRows.map((item) => item.capability_key)],
+        registryForm.capabilityKey
+      ),
+    [capabilityCatalogRows, registryForm.capabilityKey, strategyCatalogRows]
   )
   const fieldKeyOptions = useMemo(
     () => mergeFreeSoloOptions([], strategyCatalogRows.map((item) => item.field_key), registryForm.fieldKey),
     [registryForm.fieldKey, strategyCatalogRows]
   )
+  const preferredCatalogSelection = useMemo<RegistryCatalogSelection>(() => {
+    const preferred =
+      capabilityCatalogRows.find(
+        (item) =>
+          item.owner_module === 'orgunit' &&
+          item.target_object === 'orgunit' &&
+          item.surface === 'api_write' &&
+          item.intent === 'write_all'
+      ) ?? capabilityCatalogRows[0]
+    if (!preferred) {
+      return defaultRegistryCatalogSelection()
+    }
+    return {
+      ownerModule: preferred.owner_module,
+      targetObject: preferred.target_object,
+      surface: preferred.surface,
+      intent: preferred.intent
+    }
+  }, [capabilityCatalogRows])
+  const effectiveRegistryCatalog = useMemo<RegistryCatalogSelection>(() => {
+    if (
+      registryCatalog.ownerModule.trim().length > 0 ||
+      registryCatalog.targetObject.trim().length > 0 ||
+      registryCatalog.surface.trim().length > 0 ||
+      registryCatalog.intent.trim().length > 0
+    ) {
+      return registryCatalog
+    }
+    return preferredCatalogSelection
+  }, [preferredCatalogSelection, registryCatalog])
   const ownerModuleOptions = useMemo(
-    () => mergeFreeSoloOptions(ownerModulePresets, strategyCatalogRows.map((item) => item.owner_module), registryForm.ownerModule),
-    [registryForm.ownerModule, strategyCatalogRows]
+    () =>
+      mergeFreeSoloOptions(
+        ownerModulePresets,
+        [...strategyCatalogRows.map((item) => item.owner_module), ...capabilityCatalogRows.map((item) => item.owner_module)],
+        effectiveRegistryCatalog.ownerModule || registryForm.ownerModule
+      ),
+    [capabilityCatalogRows, effectiveRegistryCatalog.ownerModule, registryForm.ownerModule, strategyCatalogRows]
+  )
+  const targetObjectOptions = useMemo(
+    () =>
+      mergeFreeSoloOptions(
+        [],
+        capabilityCatalogRows
+          .filter((item) => effectiveRegistryCatalog.ownerModule.trim().length === 0 || item.owner_module === effectiveRegistryCatalog.ownerModule.trim())
+          .map((item) => item.target_object),
+        effectiveRegistryCatalog.targetObject
+      ),
+    [capabilityCatalogRows, effectiveRegistryCatalog.ownerModule, effectiveRegistryCatalog.targetObject]
+  )
+  const surfaceOptions = useMemo(
+    () =>
+      mergeFreeSoloOptions(
+        [],
+        capabilityCatalogRows
+          .filter((item) => effectiveRegistryCatalog.ownerModule.trim().length === 0 || item.owner_module === effectiveRegistryCatalog.ownerModule.trim())
+          .filter((item) => effectiveRegistryCatalog.targetObject.trim().length === 0 || item.target_object === effectiveRegistryCatalog.targetObject.trim())
+          .map((item) => item.surface),
+        effectiveRegistryCatalog.surface
+      ),
+    [capabilityCatalogRows, effectiveRegistryCatalog.ownerModule, effectiveRegistryCatalog.surface, effectiveRegistryCatalog.targetObject]
+  )
+  const intentOptions = useMemo(
+    () =>
+      mergeFreeSoloOptions(
+        [],
+        capabilityCatalogRows
+          .filter((item) => effectiveRegistryCatalog.ownerModule.trim().length === 0 || item.owner_module === effectiveRegistryCatalog.ownerModule.trim())
+          .filter((item) => effectiveRegistryCatalog.targetObject.trim().length === 0 || item.target_object === effectiveRegistryCatalog.targetObject.trim())
+          .filter((item) => effectiveRegistryCatalog.surface.trim().length === 0 || item.surface === effectiveRegistryCatalog.surface.trim())
+          .map((item) => item.intent),
+        effectiveRegistryCatalog.intent
+      ),
+    [capabilityCatalogRows, effectiveRegistryCatalog.intent, effectiveRegistryCatalog.ownerModule, effectiveRegistryCatalog.surface, effectiveRegistryCatalog.targetObject]
+  )
+  const selectedCatalogEntry = useMemo<CapabilityCatalogEntry | null>(() => {
+    const ownerModule = effectiveRegistryCatalog.ownerModule.trim()
+    const targetObject = effectiveRegistryCatalog.targetObject.trim()
+    const surface = effectiveRegistryCatalog.surface.trim()
+    const intent = effectiveRegistryCatalog.intent.trim()
+    if (ownerModule.length === 0 || targetObject.length === 0 || surface.length === 0 || intent.length === 0) {
+      return null
+    }
+    return (
+      capabilityCatalogRows.find(
+        (item) =>
+          item.owner_module === ownerModule &&
+          item.target_object === targetObject &&
+          item.surface === surface &&
+          item.intent === intent
+      ) ?? null
+    )
+  }, [capabilityCatalogRows, effectiveRegistryCatalog.intent, effectiveRegistryCatalog.ownerModule, effectiveRegistryCatalog.surface, effectiveRegistryCatalog.targetObject])
+  const catalogByCapabilityKey = useMemo(
+    () =>
+      capabilityCatalogRows.reduce<Record<string, CapabilityCatalogEntry>>((acc, item) => {
+        acc[item.capability_key] = item
+        return acc
+      }, {}),
+    [capabilityCatalogRows]
   )
   const businessUnitOptions = useMemo(
     () =>
@@ -451,14 +581,29 @@ export function SetIDGovernancePage() {
 
   function resetRegistryFormState() {
     setRegistryForm(defaultRegistryForm(asOf))
+    setRegistryMode('object_intent')
+    setRegistryCatalog(defaultRegistryCatalogSelection())
     setRegistryFormMode('create')
   }
 
   const onEditStrategyRow = useCallback((row: SetIDStrategyRegistryItem) => {
     setRegistryForm(toRegistryFormFromRow(row))
+    const entry = catalogByCapabilityKey[row.capability_key]
+    if (entry) {
+      setRegistryMode('object_intent')
+      setRegistryCatalog({
+        ownerModule: entry.owner_module,
+        targetObject: entry.target_object,
+        surface: entry.surface,
+        intent: entry.intent
+      })
+    } else {
+      setRegistryMode('advanced')
+      setRegistryCatalog(defaultRegistryCatalogSelection())
+    }
     setRegistryFormMode('edit')
     setRegistryNotice(null)
-  }, [])
+  }, [catalogByCapabilityKey])
 
   function onForkStrategyFromCurrent() {
     const nextEffectiveDate = registryForm.effectiveDate.trim().length > 0 ? nextDayISO(registryForm.effectiveDate) : asOf
@@ -487,6 +632,30 @@ export function SetIDGovernancePage() {
   const strategyColumns = useMemo<GridColDef[]>(
     () => [
       { field: 'capability_key', headerName: 'capability_key', flex: 1.3, minWidth: 200 },
+      {
+        field: 'source_type',
+        headerName: 'source_type',
+        minWidth: 130,
+        valueGetter: (_, row: SetIDStrategyRegistryItem) => row.source_type ?? '-'
+      },
+      {
+        field: 'target_object',
+        headerName: 'target_object',
+        minWidth: 130,
+        valueGetter: (_, row: SetIDStrategyRegistryItem) => catalogByCapabilityKey[row.capability_key]?.target_object ?? '-'
+      },
+      {
+        field: 'surface',
+        headerName: 'surface',
+        minWidth: 130,
+        valueGetter: (_, row: SetIDStrategyRegistryItem) => catalogByCapabilityKey[row.capability_key]?.surface ?? '-'
+      },
+      {
+        field: 'intent',
+        headerName: 'intent',
+        minWidth: 140,
+        valueGetter: (_, row: SetIDStrategyRegistryItem) => catalogByCapabilityKey[row.capability_key]?.intent ?? '-'
+      },
       { field: 'field_key', headerName: 'field_key', minWidth: 140 },
       { field: 'personalization_mode', headerName: 'mode', minWidth: 130 },
       { field: 'org_applicability', headerName: 'org_applicability', minWidth: 120 },
@@ -541,7 +710,7 @@ export function SetIDGovernancePage() {
         )
       }
     ],
-    [canManageGovernance, onEditStrategyRow, onOpenDisableDialog]
+    [canManageGovernance, catalogByCapabilityKey, onEditStrategyRow, onOpenDisableDialog]
   )
 
   function updateURL(nextTab: SetIDPageTab, nextAsOf: string) {
@@ -585,10 +754,27 @@ export function SetIDGovernancePage() {
     event.preventDefault()
     setError(null)
     setRegistryNotice(null)
+    let capabilityKey = registryForm.capabilityKey.trim()
+    let ownerModule = registryForm.ownerModule.trim()
+    if (registryMode === 'object_intent') {
+      if (selectedCatalogEntry == null) {
+        setError('请先选择对象/意图，系统会自动回填 capability_key。')
+        return
+      }
+      capabilityKey = selectedCatalogEntry.capability_key
+      ownerModule = selectedCatalogEntry.owner_module
+    } else {
+      const catalogEntry = catalogByCapabilityKey[capabilityKey]
+      if (!catalogEntry) {
+        setError('capability_key 未在能力目录注册，请改用对象/意图模式或修正 capability_key。')
+        return
+      }
+      ownerModule = catalogEntry.owner_module
+    }
     try {
       await strategyMutation.mutateAsync({
-        capability_key: registryForm.capabilityKey.trim(),
-        owner_module: registryForm.ownerModule.trim(),
+        capability_key: capabilityKey,
+        owner_module: ownerModule,
         field_key: registryForm.fieldKey.trim(),
         personalization_mode: registryForm.personalizationMode,
         org_applicability: registryForm.orgApplicability,
@@ -937,6 +1123,16 @@ export function SetIDGovernancePage() {
                   当前为“另存为新版本”模式：仅 effective_date 可修改，请确认后保存。
                 </Alert>
               ) : null}
+              {capabilityCatalogQuery.isLoading ? (
+                <Alert severity='info' sx={{ mb: 1.5 }}>
+                  对象/意图目录加载中…
+                </Alert>
+              ) : null}
+              {capabilityCatalogQuery.isError ? (
+                <Alert severity='warning' sx={{ mb: 1.5 }}>
+                  对象/意图目录暂不可用，请切换到高级模式并稍后重试。
+                </Alert>
+              ) : null}
               <Stack
                 component='form'
                 spacing={1.5}
@@ -944,6 +1140,50 @@ export function SetIDGovernancePage() {
                   void onUpsertStrategy(event)
                 }}
               >
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                  <TextField
+                    label='配置模式'
+                    select
+                    size='small'
+                    value={registryMode}
+                    onChange={(event) => setRegistryMode(event.target.value as 'object_intent' | 'advanced')}
+                  >
+                    <MenuItem value='object_intent'>对象/意图模式（默认）</MenuItem>
+                    <MenuItem value='advanced'>高级 capability_key</MenuItem>
+                  </TextField>
+                  <Button
+                    type='button'
+                    variant='outlined'
+                    onClick={() => {
+                      setRegistryMode('object_intent')
+                      setRegistryCatalog({
+                        ownerModule: 'orgunit',
+                        targetObject: 'orgunit',
+                        surface: 'api_write',
+                        intent: 'write_all'
+                      })
+                    }}
+                  >
+                    应用到全部写场景
+                  </Button>
+                  <Button
+                    type='button'
+                    variant='outlined'
+                    onClick={() => {
+                      setRegistryMode('object_intent')
+                      setRegistryCatalog((previous) => ({
+                        ownerModule: previous.ownerModule || 'orgunit',
+                        targetObject: previous.targetObject || 'orgunit',
+                        surface: previous.surface === 'details_dialog' ? previous.surface : 'create_dialog',
+                        intent: previous.intent === 'create_org' || previous.intent === 'add_version' || previous.intent === 'insert_version' || previous.intent === 'correct'
+                          ? previous.intent
+                          : 'create_org'
+                      }))
+                    }}
+                  >
+                    仅当前场景覆盖
+                  </Button>
+                </Stack>
                 <Box
                   sx={{
                     display: 'grid',
@@ -954,21 +1194,91 @@ export function SetIDGovernancePage() {
                     }
                   }}
                 >
-                  <FreeSoloDropdownField
-                    label='capability_key'
-                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, capabilityKey: nextValue }))}
-                    options={capabilityKeyOptions}
-                    required
-                    value={registryForm.capabilityKey}
-                    disabled={hasRegistryKeyLock}
-                  />
-                  <FreeSoloDropdownField
-                    label='owner_module'
-                    onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, ownerModule: nextValue }))}
-                    options={ownerModuleOptions}
-                    required
-                    value={registryForm.ownerModule}
-                  />
+                  {registryMode === 'object_intent' ? (
+                    <>
+                      <FreeSoloDropdownField
+                        label='owner_module'
+                        onChange={(nextValue) =>
+                          setRegistryCatalog({
+                            ownerModule: nextValue,
+                            targetObject: '',
+                            surface: '',
+                            intent: ''
+                          })
+                        }
+                        options={ownerModuleOptions}
+                        required
+                        value={effectiveRegistryCatalog.ownerModule}
+                        disabled={hasRegistryKeyLock}
+                      />
+                      <FreeSoloDropdownField
+                        label='target_object'
+                        onChange={(nextValue) =>
+                          setRegistryCatalog((previous) => ({
+                            ...previous,
+                            targetObject: nextValue,
+                            surface: '',
+                            intent: ''
+                          }))
+                        }
+                        options={targetObjectOptions}
+                        required
+                        value={effectiveRegistryCatalog.targetObject}
+                        disabled={hasRegistryKeyLock}
+                      />
+                      <FreeSoloDropdownField
+                        label='surface'
+                        onChange={(nextValue) =>
+                          setRegistryCatalog((previous) => ({
+                            ...previous,
+                            surface: nextValue,
+                            intent: ''
+                          }))
+                        }
+                        options={surfaceOptions}
+                        required
+                        value={effectiveRegistryCatalog.surface}
+                        disabled={hasRegistryKeyLock}
+                      />
+                      <FreeSoloDropdownField
+                        label='intent'
+                        onChange={(nextValue) =>
+                          setRegistryCatalog((previous) => ({
+                            ...previous,
+                            intent: nextValue
+                          }))
+                        }
+                        options={intentOptions}
+                        required
+                        value={effectiveRegistryCatalog.intent}
+                        disabled={hasRegistryKeyLock}
+                      />
+                      <TextField
+                        label='capability_key（自动回填）'
+                        size='small'
+                        value={selectedCatalogEntry?.capability_key ?? ''}
+                        InputProps={{ readOnly: true }}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <FreeSoloDropdownField
+                        label='capability_key'
+                        onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, capabilityKey: nextValue }))}
+                        options={capabilityKeyOptions}
+                        required
+                        value={registryForm.capabilityKey}
+                        disabled={hasRegistryKeyLock}
+                      />
+                      <FreeSoloDropdownField
+                        label='owner_module'
+                        onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, ownerModule: nextValue }))}
+                        options={ownerModuleOptions}
+                        required
+                        value={registryForm.ownerModule}
+                      />
+                    </>
+                  )}
                   <FreeSoloDropdownField
                     label='field_key'
                     onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, fieldKey: nextValue }))}

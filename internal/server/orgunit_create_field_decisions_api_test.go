@@ -208,8 +208,18 @@ func TestHandleOrgUnitCreateFieldDecisionsAPI(t *testing.T) {
 		if response.BusinessUnitID != "" {
 			t.Fatalf("business_unit_id=%q", response.BusinessUnitID)
 		}
-		if response.PolicyVersion != "2026-03-01" {
-			t.Fatalf("policy_version=%q", response.PolicyVersion)
+		expectedPolicyVersion, parts := resolveOrgUnitEffectivePolicyVersion("t1", orgUnitCreateFieldPolicyCapabilityKey)
+		if response.PolicyVersion != expectedPolicyVersion {
+			t.Fatalf("policy_version=%q want=%q", response.PolicyVersion, expectedPolicyVersion)
+		}
+		if response.BaselineCapabilityKey != orgUnitWriteFieldPolicyCapabilityKey {
+			t.Fatalf("baseline_capability_key=%q", response.BaselineCapabilityKey)
+		}
+		if response.PolicyVersionAlg != orgUnitEffectivePolicyVersionAlgorithm {
+			t.Fatalf("policy_version_alg=%q", response.PolicyVersionAlg)
+		}
+		if response.IntentPolicyVersion != parts.IntentPolicyVersion || response.BaselinePolicyVersion != parts.BaselinePolicyVersion {
+			t.Fatalf("parts mismatch response=%+v parts=%+v", response, parts)
 		}
 		if len(response.FieldDecisions) != 2 {
 			t.Fatalf("field_decisions=%+v", response.FieldDecisions)

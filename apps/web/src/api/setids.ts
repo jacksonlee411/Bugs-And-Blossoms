@@ -55,6 +55,7 @@ export async function bindSetID(request: {
 export interface SetIDStrategyRegistryItem {
   capability_key: string
   owner_module: string
+  source_type?: 'baseline' | 'intent_override'
   field_key: string
   personalization_mode: 'tenant_only' | 'setid'
   org_applicability: 'tenant' | 'business_unit'
@@ -141,6 +142,7 @@ export async function disableSetIDStrategyRegistry(
 
 export interface SetIDExplainFieldDecision {
   capability_key: string
+  source_type?: 'baseline' | 'intent_override'
   field_key: string
   required: boolean
   visible: boolean
@@ -260,4 +262,68 @@ export async function switchFunctionalAreaState(request: {
   operator: string
 }): Promise<FunctionalAreaStateItem> {
   return httpClient.post<FunctionalAreaStateItem>('/internal/functional-areas/switch', request)
+}
+
+export interface CapabilityCatalogEntry {
+  module: string
+  owner_module: string
+  target_object: string
+  surface: string
+  intent: string
+  capability_key: string
+  route_class?: string
+  actions?: string[]
+  status: string
+}
+
+export interface CapabilityCatalogResponse {
+  items: CapabilityCatalogEntry[]
+}
+
+export interface CapabilityCatalogListOptions {
+  module?: string
+  ownerModule?: string
+  targetObject?: string
+  surface?: string
+  intent?: string
+  capabilityKey?: string
+}
+
+function buildCapabilityCatalogQuery(options: CapabilityCatalogListOptions): string {
+  const query = new URLSearchParams()
+  if (options.module && options.module.trim().length > 0) {
+    query.set('module', options.module.trim())
+  }
+  if (options.ownerModule && options.ownerModule.trim().length > 0) {
+    query.set('owner_module', options.ownerModule.trim())
+  }
+  if (options.targetObject && options.targetObject.trim().length > 0) {
+    query.set('target_object', options.targetObject.trim())
+  }
+  if (options.surface && options.surface.trim().length > 0) {
+    query.set('surface', options.surface.trim())
+  }
+  if (options.intent && options.intent.trim().length > 0) {
+    query.set('intent', options.intent.trim())
+  }
+  if (options.capabilityKey && options.capabilityKey.trim().length > 0) {
+    query.set('capability_key', options.capabilityKey.trim())
+  }
+  return query.toString()
+}
+
+export async function listCapabilityCatalog(options: CapabilityCatalogListOptions = {}): Promise<CapabilityCatalogResponse> {
+  const query = buildCapabilityCatalogQuery(options)
+  if (query.length === 0) {
+    return httpClient.get<CapabilityCatalogResponse>('/internal/capabilities/catalog')
+  }
+  return httpClient.get<CapabilityCatalogResponse>(`/internal/capabilities/catalog?${query}`)
+}
+
+export async function listCapabilityCatalogByIntent(options: CapabilityCatalogListOptions = {}): Promise<CapabilityCatalogResponse> {
+  const query = buildCapabilityCatalogQuery(options)
+  if (query.length === 0) {
+    return httpClient.get<CapabilityCatalogResponse>('/internal/capabilities/catalog:by-intent')
+  }
+  return httpClient.get<CapabilityCatalogResponse>(`/internal/capabilities/catalog:by-intent?${query}`)
 }

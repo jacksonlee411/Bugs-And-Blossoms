@@ -185,7 +185,7 @@ func TestWriteUnified_CoversMoreWriteBranches(t *testing.T) {
 	})
 
 	t.Run("create_org missing name rejected (late check)", func(t *testing.T) {
-		svc := NewOrgUnitWriteService(baseStore)
+		svc := NewOrgUnitWriteService(withDefaultCreateFieldDecisions(baseStore))
 		_, err := svc.Write(context.Background(), "t1", WriteOrgUnitRequest{
 			Intent:        "create_org",
 			OrgCode:       "ROOT",
@@ -203,7 +203,7 @@ func TestWriteUnified_CoversMoreWriteBranches(t *testing.T) {
 		store.submitEventFn = func(context.Context, string, string, *int, string, string, json.RawMessage, string, string) (int64, error) {
 			return 0, errors.New("submit fail")
 		}
-		svc := NewOrgUnitWriteService(store)
+		svc := NewOrgUnitWriteService(withDefaultCreateFieldDecisions(store))
 		name := "Root A"
 		_, err := svc.Write(context.Background(), "t1", WriteOrgUnitRequest{
 			Intent:        "create_org",

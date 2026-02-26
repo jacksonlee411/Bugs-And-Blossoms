@@ -148,6 +148,8 @@ func knownErrorMessage(code string) string {
 		return "必填字段缺少有效值，请补全后重试。"
 	case "FIELD_POLICY_MISSING":
 		return "未找到匹配的字段策略，请刷新后重试。"
+	case "FIELD_POLICY_REDUNDANT_OVERRIDE":
+		return "该策略与基线配置一致，无需重复覆盖。"
 	case "FIELD_POLICY_CONFLICT":
 		return "字段策略存在冲突，请联系管理员。"
 	case "FIELD_POLICY_DISABLE_NOT_ALLOWED":
