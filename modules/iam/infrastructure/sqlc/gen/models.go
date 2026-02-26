@@ -722,7 +722,7 @@ type OrgunitSetidStrategyRegistry struct {
 	OwnerModule         string             `json:"owner_module"`
 	FieldKey            string             `json:"field_key"`
 	PersonalizationMode string             `json:"personalization_mode"`
-	OrgLevel            string             `json:"org_level"`
+	OrgApplicability    string             `json:"org_applicability"`
 	BusinessUnitID      string             `json:"business_unit_id"`
 	Required            bool               `json:"required"`
 	Visible             bool               `json:"visible"`

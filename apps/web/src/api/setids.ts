@@ -57,7 +57,7 @@ export interface SetIDStrategyRegistryItem {
   owner_module: string
   field_key: string
   personalization_mode: 'tenant_only' | 'setid'
-  org_level: 'tenant' | 'business_unit'
+  org_applicability: 'tenant' | 'business_unit'
   business_unit_id?: string
   required: boolean
   visible: boolean
@@ -85,7 +85,7 @@ export interface SetIDStrategyRegistryUpsertRequest {
   owner_module: string
   field_key: string
   personalization_mode: 'tenant_only' | 'setid'
-  org_level: 'tenant' | 'business_unit'
+  org_applicability: 'tenant' | 'business_unit'
   business_unit_id: string
   required: boolean
   visible: boolean
@@ -126,7 +126,7 @@ export async function upsertSetIDStrategyRegistry(
 export interface SetIDStrategyRegistryDisableRequest {
   capability_key: string
   field_key: string
-  org_level: 'tenant' | 'business_unit'
+  org_applicability: 'tenant' | 'business_unit'
   business_unit_id: string
   effective_date: string
   disable_as_of: string

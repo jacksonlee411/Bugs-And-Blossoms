@@ -215,17 +215,6 @@ type orgUnitRequestIDEventReader interface {
 	FindEventByRequestID(ctx context.Context, tenantID string, requestID string) (types.OrgUnitEvent, bool, error)
 }
 
-type orgUnitFieldPolicyResolver interface {
-	ResolveTenantFieldPolicy(
-		ctx context.Context,
-		tenantID string,
-		fieldKey string,
-		scopeType string,
-		scopeKey string,
-		asOf string,
-	) (types.TenantFieldPolicy, bool, error)
-}
-
 type orgUnitSetIDStrategyFieldDecisionResolver interface {
 	ResolveSetIDStrategyFieldDecision(
 		ctx context.Context,
@@ -262,12 +251,6 @@ type orgUnitAutoCodeSpec struct {
 }
 
 const (
-	orgUnitPolicyScopeGlobal    = "GLOBAL"
-	orgUnitPolicyScopeForm      = "FORM"
-	orgUnitPolicyScopeGlobalKey = "global"
-	orgUnitCreateDialogScopeKey = "orgunit.create_dialog"
-	orgUnitDefaultModeNone      = "NONE"
-	orgUnitDefaultModeCEL       = "CEL"
 	orgUnitNextOrgCodeFuncName  = "next_org_code"
 	orgUnitDefaultOrgCodePrefix = "O"
 	orgUnitDefaultOrgCodeWidth  = 6
@@ -1625,78 +1608,12 @@ func (s *orgUnitWriteService) applyCreatePolicyDefaults(
 	fieldConfigs []types.TenantFieldConfig,
 	req *WriteOrgUnitRequest,
 ) (*orgUnitAutoCodeSpec, error) {
-	if resolver, ok := s.store.(orgUnitSetIDStrategyFieldDecisionResolver); ok {
-		return s.applyCreatePolicyDefaultsFromSetIDRegistry(ctx, tenantID, effectiveDate, req, resolver)
-	}
-	return s.applyCreatePolicyDefaultsFromTenantFieldPolicy(ctx, tenantID, effectiveDate, fieldConfigs, req)
-}
-
-func (s *orgUnitWriteService) applyCreatePolicyDefaultsFromTenantFieldPolicy(
-	ctx context.Context,
-	tenantID string,
-	effectiveDate string,
-	fieldConfigs []types.TenantFieldConfig,
-	req *WriteOrgUnitRequest,
-) (*orgUnitAutoCodeSpec, error) {
-	_ = fieldConfigs // fallback path for compatibility tests/stubs.
-
-	resolver, ok := s.store.(orgUnitFieldPolicyResolver)
+	_ = fieldConfigs
+	resolver, ok := s.store.(orgUnitSetIDStrategyFieldDecisionResolver)
 	if !ok {
-		return nil, nil
+		return nil, errors.New(errFieldPolicyMissing)
 	}
-	policy := types.TenantFieldPolicy{
-		FieldKey:     orgUnitCreateFieldOrgCode,
-		ScopeType:    orgUnitPolicyScopeGlobal,
-		ScopeKey:     orgUnitPolicyScopeGlobalKey,
-		Maintainable: true,
-		DefaultMode:  orgUnitDefaultModeNone,
-	}
-	resolved, found, err := resolver.ResolveTenantFieldPolicy(
-		ctx,
-		tenantID,
-		orgUnitCreateFieldOrgCode,
-		orgUnitPolicyScopeForm,
-		orgUnitCreateDialogScopeKey,
-		effectiveDate,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if found {
-		policy = resolved
-	}
-
-	provided := strings.TrimSpace(req.OrgCode) != ""
-	if !policy.Maintainable && provided {
-		return nil, errors.New(errFieldNotMaintainable)
-	}
-
-	mode := strings.ToUpper(strings.TrimSpace(policy.DefaultMode))
-	switch mode {
-	case "", orgUnitDefaultModeNone:
-		if !policy.Maintainable {
-			return nil, errors.New(errDefaultRuleRequired)
-		}
-		return nil, nil
-	case orgUnitDefaultModeCEL:
-		if provided {
-			return nil, nil
-		}
-		if policy.DefaultRuleExpr == nil || strings.TrimSpace(*policy.DefaultRuleExpr) == "" {
-			return nil, errors.New(errDefaultRuleRequired)
-		}
-		spec, err := parseNextOrgCodeRule(*policy.DefaultRuleExpr)
-		if err != nil {
-			return nil, err
-		}
-		req.OrgCode = ""
-		return spec, nil
-	default:
-		if !policy.Maintainable {
-			return nil, errors.New(errDefaultRuleRequired)
-		}
-		return nil, errors.New(errDefaultRuleEvalFailed)
-	}
+	return s.applyCreatePolicyDefaultsFromSetIDRegistry(ctx, tenantID, effectiveDate, req, resolver)
 }
 
 func (s *orgUnitWriteService) applyCreatePolicyDefaultsFromSetIDRegistry(

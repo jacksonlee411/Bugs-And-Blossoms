@@ -13,9 +13,8 @@ import (
 )
 
 const (
-	orgUnitCreateFieldPolicyCapabilityKey = "org.orgunit_create.field_policy"
-	orgUnitCreateFieldOrgCode             = "org_code"
-	orgUnitCreateFieldOrgType             = "d_org_type"
+	orgUnitCreateFieldOrgCode = "org_code"
+	orgUnitCreateFieldOrgType = "d_org_type"
 )
 
 type orgUnitCreateFieldDecisionsAPIResponse struct {

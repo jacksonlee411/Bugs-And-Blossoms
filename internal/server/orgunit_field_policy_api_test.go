@@ -97,37 +97,8 @@ func (s orgUnitStoreWithFieldConfigsAndPolicies) DisableTenantFieldPolicy(contex
 	return orgUnitTenantFieldPolicy{}, false, nil
 }
 
-func TestHandleOrgUnitFieldPoliciesAPI_Success(t *testing.T) {
-	now := time.Unix(123, 0).UTC()
-	base := newOrgUnitMemoryStore()
-	store := orgUnitStoreWithFieldPolicies{
-		OrgUnitStore: base,
-		upsertFn: func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, maintainable bool, defaultMode string, defaultRuleExpr *string, enabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error) {
-			if tenantID != "t1" || fieldKey != "org_code" {
-				t.Fatalf("tenant/field mismatch: %s %s", tenantID, fieldKey)
-			}
-			if scopeType != "FORM" || scopeKey != "orgunit.create_dialog" {
-				t.Fatalf("scope mismatch: %s %s", scopeType, scopeKey)
-			}
-			if maintainable {
-				t.Fatalf("expected maintainable=false")
-			}
-			if defaultMode != "CEL" || defaultRuleExpr == nil || *defaultRuleExpr == "" {
-				t.Fatalf("default rule missing: %s %#v", defaultMode, defaultRuleExpr)
-			}
-			return orgUnitTenantFieldPolicy{
-				FieldKey:        fieldKey,
-				ScopeType:       scopeType,
-				ScopeKey:        scopeKey,
-				Maintainable:    maintainable,
-				DefaultMode:     defaultMode,
-				DefaultRuleExpr: defaultRuleExpr,
-				EnabledOn:       enabledOn,
-				UpdatedAt:       now,
-			}, false, nil
-		},
-	}
-
+func TestHandleOrgUnitFieldPoliciesAPI_WriteDisabled(t *testing.T) {
+	store := orgUnitStoreWithFieldPolicies{OrgUnitStore: newOrgUnitMemoryStore()}
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{
 		"field_key":"org_code",
 		"scope_type":"FORM",
@@ -141,15 +112,15 @@ func TestHandleOrgUnitFieldPoliciesAPI_Success(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitFieldPoliciesAPI(rec, req, store)
-	if rec.Code != http.StatusCreated {
+	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	var body orgUnitFieldPolicyAPIItem
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if body.FieldKey != "org_code" || body.ScopeType != "FORM" || body.ScopeKey != "orgunit.create_dialog" {
-		t.Fatalf("unexpected body=%+v", body)
+	if payload["code"] != "write_disabled" {
+		t.Fatalf("code=%v", payload["code"])
 	}
 }
 
@@ -168,14 +139,14 @@ func TestHandleOrgUnitFieldPoliciesAPI_InvalidExpr(t *testing.T) {
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitFieldPoliciesAPI(rec, req, store)
-	if rec.Code != http.StatusBadRequest {
+	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	var payload map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if payload["code"] != orgUnitErrFieldPolicyExprInvalid {
+	if payload["code"] != "write_disabled" {
 		t.Fatalf("code=%v", payload["code"])
 	}
 }
@@ -204,13 +175,8 @@ func TestHandleOrgUnitFieldPoliciesResolvePreviewAPI_DefaultFallback(t *testing.
 	}
 }
 
-func TestHandleOrgUnitFieldPoliciesDisableAPI_NotFoundMappedTo404(t *testing.T) {
-	store := orgUnitStoreWithFieldPolicies{
-		OrgUnitStore: newOrgUnitMemoryStore(),
-		disableFn: func(ctx context.Context, tenantID string, fieldKey string, scopeType string, scopeKey string, disabledOn string, requestID string, initiatorUUID string) (orgUnitTenantFieldPolicy, bool, error) {
-			return orgUnitTenantFieldPolicy{}, false, errors.New(orgUnitErrFieldPolicyNotFound)
-		},
-	}
+func TestHandleOrgUnitFieldPoliciesDisableAPI_WriteDisabled(t *testing.T) {
+	store := orgUnitStoreWithFieldPolicies{OrgUnitStore: newOrgUnitMemoryStore()}
 	req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies:disable", bytes.NewReader([]byte(`{
 		"field_key":"org_code",
 		"scope_type":"FORM",
@@ -221,8 +187,15 @@ func TestHandleOrgUnitFieldPoliciesDisableAPI_NotFoundMappedTo404(t *testing.T) 
 	req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 	rec := httptest.NewRecorder()
 	handleOrgUnitFieldPoliciesDisableAPI(rec, req, store)
-	if rec.Code != http.StatusNotFound {
+	if rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if payload["code"] != "write_disabled" {
+		t.Fatalf("code=%v", payload["code"])
 	}
 }
 
@@ -243,7 +216,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-policies", bytes.NewReader([]byte(`{}`)))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, orgUnitStoreWithFieldPolicies{OrgUnitStore: base})
-		if rec.Code != http.StatusInternalServerError {
+		if rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
@@ -253,7 +226,7 @@ func TestHandleOrgUnitFieldPoliciesAPI_ErrorAndRetryBranches(t *testing.T) {
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesAPI(rec, req, base)
-		if rec.Code != http.StatusInternalServerError {
+		if rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
@@ -656,16 +629,25 @@ func TestOrgUnitFieldPolicyHelpers(t *testing.T) {
 		}
 	})
 
-	t.Run("normalizeFieldPolicyScope", func(t *testing.T) {
-		if gotType, gotKey, ok := normalizeFieldPolicyScope("GLOBAL", "ignored"); !ok || gotType != "GLOBAL" || gotKey != "global" {
-			t.Fatalf("global: %q %q %v", gotType, gotKey, ok)
-		}
-		if gotType, gotKey, ok := normalizeFieldPolicyScope("", "orgunit.create_dialog"); !ok || gotType != "FORM" || gotKey != "orgunit.create_dialog" {
-			t.Fatalf("default form: %q %q %v", gotType, gotKey, ok)
-		}
-		if _, _, ok := normalizeFieldPolicyScope("FORM", "bad.scope"); ok {
-			t.Fatalf("bad form scope should fail")
-		}
+		t.Run("normalizeFieldPolicyScope", func(t *testing.T) {
+			if gotType, gotKey, ok := normalizeFieldPolicyScope("GLOBAL", "ignored"); !ok || gotType != "GLOBAL" || gotKey != "global" {
+				t.Fatalf("global: %q %q %v", gotType, gotKey, ok)
+			}
+			if gotType, gotKey, ok := normalizeFieldPolicyScope("", "orgunit.create_dialog"); !ok || gotType != "FORM" || gotKey != "orgunit.create_dialog" {
+				t.Fatalf("default form: %q %q %v", gotType, gotKey, ok)
+			}
+			if gotType, gotKey, ok := normalizeFieldPolicyScope("FORM", "orgunit.details.add_version_dialog"); !ok || gotType != "FORM" || gotKey != "orgunit.details.add_version_dialog" {
+				t.Fatalf("add version form: %q %q %v", gotType, gotKey, ok)
+			}
+			if gotType, gotKey, ok := normalizeFieldPolicyScope("FORM", "orgunit.details.insert_version_dialog"); !ok || gotType != "FORM" || gotKey != "orgunit.details.insert_version_dialog" {
+				t.Fatalf("insert version form: %q %q %v", gotType, gotKey, ok)
+			}
+			if gotType, gotKey, ok := normalizeFieldPolicyScope("FORM", "orgunit.details.correct_dialog"); !ok || gotType != "FORM" || gotKey != "orgunit.details.correct_dialog" {
+				t.Fatalf("correct form: %q %q %v", gotType, gotKey, ok)
+			}
+			if _, _, ok := normalizeFieldPolicyScope("FORM", "bad.scope"); ok {
+				t.Fatalf("bad form scope should fail")
+			}
 		if _, _, ok := normalizeFieldPolicyScope("BAD", "x"); ok {
 			t.Fatalf("bad type should fail")
 		}

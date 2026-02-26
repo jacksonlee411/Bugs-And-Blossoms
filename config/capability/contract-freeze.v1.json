@@ -96,6 +96,7 @@
       "check naming",
       "check no-legacy",
       "check no-scope-package",
+      "check granularity",
       "check capability-key",
       "check capability-contract",
       "check capability-route-map",

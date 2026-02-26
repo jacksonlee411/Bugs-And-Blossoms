@@ -742,6 +742,8 @@ func handleOrgUnitFieldPoliciesAPI(w http.ResponseWriter, r *http.Request, store
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
+	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "write_disabled", "tenant_field_policies write disabled (read-only)")
+	return
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -844,6 +846,8 @@ func handleOrgUnitFieldPoliciesDisableAPI(w http.ResponseWriter, r *http.Request
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
+	routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "write_disabled", "tenant_field_policies write disabled (read-only)")
+	return
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
@@ -1137,12 +1141,10 @@ func normalizeFieldPolicyScope(scopeType string, scopeKey string) (string, strin
 	case "GLOBAL":
 		return scopeType, "global", true
 	case "FORM":
-		switch scopeKey {
-		case "orgunit.create_dialog", "orgunit.details.add_version_dialog", "orgunit.details.insert_version_dialog", "orgunit.details.correct_dialog":
+		if _, ok := orgUnitFieldPolicyCapabilityKeyForScope(scopeType, scopeKey); ok {
 			return scopeType, scopeKey, true
-		default:
-			return "", "", false
 		}
+		return "", "", false
 	default:
 		return "", "", false
 	}

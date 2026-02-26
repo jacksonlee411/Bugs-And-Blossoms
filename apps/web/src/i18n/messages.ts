@@ -315,6 +315,7 @@ const messages = {
     org_field_configs_policy_default_mode: 'Default Mode',
     org_field_configs_policy_default_rule_expr: 'Default Rule (CEL)',
     org_field_configs_policy_default_rule_expr_helper: 'Use next_org_code("PREFIX", WIDTH).',
+    org_field_configs_policy_write_disabled: 'Field policy writes are disabled. This page is read-only.',
     org_field_configs_policy_future_effective_hint:
       'enabled_on {enabledOn} is later than current as-of {asOf}. After save, the page will switch to the effective date.',
     org_field_configs_policy_error_scope_key_invalid: 'Scope key invalid',
@@ -763,6 +764,7 @@ const messages = {
     org_field_configs_policy_default_mode: '默认值模式',
     org_field_configs_policy_default_rule_expr: '默认规则（CEL）',
     org_field_configs_policy_default_rule_expr_helper: '请使用 next_org_code("PREFIX", WIDTH)。',
+    org_field_configs_policy_write_disabled: '字段策略写入已禁用，本页为只读。',
     org_field_configs_policy_future_effective_hint: 'enabled_on {enabledOn} 晚于当前查看日期 {asOf}；保存后页面会自动切换到该生效日。',
     org_field_configs_policy_error_scope_key_invalid: '作用域键不合法',
     org_field_configs_policy_error_expr_required: '必须填写 CEL 规则表达式',

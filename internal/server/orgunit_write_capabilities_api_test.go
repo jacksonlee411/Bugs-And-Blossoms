@@ -156,6 +156,12 @@ func TestHandleOrgUnitWriteCapabilitiesAPI_SuccessEnvelope(t *testing.T) {
 	if resp["intent"] != "create_org" {
 		t.Fatalf("intent=%v", resp["intent"])
 	}
+	if resp["capability_key"] != orgUnitCreateFieldPolicyCapabilityKey {
+		t.Fatalf("capability_key=%v", resp["capability_key"])
+	}
+	if resp["policy_version"] != capabilityPolicyVersionBaseline {
+		t.Fatalf("policy_version=%v", resp["policy_version"])
+	}
 	if resp["tree_initialized"] != true {
 		t.Fatalf("tree_initialized=%v", resp["tree_initialized"])
 	}
@@ -206,6 +212,60 @@ func TestHandleOrgUnitWriteCapabilitiesAPI_CoversBranches(t *testing.T) {
 		handleOrgUnitWriteCapabilitiesAPI(rec, req, store)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("intent maps capability key", func(t *testing.T) {
+		tests := []struct {
+			intent        string
+			targetDate    string
+			wantCapKey    string
+			wantPolicyVer string
+		}{
+			{intent: "create_org", wantCapKey: orgUnitCreateFieldPolicyCapabilityKey, wantPolicyVer: capabilityPolicyVersionBaseline},
+			{intent: "add_version", wantCapKey: orgUnitAddVersionFieldPolicyCapabilityKey, wantPolicyVer: capabilityPolicyVersionBaseline},
+			{intent: "insert_version", wantCapKey: orgUnitInsertVersionFieldPolicyCapabilityKey, wantPolicyVer: capabilityPolicyVersionBaseline},
+			{intent: "correct", targetDate: "&target_effective_date=2026-01-01", wantCapKey: orgUnitCorrectFieldPolicyCapabilityKey, wantPolicyVer: capabilityPolicyVersionBaseline},
+		}
+
+		store := orgUnitStoreWithWriteCapabilities{
+			OrgUnitStore: newOrgUnitMemoryStore(),
+			resolveOrgIDFn: func(context.Context, string, string) (int, error) {
+				return 1, nil
+			},
+			resolveFactsFn: func(context.Context, string, int, string) (orgUnitAppendFacts, error) {
+				return orgUnitAppendFacts{TargetExistsAsOf: true}, nil
+			},
+			resolveTargetFn: func(context.Context, string, int, string) (orgUnitMutationTargetEvent, error) {
+				return orgUnitMutationTargetEvent{HasEffective: true, HasRaw: true}, nil
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.intent, func(t *testing.T) {
+				url := "/org/api/org-units/write-capabilities?intent=" + tc.intent + "&org_code=A001&effective_date=2026-01-01" + tc.targetDate
+				req := httptest.NewRequest(http.MethodGet, url, nil)
+				req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+				req = req.WithContext(withPrincipal(req.Context(), Principal{RoleSlug: "tenant-admin"}))
+				rec := httptest.NewRecorder()
+				handleOrgUnitWriteCapabilitiesAPI(rec, req, store)
+				if rec.Code != http.StatusOK {
+					t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+				}
+				var resp struct {
+					CapabilityKey string `json:"capability_key"`
+					PolicyVersion string `json:"policy_version"`
+				}
+				if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("json err=%v", err)
+				}
+				if resp.CapabilityKey != tc.wantCapKey {
+					t.Fatalf("capability_key=%q want=%q", resp.CapabilityKey, tc.wantCapKey)
+				}
+				if resp.PolicyVersion != tc.wantPolicyVer {
+					t.Fatalf("policy_version=%q want=%q", resp.PolicyVersion, tc.wantPolicyVer)
+				}
+			})
 		}
 	})
 

@@ -16,7 +16,7 @@
 - 结论：`add_version` / `insert_version` / `correct` 不会消费 create-field-decisions 的 `allowed_value_codes`。
 
 ### 2.2 下级不继承的直接原因
-- SetID Registry 命中条件是：`org_level=business_unit` 且 `business_unit_id` **精确匹配**，或 tenant 兜底；没有“按组织树祖先继承”语义。
+- SetID Registry 命中条件是：`org_applicability=business_unit` 且 `business_unit_id` **精确匹配**，或 tenant 兜底；没有“按组织树祖先继承”语义。
 - create 场景上下文里的 `business_unit_id` 由 `parent_org_code -> org_id` 直接转换，不会自动回溯到“上级业务单元”。
 - 因此若仅配置 `00000002/00000004`，而实际创建时父节点是 `00000003`，就会因无精确行而 `FIELD_POLICY_MISSING`。
 
@@ -32,7 +32,7 @@
 | 3) 00000002 与 00000004（含下级）列表差异 | 部分可缓解 | 若只覆盖少量明确节点可配置；若要求“自动覆盖下级”，现模型不支持，仅靠配置无法达成。 |
 
 ## 4. 配置层可执行的临时方案（止血）
-1. [ ] 为当前实际会作为“父节点”的组织逐条补 `d_org_type` 记录（`org_level=business_unit`，`business_unit_id` 为 8 位 org_id，不是 org_code）。
+1. [ ] 为当前实际会作为“父节点”的组织逐条补 `d_org_type` 记录（`org_applicability=business_unit`，`business_unit_id` 为 8 位 org_id，不是 org_code）。
 2. [ ] 保留 tenant 级兜底记录，避免出现全量 `FIELD_POLICY_MISSING`。
 3. [ ] 在治理页面统一维护 `allowed_value_codes`，并建立“父节点新增时必须同步补策略”的运维清单。
 

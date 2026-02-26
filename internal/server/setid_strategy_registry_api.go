@@ -18,8 +18,8 @@ import (
 const (
 	personalizationModeTenantOnly = "tenant_only"
 	personalizationModeSetID      = "setid"
-	orgLevelTenant                = "tenant"
-	orgLevelBusinessUnit          = "business_unit"
+	orgApplicabilityTenant        = "tenant"
+	orgApplicabilityBusinessUnit  = "business_unit"
 	fieldPolicyConflictCode       = "FIELD_POLICY_CONFLICT"
 	fieldPolicyMissingCode        = "FIELD_POLICY_MISSING"
 	explainRequiredCode           = "EXPLAIN_REQUIRED"
@@ -50,7 +50,7 @@ type setIDStrategyRegistryItem struct {
 	OwnerModule         string   `json:"owner_module"`
 	FieldKey            string   `json:"field_key"`
 	PersonalizationMode string   `json:"personalization_mode"`
-	OrgLevel            string   `json:"org_level"`
+	OrgApplicability    string   `json:"org_applicability"`
 	BusinessUnitID      string   `json:"business_unit_id,omitempty"`
 	Required            bool     `json:"required"`
 	Visible             bool     `json:"visible"`
@@ -72,7 +72,7 @@ type setIDStrategyRegistryUpsertAPIRequest struct {
 	OwnerModule         string   `json:"owner_module"`
 	FieldKey            string   `json:"field_key"`
 	PersonalizationMode string   `json:"personalization_mode"`
-	OrgLevel            string   `json:"org_level"`
+	OrgApplicability    string   `json:"org_applicability"`
 	BusinessUnitID      string   `json:"business_unit_id"`
 	Required            bool     `json:"required"`
 	Visible             bool     `json:"visible"`
@@ -90,22 +90,22 @@ type setIDStrategyRegistryUpsertAPIRequest struct {
 }
 
 type setIDStrategyRegistryDisableAPIRequest struct {
-	CapabilityKey  string `json:"capability_key"`
-	FieldKey       string `json:"field_key"`
-	OrgLevel       string `json:"org_level"`
-	BusinessUnitID string `json:"business_unit_id"`
-	EffectiveDate  string `json:"effective_date"`
-	DisableAsOf    string `json:"disable_as_of"`
-	RequestID      string `json:"request_id"`
+	CapabilityKey    string `json:"capability_key"`
+	FieldKey         string `json:"field_key"`
+	OrgApplicability string `json:"org_applicability"`
+	BusinessUnitID   string `json:"business_unit_id"`
+	EffectiveDate    string `json:"effective_date"`
+	DisableAsOf      string `json:"disable_as_of"`
+	RequestID        string `json:"request_id"`
 }
 
 type setIDStrategyRegistryDisableRequest struct {
-	CapabilityKey  string
-	FieldKey       string
-	OrgLevel       string
-	BusinessUnitID string
-	EffectiveDate  string
-	DisableAsOf    string
+	CapabilityKey    string
+	FieldKey         string
+	OrgApplicability string
+	BusinessUnitID   string
+	EffectiveDate    string
+	DisableAsOf      string
 }
 
 type setIDFieldDecision struct {
@@ -231,7 +231,7 @@ func scanSetIDStrategyRegistryRows(rows pgx.Rows) ([]setIDStrategyRegistryItem, 
 			&item.OwnerModule,
 			&item.FieldKey,
 			&item.PersonalizationMode,
-			&item.OrgLevel,
+			&item.OrgApplicability,
 			&item.BusinessUnitID,
 			&item.Required,
 			&item.Visible,
@@ -282,11 +282,11 @@ SELECT EXISTS (
   WHERE tenant_uuid = $1::uuid
     AND capability_key = $2::text
     AND field_key = $3::text
-    AND org_level = $4::text
+    AND org_applicability = $4::text
     AND business_unit_id = $5::text
     AND effective_date = $6::date
 )
-`, tenantID, item.CapabilityKey, item.FieldKey, item.OrgLevel, item.BusinessUnitID, item.EffectiveDate).Scan(&updated); err != nil {
+`, tenantID, item.CapabilityKey, item.FieldKey, item.OrgApplicability, item.BusinessUnitID, item.EffectiveDate).Scan(&updated); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `
@@ -296,7 +296,7 @@ INSERT INTO orgunit.setid_strategy_registry (
   owner_module,
   field_key,
   personalization_mode,
-  org_level,
+  org_applicability,
   business_unit_id,
   required,
   visible,
@@ -333,7 +333,7 @@ INSERT INTO orgunit.setid_strategy_registry (
   $19::date,
   $20::timestamptz
 )
-ON CONFLICT (tenant_uuid, capability_key, field_key, org_level, business_unit_id, effective_date)
+ON CONFLICT (tenant_uuid, capability_key, field_key, org_applicability, business_unit_id, effective_date)
 DO UPDATE SET
   owner_module = EXCLUDED.owner_module,
   personalization_mode = EXCLUDED.personalization_mode,
@@ -349,7 +349,7 @@ DO UPDATE SET
   change_policy = EXCLUDED.change_policy,
   end_date = EXCLUDED.end_date,
   updated_at = EXCLUDED.updated_at
-`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgLevel, item.BusinessUnitID, item.Required, item.Visible, item.Maintainable, item.DefaultRuleRef, item.DefaultValue, allowedValueCodesJSON, item.Priority, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
+`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgApplicability, item.BusinessUnitID, item.Required, item.Visible, item.Maintainable, item.DefaultRuleRef, item.DefaultValue, allowedValueCodesJSON, item.Priority, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
 		return err
 	})
 	return item, updated, err
@@ -378,7 +378,7 @@ func ensureStrategyResolvableAfterDisable(items []setIDStrategyRegistryItem, req
 		active = append(active, item)
 	}
 	businessUnitID := ""
-	if req.OrgLevel == orgLevelBusinessUnit {
+	if req.OrgApplicability == orgApplicabilityBusinessUnit {
 		businessUnitID = req.BusinessUnitID
 	}
 	if _, err := resolveFieldDecisionFromItems(active, businessUnitID); err != nil {
@@ -399,7 +399,7 @@ SELECT
   owner_module,
   field_key,
   personalization_mode,
-  org_level,
+  org_applicability,
   business_unit_id,
   required,
   visible,
@@ -418,18 +418,18 @@ FROM orgunit.setid_strategy_registry
 WHERE tenant_uuid = $1::uuid
   AND capability_key = $2::text
   AND field_key = $3::text
-  AND org_level = $4::text
+  AND org_applicability = $4::text
   AND business_unit_id = $5::text
   AND effective_date = $6::date
 FOR UPDATE
-`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgLevel, req.BusinessUnitID, req.EffectiveDate)
+`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitID, req.EffectiveDate)
 		var allowedValueCodesRaw string
 		if err := row.Scan(
 			&target.CapabilityKey,
 			&target.OwnerModule,
 			&target.FieldKey,
 			&target.PersonalizationMode,
-			&target.OrgLevel,
+			&target.OrgApplicability,
 			&target.BusinessUnitID,
 			&target.Required,
 			&target.Visible,
@@ -469,10 +469,10 @@ SET end_date = $7::date,
 WHERE tenant_uuid = $1::uuid
   AND capability_key = $2::text
   AND field_key = $3::text
-  AND org_level = $4::text
+  AND org_applicability = $4::text
   AND business_unit_id = $5::text
   AND effective_date = $6::date
-`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgLevel, req.BusinessUnitID, req.EffectiveDate, endDate, nowUTC); err != nil {
+`, tenantID, req.CapabilityKey, req.FieldKey, req.OrgApplicability, req.BusinessUnitID, req.EffectiveDate, endDate, nowUTC); err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `
@@ -481,7 +481,7 @@ SELECT
   owner_module,
   field_key,
   personalization_mode,
-  org_level,
+  org_applicability,
   business_unit_id,
   required,
   visible,
@@ -502,7 +502,7 @@ WHERE tenant_uuid = $1::uuid
   AND field_key = $3::text
   AND effective_date <= $4::date
   AND (end_date IS NULL OR end_date > $4::date)
-ORDER BY capability_key ASC, field_key ASC, org_level ASC, business_unit_id ASC, effective_date ASC
+ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, business_unit_id ASC, effective_date ASC
 `, tenantID, req.CapabilityKey, req.FieldKey, endDate)
 		if err != nil {
 			return err
@@ -538,7 +538,7 @@ SELECT
   owner_module,
   field_key,
   personalization_mode,
-  org_level,
+  org_applicability,
   business_unit_id,
   required,
   visible,
@@ -559,7 +559,7 @@ WHERE tenant_uuid = $1::uuid
   AND ($3::text = '' OR field_key = $3::text)
   AND effective_date <= $4::date
   AND (end_date IS NULL OR end_date > $4::date)
-ORDER BY capability_key ASC, field_key ASC, org_level ASC, business_unit_id ASC, effective_date ASC
+ORDER BY capability_key ASC, field_key ASC, org_applicability ASC, business_unit_id ASC, effective_date ASC
 	`, tenantID, capabilityKey, fieldKey, normalizedAsOf)
 		if err != nil {
 			return err
@@ -587,7 +587,7 @@ func strategyRegistrySortKey(item setIDStrategyRegistryItem) string {
 	return strings.Join([]string{
 		item.CapabilityKey,
 		item.FieldKey,
-		item.OrgLevel,
+		item.OrgApplicability,
 		item.BusinessUnitID,
 		item.EffectiveDate,
 	}, "|")
@@ -599,7 +599,7 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 		OwnerModule:         strings.ToLower(strings.TrimSpace(req.OwnerModule)),
 		FieldKey:            strings.ToLower(strings.TrimSpace(req.FieldKey)),
 		PersonalizationMode: strings.ToLower(strings.TrimSpace(req.PersonalizationMode)),
-		OrgLevel:            strings.ToLower(strings.TrimSpace(req.OrgLevel)),
+		OrgApplicability:    strings.ToLower(strings.TrimSpace(req.OrgApplicability)),
 		BusinessUnitID:      strings.TrimSpace(req.BusinessUnitID),
 		Required:            req.Required,
 		Visible:             req.Visible,
@@ -623,7 +623,7 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 	if item.ChangePolicy == "" {
 		item.ChangePolicy = "plan_required"
 	}
-	if item.OrgLevel == orgLevelTenant {
+	if item.OrgApplicability == orgApplicabilityTenant {
 		item.BusinessUnitID = ""
 	}
 	item.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -632,14 +632,14 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 
 func normalizeStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableAPIRequest) setIDStrategyRegistryDisableRequest {
 	item := setIDStrategyRegistryDisableRequest{
-		CapabilityKey:  strings.ToLower(strings.TrimSpace(req.CapabilityKey)),
-		FieldKey:       strings.ToLower(strings.TrimSpace(req.FieldKey)),
-		OrgLevel:       strings.ToLower(strings.TrimSpace(req.OrgLevel)),
-		BusinessUnitID: strings.TrimSpace(req.BusinessUnitID),
-		EffectiveDate:  strings.TrimSpace(req.EffectiveDate),
-		DisableAsOf:    strings.TrimSpace(req.DisableAsOf),
+		CapabilityKey:    strings.ToLower(strings.TrimSpace(req.CapabilityKey)),
+		FieldKey:         strings.ToLower(strings.TrimSpace(req.FieldKey)),
+		OrgApplicability: strings.ToLower(strings.TrimSpace(req.OrgApplicability)),
+		BusinessUnitID:   strings.TrimSpace(req.BusinessUnitID),
+		EffectiveDate:    strings.TrimSpace(req.EffectiveDate),
+		DisableAsOf:      strings.TrimSpace(req.DisableAsOf),
 	}
-	if item.OrgLevel == orgLevelTenant {
+	if item.OrgApplicability == orgApplicabilityTenant {
 		item.BusinessUnitID = ""
 	}
 	return item
@@ -669,14 +669,21 @@ func normalizeAllowedValueCodes(values []string) []string {
 }
 
 func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, string) {
-	if item.CapabilityKey == "" || item.OwnerModule == "" || item.FieldKey == "" || item.PersonalizationMode == "" || item.OrgLevel == "" || item.EffectiveDate == "" {
-		return http.StatusBadRequest, "invalid_request", "capability_key/owner_module/field_key/personalization_mode/org_level/effective_date required"
+	if item.CapabilityKey == "" || item.OwnerModule == "" || item.FieldKey == "" || item.PersonalizationMode == "" || item.OrgApplicability == "" || item.EffectiveDate == "" {
+		return http.StatusBadRequest, "invalid_request", "capability_key/owner_module/field_key/personalization_mode/org_applicability/effective_date required"
 	}
 	if !capabilityKeyPattern.MatchString(item.CapabilityKey) {
 		return http.StatusBadRequest, "invalid_capability_key", "invalid capability_key"
 	}
 	if containsCapabilityContextToken(item.CapabilityKey) {
 		return http.StatusUnprocessableEntity, "invalid_capability_key_context", "capability_key must not include context tokens"
+	}
+	definition, ok := capabilityDefinitionForKey(item.CapabilityKey)
+	if !ok {
+		return http.StatusUnprocessableEntity, "invalid_request", "capability_key must be registered"
+	}
+	if definition.OwnerModule != "" && definition.OwnerModule != item.OwnerModule {
+		return http.StatusUnprocessableEntity, "invalid_request", "owner_module must match capability registry"
 	}
 	if !fieldKeyPattern.MatchString(item.FieldKey) {
 		return http.StatusBadRequest, "invalid_field_key", "invalid field_key"
@@ -686,9 +693,9 @@ func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, 
 	default:
 		return http.StatusUnprocessableEntity, "personalization_mode_invalid", "personalization_mode invalid"
 	}
-	switch item.OrgLevel {
-	case orgLevelTenant:
-	case orgLevelBusinessUnit:
+	switch item.OrgApplicability {
+	case orgApplicabilityTenant:
+	case orgApplicabilityBusinessUnit:
 		if item.BusinessUnitID == "" {
 			return http.StatusBadRequest, "invalid_business_unit_id", "business_unit_id required"
 		}
@@ -696,7 +703,7 @@ func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, 
 			return http.StatusBadRequest, "invalid_business_unit_id", "invalid business_unit_id"
 		}
 	default:
-		return http.StatusUnprocessableEntity, "org_level_invalid", "org_level invalid"
+		return http.StatusUnprocessableEntity, "org_applicability_invalid", "org_applicability invalid"
 	}
 	if item.PersonalizationMode != personalizationModeTenantOnly && !item.ExplainRequired {
 		return http.StatusUnprocessableEntity, explainRequiredCode, "explain_required must be true when personalization_mode is not tenant_only"
@@ -727,8 +734,8 @@ func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, 
 }
 
 func validateStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableRequest) (int, string, string) {
-	if req.CapabilityKey == "" || req.FieldKey == "" || req.OrgLevel == "" || req.EffectiveDate == "" || req.DisableAsOf == "" {
-		return http.StatusBadRequest, "invalid_request", "capability_key/field_key/org_level/effective_date/disable_as_of required"
+	if req.CapabilityKey == "" || req.FieldKey == "" || req.OrgApplicability == "" || req.EffectiveDate == "" || req.DisableAsOf == "" {
+		return http.StatusBadRequest, "invalid_request", "capability_key/field_key/org_applicability/effective_date/disable_as_of required"
 	}
 	if !capabilityKeyPattern.MatchString(req.CapabilityKey) {
 		return http.StatusBadRequest, "invalid_capability_key", "invalid capability_key"
@@ -739,9 +746,9 @@ func validateStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableRequ
 	if !fieldKeyPattern.MatchString(req.FieldKey) {
 		return http.StatusBadRequest, "invalid_field_key", "invalid field_key"
 	}
-	switch req.OrgLevel {
-	case orgLevelTenant:
-	case orgLevelBusinessUnit:
+	switch req.OrgApplicability {
+	case orgApplicabilityTenant:
+	case orgApplicabilityBusinessUnit:
 		if req.BusinessUnitID == "" {
 			return http.StatusBadRequest, "invalid_business_unit_id", "business_unit_id required"
 		}
@@ -749,7 +756,7 @@ func validateStrategyRegistryDisableRequest(req setIDStrategyRegistryDisableRequ
 			return http.StatusBadRequest, "invalid_business_unit_id", "invalid business_unit_id"
 		}
 	default:
-		return http.StatusUnprocessableEntity, "org_level_invalid", "org_level invalid"
+		return http.StatusUnprocessableEntity, "org_applicability_invalid", "org_applicability invalid"
 	}
 	effectiveDate, err := time.Parse("2006-01-02", req.EffectiveDate)
 	if err != nil {
@@ -812,7 +819,7 @@ func (s *setIDStrategyRegistryRuntime) disable(tenantID string, req setIDStrateg
 	targetKey := strings.Join([]string{
 		req.CapabilityKey,
 		req.FieldKey,
-		req.OrgLevel,
+		req.OrgApplicability,
 		req.BusinessUnitID,
 		req.EffectiveDate,
 	}, "|")
@@ -821,7 +828,7 @@ func (s *setIDStrategyRegistryRuntime) disable(tenantID string, req setIDStrateg
 		candidateKey := strings.Join([]string{
 			items[i].CapabilityKey,
 			items[i].FieldKey,
-			items[i].OrgLevel,
+			items[i].OrgApplicability,
 			items[i].BusinessUnitID,
 			items[i].EffectiveDate,
 		}, "|")
@@ -910,13 +917,13 @@ func resolveFieldDecisionFromItems(items []setIDStrategyRegistryItem, businessUn
 	var chosen *candidate
 	for _, item := range items {
 		current := candidate{item: item}
-		switch item.OrgLevel {
-		case orgLevelBusinessUnit:
+		switch item.OrgApplicability {
+		case orgApplicabilityBusinessUnit:
 			if !strings.EqualFold(item.BusinessUnitID, businessUnitID) {
 				continue
 			}
 			current.specificity = 2
-		case orgLevelTenant:
+		case orgApplicabilityTenant:
 			current.specificity = 1
 		default:
 			continue
@@ -953,7 +960,7 @@ func findStrategyRegistryItemForUpsert(ctx context.Context, tenantID string, ite
 		return setIDStrategyRegistryItem{}, false, err
 	}
 	for _, candidate := range items {
-		if candidate.OrgLevel != item.OrgLevel {
+		if candidate.OrgApplicability != item.OrgApplicability {
 			continue
 		}
 		if candidate.BusinessUnitID != item.BusinessUnitID {
@@ -1016,7 +1023,7 @@ func handleSetIDStrategyRegistryAPI(w http.ResponseWriter, r *http.Request) {
 			CapabilityKey:       item.CapabilityKey,
 			BusinessUnitID:      item.BusinessUnitID,
 			AsOf:                item.EffectiveDate,
-			RequireBusinessUnit: item.OrgLevel == orgLevelBusinessUnit,
+			RequireBusinessUnit: item.OrgApplicability == orgApplicabilityBusinessUnit,
 		})
 		if capErr != nil {
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, statusCodeForCapabilityContextError(capErr.Code), capErr.Code, capErr.Message)
@@ -1080,7 +1087,7 @@ func handleSetIDStrategyRegistryDisableAPI(w http.ResponseWriter, r *http.Reques
 		CapabilityKey:       item.CapabilityKey,
 		BusinessUnitID:      item.BusinessUnitID,
 		AsOf:                item.DisableAsOf,
-		RequireBusinessUnit: item.OrgLevel == orgLevelBusinessUnit,
+		RequireBusinessUnit: item.OrgApplicability == orgApplicabilityBusinessUnit,
 	})
 	if capErr != nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, statusCodeForCapabilityContextError(capErr.Code), capErr.Code, capErr.Message)

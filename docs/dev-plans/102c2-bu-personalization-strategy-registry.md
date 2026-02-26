@@ -45,7 +45,7 @@
 | `owner_module` | 归属模块 | `jobcatalog` |
 | `field_key` | 字段键（字段级策略时必填） | `field_x` |
 | `personalization_mode` | 个性化模式 | `tenant_only` / `setid` |
-| `org_level` | 生效组织层级 | `tenant` / `business_unit` |
+| `org_applicability` | 生效组织层级 | `tenant` / `business_unit` |
 | `bu_selector` | BU 选择器 | `business_unit=BU-A` |
 | `required` | 该字段是否必填 | `true` |
 | `visible` | 该字段是否可见 | `false` |
@@ -97,7 +97,7 @@
 | 新能力准入流程 | 不主责 | 部分关联 | 实施主责（注册先行） |
 
 ## 6. 新能力准入流程（冻结）
-1. [ ] 新能力提出时先填写 `capability_key + functional_area_key + capability_type + personalization_mode + org_level`。
+1. [ ] 新能力提出时先填写 `capability_key + functional_area_key + capability_type + personalization_mode + org_applicability`。
 2. [ ] 若 `personalization_mode != tenant_only`，必须提供 explain 方案与审计字段方案。
 3. [ ] 字段级差异场景必须登记 `field_key + required + visible + default_rule_ref + bu_selector`。
 4. [ ] 路由/动作到 `capability_key` 的映射必须登记并评审，缺失时禁止上线。

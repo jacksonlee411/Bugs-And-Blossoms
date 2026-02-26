@@ -23,7 +23,7 @@
 | `owner_module` | 可下拉化 | 可搜索下拉（预置模块 + 历史值） |
 | `field_key` | 可下拉化 | 可搜索下拉（历史值候选） |
 | `personalization_mode` | 可下拉化 | 枚举下拉（tenant_only/setid） |
-| `org_level` | 可下拉化 | 枚举下拉（tenant/business_unit） |
+| `org_applicability` | 可下拉化 | 枚举下拉（tenant/business_unit） |
 | `business_unit_id` | 可下拉化 | 可搜索下拉（历史值 + 绑定记录候选） |
 | `default_rule_ref` | 可下拉化 | 可搜索下拉（历史值候选） |
 | `default_value` | 可下拉化 | 可搜索下拉（历史值候选） |

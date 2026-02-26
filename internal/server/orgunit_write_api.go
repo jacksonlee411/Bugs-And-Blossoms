@@ -69,7 +69,7 @@ func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc org
 	intent := strings.TrimSpace(req.Intent)
 	effectiveDate := strings.TrimSpace(req.EffectiveDate)
 	policyVersion := strings.TrimSpace(req.PolicyVersion)
-	if intent == string(orgunitservices.OrgUnitWriteIntentCreateOrg) {
+	if capabilityKey, ok := orgUnitFieldPolicyCapabilityKeyForWriteIntent(intent); ok {
 		if policyVersion == "" {
 			routing.WriteError(
 				w,
@@ -81,7 +81,7 @@ func handleOrgUnitsWriteAPI(w http.ResponseWriter, r *http.Request, writeSvc org
 			)
 			return
 		}
-		activePolicyVersion := defaultPolicyActivationRuntime.activePolicyVersion(tenant.ID, orgUnitCreateFieldPolicyCapabilityKey)
+		activePolicyVersion := defaultPolicyActivationRuntime.activePolicyVersion(tenant.ID, capabilityKey)
 		if policyVersion != activePolicyVersion {
 			routing.WriteError(
 				w,

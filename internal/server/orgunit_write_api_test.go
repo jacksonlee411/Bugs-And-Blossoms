@@ -111,6 +111,28 @@ func TestHandleOrgUnitsWriteAPI_BasicValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("add_version missing policy_version", func(t *testing.T) {
+		body := `{"intent":"add_version","org_code":"A001","effective_date":"2026-01-01","request_id":"r1","patch":{"name":"X"}}`
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsWriteAPI(rec, req, svc)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), orgUnitErrFieldPolicyVersionRequired) {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("correct stale policy_version", func(t *testing.T) {
+		body := `{"intent":"correct","org_code":"A001","effective_date":"2026-01-02","target_effective_date":"2026-01-01","policy_version":"2025-01-01","request_id":"r1","patch":{"name":"X"}}`
+		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitsWriteAPI(rec, req, svc)
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), orgUnitErrFieldPolicyVersionStale) {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("forbid ext_labels_snapshot in request", func(t *testing.T) {
 		body := `{"intent":"create_org","org_code":"ROOT","effective_date":"2026-01-01","policy_version":"2026-02-23","request_id":"r1","patch":{"name":"X","ext_labels_snapshot":{"x":"y"}}}`
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/write", bytes.NewBufferString(body))

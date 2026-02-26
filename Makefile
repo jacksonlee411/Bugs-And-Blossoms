@@ -7,7 +7,7 @@ export ATLAS_VERSION ?= v0.38.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
-.PHONY: help preflight check pr-branch naming no-legacy no-scope-package capability-key capability-contract capability-route-map request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch naming no-legacy no-scope-package granularity capability-key capability-contract capability-route-map request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
@@ -21,6 +21,7 @@ help:
 			"  make check naming" \
 				"  make check no-legacy" \
 				"  make check no-scope-package" \
+				"  make check granularity" \
 				"  make check capability-key" \
 				"  make check capability-contract" \
 				"  make check capability-route-map" \
@@ -52,6 +53,7 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check naming
 	@$(MAKE) check no-legacy
 	@$(MAKE) check no-scope-package
+	@$(MAKE) check granularity
 	@$(MAKE) check capability-key
 	@$(MAKE) check capability-contract
 	@$(MAKE) check capability-route-map
@@ -82,6 +84,9 @@ no-legacy: ## 禁止 legacy 分支/回退通道（单链路原则）
 
 no-scope-package: ## 反漂移门禁（阻断新增 scope/package 语义）
 	@./scripts/ci/check-no-scope-package.sh
+
+granularity: ## 颗粒度层次门禁（阻断 org_level/scope_type/scope_key 回流）
+	@./scripts/ci/check-granularity.sh
 
 capability-key: ## capability_key 命名与拼接门禁（防退化为 scope）
 	@./scripts/ci/check-capability-key.sh

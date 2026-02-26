@@ -1,0 +1,5 @@
+printf: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `PY')
+  File "<stdin>", line 4
+    text = text.replace('  printf %sn  >&2\n', 
+                       ^
+SyntaxError: '(' was never closed

@@ -52,7 +52,7 @@ interface RegistryFormState {
   ownerModule: string
   fieldKey: string
   personalizationMode: 'tenant_only' | 'setid'
-  orgLevel: 'tenant' | 'business_unit'
+  orgApplicability: 'tenant' | 'business_unit'
   businessUnitID: string
   required: boolean
   visible: boolean
@@ -79,7 +79,7 @@ const personalizationModeOptions: DropdownOption[] = [
   { value: 'setid', label: 'setid' },
   { value: 'tenant_only', label: 'tenant_only' }
 ]
-const orgLevelOptions: DropdownOption[] = [
+const orgApplicabilityOptions: DropdownOption[] = [
   { value: 'business_unit', label: 'business_unit' },
   { value: 'tenant', label: 'tenant' }
 ]
@@ -149,7 +149,7 @@ function defaultRegistryForm(asOf: string): RegistryFormState {
     ownerModule: '',
     fieldKey: '',
     personalizationMode: 'setid',
-    orgLevel: 'business_unit',
+    orgApplicability: 'business_unit',
     businessUnitID: '',
     required: true,
     visible: true,
@@ -184,7 +184,7 @@ function toRegistryFormFromRow(row: SetIDStrategyRegistryItem): RegistryFormStat
     ownerModule: row.owner_module,
     fieldKey: row.field_key,
     personalizationMode: row.personalization_mode,
-    orgLevel: row.org_level,
+    orgApplicability: row.org_applicability,
     businessUnitID: row.business_unit_id ?? '',
     required: row.required,
     visible: row.visible,
@@ -215,7 +215,7 @@ function strategyRowID(item: SetIDStrategyRegistryItem): string {
   return [
     item.capability_key,
     item.field_key,
-    item.org_level,
+    item.org_applicability,
     item.business_unit_id ?? '-',
     item.effective_date
   ].join(':')
@@ -489,7 +489,7 @@ export function SetIDGovernancePage() {
       { field: 'capability_key', headerName: 'capability_key', flex: 1.3, minWidth: 200 },
       { field: 'field_key', headerName: 'field_key', minWidth: 140 },
       { field: 'personalization_mode', headerName: 'mode', minWidth: 130 },
-      { field: 'org_level', headerName: 'org_level', minWidth: 120 },
+      { field: 'org_applicability', headerName: 'org_applicability', minWidth: 120 },
       { field: 'business_unit_id', headerName: 'business_unit_id', minWidth: 140 },
       {
         field: 'policy',
@@ -591,7 +591,7 @@ export function SetIDGovernancePage() {
         owner_module: registryForm.ownerModule.trim(),
         field_key: registryForm.fieldKey.trim(),
         personalization_mode: registryForm.personalizationMode,
-        org_level: registryForm.orgLevel,
+        org_applicability: registryForm.orgApplicability,
         business_unit_id: registryForm.businessUnitID.trim(),
         required: registryForm.required,
         visible: registryForm.visible,
@@ -632,7 +632,7 @@ export function SetIDGovernancePage() {
       await strategyDisableMutation.mutateAsync({
         capability_key: row.capability_key,
         field_key: row.field_key,
-        org_level: row.org_level,
+        org_applicability: row.org_applicability,
         business_unit_id: row.business_unit_id ?? '',
         effective_date: row.effective_date,
         disable_as_of: disableAsOf,
@@ -998,21 +998,21 @@ export function SetIDGovernancePage() {
                     ))}
                   </TextField>
                   <TextField
-                    label='org_level'
+                    label='org_applicability'
                     required
                     select
                     size='small'
-                    value={registryForm.orgLevel}
+                    value={registryForm.orgApplicability}
                     disabled={hasRegistryKeyLock}
                     onChange={(event) =>
                       setRegistryForm((prev) => ({
                         ...prev,
-                        orgLevel: event.target.value as RegistryFormState['orgLevel'],
+                        orgApplicability: event.target.value as RegistryFormState['orgApplicability'],
                         businessUnitID: event.target.value === 'tenant' ? '' : prev.businessUnitID
                       }))
                     }
                   >
-                    {orgLevelOptions.map((option) => (
+                    {orgApplicabilityOptions.map((option) => (
                       <MenuItem key={`form-org-level-${option.value}`} value={option.value}>
                         {option.label}
                       </MenuItem>
@@ -1020,7 +1020,7 @@ export function SetIDGovernancePage() {
                   </TextField>
                   <FreeSoloDropdownField
                     label='business_unit_id'
-                    disabled={hasRegistryKeyLock || registryForm.orgLevel === 'tenant'}
+                    disabled={hasRegistryKeyLock || registryForm.orgApplicability === 'tenant'}
                     onChange={(nextValue) => setRegistryForm((prev) => ({ ...prev, businessUnitID: nextValue }))}
                     options={businessUnitOptions}
                     value={registryForm.businessUnitID}
@@ -1347,7 +1347,7 @@ export function SetIDGovernancePage() {
                 capability_key={registryDisableDialog.row?.capability_key || '-'}
               </Typography>
               <Typography color='text.secondary' variant='body2'>
-                field_key={registryDisableDialog.row?.field_key || '-'} · org_level={registryDisableDialog.row?.org_level || '-'} ·
+                field_key={registryDisableDialog.row?.field_key || '-'} · org_applicability={registryDisableDialog.row?.org_applicability || '-'} ·
                 business_unit_id={registryDisableDialog.row?.business_unit_id || '-'}
               </Typography>
               <Typography color='text.secondary' variant='body2'>

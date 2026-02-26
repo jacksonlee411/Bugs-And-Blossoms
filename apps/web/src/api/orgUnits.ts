@@ -296,6 +296,8 @@ export async function getOrgUnitCreateFieldDecisions(options: {
 
 export interface OrgUnitWriteCapabilitiesResponse {
   intent: OrgUnitWriteIntent
+  capability_key: string
+  policy_version: string
   tree_initialized: boolean
   enabled: boolean
   deny_reasons: string[]

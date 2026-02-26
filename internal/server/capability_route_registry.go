@@ -56,6 +56,33 @@ var capabilityDefinitions = []capabilityDefinition{
 		ActivationState:   "active",
 		CurrentPolicy:     capabilityPolicyVersionBaseline,
 	},
+	{
+		CapabilityKey:     "org.orgunit_add_version.field_policy",
+		FunctionalAreaKey: "org_foundation",
+		CapabilityType:    "process_capability",
+		OwnerModule:       "orgunit",
+		Status:            routeCapabilityStatusActive,
+		ActivationState:   "active",
+		CurrentPolicy:     capabilityPolicyVersionBaseline,
+	},
+	{
+		CapabilityKey:     "org.orgunit_insert_version.field_policy",
+		FunctionalAreaKey: "org_foundation",
+		CapabilityType:    "process_capability",
+		OwnerModule:       "orgunit",
+		Status:            routeCapabilityStatusActive,
+		ActivationState:   "active",
+		CurrentPolicy:     capabilityPolicyVersionBaseline,
+	},
+	{
+		CapabilityKey:     "org.orgunit_correct.field_policy",
+		FunctionalAreaKey: "org_foundation",
+		CapabilityType:    "process_capability",
+		OwnerModule:       "orgunit",
+		Status:            routeCapabilityStatusActive,
+		ActivationState:   "active",
+		CurrentPolicy:     capabilityPolicyVersionBaseline,
+	},
 }
 
 var capabilityDefinitionByKey = buildCapabilityDefinitionIndex(capabilityDefinitions)

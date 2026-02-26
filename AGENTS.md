@@ -12,6 +12,7 @@
 - 新建 Go 模块后（防止 `go mod init` 默认回退）：执行 `go get go@1.26.0`（或 `go mod edit -go=1.26.0`）
 - 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
 - 禁止新增 scope/package 漂移：`make check no-scope-package`
+- 颗粒度层次门禁（阻断 org_level/scope_type/scope_key 回流）：`make check granularity`
 - capability_key 防退化（禁上下文编码/禁拼接）：`make check capability-key`
 - 路由 capability 映射防漂移（缺映射/重复/未注册阻断）：`make check capability-route-map`
 - 业务幂等字段命名收敛：`make check request-code`
@@ -53,6 +54,7 @@
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
 | 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
+| 颗粒度层次/旧 scope 相关新增（`org_level/scope_type/scope_key`） | `make check granularity` | 颗粒度治理门禁（承接 `DEV-PLAN-180`） |
 | capability_key 命名与生成方式 | `make check capability-key` | 禁止上下文编码与运行时拼接（承接 `DEV-PLAN-102C6/102D`） |
 | 路由/动作到 capability_key 映射 | `make check capability-route-map` | 阻断缺映射、重复映射、未注册 key（承接 `DEV-PLAN-156`） |
 | 幂等与追踪命名（request_id / trace_id） | `make check request-code` | 规则见 `DEV-PLAN-109A` |
@@ -306,6 +308,8 @@ modules/{module}/
 - DEV-PLAN-170：Org 详情页 UI 外观对齐 Capability Key（仅页面壳层改造；弹窗不改）：`docs/dev-plans/170-org-form-ui-shell-alignment-with-capability-key.md`
 - DEV-PLAN-170A：Org 变更日志页 UI 外观对齐 Capability Key（仅页面壳层改造；其“顶部上下文定位实现”后续由 170B 纠偏）：`docs/dev-plans/170a-org-audit-log-ui-shell-alignment-with-capability-key.md`
 - DEV-PLAN-170B：Org 详情页移除顶部上下文区与 URL 恢复定位替代方案（170A 纠偏计划）：`docs/dev-plans/170b-org-details-remove-top-context-and-url-restore-positioning.md`
+- DEV-PLAN-180：项目颗粒度层次统一与治理（Field/Form/Module/SetID/Tenant/Server）：`docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md`
+- DEV-PLAN-181：OrgUnit Details 三类表单到 Capability Key 映射落地：`docs/dev-plans/181-orgunit-details-form-capability-mapping-implementation.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`

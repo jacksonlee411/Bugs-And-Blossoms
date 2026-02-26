@@ -36,7 +36,7 @@ func (s orgUnitWriteResolverStoreStub) ResolveTenantFieldPolicy(ctx context.Cont
 }
 
 type orgUnitWriteAutoCodeStoreStub struct {
-	orgUnitWriteResolverStoreStub
+	orgUnitWriteSetIDResolverStoreStub
 	submitCreateAutoFn func(
 		ctx context.Context,
 		tenantID string,
@@ -235,152 +235,23 @@ func TestOrgCodeFromEventPayload(t *testing.T) {
 
 func TestApplyCreatePolicyDefaults_Branches(t *testing.T) {
 	ctx := context.Background()
-	fieldConfigs := []types.TenantFieldConfig{}
 
-	t.Run("store without resolver", func(t *testing.T) {
+	t.Run("store without setid resolver", func(t *testing.T) {
 		svc := newWriteService(orgUnitWriteStoreStub{})
 		req := &WriteOrgUnitRequest{}
-		spec, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", fieldConfigs, req)
-		if err != nil || spec != nil {
-			t.Fatalf("spec=%+v err=%v", spec, err)
-		}
-	})
-
-	t.Run("resolver error", func(t *testing.T) {
-		svc := newWriteService(orgUnitWriteResolverStoreStub{
-			orgUnitWriteStoreStub: orgUnitWriteStoreStub{},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{}, false, errors.New("boom")
-			},
-		})
-		req := &WriteOrgUnitRequest{}
-		if _, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", fieldConfigs, req); err == nil {
-			t.Fatal("expected error")
-		}
-	})
-
-	t.Run("not maintainable with provided org_code", func(t *testing.T) {
-		svc := newWriteService(orgUnitWriteResolverStoreStub{
-			orgUnitWriteStoreStub: orgUnitWriteStoreStub{},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{Maintainable: false, DefaultMode: orgUnitDefaultModeNone}, true, nil
-			},
-		})
-		req := &WriteOrgUnitRequest{OrgCode: "ROOT"}
-		if _, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", fieldConfigs, req); err == nil || err.Error() != errFieldNotMaintainable {
+		if _, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", nil, req); err == nil || err.Error() != errFieldPolicyMissing {
 			t.Fatalf("err=%v", err)
 		}
 	})
 
-	t.Run("none mode not maintainable requires default rule", func(t *testing.T) {
-		svc := newWriteService(orgUnitWriteResolverStoreStub{
-			orgUnitWriteStoreStub: orgUnitWriteStoreStub{},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{Maintainable: false, DefaultMode: orgUnitDefaultModeNone}, true, nil
+	t.Run("org_code decision missing", func(t *testing.T) {
+		svc := newWriteService(orgUnitWriteSetIDResolverStoreStub{
+			resolveDecisionFn: func(context.Context, string, string, string, string, string) (types.SetIDStrategyFieldDecision, bool, error) {
+				return types.SetIDStrategyFieldDecision{}, false, nil
 			},
 		})
 		req := &WriteOrgUnitRequest{}
-		if _, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", fieldConfigs, req); err == nil || err.Error() != errDefaultRuleRequired {
-			t.Fatalf("err=%v", err)
-		}
-	})
-
-	t.Run("none mode maintainable true", func(t *testing.T) {
-		svc := newWriteService(orgUnitWriteResolverStoreStub{
-			orgUnitWriteStoreStub: orgUnitWriteStoreStub{},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{Maintainable: true, DefaultMode: orgUnitDefaultModeNone}, true, nil
-			},
-		})
-		req := &WriteOrgUnitRequest{}
-		spec, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", fieldConfigs, req)
-		if err != nil || spec != nil {
-			t.Fatalf("spec=%+v err=%v", spec, err)
-		}
-	})
-
-	t.Run("cel mode with provided org_code is skipped", func(t *testing.T) {
-		rule := `next_org_code("O", 6)`
-		svc := newWriteService(orgUnitWriteResolverStoreStub{
-			orgUnitWriteStoreStub: orgUnitWriteStoreStub{},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{Maintainable: true, DefaultMode: orgUnitDefaultModeCEL, DefaultRuleExpr: &rule}, true, nil
-			},
-		})
-		req := &WriteOrgUnitRequest{OrgCode: "ROOT"}
-		spec, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", fieldConfigs, req)
-		if err != nil || spec != nil {
-			t.Fatalf("spec=%+v err=%v", spec, err)
-		}
-	})
-
-	t.Run("cel mode missing expression", func(t *testing.T) {
-		svc := newWriteService(orgUnitWriteResolverStoreStub{
-			orgUnitWriteStoreStub: orgUnitWriteStoreStub{},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{Maintainable: true, DefaultMode: orgUnitDefaultModeCEL}, true, nil
-			},
-		})
-		req := &WriteOrgUnitRequest{}
-		if _, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", fieldConfigs, req); err == nil || err.Error() != errDefaultRuleRequired {
-			t.Fatalf("err=%v", err)
-		}
-	})
-
-	t.Run("cel mode invalid expression", func(t *testing.T) {
-		rule := `next_org_code("O", )`
-		svc := newWriteService(orgUnitWriteResolverStoreStub{
-			orgUnitWriteStoreStub: orgUnitWriteStoreStub{},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{Maintainable: true, DefaultMode: orgUnitDefaultModeCEL, DefaultRuleExpr: &rule}, true, nil
-			},
-		})
-		req := &WriteOrgUnitRequest{}
-		if _, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", fieldConfigs, req); err == nil || err.Error() != errFieldPolicyExprInvalid {
-			t.Fatalf("err=%v", err)
-		}
-	})
-
-	t.Run("cel mode valid expression", func(t *testing.T) {
-		rule := `next_org_code("O", 6)`
-		svc := newWriteService(orgUnitWriteResolverStoreStub{
-			orgUnitWriteStoreStub: orgUnitWriteStoreStub{},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{Maintainable: false, DefaultMode: orgUnitDefaultModeCEL, DefaultRuleExpr: &rule}, true, nil
-			},
-		})
-		req := &WriteOrgUnitRequest{}
-		spec, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", fieldConfigs, req)
-		if err != nil {
-			t.Fatalf("err=%v", err)
-		}
-		if spec == nil || spec.Prefix != "O" || spec.Width != 6 {
-			t.Fatalf("spec=%+v", spec)
-		}
-	})
-
-	t.Run("unknown mode and not maintainable", func(t *testing.T) {
-		svc := newWriteService(orgUnitWriteResolverStoreStub{
-			orgUnitWriteStoreStub: orgUnitWriteStoreStub{},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{Maintainable: false, DefaultMode: "BAD"}, true, nil
-			},
-		})
-		req := &WriteOrgUnitRequest{}
-		if _, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", fieldConfigs, req); err == nil || err.Error() != errDefaultRuleRequired {
-			t.Fatalf("err=%v", err)
-		}
-	})
-
-	t.Run("unknown mode and maintainable", func(t *testing.T) {
-		svc := newWriteService(orgUnitWriteResolverStoreStub{
-			orgUnitWriteStoreStub: orgUnitWriteStoreStub{},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{Maintainable: true, DefaultMode: "BAD"}, true, nil
-			},
-		})
-		req := &WriteOrgUnitRequest{}
-		if _, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", fieldConfigs, req); err == nil || err.Error() != errDefaultRuleEvalFailed {
+		if _, err := svc.applyCreatePolicyDefaults(ctx, "t1", "2026-01-01", nil, req); err == nil || err.Error() != errFieldPolicyMissing {
 			t.Fatalf("err=%v", err)
 		}
 	})
@@ -542,20 +413,20 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 			RequestID:     "r1",
 			Patch:         OrgUnitWritePatch{Name: &name},
 		})
-		if err == nil || err.Error() != errDefaultRuleRequired {
+		if err == nil || err.Error() != errFieldPolicyMissing {
 			t.Fatalf("err=%v", err)
 		}
 	})
 
 	t.Run("create apply policy defaults returns error", func(t *testing.T) {
-		store := orgUnitWriteResolverStoreStub{
+		store := orgUnitWriteSetIDResolverStoreStub{
 			orgUnitWriteStoreStub: orgUnitWriteStoreStub{
 				listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
 					return []types.TenantFieldConfig{}, nil
 				},
 			},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{}, false, errors.New("policy")
+			resolveDecisionFn: func(context.Context, string, string, string, string, string) (types.SetIDStrategyFieldDecision, bool, error) {
+				return types.SetIDStrategyFieldDecision{}, false, errors.New("policy")
 			},
 		}
 		svc := NewOrgUnitWriteService(store)
@@ -591,15 +462,26 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 	})
 
 	t.Run("auto code resolver exists but submitter missing", func(t *testing.T) {
-		rule := `next_org_code("O", 6)`
-		store := orgUnitWriteResolverStoreStub{
+		store := orgUnitWriteSetIDResolverStoreStub{
 			orgUnitWriteStoreStub: orgUnitWriteStoreStub{
 				listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
 					return []types.TenantFieldConfig{}, nil
 				},
 			},
-			resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-				return types.TenantFieldPolicy{FieldKey: "org_code", ScopeType: "FORM", ScopeKey: "orgunit.create_dialog", Maintainable: false, DefaultMode: "CEL", DefaultRuleExpr: &rule}, true, nil
+			resolveDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (types.SetIDStrategyFieldDecision, bool, error) {
+				switch fieldKey {
+				case orgUnitCreateFieldOrgCode:
+					return types.SetIDStrategyFieldDecision{
+						FieldKey:       orgUnitCreateFieldOrgCode,
+						Maintainable:   false,
+						Required:       true,
+						DefaultRuleRef: `next_org_code("O", 6)`,
+					}, true, nil
+				case orgUnitCreateFieldOrgType:
+					return types.SetIDStrategyFieldDecision{FieldKey: orgUnitCreateFieldOrgType, Maintainable: true}, true, nil
+				default:
+					return types.SetIDStrategyFieldDecision{}, false, nil
+				}
 			},
 		}
 		svc := NewOrgUnitWriteService(store)
@@ -616,16 +498,27 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 	})
 
 	t.Run("auto submit error is mapped", func(t *testing.T) {
-		rule := `next_org_code("O", 6)`
 		store := orgUnitWriteAutoCodeStoreStub{
-			orgUnitWriteResolverStoreStub: orgUnitWriteResolverStoreStub{
+			orgUnitWriteSetIDResolverStoreStub: orgUnitWriteSetIDResolverStoreStub{
 				orgUnitWriteStoreStub: orgUnitWriteStoreStub{
 					listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
 						return []types.TenantFieldConfig{}, nil
 					},
 				},
-				resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-					return types.TenantFieldPolicy{FieldKey: "org_code", ScopeType: "FORM", ScopeKey: "orgunit.create_dialog", Maintainable: false, DefaultMode: "CEL", DefaultRuleExpr: &rule}, true, nil
+				resolveDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (types.SetIDStrategyFieldDecision, bool, error) {
+					switch fieldKey {
+					case orgUnitCreateFieldOrgCode:
+						return types.SetIDStrategyFieldDecision{
+							FieldKey:       orgUnitCreateFieldOrgCode,
+							Maintainable:   false,
+							Required:       true,
+							DefaultRuleRef: `next_org_code("O", 6)`,
+						}, true, nil
+					case orgUnitCreateFieldOrgType:
+						return types.SetIDStrategyFieldDecision{FieldKey: orgUnitCreateFieldOrgType, Maintainable: true}, true, nil
+					default:
+						return types.SetIDStrategyFieldDecision{}, false, nil
+					}
 				},
 			},
 			submitCreateAutoFn: func(context.Context, string, string, string, json.RawMessage, string, string, string, int) (int64, string, error) {
@@ -646,16 +539,27 @@ func TestWrite_CreateOrg_AutoCodeBranches(t *testing.T) {
 	})
 
 	t.Run("auto submit success", func(t *testing.T) {
-		rule := `next_org_code("O", 6)`
 		store := orgUnitWriteAutoCodeStoreStub{
-			orgUnitWriteResolverStoreStub: orgUnitWriteResolverStoreStub{
+			orgUnitWriteSetIDResolverStoreStub: orgUnitWriteSetIDResolverStoreStub{
 				orgUnitWriteStoreStub: orgUnitWriteStoreStub{
 					listEnabledFieldCfgsFn: func(context.Context, string, string) ([]types.TenantFieldConfig, error) {
 						return []types.TenantFieldConfig{}, nil
 					},
 				},
-				resolvePolicyFn: func(context.Context, string, string, string, string, string) (types.TenantFieldPolicy, bool, error) {
-					return types.TenantFieldPolicy{FieldKey: "org_code", ScopeType: "FORM", ScopeKey: "orgunit.create_dialog", Maintainable: false, DefaultMode: "CEL", DefaultRuleExpr: &rule}, true, nil
+				resolveDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (types.SetIDStrategyFieldDecision, bool, error) {
+					switch fieldKey {
+					case orgUnitCreateFieldOrgCode:
+						return types.SetIDStrategyFieldDecision{
+							FieldKey:       orgUnitCreateFieldOrgCode,
+							Maintainable:   false,
+							Required:       true,
+							DefaultRuleRef: `next_org_code("O", 6)`,
+						}, true, nil
+					case orgUnitCreateFieldOrgType:
+						return types.SetIDStrategyFieldDecision{FieldKey: orgUnitCreateFieldOrgType, Maintainable: true}, true, nil
+					default:
+						return types.SetIDStrategyFieldDecision{}, false, nil
+					}
 				},
 			},
 			submitCreateAutoFn: func(context.Context, string, string, string, json.RawMessage, string, string, string, int) (int64, string, error) {

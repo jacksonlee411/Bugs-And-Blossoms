@@ -16,6 +16,8 @@ import (
 
 type orgUnitWriteCapabilitiesAPIResponse struct {
 	Intent           string            `json:"intent"`
+	CapabilityKey    string            `json:"capability_key"`
+	PolicyVersion    string            `json:"policy_version"`
 	TreeInitialized  bool              `json:"tree_initialized"`
 	Enabled          bool              `json:"enabled"`
 	DenyReasons      []string          `json:"deny_reasons"`
@@ -57,6 +59,12 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 	targetEffectiveDate := strings.TrimSpace(r.URL.Query().Get("target_effective_date"))
 	if intent == "" || effectiveDate == "" {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "intent/effective_date required")
+		return
+	}
+
+	capabilityKey, ok := orgUnitFieldPolicyCapabilityKeyForWriteIntent(intent)
+	if !ok {
+		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "ORG_INTENT_NOT_SUPPORTED", "intent not supported")
 		return
 	}
 
@@ -172,9 +180,6 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 			facts.TargetEventRescinded = target.HasRaw
 		}
 
-	default:
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "ORG_INTENT_NOT_SUPPORTED", "intent not supported")
-		return
 	}
 
 	decision, err := resolveWriteCapabilitiesInAPI(orgunitservices.OrgUnitWriteIntent(intent), extFieldKeys, facts)
@@ -185,6 +190,8 @@ func handleOrgUnitWriteCapabilitiesAPI(w http.ResponseWriter, r *http.Request, s
 
 	resp := orgUnitWriteCapabilitiesAPIResponse{
 		Intent:           intent,
+		CapabilityKey:    capabilityKey,
+		PolicyVersion:    defaultPolicyActivationRuntime.activePolicyVersion(tenant.ID, capabilityKey),
 		TreeInitialized:  treeInitialized,
 		Enabled:          decision.Enabled,
 		DenyReasons:      decision.DenyReasons,
