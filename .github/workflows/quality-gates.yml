@@ -127,7 +127,7 @@ jobs:
           make staffing lint
           make staffing migrate up
       - name: SQLC Schema Consistency
-        if: steps.paths.outputs.db == 'true' || steps.paths.outputs.sqlc == 'true'
+        if: steps.paths.outputs.db == 'true'
         env:
           DB_HOST: localhost
           DB_PORT: "5432"

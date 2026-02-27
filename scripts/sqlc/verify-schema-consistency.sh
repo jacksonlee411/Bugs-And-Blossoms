@@ -33,11 +33,6 @@ suffix="$(date -u +%s)_$$"
 db_from_migrations="sqlc_verify_m_${suffix}"
 db_from_export="sqlc_verify_e_${suffix}"
 
-tmp_migrations_raw="$(mktemp)"
-tmp_export_raw="$(mktemp)"
-tmp_migrations_norm="$(mktemp)"
-tmp_export_norm="$(mktemp)"
-
 cleanup() {
   psql "postgres://${user}:${password}@${host}:${port}/${admin_db}?sslmode=${sslmode}" \
     -v ON_ERROR_STOP=1 \
@@ -45,13 +40,13 @@ cleanup() {
   psql "postgres://${user}:${password}@${host}:${port}/${admin_db}?sslmode=${sslmode}" \
     -v ON_ERROR_STOP=1 \
     -c "DROP DATABASE IF EXISTS ${db_from_export};" >/dev/null 2>&1 || true
-  rm -f "$tmp_migrations_raw" "$tmp_export_raw" "$tmp_migrations_norm" "$tmp_export_norm"
 }
 trap cleanup EXIT
 
 admin_url="postgres://${user}:${password}@${host}:${port}/${admin_db}?sslmode=${sslmode}"
 migrations_db_url="postgres://${user}:${password}@${host}:${port}/${db_from_migrations}?sslmode=${sslmode}"
 export_db_url="postgres://${user}:${password}@${host}:${port}/${db_from_export}?sslmode=${sslmode}"
+atlas_dev_url="${ATLAS_DEV_URL:-$admin_url}"
 
 echo "[sqlc-verify] create temp databases"
 psql "$admin_url" -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${db_from_migrations};" >/dev/null
@@ -79,30 +74,22 @@ done < <(list_modules)
 echo "[sqlc-verify] apply exported schema to ${db_from_export}"
 psql "$export_db_url" -v ON_ERROR_STOP=1 -f "$schema_file" >/dev/null
 
-echo "[sqlc-verify] inspect databases with atlas"
-"$root/scripts/db/run_atlas.sh" schema inspect --url "$migrations_db_url" --format '{{ sql . }}' >"$tmp_migrations_raw"
-"$root/scripts/db/run_atlas.sh" schema inspect --url "$export_db_url" --format '{{ sql . }}' >"$tmp_export_raw"
+echo "[sqlc-verify] compare schemas with atlas diff"
+if ! drift_sql="$(
+  ATLAS_NO_UPDATE_NOTIFIER=true \
+    "$root/scripts/db/run_atlas.sh" schema diff \
+    --from "$migrations_db_url" \
+    --to "$export_db_url" \
+    --dev-url "$atlas_dev_url" \
+    --format '{{ sql . }}'
+)"; then
+  echo "[sqlc-verify] atlas diff failed (migrations -> exported schema)" >&2
+  exit 1
+fi
 
-normalize() {
-  local input="${1:?}"
-  local output="${2:?}"
-  awk '
-    {
-      line = $0
-      gsub(/[[:space:]]+$/, "", line)
-      if (line ~ /^--/) next
-      if (line ~ /goose_db_version_/) next
-      if (line == "") next
-      print line
-    }
-  ' "$input" >"$output"
-}
-
-normalize "$tmp_migrations_raw" "$tmp_migrations_norm"
-normalize "$tmp_export_raw" "$tmp_export_norm"
-
-if ! diff -u "$tmp_migrations_norm" "$tmp_export_norm"; then
+if [[ -n "${drift_sql:-}" ]]; then
   echo "[sqlc-verify] schema mismatch: migrations-applied DB != internal/sqlc/schema.sql" >&2
+  echo "$drift_sql" >&2
   exit 1
 fi
 

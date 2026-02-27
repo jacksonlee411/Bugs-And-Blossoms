@@ -41,7 +41,7 @@
 
 - sqlc 版本：以 `DEV-PLAN-011` 冻结清单为准，且 **Makefile 为唯一命令入口**。
 - 生成入口（约束）：必须提供 `make sqlc-generate`，并在 CI 中对命中路径启用“生成一致性检查”（见 §9）。
-- 一致性阻断入口（约束）：命中 `db/sqlc` 触发器时必须执行 `make sqlc-verify-schema`（见 §11.3）。
+- 一致性阻断入口（约束）：命中 `db` 触发器时必须执行 `make sqlc-verify-schema`（见 §11.3）。
 - 生成后 `git status --short` 仅应包含本次预期改动（无遗漏/无额外生成物漂移）。
 
 ## 5. 目录结构与归属（对齐 015/016）
@@ -91,7 +91,7 @@ internal/
   - 从 `modules/*/infrastructure/persistence/schema/*.sql` 自动发现模块并稳定排序导出。
   - 导出到 **全局** `internal/sqlc/schema.sql`（单一事实源），再由 `sqlc.yaml` 引用。
 - 导出文件必须可复现：同一份 schema SSOT，导出结果应稳定（避免排序漂移）。
-- 一致性校验采用 **PR 即时阻断**：命中 `db/sqlc` 触发器时执行 `make sqlc-verify-schema`，校验“迁移落库结果”与“`internal/sqlc/schema.sql` 落库结果”一致。
+- 一致性校验采用 **PR 即时阻断**：命中 `db` 触发器时执行 `make sqlc-verify-schema`，校验“迁移落库结果”与“`internal/sqlc/schema.sql` 落库结果”一致。
 
 ### 6.2 选择“每模块 schema.sql”还是“全局 schema.sql”
 本计划已在 6.0 选定：**全局 schema.sql**。
@@ -193,7 +193,7 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 4. `git status --short` 仅应包含本次预期改动（无额外生成物漂移）。
 
 ### 11.3 PR 一致性门禁（必须）
-- 命中 `db/sqlc` 触发器时，CI 必须执行 `make sqlc-verify-schema`，并在失败时阻断 PR。
+- 命中 `db` 触发器时，CI 必须执行 `make sqlc-verify-schema`，并在失败时阻断 PR。
 - `make sqlc-verify-schema` 语义：
   - 以模块 migrations 落库得到数据库 A；
   - 以 `internal/sqlc/schema.sql` 落库得到数据库 B；
@@ -211,5 +211,5 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 - [X] schema 输入已选定为 `internal/sqlc/schema.sql`，并由脚本从 schema SSOT 可复现导出（同一 SSOT 导出无 diff）。
 - [X] `sqlc.yaml` 统一引用全局 schema 输入；sqlc 输出按模块 queries 路径隔离（当前已启用 `iam` 包，后续模块按同一口径增量接入）。
 - [X] 命中触发器时，CI 执行 `make sqlc-generate` 并通过 `assert-clean` 强制生成物一致性。
-- [X] 命中 `db/sqlc` 触发器时，CI 执行 `make sqlc-verify-schema` 并阻断“一致性校验失败”。
+- [X] 命中 `db` 触发器时，CI 执行 `make sqlc-verify-schema` 并阻断“一致性校验失败”。
 - [X] 触发器口径已覆盖 `scripts/sqlc/**`，导出逻辑变更不会漏触发 sqlc 门禁。

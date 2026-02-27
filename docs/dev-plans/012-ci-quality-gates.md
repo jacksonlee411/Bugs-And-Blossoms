@@ -131,7 +131,7 @@
 - Granularity：`make check granularity`（颗粒度层次门禁，阻断 `org_level/scope_type/scope_key` 回流，对齐 `DEV-PLAN-180`）。
 - Request-Code：`make check request-code`（Gate-C：`--full` 全量扫描零容忍；业务幂等字段统一为 `request_id`，Tracing 统一 `trace_id` + `traceparent`，并阻断 `request_code`/`X-Request-ID` 回流；对齐 `DEV-PLAN-109A`）。
 - i18n：`make check tr`（仅 en/zh，对齐 `DEV-PLAN-020`）。
-- sqlc：命中触发器时强制 `make sqlc-generate` 且 `git status --porcelain` 为空；命中 `db/sqlc` 触发器时追加 `make sqlc-verify-schema` 做 PR 阻断式一致性校验（对齐 `DEV-PLAN-025/025A`）。
+- sqlc：命中触发器时强制 `make sqlc-generate` 且 `git status --porcelain` 为空；命中 `db` 触发器时追加 `make sqlc-verify-schema` 做 PR 阻断式一致性校验（对齐 `DEV-PLAN-025/025A`）。
 - Authz：命中触发器时强制 policy pack/diff/lint/test（对齐 `DEV-PLAN-022`）。
 - DB：命中触发器时强制 Atlas plan/lint（以及必要的 hash 校验）（对齐 `DEV-PLAN-024`）。
 
@@ -199,7 +199,7 @@
 4. [ ] Docs gate：对齐 `DEV-PLAN-000/AGENTS.md` 的新文档门禁；新增文档必须可发现（Doc Map）。
 5. [ ] i18n gate：落地 `make check tr`（仅 en/zh），并在命中触发器时 fail-fast（对齐 `DEV-PLAN-020`）。
 6. [ ] DB gate（Atlas+Goose）：按模块接入 `plan/lint/migrate smoke`，并把触发器/入口纳入 CI（对齐 `DEV-PLAN-024`）。
-7. [X] sqlc gate：确定 schema 输入 SSOT 与导出脚本，命中触发器时执行 `make sqlc-generate` 并检查生成物一致性；命中 `db/sqlc` 时执行 `make sqlc-verify-schema` 做一致性阻断（对齐 `DEV-PLAN-025/025A`）。
+7. [X] sqlc gate：确定 schema 输入 SSOT 与导出脚本，命中触发器时执行 `make sqlc-generate` 并检查生成物一致性；命中 `db` 时执行 `make sqlc-verify-schema` 做一致性阻断（对齐 `DEV-PLAN-025/025A`）。
 8. [ ] Authz gate：落地 policy SSOT + pack 产物，并把 diff/lint/test 纳入 CI（对齐 `DEV-PLAN-022`）。
 9. [ ] Routing gate：落地 `make check routing` 并加入 required checks（对齐 `DEV-PLAN-017`）。
 10. [ ] Unit & Integration Tests：建立可复现的测试库初始化流程（含迁移/seed 的最小集），并在 CI 中稳定运行。
