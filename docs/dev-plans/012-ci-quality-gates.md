@@ -105,7 +105,7 @@
 - `ui`：MUI（React SPA）工程（`apps/web/`）与其 go:embed 产物（`internal/server/assets/web/**`），以及 UI 相关静态资源/配置。
 - `i18n`：`en/zh` 翻译资源（`make check tr`）。
 - `db`：schema/migrations/atlas/goose（对齐 `DEV-PLAN-024`）。
-- `sqlc`：sqlc 配置/queries/schema export（对齐 `DEV-PLAN-025`）。
+- `sqlc`：sqlc 配置/queries/schema export（对齐 `DEV-PLAN-025/025A`）。
 - `authz`：Casbin model/policy/scripts（对齐 `DEV-PLAN-022`）。
 - `routing`：allowlist SSOT 与路由注册（对齐 `DEV-PLAN-017`）。
 - `e2e`：Playwright 与 E2E 用例。
@@ -131,7 +131,7 @@
 - Granularity：`make check granularity`（颗粒度层次门禁，阻断 `org_level/scope_type/scope_key` 回流，对齐 `DEV-PLAN-180`）。
 - Request-Code：`make check request-code`（Gate-C：`--full` 全量扫描零容忍；业务幂等字段统一为 `request_id`，Tracing 统一 `trace_id` + `traceparent`，并阻断 `request_code`/`X-Request-ID` 回流；对齐 `DEV-PLAN-109A`）。
 - i18n：`make check tr`（仅 en/zh，对齐 `DEV-PLAN-020`）。
-- sqlc：命中触发器时强制 `make sqlc-generate` 且 `git status --porcelain` 为空（对齐 `DEV-PLAN-025`）。
+- sqlc：命中触发器时强制 `make sqlc-generate` 且 `git status --porcelain` 为空；命中 `db` 触发器时追加 `make sqlc-verify-schema` 做 PR 阻断式一致性校验（对齐 `DEV-PLAN-025/025A`）。
 - Authz：命中触发器时强制 policy pack/diff/lint/test（对齐 `DEV-PLAN-022`）。
 - DB：命中触发器时强制 Atlas plan/lint（以及必要的 hash 校验）（对齐 `DEV-PLAN-024`）。
 
@@ -199,7 +199,7 @@
 4. [ ] Docs gate：对齐 `DEV-PLAN-000/AGENTS.md` 的新文档门禁；新增文档必须可发现（Doc Map）。
 5. [ ] i18n gate：落地 `make check tr`（仅 en/zh），并在命中触发器时 fail-fast（对齐 `DEV-PLAN-020`）。
 6. [ ] DB gate（Atlas+Goose）：按模块接入 `plan/lint/migrate smoke`，并把触发器/入口纳入 CI（对齐 `DEV-PLAN-024`）。
-7. [ ] sqlc gate：确定 schema 输入 SSOT 与导出脚本，命中触发器时执行 `make sqlc-generate` 并检查生成物一致性（对齐 `DEV-PLAN-025`）。
+7. [X] sqlc gate：确定 schema 输入 SSOT 与导出脚本，命中触发器时执行 `make sqlc-generate` 并检查生成物一致性；命中 `db` 时执行 `make sqlc-verify-schema` 做一致性阻断（对齐 `DEV-PLAN-025/025A`）。
 8. [ ] Authz gate：落地 policy SSOT + pack 产物，并把 diff/lint/test 纳入 CI（对齐 `DEV-PLAN-022`）。
 9. [ ] Routing gate：落地 `make check routing` 并加入 required checks（对齐 `DEV-PLAN-017`）。
 10. [ ] Unit & Integration Tests：建立可复现的测试库初始化流程（含迁移/seed 的最小集），并在 CI 中稳定运行。
@@ -248,6 +248,7 @@
 - `docs/dev-plans/020-i18n-en-zh-only.md`
 - `docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - `docs/dev-plans/025-sqlc-guidelines.md`
+- `docs/dev-plans/025a-sqlc-schema-export-consistency-hardening.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
 - `docs/dev-plans/017-routing-strategy.md`
 - `docs/archive/dev-plans/109-request-code-unification-and-gate.md`

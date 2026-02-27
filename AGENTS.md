@@ -23,7 +23,7 @@
 - 发 PR 前一键对齐 CI（推荐）：`make preflight`
 - 发 PR 规则（强制）：PR 源分支只能是 `wt-dev-main` / `wt-dev-a` / `wt-dev-b`（CI 门禁：`make check pr-branch`）
 - DB Schema/迁移（Atlas+Goose，按模块）：`make <module> plan && make <module> lint && make <module> migrate up`
-- sqlc：`make sqlc-generate`，然后 `git status --short` 必须为空
+- sqlc：`make sqlc-generate`，然后 `git status --short` 必须为空；命中 DB 触发器时补跑 `make sqlc-verify-schema`
 - Routing：`make check routing`
 - Authz：`make authz-pack && make authz-test && make authz-lint`
 - E2E：`make e2e`
@@ -47,7 +47,7 @@
 | `.templ` / MUI Web UI / presentation assets | `make generate && make css` + `git status --short` | 生成物必须提交，否则 CI 会失败 |
 | 多语言 JSON | `make check tr` | |
 | DB Schema/迁移（Atlas+Goose，按模块） | `make <module> plan && make <module> lint && make <module> migrate up` | 模块级闭环见 `DEV-PLAN-024` |
-| sqlc（schema/queries/config） | `make sqlc-generate` + `git status --short` | 规范与 stopline 见 `DEV-PLAN-025` |
+| sqlc（schema/queries/config） | `make sqlc-generate` + `git status --short`（命中 DB 触发器再跑 `make sqlc-verify-schema`） | 规范与 stopline 见 `DEV-PLAN-025/025A` |
 | Routing（allowlist/分类/responder） | `make check routing` | 口径见 `DEV-PLAN-017` |
 | Authz（Casbin） | `make authz-pack && make authz-test && make authz-lint` | 口径见 `DEV-PLAN-022` |
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012` |
@@ -312,6 +312,7 @@ modules/{module}/
 - DEV-PLAN-181：OrgUnit Details 三类表单到 Capability Key 映射落地：`docs/dev-plans/181-orgunit-details-form-capability-mapping-implementation.md`
 - DEV-PLAN-182：BU 策略“全 CRUD 默认生效”与场景覆盖收敛方案：`docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
 - DEV-PLAN-183：Capability Key 配置可发现性与对象/意图显式建模方案：`docs/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
+- DEV-PLAN-184：字段配置与策略规则双层 SoT 收敛方案（Static Metadata vs Dynamic Policy）：`docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
 - DEV-PLAN-191：`/app/org/setid` 导航与页面设计优化方案（一级/二级菜单 + 独立滚动 + DEV-PLAN-002 对齐）：`docs/dev-plans/191-setid-governance-navigation-and-layout-optimization.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
@@ -368,6 +369,8 @@ modules/{module}/
 - 多语言（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
 - Atlas + Goose 闭环指引：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - sqlc 工具链使用指引与规范：`docs/dev-plans/025-sqlc-guidelines.md`
+- DEV-PLAN-025A：sqlc schema 导出一致性加固（取消夜间校验，PR 即时阻断）：`docs/dev-plans/025a-sqlc-schema-export-consistency-hardening.md`
+- DEV-PLAN-025A 执行日志：`docs/dev-records/dev-plan-025a-execution-log.md`
 - Authz（Casbin）工具链与实施方案：`docs/dev-plans/022-authz-casbin-toolchain.md`
 - 多工作区并行开发指引（3 worktree）：`docs/dev-plans/014-parallel-worktrees-local-dev-guide.md`
 - 全局路由策略统一（UI/API/Webhooks）：`docs/dev-plans/017-routing-strategy.md`

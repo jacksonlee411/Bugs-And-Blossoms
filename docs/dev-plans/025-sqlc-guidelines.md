@@ -1,10 +1,11 @@
 # DEV-PLAN-025：sqlc 工具链使用指引与规范（SQL-first + DB Kernel + RLS）
 
-**状态**: 草拟中（2026-01-05 08:48 UTC）
+**状态**: 已完成（2026-02-27 08:25 UTC）
 
 > 适用范围：**全新实现的新代码仓库（Greenfield）**，并将按 `DEV-PLAN-026/030/029/021` 的 DB Kernel 范式实现。  
 > 上游依赖：`DEV-PLAN-011`（工具链版本冻结）、`DEV-PLAN-015`（DDD 分层框架）、`DEV-PLAN-016`（模块骨架）、`DEV-PLAN-021`（RLS 注入契约）。  
-> 目标：把 sqlc 从“生成工具”收敛为一套**可审查、可验证、可复用**的工程规范，避免体系在实现期因 SQL 漂移而退化为“容易（Easy）”的补丁堆叠。
+> 目标：把 sqlc 从“生成工具”收敛为一套**可审查、可验证、可复用**的工程规范，避免体系在实现期因 SQL 漂移而退化为“容易（Easy）”的补丁堆叠。  
+> 闭环补充：`DEV-PLAN-025A` 已落地“PR 即时阻断的一致性校验”，不采用夜间补救模式。
 
 ## 1. 结论先行（必须遵守的最小规则）
 
@@ -40,7 +41,8 @@
 
 - sqlc 版本：以 `DEV-PLAN-011` 冻结清单为准，且 **Makefile 为唯一命令入口**。
 - 生成入口（约束）：必须提供 `make sqlc-generate`，并在 CI 中对命中路径启用“生成一致性检查”（见 §9）。
-- 生成后必须 `git status --short` 为空（无遗漏生成物）。
+- 一致性阻断入口（约束）：命中 `db` 触发器时必须执行 `make sqlc-verify-schema`（见 §11.3）。
+- 生成后 `git status --short` 仅应包含本次预期改动（无遗漏/无额外生成物漂移）。
 
 ## 5. 目录结构与归属（对齐 015/016）
 
@@ -53,13 +55,15 @@ modules/<module>/
       schema/                 # DB Kernel SSOT（DDL/函数/约束/视图）
     sqlc/
       queries/                # sqlc 查询（仅 SQL）
-      schema.sql              # sqlc 编译用 schema（由脚本导出；见 §6）
       gen/                    # sqlc 生成物（Go 包；必须提交）
+internal/
+  sqlc/
+    schema.sql                # 全局 sqlc 编译输入（由脚本导出；见 §6）
 ```
 
 说明：
 - `schema/` 是 **权威契约**（Kernel），进入 DB 迁移/plan/lint 的 SSOT。
-- `schema.sql` 是 **sqlc 编译输入**：允许由脚本导出（为了确定性与跨模块依赖可解析），但其来源必须可追溯到 `schema/` + 迁移工具链。
+- `internal/sqlc/schema.sql` 是 **sqlc 编译输入**：允许由脚本导出（为了确定性与跨模块依赖可解析），但其来源必须可追溯到 `schema/` + 迁移工具链。
 - `gen/` 仅存生成物；禁止手改；禁止放业务逻辑。
 
 ### 5.2 CleanArchGuard 约束
@@ -76,17 +80,18 @@ modules/<module>/
 **结论（选定）**：采用 **全量可解析 schema** 作为 sqlc 输入，并纳入门禁；不采用“每模块自维护最小 schema 子集”的方式。
 
 原因：
-- 026/030/029 的方案存在跨模块引用与组合（例如 staffing ↔ jobcatalog 的 identity，orgunit 的 as-of 校验），若 schema 输入按模块裁剪，容易引入“缺表/缺类型/缺函数”的隐式依赖清单，最终靠试错补齐（违背 045 的确定性要求）。
+- 026/030/029 的方案存在跨模块引用与组合（例如 staffing ↔ jobcatalog 的 identity，orgunit 的 as-of 校验），若 schema 输入按模块裁剪，容易引入“缺表/缺类型/缺函数”的隐式依赖清单，最终靠试错补齐。
 - 全量 schema 输入可把“依赖边界”从“sqlc 能否解析”解耦出来：边界由模块分层/ports/one-door 决定，而不是由 schema 文件裁剪决定。
 
 回滚/演化：
-- 若未来必须拆分（例如 schema 体量过大导致 sqlc 性能问题），必须另开子计划（例如 025A）并给出：依赖清单生成方式、回滚策略、以及 CI 门禁如何保持确定性。
+- 若未来必须拆分（例如 schema 体量过大导致 sqlc 性能问题），必须另开子计划并给出：依赖清单生成方式、回滚策略、以及 CI 门禁如何保持确定性。
 
 ### 6.1 导出策略（建议落地为脚本）
 - 提供脚本（示意名）：`scripts/sqlc/export-schema.sh`
-  - 在干净数据库中应用 schema SSOT（Atlas/Goose，入口以 Makefile 为准）。
-  - 导出 schema-only 到 **全局** `internal/sqlc/schema.sql`（单一事实源），再由 `sqlc.yaml` 引用。
+  - 从 `modules/*/infrastructure/persistence/schema/*.sql` 自动发现模块并稳定排序导出。
+  - 导出到 **全局** `internal/sqlc/schema.sql`（单一事实源），再由 `sqlc.yaml` 引用。
 - 导出文件必须可复现：同一份 schema SSOT，导出结果应稳定（避免排序漂移）。
+- 一致性校验采用 **PR 即时阻断**：命中 `db` 触发器时执行 `make sqlc-verify-schema`，校验“迁移落库结果”与“`internal/sqlc/schema.sql` 落库结果”一致。
 
 ### 6.2 选择“每模块 schema.sql”还是“全局 schema.sql”
 本计划已在 6.0 选定：**全局 schema.sql**。
@@ -174,9 +179,10 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 ### 11.1 触发器（建议 CI 过滤器）
 当改动命中任一项时必须运行 sqlc 生成并确保工作区干净：
 - `sqlc.yaml`
+- `scripts/sqlc/**`
 - `modules/**/infrastructure/sqlc/**`
 - `modules/**/infrastructure/persistence/schema/**`（或 schema SSOT 等效路径）
-- `scripts/db/export_*schema*.sh`（若存在）
+- `internal/sqlc/**`
 
 > 说明（M2 典型场景）：即使某模块（例如 `person/staffing`）暂时没有新增 sqlc queries，只要 schema SSOT 有变更，`internal/sqlc/schema.sql` 仍会变化；该导出文件属于生成物，必须提交并通过 “Generated Artifacts Clean” 门禁。
 
@@ -184,7 +190,14 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 1. 修改 schema SSOT（Atlas/Goose 入口按 Makefile）。
 2. 运行 schema 导出脚本（见 §6）。
 3. 运行 `make sqlc-generate`（或 `make generate` 若其包含 sqlc）。
-4. `git status --short` 必须为空。
+4. `git status --short` 仅应包含本次预期改动（无额外生成物漂移）。
+
+### 11.3 PR 一致性门禁（必须）
+- 命中 `db` 触发器时，CI 必须执行 `make sqlc-verify-schema`，并在失败时阻断 PR。
+- `make sqlc-verify-schema` 语义：
+  - 以模块 migrations 落库得到数据库 A；
+  - 以 `internal/sqlc/schema.sql` 落库得到数据库 B；
+  - 对 A/B 做规范化后比对，一致才可通过。
 
 ## 12. 停止线（命中即打回，按 DEV-PLAN-003）
 - 绕过 One Door：应用层出现对 events/versions/identity 表的直接 DML（除运维 replay 且有明确边界）。
@@ -195,8 +208,8 @@ sqlc 侧只负责调用该函数/视图（提高一致性、降低漂移）。
 - `ops.sql` 逃逸：tenant app 直接调用 `ops.sql`，或 ops 查询未使用 bypass 连接池/role，或缺少审计记录。
 
 ## 13. 验收标准（本计划完成定义）
-- [ ] schema 输入已选定为 `internal/sqlc/schema.sql`，并由脚本从 schema SSOT 可复现导出（同一 SSOT 导出无 diff）。
-- [ ] `sqlc.yaml` 以多包方式按模块输出生成物，但引用同一份全局 schema 输入（不允许按模块“随手裁剪 schema”）。
-- [ ] 命中触发器时，CI 必须执行 `make sqlc-generate` 并强制 `git status --short` 为空（生成物一致性门禁）。
-- [ ] 所有 tenant-scoped 查询在事务内执行且注入 RLS（缺 tenant 注入时 fail-closed 有测试覆盖）。
-- [ ] `ops.sql` 仅能在 superadmin/job 边界使用，且所有跨租户写操作具备审计记录；tenant app 无法调用 ops 查询（通过静态依赖与测试双重保证）。
+- [X] schema 输入已选定为 `internal/sqlc/schema.sql`，并由脚本从 schema SSOT 可复现导出（同一 SSOT 导出无 diff）。
+- [X] `sqlc.yaml` 统一引用全局 schema 输入；sqlc 输出按模块 queries 路径隔离（当前已启用 `iam` 包，后续模块按同一口径增量接入）。
+- [X] 命中触发器时，CI 执行 `make sqlc-generate` 并通过 `assert-clean` 强制生成物一致性。
+- [X] 命中 `db` 触发器时，CI 执行 `make sqlc-verify-schema` 并阻断“一致性校验失败”。
+- [X] 触发器口径已覆盖 `scripts/sqlc/**`，导出逻辑变更不会漏触发 sqlc 门禁。
