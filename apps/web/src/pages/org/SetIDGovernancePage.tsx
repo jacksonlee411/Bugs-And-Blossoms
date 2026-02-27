@@ -67,6 +67,8 @@ interface RegistryFormState {
   defaultValue: string
   allowedValueCodes: string
   priority: number
+  priorityMode: 'blend_custom_first' | 'blend_deflt_first' | 'deflt_unsubscribed'
+  localOverrideMode: 'allow' | 'no_override' | 'no_local'
   explainRequired: boolean
   isStable: boolean
   changePolicy: string
@@ -88,6 +90,16 @@ const personalizationModeOptions: DropdownOption[] = [
 const orgApplicabilityOptions: DropdownOption[] = [
   { value: 'business_unit', label: 'business_unit' },
   { value: 'tenant', label: 'tenant' }
+]
+const priorityModeOptions: DropdownOption[] = [
+  { value: 'blend_custom_first', label: 'blend_custom_first' },
+  { value: 'blend_deflt_first', label: 'blend_deflt_first' },
+  { value: 'deflt_unsubscribed', label: 'deflt_unsubscribed' }
+]
+const localOverrideModeOptions: DropdownOption[] = [
+  { value: 'allow', label: 'allow' },
+  { value: 'no_override', label: 'no_override' },
+  { value: 'no_local', label: 'no_local' }
 ]
 const changePolicyPresets = ['plan_required']
 const priorityPresets = [50, 100, 200, 500]
@@ -183,6 +195,8 @@ function defaultRegistryForm(asOf: string): RegistryFormState {
     defaultValue: '',
     allowedValueCodes: '',
     priority: 100,
+    priorityMode: 'blend_custom_first',
+    localOverrideMode: 'allow',
     explainRequired: true,
     isStable: false,
     changePolicy: 'plan_required',
@@ -227,6 +241,8 @@ function toRegistryFormFromRow(row: SetIDStrategyRegistryItem): RegistryFormStat
     defaultValue: row.default_value ?? '',
     allowedValueCodes: toAllowedValueCodesText(row.allowed_value_codes),
     priority: row.priority,
+    priorityMode: row.priority_mode ?? 'blend_custom_first',
+    localOverrideMode: row.local_override_mode ?? 'allow',
     explainRequired: row.explain_required,
     isStable: row.is_stable,
     changePolicy: row.change_policy,
@@ -732,6 +748,8 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
       },
       { field: 'field_key', headerName: 'field_key', minWidth: 140 },
       { field: 'personalization_mode', headerName: 'mode', minWidth: 130 },
+      { field: 'priority_mode', headerName: 'priority_mode', minWidth: 170 },
+      { field: 'local_override_mode', headerName: 'local_override_mode', minWidth: 170 },
       { field: 'org_applicability', headerName: 'org_applicability', minWidth: 120 },
       { field: 'business_unit_id', headerName: 'business_unit_id', minWidth: 140 },
       {
@@ -853,6 +871,8 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
         default_value: registryForm.defaultValue.trim(),
         allowed_value_codes: parseAllowedValueCodes(registryForm.allowedValueCodes),
         priority: registryForm.priority,
+        priority_mode: registryForm.priorityMode,
+        local_override_mode: registryForm.localOverrideMode,
         explain_required: registryForm.explainRequired,
         is_stable: registryForm.isStable,
         change_policy: registryForm.changePolicy.trim(),
@@ -1499,6 +1519,44 @@ export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) 
                     {priorityOptions.map((option) => (
                       <MenuItem key={`form-priority-${option}`} value={String(option)}>
                         {option}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    label='priority_mode'
+                    required
+                    select
+                    size='small'
+                    value={registryForm.priorityMode}
+                    onChange={(event) =>
+                      setRegistryForm((prev) => ({
+                        ...prev,
+                        priorityMode: event.target.value as RegistryFormState['priorityMode']
+                      }))
+                    }
+                  >
+                    {priorityModeOptions.map((option) => (
+                      <MenuItem key={`form-priority-mode-${option.value}`} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    label='local_override_mode'
+                    required
+                    select
+                    size='small'
+                    value={registryForm.localOverrideMode}
+                    onChange={(event) =>
+                      setRegistryForm((prev) => ({
+                        ...prev,
+                        localOverrideMode: event.target.value as RegistryFormState['localOverrideMode']
+                      }))
+                    }
+                  >
+                    {localOverrideModeOptions.map((option) => (
+                      <MenuItem key={`form-local-override-mode-${option.value}`} value={option.value}>
+                        {option.label}
                       </MenuItem>
                     ))}
                   </TextField>

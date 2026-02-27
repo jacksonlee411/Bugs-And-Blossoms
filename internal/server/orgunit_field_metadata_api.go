@@ -16,6 +16,7 @@ import (
 	celtypes "github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitpkg "github.com/jacksonlee411/Bugs-And-Blossoms/pkg/orgunit"
 )
 
 type orgUnitFieldDefinitionsAPIResponse struct {
@@ -195,6 +196,8 @@ type orgUnitFieldEnableCandidateField struct {
 	FieldKey       string `json:"field_key"`
 	DictCode       string `json:"dict_code"`
 	Name           string `json:"name"`
+	SetID          string `json:"setid,omitempty"`
+	SetIDSource    string `json:"setid_source,omitempty"`
 	ValueType      string `json:"value_type"`
 	DataSourceType string `json:"data_source_type"`
 }
@@ -205,7 +208,7 @@ type orgUnitPlainCustomHint struct {
 	DefaultValueType string   `json:"default_value_type"`
 }
 
-func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http.Request, dictStore orgUnitDictRegistryStore) {
+func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http.Request, dictStore orgUnitDictRegistryStore, orgResolver OrgUnitCodeResolver, setIDStore SetIDGovernanceStore) {
 	if r.Method != http.MethodGet {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
@@ -230,6 +233,53 @@ func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http
 	if dictStore == nil {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "dict_store_missing", "dict store missing")
 		return
+	}
+	resolvedSetID := orgUnitFieldOptionSetIDDeflt
+	resolvedSetIDSource := orgUnitFieldOptionSetIDSourceDeflt
+	rawOrgCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
+	if rawOrgCode != "" {
+		orgCode, normalizeErr := orgunitpkg.NormalizeOrgCode(rawOrgCode)
+		if normalizeErr != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+			return
+		}
+		if orgResolver == nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_store_missing", "orgunit store missing")
+			return
+		}
+		if setIDStore == nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
+			return
+		}
+		orgID, orgErr := orgResolver.ResolveOrgID(r.Context(), tenant.ID, orgCode)
+		if orgErr != nil {
+			switch {
+			case errors.Is(orgErr, orgunitpkg.ErrOrgCodeInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+			case errors.Is(orgErr, orgunitpkg.ErrOrgCodeNotFound):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
+			default:
+				writeInternalAPIError(w, r, orgErr, "orgunit_resolve_org_code_failed")
+			}
+			return
+		}
+		setID, resolveErr := setIDStore.ResolveSetID(r.Context(), tenant.ID, strconv.Itoa(orgID), enabledOn)
+		if resolveErr != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, stablePgMessage(resolveErr), "resolve setid failed")
+			return
+		}
+		setID = strings.ToUpper(strings.TrimSpace(setID))
+		if setID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "setid_missing", "setid missing")
+			return
+		}
+		resolvedSetID = setID
+		resolvedSetIDSource = "custom"
+		if resolvedSetID == orgUnitFieldOptionSetIDDeflt {
+			resolvedSetIDSource = orgUnitFieldOptionSetIDSourceDeflt
+		} else if resolvedSetID == "SHARE" {
+			resolvedSetIDSource = "share_preview"
+		}
 	}
 
 	dicts, err := listOrgUnitDicts(r.Context(), dictStore, tenant.ID, enabledOn)
@@ -261,6 +311,8 @@ func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http
 			FieldKey:       fieldKey,
 			DictCode:       code,
 			Name:           name,
+			SetID:          resolvedSetID,
+			SetIDSource:    resolvedSetIDSource,
 			ValueType:      "text",
 			DataSourceType: "DICT",
 		})
@@ -895,6 +947,50 @@ func handleOrgUnitFieldOptionsAPI(w http.ResponseWriter, r *http.Request, store 
 	}
 
 	keyword := strings.TrimSpace(r.URL.Query().Get("q"))
+	resolvedSetID := orgUnitFieldOptionSetIDDeflt
+	resolvedSetIDSource := orgUnitFieldOptionSetIDSourceDeflt
+	rawOrgCode := strings.TrimSpace(r.URL.Query().Get("org_code"))
+	if rawOrgCode != "" {
+		orgCode, normalizeErr := orgunitpkg.NormalizeOrgCode(rawOrgCode)
+		if normalizeErr != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+			return
+		}
+		orgID, orgErr := store.ResolveOrgID(r.Context(), tenant.ID, orgCode)
+		if orgErr != nil {
+			switch {
+			case errors.Is(orgErr, orgunitpkg.ErrOrgCodeInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "org_code_invalid", "org_code invalid")
+			case errors.Is(orgErr, orgunitpkg.ErrOrgCodeNotFound):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "org_code_not_found", "org_code not found")
+			default:
+				writeInternalAPIError(w, r, orgErr, "orgunit_resolve_org_code_failed")
+			}
+			return
+		}
+		setIDResolver, resolverOK := any(store).(orgUnitSetIDResolver)
+		if !resolverOK {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "setid_resolver_missing", "setid resolver missing")
+			return
+		}
+		setID, resolveErr := setIDResolver.ResolveSetID(r.Context(), tenant.ID, strconv.Itoa(orgID), asOf)
+		if resolveErr != nil {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, stablePgMessage(resolveErr), "resolve setid failed")
+			return
+		}
+		setID = strings.ToUpper(strings.TrimSpace(setID))
+		if setID == "" {
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "setid_missing", "setid missing")
+			return
+		}
+		resolvedSetID = setID
+		resolvedSetIDSource = "custom"
+		if resolvedSetID == orgUnitFieldOptionSetIDDeflt {
+			resolvedSetIDSource = orgUnitFieldOptionSetIDSourceDeflt
+		} else if resolvedSetID == "SHARE" {
+			resolvedSetIDSource = "share_preview"
+		}
+	}
 
 	cfg, ok, err := reader.GetEnabledTenantFieldConfigAsOf(r.Context(), tenant.ID, fieldKey, asOf)
 	if err != nil {
@@ -937,10 +1033,16 @@ func handleOrgUnitFieldOptionsAPI(w http.ResponseWriter, r *http.Request, store 
 			writeInternalAPIError(w, r, err, "orgunit_field_options_failed")
 			return
 		}
+		optionsWithSetID := make([]orgUnitFieldOption, 0, len(options))
+		for _, option := range options {
+			option.SetID = resolvedSetID
+			option.SetIDSource = resolvedSetIDSource
+			optionsWithSetID = append(optionsWithSetID, option)
+		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(orgUnitFieldOptionsAPIResponse{FieldKey: fieldKey, AsOf: asOf, Options: options})
+		_ = json.NewEncoder(w).Encode(orgUnitFieldOptionsAPIResponse{FieldKey: fieldKey, AsOf: asOf, Options: optionsWithSetID})
 		return
 	case "ENTITY":
 		fallthrough

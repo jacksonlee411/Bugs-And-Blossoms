@@ -889,6 +889,17 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		}
 	})
 
+	t.Run("org_code invalid", func(t *testing.T) {
+		store := orgUnitStoreWithEnabledFieldConfig{OrgUnitStore: base}
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=org_type&org_code=A%0A1", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldOptionsAPI(rec, req, store)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
 	t.Run("store error", func(t *testing.T) {
 		store := orgUnitStoreWithEnabledFieldConfig{OrgUnitStore: base, err: errors.New("boom")}
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=org_type", nil)
@@ -1028,8 +1039,15 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
-		if !strings.Contains(rec.Body.String(), "20") {
-			t.Fatalf("body=%s", rec.Body.String())
+		var payload orgUnitFieldOptionsAPIResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(payload.Options) != 1 || payload.Options[0].Value != "20" {
+			t.Fatalf("payload=%+v", payload)
+		}
+		if payload.Options[0].SetID != orgUnitFieldOptionSetIDDeflt || payload.Options[0].SetIDSource != orgUnitFieldOptionSetIDSourceDeflt {
+			t.Fatalf("option setid mismatch: %+v", payload.Options[0])
 		}
 
 		req2 := httptest.NewRequest(http.MethodGet, "/org/api/org-units/fields:options?as_of=2026-01-01&field_key=org_type&limit=100", nil)
@@ -1101,7 +1119,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/org/api/org-units/field-configs:enable-candidates", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore, nil, nil)
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -1110,7 +1128,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 	t.Run("tenant missing", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01", nil)
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore, nil, nil)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -1120,7 +1138,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore, nil, nil)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -1130,7 +1148,7 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs:enable-candidates?enabled_on=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore)
+		handleOrgUnitFieldConfigsEnableCandidatesAPI(rec, req, dictStore, nil, nil)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -1141,6 +1159,9 @@ func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {
 		found := false
 		for _, f := range body.DictFields {
 			if f.FieldKey == "d_org_type" && f.DictCode == "org_type" && f.DataSourceType == "DICT" && f.ValueType == "text" {
+				if f.SetID != orgUnitFieldOptionSetIDDeflt || f.SetIDSource != orgUnitFieldOptionSetIDSourceDeflt {
+					t.Fatalf("setid mismatch: %+v", f)
+				}
 				found = true
 			}
 		}

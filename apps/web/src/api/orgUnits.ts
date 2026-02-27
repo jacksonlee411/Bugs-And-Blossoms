@@ -511,6 +511,8 @@ export async function getOrgUnitAppendCapabilities(options: {
 export interface OrgUnitFieldOption {
   value: string
   label: string
+  setid?: string
+  setid_source?: 'custom' | 'deflt' | 'share_preview'
 }
 
 export interface OrgUnitFieldOptionsResponse {
@@ -522,6 +524,7 @@ export interface OrgUnitFieldOptionsResponse {
 export async function getOrgUnitFieldOptions(options: {
   fieldKey: string
   asOf: string
+  orgCode?: string
   keyword?: string
   limit?: number
 }): Promise<OrgUnitFieldOptionsResponse> {
@@ -529,6 +532,10 @@ export async function getOrgUnitFieldOptions(options: {
     field_key: options.fieldKey,
     as_of: options.asOf
   })
+  const orgCode = options.orgCode?.trim() ?? ''
+  if (orgCode.length > 0) {
+    query.set('org_code', orgCode)
+  }
 
   const keyword = options.keyword?.trim() ?? ''
   if (keyword.length > 0) {
@@ -599,6 +606,8 @@ export interface OrgUnitFieldEnableCandidateField {
   field_key: string
   dict_code: string
   name: string
+  setid?: string
+  setid_source?: 'custom' | 'deflt' | 'share_preview'
   value_type: OrgUnitExtValueType
   data_source_type: OrgUnitExtDataSourceType
 }
@@ -611,8 +620,13 @@ export interface OrgUnitFieldConfigsEnableCandidatesResponse {
 
 export async function listOrgUnitFieldConfigEnableCandidates(options: {
   enabledOn: string
+  orgCode?: string
 }): Promise<OrgUnitFieldConfigsEnableCandidatesResponse> {
   const query = new URLSearchParams({ enabled_on: options.enabledOn })
+  const orgCode = options.orgCode?.trim() ?? ''
+  if (orgCode.length > 0) {
+    query.set('org_code', orgCode)
+  }
   return httpClient.get<OrgUnitFieldConfigsEnableCandidatesResponse>(`/org/api/org-units/field-configs:enable-candidates?${query.toString()}`)
 }
 

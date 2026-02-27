@@ -19,8 +19,10 @@ type FieldDefinition struct {
 }
 
 type FieldOption struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
+	Value       string `json:"value"`
+	Label       string `json:"label"`
+	SetID       string `json:"setid,omitempty"`
+	SetIDSource string `json:"setid_source,omitempty"`
 }
 
 var fieldDefinitions = []FieldDefinition{

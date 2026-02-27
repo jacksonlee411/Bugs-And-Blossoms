@@ -20,6 +20,12 @@ const (
 	personalizationModeSetID      = "setid"
 	orgApplicabilityTenant        = "tenant"
 	orgApplicabilityBusinessUnit  = "business_unit"
+	priorityModeBlendCustomFirst  = "blend_custom_first"
+	priorityModeBlendDefltFirst   = "blend_deflt_first"
+	priorityModeDefltUnsubscribed = "deflt_unsubscribed"
+	localOverrideModeAllow        = "allow"
+	localOverrideModeNoOverride   = "no_override"
+	localOverrideModeNoLocal      = "no_local"
 	fieldPolicyConflictCode       = "FIELD_POLICY_CONFLICT"
 	fieldPolicyMissingCode        = "FIELD_POLICY_MISSING"
 	explainRequiredCode           = "EXPLAIN_REQUIRED"
@@ -40,6 +46,9 @@ const (
 
 	strategySourceBaseline       = "baseline"
 	strategySourceIntentOverride = "intent_override"
+	fieldPolicyPriorityModeCode  = "FIELD_POLICY_PRIORITY_MODE_INVALID"
+	fieldPolicyLocalModeCode     = "FIELD_POLICY_LOCAL_OVERRIDE_MODE_INVALID"
+	fieldPolicyModeComboCode     = "FIELD_POLICY_MODE_COMBINATION_INVALID"
 )
 
 var (
@@ -64,6 +73,8 @@ type setIDStrategyRegistryItem struct {
 	DefaultValue        string   `json:"default_value,omitempty"`
 	AllowedValueCodes   []string `json:"allowed_value_codes,omitempty"`
 	Priority            int      `json:"priority"`
+	PriorityMode        string   `json:"priority_mode"`
+	LocalOverrideMode   string   `json:"local_override_mode"`
 	ExplainRequired     bool     `json:"explain_required"`
 	IsStable            bool     `json:"is_stable"`
 	ChangePolicy        string   `json:"change_policy"`
@@ -86,6 +97,8 @@ type setIDStrategyRegistryUpsertAPIRequest struct {
 	DefaultValue        string   `json:"default_value"`
 	AllowedValueCodes   []string `json:"allowed_value_codes"`
 	Priority            int      `json:"priority"`
+	PriorityMode        string   `json:"priority_mode"`
+	LocalOverrideMode   string   `json:"local_override_mode"`
 	ExplainRequired     bool     `json:"explain_required"`
 	IsStable            bool     `json:"is_stable"`
 	ChangePolicy        string   `json:"change_policy"`
@@ -126,6 +139,8 @@ type setIDFieldDecision struct {
 	ResolvedDefaultVal string   `json:"resolved_default_value,omitempty"`
 	MaskedDefaultVal   string   `json:"masked_default_value,omitempty"`
 	AllowedValueCodes  []string `json:"allowed_value_codes,omitempty"`
+	PriorityMode       string   `json:"priority_mode,omitempty"`
+	LocalOverrideMode  string   `json:"local_override_mode,omitempty"`
 	Decision           string   `json:"decision"`
 	ReasonCode         string   `json:"reason_code,omitempty"`
 }
@@ -252,6 +267,8 @@ func scanSetIDStrategyRegistryRows(rows pgx.Rows) ([]setIDStrategyRegistryItem, 
 			&item.EffectiveDate,
 			&item.EndDate,
 			&item.UpdatedAt,
+			&item.PriorityMode,
+			&item.LocalOverrideMode,
 		); err != nil {
 			return nil, err
 		}
@@ -260,6 +277,7 @@ func scanSetIDStrategyRegistryRows(rows pgx.Rows) ([]setIDStrategyRegistryItem, 
 				return nil, err
 			}
 		}
+		item.PriorityMode, item.LocalOverrideMode = normalizeStrategyModes(item.PriorityMode, item.LocalOverrideMode)
 		item.AllowedValueCodes = normalizeAllowedValueCodes(item.AllowedValueCodes)
 		item.SourceType = strategySourceTypeForCapabilityKey(item.CapabilityKey)
 		out = append(out, item)
@@ -312,6 +330,8 @@ INSERT INTO orgunit.setid_strategy_registry (
   default_value,
   allowed_value_codes,
   priority,
+  priority_mode,
+  local_override_mode,
   explain_required,
   is_stable,
   change_policy,
@@ -333,12 +353,14 @@ INSERT INTO orgunit.setid_strategy_registry (
   NULLIF($12::text, ''),
   $13::jsonb,
   $14::integer,
-  $15::boolean,
-  $16::boolean,
-  $17::text,
-  $18::date,
-  $19::date,
-  $20::timestamptz
+  $15::text,
+  $16::text,
+  $17::boolean,
+  $18::boolean,
+  $19::text,
+  $20::date,
+  $21::date,
+  $22::timestamptz
 )
 ON CONFLICT (tenant_uuid, capability_key, field_key, org_applicability, business_unit_id, effective_date)
 DO UPDATE SET
@@ -351,12 +373,14 @@ DO UPDATE SET
   default_value = EXCLUDED.default_value,
   allowed_value_codes = EXCLUDED.allowed_value_codes,
   priority = EXCLUDED.priority,
+  priority_mode = EXCLUDED.priority_mode,
+  local_override_mode = EXCLUDED.local_override_mode,
   explain_required = EXCLUDED.explain_required,
   is_stable = EXCLUDED.is_stable,
   change_policy = EXCLUDED.change_policy,
   end_date = EXCLUDED.end_date,
   updated_at = EXCLUDED.updated_at
-`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgApplicability, item.BusinessUnitID, item.Required, item.Visible, item.Maintainable, item.DefaultRuleRef, item.DefaultValue, allowedValueCodesJSON, item.Priority, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
+`, tenantID, item.CapabilityKey, item.OwnerModule, item.FieldKey, item.PersonalizationMode, item.OrgApplicability, item.BusinessUnitID, item.Required, item.Visible, item.Maintainable, item.DefaultRuleRef, item.DefaultValue, allowedValueCodesJSON, item.Priority, item.PriorityMode, item.LocalOverrideMode, item.ExplainRequired, item.IsStable, item.ChangePolicy, item.EffectiveDate, endDate, item.UpdatedAt)
 		return err
 	})
 	return item, updated, err
@@ -430,7 +454,9 @@ SELECT
   change_policy,
   effective_date::text,
   COALESCE(end_date::text, ''),
-  to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+  priority_mode,
+  local_override_mode
 FROM orgunit.setid_strategy_registry
 WHERE tenant_uuid = $1::uuid
   AND capability_key = $2::text
@@ -461,6 +487,8 @@ FOR UPDATE
 			&target.EffectiveDate,
 			&target.EndDate,
 			&target.UpdatedAt,
+			&target.PriorityMode,
+			&target.LocalOverrideMode,
 		); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return errStrategyNotFound
@@ -472,6 +500,7 @@ FOR UPDATE
 				return err
 			}
 		}
+		target.PriorityMode, target.LocalOverrideMode = normalizeStrategyModes(target.PriorityMode, target.LocalOverrideMode)
 		target.AllowedValueCodes = normalizeAllowedValueCodes(target.AllowedValueCodes)
 		if target.EndDate == endDate {
 			return nil
@@ -512,7 +541,9 @@ SELECT
   change_policy,
   effective_date::text,
   COALESCE(end_date::text, ''),
-  to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+  priority_mode,
+  local_override_mode
 FROM orgunit.setid_strategy_registry
 WHERE tenant_uuid = $1::uuid
   AND capability_key = ANY($2::text[])
@@ -569,7 +600,9 @@ SELECT
   change_policy,
   effective_date::text,
   COALESCE(end_date::text, ''),
-  to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+  priority_mode,
+  local_override_mode
 FROM orgunit.setid_strategy_registry
 WHERE tenant_uuid = $1::uuid
   AND ($2::text = '' OR capability_key = $2::text)
@@ -653,6 +686,8 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 		DefaultValue:        strings.TrimSpace(req.DefaultValue),
 		AllowedValueCodes:   normalizeAllowedValueCodes(req.AllowedValueCodes),
 		Priority:            req.Priority,
+		PriorityMode:        strings.ToLower(strings.TrimSpace(req.PriorityMode)),
+		LocalOverrideMode:   strings.ToLower(strings.TrimSpace(req.LocalOverrideMode)),
 		ExplainRequired:     req.ExplainRequired,
 		IsStable:            req.IsStable,
 		ChangePolicy:        strings.ToLower(strings.TrimSpace(req.ChangePolicy)),
@@ -662,6 +697,7 @@ func normalizeStrategyRegistryItem(req setIDStrategyRegistryUpsertAPIRequest) se
 	if item.Priority <= 0 {
 		item.Priority = 100
 	}
+	item.PriorityMode, item.LocalOverrideMode = normalizeStrategyModes(item.PriorityMode, item.LocalOverrideMode)
 	if req.Maintainable != nil {
 		item.Maintainable = *req.Maintainable
 	}
@@ -714,6 +750,18 @@ func normalizeAllowedValueCodes(values []string) []string {
 	return out
 }
 
+func normalizeStrategyModes(priorityMode string, localOverrideMode string) (string, string) {
+	priorityMode = strings.ToLower(strings.TrimSpace(priorityMode))
+	localOverrideMode = strings.ToLower(strings.TrimSpace(localOverrideMode))
+	if priorityMode == "" {
+		priorityMode = priorityModeBlendCustomFirst
+	}
+	if localOverrideMode == "" {
+		localOverrideMode = localOverrideModeAllow
+	}
+	return priorityMode, localOverrideMode
+}
+
 func strategySourceTypeForCapabilityKey(capabilityKey string) string {
 	capabilityKey = strings.ToLower(strings.TrimSpace(capabilityKey))
 	switch capabilityKey {
@@ -730,6 +778,7 @@ func strategySourceTypeForCapabilityKey(capabilityKey string) string {
 }
 
 func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, string) {
+	item.PriorityMode, item.LocalOverrideMode = normalizeStrategyModes(item.PriorityMode, item.LocalOverrideMode)
 	if item.CapabilityKey == "" || item.OwnerModule == "" || item.FieldKey == "" || item.PersonalizationMode == "" || item.OrgApplicability == "" || item.EffectiveDate == "" {
 		return http.StatusBadRequest, "invalid_request", "capability_key/owner_module/field_key/personalization_mode/org_applicability/effective_date required"
 	}
@@ -760,6 +809,19 @@ func validateStrategyRegistryItem(item setIDStrategyRegistryItem) (int, string, 
 	case personalizationModeTenantOnly, personalizationModeSetID:
 	default:
 		return http.StatusUnprocessableEntity, "personalization_mode_invalid", "personalization_mode invalid"
+	}
+	switch item.PriorityMode {
+	case priorityModeBlendCustomFirst, priorityModeBlendDefltFirst, priorityModeDefltUnsubscribed:
+	default:
+		return http.StatusUnprocessableEntity, fieldPolicyPriorityModeCode, fieldPolicyPriorityModeCode
+	}
+	switch item.LocalOverrideMode {
+	case localOverrideModeAllow, localOverrideModeNoOverride, localOverrideModeNoLocal:
+	default:
+		return http.StatusUnprocessableEntity, fieldPolicyLocalModeCode, fieldPolicyLocalModeCode
+	}
+	if item.PriorityMode == priorityModeDefltUnsubscribed && item.LocalOverrideMode == localOverrideModeNoLocal {
+		return http.StatusUnprocessableEntity, fieldPolicyModeComboCode, fieldPolicyModeComboCode
 	}
 	switch item.OrgApplicability {
 	case orgApplicabilityTenant:
@@ -1069,6 +1131,7 @@ func resolveCapabilityBucketDecision(
 	if chosen == nil {
 		return setIDFieldDecision{}, false, nil
 	}
+	chosen.PriorityMode, chosen.LocalOverrideMode = normalizeStrategyModes(chosen.PriorityMode, chosen.LocalOverrideMode)
 	if chosen.Required && !chosen.Visible {
 		return setIDFieldDecision{}, false, errors.New(fieldPolicyConflictCode)
 	}
@@ -1085,12 +1148,20 @@ func resolveCapabilityBucketDecision(
 		DefaultRuleRef:     chosen.DefaultRuleRef,
 		ResolvedDefaultVal: chosen.DefaultValue,
 		AllowedValueCodes:  append([]string(nil), chosen.AllowedValueCodes...),
+		PriorityMode:       chosen.PriorityMode,
+		LocalOverrideMode:  chosen.LocalOverrideMode,
 		Decision:           "allow",
 	}, true, nil
 }
 
 func fieldDecisionSemanticallyEqual(a setIDFieldDecision, b setIDFieldDecision) bool {
 	if a.Required != b.Required || a.Visible != b.Visible || a.Maintainable != b.Maintainable {
+		return false
+	}
+	if strings.TrimSpace(a.PriorityMode) != strings.TrimSpace(b.PriorityMode) {
+		return false
+	}
+	if strings.TrimSpace(a.LocalOverrideMode) != strings.TrimSpace(b.LocalOverrideMode) {
 		return false
 	}
 	if strings.TrimSpace(a.DefaultRuleRef) != strings.TrimSpace(b.DefaultRuleRef) {

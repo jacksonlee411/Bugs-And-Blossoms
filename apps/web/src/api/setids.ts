@@ -67,6 +67,8 @@ export interface SetIDStrategyRegistryItem {
   default_value?: string
   allowed_value_codes?: string[]
   priority: number
+  priority_mode: 'blend_custom_first' | 'blend_deflt_first' | 'deflt_unsubscribed'
+  local_override_mode: 'allow' | 'no_override' | 'no_local'
   explain_required: boolean
   is_stable: boolean
   change_policy: string
@@ -95,6 +97,8 @@ export interface SetIDStrategyRegistryUpsertRequest {
   default_value: string
   allowed_value_codes: string[]
   priority: number
+  priority_mode: 'blend_custom_first' | 'blend_deflt_first' | 'deflt_unsubscribed'
+  local_override_mode: 'allow' | 'no_override' | 'no_local'
   explain_required: boolean
   is_stable: boolean
   change_policy: string
@@ -151,6 +155,8 @@ export interface SetIDExplainFieldDecision {
   default_rule_ref?: string
   resolved_default_value?: string
   masked_default_value?: string
+  priority_mode?: 'blend_custom_first' | 'blend_deflt_first' | 'deflt_unsubscribed'
+  local_override_mode?: 'allow' | 'no_override' | 'no_local'
   decision: string
   reason_code?: string
 }

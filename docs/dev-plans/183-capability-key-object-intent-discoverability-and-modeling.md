@@ -1,6 +1,6 @@
 # DEV-PLAN-183：Capability Key 配置可发现性与对象/意图显式建模方案
 
-**状态**: 执行中（2026-02-26 14:06 UTC，后端目录化与门禁已验收，UI 验收待补）
+**状态**: 执行中（2026-02-27 12:20 UTC，已按 DEV-PLAN-185 双枚举口径与 DEV-PLAN-003“有限枚举”原则完成契约对齐；UI 验收待补）
 
 ## 1. 背景与问题
 当前策略生效链路在运行时是可定位的，但在配置侧不可发现，导致用户“知道要配策略，却不知道该选哪个 capability_key”。
@@ -21,6 +21,7 @@
 - [ ] 建立“对象/意图目录”作为可查询、可测试、可门禁的 SoT。
 - [ ] 保留 capability_key 稳定键约束，不破坏现有运行时与审计链。
 - [ ] 支持“基线策略 + 场景覆盖”模型下的可解释选择（承接 DEV-PLAN-182）。
+- [ ] 对接字段级策略治理双枚举（`priority_mode` + `local_override_mode`），只允许有限枚举输入，不允许任意表达式。
 
 ## 3. 非目标
 - 不改变 RLS/租户隔离/Authz 核心模型。
@@ -54,7 +55,8 @@ UI 目标流程：
 2) 再选 `target_object`
 3) 再选 `surface + intent`
 4) 自动带出 `capability_key`（默认只读）
-5) 高级模式可切换为手工输入（但必须通过目录反查校验）
+5) 选择字段级策略模式：`priority_mode` + `local_override_mode`（下拉枚举）
+6) 高级模式可切换为手工输入（但必须通过目录反查校验）
 
 ### 4.3 与 182 的协同
 - “应用到全部写场景” -> 选择基线目录项（如 `orgunit_write`）
@@ -67,6 +69,7 @@ UI 目标流程：
 - [ ] Go 内 capability 注册结构扩展对象/意图元数据字段（以 `owner_module` 为唯一模块字段）。
 - [ ] 同步导出到 JSON 合约（与 route-capability-map 同级治理）。
 - [ ] 目录 API 从该注册结构读取，避免双维护。
+- [ ] 对接策略模式时保持有限枚举（`priority_mode/local_override_mode`），不引入表达式 DSL（对齐 DEV-PLAN-003）。
 
 第二阶段（可选）再评估是否物化为数据库字典表（需单独评审）。
 
@@ -87,8 +90,9 @@ UI 目标流程：
 ## 7. UI 方案（SetID Governance）
 1. [ ] 新增“对象/意图模式”配置面板（默认模式）。
 2. [ ] capability_key 字段改为自动回填；高级模式可手填并实时校验。
-3. [ ] 列表页新增列：`target_object` / `surface` / `intent` / `source_type`。
-4. [ ] explain 面板支持按对象/意图反查 capability_key。
+3. [ ] 增加 `priority_mode` / `local_override_mode` 下拉枚举，禁止自由表达式输入框。
+4. [ ] 列表页新增列：`target_object` / `surface` / `intent` / `source_type` / `priority_mode` / `local_override_mode`。
+5. [ ] explain 面板支持按对象/意图反查 capability_key，并展示策略模式来源。
 
 ### 7.1 用户可见性与入口验收（对齐 AGENTS 3.8）
 - [ ] **可发现入口固定**：对象/意图配置能力统一落在 `/org/setid` 治理页，不允许仅通过内部 API 提供。
@@ -108,7 +112,8 @@ UI 目标流程：
 ### 8.2 测试补齐
 - [ ] 单测：目录生成、唯一性、反查逻辑。
 - [ ] API 测试：目录查询与写入校验失败分支。
-- [ ] UI 测试：对象/意图选择 -> capability 自动带出 -> 提交成功。
+- [ ] API 测试：`priority_mode/local_override_mode` 非法值与非法组合 fail-closed。
+- [ ] UI 测试：对象/意图选择 -> capability 自动带出 -> 策略模式枚举选择 -> 提交成功。
 - [ ] E2E：用户不输入 capability_key 也能完成策略配置并生效。
 
 ## 9. 分阶段实施
@@ -124,6 +129,7 @@ UI 目标流程：
 - [ ] route、capability、catalog 三者一致性可被门禁自动验证。
 - [ ] `owner_module` 成为目录唯一模块口径；`module`（若保留）仅为只读派生字段且始终一致。
 - [ ] “选不到对象/意图”的问题在治理页消失（可用性验收通过）。
+- [ ] 治理页策略模式仅支持有限枚举，不出现任意表达式输入与解析路径。
 
 ## 11. 风险与缓解
 - **风险 1：目录字段设计过重**  
@@ -146,13 +152,15 @@ UI 目标流程：
 ## 12. 与其他计划关系
 - DEV-PLAN-182 负责“基线 + 覆盖”的策略生效语义；
 - DEV-PLAN-183 负责“对象/意图可发现性与配置体验”；
-- 两者并行推进时，以 183 的目录模型作为 182 UI 的输入来源。
+- DEV-PLAN-185 负责 SetID 下 `DEFLT/SHARE/自定义` 的双枚举治理语义（`priority_mode + local_override_mode`）；
+- 三者并行推进时，以 183 目录模型提供配置入口，以 182/185 语义模型提供运行时判定约束。
 
 ## 13. 关联文档
 - `docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
 - `docs/dev-plans/181-orgunit-details-form-capability-mapping-implementation.md`
 - `docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md`
 - `docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
+- `docs/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
 
 ## 14. 结论补充：从“对象/意图开发实现”到“可配置”的标准环节
 ### 14.1 标准接入链路（必须经过）
@@ -161,7 +169,8 @@ UI 目标流程：
 3. [ ] **写能力出口**：`write-capabilities` 返回 `capability_key + policy_version`，前端只消费服务端返回值。
 4. [ ] **写入门禁**：`org-units/write`（及同类写接口）统一校验 `policy_version`，拒绝 stale。
 5. [ ] **策略写入口校验**：策略注册接口必须校验 `capability_key` 合法、已注册、`owner_module` 匹配、禁上下文编码。
-6. [ ] **可发现性入口**：治理页应从“能力目录（catalog）”读取候选，而不是仅依赖“已有策略记录”。
+6. [ ] **策略模式校验**：`priority_mode/local_override_mode` 必须为有限枚举且组合合法（非法即拒绝）。
+7. [ ] **可发现性入口**：治理页应从“能力目录（catalog）”读取候选，而不是仅依赖“已有策略记录”。
 
 ### 14.2 “是否每次都要开发”判定
 - [ ] **仅新增 BU/租户策略配置**（对象/意图已接入、字段已接入）：不需要开发，只需配置。
