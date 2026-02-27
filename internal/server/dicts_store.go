@@ -72,13 +72,15 @@ type DictItem struct {
 }
 
 type DictValueItem struct {
-	DictCode   string    `json:"dict_code"`
-	Code       string    `json:"code"`
-	Label      string    `json:"label"`
-	Status     string    `json:"status"`
-	EnabledOn  string    `json:"enabled_on"`
-	DisabledOn *string   `json:"disabled_on"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	DictCode    string    `json:"dict_code"`
+	Code        string    `json:"code"`
+	Label       string    `json:"label"`
+	SetID       string    `json:"setid,omitempty"`
+	SetIDSource string    `json:"setid_source,omitempty"`
+	Status      string    `json:"status"`
+	EnabledOn   string    `json:"enabled_on"`
+	DisabledOn  *string   `json:"disabled_on"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type DictValueAuditItem struct {
@@ -415,6 +417,8 @@ LIMIT $6::int
 			return nil, err
 		}
 		item.DisabledOn = cloneOptionalString(disabled)
+		item.SetID = dictOptionSetIDDeflt
+		item.SetIDSource = dictOptionSetIDSourceDeflt
 		out = append(out, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -609,13 +613,15 @@ WHERE tenant_uuid = $1::uuid
 		return DictValueItem{}, err
 	}
 	return DictValueItem{
-		DictCode:   payload.DictCode,
-		Code:       payload.Code,
-		Label:      payload.Label,
-		Status:     payload.Status,
-		EnabledOn:  payload.EnabledOn,
-		DisabledOn: cloneOptionalString(payload.DisabledOn),
-		UpdatedAt:  txTime,
+		DictCode:    payload.DictCode,
+		Code:        payload.Code,
+		Label:       payload.Label,
+		SetID:       dictOptionSetIDDeflt,
+		SetIDSource: dictOptionSetIDSourceDeflt,
+		Status:      payload.Status,
+		EnabledOn:   payload.EnabledOn,
+		DisabledOn:  cloneOptionalString(payload.DisabledOn),
+		UpdatedAt:   txTime,
 	}, nil
 }
 
@@ -677,8 +683,8 @@ func newDictMemoryStore() DictStore {
 	now := time.Unix(0, 0).UTC()
 	defaultDict := DictItem{DictCode: dictCodeOrgType, Name: "Org Type", Status: "active", EnabledOn: "1970-01-01"}
 	defaultValues := []DictValueItem{
-		{DictCode: dictCodeOrgType, Code: "10", Label: "部门", Status: "active", EnabledOn: "1970-01-01", UpdatedAt: now},
-		{DictCode: dictCodeOrgType, Code: "20", Label: "单位", Status: "active", EnabledOn: "1970-01-01", UpdatedAt: now},
+		{DictCode: dictCodeOrgType, Code: "10", Label: "部门", SetID: dictOptionSetIDDeflt, SetIDSource: dictOptionSetIDSourceDeflt, Status: "active", EnabledOn: "1970-01-01", UpdatedAt: now},
+		{DictCode: dictCodeOrgType, Code: "20", Label: "单位", SetID: dictOptionSetIDDeflt, SetIDSource: dictOptionSetIDSourceDeflt, Status: "active", EnabledOn: "1970-01-01", UpdatedAt: now},
 	}
 	return &dictMemoryStore{
 		dicts: map[string]map[string]DictItem{
@@ -793,6 +799,12 @@ func (s *dictMemoryStore) ListDictValues(_ context.Context, tenantID string, dic
 		}
 		cloned := item
 		cloned.Status = currentStatus
+		if strings.TrimSpace(cloned.SetID) == "" {
+			cloned.SetID = dictOptionSetIDDeflt
+		}
+		if strings.TrimSpace(cloned.SetIDSource) == "" {
+			cloned.SetIDSource = dictOptionSetIDSourceDeflt
+		}
 		out = append(out, cloned)
 	}
 
