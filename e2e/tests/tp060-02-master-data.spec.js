@@ -503,7 +503,7 @@ test("tp060-02: master data (orgunit -> setid -> jobcatalog -> positions)", asyn
   await page.goto(`/app/org/units?as_of=${asOf}`);
   await expect(page.locator("h1")).toContainText("Bugs & Blossoms");
   await page.goto(`/app/org/setid/base`);
-  await expect(page.getByRole("heading", { level: 2, name: "Configuration & Policy" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: /^(Configuration & Policy|配置与策略)$/ })).toBeVisible();
   await page.goto(`/app/jobcatalog?as_of=${asOf}&setid=${s2601SetID}`);
   await expect(page.getByRole("heading", { level: 2, name: "Job Catalog" })).toBeVisible();
   await page.goto(`/app/staffing/positions?as_of=${asOf}&org_code=${org.rnd}`);
