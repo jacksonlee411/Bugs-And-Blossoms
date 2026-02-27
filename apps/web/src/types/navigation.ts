@@ -7,6 +7,7 @@ export interface NavItem {
   labelKey: MessageKey
   icon: ReactNode
   order: number
+  parentKey?: string
   permissionKey?: string
   keywords: string[]
 }

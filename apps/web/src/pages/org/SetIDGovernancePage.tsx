@@ -1,5 +1,5 @@
-import { type FormEvent, useCallback, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -47,7 +47,11 @@ import { PageHeader } from '../../components/PageHeader'
 import { SetIDExplainPanel } from '../../components/SetIDExplainPanel'
 import { resolveApiErrorMessage } from '../../errors/presentApiError'
 
-type SetIDPageTab = 'registry' | 'explain' | 'functional-area' | 'activation'
+type SetIDLegacyTab = 'registry' | 'explain' | 'functional-area' | 'activation'
+type SetIDPageSection = 'base' | 'registry' | 'explain' | 'ops'
+type SetIDBaseView = 'setids' | 'bindings'
+type SetIDRegistryView = 'list' | 'editor'
+type SetIDOpsView = 'functional-area' | 'activation'
 
 interface RegistryFormState {
   capabilityKey: string
@@ -117,7 +121,7 @@ function newRequestID(prefix: string): string {
   return `${prefix}:${Date.now()}`
 }
 
-function parseTab(raw: string | null): SetIDPageTab {
+function parseLegacyTab(raw: string | null): SetIDLegacyTab {
   switch ((raw ?? '').trim()) {
     case 'explain':
       return 'explain'
@@ -128,6 +132,18 @@ function parseTab(raw: string | null): SetIDPageTab {
     default:
       return 'registry'
   }
+}
+
+function parseBaseView(raw: string | null): SetIDBaseView {
+  return (raw ?? '').trim() === 'bindings' ? 'bindings' : 'setids'
+}
+
+function parseRegistryView(raw: string | null): SetIDRegistryView {
+  return (raw ?? '').trim() === 'editor' ? 'editor' : 'list'
+}
+
+function parseOpsView(raw: string | null): SetIDOpsView {
+  return (raw ?? '').trim() === 'activation' ? 'activation' : 'functional-area'
 }
 
 function parseApiError(error: unknown): string {
@@ -249,17 +265,18 @@ function defaultActivationForm(): ActivationFormState {
   }
 }
 
-export function SetIDGovernancePage() {
-  const { hasPermission } = useAppPreferences()
+export function SetIDGovernancePage({ section }: { section: SetIDPageSection }) {
+  const navigate = useNavigate()
+  const { hasPermission, t } = useAppPreferences()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
+  const legacyTab = parseLegacyTab(searchParams.get('tab'))
 
   const [asOf, setAsOf] = useState(searchParams.get('as_of')?.trim() || todayISO())
   const [createSetIDValue, setCreateSetIDValue] = useState('')
   const [createName, setCreateName] = useState('')
   const [bindOrgCode, setBindOrgCode] = useState('')
   const [bindSetIDValue, setBindSetIDValue] = useState('')
-  const [tab, setTab] = useState<SetIDPageTab>(parseTab(searchParams.get('tab')))
 
   const [registryCapabilityFilter, setRegistryCapabilityFilter] = useState('')
   const [registryFieldFilter, setRegistryFieldFilter] = useState('')
@@ -278,6 +295,60 @@ export function SetIDGovernancePage() {
   const [error, setError] = useState<string | null>(null)
   const [registryNotice, setRegistryNotice] = useState<string | null>(null)
   const [activationNotice, setActivationNotice] = useState<string | null>(null)
+  const baseView = parseBaseView(searchParams.get('base_view'))
+  const registryView = parseRegistryView(searchParams.get('registry_view'))
+  const opsView = parseOpsView(searchParams.get('ops_view'))
+
+  const updateSearchParams = useCallback(
+    (patch: Record<string, string | null>) => {
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('tab')
+      Object.entries(patch).forEach(([key, value]) => {
+        const normalized = value?.trim() ?? ''
+        if (normalized.length === 0) {
+          nextParams.delete(key)
+          return
+        }
+        nextParams.set(key, normalized)
+      })
+      setSearchParams(nextParams, { replace: true })
+    },
+    [searchParams, setSearchParams]
+  )
+
+  useEffect(() => {
+    const rawTab = searchParams.get('tab')
+    if (!rawTab) {
+      return
+    }
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('tab')
+    let targetSection: SetIDPageSection = 'registry'
+    switch (legacyTab) {
+      case 'explain':
+        targetSection = 'explain'
+        break
+      case 'functional-area':
+        targetSection = 'ops'
+        nextParams.set('ops_view', 'functional-area')
+        break
+      case 'activation':
+        targetSection = 'ops'
+        nextParams.set('ops_view', 'activation')
+        break
+      default:
+        targetSection = 'registry'
+        break
+    }
+    const nextPath = `/org/setid/${targetSection}`
+    navigate(
+      {
+        pathname: nextPath,
+        search: nextParams.toString().length > 0 ? `?${nextParams.toString()}` : ''
+      },
+      { replace: true }
+    )
+  }, [legacyTab, navigate, searchParams])
 
   const canManageGovernance = hasPermission('setid.governance.manage')
   const canViewFullExplain = hasPermission('setid.explain.full')
@@ -361,6 +432,7 @@ export function SetIDGovernancePage() {
       setRegistryMode('object_intent')
       setRegistryCatalog(defaultRegistryCatalogSelection())
       setRegistryFormMode('create')
+      updateSearchParams({ registry_view: 'list' })
     }
   })
 
@@ -584,6 +656,7 @@ export function SetIDGovernancePage() {
     setRegistryMode('object_intent')
     setRegistryCatalog(defaultRegistryCatalogSelection())
     setRegistryFormMode('create')
+    updateSearchParams({ registry_view: 'editor' })
   }
 
   const onEditStrategyRow = useCallback((row: SetIDStrategyRegistryItem) => {
@@ -603,7 +676,8 @@ export function SetIDGovernancePage() {
     }
     setRegistryFormMode('edit')
     setRegistryNotice(null)
-  }, [catalogByCapabilityKey])
+    updateSearchParams({ registry_view: 'editor' })
+  }, [catalogByCapabilityKey, updateSearchParams])
 
   function onForkStrategyFromCurrent() {
     const nextEffectiveDate = registryForm.effectiveDate.trim().length > 0 ? nextDayISO(registryForm.effectiveDate) : asOf
@@ -712,13 +786,6 @@ export function SetIDGovernancePage() {
     ],
     [canManageGovernance, catalogByCapabilityKey, onEditStrategyRow, onOpenDisableDialog]
   )
-
-  function updateURL(nextTab: SetIDPageTab, nextAsOf: string) {
-    const nextParams = new URLSearchParams(searchParams)
-    nextParams.set('tab', nextTab)
-    nextParams.set('as_of', nextAsOf)
-    setSearchParams(nextParams)
-  }
 
   async function onCreate(event: FormEvent) {
     event.preventDefault()
@@ -888,9 +955,24 @@ export function SetIDGovernancePage() {
     }
   }
 
+  const pageSubtitle =
+    section === 'base'
+      ? t('nav_configuration_policy_base')
+      : section === 'registry'
+        ? t('nav_configuration_policy_registry')
+        : section === 'explain'
+          ? t('nav_configuration_policy_explain')
+          : t('nav_configuration_policy_ops')
+
+  const showBaseSection = section === 'base'
+  const showRegistrySection = section === 'registry'
+  const showExplainSection = section === 'explain'
+  const showFunctionalAreaSection = section === 'ops' && opsView === 'functional-area'
+  const showActivationSection = section === 'ops' && opsView === 'activation'
+
   return (
     <Box>
-      <PageHeader title='SetID Governance' subtitle='Registry / Explain / Functional Area / Activation' />
+      <PageHeader title={t('nav_configuration_policy')} subtitle={pageSubtitle} />
 
       <Stack spacing={2}>
         {error ? <Alert severity='error'>{error}</Alert> : null}
@@ -911,7 +993,7 @@ export function SetIDGovernancePage() {
                 const nextAsOf = event.target.value
                 setAsOf(nextAsOf)
                 setRegistryForm((previous) => ({ ...previous, effectiveDate: nextAsOf }))
-                updateURL(tab, nextAsOf)
+                updateSearchParams({ as_of: nextAsOf })
               }}
             />
             <Typography color='text.secondary' variant='body2'>
@@ -920,22 +1002,46 @@ export function SetIDGovernancePage() {
           </Stack>
         </Paper>
 
-        <Tabs
-          onChange={(_, value: SetIDPageTab) => {
-            setTab(value)
-            updateURL(value, asOf)
-          }}
-          value={tab}
-        >
-          <Tab label='Registry' value='registry' />
-          <Tab label='Explain' value='explain' />
-          <Tab label='Functional Area' value='functional-area' />
-          <Tab label='Activation' value='activation' />
-        </Tabs>
+        {showBaseSection ? (
+          <Paper sx={{ p: 2 }} variant='outlined'>
+            <Tabs
+              onChange={(_, value: SetIDBaseView) => updateSearchParams({ base_view: value })}
+              value={baseView}
+            >
+              <Tab label='集合ID 列表' value='setids' />
+              <Tab label='绑定关系' value='bindings' />
+            </Tabs>
+          </Paper>
+        ) : null}
 
-        {tab === 'registry' ? (
+        {showRegistrySection ? (
+          <Paper sx={{ p: 2 }} variant='outlined'>
+            <Tabs
+              onChange={(_, value: SetIDRegistryView) => updateSearchParams({ registry_view: value })}
+              value={registryView}
+            >
+              <Tab label='规则列表' value='list' />
+              <Tab label='规则编辑' value='editor' />
+            </Tabs>
+          </Paper>
+        ) : null}
+
+        {section === 'ops' ? (
+          <Paper sx={{ p: 2 }} variant='outlined'>
+            <Tabs
+              onChange={(_, value: SetIDOpsView) => updateSearchParams({ ops_view: value })}
+              value={opsView}
+            >
+              <Tab label='功能域开关' value='functional-area' />
+              <Tab label='版本激活' value='activation' />
+            </Tabs>
+          </Paper>
+        ) : null}
+
+        {showBaseSection ? (
           <>
-            <Paper sx={{ p: 2 }} variant='outlined'>
+            {baseView === 'setids' ? (
+              <Paper sx={{ p: 2 }} variant='outlined'>
               <Typography component='h3' variant='subtitle1' sx={{ mb: 1 }}>
                 Create SetID
               </Typography>
@@ -962,9 +1068,11 @@ export function SetIDGovernancePage() {
                   Create
                 </Button>
               </Stack>
-            </Paper>
+              </Paper>
+            ) : null}
 
-            <Paper sx={{ p: 2 }} variant='outlined'>
+            {baseView === 'bindings' ? (
+              <Paper sx={{ p: 2 }} variant='outlined'>
               <Typography component='h3' variant='subtitle1' sx={{ mb: 1 }}>
                 Bind SetID
               </Typography>
@@ -991,9 +1099,11 @@ export function SetIDGovernancePage() {
                   Bind
                 </Button>
               </Stack>
-            </Paper>
+              </Paper>
+            ) : null}
 
-            <Paper sx={{ p: 2 }} variant='outlined'>
+            {baseView === 'setids' ? (
+              <Paper sx={{ p: 2 }} variant='outlined'>
               <Typography component='h2' variant='h6' sx={{ mb: 1 }}>
                 SetIDs
               </Typography>
@@ -1025,9 +1135,11 @@ export function SetIDGovernancePage() {
                   </tbody>
                 </table>
               </Box>
-            </Paper>
+              </Paper>
+            ) : null}
 
-            <Paper sx={{ p: 2 }} variant='outlined'>
+            {baseView === 'bindings' ? (
+              <Paper sx={{ p: 2 }} variant='outlined'>
               <Typography component='h2' variant='h6' sx={{ mb: 1 }}>
                 Bindings
               </Typography>
@@ -1061,11 +1173,12 @@ export function SetIDGovernancePage() {
                   </tbody>
                 </table>
               </Box>
-            </Paper>
+              </Paper>
+            ) : null}
           </>
         ) : null}
 
-        {tab === 'explain' ? (
+        {showExplainSection ? (
           <>
             <Alert severity='info'>
               Explain 默认展示 brief；若无 full 权限将自动降级为只读 brief，并提供申请提示。
@@ -1079,8 +1192,10 @@ export function SetIDGovernancePage() {
           </>
         ) : null}
 
-        {tab === 'registry' ? (
+        {showRegistrySection ? (
           <>
+            {registryView === 'list' ? (
+              <>
             <Paper sx={{ p: 2 }} variant='outlined'>
               <Stack alignItems='center' direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
                 <FreeSoloDropdownField
@@ -1098,6 +1213,19 @@ export function SetIDGovernancePage() {
                 <Button onClick={() => setRegistryNotice(null)} size='small' variant='outlined'>
                   清除提示
                 </Button>
+                <Button
+                  onClick={() => {
+                    setRegistryForm(defaultRegistryForm(asOf))
+                    setRegistryFormMode('create')
+                    setRegistryMode('object_intent')
+                    setRegistryCatalog(defaultRegistryCatalogSelection())
+                    updateSearchParams({ registry_view: 'editor' })
+                  }}
+                  size='small'
+                  variant='contained'
+                >
+                  新建策略
+                </Button>
               </Stack>
             </Paper>
 
@@ -1108,8 +1236,11 @@ export function SetIDGovernancePage() {
               rows={strategyRows.map((item) => ({ id: strategyRowID(item), ...item }))}
               storageKey='setid-strategy-registry-grid'
             />
+              </>
+            ) : null}
 
-            <Paper sx={{ p: 2 }} variant='outlined'>
+            {registryView === 'editor' ? (
+              <Paper sx={{ p: 2 }} variant='outlined'>
               <Typography component='h3' variant='subtitle1' sx={{ mb: 1 }}>
                 Upsert Strategy
               </Typography>
@@ -1490,13 +1621,21 @@ export function SetIDGovernancePage() {
                   >
                     {hasRegistryKeyLock ? '新建空白' : '重置表单'}
                   </Button>
+                  <Button
+                    type='button'
+                    onClick={() => updateSearchParams({ registry_view: 'list' })}
+                    variant='text'
+                  >
+                    返回列表
+                  </Button>
                 </Stack>
               </Stack>
-            </Paper>
+              </Paper>
+            ) : null}
           </>
         ) : null}
 
-        {tab === 'functional-area' ? (
+        {showFunctionalAreaSection ? (
           <Paper sx={{ p: 2 }} variant='outlined'>
             <Stack spacing={1.5}>
               <Typography variant='subtitle1'>Functional Area</Typography>
@@ -1562,7 +1701,7 @@ export function SetIDGovernancePage() {
           </Paper>
         ) : null}
 
-        {tab === 'activation' ? (
+        {showActivationSection ? (
           <Paper sx={{ p: 2 }} variant='outlined'>
             <Stack spacing={1.5}>
               <Typography variant='subtitle1'>Activation</Typography>
