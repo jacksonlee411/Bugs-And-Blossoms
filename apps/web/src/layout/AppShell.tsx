@@ -1,5 +1,7 @@
 import { type PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import LanguageIcon from '@mui/icons-material/Language'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import LockIcon from '@mui/icons-material/Lock'
@@ -10,6 +12,7 @@ import {
   AppBar,
   Box,
   Chip,
+  Collapse,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -58,6 +61,25 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
     () => sortedNavItems.filter((item) => !hasPermission(item.permissionKey)),
     [hasPermission, sortedNavItems]
   )
+  const topLevelNavItems = useMemo(
+    () => visibleNavItems.filter((item) => !item.parentKey),
+    [visibleNavItems]
+  )
+  const childNavItemsByParent = useMemo(() => {
+    const groups: Record<string, NavItem[]> = {}
+    visibleNavItems.forEach((item) => {
+      const parentKey = item.parentKey
+      if (!parentKey) {
+        return
+      }
+      const bucket = groups[parentKey] ?? []
+      bucket.push(item)
+      groups[parentKey] = bucket
+    })
+    Object.values(groups).forEach((items) => items.sort((left, right) => left.order - right.order))
+    return groups
+  }, [visibleNavItems])
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
 
   const searchEntries = useMemo(
     () => [...buildNavigationSearchEntries(sortedNavItems), ...commonSearchEntries],
@@ -204,28 +226,91 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
       >
         <Toolbar />
         <List>
-          {visibleNavItems.map((item) => (
-            <ListItemButton
-              key={item.key}
-              component={RouterLink}
-              onClick={() =>
-                trackUiEvent({
-                  eventName: 'nav_click',
-                  tenant: tenantId,
-                  module: 'shell',
-                  page: location.pathname,
-                  action: `menu_navigate:${item.key}`,
-                  result: 'success',
-                  metadata: { target: item.path }
-                })
-              }
-              selected={item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)}
-              to={item.path}
-            >
-              <ListItemIcon sx={{ minWidth: 34 }}>{item.icon}</ListItemIcon>
-              <ListItemText primary={t(item.labelKey)} />
-            </ListItemButton>
-          ))}
+          {topLevelNavItems.map((item) => {
+            const children = childNavItemsByParent[item.key] ?? []
+            const parentSelected = item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)
+
+            if (children.length === 0) {
+              return (
+                <ListItemButton
+                  key={item.key}
+                  component={RouterLink}
+                  onClick={() =>
+                    trackUiEvent({
+                      eventName: 'nav_click',
+                      tenant: tenantId,
+                      module: 'shell',
+                      page: location.pathname,
+                      action: `menu_navigate:${item.key}`,
+                      result: 'success',
+                      metadata: { target: item.path }
+                    })
+                  }
+                  selected={parentSelected}
+                  to={item.path}
+                >
+                  <ListItemIcon sx={{ minWidth: 34 }}>{item.icon}</ListItemIcon>
+                  <ListItemText primary={t(item.labelKey)} />
+                </ListItemButton>
+              )
+            }
+
+            const expanded = expandedGroups[item.key] ?? parentSelected
+            return (
+              <Box key={item.key}>
+                <ListItemButton
+                  component={RouterLink}
+                  onClick={() => {
+                    setExpandedGroups((previous) => ({
+                      ...previous,
+                      [item.key]: !(previous[item.key] ?? parentSelected)
+                    }))
+                    trackUiEvent({
+                      eventName: 'nav_click',
+                      tenant: tenantId,
+                      module: 'shell',
+                      page: location.pathname,
+                      action: `menu_navigate:${item.key}`,
+                      result: 'success',
+                      metadata: { target: item.path }
+                    })
+                  }}
+                  selected={parentSelected}
+                  to={item.path}
+                >
+                  <ListItemIcon sx={{ minWidth: 34 }}>{item.icon}</ListItemIcon>
+                  <ListItemText primary={t(item.labelKey)} />
+                  {expanded ? <ExpandLessIcon fontSize='small' /> : <ExpandMoreIcon fontSize='small' />}
+                </ListItemButton>
+                <Collapse in={expanded} timeout='auto' unmountOnExit>
+                  <List component='div' disablePadding>
+                    {children.map((child) => (
+                      <ListItemButton
+                        key={child.key}
+                        component={RouterLink}
+                        onClick={() =>
+                          trackUiEvent({
+                            eventName: 'nav_click',
+                            tenant: tenantId,
+                            module: 'shell',
+                            page: location.pathname,
+                            action: `menu_navigate:${child.key}`,
+                            result: 'success',
+                            metadata: { target: child.path }
+                          })
+                        }
+                        selected={location.pathname.startsWith(child.path)}
+                        sx={{ pl: 6 }}
+                        to={child.path}
+                      >
+                        <ListItemText primary={t(child.labelKey)} />
+                      </ListItemButton>
+                    ))}
+                  </List>
+                </Collapse>
+              </Box>
+            )
+          })}
           {navDebugMode
             ? hiddenNavItems.map((item) => (
                 <ListItemButton disabled key={item.key}>
@@ -238,7 +323,7 @@ export function AppShell({ navItems }: PropsWithChildren<AppShellProps>) {
             : null}
         </List>
       </Drawer>
-      <Box component='main' sx={{ flexGrow: 1, p: 3 }}>
+      <Box component='main' sx={{ flexGrow: 1, minWidth: 0, p: 3 }}>
         <Toolbar />
         <Outlet />
       </Box>

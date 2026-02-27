@@ -95,7 +95,39 @@ export const router = createBrowserRouter([
         path: 'org/setid',
         element: (
           <RequirePermission permissionKey='orgunit.read'>
-            <SetIDGovernancePage />
+            <Navigate replace to='base' />
+          </RequirePermission>
+        )
+      },
+      {
+        path: 'org/setid/base',
+        element: (
+          <RequirePermission permissionKey='orgunit.read'>
+            <SetIDGovernancePage section='base' />
+          </RequirePermission>
+        )
+      },
+      {
+        path: 'org/setid/registry',
+        element: (
+          <RequirePermission permissionKey='orgunit.read'>
+            <SetIDGovernancePage section='registry' />
+          </RequirePermission>
+        )
+      },
+      {
+        path: 'org/setid/explain',
+        element: (
+          <RequirePermission permissionKey='orgunit.read'>
+            <SetIDGovernancePage section='explain' />
+          </RequirePermission>
+        )
+      },
+      {
+        path: 'org/setid/ops',
+        element: (
+          <RequirePermission permissionKey='orgunit.read'>
+            <SetIDGovernancePage section='ops' />
           </RequirePermission>
         )
       },

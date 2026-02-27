@@ -48,13 +48,53 @@ export const navItems: NavItem[] = [
     keywords: ['dict', 'dictionary', 'value', '配置', '字典', '编码']
   },
   {
-    key: 'org-setid',
+    key: 'configuration-policy',
     path: '/org/setid',
-    labelKey: 'nav_setid',
+    labelKey: 'nav_configuration_policy',
     icon: <HubIcon fontSize='small' />,
     order: 25,
     permissionKey: 'orgunit.read',
-    keywords: ['setid', 'scope', 'package', '治理', '共享', '只读']
+    keywords: ['setid', 'configuration', 'policy', '集合', '策略', '治理']
+  },
+  {
+    key: 'configuration-policy-base',
+    path: '/org/setid/base',
+    labelKey: 'nav_configuration_policy_base',
+    icon: <HubIcon fontSize='small' />,
+    order: 251,
+    parentKey: 'configuration-policy',
+    permissionKey: 'orgunit.read',
+    keywords: ['setid', 'binding', '集合', '绑定']
+  },
+  {
+    key: 'configuration-policy-registry',
+    path: '/org/setid/registry',
+    labelKey: 'nav_configuration_policy_registry',
+    icon: <HubIcon fontSize='small' />,
+    order: 252,
+    parentKey: 'configuration-policy',
+    permissionKey: 'orgunit.read',
+    keywords: ['policy', 'registry', 'capability', '策略', '规则']
+  },
+  {
+    key: 'configuration-policy-explain',
+    path: '/org/setid/explain',
+    labelKey: 'nav_configuration_policy_explain',
+    icon: <HubIcon fontSize='small' />,
+    order: 253,
+    parentKey: 'configuration-policy',
+    permissionKey: 'orgunit.read',
+    keywords: ['explain', 'trace', '命中', '解释']
+  },
+  {
+    key: 'configuration-policy-ops',
+    path: '/org/setid/ops',
+    labelKey: 'nav_configuration_policy_ops',
+    icon: <HubIcon fontSize='small' />,
+    order: 254,
+    parentKey: 'configuration-policy',
+    permissionKey: 'orgunit.read',
+    keywords: ['activation', 'functional', '运维', '激活']
   },
   {
     key: 'jobcatalog',
