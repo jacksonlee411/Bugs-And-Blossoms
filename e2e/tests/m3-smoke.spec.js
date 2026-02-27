@@ -207,7 +207,7 @@ test("smoke: superadmin -> create tenant -> /app (MUI SPA) -> org/person/staffin
   expect(listAssignmentsJSON.assignments.length).toBeGreaterThan(0);
 
   // UI sanity checks (MUI-only pages)
-  await page.goto(`/app/org/setid`);
+  await page.goto(`/app/org/setid/base`);
   await expect(page.getByRole("heading", { level: 2, name: "Configuration & Policy" })).toBeVisible();
   await page.goto(`/app/jobcatalog?as_of=${asOf}&setid=DEFLT`);
   await expect(page.getByRole("heading", { level: 2, name: "Job Catalog" })).toBeVisible();

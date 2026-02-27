@@ -95,7 +95,7 @@ export const router = createBrowserRouter([
         path: 'org/setid',
         element: (
           <RequirePermission permissionKey='orgunit.read'>
-            <Navigate replace to='/org/setid/base' />
+            <Navigate replace to='base' />
           </RequirePermission>
         )
       },
