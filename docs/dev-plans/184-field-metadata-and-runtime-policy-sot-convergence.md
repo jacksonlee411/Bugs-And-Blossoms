@@ -1,6 +1,6 @@
 # DEV-PLAN-184：字段配置与策略规则双层 SoT 收敛方案（Static Metadata vs Dynamic Policy）
 
-**状态**: 规划中（2026-02-27 12:20 UTC，已按 DEV-PLAN-185 双枚举口径与 DEV-PLAN-003“有限枚举”原则完成契约对齐，待实现）
+**状态**: 执行中（2026-02-27 23:40 UTC，动态策略写口已只读化，字段配置页动态镜像改由 Strategy Registry 决议口径驱动）
 
 ## 1. 背景
 

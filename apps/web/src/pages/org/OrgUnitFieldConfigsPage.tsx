@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link as RouterLink, useSearchParams } from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Breadcrumbs,
@@ -342,6 +342,7 @@ function formatDefaultPolicySummary(row: FieldConfigRow): string {
 const customPlainValueTypeFallback: OrgUnitExtValueType[] = ['text', 'int', 'uuid', 'bool', 'date', 'numeric']
 
 export function OrgUnitFieldConfigsPage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { t, tenantId } = useAppPreferences()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -599,33 +600,16 @@ export function OrgUnitFieldConfigsPage() {
     [asOf, todayUtc]
   )
 
-  const openPolicyDialog = useCallback(
+  const openStrategyRegistry = useCallback(
     (row: FieldConfigRow) => {
-      if (policyWriteDisabled) {
-        setPolicyError(t('org_field_configs_policy_write_disabled'))
-        return
-      }
-      const scopeType = row.policyScopeType === 'GLOBAL' ? 'GLOBAL' : 'FORM'
-      const scopeKey =
-        scopeType === 'GLOBAL'
-          ? 'global'
-          : fieldPolicyFormScopes.includes(row.policyScopeKey as (typeof fieldPolicyFormScopes)[number])
-          ? row.policyScopeKey
-          : fieldPolicyFormScopes[0]
-      setPolicyRow(row)
-      setPolicyError('')
-      setPolicyForm({
-        fieldKey: row.fieldKey,
-        scopeType,
-        scopeKey,
-        maintainable: row.maintainable,
-        defaultMode: row.defaultMode,
-        defaultRuleExpr: row.defaultRuleExpr,
-        enabledOn: maxDay(todayUtc, asOf)
-      })
-      setPolicyRequestID(newRequestID())
+      const next = new URLSearchParams()
+      next.set('as_of', asOf)
+      next.set('registry_view', 'editor')
+      next.set('capability_key', 'org.orgunit_write.field_policy')
+      next.set('field_key', row.fieldKey)
+      navigate({ pathname: '/org/setid/registry', search: `?${next.toString()}` })
     },
-    [asOf, policyWriteDisabled, t, todayUtc]
+    [asOf, navigate]
   )
 
   function closePolicyDialog() {
@@ -829,8 +813,8 @@ export function OrgUnitFieldConfigsPage() {
               <Button onClick={() => setViewRow(row)} size='small' variant='text'>
                 {t('common_detail')}
               </Button>
-              <Button disabled={policyWriteDisabled} onClick={() => openPolicyDialog(row)} size='small' variant='text'>
-                {t('org_field_configs_action_edit_policy')}
+              <Button onClick={() => openStrategyRegistry(row)} size='small' variant='text'>
+                {t('nav_setid')}
               </Button>
               <Button
                 disabled={!canDisable}
@@ -853,7 +837,7 @@ export function OrgUnitFieldConfigsPage() {
         }
       }
     ]
-  }, [openDisableDialog, openPolicyDialog, t, todayUtc])
+  }, [openDisableDialog, openStrategyRegistry, t, todayUtc])
 
   function openEnableDialog() {
     setEnableError('')

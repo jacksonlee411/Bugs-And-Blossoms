@@ -327,7 +327,7 @@ func TestHandleOrgUnitFieldPoliciesResolvePreviewAPI_ErrorAndFoundBranches(t *te
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
 		handleOrgUnitFieldPoliciesResolvePreviewAPI(rec, req, base)
-		if rec.Code != http.StatusInternalServerError {
+		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
@@ -363,41 +363,39 @@ func TestHandleOrgUnitFieldPoliciesResolvePreviewAPI_ErrorAndFoundBranches(t *te
 	})
 
 	t.Run("resolve error", func(t *testing.T) {
-		store := orgUnitStoreWithFieldPolicies{
-			OrgUnitStore: base,
-			resolveFn: func(context.Context, string, string, string, string, string) (orgUnitTenantFieldPolicy, bool, error) {
-				return orgUnitTenantFieldPolicy{}, false, errors.New("boom")
+		previousStore := defaultSetIDStrategyRegistryStore
+		t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string) (setIDFieldDecision, error) {
+				return setIDFieldDecision{}, errors.New("boom")
 			},
-		}
+		})
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-policies:resolve-preview?field_key=org_code&scope_type=FORM&scope_key=orgunit.create_dialog&as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldPoliciesResolvePreviewAPI(rec, req, store)
+		handleOrgUnitFieldPoliciesResolvePreviewAPI(rec, req, base)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
 	})
 
 	t.Run("found policy", func(t *testing.T) {
-		rule := "next_org_code(\"O\", 6)"
-		store := orgUnitStoreWithFieldPolicies{
-			OrgUnitStore: base,
-			resolveFn: func(context.Context, string, string, string, string, string) (orgUnitTenantFieldPolicy, bool, error) {
-				return orgUnitTenantFieldPolicy{
-					FieldKey:        "org_code",
-					ScopeType:       "FORM",
-					ScopeKey:        "orgunit.create_dialog",
-					Maintainable:    false,
-					DefaultMode:     "CEL",
-					DefaultRuleExpr: &rule,
-					EnabledOn:       "2026-01-01",
-				}, true, nil
+		previousStore := defaultSetIDStrategyRegistryStore
+		t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string) (setIDFieldDecision, error) {
+				return setIDFieldDecision{
+					FieldKey:       "org_code",
+					Maintainable:   false,
+					DefaultRuleRef: "rule://next_org_code",
+					SourceType:     strategySourceIntentOverride,
+				}, nil
 			},
-		}
+		})
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-policies:resolve-preview?field_key=org_code&scope_type=FORM&scope_key=orgunit.create_dialog&as_of=2026-01-01", nil)
 		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
 		rec := httptest.NewRecorder()
-		handleOrgUnitFieldPoliciesResolvePreviewAPI(rec, req, store)
+		handleOrgUnitFieldPoliciesResolvePreviewAPI(rec, req, base)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -407,6 +405,9 @@ func TestHandleOrgUnitFieldPoliciesResolvePreviewAPI_ErrorAndFoundBranches(t *te
 		}
 		if body.ResolvedPolicy.DefaultMode != "CEL" || body.ResolvedPolicy.DefaultRuleExpr == nil {
 			t.Fatalf("resolved=%+v", body.ResolvedPolicy)
+		}
+		if body.ResolvedPolicy.ScopeType != "SYSTEM_DEFAULT" {
+			t.Fatalf("scope_type=%q", body.ResolvedPolicy.ScopeType)
 		}
 	})
 }
@@ -491,6 +492,18 @@ func TestHandleOrgUnitFieldConfigsAPI_WithPolicyStoreCoverage(t *testing.T) {
 
 	t.Run("policy found applies to core and ext", func(t *testing.T) {
 		rule := "next_org_code(\"O\", 6)"
+		previousStore := defaultSetIDStrategyRegistryStore
+		t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (setIDFieldDecision, error) {
+				return setIDFieldDecision{
+					FieldKey:       fieldKey,
+					Maintainable:   false,
+					DefaultRuleRef: rule,
+					SourceType:     strategySourceIntentOverride,
+				}, nil
+			},
+		})
 		store := orgUnitStoreWithFieldConfigsAndPolicies{
 			OrgUnitStore: base,
 			listConfigsFn: func(context.Context, string) ([]orgUnitTenantFieldConfig, error) {
@@ -505,18 +518,6 @@ func TestHandleOrgUnitFieldConfigsAPI_WithPolicyStoreCoverage(t *testing.T) {
 						UpdatedAt:        now,
 					},
 				}, nil
-			},
-			resolveFn: func(context.Context, string, string, string, string, string) (orgUnitTenantFieldPolicy, bool, error) {
-				return orgUnitTenantFieldPolicy{
-					FieldKey:        "org_code",
-					ScopeType:       "FORM",
-					ScopeKey:        "orgunit.create_dialog",
-					Maintainable:    false,
-					DefaultMode:     "CEL",
-					DefaultRuleExpr: &rule,
-					EnabledOn:       "2026-01-01",
-					UpdatedAt:       now,
-				}, true, nil
 			},
 		}
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-01&status=all", nil)
@@ -533,16 +534,30 @@ func TestHandleOrgUnitFieldConfigsAPI_WithPolicyStoreCoverage(t *testing.T) {
 		if len(body.FieldConfigs) == 0 {
 			t.Fatalf("expected items")
 		}
+		var hasCELMode bool
+		for _, item := range body.FieldConfigs {
+			if item.DefaultMode == "CEL" && item.DefaultRuleExpr != nil {
+				hasCELMode = true
+				break
+			}
+		}
+		if !hasCELMode {
+			t.Fatalf("expected CEL default mode on at least one field")
+		}
 	})
 
 	t.Run("policy resolve error on core", func(t *testing.T) {
+		previousStore := defaultSetIDStrategyRegistryStore
+		t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			resolveFieldDecisionFn: func(context.Context, string, string, string, string, string) (setIDFieldDecision, error) {
+				return setIDFieldDecision{}, errors.New("boom")
+			},
+		})
 		store := orgUnitStoreWithFieldConfigsAndPolicies{
 			OrgUnitStore: base,
 			listConfigsFn: func(context.Context, string) ([]orgUnitTenantFieldConfig, error) {
 				return []orgUnitTenantFieldConfig{}, nil
-			},
-			resolveFn: func(context.Context, string, string, string, string, string) (orgUnitTenantFieldPolicy, bool, error) {
-				return orgUnitTenantFieldPolicy{}, false, errors.New("boom")
 			},
 		}
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-01", nil)
@@ -556,6 +571,17 @@ func TestHandleOrgUnitFieldConfigsAPI_WithPolicyStoreCoverage(t *testing.T) {
 
 	t.Run("policy resolve error on ext", func(t *testing.T) {
 		callN := 0
+		previousStore := defaultSetIDStrategyRegistryStore
+		t.Cleanup(func() { useSetIDStrategyRegistryStore(previousStore) })
+		useSetIDStrategyRegistryStore(setIDStrategyRegistryStoreStub{
+			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (setIDFieldDecision, error) {
+				callN++
+				if fieldKey == "x_custom_01" {
+					return setIDFieldDecision{}, errors.New("boom")
+				}
+				return setIDFieldDecision{}, nil
+			},
+		})
 		store := orgUnitStoreWithFieldConfigsAndPolicies{
 			OrgUnitStore: base,
 			listConfigsFn: func(context.Context, string) ([]orgUnitTenantFieldConfig, error) {
@@ -570,13 +596,6 @@ func TestHandleOrgUnitFieldConfigsAPI_WithPolicyStoreCoverage(t *testing.T) {
 						UpdatedAt:        now,
 					},
 				}, nil
-			},
-			resolveFn: func(_ context.Context, _ string, fieldKey string, _ string, _ string, _ string) (orgUnitTenantFieldPolicy, bool, error) {
-				callN++
-				if fieldKey == "x_custom_01" {
-					return orgUnitTenantFieldPolicy{}, false, errors.New("boom")
-				}
-				return orgUnitTenantFieldPolicy{}, false, nil
 			},
 		}
 		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-01", nil)

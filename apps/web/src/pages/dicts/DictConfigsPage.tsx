@@ -830,7 +830,7 @@ export function DictConfigsPage() {
                     >
                       <td>{value.code}</td>
                       <td>{value.label}</td>
-                      <td>DEFLT</td>
+                      <td>{value.setid ?? 'DEFLT'}</td>
                       <td>{value.status}</td>
                       <td>{value.enabled_on}</td>
                       <td>{value.disabled_on ?? '-'}</td>

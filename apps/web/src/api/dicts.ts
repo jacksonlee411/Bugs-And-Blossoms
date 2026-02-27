@@ -17,6 +17,8 @@ export interface DictValueItem {
   dict_code: string
   code: string
   label: string
+  setid?: string
+  setid_source?: 'custom' | 'deflt' | 'share_preview'
   status: string
   enabled_on: string
   disabled_on?: string | null

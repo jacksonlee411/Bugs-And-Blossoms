@@ -208,6 +208,24 @@ type orgUnitPlainCustomHint struct {
 	DefaultValueType string   `json:"default_value_type"`
 }
 
+func resolveOrgUnitFieldConfigDecision(ctx context.Context, tenantID string, fieldKey string, asOf string) (setIDFieldDecision, bool, error) {
+	decision, err := defaultSetIDStrategyRegistryStore.resolveFieldDecision(
+		ctx,
+		tenantID,
+		orgUnitWriteFieldPolicyCapabilityKey,
+		fieldKey,
+		"",
+		asOf,
+	)
+	if err != nil {
+		if strings.EqualFold(stablePgMessage(err), fieldPolicyMissingCode) {
+			return setIDFieldDecision{}, false, nil
+		}
+		return setIDFieldDecision{}, false, err
+	}
+	return decision, true, nil
+}
+
 func handleOrgUnitFieldConfigsEnableCandidatesAPI(w http.ResponseWriter, r *http.Request, dictStore orgUnitDictRegistryStore, orgResolver OrgUnitCodeResolver, setIDStore SetIDGovernanceStore) {
 	if r.Method != http.MethodGet {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
@@ -370,7 +388,6 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 			writeInternalAPIError(w, r, err, "orgunit_field_configs_list_failed")
 			return
 		}
-		policyStore, _ := store.(orgUnitFieldPolicyStore)
 		items := make([]orgUnitFieldConfigAPIItem, 0, len(rows)+len(orgUnitCoreFieldCatalog))
 
 		for _, core := range orgUnitCoreFieldCatalog {
@@ -393,21 +410,20 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 				Maintainable: true,
 				DefaultMode:  "NONE",
 			}
-			if policyStore != nil {
-				resolved, found, resolveErr := policyStore.ResolveTenantFieldPolicy(
-					r.Context(),
-					tenant.ID,
-					core.FieldKey,
-					"FORM",
-					"orgunit.create_dialog",
-					asOf,
-				)
-				if resolveErr != nil {
-					writeInternalAPIError(w, r, resolveErr, "orgunit_field_configs_list_failed")
-					return
-				}
-				if found {
-					policy = orgUnitFieldPolicyAPIItemFromStore(resolved)
+			decision, found, resolveErr := resolveOrgUnitFieldConfigDecision(r.Context(), tenant.ID, core.FieldKey, asOf)
+			if resolveErr != nil {
+				writeInternalAPIError(w, r, resolveErr, "orgunit_field_configs_list_failed")
+				return
+			}
+			if found {
+				policy.Maintainable = decision.Maintainable
+				defaultRuleRef := strings.TrimSpace(decision.DefaultRuleRef)
+				if defaultRuleRef == "" {
+					policy.DefaultMode = "NONE"
+					policy.DefaultRuleExpr = nil
+				} else {
+					policy.DefaultMode = "CEL"
+					policy.DefaultRuleExpr = &defaultRuleRef
 				}
 			}
 			key := strings.TrimSpace(core.LabelI18nKey)
@@ -451,21 +467,20 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 				Maintainable: true,
 				DefaultMode:  "NONE",
 			}
-			if policyStore != nil {
-				resolved, found, resolveErr := policyStore.ResolveTenantFieldPolicy(
-					r.Context(),
-					tenant.ID,
-					row.FieldKey,
-					"FORM",
-					"orgunit.create_dialog",
-					asOf,
-				)
-				if resolveErr != nil {
-					writeInternalAPIError(w, r, resolveErr, "orgunit_field_configs_list_failed")
-					return
-				}
-				if found {
-					policy = orgUnitFieldPolicyAPIItemFromStore(resolved)
+			decision, found, resolveErr := resolveOrgUnitFieldConfigDecision(r.Context(), tenant.ID, row.FieldKey, asOf)
+			if resolveErr != nil {
+				writeInternalAPIError(w, r, resolveErr, "orgunit_field_configs_list_failed")
+				return
+			}
+			if found {
+				policy.Maintainable = decision.Maintainable
+				defaultRuleRef := strings.TrimSpace(decision.DefaultRuleRef)
+				if defaultRuleRef == "" {
+					policy.DefaultMode = "NONE"
+					policy.DefaultRuleExpr = nil
+				} else {
+					policy.DefaultMode = "CEL"
+					policy.DefaultRuleExpr = &defaultRuleRef
 				}
 			}
 			items = append(items, orgUnitFieldConfigAPIItem{
@@ -812,14 +827,10 @@ func handleOrgUnitFieldPoliciesResolvePreviewAPI(w http.ResponseWriter, r *http.
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
+	_ = store
 	tenant, ok := currentTenant(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "tenant_missing", "tenant missing")
-		return
-	}
-	policyStore, ok := store.(orgUnitFieldPolicyStore)
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "orgunit_store_missing", "orgunit store missing")
 		return
 	}
 	asOf, err := orgUnitAPIAsOf(r)
@@ -839,11 +850,7 @@ func handleOrgUnitFieldPoliciesResolvePreviewAPI(w http.ResponseWriter, r *http.
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "scope invalid")
 		return
 	}
-	resolved, found, err := policyStore.ResolveTenantFieldPolicy(r.Context(), tenant.ID, fieldKey, scopeType, scopeKey, asOf)
-	if err != nil {
-		writeInternalAPIError(w, r, err, "orgunit_field_policy_resolve_failed")
-		return
-	}
+	capabilityKey := orgUnitWriteFieldPolicyCapabilityKey
 	policy := orgUnitFieldPolicyAPIItem{
 		FieldKey:     fieldKey,
 		ScopeType:    "SYSTEM_DEFAULT",
@@ -852,8 +859,25 @@ func handleOrgUnitFieldPoliciesResolvePreviewAPI(w http.ResponseWriter, r *http.
 		DefaultMode:  "NONE",
 		EnabledOn:    "0001-01-01",
 	}
-	if found {
-		policy = orgUnitFieldPolicyAPIItemFromStore(resolved)
+	decision, resolveErr := defaultSetIDStrategyRegistryStore.resolveFieldDecision(
+		r.Context(),
+		tenant.ID,
+		capabilityKey,
+		fieldKey,
+		"",
+		asOf,
+	)
+	if resolveErr != nil && !strings.EqualFold(stablePgMessage(resolveErr), fieldPolicyMissingCode) {
+		writeInternalAPIError(w, r, resolveErr, "orgunit_field_policy_resolve_failed")
+		return
+	}
+	if resolveErr == nil {
+		defaultRuleRef := strings.TrimSpace(decision.DefaultRuleRef)
+		policy.Maintainable = decision.Maintainable
+		if defaultRuleRef != "" {
+			policy.DefaultMode = "CEL"
+			policy.DefaultRuleExpr = &defaultRuleRef
+		}
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
