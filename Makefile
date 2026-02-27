@@ -8,7 +8,7 @@ export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
 .PHONY: help preflight check pr-branch naming no-legacy no-scope-package granularity capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
-.PHONY: sqlc-generate authz-pack authz-test authz-lint
+.PHONY: sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
 .PHONY: dev dev-up dev-down dev-reset dev-ps dev-server dev-kratos-stub
@@ -215,6 +215,9 @@ css: ## UI Build（MUI；产物入仓 + go:embed）
 sqlc-generate:
 	@./scripts/sqlc/generate.sh
 
+sqlc-verify-schema:
+	@./scripts/sqlc/verify-schema-consistency.sh
+
 authz-pack:
 	@./scripts/authz/pack.sh
 
@@ -235,7 +238,7 @@ staffing:
 person:
 	@:
 
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate authz-pack authz-test authz-lint no-legacy no-scope-package capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy no-scope-package capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

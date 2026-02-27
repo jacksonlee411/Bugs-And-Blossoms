@@ -126,6 +126,16 @@ jobs:
           make staffing plan
           make staffing lint
           make staffing migrate up
+      - name: SQLC Schema Consistency
+        if: steps.paths.outputs.db == 'true' || steps.paths.outputs.sqlc == 'true'
+        env:
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_USER: app
+          DB_PASSWORD: app
+          DB_SSLMODE: disable
+          DB_ADMIN_DB: postgres
+        run: make sqlc-verify-schema
       - name: Run tests
         run: |
           if [[ "${{ steps.paths.outputs.go }}" == "true" || "${{ steps.paths.outputs.db }}" == "true" || "${{ steps.paths.outputs.sqlc }}" == "true" || "${{ steps.paths.outputs.authz }}" == "true" || "${{ steps.paths.outputs.routing }}" == "true" ]]; then
