@@ -313,6 +313,8 @@ modules/{module}/
 - DEV-PLAN-182：BU 策略“全 CRUD 默认生效”与场景覆盖收敛方案：`docs/dev-plans/182-bu-policy-baseline-and-intent-override-unification.md`
 - DEV-PLAN-183：Capability Key 配置可发现性与对象/意图显式建模方案：`docs/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
 - DEV-PLAN-184：字段配置与策略规则双层 SoT 收敛方案（Static Metadata vs Dynamic Policy）：`docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
+- DEV-PLAN-185：字段配置页字典值列表 SetID 列展示与主数据取数控制策略收敛：`docs/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
+- DEV-PLAN-183/184/185 记录：字段级双枚举契约对齐日志：`docs/dev-records/dev-plan-183-184-185-contract-alignment-log.md`
 - DEV-PLAN-191：`/app/org/setid` 导航与页面设计优化方案（一级/二级菜单 + 独立滚动 + DEV-PLAN-002 对齐）：`docs/dev-plans/191-setid-governance-navigation-and-layout-optimization.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`

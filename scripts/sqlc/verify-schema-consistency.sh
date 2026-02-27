@@ -80,6 +80,8 @@ if ! drift_sql="$(
     "$root/scripts/db/run_atlas.sh" schema diff \
     --from "$migrations_db_url" \
     --to "$export_db_url" \
+    --exclude "public.goose_db_version_*" \
+    --exclude "goose_db_version_*" \
     --dev-url "$atlas_dev_url" \
     --format '{{ sql . }}'
 )"; then

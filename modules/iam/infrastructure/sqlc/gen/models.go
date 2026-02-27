@@ -738,6 +738,8 @@ type OrgunitSetidStrategyRegistry struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	Maintainable        bool               `json:"maintainable"`
 	AllowedValueCodes   []byte             `json:"allowed_value_codes"`
+	PriorityMode        string             `json:"priority_mode"`
+	LocalOverrideMode   string             `json:"local_override_mode"`
 }
 
 type OrgunitTenantFieldConfig struct {

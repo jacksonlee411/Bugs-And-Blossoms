@@ -78,6 +78,19 @@ func (r *setIDStrategyRegistryRows) Scan(dest ...any) error {
 	}
 	row := r.rows[r.idx-1]
 	for i := range dest {
+		if i >= len(row) {
+			switch d := dest[i].(type) {
+			case *string:
+				*d = ""
+			case *bool:
+				*d = false
+			case *int:
+				*d = 0
+			default:
+				return errors.New("unsupported scan type")
+			}
+			continue
+		}
 		switch d := dest[i].(type) {
 		case *string:
 			*d = row[i].(string)
@@ -115,6 +128,12 @@ func TestNormalizeStrategyRegistryItem_Defaults(t *testing.T) {
 	if item.Priority != 100 {
 		t.Fatalf("priority=%d", item.Priority)
 	}
+	if item.PriorityMode != priorityModeBlendCustomFirst {
+		t.Fatalf("priority_mode=%q", item.PriorityMode)
+	}
+	if item.LocalOverrideMode != localOverrideModeAllow {
+		t.Fatalf("local_override_mode=%q", item.LocalOverrideMode)
+	}
 	if item.ChangePolicy != "plan_required" {
 		t.Fatalf("change_policy=%q", item.ChangePolicy)
 	}
@@ -138,6 +157,8 @@ func TestNormalizeStrategyRegistryItem_Overrides(t *testing.T) {
 		Maintainable:        &maintainable,
 		AllowedValueCodes:   []string{" 11 ", "11", "", "12"},
 		Priority:            7,
+		PriorityMode:        " blend_deflt_first ",
+		LocalOverrideMode:   " no_override ",
 		ChangePolicy:        " immediate ",
 		EffectiveDate:       "2026-01-01",
 	})
@@ -152,6 +173,12 @@ func TestNormalizeStrategyRegistryItem_Overrides(t *testing.T) {
 	}
 	if len(item.AllowedValueCodes) != 2 || item.AllowedValueCodes[0] != "11" || item.AllowedValueCodes[1] != "12" {
 		t.Fatalf("allowed_value_codes=%v", item.AllowedValueCodes)
+	}
+	if item.PriorityMode != priorityModeBlendDefltFirst {
+		t.Fatalf("priority_mode=%q", item.PriorityMode)
+	}
+	if item.LocalOverrideMode != localOverrideModeNoOverride {
+		t.Fatalf("local_override_mode=%q", item.LocalOverrideMode)
 	}
 }
 
@@ -204,6 +231,22 @@ func TestValidateStrategyRegistryItem(t *testing.T) {
 			it.PersonalizationMode = "bad"
 			return it
 		}(), status: http.StatusUnprocessableEntity, code: "personalization_mode_invalid"},
+		{name: "priority mode invalid", item: func() setIDStrategyRegistryItem {
+			it := valid
+			it.PriorityMode = "bad"
+			return it
+		}(), status: http.StatusUnprocessableEntity, code: fieldPolicyPriorityModeCode},
+		{name: "local override mode invalid", item: func() setIDStrategyRegistryItem {
+			it := valid
+			it.LocalOverrideMode = "bad"
+			return it
+		}(), status: http.StatusUnprocessableEntity, code: fieldPolicyLocalModeCode},
+		{name: "mode combination invalid", item: func() setIDStrategyRegistryItem {
+			it := valid
+			it.PriorityMode = priorityModeDefltUnsubscribed
+			it.LocalOverrideMode = localOverrideModeNoLocal
+			return it
+		}(), status: http.StatusUnprocessableEntity, code: fieldPolicyModeComboCode},
 		{name: "org level invalid", item: func() setIDStrategyRegistryItem {
 			it := valid
 			it.OrgApplicability = "bad"
@@ -277,6 +320,32 @@ func TestValidateStrategyRegistryItem(t *testing.T) {
 				t.Fatalf("status=%d code=%q", status, code)
 			}
 		})
+	}
+}
+
+func TestFieldDecisionSemanticallyEqual_PriorityAndLocalModes(t *testing.T) {
+	base := setIDFieldDecision{
+		Required:           true,
+		Visible:            true,
+		Maintainable:       true,
+		PriorityMode:       priorityModeBlendCustomFirst,
+		LocalOverrideMode:  localOverrideModeAllow,
+		DefaultRuleRef:     "x",
+		ResolvedDefaultVal: "11",
+		AllowedValueCodes:  []string{"A", "B"},
+	}
+	if !fieldDecisionSemanticallyEqual(base, base) {
+		t.Fatalf("expected equal")
+	}
+	left := base
+	left.PriorityMode = priorityModeBlendDefltFirst
+	if fieldDecisionSemanticallyEqual(left, base) {
+		t.Fatalf("priority_mode difference should be unequal")
+	}
+	right := base
+	right.LocalOverrideMode = localOverrideModeNoOverride
+	if fieldDecisionSemanticallyEqual(right, base) {
+		t.Fatalf("local_override_mode difference should be unequal")
 	}
 }
 

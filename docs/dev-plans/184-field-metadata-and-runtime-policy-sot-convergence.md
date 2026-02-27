@@ -1,6 +1,6 @@
 # DEV-PLAN-184：字段配置与策略规则双层 SoT 收敛方案（Static Metadata vs Dynamic Policy）
 
-**状态**: 规划中（2026-02-27 08:40 UTC）
+**状态**: 规划中（2026-02-27 12:20 UTC，已按 DEV-PLAN-185 双枚举口径与 DEV-PLAN-003“有限枚举”原则完成契约对齐，待实现）
 
 ## 1. 背景
 
@@ -37,6 +37,7 @@
 3. **Deterministic Resolution**：同一 `(tenant, capability_key, context, as_of, field_key)` 结果确定可重放。
 4. **Fail-Closed**：缺上下文/缺策略/版本冲突时拒绝，不隐式放行。
 5. **Single PDP, Multiple PEPs**：后端策略解析器是唯一 PDP；前端仅做体验增强，不作为信任边界。
+6. **Simple > Easy（对齐 DEV-PLAN-003）**：策略模式采用有限枚举，不引入任意表达式与动态脚本。
 
 ## 4. 双层 SoT 设计
 
@@ -65,6 +66,8 @@
 - `default_rule_ref`
 - `default_value`
 - `allowed_value_codes`
+- `priority_mode`（有限枚举：`blend_custom_first` / `blend_deflt_first` / `deflt_unsubscribed`）
+- `local_override_mode`（有限枚举：`allow` / `no_override` / `no_local`）
 - `effective_date/end_date` + `policy_version`
 
 语义：定义“在当前能力上下文下，这个字段如何判定与约束”。
@@ -78,23 +81,32 @@
 | `maintainable` | Dynamic Policy | 只读镜像 | 可写 | 是 |
 | `default_rule_ref/default_value` | Dynamic Policy | 只读镜像 | 可写 | 是 |
 | `allowed_value_codes` | Dynamic Policy | 只读镜像 | 可写 | 是 |
+| `priority_mode/local_override_mode` | Dynamic Policy | 只读镜像 | 可写 | 是（取值排序与覆盖治理） |
 | label/排序/展示 | Static Metadata | 可写 | 只读 | 是（UI 呈现） |
 
 冻结约束：
 1. `allowed_value_codes` 必须是静态数据源候选集的子集。
 2. `maintainable=false` 时必须存在 `default_rule_ref` 或 `default_value`，否则拒绝发布。
 3. 任何页面都不得出现同语义双写保存按钮。
+4. `priority_mode/local_override_mode` 仅允许有限枚举；非法值必须 fail-closed。
+5. 组合合法性固定并可回归：
+   - `blend_custom_first` + (`allow`/`no_override`/`no_local`)
+   - `blend_deflt_first` + (`allow`/`no_override`/`no_local`)
+   - `deflt_unsubscribed` + (`allow`/`no_override`)（`no_local` 视为非法组合）
 
 ## 6. 统一决策流水线（运行时）
 
 1. 解析上下文：`tenant + capability_key + business_unit + as_of + field_key`。
 2. 读取静态层：字段定义与数据源候选集。
 3. 读取动态层：命中策略（含 `policy_version`）。
-4. 合并决策：
+4. 应用治理枚举：
+   - 先按 `priority_mode` 形成层顺序
+   - 再按 `local_override_mode` 决定 local 是否可补充/覆盖/参与
+5. 合并决策：
    - 值来源：用户输入 / 动态默认 / 空值（遵循既有优先级契约）
    - 校验顺序：`required` -> `allowed_value_codes` -> maintainable 约束
-5. 写入前复核：`policy_version` 一致性校验；不一致返回冲突。
-6. Explain 输出：返回命中规则、拒绝原因、最终决策快照。
+6. 写入前复核：`policy_version` 一致性校验；不一致返回冲突。
+7. Explain 输出：返回命中规则、拒绝原因、最终决策快照（含 `priority_mode/local_override_mode`）。
 
 ## 7. 页面信息架构与交互规范
 
@@ -124,6 +136,9 @@
    - `FIELD_POLICY_VERSION_REQUIRED`
    - `FIELD_POLICY_VERSION_STALE`
    - `FIELD_OPTION_NOT_ALLOWED`
+   - `FIELD_POLICY_PRIORITY_MODE_INVALID`
+   - `FIELD_POLICY_LOCAL_OVERRIDE_MODE_INVALID`
+   - `FIELD_POLICY_MODE_COMBINATION_INVALID`
 
 ## 9. 迁移与收口里程碑
 
@@ -151,7 +166,9 @@
 3. [ ] Strategy 页改动可在目标业务场景稳定生效，且 explain 可追踪。
 4. [ ] create/add/insert/correct 同字段同上下文命中同一事实源。
 5. [ ] `policy_version` 冲突可稳定复现并返回明确错误码。
-6. [ ] 质量门禁全绿，且无 legacy 回退路径。
+6. [ ] `priority_mode/local_override_mode` 非法值与非法组合均 fail-closed。
+7. [ ] `priority_mode/local_override_mode` 组合矩阵具备回归测试与 explain 证据。
+8. [ ] 质量门禁全绿，且无 legacy 回退路径。
 
 ## 12. 风险与缓解
 
@@ -166,3 +183,4 @@
 - `docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md`
 - `docs/dev-plans/156-capability-key-m3-m9-route-capability-mapping-and-gates.md`
 - `docs/dev-plans/180-granularity-hierarchy-governance-and-unification.md`
+- `docs/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`

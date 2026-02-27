@@ -12,12 +12,14 @@ import (
 var errResolverNotConfigured = errors.New("dict: resolver not configured")
 
 type Option struct {
-	Code       string
-	Label      string
-	Status     string
-	EnabledOn  string
-	DisabledOn *string
-	UpdatedAt  time.Time
+	Code        string
+	Label       string
+	SetID       string
+	SetIDSource string
+	Status      string
+	EnabledOn   string
+	DisabledOn  *string
+	UpdatedAt   time.Time
 }
 
 type Resolver interface {

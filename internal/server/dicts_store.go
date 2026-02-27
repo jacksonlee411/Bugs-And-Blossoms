@@ -27,6 +27,9 @@ const (
 
 	dictRegistryEventCreated  = "DICT_CREATED"
 	dictRegistryEventDisabled = "DICT_DISABLED"
+
+	dictOptionSetIDDeflt       = "DEFLT"
+	dictOptionSetIDSourceDeflt = "deflt"
 )
 
 var (
@@ -478,12 +481,14 @@ func (s *dictPGStore) ListOptions(ctx context.Context, tenantID string, asOf str
 	out := make([]dictpkg.Option, 0, len(values))
 	for _, item := range values {
 		out = append(out, dictpkg.Option{
-			Code:       item.Code,
-			Label:      item.Label,
-			Status:     item.Status,
-			EnabledOn:  item.EnabledOn,
-			DisabledOn: cloneOptionalString(item.DisabledOn),
-			UpdatedAt:  item.UpdatedAt,
+			Code:        item.Code,
+			Label:       item.Label,
+			SetID:       dictOptionSetIDDeflt,
+			SetIDSource: dictOptionSetIDSourceDeflt,
+			Status:      item.Status,
+			EnabledOn:   item.EnabledOn,
+			DisabledOn:  cloneOptionalString(item.DisabledOn),
+			UpdatedAt:   item.UpdatedAt,
 		})
 	}
 	return out, nil
@@ -829,7 +834,16 @@ func (s *dictMemoryStore) ListOptions(ctx context.Context, tenantID string, asOf
 	}
 	out := make([]dictpkg.Option, 0, len(values))
 	for _, item := range values {
-		out = append(out, dictpkg.Option{Code: item.Code, Label: item.Label, Status: item.Status, EnabledOn: item.EnabledOn, DisabledOn: item.DisabledOn, UpdatedAt: item.UpdatedAt})
+		out = append(out, dictpkg.Option{
+			Code:        item.Code,
+			Label:       item.Label,
+			SetID:       dictOptionSetIDDeflt,
+			SetIDSource: dictOptionSetIDSourceDeflt,
+			Status:      item.Status,
+			EnabledOn:   item.EnabledOn,
+			DisabledOn:  item.DisabledOn,
+			UpdatedAt:   item.UpdatedAt,
+		})
 	}
 	return out, nil
 }

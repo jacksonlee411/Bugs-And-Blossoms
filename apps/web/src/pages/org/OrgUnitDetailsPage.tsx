@@ -376,7 +376,7 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced
 }
 
-type FieldOption = { value: string; label: string }
+type FieldOption = { value: string; label: string; setid?: string; setid_source?: 'custom' | 'deflt' | 'share_preview' }
 
 function uniqueOptionsByValue(options: FieldOption[]): FieldOption[] {
   const seen = new Set<string>()
@@ -392,9 +392,18 @@ function uniqueOptionsByValue(options: FieldOption[]): FieldOption[] {
   return out
 }
 
+function formatFieldOptionLabel(option: FieldOption): string {
+  const setID = option.setid?.trim() ?? ''
+  if (setID.length === 0) {
+    return option.label
+  }
+  return `${option.label} [${setID}]`
+}
+
 function OrgUnitExtFieldSelect(props: {
   fieldKey: string
   asOf: string
+  orgCode?: string
   label: string
   disabled: boolean
   value: string | null
@@ -410,8 +419,8 @@ function OrgUnitExtFieldSelect(props: {
 
   const optionsQuery = useQuery({
     enabled: !props.disabled,
-    queryKey: ['org-units', 'field-options', props.fieldKey, props.asOf, debouncedKeyword],
-    queryFn: () => getOrgUnitFieldOptions({ fieldKey: props.fieldKey, asOf: props.asOf, keyword: debouncedKeyword, limit: 20 }),
+    queryKey: ['org-units', 'field-options', props.fieldKey, props.asOf, props.orgCode ?? '', debouncedKeyword],
+    queryFn: () => getOrgUnitFieldOptions({ fieldKey: props.fieldKey, asOf: props.asOf, orgCode: props.orgCode, keyword: debouncedKeyword, limit: 20 }),
     staleTime: 30_000
   })
 
@@ -448,11 +457,11 @@ function OrgUnitExtFieldSelect(props: {
     <Autocomplete
       clearOnEscape
       disabled={effectiveDisabled}
-      getOptionLabel={(option) => option.label}
+      getOptionLabel={(option) => formatFieldOptionLabel(option)}
       isOptionEqualToValue={(option, value) => option.value === value.value}
       loading={optionsQuery.isFetching}
       onChange={(_, option) => {
-        props.onChange(option ? option.value : null, option ? option.label : null)
+        props.onChange(option ? option.value : null, option ? formatFieldOptionLabel(option) : null)
         // 选择后清空 keyword，避免把选中 label 当作下一次 options 查询关键词。
         setKeyword('')
       }}
@@ -1948,6 +1957,7 @@ export function OrgUnitDetailsPage() {
                         asOf={actionWriteEffectiveDate}
                         disabled={!editable}
                         fieldKey={fieldKey}
+                        orgCode={orgCodeValue}
                         label={label}
                         value={currentValue}
                         valueLabel={actionForm.extDisplayValues[fieldKey] ?? null}
