@@ -1,6 +1,6 @@
 # DEV-PLAN-200：组合优先的积木式页面与功能架构蓝图（Field Config × Dict × CRUD Pattern × Strategy）
 
-**状态**: 规划中（2026-02-28 14:10 UTC，已纳入 `allowed_value_codes × SetID × Dict`、跨层作用域一致性与“自建 Temporal 分阶段启用”收敛补丁）
+**状态**: 已完成（2026-02-28 21:20 UTC，DEV-PLAN-201~212 全部完成并合并）
 
 ## 1. 背景与问题定义
 
@@ -443,7 +443,7 @@
 
 ### Phase 6：质量评测与触发式平台化（进入预发/生产前）
 
-12. [ ] **DEV-PLAN-212（对应 M11/M11A/M10D1）**：planner/skill 回归评测门禁 + 审批分级策略收口；仅在“预发/生产窗口或容量阈值触发”时执行 Temporal 生产级平台化验收（HA/回放兼容/灾备演练）。
+12. [X] **DEV-PLAN-212（对应 M11/M11A/M10D1）**：planner/skill 回归评测门禁 + 审批分级策略收口；仅在“预发/生产窗口或容量阈值触发”时执行 Temporal 生产级平台化验收（HA/回放兼容/灾备演练）。证据：`docs/dev-records/dev-plan-200-m11-eval-gate-evidence.md`、`docs/dev-records/dev-plan-200-m11a-skill-eval-gate-evidence.md`、`docs/dev-records/dev-plan-200-m10d1-self-host-temporal-production-evidence.md`
 
 ## 11. 迁移与切换剧本（No Legacy）
 
