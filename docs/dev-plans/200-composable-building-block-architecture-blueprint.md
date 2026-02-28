@@ -1,6 +1,6 @@
 # DEV-PLAN-200：组合优先的积木式页面与功能架构蓝图（Field Config × Dict × CRUD Pattern × Strategy）
 
-**状态**: 规划中（2026-02-28 12:20 UTC，已纳入 `allowed_value_codes × SetID × Dict` 与“自建 Temporal 编排决策”收敛补丁）
+**状态**: 规划中（2026-02-28 14:10 UTC，已纳入 `allowed_value_codes × SetID × Dict`、跨层作用域一致性与“自建 Temporal 分阶段启用”收敛补丁）
 
 ## 1. 背景与问题定义
 
@@ -30,11 +30,24 @@
 
 新增并冻结 `SurfaceIntentCapabilityRegistry`（命名可在实现阶段按项目规范微调）：
 
-1. [ ] 注册键：`surface + intent + effective_date(+end_date)`。
+1. [ ] 注册键：`mapping_scope + surface + intent + effective_date(+end_date)`，其中 `mapping_scope ∈ {tenant:<tenant_id>, global}`。
 2. [ ] 注册值：`capability_key + mapping_version + status`。
-3. [ ] 约束：同一时段同一 `surface+intent` 只能命中一个激活映射；禁止默认回退 capability。
-4. [ ] 运行时：组合流水线必须先查注册表；缺失或多命中直接 fail-closed（`mapping_missing/mapping_ambiguous`）。
-5. [ ] 门禁：把 `surface/intent -> capability_key` 完整性纳入强制检查，阻断未注册路径上线。
+3. [ ] 约束：同一时段同一 `mapping_scope + surface+intent` 只能命中一个激活映射；禁止默认回退 capability。
+4. [ ] 作用域决议：当 `tenant` 与 `global` 同时存在时，仅允许按“`tenant > global`”单向覆盖；同层多命中仍 fail-closed。
+5. [ ] 运行时：组合流水线必须先查注册表；缺失或多命中直接 fail-closed（`mapping_missing/mapping_ambiguous`）。
+6. [ ] 门禁：把 `surface/intent -> capability_key` 完整性纳入强制检查，阻断未注册路径上线。
+
+### 2.2A 跨层作用域一致性冻结（Mapping × Dict × SetID）
+
+1. [ ] `mapping_scope=global` 仅表示 capability 映射可复用，不授予跨租户数据读取权限。
+2. [ ] 无论命中 `tenant` 还是 `global` 映射，L2/L4 读取边界都必须是 `tenant + resolved_setid + as_of`（tenant-only）。
+3. [ ] 命中 `global` 映射时，若租户侧 Dict 基线缺失或候选未命中，必须返回 `dict_baseline_not_ready` / `dict_value_not_found_as_of`，禁止回退到 global Dict。
+4. [ ] explain 必须回显 `mapping_scope + resolved_setid + setid_source + data_scope_decision`，用于排障与审计。
+5. [ ] 作用域矩阵冻结（门禁必测）：
+   - `tenant mapping + tenant dict`：允许；
+   - `global mapping + tenant dict`：允许；
+   - `tenant mapping + missing tenant dict`：拒绝；
+   - `global mapping + missing tenant dict`：拒绝。
 
 ### 2.3 AI 编排权限主体冻结（Actor-Delegated Authorization）
 
@@ -57,6 +70,7 @@
 6. [ ] 冻结策略冲突决议算法，确保同输入同输出（deterministic）。
 7. [ ] 增加“需求到系统配置实现（Req2Config）”的 AI 编排契约，限制 AI 只生成结构化计划，不直接写库。
 8. [ ] 建立对话式事务处理模型，确保多轮对话下提交仍保持 One Door、幂等、可回放、可取消与 fail-closed。
+9. [ ] 建立 Skill（SKILL.md）驱动的作业执行契约，固化工具权限、结构化 I/O、评测与版本治理。
 
 ### 3.2 非目标
 
@@ -75,6 +89,7 @@
 7. **No Tx, No RLS**：组合读写链路必须显式事务与租户注入，违者拒绝。
 8. **AI as Planner, Kernel as Judge**：AI 只负责提案与编排，最终合法性由规则引擎/内核校验并裁决。
 9. **Actor-Delegated Authorization**：AI 仅代操作者执行，权限完全等同操作者，不得额外提权。
+10. **Skill as Executable Contract**：高风险 AI 作业必须通过注册 Skill 执行，不接受未契约化的临时提示直提交流程。
 
 ## 5. 总体架构蓝图
 
@@ -130,6 +145,7 @@
 4. [ ] **租户边界冻结**：字典读取保持 tenant-only；缺基线/未命中必须 fail-closed（不允许 global fallback）。
 5. [ ] **一致性不变量**：`allowed_value_codes ⊆ L2 候选池`；若字段 `required=true` 且为 DICT，不允许最终可选集为空；`default_value` 非空时必须命中最终可选集。
 6. [ ] **可解释性冻结**：字段级决策必须可回显 `resolved_setid + setid_source + winner_policy_ids + resolution_trace`，便于排障与审计。
+7. [ ] **跨层作用域一致性冻结**：`mapping_scope` 不得改变 L2 tenant-only 边界；命中 `global mapping` 也必须从租户侧候选池裁剪，缺基线直接 fail-closed。
 
 ### 5.2 策略冲突决议算法（冻结）
 
@@ -154,7 +170,7 @@
 4. **SetID 决议（硬前置）**：执行 `ResolveSetID(...)` 得到 `resolved_setid`；失败直接 fail-closed（不得继续取数）。
 5. **读取 L1/L2/L4**：基于 `resolved_setid + as_of` 加载静态积木、tenant-only 候选池、命中策略（含版本）。
 6. **组合决议**：结构（visible）、交互（maintainable）、值（default/allowed）一次完成；`allowed_value_codes` 仅作最终裁剪结果输出。
-7. **版本快照计算**：生成 `composition_version`（由 L1/L2/L4/mapping 快照指纹计算）。
+7. **版本快照计算**：生成 `composition_version`（由 L1/L2/L4/mapping 快照指纹 + `resolved_setid/as_of/intent` 上下文计算）。
 8. **写入提交**：执行 L3 模板校验与 One Door 提交，强制校验 `policy_version + composition_version`。
 9. **输出 explain**：返回命中链路、拒绝原因、最终决策快照（含 `resolved_setid/setid_source`、版本与冲突证据）。
 
@@ -172,8 +188,9 @@
 10. [ ] **Human/Policy Confirm**：`high` 强制人工确认；`low/medium` 可按预授权策略确认；无确认令牌禁止提交。
 11. [ ] **Authz Gate (Casbin Enforce)**：按 `DEV-PLAN-022` 冻结口径计算并校验 `subject/domain/object/action`（经 `pkg/authz` registry/helper），执行 `Require(...)`；拒绝时统一 403 且 fail-closed。
 12. [ ] **User-Equivalent Command Materialize**：将已确认计划编译为“与 UI 提交同构”的标准写入命令（同 `intent/request_id/trace_id/policy_version/composition_version` 契约）。
-13. [ ] **Headless Execute**：不依赖页面点击，但必须走与 UI 完全一致的应用服务 -> L3 模板校验 -> One Door 提交流程；禁止 `ai_*` 专用写入路径与旁路提交。
-14. [ ] **Evidence Persist**：运行时审计固化 `input/output/explain/version/hash/risk_tier/actor_id`；`docs/dev-records/` 仅用于阶段性 Readiness 证据归档。
+13. [ ] **Pre-Commit Re-Auth Gate**：提交瞬间必须重新执行 `Actor Context Bind -> MapRouteToObjectAction -> authz.Require(enforce)`；若 `actor/tenant/role_set/authz_snapshot_version` 与当前态不一致或快照超时，返回 `ai_actor_auth_snapshot_expired/ai_actor_role_drift_detected` 并回退到 `validated`。
+14. [ ] **Headless Execute**：不依赖页面点击，但必须走与 UI 完全一致的应用服务 -> L3 模板校验 -> One Door 提交流程；禁止 `ai_*` 专用写入路径与旁路提交。
+15. [ ] **Evidence Persist**：运行时审计固化 `input/output/explain/version/hash/risk_tier/actor_id`；`docs/dev-records/` 仅用于阶段性 Readiness 证据归档。
 
 ### 6.2A 编排运行时可靠性契约（Durable Orchestration）
 
@@ -182,6 +199,7 @@
 3. [ ] **Checkpoint/Resume**：在 `proposed/validated/confirmed` 状态落盘检查点，进程重启后可恢复继续。
 4. [ ] **Background Execution**：超过交互时限的 dry-run/评测任务转后台执行，前台仅返回任务句柄与轮询接口。
 5. [ ] **Dead Letter & Manual Takeover**：重试耗尽或检查点损坏进入人工接管队列，禁止自动绕过提交。
+6. [ ] **Auth Freshness SLA**：`confirmed -> committed` 允许的最大授权快照时效（如 `max_auth_age_seconds`）必须配置化；超时一律重走提交前实时授权复核。
 
 ### 6.3 对话式事务状态机（Conversation Transaction）
 
@@ -198,12 +216,13 @@
 3. [ ] 同一 `conversation_id + turn_id + request_id` 重试必须幂等。
 4. [ ] 提交前若版本漂移（`policy_version/composition_version/mapping_version`）则回到 `validated` 并要求重确认。
 5. [ ] 跨 turn 合并时必须显式展示聚合 diff，禁止静默覆盖旧意图。
+6. [ ] 提交前若 `ActorAuthSnapshot` 过期或授权漂移（角色变更/权限回收）则回到 `validated` 并要求重确认。
 
 ### 6.4 AI 信任边界与安全约束
 
 1. [ ] **Least Privilege**：AI 服务无数据库写权限，仅可调用解析/规划/dry-run 接口。
 2. [ ] **Prompt Injection 防护**：用户文本不得直接拼接执行语句；必须结构化解析 + 白名单校验。
-3. [ ] **PII 最小化**：对话日志默认脱敏；审计保存哈希与结构化摘要。
+3. [ ] **PII 最小化**：对话日志默认脱敏；审计保存哈希与结构化摘要，并强制落地 `masking_profile + retention_days + purge_at` 生命周期治理。
 4. [ ] **Explain 必达**：每次计划与提交都返回 machine-readable explain。
 5. [ ] **Fail-Closed**：解析失败、约束不全、冲突未解、确认缺失均拒绝提交。
 6. [ ] **Tool Permission Matrix**：按 `capability_key + risk_tier` 绑定可调用工具白名单，禁止未注册工具与参数越权。
@@ -211,25 +230,46 @@
 8. [ ] **No AI Principal**：AI 不作为独立授权主体；所有敏感操作必须落在操作者权限上下文内执行。
 9. [ ] **No AI Write Bypass**：AI 不得拥有独立业务写接口；仅允许通过“用户等价命令”进入与 UI 同构的提交链路。
 10. [ ] **User-Equivalent Outcome**：同一 `actor + intent + input` 在 AI 与 UI 两入口必须得到一致的 allow/deny、错误码与版本冲突判定。
-11. [ ] **Unified Forbidden Contract**：授权拒绝统一走全局 403/responder；响应体不回显 `subject/domain/object/action`，但日志必须记录缺口诊断字段。
+11. [ ] **Commit-Time Re-Auth**：长对话/后台执行/恢复执行场景在提交瞬间必须重新授权校验，禁止“早校验、晚提交”绕过。
+12. [ ] **Unified Forbidden Contract**：授权拒绝统一走全局 403/responder；响应体不回显 `subject/domain/object/action`，但日志必须记录缺口诊断字段。
 
-### 6.5 编排引擎决策事项（自建 Temporal，Go SDK）
+### 6.5 编排引擎决策事项（自建 Temporal，Go SDK，分阶段启用）
 
 决策冻结：
 
-1. [ ] `Req2Config` 编排流水线（6.2 + 6.2A）采用 **自建 Temporal（Go SDK）** 作为工作流引擎。
+1. [ ] `Req2Config` 编排流水线（6.2 + 6.2A）采用 **自建 Temporal（Go SDK）**，但按“先最小化、后平台化”分阶段启用。
 2. [ ] 运行时组合流水线（6.1）**不迁移到 Temporal**，继续保持现有同步事务链路与 One Door 提交。
 3. [ ] Temporal 仅承载“编排与状态机”，不承载业务授权裁决；授权仍由 Casbin + RLS + One Door 内核裁决。
 4. [ ] Workflow 业务主键冻结：`conversation_id + turn_id + request_id`，用于幂等重试与恢复。
 5. [ ] 强制启用 Workflow 版本治理（变更标记/兼容窗口），禁止无版本策略直接发布导致非确定性回放失败。
+6. [ ] 与 `AGENTS.md`“早期阶段避免过度运维”对齐：生产级 HA/灾备/演练仅在“进入预发/生产”触发，不作为当前阶段阻塞前置。
 
-自建边界（最小可用）：
+阶段 A（M10D0，当前阶段最小可用）：
 
-1. [ ] 环境隔离：按环境独立 Namespace/集群边界，禁止测试流量进入生产 Namespace。
-2. [ ] 安全基线：启用 mTLS、最小化服务账户权限、审计日志保留与密钥轮换。
-3. [ ] 持久化基线：Temporal 元数据与历史库高可用部署，RPO/RTO 与平台基线对齐。
-4. [ ] 可观测基线：队列积压、任务失败率、Workflow 超时率、重试耗尽率纳入告警。
-5. [ ] 灾备演练：按季度执行恢复演练（含 checkpoint 恢复与 dead-letter 人工接管路径）。
+1. [ ] 环境隔离：至少做到 `dev/staging` 独立 Namespace；禁止测试流量误入生产 Namespace。
+2. [ ] 安全基线：启用 mTLS、最小化服务账户权限、审计日志保留。
+3. [ ] 可靠性基线：支持 checkpoint 恢复、幂等重试、dead-letter 人工接管。
+4. [ ] 观测基线：覆盖队列积压、任务失败率、Workflow 超时率、重试耗尽率。
+
+阶段 B（M10D1，进入预发/生产前触发）：
+
+1. [ ] 持久化高可用：Temporal 元数据与历史库 HA 部署，RPO/RTO 与平台基线对齐。
+2. [ ] 平台可用性：worker 滚动升级、history 回放兼容、任务队列容量压测通过。
+3. [ ] 灾备演练：按季度执行恢复演练（含 checkpoint 恢复与 dead-letter 人工接管路径）。
+4. [ ] 触发条件：仅当发布目标进入预发/生产窗口，或容量/可靠性指标触达阈值，才要求完成阶段 B。
+
+### 6.6 Skill 化作业编排（SKILL.md 契约）
+
+目标：将 AI 作业从“自由提示驱动”收敛为“Skill 契约驱动”，把流程、权限、输入输出与证据口径固化为可门禁的执行单元。
+
+1. [ ] **Skill 作为执行契约**：`SKILL.md` 定义“触发条件 + 执行步骤 + 失败路径 + 证据要求”，禁止高风险作业直接走临时 prompt。
+2. [ ] **渐进披露（Progressive Disclosure）**：`SKILL.md` 保持精简流程骨架；大体量知识放 `references/` 按需加载；可复用操作落地 `scripts/`，避免上下文膨胀。
+3. [ ] **严格结构化 I/O**：每个 Skill 必须声明 `input_schema/output_schema`；执行时启用 strict decode，输出不满足 schema 直接 fail-closed。
+4. [ ] **工具白名单与风险分级绑定**：Skill 执行只允许调用 `allowed_tools`；按 `risk_tier` 冻结“是否必须 dry-run / 人工确认 / 提交前 re-auth”。
+5. [ ] **确定性优先**：重复性与高风险步骤优先脚本化（`scripts/`）；禁止在 Skill 里反复生成一次性实现代码替代确定性脚本。
+6. [ ] **Skill 注册与版本治理**：引入 Skill Registry（`skill_name + skill_version + status`）；仅允许注册且激活的 Skill 进入编排，未注册或废弃版本直接拒绝。
+7. [ ] **用户等价执行一致性**：Skill 仅改变“组织作业方式”，不得改变“授权与提交语义”；必须保持与 UI/人工流程同构。
+8. [ ] **生命周期闭环**：`draft -> validated -> published -> deprecated`；发布前必须通过 schema 校验、样本回归、权限矩阵校验与证据归档。
 
 ## 7. 数据与接口契约
 
@@ -238,8 +278,8 @@
 3. [ ] 定义 `MappingSnapshot` DTO，显式包含 `mapping_version`。
 4. [ ] 定义 `ComposedFieldDecision` DTO，字段级输出必须带 `source_layer + resolved_setid + setid_source + winner_policy_ids`。
 5. [ ] 定义 `AllowedValueDecision` DTO：`candidate_pool_hash + priority_mode + local_override_mode + allowed_value_codes + filtered_out_codes`。
-6. [ ] 冻结 `composition_version` 计算：`hash(l1_snapshot_hash, l2_snapshot_hash, policy_version, mapping_version)`。
-7. [ ] 统一写入请求携带 `intent + policy_version + composition_version + resolved_setid`；缺失、过期、冲突均拒绝。
+6. [ ] 冻结 `composition_version` 计算：`hash(l1_snapshot_hash, l2_snapshot_hash, policy_version, mapping_version, resolved_setid, as_of, intent)`。
+7. [ ] 统一写入请求携带 `intent + as_of + policy_version + composition_version + resolved_setid`；缺失、过期、冲突均拒绝。
 8. [ ] 冻结“候选池 vs 最终可选”二段式语义，禁止 UI 合并为单语义。
 9. [ ] 冻结“主数据先 ResolveSetID 再取数”的接口契约；候选接口必须回显 `resolved_setid`（或每项 `setid`）。
 10. [ ] 定义 `RequirementIntentSpec`：`conversation_id + turn_id + tenant + surface + intent + constraints + expected_outcome`。
@@ -249,18 +289,28 @@
 14. [ ] 定义 `PlanRiskAssessment`：`risk_tier + impacted_surface_count + impacted_field_count + requires_human_confirm`。
 15. [ ] 定义 `OrchestrationCheckpoint`：`conversation_state + schema_version + resume_token + expires_at`。
 16. [ ] 定义 `AsyncTaskReceipt`：`task_id + task_type + submitted_at + status + poll_uri`（用于后台 dry-run/评测）。
-17. [ ] 定义 `ActorAuthSnapshot`：`actor_id + tenant_id + role_set + authz_snapshot_version + delegated_by_ai=true`。
+17. [ ] 定义 `ActorAuthSnapshot`：`actor_id + tenant_id + role_set + authz_snapshot_version + captured_at + max_auth_age_seconds + delegated_by_ai=true`。
+18. [ ] 定义 `CommitAuthProof`：`request_id + reauth_at + reauth_result + actor_auth_fingerprint_before/after`（用于提交瞬间授权一致性审计）。
+19. [ ] 定义 `EvidenceRetentionPolicy`：`masking_profile + retention_days + purge_at + legal_hold`（用于审计证据最小化与生命周期治理）。
+20. [ ] 定义 `SkillManifest`：`skill_name + skill_version + risk_tier + allowed_tools + input_schema_ref + output_schema_ref + required_checks + status`。
+21. [ ] 定义 `SkillExecutionPlan`：`request_id + selected_skills[] + execution_order + dry_run_required + approval_policy`。
+22. [ ] 定义 `SkillExecutionResult`：`skill_name + skill_version + input_hash + output_hash + output_schema_valid + evidence_refs + duration_ms`。
+23. [ ] 定义 `SkillValidationReport`：`schema_check + tool_whitelist_check + regression_score + authz_matrix_check + publish_decision`。
+24. [ ] 对 `OrchestrationCheckpoint` 增补 Skill 维度：`active_skill_name + active_skill_version + step_index`，保障恢复后执行路径可复算。
 
 ### 7.1 错误码冻结
 
+错误码命名统一为 **lower snake_case**（旧大写命名仅可兼容输入，不可作为新输出口径）。
+
 1. [ ] 组合/策略错误：`mapping_missing`、`mapping_ambiguous`、`policy_missing`、`policy_conflict_ambiguous`、`policy_version_conflict`、`composition_version_conflict`、`allowed_value_out_of_pool`、`allowed_value_required_empty_forbidden`、`default_value_not_in_allowed`。
-2. [ ] SetID/上下文错误：`SETID_BINDING_MISSING`、`SETID_NOT_FOUND`、`SETID_DISABLED`、`CAPABILITY_CONTEXT_MISMATCH`。
+2. [ ] SetID/上下文错误：`setid_binding_missing`、`setid_not_found`、`setid_disabled`、`capability_context_mismatch`。
 3. [ ] 字典边界错误：`dict_baseline_not_ready`（tenant-only 下缺基线）、`dict_not_found`、`dict_value_not_found_as_of`。
-4. [ ] 对话事务错误：`CONVERSATION_TURN_INCOMPLETE`、`CONVERSATION_STATE_INVALID`、`CONVERSATION_CONFIRMATION_REQUIRED`、`CONVERSATION_VERSION_DRIFT`。
-5. [ ] AI 边界错误：`AI_PLAN_SCHEMA_INVALID`、`AI_PLAN_SCHEMA_CONSTRAINED_DECODE_FAILED`、`AI_PLAN_BOUNDARY_VIOLATION`。
-6. [ ] 编排运行时错误：`ORCHESTRATION_TIMEOUT`、`ORCHESTRATION_RETRY_EXHAUSTED`、`ORCHESTRATION_CHECKPOINT_CORRUPTED`、`ORCHESTRATION_ASYNC_TASK_FAILED`。
-7. [ ] 委托授权错误：`AI_ACTOR_CONTEXT_MISSING`、`AI_ACTOR_AUTHZ_DENIED`、`AI_ACTOR_ROLE_DRIFT_DETECTED`。
-8. [ ] Temporal 引擎错误：`TEMPORAL_WORKFLOW_NON_DETERMINISTIC`、`TEMPORAL_TASK_QUEUE_BACKLOG_LIMIT`、`TEMPORAL_NAMESPACE_UNAVAILABLE`。
+4. [ ] 对话事务错误：`conversation_turn_incomplete`、`conversation_state_invalid`、`conversation_confirmation_required`、`conversation_version_drift`。
+5. [ ] AI 边界错误：`ai_plan_schema_invalid`、`ai_plan_schema_constrained_decode_failed`、`ai_plan_boundary_violation`。
+6. [ ] 编排运行时错误：`orchestration_timeout`、`orchestration_retry_exhausted`、`orchestration_checkpoint_corrupted`、`orchestration_async_task_failed`。
+7. [ ] 委托授权错误：`ai_actor_context_missing`、`ai_actor_authz_denied`、`ai_actor_role_drift_detected`、`ai_actor_auth_snapshot_expired`。
+8. [ ] Temporal 引擎错误：`temporal_workflow_non_deterministic`、`temporal_task_queue_backlog_limit`、`temporal_namespace_unavailable`。
+9. [ ] Skill 编排错误：`skill_not_registered`、`skill_version_deprecated`、`skill_input_schema_invalid`、`skill_output_schema_violation`、`skill_tool_not_allowed`、`skill_validation_failed`、`skill_reference_missing`。
 
 ## 8. 性能与缓存策略
 
@@ -302,22 +352,27 @@
 | 策略冲突决议 deterministic | 单元测试（冲突矩阵）+ 集成回放测试 | `docs/dev-records/dev-plan-200-m0-policy-resolution-evidence.md` |
 | SetID 前置决议（先解析再取数） | 集成测试：候选接口未先 `ResolveSetID` 直接失败；回显 `resolved_setid/setid_source` | `docs/dev-records/dev-plan-200-m2-setid-pre-resolve-evidence.md` |
 | `allowed_value_codes` 集合语义收敛 | 单元测试：`priority_mode + local_override_mode` 组合矩阵；`required/default` 一致性阻断 | `docs/dev-records/dev-plan-200-m0-allowed-value-semantics-evidence.md` |
+| Mapping × Dict × SetID 跨层作用域一致性 | 集成测试：`global mapping` 命中时仍 tenant-only 取数；缺租户基线必须 `dict_baseline_not_ready` | `docs/dev-records/dev-plan-200-m0-scope-consistency-evidence.md` |
 | 字典 tenant-only 边界 | 集成测试：缺基线 `dict_baseline_not_ready`；未命中不回退 global | `docs/dev-records/dev-plan-200-m2-dict-tenant-only-evidence.md` |
 | No Tx, No RLS（组合链路） | 集成测试：缺 tenant/缺 tx 必须 fail-closed | `docs/dev-records/dev-plan-200-m5-tx-rls-evidence.md` |
-| 跨层版本一致性（TOCTOU 阻断） | 写入冲突测试：`policy_version/composition_version` 过期拒绝 | `docs/dev-records/dev-plan-200-m5-version-consistency-evidence.md` |
+| 跨层版本一致性（TOCTOU 阻断） | 写入冲突测试：`policy_version/composition_version` 过期拒绝；`resolved_setid/as_of/intent` 维度变更必须触发冲突 | `docs/dev-records/dev-plan-200-m5-version-consistency-evidence.md` |
 | 禁止 legacy 回退 | `make check no-legacy` | `docs/dev-records/dev-plan-200-m6-cutover-evidence.md` |
 | 性能停止线 | 查询/事务计数回归 + 压测 | `docs/dev-records/dev-plan-200-m8-performance-evidence.md` |
 | AI 计划产物边界（不直写库） | `ConfigDeltaPlan` schema 校验 + 静态 lint（禁止 SQL/未注册 key） | `docs/dev-records/dev-plan-200-m9-ai-plan-boundary-evidence.md` |
 | AI 严格结构化输出（constrained decode） | 严格 schema 解码测试（非法字段/缺字段/类型错误必须拒绝） | `docs/dev-records/dev-plan-200-m9a-ai-constrained-decode-evidence.md` |
+| Skill 输入/输出契约严格校验 | `SkillManifest` schema 校验 + strict decode 回归（input/output） | `docs/dev-records/dev-plan-200-m9b-skill-schema-evidence.md` |
+| Skill 工具白名单与风险分级一致性 | 工具权限矩阵测试：未声明工具调用必须 `skill_tool_not_allowed`；`risk_tier` 对应 dry-run/确认策略正确 | `docs/dev-records/dev-plan-200-m9b-skill-tool-matrix-evidence.md` |
 | 编排可靠性（超时/重试/恢复） | 编排运行时测试：timeout、重试幂等、checkpoint 恢复 | `docs/dev-records/dev-plan-200-m10a-orchestration-durability-evidence.md` |
-| AI 授权主体一致性（代操作者执行） | 授权回归测试：AI 代系统配置管理员/HR/普通员工/经理执行，结果与人工直操一致 | `docs/dev-records/dev-plan-200-m10b-actor-delegated-authz-evidence.md` |
-| Casbin 工具链与执行顺序冻结 | `make authz-pack && make authz-test && make authz-lint` + 集成测试：`Actor Bind -> MapRouteToObjectAction -> Require -> One Door` 顺序不可旁路 | `docs/dev-records/dev-plan-200-m10b1-authz-toolchain-sequence-evidence.md` |
+| AI 授权主体一致性（代操作者执行） | 授权回归测试：AI 代系统配置管理员/HR/普通员工/经理执行，结果与人工直操一致；提交瞬间实时复核拦截过期/漂移快照 | `docs/dev-records/dev-plan-200-m10b-actor-delegated-authz-evidence.md` |
+| Casbin 工具链与执行顺序冻结 | `make authz-pack && make authz-test && make authz-lint` + 集成测试：`Actor Bind -> MapRouteToObjectAction -> Require -> Pre-Commit Re-Auth -> One Door` 顺序不可旁路 | `docs/dev-records/dev-plan-200-m10b1-authz-toolchain-sequence-evidence.md` |
 | AI/UI 等价执行一致性 | 同 actor、同 intent、同输入下，AI 编排与 UI 提交的 allow/deny、错误码、版本冲突结果必须一致 | `docs/dev-records/dev-plan-200-m10c-ai-ui-equivalent-execution-evidence.md` |
-| 自建 Temporal 平台可用性 | 演练测试：worker 滚动升级、history 回放、任务队列积压告警、死信人工接管与灾备恢复 | `docs/dev-records/dev-plan-200-m10d-self-host-temporal-evidence.md` |
+| 自建 Temporal 阶段 A 最小基线 | 运行时测试：checkpoint/retry/dead-letter/队列观测闭环 | `docs/dev-records/dev-plan-200-m10d0-self-host-temporal-minimal-evidence.md` |
+| 自建 Temporal 阶段 B 平台可用性（触发式） | 演练测试：worker 滚动升级、history 回放、任务队列积压告警、死信人工接管与灾备恢复 | `docs/dev-records/dev-plan-200-m10d1-self-host-temporal-production-evidence.md` |
 | 评测回归门禁（planner 质量） | 固定样本集评测 + 回归阈值（准确率/拒绝率/误放行率） | `docs/dev-records/dev-plan-200-m11-eval-gate-evidence.md` |
+| Skill 回归质量门禁 | 固定 Skill 样本集评测（成功率/拒绝准确率/人工接管率）+ 版本对比回归 | `docs/dev-records/dev-plan-200-m11a-skill-eval-gate-evidence.md` |
 | 对话式事务一致性 | 会话状态机测试 + 幂等/重放测试（同 `request_id` 仅一次提交） | `docs/dev-records/dev-plan-200-m10-conversation-transaction-evidence.md` |
 
-> 说明：若现有 CI 无对应检查项，由 M3/M5/M8/M9/M9A/M10/M10A/M10B/M10B1/M10C/M10D/M11 增补自动化门禁并接入 `make preflight`。
+> 说明：若现有 CI 无对应检查项，由 M3/M5/M8/M9/M9A/M9B/M10/M10A/M10B/M10B1/M10C/M10D0/M10D1/M11/M11A 增补自动化门禁并接入 `make preflight`。
 
 ### 9.2 验收标准
 
@@ -330,49 +385,72 @@
 7. [ ] tenant-only 边界成立：缺基线返回 `dict_baseline_not_ready`，且不回退 global。
 8. [ ] 当字段 `required=true` 且为 DICT 时，最终可选集不得为空；`default_value` 非空时必须命中最终可选集。
 9. [ ] `surface+intent` 到 `capability_key` 命中唯一映射；缺失/歧义均 fail-closed。
-10. [ ] 缺策略/缺上下文/版本冲突均 fail-closed，错误码稳定且可解释。
-11. [ ] 写入提交必须通过 `policy_version + composition_version` 双版本校验，阻断 TOCTOU。
-12. [ ] 质量门禁通过，且无 legacy 回退路径。
-13. [ ] 组合快照满足性能预算与停止线，无字段级 N+1 查询回流。
-14. [ ] AI 仅输出 `RequirementIntentSpec/ConfigDeltaPlan`，无直写数据库能力；越权产物被门禁拒绝。
-15. [ ] 对话式事务遵循状态机，未 `confirmed` 的计划不得提交；取消后不得隐式恢复。
-16. [ ] 同一 `conversation_id + turn_id + request_id` 重试幂等，提交结果可回放且审计可追溯。
-17. [ ] AI 计划生成阶段启用严格 schema 约束（`strict=true`），非法结构在进入 lint 前即被拒绝。
-18. [ ] 编排链路具备超时预算、检查点恢复与后台任务能力；重试耗尽进入人工接管，不得自动提交。
-19. [ ] 计划评测门禁通过（固定回归集），关键质量指标在阈值内且证据已归档。
-20. [ ] AI 编排权限与操作者完全一致：系统配置管理员、HR 专业用户、普通员工、经理四类角色均通过“AI 代操=人工直操”一致性验证。
-21. [ ] AI 与 UI 提交路径保持同构：不新增 `ai_*` 业务写语义；同输入下授权结果、错误码与版本冲突判定一致。
-22. [ ] 自建 Temporal 仅用于编排链路（6.2/6.2A），6.1 运行时组合链路不迁移；边界与回归证据齐备。
-23. [ ] 自建 Temporal 通过平台可用性验收：滚动升级、回放兼容、队列积压告警、死信接管、灾备恢复可演练。
-24. [ ] AI 编排授权执行顺序冻结并可验证：`Actor Context Bind -> MapRouteToObjectAction -> authz.Require(enforce) -> One Door`；任何旁路均被门禁阻断。
+10. [ ] `mapping_scope` 与 Dict tenant-only 边界一致：命中 `global mapping` 也不得读取 global Dict；缺租户基线必须 fail-closed。
+11. [ ] 缺策略/缺上下文/版本冲突均 fail-closed，错误码稳定且可解释。
+12. [ ] 写入提交必须通过 `policy_version + composition_version` 双版本校验，阻断 TOCTOU。
+13. [ ] `composition_version` 必须显式覆盖 `resolved_setid + as_of + intent` 维度，避免“配置未变但语境已变”漏检。
+14. [ ] 质量门禁通过，且无 legacy 回退路径。
+15. [ ] 组合快照满足性能预算与停止线，无字段级 N+1 查询回流。
+16. [ ] AI 仅输出 `RequirementIntentSpec/ConfigDeltaPlan`，无直写数据库能力；越权产物被门禁拒绝。
+17. [ ] 对话式事务遵循状态机，未 `confirmed` 的计划不得提交；取消后不得隐式恢复。
+18. [ ] 同一 `conversation_id + turn_id + request_id` 重试幂等，提交结果可回放且审计可追溯。
+19. [ ] AI 计划生成阶段启用严格 schema 约束（`strict=true`），非法结构在进入 lint 前即被拒绝。
+20. [ ] 编排链路具备超时预算、检查点恢复与后台任务能力；重试耗尽进入人工接管，不得自动提交。
+21. [ ] 计划评测门禁通过（固定回归集），关键质量指标在阈值内且证据已归档。
+22. [ ] AI 编排权限与操作者完全一致：系统配置管理员、HR 专业用户、普通员工、经理四类角色均通过“AI 代操=人工直操”一致性验证。
+23. [ ] `confirmed -> committed` 必须执行提交瞬时实时授权复核；快照过期或角色漂移一律回退 `validated` 并重确认。
+24. [ ] AI 与 UI 提交路径保持同构：不新增 `ai_*` 业务写语义；同输入下授权结果、错误码与版本冲突判定一致。
+25. [ ] 自建 Temporal 仅用于编排链路（6.2/6.2A），6.1 运行时组合链路不迁移；并先完成 M10D0 最小基线。
+26. [ ] 阶段 B（生产级平台化）仅在进入预发/生产窗口或容量阈值触发后验收通过；未触发前不作为当前阶段阻断项。
+27. [ ] AI 编排授权执行顺序冻结并可验证：`Actor Context Bind -> MapRouteToObjectAction -> authz.Require(enforce) -> Pre-Commit Re-Auth -> One Door`；任何旁路均被门禁阻断。
+28. [ ] 高风险 AI 作业必须由已注册 Skill 执行；未注册 Skill 或废弃版本不得进入提交链路。
+29. [ ] Skill 执行必须满足 strict `input_schema/output_schema`；任一 schema 违约均 fail-closed 且不进入提交。
+30. [ ] Skill 工具调用必须命中 `allowed_tools` 白名单，且与 `risk_tier` 的 dry-run/确认/re-auth 策略一致。
+31. [ ] Skill 发布前通过回归评测门禁（成功率/拒绝准确率/人工接管率），并完成证据归档。
 
-## 10. 实施里程碑（按依赖顺序）
+## 10. 实施里程碑（按阶段 + 子计划）
 
-1. [ ] **M0 契约冻结补丁**：冲突决议算法、`allowed_value_codes` 集合语义、跨层版本协议、映射注册表契约冻结。
-2. [ ] **M1 术语与边界冻结**：Surface/Intent 与四层 SoT 文档冻结。
-3. [ ] **M2 组合 DTO 落地**：新增组合快照/决策对象与只读接口（批量决议），补齐 `resolved_setid/setid_source` 回显。
-4. [ ] **M3 映射注册表接入**：运行时强制映射决议，阻断未注册 `surface+intent`。
-5. [ ] **M4 页面收敛**：字段配置页仅静态主写；策略页仅动态主写；字典页仅候选池主写。
-6. [ ] **M5 CRUD 模板收口**：统一提交流程并接入双版本校验，固化“先 ResolveSetID 再取数”执行门禁。
-7. [ ] **M6 切换演练与上线切换**：仅做单次切换，不保留 runtime legacy 回退路径。
-8. [ ] **M7 explain 与审计闭环**：补齐组合决议可解释证据。
-9. [ ] **M8 门禁与性能收口**：阻断双写回流、语义跨层污染与 N+1 回流。
-10. [ ] **M9 Req2Config 编排链路**：落地 `RequirementIntentSpec -> ConfigDeltaPlan -> DryRunResult` 只读闭环。
-11. [ ] **M9A 严格结构化输出**：落地 constrained decode（strict schema）与拒绝路径证据。
-12. [ ] **M10 对话式事务提交**：落地会话状态机（draft/proposed/validated/confirmed/committed），接入双版本校验与 One Door 提交。
-13. [ ] **M10A 编排可靠性**：落地 timeout/retry/checkpoint/background 运行时能力与人工接管。
-14. [ ] **M10B 委托授权收口**：落地 `ActorAuthSnapshot`、角色一致性回归与“AI 非独立主体”门禁。
-15. [ ] **M10B1 Casbin 工具链收口**：冻结 `Actor Bind -> MapRouteToObjectAction -> Require -> One Door` 执行顺序，并接入 `make authz-pack/authz-test/authz-lint`。
-16. [ ] **M10C AI/UI 同构收口**：落地“用户等价命令”入口与同 actor 一致性回归门禁。
-17. [ ] **M10D 自建 Temporal 平台化**：落地集群、Namespace 隔离、worker 版本治理、可观测与灾备演练。
-18. [ ] **M11 评测与审批分级门禁**：落地 planner 回归评测与 `risk_tier` 驱动确认策略。
+> 子计划编号从 **DEV-PLAN-201** 起排；每个子计划都必须在完成时回填对应 `docs/dev-records/dev-plan-200-*.md` 证据，并对齐第 9 节门禁。
+
+### Phase 0：契约冻结（优先阻断返工）
+
+1. [ ] **DEV-PLAN-201（对应 M0/M1）**：术语与边界冻结 + 跨层作用域一致性（`mapping_scope × Dict tenant-only × ResolveSetID`）矩阵冻结；输出冲突决议与错误码契约基线。
+2. [ ] **DEV-PLAN-202（对应 M0）**：策略冲突决议 deterministic 收口（分桶/特异度/优先级/歧义阻断）与 `allowed_value_codes` 集合语义矩阵测试。
+
+### Phase 1：运行时读路径闭环（先可解释、再可提交）
+
+3. [ ] **DEV-PLAN-203（对应 M2/M3）**：`SurfaceIntentCapabilityRegistry` 接入 + SetID 硬前置（先 `ResolveSetID` 再取候选） + `resolved_setid/setid_source` 回显。
+4. [ ] **DEV-PLAN-204（对应 M2/M7）**：组合 DTO/explain 落地（`PageCompositionSnapshot/IntentDecisionSnapshot/ComposedFieldDecision`）与版本快照协议对齐。
+5. [ ] **DEV-PLAN-205（对应 M4）**：页面职责收敛（字段配置静态主写、策略页动态主写、字典页候选池主写）并完成入口联动与来源标识。
+
+### Phase 2：运行时写路径与性能收口（One Door 单链路）
+
+6. [ ] **DEV-PLAN-206（对应 M5/M6）**：create/add/insert/correct 统一模板提交，接入 `policy_version + composition_version` 双版本校验，完成 No Legacy 单次切换剧本。
+7. [ ] **DEV-PLAN-207（对应 M8）**：性能与门禁收口（批量决议、防字段级 N+1、查询/事务预算、压测证据固化）。
+
+### Phase 3：AI 只读编排与 Skill 契约化（不进入写库）
+
+8. [ ] **DEV-PLAN-208（对应 M9/M9A）**：Req2Config 只读链路（`RequirementIntentSpec -> ConfigDeltaPlan -> DryRunResult`）+ strict schema constrained decode。
+9. [ ] **DEV-PLAN-209（对应 M9B）**：Skill 契约化接入（`SkillManifest/SkillExecutionPlan/SkillExecutionResult`）、工具白名单与 `risk_tier` 策略对齐。
+
+### Phase 4：AI 提交链路与授权同构（AI 代操 = 人工直操）
+
+10. [ ] **DEV-PLAN-210（对应 M10/M10A/M10B/M10B1/M10C）**：会话事务状态机 + timeout/retry/checkpoint/background + 提交瞬时 re-auth + Casbin 顺序冻结 + AI/UI 等价执行。
+
+### Phase 5：编排引擎最小化落地（避免过度运维）
+
+11. [ ] **DEV-PLAN-211（对应 M10D0）**：自建 Temporal 最小可用（Namespace 隔离、checkpoint/retry、dead-letter 人工接管、基础观测），不提前引入生产级平台化要求。
+
+### Phase 6：质量评测与触发式平台化（进入预发/生产前）
+
+12. [ ] **DEV-PLAN-212（对应 M11/M11A/M10D1）**：planner/skill 回归评测门禁 + 审批分级策略收口；仅在“预发/生产窗口或容量阈值触发”时执行 Temporal 生产级平台化验收（HA/回放兼容/灾备演练）。
 
 ## 11. 迁移与切换剧本（No Legacy）
 
 1. [ ] **R0 基线盘点**：盘点现有页面/接口路径，识别所有 `surface+intent` 与现行 capability 映射。
 2. [ ] **R1 只读对照（测试环境）**：新组合链路仅用于对照与证据，不作为线上回退路径。
-3. [ ] **R2 数据与契约补齐**：补齐映射注册表、冲突决议参数与版本字段，完成历史数据修复。
-4. [ ] **R3 预发验收**：按第 9 节门禁与验收标准完成全量验证。
+3. [ ] **R2 数据与契约补齐**：补齐映射注册表、冲突决议参数、版本字段与 Skill Registry/Manifest，完成历史数据修复。
+4. [ ] **R3 预发验收**：按第 9 节门禁与验收标准完成全量验证（含 Skill schema/权限矩阵/回归评测）。
 5. [ ] **R4 单次切换上线**：按发布窗口切换到组合链路，不保留运行时双链路。
 6. [ ] **R5 下线旧路径**：删除旧调用入口与兼容分支，并以门禁阻断回流。
 7. [ ] **失败处置**：仅允许环境级保护（只读/停写/修复后重试），不允许启用 legacy 兜底。
@@ -391,12 +469,29 @@
 10. **编排长尾故障导致挂起**：通过超时预算、checkpoint 恢复、后台任务与人工接管收口。
 11. **低质量计划回流生产**：通过固定评测集与回归阈值门禁，阻断质量退化版本发布。
 12. **AI 隐式提权或角色漂移**：通过 Actor 绑定、提交前实时授权复核与角色漂移检测 fail-closed。
-13. **同 code 跨 SetID 语义混淆**：通过字段级 `resolved_setid/setid_source` 可解释输出与集合语义门禁阻断误判。
-14. **自建 Temporal 运维复杂度上升**：通过边界限域（仅 6.2/6.2A）、SRE 基线、演练门禁与容量预算收口。
-15. **Workflow 代码演进导致非确定性回放失败**：通过 worker 版本治理、兼容发布与回放测试阻断。
+13. **授权校验过早导致窗口越权**：通过 `max_auth_age_seconds` + `confirmed -> committed` 提交瞬时 re-auth 强制收口。
+14. **版本签名漏上下文导致误放行**：将 `resolved_setid/as_of/intent` 纳入 `composition_version` 签名并纳入冲突测试。
+15. **同 code 跨 SetID 语义混淆**：通过字段级 `resolved_setid/setid_source` 可解释输出与集合语义门禁阻断误判。
+16. **自建 Temporal 运维复杂度上升**：通过边界限域（仅 6.2/6.2A）+ 分阶段启用（M10D0/M10D1）+ SRE 基线与演练门禁收口。
+17. **Workflow 代码演进导致非确定性回放失败**：通过 worker 版本治理、兼容发布与回放测试阻断。
+18. **Skill 文档膨胀导致上下文污染**：通过渐进披露（SKILL 骨架 + references 按需加载）与体积门禁阻断。
+19. **Skill 版本漂移导致执行结果不可复现**：通过 Skill Registry、版本冻结与回放证据（`skill_name + skill_version`）收口。
+20. **Skill 工具越权调用**：通过 `allowed_tools` 白名单、风险分级策略与 `skill_tool_not_allowed` 强阻断收口。
 
 ## 13. 关联文档
 
+- `docs/dev-plans/201-blueprint-phase0-boundary-and-scope-consistency-freeze.md`
+- `docs/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
+- `docs/dev-plans/203-blueprint-runtime-read-path-mapping-and-setid-preresolve.md`
+- `docs/dev-plans/204-blueprint-composition-dto-and-explain-versioning.md`
+- `docs/dev-plans/205-blueprint-page-responsibility-convergence-static-dynamic-sot.md`
+- `docs/dev-plans/206-blueprint-crud-template-and-double-version-submit-cutover.md`
+- `docs/dev-plans/207-blueprint-performance-gates-and-n-plus-one-prevention.md`
+- `docs/dev-plans/208-blueprint-req2config-readonly-and-strict-decode.md`
+- `docs/dev-plans/209-blueprint-skill-manifest-tool-whitelist-and-risk-tier.md`
+- `docs/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
+- `docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
+- `docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
 - `docs/dev-plans/165-field-configs-and-strategy-capability-key-alignment-and-page-positioning.md`
 - `docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
 - `docs/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`

@@ -324,6 +324,18 @@ modules/{module}/
 - DEV-PLAN-183/184/185 记录：字段级双枚举契约对齐日志：`docs/dev-records/dev-plan-183-184-185-contract-alignment-log.md`
 - DEV-PLAN-191：`/app/org/setid` 导航与页面设计优化方案（一级/二级菜单 + 独立滚动 + DEV-PLAN-002 对齐）：`docs/dev-plans/191-setid-governance-navigation-and-layout-optimization.md`
 - DEV-PLAN-200：组合优先的积木式页面与功能架构蓝图（Field Config × Dict × CRUD Pattern × Strategy）：`docs/dev-plans/200-composable-building-block-architecture-blueprint.md`
+- DEV-PLAN-201：200蓝图 Phase 0 边界冻结与跨层作用域一致性基线：`docs/dev-plans/201-blueprint-phase0-boundary-and-scope-consistency-freeze.md`
+- DEV-PLAN-202：200蓝图 Phase 0 策略决议确定性与 allowed_value_codes 语义收敛：`docs/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
+- DEV-PLAN-203：200蓝图 Phase 1 运行时读路径（映射注册表 + SetID 硬前置）：`docs/dev-plans/203-blueprint-runtime-read-path-mapping-and-setid-preresolve.md`
+- DEV-PLAN-204：200蓝图 Phase 1 组合 DTO、Explain 与版本快照协议：`docs/dev-plans/204-blueprint-composition-dto-and-explain-versioning.md`
+- DEV-PLAN-205：200蓝图 Phase 1 页面职责收敛（Static Metadata × Dynamic Policy）：`docs/dev-plans/205-blueprint-page-responsibility-convergence-static-dynamic-sot.md`
+- DEV-PLAN-206：200蓝图 Phase 2 CRUD 模板统一与双版本提交收口：`docs/dev-plans/206-blueprint-crud-template-and-double-version-submit-cutover.md`
+- DEV-PLAN-207：200蓝图 Phase 2 性能停止线与反 N+1 门禁收口：`docs/dev-plans/207-blueprint-performance-gates-and-n-plus-one-prevention.md`
+- DEV-PLAN-208：200蓝图 Phase 3 Req2Config 只读编排与严格结构化输出：`docs/dev-plans/208-blueprint-req2config-readonly-and-strict-decode.md`
+- DEV-PLAN-209：200蓝图 Phase 3 Skill 契约化与工具白名单治理：`docs/dev-plans/209-blueprint-skill-manifest-tool-whitelist-and-risk-tier.md`
+- DEV-PLAN-210：200蓝图 Phase 4 会话事务提交与委托授权同构收口：`docs/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
+- DEV-PLAN-211：200蓝图 Phase 5 自建 Temporal M10D0 最小化落地：`docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
+- DEV-PLAN-212：200蓝图 Phase 6 评测门禁与触发式 Temporal 平台化验收：`docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
