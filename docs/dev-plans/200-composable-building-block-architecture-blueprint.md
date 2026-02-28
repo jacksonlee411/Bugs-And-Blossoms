@@ -415,7 +415,7 @@
 ### Phase 0：契约冻结（优先阻断返工）
 
 1. [X] **DEV-PLAN-201（对应 M0/M1）**：术语与边界冻结 + 跨层作用域一致性（`mapping_scope × Dict tenant-only × ResolveSetID`）矩阵冻结；输出冲突决议与错误码契约基线。证据：`docs/dev-records/dev-plan-200-m0-scope-consistency-evidence.md`
-2. [ ] **DEV-PLAN-202（对应 M0）**：策略冲突决议 deterministic 收口（分桶/特异度/优先级/歧义阻断）与 `allowed_value_codes` 集合语义矩阵测试。
+2. [X] **DEV-PLAN-202（对应 M0）**：策略冲突决议 deterministic 收口（分桶/特异度/优先级/歧义阻断）与 `allowed_value_codes` 集合语义矩阵测试。证据：`docs/dev-records/dev-plan-200-m0-policy-resolution-evidence.md`、`docs/dev-records/dev-plan-200-m0-allowed-value-semantics-evidence.md`
 
 ### Phase 1：运行时读路径闭环（先可解释、再可提交）
 
