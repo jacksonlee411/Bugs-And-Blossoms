@@ -419,7 +419,7 @@
 
 ### Phase 1：运行时读路径闭环（先可解释、再可提交）
 
-3. [ ] **DEV-PLAN-203（对应 M2/M3）**：`SurfaceIntentCapabilityRegistry` 接入 + SetID 硬前置（先 `ResolveSetID` 再取候选） + `resolved_setid/setid_source` 回显。
+3. [X] **DEV-PLAN-203（对应 M2/M3）**：`SurfaceIntentCapabilityRegistry` 接入 + SetID 硬前置（先 `ResolveSetID` 再取候选） + `resolved_setid/setid_source` 回显。证据：`docs/dev-records/dev-plan-200-m2-setid-pre-resolve-evidence.md`、`docs/dev-records/dev-plan-200-m3-mapping-registry-evidence.md`
 4. [ ] **DEV-PLAN-204（对应 M2/M7）**：组合 DTO/explain 落地（`PageCompositionSnapshot/IntentDecisionSnapshot/ComposedFieldDecision`）与版本快照协议对齐。
 5. [ ] **DEV-PLAN-205（对应 M4）**：页面职责收敛（字段配置静态主写、策略页动态主写、字典页候选池主写）并完成入口联动与来源标识。
 
