@@ -435,7 +435,7 @@
 
 ### Phase 4：AI 提交链路与授权同构（AI 代操 = 人工直操）
 
-10. [ ] **DEV-PLAN-210（对应 M10/M10A/M10B/M10B1/M10C）**：会话事务状态机 + timeout/retry/checkpoint/background + 提交瞬时 re-auth + Casbin 顺序冻结 + AI/UI 等价执行。
+10. [X] **DEV-PLAN-210（对应 M10/M10A/M10B/M10B1/M10C）**：会话事务状态机 + timeout/retry/checkpoint/background + 提交瞬时 re-auth + Casbin 顺序冻结 + AI/UI 等价执行。证据：`docs/dev-records/dev-plan-200-m10-conversation-transaction-evidence.md`、`docs/dev-records/dev-plan-200-m10b-actor-delegated-authz-evidence.md`、`docs/dev-records/dev-plan-200-m10c-ai-ui-equivalent-execution-evidence.md`
 
 ### Phase 5：编排引擎最小化落地（避免过度运维）
 
