@@ -112,6 +112,13 @@
 - 新增功能必须**可发现、可操作**：应在 UI 页面上可见（导航入口/按钮/表单/列表/详情等）并可完成至少一条端到端操作；否则视为“未交付”。
 - 若某能力短期必须是“后端先行”（API/内核/工具链）：必须同时提供明确的用户入口规划与验收方式（例如对应页面占位、路由入口、或被现有页面实际调用），避免长期积累隐形/重复/无人使用的功能分支。
 
+### 3.9 缓存默认方案与外部依赖准入
+
+- 缓存默认工具链冻结为 **Go 原生 + pgx + PostgreSQL**（优先 request-scope 复用与进程内短 TTL，回源 PostgreSQL）。
+- 原则：先使用“原生与扩展”，避免过早引入外部缓存基础设施或第三方缓存库。
+- 仅当存在明确必要（性能预算/停止线无法满足，且已有压测与回归证据）时，才允许申请启用 `Redis` / `Ristretto` / `BigCache` 等外部缓存方案。
+- 启用外部缓存前必须完成：用户审批 + 契约文档更新（`docs/dev-plans/`）+ 失效/一致性与回退策略评审。
+
 ## 4. 架构与目录约束（DDD + CleanArchGuard）
 
 每个模块遵循 DDD 分层，依赖约束由仓库内的架构约束配置定义。
@@ -316,6 +323,19 @@ modules/{module}/
 - DEV-PLAN-185：字段配置页字典值列表 SetID 列展示与主数据取数控制策略收敛：`docs/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
 - DEV-PLAN-183/184/185 记录：字段级双枚举契约对齐日志：`docs/dev-records/dev-plan-183-184-185-contract-alignment-log.md`
 - DEV-PLAN-191：`/app/org/setid` 导航与页面设计优化方案（一级/二级菜单 + 独立滚动 + DEV-PLAN-002 对齐）：`docs/dev-plans/191-setid-governance-navigation-and-layout-optimization.md`
+- DEV-PLAN-200：组合优先的积木式页面与功能架构蓝图（Field Config × Dict × CRUD Pattern × Strategy）：`docs/dev-plans/200-composable-building-block-architecture-blueprint.md`
+- DEV-PLAN-201：200蓝图 Phase 0 边界冻结与跨层作用域一致性基线：`docs/dev-plans/201-blueprint-phase0-boundary-and-scope-consistency-freeze.md`
+- DEV-PLAN-202：200蓝图 Phase 0 策略决议确定性与 allowed_value_codes 语义收敛：`docs/dev-plans/202-blueprint-policy-resolution-and-allowed-values-determinism.md`
+- DEV-PLAN-203：200蓝图 Phase 1 运行时读路径（映射注册表 + SetID 硬前置）：`docs/dev-plans/203-blueprint-runtime-read-path-mapping-and-setid-preresolve.md`
+- DEV-PLAN-204：200蓝图 Phase 1 组合 DTO、Explain 与版本快照协议：`docs/dev-plans/204-blueprint-composition-dto-and-explain-versioning.md`
+- DEV-PLAN-205：200蓝图 Phase 1 页面职责收敛（Static Metadata × Dynamic Policy）：`docs/dev-plans/205-blueprint-page-responsibility-convergence-static-dynamic-sot.md`
+- DEV-PLAN-206：200蓝图 Phase 2 CRUD 模板统一与双版本提交收口：`docs/dev-plans/206-blueprint-crud-template-and-double-version-submit-cutover.md`
+- DEV-PLAN-207：200蓝图 Phase 2 性能停止线与反 N+1 门禁收口：`docs/dev-plans/207-blueprint-performance-gates-and-n-plus-one-prevention.md`
+- DEV-PLAN-208：200蓝图 Phase 3 Req2Config 只读编排与严格结构化输出：`docs/dev-plans/208-blueprint-req2config-readonly-and-strict-decode.md`
+- DEV-PLAN-209：200蓝图 Phase 3 Skill 契约化与工具白名单治理：`docs/dev-plans/209-blueprint-skill-manifest-tool-whitelist-and-risk-tier.md`
+- DEV-PLAN-210：200蓝图 Phase 4 会话事务提交与委托授权同构收口：`docs/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
+- DEV-PLAN-211：200蓝图 Phase 5 自建 Temporal M10D0 最小化落地：`docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
+- DEV-PLAN-212：200蓝图 Phase 6 评测门禁与触发式 Temporal 平台化验收：`docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
