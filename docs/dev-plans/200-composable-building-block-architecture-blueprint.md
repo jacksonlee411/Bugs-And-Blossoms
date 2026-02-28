@@ -439,7 +439,7 @@
 
 ### Phase 5：编排引擎最小化落地（避免过度运维）
 
-11. [ ] **DEV-PLAN-211（对应 M10D0）**：自建 Temporal 最小可用（Namespace 隔离、checkpoint/retry、dead-letter 人工接管、基础观测），不提前引入生产级平台化要求。
+11. [X] **DEV-PLAN-211（对应 M10D0）**：自建 Temporal 最小可用（Namespace 隔离、checkpoint/retry、dead-letter 人工接管、基础观测），不提前引入生产级平台化要求。证据：`docs/dev-records/dev-plan-200-m10d0-self-host-temporal-minimal-evidence.md`
 
 ### Phase 6：质量评测与触发式平台化（进入预发/生产前）
 
