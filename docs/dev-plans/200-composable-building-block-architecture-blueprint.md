@@ -430,7 +430,7 @@
 
 ### Phase 3：AI 只读编排与 Skill 契约化（不进入写库）
 
-8. [ ] **DEV-PLAN-208（对应 M9/M9A）**：Req2Config 只读链路（`RequirementIntentSpec -> ConfigDeltaPlan -> DryRunResult`）+ strict schema constrained decode。
+8. [X] **DEV-PLAN-208（对应 M9/M9A）**：Req2Config 只读链路（`RequirementIntentSpec -> ConfigDeltaPlan -> DryRunResult`）+ strict schema constrained decode。证据：`docs/dev-records/dev-plan-200-m9-ai-plan-boundary-evidence.md`、`docs/dev-records/dev-plan-200-m9a-ai-constrained-decode-evidence.md`
 9. [ ] **DEV-PLAN-209（对应 M9B）**：Skill 契约化接入（`SkillManifest/SkillExecutionPlan/SkillExecutionResult`）、工具白名单与 `risk_tier` 策略对齐。
 
 ### Phase 4：AI 提交链路与授权同构（AI 代操 = 人工直操）
