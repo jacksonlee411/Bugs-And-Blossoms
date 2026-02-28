@@ -425,7 +425,7 @@
 
 ### Phase 2：运行时写路径与性能收口（One Door 单链路）
 
-6. [ ] **DEV-PLAN-206（对应 M5/M6）**：create/add/insert/correct 统一模板提交，接入 `policy_version + composition_version` 双版本校验，完成 No Legacy 单次切换剧本。
+6. [X] **DEV-PLAN-206（对应 M5/M6）**：create/add/insert/correct 统一模板提交，接入 `policy_version + composition_version` 双版本校验，完成 No Legacy 单次切换剧本。证据：`docs/dev-records/dev-plan-200-m5-version-consistency-evidence.md`、`docs/dev-records/dev-plan-200-m6-cutover-evidence.md`
 7. [ ] **DEV-PLAN-207（对应 M8）**：性能与门禁收口（批量决议、防字段级 N+1、查询/事务预算、压测证据固化）。
 
 ### Phase 3：AI 只读编排与 Skill 契约化（不进入写库）
