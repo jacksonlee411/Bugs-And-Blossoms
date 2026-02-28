@@ -1,6 +1,6 @@
 # DEV-PLAN-011：技术栈与工具链版本冻结（Stack & Tooling Decisions）
 
-**状态**: 草拟中（2026-01-05 09:20 UTC）
+**状态**: 草拟中（2026-02-28 01:11 UTC）
 
 > 本文是 Greenfield（全新实施，实施路线图见 `DEV-PLAN-009`）的“技术栈 + 工具链”决策与版本基线文档：**明确我们用什么、用哪个版本、以什么为事实源（SSOT）**，避免本地/CI/部署版本漂移导致不可复现。
 
@@ -43,7 +43,7 @@
 | --- | --- | --- |
 | Go | `1.26.0` | `go.mod` + `.github/workflows/quality-gates.yml` |
 | PostgreSQL | `17`（`postgres:17`） | `compose.dev.yml`/`compose.yml`/CI service |
-| Redis | `latest`（`redis:latest`，浮动） | `compose.dev.yml`/CI service |
+| Redis | `latest`（`redis:latest`，浮动） | `compose.dev.yml`/CI service（非默认缓存路径；仅在明确必要且审批通过后启用） |
 | Docker 基底（构建） | 暂未落地（仓库暂无 `Dockerfile`） | 待补齐容器化交付后冻结 |
 | Docker 基底（运行） | `alpine:3.21` | `Dockerfile`/`Dockerfile.superadmin` |
 
@@ -137,6 +137,15 @@
 - RLS 注入：事务内设置 `app.current_tenant`（`pkg/composables/rls.go`），policy 用 `current_setting('app.current_tenant')::uuid`（fail-closed），对齐 `DEV-PLAN-021`。
 - 运行态开关：凡访问 Greenfield 表，`RLS_ENFORCE` 必须为 `enforce`（否则视为配置错误），对齐 `.env.example` 与 `DEV-PLAN-021`。
 - DB 账号：应用侧 `DB_USER` 必须为非 superuser，且不可带 `BYPASSRLS`（建议显式 `NOBYPASSRLS`）；superadmin 若需旁路能力，使用独立 role/连接池（见 `DEV-PLAN-019` 的边界）。
+
+### 4.4 缓存工具链默认方案（冻结）
+
+- 默认缓存工具链：**Go 原生 + pgx + PostgreSQL**。
+- 默认优先级：request-scope 复用（单请求内） > 进程内短 TTL（应用内） > PostgreSQL 回源（`pgx`）。
+- 原则：优先“原生与扩展”，先做批量化、请求内复用和查询路径收敛，再考虑外部缓存依赖。
+- `Redis` / `Ristretto` / `BigCache` 等外部缓存方案不作为默认依赖。
+- 仅当出现明确必要（性能预算/停止线无法满足，且压测与回归证据完备）时，才可申请启用外部缓存。
+- 启用外部缓存前置条件：用户审批 + 更新 `docs/dev-plans/` 契约文档 + 一致性/失效/回退策略评审通过。
 
 ## 5. 开发环境指引（本地）
 
