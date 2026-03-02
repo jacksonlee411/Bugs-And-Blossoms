@@ -92,6 +92,15 @@ var capabilityDefinitions = []capabilityDefinition{
 		ActivationState:   "active",
 		CurrentPolicy:     capabilityPolicyVersionBaseline,
 	},
+	{
+		CapabilityKey:     "org.assistant_conversation.manage",
+		FunctionalAreaKey: "org_foundation",
+		CapabilityType:    "process_capability",
+		OwnerModule:       "orgunit",
+		Status:            routeCapabilityStatusActive,
+		ActivationState:   "active",
+		CurrentPolicy:     capabilityPolicyVersionBaseline,
+	},
 }
 
 var capabilityDefinitionByKey = buildCapabilityDefinitionIndex(capabilityDefinitions)
@@ -223,6 +232,42 @@ var capabilityRouteBindings = []capabilityRouteBinding{
 		OwnerModule:   "orgunit",
 		Status:        routeCapabilityStatusActive,
 	},
+	{
+		Method:        "POST",
+		Path:          "/internal/assistant/conversations",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionAdmin,
+		CapabilityKey: "org.assistant_conversation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "GET",
+		Path:          "/internal/assistant/conversations/{conversation_id}",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionRead,
+		CapabilityKey: "org.assistant_conversation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "POST",
+		Path:          "/internal/assistant/conversations/{conversation_id}/turns",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionAdmin,
+		CapabilityKey: "org.assistant_conversation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
+	{
+		Method:        "POST",
+		Path:          "/internal/assistant/conversations/{conversation_id}/turns/{turn_action}",
+		RouteClass:    "internal_api",
+		Action:        authz.ActionAdmin,
+		CapabilityKey: "org.assistant_conversation.manage",
+		OwnerModule:   "orgunit",
+		Status:        routeCapabilityStatusActive,
+	},
 }
 
 var capabilityRouteBindingByKey = buildCapabilityRouteBindingIndex(capabilityRouteBindings)
@@ -255,7 +300,19 @@ func capabilityRouteBindingKey(method string, path string) string {
 
 func capabilityRouteBindingForRoute(method string, path string) (capabilityRouteBinding, bool) {
 	binding, ok := capabilityRouteBindingByKey[capabilityRouteBindingKey(method, path)]
-	return binding, ok
+	if ok {
+		return binding, true
+	}
+	normalizedMethod := strings.ToUpper(strings.TrimSpace(method))
+	for _, candidate := range capabilityRouteBindings {
+		if strings.ToUpper(strings.TrimSpace(candidate.Method)) != normalizedMethod {
+			continue
+		}
+		if pathMatchRouteTemplate(path, candidate.Path) {
+			return candidate, true
+		}
+	}
+	return capabilityRouteBinding{}, false
 }
 
 func capabilityAuthzRequirementForRoute(method string, path string) (object string, action string, ok bool) {

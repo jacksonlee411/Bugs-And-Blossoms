@@ -63,6 +63,15 @@
       "status": "active",
       "activation_state": "active",
       "current_policy_version": "2026-02-23"
+    },
+    {
+      "capability_key": "org.assistant_conversation.manage",
+      "functional_area_key": "org_foundation",
+      "capability_type": "process_capability",
+      "owner_module": "orgunit",
+      "status": "active",
+      "activation_state": "active",
+      "current_policy_version": "2026-02-23"
     }
   ],
   "routes": [
@@ -180,6 +189,42 @@
       "route_class": "internal_api",
       "action": "admin",
       "capability_key": "org.policy_activation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/assistant/conversations/{conversation_id}",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations/{conversation_id}/turns",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/assistant/conversations/{conversation_id}/turns/{turn_action}",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
       "owner_module": "orgunit",
       "status": "active"
     },

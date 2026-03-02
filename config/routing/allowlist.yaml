@@ -17,6 +17,15 @@ entrypoints:
       - path: /app/dicts/{dict_code}/values/{code}
         methods: [GET]
         route_class: ui
+      - path: /app/assistant
+        methods: [GET]
+        route_class: ui
+      - path: /assistant-ui
+        methods: [GET]
+        route_class: ui
+      - path: /assistant-ui/{path}
+        methods: [GET]
+        route_class: ui
       - path: /app/login
         methods: [GET]
         route_class: ui
@@ -129,6 +138,18 @@ entrypoints:
         methods: [GET]
         route_class: internal_api
       - path: /internal/functional-areas/switch
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/assistant/conversations
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/assistant/conversations/{conversation_id}
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/assistant/conversations/{conversation_id}/turns
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/assistant/conversations/{conversation_id}/turns/{turn_action}
         methods: [POST]
         route_class: internal_api
       - path: /org/api/org-units

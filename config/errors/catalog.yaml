@@ -294,11 +294,95 @@ errors:
     user_message_key: errors.audit_error
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: ai_actor_auth_snapshot_expired
+    module: assistant
+    http_status: 403
+    severity: error
+    user_message_key: errors.ai_actor_auth_snapshot_expired
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ai_actor_role_drift_detected
+    module: assistant
+    http_status: 403
+    severity: error
+    user_message_key: errors.ai_actor_role_drift_detected
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_candidate_not_found
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.assistant_candidate_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_commit_failed
+    module: assistant
+    http_status: 500
+    severity: error
+    user_message_key: errors.assistant_commit_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_conversation_load_failed
+    module: assistant
+    http_status: 500
+    severity: error
+    user_message_key: errors.assistant_conversation_load_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_intent_unsupported
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.assistant_intent_unsupported
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_service_missing
+    module: assistant
+    http_status: 500
+    severity: error
+    user_message_key: errors.assistant_service_missing
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_turn_confirm_failed
+    module: assistant
+    http_status: 500
+    severity: error
+    user_message_key: errors.assistant_turn_confirm_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_turn_create_failed
+    module: assistant
+    http_status: 500
+    severity: error
+    user_message_key: errors.assistant_turn_create_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
   - code: authz_error
     module: iam
     http_status: 500
     severity: error
     user_message_key: errors.authz_error
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: conversation_confirmation_required
+    module: assistant
+    http_status: 409
+    severity: error
+    user_message_key: errors.conversation_confirmation_required
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: conversation_not_found
+    module: assistant
+    http_status: 404
+    severity: error
+    user_message_key: errors.conversation_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: conversation_turn_not_found
+    module: assistant
+    http_status: 404
+    severity: error
+    user_message_key: errors.conversation_turn_not_found
     backend_policy: passthrough
     frontend_policy: mapped
   - code: bad_json

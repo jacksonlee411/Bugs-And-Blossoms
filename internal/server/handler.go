@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
+	orgunitports "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/ports"
 	orgunitpersistence "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/infrastructure/persistence"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/pkg/authz"
@@ -83,7 +84,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}
 
 	if orgUnitWriteService == nil {
-		if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
+		if writeStore, ok := orgStore.(orgunitports.OrgUnitWriteStore); ok {
+			orgUnitWriteService = orgunitservices.NewOrgUnitWriteService(writeStore)
+		} else if pgStore, ok := orgStore.(*orgUnitPGStore); ok {
 			orgUnitWriteService = orgunitservices.NewOrgUnitWriteService(orgunitpersistence.NewOrgUnitPGStore(pgStore.pool))
 		}
 	}
@@ -147,6 +150,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	if err := dictpkg.RegisterResolver(dictStore); err != nil {
 		return nil, err
 	}
+	assistantSvc := newAssistantConversationService(orgStore, orgUnitWriteService)
 
 	router := routing.NewRouter(classifier)
 
@@ -462,6 +466,18 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/jobcatalog/api/catalog/actions", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleJobCatalogWriteAPI(w, r, setidStore, jobcatalogStore)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantConversationsAPI(w, r, assistantSvc)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantConversationDetailAPI(w, r, assistantSvc)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantConversationTurnsAPI(w, r, assistantSvc)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns/{turn_action}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantTurnActionAPI(w, r, assistantSvc)
+	}))
 
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
 
@@ -472,6 +488,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	entrypoint.Handle("/app/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serveWebMUIIndex(w, r, embeddedAssets)
 	}))
+	assistantUIProxy := newAssistantUIProxyHandler()
+	entrypoint.Handle("/assistant-ui", assistantUIProxy)
+	entrypoint.Handle("/assistant-ui/", assistantUIProxy)
 	entrypoint.Handle("/", router)
 
 	guarded := withTenantAndSession(classifier, tenancyResolver, principals, sessions, withAuthz(classifier, authorizer, entrypoint))
