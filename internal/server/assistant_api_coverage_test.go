@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	orgunittypes "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/domain/types"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
@@ -68,6 +69,52 @@ type assistantWriteServiceErrorStub struct{}
 
 func (assistantWriteServiceErrorStub) Write(context.Context, string, orgunitservices.WriteOrgUnitRequest) (orgunitservices.OrgUnitWriteResult, error) {
 	return orgunitservices.OrgUnitWriteResult{}, errors.New("write failed")
+}
+
+type assistantWriteServiceFieldPolicyMissingStub struct{}
+
+func (assistantWriteServiceFieldPolicyMissingStub) Write(context.Context, string, orgunitservices.WriteOrgUnitRequest) (orgunitservices.OrgUnitWriteResult, error) {
+	return orgunitservices.OrgUnitWriteResult{}, errors.New(orgUnitErrFieldPolicyMissing)
+}
+
+func (assistantWriteServiceFieldPolicyMissingStub) Create(context.Context, string, orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+	return orgunittypes.OrgUnitResult{}, errors.New("not implemented")
+}
+
+func (assistantWriteServiceFieldPolicyMissingStub) Rename(context.Context, string, orgunitservices.RenameOrgUnitRequest) error {
+	return errors.New("not implemented")
+}
+
+func (assistantWriteServiceFieldPolicyMissingStub) Move(context.Context, string, orgunitservices.MoveOrgUnitRequest) error {
+	return errors.New("not implemented")
+}
+
+func (assistantWriteServiceFieldPolicyMissingStub) Disable(context.Context, string, orgunitservices.DisableOrgUnitRequest) error {
+	return errors.New("not implemented")
+}
+
+func (assistantWriteServiceFieldPolicyMissingStub) Enable(context.Context, string, orgunitservices.EnableOrgUnitRequest) error {
+	return errors.New("not implemented")
+}
+
+func (assistantWriteServiceFieldPolicyMissingStub) SetBusinessUnit(context.Context, string, orgunitservices.SetBusinessUnitRequest) error {
+	return errors.New("not implemented")
+}
+
+func (assistantWriteServiceFieldPolicyMissingStub) Correct(context.Context, string, orgunitservices.CorrectOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+	return orgunittypes.OrgUnitResult{}, errors.New("not implemented")
+}
+
+func (assistantWriteServiceFieldPolicyMissingStub) CorrectStatus(context.Context, string, orgunitservices.CorrectStatusOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+	return orgunittypes.OrgUnitResult{}, errors.New("not implemented")
+}
+
+func (assistantWriteServiceFieldPolicyMissingStub) RescindRecord(context.Context, string, orgunitservices.RescindRecordOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+	return orgunittypes.OrgUnitResult{}, errors.New("not implemented")
+}
+
+func (assistantWriteServiceFieldPolicyMissingStub) RescindOrg(context.Context, string, orgunitservices.RescindOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
+	return orgunittypes.OrgUnitResult{}, errors.New("not implemented")
 }
 
 func (assistantWriteServiceErrorStub) Create(context.Context, string, orgunitservices.CreateOrgUnitRequest) (orgunittypes.OrgUnitResult, error) {
@@ -564,6 +611,26 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 
+		fieldPolicyErrSvc := newAssistantConversationService(store, assistantWriteServiceFieldPolicyMissingStub{})
+		fieldPolicyErrConv := fieldPolicyErrSvc.createConversation(tenantID, principal)
+		fieldPolicyErrTurn := &assistantTurn{
+			TurnID:              "turn-field-policy-missing",
+			State:               assistantStateConfirmed,
+			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
+			ResolvedCandidateID: "FLOWER-A",
+			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
+			RequestID:           "assistant_req_field_policy_missing",
+			PolicyVersion:       capabilityPolicyVersionBaseline,
+		}
+		fieldPolicyErrSvc.mu.Lock()
+		fieldPolicyErrSvc.byID[fieldPolicyErrConv.ConversationID].Turns = append(fieldPolicyErrSvc.byID[fieldPolicyErrConv.ConversationID].Turns, fieldPolicyErrTurn)
+		fieldPolicyErrSvc.mu.Unlock()
+		rec = httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+fieldPolicyErrConv.ConversationID+"/turns/turn-field-policy-missing:commit", `{}`, true, true), fieldPolicyErrSvc)
+		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != orgUnitErrFieldPolicyMissing {
+			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
+
 		rec = httptest.NewRecorder()
 		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, baseCommitPath, `{}`, true, true), svc)
 		if rec.Code != http.StatusOK {
@@ -976,6 +1043,70 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		}
 		if segs := assistantSplitPathSegments(" "); segs != nil {
 			t.Fatalf("segments should be nil, got=%v", segs)
+		}
+	})
+}
+
+func TestAssistantResolveCommitError_CoverageMatrix(t *testing.T) {
+	t.Run("known stable db code uses mapped message", func(t *testing.T) {
+		status, code, message, ok := assistantResolveCommitError(errors.New(orgUnitErrFieldPolicyMissing))
+		if !ok {
+			t.Fatal("expected resolver hit")
+		}
+		if status != http.StatusUnprocessableEntity {
+			t.Fatalf("status=%d", status)
+		}
+		if code != orgUnitErrFieldPolicyMissing {
+			t.Fatalf("code=%q", code)
+		}
+		if message == code {
+			t.Fatalf("expected mapped message, got=%q", message)
+		}
+	})
+
+	t.Run("unknown but stable code returns 422", func(t *testing.T) {
+		status, code, message, ok := assistantResolveCommitError(errors.New("SOME_STABLE_CODE"))
+		if !ok {
+			t.Fatal("expected resolver hit")
+		}
+		if status != http.StatusUnprocessableEntity || code != "SOME_STABLE_CODE" || message != "SOME_STABLE_CODE" {
+			t.Fatalf("status=%d code=%q message=%q", status, code, message)
+		}
+	})
+
+	t.Run("bad request error maps to invalid_request", func(t *testing.T) {
+		err := newBadRequestError("invalid input from ui")
+		status, code, message, ok := assistantResolveCommitError(err)
+		if !ok {
+			t.Fatal("expected resolver hit")
+		}
+		if status != http.StatusBadRequest || code != "invalid_request" || message != err.Error() {
+			t.Fatalf("status=%d code=%q message=%q", status, code, message)
+		}
+	})
+
+	t.Run("pg invalid input maps to invalid_request", func(t *testing.T) {
+		err := &pgconn.PgError{Code: "22P02", Message: "invalid_text_representation"}
+		status, code, message, ok := assistantResolveCommitError(err)
+		if !ok {
+			t.Fatal("expected resolver hit")
+		}
+		if status != http.StatusBadRequest || code != "invalid_request" || message != err.Error() {
+			t.Fatalf("status=%d code=%q message=%q", status, code, message)
+		}
+	})
+
+	t.Run("unknown and unstable error falls through", func(t *testing.T) {
+		status, code, message, ok := assistantResolveCommitError(errors.New("write failed"))
+		if ok {
+			t.Fatalf("unexpected resolver hit status=%d code=%q message=%q", status, code, message)
+		}
+	})
+
+	t.Run("blank error message falls through", func(t *testing.T) {
+		status, code, message, ok := assistantResolveCommitError(errors.New("   "))
+		if ok {
+			t.Fatalf("unexpected resolver hit status=%d code=%q message=%q", status, code, message)
 		}
 	})
 }

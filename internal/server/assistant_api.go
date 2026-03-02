@@ -347,6 +347,10 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 			case errors.Is(err, errAssistantCandidateNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
 			default:
+				if status, code, message, ok := assistantResolveCommitError(err); ok {
+					routing.WriteError(w, r, routing.RouteClassInternalAPI, status, code, message)
+					return
+				}
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_commit_failed", "assistant commit failed")
 			}
 			return
@@ -357,6 +361,33 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "assistant action unsupported")
 		return
 	}
+}
+
+func assistantResolveCommitError(err error) (status int, code string, message string, ok bool) {
+	code = strings.TrimSpace(stablePgMessage(err))
+	if code == "" {
+		code = strings.TrimSpace(err.Error())
+	}
+	if code == "" {
+		return 0, "", "", false
+	}
+
+	status, known := orgUnitAPIStatusForCode(code)
+	if !known {
+		if isBadRequestError(err) || isPgInvalidInput(err) {
+			return http.StatusBadRequest, "invalid_request", err.Error(), true
+		}
+		if !isStableDBCode(code) {
+			return 0, "", "", false
+		}
+		status = http.StatusUnprocessableEntity
+	}
+
+	message = code
+	if mapped := strings.TrimSpace(orgNodeWriteErrorMessage(errors.New(code))); mapped != "" && mapped != code {
+		message = mapped
+	}
+	return status, code, message, true
 }
 
 var (
