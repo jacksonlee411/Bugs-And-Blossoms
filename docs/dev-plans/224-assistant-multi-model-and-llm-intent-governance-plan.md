@@ -1,6 +1,6 @@
 # DEV-PLAN-224：Assistant 多模型适配与 LLM 意图治理详细设计（修订版）
 
-**状态**: 规划中（2026-03-02 16:30 UTC）
+**状态**: 规划中（2026-03-02 18:25 UTC，补充“确定性与契约版本化”）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
@@ -91,6 +91,9 @@ graph TD
 - **决策 5：受控回退，不做 silent fallback（选定）**
   - 选项 A：主模型失败静默降级规则解析并继续流程。缺点：行为不可预期。
   - 选项 B（选定）：可配置 provider fallback；全部失败 fail-closed 返回明确错误码。
+- **决策 6：意图链路确定性优先（选定）**
+  - 选项 A：以“自然波动可接受”为前提，仅做结构校验。缺点：同输入输出不稳定，难以审计与回放。
+  - 选项 B（选定）：冻结推理参数 + 规范化产物 + 哈希对账 + 契约版本化，构建可重复执行链路。
 
 ## 4. 数据模型与约束 (Data Model & Constraints)
 > 224 不直接新建表；配置与契约先行，持久化模型对齐 223。
@@ -121,10 +124,10 @@ assistant:
 ```
 
 ### 4.2 意图与指令契约（新增）
-1. [ ] `RequirementIntentSpec`：`conversation_id + turn_id + user_prompt + intent + constraints + expected_outcome`。
-2. [ ] `SkillExecutionPlan`：`selected_skills[] + execution_order + risk_tier + required_checks`。
+1. [ ] `RequirementIntentSpec`：`conversation_id + turn_id + user_prompt + intent + constraints + expected_outcome + intent_schema_version + context_hash`。
+2. [ ] `SkillExecutionPlan`：`selected_skills[] + execution_order + risk_tier + required_checks + compiler_contract_version + skill_manifest_digest`。
 3. [ ] `ConfigDeltaPlan`：仅表达 capability 注册范围内的结构化变更，不允许 SQL/表名/未注册动作。
-4. [ ] `DryRunResult`：`diff + explain + validation_errors + would_commit=false`。
+4. [ ] `DryRunResult`：`diff + explain + validation_errors + would_commit=false + plan_hash`。
 
 ### 4.3 会话上下文契约（对齐 223）
 1. [ ] `conversation_id + turn_id + request_id + trace_id` 全链路可追踪。
@@ -138,12 +141,21 @@ assistant:
 4. [ ] 密钥仅环境变量或密钥服务注入，不存入业务库。
 5. [ ] 未通过配置校验时服务启动 fail-closed。
 
+### 4.5 确定性与契约版本化约束（新增）
+1. [ ] 模型调用采用确定性参数档位：`temperature=0`、`top_p=1`、`n=1`、固定 schema strict decode。
+2. [ ] provider/model 必须固定到可审计 revision（禁止浮动 alias 直接用于生产提交链路）。
+3. [ ] 编译器必须是纯函数：禁止读取时钟/随机数/外部可变状态；`selected_skills[]`、`diff[]` 需稳定排序。
+4. [ ] 所有链路产物执行规范化（canonical JSON）并计算 `context_hash/intent_hash/plan_hash`。
+5. [ ] 提交前强校验 `intent_schema_version + compiler_contract_version + capability_map_version + skill_manifest_digest` 一致性；不一致 fail-closed。
+6. [ ] 规则匹配解析只允许用于诊断日志，不得作为提交决策主链路。
+
 ## 5. 接口契约 (API Contracts)
 ### 5.1 内部接口（Go）
 - `ModelGateway.ResolveIntent(ctx, request) (IntentResult, error)`
 - `ProviderAdapter.Invoke(ctx, prompt, schema) (StructuredOutput, error)`
 - `IntentBoundaryLint.Validate(intent) error`
 - `IntentToCommandCompiler.Compile(intent, context) (SkillExecutionPlan, ConfigDeltaPlan, error)`
+- `DeterminismGuard.Verify(input, output, snapshots) (DeterminismReport, error)`
 
 ### 5.2 新增内部 API（模型配置页）
 1. [ ] `GET /internal/assistant/model-providers`：读取 provider 配置与健康状态。
@@ -154,6 +166,7 @@ assistant:
 ### 5.3 会话 API（沿用 + 语义增强）
 - 继续沿用 `/internal/assistant/conversations/*`。
 - 语义增强为：支持多轮上下文恢复、意图链路结构化回显、模型路由元数据审计。
+- 返回体必须带出：`intent_schema_version`、`compiler_contract_version`、`capability_map_version`、`skill_manifest_digest`、`context_hash`、`intent_hash`、`plan_hash`。
 
 ### 5.4 错误码契约（修订）
 1. [ ] strict decode 失败 -> `ai_plan_schema_constrained_decode_failed`
@@ -163,6 +176,8 @@ assistant:
 5. [ ] provider 限流 -> `ai_model_rate_limited`
 6. [ ] 模型配置非法 -> `ai_model_config_invalid`
 7. [ ] 模型密钥缺失 -> `ai_model_secret_missing`
+8. [ ] 契约版本不一致 -> `ai_plan_contract_version_mismatch`
+9. [ ] 确定性校验失败 -> `ai_plan_determinism_violation`
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 provider 路由与回退算法（伪代码）
@@ -186,12 +201,17 @@ if boundaryLintFail(intent): return ai_plan_boundary_violation
 
 skillPlan, deltaPlan = compiler.compile(intent, context)
 dryRun = runDryRun(deltaPlan)
+hashes = canonicalHash(context, intent, deltaPlan)
+if !determinismGuard.pass(hashes, versions): return ai_plan_determinism_violation
 
 return {
   intent_spec: intent,
   skill_execution_plan: skillPlan,
   config_delta_plan: deltaPlan,
-  dry_run_result: dryRun
+  dry_run_result: dryRun,
+  context_hash: hashes.context,
+  intent_hash: hashes.intent,
+  plan_hash: hashes.plan
 }
 ```
 
@@ -216,6 +236,18 @@ onMessage(event):
 ### 6.5 诊断降级策略
 - 仅允许“诊断日志级”规则解析用于故障定位；不得作为静默业务提交路径。
 
+### 6.6 确定性守护算法（新增）
+```text
+normalize(input, context, snapshots) -> canonical_input
+result = llm(strict_schema, deterministic_params)
+intent = strictDecode(result)
+plan = compile(intent, canonical_input)
+hashes = hash(canonical_input, intent, plan)
+if contractVersionChanged(): return ai_plan_contract_version_mismatch
+if replay(canonical_input).plan_hash != hashes.plan: return ai_plan_determinism_violation
+return plan + hashes
+```
+
 ## 7. 安全与鉴权 (Security & Authz)
 1. [ ] 密钥仅环境注入，日志掩码处理，禁止明文输出。
 2. [ ] provider endpoint 白名单校验，禁止任意 URL 注入。
@@ -223,12 +255,14 @@ onMessage(event):
 4. [ ] 模型输出必须 boundary lint，禁止越界能力进入提交链路。
 5. [ ] LibreChat iframe 通信必须通过 origin/schema/nonce-channel 三重校验。
 6. [ ] LibreChat 只允许访问 `internal/assistant/*` 编排接口，禁止业务写旁路。
+7. [ ] 反向代理与路由层对 `assistant-ui` 到业务写路由实施硬阻断（非“仅测试约束”）。
 
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
 - **依赖**：
   - `DEV-PLAN-221` 错误码与状态机契约冻结。
   - `DEV-PLAN-222` iframe/postMessage 安全契约与 FE/E2E 收口。
   - `DEV-PLAN-223` 会话持久化与审计字段落地（支撑多轮恢复）。
+  - M4 启动条件：223 完成并通过其门禁与证据验收。
 - **里程碑**：
   1. [ ] M1：Provider 配置契约 + `ModelGateway` 接口冻结（含配置页 IA）。
   2. [ ] M2：四类 provider adapter + 健康检查 + 错误归一化实现。
@@ -241,26 +275,31 @@ onMessage(event):
   1. [ ] 配置加载校验（字段缺失、非法 provider、priority 冲突、密钥缺失）。
   2. [ ] provider adapter 错误归一化（timeout/rate_limit/unavailable/config_invalid）。
   3. [ ] strict decode、boundary lint、compiler 分支覆盖。
+  4. [ ] 确定性守护：同输入同快照重复执行 20 次 `plan_hash` 一致。
 - **集成测试**：
   1. [ ] 多 provider 路由与受控回退一致性。
   2. [ ] 同输入在同配置下输出 `IntentSpec/SkillPlan/DeltaPlan` 结构稳定。
   3. [ ] 会话恢复后多轮上下文一致（重启前后行为一致）。
+  4. [ ] 契约版本漂移命中时稳定拒绝（`ai_plan_contract_version_mismatch`）。
 - **前端/E2E**：
   1. [ ] 模型配置页可完成“查看/校验/应用”闭环。
   2. [ ] `/app/assistant` 多轮会话可恢复（会话列表 + 回放）。
   3. [ ] postMessage 三重校验均有自动化断言。
+  4. [ ] 右侧事务面板展示 `*_version` 与 `*_hash`，并支持“版本不一致”阻断提示。
 - **验收对齐**：
   1. [ ] 对齐 `TC-220-BE-003/004` 及 220A 的多模型/意图缺口项。
   2. [ ] 新增“多模型切换一致性”“intent->command 稳定性”“会话恢复一致性”证据。
   3. [ ] `make preflight` 全绿。
+  4. [ ] 高信心阈值：同输入同快照一致率 ≥ 99.5%，schema/boundary 误放行 = 0，版本漂移拦截覆盖率 = 100%。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 - 不引入复杂开关平台，遵循仓库“早期最小运维”原则。
 - 最小可观测要求：
-  1. [ ] 请求级记录 `provider/model/latency_ms/error_code/request_id/trace_id/conversation_id/turn_id`。
+  1. [ ] 请求级记录 `provider/model/revision/latency_ms/error_code/request_id/trace_id/conversation_id/turn_id`。
   2. [ ] 统计 provider 成功率/超时率/限流率（用于路由优先级调优）。
   3. [ ] 统计 intent->command 拒绝率（decode 失败、boundary 失败、编译失败）。
-  4. [ ] 故障处置遵循 No-Legacy：环境级保护 → 只读/停写 → 修复 → 重试/重放 → 恢复。
+  4. [ ] 统计 `contract_version_mismatch` / `determinism_violation` 拒绝率并保留样本快照。
+  5. [ ] 故障处置遵循 No-Legacy：环境级保护 → 只读/停写 → 修复 → 重试/重放 → 恢复。
 
 ## 11. 交付物
 1. [ ] 多模型治理配置与 `ModelGateway` 代码。
@@ -269,6 +308,7 @@ onMessage(event):
 4. [ ] 与 223 对齐的多轮会话恢复接入与测试证据。
 5. [ ] LibreChat 对齐能力（模型选择、会话恢复、消息安全）与 E2E 证据。
 6. [ ] `DEV-PLAN-224` 执行记录文档（新增到 `docs/dev-records/`）。
+7. [ ] 意图链路确定性证据包（样本集、版本矩阵、哈希一致性报告）。
 
 ## 12. 实施任务拆解（可执行）
 ### 12.1 M1：模型配置契约与配置页（P0）
@@ -283,7 +323,8 @@ onMessage(event):
    - [ ] `POST /internal/assistant/model-providers:apply`
    - [ ] `GET /internal/assistant/models`
 4. [ ] 新增配置装载器与校验器（启动校验 fail-closed）。
-5. [ ] 路由治理与授权映射更新：
+5. [ ] 定义配置生效语义（热加载 + 原子切换 + 回滚），保证“应用后可审计且重启一致”。
+6. [ ] 路由治理与授权映射更新：
    - [ ] `config/routing/allowlist.yaml`
    - [ ] `config/capability/route-capability-map.v1.json`
    - [ ] capability catalog / authz requirement 对齐。
@@ -307,7 +348,13 @@ onMessage(event):
    - [ ] 输出 `SkillExecutionPlan`
    - [ ] 输出 `ConfigDeltaPlan`
    - [ ] 输出 `DryRunResult`
-5. [ ] 右侧事务面板改为消费结构化结果（不允许前端本地拼写提交命令）。
+5. [ ] 冻结并注入版本字段：`intent_schema_version`、`compiler_contract_version`、`capability_map_version`、`skill_manifest_digest`。
+6. [ ] 实现规范化与哈希：`context_hash`、`intent_hash`、`plan_hash`，并进入 API 返回与审计日志。
+7. [ ] 实现确定性守护：
+   - [ ] 推理参数冻结（temperature/top_p/n）。
+   - [ ] 编译器纯函数化与稳定排序。
+   - [ ] 回放对账（同输入同快照）失败返回 `ai_plan_determinism_violation`。
+8. [ ] 右侧事务面板改为消费结构化结果（不允许前端本地拼写提交命令）。
 
 ### 12.4 M4：多轮会话恢复（依赖 223）
 1. [ ] 对接 223 的持久化会话读取能力（conversation/turn/transition/idempotency）。
@@ -331,11 +378,13 @@ onMessage(event):
 2. [ ] 集成测试：多 provider 切换一致性、会话恢复一致性。
 3. [ ] 前端测试：模型配置页表单校验与错误映射。
 4. [ ] E2E：模型切换、多轮恢复、消息桥接安全、越权阻断。
-5. [ ] 门禁命令：
+5. [ ] 确定性回归：固定样本集重复回放、跨 provider 结构等价性、版本漂移阻断。
+6. [ ] 门禁命令：
    - [ ] `make check routing`
    - [ ] `make check capability-route-map`
    - [ ] `make authz-pack && make authz-test && make authz-lint`
    - [ ] `make check error-message`
+   - [ ] `make check assistant-intent-determinism`
    - [ ] `make test`
    - [ ] `make e2e`
    - [ ] `make preflight`
