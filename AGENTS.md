@@ -336,6 +336,13 @@ modules/{module}/
 - DEV-PLAN-210：200蓝图 Phase 4 会话事务提交与委托授权同构收口：`docs/dev-plans/210-blueprint-conversation-transaction-and-actor-delegated-authz.md`
 - DEV-PLAN-211：200蓝图 Phase 5 自建 Temporal M10D0 最小化落地：`docs/dev-plans/211-blueprint-temporal-m10d0-minimal-orchestration-foundation.md`
 - DEV-PLAN-212：200蓝图 Phase 6 评测门禁与触发式 Temporal 平台化验收：`docs/dev-plans/212-blueprint-eval-gates-and-triggered-temporal-productionization.md`
+- DEV-PLAN-220：聊天框式 AI 助手升级实施方案（SetID Governance × Req2Config × Conversation Tx）：`docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
+- DEV-PLAN-220A：聊天框 AI 助手（220）测试验证与功能缺口收敛方案：`docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
+- DEV-PLAN-221：Assistant P1 Blocker 收口实施计划（状态机 × 漂移回退 × Strict Decode）：`docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
+- DEV-PLAN-222：Assistant 前端交互与 E2E 证据闭环实施计划：`docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
+- DEV-PLAN-223：Assistant 会话持久化与审计闭环实施计划：`docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
+- DEV-PLAN-224：Assistant 多模型适配与 LLM 意图判断能力实施计划：`docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
+- DEV-PLAN-225：Assistant Tasks API 与 Temporal（P2）实施计划：`docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
