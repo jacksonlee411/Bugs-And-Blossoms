@@ -150,7 +150,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	if err := dictpkg.RegisterResolver(dictStore); err != nil {
 		return nil, err
 	}
-	assistantSvc := newAssistantConversationService(orgStore, orgUnitWriteService)
+	assistantSvc := newAssistantConversationServiceWithPool(orgStore, orgUnitWriteService, pgPool)
 
 	router := routing.NewRouter(classifier)
 

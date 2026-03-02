@@ -343,6 +343,13 @@ errors:
     user_message_key: errors.assistant_conversation_load_failed
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: assistant_conversation_create_failed
+    module: assistant
+    http_status: 500
+    severity: error
+    user_message_key: errors.assistant_conversation_create_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
   - code: assistant_intent_unsupported
     module: assistant
     http_status: 422
@@ -404,6 +411,27 @@ errors:
     http_status: 409
     severity: error
     user_message_key: errors.conversation_state_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: idempotency_key_conflict
+    module: assistant
+    http_status: 409
+    severity: error
+    user_message_key: errors.idempotency_key_conflict
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: request_in_progress
+    module: assistant
+    http_status: 409
+    severity: error
+    user_message_key: errors.request_in_progress
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: tenant_mismatch
+    module: assistant
+    http_status: 403
+    severity: error
+    user_message_key: errors.tenant_mismatch
     backend_policy: passthrough
     frontend_policy: mapped
   - code: bad_json

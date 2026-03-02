@@ -515,7 +515,7 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 		forbiddenReq = forbiddenReq.WithContext(withTenant(forbiddenReq.Context(), Tenant{ID: "tenant-x"}))
 		rec = httptest.NewRecorder()
 		handleAssistantTurnActionAPI(rec, forbiddenReq, svc)
-		if rec.Code != http.StatusForbidden || assistantDecodeErrCode(t, rec) != "forbidden" {
+		if rec.Code != http.StatusForbidden || assistantDecodeErrCode(t, rec) != "tenant_mismatch" {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 
@@ -751,8 +751,8 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		if _, err := svc.getConversation("tenant-1", "actor-1", "missing"); !errors.Is(err, errAssistantConversationNotFound) {
 			t.Fatalf("want conversation not found, got %v", err)
 		}
-		if _, err := svc.getConversation("tenant-x", "actor-1", conv.ConversationID); !errors.Is(err, errAssistantConversationForbidden) {
-			t.Fatalf("want conversation forbidden, got %v", err)
+		if _, err := svc.getConversation("tenant-x", "actor-1", conv.ConversationID); !errors.Is(err, errAssistantTenantMismatch) {
+			t.Fatalf("want tenant mismatch, got %v", err)
 		}
 		svc.mu.Lock()
 		svc.byID["conv-corrupted"] = nil
@@ -770,8 +770,8 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		if _, _, err := svc.lookupMutableTurn("tenant-1", "actor-1", "missing", turnID); !errors.Is(err, errAssistantConversationNotFound) {
 			t.Fatalf("want not found, got %v", err)
 		}
-		if _, _, err := svc.lookupMutableTurn("tenant-x", "actor-1", conv.ConversationID, turnID); !errors.Is(err, errAssistantConversationForbidden) {
-			t.Fatalf("want forbidden, got %v", err)
+		if _, _, err := svc.lookupMutableTurn("tenant-x", "actor-1", conv.ConversationID, turnID); !errors.Is(err, errAssistantTenantMismatch) {
+			t.Fatalf("want tenant mismatch, got %v", err)
 		}
 		if _, _, err := svc.lookupMutableTurn("tenant-1", "actor-1", conv.ConversationID, "missing"); !errors.Is(err, errAssistantTurnNotFound) {
 			t.Fatalf("want turn not found, got %v", err)
@@ -1118,8 +1118,8 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		if _, err := svc.commitTurn(context.Background(), "tenant-1", Principal{ID: "actor-x", RoleSlug: "tenant-admin"}, conv.ConversationID, turnID); !errors.Is(err, errAssistantAuthSnapshotExpired) {
 			t.Fatalf("want auth snapshot expired, got %v", err)
 		}
-		if _, err := svc.commitTurn(context.Background(), "tenant-x", principal, conv.ConversationID, turnID); !errors.Is(err, errAssistantConversationForbidden) {
-			t.Fatalf("want forbidden, got %v", err)
+		if _, err := svc.commitTurn(context.Background(), "tenant-x", principal, conv.ConversationID, turnID); !errors.Is(err, errAssistantTenantMismatch) {
+			t.Fatalf("want tenant mismatch, got %v", err)
 		}
 		if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "missing"); !errors.Is(err, errAssistantTurnNotFound) {
 			t.Fatalf("want turn not found, got %v", err)
