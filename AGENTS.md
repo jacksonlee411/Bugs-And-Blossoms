@@ -341,6 +341,7 @@ modules/{module}/
 - DEV-PLAN-221：Assistant P1 Blocker 收口实施计划（状态机 × 漂移回退 × Strict Decode）：`docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
 - DEV-PLAN-221 执行日志：`docs/dev-records/dev-plan-221-execution-log.md`
 - DEV-PLAN-222：Assistant 前端交互与 E2E 证据闭环实施计划：`docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
+- DEV-PLAN-222 执行日志：`docs/dev-records/dev-plan-222-execution-log.md`
 - DEV-PLAN-223：Assistant 会话持久化与审计闭环实施计划：`docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - DEV-PLAN-224：Assistant 多模型适配与 LLM 意图判断能力实施计划：`docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
 - DEV-PLAN-225：Assistant Tasks API 与 Temporal（P2）实施计划：`docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
