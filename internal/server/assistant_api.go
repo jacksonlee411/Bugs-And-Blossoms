@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 	orgunitservices "github.com/jacksonlee411/Bugs-And-Blossoms/modules/orgunit/services"
@@ -44,10 +45,14 @@ type assistantConversationService struct {
 	orgStore     OrgUnitStore
 	writeSvc     orgunitservices.OrgUnitWriteService
 	modelGateway *assistantModelGateway
-	pool         *pgxpool.Pool
+	pool         assistantTxBeginner
 	mu           sync.RWMutex
 	byID         map[string]*assistantConversation
 	byActorID    map[string][]string
+}
+
+type assistantTxBeginner interface {
+	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
 }
 
 type assistantConversation struct {
@@ -189,7 +194,9 @@ func newAssistantConversationService(orgStore OrgUnitStore, writeSvc orgunitserv
 
 func newAssistantConversationServiceWithPool(orgStore OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService, pool *pgxpool.Pool) *assistantConversationService {
 	svc := newAssistantConversationService(orgStore, writeSvc)
-	svc.pool = pool
+	if pool != nil {
+		svc.pool = pool
+	}
 	return svc
 }
 

@@ -565,11 +565,14 @@ INSERT INTO iam.assistant_conversations (
 }
 
 func (s *assistantConversationService) beginAssistantTx(ctx context.Context, tenantID string) (pgx.Tx, error) {
+	if s == nil || s.pool == nil {
+		return nil, errAssistantServiceMissing
+	}
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx, `SELECT set_config(app.current_tenant, $1, true);`, tenantID); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.current_tenant', $1, true);`, tenantID); err != nil {
 		tx.Rollback(ctx)
 		return nil, err
 	}
@@ -827,10 +830,10 @@ INSERT INTO iam.assistant_turns (
   $12::jsonb,
   $13::jsonb,
   $14::jsonb,
-  NULLIF($15, ),
+  NULLIF($15, ''),
   $16,
   $17,
-  NULLIF($18, ),
+  NULLIF($18, ''),
   $19::jsonb,
   $20::jsonb,
   $21,
@@ -985,7 +988,7 @@ INSERT INTO iam.assistant_idempotency (
   $4,
   $5,
   $6,
-  pending,
+  'pending',
   now(),
   $7
 )
@@ -1042,7 +1045,7 @@ func (s *assistantConversationService) finalizeIdempotencySuccessTx(ctx context.
 	responseHash := assistantHashBytes(body)
 	_, err = tx.Exec(ctx, `
 UPDATE iam.assistant_idempotency
-SET status = done,
+SET status = 'done',
     http_status = 200,
     error_code = NULL,
     response_body = $6::jsonb,
@@ -1067,13 +1070,13 @@ WHERE tenant_uuid = $1::uuid
   AND turn_id = $3
   AND turn_action = $4
   AND request_id = $5
-  AND status = pending
+  AND status = 'pending'
 `, key.TenantID, key.ConversationID, key.TurnID, key.TurnAction, key.RequestID)
 		return err
 	}
 	_, err := tx.Exec(ctx, `
 UPDATE iam.assistant_idempotency
-SET status = done,
+SET status = 'done',
     http_status = $6,
     error_code = $7,
     response_body = NULL,
