@@ -22,6 +22,8 @@ const (
 	assistantStateValidated = "validated"
 	assistantStateConfirmed = "confirmed"
 	assistantStateCommitted = "committed"
+	assistantStateCanceled  = "canceled"
+	assistantStateExpired   = "expired"
 
 	assistantResolutionAuto          = "auto"
 	assistantResolutionUserConfirmed = "user_confirmed"
@@ -34,6 +36,7 @@ var (
 	assistantDeptNameRE    = regexp.MustCompile(`名为(.+?)的部门`)
 	assistantDateCNRE      = regexp.MustCompile(`(20\d{2})年(\d{1,2})月(\d{1,2})日`)
 	assistantDateISORE     = regexp.MustCompile(`(20\d{2}-\d{2}-\d{2})`)
+	assistantBoundaryRE    = regexp.MustCompile(`(?i)(\bselect\b|\binsert\s+into\b|\bupdate\s+\S+\s+set\b|\bdelete\s+from\b|\bdrop\s+table\b|\btruncate\s+table\b|\balter\s+table\b|--|/\*|\*/|;)`)
 )
 
 type assistantConversationService struct {
@@ -256,8 +259,10 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_not_found", "conversation not found")
 		case errors.Is(err, errAssistantConversationForbidden):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "forbidden", "forbidden")
-		case errors.Is(err, errAssistantIntentDateRequired):
-			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "invalid_effective_date", "effective_date required")
+		case errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_plan_schema_constrained_decode_failed", "ai plan schema constrained decode failed")
+		case errors.Is(err, errAssistantPlanBoundaryViolation):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_plan_boundary_violation", "ai plan boundary violation")
 		default:
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_turn_create_failed", "assistant turn create failed")
 		}
@@ -315,6 +320,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_turn_not_found", "conversation turn not found")
 			case errors.Is(err, errAssistantConfirmationRequired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
+			case errors.Is(err, errAssistantConversationStateInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantCandidateNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "assistant_candidate_not_found", "assistant candidate not found")
 			default:
@@ -336,6 +343,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_turn_not_found", "conversation turn not found")
 			case errors.Is(err, errAssistantConfirmationRequired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
+			case errors.Is(err, errAssistantConversationStateInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
 			case errors.Is(err, errAssistantAuthSnapshotExpired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "ai_actor_auth_snapshot_expired", "ai actor auth snapshot expired")
 			case errors.Is(err, errAssistantRoleDriftDetected):
@@ -391,17 +400,19 @@ func assistantResolveCommitError(err error) (status int, code string, message st
 }
 
 var (
-	errAssistantConversationNotFound  = errors.New("assistant_conversation_not_found")
-	errAssistantConversationForbidden = errors.New("assistant_conversation_forbidden")
-	errAssistantConversationCorrupted = errors.New("assistant_conversation_corrupted")
-	errAssistantTurnNotFound          = errors.New("assistant_turn_not_found")
-	errAssistantConfirmationRequired  = errors.New("assistant_confirmation_required")
-	errAssistantCandidateNotFound     = errors.New("assistant_candidate_not_found")
-	errAssistantAuthSnapshotExpired   = errors.New("assistant_auth_snapshot_expired")
-	errAssistantRoleDriftDetected     = errors.New("assistant_role_drift_detected")
-	errAssistantUnsupportedIntent     = errors.New("assistant_unsupported_intent")
-	errAssistantServiceMissing        = errors.New("assistant_service_missing")
-	errAssistantIntentDateRequired    = errors.New("assistant_intent_date_required")
+	errAssistantConversationNotFound              = errors.New("assistant_conversation_not_found")
+	errAssistantConversationForbidden             = errors.New("assistant_conversation_forbidden")
+	errAssistantConversationCorrupted             = errors.New("assistant_conversation_corrupted")
+	errAssistantTurnNotFound                      = errors.New("assistant_turn_not_found")
+	errAssistantConfirmationRequired              = errors.New("assistant_confirmation_required")
+	errAssistantCandidateNotFound                 = errors.New("assistant_candidate_not_found")
+	errAssistantAuthSnapshotExpired               = errors.New("assistant_auth_snapshot_expired")
+	errAssistantRoleDriftDetected                 = errors.New("assistant_role_drift_detected")
+	errAssistantUnsupportedIntent                 = errors.New("assistant_unsupported_intent")
+	errAssistantServiceMissing                    = errors.New("assistant_service_missing")
+	errAssistantConversationStateInvalid          = errors.New("assistant_conversation_state_invalid")
+	errAssistantPlanSchemaConstrainedDecodeFailed = errors.New("assistant_plan_schema_constrained_decode_failed")
+	errAssistantPlanBoundaryViolation             = errors.New("assistant_plan_boundary_violation")
 )
 
 func (s *assistantConversationService) createConversation(tenantID string, principal Principal) *assistantConversation {
@@ -452,9 +463,9 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		return nil, errAssistantConversationForbidden
 	}
 
-	intent := assistantExtractIntent(userInput)
-	if intent.Action == assistantIntentCreateOrgUnit && intent.EffectiveDate == "" {
-		return nil, errAssistantIntentDateRequired
+	intent, err := assistantDecodeIntent(userInput)
+	if err != nil {
+		return nil, err
 	}
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
@@ -480,6 +491,9 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		}
 	}
 
+	plan := assistantBuildPlan(intent)
+	policyVersion, compositionVersion, mappingVersion := assistantTurnVersionSnapshot(plan.CapabilityKey)
+
 	turn := &assistantTurn{
 		TurnID:              "turn_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		UserInput:           userInput,
@@ -487,11 +501,11 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		RiskTier:            assistantRiskTierForIntent(intent),
 		RequestID:           "assistant_" + strings.ReplaceAll(uuid.NewString(), "-", ""),
 		TraceID:             strings.ReplaceAll(uuid.NewString(), "-", ""),
-		PolicyVersion:       capabilityPolicyVersionBaseline,
-		CompositionVersion:  capabilityPolicyVersionBaseline,
-		MappingVersion:      capabilityPolicyVersionBaseline,
+		PolicyVersion:       policyVersion,
+		CompositionVersion:  compositionVersion,
+		MappingVersion:      mappingVersion,
 		Intent:              intent,
-		Plan:                assistantBuildPlan(intent),
+		Plan:                plan,
 		Candidates:          candidates,
 		ResolvedCandidateID: resolvedCandidateID,
 		AmbiguityCount:      ambiguityCount,
@@ -519,7 +533,22 @@ func (s *assistantConversationService) confirmTurn(tenantID string, principal Pr
 	if turn.State == assistantStateCommitted {
 		return cloneConversation(conversation), nil
 	}
-	if turn.State != assistantStateValidated && turn.State != assistantStateConfirmed {
+	if turn.State == assistantStateCanceled || turn.State == assistantStateExpired {
+		return nil, errAssistantConversationStateInvalid
+	}
+	if turn.State == assistantStateConfirmed {
+		if turn.AmbiguityCount > 1 {
+			if candidateID == "" || candidateID == turn.ResolvedCandidateID {
+				return cloneConversation(conversation), nil
+			}
+			if !assistantCandidateExists(turn.Candidates, candidateID) {
+				return nil, errAssistantCandidateNotFound
+			}
+			return nil, errAssistantConversationStateInvalid
+		}
+		return cloneConversation(conversation), nil
+	}
+	if turn.State != assistantStateValidated {
 		return nil, errAssistantConfirmationRequired
 	}
 	if turn.AmbiguityCount > 1 {
@@ -535,6 +564,7 @@ func (s *assistantConversationService) confirmTurn(tenantID string, principal Pr
 	if turn.Intent.Action == assistantIntentCreateOrgUnit && turn.ResolvedCandidateID == "" {
 		return nil, errAssistantConfirmationRequired
 	}
+	turn.PolicyVersion, turn.CompositionVersion, turn.MappingVersion = assistantTurnVersionSnapshot(turn.Plan.CapabilityKey)
 	turn.State = assistantStateConfirmed
 	turn.UpdatedAt = time.Now().UTC()
 	conversation.UpdatedAt = turn.UpdatedAt
@@ -574,7 +604,16 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 	if turn.State == assistantStateCommitted {
 		return cloneConversation(conversation), nil
 	}
+	if turn.State == assistantStateCanceled || turn.State == assistantStateExpired {
+		return nil, errAssistantConversationStateInvalid
+	}
 	if turn.State != assistantStateConfirmed {
+		return nil, errAssistantConfirmationRequired
+	}
+	if assistantTurnVersionDrifted(turn) {
+		turn.State = assistantStateValidated
+		turn.UpdatedAt = time.Now().UTC()
+		conversation.UpdatedAt = turn.UpdatedAt
 		return nil, errAssistantConfirmationRequired
 	}
 	if turn.Intent.Action != assistantIntentCreateOrgUnit {
@@ -722,6 +761,70 @@ func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCand
 		explain = "检测到多个同名父组织候选，需先确认候选主键"
 	}
 	return assistantDryRunResult{Diff: diff, Explain: explain}
+}
+
+func assistantDecodeIntent(userInput string) (assistantIntentSpec, error) {
+	text := strings.TrimSpace(userInput)
+	if assistantBoundaryViolationDetected(text) {
+		return assistantIntentSpec{}, errAssistantPlanBoundaryViolation
+	}
+	intent := assistantExtractIntent(text)
+	if assistantIntentSchemaInvalid(intent) {
+		return assistantIntentSpec{}, errAssistantPlanSchemaConstrainedDecodeFailed
+	}
+	plan := assistantBuildPlan(intent)
+	if _, ok := capabilityDefinitionForKey(plan.CapabilityKey); !ok {
+		return assistantIntentSpec{}, errAssistantPlanBoundaryViolation
+	}
+	return intent, nil
+}
+
+func assistantBoundaryViolationDetected(text string) bool {
+	return assistantBoundaryRE.MatchString(strings.TrimSpace(text))
+}
+
+func assistantIntentSchemaInvalid(intent assistantIntentSpec) bool {
+	if intent.Action != assistantIntentCreateOrgUnit {
+		return false
+	}
+	if strings.TrimSpace(intent.ParentRefText) == "" {
+		return true
+	}
+	if strings.TrimSpace(intent.EntityName) == "" {
+		return true
+	}
+	effectiveDate := strings.TrimSpace(intent.EffectiveDate)
+	if effectiveDate == "" {
+		return true
+	}
+	return !assistantDateISORE.MatchString(effectiveDate)
+}
+
+func assistantTurnVersionSnapshot(capabilityKey string) (policyVersion string, compositionVersion string, mappingVersion string) {
+	policyVersion = capabilityPolicyVersionBaseline
+	if definition, ok := capabilityDefinitionForKey(capabilityKey); ok {
+		currentPolicy := strings.TrimSpace(definition.CurrentPolicy)
+		if currentPolicy != "" {
+			policyVersion = currentPolicy
+		}
+	}
+	compositionVersion = policyVersion
+	mappingVersion = policyVersion
+	return policyVersion, compositionVersion, mappingVersion
+}
+
+func assistantTurnVersionDrifted(turn *assistantTurn) bool {
+	if turn == nil {
+		return false
+	}
+	policyVersion, compositionVersion, mappingVersion := assistantTurnVersionSnapshot(turn.Plan.CapabilityKey)
+	if strings.TrimSpace(turn.PolicyVersion) != strings.TrimSpace(policyVersion) {
+		return true
+	}
+	if strings.TrimSpace(turn.CompositionVersion) != strings.TrimSpace(compositionVersion) {
+		return true
+	}
+	return strings.TrimSpace(turn.MappingVersion) != strings.TrimSpace(mappingVersion)
 }
 
 func assistantExtractIntent(input string) assistantIntentSpec {
