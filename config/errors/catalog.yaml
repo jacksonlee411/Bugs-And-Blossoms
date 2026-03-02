@@ -308,6 +308,20 @@ errors:
     user_message_key: errors.ai_actor_role_drift_detected
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: ai_plan_boundary_violation
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.ai_plan_boundary_violation
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: ai_plan_schema_constrained_decode_failed
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.ai_plan_schema_constrained_decode_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
   - code: assistant_candidate_not_found
     module: assistant
     http_status: 422
@@ -383,6 +397,13 @@ errors:
     http_status: 404
     severity: error
     user_message_key: errors.conversation_turn_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: conversation_state_invalid
+    module: assistant
+    http_status: 409
+    severity: error
+    user_message_key: errors.conversation_state_invalid
     backend_policy: passthrough
     frontend_policy: mapped
   - code: bad_json

@@ -355,7 +355,13 @@ func TestAssistantConversationHandlers_CoverageMatrix(t *testing.T) {
 
 		rec = httptest.NewRecorder()
 		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, path, `{"user_input":"在鲜花组织之下，新建一个名为运营部的部门"}`, true, true), svc)
-		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "invalid_effective_date" {
+		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "ai_plan_schema_constrained_decode_failed" {
+			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
+
+		rec = httptest.NewRecorder()
+		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, path, `{"user_input":"请执行 SELECT * FROM org_units"}`, true, true), svc)
+		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "ai_plan_boundary_violation" {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 
@@ -483,6 +489,19 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
+
+		rec = httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, baseConfirmPath, `{"candidate_id":"`+candidateID+`"}`, true, true), svc)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+
+		candidateID2 := conversation.Turns[0].Candidates[1].CandidateID
+		rec = httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, baseConfirmPath, `{"candidate_id":"`+candidateID2+`"}`, true, true), svc)
+		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_state_invalid" {
+			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
 	})
 
 	t.Run("commit branches", func(t *testing.T) {
@@ -518,6 +537,61 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 
+		terminalSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		terminalConv := terminalSvc.createConversation(tenantID, principal)
+		terminalTurn := &assistantTurn{
+			TurnID:              "turn-terminal",
+			State:               assistantStateCanceled,
+			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
+			ResolvedCandidateID: "FLOWER-A",
+			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
+		}
+		terminalSvc.mu.Lock()
+		terminalSvc.byID[terminalConv.ConversationID].Turns = append(terminalSvc.byID[terminalConv.ConversationID].Turns, terminalTurn)
+		terminalSvc.mu.Unlock()
+		rec = httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+terminalConv.ConversationID+"/turns/"+terminalTurn.TurnID+":commit", `{}`, true, true), terminalSvc)
+		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_state_invalid" {
+			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
+
+		terminalSvc.mu.Lock()
+		terminalSvc.byID[terminalConv.ConversationID].Turns[0].State = assistantStateExpired
+		terminalSvc.mu.Unlock()
+		rec = httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+terminalConv.ConversationID+"/turns/"+terminalTurn.TurnID+":commit", `{}`, true, true), terminalSvc)
+		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_state_invalid" {
+			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
+
+		driftSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		driftConv := driftSvc.createConversation(tenantID, principal)
+		driftTurn := &assistantTurn{
+			TurnID:              "turn-drift",
+			State:               assistantStateConfirmed,
+			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
+			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
+			ResolvedCandidateID: "FLOWER-A",
+			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
+			PolicyVersion:       "1999-01-01",
+			CompositionVersion:  capabilityPolicyVersionBaseline,
+			MappingVersion:      capabilityPolicyVersionBaseline,
+		}
+		driftSvc.mu.Lock()
+		driftSvc.byID[driftConv.ConversationID].Turns = append(driftSvc.byID[driftConv.ConversationID].Turns, driftTurn)
+		driftSvc.mu.Unlock()
+		rec = httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+driftConv.ConversationID+"/turns/"+driftTurn.TurnID+":commit", `{}`, true, true), driftSvc)
+		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
+			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
+		driftSvc.mu.RLock()
+		gotDriftState := driftSvc.byID[driftConv.ConversationID].Turns[0].State
+		driftSvc.mu.RUnlock()
+		if gotDriftState != assistantStateValidated {
+			t.Fatalf("drift rollback state=%s", gotDriftState)
+		}
+
 		reauthSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		reauthConv := reauthSvc.createConversation(tenantID, principal)
 		reauthConversation, createErr := reauthSvc.createTurn(context.Background(), tenantID, principal, reauthConv.ConversationID, "在鲜花组织之下，新建一个名为市场部的部门，成立日期是2026-01-01")
@@ -545,7 +619,16 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 
 		unsupportedSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		unsupportedConv := unsupportedSvc.createConversation(tenantID, principal)
-		unsupportedTurn := &assistantTurn{TurnID: "turn-unsupported", State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: "plan_only"}, ResolvedCandidateID: "FLOWER-A"}
+		unsupportedTurn := &assistantTurn{
+			TurnID:              "turn-unsupported",
+			State:               assistantStateConfirmed,
+			Intent:              assistantIntentSpec{Action: "plan_only"},
+			Plan:                assistantBuildPlan(assistantIntentSpec{Action: "plan_only"}),
+			ResolvedCandidateID: "FLOWER-A",
+			PolicyVersion:       capabilityPolicyVersionBaseline,
+			CompositionVersion:  capabilityPolicyVersionBaseline,
+			MappingVersion:      capabilityPolicyVersionBaseline,
+		}
 		unsupportedSvc.mu.Lock()
 		unsupportedSvc.byID[unsupportedConv.ConversationID].Turns = append(unsupportedSvc.byID[unsupportedConv.ConversationID].Turns, unsupportedTurn)
 		unsupportedSvc.mu.Unlock()
@@ -561,8 +644,12 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			TurnID:              "turn-missing-service",
 			State:               assistantStateConfirmed,
 			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
+			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 			ResolvedCandidateID: "FLOWER-A",
 			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
+			PolicyVersion:       capabilityPolicyVersionBaseline,
+			CompositionVersion:  capabilityPolicyVersionBaseline,
+			MappingVersion:      capabilityPolicyVersionBaseline,
 		}
 		missingServiceSvc.mu.Lock()
 		missingServiceSvc.byID[missingConv.ConversationID].Turns = append(missingServiceSvc.byID[missingConv.ConversationID].Turns, missingTurn)
@@ -579,8 +666,12 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			TurnID:              "turn-missing-candidate",
 			State:               assistantStateConfirmed,
 			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
+			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 			ResolvedCandidateID: "UNKNOWN",
 			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
+			PolicyVersion:       capabilityPolicyVersionBaseline,
+			CompositionVersion:  capabilityPolicyVersionBaseline,
+			MappingVersion:      capabilityPolicyVersionBaseline,
 		}
 		missingCandidateSvc.mu.Lock()
 		missingCandidateSvc.byID[missingCandidateConv.ConversationID].Turns = append(missingCandidateSvc.byID[missingCandidateConv.ConversationID].Turns, missingCandidateTurn)
@@ -597,10 +688,13 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			TurnID:              "turn-write-error",
 			State:               assistantStateConfirmed,
 			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
+			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 			ResolvedCandidateID: "FLOWER-A",
 			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
 			RequestID:           "assistant_req_write_error",
 			PolicyVersion:       capabilityPolicyVersionBaseline,
+			CompositionVersion:  capabilityPolicyVersionBaseline,
+			MappingVersion:      capabilityPolicyVersionBaseline,
 		}
 		writeErrSvc.mu.Lock()
 		writeErrSvc.byID[writeErrConv.ConversationID].Turns = append(writeErrSvc.byID[writeErrConv.ConversationID].Turns, writeErrTurn)
@@ -617,10 +711,13 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			TurnID:              "turn-field-policy-missing",
 			State:               assistantStateConfirmed,
 			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"},
+			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 			ResolvedCandidateID: "FLOWER-A",
 			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
 			RequestID:           "assistant_req_field_policy_missing",
 			PolicyVersion:       capabilityPolicyVersionBaseline,
+			CompositionVersion:  capabilityPolicyVersionBaseline,
+			MappingVersion:      capabilityPolicyVersionBaseline,
 		}
 		fieldPolicyErrSvc.mu.Lock()
 		fieldPolicyErrSvc.byID[fieldPolicyErrConv.ConversationID].Turns = append(fieldPolicyErrSvc.byID[fieldPolicyErrConv.ConversationID].Turns, fieldPolicyErrTurn)
@@ -773,6 +870,69 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		if intentISO.EffectiveDate != "2026-01-02" {
 			t.Fatalf("unexpected iso date: %+v", intentISO)
 		}
+		if _, err := assistantDecodeIntent("在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"); err != nil {
+			t.Fatalf("decode intent failed: %v", err)
+		}
+		if _, err := assistantDecodeIntent("在鲜花组织之下，新建一个名为运营部的部门"); !errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed) {
+			t.Fatalf("want schema decode failed, got %v", err)
+		}
+		if _, err := assistantDecodeIntent("请执行 SELECT * FROM org_units"); !errors.Is(err, errAssistantPlanBoundaryViolation) {
+			t.Fatalf("want boundary violation, got %v", err)
+		}
+		originalDefs := capabilityDefinitionByKey
+		capabilityDefinitionByKey = map[string]capabilityDefinition{}
+		if _, err := assistantDecodeIntent("仅生成计划"); !errors.Is(err, errAssistantPlanBoundaryViolation) {
+			t.Fatalf("want boundary violation for unknown capability, got %v", err)
+		}
+		capabilityDefinitionByKey = originalDefs
+		if !assistantBoundaryViolationDetected("drop table org_unit_nodes") {
+			t.Fatal("expected boundary violation detection")
+		}
+		if assistantIntentSchemaInvalid(assistantIntentSpec{Action: "plan_only"}) {
+			t.Fatal("plan_only should not trigger schema validation")
+		}
+		if !assistantIntentSchemaInvalid(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "", EntityName: "运营部", EffectiveDate: "2026-01-01"}) {
+			t.Fatal("missing parent should be invalid")
+		}
+		if !assistantIntentSchemaInvalid(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "", EffectiveDate: "2026-01-01"}) {
+			t.Fatal("missing entity should be invalid")
+		}
+		if !assistantIntentSchemaInvalid(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: ""}) {
+			t.Fatal("missing effective date should be invalid")
+		}
+		if !assistantIntentSchemaInvalid(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026/01/01"}) {
+			t.Fatal("invalid date format should be invalid")
+		}
+		if assistantIntentSchemaInvalid(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}) {
+			t.Fatal("valid create intent should pass schema")
+		}
+		if assistantTurnVersionDrifted(nil) {
+			t.Fatal("nil turn should not drift")
+		}
+		if assistantTurnVersionDrifted(&assistantTurn{
+			Plan:               assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
+			PolicyVersion:      capabilityPolicyVersionBaseline,
+			CompositionVersion: capabilityPolicyVersionBaseline,
+			MappingVersion:     capabilityPolicyVersionBaseline,
+		}) {
+			t.Fatal("baseline turn should not drift")
+		}
+		if !assistantTurnVersionDrifted(&assistantTurn{
+			Plan:               assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
+			PolicyVersion:      capabilityPolicyVersionBaseline,
+			CompositionVersion: "1999-01-01",
+			MappingVersion:     capabilityPolicyVersionBaseline,
+		}) {
+			t.Fatal("composition drift should be detected")
+		}
+		if !assistantTurnVersionDrifted(&assistantTurn{
+			Plan:               assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
+			PolicyVersion:      capabilityPolicyVersionBaseline,
+			CompositionVersion: capabilityPolicyVersionBaseline,
+			MappingVersion:     "1999-01-01",
+		}) {
+			t.Fatal("mapping drift should be detected")
+		}
 		planOnly := assistantExtractIntent("hello")
 		if planOnly.Action != "plan_only" {
 			t.Fatalf("unexpected plan only intent: %+v", planOnly)
@@ -890,12 +1050,30 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, turnID, created.Turns[0].Candidates[0].CandidateID); err != nil {
 			t.Fatalf("confirm failed: %v", err)
 		}
+		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, turnID, created.Turns[0].Candidates[0].CandidateID); err != nil {
+			t.Fatalf("confirmed same candidate should be idempotent: %v", err)
+		}
+		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, turnID, "bad"); !errors.Is(err, errAssistantCandidateNotFound) {
+			t.Fatalf("want candidate not found in confirmed state, got %v", err)
+		}
+		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, turnID, created.Turns[0].Candidates[1].CandidateID); !errors.Is(err, errAssistantConversationStateInvalid) {
+			t.Fatalf("want state invalid for candidate rewrite, got %v", err)
+		}
 		svc.mu.Lock()
 		svc.byID[conv.ConversationID].Turns[0].State = assistantStateCommitted
 		svc.mu.Unlock()
 		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, turnID, created.Turns[0].Candidates[0].CandidateID); err != nil {
 			t.Fatalf("committed confirm should be idempotent: %v", err)
 		}
+		svc.mu.Lock()
+		svc.byID[conv.ConversationID].Turns[0].State = assistantStateCanceled
+		svc.mu.Unlock()
+		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, turnID, created.Turns[0].Candidates[0].CandidateID); !errors.Is(err, errAssistantConversationStateInvalid) {
+			t.Fatalf("want state invalid for canceled turn, got %v", err)
+		}
+		svc.mu.Lock()
+		svc.byID[conv.ConversationID].Turns[0].State = assistantStateConfirmed
+		svc.mu.Unlock()
 
 		invalidStateTurn := &assistantTurn{TurnID: "turn-draft", State: assistantStateDraft, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}}
 		svc.mu.Lock()
@@ -903,6 +1081,24 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		svc.mu.Unlock()
 		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, invalidStateTurn.TurnID, created.Turns[0].Candidates[0].CandidateID); !errors.Is(err, errAssistantConfirmationRequired) {
 			t.Fatalf("want confirmation required for draft, got %v", err)
+		}
+
+		singleChoiceTurn := &assistantTurn{
+			TurnID:              "turn-single-choice-confirmed",
+			State:               assistantStateConfirmed,
+			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"},
+			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
+			AmbiguityCount:      1,
+			ResolvedCandidateID: "FLOWER-A",
+			PolicyVersion:       capabilityPolicyVersionBaseline,
+			CompositionVersion:  capabilityPolicyVersionBaseline,
+			MappingVersion:      capabilityPolicyVersionBaseline,
+		}
+		svc.mu.Lock()
+		svc.byID[conv.ConversationID].Turns = append(svc.byID[conv.ConversationID].Turns, singleChoiceTurn)
+		svc.mu.Unlock()
+		if _, err := svc.confirmTurn("tenant-1", principal, conv.ConversationID, singleChoiceTurn.TurnID, ""); err != nil {
+			t.Fatalf("confirmed turn with single candidate should be idempotent: %v", err)
 		}
 
 		unresolvedTurn := &assistantTurn{TurnID: "turn-unresolved", State: assistantStateValidated, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}}
@@ -934,10 +1130,30 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 		if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, conv.ConversationID, turnID); err != nil {
 			t.Fatalf("idempotent commit failed: %v", err)
 		}
+		svc.mu.Lock()
+		svc.byID[conv.ConversationID].Turns[0].State = assistantStateCanceled
+		svc.mu.Unlock()
+		if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, conv.ConversationID, turnID); !errors.Is(err, errAssistantConversationStateInvalid) {
+			t.Fatalf("want state invalid for canceled commit, got %v", err)
+		}
+		svc.mu.Lock()
+		svc.byID[conv.ConversationID].Turns[0].State = assistantStateExpired
+		svc.mu.Unlock()
+		if _, err := svc.commitTurn(context.Background(), "tenant-1", principal, conv.ConversationID, turnID); !errors.Is(err, errAssistantConversationStateInvalid) {
+			t.Fatalf("want state invalid for expired commit, got %v", err)
+		}
 
 		unsupportedSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		unsupportedConv := unsupportedSvc.createConversation("tenant-1", principal)
-		unsupportedTurn := &assistantTurn{TurnID: "turn-unsupported", State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: "plan_only"}}
+		unsupportedTurn := &assistantTurn{
+			TurnID:             "turn-unsupported",
+			State:              assistantStateConfirmed,
+			Intent:             assistantIntentSpec{Action: "plan_only"},
+			Plan:               assistantBuildPlan(assistantIntentSpec{Action: "plan_only"}),
+			PolicyVersion:      capabilityPolicyVersionBaseline,
+			CompositionVersion: capabilityPolicyVersionBaseline,
+			MappingVersion:     capabilityPolicyVersionBaseline,
+		}
 		unsupportedSvc.mu.Lock()
 		unsupportedSvc.byID[unsupportedConv.ConversationID].Turns = append(unsupportedSvc.byID[unsupportedConv.ConversationID].Turns, unsupportedTurn)
 		unsupportedSvc.mu.Unlock()
@@ -947,12 +1163,46 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 
 		missingCandidateSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		missingCandidateConv := missingCandidateSvc.createConversation("tenant-1", principal)
-		missingCandidateTurn := &assistantTurn{TurnID: "turn-missing-candidate", State: assistantStateConfirmed, Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"}}
+		missingCandidateTurn := &assistantTurn{
+			TurnID:             "turn-missing-candidate",
+			State:              assistantStateConfirmed,
+			Intent:             assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"},
+			Plan:               assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
+			PolicyVersion:      capabilityPolicyVersionBaseline,
+			CompositionVersion: capabilityPolicyVersionBaseline,
+			MappingVersion:     capabilityPolicyVersionBaseline,
+		}
 		missingCandidateSvc.mu.Lock()
 		missingCandidateSvc.byID[missingCandidateConv.ConversationID].Turns = append(missingCandidateSvc.byID[missingCandidateConv.ConversationID].Turns, missingCandidateTurn)
 		missingCandidateSvc.mu.Unlock()
 		if _, err := missingCandidateSvc.commitTurn(context.Background(), "tenant-1", principal, missingCandidateConv.ConversationID, missingCandidateTurn.TurnID); !errors.Is(err, errAssistantCandidateNotFound) {
 			t.Fatalf("want candidate not found, got %v", err)
+		}
+
+		driftSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		driftConv := driftSvc.createConversation("tenant-1", principal)
+		driftTurn := &assistantTurn{
+			TurnID:              "turn-drift",
+			State:               assistantStateConfirmed,
+			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"},
+			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
+			ResolvedCandidateID: "FLOWER-A",
+			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
+			PolicyVersion:       "1999-01-01",
+			CompositionVersion:  capabilityPolicyVersionBaseline,
+			MappingVersion:      capabilityPolicyVersionBaseline,
+		}
+		driftSvc.mu.Lock()
+		driftSvc.byID[driftConv.ConversationID].Turns = append(driftSvc.byID[driftConv.ConversationID].Turns, driftTurn)
+		driftSvc.mu.Unlock()
+		if _, err := driftSvc.commitTurn(context.Background(), "tenant-1", principal, driftConv.ConversationID, driftTurn.TurnID); !errors.Is(err, errAssistantConfirmationRequired) {
+			t.Fatalf("want confirmation required on drift, got %v", err)
+		}
+		driftSvc.mu.RLock()
+		driftState := driftSvc.byID[driftConv.ConversationID].Turns[0].State
+		driftSvc.mu.RUnlock()
+		if driftState != assistantStateValidated {
+			t.Fatalf("expected drift rollback to validated, got %s", driftState)
 		}
 
 		corruptedSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
@@ -969,10 +1219,13 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			TurnID:              "turn-empty-name",
 			State:               assistantStateConfirmed,
 			Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EffectiveDate: "2026-01-01"},
+			Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
 			ResolvedCandidateID: "FLOWER-A",
 			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
 			RequestID:           "assistant_req_empty_name",
 			PolicyVersion:       capabilityPolicyVersionBaseline,
+			CompositionVersion:  capabilityPolicyVersionBaseline,
+			MappingVersion:      capabilityPolicyVersionBaseline,
 		}
 		fallbackNameSvc.mu.Lock()
 		fallbackNameSvc.byID[fallbackConv.ConversationID].Turns = append(fallbackNameSvc.byID[fallbackConv.ConversationID].Turns, fallbackTurn)

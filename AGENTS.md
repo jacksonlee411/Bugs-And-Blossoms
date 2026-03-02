@@ -339,6 +339,7 @@ modules/{module}/
 - DEV-PLAN-220：聊天框式 AI 助手升级实施方案（SetID Governance × Req2Config × Conversation Tx）：`docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
 - DEV-PLAN-220A：聊天框 AI 助手（220）测试验证与功能缺口收敛方案：`docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
 - DEV-PLAN-221：Assistant P1 Blocker 收口实施计划（状态机 × 漂移回退 × Strict Decode）：`docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
+- DEV-PLAN-221 执行日志：`docs/dev-records/dev-plan-221-execution-log.md`
 - DEV-PLAN-222：Assistant 前端交互与 E2E 证据闭环实施计划：`docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
 - DEV-PLAN-223：Assistant 会话持久化与审计闭环实施计划：`docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - DEV-PLAN-224：Assistant 多模型适配与 LLM 意图判断能力实施计划：`docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
