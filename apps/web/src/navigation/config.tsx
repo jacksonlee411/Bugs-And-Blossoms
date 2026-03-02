@@ -58,6 +58,16 @@ export const navItems: NavItem[] = [
     keywords: ['assistant', 'ai', 'chat', 'planner', '智能助手', '对话']
   },
   {
+    key: 'assistant-models',
+    path: '/assistant/models',
+    labelKey: 'nav_ai_assistant',
+    icon: <SmartToyIcon fontSize='small' />,
+    order: 231,
+    parentKey: 'assistant',
+    permissionKey: 'orgunit.admin',
+    keywords: ['assistant', 'model', 'provider', 'llm', '模型', '供应商']
+  },
+  {
     key: 'configuration-policy',
     path: '/org/setid',
     labelKey: 'nav_configuration_policy',

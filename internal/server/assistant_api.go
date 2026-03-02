@@ -41,12 +41,13 @@ var (
 )
 
 type assistantConversationService struct {
-	orgStore  OrgUnitStore
-	writeSvc  orgunitservices.OrgUnitWriteService
-	pool      *pgxpool.Pool
-	mu        sync.RWMutex
-	byID      map[string]*assistantConversation
-	byActorID map[string][]string
+	orgStore     OrgUnitStore
+	writeSvc     orgunitservices.OrgUnitWriteService
+	modelGateway *assistantModelGateway
+	pool         *pgxpool.Pool
+	mu           sync.RWMutex
+	byID         map[string]*assistantConversation
+	byActorID    map[string][]string
 }
 
 type assistantConversation struct {
@@ -98,21 +99,52 @@ type assistantTurn struct {
 }
 
 type assistantIntentSpec struct {
-	Action        string `json:"action"`
-	ParentRefText string `json:"parent_ref_text,omitempty"`
-	EntityName    string `json:"entity_name,omitempty"`
-	EffectiveDate string `json:"effective_date,omitempty"`
+	Action              string `json:"action"`
+	ParentRefText       string `json:"parent_ref_text,omitempty"`
+	EntityName          string `json:"entity_name,omitempty"`
+	EffectiveDate       string `json:"effective_date,omitempty"`
+	IntentSchemaVersion string `json:"intent_schema_version,omitempty"`
+	ContextHash         string `json:"context_hash,omitempty"`
+	IntentHash          string `json:"intent_hash,omitempty"`
 }
 
 type assistantPlanSummary struct {
-	Title         string `json:"title"`
-	CapabilityKey string `json:"capability_key"`
-	Summary       string `json:"summary"`
+	Title                   string                      `json:"title"`
+	CapabilityKey           string                      `json:"capability_key"`
+	Summary                 string                      `json:"summary"`
+	CapabilityMapVersion    string                      `json:"capability_map_version,omitempty"`
+	CompilerContractVersion string                      `json:"compiler_contract_version,omitempty"`
+	SkillManifestDigest     string                      `json:"skill_manifest_digest,omitempty"`
+	ModelProvider           string                      `json:"model_provider,omitempty"`
+	ModelName               string                      `json:"model_name,omitempty"`
+	ModelRevision           string                      `json:"model_revision,omitempty"`
+	SkillExecutionPlan      assistantSkillExecutionPlan `json:"skill_execution_plan,omitempty"`
+	ConfigDeltaPlan         assistantConfigDeltaPlan    `json:"config_delta_plan,omitempty"`
+}
+
+type assistantSkillExecutionPlan struct {
+	SelectedSkills []string `json:"selected_skills"`
+	ExecutionOrder []string `json:"execution_order"`
+	RiskTier       string   `json:"risk_tier"`
+	RequiredChecks []string `json:"required_checks"`
+}
+
+type assistantConfigDeltaPlan struct {
+	CapabilityKey string                  `json:"capability_key"`
+	Changes       []assistantConfigChange `json:"changes"`
+}
+
+type assistantConfigChange struct {
+	Field string `json:"field"`
+	After any    `json:"after"`
 }
 
 type assistantDryRunResult struct {
-	Diff    []map[string]any `json:"diff"`
-	Explain string           `json:"explain"`
+	Diff             []map[string]any `json:"diff"`
+	Explain          string           `json:"explain"`
+	ValidationErrors []string         `json:"validation_errors,omitempty"`
+	WouldCommit      bool             `json:"would_commit"`
+	PlanHash         string           `json:"plan_hash,omitempty"`
 }
 
 type assistantCandidate struct {
@@ -147,10 +179,11 @@ type assistantConfirmRequest struct {
 
 func newAssistantConversationService(orgStore OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService) *assistantConversationService {
 	return &assistantConversationService{
-		orgStore:  orgStore,
-		writeSvc:  writeSvc,
-		byID:      make(map[string]*assistantConversation),
-		byActorID: make(map[string][]string),
+		orgStore:     orgStore,
+		writeSvc:     writeSvc,
+		modelGateway: newAssistantModelGateway(),
+		byID:         make(map[string]*assistantConversation),
+		byActorID:    make(map[string][]string),
 	}
 }
 
@@ -296,6 +329,18 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_plan_schema_constrained_decode_failed", "ai plan schema constrained decode failed")
 		case errors.Is(err, errAssistantPlanBoundaryViolation):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_plan_boundary_violation", "ai plan boundary violation")
+		case errors.Is(err, errAssistantModelProviderUnavailable):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_model_provider_unavailable", "ai model provider unavailable")
+		case errors.Is(err, errAssistantModelTimeout):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusGatewayTimeout, "ai_model_timeout", "ai model timeout")
+		case errors.Is(err, errAssistantModelRateLimited):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusTooManyRequests, "ai_model_rate_limited", "ai model rate limited")
+		case errors.Is(err, errAssistantModelConfigInvalid):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_model_config_invalid", "ai model config invalid")
+		case errors.Is(err, errAssistantModelSecretMissing):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "ai_model_secret_missing", "ai model secret missing")
+		case errors.Is(err, errAssistantPlanDeterminismViolation):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_determinism_violation", "ai plan determinism violation")
 		default:
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_turn_create_failed", "assistant turn create failed")
 		}
@@ -392,6 +437,8 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_confirmation_required", "conversation confirmation required")
 			case errors.Is(err, errAssistantConversationStateInvalid):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "conversation_state_invalid", "conversation state invalid")
+			case errors.Is(err, errAssistantPlanContractVersionMismatch):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusConflict, "ai_plan_contract_version_mismatch", "ai plan contract version mismatch")
 			case errors.Is(err, errAssistantAuthSnapshotExpired):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "ai_actor_auth_snapshot_expired", "ai actor auth snapshot expired")
 			case errors.Is(err, errAssistantRoleDriftDetected):
@@ -461,6 +508,13 @@ var (
 	errAssistantConversationStateInvalid          = errors.New("assistant_conversation_state_invalid")
 	errAssistantPlanSchemaConstrainedDecodeFailed = errors.New("assistant_plan_schema_constrained_decode_failed")
 	errAssistantPlanBoundaryViolation             = errors.New("assistant_plan_boundary_violation")
+	errAssistantPlanContractVersionMismatch       = errors.New("assistant_plan_contract_version_mismatch")
+	errAssistantPlanDeterminismViolation          = errors.New("assistant_plan_determinism_violation")
+	errAssistantModelProviderUnavailable          = errors.New("assistant_model_provider_unavailable")
+	errAssistantModelTimeout                      = errors.New("assistant_model_timeout")
+	errAssistantModelRateLimited                  = errors.New("assistant_model_rate_limited")
+	errAssistantModelConfigInvalid                = errors.New("assistant_model_config_invalid")
+	errAssistantModelSecretMissing                = errors.New("assistant_model_secret_missing")
 	errAssistantIdempotencyKeyConflict            = errors.New("assistant_idempotency_key_conflict")
 	errAssistantRequestInProgress                 = errors.New("assistant_request_in_progress")
 )
@@ -547,10 +601,11 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		return nil, errAssistantConversationForbidden
 	}
 
-	intent, err := assistantDecodeIntent(userInput)
+	resolvedIntent, err := s.resolveIntent(ctx, tenantID, conversationID, userInput)
 	if err != nil {
 		return nil, err
 	}
+	intent := resolvedIntent.Intent
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
 	resolutionSource := ""
@@ -576,6 +631,19 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 	}
 
 	plan := assistantBuildPlan(intent)
+	plan.ModelProvider = resolvedIntent.ProviderName
+	plan.ModelName = resolvedIntent.ModelName
+	plan.ModelRevision = resolvedIntent.ModelRevision
+	skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlans(intent, resolvedCandidateID)
+	plan.SkillExecutionPlan = skillExecutionPlan
+	plan.ConfigDeltaPlan = configDeltaPlan
+	if _, ok := capabilityDefinitionForKey(plan.CapabilityKey); !ok {
+		return nil, errAssistantPlanBoundaryViolation
+	}
+	dryRun := assistantBuildDryRun(intent, candidates, resolvedCandidateID)
+	if err := assistantAnnotateIntentPlan(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
+		return nil, err
+	}
 	policyVersion, compositionVersion, mappingVersion := assistantTurnVersionSnapshot(plan.CapabilityKey)
 
 	turn := &assistantTurn{
@@ -595,7 +663,7 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		AmbiguityCount:      ambiguityCount,
 		Confidence:          confidence,
 		ResolutionSource:    resolutionSource,
-		DryRun:              assistantBuildDryRun(intent, candidates, resolvedCandidateID),
+		DryRun:              dryRun,
 		CreatedAt:           time.Now().UTC(),
 		UpdatedAt:           time.Now().UTC(),
 	}
@@ -723,6 +791,25 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 	}
 	if turn.State != assistantStateConfirmed {
 		return nil, errAssistantConfirmationRequired
+	}
+	if assistantTurnContractVersionMismatched(turn) {
+		fromState := turn.State
+		turn.State = assistantStateValidated
+		turn.UpdatedAt = time.Now().UTC()
+		conversation.UpdatedAt = turn.UpdatedAt
+		conversation.State = turn.State
+		conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
+			TurnID:     turn.TurnID,
+			TurnAction: "commit",
+			RequestID:  turn.RequestID,
+			TraceID:    turn.TraceID,
+			FromState:  fromState,
+			ToState:    turn.State,
+			ReasonCode: "contract_version_mismatch",
+			ActorID:    principal.ID,
+			ChangedAt:  turn.UpdatedAt,
+		})
+		return nil, errAssistantPlanContractVersionMismatch
 	}
 	if assistantTurnVersionDrifted(turn) {
 		fromState := turn.State
@@ -880,14 +967,17 @@ func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
 		summary = "在指定父组织下创建部门，提交前需要确认候选主键"
 	}
 	return assistantPlanSummary{
-		Title:         title,
-		CapabilityKey: capabilityKey,
-		Summary:       summary,
+		Title:                   title,
+		CapabilityKey:           capabilityKey,
+		Summary:                 summary,
+		CapabilityMapVersion:    assistantCapabilityMapVersionV1,
+		CompilerContractVersion: assistantCompilerContractVersionV1,
 	}
 }
 
 func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCandidate, resolvedCandidateID string) assistantDryRunResult {
 	diff := make([]map[string]any, 0, 3)
+	validationErrors := make([]string, 0, 1)
 	if intent.Action == assistantIntentCreateOrgUnit {
 		diff = append(diff,
 			map[string]any{"field": "name", "after": intent.EntityName},
@@ -902,8 +992,16 @@ func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCand
 	explain := "计划已生成，等待确认后可提交"
 	if intent.Action == assistantIntentCreateOrgUnit && len(candidates) > 1 {
 		explain = "检测到多个同名父组织候选，需先确认候选主键"
+		if strings.TrimSpace(resolvedCandidateID) == "" {
+			validationErrors = append(validationErrors, "candidate_confirmation_required")
+		}
 	}
-	return assistantDryRunResult{Diff: diff, Explain: explain}
+	return assistantDryRunResult{
+		Diff:             diff,
+		Explain:          explain,
+		ValidationErrors: validationErrors,
+		WouldCommit:      false,
+	}
 }
 
 func assistantDecodeIntent(userInput string) (assistantIntentSpec, error) {

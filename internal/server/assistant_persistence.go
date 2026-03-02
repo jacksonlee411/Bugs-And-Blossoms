@@ -90,10 +90,11 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	intent, err := assistantDecodeIntent(userInput)
+	resolvedIntent, err := s.resolveIntent(ctx, tenantID, conversationID, userInput)
 	if err != nil {
 		return nil, err
 	}
+	intent := resolvedIntent.Intent
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
 	resolutionSource := ""
@@ -119,6 +120,19 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	}
 
 	plan := assistantBuildPlan(intent)
+	plan.ModelProvider = resolvedIntent.ProviderName
+	plan.ModelName = resolvedIntent.ModelName
+	plan.ModelRevision = resolvedIntent.ModelRevision
+	skillExecutionPlan, configDeltaPlan := assistantCompileIntentToPlans(intent, resolvedCandidateID)
+	plan.SkillExecutionPlan = skillExecutionPlan
+	plan.ConfigDeltaPlan = configDeltaPlan
+	if _, ok := capabilityDefinitionForKey(plan.CapabilityKey); !ok {
+		return nil, errAssistantPlanBoundaryViolation
+	}
+	dryRun := assistantBuildDryRun(intent, candidates, resolvedCandidateID)
+	if err := assistantAnnotateIntentPlan(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
+		return nil, err
+	}
 	policyVersion, compositionVersion, mappingVersion := assistantTurnVersionSnapshot(plan.CapabilityKey)
 	now := time.Now().UTC()
 	turn := &assistantTurn{
@@ -138,7 +152,7 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 		AmbiguityCount:      ambiguityCount,
 		Confidence:          confidence,
 		ResolutionSource:    resolutionSource,
-		DryRun:              assistantBuildDryRun(intent, candidates, resolvedCandidateID),
+		DryRun:              dryRun,
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
@@ -426,6 +440,26 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 	}
 	if turn.State != assistantStateConfirmed {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
+	}
+	if assistantTurnContractVersionMismatched(turn) {
+		fromState := turn.State
+		turn.State = assistantStateValidated
+		turn.UpdatedAt = time.Now().UTC()
+		conversation.UpdatedAt = turn.UpdatedAt
+		conversation.State = turn.State
+		transition := &assistantStateTransition{
+			TurnID:     turn.TurnID,
+			TurnAction: "commit",
+			RequestID:  turn.RequestID,
+			TraceID:    turn.TraceID,
+			FromState:  fromState,
+			ToState:    turn.State,
+			ReasonCode: "contract_version_mismatch",
+			ActorID:    principal.ID,
+			ChangedAt:  turn.UpdatedAt,
+		}
+		conversation.Transitions = append(conversation.Transitions, *transition)
+		return assistantTurnMutationResult{Transition: transition, PersistTurn: true}, errAssistantPlanContractVersionMismatch
 	}
 	if assistantTurnVersionDrifted(turn) {
 		fromState := turn.State
@@ -1060,6 +1094,8 @@ func assistantIdempotencyErrorPayload(err error) (status int, code string, ok bo
 		return http.StatusConflict, errAssistantConfirmationRequired.Error(), true
 	case errors.Is(err, errAssistantConversationStateInvalid):
 		return http.StatusConflict, errAssistantConversationStateInvalid.Error(), true
+	case errors.Is(err, errAssistantPlanContractVersionMismatch):
+		return http.StatusConflict, errAssistantPlanContractVersionMismatch.Error(), true
 	case errors.Is(err, errAssistantCandidateNotFound):
 		return http.StatusUnprocessableEntity, errAssistantCandidateNotFound.Error(), true
 	case errors.Is(err, errAssistantAuthSnapshotExpired):
@@ -1097,6 +1133,8 @@ func assistantErrorFromIdempotencyCode(code string) error {
 		return errAssistantConfirmationRequired
 	case errAssistantConversationStateInvalid.Error():
 		return errAssistantConversationStateInvalid
+	case errAssistantPlanContractVersionMismatch.Error():
+		return errAssistantPlanContractVersionMismatch
 	case errAssistantCandidateNotFound.Error():
 		return errAssistantCandidateNotFound
 	case errAssistantAuthSnapshotExpired.Error():

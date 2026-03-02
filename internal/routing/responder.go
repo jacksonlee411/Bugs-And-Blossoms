@@ -158,6 +158,24 @@ func knownErrorMessage(code string) string {
 		return "缺少策略版本，请刷新页面后重试。"
 	case "FIELD_POLICY_VERSION_STALE":
 		return "策略版本已过期，请刷新页面后重试。"
+	case "ai_plan_schema_constrained_decode_failed":
+		return "计划结构化解析失败，请补全必填信息后重试。"
+	case "ai_plan_boundary_violation":
+		return "计划超出助手执行边界，请调整后重试。"
+	case "ai_plan_contract_version_mismatch":
+		return "计划契约版本不一致，请重新生成并确认后再提交。"
+	case "ai_plan_determinism_violation":
+		return "计划确定性校验失败，请重新生成后重试。"
+	case "ai_model_provider_unavailable":
+		return "当前无可用模型服务，请检查模型健康状态后重试。"
+	case "ai_model_timeout":
+		return "模型请求超时，请稍后重试。"
+	case "ai_model_rate_limited":
+		return "模型服务限流，请稍后重试。"
+	case "ai_model_config_invalid":
+		return "模型配置不合法，请修正后重新应用。"
+	case "ai_model_secret_missing":
+		return "模型密钥缺失，请检查 key_ref 配置后重试。"
 	default:
 		return ""
 	}

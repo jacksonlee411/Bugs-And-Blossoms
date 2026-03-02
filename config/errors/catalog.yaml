@@ -313,14 +313,63 @@ errors:
     http_status: 422
     severity: error
     user_message_key: errors.ai_plan_boundary_violation
-    backend_policy: passthrough
+    backend_policy: mapped
     frontend_policy: mapped
   - code: ai_plan_schema_constrained_decode_failed
     module: assistant
     http_status: 422
     severity: error
     user_message_key: errors.ai_plan_schema_constrained_decode_failed
-    backend_policy: passthrough
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ai_plan_contract_version_mismatch
+    module: assistant
+    http_status: 409
+    severity: error
+    user_message_key: errors.ai_plan_contract_version_mismatch
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ai_plan_determinism_violation
+    module: assistant
+    http_status: 409
+    severity: error
+    user_message_key: errors.ai_plan_determinism_violation
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ai_model_provider_unavailable
+    module: assistant
+    http_status: 503
+    severity: error
+    user_message_key: errors.ai_model_provider_unavailable
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ai_model_timeout
+    module: assistant
+    http_status: 504
+    severity: error
+    user_message_key: errors.ai_model_timeout
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ai_model_rate_limited
+    module: assistant
+    http_status: 429
+    severity: error
+    user_message_key: errors.ai_model_rate_limited
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ai_model_config_invalid
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.ai_model_config_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ai_model_secret_missing
+    module: assistant
+    http_status: 500
+    severity: error
+    user_message_key: errors.ai_model_secret_missing
+    backend_policy: mapped
     frontend_policy: mapped
   - code: assistant_candidate_not_found
     module: assistant

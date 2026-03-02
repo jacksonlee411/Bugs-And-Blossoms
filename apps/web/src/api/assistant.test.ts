@@ -13,11 +13,15 @@ vi.mock('./httpClient', () => ({
 }))
 
 import {
+  applyAssistantModelProviders,
   commitAssistantTurn,
   confirmAssistantTurn,
   createAssistantConversation,
   createAssistantTurn,
-  getAssistantConversation
+  getAssistantConversation,
+  getAssistantModelProviders,
+  getAssistantModels,
+  validateAssistantModelProviders
 } from './assistant'
 
 describe('assistant api', () => {
@@ -59,5 +63,34 @@ describe('assistant api', () => {
       '/internal/assistant/conversations/conv_1/turns/turn_1:commit',
       {}
     )
+  })
+
+  it('calls model provider governance endpoints', async () => {
+    getMock.mockResolvedValue({ providers: [] })
+    postMock.mockResolvedValue({ valid: true, normalized: { provider_routing: {}, providers: [] } })
+
+    await getAssistantModelProviders()
+    expect(getMock).toHaveBeenCalledWith('/internal/assistant/model-providers')
+
+    await validateAssistantModelProviders({
+      provider_routing: { strategy: 'priority_failover', fallback_enabled: true },
+      providers: []
+    })
+    expect(postMock).toHaveBeenNthCalledWith(1, '/internal/assistant/model-providers:validate', {
+      provider_routing: { strategy: 'priority_failover', fallback_enabled: true },
+      providers: []
+    })
+
+    await applyAssistantModelProviders({
+      provider_routing: { strategy: 'priority_failover', fallback_enabled: true },
+      providers: []
+    })
+    expect(postMock).toHaveBeenNthCalledWith(2, '/internal/assistant/model-providers:apply', {
+      provider_routing: { strategy: 'priority_failover', fallback_enabled: true },
+      providers: []
+    })
+
+    await getAssistantModels()
+    expect(getMock).toHaveBeenNthCalledWith(2, '/internal/assistant/models')
   })
 })

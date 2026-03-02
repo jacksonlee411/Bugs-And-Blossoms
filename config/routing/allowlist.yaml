@@ -20,6 +20,9 @@ entrypoints:
       - path: /app/assistant
         methods: [GET]
         route_class: ui
+      - path: /app/assistant/models
+        methods: [GET]
+        route_class: ui
       - path: /assistant-ui
         methods: [GET]
         route_class: ui
@@ -151,6 +154,18 @@ entrypoints:
         route_class: internal_api
       - path: /internal/assistant/conversations/{conversation_id}/turns/{turn_action}
         methods: [POST]
+        route_class: internal_api
+      - path: /internal/assistant/model-providers
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/assistant/model-providers:validate
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/assistant/model-providers:apply
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/assistant/models
+        methods: [GET]
         route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]

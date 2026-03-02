@@ -1,6 +1,6 @@
 # DEV-PLAN-224：Assistant 多模型适配与 LLM 意图治理详细设计（修订版）
 
-**状态**: 规划中（2026-03-02 18:25 UTC，补充“确定性与契约版本化”）
+**状态**: 实施中（2026-03-02 18:50 UTC，已完成 M1/M3/M4 主链路落地与 223 集成收口）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
@@ -12,7 +12,7 @@
 - **当前痛点（修订确认）**:
   1. 当前仓库对 LibreChat 的利用停留在 `/assistant-ui/*` 反向代理与 iframe 嵌入，尚未形成平台侧多模型治理闭环。
   2. 意图识别仍以规则匹配为主，缺少 LLM + strict decode + boundary lint 的确定性主链路。
-  3. 会话为内存态，虽支持 turn append，但重启后不可恢复，难以支撑多轮对话稳定性。
+  3. `DEV-PLAN-223` 已完成会话持久化与审计闭环；224 需在其基础上完成上下文构建、版本快照注入与恢复链路集成，确保多轮行为稳定一致。
   4. 用户无法在产品内配置 provider/model，无法实现“可视化多模型切换 + 治理审计”。
 - **业务价值**:
   - 构建“可治理模型接入层 + 可审计意图到指令转换层 + 可恢复多轮会话层”，在不破坏 One Door 的前提下对齐 LibreChat 的多模型与会话体验能力。
@@ -58,6 +58,7 @@ graph TD
     D --> E[Assistant BFF /internal/assistant/*]
     B --> E
     E --> F[Intent Orchestrator]
+    E --> V[(Conversation Persistence\naudit/idempotency from 223)]
     F --> G[Model Gateway]
     G --> H[OpenAI Adapter]
     G --> I[DeepSeek Adapter]
@@ -133,6 +134,8 @@ assistant:
 1. [ ] `conversation_id + turn_id + request_id + trace_id` 全链路可追踪。
 2. [ ] 支持 `state/history/version snapshot` 回放。
 3. [ ] 提交前比对 `policy/composition/mapping` 漂移，命中后回退 `validated`。
+4. [ ] 幂等语义沿用 223：同 `(tenant, conversation, turn, turn_action, request_id)` 重试必须返回同一响应语义。
+5. [ ] 同键异载荷返回 `idempotency_key_conflict`（409）；处理中返回 `request_in_progress`（409）并携带 `Retry-After`。
 
 ### 4.4 配置约束
 1. [ ] `name` 必须在 `{openai, deepseek, claude, gemini}` 白名单内。
@@ -167,6 +170,7 @@ assistant:
 - 继续沿用 `/internal/assistant/conversations/*`。
 - 语义增强为：支持多轮上下文恢复、意图链路结构化回显、模型路由元数据审计。
 - 返回体必须带出：`intent_schema_version`、`compiler_contract_version`、`capability_map_version`、`skill_manifest_digest`、`context_hash`、`intent_hash`、`plan_hash`。
+- 幂等与恢复语义继承 223：同键同响应、同键异载荷冲突拒绝、处理中重试建议（`Retry-After`）。
 
 ### 5.4 错误码契约（修订）
 1. [ ] strict decode 失败 -> `ai_plan_schema_constrained_decode_failed`
@@ -178,6 +182,8 @@ assistant:
 7. [ ] 模型密钥缺失 -> `ai_model_secret_missing`
 8. [ ] 契约版本不一致 -> `ai_plan_contract_version_mismatch`
 9. [ ] 确定性校验失败 -> `ai_plan_determinism_violation`
+10. [ ] 幂等键冲突（沿用 223） -> `idempotency_key_conflict`
+11. [ ] 请求处理中（沿用 223） -> `request_in_progress`
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 provider 路由与回退算法（伪代码）
@@ -258,16 +264,15 @@ return plan + hashes
 7. [ ] 反向代理与路由层对 `assistant-ui` 到业务写路由实施硬阻断（非“仅测试约束”）。
 
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
-- **依赖**：
+- **依赖（修订）**：
   - `DEV-PLAN-221` 错误码与状态机契约冻结。
   - `DEV-PLAN-222` iframe/postMessage 安全契约与 FE/E2E 收口。
-  - `DEV-PLAN-223` 会话持久化与审计字段落地（支撑多轮恢复）。
-  - M4 启动条件：223 完成并通过其门禁与证据验收。
+  - `DEV-PLAN-223` 会话持久化与审计字段已落地（作为 224 会话恢复集成基线）。
 - **里程碑**：
   1. [ ] M1：Provider 配置契约 + `ModelGateway` 接口冻结（含配置页 IA）。
   2. [ ] M2：四类 provider adapter + 健康检查 + 错误归一化实现。
   3. [ ] M3：意图到指令链路切换（strict decode + boundary lint + compiler）。
-  4. [ ] M4：多轮会话恢复接入（对接 223 持久化能力）。
+  4. [ ] M4：多轮会话恢复集成（基于 223 的持久化/幂等/审计能力完成上下文构建与回放收口）。
   5. [ ] M5：LibreChat 对齐收口（模型切换/会话恢复/消息安全）+ 证据归档。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
@@ -281,6 +286,7 @@ return plan + hashes
   2. [ ] 同输入在同配置下输出 `IntentSpec/SkillPlan/DeltaPlan` 结构稳定。
   3. [ ] 会话恢复后多轮上下文一致（重启前后行为一致）。
   4. [ ] 契约版本漂移命中时稳定拒绝（`ai_plan_contract_version_mismatch`）。
+  5. [ ] 223 不变量回归：同键同响应、同键异载荷冲突、`request_in_progress + Retry-After` 全部稳定。
 - **前端/E2E**：
   1. [ ] 模型配置页可完成“查看/校验/应用”闭环。
   2. [ ] `/app/assistant` 多轮会话可恢复（会话列表 + 回放）。
@@ -357,7 +363,7 @@ return plan + hashes
 8. [ ] 右侧事务面板改为消费结构化结果（不允许前端本地拼写提交命令）。
 
 ### 12.4 M4：多轮会话恢复（依赖 223）
-1. [ ] 对接 223 的持久化会话读取能力（conversation/turn/transition/idempotency）。
+1. [ ] 对接 223 已落地的持久化会话读取能力（conversation/turn/transition/idempotency）。
 2. [ ] 实现上下文构建器：
    - [ ] 最近 N 轮窗口 + 摘要压缩。
    - [ ] 候选主键与版本快照注入。
@@ -366,6 +372,10 @@ return plan + hashes
    - [ ] 同 `request_id` 幂等重试不重复提交。
 4. [ ] 漂移检测：
    - [ ] `policy/composition/mapping` 漂移命中后强制回退 `validated`。
+5. [ ] 继承并验证 223 幂等契约：
+   - [ ] 同键重试返回同一 `http_status + error_code + response_body`。
+   - [ ] 同键异载荷命中 `idempotency_key_conflict`。
+   - [ ] 处理中命中 `request_in_progress + Retry-After` 并按同 `request_id` 重试。
 
 ### 12.5 M5：LibreChat 对齐收口（P1/P2 前置）
 1. [ ] 消息桥接安全落地（origin/schema/nonce-channel 三重校验）。
@@ -379,7 +389,8 @@ return plan + hashes
 3. [ ] 前端测试：模型配置页表单校验与错误映射。
 4. [ ] E2E：模型切换、多轮恢复、消息桥接安全、越权阻断。
 5. [ ] 确定性回归：固定样本集重复回放、跨 provider 结构等价性、版本漂移阻断。
-6. [ ] 门禁命令：
+6. [ ] 223 回归：会话恢复、幂等一致性、租户隔离与状态转移审计回放。
+7. [ ] 门禁命令：
    - [ ] `make check routing`
    - [ ] `make check capability-route-map`
    - [ ] `make authz-pack && make authz-test && make authz-lint`
@@ -402,3 +413,27 @@ return plan + hashes
 - `docs/dev-plans/209-blueprint-skill-manifest-tool-whitelist-and-risk-tier.md`
 - `docs/dev-plans/200-composable-building-block-architecture-blueprint.md`
 - `AGENTS.md`
+
+## 14. 实施回执（2026-03-02）
+### 14.1 已落地项
+1. [X] M1 模型治理闭环：新增 `GET/POST /internal/assistant/model-providers*` 与 `GET /internal/assistant/models`，前端新增 `/app/assistant/models` 配置页并接入导航。
+2. [X] M2 网关基线：落地 `assistantModelGateway`（priority failover、provider 白名单、错误归一化、健康状态视图），四 provider 统一走 adapter 契约（当前为 deterministic adapter 基线）。
+3. [X] M3 意图链路收口：`resolveIntent -> strict decode -> boundary lint -> SkillExecutionPlan -> ConfigDeltaPlan -> DryRunResult` 全链路接入创建 turn。
+4. [X] M3 确定性与版本化：注入并返回 `intent_schema_version/compiler_contract_version/capability_map_version/skill_manifest_digest/context_hash/intent_hash/plan_hash`。
+5. [X] M4 与 223 对齐：create/commit 路径接入持久化链路，提交前新增契约版本漂移检测并按 223 状态机回退 `confirmed -> validated`（`contract_version_mismatch`）。
+6. [X] 路由/授权/错误码同步：allowlist、route-capability-map、registry、authz 与前后端错误码映射完成同步。
+
+### 14.2 新增/更新实现文件（摘要）
+- 后端：`internal/server/assistant_model_gateway.go`、`internal/server/assistant_model_providers_api.go`、`internal/server/assistant_intent_pipeline.go`、`internal/server/assistant_api.go`、`internal/server/assistant_persistence.go`
+- 前端：`apps/web/src/pages/assistant/AssistantModelProvidersPage.tsx`、`apps/web/src/pages/assistant/AssistantPage.tsx`、`apps/web/src/api/assistant.ts`
+- 契约：`config/routing/allowlist.yaml`、`config/capability/route-capability-map.v1.json`、`config/errors/catalog.yaml`
+
+### 14.3 验证结果
+1. [X] `go test ./internal/server -count=1`
+2. [X] `pnpm --dir apps/web exec vitest run src/api/assistant.test.ts src/pages/assistant/AssistantPage.test.tsx`
+3. [X] `make check routing`
+4. [X] `make check capability-route-map`
+5. [X] `make authz-pack && make authz-test && make authz-lint`
+6. [X] `make check error-message`
+7. [X] `make check doc`
+8. [ ] `make test`：当前仍受仓库全局覆盖率策略阻断（`total 95.40% < threshold 100%`），已确认本次 224 相关新增测试通过。
