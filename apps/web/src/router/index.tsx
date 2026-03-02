@@ -2,6 +2,7 @@ import { Navigate, createBrowserRouter } from 'react-router-dom'
 import { AppShell } from '../layout/AppShell'
 import { navItems } from '../navigation/config'
 import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
+import { AssistantPage } from '../pages/assistant/AssistantPage'
 import { FoundationDemoPage } from '../pages/FoundationDemoPage'
 import { DictConfigsPage } from '../pages/dicts/DictConfigsPage'
 import { DictValueDetailsPage } from '../pages/dicts/DictValueDetailsPage'
@@ -38,6 +39,14 @@ export const router = createBrowserRouter([
       {
         path: 'home',
         element: <Navigate replace to='/' />
+      },
+      {
+        path: 'assistant',
+        element: (
+          <RequirePermission permissionKey='orgunit.read'>
+            <AssistantPage />
+          </RequirePermission>
+        )
       },
       {
         path: 'org/units/field-configs',

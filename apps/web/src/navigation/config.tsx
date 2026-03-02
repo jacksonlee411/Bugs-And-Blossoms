@@ -6,6 +6,7 @@ import HubIcon from '@mui/icons-material/Hub'
 import HomeWorkIcon from '@mui/icons-material/HomeWork'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
 import PendingActionsIcon from '@mui/icons-material/PendingActions'
+import SmartToyIcon from '@mui/icons-material/SmartToy'
 import TuneIcon from '@mui/icons-material/Tune'
 import WorkOutlineIcon from '@mui/icons-material/WorkOutline'
 import type { NavItem, SearchEntry } from '../types/navigation'
@@ -46,6 +47,15 @@ export const navItems: NavItem[] = [
     order: 22,
     permissionKey: 'dict.admin',
     keywords: ['dict', 'dictionary', 'value', '配置', '字典', '编码']
+  },
+  {
+    key: 'assistant',
+    path: '/assistant',
+    labelKey: 'nav_ai_assistant',
+    icon: <SmartToyIcon fontSize='small' />,
+    order: 23,
+    permissionKey: 'orgunit.read',
+    keywords: ['assistant', 'ai', 'chat', 'planner', '智能助手', '对话']
   },
   {
     key: 'configuration-policy',

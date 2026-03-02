@@ -402,6 +402,18 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/functional-areas/switch"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
 		t.Fatalf("expected internal functional area switch mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
 	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/conversations"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected assistant conversation create mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/conversations/conv_001"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
+		t.Fatalf("expected assistant conversation get mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/conversations/conv_001/turns"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected assistant turn create mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
+	}
+	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/conversations/conv_001/turns/turn_001:confirm"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
+		t.Fatalf("expected assistant turn confirm mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units"); !ok {
 		t.Fatal("expected ok=true")
 	}

@@ -44,6 +44,12 @@ func TestCapabilityRouteBindingForRoute(t *testing.T) {
 	if binding, ok := capabilityRouteBindingForRoute("POST", "/org/api/setid-strategy-registry:disable"); !ok || binding.Action != authz.ActionAdmin {
 		t.Fatalf("expected disable mapping found, got=%+v ok=%v", binding, ok)
 	}
+	if binding, ok := capabilityRouteBindingForRoute("GET", "/internal/assistant/conversations/conv_001"); !ok || binding.CapabilityKey != "org.assistant_conversation.manage" {
+		t.Fatalf("expected assistant conversation template mapping found, got=%+v ok=%v", binding, ok)
+	}
+	if binding, ok := capabilityRouteBindingForRoute("POST", "/internal/assistant/conversations/conv_001/turns/turn_001:confirm"); !ok || binding.CapabilityKey != "org.assistant_conversation.manage" {
+		t.Fatalf("expected assistant turn action template mapping found, got=%+v ok=%v", binding, ok)
+	}
 }
 
 func TestCapabilityAuthzRequirementForBinding(t *testing.T) {

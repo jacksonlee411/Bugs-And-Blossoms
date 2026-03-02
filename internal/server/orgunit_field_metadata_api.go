@@ -418,10 +418,7 @@ func handleOrgUnitFieldConfigsAPI(w http.ResponseWriter, r *http.Request, store 
 			if found {
 				policy.Maintainable = decision.Maintainable
 				defaultRuleRef := strings.TrimSpace(decision.DefaultRuleRef)
-				if defaultRuleRef == "" {
-					policy.DefaultMode = "NONE"
-					policy.DefaultRuleExpr = nil
-				} else {
+				if defaultRuleRef != "" {
 					policy.DefaultMode = "CEL"
 					policy.DefaultRuleExpr = &defaultRuleRef
 				}
