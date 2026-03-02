@@ -139,6 +139,7 @@ check (to_state in ('validated', 'confirmed', 'committed', 'canceled', 'expired'
 tenant_id uuid not null
 conversation_id uuid not null
 turn_id uuid not null
+turn_action text not null
 request_id text not null
 request_hash text not null
 status text not null default 'pending'
@@ -148,18 +149,23 @@ response_body jsonb
 response_hash text
 created_at timestamptz not null
 finalized_at timestamptz
-primary key (tenant_id, conversation_id, turn_id, request_id)
+expires_at timestamptz not null
+primary key (tenant_id, conversation_id, turn_id, turn_action, request_id)
 foreign key (tenant_id, conversation_id, turn_id)
   references assistant_turns(tenant_id, conversation_id, turn_id)
 check (status in ('pending', 'done'))
+check (turn_action in ('confirm', 'commit'))
+check (response_body is null or octet_length(response_body::text) <= 65536)
 ```
 
 ### 4.2 约束与索引要求
 1. [ ] 会话、回合、幂等统一采用租户前缀主键，避免“键存在但租户上下文缺失”的 fail-open 查询。
 2. [ ] `assistant_turns(tenant_id, conversation_id, created_at, turn_id)` 索引，保障会话恢复顺序稳定。
 3. [ ] `assistant_state_transitions(tenant_id, conversation_id, changed_at, id)` 索引，保障审计回放顺序稳定。
-4. [ ] `assistant_idempotency(tenant_id, conversation_id, turn_id, request_id)` 主键 + `request_hash` 校验，阻断同键异载荷。
+4. [ ] `assistant_idempotency(tenant_id, conversation_id, turn_id, turn_action, request_id)` 主键 + `request_hash` 校验，阻断同键异载荷。
 5. [ ] `assistant_turns` 必须固化 `policy_version/composition_version/mapping_version`，用于 `:commit` 漂移校验。
+6. [ ] `request_hash` 计算口径冻结为：`turn_action + canonical_json_payload`，防止跨动作键碰撞。
+7. [ ] `response_body` 仅允许落最小回放白名单字段（禁止原样落盘完整业务对象）。
 
 ### 4.3 RLS 与鉴权约束（落地项）
 1. [ ] 新表全部 `ENABLE ROW LEVEL SECURITY`，默认拒绝（fail-closed）。
@@ -173,6 +179,7 @@ check (status in ('pending', 'done'))
 3. [ ] 在迁移中同步落地 RLS policy 与必要索引，不拆分到后续“补丁迁移”。
 4. [ ] 若命中 sqlc，执行 `make sqlc-generate`，并在必要时执行 `make sqlc-verify-schema`。
 5. [ ] 生成后要求 `git status --short` 无生成物漂移。
+6. [ ] 为 `assistant_idempotency.expires_at` 提供默认值（建议 `created_at + interval '30 days'`）。
 
 ## 5. 接口契约 (API Contracts)
 > 不新增对外路由，仅增强既有 assistant API 的持久化与审计语义。
@@ -184,11 +191,18 @@ check (status in ('pending', 'done'))
 4. [ ] `POST .../turns/:confirm`、`POST .../turns/:commit`：状态转移、审计、幂等记录同事务落盘。
 
 ### 5.2 错误码与租户绑定契约
-1. [ ] 同 `(tenant, conversation, turn, request_id)` 重试返回完全一致响应语义。
+1. [ ] 同 `(tenant, conversation, turn, turn_action, request_id)` 重试返回完全一致响应语义。
 2. [ ] 同键不同载荷（`request_hash` 不一致）返回 `idempotency_key_conflict`（409）。
 3. [ ] 违反状态机约束返回 `conversation_state_invalid`。
 4. [ ] 租户不匹配返回 `tenant_mismatch`/403（对齐 `TC-220-BE-011`）。
 5. [ ] 保持候选固化冲突错误码与 `DEV-PLAN-221` 一致。
+6. [ ] 处理中请求返回 `request_in_progress`（409），并带 `Retry-After`、`retry_after_ms`、`advice=retry_same_request_id`。
+
+### 5.3 `request_in_progress` 重试契约（客户端）
+1. [ ] 客户端必须使用同一 `request_id` 重试，不得隐式改写幂等键。
+2. [ ] 退避策略冻结：指数退避（300ms → 600ms → 1200ms → 2000ms，上限 2000ms），最多 5 次。
+3. [ ] 达到重试上限后展示“请求处理中，可稍后刷新会话”，不再继续前台高频重试。
+4. [ ] 服务端 `Retry-After` 建议默认 1s，可按负载调节但不得省略。
 
 ## 6. 核心逻辑与算法 (Business Logic & Algorithms)
 ### 6.1 会话创建流程（伪代码）
@@ -206,7 +220,7 @@ begin tx
 set local app.tenant_id
 lock conversation row for update
 
-insert assistant_idempotency(key..., request_hash, status='pending')
+insert assistant_idempotency(key including turn_action..., request_hash, status='pending')
 on conflict do nothing returning key
 
 if not inserted:
@@ -215,15 +229,15 @@ if not inserted:
     return 409 idempotency_key_conflict
   if existing.status = 'done':
     return existing.http_status + existing.error_code + existing.response_body
-  return 409 request_in_progress
+  return 409 request_in_progress + Retry-After
 
 validate tenant + state transition + version drift
 apply confirm/commit mutation
 insert assistant_state_transitions
-build response envelope
+build response envelope(whitelist fields only)
 
 update assistant_idempotency
-  set status='done', http_status=?, error_code=?, response_body=?, response_hash=?, finalized_at=now()
+  set status='done', http_status=?, error_code=?, response_body=?, response_hash=?, finalized_at=now(), expires_at=now()+30d
 where key...
 
 commit
@@ -274,11 +288,14 @@ on GET conversation:
   2. [ ] 幂等命中、并发冲突、同键异载荷冲突分支。
   3. [ ] 候选固化与错误码映射回归。
   4. [ ] 漂移触发 `confirmed -> validated` 回退分支。
+  5. [ ] 同 `request_id` 在 `confirm` 与 `commit` 下互不碰撞（动作维度幂等）。
 - **集成测试**：
   1. [ ] 服务重启后会话与 turn 可恢复。
   2. [ ] 并发重试不产生重复提交，且返回一致响应语义。
   3. [ ] 租户切换访问同 conversation 被阻断（`TC-220-BE-011`）。
   4. [ ] RLS 缺少租户上下文时 fail-closed。
+  5. [ ] `request_in_progress` 返回 `Retry-After`，客户端按退避策略收敛重试流量。
+  6. [ ] `response_body` 超限时被拒绝或裁剪，且不破坏幂等语义回放。
 - **门禁命令（按触发器矩阵）**：
   1. [ ] `go fmt ./... && go vet ./... && make check lint && make test`
   2. [ ] `make check routing && make check capability-route-map`
@@ -294,6 +311,10 @@ on GET conversation:
 ## 10. 故障处置与最小可观测 (Ops & Recovery)
 - 不引入额外运维开关；遵循最小运维原则。
 - **日志最小字段**：`tenant_id/conversation_id/turn_id/request_id/trace_id/error_code`。
+- **幂等数据治理**：
+  1. [ ] `assistant_idempotency` 保留期默认 30 天（以 `expires_at` 为准）。
+  2. [ ] 到期数据由定时清理任务删除；清理失败需告警并记录执行证据。
+  3. [ ] 长期审计依赖 `assistant_state_transitions`，不依赖 idempotency 表长期保存。
 - **处置预案（必须可执行）**：
   1. [ ] 触发条件：幂等冲突激增、跨租户误判、状态机误转移。
   2. [ ] 责任人：当班后端值守（执行）+ 模块 owner（审批恢复）。
