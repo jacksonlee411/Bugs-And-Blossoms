@@ -46,8 +46,9 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 
 	t.Run("proxy forward and error handler", func(t *testing.T) {
 		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Set-Cookie", "upstream_sid=1; Path=/")
 			w.Header().Set("Content-Type", "text/plain")
-			_, _ = io.WriteString(w, r.URL.Path+"|"+r.Header.Get("X-Forwarded-Prefix")+"|"+r.Host)
+			_, _ = io.WriteString(w, r.URL.Path+"|"+r.Header.Get("X-Forwarded-Prefix")+"|"+r.Host+"|"+r.Header.Get("Cookie")+"|"+r.Header.Get("Authorization"))
 		}))
 		defer upstream.Close()
 
@@ -55,6 +56,8 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 		h := newAssistantUIProxyHandler()
 
 		req := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui/assets/app.js", nil)
+		req.Header.Set("Cookie", "sid=local")
+		req.Header.Set("Authorization", "Bearer test")
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -62,6 +65,15 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 		}
 		if got := rec.Body.String(); got == "" || got[0:5] != "/chat" {
 			t.Fatalf("unexpected body=%s", got)
+		}
+		if strings.Contains(rec.Body.String(), "sid=local") {
+			t.Fatalf("cookie header should be stripped, got=%q", rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), "Bearer test") {
+			t.Fatalf("authorization header should be stripped, got=%q", rec.Body.String())
+		}
+		if setCookie := rec.Result().Header.Get("Set-Cookie"); setCookie != "" {
+			t.Fatalf("set-cookie should be stripped, got=%q", setCookie)
 		}
 
 		unreachableURL := "http://127.0.0.1:1"
@@ -72,6 +84,30 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 		errorProxy.ServeHTTP(errorRec, errorReq)
 		if errorRec.Code != http.StatusBadGateway {
 			t.Fatalf("status=%d body=%s", errorRec.Code, errorRec.Body.String())
+		}
+	})
+
+	t.Run("method and path guard", func(t *testing.T) {
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = io.WriteString(w, "ok")
+		}))
+		defer upstream.Close()
+
+		t.Setenv("LIBRECHAT_UPSTREAM", upstream.URL)
+		h := newAssistantUIProxyHandler()
+
+		postReq := httptest.NewRequest(http.MethodPost, "http://localhost/assistant-ui", nil)
+		postRec := httptest.NewRecorder()
+		h.ServeHTTP(postRec, postReq)
+		if postRec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("post status=%d body=%s", postRec.Code, postRec.Body.String())
+		}
+
+		pathReq := httptest.NewRequest(http.MethodGet, "http://localhost/not-assistant", nil)
+		pathRec := httptest.NewRecorder()
+		h.ServeHTTP(pathRec, pathReq)
+		if pathRec.Code != http.StatusBadRequest {
+			t.Fatalf("path status=%d body=%s", pathRec.Code, pathRec.Body.String())
 		}
 	})
 }
