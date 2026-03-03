@@ -4,18 +4,32 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 )
 
 func TestAssistantUIProxyHandler(t *testing.T) {
-	t.Run("unavailable when upstream missing", func(t *testing.T) {
+	t.Run("defaults to local upstream when env missing", func(t *testing.T) {
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = io.WriteString(w, "ok:"+r.URL.Path)
+		}))
+		defer upstream.Close()
+		parsed, err := url.Parse(upstream.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("LIBRECHAT_PORT", parsed.Port())
 		t.Setenv("LIBRECHAT_UPSTREAM", "")
 		h := newAssistantUIProxyHandler()
 		req := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
-		if rec.Code != http.StatusServiceUnavailable {
+		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "ok:/") {
+			t.Fatalf("unexpected body=%s", rec.Body.String())
 		}
 	})
 

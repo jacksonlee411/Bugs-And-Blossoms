@@ -176,6 +176,9 @@ entrypoints:
       - path: /internal/assistant/models
         methods: [GET]
         route_class: internal_api
+      - path: /internal/assistant/runtime-status
+        methods: [GET]
+        route_class: internal_api
       - path: /org/api/org-units
         methods: [GET, POST]
         route_class: internal_api

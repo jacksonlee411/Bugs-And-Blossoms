@@ -429,6 +429,9 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/models"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
 		t.Fatalf("expected assistant models read mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
 	}
+	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/runtime-status"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
+		t.Fatalf("expected assistant runtime status read mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)
+	}
 	if _, _, ok := authzRequirementForRoute(http.MethodGet, "/org/api/org-units"); !ok {
 		t.Fatal("expected ok=true")
 	}

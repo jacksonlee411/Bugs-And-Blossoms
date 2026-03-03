@@ -1,6 +1,6 @@
 # DEV-PLAN-231：LibreChat 集成前置契约与门禁补齐详细设计
 
-**状态**: 草拟中（2026-03-03 15:40 UTC）
+**状态**: 已完成（2026-03-03 12:25 UTC，实施与验证见 `docs/dev-records/dev-plan-231-execution-log.md`，PR #466 已合并）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:

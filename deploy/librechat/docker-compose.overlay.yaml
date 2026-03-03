@@ -1,0 +1,22 @@
+services:
+  api:
+    environment:
+      LIBRECHAT_RUNTIME_OWNER: bugs-and-blossoms
+    volumes:
+      - ${LIBRECHAT_DATA_ROOT:-./.local/librechat}/api:/app/data
+
+  mongodb:
+    volumes:
+      - ${LIBRECHAT_DATA_ROOT:-./.local/librechat}/mongodb:/data/db
+
+  meilisearch:
+    volumes:
+      - ${LIBRECHAT_DATA_ROOT:-./.local/librechat}/meilisearch:/meili_data
+
+  rag_api:
+    volumes:
+      - ${LIBRECHAT_DATA_ROOT:-./.local/librechat}/rag_api:/app/data
+
+  vectordb:
+    volumes:
+      - ${LIBRECHAT_DATA_ROOT:-./.local/librechat}/vectordb:/qdrant/storage

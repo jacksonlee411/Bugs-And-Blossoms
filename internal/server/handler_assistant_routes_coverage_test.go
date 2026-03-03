@@ -75,4 +75,7 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	if rec := call(http.MethodGet, "/internal/assistant/models", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant models route not wired")
 	}
+	if rec := call(http.MethodGet, "/internal/assistant/runtime-status", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant runtime status route not wired")
+	}
 }

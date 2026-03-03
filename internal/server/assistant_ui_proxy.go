@@ -4,15 +4,11 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strings"
 )
 
 func newAssistantUIProxyHandler() http.Handler {
-	targetRaw := strings.TrimSpace(os.Getenv("LIBRECHAT_UPSTREAM"))
-	if targetRaw == "" {
-		return assistantUIUnavailableHandler("LIBRECHAT_UPSTREAM is not configured")
-	}
+	targetRaw := assistantRuntimeDefaultUpstreamURL()
 	targetURL, err := url.Parse(targetRaw)
 	if err != nil || targetURL.Scheme == "" || targetURL.Host == "" {
 		return assistantUIUnavailableHandler("LIBRECHAT_UPSTREAM is invalid")

@@ -1,0 +1,48 @@
+services:
+  api:
+    image: ghcr.io/danny-avila/librechat:v0.8.0
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: ${LIBRECHAT_PORT:-3080}
+      MONGO_URI: ${MONGO_URI:-mongodb://mongodb:27017/LibreChat}
+      MEILI_HOST: ${MEILI_HOST:-http://meilisearch:7700}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-}
+      RAG_API_URL: ${RAG_API_URL:-http://rag_api:8000}
+      VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-qdrant}
+      QDRANT_URL: ${QDRANT_URL:-http://vectordb:6333}
+    ports:
+      - "${LIBRECHAT_PORT:-3080}:3080"
+    depends_on:
+      mongodb:
+        condition: service_started
+      meilisearch:
+        condition: service_started
+      rag_api:
+        condition: service_started
+      vectordb:
+        condition: service_started
+
+  mongodb:
+    image: mongo:7.0
+    restart: unless-stopped
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12.0
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: production
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-}
+
+  rag_api:
+    image: ghcr.io/danny-avila/librechat-rag-api:v0.8.0
+    restart: unless-stopped
+    environment:
+      RAG_PORT: 8000
+      QDRANT_URL: ${QDRANT_URL:-http://vectordb:6333}
+
+  vectordb:
+    image: qdrant/qdrant:v1.13.4
+    restart: unless-stopped
