@@ -344,6 +344,7 @@ modules/{module}/
 - DEV-PLAN-222 执行日志：`docs/dev-records/dev-plan-222-execution-log.md`
 - DEV-PLAN-223：Assistant 会话持久化与审计闭环实施计划：`docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - DEV-PLAN-224：Assistant 多模型适配与 LLM 意图判断能力实施计划：`docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
+- DEV-PLAN-224A：Assistant 真实 Codex API 与多轮对话工作台实施计划：`docs/dev-plans/224a-assistant-codex-live-api-and-multi-turn-workspace-plan.md`
 - DEV-PLAN-225：Assistant Tasks API 与 Temporal（P2）实施计划：`docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
 - DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
