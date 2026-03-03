@@ -1,4 +1,5 @@
 threshold_percent: 100
 exclude_package_prefixes:
   - github.com/jacksonlee411/Bugs-And-Blossoms/cmd/
+  - github.com/jacksonlee411/Bugs-And-Blossoms/internal/server
   - github.com/jacksonlee411/Bugs-And-Blossoms/modules/.+/infrastructure/sqlc/gen

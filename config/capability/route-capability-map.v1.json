@@ -230,6 +230,42 @@
     },
     {
       "method": "GET",
+      "path": "/internal/assistant/model-providers",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/assistant/model-providers:validate",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/assistant/model-providers:apply",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/assistant/models",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "GET",
       "path": "/org/api/org-units/create-field-decisions",
       "route_class": "internal_api",
       "action": "read",

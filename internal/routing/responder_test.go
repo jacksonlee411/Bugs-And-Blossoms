@@ -229,6 +229,15 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "FIELD_POLICY_DISABLE_NOT_ALLOWED", want: "停用该策略会导致当前上下文无可用策略，请先补齐兜底策略后再重试。"},
 		{code: "FIELD_POLICY_VERSION_REQUIRED", want: "缺少策略版本，请刷新页面后重试。"},
 		{code: "FIELD_POLICY_VERSION_STALE", want: "策略版本已过期，请刷新页面后重试。"},
+		{code: "ai_plan_schema_constrained_decode_failed", want: "计划结构化解析失败，请补全必填信息后重试。"},
+		{code: "ai_plan_boundary_violation", want: "计划超出助手执行边界，请调整后重试。"},
+		{code: "ai_plan_contract_version_mismatch", want: "计划契约版本不一致，请重新生成并确认后再提交。"},
+		{code: "ai_plan_determinism_violation", want: "计划确定性校验失败，请重新生成后重试。"},
+		{code: "ai_model_provider_unavailable", want: "当前无可用模型服务，请检查模型健康状态后重试。"},
+		{code: "ai_model_timeout", want: "模型请求超时，请稍后重试。"},
+		{code: "ai_model_rate_limited", want: "模型服务限流，请稍后重试。"},
+		{code: "ai_model_config_invalid", want: "模型配置不合法，请修正后重新应用。"},
+		{code: "ai_model_secret_missing", want: "模型密钥缺失，请检查 key_ref 配置后重试。"},
 		{code: "unknown", want: ""},
 	}
 

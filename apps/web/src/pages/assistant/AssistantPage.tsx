@@ -271,6 +271,10 @@ export function AssistantPage() {
       <Stack alignItems='center' direction='row' spacing={1}>
         <SmartToyIcon color='primary' />
         <Typography variant='h5'>AI 助手</Typography>
+        <Box sx={{ flex: 1 }} />
+        <Button component='a' href='/app/assistant/models' variant='text'>
+          模型配置
+        </Button>
       </Stack>
       <Typography color='text.secondary' variant='body2'>
         左侧为 LibreChat 聊天展示层，右侧为本系统事务控制面板（Confirm / Commit 仍走后端 One Door）。
@@ -331,6 +335,15 @@ export function AssistantPage() {
                 <Typography data-testid='assistant-trace-id' variant='body2'>
                   trace_id: {turn?.trace_id ?? '-'}
                 </Typography>
+                <Typography variant='caption'>intent_schema_version: {turn?.intent.intent_schema_version ?? '-'}</Typography>
+                <Typography variant='caption'>
+                  compiler_contract_version: {turn?.plan.compiler_contract_version ?? '-'}
+                </Typography>
+                <Typography variant='caption'>capability_map_version: {turn?.plan.capability_map_version ?? '-'}</Typography>
+                <Typography variant='caption'>skill_manifest_digest: {turn?.plan.skill_manifest_digest ?? '-'}</Typography>
+                <Typography variant='caption'>context_hash: {turn?.intent.context_hash ?? '-'}</Typography>
+                <Typography variant='caption'>intent_hash: {turn?.intent.intent_hash ?? '-'}</Typography>
+                <Typography variant='caption'>plan_hash: {turn?.dry_run.plan_hash ?? '-'}</Typography>
                 <Stack alignItems='center' direction='row' spacing={1}>
                   <Typography variant='body2'>状态：</Typography>
                   <Chip data-testid='assistant-turn-state' label={turn?.state ?? assistantStatePlaceholder} size='small' />
@@ -360,6 +373,10 @@ export function AssistantPage() {
                     <Typography component='span' data-testid='assistant-plan-capability' variant='caption'>
                       capability_key={turn.plan.capability_key}
                     </Typography>
+                    <br />
+                    <Typography component='span' variant='caption'>
+                      provider={turn.plan.model_provider ?? '-'} / model={turn.plan.model_name ?? '-'}
+                    </Typography>
                   </Alert>
                 ) : null}
                 {turn?.dry_run ? (
@@ -376,6 +393,11 @@ export function AssistantPage() {
                           </Typography>
                         ))}
                       </Stack>
+                    ) : null}
+                    {turn.dry_run.validation_errors?.length ? (
+                      <Alert severity='warning'>
+                        {turn.dry_run.validation_errors.join(', ')}
+                      </Alert>
                     ) : null}
                   </Stack>
                 ) : null}

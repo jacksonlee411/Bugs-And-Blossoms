@@ -150,7 +150,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	if err := dictpkg.RegisterResolver(dictStore); err != nil {
 		return nil, err
 	}
-	assistantSvc := newAssistantConversationService(orgStore, orgUnitWriteService)
+	assistantSvc := newAssistantConversationServiceWithPool(orgStore, orgUnitWriteService, pgPool)
 
 	router := routing.NewRouter(classifier)
 
@@ -477,6 +477,18 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations/{conversation_id}/turns/{turn_action}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantTurnActionAPI(w, r, assistantSvc)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/model-providers", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantModelProvidersAPI(w, r, assistantSvc)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/model-providers:validate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantModelProvidersValidateAPI(w, r, assistantSvc)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/model-providers:apply", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantModelProvidersApplyAPI(w, r, assistantSvc)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/models", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantModelsAPI(w, r, assistantSvc)
 	}))
 
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
