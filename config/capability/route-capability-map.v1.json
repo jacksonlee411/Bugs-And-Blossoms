@@ -229,6 +229,33 @@
       "status": "active"
     },
     {
+      "method": "POST",
+      "path": "/internal/assistant/tasks",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/assistant/tasks/{task_id}",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/assistant/tasks/{task_action}",
+      "route_class": "internal_api",
+      "action": "admin",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
       "method": "GET",
       "path": "/internal/assistant/model-providers",
       "route_class": "internal_api",

@@ -347,6 +347,7 @@ modules/{module}/
 - DEV-PLAN-223：Assistant 会话持久化与审计闭环实施计划：`docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - DEV-PLAN-224：Assistant 多模型适配与 LLM 意图判断能力实施计划：`docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
 - DEV-PLAN-225：Assistant Tasks API 与 Temporal（P2）实施计划：`docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
+- DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`

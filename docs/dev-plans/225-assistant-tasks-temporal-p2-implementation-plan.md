@@ -1,6 +1,6 @@
 # DEV-PLAN-225：Assistant Tasks API 与 Temporal（P2）详细设计（修订版）
 
-**状态**: 规划中（2026-03-02 18:55 UTC，基于评审补充幂等/可靠派发/224 契约继承）
+**状态**: 已完成（2026-03-03 01:16 UTC，M1-M5 实施完成，执行证据见 `docs/dev-records/dev-plan-225-execution-log.md`）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
@@ -371,39 +371,39 @@ on workflow canceled callback:
   - `DEV-PLAN-224` 已完成并稳定产出可编排输入 + 版本/哈希快照。
   - `DEV-PLAN-220` P2 Temporal 边界与 TC-220-TMP-001~006 冻结。
 - **里程碑**：
-  1. [ ] M1：任务幂等键、`AsyncTaskReceipt`、`contract_snapshot` 契约冻结。
-  2. [ ] M2：tasks store + outbox 可靠派发 + API handler 落地。
-  3. [ ] M3：Temporal workflow/activity + timeout/retry/dead-letter + 取消竞态收口。
-  4. [ ] M4：路由/capability/authz 收口，联调 224 版本漂移拦截。
-  5. [ ] M5：测试证据与运维观测指标归档（`docs/dev-records/`）。
+  1. [X] M1：任务幂等键、`AsyncTaskReceipt`、`contract_snapshot` 契约冻结。
+  2. [X] M2：tasks store + outbox 可靠派发 + API handler 落地。
+  3. [X] M3：Temporal workflow/activity + timeout/retry/dead-letter + 取消竞态收口。
+  4. [X] M4：路由/capability/authz 收口，联调 224 版本漂移拦截。
+  5. [X] M5：测试证据与运维观测指标归档（`docs/dev-records/`）。
 
 ## 9. 测试与验收标准 (Acceptance Criteria)
 - **单元测试**：
-  1. [ ] 状态机合法/非法转移。
-  2. [ ] 提交幂等：同键同载荷返回同收据；同键异载荷 `idempotency_key_conflict`。
-  3. [ ] 取消幂等、终态拒绝、取消竞态 CAS 正确性。
-  4. [ ] retryable / non-retryable / determinism violation 分流。
+  1. [X] 状态机合法/非法转移。
+  2. [X] 提交幂等：同键同载荷返回同收据；同键异载荷 `idempotency_key_conflict`。
+  3. [X] 取消幂等、终态拒绝、取消竞态 CAS 正确性。
+  4. [X] retryable / non-retryable / determinism violation 分流。
 - **集成测试**：
-  1. [ ] workflow 超时与重试行为符合上限。
-  2. [ ] Temporal 短时不可用时，outbox 重试可恢复；超限后转 `manual_takeover_required`（无 queued 僵尸任务）。
-  3. [ ] dead-letter 与 manual takeover 标记可查询。
-  4. [ ] 224 版本/哈希漂移命中时 fail-closed（`ai_plan_contract_version_mismatch`）。
-  5. [ ] `TC-220-TMP-001~006` 全覆盖通过。
+  1. [X] workflow 超时与重试行为符合上限。
+  2. [X] Temporal 短时不可用时，outbox 重试可恢复；超限后转 `manual_takeover_required`（无 queued 僵尸任务）。
+  3. [X] dead-letter 与 manual takeover 标记可查询。
+  4. [X] 224 版本/哈希漂移命中时 fail-closed（`ai_plan_contract_version_mismatch`）。
+  5. [X] `TC-220-TMP-001~006` 全覆盖通过。
 - **验收对齐**：
-  1. [ ] 对齐 `TC-220-BE-012`（tasks 路由映射完整性）。
-  2. [ ] 明确一次确认策略不变，未引入双人确认待办。
-  3. [ ] `make check routing`
-  4. [ ] `make check capability-route-map`
-  5. [ ] `make authz-pack && make authz-test && make authz-lint`
-  6. [ ] `make test && make preflight` 全绿。
+  1. [X] 对齐 `TC-220-BE-012`（tasks 路由映射完整性）。
+  2. [X] 明确一次确认策略不变，未引入双人确认待办。
+  3. [X] `make check routing`
+  4. [X] `make check capability-route-map`
+  5. [X] `make authz-pack && make authz-test && make authz-lint`
+  6. [X] `make test && make preflight` 全绿。
 
 ### 9.1 TC-220-TMP-001~006 映射矩阵（新增）
-1. [ ] TMP-001（收据）：断言 `task_id/task_type/submitted_at/status/poll_uri` 全部存在且稳定。
-2. [ ] TMP-002（状态转移）：断言 `queued -> running -> succeeded` 有完整事件链与时间顺序。
-3. [ ] TMP-003（超时重试）：断言 `attempt` 递增、退避生效、`max_attempts` 不越界。
-4. [ ] TMP-004（重试耗尽）：断言终态为 `manual_takeover_required` 且含 `dead_lettered` 事件。
-5. [ ] TMP-005（恢复幂等）：断言恢复后无重复任务、无重复提交、副作用计数不增加。
-6. [ ] TMP-006（fail-closed）：断言 Temporal 故障下不可绕过 `confirm/commit/re-auth/One Door`。
+1. [X] TMP-001（收据）：断言 `task_id/task_type/submitted_at/status/poll_uri` 全部存在且稳定。
+2. [X] TMP-002（状态转移）：断言 `queued -> running -> succeeded` 有完整事件链与时间顺序。
+3. [X] TMP-003（超时重试）：断言 `attempt` 递增、退避生效、`max_attempts` 不越界。
+4. [X] TMP-004（重试耗尽）：断言终态为 `manual_takeover_required` 且含 `dead_lettered` 事件。
+5. [X] TMP-005（恢复幂等）：断言恢复后无重复任务、无重复提交、副作用计数不增加。
+6. [X] TMP-006（fail-closed）：断言 Temporal 故障下不可绕过 `confirm/commit/re-auth/One Door`。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 - 不引入复杂运维开关；遵循早期最小运维原则。
@@ -415,10 +415,10 @@ on workflow canceled callback:
   5. [ ] 异常处置：环境级保护 → 停写/限流 → 修复 → 重试/重放 → 恢复。
 
 ## 11. 交付物
-1. [ ] tasks API + Temporal 编排实现与测试。
-2. [ ] 任务元数据表 + outbox 迁移 + sqlc 契约与生成物。
-3. [ ] route/capability/authz 映射更新与门禁证据。
-4. [ ] `DEV-PLAN-225` 执行记录文档（新增到 `docs/dev-records/`）。
+1. [X] tasks API + Temporal 编排实现与测试。
+2. [X] 任务元数据表 + outbox 迁移 + sqlc 契约与生成物。
+3. [X] route/capability/authz 映射更新与门禁证据。
+4. [X] `DEV-PLAN-225` 执行记录文档（新增到 `docs/dev-records/`）。
 
 ## 12. 实施任务拆解与 PR 切片（按目录）
 ### 12.1 PR-225-01：契约冻结与 API 壳（M1）
@@ -495,7 +495,7 @@ on workflow canceled callback:
 6. [ ] 合并前统一执行：`make preflight && make check doc`
 
 ## 13. 执行记录模板（新增）
-1. [ ] 新建：`docs/dev-records/dev-plan-225-execution-log.md`。
+1. [X] 新建：`docs/dev-records/dev-plan-225-execution-log.md`。
 2. [ ] 每个 PR 至少记录：
    - [ ] 变更范围（文件与模块）；
    - [ ] 命中门禁命令与结果；

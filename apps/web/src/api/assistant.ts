@@ -92,6 +92,58 @@ export interface AssistantConversation {
   turns: AssistantTurn[]
 }
 
+export interface AssistantTaskContractSnapshot {
+  intent_schema_version: string
+  compiler_contract_version: string
+  capability_map_version: string
+  skill_manifest_digest: string
+  context_hash: string
+  intent_hash: string
+  plan_hash: string
+}
+
+export interface AssistantTaskSubmitRequest {
+  conversation_id: string
+  turn_id: string
+  task_type: 'assistant_async_plan'
+  request_id: string
+  trace_id?: string
+  contract_snapshot: AssistantTaskContractSnapshot
+}
+
+export interface AssistantTaskAsyncReceipt {
+  task_id: string
+  task_type: string
+  status: string
+  workflow_id: string
+  submitted_at: string
+  poll_uri: string
+}
+
+export interface AssistantTaskDetail {
+  task_id: string
+  task_type: string
+  status: string
+  dispatch_status: string
+  attempt: number
+  max_attempts: number
+  last_error_code?: string
+  workflow_id: string
+  request_id: string
+  trace_id?: string
+  conversation_id: string
+  turn_id: string
+  submitted_at: string
+  cancel_requested_at?: string
+  completed_at?: string
+  updated_at: string
+  contract_snapshot: AssistantTaskContractSnapshot
+}
+
+export interface AssistantTaskCancelResponse extends AssistantTaskDetail {
+  cancel_accepted: boolean
+}
+
 export interface AssistantModelProvider {
   name: string
   enabled: boolean
@@ -176,6 +228,18 @@ export async function commitAssistantTurn(conversationID: string, turnID: string
     `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(turnID)}:commit`,
     {}
   )
+}
+
+export async function submitAssistantTask(payload: AssistantTaskSubmitRequest): Promise<AssistantTaskAsyncReceipt> {
+  return httpClient.post<AssistantTaskAsyncReceipt>('/internal/assistant/tasks', payload)
+}
+
+export async function getAssistantTask(taskID: string): Promise<AssistantTaskDetail> {
+  return httpClient.get<AssistantTaskDetail>(`/internal/assistant/tasks/${encodeURIComponent(taskID)}`)
+}
+
+export async function cancelAssistantTask(taskID: string): Promise<AssistantTaskCancelResponse> {
+  return httpClient.post<AssistantTaskCancelResponse>(`/internal/assistant/tasks/${encodeURIComponent(taskID)}:cancel`, {})
 }
 
 export async function getAssistantModelProviders(): Promise<AssistantModelProvidersResponse> {
