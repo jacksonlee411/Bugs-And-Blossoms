@@ -532,7 +532,7 @@ func newAssistantModelGateway() (*assistantModelGateway, error) {
 	if err := json.Unmarshal([]byte(fromEnv), &parsed); err != nil {
 		return nil, errAssistantRuntimeConfigInvalid
 	}
-	normalized, errs := normalizeAssistantModelConfig(parsed, true)
+	normalized, errs := normalizeAssistantModelConfig(parsed, false)
 	if len(errs) > 0 {
 		return nil, errAssistantRuntimeConfigInvalid
 	}

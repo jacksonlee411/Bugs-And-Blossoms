@@ -254,6 +254,12 @@ func TestAssistantModelGateway_NewGatewayProbeHealthAndURLCoverage(t *testing.T)
 		t.Fatalf("expected runtime invalid by normalization, got=%v", err)
 	}
 
+	t.Setenv("ASSISTANT_MODEL_CONFIG_JSON", `{"provider_routing":{"strategy":"priority_failover","fallback_enabled":false},"providers":[{"name":"openai","enabled":true,"model":"gpt-5-codex","endpoint":"https://api.openai.com/v1","timeout_ms":500,"retries":0,"priority":1,"key_ref":"OPENAI_API_KEY"}]}`)
+	t.Setenv("OPENAI_API_KEY", "")
+	if gateway, err := newAssistantModelGateway(); err != nil || gateway == nil {
+		t.Fatalf("expected gateway init without secret check, gateway=%v err=%v", gateway, err)
+	}
+
 	gateway := &assistantModelGateway{
 		adapters: map[string]assistantProviderAdapter{
 			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
