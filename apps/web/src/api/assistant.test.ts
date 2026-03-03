@@ -13,14 +13,17 @@ vi.mock('./httpClient', () => ({
 }))
 
 import {
+  cancelAssistantTask,
   applyAssistantModelProviders,
   commitAssistantTurn,
   confirmAssistantTurn,
   createAssistantConversation,
   createAssistantTurn,
+  getAssistantTask,
   getAssistantConversation,
   getAssistantModelProviders,
   getAssistantModels,
+  submitAssistantTask,
   validateAssistantModelProviders
 } from './assistant'
 
@@ -92,5 +95,49 @@ describe('assistant api', () => {
 
     await getAssistantModels()
     expect(getMock).toHaveBeenNthCalledWith(2, '/internal/assistant/models')
+  })
+
+  it('calls assistant task lifecycle endpoints', async () => {
+    postMock.mockResolvedValue({ task_id: 'task_1' })
+    getMock.mockResolvedValue({ task_id: 'task_1', status: 'queued' })
+
+    await submitAssistantTask({
+      conversation_id: 'conv_1',
+      turn_id: 'turn_1',
+      task_type: 'assistant_async_plan',
+      request_id: 'request_1',
+      trace_id: 'trace_1',
+      contract_snapshot: {
+        intent_schema_version: 'v1',
+        compiler_contract_version: 'v1',
+        capability_map_version: 'v1',
+        skill_manifest_digest: 'digest',
+        context_hash: 'ctx',
+        intent_hash: 'intent',
+        plan_hash: 'plan'
+      }
+    })
+    expect(postMock).toHaveBeenNthCalledWith(1, '/internal/assistant/tasks', {
+      conversation_id: 'conv_1',
+      turn_id: 'turn_1',
+      task_type: 'assistant_async_plan',
+      request_id: 'request_1',
+      trace_id: 'trace_1',
+      contract_snapshot: {
+        intent_schema_version: 'v1',
+        compiler_contract_version: 'v1',
+        capability_map_version: 'v1',
+        skill_manifest_digest: 'digest',
+        context_hash: 'ctx',
+        intent_hash: 'intent',
+        plan_hash: 'plan'
+      }
+    })
+
+    await getAssistantTask('task_1')
+    expect(getMock).toHaveBeenCalledWith('/internal/assistant/tasks/task_1')
+
+    await cancelAssistantTask('task_1')
+    expect(postMock).toHaveBeenNthCalledWith(2, '/internal/assistant/tasks/task_1:cancel', {})
   })
 })

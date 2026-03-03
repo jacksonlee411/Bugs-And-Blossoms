@@ -2,11 +2,14 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const assistantAPIMocks = vi.hoisted(() => ({
+  cancelAssistantTask: vi.fn(),
   commitAssistantTurn: vi.fn(),
   confirmAssistantTurn: vi.fn(),
   createAssistantConversation: vi.fn(),
   createAssistantTurn: vi.fn(),
-  getAssistantConversation: vi.fn()
+  getAssistantConversation: vi.fn(),
+  getAssistantTask: vi.fn(),
+  submitAssistantTask: vi.fn()
 }))
 
 vi.mock('../../api/assistant', () => assistantAPIMocks)
@@ -28,7 +31,10 @@ function makeTurn(overrides: Record<string, unknown> = {}) {
       action: 'create_orgunit',
       parent_ref_text: '鲜花组织',
       entity_name: '运营部',
-      effective_date: '2026-01-01'
+      effective_date: '2026-01-01',
+      intent_schema_version: 'intent-v1',
+      context_hash: 'ctx-hash',
+      intent_hash: 'intent-hash'
     },
     ambiguity_count: 2,
     confidence: 0.8,
@@ -55,11 +61,15 @@ function makeTurn(overrides: Record<string, unknown> = {}) {
     plan: {
       title: '创建组织计划',
       capability_key: 'org.orgunit_create.field_policy',
-      summary: '在指定父组织下创建部门'
+      summary: '在指定父组织下创建部门',
+      capability_map_version: 'cap-v1',
+      compiler_contract_version: 'compiler-v1',
+      skill_manifest_digest: 'skill-v1'
     },
     dry_run: {
       explain: '检测到多个同名父组织候选，需先确认候选主键',
-      diff: [{ field: 'parent_candidate_id', after: 'pending_confirmation' }]
+      diff: [{ field: 'parent_candidate_id', after: 'pending_confirmation' }],
+      plan_hash: 'plan-hash'
     },
     ...overrides
   }
@@ -97,6 +107,65 @@ describe('AssistantPage', () => {
     assistantAPIMocks.confirmAssistantTurn.mockResolvedValue(makeConversation())
     assistantAPIMocks.commitAssistantTurn.mockResolvedValue(makeConversation())
     assistantAPIMocks.getAssistantConversation.mockResolvedValue(makeConversation())
+    assistantAPIMocks.submitAssistantTask.mockResolvedValue({
+      task_id: 'task_1',
+      task_type: 'assistant_async_plan',
+      status: 'queued',
+      workflow_id: 'wf_1',
+      submitted_at: '2026-03-02T00:00:00Z',
+      poll_uri: '/internal/assistant/tasks/task_1'
+    })
+    assistantAPIMocks.getAssistantTask.mockResolvedValue({
+      task_id: 'task_1',
+      task_type: 'assistant_async_plan',
+      status: 'succeeded',
+      dispatch_status: 'started',
+      attempt: 1,
+      max_attempts: 3,
+      last_error_code: '',
+      workflow_id: 'wf_1',
+      request_id: 'request_1',
+      trace_id: 'trace_1',
+      conversation_id: 'conv_1',
+      turn_id: 'turn_1',
+      submitted_at: '2026-03-02T00:00:00Z',
+      updated_at: '2026-03-02T00:00:01Z',
+      contract_snapshot: {
+        intent_schema_version: 'intent-v1',
+        compiler_contract_version: 'compiler-v1',
+        capability_map_version: 'cap-v1',
+        skill_manifest_digest: 'skill-v1',
+        context_hash: 'ctx-hash',
+        intent_hash: 'intent-hash',
+        plan_hash: 'plan-hash'
+      }
+    })
+    assistantAPIMocks.cancelAssistantTask.mockResolvedValue({
+      task_id: 'task_1',
+      task_type: 'assistant_async_plan',
+      status: 'canceled',
+      dispatch_status: 'failed',
+      attempt: 1,
+      max_attempts: 3,
+      last_error_code: '',
+      workflow_id: 'wf_1',
+      request_id: 'request_1',
+      trace_id: 'trace_1',
+      conversation_id: 'conv_1',
+      turn_id: 'turn_1',
+      submitted_at: '2026-03-02T00:00:00Z',
+      updated_at: '2026-03-02T00:00:01Z',
+      contract_snapshot: {
+        intent_schema_version: 'intent-v1',
+        compiler_contract_version: 'compiler-v1',
+        capability_map_version: 'cap-v1',
+        skill_manifest_digest: 'skill-v1',
+        context_hash: 'ctx-hash',
+        intent_hash: 'intent-hash',
+        plan_hash: 'plan-hash'
+      },
+      cancel_accepted: true
+    })
   })
 
   it('renders panel, tracking fields and candidate details', async () => {
@@ -172,6 +241,36 @@ describe('AssistantPage', () => {
 
     await waitFor(() => expect(assistantAPIMocks.getAssistantConversation).toHaveBeenCalledWith('conv_1'))
     expect(await screen.findByTestId('assistant-error-alert')).toHaveTextContent('当前会话状态不允许执行该操作。')
+  })
+
+  it('submits async task and renders task fields', async () => {
+    render(<AssistantPage />)
+
+    const submitButton = await screen.findByTestId('assistant-task-submit-button')
+    fireEvent.click(submitButton)
+
+    await waitFor(() =>
+      expect(assistantAPIMocks.submitAssistantTask).toHaveBeenCalledWith({
+        conversation_id: 'conv_1',
+        turn_id: 'turn_1',
+        task_type: 'assistant_async_plan',
+        request_id: 'request_1',
+        trace_id: 'trace_1',
+        contract_snapshot: {
+          intent_schema_version: 'intent-v1',
+          compiler_contract_version: 'compiler-v1',
+          capability_map_version: 'cap-v1',
+          skill_manifest_digest: 'skill-v1',
+          context_hash: 'ctx-hash',
+          intent_hash: 'intent-hash',
+          plan_hash: 'plan-hash'
+        }
+      })
+    )
+    await waitFor(() => expect(assistantAPIMocks.getAssistantTask).toHaveBeenCalledWith('task_1'))
+    expect(screen.getByTestId('assistant-task-id')).toHaveTextContent('task_1')
+    expect(screen.getByTestId('assistant-task-workflow-id')).toHaveTextContent('wf_1')
+    expect(screen.getByTestId('assistant-task-status')).toHaveTextContent('succeeded')
   })
 
   it('accepts postMessage only with allowed origin, valid schema and matching nonce/channel', async () => {
