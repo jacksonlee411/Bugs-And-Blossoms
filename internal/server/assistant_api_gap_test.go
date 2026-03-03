@@ -338,3 +338,112 @@ func TestAssistantServiceHelpers_PoolWrappersAndPathEdges(t *testing.T) {
 		t.Fatal("expected invalid empty action")
 	}
 }
+
+func TestAssistantConversationsList_HandlerAndServiceBranches(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
+	conv1 := svc.createConversation("tenant-1", principal)
+	conv2 := svc.createConversation("tenant-1", principal)
+	_ = svc.createConversation("tenant-1", principal)
+
+	svc.mu.Lock()
+	if stored := svc.byID[conv2.ConversationID]; stored != nil {
+		stored.Turns = []*assistantTurn{nil, &assistantTurn{
+			TurnID:    "turn_1",
+			UserInput: "u",
+			State:     assistantStateDraft,
+			RiskTier:  "low",
+		}}
+		stored.UpdatedAt = conv1.UpdatedAt
+	}
+	svc.byID["conv_nil"] = nil
+	svc.byID["conv_other_actor"] = &assistantConversation{
+		ConversationID: "conv_other_actor",
+		TenantID:       "tenant-1",
+		ActorID:        "actor-2",
+		UpdatedAt:      time.Now().UTC(),
+	}
+	svc.byID["conv_other_tenant"] = &assistantConversation{
+		ConversationID: "conv_other_tenant",
+		TenantID:       "tenant-2",
+		ActorID:        "actor-1",
+		UpdatedAt:      time.Now().UTC(),
+	}
+	svc.mu.Unlock()
+
+	items, cursor, err := svc.listConversations(context.Background(), "tenant-1", "actor-1", 0, "")
+	if err != nil {
+		t.Fatalf("list conversations err=%v", err)
+	}
+	if len(items) < 2 || cursor != "" {
+		t.Fatalf("unexpected list result len=%d cursor=%q", len(items), cursor)
+	}
+	hasLastTurn := false
+	for _, item := range items {
+		if item.LastTurn != nil {
+			hasLastTurn = true
+		}
+	}
+	if !hasLastTurn {
+		t.Fatalf("expected at least one item with last turn: %+v", items)
+	}
+
+	_, firstCursor, err := svc.listConversations(context.Background(), "tenant-1", "actor-1", 1, "")
+	if err != nil || firstCursor == "" {
+		t.Fatalf("unexpected first page err=%v cursor=%q", err, firstCursor)
+	}
+
+	items2, nextCursor, err := svc.listConversations(context.Background(), "tenant-1", "actor-1", 1, firstCursor)
+	if err != nil {
+		t.Fatalf("list conversations page2 err=%v", err)
+	}
+	if len(items2) > 1 {
+		t.Fatalf("unexpected page2 result len=%d next=%q", len(items2), nextCursor)
+	}
+
+	rec := httptest.NewRecorder()
+	handleAssistantConversationsAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/conversations?page_size=0", "", true, true), svc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	handleAssistantConversationsAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/conversations?page_size=999", "", true, true), svc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	pgSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	pgSvc.pool = assistFakeTxBeginner{err: errors.New("begin failed")}
+	if _, _, err := pgSvc.listConversations(context.Background(), "tenant-1", "actor-1", 20, ""); err == nil {
+		t.Fatal("expected pg list error")
+	}
+	rec = httptest.NewRecorder()
+	handleAssistantConversationsAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/conversations", "", true, true), pgSvc)
+	if rec.Code != http.StatusInternalServerError || assistantDecodeErrCode(t, rec) != "assistant_conversation_list_failed" {
+		t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+	}
+}
+
+func TestAssistantHelper_LatestTurnAndTaskActionPathBranches(t *testing.T) {
+	if got := latestTurn(nil); got != nil {
+		t.Fatalf("expected nil latest turn, got=%+v", got)
+	}
+	if got := latestTurn(&assistantConversation{}); got != nil {
+		t.Fatalf("expected nil latest turn for empty conversation, got=%+v", got)
+	}
+	if got := latestTurn(&assistantConversation{Turns: []*assistantTurn{nil, nil}}); got != nil {
+		t.Fatalf("expected nil latest turn for all nil turns, got=%+v", got)
+	}
+	turn := &assistantTurn{TurnID: "turn_x"}
+	if got := latestTurn(&assistantConversation{Turns: []*assistantTurn{nil, turn}}); got == nil || got.TurnID != turn.TurnID {
+		t.Fatalf("unexpected latest turn=%+v", got)
+	}
+
+	if _, _, ok := extractAssistantTaskActionPath("/internal/assistant/tasks/task_1:   "); ok {
+		t.Fatal("expected invalid empty task action")
+	}
+	if _, _, ok := extractAssistantTaskActionPath("/internal/assistant/tasks/   :cancel"); ok {
+		t.Fatal("expected invalid empty task id")
+	}
+}

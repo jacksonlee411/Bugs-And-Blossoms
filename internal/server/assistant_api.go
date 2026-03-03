@@ -1365,7 +1365,7 @@ func extractAssistantTaskActionPath(path string) (taskID string, action string, 
 		return "", "", false
 	}
 	index := strings.LastIndex(taskAction, ":")
-	if index <= 0 || index >= len(taskAction)-1 {
+	if index <= 0 {
 		return "", "", false
 	}
 	taskID = strings.TrimSpace(taskAction[:index])

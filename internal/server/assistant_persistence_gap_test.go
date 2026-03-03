@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -964,5 +965,161 @@ func TestAssistantPersistence_CommitTurnPG_ErrorPathMatrix(t *testing.T) {
 	successPathCommitErrSvc := makeSvc("actor_1", "tenant-admin", [][]any{successRow}, nil, nil, errors.New("commit success-path failed"))
 	if _, err := successPathCommitErrSvc.commitTurnPG(context.Background(), "tenant_1", principal, "conv_1", "turn_1"); err == nil || !strings.Contains(err.Error(), "commit success-path failed") {
 		t.Fatalf("unexpected err=%v", err)
+	}
+}
+
+func TestAssistantPersistence_ListConversationsPG_BranchMatrix(t *testing.T) {
+	newSvc := func(tx *assistFakeTx, beginErr error) *assistantConversationService {
+		svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+		svc.pool = assistFakeTxBeginner{tx: tx, err: beginErr}
+		return svc
+	}
+
+	svc := newSvc(&assistFakeTx{}, nil)
+	if _, _, err := svc.listConversationsPG(context.Background(), "tenant_1", "actor_1", 20, "broken"); !errors.Is(err, errAssistantConversationCursorInvalid) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	pageSizeNormalizedTx := &assistFakeTx{
+		queryFn: func(string, ...any) (pgx.Rows, error) {
+			return &assistFakeRows{}, nil
+		},
+	}
+	if _, _, err := newSvc(pageSizeNormalizedTx, nil).listConversationsPG(context.Background(), "tenant_1", "actor_1", 0, ""); err != nil {
+		t.Fatalf("unexpected normalized page-size err=%v", err)
+	}
+
+	if _, _, err := newSvc(nil, errors.New("begin failed")).listConversationsPG(context.Background(), "tenant_1", "actor_1", 20, ""); err == nil || !strings.Contains(err.Error(), "begin failed") {
+		t.Fatalf("unexpected begin err=%v", err)
+	}
+
+	queryErrTx := &assistFakeTx{
+		queryFn: func(string, ...any) (pgx.Rows, error) {
+			return nil, errors.New("query failed")
+		},
+	}
+	if _, _, err := newSvc(queryErrTx, nil).listConversationsPG(context.Background(), "tenant_1", "actor_1", 20, ""); err == nil || !strings.Contains(err.Error(), "query failed") {
+		t.Fatalf("unexpected query err=%v", err)
+	}
+
+	now := time.Now().UTC()
+	scanErrRows := &assistFakeRows{rows: [][]any{{"conv_1", assistantStateDraft, now}}}
+	scanErrTx := &assistFakeTx{
+		queryFn: func(string, ...any) (pgx.Rows, error) {
+			return scanErrRows, nil
+		},
+	}
+	if _, _, err := newSvc(scanErrTx, nil).listConversationsPG(context.Background(), "tenant_1", "actor_1", 20, ""); err == nil {
+		t.Fatal("expected scan error")
+	}
+
+	rowsErrTx := &assistFakeTx{
+		queryFn: func(string, ...any) (pgx.Rows, error) {
+			return &assistFakeRows{err: errors.New("rows failed")}, nil
+		},
+	}
+	if _, _, err := newSvc(rowsErrTx, nil).listConversationsPG(context.Background(), "tenant_1", "actor_1", 20, ""); err == nil || !strings.Contains(err.Error(), "rows failed") {
+		t.Fatalf("unexpected rows err=%v", err)
+	}
+
+	commitErrTx := &assistFakeTx{
+		commitErr: errors.New("commit failed"),
+		queryFn: func(string, ...any) (pgx.Rows, error) {
+			return &assistFakeRows{}, nil
+		},
+	}
+	if _, _, err := newSvc(commitErrTx, nil).listConversationsPG(context.Background(), "tenant_1", "actor_1", 20, ""); err == nil || !strings.Contains(err.Error(), "commit failed") {
+		t.Fatalf("unexpected commit err=%v", err)
+	}
+
+	var capturedSQL string
+	var capturedArgs []any
+	validCursor := assistantEncodeConversationCursor(assistantConversationCursor{
+		UpdatedAt:      now.Add(2 * time.Minute),
+		ConversationID: "conv_anchor",
+	}, "tenant_1", "actor_1")
+	successTx := &assistFakeTx{
+		queryFn: func(sql string, args ...any) (pgx.Rows, error) {
+			capturedSQL = sql
+			capturedArgs = append([]any(nil), args...)
+			return &assistFakeRows{rows: [][]any{
+				{"conv_2", assistantStateValidated, now.Add(1 * time.Minute), "turn_2", "prompt-2", assistantStateDraft, "low"},
+				{"conv_1", assistantStateConfirmed, now, nil, nil, nil, nil},
+			}}, nil
+		},
+	}
+	items, nextCursor, err := newSvc(successTx, nil).listConversationsPG(nil, "tenant_1", "actor_1", 1, validCursor)
+	if err != nil {
+		t.Fatalf("list conversations pg err=%v", err)
+	}
+	if len(items) != 1 || nextCursor == "" {
+		t.Fatalf("unexpected list result len=%d next=%q", len(items), nextCursor)
+	}
+	if items[0].LastTurn == nil || items[0].LastTurn.TurnID != "turn_2" {
+		t.Fatalf("unexpected last turn=%+v", items[0].LastTurn)
+	}
+	if !strings.Contains(capturedSQL, "AND (c.updated_at, c.conversation_id) < ($3, $4)") {
+		t.Fatalf("expected cursor filter in query, sql=%s", capturedSQL)
+	}
+	if len(capturedArgs) != 5 {
+		t.Fatalf("unexpected args=%v", capturedArgs)
+	}
+}
+
+func TestAssistantPersistence_ConversationCursorCodecAndValueOrEmpty(t *testing.T) {
+	if got := assistantEncodeConversationCursor(assistantConversationCursor{}, "tenant_1", "actor_1"); got != "" {
+		t.Fatalf("expected empty cursor, got=%q", got)
+	}
+	if decoded, err := assistantDecodeConversationCursor("", "tenant_1", "actor_1"); err != nil || decoded != nil {
+		t.Fatalf("unexpected decode empty result=%+v err=%v", decoded, err)
+	}
+
+	now := time.Now().UTC()
+	encoded := assistantEncodeConversationCursor(assistantConversationCursor{
+		UpdatedAt:      now,
+		ConversationID: "conv_1",
+	}, "tenant_1", "actor_1")
+	decoded, err := assistantDecodeConversationCursor(encoded, "tenant_1", "actor_1")
+	if err != nil || decoded == nil || decoded.ConversationID != "conv_1" {
+		t.Fatalf("unexpected decode result=%+v err=%v", decoded, err)
+	}
+	if _, err := assistantDecodeConversationCursor(encoded, "tenant_x", "actor_1"); !errors.Is(err, errAssistantConversationCursorInvalid) {
+		t.Fatalf("unexpected tenant mismatch err=%v", err)
+	}
+	if _, err := assistantDecodeConversationCursor("%%%%", "tenant_1", "actor_1"); !errors.Is(err, errAssistantConversationCursorInvalid) {
+		t.Fatalf("unexpected base64 err=%v", err)
+	}
+
+	badParts := base64.RawURLEncoding.EncodeToString([]byte("a|b|c|d"))
+	if _, err := assistantDecodeConversationCursor(badParts, "tenant_1", "actor_1"); !errors.Is(err, errAssistantConversationCursorInvalid) {
+		t.Fatalf("unexpected parts err=%v", err)
+	}
+
+	badTimeBase := strings.Join([]string{"tenant_1", "actor_1", "bad-time", "conv_1"}, "|")
+	badTimeSig := assistantHashText(badTimeBase + "|" + assistantConversationCursorSalt)
+	badTime := base64.RawURLEncoding.EncodeToString([]byte(badTimeBase + "|" + badTimeSig))
+	if _, err := assistantDecodeConversationCursor(badTime, "tenant_1", "actor_1"); !errors.Is(err, errAssistantConversationCursorInvalid) {
+		t.Fatalf("unexpected time err=%v", err)
+	}
+
+	emptyIDBase := strings.Join([]string{"tenant_1", "actor_1", now.Format(time.RFC3339Nano), "   "}, "|")
+	emptyIDSig := assistantHashText(emptyIDBase + "|" + assistantConversationCursorSalt)
+	emptyID := base64.RawURLEncoding.EncodeToString([]byte(emptyIDBase + "|" + emptyIDSig))
+	if _, err := assistantDecodeConversationCursor(emptyID, "tenant_1", "actor_1"); !errors.Is(err, errAssistantConversationCursorInvalid) {
+		t.Fatalf("unexpected empty id err=%v", err)
+	}
+
+	raw, _ := base64.RawURLEncoding.DecodeString(encoded)
+	tampered := base64.RawURLEncoding.EncodeToString(append(raw, byte('x')))
+	if _, err := assistantDecodeConversationCursor(tampered, "tenant_1", "actor_1"); !errors.Is(err, errAssistantConversationCursorInvalid) {
+		t.Fatalf("unexpected signature err=%v", err)
+	}
+
+	if got := valueOrEmpty(nil); got != "" {
+		t.Fatalf("expected empty string, got=%q", got)
+	}
+	value := "hello"
+	if got := valueOrEmpty(&value); got != value {
+		t.Fatalf("unexpected value=%q", got)
 	}
 }

@@ -80,6 +80,8 @@ type assistantProviderAdapter interface {
 }
 
 var assistantIntentMarshalFn = json.Marshal
+var assistantOpenAIRequestMarshalFn = json.Marshal
+var assistantOpenAINewRequestWithContextFn = http.NewRequestWithContext
 
 type assistantDeterministicProviderAdapter struct{}
 
@@ -202,7 +204,7 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 			},
 		},
 	}
-	body, err := json.Marshal(payload)
+	body, err := assistantOpenAIRequestMarshalFn(payload)
 	if err != nil {
 		return nil, errAssistantModelConfigInvalid
 	}
@@ -212,7 +214,7 @@ func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt strin
 	}
 	timeoutCtx, cancel := context.WithTimeout(requestCtx, time.Duration(provider.TimeoutMS)*time.Millisecond)
 	defer cancel()
-	req, err := http.NewRequestWithContext(timeoutCtx, http.MethodPost, requestURL, bytes.NewReader(body))
+	req, err := assistantOpenAINewRequestWithContextFn(timeoutCtx, http.MethodPost, requestURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, errAssistantModelConfigInvalid
 	}
@@ -451,7 +453,7 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 		if adapter == nil {
 			return assistantResolveIntentResult{}, errAssistantModelConfigInvalid
 		}
-		invokeErr := error(nil)
+		invokeErr := errAssistantModelProviderUnavailable
 		attempts := provider.Retries + 1
 		if attempts < 1 {
 			attempts = 1
@@ -477,8 +479,6 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 			}, nil
 		}
 		switch {
-		case invokeErr == nil:
-			return assistantResolveIntentResult{}, errAssistantModelProviderUnavailable
 		case errorsIsAny(invokeErr, errAssistantModelTimeout, errAssistantModelRateLimited, errAssistantModelProviderUnavailable):
 			lastTransientErr = invokeErr
 			continue
