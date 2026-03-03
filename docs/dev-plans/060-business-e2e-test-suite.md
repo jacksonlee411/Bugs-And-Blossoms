@@ -1,4 +1,4 @@
-# DEV-PLAN-060：全链路业务测试案例套件（009/026-031 覆盖）
+# DEV-PLAN-060：全链路业务测试案例套件（009/026-031/220-225 覆盖）
 
 **状态**: 草拟中（2026-01-10 11:40 UTC）
 
@@ -8,6 +8,7 @@
 
 本仓库按 Greenfield 的“切片式交付 + 门禁阻断漂移”推进（见 `docs/dev-plans/009-implementation-roadmap.md`、`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`、`docs/dev-plans/029-job-catalog-transactional-event-sourcing-synchronous-projection.md`）。因此需要一套“全链路业务测试案例套件”，用于在 **不回退/不走双链路** 的前提下验证：
 - 系统功能是否覆盖完整业务域（组织/职位分类/SetID/职位/任职/人员）；
+- Assistant 功能是否覆盖会话/意图/提交/任务编排的主链路（对齐 220-225）；
 - 每条能力是否 **用户可见、可操作**（避免僵尸功能）；
 - 行为是否与契约文档一致（Contract First：偏差必须先记录并回到契约处理）。
 
@@ -206,6 +207,12 @@
 | 职位 | Position 创建与列表 | TP-060-02 |
 | 人员 | Person 创建/查询；pernr 解析一致性 | TP-060-03 |
 | 任职记录 | Assignment（Valid Time `as_of`）/仅展示 effective_date；upsert 可重复执行（同日幂等）；position 裁决 fail-closed | TP-060-03 |
+| Assistant 会话 | `/app/assistant` 可发现；会话创建/列表/详情/turns 可用 | TP-060-05 |
+| Assistant 提交链路 | `validated -> confirmed -> committed` 状态机；非法转换 fail-closed | TP-060-05 |
+| Assistant 模型/意图治理 | provider validate/apply；intent candidate 确认；版本漂移回退 | TP-060-05 |
+| Assistant 任务编排 | Tasks API 与 Temporal 触发链路（含幂等与可追踪） | TP-060-05 |
+
+> 编号说明：`TP-060-04` 已被现有 OrgUnit 详情双栏回归用例占用（`e2e/tests/tp060-04-orgunit-details-two-pane.spec.js`），Assistant 子套件采用 `TP-060-05` 以避免冲突。
 
 ## 7. 子测试计划（框架）
 
@@ -286,6 +293,37 @@
 - Valid Time：同一 person 至少覆盖 1 条“未来生效/多切片”的 as_of 读口径（as_of 前后读到不同的 effective_date 版本；Valid Time=day）。
 - 可重复执行：同一 `effective_date` 相同输入重复提交应幂等成功；同日不同输入必须 fail-closed（例如 409 `STAFFING_IDEMPOTENCY_REUSED`，或等效稳定错误码）。
 - 交叉裁决：同一时点一个 position 不得被多个 active assignment 占用；违反必须 fail-closed（稳定错误码优先）。
+
+**问题记录**
+| 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+### TP-060-05：Assistant（会话 + 意图 + 提交 + 任务编排）
+
+**子计划文档**：`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
+
+**执行记录**：`docs/dev-records/dev-plan-064a-execution-log.md`
+
+**契约引用**
+- `docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
+- `docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
+- `docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
+- `docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
+- `docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
+- `docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
+- `docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
+
+**数据准备**
+- 复用 TP-060-01 的租户与登录基线（`T060` + tenant-admin）。
+- 准备 assistant 最小用例：1 条新建会话、1 次确认、1 次提交、至少 1 条失败分支（非法状态迁移或版本漂移）。
+- 若启用 tasks/temporal 验证，准备可追踪的 `request_id/trace_id` 与任务查询入口。
+
+**核心验收点（高层）**
+- `/app/assistant` 可发现、可交互，且 FE 状态与后端状态机一致（含终态可见）。
+- 会话与 turn 主链路可复现：create/list/detail/turns/confirm/commit。
+- 意图治理稳定：候选确认后不得被静默改写；版本漂移必须回退到安全态并返回稳定错误码。
+- 多模型入口可控：provider validate/apply 路径有正负例；失败时错误码与提示可审计。
+- tasks/temporal（若功能已就绪）可追踪、可幂等；若未就绪必须记录为 `CONTRACT_MISSING` 或 `ENV_DRIFT`，不得口径降级绕过。
 
 **问题记录**
 | 时间（UTC） | 环境（Host/as_of/模式） | 复现步骤摘要 | 期望（契约引用） | 实际结果 | 严重级别（P0/P1/P2） | 类型（BUG/CONTRACT_DRIFT/CONTRACT_MISSING/ENV_DRIFT） | 处理建议（改实现/先改契约） | 负责人 | 链接（Issue/PR/日志） |

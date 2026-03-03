@@ -274,12 +274,14 @@ test("tp060-02: orgunit list ext filter/sort (admin)", async ({ browser }) => {
   await expect(companyRow).toBeVisible({ timeout: 30_000 });
   await expect(deptRow).toBeVisible({ timeout: 30_000 });
 
-  const companyBox = await companyRow.boundingBox();
-  const deptBox = await deptRow.boundingBox();
-  if (!companyBox || !deptBox) {
-    throw new Error("row bounding box missing");
-  }
-  expect(deptBox.y).toBeLessThan(companyBox.y);
+  const dataRows = page.locator('[role="rowgroup"] [role="row"]');
+  await expect(dataRows.first()).toBeVisible({ timeout: 30_000 });
+  const rowTexts = await dataRows.allTextContents();
+  const deptIndex = rowTexts.findIndex((text) => text.includes(org.dept));
+  const companyIndex = rowTexts.findIndex((text) => text.includes(org.company));
+  expect(deptIndex).toBeGreaterThanOrEqual(0);
+  expect(companyIndex).toBeGreaterThanOrEqual(0);
+  expect(deptIndex).toBeLessThan(companyIndex);
 
   const extFilterField = page.getByLabel(/Ext Filter Field|扩展筛选字段/);
   await expect(extFilterField).toBeEnabled({ timeout: 30_000 });

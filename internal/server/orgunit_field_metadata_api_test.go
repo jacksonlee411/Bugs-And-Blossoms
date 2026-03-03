@@ -1110,6 +1110,65 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 			t.Fatalf("body=%s", rec.Body.String())
 		}
 	})
+
+	t.Run("get success policy default rule empty keeps NONE mode", func(t *testing.T) {
+		now := time.Unix(123, 0).UTC()
+		dictStore2 := newDictMemoryStore()
+		store := orgUnitStoreWithFieldConfigs{
+			OrgUnitStore: base,
+			listFn: func(context.Context, string) ([]orgUnitTenantFieldConfig, error) {
+				return []orgUnitTenantFieldConfig{
+					{
+						FieldKey:         "d_org_type",
+						ValueType:        "text",
+						DataSourceType:   "DICT",
+						DataSourceConfig: json.RawMessage(`{"dict_code":"org_type"}`),
+						PhysicalCol:      "ext_str_01",
+						EnabledOn:        "2026-01-01",
+						UpdatedAt:        now,
+					},
+				}, nil
+			},
+		}
+		previousStore := defaultSetIDStrategyRegistryStore
+		defaultSetIDStrategyRegistryStore = setIDStrategyRegistryStoreStub{
+			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (setIDFieldDecision, error) {
+				return setIDFieldDecision{
+					FieldKey:       fieldKey,
+					Maintainable:   true,
+					DefaultRuleRef: "   ",
+				}, nil
+			},
+		}
+		t.Cleanup(func() {
+			defaultSetIDStrategyRegistryStore = previousStore
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/org/api/org-units/field-configs?as_of=2026-01-01&status=all", nil)
+		req = req.WithContext(withTenant(req.Context(), Tenant{ID: "t1"}))
+		rec := httptest.NewRecorder()
+		handleOrgUnitFieldConfigsAPI(rec, req, store, dictStore2)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var body orgUnitFieldConfigsAPIResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal err=%v", err)
+		}
+		found := false
+		for _, item := range body.FieldConfigs {
+			if item.FieldKey != "d_org_type" {
+				continue
+			}
+			found = true
+			if item.DefaultMode != "NONE" || item.DefaultRuleExpr != nil {
+				t.Fatalf("unexpected resolved policy=%+v", item)
+			}
+		}
+		if !found {
+			t.Fatalf("unexpected items=%+v", body.FieldConfigs)
+		}
+	})
 }
 
 func TestHandleOrgUnitFieldConfigsEnableCandidatesAPI(t *testing.T) {

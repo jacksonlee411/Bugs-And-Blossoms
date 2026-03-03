@@ -76,4 +76,14 @@ func TestHandleAssistantModelProvidersValidateAndApplyAPI(t *testing.T) {
 	if len(models.Models) == 0 {
 		t.Fatal("expected at least one model")
 	}
+	foundApplied := false
+	for _, model := range models.Models {
+		if model.Provider == "openai" && model.Model == "gpt-4o-mini" {
+			foundApplied = true
+			break
+		}
+	}
+	if !foundApplied {
+		t.Fatalf("expected applied model openai/gpt-4o-mini, got=%+v", models.Models)
+	}
 }

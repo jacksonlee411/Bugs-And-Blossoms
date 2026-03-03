@@ -15,12 +15,20 @@ func (f assistantAdapterFunc) Invoke(ctx context.Context, prompt string, provide
 }
 
 func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
+	originalMarshal := assistantIntentMarshalFn
+	defer func() { assistantIntentMarshalFn = originalMarshal }()
+
 	if _, err := (assistantDeterministicProviderAdapter{}).Invoke(context.Background(), "x", assistantModelProviderConfig{Endpoint: "simulate://rate-limit"}); !errors.Is(err, errAssistantModelRateLimited) {
 		t.Fatalf("unexpected err=%v", err)
 	}
 	if _, err := (assistantDeterministicProviderAdapter{}).Invoke(context.Background(), "x", assistantModelProviderConfig{Endpoint: "simulate://unavailable"}); !errors.Is(err, errAssistantModelProviderUnavailable) {
 		t.Fatalf("unexpected err=%v", err)
 	}
+	assistantIntentMarshalFn = func(any) ([]byte, error) { return nil, errors.New("marshal failed") }
+	if _, err := (assistantDeterministicProviderAdapter{}).Invoke(context.Background(), "x", assistantModelProviderConfig{Endpoint: "builtin://openai"}); !errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+	assistantIntentMarshalFn = originalMarshal
 
 	t.Setenv("ASSISTANT_MODEL_CONFIG_JSON", `{"provider_routing":{"strategy":"priority_failover","fallback_enabled":true},"providers":[{"name":"openai","enabled":true,"model":"gpt-4o-mini","endpoint":"builtin://openai","timeout_ms":1000,"retries":0,"priority":1,"key_ref":"OPENAI_API_KEY"}]}`)
 	gw := newAssistantModelGateway()
@@ -40,16 +48,54 @@ func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 	if len(statuses) == 0 {
 		t.Fatal("expected status")
 	}
+	foundSecretMissing := false
+	gw.mu.Lock()
+	gw.config = assistantModelConfig{
+		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+		Providers: []assistantModelProviderConfig{
+			{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://example.invalid", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "MISSING_OPENAI_KEY"},
+		},
+	}
+	gw.adapters = map[string]assistantProviderAdapter{"openai": assistantDeterministicProviderAdapter{}}
+	gw.mu.Unlock()
+	_, statuses = gw.listProviderStatus()
+	for _, st := range statuses {
+		if st.HealthReason == "secret_missing" {
+			foundSecretMissing = true
+		}
+	}
+	if !foundSecretMissing {
+		t.Fatalf("expected secret_missing status, got=%+v", statuses)
+	}
 
 	_, errs := gw.validateConfig(assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "unsupported"}, Providers: []assistantModelProviderConfig{{Name: "openai", Enabled: true, Model: "", Endpoint: "", TimeoutMS: 0, Retries: -1, Priority: 1, KeyRef: ""}, {Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "K"}}})
 	if len(errs) == 0 {
 		t.Fatal("expected validation errors")
+	}
+	normalized, errs := gw.validateConfig(assistantModelConfig{
+		ProviderRouting: assistantProviderRouting{Strategy: ""},
+		Providers: []assistantModelProviderConfig{
+			{Name: "openai", Enabled: false, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+			{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://example.invalid", TimeoutMS: 1, Retries: 0, Priority: 2, KeyRef: "MISSING_VALIDATE_KEY"},
+		},
+	})
+	if normalized.ProviderRouting.Strategy != "priority_failover" {
+		t.Fatalf("unexpected normalized strategy=%s", normalized.ProviderRouting.Strategy)
+	}
+	if len(errs) == 0 {
+		t.Fatal("expected secret missing when checkSecret enabled")
 	}
 	if _, errs := gw.applyConfig(assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "invalid"}}); len(errs) == 0 {
 		t.Fatal("expected apply errors")
 	}
 	if models := gw.listModels(); len(models) == 0 {
 		t.Fatal("expected enabled models")
+	}
+	if models := (&assistantModelGateway{config: assistantModelConfig{Providers: []assistantModelProviderConfig{
+		{Name: "openai", Enabled: false, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+		{Name: "deepseek", Enabled: true, Model: "m", Endpoint: "builtin://deepseek", TimeoutMS: 1, Retries: 0, Priority: 2, KeyRef: "DEEPSEEK_API_KEY"},
+	}}}).listModels(); len(models) != 1 || models[0].Name != "deepseek" {
+		t.Fatalf("unexpected listModels=%+v", models)
 	}
 
 	gw.mu.Lock()
@@ -64,6 +110,76 @@ func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 	gw.adapters = map[string]assistantProviderAdapter{"openai": assistantDeterministicProviderAdapter{}}
 	gw.mu.Unlock()
 	if _, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"}); !errors.Is(err, errAssistantModelSecretMissing) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	gw.mu.Lock()
+	gw.config = assistantModelConfig{
+		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+		Providers: []assistantModelProviderConfig{
+			{Name: "openai", Enabled: false, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+			{Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 2, KeyRef: "OPENAI_API_KEY"},
+		},
+	}
+	gw.adapters = map[string]assistantProviderAdapter{"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+		return []byte(`{"action":"plan_only"}`), nil
+	})}
+	gw.mu.Unlock()
+	if resolved, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"}); err != nil || resolved.Intent.Action != "plan_only" {
+		t.Fatalf("unexpected resolve result=%+v err=%v", resolved, err)
+	}
+
+	gw.mu.Lock()
+	gw.config = assistantModelConfig{
+		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+		Providers: []assistantModelProviderConfig{
+			{Name: "openai", Enabled: true, Model: "", Endpoint: "builtin://openai", TimeoutMS: 0, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+		},
+	}
+	gw.adapters = map[string]assistantProviderAdapter{"openai": assistantDeterministicProviderAdapter{}}
+	gw.mu.Unlock()
+	if _, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"}); !errors.Is(err, errAssistantModelConfigInvalid) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	gw.mu.Lock()
+	gw.config = assistantModelConfig{
+		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+		Providers: []assistantModelProviderConfig{
+			{Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: ""},
+		},
+	}
+	gw.adapters = map[string]assistantProviderAdapter{"openai": assistantDeterministicProviderAdapter{}}
+	gw.mu.Unlock()
+	if _, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"}); !errors.Is(err, errAssistantModelConfigInvalid) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	gw.mu.Lock()
+	gw.config = assistantModelConfig{
+		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+		Providers: []assistantModelProviderConfig{
+			{Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+		},
+	}
+	gw.adapters = map[string]assistantProviderAdapter{"openai": nil}
+	gw.mu.Unlock()
+	if _, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"}); !errors.Is(err, errAssistantModelConfigInvalid) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	gw.mu.Lock()
+	gw.config = assistantModelConfig{
+		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+		Providers: []assistantModelProviderConfig{
+			{Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+		},
+	}
+	gw.adapters = map[string]assistantProviderAdapter{"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+		return nil, errors.New("invoke failed")
+	})}
+	gw.mu.Unlock()
+	if _, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"}); err == nil || err.Error() != "invoke failed" {
 		t.Fatalf("unexpected err=%v", err)
 	}
 
@@ -92,6 +208,27 @@ func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 	gw.mu.Unlock()
 	if _, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"}); !errors.Is(err, errAssistantModelProviderUnavailable) {
 		t.Fatalf("unexpected err=%v", err)
+	}
+
+	gw.mu.Lock()
+	gw.config = assistantModelConfig{
+		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+		Providers: []assistantModelProviderConfig{
+			{Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+			{Name: "deepseek", Enabled: true, Model: "m", Endpoint: "builtin://deepseek", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "DEEPSEEK_API_KEY"},
+		},
+	}
+	gw.adapters = map[string]assistantProviderAdapter{
+		"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+			return []byte(`{"action":"plan_only"}`), nil
+		}),
+		"deepseek": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+			return []byte(`{"action":"plan_only"}`), nil
+		}),
+	}
+	gw.mu.Unlock()
+	if resolved, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"}); err != nil || resolved.ProviderName != "deepseek" {
+		t.Fatalf("unexpected resolve result=%+v err=%v", resolved, err)
 	}
 
 	if !errorsIsAny(errors.New("x"), errors.New("y")) {
