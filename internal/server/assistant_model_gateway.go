@@ -109,9 +109,6 @@ func (assistantDeterministicProviderAdapter) Invoke(_ context.Context, prompt st
 }
 
 func (assistantDeterministicProviderAdapter) Probe(_ context.Context, provider assistantModelProviderConfig) error {
-	if assistantEndpointInvalidForRuntime(provider.Endpoint) {
-		return errAssistantModelConfigInvalid
-	}
 	endpoint := strings.ToLower(strings.TrimSpace(provider.Endpoint))
 	switch {
 	case assistantIsSimulateEndpoint(endpoint) && strings.HasPrefix(endpoint, "simulate://timeout"):
@@ -120,6 +117,8 @@ func (assistantDeterministicProviderAdapter) Probe(_ context.Context, provider a
 		return errAssistantModelRateLimited
 	case assistantIsSimulateEndpoint(endpoint) && strings.HasPrefix(endpoint, "simulate://unavailable"):
 		return errAssistantModelProviderUnavailable
+	case assistantEndpointInvalidForRuntime(provider.Endpoint):
+		return errAssistantModelConfigInvalid
 	default:
 		return nil
 	}
