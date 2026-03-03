@@ -200,12 +200,13 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 		return nil, err
 	}
 	intent := resolvedIntent.Intent
+	intentValidationErrors := assistantIntentValidationErrors(intent)
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
 	resolutionSource := ""
 	ambiguityCount := 0
 	confidence := 0.65
-	if intent.Action == assistantIntentCreateOrgUnit && intent.ParentRefText != "" {
+	if intent.Action == assistantIntentCreateOrgUnit && intent.ParentRefText != "" && len(intentValidationErrors) == 0 {
 		resolved, resolveErr := s.resolveCandidates(ctx, tenantID, intent.ParentRefText, intent.EffectiveDate)
 		if resolveErr != nil {
 			return nil, resolveErr
@@ -502,6 +503,9 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 	if turn.State != assistantStateValidated {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
+	if assistantTurnRequiresIntentClarification(turn) {
+		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
+	}
 	if turn.AmbiguityCount > 1 {
 		if candidateID == "" {
 			return assistantTurnMutationResult{}, errAssistantConfirmationRequired
@@ -544,6 +548,9 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 		return assistantTurnMutationResult{}, errAssistantConversationStateInvalid
 	}
 	if turn.State != assistantStateConfirmed {
+		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
+	}
+	if assistantTurnRequiresIntentClarification(turn) {
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
 	if assistantTurnContractVersionMismatched(turn) {

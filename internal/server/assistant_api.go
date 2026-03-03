@@ -46,6 +46,7 @@ type assistantConversationService struct {
 	orgStore     OrgUnitStore
 	writeSvc     orgunitservices.OrgUnitWriteService
 	modelGateway *assistantModelGateway
+	gatewayErr   error
 	pool         assistantTxBeginner
 	mu           sync.RWMutex
 	byID         map[string]*assistantConversation
@@ -203,10 +204,12 @@ type assistantConfirmRequest struct {
 }
 
 func newAssistantConversationService(orgStore OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService) *assistantConversationService {
+	gateway, err := newAssistantModelGateway()
 	return &assistantConversationService{
 		orgStore:     orgStore,
 		writeSvc:     writeSvc,
-		modelGateway: newAssistantModelGateway(),
+		modelGateway: gateway,
+		gatewayErr:   err,
 		byID:         make(map[string]*assistantConversation),
 		byActorID:    make(map[string][]string),
 	}
@@ -397,6 +400,10 @@ func handleAssistantConversationTurnsAPI(w http.ResponseWriter, r *http.Request,
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusTooManyRequests, "ai_model_rate_limited", "ai model rate limited")
 		case errors.Is(err, errAssistantModelConfigInvalid):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_model_config_invalid", "ai model config invalid")
+		case errors.Is(err, errAssistantRuntimeConfigInvalid):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_runtime_config_invalid", "ai runtime config invalid")
+		case errors.Is(err, errAssistantRuntimeConfigMissing):
+			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_runtime_config_missing", "ai runtime config missing")
 		case errors.Is(err, errAssistantModelSecretMissing):
 			routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "ai_model_secret_missing", "ai model secret missing")
 		case errors.Is(err, errAssistantPlanDeterminismViolation):
@@ -572,6 +579,8 @@ var (
 	errAssistantModelTimeout                      = errors.New("assistant_model_timeout")
 	errAssistantModelRateLimited                  = errors.New("assistant_model_rate_limited")
 	errAssistantModelConfigInvalid                = errors.New("assistant_model_config_invalid")
+	errAssistantRuntimeConfigInvalid              = errors.New("assistant_runtime_config_invalid")
+	errAssistantRuntimeConfigMissing              = errors.New("assistant_runtime_config_missing")
 	errAssistantModelSecretMissing                = errors.New("assistant_model_secret_missing")
 	errAssistantConversationCursorInvalid         = errors.New("assistant_conversation_cursor_invalid")
 	errAssistantIdempotencyKeyConflict            = errors.New("assistant_idempotency_key_conflict")
@@ -748,12 +757,13 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		return nil, err
 	}
 	intent := resolvedIntent.Intent
+	intentValidationErrors := assistantIntentValidationErrors(intent)
 	candidates := make([]assistantCandidate, 0)
 	resolvedCandidateID := ""
 	resolutionSource := ""
 	ambiguityCount := 0
 	confidence := 0.65
-	if intent.Action == assistantIntentCreateOrgUnit && intent.ParentRefText != "" {
+	if intent.Action == assistantIntentCreateOrgUnit && intent.ParentRefText != "" && len(intentValidationErrors) == 0 {
 		resolved, err := s.resolveCandidates(ctx, tenantID, intent.ParentRefText, intent.EffectiveDate)
 		if err != nil {
 			return nil, err
@@ -859,6 +869,9 @@ func (s *assistantConversationService) confirmTurn(tenantID string, principal Pr
 	if turn.State != assistantStateValidated {
 		return nil, errAssistantConfirmationRequired
 	}
+	if assistantTurnRequiresIntentClarification(turn) {
+		return nil, errAssistantConfirmationRequired
+	}
 	if turn.AmbiguityCount > 1 {
 		if candidateID == "" {
 			return nil, errAssistantConfirmationRequired
@@ -932,6 +945,9 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 		return nil, errAssistantConversationStateInvalid
 	}
 	if turn.State != assistantStateConfirmed {
+		return nil, errAssistantConfirmationRequired
+	}
+	if assistantTurnRequiresIntentClarification(turn) {
 		return nil, errAssistantConfirmationRequired
 	}
 	if assistantTurnContractVersionMismatched(turn) {
@@ -1119,7 +1135,7 @@ func assistantBuildPlan(intent assistantIntentSpec) assistantPlanSummary {
 
 func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCandidate, resolvedCandidateID string) assistantDryRunResult {
 	diff := make([]map[string]any, 0, 3)
-	validationErrors := make([]string, 0, 1)
+	validationErrors := assistantIntentValidationErrors(intent)
 	if intent.Action == assistantIntentCreateOrgUnit {
 		diff = append(diff,
 			map[string]any{"field": "name", "after": intent.EntityName},
@@ -1132,11 +1148,12 @@ func assistantBuildDryRun(intent assistantIntentSpec, candidates []assistantCand
 		}
 	}
 	explain := "计划已生成，等待确认后可提交"
-	if intent.Action == assistantIntentCreateOrgUnit && len(candidates) > 1 {
-		explain = "检测到多个同名父组织候选，需先确认候选主键"
-		if strings.TrimSpace(resolvedCandidateID) == "" {
-			validationErrors = append(validationErrors, "candidate_confirmation_required")
-		}
+	if intent.Action == assistantIntentCreateOrgUnit && len(candidates) > 1 && strings.TrimSpace(resolvedCandidateID) == "" {
+		validationErrors = append(validationErrors, "candidate_confirmation_required")
+	}
+	validationErrors = assistantNormalizeValidationErrors(validationErrors)
+	if len(validationErrors) > 0 {
+		explain = assistantDryRunValidationExplain(validationErrors)
 	}
 	return assistantDryRunResult{
 		Diff:             diff,
@@ -1167,20 +1184,86 @@ func assistantBoundaryViolationDetected(text string) bool {
 }
 
 func assistantIntentSchemaInvalid(intent assistantIntentSpec) bool {
-	if intent.Action != assistantIntentCreateOrgUnit {
+	return len(assistantIntentValidationErrors(intent)) > 0
+}
+
+func assistantTurnRequiresIntentClarification(turn *assistantTurn) bool {
+	if turn == nil {
 		return false
 	}
+	for _, code := range assistantNormalizeValidationErrors(turn.DryRun.ValidationErrors) {
+		switch code {
+		case "missing_parent_ref_text", "missing_entity_name", "missing_effective_date", "invalid_effective_date_format":
+			return true
+		}
+	}
+	return false
+}
+
+func assistantIntentValidationErrors(intent assistantIntentSpec) []string {
+	if intent.Action != assistantIntentCreateOrgUnit {
+		return nil
+	}
+	errors := make([]string, 0, 3)
 	if strings.TrimSpace(intent.ParentRefText) == "" {
-		return true
+		errors = append(errors, "missing_parent_ref_text")
 	}
 	if strings.TrimSpace(intent.EntityName) == "" {
-		return true
+		errors = append(errors, "missing_entity_name")
 	}
 	effectiveDate := strings.TrimSpace(intent.EffectiveDate)
 	if effectiveDate == "" {
-		return true
+		errors = append(errors, "missing_effective_date")
+	} else if !assistantDateISORE.MatchString(effectiveDate) {
+		errors = append(errors, "invalid_effective_date_format")
 	}
-	return !assistantDateISORE.MatchString(effectiveDate)
+	return errors
+}
+
+func assistantNormalizeValidationErrors(validationErrors []string) []string {
+	if len(validationErrors) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(validationErrors))
+	normalized := make([]string, 0, len(validationErrors))
+	for _, item := range validationErrors {
+		code := strings.TrimSpace(item)
+		if code == "" {
+			continue
+		}
+		if _, exists := seen[code]; exists {
+			continue
+		}
+		seen[code] = struct{}{}
+		normalized = append(normalized, code)
+	}
+	return normalized
+}
+
+func assistantDryRunValidationExplain(validationErrors []string) string {
+	if len(validationErrors) == 0 {
+		return "计划已生成，等待确认后可提交"
+	}
+	if len(validationErrors) == 1 && validationErrors[0] == "candidate_confirmation_required" {
+		return "检测到多个同名父组织候选，需先确认候选主键"
+	}
+	hints := make([]string, 0, len(validationErrors))
+	for _, code := range validationErrors {
+		switch code {
+		case "missing_parent_ref_text":
+			hints = append(hints, "上级组织（例如：鲜花组织）")
+		case "missing_entity_name":
+			hints = append(hints, "部门名称（例如：运营部）")
+		case "missing_effective_date":
+			hints = append(hints, "成立日期（YYYY-MM-DD）")
+		case "invalid_effective_date_format":
+			hints = append(hints, "成立日期格式（YYYY-MM-DD）")
+		}
+	}
+	if len(hints) == 0 {
+		return "信息不完整，请继续补充必填信息后重试。"
+	}
+	return "信息不完整，请通过下一轮对话补充：" + strings.Join(hints, "；")
 }
 
 func assistantTurnVersionSnapshot(capabilityKey string) (policyVersion string, compositionVersion string, mappingVersion string) {

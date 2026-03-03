@@ -42,6 +42,7 @@ describe('deriveAssistantActionState', () => {
     expect(result.canRegenerate).toBe(false)
     expect(result.canConfirm).toBe(false)
     expect(result.canCommit).toBe(false)
+    expect(result.showRequiredFieldBlocker).toBe(false)
   })
 
   it('blocks confirm when candidate is ambiguous and not selected', () => {
@@ -61,6 +62,7 @@ describe('deriveAssistantActionState', () => {
     expect(result.canCommit).toBe(false)
     expect(result.showRiskBlocker).toBe(true)
     expect(result.showCandidateBlocker).toBe(true)
+    expect(result.showRequiredFieldBlocker).toBe(false)
   })
 
   it('allows confirm after candidate selection in validated state', () => {
@@ -78,6 +80,7 @@ describe('deriveAssistantActionState', () => {
 
     expect(result.canConfirm).toBe(true)
     expect(result.canCommit).toBe(false)
+    expect(result.showRequiredFieldBlocker).toBe(false)
   })
 
   it('allows commit only when confirmed and candidate is resolved', () => {
@@ -99,6 +102,7 @@ describe('deriveAssistantActionState', () => {
     expect(result.canCommit).toBe(true)
     expect(result.showRiskBlocker).toBe(false)
     expect(result.showCandidateBlocker).toBe(false)
+    expect(result.showRequiredFieldBlocker).toBe(false)
   })
 
   it('treats terminal states as non-actionable', () => {
@@ -112,5 +116,25 @@ describe('deriveAssistantActionState', () => {
     expect(result.canConfirm).toBe(false)
     expect(result.canCommit).toBe(false)
     expect(result.showRiskBlocker).toBe(false)
+    expect(result.showRequiredFieldBlocker).toBe(false)
+  })
+
+  it('blocks confirm and commit when required fields are missing', () => {
+    const result = deriveAssistantActionState({
+      hasConversation: true,
+      loading: false,
+      selectedCandidateID: '',
+      turn: makeTurn({
+        dry_run: {
+          explain: '信息不完整',
+          diff: [],
+          validation_errors: ['missing_parent_ref_text', 'missing_effective_date']
+        }
+      })
+    })
+
+    expect(result.canConfirm).toBe(false)
+    expect(result.canCommit).toBe(false)
+    expect(result.showRequiredFieldBlocker).toBe(true)
   })
 })

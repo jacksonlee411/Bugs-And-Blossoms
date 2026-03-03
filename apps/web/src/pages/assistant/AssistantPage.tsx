@@ -45,7 +45,7 @@ const assistantTaskPollIntervalMS = 1000
 const conversationStorageKey = 'assistant.active_conversation_id'
 
 function latestTurn(conversation: AssistantConversation | null): AssistantTurn | null {
-  if (!conversation || conversation.turns.length === 0) {
+  if (!conversation || !Array.isArray(conversation.turns) || conversation.turns.length === 0) {
     return null
   }
   const turn = conversation.turns[conversation.turns.length - 1]
@@ -64,10 +64,16 @@ function resolveCandidateSelection(turn: AssistantTurn | null, currentCandidateI
   if (resolved.length > 0) {
     return resolved
   }
-  if (turn.candidates.some((candidate) => candidate.candidate_id === currentCandidateID)) {
+  const candidates = Array.isArray(turn.candidates) ? turn.candidates : []
+  if (candidates.some((candidate) => candidate.candidate_id === currentCandidateID)) {
     return currentCandidateID
   }
   return ''
+}
+
+function normalizedDryRunDiff(turn: AssistantTurn | null): Array<Record<string, unknown>> {
+  const diff = turn?.dry_run?.diff
+  return Array.isArray(diff) ? diff : []
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -96,6 +102,37 @@ function stringifyDiffValue(value: unknown): string {
   } catch {
     return String(value)
   }
+}
+
+function formatDryRunValidationError(code: string): string {
+  const normalizedCode = normalized(code)
+  switch (normalizedCode) {
+    case 'missing_parent_ref_text':
+      return '请补充上级组织名称（例如：鲜花组织）'
+    case 'missing_entity_name':
+      return '请补充部门名称（例如：运营部）'
+    case 'missing_effective_date':
+      return '请补充成立日期（YYYY-MM-DD）'
+    case 'invalid_effective_date_format':
+      return '成立日期格式不正确，请使用 YYYY-MM-DD'
+    case 'candidate_confirmation_required':
+      return '请先确认父组织候选'
+    default:
+      return normalizedCode
+  }
+}
+
+function dryRunValidationMessages(turn: AssistantTurn | null): string[] {
+  const codes = Array.isArray(turn?.dry_run?.validation_errors) ? turn.dry_run.validation_errors : []
+  const messages: string[] = []
+  for (const code of codes) {
+    const message = formatDryRunValidationError(code)
+    if (message.length === 0 || messages.includes(message)) {
+      continue
+    }
+    messages.push(message)
+  }
+  return messages
 }
 
 function assistantTaskTerminal(status: string | undefined): boolean {
@@ -181,6 +218,8 @@ export function AssistantPage() {
   const [bridgeNonce] = useState(() => createAssistantBridgeToken('assistant_nonce'))
 
   const turn = useMemo(() => latestTurn(conversation), [conversation])
+  const turnDryRunDiff = useMemo(() => normalizedDryRunDiff(turn), [turn])
+  const turnDryRunValidationMessages = useMemo(() => dryRunValidationMessages(turn), [turn])
   const taskID = normalized(taskDetail?.task_id)
   const taskStatus = normalized(taskDetail?.status)
   const taskTerminal = useMemo(() => assistantTaskTerminal(taskStatus), [taskStatus])
@@ -742,6 +781,11 @@ export function AssistantPage() {
                   存在多个同名候选组织，请先选择候选并 Confirm。
                 </Alert>
               ) : null}
+              {actionState.showRequiredFieldBlocker ? (
+                <Alert data-testid='assistant-required-field-blocker' severity='warning'>
+                  当前信息不完整，请先在对话中补全必填信息，再执行 Confirm / Commit。
+                </Alert>
+              ) : null}
               {turn?.plan ? (
                 <Alert data-testid='assistant-plan' severity='info'>
                   <strong>{turn.plan.title}</strong>
@@ -763,17 +807,23 @@ export function AssistantPage() {
                   <Typography data-testid='assistant-dryrun-explain' variant='body2'>
                     {turn.dry_run.explain}
                   </Typography>
-                  {turn.dry_run.diff.length > 0 ? (
+                  {turnDryRunDiff.length > 0 ? (
                     <Stack component='ul' data-testid='assistant-dryrun-diff' spacing={0.5} sx={{ m: 0, pl: 2 }}>
-                      {turn.dry_run.diff.map((item, index) => (
+                      {turnDryRunDiff.map((item, index) => (
                         <Typography component='li' key={`${item.field ?? 'field'}-${index}`} variant='caption'>
                           {String(item.field ?? '-')} {'->'} {stringifyDiffValue(item.after)}
                         </Typography>
                       ))}
                     </Stack>
                   ) : null}
-                  {turn.dry_run.validation_errors?.length ? (
-                    <Alert severity='warning'>{turn.dry_run.validation_errors.join(', ')}</Alert>
+                  {turnDryRunValidationMessages.length ? (
+                    <Alert severity='warning'>
+                      {turnDryRunValidationMessages.map((message, index) => (
+                        <Typography component='div' key={`${message}-${index}`} variant='body2'>
+                          {message}
+                        </Typography>
+                      ))}
+                    </Alert>
                   ) : null}
                 </Stack>
               ) : null}

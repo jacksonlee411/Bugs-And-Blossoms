@@ -151,6 +151,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		return nil, err
 	}
 	assistantSvc := newAssistantConversationServiceWithPool(orgStore, orgUnitWriteService, pgPool)
+	if assistantSvc != nil && assistantSvc.gatewayErr != nil {
+		return nil, assistantSvc.gatewayErr
+	}
 
 	router := routing.NewRouter(classifier)
 

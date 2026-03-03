@@ -126,6 +126,11 @@ func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
 	if _, err := errSvc.createTurnPG(nil, "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"); err == nil {
 		t.Fatal("expected resolve candidates error")
 	}
+	runtimeErrSvc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	runtimeErrSvc.gatewayErr = errAssistantRuntimeConfigInvalid
+	if _, err := runtimeErrSvc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "仅生成计划"); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+		t.Fatalf("unexpected err=%v", err)
+	}
 
 	originalDefinitions := capabilityDefinitionByKey
 	capabilityDefinitionByKey = map[string]capabilityDefinition{}
@@ -165,8 +170,12 @@ func TestAssistantPersistence_CreateTurnPGErrorMatrix(t *testing.T) {
 		t.Fatalf("multi candidate confidence=%v", got)
 	}
 
-	if _, err := svc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门"); !errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed) {
+	incompleteConversation, err := svc.createTurnPG(context.Background(), "tenant_1", Principal{ID: "actor_1", RoleSlug: "tenant-admin"}, "conv_pg", "在鲜花组织之下，新建一个名为运营部的部门")
+	if err != nil {
 		t.Fatalf("unexpected err=%v", err)
+	}
+	if got := strings.Join(incompleteConversation.Turns[0].DryRun.ValidationErrors, ","); !strings.Contains(got, "missing_effective_date") {
+		t.Fatalf("expected missing_effective_date, got=%v", incompleteConversation.Turns[0].DryRun.ValidationErrors)
 	}
 
 	originalAnnotateFn := assistantAnnotateIntentPlanFn
@@ -219,7 +228,7 @@ func TestAssistantPersistence_LoadConversationTxErrorMatrix(t *testing.T) {
 			AmbiguityCount:      1,
 			Confidence:          0.9,
 			ResolutionSource:    assistantResolutionAuto,
-			DryRun:              assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""),
+			DryRun:              assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""),
 			CommitResult:        &assistantCommitResult{OrgCode: "ORG-1"},
 			CreatedAt:           now,
 			UpdatedAt:           now,
@@ -334,6 +343,51 @@ func TestAssistantPersistence_LoadConversationTxErrorMatrix(t *testing.T) {
 	svc.pool = assistFakeTxBeginner{tx: notFoundTx}
 	if _, err := svc.loadConversationByTenant(context.Background(), "tenant_1", "conv_commit", false); !errors.Is(err, errAssistantConversationNotFound) {
 		t.Fatalf("unexpected err=%v", err)
+	}
+}
+
+func TestAssistantPersistence_ApplyTurnRequiresIntentClarification(t *testing.T) {
+	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	principal := Principal{ID: "actor_1", RoleSlug: "tenant-admin"}
+	now := time.Now().UTC()
+	conversation := &assistantConversation{
+		ConversationID: "conv_1",
+		TenantID:       "tenant_1",
+		ActorID:        principal.ID,
+		ActorRole:      principal.RoleSlug,
+		State:          assistantStateValidated,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	turn := &assistantTurn{
+		TurnID:              "turn_1",
+		UserInput:           "在鲜花组织之下，新建一个名为运营部的部门",
+		State:               assistantStateValidated,
+		RiskTier:            "high",
+		RequestID:           "request_1",
+		TraceID:             "trace_1",
+		PolicyVersion:       capabilityPolicyVersionBaseline,
+		CompositionVersion:  capabilityPolicyVersionBaseline,
+		MappingVersion:      capabilityPolicyVersionBaseline,
+		Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部"},
+		Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
+		Candidates:          []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}},
+		ResolvedCandidateID: "c1",
+		AmbiguityCount:      1,
+		DryRun: assistantDryRunResult{
+			ValidationErrors: []string{"missing_effective_date"},
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if _, err := svc.applyConfirmTurn(conversation, turn, principal, ""); !errors.Is(err, errAssistantConfirmationRequired) {
+		t.Fatalf("expected confirmation required, got=%v", err)
+	}
+
+	turn.State = assistantStateConfirmed
+	if _, err := svc.applyCommitTurn(context.Background(), conversation, turn, principal, "tenant_1"); !errors.Is(err, errAssistantConfirmationRequired) {
+		t.Fatalf("expected confirmation required on commit, got=%v", err)
 	}
 }
 

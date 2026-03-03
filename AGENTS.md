@@ -347,7 +347,11 @@ modules/{module}/
 - DEV-PLAN-223：Assistant 会话持久化与审计闭环实施计划：`docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - DEV-PLAN-224：Assistant 多模型适配与 LLM 意图判断能力实施计划：`docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
 - DEV-PLAN-224A：Assistant 真实 Codex API 与多轮对话工作台实施计划：`docs/dev-plans/224a-assistant-codex-live-api-and-multi-turn-workspace-plan.md`
+- DEV-PLAN-224B：Assistant 运行时配置强制生效与无回退硬化方案：`docs/dev-plans/224b-assistant-runtime-config-hardening-and-no-fallback.md`
+- DEV-PLAN-224C：Assistant 可扩展意图注册表与多场景受控提交实施计划：`docs/dev-plans/224c-assistant-intent-registry-and-multi-scenario-expansion-plan.md`
+- DEV-PLAN-224D：Assistant `correct_orgunit` 意图全字段覆盖实施计划：`docs/dev-plans/224d-assistant-correct-orgunit-full-field-coverage-plan.md`
 - DEV-PLAN-225：Assistant Tasks API 与 Temporal（P2）实施计划：`docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
+- DEV-PLAN-230：LibreChat 项目级集成实施方案（源码纳管 + 运行基线 + 安全边界）：`docs/dev-plans/230-librechat-project-level-integration-plan.md`
 - DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`

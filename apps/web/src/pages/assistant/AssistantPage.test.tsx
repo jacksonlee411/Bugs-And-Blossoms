@@ -310,6 +310,56 @@ describe('AssistantPage', () => {
     expect(screen.getByTestId('assistant-task-status')).toHaveTextContent('succeeded')
   })
 
+  it('renders safely when candidates and dry_run.diff are null', async () => {
+    assistantAPIMocks.getAssistantConversation.mockResolvedValue(
+      makeConversation({
+        turns: [
+          makeTurn({
+            candidates: null,
+            dry_run: {
+              explain: '计划已生成，等待确认后可提交',
+              diff: null,
+              plan_hash: 'plan-hash'
+            }
+          })
+        ]
+      })
+    )
+
+    render(<AssistantPage />)
+
+    expect(await screen.findByTestId('assistant-transaction-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('assistant-dryrun-explain')).toHaveTextContent('计划已生成，等待确认后可提交')
+    expect(screen.queryByTestId('assistant-candidates')).not.toBeInTheDocument()
+  })
+
+  it('shows required-field guidance and blocks actions when intent fields are missing', async () => {
+    assistantAPIMocks.getAssistantConversation.mockResolvedValue(
+      makeConversation({
+        turns: [
+          makeTurn({
+            ambiguity_count: 0,
+            candidates: [],
+            dry_run: {
+              explain: '信息不完整，请通过下一轮对话补充：上级组织；成立日期',
+              diff: [],
+              validation_errors: ['missing_parent_ref_text', 'missing_effective_date'],
+              plan_hash: 'plan-hash'
+            }
+          })
+        ]
+      })
+    )
+
+    render(<AssistantPage />)
+
+    expect(await screen.findByTestId('assistant-required-field-blocker')).toBeInTheDocument()
+    expect(screen.getByText('请补充上级组织名称（例如：鲜花组织）')).toBeInTheDocument()
+    expect(screen.getByText('请补充成立日期（YYYY-MM-DD）')).toBeInTheDocument()
+    expect(screen.getByTestId('assistant-confirm-button')).toBeDisabled()
+    expect(screen.getByTestId('assistant-commit-button')).toBeDisabled()
+  })
+
   it('accepts postMessage only with allowed origin, valid schema and matching nonce/channel', async () => {
     assistantAPIMocks.createAssistantConversation.mockResolvedValue(makeConversation({ turns: [] }))
     render(<AssistantPage />)

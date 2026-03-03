@@ -79,7 +79,16 @@ func TestAssistantConversationTurns_ModelGatewayErrorMappings(t *testing.T) {
 		svc.modelGateway = &assistantModelGateway{
 			config: config,
 			adapters: map[string]assistantProviderAdapter{
-				"openai": assistantDeterministicProviderAdapter{},
+				"openai": assistantAdapterFunc(func(_ context.Context, _ string, provider assistantModelProviderConfig) ([]byte, error) {
+					switch strings.TrimSpace(provider.Model) {
+					case "timeout":
+						return nil, errAssistantModelTimeout
+					case "rate_limited":
+						return nil, errAssistantModelRateLimited
+					default:
+						return []byte(`{"action":"plan_only"}`), nil
+					}
+				}),
 			},
 		}
 		conv := svc.createConversation("tenant-1", Principal{ID: "actor-1", RoleSlug: "tenant-admin"})
@@ -102,7 +111,7 @@ func TestAssistantConversationTurns_ModelGatewayErrorMappings(t *testing.T) {
 		{
 			name: "timeout",
 			config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{
-				{Name: "openai", Enabled: true, Model: "m", Endpoint: "simulate://timeout", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+				{Name: "openai", Enabled: true, Model: "timeout", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
 			}},
 			wantStatus: http.StatusGatewayTimeout,
 			wantCode:   "ai_model_timeout",
@@ -110,7 +119,7 @@ func TestAssistantConversationTurns_ModelGatewayErrorMappings(t *testing.T) {
 		{
 			name: "rate limited",
 			config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{
-				{Name: "openai", Enabled: true, Model: "m", Endpoint: "simulate://rate-limit", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+				{Name: "openai", Enabled: true, Model: "rate_limited", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
 			}},
 			wantStatus: http.StatusTooManyRequests,
 			wantCode:   "ai_model_rate_limited",
@@ -293,6 +302,85 @@ func TestAssistantTurnAction_IdempotencyConflictMappings(t *testing.T) {
 	if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "idempotency_key_conflict" {
 		t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 	}
+}
+
+func TestAssistantTurnAction_RequiresIntentClarificationBeforeConfirm(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
+		t.Fatalf("create node err=%v", err)
+	}
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
+	conv := svc.createConversation("tenant-1", principal)
+	created, err := svc.createTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "在鲜花组织之下，新建一个名为运营部的部门")
+	if err != nil {
+		t.Fatalf("create turn err=%v", err)
+	}
+	turn := latestTurn(created)
+	if turn == nil {
+		t.Fatal("expected turn")
+	}
+	if got := strings.Join(turn.DryRun.ValidationErrors, ","); !strings.Contains(got, "missing_effective_date") {
+		t.Fatalf("expected missing_effective_date, got=%v", turn.DryRun.ValidationErrors)
+	}
+
+	rec := httptest.NewRecorder()
+	path := "/internal/assistant/conversations/" + conv.ConversationID + "/turns/" + turn.TurnID + ":confirm"
+	handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, path, `{}`, true, true), svc)
+	if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
+		t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+	}
+
+	svc.mu.Lock()
+	live := svc.byID[conv.ConversationID]
+	if live == nil || len(live.Turns) == 0 {
+		svc.mu.Unlock()
+		t.Fatal("expected live turn")
+	}
+	liveTurn := live.Turns[len(live.Turns)-1]
+	liveTurn.State = assistantStateConfirmed
+	liveTurn.ResolvedCandidateID = "FLOWER-A"
+	liveTurn.Candidates = []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}}
+	liveTurn.DryRun.ValidationErrors = []string{"missing_effective_date"}
+	svc.mu.Unlock()
+
+	rec = httptest.NewRecorder()
+	commitPath := "/internal/assistant/conversations/" + conv.ConversationID + "/turns/" + turn.TurnID + ":commit"
+	handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, commitPath, `{}`, true, true), svc)
+	if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
+		t.Fatalf("commit status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+	}
+}
+
+func TestAssistantConversationTurns_RuntimeConfigErrorMappings(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
+
+	makeReq := func(conversationID string) *http.Request {
+		return assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+conversationID+"/turns", `{"user_input":"测试模型配置错误"}`, true, true)
+	}
+
+	t.Run("runtime config invalid", func(t *testing.T) {
+		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		svc.gatewayErr = errAssistantRuntimeConfigInvalid
+		conv := svc.createConversation("tenant-1", principal)
+		rec := httptest.NewRecorder()
+		handleAssistantConversationTurnsAPI(rec, makeReq(conv.ConversationID), svc)
+		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "ai_runtime_config_invalid" {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+	})
+
+	t.Run("runtime config missing", func(t *testing.T) {
+		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		svc.gatewayErr = errAssistantRuntimeConfigMissing
+		conv := svc.createConversation("tenant-1", principal)
+		rec := httptest.NewRecorder()
+		handleAssistantConversationTurnsAPI(rec, makeReq(conv.ConversationID), svc)
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "ai_runtime_config_missing" {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+	})
 }
 
 func TestAssistantServiceHelpers_PoolWrappersAndPathEdges(t *testing.T) {

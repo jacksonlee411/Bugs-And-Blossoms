@@ -16,12 +16,14 @@ func (s *assistantConversationService) resolveIntent(ctx context.Context, tenant
 	if assistantBoundaryViolationDetected(text) {
 		return assistantResolveIntentResult{}, errAssistantPlanBoundaryViolation
 	}
-	if s == nil || s.modelGateway == nil {
-		intent, err := assistantDecodeIntent(text)
-		if err != nil {
-			return assistantResolveIntentResult{}, err
-		}
-		return assistantResolveIntentResult{Intent: intent, ProviderName: "builtin", ModelName: "rule-based", ModelRevision: "r000000000000"}, nil
+	if s == nil {
+		return assistantResolveIntentResult{}, errAssistantServiceMissing
+	}
+	if s.gatewayErr != nil {
+		return assistantResolveIntentResult{}, s.gatewayErr
+	}
+	if s.modelGateway == nil {
+		return assistantResolveIntentResult{}, errAssistantModelProviderUnavailable
 	}
 	resolved, err := s.modelGateway.ResolveIntent(ctx, assistantResolveIntentRequest{
 		Prompt:         text,
@@ -32,7 +34,16 @@ func (s *assistantConversationService) resolveIntent(ctx context.Context, tenant
 		return assistantResolveIntentResult{}, err
 	}
 	if assistantIntentSchemaInvalid(resolved.Intent) {
-		return assistantResolveIntentResult{}, errAssistantPlanSchemaConstrainedDecodeFailed
+		// Real provider may occasionally emit partial JSON; retry once with the same runtime path.
+		retryResolved, retryErr := s.modelGateway.ResolveIntent(ctx, assistantResolveIntentRequest{
+			Prompt:         text,
+			ConversationID: conversationID,
+			TenantID:       tenantID,
+		})
+		if retryErr != nil {
+			return assistantResolveIntentResult{}, retryErr
+		}
+		return retryResolved, nil
 	}
 	return resolved, nil
 }

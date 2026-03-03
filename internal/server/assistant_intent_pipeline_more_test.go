@@ -14,13 +14,13 @@ func TestAssistantIntentPipeline_Branches(t *testing.T) {
 	}
 
 	svc.modelGateway = nil
-	if resolved, err := svc.resolveIntent(context.Background(), "t1", "c1", "  "); err != nil || resolved.ProviderName != "builtin" {
-		t.Fatalf("unexpected resolved=%+v err=%v", resolved, err)
+	if _, err := svc.resolveIntent(context.Background(), "t1", "c1", "  "); !errors.Is(err, errAssistantModelProviderUnavailable) {
+		t.Fatalf("unexpected err=%v", err)
 	}
-	if resolved, err := svc.resolveIntent(context.Background(), "t1", "c1", "随便聊聊"); err != nil || resolved.ProviderName != "builtin" {
-		t.Fatalf("unexpected resolved=%+v err=%v", resolved, err)
+	if _, err := svc.resolveIntent(context.Background(), "t1", "c1", "随便聊聊"); !errors.Is(err, errAssistantModelProviderUnavailable) {
+		t.Fatalf("unexpected err=%v", err)
 	}
-	if _, err := svc.resolveIntent(context.Background(), "t1", "c1", "在鲜花组织之下，新建一个名为运营部的部门"); !errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed) {
+	if _, err := svc.resolveIntent(context.Background(), "t1", "c1", "在鲜花组织之下，新建一个名为运营部的部门"); !errors.Is(err, errAssistantModelProviderUnavailable) {
 		t.Fatalf("unexpected err=%v", err)
 	}
 
@@ -30,13 +30,20 @@ func TestAssistantIntentPipeline_Branches(t *testing.T) {
 	}
 
 	svc.modelGateway = &assistantModelGateway{
-		config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{{Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1000, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"}}},
+		config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1000, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"}}},
 		adapters: map[string]assistantProviderAdapter{"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
 			return []byte(`{"action":"create_orgunit"}`), nil
 		})},
 	}
-	if _, err := svc.resolveIntent(context.Background(), "t1", "c1", "新建一个部门"); !errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed) {
+	resolvedIntent, err := svc.resolveIntent(context.Background(), "t1", "c1", "新建一个部门")
+	if err != nil {
 		t.Fatalf("unexpected err=%v", err)
+	}
+	if resolvedIntent.Intent.Action != assistantIntentCreateOrgUnit {
+		t.Fatalf("intent action=%s", resolvedIntent.Intent.Action)
+	}
+	if got := assistantIntentValidationErrors(resolvedIntent.Intent); len(got) == 0 {
+		t.Fatalf("expected missing required fields, got=%v", got)
 	}
 
 	intent := assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}
@@ -119,5 +126,93 @@ func TestAssistantIntentPipeline_Branches(t *testing.T) {
 	}
 	if err := assistantAnnotateIntentPlan("t", "c", "输入", &intent2, &plan2, &dry2); !errors.Is(err, errAssistantPlanDeterminismViolation) {
 		t.Fatalf("unexpected err=%v", err)
+	}
+}
+
+func TestAssistantIntentPipeline_RetryOnSchemaInvalid(t *testing.T) {
+	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	attempt := 0
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{
+				{
+					Name:      "openai",
+					Enabled:   true,
+					Model:     "gpt-5-codex",
+					Endpoint:  "https://api.openai.com/v1",
+					TimeoutMS: 1000,
+					Retries:   0,
+					Priority:  1,
+					KeyRef:    "OPENAI_API_KEY",
+				},
+			},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				attempt++
+				if attempt == 1 {
+					return []byte(`{"action":"create_orgunit"}`), nil
+				}
+				return []byte(`{"action":"create_orgunit","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`), nil
+			}),
+		},
+	}
+	resolved, err := svc.resolveIntent(context.Background(), "t1", "c1", "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。")
+	if err != nil {
+		t.Fatalf("resolve intent err=%v", err)
+	}
+	if attempt != 2 {
+		t.Fatalf("expected one retry, attempts=%d", attempt)
+	}
+	if resolved.Intent.Action != assistantIntentCreateOrgUnit || resolved.Intent.ParentRefText != "鲜花组织" || resolved.Intent.EntityName != "运营部" || resolved.Intent.EffectiveDate != "2026-01-01" {
+		t.Fatalf("unexpected intent=%+v", resolved.Intent)
+	}
+}
+
+func TestAssistantIntentPipeline_ResolveIntentErrorBranches(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "dummy")
+
+	var nilSvc *assistantConversationService
+	if _, err := nilSvc.resolveIntent(context.Background(), "t1", "c1", "新建一个部门"); !errors.Is(err, errAssistantServiceMissing) {
+		t.Fatalf("expected service missing, got=%v", err)
+	}
+
+	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+	svc.gatewayErr = errAssistantRuntimeConfigInvalid
+	if _, err := svc.resolveIntent(context.Background(), "t1", "c1", "新建一个部门"); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+		t.Fatalf("expected runtime config invalid, got=%v", err)
+	}
+
+	svc.gatewayErr = nil
+	attempt := 0
+	svc.modelGateway = &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{
+				{
+					Name:      "openai",
+					Enabled:   true,
+					Model:     "gpt-5-codex",
+					Endpoint:  "https://api.openai.com/v1",
+					TimeoutMS: 1000,
+					Retries:   0,
+					Priority:  1,
+					KeyRef:    "OPENAI_API_KEY",
+				},
+			},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+				attempt++
+				if attempt == 1 {
+					return []byte(`{"action":"create_orgunit"}`), nil
+				}
+				return nil, errAssistantModelTimeout
+			}),
+		},
+	}
+	if _, err := svc.resolveIntent(context.Background(), "t1", "c1", "在鲜花组织之下，新建一个名为运营部的部门"); !errors.Is(err, errAssistantModelTimeout) {
+		t.Fatalf("expected timeout on retry, got=%v", err)
 	}
 }

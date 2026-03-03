@@ -370,6 +370,28 @@ func TestAssistantConversationHandlers_CoverageMatrix(t *testing.T) {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 
+		t.Setenv("OPENAI_API_KEY", "dummy")
+		schemaErrSvc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
+		schemaErrSvc.modelGateway = &assistantModelGateway{
+			config: assistantModelConfig{
+				ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+				Providers: []assistantModelProviderConfig{
+					{Name: "openai", Enabled: true, Model: "gpt-5-codex", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1000, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+				},
+			},
+			adapters: map[string]assistantProviderAdapter{
+				"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+					return []byte(`{"action":"create_orgunit","extra":1}`), nil
+				}),
+			},
+		}
+		schemaErrConv := schemaErrSvc.createConversation("tenant-1", principal)
+		rec = httptest.NewRecorder()
+		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+schemaErrConv.ConversationID+"/turns", `{"user_input":"在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026-01-01"}`, true, true), schemaErrSvc)
+		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "ai_plan_schema_constrained_decode_failed" {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+
 		forbiddenReq := assistantReqWithContext(http.MethodPost, path, `{"user_input":"计划"}`, true, true)
 		forbiddenReq = forbiddenReq.WithContext(withPrincipal(forbiddenReq.Context(), Principal{ID: "actor-x", RoleSlug: "tenant-admin"}))
 		rec = httptest.NewRecorder()
@@ -380,8 +402,19 @@ func TestAssistantConversationHandlers_CoverageMatrix(t *testing.T) {
 
 		rec = httptest.NewRecorder()
 		handleAssistantConversationTurnsAPI(rec, assistantReqWithContext(http.MethodPost, path, `{"user_input":"在鲜花组织之下，新建一个名为运营部的部门"}`, true, true), svc)
-		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "ai_plan_schema_constrained_decode_failed" {
-			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var conversation assistantConversation
+		if err := json.Unmarshal(rec.Body.Bytes(), &conversation); err != nil {
+			t.Fatalf("decode conversation: %v", err)
+		}
+		last := latestTurn(&conversation)
+		if last == nil {
+			t.Fatal("expected turn created")
+		}
+		if got := strings.Join(last.DryRun.ValidationErrors, ","); !strings.Contains(got, "missing_effective_date") {
+			t.Fatalf("expected missing_effective_date, got=%v", last.DryRun.ValidationErrors)
 		}
 
 		rec = httptest.NewRecorder()
@@ -1079,13 +1112,47 @@ func TestAssistantServiceHelpersAndUtilities(t *testing.T) {
 			t.Fatal("expected missing action separator")
 		}
 
-		dryRun := assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"}, candidates, "")
+		dryRun := assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, candidates, "")
 		if !strings.Contains(dryRun.Explain, "候选") {
 			t.Fatalf("unexpected dryrun explain=%s", dryRun.Explain)
 		}
-		resolvedDryRun := assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"}, candidates[:1], "A")
+		resolvedDryRun := assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, candidates[:1], "A")
 		if len(resolvedDryRun.Diff) < 3 {
 			t.Fatalf("unexpected dryrun diff=%+v", resolvedDryRun.Diff)
+		}
+		formatDryRun := assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026/01/01"}, nil, "")
+		if !strings.Contains(formatDryRun.Explain, "YYYY-MM-DD") {
+			t.Fatalf("unexpected format explain=%s", formatDryRun.Explain)
+		}
+
+		if got := assistantDryRunValidationExplain(nil); !strings.Contains(got, "等待确认") {
+			t.Fatalf("unexpected default explain=%s", got)
+		}
+		if got := assistantDryRunValidationExplain([]string{"candidate_confirmation_required"}); !strings.Contains(got, "候选主键") {
+			t.Fatalf("unexpected candidate explain=%s", got)
+		}
+		if got := assistantDryRunValidationExplain([]string{"missing_entity_name"}); !strings.Contains(got, "部门名称") {
+			t.Fatalf("unexpected missing entity explain=%s", got)
+		}
+		if got := assistantDryRunValidationExplain([]string{"unknown_code"}); !strings.Contains(got, "继续补充") {
+			t.Fatalf("unexpected unknown explain=%s", got)
+		}
+
+		if got := assistantNormalizeValidationErrors([]string{"", "missing_effective_date", "missing_effective_date"}); len(got) != 1 || got[0] != "missing_effective_date" {
+			t.Fatalf("unexpected normalized errors=%v", got)
+		}
+		if got := assistantNormalizeValidationErrors(nil); got != nil {
+			t.Fatalf("expected nil normalized errors, got=%v", got)
+		}
+
+		if assistantTurnRequiresIntentClarification(nil) {
+			t.Fatal("nil turn should not require clarification")
+		}
+		if assistantTurnRequiresIntentClarification(&assistantTurn{DryRun: assistantDryRunResult{ValidationErrors: []string{"candidate_confirmation_required"}}}) {
+			t.Fatal("candidate confirmation only should not require clarification")
+		}
+		if !assistantTurnRequiresIntentClarification(&assistantTurn{DryRun: assistantDryRunResult{ValidationErrors: []string{"invalid_effective_date_format"}}}) {
+			t.Fatal("invalid date format should require clarification")
 		}
 	})
 

@@ -174,6 +174,10 @@ func knownErrorMessage(code string) string {
 		return "模型服务限流，请稍后重试。"
 	case "ai_model_config_invalid":
 		return "模型配置不合法，请修正后重新应用。"
+	case "ai_runtime_config_invalid":
+		return "助手运行时模型配置不合法，请修正配置并重启服务。"
+	case "ai_runtime_config_missing":
+		return "助手运行时模型配置缺失，请完成配置并重启服务。"
 	case "ai_model_secret_missing":
 		return "模型密钥缺失，请检查 key_ref 配置后重试。"
 	case "assistant_conversation_cursor_invalid":
