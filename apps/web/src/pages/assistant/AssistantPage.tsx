@@ -21,12 +21,15 @@ import {
   confirmAssistantTurn,
   createAssistantConversation,
   createAssistantTurn,
+  getAssistantRuntimeStatus,
   getAssistantTask,
   getAssistantConversation,
   listAssistantConversations,
   submitAssistantTask,
   type AssistantConversation,
   type AssistantConversationListItem,
+  type AssistantRuntimeService,
+  type AssistantRuntimeStatusResponse,
   type AssistantTaskDetail,
   type AssistantTurn
 } from '../../api/assistant'
@@ -185,6 +188,15 @@ function formatTimestamp(input: string | undefined): string {
   return date.toLocaleString()
 }
 
+function formatRuntimeService(service: AssistantRuntimeService): string {
+  const status = normalized(service.healthy) || assistantStatePlaceholder
+  const reason = normalized(service.reason)
+  if (reason.length > 0) {
+    return `${service.name}=${status}(${reason})`
+  }
+  return `${service.name}=${status}`
+}
+
 function saveActiveConversationID(conversationID: string) {
   if (typeof window === 'undefined') {
     return
@@ -214,6 +226,8 @@ export function AssistantPage() {
   const [loading, setLoading] = useState(false)
   const [loadingList, setLoadingList] = useState(false)
   const [error, setError] = useState('')
+  const [runtimeStatus, setRuntimeStatus] = useState<AssistantRuntimeStatusResponse | null>(null)
+  const [runtimeError, setRuntimeError] = useState('')
   const [bridgeChannel] = useState(() => createAssistantBridgeToken('assistant_channel'))
   const [bridgeNonce] = useState(() => createAssistantBridgeToken('assistant_nonce'))
 
@@ -234,6 +248,17 @@ export function AssistantPage() {
       `/assistant-ui/?channel=${encodeURIComponent(bridgeChannel)}&nonce=${encodeURIComponent(bridgeNonce)}`,
     [bridgeChannel, bridgeNonce]
   )
+  const runtimeSummary = useMemo(() => {
+    if (!runtimeStatus) {
+      return ''
+    }
+    const services = Array.isArray(runtimeStatus.services) ? runtimeStatus.services : []
+    const summary = services.map((service) => formatRuntimeService(service)).join(' | ')
+    if (summary.length > 0) {
+      return summary
+    }
+    return '无运行时服务状态快照'
+  }, [runtimeStatus])
 
   const applyConversation = useCallback((nextConversation: AssistantConversation) => {
     setConversation(nextConversation)
@@ -332,6 +357,27 @@ export function AssistantPage() {
       setLoading(false)
     }
   }, [applyConversation])
+
+  useEffect(() => {
+    let active = true
+    void getAssistantRuntimeStatus()
+      .then((status) => {
+        if (!active) {
+          return
+        }
+        setRuntimeStatus(status)
+        setRuntimeError('')
+      })
+      .catch((err: unknown) => {
+        if (!active) {
+          return
+        }
+        setRuntimeError(errorMessage(err, '加载 LibreChat 运行状态失败'))
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -606,6 +652,25 @@ export function AssistantPage() {
       <Typography color='text.secondary' variant='body2'>
         三栏工作台：左侧会话列表，中间时间线回放，右侧当前回合操作区（Confirm / Commit 仍走后端 One Door）。
       </Typography>
+      {runtimeStatus ? (
+        <Alert
+          data-testid='assistant-runtime-alert'
+          severity={runtimeStatus.status === 'healthy' ? 'success' : runtimeStatus.status === 'degraded' ? 'warning' : 'error'}
+        >
+          <Typography variant='body2'>
+            LibreChat Runtime：status={runtimeStatus.status} / code={runtimeStatus.error_code ?? '-'} / upstream=
+            {runtimeStatus.upstream?.repo ?? '-'}@{runtimeStatus.upstream?.ref ?? '-'} ({runtimeStatus.upstream?.url ?? '-'})
+          </Typography>
+          <Typography variant='caption'>checked_at={formatTimestamp(runtimeStatus.checked_at)}</Typography>
+          <br />
+          <Typography variant='caption'>{runtimeSummary}</Typography>
+        </Alert>
+      ) : null}
+      {runtimeError ? (
+        <Alert data-testid='assistant-runtime-error-alert' severity='warning'>
+          {runtimeError}
+        </Alert>
+      ) : null}
       {error ? (
         <Alert data-testid='assistant-error-alert' severity='error'>
           {error}

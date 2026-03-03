@@ -357,6 +357,7 @@ modules/{module}/
 - DEV-PLAN-231：LibreChat 集成前置契约与门禁补齐实施计划：`docs/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md`
 - DEV-PLAN-231 执行日志：`docs/dev-records/dev-plan-231-execution-log.md`
 - DEV-PLAN-232：LibreChat 官方运行基线落地实施计划：`docs/dev-plans/232-librechat-official-runtime-baseline-plan.md`
+- DEV-PLAN-232 执行日志：`docs/dev-records/dev-plan-232-execution-log.md`
 - DEV-PLAN-233：LibreChat 模型配置单主源收口实施计划：`docs/dev-plans/233-librechat-single-source-config-convergence-plan.md`
 - DEV-PLAN-234：LibreChat 开源能力复用落地实施计划（MCP/Actions/Allowlist）：`docs/dev-plans/234-librechat-open-source-capabilities-reuse-plan.md`
 - DEV-PLAN-235：LibreChat 身份/会话/租户边界硬化实施计划：`docs/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`

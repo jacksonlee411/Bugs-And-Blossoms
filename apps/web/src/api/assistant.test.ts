@@ -24,6 +24,7 @@ import {
   getAssistantConversation,
   getAssistantModelProviders,
   getAssistantModels,
+  getAssistantRuntimeStatus,
   submitAssistantTask,
   validateAssistantModelProviders
 } from './assistant'
@@ -105,6 +106,17 @@ describe('assistant api', () => {
 
     await getAssistantModels()
     expect(getMock).toHaveBeenNthCalledWith(2, '/internal/assistant/models')
+  })
+
+  it('loads runtime status diagnostics endpoint', async () => {
+    getMock.mockResolvedValue({
+      status: 'healthy',
+      checked_at: '2026-03-03T17:00:00Z',
+      upstream: { url: 'http://127.0.0.1:3080' },
+      services: []
+    })
+    await getAssistantRuntimeStatus()
+    expect(getMock).toHaveBeenCalledWith('/internal/assistant/runtime-status')
   })
 
   it('calls assistant task lifecycle endpoints', async () => {

@@ -7,6 +7,7 @@ const assistantAPIMocks = vi.hoisted(() => ({
   confirmAssistantTurn: vi.fn(),
   createAssistantConversation: vi.fn(),
   createAssistantTurn: vi.fn(),
+  getAssistantRuntimeStatus: vi.fn(),
   getAssistantConversation: vi.fn(),
   listAssistantConversations: vi.fn(),
   getAssistantTask: vi.fn(),
@@ -122,6 +123,19 @@ describe('AssistantPage', () => {
     })
     assistantAPIMocks.createAssistantConversation.mockResolvedValue(makeConversation())
     assistantAPIMocks.createAssistantTurn.mockResolvedValue(makeConversation())
+    assistantAPIMocks.getAssistantRuntimeStatus.mockResolvedValue({
+      status: 'healthy',
+      checked_at: '2026-03-02T00:00:00Z',
+      upstream: {
+        url: 'http://127.0.0.1:3080',
+        repo: 'danny-avila/LibreChat',
+        ref: 'main'
+      },
+      services: [
+        { name: 'api', required: true, healthy: 'healthy' },
+        { name: 'mongodb', required: true, healthy: 'healthy' }
+      ]
+    })
     assistantAPIMocks.confirmAssistantTurn.mockResolvedValue(makeConversation())
     assistantAPIMocks.commitAssistantTurn.mockResolvedValue(makeConversation())
     assistantAPIMocks.getAssistantConversation.mockResolvedValue(makeConversation())
@@ -190,12 +204,13 @@ describe('AssistantPage', () => {
     render(<AssistantPage />)
 
     expect(await screen.findByTestId('assistant-transaction-panel')).toBeInTheDocument()
+    expect(await screen.findByTestId('assistant-runtime-alert')).toHaveTextContent('LibreChat Runtime：status=healthy')
     expect(screen.getByTestId('assistant-librechat-frame')).toBeInTheDocument()
     expect(screen.getByTestId('assistant-conversation-id')).toHaveTextContent('conv_1')
     expect(screen.getByTestId('assistant-turn-id')).toHaveTextContent('turn_1')
     expect(screen.getByTestId('assistant-request-id')).toHaveTextContent('request_1')
     expect(screen.getByTestId('assistant-trace-id')).toHaveTextContent('trace_1')
-    expect(screen.getByTestId('assistant-dryrun-explain')).toHaveTextContent('检测到多个同名父组织候选')
+    expect(await screen.findByTestId('assistant-dryrun-explain')).toHaveTextContent('检测到多个同名父组织候选')
     expect(screen.getByTestId('assistant-risk-blocker')).toBeInTheDocument()
     expect(screen.getByTestId('assistant-candidate-blocker')).toBeInTheDocument()
     expect(screen.getByText('鲜花组织 / FLOWER-A / /鲜花组织/华东 / 2026-01-01')).toBeInTheDocument()
@@ -329,7 +344,7 @@ describe('AssistantPage', () => {
     render(<AssistantPage />)
 
     expect(await screen.findByTestId('assistant-transaction-panel')).toBeInTheDocument()
-    expect(screen.getByTestId('assistant-dryrun-explain')).toHaveTextContent('计划已生成，等待确认后可提交')
+    expect(await screen.findByTestId('assistant-dryrun-explain')).toHaveTextContent('计划已生成，等待确认后可提交')
     expect(screen.queryByTestId('assistant-candidates')).not.toBeInTheDocument()
   })
 

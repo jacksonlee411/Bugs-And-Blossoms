@@ -1,0 +1,44 @@
+upstream:
+  repo: "danny-avila/LibreChat"
+  ref: "main"
+  source_compose_url: "https://raw.githubusercontent.com/danny-avila/LibreChat/main/docker-compose.yml"
+  source_yaml_url: "https://raw.githubusercontent.com/danny-avila/LibreChat/main/librechat.example.yaml"
+  imported_at: "2026-03-03T17:20:00Z"
+  rollback_ref: "main"
+
+services:
+  - name: api
+    required: true
+    image: ghcr.io/danny-avila/librechat
+    tag: v0.8.0
+    digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+    data_dir: .local/librechat/api
+    owner: assistant-platform
+  - name: mongodb
+    required: true
+    image: mongo
+    tag: "7.0"
+    digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
+    data_dir: .local/librechat/mongodb
+    owner: assistant-platform
+  - name: meilisearch
+    required: true
+    image: getmeili/meilisearch
+    tag: v1.12.0
+    digest: sha256:3333333333333333333333333333333333333333333333333333333333333333
+    data_dir: .local/librechat/meilisearch
+    owner: assistant-platform
+  - name: rag_api
+    required: true
+    image: ghcr.io/danny-avila/librechat-rag-api
+    tag: v0.8.0
+    digest: sha256:4444444444444444444444444444444444444444444444444444444444444444
+    data_dir: .local/librechat/rag_api
+    owner: assistant-platform
+  - name: vectordb
+    required: true
+    image: qdrant/qdrant
+    tag: v1.13.4
+    digest: sha256:5555555555555555555555555555555555555555555555555555555555555555
+    data_dir: .local/librechat/vectordb
+    owner: assistant-platform

@@ -505,6 +505,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/models", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantModelsAPI(w, r, assistantSvc)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/runtime-status", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantRuntimeStatusAPI(w, r)
+	}))
 
 	assetsSub, _ := fs.Sub(embeddedAssets, "assets")
 

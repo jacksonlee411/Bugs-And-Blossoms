@@ -71,6 +71,9 @@ func TestCapabilityRouteBindingForRoute(t *testing.T) {
 	if binding, ok := capabilityRouteBindingForRoute("GET", "/internal/assistant/models"); !ok || binding.Action != authz.ActionRead {
 		t.Fatalf("expected assistant models mapping found, got=%+v ok=%v", binding, ok)
 	}
+	if binding, ok := capabilityRouteBindingForRoute("GET", "/internal/assistant/runtime-status"); !ok || binding.Action != authz.ActionRead {
+		t.Fatalf("expected assistant runtime status mapping found, got=%+v ok=%v", binding, ok)
+	}
 }
 
 func TestCapabilityAuthzRequirementForBinding(t *testing.T) {

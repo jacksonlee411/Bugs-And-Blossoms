@@ -213,6 +213,35 @@ export interface AssistantModelsResponse {
   }>
 }
 
+export interface AssistantRuntimeUpstream {
+  url?: string
+  repo?: string
+  ref?: string
+  imported_at?: string
+  rollback_ref?: string
+}
+
+export interface AssistantRuntimeService {
+  name: string
+  required: boolean
+  healthy: 'healthy' | 'degraded' | 'unavailable'
+  reason?: string
+  image?: string
+  tag?: string
+  digest?: string
+}
+
+export interface AssistantRuntimeStatusResponse {
+  status: 'healthy' | 'degraded' | 'unavailable'
+  checked_at: string
+  error_code?: string
+  error_message?: string
+  code?: string
+  message?: string
+  upstream: AssistantRuntimeUpstream
+  services: AssistantRuntimeService[]
+}
+
 export async function createAssistantConversation(): Promise<AssistantConversation> {
   return httpClient.post<AssistantConversation>('/internal/assistant/conversations', {})
 }
@@ -294,4 +323,19 @@ export async function applyAssistantModelProviders(
 
 export async function getAssistantModels(): Promise<AssistantModelsResponse> {
   return httpClient.get<AssistantModelsResponse>('/internal/assistant/models')
+}
+
+export async function getAssistantRuntimeStatus(): Promise<AssistantRuntimeStatusResponse> {
+  try {
+    return await httpClient.get<AssistantRuntimeStatusResponse>('/internal/assistant/runtime-status')
+  } catch (error) {
+    const details = (error as { details?: unknown })?.details
+    if (details && typeof details === 'object') {
+      const candidate = details as Partial<AssistantRuntimeStatusResponse>
+      if (typeof candidate.status === 'string' && Array.isArray(candidate.services) && candidate.upstream) {
+        return candidate as AssistantRuntimeStatusResponse
+      }
+    }
+    throw error
+  }
 }
