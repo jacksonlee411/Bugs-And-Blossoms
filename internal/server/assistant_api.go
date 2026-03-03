@@ -431,8 +431,6 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_not_found", "conversation not found")
 			case errors.Is(err, errAssistantTenantMismatch):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "tenant_mismatch", "tenant mismatch")
-			case errors.Is(err, errAssistantConversationForbidden):
-				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "forbidden", "forbidden")
 			case errors.Is(err, errAssistantTurnNotFound):
 				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_turn_not_found", "conversation turn not found")
 			case errors.Is(err, errAssistantIdempotencyKeyConflict):
@@ -653,7 +651,7 @@ func (s *assistantConversationService) createTurn(ctx context.Context, tenantID 
 		return nil, errAssistantPlanBoundaryViolation
 	}
 	dryRun := assistantBuildDryRun(intent, candidates, resolvedCandidateID)
-	if err := assistantAnnotateIntentPlan(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
+	if err := assistantAnnotateIntentPlanFn(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
 		return nil, err
 	}
 	policyVersion, compositionVersion, mappingVersion := assistantTurnVersionSnapshot(plan.CapabilityKey)
@@ -1191,9 +1189,6 @@ func extractAssistantTurnActionPath(path string) (conversationID string, turnID 
 	}
 	turnID = strings.TrimSpace(turnAction[:index])
 	action = strings.TrimSpace(turnAction[index+1:])
-	if turnID == "" || action == "" {
-		return "", "", "", false
-	}
 	return conversationID, turnID, action, true
 }
 

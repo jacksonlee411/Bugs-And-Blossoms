@@ -46,9 +46,30 @@ func TestAssistantModelProvidersAPI_Branches(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/internal/assistant/model-providers:validate", strings.NewReader(`{}`))
+	handleAssistantModelProvidersValidateAPI(rec, req, nil)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/internal/assistant/model-providers:apply", strings.NewReader("{"))
 	handleAssistantModelProvidersApplyAPI(rec, req, svc)
 	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/internal/assistant/model-providers:apply", nil)
+	handleAssistantModelProvidersApplyAPI(rec, req, svc)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status=%d", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/internal/assistant/model-providers:apply", strings.NewReader(`{}`))
+	handleAssistantModelProvidersApplyAPI(rec, req, nil)
+	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d", rec.Code)
 	}
 

@@ -247,6 +247,7 @@ describe('AssistantPage', () => {
     render(<AssistantPage />)
 
     const submitButton = await screen.findByTestId('assistant-task-submit-button')
+    await waitFor(() => expect(submitButton).toBeEnabled())
     fireEvent.click(submitButton)
 
     await waitFor(() =>

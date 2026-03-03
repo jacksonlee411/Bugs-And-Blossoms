@@ -484,7 +484,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/tasks/{task_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantTaskDetailAPI(w, r, assistantSvc)
 	}))
-	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/tasks/{task_action}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/tasks/{task_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantTaskActionAPI(w, r, assistantSvc)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/model-providers", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

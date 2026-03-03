@@ -33,6 +33,8 @@ const (
 	assistantTaskDispatchBatchSize       = 5
 )
 
+var assistantTaskMarshalFn = json.Marshal
+
 type assistantTaskContractSnapshot struct {
 	IntentSchemaVersion     string `json:"intent_schema_version"`
 	CompilerContractVersion string `json:"compiler_contract_version"`
@@ -179,7 +181,7 @@ func assistantTaskRequestHash(req assistantTaskSubmitRequest) (string, error) {
 		RequestID:        strings.TrimSpace(req.RequestID),
 		ContractSnapshot: req.ContractSnapshot,
 	}
-	raw, err := json.Marshal(payload)
+	raw, err := assistantTaskMarshalFn(payload)
 	if err != nil {
 		return "", err
 	}
@@ -915,7 +917,7 @@ func (s *assistantConversationService) insertAssistantTaskEventTx(
 	}
 	var payloadArg any
 	if payload != nil {
-		raw, err := json.Marshal(payload)
+		raw, err := assistantTaskMarshalFn(payload)
 		if err != nil {
 			return err
 		}

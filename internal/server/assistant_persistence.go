@@ -46,9 +46,6 @@ type assistantIdempotencyClaim struct {
 
 func (s *assistantConversationService) createConversationPG(ctx context.Context, tenantID string, principal Principal) (*assistantConversation, error) {
 	conversation := s.createConversation(tenantID, principal)
-	if conversation == nil {
-		return nil, errors.New("assistant conversation create failed")
-	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -130,7 +127,7 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 		return nil, errAssistantPlanBoundaryViolation
 	}
 	dryRun := assistantBuildDryRun(intent, candidates, resolvedCandidateID)
-	if err := assistantAnnotateIntentPlan(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
+	if err := assistantAnnotateIntentPlanFn(tenantID, conversationID, userInput, &intent, &plan, &dryRun); err != nil {
 		return nil, err
 	}
 	policyVersion, compositionVersion, mappingVersion := assistantTurnVersionSnapshot(plan.CapabilityKey)
@@ -768,28 +765,19 @@ ORDER BY changed_at, id
 }
 
 func (s *assistantConversationService) upsertTurnTx(ctx context.Context, tx pgx.Tx, tenantID string, conversationID string, turn *assistantTurn) error {
-	intentJSON, err := json.Marshal(turn.Intent)
-	if err != nil {
-		return err
-	}
+	intentJSON, _ := json.Marshal(turn.Intent)
 	planJSON, err := json.Marshal(turn.Plan)
 	if err != nil {
 		return err
 	}
-	candidatesJSON, err := json.Marshal(turn.Candidates)
-	if err != nil {
-		return err
-	}
+	candidatesJSON, _ := json.Marshal(turn.Candidates)
 	dryRunJSON, err := json.Marshal(turn.DryRun)
 	if err != nil {
 		return err
 	}
 	var commitResultJSON []byte
 	if turn.CommitResult != nil {
-		commitResultJSON, err = json.Marshal(turn.CommitResult)
-		if err != nil {
-			return err
-		}
+		commitResultJSON, _ = json.Marshal(turn.CommitResult)
 	}
 	_, err = tx.Exec(ctx, `
 INSERT INTO iam.assistant_turns (
