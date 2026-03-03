@@ -1,0 +1,16 @@
+version: 1
+default: deny
+sources:
+  mcp:
+    allowed_domains:
+      - "api.openai.com"
+      - "*.openai.com"
+  actions:
+    allowed_domains:
+      - "api.openai.com"
+      - "*.openai.com"
+blocked_domains:
+  - "localhost"
+  - "127.0.0.1"
+  - "::1"
+  - "169.254.169.254"

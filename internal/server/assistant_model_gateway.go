@@ -411,10 +411,7 @@ func assistantNormalizeOpenAIIntentPayload(content string) []byte {
 	if len(normalized) == 0 {
 		return []byte(trimmed)
 	}
-	payload, err := json.Marshal(normalized)
-	if err != nil {
-		return []byte(trimmed)
-	}
+	payload, _ := json.Marshal(normalized)
 	return payload
 }
 

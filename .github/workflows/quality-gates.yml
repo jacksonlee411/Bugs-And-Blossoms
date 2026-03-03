@@ -33,6 +33,8 @@ jobs:
         run: make check no-legacy
       - name: Assistant Config Single-Source Gate (always)
         run: make check assistant-config-single-source
+      - name: Assistant Domain Allowlist Gate (always)
+        run: make check assistant-domain-allowlist
       - name: No-Scope-Package Gate (always)
         run: make check no-scope-package
       - name: Granularity Gate (always)

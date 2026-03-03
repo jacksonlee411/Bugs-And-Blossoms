@@ -240,6 +240,12 @@ export interface AssistantRuntimeStatusResponse {
   message?: string
   upstream: AssistantRuntimeUpstream
   services: AssistantRuntimeService[]
+  capabilities?: {
+    mcp_enabled: boolean
+    actions_enabled: boolean
+    agents_write_enabled: boolean
+    domain_policy_version?: string
+  }
 }
 
 export async function createAssistantConversation(): Promise<AssistantConversation> {

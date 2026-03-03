@@ -7,7 +7,7 @@ export ATLAS_VERSION ?= v0.38.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
-.PHONY: help preflight check pr-branch naming no-legacy assistant-config-single-source no-scope-package granularity capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch naming no-legacy assistant-config-single-source assistant-domain-allowlist no-scope-package granularity capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
@@ -22,6 +22,7 @@ help:
 				"  make check naming" \
 					"  make check no-legacy" \
 					"  make check assistant-config-single-source" \
+					"  make check assistant-domain-allowlist" \
 					"  make check no-scope-package" \
 					"  make check granularity" \
 				"  make check capability-key" \
@@ -63,6 +64,7 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check naming
 	@$(MAKE) check no-legacy
 	@$(MAKE) check assistant-config-single-source
+	@$(MAKE) check assistant-domain-allowlist
 	@$(MAKE) check no-scope-package
 	@$(MAKE) check granularity
 	@$(MAKE) check capability-key
@@ -97,6 +99,9 @@ no-legacy: ## 禁止 legacy 分支/回退通道（单链路原则）
 
 assistant-config-single-source: ## 助手配置单主源门禁（禁止第二写入口/契约回写/SSOT 漂移）
 	@./scripts/ci/check-assistant-config-single-source.sh
+
+assistant-domain-allowlist: ## 助手外域名白名单门禁（default deny + SSRF 风险域名阻断 + SSOT 接线）
+	@./scripts/ci/check-assistant-domain-allowlist.sh
 
 no-scope-package: ## 反漂移门禁（阻断新增 scope/package 语义）
 	@./scripts/ci/check-no-scope-package.sh
@@ -262,7 +267,7 @@ staffing:
 person:
 	@:
 
-MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy no-scope-package capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server assistant-runtime-up assistant-runtime-down assistant-runtime-status assistant-runtime-clean,$(MAKECMDGOALS)))
+MODULE := $(firstword $(filter-out preflight check fmt lint test routing e2e doc tr generate css sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint no-legacy assistant-config-single-source assistant-domain-allowlist no-scope-package capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message plan migrate up dev dev-up dev-down dev-reset dev-ps dev-server assistant-runtime-up assistant-runtime-down assistant-runtime-status assistant-runtime-clean,$(MAKECMDGOALS)))
 MIGRATE_DIR := $(lastword $(filter up down,$(MAKECMDGOALS)))
 
 plan:

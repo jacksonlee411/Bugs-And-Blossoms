@@ -85,6 +85,12 @@ services:
 	if status.Status != assistantRuntimeHealthDegraded {
 		t.Fatalf("status=%s", status.Status)
 	}
+	if !status.Capabilities.MCPEnabled || !status.Capabilities.ActionsEnabled {
+		t.Fatalf("capabilities=%+v", status.Capabilities)
+	}
+	if status.Capabilities.DomainPolicyVersion != "v1" {
+		t.Fatalf("domain policy version=%q", status.Capabilities.DomainPolicyVersion)
+	}
 	if status.Upstream.Repo != "danny-avila/LibreChat" || status.Upstream.Ref != "main" {
 		t.Fatalf("unexpected upstream=%+v", status.Upstream)
 	}
@@ -93,6 +99,34 @@ services:
 	}
 	if status.Services[0].Image == "" || status.Services[0].Digest == "" {
 		t.Fatalf("lock metadata not merged: %+v", status.Services[0])
+	}
+}
+
+func TestAssistantRuntimeStatus_DomainPolicyMissingFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, "versions.lock.yaml")
+	snapshotPath := filepath.Join(dir, "runtime-status.json")
+	if err := os.WriteFile(lockPath, []byte("services:\n  - name: api\n    required: true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(snapshotPath, []byte("{\"status\":\"healthy\",\"services\":[{\"name\":\"api\",\"required\":true,\"healthy\":\"healthy\"}]}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("LIBRECHAT_UPSTREAM", "http://127.0.0.1:3080")
+	t.Setenv("ASSISTANT_RUNTIME_VERSIONS_LOCK", lockPath)
+	t.Setenv("ASSISTANT_RUNTIME_STATUS_FILE", snapshotPath)
+	t.Setenv("ASSISTANT_DOMAIN_ALLOWLIST_PATH", filepath.Join(dir, "missing-domain-policy.yaml"))
+
+	status := assistantRuntimeStatus()
+	if status.Status != assistantRuntimeHealthUnavailable {
+		t.Fatalf("status=%s", status.Status)
+	}
+	if status.ErrorCode != "assistant_oss_domain_policy_missing" {
+		t.Fatalf("error_code=%s", status.ErrorCode)
+	}
+	if status.Capabilities.DomainPolicyVersion != "" {
+		t.Fatalf("unexpected domain policy version=%q", status.Capabilities.DomainPolicyVersion)
 	}
 }
 
@@ -191,6 +225,18 @@ func TestAssistantRuntimeHelpers(t *testing.T) {
 	}
 	if got := assistantRuntimeLockReadErrorCode(errors.New("bad")); got != "assistant_runtime_versions_lock_invalid" {
 		t.Fatalf("code=%s", got)
+	}
+	if got := assistantRuntimeDomainPolicyErrorCode(errAssistantDomainPolicyMissing); got != "assistant_oss_domain_policy_missing" {
+		t.Fatalf("domain policy code=%s", got)
+	}
+	if got := assistantRuntimeDomainPolicyErrorCode(errAssistantDomainPolicyInvalid); got != "assistant_oss_domain_policy_invalid" {
+		t.Fatalf("domain policy code=%s", got)
+	}
+	if got := assistantRuntimeDomainPolicyErrorMessage(errAssistantDomainPolicyMissing); got != "assistant domain allowlist policy is missing" {
+		t.Fatalf("domain policy message=%q", got)
+	}
+	if got := assistantRuntimeDomainPolicyErrorMessage(errAssistantDomainPolicyInvalid); got != "assistant domain allowlist policy is invalid" {
+		t.Fatalf("domain policy message=%q", got)
 	}
 }
 
