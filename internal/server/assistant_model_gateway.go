@@ -70,6 +70,8 @@ type assistantProviderAdapter interface {
 	Invoke(ctx context.Context, prompt string, provider assistantModelProviderConfig) ([]byte, error)
 }
 
+var assistantIntentMarshalFn = json.Marshal
+
 type assistantDeterministicProviderAdapter struct{}
 
 func (assistantDeterministicProviderAdapter) Invoke(_ context.Context, prompt string, provider assistantModelProviderConfig) ([]byte, error) {
@@ -83,7 +85,7 @@ func (assistantDeterministicProviderAdapter) Invoke(_ context.Context, prompt st
 		return nil, errAssistantModelProviderUnavailable
 	}
 	intent := assistantExtractIntent(strings.TrimSpace(prompt))
-	payload, err := json.Marshal(intent)
+	payload, err := assistantIntentMarshalFn(intent)
 	if err != nil {
 		return nil, errAssistantPlanSchemaConstrainedDecodeFailed
 	}
@@ -283,13 +285,10 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 			ModelRevision: assistantModelRevision(provider),
 		}, nil
 	}
-	if enabledCount == 0 {
+	if enabledCount == 0 || lastTransientErr == nil {
 		return assistantResolveIntentResult{}, errAssistantModelProviderUnavailable
 	}
-	if lastTransientErr != nil {
-		return assistantResolveIntentResult{}, lastTransientErr
-	}
-	return assistantResolveIntentResult{}, errAssistantModelProviderUnavailable
+	return assistantResolveIntentResult{}, lastTransientErr
 }
 
 func assistantStrictDecodeIntent(raw []byte) (assistantIntentSpec, error) {

@@ -5,6 +5,12 @@ import (
 	"strings"
 )
 
+var (
+	assistantAnnotateIntentPlanFn = assistantAnnotateIntentPlan
+	assistantCanonicalHashFn      = assistantCanonicalHash
+	assistantPlanHashFn           = assistantPlanHash
+)
+
 func (s *assistantConversationService) resolveIntent(ctx context.Context, tenantID string, conversationID string, userInput string) (assistantResolveIntentResult, error) {
 	text := strings.TrimSpace(userInput)
 	if assistantBoundaryViolationDetected(text) {
@@ -66,7 +72,7 @@ func assistantAnnotateIntentPlan(tenantID string, conversationID string, userInp
 	plan.CapabilityMapVersion = assistantCapabilityMapVersionV1
 	plan.SkillManifestDigest = assistantSkillManifestDigest(plan.SkillExecutionPlan.SelectedSkills)
 
-	contextHash := assistantCanonicalHash(map[string]any{
+	contextHash := assistantCanonicalHashFn(map[string]any{
 		"tenant_id":       strings.TrimSpace(tenantID),
 		"conversation_id": strings.TrimSpace(conversationID),
 		"user_input":      strings.TrimSpace(userInput),
@@ -76,7 +82,7 @@ func assistantAnnotateIntentPlan(tenantID string, conversationID string, userInp
 	}
 	intent.ContextHash = contextHash
 
-	intentHash := assistantCanonicalHash(map[string]any{
+	intentHash := assistantCanonicalHashFn(map[string]any{
 		"action":                intent.Action,
 		"parent_ref_text":       intent.ParentRefText,
 		"entity_name":           intent.EntityName,
@@ -91,16 +97,13 @@ func assistantAnnotateIntentPlan(tenantID string, conversationID string, userInp
 
 	dryRun.WouldCommit = false
 	dryRun.ValidationErrors = append([]string(nil), dryRun.ValidationErrors...)
-	planHash := assistantPlanHash(*intent, *plan, *dryRun)
+	planHash := assistantPlanHashFn(*intent, *plan, *dryRun)
 	if planHash == "" {
 		return errAssistantPlanDeterminismViolation
 	}
 	dryRun.PlanHash = planHash
-	if assistantPlanHash(*intent, *plan, *dryRun) != planHash {
+	if assistantPlanHashFn(*intent, *plan, *dryRun) != planHash {
 		return errAssistantPlanDeterminismViolation
-	}
-	if assistantTurnContractVersionMismatchedForCreate(*intent, *plan) {
-		return errAssistantPlanContractVersionMismatch
 	}
 	return nil
 }

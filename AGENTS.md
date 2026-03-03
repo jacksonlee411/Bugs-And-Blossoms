@@ -188,10 +188,12 @@ modules/{module}/
 - DEV-PLAN-004 记录：全仓去除版本标记——映射表（草案）：`docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`
 - DEV-PLAN-004 记录：全仓去除版本标记——执行日志：`docs/dev-records/dev-plan-004-execution-log.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
-- DEV-PLAN-060：全链路业务测试案例套件（009/039/051-056 覆盖）：`docs/dev-plans/060-business-e2e-test-suite.md`
+- DEV-PLAN-060：全链路业务测试案例套件（009/026-031/220-225 覆盖）：`docs/dev-plans/060-business-e2e-test-suite.md`
 - DEV-PLAN-061：全链路业务测试子计划 TP-060-01——租户/登录/权限/隔离基线：`docs/dev-plans/061-test-tp060-01-tenant-login-authz-rls-baseline.md`
 - DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 - DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
+- DEV-PLAN-064A：全链路业务测试子计划 TP-060-05——Assistant（会话 + 意图 + 提交 + 任务编排）：`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
+- DEV-PLAN-064A 执行日志：TP-060-05（Assistant）实施记录：`docs/dev-records/dev-plan-064a-execution-log.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
 - DEV-PLAN-069 执行日志：`docs/dev-records/dev-plan-069-execution-log.md`
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
@@ -345,6 +347,7 @@ modules/{module}/
 - DEV-PLAN-223：Assistant 会话持久化与审计闭环实施计划：`docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - DEV-PLAN-224：Assistant 多模型适配与 LLM 意图判断能力实施计划：`docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
 - DEV-PLAN-225：Assistant Tasks API 与 Temporal（P2）实施计划：`docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
+- DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
 - DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`

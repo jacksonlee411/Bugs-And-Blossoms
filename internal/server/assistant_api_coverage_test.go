@@ -592,6 +592,46 @@ func TestAssistantTurnActionHandler_CoverageMatrix(t *testing.T) {
 			t.Fatalf("drift rollback state=%s", gotDriftState)
 		}
 
+		contractMismatchSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		contractMismatchConv := contractMismatchSvc.createConversation(tenantID, principal)
+		contractMismatchTurn := &assistantTurn{
+			TurnID: "turn-contract-mismatch",
+			State:  assistantStateConfirmed,
+			Intent: assistantIntentSpec{
+				Action:              assistantIntentCreateOrgUnit,
+				EntityName:          "运营部",
+				EffectiveDate:       "2026-01-01",
+				IntentSchemaVersion: assistantIntentSchemaVersionV1,
+			},
+			Plan: assistantPlanSummary{
+				Title:                   "创建组织计划",
+				CapabilityKey:           "org.orgunit_create.field_policy",
+				Summary:                 "contract mismatch test",
+				CompilerContractVersion: "assistant.compiler.v0",
+				CapabilityMapVersion:    assistantCapabilityMapVersionV1,
+				SkillManifestDigest:     "digest-v1",
+			},
+			ResolvedCandidateID: "FLOWER-A",
+			Candidates:          []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}},
+			PolicyVersion:       capabilityPolicyVersionBaseline,
+			CompositionVersion:  capabilityPolicyVersionBaseline,
+			MappingVersion:      capabilityPolicyVersionBaseline,
+		}
+		contractMismatchSvc.mu.Lock()
+		contractMismatchSvc.byID[contractMismatchConv.ConversationID].Turns = append(contractMismatchSvc.byID[contractMismatchConv.ConversationID].Turns, contractMismatchTurn)
+		contractMismatchSvc.mu.Unlock()
+		rec = httptest.NewRecorder()
+		handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+contractMismatchConv.ConversationID+"/turns/"+contractMismatchTurn.TurnID+":commit", `{}`, true, true), contractMismatchSvc)
+		if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "ai_plan_contract_version_mismatch" {
+			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
+		contractMismatchSvc.mu.RLock()
+		gotContractMismatchState := contractMismatchSvc.byID[contractMismatchConv.ConversationID].Turns[0].State
+		contractMismatchSvc.mu.RUnlock()
+		if gotContractMismatchState != assistantStateValidated {
+			t.Fatalf("contract mismatch rollback state=%s", gotContractMismatchState)
+		}
+
 		reauthSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
 		reauthConv := reauthSvc.createConversation(tenantID, principal)
 		reauthConversation, createErr := reauthSvc.createTurn(context.Background(), tenantID, principal, reauthConv.ConversationID, "在鲜花组织之下，新建一个名为市场部的部门，成立日期是2026-01-01")
