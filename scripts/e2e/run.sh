@@ -20,6 +20,46 @@ export AUTHZ_MODE="${AUTHZ_MODE:-enforce}"
 export RLS_ENFORCE="${RLS_ENFORCE:-enforce}"
 export TRUST_PROXY="${TRUST_PROXY:-1}"
 
+extract_port_from_url() {
+  local target_url="${1:?}"
+  local fallback_port="${2:?}"
+  python3 - "$target_url" "$fallback_port" <<'PY'
+import sys
+from urllib.parse import urlparse
+
+parsed = urlparse(sys.argv[1])
+fallback = int(sys.argv[2])
+print(parsed.port or fallback)
+PY
+}
+
+assert_port_free() {
+  local host="${1:?}"
+  local port="${2:?}"
+  local service_name="${3:?}"
+  if ! python3 - "$host" "$port" <<'PY'
+import socket
+import sys
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.settimeout(0.25)
+try:
+    sock.connect((host, port))
+except OSError:
+    sys.exit(0)
+finally:
+    sock.close()
+sys.exit(1)
+PY
+  then
+    echo "[e2e] ${service_name} port already in use: ${host}:${port}" >&2
+    echo "[e2e] stop the existing service or override ports (E2E_BASE_URL / E2E_SUPERADMIN_BASE_URL / KRATOS_PUBLIC_URL / E2E_KRATOS_ADMIN_URL)" >&2
+    exit 2
+  fi
+}
+
 load_env_file() {
   local file="${1:?}"
   if [[ -f "$file" ]]; then
@@ -40,6 +80,7 @@ require_cmd() {
 
 require_cmd docker
 require_cmd go
+require_cmd python3
 
 if ! command -v pnpm >/dev/null 2>&1; then
   if command -v corepack >/dev/null 2>&1; then
@@ -163,6 +204,23 @@ make authz-pack >/dev/null
 
 export KRATOS_PUBLIC_URL="${KRATOS_PUBLIC_URL:-http://127.0.0.1:4433}"
 export E2E_KRATOS_ADMIN_URL="${E2E_KRATOS_ADMIN_URL:-http://127.0.0.1:4434}"
+superadmin_base_url="${E2E_SUPERADMIN_BASE_URL:-http://localhost:8081}"
+if [[ -z "${ASSISTANT_MODEL_CONFIG_JSON:-}" ]]; then
+  export ASSISTANT_MODEL_CONFIG_JSON='{"provider_routing":{"strategy":"priority_failover","fallback_enabled":true},"providers":[{"name":"openai","enabled":true,"model":"gpt-5-codex","endpoint":"https://api.openai.com/v1","timeout_ms":8000,"retries":1,"priority":10,"key_ref":"OPENAI_API_KEY"}]}'
+fi
+
+server_port="$(extract_port_from_url "$base_url" 8080)"
+superadmin_port="$(extract_port_from_url "$superadmin_base_url" 8081)"
+kratos_public_port="$(extract_port_from_url "$KRATOS_PUBLIC_URL" 4433)"
+kratos_admin_port="$(extract_port_from_url "$E2E_KRATOS_ADMIN_URL" 4434)"
+
+server_health_url="http://127.0.0.1:${server_port}/health"
+superadmin_health_url="http://127.0.0.1:${superadmin_port}/health"
+
+assert_port_free "127.0.0.1" "$server_port" "server"
+assert_port_free "127.0.0.1" "$superadmin_port" "superadmin"
+assert_port_free "127.0.0.1" "$kratos_public_port" "kratos public"
+assert_port_free "127.0.0.1" "$kratos_admin_port" "kratos admin"
 
 echo "[e2e] start kratos stub: log=$kratos_log"
 go run ./cmd/kratosstub >"$kratos_log" 2>&1 &
@@ -213,18 +271,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "[e2e] wait server ready: http://127.0.0.1:8080/health"
+echo "[e2e] wait server ready: $server_health_url"
 for i in $(seq 1 60); do
   if ! kill -0 "$server_pid" >/dev/null 2>&1; then
     echo "[e2e] server exited before becoming ready; see: $server_log" >&2
     exit 1
   fi
   if command -v curl >/dev/null 2>&1; then
-    if curl -fsS "http://127.0.0.1:8080/health" >/dev/null 2>&1; then
+    if curl -fsS "$server_health_url" >/dev/null 2>&1; then
       break
     fi
   else
-    if wget -q -O- "http://127.0.0.1:8080/health" >/dev/null 2>&1; then
+    if wget -q -O- "$server_health_url" >/dev/null 2>&1; then
       break
     fi
   fi
@@ -235,18 +293,18 @@ for i in $(seq 1 60); do
   sleep 0.5
 done
 
-echo "[e2e] wait superadmin ready: http://127.0.0.1:8081/health"
+echo "[e2e] wait superadmin ready: $superadmin_health_url"
 for i in $(seq 1 60); do
   if ! kill -0 "$superadmin_pid" >/dev/null 2>&1; then
     echo "[e2e] superadmin exited before becoming ready; see: $superadmin_log" >&2
     exit 1
   fi
   if command -v curl >/dev/null 2>&1; then
-    if curl -fsS "http://127.0.0.1:8081/health" >/dev/null 2>&1; then
+    if curl -fsS "$superadmin_health_url" >/dev/null 2>&1; then
       break
     fi
   else
-    if wget -q -O- "http://127.0.0.1:8081/health" >/dev/null 2>&1; then
+    if wget -q -O- "$superadmin_health_url" >/dev/null 2>&1; then
       break
     fi
   fi

@@ -1,6 +1,6 @@
 # DEV-PLAN-235：LibreChat 身份/会话/租户边界硬化详细设计
 
-**状态**: 规划中（2026-03-03 18:35 UTC）
+**状态**: 已完成（2026-03-03 15:10 UTC，实施与验证见 `docs/dev-records/dev-plan-235-execution-log.md`）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
