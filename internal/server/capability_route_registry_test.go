@@ -50,6 +50,15 @@ func TestCapabilityRouteBindingForRoute(t *testing.T) {
 	if binding, ok := capabilityRouteBindingForRoute("POST", "/internal/assistant/conversations/conv_001/turns/turn_001:confirm"); !ok || binding.CapabilityKey != "org.assistant_conversation.manage" {
 		t.Fatalf("expected assistant turn action template mapping found, got=%+v ok=%v", binding, ok)
 	}
+	if binding, ok := capabilityRouteBindingForRoute("POST", "/internal/assistant/tasks"); !ok || binding.CapabilityKey != "org.assistant_conversation.manage" {
+		t.Fatalf("expected assistant tasks submit mapping found, got=%+v ok=%v", binding, ok)
+	}
+	if binding, ok := capabilityRouteBindingForRoute("GET", "/internal/assistant/tasks/123"); !ok || binding.Action != authz.ActionRead {
+		t.Fatalf("expected assistant task detail mapping found, got=%+v ok=%v", binding, ok)
+	}
+	if binding, ok := capabilityRouteBindingForRoute("POST", "/internal/assistant/tasks/123:cancel"); !ok || binding.Action != authz.ActionAdmin {
+		t.Fatalf("expected assistant task cancel mapping found, got=%+v ok=%v", binding, ok)
+	}
 	if binding, ok := capabilityRouteBindingForRoute("GET", "/internal/assistant/model-providers"); !ok || binding.Action != authz.ActionRead {
 		t.Fatalf("expected assistant model providers mapping found, got=%+v ok=%v", binding, ok)
 	}

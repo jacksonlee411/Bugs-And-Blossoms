@@ -50,6 +50,61 @@ type IamAssistantStateTransition struct {
 	ChangedAt      pgtype.Timestamptz `json:"changed_at"`
 }
 
+type IamAssistantTask struct {
+	TenantUuid              pgtype.UUID        `json:"tenant_uuid"`
+	TaskID                  pgtype.UUID        `json:"task_id"`
+	ConversationID          string             `json:"conversation_id"`
+	TurnID                  string             `json:"turn_id"`
+	TaskType                string             `json:"task_type"`
+	RequestID               string             `json:"request_id"`
+	RequestHash             string             `json:"request_hash"`
+	WorkflowID              string             `json:"workflow_id"`
+	Status                  string             `json:"status"`
+	DispatchStatus          string             `json:"dispatch_status"`
+	DispatchAttempt         int32              `json:"dispatch_attempt"`
+	DispatchDeadlineAt      pgtype.Timestamptz `json:"dispatch_deadline_at"`
+	Attempt                 int32              `json:"attempt"`
+	MaxAttempts             int32              `json:"max_attempts"`
+	LastErrorCode           *string            `json:"last_error_code"`
+	TraceID                 *string            `json:"trace_id"`
+	IntentSchemaVersion     string             `json:"intent_schema_version"`
+	CompilerContractVersion string             `json:"compiler_contract_version"`
+	CapabilityMapVersion    string             `json:"capability_map_version"`
+	SkillManifestDigest     string             `json:"skill_manifest_digest"`
+	ContextHash             string             `json:"context_hash"`
+	IntentHash              string             `json:"intent_hash"`
+	PlanHash                string             `json:"plan_hash"`
+	SubmittedAt             pgtype.Timestamptz `json:"submitted_at"`
+	CancelRequestedAt       pgtype.Timestamptz `json:"cancel_requested_at"`
+	CompletedAt             pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamAssistantTaskDispatchOutbox struct {
+	ID          int64              `json:"id"`
+	TenantUuid  pgtype.UUID        `json:"tenant_uuid"`
+	TaskID      pgtype.UUID        `json:"task_id"`
+	WorkflowID  string             `json:"workflow_id"`
+	Status      string             `json:"status"`
+	Attempt     int32              `json:"attempt"`
+	NextRetryAt pgtype.Timestamptz `json:"next_retry_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamAssistantTaskEvent struct {
+	ID         int64              `json:"id"`
+	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
+	TaskID     pgtype.UUID        `json:"task_id"`
+	FromStatus *string            `json:"from_status"`
+	ToStatus   string             `json:"to_status"`
+	EventType  string             `json:"event_type"`
+	ErrorCode  *string            `json:"error_code"`
+	Payload    []byte             `json:"payload"`
+	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
+}
+
 type IamAssistantTurn struct {
 	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
 	ConversationID      string             `json:"conversation_id"`

@@ -476,6 +476,41 @@ errors:
     user_message_key: errors.request_in_progress
     backend_policy: passthrough
     frontend_policy: mapped
+  - code: assistant_task_not_found
+    module: assistant
+    http_status: 404
+    severity: error
+    user_message_key: errors.assistant_task_not_found
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_task_state_invalid
+    module: assistant
+    http_status: 409
+    severity: error
+    user_message_key: errors.assistant_task_state_invalid
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_task_cancel_not_allowed
+    module: assistant
+    http_status: 409
+    severity: error
+    user_message_key: errors.assistant_task_cancel_not_allowed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_task_workflow_unavailable
+    module: assistant
+    http_status: 503
+    severity: error
+    user_message_key: errors.assistant_task_workflow_unavailable
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_task_dispatch_failed
+    module: assistant
+    http_status: 503
+    severity: error
+    user_message_key: errors.assistant_task_dispatch_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
   - code: tenant_mismatch
     module: assistant
     http_status: 403

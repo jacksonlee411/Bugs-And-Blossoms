@@ -155,6 +155,15 @@ entrypoints:
       - path: /internal/assistant/conversations/{conversation_id}/turns/{turn_action}
         methods: [POST]
         route_class: internal_api
+      - path: /internal/assistant/tasks
+        methods: [POST]
+        route_class: internal_api
+      - path: /internal/assistant/tasks/{task_id}
+        methods: [GET]
+        route_class: internal_api
+      - path: /internal/assistant/tasks/{task_action}
+        methods: [POST]
+        route_class: internal_api
       - path: /internal/assistant/model-providers
         methods: [GET]
         route_class: internal_api

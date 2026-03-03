@@ -524,6 +524,11 @@ var (
 	errAssistantModelSecretMissing                = errors.New("assistant_model_secret_missing")
 	errAssistantIdempotencyKeyConflict            = errors.New("assistant_idempotency_key_conflict")
 	errAssistantRequestInProgress                 = errors.New("assistant_request_in_progress")
+	errAssistantTaskNotFound                      = errors.New("assistant_task_not_found")
+	errAssistantTaskStateInvalid                  = errors.New("assistant_task_state_invalid")
+	errAssistantTaskCancelNotAllowed              = errors.New("assistant_task_cancel_not_allowed")
+	errAssistantTaskWorkflowUnavailable           = errors.New("assistant_task_workflow_unavailable")
+	errAssistantTaskDispatchFailed                = errors.New("assistant_task_dispatch_failed")
 )
 
 func (s *assistantConversationService) createConversationWithContext(ctx context.Context, tenantID string, principal Principal) (*assistantConversation, error) {
@@ -1190,6 +1195,45 @@ func extractAssistantTurnActionPath(path string) (conversationID string, turnID 
 		return "", "", "", false
 	}
 	return conversationID, turnID, action, true
+}
+
+func extractAssistantTaskIDFromPath(path string) (taskID string, ok bool) {
+	parts := assistantSplitPathSegments(path)
+	if len(parts) != 4 {
+		return "", false
+	}
+	if parts[0] != "internal" || parts[1] != "assistant" || parts[2] != "tasks" {
+		return "", false
+	}
+	taskID = strings.TrimSpace(parts[3])
+	if taskID == "" {
+		return "", false
+	}
+	return taskID, true
+}
+
+func extractAssistantTaskActionPath(path string) (taskID string, action string, ok bool) {
+	parts := assistantSplitPathSegments(path)
+	if len(parts) != 4 {
+		return "", "", false
+	}
+	if parts[0] != "internal" || parts[1] != "assistant" || parts[2] != "tasks" {
+		return "", "", false
+	}
+	taskAction := strings.TrimSpace(parts[3])
+	if taskAction == "" {
+		return "", "", false
+	}
+	index := strings.LastIndex(taskAction, ":")
+	if index <= 0 || index >= len(taskAction)-1 {
+		return "", "", false
+	}
+	taskID = strings.TrimSpace(taskAction[:index])
+	action = strings.TrimSpace(taskAction[index+1:])
+	if taskID == "" || action == "" {
+		return "", "", false
+	}
+	return taskID, action, true
 }
 
 func cloneConversation(in *assistantConversation) *assistantConversation {

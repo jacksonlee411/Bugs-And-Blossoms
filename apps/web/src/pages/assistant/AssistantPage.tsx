@@ -16,12 +16,16 @@ import {
 } from '@mui/material'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  cancelAssistantTask,
   commitAssistantTurn,
   confirmAssistantTurn,
   createAssistantConversation,
   createAssistantTurn,
+  getAssistantTask,
   getAssistantConversation,
+  submitAssistantTask,
   type AssistantConversation,
+  type AssistantTaskDetail,
   type AssistantTurn
 } from '../../api/assistant'
 import {
@@ -35,6 +39,7 @@ const samplePrompt =
   '在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。通过AI对话，调用相关能力完成部门的创建任务。'
 
 const assistantStatePlaceholder = '-'
+const assistantTaskPollIntervalMS = 1000
 
 function latestTurn(conversation: AssistantConversation | null): AssistantTurn | null {
   if (!conversation || conversation.turns.length === 0) {
@@ -90,8 +95,19 @@ function stringifyDiffValue(value: unknown): string {
   }
 }
 
+function assistantTaskTerminal(status: string | undefined): boolean {
+  const current = normalized(status)
+  return (
+    current === 'succeeded' ||
+    current === 'failed' ||
+    current === 'manual_takeover_required' ||
+    current === 'canceled'
+  )
+}
+
 export function AssistantPage() {
   const [conversation, setConversation] = useState<AssistantConversation | null>(null)
+  const [taskDetail, setTaskDetail] = useState<AssistantTaskDetail | null>(null)
   const [input, setInput] = useState(samplePrompt)
   const [candidateID, setCandidateID] = useState('')
   const [loading, setLoading] = useState(false)
@@ -100,6 +116,9 @@ export function AssistantPage() {
   const [bridgeNonce] = useState(() => createAssistantBridgeToken('assistant_nonce'))
 
   const turn = useMemo(() => latestTurn(conversation), [conversation])
+  const taskID = normalized(taskDetail?.task_id)
+  const taskStatus = normalized(taskDetail?.status)
+  const taskTerminal = useMemo(() => assistantTaskTerminal(taskStatus), [taskStatus])
   const conversationID = normalized(conversation?.conversation_id)
   const allowedOrigins = useMemo(() => {
     const origin = typeof window !== 'undefined' ? window.location.origin : undefined
@@ -135,6 +154,10 @@ export function AssistantPage() {
     const nextConversation = await getAssistantConversation(conversationID)
     applyConversation(nextConversation)
   }, [applyConversation, conversationID])
+
+  useEffect(() => {
+    setTaskDetail(null)
+  }, [turn?.turn_id])
 
   useEffect(() => {
     let active = true
@@ -221,6 +244,100 @@ export function AssistantPage() {
       setLoading(false)
     }
   }, [applyConversation, conversation, refreshConversation, turn])
+
+  const handleSubmitTask = useCallback(async () => {
+    if (!conversation || !turn) {
+      return
+    }
+    const snapshot = {
+      intent_schema_version: normalized(turn.intent.intent_schema_version),
+      compiler_contract_version: normalized(turn.plan.compiler_contract_version),
+      capability_map_version: normalized(turn.plan.capability_map_version),
+      skill_manifest_digest: normalized(turn.plan.skill_manifest_digest),
+      context_hash: normalized(turn.intent.context_hash),
+      intent_hash: normalized(turn.intent.intent_hash),
+      plan_hash: normalized(turn.dry_run.plan_hash)
+    }
+    if (Object.values(snapshot).some((value) => value.length === 0)) {
+      setError('任务提交失败：contract_snapshot 不完整，请先重新生成计划。')
+      return
+    }
+    setError('')
+    setLoading(true)
+    try {
+      const receipt = await submitAssistantTask({
+        conversation_id: conversation.conversation_id,
+        turn_id: turn.turn_id,
+        task_type: 'assistant_async_plan',
+        request_id: turn.request_id,
+        trace_id: turn.trace_id,
+        contract_snapshot: snapshot
+      })
+      const detail = await getAssistantTask(receipt.task_id).catch(() => null)
+      if (detail) {
+        setTaskDetail(detail)
+        return
+      }
+      setTaskDetail({
+        task_id: receipt.task_id,
+        task_type: receipt.task_type,
+        status: receipt.status,
+        dispatch_status: 'pending',
+        attempt: 0,
+        max_attempts: 3,
+        workflow_id: receipt.workflow_id,
+        request_id: turn.request_id,
+        trace_id: normalized(turn.trace_id) || undefined,
+        conversation_id: conversation.conversation_id,
+        turn_id: turn.turn_id,
+        submitted_at: receipt.submitted_at,
+        updated_at: receipt.submitted_at,
+        contract_snapshot: snapshot
+      })
+    } catch (err) {
+      setError(errorMessage(err, '任务提交失败'))
+    } finally {
+      setLoading(false)
+    }
+  }, [conversation, turn])
+
+  const handleCancelTask = useCallback(async () => {
+    if (!taskDetail) {
+      return
+    }
+    setError('')
+    setLoading(true)
+    try {
+      const next = await cancelAssistantTask(taskDetail.task_id)
+      setTaskDetail(next)
+    } catch (err) {
+      setError(errorMessage(err, '任务取消失败'))
+    } finally {
+      setLoading(false)
+    }
+  }, [taskDetail])
+
+  useEffect(() => {
+    if (taskID.length === 0 || assistantTaskTerminal(taskStatus)) {
+      return
+    }
+    let active = true
+    const timer = window.setInterval(() => {
+      void getAssistantTask(taskID)
+        .then((next) => {
+          if (!active) {
+            return
+          }
+          setTaskDetail(next)
+        })
+        .catch(() => undefined)
+    }, assistantTaskPollIntervalMS)
+
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [taskID, taskStatus])
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<unknown>) => {
@@ -440,6 +557,49 @@ export function AssistantPage() {
                     effective_date={turn.commit_result.effective_date}
                   </Alert>
                 ) : null}
+                <Divider />
+                <Typography variant='subtitle2'>异步任务（225）</Typography>
+                <Stack direction='row' spacing={1}>
+                  <Button
+                    data-testid='assistant-task-submit-button'
+                    disabled={!turn || loading}
+                    onClick={() => void handleSubmitTask()}
+                    variant='contained'
+                  >
+                    Submit Task
+                  </Button>
+                  <Button
+                    data-testid='assistant-task-cancel-button'
+                    disabled={!taskDetail || taskTerminal || loading}
+                    onClick={() => void handleCancelTask()}
+                    variant='outlined'
+                  >
+                    Cancel Task
+                  </Button>
+                </Stack>
+                <Typography data-testid='assistant-task-id' variant='body2'>
+                  task_id: {taskDetail?.task_id ?? '-'}
+                </Typography>
+                <Typography data-testid='assistant-task-workflow-id' variant='body2'>
+                  workflow_id: {taskDetail?.workflow_id ?? '-'}
+                </Typography>
+                <Stack alignItems='center' direction='row' spacing={1}>
+                  <Typography variant='body2'>task_status：</Typography>
+                  <Chip data-testid='assistant-task-status' label={taskDetail?.status ?? assistantStatePlaceholder} size='small' />
+                  <Chip data-testid='assistant-task-dispatch-status' label={`dispatch=${taskDetail?.dispatch_status ?? '-'}`} size='small' />
+                </Stack>
+                <Typography data-testid='assistant-task-attempt' variant='body2'>
+                  attempt: {taskDetail?.attempt ?? 0} / {taskDetail?.max_attempts ?? 0}
+                </Typography>
+                <Typography data-testid='assistant-task-error-code' variant='body2'>
+                  last_error_code: {taskDetail?.last_error_code ?? '-'}
+                </Typography>
+                <Typography data-testid='assistant-task-request-id' variant='body2'>
+                  request_id: {taskDetail?.request_id ?? '-'}
+                </Typography>
+                <Typography data-testid='assistant-task-trace-id' variant='body2'>
+                  trace_id: {taskDetail?.trace_id ?? '-'}
+                </Typography>
               </Stack>
             </CardContent>
           </Card>
