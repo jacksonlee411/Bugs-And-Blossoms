@@ -469,6 +469,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantConversationsAPI(w, r, assistantSvc)
 	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantConversationsAPI(w, r, assistantSvc)
+	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantConversationDetailAPI(w, r, assistantSvc)
 	}))

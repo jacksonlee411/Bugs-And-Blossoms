@@ -55,6 +55,9 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {
 		t.Fatalf("assistant task detail status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	if rec := call(http.MethodGet, "/internal/assistant/conversations", ""); rec.Code == http.StatusNotFound {
+		t.Fatalf("assistant conversation list route not wired")
+	}
 	if rec := call(http.MethodPost, "/internal/assistant/tasks/task_1:cancel", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant task action route not wired")
 	} else if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "assistant_task_workflow_unavailable" {

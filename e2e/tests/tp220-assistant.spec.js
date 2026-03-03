@@ -139,6 +139,7 @@ function assistantConversation({ state = "draft", riskTier = "low", candidates =
     tenant_id: "tenant_tp220",
     actor_id: "actor_tp220",
     actor_role: "tenant-admin",
+    state,
     created_at: "2026-03-02T00:00:00Z",
     updated_at: "2026-03-02T00:00:00Z",
     turns: turn
@@ -190,6 +191,28 @@ async function installAssistantMock(page, options) {
     if (method === "POST" && pathname === "/internal/assistant/conversations") {
       currentConversation = assistantConversation({ state: "draft" });
       await fulfillJSON(route, 200, currentConversation);
+      return;
+    }
+    if (method === "GET" && pathname === "/internal/assistant/conversations") {
+      const lastTurn = currentConversation.turns[currentConversation.turns.length - 1];
+      await fulfillJSON(route, 200, {
+        items: [
+          {
+            conversation_id: currentConversation.conversation_id,
+            state: currentConversation.state,
+            updated_at: currentConversation.updated_at,
+            last_turn: lastTurn
+              ? {
+                  turn_id: lastTurn.turn_id,
+                  user_input: lastTurn.user_input,
+                  state: lastTurn.state,
+                  risk_tier: lastTurn.risk_tier
+                }
+              : null
+          }
+        ],
+        next_cursor: ""
+      });
       return;
     }
     if (method === "GET" && pathname === "/internal/assistant/conversations/conv_tp220_1") {

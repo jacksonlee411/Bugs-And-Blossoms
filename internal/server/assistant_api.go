@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -174,6 +175,25 @@ type assistantCreateConversationRequest struct {
 	Title string `json:"title"`
 }
 
+type assistantConversationListResponse struct {
+	Items      []assistantConversationListItem `json:"items"`
+	NextCursor string                          `json:"next_cursor"`
+}
+
+type assistantConversationListItem struct {
+	ConversationID string                             `json:"conversation_id"`
+	State          string                             `json:"state"`
+	UpdatedAt      time.Time                          `json:"updated_at"`
+	LastTurn       *assistantConversationListLastTurn `json:"last_turn,omitempty"`
+}
+
+type assistantConversationListLastTurn struct {
+	TurnID    string `json:"turn_id"`
+	UserInput string `json:"user_input"`
+	State     string `json:"state"`
+	RiskTier  string `json:"risk_tier"`
+}
+
 type assistantCreateTurnRequest struct {
 	UserInput string `json:"user_input"`
 }
@@ -201,7 +221,7 @@ func newAssistantConversationServiceWithPool(orgStore OrgUnitStore, writeSvc org
 }
 
 func handleAssistantConversationsAPI(w http.ResponseWriter, r *http.Request, svc *assistantConversationService) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
@@ -217,6 +237,39 @@ func handleAssistantConversationsAPI(w http.ResponseWriter, r *http.Request, svc
 	principal, ok := currentPrincipal(r.Context())
 	if !ok {
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "unauthorized", "unauthorized")
+		return
+	}
+	if r.Method == http.MethodGet {
+		pageSize := 20
+		if rawPageSize := strings.TrimSpace(r.URL.Query().Get("page_size")); rawPageSize != "" {
+			parsed, err := strconv.Atoi(rawPageSize)
+			if err != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "invalid page_size")
+				return
+			}
+			pageSize = parsed
+		}
+		if pageSize <= 0 {
+			pageSize = 20
+		}
+		if pageSize > 100 {
+			pageSize = 100
+		}
+		cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+		items, nextCursor, err := svc.listConversations(r.Context(), tenant.ID, principal.ID, pageSize, cursor)
+		if err != nil {
+			switch {
+			case errors.Is(err, errAssistantConversationCursorInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "assistant_conversation_cursor_invalid", "assistant conversation cursor invalid")
+			default:
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_conversation_list_failed", "assistant conversation list failed")
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, assistantConversationListResponse{
+			Items:      items,
+			NextCursor: nextCursor,
+		})
 		return
 	}
 
@@ -520,6 +573,7 @@ var (
 	errAssistantModelRateLimited                  = errors.New("assistant_model_rate_limited")
 	errAssistantModelConfigInvalid                = errors.New("assistant_model_config_invalid")
 	errAssistantModelSecretMissing                = errors.New("assistant_model_secret_missing")
+	errAssistantConversationCursorInvalid         = errors.New("assistant_conversation_cursor_invalid")
 	errAssistantIdempotencyKeyConflict            = errors.New("assistant_idempotency_key_conflict")
 	errAssistantRequestInProgress                 = errors.New("assistant_request_in_progress")
 	errAssistantTaskNotFound                      = errors.New("assistant_task_not_found")
@@ -534,6 +588,84 @@ func (s *assistantConversationService) createConversationWithContext(ctx context
 		return s.createConversationPG(ctx, tenantID, principal)
 	}
 	return s.createConversation(tenantID, principal), nil
+}
+
+func (s *assistantConversationService) listConversations(ctx context.Context, tenantID string, actorID string, pageSize int, cursor string) ([]assistantConversationListItem, string, error) {
+	if s.pool != nil {
+		return s.listConversationsPG(ctx, tenantID, actorID, pageSize, cursor)
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	s.mu.RLock()
+	conversations := make([]*assistantConversation, 0, len(s.byID))
+	for _, conversation := range s.byID {
+		if conversation == nil {
+			continue
+		}
+		if conversation.TenantID != tenantID || conversation.ActorID != actorID {
+			continue
+		}
+		conversations = append(conversations, cloneConversation(conversation))
+	}
+	s.mu.RUnlock()
+	sort.SliceStable(conversations, func(i, j int) bool {
+		left := conversations[i]
+		right := conversations[j]
+		if left.UpdatedAt.Equal(right.UpdatedAt) {
+			return left.ConversationID > right.ConversationID
+		}
+		return left.UpdatedAt.After(right.UpdatedAt)
+	})
+	decoded, err := assistantDecodeConversationCursor(cursor, tenantID, actorID)
+	if err != nil {
+		return nil, "", err
+	}
+	filtered := make([]*assistantConversation, 0, len(conversations))
+	for _, conversation := range conversations {
+		if decoded == nil {
+			filtered = append(filtered, conversation)
+			continue
+		}
+		if conversation.UpdatedAt.Before(decoded.UpdatedAt) {
+			filtered = append(filtered, conversation)
+			continue
+		}
+		if conversation.UpdatedAt.Equal(decoded.UpdatedAt) && conversation.ConversationID < decoded.ConversationID {
+			filtered = append(filtered, conversation)
+		}
+	}
+	limit := pageSize + 1
+	if len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+	nextCursor := ""
+	if len(filtered) > pageSize {
+		last := filtered[pageSize-1]
+		nextCursor = assistantEncodeConversationCursor(assistantConversationCursor{
+			UpdatedAt:      last.UpdatedAt,
+			ConversationID: last.ConversationID,
+		}, tenantID, actorID)
+		filtered = filtered[:pageSize]
+	}
+	items := make([]assistantConversationListItem, 0, len(filtered))
+	for _, conversation := range filtered {
+		item := assistantConversationListItem{
+			ConversationID: conversation.ConversationID,
+			State:          conversation.State,
+			UpdatedAt:      conversation.UpdatedAt,
+		}
+		if last := latestTurn(conversation); last != nil {
+			item.LastTurn = &assistantConversationListLastTurn{
+				TurnID:    last.TurnID,
+				UserInput: last.UserInput,
+				State:     last.State,
+				RiskTier:  last.RiskTier,
+			}
+		}
+		items = append(items, item)
+	}
+	return items, nextCursor, nil
 }
 
 func (s *assistantConversationService) createConversation(tenantID string, principal Principal) *assistantConversation {
@@ -1126,6 +1258,19 @@ func assistantFindCandidate(candidates []assistantCandidate, candidateID string)
 		}
 	}
 	return assistantCandidate{}, false
+}
+
+func latestTurn(conversation *assistantConversation) *assistantTurn {
+	if conversation == nil || len(conversation.Turns) == 0 {
+		return nil
+	}
+	for i := len(conversation.Turns) - 1; i >= 0; i-- {
+		turn := conversation.Turns[i]
+		if turn != nil {
+			return turn
+		}
+	}
+	return nil
 }
 
 func assistantGeneratedOrgCode(turnID string) string {

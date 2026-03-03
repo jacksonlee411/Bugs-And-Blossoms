@@ -6,17 +6,26 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
 	assistantIntentSchemaVersionV1     = "assistant.intent.v1"
 	assistantCompilerContractVersionV1 = "assistant.compiler.v1"
 	assistantCapabilityMapVersionV1    = "2026-02-23"
+	assistantRuntimeProd               = "prod"
+	assistantRuntimeProduction         = "production"
 )
 
 var assistantProviderNameAllowlist = map[string]struct{}{
@@ -92,6 +101,163 @@ func (assistantDeterministicProviderAdapter) Invoke(_ context.Context, prompt st
 	return payload, nil
 }
 
+type assistantOpenAIProviderAdapter struct {
+	httpClient *http.Client
+	fallback   assistantProviderAdapter
+}
+
+type assistantOpenAIChatCompletionRequest struct {
+	Model          string                                    `json:"model"`
+	Temperature    float64                                   `json:"temperature"`
+	TopP           float64                                   `json:"top_p"`
+	N              int                                       `json:"n"`
+	Messages       []assistantOpenAIChatCompletionMessage    `json:"messages"`
+	ResponseFormat assistantOpenAIChatCompletionResponseSpec `json:"response_format"`
+}
+
+type assistantOpenAIChatCompletionMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type assistantOpenAIChatCompletionResponseSpec struct {
+	Type       string                            `json:"type"`
+	JSONSchema assistantOpenAIChatJSONSchemaSpec `json:"json_schema"`
+}
+
+type assistantOpenAIChatJSONSchemaSpec struct {
+	Name   string `json:"name"`
+	Strict bool   `json:"strict"`
+	Schema any    `json:"schema"`
+}
+
+type assistantOpenAIChatCompletionResponse struct {
+	Choices []assistantOpenAIChatCompletionChoice `json:"choices"`
+}
+
+type assistantOpenAIChatCompletionChoice struct {
+	Message assistantOpenAIChatCompletionChoiceMessage `json:"message"`
+}
+
+type assistantOpenAIChatCompletionChoiceMessage struct {
+	Content any `json:"content"`
+}
+
+func (a assistantOpenAIProviderAdapter) Invoke(ctx context.Context, prompt string, provider assistantModelProviderConfig) ([]byte, error) {
+	endpoint := strings.TrimSpace(provider.Endpoint)
+	if assistantIsBuiltInEndpoint(endpoint) || assistantIsSimulateEndpoint(endpoint) {
+		if a.fallback == nil {
+			return nil, errAssistantModelConfigInvalid
+		}
+		return a.fallback.Invoke(ctx, prompt, provider)
+	}
+	requestURL, err := assistantBuildOpenAIChatCompletionURL(endpoint)
+	if err != nil {
+		return nil, errAssistantModelConfigInvalid
+	}
+	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	if apiKey == "" {
+		return nil, errAssistantModelSecretMissing
+	}
+	payload := assistantOpenAIChatCompletionRequest{
+		Model:       strings.TrimSpace(provider.Model),
+		Temperature: 0,
+		TopP:        1,
+		N:           1,
+		Messages: []assistantOpenAIChatCompletionMessage{
+			{
+				Role: "system",
+				Content: "你是企业 HR 组织变更助手。你必须只输出严格 JSON，禁止输出解释、Markdown 或其他文本。" +
+					"JSON 必须符合 schema 且 additionalProperties=false。",
+			},
+			{
+				Role:    "user",
+				Content: strings.TrimSpace(prompt),
+			},
+		},
+		ResponseFormat: assistantOpenAIChatCompletionResponseSpec{
+			Type: "json_schema",
+			JSONSchema: assistantOpenAIChatJSONSchemaSpec{
+				Name:   "assistant_intent_spec",
+				Strict: true,
+				Schema: map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"properties": map[string]any{
+						"action": map[string]any{
+							"type": "string",
+						},
+						"parent_ref_text": map[string]any{
+							"type": "string",
+						},
+						"entity_name": map[string]any{
+							"type": "string",
+						},
+						"effective_date": map[string]any{
+							"type": "string",
+						},
+					},
+					"required": []string{"action"},
+				},
+			},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, errAssistantModelConfigInvalid
+	}
+	requestCtx := ctx
+	if requestCtx == nil {
+		requestCtx = context.Background()
+	}
+	timeoutCtx, cancel := context.WithTimeout(requestCtx, time.Duration(provider.TimeoutMS)*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(timeoutCtx, http.MethodPost, requestURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, errAssistantModelConfigInvalid
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	client := a.httpClient
+	if client == nil {
+		client = &http.Client{}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
+			return nil, errAssistantModelTimeout
+		}
+		return nil, errAssistantModelProviderUnavailable
+	}
+	defer resp.Body.Close()
+	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if readErr != nil {
+		return nil, errAssistantModelProviderUnavailable
+	}
+	switch {
+	case resp.StatusCode == http.StatusTooManyRequests:
+		return nil, errAssistantModelRateLimited
+	case resp.StatusCode == http.StatusRequestTimeout || resp.StatusCode == http.StatusGatewayTimeout:
+		return nil, errAssistantModelTimeout
+	case resp.StatusCode >= 500:
+		return nil, errAssistantModelProviderUnavailable
+	case resp.StatusCode >= 400:
+		return nil, errAssistantModelConfigInvalid
+	}
+	var completion assistantOpenAIChatCompletionResponse
+	if err := json.Unmarshal(raw, &completion); err != nil {
+		return nil, errAssistantPlanSchemaConstrainedDecodeFailed
+	}
+	if len(completion.Choices) == 0 {
+		return nil, errAssistantPlanSchemaConstrainedDecodeFailed
+	}
+	content := assistantExtractOpenAIMessageContent(completion.Choices[0].Message.Content)
+	if strings.TrimSpace(content) == "" {
+		return nil, errAssistantPlanSchemaConstrainedDecodeFailed
+	}
+	return []byte(content), nil
+}
+
 type assistantModelGateway struct {
 	mu       sync.RWMutex
 	config   assistantModelConfig
@@ -99,13 +265,16 @@ type assistantModelGateway struct {
 }
 
 func newAssistantModelGateway() *assistantModelGateway {
+	deterministic := assistantDeterministicProviderAdapter{}
 	gateway := &assistantModelGateway{
 		config: defaultAssistantModelConfig(),
 		adapters: map[string]assistantProviderAdapter{
-			"openai":   assistantDeterministicProviderAdapter{},
-			"deepseek": assistantDeterministicProviderAdapter{},
-			"claude":   assistantDeterministicProviderAdapter{},
-			"gemini":   assistantDeterministicProviderAdapter{},
+			"openai": assistantOpenAIProviderAdapter{
+				fallback: deterministic,
+			},
+			"deepseek": deterministic,
+			"claude":   deterministic,
+			"gemini":   deterministic,
 		},
 	}
 	if fromEnv := strings.TrimSpace(os.Getenv("ASSISTANT_MODEL_CONFIG_JSON")); fromEnv != "" {
@@ -120,14 +289,20 @@ func newAssistantModelGateway() *assistantModelGateway {
 }
 
 func defaultAssistantModelConfig() assistantModelConfig {
+	openAIEndpoint := "builtin://openai"
+	openAIModel := "gpt-4o-mini"
+	if assistantIsProductionRuntime() {
+		openAIEndpoint = "https://api.openai.com/v1"
+		openAIModel = "gpt-5-codex"
+	}
 	return assistantModelConfig{
 		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
 		Providers: []assistantModelProviderConfig{
 			{
 				Name:      "openai",
 				Enabled:   true,
-				Model:     "gpt-4o-mini",
-				Endpoint:  "builtin://openai",
+				Model:     openAIModel,
+				Endpoint:  openAIEndpoint,
 				TimeoutMS: 8000,
 				Retries:   1,
 				Priority:  10,
@@ -192,9 +367,15 @@ func (g *assistantModelGateway) listProviderStatus() ([]assistantModelProviderCo
 		case strings.HasPrefix(strings.ToLower(strings.TrimSpace(provider.Endpoint)), "simulate://rate-limit"):
 			status.Healthy = "degraded"
 			status.HealthReason = "simulated_rate_limited"
-		case !assistantIsBuiltInEndpoint(provider.Endpoint) && strings.TrimSpace(os.Getenv(strings.TrimSpace(provider.KeyRef))) == "":
+		case assistantEndpointInvalidForRuntime(provider.Endpoint):
+			status.Healthy = "degraded"
+			status.HealthReason = "endpoint_invalid"
+		case assistantProviderRequiresSecret(provider) && strings.TrimSpace(os.Getenv(strings.TrimSpace(provider.KeyRef))) == "":
 			status.Healthy = "degraded"
 			status.HealthReason = "secret_missing"
+		case assistantProviderRequiresOpenAIKey(provider) && strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) == "":
+			status.Healthy = "degraded"
+			status.HealthReason = "openai_key_missing"
 		default:
 			status.Healthy = "healthy"
 		}
@@ -257,33 +438,53 @@ func (g *assistantModelGateway) ResolveIntent(ctx context.Context, req assistant
 		if strings.TrimSpace(provider.KeyRef) == "" {
 			return assistantResolveIntentResult{}, errAssistantModelConfigInvalid
 		}
-		if !assistantIsBuiltInEndpoint(provider.Endpoint) && strings.TrimSpace(os.Getenv(strings.TrimSpace(provider.KeyRef))) == "" {
+		if assistantEndpointInvalidForRuntime(provider.Endpoint) {
+			return assistantResolveIntentResult{}, errAssistantModelConfigInvalid
+		}
+		if assistantProviderRequiresSecret(provider) && strings.TrimSpace(os.Getenv(strings.TrimSpace(provider.KeyRef))) == "" {
+			return assistantResolveIntentResult{}, errAssistantModelSecretMissing
+		}
+		if assistantProviderRequiresOpenAIKey(provider) && strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) == "" {
 			return assistantResolveIntentResult{}, errAssistantModelSecretMissing
 		}
 		adapter := g.adapters[strings.ToLower(strings.TrimSpace(provider.Name))]
 		if adapter == nil {
 			return assistantResolveIntentResult{}, errAssistantModelConfigInvalid
 		}
-		raw, err := adapter.Invoke(ctx, req.Prompt, provider)
-		if err != nil {
-			switch {
-			case errorsIsAny(err, errAssistantModelTimeout, errAssistantModelRateLimited, errAssistantModelProviderUnavailable):
-				lastTransientErr = err
-				continue
-			default:
-				return assistantResolveIntentResult{}, err
+		invokeErr := error(nil)
+		attempts := provider.Retries + 1
+		if attempts < 1 {
+			attempts = 1
+		}
+		for attempt := 0; attempt < attempts; attempt++ {
+			raw, err := adapter.Invoke(ctx, req.Prompt, provider)
+			if err != nil {
+				invokeErr = err
+				if errorsIsAny(err, errAssistantModelTimeout, errAssistantModelRateLimited, errAssistantModelProviderUnavailable) && attempt < attempts-1 {
+					continue
+				}
+				break
 			}
+			intent, err := assistantStrictDecodeIntent(raw)
+			if err != nil {
+				return assistantResolveIntentResult{}, errAssistantPlanSchemaConstrainedDecodeFailed
+			}
+			return assistantResolveIntentResult{
+				Intent:        intent,
+				ProviderName:  strings.ToLower(strings.TrimSpace(provider.Name)),
+				ModelName:     strings.TrimSpace(provider.Model),
+				ModelRevision: assistantModelRevision(provider),
+			}, nil
 		}
-		intent, err := assistantStrictDecodeIntent(raw)
-		if err != nil {
-			return assistantResolveIntentResult{}, errAssistantPlanSchemaConstrainedDecodeFailed
+		switch {
+		case invokeErr == nil:
+			return assistantResolveIntentResult{}, errAssistantModelProviderUnavailable
+		case errorsIsAny(invokeErr, errAssistantModelTimeout, errAssistantModelRateLimited, errAssistantModelProviderUnavailable):
+			lastTransientErr = invokeErr
+			continue
+		default:
+			return assistantResolveIntentResult{}, invokeErr
 		}
-		return assistantResolveIntentResult{
-			Intent:        intent,
-			ProviderName:  strings.ToLower(strings.TrimSpace(provider.Name)),
-			ModelName:     strings.TrimSpace(provider.Model),
-			ModelRevision: assistantModelRevision(provider),
-		}, nil
 	}
 	if enabledCount == 0 || lastTransientErr == nil {
 		return assistantResolveIntentResult{}, errAssistantModelProviderUnavailable
@@ -355,8 +556,14 @@ func normalizeAssistantModelConfig(config assistantModelConfig, checkSecret bool
 			errs = append(errs, "provider priority duplicated")
 		}
 		seenPriority[provider.Priority] = struct{}{}
-		if checkSecret && !assistantIsBuiltInEndpoint(provider.Endpoint) && provider.KeyRef != "" && strings.TrimSpace(os.Getenv(provider.KeyRef)) == "" {
+		if assistantEndpointInvalidForRuntime(provider.Endpoint) {
+			errs = append(errs, "providers."+strconv.Itoa(idx)+" endpoint invalid for runtime")
+		}
+		if checkSecret && assistantProviderRequiresSecret(*provider) && provider.KeyRef != "" && strings.TrimSpace(os.Getenv(provider.KeyRef)) == "" {
 			errs = append(errs, "providers."+strconv.Itoa(idx)+" secret missing for key_ref")
+		}
+		if checkSecret && assistantProviderRequiresOpenAIKey(*provider) && strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) == "" {
+			errs = append(errs, "providers."+strconv.Itoa(idx)+" OPENAI_API_KEY missing")
 		}
 	}
 	return normalized, errs
@@ -364,6 +571,87 @@ func normalizeAssistantModelConfig(config assistantModelConfig, checkSecret bool
 
 func assistantIsBuiltInEndpoint(endpoint string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(endpoint)), "builtin://")
+}
+
+func assistantIsSimulateEndpoint(endpoint string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(endpoint)), "simulate://")
+}
+
+func assistantIsHTTPSAPIEndpoint(endpoint string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(endpoint)), "https://")
+}
+
+func assistantRuntimeEnvironment() string {
+	for _, key := range []string{"ASSISTANT_RUNTIME_ENV", "APP_ENV", "ENV"} {
+		if value := strings.TrimSpace(strings.ToLower(os.Getenv(key))); value != "" {
+			return value
+		}
+	}
+	return "dev"
+}
+
+func assistantIsProductionRuntime() bool {
+	env := assistantRuntimeEnvironment()
+	return env == assistantRuntimeProd || env == assistantRuntimeProduction
+}
+
+func assistantEndpointInvalidForRuntime(endpoint string) bool {
+	normalized := strings.TrimSpace(strings.ToLower(endpoint))
+	if normalized == "" {
+		return true
+	}
+	if assistantIsProductionRuntime() {
+		return !assistantIsHTTPSAPIEndpoint(normalized)
+	}
+	return !(assistantIsBuiltInEndpoint(normalized) || assistantIsSimulateEndpoint(normalized) || assistantIsHTTPSAPIEndpoint(normalized))
+}
+
+func assistantProviderRequiresSecret(provider assistantModelProviderConfig) bool {
+	return assistantIsHTTPSAPIEndpoint(provider.Endpoint)
+}
+
+func assistantProviderRequiresOpenAIKey(provider assistantModelProviderConfig) bool {
+	return strings.TrimSpace(strings.ToLower(provider.Name)) == "openai" && assistantIsHTTPSAPIEndpoint(provider.Endpoint)
+}
+
+func assistantBuildOpenAIChatCompletionURL(endpoint string) (string, error) {
+	base, err := url.Parse(strings.TrimSpace(endpoint))
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(base.Scheme) != "https" || strings.TrimSpace(base.Host) == "" {
+		return "", fmt.Errorf("invalid endpoint")
+	}
+	trimmedPath := strings.TrimSpace(base.Path)
+	if strings.HasSuffix(trimmedPath, "/chat/completions") {
+		return base.String(), nil
+	}
+	base.Path = path.Join(trimmedPath, "/chat/completions")
+	base.RawQuery = ""
+	base.Fragment = ""
+	return base.String(), nil
+}
+
+func assistantExtractOpenAIMessageContent(raw any) string {
+	switch value := raw.(type) {
+	case string:
+		return value
+	case []any:
+		parts := make([]string, 0, len(value))
+		for _, entry := range value {
+			object, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			switch text := object["text"].(type) {
+			case string:
+				parts = append(parts, text)
+			}
+		}
+		return strings.Join(parts, "")
+	default:
+		return ""
+	}
 }
 
 func cloneAssistantProviderSlice(in []assistantModelProviderConfig) []assistantModelProviderConfig {

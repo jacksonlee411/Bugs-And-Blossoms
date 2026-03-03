@@ -87,9 +87,27 @@ export interface AssistantConversation {
   tenant_id: string
   actor_id: string
   actor_role: string
+  state: string
   created_at: string
   updated_at: string
   turns: AssistantTurn[]
+}
+
+export interface AssistantConversationListItem {
+  conversation_id: string
+  state: string
+  updated_at: string
+  last_turn?: {
+    turn_id: string
+    user_input: string
+    state: string
+    risk_tier: string
+  }
+}
+
+export interface AssistantConversationListResponse {
+  items: AssistantConversationListItem[]
+  next_cursor: string
 }
 
 export interface AssistantTaskContractSnapshot {
@@ -197,6 +215,22 @@ export interface AssistantModelsResponse {
 
 export async function createAssistantConversation(): Promise<AssistantConversation> {
   return httpClient.post<AssistantConversation>('/internal/assistant/conversations', {})
+}
+
+export async function listAssistantConversations(params?: {
+  page_size?: number
+  cursor?: string
+}): Promise<AssistantConversationListResponse> {
+  const query = new URLSearchParams()
+  if (typeof params?.page_size === 'number' && Number.isFinite(params.page_size)) {
+    query.set('page_size', String(params.page_size))
+  }
+  if (typeof params?.cursor === 'string' && params.cursor.trim().length > 0) {
+    query.set('cursor', params.cursor.trim())
+  }
+  const suffix = query.toString()
+  const path = suffix.length > 0 ? `/internal/assistant/conversations?${suffix}` : '/internal/assistant/conversations'
+  return httpClient.get<AssistantConversationListResponse>(path)
 }
 
 export async function createAssistantTurn(conversationID: string, userInput: string): Promise<AssistantConversation> {

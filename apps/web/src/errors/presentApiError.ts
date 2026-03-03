@@ -57,6 +57,8 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   ai_model_rate_limited: { en: 'Model provider is rate limited. Please retry later.', zh: '模型服务限流，请稍后重试。' },
   ai_model_config_invalid: { en: 'Model provider configuration is invalid. Please fix and apply again.', zh: '模型配置不合法，请修正后重新应用。' },
   ai_model_secret_missing: { en: 'Model provider secret is missing. Please configure key reference and retry.', zh: '模型密钥缺失，请检查 key_ref 配置后重试。' },
+  assistant_conversation_cursor_invalid: { en: 'Conversation cursor is invalid or expired. Please reload list.', zh: '会话分页游标无效或已过期，请刷新列表后重试。' },
+  assistant_conversation_list_failed: { en: 'Failed to load assistant conversation list.', zh: '加载助手会话列表失败，请稍后重试。' },
   assistant_candidate_not_found: { en: 'Candidate is not found.', zh: '未找到候选对象，请重新选择。' },
   assistant_commit_failed: { en: 'Assistant commit failed. Please retry later.', zh: '助手提交失败，请稍后重试。' },
   assistant_conversation_create_failed: { en: 'Failed to create assistant conversation.', zh: '创建助手会话失败，请稍后重试。' },

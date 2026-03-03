@@ -19,6 +19,7 @@ import {
   confirmAssistantTurn,
   createAssistantConversation,
   createAssistantTurn,
+  listAssistantConversations,
   getAssistantTask,
   getAssistantConversation,
   getAssistantModelProviders,
@@ -37,6 +38,15 @@ describe('assistant api', () => {
     postMock.mockResolvedValue({ conversation_id: 'conv_1', turns: [] })
     await createAssistantConversation()
     expect(postMock).toHaveBeenCalledWith('/internal/assistant/conversations', {})
+  })
+
+  it('lists conversations with pagination query', async () => {
+    getMock.mockResolvedValue({ items: [], next_cursor: '' })
+    await listAssistantConversations({ page_size: 50, cursor: 'abc' })
+    expect(getMock).toHaveBeenCalledWith('/internal/assistant/conversations?page_size=50&cursor=abc')
+
+    await listAssistantConversations()
+    expect(getMock).toHaveBeenCalledWith('/internal/assistant/conversations')
   })
 
   it('creates turn with encoded conversation id', async () => {

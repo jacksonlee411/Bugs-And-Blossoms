@@ -238,6 +238,8 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "ai_model_rate_limited", want: "模型服务限流，请稍后重试。"},
 		{code: "ai_model_config_invalid", want: "模型配置不合法，请修正后重新应用。"},
 		{code: "ai_model_secret_missing", want: "模型密钥缺失，请检查 key_ref 配置后重试。"},
+		{code: "assistant_conversation_cursor_invalid", want: "会话分页游标无效或已过期，请刷新列表后重试。"},
+		{code: "assistant_conversation_list_failed", want: "加载助手会话列表失败，请稍后重试。"},
 		{code: "unknown", want: ""},
 	}
 

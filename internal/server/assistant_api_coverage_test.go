@@ -183,8 +183,33 @@ func TestAssistantConversationHandlers_CoverageMatrix(t *testing.T) {
 
 	t.Run("create conversation handler branches", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		handleAssistantConversationsAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/conversations", "", true, true), svc)
+		handleAssistantConversationsAPI(rec, assistantReqWithContext(http.MethodDelete, "/internal/assistant/conversations", "", true, true), svc)
 		if rec.Code != http.StatusMethodNotAllowed || assistantDecodeErrCode(t, rec) != "method_not_allowed" {
+			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
+
+		rec = httptest.NewRecorder()
+		handleAssistantConversationsAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/conversations?page_size=2", "", true, true), svc)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var listResp assistantConversationListResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &listResp); err != nil {
+			t.Fatalf("unmarshal list response: %v", err)
+		}
+		if listResp.Items == nil {
+			t.Fatal("items should not be nil")
+		}
+
+		rec = httptest.NewRecorder()
+		handleAssistantConversationsAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/conversations?page_size=x", "", true, true), svc)
+		if rec.Code != http.StatusBadRequest || assistantDecodeErrCode(t, rec) != "invalid_request" {
+			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+		}
+
+		rec = httptest.NewRecorder()
+		handleAssistantConversationsAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/conversations?cursor=not-valid", "", true, true), svc)
+		if rec.Code != http.StatusBadRequest || assistantDecodeErrCode(t, rec) != "assistant_conversation_cursor_invalid" {
 			t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
 		}
 

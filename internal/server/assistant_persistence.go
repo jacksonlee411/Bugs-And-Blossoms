@@ -3,10 +3,12 @@ package server
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,8 +18,9 @@ import (
 )
 
 const (
-	assistantIdempotencyTTLDays    = 30
-	assistantDefaultRetryAfterSecs = "1"
+	assistantIdempotencyTTLDays     = 30
+	assistantDefaultRetryAfterSecs  = "1"
+	assistantConversationCursorSalt = "assistant-conversation-cursor-v1"
 )
 
 type assistantIdempotencyKey struct {
@@ -42,6 +45,11 @@ type assistantIdempotencyClaim struct {
 	ErrorCode  string
 	HTTPStatus int
 	Body       []byte
+}
+
+type assistantConversationCursor struct {
+	UpdatedAt      time.Time
+	ConversationID string
 }
 
 func (s *assistantConversationService) createConversationPG(ctx context.Context, tenantID string, principal Principal) (*assistantConversation, error) {
@@ -81,6 +89,106 @@ func (s *assistantConversationService) getConversationPG(ctx context.Context, te
 	}
 	s.cacheConversation(conversation)
 	return cloneConversation(conversation), nil
+}
+
+func (s *assistantConversationService) listConversationsPG(ctx context.Context, tenantID string, actorID string, pageSize int, cursor string) ([]assistantConversationListItem, string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	decoded, err := assistantDecodeConversationCursor(cursor, tenantID, actorID)
+	if err != nil {
+		return nil, "", err
+	}
+	tx, err := s.beginAssistantTx(ctx, tenantID)
+	if err != nil {
+		return nil, "", err
+	}
+	defer tx.Rollback(ctx)
+	query := `
+SELECT
+  c.conversation_id,
+  c.state,
+  c.updated_at,
+  t.turn_id,
+  t.user_input,
+  t.state,
+  t.risk_tier
+FROM iam.assistant_conversations c
+LEFT JOIN LATERAL (
+  SELECT turn_id, user_input, state, risk_tier
+  FROM iam.assistant_turns at
+  WHERE at.tenant_uuid = $1::uuid AND at.conversation_id = c.conversation_id
+  ORDER BY at.created_at DESC, at.turn_id DESC
+  LIMIT 1
+) t ON TRUE
+WHERE c.tenant_uuid = $1::uuid
+  AND c.actor_id = $2`
+	args := make([]any, 0, 5)
+	args = append(args, tenantID, actorID)
+	if decoded != nil {
+		query += `
+  AND (c.updated_at, c.conversation_id) < ($3, $4)`
+		args = append(args, decoded.UpdatedAt, decoded.ConversationID)
+	}
+	query += `
+ORDER BY c.updated_at DESC, c.conversation_id DESC
+LIMIT $` + strconv.Itoa(len(args)+1)
+	args = append(args, pageSize+1)
+	rows, err := tx.Query(ctx, query, args...)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	items := make([]assistantConversationListItem, 0, pageSize+1)
+	for rows.Next() {
+		var (
+			item          assistantConversationListItem
+			lastTurnID    *string
+			lastUserInput *string
+			lastTurnState *string
+			lastRiskTier  *string
+		)
+		if err := rows.Scan(
+			&item.ConversationID,
+			&item.State,
+			&item.UpdatedAt,
+			&lastTurnID,
+			&lastUserInput,
+			&lastTurnState,
+			&lastRiskTier,
+		); err != nil {
+			return nil, "", err
+		}
+		if lastTurnID != nil {
+			item.LastTurn = &assistantConversationListLastTurn{
+				TurnID:    strings.TrimSpace(*lastTurnID),
+				UserInput: strings.TrimSpace(valueOrEmpty(lastUserInput)),
+				State:     strings.TrimSpace(valueOrEmpty(lastTurnState)),
+				RiskTier:  strings.TrimSpace(valueOrEmpty(lastRiskTier)),
+			}
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, "", err
+	}
+	nextCursor := ""
+	if len(items) > pageSize {
+		last := items[pageSize-1]
+		nextCursor = assistantEncodeConversationCursor(assistantConversationCursor{
+			UpdatedAt:      last.UpdatedAt,
+			ConversationID: last.ConversationID,
+		}, tenantID, actorID)
+		items = items[:pageSize]
+	}
+	return items, nextCursor, nil
 }
 
 func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantID string, principal Principal, conversationID string, userInput string) (*assistantConversation, error) {
@@ -1171,6 +1279,63 @@ func (s *assistantConversationService) getCachedConversation(conversationID stri
 		return nil, false
 	}
 	return cloneConversation(conversation), true
+}
+
+func assistantEncodeConversationCursor(cursor assistantConversationCursor, tenantID string, actorID string) string {
+	if cursor.UpdatedAt.IsZero() || strings.TrimSpace(cursor.ConversationID) == "" {
+		return ""
+	}
+	base := strings.Join([]string{
+		strings.TrimSpace(tenantID),
+		strings.TrimSpace(actorID),
+		cursor.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		strings.TrimSpace(cursor.ConversationID),
+	}, "|")
+	signature := assistantHashText(base + "|" + assistantConversationCursorSalt)
+	raw := base + "|" + signature
+	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+}
+
+func assistantDecodeConversationCursor(encoded string, tenantID string, actorID string) (*assistantConversationCursor, error) {
+	trimmed := strings.TrimSpace(encoded)
+	if trimmed == "" {
+		return nil, nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(trimmed)
+	if err != nil {
+		return nil, errAssistantConversationCursorInvalid
+	}
+	parts := strings.Split(string(raw), "|")
+	if len(parts) != 5 {
+		return nil, errAssistantConversationCursorInvalid
+	}
+	if parts[0] != strings.TrimSpace(tenantID) || parts[1] != strings.TrimSpace(actorID) {
+		return nil, errAssistantConversationCursorInvalid
+	}
+	signatureBase := strings.Join(parts[:4], "|")
+	expected := assistantHashText(signatureBase + "|" + assistantConversationCursorSalt)
+	if parts[4] != expected {
+		return nil, errAssistantConversationCursorInvalid
+	}
+	updatedAt, err := time.Parse(time.RFC3339Nano, parts[2])
+	if err != nil {
+		return nil, errAssistantConversationCursorInvalid
+	}
+	conversationID := strings.TrimSpace(parts[3])
+	if conversationID == "" {
+		return nil, errAssistantConversationCursorInvalid
+	}
+	return &assistantConversationCursor{
+		UpdatedAt:      updatedAt.UTC(),
+		ConversationID: conversationID,
+	}, nil
+}
+
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func assistantLookupTurn(conversation *assistantConversation, turnID string) *assistantTurn {

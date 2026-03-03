@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 )
@@ -250,5 +252,60 @@ func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 	intent, err := assistantStrictDecodeIntent(raw)
 	if err != nil || intent.Action != assistantIntentCreateOrgUnit {
 		t.Fatalf("unexpected strict decode err=%v intent=%+v", err, intent)
+	}
+}
+
+func TestAssistantModelGateway_RuntimeEndpointValidation(t *testing.T) {
+	t.Setenv("ASSISTANT_RUNTIME_ENV", "production")
+	if !assistantEndpointInvalidForRuntime("builtin://openai") {
+		t.Fatal("builtin endpoint should be invalid in production")
+	}
+	if assistantEndpointInvalidForRuntime("https://api.openai.com/v1") {
+		t.Fatal("https endpoint should be valid in production")
+	}
+	_, errs := normalizeAssistantModelConfig(assistantModelConfig{
+		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+		Providers: []assistantModelProviderConfig{
+			{Name: "openai", Enabled: true, Model: "gpt-5-codex", Endpoint: "builtin://openai", TimeoutMS: 1000, Retries: 1, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+		},
+	}, false)
+	if len(errs) == 0 {
+		t.Fatal("expected endpoint validation error in production")
+	}
+}
+
+func TestAssistantOpenAIProviderAdapter_InvokeAndParseContentArray(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method=%s", r.Method)
+		}
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("path=%s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":[{"type":"output_text","text":"{\"action\":\"create_orgunit\"}"}]}}]}`))
+	}))
+	defer server.Close()
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	adapter := assistantOpenAIProviderAdapter{
+		httpClient: server.Client(),
+		fallback:   assistantDeterministicProviderAdapter{},
+	}
+	payload, err := adapter.Invoke(context.Background(), "在鲜花组织之下新建运营部", assistantModelProviderConfig{
+		Name:      "openai",
+		Model:     "gpt-5-codex",
+		Endpoint:  server.URL + "/v1",
+		TimeoutMS: 1000,
+		KeyRef:    "OPENAI_API_KEY",
+	})
+	if err != nil {
+		t.Fatalf("invoke err=%v", err)
+	}
+	intent, err := assistantStrictDecodeIntent(payload)
+	if err != nil {
+		t.Fatalf("strict decode err=%v", err)
+	}
+	if intent.Action != assistantIntentCreateOrgUnit {
+		t.Fatalf("intent=%+v", intent)
 	}
 }

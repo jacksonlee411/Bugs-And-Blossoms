@@ -23,8 +23,10 @@ import {
   createAssistantTurn,
   getAssistantTask,
   getAssistantConversation,
+  listAssistantConversations,
   submitAssistantTask,
   type AssistantConversation,
+  type AssistantConversationListItem,
   type AssistantTaskDetail,
   type AssistantTurn
 } from '../../api/assistant'
@@ -40,6 +42,7 @@ const samplePrompt =
 
 const assistantStatePlaceholder = '-'
 const assistantTaskPollIntervalMS = 1000
+const conversationStorageKey = 'assistant.active_conversation_id'
 
 function latestTurn(conversation: AssistantConversation | null): AssistantTurn | null {
   if (!conversation || conversation.turns.length === 0) {
@@ -105,12 +108,74 @@ function assistantTaskTerminal(status: string | undefined): boolean {
   )
 }
 
+function summarizeConversation(conversation: AssistantConversation): AssistantConversationListItem {
+  const turn = latestTurn(conversation)
+  return {
+    conversation_id: conversation.conversation_id,
+    state: conversation.state,
+    updated_at: conversation.updated_at,
+    last_turn: turn
+      ? {
+          turn_id: turn.turn_id,
+          user_input: turn.user_input,
+          state: turn.state,
+          risk_tier: turn.risk_tier
+        }
+      : undefined
+  }
+}
+
+function sortConversationItems(items: AssistantConversationListItem[]): AssistantConversationListItem[] {
+  return [...items].sort((left, right) => {
+    const leftTime = new Date(left.updated_at).getTime()
+    const rightTime = new Date(right.updated_at).getTime()
+    if (leftTime === rightTime) {
+      return right.conversation_id.localeCompare(left.conversation_id)
+    }
+    return rightTime - leftTime
+  })
+}
+
+function formatTimestamp(input: string | undefined): string {
+  const value = normalized(input)
+  if (value.length === 0) {
+    return '-'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return date.toLocaleString()
+}
+
+function saveActiveConversationID(conversationID: string) {
+  if (typeof window === 'undefined') {
+    return
+  }
+  if (conversationID.trim().length === 0) {
+    window.localStorage.removeItem(conversationStorageKey)
+    return
+  }
+  window.localStorage.setItem(conversationStorageKey, conversationID)
+}
+
+function loadActiveConversationID(): string {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+  return normalized(window.localStorage.getItem(conversationStorageKey) ?? '')
+}
+
 export function AssistantPage() {
   const [conversation, setConversation] = useState<AssistantConversation | null>(null)
+  const [conversations, setConversations] = useState<AssistantConversationListItem[]>([])
+  const [conversationCursor, setConversationCursor] = useState('')
+  const [selectedConversationID, setSelectedConversationID] = useState('')
   const [taskDetail, setTaskDetail] = useState<AssistantTaskDetail | null>(null)
   const [input, setInput] = useState(samplePrompt)
   const [candidateID, setCandidateID] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingList, setLoadingList] = useState(false)
   const [error, setError] = useState('')
   const [bridgeChannel] = useState(() => createAssistantBridgeToken('assistant_channel'))
   const [bridgeNonce] = useState(() => createAssistantBridgeToken('assistant_nonce'))
@@ -120,6 +185,7 @@ export function AssistantPage() {
   const taskStatus = normalized(taskDetail?.status)
   const taskTerminal = useMemo(() => assistantTaskTerminal(taskStatus), [taskStatus])
   const conversationID = normalized(conversation?.conversation_id)
+  const selectedTurnID = normalized(turn?.turn_id)
   const allowedOrigins = useMemo(() => {
     const origin = typeof window !== 'undefined' ? window.location.origin : undefined
     return parseAssistantAllowedOrigins(import.meta.env.VITE_ASSISTANT_ALLOWED_ORIGINS, origin)
@@ -132,6 +198,13 @@ export function AssistantPage() {
 
   const applyConversation = useCallback((nextConversation: AssistantConversation) => {
     setConversation(nextConversation)
+    setSelectedConversationID(nextConversation.conversation_id)
+    saveActiveConversationID(nextConversation.conversation_id)
+    setConversations((current) => {
+      const summary = summarizeConversation(nextConversation)
+      const remaining = current.filter((item) => item.conversation_id !== summary.conversation_id)
+      return sortConversationItems([summary, ...remaining])
+    })
     const nextTurn = latestTurn(nextConversation)
     setCandidateID((current) => resolveCandidateSelection(nextTurn, current))
   }, [])
@@ -147,6 +220,29 @@ export function AssistantPage() {
     [candidateID, conversation, loading, turn]
   )
 
+  const loadConversation = useCallback(
+    async (targetConversationID: string, options?: { silent?: boolean }) => {
+      const normalizedID = normalized(targetConversationID)
+      if (normalizedID.length === 0) {
+        return
+      }
+      if (!options?.silent) {
+        setLoading(true)
+      }
+      try {
+        const nextConversation = await getAssistantConversation(normalizedID)
+        applyConversation(nextConversation)
+      } catch (err) {
+        setError(errorMessage(err, '加载会话失败'))
+      } finally {
+        if (!options?.silent) {
+          setLoading(false)
+        }
+      }
+    },
+    [applyConversation]
+  )
+
   const refreshConversation = useCallback(async () => {
     if (conversationID.length === 0) {
       return
@@ -155,36 +251,93 @@ export function AssistantPage() {
     applyConversation(nextConversation)
   }, [applyConversation, conversationID])
 
-  useEffect(() => {
-    setTaskDetail(null)
-  }, [turn?.turn_id])
+  const refreshConversationList = useCallback(
+    async (cursor?: string, append?: boolean) => {
+      setLoadingList(true)
+      try {
+        const response = await listAssistantConversations({
+          page_size: 20,
+          cursor
+        })
+        const nextItems = append ? sortConversationItems([...conversations, ...response.items]) : response.items
+        const dedup = Array.from(new Map(nextItems.map((item) => [item.conversation_id, item])).values())
+        const sorted = sortConversationItems(dedup)
+        setConversations(sorted)
+        setConversationCursor(response.next_cursor)
+        if (!append) {
+          const remembered = loadActiveConversationID()
+          const preferred =
+            sorted.find((item) => item.conversation_id === remembered)?.conversation_id ?? sorted[0]?.conversation_id ?? ''
+          if (preferred.length > 0) {
+            await loadConversation(preferred, { silent: true })
+          }
+        }
+      } catch (err) {
+        setError(errorMessage(err, '加载会话列表失败'))
+      } finally {
+        setLoadingList(false)
+      }
+    },
+    [conversations, loadConversation]
+  )
+
+  const handleCreateConversation = useCallback(async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const created = await createAssistantConversation()
+      applyConversation(created)
+    } catch (err) {
+      setError(errorMessage(err, '创建会话失败'))
+    } finally {
+      setLoading(false)
+    }
+  }, [applyConversation])
 
   useEffect(() => {
     let active = true
-    setLoading(true)
-    createAssistantConversation()
-      .then((result) => {
+    setLoadingList(true)
+    listAssistantConversations({ page_size: 20 })
+      .then(async (response) => {
         if (!active) {
           return
         }
-        applyConversation(result)
+        setConversationCursor(response.next_cursor)
+        const sorted = sortConversationItems(response.items)
+        setConversations(sorted)
+        const remembered = loadActiveConversationID()
+        const preferred =
+          sorted.find((item) => item.conversation_id === remembered)?.conversation_id ?? sorted[0]?.conversation_id ?? ''
+        if (preferred.length > 0) {
+          await loadConversation(preferred, { silent: true })
+          return
+        }
+        const created = await createAssistantConversation()
+        if (!active) {
+          return
+        }
+        applyConversation(created)
       })
       .catch((err: unknown) => {
         if (!active) {
           return
         }
-        setError(errorMessage(err, '创建会话失败'))
+        setError(errorMessage(err, '初始化助手会话失败'))
       })
       .finally(() => {
         if (active) {
-          setLoading(false)
+          setLoadingList(false)
         }
       })
 
     return () => {
       active = false
     }
-  }, [applyConversation])
+  }, [applyConversation, loadConversation])
+
+  useEffect(() => {
+    setTaskDetail(null)
+  }, [selectedTurnID, selectedConversationID])
 
   const handleGenerate = useCallback(async () => {
     if (!conversation) {
@@ -206,6 +359,19 @@ export function AssistantPage() {
       setLoading(false)
     }
   }, [applyConversation, conversation, input])
+
+  const handleSelectConversation = useCallback(
+    async (targetConversationID: string) => {
+      if (normalized(targetConversationID) === selectedConversationID) {
+        return
+      }
+      setError('')
+      setSelectedConversationID(targetConversationID)
+      saveActiveConversationID(targetConversationID)
+      await loadConversation(targetConversationID)
+    },
+    [loadConversation, selectedConversationID]
+  )
 
   const handleConfirm = useCallback(async () => {
     if (!conversation || !turn) {
@@ -389,222 +555,329 @@ export function AssistantPage() {
         <SmartToyIcon color='primary' />
         <Typography variant='h5'>AI 助手</Typography>
         <Box sx={{ flex: 1 }} />
+        <Chip
+          color='info'
+          label={`provider=${turn?.plan.model_provider ?? '-'} / model=${turn?.plan.model_name ?? '-'} / rev=${turn?.plan.model_revision ?? '-'}`}
+          size='small'
+        />
         <Button component='a' href='/app/assistant/models' variant='text'>
           模型配置
         </Button>
       </Stack>
       <Typography color='text.secondary' variant='body2'>
-        左侧为 LibreChat 聊天展示层，右侧为本系统事务控制面板（Confirm / Commit 仍走后端 One Door）。
+        三栏工作台：左侧会话列表，中间时间线回放，右侧当前回合操作区（Confirm / Commit 仍走后端 One Door）。
       </Typography>
       {error ? (
         <Alert data-testid='assistant-error-alert' severity='error'>
           {error}
         </Alert>
       ) : null}
-      <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', md: 'row' } }}>
-        <Box sx={{ flex: 7 }}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography gutterBottom variant='subtitle1'>
-                聊天与计划展示层（LibreChat）
-              </Typography>
-              <Box
-                component='iframe'
-                data-testid='assistant-librechat-frame'
-                src={iframeSrc}
-                title='LibreChat'
-                sx={{ width: '100%', height: 580, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
-              />
-            </CardContent>
-          </Card>
-        </Box>
-        <Box sx={{ flex: 5 }}>
-          <Card data-testid='assistant-transaction-panel'>
-            <CardContent>
-              <Stack spacing={2}>
-                <Typography variant='subtitle1'>事务控制面板</Typography>
-                <TextField
-                  data-testid='assistant-input'
-                  label='输入需求'
-                  minRows={4}
-                  multiline
-                  onChange={(event) => setInput(event.target.value)}
-                  value={input}
-                />
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 2,
+          gridTemplateColumns: {
+            xs: '1fr',
+            lg: 'minmax(260px, 1fr) minmax(320px, 1.4fr) minmax(380px, 1.2fr)'
+          }
+        }}
+      >
+        <Card>
+          <CardContent>
+            <Stack spacing={1.5}>
+              <Stack alignItems='center' direction='row' justifyContent='space-between'>
+                <Typography variant='subtitle1'>会话列表</Typography>
+                <Stack direction='row' spacing={1}>
+                  <Button disabled={loadingList || loading} onClick={() => void refreshConversationList()} size='small' variant='outlined'>
+                    刷新
+                  </Button>
+                  <Button disabled={loading} onClick={() => void handleCreateConversation()} size='small' variant='contained'>
+                    新建
+                  </Button>
+                </Stack>
+              </Stack>
+              {conversations.length === 0 ? <Alert severity='info'>暂无会话，点击“新建”开始多轮对话。</Alert> : null}
+              <Stack spacing={1}>
+                {conversations.map((item) => {
+                  const active = item.conversation_id === selectedConversationID
+                  return (
+                    <Button
+                      data-testid={active ? 'assistant-conversation-active' : undefined}
+                      key={item.conversation_id}
+                      onClick={() => void handleSelectConversation(item.conversation_id)}
+                      size='small'
+                      sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                      variant={active ? 'contained' : 'outlined'}
+                    >
+                      <Stack alignItems='flex-start' spacing={0.4} sx={{ width: '100%' }}>
+                        <Typography sx={{ fontSize: 12 }}>{item.conversation_id}</Typography>
+                        <Typography color='text.secondary' sx={{ fontSize: 11 }}>
+                          state={item.state} · {formatTimestamp(item.updated_at)}
+                        </Typography>
+                        <Typography color='text.secondary' noWrap sx={{ fontSize: 11, width: '100%' }}>
+                          {item.last_turn?.user_input ?? '（暂无回合）'}
+                        </Typography>
+                      </Stack>
+                    </Button>
+                  )
+                })}
+              </Stack>
+              {conversationCursor.length > 0 ? (
                 <Button
-                  data-testid='assistant-generate-button'
-                  disabled={!actionState.canRegenerate}
-                  onClick={() => void handleGenerate()}
+                  disabled={loadingList}
+                  onClick={() => void refreshConversationList(conversationCursor, true)}
+                  size='small'
+                  variant='text'
+                >
+                  加载更多
+                </Button>
+              ) : null}
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <Stack spacing={1.5}>
+              <Typography variant='subtitle1'>会话时间线</Typography>
+              {conversation?.turns?.length ? (
+                <Stack spacing={1.2}>
+                  {[...conversation.turns].reverse().map((timelineTurn) => {
+                    const taskState = taskDetail?.turn_id === timelineTurn.turn_id ? taskDetail.status : ''
+                    return (
+                      <Card key={timelineTurn.turn_id} variant='outlined'>
+                        <CardContent>
+                          <Stack spacing={0.6}>
+                            <Stack alignItems='center' direction='row' justifyContent='space-between'>
+                              <Typography variant='caption'>turn={timelineTurn.turn_id}</Typography>
+                              <Stack direction='row' spacing={0.5}>
+                                <Chip label={timelineTurn.state} size='small' />
+                                <Chip label={`risk=${timelineTurn.risk_tier}`} size='small' />
+                                {taskState ? <Chip label={`task=${taskState}`} size='small' /> : null}
+                              </Stack>
+                            </Stack>
+                            <Typography variant='body2'>{timelineTurn.user_input}</Typography>
+                            <Typography color='text.secondary' variant='caption'>
+                              request_id={timelineTurn.request_id} · trace_id={timelineTurn.trace_id}
+                            </Typography>
+                            <Typography color='text.secondary' variant='caption'>
+                              provider={timelineTurn.plan.model_provider ?? '-'} / model={timelineTurn.plan.model_name ?? '-'}
+                            </Typography>
+                            <Typography color='text.secondary' variant='caption'>dry-run: {timelineTurn.dry_run.explain}</Typography>
+                            {timelineTurn.commit_result ? (
+                              <Alert severity='success'>
+                                已提交：org_code={timelineTurn.commit_result.org_code} / parent={timelineTurn.commit_result.parent_org_code}
+                              </Alert>
+                            ) : null}
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </Stack>
+              ) : (
+                <Alert severity='info'>当前会话暂无回合，请在右侧输入并生成。</Alert>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Card data-testid='assistant-transaction-panel'>
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant='subtitle1'>当前回合操作</Typography>
+              <TextField
+                data-testid='assistant-input'
+                label='输入需求'
+                minRows={4}
+                multiline
+                onChange={(event) => setInput(event.target.value)}
+                value={input}
+              />
+              <Button
+                data-testid='assistant-generate-button'
+                disabled={!actionState.canRegenerate}
+                onClick={() => void handleGenerate()}
+                variant='contained'
+              >
+                Regenerate
+              </Button>
+              <Divider />
+              <Typography data-testid='assistant-conversation-id' variant='body2'>
+                conversation_id: {conversation?.conversation_id ?? '-'}
+              </Typography>
+              <Typography data-testid='assistant-turn-id' variant='body2'>
+                turn_id: {turn?.turn_id ?? '-'}
+              </Typography>
+              <Typography data-testid='assistant-request-id' variant='body2'>
+                request_id: {turn?.request_id ?? '-'}
+              </Typography>
+              <Typography data-testid='assistant-trace-id' variant='body2'>
+                trace_id: {turn?.trace_id ?? '-'}
+              </Typography>
+              <Typography variant='caption'>intent_schema_version: {turn?.intent.intent_schema_version ?? '-'}</Typography>
+              <Typography variant='caption'>compiler_contract_version: {turn?.plan.compiler_contract_version ?? '-'}</Typography>
+              <Typography variant='caption'>capability_map_version: {turn?.plan.capability_map_version ?? '-'}</Typography>
+              <Typography variant='caption'>skill_manifest_digest: {turn?.plan.skill_manifest_digest ?? '-'}</Typography>
+              <Typography variant='caption'>context_hash: {turn?.intent.context_hash ?? '-'}</Typography>
+              <Typography variant='caption'>intent_hash: {turn?.intent.intent_hash ?? '-'}</Typography>
+              <Typography variant='caption'>plan_hash: {turn?.dry_run.plan_hash ?? '-'}</Typography>
+              <Stack alignItems='center' direction='row' spacing={1}>
+                <Typography variant='body2'>状态：</Typography>
+                <Chip data-testid='assistant-turn-state' label={turn?.state ?? assistantStatePlaceholder} size='small' />
+                <Chip
+                  color={turn?.risk_tier === 'high' ? 'warning' : 'default'}
+                  data-testid='assistant-risk-tier'
+                  label={`risk=${turn?.risk_tier ?? '-'}`}
+                  size='small'
+                />
+              </Stack>
+              {actionState.showRiskBlocker ? (
+                <Alert data-testid='assistant-risk-blocker' severity='warning'>
+                  高风险计划需要先 Confirm，再允许 Commit。
+                </Alert>
+              ) : null}
+              {actionState.showCandidateBlocker ? (
+                <Alert data-testid='assistant-candidate-blocker' severity='warning'>
+                  存在多个同名候选组织，请先选择候选并 Confirm。
+                </Alert>
+              ) : null}
+              {turn?.plan ? (
+                <Alert data-testid='assistant-plan' severity='info'>
+                  <strong>{turn.plan.title}</strong>
+                  <br />
+                  {turn.plan.summary}
+                  <br />
+                  <Typography component='span' data-testid='assistant-plan-capability' variant='caption'>
+                    capability_key={turn.plan.capability_key}
+                  </Typography>
+                  <br />
+                  <Typography component='span' variant='caption'>
+                    provider={turn.plan.model_provider ?? '-'} / model={turn.plan.model_name ?? '-'}
+                  </Typography>
+                </Alert>
+              ) : null}
+              {turn?.dry_run ? (
+                <Stack data-testid='assistant-dryrun' spacing={1}>
+                  <Typography variant='subtitle2'>Dry Run</Typography>
+                  <Typography data-testid='assistant-dryrun-explain' variant='body2'>
+                    {turn.dry_run.explain}
+                  </Typography>
+                  {turn.dry_run.diff.length > 0 ? (
+                    <Stack component='ul' data-testid='assistant-dryrun-diff' spacing={0.5} sx={{ m: 0, pl: 2 }}>
+                      {turn.dry_run.diff.map((item, index) => (
+                        <Typography component='li' key={`${item.field ?? 'field'}-${index}`} variant='caption'>
+                          {String(item.field ?? '-')} {'->'} {stringifyDiffValue(item.after)}
+                        </Typography>
+                      ))}
+                    </Stack>
+                  ) : null}
+                  {turn.dry_run.validation_errors?.length ? (
+                    <Alert severity='warning'>{turn.dry_run.validation_errors.join(', ')}</Alert>
+                  ) : null}
+                </Stack>
+              ) : null}
+              {turn?.candidates?.length ? (
+                <Stack data-testid='assistant-candidates' spacing={1}>
+                  <Typography variant='subtitle2'>父组织候选</Typography>
+                  <RadioGroup onChange={(_, value) => setCandidateID(value)} value={candidateID}>
+                    {turn.candidates.map((candidate) => (
+                      <FormControlLabel
+                        control={<Radio />}
+                        key={candidate.candidate_id}
+                        label={`${candidate.name} / ${candidate.candidate_code} / ${candidate.path} / ${candidate.as_of}`}
+                        value={candidate.candidate_id}
+                      />
+                    ))}
+                  </RadioGroup>
+                </Stack>
+              ) : null}
+              <Stack direction='row' spacing={1}>
+                <Button
+                  data-testid='assistant-confirm-button'
+                  disabled={!actionState.canConfirm}
+                  onClick={() => void handleConfirm()}
+                  variant='outlined'
+                >
+                  Confirm
+                </Button>
+                <Button
+                  data-testid='assistant-commit-button'
+                  disabled={!actionState.canCommit}
+                  onClick={() => void handleCommit()}
                   variant='contained'
                 >
-                  Regenerate
+                  Commit
                 </Button>
-                <Divider />
-                <Typography data-testid='assistant-conversation-id' variant='body2'>
-                  conversation_id: {conversation?.conversation_id ?? '-'}
-                </Typography>
-                <Typography data-testid='assistant-turn-id' variant='body2'>
-                  turn_id: {turn?.turn_id ?? '-'}
-                </Typography>
-                <Typography data-testid='assistant-request-id' variant='body2'>
-                  request_id: {turn?.request_id ?? '-'}
-                </Typography>
-                <Typography data-testid='assistant-trace-id' variant='body2'>
-                  trace_id: {turn?.trace_id ?? '-'}
-                </Typography>
-                <Typography variant='caption'>intent_schema_version: {turn?.intent.intent_schema_version ?? '-'}</Typography>
-                <Typography variant='caption'>
-                  compiler_contract_version: {turn?.plan.compiler_contract_version ?? '-'}
-                </Typography>
-                <Typography variant='caption'>capability_map_version: {turn?.plan.capability_map_version ?? '-'}</Typography>
-                <Typography variant='caption'>skill_manifest_digest: {turn?.plan.skill_manifest_digest ?? '-'}</Typography>
-                <Typography variant='caption'>context_hash: {turn?.intent.context_hash ?? '-'}</Typography>
-                <Typography variant='caption'>intent_hash: {turn?.intent.intent_hash ?? '-'}</Typography>
-                <Typography variant='caption'>plan_hash: {turn?.dry_run.plan_hash ?? '-'}</Typography>
-                <Stack alignItems='center' direction='row' spacing={1}>
-                  <Typography variant='body2'>状态：</Typography>
-                  <Chip data-testid='assistant-turn-state' label={turn?.state ?? assistantStatePlaceholder} size='small' />
-                  <Chip
-                    color={turn?.risk_tier === 'high' ? 'warning' : 'default'}
-                    data-testid='assistant-risk-tier'
-                    label={`risk=${turn?.risk_tier ?? '-'}`}
-                    size='small'
-                  />
-                </Stack>
-                {actionState.showRiskBlocker ? (
-                  <Alert data-testid='assistant-risk-blocker' severity='warning'>
-                    高风险计划需要先 Confirm，再允许 Commit。
-                  </Alert>
-                ) : null}
-                {actionState.showCandidateBlocker ? (
-                  <Alert data-testid='assistant-candidate-blocker' severity='warning'>
-                    存在多个同名候选组织，请先选择候选并 Confirm。
-                  </Alert>
-                ) : null}
-                {turn?.plan ? (
-                  <Alert data-testid='assistant-plan' severity='info'>
-                    <strong>{turn.plan.title}</strong>
-                    <br />
-                    {turn.plan.summary}
-                    <br />
-                    <Typography component='span' data-testid='assistant-plan-capability' variant='caption'>
-                      capability_key={turn.plan.capability_key}
-                    </Typography>
-                    <br />
-                    <Typography component='span' variant='caption'>
-                      provider={turn.plan.model_provider ?? '-'} / model={turn.plan.model_name ?? '-'}
-                    </Typography>
-                  </Alert>
-                ) : null}
-                {turn?.dry_run ? (
-                  <Stack data-testid='assistant-dryrun' spacing={1}>
-                    <Typography variant='subtitle2'>Dry Run</Typography>
-                    <Typography data-testid='assistant-dryrun-explain' variant='body2'>
-                      {turn.dry_run.explain}
-                    </Typography>
-                    {turn.dry_run.diff.length > 0 ? (
-                      <Stack component='ul' data-testid='assistant-dryrun-diff' spacing={0.5} sx={{ m: 0, pl: 2 }}>
-                        {turn.dry_run.diff.map((item, index) => (
-                          <Typography component='li' key={`${item.field ?? 'field'}-${index}`} variant='caption'>
-                            {String(item.field ?? '-')} {'->'} {stringifyDiffValue(item.after)}
-                          </Typography>
-                        ))}
-                      </Stack>
-                    ) : null}
-                    {turn.dry_run.validation_errors?.length ? (
-                      <Alert severity='warning'>
-                        {turn.dry_run.validation_errors.join(', ')}
-                      </Alert>
-                    ) : null}
-                  </Stack>
-                ) : null}
-                {turn?.candidates?.length ? (
-                  <Stack data-testid='assistant-candidates' spacing={1}>
-                    <Typography variant='subtitle2'>父组织候选</Typography>
-                    <RadioGroup onChange={(_, value) => setCandidateID(value)} value={candidateID}>
-                      {turn.candidates.map((candidate) => (
-                        <FormControlLabel
-                          control={<Radio />}
-                          key={candidate.candidate_id}
-                          label={`${candidate.name} / ${candidate.candidate_code} / ${candidate.path} / ${candidate.as_of}`}
-                          value={candidate.candidate_id}
-                        />
-                      ))}
-                    </RadioGroup>
-                  </Stack>
-                ) : null}
-                <Stack direction='row' spacing={1}>
-                  <Button
-                    data-testid='assistant-confirm-button'
-                    disabled={!actionState.canConfirm}
-                    onClick={() => void handleConfirm()}
-                    variant='outlined'
-                  >
-                    Confirm
-                  </Button>
-                  <Button
-                    data-testid='assistant-commit-button'
-                    disabled={!actionState.canCommit}
-                    onClick={() => void handleCommit()}
-                    variant='contained'
-                  >
-                    Commit
-                  </Button>
-                </Stack>
-                {turn?.commit_result ? (
-                  <Alert data-testid='assistant-commit-result' severity='success'>
-                    已提交：org_code={turn.commit_result.org_code} / parent={turn.commit_result.parent_org_code} /
-                    effective_date={turn.commit_result.effective_date}
-                  </Alert>
-                ) : null}
-                <Divider />
-                <Typography variant='subtitle2'>异步任务（225）</Typography>
-                <Stack direction='row' spacing={1}>
-                  <Button
-                    data-testid='assistant-task-submit-button'
-                    disabled={!turn || loading}
-                    onClick={() => void handleSubmitTask()}
-                    variant='contained'
-                  >
-                    Submit Task
-                  </Button>
-                  <Button
-                    data-testid='assistant-task-cancel-button'
-                    disabled={!taskDetail || taskTerminal || loading}
-                    onClick={() => void handleCancelTask()}
-                    variant='outlined'
-                  >
-                    Cancel Task
-                  </Button>
-                </Stack>
-                <Typography data-testid='assistant-task-id' variant='body2'>
-                  task_id: {taskDetail?.task_id ?? '-'}
-                </Typography>
-                <Typography data-testid='assistant-task-workflow-id' variant='body2'>
-                  workflow_id: {taskDetail?.workflow_id ?? '-'}
-                </Typography>
-                <Stack alignItems='center' direction='row' spacing={1}>
-                  <Typography variant='body2'>task_status：</Typography>
-                  <Chip data-testid='assistant-task-status' label={taskDetail?.status ?? assistantStatePlaceholder} size='small' />
-                  <Chip data-testid='assistant-task-dispatch-status' label={`dispatch=${taskDetail?.dispatch_status ?? '-'}`} size='small' />
-                </Stack>
-                <Typography data-testid='assistant-task-attempt' variant='body2'>
-                  attempt: {taskDetail?.attempt ?? 0} / {taskDetail?.max_attempts ?? 0}
-                </Typography>
-                <Typography data-testid='assistant-task-error-code' variant='body2'>
-                  last_error_code: {taskDetail?.last_error_code ?? '-'}
-                </Typography>
-                <Typography data-testid='assistant-task-request-id' variant='body2'>
-                  request_id: {taskDetail?.request_id ?? '-'}
-                </Typography>
-                <Typography data-testid='assistant-task-trace-id' variant='body2'>
-                  trace_id: {taskDetail?.trace_id ?? '-'}
-                </Typography>
               </Stack>
-            </CardContent>
-          </Card>
-        </Box>
+              {turn?.commit_result ? (
+                <Alert data-testid='assistant-commit-result' severity='success'>
+                  已提交：org_code={turn.commit_result.org_code} / parent={turn.commit_result.parent_org_code} /
+                  effective_date={turn.commit_result.effective_date}
+                </Alert>
+              ) : null}
+              <Divider />
+              <Typography variant='subtitle2'>异步任务（225）</Typography>
+              <Stack direction='row' spacing={1}>
+                <Button
+                  data-testid='assistant-task-submit-button'
+                  disabled={!turn || loading}
+                  onClick={() => void handleSubmitTask()}
+                  variant='contained'
+                >
+                  Submit Task
+                </Button>
+                <Button
+                  data-testid='assistant-task-cancel-button'
+                  disabled={!taskDetail || taskTerminal || loading}
+                  onClick={() => void handleCancelTask()}
+                  variant='outlined'
+                >
+                  Cancel Task
+                </Button>
+              </Stack>
+              <Typography data-testid='assistant-task-id' variant='body2'>
+                task_id: {taskDetail?.task_id ?? '-'}
+              </Typography>
+              <Typography data-testid='assistant-task-workflow-id' variant='body2'>
+                workflow_id: {taskDetail?.workflow_id ?? '-'}
+              </Typography>
+              <Stack alignItems='center' direction='row' spacing={1}>
+                <Typography variant='body2'>task_status：</Typography>
+                <Chip data-testid='assistant-task-status' label={taskDetail?.status ?? assistantStatePlaceholder} size='small' />
+                <Chip data-testid='assistant-task-dispatch-status' label={`dispatch=${taskDetail?.dispatch_status ?? '-'}`} size='small' />
+              </Stack>
+              <Typography data-testid='assistant-task-attempt' variant='body2'>
+                attempt: {taskDetail?.attempt ?? 0} / {taskDetail?.max_attempts ?? 0}
+              </Typography>
+              <Typography data-testid='assistant-task-error-code' variant='body2'>
+                last_error_code: {taskDetail?.last_error_code ?? '-'}
+              </Typography>
+              <Typography data-testid='assistant-task-request-id' variant='body2'>
+                request_id: {taskDetail?.request_id ?? '-'}
+              </Typography>
+              <Typography data-testid='assistant-task-trace-id' variant='body2'>
+                trace_id: {taskDetail?.trace_id ?? '-'}
+              </Typography>
+            </Stack>
+          </CardContent>
+        </Card>
       </Box>
+
+      <Card>
+        <CardContent>
+          <Typography gutterBottom variant='subtitle1'>
+            聊天壳层（LibreChat）
+          </Typography>
+          <Box
+            component='iframe'
+            data-testid='assistant-librechat-frame'
+            src={iframeSrc}
+            title='LibreChat'
+            sx={{ width: '100%', height: 380, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
+          />
+        </CardContent>
+      </Card>
     </Stack>
   )
 }

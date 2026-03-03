@@ -8,6 +8,7 @@ const assistantAPIMocks = vi.hoisted(() => ({
   createAssistantConversation: vi.fn(),
   createAssistantTurn: vi.fn(),
   getAssistantConversation: vi.fn(),
+  listAssistantConversations: vi.fn(),
   getAssistantTask: vi.fn(),
   submitAssistantTask: vi.fn()
 }))
@@ -81,6 +82,7 @@ function makeConversation(overrides: Record<string, unknown> = {}) {
     tenant_id: 'tenant_1',
     actor_id: 'actor_1',
     actor_role: 'tenant-admin',
+    state: 'validated',
     created_at: '2026-03-02T00:00:00Z',
     updated_at: '2026-03-02T00:00:00Z',
     turns: [makeTurn()],
@@ -102,6 +104,22 @@ describe('AssistantPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    assistantAPIMocks.listAssistantConversations.mockResolvedValue({
+      items: [
+        {
+          conversation_id: 'conv_1',
+          state: 'validated',
+          updated_at: '2026-03-02T00:00:00Z',
+          last_turn: {
+            turn_id: 'turn_1',
+            user_input: 'input',
+            state: 'validated',
+            risk_tier: 'high'
+          }
+        }
+      ],
+      next_cursor: ''
+    })
     assistantAPIMocks.createAssistantConversation.mockResolvedValue(makeConversation())
     assistantAPIMocks.createAssistantTurn.mockResolvedValue(makeConversation())
     assistantAPIMocks.confirmAssistantTurn.mockResolvedValue(makeConversation())
@@ -216,22 +234,23 @@ describe('AssistantPage', () => {
   })
 
   it('refreshes conversation when commit returns conversation_state_invalid', async () => {
-    assistantAPIMocks.createAssistantConversation.mockResolvedValue(
-      makeConversation({
-        turns: [makeTurn({ state: 'confirmed', resolved_candidate_id: 'FLOWER-A', ambiguity_count: 1 })]
-      })
-    )
+    assistantAPIMocks.getAssistantConversation
+      .mockResolvedValueOnce(
+        makeConversation({
+          turns: [makeTurn({ state: 'confirmed', resolved_candidate_id: 'FLOWER-A', ambiguity_count: 1 })]
+        })
+      )
+      .mockResolvedValueOnce(
+        makeConversation({
+          turns: [makeTurn({ state: 'validated', resolved_candidate_id: '' })]
+        })
+      )
     assistantAPIMocks.commitAssistantTurn.mockRejectedValue({
       message: '当前会话状态不允许执行该操作。',
       details: {
         code: 'conversation_state_invalid'
       }
     })
-    assistantAPIMocks.getAssistantConversation.mockResolvedValue(
-      makeConversation({
-        turns: [makeTurn({ state: 'validated', resolved_candidate_id: '' })]
-      })
-    )
 
     render(<AssistantPage />)
 
@@ -241,6 +260,23 @@ describe('AssistantPage', () => {
 
     await waitFor(() => expect(assistantAPIMocks.getAssistantConversation).toHaveBeenCalledWith('conv_1'))
     expect(await screen.findByTestId('assistant-error-alert')).toHaveTextContent('当前会话状态不允许执行该操作。')
+  })
+
+  it('creates conversation when list is empty', async () => {
+    assistantAPIMocks.listAssistantConversations.mockResolvedValue({
+      items: [],
+      next_cursor: ''
+    })
+    assistantAPIMocks.createAssistantConversation.mockResolvedValue(
+      makeConversation({
+        turns: [makeTurn({ state: 'confirmed', resolved_candidate_id: 'FLOWER-A', ambiguity_count: 1 })]
+      })
+    )
+
+    render(<AssistantPage />)
+
+    await waitFor(() => expect(assistantAPIMocks.createAssistantConversation).toHaveBeenCalledTimes(1))
+    expect(await screen.findByTestId('assistant-conversation-id')).toHaveTextContent('conv_1')
   })
 
   it('submits async task and renders task fields', async () => {
