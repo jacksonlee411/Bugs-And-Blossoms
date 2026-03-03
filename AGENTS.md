@@ -361,6 +361,7 @@ modules/{module}/
 - DEV-PLAN-233：LibreChat 模型配置单主源收口实施计划：`docs/dev-plans/233-librechat-single-source-config-convergence-plan.md`
 - DEV-PLAN-234：LibreChat 开源能力复用落地实施计划（MCP/Actions/Allowlist）：`docs/dev-plans/234-librechat-open-source-capabilities-reuse-plan.md`
 - DEV-PLAN-235：LibreChat 身份/会话/租户边界硬化实施计划：`docs/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
+- DEV-PLAN-235 执行日志：`docs/dev-records/dev-plan-235-execution-log.md`
 - DEV-PLAN-236：LibreChat 旧入口退役与单主源封板实施计划：`docs/dev-plans/236-librechat-legacy-endpoint-retirement-and-single-source-closure-plan.md`
 - DEV-PLAN-237：LibreChat 升级与回归闭环实施计划：`docs/dev-plans/237-librechat-upgrade-and-regression-closure-plan.md`
 - DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
