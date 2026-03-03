@@ -8,6 +8,73 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type IamAssistantConversation struct {
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	ConversationID string             `json:"conversation_id"`
+	ActorID        string             `json:"actor_id"`
+	ActorRole      string             `json:"actor_role"`
+	State          string             `json:"state"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IamAssistantIdempotency struct {
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	ConversationID string             `json:"conversation_id"`
+	TurnID         string             `json:"turn_id"`
+	TurnAction     string             `json:"turn_action"`
+	RequestID      string             `json:"request_id"`
+	RequestHash    string             `json:"request_hash"`
+	Status         string             `json:"status"`
+	HttpStatus     *int32             `json:"http_status"`
+	ErrorCode      *string            `json:"error_code"`
+	ResponseBody   []byte             `json:"response_body"`
+	ResponseHash   *string            `json:"response_hash"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	FinalizedAt    pgtype.Timestamptz `json:"finalized_at"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+}
+
+type IamAssistantStateTransition struct {
+	ID             int64              `json:"id"`
+	TenantUuid     pgtype.UUID        `json:"tenant_uuid"`
+	ConversationID string             `json:"conversation_id"`
+	TurnID         *string            `json:"turn_id"`
+	TurnAction     *string            `json:"turn_action"`
+	RequestID      string             `json:"request_id"`
+	TraceID        string             `json:"trace_id"`
+	FromState      string             `json:"from_state"`
+	ToState        string             `json:"to_state"`
+	ReasonCode     *string            `json:"reason_code"`
+	ActorID        string             `json:"actor_id"`
+	ChangedAt      pgtype.Timestamptz `json:"changed_at"`
+}
+
+type IamAssistantTurn struct {
+	TenantUuid          pgtype.UUID        `json:"tenant_uuid"`
+	ConversationID      string             `json:"conversation_id"`
+	TurnID              string             `json:"turn_id"`
+	UserInput           string             `json:"user_input"`
+	State               string             `json:"state"`
+	RiskTier            string             `json:"risk_tier"`
+	RequestID           string             `json:"request_id"`
+	TraceID             string             `json:"trace_id"`
+	PolicyVersion       string             `json:"policy_version"`
+	CompositionVersion  string             `json:"composition_version"`
+	MappingVersion      string             `json:"mapping_version"`
+	IntentJson          []byte             `json:"intent_json"`
+	PlanJson            []byte             `json:"plan_json"`
+	CandidatesJson      []byte             `json:"candidates_json"`
+	ResolvedCandidateID *string            `json:"resolved_candidate_id"`
+	AmbiguityCount      int32              `json:"ambiguity_count"`
+	Confidence          float64            `json:"confidence"`
+	ResolutionSource    *string            `json:"resolution_source"`
+	DryRunJson          []byte             `json:"dry_run_json"`
+	CommitResultJson    []byte             `json:"commit_result_json"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
 type IamDict struct {
 	TenantUuid pgtype.UUID        `json:"tenant_uuid"`
 	DictCode   string             `json:"dict_code"`
