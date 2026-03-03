@@ -223,18 +223,18 @@ validate_allowlist_expiry
 if [[ ! -f "Makefile" ]]; then
   add_violation "R3" "Makefile" "assistant_config_ssot_drift_detected" "Makefile is missing"
 else
-  rg -q '^assistant-config-single-source:' Makefile ||
+  grep -q '^assistant-config-single-source:' Makefile ||
     add_violation "R3" "Makefile" "assistant_config_ssot_drift_detected" "missing assistant-config-single-source target"
-  rg -q 'check-assistant-config-single-source\.sh' Makefile ||
+  grep -q 'check-assistant-config-single-source\.sh' Makefile ||
     add_violation "R3" "Makefile" "assistant_config_ssot_drift_detected" "missing check-assistant-config-single-source.sh wiring"
-  rg -q '\$\(MAKE\) check assistant-config-single-source' Makefile ||
+  grep -q '\$(MAKE) check assistant-config-single-source' Makefile ||
     add_violation "R3" "Makefile" "assistant_config_ssot_drift_detected" "missing preflight hook for assistant-config-single-source"
 fi
 
 if [[ ! -f ".github/workflows/quality-gates.yml" ]]; then
   add_violation "R3" ".github/workflows/quality-gates.yml" "assistant_config_ssot_drift_detected" "quality-gates workflow is missing"
 else
-  rg -q 'make check assistant-config-single-source' .github/workflows/quality-gates.yml ||
+  grep -q 'make check assistant-config-single-source' .github/workflows/quality-gates.yml ||
     add_violation "R3" ".github/workflows/quality-gates.yml" "assistant_config_ssot_drift_detected" "missing CI step for assistant-config-single-source gate"
 fi
 
@@ -243,7 +243,7 @@ for doc in \
   docs/dev-plans/012-ci-quality-gates.md \
   docs/dev-plans/230-librechat-project-level-integration-plan.md \
   docs/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md; do
-  if [[ -f "$doc" ]] && rg -q 'assistant-config-single-source' "$doc"; then
+  if [[ -f "$doc" ]] && grep -q 'assistant-config-single-source' "$doc"; then
     docs_with_gate=$((docs_with_gate + 1))
   fi
 done
@@ -268,7 +268,7 @@ for file in "${changed_files[@]}"; do
   added_lines="$(printf '%s\n' "$patch" | grep -E '^\+[^+]' || true)"
   [[ -z "$added_lines" ]] && continue
 
-  r1_hits="$(printf '%s\n' "$added_lines" | rg -n -e '/internal/assistant/model-providers:apply|handleAssistantModelProvidersApply|applyAssistantModelProviders\(' || true)"
+  r1_hits="$(printf '%s\n' "$added_lines" | grep -nE '/internal/assistant/model-providers:apply|handleAssistantModelProvidersApply|applyAssistantModelProviders\(' || true)"
   if [[ -n "$r1_hits" ]]; then
     decision="$(allowlist_decision "R1" "$file")"
     case "$decision" in
@@ -287,7 +287,7 @@ for file in "${changed_files[@]}"; do
   fi
 
   if is_config_layer_file "$file"; then
-    r2_hits="$(printf '%s\n' "$added_lines" | rg -n -e '\b(intent_hash|plan_hash|context_hash|contract_snapshot)\b' || true)"
+    r2_hits="$(printf '%s\n' "$added_lines" | grep -nE 'intent_hash|plan_hash|context_hash|contract_snapshot' || true)"
     if [[ -n "$r2_hits" ]]; then
       decision="$(allowlist_decision "R2" "$file")"
       case "$decision" in
