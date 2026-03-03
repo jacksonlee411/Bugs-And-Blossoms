@@ -1134,8 +1134,8 @@ func TestHandleOrgUnitFieldOptionsAPI(t *testing.T) {
 		defaultSetIDStrategyRegistryStore = setIDStrategyRegistryStoreStub{
 			resolveFieldDecisionFn: func(_ context.Context, _ string, _ string, fieldKey string, _ string, _ string) (setIDFieldDecision, error) {
 				return setIDFieldDecision{
-					FieldKey:      fieldKey,
-					Maintainable:  true,
+					FieldKey:       fieldKey,
+					Maintainable:   true,
 					DefaultRuleRef: "   ",
 				}, nil
 			},
