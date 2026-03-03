@@ -11,6 +11,7 @@
 - Go 代码：`go fmt ./... && go vet ./... && make check lint && make test`
 - 新建 Go 模块后（防止 `go mod init` 默认回退）：执行 `go get go@1.26.0`（或 `go mod edit -go=1.26.0`）
 - 禁止 legacy（单链路原则）：`make check no-legacy`（或直接跑 `make preflight`）
+- Assistant 配置单主源门禁（阻断第二写入口/契约回写/SSOT 漂移）：`make check assistant-config-single-source`
 - 禁止新增 scope/package 漂移：`make check no-scope-package`
 - 颗粒度层次门禁（阻断 org_level/scope_type/scope_key 回流）：`make check granularity`
 - capability_key 防退化（禁上下文编码/禁拼接）：`make check capability-key`
@@ -53,6 +54,7 @@
 | E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012` |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
+| Assistant 模型配置主源相关改动（配置写入口/迁移 stopline/门禁接线） | `make check assistant-config-single-source` | 单主源门禁（见 `DEV-PLAN-231`） |
 | 新增 scope/package 语义引用（`scope_code/scope_package/scope_subscription/package_id`） | `make check no-scope-package` | 增量反漂移门禁（承接 `DEV-PLAN-102C6`） |
 | 颗粒度层次/旧 scope 相关新增（`org_level/scope_type/scope_key`） | `make check granularity` | 颗粒度治理门禁（承接 `DEV-PLAN-180`） |
 | capability_key 命名与生成方式 | `make check capability-key` | 禁止上下文编码与运行时拼接（承接 `DEV-PLAN-102C6/102D`） |
@@ -352,6 +354,14 @@ modules/{module}/
 - DEV-PLAN-224D：Assistant `correct_orgunit` 意图全字段覆盖实施计划：`docs/dev-plans/224d-assistant-correct-orgunit-full-field-coverage-plan.md`
 - DEV-PLAN-225：Assistant Tasks API 与 Temporal（P2）实施计划：`docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
 - DEV-PLAN-230：LibreChat 项目级集成实施方案（源码纳管 + 运行基线 + 安全边界）：`docs/dev-plans/230-librechat-project-level-integration-plan.md`
+- DEV-PLAN-231：LibreChat 集成前置契约与门禁补齐实施计划：`docs/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md`
+- DEV-PLAN-231 执行日志：`docs/dev-records/dev-plan-231-execution-log.md`
+- DEV-PLAN-232：LibreChat 官方运行基线落地实施计划：`docs/dev-plans/232-librechat-official-runtime-baseline-plan.md`
+- DEV-PLAN-233：LibreChat 模型配置单主源收口实施计划：`docs/dev-plans/233-librechat-single-source-config-convergence-plan.md`
+- DEV-PLAN-234：LibreChat 开源能力复用落地实施计划（MCP/Actions/Allowlist）：`docs/dev-plans/234-librechat-open-source-capabilities-reuse-plan.md`
+- DEV-PLAN-235：LibreChat 身份/会话/租户边界硬化实施计划：`docs/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
+- DEV-PLAN-236：LibreChat 旧入口退役与单主源封板实施计划：`docs/dev-plans/236-librechat-legacy-endpoint-retirement-and-single-source-closure-plan.md`
+- DEV-PLAN-237：LibreChat 升级与回归闭环实施计划：`docs/dev-plans/237-librechat-upgrade-and-regression-closure-plan.md`
 - DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`

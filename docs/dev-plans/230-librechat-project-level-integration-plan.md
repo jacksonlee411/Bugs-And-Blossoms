@@ -1,6 +1,6 @@
 # DEV-PLAN-230：LibreChat 项目级集成实施方案（复用优先 + 边界自建）
 
-**状态**: 草拟中（2026-03-03 10:30 UTC）
+**状态**: 修订中（2026-03-03 12:40 UTC）
 
 ## 1. 背景与问题
 - 关联计划：
@@ -9,68 +9,67 @@
   - `docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
   - `docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
   - `docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
-- 当前实现以“UI 壳层接入”为主：
-  1. [ ] `/assistant-ui/*` 反向代理 + iframe 已存在，但 LibreChat 仍是外部上游依赖。
-  2. [ ] 仓库未形成官方版本/镜像/配置的纳管闭环，环境漂移导致“页面可见但不可用”。
-  3. [ ] 模型与 Provider 治理主要在本仓自建，未充分复用 LibreChat 原生 AI 配置能力。
-- 批判结论（本计划修订输入）：
-  1. [ ] 若继续在模型配置、会话壳层、运行基线重复自建，属于“重复造轮子”。
-  2. [ ] 项目级集成应优先复用成熟开源能力，仅在业务边界与合规约束处自建。
+- 当前缺口（评审收敛后）：
+  1. [ ] 模型配置主源切到 LibreChat 后，224/225 确定性契约映射未冻结，存在异步任务契约漂移风险。
+  2. [ ] “官方运行基线复用”粒度偏粗，依赖栈归属/生命周期未固化，PR-230-01 验收会失真。
+  3. [ ] `/assistant-ui/*` 会话边界未与现有路由现实完全对齐，存在会话绕过与双身份体系风险。
+  4. [ ] 对 MCP/Actions/Domain Allowlist/Agents 的复用边界虽有方向，但未形成“可执行切片 + 门禁 + 验收”闭环。
+  5. [ ] 旧接口 `model-providers:apply` 缺少强 stopline 与 CI 阻断，双主源共存风险仍在。
 
-## 2. 目标与非目标
+## 2. 目标与成功判定
 ### 2.1 核心目标
-1. [ ] **复用优先（Upstream-first）**：默认采用 LibreChat 官方成熟能力；任何自建必须给出“不可复用”证据（合规/边界/性能）。
-2. [ ] 将 LibreChat 以项目级依赖纳入仓库治理：版本冻结、来源可追溯、可复现运行。
-3. [ ] 提供仓库内可启动的 LibreChat 运行基线（本地/CI 一致），不再依赖手工外置上游。
-4. [ ] 将“模型/Provider 配置”收敛为 LibreChat 原生配置为主源；本仓仅保留适配层与边界校验。
-5. [ ] 保持 One Door 与授权边界不变：LibreChat 不获得业务写入口。
-6. [ ] 固化升级路径：版本升级、回归检查、回滚策略可执行且有门禁证据。
-7. [ ] 在 `/app/assistant` 形成壳可用性可观测闭环（健康、错误、来源版本可见）。
+1. [ ] 复用优先：默认采用 LibreChat 官方成熟能力；自建必须给出不可复用证据。
+2. [ ] 项目级纳管：LibreChat 版本、来源、运行基线可追溯、可复现。
+3. [ ] 单主源配置：模型/Provider 由 LibreChat 主源驱动，本仓仅做只读适配与边界校验。
+4. [ ] 边界不变：One Door、RLS/Casbin、AuthN/AuthZ/Tenant 注入保持在本仓。
+5. [ ] 契约确定：224/225 版本快照与 hash 在异步链路可继承、可校验、fail-closed。
+6. [ ] 退役可执行：旧入口按日期降级/停用/删除，避免双主源长期共存。
+7. [ ] 升级可持续：升级/回滚流程与证据模板可执行。
 
 ### 2.2 非目标（Out of Scope）
 1. [ ] 不将 `confirm/commit/re-auth/One Door` 下放给 LibreChat。
-2. [ ] 不替换现有 `internal/assistant/*` 业务契约与状态机。
-3. [ ] 不在本计划扩展多业务域 Agent 能力（仍聚焦 assistant 集成边界）。
-4. [ ] 不引入 legacy 双链路（禁止“旧壳/新壳并行长期运行”）。
+2. [ ] 不替换 `internal/assistant/*` 业务契约与状态机。
+3. [ ] 不在本阶段引入 Agents 自动执行业务写动作。
+4. [ ] 不引入 legacy 双链路。
 
-## 3. Build vs Buy 评审门槛（新增）
+### 2.3 目标到验收映射（100% 达成口径）
+| 目标 | 完成定义（DoD） | 阻断门禁/证据 |
+| --- | --- | --- |
+| 复用优先 | 复用/自建矩阵全量覆盖，且每项有系统所有权、主数据源、退出条件 | `docs/dev-records/` 评审记录 + `make check doc` |
+| 项目级纳管 | 本地/CI 可启动仓库内 LibreChat，依赖栈归属与生命周期清晰 | e2e 启动证据 + 版本元数据留档 |
+| 单主源配置 | 仅 LibreChat 主源可写；本仓无第二写入口 | `make check assistant-config-single-source`（新增） |
+| 边界不变 | `/assistant-ui/*` 无会话绕过；无业务写旁路 | `make check routing` + assistant-ui e2e |
+| 契约确定 | 224/225 快照 + model_route_snapshot 联合校验通过 | `make e2e` + 契约快照比对报告 |
+| 退役可执行 | `model-providers:apply` 按 stopline 410/删除 | CI gate + 路由/handler diff 证据 |
+| 升级可持续 | 升级回归脚本固定，失败阻断发布 | 回归脚本输出 + 升级记录 |
+
+## 3. Build vs Buy 与能力边界
 ### 3.1 反造轮子准则
-1. [ ] 先评估“官方能力直用”→“薄适配”→“自建替代”，按顺序决策。
-2. [ ] 触发自建前必须满足以下任一条件并留档：
-   - [ ] 官方能力无法满足租户隔离/授权边界（RLS + Casbin + One Door）。
-   - [ ] 官方能力无法满足仓库级契约（幂等、审计快照、路由门禁）。
-   - [ ] 官方能力在关键指标上不达标且无法通过配置/插件解决。
-3. [ ] 自建项必须定义“退出策略”：若上游后续提供等价能力，优先回归上游实现。
+1. [ ] 先“官方直用”->“薄适配”->“自建替代”。
+2. [ ] 自建触发条件仅限：边界合规不满足、仓库契约不满足、关键指标不达标且无法插件化。
+3. [ ] 自建项必须具备退出策略（上游具备等价能力后回归上游）。
 
-### 3.2 能力分界矩阵（Must Reuse / Must Build）
-- **应优先复用（Must Reuse）**
-  1. [ ] LibreChat 聊天 UI 壳层（会话、消息渲染、输入交互、流式显示）。
-  2. [ ] LibreChat 官方模型/Provider 配置机制（作为主配置源）。
-  3. [ ] LibreChat 官方运行与发布基线（镜像、环境变量约定、健康检查范式）。
-  4. [ ] LibreChat 上游升级节奏与版本元数据（tag/commit/digest）。
-- **必须自建（Must Build）**
-  1. [ ] One Door 业务提交裁决链（confirm/commit/re-auth）。
-  2. [ ] 租户隔离与授权边界（RLS/Casbin/route-capability-map）。
-  3. [ ] `internal/assistant/*` 业务契约（幂等、审计快照、任务编排与补偿）。
-  4. [ ] 项目特有的合规审计与错误码契约。
-- **可薄适配（Adapter-first）**
-  1. [ ] 将现有 `assistantModelGateway` 收敛为适配层，避免继续扩张为“第二套配置中心”。
-  2. [ ] 将现有模型配置 UI 收敛为“查看/校验/迁移”入口，不再演进为独立主配置面。
+### 3.2 能力分界矩阵（可执行）
+| 能力域 | 决策 | 系统所有权 | 主数据源 | 迁移退出条件（含停用日期/门禁） |
+| --- | --- | --- | --- | --- |
+| 聊天 UI 壳层（会话/消息/输入/流式） | Must Reuse | LibreChat | LibreChat Runtime | 仅保留 iframe + proxy；若新增并行 UI，`make check no-legacy` 阻断。 |
+| 模型/Provider 配置 | Must Reuse + Adapter-first | LibreChat（配置）+ 本仓（校验） | `librechat.yaml`/`.env` | `model-providers:apply`：2026-03-20 降级迁移入口；2026-04-10 CI/Prod 返回 410；2026-04-24 删除代码与路由。 |
+| 官方运行基线（镜像/compose/env） | Must Reuse | LibreChat Upstream + 本仓部署封装 | Upstream tag+digest+compose | 基线必须覆盖 `api/mongodb/meilisearch/rag_api/vectordb` 生命周期；裁剪需证据与审批。 |
+| 确定性契约产物（version/hash/snapshot） | Must Build | 本仓 `internal/assistant/*` | 224/225 契约快照 | 永不并入 LibreChat 配置层；来源变更必须先更新契约文档并过 e2e。 |
+| 身份与会话边界（AuthN/AuthZ/Tenant） | Must Build | 本仓网关与中间件 | Kratos Session + Casbin + Tenant Resolver | `/assistant-ui/*` 必须纳入会话校验；未登录 302/401；旁路写阻断。 |
+| One Door 提交裁决链 | Must Build | 本仓 | 本仓业务库与审计链 | 永不下放；出现直写旁路即阻断合并。 |
 
-## 4. 架构与关键决策
-### 4.1 决策 1：集成形态（修订）
-- 方案 A：继续“外部上游 URL + 本仓自建配置中心”模式。  
-  缺点：不可复现，且继续重复造轮子。
-- 方案 B（选定）：**官方能力优先 + 仓库级纳管**（官方镜像/配置契约 + 本仓边界适配）。  
-  优点：版本可控、环境一致、减少重复实现、边界可验证。
+### 3.3 开源能力显式取舍表（含落地切片）
+| LibreChat 能力 | 判定 | 本阶段动作 | 验收 |
+| --- | --- | --- | --- |
+| MCP Servers（`mcpServers`） | 复用 | 接入官方注册/调用；本仓仅做租户与能力白名单校验 | MCP 用例通过 + 审计记录可见 |
+| MCP 远程域名限制（`mcpSettings.allowedDomains`） | 复用 | 统一使用官方 allowlist；本仓保留出口策略 | SSRF 负测通过 |
+| Actions（`actions.allowedDomains`） | 复用 | 复用官方 Actions，不再自建第二配置中心 | Actions 端到端通过 |
+| Domain Allowlist | 复用 | 以 LibreChat 配置为主源，本仓只校验与审计 | 非白名单域阻断通过 |
+| Agents Builder / 自动执行 | 暂不复用（本阶段） | 禁止可写业务自动执行；保留后续评审入口 | One Door 边界测试通过 |
 
-### 4.2 目录与归属（草案）
-1. [ ] `deploy/librechat/`：官方镜像编排、环境模板、健康检查脚本。
-2. [ ] `scripts/librechat/`：版本同步、差异审计、升级检查脚本。
-3. [ ] `docs/dev-records/`：升级回归证据、Build-vs-Buy 决策记录。
-4. [ ] 可选 `third_party/librechat/`：仅在“必须源码纳管”时启用，默认优先官方镜像而非 fork 改造。
-
-### 4.3 运行拓扑（不变）
+## 4. 关键架构与契约映射
+### 4.1 运行拓扑（保持）
 ```mermaid
 graph TD
     A[/app/assistant/] --> B[iframe /assistant-ui/*]
@@ -80,63 +79,101 @@ graph TD
     E --> F[Assistant service / One Door chain]
 ```
 
-### 4.4 配置与启动基线（修订）
-1. [ ] 增加 LibreChat 官方配置模板（开发/CI），补齐必填变量说明。
-2. [ ] `LIBRECHAT_UPSTREAM` 默认指向仓库内 LibreChat 服务，非默认外部地址。
-3. [ ] 启动前执行配置校验（缺变量/非法 URL/危险配置直接 fail-fast）。
-4. [ ] `/assistant-ui/*` 不可用时返回稳定错误码与可观测日志，不允许静默失败。
-5. [ ] 模型/Provider 配置读取路径改为“LibreChat 主源 + 本仓边界校验”，禁止双主源漂移。
+### 4.2 配置主源与 224/225 确定性映射（冻结）
+1. [ ] `LibreChat provider/model 配置` 仅影响“模型路由输入”，不直接生成 224/225 产物。
+2. [ ] 任务创建时必须同时固化：
+   - [ ] `model_route_snapshot`（canonical JSON）
+   - [ ] `model_route_snapshot_hash`
+   - [ ] `contract_snapshot`（224/225 version/hash/snapshot）
+3. [ ] workflow 执行前校验：`model_route_snapshot_hash + contract_snapshot` 任一不一致即 fail-closed。
+4. [ ] 禁止从 LibreChat 配置层反写 `intent_hash/plan_hash` 等确定性产物。
+5. [ ] 与 225 收口：新增 `DEV-PLAN-225A`（或等效修订）补齐任务存储字段与 replay 校验语义。
 
-### 4.5 安全边界与路由治理（不变）
-1. [ ] 保持“LibreChat 仅可通过 `/internal/assistant/*` 编排接口交互”不变。
-2. [ ] 阻断从 `/assistant-ui/*` 触达业务写路由（持续保留并强化 E2E 断言）。
-3. [ ] 固化 postMessage 三重校验（origin/schema/nonce-channel）并确保升级后不退化。
-4. [ ] 路由 allowlist、capability-route-map、authz requirement 同步校验，防漂移。
+### 4.3 身份与会话边界（冻结）
+1. [ ] 认证：本仓 Kratos Session。
+2. [ ] 授权：本仓 Casbin + capability-route-map。
+3. [ ] 租户注入：本仓 `withTenantAndSession`。
+4. [ ] `/assistant-ui/*` 必须执行会话校验，不得因“非 `/app/**` UI 路径”跳过。
 
-### 4.6 升级与回滚策略（补充）
-1. [ ] 版本冻结：记录上游版本标识（tag + commit/digest）与引入时间。
-2. [ ] 升级流程：`升级候选评估（复用优先） -> 集成验证 -> 自动化回归 -> 证据归档 -> 发布`。
-3. [ ] 回滚原则：仅允许“版本回滚”，不允许引入临时 legacy 分支规避边界约束。
-4. [ ] 每次升级输出“复用率变化”记录（新增自建项必须给出豁免理由）。
+### 4.4 旧接口退役 stopline（冻结）
+1. [ ] 阶段 A（截止 2026-03-20）：`POST /internal/assistant/model-providers:apply` 仅作为迁移入口，并返回 `Deprecation`。
+2. [ ] 阶段 B（截止 2026-04-10）：CI/Prod 默认禁用，返回 `410 Gone + assistant_model_provider_apply_deprecated`。
+3. [ ] 阶段 C（截止 2026-04-24）：删除路由、handler、文档与前端调用残留。
+4. [ ] 同步收口相关接口职责：`GET /model-providers`、`GET /models`、`POST ...:validate` 仅保留只读/校验语义，禁止成为第二写入口。
 
-## 5. 实施切片（修订顺序）
-### PR-230-01：最小复用落地（官方能力先跑通）
-1. [ ] 引入官方镜像 + 官方环境模板 + 本地/CI 编排，形成可启动基线。
-2. [ ] 服务器默认上游切换为仓库内 LibreChat 服务。
-3. [ ] 在 `/app/assistant` 明确壳层不可用提示与诊断信息。
+## 5. 实施切片（100% 闭环顺序）
+### PR-230-00：前置契约与门禁补齐（新增）
+1. [ ] 新增/修订 `DEV-PLAN-225A`：补 `model_route_snapshot(_hash)` 存储与执行前校验。
+2. [ ] 新增 `make check assistant-config-single-source` 设计与脚本契约。
+3. [ ] 更新 `docs/dev-plans/012-ci-quality-gates.md` 与 CI，纳入新 gate。
 
-### PR-230-02：配置主源收敛（停止重复造轮子）
-1. [ ] 将模型/Provider 配置主源收敛到 LibreChat 原生配置。
-2. [ ] 将现有 `assistantModelGateway` 改为适配与边界校验层（不再扩张配置能力）。
-3. [ ] 补齐配置迁移与一致性校验脚本，避免双主源冲突。
+### PR-230-01：官方运行基线落地
+1. [ ] 引入官方镜像与环境模板，默认上游切到仓库内 LibreChat。
+2. [ ] 固化依赖栈 `api/mongodb/meilisearch/rag_api/vectordb` 的归属、版本 pin、生命周期。
+3. [ ] `/app/assistant` 展示不可用诊断（错误码 + 版本标识）。
 
-### PR-230-03：边界硬化与门禁
-1. [ ] 强化 `/assistant-ui/*` 代理边界（路径、方法、头透传最小化）。
-2. [ ] 增补边界测试：`assistant-ui` 不得旁路业务写路由。
-3. [ ] 路由与授权门禁对齐（`routing/capability/authz`）。
+### PR-230-02：单主源配置收口
+1. [ ] 模型/Provider 主写源收敛到 LibreChat。
+2. [ ] `assistantModelGateway` 改为只读适配 + 规范化 + 边界校验。
+3. [ ] 增加配置迁移与一致性校验脚本（短期只读比对，长期单主源）。
 
-### PR-230-04：可观测与升级回归
-1. [ ] 展示 LibreChat 版本标识、健康态、错误码映射。
-2. [ ] 固化升级回归脚本并纳入 `make e2e` 或等效门禁。
-3. [ ] 输出 `docs/dev-records/` 证据模板并完成首轮留档。
+### PR-230-03：开源能力复用落地（MCP/Actions/Allowlist）
+1. [ ] 接入并验证 MCP Servers / mcp allowedDomains。
+2. [ ] 接入并验证 Actions / actions allowedDomains。
+3. [ ] 明确 Agents 暂不复用的边界与触发复评条件。
 
-## 6. 测试与验收标准（修订）
-1. [ ] 可用性：未配置外部上游时，仓库内编排可直接启动并访问 LibreChat 壳层。
-2. [ ] 复用性：模型/Provider 配置以 LibreChat 原生主源生效，本仓无第二主配置源。
-3. [ ] 边界：`/assistant-ui/*` 无法触发业务写旁路（保留并升级 `tp220-e2e-007`）。
-4. [ ] 兼容：postMessage 三重校验用例全部通过（222 基线不退化）。
-5. [ ] 稳定：`make check routing`、`make check capability-route-map`、`make check error-message` 通过。
-6. [ ] 文档：`make check doc` 通过，且 AGENTS Doc Map 可发现本计划。
+### PR-230-04：身份边界硬化
+1. [ ] 修复 `/assistant-ui/*` 会话校验绕过。
+2. [ ] 强化 proxy 最小透传与路径/方法约束。
+3. [ ] 增补 e2e：未登录访问、跨租户访问、业务写旁路三类负测。
 
-## 7. 风险与缓解
-1. [ ] 风险：对官方配置机制理解不足，迁移期出现错配。  
-   缓解：迁移脚本 + 双向一致性校验（短期只读比对，长期单主源）。
-2. [ ] 风险：上游版本变化导致消息桥协议漂移。  
-   缓解：协议契约测试前置，失败即阻断升级。
-3. [ ] 风险：为了赶进度继续扩张自建配置功能。  
-   缓解：Build-vs-Buy 门禁 + 自建项豁免审批 + 退出策略留档。
+### PR-230-05：旧入口退役与单主源封板
+1. [ ] 执行 `model-providers:apply` A/B/C 三阶段。
+2. [ ] 清理双主源残留（路由、handler、前端入口、文档）。
+3. [ ] 新 gate 与 no-legacy 联动阻断回流。
 
-## 8. SSOT 引用
+### PR-230-06：升级与回归闭环
+1. [ ] 固化升级回归脚本（含协议兼容、边界、契约快照）。
+2. [ ] 输出首轮 `docs/dev-records/` 证据模板并留档。
+3. [ ] 冻结回滚策略：只允许版本回滚，禁止临时 legacy 分支。
+
+## 6. 门禁与验证清单
+1. [ ] `make check routing`
+2. [ ] `make check capability-route-map`
+3. [ ] `make check no-legacy`
+4. [ ] `make check error-message`
+5. [ ] `make check assistant-config-single-source`（新增）
+6. [ ] `make e2e`（含 assistant-ui 负测 + 224/225 契约快照回归）
+7. [ ] `make check doc`
+
+## 7. 剪切/缩水策略（允许项与禁止项）
+### 7.1 允许的策略性剪切（不冲突）
+1. [ ] 暂不复用 Agents 自动执行（保护 One Door 边界）。
+2. [ ] 不复用 LibreChat 自身身份体系（保持本仓统一 AuthN/AuthZ/Tenant）。
+
+### 7.2 禁止的缩水（命中即阻断）
+1. [ ] 只“口头复用”MCP/Actions/Allowlist，未进入切片与验收。
+2. [ ] 保留 `model-providers:apply` 作为长期可写入口。
+3. [ ] 未补 224/225 契约映射字段却上线主源切换。
+4. [ ] `/assistant-ui/*` 仍可绕过会话校验。
+5. [ ] 未将新 gate 纳入 CI 就宣称“单主源完成”。
+
+## 8. 风险与缓解
+1. [ ] 风险：上游配置理解不足导致迁移错配。  
+   缓解：迁移脚本 + 双向比对 + 回滚演练。
+2. [ ] 风险：上游升级引入协议漂移。  
+   缓解：升级前跑协议与边界回归，失败阻断。
+3. [ ] 风险：为了交付速度回退为自建扩张。  
+   缓解：Build-vs-Buy 审批 + 退出策略 + no-legacy/gate 联动。
+
+## 9. 参考资料（开源能力核对）
+- `https://www.librechat.ai/docs/quick_start/local_setup`
+- `https://www.librechat.ai/docs/quick_start/docker_compose_install`（当前 404，待上游路径确认）
+- `https://raw.githubusercontent.com/danny-avila/LibreChat/main/librechat.example.yaml`
+- `https://raw.githubusercontent.com/danny-avila/LibreChat/main/README.md`
+- `https://raw.githubusercontent.com/danny-avila/LibreChat/main/docker-compose.yml`
+
+## 10. SSOT 引用
 - `AGENTS.md`
 - `Makefile`
 - `.github/workflows/quality-gates.yml`
@@ -146,3 +183,12 @@ graph TD
 - `docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
 - `docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
 - `docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
+
+## 11. 子计划拆分（直接落地）
+- [ ] DEV-PLAN-231（前置契约与门禁）：`docs/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md`
+- [ ] DEV-PLAN-232（官方运行基线）：`docs/dev-plans/232-librechat-official-runtime-baseline-plan.md`
+- [ ] DEV-PLAN-233（单主源配置收口）：`docs/dev-plans/233-librechat-single-source-config-convergence-plan.md`
+- [ ] DEV-PLAN-234（MCP/Actions/Allowlist 复用落地）：`docs/dev-plans/234-librechat-open-source-capabilities-reuse-plan.md`
+- [ ] DEV-PLAN-235（身份/会话/租户边界硬化）：`docs/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
+- [ ] DEV-PLAN-236（旧入口退役与单主源封板）：`docs/dev-plans/236-librechat-legacy-endpoint-retirement-and-single-source-closure-plan.md`
+- [ ] DEV-PLAN-237（升级与回归闭环）：`docs/dev-plans/237-librechat-upgrade-and-regression-closure-plan.md`

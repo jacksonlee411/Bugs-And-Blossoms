@@ -31,6 +31,8 @@ jobs:
         run: make check naming
       - name: No-Legacy Gate (always)
         run: make check no-legacy
+      - name: Assistant Config Single-Source Gate (always)
+        run: make check assistant-config-single-source
       - name: No-Scope-Package Gate (always)
         run: make check no-scope-package
       - name: Granularity Gate (always)
