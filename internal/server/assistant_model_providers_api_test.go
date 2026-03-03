@@ -46,7 +46,7 @@ func TestHandleAssistantModelProvidersValidateAndApplyAPI(t *testing.T) {
 		t.Fatal("expected invalid payload rejected")
 	}
 
-	validBody := `{"provider_routing":{"strategy":"priority_failover","fallback_enabled":true},"providers":[{"name":"openai","enabled":true,"model":"gpt-4o-mini","endpoint":"builtin://openai","timeout_ms":1000,"retries":1,"priority":10,"key_ref":"OPENAI_API_KEY"}]}`
+	validBody := `{"provider_routing":{"strategy":"priority_failover","fallback_enabled":true},"providers":[{"name":"openai","enabled":true,"model":"gpt-4o-mini","endpoint":"https://api.openai.com/v1","timeout_ms":1000,"retries":1,"priority":10,"key_ref":"OPENAI_API_KEY"}]}`
 
 	unauthorized := httptest.NewRecorder()
 	unauthorizedReq := httptest.NewRequest(http.MethodPost, "/internal/assistant/model-providers:apply", http.NoBody)

@@ -144,7 +144,7 @@ entrypoints:
         methods: [POST]
         route_class: internal_api
       - path: /internal/assistant/conversations
-        methods: [POST]
+        methods: [GET, POST]
         route_class: internal_api
       - path: /internal/assistant/conversations/{conversation_id}
         methods: [GET]

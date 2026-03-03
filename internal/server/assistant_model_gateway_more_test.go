@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -13,6 +17,17 @@ type assistantAdapterFunc func(ctx context.Context, prompt string, provider assi
 func (f assistantAdapterFunc) Invoke(ctx context.Context, prompt string, provider assistantModelProviderConfig) ([]byte, error) {
 	return f(ctx, prompt, provider)
 }
+
+type assistantRoundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f assistantRoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type assistantErrReadCloser struct{}
+
+func (assistantErrReadCloser) Read([]byte) (int, error) { return 0, errors.New("read failed") }
+func (assistantErrReadCloser) Close() error             { return nil }
 
 func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 	originalMarshal := assistantIntentMarshalFn
@@ -30,15 +45,21 @@ func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 	}
 	assistantIntentMarshalFn = originalMarshal
 
-	t.Setenv("ASSISTANT_MODEL_CONFIG_JSON", `{"provider_routing":{"strategy":"priority_failover","fallback_enabled":true},"providers":[{"name":"openai","enabled":true,"model":"gpt-4o-mini","endpoint":"builtin://openai","timeout_ms":1000,"retries":0,"priority":1,"key_ref":"OPENAI_API_KEY"}]}`)
-	gw := newAssistantModelGateway()
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	t.Setenv("ASSISTANT_MODEL_CONFIG_JSON", `{"provider_routing":{"strategy":"priority_failover","fallback_enabled":true},"providers":[{"name":"openai","enabled":true,"model":"gpt-5-codex","endpoint":"https://api.openai.com/v1","timeout_ms":1000,"retries":0,"priority":1,"key_ref":"OPENAI_API_KEY"}]}`)
+	gw, err := newAssistantModelGateway()
+	if err != nil {
+		t.Fatalf("new gateway err=%v", err)
+	}
 	if len(gw.snapshot().Providers) != 1 {
 		t.Fatalf("expected 1 provider")
 	}
 	if err := os.Setenv("ASSISTANT_MODEL_CONFIG_JSON", "{"); err != nil {
 		t.Fatalf("set env err=%v", err)
 	}
-	_ = newAssistantModelGateway()
+	if _, err := newAssistantModelGateway(); !errors.Is(err, errAssistantRuntimeConfigInvalid) {
+		t.Fatalf("expected runtime config invalid, got=%v", err)
+	}
 
 	gw.mu.Lock()
 	gw.config = assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{{Name: "openai", Enabled: false, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"}, {Name: "deepseek", Enabled: true, Model: "m", Endpoint: "simulate://timeout", TimeoutMS: 1, Retries: 0, Priority: 2, KeyRef: "DEEPSEEK_API_KEY"}, {Name: "claude", Enabled: true, Model: "m", Endpoint: "simulate://rate-limit", TimeoutMS: 1, Retries: 0, Priority: 3, KeyRef: "ANTHROPIC_API_KEY"}, {Name: "gemini", Enabled: true, Model: "m", Endpoint: "https://example.invalid", TimeoutMS: 1, Retries: 0, Priority: 4, KeyRef: "MISSING_KEY"}, {Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 5, KeyRef: "OPENAI_API_KEY"}}}
@@ -118,7 +139,7 @@ func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
 		Providers: []assistantModelProviderConfig{
 			{Name: "openai", Enabled: false, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
-			{Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 2, KeyRef: "OPENAI_API_KEY"},
+			{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1, Retries: 0, Priority: 2, KeyRef: "OPENAI_API_KEY"},
 		},
 	}
 	gw.adapters = map[string]assistantProviderAdapter{"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
@@ -159,7 +180,7 @@ func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 	gw.config = assistantModelConfig{
 		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
 		Providers: []assistantModelProviderConfig{
-			{Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+			{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
 		},
 	}
 	gw.adapters = map[string]assistantProviderAdapter{"openai": nil}
@@ -172,7 +193,7 @@ func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 	gw.config = assistantModelConfig{
 		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
 		Providers: []assistantModelProviderConfig{
-			{Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+			{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
 		},
 	}
 	gw.adapters = map[string]assistantProviderAdapter{"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
@@ -185,7 +206,7 @@ func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 
 	t.Setenv("OPENAI_API_KEY", "dummy")
 	gw.mu.Lock()
-	gw.config = assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{{Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"}}}
+	gw.config = assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"}}}
 	gw.adapters = map[string]assistantProviderAdapter{"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
 		return []byte(`{"action":"create_orgunit","extra":1}`), nil
 	})}
@@ -214,8 +235,8 @@ func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 	gw.config = assistantModelConfig{
 		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
 		Providers: []assistantModelProviderConfig{
-			{Name: "openai", Enabled: true, Model: "m", Endpoint: "builtin://openai", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
-			{Name: "deepseek", Enabled: true, Model: "m", Endpoint: "builtin://deepseek", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "DEEPSEEK_API_KEY"},
+			{Name: "openai", Enabled: true, Model: "m", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+			{Name: "deepseek", Enabled: true, Model: "m", Endpoint: "https://api.deepseek.com", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
 		},
 	}
 	gw.adapters = map[string]assistantProviderAdapter{
@@ -251,4 +272,502 @@ func TestAssistantModelGateway_BranchCoverage(t *testing.T) {
 	if err != nil || intent.Action != assistantIntentCreateOrgUnit {
 		t.Fatalf("unexpected strict decode err=%v intent=%+v", err, intent)
 	}
+}
+
+func TestAssistantModelGateway_RuntimeEndpointValidation(t *testing.T) {
+	t.Setenv("ASSISTANT_RUNTIME_ENV", "production")
+	if !assistantEndpointInvalidForRuntime("builtin://openai") {
+		t.Fatal("builtin endpoint should be invalid in production")
+	}
+	if assistantEndpointInvalidForRuntime("https://api.openai.com/v1") {
+		t.Fatal("https endpoint should be valid in production")
+	}
+	_, errs := normalizeAssistantModelConfig(assistantModelConfig{
+		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+		Providers: []assistantModelProviderConfig{
+			{Name: "openai", Enabled: true, Model: "gpt-5-codex", Endpoint: "builtin://openai", TimeoutMS: 1000, Retries: 1, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+		},
+	}, false)
+	if len(errs) == 0 {
+		t.Fatal("expected endpoint validation error in production")
+	}
+}
+
+func TestAssistantModelGateway_NoDeterministicSwapInTestEnv(t *testing.T) {
+	t.Setenv("ASSISTANT_RUNTIME_ENV", "test")
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	t.Setenv("ASSISTANT_MODEL_CONFIG_JSON", `{"provider_routing":{"strategy":"priority_failover","fallback_enabled":true},"providers":[{"name":"openai","enabled":true,"model":"gpt-5-codex","endpoint":"https://api.openai.com/v1","timeout_ms":1000,"retries":0,"priority":1,"key_ref":"OPENAI_API_KEY"}]}`)
+	gw, err := newAssistantModelGateway()
+	if err != nil {
+		t.Fatalf("new gateway err=%v", err)
+	}
+	adapter := gw.adapters["openai"]
+	if adapter == nil {
+		t.Fatal("openai adapter missing")
+	}
+	if _, ok := adapter.(assistantDeterministicProviderAdapter); ok {
+		t.Fatal("openai adapter should stay real provider adapter in test env")
+	}
+	if _, ok := adapter.(assistantOpenAIProviderAdapter); !ok {
+		t.Fatalf("unexpected openai adapter type=%T", adapter)
+	}
+}
+
+func TestAssistantModelGateway_ListProviderStatus_ProbeConnectivity(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	modelsProbeCalls := 0
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("unexpected path=%s", r.URL.Path)
+		}
+		modelsProbeCalls++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"gpt-5-codex"}]}`))
+	}))
+	defer server.Close()
+	gw := &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{
+				{
+					Name:      "openai",
+					Enabled:   true,
+					Model:     "gpt-5-codex",
+					Endpoint:  server.URL + "/v1",
+					TimeoutMS: 1000,
+					Retries:   0,
+					Priority:  1,
+					KeyRef:    "OPENAI_API_KEY",
+				},
+			},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai": assistantOpenAIProviderAdapter{httpClient: server.Client()},
+		},
+	}
+	_, statuses := gw.listProviderStatus()
+	if len(statuses) != 1 {
+		t.Fatalf("unexpected statuses=%+v", statuses)
+	}
+	if statuses[0].Healthy != "healthy" || statuses[0].HealthReason != "" {
+		t.Fatalf("expected healthy by probe, got=%+v", statuses[0])
+	}
+	if modelsProbeCalls != 1 {
+		t.Fatalf("expected exactly one probe call, got=%d", modelsProbeCalls)
+	}
+
+	server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	_, statuses = gw.listProviderStatus()
+	if len(statuses) != 1 {
+		t.Fatalf("unexpected statuses=%+v", statuses)
+	}
+	if statuses[0].Healthy != "unavailable" || statuses[0].HealthReason != "probe_failed" {
+		t.Fatalf("expected unavailable/probe_failed, got=%+v", statuses[0])
+	}
+}
+
+func TestAssistantOpenAIProviderAdapter_InvokeAndParseContentArray(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method=%s", r.Method)
+		}
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("path=%s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":[{"type":"output_text","text":"{\"action\":\"create_orgunit\"}"}]}}]}`))
+	}))
+	defer server.Close()
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	adapter := assistantOpenAIProviderAdapter{
+		httpClient: server.Client(),
+		fallback:   assistantDeterministicProviderAdapter{},
+	}
+	payload, err := adapter.Invoke(context.Background(), "在鲜花组织之下新建运营部", assistantModelProviderConfig{
+		Name:      "openai",
+		Model:     "gpt-5-codex",
+		Endpoint:  server.URL + "/v1",
+		TimeoutMS: 1000,
+		KeyRef:    "OPENAI_API_KEY",
+	})
+	if err != nil {
+		t.Fatalf("invoke err=%v", err)
+	}
+	intent, err := assistantStrictDecodeIntent(payload)
+	if err != nil {
+		t.Fatalf("strict decode err=%v", err)
+	}
+	if intent.Action != assistantIntentCreateOrgUnit {
+		t.Fatalf("intent=%+v", intent)
+	}
+}
+
+func TestAssistantModelGateway_DefaultConfigFollowsRuntime(t *testing.T) {
+	t.Setenv("ASSISTANT_RUNTIME_ENV", "production")
+	prod := defaultAssistantModelConfig()
+	if prod.Providers[0].Endpoint != "https://api.openai.com/v1" || prod.Providers[0].Model != "gpt-5-codex" {
+		t.Fatalf("unexpected production defaults: %+v", prod.Providers[0])
+	}
+
+	t.Setenv("ASSISTANT_RUNTIME_ENV", "dev")
+	dev := defaultAssistantModelConfig()
+	if dev.Providers[0].Endpoint != "https://api.openai.com/v1" || dev.Providers[0].Model != "gpt-5-codex" {
+		t.Fatalf("unexpected dev defaults: %+v", dev.Providers[0])
+	}
+}
+
+func TestAssistantOpenAIProviderAdapter_ErrorBranches(t *testing.T) {
+	originalMarshal := assistantOpenAIRequestMarshalFn
+	originalNewRequest := assistantOpenAINewRequestWithContextFn
+	defer func() {
+		assistantOpenAIRequestMarshalFn = originalMarshal
+		assistantOpenAINewRequestWithContextFn = originalNewRequest
+	}()
+	assistantOpenAIRequestMarshalFn = json.Marshal
+	assistantOpenAINewRequestWithContextFn = http.NewRequestWithContext
+
+	t.Run("fallback missing", func(t *testing.T) {
+		adapter := assistantOpenAIProviderAdapter{}
+		if _, err := adapter.Invoke(context.Background(), "x", assistantModelProviderConfig{
+			Name: "openai", Model: "gpt-5-codex", Endpoint: "builtin://openai", TimeoutMS: 50, KeyRef: "OPENAI_API_KEY",
+		}); !errors.Is(err, errAssistantModelConfigInvalid) {
+			t.Fatalf("unexpected err=%v", err)
+		}
+	})
+
+	t.Run("invalid endpoint", func(t *testing.T) {
+		t.Setenv("OPENAI_API_KEY", "test-key")
+		adapter := assistantOpenAIProviderAdapter{fallback: assistantDeterministicProviderAdapter{}}
+		if _, err := adapter.Invoke(context.Background(), "x", assistantModelProviderConfig{
+			Name: "openai", Model: "gpt-5-codex", Endpoint: "http://api.openai.com/v1", TimeoutMS: 50, KeyRef: "OPENAI_API_KEY",
+		}); !errors.Is(err, errAssistantModelConfigInvalid) {
+			t.Fatalf("unexpected err=%v", err)
+		}
+	})
+
+	t.Run("openai key missing", func(t *testing.T) {
+		t.Setenv("OPENAI_API_KEY", "")
+		adapter := assistantOpenAIProviderAdapter{fallback: assistantDeterministicProviderAdapter{}}
+		if _, err := adapter.Invoke(context.Background(), "x", assistantModelProviderConfig{
+			Name: "openai", Model: "gpt-5-codex", Endpoint: "https://api.openai.com/v1", TimeoutMS: 50, KeyRef: "OPENAI_API_KEY",
+		}); !errors.Is(err, errAssistantModelSecretMissing) {
+			t.Fatalf("unexpected err=%v", err)
+		}
+	})
+
+	t.Run("marshal/new-request errors", func(t *testing.T) {
+		t.Setenv("OPENAI_API_KEY", "test-key")
+		adapter := assistantOpenAIProviderAdapter{fallback: assistantDeterministicProviderAdapter{}}
+		assistantOpenAIRequestMarshalFn = func(any) ([]byte, error) { return nil, errors.New("marshal failed") }
+		if _, err := adapter.Invoke(context.Background(), "x", assistantModelProviderConfig{
+			Name: "openai", Model: "gpt-5-codex", Endpoint: "https://api.openai.com/v1", TimeoutMS: 50, KeyRef: "OPENAI_API_KEY",
+		}); !errors.Is(err, errAssistantModelConfigInvalid) {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		assistantOpenAIRequestMarshalFn = json.Marshal
+		assistantOpenAINewRequestWithContextFn = func(context.Context, string, string, io.Reader) (*http.Request, error) {
+			return nil, errors.New("new request failed")
+		}
+		if _, err := adapter.Invoke(context.Background(), "x", assistantModelProviderConfig{
+			Name: "openai", Model: "gpt-5-codex", Endpoint: "https://api.openai.com/v1", TimeoutMS: 50, KeyRef: "OPENAI_API_KEY",
+		}); !errors.Is(err, errAssistantModelConfigInvalid) {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		assistantOpenAINewRequestWithContextFn = http.NewRequestWithContext
+	})
+
+	t.Run("network and status mappings", func(t *testing.T) {
+		t.Setenv("OPENAI_API_KEY", "test-key")
+		baseAdapter := assistantOpenAIProviderAdapter{fallback: assistantDeterministicProviderAdapter{}}
+		if _, err := baseAdapter.Invoke(context.Background(), "x", assistantModelProviderConfig{
+			Name: "openai", Model: "gpt-5-codex", Endpoint: "https://127.0.0.1:1/v1", TimeoutMS: 20, KeyRef: "OPENAI_API_KEY",
+		}); !errors.Is(err, errAssistantModelProviderUnavailable) {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if _, err := baseAdapter.Invoke(nil, "x", assistantModelProviderConfig{
+			Name: "openai", Model: "gpt-5-codex", Endpoint: "https://127.0.0.1:1/v1", TimeoutMS: 20, KeyRef: "OPENAI_API_KEY",
+		}); !errors.Is(err, errAssistantModelProviderUnavailable) {
+			t.Fatalf("unexpected nil-ctx err=%v", err)
+		}
+
+		timeoutAdapter := assistantOpenAIProviderAdapter{
+			httpClient: &http.Client{
+				Transport: assistantRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+					return nil, context.DeadlineExceeded
+				}),
+			},
+			fallback: assistantDeterministicProviderAdapter{},
+		}
+		if _, err := timeoutAdapter.Invoke(context.Background(), "x", assistantModelProviderConfig{
+			Name: "openai", Model: "gpt-5-codex", Endpoint: "https://api.openai.com/v1", TimeoutMS: 20, KeyRef: "OPENAI_API_KEY",
+		}); !errors.Is(err, errAssistantModelTimeout) {
+			t.Fatalf("unexpected timeout err=%v", err)
+		}
+
+		readErrAdapter := assistantOpenAIProviderAdapter{
+			httpClient: &http.Client{
+				Transport: assistantRoundTripperFunc(func(*http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       assistantErrReadCloser{},
+						Header:     make(http.Header),
+					}, nil
+				}),
+			},
+			fallback: assistantDeterministicProviderAdapter{},
+		}
+		if _, err := readErrAdapter.Invoke(context.Background(), "x", assistantModelProviderConfig{
+			Name: "openai", Model: "gpt-5-codex", Endpoint: "https://api.openai.com/v1", TimeoutMS: 20, KeyRef: "OPENAI_API_KEY",
+		}); !errors.Is(err, errAssistantModelProviderUnavailable) {
+			t.Fatalf("unexpected read err=%v", err)
+		}
+
+		makeServer := func(status int, body string) *httptest.Server {
+			return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v1/chat/completions" {
+					t.Fatalf("unexpected path=%s", r.URL.Path)
+				}
+				w.WriteHeader(status)
+				if body != "" {
+					_, _ = w.Write([]byte(body))
+				}
+			}))
+		}
+
+		cases := []struct {
+			name    string
+			status  int
+			body    string
+			wantErr error
+		}{
+			{name: "rate limited", status: http.StatusTooManyRequests, wantErr: errAssistantModelRateLimited},
+			{name: "timeout status", status: http.StatusRequestTimeout, wantErr: errAssistantModelTimeout},
+			{name: "provider unavailable", status: http.StatusInternalServerError, wantErr: errAssistantModelProviderUnavailable},
+			{name: "config invalid", status: http.StatusBadRequest, wantErr: errAssistantModelConfigInvalid},
+			{name: "bad json", status: http.StatusOK, body: "{", wantErr: errAssistantPlanSchemaConstrainedDecodeFailed},
+			{name: "empty choices", status: http.StatusOK, body: `{"choices":[]}`, wantErr: errAssistantPlanSchemaConstrainedDecodeFailed},
+			{name: "empty content", status: http.StatusOK, body: `{"choices":[{"message":{"content":[]}}]}`, wantErr: errAssistantPlanSchemaConstrainedDecodeFailed},
+		}
+		for _, tc := range cases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				server := makeServer(tc.status, tc.body)
+				defer server.Close()
+				adapter := assistantOpenAIProviderAdapter{
+					httpClient: server.Client(),
+					fallback:   assistantDeterministicProviderAdapter{},
+				}
+				_, err := adapter.Invoke(context.Background(), "x", assistantModelProviderConfig{
+					Name: "openai", Model: "gpt-5-codex", Endpoint: server.URL + "/v1", TimeoutMS: 1000, KeyRef: "OPENAI_API_KEY",
+				})
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err=%v want=%v", err, tc.wantErr)
+				}
+			})
+		}
+	})
+
+	t.Run("response_format unsupported fallback", func(t *testing.T) {
+		t.Setenv("OPENAI_API_KEY", "test-key")
+		calls := 0
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls++
+			raw, _ := io.ReadAll(r.Body)
+			var payload map[string]any
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				t.Fatalf("decode payload failed: %v", err)
+			}
+			_, hasResponseFormat := payload["response_format"]
+			if calls == 1 {
+				if !hasResponseFormat {
+					t.Fatalf("first request should include response_format, payload=%s", string(raw))
+				}
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":{"message":"invalid response_format"}}`))
+				return
+			}
+			if hasResponseFormat {
+				t.Fatalf("fallback request should not include response_format, payload=%s", string(raw))
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"action\":\"create_department\",\"parent_department\":\"鲜花组织\",\"department_name\":\"测试部\",\"established_date\":\"2026-01-01\"}"}}]}`))
+		}))
+		defer server.Close()
+		adapter := assistantOpenAIProviderAdapter{
+			httpClient: server.Client(),
+			fallback:   assistantDeterministicProviderAdapter{},
+		}
+		payload, err := adapter.Invoke(context.Background(), "x", assistantModelProviderConfig{
+			Name: "openai", Model: "gpt-5-codex", Endpoint: server.URL + "/v1", TimeoutMS: 1000, KeyRef: "OPENAI_API_KEY",
+		})
+		if err != nil {
+			t.Fatalf("fallback invoke err=%v", err)
+		}
+		intent, decodeErr := assistantStrictDecodeIntent(payload)
+		if decodeErr != nil {
+			t.Fatalf("strict decode fallback payload failed: %v payload=%s", decodeErr, string(payload))
+		}
+		if intent.Action != assistantIntentCreateOrgUnit || intent.ParentRefText != "鲜花组织" || intent.EntityName != "测试部" || intent.EffectiveDate != "2026-01-01" {
+			t.Fatalf("unexpected fallback intent=%+v payload=%s", intent, string(payload))
+		}
+		if calls != 2 {
+			t.Fatalf("expected 2 calls, got=%d", calls)
+		}
+	})
+
+	t.Run("config invalid without response_format hint no fallback", func(t *testing.T) {
+		t.Setenv("OPENAI_API_KEY", "test-key")
+		calls := 0
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			calls++
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"message":"invalid request"}}`))
+		}))
+		defer server.Close()
+		adapter := assistantOpenAIProviderAdapter{
+			httpClient: server.Client(),
+			fallback:   assistantDeterministicProviderAdapter{},
+		}
+		_, err := adapter.Invoke(context.Background(), "x", assistantModelProviderConfig{
+			Name: "openai", Model: "gpt-5-codex", Endpoint: server.URL + "/v1", TimeoutMS: 1000, KeyRef: "OPENAI_API_KEY",
+		})
+		if !errors.Is(err, errAssistantModelConfigInvalid) {
+			t.Fatalf("unexpected err=%v", err)
+		}
+		if calls != 1 {
+			t.Fatalf("expected 1 call, got=%d", calls)
+		}
+	})
+}
+
+func TestAssistantModelGateway_ResolveIntentRetryAndGuardBranches(t *testing.T) {
+	t.Setenv("ASSISTANT_RUNTIME_ENV", "production")
+	t.Setenv("OPENAI_API_KEY", "test-key")
+
+	gw := &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{
+				{Name: "openai", Enabled: true, Model: "gpt-5-codex", Endpoint: "https://api.openai.com/v1", TimeoutMS: 100, Retries: 1, Priority: 1, KeyRef: "CUSTOM_OPENAI_KEY_REF"},
+			},
+		},
+	}
+	t.Setenv("CUSTOM_OPENAI_KEY_REF", "configured")
+	attempts := 0
+	gw.adapters = map[string]assistantProviderAdapter{
+		"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+			attempts++
+			if attempts == 1 {
+				return nil, errAssistantModelTimeout
+			}
+			return []byte(`{"action":"plan_only"}`), nil
+		}),
+	}
+	resolved, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"})
+	if err != nil || resolved.Intent.Action != "plan_only" || attempts != 2 {
+		t.Fatalf("resolved=%+v err=%v attempts=%d", resolved, err, attempts)
+	}
+
+	gw.config.Providers[0].Retries = -1
+	gw.adapters["openai"] = assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+		return nil, errAssistantModelTimeout
+	})
+	if _, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"}); !errors.Is(err, errAssistantModelTimeout) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	gw.config.Providers[0].Endpoint = "builtin://openai"
+	if _, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"}); !errors.Is(err, errAssistantModelConfigInvalid) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+
+	gw.config.Providers[0].Endpoint = "https://api.openai.com/v1"
+	t.Setenv("OPENAI_API_KEY", "")
+	if _, err := gw.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "x"}); !errors.Is(err, errAssistantModelSecretMissing) {
+		t.Fatalf("unexpected err=%v", err)
+	}
+}
+
+func TestAssistantModelGateway_HelperFunctions_ExtraBranches(t *testing.T) {
+	if _, err := assistantBuildOpenAIChatCompletionURL("://bad"); err == nil {
+		t.Fatal("expected parse error")
+	}
+	if _, err := assistantBuildOpenAIChatCompletionURL("http://api.openai.com/v1"); err == nil {
+		t.Fatal("expected non-https error")
+	}
+	urlWithSuffix, err := assistantBuildOpenAIChatCompletionURL("https://api.openai.com/v1/chat/completions")
+	if err != nil || !strings.HasSuffix(urlWithSuffix, "/chat/completions") {
+		t.Fatalf("unexpected url=%s err=%v", urlWithSuffix, err)
+	}
+
+	if got := assistantExtractOpenAIMessageContent(map[string]any{"text": "x"}); got != "" {
+		t.Fatalf("unexpected content=%q", got)
+	}
+	if got := assistantExtractOpenAIMessageContent(`{"action":"plan_only"}`); got != `{"action":"plan_only"}` {
+		t.Fatalf("unexpected string content=%q", got)
+	}
+	if got := assistantExtractOpenAIMessageContent([]any{"invalid", map[string]any{"type": "text"}}); got != "" {
+		t.Fatalf("unexpected content=%q", got)
+	}
+	if !assistantOpenAIResponseFormatUnsupported([]byte(`{"error":{"message":"invalid response_format"}}`)) {
+		t.Fatal("expected response_format unsupported detection")
+	}
+	if assistantOpenAIResponseFormatUnsupported([]byte(`{"error":{"message":"invalid request"}}`)) {
+		t.Fatal("expected non response_format error not detected")
+	}
+	normalizedPayload := assistantNormalizeOpenAIIntentPayload(`{"action":"create_department","parent_department":"鲜花组织","department_name":"测试部","established_date":"2026-01-01"}`)
+	intent, err := assistantStrictDecodeIntent(normalizedPayload)
+	if err != nil {
+		t.Fatalf("normalize payload decode err=%v payload=%s", err, string(normalizedPayload))
+	}
+	if intent.Action != assistantIntentCreateOrgUnit || intent.ParentRefText != "鲜花组织" || intent.EntityName != "测试部" || intent.EffectiveDate != "2026-01-01" {
+		t.Fatalf("unexpected normalized intent=%+v", intent)
+	}
+	markdownPayload := assistantNormalizeOpenAIIntentPayload("```json\n{\"action\":\"plan_only\"}\n```")
+	if string(markdownPayload) != `{"action":"plan_only"}` {
+		t.Fatalf("unexpected markdown normalized payload=%s", string(markdownPayload))
+	}
+
+	t.Setenv("ASSISTANT_RUNTIME_ENV", "production")
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("CUSTOM_OPENAI_KEY_REF", "configured")
+	gw := &assistantModelGateway{
+		config: assistantModelConfig{
+			ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+			Providers: []assistantModelProviderConfig{
+				{Name: "openai", Enabled: true, Model: "gpt-5-codex", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1000, Retries: 0, Priority: 1, KeyRef: "CUSTOM_OPENAI_KEY_REF"},
+				{Name: "deepseek", Enabled: true, Model: "deepseek-chat", Endpoint: "builtin://deepseek", TimeoutMS: 1000, Retries: 0, Priority: 2, KeyRef: "DEEPSEEK_API_KEY"},
+			},
+		},
+		adapters: map[string]assistantProviderAdapter{
+			"openai":   assistantDeterministicProviderAdapter{},
+			"deepseek": assistantDeterministicProviderAdapter{},
+		},
+	}
+	_, statuses := gw.listProviderStatus()
+	got := map[string]string{}
+	for _, status := range statuses {
+		got[status.Name] = status.HealthReason
+	}
+	if got["openai"] != "openai_key_missing" {
+		t.Fatalf("unexpected openai status=%+v", statuses)
+	}
+	if got["deepseek"] != "endpoint_invalid" {
+		t.Fatalf("unexpected deepseek status=%+v", statuses)
+	}
+
+	t.Setenv("OPENAI_API_KEY", "")
+	_, errs := normalizeAssistantModelConfig(assistantModelConfig{
+		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
+		Providers: []assistantModelProviderConfig{
+			{Name: "openai", Enabled: true, Model: "gpt-5-codex", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1000, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+		},
+	}, true)
+	joined := strings.Join(errs, "|")
+	if !strings.Contains(joined, "OPENAI_API_KEY missing") {
+		t.Fatalf("expected openai key validation error, got=%v", errs)
+	}
+
 }

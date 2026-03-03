@@ -169,6 +169,10 @@ jobs:
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
+    env:
+      ASSISTANT_RUNTIME_ENV: ci
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ASSISTANT_MODEL_CONFIG_JSON: '{"provider_routing":{"strategy":"priority_failover","fallback_enabled":false},"providers":[{"name":"openai","enabled":true,"model":"gpt-5-codex","endpoint":"https://api.openai.com/v1","timeout_ms":8000,"retries":1,"priority":10,"key_ref":"OPENAI_API_KEY"}]}'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:

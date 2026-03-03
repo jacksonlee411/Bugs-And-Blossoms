@@ -8,16 +8,21 @@ import (
 
 func TestAssistantModelGatewayResolveIntentFallbackAndValidation(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "dummy")
+	t.Setenv("DEEPSEEK_API_KEY", "dummy")
 
-	gateway := newAssistantModelGateway()
+	t.Setenv("ASSISTANT_MODEL_CONFIG_JSON", `{"provider_routing":{"strategy":"priority_failover","fallback_enabled":true},"providers":[{"name":"openai","enabled":true,"model":"gpt-5-codex","endpoint":"https://api.openai.com/v1","timeout_ms":200,"retries":0,"priority":10,"key_ref":"OPENAI_API_KEY"}]}`)
+	gateway, err := newAssistantModelGateway()
+	if err != nil {
+		t.Fatalf("new gateway err=%v", err)
+	}
 	_, errs := gateway.applyConfig(assistantModelConfig{
 		ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true},
 		Providers: []assistantModelProviderConfig{
 			{
 				Name:      "openai",
 				Enabled:   true,
-				Model:     "gpt-4o-mini",
-				Endpoint:  "simulate://timeout",
+				Model:     "timeout-model",
+				Endpoint:  "https://api.openai.com/v1",
 				TimeoutMS: 200,
 				Retries:   0,
 				Priority:  10,
@@ -27,7 +32,7 @@ func TestAssistantModelGatewayResolveIntentFallbackAndValidation(t *testing.T) {
 				Name:      "deepseek",
 				Enabled:   true,
 				Model:     "deepseek-chat",
-				Endpoint:  "builtin://deepseek",
+				Endpoint:  "https://api.deepseek.com",
 				TimeoutMS: 200,
 				Retries:   0,
 				Priority:  20,
@@ -37,6 +42,14 @@ func TestAssistantModelGatewayResolveIntentFallbackAndValidation(t *testing.T) {
 	})
 	if len(errs) != 0 {
 		t.Fatalf("apply config errs=%v", errs)
+	}
+	gateway.adapters = map[string]assistantProviderAdapter{
+		"openai": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+			return nil, errAssistantModelTimeout
+		}),
+		"deepseek": assistantAdapterFunc(func(context.Context, string, assistantModelProviderConfig) ([]byte, error) {
+			return []byte(`{"action":"create_orgunit","parent_ref_text":"鲜花组织","entity_name":"运营部","effective_date":"2026-01-01"}`), nil
+		}),
 	}
 
 	resolved, err := gateway.ResolveIntent(context.Background(), assistantResolveIntentRequest{Prompt: "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。通过AI对话，调用相关能力完成部门的创建任务。"})
@@ -80,7 +93,7 @@ func TestAssistantModelGatewayResolveIntentFallbackAndValidation(t *testing.T) {
 			Name:      "unknown",
 			Enabled:   true,
 			Model:     "x",
-			Endpoint:  "builtin://unknown",
+			Endpoint:  "https://api.unknown.example",
 			TimeoutMS: 100,
 			Retries:   0,
 			Priority:  1,

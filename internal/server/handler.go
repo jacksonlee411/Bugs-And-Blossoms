@@ -151,6 +151,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		return nil, err
 	}
 	assistantSvc := newAssistantConversationServiceWithPool(orgStore, orgUnitWriteService, pgPool)
+	if assistantSvc != nil && assistantSvc.gatewayErr != nil {
+		return nil, assistantSvc.gatewayErr
+	}
 
 	router := routing.NewRouter(classifier)
 
@@ -467,6 +470,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, error) {
 		handleJobCatalogWriteAPI(w, r, setidStore, jobcatalogStore)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodPost, "/internal/assistant/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleAssistantConversationsAPI(w, r, assistantSvc)
+	}))
+	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/conversations", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleAssistantConversationsAPI(w, r, assistantSvc)
 	}))
 	router.Handle(routing.RouteClassInternalAPI, http.MethodGet, "/internal/assistant/conversations/{conversation_id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

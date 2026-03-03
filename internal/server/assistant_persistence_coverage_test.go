@@ -532,7 +532,7 @@ func TestAssistantPersistence_DBHelpersAndTxPaths(t *testing.T) {
 			intentJSON, _ := json.Marshal(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"})
 			planJSON, _ := json.Marshal(assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}))
 			candidatesJSON, _ := json.Marshal([]assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}})
-			dryRunJSON, _ := json.Marshal(assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""))
+			dryRunJSON, _ := json.Marshal(assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""))
 			commitJSON, _ := json.Marshal(assistantCommitResult{OrgCode: "ORG-1", ParentOrgCode: "FLOWER-A", EffectiveDate: "2026-01-01", EventType: "CREATE", EventUUID: "evt-1"})
 			return &assistFakeRows{rows: [][]any{{"turn_1", "输入", assistantStateConfirmed, "high", "req_1", "trace_1", "2026-02-23", "2026-02-23", "2026-02-23", intentJSON, planJSON, candidatesJSON, "c1", 1, 0.9, "auto", dryRunJSON, commitJSON, time.Now().UTC(), time.Now().UTC()}}}, nil
 		case strings.Contains(sql, "FROM iam.assistant_state_transitions"):
@@ -617,7 +617,7 @@ func TestAssistantPersistence_DBHelpersAndTxPaths(t *testing.T) {
 		t.Fatalf("transition defaults not populated: %+v", transition)
 	}
 
-	turn := &assistantTurn{TurnID: "turn_1", UserInput: "输入", State: assistantStateValidated, RiskTier: "high", RequestID: "req_1", TraceID: "trace_1", PolicyVersion: "2026-02-23", CompositionVersion: "2026-02-23", MappingVersion: "2026-02-23", Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}}, DryRun: assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	turn := &assistantTurn{TurnID: "turn_1", UserInput: "输入", State: assistantStateValidated, RiskTier: "high", RequestID: "req_1", TraceID: "trace_1", PolicyVersion: "2026-02-23", CompositionVersion: "2026-02-23", MappingVersion: "2026-02-23", Intent: assistantIntentSpec{Action: assistantIntentCreateOrgUnit}, Plan: assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}), Candidates: []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}}, DryRun: assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	if err := svc.upsertTurnTx(ctx, tx, "tenant_1", "conv_1", turn); err != nil {
 		t.Fatalf("upsert err=%v", err)
 	}
@@ -796,7 +796,7 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 		},
 		AmbiguityCount: 2,
 		Confidence:     0.55,
-		DryRun:         assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""),
+		DryRun:         assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""),
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}

@@ -79,7 +79,16 @@ func TestAssistantConversationTurns_ModelGatewayErrorMappings(t *testing.T) {
 		svc.modelGateway = &assistantModelGateway{
 			config: config,
 			adapters: map[string]assistantProviderAdapter{
-				"openai": assistantDeterministicProviderAdapter{},
+				"openai": assistantAdapterFunc(func(_ context.Context, _ string, provider assistantModelProviderConfig) ([]byte, error) {
+					switch strings.TrimSpace(provider.Model) {
+					case "timeout":
+						return nil, errAssistantModelTimeout
+					case "rate_limited":
+						return nil, errAssistantModelRateLimited
+					default:
+						return []byte(`{"action":"plan_only"}`), nil
+					}
+				}),
 			},
 		}
 		conv := svc.createConversation("tenant-1", Principal{ID: "actor-1", RoleSlug: "tenant-admin"})
@@ -102,7 +111,7 @@ func TestAssistantConversationTurns_ModelGatewayErrorMappings(t *testing.T) {
 		{
 			name: "timeout",
 			config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{
-				{Name: "openai", Enabled: true, Model: "m", Endpoint: "simulate://timeout", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+				{Name: "openai", Enabled: true, Model: "timeout", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
 			}},
 			wantStatus: http.StatusGatewayTimeout,
 			wantCode:   "ai_model_timeout",
@@ -110,7 +119,7 @@ func TestAssistantConversationTurns_ModelGatewayErrorMappings(t *testing.T) {
 		{
 			name: "rate limited",
 			config: assistantModelConfig{ProviderRouting: assistantProviderRouting{Strategy: "priority_failover", FallbackEnabled: true}, Providers: []assistantModelProviderConfig{
-				{Name: "openai", Enabled: true, Model: "m", Endpoint: "simulate://rate-limit", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
+				{Name: "openai", Enabled: true, Model: "rate_limited", Endpoint: "https://api.openai.com/v1", TimeoutMS: 1, Retries: 0, Priority: 1, KeyRef: "OPENAI_API_KEY"},
 			}},
 			wantStatus: http.StatusTooManyRequests,
 			wantCode:   "ai_model_rate_limited",
@@ -295,6 +304,85 @@ func TestAssistantTurnAction_IdempotencyConflictMappings(t *testing.T) {
 	}
 }
 
+func TestAssistantTurnAction_RequiresIntentClarificationBeforeConfirm(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	if _, err := store.CreateNodeCurrent(context.Background(), "tenant-1", "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
+		t.Fatalf("create node err=%v", err)
+	}
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
+	conv := svc.createConversation("tenant-1", principal)
+	created, err := svc.createTurn(context.Background(), "tenant-1", principal, conv.ConversationID, "在鲜花组织之下，新建一个名为运营部的部门")
+	if err != nil {
+		t.Fatalf("create turn err=%v", err)
+	}
+	turn := latestTurn(created)
+	if turn == nil {
+		t.Fatal("expected turn")
+	}
+	if got := strings.Join(turn.DryRun.ValidationErrors, ","); !strings.Contains(got, "missing_effective_date") {
+		t.Fatalf("expected missing_effective_date, got=%v", turn.DryRun.ValidationErrors)
+	}
+
+	rec := httptest.NewRecorder()
+	path := "/internal/assistant/conversations/" + conv.ConversationID + "/turns/" + turn.TurnID + ":confirm"
+	handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, path, `{}`, true, true), svc)
+	if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
+		t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+	}
+
+	svc.mu.Lock()
+	live := svc.byID[conv.ConversationID]
+	if live == nil || len(live.Turns) == 0 {
+		svc.mu.Unlock()
+		t.Fatal("expected live turn")
+	}
+	liveTurn := live.Turns[len(live.Turns)-1]
+	liveTurn.State = assistantStateConfirmed
+	liveTurn.ResolvedCandidateID = "FLOWER-A"
+	liveTurn.Candidates = []assistantCandidate{{CandidateID: "FLOWER-A", CandidateCode: "FLOWER-A", Name: "鲜花组织", IsActive: true}}
+	liveTurn.DryRun.ValidationErrors = []string{"missing_effective_date"}
+	svc.mu.Unlock()
+
+	rec = httptest.NewRecorder()
+	commitPath := "/internal/assistant/conversations/" + conv.ConversationID + "/turns/" + turn.TurnID + ":commit"
+	handleAssistantTurnActionAPI(rec, assistantReqWithContext(http.MethodPost, commitPath, `{}`, true, true), svc)
+	if rec.Code != http.StatusConflict || assistantDecodeErrCode(t, rec) != "conversation_confirmation_required" {
+		t.Fatalf("commit status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+	}
+}
+
+func TestAssistantConversationTurns_RuntimeConfigErrorMappings(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
+
+	makeReq := func(conversationID string) *http.Request {
+		return assistantReqWithContext(http.MethodPost, "/internal/assistant/conversations/"+conversationID+"/turns", `{"user_input":"测试模型配置错误"}`, true, true)
+	}
+
+	t.Run("runtime config invalid", func(t *testing.T) {
+		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		svc.gatewayErr = errAssistantRuntimeConfigInvalid
+		conv := svc.createConversation("tenant-1", principal)
+		rec := httptest.NewRecorder()
+		handleAssistantConversationTurnsAPI(rec, makeReq(conv.ConversationID), svc)
+		if rec.Code != http.StatusUnprocessableEntity || assistantDecodeErrCode(t, rec) != "ai_runtime_config_invalid" {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+	})
+
+	t.Run("runtime config missing", func(t *testing.T) {
+		svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+		svc.gatewayErr = errAssistantRuntimeConfigMissing
+		conv := svc.createConversation("tenant-1", principal)
+		rec := httptest.NewRecorder()
+		handleAssistantConversationTurnsAPI(rec, makeReq(conv.ConversationID), svc)
+		if rec.Code != http.StatusServiceUnavailable || assistantDecodeErrCode(t, rec) != "ai_runtime_config_missing" {
+			t.Fatalf("status=%d code=%s body=%s", rec.Code, assistantDecodeErrCode(t, rec), rec.Body.String())
+		}
+	})
+}
+
 func TestAssistantServiceHelpers_PoolWrappersAndPathEdges(t *testing.T) {
 	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
 	svc.pool = assistFakeTxBeginner{err: errors.New("begin failed")}
@@ -336,5 +424,114 @@ func TestAssistantServiceHelpers_PoolWrappersAndPathEdges(t *testing.T) {
 	}
 	if _, _, _, ok := extractAssistantTurnActionPath("/internal/assistant/conversations/conv-1/turns/turn-1:   "); ok {
 		t.Fatal("expected invalid empty action")
+	}
+}
+
+func TestAssistantConversationsList_HandlerAndServiceBranches(t *testing.T) {
+	store := newOrgUnitMemoryStore()
+	svc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	principal := Principal{ID: "actor-1", RoleSlug: "tenant-admin"}
+	conv1 := svc.createConversation("tenant-1", principal)
+	conv2 := svc.createConversation("tenant-1", principal)
+	_ = svc.createConversation("tenant-1", principal)
+
+	svc.mu.Lock()
+	if stored := svc.byID[conv2.ConversationID]; stored != nil {
+		stored.Turns = []*assistantTurn{nil, &assistantTurn{
+			TurnID:    "turn_1",
+			UserInput: "u",
+			State:     assistantStateDraft,
+			RiskTier:  "low",
+		}}
+		stored.UpdatedAt = conv1.UpdatedAt
+	}
+	svc.byID["conv_nil"] = nil
+	svc.byID["conv_other_actor"] = &assistantConversation{
+		ConversationID: "conv_other_actor",
+		TenantID:       "tenant-1",
+		ActorID:        "actor-2",
+		UpdatedAt:      time.Now().UTC(),
+	}
+	svc.byID["conv_other_tenant"] = &assistantConversation{
+		ConversationID: "conv_other_tenant",
+		TenantID:       "tenant-2",
+		ActorID:        "actor-1",
+		UpdatedAt:      time.Now().UTC(),
+	}
+	svc.mu.Unlock()
+
+	items, cursor, err := svc.listConversations(context.Background(), "tenant-1", "actor-1", 0, "")
+	if err != nil {
+		t.Fatalf("list conversations err=%v", err)
+	}
+	if len(items) < 2 || cursor != "" {
+		t.Fatalf("unexpected list result len=%d cursor=%q", len(items), cursor)
+	}
+	hasLastTurn := false
+	for _, item := range items {
+		if item.LastTurn != nil {
+			hasLastTurn = true
+		}
+	}
+	if !hasLastTurn {
+		t.Fatalf("expected at least one item with last turn: %+v", items)
+	}
+
+	_, firstCursor, err := svc.listConversations(context.Background(), "tenant-1", "actor-1", 1, "")
+	if err != nil || firstCursor == "" {
+		t.Fatalf("unexpected first page err=%v cursor=%q", err, firstCursor)
+	}
+
+	items2, nextCursor, err := svc.listConversations(context.Background(), "tenant-1", "actor-1", 1, firstCursor)
+	if err != nil {
+		t.Fatalf("list conversations page2 err=%v", err)
+	}
+	if len(items2) > 1 {
+		t.Fatalf("unexpected page2 result len=%d next=%q", len(items2), nextCursor)
+	}
+
+	rec := httptest.NewRecorder()
+	handleAssistantConversationsAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/conversations?page_size=0", "", true, true), svc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	handleAssistantConversationsAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/conversations?page_size=999", "", true, true), svc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	pgSvc := newAssistantConversationService(store, assistantWriteServiceStub{store: store})
+	pgSvc.pool = assistFakeTxBeginner{err: errors.New("begin failed")}
+	if _, _, err := pgSvc.listConversations(context.Background(), "tenant-1", "actor-1", 20, ""); err == nil {
+		t.Fatal("expected pg list error")
+	}
+	rec = httptest.NewRecorder()
+	handleAssistantConversationsAPI(rec, assistantReqWithContext(http.MethodGet, "/internal/assistant/conversations", "", true, true), pgSvc)
+	if rec.Code != http.StatusInternalServerError || assistantDecodeErrCode(t, rec) != "assistant_conversation_list_failed" {
+		t.Fatalf("status=%d code=%s", rec.Code, assistantDecodeErrCode(t, rec))
+	}
+}
+
+func TestAssistantHelper_LatestTurnAndTaskActionPathBranches(t *testing.T) {
+	if got := latestTurn(nil); got != nil {
+		t.Fatalf("expected nil latest turn, got=%+v", got)
+	}
+	if got := latestTurn(&assistantConversation{}); got != nil {
+		t.Fatalf("expected nil latest turn for empty conversation, got=%+v", got)
+	}
+	if got := latestTurn(&assistantConversation{Turns: []*assistantTurn{nil, nil}}); got != nil {
+		t.Fatalf("expected nil latest turn for all nil turns, got=%+v", got)
+	}
+	turn := &assistantTurn{TurnID: "turn_x"}
+	if got := latestTurn(&assistantConversation{Turns: []*assistantTurn{nil, turn}}); got == nil || got.TurnID != turn.TurnID {
+		t.Fatalf("unexpected latest turn=%+v", got)
+	}
+
+	if _, _, ok := extractAssistantTaskActionPath("/internal/assistant/tasks/task_1:   "); ok {
+		t.Fatal("expected invalid empty task action")
+	}
+	if _, _, ok := extractAssistantTaskActionPath("/internal/assistant/tasks/   :cancel"); ok {
+		t.Fatal("expected invalid empty task id")
 	}
 }

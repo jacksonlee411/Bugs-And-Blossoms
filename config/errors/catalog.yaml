@@ -364,11 +364,39 @@ errors:
     user_message_key: errors.ai_model_config_invalid
     backend_policy: mapped
     frontend_policy: mapped
+  - code: ai_runtime_config_invalid
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.ai_runtime_config_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ai_runtime_config_missing
+    module: assistant
+    http_status: 503
+    severity: error
+    user_message_key: errors.ai_runtime_config_missing
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: ai_model_secret_missing
     module: assistant
     http_status: 500
     severity: error
     user_message_key: errors.ai_model_secret_missing
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: assistant_conversation_cursor_invalid
+    module: assistant
+    http_status: 400
+    severity: error
+    user_message_key: errors.assistant_conversation_cursor_invalid
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: assistant_conversation_list_failed
+    module: assistant
+    http_status: 500
+    severity: error
+    user_message_key: errors.assistant_conversation_list_failed
     backend_policy: mapped
     frontend_policy: mapped
   - code: assistant_candidate_not_found

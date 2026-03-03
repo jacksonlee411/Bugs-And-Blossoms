@@ -203,6 +203,15 @@
     },
     {
       "method": "GET",
+      "path": "/internal/assistant/conversations",
+      "route_class": "internal_api",
+      "action": "read",
+      "capability_key": "org.assistant_conversation.manage",
+      "owner_module": "orgunit",
+      "status": "active"
+    },
+    {
+      "method": "GET",
       "path": "/internal/assistant/conversations/{conversation_id}",
       "route_class": "internal_api",
       "action": "read",
