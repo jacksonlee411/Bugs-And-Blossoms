@@ -130,6 +130,7 @@
 - No-Legacy：`make check no-legacy`（禁止 legacy 分支/回退通道，对齐 `DEV-PLAN-004M1`）。
 - Granularity：`make check granularity`（颗粒度层次门禁，阻断 `org_level/scope_type/scope_key` 回流，对齐 `DEV-PLAN-180`）。
 - Request-Code：`make check request-code`（Gate-C：`--full` 全量扫描零容忍；业务幂等字段统一为 `request_id`，Tracing 统一 `trace_id` + `traceparent`，并阻断 `request_code`/`X-Request-ID` 回流；对齐 `DEV-PLAN-109A`）。
+- Assistant Config Single-Source：`make check assistant-config-single-source`（阻断 Assistant 模型配置第二写入口、配置层确定性产物回写、以及 Makefile/CI/文档接线漂移；对齐 `DEV-PLAN-230/231`）。
 - i18n：`make check tr`（仅 en/zh，对齐 `DEV-PLAN-020`）。
 - sqlc：命中触发器时强制 `make sqlc-generate` 且 `git status --porcelain` 为空；命中 `db` 触发器时追加 `make sqlc-verify-schema` 做 PR 阻断式一致性校验（对齐 `DEV-PLAN-025/025A`）。
 - Authz：命中触发器时强制 policy pack/diff/lint/test（对齐 `DEV-PLAN-022`）。
@@ -208,6 +209,7 @@
 13. [ ] GitHub 保护规则：把四大 required checks 设置为合并前必须通过（repo settings 层面），并在文档中冻结其名称（避免后续改名）。
 14. [X] Go 版本门禁：在 Code Quality & Formatting 中接入 `make check go-version`，阻断 `go.mod` / `.tool-versions` 偏离 `1.26.x`。
 15. [X] 错误提示门禁：在 Code Quality & Formatting 中接入 `make check error-message`，并纳入 `make preflight` 与 required checks（对齐 `DEV-PLAN-140`）。
+16. [X] Assistant 配置单主源门禁：在 Code Quality & Formatting 中接入 `make check assistant-config-single-source`，并纳入 `make preflight` 与 required checks（对齐 `DEV-PLAN-230/231`）。
 
 ## 5. 失败路径与排障（Fail-Fast & Debuggability）
 
@@ -234,6 +236,7 @@
 - [ ] 命中生成物触发器时，CI 能阻断“漏提交/漂移”（`git status --porcelain` 为空为硬约束）。
 - [X] CI 始终执行 Go 版本门禁（`make check go-version`），并对 `go.mod` / `.tool-versions` 的 `1.26.x` 口径漂移 fail-fast。
 - [X] CI 始终执行错误提示门禁（`make check error-message`），并对 error catalog / backend / frontend 映射漂移 fail-fast（对齐 `DEV-PLAN-140`）。
+- [X] CI 始终执行 Assistant 配置单主源门禁（`make check assistant-config-single-source`），并对第二写入口/契约回写/SSOT 接线漂移 fail-fast（对齐 `DEV-PLAN-230/231`）。
 - [ ] Unit & Integration Tests 在 CI 稳定可复现，并满足 100% 覆盖率门禁（按 §6 的口径）。
 - [ ] 覆盖率门禁的阈值/范围/排除项存在可审计的策略文件（例如 `config/coverage/policy.yaml`），且 CI workflow 不再隐式写入阈值/忽略规则。
 - [ ] Routing Gates 能阻断 allowlist/分类/返回契约漂移（对齐 `DEV-PLAN-017`）。

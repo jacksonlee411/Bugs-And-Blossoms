@@ -7,7 +7,7 @@ export ATLAS_VERSION ?= v0.38.0
 export DEV_COMPOSE_PROJECT ?= bugs-and-blossoms-dev
 export DEV_INFRA_ENV_FILE ?= .env.example
 
-.PHONY: help preflight check pr-branch naming no-legacy no-scope-package granularity capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
+.PHONY: help preflight check pr-branch naming no-legacy assistant-config-single-source no-scope-package granularity capability-key capability-contract capability-route-map capability-catalog policy-baseline-dup request-code as-of-explicit dict-tenant-only go-version error-message fmt lint test routing e2e doc tr generate css
 .PHONY: sqlc-generate sqlc-verify-schema authz-pack authz-test authz-lint
 .PHONY: plan migrate up
 .PHONY: iam orgunit jobcatalog staffing person
@@ -18,10 +18,11 @@ help:
 	@printf "%s\n" \
 		"常用入口：" \
 		"  make preflight" \
-			"  make check naming" \
-				"  make check no-legacy" \
-				"  make check no-scope-package" \
-				"  make check granularity" \
+				"  make check naming" \
+					"  make check no-legacy" \
+					"  make check assistant-config-single-source" \
+					"  make check no-scope-package" \
+					"  make check granularity" \
 				"  make check capability-key" \
 				"  make check capability-contract" \
 				"  make check capability-route-map" \
@@ -54,6 +55,7 @@ preflight: ## 本地一键对齐CI（严格版：含 UI build/typecheck）
 	@$(MAKE) check pr-branch
 	@$(MAKE) check naming
 	@$(MAKE) check no-legacy
+	@$(MAKE) check assistant-config-single-source
 	@$(MAKE) check no-scope-package
 	@$(MAKE) check granularity
 	@$(MAKE) check capability-key
@@ -85,6 +87,9 @@ naming: ## 命名去噪门禁（已取消：no-op）
 
 no-legacy: ## 禁止 legacy 分支/回退通道（单链路原则）
 	@./scripts/ci/check-no-legacy.sh
+
+assistant-config-single-source: ## 助手配置单主源门禁（禁止第二写入口/契约回写/SSOT 漂移）
+	@./scripts/ci/check-assistant-config-single-source.sh
 
 no-scope-package: ## 反漂移门禁（阻断新增 scope/package 语义）
 	@./scripts/ci/check-no-scope-package.sh
