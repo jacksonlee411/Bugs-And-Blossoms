@@ -143,8 +143,9 @@ graph TD
 3. [ ] `make check no-legacy`
 4. [ ] `make check error-message`
 5. [ ] `make check assistant-config-single-source`（新增）
-6. [ ] `make e2e`（含 assistant-ui 负测 + 224/225 契约快照回归）
-7. [ ] `make check doc`
+6. [ ] `make check assistant-domain-allowlist`（新增，承接 `DEV-PLAN-234`）
+7. [ ] `make e2e`（含 assistant-ui 负测 + 224/225 契约快照回归）
+8. [ ] `make check doc`
 
 ## 7. 剪切/缩水策略（允许项与禁止项）
 ### 7.1 允许的策略性剪切（不冲突）
@@ -187,8 +188,8 @@ graph TD
 ## 11. 子计划拆分（直接落地）
 - [ ] DEV-PLAN-231（前置契约与门禁）：`docs/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md`
 - [ ] DEV-PLAN-232（官方运行基线）：`docs/dev-plans/232-librechat-official-runtime-baseline-plan.md`
-- [ ] DEV-PLAN-233（单主源配置收口）：`docs/dev-plans/233-librechat-single-source-config-convergence-plan.md`
-- [ ] DEV-PLAN-234（MCP/Actions/Allowlist 复用落地）：`docs/dev-plans/234-librechat-open-source-capabilities-reuse-plan.md`
+- [X] DEV-PLAN-233（单主源配置收口）：`docs/dev-plans/233-librechat-single-source-config-convergence-plan.md`
+- [X] DEV-PLAN-234（MCP/Actions/Allowlist 复用落地）：`docs/dev-plans/234-librechat-open-source-capabilities-reuse-plan.md`
 - [ ] DEV-PLAN-235（身份/会话/租户边界硬化）：`docs/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
 - [ ] DEV-PLAN-236（旧入口退役与单主源封板）：`docs/dev-plans/236-librechat-legacy-endpoint-retirement-and-single-source-closure-plan.md`
 - [ ] DEV-PLAN-237（升级与回归闭环）：`docs/dev-plans/237-librechat-upgrade-and-regression-closure-plan.md`

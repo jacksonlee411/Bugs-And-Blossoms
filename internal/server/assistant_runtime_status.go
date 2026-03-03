@@ -32,6 +32,7 @@ type assistantRuntimeStatusResponse struct {
 	ErrorMessage string                         `json:"error_message,omitempty"`
 	Upstream     assistantRuntimeUpstreamStatus `json:"upstream"`
 	Services     []assistantRuntimeService      `json:"services"`
+	Capabilities assistantRuntimeCapabilities   `json:"capabilities"`
 	Code         string                         `json:"code,omitempty"`
 	Message      string                         `json:"message,omitempty"`
 }
@@ -93,6 +94,9 @@ func assistantRuntimeStatus() assistantRuntimeStatusResponse {
 	resp := assistantRuntimeStatusResponse{
 		Status:    assistantRuntimeHealthUnavailable,
 		CheckedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		Capabilities: assistantRuntimeCapabilities{
+			AgentsWriteEnabled: assistantRuntimeAgentsWriteEnabled(),
+		},
 	}
 	resp.Upstream.URL = assistantRuntimeDefaultUpstreamURL()
 	if _, err := url.ParseRequestURI(resp.Upstream.URL); err != nil {
@@ -142,11 +146,38 @@ func assistantRuntimeStatus() assistantRuntimeStatusResponse {
 	}
 
 	resp.Status = assistantRuntimeAggregateStatus(resp.Services)
+	if capabilities, err := assistantRuntimeCapabilitiesStatus(); err == nil {
+		resp.Capabilities = capabilities
+	} else {
+		resp.Status = assistantRuntimeHealthUnavailable
+		if resp.ErrorCode == "" {
+			resp.ErrorCode = assistantRuntimeDomainPolicyErrorCode(err)
+			resp.ErrorMessage = assistantRuntimeDomainPolicyErrorMessage(err)
+		}
+	}
 	if resp.Status == assistantRuntimeHealthUnavailable && resp.ErrorCode == "" {
 		resp.ErrorCode = "assistant_runtime_dependency_unavailable"
 		resp.ErrorMessage = "assistant runtime dependencies are unavailable"
 	}
 	return resp
+}
+
+func assistantRuntimeDomainPolicyErrorCode(err error) string {
+	switch {
+	case errors.Is(err, errAssistantDomainPolicyMissing):
+		return "assistant_oss_domain_policy_missing"
+	default:
+		return "assistant_oss_domain_policy_invalid"
+	}
+}
+
+func assistantRuntimeDomainPolicyErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, errAssistantDomainPolicyMissing):
+		return "assistant domain allowlist policy is missing"
+	default:
+		return "assistant domain allowlist policy is invalid"
+	}
 }
 
 func assistantRuntimeServicesFromLock(services []struct {
