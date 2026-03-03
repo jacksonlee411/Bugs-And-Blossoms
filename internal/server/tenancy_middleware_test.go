@@ -187,6 +187,24 @@ func TestWithTenantAndSession_MissingSIDRedirects(t *testing.T) {
 	}
 }
 
+func TestWithTenantAndSession_MissingSIDRedirectsAssistantUI(t *testing.T) {
+	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
+	h := withTenantAndSession(nil, stubTenancyResolver{tenant: tnt, ok: true}, newMemoryPrincipalStore(), newMemorySessionStore(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unexpected next")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/assistant-ui", nil)
+	req.Host = "localhost:8080"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	if loc := rec.Result().Header.Get("Location"); loc != "/app/login" {
+		t.Fatalf("location=%q", loc)
+	}
+}
+
 func TestWithTenantAndSession_OldUIPathPassthrough_NoLoginAlias(t *testing.T) {
 	tnt := Tenant{ID: "t1", Domain: "localhost", Name: "Local"}
 	nextCalled := false

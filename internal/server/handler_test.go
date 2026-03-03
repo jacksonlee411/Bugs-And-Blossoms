@@ -484,6 +484,17 @@ func TestUI_MUIOnly(t *testing.T) {
 		t.Fatalf("unexpected redirect location=%q", loc)
 	}
 
+	reqAssistantUINoSession := httptest.NewRequest(http.MethodGet, "/assistant-ui", nil)
+	reqAssistantUINoSession.Host = "localhost:8080"
+	recAssistantUINoSession := httptest.NewRecorder()
+	h.ServeHTTP(recAssistantUINoSession, reqAssistantUINoSession)
+	if recAssistantUINoSession.Code != http.StatusFound {
+		t.Fatalf("assistant-ui (no session) status=%d", recAssistantUINoSession.Code)
+	}
+	if loc := recAssistantUINoSession.Result().Header.Get("Location"); loc != "/app/login" {
+		t.Fatalf("unexpected assistant-ui redirect location=%q", loc)
+	}
+
 	reqAppLogin := httptest.NewRequest(http.MethodGet, "/app/login", nil)
 	reqAppLogin.Host = "localhost:8080"
 	recAppLogin := httptest.NewRecorder()

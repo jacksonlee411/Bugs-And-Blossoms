@@ -589,10 +589,10 @@ func withTenantAndSession(classifier *routing.Classifier, tenants TenancyResolve
 		}
 		r = r.WithContext(withTenant(r.Context(), t))
 
-		// DEV-PLAN-103/103A: tenant app UI is MUI-only under /app/**.
-		// For non-/app UI paths (e.g. old URLs like /login, /org/*), do not redirect-to-login alias;
+		// DEV-PLAN-103/103A/235: protected tenant UI lives under /app/** and /assistant-ui/**.
+		// For other UI paths (e.g. old URLs like /login, /org/*), do not redirect-to-login alias;
 		// let the router return 404 instead.
-		if rc == routing.RouteClassUI && path != "/" && !pathHasPrefixSegment(path, "/app") {
+		if rc == routing.RouteClassUI && path != "/" && !isProtectedTenantUIPath(path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -652,4 +652,8 @@ func pathHasPrefixSegment(path, prefix string) bool {
 		return true
 	}
 	return len(path) > len(prefix) && path[:len(prefix)+1] == prefix+"/"
+}
+
+func isProtectedTenantUIPath(path string) bool {
+	return pathHasPrefixSegment(path, "/app") || pathHasPrefixSegment(path, "/assistant-ui")
 }
