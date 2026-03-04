@@ -1,6 +1,6 @@
 # DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（去写死 + Skill/MCP/LibreChat 对齐）
 
-**状态**: 草拟中（2026-03-04 11:46 UTC）
+**状态**: 草拟中（已采纳蓝图建议，按“条件采纳”落地；已纳入 TTL/TOCTOU/M5 人工接管优先；2026-03-04 13:22 UTC）
 
 ## 1. 背景与问题定义
 - **需求来源**：针对当前 Assistant 在组织架构操作中的“代码写死”实现，提出批判性评估，并给出更先进、可扩展、可审计的事务操作模式。
@@ -56,6 +56,13 @@
 2. [ ] **中期增强**：MCP Tool 只读增强 + 人工确认网关 + Task 异步执行。
 3. [ ] **长期方向**：统一 Conversation/Task/Workflow 事务模型，逐步消除硬编码动作分支。
 
+### 3.6 蓝图采纳结论（2026-03-04）
+1. [X] 采纳 `AssistantActionSpec` 作为 DEV-PLAN-240 的核心契约载体，承接“去写死 + 声明式编排”目标。
+2. [X] 采用“条件采纳”：不直接引入多写入口（如 DB 动态回写注册），初期仅允许代码内注册表或只读配置源。
+3. [X] 权鉴语义对齐本仓现行模型：subject/domain/object/action（Casbin），禁止仅以 `UserID` 直判替代既有授权口径。
+4. [X] `CommitPath` 采用受控 Adapter 注册（typed key + allowlist），禁止字符串直路由导致第二写入口风险。
+5. [X] MCP 外部能力默认只读接入；涉及业务写入的能力必须显式映射 capability_key 并通过确认/审计门。
+
 ## 4. 目标与非目标
 
 ### 4.1 核心目标
@@ -97,24 +104,149 @@ graph TD
 ## 6. 契约与数据模型改造（草案）
 
 ### 6.1 新增/收敛契约
-1. [ ] `AssistantActionSpec`：动作定义（capability_key、skill_id、risk_tier、required_checks）。
-2. [ ] `AssistantExecutionPlan`：计划快照（intent_hash、plan_hash、skill_manifest_digest、version tuple）。
-3. [ ] `AssistantTxEnvelope`：事务封套（tenant_id、conversation_id、turn_id、request_id、trace_id、idempotency_key）。
-4. [ ] `AssistantCompensationSpec`：失败补偿策略（none/manual/auto-saga）。
+1. [ ] `AssistantActionSpec`：动作定义（`id/version/category/tags/input_schema/capability_key/security.auth_object/security.auth_action/security.risk_tier/security.required_checks/handler.commit_adapter_key/handler.dry_run_key/handler.undo_action/handler.timeout_sec`）。
+2. [ ] `AssistantExecutionPlan`：计划快照（`intent_hash/context_hash/plan_hash/skill_manifest_digest/model_route_snapshot/version tuple`）。
+3. [ ] `AssistantTxEnvelope`：事务封套（`tenant_id/conversation_id/turn_id/request_id/trace_id/idempotency_key`）。
+4. [ ] `AssistantCompensationSpec`：失败补偿策略（`none/manual/auto-saga` + `max_retry/backoff/manual_takeover_threshold`）。
 
-### 6.2 事务不变量
+### 6.2 ActionSpec 约束（冻结）
+1. [ ] **No Spec, No Commit**：未注册 action 一律不得进入 commit。
+2. [ ] **No Capability, No Plan**：`AssistantActionSpec.capability_key` 必须命中 capability 注册与映射门禁。
+3. [ ] **No Auth Pass, No DryRun**：左移鉴权失败时直接阻断，不调用业务 DryRun。
+4. [ ] **No Adapter, No Write**：`commit_adapter_key` 未注册时 fail-closed，禁止降级到直写实现。
+5. [ ] **No PlanHash Match, No Confirm**：Confirm 必须提交并校验 `plan_hash`，防止“旧确认提交新计划”。
+6. [ ] **No VersionTuple Match, No Commit**：Commit Adapter 在调用写门前必须校验 `version tuple`（OCC），防止 TOCTOU。
+
+### 6.3 事务不变量
 1. [ ] One Door：最终写入仅经业务模块既有写门。
 2. [ ] No Tx No RLS：所有 DB 访问保持显式事务 + 租户注入。
 3. [ ] No Legacy：禁止 read/write 双链路并存。
 4. [ ] Determinism：提交前必须校验快照版本与哈希一致性。
 
+### 6.4 ActionPlan 状态机（v0.1）
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT
+    DRAFT --> AUTH_BLOCKED: casbin deny
+    DRAFT --> READY_FOR_CONFIRM: auth ok + dry-run ok
+    READY_FOR_CONFIRM --> CONFIRMED: user confirm + plan_hash match
+    READY_FOR_CONFIRM --> EXPIRED: ttl timeout
+    READY_FOR_CONFIRM --> CANCELED: cancel
+    CONFIRMED --> QUEUED: submit task
+    QUEUED --> EXECUTING: dispatcher claim
+    QUEUED --> CANCELED: cancel
+    EXECUTING --> SUCCEEDED: one-door commit success
+    EXECUTING --> COMPENSATING: partial failure + undo_action
+    EXECUTING --> MANUAL_TAKEOVER_REQUIRED: retry/deadline exceeded
+    EXECUTING --> CANCELED: cancel
+    COMPENSATING --> COMPENSATED: undo success
+    COMPENSATING --> MANUAL_TAKEOVER_REQUIRED: undo failed
+```
+
+### 6.5 状态映射到现有实现（过渡期）
+1. [ ] `READY_FOR_CONFIRM/CONFIRMED` 对齐现有 `validated/confirmed` 语义。
+2. [ ] `QUEUED/EXECUTING/SUCCEEDED/MANUAL_TAKEOVER_REQUIRED/CANCELED` 对齐现有 Task 状态机。
+3. [ ] `COMPENSATING/COMPENSATED` 先在编排层落状态与审计，再逐步接入真实补偿动作。
+4. [ ] `EXPIRED` 对齐现有会话回合 `expired` 语义；先实现“惰性过期判定”，再评估后台清理任务。
+
+### 6.6 核心契约结构定义（Go Struct 草案，M1 冻结目标）
+```go
+package assistantcontracts
+
+import "encoding/json"
+
+type AssistantActionSecurity struct {
+	AuthObject     string   `json:"auth_object"`
+	AuthAction     string   `json:"auth_action"`
+	RiskTier       string   `json:"risk_tier"`        // low | medium | high
+	RequiredChecks []string `json:"required_checks"`  // strict_decode / boundary_lint / ...
+}
+
+type AssistantActionHandler struct {
+	DryRunKey        string `json:"dry_run_key"`
+	CommitAdapterKey string `json:"commit_adapter_key"`
+	UndoAction       string `json:"undo_action,omitempty"`
+	TimeoutSec       int    `json:"timeout_sec"`
+}
+
+type AssistantActionUI struct {
+	ConfirmTemplate string `json:"confirm_template,omitempty"`
+	SuccessRoute    string `json:"success_route,omitempty"`
+}
+
+// AssistantActionSpec 是动作声明的主契约（Registry 单位）
+type AssistantActionSpec struct {
+	ID            string          `json:"id"`
+	Version       string          `json:"version"`
+	Category      string          `json:"category"`
+	Tags          []string        `json:"tags,omitempty"`
+	CapabilityKey string          `json:"capability_key"`
+	InputSchema   json.RawMessage `json:"input_schema"` // JSON Schema 原文
+	Security      AssistantActionSecurity `json:"security"`
+	Handler       AssistantActionHandler  `json:"handler"`
+	UI            AssistantActionUI       `json:"ui,omitempty"`
+}
+
+type AssistantExecutionPlan struct {
+	PlanID                   string          `json:"plan_id"`
+	ActionID                 string          `json:"action_id"`
+	ActionVersion            string          `json:"action_version"`
+	IntentHash               string          `json:"intent_hash"`
+	ContextHash              string          `json:"context_hash"`
+	PlanHash                 string          `json:"plan_hash"`
+	SkillManifestDigest      string          `json:"skill_manifest_digest"`
+	ModelRouteSnapshot       json.RawMessage `json:"model_route_snapshot,omitempty"`
+	ModelRouteSnapshotHash   string          `json:"model_route_snapshot_hash,omitempty"`
+	IntentSchemaVersion      string          `json:"intent_schema_version"`
+	CompilerContractVersion  string          `json:"compiler_contract_version"`
+	CapabilityMapVersion     string          `json:"capability_map_version"`
+	VersionTuple             json.RawMessage `json:"version_tuple,omitempty"` // 写前 OCC 前置条件（如父组织状态/目标记录版本）
+	ConfirmTTLSeconds        int             `json:"confirm_ttl_seconds"`
+	ExpiresAt                string          `json:"expires_at,omitempty"` // RFC3339 UTC
+}
+
+type AssistantTxEnvelope struct {
+	TenantID       string `json:"tenant_id"`
+	ConversationID string `json:"conversation_id"`
+	TurnID         string `json:"turn_id"`
+	RequestID      string `json:"request_id"`
+	TraceID        string `json:"trace_id"`
+	IdempotencyKey string `json:"idempotency_key"`
+	PlanHash       string `json:"plan_hash"`
+}
+
+type AssistantCompensationSpec struct {
+	Mode                  string `json:"mode"` // none | manual | auto-saga
+	MaxRetry              int    `json:"max_retry"`
+	Backoff               string `json:"backoff"`
+	ManualTakeoverTrigger string `json:"manual_takeover_trigger"`
+}
+
+type AssistantActionPlanState string
+
+const (
+	ActionPlanDraft                AssistantActionPlanState = "DRAFT"
+	ActionPlanAuthBlocked          AssistantActionPlanState = "AUTH_BLOCKED"
+	ActionPlanReadyForConfirm      AssistantActionPlanState = "READY_FOR_CONFIRM"
+	ActionPlanConfirmed            AssistantActionPlanState = "CONFIRMED"
+	ActionPlanExpired              AssistantActionPlanState = "EXPIRED"
+	ActionPlanQueued               AssistantActionPlanState = "QUEUED"
+	ActionPlanExecuting            AssistantActionPlanState = "EXECUTING"
+	ActionPlanSucceeded            AssistantActionPlanState = "SUCCEEDED"
+	ActionPlanCompensating         AssistantActionPlanState = "COMPENSATING"
+	ActionPlanCompensated          AssistantActionPlanState = "COMPENSATED"
+	ActionPlanManualTakeoverNeeded AssistantActionPlanState = "MANUAL_TAKEOVER_REQUIRED"
+	ActionPlanCanceled             AssistantActionPlanState = "CANCELED"
+)
+```
+
 ## 7. 分阶段实施路线（M1-M6）
-1. [ ] **M1（契约冻结）**：冻结 ActionSpec/ExecutionPlan/TxEnvelope 草案与错误码。
-2. [ ] **M2（去写死第一步）**：把 `create_orgunit` 逻辑从核心 `if/switch` 下沉到注册表驱动执行器。
-3. [ ] **M3（编排统一）**：统一内存与 PG 路径的事务状态迁移逻辑，消除重复实现。
-4. [ ] **M4（MCP/LibreChat 对齐）**：将 MCP Tool 调用接入同一风控与审批门，完善 allowedDomains 与审计字段。
-5. [ ] **M5（耐久执行）**：提交链路默认走任务编排（可同步快速返回 receipt + 异步执行）。
-6. [ ] **M6（全链路验收）**：完成 AI/UI 同构回归、失败重试与人工接管演练，封板文档与门禁。
+1. [ ] **M1（契约冻结）**：冻结 `AssistantActionSpec/ExecutionPlan/TxEnvelope/CompensationSpec`、状态机、错误码与 Confirm `plan_hash` 契约，并冻结 `confirm_ttl_seconds/expires_at/version_tuple` 字段口径。
+2. [ ] **M2（去写死第一步）**：把 `create_orgunit` 从核心 `if/switch` 下沉到 `ActionRegistry + CommitAdapter`，保持行为等价；强制 Commit 前执行 `version_tuple` OCC 校验。
+3. [ ] **M3（编排统一）**：统一内存与 PG 路径状态迁移；把 confirm/commit/task 三段收敛为同一状态机实现。
+4. [ ] **M4（权鉴与风控左移）**：落地 `ActionInterceptor`，将 `auth_object/auth_action/risk_tier/required_checks` 固化到执行前 gate。
+5. [ ] **M5（耐久执行 + 补偿）**：提交链路默认走任务编排（receipt + 异步执行）；高风险组织操作在初期默认“人工接管优先”，`partial failure` 先落 `MANUAL_TAKEOVER_REQUIRED`，`auto-saga` 按白名单渐进启用。
+6. [ ] **M6（MCP/LibreChat 对齐与验收）**：将 MCP 调用接入统一风控/审批门，完成 AI/UI 同构回归与门禁封板。
 
 ## 8. 门禁与验证（SSOT 引用）
 - 触发器与本地必跑矩阵：`AGENTS.md`
@@ -135,9 +267,13 @@ graph TD
 ## 9. 验收标准（DoD）
 1. [ ] 新增组织操作场景时，无需修改核心 `assistant_*` 提交流程分支，仅通过注册契约扩展。
 2. [ ] 对同一输入，AI/UI 路径在授权判定、错误码、审计字段上保持一致。
-3. [ ] 任务执行支持断点恢复与可审计重试，不出现“已受理但不可追踪”状态。
-4. [ ] MCP/LibreChat 接入不突破 One Door 与租户边界。
-5. [ ] 关键失败路径（超时/版本漂移/审批拒绝/外部工具失败）均有稳定错误码与人工接管入口。
+3. [ ] Confirm 请求必须携带 `plan_hash` 且后端一致性校验通过，避免确认-提交错配。
+4. [ ] `READY_FOR_CONFIRM` 超过 TTL 后必须进入 `EXPIRED`（至少惰性判定生效），禁止超时确认。
+5. [ ] Commit Adapter 在写门前必须完成 `version_tuple` OCC 校验；校验失败返回稳定错误码并阻断提交。
+6. [ ] 高风险动作 `partial failure` 默认进入 `MANUAL_TAKEOVER_REQUIRED`，并生成可追踪人工接管信息。
+7. [ ] 任务执行支持断点恢复与可审计重试，不出现“已受理但不可追踪”状态。
+8. [ ] MCP/LibreChat 接入不突破 One Door 与租户边界，外部写能力必须显式注册并受审批门控制。
+9. [ ] 关键失败路径（超时/版本漂移/审批拒绝/外部工具失败/补偿失败）均有稳定错误码与人工接管入口。
 
 ## 10. 风险与缓解
 1. [ ] **风险：抽象过度导致落地变慢**；缓解：先从 orgunit create 单场景切片落地，再复制到其他动作。
@@ -165,3 +301,26 @@ graph TD
 1. [ ] 承接 `DEV-PLAN-224/224C/225` 的意图治理、技能计划、任务编排基础。
 2. [ ] 复用 `DEV-PLAN-234/235/239` 的 LibreChat、MCP、运行边界收敛成果。
 3. [ ] 本计划聚焦“去写死 + 统一事务编排抽象”，不重复定义既有单主源与边界规则。
+
+## 14. 当前实现 vs 目标态对照表（专门）
+
+> 快照日期：2026-03-04（基于当前主干代码与本计划草案）
+
+| 优先级 | 改造主题 | 当前实现（现状） | 240 目标态 | 主要落点（代码/契约） |
+| --- | --- | --- | --- | --- |
+| P0 | 去写死：ActionSpec/Registry | `create_orgunit`、`capability_key`、`required_checks` 在核心流程常量/分支中写死 | 使用 `AssistantActionSpec` + `ActionRegistry` 注册驱动；`No Spec, No Commit` | `internal/server/assistant_api.go:34`、`internal/server/assistant_api.go:1120`、`internal/server/assistant_intent_pipeline.go:51`、`internal/server/assistant_intent_pipeline.go:59`；本计划 §6.1/§6.2 |
+| P0 | Confirm 契约（plan_hash + TTL） | confirm 入参仅 `candidate_id`；未要求 `plan_hash`；未见 `READY_FOR_CONFIRM` 的 TTL 过期判定 | Confirm 必须提交并校验 `plan_hash`；超时转 `EXPIRED`，禁止超时确认 | `internal/server/assistant_api.go:202`、`internal/server/assistant_api.go:447`、`internal/server/assistant_api.go:840`；本计划 §6.2/§6.4/§9 |
+| P0 | Commit Adapter + OCC | commit 直接构造 `WriteOrgUnitRequest` 调 `writeSvc.Write`；未显式 `version_tuple` OCC | 通过 `commit_adapter_key` 进入受控 Adapter；写前强制 `version_tuple` OCC（TOCTOU 防护） | `internal/server/assistant_api.go:1009`、`internal/server/assistant_persistence.go:614`；本计划 §6.2/§7(M2)/§9 |
+| P0 | 内存/PG 路径统一 | `commitTurn` 与 `applyCommitTurn` 逻辑双处维护，容易漂移 | confirm/commit/task 收敛为统一状态机实现 | `internal/server/assistant_api.go:908`、`internal/server/assistant_persistence.go:543`；本计划 §7(M3) |
+| P1 | 提交链路耐久化（默认异步） | `/turns/{turn_action}:commit` 仍是同步直提；Task 通道存在但非默认写入主链 | 默认 `receipt + async task`，支持恢复重试与可追踪 | `internal/server/assistant_api.go:486`、`internal/server/assistant_tasks_api.go:12`、`internal/server/assistant_task_store.go:289`；本计划 §7(M5) |
+| P1 | Task 执行语义补齐 | 当前 workflow 主要做快照一致性校验后标记成功，未承接完整业务提交/补偿 | 对齐 `QUEUED/EXECUTING/SUCCEEDED/COMPENSATING/COMPENSATED/MANUAL_TAKEOVER_REQUIRED` | `internal/server/assistant_task_store.go:548`、`internal/server/assistant_task_store.go:611`；本计划 §6.4/§6.5 |
+| P1 | 权鉴与风控左移 | `required_checks` 主要在计划编译阶段硬编码，缺少统一拦截器承载 | 通过 `ActionInterceptor` 固化 `auth_object/auth_action/risk_tier/required_checks` gate | `internal/server/assistant_intent_pipeline.go:56`、`internal/server/assistant_intent_pipeline.go:65`；本计划 §6.1/§6.2/§7(M4) |
+| P2 | MCP/LibreChat 对齐（受控写入） | 已有域名 allowlist 与 runtime capability 检测，但未与 ActionSpec/Adapter 全量闭环 | MCP 默认只读；写能力必须显式 capability 映射 + 审批/审计门 | `internal/server/assistant_domain_policy.go:15`、`internal/server/assistant_domain_policy.go:168`；本计划 §3.6/§7(M6) |
+
+### 14.1 与 M1-M6 的对应关系（执行顺序）
+1. [ ] **M1**：先冻结 ActionSpec/ExecutionPlan/TxEnvelope 与 Confirm `plan_hash` + TTL 字段口径（对照表前两行）。
+2. [ ] **M2**：落地 ActionRegistry + CommitAdapter，并引入 `version_tuple` OCC（对照表第 1/3 行）。
+3. [ ] **M3**：消除内存/PG 双实现漂移，统一状态迁移（对照表第 4 行）。
+4. [ ] **M4**：接入 ActionInterceptor，权鉴与风控左移（对照表第 7 行）。
+5. [ ] **M5**：提交改为耐久任务主链，补齐人工接管优先策略（对照表第 5/6 行）。
+6. [ ] **M6**：完成 MCP/LibreChat 的受控写入闭环与验收（对照表第 8 行）。
