@@ -184,6 +184,12 @@ func knownErrorMessage(code string) string {
 		return "会话分页游标无效或已过期，请刷新列表后重试。"
 	case "assistant_conversation_list_failed":
 		return "加载助手会话列表失败，请稍后重试。"
+	case "assistant_ui_method_not_allowed":
+		return "当前请求方法不被允许，请刷新页面后重试。"
+	case "assistant_ui_path_invalid":
+		return "助手聊天路径无效，请从助手页面重新进入。"
+	case "assistant_ui_upstream_unavailable":
+		return "聊天服务暂不可用，请稍后重试。"
 	default:
 		return ""
 	}

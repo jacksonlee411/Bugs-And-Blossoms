@@ -242,6 +242,9 @@ func TestKnownErrorMessage_AllCases(t *testing.T) {
 		{code: "ai_model_secret_missing", want: "模型密钥缺失，请检查 key_ref 配置后重试。"},
 		{code: "assistant_conversation_cursor_invalid", want: "会话分页游标无效或已过期，请刷新列表后重试。"},
 		{code: "assistant_conversation_list_failed", want: "加载助手会话列表失败，请稍后重试。"},
+		{code: "assistant_ui_method_not_allowed", want: "当前请求方法不被允许，请刷新页面后重试。"},
+		{code: "assistant_ui_path_invalid", want: "助手聊天路径无效，请从助手页面重新进入。"},
+		{code: "assistant_ui_upstream_unavailable", want: "聊天服务暂不可用，请稍后重试。"},
 		{code: "unknown", want: ""},
 	}
 

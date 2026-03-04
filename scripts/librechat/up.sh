@@ -17,8 +17,10 @@ librechat_require_cmd jq
 
 librechat_ensure_data_dirs
 librechat_assert_mount_sources
+librechat_require_env_nonempty OPENAI_API_KEY "set OPENAI_API_KEY in deploy/librechat/.env (or export it) before runtime-up"
 
 "${LIBRECHAT_COMPOSE_CMD[@]}" up -d
+librechat_require_container_env_nonempty api OPENAI_API_KEY "container env drift detected; check deploy/librechat/.env and rerun make assistant-runtime-down && make assistant-runtime-up"
 "${LIBRECHAT_RUNTIME_DIR}/healthcheck.sh"
 
 echo "${prefix} OK"

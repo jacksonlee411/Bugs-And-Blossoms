@@ -99,6 +99,12 @@ func TestValidateAssistantDomainPolicy(t *testing.T) {
 	if err := validateAssistantDomainPolicy(emptyAllowed); err == nil {
 		t.Fatal("expected empty allowed_domains to fail")
 	}
+
+	invalidBlocked := valid
+	invalidBlocked.BlockedDomains = []string{"localhost", "127.0.0.1", "https://169.254.169.254"}
+	if err := validateAssistantDomainPolicy(invalidBlocked); err == nil {
+		t.Fatal("expected blocked domain with scheme to fail")
+	}
 }
 
 func TestAssistantRuntimeAgentsWriteEnabled(t *testing.T) {
@@ -131,6 +137,11 @@ func TestReadAssistantDomainPolicy_ErrorAndSuccess(t *testing.T) {
 	t.Setenv("ASSISTANT_DOMAIN_ALLOWLIST_PATH", filepath.Join(dir, "missing.yaml"))
 	if _, err := readAssistantDomainPolicy(); !errors.Is(err, errAssistantDomainPolicyMissing) {
 		t.Fatalf("expected missing error, got=%v", err)
+	}
+
+	t.Setenv("ASSISTANT_DOMAIN_ALLOWLIST_PATH", dir)
+	if _, err := readAssistantDomainPolicy(); !errors.Is(err, errAssistantDomainPolicyInvalid) {
+		t.Fatalf("expected invalid policy error for unreadable path, got=%v", err)
 	}
 
 	invalidYAMLPath := filepath.Join(dir, "invalid.yaml")
@@ -214,6 +225,15 @@ func TestAssistantDomainPatternDangerous(t *testing.T) {
 	}
 	if assistantDomainPatternDangerous("api.openai.com") {
 		t.Fatal("expected api.openai.com to be safe")
+	}
+	if !assistantDomainPatternDangerous("*.localhost") {
+		t.Fatal("expected *.localhost to be dangerous")
+	}
+	if assistantDomainPatternDangerous("172.15.0.1") {
+		t.Fatal("expected 172.15.0.1 to be safe")
+	}
+	if !assistantDomainPatternDangerous("::") {
+		t.Fatal("expected :: to be dangerous")
 	}
 }
 

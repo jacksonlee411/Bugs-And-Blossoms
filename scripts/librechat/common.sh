@@ -95,6 +95,34 @@ librechat_require_cmd() {
   fi
 }
 
+librechat_require_env_nonempty() {
+  local name="${1:?}"
+  local hint="${2:-}"
+  local value="${!name:-}"
+  if [[ -n "${value//[[:space:]]/}" ]]; then
+    return 0
+  fi
+  echo "${LIBRECHAT_PREFIX} missing required env: ${name} (file=${LIBRECHAT_ENV_FILE_PATH})" >&2
+  if [[ -n "${hint}" ]]; then
+    echo "${LIBRECHAT_PREFIX} ${hint}" >&2
+  fi
+  return 2
+}
+
+librechat_require_container_env_nonempty() {
+  local service="${1:?}"
+  local name="${2:?}"
+  local hint="${3:-}"
+  if "${LIBRECHAT_COMPOSE_CMD[@]}" exec -T "${service}" sh -lc "test -n \"\${${name}:-}\"" >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "${LIBRECHAT_PREFIX} ${service} missing required env in container: ${name}" >&2
+  if [[ -n "${hint}" ]]; then
+    echo "${LIBRECHAT_PREFIX} ${hint}" >&2
+  fi
+  return 1
+}
+
 librechat_ensure_data_dirs() {
   mkdir -p "${LIBRECHAT_DATA_ROOT_ABS}"
   for service in "${LIBRECHAT_SERVICES[@]}"; do

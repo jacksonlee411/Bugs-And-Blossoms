@@ -301,3 +301,26 @@ const (
 1. [ ] 承接 `DEV-PLAN-224/224C/225` 的意图治理、技能计划、任务编排基础。
 2. [ ] 复用 `DEV-PLAN-234/235/239` 的 LibreChat、MCP、运行边界收敛成果。
 3. [ ] 本计划聚焦“去写死 + 统一事务编排抽象”，不重复定义既有单主源与边界规则。
+
+## 14. 当前实现 vs 目标态对照表（专门）
+
+> 快照日期：2026-03-04（基于当前主干代码与本计划草案）
+
+| 优先级 | 改造主题 | 当前实现（现状） | 240 目标态 | 主要落点（代码/契约） |
+| --- | --- | --- | --- | --- |
+| P0 | 去写死：ActionSpec/Registry | `create_orgunit`、`capability_key`、`required_checks` 在核心流程常量/分支中写死 | 使用 `AssistantActionSpec` + `ActionRegistry` 注册驱动；`No Spec, No Commit` | `internal/server/assistant_api.go:34`、`internal/server/assistant_api.go:1120`、`internal/server/assistant_intent_pipeline.go:51`、`internal/server/assistant_intent_pipeline.go:59`；本计划 §6.1/§6.2 |
+| P0 | Confirm 契约（plan_hash + TTL） | confirm 入参仅 `candidate_id`；未要求 `plan_hash`；未见 `READY_FOR_CONFIRM` 的 TTL 过期判定 | Confirm 必须提交并校验 `plan_hash`；超时转 `EXPIRED`，禁止超时确认 | `internal/server/assistant_api.go:202`、`internal/server/assistant_api.go:447`、`internal/server/assistant_api.go:840`；本计划 §6.2/§6.4/§9 |
+| P0 | Commit Adapter + OCC | commit 直接构造 `WriteOrgUnitRequest` 调 `writeSvc.Write`；未显式 `version_tuple` OCC | 通过 `commit_adapter_key` 进入受控 Adapter；写前强制 `version_tuple` OCC（TOCTOU 防护） | `internal/server/assistant_api.go:1009`、`internal/server/assistant_persistence.go:614`；本计划 §6.2/§7(M2)/§9 |
+| P0 | 内存/PG 路径统一 | `commitTurn` 与 `applyCommitTurn` 逻辑双处维护，容易漂移 | confirm/commit/task 收敛为统一状态机实现 | `internal/server/assistant_api.go:908`、`internal/server/assistant_persistence.go:543`；本计划 §7(M3) |
+| P1 | 提交链路耐久化（默认异步） | `/turns/{turn_action}:commit` 仍是同步直提；Task 通道存在但非默认写入主链 | 默认 `receipt + async task`，支持恢复重试与可追踪 | `internal/server/assistant_api.go:486`、`internal/server/assistant_tasks_api.go:12`、`internal/server/assistant_task_store.go:289`；本计划 §7(M5) |
+| P1 | Task 执行语义补齐 | 当前 workflow 主要做快照一致性校验后标记成功，未承接完整业务提交/补偿 | 对齐 `QUEUED/EXECUTING/SUCCEEDED/COMPENSATING/COMPENSATED/MANUAL_TAKEOVER_REQUIRED` | `internal/server/assistant_task_store.go:548`、`internal/server/assistant_task_store.go:611`；本计划 §6.4/§6.5 |
+| P1 | 权鉴与风控左移 | `required_checks` 主要在计划编译阶段硬编码，缺少统一拦截器承载 | 通过 `ActionInterceptor` 固化 `auth_object/auth_action/risk_tier/required_checks` gate | `internal/server/assistant_intent_pipeline.go:56`、`internal/server/assistant_intent_pipeline.go:65`；本计划 §6.1/§6.2/§7(M4) |
+| P2 | MCP/LibreChat 对齐（受控写入） | 已有域名 allowlist 与 runtime capability 检测，但未与 ActionSpec/Adapter 全量闭环 | MCP 默认只读；写能力必须显式 capability 映射 + 审批/审计门 | `internal/server/assistant_domain_policy.go:15`、`internal/server/assistant_domain_policy.go:168`；本计划 §3.6/§7(M6) |
+
+### 14.1 与 M1-M6 的对应关系（执行顺序）
+1. [ ] **M1**：先冻结 ActionSpec/ExecutionPlan/TxEnvelope 与 Confirm `plan_hash` + TTL 字段口径（对照表前两行）。
+2. [ ] **M2**：落地 ActionRegistry + CommitAdapter，并引入 `version_tuple` OCC（对照表第 1/3 行）。
+3. [ ] **M3**：消除内存/PG 双实现漂移，统一状态迁移（对照表第 4 行）。
+4. [ ] **M4**：接入 ActionInterceptor，权鉴与风控左移（对照表第 7 行）。
+5. [ ] **M5**：提交改为耐久任务主链，补齐人工接管优先策略（对照表第 5/6 行）。
+6. [ ] **M6**：完成 MCP/LibreChat 的受控写入闭环与验收（对照表第 8 行）。
