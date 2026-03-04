@@ -41,7 +41,7 @@ func newAssistantUIProxyHandler() http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if !assistantUIProxyMethodAllowed(r.Method) {
 			routing.WriteError(w, r, routing.RouteClassUI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
 		}
@@ -77,24 +77,19 @@ func joinProxyPath(base string, suffix string) string {
 	return base + "/" + suffix
 }
 
-var assistantUIProxyAllowedRequestHeaders = map[string]struct{}{
-	"Accept":          {},
-	"Accept-Encoding": {},
-	"Accept-Language": {},
-	"Cache-Control":   {},
-	"Content-Type":    {},
-	"Origin":          {},
-	"Referer":         {},
-	"User-Agent":      {},
+var assistantUIProxyAllowedMethods = map[string]struct{}{
+	http.MethodGet:     {},
+	http.MethodHead:    {},
+	http.MethodPost:    {},
+	http.MethodOptions: {},
+}
+
+func assistantUIProxyMethodAllowed(method string) bool {
+	_, ok := assistantUIProxyAllowedMethods[method]
+	return ok
 }
 
 func filterAssistantUIProxyRequestHeaders(req *http.Request) {
-	for header := range req.Header {
-		if _, ok := assistantUIProxyAllowedRequestHeaders[http.CanonicalHeaderKey(header)]; ok {
-			continue
-		}
-		req.Header.Del(header)
-	}
 	req.Header.Del("Cookie")
 	req.Header.Del("Authorization")
 }

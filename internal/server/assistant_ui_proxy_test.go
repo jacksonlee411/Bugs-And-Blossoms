@@ -48,7 +48,7 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Set-Cookie", "upstream_sid=1; Path=/")
 			w.Header().Set("Content-Type", "text/plain")
-			_, _ = io.WriteString(w, r.URL.Path+"|"+r.Header.Get("X-Forwarded-Prefix")+"|"+r.Host+"|"+r.Header.Get("Cookie")+"|"+r.Header.Get("Authorization"))
+			_, _ = io.WriteString(w, r.Method+"|"+r.URL.Path+"|"+r.Header.Get("X-Forwarded-Prefix")+"|"+r.Host+"|"+r.Header.Get("Cookie")+"|"+r.Header.Get("Authorization")+"|"+r.Header.Get("X-Client-Trace"))
 		}))
 		defer upstream.Close()
 
@@ -58,12 +58,13 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui/assets/app.js", nil)
 		req.Header.Set("Cookie", "sid=local")
 		req.Header.Set("Authorization", "Bearer test")
+		req.Header.Set("X-Client-Trace", "trace-001")
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
-		if got := rec.Body.String(); got == "" || got[0:5] != "/chat" {
+		if got := rec.Body.String(); got == "" || !strings.Contains(got, "GET|/chat/") {
 			t.Fatalf("unexpected body=%s", got)
 		}
 		if strings.Contains(rec.Body.String(), "sid=local") {
@@ -71,6 +72,9 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 		}
 		if strings.Contains(rec.Body.String(), "Bearer test") {
 			t.Fatalf("authorization header should be stripped, got=%q", rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "trace-001") {
+			t.Fatalf("custom header should be forwarded, got=%q", rec.Body.String())
 		}
 		if setCookie := rec.Result().Header.Get("Set-Cookie"); setCookie != "" {
 			t.Fatalf("set-cookie should be stripped, got=%q", setCookie)
@@ -99,8 +103,20 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 		postReq := httptest.NewRequest(http.MethodPost, "http://localhost/assistant-ui", nil)
 		postRec := httptest.NewRecorder()
 		h.ServeHTTP(postRec, postReq)
-		if postRec.Code != http.StatusMethodNotAllowed {
+		if postRec.Code != http.StatusOK {
 			t.Fatalf("post status=%d body=%s", postRec.Code, postRec.Body.String())
+		}
+		optionsReq := httptest.NewRequest(http.MethodOptions, "http://localhost/assistant-ui", nil)
+		optionsRec := httptest.NewRecorder()
+		h.ServeHTTP(optionsRec, optionsReq)
+		if optionsRec.Code != http.StatusOK {
+			t.Fatalf("options status=%d body=%s", optionsRec.Code, optionsRec.Body.String())
+		}
+		putReq := httptest.NewRequest(http.MethodPut, "http://localhost/assistant-ui", nil)
+		putRec := httptest.NewRecorder()
+		h.ServeHTTP(putRec, putReq)
+		if putRec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("put status=%d body=%s", putRec.Code, putRec.Body.String())
 		}
 
 		pathReq := httptest.NewRequest(http.MethodGet, "http://localhost/not-assistant", nil)

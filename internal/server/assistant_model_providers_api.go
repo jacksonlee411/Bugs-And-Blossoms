@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/jacksonlee411/Bugs-And-Blossoms/internal/routing"
 )
@@ -35,12 +34,6 @@ type assistantModelConfigPayload struct {
 type assistantModelProvidersValidateResponse struct {
 	Valid      bool                        `json:"valid"`
 	Errors     []string                    `json:"errors,omitempty"`
-	Normalized assistantModelConfigPayload `json:"normalized"`
-}
-
-type assistantModelProvidersApplyResponse struct {
-	AppliedAt  string                      `json:"applied_at"`
-	AppliedBy  string                      `json:"applied_by"`
 	Normalized assistantModelConfigPayload `json:"normalized"`
 }
 
@@ -119,52 +112,6 @@ func handleAssistantModelProvidersValidateAPI(w http.ResponseWriter, r *http.Req
 		},
 	}
 	writeJSON(w, http.StatusOK, resp)
-}
-
-func handleAssistantModelProvidersApplyAPI(w http.ResponseWriter, r *http.Request, svc *assistantConversationService) {
-	if r.Method != http.MethodPost {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
-		return
-	}
-	if svc == nil || svc.modelGateway == nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_service_missing", "assistant service missing")
-		return
-	}
-	principal, ok := currentPrincipal(r.Context())
-	if !ok {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnauthorized, "unauthorized", "unauthorized")
-		return
-	}
-	var payload assistantModelConfigPayload
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&payload); err != nil {
-		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
-		return
-	}
-	normalized, errs := svc.modelGateway.applyConfig(assistantModelConfig{
-		ProviderRouting: payload.ProviderRouting,
-		Providers:       payload.Providers,
-	})
-	if len(errs) > 0 {
-		writeJSON(w, http.StatusUnprocessableEntity, assistantModelProvidersValidateResponse{
-			Valid:  false,
-			Errors: errs,
-			Normalized: assistantModelConfigPayload{
-				ProviderRouting: normalized.ProviderRouting,
-				Providers:       normalized.Providers,
-			},
-		})
-		return
-	}
-	writeJSON(w, http.StatusOK, assistantModelProvidersApplyResponse{
-		AppliedAt: time.Now().UTC().Format(time.RFC3339Nano),
-		AppliedBy: principal.ID,
-		Normalized: assistantModelConfigPayload{
-			ProviderRouting: normalized.ProviderRouting,
-			Providers:       normalized.Providers,
-		},
-	})
 }
 
 func handleAssistantModelsAPI(w http.ResponseWriter, r *http.Request, svc *assistantConversationService) {

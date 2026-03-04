@@ -239,12 +239,16 @@ func (s assistantWriteServiceStub) Write(ctx context.Context, tenantID string, r
 	if name == "" {
 		name = "新建组织"
 	}
-	_, err = s.store.CreateNodeCurrent(ctx, tenantID, req.EffectiveDate, req.OrgCode, name, strconv.Itoa(parentID), false)
+	orgCode := strings.TrimSpace(req.OrgCode)
+	if orgCode == "" {
+		orgCode = assistantGeneratedOrgCode(req.RequestID)
+	}
+	_, err = s.store.CreateNodeCurrent(ctx, tenantID, req.EffectiveDate, orgCode, name, strconv.Itoa(parentID), false)
 	if err != nil {
 		return orgunitservices.OrgUnitWriteResult{}, err
 	}
 	return orgunitservices.OrgUnitWriteResult{
-		OrgCode:       req.OrgCode,
+		OrgCode:       orgCode,
 		EffectiveDate: req.EffectiveDate,
 		EventType:     "CREATE",
 		EventUUID:     "evt_" + req.RequestID,

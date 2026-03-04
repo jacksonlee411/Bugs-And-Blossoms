@@ -69,8 +69,8 @@ func TestNewHandlerWithOptions_AssistantRoutes_AreWired(t *testing.T) {
 	if rec := call(http.MethodPost, "/internal/assistant/model-providers:validate", `{"providers":[]}`); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant model providers validate route not wired")
 	}
-	if rec := call(http.MethodPost, "/internal/assistant/model-providers:apply", `{"providers":[]}`); rec.Code == http.StatusNotFound {
-		t.Fatalf("assistant model providers apply route not wired")
+	if rec := call(http.MethodPost, "/internal/assistant/model-providers:apply", `{"providers":[]}`); rec.Code != http.StatusNotFound {
+		t.Fatalf("assistant model providers apply status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	if rec := call(http.MethodGet, "/internal/assistant/models", ""); rec.Code == http.StatusNotFound {
 		t.Fatalf("assistant models route not wired")

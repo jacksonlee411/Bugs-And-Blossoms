@@ -170,9 +170,6 @@ entrypoints:
       - path: /internal/assistant/model-providers:validate
         methods: [POST]
         route_class: internal_api
-      - path: /internal/assistant/model-providers:apply
-        methods: [POST]
-        route_class: internal_api
       - path: /internal/assistant/models
         methods: [GET]
         route_class: internal_api

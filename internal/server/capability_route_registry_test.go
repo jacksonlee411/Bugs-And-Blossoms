@@ -68,6 +68,9 @@ func TestCapabilityRouteBindingForRoute(t *testing.T) {
 	if binding, ok := capabilityRouteBindingForRoute("POST", "/internal/assistant/model-providers:validate"); !ok || binding.Action != authz.ActionAdmin {
 		t.Fatalf("expected assistant model providers validate mapping found, got=%+v ok=%v", binding, ok)
 	}
+	if _, ok := capabilityRouteBindingForRoute("POST", "/internal/assistant/model-providers:apply"); ok {
+		t.Fatal("expected retired assistant model providers apply mapping missing")
+	}
 	if binding, ok := capabilityRouteBindingForRoute("GET", "/internal/assistant/models"); !ok || binding.Action != authz.ActionRead {
 		t.Fatalf("expected assistant models mapping found, got=%+v ok=%v", binding, ok)
 	}

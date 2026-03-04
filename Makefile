@@ -181,13 +181,18 @@ dev-ps:
 	docker compose -p "$(DEV_COMPOSE_PROJECT)" --env-file "$(DEV_INFRA_ENV_FILE)" -f compose.dev.yml ps
 
 dev-server:
-	@env_file=""; \
-	if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
-	if [[ -z "$$env_file" && -f "env.local" ]]; then env_file="env.local"; fi; \
-	if [[ -z "$$env_file" && -f ".env" ]]; then env_file=".env"; fi; \
-	if [[ -z "$$env_file" && -f ".env.example" ]]; then env_file=".env.example"; fi; \
+	@env_file="$(DEV_SERVER_ENV_FILE)"; \
+	if [[ -z "$$env_file" ]]; then \
+		if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
+		if [[ -z "$$env_file" && -f "env.local" ]]; then env_file="env.local"; fi; \
+		if [[ -z "$$env_file" && -f ".env" ]]; then env_file=".env"; fi; \
+		if [[ -z "$$env_file" && -f ".env.example" ]]; then env_file=".env.example"; fi; \
+	fi; \
 	if [[ -n "$$env_file" ]]; then \
 		set -a; . "$$env_file"; set +a; \
+	fi; \
+	if [[ -n "$(DEV_SERVER_HTTP_ADDR)" ]]; then \
+		export HTTP_ADDR="$(DEV_SERVER_HTTP_ADDR)"; \
 	fi; \
 	go run ./cmd/server
 
@@ -195,13 +200,18 @@ dev-kratos-stub:
 	go run ./cmd/kratosstub
 
 dev-superadmin:
-	@env_file=""; \
-	if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
-	if [[ -z "$$env_file" && -f "env.local" ]]; then env_file="env.local"; fi; \
-	if [[ -z "$$env_file" && -f ".env" ]]; then env_file=".env"; fi; \
-	if [[ -z "$$env_file" && -f ".env.example" ]]; then env_file=".env.example"; fi; \
+	@env_file="$(DEV_SUPERADMIN_ENV_FILE)"; \
+	if [[ -z "$$env_file" ]]; then \
+		if [[ -f ".env.local" ]]; then env_file=".env.local"; fi; \
+		if [[ -z "$$env_file" && -f "env.local" ]]; then env_file="env.local"; fi; \
+		if [[ -z "$$env_file" && -f ".env" ]]; then env_file=".env"; fi; \
+		if [[ -z "$$env_file" && -f ".env.example" ]]; then env_file=".env.example"; fi; \
+	fi; \
 	if [[ -n "$$env_file" ]]; then \
 		set -a; . "$$env_file"; set +a; \
+	fi; \
+	if [[ -n "$(DEV_SUPERADMIN_HTTP_ADDR)" ]]; then \
+		export SUPERADMIN_HTTP_ADDR="$(DEV_SUPERADMIN_HTTP_ADDR)"; \
 	fi; \
 	export SUPERADMIN_DATABASE_URL="$${SUPERADMIN_DATABASE_URL:-postgres://superadmin_runtime:$${DB_PASSWORD:-app}@$${DB_HOST:-127.0.0.1}:$${DB_PORT:-5438}/$${DB_NAME:-bugs_and_blossoms}?sslmode=$${DB_SSLMODE:-disable}}"; \
 	export SUPERADMIN_BASIC_AUTH_USER="$${SUPERADMIN_BASIC_AUTH_USER:-admin}"; \

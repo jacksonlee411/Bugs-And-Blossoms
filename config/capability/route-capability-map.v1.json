@@ -283,15 +283,6 @@
       "status": "active"
     },
     {
-      "method": "POST",
-      "path": "/internal/assistant/model-providers:apply",
-      "route_class": "internal_api",
-      "action": "admin",
-      "capability_key": "org.assistant_conversation.manage",
-      "owner_module": "orgunit",
-      "status": "active"
-    },
-    {
       "method": "GET",
       "path": "/internal/assistant/models",
       "route_class": "internal_api",

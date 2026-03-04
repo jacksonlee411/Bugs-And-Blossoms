@@ -1007,10 +1007,8 @@ func (s *assistantConversationService) commitTurn(ctx context.Context, tenantID 
 		name = "新建组织"
 	}
 	parentOrgCode := resolved.CandidateCode
-	orgCode := assistantGeneratedOrgCode(turn.TurnID)
 	result, err := s.writeSvc.Write(ctx, tenantID, orgunitservices.WriteOrgUnitRequest{
 		Intent:        string(orgunitservices.OrgUnitWriteIntentCreateOrg),
-		OrgCode:       orgCode,
 		EffectiveDate: turn.Intent.EffectiveDate,
 		PolicyVersion: turn.PolicyVersion,
 		RequestID:     turn.RequestID,
