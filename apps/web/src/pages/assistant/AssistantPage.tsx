@@ -14,7 +14,7 @@ import {
   TextField,
   Typography
 } from '@mui/material'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   cancelAssistantTask,
   commitAssistantTurn,
@@ -39,6 +39,15 @@ import {
   validateAssistantBridgeMessage
 } from './assistantMessageBridge'
 import { deriveAssistantActionState } from './assistantUiState'
+import {
+  composeCreateOrgUnitPrompt,
+  extractIntentDraftFromText,
+  formatCandidatePrompt,
+  isExecutionConfirmationText,
+  looksLikeCreateOrgUnitRequest,
+  mergeIntentDraft,
+  resolveCandidateFromInput
+} from './assistantAutoRun'
 
 const samplePrompt =
   '在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。通过AI对话，调用相关能力完成部门的创建任务。'
@@ -46,6 +55,8 @@ const samplePrompt =
 const assistantStatePlaceholder = '-'
 const assistantTaskPollIntervalMS = 1000
 const conversationStorageKey = 'assistant.active_conversation_id'
+
+type BridgeNoticeSeverity = 'info' | 'success' | 'warning' | 'error'
 
 function latestTurn(conversation: AssistantConversation | null): AssistantTurn | null {
   if (!conversation || !Array.isArray(conversation.turns) || conversation.turns.length === 0) {
@@ -230,6 +241,10 @@ export function AssistantPage() {
   const [runtimeError, setRuntimeError] = useState('')
   const [bridgeChannel] = useState(() => createAssistantBridgeToken('assistant_channel'))
   const [bridgeNonce] = useState(() => createAssistantBridgeToken('assistant_nonce'))
+  const librechatFrameRef = useRef<HTMLIFrameElement | null>(null)
+  const conversationRef = useRef<AssistantConversation | null>(null)
+  const bridgePromptQueueRef = useRef<string[]>([])
+  const bridgeWorkerRunningRef = useRef(false)
 
   const turn = useMemo(() => latestTurn(conversation), [conversation])
   const turnDryRunDiff = useMemo(() => normalizedDryRunDiff(turn), [turn])
@@ -283,6 +298,10 @@ export function AssistantPage() {
       }),
     [candidateID, conversation, loading, turn]
   )
+
+  useEffect(() => {
+    conversationRef.current = conversation
+  }, [conversation])
 
   const loadConversation = useCallback(
     async (targetConversationID: string, options?: { silent?: boolean }) => {
@@ -568,6 +587,282 @@ export function AssistantPage() {
     }
   }, [taskDetail])
 
+  const postBridgeNotice = useCallback(
+    (message: string, severity: BridgeNoticeSeverity = 'info') => {
+      const text = normalized(message)
+      if (text.length === 0 || typeof window === 'undefined') {
+        return
+      }
+      const target = librechatFrameRef.current?.contentWindow
+      if (!target) {
+        return
+      }
+      target.postMessage(
+        {
+          type: 'assistant.flow.notice',
+          channel: bridgeChannel,
+          nonce: bridgeNonce,
+          payload: {
+            text,
+            severity
+          }
+        },
+        window.location.origin
+      )
+    },
+    [bridgeChannel, bridgeNonce]
+  )
+
+  const autoCommitTurnFromChat = useCallback(
+    async (
+      sourceConversation: AssistantConversation,
+      sourceTurn: AssistantTurn,
+      candidateChoice?: string
+    ): Promise<AssistantConversation | null> => {
+      let currentConversation: AssistantConversation = sourceConversation
+      let currentTurn: AssistantTurn = sourceTurn
+      const resolvedCandidate = normalized(candidateChoice) || normalized(currentTurn.resolved_candidate_id) || undefined
+
+      if (normalized(currentTurn.state) === 'validated') {
+        setLoading(true)
+        try {
+          const confirmed = await confirmAssistantTurn(currentConversation.conversation_id, currentTurn.turn_id, resolvedCandidate)
+          applyConversation(confirmed)
+          currentConversation = confirmed
+          const refreshedTurn = latestTurn(confirmed)
+          if (!refreshedTurn) {
+            return confirmed
+          }
+          currentTurn = refreshedTurn
+        } catch (err) {
+          const message = errorMessage(err, '确认失败')
+          setError(message)
+          postBridgeNotice(message, 'error')
+          if (shouldRefreshConversation(errorCode(err))) {
+            await refreshConversation().catch(() => undefined)
+          }
+          return null
+        } finally {
+          setLoading(false)
+        }
+      }
+
+      if (normalized(currentTurn.state) !== 'confirmed') {
+        return currentConversation
+      }
+
+      setLoading(true)
+      try {
+        const committed = await commitAssistantTurn(currentConversation.conversation_id, currentTurn.turn_id)
+        applyConversation(committed)
+        currentConversation = committed
+        const committedTurn = latestTurn(committed)
+        if (committedTurn?.commit_result) {
+          postBridgeNotice(
+            `已自动提交：org_code=${committedTurn.commit_result.org_code} / parent=${committedTurn.commit_result.parent_org_code} / effective_date=${committedTurn.commit_result.effective_date}`,
+            'success'
+          )
+        } else {
+          postBridgeNotice('已自动提交。', 'success')
+        }
+        return committed
+      } catch (err) {
+        const message = errorMessage(err, '提交失败')
+        setError(message)
+        postBridgeNotice(message, 'error')
+        if (shouldRefreshConversation(errorCode(err))) {
+          await refreshConversation().catch(() => undefined)
+        }
+        return null
+      } finally {
+        setLoading(false)
+      }
+    },
+    [applyConversation, postBridgeNotice, refreshConversation]
+  )
+
+  const autoAdvanceGeneratedTurn = useCallback(
+    async (sourceConversation: AssistantConversation, sourceTurn: AssistantTurn, userInput: string) => {
+      const validationCodes = Array.isArray(sourceTurn.dry_run?.validation_errors) ? sourceTurn.dry_run.validation_errors : []
+      const missingFieldCodes = validationCodes.filter((code) =>
+        ['missing_parent_ref_text', 'missing_entity_name', 'missing_effective_date', 'invalid_effective_date_format'].includes(code)
+      )
+      if (missingFieldCodes.length > 0) {
+        const messages = dryRunValidationMessages(sourceTurn)
+        if (messages.length > 0) {
+          postBridgeNotice(`信息不完整，请补充后继续：${messages.join('；')}`, 'warning')
+        }
+        return
+      }
+
+      const candidatePending = sourceTurn.ambiguity_count > 1 && normalized(sourceTurn.resolved_candidate_id).length === 0
+      if (candidatePending) {
+        const candidateChoice = resolveCandidateFromInput(userInput, sourceTurn.candidates ?? [])
+        if (candidateChoice.length === 0) {
+          postBridgeNotice(formatCandidatePrompt(sourceTurn.candidates ?? []), 'warning')
+          return
+        }
+        await autoCommitTurnFromChat(sourceConversation, sourceTurn, candidateChoice)
+        return
+      }
+
+      await autoCommitTurnFromChat(sourceConversation, sourceTurn)
+    },
+    [autoCommitTurnFromChat, postBridgeNotice]
+  )
+
+  const tryHandlePendingTurnByDialogue = useCallback(
+    async (sourceConversation: AssistantConversation, sourceTurn: AssistantTurn, userInput: string): Promise<boolean> => {
+      const state = normalized(sourceTurn.state)
+      const validationCodes = Array.isArray(sourceTurn.dry_run?.validation_errors) ? sourceTurn.dry_run.validation_errors : []
+      const looksLikeCreateRequest = looksLikeCreateOrgUnitRequest(userInput)
+
+      if (state === 'confirmed') {
+        if (isExecutionConfirmationText(userInput)) {
+          await autoCommitTurnFromChat(sourceConversation, sourceTurn)
+          return true
+        }
+        if (!looksLikeCreateRequest) {
+          postBridgeNotice('检测到待提交回合，请回复“确认执行”以继续；如需发起新任务，请明确输入创建需求。', 'info')
+          return true
+        }
+      }
+
+      if (state !== 'validated') {
+        return false
+      }
+
+      const candidatePending = sourceTurn.ambiguity_count > 1 && normalized(sourceTurn.resolved_candidate_id).length === 0
+      if (candidatePending && !looksLikeCreateRequest) {
+        const candidateChoice = resolveCandidateFromInput(userInput, sourceTurn.candidates ?? [])
+        if (candidateChoice.length === 0) {
+          postBridgeNotice(formatCandidatePrompt(sourceTurn.candidates ?? []), 'warning')
+          return true
+        }
+        await autoCommitTurnFromChat(sourceConversation, sourceTurn, candidateChoice)
+        return true
+      }
+
+      if (validationCodes.length === 0 && isExecutionConfirmationText(userInput) && !looksLikeCreateRequest) {
+        await autoCommitTurnFromChat(sourceConversation, sourceTurn)
+        return true
+      }
+
+      return false
+    },
+    [autoCommitTurnFromChat, postBridgeNotice]
+  )
+
+  const runBridgeAutoFlow = useCallback(
+    async (incomingText: string) => {
+      const userInput = normalized(incomingText)
+      if (userInput.length === 0) {
+        return
+      }
+      setInput(userInput)
+      setError('')
+
+      let activeConversation = conversationRef.current
+      if (!activeConversation) {
+        setLoading(true)
+        try {
+          const created = await createAssistantConversation()
+          applyConversation(created)
+          activeConversation = created
+        } catch (err) {
+          const message = errorMessage(err, '创建会话失败')
+          setError(message)
+          postBridgeNotice(message, 'error')
+          return
+        } finally {
+          setLoading(false)
+        }
+      }
+      if (!activeConversation) {
+        return
+      }
+
+      const pendingTurn = latestTurn(activeConversation)
+      if (pendingTurn) {
+        const handled = await tryHandlePendingTurnByDialogue(activeConversation, pendingTurn, userInput)
+        if (handled) {
+          return
+        }
+      }
+
+      let generationInput = userInput
+      if (pendingTurn && normalized(pendingTurn.state) === 'validated') {
+        const validationCodes = Array.isArray(pendingTurn.dry_run?.validation_errors) ? pendingTurn.dry_run.validation_errors : []
+        const hasMissingFields = validationCodes.some((code) =>
+          ['missing_parent_ref_text', 'missing_entity_name', 'missing_effective_date', 'invalid_effective_date_format'].includes(code)
+        )
+        if (hasMissingFields) {
+          const mergedDraft = mergeIntentDraft(
+            {
+              parent_ref_text: pendingTurn.intent.parent_ref_text,
+              entity_name: pendingTurn.intent.entity_name,
+              effective_date: pendingTurn.intent.effective_date
+            },
+            extractIntentDraftFromText(userInput)
+          )
+          const composedInput = composeCreateOrgUnitPrompt(mergedDraft)
+          if (composedInput.length > 0) {
+            generationInput = composedInput
+          }
+        }
+      }
+
+      setLoading(true)
+      let generatedConversation: AssistantConversation | null = null
+      try {
+        generatedConversation = await createAssistantTurn(activeConversation.conversation_id, generationInput)
+        applyConversation(generatedConversation)
+      } catch (err) {
+        const message = errorMessage(err, '生成计划失败')
+        setError(message)
+        postBridgeNotice(message, 'error')
+        return
+      } finally {
+        setLoading(false)
+      }
+
+      const generatedTurn = latestTurn(generatedConversation)
+      if (!generatedTurn || !generatedConversation) {
+        return
+      }
+      await autoAdvanceGeneratedTurn(generatedConversation, generatedTurn, userInput)
+    },
+    [applyConversation, autoAdvanceGeneratedTurn, postBridgeNotice, tryHandlePendingTurnByDialogue]
+  )
+
+  const enqueueBridgePrompt = useCallback(
+    (incomingText: string) => {
+      const text = normalized(incomingText)
+      if (text.length === 0) {
+        return
+      }
+      bridgePromptQueueRef.current.push(text)
+      if (bridgeWorkerRunningRef.current) {
+        return
+      }
+      bridgeWorkerRunningRef.current = true
+      void (async () => {
+        try {
+          while (bridgePromptQueueRef.current.length > 0) {
+            const nextInput = bridgePromptQueueRef.current.shift()
+            if (!nextInput) {
+              continue
+            }
+            await runBridgeAutoFlow(nextInput)
+          }
+        } finally {
+          bridgeWorkerRunningRef.current = false
+        }
+      })()
+    },
+    [runBridgeAutoFlow]
+  )
+
   useEffect(() => {
     if (taskID.length === 0 || assistantTaskTerminal(taskStatus)) {
       return
@@ -616,10 +911,14 @@ export function AssistantPage() {
       if (!message) {
         return
       }
+      if (message.type === 'assistant.bridge.ready') {
+        postBridgeNotice('自动执行通道已连接：可直接在 LibreChat 对话中输入需求。', 'info')
+        return
+      }
       if (message.type === 'assistant.prompt.sync') {
         const nextInput = message.payload.input
         if (typeof nextInput === 'string' && nextInput.trim().length > 0) {
-          setInput(nextInput)
+          enqueueBridgePrompt(nextInput)
         }
         return
       }
@@ -632,7 +931,7 @@ export function AssistantPage() {
     return () => {
       window.removeEventListener('message', handleMessage)
     }
-  }, [allowedOrigins, bridgeChannel, bridgeNonce, refreshConversation])
+  }, [allowedOrigins, bridgeChannel, bridgeNonce, enqueueBridgePrompt, postBridgeNotice, refreshConversation])
 
   return (
     <Stack spacing={2}>
@@ -645,12 +944,15 @@ export function AssistantPage() {
           label={`provider=${turn?.plan.model_provider ?? '-'} / model=${turn?.plan.model_name ?? '-'} / rev=${turn?.plan.model_revision ?? '-'}`}
           size='small'
         />
+        <Button component='a' href='/app/assistant/librechat' variant='text'>
+          LibreChat 独立页
+        </Button>
         <Button component='a' href='/app/assistant/models' variant='text'>
           模型配置
         </Button>
       </Stack>
       <Typography color='text.secondary' variant='body2'>
-        三栏工作台：左侧会话列表，中间时间线回放，右侧当前回合操作区（Confirm / Commit 仍走后端 One Door）。
+        三栏工作台：左侧会话列表，中间时间线回放，右侧当前回合操作区。支持在 LibreChat 对话中一句话触发自动执行（写入仍走后端 One Door）。
       </Typography>
       {runtimeStatus ? (
         <Alert
@@ -987,6 +1289,7 @@ export function AssistantPage() {
           <Box
             component='iframe'
             data-testid='assistant-librechat-frame'
+            ref={librechatFrameRef}
             src={iframeSrc}
             title='LibreChat'
             sx={{ width: '100%', height: 380, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}

@@ -159,6 +159,15 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 		if optionsRec.Code != http.StatusOK {
 			t.Fatalf("options status=%d body=%s", optionsRec.Code, optionsRec.Body.String())
 		}
+		bridgeReq := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui/bridge.js", nil)
+		bridgeRec := httptest.NewRecorder()
+		h.ServeHTTP(bridgeRec, bridgeReq)
+		if bridgeRec.Code != http.StatusOK {
+			t.Fatalf("bridge status=%d body=%s", bridgeRec.Code, bridgeRec.Body.String())
+		}
+		if !strings.Contains(bridgeRec.Body.String(), "assistant.prompt.sync") {
+			t.Fatalf("expected assistant bridge script body, got=%q", bridgeRec.Body.String())
+		}
 		putReq := httptest.NewRequest(http.MethodPut, "http://localhost/assistant-ui", nil)
 		putReq.Header.Set("Accept", "application/json")
 		putRec := httptest.NewRecorder()
@@ -168,6 +177,16 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 		}
 		if got := decodeAssistantUIProxyErrorCode(t, putRec); got != assistantUIProxyMethodNotAllowedCode {
 			t.Fatalf("code=%s", got)
+		}
+		bridgePutReq := httptest.NewRequest(http.MethodPut, "http://localhost/assistant-ui/bridge.js", nil)
+		bridgePutReq.Header.Set("Accept", "application/json")
+		bridgePutRec := httptest.NewRecorder()
+		h.ServeHTTP(bridgePutRec, bridgePutReq)
+		if bridgePutRec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("bridge put status=%d body=%s", bridgePutRec.Code, bridgePutRec.Body.String())
+		}
+		if got := decodeAssistantUIProxyErrorCode(t, bridgePutRec); got != assistantUIProxyMethodNotAllowedCode {
+			t.Fatalf("bridge put code=%s", got)
 		}
 
 		pathReq := httptest.NewRequest(http.MethodGet, "http://localhost/not-assistant", nil)
@@ -322,6 +341,10 @@ func TestSanitizeAssistantUIProxyAuthorizationHeader(t *testing.T) {
 	if got := sanitizeAssistantUIProxyAuthorizationHeader(req); got != "Bearer token-1" {
 		t.Fatalf("bearer auth should be normalized, got=%q", got)
 	}
+	req.Header.Set("Authorization", "bearer token-2")
+	if got := sanitizeAssistantUIProxyAuthorizationHeader(req); got != "Bearer token-2" {
+		t.Fatalf("bearer auth should be case-insensitive, got=%q", got)
+	}
 }
 
 func TestFilterAssistantUIProxyResponseCookies(t *testing.T) {
@@ -344,6 +367,42 @@ func TestFilterAssistantUIProxyResponseCookies(t *testing.T) {
 		if cookie.Name == "token_provider" && cookie.Path != "/assistant-ui" {
 			t.Fatalf("expected root path to be rewritten, got cookie=%+v", cookie)
 		}
+	}
+}
+
+func TestServeAssistantUIBridgeScript(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui/bridge.js", nil)
+	rec := httptest.NewRecorder()
+	serveAssistantUIBridgeScript(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "assistant.prompt.sync") {
+		t.Fatalf("unexpected bridge body=%q", rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/javascript") {
+		t.Fatalf("unexpected content-type=%q", ct)
+	}
+
+	headReq := httptest.NewRequest(http.MethodHead, "http://localhost/assistant-ui/bridge.js", nil)
+	headRec := httptest.NewRecorder()
+	serveAssistantUIBridgeScript(headRec, headReq)
+	if headRec.Code != http.StatusOK {
+		t.Fatalf("head status=%d", headRec.Code)
+	}
+	if headRec.Body.Len() != 0 {
+		t.Fatalf("head response body should be empty, got=%q", headRec.Body.String())
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, "http://localhost/assistant-ui/bridge.js", nil)
+	postReq.Header.Set("Accept", "application/json")
+	postRec := httptest.NewRecorder()
+	serveAssistantUIBridgeScript(postRec, postReq)
+	if postRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("post status=%d body=%s", postRec.Code, postRec.Body.String())
+	}
+	if got := decodeAssistantUIProxyErrorCode(t, postRec); got != assistantUIProxyMethodNotAllowedCode {
+		t.Fatalf("post code=%s", got)
 	}
 }
 
@@ -375,6 +434,12 @@ func TestRewriteAssistantUIProxyHTMLBase(t *testing.T) {
 	if strings.Contains(got, `<base href="/" />`) {
 		t.Fatalf("unexpected old base href remains: %q", got)
 	}
+	if !strings.Contains(got, assistantUIBridgeScriptTag) {
+		t.Fatalf("expected bridge script tag injection, got=%q", got)
+	}
+	if !strings.Contains(got, assistantUISWCleanupScriptTag) {
+		t.Fatalf("expected sw cleanup script tag injection, got=%q", got)
+	}
 	if resp.ContentLength != int64(len(rewritten)) {
 		t.Fatalf("unexpected content length: %d", resp.ContentLength)
 	}
@@ -403,6 +468,34 @@ func TestRewriteAssistantUIProxyHTMLBase_NoopAndErrorBranches(t *testing.T) {
 		t.Fatalf("non-html response should not return error: %v", err)
 	}
 
+	mislabeledJSON := `{"openAI":{"order":0}}`
+	mislabeledJSONResp := &http.Response{
+		Header:        make(http.Header),
+		Body:          io.NopCloser(strings.NewReader(mislabeledJSON)),
+		ContentLength: int64(len(mislabeledJSON)),
+	}
+	mislabeledJSONResp.Header.Set("Content-Type", "text/html; charset=utf-8")
+	mislabeledJSONResp.Header.Set("Content-Length", strconv.Itoa(len(mislabeledJSON)))
+	if err := rewriteAssistantUIProxyHTMLBase(mislabeledJSONResp); err != nil {
+		t.Fatalf("mislabeled json response should not return error: %v", err)
+	}
+	mislabeledJSONBody, err := io.ReadAll(mislabeledJSONResp.Body)
+	if err != nil {
+		t.Fatalf("read mislabeled json body: %v", err)
+	}
+	if got := string(mislabeledJSONBody); got != mislabeledJSON {
+		t.Fatalf("mislabeled json should remain unchanged, got=%q", got)
+	}
+	if strings.Contains(string(mislabeledJSONBody), assistantUIBridgeScriptTag) {
+		t.Fatalf("mislabeled json should not include bridge script, got=%q", string(mislabeledJSONBody))
+	}
+	if strings.Contains(string(mislabeledJSONBody), assistantUISWCleanupScriptTag) {
+		t.Fatalf("mislabeled json should not include sw cleanup script, got=%q", string(mislabeledJSONBody))
+	}
+	if got := mislabeledJSONResp.Header.Get("Content-Length"); got != strconv.Itoa(len(mislabeledJSON)) {
+		t.Fatalf("mislabeled json content-length should remain original, got=%q", got)
+	}
+
 	noBaseHTML := `<!DOCTYPE html><html><head><title>x</title></head><body>ok</body></html>`
 	noBaseResp := &http.Response{
 		Header:        make(http.Header),
@@ -418,8 +511,11 @@ func TestRewriteAssistantUIProxyHTMLBase_NoopAndErrorBranches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read no-base html body: %v", err)
 	}
-	if string(noBaseBody) != noBaseHTML {
-		t.Fatalf("no-base html should remain unchanged, got=%q", string(noBaseBody))
+	if !strings.Contains(string(noBaseBody), assistantUIBridgeScriptTag) {
+		t.Fatalf("no-base html should include bridge script tag, got=%q", string(noBaseBody))
+	}
+	if !strings.Contains(string(noBaseBody), assistantUISWCleanupScriptTag) {
+		t.Fatalf("no-base html should include sw cleanup script tag, got=%q", string(noBaseBody))
 	}
 
 	singleQuoteHTML := `<!DOCTYPE html><html><head><base href='/' /></head><body>ok</body></html>`
@@ -439,6 +535,53 @@ func TestRewriteAssistantUIProxyHTMLBase_NoopAndErrorBranches(t *testing.T) {
 	if !strings.Contains(string(singleQuoteBody), `<base href='/assistant-ui/' />`) {
 		t.Fatalf("single quote base should be rewritten, got=%q", string(singleQuoteBody))
 	}
+	if !strings.Contains(string(singleQuoteBody), assistantUIBridgeScriptTag) {
+		t.Fatalf("single quote html should include bridge script tag, got=%q", string(singleQuoteBody))
+	}
+	if !strings.Contains(string(singleQuoteBody), assistantUISWCleanupScriptTag) {
+		t.Fatalf("single quote html should include sw cleanup script tag, got=%q", string(singleQuoteBody))
+	}
+
+	withPwaRegisterScript := `<!DOCTYPE html><html><head><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head><body>ok</body></html>`
+	withPwaRegisterResp := &http.Response{
+		Header:        make(http.Header),
+		Body:          io.NopCloser(strings.NewReader(withPwaRegisterScript)),
+		ContentLength: int64(len(withPwaRegisterScript)),
+	}
+	withPwaRegisterResp.Header.Set("Content-Type", "text/html")
+	if err := rewriteAssistantUIProxyHTMLBase(withPwaRegisterResp); err != nil {
+		t.Fatalf("pwa register script rewrite should not return error: %v", err)
+	}
+	withPwaRegisterBody, err := io.ReadAll(withPwaRegisterResp.Body)
+	if err != nil {
+		t.Fatalf("read pwa register rewrite body: %v", err)
+	}
+	withPwaRegisterText := string(withPwaRegisterBody)
+	if strings.Contains(withPwaRegisterText, `vite-plugin-pwa:register-sw`) {
+		t.Fatalf("pwa register script should be removed, got=%q", withPwaRegisterText)
+	}
+	if !strings.Contains(withPwaRegisterText, assistantUISWCleanupScriptTag) {
+		t.Fatalf("pwa register rewrite should include sw cleanup script, got=%q", withPwaRegisterText)
+	}
+
+	alreadyInjectedHTML := `<!DOCTYPE html><html><head><title>x</title>` + assistantUISWCleanupScriptTag + assistantUIBridgeScriptTag + `</head><body>ok</body></html>`
+	alreadyInjectedResp := &http.Response{
+		Header:        make(http.Header),
+		Body:          io.NopCloser(strings.NewReader(alreadyInjectedHTML)),
+		ContentLength: int64(len(alreadyInjectedHTML)),
+	}
+	alreadyInjectedResp.Header.Set("Content-Type", "text/html")
+	alreadyInjectedResp.Header.Set("Content-Length", strconv.Itoa(len(alreadyInjectedHTML)))
+	if err := rewriteAssistantUIProxyHTMLBase(alreadyInjectedResp); err != nil {
+		t.Fatalf("already injected html should not return error: %v", err)
+	}
+	alreadyInjectedBody, err := io.ReadAll(alreadyInjectedResp.Body)
+	if err != nil {
+		t.Fatalf("read already-injected html body: %v", err)
+	}
+	if string(alreadyInjectedBody) != alreadyInjectedHTML {
+		t.Fatalf("already injected html should remain unchanged, got=%q", string(alreadyInjectedBody))
+	}
 
 	readErrResp := &http.Response{
 		Header: make(http.Header),
@@ -447,6 +590,105 @@ func TestRewriteAssistantUIProxyHTMLBase_NoopAndErrorBranches(t *testing.T) {
 	readErrResp.Header.Set("Content-Type", "text/html")
 	if err := rewriteAssistantUIProxyHTMLBase(readErrResp); err == nil {
 		t.Fatal("expected read error to be returned")
+	}
+}
+
+func TestModifyAssistantUIProxyResponse(t *testing.T) {
+	resp := &http.Response{
+		Header: make(http.Header),
+		Body: io.NopCloser(strings.NewReader(
+			`<!doctype html><html><head><base href="/" /></head><body>x</body></html>`,
+		)),
+	}
+	resp.Header.Set("Content-Type", "text/html")
+	resp.Header.Add("Set-Cookie", "refreshToken=rf-1; Path=/; HttpOnly")
+	resp.Header.Add("Set-Cookie", "sid=local; Path=/; HttpOnly")
+	if err := modifyAssistantUIProxyResponse(resp); err != nil {
+		t.Fatalf("modifyAssistantUIProxyResponse returned error: %v", err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read modified body: %v", err)
+	}
+	if !strings.Contains(string(body), `<base href="/assistant-ui/" />`) {
+		t.Fatalf("expected html rewrite, got=%q", string(body))
+	}
+	cookies := resp.Cookies()
+	if len(cookies) != 1 || cookies[0].Name != "refreshToken" {
+		t.Fatalf("expected only refreshToken cookie, got=%+v", cookies)
+	}
+
+	respErr := &http.Response{
+		Header: make(http.Header),
+		Body:   assistantUIProxyErrReadCloser{},
+	}
+	respErr.Header.Set("Content-Type", "text/html")
+	if err := modifyAssistantUIProxyResponse(respErr); err == nil {
+		t.Fatal("expected read error from modifyAssistantUIProxyResponse")
+	}
+}
+
+func TestInjectAssistantUIProxyBridgeScript(t *testing.T) {
+	already := `<html><head>` + assistantUIBridgeScriptTag + `</head><body>x</body></html>`
+	if got := injectAssistantUIProxyBridgeScript(already); got != already {
+		t.Fatalf("already-injected html should remain unchanged, got=%q", got)
+	}
+
+	withHead := `<!doctype html><html><head><title>x</title></head><body>x</body></html>`
+	gotHead := injectAssistantUIProxyBridgeScript(withHead)
+	if !strings.Contains(gotHead, `<head><title>x</title>`+assistantUIBridgeScriptTag+`</head>`) {
+		t.Fatalf("expected injection before </head>, got=%q", gotHead)
+	}
+
+	withBody := `<html><body>x</body></html>`
+	gotBody := injectAssistantUIProxyBridgeScript(withBody)
+	if !strings.Contains(gotBody, `x`+assistantUIBridgeScriptTag+`</body>`) {
+		t.Fatalf("expected injection before </body>, got=%q", gotBody)
+	}
+
+	plain := `<html>x</html>`
+	gotPlain := injectAssistantUIProxyBridgeScript(plain)
+	if gotPlain != plain+assistantUIBridgeScriptTag {
+		t.Fatalf("expected append fallback, got=%q", gotPlain)
+	}
+}
+
+func TestInjectAssistantUIProxyServiceWorkerCleanupScript(t *testing.T) {
+	already := `<html><head>` + assistantUISWCleanupScriptTag + `</head><body>x</body></html>`
+	if got := injectAssistantUIProxyServiceWorkerCleanupScript(already); got != already {
+		t.Fatalf("already-injected html should remain unchanged, got=%q", got)
+	}
+
+	withHead := `<!doctype html><html><head><title>x</title></head><body>x</body></html>`
+	gotHead := injectAssistantUIProxyServiceWorkerCleanupScript(withHead)
+	if !strings.Contains(gotHead, `<head><title>x</title>`+assistantUISWCleanupScriptTag+`</head>`) {
+		t.Fatalf("expected injection before </head>, got=%q", gotHead)
+	}
+
+	withBody := `<html><body>x</body></html>`
+	gotBody := injectAssistantUIProxyServiceWorkerCleanupScript(withBody)
+	if !strings.Contains(gotBody, `x`+assistantUISWCleanupScriptTag+`</body>`) {
+		t.Fatalf("expected injection before </body>, got=%q", gotBody)
+	}
+
+	plain := `<html>x</html>`
+	gotPlain := injectAssistantUIProxyServiceWorkerCleanupScript(plain)
+	if gotPlain != plain+assistantUISWCleanupScriptTag {
+		t.Fatalf("expected append fallback, got=%q", gotPlain)
+	}
+}
+
+func TestStripAssistantUIProxyServiceWorkerRegistration(t *testing.T) {
+	cases := []string{
+		`<script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script>`,
+		`<script src="./registerSW.js" id='vite-plugin-pwa:register-sw' defer></script>`,
+		`<SCRIPT ID="vite-plugin-pwa:register-sw" SRC="./registerSW.js"></SCRIPT>`,
+	}
+	for _, input := range cases {
+		got := stripAssistantUIProxyServiceWorkerRegistration(`<html><head>` + input + `</head></html>`)
+		if strings.Contains(strings.ToLower(got), "vite-plugin-pwa:register-sw") {
+			t.Fatalf("register-sw script should be removed, got=%q", got)
+		}
 	}
 }
 

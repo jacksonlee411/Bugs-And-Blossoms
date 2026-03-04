@@ -4,6 +4,7 @@ import { navItems } from '../navigation/config'
 import { ApprovalsInboxPage } from '../pages/approvals/ApprovalsInboxPage'
 import { AssistantPage } from '../pages/assistant/AssistantPage'
 import { AssistantModelProvidersPage } from '../pages/assistant/AssistantModelProvidersPage'
+import { LibreChatPage } from '../pages/assistant/LibreChatPage'
 import { FoundationDemoPage } from '../pages/FoundationDemoPage'
 import { DictConfigsPage } from '../pages/dicts/DictConfigsPage'
 import { DictValueDetailsPage } from '../pages/dicts/DictValueDetailsPage'
@@ -54,6 +55,14 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permissionKey='orgunit.admin'>
             <AssistantModelProvidersPage />
+          </RequirePermission>
+        )
+      },
+      {
+        path: 'assistant/librechat',
+        element: (
+          <RequirePermission permissionKey='orgunit.read'>
+            <LibreChatPage />
           </RequirePermission>
         )
       },

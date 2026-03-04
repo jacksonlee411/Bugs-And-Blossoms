@@ -128,6 +128,126 @@ func TestAssistantConversationFlow_AmbiguousCandidateConfirmAndCommit(t *testing
 	}
 }
 
+func TestAssistantConversationFlow_CommitResultVisibleInOrgList(t *testing.T) {
+	wd := mustGetwd(t)
+	allowlistPath := mustAllowlistPathFromWd(t, wd)
+	t.Setenv("ALLOWLIST_PATH", allowlistPath)
+	t.Setenv("AUTHZ_MODE", "disabled")
+	t.Setenv("AUTHZ_UNSAFE_ALLOW_DISABLED", "1")
+
+	orgStore := newOrgUnitMemoryStore()
+	tenantID := "00000000-0000-0000-0000-000000000001"
+	if _, err := orgStore.CreateNodeCurrent(context.Background(), tenantID, "2026-01-01", "FLOWER-A", "鲜花组织", "", true); err != nil {
+		t.Fatal(err)
+	}
+
+	h, err := NewHandlerWithOptions(HandlerOptions{
+		TenancyResolver: localTenancyResolver(),
+		IdentityProvider: staticIdentityProvider{ident: authenticatedIdentity{
+			KratosIdentityID: "00000000-0000-0000-0000-0000000000ab",
+			Email:            "tenant-admin@example.invalid",
+			RoleSlug:         "tenant-admin",
+		}},
+		OrgUnitStore:        orgStore,
+		OrgUnitWriteService: assistantWriteServiceStub{store: orgStore},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sidCookie := loginAsTenantAdminForAssistantTests(t, h)
+	conversation := createAssistantConversationForTest(t, h, sidCookie)
+
+	conversation = createAssistantTurnForTest(
+		t,
+		h,
+		sidCookie,
+		conversation.ConversationID,
+		"在鲜花组织之下，新建一个名为人力资源部239A的部门，成立日期是2026年1月1日。通过AI对话，调用相关能力完成部门的创建任务。",
+	)
+	if len(conversation.Turns) != 1 {
+		t.Fatalf("turn count=%d", len(conversation.Turns))
+	}
+	turn := conversation.Turns[0]
+	if turn.State != assistantStateValidated {
+		t.Fatalf("turn state=%s", turn.State)
+	}
+
+	confirmPath := "/internal/assistant/conversations/" + conversation.ConversationID + "/turns/" + turn.TurnID + ":confirm"
+	reqConfirm := httptest.NewRequest(http.MethodPost, "http://localhost"+confirmPath, bytes.NewBufferString(`{}`))
+	reqConfirm.Host = "localhost"
+	reqConfirm.Header.Set("Content-Type", "application/json")
+	reqConfirm.AddCookie(sidCookie)
+	recConfirm := httptest.NewRecorder()
+	h.ServeHTTP(recConfirm, reqConfirm)
+	if recConfirm.Code != http.StatusOK {
+		t.Fatalf("confirm status=%d body=%s", recConfirm.Code, recConfirm.Body.String())
+	}
+	if err := json.Unmarshal(recConfirm.Body.Bytes(), &conversation); err != nil {
+		t.Fatalf("unmarshal confirm=%v", err)
+	}
+	turn = conversation.Turns[0]
+
+	commitPath := "/internal/assistant/conversations/" + conversation.ConversationID + "/turns/" + turn.TurnID + ":commit"
+	reqCommit := httptest.NewRequest(http.MethodPost, "http://localhost"+commitPath, bytes.NewBufferString(`{}`))
+	reqCommit.Host = "localhost"
+	reqCommit.Header.Set("Content-Type", "application/json")
+	reqCommit.AddCookie(sidCookie)
+	recCommit := httptest.NewRecorder()
+	h.ServeHTTP(recCommit, reqCommit)
+	if recCommit.Code != http.StatusOK {
+		t.Fatalf("commit status=%d body=%s", recCommit.Code, recCommit.Body.String())
+	}
+	if err := json.Unmarshal(recCommit.Body.Bytes(), &conversation); err != nil {
+		t.Fatalf("unmarshal commit=%v", err)
+	}
+	turn = conversation.Turns[0]
+	if turn.State != assistantStateCommitted {
+		t.Fatalf("turn state=%s", turn.State)
+	}
+	if turn.CommitResult == nil {
+		t.Fatal("commit_result missing")
+	}
+	if turn.CommitResult.EffectiveDate != "2026-01-01" {
+		t.Fatalf("effective_date=%s", turn.CommitResult.EffectiveDate)
+	}
+	createdOrgCode := strings.TrimSpace(turn.CommitResult.OrgCode)
+	if createdOrgCode == "" {
+		t.Fatal("commit_result.org_code empty")
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "http://localhost/org/api/org-units?as_of=2026-01-01", nil)
+	listReq.Host = "localhost"
+	listReq.AddCookie(sidCookie)
+	listRec := httptest.NewRecorder()
+	h.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("org list status=%d body=%s", listRec.Code, listRec.Body.String())
+	}
+
+	var payload struct {
+		OrgUnits []map[string]any `json:"org_units"`
+	}
+	if err := json.Unmarshal(listRec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode org list=%v", err)
+	}
+	found := false
+	for _, row := range payload.OrgUnits {
+		if strings.TrimSpace(asString(row["org_code"])) == createdOrgCode {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("created org_code=%s not found in org list payload=%s", createdOrgCode, listRec.Body.String())
+	}
+}
+
+func asString(value any) string {
+	text, _ := value.(string)
+	return text
+}
+
 func TestAssistantConversationAPI_InvalidTurnInput(t *testing.T) {
 	wd := mustGetwd(t)
 	allowlistPath := mustAllowlistPathFromWd(t, wd)
