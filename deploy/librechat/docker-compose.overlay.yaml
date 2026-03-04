@@ -15,7 +15,7 @@ services:
 
   rag_api:
     volumes:
-      - ${LIBRECHAT_DATA_ROOT:?LIBRECHAT_DATA_ROOT is required}/rag_api:/app/data
+      - ${LIBRECHAT_DATA_ROOT:?LIBRECHAT_DATA_ROOT is required}/rag_api:/app/uploads
 
   vectordb:
     volumes:

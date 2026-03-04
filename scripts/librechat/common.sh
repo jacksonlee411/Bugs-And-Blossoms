@@ -34,7 +34,7 @@ librechat_service_mount_target() {
     api) printf '%s\n' "/app/data" ;;
     mongodb) printf '%s\n' "/data/db" ;;
     meilisearch) printf '%s\n' "/meili_data" ;;
-    rag_api) printf '%s\n' "/app/data" ;;
+    rag_api) printf '%s\n' "/app/uploads" ;;
     vectordb) printf '%s\n' "/qdrant/storage" ;;
     *)
       return 1

@@ -1,6 +1,6 @@
 # DEV-PLAN-239：LibreChat 聊天可写链路恢复与运行态稳定性收口计划
 
-**状态**: 草拟中（2026-03-04 01:20 UTC）
+**状态**: 进行中（2026-03-04 01:20 UTC）
 
 ## 1. 背景与问题
 - 承接计划：
@@ -10,9 +10,9 @@
   - `docs/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`
 - 当前用户可见问题（2026-03-04 现场）：在 `/app/assistant` 页面中，LibreChat iframe 可加载但无法在聊天框正常发起对话。
 - 已确认的主要缺口：
-  1. [ ] `assistant-ui` 代理当前仅允许 `GET`，聊天发送所需写请求被 `405` 拒绝（“只读壳层”与“可对话壳层”语义不一致）。
-  2. [ ] LibreChat runtime 在部分环境进入 `unavailable`，常见表现为 `mongodb mount_source_missing`、`rag_api container_not_running`。
-  3. [ ] 本地清理链路对容器写入的 root/非当前用户文件处理不稳定，导致 `assistant-runtime-clean/up` 偶发失败，进一步放大不可用窗口。
+  1. [x] `assistant-ui` 代理当前仅允许 `GET`，聊天发送所需写请求被 `405` 拒绝（“只读壳层”与“可对话壳层”语义不一致）。
+  2. [x] LibreChat runtime 在部分环境进入 `unavailable`，常见表现为 `mongodb mount_source_missing`、`rag_api container_not_running`。
+  3. [x] 本地清理链路对容器写入的 root/非当前用户文件处理不稳定，导致 `assistant-runtime-clean/up` 偶发失败，进一步放大不可用窗口。
 
 ## 2. 目标与非目标
 ### 2.1 核心目标
@@ -96,11 +96,11 @@ assistant_ui_proxy:
    - [ ] 冻结代理方法矩阵与错误码口径。
    - [ ] 先补失败用例（聊天请求被拒绝、路径越界、旁路写）。
 2. [ ] **PR-239-02：assistant-ui 聊天可写链路恢复**
-   - [ ] 在代理中放开聊天必需方法。
-   - [ ] 保持路径/头部边界与 fail-closed。
+   - [x] 在代理中放开聊天必需方法。
+   - [x] 保持路径/头部边界与 fail-closed。
 3. [ ] **PR-239-03：runtime 目录与挂载稳定性加固**
-   - [ ] 强化 `up/clean/status` 脚本前置检查与错误提示。
-   - [ ] 固化最小恢复流程（down -> clean -> up -> status）。
+   - [x] 强化 `up/clean/status` 脚本前置检查与错误提示。
+   - [x] 固化最小恢复流程（down -> clean -> up -> status）。
 4. [ ] **PR-239-04：回归与证据封板**
    - [ ] 补齐 e2e：iframe 内聊天发送正向 + 未登录/跨租户/旁路写负向。
    - [ ] 输出 `docs/dev-records/dev-plan-239-execution-log.md`。

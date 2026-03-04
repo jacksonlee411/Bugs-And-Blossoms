@@ -29,6 +29,12 @@
   2. compose 解析出的 bind mount source 与预期路径完全一致；
   3. 缺失或漂移时 fail-fast（阻断启动）。
 
+## rag_api 运行口径（DEV-PLAN-239）
+
+- `rag_api` 镜像固定为 `ghcr.io/danny-avila/librechat-rag-api-dev-lite@sha256:201958505e21...`。
+- `rag_api` 统一使用 `atlas-mongo` 模式，默认连接 `mongodb://mongodb:27017/LibreChat`，避免隐式回退到 `db:5432`（pgvector）导致重启风暴。
+- `rag_api` 数据卷挂载目标为 `/app/uploads`（宿主机目录：`${LIBRECHAT_DATA_ROOT}/rag_api`）。
+
 ## 清理边界
 
 `make assistant-runtime-clean` 仅清理 `${LIBRECHAT_DATA_ROOT}` 下列目录（与运行时同源）：
