@@ -200,12 +200,6 @@ export interface AssistantModelProvidersValidateResponse {
   normalized: AssistantModelConfigPayload
 }
 
-export interface AssistantModelProvidersApplyResponse {
-  applied_at: string
-  applied_by: string
-  normalized: AssistantModelConfigPayload
-}
-
 export interface AssistantModelsResponse {
   models: Array<{
     provider: string
@@ -319,12 +313,6 @@ export async function validateAssistantModelProviders(
   payload: AssistantModelConfigPayload
 ): Promise<AssistantModelProvidersValidateResponse> {
   return httpClient.post<AssistantModelProvidersValidateResponse>('/internal/assistant/model-providers:validate', payload)
-}
-
-export async function applyAssistantModelProviders(
-  payload: AssistantModelConfigPayload
-): Promise<AssistantModelProvidersApplyResponse> {
-  return httpClient.post<AssistantModelProvidersApplyResponse>('/internal/assistant/model-providers:apply', payload)
 }
 
 export async function getAssistantModels(): Promise<AssistantModelsResponse> {

@@ -1,5 +1,4 @@
 import RefreshIcon from '@mui/icons-material/Refresh'
-import SaveIcon from '@mui/icons-material/Save'
 import VerifiedIcon from '@mui/icons-material/Verified'
 import {
   Alert,
@@ -17,7 +16,6 @@ import {
 } from '@mui/material'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  applyAssistantModelProviders,
   getAssistantModelProviders,
   getAssistantModels,
   type AssistantModelConfigPayload,
@@ -131,25 +129,6 @@ export function AssistantModelProvidersPage() {
     }
   }, [payload])
 
-  const onApply = useCallback(async () => {
-    if (!payload) return
-    setLoading(true)
-    setErrorMessage('')
-    setSuccessMessage('')
-    try {
-      const resp = await applyAssistantModelProviders(payload)
-      setPayload(normalizePayload(resp.normalized))
-      setValidationErrors([])
-      setSuccessMessage('模型配置已应用。')
-      await load()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '模型配置应用失败'
-      setErrorMessage(message)
-    } finally {
-      setLoading(false)
-    }
-  }, [load, payload])
-
   return (
     <Stack spacing={2}>
       <Stack direction='row' spacing={1} alignItems='center'>
@@ -164,7 +143,7 @@ export function AssistantModelProvidersPage() {
       </Stack>
 
       <Typography color='text.secondary' variant='body2'>
-        在此页面管理 OpenAI / DeepSeek / Claude / Gemini 模型路由配置，提交链路保持 One Door 不变。
+        本页面仅提供模型路由只读展示与校验，不提供配置写入入口（单主源：LibreChat）。
       </Typography>
 
       {errorMessage ? <Alert severity='error'>{errorMessage}</Alert> : null}
@@ -233,9 +212,6 @@ export function AssistantModelProvidersPage() {
               variant='outlined'
             >
               Validate
-            </Button>
-            <Button disabled={!canOperate} onClick={() => void onApply()} startIcon={<SaveIcon />} variant='contained'>
-              Apply
             </Button>
           </Stack>
         </CardContent>

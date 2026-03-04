@@ -205,6 +205,8 @@ make authz-pack >/dev/null
 export KRATOS_PUBLIC_URL="${KRATOS_PUBLIC_URL:-http://127.0.0.1:4433}"
 export E2E_KRATOS_ADMIN_URL="${E2E_KRATOS_ADMIN_URL:-http://127.0.0.1:4434}"
 superadmin_base_url="${E2E_SUPERADMIN_BASE_URL:-http://localhost:8081}"
+e2e_server_env_file="${E2E_SERVER_ENV_FILE:-$infra_env_file}"
+e2e_superadmin_env_file="${E2E_SUPERADMIN_ENV_FILE:-$infra_env_file}"
 if [[ -z "${ASSISTANT_MODEL_CONFIG_JSON:-}" ]]; then
   export ASSISTANT_MODEL_CONFIG_JSON='{"provider_routing":{"strategy":"priority_failover","fallback_enabled":true},"providers":[{"name":"openai","enabled":true,"model":"gpt-5-codex","endpoint":"https://api.openai.com/v1","timeout_ms":8000,"retries":1,"priority":10,"key_ref":"OPENAI_API_KEY"}]}'
 fi
@@ -213,6 +215,8 @@ server_port="$(extract_port_from_url "$base_url" 8080)"
 superadmin_port="$(extract_port_from_url "$superadmin_base_url" 8081)"
 kratos_public_port="$(extract_port_from_url "$KRATOS_PUBLIC_URL" 4433)"
 kratos_admin_port="$(extract_port_from_url "$E2E_KRATOS_ADMIN_URL" 4434)"
+export KRATOS_STUB_PUBLIC_ADDR="${KRATOS_STUB_PUBLIC_ADDR:-127.0.0.1:${kratos_public_port}}"
+export KRATOS_STUB_ADMIN_ADDR="${KRATOS_STUB_ADMIN_ADDR:-127.0.0.1:${kratos_admin_port}}"
 
 server_health_url="http://127.0.0.1:${server_port}/health"
 superadmin_health_url="http://127.0.0.1:${superadmin_port}/health"
@@ -232,7 +236,7 @@ if ! kill -0 "$kratos_pid" >/dev/null 2>&1; then
 fi
 
 echo "[e2e] start server: log=$server_log"
-make dev-server >"$server_log" 2>&1 &
+DEV_SERVER_ENV_FILE="$e2e_server_env_file" DEV_SERVER_HTTP_ADDR=":${server_port}" make dev-server >"$server_log" 2>&1 &
 server_pid="$!"
 sleep 0.2
 if ! kill -0 "$server_pid" >/dev/null 2>&1; then
@@ -247,7 +251,7 @@ export SUPERADMIN_BASIC_AUTH_PASS="${E2E_SUPERADMIN_PASS:-admin}"
 export SUPERADMIN_WRITE_MODE="${SUPERADMIN_WRITE_MODE:-enabled}"
 
 echo "[e2e] start superadmin: log=$superadmin_log"
-make dev-superadmin >"$superadmin_log" 2>&1 &
+DEV_SUPERADMIN_ENV_FILE="$e2e_superadmin_env_file" DEV_SUPERADMIN_HTTP_ADDR=":${superadmin_port}" make dev-superadmin >"$superadmin_log" 2>&1 &
 superadmin_pid="$!"
 sleep 0.2
 if ! kill -0 "$superadmin_pid" >/dev/null 2>&1; then

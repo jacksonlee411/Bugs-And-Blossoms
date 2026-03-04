@@ -14,7 +14,6 @@ vi.mock('./httpClient', () => ({
 
 import {
   cancelAssistantTask,
-  applyAssistantModelProviders,
   commitAssistantTurn,
   confirmAssistantTurn,
   createAssistantConversation,
@@ -91,15 +90,6 @@ describe('assistant api', () => {
       providers: []
     })
     expect(postMock).toHaveBeenNthCalledWith(1, '/internal/assistant/model-providers:validate', {
-      provider_routing: { strategy: 'priority_failover', fallback_enabled: true },
-      providers: []
-    })
-
-    await applyAssistantModelProviders({
-      provider_routing: { strategy: 'priority_failover', fallback_enabled: true },
-      providers: []
-    })
-    expect(postMock).toHaveBeenNthCalledWith(2, '/internal/assistant/model-providers:apply', {
       provider_routing: { strategy: 'priority_failover', fallback_enabled: true },
       providers: []
     })

@@ -423,8 +423,8 @@ func TestAuthzRequirementForRoute(t *testing.T) {
 	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/model-providers:validate"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
 		t.Fatalf("expected assistant model providers validate mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
 	}
-	if object, action, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/model-providers:apply"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionAdmin {
-		t.Fatalf("expected assistant model providers apply mapped to org.setid_capability_config admin, got ok=%v object=%q action=%q", ok, object, action)
+	if _, _, ok := authzRequirementForRoute(http.MethodPost, "/internal/assistant/model-providers:apply"); ok {
+		t.Fatal("expected retired assistant model providers apply route unmapped")
 	}
 	if object, action, ok := authzRequirementForRoute(http.MethodGet, "/internal/assistant/models"); !ok || object != authz.ObjectOrgSetIDCapability || action != authz.ActionRead {
 		t.Fatalf("expected assistant models read mapped to org.setid_capability_config read, got ok=%v object=%q action=%q", ok, object, action)

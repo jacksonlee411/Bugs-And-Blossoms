@@ -323,15 +323,6 @@ var capabilityRouteBindings = []capabilityRouteBinding{
 		Status:        routeCapabilityStatusActive,
 	},
 	{
-		Method:        "POST",
-		Path:          "/internal/assistant/model-providers:apply",
-		RouteClass:    "internal_api",
-		Action:        authz.ActionAdmin,
-		CapabilityKey: "org.assistant_conversation.manage",
-		OwnerModule:   "orgunit",
-		Status:        routeCapabilityStatusActive,
-	},
-	{
 		Method:        "GET",
 		Path:          "/internal/assistant/models",
 		RouteClass:    "internal_api",
