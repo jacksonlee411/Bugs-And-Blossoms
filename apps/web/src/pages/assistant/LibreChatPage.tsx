@@ -243,9 +243,15 @@ export function LibreChatPage() {
       const validationCodes = Array.isArray(sourceTurn.dry_run?.validation_errors) ? sourceTurn.dry_run.validation_errors : []
       const looksLikeCreateRequest = looksLikeCreateOrgUnitRequest(userInput)
 
-      if (state === 'confirmed' && isExecutionConfirmationText(userInput)) {
-        await autoCommitTurnFromChat(sourceConversation, sourceTurn)
-        return true
+      if (state === 'confirmed') {
+        if (isExecutionConfirmationText(userInput)) {
+          await autoCommitTurnFromChat(sourceConversation, sourceTurn)
+          return true
+        }
+        if (!looksLikeCreateRequest) {
+          postBridgeNotice('检测到待提交回合，请回复“确认执行”以继续；如需发起新任务，请明确输入创建需求。', 'info')
+          return true
+        }
       }
 
       if (state !== 'validated') {

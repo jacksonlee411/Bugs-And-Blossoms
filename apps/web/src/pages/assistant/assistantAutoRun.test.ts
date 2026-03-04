@@ -49,7 +49,9 @@ describe('assistantAutoRun', () => {
     expect(looksLikeCreateOrgUnitRequest('在鲜花组织之下新建一个名为运营部的部门')).toBe(true)
     expect(looksLikeCreateOrgUnitRequest('确认执行')).toBe(false)
     expect(isExecutionConfirmationText('请确认执行')).toBe(true)
+    expect(isExecutionConfirmationText('ok')).toBe(true)
     expect(isExecutionConfirmationText('继续聊聊')).toBe(false)
+    expect(isExecutionConfirmationText('我们继续执行排查这个问题')).toBe(false)
   })
 
   it('resolves candidate by code/name/path and index', () => {
