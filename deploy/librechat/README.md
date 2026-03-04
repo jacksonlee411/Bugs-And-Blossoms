@@ -21,14 +21,37 @@
 4. 停止：
    - `make assistant-runtime-down`
 
+## 数据目录单一口径（DEV-PLAN-238）
+
+- `LIBRECHAT_DATA_ROOT` 是数据目录唯一入口，默认值：`.local/librechat`（相对仓库根目录解析）。
+- 运行脚本会将 `LIBRECHAT_DATA_ROOT` 归一为绝对路径，并在启动前校验：
+  1. 必需子目录可创建且可写；
+  2. compose 解析出的 bind mount source 与预期路径完全一致；
+  3. 缺失或漂移时 fail-fast（阻断启动）。
+
 ## 清理边界
 
-`make assistant-runtime-clean` 仅清理以下本地目录：
+`make assistant-runtime-clean` 仅清理 `${LIBRECHAT_DATA_ROOT}` 下列目录（与运行时同源）：
 
-- `.local/librechat/api`
-- `.local/librechat/mongodb`
-- `.local/librechat/meilisearch`
-- `.local/librechat/rag_api`
-- `.local/librechat/vectordb`
+- `${LIBRECHAT_DATA_ROOT}/api`
+- `${LIBRECHAT_DATA_ROOT}/mongodb`
+- `${LIBRECHAT_DATA_ROOT}/meilisearch`
+- `${LIBRECHAT_DATA_ROOT}/rag_api`
+- `${LIBRECHAT_DATA_ROOT}/vectordb`
 
-禁止在脚本中清理上述目录之外的路径。
+禁止清理上述目录之外的路径（脚本对仓库外路径 fail-closed）。
+
+## 故障处置（MongoDB 挂载异常）
+
+最小恢复流程（建议按顺序）：
+
+1. `make assistant-runtime-down`
+2. `make assistant-runtime-clean`
+3. `make assistant-runtime-up`
+4. `make assistant-runtime-status`
+
+当 `status` 为 `unavailable` 时，`services[].reason` 重点关注：
+
+- `mount_source_missing`：宿主机挂载目录缺失（先执行 `clean -> up`，或检查 `LIBRECHAT_DATA_ROOT`）。
+- `container_not_running`：容器未运行（查看 `docker compose ps`/容器日志）。
+- `upstream_unreachable`：API 容器已运行但上游探针不可达（查看 api 服务日志与端口绑定）。

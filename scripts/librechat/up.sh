@@ -3,26 +3,22 @@ set -euo pipefail
 
 prefix="[librechat-runtime-up]"
 repo_root="$(git rev-parse --show-toplevel)"
-runtime_dir="${repo_root}/deploy/librechat"
-compose_project="${LIBRECHAT_COMPOSE_PROJECT:-bugs-and-blossoms-librechat}"
-env_file="${LIBRECHAT_ENV_FILE:-${runtime_dir}/.env}"
-if [[ ! -f "${env_file}" ]]; then
-  env_file="${runtime_dir}/.env.example"
-fi
+# shellcheck disable=SC1091
+source "${repo_root}/scripts/librechat/common.sh"
+librechat_init "${prefix}"
 
-if [[ ! -f "${runtime_dir}/versions.lock.yaml" ]]; then
+if [[ ! -f "${LIBRECHAT_RUNTIME_DIR}/versions.lock.yaml" ]]; then
   echo "${prefix} missing versions.lock.yaml" >&2
   exit 2
 fi
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "${prefix} missing docker" >&2
-  exit 2
-fi
+librechat_require_cmd docker
+librechat_require_cmd jq
 
-compose_cmd=(docker compose -p "${compose_project}" --env-file "${env_file}" -f "${runtime_dir}/docker-compose.upstream.yaml" -f "${runtime_dir}/docker-compose.overlay.yaml")
+librechat_ensure_data_dirs
+librechat_assert_mount_sources
 
-"${compose_cmd[@]}" up -d
-"${runtime_dir}/healthcheck.sh"
+"${LIBRECHAT_COMPOSE_CMD[@]}" up -d
+"${LIBRECHAT_RUNTIME_DIR}/healthcheck.sh"
 
 echo "${prefix} OK"

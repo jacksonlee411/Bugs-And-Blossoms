@@ -366,6 +366,8 @@ modules/{module}/
 - DEV-PLAN-236 执行日志：`docs/dev-records/dev-plan-236-execution-log.md`
 - DEV-PLAN-237：LibreChat 升级与回归闭环实施计划：`docs/dev-plans/237-librechat-upgrade-and-regression-closure-plan.md`
 - DEV-PLAN-238：LibreChat MongoDB 运行异常专项修复与防回归计划：`docs/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`
+- DEV-PLAN-238 执行日志：`docs/dev-records/dev-plan-238-execution-log.md`
+- DEV-PLAN-239：LibreChat 聊天可写链路恢复与运行态稳定性收口计划：`docs/dev-plans/239-librechat-chat-write-path-recovery-and-runtime-stability-plan.md`
 - DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
