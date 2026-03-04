@@ -1,11 +1,13 @@
 ---
 name: bugs-and-blossoms-dev-login
-description: Start the Bugs-And-Blossoms local dev stack and bring up the tenant login page at http://localhost:8080/app/login (Postgres+Redis via make dev-up, IAM migrations, KratosStub, and the Go server). Use when you need a repeatable workflow to get a working login on port 8080, seed a test identity, and verify creating a session (cookie sid) locally. 适用于“启动8080登录页/本地联调登录/起dev-up+kratosstub+dev-server”的场景。
+description: Start the Bugs-And-Blossoms local login stack and bring up the tenant login page at http://localhost:8080/app/login (Postgres+Redis via make dev-up, IAM migrations, KratosStub, and the Go server). Optionally boot LibreChat runtime (`make assistant-runtime-up`) for `/app/assistant` verification. Use when you need a repeatable workflow to get a working login on port 8080, seed test identities, verify session creation (cookie sid), and check assistant-ui tenant/session boundaries locally. 适用于“启动8080登录页/本地联调登录/起dev-up+kratosstub+dev-server（可选 assistant runtime）”的场景。
 ---
 
-# Bugs-And-Blossoms：本地 8080 登录页启动（dev-up + kratosstub + server）
+# Bugs-And-Blossoms：本地 8080 登录页启动（dev-up + kratosstub + server，可选 assistant runtime）
 
-目标：在本机把 `http://localhost:8080/app/login` 跑通（含 `POST /iam/api/sessions` 成功设置 `sid` cookie，并进入 `/app`）。
+目标 A：在本机把 `http://localhost:8080/app/login` 跑通（含 `POST /iam/api/sessions` 成功设置 `sid` cookie，并进入 `/app`）。
+
+目标 B（可选）：在已登录前提下，跑通 `/app/assistant` 对应的 `/assistant-ui/*` 受保护代理链路，并验证 LibreChat runtime 可用性。
 
 本技能默认只做“启动/迁移/seed/验证”，不会执行 `make dev-reset`，不会轻易清库删数据。
 
@@ -82,6 +84,18 @@ cd "$(git rev-parse --show-toplevel)"
 make dev-server
 ```
 
+（可选）6) 启动 LibreChat Runtime（用于 `/app/assistant`）
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+make assistant-runtime-up
+make assistant-runtime-status
+```
+
+预期：
+- `make assistant-runtime-status` 输出 `status=healthy` 时，`/app/assistant` 可进入完整对话闭环。
+- 若输出 `status=unavailable`，先执行文末“关闭”小节中的 runtime 恢复流程再重试。
+
 ## 一键启动 + seed + 验证登录（推荐）
 
 说明：适合本地临时启动（包含 dev-up、IAM 迁移、kratosstub、seed、server 启动与登录验证）。
@@ -129,6 +143,9 @@ curl -i -X POST -H 'Host: localhost:8080' -H 'Content-Type: application/json' \
    - `admin2@localhost`（tenant `00000000-0000-0000-0000-000000000002`）
 3) 预期：前端调用 `POST /iam/api/sessions` 成功（204），并设置 `sid` cookie，然后进入 `/app`。
 4) 登录后可直接访问：`http://<对应租户域名>:8080/app/org/units`（未登录时访问 `/app/*` 会 302 到 `/app/login`，属正常行为）。
+5) （可选）访问：`http://<对应租户域名>:8080/app/assistant`
+   - 若 runtime healthy：可加载 LibreChat iframe，并进行聊天。
+   - 若 runtime 未启动：通过会话校验后可能返回 `502`（表示边界已生效，但上游不可用）。
 
 （注意）不要用 `http://127.0.0.1:8080/app/login`：租户解析基于 Host，`127.0.0.1` 默认无租户映射，会 404（tenant not found）。
 
@@ -191,6 +208,29 @@ curl -i -b /tmp/sid-saas.txt -H 'Host: tenant2.localhost:8080' \
   'http://127.0.0.1:8080/iam/api/dicts?as_of=2026-01-01'
 ```
 
+5) （可选）assistant-ui 边界快速验证（与 DEV-PLAN-235 对齐）
+
+- 未登录访问 assistant-ui（预期 `302` 到 `/app/login`）：
+
+```bash
+curl -i -H 'Host: localhost:8080' \
+  http://127.0.0.1:8080/assistant-ui
+```
+
+- 登录后同租户访问 assistant-ui（预期 `200` 或 `502`；`502` 表示上游 runtime 未就绪）：
+
+```bash
+curl -i -b /tmp/sid-local.txt -H 'Host: localhost:8080' \
+  http://127.0.0.1:8080/assistant-ui
+```
+
+- 跨租户复用 sid 访问 assistant-ui（预期 `302` 到 `/app/login`）：
+
+```bash
+curl -i -b /tmp/sid-saas.txt -H 'Host: tenant2.localhost:8080' \
+  http://127.0.0.1:8080/assistant-ui
+```
+
 ## 1 分钟手工验证（浏览器三窗口并行）
 
 > 目标：不用 curl，快速做一次“3 租户并行登录 + 隔离”肉眼验收。
@@ -225,6 +265,9 @@ curl -i -b /tmp/sid-saas.txt -H 'Host: tenant2.localhost:8080' \
 - 登录显示 principal error：通常表示数据库里 `iam.principals(tenant_id,email)` 已绑定了**不同的** `kratos_identity_id`（历史数据与当前 KratosStub 的 identity id 算法不一致会触发该保护）。处理方式：
   - A) 清库重建（最省心，会丢 dev 数据）：执行一次 `make dev-reset`，然后从本技能第 1 步重新跑起。
   - B) 不清库：换一个新邮箱重新 seed；或手工把该 principal 的 `kratos_identity_id` 清空后再登录（这会改动数据库数据，需你自行确认风险）。
+- 未登录访问 `/assistant-ui` 时应为 `302 /app/login`；若不是，优先检查 `withTenantAndSession` 边界链路是否被本地改动破坏。
+- 登录后访问 `/assistant-ui` 返回 `502`：通常是 LibreChat 上游未启动或不可达，执行 `make assistant-runtime-up && make assistant-runtime-status`。
+- `make assistant-runtime-status` 显示 `unavailable`：按顺序执行 `make assistant-runtime-down && make assistant-runtime-clean && make assistant-runtime-up && make assistant-runtime-status`。
 - 8080 端口占用：用 `HTTP_ADDR=:8080` 或换端口后相应调整访问地址；但本技能的目标是跑通 8080。
 
 ## 关闭（默认保留数据）
@@ -232,11 +275,12 @@ curl -i -b /tmp/sid-saas.txt -H 'Host: tenant2.localhost:8080' \
 说明：
 - 如果你在前台运行了 `make dev-server` / `make dev-kratos-stub`：用 Ctrl+C 结束即可。
 - 如果你使用了 `&` 放到后台：`make dev-down` 只会停 Docker（Postgres/Redis），不会自动停止本机上的 Go 进程；请先手工停止它们。
+- 若你还启动了 LibreChat runtime：执行 `make assistant-runtime-down` 停止运行基线容器。
 
 （Linux）查看监听端口与 PID（然后 `kill <pid>`）：
 
 ```bash
-ss -ltnp | grep -E ':(8080|8081|4433|4434)'
+ss -ltnp | grep -E ':(8080|8081|3080|4433|4434)'
 ```
 
 ```bash
@@ -245,6 +289,20 @@ make dev-down
 ```
 
 `make dev-down` 会停止容器但保留 Postgres volume（数据不丢）。
+
+（可选）如果需要连同 LibreChat runtime 一并停止：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+make assistant-runtime-down
+```
+
+（可选）仅当你明确要清理 LibreChat 本地运行数据时：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+make assistant-runtime-clean
+```
 
 ## 危险操作（会清空数据，需明确确认）
 

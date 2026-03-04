@@ -52,7 +52,11 @@ describe('assistant api', () => {
   it('creates turn with encoded conversation id', async () => {
     postMock.mockResolvedValue({ conversation_id: 'conv_1', turns: [] })
     await createAssistantTurn('conv_1', 'hello')
-    expect(postMock).toHaveBeenCalledWith('/internal/assistant/conversations/conv_1/turns', { user_input: 'hello' })
+    expect(postMock).toHaveBeenCalledWith(
+      '/internal/assistant/conversations/conv_1/turns',
+      { user_input: 'hello' },
+      { timeout: 60000, retry: 0 }
+    )
   })
 
   it('gets conversation details', async () => {

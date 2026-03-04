@@ -1,5 +1,17 @@
 import { httpClient } from './httpClient'
 
+const DEFAULT_ASSISTANT_TURN_TIMEOUT_MS = 60000
+
+function resolveAssistantTurnTimeoutMs(raw: string | undefined): number {
+  const parsed = Number(raw ?? '')
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed
+  }
+  return DEFAULT_ASSISTANT_TURN_TIMEOUT_MS
+}
+
+const assistantTurnTimeoutMs = resolveAssistantTurnTimeoutMs(import.meta.env.VITE_ASSISTANT_TURN_TIMEOUT_MS)
+
 export interface AssistantCandidate {
   candidate_id: string
   candidate_code: string
@@ -265,7 +277,8 @@ export async function listAssistantConversations(params?: {
 export async function createAssistantTurn(conversationID: string, userInput: string): Promise<AssistantConversation> {
   return httpClient.post<AssistantConversation>(
     `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns`,
-    { user_input: userInput }
+    { user_input: userInput },
+    { timeout: assistantTurnTimeoutMs, retry: 0 }
   )
 }
 

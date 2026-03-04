@@ -3,6 +3,9 @@ env.local
 .env.*.local
 .env
 
+# Local runtime data
+/.local/
+
 # OS / editor
 .DS_Store
 *.swp

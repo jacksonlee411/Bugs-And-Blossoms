@@ -1,39 +1,41 @@
-# DEV-PLAN-239：LibreChat 聊天可写链路恢复与运行态稳定性收口计划
+# DEV-PLAN-239：LibreChat 聊天可写链路恢复与运行态稳定性收口详细设计
 
-**状态**: 进行中（2026-03-04 01:20 UTC）
+**状态**: 草拟中（2026-03-04 02:23 UTC）
 
-## 1. 背景与问题
-- 承接计划：
+## 1. 背景与上下文 (Context)
+- **需求来源**:
   - `docs/dev-plans/230-librechat-project-level-integration-plan.md`
   - `docs/dev-plans/232-librechat-official-runtime-baseline-plan.md`
   - `docs/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
   - `docs/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`
-- 当前用户可见问题（2026-03-04 现场）：在 `/app/assistant` 页面中，LibreChat iframe 可加载但无法在聊天框正常发起对话。
-- 已确认的主要缺口：
-  1. [x] `assistant-ui` 代理当前仅允许 `GET`，聊天发送所需写请求被 `405` 拒绝（“只读壳层”与“可对话壳层”语义不一致）。
-  2. [x] LibreChat runtime 在部分环境进入 `unavailable`，常见表现为 `mongodb mount_source_missing`、`rag_api container_not_running`。
-  3. [x] 本地清理链路对容器写入的 root/非当前用户文件处理不稳定，导致 `assistant-runtime-clean/up` 偶发失败，进一步放大不可用窗口。
+- **当前痛点**（2026-03-04 现场复现）:
+  1. `assistant-ui` 代理当前仅允许 `GET`，聊天发送请求被拦截，导致 iframe 可加载但不可交互。
+  2. LibreChat 运行态在部分环境会退化为 `unavailable`（典型表现为 `mongodb` 挂载/权限异常与 `rag_api` 未运行）。
+  3. 本地清理与重建链路在容器写入文件权限不一致场景下不稳定，放大恢复成本与停机窗口。
+- **业务价值**:
+  - 让 `/app/assistant` 页面“聊天壳层（LibreChat）”恢复可对话，同时保持本仓 `AuthN/AuthZ/Tenant/One Door` 边界不变。
 
-## 2. 目标与非目标
-### 2.1 核心目标
-1. [ ] 恢复“可对话”最小闭环：登录后可在 LibreChat 聊天框提交消息并获得响应。
-2. [ ] 维持边界不变：`/assistant-ui/*` 仍受本仓 `AuthN/AuthZ/Tenant` 保护，禁止业务写旁路。
-3. [ ] 收敛代理契约：方法放开仅覆盖聊天必需范围，路径/头部继续最小透传与 fail-closed。
-4. [ ] 收敛运行稳定性：`make assistant-runtime-up/status` 在干净环境可重复恢复为 `healthy`。
-5. [ ] 补齐回归证据：单测 + e2e + runtime 闭环证据进入 `docs/dev-records/`。
+## 2. 目标与非目标 (Goals & Non-Goals)
+### 2.1 核心目标（量化）
+1. [ ] **可对话闭环（真实模型）**：登录用户在 `/app/assistant` 的 LibreChat iframe 内可完成“发送消息 -> 由真实外网模型返回响应”最小闭环。
+2. [ ] **边界不退化**：`/assistant-ui/*` 继续受会话与租户校验，未登录仍 `302 /app/login`，跨租户会话仍拒绝。
+3. [ ] **代理最小放开**：仅放开聊天必需 HTTP 方法，维持路径边界与敏感头剥离，fail-closed 不变。
+4. [ ] **运行态可恢复**：`make assistant-runtime-down && make assistant-runtime-clean && make assistant-runtime-up && make assistant-runtime-status` 连续 3 轮通过，状态为 `healthy`。
+5. [ ] **证据可审计**：完成单测/E2E/runtime 回归并在 `docs/dev-records/dev-plan-239-execution-log.md` 留档。
 
-### 2.2 非目标（Out of Scope）
-1. [ ] 不引入 LibreChat 自管身份体系，不改变本仓 Kratos/Casbin/Tenant 归属。
-2. [ ] 不引入新数据库/新中间件，不新增业务能力。
-3. [ ] 不恢复 legacy 双链路或临时旁路开关。
-4. [ ] 不在本计划处理 `model-providers:apply` 退役阶段推进（由 `DEV-PLAN-236` 承接）。
+### 2.2 非目标 (Out of Scope)
+1. [ ] 不引入 LibreChat 自管身份，不改变 Kratos/Casbin/Tenant 注入归属。
+2. [ ] 不替代“当前回合操作”业务提交链（Confirm/Commit/Task 仍走本仓 One Door）。
+3. [ ] 不新增数据库 schema/迁移/sqlc 变更。
+4. [ ] 不恢复 legacy 双链路，不引入临时绕过开关。
+5. [ ] 不在本计划推进 `model-providers:apply` 三阶段退役（由 `DEV-PLAN-236` 承接）。
 
 ### 2.3 工具链与门禁（SSOT 引用）
 - **触发器清单（本计划命中）**：
-  - [X] Go 代码（代理/中间件/测试）
+  - [X] Go 代码（server/proxy/scripts/tests）
   - [ ] `.templ` / CSS 生成
   - [ ] 多语言 JSON
-  - [X] Routing / capability 映射
+  - [X] Routing
   - [X] E2E
   - [X] 文档门禁
 - **本地必跑（命中项）**：
@@ -42,16 +44,17 @@
   3. [ ] `make check capability-route-map`（命中映射改动时）
   4. [ ] `make check error-message`（命中错误码/提示改动时）
   5. [ ] `make assistant-runtime-down && make assistant-runtime-clean && make assistant-runtime-up && make assistant-runtime-status`
-  6. [ ] `make e2e`
-  7. [ ] `make check doc`
+  6. [ ] `docker compose -p ${LIBRECHAT_COMPOSE_PROJECT:-bugs-and-blossoms-librechat} --env-file deploy/librechat/.env -f deploy/librechat/docker-compose.upstream.yaml -f deploy/librechat/docker-compose.overlay.yaml exec -T api sh -lc 'test -n "${OPENAI_API_KEY:-}"'`
+  7. [ ] `make e2e`
+  8. [ ] `make check doc`
 - **SSOT 链接**：
   - `AGENTS.md`
   - `Makefile`
   - `.github/workflows/quality-gates.yml`
   - `docs/dev-plans/012-ci-quality-gates.md`
 
-## 3. 架构与关键决策
-### 3.1 目标拓扑（保持 One Door 边界）
+## 3. 架构与关键决策 (Architecture & Decisions)
+### 3.1 目标拓扑
 ```mermaid
 graph TD
     A[/app/assistant/] --> B[iframe /assistant-ui/*]
@@ -59,73 +62,201 @@ graph TD
     C --> D[assistant_ui_proxy]
     D --> E[LibreChat upstream]
 
-    F[/internal/assistant/*] --> G[One Door chain]
+    A --> F[当前回合操作面板]
+    F --> G[/internal/assistant/*]
+    G --> H[One Door chain]
 ```
 
-### 3.2 ADR 摘要
-- **ADR-239-01：代理方法从“只读”收敛到“聊天最小可写集”**（选定）
-  - 选项 A：继续仅 `GET`；缺点：无法在聊天框发送消息。
-  - 选项 B（选定）：按证据放开聊天必需方法（默认 `GET/HEAD/POST`，必要时补 `OPTIONS`），其余仍拒绝。
-- **ADR-239-02：边界优先于可用性**（选定）
-  - 即便放开 `POST`，仍保持 `/assistant-ui/*` 前缀约束、敏感头剥离、禁止本仓内部路由旁路。
-- **ADR-239-03：运行目录治理脚本化**（选定）
-  - 启动/清理流程需对目录存在性、权限与挂载源一致性做前置检查与自动修复路径，避免人工临时命令依赖。
+### 3.2 关键决策（ADR 摘要）
+- **ADR-239-01：代理方法从只读收敛到聊天最小可写集**（选定）
+  - 选项 A：继续仅 `GET`；缺点：聊天无法发送。
+  - 选项 B（选定）：允许 `GET/HEAD/POST/OPTIONS`，其余继续 `405`；`OPTIONS` 保留用于浏览器预检稳定性，避免写链路回归。
+- **ADR-239-02：可用性修复不得突破边界**（选定）
+  - 即便放开 `POST`，仍必须保持 `/assistant-ui/*` 前缀、会话校验、敏感头剥离、禁止旁路本仓 `/internal/**`。
+- **ADR-239-03：运行态故障优先脚本化恢复**（选定）
+  - 把目录存在性/可写性/挂载一致性检查前置到脚本，失败直接中止并输出可操作诊断。
 
-## 4. 输入/输出契约
-### 4.1 assistant-ui 代理契约（拟修订）
+### 3.3 职责边界（显式冻结）
+1. [ ] LibreChat iframe：负责聊天 UI 交互与通用对话体验。
+2. [ ] 当前回合操作面板：负责业务裁决动作（Generate/Confirm/Commit/Submit Task）。
+3. [ ] 两者通过受控消息桥协同，不互相替代，不合并状态机。
+
+## 4. 数据模型与约束 (Data Model & Constraints)
+> 本计划不新增数据库表，仅收敛运行时契约。
+
+### 4.1 assistant-ui 代理边界契约（冻结）
 ```yaml
 assistant_ui_proxy:
-  methods_allowlist: [GET, HEAD, POST]
+  methods_allowlist: [GET, HEAD, POST, OPTIONS]
   path_prefix: /assistant-ui
-  request_header_strip: [Cookie, Authorization]
-  response_header_strip: [Set-Cookie]
+  request_header_allowlist:
+    - Accept
+    - Accept-Encoding
+    - Accept-Language
+    - Cache-Control
+    - Content-Type
+    - Origin
+    - Referer
+    - User-Agent
+  request_header_strip:
+    - Cookie
+    - Authorization
+  response_header_strip:
+    - Set-Cookie
 ```
 约束：
 1. [ ] 非 allowlist 方法返回 `405`。
 2. [ ] 非 `/assistant-ui/*` 路径返回 `400`。
-3. [ ] 仍需通过会话与租户校验；未登录保持 `302 /app/login`。
-4. [ ] assistant-ui 不得触达本仓 `/internal/**` 业务写路径。
+3. [ ] 请求进入 proxy 前必须通过 tenant/session/principal 校验。
+4. [ ] 禁止透传本仓登录态凭据到上游。
 
-### 4.2 runtime 脚本契约（拟修订）
-1. [ ] `assistant-runtime-up`：启动前校验各数据目录“存在 + 可写 + 可删除探针”并输出可操作错误。
-2. [ ] `assistant-runtime-clean`：清理时兼容容器写入文件权限差异，避免因权限导致半清理状态。
-3. [ ] `assistant-runtime-status`：失败原因保持稳定枚举（如 `mount_source_missing`、`container_not_running`、`upstream_unreachable`）。
+### 4.2 真实模型密钥与配置入口契约（冻结）
+1. [ ] `OPENAI_API_KEY` 必须通过运行时环境注入 `api` 容器（必要时同步注入 `rag_api`），且容器内值必须非空。
+2. [ ] `apps/web/src/pages/assistant/AssistantModelProvidersPage.tsx` 仅做“只读展示 + validate”，不作为配置写入口；模型与密钥最终以运行时环境为准。
+3. [ ] 密钥仅允许放在本机私有环境文件（如 `.env.local`、`deploy/librechat/.env`），禁止提交到仓库。
 
-## 5. 实施切片（建议顺序）
-1. [ ] **PR-239-01：契约冻结与测试先行**
-   - [ ] 冻结代理方法矩阵与错误码口径。
-   - [ ] 先补失败用例（聊天请求被拒绝、路径越界、旁路写）。
-2. [ ] **PR-239-02：assistant-ui 聊天可写链路恢复**
-   - [x] 在代理中放开聊天必需方法。
-   - [x] 保持路径/头部边界与 fail-closed。
-3. [ ] **PR-239-03：runtime 目录与挂载稳定性加固**
-   - [x] 强化 `up/clean/status` 脚本前置检查与错误提示。
-   - [x] 固化最小恢复流程（down -> clean -> up -> status）。
-4. [ ] **PR-239-04：回归与证据封板**
-   - [ ] 补齐 e2e：iframe 内聊天发送正向 + 未登录/跨租户/旁路写负向。
-   - [ ] 输出 `docs/dev-records/dev-plan-239-execution-log.md`。
+### 4.3 运行态状态文件契约（沿用并补齐）
+`deploy/librechat/runtime-status.json` 字段保持：
+- `status`: `healthy | unavailable`
+- `checked_at`: UTC 时间戳
+- `upstream.url`
+- `services[]`: `{name, required, healthy, reason}`
 
-## 6. 验收标准（DoD）
-1. [ ] 登录用户在 `/app/assistant` 内可完成一次真实聊天发送与响应接收。
-2. [ ] 未登录访问 `/assistant-ui` 仍返回 `302 /app/login`，跨租户会话仍被拒绝。
-3. [ ] 非法方法与越界路径仍被稳定阻断（`405`/`400`），无旁路写。
-4. [ ] `assistant-runtime-down -> clean -> up -> status` 连续 3 轮通过，状态为 `healthy`。
-5. [ ] 本计划门禁命令全绿，且证据入档。
+失败原因枚举至少包含：
+- `mount_source_missing`
+- `container_not_running`
+- `upstream_unreachable`
 
-## 7. 风险与缓解
-1. [ ] 风险：放开 `POST` 引入代理攻击面。  
-   缓解：仅放开最小方法集合 + 路径/头部双层约束 + 负测门禁。
-2. [ ] 风险：Docker/WSL 路径语义差异导致偶发挂载失败。  
-   缓解：脚本前置校验绝对路径与目录探针，失败即中止并输出修复建议。
-3. [ ] 风险：为追求可用性放松身份边界。  
-   缓解：复用 `DEV-PLAN-235` 边界用例，任一回归失败即阻断发布。
+## 5. 接口契约 (API / HTTP Contracts)
+### 5.1 `/assistant-ui/*` 代理行为（目标态）
+| 场景 | 输入 | 期望 |
+| --- | --- | --- |
+| 未登录访问 | `GET /assistant-ui` | `302 /app/login` |
+| 正常聊天发送 | `POST /assistant-ui/*` | 转发上游，响应透传（剥离 `Set-Cookie`） |
+| 预检请求 | `OPTIONS /assistant-ui/*` | 允许通过（用于浏览器预检），其余边界约束不变 |
+| 方法越界 | `PUT/DELETE/PATCH ...` | `405` + 稳定错误码 |
+| 路径越界 | 非 `/assistant-ui/*` | `400` + 稳定错误码 |
+| 上游不可达 | 代理转发失败 | `502` + 稳定错误码 |
 
-## 8. SSOT 引用
+### 5.2 错误码与提示（拟收敛）
+1. [ ] `assistant_ui_method_not_allowed`
+2. [ ] `assistant_ui_path_invalid`
+3. [ ] `assistant_ui_upstream_unavailable`
+
+要求：
+- [ ] `en/zh` 文案明确，不输出泛化失败提示。
+- [ ] 与 `make check error-message` 口径一致。
+
+### 5.3 runtime 命令接口契约
+1. [ ] `assistant-runtime-clean`：在权限冲突场景给出明确提示与恢复建议。
+2. [ ] `assistant-runtime-up`：挂载源异常时 fail-fast，并输出具体 service/路径。
+3. [ ] `assistant-runtime-status`：输出可机读 JSON，非健康时返回非零退出码。
+
+## 6. 核心逻辑与算法 (Business Logic & Algorithms)
+### 6.1 代理入口判定算法
+```text
+if method not in allowlist: return 405
+if path not starts_with /assistant-ui: return 400
+if tenant/session/principal invalid: return 302(/app/login) or 401 by route class
+sanitize request headers
+proxy to librechat upstream
+strip response Set-Cookie
+on proxy error: return 502
+```
+
+### 6.2 消息桥协同算法（保持）
+```text
+receive postMessage from iframe
+validate origin + schema + channel + nonce
+if type == assistant.prompt.sync: sync payload.input to "输入需求"文本框
+if type == assistant.turn.refresh: refresh current conversation
+otherwise: drop
+```
+
+### 6.3 runtime 恢复闭环算法
+```text
+down -> clean -> up -> status
+if status != healthy:
+  inspect reason per service
+  fix mount/permission/container issue
+  rerun status until healthy
+```
+
+## 7. 安全与鉴权 (Security & Authz)
+1. [ ] 身份体系保持本仓 Kratos Session，不引入 LibreChat 自管登录。
+2. [ ] `/assistant-ui/*` 必须纳入受保护 UI 前缀，与 `/app/**` 同级校验。
+3. [ ] 保持 One Door 边界：assistant-ui 仅为聊天壳层，不直接触发业务写路由。
+4. [ ] 敏感头剥离与路径约束默认启用，不提供 warning-only 模式。
+
+## 8. 依赖与里程碑 (Dependencies & Milestones)
+- **依赖**：
+  - `DEV-PLAN-231`（单主源门禁）已完成
+  - `DEV-PLAN-232`（运行基线）已实施
+  - `DEV-PLAN-235`（会话边界）已完成
+  - `DEV-PLAN-238`（Mongo 运行异常修复）已完成
+- **里程碑**：
+  1. [ ] M1：冻结代理方法矩阵、错误码契约与测试清单。
+  2. [ ] M2：完成 proxy 改造与单测（方法/路径/头部/会话边界）。
+  3. [ ] M3：完成 runtime 脚本稳定性改造、容器内密钥前置校验与 3 轮恢复闭环证据。
+  4. [ ] M4：完成真实模型 e2e 回归、门禁全绿、readiness 留档。
+
+## 9. 测试与验收标准 (Acceptance Criteria)
+### 9.1 单元/集成测试
+1. [ ] `assistant_ui_proxy_test` 覆盖 `GET/HEAD/POST/OPTIONS` 正向与非法方法负向。
+2. [ ] 覆盖路径越界（非 `/assistant-ui/*`）返回 `400`。
+3. [ ] 覆盖敏感头剥离（`Cookie`/`Authorization`）与 `Set-Cookie` 响应剥离。
+4. [ ] 覆盖未登录与跨租户会话拒绝。
+
+### 9.2 E2E 必测
+1. [ ] 登录后在 iframe 内发送消息并收到真实外网模型响应（记录 provider/model 与响应片段）。
+2. [ ] 未登录访问 `/assistant-ui` 被重定向。
+3. [ ] 跨租户会话复用被拒绝。
+4. [ ] assistant-ui 无法旁路调用本仓业务写接口。
+5. [ ] 本计划验收禁止使用本地假服务替代真实模型响应。
+
+### 9.3 runtime 回归
+1. [ ] 连续 3 轮 `down -> clean -> up -> status` 均为 `healthy`。
+2. [ ] 人工构造挂载缺失场景时，脚本能输出稳定且可操作的失败原因。
+3. [ ] `api` 容器内 `OPENAI_API_KEY` 非空（以容器内检查结果为准，不以页面展示为准）。
+
+### 9.4 验收命令
+1. [ ] `go fmt ./... && go vet ./... && make check lint && make test`
+2. [ ] `make check routing`
+3. [ ] `make check capability-route-map`（命中时）
+4. [ ] `make check error-message`（命中时）
+5. [ ] `make assistant-runtime-down && make assistant-runtime-clean && make assistant-runtime-up && make assistant-runtime-status`
+6. [ ] `docker compose -p ${LIBRECHAT_COMPOSE_PROJECT:-bugs-and-blossoms-librechat} --env-file deploy/librechat/.env -f deploy/librechat/docker-compose.upstream.yaml -f deploy/librechat/docker-compose.overlay.yaml exec -T api sh -lc 'test -n "${OPENAI_API_KEY:-}"'`
+7. [ ] `make e2e`
+8. [ ] `make check doc`
+
+### 9.5 完成定义（DoD）
+1. [ ] 用户可在“聊天壳层（LibreChat）”中通过真实外网模型完成交互。
+2. [ ] 安全边界与 One Door 约束不回退。
+3. [ ] 运行态恢复流程在本地可重复通过并具备故障可诊断性。
+4. [ ] `docs/dev-records/dev-plan-239-execution-log.md` 证据完整。
+
+## 10. 运维与监控 (Ops & Monitoring)
+1. [ ] 保持早期阶段最小运维原则，不新增外部监控栈与开关系统。
+2. [ ] 运行异常处置顺序固定：阻断发布 -> 修复运行态 -> 重跑门禁 -> 恢复。
+3. [ ] 关键日志需包含 `tenant_id/request_id/trace_id/path/method/reason`。
+4. [ ] 回滚策略仅允许版本回滚或前向修复，禁止恢复 legacy 双链路。
+
+## 11. Readiness 记录要求
+1. [ ] 新建 `docs/dev-records/dev-plan-239-execution-log.md`。
+2. [ ] 每条证据记录：UTC 时间、命令、退出码、关键响应片段、关联 commit/PR。
+3. [ ] 至少包含 1 条正向证据（真实模型聊天可发送并回包，含 provider/model）与 3 条负向证据（未登录/跨租户/越界）。
+4. [ ] 全部验收项勾选完成后再将状态更新为 `已完成`。
+
+## 12. SSOT 引用
 - `AGENTS.md`
 - `Makefile`
 - `.github/workflows/quality-gates.yml`
 - `internal/server/assistant_ui_proxy.go`
 - `internal/server/handler.go`
+- `internal/server/assistant_ui_proxy_test.go`
+- `internal/server/tenancy_middleware_test.go`
+- `apps/web/src/pages/assistant/AssistantPage.tsx`
+- `apps/web/src/pages/assistant/assistantMessageBridge.ts`
 - `scripts/librechat/up.sh`
 - `scripts/librechat/clean.sh`
 - `deploy/librechat/healthcheck.sh`

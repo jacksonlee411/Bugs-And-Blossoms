@@ -21,6 +21,14 @@
 4. 停止：
    - `make assistant-runtime-down`
 
+## 真实模型能力前置条件（DEV-PLAN-239）
+
+- `OPENAI_API_KEY` 必须在 **容器内** 可见且非空（以容器内检查为准，不以页面展示为准）。
+- 推荐在启动后执行：
+  - `docker compose -p ${LIBRECHAT_COMPOSE_PROJECT:-bugs-and-blossoms-librechat} --env-file deploy/librechat/.env -f deploy/librechat/docker-compose.upstream.yaml -f deploy/librechat/docker-compose.overlay.yaml exec -T api sh -lc 'test -n "${OPENAI_API_KEY:-}"'`
+- 模型治理页面 `/app/assistant/models` 仅提供“只读展示 + Validate”，不是模型/密钥写入口；运行时最终以环境变量注入结果为准。
+- 密钥仅允许放在本机私有环境文件（如 `.env.local` / `deploy/librechat/.env`），禁止提交到仓库。
+
 ## 数据目录单一口径（DEV-PLAN-238）
 
 - `LIBRECHAT_DATA_ROOT` 是数据目录唯一入口，默认值：`.local/librechat`（相对仓库根目录解析）。
