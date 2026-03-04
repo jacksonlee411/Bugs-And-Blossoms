@@ -368,6 +368,7 @@ modules/{module}/
 - DEV-PLAN-238：LibreChat MongoDB 运行异常专项修复与防回归计划：`docs/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`
 - DEV-PLAN-238 执行日志：`docs/dev-records/dev-plan-238-execution-log.md`
 - DEV-PLAN-239：LibreChat 聊天可写链路恢复与运行态稳定性收口计划：`docs/dev-plans/239-librechat-chat-write-path-recovery-and-runtime-stability-plan.md`
+- DEV-PLAN-239A：LibreChat 对话式自动执行与独立页面实施方案：`docs/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
 - DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（去写死 + Skill/MCP/LibreChat 对齐）：`docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
 - DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`

@@ -68,6 +68,16 @@ export const navItems: NavItem[] = [
     keywords: ['assistant', 'model', 'provider', 'llm', '模型', '供应商']
   },
   {
+    key: 'assistant-librechat',
+    path: '/assistant/librechat',
+    labelKey: 'nav_librechat',
+    icon: <SmartToyIcon fontSize='small' />,
+    order: 232,
+    parentKey: 'assistant',
+    permissionKey: 'orgunit.read',
+    keywords: ['assistant', 'librechat', 'chat', '独立聊天', '对话页']
+  },
+  {
     key: 'configuration-policy',
     path: '/org/setid',
     labelKey: 'nav_configuration_policy',

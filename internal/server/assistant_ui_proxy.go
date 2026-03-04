@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -18,6 +19,9 @@ const (
 	assistantUIProxyPathInvalidCode       = "assistant_ui_path_invalid"
 	assistantUIProxyUpstreamUnavailable   = "assistant_ui_upstream_unavailable"
 	assistantUIProxyDefaultRequestIDValue = "-"
+	assistantUIBridgeScriptPath           = "/assistant-ui/bridge.js"
+	assistantUIBridgeScriptTag            = `<script src="/assistant-ui/bridge.js" defer></script>`
+	assistantUISWCleanupScriptTag         = `<script data-assistant-ui-sw-cleanup="1">(function(){try{if('serviceWorker'in navigator&&navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){navigator.serviceWorker.getRegistrations().then(function(registrations){registrations.forEach(function(registration){registration.unregister().catch(function(){});});}).catch(function(){});}if(typeof window!=='undefined'&&window.caches&&window.caches.keys){window.caches.keys().then(function(keys){keys.forEach(function(key){window.caches.delete(key).catch(function(){});});}).catch(function(){});}}catch(err){}})();</script>`
 )
 
 var assistantUIProxyForbiddenBypassPrefixes = []string{
@@ -29,6 +33,8 @@ var assistantUIProxyForbiddenBypassPrefixes = []string{
 	"/staffing",
 	"/dicts",
 }
+
+var assistantUIRegisterSWScriptTagPattern = regexp.MustCompile(`(?is)<script[^>]*id=["']vite-plugin-pwa:register-sw["'][^>]*>\s*</script>`)
 
 func newAssistantUIProxyHandler() http.Handler {
 	targetRaw := assistantRuntimeDefaultUpstreamURL()
@@ -51,13 +57,7 @@ func newAssistantUIProxyHandler() http.Handler {
 		req.Host = targetURL.Host
 		req.Header.Set("X-Forwarded-Prefix", "/assistant-ui")
 	}
-	proxy.ModifyResponse = func(resp *http.Response) error {
-		if err := rewriteAssistantUIProxyHTMLBase(resp); err != nil {
-			return err
-		}
-		filterAssistantUIProxyResponseCookies(resp)
-		return nil
-	}
+	proxy.ModifyResponse = modifyAssistantUIProxyResponse
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, _ error) {
 		writeAssistantUIProxyError(
 			w,
@@ -70,6 +70,10 @@ func newAssistantUIProxyHandler() http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == assistantUIBridgeScriptPath {
+			serveAssistantUIBridgeScript(w, r)
+			return
+		}
 		if !assistantUIProxyMethodAllowed(r.Method) {
 			writeAssistantUIProxyError(
 				w,
@@ -119,6 +123,209 @@ func assistantUIUnavailableHandler(reason string) http.Handler {
 			"upstream_invalid:"+reason,
 		)
 	})
+}
+
+func serveAssistantUIBridgeScript(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		writeAssistantUIProxyError(
+			w,
+			r,
+			http.StatusMethodNotAllowed,
+			assistantUIProxyMethodNotAllowedCode,
+			"assistant_ui_method_not_allowed",
+			"bridge_script_method_not_allowed",
+		)
+		return
+	}
+	body := assistantUIBridgeScriptBody()
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	_, _ = io.WriteString(w, body)
+}
+
+func assistantUIBridgeScriptBody() string {
+	return `(function () {
+  if (!window || !window.parent || window.parent === window) {
+    return;
+  }
+  var params = new URLSearchParams(window.location.search || "");
+  var channel = (params.get("channel") || "").trim();
+  var nonce = (params.get("nonce") || "").trim();
+  if (!channel || !nonce) {
+    return;
+  }
+  var lastPayload = "";
+  var lastAt = 0;
+  function normalize(input) {
+    if (typeof input !== "string") {
+      return "";
+    }
+    return input.replace(/\\s+/g, " ").trim();
+  }
+  function emitPrompt(input) {
+    var text = normalize(input);
+    if (!text) {
+      return;
+    }
+    var now = Date.now();
+    if (text === lastPayload && now - lastAt < 1200) {
+      return;
+    }
+    lastPayload = text;
+    lastAt = now;
+    window.parent.postMessage({
+      type: "assistant.prompt.sync",
+      channel: channel,
+      nonce: nonce,
+      payload: { input: text, source: "librechat" }
+    }, window.location.origin);
+  }
+  function readInputValue(node) {
+    if (!node) {
+      return "";
+    }
+    if (typeof node.value === "string") {
+      return node.value;
+    }
+    if (typeof node.textContent === "string") {
+      return node.textContent;
+    }
+    return "";
+  }
+  function findInput(node) {
+    if (node && node.matches && node.matches('textarea, [contenteditable="true"]')) {
+      return node;
+    }
+    if (node && node.querySelector) {
+      var nested = node.querySelector('textarea, [contenteditable="true"]');
+      if (nested) {
+        return nested;
+      }
+    }
+    if (node && node.closest) {
+      var form = node.closest("form");
+      if (form) {
+        var inForm = form.querySelector('textarea, [contenteditable="true"]');
+        if (inForm) {
+          return inForm;
+        }
+      }
+    }
+    return document.querySelector('form textarea, form [contenteditable="true"], textarea, [contenteditable="true"]');
+  }
+  function mountNoticeLayer() {
+    var container = document.getElementById("assistant-flow-notice-layer");
+    if (container) {
+      return container;
+    }
+    container = document.createElement("div");
+    container.id = "assistant-flow-notice-layer";
+    container.style.position = "fixed";
+    container.style.right = "16px";
+    container.style.bottom = "16px";
+    container.style.maxWidth = "360px";
+    container.style.zIndex = "2147483000";
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+    container.style.gap = "8px";
+    document.body.appendChild(container);
+    return container;
+  }
+  function showNotice(text, severity) {
+    var content = normalize(text);
+    if (!content) {
+      return;
+    }
+    var layer = mountNoticeLayer();
+    var item = document.createElement("div");
+    item.style.padding = "10px 12px";
+    item.style.borderRadius = "10px";
+    item.style.fontSize = "12px";
+    item.style.lineHeight = "1.45";
+    item.style.color = "#123";
+    item.style.whiteSpace = "pre-wrap";
+    item.style.wordBreak = "break-word";
+    item.style.boxShadow = "0 4px 14px rgba(0,0,0,0.2)";
+    item.style.border = "1px solid rgba(0,0,0,0.08)";
+    var level = (severity || "info").toLowerCase();
+    if (level === "success") {
+      item.style.background = "#e8f5e9";
+      item.style.borderColor = "#81c784";
+    } else if (level === "warning") {
+      item.style.background = "#fff8e1";
+      item.style.borderColor = "#ffd54f";
+    } else if (level === "error") {
+      item.style.background = "#ffebee";
+      item.style.borderColor = "#ef9a9a";
+    } else {
+      item.style.background = "#e3f2fd";
+      item.style.borderColor = "#90caf9";
+    }
+    item.textContent = content;
+    layer.appendChild(item);
+    window.setTimeout(function () {
+      if (item.parentNode) {
+        item.parentNode.removeChild(item);
+      }
+    }, 9000);
+  }
+  window.addEventListener("message", function (event) {
+    if (event.origin !== window.location.origin) {
+      return;
+    }
+    var data = event.data;
+    if (!data || typeof data !== "object") {
+      return;
+    }
+    if (data.channel !== channel || data.nonce !== nonce) {
+      return;
+    }
+    if (data.type === "assistant.flow.notice" && data.payload && typeof data.payload === "object") {
+      showNotice(data.payload.text, data.payload.severity);
+    }
+  });
+  document.addEventListener("submit", function (event) {
+    var target = findInput(event.target);
+    emitPrompt(readInputValue(target));
+  }, true);
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+    if (event.isComposing) {
+      return;
+    }
+    var target = findInput(event.target);
+    emitPrompt(readInputValue(target));
+  }, true);
+  document.addEventListener("click", function (event) {
+    var node = event.target;
+    if (!node || !node.closest) {
+      return;
+    }
+    var button = node.closest('button, [role="button"]');
+    if (!button) {
+      return;
+    }
+    var label = normalize(button.textContent || "");
+    if (!/send|发送|提交/.test(label)) {
+      return;
+    }
+    var target = findInput(button);
+    emitPrompt(readInputValue(target));
+  }, true);
+  window.parent.postMessage({
+    type: "assistant.bridge.ready",
+    channel: channel,
+    nonce: nonce,
+    payload: { source: "assistant-ui-bridge" }
+  }, window.location.origin);
+})();`
 }
 
 func joinProxyPath(base string, suffix string) string {
@@ -222,10 +429,15 @@ func sanitizeAssistantUIProxyAuthorizationHeader(req *http.Request) string {
 	if !strings.EqualFold(parts[0], "Bearer") {
 		return ""
 	}
-	if strings.TrimSpace(parts[1]) == "" {
-		return ""
-	}
 	return "Bearer " + parts[1]
+}
+
+func modifyAssistantUIProxyResponse(resp *http.Response) error {
+	if err := rewriteAssistantUIProxyHTMLBase(resp); err != nil {
+		return err
+	}
+	filterAssistantUIProxyResponseCookies(resp)
+	return nil
 }
 
 func filterAssistantUIProxyResponseCookies(resp *http.Response) {
@@ -259,6 +471,12 @@ func rewriteAssistantUIProxyHTMLBase(resp *http.Response) error {
 		return err
 	}
 	_ = resp.Body.Close()
+	if !assistantUIProxyLooksLikeHTML(body) {
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+		resp.ContentLength = int64(len(body))
+		resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+		return nil
+	}
 
 	original := string(body)
 	rewritten := original
@@ -266,6 +484,9 @@ func rewriteAssistantUIProxyHTMLBase(resp *http.Response) error {
 	rewritten = strings.ReplaceAll(rewritten, `<base href="/">`, `<base href="/assistant-ui/">`)
 	rewritten = strings.ReplaceAll(rewritten, `<base href='/' />`, `<base href='/assistant-ui/' />`)
 	rewritten = strings.ReplaceAll(rewritten, `<base href='/'>`, `<base href='/assistant-ui/'>`)
+	rewritten = stripAssistantUIProxyServiceWorkerRegistration(rewritten)
+	rewritten = injectAssistantUIProxyServiceWorkerCleanupScript(rewritten)
+	rewritten = injectAssistantUIProxyBridgeScript(rewritten)
 	if rewritten == original {
 		resp.Body = io.NopCloser(bytes.NewReader(body))
 		resp.ContentLength = int64(len(body))
@@ -277,6 +498,54 @@ func rewriteAssistantUIProxyHTMLBase(resp *http.Response) error {
 	resp.ContentLength = int64(len(newBody))
 	resp.Header.Set("Content-Length", strconv.Itoa(len(newBody)))
 	return nil
+}
+
+func assistantUIProxyLooksLikeHTML(body []byte) bool {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 || trimmed[0] != '<' {
+		return false
+	}
+	snippetLen := len(trimmed)
+	if snippetLen > 1024 {
+		snippetLen = 1024
+	}
+	snippet := strings.ToLower(string(trimmed[:snippetLen]))
+	return strings.Contains(snippet, "<!doctype html") ||
+		strings.Contains(snippet, "<html") ||
+		strings.Contains(snippet, "<head") ||
+		strings.Contains(snippet, "<body")
+}
+
+func injectAssistantUIProxyBridgeScript(html string) string {
+	if strings.Contains(html, assistantUIBridgeScriptTag) {
+		return html
+	}
+	lower := strings.ToLower(html)
+	if idx := strings.Index(lower, "</head>"); idx >= 0 {
+		return html[:idx] + assistantUIBridgeScriptTag + html[idx:]
+	}
+	if idx := strings.Index(lower, "</body>"); idx >= 0 {
+		return html[:idx] + assistantUIBridgeScriptTag + html[idx:]
+	}
+	return html + assistantUIBridgeScriptTag
+}
+
+func injectAssistantUIProxyServiceWorkerCleanupScript(html string) string {
+	if strings.Contains(html, assistantUISWCleanupScriptTag) {
+		return html
+	}
+	lower := strings.ToLower(html)
+	if idx := strings.Index(lower, "</head>"); idx >= 0 {
+		return html[:idx] + assistantUISWCleanupScriptTag + html[idx:]
+	}
+	if idx := strings.Index(lower, "</body>"); idx >= 0 {
+		return html[:idx] + assistantUISWCleanupScriptTag + html[idx:]
+	}
+	return html + assistantUISWCleanupScriptTag
+}
+
+func stripAssistantUIProxyServiceWorkerRegistration(html string) string {
+	return assistantUIRegisterSWScriptTagPattern.ReplaceAllString(html, "")
 }
 
 func assistantUIProxyBypassPathForbidden(proxyPath string) bool {
