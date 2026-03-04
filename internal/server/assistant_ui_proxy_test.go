@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -282,8 +283,12 @@ func TestSanitizeAssistantUIProxyRequestCookieHeader(t *testing.T) {
 	if got := sanitizeAssistantUIProxyRequestCookieHeader(nil); got != "" {
 		t.Fatalf("expected empty cookie header for nil request, got=%q", got)
 	}
+	reqEmpty := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui", nil)
+	if got := sanitizeAssistantUIProxyRequestCookieHeader(reqEmpty); got != "" {
+		t.Fatalf("expected empty cookie header for request without cookies, got=%q", got)
+	}
 	req := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui", nil)
-	req.Header.Set("Cookie", "sid=local; refreshToken=rf-1; token_provider=librechat; openid_user_id=oid-1")
+	req.Header.Set("Cookie", "sid=local; refreshToken=rf-1; token_provider=librechat; openid_user_id=oid-1; token_provider=")
 	got := sanitizeAssistantUIProxyRequestCookieHeader(req)
 	if strings.Contains(got, "sid=local") {
 		t.Fatalf("unexpected sid in sanitized cookies: %q", got)
@@ -298,6 +303,9 @@ func TestSanitizeAssistantUIProxyAuthorizationHeader(t *testing.T) {
 		t.Fatalf("expected empty auth header for nil request, got=%q", got)
 	}
 	req := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui", nil)
+	if got := sanitizeAssistantUIProxyAuthorizationHeader(req); got != "" {
+		t.Fatalf("empty auth header should be dropped, got=%q", got)
+	}
 	req.Header.Set("Authorization", "Basic abc")
 	if got := sanitizeAssistantUIProxyAuthorizationHeader(req); got != "" {
 		t.Fatalf("non-bearer auth should be dropped, got=%q", got)
@@ -306,11 +314,43 @@ func TestSanitizeAssistantUIProxyAuthorizationHeader(t *testing.T) {
 	if got := sanitizeAssistantUIProxyAuthorizationHeader(req); got != "" {
 		t.Fatalf("malformed bearer auth should be dropped, got=%q", got)
 	}
+	req.Header.Set("Authorization", "Bearer token-1 extra")
+	if got := sanitizeAssistantUIProxyAuthorizationHeader(req); got != "" {
+		t.Fatalf("multi-part bearer auth should be dropped, got=%q", got)
+	}
 	req.Header.Set("Authorization", "Bearer token-1")
 	if got := sanitizeAssistantUIProxyAuthorizationHeader(req); got != "Bearer token-1" {
 		t.Fatalf("bearer auth should be normalized, got=%q", got)
 	}
 }
+
+func TestFilterAssistantUIProxyResponseCookies(t *testing.T) {
+	filterAssistantUIProxyResponseCookies(nil)
+
+	resp := &http.Response{Header: make(http.Header)}
+	resp.Header.Add("Set-Cookie", "sid=local; Path=/; HttpOnly")
+	resp.Header.Add("Set-Cookie", "refreshToken=rf-1; Path=/librechat; HttpOnly")
+	resp.Header.Add("Set-Cookie", "token_provider=librechat; Path=/; HttpOnly")
+	filterAssistantUIProxyResponseCookies(resp)
+
+	cookies := resp.Cookies()
+	if len(cookies) != 2 {
+		t.Fatalf("expected 2 allowed cookies, got=%d cookies=%+v", len(cookies), cookies)
+	}
+	for _, cookie := range cookies {
+		if cookie.Name == "refreshToken" && cookie.Path != "/librechat" {
+			t.Fatalf("expected custom path to be preserved, got cookie=%+v", cookie)
+		}
+		if cookie.Name == "token_provider" && cookie.Path != "/assistant-ui" {
+			t.Fatalf("expected root path to be rewritten, got cookie=%+v", cookie)
+		}
+	}
+}
+
+type assistantUIProxyErrReadCloser struct{}
+
+func (assistantUIProxyErrReadCloser) Read([]byte) (int, error) { return 0, errors.New("read-failed") }
+func (assistantUIProxyErrReadCloser) Close() error             { return nil }
 
 func TestRewriteAssistantUIProxyHTMLBase(t *testing.T) {
 	body := `<!DOCTYPE html><html><head><base href="/" /><title>x</title></head><body>ok</body></html>`
@@ -340,6 +380,73 @@ func TestRewriteAssistantUIProxyHTMLBase(t *testing.T) {
 	}
 	if resp.Header.Get("Content-Length") != strconv.Itoa(len(rewritten)) {
 		t.Fatalf("unexpected header content-length=%q", resp.Header.Get("Content-Length"))
+	}
+}
+
+func TestRewriteAssistantUIProxyHTMLBase_NoopAndErrorBranches(t *testing.T) {
+	if err := rewriteAssistantUIProxyHTMLBase(nil); err != nil {
+		t.Fatalf("nil response should not return error: %v", err)
+	}
+
+	respBodyNil := &http.Response{Header: make(http.Header)}
+	if err := rewriteAssistantUIProxyHTMLBase(respBodyNil); err != nil {
+		t.Fatalf("response with nil body should not return error: %v", err)
+	}
+
+	nonHTML := &http.Response{
+		Header:        make(http.Header),
+		Body:          io.NopCloser(strings.NewReader(`{"ok":true}`)),
+		ContentLength: int64(len(`{"ok":true}`)),
+	}
+	nonHTML.Header.Set("Content-Type", "application/json")
+	if err := rewriteAssistantUIProxyHTMLBase(nonHTML); err != nil {
+		t.Fatalf("non-html response should not return error: %v", err)
+	}
+
+	noBaseHTML := `<!DOCTYPE html><html><head><title>x</title></head><body>ok</body></html>`
+	noBaseResp := &http.Response{
+		Header:        make(http.Header),
+		Body:          io.NopCloser(strings.NewReader(noBaseHTML)),
+		ContentLength: int64(len(noBaseHTML)),
+	}
+	noBaseResp.Header.Set("Content-Type", "text/html")
+	noBaseResp.Header.Set("Content-Length", strconv.Itoa(len(noBaseHTML)))
+	if err := rewriteAssistantUIProxyHTMLBase(noBaseResp); err != nil {
+		t.Fatalf("no-base html should not return error: %v", err)
+	}
+	noBaseBody, err := io.ReadAll(noBaseResp.Body)
+	if err != nil {
+		t.Fatalf("read no-base html body: %v", err)
+	}
+	if string(noBaseBody) != noBaseHTML {
+		t.Fatalf("no-base html should remain unchanged, got=%q", string(noBaseBody))
+	}
+
+	singleQuoteHTML := `<!DOCTYPE html><html><head><base href='/' /></head><body>ok</body></html>`
+	singleQuoteResp := &http.Response{
+		Header:        make(http.Header),
+		Body:          io.NopCloser(strings.NewReader(singleQuoteHTML)),
+		ContentLength: int64(len(singleQuoteHTML)),
+	}
+	singleQuoteResp.Header.Set("Content-Type", "text/html")
+	if err := rewriteAssistantUIProxyHTMLBase(singleQuoteResp); err != nil {
+		t.Fatalf("single quote base rewrite should not return error: %v", err)
+	}
+	singleQuoteBody, err := io.ReadAll(singleQuoteResp.Body)
+	if err != nil {
+		t.Fatalf("read single-quote html body: %v", err)
+	}
+	if !strings.Contains(string(singleQuoteBody), `<base href='/assistant-ui/' />`) {
+		t.Fatalf("single quote base should be rewritten, got=%q", string(singleQuoteBody))
+	}
+
+	readErrResp := &http.Response{
+		Header: make(http.Header),
+		Body:   assistantUIProxyErrReadCloser{},
+	}
+	readErrResp.Header.Set("Content-Type", "text/html")
+	if err := rewriteAssistantUIProxyHTMLBase(readErrResp); err == nil {
+		t.Fatal("expected read error to be returned")
 	}
 }
 
