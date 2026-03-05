@@ -11,7 +11,20 @@ description: Start the Bugs-And-Blossoms local login stack and bring up the tena
 
 本技能默认只做“启动/迁移/seed/验证”，不会执行 `make dev-reset`，不会轻易清库删数据。
 
-前置：已安装并可用 `docker compose`、Go（能 `go run`）、`make`、`curl`。
+> 重要提醒（防遗忘）：`kratosstub` 使用内存存储。**每次重启 `make dev-kratos-stub`（或重启全部服务）后，都必须重新执行 seed 步骤**，否则会出现 `invalid credentials`。
+
+前置：已安装并可用 `docker compose`、Go（能 `go run`）、`make`、`curl`，并完成以下本地环境初始化（对齐当前 Ubuntu/.env 口径）：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+cp -n .env.example .env
+```
+
+确保 `.env` 至少包含：
+- `DB_USER=app_runtime`
+- `RLS_ENFORCE=enforce`
+- `AUTHZ_MODE=enforce`
+- `ASSISTANT_MODEL_CONFIG_JSON="{\"provider_routing\":{\"strategy\":\"priority_failover\",\"fallback_enabled\":true},\"providers\":[{\"name\":\"openai\",\"enabled\":true,\"model\":\"gpt-5-codex\",\"endpoint\":\"https://api.openai.com/v1\",\"timeout_ms\":8000,\"retries\":1,\"priority\":10,\"key_ref\":\"OPENAI_API_KEY\"}]}"`（避免 `assistant_runtime_config_missing/invalid`）
 
 ## 工作流（推荐顺序）
 
@@ -19,24 +32,26 @@ description: Start the Bugs-And-Blossoms local login stack and bring up the tena
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-make dev-up
+DEV_INFRA_ENV_FILE=.env make dev-up
 ```
 
 2) 确保 IAM 迁移已执行（会插入 `localhost` 租户域名与 Local Tenant）
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-make iam migrate up
+admin_url="postgres://app:app@127.0.0.1:5438/bugs_and_blossoms?sslmode=disable"
+DATABASE_URL="$admin_url" make iam migrate up
 ```
 
 （可选）若你希望登录后能直接打开各业务模块页面（如 `/org/*`、`/person/*`），需要把对应模块的 schema/table 也迁移到本地 dev DB：
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-make orgunit migrate up
-make jobcatalog migrate up
-make person migrate up
-make staffing migrate up
+admin_url="postgres://app:app@127.0.0.1:5438/bugs_and_blossoms?sslmode=disable"
+DATABASE_URL="$admin_url" make orgunit migrate up
+DATABASE_URL="$admin_url" make jobcatalog migrate up
+DATABASE_URL="$admin_url" make person migrate up
+DATABASE_URL="$admin_url" make staffing migrate up
 ```
 
 3) 启动 KratosStub（本地认证 stub）
@@ -47,6 +62,8 @@ make dev-kratos-stub
 ```
 
 默认监听：public `127.0.0.1:4433` / admin `127.0.0.1:4434`。
+
+⚠️ 每次 KratosStub 重启后，下一步的 seed 必须重跑（见步骤 4）。
 
 4) 创建/确保可登录账号（多租户验证，统一密码）
 
@@ -81,7 +98,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-make dev-server
+DEV_SERVER_ENV_FILE=.env make dev-server
 ```
 
 （可选）6) 启动 LibreChat Runtime（用于 `/app/assistant`）
@@ -105,8 +122,9 @@ make assistant-runtime-status
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-make dev-up
-make iam migrate up
+admin_url="postgres://app:app@127.0.0.1:5438/bugs_and_blossoms?sslmode=disable"
+DEV_INFRA_ENV_FILE=.env make dev-up
+DATABASE_URL="$admin_url" make iam migrate up
 make dev-kratos-stub &
 sleep 0.5
 ./tools/codex/skills/bugs-and-blossoms-dev-login/scripts/seed_kratosstub_identity.sh \
@@ -124,7 +142,7 @@ sleep 0.5
   --email admin2@localhost \
   --password admin123 \
   --role-slug tenant-admin
-make dev-server &
+DEV_SERVER_ENV_FILE=.env make dev-server &
 sleep 0.5
 curl -i -X POST -H 'Host: localhost:8080' -H 'Content-Type: application/json' \
   --data-binary '{"email":"admin@localhost","password":"admin123"}' \
@@ -256,7 +274,7 @@ curl -i -b /tmp/sid-saas.txt -H 'Host: tenant2.localhost:8080' \
 
 ## 常见排障
 
-- 浏览器提示“无法访问此网站 / 连接被拒绝”：先确认服务是否在监听 8080（`curl -fsS http://localhost:8080/healthz` 预期输出 `ok`）。若连接失败，重新执行 `make dev-server` 并查看其输出。
+- 浏览器提示“无法访问此网站 / 连接被拒绝”：先确认服务是否在监听 8080（`curl -fsS http://localhost:8080/health` 预期返回 200）。若连接失败，重新执行 `DEV_SERVER_ENV_FILE=.env make dev-server` 并查看其输出。
 - 404 tenant not found：确认用的是 `localhost`；并确认 `make iam migrate up` 已执行。
 - 登录一直 invalid credentials：确认 KratosStub 在跑；并确认已按 `tenant_id:email` seed 过同一密码。
 - seed 脚本提示 409 但你仍然 invalid credentials：说明 **KratosStub 当前进程**里该 identifier 已存在，seed 不会更新密码；处理方式是重启 KratosStub（它是内存存储）后重新 seed，或换一个新邮箱 seed。
