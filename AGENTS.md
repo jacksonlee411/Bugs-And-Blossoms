@@ -374,6 +374,8 @@ modules/{module}/
 - DEV-PLAN-239D：Ubuntu 本地开发环境搭建方案（Clone 后首日）：`docs/dev-plans/239d-ubuntu-local-development-environment-bootstrap-plan.md`
 - DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（去写死 + Skill/MCP/LibreChat 对齐）：`docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
+- DEV-PLAN-260：LibreChat 对话闭环自动执行重构方案（真实多轮补全/确认）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
+- DEV-PLAN-260 执行日志：`docs/dev-records/dev-plan-260-execution-log.md`
 - DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`

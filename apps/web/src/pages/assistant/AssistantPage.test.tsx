@@ -375,7 +375,7 @@ describe('AssistantPage', () => {
     expect(screen.getByTestId('assistant-commit-button')).toBeDisabled()
   })
 
-  it('auto executes create flow from secure bridge message without right-side button clicks', async () => {
+  it('requires confirmation turn before bridge flow commit', async () => {
     const singleCandidate = [
       {
         candidate_id: 'FLOWER-A',
@@ -466,12 +466,22 @@ describe('AssistantPage', () => {
         '在鲜花组织之下，新建一个名为人力资源部2的部门，成立日期是2026-01-01。'
       )
     )
+    expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
+    expect(assistantAPIMocks.commitAssistantTurn).not.toHaveBeenCalled()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '确认执行' }
+    })
+
     await waitFor(() => expect(assistantAPIMocks.confirmAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1', 'FLOWER-A'))
     await waitFor(() => expect(assistantAPIMocks.commitAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1'))
     expect(await screen.findByTestId('assistant-commit-result')).toHaveTextContent('org_code=HR2')
   })
 
-  it('handles candidate disambiguation directly from bridge dialogue message', async () => {
+  it('handles candidate disambiguation with second-turn confirmation', async () => {
     assistantAPIMocks.confirmAssistantTurn.mockResolvedValue(
       makeConversation({
         turns: [
@@ -512,7 +522,17 @@ describe('AssistantPage', () => {
       type: 'assistant.prompt.sync',
       channel,
       nonce,
-      payload: { input: '选第2个，确认执行' }
+      payload: { input: '选第2个' }
+    })
+
+    expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
+    expect(assistantAPIMocks.commitAssistantTurn).not.toHaveBeenCalled()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '确认执行' }
     })
 
     await waitFor(() => expect(assistantAPIMocks.confirmAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1', 'FLOWER-B'))
@@ -660,6 +680,15 @@ describe('AssistantPage', () => {
         '在AI治理办公室之下，新建一个名为人力资源部239A补全的部门，成立日期是2026-03-25。'
       )
     )
+    expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
+    expect(assistantAPIMocks.commitAssistantTurn).not.toHaveBeenCalled()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '确认提交' }
+    })
     await waitFor(() => expect(assistantAPIMocks.confirmAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1', 'FLOWER-A'))
     await waitFor(() => expect(assistantAPIMocks.commitAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1'))
   })

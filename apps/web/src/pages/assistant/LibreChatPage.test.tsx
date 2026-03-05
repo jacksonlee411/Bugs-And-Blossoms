@@ -145,7 +145,7 @@ describe('LibreChatPage', () => {
     expect(screen.getByText('自动执行通道已连接：可直接在 LibreChat 对话中输入需求。')).toBeInTheDocument()
   })
 
-  it('auto executes create -> confirm -> commit from one complete prompt', async () => {
+  it('requires second-turn confirmation before commit for complete input', async () => {
     render(<LibreChatPage />)
     const { channel, nonce } = await readBridgeTokens()
 
@@ -162,6 +162,16 @@ describe('LibreChatPage', () => {
         '在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01'
       )
     )
+    expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
+    expect(assistantAPIMocks.commitAssistantTurn).not.toHaveBeenCalled()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '确认执行' }
+    })
+
     await waitFor(() => expect(assistantAPIMocks.confirmAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1', 'AI-GOV-A'))
     await waitFor(() => expect(assistantAPIMocks.commitAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1'))
   })
@@ -238,11 +248,20 @@ describe('LibreChatPage', () => {
         '在AI治理办公室之下，新建一个名为人力资源部239A补全的部门，成立日期是2026-03-25。'
       )
     )
+    expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
+    expect(assistantAPIMocks.commitAssistantTurn).not.toHaveBeenCalled()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '确认提交' }
+    })
     await waitFor(() => expect(assistantAPIMocks.confirmAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1', 'AI-GOV-A'))
     await waitFor(() => expect(assistantAPIMocks.commitAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1'))
   })
 
-  it('resolves ambiguous candidate by dialogue index without generating new turn', async () => {
+  it('requires second confirmation after candidate selection', async () => {
     assistantAPIMocks.createAssistantConversation.mockResolvedValue(
       makeConversation({
         turns: [
@@ -281,6 +300,16 @@ describe('LibreChatPage', () => {
       channel,
       nonce,
       payload: { input: '选第2个' }
+    })
+
+    expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
+    expect(assistantAPIMocks.commitAssistantTurn).not.toHaveBeenCalled()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '确认执行' }
     })
 
     await waitFor(() => expect(assistantAPIMocks.confirmAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1', 'SSC-2'))

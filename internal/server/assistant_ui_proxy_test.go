@@ -168,6 +168,12 @@ func TestAssistantUIProxyHandler(t *testing.T) {
 		if !strings.Contains(bridgeRec.Body.String(), "assistant.prompt.sync") {
 			t.Fatalf("expected assistant bridge script body, got=%q", bridgeRec.Body.String())
 		}
+		if !strings.Contains(bridgeRec.Body.String(), "assistant.flow.dialog") {
+			t.Fatalf("expected assistant.flow.dialog support in bridge script, got=%q", bridgeRec.Body.String())
+		}
+		if strings.Contains(bridgeRec.Body.String(), "assistant-flow-notice-layer") {
+			t.Fatalf("bridge script should no longer rely on notice layer overlay, got=%q", bridgeRec.Body.String())
+		}
 		putReq := httptest.NewRequest(http.MethodPut, "http://localhost/assistant-ui", nil)
 		putReq.Header.Set("Accept", "application/json")
 		putRec := httptest.NewRecorder()
@@ -379,6 +385,12 @@ func TestServeAssistantUIBridgeScript(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "assistant.prompt.sync") {
 		t.Fatalf("unexpected bridge body=%q", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "assistant.flow.dialog") {
+		t.Fatalf("expected assistant.flow.dialog support in bridge script, got=%q", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "assistant-flow-notice-layer") {
+		t.Fatalf("bridge script should no longer rely on notice layer overlay, got=%q", rec.Body.String())
 	}
 	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/javascript") {
 		t.Fatalf("unexpected content-type=%q", ct)

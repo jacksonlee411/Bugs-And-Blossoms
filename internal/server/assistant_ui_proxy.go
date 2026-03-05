@@ -218,31 +218,42 @@ func assistantUIBridgeScriptBody() string {
     }
     return document.querySelector('form textarea, form [contenteditable="true"], textarea, [contenteditable="true"]');
   }
-  function mountNoticeLayer() {
-    var container = document.getElementById("assistant-flow-notice-layer");
+  function findDialogRoot() {
+    var selectors = [
+      '[data-testid="conversation-container"]',
+      '[data-testid="chat-container"]',
+      '[role="log"]',
+      "main",
+      "#__next"
+    ];
+    for (var i = 0; i < selectors.length; i += 1) {
+      var node = document.querySelector(selectors[i]);
+      if (node) {
+        return node;
+      }
+    }
+    return document.body;
+  }
+  function ensureDialogStream() {
+    var root = findDialogRoot();
+    if (!root) {
+      return null;
+    }
+    var container = root.querySelector('[data-assistant-dialog-stream="1"]');
     if (container) {
       return container;
     }
     container = document.createElement("div");
-    container.id = "assistant-flow-notice-layer";
-    container.style.position = "fixed";
-    container.style.right = "16px";
-    container.style.bottom = "16px";
-    container.style.maxWidth = "360px";
-    container.style.zIndex = "2147483000";
+    container.setAttribute("data-assistant-dialog-stream", "1");
     container.style.display = "flex";
     container.style.flexDirection = "column";
     container.style.gap = "8px";
-    document.body.appendChild(container);
+    container.style.margin = "12px 0";
+    container.style.pointerEvents = "none";
+    root.appendChild(container);
     return container;
   }
-  function showNotice(text, severity) {
-    var content = normalize(text);
-    if (!content) {
-      return;
-    }
-    var layer = mountNoticeLayer();
-    var item = document.createElement("div");
+  function styleDialogItem(item, level) {
     item.style.padding = "10px 12px";
     item.style.borderRadius = "10px";
     item.style.fontSize = "12px";
@@ -250,9 +261,11 @@ func assistantUIBridgeScriptBody() string {
     item.style.color = "#123";
     item.style.whiteSpace = "pre-wrap";
     item.style.wordBreak = "break-word";
-    item.style.boxShadow = "0 4px 14px rgba(0,0,0,0.2)";
     item.style.border = "1px solid rgba(0,0,0,0.08)";
-    var level = (severity || "info").toLowerCase();
+    item.style.maxWidth = "min(680px, 100%)";
+    item.style.alignSelf = "flex-start";
+    item.style.background = "#eef3ff";
+    item.style.borderColor = "#c7d7ff";
     if (level === "success") {
       item.style.background = "#e8f5e9";
       item.style.borderColor = "#81c784";
@@ -262,17 +275,30 @@ func assistantUIBridgeScriptBody() string {
     } else if (level === "error") {
       item.style.background = "#ffebee";
       item.style.borderColor = "#ef9a9a";
-    } else {
-      item.style.background = "#e3f2fd";
-      item.style.borderColor = "#90caf9";
     }
-    item.textContent = content;
-    layer.appendChild(item);
-    window.setTimeout(function () {
-      if (item.parentNode) {
-        item.parentNode.removeChild(item);
-      }
-    }, 9000);
+  }
+  function appendDialogMessage(payload, fallbackSeverity) {
+    var text = normalize(payload && payload.text);
+    if (!text) {
+      return;
+    }
+    var stream = ensureDialogStream();
+    if (!stream) {
+      return;
+    }
+    var level = normalize(payload && (payload.kind || payload.severity || fallbackSeverity)).toLowerCase();
+    if (!level) {
+      level = "info";
+    }
+    var stage = normalize(payload && payload.stage);
+    var item = document.createElement("div");
+    styleDialogItem(item, level);
+    if (stage) {
+      item.setAttribute("data-assistant-dialog-stage", stage);
+    }
+    item.textContent = text;
+    stream.appendChild(item);
+    item.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
   window.addEventListener("message", function (event) {
     if (event.origin !== window.location.origin) {
@@ -285,8 +311,12 @@ func assistantUIBridgeScriptBody() string {
     if (data.channel !== channel || data.nonce !== nonce) {
       return;
     }
+    if (data.type === "assistant.flow.dialog" && data.payload && typeof data.payload === "object") {
+      appendDialogMessage(data.payload, "info");
+      return;
+    }
     if (data.type === "assistant.flow.notice" && data.payload && typeof data.payload === "object") {
-      showNotice(data.payload.text, data.payload.severity);
+      appendDialogMessage(data.payload, "info");
     }
   });
   document.addEventListener("submit", function (event) {

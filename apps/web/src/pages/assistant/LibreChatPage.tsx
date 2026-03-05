@@ -16,16 +16,29 @@ import {
   validateAssistantBridgeMessage
 } from './assistantMessageBridge'
 import {
+  analyzeTurnForDialog,
+  createDialogFlowState,
+  formatCandidateConfirmMessage,
+  formatCommitSuccessMessage,
+  formatMissingFieldMessageText,
+  resetDialogFlowForConversation,
+  type DialogFlowState,
+  type DialogMessageKind,
+  type DialogMessageStage,
+  withDialogPhase
+} from './assistantDialogFlow'
+import {
+  composeStructuredIntentRetryPrompt,
   composeCreateOrgUnitPrompt,
   extractIntentDraftFromText,
   formatCandidatePrompt,
+  isStructuredIntentRetryPrompt,
   isExecutionConfirmationText,
   looksLikeCreateOrgUnitRequest,
   mergeIntentDraft,
-  resolveCandidateFromInput
+  resolveCandidateFromInput,
+  shouldRetryStructuredPromptForError
 } from './assistantAutoRun'
-
-type BridgeNoticeSeverity = 'info' | 'success' | 'warning' | 'error'
 
 function normalized(value: string | undefined): string {
   return (value ?? '').trim()
@@ -55,40 +68,10 @@ function shouldRefreshConversation(code: string): boolean {
   return code === 'conversation_state_invalid' || code === 'conversation_confirmation_required'
 }
 
-function formatDryRunValidationError(code: string): string {
-  const normalizedCode = normalized(code)
-  switch (normalizedCode) {
-    case 'missing_parent_ref_text':
-      return '请补充上级组织名称（例如：AI治理办公室）'
-    case 'missing_entity_name':
-      return '请补充部门名称（例如：人力资源部2）'
-    case 'missing_effective_date':
-      return '请补充生效日期（YYYY-MM-DD）'
-    case 'invalid_effective_date_format':
-      return '生效日期格式不正确，请使用 YYYY-MM-DD'
-    case 'candidate_confirmation_required':
-      return '请先确认父组织候选'
-    default:
-      return normalizedCode
-  }
-}
-
-function dryRunValidationMessages(turn: AssistantTurn | null): string[] {
-  const codes = Array.isArray(turn?.dry_run?.validation_errors) ? turn.dry_run.validation_errors : []
-  const messages: string[] = []
-  for (const code of codes) {
-    const message = formatDryRunValidationError(code)
-    if (message.length === 0 || messages.includes(message)) {
-      continue
-    }
-    messages.push(message)
-  }
-  return messages
-}
-
 export function LibreChatPage() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const conversationRef = useRef<AssistantConversation | null>(null)
+  const dialogFlowRef = useRef<DialogFlowState>(createDialogFlowState())
   const bridgePromptQueueRef = useRef<string[]>([])
   const bridgeWorkerRunningRef = useRef(false)
   const [bridgeChannel] = useState(() => createAssistantBridgeToken('assistant_channel'))
@@ -104,9 +87,34 @@ export function LibreChatPage() {
     [bridgeChannel, bridgeNonce]
   )
 
-  const applyConversation = useCallback((next: AssistantConversation) => {
-    conversationRef.current = next
+  const setDialogFlow = useCallback((next: DialogFlowState) => {
+    dialogFlowRef.current = next
   }, [])
+
+  const syncDialogFlowByTurn = useCallback(
+    (conversationID: string, turn: AssistantTurn | null) => {
+      const turnID = normalized(turn?.turn_id)
+      const base = resetDialogFlowForConversation(conversationID, turnID)
+      const analysis = analyzeTurnForDialog(turn)
+      setDialogFlow(
+        withDialogPhase(base, analysis.phase, {
+          pending_draft_summary: analysis.draft_summary,
+          missing_fields: analysis.missing_field_messages,
+          candidates: analysis.candidates,
+          selected_candidate_id: normalized(turn?.resolved_candidate_id)
+        })
+      )
+    },
+    [setDialogFlow]
+  )
+
+  const applyConversation = useCallback(
+    (next: AssistantConversation) => {
+      conversationRef.current = next
+      syncDialogFlowByTurn(next.conversation_id, latestTurn(next))
+    },
+    [syncDialogFlowByTurn]
+  )
 
   const refreshConversation = useCallback(async (): Promise<AssistantConversation | null> => {
     const current = conversationRef.current
@@ -119,10 +127,9 @@ export function LibreChatPage() {
     return refreshed
   }, [applyConversation])
 
-  const postBridgeNotice = useCallback(
-    (message: string, severity: BridgeNoticeSeverity = 'info') => {
-      const text = normalized(message)
-      if (text.length === 0 || typeof window === 'undefined') {
+  const postBridgeMessage = useCallback(
+    (type: string, payload: Record<string, unknown>) => {
+      if (typeof window === 'undefined') {
         return
       }
       const target = iframeRef.current?.contentWindow
@@ -131,13 +138,10 @@ export function LibreChatPage() {
       }
       target.postMessage(
         {
-          type: 'assistant.flow.notice',
+          type,
           channel: bridgeChannel,
           nonce: bridgeNonce,
-          payload: {
-            text,
-            severity
-          }
+          payload
         },
         window.location.origin
       )
@@ -145,15 +149,56 @@ export function LibreChatPage() {
     [bridgeChannel, bridgeNonce]
   )
 
-  const autoCommitTurnFromChat = useCallback(
+  const postBridgeNotice = useCallback(
+    (message: string, severity: DialogMessageKind = 'info') => {
+      const text = normalized(message)
+      if (text.length === 0) {
+        return
+      }
+      postBridgeMessage('assistant.flow.notice', {
+        text,
+        severity
+      })
+    },
+    [postBridgeMessage]
+  )
+
+  const postBridgeDialog = useCallback(
+    (
+      message: string,
+      kind: DialogMessageKind = 'info',
+      stage: DialogMessageStage = 'draft',
+      meta?: Record<string, string>
+    ) => {
+      const text = normalized(message)
+      if (text.length === 0) {
+        return
+      }
+      postBridgeMessage('assistant.flow.dialog', {
+        message_id: `dlg_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
+        kind,
+        stage,
+        text,
+        meta: meta ?? {}
+      })
+    },
+    [postBridgeMessage]
+  )
+
+  const commitTurnByDialogue = useCallback(
     async (
       sourceConversation: AssistantConversation,
       sourceTurn: AssistantTurn,
       candidateChoice?: string
     ): Promise<AssistantConversation | null> => {
-      let currentConversation: AssistantConversation = sourceConversation
-      let currentTurn: AssistantTurn = sourceTurn
-      const resolvedCandidate = normalized(candidateChoice) || normalized(currentTurn.resolved_candidate_id) || undefined
+      let currentConversation = sourceConversation
+      let currentTurn = sourceTurn
+      setDialogFlow(withDialogPhase(dialogFlowRef.current, 'committing'))
+      const resolvedCandidate =
+        normalized(candidateChoice) ||
+        normalized(dialogFlowRef.current.selected_candidate_id) ||
+        normalized(currentTurn.resolved_candidate_id) ||
+        undefined
 
       if (normalized(currentTurn.state) === 'validated') {
         try {
@@ -166,9 +211,10 @@ export function LibreChatPage() {
           }
           currentTurn = refreshedTurn
         } catch (err) {
-          const message = errorMessage(err, '确认失败')
+          const message = errorMessage(err, '确认失败，请稍后重试。')
           setBridgeError(message)
-          postBridgeNotice(message, 'error')
+          setDialogFlow(withDialogPhase(dialogFlowRef.current, 'failed'))
+          postBridgeDialog(message, 'error', 'commit_failed')
           if (shouldRefreshConversation(errorCode(err))) {
             await refreshConversation().catch(() => undefined)
           }
@@ -183,100 +229,91 @@ export function LibreChatPage() {
       try {
         const committed = await commitAssistantTurn(currentConversation.conversation_id, currentTurn.turn_id)
         applyConversation(committed)
-        currentConversation = committed
         const committedTurn = latestTurn(committed)
-        if (committedTurn?.commit_result) {
-          postBridgeNotice(
-            `已自动提交：org_code=${committedTurn.commit_result.org_code} / parent=${committedTurn.commit_result.parent_org_code} / effective_date=${committedTurn.commit_result.effective_date}`,
-            'success'
-          )
-        } else {
-          postBridgeNotice('已自动提交。', 'success')
-        }
+        setDialogFlow(withDialogPhase(dialogFlowRef.current, 'committed'))
+        postBridgeDialog(formatCommitSuccessMessage(committedTurn ?? currentTurn), 'success', 'commit_result', {
+          effective_date: normalized(committedTurn?.commit_result?.effective_date)
+        })
         return committed
       } catch (err) {
-        const message = errorMessage(err, '提交失败')
+        const message = errorMessage(err, '提交失败，请按最新提示继续。')
         setBridgeError(message)
-        postBridgeNotice(message, 'error')
+        setDialogFlow(withDialogPhase(dialogFlowRef.current, 'failed'))
+        postBridgeDialog(message, 'error', 'commit_failed')
         if (shouldRefreshConversation(errorCode(err))) {
           await refreshConversation().catch(() => undefined)
         }
         return null
       }
     },
-    [applyConversation, postBridgeNotice, refreshConversation]
-  )
-
-  const autoAdvanceGeneratedTurn = useCallback(
-    async (sourceConversation: AssistantConversation, sourceTurn: AssistantTurn, userInput: string) => {
-      const validationCodes = Array.isArray(sourceTurn.dry_run?.validation_errors) ? sourceTurn.dry_run.validation_errors : []
-      const missingFieldCodes = validationCodes.filter((code) =>
-        ['missing_parent_ref_text', 'missing_entity_name', 'missing_effective_date', 'invalid_effective_date_format'].includes(code)
-      )
-      if (missingFieldCodes.length > 0) {
-        const messages = dryRunValidationMessages(sourceTurn)
-        if (messages.length > 0) {
-          postBridgeNotice(`信息不完整，请补充后继续：${messages.join('；')}`, 'warning')
-        }
-        return
-      }
-
-      const candidatePending = sourceTurn.ambiguity_count > 1 && normalized(sourceTurn.resolved_candidate_id).length === 0
-      if (candidatePending) {
-        const candidateChoice = resolveCandidateFromInput(userInput, sourceTurn.candidates ?? [])
-        if (candidateChoice.length === 0) {
-          postBridgeNotice(formatCandidatePrompt(sourceTurn.candidates ?? []), 'warning')
-          return
-        }
-        await autoCommitTurnFromChat(sourceConversation, sourceTurn, candidateChoice)
-        return
-      }
-
-      await autoCommitTurnFromChat(sourceConversation, sourceTurn)
-    },
-    [autoCommitTurnFromChat, postBridgeNotice]
+    [applyConversation, postBridgeDialog, refreshConversation, setDialogFlow]
   )
 
   const tryHandlePendingTurnByDialogue = useCallback(
     async (sourceConversation: AssistantConversation, sourceTurn: AssistantTurn, userInput: string): Promise<boolean> => {
-      const state = normalized(sourceTurn.state)
-      const validationCodes = Array.isArray(sourceTurn.dry_run?.validation_errors) ? sourceTurn.dry_run.validation_errors : []
       const looksLikeCreateRequest = looksLikeCreateOrgUnitRequest(userInput)
+      const analysis = analyzeTurnForDialog(sourceTurn)
 
-      if (state === 'confirmed') {
+      if (dialogFlowRef.current.phase === 'await_candidate_confirm') {
         if (isExecutionConfirmationText(userInput)) {
-          await autoCommitTurnFromChat(sourceConversation, sourceTurn)
+          await commitTurnByDialogue(sourceConversation, sourceTurn, dialogFlowRef.current.selected_candidate_id)
           return true
         }
         if (!looksLikeCreateRequest) {
-          postBridgeNotice('检测到待提交回合，请回复“确认执行”以继续；如需发起新任务，请明确输入创建需求。', 'info')
+          postBridgeDialog('已选择候选，请回复“确认执行”后继续提交。', 'info', 'candidate_confirm')
           return true
         }
-      }
-
-      if (state !== 'validated') {
         return false
       }
 
-      const candidatePending = sourceTurn.ambiguity_count > 1 && normalized(sourceTurn.resolved_candidate_id).length === 0
-      if (candidatePending && !looksLikeCreateRequest) {
-        const candidateChoice = resolveCandidateFromInput(userInput, sourceTurn.candidates ?? [])
+      if (analysis.phase === 'await_candidate_pick') {
+        if (looksLikeCreateRequest) {
+          return false
+        }
+        const candidateChoice = resolveCandidateFromInput(userInput, analysis.candidates)
         if (candidateChoice.length === 0) {
-          postBridgeNotice(formatCandidatePrompt(sourceTurn.candidates ?? []), 'warning')
+          setDialogFlow(
+            withDialogPhase(dialogFlowRef.current, 'await_candidate_pick', {
+              candidates: analysis.candidates
+            })
+          )
+          postBridgeDialog(formatCandidatePrompt(analysis.candidates), 'warning', 'candidate_list')
           return true
         }
-        await autoCommitTurnFromChat(sourceConversation, sourceTurn, candidateChoice)
+        setDialogFlow(
+          withDialogPhase(dialogFlowRef.current, 'await_candidate_confirm', {
+            candidates: analysis.candidates,
+            selected_candidate_id: candidateChoice
+          })
+        )
+        postBridgeDialog(
+          formatCandidateConfirmMessage(analysis.candidates, candidateChoice),
+          'info',
+          'candidate_confirm',
+          { candidate_id: candidateChoice }
+        )
         return true
       }
 
-      if (validationCodes.length === 0 && isExecutionConfirmationText(userInput) && !looksLikeCreateRequest) {
-        await autoCommitTurnFromChat(sourceConversation, sourceTurn)
+      if (analysis.phase === 'await_commit_confirm') {
+        if (isExecutionConfirmationText(userInput)) {
+          await commitTurnByDialogue(sourceConversation, sourceTurn)
+          return true
+        }
+        if (!looksLikeCreateRequest) {
+          postBridgeDialog('已生成草案，请回复“确认执行”后继续提交。', 'info', 'draft')
+          return true
+        }
+      }
+
+      if (analysis.phase === 'await_missing_fields' && isExecutionConfirmationText(userInput)) {
+        postBridgeDialog('当前信息尚未补全，暂不能提交。请先补充缺失字段。', 'warning', 'missing_fields')
         return true
       }
 
       return false
     },
-    [autoCommitTurnFromChat, postBridgeNotice]
+    [commitTurnByDialogue, postBridgeDialog, setDialogFlow]
   )
 
   const runBridgeAutoFlow = useCallback(
@@ -296,7 +333,7 @@ export function LibreChatPage() {
         } catch (err) {
           const message = errorMessage(err, '创建会话失败')
           setBridgeError(message)
-          postBridgeNotice(message, 'error')
+          postBridgeDialog(message, 'error', 'commit_failed')
           return
         }
       }
@@ -313,24 +350,19 @@ export function LibreChatPage() {
       }
 
       let generationInput = userInput
-      if (pendingTurn && normalized(pendingTurn.state) === 'validated') {
-        const validationCodes = Array.isArray(pendingTurn.dry_run?.validation_errors) ? pendingTurn.dry_run.validation_errors : []
-        const hasMissingFields = validationCodes.some((code) =>
-          ['missing_parent_ref_text', 'missing_entity_name', 'missing_effective_date', 'invalid_effective_date_format'].includes(code)
+      const pendingAnalysis = analyzeTurnForDialog(pendingTurn)
+      if (pendingTurn && pendingAnalysis.phase === 'await_missing_fields') {
+        const mergedDraft = mergeIntentDraft(
+          {
+            parent_ref_text: pendingTurn.intent.parent_ref_text,
+            entity_name: pendingTurn.intent.entity_name,
+            effective_date: pendingTurn.intent.effective_date
+          },
+          extractIntentDraftFromText(userInput)
         )
-        if (hasMissingFields) {
-          const mergedDraft = mergeIntentDraft(
-            {
-              parent_ref_text: pendingTurn.intent.parent_ref_text,
-              entity_name: pendingTurn.intent.entity_name,
-              effective_date: pendingTurn.intent.effective_date
-            },
-            extractIntentDraftFromText(userInput)
-          )
-          const composedInput = composeCreateOrgUnitPrompt(mergedDraft)
-          if (composedInput.length > 0) {
-            generationInput = composedInput
-          }
+        const composedInput = composeCreateOrgUnitPrompt(mergedDraft)
+        if (composedInput.length > 0) {
+          generationInput = composedInput
         }
       }
 
@@ -339,19 +371,62 @@ export function LibreChatPage() {
         generatedConversation = await createAssistantTurn(activeConversation.conversation_id, generationInput)
         applyConversation(generatedConversation)
       } catch (err) {
-        const message = errorMessage(err, '生成计划失败')
-        setBridgeError(message)
-        postBridgeNotice(message, 'error')
-        return
+        const code = errorCode(err)
+        const recoverable = shouldRetryStructuredPromptForError(code)
+        if (recoverable && !isStructuredIntentRetryPrompt(generationInput)) {
+          try {
+            const retryPrompt = composeStructuredIntentRetryPrompt(generationInput)
+            generatedConversation = await createAssistantTurn(activeConversation.conversation_id, retryPrompt)
+            applyConversation(generatedConversation)
+            postBridgeDialog('模型返回非结构化内容，已自动重试并生成可确认草案。', 'warning', 'draft')
+          } catch (retryErr) {
+            const retryMessage = errorMessage(retryErr, '生成计划失败')
+            setBridgeError(retryMessage)
+            postBridgeDialog(retryMessage, 'error', 'commit_failed')
+            return
+          }
+        } else {
+          const message = errorMessage(err, '生成计划失败')
+          setBridgeError(message)
+          postBridgeDialog(message, 'error', 'commit_failed')
+          return
+        }
       }
 
       const generatedTurn = latestTurn(generatedConversation)
       if (!generatedTurn || !generatedConversation) {
         return
       }
-      await autoAdvanceGeneratedTurn(generatedConversation, generatedTurn, userInput)
+
+      const generatedAnalysis = analyzeTurnForDialog(generatedTurn)
+      setDialogFlow(
+        withDialogPhase(dialogFlowRef.current, generatedAnalysis.phase, {
+          candidates: generatedAnalysis.candidates,
+          missing_fields: generatedAnalysis.missing_field_messages,
+          pending_draft_summary: generatedAnalysis.draft_summary,
+          selected_candidate_id: normalized(generatedTurn.resolved_candidate_id),
+          conversation_id: generatedConversation.conversation_id,
+          turn_id: generatedTurn.turn_id
+        })
+      )
+
+      if (generatedAnalysis.phase === 'await_missing_fields') {
+        postBridgeDialog(
+          formatMissingFieldMessageText(generatedAnalysis.missing_field_messages),
+          'warning',
+          'missing_fields'
+        )
+        return
+      }
+      if (generatedAnalysis.phase === 'await_candidate_pick') {
+        postBridgeDialog(formatCandidatePrompt(generatedAnalysis.candidates), 'warning', 'candidate_list')
+        return
+      }
+      if (generatedAnalysis.phase === 'await_commit_confirm') {
+        postBridgeDialog(generatedAnalysis.draft_summary, 'info', 'draft')
+      }
     },
-    [applyConversation, autoAdvanceGeneratedTurn, postBridgeNotice, tryHandlePendingTurnByDialogue]
+    [applyConversation, postBridgeDialog, setDialogFlow, tryHandlePendingTurnByDialogue]
   )
 
   const enqueueBridgePrompt = useCallback(

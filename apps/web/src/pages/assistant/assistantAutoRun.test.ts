@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  composeStructuredIntentRetryPrompt,
   composeCreateOrgUnitPrompt,
   extractIntentDraftFromText,
   formatCandidatePrompt,
   hasCompleteCreateIntent,
+  isStructuredIntentRetryPrompt,
   isExecutionConfirmationText,
   looksLikeCreateOrgUnitRequest,
   mergeIntentDraft,
-  resolveCandidateFromInput
+  resolveCandidateFromInput,
+  shouldRetryStructuredPromptForError
 } from './assistantAutoRun'
 
 describe('assistantAutoRun', () => {
@@ -49,6 +52,7 @@ describe('assistantAutoRun', () => {
     expect(looksLikeCreateOrgUnitRequest('在鲜花组织之下新建一个名为运营部的部门')).toBe(true)
     expect(looksLikeCreateOrgUnitRequest('确认执行')).toBe(false)
     expect(isExecutionConfirmationText('请确认执行')).toBe(true)
+    expect(isExecutionConfirmationText('是的，确认')).toBe(true)
     expect(isExecutionConfirmationText('ok')).toBe(true)
     expect(isExecutionConfirmationText('继续聊聊')).toBe(false)
     expect(isExecutionConfirmationText('我们继续执行排查这个问题')).toBe(false)
@@ -70,5 +74,22 @@ describe('assistantAutoRun', () => {
       { candidate_id: 'FLOWER-A', candidate_code: 'FLOWER-A', name: '鲜花组织', path: '/鲜花组织/华东' }
     ])
     expect(message).toContain('1. 鲜花组织 / FLOWER-A (/鲜花组织/华东)')
+  })
+
+  it('composes structured retry prompt', () => {
+    const prompt = composeStructuredIntentRetryPrompt('在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01')
+    expect(isStructuredIntentRetryPrompt(prompt)).toBe(true)
+    expect(prompt).toBe('请输出严格JSON，不要解释：{"action":"plan_only"}')
+  })
+
+  it('falls back to plan_only structured prompt for generic text', () => {
+    const prompt = composeStructuredIntentRetryPrompt('随便聊聊')
+    expect(prompt).toBe('请输出严格JSON，不要解释：{"action":"plan_only"}')
+  })
+
+  it('detects recoverable create-turn error codes', () => {
+    expect(shouldRetryStructuredPromptForError('ai_plan_schema_constrained_decode_failed')).toBe(true)
+    expect(shouldRetryStructuredPromptForError('AI_MODEL_TIMEOUT')).toBe(true)
+    expect(shouldRetryStructuredPromptForError('conversation_not_found')).toBe(false)
   })
 })
