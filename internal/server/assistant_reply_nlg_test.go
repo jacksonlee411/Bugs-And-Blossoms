@@ -89,14 +89,28 @@ func TestAssistantReplyNLGPipeline(t *testing.T) {
 	if reply.ReplyModelName != assistantReplyTargetModelName {
 		t.Fatalf("unexpected reply model=%q", reply.ReplyModelName)
 	}
+	if reply.ReplySource != assistantReplySourceModel {
+		t.Fatalf("unexpected reply source=%q", reply.ReplySource)
+	}
+	if reply.UsedFallback {
+		t.Fatal("reply should not use fallback")
+	}
 	if captured.ConversationID != conversation.ConversationID || captured.TurnID != turn.TurnID {
 		t.Fatalf("unexpected prompt identity: conv=%q turn=%q", captured.ConversationID, captured.TurnID)
 	}
 	if captured.Machine.IntentAction != assistantIntentCreateOrgUnit {
 		t.Fatalf("expected intent action create_orgunit, got=%q", captured.Machine.IntentAction)
 	}
-	if captured.Machine.CandidateCount != 1 {
-		t.Fatalf("expected candidate_count=1, got=%d", captured.Machine.CandidateCount)
+	storedConversation, err := svc.getConversation("tenant_1", principal.ID, conversation.ConversationID)
+	if err != nil {
+		t.Fatalf("getConversation err=%v", err)
+	}
+	storedTurn := assistantFindTurnForReply(storedConversation, turn.TurnID)
+	if storedTurn == nil || storedTurn.ReplyNLG == nil {
+		t.Fatal("expected reply_nlg persisted on turn")
+	}
+	if storedTurn.ReplyNLG.ReplySource != assistantReplySourceModel {
+		t.Fatalf("unexpected persisted reply source=%q", storedTurn.ReplyNLG.ReplySource)
 	}
 }
 
@@ -158,5 +172,110 @@ func TestAssistantDecodeOpenAIReplyResult_HidesTechnicalSignals(t *testing.T) {
 	}
 	if strings.Contains(result.Text, "ai_plan_schema_constrained_decode_failed") {
 		t.Fatalf("expected technical signal hidden, got=%q", result.Text)
+	}
+}
+
+func TestAssistantDecodeOpenAIReplyResult_RejectsFallbackMasquerade(t *testing.T) {
+	_, err := assistantDecodeOpenAIReplyResult([]byte(`not-json`), assistantReplyRenderPrompt{
+		ConversationID: "conv_1",
+		TurnID:         "turn_1",
+		Stage:          "draft",
+		Kind:           "info",
+		Outcome:        "success",
+		Locale:         "zh",
+		FallbackText:   "本地兜底文案",
+	})
+	if !errors.Is(err, errAssistantReplyRenderFailed) {
+		t.Fatalf("expected errAssistantReplyRenderFailed, got=%v", err)
+	}
+}
+
+func TestAssistantRenderReply_AllowsMissingTurnWhenExplicitlyRequested(t *testing.T) {
+	svc := newAssistantConversationService(nil, nil)
+	principal := Principal{ID: "actor_1", RoleSlug: "tenant-admin"}
+	conversation := svc.createConversation("tenant_1", principal)
+
+	original := assistantRenderReplyWithModelFn
+	defer func() { assistantRenderReplyWithModelFn = original }()
+
+	captured := assistantReplyRenderPrompt{}
+	assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
+		captured = prompt
+		return assistantReplyModelResult{
+			Text:           "请补充成立日期后继续。",
+			Kind:           "warning",
+			Stage:          "missing_fields",
+			ReplyModelName: assistantReplyTargetModelName,
+			ReplySource:    assistantReplySourceModel,
+		}, nil
+	}
+
+	reply, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, "missing-turn-context", assistantRenderReplyRequest{
+		Stage:            "missing_fields",
+		Kind:             "warning",
+		Outcome:          "failure",
+		ErrorCode:        "ai_plan_schema_constrained_decode_failed",
+		ErrorMessage:     "ai plan schema constrained decode failed",
+		FallbackText:     "请补充生效日期（YYYY-MM-DD）",
+		AllowMissingTurn: true,
+	})
+	if err != nil {
+		t.Fatalf("renderTurnReply err=%v", err)
+	}
+	if reply == nil || strings.TrimSpace(reply.Text) == "" {
+		t.Fatalf("expected rendered reply, got=%+v", reply)
+	}
+	if captured.ConversationID != conversation.ConversationID {
+		t.Fatalf("unexpected conversation id=%q", captured.ConversationID)
+	}
+	if captured.TurnID != "missing-turn-context" {
+		t.Fatalf("expected missing-turn sentinel id, got=%q", captured.TurnID)
+	}
+	if captured.Machine.TurnState != "" {
+		t.Fatalf("expected empty machine state without turn, got=%+v", captured.Machine)
+	}
+}
+
+func TestAssistantReplyNLGFailurePipeline(t *testing.T) {
+	svc := newAssistantConversationService(nil, nil)
+	principal, conversation, turn := seedAssistantReplyConversation(t, svc)
+
+	original := assistantRenderReplyWithModelFn
+	defer func() { assistantRenderReplyWithModelFn = original }()
+
+	captured := assistantReplyRenderPrompt{}
+	assistantRenderReplyWithModelFn = func(_ context.Context, _ *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
+		captured = prompt
+		return assistantReplyModelResult{
+			Text:           "这次提交暂未成功，请检查条件后重试。",
+			Kind:           "error",
+			Stage:          "commit_failed",
+			ReplyModelName: assistantReplyTargetModelName,
+			ReplySource:    assistantReplySourceModel,
+		}, nil
+	}
+
+	reply, err := svc.renderTurnReply(context.Background(), "tenant_1", principal, conversation.ConversationID, turn.TurnID, assistantRenderReplyRequest{
+		Stage:        "commit_failed",
+		Kind:         "error",
+		Outcome:      "failure",
+		ErrorCode:    "conversation_state_invalid",
+		ErrorMessage: "提交失败，请按最新提示继续。",
+		Locale:       "zh",
+	})
+	if err != nil {
+		t.Fatalf("renderTurnReply err=%v", err)
+	}
+	if reply.ReplySource != assistantReplySourceModel {
+		t.Fatalf("unexpected reply source=%q", reply.ReplySource)
+	}
+	if captured.Outcome != "failure" {
+		t.Fatalf("expected failure outcome, got=%q", captured.Outcome)
+	}
+	if captured.ErrorCode != "conversation_state_invalid" {
+		t.Fatalf("expected error code passed through, got=%q", captured.ErrorCode)
+	}
+	if captured.TurnID != turn.TurnID {
+		t.Fatalf("expected real turn id, got=%q", captured.TurnID)
 	}
 }

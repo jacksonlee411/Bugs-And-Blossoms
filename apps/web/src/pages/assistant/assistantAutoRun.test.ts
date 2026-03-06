@@ -79,7 +79,9 @@ describe('assistantAutoRun', () => {
   it('composes structured retry prompt', () => {
     const prompt = composeStructuredIntentRetryPrompt('在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01')
     expect(isStructuredIntentRetryPrompt(prompt)).toBe(true)
-    expect(prompt).toBe('请输出严格JSON，不要解释：{"action":"plan_only"}')
+    expect(prompt).toBe(
+      '请输出严格JSON，不要解释：{"action":"create_orgunit","parent_ref_text":"AI治理办公室","entity_name":"人力资源部2","effective_date":"2026-01-01"}'
+    )
   })
 
   it('falls back to plan_only structured prompt for generic text', () => {

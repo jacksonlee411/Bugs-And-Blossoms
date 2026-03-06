@@ -145,15 +145,14 @@ func assistantRuntimeStatus() assistantRuntimeStatusResponse {
 		}
 	}
 
+	resp = assistantRuntimeApplyUpstreamProbe(resp)
 	resp.Status = assistantRuntimeAggregateStatus(resp.Services)
 	if capabilities, err := assistantRuntimeCapabilitiesStatus(); err == nil {
 		resp.Capabilities = capabilities
 	} else {
 		resp.Status = assistantRuntimeHealthUnavailable
-		if resp.ErrorCode == "" {
-			resp.ErrorCode = assistantRuntimeDomainPolicyErrorCode(err)
-			resp.ErrorMessage = assistantRuntimeDomainPolicyErrorMessage(err)
-		}
+		resp.ErrorCode = assistantRuntimeDomainPolicyErrorCode(err)
+		resp.ErrorMessage = assistantRuntimeDomainPolicyErrorMessage(err)
 	}
 	if resp.Status == assistantRuntimeHealthUnavailable && resp.ErrorCode == "" {
 		resp.ErrorCode = "assistant_runtime_dependency_unavailable"
@@ -251,6 +250,61 @@ func mergeAssistantRuntimeServices(base []assistantRuntimeService, snapshot []as
 		merged = append(merged, service)
 	}
 	return merged
+}
+
+func assistantRuntimeApplyUpstreamProbe(resp assistantRuntimeStatusResponse) assistantRuntimeStatusResponse {
+	if strings.TrimSpace(resp.Upstream.URL) == "" {
+		return resp
+	}
+	if err := assistantRuntimeProbeUpstream(resp.Upstream.URL); err != nil {
+		resp.Services = assistantRuntimeUpsertService(resp.Services, assistantRuntimeService{
+			Name:     "api",
+			Required: true,
+			Healthy:  assistantRuntimeHealthUnavailable,
+			Reason:   "upstream_unreachable",
+		})
+		if resp.ErrorCode == "" {
+			resp.ErrorCode = assistantUIProxyUpstreamUnavailable
+			resp.ErrorMessage = "assistant runtime upstream is unreachable"
+		}
+	}
+	return resp
+}
+
+func assistantRuntimeProbeUpstream(rawURL string) error {
+	requestURL, err := url.ParseRequestURI(strings.TrimSpace(rawURL))
+	if err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 1500 * time.Millisecond}
+	req, err := http.NewRequest(http.MethodGet, requestURL.String(), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func assistantRuntimeUpsertService(services []assistantRuntimeService, next assistantRuntimeService) []assistantRuntimeService {
+	nameKey := strings.ToLower(strings.TrimSpace(next.Name))
+	if nameKey == "" {
+		return services
+	}
+	for idx := range services {
+		if strings.ToLower(strings.TrimSpace(services[idx].Name)) != nameKey {
+			continue
+		}
+		services[idx].Required = next.Required
+		services[idx].Healthy = normalizeAssistantRuntimeHealth(next.Healthy)
+		services[idx].Reason = strings.TrimSpace(next.Reason)
+		return services
+	}
+	next.Healthy = normalizeAssistantRuntimeHealth(next.Healthy)
+	return append(services, next)
 }
 
 func assistantRuntimeAggregateStatus(services []assistantRuntimeService) string {

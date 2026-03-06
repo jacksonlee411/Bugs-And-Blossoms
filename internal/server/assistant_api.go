@@ -83,26 +83,27 @@ type assistantStateTransition struct {
 }
 
 type assistantTurn struct {
-	TurnID              string                 `json:"turn_id"`
-	UserInput           string                 `json:"user_input"`
-	State               string                 `json:"state"`
-	RiskTier            string                 `json:"risk_tier"`
-	RequestID           string                 `json:"request_id"`
-	TraceID             string                 `json:"trace_id"`
-	PolicyVersion       string                 `json:"policy_version"`
-	CompositionVersion  string                 `json:"composition_version"`
-	MappingVersion      string                 `json:"mapping_version"`
-	Intent              assistantIntentSpec    `json:"intent"`
-	Plan                assistantPlanSummary   `json:"plan"`
-	Candidates          []assistantCandidate   `json:"candidates"`
-	ResolvedCandidateID string                 `json:"resolved_candidate_id,omitempty"`
-	AmbiguityCount      int                    `json:"ambiguity_count"`
-	Confidence          float64                `json:"confidence"`
-	ResolutionSource    string                 `json:"resolution_source,omitempty"`
-	DryRun              assistantDryRunResult  `json:"dry_run"`
-	CommitResult        *assistantCommitResult `json:"commit_result,omitempty"`
-	CreatedAt           time.Time              `json:"created_at"`
-	UpdatedAt           time.Time              `json:"updated_at"`
+	TurnID              string                        `json:"turn_id"`
+	UserInput           string                        `json:"user_input"`
+	State               string                        `json:"state"`
+	RiskTier            string                        `json:"risk_tier"`
+	RequestID           string                        `json:"request_id"`
+	TraceID             string                        `json:"trace_id"`
+	PolicyVersion       string                        `json:"policy_version"`
+	CompositionVersion  string                        `json:"composition_version"`
+	MappingVersion      string                        `json:"mapping_version"`
+	Intent              assistantIntentSpec           `json:"intent"`
+	Plan                assistantPlanSummary          `json:"plan"`
+	Candidates          []assistantCandidate          `json:"candidates"`
+	ResolvedCandidateID string                        `json:"resolved_candidate_id,omitempty"`
+	AmbiguityCount      int                           `json:"ambiguity_count"`
+	Confidence          float64                       `json:"confidence"`
+	ResolutionSource    string                        `json:"resolution_source,omitempty"`
+	DryRun              assistantDryRunResult         `json:"dry_run"`
+	CommitResult        *assistantCommitResult        `json:"commit_result,omitempty"`
+	ReplyNLG            *assistantRenderReplyResponse `json:"reply_nlg,omitempty"`
+	CreatedAt           time.Time                     `json:"created_at"`
+	UpdatedAt           time.Time                     `json:"updated_at"`
 }
 
 type assistantIntentSpec struct {
@@ -1534,6 +1535,10 @@ func cloneConversation(in *assistantConversation) *assistantConversation {
 		if turn.CommitResult != nil {
 			copyResult := *turn.CommitResult
 			copyTurn.CommitResult = &copyResult
+		}
+		if turn.ReplyNLG != nil {
+			copyReply := *turn.ReplyNLG
+			copyTurn.ReplyNLG = &copyReply
 		}
 		out.Turns = append(out.Turns, &copyTurn)
 	}

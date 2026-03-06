@@ -129,6 +129,23 @@ export function isStructuredIntentRetryPrompt(text: string): boolean {
 }
 
 export function composeStructuredIntentRetryPrompt(_text: string): string {
+  const text = trimText(_text)
+  if (looksLikeCreateOrgUnitRequest(text)) {
+    const draft = extractIntentDraftFromText(text)
+    const payload: Record<string, string> = {
+      action: 'create_orgunit'
+    }
+    if (trimText(draft.parent_ref_text).length > 0) {
+      payload.parent_ref_text = trimText(draft.parent_ref_text)
+    }
+    if (trimText(draft.entity_name).length > 0) {
+      payload.entity_name = trimText(draft.entity_name)
+    }
+    if (trimText(draft.effective_date).length > 0) {
+      payload.effective_date = trimText(draft.effective_date)
+    }
+    return `请输出严格JSON，不要解释：${JSON.stringify(payload)}`
+  }
   return '请输出严格JSON，不要解释：{"action":"plan_only"}'
 }
 

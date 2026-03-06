@@ -28,6 +28,7 @@ import {
   type DialogMessageStage,
   withDialogPhase
 } from './assistantDialogFlow'
+import { buildAssistantTurnCreationFailureReplyPayload } from './assistantReplyFailurePayload'
 import {
   composeStructuredIntentRetryPrompt,
   composeCreateOrgUnitPrompt,
@@ -52,8 +53,6 @@ function latestTurn(conversation: AssistantConversation | null): AssistantTurn |
   return conversation.turns[conversation.turns.length - 1] ?? null
 }
 
-const assistantSyntheticReplyTurnID = 'missing-turn-context'
-
 function errorMessage(err: unknown, fallback: string): string {
   const message = (err as { message?: string })?.message
   if (typeof message === 'string' && message.trim().length > 0) {
@@ -66,6 +65,8 @@ function errorCode(err: unknown): string {
   const details = (err as { details?: { code?: string } })?.details
   return normalized(details?.code)
 }
+
+const assistantMissingTurnContextID = 'missing-turn-context'
 
 function shouldRefreshConversation(code: string): boolean {
   return code === 'conversation_state_invalid' || code === 'conversation_confirmation_required'
@@ -179,6 +180,7 @@ export function LibreChatPage() {
         errorCode?: string
         errorMessage?: string
         nextAction?: string
+        fallbackText?: string
         allowMissingTurn?: boolean
       }
     ) => {
@@ -196,10 +198,9 @@ export function LibreChatPage() {
         return
       }
       const conversationID = normalized(options?.conversationID) || normalized(conversationRef.current?.conversation_id)
-      const currentTurnID = normalized(options?.turnID) || normalized(latestTurn(conversationRef.current)?.turn_id)
-      const allowMissingTurn = options?.allowMissingTurn ?? false
-      const resolvedTurnID = currentTurnID.length > 0 ? currentTurnID : allowMissingTurn ? assistantSyntheticReplyTurnID : ''
-      if (conversationID.length === 0 || resolvedTurnID.length === 0) {
+      const resolvedTurnID = normalized(options?.turnID) || normalized(latestTurn(conversationRef.current)?.turn_id)
+      const allowMissingTurn = Boolean(options?.allowMissingTurn)
+      if (conversationID.length === 0 || (resolvedTurnID.length === 0 && !allowMissingTurn)) {
         const notice =
           conversationID.length === 0
             ? '回复生成链路不可用：缺少会话上下文，请先发起业务请求。'
@@ -210,16 +211,21 @@ export function LibreChatPage() {
       }
       void (async () => {
         try {
-          const rendered = await renderAssistantTurnReply(conversationID, resolvedTurnID, {
+          const replyTurnID = resolvedTurnID || assistantMissingTurnContextID
+          const replyPayload = {
             stage,
             kind,
             outcome: options?.outcome ?? (kind === 'error' ? 'failure' : 'success'),
             error_code: normalized(options?.errorCode),
-            error_message: normalized(options?.errorMessage) || text,
+            error_message: normalized(options?.errorMessage),
             next_action: normalized(options?.nextAction),
-            locale: 'zh',
-            fallback_text: text,
-            allow_missing_turn: allowMissingTurn
+            locale: 'zh'
+          } as const
+          const fallbackText = normalized(options?.fallbackText)
+          const rendered = await renderAssistantTurnReply(conversationID, replyTurnID, {
+            ...replyPayload,
+            ...(fallbackText.length > 0 ? { fallback_text: fallbackText } : {}),
+            ...(allowMissingTurn && resolvedTurnID.length === 0 ? { allow_missing_turn: true } : {})
           })
           sendBridgeDialog(
             normalized(rendered.text) || text,
@@ -228,7 +234,9 @@ export function LibreChatPage() {
             {
               ...(meta ?? {}),
               reply_model_name: normalized(rendered.reply_model_name),
-              reply_prompt_version: normalized(rendered.reply_prompt_version)
+              reply_prompt_version: normalized(rendered.reply_prompt_version),
+              reply_source: normalized(rendered.reply_source),
+              used_fallback: rendered.used_fallback ? 'true' : 'false'
             }
           )
         } catch {
@@ -239,6 +247,30 @@ export function LibreChatPage() {
       })()
     },
     [postBridgeMessage, postBridgeNotice]
+  )
+
+  const postBridgeTurnCreationFailure = useCallback(
+    (conversationID: string, userInput: string, rawError: unknown) => {
+      const code = errorCode(rawError)
+      const message = errorMessage(rawError, '生成计划失败')
+      const payload = buildAssistantTurnCreationFailureReplyPayload(userInput, code, message)
+      setBridgeError(message)
+      postBridgeDialog(
+        normalized(payload.fallback_text) || message,
+        (normalized(payload.kind) as DialogMessageKind) || 'error',
+        (normalized(payload.stage) as DialogMessageStage) || 'commit_failed',
+        undefined,
+        {
+          conversationID,
+          outcome: payload.outcome,
+          errorCode: payload.error_code,
+          errorMessage: payload.error_message,
+          fallbackText: payload.fallback_text,
+          allowMissingTurn: payload.allow_missing_turn
+        }
+      )
+    },
+    [postBridgeDialog]
   )
 
   const commitTurnByDialogue = useCallback(
@@ -397,11 +429,7 @@ export function LibreChatPage() {
         } catch (err) {
           const message = errorMessage(err, '创建会话失败')
           setBridgeError(message)
-          postBridgeDialog(message, 'error', 'commit_failed', undefined, {
-            errorCode: errorCode(err),
-            errorMessage: message,
-            outcome: 'failure'
-          })
+          postBridgeNotice(message, 'error')
           return
         }
       }
@@ -417,7 +445,8 @@ export function LibreChatPage() {
         }
       }
 
-      let generationInput = userInput
+      const directDraft = extractIntentDraftFromText(userInput)
+      let generationInput = composeCreateOrgUnitPrompt(directDraft) || userInput
       const pendingAnalysis = analyzeTurnForDialog(pendingTurn)
       if (pendingTurn && pendingAnalysis.phase === 'await_missing_fields') {
         const mergedDraft = mergeIntentDraft(
@@ -448,27 +477,11 @@ export function LibreChatPage() {
             applyConversation(generatedConversation)
             postBridgeDialog('模型返回非结构化内容，已自动重试并生成可确认草案。', 'warning', 'draft')
           } catch (retryErr) {
-            const retryMessage = errorMessage(retryErr, '生成计划失败')
-            setBridgeError(retryMessage)
-            postBridgeDialog(retryMessage, 'error', 'commit_failed', undefined, {
-              errorCode: errorCode(retryErr),
-              errorMessage: retryMessage,
-              outcome: 'failure',
-              allowMissingTurn: true,
-              turnID: assistantSyntheticReplyTurnID
-            })
+            postBridgeTurnCreationFailure(activeConversation.conversation_id, userInput, retryErr)
             return
           }
         } else {
-          const message = errorMessage(err, '生成计划失败')
-          setBridgeError(message)
-          postBridgeDialog(message, 'error', 'commit_failed', undefined, {
-            errorCode: errorCode(err),
-            errorMessage: message,
-            outcome: 'failure',
-            allowMissingTurn: true,
-            turnID: assistantSyntheticReplyTurnID
-          })
+          postBridgeTurnCreationFailure(activeConversation.conversation_id, userInput, err)
           return
         }
       }
@@ -506,7 +519,7 @@ export function LibreChatPage() {
         postBridgeDialog(generatedAnalysis.draft_summary, 'info', 'draft')
       }
     },
-    [applyConversation, postBridgeDialog, setDialogFlow, tryHandlePendingTurnByDialogue]
+    [applyConversation, postBridgeDialog, postBridgeTurnCreationFailure, setDialogFlow, tryHandlePendingTurnByDialogue]
   )
 
   const enqueueBridgePrompt = useCallback(

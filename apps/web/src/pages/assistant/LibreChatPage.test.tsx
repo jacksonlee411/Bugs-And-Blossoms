@@ -131,12 +131,14 @@ describe('LibreChatPage', () => {
     )
     assistantAPIMocks.getAssistantConversation.mockResolvedValue(makeConversation())
     assistantAPIMocks.renderAssistantTurnReply.mockImplementation(
-      async (_conversationID: string, turnID: string, payload: { fallback_text?: string; kind?: string; stage?: string }) => ({
-        text: payload.fallback_text ?? 'mock reply',
+      async (_conversationID: string, turnID: string, payload: { kind?: string; stage?: string }) => ({
+        text: payload.stage === 'commit_failed' ? '模型已生成失败说明。' : '模型已生成业务回复。',
         kind: payload.kind ?? 'info',
         stage: payload.stage ?? 'draft',
         reply_model_name: 'gpt-5.2',
         reply_prompt_version: 'assistant.reply.v1',
+        reply_source: 'model',
+        used_fallback: false,
         conversation_id: 'conv_1',
         turn_id: turnID
       })
@@ -171,7 +173,7 @@ describe('LibreChatPage', () => {
     await waitFor(() =>
       expect(assistantAPIMocks.createAssistantTurn).toHaveBeenCalledWith(
         'conv_1',
-        '在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01'
+        '在AI治理办公室之下，新建一个名为人力资源部2的部门，成立日期是2026-01-01。'
       )
     )
     expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
@@ -364,4 +366,92 @@ describe('LibreChatPage', () => {
     await waitFor(() => expect(assistantAPIMocks.commitAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1'))
     expect(assistantAPIMocks.createAssistantTurn).not.toHaveBeenCalled()
   })
+  it('does not render synthetic gpt reply when conversation creation fails', async () => {
+    assistantAPIMocks.createAssistantConversation.mockRejectedValueOnce(new Error('创建会话失败'))
+    render(<LibreChatPage />)
+    const { channel, nonce } = await readBridgeTokens()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '在鲜花组织之下，新建一个名为运营部的部门' }
+    })
+
+    await waitFor(() => expect(screen.getByText('创建会话失败')).toBeInTheDocument())
+    expect(assistantAPIMocks.renderAssistantTurnReply).not.toHaveBeenCalled()
+  })
+
+  it('renders commit failure through reply api without missing-turn fallback', async () => {
+    assistantAPIMocks.commitAssistantTurn.mockRejectedValueOnce({
+      message: '提交失败',
+      details: { code: 'conversation_state_invalid' }
+    })
+    render(<LibreChatPage />)
+    const { channel, nonce } = await readBridgeTokens()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01' }
+    })
+    await waitFor(() => expect(assistantAPIMocks.createAssistantTurn).toHaveBeenCalled())
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '确认执行' }
+    })
+
+    await waitFor(() => expect(assistantAPIMocks.renderAssistantTurnReply).toHaveBeenCalled())
+    const lastCall = assistantAPIMocks.renderAssistantTurnReply.mock.calls.at(-1)
+    expect(lastCall?.[0]).toBe('conv_1')
+    expect(lastCall?.[1]).toBe('turn_1')
+    expect(lastCall?.[2]).toMatchObject({
+      stage: 'commit_failed',
+      kind: 'error',
+      outcome: 'failure',
+      locale: 'zh'
+    })
+    expect(lastCall?.[2]).not.toHaveProperty('fallback_text')
+    expect(lastCall?.[2]).not.toHaveProperty('allow_missing_turn')
+  })
+
+  it('renders first-turn structured failure through reply api with allow-missing-turn', async () => {
+    assistantAPIMocks.createAssistantTurn
+      .mockRejectedValueOnce({
+        message: 'ai plan schema constrained decode failed',
+        details: { code: 'ai_plan_schema_constrained_decode_failed' }
+      })
+      .mockRejectedValueOnce({
+        message: 'ai plan schema constrained decode failed',
+        details: { code: 'ai_plan_schema_constrained_decode_failed' }
+      })
+
+    render(<LibreChatPage />)
+    const { channel, nonce } = await readBridgeTokens()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '在鲜花组织之下，新建一个名为运营部的部门。' }
+    })
+
+    await waitFor(() => expect(assistantAPIMocks.renderAssistantTurnReply).toHaveBeenCalled())
+    const lastCall = assistantAPIMocks.renderAssistantTurnReply.mock.calls.at(-1)
+    expect(lastCall?.[0]).toBe('conv_1')
+    expect(lastCall?.[1]).toBe('missing-turn-context')
+    expect(lastCall?.[2]).toMatchObject({
+      stage: 'missing_fields',
+      kind: 'warning',
+      outcome: 'failure',
+      locale: 'zh',
+      allow_missing_turn: true
+    })
+    expect(String(lastCall?.[2]?.fallback_text || '')).toContain('请补充生效日期')
+  })
+
 })

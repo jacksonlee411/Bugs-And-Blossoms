@@ -1,76 +1,93 @@
-# DEV-PLAN-260：LibreChat 对话闭环自动执行重构方案（真实多轮补全/确认）
+# DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）
 
-**状态**: 已完成（2026-03-06 04:39 CST）
+**状态**: 规划中（2026-03-06 16:31 CST）
 
-> 实施与验收证据见：`docs/dev-records/dev-plan-260-execution-log.md`。
+> 历史执行记录仍保留在 `docs/dev-records/dev-plan-260-execution-log.md`，但其“已完成”只代表旧口径阶段性实现；**不再等同于当前真实需求已达成**。
 
-## 1. 背景与上下文（Context）
-- **需求来源**: 当前明确目标为“100% 达成 Case 1~4 的对话闭环验收，不保留兼容快路径，不做无感迁移”。
-- **现状痛点（来自已落地实现）**:
-  1. [ ] 业务反馈主通道仍是 `assistant.flow.notice` 浮层（`internal/server/assistant_ui_proxy.go`、`apps/web/src/pages/assistant/LibreChatPage.tsx`）。
-  2. [ ] 完整信息场景会自动推进 `create -> confirm -> commit`，缺少“先草案、后确认”回合（`apps/web/src/pages/assistant/LibreChatPage.tsx`、`apps/web/src/pages/assistant/AssistantPage.tsx`）。
-  3. [ ] 多候选场景可“选候选后直接提交”，缺少“候选选择后二次确认”回合。
-- **业务价值**:
-  - 让用户在 LibreChat 对话内获得可审计、可中断、可确认的执行流程，消除“未显式确认即提交”的高风险体验。
+## 1. 背景与重开原因
+- 用户已明确指出：239A 及其后续落地**偏离真实需求**，没有真正实现“通过 AI 对话形式完成多轮补充 / 确认信息、自动执行操作，并通过对话告诉用户结果”的闭环。
+- 当前问题不是单一的文案或截图问题，而是**主计划与子问题边界混乱**：
+  1. 旧 260 更像一次阶段性收口记录，但没有把“真实业务闭环”与“官方 UI / 通道落点”分层冻结；
+  2. 266 当前主要解决官方 UI 单通道与气泡内回写问题，**不能单独代表业务对话闭环**；
+  3. 因此需要把 260 重新打开，恢复为**主计划**，把真实 Case 1~4 作为唯一验收口径。
+- 本次重开后，计划分工冻结为：
+  - **260 = 主计划**：定义真实业务对话闭环、FSM、确认语义、补全语义、候选语义、自动执行时机。
+  - **266 = 前置子计划**：保证这些对话都发生在官方 UI 的同一聊天流、同一气泡内，不再出现外置容器和官方 `Connection error`。
 
-## 2. 目标与非目标（Goals & Non-Goals）
+## 2. 唯一目标口径（以用户真实案例为准）
 
-### 2.1 核心目标（100% 达成，不缩水）
-1. [ ] 在 `http://localhost:8080/app/assistant/librechat` 实现“对话优先”自动执行：补全、候选、确认、结果全部进入聊天消息流。
-2. [ ] Case 2（完整信息）必须变更为：
-   - 首轮仅 `create` 生成草案；
-   - AI 输出“准备提交摘要 + 请确认”；
-   - 用户确认后才执行 `confirm + commit`；
-   - AI 输出提交成功回执。
-3. [ ] Case 3（信息不全）必须变更为：
-   - 先提示缺字段并进入等待补全；
-   - 补全后重新生成草案并等待确认；
-   - 确认后再提交。
-4. [ ] Case 4（多候选）必须变更为：
-   - 先输出编号候选列表并等待选择；
-   - 用户选择后进入“候选二次确认”；
-   - 二次确认后执行 `confirm + commit`。
-5. [ ] 保持 One Door：写入仅走既有 `/internal/assistant/*`，不新增写入口。
-6. [ ] `AssistantPage` 与 `LibreChatPage` 复用同一 FSM helper，禁止双份编排逻辑继续漂移。
+### 2.1 验证入口
+- 验证入口按用户当前口径冻结为：`http://localhost:8080/app/assistant/AI对话`
+- 若运行态存在路由别名或 iframe 落点差异，**以用户实际可见的“AI对话独立页”体验为准**，不得以技术内部路径差异规避验收。
 
-### 2.2 非目标（Out of Scope）
-1. [ ] 不新增数据库 schema/迁移/sqlc 改动。
-2. [ ] 不引入 legacy 双链路、回退分支、兼容快路径。
-3. [ ] 不改 LibreChat 上游仓库源码，仅在本仓代理注入脚本 + 前端编排收口。
+### 2.2 真实 Case（必须 100% 达成）
+1. [ ] **Case 1：通道连通（前置）**
+   - 输入：`你好`
+   - 预期：
+     - 页面出现“自动执行通道已连接：可直接在 AI对话 对话中输入需求。”
+     - 页面不白屏、输入框可用、可正常发消息。
+2. [ ] **Case 2：一句话自动执行（完整信息）**
+   - 输入：`在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01`
+   - 预期：
+     - AI 先在对话中返回准备提交的信息摘要；
+     - AI 在对话中询问用户是否确认提交；
+     - 用户通过对话输入确认；
+     - 系统自动执行 `create -> confirm -> commit`；
+     - AI 通过对话告诉用户已提交成功。
+3. [ ] **Case 3：信息不充分 -> 对话补全**
+   - 第一句：`在 AI治理办公室 下新建 人力资源部239A补全`
+   - 第二句：`生效日期 2026-03-25`
+   - 预期：
+     - 第一句先提示缺少字段；
+     - AI 在对话中明确指出缺的是哪个字段，并引导用户补全；
+     - 用户第二句通过对话补充确切信息；
+     - AI 在对话中给出准备提交的信息并要求确认；
+     - 用户确认后，系统自动执行并提交成功；
+     - AI 通过对话告诉用户已提交成功。
+4. [ ] **Case 4：多候选确认（对话内完成）**
+   - 第一句：`在 共享服务中心 下新建 239A候选验证部，生效日期 2026-03-26`
+   - 第二句：`选第2个`（或候选编码）
+   - 预期：
+     - AI 发现系统中有多个匹配后，在对话中以用户友好形式列出候选并编号；
+     - 用户通过对话反馈“选第N个/编码”完成候选选择；
+     - AI 再次确认用户选择的是哪个具体候选项；
+     - 用户通过对话确认“是的”；
+     - 系统自动执行并提交成功；
+     - AI 通过对话告诉用户已提交成功。
 
-### 2.3 工具链与门禁（SSOT 引用）
-- **命中触发器**:
-  - [ ] Go 代码（代理脚本注入与测试）
-  - [ ] Web 代码（页面编排/FSM/helper/组件测试）
-  - [ ] E2E（对话闭环 Case 2~4）
-  - [ ] 文档（计划与执行记录）
-- **执行入口（引用 SSOT，不复制脚本实现）**:
-  - `AGENTS.md`
-  - `docs/dev-plans/012-ci-quality-gates.md`
-  - `Makefile`
+## 3. 主从关系冻结（260 主计划 / 266 前置子计划）
+1. [ ] **260 主计划职责**：
+   - 定义 Case 1~4 的业务 FSM；
+   - 定义哪些轮次等待补全、等待候选、等待二次确认、等待提交确认；
+   - 定义用户输入如何驱动 `create / confirm / commit`；
+   - 定义最终成功 / 失败回执的业务语义。
+2. [ ] **266 前置子计划职责**：
+   - 收掉官方原始发送链路；
+   - 保证所有业务回执都写入官方 UI 同一聊天流、同一气泡体系；
+   - 移除页面外外挂容器；
+   - 消除官方 `Connection error` 干扰。
+3. [ ] **边界冻结**：
+   - 未完成 266，不得宣称 260 用户体验达成；
+   - 即使 266 完成，若 260 的业务 FSM/确认语义未完成，也不得宣称 Case 2~4 达成。
 
-## 3. 架构与关键决策（Architecture & Decisions）
+## 4. 目标与非目标
 
-### 3.1 架构图（Mermaid）
-```mermaid
-graph TD
-    U[User in LibreChat] --> I[assistant-ui iframe]
-    I -->|assistant.prompt.sync| P[AssistantPage/LibreChatPage Orchestrator]
-    P -->|create/confirm/commit| A[/internal/assistant/*]
-    A --> K[DB Kernel submit_*_event]
-    P -->|assistant.flow.dialog| I
-    I --> R[Dialog Stream Renderer in bridge.js]
-```
+### 4.1 核心目标
+1. [ ] 所有业务闭环步骤都必须通过**对话**完成，不得依赖页面外提示、浮层、表单按钮或隐藏状态提示来完成业务确认。
+2. [ ] 正常、缺字段、多候选、提交成功、提交失败五类结果，都必须通过 AI 对话返回给用户。
+3. [ ] 写入动作仍保持 One Door：只允许走既有 `/internal/assistant/*` 与 DB Kernel 提交链路。
+4. [ ] 用户可见业务文案必须来自真实大模型，不允许本地模板 / fallback 冒充。
+5. [ ] `AssistantPage` 与 AI对话独立页必须复用同一套业务 FSM helper，禁止双份编排漂移。
 
-### 3.2 ADR 摘要
-- **ADR-260-01（选定）**: `assistant.flow.dialog` 成为业务闭环唯一消息协议；`assistant.flow.notice` 仅用于技术性提示（连接/调试）。
-- **ADR-260-02（选定）**: 提交动作必须受 FSM 状态前置约束，确认词只在 `await_candidate_confirm|await_commit_confirm` 生效。
-- **ADR-260-03（选定）**: 抽离共享 FSM helper，两个页面只保留 UI 壳差异，禁止编排复制。
+### 4.2 非目标
+1. [ ] 不新增数据库 schema / 迁移 / sqlc 改动。
+2. [ ] 不引入 legacy 双链路、兼容快路径或第二业务写入口。
+3. [ ] 不修改 LibreChat 上游源码；UI 适配通过 266 的代理注入与本仓前端编排收口。
+4. [ ] 不以“局部单测通过”“页面外出现提示”或“接口返回成功”作为 Case 2~4 达成依据。
 
-## 4. 数据模型与约束（Data Model & Constraints）
-> 无 DB 变更；本节定义前端运行态契约（TypeScript SSOT）。
+## 5. 业务状态机（FSM）冻结
 
-### 4.1 前端运行态模型（新增）
+### 5.1 运行态阶段
 ```ts
 interface DialogFlowState {
   phase:
@@ -91,163 +108,119 @@ interface DialogFlowState {
 }
 ```
 
-### 4.2 运行不变量（必须满足）
-1. [ ] `phase!=await_*_confirm` 时，确认词不得触发提交。
-2. [ ] `pending_draft_summary` 为空时不得进入 `await_commit_confirm`。
-3. [ ] `selected_candidate_id` 为空时不得进入 `await_candidate_confirm`。
-4. [ ] 任意 `confirm/commit` 失败后必须转入 `failed` 并给出对话错误回执，禁止静默吞错。
+### 5.2 阶段语义
+1. [ ] `idle`
+   - 仅表示当前没有待补全 / 待选择 / 待确认上下文。
+2. [ ] `await_missing_fields`
+   - AI 必须明确告诉用户缺哪些字段；
+   - 用户补充后，系统重新生成草案；
+   - 不允许在该阶段直接 commit。
+3. [ ] `await_candidate_pick`
+   - AI 必须以编号列表形式给出候选；
+   - 用户可通过“选第N个/候选编码”反馈选择；
+   - 选择后转 `await_candidate_confirm`。
+4. [ ] `await_candidate_confirm`
+   - AI 必须复述用户选中的候选具体内容；
+   - 用户确认后才能执行 `confirm(candidate_id)`。
+5. [ ] `await_commit_confirm`
+   - AI 必须展示准备提交的摘要；
+   - 只有用户明确确认后才能执行 `commit`。
+6. [ ] `committing`
+   - 后台正在提交；
+   - 完成后转 `committed` 或 `failed`。
+7. [ ] `committed`
+   - AI 必须通过对话明确告诉用户提交成功。
+8. [ ] `failed`
+   - AI 必须通过对话解释失败原因与下一步建议；
+   - 不允许仅在页面外给 notice/alert。
 
-## 5. 接口契约（API Contracts）
+### 5.3 不变量
+1. [ ] `phase != await_candidate_confirm && phase != await_commit_confirm` 时，确认词不得触发写入。
+2. [ ] `selected_candidate_id` 为空时，不得进入 `await_candidate_confirm`。
+3. [ ] `pending_draft_summary` 为空时，不得进入 `await_commit_confirm`。
+4. [ ] 任意 `confirm/commit` 失败后必须转入 `failed` 并在对话中回执。
+5. [ ] 任意阶段若用户可见业务回执不在聊天流内，则整轮验收判失败。
 
-### 5.1 iframe -> 父页（保持）
-1. [ ] `assistant.bridge.ready`
-2. [ ] `assistant.prompt.sync`
+## 6. 内部调用序列（冻结）
+1. [ ] **Case 2**：
+   - `POST /conversations/:id/turns`
+   - 等待用户确认
+   - `:confirm`
+   - `:commit`
+   - `:reply`
+2. [ ] **Case 3**：
+   - `turns(首轮缺字段)`
+   - 等待用户补全
+   - `turns(补全后草案)`
+   - 等待用户确认
+   - `:confirm`
+   - `:commit`
+   - `:reply`
+3. [ ] **Case 4**：
+   - `turns(候选列表)`
+   - 等待用户选择候选
+   - AI 二次确认用户选中项
+   - `:confirm(candidate_id)`
+   - 等待提交确认
+   - `:commit`
+   - `:reply`
 
-### 5.2 父页 -> iframe（新增业务主协议）
-1. [ ] `assistant.flow.dialog`
-- **Payload 契约**:
-```json
-{
-  "message_id": "dlg_20260305_001",
-  "kind": "info|warning|success|error",
-  "stage": "draft|missing_fields|candidate_list|candidate_confirm|commit_result|commit_failed",
-  "text": "string",
-  "meta": {
-    "effective_date": "2026-01-01",
-    "candidate_id": "SSC-2"
-  }
-}
-```
-2. [ ] `assistant.flow.notice` 降级为非业务提示；业务闭环禁止依赖该消息。
+## 7. 实施分解
 
-### 5.3 内部 Assistant API 调用序列（冻结）
-- Case 2：`POST /conversations/:id/turns` ->（等待确认）-> `:confirm` -> `:commit`
-- Case 3：`turns(首轮缺字段)` -> `turns(补全后草案)` -> `:confirm` -> `:commit`
-- Case 4：`turns(候选列表)` ->（用户选候选）->（等待二次确认）-> `:confirm(candidate_id)` -> `:commit`
+### 7.1 M1：业务语义重新冻结（主计划）
+1. [ ] 将 Case 1~4 作为唯一业务验收契约写入测试与执行日志模板。
+2. [ ] 统一确认词、候选选择词、补全语义解析规则。
+3. [ ] 明确“哪些回复必须等待用户下一轮输入，哪些回复可以自动推进”。
 
-### 5.4 错误码映射（对话回执）
-1. [ ] `missing_*` / `invalid_effective_date_format` -> 缺字段引导。
-2. [ ] `candidate_confirmation_required` -> 候选确认引导。
-3. [ ] `conversation_state_invalid|conversation_confirmation_required` -> 刷新会话 + 回执“状态已变化，请按当前提示继续”。
-4. [ ] 其他错误 -> 明确失败原因（禁止泛化“提交失败”单句直出）。
+### 7.2 M2：共享 FSM 与编排收口
+1. [ ] 抽离并冻结共享 FSM helper，供 `AssistantPage` 与 AI对话独立页共用。
+2. [ ] 删除页面级分叉编排，避免一个页面支持、另一个页面失效。
+3. [ ] 保证 Case 2~4 在运行态中严格按 FSM 阶段推进。
 
-## 6. 核心逻辑与算法（Business Logic & Algorithms）
+### 7.3 M3：对话文案与模型链路收口
+1. [ ] 所有业务回执统一走真实大模型回复链路。
+2. [ ] 缺字段提示、多候选提示、确认提示、成功/失败回执，都必须由对话消息返回。
+3. [ ] 禁止页面外 notice/alert 承担业务确认职责。
 
-### 6.1 状态机（FSM）
-```mermaid
-stateDiagram-v2
-    [*] --> idle
-    idle --> await_missing_fields: create turn -> missing fields
-    idle --> await_candidate_pick: create turn -> ambiguous candidates
-    idle --> await_commit_confirm: create turn -> draft ready
-    await_missing_fields --> await_commit_confirm: user补全 -> draft ready
-    await_candidate_pick --> await_candidate_confirm: user选择候选
-    await_candidate_confirm --> committing: user确认候选并提交
-    await_commit_confirm --> committing: user确认提交
-    committing --> committed: commit success
-    committing --> failed: confirm/commit error
-    committed --> idle
-    failed --> idle
-```
+### 7.4 M4：依赖 266 完成 UI / 通道前置收口
+1. [ ] 将官方原始发送链路收掉。
+2. [ ] 保证所有业务回执落到官方 UI 同一聊天流气泡中。
+3. [ ] 彻底去掉外挂容器与官方错误气泡干扰。
 
-### 6.2 Case 2 算法（完整信息）
-1. [ ] 首轮仅调用 `createAssistantTurn`。
-2. [ ] 生成草案摘要（组织名、父组织、生效日、候选信息）。
-3. [ ] 发送 `assistant.flow.dialog(stage=draft)` 并进入 `await_commit_confirm`。
-4. [ ] 仅当下一轮命中确认词时，执行 `confirm + commit`。
-5. [ ] 提交后发送 `stage=commit_result`。
+### 7.5 M5：真实验收与证据固化
+1. [ ] 用真实页面按 Case 1~4 顺序逐条验收。
+2. [ ] 每个 Case 必须保存页面全图、对话局部图、同轮 trace / 网络证据。
+3. [ ] 执行记录写回 `docs/dev-records/dev-plan-260-execution-log.md` 新章节，明确区分“旧 260 验收记录”与“本次重开后的真实需求验收记录”。
 
-### 6.3 Case 3 算法（缺字段补全）
-1. [ ] 首轮 `validation_errors` 命中缺字段时，发送 `stage=missing_fields` 并进入 `await_missing_fields`。
-2. [ ] 下一轮输入与现有意图草案合并（沿用 `extractIntentDraftFromText + mergeIntentDraft`）。
-3. [ ] 补全成功后转 `await_commit_confirm`，等待确认再提交。
+## 8. 验收标准（硬门槛）
+1. [ ] Case 1~4 必须全部在**AI 对话中**闭环，不得借助页面外提示补齐业务流程。
+2. [ ] Case 2 必须是“先草案、后确认、再提交”，不得首轮自动 commit。
+3. [ ] Case 3 必须是“先缺字段提示、再补全、再确认、再提交”，不得跳过确认。
+4. [ ] Case 4 必须是“先候选列表、再选择、再二次确认、再提交”，不得选中后直接提交。
+5. [ ] 成功与失败回执都必须由真实大模型生成，并显示在聊天流气泡内。
+6. [ ] 266 未完成前，不得宣布 260 用户体验达成。
 
-### 6.4 Case 4 算法（多候选）
-1. [ ] 首轮命中多候选时，发送固定格式候选列表（编号+名称+编码+路径），进入 `await_candidate_pick`。
-2. [ ] 用户回复“选第N个/编码”后，仅记录 `selected_candidate_id` 并发送 `stage=candidate_confirm`。
-3. [ ] 用户再次确认后，执行 `confirm(candidate_id)+commit`。
+## 9. 测试与门禁
+- 触发器与门禁以 `AGENTS.md`、`docs/dev-plans/012-ci-quality-gates.md`、`Makefile` 为 SSOT。
+- 260 当前最低验证集：
+  1. [ ] `go test ./internal/server -run 'TestAssistantUIProxy|TestAssistantReply|TestAssistantRenderReply' -count=1`
+  2. [ ] `pnpm --dir apps/web test -- src/pages/assistant/assistantDialogFlow.test.ts src/pages/assistant/assistantAutoRun.test.ts src/pages/assistant/AssistantPage.test.tsx src/pages/assistant/LibreChatPage.test.tsx`
+  3. [ ] `pnpm --dir e2e exec playwright test tests/tp260-librechat-dialog-closure.spec.js --reporter=line`
+  4. [ ] 补充“AI对话独立页真实 Case 1~4”专属 E2E，禁止仅凭旧 260 用例通过即宣称达成。
+  5. [ ] `make check doc`
 
-### 6.5 确认词识别约束
-1. [ ] 只允许精确短语：`确认执行|确认提交|立即执行|同意执行|yes|ok`（可扩展但必须加测试）。
-2. [ ] 任意“普通叙述句包含执行/提交字样”不得触发提交。
+## 10. 交付物
+1. [ ] 主计划文档：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
+2. [ ] 前置子计划：`docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
+3. [ ] 更新后的执行日志：`docs/dev-records/dev-plan-260-execution-log.md`
+4. [ ] 真实用例证据目录：`docs/dev-records/assets/dev-plan-260/`
+5. [ ] 相关后端 / Web / E2E 用例补强。
 
-### 6.6 对话渲染算法（bridge.js）
-1. [ ] 新增 `assistant.flow.dialog` 监听与渲染函数，消息插入聊天流容器而非右下角浮层。
-2. [ ] 通过 `MutationObserver` 等待聊天容器就绪；未就绪时排队，不丢消息。
-3. [ ] 渲染失败时 fail-closed：父页禁止继续 `confirm/commit`，并输出技术错误回执。
-
-## 7. 安全与鉴权（Security & Authz）
-1. [ ] 继续执行 `origin + channel + nonce` 三元校验（`assistantMessageBridge.ts`）。
-2. [ ] 继续执行 `/assistant-ui/**` 路径与 header/cookie 边界策略（`assistant_ui_proxy.go`）。
-3. [ ] 保持租户隔离：会话创建、回合推进、提交均沿用既有租户上下文，不新增旁路。
-4. [ ] 禁止新增任何直接写 OrgUnit 的前端/代理通道。
-
-## 8. 实施拆分（可直接开发）
-
-### 8.1 M1：契约冻结与共享 FSM helper
-1. [ ] 新增 `apps/web/src/pages/assistant/assistantDialogFlow.ts`（状态、事件、reducer、格式化）。
-2. [ ] 新增 `apps/web/src/pages/assistant/assistantDialogFlow.test.ts`（状态迁移全覆盖）。
-3. [ ] `assistantAutoRun.ts` 仅保留文本抽取/候选解析/确认词基础能力。
-
-### 8.2 M2：Bridge 对话消息渲染
-1. [ ] 改造 `internal/server/assistant_ui_proxy.go` 注入脚本：支持 `assistant.flow.dialog` 渲染聊天消息。
-2. [ ] `internal/server/assistant_ui_proxy_test.go` 新增断言：脚本包含 `assistant.flow.dialog` 与聊天流渲染逻辑关键标记。
-
-### 8.3 M3：页面编排收口
-1. [ ] 改造 `apps/web/src/pages/assistant/LibreChatPage.tsx`：切换到 FSM 驱动，移除“生成后自动提交”。
-2. [ ] 改造 `apps/web/src/pages/assistant/AssistantPage.tsx`：与 `LibreChatPage` 共用同一 helper。
-3. [ ] 禁止业务成功/失败只走页面 Alert；业务回执必须发 `assistant.flow.dialog`。
-
-### 8.4 M4：测试与证据闭环
-1. [ ] 更新 `apps/web/src/pages/assistant/LibreChatPage.test.tsx` 覆盖 Case 2~4 新回合语义。
-2. [ ] 更新 `apps/web/src/pages/assistant/AssistantPage.test.tsx` 断言双页行为一致。
-3. [ ] 更新 `apps/web/src/pages/assistant/assistantAutoRun.test.ts`（确认词与候选解析边界）。
-4. [ ] 新增/改造 `e2e/tests/tp260-librechat-dialog-closure.spec.js`（Case 1~4 真实对话闭环）。
-5. [ ] 新增执行记录：`docs/dev-records/dev-plan-260-execution-log.md`。
-
-## 9. 测试与验收标准（Acceptance Criteria）
-
-### 9.1 冻结用例（必须 100% 通过）
-> 统一入口：`http://localhost:8080/app/assistant/librechat`
-
-1. [ ] **Case 1 通道连通**：出现连接文案，页面可输入可发送。
-2. [ ] **Case 2 完整信息**：首轮仅出草案；第二轮确认后才提交；回执含 `effective_date=2026-01-01`。
-3. [ ] **Case 3 缺字段补全**：首轮缺字段提示；补全后草案确认；第三轮确认提交成功。
-4. [ ] **Case 4 多候选**：首轮候选列表；第二轮选择；第三轮二次确认并提交成功。
-
-### 9.2 负向回归（必须）
-1. [ ] 未进入确认状态时，`确认执行` 不得触发提交。
-2. [ ] 普通句子（如“继续执行排查”）不得触发提交。
-3. [ ] 候选未选中时不得提交。
-4. [ ] 任一业务闭环若仅通过浮层可见，判定失败。
-
-### 9.3 覆盖率与门禁
-1. [ ] 覆盖率口径沿用仓库 SSOT 门禁，不新增豁免。
-2. [ ] 本计划相关测试全量通过后方可更新状态。
-
-## 10. 运维与故障处置（Greenfield）
-1. [ ] 不引入 feature flag/双链路。
-2. [ ] 发生异常时遵循 fail-closed：停止自动推进，要求用户按最新对话提示继续。
-3. [ ] 以前向修复为主，不允许回退到旧交互闭环。
-
-## 11. 停止线（Stopline）
-1. [ ] 任一业务闭环仍依赖 `assistant.flow.notice` 或页面 Alert 才能完成 -> 禁止合并。
-2. [ ] 任一 Case 存在“未确认即提交” -> 禁止合并。
-3. [ ] `AssistantPage` 与 `LibreChatPage` 行为不一致 -> 禁止合并。
-4. [ ] Case 1~4 任一未通过 -> 禁止将状态改为“已完成”。
-
-## 12. 交付物（Deliverables）
-1. [ ] 本文档：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`（按 001 细化后的实施契约）。
-2. [ ] 代码改造：
-   - `internal/server/assistant_ui_proxy.go`
-   - `apps/web/src/pages/assistant/assistantDialogFlow.ts`（新增）
-   - `apps/web/src/pages/assistant/AssistantPage.tsx`
-   - `apps/web/src/pages/assistant/LibreChatPage.tsx`
-   - `apps/web/src/pages/assistant/assistantAutoRun.ts`
-3. [ ] 测试改造：
-   - `internal/server/assistant_ui_proxy_test.go`
-   - `apps/web/src/pages/assistant/assistantDialogFlow.test.ts`（新增）
-   - `apps/web/src/pages/assistant/AssistantPage.test.tsx`
-   - `apps/web/src/pages/assistant/LibreChatPage.test.tsx`
-   - `e2e/tests/tp260-librechat-dialog-closure.spec.js`（新增）
-4. [ ] 执行证据：`docs/dev-records/dev-plan-260-execution-log.md`。
+## 11. 关联文档
+- `docs/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
+- `docs/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
+- `docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
+- `docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
+- `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
+- `docs/dev-records/dev-plan-260-execution-log.md`
+- `AGENTS.md`

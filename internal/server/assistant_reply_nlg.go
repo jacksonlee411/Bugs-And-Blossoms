@@ -8,6 +8,7 @@ import (
 
 const (
 	assistantReplyPromptVersionV1 = "assistant.reply.v1"
+	assistantReplySourceModel     = "model"
 )
 
 type assistantRenderReplyResponse struct {
@@ -16,6 +17,8 @@ type assistantRenderReplyResponse struct {
 	Stage              string `json:"stage"`
 	ReplyModelName     string `json:"reply_model_name"`
 	ReplyPromptVersion string `json:"reply_prompt_version"`
+	ReplySource        string `json:"reply_source"`
+	UsedFallback       bool   `json:"used_fallback"`
 	ConversationID     string `json:"conversation_id"`
 	TurnID             string `json:"turn_id"`
 }
@@ -53,6 +56,8 @@ type assistantReplyModelResult struct {
 	Kind           string
 	Stage          string
 	ReplyModelName string
+	ReplySource    string
+	UsedFallback   bool
 }
 
 var assistantRenderReplyWithModelFn = assistantRenderReplyWithModel
@@ -113,15 +118,23 @@ func (s *assistantConversationService) renderTurnReply(ctx context.Context, tena
 		return nil, errAssistantReplyRenderFailed
 	}
 
-	return &assistantRenderReplyResponse{
+	replySource := strings.TrimSpace(modelResult.ReplySource)
+	if replySource == "" {
+		replySource = assistantReplySourceModel
+	}
+	reply := &assistantRenderReplyResponse{
 		Text:               text,
 		Kind:               assistantReplyKind(modelResult.Kind, kind, outcome),
 		Stage:              assistantReplyStage(modelResult.Stage, outcome, turn),
 		ReplyModelName:     replyModelName,
 		ReplyPromptVersion: assistantReplyPromptVersionV1,
+		ReplySource:        replySource,
+		UsedFallback:       modelResult.UsedFallback,
 		ConversationID:     strings.TrimSpace(conversation.ConversationID),
 		TurnID:             resolvedTurnID,
-	}, nil
+	}
+	s.persistRenderedReply(tenantID, principal.ID, conversationID, resolvedTurnID, reply)
+	return reply, nil
 }
 
 func assistantRenderReplyWithModel(ctx context.Context, svc *assistantConversationService, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
@@ -135,6 +148,32 @@ func assistantRenderReplyWithModel(ctx context.Context, svc *assistantConversati
 		return assistantReplyModelResult{}, errAssistantModelProviderUnavailable
 	}
 	return svc.modelGateway.RenderReply(ctx, prompt)
+}
+
+func (s *assistantConversationService) persistRenderedReply(tenantID string, actorID string, conversationID string, turnID string, reply *assistantRenderReplyResponse) {
+	if s == nil || reply == nil {
+		return
+	}
+	conversationID = strings.TrimSpace(conversationID)
+	turnID = strings.TrimSpace(turnID)
+	if conversationID == "" || turnID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	conversation, ok := s.byID[conversationID]
+	if !ok || conversation == nil {
+		return
+	}
+	if conversation.TenantID != tenantID || conversation.ActorID != actorID {
+		return
+	}
+	turn := assistantFindTurnForReply(conversation, turnID)
+	if turn == nil {
+		return
+	}
+	copyReply := *reply
+	turn.ReplyNLG = &copyReply
 }
 
 func assistantFindTurnForReply(conversation *assistantConversation, turnID string) *assistantTurn {

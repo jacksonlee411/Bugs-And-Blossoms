@@ -97,7 +97,15 @@ func (a assistantOpenAIProviderAdapter) RenderReply(ctx context.Context, provide
 	if err != nil {
 		return assistantReplyModelResult{}, errAssistantReplyRenderFailed
 	}
-	buildPayload := func(enableSchemaFormat bool) assistantOpenAIChatCompletionRequest {
+	buildPayload := func(enableSchemaFormat bool, plainTextMode bool) assistantOpenAIChatCompletionRequest {
+		systemPrompt := "你是企业 HR 助手的最终回复生成器。你会收到机器态上下文 JSON。" +
+			"你必须输出给最终用户可直接阅读的自然语言回复，并严格只输出 JSON。" +
+			"禁止输出内部实现细节，禁止原样暴露技术错误码。"
+		if plainTextMode {
+			systemPrompt = "你是企业 HR 助手的最终回复生成器。你会收到机器态上下文 JSON。" +
+				"你必须直接输出给最终用户看的自然语言回复。" +
+				"禁止输出 JSON、代码块、Markdown、内部实现细节与技术错误码。"
+		}
 		payload := assistantOpenAIChatCompletionRequest{
 			Model:       assistantReplyTargetModelName,
 			Temperature: 0,
@@ -105,10 +113,8 @@ func (a assistantOpenAIProviderAdapter) RenderReply(ctx context.Context, provide
 			N:           1,
 			Messages: []assistantOpenAIChatCompletionMessage{
 				{
-					Role: "system",
-					Content: "你是企业 HR 助手的最终回复生成器。你会收到机器态上下文 JSON。" +
-						"你必须输出给最终用户可直接阅读的自然语言回复，并严格只输出 JSON。" +
-						"禁止输出内部实现细节，禁止原样暴露技术错误码。",
+					Role:    "system",
+					Content: systemPrompt,
 				},
 				{
 					Role:    "user",
@@ -116,7 +122,7 @@ func (a assistantOpenAIProviderAdapter) RenderReply(ctx context.Context, provide
 				},
 			},
 		}
-		if enableSchemaFormat {
+		if enableSchemaFormat && !plainTextMode {
 			payload.ResponseFormat = &assistantOpenAIChatCompletionResponseSpec{
 				Type: "json_schema",
 				JSONSchema: assistantOpenAIChatJSONSchemaSpec{
@@ -182,31 +188,61 @@ func (a assistantOpenAIProviderAdapter) RenderReply(ctx context.Context, provide
 		return result, nil
 	}
 
-	result, err := invokePayload(buildPayload(true))
+	result, err := invokePayload(buildPayload(true, false))
 	if err != nil {
 		if !errors.Is(err, errAssistantModelConfigInvalid) || !assistantOpenAIResponseFormatUnsupported(result.RawBody) {
 			return assistantReplyModelResult{}, err
 		}
-		result, err = invokePayload(buildPayload(false))
+		result, err = invokePayload(buildPayload(false, false))
 		if err != nil {
 			return assistantReplyModelResult{}, err
 		}
 	}
-	return assistantDecodeOpenAIReplyResult(result.RawBody, prompt)
+	if decoded, decodeErr := assistantDecodeOpenAIReplyResult(result.RawBody, prompt); decodeErr == nil {
+		return decoded, nil
+	}
+	if decoded, decodeErr := assistantDecodeOpenAIReplyPlainTextResult(result.RawBody, prompt); decodeErr == nil {
+		return decoded, nil
+	}
+	result, err = invokePayload(buildPayload(false, true))
+	if err != nil {
+		return assistantReplyModelResult{}, err
+	}
+	return assistantDecodeOpenAIReplyPlainTextResult(result.RawBody, prompt)
+}
+
+func assistantDecodeOpenAIReplyPlainTextResult(raw []byte, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
+	var completion assistantOpenAIChatCompletionResponse
+	if err := json.Unmarshal(raw, &completion); err != nil {
+		return assistantReplyModelResult{}, errAssistantReplyRenderFailed
+	}
+	if len(completion.Choices) == 0 {
+		return assistantReplyModelResult{}, errAssistantReplyRenderFailed
+	}
+	content := assistantExtractOpenAIMessageContent(completion.Choices[0].Message.Content)
+	parsed := assistantParseReplyPayload(content)
+	text := strings.TrimSpace(parsed.Text)
+	if text == "" {
+		text = assistantReplyTextCandidate(content)
+	}
+	text = assistantSanitizeUserFacingReplyText(text, prompt.Locale)
+	if text == "" {
+		return assistantReplyModelResult{}, errAssistantReplyRenderFailed
+	}
+	resolvedStage := assistantReplyStage(parsed.Stage, prompt.Outcome, nil)
+	return assistantReplyModelResult{
+		Text:           text,
+		Kind:           assistantReplyKind(parsed.Kind, resolvedStage, prompt.Outcome),
+		Stage:          resolvedStage,
+		ReplyModelName: assistantReplyTargetModelName,
+		ReplySource:    assistantReplySourceModel,
+		UsedFallback:   false,
+	}, nil
 }
 
 func assistantDecodeOpenAIReplyResult(raw []byte, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
 	var completion assistantOpenAIChatCompletionResponse
 	if err := json.Unmarshal(raw, &completion); err != nil {
-		fallbackText := assistantSanitizeUserFacingReplyText(strings.TrimSpace(prompt.FallbackText), prompt.Locale)
-		if fallbackText != "" {
-			return assistantReplyModelResult{
-				Text:           fallbackText,
-				Kind:           assistantReplyKind("", prompt.Kind, prompt.Outcome),
-				Stage:          assistantReplyStage("", prompt.Outcome, nil),
-				ReplyModelName: assistantReplyTargetModelName,
-			}, nil
-		}
 		return assistantReplyModelResult{}, errAssistantReplyRenderFailed
 	}
 	if len(completion.Choices) == 0 {
@@ -215,7 +251,7 @@ func assistantDecodeOpenAIReplyResult(raw []byte, prompt assistantReplyRenderPro
 	content := assistantExtractOpenAIMessageContent(completion.Choices[0].Message.Content)
 	parsed := assistantParseReplyPayload(content)
 	if strings.TrimSpace(parsed.Text) == "" {
-		parsed.Text = strings.TrimSpace(prompt.FallbackText)
+		return assistantReplyModelResult{}, errAssistantReplyRenderFailed
 	}
 	text := assistantSanitizeUserFacingReplyText(strings.TrimSpace(parsed.Text), prompt.Locale)
 	if text == "" {
@@ -227,6 +263,8 @@ func assistantDecodeOpenAIReplyResult(raw []byte, prompt assistantReplyRenderPro
 		Kind:           assistantReplyKind(parsed.Kind, resolvedStage, prompt.Outcome),
 		Stage:          resolvedStage,
 		ReplyModelName: assistantReplyTargetModelName,
+		ReplySource:    assistantReplySourceModel,
+		UsedFallback:   false,
 	}, nil
 }
 
@@ -234,6 +272,35 @@ type assistantReplyPayload struct {
 	Text  string `json:"text"`
 	Kind  string `json:"kind"`
 	Stage string `json:"stage"`
+}
+
+func assistantReplyTextCandidate(content string) string {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return ""
+	}
+	parsed := assistantParseReplyPayload(trimmed)
+	if strings.TrimSpace(parsed.Text) != "" {
+		return strings.TrimSpace(parsed.Text)
+	}
+	var generic map[string]any
+	if err := json.Unmarshal([]byte(trimmed), &generic); err == nil {
+		for _, key := range []string{"reply", "message", "content", "answer", "output_text", "text"} {
+			switch value := generic[key].(type) {
+			case string:
+				if strings.TrimSpace(value) != "" {
+					return strings.TrimSpace(value)
+				}
+			case []any:
+				for _, entry := range value {
+					if text, ok := entry.(string); ok && strings.TrimSpace(text) != "" {
+						return strings.TrimSpace(text)
+					}
+				}
+			}
+		}
+	}
+	return trimmed
 }
 
 func assistantParseReplyPayload(content string) assistantReplyPayload {

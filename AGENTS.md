@@ -374,16 +374,19 @@ modules/{module}/
 - DEV-PLAN-239D：Ubuntu 本地开发环境搭建方案（Clone 后首日）：`docs/dev-plans/239d-ubuntu-local-development-environment-bootstrap-plan.md`
 - DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（去写死 + Skill/MCP/LibreChat 对齐）：`docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
-- DEV-PLAN-260：LibreChat 对话闭环自动执行重构方案（真实多轮补全/确认）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
+- DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - DEV-PLAN-260 执行日志：`docs/dev-records/dev-plan-260-execution-log.md`
 - DEV-PLAN-261：LibreChat 助手对话失败问题排查与修复实施计划：`docs/dev-plans/261-librechat-assistant-conversation-failure-investigation-and-remediation-plan.md`
 - DEV-PLAN-261 执行日志：`docs/dev-records/dev-plan-261-execution-log.md`
 - DEV-PLAN-262：LibreChat 对话回执渲染越界问题调查与收敛方案：`docs/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
 - DEV-PLAN-262 执行日志：`docs/dev-records/dev-plan-262-execution-log.md`
-- DEV-PLAN-263：LibreChat GPT-5.2 助手对话回复专线实施方案：`docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
+- DEV-PLAN-263：LibreChat 真实大模型助手对话回复专线实施方案：`docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
 - DEV-PLAN-263 执行日志：`docs/dev-records/dev-plan-263-execution-log.md`
-- DEV-PLAN-264：LibreChat GPT-5.2 回复单链路与真实验收证据收敛方案：`docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
+- DEV-PLAN-264：LibreChat 真实大模型回复单链路与真实验收证据收敛方案：`docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
 - DEV-PLAN-264 执行日志：`docs/dev-records/dev-plan-264-execution-log.md`
+- DEV-PLAN-265：LibreChat 回复经 GPT-5.2 单链路目标达成度审计与缺口收敛方案：`docs/dev-plans/265-librechat-gpt52-reply-goal-attainment-audit-and-gap-closure-plan.md`
+- DEV-PLAN-265 执行日志：`docs/dev-records/dev-plan-265-execution-log.md`
+- DEV-PLAN-266：AI对话官方 UI 单通道与气泡内回写前置子计划：`docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
 - DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`

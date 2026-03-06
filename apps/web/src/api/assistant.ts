@@ -55,6 +55,8 @@ export interface AssistantReplyNLG {
   stage: 'draft' | 'missing_fields' | 'candidate_list' | 'candidate_confirm' | 'commit_result' | 'commit_failed'
   reply_model_name: string
   reply_prompt_version: string
+  reply_source: 'model'
+  used_fallback: boolean
   conversation_id: string
   turn_id: string
 }

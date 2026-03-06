@@ -658,6 +658,120 @@ func TestModifyAssistantUIProxyResponse(t *testing.T) {
 	}
 }
 
+func TestAssistantUIProxyBootstrapsUpstreamAuthAtRoot(t *testing.T) {
+	registered := false
+	loginAttempts := 0
+	registerAttempts := 0
+	rootCookieHeader := ""
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/auth/login":
+			loginAttempts += 1
+			if !registered {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.Header().Add("Set-Cookie", "refreshToken=rf-bootstrap; Path=/; HttpOnly; SameSite=Strict")
+			w.Header().Add("Set-Cookie", "token_provider=librechat; Path=/; HttpOnly; SameSite=Strict")
+			_, _ = io.WriteString(w, `{"token":"tok"}`)
+		case "/api/auth/register":
+			registerAttempts += 1
+			registered = true
+			_, _ = io.WriteString(w, `{"message":"ok"}`)
+		case "/":
+			rootCookieHeader = r.Header.Get("Cookie")
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = io.WriteString(w, `<!doctype html><html><head><title>LibreChat</title></head><body>ok</body></html>`)
+		default:
+			t.Fatalf("unexpected upstream path=%s", r.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+
+	t.Setenv("LIBRECHAT_UPSTREAM", upstream.URL)
+	h := newAssistantUIProxyHandler()
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui", nil)
+	req = req.WithContext(withTenant(withPrincipal(req.Context(), Principal{
+		ID:               "principal-001",
+		TenantID:         "tenant-001",
+		Email:            "admin@localhost",
+		KratosIdentityID: "kratos-001",
+	}), Tenant{ID: "tenant-001", Domain: "localhost:8080", Name: "Tenant 001"}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if loginAttempts != 2 {
+		t.Fatalf("expected 2 login attempts, got=%d", loginAttempts)
+	}
+	if registerAttempts != 1 {
+		t.Fatalf("expected 1 register attempt, got=%d", registerAttempts)
+	}
+	if !strings.Contains(rootCookieHeader, "refreshToken=rf-bootstrap") || !strings.Contains(rootCookieHeader, "token_provider=librechat") {
+		t.Fatalf("expected upstream auth cookies on root request, got=%q", rootCookieHeader)
+	}
+	if !strings.Contains(rec.Body.String(), assistantUIBridgeScriptTag) {
+		t.Fatalf("expected bridge injection, got=%q", rec.Body.String())
+	}
+	resultCookies := rec.Result().Cookies()
+	if len(resultCookies) < 2 {
+		t.Fatalf("expected bootstrap cookies in response, got=%+v", resultCookies)
+	}
+	for _, cookie := range resultCookies {
+		if cookie.Name == "refreshToken" || cookie.Name == "token_provider" {
+			if cookie.Path != "/assistant-ui" {
+				t.Fatalf("expected /assistant-ui cookie path, got=%+v", cookie)
+			}
+		}
+	}
+}
+
+func TestAssistantUIProxyBootstrapsLoginPathAndRedirectsToRoot(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/auth/login":
+			w.Header().Add("Set-Cookie", "refreshToken=rf-login; Path=/; HttpOnly; SameSite=Strict")
+			w.Header().Add("Set-Cookie", "token_provider=librechat; Path=/; HttpOnly; SameSite=Strict")
+			_, _ = io.WriteString(w, `{"token":"tok"}`)
+		default:
+			t.Fatalf("unexpected upstream path=%s", r.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+
+	t.Setenv("LIBRECHAT_UPSTREAM", upstream.URL)
+	h := newAssistantUIProxyHandler()
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui/login", nil)
+	req = req.WithContext(withTenant(withPrincipal(req.Context(), Principal{
+		ID:               "principal-001",
+		TenantID:         "tenant-001",
+		Email:            "admin@localhost",
+		KratosIdentityID: "kratos-001",
+	}), Tenant{ID: "tenant-001", Domain: "localhost:8080", Name: "Tenant 001"}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if location := rec.Header().Get("Location"); location != "/assistant-ui" {
+		t.Fatalf("unexpected redirect location=%q", location)
+	}
+	resultCookies := rec.Result().Cookies()
+	if len(resultCookies) < 2 {
+		t.Fatalf("expected bootstrap cookies in redirect response, got=%+v", resultCookies)
+	}
+	for _, cookie := range resultCookies {
+		if cookie.Name == "refreshToken" || cookie.Name == "token_provider" {
+			if cookie.Path != "/assistant-ui" {
+				t.Fatalf("expected /assistant-ui cookie path, got=%+v", cookie)
+			}
+		}
+	}
+}
+
 func TestInjectAssistantUIProxyBridgeScript(t *testing.T) {
 	already := `<html><head>` + assistantUIBridgeScriptTag + `</head><body>x</body></html>`
 	if got := injectAssistantUIProxyBridgeScript(already); got != already {
@@ -729,4 +843,30 @@ func decodeAssistantUIProxyErrorCode(t *testing.T, rec *httptest.ResponseRecorde
 		t.Fatalf("decode error envelope: %v body=%s", err, rec.Body.String())
 	}
 	return envelope.Code
+}
+
+func TestAssistantUIProxyUnavailableFallsBackToLocalShell(t *testing.T) {
+	t.Setenv("LIBRECHAT_UPSTREAM", "http://127.0.0.1:1")
+	h := newAssistantUIProxyHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/assistant-ui", nil)
+	req.Header.Set("Accept", "text/html")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("X-Assistant-UI-Mode") != "fallback-shell" {
+		t.Fatalf("unexpected mode header=%q", rec.Header().Get("X-Assistant-UI-Mode"))
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-assistant-dialog-stream="1"`) {
+		t.Fatalf("fallback shell missing dialog stream: %q", body)
+	}
+	if !strings.Contains(body, `<textarea`) {
+		t.Fatalf("fallback shell missing textarea: %q", body)
+	}
+	if !strings.Contains(body, assistantUIBridgeScriptPath) {
+		t.Fatalf("fallback shell missing bridge script: %q", body)
+	}
 }

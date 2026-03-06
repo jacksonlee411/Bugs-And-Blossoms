@@ -868,7 +868,8 @@ export function AssistantPage() {
         }
       }
 
-      let generationInput = userInput
+      const directDraft = extractIntentDraftFromText(userInput)
+      let generationInput = composeCreateOrgUnitPrompt(directDraft) || userInput
       const pendingAnalysis = analyzeTurnForDialog(pendingTurn)
       if (pendingTurn && pendingAnalysis.phase === 'await_missing_fields') {
         const mergedDraft = mergeIntentDraft(
