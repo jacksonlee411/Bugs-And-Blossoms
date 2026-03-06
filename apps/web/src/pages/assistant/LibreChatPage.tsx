@@ -34,6 +34,7 @@ import {
   composeCreateOrgUnitPrompt,
   extractIntentDraftFromText,
   formatCandidatePrompt,
+  hasCompleteCreateIntent,
   isStructuredIntentRetryPrompt,
   isExecutionConfirmationText,
   looksLikeCreateOrgUnitRequest,
@@ -447,6 +448,9 @@ export function LibreChatPage() {
 
       const directDraft = extractIntentDraftFromText(userInput)
       let generationInput = composeCreateOrgUnitPrompt(directDraft) || userInput
+      if (hasCompleteCreateIntent(directDraft)) {
+        generationInput = composeStructuredIntentRetryPrompt(generationInput)
+      }
       const pendingAnalysis = analyzeTurnForDialog(pendingTurn)
       if (pendingTurn && pendingAnalysis.phase === 'await_missing_fields') {
         const mergedDraft = mergeIntentDraft(
@@ -459,7 +463,9 @@ export function LibreChatPage() {
         )
         const composedInput = composeCreateOrgUnitPrompt(mergedDraft)
         if (composedInput.length > 0) {
-          generationInput = composedInput
+          generationInput = hasCompleteCreateIntent(mergedDraft)
+            ? composeStructuredIntentRetryPrompt(composedInput)
+            : composedInput
         }
       }
 

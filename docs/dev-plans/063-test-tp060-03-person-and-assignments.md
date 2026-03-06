@@ -103,6 +103,7 @@
 - 输入依赖：
   - 10 个 `position_id`（来自 TP-060-02；建议记录为 `P-ENG-01..` 等 10 个职位）
   - 10 个员工（E01~E10；基线表见 `docs/dev-plans/060-business-e2e-test-suite.md` §5.8）
+- 数据库依赖口径承接 `DEV-PLAN-060/012/226`：若本子计划需要 SQL seed/校验，必须优先使用 Docker / compose 内 PostgreSQL；不得把宿主机 `psql` 作为唯一前置条件。
 
 ### 4.1 `as_of` / `effective_date` 显式要求（避免执行期漂移）
 

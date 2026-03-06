@@ -51,7 +51,7 @@
 | sqlc（schema/queries/config） | `make sqlc-generate` + `git status --short`（命中 DB 触发器再跑 `make sqlc-verify-schema`） | 规范与 stopline 见 `DEV-PLAN-025/025A` |
 | Routing（allowlist/分类/responder） | `make check routing` | 口径见 `DEV-PLAN-017` |
 | Authz（Casbin） | `make authz-pack && make authz-test && make authz-lint` | 口径见 `DEV-PLAN-022` |
-| E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012` |
+| E2E（Playwright） | `make e2e` | 门禁结构见 `DEV-PLAN-012`；数据库依赖口径冻结为 Docker / compose，E2E 不得把宿主机 `psql` 等工具作为唯一前置条件 |
 | 新增/调整文档 | `make check doc` | 门禁见“文档收敛与门禁” |
 | 引入/修改“回退通道/双链路/legacy 分支” | `make check no-legacy` | 禁止 legacy（见 `DEV-PLAN-004M1`） |
 | Assistant 模型配置主源相关改动（配置写入口/迁移 stopline/门禁接线） | `make check assistant-config-single-source` | 单主源门禁（见 `DEV-PLAN-231`） |
@@ -114,7 +114,15 @@
 - 新增功能必须**可发现、可操作**：应在 UI 页面上可见（导航入口/按钮/表单/列表/详情等）并可完成至少一条端到端操作；否则视为“未交付”。
 - 若某能力短期必须是“后端先行”（API/内核/工具链）：必须同时提供明确的用户入口规划与验收方式（例如对应页面占位、路由入口、或被现有页面实际调用），避免长期积累隐形/重复/无人使用的功能分支。
 
-### 3.9 缓存默认方案与外部依赖准入
+### 3.9 死分支与覆盖率处理原则（强制）
+
+- 100% 覆盖率门禁下，**死分支优先删除，不允许为凑覆盖率长期保留可证明不可达的分支**。
+- 对覆盖率缺口，必须先分类："可构造场景的真实分支" → 补测试；"可证明不可达的死分支" → 删除或前移为更早的不变量约束；不得默认通过改门禁口径、加排除项或伪造 fallback 来绕过。
+- 若某分支当前看似不可达但承担明确业务兜底语义，必须保留，并通过更小职责拆分、纯函数化、接口隔离或可注入依赖提升可测性；不得因测试困难直接删除。
+- 删除死分支时，必须满足：① 能说明不可达原因；② 删除后不改变对外契约；③ 相关测试与文档同步更新。
+- 未经用户明确批准，不得通过降低阈值、扩大 coverage 排除项、缩小统计范围来替代“删死分支/补测试”。
+
+### 3.10 缓存默认方案与外部依赖准入
 
 - 缓存默认工具链冻结为 **Go 原生 + pgx + PostgreSQL**（优先 request-scope 复用与进程内短 TTL，回源 PostgreSQL）。
 - 原则：先使用“原生与扩展”，避免过早引入外部缓存基础设施或第三方缓存库。
@@ -387,6 +395,7 @@ modules/{module}/
 - DEV-PLAN-265：LibreChat 回复经 GPT-5.2 单链路目标达成度审计与缺口收敛方案：`docs/dev-plans/265-librechat-gpt52-reply-goal-attainment-audit-and-gap-closure-plan.md`
 - DEV-PLAN-265 执行日志：`docs/dev-records/dev-plan-265-execution-log.md`
 - DEV-PLAN-266：AI对话官方 UI 单通道与气泡内回写前置子计划：`docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
+- DEV-PLAN-270：项目容器部署分层检讨与收敛方案：`docs/dev-plans/270-project-container-deployment-review-and-layered-convergence-plan.md`
 - DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`

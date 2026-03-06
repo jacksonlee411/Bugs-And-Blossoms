@@ -150,9 +150,7 @@ func assistantUIProxyBootstrapRequest(r *http.Request, targetURL *url.URL) (*htt
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(bootstrapCookies) == 0 {
-		return r, nil, nil
-	}
+
 	ctx := context.WithValue(r.Context(), assistantUIBootstrapCookiesCtxKey{}, bootstrapCookies)
 	proxyReq := r.Clone(ctx)
 	assistantUIApplyAuthCookiesToRequest(proxyReq, bootstrapCookies)
@@ -311,9 +309,6 @@ func assistantUIBootstrapCredentialSet(tenant Tenant, principal Principal) assis
 	username := fmt.Sprintf("bb_%s_%s", assistantUIBootstrapShortSlug(tenantSlug, 16), assistantUIBootstrapShortSlug(principalSlug, 24))
 	if kratosSlug != "" {
 		username = fmt.Sprintf("%s_%s", username, assistantUIBootstrapShortSlug(kratosSlug, 12))
-	}
-	if len(username) > 80 {
-		username = username[:80]
 	}
 	return assistantUIBootstrapCredentials{
 		Name:     name,

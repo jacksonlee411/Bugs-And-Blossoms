@@ -277,10 +277,7 @@ func assistantRuntimeProbeUpstream(rawURL string) error {
 		return err
 	}
 	client := &http.Client{Timeout: 1500 * time.Millisecond}
-	req, err := http.NewRequest(http.MethodGet, requestURL.String(), nil)
-	if err != nil {
-		return err
-	}
+	req, _ := http.NewRequest(http.MethodGet, requestURL.String(), nil)
 	resp, err := client.Do(req)
 	if err != nil {
 		return err

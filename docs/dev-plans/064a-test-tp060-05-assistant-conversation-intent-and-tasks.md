@@ -69,6 +69,8 @@
 
 ## 4. 前置条件与数据准备
 
+- 环境口径承接 `DEV-PLAN-060/012/226`：若本子计划复用 TP-060 数据 seed、联动全量 `make e2e`，或需要数据库直连/校验，必须默认 PostgreSQL 运行于 Docker / compose 并优先使用容器内工具链；不得把宿主机 `psql` 缺失误判为 Assistant 业务失败。
+
 1. [ ] 复用 TP-060-01 基线：`T060` 可登录、RLS/Authz enforce、跨租户 fail-closed 已验证。  
 2. [ ] 测试账号：`tenant-admin@example.invalid`（至少 1 个可写账号）。  
 3. [ ] 固定业务日期：`as_of=2026-01-01`（避免执行期漂移）。  

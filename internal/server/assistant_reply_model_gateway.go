@@ -29,7 +29,7 @@ func (g *assistantModelGateway) RenderReply(ctx context.Context, prompt assistan
 	})
 
 	openaiFound := false
-	lastTransientErr := error(nil)
+	lastTransientErr := errAssistantModelProviderUnavailable
 	for _, provider := range providers {
 		if !provider.Enabled {
 			continue
@@ -70,10 +70,7 @@ func (g *assistantModelGateway) RenderReply(ctx context.Context, prompt assistan
 	if !openaiFound {
 		return assistantReplyModelResult{}, errAssistantModelProviderUnavailable
 	}
-	if lastTransientErr != nil {
-		return assistantReplyModelResult{}, lastTransientErr
-	}
-	return assistantReplyModelResult{}, errAssistantModelProviderUnavailable
+	return assistantReplyModelResult{}, lastTransientErr
 }
 
 func (a assistantOpenAIProviderAdapter) RenderReply(ctx context.Context, provider assistantModelProviderConfig, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
@@ -93,10 +90,7 @@ func (a assistantOpenAIProviderAdapter) RenderReply(ctx context.Context, provide
 	if client == nil {
 		client = &http.Client{}
 	}
-	promptPayload, err := json.Marshal(prompt)
-	if err != nil {
-		return assistantReplyModelResult{}, errAssistantReplyRenderFailed
-	}
+	promptPayload, _ := json.Marshal(prompt)
 	buildPayload := func(enableSchemaFormat bool, plainTextMode bool) assistantOpenAIChatCompletionRequest {
 		systemPrompt := "你是企业 HR 助手的最终回复生成器。你会收到机器态上下文 JSON。" +
 			"你必须输出给最终用户可直接阅读的自然语言回复，并严格只输出 JSON。" +
@@ -226,9 +220,7 @@ func assistantDecodeOpenAIReplyPlainTextResult(raw []byte, prompt assistantReply
 		text = assistantReplyTextCandidate(content)
 	}
 	text = assistantSanitizeUserFacingReplyText(text, prompt.Locale)
-	if text == "" {
-		return assistantReplyModelResult{}, errAssistantReplyRenderFailed
-	}
+
 	resolvedStage := assistantReplyStage(parsed.Stage, prompt.Outcome, nil)
 	return assistantReplyModelResult{
 		Text:           text,
@@ -254,9 +246,6 @@ func assistantDecodeOpenAIReplyResult(raw []byte, prompt assistantReplyRenderPro
 		return assistantReplyModelResult{}, errAssistantReplyRenderFailed
 	}
 	text := assistantSanitizeUserFacingReplyText(strings.TrimSpace(parsed.Text), prompt.Locale)
-	if text == "" {
-		return assistantReplyModelResult{}, errAssistantReplyRenderFailed
-	}
 	resolvedStage := assistantReplyStage(parsed.Stage, prompt.Outcome, nil)
 	return assistantReplyModelResult{
 		Text:           text,
