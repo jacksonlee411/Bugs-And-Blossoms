@@ -1,6 +1,6 @@
 # DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）
 
-**状态**: 规划中（2026-03-06 16:31 CST）
+**状态**: 规划中（2026-03-06 18:11 CST）
 
 > 历史执行记录仍保留在 `docs/dev-records/dev-plan-260-execution-log.md`，但其“已完成”只代表旧口径阶段性实现；**不再等同于当前真实需求已达成**。
 
@@ -52,8 +52,15 @@
      - 用户通过对话反馈“选第N个/编码”完成候选选择；
      - AI 再次确认用户选择的是哪个具体候选项；
      - 用户通过对话确认“是的”；
-     - 系统自动执行并提交成功；
-     - AI 通过对话告诉用户已提交成功。
+	   - 系统自动执行并提交成功；
+	   - AI 通过对话告诉用户已提交成功。
+
+### 2.3 Case 1~4 共通 UI / 体验前提（继承 266）
+1. [ ] Case 1~4 的真实页面验收，必须同时满足 `DEV-PLAN-266` 第 6.6 节“用户可见交互与体验变化”与第 7 节“验收标准（硬门槛）”。
+2. [ ] 同一轮用户输入只允许一条有效发送通道；不得再出现“官方原始发送 + 本仓桥接请求”双链路并存。
+3. [ ] 同一轮 assistant 最终回复只能出现一次，且必须位于官方聊天流内部。
+4. [ ] 页面外 bridge 容器、overlay、notice 不得承担用户可见业务回执职责。
+5. [ ] 任一 Case 若出现官方 `Connection error`、双写、串泡或外挂回执，则该 Case 直接判失败，即使业务语义本身正确。
 
 ## 3. 主从关系冻结（260 主计划 / 266 前置子计划）
 1. [ ] **260 主计划职责**：
@@ -67,8 +74,9 @@
    - 移除页面外外挂容器；
    - 消除官方 `Connection error` 干扰。
 3. [ ] **边界冻结**：
-   - 未完成 266，不得宣称 260 用户体验达成；
-   - 即使 266 完成，若 260 的业务 FSM/确认语义未完成，也不得宣称 Case 2~4 达成。
+	   - 未完成 266，不得宣称 260 用户体验达成；
+	   - 即使 266 完成，若 260 的业务 FSM/确认语义未完成，也不得宣称 Case 2~4 达成。
+	   - 260 任一 Case 的通过，必须同时满足 266 的单通道、气泡内回写、无外挂容器、无官方原始错误体验等前置门槛；若 266 回归退化，则 260 视为未通过。
 
 ## 4. 目标与非目标
 
@@ -78,6 +86,7 @@
 3. [ ] 写入动作仍保持 One Door：只允许走既有 `/internal/assistant/*` 与 DB Kernel 提交链路。
 4. [ ] 用户可见业务文案必须来自真实大模型，不允许本地模板 / fallback 冒充。
 5. [ ] `AssistantPage` 与 AI对话独立页必须复用同一套业务 FSM helper，禁止双份编排漂移。
+6. [ ] Case 1~4 除业务语义达成外，还必须同时满足单通道、官方气泡内回写、同轮唯一回复、无外挂回复容器、无官方原始 `Connection error` 干扰。
 
 ### 4.2 非目标
 1. [ ] 不新增数据库 schema / 迁移 / sqlc 改动。
@@ -140,6 +149,9 @@ interface DialogFlowState {
 3. [ ] `pending_draft_summary` 为空时，不得进入 `await_commit_confirm`。
 4. [ ] 任意 `confirm/commit` 失败后必须转入 `failed` 并在对话中回执。
 5. [ ] 任意阶段若用户可见业务回执不在聊天流内，则整轮验收判失败。
+6. [ ] 任意轮用户发送不得触发双链路；若官方原始发送实际发出，则该轮验收直接失败。
+7. [ ] 任意轮 assistant 最终回复只能出现一次，且必须能与同轮 `conversation_id/turn_id/request_id` 一一对应。
+8. [ ] 页面外 bridge 容器、overlay、notice 不得承担用户可见业务回执职责。
 
 ## 6. 内部调用序列（冻结）
 1. [ ] **Case 2**：
@@ -183,13 +195,14 @@ interface DialogFlowState {
 3. [ ] 禁止页面外 notice/alert 承担业务确认职责。
 
 ### 7.4 M4：依赖 266 完成 UI / 通道前置收口
-1. [ ] 将官方原始发送链路收掉。
-2. [ ] 保证所有业务回执落到官方 UI 同一聊天流气泡中。
-3. [ ] 彻底去掉外挂容器与官方错误气泡干扰。
+1. [ ] 以 `266` 第 6.6 节与第 7 节为 readiness：只有当单通道、气泡内回写、无外挂容器、无官方原始错误体验全部达成后，260 才能进入最终 Case 通过判定。
+2. [ ] 将官方原始发送链路收掉，并把“官方原始发送未实际发出”作为 260 Case 1~4 的共通前置断言。
+3. [ ] 保证所有业务回执落到官方 UI 同一聊天流气泡中，并把“同轮唯一 assistant 回复”作为 260 Case 1~4 的共通前置断言。
+4. [ ] 彻底去掉外挂容器与官方错误气泡干扰；若 266 回归退化，则 260 不得封板。
 
 ### 7.5 M5：真实验收与证据固化
 1. [ ] 用真实页面按 Case 1~4 顺序逐条验收。
-2. [ ] 每个 Case 必须保存页面全图、对话局部图、同轮 trace / 网络证据。
+2. [ ] 每个 Case 必须保存页面全图、对话局部图、同轮 trace / 网络证据，并额外证明：无官方 `Connection error`、无页面外挂回复容器、同轮仅一份 assistant 回复。
 3. [ ] 执行记录写回 `docs/dev-records/dev-plan-260-execution-log.md` 新章节，明确区分“旧 260 验收记录”与“本次重开后的真实需求验收记录”。
 
 ## 8. 验收标准（硬门槛）
@@ -198,7 +211,9 @@ interface DialogFlowState {
 3. [ ] Case 3 必须是“先缺字段提示、再补全、再确认、再提交”，不得跳过确认。
 4. [ ] Case 4 必须是“先候选列表、再选择、再二次确认、再提交”，不得选中后直接提交。
 5. [ ] 成功与失败回执都必须由真实大模型生成，并显示在聊天流气泡内。
-6. [ ] 266 未完成前，不得宣布 260 用户体验达成。
+6. [ ] Case 1~4 的每一轮都必须同时满足 `266` 第 6.6 节“用户可见交互与体验变化”与第 7 节“验收标准（硬门槛）”。
+7. [ ] 任一 Case 如出现双链路、官方 `Connection error`、页面外挂容器承担回复或同轮多份 assistant 回复，则该 Case 直接判失败。
+8. [ ] 266 未完成或回归退化前，不得宣布 260 用户体验达成。
 
 ## 9. 测试与门禁
 - 触发器与门禁以 `AGENTS.md`、`docs/dev-plans/012-ci-quality-gates.md`、`Makefile` 为 SSOT。
@@ -206,7 +221,7 @@ interface DialogFlowState {
   1. [ ] `go test ./internal/server -run 'TestAssistantUIProxy|TestAssistantReply|TestAssistantRenderReply' -count=1`
   2. [ ] `pnpm --dir apps/web test -- src/pages/assistant/assistantDialogFlow.test.ts src/pages/assistant/assistantAutoRun.test.ts src/pages/assistant/AssistantPage.test.tsx src/pages/assistant/LibreChatPage.test.tsx`
   3. [ ] `pnpm --dir e2e exec playwright test tests/tp260-librechat-dialog-closure.spec.js --reporter=line`
-  4. [ ] 补充“AI对话独立页真实 Case 1~4”专属 E2E，禁止仅凭旧 260 用例通过即宣称达成。
+  4. [ ] 补充“AI对话独立页真实 Case 1~4”专属 E2E；每个 Case 必须同时断言 266 的共通 stopline：无官方原始发送、无官方错误气泡、无外挂回复容器、同轮唯一 assistant 气泡。
   5. [ ] `make check doc`
 
 ## 10. 交付物

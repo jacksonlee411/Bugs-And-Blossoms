@@ -1,6 +1,6 @@
 # DEV-PLAN-266：AI对话官方 UI 单通道与气泡内回写前置子计划
 
-**状态**: 规划中（2026-03-06 16:31 CST）
+**状态**: 规划中（2026-03-06 17:39 CST）
 
 ## 1. 计划定位
 - 266 不再被视为独立的业务闭环主计划。
@@ -12,6 +12,14 @@
   1. 官方原始发送链路仍会触发，导致出现官方 `Connection error`；
   2. 本仓回复仍可能落在对话框外的外挂容器，而不是官方对话气泡内。
 - 因此，在 260 的真实业务 FSM 达成之前，266 必须先完成“**单通道 + 气泡内回写**”底座收口。
+- 本计划还需补上两项冻结：
+  1. 验收入口必须与 `260` 一致，避免用 `/assistant-ui` 直链替代用户真实入口；
+  2. 必须冻结“在哪一层拦截官方发送、如何把同轮回复写回唯一 assistant 气泡”的实现契约，避免后续实现漂移。
+
+### 2.1 验收入口冻结
+- 266 的用户验收入口与 `260` 保持一致：`http://localhost:8080/app/assistant/AI对话`。
+- `/assistant-ui`、iframe 内部路由、代理层静态资源路径只可作为调试与定位手段，**不得单独作为 266 通过依据**。
+- 若运行态入口别名或 iframe 落点发生变化，仍以用户在“AI对话独立页”中的实际体验为准。
 
 ## 3. 266 的职责边界
 
@@ -35,6 +43,7 @@
 3. [ ] 正常回复与错误回复都写入**官方对话流内部**，而不是页面外层 bridge panel / overlay / notice 容器。
 4. [ ] 真实页面验收时，用户在官方对话框内只能看到本仓模型链路的最终文案，不再看到官方原始错误文案。
 5. [ ] 审计与测试能够区分“官方链路已被阻断”与“模型回复已成功回写官方气泡”。
+6. [ ] 266 的通过证据必须来自用户真实入口页，不接受仅通过 `/assistant-ui` 直链验证即判完成。
 
 ### 4.2 非目标
 1. [ ] 不修改业务域 schema / 迁移 / sqlc。
@@ -51,49 +60,72 @@
 
 ## 6. 设计与实施步骤
 
+### 6.0 先冻结的实现契约（不冻结不得开工）
+1. [ ] **主接管层冻结**：以官方 UI 注入脚本 / 事件层作为首选接管点，在 LibreChat 原生请求发出前统一拦截发送、回车发送、重试、重新生成等动作；网络层/代理层探针只用于观测与止损，**不能作为唯一修复手段**。
+2. [ ] **非接受方案冻结**：仅隐藏 `Connection error` DOM、仅在响应后删气泡、或只靠代理层吞掉错误响应而不阻断原始发送，都不计入完成。
+3. [ ] **同轮关联契约冻结**：每次用户发送必须只生成一组可审计关联键，至少能稳定关联同轮 `conversation_id`、`turn_id`、`request_id` 与唯一 assistant message item；并发发送、重试发送、重新生成不得复用或串用旧气泡。
+4. [ ] **占位与回写契约冻结**：用户发送后，官方消息流内必须先出现或可稳定定位到唯一 assistant 占位消息；模型返回后只允许回写该气泡，不得同时写入页面外 bridge panel / overlay / notice。
+5. [ ] **Stopline 冻结**：若任一轮出现“官方原始请求已发出”或“回复无法绑定回官方 assistant 气泡”，则该轮直接判失败，不得以隐藏错误、外挂提示、旁路 notice 视为通过。
+
 ### 6.1 M1：冻结单发送通道契约
 1. [ ] 明确官方 UI 中“发送”动作的唯一接管点（按钮提交、回车提交、重试提交等）。
 2. [ ] 梳理当前 bridge 对官方 DOM / 事件 / 网络请求的挂载点，标注哪些只监听、哪些需要改为阻断 + 接管。
 3. [ ] 在代理层或注入脚本层增加“原始发送已拦截”的可观测标识，供 260/266 测试复用。
+4. [ ] 明确记录以下最小探针口径：`native_send_attempted`、`native_send_blocked`、`native_send_emitted`、`bridge_reply_embedded`。
 
 ### 6.2 M2：收掉官方原始发送链路
 1. [ ] 拦截官方发送事件，阻断 LibreChat 对上游原始提交与默认错误渲染触发条件。
 2. [ ] 将用户输入统一改写为本仓 Assistant 单请求路径，确保每轮只生成一个可追踪的 `conversation_id/turn_id`。
 3. [ ] 对重试、重新生成、回车发送、按钮发送等交互保持同一拦截口径，避免漏网路径。
-4. [ ] 增加测试探针或日志证据，验证“官方原始发送未再发生”。
+4. [ ] 增加测试探针或日志证据，验证“官方原始发送未再发生”；通过标准不是“看不到错误气泡”，而是 `native_send_emitted=0`。
 
 ### 6.3 M3：把模型回复写回官方消息流
 1. [ ] 调查官方消息列表 DOM / 数据流最小可接管点，选择最稳妥的“消息项内注入/替换”方案。
-2. [ ] 将本仓模型最终文案写回官方 assistant message item，使其出现在官方对话记录内部。
-3. [ ] 错误场景与正常场景使用同一消息落点。
-4. [ ] 清理或下线现有对话框外 bridge 容器渲染逻辑，避免同轮重复显示。
+2. [ ] 为每轮发送建立唯一 assistant 占位消息或等价稳定消息锚点，避免回复回写时出现串位、丢位或重复 assistant 气泡。
+3. [ ] 将本仓模型最终文案写回官方 assistant message item，使其出现在官方对话记录内部。
+4. [ ] 错误场景与正常场景使用同一消息落点，且都保留同轮 `conversation_id/turn_id/request_id` 的可追溯映射。
+5. [ ] 清理或下线现有对话框外 bridge 容器渲染逻辑，避免同轮重复显示。
 
 ### 6.4 M4：审计、容错与回归防线
-1. [ ] 审计字段补齐：区分“官方发送已拦截”“消息已内嵌官方气泡”“是否存在外挂渲染”。
+1. [ ] 审计字段补齐：区分“官方发送已拦截”“官方原始发送是否实际发出”“消息已内嵌官方气泡”“是否存在外挂渲染”。
 2. [ ] fail-closed：若官方发送拦截失败或消息无法回写官方气泡，则整轮判失败。
-3. [ ] 为首轮、错误回复、重试回复分别补充回归测试。
+3. [ ] 失败时只能在官方消息流内显示技术态失败提示或保留可重试状态，不得把最终用户可见业务回执降级到页面外 notice / overlay。
+4. [ ] 为首轮、错误回复、重试回复分别补充回归测试。
 
 ### 6.5 M5：作为 260 前置验收项固化证据
 1. [ ] 新增/更新真实 E2E，用官方 UI 实际输入并断言：
    - [ ] 不出现官方 `Connection error` 气泡；
+   - [ ] 官方原始发送未实际发出（或等价强证据证明已在发出前拦截）；
    - [ ] 模型回复出现在官方聊天流内部；
-   - [ ] 页面外不存在旧 bridge 回复容器。
+   - [ ] 页面外不存在旧 bridge 回复容器；
+   - [ ] 同轮只存在一个 assistant 回复气泡，且能关联回同轮 `conversation_id/turn_id/request_id`。
 2. [ ] 固化证据到 `docs/dev-records/assets/dev-plan-266/`。
 3. [ ] 将实施与验证过程记录到 `docs/dev-records/dev-plan-266-execution-log.md`。
+
+### 6.6 用户可见交互与体验变化（作为正式验收依据）
+1. [ ] **单次发送 = 单次有效通道**：用户在 `AI对话` 页面点击发送、按回车发送、点击重试或重新生成时，只感知到一条连续聊天链路；不得再出现“一次输入触发两条链路”的重复体验。
+2. [ ] **回复留在官方聊天气泡内**：用户发送后，最终看到的 assistant 回复必须位于官方 LibreChat 聊天流内部，而不是落到页面外 bridge panel、overlay、notice 或其他外挂容器。
+3. [ ] **同轮只看到一份回复**：同一轮对话中，用户只能看到一份 assistant 最终回复；不得出现官方气泡一份、外挂区域再一份、或同轮多个 assistant 气泡串位/重复。
+4. [ ] **用户不再被官方原始错误打断**：在 266 达成后，用户不应再看到官方原始 `Connection error` 聊天气泡；如该轮失败，也只能以受控方式在官方消息流内呈现技术态失败，不得回退到官方原生错误体验。
+5. [ ] **对话承载面连续统一**：从用户视角看，整个体验应表现为“始终在同一个官方聊天窗口内连续对话”，而不是“官方界面外再套一层桥接回复系统”。
+6. [ ] **266 的用户价值边界明确**：266 达成只表示聊天承载面、通道与落点收口完成；用户虽然会感受到更干净、更一致的聊天体验，但这不等于 260 的缺字段补全、多候选确认、提交确认、成功回执等业务 FSM 已全部完成。
 
 ## 7. 验收标准（硬门槛）
 1. [ ] 官方 UI 中真实发送后，用户看不到官方原始 `Connection error` 聊天气泡。
 2. [ ] 同一轮回复只出现一次，且位于官方对话流内部的 assistant 气泡中。
 3. [ ] 页面外 bridge 容器不再承担用户可见业务回复职责。
-4. [ ] 266 通过只能表示“260 的 UI / 通道前置条件满足”，**不能单独代表 260 的 Case 2~4 已达成**。
+4. [ ] 验收证据必须能证明该轮官方原始发送未实际发出；仅“错误气泡不可见”不构成通过。
+5. [ ] 验收证据必须能证明同轮 `conversation_id/turn_id/request_id` 与唯一 assistant 气泡一一对应，不存在串泡、外挂回执或双写。
+6. [ ] 上述“6.6 用户可见交互与体验变化”各项必须都能被真实页面录像、截图、DOM 断言或 trace 佐证，作为 266 正式验收依据的一部分。
+7. [ ] 266 通过只能表示“260 的 UI / 通道前置条件满足”，**不能单独代表 260 的 Case 2~4 已达成**。
 
 ## 8. 测试与门禁
 - 触发器与门禁以 `AGENTS.md`、`docs/dev-plans/012-ci-quality-gates.md`、`Makefile` 为 SSOT。
 - 266 最低验证集计划：
-  1. [ ] `go test ./internal/server -run 'TestAssistantUIProxy|TestModifyAssistantUIProxyResponse|TestAssistantReply|TestAssistantRenderReply' -count=1`
-  2. [ ] `pnpm --dir apps/web test -- src/pages/assistant/LibreChatPage.test.tsx src/pages/assistant/AssistantPage.test.tsx src/pages/assistant/assistantAutoRun.test.ts`
-  3. [ ] `pnpm --dir e2e exec playwright test tests/tp264-librechat-gpt52-dialog-response-real.spec.js tests/tp265-librechat-gpt52-blocked-reply-real.spec.js --reporter=line`
-  4. [ ] 补充 266 专属真实 E2E，硬断言“无官方错误气泡 + 官方气泡内回写成功”。
+  1. [ ] 补充 266 专属真实 E2E，硬断言“官方原始发送未发出 + 无官方错误气泡 + 官方气泡内回写成功 + 无页面外挂回复容器”；该用例是 266 的主通过条件。
+  2. [ ] `go test ./internal/server -run 'TestAssistantUIProxy|TestModifyAssistantUIProxyResponse|TestAssistantReply|TestAssistantRenderReply' -count=1`
+  3. [ ] `pnpm --dir apps/web test -- src/pages/assistant/LibreChatPage.test.tsx src/pages/assistant/AssistantPage.test.tsx src/pages/assistant/assistantAutoRun.test.ts`
+  4. [ ] `pnpm --dir e2e exec playwright test tests/tp264-librechat-gpt52-dialog-response-real.spec.js tests/tp265-librechat-gpt52-blocked-reply-real.spec.js --reporter=line` 作为 264/265 回归集继续保留，但**不替代 266 专属 stopline**。
   5. [ ] `make check doc`
 
 ## 9. 交付物

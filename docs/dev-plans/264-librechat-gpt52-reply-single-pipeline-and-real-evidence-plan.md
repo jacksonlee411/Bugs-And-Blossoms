@@ -1,11 +1,12 @@
 # DEV-PLAN-264：LibreChat 真实大模型回复单链路与真实验收证据收敛方案
 
-**状态**: 已完成（2026-03-06 16:31 CST）
+**状态**: 已完成（2026-03-06 16:31 CST）— 仅代表“回复单链路 + 真实证据”阶段已收口，不代表当前 `DEV-PLAN-260/266` 用户体验主验收已达成。
 
 ## 1. 背景与纠偏
-- 263 的核心目标没有变化：用户在 `/app/assistant/librechat` 输入业务句子后，系统必须先构造机器态上下文，再 prompt 给**真实大模型**，最后由真实大模型输出用户可见回复（正常与报错同口径）。
+- 263 的核心目标没有变化：用户在真实入口页输入业务句子后，系统必须先构造机器态上下文，再 prompt 给**真实大模型**，最后由真实大模型输出用户可见回复（正常与报错同口径）。当前用户入口以 `http://localhost:8080/app/assistant/AI对话` 为准；264 的历史执行证据基于 `/app/assistant/librechat`。
 - 现有实现与证据曾存在偏差：出现过 mock 取证、固定造数 `conversation_id/turn_id`、非真实链路截图等情况，不能作为 263 目标达成证据。
 - 本计划（264）用于替代旧的固定模型口径：**以真实链路、同轮次可对账证据、真实大模型命中硬约束为唯一通过标准**。
+- 264 不负责替代 `266` 的 UI / 通道前置门槛；若官方单通道、气泡内回写、无外挂容器、无官方原始错误体验未达成，则不得仅凭 264 宣称当前用户体验已经达成。
 
 ## 2. 目标与非目标
 ### 2.1 目标（必须同时满足）
@@ -58,7 +59,7 @@
 
 ### 5.4 M4：真实验收用例（非 mock）
 1. [X] 新增 `tp264-real` 用例，禁止拦截 `/internal/assistant/**` 业务 API。
-2. [X] 测试必须走真实 `/app/assistant/librechat` 链路并输入基准句。
+2. [X] 历史执行时测试走真实 `/app/assistant/librechat` 链路并输入基准句；当前若重跑/复验，应以 `AI对话` 入口为准，并同时满足 `266` 的 stopline。
 3. [X] 用例硬断言：
    - [X] 聊天气泡出现业务回执文本；
    - [X] 同轮 trace 存在 `reply_source=model`、`used_fallback=false`、`reply_model_name` 非空；
@@ -76,6 +77,7 @@
 3. [X] 业务回执只在聊天流气泡中判定通过，页面外层提示不计入通过。
 4. [X] 三件套证据完整且同轮次可对账。
 5. [X] 任意一轮出现 mock 证据、本地 fallback 冒充真实链路或固定造数冒充真实链路，整轮判无效。
+6. [X] 264 的通过仅代表“回复生成单链路与真实证据口径”已达成；若 `266` 的官方单通道 / 气泡内回写门槛失败，不得据此宣布当前用户体验达成。
 
 ## 7. 测试与门禁
 - 触发器与门禁以 `AGENTS.md`、`docs/dev-plans/012-ci-quality-gates.md`、`Makefile` 为 SSOT。
@@ -85,6 +87,7 @@
   3. [X] `pnpm --dir e2e exec playwright test tests/tp260-librechat-dialog-closure.spec.js tests/tp262-librechat-dialog-anchor.spec.js`
   4. [X] `pnpm --dir e2e exec playwright test tests/tp264-librechat-gpt52-dialog-response-real.spec.js`
   5. [X] `make check doc`
+  6. [X] 当前若复验 264，应以 `AI对话` 入口并叠加 `266` 的 stopline 为准；历史证据仍保留原执行路径，不回写伪造新证据。
 
 ## 8. 交付物
 1. [X] 计划文档：`docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
