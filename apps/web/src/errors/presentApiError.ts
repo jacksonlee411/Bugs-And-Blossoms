@@ -60,7 +60,7 @@ const localizedMessages: Record<string, LocalizedErrorMessage> = {
   ai_runtime_config_missing: { en: 'Assistant runtime model configuration is missing. Please configure and restart service.', zh: '助手运行时模型配置缺失，请完成配置并重启服务。' },
   ai_model_secret_missing: { en: 'Model provider secret is missing. Please configure key reference and retry.', zh: '模型密钥缺失，请检查 key_ref 配置后重试。' },
   ai_reply_render_failed: { en: 'Assistant reply generation failed. Please retry.', zh: '助手回复生成失败，请稍后重试。' },
-  ai_reply_model_target_mismatch: { en: 'Assistant reply model mismatch. Please retry later.', zh: '助手回复模型未命中 GPT-5.2，请稍后重试。' },
+  ai_reply_model_target_mismatch: { en: 'Assistant reply did not come from the expected model pipeline. Please retry later.', zh: '助手回复未命中预期的大模型链路，请稍后重试。' },
   assistant_conversation_cursor_invalid: { en: 'Conversation cursor is invalid or expired. Please reload list.', zh: '会话分页游标无效或已过期，请刷新列表后重试。' },
   assistant_conversation_list_failed: { en: 'Failed to load assistant conversation list.', zh: '加载助手会话列表失败，请稍后重试。' },
   assistant_candidate_not_found: { en: 'Candidate is not found.', zh: '未找到候选对象，请重新选择。' },
