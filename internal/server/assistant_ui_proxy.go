@@ -661,6 +661,19 @@ func assistantUIBridgeScriptBody() string {
   if (!channel || !nonce) {
     return;
   }
+  var bridgeMetrics = window.__assistantBridgeMetrics;
+  if (!bridgeMetrics || typeof bridgeMetrics !== "object") {
+    bridgeMetrics = {
+      native_send_attempted: 0,
+      native_send_blocked: 0,
+      native_send_emitted: 0,
+      prompt_emitted: 0,
+      bridge_reply_embedded: 0,
+      last_prompt: "",
+      last_message_id: ""
+    };
+    window.__assistantBridgeMetrics = bridgeMetrics;
+  }
   var lastPayload = "";
   var lastAt = 0;
   function normalize(input) {
@@ -668,6 +681,32 @@ func assistantUIBridgeScriptBody() string {
       return "";
     }
     return input.replace(/\\s+/g, " ").trim();
+  }
+  function normalizeToken(input) {
+    return normalize(input).replace(/[^a-zA-Z0-9_-]+/g, "_");
+  }
+  function bumpMetric(name) {
+    bridgeMetrics[name] = Number(bridgeMetrics[name] || 0) + 1;
+  }
+  function setMetric(name, value) {
+    bridgeMetrics[name] = value;
+  }
+  function publishMetrics(reason) {
+    window.parent.postMessage({
+      type: "assistant.bridge.metrics",
+      channel: channel,
+      nonce: nonce,
+      payload: {
+        reason: normalize(reason),
+        native_send_attempted: Number(bridgeMetrics.native_send_attempted || 0),
+        native_send_blocked: Number(bridgeMetrics.native_send_blocked || 0),
+        native_send_emitted: Number(bridgeMetrics.native_send_emitted || 0),
+        prompt_emitted: Number(bridgeMetrics.prompt_emitted || 0),
+        bridge_reply_embedded: Number(bridgeMetrics.bridge_reply_embedded || 0),
+        last_prompt: normalize(bridgeMetrics.last_prompt),
+        last_message_id: normalize(bridgeMetrics.last_message_id)
+      }
+    }, window.location.origin);
   }
   function emitPrompt(input) {
     var text = normalize(input);
@@ -680,12 +719,15 @@ func assistantUIBridgeScriptBody() string {
     }
     lastPayload = text;
     lastAt = now;
+    bumpMetric("prompt_emitted");
+    setMetric("last_prompt", text);
     window.parent.postMessage({
       type: "assistant.prompt.sync",
       channel: channel,
       nonce: nonce,
       payload: { input: text, source: "librechat" }
     }, window.location.origin);
+    publishMetrics("prompt_emitted");
   }
   function readInputValue(node) {
     if (!node) {
@@ -720,6 +762,65 @@ func assistantUIBridgeScriptBody() string {
     }
     return document.querySelector('form textarea, form [contenteditable="true"], textarea, [contenteditable="true"]');
   }
+  function clearInput(node) {
+    if (!node) {
+      return;
+    }
+    if (typeof node.value === "string") {
+      node.value = "";
+      node.dispatchEvent(new Event("input", { bubbles: true }));
+      node.dispatchEvent(new Event("change", { bubbles: true }));
+      return;
+    }
+    if (typeof node.textContent === "string") {
+      node.textContent = "";
+      node.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
+  function blockNativeSend(event, sourceNode) {
+    var target = findInput(sourceNode);
+    var text = normalize(readInputValue(target));
+    if (!text) {
+      return false;
+    }
+    bumpMetric("native_send_attempted");
+    if (event && typeof event.preventDefault === "function") {
+      event.preventDefault();
+    }
+    if (event && typeof event.stopImmediatePropagation === "function") {
+      event.stopImmediatePropagation();
+    }
+    if (event && typeof event.stopPropagation === "function") {
+      event.stopPropagation();
+    }
+    bumpMetric("native_send_blocked");
+    emitPrompt(text);
+    clearInput(target);
+    publishMetrics("native_send_blocked");
+    return true;
+  }
+  function readButtonLabel(button) {
+    if (!button || !button.getAttribute) {
+      return "";
+    }
+    return normalize(
+      button.getAttribute("aria-label") ||
+      button.getAttribute("title") ||
+      button.textContent ||
+      button.getAttribute("data-testid") ||
+      ""
+    ).toLowerCase();
+  }
+  function isSendActionButton(button) {
+    if (!button) {
+      return false;
+    }
+    var typeAttr = normalize(button.getAttribute && button.getAttribute("type")).toLowerCase();
+    if (typeAttr === "submit") {
+      return true;
+    }
+    return /send|发送|提交/.test(readButtonLabel(button));
+  }
   var dialogQueue = [];
   var dialogObserver = null;
   var dialogObserverTimer = null;
@@ -735,13 +836,13 @@ func assistantUIBridgeScriptBody() string {
     }
     return true;
   }
-	  function findDialogRoot() {
-	    var selectors = [
-	      "#messages-view",
-	      '[data-testid="conversation-container"] [role="log"]',
-	      '[data-testid="chat-container"] [role="log"]',
-	      '[data-testid="conversation-container"]',
-	      '[data-testid="chat-container"]',
+  function findDialogRoot() {
+    var selectors = [
+      "#messages-view",
+      '[data-testid="conversation-container"] [role="log"]',
+      '[data-testid="chat-container"] [role="log"]',
+      '[data-testid="conversation-container"]',
+      '[data-testid="chat-container"]',
       '[data-testid="messages-container"]',
       '[data-testid="message-list"]',
       '[role="log"]'
@@ -798,6 +899,35 @@ func assistantUIBridgeScriptBody() string {
       item.style.borderColor = "#ef9a9a";
     }
   }
+  function applyDialogMeta(item, payload) {
+    if (!item) {
+      return;
+    }
+    var messageID = normalizeToken(payload && payload.message_id);
+    if (messageID) {
+      item.setAttribute("data-assistant-message-id", messageID);
+      setMetric("last_message_id", messageID);
+    }
+    var meta = payload && payload.meta && typeof payload.meta === "object" ? payload.meta : null;
+    if (!meta) {
+      return;
+    }
+    var keys = ["conversation_id", "turn_id", "request_id", "trace_id", "reply_model_name", "reply_prompt_version", "reply_source", "used_fallback"];
+    for (var i = 0; i < keys.length; i += 1) {
+      var key = keys[i];
+      var value = normalizeToken(meta[key]);
+      if (!value) {
+        continue;
+      }
+      item.setAttribute("data-assistant-" + key.replace(/_/g, "-"), value);
+    }
+  }
+  function findDialogItemByMessageID(stream, messageID) {
+    if (!stream || !messageID) {
+      return null;
+    }
+    return stream.querySelector('[data-assistant-message-id="' + messageID + '"]');
+  }
   function appendDialogMessageToStream(stream, payload, fallbackSeverity) {
     if (!stream) {
       return;
@@ -811,13 +941,22 @@ func assistantUIBridgeScriptBody() string {
       level = "info";
     }
     var stage = normalize(payload && payload.stage);
-    var item = document.createElement("div");
+    var messageID = normalizeToken(payload && payload.message_id);
+    var item = findDialogItemByMessageID(stream, messageID);
+    if (!item) {
+      item = document.createElement("div");
+    }
     styleDialogItem(item, level);
     if (stage) {
       item.setAttribute("data-assistant-dialog-stage", stage);
     }
     item.textContent = text;
-    stream.appendChild(item);
+    applyDialogMeta(item, payload);
+    if (item.parentElement !== stream) {
+      stream.appendChild(item);
+    }
+    bumpMetric("bridge_reply_embedded");
+    publishMetrics("bridge_reply_embedded");
     item.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
   function stopDialogObserver() {
@@ -904,8 +1043,7 @@ func assistantUIBridgeScriptBody() string {
     }
   });
   document.addEventListener("submit", function (event) {
-    var target = findInput(event.target);
-    emitPrompt(readInputValue(target));
+    blockNativeSend(event, event.target);
   }, true);
   document.addEventListener("keydown", function (event) {
     if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) {
@@ -914,8 +1052,7 @@ func assistantUIBridgeScriptBody() string {
     if (event.isComposing) {
       return;
     }
-    var target = findInput(event.target);
-    emitPrompt(readInputValue(target));
+    blockNativeSend(event, event.target);
   }, true);
   document.addEventListener("click", function (event) {
     var node = event.target;
@@ -926,12 +1063,10 @@ func assistantUIBridgeScriptBody() string {
     if (!button) {
       return;
     }
-    var label = normalize(button.textContent || "");
-    if (!/send|发送|提交/.test(label)) {
+    if (!isSendActionButton(button)) {
       return;
     }
-    var target = findInput(button);
-    emitPrompt(readInputValue(target));
+    blockNativeSend(event, button);
   }, true);
   window.parent.postMessage({
     type: "assistant.bridge.ready",

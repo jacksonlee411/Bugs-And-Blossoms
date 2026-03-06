@@ -115,11 +115,17 @@ test("tp263-e2e-001: AI对话 reply must go through gpt-5.2 reply pipeline", asy
       });
       return;
     }
-    if (method === "GET" && pathname === "/internal/assistant/runtime/status") {
+    if (method === "GET" && pathname === "/internal/assistant/runtime-status") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ services: [{ name: "assistant", status: "ok", reason: "mock" }] })
+        body: JSON.stringify({
+          status: "healthy",
+          checked_at: "2026-03-06T00:00:00Z",
+          upstream: { reachable: true, code: "ok", message: "mock", url: "http://localhost:3080" },
+          services: [{ name: "assistant", status: "ok", reason: "mock" }],
+          capabilities: { mcp_enabled: false, actions_enabled: true, agents_write_enabled: true }
+        })
       });
       return;
     }

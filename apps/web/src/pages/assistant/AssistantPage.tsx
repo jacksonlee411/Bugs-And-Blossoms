@@ -83,6 +83,16 @@ function normalized(value: string | undefined): string {
   return (value ?? '').trim()
 }
 
+function buildAssistantDialogMessageID(conversationID: string, turnID: string, stage: string): string {
+  const parts = [conversationID, turnID, stage]
+    .map((value) => normalized(value).replace(/[^a-zA-Z0-9_-]+/g, '_'))
+    .filter((value) => value.length > 0)
+  if (parts.length === 0) {
+    return `dlg_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`
+  }
+  return `dlg_${parts.join('_')}`
+}
+
 function resolveCandidateSelection(turn: AssistantTurn | null, currentCandidateID: string): string {
   if (!turn) {
     return ''
@@ -683,12 +693,21 @@ export function AssistantPage() {
       if (text.length === 0) {
         return
       }
+      const activeConversationID = normalized(conversationRef.current?.conversation_id)
+      const activeTurn = latestTurn(conversationRef.current)
+      const activeTurnID = normalized(activeTurn?.turn_id)
       postBridgeMessage('assistant.flow.dialog', {
-        message_id: `dlg_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
+        message_id: buildAssistantDialogMessageID(activeConversationID, activeTurnID, stage),
         kind,
         stage,
         text,
-        meta: meta ?? {}
+        meta: {
+          ...(meta ?? {}),
+          ...(activeConversationID.length > 0 ? { conversation_id: activeConversationID } : {}),
+          ...(activeTurnID.length > 0 ? { turn_id: activeTurnID } : {}),
+          ...(normalized(activeTurn?.request_id).length > 0 ? { request_id: normalized(activeTurn?.request_id) } : {}),
+          ...(normalized(activeTurn?.trace_id).length > 0 ? { trace_id: normalized(activeTurn?.trace_id) } : {})
+        }
       })
     },
     [postBridgeMessage]
