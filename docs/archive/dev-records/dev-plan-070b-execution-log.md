@@ -12,7 +12,7 @@
   - `docs/dev-plans/071a-package-selection-ownership-and-subscription.md`
   - `docs/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
 - 明确 071B 默认绑定模式收敛为 `tenant_only`，并将 `tenant_global/global fallback` 标注为历史阶段口径。
-- 完成 070B 启动前置核验：`DEV-PLAN-102B` 的 M2/M3/M5 已完成，并在 `docs/dev-records/dev-plan-102b-execution-log.md` 留证。
+- 完成 070B 启动前置核验：`DEV-PLAN-102B` 的 M2/M3/M5 已完成，并在 `docs/archive/dev-records/dev-plan-102b-execution-log.md` 留证。
 
 ### 待完成（承接后续 PR）
 

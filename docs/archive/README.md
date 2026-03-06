@@ -11,4 +11,5 @@
 ## 当前归档
 
 - 开发计划历史归档：`docs/archive/dev-plans/`
+- 历史执行记录归档：`docs/archive/dev-records/`
   - 例如：`DEV-PLAN-018`、`DEV-PLAN-026` 系列、`DEV-PLAN-028`、`DEV-PLAN-109`、`DEV-PLAN-009M1~009M6`、`DEV-PLAN-070/071` 系列、`DEV-PLAN-075A/075D`、`DEV-PLAN-082/083/083A`、`DEV-PLAN-101` 系列。

@@ -1,6 +1,6 @@
 # DEV-PLAN-234：LibreChat 开源能力复用（MCP/Actions/Domain Allowlist）详细设计
 
-**状态**: 已完成（2026-03-03 16:10 UTC，实施与验证见 `docs/dev-records/dev-plan-234-execution-log.md`）
+**状态**: 已完成（2026-03-03 16:10 UTC，实施与验证见 `docs/archive/dev-records/dev-plan-234-execution-log.md`）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:

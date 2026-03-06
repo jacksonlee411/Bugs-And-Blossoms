@@ -53,7 +53,7 @@
 ### 4.4 M4：测试与验收闭环
 1. [X] Go：补充 `internal/server/assistant_ui_proxy_test.go`，断言“合法锚点 + fail-closed + 重定位”脚本标记。
 2. [X] Web/E2E：补充 `/app/assistant/librechat` DOM 断言，验证消息节点位于聊天对话流容器内部。
-3. [X] 记录执行证据：`docs/dev-records/dev-plan-262-execution-log.md`。
+3. [X] 记录执行证据：`docs/archive/dev-records/dev-plan-262-execution-log.md`。
 4. [ ] 若作为当前复验依据重跑，需回到 `AI对话` 入口，并与 `266` 的单通道/无外挂 stopline 联合断言。
 
 ## 5. 验收标准
@@ -74,14 +74,14 @@
 
 ## 7. 交付物
 1. [X] 计划文档：`docs/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
-2. [X] 执行日志：`docs/dev-records/dev-plan-262-execution-log.md`
+2. [X] 执行日志：`docs/archive/dev-records/dev-plan-262-execution-log.md`
 3. [X] 修复代码与测试清单（执行阶段回填）。
 
 ## 8. 关联文档
 - `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - `docs/dev-plans/261-librechat-assistant-conversation-failure-investigation-and-remediation-plan.md`
-- `docs/dev-records/dev-plan-261-execution-log.md`
-- `docs/dev-records/dev-plan-262-execution-log.md`
+- `docs/archive/dev-records/dev-plan-261-execution-log.md`
+- `docs/archive/dev-records/dev-plan-262-execution-log.md`
 - `docs/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `AGENTS.md`

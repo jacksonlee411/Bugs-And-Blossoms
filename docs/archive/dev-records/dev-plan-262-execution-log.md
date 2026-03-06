@@ -5,8 +5,8 @@
 ## 1. 问题复现与截图证据（M1）
 1. [X] 已复现“回执渲染在对话框外”问题。
 2. [X] 复现截图：
-   - `docs/dev-records/dev-plan-262-librechat-outside-chat-full.png`
-   - `docs/dev-records/dev-plan-262-librechat-outside-chat-iframe.png`
+   - `docs/archive/dev-records/dev-plan-262-librechat-outside-chat-full.png`
+   - `docs/archive/dev-records/dev-plan-262-librechat-outside-chat-iframe.png`
 3. [X] DOM 定位结论（复现态）：
    - `data-assistant-dialog-stream` 挂载路径：`div[data-assistant-dialog-stream=1] <- body <- html`
    - `inChatRoot=false`，`hasChatRoot=false`
@@ -28,7 +28,7 @@
 2. [X] 既有 E2E 闭环回归通过：
    - `pnpm --dir e2e exec playwright test tests/tp260-librechat-dialog-closure.spec.js`
 3. [X] 修复后截图与 DOM 取证：
-   - `docs/dev-records/dev-plan-262-librechat-post-fix-iframe.png`
+   - `docs/archive/dev-records/dev-plan-262-librechat-post-fix-iframe.png`
    - 结果：`found=false`（未再挂到 body 外层），越界渲染已被阻断。
 
 ## 4. 待补项
@@ -41,8 +41,8 @@
 2. [X] 根因补充：LibreChat v0.8.0 聊天主容器使用 `#messages-view`，旧锚点选择器未覆盖，导致桥脚本无法挂载回执流。
 3. [X] 修复：在 bridge 聊天锚点选择器中新增 `#messages-view`（并保持禁止挂载到 `body/main`）。
 4. [X] 证据截图（修复后）：
-   - `docs/dev-records/dev-plan-262-live-login-prompt-full.png`
-   - `docs/dev-records/dev-plan-262-live-login-prompt-iframe.png`
+   - `docs/archive/dev-records/dev-plan-262-live-login-prompt-full.png`
+   - `docs/archive/dev-records/dev-plan-262-live-login-prompt-iframe.png`
    - 结果：页面已出现助手对话回执文案（如“自动执行通道已连接...”“信息不完整，请补充...”），且未挂载到 `body` 外层。
 5. [X] 回归：
    - `go test ./internal/server -run "TestAssistantUIProxyHandler|TestServeAssistantUIBridgeScript|TestRewriteAssistantUIProxyHTMLBase" -count=1`

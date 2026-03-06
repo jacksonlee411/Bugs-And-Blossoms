@@ -297,7 +297,7 @@ Response 200：
   - `new_parent_id` → `new_parent_code`
 - 表单/校验提示文案同步调整（明确 1~64、允许空格/\\t/全角/中文标点；输入会做 `upper` 归一化）。
 - 相关测试与文档同步更新：
-  - `internal/server/orgunit_nodes_test.go`、`e2e/tests/*`、`docs/dev-records/DEV-PLAN-010-READINESS.md` 中涉及 `org_unit_id/org_id` 的断言与示例。
+  - `internal/server/orgunit_nodes_test.go`、`e2e/tests/*`、`docs/archive/dev-records/DEV-PLAN-010-READINESS.md` 中涉及 `org_unit_id/org_id` 的断言与示例。
 
 ### 5.7 路由/Allowlist/Authz 变更清单（对齐 DEV-PLAN-017）
 - `config/routing/allowlist.yaml`：
@@ -400,7 +400,7 @@ Response 200：
   - 列表与详情展示 `org_code`（如需内部 ID，仅限 debug）。
 - **测试/文档**
   - 更新 `internal/server/orgunit_nodes_test.go`、`internal/server/orgunit_api_test.go`、`e2e/tests/*`。
-  - 更新 `docs/dev-records/DEV-PLAN-010-READINESS.md` 示例与校验口径。
+  - 更新 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md` 示例与校验口径。
 
 ### 10.2 迁移脚本设计（Atlas/Goose）
 > 按 `DEV-PLAN-024` 闭环生成 goose 迁移；以下为设计清单（文件名以实际 UTC 时间戳为准）。

@@ -3,7 +3,7 @@
 **状态**: 已完成（2026-02-17）
 
 > 本计划用于记录 DEV-PLAN-105 已落地后，在字典模块验证中发现的偏差/缺陷，并冻结调查结论、修复路径与验收口径。  
-> 主方案与冻结条款见：`docs/dev-plans/105-dict-config-platform-module.md`；实施证据见：`docs/dev-records/dev-plan-105-execution-log.md`。
+> 主方案与冻结条款见：`docs/dev-plans/105-dict-config-platform-module.md`；实施证据见：`docs/archive/dev-records/dev-plan-105-execution-log.md`。
 
 ## 0.1 后续口径收敛注记（2026-02-22）
 

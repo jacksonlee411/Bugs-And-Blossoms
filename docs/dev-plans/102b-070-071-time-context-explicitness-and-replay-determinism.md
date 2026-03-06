@@ -175,7 +175,7 @@
 3. [x] **M3 Kernel 收口**：移除 SQL 函数内 `current_date` 业务口径分支，改为显式日期。
 4. [x] **M4 测试重构**：删除“default as_of/effective_date”用例，新增“missing required date -> fail”并补齐显式日期成功路径覆盖。
 5. [x] **M5 门禁落地**：新增 `make check as-of-explicit`（名称可调整）并接入 CI，阻断回漂。
-6. [x] **M6 证据归档**：更新 `docs/dev-records/dev-plan-102b-execution-log.md`，记录命令、结果、风险、回滚说明。
+6. [x] **M6 证据归档**：更新 `docs/archive/dev-records/dev-plan-102b-execution-log.md`，记录命令、结果、风险、回滚说明。
 
 ### 8.4 文档收口记录（2026-02-22）
 - [x] `DEV-PLAN-005`：新增 `STD-002`（`as_of`/`effective_date` 语义标准）。
@@ -202,7 +202,7 @@
 - [ ] 引入统一测试夹具：同一份数据库快照 + 同一批请求脚本 + 同一显式日期参数集（后续增强）。
 - [ ] CI 中串行执行两轮回放（示例运行日锚点：`2026-03-01`、`2026-03-20`），仅允许审计字段（`created_at/updated_at/transaction_time`）差异（后续增强）。
 - [ ] 输出结构化对比报告：请求键为 `(tenant, route, payload/query, as_of/effective_date)`；差异字段超出审计白名单即失败（后续增强）。
-- [ ] 对比报告作为 readiness 证据归档到 `docs/dev-records/dev-plan-102b-execution-log.md`（后续增强）。
+- [ ] 对比报告作为 readiness 证据归档到 `docs/archive/dev-records/dev-plan-102b-execution-log.md`（后续增强）。
 
 ### 9.3 门禁与静态检查
 - [x] 新增分层门禁 `make check as-of-explicit`（名称可调整）：

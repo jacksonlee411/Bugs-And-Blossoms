@@ -33,7 +33,7 @@
 - Atlas+Goose：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - sqlc：`docs/dev-plans/025-sqlc-guidelines.md`
 - CI 门禁：`docs/dev-plans/012-ci-quality-gates.md`、`.github/workflows/quality-gates.yml`
-- 证据记录：`docs/dev-records/DEV-PLAN-010-READINESS.md`
+- 证据记录：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md`
 - 停止线：`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
 
 ## 2. 非目标（本执行计划不做）

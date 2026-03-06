@@ -98,12 +98,12 @@ graph TD
 ### 5.4 迁移策略
 - 模块级“原子收敛”：同一模块内字段重命名与引用更新一次性完成，禁止双轨字段并存。
 - 迁移顺序：DDL 重命名 → SQL/函数更新 → sqlc 生成 → Go 层重命名与测试对齐。
-- 差异清单与文件级替换映射见 `docs/dev-records/dev-plan-072-naming-convergence-mapping.md`。
+- 差异清单与文件级替换映射见 `docs/archive/dev-records/dev-plan-072-naming-convergence-mapping.md`。
 - **DDL 策略**：优先使用 `ALTER TABLE ... RENAME COLUMN`（保数据），避免 drop+add 造成数据丢失。
 - **回滚限制**：不提供自动回滚；如需回滚，仅允许对等的“反向 rename 迁移”，不得引入双轨字段。
 
 ### 5.5 差异映射冻结机制
-- 在实施前，将 `docs/dev-records/dev-plan-072-naming-convergence-mapping.md` 标记为 **冻结版**（添加时间戳/提交号）。
+- 在实施前，将 `docs/archive/dev-records/dev-plan-072-naming-convergence-mapping.md` 标记为 **冻结版**（添加时间戳/提交号）。
 - 冻结后如需调整，必须先更新映射表并在本计划记录变更原因与影响范围。
 - 冻结版需补充以下元数据（写入 dev-records 头部）：冻结时间、冻结提交号、覆盖模块范围、变更审批人。
 
@@ -170,7 +170,7 @@ graph TD
 
 ## 9. 实施步骤与里程碑 (Dependencies & Milestones)
 1. [ ] 更新 026B/026C：明确放宽后的 `org_code` 长度/字符集约束，并完成迁移样本统计与示例/保留字一致性对齐；若无样本数据则记录豁免（审批人：我）。
-2. [ ] 冻结差异清单（字段/接口/SQL/测试）：`docs/dev-records/dev-plan-072-naming-convergence-mapping.md`（记录冻结时间/提交号/覆盖范围/审批人）。
+2. [ ] 冻结差异清单（字段/接口/SQL/测试）：`docs/archive/dev-records/dev-plan-072-naming-convergence-mapping.md`（记录冻结时间/提交号/覆盖范围/审批人）。
 3. [ ] Staffing 边界收敛：UI 表单与 Internal API 入参/出参改为 `org_code`；旧字段拒绝；冲突规则落地；错误码与测试更新。
 4. [ ] Staffing 命名收敛：Schema/SQL/Go 按 026A 规则统一命名。
 5. [ ] Job Catalog 命名收敛：Schema/SQL/Go 按 026A 规则统一命名。

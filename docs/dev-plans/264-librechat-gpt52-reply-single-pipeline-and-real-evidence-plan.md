@@ -68,8 +68,8 @@
 
 ### 5.5 M5：证据固化与封板
 1. [X] 连续执行至少 3 轮真实验收，全部通过后方可封板。
-2. [X] 每轮落盘三件套到 `docs/dev-records/assets/dev-plan-264/`。
-3. [X] 将执行记录写入 `docs/dev-records/dev-plan-264-execution-log.md`。
+2. [X] 每轮落盘三件套到 `docs/archive/dev-records/assets/dev-plan-264/`。
+3. [X] 将执行记录写入 `docs/archive/dev-records/dev-plan-264-execution-log.md`。
 
 ## 6. 验收标准（硬门槛）
 1. [X] 正常与错误两类场景均满足“先 prompt 真实大模型，再对用户展示”的单链路。
@@ -91,8 +91,8 @@
 
 ## 8. 交付物
 1. [X] 计划文档：`docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
-2. [X] 执行日志：`docs/dev-records/dev-plan-264-execution-log.md`
-3. [X] 证据目录：`docs/dev-records/assets/dev-plan-264/`
+2. [X] 执行日志：`docs/archive/dev-records/dev-plan-264-execution-log.md`
+3. [X] 证据目录：`docs/archive/dev-records/assets/dev-plan-264/`
 4. [X] 测试用例：`e2e/tests/tp264-librechat-gpt52-dialog-response-real.spec.js`
 
 ## 9. 关联文档

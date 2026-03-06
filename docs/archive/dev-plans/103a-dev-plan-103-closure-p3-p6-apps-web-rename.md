@@ -11,7 +11,7 @@
 - 时间语义与路由时间上下文矩阵：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - CI/门禁结构（SSOT）：`docs/dev-plans/012-ci-quality-gates.md`
 - 本地必跑入口（SSOT）：`AGENTS.md`
-- 执行证据（本计划）：`docs/dev-records/dev-plan-103a-execution-log.md`
+- 执行证据（本计划）：`docs/archive/dev-records/dev-plan-103a-execution-log.md`
 
 ## 1. 背景
 
@@ -51,7 +51,7 @@
 
 ## 4. 交付物
 
-- `docs/dev-records/dev-plan-103a-execution-log.md`：
+- `docs/archive/dev-records/dev-plan-103a-execution-log.md`：
   - 《旧 UI → MUI 映射表》（表格化，含状态/证据）。
   - 本计划关键命令执行记录（时间戳、结果、环境要点）。
 - 代码与配置收口：
@@ -64,7 +64,7 @@
 
 ### PR-103A-0：收尾准备与证据骨架
 
-1. [x] 建立本计划执行日志：`docs/dev-records/dev-plan-103a-execution-log.md`。
+1. [x] 建立本计划执行日志：`docs/archive/dev-records/dev-plan-103a-execution-log.md`。
 2. [x] 在执行日志中生成《旧 UI → MUI 映射表》的初版（以事实源为准），并标注迁移/删除状态。
    - 事实源（建议顺序，可按实际补齐）：
      - `config/routing/allowlist.yaml`（route_class / 可达性门禁）
@@ -109,7 +109,7 @@
 
 10. [x] 跑 UI 构建门禁并提交生成物（如有）：`make css`，然后 `git status --short` 必须为空。
 11. [x] 跑全门禁对齐 CI：`make preflight`。
-12. [x] 将关键命令与结果登记到 `docs/dev-records/dev-plan-103a-execution-log.md`（时间戳、结果；不在 dev-plan 内复制命令矩阵）。
+12. [x] 将关键命令与结果登记到 `docs/archive/dev-records/dev-plan-103a-execution-log.md`（时间戳、结果；不在 dev-plan 内复制命令矩阵）。
 13. [x] 回写 `DEV-PLAN-103`：将 P3/P6 条目更新为 `[x]`，并在验收标准中引用本计划的执行日志作为证据入口。
 
 ## 6. 验收标准
@@ -132,5 +132,5 @@
 ## 8. 交付物清单（最终应出现的文件/变化）
 
 - `docs/archive/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`（本文件）
-- `docs/dev-records/dev-plan-103a-execution-log.md`（执行证据）
+- `docs/archive/dev-records/dev-plan-103a-execution-log.md`（执行证据）
 - `apps/web/`

@@ -80,7 +80,7 @@
 ### 4.4 M4：真实验收与证据收敛（对应 H5）
 1. [ ] 新增/更新真实 E2E，禁止以 mock `/internal/assistant/**` 结果充当通过证据。
 2. [ ] 每轮落盘三件套证据，并绑定同一 `conversation_id + turn_id`。
-3. [ ] 将执行记录写入 `docs/dev-records/dev-plan-263-execution-log.md`。
+3. [ ] 将执行记录写入 `docs/archive/dev-records/dev-plan-263-execution-log.md`。
 4. [ ] E2E 必须从 `AI对话` 真实入口启动，并同时断言 `266` 的共通 stopline。
 
 ## 5. 验收标准（硬门槛）
@@ -100,8 +100,8 @@
 
 ## 7. 交付物
 1. [ ] 计划文档：`docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
-2. [ ] 执行日志：`docs/dev-records/dev-plan-263-execution-log.md`
-3. [ ] 真实证据目录：`docs/dev-records/assets/dev-plan-263/`
+2. [ ] 执行日志：`docs/archive/dev-records/dev-plan-263-execution-log.md`
+3. [ ] 真实证据目录：`docs/archive/dev-records/assets/dev-plan-263/`
 4. [ ] 相关后端 / Web / E2E 测试补强。
 
 ## 8. 关联文档

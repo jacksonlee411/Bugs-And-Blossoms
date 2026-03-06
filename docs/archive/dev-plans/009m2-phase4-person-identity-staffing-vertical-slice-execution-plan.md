@@ -14,7 +14,7 @@
 - [X] Staffing：Position/Assignments 写入走 DB Kernel（`submit_position_event`/`submit_assignment_event`），并在同一事务内同步投射到 `*_versions`，提供 as-of 列表读取。
 - [X] Assignments UI：只展示 `effective_date`（`lower(validity)`），不展示 `end_date`/`upper(validity)`。
 - [X] Routing/Authz：相关路由已纳入 allowlist 且具备最小可拒绝策略（`staffing.positions|staffing.assignments|person.persons`）。
-- [X] 证据入口：`docs/dev-records/DEV-PLAN-010-READINESS.md`（新增 `DEV-PLAN-009M2` 小节，记录可复现脚本与结果）。
+- [X] 证据入口：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md`（新增 `DEV-PLAN-009M2` 小节，记录可复现脚本与结果）。
 
 ## 1. 里程碑定义（M2）
 
@@ -189,7 +189,7 @@
 
 ### 3.3 证据固化
 
-- [X] 将验证步骤与结果补到 `docs/dev-records/DEV-PLAN-010-READINESS.md`（作为本里程碑的可复现证据入口）。
+- [X] 将验证步骤与结果补到 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md`（作为本里程碑的可复现证据入口）。
 
 ## 4. 实施步骤（建议 PR 序列）
 
@@ -245,7 +245,7 @@
 
 ### PR-8：Readiness 证据补齐（010）
 
-- [X] 更新 `docs/dev-records/DEV-PLAN-010-READINESS.md`：记录从启动到完成本里程碑闭环的可复现脚本与结果（包含时间戳与链接）。
+- [X] 更新 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md`：记录从启动到完成本里程碑闭环的可复现脚本与结果（包含时间戳与链接）。
 
 ## 5. 本地验证（SSOT 引用）
 
@@ -257,7 +257,7 @@
 > 目的：让 reviewer/未来自己可以“照着做一遍复现”，而不是只看截图或口头描述。
 
 ### 6.1 环境与版本
-- [X] 记录：见 `docs/dev-records/DEV-PLAN-010-READINESS.md` 的 `DEV-PLAN-009M2` 小节。
+- [X] 记录：见 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md` 的 `DEV-PLAN-009M2` 小节。
 
 ### 6.2 手工验收脚本（最小可复现）
 - [X] 登录 tenant app。

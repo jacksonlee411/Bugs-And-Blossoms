@@ -134,7 +134,7 @@
 ### 7.4 PR-224A-04：E2E 与收口
 1. [ ] 新增多轮工作台 E2E：会话创建、连续追问、切换回放、确认提交、任务轮询。
 2. [ ] 门禁回归：routing/authz/error-message/preflight。
-3. [ ] 产出执行记录：`docs/dev-records/dev-plan-224a-execution-log.md`。
+3. [ ] 产出执行记录：`docs/archive/dev-records/dev-plan-224a-execution-log.md`。
 
 ## 8. 风险与回滚 (Risks & Rollback)
 1. [ ] 外部模型波动导致响应不稳定：通过严格 schema + 重试 + 明确错误码 fail-closed。
@@ -171,7 +171,7 @@
 5. [ ] `pnpm -C apps/web test -- src/api/assistant.test.ts src/pages/assistant/AssistantPage.test.tsx`
 6. [ ] `go test ./internal/server -run Assistant -count=1`
 7. [ ] `make preflight`
-8. [ ] 执行证据写入 `docs/dev-records/dev-plan-224a-execution-log.md`
+8. [ ] 执行证据写入 `docs/archive/dev-records/dev-plan-224a-execution-log.md`
 
 ## 10. 完成定义 (Definition of Done)
 1. [ ] 生产默认链路为真实 Codex API 调用，deterministic adapter 仅用于测试/降级演练。

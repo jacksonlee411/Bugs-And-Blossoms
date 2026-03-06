@@ -39,7 +39,7 @@
 - CI 门禁结构：`docs/dev-plans/012-ci-quality-gates.md`、`.github/workflows/quality-gates.yml`
 - Routing 策略与门禁：`docs/dev-plans/017-routing-strategy.md`、`config/routing/allowlist.yaml`
 - i18n（仅 en/zh）：`docs/dev-plans/020-i18n-en-zh-only.md`
-- 证据记录：`docs/dev-records/DEV-PLAN-010-READINESS.md`
+- 证据记录：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md`
 - 停止线：`docs/dev-plans/003-simple-not-easy-review-guide.md`、`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
 
 ### 1.4 已决事项（已确认采用建议项）
@@ -153,7 +153,7 @@
 
 ### PR-6：Readiness 证据登记与文档收口
 
-- [X] 更新 `docs/dev-records/DEV-PLAN-010-READINESS.md`：新增 009M6 证据（时间戳/命令/结果/PR）。
+- [X] 更新 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md`：新增 009M6 证据（时间戳/命令/结果/PR）。
 - [X] 更新 `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`：Phase 0 勾选完成并将状态更新为“已完成（UTC 时间戳）”。
 - [X] 更新 `docs/dev-plans/009-implementation-roadmap.md`：在 UI Shell 相关条目处补充“已按 Astro build Phase 0 收口”的证据链接（不改合同，只补证据）。
 

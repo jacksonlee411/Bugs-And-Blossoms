@@ -147,7 +147,7 @@
 2. [X] 保证 `AssistantPage` 与 `LibreChatPage` 编排逻辑一致，不允许一侧缺分支。
 
 ### 8.3 文档与证据收口（必须）
-1. [X] 新增 `docs/dev-records/dev-plan-239a-execution-log.md`，逐条记录 Case 1~6 实测证据。
+1. [X] 新增 `docs/archive/dev-records/dev-plan-239a-execution-log.md`，逐条记录 Case 1~6 实测证据。
 2. [X] `DEV-PLAN-239B` 缺口全部关闭后，回填 239A 勾选项并将状态更新为 `已完成`。
 
 ## 9. 停止线（Stopline）

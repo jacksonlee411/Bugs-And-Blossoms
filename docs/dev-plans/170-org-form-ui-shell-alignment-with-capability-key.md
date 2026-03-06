@@ -53,7 +53,7 @@
 2. [x] 改造 `OrgUnitDetailsPage` 主视图区布局与视觉容器。
 3. [x] 回归详情页四类状态：加载、拒绝、可读、提交后刷新展示。
 4. [x] 核验弹窗零改动（外观/结构/行为保持现状）。
-5. [x] 完成门禁与证据记录（见 `docs/dev-records/dev-plan-170-execution-log.md`）。
+5. [x] 完成门禁与证据记录（见 `docs/archive/dev-records/dev-plan-170-execution-log.md`）。
 
 ## 7. 验收标准
 - [x] 组织详情页视觉结构与 Capability Key 页面对齐，且不改变业务行为。
@@ -71,7 +71,7 @@
   缓解：以本计划范围为准，弹窗改造另立计划。
 
 ## 9. 关联文档
-- `docs/dev-records/dev-plan-170-execution-log.md`
+- `docs/archive/dev-records/dev-plan-170-execution-log.md`
 - `docs/dev-plans/160-capability-key-m8-m10-ui-delivery-and-evidence-closure.md`
 - `docs/dev-plans/161-org-create-dynamic-field-policy-on-capability-registry.md`
 - `docs/dev-plans/161a-setid-capability-registry-editable-and-maintainable.md`

@@ -99,7 +99,7 @@
    - [ ] 模型回复出现在官方聊天流内部；
    - [ ] 页面外不存在旧 bridge 回复容器；
    - [ ] 同轮只存在一个 assistant 回复气泡，且能关联回同轮 `conversation_id/turn_id/request_id`。
-2. [ ] 固化证据到 `docs/dev-records/assets/dev-plan-266/`。
+2. [ ] 固化证据到 `docs/archive/dev-records/assets/dev-plan-266/`。
 3. [ ] 将实施与验证过程记录到 `docs/dev-records/dev-plan-266-execution-log.md`。
 
 ### 6.6 用户可见交互与体验变化（作为正式验收依据）
@@ -131,7 +131,7 @@
 ## 9. 交付物
 1. [ ] 前置子计划文档：`docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
 2. [ ] 执行日志：`docs/dev-records/dev-plan-266-execution-log.md`
-3. [ ] 证据目录：`docs/dev-records/assets/dev-plan-266/`
+3. [ ] 证据目录：`docs/archive/dev-records/assets/dev-plan-266/`
 4. [ ] 相关后端 / 前端 / E2E 用例补强。
 
 ## 10. 关联文档
@@ -139,5 +139,5 @@
 - `docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
 - `docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
 - `docs/dev-plans/265-librechat-gpt52-reply-goal-attainment-audit-and-gap-closure-plan.md`
-- `docs/dev-records/dev-plan-265-execution-log.md`
+- `docs/archive/dev-records/dev-plan-265-execution-log.md`
 - `AGENTS.md`

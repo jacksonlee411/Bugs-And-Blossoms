@@ -103,7 +103,7 @@
    - `make check request-code`
    - `make check doc`
    - 涉及 Go 变更时：`go fmt ./... && go vet ./... && make check lint && make test`
-7. [x] M7：新增执行日志：`docs/dev-records/dev-plan-109a-execution-log.md`。
+7. [x] M7：新增执行日志：`docs/archive/dev-records/dev-plan-109a-execution-log.md`。
 
 ## 7. 验收标准（DoD）
 

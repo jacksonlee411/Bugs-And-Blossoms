@@ -14,8 +14,8 @@
 
 ## 2. 调查范围与证据基线
 1. [X] 契约文档基线：`docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`、`docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`。
-2. [X] 执行记录基线：`docs/dev-records/dev-plan-263-execution-log.md`、`docs/dev-records/dev-plan-264-execution-log.md`。
-3. [X] 真实证据基线：`docs/dev-records/assets/dev-plan-264/run-2026-03-06T03-13-36-135Z/trace-reply.json` 与同目录截图。
+2. [X] 执行记录基线：`docs/archive/dev-records/dev-plan-263-execution-log.md`、`docs/archive/dev-records/dev-plan-264-execution-log.md`。
+3. [X] 真实证据基线：`docs/archive/dev-records/assets/dev-plan-264/run-2026-03-06T03-13-36-135Z/trace-reply.json` 与同目录截图。
 4. [X] 实现基线：`internal/server/assistant_reply_nlg.go`、`internal/server/assistant_reply_model_gateway.go`、`apps/web/src/pages/assistant/LibreChatPage.tsx`、`e2e/tests/tp264-librechat-gpt52-dialog-response-real.spec.js`。
 
 ## 3. 264 目标实现情况审计
@@ -35,7 +35,7 @@
 
 ### 3.3 实现缺口（尚未覆盖或尚未证明）
 1. [ ] **缺少真实报错链路 E2E**：`tp264` 仅覆盖一条成功草案路径；未证明 create/confirm/commit 的失败路径、模型异常路径、上游错误路径都先进入 GPT-5.2 回复链路。
-2. [ ] **缺少 264 自述要求的“三轮真实证据三件套”**：执行日志记录了 `--repeat-each=3` 通过，但 `docs/dev-records/assets/dev-plan-264/` 当前仅见一组截图 + trace，不满足“每轮落盘三件套”的硬要求。
+2. [ ] **缺少 264 自述要求的“三轮真实证据三件套”**：执行日志记录了 `--repeat-each=3` 通过，但 `docs/archive/dev-records/assets/dev-plan-264/` 当前仅见一组截图 + trace，不满足“每轮落盘三件套”的硬要求。
 3. [ ] **缺少“回复来源”可审计字段**：当前证据只记录 `reply_model_name`，未记录 `reply_source=model` / `used_fallback=false` / 上游响应指纹等字段，因此无法审计最终用户文案究竟来自模型输出还是本地 fallback。
 4. [ ] **缺少会话主对象中的最终回复 SoT**：前端类型声明了 `turn.reply_nlg`，但服务端 `assistantTurn` 结构未落该字段；现状下最终用户可见回复并非对话 turn 的稳定事实源，后续审计只能依赖旁路 trace 文件。
 5. [ ] **缺少 stopline 级门禁**：当前没有自动化测试明确阻断“allow_missing_turn 进入验收路径”“模型解码失败却仍回退本地文案并宣称 gpt-5.2 命中”“render reply 失败时页面直接输出本地业务文案”等情况。
@@ -93,9 +93,9 @@
 
 ## 8. 交付物
 1. [ ] 计划文档：`docs/dev-plans/265-librechat-gpt52-reply-goal-attainment-audit-and-gap-closure-plan.md`
-2. [ ] 后续执行日志：`docs/dev-records/dev-plan-265-execution-log.md`
+2. [ ] 后续执行日志：`docs/archive/dev-records/dev-plan-265-execution-log.md`
 3. [ ] 补强后的测试：以实施阶段新增/修订文件为准。
-4. [ ] 补强后的真实证据目录：`docs/dev-records/assets/dev-plan-265/`
+4. [ ] 补强后的真实证据目录：`docs/archive/dev-records/assets/dev-plan-265/`
 
 ## 9. 结论
 - 以“正常/报错回复都必须先 prompt 给 GPT-5.2，再由 GPT-5.2 告诉用户”为唯一目标口径审计，264 **并非完全未做成**，但当前最多只能判定为“已打通 `:reply` 基础链路、已具备部分真实证据”；**尚不能判定为最初目标已完整达成**。

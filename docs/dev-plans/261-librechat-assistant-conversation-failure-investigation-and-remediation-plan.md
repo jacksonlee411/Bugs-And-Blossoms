@@ -50,7 +50,7 @@
 ### 4.4 M4：回归验证与证据闭环
 1. [ ] 补齐/更新单测与集成测试，覆盖失败场景与修复后主路径。
 2. [ ] 新增或更新 E2E 用例，覆盖“真实对话成功 + 关键失败提示可见”。
-3. [X] 记录执行证据到 `docs/dev-records/dev-plan-261-execution-log.md`，并更新计划状态。
+3. [X] 记录执行证据到 `docs/archive/dev-records/dev-plan-261-execution-log.md`，并更新计划状态。
 
 ## 5. 验收标准（必须全部满足）
 1. [ ] `AI对话` 入口可稳定完成首轮对话回执（不再出现“发送后无业务响应”）。
@@ -74,13 +74,13 @@
 
 ## 8. 交付物
 1. [ ] 计划文档：`docs/dev-plans/261-librechat-assistant-conversation-failure-investigation-and-remediation-plan.md`
-2. [ ] 执行记录：`docs/dev-records/dev-plan-261-execution-log.md`
+2. [ ] 执行记录：`docs/archive/dev-records/dev-plan-261-execution-log.md`
 3. [ ] 代码与测试：以实际修复文件清单为准，执行阶段在日志中逐项固化。
 
 ## 9. 关联文档
 - `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
-- `docs/dev-records/dev-plan-260-execution-log.md`
-- `docs/dev-records/dev-plan-261-execution-log.md`
+- `docs/archive/dev-records/dev-plan-260-execution-log.md`
+- `docs/archive/dev-records/dev-plan-261-execution-log.md`
 - `docs/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `AGENTS.md`

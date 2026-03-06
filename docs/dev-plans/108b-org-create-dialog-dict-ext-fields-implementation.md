@@ -20,7 +20,7 @@
 3. [X] 提交时 DICT 字段按 `patch.ext.<field_key>=code` 写入，并保持 fail-closed（不可编辑字段不允许进入可交互状态）。  
 4. [X] 为未知 `data_source_type` 增加显式 warning，避免静默丢失字段可见性。  
 5. [X] 运行并记录前端测试门禁（`pnpm -C apps/web test -- org` 或同等入口）。  
-6. [X] 补充执行记录到 `docs/dev-records/dev-plan-108b-execution-log.md`。
+6. [X] 补充执行记录到 `docs/archive/dev-records/dev-plan-108b-execution-log.md`。
 
 ## 4. 当前实现结论
 

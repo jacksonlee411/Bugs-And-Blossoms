@@ -4,7 +4,7 @@
 
 ## 1. 背景
 
-`docs/dev-records/Go+PG+CEL 规则引擎架构升级.md` 给出了规则引擎蓝图，但当前仓库（尤其 Org 模块）仍缺少“管理员配置规则 -> 创建时自动算默认值 -> 用户可见”的首个落地闭环。
+`docs/archive/dev-records/Go+PG+CEL 规则引擎架构升级.md` 给出了规则引擎蓝图，但当前仓库（尤其 Org 模块）仍缺少“管理员配置规则 -> 创建时自动算默认值 -> 用户可见”的首个落地闭环。
 
 当前现状：
 
@@ -261,7 +261,7 @@ M1 完成判定（全部满足）：
 
 ## 8. 关联文档
 
-- `docs/dev-records/Go+PG+CEL 规则引擎架构升级.md`
+- `docs/archive/dev-records/Go+PG+CEL 规则引擎架构升级.md`
 - `docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - `docs/dev-plans/108-org-crud-ui-actions-consolidation-and-unified-field-mutation-rules.md`
 - `docs/archive/dev-plans/109-request-code-unification-and-gate.md`

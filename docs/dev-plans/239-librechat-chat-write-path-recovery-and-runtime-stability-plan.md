@@ -21,7 +21,7 @@
 2. [X] **边界不退化**：`/assistant-ui/*` 继续受会话与租户校验，未登录仍 `302 /app/login`，跨租户会话仍拒绝。
 3. [X] **代理最小放开**：仅放开聊天必需 HTTP 方法，维持路径边界与敏感头剥离，fail-closed 不变。
 4. [X] **运行态可恢复**：`make assistant-runtime-down && make assistant-runtime-clean && make assistant-runtime-up && make assistant-runtime-status` 连续 3 轮通过，状态为 `healthy`。
-5. [X] **证据可审计**：完成单测/E2E/runtime 回归并在 `docs/dev-records/dev-plan-239-execution-log.md` 留档。
+5. [X] **证据可审计**：完成单测/E2E/runtime 回归并在 `docs/archive/dev-records/dev-plan-239-execution-log.md` 留档。
 
 > 当前未闭环项：真实外网模型回包（需人工在具备有效密钥的环境中完成 iframe 实聊验收并补证据）。
 
@@ -235,7 +235,7 @@ if status != healthy:
 1. [ ] 用户可在“聊天壳层（LibreChat）”中通过真实外网模型完成交互。
 2. [X] 安全边界与 One Door 约束不回退。
 3. [X] 运行态恢复流程在本地可重复通过并具备故障可诊断性。
-4. [X] `docs/dev-records/dev-plan-239-execution-log.md` 证据完整。
+4. [X] `docs/archive/dev-records/dev-plan-239-execution-log.md` 证据完整。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 1. [X] 保持早期阶段最小运维原则，不新增外部监控栈与开关系统。
@@ -244,7 +244,7 @@ if status != healthy:
 4. [X] 回滚策略仅允许版本回滚或前向修复，禁止恢复 legacy 双链路。
 
 ## 11. Readiness 记录要求
-1. [X] 新建 `docs/dev-records/dev-plan-239-execution-log.md`。
+1. [X] 新建 `docs/archive/dev-records/dev-plan-239-execution-log.md`。
 2. [X] 每条证据记录：UTC 时间、命令、退出码、关键响应片段、关联 commit/PR。
 3. [ ] 至少包含 1 条正向证据（真实模型聊天可发送并回包，含 provider/model）与 3 条负向证据（未登录/跨租户/越界）。
 4. [ ] 全部验收项勾选完成后再将状态更新为 `已完成`。

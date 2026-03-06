@@ -58,7 +58,7 @@
 2. [X] 组合语义过于复杂。缓解：坚持有限枚举与非法组合硬拒绝。
 
 ## 9. 交付物与证据
-- 证据归档：`docs/dev-records/dev-plan-200-m0-policy-resolution-evidence.md`、`docs/dev-records/dev-plan-200-m0-allowed-value-semantics-evidence.md`
+- 证据归档：`docs/archive/dev-records/dev-plan-200-m0-policy-resolution-evidence.md`、`docs/archive/dev-records/dev-plan-200-m0-allowed-value-semantics-evidence.md`
 - 交付物最小集：契约文档更新、自动化测试/门禁项、Readiness 证据记录。
 - 本次执行记录：见上述 2 份证据文档的 2026-02-28 条目。
 

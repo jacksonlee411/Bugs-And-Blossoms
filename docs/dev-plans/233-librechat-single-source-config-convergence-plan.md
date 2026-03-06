@@ -1,6 +1,6 @@
 # DEV-PLAN-233：LibreChat 模型配置单主源收口详细设计
 
-**状态**: 已完成（2026-03-03 15:30 UTC，实施与验证见 `docs/dev-records/dev-plan-233-execution-log.md`）
+**状态**: 已完成（2026-03-03 15:30 UTC，实施与验证见 `docs/archive/dev-records/dev-plan-233-execution-log.md`）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:

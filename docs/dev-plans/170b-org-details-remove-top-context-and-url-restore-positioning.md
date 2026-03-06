@@ -77,7 +77,7 @@
   - 用新锚点替换 `org-context-summary` 相关断言。
 - `docs/dev-plans/170a-org-audit-log-ui-shell-alignment-with-capability-key.md`
   - 补充“被 170B 纠偏的实现项”说明，避免后续按 170A 旧实现回滚。
-- `docs/dev-records/dev-plan-170-execution-log.md`
+- `docs/archive/dev-records/dev-plan-170-execution-log.md`
   - 记录 170B 改造与回归证据（时间/命令/结果）。
 
 ## 6. 实施步骤
@@ -109,5 +109,5 @@
 ## 9. 关联文档
 - `docs/dev-plans/170-org-form-ui-shell-alignment-with-capability-key.md`
 - `docs/dev-plans/170a-org-audit-log-ui-shell-alignment-with-capability-key.md`
-- `docs/dev-records/dev-plan-170-execution-log.md`
+- `docs/archive/dev-records/dev-plan-170-execution-log.md`
 - `docs/dev-plans/002-ui-design-guidelines.md`

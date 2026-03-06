@@ -1,6 +1,6 @@
 # DEV-PLAN-232：LibreChat 官方运行基线落地详细设计
 
-**状态**: 已实施（2026-03-03，详见 `docs/dev-records/dev-plan-232-execution-log.md`）
+**状态**: 已实施（2026-03-03，详见 `docs/archive/dev-records/dev-plan-232-execution-log.md`）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:

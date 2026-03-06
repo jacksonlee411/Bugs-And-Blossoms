@@ -1,6 +1,6 @@
 # DEV-PLAN-031：任职记录（Job Data / Assignments）全新实现（Staffing，事件 SoT + 同步投射）
 
-**状态**: 已评审（2026-01-11 13:30 UTC）— M2 MVP 已完成（证据：`docs/dev-records/DEV-PLAN-010-READINESS.md` 的 `DEV-PLAN-009M2` 小节），M3+ 扩展待续
+**状态**: 已评审（2026-01-11 13:30 UTC）— M2 MVP 已完成（证据：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md` 的 `DEV-PLAN-009M2` 小节），M3+ 扩展待续
 
 ## 1. 背景与上下文 (Context)
 
@@ -46,7 +46,7 @@
   - UI：`GET/POST /org/assignments`
   - Internal API：`GET/POST /org/api/assignments`
 - Person Identity：`GET /person/api/persons:by-pernr`、`GET /person/api/persons:options`
-- 证据入口：`docs/dev-records/DEV-PLAN-010-READINESS.md` 的 `DEV-PLAN-009M2` 小节（含可复现 curl 与门禁记录）。
+- 证据入口：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md` 的 `DEV-PLAN-009M2` 小节（含可复现 curl 与门禁记录）。
 - 代码组织说明：Go Facade/Handler 当前位于 `internal/server/*`（composition root）；`modules/staffing` 的 Go 目录仍为骨架（后续可迁移落位，不改变合同）。
 
 ## 4. 核心设计约束（合同，必须遵守）
@@ -160,13 +160,13 @@ modules/staffing/
 
 ## 8. 里程碑与验收（Plan → Implement 的承接）
 
-1. [X] 冻结事件类型枚举、payload 合同、错误契约（见 §6.3；证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`）。
+1. [X] 冻结事件类型枚举、payload 合同、错误契约（见 §6.3；证据：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md`）。
 2. [X] 冻结路由（UI+API）与输入输出契约（只展示 effective_date；见 §3、§6.4）。
 3. [X] 冻结 DB Kernel：`staffing.submit_assignment_event` + `staffing.replay_assignment_versions`（对齐 026-030）。
 4. [X] 定义最小测试集（覆盖现状 + 待补齐项）：
    - 已覆盖：E2E（TP-060-03）断言 UI 仅展示 effective_date、disabled position 不可任职；单测覆盖 handler/store 的基本失败路径。
    - 待补齐：同日唯一/no-overlap/gapless/末段 infinity 的针对性负例（建议落在 `cmd/dbtool staffing-smoke` 或 db 单测）。
-5. [X] 通过相关门禁（M2 证据见 `docs/dev-records/DEV-PLAN-010-READINESS.md` 的 `DEV-PLAN-009M2` 小节；触发器矩阵以 `AGENTS.md` 为准）。
+5. [X] 通过相关门禁（M2 证据见 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md` 的 `DEV-PLAN-009M2` 小节；触发器矩阵以 `AGENTS.md` 为准）。
 
 ## 9. 待开发（M3+，按 `DEV-PLAN-001` 细化）
 

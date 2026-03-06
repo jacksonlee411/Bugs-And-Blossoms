@@ -2,7 +2,7 @@
 
 **状态**: 规划中（2026-03-06 18:11 CST）
 
-> 历史执行记录仍保留在 `docs/dev-records/dev-plan-260-execution-log.md`，但其“已完成”只代表旧口径阶段性实现；**不再等同于当前真实需求已达成**。
+> 历史执行记录仍保留在 `docs/archive/dev-records/dev-plan-260-execution-log.md`，但其“已完成”只代表旧口径阶段性实现；**不再等同于当前真实需求已达成**。
 
 ## 1. 背景与重开原因
 - 用户已明确指出：239A 及其后续落地**偏离真实需求**，没有真正实现“通过 AI 对话形式完成多轮补充 / 确认信息、自动执行操作，并通过对话告诉用户结果”的闭环。
@@ -203,7 +203,7 @@ interface DialogFlowState {
 ### 7.5 M5：真实验收与证据固化
 1. [ ] 用真实页面按 Case 1~4 顺序逐条验收。
 2. [ ] 每个 Case 必须保存页面全图、对话局部图、同轮 trace / 网络证据，并额外证明：无官方 `Connection error`、无页面外挂回复容器、同轮仅一份 assistant 回复。
-3. [ ] 执行记录写回 `docs/dev-records/dev-plan-260-execution-log.md` 新章节，明确区分“旧 260 验收记录”与“本次重开后的真实需求验收记录”。
+3. [ ] 执行记录写回 `docs/archive/dev-records/dev-plan-260-execution-log.md` 新章节，明确区分“旧 260 验收记录”与“本次重开后的真实需求验收记录”。
 
 ## 8. 验收标准（硬门槛）
 1. [ ] Case 1~4 必须全部在**AI 对话中**闭环，不得借助页面外提示补齐业务流程。
@@ -227,8 +227,8 @@ interface DialogFlowState {
 ## 10. 交付物
 1. [ ] 主计划文档：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 2. [ ] 前置子计划：`docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
-3. [ ] 更新后的执行日志：`docs/dev-records/dev-plan-260-execution-log.md`
-4. [ ] 真实用例证据目录：`docs/dev-records/assets/dev-plan-260/`
+3. [ ] 更新后的执行日志：`docs/archive/dev-records/dev-plan-260-execution-log.md`
+4. [ ] 真实用例证据目录：`docs/archive/dev-records/assets/dev-plan-260/`
 5. [ ] 相关后端 / Web / E2E 用例补强。
 
 ## 11. 关联文档
@@ -237,5 +237,5 @@ interface DialogFlowState {
 - `docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
 - `docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
 - `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
-- `docs/dev-records/dev-plan-260-execution-log.md`
+- `docs/archive/dev-records/dev-plan-260-execution-log.md`
 - `AGENTS.md`

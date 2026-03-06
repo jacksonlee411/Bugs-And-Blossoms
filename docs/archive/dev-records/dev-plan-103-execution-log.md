@@ -28,4 +28,4 @@
 - 2026-02-14：建立执行日志；落地 UI build 门禁收敛（`make css` → `scripts/ui/build-web.sh`，Vite `base=/assets/web/`，服务端 `webMUIIndexPath=assets/web/index.html`）。
 
 ## 收尾记录
-- 2026-02-15：迁移 E2E 与后端路由/allowlist/authz 完成；Astro/旧局部渲染链路运行路径已移除并由 MUI 页面替代；收口证据见 `docs/dev-records/dev-plan-103a-execution-log.md`。
+- 2026-02-15：迁移 E2E 与后端路由/allowlist/authz 完成；Astro/旧局部渲染链路运行路径已移除并由 MUI 页面替代；收口证据见 `docs/archive/dev-records/dev-plan-103a-execution-log.md`。

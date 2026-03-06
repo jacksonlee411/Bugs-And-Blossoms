@@ -16,9 +16,9 @@
 7. [X] 2026-03-06 11:09 CST：执行 `pnpm --dir e2e exec playwright test tests/tp264-librechat-gpt52-dialog-response-real.spec.js --reporter=line`，通过（1 passed）。
 8. [X] 2026-03-06 11:10 CST：执行 `pnpm --dir e2e exec playwright test tests/tp264-librechat-gpt52-dialog-response-real.spec.js --repeat-each=3 --reporter=line`，通过（3 passed）。
 9. [X] 2026-03-06 11:13 CST：生成真实链路证据三件套目录：
-   - 页面截图：`docs/dev-records/assets/dev-plan-264/run-2026-03-06T03-13-36-135Z/screenshot-page.png`
-   - iframe 截图：`docs/dev-records/assets/dev-plan-264/run-2026-03-06T03-13-36-135Z/screenshot-iframe.png`
-   - 同轮 Trace JSON：`docs/dev-records/assets/dev-plan-264/run-2026-03-06T03-13-36-135Z/trace-reply.json`
+   - 页面截图：`docs/archive/dev-records/assets/dev-plan-264/run-2026-03-06T03-13-36-135Z/screenshot-page.png`
+   - iframe 截图：`docs/archive/dev-records/assets/dev-plan-264/run-2026-03-06T03-13-36-135Z/screenshot-iframe.png`
+   - 同轮 Trace JSON：`docs/archive/dev-records/assets/dev-plan-264/run-2026-03-06T03-13-36-135Z/trace-reply.json`
 10. [X] 证据字段核对（来源：上述 `trace-reply.json`）：
     - `conversation_id=conv_a6f32d1be40b4780bfc0c94105cd758b`
     - `turn_id=turn_125c8bdf85684c6e8b7fbcd993760e08`

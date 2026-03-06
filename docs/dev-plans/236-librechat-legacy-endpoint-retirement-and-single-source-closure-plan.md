@@ -1,6 +1,6 @@
 # DEV-PLAN-236：LibreChat 旧入口退役与单主源封板实施计划（详细设计）
 
-**状态**: 进行中（2026-03-03 23:47 UTC，实施记录见 `docs/dev-records/dev-plan-236-execution-log.md`）
+**状态**: 进行中（2026-03-03 23:47 UTC，实施记录见 `docs/archive/dev-records/dev-plan-236-execution-log.md`）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
@@ -207,7 +207,7 @@ if any gate fails: block merge (fail-closed)
 4. [ ] 每次阶段推进必须产出可审计日志与 `dev-records` 证据。
 
 ## 11. Readiness 与执行记录要求
-1. [X] 记录文件：`docs/dev-records/dev-plan-236-execution-log.md`。
+1. [X] 记录文件：`docs/archive/dev-records/dev-plan-236-execution-log.md`。
 2. [ ] 每阶段至少记录：UTC 时间、命令、退出码、关键响应片段、PR/commit。
 3. [ ] 至少 1 条负向证据：调用 `:apply` 被 B/C 阶段阻断。
 4. [ ] 三阶段证据齐全后，方可将状态更新为 `已完成`。

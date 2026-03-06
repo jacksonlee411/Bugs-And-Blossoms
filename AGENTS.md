@@ -188,6 +188,7 @@ modules/{module}/
 ## 7. 文档地图（Doc Map）
 
 - 文档归档入口：`docs/archive/README.md`
+- 历史执行记录归档：`docs/archive/dev-records/README.md`
 - 文档规范：`docs/dev-plans/000-docs-format.md`
 - 技术设计模板：`docs/dev-plans/001-technical-design-template.md`
 - DEV-PLAN-002：UI 设计规范（React + MUI Core + MUI X / Material Design Web）：`docs/dev-plans/002-ui-design-guidelines.md`
@@ -195,23 +196,23 @@ modules/{module}/
 - DEV-PLAN-004【归档】：全仓去除版本标记（命名降噪 + 避免对外契约污染，规范已并入 `DEV-PLAN-005/STD-004`）：`docs/archive/dev-plans/004-remove-version-marker-repo-wide.md`
 - DEV-PLAN-004M1：禁止 legacy（单链路原则）——清理、门禁与迁移策略：`docs/dev-plans/004m1-no-legacy-principle-cleanup-and-gates.md`
 - DEV-PLAN-005：项目标准与外部规范采纳清单（规范入口，持续扩展）：`docs/dev-plans/005-project-standards-and-spec-adoption.md`
-- DEV-PLAN-004 记录：全仓去除版本标记——映射表（草案）：`docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`
-- DEV-PLAN-004 记录：全仓去除版本标记——执行日志：`docs/dev-records/dev-plan-004-execution-log.md`
+- DEV-PLAN-004 记录：全仓去除版本标记——映射表（草案）：`docs/archive/dev-records/dev-plan-004-version-marker-removal-mapping.md`
+- DEV-PLAN-004 记录：全仓去除版本标记——执行日志：`docs/archive/dev-records/dev-plan-004-execution-log.md`
 - Valid Time（日粒度 Effective Date）：`docs/dev-plans/032-effective-date-day-granularity.md`
 - DEV-PLAN-060：全链路业务测试案例套件（009/026-031/220-225 覆盖）：`docs/dev-plans/060-business-e2e-test-suite.md`
 - DEV-PLAN-061：全链路业务测试子计划 TP-060-01——租户/登录/权限/隔离基线：`docs/dev-plans/061-test-tp060-01-tenant-login-authz-rls-baseline.md`
 - DEV-PLAN-062：全链路业务测试子计划 TP-060-02——主数据（组织架构 + SetID + JobCatalog + 职位）：`docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`
 - DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）：`docs/dev-plans/063-test-tp060-03-person-and-assignments.md`
 - DEV-PLAN-064A：全链路业务测试子计划 TP-060-05——Assistant（会话 + 意图 + 提交 + 任务编排）：`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
-- DEV-PLAN-064A 执行日志：TP-060-05（Assistant）实施记录：`docs/dev-records/dev-plan-064a-execution-log.md`
+- DEV-PLAN-064A 执行日志：TP-060-05（Assistant）实施记录：`docs/archive/dev-records/dev-plan-064a-execution-log.md`
 - DEV-PLAN-069：移除薪酬社保与考勤（文档/代码/测试/数据库）：`docs/dev-plans/069-remove-payroll-attendance.md`
-- DEV-PLAN-069 执行日志：`docs/dev-records/dev-plan-069-execution-log.md`
+- DEV-PLAN-069 执行日志：`docs/archive/dev-records/dev-plan-069-execution-log.md`
 - DEV-PLAN-070【归档】：SetID 绑定组织架构重构方案（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/070-setid-orgunit-binding-redesign.md`
 - DEV-PLAN-070A：全局共享租户模式 vs 天然租户隔离模式专项调查（SetID/Scope Package）：`docs/dev-plans/070a-setid-global-share-vs-tenant-native-isolation-investigation.md`
 - DEV-PLAN-070B：取消共享租户（global_tenant）并收敛为租户本地发布方案（以字典配置模块为样板）：`docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
 - DEV-PLAN-070B1：字典基线发布 UI 可视化操作方案（承接 DEV-PLAN-070B）：`docs/dev-plans/070b1-dict-release-ui-operations-plan.md`
 - DEV-PLAN-070B-T：070B 系列目标达成测试方案（字典租户本地发布）：`docs/dev-plans/070b-t-dict-tenant-release-test-plan.md`
-- DEV-PLAN-070 执行日志：`docs/dev-records/dev-plan-070-execution-log.md`
+- DEV-PLAN-070 执行日志：`docs/archive/dev-records/dev-plan-070-execution-log.md`
 - DEV-PLAN-071【归档】：SetID Scope Package 订阅蓝图（时间口径已由 DEV-PLAN-102B 接管）：`docs/archive/dev-plans/071-setid-scope-package-subscription-blueprint.md`
 - DEV-PLAN-071A【归档】：基于 Package 的配置编辑与订阅显式化：`docs/archive/dev-plans/071a-package-selection-ownership-and-subscription.md`
 - DEV-PLAN-071B【归档】：字段配置/字典配置与 SetID 边界实施方案：`docs/archive/dev-plans/071b-field-config-and-dict-config-setid-boundary-implementation.md`
@@ -219,22 +220,22 @@ modules/{module}/
 - DEV-PLAN-073：OrgUnit CRUD 实现清单（页面与 API）：`docs/dev-plans/073-orgunit-crud-implementation-status.md`
 - DEV-PLAN-073A【归档】：组织架构树运行态问题记录（Shoelace 资源加载失败）：`docs/archive/dev-plans/073a-orgunit-tree-runtime-issue.md`
 - DEV-PLAN-074：OrgUnit Details 集成更新能力与 UI 优化方案：`docs/dev-plans/074-orgunit-details-update-ui-optimization.md`
-- DEV-PLAN-074 执行日志：`docs/dev-records/dev-plan-074-execution-log.md`
+- DEV-PLAN-074 执行日志：`docs/archive/dev-records/dev-plan-074-execution-log.md`
 - DEV-PLAN-075：OrgUnit 生效日期不允许回溯的限制评估：`docs/dev-plans/075-orgunit-effective-date-backdating-assessment.md`
-- DEV-PLAN-075 执行日志：`docs/dev-records/dev-plan-075-execution-log.md`
+- DEV-PLAN-075 执行日志：`docs/archive/dev-records/dev-plan-075-execution-log.md`
 - DEV-PLAN-075A【归档】：OrgUnit 记录新增/插入 UI 与可编辑字段问题记录：`docs/archive/dev-plans/075a-orgunit-records-ui-and-editing-issues.md`
-- DEV-PLAN-075A 执行日志：`docs/dev-records/dev-plan-075a-execution-log.md`
+- DEV-PLAN-075A 执行日志：`docs/archive/dev-records/dev-plan-075a-execution-log.md`
 - DEV-PLAN-075B：Root Unit A 生效日回溯可行性调查与修复方案：`docs/dev-plans/075b-orgunit-root-backdating-feasibility-and-fix-plan.md`
-- DEV-PLAN-075B 执行日志：`docs/dev-records/dev-plan-075b-execution-log.md`
+- DEV-PLAN-075B 执行日志：`docs/archive/dev-records/dev-plan-075b-execution-log.md`
 - DEV-PLAN-075C：OrgUnit 删除记录/停用语义混用调查与收敛方案：`docs/dev-plans/075c-orgunit-delete-disable-semantics-alignment.md`
 - DEV-PLAN-075D【归档】：OrgUnit 页面状态字段与有效/无效显式切换：`docs/archive/dev-plans/075d-orgunit-status-field-active-inactive-selector.md`
 - DEV-PLAN-075E【归档】：OrgUnit 同日状态修正（生效日不变）方案（模块标准已并入 `DEV-PLAN-108`）：`docs/archive/dev-plans/075e-orgunit-same-day-correction-status-conflict-investigation.md`
-- DEV-PLAN-075D 执行日志：`docs/dev-records/dev-plan-075d-execution-log.md`
-- DEV-PLAN-075E 执行日志：`docs/dev-records/dev-plan-075e-execution-log.md`
+- DEV-PLAN-075D 执行日志：`docs/archive/dev-records/dev-plan-075d-execution-log.md`
+- DEV-PLAN-075E 执行日志：`docs/archive/dev-records/dev-plan-075e-execution-log.md`
 - DEV-PLAN-076：OrgUnit 版本切换导致选中组织丢失问题与修复方案：`docs/dev-plans/076-orgunit-version-switch-selection-retention.md`
 - DEV-PLAN-077：OrgUnit Replay 写放大评估与收敛方案：`docs/dev-plans/077-orgunit-replay-write-amplification-assessment-and-mitigation.md`
-- DEV-PLAN-077 记录：OrgUnit Replay 写放大基线测量：`docs/dev-records/dev-plan-077-write-amplification-baseline.md`
-- DEV-PLAN-078 执行日志：`docs/dev-records/dev-plan-078-execution-log.md`
+- DEV-PLAN-077 记录：OrgUnit Replay 写放大基线测量：`docs/archive/dev-records/dev-plan-077-write-amplification-baseline.md`
+- DEV-PLAN-078 执行日志：`docs/archive/dev-records/dev-plan-078-execution-log.md`
 - DEV-PLAN-078：OrgUnit 写模型替代方案对比与决策建议：`docs/dev-plans/078-orgunit-write-model-alternatives-comparison-and-decision.md`
 - DEV-PLAN-080：OrgUnit 审计链收敛（方向 1：单一审计链）：`docs/dev-plans/080-orgunit-audit-chain-consolidation.md`
 - DEV-PLAN-080A：OrgUnit before_snapshot/after_snapshot 机制调查与收敛修复方案：`docs/dev-plans/080a-orgunit-audit-snapshot-mechanism-and-fix.md`
@@ -246,9 +247,9 @@ modules/{module}/
 - DEV-PLAN-083【归档】：Org 白名单模型扩展性改造（规则单点化 + 能力矩阵外显）：`docs/archive/dev-plans/083-org-whitelist-extensibility-capability-matrix-plan.md`
 - DEV-PLAN-083A【归档】：OrgUnit Append 写入动作能力外显与策略单点扩展（create / event_update）：`docs/archive/dev-plans/083a-orgunit-append-actions-capabilities-policy-extension.md`
 - DEV-PLAN-083B：Org 变更能力模型后置收口（承接 083/083A）：`docs/dev-plans/083b-org-mutation-capabilities-post-083a-closure-plan.md`
-- DEV-PLAN-083B 执行日志：`docs/dev-records/dev-plan-083b-execution-log.md`
+- DEV-PLAN-083B 执行日志：`docs/archive/dev-records/dev-plan-083b-execution-log.md`
 - DEV-PLAN-084【归档】：Org 模块组织树“下级可展开指示符”缺失问题分析与收敛方案（树可展开契约已并入 `DEV-PLAN-073`）：`docs/archive/dev-plans/084-orgunit-tree-expand-indicator-visibility.md`
-- DEV-PLAN-084 执行日志：`docs/dev-records/dev-plan-084-execution-log.md`
+- DEV-PLAN-084 执行日志：`docs/archive/dev-records/dev-plan-084-execution-log.md`
 - DEV-PLAN-090：前端框架升级为 MUI X（对标 Workday UX）方案：`docs/dev-plans/090-mui-x-frontend-upgrade-plan.md`
 - DEV-PLAN-091【归档】：MUI X 升级子计划 P0（基座准备与许可落地，阶段交付已完成）：`docs/archive/dev-plans/091-mui-x-phase0-foundation-and-license-plan.md`
 - DEV-PLAN-092【归档】：MUI X 升级子计划 P1（壳与导航迁移，阶段交付已完成）：`docs/archive/dev-plans/092-mui-x-phase1-shell-navigation-plan.md`
@@ -262,29 +263,29 @@ modules/{module}/
 - DEV-PLAN-100：Org 模块宽表预留字段 + 元数据驱动落地实施计划与路线图（承接 DEV-PLAN-098）：`docs/dev-plans/100-org-metadata-wide-table-implementation-roadmap.md`
 - DEV-PLAN-100A：Org 模块宽表元数据落地 Phase 0：契约冻结与就绪检查：`docs/dev-plans/100a-org-metadata-wide-table-phase0-contract-freeze-readiness.md`
 - DEV-PLAN-100B：Org 模块宽表元数据落地 Phase 1：Schema 与元数据骨架（最小数据库闭环）：`docs/dev-plans/100b-org-metadata-wide-table-phase1-schema-and-metadata-skeleton.md`
-- DEV-PLAN-100B 执行日志：`docs/dev-records/dev-plan-100b-execution-log.md`
+- DEV-PLAN-100B 执行日志：`docs/archive/dev-records/dev-plan-100b-execution-log.md`
 - DEV-PLAN-100C：Org 模块宽表元数据落地 Phase 2：Kernel/Projection 扩展（保持 One Door）：`docs/dev-plans/100c-org-metadata-wide-table-phase2-kernel-projection-extension-one-door.md`
-- DEV-PLAN-100C 执行日志：`docs/dev-records/dev-plan-100c-execution-log.md`
+- DEV-PLAN-100C 执行日志：`docs/archive/dev-records/dev-plan-100c-execution-log.md`
 - DEV-PLAN-100D：Org 模块宽表元数据落地 Phase 3：服务层与 API（读写可用）：`docs/dev-plans/100d-org-metadata-wide-table-phase3-service-and-api-read-write.md`
 - DEV-PLAN-100D2：Org 模块宽表元数据落地 Phase 3 修订：契约对齐与 API 实现收口（为 100E/101 做准备）：`docs/dev-plans/100d2-org-metadata-wide-table-phase3-contract-alignment-and-hardening.md`
-- DEV-PLAN-100D2 执行日志：`docs/dev-records/dev-plan-100d2-execution-log.md`
+- DEV-PLAN-100D2 执行日志：`docs/archive/dev-records/dev-plan-100d2-execution-log.md`
 - DEV-PLAN-100E：Org 模块宽表元数据落地 Phase 4A：OrgUnit 详情页扩展字段展示与 Capabilities 驱动编辑（MUI）：`docs/dev-plans/100e-org-metadata-wide-table-phase4a-orgunit-details-capabilities-editing.md`
-- DEV-PLAN-100E 执行日志：`docs/dev-records/dev-plan-100e-execution-log.md`
+- DEV-PLAN-100E 执行日志：`docs/archive/dev-records/dev-plan-100e-execution-log.md`
 - DEV-PLAN-100E1：OrgUnit Mutation Policy 单点化 + 更正链路支持 `patch.ext`（作为 DEV-PLAN-100E 前置）：`docs/dev-plans/100e1-orgunit-mutation-policy-and-ext-corrections-prereq.md`
-- DEV-PLAN-100E1 执行日志：`docs/dev-records/dev-plan-100e1-execution-log.md`
+- DEV-PLAN-100E1 执行日志：`docs/archive/dev-records/dev-plan-100e1-execution-log.md`
 - DEV-PLAN-100G：Org 模块宽表元数据落地 Phase 4C：OrgUnit 列表扩展字段筛选/排序 + i18n 收口（闭环收口，MUI）：`docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`
-- DEV-PLAN-100G 执行日志：`docs/dev-records/dev-plan-100g-execution-log.md`
+- DEV-PLAN-100G 执行日志：`docs/archive/dev-records/dev-plan-100g-execution-log.md`
 - DEV-PLAN-100H：Org 模块宽表元数据落地 Phase 5：稳定性/性能/异常与运维收口：`docs/dev-plans/100h-org-metadata-wide-table-phase5-stability-performance-ops-closure.md`
 - DEV-PLAN-101【归档】：OrgUnit 字段配置管理页（MUI）IA 与组件级方案（承接 DEV-PLAN-100）：`docs/archive/dev-plans/101-orgunit-field-config-management-ui-ia.md`
 - DEV-PLAN-101B【归档】：OrgUnit PLAIN 扩展字段编辑能力收敛（新建/插入记录/修正）：`docs/archive/dev-plans/101b-orgunit-plain-ext-fields-editability-convergence.md`
 - DEV-PLAN-101I【归档】：OrgUnit 生效日期记录新增/插入（MUI）操作口径与约束说明：`docs/archive/dev-plans/101i-orgunit-effective-date-record-add-insert-ui-and-constraints.md`
-- DEV-PLAN-101I 执行日志：`docs/dev-records/dev-plan-101i-execution-log.md`
+- DEV-PLAN-101I 执行日志：`docs/archive/dev-records/dev-plan-101i-execution-log.md`
 - DEV-PLAN-105：全模块字典配置模块（DICT 值配置 + 生效日期 + 变更记录）：`docs/dev-plans/105-dict-config-platform-module.md`
-- DEV-PLAN-105 执行日志：`docs/dev-records/dev-plan-105-execution-log.md`
+- DEV-PLAN-105 执行日志：`docs/archive/dev-records/dev-plan-105-execution-log.md`
 - DEV-PLAN-105A：字典配置模块验证问题调查与修复方案（承接 DEV-PLAN-105）：`docs/dev-plans/105a-dict-config-validation-issues-investigation.md`
-- DEV-PLAN-105A 执行日志：`docs/dev-records/dev-plan-105a-execution-log.md`
+- DEV-PLAN-105A 执行日志：`docs/archive/dev-records/dev-plan-105a-execution-log.md`
 - DEV-PLAN-105B：Dict Code（字典本体）新增与治理方案（承接 DEV-PLAN-105/105A）：`docs/dev-plans/105b-dict-code-management-and-governance.md`
-- DEV-PLAN-105B 执行日志：`docs/dev-records/dev-plan-105b-execution-log.md`
+- DEV-PLAN-105B 执行日志：`docs/archive/dev-records/dev-plan-105b-execution-log.md`
 - DEV-PLAN-106：Org 模块扩展字段启用方式改造（DICT 全量引用 + 自定义 PLAIN 字段）：`docs/dev-plans/106-org-ext-fields-enable-dict-registry-and-custom-plain-fields.md`
 - DEV-PLAN-106A：Org 扩展字段启用增强（字典字段作为 Field Key + 启用时自定义描述）：`docs/dev-plans/106a-org-ext-fields-dict-as-field-key-and-custom-label.md`
 - DEV-PLAN-106B：OrgUnit 更正语义收敛（生效日更正粘性 + 后续更正兼容，根因修复）：`docs/dev-plans/106b-orgunit-corrections-effective-date-sticky-semantics.md`
@@ -292,20 +293,20 @@ modules/{module}/
 - DEV-PLAN-108：Org 模块 CRUD UI 按钮整合与统一字段变更规则（用户操作视角）：`docs/dev-plans/108-org-crud-ui-actions-consolidation-and-unified-field-mutation-rules.md`
 - DEV-PLAN-108A：Org 新建组织弹窗支持 DICT 扩展字段（下拉选择）：`docs/dev-plans/108a-org-create-dialog-dict-ext-fields-support.md`
 - DEV-PLAN-108B：Org 新建组织弹窗 DICT 扩展字段实现（承接 108A）：`docs/dev-plans/108b-org-create-dialog-dict-ext-fields-implementation.md`
-- DEV-PLAN-108B 执行日志：`docs/dev-records/dev-plan-108b-execution-log.md`
+- DEV-PLAN-108B 执行日志：`docs/archive/dev-records/dev-plan-108b-execution-log.md`
 - DEV-PLAN-109【归档】：Org 模块幂等命名收敛与门禁（历史阶段封板，按 STD-001 修订）：`docs/archive/dev-plans/109-request-code-unification-and-gate.md`
 - DEV-PLAN-109A：`request_id`（幂等）+ `trace_id`（Tracing）全仓收敛与防扩散：`docs/dev-plans/109a-request-code-total-convergence-and-anti-drift.md`
-- DEV-PLAN-109A 执行日志：`docs/dev-records/dev-plan-109a-execution-log.md`
+- DEV-PLAN-109A 执行日志：`docs/archive/dev-records/dev-plan-109a-execution-log.md`
 - DEV-PLAN-110：启用字段表单增强：自定义（直接值）+ 值类型选择 + 自定义字段名称：`docs/dev-plans/110-orgunit-field-configs-custom-direct-value-form.md`
-- DEV-PLAN-110 执行日志：`docs/dev-records/dev-plan-110-execution-log.md`
+- DEV-PLAN-110 执行日志：`docs/archive/dev-records/dev-plan-110-execution-log.md`
 - DEV-PLAN-111：前端错误信息准确化与字段级提示收敛方案：`docs/dev-plans/111-frontend-error-message-accuracy-and-field-level-hints.md`
 - DEV-PLAN-120：Org 字段默认值（Go+PG+CEL）规则引擎落地路线图：`docs/dev-plans/120-org-field-default-values-cel-rule-engine-roadmap.md`
 - DEV-PLAN-126：Go 1.26 升级与现代化改造计划（No-Compat）：`docs/dev-plans/126-go-1-26-upgrade-and-modernization-plan.md`
-- DEV-PLAN-126 执行日志：`docs/dev-records/dev-plan-126-execution-log.md`
+- DEV-PLAN-126 执行日志：`docs/archive/dev-records/dev-plan-126-execution-log.md`
 - DEV-PLAN-130：Org 组织树初始化问题收敛与自举修复方案：`docs/dev-plans/130-orgunit-tree-initialization-recovery-and-bootstrap.md`
-- DEV-PLAN-130 执行日志：`docs/dev-records/dev-plan-130-execution-log.md`
+- DEV-PLAN-130 执行日志：`docs/archive/dev-records/dev-plan-130-execution-log.md`
 - DEV-PLAN-140：全仓错误提示明确化与质量门禁：`docs/dev-plans/140-error-message-clarity-and-gates.md`
-- DEV-PLAN-140 执行日志：`docs/dev-records/dev-plan-140-execution-log.md`
+- DEV-PLAN-140 执行日志：`docs/archive/dev-records/dev-plan-140-execution-log.md`
 - DEV-PLAN-150：Capability Key 对标 Workday 核心差距收敛方案（P0/P1）：`docs/dev-plans/150-capability-key-workday-alignment-gap-closure-plan.md`
 - DEV-PLAN-151：Capability Key Phase 1 契约冻结与门禁基线（承接 150 M1）：`docs/dev-plans/151-capability-key-m1-contract-freeze-and-gates-baseline.md`
 - DEV-PLAN-152：Capability Key Phase 2 运行时语义切口（承接 150 M4）：`docs/dev-plans/152-capability-key-m4-runtime-semantic-cutover.md`
@@ -333,7 +334,7 @@ modules/{module}/
 - DEV-PLAN-183：Capability Key 配置可发现性与对象/意图显式建模方案：`docs/dev-plans/183-capability-key-object-intent-discoverability-and-modeling.md`
 - DEV-PLAN-184：字段配置与策略规则双层 SoT 收敛方案（Static Metadata vs Dynamic Policy）：`docs/dev-plans/184-field-metadata-and-runtime-policy-sot-convergence.md`
 - DEV-PLAN-185：字段配置页字典值列表 SetID 列展示与主数据取数控制策略收敛：`docs/dev-plans/185-field-config-dict-values-setid-column-and-master-data-fetch-control.md`
-- DEV-PLAN-183/184/185 记录：字段级双枚举契约对齐日志：`docs/dev-records/dev-plan-183-184-185-contract-alignment-log.md`
+- DEV-PLAN-183/184/185 记录：字段级双枚举契约对齐日志：`docs/archive/dev-records/dev-plan-183-184-185-contract-alignment-log.md`
 - DEV-PLAN-191：`/app/org/setid` 导航与页面设计优化方案（一级/二级菜单 + 独立滚动 + DEV-PLAN-002 对齐）：`docs/dev-plans/191-setid-governance-navigation-and-layout-optimization.md`
 - DEV-PLAN-200：组合优先的积木式页面与功能架构蓝图（Field Config × Dict × CRUD Pattern × Strategy）：`docs/dev-plans/200-composable-building-block-architecture-blueprint.md`
 - DEV-PLAN-201：200蓝图 Phase 0 边界冻结与跨层作用域一致性基线：`docs/dev-plans/201-blueprint-phase0-boundary-and-scope-consistency-freeze.md`
@@ -351,9 +352,9 @@ modules/{module}/
 - DEV-PLAN-220：聊天框式 AI 助手升级实施方案（SetID Governance × Req2Config × Conversation Tx）：`docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
 - DEV-PLAN-220A：聊天框 AI 助手（220）测试验证与功能缺口收敛方案：`docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
 - DEV-PLAN-221：Assistant P1 Blocker 收口实施计划（状态机 × 漂移回退 × Strict Decode）：`docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
-- DEV-PLAN-221 执行日志：`docs/dev-records/dev-plan-221-execution-log.md`
+- DEV-PLAN-221 执行日志：`docs/archive/dev-records/dev-plan-221-execution-log.md`
 - DEV-PLAN-222：Assistant 前端交互与 E2E 证据闭环实施计划：`docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
-- DEV-PLAN-222 执行日志：`docs/dev-records/dev-plan-222-execution-log.md`
+- DEV-PLAN-222 执行日志：`docs/archive/dev-records/dev-plan-222-execution-log.md`
 - DEV-PLAN-223：Assistant 会话持久化与审计闭环实施计划：`docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - DEV-PLAN-224：Assistant 多模型适配与 LLM 意图判断能力实施计划：`docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
 - DEV-PLAN-224A：Assistant 真实 Codex API 与多轮对话工作台实施计划：`docs/dev-plans/224a-assistant-codex-live-api-and-multi-turn-workspace-plan.md`
@@ -363,43 +364,43 @@ modules/{module}/
 - DEV-PLAN-225：Assistant Tasks API 与 Temporal（P2）实施计划：`docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
 - DEV-PLAN-230：LibreChat 项目级集成实施方案（源码纳管 + 运行基线 + 安全边界）：`docs/dev-plans/230-librechat-project-level-integration-plan.md`
 - DEV-PLAN-231：LibreChat 集成前置契约与门禁补齐实施计划：`docs/dev-plans/231-librechat-prerequisites-contract-and-gates-plan.md`
-- DEV-PLAN-231 执行日志：`docs/dev-records/dev-plan-231-execution-log.md`
+- DEV-PLAN-231 执行日志：`docs/archive/dev-records/dev-plan-231-execution-log.md`
 - DEV-PLAN-232：LibreChat 官方运行基线落地实施计划：`docs/dev-plans/232-librechat-official-runtime-baseline-plan.md`
-- DEV-PLAN-232 执行日志：`docs/dev-records/dev-plan-232-execution-log.md`
+- DEV-PLAN-232 执行日志：`docs/archive/dev-records/dev-plan-232-execution-log.md`
 - DEV-PLAN-233：LibreChat 模型配置单主源收口实施计划：`docs/dev-plans/233-librechat-single-source-config-convergence-plan.md`
 - DEV-PLAN-234：LibreChat 开源能力复用落地实施计划（MCP/Actions/Allowlist）：`docs/dev-plans/234-librechat-open-source-capabilities-reuse-plan.md`
 - DEV-PLAN-235：LibreChat 身份/会话/租户边界硬化实施计划：`docs/dev-plans/235-librechat-auth-session-and-tenant-boundary-hardening-plan.md`
-- DEV-PLAN-235 执行日志：`docs/dev-records/dev-plan-235-execution-log.md`
+- DEV-PLAN-235 执行日志：`docs/archive/dev-records/dev-plan-235-execution-log.md`
 - DEV-PLAN-236：LibreChat 旧入口退役与单主源封板实施计划：`docs/dev-plans/236-librechat-legacy-endpoint-retirement-and-single-source-closure-plan.md`
-- DEV-PLAN-236 执行日志：`docs/dev-records/dev-plan-236-execution-log.md`
+- DEV-PLAN-236 执行日志：`docs/archive/dev-records/dev-plan-236-execution-log.md`
 - DEV-PLAN-237：LibreChat 升级与回归闭环实施计划：`docs/dev-plans/237-librechat-upgrade-and-regression-closure-plan.md`
 - DEV-PLAN-238：LibreChat MongoDB 运行异常专项修复与防回归计划：`docs/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`
-- DEV-PLAN-238 执行日志：`docs/dev-records/dev-plan-238-execution-log.md`
+- DEV-PLAN-238 执行日志：`docs/archive/dev-records/dev-plan-238-execution-log.md`
 - DEV-PLAN-239：LibreChat 聊天可写链路恢复与运行态稳定性收口计划：`docs/dev-plans/239-librechat-chat-write-path-recovery-and-runtime-stability-plan.md`
 - DEV-PLAN-239A：LibreChat 对话式自动执行与独立页面实施方案：`docs/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
-- DEV-PLAN-239A 执行日志：`docs/dev-records/dev-plan-239a-execution-log.md`
+- DEV-PLAN-239A 执行日志：`docs/archive/dev-records/dev-plan-239a-execution-log.md`
 - DEV-PLAN-239B：239A 直接验证用例测试报告与实现缺口：`docs/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
 - DEV-PLAN-239D：Ubuntu 本地开发环境搭建方案（Clone 后首日）：`docs/dev-plans/239d-ubuntu-local-development-environment-bootstrap-plan.md`
 - DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（去写死 + Skill/MCP/LibreChat 对齐）：`docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
 - DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
-- DEV-PLAN-260 执行日志：`docs/dev-records/dev-plan-260-execution-log.md`
+- DEV-PLAN-260 执行日志：`docs/archive/dev-records/dev-plan-260-execution-log.md`
 - DEV-PLAN-261：LibreChat 助手对话失败问题排查与修复实施计划：`docs/dev-plans/261-librechat-assistant-conversation-failure-investigation-and-remediation-plan.md`
-- DEV-PLAN-261 执行日志：`docs/dev-records/dev-plan-261-execution-log.md`
+- DEV-PLAN-261 执行日志：`docs/archive/dev-records/dev-plan-261-execution-log.md`
 - DEV-PLAN-262：LibreChat 对话回执渲染越界问题调查与收敛方案：`docs/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
-- DEV-PLAN-262 执行日志：`docs/dev-records/dev-plan-262-execution-log.md`
+- DEV-PLAN-262 执行日志：`docs/archive/dev-records/dev-plan-262-execution-log.md`
 - DEV-PLAN-263：LibreChat 真实大模型助手对话回复专线实施方案：`docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
-- DEV-PLAN-263 执行日志：`docs/dev-records/dev-plan-263-execution-log.md`
+- DEV-PLAN-263 执行日志：`docs/archive/dev-records/dev-plan-263-execution-log.md`
 - DEV-PLAN-264：LibreChat 真实大模型回复单链路与真实验收证据收敛方案：`docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
-- DEV-PLAN-264 执行日志：`docs/dev-records/dev-plan-264-execution-log.md`
+- DEV-PLAN-264 执行日志：`docs/archive/dev-records/dev-plan-264-execution-log.md`
 - DEV-PLAN-265：LibreChat 回复经 GPT-5.2 单链路目标达成度审计与缺口收敛方案：`docs/dev-plans/265-librechat-gpt52-reply-goal-attainment-audit-and-gap-closure-plan.md`
-- DEV-PLAN-265 执行日志：`docs/dev-records/dev-plan-265-execution-log.md`
+- DEV-PLAN-265 执行日志：`docs/archive/dev-records/dev-plan-265-execution-log.md`
 - DEV-PLAN-266：AI对话官方 UI 单通道与气泡内回写前置子计划：`docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
 - DEV-PLAN-270：项目容器部署分层检讨与收敛方案：`docs/dev-plans/270-project-container-deployment-review-and-layered-convergence-plan.md`
-- DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
+- DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
-- DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
-- DEV-PLAN-101 执行日志：`docs/dev-records/dev-plan-101-execution-log.md`
+- DEV-PLAN-170 执行日志：`docs/archive/dev-records/dev-plan-170-execution-log.md`
+- DEV-PLAN-101 执行日志：`docs/archive/dev-records/dev-plan-101-execution-log.md`
 - DEV-PLAN-102【归档】：全项目 as_of 时间上下文收敛与批判（承接 DEV-PLAN-076，现行口径以 `DEV-PLAN-102B`/`STD-002` 为准）：`docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`
 - DEV-PLAN-102A【归档】：Org Code 默认规则“保存后无变化”生效日错位调查与收敛方案（表达式口径一致性已并入 `DEV-PLAN-120`）：`docs/archive/dev-plans/102a-org-code-default-policy-effective-date-visibility-fix.md`
 - DEV-PLAN-102B：070/071 时间口径强制显式化与历史回放稳定性收敛：`docs/dev-plans/102b-070-071-time-context-explicitness-and-replay-determinism.md`
@@ -413,29 +414,29 @@ modules/{module}/
 - DEV-PLAN-102C-T：102C1-102C3 测试方案（同租户跨 BU 字段差异）：`docs/dev-plans/102c-t-test-plan-for-c1-c3-bu-field-variance.md`
 - DEV-PLAN-102D：基于 102 基线的 Context + Rule + Eval 动态隔离与配置安全实施方案：`docs/dev-plans/102d-context-rule-evaluation-engine-on-top-of-102-foundation.md`
 - DEV-PLAN-102D-T：102D 动态规则引擎测试方案（用户可见性 + 内部评估链路）：`docs/dev-plans/102d-t-context-rule-eval-user-visible-test-plan.md`
-- DEV-PLAN-102D 执行日志：`docs/dev-records/dev-plan-102d-execution-log.md`
-- DEV-PLAN-102D-T 执行日志：`docs/dev-records/dev-plan-102d-t-execution-log.md`
-- DEV-PLAN-102B 执行日志：`docs/dev-records/dev-plan-102b-execution-log.md`
-- DEV-PLAN-102A 执行日志：`docs/dev-records/dev-plan-102a-execution-log.md`
-- DEV-PLAN-102 执行日志：`docs/dev-records/dev-plan-102-execution-log.md`
+- DEV-PLAN-102D 执行日志：`docs/archive/dev-records/dev-plan-102d-execution-log.md`
+- DEV-PLAN-102D-T 执行日志：`docs/archive/dev-records/dev-plan-102d-t-execution-log.md`
+- DEV-PLAN-102B 执行日志：`docs/archive/dev-records/dev-plan-102b-execution-log.md`
+- DEV-PLAN-102A 执行日志：`docs/archive/dev-records/dev-plan-102a-execution-log.md`
+- DEV-PLAN-102 执行日志：`docs/archive/dev-records/dev-plan-102-execution-log.md`
 - DEV-PLAN-103【归档】：移除旧前端链路，前端收敛为 MUI X（React SPA；规范已并入 `DEV-PLAN-005/STD-005/STD-006`）：`docs/archive/dev-plans/103-remove-astro-legacy-ui-and-converge-to-mui-x-only.md`
-- DEV-PLAN-103 执行日志：`docs/dev-records/dev-plan-103-execution-log.md`
+- DEV-PLAN-103 执行日志：`docs/archive/dev-records/dev-plan-103-execution-log.md`
 - DEV-PLAN-103A【归档】：DEV-PLAN-103 收尾（P3 业务页闭环 + P6 工程改名：去技术后缀）：`docs/archive/dev-plans/103a-dev-plan-103-closure-p3-p6-apps-web-rename.md`
-- DEV-PLAN-103A 执行日志：`docs/dev-records/dev-plan-103a-execution-log.md`
+- DEV-PLAN-103A 执行日志：`docs/archive/dev-records/dev-plan-103a-execution-log.md`
 - DEV-PLAN-104：Job Catalog（职位分类）页面 UI 优化方案（信息架构收敛：上下文工具条 + Tabs + DataGrid + Dialog）：`docs/dev-plans/104-jobcatalog-ui-optimization.md`
 - DEV-PLAN-104A：Job Catalog UI 优化补充修订（对齐 DEV-PLAN-002）：`docs/dev-plans/104a-jobcatalog-ui-optimization-alignment-with-dev-plan-002.md`
-- DEV-PLAN-104 / 104A 执行日志：`docs/dev-records/dev-plan-104-execution-log.md`
-- DEV-PLAN-080 执行日志：`docs/dev-records/dev-plan-080-execution-log.md`
-- DEV-PLAN-073 执行日志：`docs/dev-records/dev-plan-073-execution-log.md`
-- DEV-PLAN-071 执行日志：`docs/dev-records/dev-plan-071-execution-log.md`
-- DEV-PLAN-072 记录：命名收敛差异清单与映射表：`docs/dev-records/dev-plan-072-naming-convergence-mapping.md`
+- DEV-PLAN-104 / 104A 执行日志：`docs/archive/dev-records/dev-plan-104-execution-log.md`
+- DEV-PLAN-080 执行日志：`docs/archive/dev-records/dev-plan-080-execution-log.md`
+- DEV-PLAN-073 执行日志：`docs/archive/dev-records/dev-plan-073-execution-log.md`
+- DEV-PLAN-071 执行日志：`docs/archive/dev-records/dev-plan-071-execution-log.md`
+- DEV-PLAN-072 记录：命名收敛差异清单与映射表：`docs/archive/dev-records/dev-plan-072-naming-convergence-mapping.md`
 - DEV-PLAN-026A【归档】：OrgUnit 8位编号与 UUID/Code 命名规范：`docs/archive/dev-plans/026a-orgunit-id-uuid-code-naming.md`
-- DEV-PLAN-026A 执行日志：`docs/dev-records/dev-plan-026a-execution-log.md`
+- DEV-PLAN-026A 执行日志：`docs/archive/dev-records/dev-plan-026a-execution-log.md`
 - DEV-PLAN-026B【归档】：OrgUnit 外部ID兼容（org_code 映射）方案：`docs/archive/dev-plans/026b-orgunit-external-id-code-mapping.md`
 - DEV-PLAN-026C【归档】：OrgUnit 外部ID兼容（org_code 映射）评审与修订方案：`docs/archive/dev-plans/026c-orgunit-external-id-code-mapping-review-and-revision.md`
-- DEV-PLAN-026C 执行日志：`docs/dev-records/dev-plan-026c-execution-log.md`
+- DEV-PLAN-026C 执行日志：`docs/archive/dev-records/dev-plan-026c-execution-log.md`
 - DEV-PLAN-026D【归档】：OrgUnit 增量投射方案（减少全量回放写放大）：`docs/archive/dev-plans/026d-orgunit-incremental-projection-plan.md`
-- DEV-PLAN-026D 执行日志：`docs/dev-records/dev-plan-026d-execution-log.md`
+- DEV-PLAN-026D 执行日志：`docs/archive/dev-records/dev-plan-026d-execution-log.md`
 - P0 前置条件实施方案（契约优先）：`docs/dev-plans/010-p0-prerequisites-contract.md`
 - AI 驱动开发评审清单（Simple > Easy）：`docs/dev-plans/003-simple-not-easy-review-guide.md`
 - Org（事务性事件溯源 + 同步投射，已归档）：`docs/archive/dev-plans/026-org-transactional-event-sourcing-synchronous-projection.md`
@@ -454,7 +455,7 @@ modules/{module}/
 - Atlas + Goose 闭环指引：`docs/dev-plans/024-atlas-goose-closed-loop-guide.md`
 - sqlc 工具链使用指引与规范：`docs/dev-plans/025-sqlc-guidelines.md`
 - DEV-PLAN-025A：sqlc schema 导出一致性加固（取消夜间校验，PR 即时阻断）：`docs/dev-plans/025a-sqlc-schema-export-consistency-hardening.md`
-- DEV-PLAN-025A 执行日志：`docs/dev-records/dev-plan-025a-execution-log.md`
+- DEV-PLAN-025A 执行日志：`docs/archive/dev-records/dev-plan-025a-execution-log.md`
 - Authz（Casbin）工具链与实施方案：`docs/dev-plans/022-authz-casbin-toolchain.md`
 - 多工作区并行开发指引（3 worktree）：`docs/dev-plans/014-parallel-worktrees-local-dev-guide.md`
 - 全局路由策略统一（UI/API/Webhooks）：`docs/dev-plans/017-routing-strategy.md`

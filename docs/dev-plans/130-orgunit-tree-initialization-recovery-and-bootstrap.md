@@ -74,4 +74,4 @@
 - `docs/dev-plans/108-org-crud-ui-actions-consolidation-and-unified-field-mutation-rules.md`
 - `docs/dev-plans/111-frontend-error-message-accuracy-and-field-level-hints.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
-- `docs/dev-records/dev-plan-130-execution-log.md`
+- `docs/archive/dev-records/dev-plan-130-execution-log.md`

@@ -238,7 +238,7 @@ job(required_check):
 
 ### 9.2 Readiness 记录（证据要求）
 
-- [ ] implementation repo 新增 `docs/dev-records/DEV-PLAN-010-READINESS.md`（或等价落点），记录每条关键结论的：时间戳、环境、命令入口（Makefile 目标）、结果与链接。
+- [ ] implementation repo 新增 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md`（或等价落点），记录每条关键结论的：时间戳、环境、命令入口（Makefile 目标）、结果与链接。
 
 ### 9.3 5 分钟验收叙事（用于评审/演示）
 

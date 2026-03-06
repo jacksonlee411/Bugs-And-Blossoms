@@ -47,7 +47,7 @@
   - CI 门禁定义：`.github/workflows/quality-gates.yml`
   - 路由 allowlist（事实源）：`config/routing/allowlist.yaml`
   - Authz policy 产物（事实源）：`config/access/policy.csv`、`config/access/policy.csv.rev`
-  - Readiness 证据口径：`docs/dev-records/DEV-PLAN-010-READINESS.md`
+  - Readiness 证据口径：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md`
 - 环境口径补充（承接 `DEV-PLAN-060/012/226`）：若本子计划执行 E2E/脚本化校验并需要数据库 seed/直连，必须优先使用 Docker / compose 内 PostgreSQL 工具链；不得把宿主机 `psql` 缺失当作业务失败。
 
 ## 3. 契约引用（SSOT）
