@@ -85,7 +85,7 @@ func (s *assistantConversationService) renderTurnReply(ctx context.Context, tena
 	stage := assistantReplyStage(req.Stage, outcome, turn)
 	kind := assistantReplyKind(req.Kind, stage, outcome)
 	locale := assistantReplyLocale(req.Locale)
-	fallbackText := assistantReplyFallbackText(req, stage, turn)
+	fallbackText := assistantReplyFallbackText(req, stage, turn, locale)
 	prompt := assistantReplyRenderPrompt{
 		ConversationID: strings.TrimSpace(conversation.ConversationID),
 		TurnID:         resolvedTurnID,
@@ -239,20 +239,29 @@ func assistantReplyLocale(raw string) string {
 	return "zh"
 }
 
-func assistantReplyFallbackText(req assistantRenderReplyRequest, stage string, turn *assistantTurn) string {
-	if text := strings.TrimSpace(req.FallbackText); text != "" {
+func assistantReplyFallbackText(req assistantRenderReplyRequest, stage string, turn *assistantTurn, locale string) string {
+	if text := assistantSanitizeUserFacingReplyText(strings.TrimSpace(req.FallbackText), locale); text != "" {
 		return text
 	}
 	if stage == "commit_failed" {
-		if text := strings.TrimSpace(req.ErrorMessage); text != "" {
+		if text := assistantSanitizeUserFacingReplyText(strings.TrimSpace(req.ErrorMessage), locale); text != "" {
 			return text
 		}
-		if code := strings.TrimSpace(req.ErrorCode); code != "" {
-			return fmt.Sprintf("本次执行失败（%s），请根据提示补充信息后重试。", code)
+		if strings.TrimSpace(req.ErrorCode) != "" {
+			if locale == "en" {
+				return "The request could not be completed. Please adjust the input and try again."
+			}
+			return "本次请求未能完成，请根据提示调整后重试。"
 		}
-		return "本次执行失败，请根据提示补充信息后重试。"
+		if locale == "en" {
+			return "The request could not be completed. Please adjust the input and try again."
+		}
+		return "本次请求未能完成，请根据提示调整后重试。"
 	}
 	if turn == nil {
+		if locale == "en" {
+			return "Your request was received. I will continue processing."
+		}
 		return "已收到你的请求，我将继续处理。"
 	}
 	if stage == "commit_result" && turn.CommitResult != nil {
@@ -265,6 +274,9 @@ func assistantReplyFallbackText(req assistantRenderReplyRequest, stage string, t
 	}
 	if stage == "candidate_list" {
 		if len(turn.Candidates) == 0 {
+			if locale == "en" {
+				return "Multiple parent candidates were detected. Please reply with the candidate index or code before confirming."
+			}
 			return "检测到多个候选父组织，请回复候选编号或编码后再确认执行。"
 		}
 		lines := make([]string, 0, len(turn.Candidates))
@@ -293,7 +305,68 @@ func assistantReplyFallbackText(req assistantRenderReplyRequest, stage string, t
 		}
 	}
 	if explain := strings.TrimSpace(turn.DryRun.Explain); explain != "" {
-		return explain
+		return assistantSanitizeUserFacingReplyText(explain, locale)
+	}
+	if locale == "en" {
+		return "Your request was received. I will continue processing."
 	}
 	return "已收到你的请求，我将继续处理。"
+}
+
+func assistantSanitizeUserFacingReplyText(text string, locale string) string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return ""
+	}
+	if !assistantReplyContainsTechnicalSignal(trimmed) {
+		return trimmed
+	}
+	if strings.TrimSpace(strings.ToLower(locale)) == "en" {
+		return "The request could not be completed. Please adjust the input and try again."
+	}
+	return "本次请求未能完成，请根据提示调整后重试。"
+}
+
+func assistantReplyContainsTechnicalSignal(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return false
+	}
+	if isStableDBCode(strings.ToUpper(trimmed)) {
+		return true
+	}
+	lower := strings.ToLower(trimmed)
+	for _, token := range []string{
+		"ai_",
+		"assistant_",
+		"schema decode",
+		"strict constraints",
+		"contract version",
+		"determinism",
+		"boundary violation",
+		"runtime config",
+		"model provider",
+		"idempotency",
+		"trace_id",
+		"request_id",
+	} {
+		if strings.Contains(lower, token) {
+			return true
+		}
+	}
+	parts := strings.FieldsFunc(lower, func(r rune) bool {
+		if r >= 'a' && r <= 'z' {
+			return false
+		}
+		if r >= '0' && r <= '9' {
+			return false
+		}
+		return r != '_'
+	})
+	for _, part := range parts {
+		if strings.Count(part, "_") >= 2 && len(part) >= 12 {
+			return true
+		}
+	}
+	return false
 }

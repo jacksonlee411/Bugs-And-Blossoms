@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -122,5 +123,40 @@ func TestAssistantReplyModelTargetGate(t *testing.T) {
 	})
 	if !errors.Is(err, errAssistantReplyModelTargetMismatch) {
 		t.Fatalf("expected errAssistantReplyModelTargetMismatch, got=%v", err)
+	}
+}
+
+func TestAssistantReplyFallbackText_HidesTechnicalSignals(t *testing.T) {
+	text := assistantReplyFallbackText(assistantRenderReplyRequest{
+		Stage:        "commit_failed",
+		Kind:         "error",
+		Outcome:      "failure",
+		ErrorCode:    "ai_plan_schema_constrained_decode_failed",
+		ErrorMessage: "ai_plan_schema_constrained_decode_failed",
+	}, "commit_failed", nil, "zh")
+	if strings.Contains(text, "ai_plan_schema_constrained_decode_failed") {
+		t.Fatalf("expected technical signal hidden, got=%q", text)
+	}
+	if strings.TrimSpace(text) == "" {
+		t.Fatalf("expected non-empty fallback text")
+	}
+}
+
+func TestAssistantDecodeOpenAIReplyResult_HidesTechnicalSignals(t *testing.T) {
+	raw := []byte(`{"choices":[{"message":{"content":"ai_plan_schema_constrained_decode_failed"}}]}`)
+	result, err := assistantDecodeOpenAIReplyResult(raw, assistantReplyRenderPrompt{
+		ConversationID: "conv_1",
+		TurnID:         "turn_1",
+		Stage:          "commit_failed",
+		Kind:           "error",
+		Outcome:        "failure",
+		Locale:         "zh",
+		FallbackText:   "ai_plan_schema_constrained_decode_failed",
+	})
+	if err != nil {
+		t.Fatalf("assistantDecodeOpenAIReplyResult err=%v", err)
+	}
+	if strings.Contains(result.Text, "ai_plan_schema_constrained_decode_failed") {
+		t.Fatalf("expected technical signal hidden, got=%q", result.Text)
 	}
 }

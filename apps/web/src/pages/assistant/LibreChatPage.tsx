@@ -52,6 +52,8 @@ function latestTurn(conversation: AssistantConversation | null): AssistantTurn |
   return conversation.turns[conversation.turns.length - 1] ?? null
 }
 
+const assistantSyntheticReplyTurnID = 'missing-turn-context'
+
 function errorMessage(err: unknown, fallback: string): string {
   const message = (err as { message?: string })?.message
   if (typeof message === 'string' && message.trim().length > 0) {
@@ -195,13 +197,20 @@ export function LibreChatPage() {
       }
       const conversationID = normalized(options?.conversationID) || normalized(conversationRef.current?.conversation_id)
       const currentTurnID = normalized(options?.turnID) || normalized(latestTurn(conversationRef.current)?.turn_id)
-      if (conversationID.length === 0) {
-        sendBridgeDialog(text, kind, stage, meta)
+      const allowMissingTurn = options?.allowMissingTurn ?? false
+      const resolvedTurnID = currentTurnID.length > 0 ? currentTurnID : allowMissingTurn ? assistantSyntheticReplyTurnID : ''
+      if (conversationID.length === 0 || resolvedTurnID.length === 0) {
+        const notice =
+          conversationID.length === 0
+            ? '回复生成链路不可用：缺少会话上下文，请先发起业务请求。'
+            : '回复生成链路不可用：缺少轮次上下文，请重试。'
+        setBridgeError(notice)
+        postBridgeNotice(notice, 'warning')
         return
       }
       void (async () => {
         try {
-          const rendered = await renderAssistantTurnReply(conversationID, currentTurnID || 'system', {
+          const rendered = await renderAssistantTurnReply(conversationID, resolvedTurnID, {
             stage,
             kind,
             outcome: options?.outcome ?? (kind === 'error' ? 'failure' : 'success'),
@@ -210,7 +219,7 @@ export function LibreChatPage() {
             next_action: normalized(options?.nextAction),
             locale: 'zh',
             fallback_text: text,
-            allow_missing_turn: options?.allowMissingTurn ?? currentTurnID.length === 0
+            allow_missing_turn: allowMissingTurn
           })
           sendBridgeDialog(
             normalized(rendered.text) || text,
@@ -223,11 +232,13 @@ export function LibreChatPage() {
             }
           )
         } catch {
-          sendBridgeDialog(text, kind, stage, meta)
+          const notice = '回复生成失败，请稍后重试。'
+          setBridgeError(notice)
+          postBridgeNotice(notice, 'error')
         }
       })()
     },
-    [postBridgeMessage]
+    [postBridgeMessage, postBridgeNotice]
   )
 
   const commitTurnByDialogue = useCallback(
@@ -442,7 +453,9 @@ export function LibreChatPage() {
             postBridgeDialog(retryMessage, 'error', 'commit_failed', undefined, {
               errorCode: errorCode(retryErr),
               errorMessage: retryMessage,
-              outcome: 'failure'
+              outcome: 'failure',
+              allowMissingTurn: true,
+              turnID: assistantSyntheticReplyTurnID
             })
             return
           }
@@ -452,7 +465,9 @@ export function LibreChatPage() {
           postBridgeDialog(message, 'error', 'commit_failed', undefined, {
             errorCode: errorCode(err),
             errorMessage: message,
-            outcome: 'failure'
+            outcome: 'failure',
+            allowMissingTurn: true,
+            turnID: assistantSyntheticReplyTurnID
           })
           return
         }

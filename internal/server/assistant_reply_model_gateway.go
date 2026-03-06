@@ -198,9 +198,10 @@ func (a assistantOpenAIProviderAdapter) RenderReply(ctx context.Context, provide
 func assistantDecodeOpenAIReplyResult(raw []byte, prompt assistantReplyRenderPrompt) (assistantReplyModelResult, error) {
 	var completion assistantOpenAIChatCompletionResponse
 	if err := json.Unmarshal(raw, &completion); err != nil {
-		if strings.TrimSpace(prompt.FallbackText) != "" {
+		fallbackText := assistantSanitizeUserFacingReplyText(strings.TrimSpace(prompt.FallbackText), prompt.Locale)
+		if fallbackText != "" {
 			return assistantReplyModelResult{
-				Text:           strings.TrimSpace(prompt.FallbackText),
+				Text:           fallbackText,
 				Kind:           assistantReplyKind("", prompt.Kind, prompt.Outcome),
 				Stage:          assistantReplyStage("", prompt.Outcome, nil),
 				ReplyModelName: assistantReplyTargetModelName,
@@ -216,12 +217,13 @@ func assistantDecodeOpenAIReplyResult(raw []byte, prompt assistantReplyRenderPro
 	if strings.TrimSpace(parsed.Text) == "" {
 		parsed.Text = strings.TrimSpace(prompt.FallbackText)
 	}
-	if strings.TrimSpace(parsed.Text) == "" {
+	text := assistantSanitizeUserFacingReplyText(strings.TrimSpace(parsed.Text), prompt.Locale)
+	if text == "" {
 		return assistantReplyModelResult{}, errAssistantReplyRenderFailed
 	}
 	resolvedStage := assistantReplyStage(parsed.Stage, prompt.Outcome, nil)
 	return assistantReplyModelResult{
-		Text:           strings.TrimSpace(parsed.Text),
+		Text:           text,
 		Kind:           assistantReplyKind(parsed.Kind, resolvedStage, prompt.Outcome),
 		Stage:          resolvedStage,
 		ReplyModelName: assistantReplyTargetModelName,
