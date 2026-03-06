@@ -218,39 +218,58 @@ func assistantUIBridgeScriptBody() string {
     }
     return document.querySelector('form textarea, form [contenteditable="true"], textarea, [contenteditable="true"]');
   }
-  function findDialogRoot() {
-    var selectors = [
-      '[data-testid="conversation-container"]',
-      '[data-testid="chat-container"]',
-      '[role="log"]',
-      "main",
-      "#__next"
+  var dialogQueue = [];
+  var dialogObserver = null;
+  var dialogObserverTimer = null;
+  var dialogObserverAttempts = 0;
+  var dialogObserverMaxAttempts = 80;
+  function isValidDialogRoot(node) {
+    if (!node || !node.tagName) {
+      return false;
+    }
+    var tag = String(node.tagName || "").toLowerCase();
+    if (tag === "body" || tag === "html" || tag === "main") {
+      return false;
+    }
+    return true;
+  }
+	  function findDialogRoot() {
+	    var selectors = [
+	      "#messages-view",
+	      '[data-testid="conversation-container"] [role="log"]',
+	      '[data-testid="chat-container"] [role="log"]',
+	      '[data-testid="conversation-container"]',
+	      '[data-testid="chat-container"]',
+      '[data-testid="messages-container"]',
+      '[data-testid="message-list"]',
+      '[role="log"]'
     ];
     for (var i = 0; i < selectors.length; i += 1) {
       var node = document.querySelector(selectors[i]);
-      if (node) {
+      if (isValidDialogRoot(node)) {
         return node;
       }
     }
-    return document.body;
+    return null;
   }
   function ensureDialogStream() {
     var root = findDialogRoot();
     if (!root) {
       return null;
     }
-    var container = root.querySelector('[data-assistant-dialog-stream="1"]');
-    if (container) {
-      return container;
+    var container = document.querySelector('[data-assistant-dialog-stream="1"]');
+    if (!container) {
+      container = document.createElement("div");
+      container.setAttribute("data-assistant-dialog-stream", "1");
+      container.style.display = "flex";
+      container.style.flexDirection = "column";
+      container.style.gap = "8px";
+      container.style.margin = "12px 0";
+      container.style.pointerEvents = "none";
     }
-    container = document.createElement("div");
-    container.setAttribute("data-assistant-dialog-stream", "1");
-    container.style.display = "flex";
-    container.style.flexDirection = "column";
-    container.style.gap = "8px";
-    container.style.margin = "12px 0";
-    container.style.pointerEvents = "none";
-    root.appendChild(container);
+    if (container.parentElement !== root) {
+      root.appendChild(container);
+    }
     return container;
   }
   function styleDialogItem(item, level) {
@@ -277,13 +296,12 @@ func assistantUIBridgeScriptBody() string {
       item.style.borderColor = "#ef9a9a";
     }
   }
-  function appendDialogMessage(payload, fallbackSeverity) {
-    var text = normalize(payload && payload.text);
-    if (!text) {
+  function appendDialogMessageToStream(stream, payload, fallbackSeverity) {
+    if (!stream) {
       return;
     }
-    var stream = ensureDialogStream();
-    if (!stream) {
+    var text = normalize(payload && payload.text);
+    if (!text) {
       return;
     }
     var level = normalize(payload && (payload.kind || payload.severity || fallbackSeverity)).toLowerCase();
@@ -299,6 +317,70 @@ func assistantUIBridgeScriptBody() string {
     item.textContent = text;
     stream.appendChild(item);
     item.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+  function stopDialogObserver() {
+    if (dialogObserver) {
+      dialogObserver.disconnect();
+      dialogObserver = null;
+    }
+    if (dialogObserverTimer !== null) {
+      window.clearInterval(dialogObserverTimer);
+      dialogObserverTimer = null;
+    }
+  }
+  function startDialogObserver() {
+    if (dialogObserver || !document.documentElement) {
+      return;
+    }
+    dialogObserverAttempts = 0;
+    dialogObserver = new MutationObserver(function () {
+      flushDialogQueue();
+    });
+    dialogObserver.observe(document.documentElement, { childList: true, subtree: true });
+    dialogObserverTimer = window.setInterval(function () {
+      dialogObserverAttempts += 1;
+      if (flushDialogQueue()) {
+        return;
+      }
+      if (dialogObserverAttempts < dialogObserverMaxAttempts) {
+        return;
+      }
+      stopDialogObserver();
+      if (dialogQueue.length > 0) {
+        dialogQueue = [];
+        window.parent.postMessage({
+          type: "assistant.bridge.render_error",
+          channel: channel,
+          nonce: nonce,
+          payload: { code: "dialog_root_not_found", message: "dialog root not found" }
+        }, window.location.origin);
+      }
+    }, 250);
+  }
+  function flushDialogQueue() {
+    if (dialogQueue.length === 0) {
+      stopDialogObserver();
+      return true;
+    }
+    var stream = ensureDialogStream();
+    if (!stream) {
+      startDialogObserver();
+      return false;
+    }
+    while (dialogQueue.length > 0) {
+      var next = dialogQueue.shift();
+      appendDialogMessageToStream(stream, next.payload, next.fallbackSeverity);
+    }
+    stopDialogObserver();
+    return true;
+  }
+  function appendDialogMessage(payload, fallbackSeverity) {
+    var text = normalize(payload && payload.text);
+    if (!text) {
+      return;
+    }
+    dialogQueue.push({ payload: payload, fallbackSeverity: fallbackSeverity });
+    flushDialogQueue();
   }
   window.addEventListener("message", function (event) {
     if (event.origin !== window.location.origin) {

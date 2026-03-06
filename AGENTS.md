@@ -376,6 +376,12 @@ modules/{module}/
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
 - DEV-PLAN-260：LibreChat 对话闭环自动执行重构方案（真实多轮补全/确认）：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - DEV-PLAN-260 执行日志：`docs/dev-records/dev-plan-260-execution-log.md`
+- DEV-PLAN-261：LibreChat 助手对话失败问题排查与修复实施计划：`docs/dev-plans/261-librechat-assistant-conversation-failure-investigation-and-remediation-plan.md`
+- DEV-PLAN-261 执行日志：`docs/dev-records/dev-plan-261-execution-log.md`
+- DEV-PLAN-262：LibreChat 对话回执渲染越界问题调查与收敛方案：`docs/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
+- DEV-PLAN-262 执行日志：`docs/dev-records/dev-plan-262-execution-log.md`
+- DEV-PLAN-263：LibreChat GPT-5.2 助手对话回复专线实施方案：`docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
+- DEV-PLAN-263 执行日志：`docs/dev-records/dev-plan-263-execution-log.md`
 - DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`
