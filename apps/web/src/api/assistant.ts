@@ -49,6 +49,16 @@ export interface AssistantConfigDeltaPlan {
   changes: AssistantConfigChange[]
 }
 
+export interface AssistantReplyNLG {
+  text: string
+  kind: 'info' | 'warning' | 'success' | 'error'
+  stage: 'draft' | 'missing_fields' | 'candidate_list' | 'candidate_confirm' | 'commit_result' | 'commit_failed'
+  reply_model_name: string
+  reply_prompt_version: string
+  conversation_id: string
+  turn_id: string
+}
+
 export interface AssistantTurn {
   turn_id: string
   user_input: string
@@ -92,6 +102,7 @@ export interface AssistantTurn {
     event_type: string
     event_uuid: string
   }
+  reply_nlg?: AssistantReplyNLG
 }
 
 export interface AssistantConversation {
@@ -254,6 +265,18 @@ export interface AssistantRuntimeStatusResponse {
   }
 }
 
+export interface AssistantRenderReplyRequest {
+  stage?: string
+  kind?: string
+  outcome?: 'success' | 'failure'
+  error_code?: string
+  error_message?: string
+  next_action?: string
+  locale?: 'zh' | 'en'
+  fallback_text?: string
+  allow_missing_turn?: boolean
+}
+
 export async function createAssistantConversation(): Promise<AssistantConversation> {
   return httpClient.post<AssistantConversation>('/internal/assistant/conversations', {})
 }
@@ -303,6 +326,17 @@ export async function commitAssistantTurn(conversationID: string, turnID: string
   return httpClient.post<AssistantConversation>(
     `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(turnID)}:commit`,
     {}
+  )
+}
+
+export async function renderAssistantTurnReply(
+  conversationID: string,
+  turnID: string,
+  payload: AssistantRenderReplyRequest
+): Promise<AssistantReplyNLG> {
+  return httpClient.post<AssistantReplyNLG>(
+    `/internal/assistant/conversations/${encodeURIComponent(conversationID)}/turns/${encodeURIComponent(turnID)}:reply`,
+    payload
   )
 }
 

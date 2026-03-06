@@ -7,6 +7,7 @@ import {
   createAssistantConversation,
   createAssistantTurn,
   getAssistantConversation,
+  renderAssistantTurnReply,
   type AssistantConversation,
   type AssistantTurn
 } from '../../api/assistant'
@@ -168,19 +169,63 @@ export function LibreChatPage() {
       message: string,
       kind: DialogMessageKind = 'info',
       stage: DialogMessageStage = 'draft',
-      meta?: Record<string, string>
+      meta?: Record<string, string>,
+      options?: {
+        conversationID?: string
+        turnID?: string
+        outcome?: 'success' | 'failure'
+        errorCode?: string
+        errorMessage?: string
+        nextAction?: string
+        allowMissingTurn?: boolean
+      }
     ) => {
+      const sendBridgeDialog = (text: string, finalKind: DialogMessageKind, finalStage: DialogMessageStage, finalMeta?: Record<string, string>) => {
+        postBridgeMessage('assistant.flow.dialog', {
+          message_id: `dlg_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
+          kind: finalKind,
+          stage: finalStage,
+          text,
+          meta: finalMeta ?? {}
+        })
+      }
       const text = normalized(message)
       if (text.length === 0) {
         return
       }
-      postBridgeMessage('assistant.flow.dialog', {
-        message_id: `dlg_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
-        kind,
-        stage,
-        text,
-        meta: meta ?? {}
-      })
+      const conversationID = normalized(options?.conversationID) || normalized(conversationRef.current?.conversation_id)
+      const currentTurnID = normalized(options?.turnID) || normalized(latestTurn(conversationRef.current)?.turn_id)
+      if (conversationID.length === 0) {
+        sendBridgeDialog(text, kind, stage, meta)
+        return
+      }
+      void (async () => {
+        try {
+          const rendered = await renderAssistantTurnReply(conversationID, currentTurnID || 'system', {
+            stage,
+            kind,
+            outcome: options?.outcome ?? (kind === 'error' ? 'failure' : 'success'),
+            error_code: normalized(options?.errorCode),
+            error_message: normalized(options?.errorMessage) || text,
+            next_action: normalized(options?.nextAction),
+            locale: 'zh',
+            fallback_text: text,
+            allow_missing_turn: options?.allowMissingTurn ?? currentTurnID.length === 0
+          })
+          sendBridgeDialog(
+            normalized(rendered.text) || text,
+            (normalized(rendered.kind) as DialogMessageKind) || kind,
+            (normalized(rendered.stage) as DialogMessageStage) || stage,
+            {
+              ...(meta ?? {}),
+              reply_model_name: normalized(rendered.reply_model_name),
+              reply_prompt_version: normalized(rendered.reply_prompt_version)
+            }
+          )
+        } catch {
+          sendBridgeDialog(text, kind, stage, meta)
+        }
+      })()
     },
     [postBridgeMessage]
   )
@@ -214,7 +259,11 @@ export function LibreChatPage() {
           const message = errorMessage(err, '确认失败，请稍后重试。')
           setBridgeError(message)
           setDialogFlow(withDialogPhase(dialogFlowRef.current, 'failed'))
-          postBridgeDialog(message, 'error', 'commit_failed')
+          postBridgeDialog(message, 'error', 'commit_failed', undefined, {
+            errorCode: errorCode(err),
+            errorMessage: message,
+            outcome: 'failure'
+          })
           if (shouldRefreshConversation(errorCode(err))) {
             await refreshConversation().catch(() => undefined)
           }
@@ -239,7 +288,11 @@ export function LibreChatPage() {
         const message = errorMessage(err, '提交失败，请按最新提示继续。')
         setBridgeError(message)
         setDialogFlow(withDialogPhase(dialogFlowRef.current, 'failed'))
-        postBridgeDialog(message, 'error', 'commit_failed')
+        postBridgeDialog(message, 'error', 'commit_failed', undefined, {
+          errorCode: errorCode(err),
+          errorMessage: message,
+          outcome: 'failure'
+        })
         if (shouldRefreshConversation(errorCode(err))) {
           await refreshConversation().catch(() => undefined)
         }
@@ -333,7 +386,11 @@ export function LibreChatPage() {
         } catch (err) {
           const message = errorMessage(err, '创建会话失败')
           setBridgeError(message)
-          postBridgeDialog(message, 'error', 'commit_failed')
+          postBridgeDialog(message, 'error', 'commit_failed', undefined, {
+            errorCode: errorCode(err),
+            errorMessage: message,
+            outcome: 'failure'
+          })
           return
         }
       }
@@ -382,13 +439,21 @@ export function LibreChatPage() {
           } catch (retryErr) {
             const retryMessage = errorMessage(retryErr, '生成计划失败')
             setBridgeError(retryMessage)
-            postBridgeDialog(retryMessage, 'error', 'commit_failed')
+            postBridgeDialog(retryMessage, 'error', 'commit_failed', undefined, {
+              errorCode: errorCode(retryErr),
+              errorMessage: retryMessage,
+              outcome: 'failure'
+            })
             return
           }
         } else {
           const message = errorMessage(err, '生成计划失败')
           setBridgeError(message)
-          postBridgeDialog(message, 'error', 'commit_failed')
+          postBridgeDialog(message, 'error', 'commit_failed', undefined, {
+            errorCode: errorCode(err),
+            errorMessage: message,
+            outcome: 'failure'
+          })
           return
         }
       }

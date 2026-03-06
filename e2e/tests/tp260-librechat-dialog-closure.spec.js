@@ -225,6 +225,24 @@ async function installTp260Mock(page) {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(currentConversation) });
       return;
     }
+    if (method === "POST" && /\/internal\/assistant\/conversations\/conv_tp260_1\/turns\/[^/]+:reply$/.test(pathname)) {
+      const body = request.postDataJSON ? request.postDataJSON() : {};
+      const fallbackText = String(body?.fallback_text || "mock reply");
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          text: fallbackText,
+          kind: String(body?.kind || "info"),
+          stage: String(body?.stage || "draft"),
+          reply_model_name: "gpt-5.2",
+          reply_prompt_version: "assistant.reply.v1",
+          conversation_id: "conv_tp260_1",
+          turn_id: String(pathname.split("/turns/")[1] || "turn_tp260_1").split(":")[0]
+        })
+      });
+      return;
+    }
 
     await route.continue();
   });

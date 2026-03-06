@@ -382,6 +382,8 @@ modules/{module}/
 - DEV-PLAN-262 执行日志：`docs/dev-records/dev-plan-262-execution-log.md`
 - DEV-PLAN-263：LibreChat GPT-5.2 助手对话回复专线实施方案：`docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
 - DEV-PLAN-263 执行日志：`docs/dev-records/dev-plan-263-execution-log.md`
+- DEV-PLAN-264：LibreChat GPT-5.2 回复单链路与真实验收证据收敛方案：`docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
+- DEV-PLAN-264 执行日志：`docs/dev-records/dev-plan-264-execution-log.md`
 - DEV-PLAN-225 执行日志：`docs/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/dev-records/dev-plan-170-execution-log.md`

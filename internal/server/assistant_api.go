@@ -203,6 +203,18 @@ type assistantConfirmRequest struct {
 	CandidateID string `json:"candidate_id"`
 }
 
+type assistantRenderReplyRequest struct {
+	Stage            string `json:"stage"`
+	Kind             string `json:"kind"`
+	Outcome          string `json:"outcome"`
+	ErrorCode        string `json:"error_code"`
+	ErrorMessage     string `json:"error_message"`
+	NextAction       string `json:"next_action"`
+	Locale           string `json:"locale"`
+	FallbackText     string `json:"fallback_text"`
+	AllowMissingTurn bool   `json:"allow_missing_turn"`
+}
+
 func newAssistantConversationService(orgStore OrgUnitStore, writeSvc orgunitservices.OrgUnitWriteService) *assistantConversationService {
 	gateway, err := newAssistantModelGateway()
 	return &assistantConversationService{
@@ -525,6 +537,52 @@ func handleAssistantTurnActionAPI(w http.ResponseWriter, r *http.Request, svc *a
 		}
 		writeJSON(w, http.StatusOK, conversation)
 		return
+	case "reply":
+		var req assistantRenderReplyRequest
+		if hasRequestBody(r) {
+			dec := json.NewDecoder(r.Body)
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(&req); err != nil {
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "bad_json", "bad json")
+				return
+			}
+		}
+		reply, err := svc.renderTurnReply(r.Context(), tenant.ID, principal, conversationID, turnID, req)
+		if err != nil {
+			switch {
+			case errors.Is(err, errAssistantConversationNotFound):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_not_found", "conversation not found")
+			case errors.Is(err, errAssistantTenantMismatch):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "tenant_mismatch", "tenant mismatch")
+			case errors.Is(err, errAssistantConversationForbidden):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusForbidden, "forbidden", "forbidden")
+			case errors.Is(err, errAssistantTurnNotFound):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusNotFound, "conversation_turn_not_found", "conversation turn not found")
+			case errors.Is(err, errAssistantReplyModelTargetMismatch):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_reply_model_target_mismatch", "assistant reply model target mismatch")
+			case errors.Is(err, errAssistantReplyRenderFailed):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_reply_render_failed", "assistant reply render failed")
+			case errors.Is(err, errAssistantModelProviderUnavailable):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_model_provider_unavailable", "ai model provider unavailable")
+			case errors.Is(err, errAssistantModelTimeout):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusGatewayTimeout, "ai_model_timeout", "ai model timeout")
+			case errors.Is(err, errAssistantModelRateLimited):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusTooManyRequests, "ai_model_rate_limited", "ai model rate limited")
+			case errors.Is(err, errAssistantModelConfigInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_model_config_invalid", "ai model config invalid")
+			case errors.Is(err, errAssistantRuntimeConfigInvalid):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusUnprocessableEntity, "ai_runtime_config_invalid", "ai runtime config invalid")
+			case errors.Is(err, errAssistantRuntimeConfigMissing):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusServiceUnavailable, "ai_runtime_config_missing", "ai runtime config missing")
+			case errors.Is(err, errAssistantModelSecretMissing):
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "ai_model_secret_missing", "ai model secret missing")
+			default:
+				routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusInternalServerError, "assistant_reply_render_failed", "assistant reply render failed")
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, reply)
+		return
 	default:
 		routing.WriteError(w, r, routing.RouteClassInternalAPI, http.StatusBadRequest, "invalid_request", "assistant action unsupported")
 		return
@@ -590,6 +648,8 @@ var (
 	errAssistantTaskCancelNotAllowed              = errors.New("assistant_task_cancel_not_allowed")
 	errAssistantTaskWorkflowUnavailable           = errors.New("assistant_task_workflow_unavailable")
 	errAssistantTaskDispatchFailed                = errors.New("assistant_task_dispatch_failed")
+	errAssistantReplyRenderFailed                 = errors.New("assistant_reply_render_failed")
+	errAssistantReplyModelTargetMismatch          = errors.New("assistant_reply_model_target_mismatch")
 )
 
 func (s *assistantConversationService) createConversationWithContext(ctx context.Context, tenantID string, principal Principal) (*assistantConversation, error) {

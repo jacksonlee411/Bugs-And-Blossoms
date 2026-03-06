@@ -6,7 +6,8 @@ const assistantAPIMocks = vi.hoisted(() => ({
   confirmAssistantTurn: vi.fn(),
   createAssistantConversation: vi.fn(),
   createAssistantTurn: vi.fn(),
-  getAssistantConversation: vi.fn()
+  getAssistantConversation: vi.fn(),
+  renderAssistantTurnReply: vi.fn()
 }))
 
 vi.mock('../../api/assistant', () => assistantAPIMocks)
@@ -129,6 +130,17 @@ describe('LibreChatPage', () => {
       })
     )
     assistantAPIMocks.getAssistantConversation.mockResolvedValue(makeConversation())
+    assistantAPIMocks.renderAssistantTurnReply.mockImplementation(
+      async (_conversationID: string, turnID: string, payload: { fallback_text?: string; kind?: string; stage?: string }) => ({
+        text: payload.fallback_text ?? 'mock reply',
+        kind: payload.kind ?? 'info',
+        stage: payload.stage ?? 'draft',
+        reply_model_name: 'gpt-5.2',
+        reply_prompt_version: 'assistant.reply.v1',
+        conversation_id: 'conv_1',
+        turn_id: turnID
+      })
+    )
   })
 
   it('shows bridge connected notice after assistant.bridge.ready', async () => {
