@@ -1,4 +1,10 @@
 import { expect, test } from "@playwright/test";
+import {
+  dispatchAssistantBridgeMessage,
+  expectAssistantDialogStoplines,
+  gotoAIConversationPage,
+  readAssistantBridgeChannelNonce
+} from "./helpers/assistant-dialog";
 
 async function setupTenantAdminSession(browser) {
   const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
@@ -117,6 +123,14 @@ async function installTp260Mock(page) {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({ items: [], next_cursor: "" })
+      });
+      return;
+    }
+    if (method === "GET" && pathname === "/internal/assistant/runtime/status") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ services: [{ name: "assistant", status: "ok", reason: "mock" }] })
       });
       return;
     }
@@ -251,28 +265,18 @@ async function installTp260Mock(page) {
 }
 
 async function readBridgeChannelNonce(page) {
-  const frame = page.getByTestId("librechat-standalone-frame");
-  await expect(frame).toBeVisible();
-  const src = await frame.getAttribute("src");
-  const iframeURL = new URL(src || "", "http://localhost:8080");
-  return {
-    channel: iframeURL.searchParams.get("channel"),
-    nonce: iframeURL.searchParams.get("nonce")
-  };
+  return readAssistantBridgeChannelNonce(page);
 }
 
 async function dispatchBridgeMessage(page, payload) {
-  await page.evaluate((data) => {
-    window.dispatchEvent(new MessageEvent("message", { data, origin: window.location.origin }));
-  }, payload);
+  await dispatchAssistantBridgeMessage(page, payload);
 }
 
-test("tp260-e2e-001: case1~4 dialogue-closure flow", async ({ browser }) => {
+test("tp260-e2e-001: AI对话 case1~4 dialogue-closure flow", async ({ browser }) => {
   test.setTimeout(240_000);
   const { appContext, page } = await setupTenantAdminSession(browser);
   const stats = await installTp260Mock(page);
-  await page.goto("/app/assistant/librechat");
-  await expect(page.getByRole("heading", { name: "LibreChat" })).toBeVisible();
+  await gotoAIConversationPage(page);
 
   const { channel, nonce } = await readBridgeChannelNonce(page);
   expect(channel).toBeTruthy();
@@ -284,7 +288,6 @@ test("tp260-e2e-001: case1~4 dialogue-closure flow", async ({ browser }) => {
     nonce,
     payload: { source: "assistant-ui-bridge" }
   });
-  await expect(page.getByText("自动执行通道已连接：可直接在 LibreChat 对话中输入需求。")).toBeVisible();
 
   await dispatchBridgeMessage(page, {
     type: "assistant.prompt.sync",
@@ -359,6 +362,7 @@ test("tp260-e2e-001: case1~4 dialogue-closure flow", async ({ browser }) => {
   await expect.poll(() => stats.confirmCalls).toBe(3);
   await expect.poll(() => stats.commitCalls).toBe(3);
   await expect.poll(() => stats.lastConfirmCandidateID).toBe("SSC-2");
+  await expectAssistantDialogStoplines(page);
 
   await appContext.close();
 });

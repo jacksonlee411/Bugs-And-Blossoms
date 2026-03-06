@@ -1,4 +1,10 @@
 import { expect, test } from "@playwright/test";
+import {
+  assistantDialogStream,
+  expectAssistantDialogStoplines,
+  gotoAIConversationPage,
+  typePromptInAssistantChat
+} from "./helpers/assistant-dialog";
 
 async function setupTenantAdminSession(browser) {
   const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
@@ -14,15 +20,7 @@ async function setupTenantAdminSession(browser) {
   return { appContext, page };
 }
 
-async function typePromptInIframe(page, input) {
-  const frame = page.frameLocator("[data-testid='librechat-standalone-frame']");
-  const textarea = frame.locator("textarea").first();
-  await expect(textarea).toBeVisible({ timeout: 120_000 });
-  await textarea.fill(input);
-  await frame.getByRole("button", { name: /发送|send/i }).click();
-}
-
-test("tp264-e2e-001: real typing must render gpt-5.2 reply via :reply", async ({ browser }) => {
+test("tp264-e2e-001: AI对话 real typing must render gpt-5.2 reply via :reply", async ({ browser }) => {
   test.setTimeout(300_000);
   const { appContext, page } = await setupTenantAdminSession(browser);
   const observedReplyRequests = [];
@@ -56,10 +54,9 @@ test("tp264-e2e-001: real typing must render gpt-5.2 reply via :reply", async ({
     observedReplyResponses.push({ pathname, status: response.status(), body });
   });
 
-  await page.goto("/app/assistant/librechat");
-  await expect(page.getByRole("heading", { name: "LibreChat" })).toBeVisible();
+  await gotoAIConversationPage(page);
 
-  await typePromptInIframe(
+  await typePromptInAssistantChat(
     page,
     "在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。通过AI对话，调用相关能力完成部门的创建任务。"
   );
@@ -90,11 +87,10 @@ test("tp264-e2e-001: real typing must render gpt-5.2 reply via :reply", async ({
   expect(Object.prototype.hasOwnProperty.call(request?.body || {}, "fallback_text")).toBe(false);
   expect(Object.prototype.hasOwnProperty.call(request?.body || {}, "allow_missing_turn")).toBe(false);
 
-  const streamLocator = page
-    .frameLocator("[data-testid='librechat-standalone-frame']")
-    .locator("[data-assistant-dialog-stream='1']");
+  const streamLocator = assistantDialogStream(page);
   await expect(streamLocator.first()).toBeVisible({ timeout: 120_000 });
   await expect(streamLocator.first()).not.toContainText("ai_plan_schema_constrained_decode_failed");
+  await expectAssistantDialogStoplines(page);
 
   await expect(page.getByText("ai_plan_schema_constrained_decode_failed")).toHaveCount(0);
 

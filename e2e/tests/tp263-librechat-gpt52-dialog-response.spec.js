@@ -1,4 +1,11 @@
 import { expect, test } from "@playwright/test";
+import {
+  assistantDialogStream,
+  dispatchAssistantBridgeMessage,
+  expectAssistantDialogStoplines,
+  gotoAIConversationPage,
+  readAssistantBridgeChannelNonce
+} from "./helpers/assistant-dialog";
 
 async function setupTenantAdminSession(browser) {
   const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
@@ -75,23 +82,14 @@ function makeConversation(turns) {
 }
 
 async function readBridgeChannelNonce(page) {
-  const frame = page.getByTestId("librechat-standalone-frame");
-  await expect(frame).toBeVisible();
-  const src = await frame.getAttribute("src");
-  const iframeURL = new URL(src || "", "http://localhost:8080");
-  return {
-    channel: iframeURL.searchParams.get("channel"),
-    nonce: iframeURL.searchParams.get("nonce")
-  };
+  return readAssistantBridgeChannelNonce(page);
 }
 
 async function dispatchBridgeMessage(page, payload) {
-  await page.evaluate((data) => {
-    window.dispatchEvent(new MessageEvent("message", { data, origin: window.location.origin }));
-  }, payload);
+  await dispatchAssistantBridgeMessage(page, payload);
 }
 
-test("tp263-e2e-001: librechat reply must go through gpt-5.2 reply pipeline", async ({ browser }) => {
+test("tp263-e2e-001: AI对话 reply must go through gpt-5.2 reply pipeline", async ({ browser }) => {
   test.setTimeout(240_000);
   const { appContext, page } = await setupTenantAdminSession(browser);
 
@@ -107,6 +105,22 @@ test("tp263-e2e-001: librechat reply must go through gpt-5.2 reply pipeline", as
     if (method === "POST" && pathname === "/internal/assistant/conversations") {
       currentConversation = makeConversation([]);
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(currentConversation) });
+      return;
+    }
+    if (method === "GET" && pathname === "/internal/assistant/conversations") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ items: [], next_cursor: "" })
+      });
+      return;
+    }
+    if (method === "GET" && pathname === "/internal/assistant/runtime/status") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ services: [{ name: "assistant", status: "ok", reason: "mock" }] })
+      });
       return;
     }
     if (method === "POST" && pathname === "/internal/assistant/conversations/conv_tp263_1/turns") {
@@ -141,8 +155,7 @@ test("tp263-e2e-001: librechat reply must go through gpt-5.2 reply pipeline", as
     await route.continue();
   });
 
-  await page.goto("/app/assistant/librechat");
-  await expect(page.getByRole("heading", { name: "LibreChat" })).toBeVisible();
+  await gotoAIConversationPage(page);
 
   const { channel, nonce } = await readBridgeChannelNonce(page);
   expect(channel).toBeTruthy();
@@ -168,6 +181,8 @@ test("tp263-e2e-001: librechat reply must go through gpt-5.2 reply pipeline", as
   await expect.poll(() => observedReplyCalls.length, { timeout: 15_000 }).toBeGreaterThan(0);
   expect(String(observedReplyCalls[0]?.stage || "")).toBe("draft");
   expect(String(observedReplyCalls[0]?.fallback_text || "")).not.toContain("ai_plan_schema_constrained_decode_failed");
+  await expect(assistantDialogStream(page).first()).toContainText("已收到需求，正在为你生成可确认草案。", { timeout: 15_000 });
+  await expectAssistantDialogStoplines(page);
   await expect(page.getByText("ai_plan_schema_constrained_decode_failed")).toHaveCount(0);
 
   await appContext.close();

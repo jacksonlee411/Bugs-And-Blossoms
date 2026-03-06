@@ -1,4 +1,10 @@
 import { expect, test } from "@playwright/test";
+import {
+  assistantDialogStream,
+  expectAssistantDialogStoplines,
+  gotoAIConversationPage,
+  typePromptInAssistantChat
+} from "./helpers/assistant-dialog";
 
 async function setupTenantAdminSession(browser) {
   const appBaseURL = process.env.E2E_BASE_URL || "http://localhost:8080";
@@ -14,15 +20,7 @@ async function setupTenantAdminSession(browser) {
   return { appContext, page };
 }
 
-async function typePromptInIframe(page, input) {
-  const frame = page.frameLocator("[data-testid='librechat-standalone-frame']");
-  const textarea = frame.locator("textarea").first();
-  await expect(textarea).toBeVisible({ timeout: 120_000 });
-  await textarea.fill(input);
-  await frame.getByRole("button", { name: /发送|send/i }).click();
-}
-
-test("tp265-e2e-001: blocked reply still must go through gpt-5.2 without fallback", async ({ browser }) => {
+test("tp265-e2e-001: AI对话 blocked reply still must go through gpt-5.2 without fallback", async ({ browser }) => {
   test.setTimeout(300_000);
   const { appContext, page } = await setupTenantAdminSession(browser);
   const observedReplyResponses = [];
@@ -41,10 +39,9 @@ test("tp265-e2e-001: blocked reply still must go through gpt-5.2 without fallbac
     observedReplyResponses.push({ status: response.status(), body });
   });
 
-  await page.goto("/app/assistant/librechat");
-  await expect(page.getByRole("heading", { name: "LibreChat" })).toBeVisible();
+  await gotoAIConversationPage(page);
 
-  await typePromptInIframe(page, "在鲜花组织之下，新建一个名为运营部的部门。");
+  await typePromptInAssistantChat(page, "在鲜花组织之下，新建一个名为运营部的部门。");
 
   await expect
     .poll(() => observedReplyResponses.length, { timeout: 120_000 })
@@ -59,11 +56,10 @@ test("tp265-e2e-001: blocked reply still must go through gpt-5.2 without fallbac
   expect(String(response?.body.text || "").trim().length).toBeGreaterThan(0);
   expect(String(response?.body.text || "")).not.toContain("ai_plan_schema_constrained_decode_failed");
 
-  const streamLocator = page
-    .frameLocator("[data-testid='librechat-standalone-frame']")
-    .locator("[data-assistant-dialog-stream='1']");
+  const streamLocator = assistantDialogStream(page);
   await expect(streamLocator.first()).toBeVisible({ timeout: 120_000 });
   await expect(streamLocator.first()).toContainText(/补充|日期|成立/i);
+  await expectAssistantDialogStoplines(page);
 
   await appContext.close();
 });
