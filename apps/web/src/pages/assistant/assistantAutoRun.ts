@@ -21,8 +21,15 @@ const executionConfirmPatterns: RegExp[] = [
   /^(请)?确认提交[。！!,.，\s]*$/i,
   /^(请)?立即执行[。！!,.，\s]*$/i,
   /^(请)?同意执行[。！!,.，\s]*$/i,
+  /^是的[，,\s]*确认[。！!,.，\s]*$/i,
   /^(yes|ok)[。！!,.，\s]*$/i
 ]
+const structuredRetryErrorCodes = new Set([
+  'ai_plan_schema_constrained_decode_failed',
+  'ai_model_timeout',
+  'ai_model_rate_limited',
+  'ai_model_provider_unavailable'
+])
 
 function trimText(value: string | undefined): string {
   return (value ?? '').trim()
@@ -110,6 +117,36 @@ export function isExecutionConfirmationText(text: string): boolean {
     return false
   }
   return executionConfirmPatterns.some((pattern) => pattern.test(input))
+}
+
+export function shouldRetryStructuredPromptForError(code: string): boolean {
+  const normalizedCode = trimText(code).toLowerCase()
+  return normalizedCode.length > 0 && structuredRetryErrorCodes.has(normalizedCode)
+}
+
+export function isStructuredIntentRetryPrompt(text: string): boolean {
+  return trimText(text).startsWith('请输出严格JSON，不要解释：')
+}
+
+export function composeStructuredIntentRetryPrompt(_text: string): string {
+  const text = trimText(_text)
+  if (looksLikeCreateOrgUnitRequest(text)) {
+    const draft = extractIntentDraftFromText(text)
+    const payload: Record<string, string> = {
+      action: 'create_orgunit'
+    }
+    if (trimText(draft.parent_ref_text).length > 0) {
+      payload.parent_ref_text = trimText(draft.parent_ref_text)
+    }
+    if (trimText(draft.entity_name).length > 0) {
+      payload.entity_name = trimText(draft.entity_name)
+    }
+    if (trimText(draft.effective_date).length > 0) {
+      payload.effective_date = trimText(draft.effective_date)
+    }
+    return `请输出严格JSON，不要解释：${JSON.stringify(payload)}`
+  }
+  return '请输出严格JSON，不要解释：{"action":"plan_only"}'
 }
 
 function resolveCandidateByIndex(input: string, candidates: AssistantCandidateOption[]): string {

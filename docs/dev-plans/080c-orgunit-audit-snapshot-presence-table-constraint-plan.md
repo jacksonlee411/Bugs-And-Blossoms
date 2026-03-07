@@ -299,7 +299,7 @@ $$;
 ### 11.3 测试与证据任务
 10. [x] 更新 `internal/server/orgunit_audit_snapshot_schema_test.go` 的防回归断言。
 11. [x] 新增/补齐 presence 谓词矩阵测试与 rescind_outcome 场景测试。
-12. [x] 在 `docs/dev-records/dev-plan-080-execution-log.md` 增加 080C 证据块（命中触发器、命令、结果）。
+12. [x] 在 `docs/archive/dev-records/dev-plan-080-execution-log.md` 增加 080C 证据块（命中触发器、命令、结果）。
 
 ## 12. 关联文档
 - `docs/dev-plans/080-orgunit-audit-chain-consolidation.md`

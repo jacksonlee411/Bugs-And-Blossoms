@@ -1,10 +1,10 @@
 # DEV-PLAN-063：全链路业务测试子计划 TP-060-03——人员与任职（Person + Assignments）
 
-**状态**: 已完成（2026-01-11；证据：`docs/dev-records/dev-plan-063-execution-log.md`）
+**状态**: 已完成（2026-01-11；证据：`docs/archive/dev-records/dev-plan-063-execution-log.md`）
 
 > 上游测试套件（总纲）：`docs/dev-plans/060-business-e2e-test-suite.md`  
 > 依赖：必须先完成 `docs/dev-plans/062-test-tp060-02-master-data-org-setid-jobcatalog-position.md`（positions 作为 assignments 输入来源）。  
-> 执行日志：`docs/dev-records/dev-plan-063-execution-log.md`
+> 执行日志：`docs/archive/dev-records/dev-plan-063-execution-log.md`
 
 ## 1. 背景与上下文（Context）
 
@@ -103,6 +103,7 @@
 - 输入依赖：
   - 10 个 `position_id`（来自 TP-060-02；建议记录为 `P-ENG-01..` 等 10 个职位）
   - 10 个员工（E01~E10；基线表见 `docs/dev-plans/060-business-e2e-test-suite.md` §5.8）
+- 数据库依赖口径承接 `DEV-PLAN-060/012/226`：若本子计划需要 SQL seed/校验，必须优先使用 Docker / compose 内 PostgreSQL；不得把宿主机 `psql` 作为唯一前置条件。
 
 ### 4.1 `as_of` / `effective_date` 显式要求（避免执行期漂移）
 
@@ -345,7 +346,7 @@
   - `STAFFING_POSITION_REPORTS_TO_SELF`
   - `STAFFING_POSITION_REPORTS_TO_CYCLE`
   - `STAFFING_INVALID_ARGUMENT`（forward-only 负例）
-- 自动化证据：`make e2e` 通过（用例：`e2e/tests/tp060-03-person-and-assignments.spec.js`；截图输出位置见 `docs/dev-records/dev-plan-063-execution-log.md`）。
+- 自动化证据：`make e2e` 通过（用例：`e2e/tests/tp060-03-person-and-assignments.spec.js`；截图输出位置见 `docs/archive/dev-records/dev-plan-063-execution-log.md`）。
 
 建议在证据中维护一份可复用映射表（后续子计划直接引用）：
 
@@ -364,7 +365,7 @@
 
 ### 10.1 执行记录（Readiness/可复现记录）
 
-> 说明：以 `docs/dev-records/dev-plan-063-execution-log.md` 为准；本节仅列出关键门禁入口，便于快速复跑。
+> 说明：以 `docs/archive/dev-records/dev-plan-063-execution-log.md` 为准；本节仅列出关键门禁入口，便于快速复跑。
 
 - [X] E2E：`make e2e`（包含 `e2e/tests/tp060-03-person-and-assignments.spec.js`）
 - [X] Go 测试：`make test`

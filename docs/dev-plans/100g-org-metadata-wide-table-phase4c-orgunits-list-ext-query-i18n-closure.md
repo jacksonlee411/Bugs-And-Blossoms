@@ -3,7 +3,7 @@
 **状态**: 已完成（2026-02-16 06:17 UTC — E2E 闭环通过并完成 083B 同步收口）
 
 **执行记录**:
-- `docs/dev-records/dev-plan-100g-execution-log.md`
+- `docs/archive/dev-records/dev-plan-100g-execution-log.md`
 
 > 本文从 `DEV-PLAN-100` Phase 4 的 **4C** 拆分而来，作为 4C 的 SSOT；`DEV-PLAN-100` 继续保持为整体路线图。  
 > 本文聚焦：**OrgUnit 列表页**接入扩展字段筛选/排序入口，并补齐 **en/zh i18n**（字段标签 + 列表相关错误提示），形成“配置字段 -> 写入 -> 列表筛选/排序 -> 详情回显”的用户可见闭环。

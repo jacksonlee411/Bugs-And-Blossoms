@@ -287,6 +287,9 @@ func TestAssistantPersistence_UtilityFunctions(t *testing.T) {
 	if err != nil || restored.ConversationID != "conv_a" {
 		t.Fatalf("restore err=%v restored=%+v", err, restored)
 	}
+	if restored.CurrentPhase != assistantPhaseIdle {
+		t.Fatalf("expected derived current phase idle, got=%q", restored.CurrentPhase)
+	}
 
 	svc := newAssistantConversationService(newOrgUnitMemoryStore(), assistantWriteServiceStub{store: newOrgUnitMemoryStore()})
 	svc.cacheConversation(nil)
@@ -515,7 +518,7 @@ func TestAssistantPersistence_DBHelpersAndTxPaths(t *testing.T) {
 	tx.queryRowFn = func(sql string, _ ...any) pgx.Row {
 		switch {
 		case strings.Contains(sql, "FROM iam.assistant_conversations"):
-			return &assistFakeRow{vals: []any{"conv_1", "tenant_1", "actor_1", "tenant-admin", assistantStateValidated, conv.CreatedAt, conv.UpdatedAt}}
+			return &assistFakeRow{vals: []any{"conv_1", "tenant_1", "actor_1", "tenant-admin", assistantStateValidated, assistantConversationPhaseFromLegacyState(assistantStateValidated), conv.CreatedAt, conv.UpdatedAt}}
 		case strings.Contains(sql, "INSERT INTO iam.assistant_state_transitions"):
 			return &assistFakeRow{vals: []any{int64(9)}}
 		case strings.Contains(sql, "INSERT INTO iam.assistant_idempotency"):
@@ -529,14 +532,31 @@ func TestAssistantPersistence_DBHelpersAndTxPaths(t *testing.T) {
 	tx.queryFn = func(sql string, _ ...any) (pgx.Rows, error) {
 		switch {
 		case strings.Contains(sql, "FROM iam.assistant_turns"):
-			intentJSON, _ := json.Marshal(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"})
-			planJSON, _ := json.Marshal(assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}))
-			candidatesJSON, _ := json.Marshal([]assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}})
-			dryRunJSON, _ := json.Marshal(assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""))
-			commitJSON, _ := json.Marshal(assistantCommitResult{OrgCode: "ORG-1", ParentOrgCode: "FLOWER-A", EffectiveDate: "2026-01-01", EventType: "CREATE", EventUUID: "evt-1"})
-			return &assistFakeRows{rows: [][]any{{"turn_1", "输入", assistantStateConfirmed, "high", "req_1", "trace_1", "2026-02-23", "2026-02-23", "2026-02-23", intentJSON, planJSON, candidatesJSON, "c1", 1, 0.9, "auto", dryRunJSON, commitJSON, time.Now().UTC(), time.Now().UTC()}}}, nil
+			loadedTurn := &assistantTurn{
+				TurnID:              "turn_1",
+				UserInput:           "输入",
+				State:               assistantStateConfirmed,
+				RiskTier:            "high",
+				RequestID:           "req_1",
+				TraceID:             "trace_1",
+				PolicyVersion:       "2026-02-23",
+				CompositionVersion:  "2026-02-23",
+				MappingVersion:      "2026-02-23",
+				Intent:              assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"},
+				Plan:                assistantBuildPlan(assistantIntentSpec{Action: assistantIntentCreateOrgUnit}),
+				Candidates:          []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}},
+				ResolvedCandidateID: "c1",
+				AmbiguityCount:      1,
+				Confidence:          0.9,
+				ResolutionSource:    "auto",
+				DryRun:              assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""),
+				CommitResult:        &assistantCommitResult{OrgCode: "ORG-1", ParentOrgCode: "FLOWER-A", EffectiveDate: "2026-01-01", EventType: "CREATE", EventUUID: "evt-1"},
+				CreatedAt:           time.Now().UTC(),
+				UpdatedAt:           time.Now().UTC(),
+			}
+			return &assistFakeRows{rows: [][]any{assistantTurnRowValues(loadedTurn)}}, nil
 		case strings.Contains(sql, "FROM iam.assistant_state_transitions"):
-			return &assistFakeRows{rows: [][]any{{int64(1), "turn_1", "confirm", "req_1", "trace_1", assistantStateValidated, assistantStateConfirmed, "confirmed", "actor_1", time.Now().UTC()}}}, nil
+			return &assistFakeRows{rows: [][]any{{int64(1), "turn_1", "confirm", "req_1", "trace_1", assistantStateValidated, assistantStateConfirmed, assistantPhaseAwaitCommitConfirm, assistantPhaseAwaitCommitConfirm, "confirmed", "actor_1", time.Now().UTC()}}}, nil
 		default:
 			return &assistFakeRows{}, nil
 		}
@@ -545,6 +565,15 @@ func TestAssistantPersistence_DBHelpersAndTxPaths(t *testing.T) {
 	loaded, err := svc.loadConversationTx(ctx, tx, "tenant_1", "conv_1", true)
 	if err != nil || loaded.ConversationID != "conv_1" || len(loaded.Turns) != 1 || len(loaded.Transitions) != 1 {
 		t.Fatalf("unexpected load err=%v loaded=%+v", err, loaded)
+	}
+	if loaded.CurrentPhase != assistantPhaseAwaitCommitConfirm {
+		t.Fatalf("expected current phase await_commit_confirm, got=%q", loaded.CurrentPhase)
+	}
+	if loaded.Turns[0].CommitReply == nil || loaded.Turns[0].CommitReply.Outcome != "success" {
+		t.Fatalf("expected commit reply restored, got=%+v", loaded.Turns[0].CommitReply)
+	}
+	if loaded.Transitions[0].ToPhase != assistantPhaseAwaitCommitConfirm {
+		t.Fatalf("expected transition to_phase await_commit_confirm, got=%q", loaded.Transitions[0].ToPhase)
 	}
 
 	if _, err := svc.loadConversationByTenant(ctx, "tenant_1", "conv_1", false); err != nil {
@@ -636,7 +665,7 @@ func TestAssistantPersistence_DBHelpersAndTxPaths(t *testing.T) {
 	if err := svc.persistConversationCreate(ctx, conv); err != nil {
 		t.Fatalf("persist conversation err=%v", err)
 	}
-	if err := svc.updateConversationStateTx(ctx, tx, "tenant_1", "conv_1", assistantStateConfirmed, time.Now().UTC()); err != nil {
+	if err := svc.updateConversationStateTx(ctx, tx, "tenant_1", "conv_1", assistantStateConfirmed, assistantPhaseAwaitCommitConfirm, time.Now().UTC()); err != nil {
 		t.Fatalf("update state err=%v", err)
 	}
 
@@ -661,26 +690,50 @@ func bodyOrNull(conv *assistantConversation) []byte {
 }
 
 func assistantTurnRowValues(turn *assistantTurn) []any {
+	assistantRefreshTurnDerivedFields(turn)
 	intentJSON, _ := json.Marshal(turn.Intent)
 	planJSON, _ := json.Marshal(turn.Plan)
 	candidatesJSON, _ := json.Marshal(turn.Candidates)
+	candidateOptionsJSON := []byte(assistantCandidateOptionsJSON(turn))
 	dryRunJSON, _ := json.Marshal(turn.DryRun)
+	missingFieldsJSON := []byte(assistantMissingFieldsJSON(turn))
 	var commitJSON []byte
 	if turn.CommitResult != nil {
 		commitJSON, _ = json.Marshal(turn.CommitResult)
+	}
+	var commitReplyJSON []byte
+	if reply := assistantTurnCommitReply(turn); reply != nil {
+		commitReplyJSON, _ = json.Marshal(reply)
+	}
+	var phase any
+	if strings.TrimSpace(turn.Phase) != "" {
+		phase = turn.Phase
 	}
 	var resolved any
 	if strings.TrimSpace(turn.ResolvedCandidateID) != "" {
 		resolved = turn.ResolvedCandidateID
 	}
+	var selected any
+	if strings.TrimSpace(turn.SelectedCandidateID) != "" {
+		selected = turn.SelectedCandidateID
+	}
 	var source any
 	if strings.TrimSpace(turn.ResolutionSource) != "" {
 		source = turn.ResolutionSource
+	}
+	var pendingDraft any
+	if strings.TrimSpace(turn.PendingDraftSummary) != "" {
+		pendingDraft = turn.PendingDraftSummary
+	}
+	var errorCode any
+	if strings.TrimSpace(turn.ErrorCode) != "" {
+		errorCode = turn.ErrorCode
 	}
 	return []any{
 		turn.TurnID,
 		turn.UserInput,
 		turn.State,
+		phase,
 		turn.RiskTier,
 		turn.RequestID,
 		turn.TraceID,
@@ -690,12 +743,18 @@ func assistantTurnRowValues(turn *assistantTurn) []any {
 		intentJSON,
 		planJSON,
 		candidatesJSON,
+		candidateOptionsJSON,
 		resolved,
+		selected,
 		turn.AmbiguityCount,
 		turn.Confidence,
 		source,
 		dryRunJSON,
+		pendingDraft,
+		missingFieldsJSON,
 		commitJSON,
+		commitReplyJSON,
+		errorCode,
 		turn.CreatedAt,
 		turn.UpdatedAt,
 	}
@@ -732,7 +791,7 @@ func TestAssistantPersistence_PGFlowCreateConversation(t *testing.T) {
 	tx2 := &assistFakeTx{}
 	tx2.queryRowFn = func(sql string, _ ...any) pgx.Row {
 		if strings.Contains(sql, "FROM iam.assistant_conversations") {
-			return &assistFakeRow{vals: []any{conv.ConversationID, "tenant_1", "actor_1", "tenant-admin", assistantStateValidated, now, now}}
+			return &assistFakeRow{vals: []any{conv.ConversationID, "tenant_1", "actor_1", "tenant-admin", assistantStateValidated, assistantConversationPhaseFromLegacyState(assistantStateValidated), now, now}}
 		}
 		return &assistFakeRow{err: pgx.ErrNoRows}
 	}
@@ -796,7 +855,7 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 		},
 		AmbiguityCount: 2,
 		Confidence:     0.55,
-		DryRun:         assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, nil, ""),
+		DryRun:         assistantBuildDryRun(assistantIntentSpec{Action: assistantIntentCreateOrgUnit, ParentRefText: "鲜花组织", EntityName: "运营部", EffectiveDate: "2026-01-01"}, []assistantCandidate{{CandidateID: "c1", CandidateCode: "FLOWER-A"}, {CandidateID: "c2", CandidateCode: "FLOWER-B"}}, ""),
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
@@ -814,7 +873,7 @@ func TestAssistantPersistence_PGFlowCreateConfirmCommitTurn(t *testing.T) {
 	tx.queryRowFn = func(sql string, args ...any) pgx.Row {
 		switch {
 		case strings.Contains(sql, "FROM iam.assistant_conversations"):
-			return &assistFakeRow{vals: []any{conv.ConversationID, conv.TenantID, conv.ActorID, conv.ActorRole, conv.State, conv.CreatedAt, conv.UpdatedAt}}
+			return &assistFakeRow{vals: []any{conv.ConversationID, conv.TenantID, conv.ActorID, conv.ActorRole, conv.State, assistantConversationPhaseFromLegacyState(conv.State), conv.CreatedAt, conv.UpdatedAt}}
 		case strings.Contains(sql, "INSERT INTO iam.assistant_state_transitions"):
 			return &assistFakeRow{vals: []any{int64(100)}}
 		case strings.Contains(sql, "INSERT INTO iam.assistant_idempotency"):

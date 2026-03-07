@@ -80,10 +80,10 @@
 1. [x] 新增 migration：对齐 `submit_org_event_correction` 区间回溯规则（`migrations/orgunit/20260206115000_orgunit_correction_backdating_range_fix.sql`）。
 2. [x] 修复 `internal/server/orgunit_nodes.go` 的 `set_config('app.current_tenant', ...)` 字符串。
 3. [x] 补齐/更新相关测试（新增 `TestOrgUnitPGStore_UsesQuotedCurrentTenantKey`，并回归 `insert_record_backdate_earliest_uses_correction` 关键分支）。
-4. [x] 本地执行门禁并记录证据到 `docs/dev-records/`（见 `docs/dev-records/dev-plan-075b-execution-log.md`）。
+4. [x] 本地执行门禁并记录证据到 `docs/dev-records/`（见 `docs/archive/dev-records/dev-plan-075b-execution-log.md`）。
 
 ## 8. 关联文档
 - `docs/dev-plans/075-orgunit-effective-date-backdating-assessment.md`
-- `docs/dev-records/dev-plan-075-execution-log.md`
+- `docs/archive/dev-records/dev-plan-075-execution-log.md`
 - `docs/dev-plans/073-orgunit-crud-implementation-status.md`
 - `docs/dev-plans/032-effective-date-day-granularity.md`

@@ -157,7 +157,7 @@
 4. [x] 新增 `修正记录` 的独立前端入口与后端动作对接，移除“隐式 correction”认知负担。
 5. [x] 统一日期组件展示与提示文案（`tree_as_of` 与 `effective_date` 语义分离）。
 6. [x] 补齐单测/E2E（日期边界、冲突、误操作防护）。
-7. [x] 记录验收与执行日志（`docs/dev-records/dev-plan-075a-execution-log.md`）。
+7. [x] 记录验收与执行日志（`docs/archive/dev-records/dev-plan-075a-execution-log.md`）。
 
 ## 本轮实施结果（2026-02-06）
 - 详情页记录操作区改为三分区：新版本操作（新增/插入）、历史修正（入口直达编辑区）、危险操作（删除+二次确认）。

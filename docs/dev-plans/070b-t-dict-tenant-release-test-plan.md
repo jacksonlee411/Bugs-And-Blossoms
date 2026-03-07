@@ -153,7 +153,7 @@
 - [x] 文档门禁：`make check doc` 通过。
 
 证据归档：
-- [x] 在 `docs/dev-records/dev-plan-070b-execution-log.md` 增补测试批次记录（时间、环境、命中门禁、结果、缺陷链接）。
+- [x] 在 `docs/archive/dev-records/dev-plan-070b-execution-log.md` 增补测试批次记录（时间、环境、命中门禁、结果、缺陷链接）。
 - [x] 对每个阻塞缺陷给出分类：`BUG` / `CONTRACT_DRIFT` / `CONTRACT_MISSING` / `ENV_DRIFT`。
 - [x] 对关键通过项记录“输入参数 + 期望 + 实际 + 证据链接”，保证可复查。
 
@@ -183,5 +183,5 @@
 ## 12. 交付物
 
 1. 本测试方案文档：`docs/dev-plans/070b-t-dict-tenant-release-test-plan.md`
-2. 测试执行记录（增补）：`docs/dev-records/dev-plan-070b-execution-log.md`
+2. 测试执行记录（增补）：`docs/archive/dev-records/dev-plan-070b-execution-log.md`
 3. 缺陷与偏差清单：Issue/PR 链接（在执行记录中汇总）

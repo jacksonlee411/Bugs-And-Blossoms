@@ -112,6 +112,7 @@ make assistant-runtime-status
 预期：
 - `make assistant-runtime-status` 输出 `status=healthy` 时，`/app/assistant` 可进入完整对话闭环。
 - 若输出 `status=unavailable`，先执行文末“关闭”小节中的 runtime 恢复流程再重试。
+- 注意：LibreChat 登录账户与 `/app/login`（KratosStub）账户是两套独立体系；`admin@localhost` 可用于 `/app/login`，但在 LibreChat 表单里会被判定为无效邮箱格式。
 
 ## 一键启动 + seed + 验证登录（推荐）
 
@@ -275,8 +276,11 @@ curl -i -b /tmp/sid-saas.txt -H 'Host: tenant2.localhost:8080' \
 ## 常见排障
 
 - 浏览器提示“无法访问此网站 / 连接被拒绝”：先确认服务是否在监听 8080（`curl -fsS http://localhost:8080/health` 预期返回 200）。若连接失败，重新执行 `DEV_SERVER_ENV_FILE=.env make dev-server` 并查看其输出。
+- 登录页直接显示 `tenant resolve error`（HTTP 500）：通常是 DB 未启动或服务端无法连接 DB（常见于未执行 `DEV_INFRA_ENV_FILE=.env make dev-up`）。先启动 infra，再重试 `http://localhost:8080/app/login`。
 - 404 tenant not found：确认用的是 `localhost`；并确认 `make iam migrate up` 已执行。
 - 登录一直 invalid credentials：确认 KratosStub 在跑；并确认已按 `tenant_id:email` seed 过同一密码。
+- LibreChat 登录页提示“您必须输入有效的邮箱地址”：`admin@localhost` 不是 LibreChat 可接受的邮箱格式。请使用 `admin@localhost.local`（或任意标准邮箱格式）。
+- LibreChat 登录页没有注册入口/注册被拒（`Registration is not allowed.`）：在 `deploy/librechat/.env` 设置 `ALLOW_REGISTRATION=true`，然后重启 runtime（`make assistant-runtime-down && make assistant-runtime-up`），先注册一个 LibreChat 本地账号再登录。
 - seed 脚本提示 409 但你仍然 invalid credentials：说明 **KratosStub 当前进程**里该 identifier 已存在，seed 不会更新密码；处理方式是重启 KratosStub（它是内存存储）后重新 seed，或换一个新邮箱 seed。
 - 登录显示 identity error：确认 KratosStub 在跑（4433/4434）；未设置时默认 `KRATOS_PUBLIC_URL=http://127.0.0.1:4433`；并确认已执行 seed。
 - `POST /iam/api/sessions` 返回 `invalid_json`：确认 `Content-Type: application/json`，并传入合法 JSON（例如 `{"email":"admin@localhost","password":"admin123"}`）。

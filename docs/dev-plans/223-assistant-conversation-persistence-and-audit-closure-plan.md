@@ -21,14 +21,20 @@
 3. [ ] 支持服务重启后的会话恢复、状态恢复与提交幂等验证。
 4. [ ] 幂等重试返回**同一响应语义**（同 `http_status + error_code + response_body`）。
 5. [ ] 强化租户绑定防漂移（对齐 `TC-220-BE-011`）并形成可审计证据。
-6. [ ] 形成 220 主计划要求的执行证据文档闭环。
+6. [ ] 明确业务事实源：本仓持久化的 `conversation_id/turn_id/request_id/trace_id + 状态转移` 是 Assistant 唯一业务真相，前端消息树只作为渲染面。
+7. [ ] 形成 220 主计划要求的执行证据文档闭环。
 
 ### 2.2 非目标 (Out of Scope)
 1. [ ] 不引入 Temporal 任务模型与 `/tasks` API（由 `DEV-PLAN-225` 承接）。
 2. [ ] 不扩展 assistant 新业务动作面，仅做持久化与审计收口。
 3. [ ] 不在本计划内实现跨租户分析报表。
 
-### 2.3 工具链与门禁（SSOT 引用）
+## 2.3 事实源冻结
+1. [ ] `assistant_conversations`、`assistant_turns`、状态转移审计与幂等记录共同构成 Assistant 的唯一业务事实源。
+2. [ ] UI 侧官方消息实体、气泡树、卡片渲染结果都不得替代上述持久化事实源。
+3. [ ] 任一用户可见回执若无法回溯到 `conversation_id/turn_id/request_id/trace_id` 与状态转移审计，则视为不满足事务化与可回放要求。
+
+### 2.4 工具链与门禁（SSOT 引用）
 - **触发器清单（本计划命中）**：
   - [X] Go 代码
   - [ ] `.templ` / Tailwind

@@ -65,7 +65,9 @@
 
 - `AUTHZ_MODE=enforce`（未授权必须 403）
 - `RLS_ENFORCE=enforce`（未注入 tenant context 必须 fail-closed）
-- Host/tenant 解析必须严格：**禁止用 `127.0.0.1` 作为访问 Host**（对齐 `docs/dev-records/DEV-PLAN-010-READINESS.md` 与 E2E）。
+- Host/tenant 解析必须严格：**禁止用 `127.0.0.1` 作为访问 Host**（对齐 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md` 与 E2E）。
+- PostgreSQL 运行口径冻结为 **Docker / compose 内数据库**；`TP-060-*` 的 seed / 校验脚本不得把宿主机安装 `psql` 作为唯一前置条件。
+- 若测试需要 SQL 直连/seed，必须优先使用 `docker compose exec postgres psql`（或等价容器内执行方式）；不得因宿主机缺少 `psql` 将业务用例判定为失败。
 - `as_of` 为 UI Shell 的统一时间语义输入；所有业务页按契约要求显式传入或使用 UI 默认。
 
 ### 4.4 账号准备（SSOT：E2E smoke 口径）
@@ -302,7 +304,7 @@
 
 **子计划文档**：`docs/dev-plans/064a-test-tp060-05-assistant-conversation-intent-and-tasks.md`
 
-**执行记录**：`docs/dev-records/dev-plan-064a-execution-log.md`
+**执行记录**：`docs/archive/dev-records/dev-plan-064a-execution-log.md`
 
 **契约引用**
 - `docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`

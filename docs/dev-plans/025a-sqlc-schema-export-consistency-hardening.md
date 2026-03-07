@@ -77,7 +77,7 @@
 
 5. [X] **测试与回归**
    - 完成脚本语法校验与本地门禁验证（`make sqlc-generate`、`bash -n ...`、`make check doc`、`make sqlc-verify-schema` 的 fail-fast 验证）。
-   - 记录执行证据到 `docs/dev-records/dev-plan-025a-execution-log.md`（时间戳、命令、结果、失败样例与修复结果）。
+   - 记录执行证据到 `docs/archive/dev-records/dev-plan-025a-execution-log.md`（时间戳、命令、结果、失败样例与修复结果）。
 
 ## 5. 停止线（命中即打回）
 
@@ -99,7 +99,7 @@
 - `docs/dev-plans/025-sqlc-guidelines.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 - `docs/dev-plans/011-tech-stack-and-toolchain-versions.md`
-- `docs/dev-records/dev-plan-025a-execution-log.md`
+- `docs/archive/dev-records/dev-plan-025a-execution-log.md`
 - `AGENTS.md`
 - `Makefile`
 - `.github/workflows/quality-gates.yml`

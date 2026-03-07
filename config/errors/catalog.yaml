@@ -336,6 +336,20 @@ errors:
     user_message_key: errors.ai_plan_determinism_violation
     backend_policy: mapped
     frontend_policy: mapped
+  - code: ai_reply_model_target_mismatch
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.ai_reply_model_target_mismatch
+    backend_policy: mapped
+    frontend_policy: mapped
+  - code: ai_reply_render_failed
+    module: assistant
+    http_status: 422
+    severity: error
+    user_message_key: errors.ai_reply_render_failed
+    backend_policy: mapped
+    frontend_policy: mapped
   - code: ai_model_provider_unavailable
     module: assistant
     http_status: 503
@@ -453,6 +467,13 @@ errors:
     http_status: 500
     severity: error
     user_message_key: errors.assistant_turn_create_failed
+    backend_policy: passthrough
+    frontend_policy: mapped
+  - code: assistant_reply_render_failed
+    module: assistant
+    http_status: 500
+    severity: error
+    user_message_key: errors.assistant_reply_render_failed
     backend_policy: passthrough
     frontend_policy: mapped
   - code: assistant_ui_method_not_allowed

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"strings"
 )
 
@@ -31,6 +32,9 @@ func (s *assistantConversationService) resolveIntent(ctx context.Context, tenant
 		TenantID:       tenantID,
 	})
 	if err != nil {
+		if assistantShouldFallbackIntentLocally(err) {
+			return assistantResolveIntentLocally(text)
+		}
 		return assistantResolveIntentResult{}, err
 	}
 	if assistantIntentSchemaInvalid(resolved.Intent) {
@@ -41,11 +45,35 @@ func (s *assistantConversationService) resolveIntent(ctx context.Context, tenant
 			TenantID:       tenantID,
 		})
 		if retryErr != nil {
+			if assistantShouldFallbackIntentLocally(retryErr) {
+				return assistantResolveIntentLocally(text)
+			}
 			return assistantResolveIntentResult{}, retryErr
+		}
+		if assistantIntentSchemaInvalid(retryResolved.Intent) {
+			return assistantResolveIntentLocally(text)
 		}
 		return retryResolved, nil
 	}
 	return resolved, nil
+}
+
+func assistantShouldFallbackIntentLocally(err error) bool {
+	return errors.Is(err, errAssistantPlanSchemaConstrainedDecodeFailed)
+}
+
+func assistantResolveIntentLocally(userInput string) (assistantResolveIntentResult, error) {
+	intent := assistantExtractIntent(strings.TrimSpace(userInput))
+	plan := assistantBuildPlan(intent)
+	if _, ok := capabilityDefinitionForKey(plan.CapabilityKey); !ok {
+		return assistantResolveIntentResult{}, errAssistantPlanBoundaryViolation
+	}
+	return assistantResolveIntentResult{
+		Intent:        intent,
+		ProviderName:  "deterministic",
+		ModelName:     "builtin-intent-extractor",
+		ModelRevision: assistantIntentSchemaVersionV1,
+	}, nil
 }
 
 func assistantCompileIntentToPlans(intent assistantIntentSpec, resolvedCandidateID string) (assistantSkillExecutionPlan, assistantConfigDeltaPlan) {

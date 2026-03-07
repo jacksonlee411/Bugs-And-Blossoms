@@ -14,7 +14,7 @@
 ## 0. 进度速记
 
 1. [X] 创建 `DEV-PLAN-004` 并加入 Doc Map（2026-01-06 15:50 UTC，本 PR）。
-2. [X] 盘点全仓版本标记出现点（2026-01-06 09:25 UTC）—— 见 `docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`。
+2. [X] 盘点全仓版本标记出现点（2026-01-06 09:25 UTC）—— 见 `docs/archive/dev-records/dev-plan-004-version-marker-removal-mapping.md`。
 3. [X] 输出“旧名 → 新名”映射表并冻结（避免 PR 间反复改名）（2026-01-06 11:32 UTC）。
 4. [X] 分批 PR 完成重命名，并确保门禁全绿且不 `skipped`（2026-01-06 11:46 UTC）。
 5. [X] 加入防回归门禁：禁止版本标记再次进入仓库（包含文档与代码）（2026-01-06 11:46 UTC）。
@@ -100,7 +100,7 @@
 ### PR-1：盘点与映射表冻结
 
 - [X] 全仓扫描版本标记出现点并分类（2026-01-06 09:25 UTC）。
-- [X] 输出并冻结映射表（旧名 → 新名）（2026-01-06 11:32 UTC）—— 见 `docs/dev-records/dev-plan-004-version-marker-removal-mapping.md`。
+- [X] 输出并冻结映射表（旧名 → 新名）（2026-01-06 11:32 UTC）—— 见 `docs/archive/dev-records/dev-plan-004-version-marker-removal-mapping.md`。
 - [X] 明确是否存在必须时间盒过渡的对外契约：无（不提供长期兼容别名；所有对外契约改动同 PR 原子切换）。
 
 ### PR-2：文档与 Doc Map 清理

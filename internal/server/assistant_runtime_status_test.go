@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -42,6 +43,11 @@ func TestAssistantRuntimeStatus_InvalidUpstream(t *testing.T) {
 }
 
 func TestAssistantRuntimeStatus_MergesLockAndSnapshot(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer upstream.Close()
+
 	dir := t.TempDir()
 	lockPath := filepath.Join(dir, "versions.lock.yaml")
 	snapshotPath := filepath.Join(dir, "runtime-status.json")
@@ -77,7 +83,7 @@ services:
 		t.Fatal(err)
 	}
 
-	t.Setenv("LIBRECHAT_UPSTREAM", "http://127.0.0.1:3080")
+	t.Setenv("LIBRECHAT_UPSTREAM", upstream.URL)
 	t.Setenv("ASSISTANT_RUNTIME_VERSIONS_LOCK", lockPath)
 	t.Setenv("ASSISTANT_RUNTIME_STATUS_FILE", snapshotPath)
 
@@ -99,6 +105,36 @@ services:
 	}
 	if status.Services[0].Image == "" || status.Services[0].Digest == "" {
 		t.Fatalf("lock metadata not merged: %+v", status.Services[0])
+	}
+}
+
+func TestAssistantRuntimeStatus_UpstreamProbeFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, "versions.lock.yaml")
+	snapshotPath := filepath.Join(dir, "runtime-status.json")
+	if err := os.WriteFile(lockPath, []byte(`services:
+  - name: api
+    required: true
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(snapshotPath, []byte(`{"status":"healthy","services":[{"name":"api","required":true,"healthy":"healthy"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("LIBRECHAT_UPSTREAM", "http://127.0.0.1:1")
+	t.Setenv("ASSISTANT_RUNTIME_VERSIONS_LOCK", lockPath)
+	t.Setenv("ASSISTANT_RUNTIME_STATUS_FILE", snapshotPath)
+
+	status := assistantRuntimeStatus()
+	if status.Status != assistantRuntimeHealthUnavailable {
+		t.Fatalf("status=%s", status.Status)
+	}
+	if status.ErrorCode != assistantUIProxyUpstreamUnavailable {
+		t.Fatalf("error_code=%s", status.ErrorCode)
+	}
+	if len(status.Services) == 0 || status.Services[0].Reason != "upstream_unreachable" {
+		t.Fatalf("services=%+v", status.Services)
 	}
 }
 

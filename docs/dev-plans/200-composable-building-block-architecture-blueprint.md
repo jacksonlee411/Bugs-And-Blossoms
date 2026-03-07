@@ -348,29 +348,29 @@
 
 | 约束 | 门禁/测试 | 证据归档 |
 | --- | --- | --- |
-| Surface/Intent 映射唯一且完整 | `make check capability-route-map` + 映射注册表一致性测试（M3） | `docs/dev-records/dev-plan-200-m3-mapping-registry-evidence.md` |
-| 策略冲突决议 deterministic | 单元测试（冲突矩阵）+ 集成回放测试 | `docs/dev-records/dev-plan-200-m0-policy-resolution-evidence.md` |
-| SetID 前置决议（先解析再取数） | 集成测试：候选接口未先 `ResolveSetID` 直接失败；回显 `resolved_setid/setid_source` | `docs/dev-records/dev-plan-200-m2-setid-pre-resolve-evidence.md` |
-| `allowed_value_codes` 集合语义收敛 | 单元测试：`priority_mode + local_override_mode` 组合矩阵；`required/default` 一致性阻断 | `docs/dev-records/dev-plan-200-m0-allowed-value-semantics-evidence.md` |
-| Mapping × Dict × SetID 跨层作用域一致性 | 集成测试：`global mapping` 命中时仍 tenant-only 取数；缺租户基线必须 `dict_baseline_not_ready` | `docs/dev-records/dev-plan-200-m0-scope-consistency-evidence.md` |
+| Surface/Intent 映射唯一且完整 | `make check capability-route-map` + 映射注册表一致性测试（M3） | `docs/archive/dev-records/dev-plan-200-m3-mapping-registry-evidence.md` |
+| 策略冲突决议 deterministic | 单元测试（冲突矩阵）+ 集成回放测试 | `docs/archive/dev-records/dev-plan-200-m0-policy-resolution-evidence.md` |
+| SetID 前置决议（先解析再取数） | 集成测试：候选接口未先 `ResolveSetID` 直接失败；回显 `resolved_setid/setid_source` | `docs/archive/dev-records/dev-plan-200-m2-setid-pre-resolve-evidence.md` |
+| `allowed_value_codes` 集合语义收敛 | 单元测试：`priority_mode + local_override_mode` 组合矩阵；`required/default` 一致性阻断 | `docs/archive/dev-records/dev-plan-200-m0-allowed-value-semantics-evidence.md` |
+| Mapping × Dict × SetID 跨层作用域一致性 | 集成测试：`global mapping` 命中时仍 tenant-only 取数；缺租户基线必须 `dict_baseline_not_ready` | `docs/archive/dev-records/dev-plan-200-m0-scope-consistency-evidence.md` |
 | 字典 tenant-only 边界 | 集成测试：缺基线 `dict_baseline_not_ready`；未命中不回退 global | `docs/dev-records/dev-plan-200-m2-dict-tenant-only-evidence.md` |
 | No Tx, No RLS（组合链路） | 集成测试：缺 tenant/缺 tx 必须 fail-closed | `docs/dev-records/dev-plan-200-m5-tx-rls-evidence.md` |
-| 跨层版本一致性（TOCTOU 阻断） | 写入冲突测试：`policy_version/composition_version` 过期拒绝；`resolved_setid/as_of/intent` 维度变更必须触发冲突 | `docs/dev-records/dev-plan-200-m5-version-consistency-evidence.md` |
-| 禁止 legacy 回退 | `make check no-legacy` | `docs/dev-records/dev-plan-200-m6-cutover-evidence.md` |
-| 性能停止线 | 查询/事务计数回归 + 压测 | `docs/dev-records/dev-plan-200-m8-performance-evidence.md` |
-| AI 计划产物边界（不直写库） | `ConfigDeltaPlan` schema 校验 + 静态 lint（禁止 SQL/未注册 key） | `docs/dev-records/dev-plan-200-m9-ai-plan-boundary-evidence.md` |
-| AI 严格结构化输出（constrained decode） | 严格 schema 解码测试（非法字段/缺字段/类型错误必须拒绝） | `docs/dev-records/dev-plan-200-m9a-ai-constrained-decode-evidence.md` |
-| Skill 输入/输出契约严格校验 | `SkillManifest` schema 校验 + strict decode 回归（input/output） | `docs/dev-records/dev-plan-200-m9b-skill-schema-evidence.md` |
-| Skill 工具白名单与风险分级一致性 | 工具权限矩阵测试：未声明工具调用必须 `skill_tool_not_allowed`；`risk_tier` 对应 dry-run/确认策略正确 | `docs/dev-records/dev-plan-200-m9b-skill-tool-matrix-evidence.md` |
+| 跨层版本一致性（TOCTOU 阻断） | 写入冲突测试：`policy_version/composition_version` 过期拒绝；`resolved_setid/as_of/intent` 维度变更必须触发冲突 | `docs/archive/dev-records/dev-plan-200-m5-version-consistency-evidence.md` |
+| 禁止 legacy 回退 | `make check no-legacy` | `docs/archive/dev-records/dev-plan-200-m6-cutover-evidence.md` |
+| 性能停止线 | 查询/事务计数回归 + 压测 | `docs/archive/dev-records/dev-plan-200-m8-performance-evidence.md` |
+| AI 计划产物边界（不直写库） | `ConfigDeltaPlan` schema 校验 + 静态 lint（禁止 SQL/未注册 key） | `docs/archive/dev-records/dev-plan-200-m9-ai-plan-boundary-evidence.md` |
+| AI 严格结构化输出（constrained decode） | 严格 schema 解码测试（非法字段/缺字段/类型错误必须拒绝） | `docs/archive/dev-records/dev-plan-200-m9a-ai-constrained-decode-evidence.md` |
+| Skill 输入/输出契约严格校验 | `SkillManifest` schema 校验 + strict decode 回归（input/output） | `docs/archive/dev-records/dev-plan-200-m9b-skill-schema-evidence.md` |
+| Skill 工具白名单与风险分级一致性 | 工具权限矩阵测试：未声明工具调用必须 `skill_tool_not_allowed`；`risk_tier` 对应 dry-run/确认策略正确 | `docs/archive/dev-records/dev-plan-200-m9b-skill-tool-matrix-evidence.md` |
 | 编排可靠性（超时/重试/恢复） | 编排运行时测试：timeout、重试幂等、checkpoint 恢复 | `docs/dev-records/dev-plan-200-m10a-orchestration-durability-evidence.md` |
-| AI 授权主体一致性（代操作者执行） | 授权回归测试：AI 代系统配置管理员/HR/普通员工/经理执行，结果与人工直操一致；提交瞬间实时复核拦截过期/漂移快照 | `docs/dev-records/dev-plan-200-m10b-actor-delegated-authz-evidence.md` |
+| AI 授权主体一致性（代操作者执行） | 授权回归测试：AI 代系统配置管理员/HR/普通员工/经理执行，结果与人工直操一致；提交瞬间实时复核拦截过期/漂移快照 | `docs/archive/dev-records/dev-plan-200-m10b-actor-delegated-authz-evidence.md` |
 | Casbin 工具链与执行顺序冻结 | `make authz-pack && make authz-test && make authz-lint` + 集成测试：`Actor Bind -> MapRouteToObjectAction -> Require -> Pre-Commit Re-Auth -> One Door` 顺序不可旁路 | `docs/dev-records/dev-plan-200-m10b1-authz-toolchain-sequence-evidence.md` |
-| AI/UI 等价执行一致性 | 同 actor、同 intent、同输入下，AI 编排与 UI 提交的 allow/deny、错误码、版本冲突结果必须一致 | `docs/dev-records/dev-plan-200-m10c-ai-ui-equivalent-execution-evidence.md` |
-| 自建 Temporal 阶段 A 最小基线 | 运行时测试：checkpoint/retry/dead-letter/队列观测闭环 | `docs/dev-records/dev-plan-200-m10d0-self-host-temporal-minimal-evidence.md` |
-| 自建 Temporal 阶段 B 平台可用性（触发式） | 演练测试：worker 滚动升级、history 回放、任务队列积压告警、死信人工接管与灾备恢复 | `docs/dev-records/dev-plan-200-m10d1-self-host-temporal-production-evidence.md` |
-| 评测回归门禁（planner 质量） | 固定样本集评测 + 回归阈值（准确率/拒绝率/误放行率） | `docs/dev-records/dev-plan-200-m11-eval-gate-evidence.md` |
-| Skill 回归质量门禁 | 固定 Skill 样本集评测（成功率/拒绝准确率/人工接管率）+ 版本对比回归 | `docs/dev-records/dev-plan-200-m11a-skill-eval-gate-evidence.md` |
-| 对话式事务一致性 | 会话状态机测试 + 幂等/重放测试（同 `request_id` 仅一次提交） | `docs/dev-records/dev-plan-200-m10-conversation-transaction-evidence.md` |
+| AI/UI 等价执行一致性 | 同 actor、同 intent、同输入下，AI 编排与 UI 提交的 allow/deny、错误码、版本冲突结果必须一致 | `docs/archive/dev-records/dev-plan-200-m10c-ai-ui-equivalent-execution-evidence.md` |
+| 自建 Temporal 阶段 A 最小基线 | 运行时测试：checkpoint/retry/dead-letter/队列观测闭环 | `docs/archive/dev-records/dev-plan-200-m10d0-self-host-temporal-minimal-evidence.md` |
+| 自建 Temporal 阶段 B 平台可用性（触发式） | 演练测试：worker 滚动升级、history 回放、任务队列积压告警、死信人工接管与灾备恢复 | `docs/archive/dev-records/dev-plan-200-m10d1-self-host-temporal-production-evidence.md` |
+| 评测回归门禁（planner 质量） | 固定样本集评测 + 回归阈值（准确率/拒绝率/误放行率） | `docs/archive/dev-records/dev-plan-200-m11-eval-gate-evidence.md` |
+| Skill 回归质量门禁 | 固定 Skill 样本集评测（成功率/拒绝准确率/人工接管率）+ 版本对比回归 | `docs/archive/dev-records/dev-plan-200-m11a-skill-eval-gate-evidence.md` |
+| 对话式事务一致性 | 会话状态机测试 + 幂等/重放测试（同 `request_id` 仅一次提交） | `docs/archive/dev-records/dev-plan-200-m10-conversation-transaction-evidence.md` |
 
 > 说明：若现有 CI 无对应检查项，由 M3/M5/M8/M9/M9A/M9B/M10/M10A/M10B/M10B1/M10C/M10D0/M10D1/M11/M11A 增补自动化门禁并接入 `make preflight`。
 
@@ -414,36 +414,36 @@
 
 ### Phase 0：契约冻结（优先阻断返工）
 
-1. [X] **DEV-PLAN-201（对应 M0/M1）**：术语与边界冻结 + 跨层作用域一致性（`mapping_scope × Dict tenant-only × ResolveSetID`）矩阵冻结；输出冲突决议与错误码契约基线。证据：`docs/dev-records/dev-plan-200-m0-scope-consistency-evidence.md`
-2. [X] **DEV-PLAN-202（对应 M0）**：策略冲突决议 deterministic 收口（分桶/特异度/优先级/歧义阻断）与 `allowed_value_codes` 集合语义矩阵测试。证据：`docs/dev-records/dev-plan-200-m0-policy-resolution-evidence.md`、`docs/dev-records/dev-plan-200-m0-allowed-value-semantics-evidence.md`
+1. [X] **DEV-PLAN-201（对应 M0/M1）**：术语与边界冻结 + 跨层作用域一致性（`mapping_scope × Dict tenant-only × ResolveSetID`）矩阵冻结；输出冲突决议与错误码契约基线。证据：`docs/archive/dev-records/dev-plan-200-m0-scope-consistency-evidence.md`
+2. [X] **DEV-PLAN-202（对应 M0）**：策略冲突决议 deterministic 收口（分桶/特异度/优先级/歧义阻断）与 `allowed_value_codes` 集合语义矩阵测试。证据：`docs/archive/dev-records/dev-plan-200-m0-policy-resolution-evidence.md`、`docs/archive/dev-records/dev-plan-200-m0-allowed-value-semantics-evidence.md`
 
 ### Phase 1：运行时读路径闭环（先可解释、再可提交）
 
-3. [X] **DEV-PLAN-203（对应 M2/M3）**：`SurfaceIntentCapabilityRegistry` 接入 + SetID 硬前置（先 `ResolveSetID` 再取候选） + `resolved_setid/setid_source` 回显。证据：`docs/dev-records/dev-plan-200-m2-setid-pre-resolve-evidence.md`、`docs/dev-records/dev-plan-200-m3-mapping-registry-evidence.md`
-4. [X] **DEV-PLAN-204（对应 M2/M7）**：组合 DTO/explain 落地（`PageCompositionSnapshot/IntentDecisionSnapshot/ComposedFieldDecision`）与版本快照协议对齐。证据：`docs/dev-records/dev-plan-200-m5-version-consistency-evidence.md`、`docs/dev-records/dev-plan-200-m7-explain-evidence.md`
-5. [X] **DEV-PLAN-205（对应 M4）**：页面职责收敛（字段配置静态主写、策略页动态主写、字典页候选池主写）并完成入口联动与来源标识。证据：`docs/dev-records/dev-plan-200-m4-page-convergence-evidence.md`
+3. [X] **DEV-PLAN-203（对应 M2/M3）**：`SurfaceIntentCapabilityRegistry` 接入 + SetID 硬前置（先 `ResolveSetID` 再取候选） + `resolved_setid/setid_source` 回显。证据：`docs/archive/dev-records/dev-plan-200-m2-setid-pre-resolve-evidence.md`、`docs/archive/dev-records/dev-plan-200-m3-mapping-registry-evidence.md`
+4. [X] **DEV-PLAN-204（对应 M2/M7）**：组合 DTO/explain 落地（`PageCompositionSnapshot/IntentDecisionSnapshot/ComposedFieldDecision`）与版本快照协议对齐。证据：`docs/archive/dev-records/dev-plan-200-m5-version-consistency-evidence.md`、`docs/archive/dev-records/dev-plan-200-m7-explain-evidence.md`
+5. [X] **DEV-PLAN-205（对应 M4）**：页面职责收敛（字段配置静态主写、策略页动态主写、字典页候选池主写）并完成入口联动与来源标识。证据：`docs/archive/dev-records/dev-plan-200-m4-page-convergence-evidence.md`
 
 ### Phase 2：运行时写路径与性能收口（One Door 单链路）
 
-6. [X] **DEV-PLAN-206（对应 M5/M6）**：create/add/insert/correct 统一模板提交，接入 `policy_version + composition_version` 双版本校验，完成 No Legacy 单次切换剧本。证据：`docs/dev-records/dev-plan-200-m5-version-consistency-evidence.md`、`docs/dev-records/dev-plan-200-m6-cutover-evidence.md`
-7. [X] **DEV-PLAN-207（对应 M8）**：性能与门禁收口（批量决议、防字段级 N+1、查询/事务预算、压测证据固化）。证据：`docs/dev-records/dev-plan-200-m8-performance-evidence.md`
+6. [X] **DEV-PLAN-206（对应 M5/M6）**：create/add/insert/correct 统一模板提交，接入 `policy_version + composition_version` 双版本校验，完成 No Legacy 单次切换剧本。证据：`docs/archive/dev-records/dev-plan-200-m5-version-consistency-evidence.md`、`docs/archive/dev-records/dev-plan-200-m6-cutover-evidence.md`
+7. [X] **DEV-PLAN-207（对应 M8）**：性能与门禁收口（批量决议、防字段级 N+1、查询/事务预算、压测证据固化）。证据：`docs/archive/dev-records/dev-plan-200-m8-performance-evidence.md`
 
 ### Phase 3：AI 只读编排与 Skill 契约化（不进入写库）
 
-8. [X] **DEV-PLAN-208（对应 M9/M9A）**：Req2Config 只读链路（`RequirementIntentSpec -> ConfigDeltaPlan -> DryRunResult`）+ strict schema constrained decode。证据：`docs/dev-records/dev-plan-200-m9-ai-plan-boundary-evidence.md`、`docs/dev-records/dev-plan-200-m9a-ai-constrained-decode-evidence.md`
-9. [X] **DEV-PLAN-209（对应 M9B）**：Skill 契约化接入（`SkillManifest/SkillExecutionPlan/SkillExecutionResult`）、工具白名单与 `risk_tier` 策略对齐。证据：`docs/dev-records/dev-plan-200-m9b-skill-schema-evidence.md`、`docs/dev-records/dev-plan-200-m9b-skill-tool-matrix-evidence.md`
+8. [X] **DEV-PLAN-208（对应 M9/M9A）**：Req2Config 只读链路（`RequirementIntentSpec -> ConfigDeltaPlan -> DryRunResult`）+ strict schema constrained decode。证据：`docs/archive/dev-records/dev-plan-200-m9-ai-plan-boundary-evidence.md`、`docs/archive/dev-records/dev-plan-200-m9a-ai-constrained-decode-evidence.md`
+9. [X] **DEV-PLAN-209（对应 M9B）**：Skill 契约化接入（`SkillManifest/SkillExecutionPlan/SkillExecutionResult`）、工具白名单与 `risk_tier` 策略对齐。证据：`docs/archive/dev-records/dev-plan-200-m9b-skill-schema-evidence.md`、`docs/archive/dev-records/dev-plan-200-m9b-skill-tool-matrix-evidence.md`
 
 ### Phase 4：AI 提交链路与授权同构（AI 代操 = 人工直操）
 
-10. [X] **DEV-PLAN-210（对应 M10/M10A/M10B/M10B1/M10C）**：会话事务状态机 + timeout/retry/checkpoint/background + 提交瞬时 re-auth + Casbin 顺序冻结 + AI/UI 等价执行。证据：`docs/dev-records/dev-plan-200-m10-conversation-transaction-evidence.md`、`docs/dev-records/dev-plan-200-m10b-actor-delegated-authz-evidence.md`、`docs/dev-records/dev-plan-200-m10c-ai-ui-equivalent-execution-evidence.md`
+10. [X] **DEV-PLAN-210（对应 M10/M10A/M10B/M10B1/M10C）**：会话事务状态机 + timeout/retry/checkpoint/background + 提交瞬时 re-auth + Casbin 顺序冻结 + AI/UI 等价执行。证据：`docs/archive/dev-records/dev-plan-200-m10-conversation-transaction-evidence.md`、`docs/archive/dev-records/dev-plan-200-m10b-actor-delegated-authz-evidence.md`、`docs/archive/dev-records/dev-plan-200-m10c-ai-ui-equivalent-execution-evidence.md`
 
 ### Phase 5：编排引擎最小化落地（避免过度运维）
 
-11. [X] **DEV-PLAN-211（对应 M10D0）**：自建 Temporal 最小可用（Namespace 隔离、checkpoint/retry、dead-letter 人工接管、基础观测），不提前引入生产级平台化要求。证据：`docs/dev-records/dev-plan-200-m10d0-self-host-temporal-minimal-evidence.md`
+11. [X] **DEV-PLAN-211（对应 M10D0）**：自建 Temporal 最小可用（Namespace 隔离、checkpoint/retry、dead-letter 人工接管、基础观测），不提前引入生产级平台化要求。证据：`docs/archive/dev-records/dev-plan-200-m10d0-self-host-temporal-minimal-evidence.md`
 
 ### Phase 6：质量评测与触发式平台化（进入预发/生产前）
 
-12. [X] **DEV-PLAN-212（对应 M11/M11A/M10D1）**：planner/skill 回归评测门禁 + 审批分级策略收口；仅在“预发/生产窗口或容量阈值触发”时执行 Temporal 生产级平台化验收（HA/回放兼容/灾备演练）。证据：`docs/dev-records/dev-plan-200-m11-eval-gate-evidence.md`、`docs/dev-records/dev-plan-200-m11a-skill-eval-gate-evidence.md`、`docs/dev-records/dev-plan-200-m10d1-self-host-temporal-production-evidence.md`
+12. [X] **DEV-PLAN-212（对应 M11/M11A/M10D1）**：planner/skill 回归评测门禁 + 审批分级策略收口；仅在“预发/生产窗口或容量阈值触发”时执行 Temporal 生产级平台化验收（HA/回放兼容/灾备演练）。证据：`docs/archive/dev-records/dev-plan-200-m11-eval-gate-evidence.md`、`docs/archive/dev-records/dev-plan-200-m11a-skill-eval-gate-evidence.md`、`docs/archive/dev-records/dev-plan-200-m10d1-self-host-temporal-production-evidence.md`
 
 ## 11. 迁移与切换剧本（No Legacy）
 

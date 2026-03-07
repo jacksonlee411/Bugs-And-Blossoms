@@ -31,7 +31,7 @@
 
 1. 门禁接入结构（`make check request-code` + CI job）可复用，但规则语义需按 109A 改造。
 2. “先增量阻断，再全量阻断”的门禁演进路径可复用。
-3. 执行证据仍可追溯：`docs/dev-records/dev-plan-109-execution-log.md`。
+3. 执行证据仍可追溯：`docs/archive/dev-records/dev-plan-109-execution-log.md`。
 
 ## 5. 当前有效口径（引用 STD-001）
 
@@ -58,5 +58,5 @@
 - `docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - `docs/dev-plans/109a-request-code-total-convergence-and-anti-drift.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
-- `docs/dev-records/dev-plan-109-execution-log.md`
+- `docs/archive/dev-records/dev-plan-109-execution-log.md`
 - `AGENTS.md`

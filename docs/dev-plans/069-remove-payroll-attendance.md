@@ -286,16 +286,16 @@
 
 1. [ ] 删除 dev-plan 文档（见 §8.1 清单）
 2. [ ] 删除 payroll/attendance 专用 dev-record 文档/资产（见 §8.2.1）
-3. [ ] 新增 `docs/dev-records/dev-plan-069-execution-log.md`，并在 `AGENTS.md` Doc Map 添加链接
+3. [ ] 新增 `docs/archive/dev-records/dev-plan-069-execution-log.md`，并在 `AGENTS.md` Doc Map 添加链接
 4. [ ] 更新引用入口文档（至少）：
    - [ ] `AGENTS.md`：移除 039-046/050-056/064-068 的 Doc Map 链接；新增 `DEV-PLAN-069` 执行记录链接
    - [ ] `docs/dev-plans/009-implementation-roadmap.md`：移除相关里程碑/引用
    - [ ] `docs/dev-plans/060-business-e2e-test-suite.md`：移除相关用例引用
-   - [ ] `docs/dev-records/DEV-PLAN-010-READINESS.md`：移除 payroll/attendance readiness 段落（避免误导）
+   - [ ] `docs/archive/dev-records/DEV-PLAN-010-READINESS.md`：移除 payroll/attendance readiness 段落（避免误导）
    - [ ] `docs/dev-plans/031-greenfield-assignment-job-data.md`：移除 `base_salary/currency` 的契约定义与任何 payroll 语义描述
    - [ ] `docs/dev-plans/063-test-tp060-03-person-and-assignments.md`：移除 `base_salary/currency` 与 payroll 依赖引用（保持 tp060-03 作为 Person+Assignments 的核心闭环）
-   - [ ] `docs/dev-records/dev-plan-031-execution-log.md`：改写移除 payroll/attendance 字样（保留 Assignments M4 证据）
-   - [ ] `docs/dev-records/dev-plan-063-execution-log.md`：改写移除 payroll/attendance 字样（保留 Person+Assignments 证据）
+   - [ ] `docs/archive/dev-records/dev-plan-031-execution-log.md`：改写移除 payroll/attendance 字样（保留 Assignments M4 证据）
+   - [ ] `docs/archive/dev-records/dev-plan-063-execution-log.md`：改写移除 payroll/attendance 字样（保留 Person+Assignments 证据）
 5. [ ] 对 `docs/dev-records/` 做“无痕清理”扫尾：
    - [ ] 删除 payroll/attendance 专用记录（见 §8.2.1）
    - [ ] 改写其它记录中出现的 payroll/attendance 字样与上下文（见 §8.2.2；以 `rg` 盘点为准）
@@ -428,8 +428,8 @@
 
 #### 8.2.2 待改写：清除 payroll/attendance 历史痕迹（保留其它模块证据）
 
-- `docs/dev-records/dev-plan-031-execution-log.md`
-- `docs/dev-records/dev-plan-063-execution-log.md`
+- `docs/archive/dev-records/dev-plan-031-execution-log.md`
+- `docs/archive/dev-records/dev-plan-063-execution-log.md`
 - 以及 `docs/dev-records/` 下所有通过 `rg` 盘点命中的其它文件（以 Milestone A 的盘点结果为准）
 
 ### 8.3 待删除：Go 实现（server）
@@ -483,7 +483,7 @@
 
 ## 9. Readiness / 执行记录（实施时补齐）
 
-> 按 `DEV-PLAN-000`：记录写入 `docs/dev-records/dev-plan-069-execution-log.md`，每条包含时间戳、命令与结果；全部完成后更新状态为“已完成”。
+> 按 `DEV-PLAN-000`：记录写入 `docs/archive/dev-records/dev-plan-069-execution-log.md`，每条包含时间戳、命令与结果；全部完成后更新状态为“已完成”。
 
 1. [ ] 记录：`make check doc`
 2. [ ] 记录：`make e2e`

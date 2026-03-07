@@ -34,7 +34,7 @@
 - `apps/web-mui/src/pages/org/OrgUnitsPage.tsx`：去 bulk actions；移除误导列。
 - `docs/archive/dev-plans/102-as-of-time-context-convergence-and-critique.md`：补齐矩阵与 stopline，并标记里程碑完成。
 - `docs/archive/dev-plans/018-astro-aha-ui-shell-for-hrms.md`：同步壳层不再全局注入 `as_of` 的最新口径（引用 `DEV-PLAN-102`）。
-- `docs/dev-records/DEV-PLAN-010-READINESS.md`：更新 Shell 描述，避免引用已移除的 token 注入机制。
+- `docs/archive/dev-records/DEV-PLAN-010-READINESS.md`：更新 Shell 描述，避免引用已移除的 token 注入机制。
 
 ## 4. 本地验证记录
 - `pnpm -C apps/web-mui test`：通过（13 tests）

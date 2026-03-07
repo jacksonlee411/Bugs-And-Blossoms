@@ -34,7 +34,7 @@
 | 日期（UTC） | 操作 | 结果 | 证据 |
 | --- | --- | --- | --- |
 | 2026-02-16 06:15 | `make e2e` + `tp060-02-orgunit-ext-query.spec.js` | ✅（7/7 通过） | `make e2e` 输出：`tp060-02-orgunit-ext-query.spec.js` 通过；`e2e/_artifacts/`、`e2e/test-results/` |
-| 2026-02-16 06:16 | `100G` 文档与执行日志回写 | ✅ | `docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`、`docs/dev-records/dev-plan-100g-execution-log.md` |
+| 2026-02-16 06:16 | `100G` 文档与执行日志回写 | ✅ | `docs/dev-plans/100g-org-metadata-wide-table-phase4c-orgunits-list-ext-query-i18n-closure.md`、`docs/archive/dev-records/dev-plan-100g-execution-log.md` |
 
 ## 3. W3（Phase 5 基线）执行记录
 

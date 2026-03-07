@@ -37,7 +37,7 @@
 - [X] 触发器矩阵命中项均通过本地门禁（按 `AGENTS.md`）：涉及 Go/路由/sqlc/迁移/authz 时，不允许“只跑一半”。
 
 ### 3.3 证据固化
-- [X] 将验证步骤与结果补到 `docs/dev-records/DEV-PLAN-010-READINESS.md`（作为本里程碑的可复现证据入口）。
+- [X] 将验证步骤与结果补到 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md`（作为本里程碑的可复现证据入口）。
 
 ## 4. 实施步骤（建议 PR 序列）
 
@@ -77,7 +77,7 @@
 - [X] 门禁：`make authz-pack && make authz-test && make authz-lint`。
 
 ### PR-7：Readiness 证据补齐（010）
-- [X] 更新 `docs/dev-records/DEV-PLAN-010-READINESS.md`：记录从启动到完成闭环的浏览器验证脚本与结果（包含时间戳与链接）。
+- [X] 更新 `docs/archive/dev-records/DEV-PLAN-010-READINESS.md`：记录从启动到完成闭环的浏览器验证脚本与结果（包含时间戳与链接）。
 
 ## 5. 本地验证（SSOT 引用）
 

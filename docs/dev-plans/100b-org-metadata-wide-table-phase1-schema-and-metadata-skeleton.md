@@ -3,7 +3,7 @@
 **状态**: 已完成（2026-02-13；2026-02-16 文档回填）
 
 **执行记录**：
-- `docs/dev-records/dev-plan-100b-execution-log.md`
+- `docs/archive/dev-records/dev-plan-100b-execution-log.md`
 
 > 本文从 `DEV-PLAN-100` 的 Phase 1 拆分而来，作为 Phase 1 的 SSOT；`DEV-PLAN-100` 保持为整体路线图。
 

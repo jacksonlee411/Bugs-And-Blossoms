@@ -78,13 +78,19 @@
 - 必备：Tenant Admin（可执行 `POST` 写入动作）。
 - 可选（用于 403 负例）：Tenant Viewer（若环境已支持角色区分；若不支持则记录为 `CONTRACT_MISSING` 并写明阻塞点，口径对齐 `docs/dev-plans/060-business-e2e-test-suite.md`）。
 
-### 4.3 `as_of` 缺省行为（避免踩坑）
+### 4.3 数据库执行口径（容器优先，强制）
+
+- 本子计划依赖的 PostgreSQL 运行在 Docker / compose 中；`tp060-02-orgunit-ext-query` 的字典 seed 必须通过容器内 PostgreSQL 执行。
+- 禁止把“宿主机已安装 `psql`”作为本子计划通过前置条件；宿主机缺少 `psql` 不得被判定为业务不合格。
+- 若需要 SQL seed/校验，优先使用 `docker compose exec postgres psql`（或等价容器内执行方式），并按仓库根路径解析 `compose.dev.yml` / `DEV_INFRA_ENV_FILE`。
+
+### 4.4 `as_of` 缺省行为（避免踩坑）
 
 - `GET` 且未提供 `as_of`：服务端会 `302` 重定向补上 `as_of=<当前UTC日期>`。
 - `POST` 且未提供 `as_of`：服务端会使用 `as_of=<当前UTC日期>` 作为默认值。
 - 结论：本子计划所有步骤必须显式带 `as_of=2026-01-01`，且表单中的 `effective_date` 建议同样固定为 `2026-01-01`。
 
-### 4.4 可重复执行口径（Idempotency / Re-run）
+### 4.5 可重复执行口径（Idempotency / Re-run）
 
 > 目的：同一租户/同一环境重复跑本子计划时，避免“重复创建导致失败或脏数据”。
 
@@ -92,10 +98,10 @@
 - 所有“创建”动作若返回“已存在/重复”类错误：应先在列表中确认是否已存在对应记录；若已存在则改为记录其 ID 并继续；若未存在则记录为 `BUG/CONTRACT_DRIFT` 并停止该子步骤。
 - 若环境允许但数据已明显污染（重复 Root、重复 SetID/绑定/JobFamilyGroup、职位数量异常且无法判定）：记录为 `ENV_DRIFT`，建议重置租户或更换干净租户再跑（不得在测试中隐式修补口径）。
 
-### 4.5 数据保留（强制）
+### 4.6 数据保留（强制）
 
 - 本子计划创建/补齐的数据（OrgUnit、SetID/绑定/业务单元标记、JobCatalog、Positions）构成 060-DS1 的主数据底座，必须保留以供 TP-060-03/04/05/07/08 复用（SSOT：`docs/dev-plans/060-business-e2e-test-suite.md` §5.0）。
-- 禁止在本子计划执行完后清理数据；若必须重置环境，需按 §4.4 的口径登记并重建 060-DS1。
+- 禁止在本子计划执行完后清理数据；若必须重置环境，需按 §4.5 的口径登记并重建 060-DS1。
 
 ## 5. 数据准备要求（060-DS1 子集 + 本计划增量）
 

@@ -6,12 +6,19 @@ const assistantAPIMocks = vi.hoisted(() => ({
   confirmAssistantTurn: vi.fn(),
   createAssistantConversation: vi.fn(),
   createAssistantTurn: vi.fn(),
-  getAssistantConversation: vi.fn()
+  getAssistantConversation: vi.fn(),
+  renderAssistantTurnReply: vi.fn()
 }))
 
 vi.mock('../../api/assistant', () => assistantAPIMocks)
 
 import { LibreChatPage } from './LibreChatPage'
+import {
+  composeCreateOrgUnitPrompt,
+  composeStructuredIntentRetryPrompt,
+  extractIntentDraftFromText,
+  mergeIntentDraft
+} from './assistantAutoRun'
 
 function makeTurn(overrides: Record<string, unknown> = {}) {
   return {
@@ -129,9 +136,22 @@ describe('LibreChatPage', () => {
       })
     )
     assistantAPIMocks.getAssistantConversation.mockResolvedValue(makeConversation())
+    assistantAPIMocks.renderAssistantTurnReply.mockImplementation(
+      async (_conversationID: string, turnID: string, payload: { kind?: string; stage?: string }) => ({
+        text: payload.stage === 'commit_failed' ? '模型已生成失败说明。' : '模型已生成业务回复。',
+        kind: payload.kind ?? 'info',
+        stage: payload.stage ?? 'draft',
+        reply_model_name: 'gpt-5.2',
+        reply_prompt_version: 'assistant.reply.v1',
+        reply_source: 'model',
+        used_fallback: false,
+        conversation_id: 'conv_1',
+        turn_id: turnID
+      })
+    )
   })
 
-  it('shows bridge connected notice after assistant.bridge.ready', async () => {
+  it('tracks bridge readiness without rendering outer visible notice', async () => {
     render(<LibreChatPage />)
     const { channel, nonce } = await readBridgeTokens()
 
@@ -142,26 +162,40 @@ describe('LibreChatPage', () => {
       payload: { source: 'assistant-ui-bridge' }
     })
 
-    expect(screen.getByText('自动执行通道已连接：可直接在 LibreChat 对话中输入需求。')).toBeInTheDocument()
+    expect(screen.getByTestId('librechat-bridge-status')).toHaveTextContent('connected')
   })
 
-  it('auto executes create -> confirm -> commit from one complete prompt', async () => {
-    render(<LibreChatPage />)
-    const { channel, nonce } = await readBridgeTokens()
+	it('requires second-turn confirmation before commit for complete input', async () => {
+	  render(<LibreChatPage />)
+	  const { channel, nonce } = await readBridgeTokens()
+	  const completeInput = '在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01'
+	  const expectedStructuredPrompt = composeStructuredIntentRetryPrompt(
+	    composeCreateOrgUnitPrompt(extractIntentDraftFromText(completeInput))
+	  )
+
+	  await dispatchBridgeMessage(window.location.origin, {
+	    type: 'assistant.prompt.sync',
+	    channel,
+	    nonce,
+	    payload: { input: completeInput }
+	  })
+
+	  await waitFor(() =>
+	    expect(assistantAPIMocks.createAssistantTurn).toHaveBeenCalledWith(
+	      'conv_1',
+	      expectedStructuredPrompt
+	    )
+	  )
+    expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
+    expect(assistantAPIMocks.commitAssistantTurn).not.toHaveBeenCalled()
 
     await dispatchBridgeMessage(window.location.origin, {
       type: 'assistant.prompt.sync',
       channel,
       nonce,
-      payload: { input: '在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01' }
+      payload: { input: '确认执行' }
     })
 
-    await waitFor(() =>
-      expect(assistantAPIMocks.createAssistantTurn).toHaveBeenCalledWith(
-        'conv_1',
-        '在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01'
-      )
-    )
     await waitFor(() => expect(assistantAPIMocks.confirmAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1', 'AI-GOV-A'))
     await waitFor(() => expect(assistantAPIMocks.commitAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1'))
   })
@@ -212,11 +246,24 @@ describe('LibreChatPage', () => {
         })
       )
 
-    render(<LibreChatPage />)
-    const { channel, nonce } = await readBridgeTokens()
+	  render(<LibreChatPage />)
+	  const { channel, nonce } = await readBridgeTokens()
+	  const missingFieldFollowUp = '生效日期 2026-03-25'
+	  const expectedMergedStructuredPrompt = composeStructuredIntentRetryPrompt(
+	    composeCreateOrgUnitPrompt(
+	      mergeIntentDraft(
+	        {
+	          parent_ref_text: 'AI治理办公室',
+	          entity_name: '人力资源部239A补全',
+	          effective_date: ''
+	        },
+	        extractIntentDraftFromText(missingFieldFollowUp)
+	      )
+	    )
+	  )
 
-    await dispatchBridgeMessage(window.location.origin, {
-      type: 'assistant.prompt.sync',
+	  await dispatchBridgeMessage(window.location.origin, {
+	    type: 'assistant.prompt.sync',
       channel,
       nonce,
       payload: { input: '在 AI治理办公室 下新建 人力资源部239A补全' }
@@ -225,24 +272,33 @@ describe('LibreChatPage', () => {
       expect(assistantAPIMocks.createAssistantTurn).toHaveBeenNthCalledWith(1, 'conv_1', '在 AI治理办公室 下新建 人力资源部239A补全')
     )
 
+	  await dispatchBridgeMessage(window.location.origin, {
+	    type: 'assistant.prompt.sync',
+	    channel,
+	    nonce,
+	    payload: { input: missingFieldFollowUp }
+	  })
+	  await waitFor(() =>
+	    expect(assistantAPIMocks.createAssistantTurn).toHaveBeenNthCalledWith(
+	      2,
+	      'conv_1',
+	      expectedMergedStructuredPrompt
+	    )
+	  )
+    expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
+    expect(assistantAPIMocks.commitAssistantTurn).not.toHaveBeenCalled()
+
     await dispatchBridgeMessage(window.location.origin, {
       type: 'assistant.prompt.sync',
       channel,
       nonce,
-      payload: { input: '生效日期 2026-03-25' }
+      payload: { input: '确认提交' }
     })
-    await waitFor(() =>
-      expect(assistantAPIMocks.createAssistantTurn).toHaveBeenNthCalledWith(
-        2,
-        'conv_1',
-        '在AI治理办公室之下，新建一个名为人力资源部239A补全的部门，成立日期是2026-03-25。'
-      )
-    )
     await waitFor(() => expect(assistantAPIMocks.confirmAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1', 'AI-GOV-A'))
     await waitFor(() => expect(assistantAPIMocks.commitAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1'))
   })
 
-  it('resolves ambiguous candidate by dialogue index without generating new turn', async () => {
+  it('requires second confirmation after candidate selection', async () => {
     assistantAPIMocks.createAssistantConversation.mockResolvedValue(
       makeConversation({
         turns: [
@@ -281,6 +337,16 @@ describe('LibreChatPage', () => {
       channel,
       nonce,
       payload: { input: '选第2个' }
+    })
+
+    expect(assistantAPIMocks.confirmAssistantTurn).not.toHaveBeenCalled()
+    expect(assistantAPIMocks.commitAssistantTurn).not.toHaveBeenCalled()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '确认执行' }
     })
 
     await waitFor(() => expect(assistantAPIMocks.confirmAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1', 'SSC-2'))
@@ -323,4 +389,92 @@ describe('LibreChatPage', () => {
     await waitFor(() => expect(assistantAPIMocks.commitAssistantTurn).toHaveBeenCalledWith('conv_1', 'turn_1'))
     expect(assistantAPIMocks.createAssistantTurn).not.toHaveBeenCalled()
   })
+  it('does not render synthetic gpt reply when conversation creation fails', async () => {
+    assistantAPIMocks.createAssistantConversation.mockRejectedValueOnce(new Error('创建会话失败'))
+    render(<LibreChatPage />)
+    const { channel, nonce } = await readBridgeTokens()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '在鲜花组织之下，新建一个名为运营部的部门' }
+    })
+
+    await waitFor(() => expect(screen.getByTestId('librechat-bridge-error')).toHaveTextContent('创建会话失败'))
+    expect(assistantAPIMocks.renderAssistantTurnReply).not.toHaveBeenCalled()
+  })
+
+  it('renders commit failure through reply api without missing-turn fallback', async () => {
+    assistantAPIMocks.commitAssistantTurn.mockRejectedValueOnce({
+      message: '提交失败',
+      details: { code: 'conversation_state_invalid' }
+    })
+    render(<LibreChatPage />)
+    const { channel, nonce } = await readBridgeTokens()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '在 AI治理办公室 下新建 人力资源部2，生效日期 2026-01-01' }
+    })
+    await waitFor(() => expect(assistantAPIMocks.createAssistantTurn).toHaveBeenCalled())
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '确认执行' }
+    })
+
+    await waitFor(() => expect(assistantAPIMocks.renderAssistantTurnReply).toHaveBeenCalled())
+    const lastCall = assistantAPIMocks.renderAssistantTurnReply.mock.calls.at(-1)
+    expect(lastCall?.[0]).toBe('conv_1')
+    expect(lastCall?.[1]).toBe('turn_1')
+    expect(lastCall?.[2]).toMatchObject({
+      stage: 'commit_failed',
+      kind: 'error',
+      outcome: 'failure',
+      locale: 'zh'
+    })
+    expect(lastCall?.[2]).not.toHaveProperty('fallback_text')
+    expect(lastCall?.[2]).not.toHaveProperty('allow_missing_turn')
+  })
+
+  it('renders first-turn structured failure through reply api with allow-missing-turn', async () => {
+    assistantAPIMocks.createAssistantTurn
+      .mockRejectedValueOnce({
+        message: 'ai plan schema constrained decode failed',
+        details: { code: 'ai_plan_schema_constrained_decode_failed' }
+      })
+      .mockRejectedValueOnce({
+        message: 'ai plan schema constrained decode failed',
+        details: { code: 'ai_plan_schema_constrained_decode_failed' }
+      })
+
+    render(<LibreChatPage />)
+    const { channel, nonce } = await readBridgeTokens()
+
+    await dispatchBridgeMessage(window.location.origin, {
+      type: 'assistant.prompt.sync',
+      channel,
+      nonce,
+      payload: { input: '在鲜花组织之下，新建一个名为运营部的部门。' }
+    })
+
+    await waitFor(() => expect(assistantAPIMocks.renderAssistantTurnReply).toHaveBeenCalled())
+    const lastCall = assistantAPIMocks.renderAssistantTurnReply.mock.calls.at(-1)
+    expect(lastCall?.[0]).toBe('conv_1')
+    expect(lastCall?.[1]).toBe('missing-turn-context')
+    expect(lastCall?.[2]).toMatchObject({
+      stage: 'missing_fields',
+      kind: 'warning',
+      outcome: 'failure',
+      locale: 'zh',
+      allow_missing_turn: true
+    })
+    expect(String(lastCall?.[2]?.fallback_text || '')).toContain('请补充生效日期')
+  })
+
 })

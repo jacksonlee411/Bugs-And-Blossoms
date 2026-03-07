@@ -54,7 +54,7 @@
 - [x] `modules/orgunit/services/orgunit_mutation_policy.go` + `modules/orgunit/services/orgunit_mutation_policy_test.go`
 - [x] capabilities API 的契约测试/回归测试补齐（`internal/server/..._test.go`）
 - [x] 更正链路（handler + service + store 适配）支持 `patch.ext` 的测试补齐
-- [x] 执行日志：`docs/dev-records/dev-plan-100e1-execution-log.md`（按 `DEV-PLAN-010` 口径记录门禁证据）
+- [x] 执行日志：`docs/archive/dev-records/dev-plan-100e1-execution-log.md`（按 `DEV-PLAN-010` 口径记录门禁证据）
 
 ## 3. 非目标（Non-Goals）
 
@@ -148,7 +148,7 @@ services 侧要做到：
      - [x] 不允许：ext 字段不在 allowed_fields 时拒绝（稳定错误码）。
 6. [x] 门禁与证据
    - [x] 本地门禁按 `AGENTS.md`（Go/doc/routing/authz 按触发器命中）。
-   - [x] 记录到 `docs/dev-records/dev-plan-100e1-execution-log.md`。
+   - [x] 记录到 `docs/archive/dev-records/dev-plan-100e1-execution-log.md`。
 
 ## 6. 测试与验收标准（Acceptance Criteria）
 

@@ -59,9 +59,9 @@
 2. [X] 授权复核引入时延。缓解：只在 commit 瞬间做强校验。
 
 ## 9. 交付物与证据
-- 证据归档：`docs/dev-records/dev-plan-200-m10-conversation-transaction-evidence.md`、`docs/dev-records/dev-plan-200-m10b-actor-delegated-authz-evidence.md`、`docs/dev-records/dev-plan-200-m10c-ai-ui-equivalent-execution-evidence.md`
+- 证据归档：`docs/archive/dev-records/dev-plan-200-m10-conversation-transaction-evidence.md`、`docs/archive/dev-records/dev-plan-200-m10b-actor-delegated-authz-evidence.md`、`docs/archive/dev-records/dev-plan-200-m10c-ai-ui-equivalent-execution-evidence.md`
 - 交付物最小集：契约文档更新、自动化测试/门禁项、Readiness 证据记录。
-- 本次执行记录：见 `docs/dev-records/dev-plan-200-m10-conversation-transaction-evidence.md`、`docs/dev-records/dev-plan-200-m10b-actor-delegated-authz-evidence.md`、`docs/dev-records/dev-plan-200-m10c-ai-ui-equivalent-execution-evidence.md` 的 2026-02-28 条目。
+- 本次执行记录：见 `docs/archive/dev-records/dev-plan-200-m10-conversation-transaction-evidence.md`、`docs/archive/dev-records/dev-plan-200-m10b-actor-delegated-authz-evidence.md`、`docs/archive/dev-records/dev-plan-200-m10c-ai-ui-equivalent-execution-evidence.md` 的 2026-02-28 条目。
 
 ## 10. 文档完整性与 DEV-PLAN-003 对齐自检
 1. [X] 已覆盖对应阶段目标、边界、不变量与失败路径。

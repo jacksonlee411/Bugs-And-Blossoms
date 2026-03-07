@@ -150,7 +150,7 @@
 **交付物**：
 - 本计划文档（`070B`）
 - 后续实施子计划（建议 `070B1` 字典落地、`070B2` scope package 落地）
-- 执行证据记录（`docs/dev-records/dev-plan-070b-execution-log.md`）
+- 执行证据记录（`docs/archive/dev-records/dev-plan-070b-execution-log.md`）
 
 ### 9.1 详细实施拆解（按 PR 主轴）
 > 原则：单 PR 单主轴、可验证、可回滚（仅环境级停写+修复后重试），禁止引入 legacy 双链路。
@@ -159,7 +159,7 @@
 - [x] 冻结“运行时 tenant-only、共享改发布、禁止 global fallback”契约文字（070B + 受影响 P0 文档）。
 - [x] 新增防漂移检查：阻断新代码新增 `global_tenant` 字典读取分支。
 - [x] 固化迁移期错误码与术语：`dict_baseline_not_ready`、`tenant_only`、`release`。
-- [x] 产出：契约差异清单（旧口径 -> 新口径）并落档到 `docs/dev-records/dev-plan-070b-execution-log.md`。
+- [x] 产出：契约差异清单（旧口径 -> 新口径）并落档到 `docs/archive/dev-records/dev-plan-070b-execution-log.md`。
 
 #### PR-070B-2：发布基座数据模型与 Kernel 写入口（DB + One Door）
 - [x] 设计并落地“发布元数据 + 发布任务状态”最小模型（采用“事件 payload + 任务响应模型”，未新增表）。
@@ -202,7 +202,7 @@
 1. [x] 完成 PR-070B-1（不通过不允许进入代码实施）。
 2. [x] PR-070B-2 与 PR-070B-3 串行推进（先基座后服务）。
 3. [x] PR-070B-4 在 PR-070B-3 可用后落地（确保基线导入能力先可用）。
-4. [x] `DEV-PLAN-102B` 已完成 M2+M3+M5，并在 `docs/dev-records/dev-plan-102b-execution-log.md` 留证（2026-02-22）。
+4. [x] `DEV-PLAN-102B` 已完成 M2+M3+M5，并在 `docs/archive/dev-records/dev-plan-102b-execution-log.md` 留证（2026-02-22）。
 5. [x] PR-070B-5 在切流前完成并输出冲突清单与对账报告。
 6. [x] PR-070B-6 预演脚本就绪后，推进 PR-070B-7 收口（生产窗口执行项另行记录）。
 

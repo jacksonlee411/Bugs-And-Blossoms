@@ -175,7 +175,7 @@
 - 日期规则：`apps/web/src/pages/org/orgUnitRecordDateRules.ts`
 - 单测：`apps/web/src/pages/org/orgUnitRecordDateRules.test.ts`
 - i18n：`apps/web/src/i18n/messages.ts`
-- 执行日志：`docs/dev-records/dev-plan-101i-execution-log.md`
+- 执行日志：`docs/archive/dev-records/dev-plan-101i-execution-log.md`
 
 ## 9. 风险与缓解
 

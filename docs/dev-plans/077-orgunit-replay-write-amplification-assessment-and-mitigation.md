@@ -130,7 +130,7 @@
 - 增量化方案明确落地到可执行任务，并与 026D 对齐。
 
 ## 证据与记录
-- 执行记录：`docs/dev-records/dev-plan-077-write-amplification-baseline.md`
+- 执行记录：`docs/archive/dev-records/dev-plan-077-write-amplification-baseline.md`
 
 ## 触发器与门禁（引用 SSOT）
 - 以 `AGENTS.md` 的触发器矩阵与 `docs/dev-plans/012-ci-quality-gates.md` 为准。

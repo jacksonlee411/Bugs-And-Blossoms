@@ -173,7 +173,7 @@
 
 ## 12. 关联文档
 - `docs/dev-plans/070b-no-global-tenant-and-dict-release-to-tenant-plan.md`
-- `docs/dev-records/dev-plan-070b-execution-log.md`
+- `docs/archive/dev-records/dev-plan-070b-execution-log.md`
 - `docs/dev-plans/005-project-standards-and-spec-adoption.md`
 - `docs/dev-plans/003-simple-not-easy-review-guide.md`
 - `docs/dev-plans/002-ui-design-guidelines.md`

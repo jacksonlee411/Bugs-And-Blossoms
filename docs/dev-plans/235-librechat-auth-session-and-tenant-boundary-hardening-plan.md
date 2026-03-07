@@ -1,6 +1,6 @@
 # DEV-PLAN-235：LibreChat 身份/会话/租户边界硬化详细设计
 
-**状态**: 已完成（2026-03-03 15:10 UTC，实施与验证见 `docs/dev-records/dev-plan-235-execution-log.md`）
+**状态**: 已完成（2026-03-03 15:10 UTC，实施与验证见 `docs/archive/dev-records/dev-plan-235-execution-log.md`）
 
 ## 1. 背景与上下文 (Context)
 - **需求来源**:
@@ -14,13 +14,14 @@
   3. 代理路径/方法边界未冻结，存在越界访问、跨租户会话复用与身份混淆风险。
   4. 缺少覆盖 `/assistant-ui/*` 的端到端负测（未登录、跨租户、旁路写）作为 CI 阻断证据。
 - **业务价值**:
-  - 将 `assistant-ui` 纳入与 `/app/**` 同级的会话与租户边界，确保 LibreChat UI 复用不破坏本仓 AuthN/AuthZ/Tenant 不变量。
+  - 将 LibreChat UI 的所有暴露入口纳入与 `/app/**` 同级的会话与租户边界，确保 UI 承载形态从 `/assistant-ui/*` 迁移到 vendored Web UI 后，仍不破坏本仓 AuthN/AuthZ/Tenant 不变量。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
-1. [ ] `/assistant-ui` 与 `/assistant-ui/*` 强制会话校验，禁止绕过。
+1. [ ] LibreChat UI 的正式入口与历史别名入口都必须强制会话校验，禁止绕过。
 2. [ ] 固化 UI 会话行为矩阵（未登录、会话失效、租户不匹配）并保持 fail-closed。
-3. [ ] 收敛代理边界：方法白名单、路径规范化、请求/响应头最小透传。
+3. [ ] 收敛代理/BFF 边界：方法白名单、路径规范化、请求/响应头最小透传。
+4. [ ] 采用 cutover-first 口径：新正式入口边界补齐后，旧入口不得继续承担正式职责，不为历史路径保留长期兼容豁免。
 4. [ ] 明确并保持 AuthN/AuthZ/Tenant 注入归属在本仓，不引入 LibreChat 自管身份旁路。
 5. [ ] 补齐单测 + E2E 负测，并接入现有门禁链路。
 
@@ -104,13 +105,14 @@ sequenceDiagram
 > 本计划不新增数据库 schema；冻结运行时边界契约。
 
 ### 4.1 受保护 UI 路径契约
+> 自 `DEV-PLAN-280` 起，本计划不再把 `/assistant-ui/*` 视为唯一正式 UI 路径；凡承载 LibreChat Web UI 的正式入口、静态资源前缀、短期灰度别名入口，都属于受保护 UI 路径集合。
 ```yaml
 protected_ui_prefixes:
   - /app
   - /assistant-ui
 ```
 约束：
-1. [ ] 受保护前缀必须经过完整 `tenant -> session -> principal` 校验。
+1. [ ] 受保护前缀必须经过完整 `tenant -> session -> principal` 校验，且该约束适用于 vendored UI 正式入口与历史 `/assistant-ui/*` 别名。
 2. [ ] 历史 UI 路径（如 `/login`）仍保持“无别名跳转、由路由层返回 404”的既有行为。
 
 ### 4.2 assistant-ui 代理请求边界契约
@@ -157,11 +159,12 @@ assistant_ui_proxy:
 | 主体失效 | principal 缺失/非 active | 清理 SID + `302 -> /app/login` |
 | 已登录同租户 | SID 有效且主体 active | 允许进入 proxy |
 
-### 5.2 assistant-ui 代理行为契约
-1. [ ] 仅允许 `GET/HEAD /assistant-ui/*`。
+### 5.2 LibreChat UI 入口边界契约
+1. [ ] 对历史 `/assistant-ui/*` 别名，仅允许最小必要的 `GET/HEAD` 调试访问；一旦新正式入口切换完成，旧入口不得继续承担正式业务职责。
 2. [ ] 上游不可达返回 `502`，错误码 `assistant_ui_upstream_unavailable`（消息明确、可审计）。
 3. [ ] 方法不允许返回 `405`，错误码 `assistant_ui_method_not_allowed`。
 4. [ ] 路径越界返回 `400`，错误码 `assistant_ui_path_invalid`。
+5. [ ] 不为历史入口保留长期放宽策略、白名单例外或兼容型旁路。
 
 ### 5.3 错误码与提示契约
 新增或复用错误码需进入统一错误目录并通过门禁：
@@ -185,14 +188,15 @@ else if rc == ui and path not protected:
   passthrough (保持旧路径 404 语义)
 ```
 
-### 6.2 assistant-ui 会话校验算法
+### 6.2 LibreChat UI 入口会话校验算法
 ```text
 if no sid: redirect /app/login
 sess = sessions.Lookup(sid)
 if lookup failed or tenant mismatch: clear sid + redirect
 principal = principals.GetByID(sess.principal_id)
 if principal missing or inactive: clear sid + redirect
-forward to proxy
+if path belongs to retired historical entry and current phase >= cutover: deny/redirect to formal entry
+forward only to the current allowed UI entry
 ```
 
 ### 6.3 代理边界算法
@@ -210,9 +214,10 @@ on response: strip Set-Cookie
 
 ## 7. 安全与鉴权 (Security & Authz)
 1. [ ] 身份与会话仍由本仓 Kratos Session 驱动，不引入 LibreChat 自管身份。
-2. [ ] 租户与主体校验在进入 proxy 之前执行，避免未鉴权流量触达上游。
-3. [ ] 保持 `RLS/Casbin/One Door` 既有边界：assistant-ui 仅作为 UI 读入口，不得成为写旁路。
+2. [ ] 租户与主体校验在进入 proxy/BFF 之前执行，避免未鉴权流量触达上游。
+3. [ ] 保持 `RLS/Casbin/One Door` 既有边界：LibreChat UI 任一入口都不得成为写旁路。
 4. [ ] 敏感头与 cookie 不透传，避免跨系统会话污染与凭据泄露。
+5. [ ] 迁移切换后，历史入口若保留，只能承担调试/排障职责；不得继续承担正式用户交互与正式验收职责。
 
 ## 8. 依赖与里程碑 (Dependencies & Milestones)
 - **依赖**:
@@ -244,14 +249,15 @@ on response: strip Set-Cookie
 6. [ ] `make check doc`
 
 ### 9.3 完成定义（DoD）
-1. [ ] `/assistant-ui/*` 与 `/app/**` 在会话与租户边界上一致。
-2. [ ] 代理默认最小透传，敏感头与 cookie 剥离可被测试稳定验证。
-3. [ ] 三类负测（未登录/跨租户/旁路写）在 CI 中可重复通过。
-4. [ ] 无 legacy 旁路或临时开关残留。
+1. [ ] LibreChat UI 的正式入口、静态资源路径与历史别名入口都与 `/app/**` 在会话与租户边界上一致。
+2. [ ] 正式入口切换完成后，不再存在两个同时承担正式职责的 UI 入口。
+3. [ ] 代理/BFF 默认最小透传，敏感头与 cookie 剥离可被测试稳定验证。
+4. [ ] 三类负测（未登录/跨租户/旁路写）在 CI 中可重复通过。
+5. [ ] 无 legacy 旁路、临时开关或为照顾旧入口保留的长期兼容例外。
 
 ## 10. 运维与监控 (Ops & Monitoring)
 1. [ ] 本阶段不引入新运维开关或外部监控栈，遵循早期最小运维原则。
-2. [ ] 当 assistant-ui 出现边界告警时，处置顺序固定：阻断发布 -> 修复边界 -> 重跑门禁 -> 恢复。
+2. [ ] 当 LibreChat UI 入口出现边界告警时，处置顺序固定：阻断发布 -> 修复边界 -> 重跑门禁 -> 恢复；不得以“先临时放行旧入口”替代修复。
 3. [ ] 日志需可追踪到 `tenant_id/request_id/trace_id`，用于审计与故障复盘。
 4. [ ] 回滚只允许前向修复或版本回滚，禁止恢复 legacy 双链路。
 

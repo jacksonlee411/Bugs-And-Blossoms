@@ -17,6 +17,19 @@ checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 running_services="$(librechat_running_services)"
 api_probe_timeout_seconds="${LIBRECHAT_API_PROBE_TIMEOUT_SECONDS:-60}"
 api_probe_interval_seconds="${LIBRECHAT_API_PROBE_INTERVAL_SECONDS:-2}"
+accept_external_upstream="${LIBRECHAT_RUNTIME_ACCEPT_EXTERNAL_UPSTREAM:-true}"
+external_upstream_reachable="0"
+
+if [[ "${accept_external_upstream}" == "true" ]]; then
+  deadline=$((SECONDS + api_probe_timeout_seconds))
+  while (( SECONDS < deadline )); do
+    if curl -fsS --max-time 3 "${upstream%/}/" >/dev/null 2>&1; then
+      external_upstream_reachable="1"
+      break
+    fi
+    sleep "${api_probe_interval_seconds}"
+  done
+fi
 
 status="healthy"
 services_json="[]"
@@ -24,12 +37,17 @@ for service in "${LIBRECHAT_SERVICES[@]}"; do
   healthy="healthy"
   reason=""
   if [[ -z "${running_services}" ]] || ! grep -qx "${service}" <<<"${running_services}"; then
-    healthy="unavailable"
-    data_dir="$(librechat_service_data_dir "${service}")"
-    if [[ ! -d "${data_dir}" ]]; then
-      reason="mount_source_missing"
+    if [[ "${external_upstream_reachable}" == "1" ]]; then
+      healthy="healthy"
+      reason="external_upstream_managed"
     else
-      reason="container_not_running"
+      healthy="unavailable"
+      data_dir="$(librechat_service_data_dir "${service}")"
+      if [[ ! -d "${data_dir}" ]]; then
+        reason="mount_source_missing"
+      else
+        reason="container_not_running"
+      fi
     fi
   fi
 

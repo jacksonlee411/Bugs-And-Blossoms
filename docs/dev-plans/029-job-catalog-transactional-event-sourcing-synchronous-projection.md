@@ -30,7 +30,7 @@
 - schema/迁移：`modules/jobcatalog/infrastructure/persistence/schema/00001_jobcatalog_schema.sql`、`modules/jobcatalog/infrastructure/persistence/schema/00002_jobcatalog_job_family_groups.sql`、`modules/jobcatalog/infrastructure/persistence/schema/00003_jobcatalog_engine.sql`、`migrations/jobcatalog/20260106102000_jobcatalog_schema.sql`、`migrations/jobcatalog/20260106102500_jobcatalog_engine.sql`
 - UI 闭环入口：`/org/job-catalog`（实现：`internal/server/jobcatalog.go`；allowlist：`config/routing/allowlist.yaml`）
 - Scope Package 解析：`orgunit.resolve_scope_package(...)`（基于 `setid + scope_code` 解析 `package_uuid`；对齐 `DEV-PLAN-071`）；**Job Catalog 配置主数据入口**必须显式传 `package_uuid`，不再直接用 `setid` 过滤（业务数据入口另见 `DEV-PLAN-030/070`）。
-- 证据：`docs/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
+- 证据：`docs/archive/dev-records/DEV-PLAN-010-READINESS.md`（第 10 节）
 - **SSOT 链接**：
   - 触发器矩阵与本地必跑：`AGENTS.md`
   - 命令入口：`Makefile`

@@ -209,7 +209,10 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 	if intent.Action == assistantIntentCreateOrgUnit && intent.ParentRefText != "" && len(intentValidationErrors) == 0 {
 		resolved, resolveErr := s.resolveCandidates(ctx, tenantID, intent.ParentRefText, intent.EffectiveDate)
 		if resolveErr != nil {
-			return nil, resolveErr
+			if !errors.Is(resolveErr, errOrgUnitNotFound) {
+				return nil, resolveErr
+			}
+			resolved = make([]assistantCandidate, 0)
 		}
 		candidates = resolved
 		ambiguityCount = len(candidates)
@@ -277,8 +280,10 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 		return nil, errAssistantConversationForbidden
 	}
 
+	assistantRefreshTurnDerivedFields(turn)
 	conversation.Turns = append(conversation.Turns, turn)
 	conversation.State = turn.State
+	conversation.CurrentPhase = turn.Phase
 	conversation.UpdatedAt = now
 	conversation.Transitions = append(conversation.Transitions, assistantStateTransition{
 		TurnID:     turn.TurnID,
@@ -286,15 +291,18 @@ func (s *assistantConversationService) createTurnPG(ctx context.Context, tenantI
 		TraceID:    turn.TraceID,
 		FromState:  "init",
 		ToState:    assistantStateValidated,
+		FromPhase:  assistantPhaseIdle,
+		ToPhase:    turn.Phase,
 		ReasonCode: "turn_created",
 		ActorID:    principal.ID,
 		ChangedAt:  now,
 	})
 
+	assistantRefreshConversationDerivedFields(conversation)
 	if err := s.upsertTurnTx(ctx, tx, tenantID, conversation.ConversationID, turn); err != nil {
 		return nil, err
 	}
-	if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.UpdatedAt); err != nil {
+	if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.CurrentPhase, conversation.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if err := s.insertTransitionTx(ctx, tx, tenantID, conversation.ConversationID, &conversation.Transitions[len(conversation.Transitions)-1]); err != nil {
@@ -353,6 +361,7 @@ func (s *assistantConversationService) confirmTurnPG(ctx context.Context, tenant
 	}
 
 	result, applyErr := s.applyConfirmTurn(conversation, turn, principal, candidateID)
+	assistantRefreshConversationDerivedFields(conversation)
 	if applyErr != nil {
 		if finalizeErr := s.finalizeIdempotencyErrorTx(ctx, tx, claimKey, applyErr); finalizeErr != nil {
 			return nil, finalizeErr
@@ -366,7 +375,7 @@ func (s *assistantConversationService) confirmTurnPG(ctx context.Context, tenant
 	if err := s.upsertTurnTx(ctx, tx, tenantID, conversation.ConversationID, turn); err != nil {
 		return nil, err
 	}
-	if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.UpdatedAt); err != nil {
+	if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.CurrentPhase, conversation.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if result.Transition != nil {
@@ -432,12 +441,13 @@ func (s *assistantConversationService) commitTurnPG(ctx context.Context, tenantI
 	}
 
 	result, applyErr := s.applyCommitTurn(ctx, conversation, turn, principal, tenantID)
+	assistantRefreshConversationDerivedFields(conversation)
 	if applyErr != nil {
 		if result.PersistTurn {
 			if err := s.upsertTurnTx(ctx, tx, tenantID, conversation.ConversationID, turn); err != nil {
 				return nil, err
 			}
-			if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.UpdatedAt); err != nil {
+			if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.CurrentPhase, conversation.UpdatedAt); err != nil {
 				return nil, err
 			}
 		}
@@ -458,7 +468,7 @@ func (s *assistantConversationService) commitTurnPG(ctx context.Context, tenantI
 	if err := s.upsertTurnTx(ctx, tx, tenantID, conversation.ConversationID, turn); err != nil {
 		return nil, err
 	}
-	if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.UpdatedAt); err != nil {
+	if err := s.updateConversationStateTx(ctx, tx, tenantID, conversation.ConversationID, conversation.State, conversation.CurrentPhase, conversation.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if result.Transition != nil {
@@ -520,11 +530,14 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 		return assistantTurnMutationResult{}, errAssistantConfirmationRequired
 	}
 	fromState := turn.State
+	fromPhase := turn.Phase
 	turn.PolicyVersion, turn.CompositionVersion, turn.MappingVersion = assistantTurnVersionSnapshot(turn.Plan.CapabilityKey)
 	turn.State = assistantStateConfirmed
 	turn.UpdatedAt = time.Now().UTC()
+	assistantRefreshTurnDerivedFields(turn)
 	conversation.UpdatedAt = turn.UpdatedAt
 	conversation.State = turn.State
+	conversation.CurrentPhase = turn.Phase
 	transition := &assistantStateTransition{
 		TurnID:     turn.TurnID,
 		TurnAction: "confirm",
@@ -532,6 +545,8 @@ func (s *assistantConversationService) applyConfirmTurn(conversation *assistantC
 		TraceID:    turn.TraceID,
 		FromState:  fromState,
 		ToState:    turn.State,
+		FromPhase:  fromPhase,
+		ToPhase:    turn.Phase,
 		ReasonCode: "confirmed",
 		ActorID:    principal.ID,
 		ChangedAt:  turn.UpdatedAt,
@@ -555,10 +570,13 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 	}
 	if assistantTurnContractVersionMismatched(turn) {
 		fromState := turn.State
+		fromPhase := turn.Phase
 		turn.State = assistantStateValidated
 		turn.UpdatedAt = time.Now().UTC()
+		assistantRefreshTurnDerivedFields(turn)
 		conversation.UpdatedAt = turn.UpdatedAt
 		conversation.State = turn.State
+		conversation.CurrentPhase = turn.Phase
 		transition := &assistantStateTransition{
 			TurnID:     turn.TurnID,
 			TurnAction: "commit",
@@ -566,6 +584,8 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 			TraceID:    turn.TraceID,
 			FromState:  fromState,
 			ToState:    turn.State,
+			FromPhase:  fromPhase,
+			ToPhase:    turn.Phase,
 			ReasonCode: "contract_version_mismatch",
 			ActorID:    principal.ID,
 			ChangedAt:  turn.UpdatedAt,
@@ -575,10 +595,13 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 	}
 	if assistantTurnVersionDrifted(turn) {
 		fromState := turn.State
+		fromPhase := turn.Phase
 		turn.State = assistantStateValidated
 		turn.UpdatedAt = time.Now().UTC()
+		assistantRefreshTurnDerivedFields(turn)
 		conversation.UpdatedAt = turn.UpdatedAt
 		conversation.State = turn.State
+		conversation.CurrentPhase = turn.Phase
 		transition := &assistantStateTransition{
 			TurnID:     turn.TurnID,
 			TurnAction: "commit",
@@ -586,6 +609,8 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 			TraceID:    turn.TraceID,
 			FromState:  fromState,
 			ToState:    turn.State,
+			FromPhase:  fromPhase,
+			ToPhase:    turn.Phase,
 			ReasonCode: "version_drift",
 			ActorID:    principal.ID,
 			ChangedAt:  turn.UpdatedAt,
@@ -633,10 +658,13 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 		EventUUID:     result.EventUUID,
 	}
 	fromState := turn.State
+	fromPhase := turn.Phase
 	turn.State = assistantStateCommitted
 	turn.UpdatedAt = time.Now().UTC()
+	assistantRefreshTurnDerivedFields(turn)
 	conversation.UpdatedAt = turn.UpdatedAt
 	conversation.State = turn.State
+	conversation.CurrentPhase = turn.Phase
 	transition := &assistantStateTransition{
 		TurnID:     turn.TurnID,
 		TurnAction: "commit",
@@ -644,6 +672,8 @@ func (s *assistantConversationService) applyCommitTurn(ctx context.Context, conv
 		TraceID:    turn.TraceID,
 		FromState:  fromState,
 		ToState:    turn.State,
+		FromPhase:  fromPhase,
+		ToPhase:    turn.Phase,
 		ReasonCode: "committed",
 		ActorID:    principal.ID,
 		ChangedAt:  turn.UpdatedAt,
@@ -707,9 +737,9 @@ func (s *assistantConversationService) loadConversationByTenant(ctx context.Cont
 
 func (s *assistantConversationService) loadConversationTx(ctx context.Context, tx pgx.Tx, tenantID string, conversationID string, forUpdate bool) (*assistantConversation, error) {
 	query := `
-SELECT conversation_id, tenant_uuid::text, actor_id, actor_role, state, created_at, updated_at
-FROM iam.assistant_conversations
-WHERE tenant_uuid = $1::uuid AND conversation_id = $2`
+	SELECT conversation_id, tenant_uuid::text, actor_id, actor_role, state, current_phase, created_at, updated_at
+	FROM iam.assistant_conversations
+	WHERE tenant_uuid = $1::uuid AND conversation_id = $2`
 	if forUpdate {
 		query += ` FOR UPDATE`
 	}
@@ -720,6 +750,7 @@ WHERE tenant_uuid = $1::uuid AND conversation_id = $2`
 		&conversation.ActorID,
 		&conversation.ActorRole,
 		&conversation.State,
+		&conversation.CurrentPhase,
 		&conversation.CreatedAt,
 		&conversation.UpdatedAt,
 	); err != nil {
@@ -730,31 +761,38 @@ WHERE tenant_uuid = $1::uuid AND conversation_id = $2`
 	}
 
 	turnRows, err := tx.Query(ctx, `
-SELECT
-  turn_id,
-  user_input,
-  state,
-  risk_tier,
-  request_id,
-  trace_id,
-  policy_version,
-  composition_version,
-  mapping_version,
-  intent_json,
-  plan_json,
-  candidates_json,
-  resolved_candidate_id,
-  ambiguity_count,
-  confidence,
-  resolution_source,
-  dry_run_json,
-  commit_result_json,
-  created_at,
-  updated_at
-FROM iam.assistant_turns
-WHERE tenant_uuid = $1::uuid AND conversation_id = $2
-ORDER BY created_at, turn_id
-`, tenantID, conversationID)
+	SELECT
+	  turn_id,
+	  user_input,
+	  state,
+	  phase,
+	  risk_tier,
+	  request_id,
+	  trace_id,
+	  policy_version,
+	  composition_version,
+	  mapping_version,
+	  intent_json,
+	  plan_json,
+	  candidates_json,
+	  candidate_options,
+	  resolved_candidate_id,
+	  selected_candidate_id,
+	  ambiguity_count,
+	  confidence,
+	  resolution_source,
+	  dry_run_json,
+	  pending_draft_summary,
+	  missing_fields,
+	  commit_result_json,
+	  commit_reply,
+	  error_code,
+	  created_at,
+	  updated_at
+	FROM iam.assistant_turns
+	WHERE tenant_uuid = $1::uuid AND conversation_id = $2
+	ORDER BY created_at, turn_id
+	`, tenantID, conversationID)
 	if err != nil {
 		return nil, err
 	}
@@ -762,19 +800,27 @@ ORDER BY created_at, turn_id
 	conversation.Turns = make([]*assistantTurn, 0, 4)
 	for turnRows.Next() {
 		var (
-			turn                assistantTurn
-			intentJSON          []byte
-			planJSON            []byte
-			candidatesJSON      []byte
-			dryRunJSON          []byte
-			commitResultJSON    []byte
-			resolvedCandidateID *string
-			resolutionSource    *string
+			turn                 assistantTurn
+			intentJSON           []byte
+			planJSON             []byte
+			candidatesJSON       []byte
+			candidateOptionsJSON []byte
+			dryRunJSON           []byte
+			missingFieldsJSON    []byte
+			commitResultJSON     []byte
+			commitReplyJSON      []byte
+			phase                *string
+			resolvedCandidateID  *string
+			selectedCandidateID  *string
+			resolutionSource     *string
+			pendingDraftSummary  *string
+			errorCode            *string
 		)
 		if err := turnRows.Scan(
 			&turn.TurnID,
 			&turn.UserInput,
 			&turn.State,
+			&phase,
 			&turn.RiskTier,
 			&turn.RequestID,
 			&turn.TraceID,
@@ -784,22 +830,40 @@ ORDER BY created_at, turn_id
 			&intentJSON,
 			&planJSON,
 			&candidatesJSON,
+			&candidateOptionsJSON,
 			&resolvedCandidateID,
+			&selectedCandidateID,
 			&turn.AmbiguityCount,
 			&turn.Confidence,
 			&resolutionSource,
 			&dryRunJSON,
+			&pendingDraftSummary,
+			&missingFieldsJSON,
 			&commitResultJSON,
+			&commitReplyJSON,
+			&errorCode,
 			&turn.CreatedAt,
 			&turn.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
+		if phase != nil {
+			turn.Phase = *phase
+		}
 		if resolvedCandidateID != nil {
 			turn.ResolvedCandidateID = *resolvedCandidateID
 		}
+		if selectedCandidateID != nil {
+			turn.SelectedCandidateID = *selectedCandidateID
+		}
 		if resolutionSource != nil {
 			turn.ResolutionSource = *resolutionSource
+		}
+		if pendingDraftSummary != nil {
+			turn.PendingDraftSummary = *pendingDraftSummary
+		}
+		if errorCode != nil {
+			turn.ErrorCode = *errorCode
 		}
 		if err := json.Unmarshal(intentJSON, &turn.Intent); err != nil {
 			return nil, err
@@ -807,11 +871,24 @@ ORDER BY created_at, turn_id
 		if err := json.Unmarshal(planJSON, &turn.Plan); err != nil {
 			return nil, err
 		}
-		if err := json.Unmarshal(candidatesJSON, &turn.Candidates); err != nil {
-			return nil, err
+		candidateSource := candidatesJSON
+		if len(candidateOptionsJSON) > 0 && string(candidateOptionsJSON) != "null" {
+			candidateSource = candidateOptionsJSON
 		}
-		if err := json.Unmarshal(dryRunJSON, &turn.DryRun); err != nil {
-			return nil, err
+		if len(candidateSource) > 0 && string(candidateSource) != "null" {
+			if err := json.Unmarshal(candidateSource, &turn.Candidates); err != nil {
+				return nil, err
+			}
+		}
+		if len(dryRunJSON) > 0 && string(dryRunJSON) != "null" {
+			if err := json.Unmarshal(dryRunJSON, &turn.DryRun); err != nil {
+				return nil, err
+			}
+		}
+		if len(missingFieldsJSON) > 0 && string(missingFieldsJSON) != "null" {
+			if err := json.Unmarshal(missingFieldsJSON, &turn.MissingFields); err != nil {
+				return nil, err
+			}
 		}
 		if len(commitResultJSON) > 0 && string(commitResultJSON) != "null" {
 			var commitResult assistantCommitResult
@@ -819,6 +896,13 @@ ORDER BY created_at, turn_id
 				return nil, err
 			}
 			turn.CommitResult = &commitResult
+		}
+		if len(commitReplyJSON) > 0 && string(commitReplyJSON) != "null" {
+			var commitReply assistantCommitReply
+			if err := json.Unmarshal(commitReplyJSON, &commitReply); err != nil {
+				return nil, err
+			}
+			turn.CommitReply = &commitReply
 		}
 		copyTurn := turn
 		conversation.Turns = append(conversation.Turns, &copyTurn)
@@ -828,11 +912,11 @@ ORDER BY created_at, turn_id
 	}
 
 	transitionRows, err := tx.Query(ctx, `
-SELECT id, turn_id, turn_action, request_id, trace_id, from_state, to_state, reason_code, actor_id, changed_at
-FROM iam.assistant_state_transitions
-WHERE tenant_uuid = $1::uuid AND conversation_id = $2
-ORDER BY changed_at, id
-`, tenantID, conversationID)
+	SELECT id, turn_id, turn_action, request_id, trace_id, from_state, to_state, from_phase, to_phase, reason_code, actor_id, changed_at
+	FROM iam.assistant_state_transitions
+	WHERE tenant_uuid = $1::uuid AND conversation_id = $2
+	ORDER BY changed_at, id
+	`, tenantID, conversationID)
 	if err != nil {
 		return nil, err
 	}
@@ -843,6 +927,8 @@ ORDER BY changed_at, id
 			transition assistantStateTransition
 			turnID     *string
 			action     *string
+			fromPhase  *string
+			toPhase    *string
 			reasonCode *string
 		)
 		if err := transitionRows.Scan(
@@ -853,6 +939,8 @@ ORDER BY changed_at, id
 			&transition.TraceID,
 			&transition.FromState,
 			&transition.ToState,
+			&fromPhase,
+			&toPhase,
 			&reasonCode,
 			&transition.ActorID,
 			&transition.ChangedAt,
@@ -865,6 +953,12 @@ ORDER BY changed_at, id
 		if action != nil {
 			transition.TurnAction = *action
 		}
+		if fromPhase != nil {
+			transition.FromPhase = *fromPhase
+		}
+		if toPhase != nil {
+			transition.ToPhase = *toPhase
+		}
 		if reasonCode != nil {
 			transition.ReasonCode = *reasonCode
 		}
@@ -874,16 +968,22 @@ ORDER BY changed_at, id
 		return nil, err
 	}
 
+	assistantRefreshConversationDerivedFields(&conversation)
 	return &conversation, nil
 }
 
 func (s *assistantConversationService) upsertTurnTx(ctx context.Context, tx pgx.Tx, tenantID string, conversationID string, turn *assistantTurn) error {
+	assistantRefreshTurnDerivedFields(turn)
 	intentJSON, _ := json.Marshal(turn.Intent)
 	planJSON, err := json.Marshal(turn.Plan)
 	if err != nil {
 		return err
 	}
-	candidatesJSON, _ := json.Marshal(turn.Candidates)
+	candidates := turn.Candidates
+	if candidates == nil {
+		candidates = make([]assistantCandidate, 0)
+	}
+	candidatesJSON, _ := json.Marshal(candidates)
 	dryRunJSON, err := json.Marshal(turn.DryRun)
 	if err != nil {
 		return err
@@ -899,6 +999,7 @@ INSERT INTO iam.assistant_turns (
   turn_id,
   user_input,
   state,
+  phase,
   risk_tier,
   request_id,
   trace_id,
@@ -908,12 +1009,18 @@ INSERT INTO iam.assistant_turns (
   intent_json,
   plan_json,
   candidates_json,
+  candidate_options,
   resolved_candidate_id,
+  selected_candidate_id,
   ambiguity_count,
   confidence,
   resolution_source,
   dry_run_json,
+  pending_draft_summary,
+  missing_fields,
   commit_result_json,
+  commit_reply,
+  error_code,
   created_at,
   updated_at
 ) VALUES (
@@ -928,22 +1035,30 @@ INSERT INTO iam.assistant_turns (
   $9,
   $10,
   $11,
-  $12::jsonb,
+  $12,
   $13::jsonb,
   $14::jsonb,
-  NULLIF($15, ''),
-  $16,
-  $17,
+  $15::jsonb,
+  $16::jsonb,
+  NULLIF($17, ''),
   NULLIF($18, ''),
-  $19::jsonb,
-  $20::jsonb,
-  $21,
-  $22
+  $19,
+  $20,
+  NULLIF($21, ''),
+  $22::jsonb,
+  NULLIF($23, ''),
+  $24::jsonb,
+  $25::jsonb,
+  $26::jsonb,
+  NULLIF($27, ''),
+  $28,
+  $29
 )
 ON CONFLICT (tenant_uuid, conversation_id, turn_id)
 DO UPDATE SET
   user_input = EXCLUDED.user_input,
   state = EXCLUDED.state,
+  phase = EXCLUDED.phase,
   risk_tier = EXCLUDED.risk_tier,
   request_id = EXCLUDED.request_id,
   trace_id = EXCLUDED.trace_id,
@@ -953,12 +1068,18 @@ DO UPDATE SET
   intent_json = EXCLUDED.intent_json,
   plan_json = EXCLUDED.plan_json,
   candidates_json = EXCLUDED.candidates_json,
+  candidate_options = EXCLUDED.candidate_options,
   resolved_candidate_id = EXCLUDED.resolved_candidate_id,
+  selected_candidate_id = EXCLUDED.selected_candidate_id,
   ambiguity_count = EXCLUDED.ambiguity_count,
   confidence = EXCLUDED.confidence,
   resolution_source = EXCLUDED.resolution_source,
   dry_run_json = EXCLUDED.dry_run_json,
+  pending_draft_summary = EXCLUDED.pending_draft_summary,
+  missing_fields = EXCLUDED.missing_fields,
   commit_result_json = EXCLUDED.commit_result_json,
+  commit_reply = EXCLUDED.commit_reply,
+  error_code = EXCLUDED.error_code,
   updated_at = EXCLUDED.updated_at
 `,
 		tenantID,
@@ -966,6 +1087,7 @@ DO UPDATE SET
 		turn.TurnID,
 		turn.UserInput,
 		turn.State,
+		turn.Phase,
 		turn.RiskTier,
 		turn.RequestID,
 		turn.TraceID,
@@ -975,12 +1097,18 @@ DO UPDATE SET
 		string(intentJSON),
 		string(planJSON),
 		string(candidatesJSON),
+		assistantCandidateOptionsJSON(turn),
 		turn.ResolvedCandidateID,
+		turn.SelectedCandidateID,
 		turn.AmbiguityCount,
 		turn.Confidence,
 		turn.ResolutionSource,
 		string(dryRunJSON),
+		turn.PendingDraftSummary,
+		assistantMissingFieldsJSON(turn),
 		nilIfEmptyJSON(commitResultJSON),
+		assistantCommitReplyJSON(turn),
+		turn.ErrorCode,
 		turn.CreatedAt,
 		turn.UpdatedAt,
 	)
@@ -994,13 +1122,14 @@ func nilIfEmptyJSON(data []byte) any {
 	return string(data)
 }
 
-func (s *assistantConversationService) updateConversationStateTx(ctx context.Context, tx pgx.Tx, tenantID string, conversationID string, state string, updatedAt time.Time) error {
+func (s *assistantConversationService) updateConversationStateTx(ctx context.Context, tx pgx.Tx, tenantID string, conversationID string, state string, currentPhase string, updatedAt time.Time) error {
 	_, err := tx.Exec(ctx, `
 UPDATE iam.assistant_conversations
 SET state = $3,
-    updated_at = $4
+    current_phase = $4,
+    updated_at = $5
 WHERE tenant_uuid = $1::uuid AND conversation_id = $2
-`, tenantID, conversationID, state, updatedAt)
+`, tenantID, conversationID, state, currentPhase, updatedAt)
 	return err
 }
 
@@ -1032,6 +1161,12 @@ func (s *assistantConversationService) insertTransitionTx(ctx context.Context, t
 	if strings.TrimSpace(transition.ActorID) == "" {
 		transition.ActorID = conversationID
 	}
+	if strings.TrimSpace(transition.FromPhase) == "" {
+		transition.FromPhase = assistantTransitionPhaseValue(strings.TrimSpace(transition.FromState), strings.TrimSpace(transition.ReasonCode), "", true)
+	}
+	if strings.TrimSpace(transition.ToPhase) == "" {
+		transition.ToPhase = assistantTransitionPhaseValue(strings.TrimSpace(transition.ToState), strings.TrimSpace(transition.ReasonCode), "", false)
+	}
 	var id int64
 	err := tx.QueryRow(ctx, `
 INSERT INTO iam.assistant_state_transitions (
@@ -1043,6 +1178,8 @@ INSERT INTO iam.assistant_state_transitions (
   trace_id,
   from_state,
   to_state,
+  from_phase,
+  to_phase,
   reason_code,
   actor_id,
   changed_at
@@ -1057,10 +1194,12 @@ INSERT INTO iam.assistant_state_transitions (
   $8,
   $9,
   $10,
-  $11
+  $11,
+  $12,
+  $13
 )
 RETURNING id
-`, tenantID, conversationID, turnID, turnAction, transition.RequestID, transition.TraceID, transition.FromState, transition.ToState, reasonCode, transition.ActorID, transition.ChangedAt).Scan(&id)
+`, tenantID, conversationID, turnID, turnAction, transition.RequestID, transition.TraceID, transition.FromState, transition.ToState, transition.FromPhase, transition.ToPhase, reasonCode, transition.ActorID, transition.ChangedAt).Scan(&id)
 	if err != nil {
 		return err
 	}
@@ -1139,6 +1278,7 @@ FOR UPDATE
 }
 
 func (s *assistantConversationService) finalizeIdempotencySuccessTx(ctx context.Context, tx pgx.Tx, key assistantIdempotencyKey, conversation *assistantConversation) error {
+	assistantRefreshConversationDerivedFields(conversation)
 	body, err := json.Marshal(conversation)
 	if err != nil {
 		return err
@@ -1228,6 +1368,7 @@ func (s *assistantConversationService) restoreIdempotentResult(claim assistantId
 	if err := json.Unmarshal(claim.Body, &conversation); err != nil {
 		return nil, err
 	}
+	assistantRefreshConversationDerivedFields(&conversation)
 	return &conversation, nil
 }
 

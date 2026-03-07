@@ -186,6 +186,7 @@
 
 **fail-fast（缺口必须显式化）**：
 - 当 Playwright 依赖缺失、未发现任何测试用例、或关键运行态契约缺失导致无法执行时：必须退出非 0，并输出“如何在本地复现/修复”的最短指引（入口以 `Makefile` 为 SSOT）。
+- 当外部依赖运行形态已冻结（例如 PostgreSQL 运行于 Docker / compose）时，E2E 脚本不得新增“宿主机额外工具必装”前置条件；数据库 seed / 校验必须优先使用容器内工具链（如 `docker compose exec postgres psql`），不得因宿主机缺少 `psql` 将业务用例误判为失败。
 
 **实施现状（DEV-PLAN-009M3 已落地）**：
 - 入口（SSOT）：`make e2e` → `scripts/e2e/run.sh`（不再 placeholder/no-op）。

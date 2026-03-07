@@ -162,7 +162,7 @@ func TestAssistantTurnAction_RequestInProgressMappings(t *testing.T) {
 		tx.queryRowFn = func(sql string, _ ...any) pgx.Row {
 			switch {
 			case strings.Contains(sql, "FROM iam.assistant_conversations"):
-				return &assistFakeRow{vals: []any{"conv_1", "tenant-1", "actor-1", "tenant-admin", assistantStateValidated, now, now}}
+				return &assistFakeRow{vals: []any{"conv_1", "tenant-1", "actor-1", "tenant-admin", assistantStateValidated, assistantConversationPhaseFromLegacyState(assistantStateValidated), now, now}}
 			case strings.Contains(sql, "INSERT INTO iam.assistant_idempotency"):
 				return &assistFakeRow{err: pgx.ErrNoRows}
 			case strings.Contains(sql, "SELECT request_hash"):
@@ -245,7 +245,7 @@ func TestAssistantTurnAction_IdempotencyConflictMappings(t *testing.T) {
 		tx.queryRowFn = func(sql string, _ ...any) pgx.Row {
 			switch {
 			case strings.Contains(sql, "FROM iam.assistant_conversations"):
-				return &assistFakeRow{vals: []any{"conv_1", "tenant-1", "actor-1", "tenant-admin", assistantStateValidated, now, now}}
+				return &assistFakeRow{vals: []any{"conv_1", "tenant-1", "actor-1", "tenant-admin", assistantStateValidated, assistantConversationPhaseFromLegacyState(assistantStateValidated), now, now}}
 			case strings.Contains(sql, "INSERT INTO iam.assistant_idempotency"):
 				return &assistFakeRow{err: pgx.ErrNoRows}
 			case strings.Contains(sql, "SELECT request_hash"):
