@@ -25,7 +25,7 @@
 5. [ ] 将 `/app/assistant/librechat` 收敛为单一真实入口，不再依赖 iframe 套壳作为正式交互承载面。
 6. [ ] 保持 One Door：任何业务写入仍只允许经本仓 `/internal/assistant/*` 与业务提交链路完成，绝不把可写业务能力下放到上游 runtime。
 7. [ ] 明确业务事实源：业务真相以本仓 `conversation_id/turn_id/request_id/trace_id` 与其状态流转为准；官方消息树只是唯一用户可见渲染面，不得反客为主成为业务事实源。
-8. [ ] 明确前端降权：vendored UI 只消费后端返回的 `phase/candidates/draft/commit-reply` 等 DTO，不得在页面 helper / adapter 内重算业务 FSM、候选裁决或提交约束。
+8. [ ] 明确前端降权：vendored UI 只消费后端返回的 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO，不得在页面 helper / adapter 内重算业务 FSM、候选裁决或提交约束。
 
 ### 2.2 非目标
 1. [ ] **不** vendoring LibreChat 后端 Node 服务，不在本计划中接管上游 API/runtime 实现。
@@ -123,7 +123,7 @@ graph TD
 
 ### ADR-280-08：前端降权，只消费 DTO（选定）
 - 选项 A：继续让页面 helper / adapter 承担候选判断、确认词语义与提交前置校验。缺点：会把旧的“DOM hack”升级成“源码 patch hack”。
-- 选项 B（选定）：业务 FSM、候选裁决、确认约束以后端为 SSOT；vendored UI 只消费后端返回的 `phase/candidates/draft/commit-reply` DTO 并负责渲染。
+- 选项 B（选定）：业务 FSM、候选裁决、确认约束以后端为 SSOT；vendored UI 只消费后端返回的 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO 并负责渲染。
 
 ## 6. 仓库布局与资产模型（目标态）
 
@@ -143,7 +143,7 @@ graph TD
 
 ### 7.0 业务事实源与前端职责冻结
 1. [ ] 业务真相固定为本仓持久化的 `conversation_id/turn_id/request_id/trace_id + phase + 审计状态转移`；官方消息树不是业务真相，只是唯一用户可见渲染面。
-2. [ ] vendored UI 只能消费后端 DTO（如 `phase/candidates/draft/commit_reply/error_code`），不得在前端 helper 中重新计算候选解析、确认判定、提交约束或状态推进规则。
+2. [ ] vendored UI 只能消费后端 DTO（如 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code`），不得在前端 helper 中重新计算候选解析、确认判定、提交约束或状态推进规则。
 3. [ ] 若前端需要临时 adapter，只能做展示层归一、事件分发与协议适配，不得承载业务判定。
 4. [ ] `223/260` 是业务事实源与业务 FSM 的 SSOT；`280` 负责承载面与控制点收口，不得与其冲突。
 
@@ -259,7 +259,7 @@ graph TD
 3. [ ] 不再存在 `data-assistant-dialog-stream` 或等价外挂消息流承担用户可见业务回执职责。
 4. [ ] 不再存在两个同时有效的正式用户入口、两套正式静态资源前缀、两套正式消息落点或两套正式 E2E 通过口径。
 5. [ ] `260` Case 1~4 中，所有业务回执都由官方消息列表组件树渲染，且每轮仅有唯一 assistant 回复实体。
-6. [ ] 前端只消费后端 `phase/candidates/draft/commit-reply` 等 DTO；业务事实源仍以本仓 `conversation/turn/request/trace` 与审计状态转移为准。
+6. [ ] 前端只消费后端 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO；业务事实源仍以本仓 `conversation/turn/request/trace` 与审计状态转移为准。
 7. [ ] 发送、缺字段、多候选、确认、提交成功/失败的关键路径，都能通过源码级单测/组件测 + 真实 E2E 双重验证。
 8. [ ] 旧桥接链路相关代码、测试与文案已删除或明确退役，不再形成持续维护负担。
 9. [ ] 上游 runtime 镜像基线仍可独立启动、健康检查、升级与回滚，不因 UI 源码纳管而退化。

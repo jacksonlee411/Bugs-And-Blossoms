@@ -12,7 +12,7 @@
 - **当前痛点**:
   1. 原 `223` 已解决“内存 map 无法恢复”的第一阶段问题，但其文档口径仍停留在 `validated/confirmed/committed` 这类较粗粒度状态，不足以承接 `260` 已冻结的 `phase` 级业务 FSM。
   2. 旧版持久化模型没有明确冻结 `await_missing_fields / await_candidate_pick / await_candidate_confirm / await_commit_confirm` 所需的最小交互快照，服务重启后无法稳定重建同一轮对话上下文。
-  3. `280/284` 已明确前端降权：vendored UI 只能消费后端 DTO，不能在页面 helper / adapter 中重算业务 FSM；因此后端必须把 `phase/candidates/draft/commit-reply` 的事实源口径补齐并冻结。
+  3. `280/284` 已明确前端降权：vendored UI 只能消费后端 DTO，不能在页面 helper / adapter 中重算业务 FSM；因此后端必须把 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` 的事实源口径补齐并冻结。
   4. 旧 `223` 对前端依赖仍引用历史 `222` 口径，已不再适合作为新正式承载面的约束来源。
 - **业务价值**:
   - 将 Assistant 从“可持久化”进一步升级为“`260` 业务 FSM 可恢复、`280/284` UI 可直接消费、全链路可追踪与可审计”的稳定事务能力。

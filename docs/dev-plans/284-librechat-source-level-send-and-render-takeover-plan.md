@@ -1,6 +1,6 @@
 # DEV-PLAN-284：LibreChat 发送与渲染主链路源码级接管实施计划
 
-**状态**: 准备中（2026-03-08 CST；仅完成 284-prep 资产：接口映射草案、patch 清单草案、测试骨架）
+**状态**: 准备中（2026-03-08 CST；`284-prep` 已完成，且已按 `260` P0 契约完成 readiness 对齐，待进入正式 patch 实施）
 
 ## 0. 284-prep 当前进度（2026-03-08）
 - [x] 冻结 `284-prep` 边界：当前只做实施前准备，不落 send/store/render 主链路行为变更代码。
@@ -26,7 +26,7 @@
 ## 3. 顺序与 readiness
 1. [ ] `284` 只能在 `281` 完成后启动。
 2. [ ] `DEV-PLAN-223` 已明确业务事实源字段与回放口径。
-3. [ ] `DEV-PLAN-260` 已冻结 phase / candidates / draft / commit-reply DTO 契约。
+3. [X] `DEV-PLAN-260` 已冻结 DTO 契约：`phase / missing_fields / candidates / pending_draft_summary / selected_candidate_id / commit_reply / error_code`。
 4. [ ] `DEV-PLAN-283` 已完成正式入口切换，不再依赖旧桥接链路承载发送与回执。
 5. [ ] `284` 不应与“旧桥接仍承担正式职责”的状态并行存在。
 
@@ -43,7 +43,13 @@
 ## 3.2 搜索型 stopline
 1. [ ] 完成 `284` 后，正式用户可见业务职责不应再由 `assistantDialogFlow`、`assistantAutoRun` 或等价 helper 承担。
 2. [ ] 完成 `284` 后，不应再存在 `document.createElement(...)` 式外挂消息流作为正式回执落点的实现口径。
-3. [ ] 完成 `284` 后，前端消费契约应可清晰定位为后端 `phase/candidates/draft/commit-reply` DTO，而非散落的本地判定逻辑。
+3. [ ] 完成 `284` 后，前端消费契约应可清晰定位为后端 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` DTO，而非散落的本地判定逻辑。
+
+### 3.4 `260` P0 契约对齐结果（2026-03-08）
+1. [X] DTO 字段命名与适用范围改为引用 `260` 第 4.3 与第 5.5 节，不再使用 `draft/commit-reply` 简写。
+2. [X] 阶段推进与 guard 改为引用 `260` 第 5.4 节；`284` 不再重复定义业务 FSM。
+3. [X] 接口对接以 `260` 第 6.1 节契约矩阵为准，`284` 只定义 send/store/render 控制点接管。
+4. [X] 前端降权 stopline 改为引用 `260` 第 5.6 节，作为 patch 验收前置断言。
 
 ## 4. 实施步骤
 1. [ ] 接管发送 action：阻止旧的页面级业务编排继续推进状态。
@@ -56,7 +62,7 @@
 | --- | --- | --- | --- |
 | 发送入口（form submit） | `client/src/components/Chat/Input/ChatForm.tsx` `onSubmit={methods.handleSubmit(submitMessage)}` | `POST /internal/assistant/conversations/{conversation_id}/turns` | 入口锚点已固定，后续 patch 在 `submitMessage/ask` 之间接入 adapter。 |
 | 发送组装（ask 前） | `client/src/hooks/Messages/useSubmitMessage.ts` `submitMessage()` | `request_id/trace_id + user_input`（`223/260` 口径） | 当前只定位入口，不引入业务重算。 |
-| 提交载荷组装（store 前） | `client/src/hooks/Chat/useChatFunctions.ts` `ask()` 组装 `submission` | DTO：`phase/candidates/draft/commit-reply`（以 `260` 冻结版为准） | `284` 正式阶段将把本地语义判断收敛为 DTO 消费。 |
+| 提交载荷组装（store 前） | `client/src/hooks/Chat/useChatFunctions.ts` `ask()` 组装 `submission` | DTO：`phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code`（以 `260` 冻结版为准） | `284` 正式阶段将把本地语义判断收敛为 DTO 消费。 |
 | 流式事件接入（SSE） | `client/src/hooks/SSE/useSSE.ts`（`created/sync/event/type/final/error`） | `GET /internal/assistant/conversations/{conversation_id}`（回读）+ turn action 接口 | 本次只冻结事件接入点，不改事件语义。 |
 | 消息落盘与渲染前更新 | `client/src/hooks/SSE/useEventHandlers.ts` `setMessages/queryClient.setQueryData` | 对齐 `223` 事实源字段（`conversation_id/turn_id/request_id/trace_id`） | 正式阶段要求所有业务回执进官方消息数组。 |
 | 官方消息渲染面 | `client/src/components/Chat/Messages/ui/MessageRender.tsx` + `MessageContent` | 仅消费后端 DTO，不再前端重算阶段/候选/确认 | 本次只确认唯一渲染面入口。 |
@@ -71,8 +77,8 @@
 
 ### 4.3 测试骨架清单（284-prep）
 1. [x] `e2e/tests/tp284-librechat-send-render-takeover.prep.spec.js` 已创建（`fixme` 占位，含 4 个 case 骨架）。
-2. [ ] 待 `283` 完成后把 `fixme` 转实测：单通道发送、DTO 驱动渲染、官方消息树唯一渲染面、helper 失活验证。
-3. [ ] 待 `223/260` 冻结后补组件/单测，覆盖 send/store/render 关键路径与错误分支。
+2. [X] readiness 前置已满足：`283` 已完成正式入口切换；进入 `284` 正式 patch 后把 `fixme` 转实测（单通道发送、DTO 驱动渲染、官方消息树唯一渲染面、helper 失活验证）。
+3. [ ] 待 `223` 持久化实现与回放测试补齐后，补组件/单测覆盖 send/store/render 关键路径与错误分支。
 
 ## 5. 验收标准
 1. [ ] 前端只消费后端 DTO，不再重算业务语义。

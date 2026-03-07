@@ -1,6 +1,6 @@
 # DEV-PLAN-260：AI对话真实业务闭环主计划（多轮补全 / 候选确认 / 提交回执）
 
-**状态**: 规划中（2026-03-07 16:00 CST；已按 `DEV-PLAN-223/280` 方向收敛为“业务语义/FSM/DTO 契约主计划”，不再承载前端本地编排口径）
+**状态**: 规划中（2026-03-08 CST；已按 `DEV-PLAN-223/280` 方向收敛为“业务语义/FSM/DTO 契约主计划”，并完成推进 `284` 所需的 P0 契约冻结）
 
 > 历史执行记录仍保留在 `docs/archive/dev-records/dev-plan-260-execution-log.md`，但其“已完成”只代表旧口径阶段性实现；**不再等同于当前真实需求已达成**。
 
@@ -110,6 +110,14 @@
 3. [ ] 不在本计划内定义 LibreChat UI 承载实现细节；UI 主架构与源码纳管以 `280` 为准，send/store/render 接管以 `284` 为准，260 只冻结业务语义、FSM、DTO 契约与验收口径。
 4. [ ] 不以“局部单测通过”“页面外出现提示”或“接口返回成功”作为 Case 2~4 达成依据。
 
+### 4.3 P0 契约冻结（用于推进 284）
+1. [X] 冻结统一 DTO 字段命名：`phase / missing_fields / candidates / pending_draft_summary / selected_candidate_id / commit_reply / error_code`。
+2. [X] 冻结阶段转移与 guard 条件（见 5.4），作为 `284` send/store/render 接管时的唯一业务推进依据。
+3. [X] 冻结 DTO 字段适用矩阵（见 5.5），禁止前端为“补齐显示”自行推导业务字段。
+4. [X] 冻结接口契约矩阵（见 6.1），`284` patch 与测试只允许消费该契约。
+5. [X] 冻结前端降权 stopline（见 5.6）：vendored UI 只做渲染与事件分发，不重算业务语义。
+6. [X] 冻结命名退化禁止项：`draft`、`commit-reply`、`commitReply` 仅可作为历史术语出现在归档说明，不得作为现行契约字段名。
+
 ## 5. 业务状态机（FSM）冻结
 
 ### 5.1 运行态阶段
@@ -128,10 +136,10 @@ interface DialogFlowSnapshotDTO {
     | 'failed'
   conversation_id: string
   turn_id: string
-  pending_draft_summary: string
-  missing_fields: string[]
-  candidates: AssistantCandidateOption[]
-  selected_candidate_id: string
+  pending_draft_summary?: string
+  missing_fields?: string[]
+  candidates?: AssistantCandidateOption[]
+  selected_candidate_id?: string
   commit_reply?: {
     outcome: 'success' | 'failure'
     message: string
@@ -177,6 +185,37 @@ interface DialogFlowSnapshotDTO {
 8. [ ] 页面外 bridge 容器、overlay、notice 不得承担用户可见业务回执职责。
 9. [ ] DTO 中的 `phase/missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code` 必须能由 `223` 的持久化事实源稳定重建，不能只存在于前端运行时内存。
 
+### 5.4 阶段转移表（P0 冻结）
+| 当前 phase | 用户输入 / 动作 | Guard（必须满足） | 下一 phase | 接口 |
+| --- | --- | --- | --- | --- |
+| `idle` | `POST .../turns`（信息完整） | 无缺字段、无候选冲突、已形成草案 | `await_commit_confirm` | `POST /internal/assistant/conversations/{conversation_id}/turns` |
+| `idle` | `POST .../turns`（信息缺失） | 存在缺字段 | `await_missing_fields` | 同上 |
+| `idle` | `POST .../turns`（多候选） | 存在候选冲突 | `await_candidate_pick` | 同上 |
+| `await_missing_fields` | `POST .../turns`（用户补全） | 缺字段已补齐 | `await_commit_confirm` 或 `await_candidate_pick` | 同上 |
+| `await_candidate_pick` | 用户“选第N个/候选编码” | 可唯一定位候选 | `await_candidate_confirm` | `POST /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:reply`（或等价回复动作） |
+| `await_candidate_confirm` | `:confirm(candidate_id)` | `selected_candidate_id` 非空 | `await_commit_confirm` | `POST /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:confirm` |
+| `await_commit_confirm` | `:commit` | `pending_draft_summary` 非空且用户明确确认 | `committing` | `POST /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:commit` |
+| `committing` | 提交完成 | 后端提交结果成功 | `committed` | 内部状态推进 |
+| `committing` | 提交完成 | 后端提交结果失败 | `failed` | 内部状态推进 |
+
+### 5.5 DTO 字段适用矩阵（P0 冻结）
+| 字段 | 适用 phase | 约束 |
+| --- | --- | --- |
+| `phase` | 全部 | 必填，后端事实源唯一真相 |
+| `missing_fields` | `await_missing_fields` | 非空列表；其他 phase 不得伪造 |
+| `candidates` | `await_candidate_pick` | 非空列表；候选顺序稳定可追溯 |
+| `selected_candidate_id` | `await_candidate_confirm`、`await_commit_confirm`、`committing`、`committed`、`failed`（若由候选链路进入） | 进入 `await_candidate_confirm` 前必须已有值 |
+| `pending_draft_summary` | `await_commit_confirm`、`committing`、`committed`、`failed`（若草案已生成） | 进入 `await_commit_confirm` 前必须已有值 |
+| `commit_reply` | `committed`、`failed` | 仅提交结束后出现 |
+| `error_code` | `failed`（或接口错误响应） | 与错误码契约一致，不得由前端拼装 |
+
+### 5.6 前端降权 Stopline（P0 冻结）
+1. [X] 禁止在 vendored UI、`LibreChatPage`、页面 helper、adapter 中根据自然语言文本重算 `phase`。
+2. [X] 禁止前端根据局部上下文自行推断 `selected_candidate_id`、`pending_draft_summary`、`commit_reply`。
+3. [X] 禁止在前端把确认词直接映射为 `:commit`；是否允许提交只能由后端 phase + guard 决策。
+4. [X] 前端允许职责仅限：DTO 渲染、事件分发、协议适配、可观测埋点。
+5. [X] 若任一 stopline 被破坏，则 `260/284` 同时判未达成。
+
 ## 6. 内部调用序列（冻结）
 1. [ ] **Case 2**：
    - `POST /conversations/:id/turns`
@@ -206,6 +245,21 @@ interface DialogFlowSnapshotDTO {
    - 等待提交确认
    - `:commit`
    - 返回 `commit_reply`
+
+### 6.1 接口契约矩阵（P0 冻结）
+| 接口 | 请求关键字段 | 响应关键字段（最小集合） | 说明 |
+| --- | --- | --- | --- |
+| `POST /internal/assistant/conversations/{conversation_id}/turns` | `request_id`、`trace_id`、`user_input` | `phase` + 适用子集（`missing_fields/candidates/pending_draft_summary/selected_candidate_id/commit_reply/error_code`） | 创建用户回合并推进到下一业务阶段 |
+| `POST /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:reply`（或等价动作） | `request_id`、`trace_id`、`user_input` | 同上 | 处理“补全字段”“选择候选”“确认文本”等回合内回复 |
+| `POST /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:confirm` | `request_id`、`trace_id`、`candidate_id`（候选链路时） | `phase` + 适用子集 | 候选确认或提交前确认 |
+| `POST /internal/assistant/conversations/{conversation_id}/turns/{turn_id}:commit` | `request_id`、`trace_id` | `phase`、`commit_reply`、`error_code`（失败时） | 执行最终提交 |
+| `GET /internal/assistant/conversations/{conversation_id}` | 无 | 当前会话 `phase` + 最近回合可恢复 DTO 快照 | 重启恢复与 UI 回读唯一入口 |
+
+错误码口径（P0 最小集合）：
+1. `conversation_state_invalid`
+2. `idempotency_key_conflict`
+3. `request_in_progress`
+4. `tenant_mismatch`
 
 ## 7. 实施分解
 
@@ -260,6 +314,12 @@ interface DialogFlowSnapshotDTO {
   4. [ ] 旧桥专属 E2E 已由 `DEV-PLAN-282` 删除；正式入口 E2E 由 `DEV-PLAN-283/285` 重新补齐。
   5. [ ] 补充“AI 对话独立页真实 Case 1~4”专属 E2E；每个 Case 必须同时断言 `266` 的共通 stopline：无官方原始发送、无官方错误气泡、无外挂回复容器、同轮唯一 assistant 气泡。
   6. [ ] `make check doc`
+
+### 9.1 `260 -> 284` 交接包（P0）
+1. [X] 阶段转移与 guard：见 5.4。
+2. [X] DTO 字段适用矩阵：见 5.5。
+3. [X] 接口契约矩阵与错误码最小集合：见 6.1。
+4. [X] 前端降权 stopline：见 5.6。
 
 ## 10. 交付物
 1. [ ] 主计划文档：`docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
