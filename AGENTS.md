@@ -353,7 +353,7 @@ modules/{module}/
 - DEV-PLAN-220A：聊天框 AI 助手（220）测试验证与功能缺口收敛方案：`docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
 - DEV-PLAN-221：Assistant P1 Blocker 收口实施计划（状态机 × 漂移回退 × Strict Decode）：`docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
 - DEV-PLAN-221 执行日志：`docs/archive/dev-records/dev-plan-221-execution-log.md`
-- DEV-PLAN-222：Assistant 前端交互与 E2E 证据闭环实施计划：`docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
+- DEV-PLAN-222【归档】：Assistant 前端交互与 E2E 证据闭环实施计划（旧桥接阶段历史证据）：`docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
 - DEV-PLAN-222 执行日志：`docs/archive/dev-records/dev-plan-222-execution-log.md`
 - DEV-PLAN-223：Assistant 会话持久化与审计闭环实施计划：`docs/dev-plans/223-assistant-conversation-persistence-and-audit-closure-plan.md`
 - DEV-PLAN-224：Assistant 多模型适配与 LLM 意图判断能力实施计划：`docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
@@ -376,10 +376,10 @@ modules/{module}/
 - DEV-PLAN-237：LibreChat 升级与回归闭环实施计划：`docs/dev-plans/237-librechat-upgrade-and-regression-closure-plan.md`
 - DEV-PLAN-238：LibreChat MongoDB 运行异常专项修复与防回归计划：`docs/dev-plans/238-librechat-mongodb-runtime-failure-hardening-plan.md`
 - DEV-PLAN-238 执行日志：`docs/archive/dev-records/dev-plan-238-execution-log.md`
-- DEV-PLAN-239：LibreChat 聊天可写链路恢复与运行态稳定性收口计划：`docs/dev-plans/239-librechat-chat-write-path-recovery-and-runtime-stability-plan.md`
-- DEV-PLAN-239A：LibreChat 对话式自动执行与独立页面实施方案：`docs/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
+- DEV-PLAN-239【归档】：LibreChat 聊天可写链路恢复与运行态稳定性收口计划（旧桥接阶段历史基线）：`docs/archive/dev-plans/239-librechat-chat-write-path-recovery-and-runtime-stability-plan.md`
+- DEV-PLAN-239A【归档】：LibreChat 对话式自动执行与独立页面实施方案（旧桥接阶段历史方案）：`docs/archive/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
 - DEV-PLAN-239A 执行日志：`docs/archive/dev-records/dev-plan-239a-execution-log.md`
-- DEV-PLAN-239B：239A 直接验证用例测试报告与实现缺口：`docs/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
+- DEV-PLAN-239B【归档】：239A 直接验证用例测试报告与实现缺口（旧桥接阶段历史报告）：`docs/archive/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
 - DEV-PLAN-239D：Ubuntu 本地开发环境搭建方案（Clone 后首日）：`docs/dev-plans/239d-ubuntu-local-development-environment-bootstrap-plan.md`
 - DEV-PLAN-240：Assistant 组织架构事务编排现代化方案（去写死 + Skill/MCP/LibreChat 对齐）：`docs/dev-plans/240-assistant-org-transaction-orchestration-modernization-plan.md`
 - DEV-PLAN-250：Go 网关 + PostgreSQL RAG/鉴权接管实施方案（覆盖阶段一至阶段二）：`docs/dev-plans/250-go-gateway-rag-and-authz-phase1-2-plan.md`
@@ -387,7 +387,7 @@ modules/{module}/
 - DEV-PLAN-260 执行日志：`docs/archive/dev-records/dev-plan-260-execution-log.md`
 - DEV-PLAN-261：LibreChat 助手对话失败问题排查与修复实施计划：`docs/dev-plans/261-librechat-assistant-conversation-failure-investigation-and-remediation-plan.md`
 - DEV-PLAN-261 执行日志：`docs/archive/dev-records/dev-plan-261-execution-log.md`
-- DEV-PLAN-262：LibreChat 对话回执渲染越界问题调查与收敛方案：`docs/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
+- DEV-PLAN-262【归档】：LibreChat 对话回执渲染越界问题调查与收敛方案（旧桥接阶段缺陷修复记录）：`docs/archive/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
 - DEV-PLAN-262 执行日志：`docs/archive/dev-records/dev-plan-262-execution-log.md`
 - DEV-PLAN-263：LibreChat 真实大模型助手对话回复专线实施方案：`docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
 - DEV-PLAN-263 执行日志：`docs/archive/dev-records/dev-plan-263-execution-log.md`

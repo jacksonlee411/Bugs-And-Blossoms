@@ -8,7 +8,7 @@
 - 本计划（265）不直接宣布 264 失败或通过，而是把“**已实现 / 偏离 / 缺口**”拆开固化，作为后续修复与重新验收的契约入口。
 
 ### 1.1 当前验收入口与前置门槛
-- 当前用户入口以 `http://localhost:8080/app/assistant/AI对话` 为准；`/app/assistant/librechat` 与 `/assistant-ui` 只可作为历史证据与调试入口。
+- 当前用户入口以 `http://localhost:8080/app/assistant/librechat` 为准；`/assistant-ui` 只可作为历史证据与调试入口。
 - 265 聚焦“回复必须先经 GPT-5.2 再展示”，但它的通过证据仍必须建立在 `DEV-PLAN-266` 的 UI / 通道前置门槛之上：无官方原始发送、无官方 `Connection error`、无页面外挂回复容器、同轮唯一 assistant 回复。
 - 若 `266` 的门槛不满足，则即使 `reply_source=model`、`used_fallback=false` 成立，也不得单独宣称当前用户体验达成。
 
@@ -45,7 +45,7 @@
 2. [ ] 收敛为严格单链路：用户可见业务回执只能来自真实 turn 上下文 + GPT-5.2 输出，禁止 fallback 冒充模型输出。
 3. [ ] 补齐可审计证据：每轮必须能证明“真实 turn / 真实模型 / 非 fallback / 最终展示文本”属于同一轮。
 4. [ ] 形成新的 stopline 与回归集，阻断后续再次以“走过 `:reply` 但实际仍是本地文案”为通过依据。
-5. [ ] 265 的复验与后续封板必须回到 `AI对话` 真实入口，并继承 `266` 的共通 stopline。
+5. [ ] 265 的复验与后续封板必须回到 `/app/assistant/librechat` 真实入口，并继承 `266` 的共通 stopline。
 
 ## 5. 冻结契约（265 SSOT）
 1. [ ] **C1 回复来源契约**：用户可见业务回复必须来自 GPT-5.2 实际输出；若模型输出缺失、不可解码或超时，则该轮回复生成失败，不得用本地 `fallback_text` 冒充最终业务回复。
@@ -77,7 +77,7 @@
 2. [ ] 新增真实失败路径 E2E：至少覆盖一个 create/confirm/commit 失败场景，并证明报错文案也先经 GPT-5.2。
 3. [ ] 连续执行至少 3 轮真实验收并逐轮落盘三件套；每轮必须单独落目录，禁止只记录 `repeat-each=3` 汇总结果。
 4. [ ] 在执行日志中逐轮登记 `conversation_id/turn_id/reply_model_name/reply_source/used_fallback`。
-5. [ ] 真实验收需从 `AI对话` 入口启动，并同时断言 `266` 的共通 stopline 仍成立。
+5. [ ] 真实验收需从 `/app/assistant/librechat` 入口启动，并同时断言 `266` 的共通 stopline 仍成立。
 
 ### 6.5 M5：门禁与封板
 1. [ ] 新增单测/集成测试：阻断 fallback 冒充 GPT、阻断 `allow_missing_turn`、阻断 reply render 失败后直出本地业务文案。

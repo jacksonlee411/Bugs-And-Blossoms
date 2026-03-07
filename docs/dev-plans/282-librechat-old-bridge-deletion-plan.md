@@ -45,6 +45,16 @@
 3. [ ] 对少量暂存残留增加“不可达/不可见/不可承担正式职责”保护。
 4. [ ] 运行搜索与门禁，证明旧桥接职责未回流。
 
+## 4.1 归档准备清单（与 283/285 联动）
+1. [X] 以下文档已归档，停止新增实现口径：
+   - `docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
+   - `docs/archive/dev-plans/239-librechat-chat-write-path-recovery-and-runtime-stability-plan.md`
+   - `docs/archive/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
+   - `docs/archive/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
+   - `docs/archive/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
+2. [ ] 与 `DEV-PLAN-283` 对齐“正式入口唯一化”结果，确认上述文档不再承担正式验收口径。
+3. [ ] 将最终物理归档动作放在 `DEV-PLAN-285` 封板步骤中一次完成，避免中途口径漂移。
+
 ## 5. 验收标准
 1. [ ] 不再存在旧桥接链路承担正式用户可见业务职责。
 2. [ ] 仓库中不再存在继续维护旧桥的测试主路径与文档主口径。

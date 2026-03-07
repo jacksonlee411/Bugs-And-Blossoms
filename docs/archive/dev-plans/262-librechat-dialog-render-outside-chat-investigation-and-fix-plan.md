@@ -1,6 +1,11 @@
 # DEV-PLAN-262：LibreChat 对话回执渲染越界问题调查与收敛方案
 
-**状态**: 进行中（2026-03-06 18:54 CST）
+**状态**: 已归档（2026-03-08 CST，旧桥接阶段缺陷修复记录）
+
+> 归档说明：
+> - 本计划聚焦 `assistant_ui_proxy.go + bridge.js` 注入链路的落点修复，当前仅保留历史排障与证据价值。
+> - 自 `DEV-PLAN-281` 启动后，禁止继续扩展本计划作为正式实现路径。
+> - 归档已于 2026-03-08 执行，保留仅用于历史追溯。
 
 ## 1. 背景与问题定义
 - 用户反馈：在 `/app/assistant/librechat` 中，助手业务回执没有出现在聊天对话流内部，而是渲染在对话框之外（越界渲染）。
@@ -9,7 +14,7 @@
 - 自 `DEV-PLAN-266` 冻结后，262 的定位收敛为：**只解决“消息落点越界/锚点漂移”这一类问题**；它不单独代表“官方单通道 + 气泡内回写 + 无外挂容器”整体目标已完成。
 
 ### 1.1 当前验收边界
-- 262 的问题复现可以在 `/app/assistant/librechat` / iframe 内进行，但当前主验收入口仍以 `http://localhost:8080/app/assistant/AI对话` 为准。
+- 262 的问题复现可以在 `/app/assistant/librechat` / iframe 内进行，但当前主验收入口仍以 `http://localhost:8080/app/assistant/librechat` 为准。
 - 262 的通过只表示“消息落点不再越界”；若仍存在官方原始发送、官方 `Connection error`、外挂容器承担回复等问题，则应由 `DEV-PLAN-266` 继续判失败。
 
 ## 2. 目标与非目标
@@ -54,7 +59,7 @@
 1. [X] Go：补充 `internal/server/assistant_ui_proxy_test.go`，断言“合法锚点 + fail-closed + 重定位”脚本标记。
 2. [X] Web/E2E：补充 `/app/assistant/librechat` DOM 断言，验证消息节点位于聊天对话流容器内部。
 3. [X] 记录执行证据：`docs/archive/dev-records/dev-plan-262-execution-log.md`。
-4. [ ] 若作为当前复验依据重跑，需回到 `AI对话` 入口，并与 `266` 的单通道/无外挂 stopline 联合断言。
+4. [ ] 若作为当前复验依据重跑，需回到 `/app/assistant/librechat` 入口，并与 `266` 的单通道/无外挂 stopline 联合断言。
 
 ## 5. 验收标准
 1. [ ] 业务回执消息在视觉与 DOM 结构上都位于聊天流内部（非页面外层/浮层区）。
@@ -73,7 +78,7 @@
   5. [X] `make check doc`
 
 ## 7. 交付物
-1. [X] 计划文档：`docs/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
+1. [X] 计划文档：`docs/archive/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
 2. [X] 执行日志：`docs/archive/dev-records/dev-plan-262-execution-log.md`
 3. [X] 修复代码与测试清单（执行阶段回填）。
 

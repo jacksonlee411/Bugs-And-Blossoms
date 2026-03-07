@@ -1,6 +1,10 @@
 # DEV-PLAN-239B：239A 直接验证用例测试报告与实现缺口
 
-**状态**: 已完成（2026-03-04 16:57 CST）— 仅代表 `239A` 历史阶段验证报告已收口，不代表当前 `DEV-PLAN-260/266` 主验收已达成。
+**状态**: 已归档（2026-03-08 CST）— 仅代表 `239A` 历史阶段验证报告已收口，不代表当前 `DEV-PLAN-260/266` 主验收已达成。
+
+> 归档说明：
+> - 本报告仅保留旧桥接阶段的验证缺口与关闭记录，不再作为当前主链路验收口径。
+> - 归档已于 2026-03-08 执行，保留仅用于历史追溯。
 
 ## 1. 背景与范围
 - 本报告用于验证 `DEV-PLAN-239A` 第 7 节“直接验证用例（Case 1 ~ Case 6）”的**实际落地完成度**，并识别实现缺口。
@@ -80,7 +84,7 @@
   - 实现存在但验证不足：1/6（Case 3）
   - 未完成验证：1/6（Case 6）
 - 结论：239A 代码主干已落地，但“直接验证用例”尚未形成可复现的全链路验收闭环，当前更接近 **P0/P1 功能实现完成 + 验证证据未收口**。
-- 边界说明：以上“完成度评估”仅针对 239A 历史阶段，不得外推为当前 `AI对话` 主路径或 `260/266` 用户体验已达成。
+- 边界说明：以上“完成度评估”仅针对 239A 历史阶段，不得外推为当前 `/app/assistant/librechat` 主路径或 `260/266` 用户体验已达成。
 
 ## 5. 实现缺口清单（Gap List）
 
@@ -105,7 +109,7 @@
 - 建议：收窄策略（精确短语 + 回合状态前置 + 明确二次确认提示），并补充负测。
 
 ### GAP-239B-05（中）239A 文档状态与证据未闭环
-- 现状：239A 状态仍为“草拟中”，验收项未打勾（`docs/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md:3`）。
+- 现状：239A 状态仍为“草拟中”，验收项未打勾（`docs/archive/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md:3`）。
 - 风险：实现与契约状态不一致，影响后续计划衔接与审计可追溯性。
 - 建议：在补齐 239B 缺口后更新 239A 验收勾选，并新增对应执行记录（`docs/dev-records/`）。
 
@@ -117,8 +121,8 @@
 5. [ ] 补齐 239A 执行记录与状态收口（计划与证据一致）。
 
 ## 7. 关联文档
-- `docs/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
-- `docs/dev-plans/239-librechat-chat-write-path-recovery-and-runtime-stability-plan.md`
+- `docs/archive/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
+- `docs/archive/dev-plans/239-librechat-chat-write-path-recovery-and-runtime-stability-plan.md`
 - `docs/dev-plans/012-ci-quality-gates.md`
 
 ## 8. 缺口关闭结果（收口）

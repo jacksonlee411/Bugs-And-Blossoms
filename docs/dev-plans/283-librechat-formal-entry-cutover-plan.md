@@ -38,6 +38,15 @@
 3. [ ] 补齐正式入口的 E2E 与路径边界验证。
 4. [ ] 清理双入口、双文案、双通过口径残留。
 
+## 4.1 归档前置校验（交给 285 执行物理归档）
+1. [ ] 入口切换完成后，确认以下文档只保留历史证据语义，不再出现“正式入口/正式链路”描述：
+   - `docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
+   - `docs/archive/dev-plans/239-librechat-chat-write-path-recovery-and-runtime-stability-plan.md`
+   - `docs/archive/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
+   - `docs/archive/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
+   - `docs/archive/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
+2. [X] 上述文档的物理迁移（`docs/dev-plans -> docs/archive/dev-plans`）已完成；`DEV-PLAN-285` 仅保留一致性复核。
+
 ## 5. 验收标准
 1. [ ] 不再存在两个同时承担正式职责的 UI 入口。
 2. [ ] 用户真实入口、测试入口、文档入口三者口径一致。

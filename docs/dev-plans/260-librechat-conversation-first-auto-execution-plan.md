@@ -234,8 +234,8 @@ interface DialogFlowState {
 5. [ ] 相关后端 / Web / E2E 用例补强。
 
 ## 11. 关联文档
-- `docs/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
-- `docs/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
+- `docs/archive/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
+- `docs/archive/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
 - `docs/dev-plans/263-librechat-gpt52-assistant-dialogue-response-implementation-plan.md`
 - `docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
 - `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`

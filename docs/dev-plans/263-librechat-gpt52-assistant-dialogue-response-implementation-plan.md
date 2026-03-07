@@ -3,7 +3,7 @@
 **状态**: 规划中（2026-03-06 18:54 CST）
 
 ## 1. 背景与问题定义
-- 263 的验收目标是单一且不可替代的：在 `http://localhost:8080/app/assistant/AI对话` 输入自然语言后，**用户可见回复必须来自真实大模型生成**，且回复必须出现在官方聊天流内。
+- 263 的验收目标是单一且不可替代的：在 `http://localhost:8080/app/assistant/librechat` 输入自然语言后，**用户可见回复必须来自真实大模型生成**，且回复必须出现在官方聊天流内。
 - 260/261/262 已改善对话闭环与渲染锚点，但它们的约束不能替代 263 目标本身；凡与 263 硬目标冲突的历史约束，一律以下述目标倒推约束为准。
 - 263 不负责替代 `266` 的 UI / 通道前置门槛；若官方单通道、气泡内回写、无外挂容器、无官方原始错误体验未达成，则 263 不得单独宣布“用户体验通过”。
 - 本计划明确采用“双阶段链路”：
@@ -18,14 +18,14 @@
     5. [ ] 失败态存在技术错误码用户可见风险，未统一为大模型自然语言解释。
 
 ### 1.1 验收入口与前置依赖
-- 当前用户验收入口冻结为：`http://localhost:8080/app/assistant/AI对话`。
-- `/app/assistant/librechat` 与 `/assistant-ui` 仅可作为桥接/iframe/代理调试入口，**不得单独作为 263 通过依据**。
+- 当前用户验收入口冻结为：`http://localhost:8080/app/assistant/librechat`。
+- `/assistant-ui` 仅可作为桥接/iframe/代理调试入口，**不得单独作为 263 通过依据**。
 - 263 的任何“通过”都必须同时满足 `DEV-PLAN-266` 第 6.6 节“用户可见交互与体验变化”与第 7 节“验收标准（硬门槛）”。
 
 ## 2. 目标与非目标
 
 ### 2.1 目标（必须全部满足）
-1. [ ] 用户在 `AI对话` 入口输入业务句子后，业务回执必须在官方聊天流同一 assistant 气泡体系中可见。
+1. [ ] 用户在 `/app/assistant/librechat` 入口输入业务句子后，业务回执必须在官方聊天流同一 assistant 气泡体系中可见。
 2. [ ] 用户可见业务回执文本（含成功与失败）必须由**真实大模型**生成，不允许前端/后端本地模板直接拼接后展示给用户。
 3. [ ] 该轮回执必须满足模型命中约束：`reply_source=model`、`used_fallback=false`、`reply_model_name` 非空；任一不满足即该轮失败。
 4. [ ] 通过判定必须具备同轮次证据三件套：页面全图、聊天局部图、同轮次 trace（`conversation_id`/`turn_id`/`reply_model_name`/`reply_source`/`used_fallback`）。
@@ -47,14 +47,14 @@
 3. [ ] **文案来源硬约束（H3）**：聊天气泡中的业务文本只允许来自 `reply_nlg.text`（大模型输出）；禁止把 `format*Message` 或固定字符串作为最终业务回执直接展示。
 4. [ ] **聊天流唯一业务出口（H4）**：业务成功/失败回执仅允许通过 `assistant.flow.dialog` 进入官方同一 transcript / assistant 气泡体系；`assistant.flow.notice`、页面 Alert、外挂容器不得作为业务通过依据。
 5. [ ] **同轮次证据绑定（H5）**：每次“通过”必须同时提交：
-   - `Screenshot-A`：`/app/assistant/AI对话` 页面全图；
+   - `Screenshot-A`：`/app/assistant/librechat` 页面全图；
    - `Screenshot-B`：官方聊天区局部图（含该轮助手气泡）；
    - `Trace-C`：同一 `conversation_id + turn_id` 的后端记录，显式包含 `reply_model_name`、`reply_source`、`used_fallback` 与 `reply_prompt_version`。
 6. [ ] **失败语义硬约束（H6）**：正常与报错场景都应先走大模型回复生成；若回复生成链路不可用，则该轮判失败且不计通过。
 7. [ ] **技术细节隔离（H7）**：内部错误码仅进入日志/trace，不在终端用户可见文本中原样输出（例如 `ai_plan_schema_constrained_decode_failed`）。
 8. [ ] **用户体验前置硬约束（H8）**：任一轮若出现官方原始发送漏网、官方 `Connection error`、页面外挂回复容器或同轮多份 assistant 回复，则该轮即使模型命中也判失败。
 8. [ ] **输入基准句**（验收句）：
-   - `在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。通过AI对话，调用相关能力完成部门的创建任务。`
+   - `在鲜花组织之下，新建一个名为运营部的部门，成立日期是2026年1月1日。通过对话页面，调用相关能力完成部门的创建任务。`
 
 ## 4. 实施步骤（按硬约束落地）
 
@@ -81,7 +81,7 @@
 1. [ ] 新增/更新真实 E2E，禁止以 mock `/internal/assistant/**` 结果充当通过证据。
 2. [ ] 每轮落盘三件套证据，并绑定同一 `conversation_id + turn_id`。
 3. [ ] 将执行记录写入 `docs/archive/dev-records/dev-plan-263-execution-log.md`。
-4. [ ] E2E 必须从 `AI对话` 真实入口启动，并同时断言 `266` 的共通 stopline。
+4. [ ] E2E 必须从 `/app/assistant/librechat` 真实入口启动，并同时断言 `266` 的共通 stopline。
 
 ## 5. 验收标准（硬门槛）
 1. [ ] 正常与错误两类场景都满足“先得到机器态结果，再经真实大模型转写并展示”的单链路。
@@ -95,7 +95,7 @@
 - 263 最低验证集：
 1. [ ] `go test ./internal/server -run 'TestAssistantReplyNLGPipeline|TestAssistantReplyModelSourceGate|TestAssistantUIProxyHandler|TestServeAssistantUIBridgeScript|TestRewriteAssistantUIProxyHTMLBase' -count=1`
 2. [ ] `pnpm --dir apps/web test -- src/pages/assistant/LibreChatPage.test.tsx src/pages/assistant/AssistantPage.test.tsx`
-3. [ ] `pnpm --dir e2e exec playwright test tests/tp263-librechat-gpt52-dialog-response.spec.js`，并以 `AI对话` 入口断言 `266` 的共通 stopline。
+3. [ ] `pnpm --dir e2e exec playwright test tests/tp263-librechat-gpt52-dialog-response.spec.js`，并以 `/app/assistant/librechat` 入口断言 `266` 的共通 stopline。
 4. [ ] `make check doc`
 
 ## 7. 交付物
@@ -107,7 +107,7 @@
 ## 8. 关联文档
 - `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - `docs/dev-plans/261-librechat-assistant-conversation-failure-investigation-and-remediation-plan.md`
-- `docs/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
+- `docs/archive/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
 - `docs/dev-plans/264-librechat-gpt52-reply-single-pipeline-and-real-evidence-plan.md`
 - `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
 - `docs/dev-plans/012-ci-quality-gates.md`

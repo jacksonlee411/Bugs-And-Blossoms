@@ -59,11 +59,11 @@
 ### 3.1 目标拓扑
 ```mermaid
 graph TD
-    A[/app/assistant/] --> B[/assistant-ui/*]
-    B --> C[withTenantAndSession]
+    A[/app/assistant/librechat 正式入口] --> C[withTenantAndSession]
+    B[/assistant-ui/* 历史别名入口] --> C
     C --> D{session + tenant + principal valid?}
     D -->|No| E[302 /app/login + clear cookie]
-    D -->|Yes| F[assistant UI reverse proxy]
+    D -->|Yes| F[assistant UI static/proxy handler]
     F --> G[LibreChat upstream]
 
     H[/internal/assistant/*] --> I[withAuthz + capability-route-map]
@@ -137,7 +137,7 @@ assistant_ui_proxy:
 ```
 约束：
 1. [ ] 非白名单方法拒绝（405）。
-2. [ ] 路径必须保持在 `/assistant-ui/*` 语义域内，不得旁路到本仓 `/internal/**`。
+2. [ ] 历史别名路径必须保持在 `/assistant-ui/*` 语义域内；正式入口与静态资源路径也不得旁路到本仓 `/internal/**`。
 3. [ ] 代理禁止把本仓登录态 cookie 透传给上游。
 
 ### 4.3 审计日志字段约束（结构化日志）

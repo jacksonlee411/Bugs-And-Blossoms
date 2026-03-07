@@ -346,6 +346,6 @@ on GET conversation:
 - `docs/dev-plans/220-chat-assistant-upgrade-implementation-plan.md`
 - `docs/dev-plans/220a-chat-assistant-gap-assessment-and-closure-plan.md`
 - `docs/dev-plans/221-assistant-p1-blocker-closure-plan.md`
-- `docs/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
+- `docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
 - `docs/dev-plans/225-assistant-tasks-temporal-p2-implementation-plan.md`
 - `AGENTS.md`

@@ -2,6 +2,8 @@
 
 **状态**: 草拟中（2026-03-03 09:36 UTC）
 
+> 口径说明（2026-03-08）：本计划只约束“意图注册表与受控提交”能力，不再绑定旧 `/app/assistant` 工作台 IA。正式对话入口与承载面以 `DEV-PLAN-280/283/284/266` 为准。
+
 ## 1. 背景与问题
 - 关联计划：
   - `docs/dev-plans/224-assistant-multi-model-and-llm-intent-governance-plan.md`
@@ -61,8 +63,8 @@
 2. [ ] `assistantNormalizeOpenAIIntentAction` 扩展同义词归一化，但归一后必须命中 registry。
 3. [ ] boundary lint 新增 action 级字段白名单与 capability 反查，杜绝“模型幻觉 action”。
 
-### 4.5 前端工作台适配
-1. [ ] 右侧事务面板改为 action 感知：标题、dry-run diff、确认阻断提示均动态渲染。
+### 4.5 前端消费面适配（不绑定旧工作台）
+1. [ ] 正式对话页内的事务交互区改为 action 感知：标题、dry-run diff、确认阻断提示均动态渲染。
 2. [ ] 生成示例提示词不再固定“创建组织”单模板，改为多 action 样例切换。
 3. [ ] 错误提示按 action 分类准确映射，避免“全部提示生成失败”。
 
@@ -83,7 +85,7 @@
 3. [ ] 补齐 commit 前置校验（候选确认、版本漂移、策略版本快照）。
 
 ### PR-224C-04：前端与 E2E 收口
-1. [ ] `/app/assistant` 改为 action 感知 UI，新增多 action 示例与断言。
+1. [ ] 按当前正式入口（以 `283` 切换结果为准）改造 action 感知 UI，新增多 action 示例与断言。
 2. [ ] 新增 E2E：不同 action 的 generate -> confirm -> commit 闭环。
 3. [ ] 收口错误码文案与证据文档。
 

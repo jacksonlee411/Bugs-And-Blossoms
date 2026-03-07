@@ -39,6 +39,16 @@
 3. [ ] 运行 `237` 相关 source/runtime compatibility 回归。
 4. [ ] 产出封板证据：无双入口、无双回执、无旧桥正式职责、无旧口径测试回流。
 
+## 3.1 封板归档动作（强制）
+1. [X] 以下“旧桥接阶段文档”已物理迁移到 `docs/archive/dev-plans/`：
+   - `docs/archive/dev-plans/222-assistant-frontend-e2e-evidence-closure-plan.md`
+   - `docs/archive/dev-plans/239-librechat-chat-write-path-recovery-and-runtime-stability-plan.md`
+   - `docs/archive/dev-plans/239a-librechat-dialog-auto-execution-and-standalone-page-plan.md`
+   - `docs/archive/dev-plans/239b-239a-direct-validation-report-and-implementation-gaps.md`
+   - `docs/archive/dev-plans/262-librechat-dialog-render-outside-chat-investigation-and-fix-plan.md`
+2. [X] 已同步更新 `AGENTS.md` 文档地图与关联引用，确保归档后无失效链接、无主链路口径回流。
+3. [ ] 封板前需再次复核归档文档引用稳定性，防止回流到主线口径。
+
 ## 4. 验收标准
 1. [ ] `260` Case 1~4 全部通过。
 2. [ ] `266` stopline 全部通过。
