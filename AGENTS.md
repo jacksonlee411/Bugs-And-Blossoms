@@ -398,6 +398,11 @@ modules/{module}/
 - DEV-PLAN-266：AI对话官方 UI 单通道与气泡内回写前置子计划：`docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
 - DEV-PLAN-270：项目容器部署分层检讨与收敛方案：`docs/dev-plans/270-project-container-deployment-review-and-layered-convergence-plan.md`
 - DEV-PLAN-280：LibreChat Web UI 源码纳管与 Runtime 分层复用实施方案：`docs/dev-plans/280-librechat-web-ui-vendoring-and-runtime-layered-reuse-plan.md`
+- DEV-PLAN-281：LibreChat Web UI 源码纳管与新主链路冻结实施计划：`docs/dev-plans/281-librechat-web-ui-source-vendoring-and-mainline-freeze-plan.md`
+- DEV-PLAN-282：LibreChat 旧桥接链路删除实施计划：`docs/dev-plans/282-librechat-old-bridge-deletion-plan.md`
+- DEV-PLAN-283：LibreChat 正式入口直接切换实施计划：`docs/dev-plans/283-librechat-formal-entry-cutover-plan.md`
+- DEV-PLAN-284：LibreChat 发送与渲染主链路源码级接管实施计划：`docs/dev-plans/284-librechat-source-level-send-and-render-takeover-plan.md`
+- DEV-PLAN-285：LibreChat 切换回归闭环与封板实施计划：`docs/dev-plans/285-librechat-cutover-regression-and-closure-plan.md`
 - DEV-PLAN-225 执行日志：`docs/archive/dev-records/dev-plan-225-execution-log.md`
 - DEV-PLAN-226：测试指引 TG-004（门禁口径变更审批）：`docs/dev-plans/226-test-guide-tg004-gate-caliber-change-approval.md`
 - DEV-PLAN-170 执行日志：`docs/archive/dev-records/dev-plan-170-execution-log.md`

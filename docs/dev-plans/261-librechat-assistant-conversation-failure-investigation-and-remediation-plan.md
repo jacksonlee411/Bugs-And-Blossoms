@@ -5,7 +5,7 @@
 ## 1. 背景与问题定义
 - 现象：在 `http://localhost:8080/app/assistant/AI对话` 的真实用户入口中，用户反馈“对话不成功”（无回复、未进入草案确认链路、或会话状态异常）。
 - 上下文：`DEV-PLAN-260` 已重开为真实业务闭环主计划，`DEV-PLAN-266` 已冻结官方 UI 单通道与气泡内回写前置门槛；当前反馈说明仍存在运行态失败点或回归点。
-- `/app/assistant/librechat` 与 `/assistant-ui` 在本计划中只作为定位 bridge / proxy / iframe 内部问题的调试入口，**不得单独作为最终通过依据**。
+- `/app/assistant/librechat` 与历史 `/assistant-ui` 别名在本计划中只作为定位 bridge / proxy / iframe 内部问题的调试入口，**不得单独作为最终通过依据**；不应被解释为旧入口需长期保留。
 - 本计划目标是以“先定位根因，再一次性修复并补足防回归证据”为原则收口问题，并确保修复结果不违背 `260/266` 的当前验收口径。
 
 ## 2. 目标与非目标
@@ -26,7 +26,7 @@
 1. [ ] **Bridge 层**：`assistant.prompt.sync`/`assistant.flow.dialog` 消息未正确收发，导致前端无业务回执。
 2. [ ] **会话层**：`create turn`/`confirm`/`commit` 状态机错位，返回 `conversation_state_invalid` 等错误后未被正确呈现。
 3. [ ] **运行时依赖层**：LibreChat upstream、模型提供方或代理健康状态抖动，触发超时/限流/结构化解码失败。
-4. [ ] **身份与边界层**：`/assistant-ui` 会话、cookie、csrf 或租户注入异常，导致请求被拒绝或短路。
+4. [ ] **身份与边界层**：正式 LibreChat UI 入口或历史 `/assistant-ui` 别名的会话、cookie、csrf 或租户注入异常，导致请求被拒绝或短路。
 5. [ ] **可观测性层**：失败信息未透出到聊天流，用户感知为“无响应”。
 6. [ ] **UI / 通道层**：官方原始发送未被阻断、回复落到外挂容器、或出现官方 `Connection error`，导致业务链路部分可用但整体用户体验仍失败。
 
@@ -58,7 +58,7 @@
 3. [ ] 失败场景出现时，聊天流展示可操作提示（错误码语义化映射），不再仅靠控制台日志或页面外 notice。
 4. [ ] 会话列表可见最新会话与最后一轮输入，且与实际交互一致。
 5. [ ] 相关门禁通过（按 `AGENTS.md` 与 `docs/dev-plans/012-ci-quality-gates.md` 执行）。
-6. [ ] `/app/assistant/librechat` 与 `/assistant-ui` 仅可作为调试辅助证据；最终通过判定必须回到 `AI对话` 真实入口。
+6. [ ] `/app/assistant/librechat` 与历史 `/assistant-ui` 别名仅可作为调试辅助证据；最终通过判定必须回到 `AI对话` 真实入口，且不得据此主张旧入口长期保留。
 
 ## 6. 测试与覆盖率
 - 覆盖率口径与阈值遵循仓库现行门禁（以 `Makefile`/CI 为 SSOT，保持覆盖率 gate 不退化）。

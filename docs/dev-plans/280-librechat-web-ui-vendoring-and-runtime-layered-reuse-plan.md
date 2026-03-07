@@ -1,6 +1,6 @@
 # DEV-PLAN-280：LibreChat Web UI 源码纳管与 Runtime 分层复用实施方案
 
-**状态**: 规划中（2026-03-07 22:25 CST）
+**状态**: 规划中（2026-03-07 23:55 CST）
 
 ## 1. 背景与重开原因
 - `DEV-PLAN-230` 将 LibreChat 集成冻结为“官方运行基线复用 + 本仓边界适配”，这一决策对运行态落地是正确起点；但随着 `DEV-PLAN-260` 将目标提升为“真实业务对话闭环”，现有模式的能力边界已出现结构性错位。
@@ -31,7 +31,8 @@
 1. [ ] **不** vendoring LibreChat 后端 Node 服务，不在本计划中接管上游 API/runtime 实现。
 2. [ ] **不** 自建第二套 MCP/Actions/模型配置中心；继续遵循 `DEV-PLAN-233/234` 的“上游主源 + 本仓校验”原则。
 3. [ ] **不** 在本计划中改写 `260` 的业务语义本身；`280` 只解决“承载面与控制点层级错位”，不替代 `260` 主计划。
-4. [ ] **不** 引入 legacy 双链路；迁移期间允许受控灰度，但正式入口只能有一条用户可见交互链路。
+4. [ ] **不** 引入 legacy 双链路；本项目仍处于早期阶段，本计划默认采用直接切换（cutover-first），不为旧桥接链路保留长期灰度、兼容窗口或双入口存活期。
+5. [ ] **不** 为照顾历史实现而保留 iframe、bridge、HTML 注入、外挂消息流、旧工作台交互等高维护负担。
 
 ## 2.1 工具链与门禁（SSOT 引用）
 - **本计划命中触发器**：
@@ -179,33 +180,61 @@ graph TD
    - 成功/失败回执。
 3. [ ] 若 `280` 未完成，即使短期 E2E 通过，也不视为 `260` 已获得稳定、可升级的实现底座。
 
+### 7.6 迁移原则：Cutover First，而不是兼容优先
+1. [ ] 本项目仍处于早期阶段，用户面与部署面尚未形成需要长期兼容的历史包袱；因此 `280` 默认采用**直接切换**，而不是“新旧并存 + 慢慢迁移”。
+2. [ ] 任何仅服务于旧桥接方案的复杂度，都应优先删除而非搬迁，包括：`iframe`、`bridge.js`、HTML 注入、`data-assistant-dialog-stream`、`assistantDialogFlow`、`assistantAutoRun`、旧 `/app/assistant` 工作台中的外置业务交互职责。
+3. [ ] 若某旧能力在新承载面下无明确保留价值，应直接删除，不做等价搬运。
+4. [ ] 若某验证仅证明“旧桥还能继续工作”，而不能证明“新承载面已稳定”，则该验证不再具有发布价值。
+5. [ ] 迁移设计优先级固定为：**删除旧负担 > 建立新主链路 > 补齐最小必要适配 > 回归验证**。
+6. [ ] 除非存在用户明确批准的外部依赖或不可中断场景，否则不保留别名入口、兼容层、双写或双渲染窗口。
+
 ## 8. 迁移策略与停止线
 
-### 8.1 迁移阶段
-1. [ ] **M1：资产纳管与来源冻结**
-   - 引入 vendored Web UI 源码、来源元数据、patch 清单与构建脚本。
-2. [ ] **M2：本仓构建与静态发布闭环**
-   - 本地/CI 能从 vendored 源码稳定构建官方 UI 产物并由本仓服务。
-3. [ ] **M3：源码级发送链路接管**
-   - 正式移除 DOM 级原始发送拦截与跨窗口桥接发送。
-   - readiness：`235` 中新的 LibreChat UI 入口会话/租户边界已补齐；否则不得切正式入口。
-4. [ ] **M4：源码级消息渲染接管**
-   - 正式移除外挂 dialog stream / DOM 注入式回执。
-   - readiness：`223` 已明确业务事实源字段与审计回放口径，`260` 已冻结 phase / candidate / draft / commit-reply DTO 契约。
-5. [ ] **M5：260 Case 1~4 回归闭环**
-   - 在新承载面上重跑 `260/266/263/264/265` 真实回归集。
-   - readiness：`237` 已纳入 vendored UI source + patch stack + runtime compatibility 回归项。
-6. [ ] **M6：旧桥接退役与封板**
-   - 下线 iframe、bridge.js 注入、外挂回执容器与相关 legacy 测试口径。
-   - 明确退役对象最少包括：`iframe`、`bridge.js`、HTML 注入、`data-assistant-dialog-stream`、`assistantDialogFlow`、`assistantAutoRun` 以及等价的页面外桥接业务职责。
+### 8.1 总体策略：直接切换，不做温和迁移
+1. [ ] `280` 采用 **big-cutover / cutover-first** 策略：新 UI 主链路一旦具备最小可运行闭环，即直接替换旧正式入口，不保留长期双入口。
+2. [ ] 迁移目标不是“把旧桥接方案平移到源码纳管 UI 上”，而是“借迁移机会直接删除旧方案造成的偶然复杂度”。
+3. [ ] 旧方案相关资产按“默认删除”处理，而不是“默认保留等待后续清理”。
+4. [ ] 所有只服务于旧链路的测试、页面元素、配置入口、路由别名、注入脚本、覆盖率补丁都必须纳入删除清单。
 
-### 8.2 停止线（Fail-Closed）
+### 8.2 一次性切换步骤（推荐）
+1. [ ] **S1：纳管 + 构建闭环**
+   - 引入 vendored Web UI 源码、来源元数据、patch 清单与构建脚本。
+   - 在本地/CI 稳定构建官方 UI 产物，并由本仓直接服务。
+2. [ ] **S2：先删旧桥，再接新主链路**
+   - 删除/下线 `iframe`、`bridge.js`、HTML 注入、`data-assistant-dialog-stream`、跨窗口 `postMessage` 发送与回执职责。
+   - 删除 `assistantDialogFlow`、`assistantAutoRun` 及等价的页面级业务编排职责；若暂不能物理删除，至少必须先降为“不可达、不可见、不可承担正式职责”，并在同一计划内继续删净。
+   - 旧 `/app/assistant` 若只剩历史工作台职责，应同步收缩为日志/审计/运行态页，或直接退役为非正式入口。
+3. [ ] **S3：新主链路接管**
+   - 在 vendored UI 的 action/store/render 层接入本仓业务链路。
+   - 正式入口直接切到新的 LibreChat Web UI 承载面，不保留旧正式入口并行存活。
+4. [ ] **S4：回归闭环**
+   - 在新承载面上重跑 `260/266/263/264/265` 真实回归集。
+   - 并行确认 `235` 的入口会话边界与 `237` 的 source/runtime compatibility 回归已经补齐。
+
+### 8.3 删除清单（默认必须命中）
+1. [ ] `iframe` 正式承载路径。
+2. [ ] `bridge.js` 注入链路。
+3. [ ] HTML rewrite / DOM 注入式消息回执。
+4. [ ] `data-assistant-dialog-stream` 或等价外挂消息流。
+5. [ ] `assistantDialogFlow`、`assistantAutoRun` 或等价页面级业务编排职责。
+6. [ ] 旧 `/assistant-ui/*` 正式入口地位；如保留，最多只允许作为短期调试/排障入口，且不得承担正式验收职责。
+7. [ ] 只服务于旧桥接方案的测试、截图、E2E 断言与说明文案。
+
+### 8.4 停止线（Fail-Closed）
 1. [ ] 若 vendored UI 无法稳定构建，不允许回退到“临时继续堆 bridge.js 逻辑”作为正式解法。
-2. [ ] 若消息仍通过外挂容器显示，则 `280` 不得宣称通过。
-3. [ ] 若同轮仍存在双发送或双回复，则 `260/266` 均视为未满足前置条件。
-4. [ ] 若迁移后引入第二业务写入口或绕开 One Door，立即阻断。
-5. [ ] 若页面 helper / adapter 仍承担业务 phase 推进、候选裁决或提交约束，则 `280` 不得宣称“前端降权”完成。
-6. [ ] 若 `assistantDialogFlow`、`assistantAutoRun` 或等价逻辑仍承担正式用户可见业务职责，则 `M6` 视为未完成。
+2. [ ] 若新入口上线时旧入口仍承担正式用户可见业务职责，则 `280` 视为未完成。
+3. [ ] 若消息仍通过外挂容器显示，则 `280` 不得宣称通过。
+4. [ ] 若同轮仍存在双发送或双回复，则 `260/266` 均视为未满足前置条件。
+5. [ ] 若迁移后引入第二业务写入口或绕开 One Door，立即阻断。
+6. [ ] 若页面 helper / adapter 仍承担业务 phase 推进、候选裁决或提交约束，则 `280` 不得宣称“前端降权”完成。
+7. [ ] 若 `assistantDialogFlow`、`assistantAutoRun` 或等价逻辑仍承担正式用户可见业务职责，则 `280` 不得进入封板。
+8. [ ] 若为了平滑迁移而保留超过一个正式用户入口、双渲染、双回执、双测试口径，则视为违反本计划“简单而非容易”原则。
+
+### 8.5 依赖口径（按切换节点，而非拖长迁移）
+1. [ ] `235` 不是阻止开始纳管的前置条件，但它必须在**正式切换入口前**补齐新入口会话/租户边界。
+2. [ ] `223/260` 不是阻止 UI 构建的前置条件，但它们必须在**正式切换业务交互前**冻结业务事实源与 FSM DTO 契约。
+3. [ ] `237` 不是阻止前期开发的前置条件，但它必须在**宣称切换完成前**补齐 vendored UI source + patch stack + runtime compatibility 回归。
+4. [ ] 依赖的作用是为正式切换提供 stopline，不得被滥用为“因此先保留旧链路”的理由。
 
 ## 9. 风险与应对
 1. [ ] **风险：前端源码纳管后升级成本上升**。
@@ -214,8 +243,8 @@ graph TD
    - 处置：将 patch 聚焦在发送/store/render 三个明确控制点，避免散改全局。
 3. [ ] **风险：本仓与上游 runtime API 版本漂移**。
    - 处置：在 `237` 升级闭环中新增 UI source/runtime compatibility 回归项。
-4. [ ] **风险：迁移期间出现双入口**。
-   - 处置：以 `no-legacy` 为硬门槛，正式入口只保留一个；别名入口仅限短期灰度，并有明确下线日期。
+4. [ ] **风险：团队因为求稳而再次引入双入口/兼容层**。
+   - 处置：以 `no-legacy` 与本计划 stopline 为硬门槛；除调试用途外，不允许旧入口继续承担正式职责。
 
 ## 10. 测试与验收标准
 
@@ -228,17 +257,28 @@ graph TD
 1. [ ] `/app/assistant/librechat` 不再依赖 iframe 作为正式聊天承载面。
 2. [ ] 不再依赖运行时注入 `bridge.js` 才能阻断原始发送或显示业务回执。
 3. [ ] 不再存在 `data-assistant-dialog-stream` 或等价外挂消息流承担用户可见业务回执职责。
-4. [ ] `260` Case 1~4 中，所有业务回执都由官方消息列表组件树渲染，且每轮仅有唯一 assistant 回复实体。
-5. [ ] 前端只消费后端 `phase/candidates/draft/commit-reply` 等 DTO；业务事实源仍以本仓 `conversation/turn/request/trace` 与审计状态转移为准。
-6. [ ] 发送、缺字段、多候选、确认、提交成功/失败的关键路径，都能通过源码级单测/组件测 + 真实 E2E 双重验证。
-7. [ ] 上游 runtime 镜像基线仍可独立启动、健康检查、升级与回滚，不因 UI 源码纳管而退化。
+4. [ ] 不再存在两个同时有效的正式用户入口、两套正式消息落点或两套正式 E2E 通过口径。
+5. [ ] `260` Case 1~4 中，所有业务回执都由官方消息列表组件树渲染，且每轮仅有唯一 assistant 回复实体。
+6. [ ] 前端只消费后端 `phase/candidates/draft/commit-reply` 等 DTO；业务事实源仍以本仓 `conversation/turn/request/trace` 与审计状态转移为准。
+7. [ ] 发送、缺字段、多候选、确认、提交成功/失败的关键路径，都能通过源码级单测/组件测 + 真实 E2E 双重验证。
+8. [ ] 旧桥接链路相关代码、测试与文案已删除或明确退役，不再形成持续维护负担。
+9. [ ] 上游 runtime 镜像基线仍可独立启动、健康检查、升级与回滚，不因 UI 源码纳管而退化。
 
-## 11. 实施里程碑
-1. [ ] **280A**：LibreChat Web UI 源码纳管与来源锁定。
-2. [ ] **280B**：本仓 UI 构建链与静态发布接线。
-3. [ ] **280C**：发送 action / store 级单通道接管。
-4. [ ] **280D**：消息渲染模型收口（官方气泡内回写）。
-5. [ ] **280E**：`260` Case 1~4 真实回归闭环与旧桥退役。
+## 11. 子计划拆分（自本次修订起）
+1. [ ] `DEV-PLAN-281`：LibreChat Web UI 源码纳管与新主链路冻结实施计划。
+2. [ ] `DEV-PLAN-282`：LibreChat 旧桥接链路删除实施计划。
+3. [ ] `DEV-PLAN-283`：LibreChat 正式入口直接切换实施计划。
+4. [ ] `DEV-PLAN-284`：LibreChat 发送与渲染主链路源码级接管实施计划。
+5. [ ] `DEV-PLAN-285`：LibreChat 切换回归闭环与封板实施计划。
+
+### 11.1 执行顺序与并行策略
+1. [ ] **必须先做**：`281`（先冻结新主链路与来源元数据，否则后续删除与切换没有稳定目标）。
+2. [ ] **可部分并行**：`282` 与 `235` 可在 `281` 完成后并行推进；前者清旧桥职责，后者补新入口边界。
+3. [ ] **必须晚于 `282/235`**：`283`（正式入口切换）只能在“旧桥正式职责已去除 + 新入口边界已补齐”后执行。
+4. [ ] **必须晚于 `223/260/283`**：`284` 需要业务事实源与 FSM DTO 已冻结，且正式入口已完成切换。
+5. [ ] **最后封板**：`285` 只能在 `281~284`、`235`、`237` 对应 stopline 全部满足后执行。
+6. [ ] **禁止并行**：`283` 与“继续维护旧桥接正式职责”不得并行存在；一旦进入 `283`，旧入口只能是调试/审计角色或直接删除。
+7. [ ] **推荐节奏**：`281 -> (282 || 235) -> 283 -> 284 -> 285`。
 
 ## 12. 交付物
 1. [ ] `DEV-PLAN-280` 主计划文档。
@@ -255,4 +295,9 @@ graph TD
 - `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
 - `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
 - `docs/dev-plans/270-project-container-deployment-review-and-layered-convergence-plan.md`
+- `docs/dev-plans/281-librechat-web-ui-source-vendoring-and-mainline-freeze-plan.md`
+- `docs/dev-plans/282-librechat-old-bridge-deletion-plan.md`
+- `docs/dev-plans/283-librechat-formal-entry-cutover-plan.md`
+- `docs/dev-plans/284-librechat-source-level-send-and-render-takeover-plan.md`
+- `docs/dev-plans/285-librechat-cutover-regression-and-closure-plan.md`
 - `AGENTS.md`

@@ -8,7 +8,7 @@
   - `docs/dev-plans/232-librechat-official-runtime-baseline-plan.md`
   - `docs/dev-plans/233-librechat-single-source-config-convergence-plan.md`
 - **当前痛点**:
-  1. 当前仓库对 LibreChat 的复用主要停留在 `/assistant-ui/*` 反向代理，尚未把 MCP/Actions/Domain Allowlist 落成可执行切片与门禁。
+  1. 历史上，仓库对 LibreChat 的复用曾主要停留在 `/assistant-ui/*` 反向代理；当前该形态只应被视为历史阶段背景，不再代表长期正式承载结构。
   2. `mcpSettings.allowedDomains` 与 `actions.allowedDomains` 缺少本仓侧一致性校验，存在“上游放宽、本仓未感知”的漂移风险。
   3. 对外域名访问缺少统一 fail-closed 判定与审计字段标准（tenant/request_id/blocked_domain/reason），SSRF 与越权回源风险不可审计。
   4. Agents 自动执行业务写动作虽在总方案中定义“暂不复用”，但缺少配置冻结点与回归用例，后续回流风险高。
@@ -27,7 +27,7 @@
 1. [ ] 不引入 LibreChat Agents 自动提交本仓业务写接口（One Door 边界不变）。
 2. [ ] 不自建第二套 MCP/Actions 配置中心或数据库镜像表。
 3. [ ] 不替换 `internal/assistant/*` 既有 224/225 确定性契约与任务状态机。
-4. [ ] 不在本计划实现 `/assistant-ui/*` 会话边界修复（由 `DEV-PLAN-235` 承接）。
+4. [ ] 不在本计划实现 LibreChat UI 入口会话边界修复（由 `DEV-PLAN-235` 承接）；不预设正式入口必须长期是 `/assistant-ui/*`。
 
 ## 2.3 工具链与门禁（SSOT 引用）
 - **触发器清单（本计划命中）**：
@@ -57,7 +57,7 @@
 ### 3.1 能力复用与阻断拓扑
 ```mermaid
 graph TD
-    A[/app/assistant/] --> B[/assistant-ui/* proxy]
+    A[本仓正式 LibreChat UI 入口] --> B[LibreChat 能力复用层]
     B --> C[LibreChat Runtime]
 
     C --> D[MCP Servers]

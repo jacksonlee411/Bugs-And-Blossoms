@@ -55,7 +55,7 @@
 ### 3.1 运行拓扑（官方基线 + 本仓边界）
 ```mermaid
 graph TD
-    A[/app/assistant/] --> B[/assistant-ui/* proxy]
+    A[本仓正式 LibreChat UI 入口] --> B[LibreChat runtime / 历史代理别名]
     B --> C[LibreChat API container]
 
     C --> D[(MongoDB)]
@@ -251,7 +251,7 @@ perform cleanup only inside allowed_dirs
 ```
 
 ## 7. 安全与鉴权 (Security & Authz)
-1. [ ] `/assistant-ui/*` 与 `/app/assistant` 继续遵循本仓会话与租户边界（本计划不放宽认证）。
+1. [ ] LibreChat runtime 的任何暴露入口都继续遵循本仓会话与租户边界（本计划不放宽认证）；`/assistant-ui/*` 若仍存在，仅按历史别名/调试入口理解，不构成长期正式入口承诺。
 2. [ ] 健康诊断接口归类为 internal API，保持现有认证/授权链路。
 3. [ ] 运行日志中禁止打印密钥值；仅允许 `key_ref` 与变量名。
 4. [ ] 不引入 feature flag、legacy 双链路或外部兜底 URL。

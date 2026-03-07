@@ -1,6 +1,6 @@
 # DEV-PLAN-224A：Assistant 真实 Codex API 接入与多轮对话工作台实施计划
 
-**状态**: 实施中（2026-03-03 04:55 UTC，首轮实现已完成，等待覆盖率门禁收口）
+**状态**: 实施中（2026-03-07 22:45 CST，已按 280/260/266 新口径修订）
 
 ## 1. 背景与上下文 (Context)
 - 关联计划：
@@ -12,13 +12,14 @@
   1. [ ] 224 已完成多模型治理与意图链路基线，但 provider adapter 仍为 deterministic 基线，未真实调用 Codex/API。
   2. [ ] 页面层虽可发起 turn，但仍偏“单轮操作面板”，缺少可用的多轮会话工作台（会话列表、切换、回放、继续对话、状态总览）。
   3. [ ] 会话持久化已具备（223），但前端尚未完整消费“多会话+多轮”能力。
-- 本计划目标：在不破坏 One Door / confirm / commit / re-auth / fail-closed 边界的前提下，完成“真实 Codex API + 页面多轮对话闭环”。
+- 本计划目标：在不破坏 One Door / confirm / commit / re-auth / fail-closed 边界的前提下，完成“真实 Codex API + 多轮对话能力消费增强”。
+- 自 `DEV-PLAN-280/260/266` 冻结后，224A 不再约束正式对话入口必须是 `/app/assistant` 工作台；正式对话承载面以 `280/260/266` 为准，224A 更关注真实模型接入、多会话/多轮消费能力与相关页面能力。
 
 ## 2. 目标与非目标 (Goals & Non-Goals)
 ### 2.1 核心目标
 1. [ ] 落地真实 Codex API 调用链路（生产链路不再依赖 deterministic adapter）。
 2. [ ] 保持 strict decode + boundary lint + contract snapshot + determinism guard 全链路不退化。
-3. [ ] 在 `/app/assistant` 落地“多轮对话工作台”：会话列表、会话切换、历史回放、继续追问、turn 状态可视化、任务状态联动。
+3. [ ] 落地“多轮对话能力消费面”：会话列表、会话切换、历史回放、继续追问、turn 状态可视化、任务状态联动；正式对话入口与承载面以 `280/260/266` 为准。
 4. [ ] 新增会话列表读取能力（按 actor + tenant），支持分页与稳定排序。
 5. [ ] 补齐 FE/BE/E2E 验收证据，确保 224A 可独立验收。
 
@@ -32,7 +33,12 @@
 2. [ ] No Tx, No RLS：Assistant 读写继续走事务与租户注入，fail-closed。
 3. [ ] 错误码契约不降级：模型/解析/边界/幂等错误继续走目录化错误码。
 4. [ ] 同键幂等语义不变：`request_id + turn_action` 同键同响应、同键异载荷冲突。
-5. [ ] 页面可见性原则：224A 必须可在 UI 上直接验证“多轮会话能力”，不接受仅 API 完成。
+5. [ ] 页面可见性原则：224A 必须可在 UI 上直接验证“多轮会话能力”，但不要求继续保留旧的 `/app/assistant` 工作台形态作为唯一正式入口。
+
+### 3.1 与 280/260/266 的边界
+1. [ ] 224A 不定义 LibreChat UI 的正式承载面、单通道实现、消息落点与旧桥退役策略；这些以 `280/260/266` 为 SSOT。
+2. [ ] 224A 关注真实 Codex API 接入、多会话/多轮会话能力、列表/回放/继续追问/任务联动等“能力消费层”问题。
+3. [ ] 若 224A 中的页面形态描述与 `280/260/266` 冲突，以 `280/260/266` 为准。
 
 ## 4. 架构方案 (Architecture)
 ### 4.1 真实 Codex API 接入
@@ -44,11 +50,11 @@
 6. [ ] 调用参数冻结为确定性档位（如 temperature/top_p/n/schema strict），保障可审计与重放稳定性。
 7. [ ] 保留 deterministic adapter 仅用于测试桩与离线回归，不进入生产默认链路。
 
-### 4.2 多轮工作台信息架构（页面必交付）
-1. [ ] 左栏：会话列表（最近更新时间倒序，显示 state、最后一轮摘要、更新时间）。
-2. [ ] 中栏：会话时间线（逐轮展示 user_input、intent、plan、dry-run、confirm/commit 结果、task 状态）。
-3. [ ] 右栏：当前轮操作区（继续追问、候选确认、commit、submit task/cancel task）。
-4. [ ] 顶部：模型来源与版本信息（provider/model/revision）可见。
+### 4.2 多轮会话消费面信息架构（页面必交付）
+1. [ ] 会话列表：最近更新时间倒序，显示 state、最后一轮摘要、更新时间。
+2. [ ] 会话时间线：逐轮展示 user_input、intent、plan、dry-run、confirm/commit 结果、task 状态。
+3. [ ] 当前轮操作消费面：继续追问、候选确认、commit、submit task/cancel task 等能力需在当前承载面可用，但具体布局不再由本计划强制固定为“三栏工作台”。
+4. [ ] 模型来源与版本信息（provider/model/revision）可见。
 5. [ ] 空态/错误态/加载态统一：首次进入、无会话、会话切换失败、轮询失败均有明确提示。
 
 ### 4.3 API 扩展（为页面多轮提供支撑）
@@ -120,19 +126,19 @@
    - `config/routing/allowlist.yaml`
    - `config/capability/route-capability-map.v1.json`
 
-### 7.3 PR-224A-03：多轮工作台页面（前端）
-1. [ ] 重构 `/app/assistant` 为“三栏工作台”（会话列表/时间线/操作区）。
+### 7.3 PR-224A-03：多轮会话消费页面（前端）
+1. [ ] 在当前正式承载面上交付多轮会话消费能力（会话列表/时间线/继续追问/任务联动），不再强制固定为 `/app/assistant` 三栏工作台。
 2. [ ] 新增会话列表拉取、会话切换、历史回放、继续追问。
 3. [ ] 任务状态联动展示（与 225 SDK 对齐）。
 4. [ ] 补齐组件测试与交互测试。
 5. [ ] 变更文件（建议）：
-   - `apps/web/src/pages/assistant/AssistantPage.tsx`
+   - `apps/web/src/pages/assistant/AssistantPage.tsx` 或 `apps/web/src/pages/assistant/LibreChatPage.tsx` 及其后续承载面实现
    - `apps/web/src/api/assistant.ts`
-   - `apps/web/src/pages/assistant/AssistantPage.test.tsx`
+   - 对应页面测试文件
    - `apps/web/src/api/assistant.test.ts`
 
 ### 7.4 PR-224A-04：E2E 与收口
-1. [ ] 新增多轮工作台 E2E：会话创建、连续追问、切换回放、确认提交、任务轮询。
+1. [ ] 新增多轮会话消费面 E2E：会话创建、连续追问、切换回放、确认提交、任务轮询；正式入口以当期 `280/260/266` 承载面为准。
 2. [ ] 门禁回归：routing/authz/error-message/preflight。
 3. [ ] 产出执行记录：`docs/archive/dev-records/dev-plan-224a-execution-log.md`。
 
@@ -175,7 +181,7 @@
 
 ## 10. 完成定义 (Definition of Done)
 1. [ ] 生产默认链路为真实 Codex API 调用，deterministic adapter 仅用于测试/降级演练。
-2. [ ] `/app/assistant` 页面可完成“多会话 + 多轮 + 回放 + 继续追问 + 提交任务”的全流程。
+2. [ ] 当前正式承载面可完成“多会话 + 多轮 + 回放 + 继续追问 + 提交任务”的全流程；不再要求必须通过旧 `/app/assistant` 工作台形态实现。
 3. [ ] 224/225 既有契约（One Door、幂等、漂移检测、错误码）无回退。
 4. [ ] CI 门禁全绿并完成 PR 合并后同步固定分支。
 
@@ -188,3 +194,6 @@
 - `docs/dev-plans/019-tenant-and-authn.md`
 - `docs/dev-plans/021-pg-rls-for-org-position-job-catalog.md`
 - `docs/dev-plans/022-authz-casbin-toolchain.md`
+- `docs/dev-plans/260-librechat-conversation-first-auto-execution-plan.md`
+- `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
+- `docs/dev-plans/280-librechat-web-ui-vendoring-and-runtime-layered-reuse-plan.md`
