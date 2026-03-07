@@ -265,14 +265,14 @@ graph TD
 9. [ ] 上游 runtime 镜像基线仍可独立启动、健康检查、升级与回滚，不因 UI 源码纳管而退化。
 
 ## 11. 子计划拆分（自本次修订起）
-1. [ ] `DEV-PLAN-281`：LibreChat Web UI 源码纳管与新主链路冻结实施计划。
+1. [X] `DEV-PLAN-281`：LibreChat Web UI 源码纳管与新主链路冻结实施计划（已完成，见执行日志）。
 2. [ ] `DEV-PLAN-282`：LibreChat 旧桥接链路删除实施计划。
 3. [ ] `DEV-PLAN-283`：LibreChat 正式入口直接切换实施计划。
 4. [ ] `DEV-PLAN-284`：LibreChat 发送与渲染主链路源码级接管实施计划。
 5. [ ] `DEV-PLAN-285`：LibreChat 切换回归闭环与封板实施计划。
 
 ### 11.1 执行顺序与并行策略
-1. [ ] **必须先做**：`281`（先冻结新主链路与来源元数据，否则后续删除与切换没有稳定目标）。
+1. [X] **必须先做**：`281`（先冻结新主链路与来源元数据，否则后续删除与切换没有稳定目标）。
 2. [ ] **可部分并行**：`282` 与 `235` 可在 `281` 完成后并行推进；前者清旧桥职责，后者补新入口边界。
 3. [ ] **必须晚于 `282/235`**：`283`（正式入口切换）只能在“旧桥正式职责已去除 + 新入口边界已补齐”后执行。
 4. [ ] **必须晚于 `223/260/283`**：`284` 需要业务事实源与 FSM DTO 已冻结，且正式入口已完成切换。
@@ -296,6 +296,7 @@ graph TD
 - `docs/dev-plans/266-librechat-official-ui-single-dialog-channel-and-in-bubble-gpt52-plan.md`
 - `docs/dev-plans/270-project-container-deployment-review-and-layered-convergence-plan.md`
 - `docs/dev-plans/281-librechat-web-ui-source-vendoring-and-mainline-freeze-plan.md`
+- `docs/archive/dev-records/dev-plan-281-execution-log.md`
 - `docs/dev-plans/282-librechat-old-bridge-deletion-plan.md`
 - `docs/dev-plans/283-librechat-formal-entry-cutover-plan.md`
 - `docs/dev-plans/284-librechat-source-level-send-and-render-takeover-plan.md`

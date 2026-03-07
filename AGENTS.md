@@ -399,6 +399,7 @@ modules/{module}/
 - DEV-PLAN-270：项目容器部署分层检讨与收敛方案：`docs/dev-plans/270-project-container-deployment-review-and-layered-convergence-plan.md`
 - DEV-PLAN-280：LibreChat Web UI 源码纳管与 Runtime 分层复用实施方案：`docs/dev-plans/280-librechat-web-ui-vendoring-and-runtime-layered-reuse-plan.md`
 - DEV-PLAN-281：LibreChat Web UI 源码纳管与新主链路冻结实施计划：`docs/dev-plans/281-librechat-web-ui-source-vendoring-and-mainline-freeze-plan.md`
+- DEV-PLAN-281 执行日志：`docs/archive/dev-records/dev-plan-281-execution-log.md`
 - DEV-PLAN-282：LibreChat 旧桥接链路删除实施计划：`docs/dev-plans/282-librechat-old-bridge-deletion-plan.md`
 - DEV-PLAN-283：LibreChat 正式入口直接切换实施计划：`docs/dev-plans/283-librechat-formal-entry-cutover-plan.md`
 - DEV-PLAN-284：LibreChat 发送与渲染主链路源码级接管实施计划：`docs/dev-plans/284-librechat-source-level-send-and-render-takeover-plan.md`
